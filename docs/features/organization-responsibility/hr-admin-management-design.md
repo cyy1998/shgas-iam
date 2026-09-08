@@ -83,7 +83,7 @@ Create use case 接收 authorization，在既有 UnitOfWork 内读取 holder Emp
 
 ### 生命周期命令
 
-Pause、Resume、End use case 在事务内按 Assignment ID 加载 lifecycle context，并扩充 holder 与 target 的 Organization IDs。scope guard 必须发生在 transition/no-op 判断之前，因此当前 scope 已丢失时，即使重复已完成命令也返回 404。通过 guard 后沿用现有幂等、parent availability、cardinality、审计、级联与 invalidation 行为。
+Pause、Resume、End use case 在事务内复用级联的集合取锁能力，先按 Assignment ID 锁行，再普通读取父对象组成 lifecycle context，并扩充 holder 与 target 的 Organization IDs。scope guard 必须发生在 transition/no-op 判断之前，因此当前 scope 已丢失时，即使重复已完成命令也返回 404。通过 guard 后根据锁定状态判断转换；合法重复命令返回 `changed:false` 并保留意图审计，不新建 dirty 或改写结束时间；非法转换返回 409。只读父对象保持普通预检，不因直接命令增加父行锁，也不防止新 Assignment phantom。
 
 HR scope 仍在事务外按请求时 PostgreSQL 事实解析，再传入事务；授权通过后发生的并发撤权不会中止当前事务，后续请求才观察新范围。本设计不声称 commit-time linearizable 或 serializable。
 
@@ -96,6 +96,8 @@ HR scope 仍在事务外按请求时 PostgreSQL 事实解析，再传入事务�
 - 有效 HR 的 `visibleModules` 增加 `organizationResponsibility`；
 - `collectionActions` 增加 `organizationResponsibility.create`；
 - 无有效 scope 继续 fail closed；mixed `iam:admin` + `iam:hr-admin` 继续得到 full capability。
+
+创建成功返回 `{changed:true,result:{id}}`，Pause、Resume、End 返回 `{changed,result:null}`；REST 保留 envelope，tRPC 直接返回业务结果。列表和各嵌入入口统一区分已修改与无需修改，并刷新事实。
 
 Admin Assignment view/detail 增加服务端计算的 `allowedActions.pause/resume/end`。React module 不再只根据 status 推断按钮；按钮使用 `allowedActions`，mutation 后重新加载列表和详情。服务端每次 mutation 仍重新授权，响应 capability 不是凭据。
 
@@ -113,7 +115,7 @@ holder 在 scope 但 target 越界，或 target 在 scope 但 holder 越界的 A
 - HR 创建冲突时返回稳定且安全的说明：责任槽位已占用；如果当前列表没有可管理记录，联系完整管理员；
 - Organization 生命周期被此类 Assignment 阻止时，allowed action 使用稳定的不可管理责任阻塞 reason；
 - 响应与日志不得包含 Assignment ID、holder、范围外 Organization、path 或 scope/root 集合；
-- DB unique race 继续安全映射为现有 cardinality conflict，不为了分类阻塞来源引入锁、提高隔离级别或自动重试。
+- DB unique race 按 Full/HR 安全映射已知约束：Full Admin 保留 cardinality conflict，HR 的 single slot 竞争使用不可管理责任的通用阻塞说明；不在已失败事务继续读取 blocker，不为分类阻塞来源增加父行锁、提高隔离级别或自动重试。
 
 详情和 mutation 的范围拒绝统一使用内部 `RESOURCE_OUT_OF_SCOPE` reason、外部 404 与结构化 denial log。列表和搜索以过滤后的结果表达范围，不逐条记录 denial。
 
@@ -142,7 +144,7 @@ holder 在 scope 但 target 越界，或 target 在 scope 但 holder 越界的 A
 
 - list/search/detail 在 repository seam 接收 scoped read scope，显式 filters 只能收窄。
 - Create 对四种双端组合、自 holder、跨 roots、Enable/Pause/Disable holder、target 状态及 `head`/`supervising` cardinality 全覆盖。
-- Pause、Resume、End 在事务内先授权再 transition；越界、scope 丢失和幂等重试均验证无 audit、dirty 或状态写入。
+- Pause、Resume、End 在事务内先授权再 transition；越界、scope 丢失验证无 audit、dirty 或状态写入；合法幂等重试保留 `changed:false` 意图审计，不增加 dirty 或状态写入。
 - 范围外 blocker 只返回安全原因，不包含 Assignment、holder、Organization 或 scope 身份。
 
 ### PostgreSQL integration tests
@@ -170,6 +172,6 @@ Full Admin、ordinary actor 与无有效 scope 的 HR actor；浏览器 journey 
 
 ## 发布与回滚
 
-本变更没有数据迁移、backfill 或 role provisioning。Admin API 与 Admin 前端按一次协调发布交付：先部署向后兼容的服务端 contract 与授权，再部署消费 capability/allowedActions 的前端并运行 Full-system HR journey。部署后所有有效 `iam:hr-admin` 立即获得能力。
+本变更没有数据迁移、backfill 或 role provisioning。Admin API 与 Admin 前端按一次协调发布交付：统一 mutation 结果按 [ADR-0025](../../adr/0025-align-admin-mutation-results-with-committed-facts.md) 与全部消费者协调切换，不部署混合结果契约；切换前核验外部 REST 调用方，并运行 Full-system HR journey。部署后所有有效 `iam:hr-admin` 立即获得能力。
 
 若必须回滚权限，先从 Admin API 的 HR operation/capability policy 撤销服务端授权，再回滚前端入口；只隐藏 UI 不能构成安全回滚。数据库、Assignment 数据、审计和 User Profile 投影不需要回滚。

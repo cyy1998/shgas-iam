@@ -4,14 +4,18 @@ import type { Context } from "hono";
 import { createAdminAuthenticationHandlers } from "@admin-api/middlewares/authentication.handler";
 import { createOrganizationResponsibilityAdapter } from "@admin-api/routes/admin/organization-responsibility/organization-responsibility.adapter";
 import { createOrganizationResponsibilityRoute } from "@admin-api/routes/admin/organization-responsibility/organization-responsibility.index";
+import * as responsibilityRoutes from "@admin-api/routes/admin/organization-responsibility/organization-responsibility.routes";
 import { createAdminAuthorizationPolicy } from "@admin-api/services/admin-authorization/admin-authorization.policy";
+import { AdminMutationCommittedError } from "@admin-api/services/admin-mutation/admin-mutation";
 import { createOrganizationResponsibilityService } from "@admin-api/services/organization-responsibility/organization-responsibility.service";
 import {
+  ApiErrorCode,
   ORGANIZATION_RESPONSIBILITY_TYPE_CATALOG,
   OrganizationResponsibilityAssignmentStatus,
   OrganizationResponsibilityTypeCode,
   UserStatus,
 } from "@iam/contracts";
+import { OrganizationResponsibilityAssignmentNotOpenError } from "@iam/domain/organization-responsibility";
 import { describe, expect, mock, test } from "bun:test";
 import { Hono } from "hono";
 import {
@@ -166,8 +170,8 @@ describe("Organization Responsibility Type Catalog admin adapter", () => {
     const service = createOrganizationResponsibilityService({
       repository,
     });
-    const execute = mock(async () => ({ id: assignment.id }));
-    const manageLifecycle = mock(async () => true);
+    const execute = mock(async () => ({ changed: true, result: { id: assignment.id } }));
+    const manageLifecycle = mock(async () => ({ changed: true, result: null }));
     const adapterDeps = {
       createAssignment: { execute },
       manageAssignmentLifecycle: { execute: manageLifecycle },
@@ -224,9 +228,12 @@ describe("Organization Responsibility Type Catalog admin adapter", () => {
       },
     );
     expect(createResponse.status).toBe(200);
-    expect(((await createResponse.json()) as { data: unknown }).data).toEqual({
-      id: 41,
-    });
+    const createBody = await createResponse.json();
+    const parsedCreate = responsibilityRoutes.organizationResponsibilityAssignmentCreate.responses[200]
+      .content["application/json"]
+      .schema
+      .parse(createBody);
+    expect(parsedCreate.data).toEqual({ changed: true, result: { id: 41 } });
     expect(execute).toHaveBeenCalledWith(
       {
         employmentId: 7,
@@ -250,7 +257,12 @@ describe("Organization Responsibility Type Catalog admin adapter", () => {
       { method: "POST" },
     );
     expect(pauseResponse.status).toBe(200);
-    expect(((await pauseResponse.json()) as { data: unknown }).data).toBe(true);
+    const pauseBody = await pauseResponse.json();
+    const parsedPause = responsibilityRoutes.organizationResponsibilityAssignmentPause.responses[200]
+      .content["application/json"]
+      .schema
+      .parse(pauseBody);
+    expect(parsedPause.data).toEqual({ changed: true, result: null });
     expect(manageLifecycle).toHaveBeenCalledWith(
       { id: 41, command: "pause" },
       expect.objectContaining({
@@ -284,8 +296,10 @@ describe("Organization Responsibility Type Catalog admin adapter", () => {
         },
       } as unknown as Context,
     });
-    await expect(caller.resumeAssignment({ id: 41 })).resolves.toBe(true);
-    await expect(caller.endAssignment({ id: 41 })).resolves.toBe(true);
+    const resumeResult = await caller.resumeAssignment({ id: 41 });
+    expect(resumeResult).toEqual({ changed: true, result: null });
+    const endResult = await caller.endAssignment({ id: 41 });
+    expect(endResult).toEqual({ changed: true, result: null });
     expect(manageLifecycle).toHaveBeenCalledWith(
       { id: 41, command: "resume" },
       expect.any(Object),
@@ -294,6 +308,27 @@ describe("Organization Responsibility Type Catalog admin adapter", () => {
       { id: 41, command: "end" },
       expect.any(Object),
     );
+    manageLifecycle.mockResolvedValue({ changed: false, result: null });
+    const retried = await app.request(
+      "http://localhost/admin/organization-responsibilities/assignments/41/end",
+      { method: "POST" },
+    );
+    expect(retried.status).toBe(200);
+    const retryBody = await retried.json();
+    const parsedRetry = responsibilityRoutes.organizationResponsibilityAssignmentEnd.responses[200]
+      .content["application/json"]
+      .schema
+      .parse(retryBody);
+    expect(parsedRetry.data).toEqual({ changed: false, result: null });
+    const trpcRetry = await caller.endAssignment({ id: 41 });
+    expect(trpcRetry).toEqual({ changed: false, result: null });
+
+    manageLifecycle.mockRejectedValueOnce(new OrganizationResponsibilityAssignmentNotOpenError());
+    const illegal = await caller.resumeAssignment({ id: 41 }).catch(error => error);
+    expect(illegal).toMatchObject({ code: "CONFLICT" });
+    manageLifecycle.mockRejectedValueOnce(new AdminMutationCommittedError());
+    const committed = await caller.pauseAssignment({ id: 41 }).catch(error => error);
+    expect(committed).toMatchObject({ cause: { code: ApiErrorCode.AdminMutationCommitted } });
   });
 
   test("exposes global Assignment discovery with recoverable cursor filters", async () => {
@@ -309,7 +344,7 @@ describe("Organization Responsibility Type Catalog admin adapter", () => {
         },
       } as never,
       manageAssignmentLifecycle: {
-        execute: async () => true,
+        execute: async () => ({ changed: true, result: null }),
       } as never,
       service: {
         detailAssignment,
@@ -395,17 +430,17 @@ describe("Organization Responsibility Type Catalog admin adapter", () => {
       items: [],
       nextCursor: null,
     }));
-    const detailAssignment = mock(async () => ({ id: 41 }));
+    const detailAssignment = mock(async () => ({ changed: true, result: { id: 41 } }));
     const createAssignment = mock(async (
       ..._args: Parameters<
         CreateOrganizationResponsibilityAdapterDeps["createAssignment"]["execute"]
       >
-    ) => ({ id: 41 }));
+    ) => ({ changed: true, result: { id: 41 } }));
     const manageAssignmentLifecycle = mock(async (
       ..._args: Parameters<
         CreateOrganizationResponsibilityAdapterDeps["manageAssignmentLifecycle"]["execute"]
       >
-    ) => true);
+    ) => ({ changed: true, result: null }));
     const adapter = createOrganizationResponsibilityAdapter({
       createAssignment: { execute: createAssignment } as never,
       manageAssignmentLifecycle: {
@@ -511,7 +546,7 @@ describe("Organization Responsibility Type Catalog admin adapter", () => {
       employmentId: 8,
       typeCode: OrganizationResponsibilityTypeCode.Supervising,
     });
-    expect(trpcCreated).toEqual({ id: 41 });
+    expect(trpcCreated).toEqual({ changed: true, result: { id: 41 } });
     expect(createAssignment).toHaveBeenCalledTimes(2);
     expect(createAssignment.mock.calls[0]?.[0]).toEqual({
       employmentId: 7,
@@ -539,8 +574,10 @@ describe("Organization Responsibility Type Catalog admin adapter", () => {
       { method: "POST" },
     );
     expect(pauseResponse.status).toBe(200);
-    expect(await caller.resumeAssignment({ id: 42 })).toBe(true);
-    expect(await caller.endAssignment({ id: 43 })).toBe(true);
+    const resumeResult = await caller.resumeAssignment({ id: 42 });
+    expect(resumeResult).toEqual({ changed: true, result: null });
+    const endResult = await caller.endAssignment({ id: 43 });
+    expect(endResult).toEqual({ changed: true, result: null });
     expect(manageAssignmentLifecycle).toHaveBeenCalledTimes(3);
     expect(manageAssignmentLifecycle.mock.calls.map(call => call[0])).toEqual([
       { id: 41, command: "pause" },
@@ -627,7 +664,7 @@ function createCatalogAdapter() {
       },
     } as never,
     manageAssignmentLifecycle: {
-      execute: async () => true,
+      execute: async () => ({ changed: true, result: null }),
     } as never,
     service: {
       detailAssignment: async () => {

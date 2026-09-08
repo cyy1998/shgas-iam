@@ -1,4 +1,5 @@
 import type { AdminAuditContext, AuditLogInput } from "@admin-api/services/audit/audit.context";
+import type { OrganizationResponsibilityAssignmentWriteTarget } from "@admin-api/services/organization-responsibility/organization-responsibility-parent-lifecycle.type";
 import type { UnitOfWorkPort } from "@iam/api-core/uow";
 import type { EmploymentStatus } from "@iam/contracts";
 import type { Employment } from "@iam/domain/employment";
@@ -30,15 +31,16 @@ export interface TransferEmploymentStorePort {
     posId: number,
     exceptEmploymentId?: number,
   ) => Promise<Employment | null>;
-  unsetOpenPrimariesByUserId: (userId: number) => Promise<unknown>;
+  getOpenPrimaryEmploymentIdsByUserId: (userId: number) => Promise<number[]>;
+  lockEmploymentsByIds: (ids: readonly number[]) => Promise<Employment[]>;
   updateEmploymentRecord: (
     id: number,
     patch: {
-      status: EmploymentStatus.Disable;
-      endTime: Date;
+      status?: EmploymentStatus.Disable;
+      endTime?: Date;
       isPrimary: false;
     },
-  ) => Promise<unknown>;
+  ) => Promise<Employment>;
 }
 
 export interface TransferEmploymentTransactionPorts {
@@ -60,11 +62,16 @@ export interface TransferEmploymentTransactionPorts {
     recordAuditLog: (input: AuditLogInput) => Promise<void>;
   };
   responsibilityParentLifecycle: {
+    lockAssignmentsForEmployment: (input: {
+      employmentId: number;
+      command: "pause" | "end";
+    }) => Promise<OrganizationResponsibilityAssignmentWriteTarget[]>;
     endOpenAssignmentsForEmployment: (input: {
       action: "transfer";
       employmentId: number;
       endTime: Date;
       auditContext?: AdminAuditContext;
+      selectedAssignments: readonly OrganizationResponsibilityAssignmentWriteTarget[];
     }) => Promise<boolean>;
   };
   userProfileInvalidation: {

@@ -1,5 +1,6 @@
 import OrganizationTreeSelector from '@admin/components/OrganizationTreeSelector';
 import { apiClient } from '@admin/lib/api-client';
+import { AdminMutationCommittedError } from '@admin/services/admin-mutation';
 import {
   type EmploymentVo,
   transferEmployment,
@@ -30,7 +31,8 @@ type Props = {
   open: boolean;
   employment: EmploymentTransferSource | null;
   onOpenChange: (open: boolean) => void;
-  onSuccess?: () => void;
+  onSuccess?: (newEmploymentId: number) => Promise<void> | void;
+  onCommitted: (error: AdminMutationCommittedError) => Promise<void>;
 };
 
 function formatOrgPath(employment: EmploymentTransferSource) {
@@ -54,6 +56,7 @@ export default function TransferModal({
   employment,
   onOpenChange,
   onSuccess,
+  onCommitted,
 }: Props) {
   const formRef = useRef<ProFormInstance>(undefined);
 
@@ -78,16 +81,21 @@ export default function TransferModal({
           return false;
         }
         try {
-          await transferEmployment(employment.id, {
+          const outcome = await transferEmployment(employment.id, {
             newOrgCode: values.newOrgCode,
             newPosCode: values.newPosCode,
             isPrimary: values.isPrimary,
             description: values.description || null,
           });
-          message.success('转岗成功');
-          onSuccess?.();
+          if (outcome.changed) message.success('转岗成功');
+          else message.info('无需修改');
+          await onSuccess?.(outcome.result.id);
           return true;
         } catch (err) {
+          if (err instanceof AdminMutationCommittedError) {
+            await onCommitted(err);
+            return true;
+          }
           handleError(err);
           return false;
         }

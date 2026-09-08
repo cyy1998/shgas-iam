@@ -1,6 +1,7 @@
-import AuthorizationActionDropdown from '@admin/components/AuthorizationActionDropdown';
 import AuthorizationActionButton from '@admin/components/AuthorizationActionButton';
+import AuthorizationActionDropdown from '@admin/components/AuthorizationActionDropdown';
 import StatusTag from '@admin/components/StatusTag';
+import { AdminMutationCommittedError } from '@admin/services/admin-mutation';
 import {
   deleteOrganization,
   type OrganizationChildrenPage,
@@ -13,17 +14,9 @@ import {
   getOrganizationStatusOptions,
   OrganizationStatus,
 } from '@iam/contracts';
-import {
-  Empty,
-  message,
-  Modal,
-  Space,
-  Table,
-  Tabs,
-  Typography,
-} from 'antd';
-import type { ColumnsType } from 'antd/es/table';
 import { useAccess } from '@umijs/max';
+import { Empty, message, Modal, Space, Table, Tabs, Typography } from 'antd';
+import type { ColumnsType } from 'antd/es/table';
 import OrganizationResponsibilityAssignmentsPanel from './OrganizationResponsibilityAssignmentsPanel';
 
 type Props = {
@@ -36,6 +29,8 @@ type Props = {
   onCreateChild: () => void;
   onSelectChild: (orgCode: string) => void;
   onChanged: () => void;
+  onDeleted?: () => void;
+  onCommitted?: (error: AdminMutationCommittedError) => void;
 };
 
 const childColumns = (
@@ -65,6 +60,8 @@ export default function OrgDetailPanel({
   onCreateChild,
   onSelectChild,
   onChanged,
+  onDeleted,
+  onCommitted,
 }: Props) {
   const access = useAccess();
   if (!detail) {
@@ -75,14 +72,19 @@ export default function OrgDetailPanel({
     );
   }
 
-  const handleError = (err: unknown) =>
+  const handleError = (err: unknown) => {
+    if (err instanceof AdminMutationCommittedError) {
+      onCommitted?.(err);
+      return;
+    }
     message.error(err instanceof Error ? err.message : '操作失败');
+  };
 
   const onStatusChange = async (status: number) => {
     const mutate = async () => {
       try {
-        await updateOrganizationStatus(detail.orgCode, status);
-        message.success('状态已更新');
+        const outcome = await updateOrganizationStatus(detail.orgCode, status);
+        message.success(outcome.changed ? '状态已更新' : '无需修改');
         onChanged();
       } catch (err) {
         handleError(err);
@@ -109,9 +111,9 @@ export default function OrgDetailPanel({
       okType: 'danger',
       onOk: async () => {
         try {
-          await deleteOrganization(detail.orgCode);
-          message.success('已删除');
-          onChanged();
+          const outcome = await deleteOrganization(detail.orgCode);
+          message.success(outcome.changed ? '已删除' : '无需修改');
+          (onDeleted ?? onChanged)();
         } catch (err) {
           handleError(err);
         }
@@ -258,15 +260,19 @@ export default function OrgDetailPanel({
               </>
             ),
           },
-          ...(access.canAccessOrganizationResponsibility ? [{
-            key: 'responsibility-assignments',
-            label: '责任任命',
-            children: (
-              <OrganizationResponsibilityAssignmentsPanel
-                orgCode={detail.orgCode}
-              />
-            ),
-          }] : []),
+          ...(access.canAccessOrganizationResponsibility
+            ? [
+                {
+                  key: 'responsibility-assignments',
+                  label: '责任任命',
+                  children: (
+                    <OrganizationResponsibilityAssignmentsPanel
+                      orgCode={detail.orgCode}
+                    />
+                  ),
+                },
+              ]
+            : []),
         ]}
       />
     </div>

@@ -29,7 +29,7 @@ function createService(overrides: Record<string, unknown> = {}) {
     positionRepository: {
       countOpenEmploymentsByPosCode: mock(async (_posCode: string) => 0),
       getAnyPositionByCode: mock(async () => null),
-      getPositionByCode: mock(async () => position()),
+      lockPositionByCode: mock(async () => position()),
       setPosition: mock(async () => position()),
       softDeletePositionByCode: mock(async () => position({ isDelete: true })),
       updatePositionByCode: mock(async () => position()),
@@ -38,7 +38,7 @@ function createService(overrides: Record<string, unknown> = {}) {
   const deps = {
     positionRepository: {
       getPositionDetailByCode: mock(async () => position({ memberNumber: 0 })),
-      getPositionByCode: mock(async () => position()),
+      lockPositionByCode: mock(async () => position()),
     },
     uow: createImmediateUnitOfWork(tx),
     ...overrides,
@@ -61,7 +61,7 @@ describe("createPositionService", () => {
   test("updates a position inside a unit of work and records audit", async () => {
     const { service, tx } = createService();
 
-    await expect(service.updatePosition("DEV", { posName: "Senior Developer" })).resolves.toBe(true);
+    await expect(service.updatePosition("DEV", { posName: "Senior Developer" })).resolves.toEqual({ changed: true, result: null });
 
     expect(tx.positionRepository.updatePositionByCode).toHaveBeenCalledWith("DEV", { posName: "Senior Developer" });
     expect(tx.auditService.recordAuditLog).toHaveBeenCalledWith(expect.objectContaining({
@@ -113,10 +113,10 @@ describe("createPositionService", () => {
 
   test("re-enables a position without inspecting or changing its Employments", async () => {
     const { service, tx } = createService();
-    tx.positionRepository.getPositionByCode.mockResolvedValue(position({ status: PositionStatus.Disable }));
+    tx.positionRepository.lockPositionByCode.mockResolvedValue(position({ status: PositionStatus.Disable }));
     tx.positionRepository.countOpenEmploymentsByPosCode.mockResolvedValue(1);
 
-    await expect(service.updatePositionStatus("DEV", PositionStatus.Enable)).resolves.toBe(true);
+    await expect(service.updatePositionStatus("DEV", PositionStatus.Enable)).resolves.toEqual({ changed: true, result: null });
 
     expect(tx.positionRepository.countOpenEmploymentsByPosCode).not.toHaveBeenCalled();
     expect(tx.positionRepository.updatePositionByCode).toHaveBeenCalledWith("DEV", {
@@ -131,7 +131,7 @@ describe("createPositionService", () => {
     const { service, tx } = createService();
     useEmploymentFixture(tx, { status, isDelete });
 
-    await expect(service.updatePositionStatus("DEV", PositionStatus.Disable)).resolves.toBe(true);
+    await expect(service.updatePositionStatus("DEV", PositionStatus.Disable)).resolves.toEqual({ changed: true, result: null });
 
     expect(tx.positionRepository.updatePositionByCode).toHaveBeenCalledWith("DEV", {
       status: PositionStatus.Disable,
@@ -148,7 +148,7 @@ describe("createPositionService", () => {
     const { service, tx } = createService();
     useEmploymentFixture(tx, { status, isDelete });
 
-    await expect(service.deletePosition("DEV")).resolves.toBe(true);
+    await expect(service.deletePosition("DEV")).resolves.toEqual({ changed: true, result: null });
 
     expect(tx.positionRepository.countOpenEmploymentsByPosCode).toHaveBeenCalledWith("DEV");
     expect(tx.positionRepository.softDeletePositionByCode).toHaveBeenCalledWith("DEV");

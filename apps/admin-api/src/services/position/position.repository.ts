@@ -1,12 +1,30 @@
 import type { DbClient } from "@iam/db";
 import type { PositionCreateDto, PositionFuzzyQueryDto, PositionUpdateDto } from "./position.type";
+import { extractPostgresError } from "@iam/db/postgres-error";
 import { compactUpdate, firstRow } from "@iam/db/query-utils";
 import { employments, positions } from "@iam/db/schema";
 import { OPEN_EMPLOYMENT_STATUSES } from "@iam/domain/employment";
+import { PositionCodeExistsError } from "@iam/domain/position";
 import { and, count, eq, getTableColumns, inArray } from "drizzle-orm";
 
 export function createPositionRepository(db: DbClient) {
+  async function write<T>(operation: () => Promise<T>): Promise<T> {
+    try {
+      return await operation();
+    }
+    catch (error) {
+      const detail = extractPostgresError(error);
+      if (detail?.code === "23505"
+        && (detail.constraint === "position_post_code_unique" || detail.constraint === "position_post_code_key")) {
+        throw new PositionCodeExistsError();
+      }
+      throw error;
+    }
+  }
   return {
+    async lockPositionByCode(posCode: string) {
+      return firstRow(await db.select().from(positions).where(and(eq(positions.posCode, posCode), eq(positions.isDelete, false))).for("update"));
+    },
     async getPositionByCode(posCode: string) {
       return await db.query.positions.findFirst({
         where: { posCode, isDelete: false },
@@ -28,7 +46,7 @@ export function createPositionRepository(db: DbClient) {
       return firstRow(rows) ?? null;
     },
     async setPosition(positionCreateDto: PositionCreateDto) {
-      await db.insert(positions).values(positionCreateDto);
+      return write(async () => firstRow(await db.insert(positions).values(positionCreateDto).returning()));
     },
     async searchPositionsFuzzy(positionAdminQueryDto: PositionFuzzyQueryDto) {
       const { exactConditions, fuzzyConditions } = positionAdminQueryDto.conditions;
@@ -59,16 +77,18 @@ export function createPositionRepository(db: DbClient) {
       });
     },
     async updatePositionByCode(posCode: string, data: PositionUpdateDto) {
-      return await db
+      return write(async () => firstRow(await db
         .update(positions)
         .set(compactUpdate(data))
-        .where(and(eq(positions.posCode, posCode), eq(positions.isDelete, false)));
+        .where(and(eq(positions.posCode, posCode), eq(positions.isDelete, false)))
+        .returning()));
     },
     async softDeletePositionByCode(posCode: string) {
-      return await db
+      return firstRow(await db
         .update(positions)
         .set({ isDelete: true })
-        .where(and(eq(positions.posCode, posCode), eq(positions.isDelete, false)));
+        .where(and(eq(positions.posCode, posCode), eq(positions.isDelete, false)))
+        .returning());
     },
     async countOpenEmploymentsByPosCode(posCode: string) {
       const rows = await db

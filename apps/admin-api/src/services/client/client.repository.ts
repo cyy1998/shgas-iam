@@ -11,8 +11,10 @@ import {
   CustomSsoClientState,
   OidcClientState,
 } from "@iam/contracts";
+import { extractPostgresError } from "@iam/db/postgres-error";
 import { compactUpdate, firstRow, ilikeContainsIf, inArrayIf } from "@iam/db/query-utils";
 import { clients } from "@iam/db/schema";
+import { ClientCodeExistsError } from "@iam/domain/client";
 import { and, count, eq, isNotNull, isNull, or, sql } from "drizzle-orm";
 import { toAdminClientRecord } from "./client.schema";
 
@@ -20,11 +22,22 @@ export function createClientRepository(db: DbClient) {
   return {
     async createClient(clientDto: ClientCreateDto) {
       const { extAttributes, ...data } = clientDto;
-      const rows = await db.insert(clients).values({
-        ...data,
-        extAttributes: sql`${JSON.stringify(extAttributes)}::jsonb`,
-      }).returning();
-      return toAdminClientRecord(firstRow(rows)!);
+      try {
+        const rows = await db.insert(clients).values({
+          ...data,
+          extAttributes: sql`${JSON.stringify(extAttributes)}::jsonb`,
+        }).returning();
+        const row = firstRow(rows);
+        return row === null ? null : toAdminClientRecord(row);
+      }
+      catch (error) {
+        const detail = extractPostgresError(error);
+        if (detail?.code === "23505"
+          && (detail.constraint === "client_client_code_unique" || detail.constraint === "client_client_code_key")) {
+          throw new ClientCodeExistsError();
+        }
+        throw error;
+      }
     },
     async getClientByCode(clientCode: string) {
       const row = await db.query.clients.findFirst({
@@ -41,7 +54,7 @@ export function createClientRepository(db: DbClient) {
         .from(clients)
         .where(and(eq(clients.clientCode, clientCode), eq(clients.isDelete, false)))
         .for("update"));
-      return row === undefined ? null : toAdminClientRecord(row);
+      return row === null ? null : toAdminClientRecord(row);
     },
     async lockClientById(id: number) {
       const row = firstRow(await db
@@ -49,7 +62,7 @@ export function createClientRepository(db: DbClient) {
         .from(clients)
         .where(and(eq(clients.id, id), eq(clients.isDelete, false)))
         .for("update"));
-      return row === undefined ? null : toAdminClientRecord(row);
+      return row === null ? null : toAdminClientRecord(row);
     },
     async getAnyClientByCode(clientCode: string) {
       const row = await db.query.clients.findFirst({
@@ -89,7 +102,8 @@ export function createClientRepository(db: DbClient) {
         .set(toClientStorageUpdate(data))
         .where(and(eq(clients.clientCode, clientCode), eq(clients.isDelete, false)))
         .returning();
-      return toAdminClientRecord(firstRow(rows)!);
+      const row = firstRow(rows);
+      return row === null ? null : toAdminClientRecord(row);
     },
     async updateClientByCodeWithProtocolEpochs(clientCode: string, data: ClientUpdateDto) {
       const rows = await db
@@ -102,7 +116,8 @@ export function createClientRepository(db: DbClient) {
         })
         .where(and(eq(clients.clientCode, clientCode), eq(clients.isDelete, false)))
         .returning();
-      return toAdminClientRecord(firstRow(rows)!);
+      const row = firstRow(rows);
+      return row === null ? null : toAdminClientRecord(row);
     },
     async updateClientById(clientDto: ClientInputDto) {
       const { id, clientCode: _clientCode, ...data } = clientDto;
@@ -111,7 +126,8 @@ export function createClientRepository(db: DbClient) {
         .set(toClientStorageUpdate(data))
         .where(and(eq(clients.id, id), eq(clients.isDelete, false)))
         .returning();
-      return toAdminClientRecord(firstRow(rows)!);
+      const row = firstRow(rows);
+      return row === null ? null : toAdminClientRecord(row);
     },
     async updateClientByIdWithProtocolEpochs(clientDto: ClientInputDto) {
       const { id, clientCode: _clientCode, ...data } = clientDto;
@@ -125,7 +141,8 @@ export function createClientRepository(db: DbClient) {
         })
         .where(and(eq(clients.id, id), eq(clients.isDelete, false)))
         .returning();
-      return toAdminClientRecord(firstRow(rows)!);
+      const row = firstRow(rows);
+      return row === null ? null : toAdminClientRecord(row);
     },
     async updateClientOidcByCode(clientCode: string, data: AdminClientOidcUpdate) {
       const rows = await db
@@ -133,7 +150,10 @@ export function createClientRepository(db: DbClient) {
         .set({ ...data, oidcConfigVersion: sql`${clients.oidcConfigVersion} + 1` })
         .where(and(eq(clients.clientCode, clientCode), eq(clients.isDelete, false)))
         .returning();
-      return toAdminClientRecord(firstRow(rows)!);
+      const row = firstRow(rows);
+      if (row === null)
+        throw new Error("Locked Client OIDC update returned no row");
+      return toAdminClientRecord(row);
     },
     async updateClientCustomSsoByCode(clientCode: string, data: AdminClientCustomSsoUpdate) {
       const rows = await db
@@ -141,7 +161,10 @@ export function createClientRepository(db: DbClient) {
         .set({ ...data, customSsoConfigVersion: sql`${clients.customSsoConfigVersion} + 1` })
         .where(and(eq(clients.clientCode, clientCode), eq(clients.isDelete, false)))
         .returning();
-      return toAdminClientRecord(firstRow(rows)!);
+      const row = firstRow(rows);
+      if (row === null)
+        throw new Error("Locked Client Custom SSO update returned no row");
+      return toAdminClientRecord(row);
     },
     async softDeleteClientByCode(clientCode: string) {
       const rows = await db
@@ -154,7 +177,8 @@ export function createClientRepository(db: DbClient) {
         })
         .where(and(eq(clients.clientCode, clientCode), eq(clients.isDelete, false)))
         .returning();
-      return toAdminClientRecord(firstRow(rows)!);
+      const row = firstRow(rows);
+      return row === null ? null : toAdminClientRecord(row);
     },
   };
 }

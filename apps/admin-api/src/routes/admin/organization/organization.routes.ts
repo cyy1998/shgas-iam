@@ -1,5 +1,6 @@
 import {
   OrganizationCreateDtoSchema,
+  OrganizationDtoSchema,
   OrganizationPaginationQueryDtoSchema,
   OrganizationSelectorNodeSchema,
   OrganizationSelectorQueryDtoSchema,
@@ -14,6 +15,8 @@ import jsonContent from "@iam/api-core/core/openapi/helpers/json-content";
 import jsonContentRequired from "@iam/api-core/core/openapi/helpers/json-content-required";
 import createSuccessResponseSchema from "@iam/api-core/core/openapi/schemas/create-success-schema";
 import { createPageResultSchema } from "@iam/api-core/core/pagination/schema";
+import { createAdminMutationResultSchema } from "@iam/contracts";
+
 import { OrganizationDetailVoSchema, OrganizationVoSchema } from "./organization.schema";
 
 const tags = ["Admin/Organization"];
@@ -92,7 +95,7 @@ export const organizationCreate = createRoute({
   },
   responses: {
     ...commonErrorResponses,
-    [HttpStatusCodes.OK]: jsonContent(createSuccessResponseSchema(z.boolean()), "组织创建成功"),
+    [HttpStatusCodes.OK]: jsonContent(createSuccessResponseSchema(createAdminMutationResultSchema(OrganizationDtoSchema)), "组织创建成功"),
   },
 });
 
@@ -106,7 +109,7 @@ export const organizationUpdate = createRoute({
   },
   responses: {
     ...commonErrorResponses,
-    [HttpStatusCodes.OK]: jsonContent(createSuccessResponseSchema(z.boolean()), "组织更新成功"),
+    [HttpStatusCodes.OK]: jsonContent(createSuccessResponseSchema(createAdminMutationResultSchema(z.null())), "组织更新成功"),
   },
 });
 
@@ -120,7 +123,7 @@ export const organizationStatusUpdate = createRoute({
   },
   responses: {
     ...commonErrorResponses,
-    [HttpStatusCodes.OK]: jsonContent(createSuccessResponseSchema(z.boolean()), "状态更新成功"),
+    [HttpStatusCodes.OK]: jsonContent(createSuccessResponseSchema(createAdminMutationResultSchema(z.null())), "状态更新成功"),
   },
 });
 
@@ -133,6 +136,6 @@ export const organizationDelete = createRoute({
   },
   responses: {
     ...commonErrorResponses,
-    [HttpStatusCodes.OK]: jsonContent(createSuccessResponseSchema(z.boolean()), "组织删除成功"),
+    [HttpStatusCodes.OK]: jsonContent(createSuccessResponseSchema(createAdminMutationResultSchema(z.null())), "组织删除成功"),
   },
 });

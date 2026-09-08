@@ -11,13 +11,14 @@ import type {
   AdminOrganizationReadScope,
   AdminOrganizationServiceDeps,
 } from "./organization.port";
+import { createAdminMutation } from "@admin-api/services/admin-mutation/admin-mutation";
 import { adminAuditTransactionOptions } from "@admin-api/services/audit/audit.context";
 import { buildOrganizationAudit } from "@admin-api/services/audit/events/organization.audit";
 import { toOrganizationDto } from "@admin-api/services/organization/organization.schema";
+import { BadRequestError } from "@iam/api-core/errors";
 import { paginate } from "@iam/api-core/utils";
 import { OrganizationLevel, OrganizationStatus, organizationStatusToString } from "@iam/contracts";
 import {
-  OrganizationAlreadyExistsError,
   OrganizationCodeExistsError,
   OrganizationHasChildrenError,
   OrganizationHasEmploymentError,
@@ -25,6 +26,7 @@ import {
 } from "@iam/domain/organization";
 
 export function createOrganizationService(deps: AdminOrganizationServiceDeps) {
+  const mutation = createAdminMutation(deps.uow);
   function readScope(
     authorization?: AdminOrganizationAuthorization,
   ): AdminOrganizationReadScope | undefined {
@@ -41,72 +43,96 @@ export function createOrganizationService(deps: AdminOrganizationServiceDeps) {
     auditContext?: AdminAuditContext,
     authorization?: AdminOrganizationAuthorization,
   ) {
-    return await deps.uow.transaction(async (tx) => {
-      const newOrg = await tx.organizationRepository.getOrganizationByCode(organizationCreateDto.orgCode);
-      let parentOrg = organizationCreateDto.parentCode
-        ? await tx.organizationRepository.getOrganizationByCode(organizationCreateDto.parentCode)
-        : null;
-      if (authorization?.kind === "scoped") {
-        const parentCode = organizationCreateDto.parentCode;
-        if (typeof parentCode !== "string" || parentCode.length === 0) {
-          return authorization.denyMutation({
-            operationId: "admin.organization.create",
-            resourceIdentifier: organizationCreateDto.orgCode,
-            reason: "ACTION_NOT_GRANTED",
-          });
+    if (organizationCreateDto.status !== undefined && organizationCreateDto.status !== OrganizationStatus.Enable)
+      throw new BadRequestError("组织只允许以 Enable 创建");
+    try {
+      return await mutation.transaction(async (tx) => {
+        const newOrg = await tx.organizationRepository.getAnyOrganizationByCode(organizationCreateDto.orgCode);
+        let parentOrg = organizationCreateDto.parentCode
+          ? await tx.organizationRepository.getOrganizationByCode(organizationCreateDto.parentCode)
+          : null;
+        if (authorization?.kind === "scoped") {
+          const parentCode = organizationCreateDto.parentCode;
+          if (typeof parentCode !== "string" || parentCode.length === 0) {
+            return authorization.denyMutation({
+              operationId: "admin.organization.create",
+              resourceIdentifier: organizationCreateDto.orgCode,
+              reason: "ACTION_NOT_GRANTED",
+            });
+          }
+          const candidateParent = await tx.organizationRepository
+            .getOrganizationByCodeForAdmin(parentCode);
+          if (
+            candidateParent === null
+            || !authorization.organizationIds.includes(candidateParent.id)
+          ) {
+            authorization.denyMutation({
+              operationId: "admin.organization.create",
+              resourceIdentifier: parentCode,
+              reason: "RESOURCE_OUT_OF_SCOPE",
+              concealExistence: true,
+            });
+          }
+          if (candidateParent === null)
+            throw new OrganizationNotFoundError();
+          if (
+            candidateParent.status !== OrganizationStatus.Enable
+            || candidateParent.level === OrganizationLevel.Five
+          ) {
+            authorization.denyMutation({
+              operationId: "admin.organization.create",
+              resourceIdentifier: parentCode,
+              reason: "RESOURCE_STATE_NOT_ACTIONABLE",
+            });
+          }
+          parentOrg = candidateParent;
         }
-        const candidateParent = await tx.organizationRepository
-          .getOrganizationByCodeForAdmin(parentCode);
         if (
-          candidateParent === null
-          || !authorization.organizationIds.includes(candidateParent.id)
+          authorization?.kind === "scoped"
+          && newOrg !== null
+          && !authorization.organizationIds.includes(newOrg.id)
         ) {
           authorization.denyMutation({
             operationId: "admin.organization.create",
-            resourceIdentifier: parentCode,
+            resourceIdentifier: organizationCreateDto.orgCode,
             reason: "RESOURCE_OUT_OF_SCOPE",
             concealExistence: true,
           });
         }
-        if (candidateParent === null)
-          throw new OrganizationNotFoundError();
-        if (
-          candidateParent.status !== OrganizationStatus.Enable
-          || candidateParent.level === OrganizationLevel.Five
-        ) {
+        if (newOrg !== null) {
+          throw new OrganizationCodeExistsError("待创建组织编码已存在");
+        }
+        if (organizationCreateDto.parentCode && parentOrg === null)
+          throw new OrganizationNotFoundError("父组织不存在或未启用");
+        const created = await tx.organizationRepository.setOrganization(
+          { ...organizationCreateDto, status: OrganizationStatus.Enable },
+          parentOrg,
+        );
+        if (created === null)
+          throw new Error("Organization insert returned no row");
+        await tx.auditService.recordAuditLog(buildOrganizationAudit("admin.organization.create", created, {
+          changed: true,
+          parentCode: organizationCreateDto.parentCode ?? null,
+          orgType: organizationCreateDto.orgType,
+        }, auditContext));
+        return { changed: true, result: toOrganizationDto(created) };
+      }, adminAuditTransactionOptions(auditContext));
+    }
+    catch (error) {
+      if (authorization?.kind === "scoped" && error instanceof OrganizationCodeExistsError) {
+        // The failed transaction has rolled back; use the root reader for visibility.
+        const occupied = await deps.organizationRepository.getAnyOrganizationByCode(organizationCreateDto.orgCode);
+        if (occupied === null || !authorization.organizationIds.includes(occupied.id)) {
           authorization.denyMutation({
             operationId: "admin.organization.create",
-            resourceIdentifier: parentCode,
-            reason: "RESOURCE_STATE_NOT_ACTIONABLE",
+            resourceIdentifier: organizationCreateDto.orgCode,
+            reason: "RESOURCE_OUT_OF_SCOPE",
+            concealExistence: true,
           });
         }
-        parentOrg = candidateParent;
       }
-      if (
-        authorization?.kind === "scoped"
-        && newOrg !== null
-        && !authorization.organizationIds.includes(newOrg.id)
-      ) {
-        authorization.denyMutation({
-          operationId: "admin.organization.create",
-          resourceIdentifier: organizationCreateDto.orgCode,
-          reason: "RESOURCE_OUT_OF_SCOPE",
-          concealExistence: true,
-        });
-      }
-      if (newOrg !== null) {
-        throw new OrganizationAlreadyExistsError("待创建组织已存在");
-      }
-      const created = await tx.organizationRepository.setOrganization(
-        organizationCreateDto,
-        parentOrg,
-      );
-      await tx.auditService.recordAuditLog(buildOrganizationAudit("admin.organization.create", created, {
-        parentCode: organizationCreateDto.parentCode ?? null,
-        orgType: organizationCreateDto.orgType,
-      }, auditContext));
-      return true;
-    }, adminAuditTransactionOptions(auditContext));
+      throw error;
+    }
   }
 
   async function getOrganizationChildrenForAdmin(
@@ -226,70 +252,86 @@ export function createOrganizationService(deps: AdminOrganizationServiceDeps) {
     authorization?: AdminOrganizationAuthorization,
     action = "admin.organization.update",
   ) {
-    return await deps.uow.transaction(async (tx) => {
-      const existing = await tx.organizationRepository.getOrganizationByCodeForAdmin(orgCode);
-      if (existing === null) {
-        throw new OrganizationNotFoundError("组织不存在");
-      }
-      if (
-        authorization?.kind === "scoped"
-        && !authorization.organizationIds.includes(existing.id)
-      ) {
-        authorization.denyMutation({
-          operationId: action === "admin.organization.status_update"
-            ? "admin.organization.updateStatus"
-            : "admin.organization.update",
-          resourceIdentifier: orgCode,
-          reason: "RESOURCE_OUT_OF_SCOPE",
-          concealExistence: true,
-        });
-      }
-      if (
-        authorization?.kind === "scoped"
-        && data.orgCode !== undefined
-        && data.orgCode !== orgCode
-      ) {
-        authorization.denyMutation({
-          operationId: "admin.organization.update",
-          resourceIdentifier: orgCode,
-          reason: "ACTION_NOT_GRANTED",
-        });
-      }
-      if (data.orgCode && data.orgCode !== orgCode) {
-        const conflict = await tx.organizationRepository.getOrganizationByCode(data.orgCode);
-        if (conflict !== null) {
-          throw new OrganizationCodeExistsError(`组织编码已存在: ${data.orgCode}`);
-        }
-      }
-      if (
-        data.status !== undefined
-        && data.status !== existing.status
-        && data.status !== OrganizationStatus.Enable
-      ) {
-        await tx.responsibilityParentLifecycle
-          .assertNoOpenAssignmentsTargetingOrganizationSubtree({
-            organizationId: existing.id,
+    if (!Object.values(data).some(value => value !== undefined))
+      throw new BadRequestError("至少提交一个组织更新字段");
+    return await mutation.locked(
+      tx => tx.organizationRepository.lockOrganizationByCode(orgCode),
+      () => new OrganizationNotFoundError(),
+      async (tx, existing) => {
+        if (
+          authorization?.kind === "scoped"
+          && !authorization.organizationIds.includes(existing.id)
+        ) {
+          authorization.denyMutation({
+            operationId: action === "admin.organization.status_update"
+              ? "admin.organization.updateStatus"
+              : "admin.organization.update",
+            resourceIdentifier: orgCode,
+            reason: "RESOURCE_OUT_OF_SCOPE",
+            concealExistence: true,
           });
-        const employmentCount = await tx.organizationRepository.countOpenEmploymentsByOrgCode(orgCode);
-        if (employmentCount > 0) {
-          throw new OrganizationHasEmploymentError();
         }
-      }
-      await tx.organizationRepository.updateOrganizationByCode(orgCode, data);
-      await tx.auditService.recordAuditLog(buildOrganizationAudit(action, {
-        ...existing,
-        orgCode: data.orgCode ?? existing.orgCode,
-        orgName: data.orgName ?? existing.orgName,
-        status: data.status ?? existing.status,
-      }, {
-        patch: data,
-        previousOrgCode: orgCode,
-      }, auditContext));
-      await tx.userProfileInvalidation.recordChanges([
-        { kind: "organization", organizationId: existing.id },
-      ]);
-      return true;
-    }, adminAuditTransactionOptions(auditContext));
+        if (
+          authorization?.kind === "scoped"
+          && data.orgCode !== undefined
+          && data.orgCode !== orgCode
+        ) {
+          authorization.denyMutation({
+            operationId: "admin.organization.update",
+            resourceIdentifier: orgCode,
+            reason: "ACTION_NOT_GRANTED",
+          });
+        }
+        const changed = (data.orgCode !== undefined && data.orgCode !== existing.orgCode)
+          || (data.orgName !== undefined && data.orgName !== existing.orgName)
+          || (data.orgType !== undefined && data.orgType !== existing.orgType)
+          || (data.status !== undefined && data.status !== existing.status);
+        if (!changed && data.status === undefined)
+          return { changed: false, result: null };
+        if (data.orgCode && data.orgCode !== orgCode) {
+          const conflict = await tx.organizationRepository.getAnyOrganizationByCode(data.orgCode);
+          if (conflict !== null) {
+            throw new OrganizationCodeExistsError(`组织编码已存在: ${data.orgCode}`);
+          }
+        }
+        if (
+          data.status !== undefined
+          && data.status !== existing.status
+          && data.status !== OrganizationStatus.Enable
+        ) {
+          await tx.responsibilityParentLifecycle
+            .assertNoOpenAssignmentsTargetingOrganizationSubtree({
+              organizationId: existing.id,
+            });
+          const employmentCount = await tx.organizationRepository.countOpenEmploymentsByOrgCode(orgCode);
+          if (employmentCount > 0) {
+            throw new OrganizationHasEmploymentError();
+          }
+        }
+        if (changed) {
+          const updated = await tx.organizationRepository.updateOrganizationByCode(orgCode, data);
+          if (updated === null)
+            throw new Error("Locked Organization update returned no row");
+        }
+        await tx.auditService.recordAuditLog(buildOrganizationAudit(action, {
+          ...existing,
+          orgCode: data.orgCode ?? existing.orgCode,
+          orgName: data.orgName ?? existing.orgName,
+          status: data.status ?? existing.status,
+        }, {
+          patch: data,
+          previousOrgCode: orgCode,
+          changed,
+        }, auditContext));
+        if (changed) {
+          await tx.userProfileInvalidation.recordChanges([
+            { kind: "organization", organizationId: existing.id },
+          ]);
+        }
+        return { changed, result: null };
+      },
+      adminAuditTransactionOptions(auditContext),
+    );
   }
 
   async function updateOrganizationStatus(
@@ -312,43 +354,47 @@ export function createOrganizationService(deps: AdminOrganizationServiceDeps) {
     auditContext?: AdminAuditContext,
     authorization?: AdminOrganizationAuthorization,
   ) {
-    return await deps.uow.transaction(async (tx) => {
-      const existing = await tx.organizationRepository.getOrganizationByCodeForAdmin(orgCode);
-      if (existing === null) {
-        throw new OrganizationNotFoundError("组织不存在");
-      }
-      if (
-        authorization?.kind === "scoped"
-        && !authorization.organizationIds.includes(existing.id)
-      ) {
-        authorization.denyMutation({
-          operationId: "admin.organization.delete",
-          resourceIdentifier: orgCode,
-          reason: "RESOURCE_OUT_OF_SCOPE",
-          concealExistence: true,
-        });
-      }
-      await tx.responsibilityParentLifecycle
-        .assertNoOpenAssignmentsTargetingOrganizationSubtree({
-          organizationId: existing.id,
-        });
-      const childrenCount = await tx.organizationRepository.countActiveChildrenByOrgCode(orgCode);
-      if (childrenCount > 0) {
-        throw new OrganizationHasChildrenError();
-      }
-      const employmentCount = await tx.organizationRepository.countOpenEmploymentsByOrgCode(orgCode);
-      if (employmentCount > 0) {
-        throw new OrganizationHasEmploymentError();
-      }
-      await tx.organizationRepository.softDeleteOrganizationByCode(orgCode);
-      await tx.auditService.recordAuditLog(buildOrganizationAudit("admin.organization.delete", existing, {
-        deleted: true,
-      }, auditContext));
-      await tx.userProfileInvalidation.recordChanges([
-        { kind: "organization", organizationId: existing.id },
-      ]);
-      return true;
-    }, adminAuditTransactionOptions(auditContext));
+    return await mutation.locked(
+      tx => tx.organizationRepository.lockOrganizationByCode(orgCode),
+      () => new OrganizationNotFoundError(),
+      async (tx, existing) => {
+        if (
+          authorization?.kind === "scoped"
+          && !authorization.organizationIds.includes(existing.id)
+        ) {
+          authorization.denyMutation({
+            operationId: "admin.organization.delete",
+            resourceIdentifier: orgCode,
+            reason: "RESOURCE_OUT_OF_SCOPE",
+            concealExistence: true,
+          });
+        }
+        await tx.responsibilityParentLifecycle
+          .assertNoOpenAssignmentsTargetingOrganizationSubtree({
+            organizationId: existing.id,
+          });
+        const childrenCount = await tx.organizationRepository.countActiveChildrenByOrgCode(orgCode);
+        if (childrenCount > 0) {
+          throw new OrganizationHasChildrenError();
+        }
+        const employmentCount = await tx.organizationRepository.countOpenEmploymentsByOrgCode(orgCode);
+        if (employmentCount > 0) {
+          throw new OrganizationHasEmploymentError();
+        }
+        const deleted = await tx.organizationRepository.softDeleteOrganizationByCode(orgCode);
+        if (deleted === null)
+          throw new Error("Locked Organization delete returned no row");
+        await tx.auditService.recordAuditLog(buildOrganizationAudit("admin.organization.delete", existing, {
+          deleted: true,
+          changed: true,
+        }, auditContext));
+        await tx.userProfileInvalidation.recordChanges([
+          { kind: "organization", organizationId: existing.id },
+        ]);
+        return { changed: true, result: null };
+      },
+      adminAuditTransactionOptions(auditContext),
+    );
   }
 
   return {

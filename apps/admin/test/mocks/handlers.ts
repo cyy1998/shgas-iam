@@ -1,7 +1,7 @@
 import { HttpResponse, http } from 'msw';
 import {
-  adminClientDetail,
   adminCapabilitySummary,
+  adminClientDetail,
   adminClientSearchResult,
   adminEmploymentSearchResult,
   adminPositionSearchResult,
@@ -31,6 +31,10 @@ export const handlers = [
   http.get('*/rpc/admin.employment.search', () =>
     trpc(adminEmploymentSearchResult),
   ),
-  http.post('*/rpc/admin.client.create', () => trpc(adminClientDetail)),
-  http.post('*/rpc/admin.client.update', () => trpc(adminClientDetail)),
+  http.post('*/rpc/admin.client.create', () =>
+    trpc({ changed: true, result: adminClientDetail }),
+  ),
+  http.post('*/rpc/admin.client.update', () =>
+    trpc({ changed: true, result: null }),
+  ),
 ];

@@ -2,12 +2,18 @@ import type { AdminApiRestContext } from "@admin-api/lib/admin-api-adapter";
 import type { AdminEmploymentAuthorization } from "@admin-api/services/admin-authorization/admin-employment-authorization.type";
 import type { Context } from "hono";
 import { createEmploymentAdapter } from "@admin-api/routes/admin/employment/employment.adapter";
+import { createEmploymentRoute } from "@admin-api/routes/admin/employment/employment.index";
 import { createAdminAuthorizationPolicy } from "@admin-api/services/admin-authorization/admin-authorization.policy";
-import { EmploymentStatus, OrganizationLevel, OrganizationType } from "@iam/contracts";
+import { AdminMutationCommittedError } from "@admin-api/services/admin-mutation/admin-mutation";
+import { createErrorHandler } from "@iam/api-core/middlewares";
+import { ApiErrorCode, EmploymentStatus, OrganizationLevel, OrganizationType } from "@iam/contracts";
+import { EmploymentAlreadyExistsError, EmploymentNotEditableError, EmploymentNotFoundError } from "@iam/domain/employment";
 import { UserNotFoundError } from "@iam/domain/user";
 import { TRPCError } from "@trpc/server";
+import { fetchRequestHandler } from "@trpc/server/adapters/fetch";
 import { describe, expect, mock, test } from "bun:test";
-import { getTestAdminAuthorizationValue } from "../helpers/admin-authorization";
+import { Hono } from "hono";
+import { addTestAdminAuthorizationMiddleware, getTestAdminAuthorizationValue } from "../helpers/admin-authorization";
 
 function createRestContext(username: string) {
   return {
@@ -111,12 +117,20 @@ describe("admin employment adapter", () => {
         privileges: [],
       };
     });
-    const createEmployment = mock(async () => ({ id: 5 }));
-    const updateEmployment = mock(async () => true);
-    const changeEmploymentAvailability = mock(async () => true);
-    const endEmployment = mock(async () => true);
-    const managePrimaryEmployment = mock(async () => true);
-    const transferEmployment = mock(async () => ({ newEmploymentId: 6 }));
+    const createEmployment = mock(async () => ({ changed: true, result: { id: 5 } }));
+    const updateEmployment = mock(async () => ({ changed: true, result: null }));
+    const changeEmploymentAvailability = mock(async (
+      input: { employmentId: number },
+      options: { authorization: AdminEmploymentAuthorization },
+    ) => {
+      if (input.employmentId === 404) {
+        options.authorization.denyMutation({ operationId: "admin.employment.pause", resourceIdentifier: 404, reason: "RESOURCE_OUT_OF_SCOPE", concealExistence: true });
+      }
+      return { changed: true, result: null };
+    });
+    const endEmployment = mock(async () => ({ changed: true, result: null }));
+    const managePrimaryEmployment = mock(async () => ({ changed: true, result: null }));
+    const transferEmployment = mock(async () => ({ changed: true, result: { id: 6 } }));
     const authorizationLogger = { warn: mock() };
     const resolveForActor = mock(async () => ({
       rootOrganizationIds: [10],
@@ -153,7 +167,7 @@ describe("admin employment adapter", () => {
         updateEmployment,
       },
       managePrimaryEmployment: { execute: managePrimaryEmployment },
-      resignUser: { execute: mock(async () => true as const) },
+      resignUser: { execute: mock(async () => ({ changed: true, result: null })) },
       transferEmployment: { execute: transferEmployment },
     } as any);
     const caller = adapter.employmentAdminRouter.createCaller({
@@ -248,7 +262,7 @@ describe("admin employment adapter", () => {
       command: "clear",
       employmentId: 4,
     }, expect.anything());
-    expect(guardEmploymentMutationForAdmin).toHaveBeenCalledTimes(7);
+    expect(guardEmploymentMutationForAdmin).not.toHaveBeenCalled();
     expect(resolveForActor).toHaveBeenCalledTimes(10);
     expect(authorizationLogger.warn).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -262,48 +276,50 @@ describe("admin employment adapter", () => {
   });
 
   test("exposes an explicit End lifecycle command", async () => {
-    const execute = mock(async () => true);
+    const execute = mock(async () => ({ changed: true, result: null }));
     const adapter = createEmploymentAdapter({
-      changeEmploymentAvailability: { execute: mock(async () => true) },
-      createEmployment: { execute: mock(async () => ({ id: 10 })) },
+      changeEmploymentAvailability: { execute: mock(async () => ({ changed: true, result: null })) },
+      createEmployment: { execute: mock(async () => ({ changed: true, result: { id: 10 } })) },
       endEmployment: { execute },
       employmentService: {},
-      resignUser: { execute: mock(async () => true as const) },
+      resignUser: { execute: mock(async () => ({ changed: true, result: null })) },
     } as any);
     const caller = adapter.employmentAdminRouter.createCaller({
       hono: createRestContext("unused") as unknown as Context,
     });
 
-    await expect(caller.end({ id: 4 })).resolves.toBe(true);
+    await expect(caller.end({ id: 4 })).resolves.toEqual({ changed: true, result: null });
 
     expect(execute).toHaveBeenCalledWith({ employmentId: 4 }, {
+      authorization: expect.objectContaining({ kind: "full" }),
       auditContext: expect.objectContaining({ actorType: "admin", actorUserId: 1001 }),
     });
   });
 
   test("exposes explicit Pause and Resume lifecycle commands", async () => {
-    const execute = mock(async () => true);
+    const execute = mock(async () => ({ changed: true, result: null }));
     const adapter = createEmploymentAdapter({
       changeEmploymentAvailability: { execute },
-      createEmployment: { execute: mock(async () => ({ id: 10 })) },
+      createEmployment: { execute: mock(async () => ({ changed: true, result: { id: 10 } })) },
       employmentService: {},
-      resignUser: { execute: mock(async () => true as const) },
+      resignUser: { execute: mock(async () => ({ changed: true, result: null })) },
     } as any);
     const context = createRestContext("unused");
     const caller = adapter.employmentAdminRouter.createCaller({
       hono: context as unknown as Context,
     });
 
-    await expect(caller.pause({ id: 4 })).resolves.toBe(true);
+    await expect(caller.pause({ id: 4 })).resolves.toEqual({ changed: true, result: null });
     await expect(caller.resume({
       id: 4,
       expectedAncestorOrgCode: "COMPANY",
-    })).resolves.toBe(true);
+    })).resolves.toEqual({ changed: true, result: null });
 
     expect(execute).toHaveBeenNthCalledWith(1, {
       command: "pause",
       employmentId: 4,
     }, {
+      authorization: expect.objectContaining({ kind: "full" }),
       auditContext: expect.objectContaining({ actorType: "admin", actorUserId: 1001 }),
     });
     expect(execute).toHaveBeenNthCalledWith(2, {
@@ -311,17 +327,18 @@ describe("admin employment adapter", () => {
       employmentId: 4,
       expectedAncestorOrgCode: "COMPANY",
     }, {
+      authorization: expect.objectContaining({ kind: "full" }),
       auditContext: expect.objectContaining({ actorType: "admin", actorUserId: 1001 }),
     });
   });
 
   test("does not expose legacy status update or delete mutations", () => {
     const adapter = createEmploymentAdapter({
-      changeEmploymentAvailability: { execute: mock(async () => true) },
-      createEmployment: { execute: mock(async () => ({ id: 10 })) },
-      endEmployment: { execute: mock(async () => true) },
+      changeEmploymentAvailability: { execute: mock(async () => ({ changed: true, result: null })) },
+      createEmployment: { execute: mock(async () => ({ changed: true, result: { id: 10 } })) },
+      endEmployment: { execute: mock(async () => ({ changed: true, result: null })) },
       employmentService: {},
-      resignUser: { execute: mock(async () => true as const) },
+      resignUser: { execute: mock(async () => ({ changed: true, result: null })) },
     } as any);
     const procedureNames = Object.keys(adapter.employmentAdminRouter._def.procedures);
     expect(procedureNames).not.toContain("updateStatus");
@@ -331,13 +348,13 @@ describe("admin employment adapter", () => {
   });
 
   test("rejects lifecycle fields from the generic Employment edit contract", async () => {
-    const updateEmployment = mock(async () => true);
+    const updateEmployment = mock(async () => ({ changed: true, result: null }));
     const adapter = createEmploymentAdapter({
-      changeEmploymentAvailability: { execute: mock(async () => true) },
-      createEmployment: { execute: mock(async () => ({ id: 10 })) },
-      endEmployment: { execute: mock(async () => true) },
+      changeEmploymentAvailability: { execute: mock(async () => ({ changed: true, result: null })) },
+      createEmployment: { execute: mock(async () => ({ changed: true, result: { id: 10 } })) },
+      endEmployment: { execute: mock(async () => ({ changed: true, result: null })) },
       employmentService: { updateEmployment },
-      resignUser: { execute: mock(async () => true as const) },
+      resignUser: { execute: mock(async () => ({ changed: true, result: null })) },
     } as any);
     const caller = adapter.employmentAdminRouter.createCaller({
       hono: createRestContext("unused") as unknown as Context,
@@ -356,11 +373,11 @@ describe("admin employment adapter", () => {
   });
 
   test("delegates creation to the Employment Lifecycle interface", async () => {
-    const execute = mock(async () => ({ id: 10 }));
+    const execute = mock(async () => ({ changed: true, result: { id: 10 } }));
     const adapter = createEmploymentAdapter({
       createEmployment: { execute },
       employmentService: {},
-      resignUser: { execute: mock(async () => true as const) },
+      resignUser: { execute: mock(async () => ({ changed: true, result: null })) },
     } as any);
     const context = createRestContext("unused");
     const caller = adapter.employmentAdminRouter.createCaller({
@@ -375,7 +392,7 @@ describe("admin employment adapter", () => {
       startTime: new Date("2020-01-01T00:00:00.000Z"),
       endTime: new Date("2020-02-01T00:00:00.000Z"),
       status: 3,
-    } as any)).resolves.toEqual({ id: 10 });
+    } as any)).resolves.toEqual({ changed: true, result: { id: 10 } });
 
     expect(execute).toHaveBeenCalledWith({
       username: "zhangsan",
@@ -392,8 +409,51 @@ describe("admin employment adapter", () => {
     }));
   });
 
+  test("REST preserves its envelope around the unified create and lifecycle result", async () => {
+    const adapter = createEmploymentAdapter({
+      createEmployment: { execute: mock(async () => ({ changed: true, result: { id: 10 } })) },
+      endEmployment: { execute: mock(async () => ({ changed: false, result: null })) },
+    } as any);
+    const context = createRestContext("unused");
+    context.req.valid.mockImplementation(() => ({ username: "user", orgCode: "ORG", posCode: "DEV" }));
+    await adapter.employmentsCreate(
+      context as unknown as Parameters<typeof adapter.employmentsCreate>[0],
+      async () => {},
+    );
+    expect(context.json).toHaveBeenLastCalledWith({
+      code: 200,
+      data: { changed: true, result: { id: 10 } },
+      message: "success",
+    }, 200);
+    context.req.valid.mockImplementation(() => ({ id: 10 }));
+    await adapter.employmentsEnd(context as unknown as Parameters<typeof adapter.employmentsEnd>[0], async () => {});
+    expect(context.json).toHaveBeenLastCalledWith({
+      code: 200,
+      data: { changed: false, result: null },
+      message: "success",
+    }, 200);
+  });
+
+  test("rejects empty description input at the tRPC boundary", async () => {
+    const updateEmployment = mock(async () => ({ changed: true, result: null }));
+    const adapter = createEmploymentAdapter({ employmentService: { updateEmployment } } as any);
+    const caller = adapter.employmentAdminRouter.createCaller({
+      hono: createRestContext("unused") as unknown as Context,
+    });
+    let failure: unknown;
+    try {
+      await caller.update({ id: 4, data: {} });
+    }
+    catch (error) {
+      failure = error;
+    }
+    expect(failure).toBeInstanceOf(TRPCError);
+    expect((failure as TRPCError).code).toBe("BAD_REQUEST");
+    expect(updateEmployment).not.toHaveBeenCalled();
+  });
+
   test("delegates REST resignation to the independent use-case facade", async () => {
-    const execute = mock(async () => true as const);
+    const execute = mock(async () => ({ changed: true, result: null }));
     const adapter = createEmploymentAdapter({
       employmentService: {},
       resignUser: { execute },
@@ -420,13 +480,13 @@ describe("admin employment adapter", () => {
     );
     expect(context.json).toHaveBeenCalledWith({
       code: 200,
-      data: true,
+      data: { changed: true, result: null },
       message: "success",
     }, 200);
   });
 
   test("keeps the tRPC resignUser key, input, result, and normalized audit context", async () => {
-    const execute = mock(async () => true as const);
+    const execute = mock(async () => ({ changed: true, result: null }));
     const adapter = createEmploymentAdapter({
       employmentService: {},
       resignUser: { execute },
@@ -436,7 +496,8 @@ describe("admin employment adapter", () => {
       hono: context as unknown as Context,
     });
 
-    await expect(caller.resignUser({ username: "zhangsan" })).resolves.toBe(true);
+    const result = await caller.resignUser({ username: "zhangsan" });
+    expect(result).toEqual({ changed: true, result: null });
     expect(execute).toHaveBeenCalledWith(
       { username: "zhangsan" },
       { auditContext: expect.objectContaining({
@@ -451,8 +512,66 @@ describe("admin employment adapter", () => {
     );
   });
 
+  for (const committed of [true, false]) {
+    test(`public resignation transports distinguish ${committed ? "confirmed commit" : "unknown failure"}`, async () => {
+      const error = committed ? new AdminMutationCommittedError() : new Error("private transaction failure");
+      const execute = mock(async () => {
+        throw error;
+      });
+      const adapter = createEmploymentAdapter({ employmentService: {}, resignUser: { execute } } as any);
+      const app = new Hono();
+      addTestAdminAuthorizationMiddleware(app);
+      app.onError(createErrorHandler({ error: mock(), warn: mock(), info: mock() }));
+      app.route("/admin", createEmploymentRoute(adapter));
+      const response = await app.request("/admin/employments/users/zhangsan/resign", { method: "POST" });
+      const rest = await response.json();
+      const serviceCode = committed ? ApiErrorCode.AdminMutationCommitted : ApiErrorCode.InternalError;
+      expect(response.status).toBe(500);
+      expect(rest).toMatchObject({ code: serviceCode });
+      expect(rest).not.toHaveProperty("changed");
+      expect(JSON.stringify(rest)).not.toContain("private transaction failure");
+
+      const trpcResponse = await fetchRequestHandler({
+        endpoint: "/trpc",
+        req: new Request("http://localhost/trpc/resignUser", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ username: "zhangsan" }),
+        }),
+        router: adapter.employmentAdminRouter,
+        createContext: () => ({ hono: createRestContext("zhangsan") as unknown as Context }),
+      });
+      const trpc = await trpcResponse.json();
+      expect(trpcResponse.status).toBe(500);
+      expect(trpc).toMatchObject({ error: { data: {
+        code: "INTERNAL_SERVER_ERROR",
+        httpStatus: 500,
+        serviceCode,
+      } } });
+      expect(trpc).not.toHaveProperty("result");
+      expect(JSON.stringify(trpc)).not.toContain("private transaction failure");
+      expect(execute).toHaveBeenCalledTimes(2);
+    });
+  }
+
+  test("preserves no-op resignation results through REST and tRPC", async () => {
+    const adapter = createEmploymentAdapter({
+      employmentService: {},
+      resignUser: { execute: mock(async () => ({ changed: false, result: null })) },
+    } as any);
+    const context = createRestContext("zhangsan");
+    const response = await adapter.employmentsResignUser(
+      context as unknown as Parameters<typeof adapter.employmentsResignUser>[0],
+      async () => {},
+    );
+    expect(response).toMatchObject({ code: 200, data: { changed: false, result: null } });
+    const caller = adapter.employmentAdminRouter.createCaller({ hono: context as unknown as Context });
+    const result = await caller.resignUser({ username: "zhangsan" });
+    expect(result).toEqual({ changed: false, result: null });
+  });
+
   test("passes request-time User authorization to an HR resignation direct call", async () => {
-    const execute = mock(async () => true as const);
+    const execute = mock(async () => ({ changed: true, result: null }));
     const adapter = createEmploymentAdapter({
       employmentService: {},
       resignUser: { execute },
@@ -463,7 +582,7 @@ describe("admin employment adapter", () => {
 
     const result = await caller.resignUser({ username: "zhangsan" });
 
-    expect(result).toBe(true);
+    expect(result).toEqual({ changed: true, result: null });
     expect(execute).toHaveBeenCalledWith(
       { username: "zhangsan" },
       expect.objectContaining({
@@ -505,44 +624,31 @@ describe("admin employment adapter", () => {
     }
   });
 
-  test("exposes explicit Set and Clear Primary lifecycle commands", async () => {
-    const execute = mock(async () => true);
+  test.each([true, false])("exposes Set and Clear Primary outcomes through both protocols: changed=%s", async (changed) => {
+    const outcome = { changed, result: null };
+    const execute = mock(async () => outcome);
     const adapter = createEmploymentAdapter({
       employmentService: {},
       managePrimaryEmployment: { execute },
-      resignUser: { execute: mock(async () => true as const) },
     } as any);
     const context = createRestContext("unused");
     context.req.valid.mockImplementation(() => ({ id: 4 }));
-    const caller = adapter.employmentAdminRouter.createCaller({
-      hono: context as unknown as Context,
-    });
-
-    await expect(adapter.employmentsSetPrimary(
-      context as unknown as Parameters<typeof adapter.employmentsSetPrimary>[0],
-      async () => {},
-    )).resolves.toMatchObject({ code: 200 });
-    await expect(caller.clearPrimary({ id: 4 })).resolves.toBe(true);
-
-    expect(execute).toHaveBeenNthCalledWith(1, {
-      command: "set",
-      employmentId: 4,
-    }, expect.objectContaining({
-      auditContext: expect.objectContaining({ actorType: "admin", actorUserId: 1001 }),
-    }));
-    expect(execute).toHaveBeenNthCalledWith(2, {
-      command: "clear",
-      employmentId: 4,
-    }, {
-      auditContext: expect.objectContaining({ actorType: "admin", actorUserId: 1001 }),
-    });
+    const caller = adapter.employmentAdminRouter.createCaller({ hono: context as unknown as Context });
+    for (const handler of [adapter.employmentsSetPrimary, adapter.employmentsClearPrimary]) {
+      const response = await handler(context as unknown as Parameters<typeof handler>[0], async () => {});
+      expect(response).toMatchObject({ code: 200, data: outcome });
+    }
+    const set = await caller.setPrimary({ id: 4 });
+    const clear = await caller.clearPrimary({ id: 4 });
+    expect(set).toEqual(outcome);
+    expect(clear).toEqual(outcome);
   });
 
   test("delegates Transfer with an explicit Primary choice to the lifecycle interface", async () => {
-    const execute = mock(async () => ({ newEmploymentId: 10 }));
+    const execute = mock(async () => ({ changed: true, result: { id: 10 } }));
     const adapter = createEmploymentAdapter({
       employmentService: {},
-      resignUser: { execute: mock(async () => true as const) },
+      resignUser: { execute: mock(async () => ({ changed: true, result: null })) },
       transferEmployment: { execute },
     } as any);
     const context = createRestContext("unused");
@@ -550,7 +656,7 @@ describe("admin employment adapter", () => {
       hono: context as unknown as Context,
     });
 
-    await expect(caller.transfer({
+    const outcome = await caller.transfer({
       id: 4,
       data: {
         newOrgCode: "TARGET_ORG",
@@ -559,7 +665,14 @@ describe("admin employment adapter", () => {
         isPrimary: false,
         description: null,
       },
-    } as any)).resolves.toEqual({ newEmploymentId: 10 });
+    });
+    expect(outcome).toEqual({ changed: true, result: { id: 10 } });
+    context.req.valid.mockImplementation((target: string) => target === "param" ? { id: 4 } : { newOrgCode: "TARGET_ORG", newPosCode: "TARGET_POS", isPrimary: false });
+    const rest = await adapter.employmentsTransfer(
+      context as unknown as Parameters<typeof adapter.employmentsTransfer>[0],
+      async () => {},
+    );
+    expect(rest).toMatchObject({ code: 200, data: outcome });
 
     expect(execute).toHaveBeenCalledWith({
       employmentId: 4,
@@ -577,11 +690,57 @@ describe("admin employment adapter", () => {
     }));
   });
 
-  test("rejects Transfer without an explicit Primary choice or with legacy lifecycle fields", async () => {
-    const execute = mock(async () => ({ newEmploymentId: 10 }));
+  test.each([
+    [new EmploymentNotFoundError(), "NOT_FOUND"],
+    [new EmploymentNotEditableError(), "CONFLICT"],
+    [new EmploymentAlreadyExistsError(), "CONFLICT"],
+  ] as const)("preserves lifecycle failure semantics across Primary and Transfer", async (error, code) => {
+    const execute = mock(async () => {
+      throw error;
+    });
     const adapter = createEmploymentAdapter({
       employmentService: {},
-      resignUser: { execute: mock(async () => true as const) },
+      managePrimaryEmployment: { execute },
+      transferEmployment: { execute },
+    } as any);
+    const context = createRestContext("unused");
+    context.req.valid.mockImplementation((target: string) => target === "param"
+      ? { id: 4 }
+      : { newOrgCode: "ORG", newPosCode: "POS", isPrimary: false });
+    const caller = adapter.employmentAdminRouter.createCaller({ hono: context as unknown as Context });
+    for (const run of [
+      () => caller.setPrimary({ id: 4 }),
+      () => caller.clearPrimary({ id: 4 }),
+      () => caller.transfer({ id: 4, data: { newOrgCode: "ORG", newPosCode: "POS", isPrimary: false } }),
+    ]) {
+      const failure = await run().catch((cause: unknown) => cause);
+      expect(failure).toBeInstanceOf(TRPCError);
+      expect(failure).toMatchObject({ code });
+    }
+    for (const handler of [
+      adapter.employmentsSetPrimary,
+      adapter.employmentsClearPrimary,
+      adapter.employmentsTransfer,
+    ]) {
+      let failure: unknown;
+      try {
+        await handler(
+          context as unknown as Parameters<typeof handler>[0],
+          async () => {},
+        );
+      }
+      catch (cause) {
+        failure = cause;
+      }
+      expect(failure).toBe(error);
+    }
+  });
+
+  test("rejects Transfer without an explicit Primary choice or with legacy lifecycle fields", async () => {
+    const execute = mock(async () => ({ changed: true, result: { id: 10 } }));
+    const adapter = createEmploymentAdapter({
+      employmentService: {},
+      resignUser: { execute: mock(async () => ({ changed: true, result: null })) },
       transferEmployment: { execute },
     } as any);
     const caller = adapter.employmentAdminRouter.createCaller({

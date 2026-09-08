@@ -1,3 +1,4 @@
+import type { ApiRequestContext, InternalAuditActor } from "@api/services/audit/audit.context";
 import type { z } from "@hono/zod-openapi";
 import type { PrivilegeDelegationStatus } from "@iam/contracts";
 import type {
@@ -12,14 +13,29 @@ export interface PrivilegeDelegationQueryDto extends z.infer<typeof PrivilegeDel
 export interface PrivilegeDelegationCreateDto extends z.infer<typeof PrivilegeDelegationCreateDtoSchema> {}
 export interface PrivilegeDelegationUpdateDto extends z.infer<typeof PrivilegeDelegationUpdateDtoSchema> {}
 
-export interface PrivilegeDelegationStatusRecord {
+export interface PrivilegeDelegationCommandContext {
+  actor: InternalAuditActor;
+  requestContext?: ApiRequestContext;
+}
+
+export interface PrivilegeDelegationRecord {
+  id: number;
+  delegatorUserId: number;
+  delegateeUserId: number;
+  organizationScopeId: number;
+  privilegeIds: number[];
+  startTime: Date;
+  endTime: Date;
+  description: string | null;
   status: PrivilegeDelegationStatus;
 }
 
-export interface PrivilegeDelegationConflict {
-  delegationDetails: Array<{
-    privilege: {
-      privilegeCode: string;
-    };
-  }>;
+export interface PrivilegeDelegationInsert {
+  delegatorUserId: number;
+  delegateeUserId: number;
+  organizationScopeId: number;
+  privilegeIds: number[];
+  startTime: Date;
+  endTime: Date;
+  description?: string | null;
 }

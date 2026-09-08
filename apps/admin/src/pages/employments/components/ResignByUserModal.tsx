@@ -1,5 +1,6 @@
-import { apiClient } from '@admin/lib/api-client';
+import { AdminMutationCommittedError } from '@admin/services/admin-mutation';
 import { resignUser } from '@admin/services/employment';
+import { searchUsers } from '@admin/services/user';
 import { message, Modal, Select } from 'antd';
 import { useState } from 'react';
 
@@ -9,12 +10,14 @@ type Props = {
   open: boolean;
   onClose: () => void;
   onSuccess?: () => void;
+  onCommitted: (error: AdminMutationCommittedError) => Promise<void> | void;
 };
 
 export default function ResignByUserDialog({
   open,
   onClose,
   onSuccess,
+  onCommitted,
 }: Props) {
   const [selected, setSelected] = useState<UserOption | null>(null);
   const [options, setOptions] = useState<UserOption[]>([]);
@@ -28,7 +31,7 @@ export default function ResignByUserDialog({
     }
     setLoading(true);
     try {
-      const res = await apiClient.admin.user.search.query({
+      const res = await searchUsers({
         pageNum: 1,
         pageSize: 20,
         conditions: {
@@ -36,9 +39,8 @@ export default function ResignByUserDialog({
           exactConditions: {},
         },
       });
-      const result = res.result as Array<{ username: string; name: string }>;
       setOptions(
-        result.map((u) => ({
+        res.result.map((u) => ({
           label: `${u.name} (${u.username})`,
           value: u.username,
           name: u.name,
@@ -58,13 +60,21 @@ export default function ResignByUserDialog({
     }
     setSubmitting(true);
     try {
-      await resignUser(selected.value);
-      message.success(`${selected.name} 已离职`);
+      const outcome = await resignUser(selected.value);
+      if (outcome.changed) message.success('离职已完成');
+      else message.info('已处于离职状态，无需修改');
       onSuccess?.();
       onClose();
       setSelected(null);
       setOptions([]);
     } catch (err) {
+      if (err instanceof AdminMutationCommittedError) {
+        setSelected(null);
+        setOptions([]);
+        onClose();
+        await onCommitted(err);
+        return;
+      }
       message.error(err instanceof Error ? err.message : '离职失败');
     } finally {
       setSubmitting(false);

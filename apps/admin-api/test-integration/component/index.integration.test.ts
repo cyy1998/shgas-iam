@@ -26,22 +26,26 @@ test("publishes all four login-state intents under admin.sessionManagement", asy
       }),
       releaseLoginRestriction: async () => ({
         changed: false,
-        failureStateCleared: true,
+        result: {
+          failureStateCleared: true,
+        },
       }),
       revokeSessions: async input => ({
         changed: false,
-        scope: input.target.type,
-        revoked: {
-          principalSessions: 0,
-          bindings: 0,
-          credentials: 0,
-          artifacts: 0,
-        },
-        currentPrincipalSessionExcluded: input.target.type === "user" && input.target.userId === 7,
-        cleanup: {
-          attempted: 0,
-          succeeded: 0,
-          failed: 0,
+        result: {
+          scope: input.target.type,
+          revoked: {
+            principalSessions: 0,
+            bindings: 0,
+            credentials: 0,
+            artifacts: 0,
+          },
+          currentPrincipalSessionExcluded: input.target.type === "user" && input.target.userId === 7,
+          cleanup: {
+            attempted: 0,
+            succeeded: 0,
+            failed: 0,
+          },
         },
       }),
     },
@@ -106,18 +110,20 @@ test("publishes all four login-state intents under admin.sessionManagement", asy
     },
   })).resolves.toEqual({
     changed: false,
-    scope: "session",
-    revoked: {
-      principalSessions: 0,
-      bindings: 0,
-      credentials: 0,
-      artifacts: 0,
-    },
-    currentPrincipalSessionExcluded: false,
-    cleanup: {
-      attempted: 0,
-      succeeded: 0,
-      failed: 0,
+    result: {
+      scope: "session",
+      revoked: {
+        principalSessions: 0,
+        bindings: 0,
+        credentials: 0,
+        artifacts: 0,
+      },
+      currentPrincipalSessionExcluded: false,
+      cleanup: {
+        attempted: 0,
+        succeeded: 0,
+        failed: 0,
+      },
     },
   });
 
@@ -128,18 +134,20 @@ test("publishes all four login-state intents under admin.sessionManagement", asy
     },
   })).resolves.toEqual({
     changed: false,
-    scope: "user",
-    revoked: {
-      principalSessions: 0,
-      bindings: 0,
-      credentials: 0,
-      artifacts: 0,
-    },
-    currentPrincipalSessionExcluded: true,
-    cleanup: {
-      attempted: 0,
-      succeeded: 0,
-      failed: 0,
+    result: {
+      scope: "user",
+      revoked: {
+        principalSessions: 0,
+        bindings: 0,
+        credentials: 0,
+        artifacts: 0,
+      },
+      currentPrincipalSessionExcluded: true,
+      cleanup: {
+        attempted: 0,
+        succeeded: 0,
+        failed: 0,
+      },
     },
   });
 
@@ -147,6 +155,8 @@ test("publishes all four login-state intents under admin.sessionManagement", asy
     userId: 42,
   })).resolves.toEqual({
     changed: false,
-    failureStateCleared: true,
+    result: {
+      failureStateCleared: true,
+    },
   });
 });

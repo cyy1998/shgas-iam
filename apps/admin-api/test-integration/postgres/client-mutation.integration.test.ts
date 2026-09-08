@@ -1,7 +1,6 @@
 import { createAdminApiUnitOfWork } from "@admin-api/composition/tx";
 import { createAdminClientMutation } from "@admin-api/services/client/client-mutation";
 import {
-  AfterCommitRequiredTaskError,
   mapUnitOfWork,
 } from "@iam/api-core/uow";
 import { ClientStatus } from "@iam/contracts";
@@ -77,7 +76,7 @@ describe("Admin Client target-bound mutation PostgreSQL contract", () => {
       .select({ clientCode: clients.clientCode })
       .from(clients)
       .where(eq(clients.clientCode, clientCode));
-    expect(rejected).toBeInstanceOf(AfterCommitRequiredTaskError);
+    expect(rejected).toMatchObject({ code: "ADMIN_MUTATION_COMMITTED", httpStatus: 500 });
     expect(rows).toEqual([{ clientCode }]);
     expect(invalidateClient).toHaveBeenCalledTimes(1);
   });

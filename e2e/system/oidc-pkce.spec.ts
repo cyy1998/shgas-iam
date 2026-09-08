@@ -6,6 +6,7 @@ import {
   loginToAdmin,
   openClientSection,
   runClientProtocolLifecycleAction,
+  saveUnchangedClientProtocolConfiguration,
   updateClientStatus,
 } from "./src/admin-client-journey.ts";
 import { requireEnvironment } from "./src/environment.ts";
@@ -120,6 +121,8 @@ test("public RP observes reversible Maintenance and permanent logout through rea
     redirectUri,
     state,
   });
+
+  await saveUnchangedClientProtocolConfiguration(adminPage, clientId, "oidc", true);
 
   await pauseEmploymentWithResponsibilityCascade(
     adminPage,

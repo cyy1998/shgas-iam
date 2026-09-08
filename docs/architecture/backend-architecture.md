@@ -98,6 +98,40 @@ composition。跨层实例连接统一由 composition 完成。
   当前 schema 有意不把所有用户手机号提升为全局唯一约束：手机号可空且其他用户写流程并不共享该 upsert 语义；
   新增任何供应商联系人数据库写入口时必须复用同一 lock key/用例，而不能绕过该并发边界。
 
+## Admin 同对象写入规范
+
+[ADR-0025](../adr/0025-align-admin-mutation-results-with-committed-facts.md) 已实施，现存 Admin PostgreSQL 写入口及全部 Admin 结果契约已迁移；逐命令与协议/页面 census 见[最终契约核对](../features/admin/admin-mutation-contract.md)：后续新增或修改的 Admin PostgreSQL 同对象写入统一在同一 UnitOfWork 内使用 `SELECT ... FOR UPDATE` 读取目标，再检查前提、判断业务变化、写入并登记审计和 Profile dirty，持锁至事务结束。Organization Responsibility Assignment 已移除 Admin expectedStatus CAS，与级联共用责任集合取锁能力，不按领域维持第二套同对象并发方案。
+
+普通资料编辑本次不增加页面版本校验；只能覆盖请求明确提交的资料字段，生命周期或 Secret 等关联状态使用锁定后的当前事实。锁定命令拟修改的现存目标及级联选中行，只读父对象保留普通预检；多行写入统一安排取锁顺序。创建不存在的目标由既有数据库唯一约束裁决重复并映射已知冲突，不假定已锁住空槽。该规范不替代 Redis Session、Runtime Snapshot、Profile publication 的既有原子机制，也不自动提升跨对象、跨表的完整性保证；实施范围与验收沿 [Spec #95](https://github.com/cyy1998/shgas-iam/issues/95) 跟踪，来源讨论见 [Issue #29](https://github.com/cyy1998/shgas-iam/issues/29)，代码候选与真实部署仍须区分；外部消费者和部署动作见[协调切换清单](../releases/admin-mutation-contract-cutover.md)。
+
+Admin 应用层公共模块统一事务、锁定流程与 `{ changed, result }` 业务结果；repository 提供锁定读取和明确的写入结果，领域拥有合法转换、变化比较及审计内容。数据库基础层提取包含 `cause` 的结构化 SQLSTATE/constraint 信息，由领域 repository 映射已知约束，未知约束不伪装成普通业务冲突。
+
+当前 `services/admin-mutation` 复用 UnitOfWork，提供创建事务与现存目标锁定流程；所有 Admin PostgreSQL 命令均直接使用或通过既有 Client/Subject Access wrapper 适配该模块。创建和 Transfer 保留新资源，密码/Secret 保留必要一次性结果，其他无资源命令返回 `result:null`；普通资料无变化不写审计和 dirty，显式提交状态的所有入口（包括资料更新入口）及 Assignment scope 无变化保留 `changed:false` 意图审计。页面编辑不回填未修改的初始状态。锁后写入零行属于不变量失败，不产生成功审计或 dirty；普通缺失目标和重复删除返回 404。岗位、组织和角色编码的既有全表唯一约束继续覆盖非启用及软删除行，Assignment 保留角色与目标组合唯一约束，由 repository 映射真实 Drizzle 包装错误。
+
+Role 状态变化根据锁定后的当前事实登记 dirty；名称与说明不进入当前 Profile 角色投影，因此这些资料的真实变化只记录审计。Assignment 创建、scope 变化与删除在源事务中登记保存目标的失效，仍由原 resolver 推导受影响用户。Assignment 命令只锁拟修改的 Assignment，Role 与其他只读父对象保持普通预检，不提升跨对象保证。真实 PostgreSQL 测试通过显式事务同步、中间版本的 production Profile publication 和最终 dirty/version 验证角色状态交错，并覆盖 Assignment 删除、创建与重复删除竞争。
+
+Employment 创建、说明编辑、Pause、Resume 与 End 已使用公共 mutation 和统一结果；创建保留 `result:{id}`，其余返回 `result:null`。说明空输入拒绝，同值不写审计或 dirty；合法重复生命周期命令保留 `changed:false` 意图审计，不重写结束时间。真实父、子变化与各自审计及 dirty 在同一事务提交。
+
+基础任职级联采用固定取锁顺序：Employment 在前，Organization Responsibility Assignment 在后，各表均按主键升序。Pause/End 先锁任职，再一次选出本次 Enable/Open Assignment 的 ID，以身份锁定完整选中集合，然后才重验状态、更新父子并记录真实变化。Responsibility repository 的 `lockAssignmentsByIds` 同时为直接责任命令提供集合取锁能力。锁等待期间已经结束的选中责任不会被重新暂停或重写结束时间；后来新插入或从未选中的责任不在该集合中。创建时调整既有 Primary 的路径也先锁完整选中任职集合；不存在的目标与后来出现的 Primary 槽位仍不受行锁保护。
+
+上述方法只锁拟修改目标和级联选中行，User、Organization、Position 等只读父对象仍普通预检。它不防止 phantom，不提升跨表父对象、跨记录 Primary 或请求时 HR scope 的乐观保证。Set/Clear Primary 和 Transfer 也已采用统一结果与意图审计：主任职命令合法 no-op 不登记 dirty，Transfer 返回新任职的 `result:{id}`。这些命令在首次业务行锁前合并 URL 任职与拟清除的既有 Primary ID，一次按 ID 升序锁齐；Transfer 随后锁齐选中责任，才重验状态与候选并原子结束旧任职、结束责任、清除 Primary、创建新任职。审计记录实际清除的 Primary ID，非法重复 Transfer 不改写历史时间。Resignation 已统一 Full Admin 与 HR 的 `{ changed, result:null }` 结果：合法 no-op 保留 `changed:false` 意图审计，不登记 dirty、不重写既有结束时间，仍执行 Subject Access 与 Session 撤销重试。离职依次锁 User、精确 transition intent、按 ID 升序的完整选中 Employment 集合、按 ID 升序的完整选中 Assignment 集合，锁齐后重验 HR 资格，再以同一事务提交业务事实、审计及 dirty。该锁定范围仍仅覆盖拟修改的现存行与级联选中行，不提升上述乐观保证。离职在 pre-block 后、数据库事务前通过 Session Kernel 的 opaque `prepareUserSessionRevocation` 计划原始读取合法已存在 Principal Session 的代际，不做访问校验或触发 cleanup；提交后将捕获代际与 callback 的前代合并，按代际集合精确撤销。重试重新捕获遗留旧代，晚到撤销保留重新启用后的新代。准备失败仅记录 bestEffort 诊断并退回 callback 前代撤销，不阻断业务；本次未知的更早代留待后续重试。该读取不是全局原子快照：捕获后才落库的更早代极迟在途 Session 由下一次重试或访问校验处理，已 tombstone 对象的派生清理仍属既有 cleanup owner。
+
+组织省略初始状态时以 Enable 创建，显式非 Enable 输入被拒绝；成功创建原子完成路径及闭包关系。父组织保持普通预检，Open Employment、子组织与 Open Responsibility 的既有生命周期和安全范围阻断继续生效，不增加全父树锁或跨表强保证。
+
+公共模块把确认提交后的 `AfterCommitRequiredTaskError` 映射为 `ADMIN_MUTATION_COMMITTED`，普通失败原样保留；当前岗位、组织与角色切片只有既有 bestEffort Profile 唤醒，不新增 required 副作用。User 创建、显式状态命令、删除与 Resignation 通过公共 `runAdminSubjectAccessMutation` 保持既有 Subject Access lifecycle；仅在源事务成功返回后发生的 lifecycle 失败映射为同一已提交错误，事务回滚错误保持原对象以供 lifecycle 确认。User 页面自动刷新已提交事实并保留修复提示，不自动重放；生成密码未交付时提示先修复再主动重置。Client 基础管理也已迁移该错误契约与实际详情恢复；OIDC 与 Custom SSO 专项结果也已迁移，均在锁定事实下比较配置并返回安全 Client 与必要的一次性 Secret。Custom SSO 相同规范化配置与合法重复启停/移除保留意图审计和 required Snapshot invalidation，不推进 epoch 或撤销会话；启用时真实配置修改及 Secret 轮换仍须先禁用，Maintenance 不阻止合法准备操作。User 创建返回安全用户对象与原有生成密码，密码重置返回新密码，均置于统一 result 内；密码哈希不进入响应或审计。用户名预检覆盖软删除行，repository 仅映射已知用户名唯一约束。User 资料空更新拒绝，同值普通资料不写审计/dirty；显式状态仍保留 lifecycle 和意图审计，专用状态与删除也返回统一结果；删除按 User 行、精确 transition intent 的次序加锁，检查未删除目标和 Open Employment，并验证实际软删除返回行。该顺序与资料状态命令一致；只读 Employment predicate 保持既有跨表乐观边界。reset 取得 User 行锁后仍执行 Enable 且非删除的 guarded update，保留当前会话例外和 bestEffort 撤销。
+
+直接 Responsibility 创建、Pause、Resume 与 End 已采用同一公共 mutation 结果：创建保留 `result:{id}`，生命周期返回 `result:null`。直接命令先按 ID 锁定 Assignment，再普通读取父对象并校验双端授权与转换；与任职级联共用 `lockAssignmentsByIds`，不反向锁父 Employment。合法 no-op 保留 `changed:false` 意图审计且不新增 dirty，非法终态转换返回 409。Open slot 唯一约束继续裁决创建竞争；真实 Drizzle 已知约束按 Full/HR 映射稳定安全冲突，未知约束不掩盖为领域冲突。
+
+Client 基础创建、code 编辑、legacy ID 编辑、状态和删除已通过公共 mutation 统一结果与锁定流程。Client target-bound wrapper 仍是唯一 Snapshot 失效与未知 COMMIT 保守失效 owner；公共模块适配其单一事务，不启动嵌套 UnitOfWork。锁定 legacy ID 后使用 canonical code 写入，编码保持不可修改。基础资料同值不写审计或重写时间；显式状态及通用凭据意图保留 `changed:false` 审计，所有合法公开 mutation（包括 no-op）仍 required invalidation。真停用推进两个协议 epoch 并 bestEffort 撤销，重复停用不制造新生命周期事件。OIDC configure、enable、disable、remove 和 rotateSecret 同样复用公共锁；配置按规范化集合比较，锁后保留当前 enabled 与 Secret，合法同目标命令只记无变化意图并执行 required invalidation，不推进 epoch 或撤销会话；非法状态转换返回 409。显式轮换始终更新 Secret；配置首次生成及轮换均在 result 中保留安全 Client 对象与一次性 Secret。提交后交付失败只保留修复提示与主动轮换恢复路径，不提供明文补领。Client 的这些基础字段不进入当前 User Profile 投影，不新增 dirty。创建的全表编码唯一约束覆盖软删除占用，只映射已知约束；缺失目标返回 404，锁后零行失败关闭。
+
+Client required after-commit 失败映射公共 `ADMIN_MUTATION_COMMITTED`，未知 COMMIT 原错误与保守失效路径保持。Client 页面自动读详情且持续显示尚需修复的传播提示，创建以已知 code 恢复，删除后的 404 也不清除提示；不自动重发 mutation。协议页面同时识别该共享失败语义，一次性 Secret 未交付时保留主动修复和重新轮换流程。真实 PostgreSQL 证明竞争、审计回滚与提交边界，PG/Redis composition 通过真实 ClientService 和三个公开 Reader 证明已提交后的旧 Snapshot 窗口与 no-op required invalidation；它不证明生产环境已修复。
+
+岗位、组织、Role、Role Assignment 及上述 User、Employment、Responsibility 命令及 Client 基础、OIDC 与 Custom SSO 命令的 REST、legacy、tRPC 和页面已协调修改；整个集成分支的混合中间态不得部署，外部 REST 调用方核验仍是最终切换前的责任。
+
+成功业务结果通过现有 REST envelope 或直接通过 tRPC 返回，并协调切换调用方。状态/生命周期、主任职、授权、协议、凭据及会话命令的合法 no-op 保留意图审计，普通资料无变化不记变更审计。保留的 Client Runtime invalidation、提交后传播失败的专用错误语义及一次性 Secret 恢复由 ADR-0025 统一约束。
+
+Internal Privilege Delegation 已在 API 自身的 service、repository 与 UnitOfWork 中实现 [ADR-0026](../adr/0026-serialize-privilege-delegation-writes-by-delegator.md)：创建先锁委托人 User，更新仅预读不可变委托人 ID，取得 User 锁后再锁定、重读完整委托及权限绑定；候选校验、冲突检查、业务事实与成功审计在同一事务完成。该领域的协调锁扩展不自动改变上述 Admin 通用范围。同一委托人的未结束委托仅在权限、闭区间期间及组织覆盖范围都相交时冲突；Pause 占用期间，同组织或祖先与下级范围互斥，不相交范围可并存，不引入覆盖优先级。Disable 后仅纯重复结束合法且不重写业务行；Internal 保留详情/boolean 响应，handler 只传入 actor 与请求上下文，不在提交后另写成功审计。该能力不依赖 Admin mutation 模块、不登记 Profile dirty，也不提升其他引用对象的生命周期保证；现有 resolver 继续 fail closed。
+
 ## 请求、审计与可观测上下文
 
 - Hono `Context` 属于 route/protocol boundary。Use case 只接收 normalized actor、最小 audit request context 等
@@ -340,6 +374,8 @@ User Profile 的初代 V1 builder、Facts reader/publisher 与 Subject Projectio
   预取列表或逐行撤销。其他用户的全部根会话与 children 被撤销；actor 本人保留服务端当前根会话但仍撤销其 children
   和其他 roots。本人缺少当前 Principal Session ID 时在 control 前 fail closed；操作不引入 user generation、
   revocation epoch、登录冻结或并发新登录屏障。
+- 单会话与用户级撤销统一返回 `{ changed, result }`；result 保留 scope、实际撤销数量、当前根会话例外和 cleanup 数量，
+  changed 仍只依据实际撤销数量。Redis 管理命令不进入 PostgreSQL 公共行锁流程。
 - Session Revocation 的 Redis 作用先于 PostgreSQL 审计。作用后审计失败记录结构化系统日志并返回
   `500 / ADMIN_LOGIN_STATE_AUDIT_FAILED_AFTER_EFFECT`；调用方必须刷新状态且不得自动重试 mutation。
 - Principal Session v1 可以携带可选 Session Origin；来源只保存可信网关清洗后的请求 IP 与最多 512 字符的原始
@@ -367,8 +403,7 @@ User Profile 的初代 V1 builder、Facts reader/publisher 与 Subject Projectio
   `admin.sessionManagement.listLoginRestrictions`、`admin.sessionManagement.releaseLoginRestriction` procedure
   复用同一 adapter。安全列表 VO 只暴露用户摘要、规范 `too_many_login_failures` cause、最后
   `password` / `mobile` / `unknown` Trigger Method、自动到期时间与服务端剩余秒数。
-- 解除意图只调用共享 `clearLoginState` 原子删除限制、当前失败历史与限制索引成员，返回 `changed` 和
-  `failureStateCleared:true`；自然过期或并发处理返回 `200 / changed:false`。它不调用 Session inventory/control，
+- 解除意图只调用共享 `clearLoginState` 原子删除限制、当前失败历史与限制索引成员，返回 `{ changed, result:{ failureStateCleared:true } }`；自然过期或并发处理返回 `200 / changed:false`。它不调用 Session inventory/control，
   不创建 allowlist 或宽限期，也不创建、撤销、续期或恢复任何 Principal Session；后续新失败立即按现有策略计数。
 - 限制查询或解除无法确认 Redis 状态时返回 `503 / ADMIN_LOGIN_STATE_UNAVAILABLE`。解除作用先于
   `admin.login_restriction.release` PostgreSQL 审计；`changed:true` 后审计失败返回

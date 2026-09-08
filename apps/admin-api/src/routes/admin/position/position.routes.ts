@@ -12,6 +12,7 @@ import jsonContent from "@iam/api-core/core/openapi/helpers/json-content";
 import jsonContentRequired from "@iam/api-core/core/openapi/helpers/json-content-required";
 import createSuccessResponseSchema from "@iam/api-core/core/openapi/schemas/create-success-schema";
 import { createPageResultSchema } from "@iam/api-core/core/pagination/schema";
+import { createAdminMutationResultSchema } from "@iam/contracts";
 import { PositionVoSchema } from "./position.schema";
 
 const tags = ["Admin/Position"];
@@ -54,7 +55,7 @@ export const positionCreate = createRoute({
   },
   responses: {
     ...commonErrorResponses,
-    [HttpStatusCodes.OK]: jsonContent(createSuccessResponseSchema(z.boolean()), "岗位创建成功"),
+    [HttpStatusCodes.OK]: jsonContent(createSuccessResponseSchema(createAdminMutationResultSchema(PositionDtoSchema)), "岗位创建成功"),
   },
 });
 
@@ -68,7 +69,7 @@ export const positionUpdate = createRoute({
   },
   responses: {
     ...commonErrorResponses,
-    [HttpStatusCodes.OK]: jsonContent(createSuccessResponseSchema(z.boolean()), "岗位更新成功"),
+    [HttpStatusCodes.OK]: jsonContent(createSuccessResponseSchema(createAdminMutationResultSchema(z.null())), "岗位更新成功"),
   },
 });
 
@@ -82,7 +83,7 @@ export const positionStatusUpdate = createRoute({
   },
   responses: {
     ...commonErrorResponses,
-    [HttpStatusCodes.OK]: jsonContent(createSuccessResponseSchema(z.boolean()), "状态更新成功"),
+    [HttpStatusCodes.OK]: jsonContent(createSuccessResponseSchema(createAdminMutationResultSchema(z.null())), "状态更新成功"),
   },
 });
 
@@ -95,6 +96,6 @@ export const positionDelete = createRoute({
   },
   responses: {
     ...commonErrorResponses,
-    [HttpStatusCodes.OK]: jsonContent(createSuccessResponseSchema(z.boolean()), "岗位删除成功"),
+    [HttpStatusCodes.OK]: jsonContent(createSuccessResponseSchema(createAdminMutationResultSchema(z.null())), "岗位删除成功"),
   },
 });

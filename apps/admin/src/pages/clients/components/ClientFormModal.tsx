@@ -1,3 +1,4 @@
+import { AdminMutationCommittedError } from '@admin/services/admin-mutation';
 import { createClient, type ClientDetailVo } from '@admin/services/client';
 import {
   ModalForm,
@@ -12,6 +13,7 @@ import { message } from 'antd';
 type Props = {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  onCommitted: (clientCode: string) => void;
   onSuccess?: (client: ClientDetailVo) => void;
 };
 
@@ -28,6 +30,7 @@ export default function ClientFormModal({
   open,
   onOpenChange,
   onSuccess,
+  onCommitted,
 }: Props) {
   return (
     <ModalForm<FormValues>
@@ -52,9 +55,13 @@ export default function ClientFormModal({
             extAttributes: {},
           });
           message.success('创建成功');
-          onSuccess?.(client);
+          onSuccess?.(client.result);
           return true;
         } catch (err) {
+          if (err instanceof AdminMutationCommittedError) {
+            onCommitted(values.clientCode);
+            return true;
+          }
           message.error(err instanceof Error ? err.message : '操作失败');
           return false;
         }

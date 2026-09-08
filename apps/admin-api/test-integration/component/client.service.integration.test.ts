@@ -1,12 +1,11 @@
 import type { ClientService } from "@admin-api/services/client/client.service";
 import type { ClientCustomSsoConfigureDto } from "@admin-api/services/client/client.type";
+import { AdminMutationCommittedError } from "@admin-api/services/admin-mutation/admin-mutation";
 import { createClientService } from "@admin-api/services/client/client.service";
 import { createFakePasswordHasher, createFakeRandom, createImmediateUnitOfWork } from "@admin-api/test/fakes";
-import { AfterCommitRequiredTaskError } from "@iam/api-core/uow";
 import {
   ClientStatus,
   CustomSsoClientMode,
-  CustomSsoClientState,
   OidcClientType,
   OidcScope,
   OidcTokenEndpointAuthMethod,
@@ -76,7 +75,7 @@ function independentCustomSsoConfig(): ClientCustomSsoConfigureDto {
   return {
     mode: CustomSsoClientMode.Independent,
     validRedirectUrls: ["https://portal.example.com/sso/*"],
-    subjectClaims: ["subjectIdentifier", "profile:name"],
+    subjectClaims: ["profile:name", "subjectIdentifier"],
     callbackEndpoint: "https://portal.example.com/sso/callback",
     logoutEndpoint: "https://portal.example.com/logout",
   };
@@ -160,6 +159,123 @@ function createService(options: {
 }
 
 describe("createClientService", () => {
+  test("rejects empty profile updates before locking and keeps ordinary no-ops free of audit and writes", async () => {
+    const { service, tx, deps } = createService();
+    for (const invoke of [
+      () => service.updateClient("portal", {}),
+      () => service.updateClientById({ id: 1, clientCode: "portal" }),
+    ]) {
+      const failure = await invoke().catch(error => error);
+      expect(failure).toMatchObject({ httpStatus: 400 });
+    }
+    expect(tx.clientRepository.lockClientByCode).not.toHaveBeenCalled();
+    expect(tx.clientRepository.lockClientById).not.toHaveBeenCalled();
+    const result = await service.updateClient("portal", { clientName: "Portal", description: null });
+    expect(result).toEqual({ changed: false, result: null });
+    expect(tx.clientRepository.updateClientByCode).not.toHaveBeenCalled();
+    expect(tx.auditService.recordAuditLog).not.toHaveBeenCalled();
+    expect(deps.clientCache.invalidateUpdatedClient).toHaveBeenCalledTimes(1);
+    expect(deps.clientRuntimeInvalidation.invalidateClient).toHaveBeenCalledWith("portal");
+  });
+
+  test("retains same-value status and credential intent without rewriting epochs or revoking", async () => {
+    for (const invoke of [
+      (service: ClientService) => service.updateClient("portal", { status: ClientStatus.Enable }),
+      (service: ClientService) => service.updateClientById({ id: 1, status: ClientStatus.Enable }),
+      (service: ClientService) => service.updateClientStatus("portal", ClientStatus.Enable),
+      (service: ClientService) => service.updateClient("portal", { clientSecret: "secret" }),
+      (service: ClientService) => service.updateClientById({ id: 1, clientSecret: "secret" }),
+    ]) {
+      const { service, tx, deps } = createService();
+      const result = await invoke(service);
+      expect(result).toEqual({ changed: false, result: null });
+      expect(tx.auditService.recordAuditLog).toHaveBeenCalledWith(expect.objectContaining({
+        details: expect.objectContaining({ changed: false }),
+      }));
+      expect(tx.clientRepository.updateClientByCode).not.toHaveBeenCalled();
+      expect(tx.clientRepository.updateClientByCodeWithProtocolEpochs).not.toHaveBeenCalled();
+      expect(deps.sessionRevocation.revokeClientAllProtocols).not.toHaveBeenCalled();
+      expect(deps.sessionRevocation.revokeClientProtocol).not.toHaveBeenCalled();
+      expect(deps.clientCache.invalidateUpdatedClient).toHaveBeenCalledTimes(1);
+      expect(deps.clientRuntimeInvalidation.invalidateClient).toHaveBeenCalledTimes(1);
+      expect(JSON.stringify(tx.auditService.recordAuditLog.mock.calls)).not.toContain("\"clientSecret\":\"secret\"");
+    }
+  });
+
+  test("rejects zero-row basic writes before audit or invalidation", async () => {
+    for (const [method, invoke] of [
+      ["createClient", (service: ClientService) => service.createClient(client())],
+      ["updateClientByCode", (service: ClientService) => service.updateClient("portal", { clientName: "Changed" })],
+      ["updateClientByCodeWithProtocolEpochs", (service: ClientService) => service.updateClientStatus("portal", ClientStatus.Disable)],
+      ["softDeleteClientByCode", (service: ClientService) => service.deleteClient("portal")],
+    ] as const) {
+      const { service, tx, deps } = createService();
+      tx.clientRepository[method].mockResolvedValueOnce(null as never);
+      const failure = await invoke(service).catch(error => error);
+      expect(failure).toBeInstanceOf(Error);
+      expect(failure).not.toBeInstanceOf(AdminMutationCommittedError);
+      expect(tx.auditService.recordAuditLog).not.toHaveBeenCalled();
+      expect(deps.clientRuntimeInvalidation.invalidateClient).not.toHaveBeenCalled();
+      expect(deps.clientCache.invalidateClient).not.toHaveBeenCalled();
+      expect(deps.clientCache.invalidateUpdatedClient).not.toHaveBeenCalled();
+    }
+  });
+
+  test("every public mutation maps required Snapshot failure to a safe committed error", async () => {
+    const config = independentCustomSsoConfig();
+    const disabledProtocols = {
+      status: ClientStatus.Maintenance,
+      oidcConfig: oidcConfig(),
+      oidcSecretHash: "private-oidc-hash",
+      customSsoConfig: config,
+      customSsoSecretHash: "private-sso-hash",
+    };
+    const commands: Array<{
+      record?: Record<string, unknown>;
+      invoke: (service: ClientService) => Promise<unknown>;
+    }> = [
+      { invoke: service => service.createClient(client()) },
+      { invoke: service => service.updateClient("portal", { clientName: "Changed" }) },
+      { invoke: service => service.updateClient("portal", { clientName: "Portal" }) },
+      { invoke: service => service.updateClientById({ id: 1, clientName: "Changed" }) },
+      { invoke: service => service.updateClientStatus("portal", ClientStatus.Disable) },
+      { invoke: service => service.deleteClient("portal") },
+      { invoke: service => service.configureClientOidc("portal", oidcConfig()) },
+      { record: disabledProtocols, invoke: service => service.enableClientOidc("portal") },
+      { record: { ...disabledProtocols, oidcEnabled: true }, invoke: service => service.disableClientOidc("portal") },
+      { record: disabledProtocols, invoke: service => service.removeClientOidc("portal") },
+      { record: disabledProtocols, invoke: service => service.rotateClientOidcSecret("portal") },
+      { invoke: service => service.configureClientCustomSso("portal", config) },
+      { record: disabledProtocols, invoke: service => service.enableClientCustomSso("portal") },
+      { record: { ...disabledProtocols, customSsoEnabled: true }, invoke: service => service.disableClientCustomSso("portal") },
+      { record: disabledProtocols, invoke: service => service.removeClientCustomSso("portal") },
+      { record: disabledProtocols, invoke: service => service.rotateClientCustomSsoSecret("portal") },
+    ];
+    for (const command of commands) {
+      const { service, tx, deps } = createService();
+      const existing = client(command.record);
+      tx.clientRepository.getClientByCode.mockResolvedValue(existing);
+      tx.clientRepository.lockClientByCode.mockResolvedValue(existing);
+      tx.clientRepository.lockClientById.mockResolvedValue(existing);
+      tx.clientRepository.updateClientCustomSsoByCode.mockImplementation(async (_code, data) =>
+        client({ ...existing, ...data, customSsoConfigVersion: 2 }));
+      tx.clientRepository.updateClientOidcByCode.mockImplementation(async (_code, data) =>
+        client({ ...existing, ...data, oidcConfigVersion: 2 }));
+      deps.clientRuntimeInvalidation.invalidateClient.mockRejectedValueOnce(
+        new Error("redis://private-secret@cache.internal/raw-snapshot-payload"),
+      );
+      const failure = await command.invoke(service).catch(error => error);
+      expect(failure).toBeInstanceOf(AdminMutationCommittedError);
+      expect(failure).toMatchObject({ code: "ADMIN_MUTATION_COMMITTED" });
+      expect(failure).not.toHaveProperty("cause");
+      expect(failure).not.toHaveProperty("result");
+      const serialized = JSON.stringify(failure);
+      for (const secret of ["private-secret", "raw-snapshot-payload", "private-oidc-hash", "private-sso-hash", "iam_oidc_test_secret", "iam_sso_test_secret"])
+        expect(serialized).not.toContain(secret);
+      expect(deps.clientRuntimeInvalidation.invalidateClient).toHaveBeenCalledTimes(1);
+    }
+  });
+
   test("configures an Independent Custom SSO client with a one-time secret after commit", async () => {
     const { service, deps, tx } = createService();
     const input = independentCustomSsoConfig();
@@ -176,15 +292,18 @@ describe("createClientService", () => {
     const result = await service.configureClientCustomSso("portal", input);
 
     expect(result).toMatchObject({
-      client: {
-        clientCode: "portal",
-        status: ClientStatus.Maintenance,
-        customSsoState: "disabled",
-        customSsoMode: CustomSsoClientMode.Independent,
-        hasCustomSsoSecret: true,
-        customSsoConfigVersion: 1,
+      changed: true,
+      result: {
+        client: {
+          clientCode: "portal",
+          status: ClientStatus.Maintenance,
+          customSsoState: "disabled",
+          customSsoMode: CustomSsoClientMode.Independent,
+          hasCustomSsoSecret: true,
+          customSsoConfigVersion: 1,
+        },
+        customSsoSecret: "iam_sso_test_secret",
       },
-      customSsoSecret: "iam_sso_test_secret",
     });
     expect(deps.passwordHasher.hashSecret).toHaveBeenCalledWith("iam_sso_test_secret");
     expect(tx.clientRepository.updateClientCustomSsoByCode).toHaveBeenCalledWith("portal", {
@@ -229,11 +348,15 @@ describe("createClientService", () => {
       customSsoConfigVersion: 8,
     }));
 
-    await expect(service.enableClientCustomSso("portal")).resolves.toMatchObject({
-      client: {
-        status: ClientStatus.Maintenance,
-        customSsoState: "enabled",
-        customSsoConfigVersion: 8,
+    const enabled = await service.enableClientCustomSso("portal");
+    expect(enabled).toMatchObject({
+      changed: true,
+      result: {
+        client: {
+          status: ClientStatus.Maintenance,
+          customSsoState: "enabled",
+          customSsoConfigVersion: 8,
+        },
       },
     });
 
@@ -272,8 +395,12 @@ describe("createClientService", () => {
       customSsoSecretHash: "old-hash",
       customSsoConfigVersion: 4,
     }));
-    await expect(disableCase.service.disableClientCustomSso("portal")).resolves.toMatchObject({
-      client: { customSsoState: "disabled", customSsoConfigVersion: 4 },
+    const disabled = await disableCase.service.disableClientCustomSso("portal");
+    expect(disabled).toMatchObject({
+      changed: true,
+      result: {
+        client: { customSsoState: "disabled", customSsoConfigVersion: 4 },
+      },
     });
     expect(disableCase.deps.sessionRevocation.revokeClientProtocol).toHaveBeenCalledWith(expect.objectContaining({
       protocol: "custom-sso",
@@ -296,12 +423,16 @@ describe("createClientService", () => {
       customSsoSecretHash: null,
       customSsoConfigVersion: 5,
     }));
-    await expect(removeCase.service.removeClientCustomSso("portal")).resolves.toMatchObject({
-      client: {
-        customSsoState: "unconfigured",
-        customSsoMode: null,
-        hasCustomSsoSecret: false,
-        customSsoConfigVersion: 5,
+    const removed = await removeCase.service.removeClientCustomSso("portal");
+    expect(removed).toMatchObject({
+      changed: true,
+      result: {
+        client: {
+          customSsoState: "unconfigured",
+          customSsoMode: null,
+          hasCustomSsoSecret: false,
+          customSsoConfigVersion: 5,
+        },
       },
     });
     expect(removeCase.tx.clientRepository.updateClientCustomSsoByCode).toHaveBeenCalledWith("portal", {
@@ -328,8 +459,11 @@ describe("createClientService", () => {
     }));
     const rotated = await rotateCase.service.rotateClientCustomSsoSecret("portal");
     expect(rotated).toMatchObject({
-      client: { customSsoConfigVersion: 6, hasCustomSsoSecret: true },
-      customSsoSecret: "iam_sso_test_secret",
+      changed: true,
+      result: {
+        client: { customSsoConfigVersion: 6, hasCustomSsoSecret: true },
+        customSsoSecret: "iam_sso_test_secret",
+      },
     });
     const [rotateAudit] = rotateCase.tx.auditService.recordAuditLog.mock.calls[0] ?? [];
     expect(rotateAudit).toMatchObject({
@@ -354,12 +488,14 @@ describe("createClientService", () => {
       customSsoConfigVersion: 3,
     }));
 
-    await expect(gatewayToIndependent.service.configureClientCustomSso("portal", independent))
-      .resolves
-      .toMatchObject({
+    const configured = await gatewayToIndependent.service.configureClientCustomSso("portal", independent);
+    expect(configured).toMatchObject({
+      changed: true,
+      result: {
         customSsoSecret: "iam_sso_test_secret",
         client: { customSsoConfigVersion: 3, customSsoMode: CustomSsoClientMode.Independent },
-      });
+      },
+    });
 
     const independentToGateway = createService();
     const gateway = gatewayCustomSsoConfig();
@@ -375,7 +511,7 @@ describe("createClientService", () => {
     }));
 
     const gatewayResult = await independentToGateway.service.configureClientCustomSso("portal", gateway);
-    expect(gatewayResult).not.toHaveProperty("customSsoSecret");
+    expect(gatewayResult.result.customSsoSecret).toBeUndefined();
     expect(independentToGateway.deps.random.customSsoClientSecret).not.toHaveBeenCalled();
     expect(independentToGateway.tx.clientRepository.updateClientCustomSsoByCode).toHaveBeenCalledWith("portal", {
       customSsoEnabled: false,
@@ -403,7 +539,7 @@ describe("createClientService", () => {
       "portal",
       changedIndependent,
     );
-    expect(independentResult).not.toHaveProperty("customSsoSecret");
+    expect(independentResult.result.customSsoSecret).toBeUndefined();
     expect(independentToIndependent.deps.random.customSsoClientSecret).not.toHaveBeenCalled();
     expect(independentToIndependent.tx.clientRepository.updateClientCustomSsoByCode).toHaveBeenCalledWith("portal", {
       customSsoEnabled: false,
@@ -411,6 +547,57 @@ describe("createClientService", () => {
       customSsoSecretHash: "preserved-hash",
     });
     expect(JSON.stringify(independentResult)).not.toContain("preserved-hash");
+  });
+
+  test("Custom SSO same-target commands preserve the locked epoch and secret while auditing intent and invalidating", async () => {
+    const independent = independentCustomSsoConfig();
+    const gateway = gatewayCustomSsoConfig();
+    const cases: Array<{
+      record: Record<string, unknown>;
+      invoke: (service: ClientService) => Promise<unknown>;
+    }> = [
+      ...[false, true].flatMap(customSsoEnabled => [independent, gateway].map(config => ({
+        record: {
+          customSsoConfig: config,
+          customSsoEnabled,
+          customSsoSecretHash: config.mode === CustomSsoClientMode.Independent ? "current-hash" : null,
+        },
+        invoke: (service: ClientService) => service.configureClientCustomSso("portal", {
+          ...config,
+          subjectClaims: [...config.subjectClaims].reverse(),
+        }),
+      }))),
+      {
+        record: { customSsoEnabled: true, customSsoConfig: independent, customSsoSecretHash: "current-hash" },
+        invoke: service => service.enableClientCustomSso("portal"),
+      },
+      {
+        record: { customSsoConfig: independent, customSsoSecretHash: "current-hash" },
+        invoke: service => service.disableClientCustomSso("portal"),
+      },
+      {
+        record: { customSsoConfig: null, customSsoSecretHash: null },
+        invoke: service => service.removeClientCustomSso("portal"),
+      },
+    ];
+    for (const scenario of cases) {
+      const { service, deps, tx } = createService();
+      tx.clientRepository.lockClientByCode.mockResolvedValueOnce(client({
+        ...scenario.record,
+        customSsoConfigVersion: 9,
+      }));
+      const result = await scenario.invoke(service);
+      expect(result).toMatchObject({ changed: false, result: { client: { customSsoConfigVersion: 9 } } });
+      expect(JSON.stringify(result)).not.toContain("current-hash");
+      expect(tx.clientRepository.updateClientCustomSsoByCode).not.toHaveBeenCalled();
+      expect(deps.random.customSsoClientSecret).not.toHaveBeenCalled();
+      expect(deps.passwordHasher.hashSecret).not.toHaveBeenCalled();
+      expect(tx.auditService.recordAuditLog).toHaveBeenCalledWith(expect.objectContaining({
+        details: expect.objectContaining({ changed: false }),
+      }));
+      expect(deps.sessionRevocation.revokeClientProtocol).not.toHaveBeenCalled();
+      expect(deps.clientRuntimeInvalidation.invalidateClient).toHaveBeenCalledWith("portal");
+    }
   });
 
   test("rejects every Custom SSO mutation outside its allowed state", async () => {
@@ -435,10 +622,6 @@ describe("createClientService", () => {
         invoke: service => service.enableClientCustomSso("portal"),
       },
       {
-        record: { customSsoEnabled: true, customSsoConfig: independent, customSsoSecretHash: "hash" },
-        invoke: service => service.enableClientCustomSso("portal"),
-      },
-      {
         record: {
           status: ClientStatus.Disable,
           customSsoConfig: independent,
@@ -449,14 +632,6 @@ describe("createClientService", () => {
       {
         record: { customSsoConfig: null, customSsoSecretHash: null },
         invoke: service => service.disableClientCustomSso("portal"),
-      },
-      {
-        record: { customSsoConfig: independent, customSsoSecretHash: "hash" },
-        invoke: service => service.disableClientCustomSso("portal"),
-      },
-      {
-        record: { customSsoConfig: null, customSsoSecretHash: null },
-        invoke: service => service.removeClientCustomSso("portal"),
       },
       {
         record: {
@@ -486,7 +661,9 @@ describe("createClientService", () => {
       const { service, tx } = createService();
       tx.clientRepository.lockClientByCode.mockResolvedValueOnce(client(stateCase.record));
 
-      await expect(stateCase.invoke(service)).rejects.toBeInstanceOf(CustomSsoClientStateError);
+      const failure = await stateCase.invoke(service).catch(error => error);
+      expect(failure).toBeInstanceOf(CustomSsoClientStateError);
+      expect(failure).toMatchObject({ httpStatus: 409 });
       expect(tx.clientRepository.updateClientCustomSsoByCode).not.toHaveBeenCalled();
     }
   });
@@ -519,7 +696,7 @@ describe("createClientService", () => {
 
     await expect(service.configureClientCustomSso("portal", gatewayCustomSsoConfig()))
       .rejects
-      .toBeInstanceOf(AfterCommitRequiredTaskError);
+      .toBeInstanceOf(AdminMutationCommittedError);
 
     expect(tx.clientRepository.updateClientCustomSsoByCode).toHaveBeenCalledTimes(1);
     expect(tx.auditService.recordAuditLog).toHaveBeenCalledTimes(1);
@@ -561,7 +738,7 @@ describe("createClientService", () => {
       extAttributes: client().extAttributes,
     };
 
-    await expect(service.createClient(input as any)).resolves.toMatchObject({ clientCode: "portal" });
+    await expect(service.createClient(input as any)).resolves.toMatchObject({ changed: true, result: { clientCode: "portal" } });
 
     expect(tx.clientRepository.createClient).toHaveBeenCalledWith(input);
     expect(tx.auditService.recordAuditLog).toHaveBeenCalledWith(expect.objectContaining({
@@ -591,7 +768,7 @@ describe("createClientService", () => {
       status: ClientStatus.Enable,
       description: null,
       extAttributes: client().extAttributes,
-    } as any)).rejects.toBeInstanceOf(AfterCommitRequiredTaskError);
+    } as any)).rejects.toBeInstanceOf(AdminMutationCommittedError);
 
     expect(tx.clientRepository.createClient).toHaveBeenCalled();
     expect(tx.auditService.recordAuditLog).toHaveBeenCalled();
@@ -631,7 +808,7 @@ describe("createClientService", () => {
       oidcConfigVersion: 2,
     }));
 
-    await expect(service.updateClientStatus("portal", ClientStatus.Disable)).resolves.toBe(true);
+    await expect(service.updateClientStatus("portal", ClientStatus.Disable)).resolves.toEqual({ changed: true, result: null });
 
     expect(tx.clientRepository.updateClientByCodeWithProtocolEpochs).toHaveBeenCalledWith("portal", {
       status: ClientStatus.Disable,
@@ -657,7 +834,7 @@ describe("createClientService", () => {
     };
     deps.sessionRevocation.revokeClientAllProtocols.mockRejectedValueOnce(revocationFailure);
 
-    await expect(service.updateClientStatus("portal", ClientStatus.Disable, auditContext)).resolves.toBe(true);
+    await expect(service.updateClientStatus("portal", ClientStatus.Disable, auditContext)).resolves.toEqual({ changed: true, result: null });
 
     expect(deps.clientCache.invalidateUpdatedClient).toHaveBeenCalled();
     expect(deps.sessionRevocation.revokeClientAllProtocols).toHaveBeenCalled();
@@ -724,17 +901,8 @@ describe("createClientService", () => {
       "portal",
       { status: ClientStatus.Enable },
     );
-    expect(disabledResult).toMatchObject({
-      customSsoConfigVersion: 8,
-      customSsoConfig,
-      customSsoState: CustomSsoClientState.Enabled,
-    });
-    expect(reenabledResult).toMatchObject({
-      customSsoConfigVersion: 8,
-      oidcConfigVersion: 2,
-      customSsoConfig,
-      customSsoState: CustomSsoClientState.Enabled,
-    });
+    expect(disabledResult).toEqual({ changed: true, result: null });
+    expect(reenabledResult).toEqual({ changed: true, result: null });
     expect(deps.clientCache.invalidateUpdatedClient).toHaveBeenCalledTimes(2);
     expect(deps.clientRuntimeInvalidation.invalidateClient).toHaveBeenCalledTimes(2);
   });
@@ -763,18 +931,10 @@ describe("createClientService", () => {
 
     await expect(
       service.updateClient("portal", { status: ClientStatus.Maintenance }),
-    ).resolves.toMatchObject({
-      status: ClientStatus.Maintenance,
-      customSsoConfigVersion: 7,
-      oidcConfigVersion: 4,
-    });
+    ).resolves.toEqual({ changed: true, result: null });
     await expect(
       service.updateClient("portal", { status: ClientStatus.Enable }),
-    ).resolves.toMatchObject({
-      status: ClientStatus.Enable,
-      customSsoConfigVersion: 7,
-      oidcConfigVersion: 4,
-    });
+    ).resolves.toEqual({ changed: true, result: null });
 
     expect(
       tx.clientRepository.updateClientByCodeWithProtocolEpochs,
@@ -808,12 +968,9 @@ describe("createClientService", () => {
 
     await expect(
       service.updateClientStatus("portal", ClientStatus.Maintenance),
-    ).resolves.toBe(true);
+    ).resolves.toEqual({ changed: false, result: null });
 
-    expect(tx.clientRepository.updateClientByCode).toHaveBeenCalledWith(
-      "portal",
-      { status: ClientStatus.Maintenance },
-    );
+    expect(tx.clientRepository.updateClientByCode).not.toHaveBeenCalled();
     expect(tx.clientRepository.updateClientByCodeWithProtocolEpochs)
       .not
       .toHaveBeenCalled();
@@ -837,7 +994,7 @@ describe("createClientService", () => {
 
     await expect(
       service.updateClientStatus("portal", ClientStatus.Disable),
-    ).resolves.toBe(true);
+    ).resolves.toEqual({ changed: false, result: null });
 
     expect(tx.clientRepository.updateClientByCodeWithProtocolEpochs)
       .not
@@ -856,7 +1013,7 @@ describe("createClientService", () => {
 
     await expect(
       service.updateClientStatus("portal", ClientStatus.Maintenance),
-    ).resolves.toBe(true);
+    ).resolves.toEqual({ changed: true, result: null });
 
     expect(
       tx.clientRepository.updateClientByCode
@@ -882,7 +1039,7 @@ describe("createClientService", () => {
 
     await expect(
       service.updateClientStatus("portal", ClientStatus.Maintenance),
-    ).rejects.toBeInstanceOf(AfterCommitRequiredTaskError);
+    ).rejects.toBeInstanceOf(AdminMutationCommittedError);
 
     expect(tx.clientRepository.updateClientByCode).toHaveBeenCalledWith(
       "portal",
@@ -899,7 +1056,7 @@ describe("createClientService", () => {
       customSsoConfig,
       customSsoConfigVersion: 7,
     }));
-    tx.clientRepository.updateClientByIdWithProtocolEpochs
+    tx.clientRepository.updateClientByCodeWithProtocolEpochs
       .mockResolvedValueOnce(client({
         status: ClientStatus.Disable,
         customSsoEnabled: true,
@@ -912,13 +1069,9 @@ describe("createClientService", () => {
       id: 1,
       clientCode: "portal",
       status: ClientStatus.Disable,
-    })).resolves.toMatchObject({
-      customSsoConfigVersion: 8,
-      customSsoState: CustomSsoClientState.Enabled,
-      oidcConfigVersion: 2,
-    });
+    })).resolves.toEqual({ changed: true, result: null });
     expect(
-      tx.clientRepository.updateClientByIdWithProtocolEpochs,
+      tx.clientRepository.updateClientByCodeWithProtocolEpochs,
     ).toHaveBeenCalled();
     expect(deps.clientRuntimeInvalidation.invalidateClient).toHaveBeenCalledWith("portal");
   });
@@ -930,7 +1083,7 @@ describe("createClientService", () => {
       customSsoConfigVersion: 7,
       oidcConfigVersion: 4,
     }));
-    tx.clientRepository.updateClientById.mockResolvedValueOnce(client({
+    tx.clientRepository.updateClientByCode.mockResolvedValueOnce(client({
       status: ClientStatus.Maintenance,
       customSsoConfigVersion: 7,
       oidcConfigVersion: 4,
@@ -940,14 +1093,10 @@ describe("createClientService", () => {
       id: 1,
       clientCode: "portal",
       status: ClientStatus.Maintenance,
-    })).resolves.toMatchObject({
-      status: ClientStatus.Maintenance,
-      customSsoConfigVersion: 7,
-      oidcConfigVersion: 4,
-    });
+    })).resolves.toEqual({ changed: true, result: null });
 
-    expect(tx.clientRepository.updateClientById).toHaveBeenCalled();
-    expect(tx.clientRepository.updateClientByIdWithProtocolEpochs)
+    expect(tx.clientRepository.updateClientByCode).toHaveBeenCalled();
+    expect(tx.clientRepository.updateClientByCodeWithProtocolEpochs)
       .not
       .toHaveBeenCalled();
     expect(deps.sessionRevocation.revokeClientAllProtocols).not.toHaveBeenCalled();
@@ -971,7 +1120,7 @@ describe("createClientService", () => {
       oidcConfigVersion: 2,
     }));
 
-    await expect(service.deleteClient("portal")).resolves.toBe(true);
+    await expect(service.deleteClient("portal")).resolves.toEqual({ changed: true, result: null });
 
     expect(tx.clientRepository.updateClientCustomSsoByCode).not.toHaveBeenCalled();
     expect(deps.clientCache.invalidateClient).toHaveBeenCalledWith(
@@ -993,9 +1142,9 @@ describe("createClientService", () => {
       clientCode: "portal",
       clientSecret: "rotated-secret",
       extAttributes: {},
-    } as any)).resolves.toMatchObject({ clientCode: "portal" });
+    } as any)).resolves.toEqual({ changed: true, result: null });
 
-    expect(tx.clientRepository.updateClientById).toHaveBeenCalled();
+    expect(tx.clientRepository.updateClientByCode).toHaveBeenCalled();
     expect(tx.clientRepository.updateClientCustomSsoByCode).not.toHaveBeenCalled();
     expect(deps.sessionRevocation.revokeClientProtocol).not.toHaveBeenCalledWith(
       expect.objectContaining({ protocol: "custom-sso" }),
@@ -1007,7 +1156,7 @@ describe("createClientService", () => {
 
     await expect(service.updateClient("portal", { clientName: "Portal New" } as any))
       .resolves
-      .toMatchObject({ clientName: "Portal New" });
+      .toEqual({ changed: true, result: null });
 
     expect(deps.clientCache.invalidateUpdatedClient).toHaveBeenCalled();
     expect(deps.clientRuntimeInvalidation.invalidateClient).toHaveBeenCalledWith("portal");
@@ -1020,7 +1169,7 @@ describe("createClientService", () => {
     const input = {
       ...oidcConfig(),
     };
-    (tx.clientRepository.getClientByCode as any).mockResolvedValue(client({
+    (tx.clientRepository.lockClientByCode as any).mockResolvedValue(client({
       status: ClientStatus.Maintenance,
     }));
     tx.clientRepository.updateClientOidcByCode.mockResolvedValueOnce(client({
@@ -1031,13 +1180,16 @@ describe("createClientService", () => {
     }));
 
     await expect(service.configureClientOidc("portal", input)).resolves.toMatchObject({
-      client: {
-        clientCode: "portal",
-        status: ClientStatus.Maintenance,
-        hasOidcSecret: true,
-        oidcConfigVersion: 2,
+      changed: true,
+      result: {
+        client: {
+          clientCode: "portal",
+          status: ClientStatus.Maintenance,
+          hasOidcSecret: true,
+          oidcConfigVersion: 2,
+        },
+        clientSecret: "iam_oidc_test_secret",
       },
-      clientSecret: "iam_oidc_test_secret",
     });
 
     expect(deps.passwordHasher.hashSecret).toHaveBeenCalledWith("iam_oidc_test_secret");
@@ -1076,7 +1228,7 @@ describe("createClientService", () => {
       rejected = error;
     }
 
-    expect(rejected).toBeInstanceOf(AfterCommitRequiredTaskError);
+    expect(rejected).toBeInstanceOf(AdminMutationCommittedError);
     expect(tx.clientRepository.updateClientOidcByCode).toHaveBeenCalledTimes(1);
     expect(deps.clientRuntimeInvalidation.invalidateClient).toHaveBeenCalledTimes(1);
     expect(deps.sessionRevocation.revokeClientProtocol).toHaveBeenCalledWith(
@@ -1106,10 +1258,13 @@ describe("createClientService", () => {
     }));
 
     await expect(enableCase.service.enableClientOidc("portal")).resolves.toMatchObject({
-      client: {
-        clientCode: "portal",
-        status: ClientStatus.Maintenance,
-        oidcConfigVersion: 2,
+      changed: true,
+      result: {
+        client: {
+          clientCode: "portal",
+          status: ClientStatus.Maintenance,
+          oidcConfigVersion: 2,
+        },
       },
     });
 
@@ -1128,7 +1283,10 @@ describe("createClientService", () => {
     }));
 
     await expect(disableCase.service.disableClientOidc("portal")).resolves.toMatchObject({
-      client: { clientCode: "portal" },
+      changed: true,
+      result: {
+        client: { clientCode: "portal" },
+      },
     });
 
     expect(disableCase.deps.sessionRevocation.revokeClientProtocol).toHaveBeenCalledWith(expect.objectContaining({
@@ -1161,9 +1319,12 @@ describe("createClientService", () => {
     }));
 
     await expect(service.enableClientOidc("portal")).resolves.toMatchObject({
-      client: {
-        status: ClientStatus.Maintenance,
-        oidcState: "enabled",
+      changed: true,
+      result: {
+        client: {
+          status: ClientStatus.Maintenance,
+          oidcState: "enabled",
+        },
       },
     });
     expect(tx.clientRepository.getClientByCode).not.toHaveBeenCalled();
@@ -1186,7 +1347,7 @@ describe("createClientService", () => {
 
   test("OIDC remove and rotate secret revoke OIDC protocol without leaking secret material", async () => {
     const removeCase = createService();
-    (removeCase.tx.clientRepository.getClientByCode as any).mockResolvedValue(client({
+    (removeCase.tx.clientRepository.lockClientByCode as any).mockResolvedValue(client({
       status: ClientStatus.Maintenance,
       oidcConfig: oidcConfig(),
       oidcSecretHash: "hash",
@@ -1194,7 +1355,10 @@ describe("createClientService", () => {
     }));
 
     await expect(removeCase.service.removeClientOidc("portal")).resolves.toMatchObject({
-      client: { clientCode: "portal" },
+      changed: true,
+      result: {
+        client: { clientCode: "portal" },
+      },
     });
 
     expect(removeCase.deps.sessionRevocation.revokeClientProtocol).toHaveBeenCalledWith(expect.objectContaining({
@@ -1204,16 +1368,26 @@ describe("createClientService", () => {
     expect(removeCase.deps.clientRuntimeInvalidation.invalidateClient).toHaveBeenCalledWith("portal");
 
     const rotateCase = createService();
-    (rotateCase.tx.clientRepository.getClientByCode as any).mockResolvedValue(client({
+    (rotateCase.tx.clientRepository.lockClientByCode as any).mockResolvedValue(client({
       status: ClientStatus.Maintenance,
       oidcConfig: oidcConfig(),
       oidcSecretHash: "hash",
       oidcEnabled: true,
     }));
 
+    rotateCase.tx.clientRepository.updateClientOidcByCode.mockImplementationOnce(async (_code, data) => client({
+      oidcConfig: oidcConfig(),
+      oidcEnabled: true,
+      ...data,
+      oidcConfigVersion: 2,
+    }));
+
     await expect(rotateCase.service.rotateClientOidcSecret("portal")).resolves.toMatchObject({
-      client: { clientCode: "portal" },
-      clientSecret: "iam_oidc_test_secret",
+      changed: true,
+      result: {
+        client: { clientCode: "portal" },
+        clientSecret: "iam_oidc_test_secret",
+      },
     });
 
     const [input] = rotateCase.deps.sessionRevocation.revokeClientProtocol.mock.calls[0] ?? [];
@@ -1225,5 +1399,123 @@ describe("createClientService", () => {
     expect(JSON.stringify(input)).not.toContain("iam_oidc_test_secret");
     expect(JSON.stringify(input)).not.toContain("hashed-secret");
     expect(rotateCase.deps.clientRuntimeInvalidation.invalidateClient).toHaveBeenCalledWith("portal");
+  });
+
+  test("normalized OIDC configuration is an audited no-op without epochs, secrets or revocation", async () => {
+    const { service, tx, deps } = createService();
+    const stored = {
+      ...oidcConfig(),
+      redirectUris: ["https://portal.example.com/b", "https://portal.example.com/a"],
+      postLogoutRedirectUris: ["https://portal.example.com/out-b", "https://portal.example.com/out-a"],
+      allowedScopes: [OidcScope.Profile, OidcScope.OpenId],
+    };
+    tx.clientRepository.lockClientByCode.mockResolvedValue(client({
+      oidcConfig: stored,
+      oidcSecretHash: "latest-secret-hash",
+      oidcEnabled: true,
+      oidcConfigVersion: 9,
+    }));
+    const result = await service.configureClientOidc("portal", {
+      ...stored,
+      redirectUris: [...stored.redirectUris].reverse(),
+      postLogoutRedirectUris: [...stored.postLogoutRedirectUris].reverse(),
+      allowedScopes: [...stored.allowedScopes].reverse(),
+    });
+    expect(result).toMatchObject({ changed: false, result: { client: { oidcConfigVersion: 9, oidcState: "enabled" } } });
+    expect(result.result.clientSecret).toBeUndefined();
+    expect(tx.clientRepository.updateClientOidcByCode).not.toHaveBeenCalled();
+    expect(deps.passwordHasher.hashSecret).not.toHaveBeenCalled();
+    expect(deps.sessionRevocation.revokeClientProtocol).not.toHaveBeenCalled();
+    expect(deps.clientRuntimeInvalidation.invalidateClient).toHaveBeenCalledTimes(1);
+    expect(tx.auditService.recordAuditLog).toHaveBeenCalledWith(expect.objectContaining({
+      action: "admin.client.oidc.configure",
+      details: expect.objectContaining({ changed: false }),
+    }));
+  });
+
+  test("same-target OIDC lifecycle retries retain intent and required invalidation only", async () => {
+    const cases = [
+      { method: "enableClientOidc", config: oidcConfig(), enabled: true, hash: "hash" },
+      { method: "disableClientOidc", config: oidcConfig(), enabled: false, hash: "hash" },
+      { method: "removeClientOidc", config: null, enabled: false, hash: null },
+    ] as const;
+    for (const input of cases) {
+      const { service, tx, deps } = createService();
+      tx.clientRepository.lockClientByCode.mockResolvedValue(client({
+        oidcConfig: input.config,
+        oidcEnabled: input.enabled,
+        oidcSecretHash: input.hash,
+        oidcConfigVersion: 7,
+      }));
+      const outcome = await service[input.method]("portal");
+      expect(outcome).toMatchObject({ changed: false, result: { client: { oidcConfigVersion: 7 } } });
+      expect(tx.clientRepository.updateClientOidcByCode).not.toHaveBeenCalled();
+      expect(deps.sessionRevocation.revokeClientProtocol).not.toHaveBeenCalled();
+      expect(deps.clientRuntimeInvalidation.invalidateClient).toHaveBeenCalledTimes(1);
+      expect(tx.auditService.recordAuditLog).toHaveBeenCalledWith(expect.objectContaining({
+        details: expect.objectContaining({ changed: false }),
+      }));
+    }
+  });
+
+  test("configuration uses locked disabled state and newest secret rather than an old snapshot", async () => {
+    const { service, tx, deps } = createService();
+    const stored = client({ oidcConfig: oidcConfig(), oidcSecretHash: "newest-hash", oidcEnabled: false });
+    tx.clientRepository.getClientByCode.mockResolvedValue(client({ ...stored, oidcEnabled: true, oidcSecretHash: "old-hash" }));
+    tx.clientRepository.lockClientByCode.mockResolvedValue(stored);
+    tx.clientRepository.updateClientOidcByCode.mockImplementation(async (_code, patch) =>
+      client({ ...stored, ...patch, oidcConfigVersion: 2 }));
+    const outcome = await service.configureClientOidc("portal", { ...oidcConfig(), redirectUris: ["https://portal.example.com/new"] });
+    expect(outcome).toMatchObject({ changed: true, result: { client: { oidcState: "disabled", oidcConfigVersion: 2 } } });
+    expect(tx.clientRepository.updateClientOidcByCode).toHaveBeenCalledWith("portal", expect.objectContaining({ oidcEnabled: false, oidcSecretHash: "newest-hash" }));
+    expect(deps.passwordHasher.hashSecret).not.toHaveBeenCalled();
+    expect(tx.clientRepository.getClientByCode).not.toHaveBeenCalled();
+  });
+
+  test("rotation and removal reject locked incompatible state before writing or auditing", async () => {
+    const publicConfig = {
+      ...oidcConfig(),
+      clientType: OidcClientType.Public,
+      tokenEndpointAuthMethod: OidcTokenEndpointAuthMethod.None,
+    };
+    const cases = [
+      { method: "rotateClientOidcSecret", config: publicConfig, enabled: false, hash: null },
+      { method: "rotateClientOidcSecret", config: null, enabled: false, hash: null },
+      { method: "removeClientOidc", config: oidcConfig(), enabled: true, hash: "hash" },
+    ] as const;
+    for (const input of cases) {
+      const { service, tx, deps } = createService();
+      tx.clientRepository.lockClientByCode.mockResolvedValue(client({
+        oidcConfig: input.config,
+        oidcEnabled: input.enabled,
+        oidcSecretHash: input.hash,
+      }));
+      const failure = await service[input.method]("portal").catch(error => error);
+      expect(failure).toBeInstanceOf(OidcClientStateError);
+      expect(tx.clientRepository.updateClientOidcByCode).not.toHaveBeenCalled();
+      expect(tx.auditService.recordAuditLog).not.toHaveBeenCalled();
+      expect(deps.clientRuntimeInvalidation.invalidateClient).not.toHaveBeenCalled();
+    }
+  });
+
+  test("explicit rotations always change and deliver a fresh secret without including it in audit", async () => {
+    const { service, tx, deps } = createService();
+    const stored = client({ oidcConfig: oidcConfig(), oidcSecretHash: "original-hash" });
+    tx.clientRepository.lockClientByCode.mockResolvedValue(stored);
+    tx.clientRepository.updateClientOidcByCode.mockImplementation(async (_code, patch) =>
+      client({ ...stored, ...patch, oidcConfigVersion: 2 }));
+    deps.random.oidcClientSecret.mockReturnValueOnce("one-time-first").mockReturnValueOnce("one-time-second");
+    const first = await service.rotateClientOidcSecret("portal");
+    const second = await service.rotateClientOidcSecret("portal");
+    expect(first).toMatchObject({ changed: true, result: { clientSecret: "one-time-first" } });
+    expect(second).toMatchObject({ changed: true, result: { clientSecret: "one-time-second" } });
+    expect(tx.clientRepository.updateClientOidcByCode).toHaveBeenCalledTimes(2);
+    expect(deps.sessionRevocation.revokeClientProtocol).toHaveBeenCalledTimes(2);
+    const audit = JSON.stringify(tx.auditService.recordAuditLog.mock.calls);
+    expect(audit).not.toContain("one-time-first");
+    expect(audit).not.toContain("one-time-second");
+    expect(tx.auditService.recordAuditLog).toHaveBeenCalledWith(expect.objectContaining({
+      details: expect.objectContaining({ changed: true }),
+    }));
   });
 });

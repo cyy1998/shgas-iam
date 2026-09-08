@@ -7,6 +7,19 @@ import { and, eq, sql } from "drizzle-orm";
 
 export function createUserRepository(db: DbClient) {
   return {
+    async lockUserByUsername(username: string) {
+      return firstRow(await db.select({ id: users.id }).from(users).where(and(
+        eq(users.username, username),
+        eq(users.status, UserStatus.Enable),
+        eq(users.isDelete, false),
+      )).for("update")) ?? null;
+    },
+    async lockUserById(id: number) {
+      return firstRow(await db.select({ id: users.id }).from(users).where(and(
+        eq(users.id, id),
+        eq(users.isDelete, false),
+      )).for("update")) ?? null;
+    },
     async lockPurveyorContactMobile(mobile: string) {
       await db.execute(sql`
         select pg_advisory_xact_lock(

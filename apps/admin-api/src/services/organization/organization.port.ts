@@ -12,19 +12,22 @@ import type {
 } from "./organization.type";
 
 export interface AdminOrganizationTransactionStorePort {
+  lockOrganizationByCode: (orgCode: string) => Promise<Organization | null>;
+  getAnyOrganizationByCode: (orgCode: string) => Promise<Organization | null>;
   getOrganizationByCode: (orgCode: string) => Promise<AdminOrganizationRecord | null>;
   getOrganizationByCodeForAdmin: (orgCode: string) => Promise<AdminOrganizationRecord | null>;
   setOrganization: (
     input: OrganizationCreateDto,
     parent: Organization | null,
   ) => Promise<AdminOrganizationRecord>;
-  updateOrganizationByCode: (orgCode: string, input: OrganizationUpdateDto) => Promise<unknown>;
+  updateOrganizationByCode: (orgCode: string, input: OrganizationUpdateDto) => Promise<Organization | null>;
   countActiveChildrenByOrgCode: (orgCode: string) => Promise<number>;
   countOpenEmploymentsByOrgCode: (orgCode: string) => Promise<number>;
-  softDeleteOrganizationByCode: (orgCode: string) => Promise<unknown>;
+  softDeleteOrganizationByCode: (orgCode: string) => Promise<Organization | null>;
 }
 
 export interface AdminOrganizationReaderPort {
+  getAnyOrganizationByCode: (orgCode: string) => Promise<Organization | null>;
   listOrgChildrenByParentCode: (
     parentOrgCode: string | null,
     pageNum: number,

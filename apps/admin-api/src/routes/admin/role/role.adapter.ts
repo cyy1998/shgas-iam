@@ -53,8 +53,10 @@ export function createRoleAdapter(deps: CreateRoleAdapterDeps) {
     operationId: "admin.role.create",
     input: RoleCreateDtoSchema,
     restInput: c => c.req.valid("json") as z.infer<typeof RoleCreateDtoSchema>,
-    handler: async (input, context) =>
-      toRoleDetailVo(await deps.roleService.createRole(input, resolveAdminAuditContext(context))),
+    handler: async (input, context) => {
+      const outcome = await deps.roleService.createRole(input, resolveAdminAuditContext(context));
+      return { ...outcome, result: toRoleDetailVo(outcome.result) };
+    },
   });
 
   const updateRole = defineAdminApiMutationOperation({
@@ -68,7 +70,7 @@ export function createRoleAdapter(deps: CreateRoleAdapterDeps) {
       data: c.req.valid("json") as z.infer<typeof RoleUpdateDtoSchema>,
     }),
     handler: async ({ roleCode, data }, context) =>
-      toRoleDetailVo(await deps.roleService.updateRole(roleCode, data, resolveAdminAuditContext(context))),
+      deps.roleService.updateRole(roleCode, data, resolveAdminAuditContext(context)),
   });
 
   const updateRoleStatus = defineAdminApiMutationOperation({
@@ -82,7 +84,7 @@ export function createRoleAdapter(deps: CreateRoleAdapterDeps) {
       status: (c.req.valid("json") as z.infer<typeof RoleStatusUpdateDtoSchema>).status,
     }),
     handler: async ({ roleCode, status }, context) =>
-      toRoleDetailVo(await deps.roleService.updateRoleStatus(roleCode, status, resolveAdminAuditContext(context))),
+      deps.roleService.updateRoleStatus(roleCode, status, resolveAdminAuditContext(context)),
   });
 
   const deleteRole = defineAdminApiMutationOperation({
@@ -118,8 +120,10 @@ export function createRoleAdapter(deps: CreateRoleAdapterDeps) {
       roleCode: (c.req.valid("param") as { roleCode: string }).roleCode,
       data: c.req.valid("json") as z.infer<typeof RoleAssignmentCreateDtoSchema>,
     }),
-    handler: async ({ roleCode, data }, context) =>
-      toRoleAssignmentVo(await deps.roleService.createAssignment(roleCode, data, resolveAdminAuditContext(context))),
+    handler: async ({ roleCode, data }, context) => {
+      const outcome = await deps.roleService.createAssignment(roleCode, data, resolveAdminAuditContext(context));
+      return { ...outcome, result: toRoleAssignmentVo(outcome.result) };
+    },
   });
 
   const updateAssignmentScope = defineAdminApiMutationOperation({
@@ -136,12 +140,12 @@ export function createRoleAdapter(deps: CreateRoleAdapterDeps) {
         .includeDescendants,
     }),
     handler: async ({ roleCode, assignmentId, includeDescendants }, context) =>
-      toRoleAssignmentVo(await deps.roleService.updateAssignmentScope(
+      deps.roleService.updateAssignmentScope(
         roleCode,
         assignmentId,
         includeDescendants,
         resolveAdminAuditContext(context),
-      )),
+      ),
   });
 
   const deleteAssignment = defineAdminApiMutationOperation({

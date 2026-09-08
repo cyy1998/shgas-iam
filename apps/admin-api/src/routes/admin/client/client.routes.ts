@@ -18,6 +18,7 @@ import jsonContent from "@iam/api-core/core/openapi/helpers/json-content";
 import jsonContentRequired from "@iam/api-core/core/openapi/helpers/json-content-required";
 import createSuccessResponseSchema from "@iam/api-core/core/openapi/schemas/create-success-schema";
 import { createPageResultSchema } from "@iam/api-core/core/pagination/schema";
+import { createAdminMutationResultSchema } from "@iam/contracts";
 
 const tags = ["Admin/Client"];
 
@@ -46,7 +47,7 @@ export const clientCreate = createRoute({
   },
   responses: {
     ...commonErrorResponses,
-    [HttpStatusCodes.OK]: jsonContent(createSuccessResponseSchema(ClientAdminDetailDtoSchema), "创建客户端成功"),
+    [HttpStatusCodes.OK]: jsonContent(createSuccessResponseSchema(createAdminMutationResultSchema(ClientAdminDetailDtoSchema)), "创建客户端成功"),
   },
 });
 
@@ -73,7 +74,7 @@ export const clientUpdate = createRoute({
   },
   responses: {
     ...commonErrorResponses,
-    [HttpStatusCodes.OK]: jsonContent(createSuccessResponseSchema(ClientAdminDetailDtoSchema), "更新客户端成功"),
+    [HttpStatusCodes.OK]: jsonContent(createSuccessResponseSchema(createAdminMutationResultSchema(z.null())), "更新客户端成功"),
   },
 });
 
@@ -87,7 +88,7 @@ export const clientStatusUpdate = createRoute({
   },
   responses: {
     ...commonErrorResponses,
-    [HttpStatusCodes.OK]: jsonContent(createSuccessResponseSchema(z.boolean()), "状态更新成功"),
+    [HttpStatusCodes.OK]: jsonContent(createSuccessResponseSchema(createAdminMutationResultSchema(z.null())), "状态更新成功"),
   },
 });
 
@@ -100,7 +101,7 @@ export const clientDelete = createRoute({
   },
   responses: {
     ...commonErrorResponses,
-    [HttpStatusCodes.OK]: jsonContent(createSuccessResponseSchema(z.boolean()), "软删除成功"),
+    [HttpStatusCodes.OK]: jsonContent(createSuccessResponseSchema(createAdminMutationResultSchema(z.null())), "软删除成功"),
   },
 });
 
@@ -209,7 +210,7 @@ export const clientCreateLegacy = createRoute({
   },
   responses: {
     ...commonErrorResponses,
-    [HttpStatusCodes.OK]: jsonContent(createSuccessResponseSchema(ClientAdminDetailDtoSchema), "创建客户端成功"),
+    [HttpStatusCodes.OK]: jsonContent(createSuccessResponseSchema(createAdminMutationResultSchema(ClientAdminDetailDtoSchema)), "创建客户端成功"),
   },
 });
 
@@ -222,6 +223,6 @@ export const clientUpdateLegacy = createRoute({
   },
   responses: {
     ...commonErrorResponses,
-    [HttpStatusCodes.OK]: jsonContent(createSuccessResponseSchema(ClientAdminDetailDtoSchema), "更新客户端成功"),
+    [HttpStatusCodes.OK]: jsonContent(createSuccessResponseSchema(createAdminMutationResultSchema(z.null())), "更新客户端成功"),
   },
 });

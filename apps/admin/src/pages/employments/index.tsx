@@ -15,7 +15,7 @@ import {
 } from '@ant-design/pro-components';
 import { EmploymentStatus, getEmploymentStatusOptions } from '@iam/contracts';
 import { useAccess, useLocation } from '@umijs/max';
-import { Button, message, Space, Tag } from 'antd';
+import { Alert, Button, message, Space, Tag } from 'antd';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
 type PresetFromUrl = {
@@ -54,6 +54,7 @@ function formatPosition(row: EmploymentVo) {
 
 export default function EmploymentsPage() {
   const access = useAccess();
+  const [committedWarning, setCommittedWarning] = useState<string>();
   const actionRef = useRef<ActionType>(undefined);
   const searchFormRef = useRef<ProFormInstance>(undefined);
   const location = useLocation();
@@ -176,6 +177,9 @@ export default function EmploymentsPage() {
 
   return (
     <PageContainer title="雇佣关系">
+      {committedWarning && (
+        <Alert type="warning" showIcon title={committedWarning} />
+      )}
       <ProTable<EmploymentVo>
         actionRef={actionRef}
         formRef={searchFormRef}
@@ -257,6 +261,11 @@ export default function EmploymentsPage() {
       />
 
       <EmploymentFormModal
+        onCommitted={async (error) => {
+          setCommittedWarning(error.message);
+          setFormOpen(false);
+          await actionRef.current?.reload();
+        }}
         open={formOpen}
         presetUsername={formPresetUsername}
         presetName={formPresetName}

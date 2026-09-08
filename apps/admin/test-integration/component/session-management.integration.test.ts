@@ -5,12 +5,14 @@ import {
   LoginRestrictionListErrorKind,
   LoginRestrictionReleaseError,
   LoginRestrictionReleaseErrorKind,
+  type LoginRestrictionReleaseResult,
   releaseLoginRestriction,
   revokeSessions,
   SessionListError,
   SessionListErrorKind,
   SessionRevokeError,
   SessionRevokeErrorKind,
+  type SessionRevokeResult,
 } from '@admin/services/session-management';
 import { ApiErrorCode } from '@iam/contracts';
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -195,8 +197,8 @@ describe('session management service wrapper', () => {
     const input = { userId: 42 };
     const response = {
       changed: false,
-      failureStateCleared: true as const,
-    };
+      result: { failureStateCleared: true as const },
+    } satisfies LoginRestrictionReleaseResult;
     loginRestrictionReleaseMutation.mockResolvedValueOnce(response);
 
     await expect(releaseLoginRestriction(input)).resolves.toEqual(response);
@@ -303,20 +305,22 @@ describe('session management service wrapper', () => {
   it('returns the safe revoke result from the shared Admin API intent', async () => {
     const response = {
       changed: false,
-      scope: 'session' as const,
-      revoked: {
-        principalSessions: 0,
-        bindings: 0,
-        credentials: 0,
-        artifacts: 0,
+      result: {
+        scope: 'session' as const,
+        revoked: {
+          principalSessions: 0,
+          bindings: 0,
+          credentials: 0,
+          artifacts: 0,
+        },
+        currentPrincipalSessionExcluded: false,
+        cleanup: {
+          attempted: 0,
+          succeeded: 0,
+          failed: 0,
+        },
       },
-      currentPrincipalSessionExcluded: false,
-      cleanup: {
-        attempted: 0,
-        succeeded: 0,
-        failed: 0,
-      },
-    };
+    } satisfies SessionRevokeResult;
     sessionRevokeMutation.mockResolvedValueOnce(response);
 
     await expect(
@@ -332,20 +336,22 @@ describe('session management service wrapper', () => {
   it('passes a user target through the same shared revoke intent', async () => {
     const response = {
       changed: true,
-      scope: 'user' as const,
-      revoked: {
-        principalSessions: 2,
-        bindings: 3,
-        credentials: 4,
-        artifacts: 1,
+      result: {
+        scope: 'user' as const,
+        revoked: {
+          principalSessions: 2,
+          bindings: 3,
+          credentials: 4,
+          artifacts: 1,
+        },
+        currentPrincipalSessionExcluded: true,
+        cleanup: {
+          attempted: 1,
+          succeeded: 1,
+          failed: 0,
+        },
       },
-      currentPrincipalSessionExcluded: true,
-      cleanup: {
-        attempted: 1,
-        succeeded: 1,
-        failed: 0,
-      },
-    };
+    } satisfies SessionRevokeResult;
     const input = {
       target: {
         type: 'user' as const,

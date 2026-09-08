@@ -1,6 +1,7 @@
 import type { Context } from "hono";
 import { createUserAdapter } from "@admin-api/routes/admin/user/user.adapter";
 import { createAdminAuthorizationPolicy } from "@admin-api/services/admin-authorization/admin-authorization.policy";
+import { AdminMutationCommittedError } from "@admin-api/services/admin-mutation/admin-mutation";
 import {
   EmploymentStatus,
   OrganizationLevel,
@@ -98,6 +99,65 @@ function employment(id: number, orgId: number, status: EmploymentStatus) {
 }
 
 describe("admin User adapter authorization projection", () => {
+  test("returns the same safe create result through REST and tRPC", async () => {
+    const adapter = createUserAdapter({
+      random: { password: mock(() => "unused") },
+      userService: {
+        setUserForAdmin: mock(async () => ({
+          changed: true,
+          result: {
+            username: "target",
+            generatedPassword: "Rand1234",
+            user: { ...userDetail(), password: "hash-must-not-leak", subjectIdentifier: "private-subject" },
+          },
+        })),
+      },
+    } as never);
+    const input = { username: "target", name: "Target User", userType: UserType.Formal };
+    const context = createContext(["iam:admin"]);
+    const json = mock((body: unknown) => body);
+    const restContext = {
+      ...context,
+      req: { header: () => undefined, valid: () => input },
+      json,
+    };
+    await adapter.usersCreate(restContext as never, async () => {});
+    const result = await adapter.userAdminRouter.createCaller({ hono: context }).create(input);
+    expect(json).toHaveBeenCalledWith({ code: 200, data: result, message: "success" }, 200);
+    expect(result).toMatchObject({
+      changed: true,
+      result: { username: "target", generatedPassword: "Rand1234", user: { statusText: "正常" } },
+    });
+    expect(result.result.user).not.toHaveProperty("password");
+    expect(result.result.user).not.toHaveProperty("subjectIdentifier");
+    expect(result.result.user).not.toHaveProperty("roles");
+  });
+
+  test("preserves profile no-op and committed-failure semantics without returning a password", async () => {
+    const adapter = createUserAdapter({
+      random: { password: mock(() => "unused") },
+      userService: {
+        updateUser: mock(async () => ({ changed: false, result: null })),
+        resetPasswordByUsername: mock(async () => { throw new AdminMutationCommittedError(); }),
+      },
+    } as never);
+    const caller = adapter.userAdminRouter.createCaller({ hono: createContext(["iam:admin"]) });
+    const updated = await caller.update({ username: "target", data: { name: "Target User" } });
+    expect(updated).toEqual({ changed: false, result: null });
+    let failure: unknown;
+    try {
+      await caller.resetPassword({ username: "target" });
+    }
+    catch (error) {
+      failure = error;
+    }
+    expect(failure).toMatchObject({
+      code: "INTERNAL_SERVER_ERROR",
+      cause: { code: "ADMIN_MUTATION_COMMITTED" },
+    });
+    expect(JSON.stringify(failure)).not.toContain("Rand1234");
+  });
+
   test("returns HR-managed profile and password actions from target Employment and User facts", async () => {
     const adapter = createUserAdapter({
       random: { password: mock(() => "unused") },
@@ -262,8 +322,8 @@ describe("admin User adapter authorization projection", () => {
   });
 
   test("passes request-time User authorization to profile and password mutations", async () => {
-    const updateUser = mock(async (..._args: unknown[]) => true);
-    const resetPasswordByUsername = mock(async (..._args: unknown[]) => "Rand1234");
+    const updateUser = mock(async (..._args: unknown[]) => ({ changed: true, result: null }));
+    const resetPasswordByUsername = mock(async (..._args: unknown[]) => ({ changed: true, result: "Rand1234" }));
     const adapter = createUserAdapter({
       random: { password: mock(() => "unused") },
       userService: { updateUser, resetPasswordByUsername },
@@ -284,11 +344,11 @@ describe("admin User adapter authorization projection", () => {
       kind: "scoped",
       organizationIds: [10],
     });
-    expect(password).toBe("Rand1234");
+    expect(password).toEqual({ changed: true, result: "Rand1234" });
   });
 
   test("passes request-time User authorization to status mutations", async () => {
-    const updateUserStatus = mock(async (..._args: unknown[]) => true);
+    const updateUserStatus = mock(async (..._args: unknown[]) => ({ changed: false, result: null }));
     const adapter = createUserAdapter({
       random: { password: mock(() => "unused") },
       userService: { updateUserStatus },
@@ -298,11 +358,60 @@ describe("admin User adapter authorization projection", () => {
       .createCaller({ hono: createContext(["iam:hr-admin"]) })
       .updateStatus({ username: "target", status: UserStatus.Pause });
 
-    expect(updated).toBe(true);
+    expect(updated).toEqual({ changed: false, result: null });
     expect(updateUserStatus.mock.calls[0]?.[3]).toMatchObject({
       kind: "scoped",
       organizationIds: [10],
     });
+  });
+
+  test("preserves status/delete outcomes through REST and tRPC", async () => {
+    for (const changed of [true, false]) {
+      const outcome = { changed, result: null };
+      const adapter = createUserAdapter({
+        random: { password: mock(() => "unused") },
+        userService: {
+          updateUserStatus: mock(async () => outcome),
+          deleteUser: mock(async () => outcome),
+        },
+      } as never);
+      const context = createContext(["iam:admin"]);
+      const caller = adapter.userAdminRouter.createCaller({ hono: context });
+      const status = await caller.updateStatus({ username: "target", status: UserStatus.Pause });
+      const deleted = await caller.delete({ username: "target" });
+      expect(status).toEqual(outcome);
+      expect(deleted).toEqual(outcome);
+      for (const handler of [adapter.usersStatusUpdate, adapter.usersDelete]) {
+        const json = mock((body: unknown) => body);
+        await handler({
+          ...createContext(["iam:admin"]),
+          req: {
+            header: () => undefined,
+            valid: (kind: string) => kind === "param" ? { username: "target" } : { status: UserStatus.Pause },
+          },
+          json,
+        } as never, async () => {});
+        expect(json).toHaveBeenCalledWith({ code: 200, data: outcome, message: "success" }, 200);
+      }
+    }
+  });
+
+  test("preserves explicit committed failures for status and delete", async () => {
+    const adapter = createUserAdapter({
+      random: { password: mock(() => "unused") },
+      userService: {
+        updateUserStatus: mock(async () => { throw new AdminMutationCommittedError(); }),
+        deleteUser: mock(async () => { throw new AdminMutationCommittedError(); }),
+      },
+    } as never);
+    const caller = adapter.userAdminRouter.createCaller({ hono: createContext(["iam:admin"]) });
+    for (const run of [
+      () => caller.updateStatus({ username: "target", status: UserStatus.Pause }),
+      () => caller.delete({ username: "target" }),
+    ]) {
+      const failure = await run().catch((error: unknown) => error);
+      expect(failure).toMatchObject({ code: "INTERNAL_SERVER_ERROR", cause: { code: "ADMIN_MUTATION_COMMITTED" } });
+    }
   });
 
   test("returns 403 and logs a direct HR status denial through the adapter", async () => {
@@ -351,7 +460,7 @@ describe("admin User adapter authorization projection", () => {
   });
 
   test("rejects HR profile fields outside the allowlist without reaching the service", async () => {
-    const updateUser = mock(async (..._args: unknown[]) => true);
+    const updateUser = mock(async (..._args: unknown[]) => ({ changed: true, result: null }));
     const adapter = createUserAdapter({
       random: { password: mock(() => "unused") },
       userService: { updateUser },
@@ -377,7 +486,7 @@ describe("admin User adapter authorization projection", () => {
   });
 
   test("rechecks the HR profile allowlist when operation authorization is cached", async () => {
-    const updateUser = mock(async (..._args: unknown[]) => true);
+    const updateUser = mock(async (..._args: unknown[]) => ({ changed: true, result: null }));
     const adapter = createUserAdapter({
       random: { password: mock(() => "unused") },
       userService: { updateUser },

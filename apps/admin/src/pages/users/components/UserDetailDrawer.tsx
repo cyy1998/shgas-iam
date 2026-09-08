@@ -7,6 +7,7 @@ import EmploymentResponsibilitySummary from '@admin/components/organization-resp
 import StatusTag from '@admin/components/StatusTag';
 import EmploymentFormModal from '@admin/pages/employments/components/EmploymentFormModal';
 import TransferModal from '@admin/pages/employments/components/TransferModal';
+import { AdminMutationCommittedError } from '@admin/services/admin-mutation';
 import { resignUser } from '@admin/services/employment';
 import {
   deleteUser,
@@ -18,6 +19,7 @@ import { ProDescriptions } from '@ant-design/pro-components';
 import { getUserStatusOptions, type UserStatus } from '@iam/contracts';
 import { Link, useAccess } from '@umijs/max';
 import {
+  Alert,
   Button,
   Drawer,
   Empty,
@@ -102,6 +104,7 @@ function UserDetailDrawerContent({
   onChanged,
 }: Props) {
   const access = useAccess();
+  const [committedWarning, setCommittedWarning] = useState<string>();
   const [detail, setDetail] = useState<UserDetailVo | null>(null);
   const [loading, setLoading] = useState(open && username !== null);
   const [employmentFormOpen, setEmploymentFormOpen] = useState(false);
@@ -145,13 +148,34 @@ function UserDetailDrawerContent({
     onChanged();
   };
 
+  const onEmploymentCommitted = async (error: AdminMutationCommittedError) => {
+    setCommittedWarning(error.message);
+    setEmploymentFormOpen(false);
+    setTransferEmployment(null);
+    try {
+      await refresh();
+    } catch (refreshError) {
+      handleError(refreshError);
+    }
+  };
+
   const onStatusChange = async (status: UserStatus) => {
     if (!detail) return;
     try {
-      await updateUserStatus(detail.username, status);
-      message.success('状态已更新');
+      const outcome = await updateUserStatus(detail.username, status);
+      if (outcome.changed) message.success('状态已更新');
+      else message.info('状态无需修改');
       await refresh();
     } catch (err) {
+      if (err instanceof AdminMutationCommittedError) {
+        setCommittedWarning(err.message);
+        try {
+          await refresh();
+        } catch (refreshError) {
+          handleError(refreshError);
+        }
+        return;
+      }
       handleError(err);
     }
   };
@@ -164,11 +188,23 @@ function UserDetailDrawerContent({
       okType: 'danger',
       onOk: async () => {
         try {
-          await deleteUser(detail.username);
-          message.success('已删除');
+          const outcome = await deleteUser(detail.username);
+          if (outcome.changed) message.success('已删除');
+          else message.info('无需删除');
           onChanged();
           onClose();
         } catch (err) {
+          if (err instanceof AdminMutationCommittedError) {
+            setCommittedWarning(`删除已生效。${err.message}`);
+            setDetail(null);
+            onChanged();
+            try {
+              await refresh();
+            } catch (refreshError) {
+              handleError(refreshError);
+            }
+            return;
+          }
           handleError(err);
         }
       },
@@ -183,10 +219,15 @@ function UserDetailDrawerContent({
       okType: 'danger',
       onOk: async () => {
         try {
-          await resignUser(detail.username);
-          message.success('离职已完成');
+          const outcome = await resignUser(detail.username);
+          if (outcome.changed) message.success('离职已完成');
+          else message.info('已处于离职状态，无需修改');
           await refresh();
         } catch (err) {
+          if (err instanceof AdminMutationCommittedError) {
+            await onEmploymentCommitted(err);
+            return;
+          }
           handleError(err);
         }
       },
@@ -267,6 +308,7 @@ function UserDetailDrawerContent({
               转岗
             </AuthorizationActionButton>
             <EmploymentPrimaryActions
+              onCommitted={onEmploymentCommitted}
               decision={
                 row.isPrimary
                   ? row.allowedActions.clearPrimary
@@ -278,6 +320,7 @@ function UserDetailDrawerContent({
               onSuccess={refresh}
             />
             <EmploymentLifecycleActions
+              onCommitted={onEmploymentCommitted}
               buttonStyle={employmentTableActionStyle}
               buttonType="link"
               decisions={row.allowedActions}
@@ -295,6 +338,7 @@ function UserDetailDrawerContent({
       {access.canAccessEmployment && (
         <>
           <EmploymentFormModal
+            onCommitted={onEmploymentCommitted}
             open={employmentFormOpen}
             presetUsername={detail?.username}
             presetName={detail?.name}
@@ -305,14 +349,15 @@ function UserDetailDrawerContent({
             }}
           />
           <TransferModal
+            onCommitted={onEmploymentCommitted}
             open={transferEmployment !== null}
             employment={transferEmployment}
             onOpenChange={(nextOpen) => {
               if (!nextOpen) setTransferEmployment(null);
             }}
-            onSuccess={() => {
+            onSuccess={async () => {
               setTransferEmployment(null);
-              void refresh();
+              await refresh();
             }}
           />
         </>
@@ -364,6 +409,17 @@ function UserDetailDrawerContent({
                   confirmResetPassword({
                     username: detail.username,
                     name: detail.name,
+                    onSuccess: refresh,
+                    onCommitted: async (error) => {
+                      setCommittedWarning(
+                        `密码重置已生效，但新密码未能交付。${error.message}；请先修复，再主动重置密码。`,
+                      );
+                      try {
+                        await refresh();
+                      } catch (refreshError) {
+                        handleError(refreshError);
+                      }
+                    },
                   })
                 }
               >
@@ -387,6 +443,9 @@ function UserDetailDrawerContent({
           )
         }
       >
+        {committedWarning && (
+          <Alert type="warning" showIcon message={committedWarning} />
+        )}
         {loading && !detail ? <Skeleton active /> : null}
         {!loading && !detail ? <Empty /> : null}
         {detail && (

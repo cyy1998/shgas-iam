@@ -22,6 +22,7 @@ export interface CreateOrganizationResponsibilityAssignmentTransactionPorts {
     } | null>;
     createAssignmentRecord: (
       input: OrganizationResponsibilityAssignmentRecordCreate,
+      readScope: OrganizationResponsibilityReadScope,
     ) => Promise<{ id: number }>;
     isEndpointPairWithinReadScope: (input: {
       readScope: OrganizationResponsibilityReadScope;

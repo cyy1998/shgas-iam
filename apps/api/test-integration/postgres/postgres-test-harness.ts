@@ -44,6 +44,7 @@ export async function createApiPostgresTestHarness(): Promise<ApiPostgresTestHar
       async reset() {
         await scopedSql!.unsafe(
           `TRUNCATE TABLE
+            audit_log,
             delegation_detail,
             privilege_delegation,
             organization_closure,

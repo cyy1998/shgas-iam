@@ -2,6 +2,7 @@ import { apiClient } from '@admin/lib/api-client';
 import type { AppRouter } from '@iam/admin-api/trpc';
 import { ApiErrorCode } from '@iam/contracts';
 import type { inferRouterInputs, inferRouterOutputs } from '@trpc/server';
+import { runAdminMutation } from './admin-mutation';
 
 type AdminClientInputs = inferRouterInputs<AppRouter>['admin']['client'];
 type AdminClientOutputs = inferRouterOutputs<AppRouter>['admin']['client'];
@@ -55,81 +56,109 @@ export async function getClient(clientCode: string) {
 }
 
 export function createClient(body: AdminClientInputs['create']) {
-  return apiClient.admin.client.create.mutate(body);
+  return runAdminMutation(() => apiClient.admin.client.create.mutate(body));
 }
 
 export function updateClient(
   clientCode: string,
   data: AdminClientInputs['update']['data'],
 ) {
-  return apiClient.admin.client.update.mutate({ clientCode, data });
+  return runAdminMutation(() =>
+    apiClient.admin.client.update.mutate({ clientCode, data }),
+  );
 }
 
 export function updateClientStatus(
   clientCode: string,
   status: AdminClientInputs['updateStatus']['status'],
 ) {
-  return apiClient.admin.client.updateStatus.mutate({ clientCode, status });
+  return runAdminMutation(() =>
+    apiClient.admin.client.updateStatus.mutate({ clientCode, status }),
+  );
 }
 
 export function deleteClient(clientCode: string) {
-  return apiClient.admin.client.delete.mutate({ clientCode });
+  return runAdminMutation(() =>
+    apiClient.admin.client.delete.mutate({ clientCode }),
+  );
 }
 
 export function configureClientOidc(
   clientCode: string,
   data: ClientOidcConfigureInput,
 ) {
-  return apiClient.admin.client.oidcConfigure.mutate({ clientCode, data });
+  return runAdminMutation(() =>
+    apiClient.admin.client.oidcConfigure.mutate({ clientCode, data }),
+  );
 }
 
 export function enableClientOidc(clientCode: string) {
-  return apiClient.admin.client.oidcEnable.mutate({ clientCode });
+  return runAdminMutation(() =>
+    apiClient.admin.client.oidcEnable.mutate({ clientCode }),
+  );
 }
 
 export function disableClientOidc(clientCode: string) {
-  return apiClient.admin.client.oidcDisable.mutate({ clientCode });
+  return runAdminMutation(() =>
+    apiClient.admin.client.oidcDisable.mutate({ clientCode }),
+  );
 }
 
 export function removeClientOidc(clientCode: string) {
-  return apiClient.admin.client.oidcRemove.mutate({ clientCode });
+  return runAdminMutation(() =>
+    apiClient.admin.client.oidcRemove.mutate({ clientCode }),
+  );
 }
 
 export function rotateClientOidcSecret(clientCode: string) {
-  return apiClient.admin.client.oidcRotateSecret.mutate({ clientCode });
+  return runAdminMutation(() =>
+    apiClient.admin.client.oidcRotateSecret.mutate({ clientCode }),
+  );
 }
 
 export function configureClientCustomSso(
   clientCode: string,
   data: ClientCustomSsoConfigureInput,
 ) {
-  return apiClient.admin.client.customSsoConfigure.mutate({
-    clientCode,
-    data,
-  });
+  return runAdminMutation(() =>
+    apiClient.admin.client.customSsoConfigure.mutate({
+      clientCode,
+      data,
+    }),
+  );
 }
 
 export function enableClientCustomSso(clientCode: string) {
-  return apiClient.admin.client.customSsoEnable.mutate({ clientCode });
+  return runAdminMutation(() =>
+    apiClient.admin.client.customSsoEnable.mutate({ clientCode }),
+  );
 }
 
 export function disableClientCustomSso(clientCode: string) {
-  return apiClient.admin.client.customSsoDisable.mutate({ clientCode });
+  return runAdminMutation(() =>
+    apiClient.admin.client.customSsoDisable.mutate({ clientCode }),
+  );
 }
 
 export function removeClientCustomSso(clientCode: string) {
-  return apiClient.admin.client.customSsoRemove.mutate({ clientCode });
+  return runAdminMutation(() =>
+    apiClient.admin.client.customSsoRemove.mutate({ clientCode }),
+  );
 }
 
 export function rotateClientCustomSsoSecret(clientCode: string) {
-  return apiClient.admin.client.customSsoRotateSecret.mutate({ clientCode });
+  return runAdminMutation(() =>
+    apiClient.admin.client.customSsoRotateSecret.mutate({ clientCode }),
+  );
 }
 
 function isClientNotFoundTransportError(error: unknown) {
   if (typeof error !== 'object' || error === null) return false;
-  const data = (error as {
-    data?: { httpStatus?: unknown; serviceCode?: unknown };
-  }).data;
+  const data = (
+    error as {
+      data?: { httpStatus?: unknown; serviceCode?: unknown };
+    }
+  ).data;
   return (
     data?.serviceCode === ApiErrorCode.ClientNotFound ||
     data?.httpStatus === 404

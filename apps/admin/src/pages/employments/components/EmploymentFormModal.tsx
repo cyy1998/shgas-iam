@@ -1,5 +1,6 @@
 import OrganizationTreeSelector from '@admin/components/OrganizationTreeSelector';
 import { apiClient } from '@admin/lib/api-client';
+import { AdminMutationCommittedError } from '@admin/services/admin-mutation';
 import { createEmployment } from '@admin/services/employment';
 import type { ProFormInstance } from '@ant-design/pro-components';
 import {
@@ -27,6 +28,7 @@ type Props = {
   presetOrgCode?: string | null;
   onOpenChange: (open: boolean) => void;
   onSuccess?: () => void;
+  onCommitted: (error: AdminMutationCommittedError) => Promise<void> | void;
 };
 
 export default function EmploymentFormModal({
@@ -36,6 +38,7 @@ export default function EmploymentFormModal({
   presetOrgCode,
   onOpenChange,
   onSuccess,
+  onCommitted,
 }: Props) {
   const formRef = useRef<ProFormInstance>(undefined);
 
@@ -64,17 +67,22 @@ export default function EmploymentFormModal({
       }}
       onFinish={async (values) => {
         try {
-          await createEmployment({
+          const outcome = await createEmployment({
             username: values.username,
             orgCode: values.orgCode,
             posCode: values.posCode,
             isPrimary: values.isPrimary,
             description: values.description || null,
           });
-          message.success('雇佣已创建');
+          if (outcome.changed) message.success('雇佣已创建');
+          else message.info('无需修改');
           onSuccess?.();
           return true;
         } catch (err) {
+          if (err instanceof AdminMutationCommittedError) {
+            await onCommitted(err);
+            return true;
+          }
           handleError(err);
           return false;
         }

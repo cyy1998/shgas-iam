@@ -1,5 +1,6 @@
 import type { AdminEmploymentAuthorization } from "@admin-api/services/admin-authorization/admin-employment-authorization.type";
 import type { AdminEmploymentRecordCreate } from "@admin-api/services/employment/employment.type";
+import type { Employment } from "@iam/domain/employment";
 import { createFakeClock, createImmediateUnitOfWork } from "@admin-api/test/fakes";
 import { createCreateEmploymentUseCase } from "@admin-api/use-cases/employment/create-employment/create-employment.use-case";
 import {
@@ -78,7 +79,9 @@ function createLifecycle() {
         isDelete: false,
       })),
       getOpenEmploymentByUserOrgPosId: mock(async () => null),
-      unsetOpenPrimariesByUserId: mock(async () => undefined),
+      getOpenPrimaryEmploymentIdsByUserId: mock(async (): Promise<number[]> => []),
+      lockEmploymentsByIds: mock(async (): Promise<Employment[]> => []),
+      updateEmploymentRecord: mock(async (): Promise<Employment> => { throw new Error("unexpected primary update"); }),
     },
     organizationReader: {
       getOrganizationByCode: mock(async () => organization),
@@ -108,7 +111,7 @@ describe("Employment Lifecycle", () => {
       posCode: "DEV",
       isPrimary: true,
       description: "new employment",
-    })).resolves.toEqual({ id: 10 });
+    })).resolves.toEqual({ changed: true, result: { id: 10 } });
 
     expect(clock.nowDate).toHaveBeenCalledTimes(1);
     expect(tx.employmentStore.createEmploymentRecord).toHaveBeenCalledWith({
@@ -140,7 +143,7 @@ describe("Employment Lifecycle", () => {
       posCode: "DEV",
     });
 
-    expect(tx.employmentStore.unsetOpenPrimariesByUserId).not.toHaveBeenCalled();
+    expect(tx.employmentStore.getOpenPrimaryEmploymentIdsByUserId).not.toHaveBeenCalled();
     expect(tx.employmentStore.createEmploymentRecord).toHaveBeenCalledWith(
       expect.objectContaining({ isPrimary: false }),
     );
@@ -324,5 +327,35 @@ describe("Employment Lifecycle", () => {
       auditActions: [],
       dirtyUserIds: [],
     });
+  });
+  test("creation audits only the selected Primary facts actually cleared", async () => {
+    const { useCase, tx } = createLifecycle();
+    const primary: Employment = {
+      id: 7,
+      userId: 1,
+      posId: 5,
+      orgId: 2,
+      isPrimary: true,
+      status: EmploymentStatus.Pause,
+      startTime: now,
+      endTime: null,
+      description: null,
+      isDelete: false,
+      createTime: now,
+      updateTime: now,
+    };
+    tx.employmentStore.getOpenPrimaryEmploymentIdsByUserId.mockResolvedValueOnce([7, 8]);
+    tx.employmentStore.lockEmploymentsByIds.mockResolvedValueOnce([
+      primary,
+      { ...primary, id: 8, status: EmploymentStatus.Disable, endTime: now },
+    ]);
+    tx.employmentStore.updateEmploymentRecord.mockResolvedValueOnce({ ...primary, isPrimary: false });
+    const result = await useCase.execute({ username: "zhangsan", orgCode: "ORG", posCode: "DEV", isPrimary: true });
+    expect(result).toEqual({ changed: true, result: { id: 10 } });
+    expect(tx.employmentStore.updateEmploymentRecord).toHaveBeenCalledTimes(1);
+    expect(tx.employmentStore.updateEmploymentRecord).toHaveBeenCalledWith(7, { isPrimary: false });
+    expect(tx.auditLogWriter.recordAuditLog).toHaveBeenCalledWith(expect.objectContaining({
+      details: expect.objectContaining({ changed: true, clearedPrimaryEmploymentIds: [7] }),
+    }));
   });
 });

@@ -4,6 +4,7 @@ import EmploymentLifecycleActions from '@admin/components/EmploymentLifecycleAct
 import EmploymentPrimaryActions from '@admin/components/EmploymentPrimaryActions';
 import EmploymentResponsibilitySummary from '@admin/components/organization-responsibility/EmploymentResponsibilitySummary';
 import StatusTag from '@admin/components/StatusTag';
+import { AdminMutationCommittedError } from '@admin/services/admin-mutation';
 import {
   type EmploymentDetailVo,
   getEmployment,
@@ -12,6 +13,7 @@ import {
 import { ProDescriptions } from '@ant-design/pro-components';
 import { useAccess } from '@umijs/max';
 import {
+  Alert,
   Drawer,
   Empty,
   Input,
@@ -77,6 +79,7 @@ function EmploymentDetailDrawerContent({
   onChanged,
 }: Props) {
   const access = useAccess();
+  const [committedWarning, setCommittedWarning] = useState<string>();
   const [detail, setDetail] = useState<EmploymentDetailVo | null>(null);
   const [loading, setLoading] = useState(open && employmentId !== null);
   const [description, setDescription] = useState('');
@@ -116,6 +119,19 @@ function EmploymentDetailDrawerContent({
     await onChanged?.();
   };
 
+  const onCommitted = async (error: AdminMutationCommittedError) => {
+    setCommittedWarning(error.message);
+    setEditOpen(false);
+    setTransferOpen(false);
+    try {
+      await refresh();
+    } catch (refreshError) {
+      message.error(
+        refreshError instanceof Error ? refreshError.message : '刷新失败',
+      );
+    }
+  };
+
   return (
     <Drawer
       size={640}
@@ -137,6 +153,9 @@ function EmploymentDetailDrawerContent({
         )
       }
     >
+      {committedWarning && (
+        <Alert type="warning" showIcon title={committedWarning} />
+      )}
       {loading && !detail ? <Skeleton active /> : null}
       {!loading && !detail ? <Empty /> : null}
       {detail && (
@@ -158,6 +177,7 @@ function EmploymentDetailDrawerContent({
               转岗
             </AuthorizationActionButton>
             <EmploymentPrimaryActions
+              onCommitted={onCommitted}
               decision={
                 detail.isPrimary
                   ? detail.allowedActions.clearPrimary
@@ -167,6 +187,7 @@ function EmploymentDetailDrawerContent({
               onSuccess={refresh}
             />
             <EmploymentLifecycleActions
+              onCommitted={onCommitted}
               decisions={detail.allowedActions}
               employment={detail}
               onSuccess={refresh}
@@ -306,13 +327,18 @@ function EmploymentDetailDrawerContent({
             onCancel={() => setEditOpen(false)}
             onOk={async () => {
               try {
-                await updateEmployment(detail.id, {
+                const outcome = await updateEmployment(detail.id, {
                   description: description || null,
                 });
-                message.success('备注已更新');
+                if (outcome.changed) message.success('备注已更新');
+                else message.info('无需修改');
                 setEditOpen(false);
                 await refresh();
               } catch (error) {
+                if (error instanceof AdminMutationCommittedError) {
+                  await onCommitted(error);
+                  return;
+                }
                 message.error(
                   error instanceof Error ? error.message : '操作失败',
                 );
@@ -330,6 +356,7 @@ function EmploymentDetailDrawerContent({
             </label>
           </Modal>
           <TransferModal
+            onCommitted={onCommitted}
             open={transferOpen}
             employment={detail}
             onOpenChange={setTransferOpen}

@@ -14,6 +14,8 @@ import jsonContentRequired from "@iam/api-core/core/openapi/helpers/json-content
 import createSuccessResponseSchema from "@iam/api-core/core/openapi/schemas/create-success-schema";
 import { createPageResultSchema } from "@iam/api-core/core/pagination/schema";
 
+import { createAdminMutationResultSchema } from "@iam/contracts";
+
 const tags = ["Admin/Employment"];
 
 export const employmentsSearch = createRoute({
@@ -58,7 +60,7 @@ export const employmentsCreate = createRoute({
   responses: {
     ...commonErrorResponses,
     [HttpStatusCodes.OK]: jsonContent(
-      createSuccessResponseSchema(z.object({ id: z.number() })),
+      createSuccessResponseSchema(createAdminMutationResultSchema(z.object({ id: z.number() }))),
       "雇佣创建成功",
     ),
   },
@@ -74,7 +76,7 @@ export const employmentsUpdate = createRoute({
   },
   responses: {
     ...commonErrorResponses,
-    [HttpStatusCodes.OK]: jsonContent(createSuccessResponseSchema(z.boolean()), "更新成功"),
+    [HttpStatusCodes.OK]: jsonContent(createSuccessResponseSchema(createAdminMutationResultSchema(z.null())), "更新成功"),
   },
 });
 
@@ -87,7 +89,7 @@ export const employmentsPause = createRoute({
   },
   responses: {
     ...commonErrorResponses,
-    [HttpStatusCodes.OK]: jsonContent(createSuccessResponseSchema(z.boolean()), "任职暂停成功"),
+    [HttpStatusCodes.OK]: jsonContent(createSuccessResponseSchema(createAdminMutationResultSchema(z.null())), "任职暂停成功"),
   },
 });
 
@@ -101,7 +103,7 @@ export const employmentsResume = createRoute({
   },
   responses: {
     ...commonErrorResponses,
-    [HttpStatusCodes.OK]: jsonContent(createSuccessResponseSchema(z.boolean()), "任职恢复成功"),
+    [HttpStatusCodes.OK]: jsonContent(createSuccessResponseSchema(createAdminMutationResultSchema(z.null())), "任职恢复成功"),
   },
 });
 
@@ -114,7 +116,7 @@ export const employmentsEnd = createRoute({
   },
   responses: {
     ...commonErrorResponses,
-    [HttpStatusCodes.OK]: jsonContent(createSuccessResponseSchema(z.boolean()), "任职结束成功"),
+    [HttpStatusCodes.OK]: jsonContent(createSuccessResponseSchema(createAdminMutationResultSchema(z.null())), "任职结束成功"),
   },
 });
 
@@ -129,7 +131,7 @@ export const employmentsTransfer = createRoute({
   responses: {
     ...commonErrorResponses,
     [HttpStatusCodes.OK]: jsonContent(
-      createSuccessResponseSchema(z.object({ newEmploymentId: z.number() })),
+      createSuccessResponseSchema(createAdminMutationResultSchema(z.object({ id: z.number() }))),
       "转岗成功",
     ),
   },
@@ -144,7 +146,7 @@ export const employmentsSetPrimary = createRoute({
   },
   responses: {
     ...commonErrorResponses,
-    [HttpStatusCodes.OK]: jsonContent(createSuccessResponseSchema(z.boolean()), "已设为主岗"),
+    [HttpStatusCodes.OK]: jsonContent(createSuccessResponseSchema(createAdminMutationResultSchema(z.null())), "已设为主岗"),
   },
 });
 
@@ -157,7 +159,7 @@ export const employmentsClearPrimary = createRoute({
   },
   responses: {
     ...commonErrorResponses,
-    [HttpStatusCodes.OK]: jsonContent(createSuccessResponseSchema(z.boolean()), "已取消主任职"),
+    [HttpStatusCodes.OK]: jsonContent(createSuccessResponseSchema(createAdminMutationResultSchema(z.null())), "已取消主任职"),
   },
 });
 
@@ -171,7 +173,7 @@ export const employmentsResignUser = createRoute({
   responses: {
     ...commonErrorResponses,
     [HttpStatusCodes.OK]: jsonContent(
-      createSuccessResponseSchema(z.boolean()),
+      createSuccessResponseSchema(createAdminMutationResultSchema(z.null())),
       "离职成功（级联结束全部雇佣 + User.status=Disable）",
     ),
   },

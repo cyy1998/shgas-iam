@@ -1,5 +1,5 @@
-import { requestUserOptions } from '@admin/pages/sessions/session-selectors';
 import UserSummary from '@admin/pages/sessions/components/UserSummary';
+import { requestUserOptions } from '@admin/pages/sessions/session-selectors';
 import {
   listLoginRestrictions,
   LoginRestrictionListError,
@@ -40,10 +40,7 @@ function RemainingTime(props: { initialSeconds: number }) {
     const startedAt = Date.now();
     const timer = window.setInterval(() => {
       const elapsedSeconds = Math.floor((Date.now() - startedAt) / 1_000);
-      const nextRemainingSeconds = Math.max(
-        0,
-        initialSeconds - elapsedSeconds,
-      );
+      const nextRemainingSeconds = Math.max(0, initialSeconds - elapsedSeconds);
       setRemainingSeconds(nextRemainingSeconds);
       if (nextRemainingSeconds === 0) window.clearInterval(timer);
     }, 1_000);
@@ -61,6 +58,7 @@ export default function LoginRestrictionsTab() {
     LoginRestrictionListItem[]
   >([]);
   const [releasingUserId, setReleasingUserId] = useState<number | null>(null);
+  const [auditFailedAfterEffect, setAuditFailedAfterEffect] = useState(false);
 
   const refreshRestrictions = () => {
     actionRef.current?.reload();
@@ -80,13 +78,10 @@ export default function LoginRestrictionsTab() {
     } catch (error) {
       if (
         error instanceof LoginRestrictionReleaseError &&
-        error.kind ===
-          LoginRestrictionReleaseErrorKind.AuditFailedAfterEffect
+        error.kind === LoginRestrictionReleaseErrorKind.AuditFailedAfterEffect
       ) {
         refreshAfterOperation = true;
-        message.error(
-          '操作可能已生效，但审计记录失败，请刷新确认且不要自动重试',
-        );
+        setAuditFailedAfterEffect(true);
       } else if (
         error instanceof LoginRestrictionReleaseError &&
         error.kind === LoginRestrictionReleaseErrorKind.LoginStateUnavailable
@@ -201,6 +196,14 @@ export default function LoginRestrictionsTab() {
         type="info"
         message="临时登录限制只阻止新的认证，不影响任何已有有效会话。"
       />
+      {auditFailedAfterEffect ? (
+        <Alert
+          showIcon
+          type="error"
+          message="操作可能已生效，但审计记录失败，请刷新确认且不要自动重试"
+          description="列表刷新成功不代表审计记录已补齐，请联系管理员核查。"
+        />
+      ) : null}
       {loadError ? (
         <Alert
           showIcon

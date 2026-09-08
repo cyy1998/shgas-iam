@@ -39,8 +39,8 @@ export default function PositionsPage() {
       okType: 'danger',
       onOk: async () => {
         try {
-          await deletePosition(row.posCode);
-          message.success('已删除');
+          const outcome = await deletePosition(row.posCode);
+          message.success(outcome.changed ? '已删除' : '无需修改');
           actionRef.current?.reload();
         } catch (err) {
           handleError(err);
@@ -51,8 +51,8 @@ export default function PositionsPage() {
 
   const onStatusChange = async (row: PositionVo, status: number) => {
     try {
-      await updatePositionStatus(row.posCode, status);
-      message.success('状态已更新');
+      const outcome = await updatePositionStatus(row.posCode, status);
+      message.success(outcome.changed ? '状态已更新' : '无需修改');
       actionRef.current?.reload();
     } catch (err) {
       handleError(err);

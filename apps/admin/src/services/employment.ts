@@ -1,4 +1,5 @@
 import { apiClient } from '@admin/lib/api-client';
+import { runAdminMutation } from '@admin/services/admin-mutation';
 import type { AppRouter } from '@iam/admin-api/trpc';
 import type { inferRouterInputs, inferRouterOutputs } from '@trpc/server';
 
@@ -20,7 +21,7 @@ export function getEmployment(id: number) {
 }
 
 export function createEmployment(body: AdminEmploymentInputs['create']) {
-  return apiClient.admin.employment.create.mutate(body);
+  return runAdminMutation(() => apiClient.admin.employment.create.mutate(body));
 }
 
 export function updateEmployment(
@@ -29,42 +30,53 @@ export function updateEmployment(
     description?: string | null;
   },
 ) {
-  return apiClient.admin.employment.update.mutate({ id, data });
+  return runAdminMutation(() =>
+    apiClient.admin.employment.update.mutate({ id, data }),
+  );
 }
 
 export function pauseEmployment(id: number) {
-  return apiClient.admin.employment.pause.mutate({ id });
+  return runAdminMutation(() =>
+    apiClient.admin.employment.pause.mutate({ id }),
+  );
 }
 
-export function resumeEmployment(
-  id: number,
-  expectedAncestorOrgCode: string,
-) {
-  return apiClient.admin.employment.resume.mutate({
-    id,
-    expectedAncestorOrgCode,
-  });
+export function resumeEmployment(id: number, expectedAncestorOrgCode: string) {
+  return runAdminMutation(() =>
+    apiClient.admin.employment.resume.mutate({
+      id,
+      expectedAncestorOrgCode,
+    }),
+  );
 }
 
 export function endEmployment(id: number) {
-  return apiClient.admin.employment.end.mutate({ id });
+  return runAdminMutation(() => apiClient.admin.employment.end.mutate({ id }));
 }
 
 export function transferEmployment(
   id: number,
   data: AdminEmploymentInputs['transfer']['data'],
 ) {
-  return apiClient.admin.employment.transfer.mutate({ id, data });
+  return runAdminMutation(() =>
+    apiClient.admin.employment.transfer.mutate({ id, data }),
+  );
 }
 
 export function setPrimaryEmployment(id: number) {
-  return apiClient.admin.employment.setPrimary.mutate({ id });
+  return runAdminMutation(() =>
+    apiClient.admin.employment.setPrimary.mutate({ id }),
+  );
 }
 
 export function clearPrimaryEmployment(id: number) {
-  return apiClient.admin.employment.clearPrimary.mutate({ id });
+  return runAdminMutation(() =>
+    apiClient.admin.employment.clearPrimary.mutate({ id }),
+  );
 }
 
 export function resignUser(username: string) {
-  return apiClient.admin.employment.resignUser.mutate({ username });
+  return runAdminMutation(() =>
+    apiClient.admin.employment.resignUser.mutate({ username }),
+  );
 }

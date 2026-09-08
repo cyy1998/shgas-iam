@@ -5,9 +5,7 @@ import {
   createImmediateUnitOfWork,
 } from "@admin-api/test/fakes";
 import { createManageOrganizationResponsibilityAssignmentLifecycleUseCase } from "@admin-api/use-cases/organization-responsibility/manage-assignment-lifecycle/manage-assignment-lifecycle.use-case";
-import { CustomError } from "@iam/api-core/errors";
 import {
-  ApiErrorCode,
   EmploymentStatus,
   OrganizationResponsibilityAssignmentStatus,
   OrganizationResponsibilityTypeCode,
@@ -16,6 +14,7 @@ import {
 import {
   OrganizationResponsibilityAssignmentCardinalityConflictError,
   OrganizationResponsibilityAssignmentNotFoundError,
+  OrganizationResponsibilityAssignmentUnmanageableConflictError,
   OrganizationResponsibilityHolderEmploymentUnavailableError,
   OrganizationResponsibilityTargetOrganizationUnavailableError,
 } from "@iam/domain/organization-responsibility";
@@ -70,13 +69,20 @@ function createLifecycle(
         async (): Promise<{
           id: number;
           employmentId: number;
+          isManageable: boolean;
         } | null> => null,
       ),
-      getAssignmentLifecycleContextById: mock(
+      lockAssignmentLifecycleContextById: mock(
         async (): Promise<OrganizationResponsibilityAssignmentLifecycleContext | null> =>
           context,
       ),
-      updateAssignmentLifecycle: mock(async () => true),
+      updateLockedAssignmentLifecycle: mock(async () => ({
+        ...context.assignment,
+        beforeStatus: context.assignment.status,
+        afterStatus: context.assignment.status,
+        beforeEndTime: context.assignment.endTime,
+        afterEndTime: context.assignment.endTime,
+      })),
     },
     auditLogWriter: { recordAuditLog: mock(async () => undefined) },
     userProfileInvalidation: { recordChanges: mock(async () => undefined) },
@@ -118,7 +124,7 @@ describe("Manage Organization Responsibility Assignment lifecycle", () => {
       { authorization },
     );
 
-    expect(changed).toBe(true);
+    expect(changed).toEqual({ changed: true, result: null });
     expect(
       tx.assignmentStore.isEndpointPairWithinReadScope,
     ).toHaveBeenCalledWith({
@@ -127,7 +133,7 @@ describe("Manage Organization Responsibility Assignment lifecycle", () => {
       targetOrganizationId: 22,
     });
     expect(denyMutation).not.toHaveBeenCalled();
-    expect(tx.assignmentStore.updateAssignmentLifecycle).toHaveBeenCalledTimes(1);
+    expect(tx.assignmentStore.updateLockedAssignmentLifecycle).toHaveBeenCalledTimes(1);
   });
 
   test("conceals every out-of-scope endpoint pair before an idempotent retry", async () => {
@@ -169,7 +175,7 @@ describe("Manage Organization Responsibility Assignment lifecycle", () => {
         reason: "RESOURCE_OUT_OF_SCOPE",
       });
       expect(
-        tx.assignmentStore.updateAssignmentLifecycle,
+        tx.assignmentStore.updateLockedAssignmentLifecycle,
       ).not.toHaveBeenCalled();
       expect(tx.auditLogWriter.recordAuditLog).not.toHaveBeenCalled();
       expect(tx.userProfileInvalidation.recordChanges).not.toHaveBeenCalled();
@@ -179,14 +185,11 @@ describe("Manage Organization Responsibility Assignment lifecycle", () => {
   test("atomically pauses an enabled Assignment with a minimal direct audit", async () => {
     const { clock, tx, useCase } = createLifecycle();
 
-    await expect(useCase.execute({ id: 31, command: "pause" })).resolves.toBe(
-      true,
-    );
+    await expect(useCase.execute({ id: 31, command: "pause" })).resolves.toEqual({ changed: true, result: null });
 
     expect(clock.nowDate).not.toHaveBeenCalled();
-    expect(tx.assignmentStore.updateAssignmentLifecycle).toHaveBeenCalledWith({
-      id: 31,
-      expectedStatus: OrganizationResponsibilityAssignmentStatus.Enable,
+    expect(tx.assignmentStore.updateLockedAssignmentLifecycle).toHaveBeenCalledWith({
+      assignment: expect.objectContaining({ id: 31 }),
       status: OrganizationResponsibilityAssignmentStatus.Pause,
       endTime: null,
     });
@@ -196,6 +199,7 @@ describe("Manage Organization Responsibility Assignment lifecycle", () => {
         targetType: "organization_responsibility_assignment",
         targetId: 31,
         details: {
+          changed: true,
           binding: {
             employmentId: 11,
             targetOrganizationId: 22,
@@ -228,19 +232,17 @@ describe("Manage Organization Responsibility Assignment lifecycle", () => {
       OrganizationResponsibilityAssignmentStatus.Pause,
     );
 
-    await expect(useCase.execute({ id: 31, command: "resume" })).resolves.toBe(
-      true,
-    );
+    await expect(useCase.execute({ id: 31, command: "resume" })).resolves.toEqual({ changed: true, result: null });
 
     expect(tx.assignmentStore.findOpenAssignmentForSlot).toHaveBeenCalledWith({
       employmentId: 11,
       targetOrganizationId: 22,
       typeCode: OrganizationResponsibilityTypeCode.Head,
       excludeAssignmentId: 31,
+      readScope: { kind: "full" },
     });
-    expect(tx.assignmentStore.updateAssignmentLifecycle).toHaveBeenCalledWith({
-      id: 31,
-      expectedStatus: OrganizationResponsibilityAssignmentStatus.Pause,
+    expect(tx.assignmentStore.updateLockedAssignmentLifecycle).toHaveBeenCalledWith({
+      assignment: expect.objectContaining({ id: 31 }),
       status: OrganizationResponsibilityAssignmentStatus.Enable,
       endTime: null,
     });
@@ -285,6 +287,7 @@ describe("Manage Organization Responsibility Assignment lifecycle", () => {
       {
         id: 32,
         employmentId: 99,
+        isManageable: true,
       },
     );
     await expect(
@@ -297,19 +300,31 @@ describe("Manage Organization Responsibility Assignment lifecycle", () => {
     );
   });
 
+  test("hides an unmanageable Resume slot blocker without audit or dirty", async () => {
+    const { tx, useCase } = createLifecycle(OrganizationResponsibilityAssignmentStatus.Pause);
+    tx.assignmentStore.findOpenAssignmentForSlot.mockResolvedValueOnce({
+      id: 999,
+      employmentId: 888,
+      isManageable: false,
+    });
+    const caught = await useCase.execute({ id: 31, command: "resume" }).catch(error => error);
+    expect(caught).toBeInstanceOf(OrganizationResponsibilityAssignmentUnmanageableConflictError);
+    expect(caught.message).not.toContain("999");
+    expect(caught.message).not.toContain("888");
+    expect(tx.auditLogWriter.recordAuditLog).not.toHaveBeenCalled();
+    expect(tx.userProfileInvalidation.recordChanges).not.toHaveBeenCalled();
+  });
+
   test("ends either Open state once with the injected transaction time", async () => {
     const { clock, tx, useCase } = createLifecycle(
       OrganizationResponsibilityAssignmentStatus.Pause,
     );
 
-    await expect(useCase.execute({ id: 31, command: "end" })).resolves.toBe(
-      true,
-    );
+    await expect(useCase.execute({ id: 31, command: "end" })).resolves.toEqual({ changed: true, result: null });
 
     expect(clock.nowDate).toHaveBeenCalledTimes(1);
-    expect(tx.assignmentStore.updateAssignmentLifecycle).toHaveBeenCalledWith({
-      id: 31,
-      expectedStatus: OrganizationResponsibilityAssignmentStatus.Pause,
+    expect(tx.assignmentStore.updateLockedAssignmentLifecycle).toHaveBeenCalledWith({
+      assignment: expect.objectContaining({ id: 31 }),
       status: OrganizationResponsibilityAssignmentStatus.Disable,
       endTime: now,
     });
@@ -327,7 +342,7 @@ describe("Manage Organization Responsibility Assignment lifecycle", () => {
     );
   });
 
-  test("returns target-state retries without time, audit, Dirty, or writes", async () => {
+  test("retains target-state intent audit without time, Dirty, or writes", async () => {
     const cases = [
       [OrganizationResponsibilityAssignmentStatus.Pause, "pause"],
       [OrganizationResponsibilityAssignmentStatus.Enable, "resume"],
@@ -336,42 +351,36 @@ describe("Manage Organization Responsibility Assignment lifecycle", () => {
 
     for (const [status, command] of cases) {
       const { clock, tx, useCase } = createLifecycle(status);
-      await expect(useCase.execute({ id: 31, command })).resolves.toBe(true);
+      await expect(useCase.execute({ id: 31, command })).resolves.toEqual({ changed: false, result: null });
       expect(clock.nowDate).not.toHaveBeenCalled();
       expect(
-        tx.assignmentStore.updateAssignmentLifecycle,
+        tx.assignmentStore.updateLockedAssignmentLifecycle,
       ).not.toHaveBeenCalled();
-      expect(tx.auditLogWriter.recordAuditLog).not.toHaveBeenCalled();
+      expect(tx.auditLogWriter.recordAuditLog).toHaveBeenCalledWith(expect.objectContaining({
+        details: expect.objectContaining({ changed: false }),
+      }));
       expect(tx.userProfileInvalidation.recordChanges).not.toHaveBeenCalled();
     }
   });
 
   test("returns the stable not-found error before any mutation", async () => {
     const { tx, useCase } = createLifecycle();
-    tx.assignmentStore.getAssignmentLifecycleContextById.mockResolvedValueOnce(
+    tx.assignmentStore.lockAssignmentLifecycleContextById.mockResolvedValueOnce(
       null,
     );
 
     await expect(
       useCase.execute({ id: 404, command: "pause" }),
     ).rejects.toBeInstanceOf(OrganizationResponsibilityAssignmentNotFoundError);
-    expect(tx.assignmentStore.updateAssignmentLifecycle).not.toHaveBeenCalled();
+    expect(tx.assignmentStore.updateLockedAssignmentLifecycle).not.toHaveBeenCalled();
   });
 
-  test("fails a non-convergent concurrent change with a safe stable service error", async () => {
+  test("does not audit or dirty a failed locked update", async () => {
     const { tx, useCase } = createLifecycle();
-    tx.assignmentStore.updateAssignmentLifecycle.mockResolvedValueOnce(false);
-
-    const caught = await useCase
-      .execute({ id: 31, command: "pause" })
-      .catch((error: unknown) => error);
-
-    expect(caught).toBeInstanceOf(CustomError);
-    expect(caught).toMatchObject({
-      code: ApiErrorCode.InternalError,
-      message: "服务器内部错误",
-    });
-    expect((caught as Error).message).not.toContain("31");
+    const failure = new Error("Locked assignment update affected no row");
+    tx.assignmentStore.updateLockedAssignmentLifecycle.mockRejectedValueOnce(failure);
+    const caught = await useCase.execute({ id: 31, command: "pause" }).catch(error => error);
+    expect(caught).toBe(failure);
     expect(tx.auditLogWriter.recordAuditLog).not.toHaveBeenCalled();
     expect(tx.userProfileInvalidation.recordChanges).not.toHaveBeenCalled();
   });

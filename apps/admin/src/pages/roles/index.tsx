@@ -2,6 +2,7 @@ import StatusTag from '@admin/components/StatusTag';
 import RoleDetailDrawer from '@admin/pages/roles/components/RoleDetailDrawer';
 import RoleFormModal from '@admin/pages/roles/components/RoleFormModal';
 import { requestClientOptions } from '@admin/pages/roles/role-selectors';
+import { AdminMutationCommittedError } from '@admin/services/admin-mutation';
 import {
   deleteRole,
   getRole,
@@ -18,7 +19,7 @@ import {
   ProTable,
 } from '@ant-design/pro-components';
 import { getRoleStatusOptions, type RoleStatus } from '@iam/contracts';
-import { Button, Dropdown, message, Modal } from 'antd';
+import { Alert, Button, Dropdown, message, Modal } from 'antd';
 import { useRef, useState } from 'react';
 
 export default function RolesPage() {
@@ -26,6 +27,20 @@ export default function RolesPage() {
   const [formOpen, setFormOpen] = useState(false);
   const [editing, setEditing] = useState<RoleDetailVo | null>(null);
   const [drawerRoleCode, setDrawerRoleCode] = useState<string | null>(null);
+
+  const [committedWarning, setCommittedWarning] = useState<string>();
+  const [detailReloadSeq, setDetailReloadSeq] = useState(0);
+
+  const onCommitted = (
+    error: AdminMutationCommittedError,
+    roleCode?: string,
+  ) => {
+    setCommittedWarning(error.message);
+    setFormOpen(false);
+    if (roleCode) setDrawerRoleCode(roleCode);
+    setDetailReloadSeq((value) => value + 1);
+    void actionRef.current?.reload();
+  };
 
   const handleError = (err: unknown) =>
     message.error(err instanceof Error ? err.message : '操作失败');
@@ -53,11 +68,15 @@ export default function RolesPage() {
       okType: 'danger',
       onOk: async () => {
         try {
-          await deleteRole(row.roleCode);
-          message.success('角色已删除');
+          const outcome = await deleteRole(row.roleCode);
+          message.success(outcome.changed ? '角色已删除' : '无需修改');
           reload();
         } catch (err) {
-          handleError(err);
+          if (err instanceof AdminMutationCommittedError) {
+            onCommitted(err, row.roleCode);
+          } else {
+            handleError(err);
+          }
         }
       },
     });
@@ -65,11 +84,15 @@ export default function RolesPage() {
 
   const onStatusChange = async (row: RoleVo, status: RoleStatus) => {
     try {
-      await updateRoleStatus(row.roleCode, status);
-      message.success('状态已更新');
+      const outcome = await updateRoleStatus(row.roleCode, status);
+      message.success(outcome.changed ? '状态已更新' : '无需修改');
       reload();
     } catch (err) {
-      handleError(err);
+      if (err instanceof AdminMutationCommittedError) {
+        onCommitted(err, row.roleCode);
+      } else {
+        handleError(err);
+      }
     }
   };
 
@@ -151,6 +174,9 @@ export default function RolesPage() {
 
   return (
     <PageContainer title="角色管理">
+      {committedWarning && (
+        <Alert type="warning" showIcon message={committedWarning} />
+      )}
       <ProTable<RoleVo>
         actionRef={actionRef}
         rowKey="roleCode"
@@ -213,7 +239,9 @@ export default function RolesPage() {
         open={formOpen}
         initialValues={editing}
         onOpenChange={setFormOpen}
-        onSuccess={() => {
+        onCommitted={onCommitted}
+        onSuccess={(roleCode) => {
+          if (roleCode) setDrawerRoleCode(roleCode);
           setFormOpen(false);
           reload();
         }}
@@ -225,6 +253,8 @@ export default function RolesPage() {
           if (!open) setDrawerRoleCode(null);
         }}
         onChanged={reload}
+        reloadSeq={detailReloadSeq}
+        onCommitted={(error) => setCommittedWarning(error.message)}
       />
     </PageContainer>
   );

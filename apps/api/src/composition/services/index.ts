@@ -282,6 +282,7 @@ export function createApiServices(options: CreateApiServicesOptions) {
   const privilegeDelegationService = createPrivilegeDelegationService({
     privilegeDelegationRepository: repositories.privilegeDelegation,
     uow: mapUnitOfWork(unitOfWork, tx => ({
+      auditLogWriter: tx.auditLogWriter,
       userRepository: tx.repositories.user,
       organizationRepository: tx.repositories.organization,
       privilegeRepository: tx.repositories.privilege,

@@ -47,7 +47,8 @@ export function buildEmploymentAudit(
 
 export function buildEmploymentResignUserAudit(
   user: { id: number; username: string; name?: string | null },
-  auditContext?: AdminAuditContext,
+  auditContext: AdminAuditContext | undefined,
+  changed: boolean,
 ): AuditLogInput {
   return buildAdminResourceAudit(
     "admin.employment.resign_user",
@@ -59,6 +60,7 @@ export function buildEmploymentResignUserAudit(
     {
       username: user.username,
       resigned: true,
+      changed,
     },
     auditContext,
   );

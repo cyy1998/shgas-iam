@@ -138,7 +138,7 @@ test('manages both Organization Responsibility types inside Organization detail'
     '**/rpc/admin.organizationResponsibility.pauseAssignment**',
     (route) => {
       pauseInputs.push(parseTrpcBatchInput(route));
-      return fulfillTrpc(route, true);
+      return fulfillTrpc(route, { changed: true, result: null });
     },
   );
   await page.route('**/rpc/admin.employment.search**', (route) =>
@@ -162,7 +162,7 @@ test('manages both Organization Responsibility types inside Organization detail'
     '**/rpc/admin.organizationResponsibility.createAssignment**',
     (route) => {
       createInputs.push(parseTrpcBatchInput(route));
-      return fulfillTrpc(route, { id: 102 });
+      return fulfillTrpc(route, { changed: true, result: { id: 102 } });
     },
   );
   await page.route('**/rpc/admin.organization.updateStatus**', (route) =>
@@ -296,7 +296,7 @@ test('shows the Employment Pause cascade before executing the parent lifecycle c
   );
   await page.route('**/rpc/admin.employment.pause**', (route) => {
     pauseInputs.push(parseTrpcBatchInput(route));
-    return fulfillTrpc(route, true);
+    return fulfillTrpc(route, { changed: true, result: null });
   });
 
   await page.goto('/iam-admin/employments');

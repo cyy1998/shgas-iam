@@ -1,15 +1,11 @@
-import type { AuditLogInput } from "@api/services/audit/audit.context";
+import type { AuditLogInput, InternalAuditActor } from "@api/services/audit/audit.context";
 import { maskMobileForAudit } from "@iam/domain/audit";
-
-export type InternalAuditActor = Pick<
-  AuditLogInput,
-  "actorType" | "actorUserId" | "actorUsername" | "actorClientCode" | "actorSystemKey"
->;
 
 export function buildInternalDelegationUpdateAudit(
   actor: InternalAuditActor,
   id: number,
   patch: Record<string, unknown>,
+  changed?: boolean,
 ): AuditLogInput {
   return {
     action: "internal.delegation.update",
@@ -19,6 +15,7 @@ export function buildInternalDelegationUpdateAudit(
     targetId: id,
     details: {
       patch,
+      ...(changed === undefined ? {} : { changed }),
     },
   };
 }

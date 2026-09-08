@@ -1,7 +1,6 @@
 import { z } from "@hono/zod-openapi";
 import { PrivilegeDelegationStatus } from "@iam/contracts";
 import {
-  insertPrivilegeDelegationSchema,
   selectDelegationDetailSchema,
   selectOrganizationSchema,
   selectPrivilegeDelegationSchema,
@@ -94,20 +93,14 @@ export const PrivilegeDelegationUpdateDtoSchema = z.object({
   endTime: z.coerce.date().describe("授权结束时间").optional().openapi({ example: "2024-01-31T23:59:59Z" }),
   status: z.enum(PrivilegeDelegationStatus).describe("状态(正常1、暂停2、结束3)").optional(),
   description: z.string().describe("描述").nullish(),
-}).openapi("PrivilegeDelegationUpdateDto");
+}).strict().openapi("PrivilegeDelegationUpdateDto");
 
-export const PrivilegeDelegationCreateDtoSchema = z.object(insertPrivilegeDelegationSchema.shape).omit({
-  status: true,
-}).partial({
-  delegateeUserId: true,
-  delegatorUserId: true,
-  organizationScopeId: true,
-}).extend({
+export const PrivilegeDelegationCreateDtoSchema = z.object({
   delegatorUsername: z.string().describe("授权人用户名").openapi({ example: "138550" }),
   delegateeUsername: z.string().describe("被授权人用户名").openapi({ example: "138550" }),
   orgCode: z.string().describe("组织编码").openapi({ example: "SR23" }),
   privilegeCodes: z.array(z.string()).describe("权限编码列表").openapi({ example: ["tender:flow:SR_CZLX"] }),
-  privilegeIds: z.array(z.number()).describe("权限ID列表(非必填)").optional().openapi({ example: [1, 2] }),
+  description: z.string().max(500).nullish(),
   startTime: z.coerce.date().describe("授权开始时间").openapi({ example: "2024-01-01T00:00:00Z" }),
   endTime: z.coerce.date().describe("授权结束时间").openapi({ example: "2024-01-31T23:59:59Z" }),
 }).openapi("PrivilegeDelegationCreateDto");

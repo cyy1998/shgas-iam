@@ -16,6 +16,8 @@ export const HR_ADMIN_RESPONSIBILITY_AUDIT_ACTIONS = [
   "admin.organization_responsibility_assignment.pause",
   "admin.organization_responsibility_assignment.resume",
   "admin.organization_responsibility_assignment.end",
+  "admin.organization_responsibility_assignment.end",
+  "admin.organization_responsibility_assignment.end",
 ] as const;
 
 export interface HrAdminOutcomeReadBack {

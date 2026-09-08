@@ -1,3 +1,4 @@
+import { AdminMutationCommittedError } from '@admin/services/admin-mutation';
 import {
   createUser,
   updateUser,
@@ -10,6 +11,7 @@ import {
 } from '@ant-design/pro-components';
 import { getUserStatusOptions, getUserTypeOptions } from '@iam/contracts';
 import { message, Modal } from 'antd';
+import { useEffect, useRef } from 'react';
 
 type Mode = 'create' | 'edit';
 
@@ -18,7 +20,12 @@ type Props = {
   mode: Mode;
   initialValues?: UserDetailVo | null;
   onOpenChange: (open: boolean) => void;
-  onSuccess?: () => void;
+  onSuccess?: (username?: string) => void;
+  onCommitted: (
+    error: AdminMutationCommittedError,
+    username: string,
+    generatedPasswordMissing: boolean,
+  ) => void;
 };
 
 export default function UserFormModal({
@@ -27,8 +34,13 @@ export default function UserFormModal({
   initialValues,
   onOpenChange,
   onSuccess,
+  onCommitted,
 }: Props) {
   const isEdit = mode === 'edit';
+  const editedFieldsRef = useRef(new Set<string>());
+  useEffect(() => {
+    editedFieldsRef.current.clear();
+  }, [open, initialValues]);
 
   const handleError = (err: unknown) =>
     message.error(err instanceof Error ? err.message : '操作失败');
@@ -53,6 +65,11 @@ export default function UserFormModal({
       title={isEdit ? '编辑用户' : '新建用户'}
       open={open}
       onOpenChange={onOpenChange}
+      onValuesChange={(changed) => {
+        Object.keys(changed).forEach((field) =>
+          editedFieldsRef.current.add(field),
+        );
+      }}
       initialValues={
         initialValues
           ? {
@@ -72,13 +89,21 @@ export default function UserFormModal({
       onFinish={async (values) => {
         try {
           if (isEdit) {
-            await updateUser(initialValues!.username, {
-              name: values.name,
-              mobile: values.mobile || null,
-              wxId: values.wxId || null,
-              userType: values.userType || undefined,
-            });
-            message.success('更新成功');
+            const data: Parameters<typeof updateUser>[1] = {};
+            if (editedFieldsRef.current.has('name')) data.name = values.name;
+            if (editedFieldsRef.current.has('mobile'))
+              data.mobile = values.mobile || null;
+            if (editedFieldsRef.current.has('wxId'))
+              data.wxId = values.wxId || null;
+            if (editedFieldsRef.current.has('userType'))
+              data.userType = values.userType;
+            if (Object.keys(data).length === 0) {
+              message.info('请先编辑需要保存的字段');
+              return false;
+            }
+            const outcome = await updateUser(initialValues!.username, data);
+            message.success(outcome.changed ? '更新成功' : '无需修改');
+            onSuccess?.();
           } else {
             const res = await createUser({
               username: values.username,
@@ -90,13 +115,21 @@ export default function UserFormModal({
               status: values.status,
             });
             message.success('创建成功');
-            if (res.generatedPassword) {
-              showGeneratedPassword(res.generatedPassword);
+            if (res.result.generatedPassword) {
+              showGeneratedPassword(res.result.generatedPassword);
             }
+            onSuccess?.(res.result.user.username);
           }
-          onSuccess?.();
           return true;
         } catch (err) {
+          if (err instanceof AdminMutationCommittedError) {
+            onCommitted(
+              err,
+              initialValues?.username ?? values.username,
+              !isEdit && !values.password,
+            );
+            return true;
+          }
           handleError(err);
           return false;
         }

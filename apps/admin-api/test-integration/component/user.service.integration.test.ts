@@ -21,6 +21,16 @@ import {
 import { describe, expect, mock, test } from "bun:test";
 import { createOpenEmploymentFixtureDb } from "../helpers/drizzle-query-capture";
 
+async function captureFailure(action: () => Promise<unknown>) {
+  try {
+    await action();
+  }
+  catch (error) {
+    return error;
+  }
+  throw new Error("Expected operation to fail");
+}
+
 const now = new Date("2026-01-01T00:00:00Z");
 const subjectAccessNow = new Date("2026-01-01T00:05:00.000Z").getTime();
 const subjectAccessMutationReceipt: SubjectAccessMutationReceipt = {
@@ -161,6 +171,10 @@ function createService(options: {
       countOpenEmploymentsByUsername: mock(async (_username: string) => 0),
       getOpenEmploymentOrganizationIdsByUserId: mock(async (_userId: number) => [10]),
       getUserByUsernameForAdmin,
+      getAnyUserByUsername: getUserByUsernameForAdmin,
+      lockUserByUsername: mock(async (username: string, includeDeleted?: boolean) => includeDeleted
+        ? await tx.userRepository.getUserByUsernameIncludingDeletedForAuthorization(username)
+        : await getUserByUsernameForAdmin(username)),
       getUserByUsernameIncludingDeletedForAuthorization: mock(async (username: string) =>
         await getUserByUsernameForAdmin(username)),
       setPassword: mock(async () => user()),
@@ -221,6 +235,7 @@ function createService(options: {
       getOpenEmploymentOrganizationIdsByUserId: mock(async (userId: number) =>
         await tx.userRepository.getOpenEmploymentOrganizationIdsByUserId(userId)),
       getUserByUsernameForAdmin: mock(async () => user()),
+      getAnyUserByUsername: mock(async () => null),
       getUserByUsernameIncludingDeletedForAuthorization: mock(async (username: string) =>
         await tx.userRepository.getUserByUsernameIncludingDeletedForAuthorization(username)),
       searchUsersFuzzyPaged: mock(async () => ({ rows: [user()], total: 1 })),
@@ -258,6 +273,46 @@ function useEmploymentFixture(
 }
 
 describe("createUserService", () => {
+  test("rejects empty profile edits and skips writes, audit and dirty for equal values", async () => {
+    const { service, tx } = createService();
+    tx.userRepository.getUserByUsernameForAdmin.mockResolvedValue(user());
+    const emptyFailure = await captureFailure(() => service.updateUser("zhangsan", {}));
+    expect(emptyFailure).toMatchObject({ httpStatus: 400 });
+    const unchanged = await service.updateUser("zhangsan", { name: "张三", mobile: "13800000000" });
+    expect(unchanged).toEqual({ changed: false, result: null });
+    expect(tx.userRepository.lockUserByUsername).toHaveBeenCalledWith("zhangsan", false);
+    expect(tx.userRepository.updateUserByUsername).not.toHaveBeenCalled();
+    expect(tx.auditService.recordAuditLog).not.toHaveBeenCalled();
+    expect(tx.userProfileInvalidation.recordChanges).not.toHaveBeenCalled();
+  });
+
+  test("keeps generated credentials out of the created User DTO", async () => {
+    const { service } = createService();
+    const created = await service.setUserForAdmin({ username: "zhangsan", name: "张三", userType: UserType.Formal });
+    expect(created.result.generatedPassword).toBe("Rand1234");
+    expect(created.result.user).not.toHaveProperty("password");
+    expect(created.result.user).not.toHaveProperty("subjectIdentifier");
+  });
+
+  test("reports committed lifecycle failure after the User write without returning credentials", async () => {
+    const { service, deps, tx } = createService();
+    deps.subjectAccessLifecycle.run.mockImplementation(async (input: {
+      mutate: (receipt: SubjectAccessMutationReceipt) => Promise<unknown>;
+    }) => {
+      await input.mutate(subjectAccessMutationReceipt);
+      throw new Error("required publication failed");
+    });
+    const failure = await captureFailure(() => service.setUserForAdmin({
+      username: "zhangsan",
+      name: "张三",
+      userType: UserType.Formal,
+    }));
+    expect(failure).toMatchObject({ code: "ADMIN_MUTATION_COMMITTED", httpStatus: 500 });
+    expect(tx.userRepository.setUserForAdmin).toHaveBeenCalledTimes(1);
+    expect(tx.auditService.recordAuditLog).toHaveBeenCalledTimes(1);
+    expect(JSON.stringify(failure)).not.toContain("Rand1234");
+  });
+
   test("resolves Effective Roles once for every employment in a user detail", async () => {
     const { service, deps } = createService();
     deps.employmentRepository.getAllEmploymentsByUserIdForAdmin.mockResolvedValueOnce([
@@ -309,7 +364,7 @@ describe("createUserService", () => {
     const { service, deps } = createService();
     deps.userRepository.getUserByUsernameForAdmin.mockResolvedValueOnce(null);
 
-    await expect(service.getUserDetailByUsernameForAdmin("missing")).rejects.toThrow("用户不存在");
+    expect(await captureFailure(() => service.getUserDetailByUsernameForAdmin("missing"))).toMatchObject({ message: "用户不存在" });
 
     expect(deps.roleAssignmentResolver.resolveEffectiveRoles).not.toHaveBeenCalled();
   });
@@ -318,13 +373,17 @@ describe("createUserService", () => {
     const { service, deps, tx } = createService();
     deps.userRepository.getUserByUsernameForAdmin.mockResolvedValueOnce(null);
 
-    await expect(service.setUserForAdmin({
+    expect(await service.setUserForAdmin({
       username: "zhangsan",
       name: "张三",
       userType: UserType.Formal,
-    })).resolves.toEqual({
-      username: "zhangsan",
-      generatedPassword: "Rand1234",
+    })).toEqual({
+      changed: true,
+      result: {
+        user: expect.objectContaining({ username: "zhangsan" }),
+        username: "zhangsan",
+        generatedPassword: "Rand1234",
+      },
     });
 
     expect(deps.passwordHasher.hashPassword).toHaveBeenCalledWith("Rand1234");
@@ -346,11 +405,11 @@ describe("createUserService", () => {
     const { service, tx } = createService();
     (tx.userRepository.getUserByUsernameForAdmin as any).mockResolvedValue(user());
 
-    await expect(service.setUserForAdmin({
+    expect(await captureFailure(() => service.setUserForAdmin({
       username: "zhangsan",
       name: "张三",
       userType: UserType.Formal,
-    })).rejects.toThrow("用户名已存在");
+    }))).toMatchObject({ message: "用户名已存在" });
 
     expect(tx.userRepository.setUserForAdmin).not.toHaveBeenCalled();
   });
@@ -359,7 +418,7 @@ describe("createUserService", () => {
     const { service, deps, tx } = createService();
     (tx.userRepository.getUserByUsernameForAdmin as any).mockResolvedValue(user());
 
-    await expect(service.updateUser("zhangsan", { status: UserStatus.Disable })).resolves.toBe(true);
+    expect(await service.updateUser("zhangsan", { status: UserStatus.Disable })).toEqual({ changed: true, result: null });
 
     expect(tx.userRepository.updateUserByUsername).toHaveBeenCalledWith("zhangsan", {
       status: UserStatus.Disable,
@@ -392,7 +451,7 @@ describe("createUserService", () => {
       authorization,
     );
 
-    expect(updated).toBe(true);
+    expect(updated).toEqual({ changed: true, result: null });
     expect(allowedCase.tx.userRepository.updateUserByUsername).toHaveBeenCalledWith(
       "zhangsan",
       { name: "新姓名", mobile: "13900000000" },
@@ -441,7 +500,7 @@ describe("createUserService", () => {
       authorization,
     );
 
-    expect(updated).toBe(true);
+    expect(updated).toEqual({ changed: true, result: null });
     expect(allowedCase.tx.userRepository.updateUserByUsername).toHaveBeenCalledWith(
       "zhangsan",
       { status: UserStatus.Pause },
@@ -596,9 +655,7 @@ describe("createUserService", () => {
     const { service, deps, tx } = createService({ preBlockError });
     (tx.userRepository.getUserByUsernameForAdmin as any).mockResolvedValue(user());
 
-    await expect(service.updateUser("zhangsan", { status: UserStatus.Disable }))
-      .rejects
-      .toBe(preBlockError);
+    expect(await captureFailure(() => service.updateUser("zhangsan", { status: UserStatus.Disable }))).toBe(preBlockError);
 
     expect(tx.userRepository.updateUserByUsername).not.toHaveBeenCalled();
     expect(tx.auditService.recordAuditLog).not.toHaveBeenCalled();
@@ -612,9 +669,9 @@ describe("createUserService", () => {
       status: UserStatus.Enable,
     }));
 
-    await expect(service.updateUser("zhangsan", {
+    expect(await service.updateUser("zhangsan", {
       status: UserStatus.Enable,
-    })).resolves.toBe(true);
+    })).toEqual({ changed: false, result: null });
 
     expect(deps.subjectAccessLifecycle.run).toHaveBeenCalledTimes(1);
     expect(deps.subjectAccessLifecycle.run).toHaveBeenCalledWith(expect.objectContaining({
@@ -636,7 +693,7 @@ describe("createUserService", () => {
     };
     deps.sessionRevocation.revokeUserSessions.mockRejectedValueOnce(revocationFailure);
 
-    await expect(service.updateUser("zhangsan", { status: UserStatus.Disable }, auditContext)).resolves.toBe(true);
+    expect(await service.updateUser("zhangsan", { status: UserStatus.Disable }, auditContext)).toEqual({ changed: true, result: null });
 
     expect(tx.userRepository.updateUserByUsername).toHaveBeenCalledWith("zhangsan", {
       status: UserStatus.Disable,
@@ -660,7 +717,8 @@ describe("createUserService", () => {
     (tx.userRepository.getUserByUsernameForAdmin as any).mockResolvedValue(user());
     useEmploymentFixture(tx, { status, isDelete });
 
-    await expect(service.deleteUser("zhangsan")).resolves.toBe(true);
+    const deleted = await service.deleteUser("zhangsan");
+    expect(deleted).toEqual({ changed: true, result: null });
 
     expect(tx.userRepository.softDeleteUserByUsername).toHaveBeenCalledWith("zhangsan");
     expect(tx.userProfileInvalidation.recordChanges).toHaveBeenCalledWith([
@@ -675,6 +733,24 @@ describe("createUserService", () => {
     });
   });
 
+  test("reports a committed delete failure without replaying the deletion", async () => {
+    const { service, deps, tx } = createService();
+    tx.userRepository.getUserByUsernameForAdmin.mockResolvedValue(user());
+    deps.subjectAccessLifecycle.run.mockImplementation(async (input: {
+      mutate: (receipt: SubjectAccessMutationReceipt) => Promise<unknown>;
+    }) => {
+      await input.mutate(subjectAccessMutationReceipt);
+      throw new Error("commit confirmation unavailable");
+    });
+    const error = await captureFailure(() => service.deleteUser("zhangsan"));
+    expect(error).toMatchObject({ code: "ADMIN_MUTATION_COMMITTED", httpStatus: 500 });
+    expect(tx.userRepository.softDeleteUserByUsername).toHaveBeenCalledTimes(1);
+    expect(tx.auditService.recordAuditLog).toHaveBeenCalledWith(expect.objectContaining({
+      action: "admin.user.delete",
+      details: expect.objectContaining({ changed: true, deleted: true }),
+    }));
+  });
+
   test.each([
     ["Enable", EmploymentStatus.Enable],
     ["Pause", EmploymentStatus.Pause],
@@ -683,7 +759,7 @@ describe("createUserService", () => {
     (tx.userRepository.getUserByUsernameForAdmin as any).mockResolvedValue(user());
     useEmploymentFixture(tx, { status, isDelete: false });
 
-    await expect(service.deleteUser("zhangsan")).rejects.toThrow();
+    expect(await captureFailure(() => service.deleteUser("zhangsan"))).toBeInstanceOf(Error);
 
     expect(tx.userRepository.softDeleteUserByUsername).not.toHaveBeenCalled();
     expect(deps.sessionRevocation.revokeUserSessions).not.toHaveBeenCalled();
@@ -693,7 +769,7 @@ describe("createUserService", () => {
     const { service, deps, tx } = createService();
     (tx.userRepository.getUserByUsernameForAdmin as any).mockResolvedValue(user());
 
-    await expect(service.resetPasswordByUsername("zhangsan")).resolves.toBe("Rand1234");
+    expect(await service.resetPasswordByUsername("zhangsan")).toEqual({ changed: true, result: "Rand1234" });
 
     expect(deps.passwordHasher.hashPassword).toHaveBeenCalledWith("Rand1234");
     expect(tx.userRepository.setPassword).toHaveBeenCalledWith(1, "hashed:Rand1234");
@@ -717,11 +793,11 @@ describe("createUserService", () => {
       principalSessionId: "ps-current",
     };
 
-    await expect(service.resetPasswordByUsername(
+    expect(await service.resetPasswordByUsername(
       "zhangsan",
       auditContext,
       authorization,
-    )).resolves.toBe("Rand1234");
+    )).toEqual({ changed: true, result: "Rand1234" });
 
     expect(deps.sessionRevocation.revokeUserSessions).toHaveBeenCalledWith({
       userId: 1,
@@ -747,7 +823,7 @@ describe("createUserService", () => {
 
     const password = await service.resetPasswordByUsername("zhangsan", auditContext);
 
-    expect(password).toBe("Rand1234");
+    expect(password).toEqual({ changed: true, result: "Rand1234" });
     expect(tx.userRepository.setPassword).toHaveBeenCalledWith(1, "hashed:Rand1234");
     expect(afterCommitLogger.warn).toHaveBeenCalledWith({
       afterCommit: "admin.session_revoke.user",
@@ -816,9 +892,9 @@ describe("createUserService", () => {
       }),
     });
 
-    await expect(fixture.service.updateUser("zhangsan", {
+    expect(await captureFailure(() => fixture.service.updateUser("zhangsan", {
       status: UserStatus.Disable,
-    })).rejects.toBe(mutationError);
+    }))).toBe(mutationError);
 
     expect(await fixture.readAccessState()).toBe("enabled");
     expect(await claimRepairBacklog(fixture.store)).toEqual([]);
@@ -830,9 +906,9 @@ describe("createUserService", () => {
       initialStatus: UserStatus.Enable,
     });
 
-    await expect(fixture.service.updateUser("zhangsan", {
+    expect(await fixture.service.updateUser("zhangsan", {
       status: UserStatus.Disable,
-    })).resolves.toBe(true);
+    })).toEqual({ changed: true, result: null });
 
     expect(await fixture.readAccessState()).toBe("disabled");
     expect(await claimRepairBacklog(fixture.store)).toEqual([]);
@@ -849,12 +925,12 @@ describe("createUserService", () => {
       },
     });
 
-    await expect(fixture.service.updateUser("zhangsan", {
+    expect(await fixture.service.updateUser("zhangsan", {
       status: UserStatus.Disable,
-    })).resolves.toBe(true);
+    })).toEqual({ changed: true, result: null });
 
     expect(await fixture.readAccessState()).toBe("blocking");
-    await expect(fixture.repair.repairPending({ limit: 10 })).resolves.toMatchObject({
+    expect(await fixture.repair.repairPending({ limit: 10 })).toMatchObject({
       disabled: 1,
       failed: 0,
     });
@@ -870,15 +946,15 @@ describe("createUserService", () => {
       },
     });
 
-    await expect(fixture.service.updateUser("zhangsan", {
+    expect(await fixture.service.updateUser("zhangsan", {
       status: UserStatus.Enable,
-    })).resolves.toBe(true);
+    })).toEqual({ changed: true, result: null });
 
     expect(await fixture.readAccessState()).toBe("blocking");
     expect(fixture.sessionRevocation.revokeUserSessions).not.toHaveBeenCalled();
-    await expect(fixture.repair.repairSubject(
+    expect(await fixture.repair.repairSubject(
       "00000000-0000-4000-8000-000000000001",
-    )).resolves.toEqual({ status: "enabled" });
+    )).toEqual({ status: "enabled" });
     expect(await fixture.readAccessState()).toBe("enabled");
     expect(fixture.sessionRevocation.revokeUserSessions).not.toHaveBeenCalled();
   });
@@ -893,21 +969,21 @@ describe("createUserService", () => {
       },
     });
 
-    await expect(fixture.service.updateUser("zhangsan", {
+    expect(await fixture.service.updateUser("zhangsan", {
       status: UserStatus.Disable,
-    })).resolves.toBe(true);
+    })).toEqual({ changed: true, result: null });
     expect(await fixture.readAccessState()).toBe("disabled");
     expect(fixture.sessionRevocation.revokeUserSessions).toHaveBeenCalledTimes(1);
 
-    await expect(fixture.service.updateUser("zhangsan", {
+    expect(await fixture.service.updateUser("zhangsan", {
       status: UserStatus.Enable,
-    })).resolves.toBe(true);
+    })).toEqual({ changed: true, result: null });
     expect(await fixture.readAccessState()).toBe("blocking");
     expect(fixture.sessionRevocation.revokeUserSessions).toHaveBeenCalledTimes(1);
 
-    await expect(fixture.repair.repairSubject(
+    expect(await fixture.repair.repairSubject(
       "00000000-0000-4000-8000-000000000001",
-    )).resolves.toEqual({ status: "enabled" });
+    )).toEqual({ status: "enabled" });
     expect(await fixture.readAccessState()).toBe("enabled");
     expect(fixture.sessionRevocation.revokeUserSessions).toHaveBeenCalledTimes(1);
   });
@@ -919,9 +995,9 @@ describe("createUserService", () => {
       transactionStatus: UserStatus.Enable,
     });
 
-    await expect(fixture.service.updateUser("zhangsan", {
+    expect(await fixture.service.updateUser("zhangsan", {
       status: UserStatus.Enable,
-    })).resolves.toBe(true);
+    })).toEqual({ changed: false, result: null });
 
     expect(await fixture.readAccessState()).toBe("enabled");
     expect(await claimRepairBacklog(fixture.store)).toEqual([]);
@@ -948,6 +1024,7 @@ describe("createUserService", () => {
       userProfileInvalidation: { recordChanges: mock(async () => undefined) },
       userRepository: {
         getUserByUsernameForAdmin: mock(async () => null),
+        getAnyUserByUsername: mock(async () => null),
         setUserForAdmin: mock(async () => createdUser),
       },
     };
@@ -964,6 +1041,7 @@ describe("createUserService", () => {
       uow: createImmediateUnitOfWork(tx),
       userRepository: {
         getUserByUsernameForAdmin: mock(async () => null),
+        getAnyUserByUsername: mock(async () => null),
         searchUsersFuzzyPaged: mock(async () => ({ rows: [], total: 0 })),
       },
     } as any);
@@ -987,7 +1065,7 @@ describe("createUserService", () => {
       logger: { warn: mock(() => undefined) },
       random: { uuid: () => "30000000-0000-4000-8000-000000000001" },
     });
-    await expect(repair.repairSubject(subjectIdentifier)).resolves.toEqual({
+    expect(await repair.repairSubject(subjectIdentifier)).toEqual({
       status: "enabled",
     });
     expect(await readStoreState(store, subjectIdentifier)).toBe("enabled");
@@ -1052,6 +1130,8 @@ function createLifecycleService(options: {
     userProfileInvalidation: { recordChanges: mock(async () => undefined) },
     userRepository: {
       getUserByUsernameForAdmin: mock(async () =>
+        options.stateful ? user({ status: currentStatus }) : existingUser),
+      lockUserByUsername: mock(async () =>
         options.stateful ? user({ status: currentStatus }) : existingUser),
       updateUserByUsername,
     },

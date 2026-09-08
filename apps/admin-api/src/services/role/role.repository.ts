@@ -9,6 +9,7 @@ import type {
   RoleUpdateDto,
 } from "./role.type";
 import { EmploymentStatus, OrganizationStatus, PositionStatus, RoleAssignmentTargetType, RoleStatus } from "@iam/contracts";
+import { extractPostgresError } from "@iam/db/postgres-error";
 import { compactUpdate, firstRow, ilikeContainsIf } from "@iam/db/query-utils";
 import {
   clients,
@@ -19,10 +20,34 @@ import {
   users,
 } from "@iam/db/schema";
 import { roleAssignments } from "@iam/db/schema/role-assignments";
+import { RoleAssignmentExistsError, RoleCodeExistsError } from "@iam/domain/role";
 import { and, count, eq, exists, inArray, or, sql } from "drizzle-orm";
 
 export function createRoleRepository(db: DbClient) {
+  async function write<T>(operation: () => Promise<T>): Promise<T> {
+    try {
+      return await operation();
+    }
+    catch (error) {
+      const detail = extractPostgresError(error);
+      if (detail?.code === "23505") {
+        if (detail.constraint === "role_role_code_key" || detail.constraint === "role_role_code_unique")
+          throw new RoleCodeExistsError();
+        if (detail.constraint === "role_assignment_role_id_target_type_target_id_key")
+          throw new RoleAssignmentExistsError();
+      }
+      throw error;
+    }
+  }
   return {
+    async lockRoleByCode(roleCode: string) {
+      const rows = await db.select().from(roles).where(and(eq(roles.roleCode, roleCode), eq(roles.isDelete, false))).for("update");
+      return firstRow(await attachRoleContext(rows, db));
+    },
+    async lockAssignmentByIdForRole(roleId: number, assignmentId: number) {
+      const rows = await db.select().from(roleAssignments).where(and(eq(roleAssignments.roleId, roleId), eq(roleAssignments.id, assignmentId))).for("update");
+      return firstRow(await attachAssignmentTargets(rows, db));
+    },
     async getRoleByCode(roleCode: string) {
       const row = await db.query.roles.findFirst({
         where: { roleCode, isDelete: false },
@@ -55,13 +80,13 @@ export function createRoleRepository(db: DbClient) {
     },
 
     async createRole(data: AdminRoleCreateRecord) {
-      return firstRow(await db.insert(roles).values({
+      return write(async () => firstRow(await db.insert(roles).values({
         roleCode: data.roleCode,
         roleName: data.roleName,
         clientId: data.clientId,
         status: data.status ?? RoleStatus.Enable,
         description: data.description ?? null,
-      }).returning())!;
+      }).returning()));
     },
 
     async updateRoleByCode(roleCode: string, data: RoleUpdateDto) {
@@ -175,13 +200,6 @@ export function createRoleRepository(db: DbClient) {
       };
     },
 
-    async getAssignmentByIdForRole(roleId: number, assignmentId: number) {
-      const row = await db.query.roleAssignments.findFirst({
-        where: { id: assignmentId, roleId },
-      });
-      return firstRow(await attachAssignmentTargets(row === undefined ? [] : [row], db)) ?? null;
-    },
-
     async findAssignmentByRoleTarget(roleId: number, targetType: RoleAssignmentTargetType, targetId: number) {
       return await db.query.roleAssignments.findFirst({
         where: { roleId, targetType, targetId },
@@ -189,7 +207,7 @@ export function createRoleRepository(db: DbClient) {
     },
 
     async createAssignment(data: AdminRoleAssignmentCreateRecord) {
-      return firstRow(await db.insert(roleAssignments).values(data).returning())!;
+      return write(async () => firstRow(await db.insert(roleAssignments).values(data).returning()));
     },
 
     async updateAssignmentScope(roleId: number, assignmentId: number, includeDescendants: boolean) {

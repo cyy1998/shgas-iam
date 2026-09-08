@@ -8,6 +8,7 @@ export {
   type IssueCredentialInput,
   type ListPrincipalSessionsInput,
   type ListPrincipalSessionsResult,
+  type PreparedUserSessionRevocation,
   type PrincipalAuthenticationContext,
   type PrincipalSessionInventoryItem,
   type RevokeUserSessionsOptions,

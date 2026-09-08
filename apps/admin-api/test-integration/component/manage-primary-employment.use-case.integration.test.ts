@@ -35,9 +35,11 @@ function createLifecycle() {
     userProfileInvalidation: { recordChanges: mock(async () => undefined) },
     employmentStore: {
       getEmploymentLifecycleContextById: mock(async () => ({ employment: currentEmployment })),
-      unsetOpenPrimariesByUserId: mock(async () => undefined),
-      updateEmploymentRecord: mock(async (_id: number, patch: { isPrimary: boolean }) => ({
+      getOpenPrimaryEmploymentIdsByUserId: mock(async () => [9]),
+      lockEmploymentsByIds: mock(async () => [currentEmployment, employment({ id: 9, isPrimary: true })]),
+      updateEmploymentRecord: mock(async (id: number, patch: { isPrimary: boolean }) => ({
         ...currentEmployment,
+        id,
         ...patch,
       })),
     },
@@ -58,16 +60,16 @@ describe("Employment Lifecycle Primary", () => {
     await expect(useCase.execute({
       command: "set",
       employmentId: 4,
-    })).resolves.toBe(true);
+    })).resolves.toEqual({ changed: true, result: null });
 
-    expect(tx.employmentStore.unsetOpenPrimariesByUserId).toHaveBeenCalledWith(1);
+    expect(tx.employmentStore.updateEmploymentRecord).toHaveBeenCalledWith(9, { isPrimary: false });
     expect(tx.employmentStore.updateEmploymentRecord).toHaveBeenCalledWith(4, {
       isPrimary: true,
     });
     expect(tx.auditLogWriter.recordAuditLog).toHaveBeenCalledWith(expect.objectContaining({
       action: "admin.employment.set_primary",
       targetId: 4,
-      details: expect.objectContaining({ primary: true }),
+      details: expect.objectContaining({ changed: true, primary: true }),
     }));
     expect(tx.userProfileInvalidation.recordChanges).toHaveBeenCalledWith([
       { kind: "employment", userId: 1 },
@@ -77,14 +79,12 @@ describe("Employment Lifecycle Primary", () => {
 
   test("allows a paused Employment to become Primary", async () => {
     const { tx, useCase } = createLifecycle();
-    tx.employmentStore.getEmploymentLifecycleContextById.mockResolvedValueOnce({
-      employment: employment({ status: EmploymentStatus.Pause }),
-    });
+    tx.employmentStore.lockEmploymentsByIds.mockResolvedValueOnce([employment({ status: EmploymentStatus.Pause })]);
 
     await expect(useCase.execute({
       command: "set",
       employmentId: 4,
-    })).resolves.toBe(true);
+    })).resolves.toEqual({ changed: true, result: null });
 
     expect(tx.employmentStore.updateEmploymentRecord).toHaveBeenCalledWith(4, {
       isPrimary: true,
@@ -93,22 +93,19 @@ describe("Employment Lifecycle Primary", () => {
 
   test("clears the current Primary and permits zero Open Primary Employments", async () => {
     const { tx, useCase } = createLifecycle();
-    tx.employmentStore.getEmploymentLifecycleContextById.mockResolvedValueOnce({
-      employment: employment({ isPrimary: true }),
-    });
+    tx.employmentStore.lockEmploymentsByIds.mockResolvedValueOnce([employment({ isPrimary: true })]);
 
     await expect(useCase.execute({
       command: "clear",
       employmentId: 4,
-    })).resolves.toBe(true);
+    })).resolves.toEqual({ changed: true, result: null });
 
-    expect(tx.employmentStore.unsetOpenPrimariesByUserId).not.toHaveBeenCalled();
     expect(tx.employmentStore.updateEmploymentRecord).toHaveBeenCalledWith(4, {
       isPrimary: false,
     });
     expect(tx.auditLogWriter.recordAuditLog).toHaveBeenCalledWith(expect.objectContaining({
       action: "admin.employment.clear_primary",
-      details: expect.objectContaining({ primary: false }),
+      details: expect.objectContaining({ changed: true, primary: false }),
     }));
   });
 
@@ -117,15 +114,14 @@ describe("Employment Lifecycle Primary", () => {
     ["clear" as const, false],
   ])("treats an already satisfied %s command as an idempotent success", async (command, isPrimary) => {
     const { tx, useCase } = createLifecycle();
-    tx.employmentStore.getEmploymentLifecycleContextById.mockResolvedValueOnce({
-      employment: employment({ isPrimary }),
-    });
+    tx.employmentStore.lockEmploymentsByIds.mockResolvedValueOnce([employment({ isPrimary })]);
 
-    await expect(useCase.execute({ command, employmentId: 4 })).resolves.toBe(true);
+    await expect(useCase.execute({ command, employmentId: 4 })).resolves.toEqual({ changed: false, result: null });
 
-    expect(tx.employmentStore.unsetOpenPrimariesByUserId).not.toHaveBeenCalled();
     expect(tx.employmentStore.updateEmploymentRecord).not.toHaveBeenCalled();
-    expect(tx.auditLogWriter.recordAuditLog).not.toHaveBeenCalled();
+    expect(tx.auditLogWriter.recordAuditLog).toHaveBeenCalledWith(expect.objectContaining({
+      details: expect.objectContaining({ changed: false }),
+    }));
     expect(tx.userProfileInvalidation.recordChanges).not.toHaveBeenCalled();
   });
 
@@ -133,12 +129,10 @@ describe("Employment Lifecycle Primary", () => {
     "rejects %s for an Ended Employment",
     async (command) => {
       const { tx, useCase } = createLifecycle();
-      tx.employmentStore.getEmploymentLifecycleContextById.mockResolvedValueOnce({
-        employment: employment({
-          status: EmploymentStatus.Disable,
-          endTime: now,
-        }),
-      });
+      tx.employmentStore.lockEmploymentsByIds.mockResolvedValueOnce([employment({
+        status: EmploymentStatus.Disable,
+        endTime: now,
+      })]);
 
       await expect(useCase.execute({ command, employmentId: 4 })).rejects.toBeInstanceOf(
         EmploymentNotEditableError,
@@ -159,8 +153,57 @@ describe("Employment Lifecycle Primary", () => {
       employmentId: 4,
     })).rejects.toBeInstanceOf(EmploymentNotFoundError);
 
-    expect(tx.employmentStore.unsetOpenPrimariesByUserId).not.toHaveBeenCalled();
     expect(tx.employmentStore.updateEmploymentRecord).not.toHaveBeenCalled();
+  });
+
+  test("leaves a selected Primary candidate unchanged when it ended before protection", async () => {
+    const { tx, useCase } = createLifecycle();
+    tx.employmentStore.lockEmploymentsByIds.mockResolvedValueOnce([
+      employment(),
+      employment({ id: 9, isPrimary: true, status: EmploymentStatus.Disable, endTime: now }),
+    ]);
+
+    const result = await useCase.execute({ command: "set", employmentId: 4 });
+
+    expect(result).toEqual({ changed: true, result: null });
+    expect(tx.employmentStore.updateEmploymentRecord).toHaveBeenCalledTimes(1);
+  });
+
+  test("rejects a target that disappeared after selection", async () => {
+    const { tx, useCase } = createLifecycle();
+    tx.employmentStore.lockEmploymentsByIds.mockResolvedValueOnce([]);
+    let failure: unknown;
+    try {
+      await useCase.execute({ command: "set", employmentId: 4 });
+    }
+    catch (error) {
+      failure = error;
+    }
+
+    expect(failure).toBeInstanceOf(EmploymentNotFoundError);
+    expect(tx.employmentStore.updateEmploymentRecord).not.toHaveBeenCalled();
+    expect(tx.auditLogWriter.recordAuditLog).not.toHaveBeenCalled();
+    expect(tx.userProfileInvalidation.recordChanges).not.toHaveBeenCalled();
+  });
+
+  test.each([4, 9])("rejects a zero-row update for protected Employment %s without success effects", async (id) => {
+    const { tx, useCase } = createLifecycle();
+    tx.employmentStore.updateEmploymentRecord.mockImplementation(async (targetId, patch) => {
+      if (targetId === id)
+        return undefined as any;
+      return employment({ id: targetId, ...patch });
+    });
+    let failure: unknown;
+    try {
+      await useCase.execute({ command: "set", employmentId: 4 });
+    }
+    catch (error) {
+      failure = error;
+    }
+
+    expect(failure).toBeInstanceOf(Error);
+    expect(tx.auditLogWriter.recordAuditLog).not.toHaveBeenCalled();
+    expect(tx.userProfileInvalidation.recordChanges).not.toHaveBeenCalled();
   });
 
   test("rolls back Primary replacement, audit, and Dirty when the transaction fails", async () => {
@@ -183,12 +226,12 @@ describe("Employment Lifecycle Primary", () => {
             ...tx,
             employmentStore: {
               ...tx.employmentStore,
-              async unsetOpenPrimariesByUserId() {
-                staged.primaries = [];
-              },
               async updateEmploymentRecord(id: number, patch: { isPrimary: boolean }) {
                 if (patch.isPrimary)
                   staged.primaries.push(id);
+                else
+                  staged.primaries = staged.primaries.filter(primaryId => primaryId !== id);
+                return employment({ id, ...patch });
               },
             },
             auditLogWriter: {

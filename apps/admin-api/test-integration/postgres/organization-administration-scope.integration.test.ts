@@ -111,7 +111,7 @@ describe("HR Organization administration scope", () => {
       level: OrganizationLevel.One,
       status: OrganizationStatus.Enable,
     } as never, undefined, authorization);
-    expect(created).toBe(true);
+    expect(created).toMatchObject({ changed: true, result: { status: OrganizationStatus.Enable } });
 
     const createdRows = await harness.db
       .select({
@@ -166,7 +166,7 @@ describe("HR Organization administration scope", () => {
       undefined,
       authorization,
     );
-    expect(updated).toBe(true);
+    expect(updated).toEqual({ changed: true, result: null });
     const renamedRows = await harness.db
       .select({ orgName: organizations.orgName, orgType: organizations.orgType })
       .from(organizations)
@@ -229,7 +229,7 @@ describe("HR Organization administration scope", () => {
     ]);
     expect(search.total).toBe(7);
     expect(outsideDetail.orgCode).toBe("OUTSIDE");
-    expect(created).toBe(true);
+    expect(created).toMatchObject({ changed: true, result: { status: OrganizationStatus.Enable } });
     const createdRows = await harness.db
       .select({
         parentId: organizations.parentId,

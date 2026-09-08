@@ -33,6 +33,11 @@
 
 ## 管理路由与权限
 
+现存 Admin mutation 已统一消费 `{ changed, result }`：页面区分已修改与无需修改，创建与凭据从 result 取得必要资源。
+公共 service 归一化已提交错误，页面自动重读事实但不重放写入；普通刷新成功不清除尚需修复的提示。
+Secret 未交付沿用指定提示和先修复再主动轮换流程。全部实际入口与代表性测试见
+[最终契约核对](../features/admin/admin-mutation-contract.md)，后端/页面/外部消费者按[协调清单](../releases/admin-mutation-contract-cutover.md)切换。
+
 - 新管理路由登记到 `admin-route-registry`，复用模块 access key 和既有拒绝访问路径。
 - 模块可见性与 collection action 消费服务端 capability；服务端提供资源 `allowedActions` 时，行或详情按钮
   以它为准。新增需要资源级授权的操作时，同步设计服务端授权元数据，前端不复制角色字符串或组织范围策略。

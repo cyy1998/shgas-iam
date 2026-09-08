@@ -14,7 +14,7 @@ export interface AdminEmploymentProfileChange {
 }
 
 export interface AdminEmploymentStorePort {
-  getEmploymentByIdForAdmin: (id: number) => Promise<EmploymentDetail | null>;
+  lockEmploymentByIdForAdmin: (id: number) => Promise<EmploymentDetail | null>;
   updateEmploymentRecord: (id: number, input: AdminEmploymentRecordUpdate) => Promise<Employment>;
 }
 

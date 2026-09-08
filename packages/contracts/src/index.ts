@@ -1,4 +1,5 @@
 export * from "./admin-authorization";
+export * from "./admin-mutation";
 export * from "./audit/actions";
 export * from "./auth/login-credential";
 export * from "./auth/login-page-guard";

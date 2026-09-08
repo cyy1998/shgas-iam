@@ -59,18 +59,20 @@ function sessionListResult() {
 
 const unusedRevokeSessions = mock(async () => ({
   changed: false,
-  scope: "session" as const,
-  revoked: {
-    principalSessions: 0,
-    bindings: 0,
-    credentials: 0,
-    artifacts: 0,
-  },
-  currentPrincipalSessionExcluded: false,
-  cleanup: {
-    attempted: 0,
-    succeeded: 0,
-    failed: 0,
+  result: {
+    scope: "session" as const,
+    revoked: {
+      principalSessions: 0,
+      bindings: 0,
+      credentials: 0,
+      artifacts: 0,
+    },
+    currentPrincipalSessionExcluded: false,
+    cleanup: {
+      attempted: 0,
+      succeeded: 0,
+      failed: 0,
+    },
   },
 }));
 
@@ -84,7 +86,9 @@ const unusedListLoginRestrictions = mock(async () => ({
 
 const unusedReleaseLoginRestriction = mock(async () => ({
   changed: false,
-  failureStateCleared: true as const,
+  result: {
+    failureStateCleared: true as const,
+  },
 }));
 
 function createContext(
@@ -304,25 +308,27 @@ describe("admin session management adapter", () => {
   test("shares the session revoke mutation, server actor, audit context, and safe VO across REST and tRPC", async () => {
     const revokeSessions = mock(async () => ({
       changed: true,
-      scope: "session" as const,
-      revoked: {
-        principalSessions: 1,
-        bindings: 2,
-        credentials: 3,
-        artifacts: 4,
+      result: {
+        scope: "session" as const,
+        revoked: {
+          principalSessions: 1,
+          bindings: 2,
+          credentials: 3,
+          artifacts: 4,
+        },
+        currentPrincipalSessionExcluded: false,
+        cleanup: {
+          attempted: 2,
+          succeeded: 1,
+          failed: 1,
+          failures: [{
+            ref: "must-not-leave-adapter",
+            error: "must-not-leave-adapter",
+          }],
+        },
+        principalSessionId: "must-not-leave-adapter",
+        metadata: { secret: true },
       },
-      currentPrincipalSessionExcluded: false,
-      cleanup: {
-        attempted: 2,
-        succeeded: 1,
-        failed: 1,
-        failures: [{
-          ref: "must-not-leave-adapter",
-          error: "must-not-leave-adapter",
-        }],
-      },
-      principalSessionId: "must-not-leave-adapter",
-      metadata: { secret: true },
     }));
     const adapter = createSessionManagementAdapter({
       sessionManagementService: {
@@ -376,18 +382,20 @@ describe("admin session management adapter", () => {
     expect(restResult).toMatchObject({ code: 200, data: trpcResult });
     expect(trpcResult).toEqual({
       changed: true,
-      scope: "session",
-      revoked: {
-        principalSessions: 1,
-        bindings: 2,
-        credentials: 3,
-        artifacts: 4,
-      },
-      currentPrincipalSessionExcluded: false,
-      cleanup: {
-        attempted: 2,
-        succeeded: 1,
-        failed: 1,
+      result: {
+        scope: "session",
+        revoked: {
+          principalSessions: 1,
+          bindings: 2,
+          credentials: 3,
+          artifacts: 4,
+        },
+        currentPrincipalSessionExcluded: false,
+        cleanup: {
+          attempted: 2,
+          succeeded: 1,
+          failed: 1,
+        },
       },
     });
     expect(JSON.stringify(trpcResult)).not.toContain("must-not-leave-adapter");
@@ -396,24 +404,26 @@ describe("admin session management adapter", () => {
   test("shares a strict user revoke target while keeping the self exception server-owned", async () => {
     const revokeSessions = mock(async () => ({
       changed: true,
-      scope: "user" as const,
-      revoked: {
-        principalSessions: 1,
-        bindings: 2,
-        credentials: 3,
-        artifacts: 4,
+      result: {
+        scope: "user" as const,
+        revoked: {
+          principalSessions: 1,
+          bindings: 2,
+          credentials: 3,
+          artifacts: 4,
+        },
+        currentPrincipalSessionExcluded: true,
+        cleanup: {
+          attempted: 2,
+          succeeded: 1,
+          failed: 1,
+          failures: [{
+            ref: "must-not-leave-adapter",
+            error: "must-not-leave-adapter",
+          }],
+        },
+        exceptPrincipalSessionId: "must-not-leave-adapter",
       },
-      currentPrincipalSessionExcluded: true,
-      cleanup: {
-        attempted: 2,
-        succeeded: 1,
-        failed: 1,
-        failures: [{
-          ref: "must-not-leave-adapter",
-          error: "must-not-leave-adapter",
-        }],
-      },
-      exceptPrincipalSessionId: "must-not-leave-adapter",
     }));
     const adapter = createSessionManagementAdapter({
       sessionManagementService: {
@@ -457,18 +467,20 @@ describe("admin session management adapter", () => {
     expect(restResult).toMatchObject({ code: 200, data: trpcResult });
     expect(trpcResult).toEqual({
       changed: true,
-      scope: "user",
-      revoked: {
-        principalSessions: 1,
-        bindings: 2,
-        credentials: 3,
-        artifacts: 4,
-      },
-      currentPrincipalSessionExcluded: true,
-      cleanup: {
-        attempted: 2,
-        succeeded: 1,
-        failed: 1,
+      result: {
+        scope: "user",
+        revoked: {
+          principalSessions: 1,
+          bindings: 2,
+          credentials: 3,
+          artifacts: 4,
+        },
+        currentPrincipalSessionExcluded: true,
+        cleanup: {
+          attempted: 2,
+          succeeded: 1,
+          failed: 1,
+        },
       },
     });
     expect(JSON.stringify(trpcResult)).not.toContain("must-not-leave-adapter");
@@ -558,7 +570,9 @@ describe("admin session management adapter", () => {
         listSessions: mock(async () => sessionListResult()),
         releaseLoginRestriction: mock(async () => ({
           changed: false,
-          failureStateCleared: true as const,
+          result: {
+            failureStateCleared: true as const,
+          },
         })),
         revokeSessions: unusedRevokeSessions,
       },
@@ -607,8 +621,10 @@ describe("admin session management adapter", () => {
   test("shares the login restriction release mutation and server audit context across REST and tRPC", async () => {
     const releaseLoginRestriction = mock(async () => ({
       changed: true,
-      failureStateCleared: true as const,
-      restriction: "must-not-leave-adapter",
+      result: {
+        failureStateCleared: true as const,
+        restriction: "must-not-leave-adapter",
+      },
     }));
     const adapter = createSessionManagementAdapter({
       sessionManagementService: {
@@ -668,7 +684,9 @@ describe("admin session management adapter", () => {
     expect(restResult).toMatchObject({ code: 200, data: trpcResult });
     expect(trpcResult).toEqual({
       changed: true,
-      failureStateCleared: true,
+      result: {
+        failureStateCleared: true,
+      },
     });
     expect(JSON.stringify(trpcResult)).not.toContain("must-not-leave-adapter");
   });

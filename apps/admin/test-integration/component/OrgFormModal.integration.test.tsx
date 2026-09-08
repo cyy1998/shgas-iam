@@ -31,14 +31,15 @@ vi.mock('@ant-design/pro-components', () => {
     children: ReactNode;
     onFinish: (values: Record<string, unknown>) => Promise<boolean>;
     open: boolean;
-  }) => open ? (
-    <div>
-      {children}
-      <button type="button" onClick={() => void onFinish({ ...form.values })}>
-        确定
-      </button>
-    </div>
-  ) : null;
+  }) =>
+    open ? (
+      <div>
+        {children}
+        <button type="button" onClick={() => void onFinish({ ...form.values })}>
+          确定
+        </button>
+      </div>
+    ) : null;
   const ProFormText = ({ label }: { label: string }) => <span>{label}</span>;
   const ProFormSelect = ({
     disabled,
@@ -46,7 +47,11 @@ vi.mock('@ant-design/pro-components', () => {
   }: {
     disabled?: boolean;
     label: string;
-  }) => <button type="button" disabled={disabled}>{label}</button>;
+  }) => (
+    <button type="button" disabled={disabled}>
+      {label}
+    </button>
+  );
   const components = { ModalForm, ProFormSelect, ProFormText };
   return { ...components, default: components };
 });
@@ -97,7 +102,10 @@ describe('OrgFormModal authorization fields', () => {
       status: OrganizationStatus.Disable,
     };
     mutations.updateOrganization.mockReset();
-    mutations.updateOrganization.mockResolvedValue(true);
+    mutations.updateOrganization.mockResolvedValue({
+      changed: true,
+      result: null,
+    });
   });
 
   it('omits status from an edit when the server denies changeStatus', async () => {

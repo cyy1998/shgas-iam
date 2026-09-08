@@ -19,17 +19,20 @@ export interface AdminUserProfileChange {
 }
 
 export interface AdminUserTransactionStorePort {
+  getAnyUserByUsername: (username: string) => Promise<User | null>;
+  lockUserByUsername: (username: string, includeDeleted?: boolean) => Promise<User | null>;
   getUserByUsernameForAdmin: (username: string) => Promise<User | null>;
   getUserByUsernameIncludingDeletedForAuthorization: (username: string) => Promise<User | null>;
   getOpenEmploymentOrganizationIdsByUserId: (userId: number) => Promise<number[]>;
-  setUserForAdmin: (input: UserCreateDto & { subjectIdentifier: string }) => Promise<User>;
+  setUserForAdmin: (input: UserCreateDto & { subjectIdentifier: string }) => Promise<User | null>;
   updateUserByUsername: (username: string, input: UserUpdateDto) => Promise<User | null>;
   countOpenEmploymentsByUsername: (username: string) => Promise<number>;
-  softDeleteUserByUsername: (username: string) => Promise<User>;
+  softDeleteUserByUsername: (username: string) => Promise<User | null>;
   setPassword: (userId: number, password: string) => Promise<User | null>;
 }
 
 export interface AdminUserReaderPort {
+  getAnyUserByUsername: (username: string) => Promise<User | null>;
   getOpenEmploymentOrganizationIdsByUserId: (userId: number) => Promise<number[]>;
   getUserBySubjectIdentifierForAdmin: (subjectIdentifier: string) => Promise<User | null>;
   getUserByUsernameForAdmin: (username: string) => Promise<User | null>;

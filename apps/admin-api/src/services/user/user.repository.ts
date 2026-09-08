@@ -1,16 +1,27 @@
 import type { UserCreateDto, UserPaginationQueryDto, UserUpdateDto } from "@admin-api/services/user/user.type";
 import type { DbClient } from "@iam/db";
 import { EmploymentStatus, UserStatus } from "@iam/contracts";
+import { extractPostgresError } from "@iam/db/postgres-error";
 import { compactUpdate, firstRow, ilikeContainsIf, inArrayIf } from "@iam/db/query-utils";
 import {
   employments,
   users,
 } from "@iam/db/schema";
 import { OPEN_EMPLOYMENT_STATUSES } from "@iam/domain/employment";
+import { UsernameAlreadyExistsError } from "@iam/domain/user";
 import { and, count, eq, inArray, or } from "drizzle-orm";
 
 export function createUserRepository(db: DbClient) {
   return {
+    async getAnyUserByUsername(username: string) {
+      return await db.query.users.findFirst({ where: { username } }) ?? null;
+    },
+    async lockUserByUsername(username: string, includeDeleted = false) {
+      return firstRow(await db.select().from(users).where(and(
+        eq(users.username, username),
+        includeDeleted ? undefined : eq(users.isDelete, false),
+      )).for("update"));
+    },
     async getSessionManagementUserSummaries(userIds: readonly number[]) {
       if (userIds.length === 0)
         return [];
@@ -129,8 +140,8 @@ export function createUserRepository(db: DbClient) {
       return firstRow(await db
         .update(users)
         .set({ isDelete: true })
-        .where(eq(users.username, username))
-        .returning())!;
+        .where(and(eq(users.username, username), eq(users.isDelete, false)))
+        .returning());
     },
     async countOpenEmploymentsByUsername(username: string) {
       const rows = await db
@@ -146,7 +157,17 @@ export function createUserRepository(db: DbClient) {
       return firstRow(rows)?.value ?? 0;
     },
     async setUserForAdmin(userCreateDto: UserCreateDto & { subjectIdentifier: string }) {
-      return firstRow(await db.insert(users).values(userCreateDto).returning())!;
+      try {
+        return firstRow(await db.insert(users).values(userCreateDto).returning());
+      }
+      catch (error) {
+        const detail = extractPostgresError(error);
+        if (detail?.code === "23505"
+          && (detail.constraint === "user_username_key" || detail.constraint === "user_username_unique")) {
+          throw new UsernameAlreadyExistsError();
+        }
+        throw error;
+      }
     },
   };
 }

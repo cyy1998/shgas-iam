@@ -1,4 +1,5 @@
 import { apiClient } from '@admin/lib/api-client';
+import { runAdminMutation } from '@admin/services/admin-mutation';
 import type { AppRouter } from '@iam/admin-api/trpc';
 import type { inferRouterInputs, inferRouterOutputs } from '@trpc/server';
 
@@ -29,7 +30,9 @@ export function getOrganizationChildren(
   });
 }
 
-export function getOrganizationSelectorNodes(params: OrganizationSelectorParams) {
+export function getOrganizationSelectorNodes(
+  params: OrganizationSelectorParams,
+) {
   return apiClient.admin.organization.selector.query(params);
 }
 
@@ -38,20 +41,31 @@ export function getOrganization(orgCode: string) {
 }
 
 export function createOrganization(body: AdminOrgInputs['create']) {
-  return apiClient.admin.organization.create.mutate(body);
+  return runAdminMutation(() =>
+    apiClient.admin.organization.create.mutate(body),
+  );
 }
 
 export function updateOrganization(
   orgCode: string,
   data: AdminOrgInputs['update']['data'],
 ) {
-  return apiClient.admin.organization.update.mutate({ orgCode, data });
+  return runAdminMutation(() =>
+    apiClient.admin.organization.update.mutate({ orgCode, data }),
+  );
 }
 
-export function updateOrganizationStatus(orgCode: string, status: AdminOrgInputs['updateStatus']['status']) {
-  return apiClient.admin.organization.updateStatus.mutate({ orgCode, status });
+export function updateOrganizationStatus(
+  orgCode: string,
+  status: AdminOrgInputs['updateStatus']['status'],
+) {
+  return runAdminMutation(() =>
+    apiClient.admin.organization.updateStatus.mutate({ orgCode, status }),
+  );
 }
 
 export function deleteOrganization(orgCode: string) {
-  return apiClient.admin.organization.delete.mutate({ orgCode });
+  return runAdminMutation(() =>
+    apiClient.admin.organization.delete.mutate({ orgCode }),
+  );
 }

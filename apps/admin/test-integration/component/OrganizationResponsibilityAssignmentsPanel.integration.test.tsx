@@ -82,9 +82,18 @@ describe('OrganizationResponsibilityAssignmentsPanel', () => {
       items: [assignment],
       nextCursor: '100',
     });
-    responsibilityService.endAssignment.mockResolvedValue(true);
-    responsibilityService.pauseAssignment.mockResolvedValue(true);
-    responsibilityService.resumeAssignment.mockResolvedValue(true);
+    responsibilityService.endAssignment.mockResolvedValue({
+      changed: true,
+      result: null,
+    });
+    responsibilityService.pauseAssignment.mockResolvedValue({
+      changed: true,
+      result: null,
+    });
+    responsibilityService.resumeAssignment.mockResolvedValue({
+      changed: true,
+      result: null,
+    });
   });
 
   it('loads the default Open cursor list and opens detail by stable numeric id', async () => {
@@ -129,7 +138,10 @@ describe('OrganizationResponsibilityAssignmentsPanel', () => {
   });
 
   it('creates an assignment with only the fixed organization, type and holder employment', async () => {
-    responsibilityService.createAssignment.mockResolvedValue({ id: 102 });
+    responsibilityService.createAssignment.mockResolvedValue({
+      changed: true,
+      result: { id: 102 },
+    });
     searchEmployments.mockResolvedValue({
       result: [
         {

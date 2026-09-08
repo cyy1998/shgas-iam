@@ -1,4 +1,5 @@
 import EmploymentDetailDrawer from '@admin/pages/employments/components/EmploymentDetailDrawer';
+import { AdminMutationCommittedError } from '@admin/services/admin-mutation';
 import {
   EmploymentStatus,
   OrganizationLevel,
@@ -6,11 +7,14 @@ import {
   OrganizationResponsibilityTypeCode,
   OrganizationType,
 } from '@iam/contracts';
-import { describe, expect, it, vi } from 'vitest';
-import { render, screen } from '~admin/test/render';
+import { message, Modal } from 'antd';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { render, screen, waitFor } from '~admin/test/render';
 import { createHrEmploymentAllowedActions } from '../../test/mocks/fixtures';
 
 const services = vi.hoisted(() => ({
+  setPrimaryEmployment: vi.fn(),
+  clearPrimaryEmployment: vi.fn(),
   endEmployment: vi.fn(),
   getEmployment: vi.fn(),
   pauseEmployment: vi.fn(),
@@ -20,6 +24,8 @@ const services = vi.hoisted(() => ({
 }));
 
 vi.mock('@admin/services/employment', () => ({
+  setPrimaryEmployment: services.setPrimaryEmployment,
+  clearPrimaryEmployment: services.clearPrimaryEmployment,
   endEmployment: services.endEmployment,
   getEmployment: services.getEmployment,
   pauseEmployment: services.pauseEmployment,
@@ -117,7 +123,10 @@ const assignment = {
 describe('EmploymentDetailDrawer responsibility wayfinding', () => {
   it('edits description and renders only the server-granted lifecycle actions', async () => {
     services.getEmployment.mockResolvedValue(employment);
-    services.updateEmployment.mockResolvedValue(true);
+    services.updateEmployment.mockResolvedValue({
+      changed: true,
+      result: null,
+    });
     const { user } = render(
       <EmploymentDetailDrawer open employmentId={42} onClose={vi.fn()} />,
     );
@@ -141,9 +150,9 @@ describe('EmploymentDetailDrawer responsibility wayfinding', () => {
       /暂\s*停/,
       /结\s*束/,
     ]) {
-      expect(
-        screen.getByRole('button', { name: action }),
-      ).toHaveClass('ant-btn-variant-outlined');
+      expect(screen.getByRole('button', { name: action })).toHaveClass(
+        'ant-btn-variant-outlined',
+      );
     }
     await user.click(edit);
     await user.type(screen.getByRole('textbox', { name: '备注' }), 'HR note');
@@ -178,4 +187,189 @@ describe('EmploymentDetailDrawer responsibility wayfinding', () => {
       '/organization-responsibilities/assignments?employment=42&lifecycle=open&assignment=101',
     );
   });
+});
+
+describe('Employment mutation outcomes', () => {
+  afterEach(async () => {
+    message.destroy();
+    Modal.destroyAll();
+    await waitFor(() =>
+      expect(
+        screen.queryByRole('button', {
+          name: /^(暂停任职|结束任职)$/,
+          hidden: true,
+        }),
+      ).not.toBeInTheDocument(),
+    );
+  });
+  it.each(['setPrimary', 'clearPrimary'] as const)(
+    'shows %s no-op and keeps refreshed facts instead of toggling the stale record',
+    async (command) => {
+      const isPrimary = command === 'clearPrimary';
+      const current = {
+        ...employment,
+        isPrimary,
+        allowedActions: createHrEmploymentAllowedActions(
+          EmploymentStatus.Enable,
+          isPrimary,
+        ),
+      };
+      services.getEmployment.mockResolvedValue(current);
+      services[`${command}Employment`].mockResolvedValue({
+        changed: false,
+        result: null,
+      });
+      const info = vi.spyOn(message, 'info');
+      const confirm = vi
+        .spyOn(Modal, 'confirm')
+        .mockImplementation(() => ({ destroy: vi.fn(), update: vi.fn() }));
+      const { user } = render(
+        <EmploymentDetailDrawer open employmentId={42} onClose={vi.fn()} />,
+      );
+      await user.click(
+        await screen.findByRole('button', {
+          name: isPrimary ? '取消主岗' : '设主岗',
+        }),
+      );
+      await confirm.mock.calls[0][0].onOk?.();
+      await waitFor(() =>
+        expect(services.getEmployment).toHaveBeenCalledTimes(2),
+      );
+      expect(info).toHaveBeenCalledWith('无需修改');
+      expect(
+        screen.getByRole('button', { name: isPrimary ? '取消主岗' : '设主岗' }),
+      ).toBeVisible();
+      expect(services[`${command}Employment`]).toHaveBeenCalledExactlyOnceWith(
+        42,
+      );
+      confirm.mockRestore();
+    },
+  );
+
+  it.each(['setPrimary', 'clearPrimary'] as const)(
+    'refreshes after %s committed failure and keeps the repair warning',
+    async (command) => {
+      const isPrimary = command === 'clearPrimary';
+      services.getEmployment.mockResolvedValue({
+        ...employment,
+        isPrimary,
+        allowedActions: createHrEmploymentAllowedActions(
+          EmploymentStatus.Enable,
+          isPrimary,
+        ),
+      });
+      services[`${command}Employment`].mockRejectedValue(
+        new AdminMutationCommittedError(null),
+      );
+      const confirm = vi
+        .spyOn(Modal, 'confirm')
+        .mockImplementation(() => ({ destroy: vi.fn(), update: vi.fn() }));
+      const { user } = render(
+        <EmploymentDetailDrawer open employmentId={42} onClose={vi.fn()} />,
+      );
+      await user.click(
+        await screen.findByRole('button', {
+          name: isPrimary ? '取消主岗' : '设主岗',
+        }),
+      );
+      await confirm.mock.calls[0][0].onOk?.();
+      await waitFor(() =>
+        expect(services.getEmployment).toHaveBeenCalledTimes(2),
+      );
+      expect(
+        screen.getByText(
+          '操作已生效，但后续处理失败，请刷新确认并联系管理员修复',
+        ),
+      ).toBeVisible();
+      expect(services[`${command}Employment`]).toHaveBeenCalledOnce();
+      confirm.mockRestore();
+    },
+  );
+
+  it.each(['pause', 'resume', 'end', 'update'] as const)(
+    'shows no-op for %s and reloads current facts',
+    async (command) => {
+      const status =
+        command === 'resume' ? EmploymentStatus.Pause : EmploymentStatus.Enable;
+      services.getEmployment.mockResolvedValue({
+        ...employment,
+        status,
+        allowedActions: createHrEmploymentAllowedActions(status, true),
+      });
+      const mutation = services[`${command}Employment`];
+      mutation.mockResolvedValue({ changed: false, result: null });
+      const info = vi.spyOn(message, 'info');
+      const { user } = render(
+        <EmploymentDetailDrawer open employmentId={42} onClose={vi.fn()} />,
+      );
+      await screen.findByRole('button', { name: '编辑备注' });
+      if (command === 'update') {
+        await user.click(screen.getByRole('button', { name: '编辑备注' }));
+        await user.click(screen.getByRole('button', { name: /保\s*存/ }));
+      } else if (command === 'resume') {
+        await user.click(screen.getByRole('button', { name: /恢\s*复/ }));
+      } else {
+        await user.click(
+          screen.getByRole('button', {
+            name: command === 'pause' ? /^暂\s*停$/ : /^结\s*束$/,
+          }),
+        );
+        await user.click(
+          await screen.findByRole('button', {
+            name: command === 'pause' ? '暂停任职' : '结束任职',
+          }),
+        );
+      }
+      await waitFor(() => expect(info).toHaveBeenCalledWith('无需修改'));
+      await waitFor(() =>
+        expect(services.getEmployment).toHaveBeenCalledTimes(2),
+      );
+      expect(mutation).toHaveBeenCalledOnce();
+    },
+  );
+
+  it.each(['pause', 'resume', 'end', 'update'] as const)(
+    'preserves the committed warning after %s refresh without replaying',
+    async (command) => {
+      const status =
+        command === 'resume' ? EmploymentStatus.Pause : EmploymentStatus.Enable;
+      services.getEmployment.mockResolvedValue({
+        ...employment,
+        status,
+        allowedActions: createHrEmploymentAllowedActions(status, true),
+      });
+      const mutation = services[`${command}Employment`];
+      mutation.mockRejectedValue(new AdminMutationCommittedError(null));
+      const { user } = render(
+        <EmploymentDetailDrawer open employmentId={42} onClose={vi.fn()} />,
+      );
+      await screen.findByRole('button', { name: '编辑备注' });
+      if (command === 'update') {
+        await user.click(screen.getByRole('button', { name: '编辑备注' }));
+        await user.click(screen.getByRole('button', { name: /保\s*存/ }));
+      } else if (command === 'resume') {
+        await user.click(screen.getByRole('button', { name: /恢\s*复/ }));
+      } else {
+        await user.click(
+          screen.getByRole('button', {
+            name: command === 'pause' ? /^暂\s*停$/ : /^结\s*束$/,
+          }),
+        );
+        await user.click(
+          await screen.findByRole('button', {
+            name: command === 'pause' ? '暂停任职' : '结束任职',
+          }),
+        );
+      }
+      await waitFor(() =>
+        expect(services.getEmployment).toHaveBeenCalledTimes(2),
+      );
+      expect(
+        screen.getByText(
+          '操作已生效，但后续处理失败，请刷新确认并联系管理员修复',
+        ),
+      ).toBeVisible();
+      expect(mutation).toHaveBeenCalledOnce();
+    },
+  );
 });

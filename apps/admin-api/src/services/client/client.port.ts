@@ -24,16 +24,16 @@ export interface AdminClientTransactionStorePort {
   getClientByCode: (clientCode: string) => Promise<AdminClientRecord | null>;
   lockClientByCode: (clientCode: string) => Promise<AdminClientRecord | null>;
   lockClientById: (id: number) => Promise<AdminClientRecord | null>;
-  createClient: (input: ClientCreateDto) => Promise<AdminClientRecord>;
-  updateClientByCode: (clientCode: string, input: ClientUpdateDto) => Promise<AdminClientRecord>;
+  createClient: (input: ClientCreateDto) => Promise<AdminClientRecord | null>;
+  updateClientByCode: (clientCode: string, input: ClientUpdateDto) => Promise<AdminClientRecord | null>;
   updateClientByCodeWithProtocolEpochs: (
     clientCode: string,
     input: ClientUpdateDto,
-  ) => Promise<AdminClientRecord>;
-  updateClientById: (input: ClientInputDto) => Promise<AdminClientRecord>;
+  ) => Promise<AdminClientRecord | null>;
+  updateClientById: (input: ClientInputDto) => Promise<AdminClientRecord | null>;
   updateClientByIdWithProtocolEpochs: (
     input: ClientInputDto,
-  ) => Promise<AdminClientRecord>;
+  ) => Promise<AdminClientRecord | null>;
   updateClientOidcByCode: (
     clientCode: string,
     input: AdminClientOidcUpdate,
@@ -42,7 +42,7 @@ export interface AdminClientTransactionStorePort {
     clientCode: string,
     input: AdminClientCustomSsoUpdate,
   ) => Promise<AdminClientRecord>;
-  softDeleteClientByCode: (clientCode: string) => Promise<AdminClientRecord>;
+  softDeleteClientByCode: (clientCode: string) => Promise<AdminClientRecord | null>;
 }
 
 export interface AdminClientTransactionPorts {

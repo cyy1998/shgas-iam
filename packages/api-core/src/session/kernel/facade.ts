@@ -137,6 +137,13 @@ export type RevokeUserSessionsOptions = {
   onlySubjectAccessTransitionId?: string;
 };
 
+export type PreparedUserSessionRevocation = {
+  revoke: (
+    reason: RevocationReason,
+    options?: Pick<RevokeUserSessionsOptions, "onlySubjectAccessTransitionId">,
+  ) => Promise<RevokeSummary>;
+};
+
 export type ListPrincipalSessionsInput = {
   offset: number;
   limit: number;
@@ -626,12 +633,77 @@ export function createSessionKernelWithStateAdapterFactories(
     return await revokeObject("artifact", artifactId, reason);
   }
 
+  async function prepareUserSessionRevocation(principal: PrincipalRef): Promise<PreparedUserSessionRevocation> {
+    const target = { ...principal };
+    const capturedGenerations = new Set<string>();
+    try {
+      // Capture immutable generations without validation cleanup while the subject may be blocking.
+      const members = await store.readIndexWithoutMutation(keys.index.user(target));
+      for (const member of members) {
+        const parsed = parseIndexMember(member);
+        if (!parsed || parsed.kind !== "principal_session")
+          continue;
+        const resolved = await store.resolveObject("principal_session", parsed.id);
+        if (
+          resolved.status === "resolved"
+          && resolved.value.principal.principalType === target.principalType
+          && resolved.value.principal.subjectId === target.subjectId
+          && resolved.value.principalSessionId === parsed.id
+        ) {
+          capturedGenerations.add(resolved.value.subjectAccessTransitionId);
+        }
+      }
+    }
+    catch (error) {
+      capturedGenerations.clear();
+      try {
+        deps.logger?.warn?.({
+          event: SystemLogEvent.SessionKernelRevokeCleanupFailed,
+          sourceApp: deps.sourceApp ?? "session-kernel",
+          kind: "prepare_user_session_revocation",
+          errorName: error instanceof Error ? error.name : "Error",
+        }, "session kernel revocation preparation failed");
+      }
+      catch {
+        // Cleanup preparation and telemetry must not prevent the authoritative mutation.
+      }
+    }
+
+    return {
+      async revoke(reason, options = {}) {
+        // An empty snapshot never becomes an unfiltered user revocation.
+        const generations = new Set(capturedGenerations);
+        if (options.onlySubjectAccessTransitionId !== undefined)
+          generations.add(options.onlySubjectAccessTransitionId);
+        return await revokeUserSessionsMatching(target, reason, {}, {
+          generations,
+          continueAfterFailure: true,
+        });
+      },
+    };
+  }
+
   async function revokeUserSessions(
     principal: PrincipalRef,
     reason: RevocationReason = "admin_revoke",
     options: RevokeUserSessionsOptions = {},
   ) {
+    const generationScope = options.onlySubjectAccessTransitionId === undefined
+      ? undefined
+      : { generations: new Set([options.onlySubjectAccessTransitionId]), continueAfterFailure: false };
+    return await revokeUserSessionsMatching(principal, reason, options, generationScope);
+  }
+
+  async function revokeUserSessionsMatching(
+    principal: PrincipalRef,
+    reason: RevocationReason,
+    options: RevokeUserSessionsOptions,
+    generationScope?: { generations: ReadonlySet<string>; continueAfterFailure: boolean },
+  ) {
     const summary = createEmptyRevokeSummary();
+    if (generationScope?.generations.size === 0)
+      return summary;
+    const errors: unknown[] = [];
     const excludedPrincipalSessionIds = new Set([
       ...(options.excludePrincipalSessionIds ?? []),
       options.exceptPrincipalSessionId,
@@ -643,27 +715,37 @@ export function createSessionKernelWithStateAdapterFactories(
       if (!parsed || parsed.kind !== "principal_session")
         continue;
 
-      if (options.onlySubjectAccessTransitionId !== undefined) {
-        const resolved = await store.resolveObject("principal_session", parsed.id);
-        if (
-          resolved.status !== "resolved"
-          || resolved.value.subjectAccessTransitionId
-          !== options.onlySubjectAccessTransitionId
-        ) {
+      try {
+        if (generationScope !== undefined) {
+          const resolved = await store.resolveObject("principal_session", parsed.id);
+          if (
+            resolved.status !== "resolved"
+            || resolved.value.principal.principalType !== principal.principalType
+            || resolved.value.principal.subjectId !== principal.subjectId
+            || resolved.value.principalSessionId !== parsed.id
+            || !generationScope.generations.has(resolved.value.subjectAccessTransitionId)
+          ) {
+            summary.principalSessions.excluded += 1;
+            continue;
+          }
+        }
+
+        if (excludedPrincipalSessionIds.has(parsed.id)) {
           summary.principalSessions.excluded += 1;
+          mergeRevokeSummary(summary, await revokePrincipalChildObjects(parsed.id, reason));
           continue;
         }
-      }
 
-      if (excludedPrincipalSessionIds.has(parsed.id)) {
-        summary.principalSessions.excluded += 1;
-        mergeRevokeSummary(summary, await revokePrincipalChildObjects(parsed.id, reason));
-        continue;
+        mergeRevokeSummary(summary, await revokePrincipalSession(parsed.id, reason));
       }
-
-      mergeRevokeSummary(summary, await revokePrincipalSession(parsed.id, reason));
+      catch (error) {
+        if (!generationScope?.continueAfterFailure)
+          throw error;
+        errors.push(error);
+      }
     }
-
+    if (errors.length > 0)
+      throw new AggregateError(errors, "session kernel prepared revocation failed");
     return summary;
   }
 
@@ -1307,6 +1389,7 @@ export function createSessionKernelWithStateAdapterFactories(
     revokeCredential,
     revokeArtifact,
     revokeUserSessions,
+    prepareUserSessionRevocation,
     inventoryClientProtocol,
     revokeClientProtocol,
     revokeClient,

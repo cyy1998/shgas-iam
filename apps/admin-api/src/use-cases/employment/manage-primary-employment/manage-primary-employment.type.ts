@@ -1,3 +1,4 @@
+import type { AdminEmploymentAuthorization } from "@admin-api/services/admin-authorization/admin-employment-authorization.type";
 import type { AdminAuditContext } from "@admin-api/services/audit/audit.context";
 
 export type ManagePrimaryEmploymentInput = {
@@ -9,5 +10,6 @@ export type ManagePrimaryEmploymentInput = {
 };
 
 export interface ManagePrimaryEmploymentOptions {
+  authorization?: AdminEmploymentAuthorization;
   auditContext?: AdminAuditContext;
 }

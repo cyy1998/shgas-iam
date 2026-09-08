@@ -7,11 +7,12 @@ export interface ManagePrimaryEmploymentTransactionPorts {
     getEmploymentLifecycleContextById: (
       id: number,
     ) => Promise<{ employment: Employment } | null>;
-    unsetOpenPrimariesByUserId: (userId: number) => Promise<unknown>;
+    getOpenPrimaryEmploymentIdsByUserId: (userId: number) => Promise<number[]>;
+    lockEmploymentsByIds: (ids: readonly number[]) => Promise<Employment[]>;
     updateEmploymentRecord: (
       id: number,
       patch: { isPrimary: boolean },
-    ) => Promise<unknown>;
+    ) => Promise<Employment>;
   };
   auditLogWriter: {
     recordAuditLog: (input: AuditLogInput) => Promise<void>;

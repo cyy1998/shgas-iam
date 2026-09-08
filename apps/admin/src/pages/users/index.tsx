@@ -19,7 +19,7 @@ import {
   type UserType,
 } from '@iam/contracts';
 import { useAccess } from '@umijs/max';
-import { Button, message } from 'antd';
+import { Alert, Button, message } from 'antd';
 import { useRef, useState } from 'react';
 
 type FormState =
@@ -30,6 +30,7 @@ type FormState =
 export default function UsersPage() {
   const access = useAccess();
   const actionRef = useRef<ActionType>(undefined);
+  const [committedWarning, setCommittedWarning] = useState<string>();
   const [formState, setFormState] = useState<FormState>({ open: false });
   const [drawerUsername, setDrawerUsername] = useState<string | null>(null);
 
@@ -86,6 +87,9 @@ export default function UsersPage() {
 
   return (
     <PageContainer title="用户管理">
+      {committedWarning && (
+        <Alert type="warning" showIcon message={committedWarning} />
+      )}
       <ProTable<UserVo>
         actionRef={actionRef}
         rowKey="username"
@@ -159,7 +163,18 @@ export default function UsersPage() {
         onOpenChange={(open) => {
           if (!open) setFormState({ open: false });
         }}
-        onSuccess={() => {
+        onCommitted={(error, username, generatedPasswordMissing) => {
+          setCommittedWarning(
+            generatedPasswordMissing
+              ? `用户创建已生效，但初始密码未能交付。${error.message}；请先修复，再主动重置密码。`
+              : error.message,
+          );
+          setFormState({ open: false });
+          setDrawerUsername(username);
+          actionRef.current?.reload();
+        }}
+        onSuccess={(username) => {
+          if (username) setDrawerUsername(username);
           setFormState({ open: false });
           actionRef.current?.reload();
         }}

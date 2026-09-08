@@ -87,7 +87,6 @@ function createResolutionApp(options: {
   });
   const logger = options.logger ?? pino({ enabled: false });
   const handlers = createDelegationHandlers({
-    auditLogWriter: {} as never,
     privilegeDelegationService: {} as never,
     resolvePrivilegeDelegations: resolver,
   });

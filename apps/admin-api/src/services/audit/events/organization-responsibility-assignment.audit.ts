@@ -23,6 +23,7 @@ export function buildOrganizationResponsibilityAssignmentCreateAudit(
         targetOrganizationId: assignment.targetOrganizationId,
         typeCode: assignment.typeCode,
       },
+      changed: true,
       before: null,
       after: {
         status: assignment.status,
@@ -71,6 +72,7 @@ export function buildOrganizationResponsibilityAssignmentLifecycleAudit(input: {
   before: OrganizationResponsibilityLifecycleAuditState;
   after: OrganizationResponsibilityLifecycleAuditState;
   cause?: OrganizationResponsibilityAssignmentLifecycleAuditCause;
+  changed?: boolean;
   auditContext?: AdminAuditContext;
 }): AuditLogInput {
   return buildAdminResourceAudit(
@@ -85,6 +87,7 @@ export function buildOrganizationResponsibilityAssignmentLifecycleAudit(input: {
         targetOrganizationId: input.assignment.targetOrganizationId,
         typeCode: input.assignment.typeCode,
       },
+      changed: input.changed ?? true,
       before: input.before,
       after: input.after,
       cause: input.cause ?? "direct",

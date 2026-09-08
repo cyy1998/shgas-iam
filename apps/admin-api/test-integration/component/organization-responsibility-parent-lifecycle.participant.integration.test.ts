@@ -1,3 +1,5 @@
+import type { CreateOrganizationResponsibilityParentLifecycleParticipantDeps } from "@admin-api/services/organization-responsibility/organization-responsibility-parent-lifecycle.participant";
+import type { OrganizationResponsibilityAssignmentWriteTarget } from "@admin-api/services/organization-responsibility/organization-responsibility-parent-lifecycle.type";
 import { createOrganizationResponsibilityParentLifecycleParticipant } from "@admin-api/services/organization-responsibility/organization-responsibility-parent-lifecycle.participant";
 import {
   OrganizationResponsibilityAssignmentStatus,
@@ -24,15 +26,77 @@ function changedAssignment(id: number) {
 }
 
 describe("Organization Responsibility parent lifecycle participant", () => {
+  test("rechecks the complete locked selection and audits only actual cascade changes", async () => {
+    const selectedAssignments: OrganizationResponsibilityAssignmentWriteTarget[] = [
+      { ...changedAssignment(1), status: OrganizationResponsibilityAssignmentStatus.Enable, endTime: null },
+      { ...changedAssignment(2), status: OrganizationResponsibilityAssignmentStatus.Pause, endTime: null },
+      { ...changedAssignment(3), status: OrganizationResponsibilityAssignmentStatus.Disable, endTime: transactionTime },
+    ];
+    const deps: CreateOrganizationResponsibilityParentLifecycleParticipantDeps = {
+      assignmentStore: {
+        lockAssignmentsForEmployments: mock(async () => []),
+        lockAssignmentsForEmployment: mock(async () => selectedAssignments),
+        updateLockedAssignmentLifecycle: mock(async ({ assignment, status, endTime }) => ({
+          ...changedAssignment(assignment.id),
+          beforeStatus: assignment.status,
+          beforeEndTime: assignment.endTime,
+          afterStatus: status,
+          afterEndTime: endTime,
+        })),
+        hasOpenAssignmentTargetingOrganizationSubtree: mock(async () => false),
+      },
+      auditLogWriter: { recordAuditLog: mock(async () => undefined) },
+    };
+    const participant = createOrganizationResponsibilityParentLifecycleParticipant(deps);
+    const selected = await participant.lockAssignmentsForEmployment({ employmentId: 11, command: "pause" });
+    const changed = await participant.pauseEnabledAssignmentsForEmployment({
+      employmentId: 11,
+      selectedAssignments: selected,
+    });
+    expect(changed).toBe(true);
+    expect(deps.assignmentStore.updateLockedAssignmentLifecycle).toHaveBeenCalledTimes(1);
+    expect(deps.auditLogWriter.recordAuditLog).toHaveBeenCalledTimes(1);
+    expect(deps.auditLogWriter.recordAuditLog).toHaveBeenCalledWith(expect.objectContaining({ targetId: 1 }));
+  });
+
+  test("an already-ended locked selection preserves its original endTime without writing or auditing", async () => {
+    const deps: CreateOrganizationResponsibilityParentLifecycleParticipantDeps = {
+      assignmentStore: {
+        lockAssignmentsForEmployments: mock(async () => []),
+        lockAssignmentsForEmployment: mock(async () => []),
+        updateLockedAssignmentLifecycle: mock(async () => changedAssignment(1)),
+        hasOpenAssignmentTargetingOrganizationSubtree: mock(async () => false),
+      },
+      auditLogWriter: { recordAuditLog: mock(async () => undefined) },
+    };
+    const participant = createOrganizationResponsibilityParentLifecycleParticipant(deps);
+    const result = await participant.endOpenAssignmentsForEmployment({
+      action: "end",
+      employmentId: 11,
+      endTime: new Date("2026-03-01"),
+      selectedAssignments: [{
+        ...changedAssignment(1),
+        status: OrganizationResponsibilityAssignmentStatus.Disable,
+        endTime: transactionTime,
+      }],
+    });
+    expect(result).toBe(false);
+    expect(deps.assignmentStore.updateLockedAssignmentLifecycle).not.toHaveBeenCalled();
+    expect(deps.auditLogWriter.recordAuditLog).not.toHaveBeenCalled();
+  });
   test("pauses every selected Assignment and writes one allowlisted cascade audit per change", async () => {
+    const selectedAssignments = [31, 32].map(id => ({
+      ...changedAssignment(id),
+      status: OrganizationResponsibilityAssignmentStatus.Enable,
+      endTime: null,
+    }));
     const assignmentStore = {
-      endOpenAssignmentsForEmployment: mock(async () => []),
-      endOpenAssignmentsForUser: mock(async () => []),
+      lockAssignmentsForEmployments: mock(async () => []),
+      lockAssignmentsForEmployment: mock(async () => []),
+      updateLockedAssignmentLifecycle: mock(async (
+        { assignment }: { assignment: OrganizationResponsibilityAssignmentWriteTarget },
+      ) => changedAssignment(assignment.id)),
       hasOpenAssignmentTargetingOrganizationSubtree: mock(async () => false),
-      pauseEnabledAssignmentsForEmployment: mock(async () => [
-        changedAssignment(31),
-        changedAssignment(32),
-      ]),
     };
     const auditLogWriter = {
       recordAuditLog: mock(async () => undefined),
@@ -48,14 +112,20 @@ describe("Organization Responsibility parent lifecycle participant", () => {
       traceId: "trace-1",
     };
 
-    await expect(
-      participant.pauseEnabledAssignmentsForEmployment({
-        auditContext,
-        employmentId: 11,
-      }),
-    ).resolves.toBe(true);
-
-    expect(assignmentStore.pauseEnabledAssignmentsForEmployment).toHaveBeenCalledWith(11);
+    const changed = await participant.pauseEnabledAssignmentsForEmployment({
+      auditContext,
+      employmentId: 11,
+      selectedAssignments,
+    });
+    expect(changed).toBe(true);
+    expect(assignmentStore.updateLockedAssignmentLifecycle).toHaveBeenCalledTimes(2);
+    for (const [index, assignment] of selectedAssignments.entries()) {
+      expect(assignmentStore.updateLockedAssignmentLifecycle).toHaveBeenNthCalledWith(index + 1, {
+        assignment,
+        status: OrganizationResponsibilityAssignmentStatus.Pause,
+        endTime: null,
+      });
+    }
     expect(auditLogWriter.recordAuditLog).toHaveBeenCalledTimes(2);
     expect(auditLogWriter.recordAuditLog).toHaveBeenNthCalledWith(
       1,
@@ -75,16 +145,21 @@ describe("Organization Responsibility parent lifecycle participant", () => {
   });
 
   test("ends every selected Assignment at the parent transaction time", async () => {
+    const assignment = {
+      ...changedAssignment(41),
+      status: OrganizationResponsibilityAssignmentStatus.Pause,
+      endTime: null,
+    };
     const assignmentStore = {
-      endOpenAssignmentsForEmployment: mock(async () => [{
+      lockAssignmentsForEmployments: mock(async () => []),
+      lockAssignmentsForEmployment: mock(async () => []),
+      updateLockedAssignmentLifecycle: mock(async () => ({
         ...changedAssignment(41),
         beforeStatus: OrganizationResponsibilityAssignmentStatus.Pause,
         afterStatus: OrganizationResponsibilityAssignmentStatus.Disable,
         afterEndTime: transactionTime,
-      }]),
-      endOpenAssignmentsForUser: mock(async () => []),
+      })),
       hasOpenAssignmentTargetingOrganizationSubtree: mock(async () => false),
-      pauseEnabledAssignmentsForEmployment: mock(async () => []),
     };
     const auditLogWriter = {
       recordAuditLog: mock(async () => undefined),
@@ -94,16 +169,19 @@ describe("Organization Responsibility parent lifecycle participant", () => {
       auditLogWriter,
     });
 
-    await expect(participant.endOpenAssignmentsForEmployment({
+    const changed = await participant.endOpenAssignmentsForEmployment({
       action: "end",
       employmentId: 11,
       endTime: transactionTime,
-    })).resolves.toBe(true);
+      selectedAssignments: [assignment],
+    });
+    expect(changed).toBe(true);
 
-    expect(assignmentStore.endOpenAssignmentsForEmployment).toHaveBeenCalledWith(
-      11,
-      transactionTime,
-    );
+    expect(assignmentStore.updateLockedAssignmentLifecycle).toHaveBeenCalledWith({
+      assignment,
+      status: OrganizationResponsibilityAssignmentStatus.Disable,
+      endTime: transactionTime,
+    });
     expect(auditLogWriter.recordAuditLog).toHaveBeenCalledWith(
       expect.objectContaining({
         action: "admin.organization_responsibility_assignment.end",
@@ -122,14 +200,14 @@ describe("Organization Responsibility parent lifecycle participant", () => {
 
   test("attributes every resignation cascade to the initiating User and shared Admin context", async () => {
     const assignmentStore = {
-      endOpenAssignmentsForEmployment: mock(async () => []),
-      endOpenAssignmentsForUser: mock(async () => [{
+      lockAssignmentsForEmployments: mock(async () => []),
+      lockAssignmentsForEmployment: mock(async () => []),
+      updateLockedAssignmentLifecycle: mock(async () => ({
         ...changedAssignment(51),
         afterStatus: OrganizationResponsibilityAssignmentStatus.Disable,
         afterEndTime: transactionTime,
-      }]),
+      })),
       hasOpenAssignmentTargetingOrganizationSubtree: mock(async () => false),
-      pauseEnabledAssignmentsForEmployment: mock(async () => []),
     };
     const auditLogWriter = { recordAuditLog: mock(async () => undefined) };
     const participant = createOrganizationResponsibilityParentLifecycleParticipant({
@@ -147,12 +225,14 @@ describe("Organization Responsibility parent lifecycle participant", () => {
       auditContext,
       endTime: transactionTime,
       userId: 9,
+      selectedAssignments: [{
+        ...changedAssignment(51),
+        status: OrganizationResponsibilityAssignmentStatus.Enable,
+        endTime: null,
+      }],
     })).resolves.toBe(true);
 
-    expect(assignmentStore.endOpenAssignmentsForUser).toHaveBeenCalledWith(
-      9,
-      transactionTime,
-    );
+    expect(assignmentStore.updateLockedAssignmentLifecycle).toHaveBeenCalledTimes(1);
     expect(auditLogWriter.recordAuditLog).toHaveBeenCalledWith(
       expect.objectContaining({
         ...auditContext,
@@ -166,10 +246,10 @@ describe("Organization Responsibility parent lifecycle participant", () => {
 
   test("blocks an Organization subtree only when its repository finds an Open target", async () => {
     const assignmentStore = {
-      endOpenAssignmentsForEmployment: mock(async () => []),
-      endOpenAssignmentsForUser: mock(async () => []),
+      lockAssignmentsForEmployments: mock(async () => []),
+      lockAssignmentsForEmployment: mock(async () => []),
+      updateLockedAssignmentLifecycle: mock(async () => changedAssignment(1)),
       hasOpenAssignmentTargetingOrganizationSubtree: mock(async () => true),
-      pauseEnabledAssignmentsForEmployment: mock(async () => []),
     };
     const participant = createOrganizationResponsibilityParentLifecycleParticipant({
       assignmentStore,

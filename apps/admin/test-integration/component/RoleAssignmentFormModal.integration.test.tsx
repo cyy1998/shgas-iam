@@ -32,7 +32,10 @@ vi.mock('@admin/services/employment', () => ({ searchEmployments }));
 
 describe('RoleAssignmentFormModal', () => {
   it('does not submit organization fields after switching to position assignment', async () => {
-    createRoleAssignment.mockResolvedValue({});
+    createRoleAssignment.mockResolvedValue({
+      changed: true,
+      result: { id: 1 },
+    });
     searchPositions.mockResolvedValue({
       result: [{ posCode: 'FIN-001', posName: '财务经理' }],
       total: 1,
@@ -46,6 +49,7 @@ describe('RoleAssignmentFormModal', () => {
         roleCode="admin-role"
         onOpenChange={onOpenChange}
         onSuccess={onSuccess}
+        onCommitted={vi.fn()}
       />,
     );
 

@@ -139,6 +139,76 @@ describe("Admin client cache Redis contract", () => {
     }
   });
 
+  test("Custom SSO no-ops invalidate Redis without advancing the epoch and repair a committed disable", async () => {
+    const scope = await harness.createScope();
+    try {
+      const clientCode = scope.clientCode("custom-sso-noop");
+      const configuration = runtimeClient(clientCode, 3).customSsoConfig!;
+      let current: AdminClientRecord = {
+        ...oidcAdminClient(clientCode),
+        customSsoEnabled: true,
+        customSsoConfig: configuration,
+        customSsoConfigVersion: 3,
+      };
+      const source = mock(async () => current);
+      const snapshots = createClientRuntimeSnapshotModule({
+        redis: scope.observer,
+        adapters: [createCustomSsoClientRuntimeSnapshotAdapter({ repository: { findRuntimeRecord: source } })],
+      });
+      const reader = createCustomSsoClientRuntimeReader(snapshots.reader("custom-sso"));
+      let failInvalidation = false;
+      const tx = {
+        auditService: { recordAuditLog: mock(async () => undefined) },
+        clientRepository: {
+          lockClientByCode: mock(async () => current),
+          updateClientCustomSsoByCode: mock(async (_code: string, update: Partial<AdminClientRecord>) => {
+            current = { ...current, ...update, customSsoConfigVersion: current.customSsoConfigVersion + 1 };
+            return current;
+          }),
+        },
+      };
+      const service = createTestClientService(current, tx, async (code) => {
+        if (failInvalidation)
+          throw new Error("Injected Custom SSO propagation failure");
+        await snapshots.invalidateClient(code);
+      });
+      const before = await reader.findRuntimeRecord(clientCode);
+      const configured = await service.configureClientCustomSso(clientCode, configuration);
+      const same = await reader.findRuntimeRecord(clientCode);
+      expect(configured.changed).toBe(false);
+      expect(configured.result.client.customSsoConfigVersion).toBe(3);
+      expect(same).toEqual(before);
+      expect(source).toHaveBeenCalledTimes(2);
+      expect(tx.clientRepository.updateClientCustomSsoByCode).not.toHaveBeenCalled();
+
+      failInvalidation = true;
+      let failure: unknown;
+      try {
+        await service.disableClientCustomSso(clientCode);
+      }
+      catch (error) {
+        failure = error;
+      }
+      const stale = await reader.findRuntimeRecord(clientCode);
+      expect(failure).toMatchObject({ code: "ADMIN_MUTATION_COMMITTED" });
+      expect(current.customSsoEnabled).toBe(false);
+      expect(current.customSsoConfigVersion).toBe(4);
+      expect(stale).toEqual(before);
+
+      failInvalidation = false;
+      const retried = await service.disableClientCustomSso(clientCode);
+      const repaired = await reader.findRuntimeRecord(clientCode);
+      expect(retried.changed).toBe(false);
+      expect(retried.result.client.customSsoConfigVersion).toBe(4);
+      expect(repaired).toBeNull();
+      expect(source).toHaveBeenCalledTimes(3);
+      expect(tx.clientRepository.updateClientCustomSsoByCode).toHaveBeenCalledTimes(1);
+    }
+    finally {
+      await scope.close();
+    }
+  });
+
   test("reloads the canonical OIDC Snapshot after a production Admin mutation", async () => {
     const scope = await harness.createScope();
     try {
@@ -161,12 +231,19 @@ describe("Admin client cache Redis contract", () => {
           await snapshots.invalidateClient(targetClientCode);
         },
       });
-      await service.configureClientOidc(clientCode, oidcConfiguration());
+      const configuration = { ...oidcConfiguration(), redirectUris: ["https://portal.example.com/new-callback"] };
+      const configured = await service.configureClientOidc(clientCode, configuration);
       const after = await reader.acquire(clientCode);
 
       expect(before).toEqual({ kind: "present", value: { version: 1 } });
       expect(after).toEqual({ kind: "present", value: { version: 2 } });
       expect(source).toHaveBeenCalledTimes(2);
+      const unchanged = await service.configureClientOidc(clientCode, configuration);
+      const afterNoop = await reader.acquire(clientCode);
+      expect(configured.changed).toBe(true);
+      expect(unchanged.changed).toBe(false);
+      expect(afterNoop).toEqual(after);
+      expect(source).toHaveBeenCalledTimes(3);
     }
     finally {
       await scope.close();
@@ -213,7 +290,7 @@ describe("Admin client cache Redis contract", () => {
       await snapshots.invalidateClient(clientCode);
       const afterRepair = await gate.check(clientCode);
 
-      expect(mutationFailure).toMatchObject({ name: "AfterCommitRequiredTaskError" });
+      expect(mutationFailure).toMatchObject({ name: "AdminMutationCommittedError" });
       expect(before).toEqual({ outcome: "enabled" });
       expect(acceptedBeforeRepair).toEqual({ outcome: "enabled" });
       expect(afterRepair).toEqual({ outcome: "maintenance" });
@@ -349,7 +426,7 @@ function createOidcMutationService(input: {
   const tx = {
     auditService: { recordAuditLog: mock(async () => undefined) },
     clientRepository: {
-      getClientByCode: mock(async () => client),
+      lockClientByCode: mock(async () => client),
       updateClientOidcByCode: mock(async (
         _clientCode: string,
         update: Partial<AdminClientRecord>,
@@ -400,6 +477,7 @@ function createTestClientService(
     sessionKernel: {
       revokeClientProtocol: mock(async () => emptyRevocationSummary()),
       revokeClient: mock(async () => emptyRevocationSummary()),
+      prepareUserSessionRevocation: mock(async () => ({ revoke: async () => emptyRevocationSummary() })),
       revokeUserSessions: mock(async () => emptyRevocationSummary()),
     },
     logger: {

@@ -2,6 +2,7 @@ import { z } from "@hono/zod-openapi";
 import { createPageQuerySchema } from "@iam/api-core/core/pagination/schema";
 import {
   ClientStatus,
+  createAdminMutationResultSchema,
   CustomSsoClientMode,
   CustomSsoClientState,
   OidcClientState,
@@ -23,18 +24,14 @@ import {
 
 export { ClientAdminDetailDtoSchema, ClientAdminListDtoSchema };
 
-const oidcManagedFields = {
-  oidcEnabled: true,
-  oidcConfig: true,
-  oidcSecretHash: true,
-  oidcConfigVersion: true,
-} as const;
-
-const customSsoManagedFields = {
-  customSsoEnabled: true,
-  customSsoConfig: true,
-  customSsoSecretHash: true,
-  customSsoConfigVersion: true,
+const genericClientFields = {
+  clientCode: true,
+  clientName: true,
+  clientSecret: true,
+  url: true,
+  status: true,
+  description: true,
+  extAttributes: true,
 } as const;
 
 const AdminClientStorageSchema = z.object(selectClientSchema.shape);
@@ -57,10 +54,10 @@ export function toAdminClientRecord(input: unknown) {
 }
 
 const genericClientInsertSchema = insertClientSchema
-  .omit({ ...oidcManagedFields, ...customSsoManagedFields })
+  .pick(genericClientFields)
   .extend({ extAttributes: genericClientExtAttributesSchema.default({}) });
 const genericClientUpdateSchema = updateClientSchema
-  .omit({ ...oidcManagedFields, ...customSsoManagedFields })
+  .pick(genericClientFields)
   .extend({ extAttributes: genericClientExtAttributesSchema.optional() });
 
 export const ClientPaginationQueryDtoSchema = createPageQuerySchema(
@@ -119,19 +116,19 @@ export const ClientCustomSsoConfigureDtoSchema = z.discriminatedUnion("mode", [
   })
   .openapi("ClientCustomSsoConfigureDto");
 
-export const ClientOidcMutationResultSchema = z.object({
+export const ClientOidcMutationResultSchema = createAdminMutationResultSchema(z.object({
   client: ClientAdminDetailDtoSchema,
   clientSecret: z.string().optional().openapi({
     description: "仅在首次生成或轮换时返回一次的 OIDC client secret",
   }),
-}).openapi("ClientOidcMutationResult");
+})).openapi("ClientOidcMutationResult");
 
-export const ClientCustomSsoMutationResultSchema = z.object({
+export const ClientCustomSsoMutationResultSchema = createAdminMutationResultSchema(z.object({
   client: ClientAdminDetailDtoSchema,
   customSsoSecret: z.string().optional().openapi({
     description: "仅在创建 Independent、切换到 Independent 或轮换时返回一次的 Custom SSO secret",
   }),
-}).openapi("ClientCustomSsoMutationResult");
+})).openapi("ClientCustomSsoMutationResult");
 
 function addRedirectUrlPatternIssues(
   patterns: string[] | undefined,

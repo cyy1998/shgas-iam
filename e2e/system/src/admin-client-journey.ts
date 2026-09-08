@@ -1,4 +1,4 @@
-import type { Page, Response } from "@playwright/test";
+import type { APIResponse, Page, Response } from "@playwright/test";
 import { expect } from "@playwright/test";
 
 const clientProtocolLifecycleProcedures = {
@@ -71,7 +71,7 @@ export async function updateClientStatus(
   const updateResponse = page.waitForResponse(response =>
     isSuccessfulRpcResponse(response, "admin.client.updateStatus"));
   await page.getByRole("button", { name: "更新全局状态" }).click();
-  await updateResponse;
+  await expectRpcMutationResult(await updateResponse, "admin.client.updateStatus", true, null);
   await expect(page.getByText("全局状态已更新", { exact: true })).toBeVisible();
 }
 
@@ -86,7 +86,9 @@ export async function runClientProtocolLifecycleAction(
   const response = page.waitForResponse(candidate =>
     isSuccessfulRpcResponse(candidate, procedure));
   await page.getByRole("button", { name: /确\s*定/u }).click();
-  await response;
+  await expectRpcMutationResult(await response, procedure, true, {
+    client: expect.any(Object),
+  });
   await expect(page.getByText(action === "启用" ? "已启用" : "已禁用", {
     exact: true,
   })).toBeVisible();
@@ -97,7 +99,44 @@ export function isClientDetailResponse(response: Response) {
 }
 
 export function isSuccessfulRpcResponse(response: Response, procedure: string) {
-  return response.ok() && response.url().includes(`/rpc/${procedure}`);
+  return response.ok() && rpcProcedures(response.url()).includes(procedure);
+}
+
+export async function expectRpcMutationResult(
+  response: Response | APIResponse,
+  procedure: string,
+  changed: boolean,
+  result: unknown,
+) {
+  expect(response.ok()).toBe(true);
+  const procedureIndex = rpcProcedures(response.url()).indexOf(procedure);
+  expect(procedureIndex).toBeGreaterThanOrEqual(0);
+  const body = await response.json();
+  const entry = Array.isArray(body) ? body[procedureIndex] : body;
+  expect(entry).toEqual({ result: { data: { changed, result } } });
+}
+
+export async function saveUnchangedClientProtocolConfiguration(
+  page: Page,
+  clientCode: string,
+  protocol: ClientProtocol,
+  expectedEnabled: boolean,
+) {
+  await openClientSection(page, clientCode, protocol);
+  const procedure = protocol === "oidc"
+    ? "admin.client.oidcConfigure"
+    : "admin.client.customSsoConfigure";
+  const response = page.waitForResponse(candidate => isSuccessfulRpcResponse(candidate, procedure));
+  await page.getByRole("button", {
+    name: protocol === "oidc" ? "保存 OIDC 配置" : "保存 Custom SSO 配置",
+  }).click();
+  await expectRpcMutationResult(await response, procedure, false, expect.any(Object));
+  await expect(page.getByText("无需修改", { exact: true })).toBeVisible();
+  await expect(page.getByText(expectedEnabled ? "已启用" : "已禁用", { exact: true })).toBeVisible();
+}
+
+function rpcProcedures(url: string) {
+  return new URL(url).pathname.split("/rpc/")[1]?.split(",") ?? [];
 }
 
 function escapeRegExp(value: string) {

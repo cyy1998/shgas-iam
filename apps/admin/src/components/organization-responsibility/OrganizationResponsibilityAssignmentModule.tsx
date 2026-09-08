@@ -388,6 +388,7 @@ export default function OrganizationResponsibilityAssignmentModule({
         setDetail(nextDetail);
       } catch (error) {
         if (requestId !== detailRequestIdRef.current) return;
+        setDetail(null);
         const errorMessage =
           error instanceof Error ? error.message : '加载责任任命详情失败';
         setDetailError(errorMessage);
@@ -476,8 +477,9 @@ export default function OrganizationResponsibilityAssignmentModule({
     const handler = lifecycleCommandHandlers[command];
     setLifecycleLoading(true);
     try {
-      await handler.mutate({ id: assignmentId });
-      message.success(handler.successMessage);
+      const outcome = await handler.mutate({ id: assignmentId });
+      if (outcome.changed) message.success(handler.successMessage);
+      else message.info('无需修改');
       setAuditRevision((current) => current + 1);
     } catch (error) {
       message.error(

@@ -1,11 +1,9 @@
 import type { DbClient } from "@iam/db";
 import type { AdminApiPostgresTestHarness } from "./postgres-test-harness";
 import { randomUUID } from "node:crypto";
-import process from "node:process";
 import { createAdminApiRepositories } from "@admin-api/composition/repositories";
 import { createAdminApiUnitOfWork } from "@admin-api/composition/tx";
 import { createAdminAuthorizationPolicy } from "@admin-api/services/admin-authorization/admin-authorization.policy";
-import { buildOrganizationResponsibilityAssignmentCreateAudit } from "@admin-api/services/audit/events/organization-responsibility-assignment.audit";
 import { createOrganizationResponsibilityService } from "@admin-api/services/organization-responsibility/organization-responsibility.service";
 import { createOrganizationService } from "@admin-api/services/organization/organization.service";
 import { createChangeEmploymentAvailabilityUseCase } from "@admin-api/use-cases/employment/change-employment-availability/change-employment-availability.use-case";
@@ -32,7 +30,6 @@ import {
   UserStatus,
   UserType,
 } from "@iam/contracts";
-import { relations } from "@iam/db/relations";
 import {
   auditLogs,
   employments,
@@ -61,8 +58,6 @@ import {
   test,
 } from "bun:test";
 import { and, eq } from "drizzle-orm";
-import { drizzle } from "drizzle-orm/postgres-js";
-import postgres from "postgres";
 import {
   testFullOrganizationResponsibilityAuthorization,
   withTestFullOrganizationResponsibilityAuthorization,
@@ -107,7 +102,7 @@ describe("Organization Responsibility Assignment PostgreSQL command", () => {
         },
       },
     );
-    expect(result).toEqual({ id: 1 });
+    expect(result).toEqual({ changed: true, result: { id: 1 } });
 
     expect(
       await harness!.db.select().from(organizationResponsibilityAssignments),
@@ -207,8 +202,8 @@ describe("Organization Responsibility Assignment PostgreSQL command", () => {
       targetOrganizationCode: "TARGET",
       typeCode: OrganizationResponsibilityTypeCode.Supervising,
     }, options);
-    expect(head.id).toBeGreaterThan(0);
-    expect(supervising.id).toBeGreaterThan(head.id);
+    expect(head.result.id).toBeGreaterThan(0);
+    expect(supervising.result.id).toBeGreaterThan(head.result.id);
 
     for (const input of [
       {
@@ -301,7 +296,7 @@ describe("Organization Responsibility Assignment PostgreSQL command", () => {
     expect((createFailure as Error).message).toBe(
       "责任槽位已占用；如果当前列表没有可管理记录，请联系完整管理员",
     );
-    expect(JSON.stringify(createFailure)).not.toContain(String(hidden.id));
+    expect(JSON.stringify(createFailure)).not.toContain(String(hidden.result.id));
     expect(JSON.stringify(createFailure)).not.toContain(
       String(outside.employmentId),
     );
@@ -348,7 +343,7 @@ describe("Organization Responsibility Assignment PostgreSQL command", () => {
         reason: "UNMANAGEABLE_RESPONSIBILITY_BLOCKED",
       },
     });
-    expect(JSON.stringify(allowedActions)).not.toContain(String(hidden.id));
+    expect(JSON.stringify(allowedActions)).not.toContain(String(hidden.result.id));
     expect(JSON.stringify(allowedActions)).not.toContain(
       String(outside.employmentId),
     );
@@ -362,42 +357,26 @@ describe("Organization Responsibility Assignment PostgreSQL command", () => {
     }));
     const unitOfWork = createUnitOfWork(fixture.now, enqueueRebuildJobs);
     const sentinel = new Error("force rollback after all pre-commit writes");
-    let caught: unknown;
-    try {
-      await unitOfWork.transaction(async (tx) => {
-        const record = {
-          employmentId: fixture.employmentId,
-          targetOrganizationId: fixture.targetOrganizationId,
-          typeCode: OrganizationResponsibilityTypeCode.Head,
-          status: OrganizationResponsibilityAssignmentStatus.Enable,
-          startTime: fixture.now,
-          endTime: null,
-        } as const;
-        const created
-          = await tx.repositories.organizationResponsibility.createAssignmentRecord(
-            record,
-          );
-        await tx.auditService.recordAuditLog(
-          buildOrganizationResponsibilityAssignmentCreateAudit(
-            {
-              id: created.id,
-              ...record,
-            },
-            { actorType: "admin", actorUserId: fixture.userId },
-          ),
-        );
-        await tx.userProfileInvalidation.recordChanges([
-          {
-            kind: "organization-responsibility-assignment",
-            userId: fixture.userId,
-          },
-        ]);
-        throw sentinel;
-      });
-    }
-    catch (error) {
-      caught = error;
-    }
+    const command = withTestFullOrganizationResponsibilityAuthorization(
+      createCreateOrganizationResponsibilityAssignmentUseCase({
+        clock: { nowDate: () => fixture.now },
+        uow: mapUnitOfWork(unitOfWork, tx => ({
+          assignmentStore: tx.repositories.organizationResponsibility,
+          employmentReader: tx.repositories.organizationResponsibility,
+          organizationReader: tx.repositories.organizationResponsibility,
+          auditLogWriter: tx.auditService,
+          userProfileInvalidation: { recordChanges: async (changes) => {
+            await tx.userProfileInvalidation.recordChanges(changes);
+            throw sentinel;
+          } },
+        })),
+      }),
+    );
+    const caught = await captureFailure(() => command.execute({
+      employmentId: fixture.employmentId,
+      targetOrganizationCode: "TARGET",
+      typeCode: OrganizationResponsibilityTypeCode.Head,
+    }));
     expect(caught).toBe(sentinel);
     expect(
       await harness!.db.select().from(organizationResponsibilityAssignments),
@@ -422,7 +401,7 @@ describe("Organization Responsibility Assignment PostgreSQL command", () => {
       typeCode: OrganizationResponsibilityTypeCode.Supervising,
     });
 
-    expect(result.id).toBeGreaterThan(0);
+    expect(result.result.id).toBeGreaterThan(0);
     expect(
       await harness!.db.select().from(organizationResponsibilityAssignments),
     ).toHaveLength(1);
@@ -438,7 +417,7 @@ describe("Organization Responsibility Assignment PostgreSQL command", () => {
     );
   });
 
-  test("commits Pause, Resume, and End while target-state retries remain side-effect free", async () => {
+  test("commits lifecycle changes and records no-op intent without new Dirty or rewritten periods", async () => {
     const fixture = await seedScenario();
     const enqueueRebuildJobs = mock(async () => ({
       enqueued: 1,
@@ -453,11 +432,16 @@ describe("Organization Responsibility Assignment PostgreSQL command", () => {
     enqueueRebuildJobs.mockClear();
     const lifecycle = createLifecycleUseCase(fixture.now, enqueueRebuildJobs);
 
-    await lifecycle.execute({ id: created.id, command: "pause" });
-    await lifecycle.execute({ id: created.id, command: "pause" });
-    await lifecycle.execute({ id: created.id, command: "resume" });
-    await lifecycle.execute({ id: created.id, command: "end" });
-    await lifecycle.execute({ id: created.id, command: "end" });
+    for (const [command, changed] of [
+      ["pause", true],
+      ["pause", false],
+      ["resume", true],
+      ["end", true],
+      ["end", false],
+    ] as const) {
+      const result = await lifecycle.execute({ id: created.result.id, command });
+      expect(result).toEqual({ changed, result: null });
+    }
 
     expect(
       await harness!.db
@@ -481,11 +465,30 @@ describe("Organization Responsibility Assignment PostgreSQL command", () => {
     ).toEqual([
       "admin.organization_responsibility_assignment.create",
       "admin.organization_responsibility_assignment.pause",
+      "admin.organization_responsibility_assignment.pause",
       "admin.organization_responsibility_assignment.resume",
+      "admin.organization_responsibility_assignment.end",
       "admin.organization_responsibility_assignment.end",
     ]);
     expect(await harness!.db.select().from(userProfileDirty)).toHaveLength(1);
     expect(enqueueRebuildJobs).toHaveBeenCalledTimes(3);
+    const dirty = await harness!.db.select().from(userProfileDirty);
+    expect(dirty[0]!.dirtyVersion).toBe("4");
+    const audits = await harness!.db.select().from(auditLogs);
+    expect(audits).toMatchObject([true, true, false, true, true, false].map(changed => ({ details: { changed } })));
+    for (const command of ["pause", "resume"] as const) {
+      const error = await captureFailure(() => lifecycle.execute({ id: created.result.id, command }));
+      expect(error).toMatchObject({ httpStatus: 409 });
+    }
+    const afterInvalidAudits = await harness!.db.select().from(auditLogs);
+    expect(afterInvalidAudits).toEqual(audits);
+    const later = createLifecycleUseCase(new Date(fixture.now.getTime() + 60_000), enqueueRebuildJobs);
+    const retry = await later.execute({ id: created.result.id, command: "end" });
+    expect(retry).toEqual({ changed: false, result: null });
+    const ended = await harness!.db.select().from(organizationResponsibilityAssignments);
+    expect(ended[0]!.endTime).toEqual(fixture.now);
+    const afterDirty = await harness!.db.select().from(userProfileDirty);
+    expect(afterDirty).toEqual(dirty);
   });
 
   test("authorizes scoped HR lifecycle across roots before idempotency with atomic audit and Dirty writes", async () => {
@@ -514,10 +517,10 @@ describe("Organization Responsibility Assignment PostgreSQL command", () => {
 
     for (const command of ["pause", "resume", "end"] as const) {
       const changed = await lifecycle.execute(
-        { id: created.id, command },
+        { id: created.result.id, command },
         { authorization: crossRootAuthorization },
       );
-      expect(changed).toBe(true);
+      expect(changed).toEqual({ changed: true, result: null });
     }
 
     expect(
@@ -546,7 +549,7 @@ describe("Organization Responsibility Assignment PostgreSQL command", () => {
           fixture.userId,
         );
       const caught = await lifecycle.execute(
-        { id: created.id, command: "end" },
+        { id: created.result.id, command: "end" },
         { authorization: reducedAuthorization },
       ).catch(error => error);
       expect(caught).toBeInstanceOf(
@@ -554,7 +557,7 @@ describe("Organization Responsibility Assignment PostgreSQL command", () => {
       );
     }
     const guessedIdFailure = await lifecycle.execute(
-      { id: created.id + 10_000, command: "pause" },
+      { id: created.result.id + 10_000, command: "pause" },
       { authorization: crossRootAuthorization },
     ).catch(error => error);
     expect(guessedIdFailure).toBeInstanceOf(
@@ -566,7 +569,7 @@ describe("Organization Responsibility Assignment PostgreSQL command", () => {
     expect(enqueueRebuildJobs).toHaveBeenCalledTimes(3);
   });
 
-  test("converges concurrent Pause requests through the conditional lifecycle update", async () => {
+  test("serializes concurrent Pause requests and records both intents with one change", async () => {
     const fixture = await seedScenario();
     const enqueueRebuildJobs = mock(async () => ({
       enqueued: 1,
@@ -583,10 +586,11 @@ describe("Organization Responsibility Assignment PostgreSQL command", () => {
     const lifecycle = createLifecycleUseCase(fixture.now, enqueueRebuildJobs);
 
     const results = await Promise.all([
-      lifecycle.execute({ id: created.id, command: "pause" }),
-      lifecycle.execute({ id: created.id, command: "pause" }),
+      lifecycle.execute({ id: created.result.id, command: "pause" }),
+      lifecycle.execute({ id: created.result.id, command: "pause" }),
     ]);
-    expect(results).toEqual([true, true]);
+    expect(results.map(result => result.changed).sort()).toEqual([false, true]);
+    expect(results.map(result => result.result)).toEqual([null, null]);
 
     expect(
       await harness!.db
@@ -596,6 +600,7 @@ describe("Organization Responsibility Assignment PostgreSQL command", () => {
     expect(
       await harness!.db.select({ action: auditLogs.action }).from(auditLogs),
     ).toEqual([
+      { action: "admin.organization_responsibility_assignment.pause" },
       { action: "admin.organization_responsibility_assignment.pause" },
     ]);
     expect(await harness!.db.select().from(userProfileDirty)).toHaveLength(1);
@@ -631,7 +636,7 @@ describe("Organization Responsibility Assignment PostgreSQL command", () => {
       fixture.now,
       enqueueRebuildJobs,
     );
-    await expect(lifecycle.execute(
+    const paused = await lifecycle.execute(
       { command: "pause", employmentId: fixture.employmentId },
       {
         auditContext: {
@@ -641,7 +646,8 @@ describe("Organization Responsibility Assignment PostgreSQL command", () => {
           traceId: "trace-parent-pause",
         },
       },
-    )).resolves.toBe(true);
+    );
+    expect(paused).toEqual({ changed: true, result: null });
 
     expect(
       await harness!.db
@@ -753,7 +759,7 @@ describe("Organization Responsibility Assignment PostgreSQL command", () => {
       await harness!.db
         .select({ status: organizationResponsibilityAssignments.status })
         .from(organizationResponsibilityAssignments)
-        .where(eq(organizationResponsibilityAssignments.id, created.id)),
+        .where(eq(organizationResponsibilityAssignments.id, created.result.id)),
     ).toEqual([{ status: OrganizationResponsibilityAssignmentStatus.Enable }]);
     expect(await harness!.db.select().from(auditLogs)).toEqual([]);
     expect(await harness!.db.select().from(userProfileDirty)).toEqual([]);
@@ -802,8 +808,8 @@ describe("Organization Responsibility Assignment PostgreSQL command", () => {
       enqueueRebuildJobs,
     );
 
-    const direct = directEnd.execute({ command: "end", id: created.id });
-    let parent: Promise<boolean> | undefined;
+    const direct = directEnd.execute({ command: "end", id: created.result.id });
+    let parent: ReturnType<typeof parentPause.execute> | undefined;
     try {
       await waitForGateOrOperationFailure(
         directEndReachedAudit.promise,
@@ -814,10 +820,12 @@ describe("Organization Responsibility Assignment PostgreSQL command", () => {
         command: "pause",
         employmentId: fixture.employmentId,
       });
-      await waitForBlockedPostgresQuery("responsibility_pause_candidates");
+      await waitForBlockedPostgresQuery("organization_responsibility_assignment");
       releaseDirectEnd.resolve();
-      await expect(direct).resolves.toBe(true);
-      await expect(parent).resolves.toBe(true);
+      const directResult = await direct;
+      expect(directResult).toEqual({ changed: true, result: null });
+      const parentResult = await parent;
+      expect(parentResult).toEqual({ changed: true, result: null });
     }
     finally {
       releaseDirectEnd.resolve();
@@ -832,7 +840,7 @@ describe("Organization Responsibility Assignment PostgreSQL command", () => {
           status: organizationResponsibilityAssignments.status,
         })
         .from(organizationResponsibilityAssignments)
-        .where(eq(organizationResponsibilityAssignments.id, created.id)),
+        .where(eq(organizationResponsibilityAssignments.id, created.result.id)),
     ).toEqual([{
       endTime: fixture.now,
       status: OrganizationResponsibilityAssignmentStatus.Disable,
@@ -889,7 +897,7 @@ describe("Organization Responsibility Assignment PostgreSQL command", () => {
           status: organizationResponsibilityAssignments.status,
         })
         .from(organizationResponsibilityAssignments)
-        .where(eq(organizationResponsibilityAssignments.id, created.id)),
+        .where(eq(organizationResponsibilityAssignments.id, created.result.id)),
     ).toEqual([{
       endTime: fixture.now,
       status: OrganizationResponsibilityAssignmentStatus.Disable,
@@ -965,7 +973,7 @@ describe("Organization Responsibility Assignment PostgreSQL command", () => {
       await harness!.db
         .select({ status: organizationResponsibilityAssignments.status })
         .from(organizationResponsibilityAssignments)
-        .where(eq(organizationResponsibilityAssignments.id, created.id)),
+        .where(eq(organizationResponsibilityAssignments.id, created.result.id)),
     ).toEqual([{ status: OrganizationResponsibilityAssignmentStatus.Disable }]);
     expect(
       await harness!.db
@@ -973,7 +981,7 @@ describe("Organization Responsibility Assignment PostgreSQL command", () => {
         .from(organizationResponsibilityAssignments)
         .where(eq(
           organizationResponsibilityAssignments.employmentId,
-          result.newEmploymentId,
+          result.result.id,
         )),
     ).toEqual([]);
     expect(
@@ -1029,7 +1037,7 @@ describe("Organization Responsibility Assignment PostgreSQL command", () => {
     const revokeUserSessions = mock(async () => undefined);
     const resign = createResignUserUseCase({
       clock: { nowDate: () => fixture.now },
-      sessionRevocation: { revokeUserSessions },
+      sessionRevocation: { prepareUserSessionRevocation: async () => ({ revoke: revokeUserSessions }) },
       subjectAccessLifecycle: createPostgresSubjectAccessLifecycle(
         subject.subjectIdentifier,
         fixture.now,
@@ -1129,7 +1137,7 @@ describe("Organization Responsibility Assignment PostgreSQL command", () => {
       throw new Error("zero-Open resignation fixture user is missing");
     const createResign = (subjectIdentifier: string) => createResignUserUseCase({
       clock: { nowDate: () => fixture.now },
-      sessionRevocation: { revokeUserSessions },
+      sessionRevocation: { prepareUserSessionRevocation: async () => ({ revoke: revokeUserSessions }) },
       subjectAccessLifecycle: createPostgresSubjectAccessLifecycle(
         subjectIdentifier,
         fixture.now,
@@ -1256,7 +1264,7 @@ describe("Organization Responsibility Assignment PostgreSQL command", () => {
     });
     const resign = createResignUserUseCase({
       clock: { nowDate: () => fixture.now },
-      sessionRevocation: { revokeUserSessions },
+      sessionRevocation: { prepareUserSessionRevocation: async () => ({ revoke: revokeUserSessions }) },
       subjectAccessLifecycle: createPostgresSubjectAccessLifecycle(
         subject.subjectIdentifier,
         fixture.now,
@@ -1279,7 +1287,7 @@ describe("Organization Responsibility Assignment PostgreSQL command", () => {
       { username: "holder" },
       { authorization },
     );
-    expect(firstResult).toBe(true);
+    expect(firstResult).toEqual({ changed: true, result: null });
 
     expect(
       await harness!.db
@@ -1381,8 +1389,10 @@ describe("Organization Responsibility Assignment PostgreSQL command", () => {
       { authorization },
     );
 
-    expect(retryResult).toBe(true);
-    expect(await harness!.db.select().from(auditLogs)).toEqual(auditRowsBeforeRetry);
+    expect(retryResult).toEqual({ changed: false, result: null });
+    const auditRowsAfterRetry = await harness!.db.select().from(auditLogs);
+    expect(auditRowsAfterRetry).toHaveLength(auditRowsBeforeRetry.length + 1);
+    expect(auditRowsAfterRetry.at(-1)).toMatchObject({ action: "admin.employment.resign_user", details: { changed: false } });
     expect(await harness!.db.select().from(userProfileDirty)).toEqual(dirtyRowsBeforeRetry);
     expect(enqueueRebuildJobs).toHaveBeenCalledTimes(1);
     expect(revokeUserSessions).toHaveBeenCalledTimes(2);
@@ -1434,7 +1444,7 @@ describe("Organization Responsibility Assignment PostgreSQL command", () => {
     const revokeUserSessions = mock(async () => undefined);
     const resign = createResignUserUseCase({
       clock: { nowDate: () => fixture.now },
-      sessionRevocation: { revokeUserSessions },
+      sessionRevocation: { prepareUserSessionRevocation: async () => ({ revoke: revokeUserSessions }) },
       subjectAccessLifecycle: createPostgresSubjectAccessLifecycle(
         subject.subjectIdentifier,
         fixture.now,
@@ -1484,7 +1494,7 @@ describe("Organization Responsibility Assignment PostgreSQL command", () => {
           status: organizationResponsibilityAssignments.status,
         })
         .from(organizationResponsibilityAssignments)
-        .where(eq(organizationResponsibilityAssignments.id, created.id)),
+        .where(eq(organizationResponsibilityAssignments.id, created.result.id)),
     ).toEqual([{
       endTime: null,
       status: OrganizationResponsibilityAssignmentStatus.Enable,
@@ -1548,109 +1558,63 @@ describe("Organization Responsibility Assignment PostgreSQL command", () => {
     ).toBe(false);
   });
 
-  test("preserves the accepted Resume-vs-Pause optimistic race without replaying either command", async () => {
+  test("serializes direct Resume then Pause and leaves ordinary parents unlocked", async () => {
     const fixture = await seedScenario();
-    const enqueueRebuildJobs = mock(async () => ({
-      enqueued: 1,
-      jobIds: ["job-1"],
-    }));
-    const created = await createUseCase(fixture.now, enqueueRebuildJobs).execute({
+    const producer = mock(async () => ({ enqueued: 1, jobIds: ["job-1"] }));
+    const created = await createUseCase(fixture.now, producer).execute({
       employmentId: fixture.employmentId,
       targetOrganizationCode: "TARGET",
       typeCode: OrganizationResponsibilityTypeCode.Head,
     });
-    const lifecycle = createLifecycleUseCase(fixture.now, enqueueRebuildJobs);
-    await lifecycle.execute({ id: created.id, command: "pause" });
+    const lifecycle = createLifecycleUseCase(fixture.now, producer);
+    await lifecycle.execute({ id: created.result.id, command: "pause" });
     await harness!.db.delete(auditLogs);
     await harness!.db.delete(userProfileDirty);
-    enqueueRebuildJobs.mockClear();
-
-    const schemaRows = await harness!.sql<
-      { schemaName: string }[]
-    >`select current_schema() as "schemaName"`;
-    const schemaName = schemaRows[0]?.schemaName;
-    if (!schemaName)
-      throw new Error("test harness did not expose its PostgreSQL schema");
-    const concurrentSql = postgres(
-      process.env.IAM_ADMIN_API_TEST_DATABASE_URL!,
-      {
-        connection: { search_path: schemaName },
-        max: 2,
-      },
+    producer.mockClear();
+    const entered = deferred<void>();
+    const release = deferred<void>();
+    const gated = withTestFullOrganizationResponsibilityAuthorization(
+      createManageOrganizationResponsibilityAssignmentLifecycleUseCase({
+        clock: { nowDate: () => fixture.now },
+        uow: mapUnitOfWork(createUnitOfWork(fixture.now, producer), tx => ({
+          assignmentStore: tx.repositories.organizationResponsibility,
+          userProfileInvalidation: tx.userProfileInvalidation,
+          auditLogWriter: { recordAuditLog: async (input) => {
+            await tx.auditService.recordAuditLog(input);
+            entered.resolve();
+            await release.promise;
+          } },
+        })),
+      }),
     );
-    const concurrentDb = drizzle({ client: concurrentSql, relations });
-    const concurrentPause = createLifecycleUseCase(
-      fixture.now,
-      enqueueRebuildJobs,
-      mock(() => undefined),
-      concurrentDb,
-    );
-
-    const resumeEnteredMutation = deferred<void>();
-    const releaseResumeMutation = deferred<void>();
-    const unitOfWork = createUnitOfWork(fixture.now, enqueueRebuildJobs);
-    const gatedResume
-      = withTestFullOrganizationResponsibilityAuthorization(
-        createManageOrganizationResponsibilityAssignmentLifecycleUseCase({
-          clock: { nowDate: () => fixture.now },
-          uow: mapUnitOfWork(unitOfWork, (tx) => {
-            const repository = tx.repositories.organizationResponsibility;
-            return {
-              assignmentStore: {
-                findOpenAssignmentForSlot: repository.findOpenAssignmentForSlot,
-                isEndpointPairWithinReadScope:
-                  repository.isEndpointPairWithinReadScope,
-                getAssignmentLifecycleContextById:
-                repository.getAssignmentLifecycleContextById,
-                updateAssignmentLifecycle: async (input) => {
-                  resumeEnteredMutation.resolve();
-                  await releaseResumeMutation.promise;
-                  return await repository.updateAssignmentLifecycle(input);
-                },
-              },
-              auditLogWriter: tx.auditService,
-              userProfileInvalidation: tx.userProfileInvalidation,
-            };
-          }),
-        }),
-      );
-
-    const resume = gatedResume.execute({ id: created.id, command: "resume" });
-    let pauseResult: boolean | undefined;
-    let resumeResult: boolean | undefined;
+    const resume = gated.execute({ id: created.result.id, command: "resume" });
+    let pause: ReturnType<typeof lifecycle.execute> | undefined;
     try {
-      await waitForGateOrOperationFailure(
-        resumeEnteredMutation.promise,
-        resume,
-        "Resume did not reach its conditional PostgreSQL update",
-      );
-      pauseResult = await concurrentPause.execute({
-        id: created.id,
-        command: "pause",
+      await waitForGateOrOperationFailure(entered.promise, resume, "Resume did not reach its audit gate");
+      pause = lifecycle.execute({ id: created.result.id, command: "pause" });
+      await waitForBlockedPostgresQuery("organization_responsibility_assignment");
+      await harness!.sql.begin(async (tx) => {
+        await tx`select id from employment where id = ${fixture.employmentId} for update nowait`;
+        await tx`select id from organization where id in (${fixture.holderOrganizationId}, ${fixture.targetOrganizationId}) for update nowait`;
+        await tx`select id from "user" where id = ${fixture.userId} for update nowait`;
       });
-      releaseResumeMutation.resolve();
-      resumeResult = await resume;
     }
     finally {
-      releaseResumeMutation.resolve();
-      await resume.catch(() => undefined);
-      await concurrentSql.end();
+      release.resolve();
+      await Promise.allSettled([resume, ...(pause ? [pause] : [])]);
     }
-    expect(pauseResult).toBe(true);
-    expect(resumeResult).toBe(true);
-
-    expect(
-      await harness!.db
-        .select({ status: organizationResponsibilityAssignments.status })
-        .from(organizationResponsibilityAssignments),
-    ).toEqual([{ status: OrganizationResponsibilityAssignmentStatus.Enable }]);
-    expect(
-      await harness!.db.select({ action: auditLogs.action }).from(auditLogs),
-    ).toEqual([
-      { action: "admin.organization_responsibility_assignment.resume" },
+    expect(await resume).toEqual({ changed: true, result: null });
+    expect(await pause).toEqual({ changed: true, result: null });
+    const rows = await harness!.db.select().from(organizationResponsibilityAssignments);
+    expect(rows[0]!.status).toBe(OrganizationResponsibilityAssignmentStatus.Pause);
+    const audits = await harness!.db.select().from(auditLogs);
+    expect(audits.map(row => row.action)).toEqual([
+      "admin.organization_responsibility_assignment.resume",
+      "admin.organization_responsibility_assignment.pause",
     ]);
-    expect(await harness!.db.select().from(userProfileDirty)).toHaveLength(1);
-    expect(enqueueRebuildJobs).toHaveBeenCalledTimes(1);
+    const dirty = await harness!.db.select().from(userProfileDirty);
+    expect(dirty[0]!.dirtyVersion).toBe("2");
+    expect(producer).toHaveBeenCalledTimes(2);
   });
 
   test("proves Employment-Pause-vs-Assignment-Resume is optimistic and fails closed after the accepted anomaly", async () => {
@@ -1668,7 +1632,7 @@ describe("Organization Responsibility Assignment PostgreSQL command", () => {
       fixture.now,
       enqueueRebuildJobs,
     );
-    await assignmentLifecycle.execute({ command: "pause", id: created.id });
+    await assignmentLifecycle.execute({ command: "pause", id: created.result.id });
 
     const parentReachedAudit = deferred<void>();
     const releaseParent = deferred<void>();
@@ -1701,7 +1665,7 @@ describe("Organization Responsibility Assignment PostgreSQL command", () => {
         parent,
         "Employment Pause did not complete its Assignment cascade statement",
       );
-      await assignmentLifecycle.execute({ command: "resume", id: created.id });
+      await assignmentLifecycle.execute({ command: "resume", id: created.result.id });
       releaseParent.resolve();
       await parent;
     }
@@ -1720,7 +1684,7 @@ describe("Organization Responsibility Assignment PostgreSQL command", () => {
       await harness!.db
         .select({ status: organizationResponsibilityAssignments.status })
         .from(organizationResponsibilityAssignments)
-        .where(eq(organizationResponsibilityAssignments.id, created.id)),
+        .where(eq(organizationResponsibilityAssignments.id, created.result.id)),
     ).toEqual([{ status: OrganizationResponsibilityAssignmentStatus.Enable }]);
 
     const service = createFullAdminOrganizationResponsibilityService({
@@ -1729,7 +1693,7 @@ describe("Organization Responsibility Assignment PostgreSQL command", () => {
     });
     await expectAssignmentReadsToFailClosed(
       service,
-      created.id,
+      created.result.id,
       "parent lifecycle is invalid",
     );
   });
@@ -1781,7 +1745,7 @@ describe("Organization Responsibility Assignment PostgreSQL command", () => {
         employmentId: fixture.employmentId,
         targetOrganizationCode: "TARGET",
         typeCode: OrganizationResponsibilityTypeCode.Head,
-      })).id;
+      })).result.id;
       releaseParent.resolve();
       try {
         await parent;
@@ -1861,7 +1825,7 @@ describe("Organization Responsibility Assignment PostgreSQL command", () => {
         employmentId: fixture.employmentId,
         targetOrganizationCode: "TARGET",
         typeCode: OrganizationResponsibilityTypeCode.Head,
-      })).id;
+      })).result.id;
       releaseParent.resolve();
       await parent;
     }
@@ -1927,7 +1891,7 @@ describe("Organization Responsibility Assignment PostgreSQL command", () => {
     let caught: unknown;
     try {
       await lifecycle.execute({
-        id: assignment.id,
+        id: assignment.result.id,
         command: "pause",
       }, { authorization });
     }
@@ -1944,6 +1908,43 @@ describe("Organization Responsibility Assignment PostgreSQL command", () => {
     expect(await harness!.db.select().from(auditLogs)).toEqual([]);
     expect(await harness!.db.select().from(userProfileDirty)).toEqual([]);
     expect(enqueueRebuildJobs).not.toHaveBeenCalled();
+  });
+
+  test("rolls back direct End, its audit and Dirty when invalidation fails after writing", async () => {
+    const fixture = await seedScenario();
+    const producer = mock(async () => ({ enqueued: 1, jobIds: ["job-1"] }));
+    const created = await createUseCase(fixture.now, producer).execute({
+      employmentId: fixture.employmentId,
+      targetOrganizationCode: "TARGET",
+      typeCode: OrganizationResponsibilityTypeCode.Head,
+    });
+    const beforeAssignments = await harness!.db.select().from(organizationResponsibilityAssignments);
+    const beforeAudits = await harness!.db.select().from(auditLogs);
+    const beforeDirty = await harness!.db.select().from(userProfileDirty);
+    producer.mockClear();
+    const sentinel = new Error("fail after real dirty write");
+    const command = withTestFullOrganizationResponsibilityAuthorization(
+      createManageOrganizationResponsibilityAssignmentLifecycleUseCase({
+        clock: { nowDate: () => fixture.now },
+        uow: mapUnitOfWork(createUnitOfWork(fixture.now, producer), tx => ({
+          assignmentStore: tx.repositories.organizationResponsibility,
+          auditLogWriter: tx.auditService,
+          userProfileInvalidation: { recordChanges: async (changes) => {
+            await tx.userProfileInvalidation.recordChanges(changes);
+            throw sentinel;
+          } },
+        })),
+      }),
+    );
+    const failure = await captureFailure(() => command.execute({ id: created.result.id, command: "end" }));
+    expect(failure).toBe(sentinel);
+    const assignments = await harness!.db.select().from(organizationResponsibilityAssignments);
+    const audits = await harness!.db.select().from(auditLogs);
+    const dirty = await harness!.db.select().from(userProfileDirty);
+    expect(assignments).toEqual(beforeAssignments);
+    expect(audits).toEqual(beforeAudits);
+    expect(dirty).toEqual(beforeDirty);
+    expect(producer).not.toHaveBeenCalled();
   });
 
   test("paginates multiple Open supervising holders with an opaque stable-ID cursor", async () => {
@@ -2342,7 +2343,7 @@ describe("Organization Responsibility Assignment PostgreSQL command", () => {
 
     await expectAssignmentReadsToFailClosed(
       service,
-      created.id,
+      created.result.id,
       "has no valid target Organization",
     );
   });
@@ -2365,7 +2366,7 @@ describe("Organization Responsibility Assignment PostgreSQL command", () => {
 
     await expectAssignmentReadsToFailClosed(
       service,
-      created.id,
+      created.result.id,
       "has no valid target Organization",
     );
   });
@@ -2384,7 +2385,7 @@ describe("Organization Responsibility Assignment PostgreSQL command", () => {
         status: OrganizationResponsibilityAssignmentStatus.Disable,
         endTime: new Date(fixture.now.getTime() + 1_000),
       })
-      .where(eq(organizationResponsibilityAssignments.id, created.id));
+      .where(eq(organizationResponsibilityAssignments.id, created.result.id));
     await harness!.db
       .delete(organizations)
       .where(eq(organizations.id, fixture.targetOrganizationId));
@@ -2395,7 +2396,7 @@ describe("Organization Responsibility Assignment PostgreSQL command", () => {
 
     let caught: unknown;
     try {
-      await service.detailAssignment({ orgCode: "TARGET", id: created.id });
+      await service.detailAssignment({ orgCode: "TARGET", id: created.result.id });
     }
     catch (error) {
       caught = error;
@@ -2429,7 +2430,7 @@ describe("Organization Responsibility Assignment PostgreSQL command", () => {
 
     await expectAssignmentReadsToFailClosed(
       service,
-      created.id,
+      created.result.id,
       "has no valid holder Organization path",
     );
   });
@@ -2457,7 +2458,7 @@ describe("Organization Responsibility Assignment PostgreSQL command", () => {
 
     await expectAssignmentReadsToFailClosed(
       service,
-      created.id,
+      created.result.id,
       "has no valid target Organization path",
     );
   });
@@ -2481,7 +2482,7 @@ describe("Organization Responsibility Assignment PostgreSQL command", () => {
       .where(eq(employments.id, fixture.employmentId));
     await expectAssignmentReadsToFailClosed(
       service,
-      created.id,
+      created.result.id,
       "parent lifecycle is invalid",
     );
 
@@ -2495,73 +2496,81 @@ describe("Organization Responsibility Assignment PostgreSQL command", () => {
       .where(eq(organizations.id, fixture.targetOrganizationId));
     await expectAssignmentReadsToFailClosed(
       service,
-      created.id,
+      created.result.id,
       "parent lifecycle is invalid",
     );
   });
 
-  test("allows only one concurrent Open head and returns the stable cardinality conflict", async () => {
-    const fixture = await seedScenario();
-    const producer = mock(async () => ({ enqueued: 1, jobIds: ["job-1"] }));
-    const first = createUseCase(fixture.now, producer);
-    const second = createUseCase(fixture.now, producer);
-
-    const results = await Promise.allSettled([
-      first.execute({
-        employmentId: fixture.employmentId,
-        targetOrganizationCode: "TARGET",
-        typeCode: OrganizationResponsibilityTypeCode.Head,
-      }),
-      second.execute({
-        employmentId: fixture.secondEmploymentId,
-        targetOrganizationCode: "TARGET",
-        typeCode: OrganizationResponsibilityTypeCode.Head,
-      }),
-    ]);
-
-    expect(
-      results.filter(result => result.status === "fulfilled"),
-    ).toHaveLength(1);
-    const rejection = results.find(
-      result => result.status === "rejected",
-    ) as PromiseRejectedResult;
-    expect(rejection.reason).toBeInstanceOf(
-      OrganizationResponsibilityAssignmentCardinalityConflictError,
-    );
-    expect(
-      await harness!.db.select().from(organizationResponsibilityAssignments),
-    ).toHaveLength(1);
-  });
-
-  test("allows only one concurrent duplicate supervising holder and returns the stable duplicate", async () => {
-    const fixture = await seedScenario();
-    const producer = mock(async () => ({ enqueued: 1, jobIds: ["job-1"] }));
-    const first = createUseCase(fixture.now, producer);
-    const second = createUseCase(fixture.now, producer);
-    const input = {
-      employmentId: fixture.employmentId,
-      targetOrganizationCode: "TARGET",
-      typeCode: OrganizationResponsibilityTypeCode.Supervising,
-    } as const;
-
-    const results = await Promise.allSettled([
-      first.execute(input),
-      second.execute(input),
-    ]);
-
-    expect(
-      results.filter(result => result.status === "fulfilled"),
-    ).toHaveLength(1);
-    const rejection = results.find(
-      result => result.status === "rejected",
-    ) as PromiseRejectedResult;
-    expect(rejection.reason).toBeInstanceOf(
-      OrganizationResponsibilityAssignmentDuplicateOpenError,
-    );
-    expect(
-      await harness!.db.select().from(organizationResponsibilityAssignments),
-    ).toHaveLength(1);
-  });
+  for (const scope of ["full", "hr"] as const) {
+    for (const typeCode of [OrganizationResponsibilityTypeCode.Head, OrganizationResponsibilityTypeCode.Supervising]) {
+      test(`${scope} concurrent ${typeCode} inserts arbitrate through real Drizzle constraints with safe errors`, async () => {
+        const fixture = await seedScenario();
+        const producer = mock(async () => ({ enqueued: 1, jobIds: ["job-1"] }));
+        const bothPrechecked = deferred<void>();
+        const release = deferred<void>();
+        let entrants = 0;
+        const beforeInsert = async () => {
+          entrants += 1;
+          if (entrants === 2)
+            bothPrechecked.resolve();
+          await release.promise;
+        };
+        const command = createRawUseCase(fixture.now, producer, mock(), beforeInsert);
+        const authorization = scope === "full"
+          ? testFullOrganizationResponsibilityAuthorization
+          : await createHrOrganizationResponsibilityAuthorization([
+              fixture.holderOrganizationId,
+              fixture.targetOrganizationId,
+            ], fixture.userId);
+        const first = command.execute({
+          employmentId: fixture.employmentId,
+          targetOrganizationCode: "TARGET",
+          typeCode,
+        }, { authorization });
+        const second = command.execute({
+          employmentId: typeCode === OrganizationResponsibilityTypeCode.Head
+            ? fixture.secondEmploymentId
+            : fixture.employmentId,
+          targetOrganizationCode: "TARGET",
+          typeCode,
+        }, { authorization });
+        const resultsPending = Promise.allSettled([first, second]);
+        try {
+          await waitForGateOrOperationFailure(bothPrechecked.promise, resultsPending, "both creates did not finish ordinary prechecks");
+          await harness!.sql.begin(async (tx) => {
+            await tx`select id from employment where id in (${fixture.employmentId}, ${fixture.secondEmploymentId}) for update nowait`;
+            await tx`select id from organization where id = ${fixture.targetOrganizationId} for update nowait`;
+          });
+        }
+        finally {
+          release.resolve();
+          await resultsPending;
+        }
+        const results = await resultsPending;
+        expect(results.filter(result => result.status === "fulfilled")).toHaveLength(1);
+        const rejection = results.find(result => result.status === "rejected");
+        expect(rejection?.status).toBe("rejected");
+        if (rejection?.status !== "rejected")
+          throw new Error("expected unique constraint loser");
+        expect(rejection.reason).toBeInstanceOf(typeCode === OrganizationResponsibilityTypeCode.Supervising
+          ? OrganizationResponsibilityAssignmentDuplicateOpenError
+          : scope === "hr"
+            ? OrganizationResponsibilityAssignmentUnmanageableConflictError
+            : OrganizationResponsibilityAssignmentCardinalityConflictError);
+        expect(rejection.reason).toMatchObject({ httpStatus: 409 });
+        expect(JSON.stringify(rejection.reason)).not.toContain("constraint");
+        const assignments = await harness!.db.select().from(organizationResponsibilityAssignments);
+        const audits = await harness!.db.select().from(auditLogs);
+        const dirty = await harness!.db.select().from(userProfileDirty);
+        expect(assignments).toHaveLength(1);
+        expect(audits).toHaveLength(1);
+        expect(audits[0]).toMatchObject({ targetId: assignments[0]!.id, details: { changed: true } });
+        expect(dirty).toHaveLength(1);
+        expect(dirty[0]!.dirtyVersion).toBe("1");
+        expect(producer).toHaveBeenCalledTimes(1);
+      });
+    }
+  }
 });
 
 async function expectAssignmentReadsToFailClosed(
@@ -2696,12 +2705,19 @@ function createRawUseCase(
   now: Date,
   enqueueRebuildJobs: (payloads: never) => Promise<unknown>,
   warn = mock(() => undefined),
+  beforeInsert?: () => Promise<void>,
 ) {
   const unitOfWork = createUnitOfWork(now, enqueueRebuildJobs, warn);
   return createCreateOrganizationResponsibilityAssignmentUseCase({
     clock: { nowDate: () => now },
     uow: mapUnitOfWork(unitOfWork, tx => ({
-      assignmentStore: tx.repositories.organizationResponsibility,
+      assignmentStore: {
+        ...tx.repositories.organizationResponsibility,
+        createAssignmentRecord: async (input, readScope) => {
+          await beforeInsert?.();
+          return await tx.repositories.organizationResponsibility.createAssignmentRecord(input, readScope);
+        },
+      },
       auditLogWriter: tx.auditService,
       employmentReader: tx.repositories.organizationResponsibility,
       organizationReader: tx.repositories.organizationResponsibility,

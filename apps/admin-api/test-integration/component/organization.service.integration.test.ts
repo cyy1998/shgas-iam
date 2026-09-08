@@ -1,4 +1,5 @@
 import { createOrganizationRepository } from "@admin-api/services/organization/organization.repository";
+import { OrganizationCreateDtoSchema, toOrganizationDto } from "@admin-api/services/organization/organization.schema";
 import { createOrganizationService } from "@admin-api/services/organization/organization.service";
 import { createImmediateUnitOfWork } from "@admin-api/test/fakes";
 import { EmploymentStatus, OrganizationLevel, OrganizationStatus, OrganizationType } from "@iam/contracts";
@@ -61,6 +62,8 @@ function createService() {
       countActiveChildrenByOrgCode: mock(async () => 0),
       countOpenEmploymentsByOrgCode: mock(async (_orgCode: string) => 0),
       getOrganizationByCode: mock(async () => null),
+      getAnyOrganizationByCode: mock(async () => null),
+      lockOrganizationByCode: mock(async () => organization()),
       getOrganizationByCodeForAdmin: mock(async () => organization()),
       setOrganization: mock(async () => organization()),
       softDeleteOrganizationByCode: mock(async () => organization({ isDelete: true })),
@@ -123,6 +126,88 @@ function useEmploymentFixture(
 }
 
 describe("createOrganizationService", () => {
+  test("create and response allowlists preserve supported fields and strip storage-only fields", () => {
+    const input = OrganizationCreateDtoSchema.parse({
+      ...organization(),
+      businessParentId: 7,
+      orderNum: 3,
+      isVirtual: true,
+      isEntity: false,
+      parentCode: "PARENT",
+      storageSecret: "private",
+    });
+    expect(input).toEqual({
+      orgCode: "ORG",
+      orgName: "Organization",
+      orgType: OrganizationType.Company,
+      businessParentId: 7,
+      orderNum: 3,
+      isVirtual: true,
+      isEntity: false,
+      path: "/ORG",
+      level: OrganizationLevel.One,
+      status: OrganizationStatus.Enable,
+      parentCode: "PARENT",
+    });
+    const output = toOrganizationDto(organization({ storageSecret: "private" }));
+    expect(Object.keys(output).sort()).toEqual([
+      "id",
+      "orgCode",
+      "orgName",
+      "parentId",
+      "businessParentId",
+      "path",
+      "level",
+      "orgType",
+      "orderNum",
+      "isVirtual",
+      "isEntity",
+      "status",
+      "isDelete",
+      "createTime",
+      "updateTime",
+      "isLeaf",
+      "parentCode",
+      "parentName",
+    ].sort());
+    expect(output).toMatchObject({ orgCode: "ORG", isLeaf: true, parentCode: null, parentName: null });
+  });
+
+  test("profile no-op skips writes, audit and dirty while status no-op retains intent", async () => {
+    const { service, tx } = createService();
+    const profile = await service.updateOrganization("ORG", { orgName: "Organization" });
+    expect(profile).toEqual({ changed: false, result: null });
+    expect(tx.auditService.recordAuditLog).not.toHaveBeenCalled();
+    const status = await service.updateOrganizationStatus("ORG", OrganizationStatus.Enable);
+    expect(status).toEqual({ changed: false, result: null });
+    expect(tx.auditService.recordAuditLog).toHaveBeenCalledWith(expect.objectContaining({
+      action: "admin.organization.status_update",
+      details: expect.objectContaining({ changed: false }),
+    }));
+    expect(tx.organizationRepository.lockOrganizationByCode).toHaveBeenCalledTimes(2);
+    expect(tx.organizationRepository.updateOrganizationByCode).not.toHaveBeenCalled();
+    expect(tx.userProfileInvalidation.recordChanges).not.toHaveBeenCalled();
+  });
+
+  test.each(["update", "delete"])("zero-row %s after lock fails without success audit or dirty", async (operation) => {
+    const { service, tx } = createService();
+    tx.organizationRepository.updateOrganizationByCode.mockResolvedValueOnce(null as never);
+    tx.organizationRepository.softDeleteOrganizationByCode.mockResolvedValueOnce(null as never);
+    let failure: unknown;
+    try {
+      if (operation === "update")
+        await service.updateOrganization("ORG", { orgName: "Changed" });
+      else
+        await service.deleteOrganization("ORG");
+    }
+    catch (error) {
+      failure = error;
+    }
+    expect(failure).toBeInstanceOf(Error);
+    expect(tx.auditService.recordAuditLog).not.toHaveBeenCalled();
+    expect(tx.userProfileInvalidation.recordChanges).not.toHaveBeenCalled();
+  });
+
   test("applies the HR scope to selector, search, tree, and detail reads", async () => {
     const { service, deps } = createService();
     const { authorization } = scopedAuthorization([1, 2], [1]);
@@ -253,7 +338,7 @@ describe("createOrganizationService", () => {
   test("conceals an existing out-of-scope orgCode during HR child creation", async () => {
     const { service, tx } = createService();
     const { authorization, denyMutation } = scopedAuthorization();
-    tx.organizationRepository.getOrganizationByCode.mockResolvedValueOnce(
+    tx.organizationRepository.getAnyOrganizationByCode.mockResolvedValueOnce(
       organization({ id: 99, orgCode: "OUTSIDE" }) as never,
     );
     tx.organizationRepository.getOrganizationByCodeForAdmin.mockResolvedValueOnce(
@@ -522,7 +607,7 @@ describe("createOrganizationService", () => {
 
   test("rejects updating to an existing organization code", async () => {
     const { service, tx } = createService();
-    (tx.organizationRepository.getOrganizationByCode as any)
+    (tx.organizationRepository.getAnyOrganizationByCode as any)
       .mockResolvedValue(organization({ id: 2, orgCode: "OTHER" }));
 
     await expect(service.updateOrganization("ORG", { orgCode: "OTHER" } as any)).rejects.toThrow("组织编码已存在");
@@ -533,7 +618,7 @@ describe("createOrganizationService", () => {
   test("records an organization change when updating an organization", async () => {
     const { service, tx } = createService();
 
-    await expect(service.updateOrganization("ORG", { orgName: "New Organization" })).resolves.toBe(true);
+    await expect(service.updateOrganization("ORG", { orgName: "New Organization" })).resolves.toEqual({ changed: true, result: null });
 
     expect(tx.userProfileInvalidation.recordChanges).toHaveBeenCalledWith([
       { kind: "organization", organizationId: 1 },
@@ -542,7 +627,7 @@ describe("createOrganizationService", () => {
 
   test("does not treat an unchanged Pause status as a lifecycle transition during metadata edits", async () => {
     const { service, tx } = createService();
-    tx.organizationRepository.getOrganizationByCodeForAdmin.mockResolvedValue(
+    tx.organizationRepository.lockOrganizationByCode.mockResolvedValue(
       organization({ status: OrganizationStatus.Pause }),
     );
     tx.responsibilityParentLifecycle
@@ -554,7 +639,7 @@ describe("createOrganizationService", () => {
     await expect(service.updateOrganization("ORG", {
       orgName: "Renamed Organization",
       status: OrganizationStatus.Pause,
-    })).resolves.toBe(true);
+    })).resolves.toEqual({ changed: true, result: null });
 
     expect(
       tx.responsibilityParentLifecycle
@@ -601,7 +686,7 @@ describe("createOrganizationService", () => {
     const { service, tx } = createService();
     useEmploymentFixture(tx, { status, isDelete });
 
-    await expect(service.updateOrganizationStatus("ORG", OrganizationStatus.Disable)).resolves.toBe(true);
+    await expect(service.updateOrganizationStatus("ORG", OrganizationStatus.Disable)).resolves.toEqual({ changed: true, result: null });
 
     expect(tx.organizationRepository.updateOrganizationByCode).toHaveBeenCalledWith("ORG", {
       status: OrganizationStatus.Disable,
@@ -630,12 +715,12 @@ describe("createOrganizationService", () => {
 
   test("re-enables an organization without inspecting or changing its Employments", async () => {
     const { service, tx } = createService();
-    tx.organizationRepository.getOrganizationByCodeForAdmin.mockResolvedValue(
+    tx.organizationRepository.lockOrganizationByCode.mockResolvedValue(
       organization({ status: OrganizationStatus.Disable }),
     );
     tx.organizationRepository.countOpenEmploymentsByOrgCode.mockResolvedValue(1);
 
-    await expect(service.updateOrganizationStatus("ORG", OrganizationStatus.Enable)).resolves.toBe(true);
+    await expect(service.updateOrganizationStatus("ORG", OrganizationStatus.Enable)).resolves.toEqual({ changed: true, result: null });
 
     expect(tx.organizationRepository.countOpenEmploymentsByOrgCode).not.toHaveBeenCalled();
     expect(tx.organizationRepository.updateOrganizationByCode).toHaveBeenCalledWith("ORG", {
@@ -651,7 +736,7 @@ describe("createOrganizationService", () => {
       ancestorOrgCodes: ["OTHER"],
     });
 
-    await expect(service.updateOrganizationStatus("ORG", OrganizationStatus.Disable)).resolves.toBe(true);
+    await expect(service.updateOrganizationStatus("ORG", OrganizationStatus.Disable)).resolves.toEqual({ changed: true, result: null });
 
     expect(tx.organizationRepository.updateOrganizationByCode).toHaveBeenCalledWith("ORG", {
       status: OrganizationStatus.Disable,
@@ -665,7 +750,7 @@ describe("createOrganizationService", () => {
     const { service, tx } = createService();
     useEmploymentFixture(tx, { status, isDelete });
 
-    await expect(service.deleteOrganization("ORG")).resolves.toBe(true);
+    await expect(service.deleteOrganization("ORG")).resolves.toEqual({ changed: true, result: null });
 
     expect(tx.organizationRepository.countActiveChildrenByOrgCode).toHaveBeenCalledWith("ORG");
     expect(tx.organizationRepository.countOpenEmploymentsByOrgCode).toHaveBeenCalledWith("ORG");

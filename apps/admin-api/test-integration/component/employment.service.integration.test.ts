@@ -1,6 +1,7 @@
 import type { AdminEmploymentAuthorization } from "@admin-api/services/admin-authorization/admin-employment-authorization.type";
 import { createEmploymentService } from "@admin-api/services/employment/employment.service";
 import { createFakeClock, createImmediateUnitOfWork } from "@admin-api/test/fakes";
+import { BadRequestError } from "@iam/api-core/errors";
 import { EmploymentStatus, OrganizationLevel, OrganizationStatus, OrganizationType, PositionStatus, UserStatus, UserType } from "@iam/contracts";
 import { EmploymentNotEditableError } from "@iam/domain/employment";
 import { describe, expect, mock, test } from "bun:test";
@@ -100,7 +101,7 @@ function createService() {
     },
     employmentRepository: {
       createEmploymentRecord: mock(async () => employment({ id: 10 })),
-      getEmploymentByIdForAdmin: mock(async () => employment()),
+      lockEmploymentByIdForAdmin: mock(async () => employment()),
       getOpenEmploymentByUserOrgPosId: mock(async () => null),
       updateEmploymentRecord: mock(async () => employment()),
     },
@@ -334,7 +335,7 @@ describe("createEmploymentService", () => {
   test("updates an employment and marks its existing user dirty", async () => {
     const { service, tx } = createService();
 
-    await expect(service.updateEmployment(4, { description: "updated" })).resolves.toBe(true);
+    await expect(service.updateEmployment(4, { description: "updated" })).resolves.toEqual({ changed: true, result: null });
 
     expect(tx.employmentRepository.updateEmploymentRecord).toHaveBeenCalledWith(4, {
       description: "updated",
@@ -346,7 +347,7 @@ describe("createEmploymentService", () => {
 
   test("rejects description edits for an Ended Employment", async () => {
     const { service, tx } = createService();
-    tx.employmentRepository.getEmploymentByIdForAdmin.mockResolvedValue(
+    tx.employmentRepository.lockEmploymentByIdForAdmin.mockResolvedValue(
       employment({ status: EmploymentStatus.Disable, endTime: now, isPrimary: false }),
     );
 
@@ -355,6 +356,43 @@ describe("createEmploymentService", () => {
     ).rejects.toBeInstanceOf(EmploymentNotEditableError);
 
     expect(tx.employmentRepository.updateEmploymentRecord).not.toHaveBeenCalled();
+    expect(tx.auditService.recordAuditLog).not.toHaveBeenCalled();
+    expect(tx.userProfileInvalidation.recordChanges).not.toHaveBeenCalled();
+  });
+  test("rejects an empty description update before audit or dirty", async () => {
+    const { service, tx } = createService();
+    let failure: unknown;
+    try {
+      await service.updateEmployment(4, {});
+    }
+    catch (error) {
+      failure = error;
+    }
+    expect(failure).toBeInstanceOf(BadRequestError);
+    expect(tx.auditService.recordAuditLog).not.toHaveBeenCalled();
+    expect(tx.userProfileInvalidation.recordChanges).not.toHaveBeenCalled();
+  });
+
+  test("same description returns unchanged without writes, audit, or dirty", async () => {
+    const { service, tx } = createService();
+    const result = await service.updateEmployment(4, { description: null });
+    expect(result).toEqual({ changed: false, result: null });
+    expect(tx.employmentRepository.updateEmploymentRecord).not.toHaveBeenCalled();
+    expect(tx.auditService.recordAuditLog).not.toHaveBeenCalled();
+    expect(tx.userProfileInvalidation.recordChanges).not.toHaveBeenCalled();
+  });
+
+  test("fails closed when the locked update returns no row", async () => {
+    const { service, tx } = createService();
+    tx.employmentRepository.updateEmploymentRecord.mockResolvedValueOnce(null as never);
+    let failure: unknown;
+    try {
+      await service.updateEmployment(4, { description: "changed" });
+    }
+    catch (error) {
+      failure = error;
+    }
+    expect(failure).toBeInstanceOf(Error);
     expect(tx.auditService.recordAuditLog).not.toHaveBeenCalled();
     expect(tx.userProfileInvalidation.recordChanges).not.toHaveBeenCalled();
   });

@@ -22,23 +22,27 @@ function createDocument() {
       })),
       revokeSessions: mock(async () => ({
         changed: false,
-        scope: "session" as const,
-        revoked: {
-          principalSessions: 0,
-          bindings: 0,
-          credentials: 0,
-          artifacts: 0,
-        },
-        currentPrincipalSessionExcluded: false,
-        cleanup: {
-          attempted: 0,
-          succeeded: 0,
-          failed: 0,
+        result: {
+          scope: "session" as const,
+          revoked: {
+            principalSessions: 0,
+            bindings: 0,
+            credentials: 0,
+            artifacts: 0,
+          },
+          currentPrincipalSessionExcluded: false,
+          cleanup: {
+            attempted: 0,
+            succeeded: 0,
+            failed: 0,
+          },
         },
       })),
       releaseLoginRestriction: mock(async () => ({
         changed: false,
-        failureStateCleared: true as const,
+        result: {
+          failureStateCleared: true as const,
+        },
       })),
     },
   });
@@ -249,7 +253,7 @@ test("documents an exact safe login restriction VO and release result", () => {
   };
   const release = document.components?.schemas?.SessionManagementReleaseLoginRestrictionResultVo as {
     additionalProperties?: boolean;
-    properties?: Record<string, unknown>;
+    properties?: Record<string, { additionalProperties?: boolean; properties?: Record<string, unknown> }>;
   };
 
   expect(restriction.additionalProperties).toBe(false);
@@ -278,8 +282,10 @@ test("documents an exact safe login restriction VO and release result", () => {
   expect(release.additionalProperties).toBe(false);
   expect(Object.keys(release.properties ?? {})).toEqual([
     "changed",
-    "failureStateCleared",
+    "result",
   ]);
+  expect(release.properties?.result?.additionalProperties).toBe(false);
+  expect(Object.keys(release.properties?.result?.properties ?? {})).toEqual(["failureStateCleared"]);
 
   const serializedSchemas = JSON.stringify({ release, restriction }).toLowerCase();
   for (const forbiddenField of [
@@ -341,32 +347,37 @@ test("documents an exact safe revoke result with counts but no target or cleanup
     additionalProperties?: boolean;
     properties?: Record<string, {
       additionalProperties?: boolean;
-      properties?: Record<string, unknown>;
+      properties?: Record<string, { additionalProperties?: boolean; properties?: Record<string, unknown> }>;
     }>;
   };
 
   expect(result.additionalProperties).toBe(false);
   expect(Object.keys(result.properties ?? {})).toEqual([
     "changed",
+    "result",
+  ]);
+  const payload = result.properties?.result;
+  expect(payload?.additionalProperties).toBe(false);
+  expect(Object.keys(payload?.properties ?? {})).toEqual([
     "scope",
     "revoked",
     "currentPrincipalSessionExcluded",
     "cleanup",
   ]);
-  expect(result.properties?.revoked?.additionalProperties).toBe(false);
-  expect(Object.keys(result.properties?.revoked?.properties ?? {})).toEqual([
+  expect(payload?.properties?.revoked?.additionalProperties).toBe(false);
+  expect(Object.keys(payload?.properties?.revoked?.properties ?? {})).toEqual([
     "principalSessions",
     "bindings",
     "credentials",
     "artifacts",
   ]);
-  expect(result.properties?.cleanup?.additionalProperties).toBe(false);
-  expect(Object.keys(result.properties?.cleanup?.properties ?? {})).toEqual([
+  expect(payload?.properties?.cleanup?.additionalProperties).toBe(false);
+  expect(Object.keys(payload?.properties?.cleanup?.properties ?? {})).toEqual([
     "attempted",
     "succeeded",
     "failed",
   ]);
-  expect(result.properties?.scope).toMatchObject({
+  expect(payload?.properties?.scope).toMatchObject({
     type: "string",
     enum: ["session", "user"],
   });

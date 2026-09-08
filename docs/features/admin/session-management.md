@@ -20,8 +20,9 @@ service wrapper 使用共享 API error code 归一化为稳定的页面错误；
 保留当前根会话但撤销其关联 IAM 凭证与其他 roots。确认框同时说明点式撤销的并发窗口、不能保证第三方本地会话退出、
 不会阻止未来登录，以及凭据泄露时的密码重置、账号暂停或结束处置；不展示推测的关联应用清单，也不要求备注或原因。
 
-成功、幂等无变化和 cleanup 部分失败分别显示稳定提示并刷新当前列表；
-`ADMIN_LOGIN_STATE_AUDIT_FAILED_AFTER_EFFECT` 显示“作用可能已生效”，刷新状态且不自动重试 mutation。
+撤销成功采用 `{ changed, result }`，`result` 保留 scope、实际撤销数量、当前根会话例外及 cleanup 数量摘要。
+`changed` 只依据实际撤销数量，不因 cleanup 失败而翻转。成功、幂等无变化和 cleanup 部分失败分别显示稳定提示并刷新当前列表；
+`ADMIN_LOGIN_STATE_AUDIT_FAILED_AFTER_EFFECT` 显示“作用可能已生效”，刷新状态且不自动重试 mutation。页面持续显示审计仍需修复的提示，普通读取成功或切换标签页不会清除该提示。
 
 ## 临时登录限制与解除
 
@@ -31,8 +32,10 @@ service wrapper 使用共享 API error code 归一化为稳定的页面错误；
 解除确认明确同时清除限制和当前失败历史、不创建白名单或宽限期、新失败立即重新计数，且不影响任何已有
 Principal Session；不提供阈值、窗口或时长配置，不要求备注，也不发送通知。
 
+解除成功采用 `{ changed, result:{ failureStateCleared:true } }`。`changed` 只表示是否解除有效限制，
+`failureStateCleared:true` 表示原子清理已完成；只有失败历史而没有有效限制时仍是 `changed:false`，不把清理完成视为限制变化。
 成功与 `changed:false` 都刷新一次；Redis 503 保留当前状态且不显示假成功；
-`ADMIN_LOGIN_STATE_AUDIT_FAILED_AFTER_EFFECT` 提示作用可能已生效、刷新一次且不自动重试 mutation。
+`ADMIN_LOGIN_STATE_AUDIT_FAILED_AFTER_EFFECT` 提示作用可能已生效、刷新一次且不自动重试 mutation；刷新成功后仍保留审计修复提示。
 
 ## 验收关注点
 

@@ -3,6 +3,7 @@ import type {
   CreateOrganizationResponsibilityAssignmentInput,
   CreateOrganizationResponsibilityAssignmentOptions,
 } from "./create-assignment.type";
+import { createAdminMutation } from "@admin-api/services/admin-mutation/admin-mutation";
 import { adminAuditTransactionOptions } from "@admin-api/services/audit/audit.context";
 import { buildOrganizationResponsibilityAssignmentCreateAudit } from "@admin-api/services/audit/events/organization-responsibility-assignment.audit";
 import {
@@ -21,12 +22,13 @@ import {
 export function createCreateOrganizationResponsibilityAssignmentUseCase(
   deps: CreateOrganizationResponsibilityAssignmentUseCaseDeps,
 ) {
+  const mutation = createAdminMutation(deps.uow);
   async function execute(
     input: CreateOrganizationResponsibilityAssignmentInput,
     options: CreateOrganizationResponsibilityAssignmentOptions,
   ) {
     const { auditContext, authorization } = options;
-    return await deps.uow.transaction(async (tx) => {
+    return await mutation.transaction(async (tx) => {
       const employment = await tx.employmentReader.getEmploymentForResponsibilityById(input.employmentId);
       if (employment === null)
         throw new EmploymentNotFoundError();
@@ -86,7 +88,7 @@ export function createCreateOrganizationResponsibilityAssignmentUseCase(
         startTime: transactionTime,
         endTime: null,
       } as const;
-      const created = await tx.assignmentStore.createAssignmentRecord(record);
+      const created = await tx.assignmentStore.createAssignmentRecord(record, authorization.readScope);
       await tx.auditLogWriter.recordAuditLog(
         buildOrganizationResponsibilityAssignmentCreateAudit({
           id: created.id,
@@ -97,7 +99,7 @@ export function createCreateOrganizationResponsibilityAssignmentUseCase(
         kind: "organization-responsibility-assignment",
         userId: employment.userId,
       }]);
-      return { id: created.id };
+      return { changed: true, result: { id: created.id } };
     }, adminAuditTransactionOptions(auditContext));
   }
 

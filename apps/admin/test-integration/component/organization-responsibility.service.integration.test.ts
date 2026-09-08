@@ -1,20 +1,32 @@
 import {
+  createOrganizationResponsibilityAssignment,
+  endOrganizationResponsibilityAssignment,
   OrganizationResponsibilityMutationError,
   OrganizationResponsibilityMutationErrorKind,
   pauseOrganizationResponsibilityAssignment,
+  resumeOrganizationResponsibilityAssignment,
 } from '@admin/services/organization-responsibility';
-import { ApiErrorCode } from '@iam/contracts';
+import {
+  ApiErrorCode,
+  OrganizationResponsibilityTypeCode,
+} from '@iam/contracts';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const api = vi.hoisted(() => ({
+  create: vi.fn(),
+  end: vi.fn(),
   pause: vi.fn(),
+  resume: vi.fn(),
 }));
 
 vi.mock('@admin/lib/api-client', () => ({
   apiClient: {
     admin: {
       organizationResponsibility: {
+        createAssignment: { mutate: api.create },
+        endAssignment: { mutate: api.end },
         pauseAssignment: { mutate: api.pause },
+        resumeAssignment: { mutate: api.resume },
       },
     },
   },
@@ -22,6 +34,35 @@ vi.mock('@admin/lib/api-client', () => ({
 
 describe('Organization Responsibility mutation service', () => {
   beforeEach(() => vi.clearAllMocks());
+
+  it('preserves the created resource inside the unified result', async () => {
+    const outcome = { changed: true, result: { id: 31 } };
+    api.create.mockResolvedValueOnce(outcome);
+
+    const result = await createOrganizationResponsibilityAssignment({
+      orgCode: 'FIN',
+      typeCode: OrganizationResponsibilityTypeCode.Head,
+      employmentId: 42,
+    });
+
+    expect(result).toEqual(outcome);
+  });
+
+  it.each([
+    [pauseOrganizationResponsibilityAssignment, api.pause],
+    [resumeOrganizationResponsibilityAssignment, api.resume],
+    [endOrganizationResponsibilityAssignment, api.end],
+  ])(
+    'preserves changed and no-op lifecycle results without replay',
+    async (mutate, mock) => {
+      for (const changed of [true, false]) {
+        mock.mockResolvedValueOnce({ changed, result: null });
+        const outcome = await mutate({ id: 31 });
+        expect(outcome).toEqual({ changed, result: null });
+      }
+      expect(mock).toHaveBeenCalledTimes(2);
+    },
+  );
 
   it.each([
     [

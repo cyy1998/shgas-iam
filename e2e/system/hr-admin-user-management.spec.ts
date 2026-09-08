@@ -1,6 +1,7 @@
 import type { APIRequestContext, Browser, Page } from "@playwright/test";
 import { expect, test } from "@playwright/test";
 import {
+  expectRpcMutationResult,
   isSuccessfulRpcResponse,
   loginToAdmin,
 } from "./src/admin-client-journey.ts";
@@ -93,13 +94,17 @@ test("HR Admin manages cross-root responsibilities without widening either endpo
       "admin.organizationResponsibility.createAssignment",
     ));
   await createDialog.getByRole("button", { name: /确\s*定/u }).click();
-  await createResponse;
+  const creation = await createResponse;
   await expect(page.getByText("责任任命已创建", { exact: true })).toBeVisible();
 
   const created = await findCreatedAssignment(context.request, scenario);
+  await expectRpcMutationResult(creation, "admin.organizationResponsibility.createAssignment", true, {
+    id: created.id,
+  });
   await expectManualTransportMatrix(context.request, scenario);
   await expectContextPanels(page, scenario, created.id);
   await manageLifecycle(page, created.id);
+  await expectRepeatedEnd(context.request, scenario, created.id);
 
   await page.goto(
     `/iam-admin/organization-responsibilities/assignments?lifecycle=all&assignment=${scenario.hiddenResponsibilityAssignmentId}`,
@@ -140,7 +145,7 @@ test("HR Admin manages cross-root responsibilities without widening either endpo
   });
   expect(revokedList.items).toEqual([]);
   const revokedMutation = await context.request.post(
-    `${scenario.origin}/api/iam/admin/organization-responsibilities/assignments/${created.id}/pause`,
+    `${scenario.origin}/api/iam/admin/organization-responsibilities/assignments/${created.id}/end`,
     { headers: adminHeaders(scenario.adminClientCode) },
   );
   expect(revokedMutation.status()).toBe(404);
@@ -215,18 +220,27 @@ async function manageLifecycle(page: Page, assignmentId: number) {
   await expect(drawer.getByRole("button", { name: "暂停任命" })).toBeVisible();
   await expect(drawer.getByRole("button", { name: "结束任命" })).toBeVisible();
 
+  const pauseResponse = page.waitForResponse(response =>
+    isSuccessfulRpcResponse(response, "admin.organizationResponsibility.pauseAssignment"));
   await drawer.getByRole("button", { name: "暂停任命" }).click();
+  await expectRpcMutationResult(await pauseResponse, "admin.organizationResponsibility.pauseAssignment", true, null);
   await expect(page.getByText("责任任命已暂停", { exact: true })).toBeVisible();
   await expect(drawer.getByRole("button", { name: "恢复任命" })).toBeVisible();
 
+  const resumeResponse = page.waitForResponse(response =>
+    isSuccessfulRpcResponse(response, "admin.organizationResponsibility.resumeAssignment"));
   await drawer.getByRole("button", { name: "恢复任命" }).click();
+  await expectRpcMutationResult(await resumeResponse, "admin.organizationResponsibility.resumeAssignment", true, null);
   await expect(page.getByText("责任任命已恢复", { exact: true })).toBeVisible();
   await expect(drawer.getByRole("button", { name: "暂停任命" })).toBeVisible();
 
   await drawer.getByRole("button", { name: "结束任命" }).click();
+  const endResponse = page.waitForResponse(response =>
+    isSuccessfulRpcResponse(response, "admin.organizationResponsibility.endAssignment"));
   await page.locator(".ant-modal-confirm").getByRole("button", {
     name: "确认结束",
   }).click();
+  await expectRpcMutationResult(await endResponse, "admin.organizationResponsibility.endAssignment", true, null);
   const endedMessage = page.getByText("责任任命已结束", { exact: true });
   await expect(endedMessage).toBeVisible();
   await expect(drawer.getByText("已结束", { exact: true })).toBeVisible();
@@ -247,6 +261,32 @@ async function manageLifecycle(page: Page, assignmentId: number) {
     { exact: true },
   )).toBeVisible();
   await page.getByRole("dialog").getByRole("button", { name: "关闭" }).click();
+}
+
+async function expectRepeatedEnd(
+  request: APIRequestContext,
+  scenario: Scenario,
+  assignmentId: number,
+) {
+  const detailUrl = `${scenario.origin}/api/iam/admin/organization-responsibilities/assignments/${assignmentId}`;
+  const headers = adminHeaders(scenario.adminClientCode);
+  const before = await request.get(detailUrl, { headers });
+  expect(before.status()).toBe(200);
+  const beforeBody = await before.json();
+  expect(beforeBody.data.endTime).toEqual(expect.any(String));
+  const repeatedRest = await request.post(`${detailUrl}/end`, { headers });
+  expect(repeatedRest.status()).toBe(200);
+  expect(await repeatedRest.json()).toMatchObject({ data: { changed: false, result: null } });
+  const repeatedTrpc = await postAdminTrpcMutation(
+    request,
+    scenario,
+    "admin.organizationResponsibility.endAssignment",
+    { id: assignmentId },
+  );
+  await expectRpcMutationResult(repeatedTrpc, "admin.organizationResponsibility.endAssignment", false, null);
+  const after = await request.get(detailUrl, { headers });
+  expect(after.status()).toBe(200);
+  expect((await after.json()).data).toEqual(beforeBody.data);
 }
 
 async function expectManualTransportMatrix(

@@ -108,7 +108,13 @@ export function createUserAdapter(deps: CreateUserAdapterDeps) {
     operationId: "admin.user.create",
     input: UserAdminCreateDtoSchema,
     restInput: c => c.req.valid("json") as z.infer<typeof UserAdminCreateDtoSchema>,
-    handler: (input, context) => deps.userService.setUserForAdmin(input, resolveAuditContext(context)),
+    handler: async (input, context) => {
+      const mutation = await deps.userService.setUserForAdmin(input, resolveAuditContext(context));
+      return {
+        ...mutation,
+        result: { ...mutation.result, user: toUserVo(mutation.result.user) },
+      };
+    },
   });
 
   const updateUser = defineAdminApiMutationOperation({

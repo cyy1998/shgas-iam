@@ -1,4 +1,5 @@
 import { apiClient } from '@admin/lib/api-client';
+import { runAdminMutation } from '@admin/services/admin-mutation';
 import type { AppRouter } from '@iam/admin-api/trpc';
 import type { inferRouterInputs, inferRouterOutputs } from '@trpc/server';
 
@@ -19,26 +20,37 @@ export function getUser(username: string) {
 }
 
 export function createUser(body: AdminUserInputs['create']) {
-  return apiClient.admin.user.create.mutate(body);
+  return runAdminMutation(() => apiClient.admin.user.create.mutate(body));
 }
 
 export function updateUser(
   username: string,
   data: AdminUserInputs['update']['data'],
 ) {
-  return apiClient.admin.user.update.mutate({ username, data });
+  return runAdminMutation(() =>
+    apiClient.admin.user.update.mutate({ username, data }),
+  );
 }
 
-export function updateUserStatus(username: string, status: AdminUserInputs['updateStatus']['status']) {
-  return apiClient.admin.user.updateStatus.mutate({ username, status });
+export function updateUserStatus(
+  username: string,
+  status: AdminUserInputs['updateStatus']['status'],
+) {
+  return runAdminMutation(() =>
+    apiClient.admin.user.updateStatus.mutate({ username, status }),
+  );
 }
 
 export function deleteUser(username: string) {
-  return apiClient.admin.user.delete.mutate({ username });
+  return runAdminMutation(() =>
+    apiClient.admin.user.delete.mutate({ username }),
+  );
 }
 
 export function resetUserPassword(username: string) {
-  return apiClient.admin.user.resetPassword.mutate({ username });
+  return runAdminMutation(() =>
+    apiClient.admin.user.resetPassword.mutate({ username }),
+  );
 }
 
 export function generateRandomPassword() {

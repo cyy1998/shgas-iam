@@ -1,10 +1,12 @@
 import { Buffer } from "node:buffer";
 import { expect, test } from "@playwright/test";
 import {
+  expectRpcMutationResult,
   isSuccessfulRpcResponse,
   loginToAdmin,
   openClientSection,
   runClientProtocolLifecycleAction,
+  saveUnchangedClientProtocolConfiguration,
   updateClientStatus,
 } from "./src/admin-client-journey.ts";
 import { requireEnvironment } from "./src/environment.ts";
@@ -114,8 +116,11 @@ test("Admin prepares Custom SSO in Maintenance and existing access resumes after
   const configureResponse = page.waitForResponse(response =>
     isSuccessfulRpcResponse(response, "admin.client.customSsoConfigure"));
   await page.getByRole("button", { name: "保存 Custom SSO 配置" }).click();
-  await configureResponse;
+  await expectRpcMutationResult(await configureResponse, "admin.client.customSsoConfigure", true, {
+    client: expect.any(Object),
+  });
   await expect(page.getByText("已禁用", { exact: true })).toBeVisible();
+  await saveUnchangedClientProtocolConfiguration(page, customSsoClientCode, "custom-sso", false);
 
   await page.getByRole("button", { name: /启\s*用/u }).click();
   await expect(page.locator(".ant-modal-confirm-title").filter({
@@ -124,7 +129,9 @@ test("Admin prepares Custom SSO in Maintenance and existing access resumes after
   const enableResponse = page.waitForResponse(response =>
     isSuccessfulRpcResponse(response, "admin.client.customSsoEnable"));
   await page.getByRole("button", { name: /确\s*定/u }).click();
-  await enableResponse;
+  await expectRpcMutationResult(await enableResponse, "admin.client.customSsoEnable", true, {
+    client: expect.any(Object),
+  });
   await expect(page.getByText("已启用", { exact: true })).toBeVisible();
 
   const authorize = new URL("/sso/authorize", origin);

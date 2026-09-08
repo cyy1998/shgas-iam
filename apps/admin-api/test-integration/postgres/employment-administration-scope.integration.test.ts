@@ -148,7 +148,7 @@ describe("HR Employment administration scope", () => {
       undefined,
       authorization,
     );
-    expect(updated).toBe(true);
+    expect(updated).toEqual({ changed: true, result: null });
     const updatedRows = await harness.db
       .select({ description: employments.description })
       .from(employments)
@@ -186,7 +186,7 @@ describe("HR Employment administration scope", () => {
     const createdRows = await harness.db
       .select({ orgId: employments.orgId, description: employments.description })
       .from(employments)
-      .where(eq(employments.id, created.id));
+      .where(eq(employments.id, created.result.id));
     expect(createdRows).toEqual([{
       orgId: seeded.inScopeOrgId,
       description: "created by HR",
@@ -285,7 +285,7 @@ describe("HR Employment administration scope", () => {
       command: "pause",
       employmentId: seeded.inScopeEnabledId,
     });
-    expect(paused).toBe(true);
+    expect(paused).toEqual({ changed: true, result: null });
 
     await service.guardEmploymentMutationForAdmin(
       seeded.inScopeEnabledId,
@@ -297,7 +297,7 @@ describe("HR Employment administration scope", () => {
       employmentId: seeded.inScopeEnabledId,
       expectedAncestorOrgCode: "IN",
     });
-    expect(resumed).toBe(true);
+    expect(resumed).toEqual({ changed: true, result: null });
 
     await service.guardEmploymentMutationForAdmin(
       seeded.inScopePausedId,
@@ -307,7 +307,7 @@ describe("HR Employment administration scope", () => {
     const ended = await endEmployment.execute({
       employmentId: seeded.inScopePausedId,
     });
-    expect(ended).toBe(true);
+    expect(ended).toEqual({ changed: true, result: null });
 
     const employmentRows = await harness.db
       .select({ id: employments.id, status: employments.status })
@@ -368,7 +368,7 @@ describe("HR Employment administration scope", () => {
   });
 
   test("transfers across authorized roots while both out-of-scope directions remain no-write", async () => {
-    const { service, transferEmployment } = createSubject();
+    const { transferEmployment } = createSubject();
     const authorization = await createTestHrEmploymentAuthorization({
       rootOrganizationIds: [seeded.inScopeOrgId, seeded.secondScopeOrgId],
       organizationIds: [
@@ -398,11 +398,6 @@ describe("HR Employment administration scope", () => {
       .from(employments)
       .orderBy(asc(employments.id));
 
-    await service.guardEmploymentMutationForAdmin(
-      seeded.inScopeEnabledId,
-      "admin.employment.transfer",
-      authorization,
-    );
     let destinationFailure: unknown;
     try {
       await transferEmployment.execute({
@@ -420,11 +415,6 @@ describe("HR Employment administration scope", () => {
 
     let sourceFailure: unknown;
     try {
-      await service.guardEmploymentMutationForAdmin(
-        seeded.outOfScopeId,
-        "admin.employment.transfer",
-        authorization,
-      );
       await transferEmployment.execute({
         employmentId: seeded.outOfScopeId,
         newOrgCode: "IN_TWO",
@@ -474,9 +464,9 @@ describe("HR Employment administration scope", () => {
         status: employments.status,
       })
       .from(employments)
-      .where(eq(employments.id, sameRootTransfer.newEmploymentId)))
+      .where(eq(employments.id, sameRootTransfer.result.id)))
       .toEqual([{
-        id: sameRootTransfer.newEmploymentId,
+        id: sameRootTransfer.result.id,
         orgId: seeded.inScopeChildOrgId,
         status: EmploymentStatus.Enable,
       }]);
@@ -517,9 +507,9 @@ describe("HR Employment administration scope", () => {
         description: employments.description,
       })
       .from(employments)
-      .where(eq(employments.id, transferred.newEmploymentId)))
+      .where(eq(employments.id, transferred.result.id)))
       .toEqual([{
-        id: transferred.newEmploymentId,
+        id: transferred.result.id,
         orgId: seeded.secondScopeOrgId,
         posId: seeded.globalPositionId,
         status: EmploymentStatus.Enable,
@@ -547,19 +537,19 @@ describe("HR Employment administration scope", () => {
   });
 
   test("sets and clears an in-scope Primary while keeping an out-of-scope old Primary concealed", async () => {
-    const { managePrimaryEmployment, service } = createSubject();
+    const { managePrimaryEmployment } = createSubject();
     const authorization = await scopedAuthorization();
 
-    await service.guardEmploymentMutationForAdmin(
-      seeded.inScopeEnabledId,
-      "admin.employment.setPrimary",
-      authorization,
-    );
     const set = await managePrimaryEmployment.execute({
       command: "set",
       employmentId: seeded.inScopeEnabledId,
-    });
-    expect(set).toBe(true);
+    }, { authorization });
+    expect(set).toEqual({ changed: true, result: null });
+    const repeatedSet = await managePrimaryEmployment.execute({
+      command: "set",
+      employmentId: seeded.inScopeEnabledId,
+    }, { authorization });
+    expect(repeatedSet).toEqual({ changed: false, result: null });
     expect(await harness.db
       .select({ id: employments.id, isPrimary: employments.isPrimary })
       .from(employments)
@@ -571,27 +561,26 @@ describe("HR Employment administration scope", () => {
 
     let oldPrimaryFailure: unknown;
     try {
-      await service.guardEmploymentMutationForAdmin(
-        seeded.outOfScopeOldPrimaryId,
-        "admin.employment.pause",
-        authorization,
-      );
+      await managePrimaryEmployment.execute({
+        command: "set",
+        employmentId: seeded.outOfScopeOldPrimaryId,
+      }, { authorization });
     }
     catch (error) {
       oldPrimaryFailure = error;
     }
     expect(oldPrimaryFailure).toBeInstanceOf(EmploymentNotFoundError);
 
-    await service.guardEmploymentMutationForAdmin(
-      seeded.inScopeEnabledId,
-      "admin.employment.clearPrimary",
-      authorization,
-    );
     const cleared = await managePrimaryEmployment.execute({
       command: "clear",
       employmentId: seeded.inScopeEnabledId,
-    });
-    expect(cleared).toBe(true);
+    }, { authorization });
+    expect(cleared).toEqual({ changed: true, result: null });
+    const repeatedClear = await managePrimaryEmployment.execute({
+      command: "clear",
+      employmentId: seeded.inScopeEnabledId,
+    }, { authorization });
+    expect(repeatedClear).toEqual({ changed: false, result: null });
     expect(await harness.db
       .select({ id: employments.id, isPrimary: employments.isPrimary })
       .from(employments)

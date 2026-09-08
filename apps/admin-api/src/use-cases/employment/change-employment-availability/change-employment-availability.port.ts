@@ -1,4 +1,5 @@
 import type { AdminAuditContext, AuditLogInput } from "@admin-api/services/audit/audit.context";
+import type { OrganizationResponsibilityAssignmentWriteTarget } from "@admin-api/services/organization-responsibility/organization-responsibility-parent-lifecycle.type";
 import type { UnitOfWorkPort } from "@iam/api-core/uow";
 import type { EmploymentStatus } from "@iam/contracts";
 import type { Employment } from "@iam/domain/employment";
@@ -13,7 +14,7 @@ export interface EmploymentLifecycleContext {
 
 export interface ChangeEmploymentAvailabilityTransactionPorts {
   employmentStore: {
-    getEmploymentLifecycleContextById: (id: number) => Promise<EmploymentLifecycleContext | null>;
+    lockEmploymentLifecycleContextById: (id: number) => Promise<EmploymentLifecycleContext | null>;
     getOpenEmploymentByUserOrgPosId: (
       userId: number,
       orgId: number,
@@ -23,7 +24,7 @@ export interface ChangeEmploymentAvailabilityTransactionPorts {
     updateEmploymentRecord: (
       id: number,
       patch: { status: EmploymentStatus.Enable | EmploymentStatus.Pause },
-    ) => Promise<unknown>;
+    ) => Promise<Employment>;
   };
   organizationReader: {
     isOrganizationDescendantOf: (
@@ -35,9 +36,14 @@ export interface ChangeEmploymentAvailabilityTransactionPorts {
     recordAuditLog: (input: AuditLogInput) => Promise<void>;
   };
   responsibilityParentLifecycle: {
+    lockAssignmentsForEmployment: (input: {
+      employmentId: number;
+      command: "pause" | "end";
+    }) => Promise<OrganizationResponsibilityAssignmentWriteTarget[]>;
     pauseEnabledAssignmentsForEmployment: (input: {
       employmentId: number;
       auditContext?: AdminAuditContext;
+      selectedAssignments: readonly OrganizationResponsibilityAssignmentWriteTarget[];
     }) => Promise<boolean>;
   };
   userProfileInvalidation: {

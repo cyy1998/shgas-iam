@@ -22,7 +22,9 @@ export interface CreateEmploymentStorePort {
     orgId: number,
     posId: number,
   ) => Promise<Employment | null>;
-  unsetOpenPrimariesByUserId: (userId: number) => Promise<unknown>;
+  getOpenPrimaryEmploymentIdsByUserId: (userId: number) => Promise<number[]>;
+  lockEmploymentsByIds: (ids: readonly number[]) => Promise<Employment[]>;
+  updateEmploymentRecord: (id: number, input: { isPrimary: false }) => Promise<Employment>;
 }
 
 export interface CreateEmploymentTransactionPorts {

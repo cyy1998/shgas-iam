@@ -1,15 +1,20 @@
+import { AdminMutationCommittedError } from '@admin/services/admin-mutation';
+import { getAdminAuthorizationReasonText } from '@admin/services/authorization';
 import {
   createOrganization,
   type OrganizationDetailVo,
   updateOrganization,
 } from '@admin/services/organization';
-import { getAdminAuthorizationReasonText } from '@admin/services/authorization';
 import {
   ModalForm,
   ProFormSelect,
   ProFormText,
 } from '@ant-design/pro-components';
-import { getOrganizationStatusOptions, OrganizationType } from '@iam/contracts';
+import {
+  getOrganizationStatusOptions,
+  OrganizationStatus,
+  OrganizationType,
+} from '@iam/contracts';
 import { Alert, message } from 'antd';
 
 type Props = {
@@ -19,6 +24,7 @@ type Props = {
   parentCode?: string | null;
   onOpenChange: (open: boolean) => void;
   onSuccess?: () => void;
+  onCommitted?: (error: AdminMutationCommittedError) => void;
 };
 
 const orgTypeOptions = Object.values(OrganizationType).map((t) => ({
@@ -39,10 +45,11 @@ export default function OrgFormModal({
   parentCode,
   onOpenChange,
   onSuccess,
+  onCommitted,
 }: Props) {
   const isEdit = mode === 'edit';
-  const canChangeStatus = !isEdit
-    || initialValues?.allowedActions.changeStatus.allowed !== false;
+  const canChangeStatus =
+    !isEdit || initialValues?.allowedActions.changeStatus.allowed !== false;
   const changeStatusReason = isEdit
     ? getAdminAuthorizationReasonText(
         initialValues?.allowedActions.changeStatus.reason ?? null,
@@ -64,7 +71,7 @@ export default function OrgFormModal({
             }
           : {
               orgType: OrganizationType.Department,
-              status: 1,
+              status: OrganizationStatus.Enable,
             }
       }
       modalProps={{
@@ -75,25 +82,31 @@ export default function OrgFormModal({
       onFinish={async (values) => {
         try {
           if (isEdit && initialValues) {
-            await updateOrganization(initialValues.orgCode, {
+            const outcome = await updateOrganization(initialValues.orgCode, {
               orgName: values.orgName,
               orgType: values.orgType,
-              ...(canChangeStatus ? { status: values.status } : {}),
+              ...(canChangeStatus && values.status !== initialValues.status
+                ? { status: values.status }
+                : {}),
             });
-            message.success('更新成功');
+            message.success(outcome.changed ? '更新成功' : '无需修改');
           } else {
-            await createOrganization({
+            const outcome = await createOrganization({
               orgCode: values.orgCode,
               orgName: values.orgName,
               orgType: values.orgType,
               parentCode: mode === 'create-child' ? (parentCode ?? null) : null,
-              status: values.status,
+              status: OrganizationStatus.Enable,
             });
-            message.success('创建成功');
+            message.success(outcome.changed ? '创建成功' : '无需修改');
           }
           onSuccess?.();
           return true;
         } catch (err) {
+          if (err instanceof AdminMutationCommittedError) {
+            onCommitted?.(err);
+            return true;
+          }
           message.error(err instanceof Error ? err.message : '操作失败');
           return false;
         }
@@ -137,10 +150,12 @@ export default function OrgFormModal({
         label="状态"
         disabled={!canChangeStatus}
         tooltip={changeStatusReason}
-        options={getOrganizationStatusOptions().map((o) => ({
-          label: o.label,
-          value: o.value,
-        }))}
+        options={getOrganizationStatusOptions()
+          .filter((o) => isEdit || o.value === OrganizationStatus.Enable)
+          .map((o) => ({
+            label: o.label,
+            value: o.value,
+          }))}
         rules={[{ required: true }]}
       />
     </ModalForm>

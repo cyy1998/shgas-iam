@@ -2,6 +2,7 @@ import {
   buildCustomSsoPlaceholderPreview,
   CUSTOM_SSO_CLAIM_CATALOG,
 } from '@admin/pages/clients/customSsoCatalog';
+import { AdminMutationCommittedError } from '@admin/services/admin-mutation';
 import {
   type ClientCustomSsoConfigureInput,
   type ClientDetailVo,
@@ -35,6 +36,7 @@ import {
 } from 'antd';
 import { useEffect, useState } from 'react';
 import OneTimeSecretModal from './OneTimeSecretModal';
+import type { ClientCommittedFailureKind } from './settingsHelpers';
 import {
   canEnableClientProtocol,
   confirmClientSettingAction,
@@ -44,6 +46,7 @@ import {
 type Props = {
   client: ClientDetailVo;
   onDirtyChange: (dirty: boolean) => void;
+  onCommitted: (kind?: ClientCommittedFailureKind) => Promise<void>;
   onMutated: () => Promise<void>;
   onOneTimeSecretPendingChange: (pending: boolean) => void;
 };
@@ -88,6 +91,7 @@ export default function CustomSsoSettings({
   client,
   onDirtyChange,
   onMutated,
+  onCommitted,
   onOneTimeSecretPendingChange,
 }: Props) {
   const [form] = Form.useForm<CustomSsoFormValues>();
@@ -110,27 +114,37 @@ export default function CustomSsoSettings({
     onDirtyChange(formDirty);
   }, [formDirty, onDirtyChange]);
 
-  const handleError = (err: unknown) =>
-    message.error(err instanceof Error ? err.message : 'Custom SSO 操作失败');
+  const handleError = async (
+    err: unknown,
+    kind: ClientCommittedFailureKind = 'mutation',
+  ) => {
+    if (err instanceof AdminMutationCommittedError) {
+      setFormDirty(false);
+      await onCommitted(kind);
+      return;
+    }
+    message.error(err instanceof Error ? err.message : '操作失败');
+  };
 
   const runAction = async (
     title: string,
     content: string,
-    action: () => Promise<{
-      client: ClientDetailVo;
-      customSsoSecret?: string;
-    }>,
+    action: () => ReturnType<
+      typeof enableClientCustomSso | typeof rotateClientCustomSsoSecret
+    >,
+    failureKind: ClientCommittedFailureKind = 'mutation',
   ) => {
     if (!(await confirmClientSettingAction(title, content))) return;
     try {
-      const result = await action();
-      if (result.customSsoSecret) {
+      const { changed, result } = await action();
+      if ('customSsoSecret' in result && result.customSsoSecret) {
         setOneTimeSecret(result.customSsoSecret);
       }
-      message.success('Custom SSO 操作成功');
+      if (changed) message.success('Custom SSO 操作成功');
+      else message.info('无需修改');
       await onMutated();
     } catch (err) {
-      handleError(err);
+      await handleError(err, failureKind);
     }
   };
 
@@ -217,7 +231,7 @@ export default function CustomSsoSettings({
 
             setSaving(true);
             try {
-              const result = await configureClientCustomSso(
+              const { changed, result } = await configureClientCustomSso(
                 client.clientCode,
                 data,
               );
@@ -225,14 +239,21 @@ export default function CustomSsoSettings({
               if ('customSsoSecret' in result && result.customSsoSecret) {
                 setOneTimeSecret(result.customSsoSecret);
               }
-              message.success(
-                configured
-                  ? 'Custom SSO 配置已更新'
-                  : 'Custom SSO 配置已保存，当前保持禁用',
-              );
+              if (!changed) message.info('无需修改');
+              else
+                message.success(
+                  configured
+                    ? 'Custom SSO 配置已更新'
+                    : 'Custom SSO 配置已保存，当前保持禁用',
+                );
               await onMutated();
             } catch (err) {
-              handleError(err);
+              await handleError(
+                err,
+                data.mode === CustomSsoClientMode.Independent
+                  ? 'configuration'
+                  : 'mutation',
+              );
             } finally {
               setSaving(false);
             }
@@ -430,6 +451,7 @@ export default function CustomSsoSettings({
                 '轮换 Custom SSO secret？',
                 '旧 secret 会立即失效，新 secret 仅显示一次。',
                 () => rotateClientCustomSsoSecret(client.clientCode),
+                'rotation',
               )
             }
           >

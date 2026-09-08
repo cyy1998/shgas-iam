@@ -494,18 +494,20 @@ describe("createSessionManagementService", () => {
     expect(revokePrincipalSession).toHaveBeenCalledWith("ps-target", "admin_revoke");
     expect(result).toEqual({
       changed: true,
-      scope: "session",
-      revoked: {
-        principalSessions: 1,
-        bindings: 2,
-        credentials: 3,
-        artifacts: 4,
-      },
-      currentPrincipalSessionExcluded: false,
-      cleanup: {
-        attempted: 2,
-        succeeded: 2,
-        failed: 0,
+      result: {
+        scope: "session",
+        revoked: {
+          principalSessions: 1,
+          bindings: 2,
+          credentials: 3,
+          artifacts: 4,
+        },
+        currentPrincipalSessionExcluded: false,
+        cleanup: {
+          attempted: 2,
+          succeeded: 2,
+          failed: 0,
+        },
       },
     });
     expect(auditWrites).toEqual([{
@@ -670,17 +672,19 @@ describe("createSessionManagementService", () => {
 
     expect(result).toMatchObject({
       changed: false,
-      scope: "session",
-      revoked: {
-        principalSessions: 0,
-        bindings: 0,
-        credentials: 0,
-        artifacts: 0,
-      },
-      cleanup: {
-        attempted: 0,
-        succeeded: 0,
-        failed: 0,
+      result: {
+        scope: "session",
+        revoked: {
+          principalSessions: 0,
+          bindings: 0,
+          credentials: 0,
+          artifacts: 0,
+        },
+        cleanup: {
+          attempted: 0,
+          succeeded: 0,
+          failed: 0,
+        },
       },
     });
     expect(auditWrites).toEqual([
@@ -806,18 +810,20 @@ describe("createSessionManagementService", () => {
 
     expect(result).toEqual({
       changed: true,
-      scope: "session",
-      revoked: {
-        principalSessions: 1,
-        bindings: 0,
-        credentials: 1,
-        artifacts: 0,
-      },
-      currentPrincipalSessionExcluded: false,
-      cleanup: {
-        attempted: 2,
-        succeeded: 1,
-        failed: 1,
+      result: {
+        scope: "session",
+        revoked: {
+          principalSessions: 1,
+          bindings: 0,
+          credentials: 1,
+          artifacts: 0,
+        },
+        currentPrincipalSessionExcluded: false,
+        cleanup: {
+          attempted: 2,
+          succeeded: 1,
+          failed: 1,
+        },
       },
     });
     expect(auditWrites).toEqual([
@@ -877,18 +883,20 @@ describe("createSessionManagementService", () => {
     expect(controlCalls).toHaveLength(0);
     expect(result).toEqual({
       changed: true,
-      scope: "user",
-      revoked: {
-        principalSessions: 2,
-        bindings: 3,
-        credentials: 4,
-        artifacts: 5,
-      },
-      currentPrincipalSessionExcluded: false,
-      cleanup: {
-        attempted: 2,
-        succeeded: 2,
-        failed: 0,
+      result: {
+        scope: "user",
+        revoked: {
+          principalSessions: 2,
+          bindings: 3,
+          credentials: 4,
+          artifacts: 5,
+        },
+        currentPrincipalSessionExcluded: false,
+        cleanup: {
+          attempted: 2,
+          succeeded: 2,
+          failed: 0,
+        },
       },
     });
     expect(auditWrites).toEqual([{
@@ -951,18 +959,20 @@ describe("createSessionManagementService", () => {
     expect(listPrincipalSessions).not.toHaveBeenCalled();
     expect(result).toEqual({
       changed: true,
-      scope: "user",
-      revoked: {
-        principalSessions: 1,
-        bindings: 2,
-        credentials: 3,
-        artifacts: 1,
-      },
-      currentPrincipalSessionExcluded: true,
-      cleanup: {
-        attempted: 1,
-        succeeded: 1,
-        failed: 0,
+      result: {
+        scope: "user",
+        revoked: {
+          principalSessions: 1,
+          bindings: 2,
+          credentials: 3,
+          artifacts: 1,
+        },
+        currentPrincipalSessionExcluded: true,
+        cleanup: {
+          attempted: 1,
+          succeeded: 1,
+          failed: 0,
+        },
       },
     });
     expect(auditWrites).toEqual([
@@ -1066,18 +1076,20 @@ describe("createSessionManagementService", () => {
     expect(userControlCalls).toHaveLength(1);
     expect(result).toEqual({
       changed: false,
-      scope: "user",
-      revoked: {
-        principalSessions: 0,
-        bindings: 0,
-        credentials: 0,
-        artifacts: 0,
-      },
-      currentPrincipalSessionExcluded: false,
-      cleanup: {
-        attempted: 0,
-        succeeded: 0,
-        failed: 0,
+      result: {
+        scope: "user",
+        revoked: {
+          principalSessions: 0,
+          bindings: 0,
+          credentials: 0,
+          artifacts: 0,
+        },
+        currentPrincipalSessionExcluded: false,
+        cleanup: {
+          attempted: 0,
+          succeeded: 0,
+          failed: 0,
+        },
       },
     });
     expect(auditWrites).toEqual([
@@ -1119,11 +1131,13 @@ describe("createSessionManagementService", () => {
 
     expect(result).toMatchObject({
       changed: true,
-      scope: "user",
-      cleanup: {
-        attempted: 2,
-        succeeded: 1,
-        failed: 1,
+      result: {
+        scope: "user",
+        cleanup: {
+          attempted: 2,
+          succeeded: 1,
+          failed: 1,
+        },
       },
     });
     expect(auditWrites).toEqual([
@@ -1737,7 +1751,9 @@ describe("createSessionManagementService", () => {
     expect(clearLoginState).toHaveBeenCalledWith(7);
     expect(result).toEqual({
       changed: true,
-      failureStateCleared: true,
+      result: {
+        failureStateCleared: true,
+      },
     });
     expect(auditWrites).toEqual([{
       action: "admin.login_restriction.release",
@@ -1824,7 +1840,9 @@ describe("createSessionManagementService", () => {
 
     await expect(release()).resolves.toEqual({
       changed: false,
-      failureStateCleared: true,
+      result: {
+        failureStateCleared: true,
+      },
     });
     expect(auditWrites).toEqual([{
       action: "admin.login_restriction.release",

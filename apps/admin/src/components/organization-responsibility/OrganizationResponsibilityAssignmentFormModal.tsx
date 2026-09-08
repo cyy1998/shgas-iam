@@ -56,7 +56,7 @@ export default function OrganizationResponsibilityAssignmentFormModal({
           });
           messageApi.success('责任任命已创建');
           onOpenChange(false);
-          onSuccess(created.id);
+          onSuccess(created.result.id);
           return true;
         } catch (error) {
           messageApi.error(

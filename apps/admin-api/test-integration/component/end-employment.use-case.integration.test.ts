@@ -29,12 +29,13 @@ function createLifecycle() {
   const tx = {
     auditLogWriter: { recordAuditLog: mock(async () => undefined) },
     responsibilityParentLifecycle: {
+      lockAssignmentsForEmployment: mock(async () => []),
       endOpenAssignmentsForEmployment: mock(async () => true),
     },
     sessionRevocation: { revokeAllForUser: mock(async () => undefined) },
     userProfileInvalidation: { recordChanges: mock(async () => undefined) },
     employmentStore: {
-      getEmploymentLifecycleContextById: mock(async () => ({ employment: currentEmployment })),
+      lockEmploymentLifecycleContextById: mock(async () => ({ employment: currentEmployment })),
       updateEmploymentRecord: mock(async (_id: number, patch: Record<string, unknown>) => ({
         ...currentEmployment,
         ...patch,
@@ -55,7 +56,7 @@ describe("Employment Lifecycle End", () => {
   test("ends an enabled Employment at one transaction time and clears Primary", async () => {
     const { tx, useCase } = createLifecycle();
 
-    await expect(useCase.execute({ employmentId: 4 })).resolves.toBe(true);
+    await expect(useCase.execute({ employmentId: 4 })).resolves.toEqual({ changed: true, result: null });
 
     expect(tx.employmentStore.updateEmploymentRecord).toHaveBeenCalledWith(4, {
       status: EmploymentStatus.Disable,
@@ -76,6 +77,7 @@ describe("Employment Lifecycle End", () => {
     ).toHaveBeenCalledWith({
       action: "end",
       auditContext: undefined,
+      selectedAssignments: [],
       employmentId: 4,
       endTime: transactionTime,
     });
@@ -88,11 +90,11 @@ describe("Employment Lifecycle End", () => {
 
   test("ends a paused Employment without rewriting its start time", async () => {
     const { tx, useCase } = createLifecycle();
-    tx.employmentStore.getEmploymentLifecycleContextById.mockResolvedValueOnce({
+    tx.employmentStore.lockEmploymentLifecycleContextById.mockResolvedValueOnce({
       employment: employment({ status: EmploymentStatus.Pause }),
     });
 
-    await expect(useCase.execute({ employmentId: 4 })).resolves.toBe(true);
+    await expect(useCase.execute({ employmentId: 4 })).resolves.toEqual({ changed: true, result: null });
 
     expect(tx.employmentStore.updateEmploymentRecord).toHaveBeenCalledWith(4, {
       status: EmploymentStatus.Disable,
@@ -104,7 +106,7 @@ describe("Employment Lifecycle End", () => {
   test("treats an already ended Employment as an idempotent success", async () => {
     const { tx, useCase } = createLifecycle();
     const originalEndTime = new Date("2025-12-01T00:00:00.000Z");
-    tx.employmentStore.getEmploymentLifecycleContextById.mockResolvedValueOnce({
+    tx.employmentStore.lockEmploymentLifecycleContextById.mockResolvedValueOnce({
       employment: employment({
         status: EmploymentStatus.Disable,
         endTime: originalEndTime,
@@ -112,13 +114,15 @@ describe("Employment Lifecycle End", () => {
       }),
     });
 
-    await expect(useCase.execute({ employmentId: 4 })).resolves.toBe(true);
+    await expect(useCase.execute({ employmentId: 4 })).resolves.toEqual({ changed: false, result: null });
 
     expect(tx.employmentStore.updateEmploymentRecord).not.toHaveBeenCalled();
     expect(
       tx.responsibilityParentLifecycle.endOpenAssignmentsForEmployment,
     ).not.toHaveBeenCalled();
-    expect(tx.auditLogWriter.recordAuditLog).not.toHaveBeenCalled();
+    expect(tx.auditLogWriter.recordAuditLog).toHaveBeenCalledWith(expect.objectContaining({
+      details: expect.objectContaining({ changed: false }),
+    }));
     expect(tx.userProfileInvalidation.recordChanges).not.toHaveBeenCalled();
   });
 
@@ -156,6 +160,7 @@ describe("Employment Lifecycle End", () => {
                 staged.status = patch.status;
                 staged.endTime = patch.endTime;
                 staged.isPrimary = patch.isPrimary;
+                return employment(patch);
               },
             },
             auditLogWriter: {

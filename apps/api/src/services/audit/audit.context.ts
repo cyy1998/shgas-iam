@@ -5,6 +5,11 @@ import { normalizeAuditActor } from "@iam/domain/audit";
 
 export type ApiRequestContext = AuditRequestContext;
 
+export type InternalAuditActor = Pick<
+  AuditLogInput,
+  "actorType" | "actorUserId" | "actorUsername" | "actorClientCode" | "actorSystemKey"
+>;
+
 export type AuditLogInput = {
   eventTime?: Date;
   action: string;

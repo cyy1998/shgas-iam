@@ -123,10 +123,10 @@ export function createSessionManagementService(deps: AdminSessionManagementServi
           auditContext,
           actorUserIdFallback: actor.actorUserId,
           logFields: {
-            targetScope: result.scope,
+            targetScope: result.result.scope,
             targetUserId: input.target.userId,
-            revoked: result.revoked,
-            cleanup: result.cleanup,
+            revoked: result.result.revoked,
+            cleanup: result.result.cleanup,
           },
         });
         return result;
@@ -162,10 +162,10 @@ export function createSessionManagementService(deps: AdminSessionManagementServi
         auditContext,
         actorUserIdFallback: actor.actorUserId,
         logFields: {
-          targetScope: result.scope,
+          targetScope: result.result.scope,
           targetUserId: input.target.userId,
-          revoked: result.revoked,
-          cleanup: result.cleanup,
+          revoked: result.result.revoked,
+          cleanup: result.result.cleanup,
         },
       });
       return result;
@@ -207,10 +207,10 @@ export function createSessionManagementService(deps: AdminSessionManagementServi
       auditContext,
       actorUserIdFallback: actor.actorUserId,
       logFields: {
-        targetScope: result.scope,
+        targetScope: result.result.scope,
         targetPrincipalSessionId: input.target.principalSessionId,
-        revoked: result.revoked,
-        cleanup: result.cleanup,
+        revoked: result.result.revoked,
+        cleanup: result.result.cleanup,
       },
     });
     return result;
@@ -304,7 +304,7 @@ export function createSessionManagementService(deps: AdminSessionManagementServi
     }
     const result: AdminLoginRestrictionReleaseResult = {
       changed: transition.changed,
-      failureStateCleared: transition.failureStateCleared,
+      result: { failureStateCleared: transition.failureStateCleared },
     };
 
     await recordMutationAudit({
@@ -324,7 +324,7 @@ export function createSessionManagementService(deps: AdminSessionManagementServi
           ?? AdminLoginRestrictionCause.TooManyLoginFailures,
         triggerMethod: transition.restriction?.triggerMethod
           ?? AdminLoginRestrictionTriggerMethod.Unknown,
-        failureStateCleared: result.failureStateCleared,
+        failureStateCleared: result.result.failureStateCleared,
       },
     });
 
@@ -481,29 +481,31 @@ function classifyBrowser(userAgent: string) {
 }
 
 function emptySessionRevokeResult(
-  scope: AdminSessionRevokeResult["scope"],
+  scope: AdminSessionRevokeResult["result"]["scope"],
 ): AdminSessionRevokeResult {
   return {
     changed: false,
-    scope,
-    revoked: {
-      principalSessions: 0,
-      bindings: 0,
-      credentials: 0,
-      artifacts: 0,
-    },
-    currentPrincipalSessionExcluded: false,
-    cleanup: {
-      attempted: 0,
-      succeeded: 0,
-      failed: 0,
+    result: {
+      scope,
+      revoked: {
+        principalSessions: 0,
+        bindings: 0,
+        credentials: 0,
+        artifacts: 0,
+      },
+      currentPrincipalSessionExcluded: false,
+      cleanup: {
+        attempted: 0,
+        succeeded: 0,
+        failed: 0,
+      },
     },
   };
 }
 
 function toSessionRevokeResult(
   summary: AdminSessionControlSummary,
-  scope: AdminSessionRevokeResult["scope"],
+  scope: AdminSessionRevokeResult["result"]["scope"],
   currentPrincipalSessionExcluded = false,
 ): AdminSessionRevokeResult {
   const revoked = {
@@ -514,13 +516,15 @@ function toSessionRevokeResult(
   };
   return {
     changed: Object.values(revoked).some(count => count > 0),
-    scope,
-    revoked,
-    currentPrincipalSessionExcluded,
-    cleanup: {
-      attempted: summary.cleanup.attempted,
-      succeeded: summary.cleanup.succeeded,
-      failed: summary.cleanup.failed,
+    result: {
+      scope,
+      revoked,
+      currentPrincipalSessionExcluded,
+      cleanup: {
+        attempted: summary.cleanup.attempted,
+        succeeded: summary.cleanup.succeeded,
+        failed: summary.cleanup.failed,
+      },
     },
   };
 }

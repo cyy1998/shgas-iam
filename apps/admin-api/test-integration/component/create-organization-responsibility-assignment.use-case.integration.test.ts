@@ -102,7 +102,7 @@ describe("Create Organization Responsibility Assignment", () => {
       typeCode: OrganizationResponsibilityTypeCode.Head,
     }, { authorization });
 
-    expect(result).toEqual({ id: 31 });
+    expect(result).toEqual({ changed: true, result: { id: 31 } });
     expect(tx.assignmentStore.isEndpointPairWithinReadScope).toHaveBeenCalledWith({
       readScope: authorization.readScope,
       holderOrganizationId: 12,
@@ -145,7 +145,7 @@ describe("Create Organization Responsibility Assignment", () => {
       employmentId: 11,
       targetOrganizationCode: "TARGET",
       typeCode: OrganizationResponsibilityTypeCode.Head,
-    })).resolves.toEqual({ id: 31 });
+    })).resolves.toEqual({ changed: true, result: { id: 31 } });
 
     expect(clock.nowDate).toHaveBeenCalledTimes(1);
     expect(tx.assignmentStore.createAssignmentRecord).toHaveBeenCalledWith({
@@ -155,12 +155,13 @@ describe("Create Organization Responsibility Assignment", () => {
       status: OrganizationResponsibilityAssignmentStatus.Enable,
       startTime: now,
       endTime: null,
-    });
+    }, { kind: "full" });
     expect(tx.auditLogWriter.recordAuditLog).toHaveBeenCalledWith(expect.objectContaining({
       action: "admin.organization_responsibility_assignment.create",
       targetType: "organization_responsibility_assignment",
       targetId: 31,
       details: {
+        changed: true,
         binding: {
           employmentId: 11,
           targetOrganizationId: 22,

@@ -9,7 +9,23 @@ export const OrganizationDetailSchema = OrganizationSchema.extend({
   children: z.array(OrganizationSchema),
 });
 
-export const OrganizationDtoSchema = OrganizationSchema.extend({
+export const OrganizationDtoSchema = OrganizationSchema.pick({
+  id: true,
+  orgCode: true,
+  orgName: true,
+  parentId: true,
+  businessParentId: true,
+  path: true,
+  level: true,
+  orgType: true,
+  orderNum: true,
+  isVirtual: true,
+  isEntity: true,
+  status: true,
+  isDelete: true,
+  createTime: true,
+  updateTime: true,
+}).extend({
   isLeaf: z.boolean().openapi({ example: true }),
   parentCode: z.string().nullable().openapi({ example: "SR" }),
   parentName: z.string().nullable().openapi({ example: "上海燃气有限公司" }),
@@ -25,21 +41,26 @@ export function toOrganizationDto(input: unknown) {
   });
 }
 
-export const OrganizationCreateDtoSchema = OrganizationSchema.partial().required({
+export const OrganizationCreateDtoSchema = OrganizationSchema.pick({
+  orgCode: true,
+  orgName: true,
+  businessParentId: true,
+  path: true,
+  level: true,
+  orgType: true,
+  orderNum: true,
+  isVirtual: true,
+  isEntity: true,
+  status: true,
+}).partial().required({
   orgCode: true,
   orgType: true,
   orgName: true,
-  // parentCode: true,
 }).extend({
+  status: z.literal(OrganizationStatus.Enable).default(OrganizationStatus.Enable),
   path: z.string().default(""),
   level: z.enum(OrganizationLevel).default(OrganizationLevel.One),
   parentCode: z.string().nullish().openapi({ example: "SR" }),
-}).omit({
-  id: true,
-  isDelete: true,
-  createTime: true,
-  updateTime: true,
-  parentId: true,
 }).openapi("OrganizationCreateDto");
 
 export const OrganizationUpdateDtoSchema = z.object({

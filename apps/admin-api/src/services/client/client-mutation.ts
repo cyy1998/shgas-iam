@@ -7,6 +7,7 @@ import type {
   AdminClientMutationLoggerPort,
   AdminClientRuntimeInvalidationPort,
 } from "./client.port";
+import { AdminMutationCommittedError } from "@admin-api/services/admin-mutation/admin-mutation";
 import {
   AfterCommitRequiredTaskError,
   consumeTransactionRollbackConfirmation,
@@ -79,8 +80,11 @@ export function createAdminClientMutation<TxPorts extends object>(
         throw error;
       }
 
-      if (error instanceof AfterCommitRequiredTaskError)
+      if (error instanceof AfterCommitRequiredTaskError) {
+        if (callbackCompleted)
+          throw new AdminMutationCommittedError();
         throw error;
+      }
 
       if (!callbackCompleted || targetClientCode === undefined)
         throw error;

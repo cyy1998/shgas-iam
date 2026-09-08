@@ -1,5 +1,6 @@
 // Browser Integration uses a mocked backend; this is not a full-system journey.
 import {
+  ApiErrorCode,
   EmploymentStatus,
   OrganizationLevel,
   OrganizationStatus,
@@ -8,8 +9,11 @@ import {
 } from '@iam/contracts';
 import { expect, test, type Page } from '@playwright/test';
 import {
+  adminCapabilitySummary,
   adminEmploymentSearchResult,
   adminPositionSearchResult,
+  adminUserDetail,
+  currentAdminUser,
   createHrEmploymentAllowedActions,
   currentHrAdminUser,
   hrAdminCapabilitySummary,
@@ -51,11 +55,11 @@ async function mockHrAdmin(page: Page) {
   const passwordResets: unknown[] = [];
   await page.route('**/rpc/admin.user.update**', (route) => {
     userUpdates.push(parseTrpcBatchInput(route));
-    return fulfillTrpc(route, true);
+    return fulfillTrpc(route, { changed: true, result: null });
   });
   await page.route('**/rpc/admin.user.resetPassword**', (route) => {
     passwordResets.push(parseTrpcBatchInput(route));
-    return fulfillTrpc(route, 'Rand1234');
+    return fulfillTrpc(route, { changed: true, result: 'Rand1234' });
   });
   const roots = [
     {
@@ -226,13 +230,13 @@ async function mockHrAdmin(page: Page) {
     await page.route(`**/rpc/admin.employment.${operation}**`, (route) => {
       employmentPrimaryMutations.push(operation);
       setEmploymentPrimary(isPrimary);
-      return fulfillTrpc(route, true);
+      return fulfillTrpc(route, { changed: true, result: null });
     });
   }
   await page.route('**/rpc/admin.employment.transfer**', (route) => {
     employmentTransfers.push(parseTrpcBatchInput(route));
     setEmploymentStatus(EmploymentStatus.Disable);
-    return fulfillTrpc(route, { newEmploymentId: 100 });
+    return fulfillTrpc(route, { changed: true, result: { id: 100 } });
   });
   await page.route(
     '**/rpc/admin.position.search,admin.organization.selector**',
@@ -327,7 +331,6 @@ test('HR admin reads scoped directories and manages an authorized User from deta
       name: '张三（更新）',
       mobile: '13900000000',
       wxId: 'zhangsan-wx',
-      userType: '正式员工',
     },
   });
 
@@ -499,7 +502,7 @@ test('HR admin sees only executable User status actions and submits the selected
   });
   await page.route('**/rpc/admin.user.updateStatus**', (route) => {
     statusMutations.push(parseTrpcBatchInput(route));
-    return fulfillTrpc(route, true);
+    return fulfillTrpc(route, { changed: true, result: null });
   });
 
   await page.goto('/iam-admin/users');
@@ -518,6 +521,7 @@ test('HR admin sees only executable User status actions and submits the selected
     username: 'zhangsan',
     status: UserStatus.Pause,
   }]);
+  await expect(page.getByText('状态已更新', { exact: true })).toBeVisible();
 });
 
 test('HR admin completes resignation and can retry the server-confirmed completed shape', async ({
@@ -555,7 +559,7 @@ test('HR admin completes resignation and can retry the server-confirmed complete
   await page.route('**/rpc/admin.employment.resignUser**', (route) => {
     resignations.push(parseTrpcBatchInput(route));
     currentDetail = completedDetail;
-    return fulfillTrpc(route, true);
+    return fulfillTrpc(route, { changed: resignations.length === 1, result: null });
   });
 
   await page.goto('/iam-admin/users');
@@ -569,7 +573,9 @@ test('HR admin completes resignation and can retry the server-confirmed complete
       .filter({ hasText: '办理用户 张三 离职？' });
     await confirmation.getByRole('button', { name: /确\s*定/ }).click();
     await expect.poll(() => resignations.length).toBe(expectedCount);
-    await expect(page.getByText('离职已完成').last()).toBeVisible();
+    await expect(
+      page.getByText(expectedCount === 1 ? '离职已完成' : '已处于离职状态，无需修改').last(),
+    ).toBeVisible();
     await expect(drawer.getByRole('button', { name: /离\s*职/ })).toBeEnabled();
   }
 
@@ -578,6 +584,77 @@ test('HR admin completes resignation and can retry the server-confirmed complete
     { username: 'zhangsan' },
   ]);
 });
+
+for (const role of ['Full Admin', 'HR'] as const) {
+  test(`${role} refreshes committed resignation and retains its repair warning without replay`, async ({
+    page,
+  }) => {
+    const isHr = role === 'HR';
+    const sourceDetail = isHr ? hrAdminUserDetail : adminUserDetail;
+    let currentDetail = {
+      ...sourceDetail,
+      allowedActions: {
+        ...sourceDetail.allowedActions,
+        resign: { allowed: true, reason: null },
+      },
+    };
+    let mutations = 0;
+    let reads = 0;
+    await mockAdminApi(page, {
+      capabilitySummary: isHr
+        ? hrAdminCapabilitySummary
+        : adminCapabilitySummary,
+      currentUser: isHr ? currentHrAdminUser : currentAdminUser,
+      userDetail: currentDetail,
+    });
+    await page.route('**/rpc/admin.user.detail**', (route) => {
+      reads += 1;
+      return fulfillTrpc(route, currentDetail);
+    });
+    await page.route('**/rpc/admin.employment.resignUser**', (route) => {
+      mutations += 1;
+      currentDetail = {
+        ...currentDetail,
+        name: '已刷新离职用户',
+        status: UserStatus.Disable,
+      };
+      return fulfillJson(route, [
+        {
+          error: {
+            message: 'required cleanup failed',
+            code: -32603,
+            data: {
+              code: 'INTERNAL_SERVER_ERROR',
+              httpStatus: 500,
+              serviceCode: ApiErrorCode.AdminMutationCommitted,
+            },
+          },
+        },
+      ]);
+    });
+    await page.goto('/iam-admin/users');
+    await page.locator('td a').filter({ hasText: '查看' }).first().click();
+    await page
+      .getByRole('dialog')
+      .getByRole('button', { name: /离\s*职/ })
+      .click();
+    const confirmation = page
+      .getByRole('dialog')
+      .filter({ hasText: /办理用户 .* 离职？/ });
+    await confirmation.getByRole('button', { name: /确\s*定/ }).click();
+    await expect(
+      page
+        .getByRole('tabpanel', { name: '基本信息' })
+        .getByText('已刷新离职用户', { exact: true }),
+    ).toBeVisible();
+    await expect(
+      page.getByRole('alert').filter({ hasText: '操作已生效，但后续处理失败' }),
+    ).toContainText('联系管理员修复');
+    await expect(page.getByText('离职已完成', { exact: true })).toHaveCount(0);
+    expect(mutations).toBe(1);
+    expect(reads).toBe(2);
+  });
+}
 
 test('HR admin does not report resignation success when the mutation is rejected', async ({
   page,

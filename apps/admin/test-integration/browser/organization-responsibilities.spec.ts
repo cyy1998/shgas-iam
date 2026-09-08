@@ -8,7 +8,7 @@ import {
   OrganizationStatus,
   OrganizationType,
 } from '@iam/contracts';
-import { expect, test } from '@playwright/test';
+import { expect, test, type Page } from '@playwright/test';
 import {
   fulfillJson,
   fulfillTrpc,
@@ -151,7 +151,7 @@ test('creates a responsibility assignment from the global toolbar without exposi
     '**/rpc/admin.organizationResponsibility.createAssignment**',
     (route) => {
       createInputs.push(parseTrpcBatchInput(route));
-      return fulfillTrpc(route, { id: 102 });
+      return fulfillTrpc(route, { changed: true, result: { id: 102 } });
     },
   );
 
@@ -184,11 +184,10 @@ test('creates a responsibility assignment from the global toolbar without exposi
         employmentId: 42,
       },
     ]);
+  await expect(dialog).toBeHidden();
 });
 
-test('hydrates global filters and manages the complete lifecycle with audit refresh', async ({
-  page,
-}) => {
+async function manageLifecycle(page: Page, changed: boolean) {
   await mockAdminApi(page);
   const searchInputs: unknown[] = [];
   const pauseInputs: unknown[] = [];
@@ -251,7 +250,7 @@ test('hydrates global filters and manages the complete lifecycle with audit refr
     (route) => {
       pauseInputs.push(parseTrpcBatchInput(route));
       currentStatus = OrganizationResponsibilityAssignmentStatus.Pause;
-      return fulfillTrpc(route, true);
+      return fulfillTrpc(route, { changed, result: null });
     },
   );
   await page.route(
@@ -259,7 +258,7 @@ test('hydrates global filters and manages the complete lifecycle with audit refr
     (route) => {
       resumeInputs.push(parseTrpcBatchInput(route));
       currentStatus = OrganizationResponsibilityAssignmentStatus.Enable;
-      return fulfillTrpc(route, true);
+      return fulfillTrpc(route, { changed, result: null });
     },
   );
   await page.route(
@@ -268,7 +267,7 @@ test('hydrates global filters and manages the complete lifecycle with audit refr
       endInputs.push(parseTrpcBatchInput(route));
       currentStatus = OrganizationResponsibilityAssignmentStatus.Disable;
       currentEndTime = '2026-08-20T01:00:00.000Z';
-      return fulfillTrpc(route, true);
+      return fulfillTrpc(route, { changed, result: null });
     },
   );
   await page.route('**/rpc/admin.audit.search**', (route) => {
@@ -362,6 +361,9 @@ test('hydrates global filters and manages the complete lifecycle with audit refr
     .click();
   await expect.poll(() => pauseInputs).toEqual([{ id: 101 }]);
   await expect(
+    page.getByText(changed ? '责任任命已暂停' : '无需修改').last(),
+  ).toBeVisible();
+  await expect(
     page.getByRole('dialog').getByRole('button', { name: '恢复任命' }),
   ).toBeVisible();
   await page
@@ -369,6 +371,9 @@ test('hydrates global filters and manages the complete lifecycle with audit refr
     .getByRole('button', { name: '恢复任命' })
     .click();
   await expect.poll(() => resumeInputs).toEqual([{ id: 101 }]);
+  await expect(
+    page.getByText(changed ? '责任任命已恢复' : '无需修改').last(),
+  ).toBeVisible();
   await expect(
     page.getByRole('dialog').getByRole('button', { name: '暂停任命' }),
   ).toBeVisible();
@@ -381,6 +386,9 @@ test('hydrates global filters and manages the complete lifecycle with audit refr
   ).toBeVisible();
   await page.getByRole('button', { name: '确认结束' }).click();
   await expect.poll(() => endInputs).toEqual([{ id: 101 }]);
+  await expect(
+    page.getByText(changed ? '责任任命已结束' : '无需修改').last(),
+  ).toBeVisible();
   await expect(
     page.getByRole('dialog').getByRole('button', { name: '暂停任命' }),
   ).toHaveCount(0);
@@ -406,7 +414,15 @@ test('hydrates global filters and manages the complete lifecycle with audit refr
       cursor: '100',
       limit: 20,
     });
-});
+}
+
+for (const changed of [true, false]) {
+  test(`hydrates global filters and manages the complete lifecycle with changed=${changed} and audit refresh`, async ({
+    page,
+  }) => {
+    await manageLifecycle(page, changed);
+  });
+}
 
 test('preserves authority context after internal and forbidden lifecycle failures without replay', async ({
   page,

@@ -102,6 +102,7 @@ function createLifecycle() {
   const tx = {
     auditLogWriter: { recordAuditLog: mock(async () => undefined) },
     responsibilityParentLifecycle: {
+      lockAssignmentsForEmployment: mock(async () => []),
       endOpenAssignmentsForEmployment: mock(async () => true),
     },
     sessionRevocation: { revokeAllForUser: mock(async () => undefined) },
@@ -120,9 +121,11 @@ function createLifecycle() {
         position: sourcePosition,
       })),
       getOpenEmploymentByUserOrgPosId: mock(async () => null),
-      unsetOpenPrimariesByUserId: mock(async () => undefined),
-      updateEmploymentRecord: mock(async (_id: number, patch: Record<string, unknown>) => ({
+      getOpenPrimaryEmploymentIdsByUserId: mock(async () => [9]),
+      lockEmploymentsByIds: mock(async () => [source, employment({ id: 9 })]),
+      updateEmploymentRecord: mock(async (id: number, patch: Record<string, unknown>) => ({
         ...source,
+        id,
         ...patch,
       })),
     },
@@ -155,7 +158,7 @@ describe("Employment Lifecycle Transfer", () => {
       newPosCode: "TARGET_POS",
       isPrimary: false,
       description: "transferred",
-    })).resolves.toEqual({ newEmploymentId: 10 });
+    })).resolves.toEqual({ changed: true, result: { id: 10 } });
 
     expect(clock.nowDate).toHaveBeenCalledTimes(1);
     expect(tx.employmentStore.updateEmploymentRecord).toHaveBeenCalledWith(4, {
@@ -173,11 +176,12 @@ describe("Employment Lifecycle Transfer", () => {
       description: "transferred",
       status: EmploymentStatus.Enable,
     });
-    expect(tx.employmentStore.unsetOpenPrimariesByUserId).not.toHaveBeenCalled();
+    expect(tx.employmentStore.updateEmploymentRecord).toHaveBeenCalledTimes(1);
     expect(tx.auditLogWriter.recordAuditLog).toHaveBeenCalledWith(expect.objectContaining({
       action: "admin.employment.transfer",
       targetId: 4,
       details: expect.objectContaining({
+        changed: true,
         newEmploymentId: 10,
         endTime: transactionTime,
         startTime: transactionTime,
@@ -194,6 +198,7 @@ describe("Employment Lifecycle Transfer", () => {
       auditContext: undefined,
       employmentId: 4,
       endTime: transactionTime,
+      selectedAssignments: [],
     });
     expect(tx.userProfileInvalidation.recordChanges).toHaveBeenCalledWith([
       { kind: "employment", userId: 1 },
@@ -204,23 +209,19 @@ describe("Employment Lifecycle Transfer", () => {
 
   test("transfers a paused source into an enabled Primary without inheriting its lifecycle state", async () => {
     const { tx, useCase } = createLifecycle();
-    tx.employmentStore.getEmploymentLifecycleContextById.mockResolvedValueOnce({
-      employment: employment({
-        status: EmploymentStatus.Pause,
-        isPrimary: false,
-      }),
-      organization: await tx.organizationReader.getOrganizationByCode(),
-      position: await tx.positionReader.getPositionByCode(),
-    });
+    tx.employmentStore.lockEmploymentsByIds.mockResolvedValueOnce([employment({
+      status: EmploymentStatus.Pause,
+      isPrimary: false,
+    }), employment({ id: 9 })]);
 
     await expect(useCase.execute({
       employmentId: 4,
       newOrgCode: "TARGET_ORG",
       newPosCode: "TARGET_POS",
       isPrimary: true,
-    })).resolves.toEqual({ newEmploymentId: 10 });
+    })).resolves.toEqual({ changed: true, result: { id: 10 } });
 
-    expect(tx.employmentStore.unsetOpenPrimariesByUserId).toHaveBeenCalledWith(1);
+    expect(tx.employmentStore.updateEmploymentRecord).toHaveBeenCalledWith(9, { isPrimary: false });
     expect(tx.employmentStore.createEmploymentRecord).toHaveBeenCalledWith(
       expect.objectContaining({
         isPrimary: true,
@@ -232,15 +233,11 @@ describe("Employment Lifecycle Transfer", () => {
 
   test("rejects an Ended Employment before writing either side of the transfer", async () => {
     const { tx, useCase } = createLifecycle();
-    tx.employmentStore.getEmploymentLifecycleContextById.mockResolvedValueOnce({
-      employment: employment({
-        status: EmploymentStatus.Disable,
-        endTime: transactionTime,
-        isPrimary: false,
-      }),
-      organization: await tx.organizationReader.getOrganizationByCode(),
-      position: await tx.positionReader.getPositionByCode(),
-    });
+    tx.employmentStore.lockEmploymentsByIds.mockResolvedValueOnce([employment({
+      status: EmploymentStatus.Disable,
+      endTime: transactionTime,
+      isPrimary: false,
+    }), employment({ id: 9 })]);
 
     await expect(useCase.execute({
       employmentId: 4,
@@ -450,6 +447,56 @@ describe("Employment Lifecycle Transfer", () => {
     expect(tx.userProfileInvalidation.recordChanges).not.toHaveBeenCalled();
   });
 
+  test("leaves a selected Primary candidate unchanged when it ended before protection", async () => {
+    const { tx, useCase } = createLifecycle();
+    tx.employmentStore.lockEmploymentsByIds.mockResolvedValueOnce([
+      employment(),
+      employment({ id: 9, isPrimary: true, status: EmploymentStatus.Disable, endTime: transactionTime }),
+    ]);
+
+    const result = await useCase.execute({ employmentId: 4, newOrgCode: "TARGET_ORG", newPosCode: "TARGET_POS", isPrimary: true });
+
+    expect(result).toEqual({ changed: true, result: { id: 10 } });
+    expect(tx.employmentStore.updateEmploymentRecord).toHaveBeenCalledTimes(1);
+  });
+
+  test("rejects a target that disappeared after selection", async () => {
+    const { tx, useCase } = createLifecycle();
+    tx.employmentStore.lockEmploymentsByIds.mockResolvedValueOnce([]);
+    let failure: unknown;
+    try {
+      await useCase.execute({ employmentId: 4, newOrgCode: "TARGET_ORG", newPosCode: "TARGET_POS", isPrimary: true });
+    }
+    catch (error) {
+      failure = error;
+    }
+
+    expect(failure).toBeInstanceOf(EmploymentNotFoundError);
+    expect(tx.employmentStore.updateEmploymentRecord).not.toHaveBeenCalled();
+    expect(tx.auditLogWriter.recordAuditLog).not.toHaveBeenCalled();
+    expect(tx.userProfileInvalidation.recordChanges).not.toHaveBeenCalled();
+  });
+
+  test.each([4, 9])("rejects a zero-row update for protected Employment %s without success effects", async (id) => {
+    const { tx, useCase } = createLifecycle();
+    tx.employmentStore.updateEmploymentRecord.mockImplementation(async (targetId, patch) => {
+      if (targetId === id)
+        return undefined as any;
+      return employment({ id: targetId, ...patch });
+    });
+    let failure: unknown;
+    try {
+      await useCase.execute({ employmentId: 4, newOrgCode: "TARGET_ORG", newPosCode: "TARGET_POS", isPrimary: true });
+    }
+    catch (error) {
+      failure = error;
+    }
+
+    expect(failure).toBeInstanceOf(Error);
+    expect(tx.auditLogWriter.recordAuditLog).not.toHaveBeenCalled();
+    expect(tx.userProfileInvalidation.recordChanges).not.toHaveBeenCalled();
+  });
+
   test("rolls back both Employments, audit, and Dirty when the transaction fails", async () => {
     const { clock, tx } = createLifecycle();
     const failure = new Error("dirty write failed");
@@ -488,6 +535,7 @@ describe("Employment Lifecycle Transfer", () => {
                 staged.sourceStatus = patch.status;
                 staged.sourceEndTime = patch.endTime;
                 staged.sourceIsPrimary = patch.isPrimary;
+                return employment(patch);
               },
               async createEmploymentRecord(input: AdminEmploymentRecordCreate) {
                 attempted.targetWrites += 1;

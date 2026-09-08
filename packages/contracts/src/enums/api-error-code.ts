@@ -18,6 +18,7 @@ export enum ApiErrorCode {
   AdminLoginStateUnavailable = "ADMIN_LOGIN_STATE_UNAVAILABLE",
   AdminLoginStateAuditFailedAfterEffect = "ADMIN_LOGIN_STATE_AUDIT_FAILED_AFTER_EFFECT",
   AdminSessionCurrentProtected = "ADMIN_SESSION_CURRENT_PROTECTED",
+  AdminMutationCommitted = "ADMIN_MUTATION_COMMITTED",
 
   InvalidHumanVerificationSite = "HUMAN_VERIFICATION.INVALID_SITE",
 
@@ -54,6 +55,8 @@ export enum ApiErrorCode {
   OrganizationResponsibilityAssignmentCardinalityConflict = "ORG_RESPONSIBILITY.ASSIGNMENT_CARDINALITY_CONFLICT",
   OrganizationResponsibilityAssignmentUnmanageableConflict = "ORG_RESPONSIBILITY.ASSIGNMENT_UNMANAGEABLE_CONFLICT",
 
+  OidcClientStateConflict = "CLIENT.OIDC_STATE_CONFLICT",
+  CustomSsoClientStateConflict = "CLIENT.CUSTOM_SSO_STATE_CONFLICT",
   ClientNotFound = "CLIENT.NOT_FOUND",
   ClientCodeExists = "CLIENT.CODE_EXISTS",
 

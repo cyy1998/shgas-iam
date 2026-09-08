@@ -1,9 +1,9 @@
+import { AdminMutationCommittedError } from "@admin-api/services/admin-mutation/admin-mutation";
 import {
   ClientMutationTargetRequiredError,
   createAdminClientMutation,
 } from "@admin-api/services/client/client-mutation";
 import {
-  AfterCommitRequiredTaskError,
   createImmediateUnitOfWork,
 } from "@iam/api-core/uow";
 import { describe, expect, mock, test } from "bun:test";
@@ -187,7 +187,7 @@ describe("Admin Client target-bound mutation", () => {
       rejected = error;
     }
 
-    expect(rejected).toBeInstanceOf(AfterCommitRequiredTaskError);
+    expect(rejected).toBeInstanceOf(AdminMutationCommittedError);
     expect(invalidateClient).toHaveBeenCalledTimes(1);
   });
 
@@ -217,7 +217,7 @@ describe("Admin Client target-bound mutation", () => {
       rejected = error;
     }
 
-    expect(rejected).toBeInstanceOf(AfterCommitRequiredTaskError);
+    expect(rejected).toBeInstanceOf(AdminMutationCommittedError);
     expect(persistedName).toBe("new-name");
     expect(runtimeSnapshot).toBe("old-name");
 

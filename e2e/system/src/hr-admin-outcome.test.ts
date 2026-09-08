@@ -104,6 +104,8 @@ function completeReadBack() {
       "admin.organization_responsibility_assignment.pause",
       "admin.organization_responsibility_assignment.resume",
       "admin.organization_responsibility_assignment.end",
+      "admin.organization_responsibility_assignment.end",
+      "admin.organization_responsibility_assignment.end",
     ].map(action => ({
       action,
       actorUsername: scenario.hrAdminUsername,

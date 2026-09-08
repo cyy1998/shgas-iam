@@ -1,6 +1,7 @@
 import StatusTag from '@admin/components/StatusTag';
 import AuditLogTable from '@admin/components/audit/AuditLogTable';
 import { roleAssignmentTargetTypeOptions } from '@admin/pages/roles/role-selectors';
+import { AdminMutationCommittedError } from '@admin/services/admin-mutation';
 import {
   type RoleAssignmentVo,
   type RoleDetailVo,
@@ -35,6 +36,8 @@ type Props = {
   roleCode: string | null;
   onOpenChange: (open: boolean) => void;
   onChanged: () => void;
+  reloadSeq?: number;
+  onCommitted: (error: AdminMutationCommittedError) => void;
 };
 
 export default function RoleDetailDrawer({
@@ -42,6 +45,8 @@ export default function RoleDetailDrawer({
   roleCode,
   onOpenChange,
   onChanged,
+  reloadSeq,
+  onCommitted,
 }: Props) {
   const assignmentActionRef = useRef<ActionType>(undefined);
   const [detail, setDetail] = useState<RoleDetailVo | null>(null);
@@ -69,12 +74,22 @@ export default function RoleDetailDrawer({
 
   useEffect(() => {
     void load();
-  }, [load]);
+  }, [load, reloadSeq]);
 
   const reloadAssignments = () => {
     assignmentActionRef.current?.reload();
     void load();
     onChanged();
+  };
+
+  const handleMutationError = (error: unknown) => {
+    if (error instanceof AdminMutationCommittedError) {
+      onCommitted(error);
+      setAssignmentFormOpen(false);
+      reloadAssignments();
+    } else {
+      handleError(error);
+    }
   };
 
   const onDeleteAssignment = (row: RoleAssignmentVo) => {
@@ -85,11 +100,11 @@ export default function RoleDetailDrawer({
       okType: 'danger',
       onOk: async () => {
         try {
-          await deleteRoleAssignment(detail.roleCode, row.id);
-          message.success('分配已删除');
+          const outcome = await deleteRoleAssignment(detail.roleCode, row.id);
+          message.success(outcome.changed ? '分配已删除' : '无需修改');
           reloadAssignments();
         } catch (err) {
-          handleError(err);
+          handleMutationError(err);
         }
       },
     });
@@ -98,15 +113,15 @@ export default function RoleDetailDrawer({
   const onToggleScope = async (row: RoleAssignmentVo) => {
     if (!detail) return;
     try {
-      await updateRoleAssignmentScope(
+      const outcome = await updateRoleAssignmentScope(
         detail.roleCode,
         row.id,
         !row.includeDescendants,
       );
-      message.success('作用范围已更新');
+      message.success(outcome.changed ? '作用范围已更新' : '无需修改');
       reloadAssignments();
     } catch (err) {
-      handleError(err);
+      handleMutationError(err);
     }
   };
 
@@ -345,6 +360,7 @@ export default function RoleDetailDrawer({
         onOpenChange={setAssignmentFormOpen}
         onSuccess={reloadAssignments}
         onError={handleError}
+        onCommitted={handleMutationError}
       />
     </>
   );

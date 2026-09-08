@@ -50,20 +50,22 @@ export default function PositionFormModal({
       onFinish={async (values) => {
         try {
           if (isEdit) {
-            await updatePosition(initialValues!.posCode, {
+            const outcome = await updatePosition(initialValues!.posCode, {
               posName: values.posName,
               description: values.description || null,
-              status: values.status,
+              ...(values.status !== initialValues!.status
+                ? { status: values.status }
+                : {}),
             });
-            message.success('更新成功');
+            message.success(outcome.changed ? '更新成功' : '无需修改');
           } else {
-            await createPosition({
+            const outcome = await createPosition({
               posCode: values.posCode,
               posName: values.posName,
               description: values.description || undefined,
               status: values.status,
             });
-            message.success('创建成功');
+            message.success(outcome.changed ? '创建成功' : '无需修改');
           }
           onSuccess?.();
           return true;

@@ -15,7 +15,12 @@ export const PositionMemberCountDetailSchema = PositionDtoSchema.extend({
   memberNumber: z.number().int().nonnegative(),
 });
 
-export const PositionCreateDtoSchema = z.object(insertPositionSchema.shape).openapi("PositionCreateDto");
+export const PositionCreateDtoSchema = insertPositionSchema.pick({
+  posCode: true,
+  posName: true,
+  description: true,
+  status: true,
+}).openapi("PositionCreateDto");
 
 export const PositionPaginationQueryDtoSchema = createPageQuerySchema(
   z.object({
@@ -30,8 +35,13 @@ export const PositionPaginationQueryDtoSchema = createPageQuerySchema(
   }),
 ).openapi("PositionPaginationQueryDto");
 
-export const PositionUpdateDtoSchema = z.object(updatePositionSchema.shape).openapi("PositionUpdateDto");
+export const PositionUpdateDtoSchema = updatePositionSchema.pick({
+  posCode: true,
+  posName: true,
+  description: true,
+  status: true,
+}).openapi("PositionUpdateDto");
 
-export const PositionStatusUpdateDtoSchema = PositionUpdateDtoSchema.pick({
+export const PositionStatusUpdateDtoSchema = updatePositionSchema.pick({
   status: true,
 }).required().openapi("PositionStatusUpdateDto");

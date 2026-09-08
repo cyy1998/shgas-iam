@@ -13,6 +13,7 @@ import jsonContent from "@iam/api-core/core/openapi/helpers/json-content";
 import jsonContentRequired from "@iam/api-core/core/openapi/helpers/json-content-required";
 import createSuccessResponseSchema from "@iam/api-core/core/openapi/schemas/create-success-schema";
 import {
+  createAdminMutationResultSchema,
   ORGANIZATION_RESPONSIBILITY_ASSIGNMENT_LIFECYCLE_COMMANDS,
 
 } from "@iam/contracts";
@@ -126,7 +127,7 @@ export const organizationResponsibilityAssignmentCreate = createRoute({
     ...commonErrorResponses,
     [HttpStatusCodes.OK]: jsonContent(
       createSuccessResponseSchema(
-        z.object({ id: z.number().int().positive() }),
+        createAdminMutationResultSchema(z.object({ id: z.number().int().positive() })),
       ),
       "组织责任任命创建成功",
     ),
@@ -145,7 +146,7 @@ function createOrganizationResponsibilityLifecycleRoute(
     responses: {
       ...commonErrorResponses,
       [HttpStatusCodes.OK]: jsonContent(
-        createSuccessResponseSchema(z.boolean()),
+        createSuccessResponseSchema(createAdminMutationResultSchema(z.null())),
         description,
       ),
     },

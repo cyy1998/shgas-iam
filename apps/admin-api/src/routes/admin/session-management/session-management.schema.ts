@@ -4,6 +4,7 @@ import type {
   AdminSessionListResult,
   AdminSessionRevokeResult,
 } from "@admin-api/services/session-management/session-management.type";
+import { AdminLoginRestrictionReleaseResultSchema, AdminSessionRevokeResultSchema } from "@admin-api/services/session-management/session-management.schema";
 import {
   AdminLoginRestrictionCause,
   AdminLoginRestrictionTriggerMethod,
@@ -79,10 +80,8 @@ export const SessionManagementReleaseLoginRestrictionInputSchema = z.object({
   userId: z.int().positive(),
 }).strict().openapi("SessionManagementReleaseLoginRestrictionInput");
 
-export const SessionManagementReleaseLoginRestrictionResultVoSchema = z.object({
-  changed: z.boolean(),
-  failureStateCleared: z.literal(true),
-}).strict().openapi("SessionManagementReleaseLoginRestrictionResultVo");
+export const SessionManagementReleaseLoginRestrictionResultVoSchema = AdminLoginRestrictionReleaseResultSchema
+  .openapi("SessionManagementReleaseLoginRestrictionResultVo");
 
 export const SessionManagementRevokeSessionsInputSchema = z.object({
   target: z.discriminatedUnion("type", [
@@ -97,22 +96,8 @@ export const SessionManagementRevokeSessionsInputSchema = z.object({
   ]),
 }).strict().openapi("SessionManagementRevokeSessionsInput");
 
-export const SessionManagementRevokeSessionsResultVoSchema = z.object({
-  changed: z.boolean(),
-  scope: z.enum(["session", "user"]),
-  revoked: z.object({
-    principalSessions: z.int().nonnegative(),
-    bindings: z.int().nonnegative(),
-    credentials: z.int().nonnegative(),
-    artifacts: z.int().nonnegative(),
-  }).strict(),
-  currentPrincipalSessionExcluded: z.boolean(),
-  cleanup: z.object({
-    attempted: z.int().nonnegative(),
-    succeeded: z.int().nonnegative(),
-    failed: z.int().nonnegative(),
-  }).strict(),
-}).strict().openapi("SessionManagementRevokeSessionsResultVo");
+export const SessionManagementRevokeSessionsResultVoSchema = AdminSessionRevokeResultSchema
+  .openapi("SessionManagementRevokeSessionsResultVo");
 
 export function toSessionManagementSessionListResultVo(input: AdminSessionListResult) {
   const result = {
@@ -178,7 +163,7 @@ export function toSessionManagementReleaseLoginRestrictionResultVo(
 ) {
   const result = {
     changed: input.changed,
-    failureStateCleared: input.failureStateCleared,
+    result: { failureStateCleared: input.result.failureStateCleared },
   };
   SessionManagementReleaseLoginRestrictionResultVoSchema.parse(result);
   return result;
@@ -187,18 +172,20 @@ export function toSessionManagementReleaseLoginRestrictionResultVo(
 export function toSessionManagementRevokeSessionsResultVo(input: AdminSessionRevokeResult) {
   const result = {
     changed: input.changed,
-    scope: input.scope,
-    revoked: {
-      principalSessions: input.revoked.principalSessions,
-      bindings: input.revoked.bindings,
-      credentials: input.revoked.credentials,
-      artifacts: input.revoked.artifacts,
-    },
-    currentPrincipalSessionExcluded: input.currentPrincipalSessionExcluded,
-    cleanup: {
-      attempted: input.cleanup.attempted,
-      succeeded: input.cleanup.succeeded,
-      failed: input.cleanup.failed,
+    result: {
+      scope: input.result.scope,
+      revoked: {
+        principalSessions: input.result.revoked.principalSessions,
+        bindings: input.result.revoked.bindings,
+        credentials: input.result.revoked.credentials,
+        artifacts: input.result.revoked.artifacts,
+      },
+      currentPrincipalSessionExcluded: input.result.currentPrincipalSessionExcluded,
+      cleanup: {
+        attempted: input.result.cleanup.attempted,
+        succeeded: input.result.cleanup.succeeded,
+        failed: input.result.cleanup.failed,
+      },
     },
   };
   SessionManagementRevokeSessionsResultVoSchema.parse(result);

@@ -37,6 +37,14 @@ export type AdminSessionRevocationLogger = {
 };
 
 export interface AdminSessionRevocationPort {
+  prepareUserSessionRevocation: (input: {
+    userId: number;
+    subjectIdentifier: string;
+    reason: Extract<AdminSessionRevocationReason, "user_disabled" | "user_deleted" | "admin_revoke">;
+    auditContext?: AdminAuditContext;
+  }) => Promise<{
+    revoke: (options: { onlySubjectAccessTransitionId?: string }) => Promise<RevokeSummary>;
+  }>;
   revokeUserSessions: (input: {
     userId: number;
     subjectIdentifier: string;
@@ -62,7 +70,7 @@ export interface AdminSessionRevocationPort {
 };
 
 export interface CreateAdminSessionRevocationPortDeps {
-  sessionKernel: Pick<SessionKernel, "revokeUserSessions" | "revokeClientProtocol" | "revokeClient">;
+  sessionKernel: Pick<SessionKernel, "prepareUserSessionRevocation" | "revokeUserSessions" | "revokeClientProtocol" | "revokeClient">;
   logger: AdminSessionRevocationLogger;
 }
 
@@ -70,6 +78,24 @@ export function createAdminSessionRevocationPort(
   deps: CreateAdminSessionRevocationPortDeps,
 ): AdminSessionRevocationPort {
   return {
+    async prepareUserSessionRevocation(input) {
+      const plan = await deps.sessionKernel.prepareUserSessionRevocation({
+        principalType: "user",
+        subjectId: input.subjectIdentifier,
+      });
+      return {
+        async revoke(options) {
+          const summary = await plan.revoke(input.reason, options);
+          deps.logger.logUserRevocation({
+            targetUserId: input.userId,
+            reason: input.reason,
+            auditContext: input.auditContext,
+            summary,
+          });
+          return summary;
+        },
+      };
+    },
     async revokeUserSessions(input) {
       const summary = await deps.sessionKernel.revokeUserSessions(
         { principalType: "user", subjectId: input.subjectIdentifier },

@@ -59,22 +59,6 @@ export function createEmploymentAdapter(deps: CreateEmploymentAdapterDeps) {
     );
   }
 
-  async function guardScopedEmploymentMutation(
-    hono: Parameters<typeof getAdminAuthorizationContext>[0],
-    id: number,
-    operationId: Parameters<EmploymentService["guardEmploymentMutationForAdmin"]>[1],
-  ) {
-    const authorization = await resolveEmploymentAuthorization(hono, operationId);
-    if (authorization.kind === "scoped") {
-      await deps.employmentService.guardEmploymentMutationForAdmin(
-        id,
-        operationId,
-        authorization,
-      );
-    }
-    return authorization;
-  }
-
   const searchEmployment = defineAdminApiQueryOperation({
     operationId: "admin.employment.search",
     input: EmploymentAdminPaginationQueryDtoSchema,
@@ -152,11 +136,12 @@ export function createEmploymentAdapter(deps: CreateEmploymentAdapterDeps) {
     input: idInput,
     restInput: c => c.req.valid("param") as z.infer<typeof idInput>,
     handler: async ({ id }, context) => {
-      await guardScopedEmploymentMutation(context.hono, id, "admin.employment.pause");
+      const authorization = await resolveEmploymentAuthorization(context.hono, "admin.employment.pause");
       return deps.changeEmploymentAvailability.execute({
         command: "pause",
         employmentId: id,
       }, {
+        authorization,
         auditContext: resolveAdminAuditContext(context),
       });
     },
@@ -174,12 +159,13 @@ export function createEmploymentAdapter(deps: CreateEmploymentAdapterDeps) {
         .expectedAncestorOrgCode,
     }),
     handler: async ({ id, expectedAncestorOrgCode }, context) => {
-      await guardScopedEmploymentMutation(context.hono, id, "admin.employment.resume");
+      const authorization = await resolveEmploymentAuthorization(context.hono, "admin.employment.resume");
       return deps.changeEmploymentAvailability.execute({
         command: "resume",
         employmentId: id,
         expectedAncestorOrgCode,
       }, {
+        authorization,
         auditContext: resolveAdminAuditContext(context),
       });
     },
@@ -190,10 +176,11 @@ export function createEmploymentAdapter(deps: CreateEmploymentAdapterDeps) {
     input: idInput,
     restInput: c => c.req.valid("param") as z.infer<typeof idInput>,
     handler: async ({ id }, context) => {
-      await guardScopedEmploymentMutation(context.hono, id, "admin.employment.end");
+      const authorization = await resolveEmploymentAuthorization(context.hono, "admin.employment.end");
       return deps.endEmployment.execute({
         employmentId: id,
       }, {
+        authorization,
         auditContext: resolveAdminAuditContext(context),
       });
     },
@@ -210,9 +197,8 @@ export function createEmploymentAdapter(deps: CreateEmploymentAdapterDeps) {
       data: c.req.valid("json") as z.infer<typeof EmploymentTransferDtoSchema>,
     }),
     handler: async ({ id, data }, context) => {
-      const authorization = await guardScopedEmploymentMutation(
+      const authorization = await resolveEmploymentAuthorization(
         context.hono,
-        id,
         "admin.employment.transfer",
       );
       return deps.transferEmployment.execute({
@@ -234,11 +220,12 @@ export function createEmploymentAdapter(deps: CreateEmploymentAdapterDeps) {
     input: idInput,
     restInput: c => c.req.valid("param") as z.infer<typeof idInput>,
     handler: async ({ id }, context) => {
-      await guardScopedEmploymentMutation(context.hono, id, "admin.employment.setPrimary");
+      const authorization = await resolveEmploymentAuthorization(context.hono, "admin.employment.setPrimary");
       return deps.managePrimaryEmployment.execute({
         command: "set",
         employmentId: id,
       }, {
+        authorization,
         auditContext: resolveAdminAuditContext(context),
       });
     },
@@ -249,11 +236,12 @@ export function createEmploymentAdapter(deps: CreateEmploymentAdapterDeps) {
     input: idInput,
     restInput: c => c.req.valid("param") as z.infer<typeof idInput>,
     handler: async ({ id }, context) => {
-      await guardScopedEmploymentMutation(context.hono, id, "admin.employment.clearPrimary");
+      const authorization = await resolveEmploymentAuthorization(context.hono, "admin.employment.clearPrimary");
       return deps.managePrimaryEmployment.execute({
         command: "clear",
         employmentId: id,
       }, {
+        authorization,
         auditContext: resolveAdminAuditContext(context),
       });
     },

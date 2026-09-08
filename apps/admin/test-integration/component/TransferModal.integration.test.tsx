@@ -1,4 +1,5 @@
 import TransferModal from '@admin/pages/employments/components/TransferModal';
+import { AdminMutationCommittedError } from '@admin/services/admin-mutation';
 import { EmploymentStatus } from '@iam/contracts';
 import type { ReactNode } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -112,7 +113,7 @@ describe('TransferModal', () => {
   beforeEach(() => {
     form.values = {};
     transferEmployment.mockReset();
-    transferEmployment.mockResolvedValue({ newEmploymentId: 10 });
+    transferEmployment.mockResolvedValue({ changed: true, result: { id: 10 } });
   });
 
   it('requires an explicit Primary choice and transfers a Pause Employment as selected', async () => {
@@ -122,6 +123,7 @@ describe('TransferModal', () => {
         open
         employment={employment as any}
         onOpenChange={vi.fn()}
+        onCommitted={vi.fn()}
         onSuccess={onSuccess}
       />,
     );
@@ -147,7 +149,7 @@ describe('TransferModal', () => {
         isPrimary: false,
         description: null,
       });
-      expect(onSuccess).toHaveBeenCalledOnce();
+      expect(onSuccess).toHaveBeenCalledWith(10);
     });
   });
 
@@ -157,6 +159,7 @@ describe('TransferModal', () => {
         open
         employment={employment as any}
         onOpenChange={vi.fn()}
+        onCommitted={vi.fn()}
       />,
     );
 
@@ -173,5 +176,27 @@ describe('TransferModal', () => {
         description: null,
       });
     });
+  });
+  it('reports a committed transfer for parent refresh without replaying or publishing a missing resource', async () => {
+    const error = new AdminMutationCommittedError(null);
+    transferEmployment.mockRejectedValue(error);
+    const onCommitted = vi.fn();
+    const onSuccess = vi.fn();
+    const { user } = render(
+      <TransferModal
+        open
+        employment={employment as any}
+        onOpenChange={vi.fn()}
+        onCommitted={onCommitted}
+        onSuccess={onSuccess}
+      />,
+    );
+    await user.click(screen.getByText('新任职组织'));
+    await user.click(screen.getByText('新岗位'));
+    await user.click(screen.getByRole('button', { name: '非主任职' }));
+    await user.click(screen.getByRole('button', { name: '确定' }));
+    await waitFor(() => expect(onCommitted).toHaveBeenCalledWith(error));
+    expect(onSuccess).not.toHaveBeenCalled();
+    expect(transferEmployment).toHaveBeenCalledOnce();
   });
 });

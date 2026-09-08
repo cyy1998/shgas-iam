@@ -49,8 +49,8 @@ export class OidcClientConfigurationError extends DomainBusinessError {
 export class OidcClientStateError extends DomainBusinessError {
   constructor(message: string = "OIDC 客户端状态不允许该操作") {
     super(message, {
-      code: ApiErrorCode.BadRequest,
-      httpStatus: DomainHttpStatus.BadRequest,
+      code: ApiErrorCode.OidcClientStateConflict,
+      httpStatus: DomainHttpStatus.Conflict,
     });
   }
 }
@@ -67,8 +67,8 @@ export class CustomSsoClientConfigurationError extends DomainBusinessError {
 export class CustomSsoClientStateError extends DomainBusinessError {
   constructor(message: string = "Custom SSO 客户端状态不允许该操作") {
     super(message, {
-      code: ApiErrorCode.BadRequest,
-      httpStatus: DomainHttpStatus.BadRequest,
+      code: ApiErrorCode.CustomSsoClientStateConflict,
+      httpStatus: DomainHttpStatus.Conflict,
     });
   }
 }

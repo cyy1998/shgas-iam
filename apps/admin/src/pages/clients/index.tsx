@@ -241,6 +241,12 @@ export default function ClientsPage() {
       <ClientFormModal
         open={createOpen}
         onOpenChange={setCreateOpen}
+        onCommitted={(clientCode) => {
+          setCreateOpen(false);
+          history.push(
+            `/clients/${encodeURIComponent(clientCode)}/edit?section=basic&committed=1`,
+          );
+        }}
         onSuccess={(client) => {
           setCreateOpen(false);
           editClient(client.clientCode);

@@ -1,13 +1,8 @@
-import type { AuditLogWriterPort } from "@api/services/audit/audit.service";
 import type { PrivilegeDelegationService } from "@api/services/privilege/privilegeDelegation.service";
 import type { ResolvePrivilegeDelegationsUseCase } from "@api/use-cases/internal/resolve-privilege-delegations/resolve-privilege-delegations.use-case";
 import type { DelegationRouteHandler } from "./delegation.type";
 import { runWithinInternalHandlerBudget } from "@api/routes/internal/_handler-budget";
-import { getInternalAuditActor } from "@api/services/audit/audit.context";
-import {
-  buildInternalDelegationCreateAudit,
-  buildInternalDelegationUpdateAudit,
-} from "@api/services/audit/events/internal.audit";
+import { getApiAuditRequestContext, getInternalAuditActor } from "@api/services/audit/audit.context";
 import {
   PRIVILEGE_DELEGATION_RESOLUTION_INPUT_NOT_FOUND_MESSAGE,
   PrivilegeDelegationResolutionInputNotFoundError,
@@ -19,7 +14,6 @@ import * as resp from "@iam/api-core/http";
 export const PRIVILEGE_DELEGATION_RESOLUTION_HANDLER_TIMEOUT_MS = 5_000;
 
 export interface CreateDelegationHandlersDeps {
-  auditLogWriter: AuditLogWriterPort;
   privilegeDelegationService: Pick<
     PrivilegeDelegationService,
     "createPrivilegeDelegation" | "queryPrivilegeDelegations" | "updateDelegation"
@@ -69,29 +63,19 @@ export function createDelegationHandlers(deps: CreateDelegationHandlersDeps) {
   const privilegeDelegationUpdate: DelegationRouteHandler<"privilegeDelegationUpdate"> = async (c) => {
     const { id } = c.req.valid("param");
     const dto = c.req.valid("json");
-    const data = await deps.privilegeDelegationService.updateDelegation(id, dto);
-    await deps.auditLogWriter.recordAuditLogFromContext(
-      c,
-      buildInternalDelegationUpdateAudit(getInternalAuditActor(c), id, dto),
-    );
+    const data = await deps.privilegeDelegationService.updateDelegation(id, dto, {
+      actor: getInternalAuditActor(c),
+      requestContext: getApiAuditRequestContext(c),
+    });
     return c.json(resp.ok(data), HttpStatusCodes.OK);
   };
 
   const privilegeDelegationSet: DelegationRouteHandler<"privilegeDelegationSet"> = async (c) => {
     const dto = c.req.valid("json");
-    const data = await deps.privilegeDelegationService.createPrivilegeDelegation(dto);
-    await deps.auditLogWriter.recordAuditLogFromContext(
-      c,
-      buildInternalDelegationCreateAudit(getInternalAuditActor(c), {
-        id: data.id,
-        delegatorUsername: data.delegatorUsername,
-        delegateeUsername: data.delegateeUsername,
-        orgCode: dto.orgCode,
-        privilegeCodes: dto.privilegeCodes,
-        startTime: data.startTime,
-        endTime: data.endTime,
-      }),
-    );
+    const data = await deps.privilegeDelegationService.createPrivilegeDelegation(dto, {
+      actor: getInternalAuditActor(c),
+      requestContext: getApiAuditRequestContext(c),
+    });
     return c.json(resp.ok(data), HttpStatusCodes.OK);
   };
 

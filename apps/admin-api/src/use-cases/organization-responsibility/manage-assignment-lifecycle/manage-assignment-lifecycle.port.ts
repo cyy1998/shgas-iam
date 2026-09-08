@@ -1,5 +1,6 @@
 import type { OrganizationResponsibilityReadScope } from "@admin-api/services/admin-authorization/admin-organization-responsibility-authorization.type";
 import type { AuditLogInput } from "@admin-api/services/audit/audit.context";
+import type { OrganizationResponsibilityAssignmentLifecycleChange, OrganizationResponsibilityAssignmentWriteTarget } from "@admin-api/services/organization-responsibility/organization-responsibility-parent-lifecycle.type";
 import type { UnitOfWorkPort } from "@iam/api-core/uow";
 import type {
   EmploymentStatus,
@@ -42,16 +43,16 @@ export interface ManageOrganizationResponsibilityAssignmentLifecycleTransactionP
       targetOrganizationId: number;
       typeCode: OrganizationResponsibilityTypeCode;
       excludeAssignmentId?: number;
-    }) => Promise<{ id: number; employmentId: number } | null>;
-    getAssignmentLifecycleContextById: (
+      readScope: OrganizationResponsibilityReadScope;
+    }) => Promise<{ id: number; employmentId: number; isManageable: boolean } | null>;
+    lockAssignmentLifecycleContextById: (
       id: number,
     ) => Promise<OrganizationResponsibilityAssignmentLifecycleContext | null>;
-    updateAssignmentLifecycle: (input: {
-      id: number;
-      expectedStatus: OrganizationResponsibilityAssignmentStatus;
+    updateLockedAssignmentLifecycle: (input: {
+      assignment: OrganizationResponsibilityAssignmentWriteTarget;
       status: OrganizationResponsibilityAssignmentStatus;
       endTime: Date | null;
-    }) => Promise<boolean>;
+    }) => Promise<OrganizationResponsibilityAssignmentLifecycleChange>;
   };
   auditLogWriter: {
     recordAuditLog: (input: AuditLogInput) => Promise<void>;

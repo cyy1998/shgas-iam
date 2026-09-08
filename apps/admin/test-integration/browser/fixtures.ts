@@ -240,6 +240,7 @@ export async function mockAdminApi(
     currentUser?: unknown;
     positionSearchResult?: unknown;
     userDetail?: unknown;
+    clientDetail?: unknown;
     userSearchResult?: unknown;
   } = {},
 ) {
@@ -273,61 +274,91 @@ export async function mockAdminApi(
     fulfillTrpc(route, adminClientSearchResult),
   );
   await page.route('**/rpc/admin.client.detail**', (route) =>
-    fulfillTrpc(route, adminClientDetail),
+    fulfillTrpc(route, options.clientDetail ?? adminClientDetail),
   );
   await page.route('**/rpc/admin.client.create**', (route) => {
     const input = parseTrpcBatchInput<{ clientCode?: string }>(route);
     return fulfillTrpc(route, {
-      ...adminClientDetail,
-      clientCode: input.clientCode ?? adminClientDetail.clientCode,
+      changed: true,
+      result: {
+        ...adminClientDetail,
+        clientCode: input.clientCode ?? adminClientDetail.clientCode,
+      },
     });
   });
   await page.route('**/rpc/admin.client.update**', (route) =>
-    fulfillTrpc(route, adminClientDetail),
+    fulfillTrpc(route, { changed: true, result: null }),
   );
   await page.route('**/rpc/admin.client.updateStatus**', (route) =>
-    fulfillTrpc(route, adminClientDetail),
+    fulfillTrpc(route, { changed: true, result: null }),
   );
   await page.route('**/rpc/admin.client.delete**', (route) =>
-    fulfillTrpc(route, adminClientDetail),
+    fulfillTrpc(route, { changed: true, result: null }),
   );
   await page.route('**/rpc/admin.client.customSsoConfigure**', (route) =>
     fulfillTrpc(route, {
-      client: adminClientDetail,
-      customSsoSecret: 'iam_sso_once_secret',
+      changed: true,
+      result: {
+        client: adminClientDetail,
+        customSsoSecret: 'iam_sso_once_secret',
+      },
     }),
   );
   await page.route('**/rpc/admin.client.customSsoEnable**', (route) =>
-    fulfillTrpc(route, { client: adminClientDetail }),
+    fulfillTrpc(route, {
+      changed: true,
+      result: { client: adminClientDetail },
+    }),
   );
   await page.route('**/rpc/admin.client.customSsoDisable**', (route) =>
-    fulfillTrpc(route, { client: adminClientDetail }),
+    fulfillTrpc(route, {
+      changed: true,
+      result: { client: adminClientDetail },
+    }),
   );
   await page.route('**/rpc/admin.client.customSsoRemove**', (route) =>
-    fulfillTrpc(route, { client: adminClientDetail }),
+    fulfillTrpc(route, {
+      changed: true,
+      result: { client: adminClientDetail },
+    }),
   );
   await page.route('**/rpc/admin.client.customSsoRotateSecret**', (route) =>
     fulfillTrpc(route, {
-      client: adminClientDetail,
-      customSsoSecret: 'iam_sso_rotated_once_secret',
+      changed: true,
+      result: {
+        client: adminClientDetail,
+        customSsoSecret: 'iam_sso_rotated_once_secret',
+      },
     }),
   );
   await page.route('**/rpc/admin.client.oidcConfigure**', (route) =>
-    fulfillTrpc(route, { client: adminClientDetail }),
+    fulfillTrpc(route, {
+      changed: true,
+      result: { client: adminClientDetail },
+    }),
   );
   await page.route('**/rpc/admin.client.oidcEnable**', (route) =>
-    fulfillTrpc(route, { client: adminClientDetail }),
+    fulfillTrpc(route, {
+      changed: true,
+      result: { client: adminClientDetail },
+    }),
   );
   await page.route('**/rpc/admin.client.oidcDisable**', (route) =>
-    fulfillTrpc(route, { client: adminClientDetail }),
+    fulfillTrpc(route, {
+      changed: true,
+      result: { client: adminClientDetail },
+    }),
   );
   await page.route('**/rpc/admin.client.oidcRemove**', (route) =>
-    fulfillTrpc(route, { client: adminClientDetail }),
+    fulfillTrpc(route, {
+      changed: true,
+      result: { client: adminClientDetail },
+    }),
   );
   await page.route('**/rpc/admin.client.oidcRotateSecret**', (route) =>
     fulfillTrpc(route, {
-      client: adminClientDetail,
-      clientSecret: 'oidc_once_secret',
+      changed: true,
+      result: { client: adminClientDetail, clientSecret: 'oidc_once_secret' },
     }),
   );
 }

@@ -21,3 +21,6 @@ export function confirmClientSettingAction(title: string, content: string) {
     });
   });
 }
+
+export type ClientCommittedFailureKind =
+  'mutation' | 'rotation' | 'configuration';

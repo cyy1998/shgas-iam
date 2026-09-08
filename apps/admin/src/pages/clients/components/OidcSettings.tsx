@@ -1,3 +1,4 @@
+import { AdminMutationCommittedError } from '@admin/services/admin-mutation';
 import {
   configureClientOidc,
   disableClientOidc,
@@ -27,6 +28,7 @@ import {
 } from 'antd';
 import { useEffect, useState } from 'react';
 import OneTimeSecretModal from './OneTimeSecretModal';
+import type { ClientCommittedFailureKind } from './settingsHelpers';
 import {
   canEnableClientProtocol,
   confirmClientSettingAction,
@@ -36,6 +38,7 @@ import {
 type Props = {
   client: ClientDetailVo;
   onDirtyChange: (dirty: boolean) => void;
+  onCommitted: (kind?: ClientCommittedFailureKind) => Promise<void>;
   onMutated: () => Promise<void>;
   onOneTimeSecretPendingChange: (pending: boolean) => void;
 };
@@ -71,6 +74,7 @@ export default function OidcSettings({
   client,
   onDirtyChange,
   onMutated,
+  onCommitted,
   onOneTimeSecretPendingChange,
 }: Props) {
   const [form] = Form.useForm<OidcFormValues>();
@@ -90,27 +94,37 @@ export default function OidcSettings({
     onDirtyChange(formDirty);
   }, [formDirty, onDirtyChange]);
 
-  const handleError = (err: unknown) =>
-    message.error(err instanceof Error ? err.message : 'OIDC 操作失败');
+  const handleError = async (
+    err: unknown,
+    kind: ClientCommittedFailureKind = 'mutation',
+  ) => {
+    if (err instanceof AdminMutationCommittedError) {
+      setFormDirty(false);
+      await onCommitted(kind);
+      return;
+    }
+    message.error(err instanceof Error ? err.message : '操作失败');
+  };
 
   const runAction = async (
     title: string,
     content: string,
-    action: () => Promise<{
-      client: ClientDetailVo;
-      clientSecret?: string;
-    }>,
+    action: () => ReturnType<
+      typeof enableClientOidc | typeof rotateClientOidcSecret
+    >,
+    failureKind: ClientCommittedFailureKind = 'mutation',
   ) => {
     if (!(await confirmClientSettingAction(title, content))) return;
     try {
-      const result = await action();
-      if (result.clientSecret) {
+      const { changed, result } = await action();
+      if ('clientSecret' in result && result.clientSecret) {
         setOneTimeSecret(result.clientSecret);
       }
-      message.success('OIDC 操作成功');
+      if (changed) message.success('OIDC 操作成功');
+      else message.info('无需修改');
       await onMutated();
     } catch (err) {
-      handleError(err);
+      await handleError(err, failureKind);
     }
   };
 
@@ -196,19 +210,29 @@ export default function OidcSettings({
 
             setSaving(true);
             try {
-              const result = await configureClientOidc(client.clientCode, data);
+              const { changed, result } = await configureClientOidc(
+                client.clientCode,
+                data,
+              );
               setFormDirty(false);
               if (result.clientSecret) {
                 setOneTimeSecret(result.clientSecret);
               }
-              message.success(
-                configured
-                  ? 'OIDC 配置已更新'
-                  : 'OIDC 配置已保存，当前保持禁用',
-              );
+              if (!changed) message.info('无需修改');
+              else
+                message.success(
+                  configured
+                    ? 'OIDC 配置已更新'
+                    : 'OIDC 配置已保存，当前保持禁用',
+                );
               await onMutated();
             } catch (err) {
-              handleError(err);
+              await handleError(
+                err,
+                data.clientType === OidcClientType.Confidential
+                  ? 'configuration'
+                  : 'mutation',
+              );
             } finally {
               setSaving(false);
             }
@@ -317,6 +341,7 @@ export default function OidcSettings({
                 '轮换 OIDC secret？',
                 '旧 secret 会立即失效，新 secret 仅显示一次。',
                 () => rotateClientOidcSecret(client.clientCode),
+                'rotation',
               )
             }
           >

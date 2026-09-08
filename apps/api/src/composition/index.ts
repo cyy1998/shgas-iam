@@ -51,6 +51,7 @@ export async function createApiComposition(options: CreateApiCompositionOptions 
   const userProfileQueue = userProfileResources.queue;
   const userProfileJobProducer = createUserProfileJobProducer(userProfileQueue);
   const unitOfWork = createApiUnitOfWork({
+    db,
     logger: runtime.afterCommitLogger,
     userProfileJobProducer,
     clock: runtime.clock,

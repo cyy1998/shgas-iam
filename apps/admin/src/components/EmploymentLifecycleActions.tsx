@@ -1,4 +1,5 @@
 import AuthorizationActionButton from '@admin/components/AuthorizationActionButton';
+import { AdminMutationCommittedError } from '@admin/services/admin-mutation';
 import {
   endEmployment,
   pauseEmployment,
@@ -7,8 +8,8 @@ import {
 } from '@admin/services/employment';
 import type { AdminEmploymentAllowedActions } from '@iam/contracts';
 import { EmploymentStatus } from '@iam/contracts';
-import { message, Modal, Space } from 'antd';
 import type { ButtonProps } from 'antd';
+import { message, Modal, Space } from 'antd';
 
 type EmploymentLifecycle = Pick<EmploymentVo, 'id' | 'organization' | 'status'>;
 
@@ -18,6 +19,7 @@ type Props = {
   decisions: Pick<AdminEmploymentAllowedActions, 'end' | 'pause' | 'resume'>;
   employment: EmploymentLifecycle;
   onSuccess: () => Promise<void> | void;
+  onCommitted: (error: AdminMutationCommittedError) => Promise<void>;
 };
 
 export default function EmploymentLifecycleActions({
@@ -26,9 +28,15 @@ export default function EmploymentLifecycleActions({
   decisions,
   employment,
   onSuccess,
+  onCommitted,
 }: Props) {
-  const handleError = (error: unknown) =>
+  const handleError = async (error: unknown) => {
+    if (error instanceof AdminMutationCommittedError) {
+      await onCommitted(error);
+      return;
+    }
     message.error(error instanceof Error ? error.message : '操作失败');
+  };
 
   if (employment.status === EmploymentStatus.Disable) return null;
 
@@ -44,11 +52,13 @@ export default function EmploymentLifecycleActions({
             okText: '暂停任职',
             onOk: async () => {
               try {
-                await pauseEmployment(employment.id);
-                message.success('已暂停任职及其启用中的责任任命');
+                const outcome = await pauseEmployment(employment.id);
+                if (outcome.changed)
+                  message.success('已暂停任职及其启用中的责任任命');
+                else message.info('无需修改');
                 await onSuccess();
               } catch (error) {
-                handleError(error);
+                await handleError(error);
               }
             },
           });
@@ -66,13 +76,18 @@ export default function EmploymentLifecycleActions({
             employment.organization.companyNodes.at(-1)?.orgCode ??
             employment.organization.assignedOrg.orgCode;
           try {
-            await resumeEmployment(employment.id, expectedAncestorOrgCode);
-            message.success(
-              '已恢复任职；责任任命不会自动恢复，请在组织责任中逐条确认后恢复',
+            const outcome = await resumeEmployment(
+              employment.id,
+              expectedAncestorOrgCode,
             );
+            if (outcome.changed)
+              message.success(
+                '已恢复任职；责任任命不会自动恢复，请在组织责任中逐条确认后恢复',
+              );
+            else message.info('无需修改');
             await onSuccess();
           } catch (error) {
-            handleError(error);
+            await handleError(error);
           }
         }}
         style={buttonStyle}
@@ -91,11 +106,12 @@ export default function EmploymentLifecycleActions({
       okType: 'danger',
       onOk: async () => {
         try {
-          await endEmployment(employment.id);
-          message.success('已结束');
+          const outcome = await endEmployment(employment.id);
+          if (outcome.changed) message.success('已结束');
+          else message.info('无需修改');
           await onSuccess();
         } catch (error) {
-          handleError(error);
+          await handleError(error);
         }
       },
     });

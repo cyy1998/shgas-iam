@@ -169,6 +169,33 @@ async function confirmLoginRestrictionRelease(dialog: Locator) {
   await dialog.getByRole('button', { name: '确认解除' }).click();
 }
 
+async function expectAuditWarningAfterRefreshAndTabSwitch(
+  page: Page,
+  tabName: '有效会话' | '临时登录限制',
+  listInputs: unknown[],
+  mutationInputs: unknown[],
+) {
+  const panel = page.getByRole('tabpanel', { name: tabName });
+  const warning = panel.getByRole('alert').filter({
+    hasText: '操作可能已生效，但审计记录失败，请刷新确认且不要自动重试',
+  });
+  await expect(warning).toBeVisible();
+  const listRequestCount = listInputs.length;
+  await panel.getByRole('button', { name: '手动刷新' }).click();
+  await expect.poll(() => listInputs.length).toBe(listRequestCount + 1);
+  await expect(panel.getByText('已删除用户')).toHaveCount(0);
+  await expect(warning).toBeVisible();
+  await page
+    .getByRole('tab', {
+      name: tabName === '有效会话' ? '临时登录限制' : '有效会话',
+    })
+    .click();
+  await page.getByRole('tab', { name: tabName }).click();
+  await expect(warning).toBeVisible();
+  await expect(warning).toContainText('列表刷新成功不代表审计记录已补齐');
+  expect(mutationInputs).toHaveLength(1);
+}
+
 async function expectSingleLoginRestrictionReleaseAndReload(
   releaseInputs: LoginRestrictionReleaseInput[],
   listInputs: LoginRestrictionListInput[],
@@ -184,6 +211,16 @@ async function setupSessionRevoke(
   options: { removeTargetAfterReload?: boolean } = {},
 ) {
   await mockAdminApi(page);
+  await mockLoginRestrictionListRoute(page, (input) => ({
+    type: 'success',
+    data: {
+      result: [],
+      total: 0,
+      pageNum: input.pageNum ?? 1,
+      pageSize: input.pageSize ?? 20,
+      pages: 0,
+    },
+  }));
   const listInputs = await mockSessionListRoute(
     page,
     (input, requestNumber) => {
@@ -449,7 +486,7 @@ test('restriction release confirms exact effects, succeeds once, and refreshes o
       type: 'success',
       data: {
         changed: true,
-        failureStateCleared: true,
+        result: { failureStateCleared: true },
       },
     }),
     { removeTargetAfterReload: true },
@@ -488,7 +525,7 @@ test('restriction release no-op reports natural expiry and refreshes once', asyn
       type: 'success',
       data: {
         changed: false,
-        failureStateCleared: true,
+        result: { failureStateCleared: true },
       },
     }),
   );
@@ -593,6 +630,12 @@ test('restriction audit-after-effect refreshes once without retrying release', a
     listRequestCount,
   );
   await expect(page.getByText('已删除用户')).toHaveCount(0);
+  await expectAuditWarningAfterRefreshAndTabSwitch(
+    page,
+    '临时登录限制',
+    listInputs,
+    releaseInputs,
+  );
 });
 
 test('valid sessions show the empty state', async ({ page }) => {
@@ -665,18 +708,20 @@ test('single-session action protects the current session and confirms the third-
     type: 'success',
     data: {
       changed: true,
-      scope: 'session',
-      revoked: {
-        principalSessions: 1,
-        bindings: 1,
-        credentials: 1,
-        artifacts: 0,
-      },
-      currentPrincipalSessionExcluded: false,
-      cleanup: {
-        attempted: 1,
-        succeeded: 1,
-        failed: 0,
+      result: {
+        scope: 'session',
+        revoked: {
+          principalSessions: 1,
+          bindings: 1,
+          credentials: 1,
+          artifacts: 0,
+        },
+        currentPrincipalSessionExcluded: false,
+        cleanup: {
+          attempted: 1,
+          succeeded: 1,
+          failed: 0,
+        },
       },
     },
   }));
@@ -713,18 +758,20 @@ test('another user can be revoked from any row with point-in-time and follow-up 
     type: 'success',
     data: {
       changed: true,
-      scope: 'user',
-      revoked: {
-        principalSessions: 2,
-        bindings: 2,
-        credentials: 2,
-        artifacts: 0,
-      },
-      currentPrincipalSessionExcluded: false,
-      cleanup: {
-        attempted: 1,
-        succeeded: 1,
-        failed: 0,
+      result: {
+        scope: 'user',
+        revoked: {
+          principalSessions: 2,
+          bindings: 2,
+          credentials: 2,
+          artifacts: 0,
+        },
+        currentPrincipalSessionExcluded: false,
+        cleanup: {
+          attempted: 1,
+          succeeded: 1,
+          failed: 0,
+        },
       },
     },
   }));
@@ -756,18 +803,20 @@ test('self user revoke keeps the unified action label and explains the current-r
     type: 'success',
     data: {
       changed: true,
-      scope: 'user',
-      revoked: {
-        principalSessions: 1,
-        bindings: 2,
-        credentials: 2,
-        artifacts: 1,
-      },
-      currentPrincipalSessionExcluded: true,
-      cleanup: {
-        attempted: 1,
-        succeeded: 1,
-        failed: 0,
+      result: {
+        scope: 'user',
+        revoked: {
+          principalSessions: 1,
+          bindings: 2,
+          credentials: 2,
+          artifacts: 1,
+        },
+        currentPrincipalSessionExcluded: true,
+        cleanup: {
+          attempted: 1,
+          succeeded: 1,
+          failed: 0,
+        },
       },
     },
   }));
@@ -812,18 +861,20 @@ test('user revoke no-op reports an already inactive target and refreshes once', 
     type: 'success',
     data: {
       changed: false,
-      scope: 'user',
-      revoked: {
-        principalSessions: 0,
-        bindings: 0,
-        credentials: 0,
-        artifacts: 0,
-      },
-      currentPrincipalSessionExcluded: false,
-      cleanup: {
-        attempted: 0,
-        succeeded: 0,
-        failed: 0,
+      result: {
+        scope: 'user',
+        revoked: {
+          principalSessions: 0,
+          bindings: 0,
+          credentials: 0,
+          artifacts: 0,
+        },
+        currentPrincipalSessionExcluded: false,
+        cleanup: {
+          attempted: 0,
+          succeeded: 0,
+          failed: 0,
+        },
       },
     },
   }));
@@ -842,18 +893,20 @@ test('user revoke cleanup failure remains successful with only a safe failed cou
     type: 'success',
     data: {
       changed: true,
-      scope: 'user',
-      revoked: {
-        principalSessions: 2,
-        bindings: 2,
-        credentials: 2,
-        artifacts: 0,
-      },
-      currentPrincipalSessionExcluded: false,
-      cleanup: {
-        attempted: 3,
-        succeeded: 1,
-        failed: 2,
+      result: {
+        scope: 'user',
+        revoked: {
+          principalSessions: 2,
+          bindings: 2,
+          credentials: 2,
+          artifacts: 0,
+        },
+        currentPrincipalSessionExcluded: false,
+        cleanup: {
+          attempted: 3,
+          succeeded: 1,
+          failed: 2,
+        },
       },
     },
   }));
@@ -876,18 +929,20 @@ test('single-session no-op shows an already inactive warning and refreshes the c
     type: 'success',
     data: {
       changed: false,
-      scope: 'session',
-      revoked: {
-        principalSessions: 0,
-        bindings: 0,
-        credentials: 0,
-        artifacts: 0,
-      },
-      currentPrincipalSessionExcluded: false,
-      cleanup: {
-        attempted: 0,
-        succeeded: 0,
-        failed: 0,
+      result: {
+        scope: 'session',
+        revoked: {
+          principalSessions: 0,
+          bindings: 0,
+          credentials: 0,
+          artifacts: 0,
+        },
+        currentPrincipalSessionExcluded: false,
+        cleanup: {
+          attempted: 0,
+          succeeded: 0,
+          failed: 0,
+        },
       },
     },
   }));
@@ -910,18 +965,20 @@ test('single-session cleanup failure remains successful with a safe warning', as
     type: 'success',
     data: {
       changed: true,
-      scope: 'session',
-      revoked: {
-        principalSessions: 1,
-        bindings: 1,
-        credentials: 1,
-        artifacts: 0,
-      },
-      currentPrincipalSessionExcluded: false,
-      cleanup: {
-        attempted: 2,
-        succeeded: 1,
-        failed: 1,
+      result: {
+        scope: 'session',
+        revoked: {
+          principalSessions: 1,
+          bindings: 1,
+          credentials: 1,
+          artifacts: 0,
+        },
+        currentPrincipalSessionExcluded: false,
+        cleanup: {
+          attempted: 2,
+          succeeded: 1,
+          failed: 1,
+        },
       },
     },
   }));
@@ -959,6 +1016,12 @@ test('user audit-after-effect error refreshes once without retrying the mutation
     page.getByText('操作可能已生效，但审计记录失败，请刷新确认且不要自动重试'),
   ).toBeVisible();
   await expect(page.getByText('已删除用户')).toHaveCount(0);
+  await expectAuditWarningAfterRefreshAndTabSwitch(
+    page,
+    '有效会话',
+    listInputs,
+    revokeInputs,
+  );
 });
 
 test('audit-after-effect error refreshes state without retrying the revoke mutation', async ({
@@ -985,4 +1048,10 @@ test('audit-after-effect error refreshes state without retrying the revoke mutat
     page.getByText('操作可能已生效，但审计记录失败，请刷新确认且不要自动重试'),
   ).toBeVisible();
   await expect(page.getByText('已删除用户')).toHaveCount(0);
+  await expectAuditWarningAfterRefreshAndTabSwitch(
+    page,
+    '有效会话',
+    listInputs,
+    revokeInputs,
+  );
 });

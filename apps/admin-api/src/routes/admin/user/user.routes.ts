@@ -12,6 +12,7 @@ import jsonContent from "@iam/api-core/core/openapi/helpers/json-content";
 import jsonContentRequired from "@iam/api-core/core/openapi/helpers/json-content-required";
 import createSuccessResponseSchema from "@iam/api-core/core/openapi/schemas/create-success-schema";
 import { createPageResultSchema } from "@iam/api-core/core/pagination/schema";
+import { createAdminMutationResultSchema } from "@iam/contracts";
 
 const tags = ["Admin/User"];
 
@@ -57,12 +58,13 @@ export const usersCreate = createRoute({
   responses: {
     ...commonErrorResponses,
     [HttpStatusCodes.OK]: jsonContent(
-      createSuccessResponseSchema(z.object({
+      createSuccessResponseSchema(createAdminMutationResultSchema(z.object({
+        user: UserVoSchema,
         username: z.string(),
         generatedPassword: z.string().nullable().openapi({
           description: "若请求未提供 password，则返回后端生成的明文密码；否则为 null",
         }),
-      })),
+      }))),
       "用户创建成功",
     ),
   },
@@ -78,7 +80,7 @@ export const usersUpdate = createRoute({
   },
   responses: {
     ...commonErrorResponses,
-    [HttpStatusCodes.OK]: jsonContent(createSuccessResponseSchema(z.boolean()), "更新成功"),
+    [HttpStatusCodes.OK]: jsonContent(createSuccessResponseSchema(createAdminMutationResultSchema(z.null())), "更新成功"),
   },
 });
 
@@ -92,7 +94,7 @@ export const usersStatusUpdate = createRoute({
   },
   responses: {
     ...commonErrorResponses,
-    [HttpStatusCodes.OK]: jsonContent(createSuccessResponseSchema(z.boolean()), "状态更新成功"),
+    [HttpStatusCodes.OK]: jsonContent(createSuccessResponseSchema(createAdminMutationResultSchema(z.null())), "状态更新结果"),
   },
 });
 
@@ -105,7 +107,7 @@ export const usersDelete = createRoute({
   },
   responses: {
     ...commonErrorResponses,
-    [HttpStatusCodes.OK]: jsonContent(createSuccessResponseSchema(z.boolean()), "软删除成功"),
+    [HttpStatusCodes.OK]: jsonContent(createSuccessResponseSchema(createAdminMutationResultSchema(z.null())), "软删除结果"),
   },
 });
 
@@ -119,7 +121,9 @@ export const usersResetPassword = createRoute({
   responses: {
     ...commonErrorResponses,
     [HttpStatusCodes.OK]: jsonContent(
-      createSuccessResponseSchema(z.string().openapi({ example: "Z8m2xq7W", description: "新的明文密码" })),
+      createSuccessResponseSchema(createAdminMutationResultSchema(
+        z.string().openapi({ example: "Z8m2xq7W", description: "新的明文密码" }),
+      )),
       "密码已重置",
     ),
   },

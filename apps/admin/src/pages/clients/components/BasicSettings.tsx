@@ -1,3 +1,4 @@
+import { AdminMutationCommittedError } from '@admin/services/admin-mutation';
 import {
   deleteClient,
   updateClient,
@@ -16,11 +17,13 @@ import {
   Typography,
 } from 'antd';
 import { useEffect, useState } from 'react';
+import type { ClientCommittedFailureKind } from './settingsHelpers';
 import { confirmClientSettingAction } from './settingsHelpers';
 
 type Props = {
   client: ClientDetailVo;
   onDirtyChange: (dirty: boolean) => void;
+  onCommitted: (kind?: ClientCommittedFailureKind) => Promise<void>;
   onMutated: () => Promise<void>;
   onDeleted: () => void;
 };
@@ -36,6 +39,7 @@ export default function BasicSettings({
   client,
   onDirtyChange,
   onMutated,
+  onCommitted,
   onDeleted,
 }: Props) {
   const [form] = Form.useForm<BasicFormValues>();
@@ -58,8 +62,18 @@ export default function BasicSettings({
     onDirtyChange(formDirty || statusDirty);
   }, [formDirty, onDirtyChange, statusDirty]);
 
-  const handleError = (err: unknown) =>
+  const handleError = async (
+    err: unknown,
+    kind: ClientCommittedFailureKind = 'mutation',
+  ) => {
+    if (err instanceof AdminMutationCommittedError) {
+      setFormDirty(false);
+      setPendingStatus(null);
+      await onCommitted(kind);
+      return;
+    }
     message.error(err instanceof Error ? err.message : '操作失败');
+  };
 
   return (
     <Space orientation="vertical" size="large" style={{ width: '100%' }}>
@@ -71,18 +85,21 @@ export default function BasicSettings({
           onFinish={async (values) => {
             setSaving(true);
             try {
-              await updateClient(client.clientCode, {
+              const outcome = await updateClient(client.clientCode, {
                 clientName: values.clientName,
-                clientSecret: values.clientSecret,
+                ...(values.clientSecret !== client.clientSecret
+                  ? { clientSecret: values.clientSecret }
+                  : {}),
                 url: values.url || null,
                 description: values.description || null,
                 extAttributes: {},
               });
               setFormDirty(false);
-              message.success('基础信息已保存');
+              if (outcome.changed) message.success('基础信息已保存');
+              else message.info('无需修改');
               await onMutated();
             } catch (err) {
-              handleError(err);
+              await handleError(err);
             } finally {
               setSaving(false);
             }
@@ -140,12 +157,16 @@ export default function BasicSettings({
                 return;
               }
               try {
-                await updateClientStatus(client.clientCode, status);
+                const outcome = await updateClientStatus(
+                  client.clientCode,
+                  status,
+                );
                 setPendingStatus(null);
-                message.success('全局状态已更新');
+                if (outcome.changed) message.success('全局状态已更新');
+                else message.info('无需修改');
                 await onMutated();
               } catch (err) {
-                handleError(err);
+                await handleError(err);
               }
             }}
           >
@@ -175,7 +196,7 @@ export default function BasicSettings({
                 message.success('已删除');
                 onDeleted();
               } catch (err) {
-                handleError(err);
+                await handleError(err);
               }
             }}
           >

@@ -73,7 +73,9 @@ export const EmploymentAdminCreateDtoSchema = z.object({
 
 export const EmploymentUpdateDtoSchema = z.object({
   description: z.string().max(500).nullable().optional(),
-}).strict().openapi("EmploymentUpdateDto");
+}).strict().refine(dto => dto.description !== undefined, {
+  message: "至少提交一个任职更新字段",
+}).openapi("EmploymentUpdateDto");
 
 export const EmploymentResumeDtoSchema = z.object({
   expectedAncestorOrgCode: z.string().openapi({

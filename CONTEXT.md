@@ -52,6 +52,18 @@ _Avoid_: unbounded filter, unbounded result set, caller-controlled query cost
 自身未删除、状态为 Enable 且服务端观察时刻位于闭区间 `[startTime, endTime]` 内的 Privilege Delegation；其引用对象的 Pause 或 Disable 状态以及委托人当时是否拥有该 Privilege 都不参与判定。
 _Avoid_: effective authorization, currently authorized delegation
 
+**Privilege Delegation Lifecycle**:
+Privilege Delegation 创建时为 Enable，未结束时允许在 Enable 与 Pause 间切换并修改期间或说明；委托人、受托人、组织范围及权限绑定创建后不可修改。Disable 是不可重开的结束状态，结束后不能修改业务字段，纯重复结束保持原有事实。
+_Avoid_: mutable delegation bindings, delegation reopening, repeated end time rewrite
+
+**Privilege Delegation Scope**:
+一条 Privilege Delegation 适用的组织集合，由指定 Organization 及其全部后代组成；只有被解析的 Organization 属于该集合时，这条委托才可能被匹配。
+_Avoid_: exact organization only, global organization scope
+
+**Privilege Delegation Conflict**:
+同一委托人的两条未删除且未结束委托，在权限集合、闭区间业务期间和 Privilege Delegation Scope 三者均有交集时形成的冲突；Pause 仍占用期间，受托人相同也不豁免。相同组织及祖先与下级组织的范围有交集，互不包含的部门或独立组织树允许并存。
+_Avoid_: global privilege exclusivity, exact-scope-only conflict, nearest-scope override
+
 **Privilege Delegation Resolution Input**:
 Privilege Delegation Resolution 中以 username、Organization code 或 Privilege code 指向的存在且未删除领域对象；Pause 或 Disable 状态不影响识别。任一输入无法识别时解析整体失败，不返回部分结果。
 _Avoid_: enabled-only resolution input, missing input as no delegation
@@ -357,7 +369,7 @@ _Avoid_: raw employment record, Client Authorization Claim, employment history
 _Avoid_: open flow, public password helper
 
 **User Resignation**:
-管理员原子地结束用户全部 Open Employment 并禁用其 IAM 账号，提交后撤销该用户全部 IAM 活跃 Session 的业务流程；撤销失败不回滚已生效的离职结果。重复执行仍视为成功且不改写既有结束时间，并再次尝试撤销 Session；它不同于普通任职变化、账号禁用或删除用户。
+管理员原子地结束用户全部 Open Employment 并禁用其 IAM 账号，提交后撤销离职前 IAM 活跃 Session 的业务流程；撤销失败不回滚已生效的离职结果。合法重复执行属于无业务变化，仍保留离职意图并尝试完成遗留 Session 撤销，不改写既有结束时间，迟到的撤销不终止恢复启用后新建立的 Session；它不同于普通任职变化、账号禁用或删除用户。
 _Avoid_: account disable, employment deletion, user deletion
 
 **User Deletion**:

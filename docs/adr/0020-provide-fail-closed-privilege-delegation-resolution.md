@@ -13,4 +13,4 @@ Internal Client 需要按一组 username、一个 Organization 与一个 Privile
 - 任一 User 匹配多条 Current Privilege Delegation，即使 Delegatee 相同，或者匹配记录自委托、引用缺失或已删除对象，都属于 Privilege Delegation Resolution Integrity Violation。解析与数据库不可用或超时一并向调用方收敛为 sanitized `503 PRIVILEGE.DELEGATION_RESOLUTION_UNAVAILABLE`，不选择、折叠或返回部分结果。
 - Organization scope 等于请求 Organization 或是其祖先时生效。双向直接委托可以分别解析，不因形成环而递归。
 - 所有合法且 Enable 的 Internal Client 共享该能力。resolver 暂留 `apps/api`，使用 2 秒 PostgreSQL statement timeout 与 5 秒 handler budget，不缓存或自动重试。
-- 本变更不修改 `/internal/users/search-with-delegation`，该旧接口之后统一退役；也不修复现有委托写路径的并发与重叠约束，读取端必须继续防守已有及新增异常数据。
+- 本决定不修改 `/internal/users/search-with-delegation`，该旧接口之后统一退役；当时未处理的写路径并发与重叠约束现已由 [ADR-0026](0026-serialize-privilege-delegation-writes-by-delegator.md) 治理，读取端仍须继续防守已有及新增异常数据。

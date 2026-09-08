@@ -22,6 +22,31 @@ function createLogger() {
 }
 
 describe("createAdminSessionRevocationPort", () => {
+  test("prepares by subject before passing the committed generation and audit context to cleanup", async () => {
+    const summary = revokeSummary();
+    const revoke = mock(async () => summary);
+    const prepareUserSessionRevocation = mock(async () => ({ revoke }));
+    const logger = { logUserRevocation: mock(), logClientProtocolRevocation: mock(), logClientAllProtocolsRevocation: mock() };
+    const port = createAdminSessionRevocationPort({
+      sessionKernel: {
+        prepareUserSessionRevocation,
+        revokeUserSessions: mock(async () => summary),
+        revokeClientProtocol: mock(async () => summary),
+        revokeClient: mock(async () => summary),
+      },
+      logger,
+    });
+    const auditContext = { actorType: "admin" as const, actorUserId: 99 };
+    const plan = await port.prepareUserSessionRevocation({ userId: 1, subjectIdentifier: "subject", reason: "user_disabled", auditContext });
+    expect(prepareUserSessionRevocation).toHaveBeenCalledWith({ principalType: "user", subjectId: "subject" });
+    expect(revoke).not.toHaveBeenCalled();
+    expect(logger.logUserRevocation).not.toHaveBeenCalled();
+    const result = await plan.revoke({ onlySubjectAccessTransitionId: "previous-generation" });
+    expect(result).toBe(summary);
+    expect(revoke).toHaveBeenCalledWith("user_disabled", { onlySubjectAccessTransitionId: "previous-generation" });
+    expect(logger.logUserRevocation).toHaveBeenCalledWith({ targetUserId: 1, reason: "user_disabled", auditContext, summary });
+  });
+
   test("maps user revocation to Session Kernel with except current PrincipalSession", async () => {
     const logger = {
       logUserRevocation: mock(() => undefined),
@@ -29,6 +54,7 @@ describe("createAdminSessionRevocationPort", () => {
       logClientAllProtocolsRevocation: mock(() => undefined),
     };
     const kernel = {
+      prepareUserSessionRevocation: mock(async () => ({ revoke: async () => revokeSummary() })),
       revokeUserSessions: mock(async () => revokeSummary()),
       revokeClientProtocol: mock(async () => revokeSummary()),
       revokeClient: mock(async () => revokeSummary()),
@@ -72,6 +98,7 @@ describe("createAdminSessionRevocationPort", () => {
     };
     const port = createAdminSessionRevocationPort({
       sessionKernel: {
+        prepareUserSessionRevocation: mock(async () => ({ revoke: async () => revokeSummary() })),
         revokeUserSessions: mock(async () => revokeSummary()),
         revokeClientProtocol: mock(async () => summary),
         revokeClient: mock(async () => revokeSummary()),

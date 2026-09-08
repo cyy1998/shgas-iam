@@ -11,11 +11,11 @@ import type {
 
 export interface AdminPositionTransactionStorePort {
   getAnyPositionByCode: (posCode: string) => Promise<Position | null>;
-  getPositionByCode: (posCode: string) => Promise<Position | null>;
-  setPosition: (input: PositionCreateDto) => Promise<void>;
-  updatePositionByCode: (posCode: string, input: PositionUpdateDto) => Promise<unknown>;
+  lockPositionByCode: (posCode: string) => Promise<Position | null>;
+  setPosition: (input: PositionCreateDto) => Promise<Position | null>;
+  updatePositionByCode: (posCode: string, input: PositionUpdateDto) => Promise<Position | null>;
   countOpenEmploymentsByPosCode: (posCode: string) => Promise<number>;
-  softDeletePositionByCode: (posCode: string) => Promise<unknown>;
+  softDeletePositionByCode: (posCode: string) => Promise<Position | null>;
 }
 
 export interface AdminPositionReaderPort {

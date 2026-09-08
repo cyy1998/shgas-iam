@@ -12,6 +12,7 @@ import { ArrowLeftOutlined } from '@ant-design/icons';
 import { PageContainer } from '@ant-design/pro-components';
 import { history, useLocation, useParams } from '@umijs/max';
 import {
+  Alert,
   Button,
   Card,
   message,
@@ -22,6 +23,7 @@ import {
   Typography,
 } from 'antd';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import type { ClientCommittedFailureKind } from './components/settingsHelpers';
 
 type ClientSection = 'basic' | 'custom-sso' | 'oidc';
 
@@ -45,6 +47,11 @@ export default function ClientEditPage() {
   const location = useLocation();
   const clientCode = params.clientCode ?? '';
   const section = parseSection(location.search);
+  const [repairMessage, setRepairMessage] = useState<string | null>(() =>
+    new URLSearchParams(location.search).get('committed') === '1'
+      ? '操作已生效，但后续处理失败；请联系管理员修复传播。详情可读不代表传播已恢复。'
+      : null,
+  );
   const [loadState, setLoadState] = useState<LoadState>({
     status: 'loading',
   });
@@ -132,6 +139,23 @@ export default function ClientEditPage() {
     }
   }, [clientCode]);
 
+  const handleCommitted = async (
+    kind: ClientCommittedFailureKind = 'mutation',
+  ) => {
+    setRepairMessage(
+      kind === 'rotation'
+        ? '轮换已生效，新 Secret 出现错误。请先联系管理员修复传播，再主动重新轮换。'
+        : kind === 'configuration'
+          ? '配置已生效，若生成了新 Secret，此次未交付。请先联系管理员修复传播，再主动轮换获取新 Secret。'
+          : '操作已生效，但后续处理失败；请联系管理员修复传播。详情可读不代表传播已恢复。',
+    );
+    await loadClient();
+  };
+
+  const repairAlert = repairMessage ? (
+    <Alert type="warning" showIcon title={repairMessage} />
+  ) : null;
+
   useEffect(() => {
     void loadClient();
   }, [loadClient]);
@@ -161,8 +185,7 @@ export default function ClientEditPage() {
       if (hasPendingOneTimeSecret) {
         message.warning({
           key: 'client-one-time-secret-navigation-blocked',
-          content:
-            '请先在一次性 secret 弹窗中确认已安全保存，然后再离开页面。',
+          content: '请先在一次性 secret 弹窗中确认已安全保存，然后再离开页面。',
         });
         return;
       }
@@ -231,6 +254,7 @@ export default function ClientEditPage() {
   if (loadState.status === 'not-found') {
     return (
       <PageContainer>
+        {repairAlert}
         <Result
           status="404"
           title="应用不存在"
@@ -248,6 +272,7 @@ export default function ClientEditPage() {
   if (loadState.status === 'error') {
     return (
       <PageContainer>
+        {repairAlert}
         <Result
           status="error"
           title="应用详情加载失败"
@@ -284,6 +309,7 @@ export default function ClientEditPage() {
         </Button>
       }
     >
+      {repairAlert}
       <Tabs
         activeKey={section}
         onChange={(key) => goToSection(key as ClientSection)}
@@ -296,6 +322,7 @@ export default function ClientEditPage() {
                 key={`basic-${discardRevision.basic}`}
                 client={client}
                 onDirtyChange={setBasicDirty}
+                onCommitted={handleCommitted}
                 onMutated={refreshClient}
                 onDeleted={leaveAfterDelete}
               />
@@ -309,10 +336,9 @@ export default function ClientEditPage() {
                 key={`custom-sso-${discardRevision['custom-sso']}`}
                 client={client}
                 onDirtyChange={setCustomSsoDirty}
+                onCommitted={handleCommitted}
                 onMutated={refreshClient}
-                onOneTimeSecretPendingChange={
-                  setCustomSsoOneTimeSecretPending
-                }
+                onOneTimeSecretPendingChange={setCustomSsoOneTimeSecretPending}
               />
             ),
           },
@@ -324,6 +350,7 @@ export default function ClientEditPage() {
                 key={`oidc-${discardRevision.oidc}`}
                 client={client}
                 onDirtyChange={setOidcDirty}
+                onCommitted={handleCommitted}
                 onMutated={refreshClient}
                 onOneTimeSecretPendingChange={setOidcOneTimeSecretPending}
               />

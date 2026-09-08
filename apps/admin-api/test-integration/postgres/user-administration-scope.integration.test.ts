@@ -102,8 +102,8 @@ describe("User administration PostgreSQL authorization", () => {
       .from(auditLogs)
       .orderBy(asc(auditLogs.id));
 
-    expect(profileUpdated).toBe(true);
-    expect(newPassword).toBe("Rand1234");
+    expect(profileUpdated).toEqual({ changed: true, result: null });
+    expect(newPassword).toEqual({ changed: true, result: "Rand1234" });
     expect(persistedUser).toEqual({
       name: "Managed Updated",
       mobile: "13900000000",
@@ -166,7 +166,7 @@ describe("User administration PostgreSQL authorization", () => {
       .from(auditLogs)
       .orderBy(asc(auditLogs.id));
 
-    expect(updated).toBe(true);
+    expect(updated).toEqual({ changed: true, result: null });
     expect(persistedUser).toEqual({ status: UserStatus.Disable });
     expect(persistedAudits.map(row => row.action)).toEqual([
       "admin.user.status_update",

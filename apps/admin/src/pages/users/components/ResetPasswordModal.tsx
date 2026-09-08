@@ -1,12 +1,20 @@
+import { AdminMutationCommittedError } from '@admin/services/admin-mutation';
 import { resetUserPassword } from '@admin/services/user';
 import { message, Modal, Space, Typography } from 'antd';
 
 type Args = {
   username: string;
   name?: string;
+  onSuccess: () => Promise<void>;
+  onCommitted: (error: AdminMutationCommittedError) => Promise<void>;
 };
 
-export function confirmResetPassword({ username, name }: Args) {
+export function confirmResetPassword({
+  username,
+  name,
+  onSuccess,
+  onCommitted,
+}: Args) {
   Modal.confirm({
     title: `重置 ${name ?? username} 的密码？`,
     content: '确认后将生成新的随机密码，请做好交接准备。',
@@ -14,7 +22,8 @@ export function confirmResetPassword({ username, name }: Args) {
     okText: '重置',
     onOk: async () => {
       try {
-        const newPassword = await resetUserPassword(username);
+        const outcome = await resetUserPassword(username);
+        const newPassword = outcome.result;
         Modal.info({
           title: '新密码已生成',
           width: 620,
@@ -40,7 +49,12 @@ export function confirmResetPassword({ username, name }: Args) {
           ),
           okText: '我已复制',
         });
+        await onSuccess();
       } catch (err) {
+        if (err instanceof AdminMutationCommittedError) {
+          await onCommitted(err);
+          return;
+        }
         message.error(err instanceof Error ? err.message : '重置失败');
       }
     },

@@ -1,4 +1,5 @@
 import { requestClientOptions } from '@admin/pages/roles/role-selectors';
+import { AdminMutationCommittedError } from '@admin/services/admin-mutation';
 import {
   type RoleDetailVo,
   createRole,
@@ -17,7 +18,8 @@ type Props = {
   open: boolean;
   initialValues: RoleDetailVo | null;
   onOpenChange: (open: boolean) => void;
-  onSuccess: () => void;
+  onSuccess: (roleCode?: string) => void;
+  onCommitted: (error: AdminMutationCommittedError, roleCode: string) => void;
 };
 
 export default function RoleFormModal({
@@ -25,11 +27,13 @@ export default function RoleFormModal({
   initialValues,
   onOpenChange,
   onSuccess,
+  onCommitted,
 }: Props) {
   const editing = initialValues !== null;
 
   return (
     <ModalForm
+      name="role-form"
       title={editing ? '编辑角色' : '新建角色'}
       open={open}
       modalProps={{
@@ -49,25 +53,32 @@ export default function RoleFormModal({
       onFinish={async (values) => {
         try {
           if (editing && initialValues) {
-            await updateRole(initialValues.roleCode, {
+            const outcome = await updateRole(initialValues.roleCode, {
               roleName: values.roleName,
               description: values.description ?? null,
-              status: values.status,
+              ...(values.status !== initialValues.status
+                ? { status: values.status }
+                : {}),
             });
-            message.success('角色已更新');
+            message.success(outcome.changed ? '角色已更新' : '无需修改');
+            onSuccess();
           } else {
-            await createRole({
+            const outcome = await createRole({
               roleCode: values.roleCode,
               roleName: values.roleName,
               clientCode: values.clientCode,
               description: values.description ?? null,
               status: values.status,
             });
-            message.success('角色已创建');
+            message.success(outcome.changed ? '角色已创建' : '无需修改');
+            onSuccess(outcome.result.roleCode);
           }
-          onSuccess();
           return true;
         } catch (err) {
+          if (err instanceof AdminMutationCommittedError) {
+            onCommitted(err, initialValues?.roleCode ?? values.roleCode);
+            return true;
+          }
           message.error(err instanceof Error ? err.message : '保存失败');
           return false;
         }

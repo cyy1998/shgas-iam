@@ -1,10 +1,13 @@
+import type { OrganizationResponsibilityAssignmentWriteTarget } from "@admin-api/services/organization-responsibility/organization-responsibility-parent-lifecycle.type";
 import type {
+  SubjectAccessLifecycleRunInput,
   SubjectAccessMutationReceipt,
   SubjectAccessTransitionTarget,
 } from "@iam/api-core/subject-access";
 import type { UnitOfWorkPort } from "@iam/api-core/uow";
-import type { UserStatus } from "@iam/contracts";
+import type { EmploymentStatus, UserStatus } from "@iam/contracts";
 import type { AuditActorType, AuditDetails, AuditOutcome } from "@iam/domain/audit";
+import type { Employment } from "@iam/domain/employment";
 import type { ResignUserOptions } from "./resign-user.type";
 
 export type ResignUserProfileChange
@@ -68,11 +71,23 @@ export interface ResignUserTransactionPorts {
     recordAuditLog: (input: ResignUserAuditInput) => Promise<void>;
   };
   employmentStore: {
-    endOpenEmploymentsByUserId: (userId: number, endTime: Date) => Promise<unknown>;
+    getOpenEmploymentIdsByUserId: (userId: number) => Promise<number[]>;
+    lockEmploymentsByIds: (ids: readonly number[]) => Promise<Employment[]>;
+    updateEmploymentRecord: (id: number, patch: {
+      status: EmploymentStatus.Disable;
+      endTime: Date;
+      isPrimary: false;
+    }) => Promise<Employment>;
+
   };
   responsibilityParentLifecycle: {
+    lockAssignmentsForEmployments: (input: {
+      employmentIds: readonly number[];
+      command: "end";
+    }) => Promise<OrganizationResponsibilityAssignmentWriteTarget[]>;
     endOpenAssignmentsForUserResignation: (input: {
       userId: number;
+      selectedAssignments: readonly OrganizationResponsibilityAssignmentWriteTarget[];
       endTime: Date;
       auditContext?: ResignUserOptions["auditContext"];
     }) => Promise<boolean>;
@@ -88,6 +103,7 @@ export interface ResignUserTransactionPorts {
     recordChanges: (changes: readonly ResignUserProfileChange[]) => Promise<void>;
   };
   userStore: ResignUserEligibilityReaderPort & {
+    lockUserByUsername: (username: string, includeDeleted?: boolean) => Promise<ResignUserTarget | null>;
     updateUserByUsername: (
       username: string,
       patch: { status: UserStatus },
@@ -100,33 +116,20 @@ export interface ResignUserClockPort {
 }
 
 export interface ResignUserSessionRevocationPort {
-  revokeUserSessions: (input: {
+  prepareUserSessionRevocation: (input: {
     userId: number;
     subjectIdentifier: string;
     reason: "user_disabled";
-    onlySubjectAccessTransitionId?: string;
     auditContext?: ResignUserOptions["auditContext"];
-  }) => Promise<unknown>;
+  }) => Promise<{
+    revoke: (input: { onlySubjectAccessTransitionId?: string }) => Promise<unknown>;
+  }>;
 }
 
 export interface ResignUserReaderPort extends ResignUserEligibilityReaderPort {}
 
 export interface ResignUserSubjectAccessLifecyclePort {
-  run: (input: {
-    subjectIdentifier: string;
-    disposition: "disabled";
-    mutate: (receipt: SubjectAccessMutationReceipt) => Promise<true>;
-    revokeSessions: (
-      result: true,
-      context: {
-        invalidatedSubjectAccessTransitionId: string;
-      },
-    ) => Promise<unknown>;
-    observability?: {
-      requestId?: string;
-      traceId?: string;
-    };
-  }) => Promise<true>;
+  run: <Result>(input: SubjectAccessLifecycleRunInput<Result>) => Promise<Result>;
 }
 
 export interface ResignUserUseCaseDeps {

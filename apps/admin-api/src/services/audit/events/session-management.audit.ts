@@ -70,7 +70,7 @@ export function buildAdminLoginRestrictionReleaseAudit(
       cause: AdminLoginRestrictionCause.TooManyLoginFailures,
       triggerMethod: input.triggerMethod ?? AdminLoginRestrictionTriggerMethod.Unknown,
       changed: input.result.changed,
-      failureStateCleared: input.result.failureStateCleared,
+      failureStateCleared: input.result.result.failureStateCleared,
     },
   };
 }
@@ -83,14 +83,14 @@ function buildSafeAdminSessionRevokeAuditFields(
     ...toSafeAdminSessionManagementAuditContext(auditContext),
     outcome: input.outcome,
     details: {
-      scope: input.result.scope,
+      scope: input.result.result.scope,
       changed: input.result.changed,
-      revoked: { ...input.result.revoked },
-      currentPrincipalSessionExcluded: input.result.currentPrincipalSessionExcluded,
+      revoked: { ...input.result.result.revoked },
+      currentPrincipalSessionExcluded: input.result.result.currentPrincipalSessionExcluded,
       ...(input.currentPrincipalSessionProtected
         ? { currentPrincipalSessionProtected: true }
         : {}),
-      cleanupFailedCount: input.result.cleanup.failed,
+      cleanupFailedCount: input.result.result.cleanup.failed,
     },
   };
 }

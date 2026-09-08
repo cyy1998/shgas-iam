@@ -1,3 +1,6 @@
+import type { z } from "zod";
+import type { AdminLoginRestrictionReleaseResultSchema, AdminSessionRevokeResultSchema } from "./session-management.schema";
+
 export const AdminSessionAccountStatus = {
   Deleted: "deleted",
   Ended: "ended",
@@ -77,22 +80,7 @@ export interface AdminSessionRevokeInput {
     };
 }
 
-export interface AdminSessionRevokeResult {
-  changed: boolean;
-  scope: "session" | "user";
-  revoked: {
-    principalSessions: number;
-    bindings: number;
-    credentials: number;
-    artifacts: number;
-  };
-  currentPrincipalSessionExcluded: boolean;
-  cleanup: {
-    attempted: number;
-    succeeded: number;
-    failed: number;
-  };
-}
+export type AdminSessionRevokeResult = z.infer<typeof AdminSessionRevokeResultSchema>;
 
 export interface AdminSessionOriginSummary {
   ip: string | null;
@@ -173,7 +161,4 @@ export interface AdminLoginRestrictionReleaseInput {
   userId: number;
 }
 
-export interface AdminLoginRestrictionReleaseResult {
-  changed: boolean;
-  failureStateCleared: true;
-}
+export type AdminLoginRestrictionReleaseResult = z.infer<typeof AdminLoginRestrictionReleaseResultSchema>;

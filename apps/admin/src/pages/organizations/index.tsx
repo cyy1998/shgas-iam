@@ -2,6 +2,7 @@ import OrgDetailPanel from '@admin/pages/organizations/components/OrgDetailPanel
 import OrgFormModal from '@admin/pages/organizations/components/OrgFormModal';
 import OrgSearchPanel from '@admin/pages/organizations/components/OrgSearchPanel';
 import OrgTree from '@admin/pages/organizations/components/OrgTree';
+import type { AdminMutationCommittedError } from '@admin/services/admin-mutation';
 import {
   getOrganization,
   getOrganizationChildren,
@@ -9,8 +10,8 @@ import {
   type OrganizationDetailVo,
 } from '@admin/services/organization';
 import { PageContainer } from '@ant-design/pro-components';
-import { Button, Card, Col, message, Row, Space } from 'antd';
 import { useAccess } from '@umijs/max';
+import { Alert, Button, Card, Col, message, Row, Space } from 'antd';
 import { useCallback, useEffect, useState } from 'react';
 
 type FormState =
@@ -24,6 +25,7 @@ const DETAIL_CHILDREN_DEFAULT_SIZE = 20;
 export default function OrganizationsPage() {
   const access = useAccess();
   const [selectedCode, setSelectedCode] = useState<string | undefined>();
+  const [committedWarning, setCommittedWarning] = useState<string>();
   const [formState, setFormState] = useState<FormState>({ open: false });
 
   const [detailData, setDetailData] = useState<OrganizationDetailVo | null>(
@@ -52,6 +54,7 @@ export default function OrganizationsPage() {
       const d = await getOrganization(orgCode);
       setDetailData(d);
     } catch (err) {
+      setDetailData(null);
       message.error(err instanceof Error ? err.message : '加载组织详情失败');
     } finally {
       setDetailLoading(false);
@@ -111,6 +114,12 @@ export default function OrganizationsPage() {
     refreshAll();
   };
 
+  const onCommitted = (error: AdminMutationCommittedError) => {
+    setCommittedWarning(error.message);
+    setFormState({ open: false });
+    refreshAll();
+  };
+
   const onDetailChanged = () => {
     setDetailData(null);
     setDetailChildrenPage(null);
@@ -122,21 +131,26 @@ export default function OrganizationsPage() {
 
   return (
     <PageContainer title="组织管理">
+      {committedWarning && (
+        <Alert type="warning" showIcon message={committedWarning} />
+      )}
       <Row gutter={16}>
         <Col span={8}>
           <Card
             title="组织树"
-            extra={access.canCreateOrganizationRoot ? (
-              <Button
-                type="primary"
-                size="small"
-                onClick={() =>
-                  setFormState({ open: true, mode: 'create-root' })
-                }
-              >
-                + 新建根组织
-              </Button>
-            ) : null}
+            extra={
+              access.canCreateOrganizationRoot ? (
+                <Button
+                  type="primary"
+                  size="small"
+                  onClick={() =>
+                    setFormState({ open: true, mode: 'create-root' })
+                  }
+                >
+                  + 新建根组织
+                </Button>
+              ) : null
+            }
           >
             <Space
               orientation="vertical"
@@ -180,7 +194,9 @@ export default function OrganizationsPage() {
                 }
               }}
               onSelectChild={selectOrganization}
-              onChanged={onDetailChanged}
+              onChanged={refreshAll}
+              onDeleted={onDetailChanged}
+              onCommitted={onCommitted}
             />
           </Card>
         </Col>
@@ -203,6 +219,7 @@ export default function OrganizationsPage() {
           if (!open) setFormState({ open: false });
         }}
         onSuccess={onSuccess}
+        onCommitted={onCommitted}
       />
     </PageContainer>
   );

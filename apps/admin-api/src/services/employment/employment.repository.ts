@@ -9,6 +9,7 @@ import type {
   EmploymentAdminPaginationQueryDto,
 } from "./employment.type";
 import { EmploymentStatus, OrganizationType } from "@iam/contracts";
+import { extractPostgresError } from "@iam/db/postgres-error";
 import { compactUpdate, firstRow, ilikeContainsIf, inArrayIf } from "@iam/db/query-utils";
 import {
   employments,
@@ -18,13 +19,51 @@ import {
   users,
 } from "@iam/db/schema";
 import { EmploymentAlreadyExistsError, OPEN_EMPLOYMENT_STATUSES } from "@iam/domain/employment";
-import { and, count, desc, eq, exists, inArray, or, sql } from "drizzle-orm";
+import { and, asc, count, desc, eq, exists, inArray, or, sql } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 
 const EMPLOYMENT_ACTIVE_RELATIONSHIP_UNIQUE_INDEX = "employment_active_relationship_unique_idx";
 
 export function createEmploymentRepository(db: DbClient) {
+  async function lockEmploymentsByIds(ids: readonly number[]) {
+    if (ids.length === 0)
+      return [];
+    const rows = await db.select().from(employments).where(inArray(employments.id, [...new Set(ids)])).orderBy(asc(employments.id)).for("update");
+    if (rows.length !== new Set(ids).size)
+      throw new Error("Selected Employment lock returned missing rows");
+    return rows;
+  }
   return {
+    lockEmploymentsByIds,
+    async getOpenEmploymentIdsByUserId(userId: number) {
+      return (await db.select({ id: employments.id }).from(employments).where(and(
+        eq(employments.userId, userId),
+        eq(employments.isDelete, false),
+        inArray(employments.status, OPEN_EMPLOYMENT_STATUSES),
+      ))).map(row => row.id);
+    },
+    async getOpenPrimaryEmploymentIdsByUserId(userId: number) {
+      return (await db.select({ id: employments.id }).from(employments).where(and(
+        eq(employments.userId, userId),
+        eq(employments.isPrimary, true),
+        eq(employments.isDelete, false),
+        inArray(employments.status, OPEN_EMPLOYMENT_STATUSES),
+      ))).map(row => row.id);
+    },
+    async lockEmploymentByIdForAdmin(id: number) {
+      const row = firstRow(await db.select().from(employments).where(and(eq(employments.id, id), eq(employments.isDelete, false))).for("update"));
+      return (await attachEmploymentRelations(row === null ? [] : [row], db))[0] ?? null;
+    },
+    async lockEmploymentLifecycleContextById(id: number) {
+      const employment = firstRow(await db.select().from(employments).where(and(eq(employments.id, id), eq(employments.isDelete, false))).for("update"));
+      if (employment === null)
+        return null;
+      const [organization, position] = await Promise.all([
+        db.query.organizations.findFirst({ where: { id: employment.orgId } }),
+        db.query.positions.findFirst({ where: { id: employment.posId } }),
+      ]);
+      return { employment, organization: organization ?? null, position: position ?? null };
+    },
     async getEmploymentsByUserId(userId: number) {
       const rows = await db.query.employments.findMany({
         where: {
@@ -124,7 +163,7 @@ export function createEmploymentRepository(db: DbClient) {
     },
     async createEmploymentRecord(data: AdminEmploymentRecordCreate) {
       try {
-        return firstRow(await db.insert(employments).values({
+        const created = firstRow(await db.insert(employments).values({
           userId: data.userId,
           posId: data.posId,
           orgId: data.orgId,
@@ -133,7 +172,10 @@ export function createEmploymentRepository(db: DbClient) {
           endTime: data.endTime,
           description: data.description,
           status: data.status,
-        }).returning())!;
+        }).returning());
+        if (created === null)
+          throw new Error("Employment insert returned no row");
+        return created;
       }
       catch (error) {
         if (isEmploymentActiveRelationshipUniqueViolation(error))
@@ -142,36 +184,21 @@ export function createEmploymentRepository(db: DbClient) {
       }
     },
     async updateEmploymentRecord(id: number, data: AdminEmploymentRecordUpdate) {
-      return firstRow(await db
-        .update(employments)
-        .set(compactUpdate(data))
-        .where(eq(employments.id, id))
-        .returning())!;
-    },
-    async unsetOpenPrimariesByUserId(userId: number) {
-      return await db
-        .update(employments)
-        .set({ isPrimary: false })
-        .where(and(
-          eq(employments.userId, userId),
-          eq(employments.isPrimary, true),
-          eq(employments.isDelete, false),
-          inArray(employments.status, OPEN_EMPLOYMENT_STATUSES),
-        ));
-    },
-    async endOpenEmploymentsByUserId(userId: number, endTime: Date) {
-      return await db
-        .update(employments)
-        .set({
-          status: EmploymentStatus.Disable,
-          endTime,
-          isPrimary: false,
-        })
-        .where(and(
-          eq(employments.userId, userId),
-          eq(employments.isDelete, false),
-          inArray(employments.status, OPEN_EMPLOYMENT_STATUSES),
-        ));
+      try {
+        const updated = firstRow(await db
+          .update(employments)
+          .set(compactUpdate(data))
+          .where(and(eq(employments.id, id), eq(employments.isDelete, false)))
+          .returning());
+        if (updated === null)
+          throw new Error("Employment update returned no row");
+        return updated;
+      }
+      catch (error) {
+        if (isEmploymentActiveRelationshipUniqueViolation(error))
+          throw new EmploymentAlreadyExistsError("相同任职关系已存在");
+        throw error;
+      }
     },
   };
 }
@@ -179,15 +206,9 @@ export function createEmploymentRepository(db: DbClient) {
 export type EmploymentRepository = ReturnType<typeof createEmploymentRepository>;
 
 function isEmploymentActiveRelationshipUniqueViolation(error: unknown) {
-  if (typeof error !== "object" || error === null)
-    return false;
-
-  const candidate = error as { code?: unknown; constraint?: unknown; constraint_name?: unknown };
-  return candidate.code === "23505"
-    && (
-      candidate.constraint === EMPLOYMENT_ACTIVE_RELATIONSHIP_UNIQUE_INDEX
-      || candidate.constraint_name === EMPLOYMENT_ACTIVE_RELATIONSHIP_UNIQUE_INDEX
-    );
+  const detail = extractPostgresError(error);
+  return detail?.code === "23505"
+    && detail.constraint === EMPLOYMENT_ACTIVE_RELATIONSHIP_UNIQUE_INDEX;
 }
 
 type Position = typeof positions.$inferSelect;

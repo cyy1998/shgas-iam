@@ -1,6 +1,10 @@
+import type { ClientRuntimeSnapshotAdapter, ClientRuntimeSnapshotKind } from "@iam/api-core/client-runtime-snapshot";
 import { randomUUID } from "node:crypto";
 import { createAdminApiUnitOfWork } from "@admin-api/composition/tx";
-import { createAdminClientMutation } from "@admin-api/services/client/client-mutation";
+import { AdminMutationCommittedError } from "@admin-api/services/admin-mutation/admin-mutation";
+import { createClientRepository } from "@admin-api/services/client/client.repository";
+import { createClientService } from "@admin-api/services/client/client.service";
+import { createFakePasswordHasher, createFakeRandom } from "@admin-api/test/fakes";
 import {
   createClientRuntimeSnapshotModule,
 } from "@iam/api-core/client-runtime-snapshot";
@@ -12,6 +16,7 @@ import { mapUnitOfWork } from "@iam/api-core/uow";
 import {
   ClientStatus,
   CustomSsoClientMode,
+  CustomSsoClientState,
   OidcClientType,
   OidcScope,
   OidcTokenEndpointAuthMethod,
@@ -48,6 +53,7 @@ describe("Client Runtime hard-cutover rehearsal", () => {
     const afterName = `${clientCode}-after`;
     let testFailure: { readonly error: unknown } | undefined;
     let snapshotAcquisitionFailuresRemaining = 0;
+    let invalidationFails = false;
 
     try {
       await scope.observer.set(sentinelKey, "non-owner");
@@ -76,6 +82,18 @@ describe("Client Runtime hard-cutover rehearsal", () => {
         customSsoConfigVersion: 1,
       });
 
+      const observedAdapters = [
+        observeAdapter(createOidcClientRuntimeSnapshotAdapter({
+          repository: createOidcClientRepository(postgres.db),
+          cacheTtlSeconds: 30,
+        })),
+        observeAdapter(createCustomSsoClientRuntimeSnapshotAdapter({
+          repository: createCustomSsoClientRepository(postgres.db),
+        })),
+        observeAdapter(createClientTrafficGateSnapshotAdapter({
+          source: createTrafficGateSource(postgres.db),
+        })),
+      ] as const;
       const snapshots = createClientRuntimeSnapshotModule({
         redis: {
           async eval(script, keyCount, ...args) {
@@ -86,18 +104,7 @@ describe("Client Runtime hard-cutover rehearsal", () => {
             return await scope.redis.eval(script, keyCount, ...args);
           },
         },
-        adapters: [
-          createOidcClientRuntimeSnapshotAdapter({
-            repository: createOidcClientRepository(postgres.db),
-            cacheTtlSeconds: 30,
-          }),
-          createCustomSsoClientRuntimeSnapshotAdapter({
-            repository: createCustomSsoClientRepository(postgres.db),
-          }),
-          createClientTrafficGateSnapshotAdapter({
-            source: createTrafficGateSource(postgres.db),
-          }),
-        ],
+        adapters: observedAdapters,
       });
       const oidc = createOidcClientRuntimeStore(snapshots.reader("oidc"));
       const customSso = createCustomSsoClientRuntimeReader(
@@ -106,7 +113,11 @@ describe("Client Runtime hard-cutover rehearsal", () => {
       const trafficGate = createClientTrafficGateReader(
         snapshots.reader("traffic-gate"),
       );
-      const mutation = createMutation(postgres, snapshots.invalidateClient);
+      const mutation = createMutation(postgres, async (code) => {
+        if (invalidationFails)
+          throw new Error("Injected Snapshot propagation failure");
+        await snapshots.invalidateClient(code);
+      });
 
       const before = await acquirePublicFacts({
         clientCode,
@@ -120,12 +131,11 @@ describe("Client Runtime hard-cutover rehearsal", () => {
         trafficGate: { outcome: "enabled" },
       });
 
-      await mutation.transaction(async (tx, bindTarget) =>
-        await bindTarget(clientCode, async () =>
-          await tx.clientRepository.updateClientByCode(clientCode, {
-            clientName: afterName,
-            status: ClientStatus.Maintenance,
-          })));
+      const updated = await mutation.updateClient(clientCode, {
+        clientName: afterName,
+        status: ClientStatus.Maintenance,
+      });
+      expect(updated).toEqual({ changed: true, result: null });
       const changed = await acquirePublicFacts({
         clientCode,
         customSso,
@@ -164,12 +174,11 @@ describe("Client Runtime hard-cutover rehearsal", () => {
       expect(unavailable.trafficGate).not.toEqual(changed.trafficGate);
       expect(snapshotAcquisitionFailuresRemaining).toBe(0);
 
-      await mutation.transaction(async (tx, bindTarget) =>
-        await bindTarget(clientCode, async () =>
-          await tx.clientRepository.updateClientByCode(clientCode, {
-            clientName: beforeName,
-            status: ClientStatus.Enable,
-          })));
+      const updatedBack = await mutation.updateClient(clientCode, {
+        clientName: beforeName,
+        status: ClientStatus.Enable,
+      });
+      expect(updatedBack).toEqual({ changed: true, result: null });
       const restored = await acquirePublicFacts({
         clientCode,
         customSso,
@@ -177,6 +186,145 @@ describe("Client Runtime hard-cutover rehearsal", () => {
         trafficGate,
       });
       expect(restored).toEqual(before);
+
+      invalidationFails = true;
+      let propagationError: unknown;
+      try {
+        await mutation.updateClient(clientCode, { clientName: afterName, status: ClientStatus.Maintenance });
+      }
+      catch (error) {
+        propagationError = error;
+      }
+      expect(propagationError).toBeInstanceOf(AdminMutationCommittedError);
+      const committed = await mutation.getClientDetailByCode(clientCode);
+      expect(committed).toMatchObject({ clientName: afterName, status: ClientStatus.Maintenance });
+      const stale = await acquirePublicFacts({ clientCode, customSso, oidc, trafficGate });
+      expect(stale).toEqual(before);
+
+      // A legal no-op must still invalidate the old Snapshot after propagation is available again.
+      invalidationFails = false;
+      const noop = await mutation.updateClientStatus(clientCode, ClientStatus.Maintenance);
+      expect(noop).toEqual({ changed: false, result: null });
+      const repairedByNoop = await acquirePublicFacts({ clientCode, customSso, oidc, trafficGate });
+      expect(repairedByNoop).toEqual(changed);
+
+      const beforeOidc = await mutation.getClientDetailByCode(clientCode);
+      const nextConfig = {
+        clientType: OidcClientType.Confidential,
+        redirectUris: ["https://client.example.com/new-callback"],
+        postLogoutRedirectUris: ["https://client.example.com/logout"],
+        allowedScopes: [OidcScope.OpenId, OidcScope.Profile],
+        tokenEndpointAuthMethod: OidcTokenEndpointAuthMethod.ClientSecretBasic,
+      } as const;
+      invalidationFails = true;
+      let secretDeliveryError: unknown;
+      try {
+        await mutation.configureClientOidc(clientCode, {
+          ...nextConfig,
+          redirectUris: [...nextConfig.redirectUris],
+          postLogoutRedirectUris: [...nextConfig.postLogoutRedirectUris],
+          allowedScopes: [...nextConfig.allowedScopes],
+        });
+      }
+      catch (error) {
+        secretDeliveryError = error;
+      }
+      expect(secretDeliveryError).toBeInstanceOf(AdminMutationCommittedError);
+      const staleOidc = await oidc.findRuntime(clientCode);
+      expect(staleOidc?.redirect_uris).toEqual(["https://client.example.com/callback"]);
+      const committedOidc = await mutation.getClientDetailByCode(clientCode);
+      expect(committedOidc).toMatchObject({ hasOidcSecret: true, oidcConfigVersion: beforeOidc.oidcConfigVersion + 1 });
+
+      invalidationFails = false;
+      const oidcNoop = await mutation.configureClientOidc(clientCode, committedOidc.oidcConfig!);
+      expect(oidcNoop.changed).toBe(false);
+      expect(oidcNoop.result.clientSecret).toBeUndefined();
+      const freshOidc = await oidc.findRuntime(clientCode);
+      expect(freshOidc?.redirect_uris).toEqual(["https://client.example.com/new-callback"]);
+      expect(freshOidc?.oidc_config_version).toBe(committedOidc.oidcConfigVersion);
+      const rotated = await mutation.rotateClientOidcSecret(clientCode);
+      expect(rotated.changed).toBe(true);
+      expect(rotated.result.clientSecret).toBeTruthy();
+      const rotatedVersion = await oidc.findActiveVersion(clientCode);
+      expect(rotatedVersion).toBe(committedOidc.oidcConfigVersion + 1);
+      await mutation.disableClientOidc(clientCode);
+      const disabledOidc = await oidc.findRuntime(clientCode);
+      expect(disabledOidc).toBeNull();
+      await mutation.enableClientOidc(clientCode);
+      const enabledOidc = await oidc.findRuntime(clientCode);
+      expect(enabledOidc?.oidc_config_version).toBe(committedOidc.oidcConfigVersion + 3);
+      await mutation.disableClientOidc(clientCode);
+      await mutation.removeClientOidc(clientCode);
+      const removedOidc = await oidc.findRuntime(clientCode);
+      expect(removedOidc).toBeNull();
+
+      await mutation.disableClientCustomSso(clientCode);
+      const independentConfig = {
+        mode: CustomSsoClientMode.Independent as const,
+        validRedirectUrls: ["https://independent.example.com/*"],
+        subjectClaims: [SubjectClaim.SubjectIdentifier],
+        callbackEndpoint: "https://independent.example.com/callback",
+        logoutEndpoint: "https://independent.example.com/logout",
+      };
+      const initialCustomSso = await mutation.getClientDetailByCode(clientCode);
+      let expectedVersion = initialCustomSso.customSsoConfigVersion;
+      for (const operation of ["first-independent", "rotation"] as const) {
+        const beforeDeliveryFailure = await acquirePublicFacts({ clientCode, customSso, oidc, trafficGate });
+        invalidationFails = true;
+        let deliveryFailure: unknown;
+        try {
+          if (operation === "first-independent")
+            await mutation.configureClientCustomSso(clientCode, independentConfig);
+          else
+            await mutation.rotateClientCustomSsoSecret(clientCode);
+        }
+        catch (error) {
+          deliveryFailure = error;
+        }
+        expectedVersion += 1;
+        expect(deliveryFailure).toBeInstanceOf(AdminMutationCommittedError);
+        expect(deliveryFailure).not.toHaveProperty("result");
+        expect(JSON.stringify(deliveryFailure)).not.toContain("iam_sso_test_secret");
+        const committedCustomSso = await mutation.getClientDetailByCode(clientCode);
+        expect(committedCustomSso).toMatchObject({
+          customSsoConfigVersion: expectedVersion,
+          customSsoState: CustomSsoClientState.Disabled,
+          hasCustomSsoSecret: true,
+        });
+        expect(committedCustomSso).not.toHaveProperty("customSsoSecret");
+        expect(committedCustomSso).not.toHaveProperty("customSsoSecretHash");
+        const staleCustomSso = await acquirePublicFacts({ clientCode, customSso, oidc, trafficGate });
+        expect(staleCustomSso).toEqual(beforeDeliveryFailure);
+
+        invalidationFails = false;
+        const loadCounts = observedAdapters.map(adapter => adapter.load.mock.calls.length);
+        const repaired = await mutation.configureClientCustomSso(clientCode, independentConfig);
+        expect(repaired.changed).toBe(false);
+        expect(repaired.result.client.customSsoConfigVersion).toBe(expectedVersion);
+        expect(repaired.result.customSsoSecret).toBeUndefined();
+        await acquirePublicFacts({ clientCode, customSso, oidc, trafficGate });
+        for (const [index, adapter] of observedAdapters.entries())
+          expect(adapter.load).toHaveBeenCalledTimes(loadCounts[index]! + 1);
+
+        // Recovery requires a new, explicitly requested rotation; detail reads cannot recover the lost secret.
+        const delivered = await mutation.rotateClientCustomSsoSecret(clientCode);
+        expectedVersion += 1;
+        expect(delivered.changed).toBe(true);
+        expect(delivered.result.customSsoSecret).toBeTruthy();
+        expect(delivered.result.client.customSsoConfigVersion).toBe(expectedVersion);
+      }
+      await mutation.enableClientCustomSso(clientCode);
+      const enabledCustomSso = await customSso.findRuntimeRecord(clientCode);
+      expect(enabledCustomSso).toMatchObject({
+        customSsoConfig: independentConfig,
+        customSsoConfigVersion: expectedVersion + 1,
+      });
+      const repeatedEnable = await mutation.enableClientCustomSso(clientCode);
+      expect(repeatedEnable.changed).toBe(false);
+      const sameConfig = await mutation.configureClientCustomSso(clientCode, independentConfig);
+      expect(sameConfig.changed).toBe(false);
+      const sameRuntime = await customSso.findRuntimeRecord(clientCode);
+      expect(sameRuntime).toEqual(enabledCustomSso);
     }
     catch (error) {
       testFailure = { error };
@@ -290,11 +438,23 @@ function createMutation(
   });
   const clientUnitOfWork = mapUnitOfWork(unitOfWork, tx => ({
     clientRepository: tx.repositories.client,
+    auditService: tx.auditService,
   }));
 
-  return createAdminClientMutation({
-    invalidation: { invalidateClient },
-    logger: { error: mock(() => undefined) },
+  return createClientService({
+    clientRepository: createClientRepository(postgres.db),
+    clientRuntimeInvalidation: { invalidateClient },
+    clientMutationLogger: { error: mock(() => undefined) },
+    clientCache: {
+      invalidateClient: async () => undefined,
+      invalidateUpdatedClient: async () => undefined,
+    },
+    sessionRevocation: {
+      revokeClientProtocol: async () => revokeSummary(),
+      revokeClientAllProtocols: async () => revokeSummary(),
+    },
+    passwordHasher: createFakePasswordHasher(),
+    random: createFakeRandom(),
     uow: clientUnitOfWork,
   });
 }
@@ -341,4 +501,18 @@ async function acquireUnavailablePublicFacts(options: {
   }
   const trafficGate = await options.trafficGate.check(options.clientCode);
   return { customSso, oidc, trafficGate };
+}
+
+function revokeSummary() {
+  return {
+    principalSessions: { revoked: 0, alreadyRevoked: 0, missing: 0, excluded: 0 },
+    bindings: { revoked: 0, alreadyRevoked: 0, missing: 0, excluded: 0 },
+    credentials: { revoked: 0, alreadyRevoked: 0, missing: 0, excluded: 0 },
+    artifacts: { revoked: 0, alreadyRevoked: 0, missing: 0, excluded: 0 },
+    cleanup: { attempted: 0, succeeded: 0, failed: 0, failures: [] },
+  };
+}
+
+function observeAdapter<K extends ClientRuntimeSnapshotKind, T>(adapter: ClientRuntimeSnapshotAdapter<K, T>) {
+  return { ...adapter, load: mock(adapter.load) };
 }

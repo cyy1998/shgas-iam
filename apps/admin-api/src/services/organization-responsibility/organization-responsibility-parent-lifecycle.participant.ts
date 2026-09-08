@@ -1,23 +1,28 @@
 import type { AdminAuditContext } from "@admin-api/services/audit/audit.context";
 import type { AuditLogWriterPort } from "@admin-api/services/audit/audit.service";
-import type { OrganizationResponsibilityAssignmentLifecycleChange } from "./organization-responsibility-parent-lifecycle.type";
+import type {
+  OrganizationResponsibilityAssignmentLifecycleChange,
+  OrganizationResponsibilityAssignmentWriteTarget,
+} from "./organization-responsibility-parent-lifecycle.type";
 import { buildOrganizationResponsibilityAssignmentLifecycleAudit } from "@admin-api/services/audit/events/organization-responsibility-assignment.audit";
-import { ORGANIZATION_RESPONSIBILITY_ASSIGNMENT_AUDIT_ACTIONS } from "@iam/contracts";
+import { ORGANIZATION_RESPONSIBILITY_ASSIGNMENT_AUDIT_ACTIONS, OrganizationResponsibilityAssignmentStatus } from "@iam/contracts";
 import { OrganizationHasOpenResponsibilityAssignmentError } from "@iam/domain/organization";
 
 export interface CreateOrganizationResponsibilityParentLifecycleParticipantDeps {
   assignmentStore: {
-    pauseEnabledAssignmentsForEmployment: (
-      employmentId: number,
-    ) => Promise<OrganizationResponsibilityAssignmentLifecycleChange[]>;
-    endOpenAssignmentsForEmployment: (
-      employmentId: number,
-      endTime: Date,
-    ) => Promise<OrganizationResponsibilityAssignmentLifecycleChange[]>;
-    endOpenAssignmentsForUser: (
-      userId: number,
-      endTime: Date,
-    ) => Promise<OrganizationResponsibilityAssignmentLifecycleChange[]>;
+    lockAssignmentsForEmployments: (input: {
+      employmentIds: readonly number[];
+      command: "pause" | "end";
+    }) => Promise<OrganizationResponsibilityAssignmentWriteTarget[]>;
+    lockAssignmentsForEmployment: (input: {
+      employmentId: number;
+      command: "pause" | "end";
+    }) => Promise<OrganizationResponsibilityAssignmentWriteTarget[]>;
+    updateLockedAssignmentLifecycle: (input: {
+      assignment: OrganizationResponsibilityAssignmentWriteTarget;
+      status: OrganizationResponsibilityAssignmentStatus;
+      endTime: Date | null;
+    }) => Promise<OrganizationResponsibilityAssignmentLifecycleChange>;
     hasOpenAssignmentTargetingOrganizationSubtree: (
       organizationId: number,
     ) => Promise<boolean>;
@@ -30,12 +35,10 @@ export function createOrganizationResponsibilityParentLifecycleParticipant(
 ) {
   async function pauseEnabledAssignmentsForEmployment(input: {
     employmentId: number;
+    selectedAssignments: readonly OrganizationResponsibilityAssignmentWriteTarget[];
     auditContext?: AdminAuditContext;
   }) {
-    const changes
-      = await deps.assignmentStore.pauseEnabledAssignmentsForEmployment(
-        input.employmentId,
-      );
+    const changes = await applySelectedAssignments(input.selectedAssignments, input.employmentId, "pause", null);
     for (const change of changes) {
       await deps.auditLogWriter.recordAuditLog(
         buildOrganizationResponsibilityAssignmentLifecycleAudit({
@@ -78,13 +81,11 @@ export function createOrganizationResponsibilityParentLifecycleParticipant(
   async function endOpenAssignmentsForEmployment(input: {
     action: "end" | "transfer";
     employmentId: number;
+    selectedAssignments: readonly OrganizationResponsibilityAssignmentWriteTarget[];
     endTime: Date;
     auditContext?: AdminAuditContext;
   }) {
-    const changes = await deps.assignmentStore.endOpenAssignmentsForEmployment(
-      input.employmentId,
-      input.endTime,
-    );
+    const changes = await applySelectedAssignments(input.selectedAssignments, input.employmentId, "end", input.endTime);
     for (const change of changes) {
       await deps.auditLogWriter.recordAuditLog(
         buildOrganizationResponsibilityAssignmentLifecycleAudit({
@@ -114,13 +115,14 @@ export function createOrganizationResponsibilityParentLifecycleParticipant(
 
   async function endOpenAssignmentsForUserResignation(input: {
     userId: number;
+    selectedAssignments: readonly OrganizationResponsibilityAssignmentWriteTarget[];
     endTime: Date;
     auditContext?: AdminAuditContext;
   }) {
-    const changes = await deps.assignmentStore.endOpenAssignmentsForUser(
-      input.userId,
-      input.endTime,
-    );
+    const changes: OrganizationResponsibilityAssignmentLifecycleChange[] = [];
+    for (const assignment of input.selectedAssignments) {
+      changes.push(...await applySelectedAssignments([assignment], assignment.employmentId, "end", input.endTime));
+    }
     for (const change of changes) {
       await deps.auditLogWriter.recordAuditLog(
         buildOrganizationResponsibilityAssignmentLifecycleAudit({
@@ -148,7 +150,36 @@ export function createOrganizationResponsibilityParentLifecycleParticipant(
     return changes.length > 0;
   }
 
+  async function applySelectedAssignments(
+    assignments: readonly OrganizationResponsibilityAssignmentWriteTarget[],
+    employmentId: number,
+    command: "pause" | "end",
+    endTime: Date | null,
+  ) {
+    const changes: OrganizationResponsibilityAssignmentLifecycleChange[] = [];
+    for (const assignment of assignments) {
+      if (assignment.employmentId !== employmentId)
+        throw new Error("Locked Assignment does not belong to the selected Employment");
+      const applicable = command === "pause"
+        ? assignment.status === OrganizationResponsibilityAssignmentStatus.Enable
+        : assignment.status === OrganizationResponsibilityAssignmentStatus.Enable
+          || assignment.status === OrganizationResponsibilityAssignmentStatus.Pause;
+      if (!applicable)
+        continue;
+      changes.push(await deps.assignmentStore.updateLockedAssignmentLifecycle({
+        assignment,
+        status: command === "pause"
+          ? OrganizationResponsibilityAssignmentStatus.Pause
+          : OrganizationResponsibilityAssignmentStatus.Disable,
+        endTime: command === "pause" ? assignment.endTime : endTime,
+      }));
+    }
+    return changes;
+  }
+
   return {
+    lockAssignmentsForEmployment: deps.assignmentStore.lockAssignmentsForEmployment,
+    lockAssignmentsForEmployments: deps.assignmentStore.lockAssignmentsForEmployments,
     assertNoOpenAssignmentsTargetingOrganizationSubtree,
     endOpenAssignmentsForEmployment,
     endOpenAssignmentsForUserResignation,

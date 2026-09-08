@@ -1,4 +1,5 @@
 import AuthorizationActionButton from '@admin/components/AuthorizationActionButton';
+import { AdminMutationCommittedError } from '@admin/services/admin-mutation';
 import {
   clearPrimaryEmployment,
   type EmploymentVo,
@@ -6,8 +7,8 @@ import {
 } from '@admin/services/employment';
 import type { AdminAuthorizationDecision } from '@iam/contracts';
 import { EmploymentStatus } from '@iam/contracts';
-import { message, Modal } from 'antd';
 import type { ButtonProps } from 'antd';
+import { message, Modal } from 'antd';
 
 type EmploymentPrimary = Pick<
   EmploymentVo,
@@ -20,6 +21,7 @@ type Props = {
   decision: AdminAuthorizationDecision;
   employment: EmploymentPrimary;
   onSuccess: () => Promise<void> | void;
+  onCommitted: (error: AdminMutationCommittedError) => Promise<void>;
 };
 
 export default function EmploymentPrimaryActions({
@@ -28,6 +30,7 @@ export default function EmploymentPrimaryActions({
   decision,
   employment,
   onSuccess,
+  onCommitted,
 }: Props) {
   const handleError = (error: unknown) =>
     message.error(error instanceof Error ? error.message : '操作失败');
@@ -37,15 +40,18 @@ export default function EmploymentPrimaryActions({
   const nextPrimary = !employment.isPrimary;
   const submit = async () => {
     try {
-      if (nextPrimary) {
-        await setPrimaryEmployment(employment.id);
-        message.success('已设为主岗');
-      } else {
-        await clearPrimaryEmployment(employment.id);
-        message.success('已取消主岗');
-      }
+      const outcome = nextPrimary
+        ? await setPrimaryEmployment(employment.id)
+        : await clearPrimaryEmployment(employment.id);
+      if (outcome.changed)
+        message.success(nextPrimary ? '已设为主岗' : '已取消主岗');
+      else message.info('无需修改');
       await onSuccess();
     } catch (error) {
+      if (error instanceof AdminMutationCommittedError) {
+        await onCommitted(error);
+        return;
+      }
       handleError(error);
     }
   };

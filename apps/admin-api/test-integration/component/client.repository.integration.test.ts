@@ -38,9 +38,9 @@ function clientRow(overrides: Record<string, unknown> = {}) {
   };
 }
 
-function createUpdateDb(returnedRow: Record<string, unknown>) {
+function createUpdateDb(returnedRow: Record<string, unknown> | null) {
   let updateValues: Record<string, unknown> = {};
-  const returning = mock(async () => [returnedRow]);
+  const returning = mock(async () => returnedRow === null ? [] : [returnedRow]);
   const where = mock(() => ({ returning }));
   const set = mock((values: Record<string, unknown>) => {
     updateValues = values;
@@ -60,6 +60,16 @@ function sqlText(value: unknown) {
 }
 
 describe("client repository protocol epochs", () => {
+  test("reports missing basic write rows explicitly", async () => {
+    const repository = createClientRepository(createUpdateDb(null).db);
+    const updated = await repository.updateClientByCode("portal", { clientName: "Changed" });
+    const disabled = await repository.updateClientByCodeWithProtocolEpochs("portal", { status: ClientStatus.Disable });
+    const deleted = await repository.softDeleteClientByCode("portal");
+    expect(updated).toBeNull();
+    expect(disabled).toBeNull();
+    expect(deleted).toBeNull();
+  });
+
   test("advances independent OIDC and Custom SSO epochs for a status change without changing Custom SSO intent", async () => {
     const fake = createUpdateDb(clientRow({
       status: ClientStatus.Disable,

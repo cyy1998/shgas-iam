@@ -78,12 +78,13 @@ function createLifecycle() {
   const tx = {
     auditLogWriter: { recordAuditLog: mock(async () => undefined) },
     responsibilityParentLifecycle: {
+      lockAssignmentsForEmployment: mock(async () => []),
       pauseEnabledAssignmentsForEmployment: mock(async () => true),
     },
     sessionRevocation: { revokeAllForUser: mock(async () => undefined) },
     userProfileInvalidation: { recordChanges: mock(async () => undefined) },
     employmentStore: {
-      getEmploymentLifecycleContextById: mock(async () => ({
+      lockEmploymentLifecycleContextById: mock(async () => ({
         employment: currentEmployment,
         organization: organization(),
         position: position(),
@@ -114,7 +115,7 @@ describe("Employment Lifecycle Pause/Resume", () => {
     await expect(useCase.execute({
       command: "pause",
       employmentId: 4,
-    })).resolves.toBe(true);
+    })).resolves.toEqual({ changed: true, result: null });
 
     expect(tx.employmentStore.updateEmploymentRecord).toHaveBeenCalledWith(4, {
       status: EmploymentStatus.Pause,
@@ -127,6 +128,7 @@ describe("Employment Lifecycle Pause/Resume", () => {
       tx.responsibilityParentLifecycle.pauseEnabledAssignmentsForEmployment,
     ).toHaveBeenCalledWith({
       auditContext: undefined,
+      selectedAssignments: [],
       employmentId: 4,
     });
     expect(tx.userProfileInvalidation.recordChanges).toHaveBeenCalledWith([
@@ -138,7 +140,7 @@ describe("Employment Lifecycle Pause/Resume", () => {
 
   test("treats an already paused employment as an idempotent success", async () => {
     const { tx, useCase } = createLifecycle();
-    tx.employmentStore.getEmploymentLifecycleContextById.mockResolvedValueOnce({
+    tx.employmentStore.lockEmploymentLifecycleContextById.mockResolvedValueOnce({
       employment: employment({ status: EmploymentStatus.Pause }),
       organization: organization(),
       position: position(),
@@ -147,19 +149,21 @@ describe("Employment Lifecycle Pause/Resume", () => {
     await expect(useCase.execute({
       command: "pause",
       employmentId: 4,
-    })).resolves.toBe(true);
+    })).resolves.toEqual({ changed: false, result: null });
 
     expect(tx.employmentStore.updateEmploymentRecord).not.toHaveBeenCalled();
     expect(
       tx.responsibilityParentLifecycle.pauseEnabledAssignmentsForEmployment,
     ).not.toHaveBeenCalled();
-    expect(tx.auditLogWriter.recordAuditLog).not.toHaveBeenCalled();
+    expect(tx.auditLogWriter.recordAuditLog).toHaveBeenCalledWith(expect.objectContaining({
+      details: expect.objectContaining({ changed: false }),
+    }));
     expect(tx.userProfileInvalidation.recordChanges).not.toHaveBeenCalled();
   });
 
   test("resumes a paused employment after revalidating parents, scope, and Open uniqueness", async () => {
     const { tx, useCase } = createLifecycle();
-    tx.employmentStore.getEmploymentLifecycleContextById.mockResolvedValueOnce({
+    tx.employmentStore.lockEmploymentLifecycleContextById.mockResolvedValueOnce({
       employment: employment({ status: EmploymentStatus.Pause }),
       organization: organization(),
       position: position(),
@@ -169,7 +173,7 @@ describe("Employment Lifecycle Pause/Resume", () => {
       command: "resume",
       employmentId: 4,
       expectedAncestorOrgCode: "COMPANY",
-    })).resolves.toBe(true);
+    })).resolves.toEqual({ changed: true, result: null });
 
     expect(tx.organizationReader.isOrganizationDescendantOf).toHaveBeenCalledWith(
       "ORG",
@@ -200,12 +204,14 @@ describe("Employment Lifecycle Pause/Resume", () => {
       command: "resume",
       employmentId: 4,
       expectedAncestorOrgCode: "COMPANY",
-    })).resolves.toBe(true);
+    })).resolves.toEqual({ changed: false, result: null });
 
     expect(tx.organizationReader.isOrganizationDescendantOf).not.toHaveBeenCalled();
     expect(tx.employmentStore.getOpenEmploymentByUserOrgPosId).not.toHaveBeenCalled();
     expect(tx.employmentStore.updateEmploymentRecord).not.toHaveBeenCalled();
-    expect(tx.auditLogWriter.recordAuditLog).not.toHaveBeenCalled();
+    expect(tx.auditLogWriter.recordAuditLog).toHaveBeenCalledWith(expect.objectContaining({
+      details: expect.objectContaining({ changed: false }),
+    }));
     expect(tx.userProfileInvalidation.recordChanges).not.toHaveBeenCalled();
   });
 
@@ -214,7 +220,7 @@ describe("Employment Lifecycle Pause/Resume", () => {
     ["resume" as const, "恢复"],
   ])("rejects %s from an Ended employment with a stable business conflict", async (command) => {
     const { tx, useCase } = createLifecycle();
-    tx.employmentStore.getEmploymentLifecycleContextById.mockResolvedValueOnce({
+    tx.employmentStore.lockEmploymentLifecycleContextById.mockResolvedValueOnce({
       employment: employment({
         status: EmploymentStatus.Disable,
         endTime: now,
@@ -236,7 +242,7 @@ describe("Employment Lifecycle Pause/Resume", () => {
 
   test("rejects Resume when the assigned Organization is disabled", async () => {
     const { tx, useCase } = createLifecycle();
-    tx.employmentStore.getEmploymentLifecycleContextById.mockResolvedValueOnce({
+    tx.employmentStore.lockEmploymentLifecycleContextById.mockResolvedValueOnce({
       employment: employment({ status: EmploymentStatus.Pause }),
       organization: organization({ status: OrganizationStatus.Disable }),
       position: position(),
@@ -253,7 +259,7 @@ describe("Employment Lifecycle Pause/Resume", () => {
 
   test("rejects Resume when the Position is soft deleted", async () => {
     const { tx, useCase } = createLifecycle();
-    tx.employmentStore.getEmploymentLifecycleContextById.mockResolvedValueOnce({
+    tx.employmentStore.lockEmploymentLifecycleContextById.mockResolvedValueOnce({
       employment: employment({ status: EmploymentStatus.Pause }),
       organization: organization(),
       position: position({ isDelete: true }),
@@ -270,7 +276,7 @@ describe("Employment Lifecycle Pause/Resume", () => {
 
   test("rejects Resume outside the administrator-provided Organization scope", async () => {
     const { tx, useCase } = createLifecycle();
-    tx.employmentStore.getEmploymentLifecycleContextById.mockResolvedValueOnce({
+    tx.employmentStore.lockEmploymentLifecycleContextById.mockResolvedValueOnce({
       employment: employment({ status: EmploymentStatus.Pause }),
       organization: organization(),
       position: position(),
@@ -289,7 +295,7 @@ describe("Employment Lifecycle Pause/Resume", () => {
 
   test("rejects Resume when another Open Employment has the same relationship", async () => {
     const { tx, useCase } = createLifecycle();
-    tx.employmentStore.getEmploymentLifecycleContextById.mockResolvedValueOnce({
+    tx.employmentStore.lockEmploymentLifecycleContextById.mockResolvedValueOnce({
       employment: employment({ status: EmploymentStatus.Pause }),
       organization: organization(),
       position: position(),
@@ -331,6 +337,7 @@ describe("Employment Lifecycle Pause/Resume", () => {
               async updateEmploymentRecord(_id: number, patch: { status: EmploymentStatus }) {
                 attempted.statusWrites += 1;
                 staged.status = patch.status;
+                return employment(patch);
               },
             },
             auditLogWriter: {

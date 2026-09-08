@@ -6,9 +6,11 @@ import type {
   EmploymentAdminPaginationQueryDto,
   EmploymentUpdateDto,
 } from "./employment.type";
+import { createAdminMutation } from "@admin-api/services/admin-mutation/admin-mutation";
 import { adminAuditTransactionOptions } from "@admin-api/services/audit/audit.context";
 import { buildEmploymentAudit } from "@admin-api/services/audit/events/employment.audit";
 import { EmploymentDetailDtoSchema, toEmploymentDto } from "@admin-api/services/employment/employment.schema";
+import { BadRequestError } from "@iam/api-core/errors";
 import { EmploymentStatus } from "@iam/contracts";
 import {
   EmploymentNotEditableError,
@@ -25,6 +27,7 @@ const GUARDED_EMPLOYMENT_ACTION_BY_OPERATION = {
 } as const satisfies Partial<Record<AdminOperationId, string>>;
 
 export function createEmploymentService(deps: AdminEmploymentServiceDeps) {
+  const mutation = createAdminMutation(deps.uow);
   function readScope(authorization?: AdminEmploymentAuthorization) {
     return authorization?.kind === "scoped"
       ? { organizationIds: authorization.organizationIds }
@@ -89,38 +92,47 @@ export function createEmploymentService(deps: AdminEmploymentServiceDeps) {
     auditContext?: AdminAuditContext,
     authorization?: AdminEmploymentAuthorization,
   ) {
-    return await deps.uow.transaction(async (tx) => {
-      const existing = await tx.employmentRepository.getEmploymentByIdForAdmin(id);
-      if (existing === null)
-        throw new EmploymentNotFoundError();
-      if (
-        authorization?.kind === "scoped"
-        && !authorization.organizationIds.includes(existing.orgId)
-      ) {
-        authorization.denyMutation({
-          operationId: "admin.employment.update",
-          resourceIdentifier: id,
-          reason: "RESOURCE_OUT_OF_SCOPE",
-          concealExistence: true,
-        });
-      }
-      if (existing.status === EmploymentStatus.Disable)
-        throw new EmploymentNotEditableError();
+    if (dto.description === undefined)
+      throw new BadRequestError("至少提交一个任职更新字段");
+    return await mutation.locked(
+      tx => tx.employmentRepository.lockEmploymentByIdForAdmin(id),
+      () => new EmploymentNotFoundError(),
+      async (tx, existing) => {
+        if (
+          authorization?.kind === "scoped"
+          && !authorization.organizationIds.includes(existing.orgId)
+        ) {
+          authorization.denyMutation({
+            operationId: "admin.employment.update",
+            resourceIdentifier: id,
+            reason: "RESOURCE_OUT_OF_SCOPE",
+            concealExistence: true,
+          });
+        }
+        if (existing.status === EmploymentStatus.Disable)
+          throw new EmploymentNotEditableError();
 
-      await tx.employmentRepository.updateEmploymentRecord(
-        id,
-        {
-          description: dto.description,
-        },
-      );
-      await tx.auditService.recordAuditLog(buildEmploymentAudit("admin.employment.update", existing, {
-        patch: dto,
-      }, auditContext));
-      await tx.userProfileInvalidation.recordChanges([
-        { kind: "employment", userId: existing.userId },
-      ]);
-      return true;
-    }, adminAuditTransactionOptions(auditContext));
+        if (existing.description === dto.description)
+          return { changed: false, result: null };
+        const updated = await tx.employmentRepository.updateEmploymentRecord(
+          id,
+          {
+            description: dto.description,
+          },
+        );
+        if (updated == null)
+          throw new Error("Locked Employment update returned no row");
+        await tx.auditService.recordAuditLog(buildEmploymentAudit("admin.employment.update", existing, {
+          changed: true,
+          patch: dto,
+        }, auditContext));
+        await tx.userProfileInvalidation.recordChanges([
+          { kind: "employment", userId: existing.userId },
+        ]);
+        return { changed: true, result: null };
+      },
+      adminAuditTransactionOptions(auditContext),
+    );
   }
 
   async function guardEmploymentMutationForAdmin(

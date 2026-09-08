@@ -70,46 +70,35 @@ describe("createEmploymentRepository", () => {
     });
   });
 
-  test("clears Primary only from other Open Employments", async () => {
-    const where = mock(async (_condition: unknown) => undefined);
-    const set = mock(() => ({ where }));
-    const update = mock(() => ({ set }));
-    const repository = createEmploymentRepository({ update } as any);
+  test("selects only Open Primary Employment IDs for the command's locked selection", async () => {
+    const where = mock(async (_condition: unknown) => [{ id: 7 }, { id: 3 }]);
+    const from = mock(() => ({ where }));
+    const select = mock(() => ({ from }));
+    const repository = createEmploymentRepository({ select } as any);
 
-    await repository.unsetOpenPrimariesByUserId(1);
+    const ids = await repository.getOpenPrimaryEmploymentIdsByUserId(1);
 
-    expect(set).toHaveBeenCalledWith({ isPrimary: false });
-    const whereSql = renderSql(where.mock.calls[0]?.[0]);
-    expect(whereSql).toContain("\"employment\".\"user_id\" = $1");
-    expect(whereSql).toContain("\"employment\".\"is_primary\" = $2");
-    expect(whereSql).toContain("\"employment\".\"is_delete\" = $3");
-    expect(whereSql).toContain("\"employment\".\"status\" in ($4, $5)");
+    expect(ids).toEqual([7, 3]);
+    const query = renderQuery(where.mock.calls[0]?.[0]);
+    expect(query.sql).toContain("\"employment\".\"user_id\" = $1");
+    expect(query.sql).toContain("\"employment\".\"is_primary\" = $2");
+    expect(query.sql).toContain("\"employment\".\"is_delete\" = $3");
+    expect(query.sql).toContain("\"employment\".\"status\" in ($4, $5)");
+    expect(query.params).toEqual([1, true, false, EmploymentStatus.Enable, EmploymentStatus.Pause]);
   });
 
-  test("ends only Open Employments at the supplied time and clears Primary", async () => {
-    const endTime = new Date("2026-08-11T10:30:00.000Z");
-    const where = mock(async (_condition: unknown) => undefined);
-    const set = mock(() => ({ where }));
-    const update = mock(() => ({ set }));
-    const repository = createEmploymentRepository({ update } as any);
-
-    await repository.endOpenEmploymentsByUserId(1, endTime);
-
-    expect(set).toHaveBeenCalledWith({
-      status: EmploymentStatus.Disable,
-      endTime,
-      isPrimary: false,
-    });
+  test("selects only Open Employment IDs without writing their lifecycle facts", async () => {
+    const where = mock(async (_condition: unknown) => [{ id: 7 }, { id: 3 }]);
+    const from = mock(() => ({ where }));
+    const select = mock(() => ({ from }));
+    const repository = createEmploymentRepository({ select } as any);
+    const ids = await repository.getOpenEmploymentIdsByUserId(1);
+    expect(ids).toEqual([7, 3]);
     const query = renderQuery(where.mock.calls[0]?.[0]);
     expect(query.sql).toContain("\"employment\".\"user_id\" = $1");
     expect(query.sql).toContain("\"employment\".\"is_delete\" = $2");
     expect(query.sql).toContain("\"employment\".\"status\" in ($3, $4)");
-    expect(query.params).toEqual([
-      1,
-      false,
-      EmploymentStatus.Enable,
-      EmploymentStatus.Pause,
-    ]);
+    expect(query.params).toEqual([1, false, EmploymentStatus.Enable, EmploymentStatus.Pause]);
   });
 
   test("maps active relationship unique violations to employment already exists", async () => {

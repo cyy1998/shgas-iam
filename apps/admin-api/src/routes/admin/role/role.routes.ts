@@ -14,6 +14,7 @@ import jsonContent from "@iam/api-core/core/openapi/helpers/json-content";
 import jsonContentRequired from "@iam/api-core/core/openapi/helpers/json-content-required";
 import createSuccessResponseSchema from "@iam/api-core/core/openapi/schemas/create-success-schema";
 import { createPageResultSchema } from "@iam/api-core/core/pagination/schema";
+import { createAdminMutationResultSchema } from "@iam/contracts";
 import { RoleAssignmentVoSchema, RoleDetailVoSchema, RoleVoSchema } from "./role.schema";
 
 const tags = ["Admin/Role"];
@@ -58,7 +59,7 @@ export const roleCreate = createRoute({
   },
   responses: {
     ...commonErrorResponses,
-    [HttpStatusCodes.OK]: jsonContent(createSuccessResponseSchema(RoleDetailVoSchema), "角色创建成功"),
+    [HttpStatusCodes.OK]: jsonContent(createSuccessResponseSchema(createAdminMutationResultSchema(RoleDetailVoSchema)), "角色创建成功"),
   },
 });
 
@@ -72,7 +73,7 @@ export const roleUpdate = createRoute({
   },
   responses: {
     ...commonErrorResponses,
-    [HttpStatusCodes.OK]: jsonContent(createSuccessResponseSchema(RoleDetailVoSchema), "角色更新成功"),
+    [HttpStatusCodes.OK]: jsonContent(createSuccessResponseSchema(createAdminMutationResultSchema(z.null())), "角色更新成功"),
   },
 });
 
@@ -86,7 +87,7 @@ export const roleStatusUpdate = createRoute({
   },
   responses: {
     ...commonErrorResponses,
-    [HttpStatusCodes.OK]: jsonContent(createSuccessResponseSchema(RoleDetailVoSchema), "角色状态更新成功"),
+    [HttpStatusCodes.OK]: jsonContent(createSuccessResponseSchema(createAdminMutationResultSchema(z.null())), "角色状态更新成功"),
   },
 });
 
@@ -97,7 +98,7 @@ export const roleDelete = createRoute({
   request: { params: roleCodeParam },
   responses: {
     ...commonErrorResponses,
-    [HttpStatusCodes.OK]: jsonContent(createSuccessResponseSchema(z.boolean()), "角色删除成功"),
+    [HttpStatusCodes.OK]: jsonContent(createSuccessResponseSchema(createAdminMutationResultSchema(z.null())), "角色删除成功"),
   },
 });
 
@@ -128,7 +129,7 @@ export const roleAssignmentCreate = createRoute({
   },
   responses: {
     ...commonErrorResponses,
-    [HttpStatusCodes.OK]: jsonContent(createSuccessResponseSchema(RoleAssignmentVoSchema), "角色分配创建成功"),
+    [HttpStatusCodes.OK]: jsonContent(createSuccessResponseSchema(createAdminMutationResultSchema(RoleAssignmentVoSchema)), "角色分配创建成功"),
   },
 });
 
@@ -142,7 +143,7 @@ export const roleAssignmentScopeUpdate = createRoute({
   },
   responses: {
     ...commonErrorResponses,
-    [HttpStatusCodes.OK]: jsonContent(createSuccessResponseSchema(RoleAssignmentVoSchema), "角色分配作用范围更新成功"),
+    [HttpStatusCodes.OK]: jsonContent(createSuccessResponseSchema(createAdminMutationResultSchema(z.null())), "角色分配作用范围更新成功"),
   },
 });
 
@@ -153,6 +154,6 @@ export const roleAssignmentDelete = createRoute({
   request: { params: assignmentParam },
   responses: {
     ...commonErrorResponses,
-    [HttpStatusCodes.OK]: jsonContent(createSuccessResponseSchema(z.boolean()), "角色分配删除成功"),
+    [HttpStatusCodes.OK]: jsonContent(createSuccessResponseSchema(createAdminMutationResultSchema(z.null())), "角色分配删除成功"),
   },
 });

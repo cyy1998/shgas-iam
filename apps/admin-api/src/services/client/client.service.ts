@@ -1,7 +1,8 @@
 import type { AdminAuditContext } from "@admin-api/services/audit/audit.context";
 import type { ClientStatus } from "@iam/contracts";
 import type { GenericClientRuntimeDto } from "@iam/domain/client";
-import type { AdminClientServiceDeps } from "./client.port";
+import type { BindAdminClientMutationTarget } from "./client-mutation";
+import type { AdminClientServiceDeps, AdminClientTransactionPorts } from "./client.port";
 import type {
   AdminClientRecord,
   ClientAdminListDto,
@@ -12,11 +13,13 @@ import type {
   ClientPaginationQueryDto,
   ClientUpdateDto,
 } from "./client.type";
+import { createAdminMutation } from "@admin-api/services/admin-mutation/admin-mutation";
 import { adminAuditTransactionOptions } from "@admin-api/services/audit/audit.context";
 import { buildAdminClientAudit } from "@admin-api/services/audit/events/client.audit";
 import {
   ClientCustomSsoConfigureDtoSchema,
 } from "@admin-api/services/client/client.schema";
+import { BadRequestError } from "@iam/api-core/errors";
 import {
   ClientStatus as ClientStatusValue,
   CustomSsoClientMode,
@@ -59,6 +62,16 @@ function assertClientCodeUnchanged(currentClientCode: string, nextClientCode: st
   }
 }
 
+function normalizeOidcConfig(input: ClientOidcConfigureDto) {
+  const config = oidcClientConfigSchema.parse(input);
+  return {
+    ...config,
+    redirectUris: [...config.redirectUris].sort(),
+    postLogoutRedirectUris: [...config.postLogoutRedirectUris].sort(),
+    allowedScopes: [...config.allowedScopes].sort(),
+  };
+}
+
 function assertValidOidcStorageState(client: { oidcConfig: unknown; oidcSecretHash: string | null }) {
   const result = oidcClientSecretStateSchema.safeParse(client);
   if (!result.success) {
@@ -90,12 +103,16 @@ function parseValidCustomSsoConfig(input: unknown) {
   return customSsoClientConfigSchema.parse(result.data);
 }
 
-function parseStoredCustomSsoConfig(input: unknown) {
+function normalizeStoredCustomSsoConfig(input: unknown) {
   const result = customSsoClientConfigSchema.safeParse(input);
   if (!result.success) {
     throw new CustomSsoClientConfigurationError(result.error.issues[0]?.message);
   }
-  return result.data;
+  return {
+    ...result.data,
+    validRedirectUrls: [...new Set(result.data.validRedirectUrls)].sort(),
+    subjectClaims: [...result.data.subjectClaims].sort(),
+  };
 }
 
 type AdminClientTransactionContext = Parameters<Parameters<AdminClientServiceDeps["uow"]["transaction"]>[0]>[0];
@@ -126,28 +143,14 @@ export function createClientService(deps: AdminClientServiceDeps) {
     uow: deps.uow,
   });
 
-  async function runLockedClientRuntimeMutation<T>(
-    target: string | { readonly id: number },
-    operation: (
-      tx: AdminClientTransactionContext,
-      existing: AdminClientRecord,
-    ) => Promise<T>,
-    transactionOptions: Parameters<
-      AdminClientServiceDeps["uow"]["transaction"]
-    >[1],
-  ): Promise<T> {
-    return await clientMutation.transaction(async (tx, bindTarget) => {
-      const existing = typeof target === "string"
-        ? await tx.clientRepository.lockClientByCode(target)
-        : await tx.clientRepository.lockClientById(target.id);
-      if (existing === null)
-        throw new ClientNotFoundError("客户端不存在");
-
-      return await bindTarget(existing.clientCode, async () => {
-        return await operation(tx, existing);
-      });
-    }, transactionOptions);
-  }
+  const basicMutation = createAdminMutation<AdminClientTransactionPorts & {
+    bindTarget: BindAdminClientMutationTarget;
+  }>({
+    transaction: (command, options) => clientMutation.transaction(
+      (tx, bindTarget) => command({ ...tx, bindTarget }),
+      options,
+    ),
+  });
 
   async function txClientProtocolRevocation(
     client: Pick<AdminClientRecord, "clientCode">,
@@ -195,12 +198,15 @@ export function createClientService(deps: AdminClientServiceDeps) {
     }
   }
 
-  function registerCustomSsoInvalidation(
+  function registerCustomSsoRevocation(
     tx: AdminClientTransactionContext,
     client: Pick<AdminClientRecord, "clientCode">,
+    changed: boolean,
     reason: "client_protocol_disabled" | "client_config_changed",
     auditContext?: AdminAuditContext,
   ) {
+    if (!changed)
+      return;
     tx.afterCommit.bestEffort("admin.session_revoke.client_protocol", async () => {
       await txClientProtocolRevocation(client, "custom-sso", reason, auditContext);
     });
@@ -223,216 +229,154 @@ export function createClientService(deps: AdminClientServiceDeps) {
     input: ClientCustomSsoConfigureDto,
     auditContext?: AdminAuditContext,
   ) {
-    const customSsoConfig = parseValidCustomSsoConfig(input);
-    const result = await runLockedClientRuntimeMutation(
-      clientCode,
-      async (tx, existing) => {
-        if (existing.customSsoEnabled) {
+    const customSsoConfig = normalizeStoredCustomSsoConfig(parseValidCustomSsoConfig(input));
+    return await basicMutation.locked(
+      tx => tx.clientRepository.lockClientByCode(clientCode),
+      () => new ClientNotFoundError("客户端不存在"),
+      async (tx, existing) => tx.bindTarget(existing.clientCode, async () => {
+        const sameConfig = existing.customSsoConfig !== null
+          && JSON.stringify(normalizeStoredCustomSsoConfig(existing.customSsoConfig)) === JSON.stringify(customSsoConfig);
+        if (existing.customSsoEnabled && !sameConfig)
           throw new CustomSsoClientStateError("请先禁用 Custom SSO 再修改配置");
-        }
+        if (existing.customSsoEnabled)
+          assertValidCustomSsoStorageState(existing);
 
         let customSsoSecret: string | undefined;
         let customSsoSecretHash = existing.customSsoSecretHash;
         if (customSsoConfig.mode === CustomSsoClientMode.Gateway) {
           customSsoSecretHash = null;
         }
-        else if (
-          existing.customSsoConfig?.mode !== CustomSsoClientMode.Independent
-          || customSsoSecretHash === null
-        ) {
+        else if (existing.customSsoConfig?.mode !== CustomSsoClientMode.Independent || customSsoSecretHash === null) {
           customSsoSecret = deps.random.customSsoClientSecret();
           customSsoSecretHash = await deps.passwordHasher.hashSecret(customSsoSecret);
         }
-
-        const client = await tx.clientRepository.updateClientCustomSsoByCode(clientCode, {
-          customSsoEnabled: false,
-          customSsoConfig,
-          customSsoSecretHash,
-        });
+        const changed = !sameConfig || existing.customSsoSecretHash !== customSsoSecretHash;
+        const client = changed
+          ? await tx.clientRepository.updateClientCustomSsoByCode(clientCode, {
+              customSsoEnabled: false,
+              customSsoConfig,
+              customSsoSecretHash,
+            })
+          : existing;
         assertValidCustomSsoStorageState(client);
         await tx.auditService.recordAuditLog(buildAdminClientAudit(
           "admin.client.custom_sso.configure",
           toGenericClientRuntimeDto(client),
           {
-            mode: customSsoConfig.mode,
-            validRedirectUrls: customSsoConfig.validRedirectUrls,
-            subjectClaims: customSsoConfig.subjectClaims,
-            orcas: customSsoConfig.mode === CustomSsoClientMode.Gateway
-              ? customSsoConfig.orcas
-              : undefined,
-            callbackEndpoint: customSsoConfig.mode === CustomSsoClientMode.Independent
-              ? customSsoConfig.callbackEndpoint
-              : undefined,
-            logoutEndpoint: customSsoConfig.mode === CustomSsoClientMode.Independent
-              ? customSsoConfig.logoutEndpoint
-              : undefined,
-            customSsoState: CustomSsoClientState.Disabled,
+            changed,
+            ...customSsoConfig,
+            customSsoState: client.customSsoEnabled ? CustomSsoClientState.Enabled : CustomSsoClientState.Disabled,
             customSsoConfigVersion: client.customSsoConfigVersion,
           },
           auditContext,
         ));
-        registerCustomSsoInvalidation(tx, client, "client_config_changed", auditContext);
-        return { client, customSsoSecret };
-      },
+        registerCustomSsoRevocation(tx, client, changed, "client_config_changed", auditContext);
+        return { changed, result: { client: toClientAdminDetailDto(client), customSsoSecret } };
+      }),
       adminAuditTransactionOptions(auditContext),
     );
-    const client = toClientAdminDetailDto(result.client);
-    return result.customSsoSecret === undefined
-      ? { client }
-      : { client, customSsoSecret: result.customSsoSecret };
   }
 
-  async function enableClientCustomSso(
+  async function setClientCustomSsoEnabled(
     clientCode: string,
+    enabled: boolean,
     auditContext?: AdminAuditContext,
   ) {
-    const result = await runLockedClientRuntimeMutation(
-      clientCode,
-      async (tx, existing) => {
+    return await basicMutation.locked(
+      tx => tx.clientRepository.lockClientByCode(clientCode),
+      () => new ClientNotFoundError("客户端不存在"),
+      async (tx, existing) => tx.bindTarget(existing.clientCode, async () => {
         if (existing.customSsoConfig === null)
           throw new CustomSsoClientStateError("Custom SSO 尚未配置");
-        if (existing.customSsoEnabled)
-          throw new CustomSsoClientStateError("Custom SSO 已启用");
-        if (!allowsProtocolEnable(existing.status)) {
-          throw new CustomSsoClientStateError("全局状态停用的客户端不能启用 Custom SSO");
-        }
-
-        parseStoredCustomSsoConfig(existing.customSsoConfig);
         assertValidCustomSsoStorageState(existing);
-        const client = await tx.clientRepository.updateClientCustomSsoByCode(clientCode, {
-          customSsoEnabled: true,
-        });
+        const changed = existing.customSsoEnabled !== enabled;
+        if (changed && enabled && !allowsProtocolEnable(existing.status))
+          throw new CustomSsoClientStateError("全局状态停用的客户端不能启用 Custom SSO");
+        const client = changed
+          ? await tx.clientRepository.updateClientCustomSsoByCode(clientCode, { customSsoEnabled: enabled })
+          : existing;
         assertValidCustomSsoStorageState(client);
         await tx.auditService.recordAuditLog(buildAdminClientAudit(
-          "admin.client.custom_sso.enable",
+          enabled ? "admin.client.custom_sso.enable" : "admin.client.custom_sso.disable",
           toGenericClientRuntimeDto(client),
           {
+            changed,
             mode: client.customSsoConfig?.mode,
             subjectClaims: client.customSsoConfig?.subjectClaims,
-            customSsoState: CustomSsoClientState.Enabled,
+            customSsoState: enabled ? CustomSsoClientState.Enabled : CustomSsoClientState.Disabled,
             customSsoConfigVersion: client.customSsoConfigVersion,
           },
           auditContext,
         ));
-        registerCustomSsoInvalidation(
-          tx,
-          client,
-          "client_config_changed",
-          auditContext,
-        );
-        return client;
-      },
+        registerCustomSsoRevocation(tx, client, changed, enabled ? "client_config_changed" : "client_protocol_disabled", auditContext);
+        return { changed, result: { client: toClientAdminDetailDto(client) } };
+      }),
       adminAuditTransactionOptions(auditContext),
     );
-    return { client: toClientAdminDetailDto(result) };
   }
 
-  async function disableClientCustomSso(
-    clientCode: string,
-    auditContext?: AdminAuditContext,
-  ) {
-    const result = await runLockedClientRuntimeMutation(
-      clientCode,
-      async (tx, existing) => {
-        if (existing.customSsoConfig === null)
-          throw new CustomSsoClientStateError("Custom SSO 尚未配置");
-        if (!existing.customSsoEnabled)
-          throw new CustomSsoClientStateError("Custom SSO 已禁用");
-
-        const client = await tx.clientRepository.updateClientCustomSsoByCode(clientCode, {
-          customSsoEnabled: false,
-        });
-        await tx.auditService.recordAuditLog(buildAdminClientAudit(
-          "admin.client.custom_sso.disable",
-          toGenericClientRuntimeDto(client),
-          {
-            mode: client.customSsoConfig?.mode,
-            subjectClaims: client.customSsoConfig?.subjectClaims,
-            customSsoState: CustomSsoClientState.Disabled,
-            customSsoConfigVersion: client.customSsoConfigVersion,
-          },
-          auditContext,
-        ));
-        registerCustomSsoInvalidation(
-          tx,
-          client,
-          "client_protocol_disabled",
-          auditContext,
-        );
-        return client;
-      },
-      adminAuditTransactionOptions(auditContext),
-    );
-    return { client: toClientAdminDetailDto(result) };
+  async function enableClientCustomSso(clientCode: string, auditContext?: AdminAuditContext) {
+    return await setClientCustomSsoEnabled(clientCode, true, auditContext);
   }
 
-  async function removeClientCustomSso(
-    clientCode: string,
-    auditContext?: AdminAuditContext,
-  ) {
-    const result = await runLockedClientRuntimeMutation(
-      clientCode,
-      async (tx, existing) => {
-        if (existing.customSsoConfig === null)
-          throw new CustomSsoClientStateError("Custom SSO 尚未配置");
+  async function disableClientCustomSso(clientCode: string, auditContext?: AdminAuditContext) {
+    return await setClientCustomSsoEnabled(clientCode, false, auditContext);
+  }
+
+  async function removeClientCustomSso(clientCode: string, auditContext?: AdminAuditContext) {
+    return await basicMutation.locked(
+      tx => tx.clientRepository.lockClientByCode(clientCode),
+      () => new ClientNotFoundError("客户端不存在"),
+      async (tx, existing) => tx.bindTarget(existing.clientCode, async () => {
         if (existing.customSsoEnabled)
           throw new CustomSsoClientStateError("请先禁用 Custom SSO 再移除配置");
-
-        const client = await tx.clientRepository.updateClientCustomSsoByCode(clientCode, {
-          customSsoEnabled: false,
-          customSsoConfig: null,
-          customSsoSecretHash: null,
-        });
+        const changed = existing.customSsoConfig !== null || existing.customSsoSecretHash !== null;
+        const client = changed
+          ? await tx.clientRepository.updateClientCustomSsoByCode(clientCode, {
+              customSsoEnabled: false,
+              customSsoConfig: null,
+              customSsoSecretHash: null,
+            })
+          : existing;
         assertValidCustomSsoStorageState(client);
         await tx.auditService.recordAuditLog(buildAdminClientAudit(
           "admin.client.custom_sso.remove",
           toGenericClientRuntimeDto(client),
           {
-            previousMode: existing.customSsoConfig.mode,
-            previousSubjectClaims: existing.customSsoConfig.subjectClaims,
+            changed,
+            previousMode: existing.customSsoConfig?.mode,
+            previousSubjectClaims: existing.customSsoConfig?.subjectClaims,
             customSsoState: CustomSsoClientState.Unconfigured,
             customSsoConfigVersion: client.customSsoConfigVersion,
           },
           auditContext,
         ));
-        registerCustomSsoInvalidation(
-          tx,
-          client,
-          "client_protocol_disabled",
-          auditContext,
-        );
-        return client;
-      },
+        registerCustomSsoRevocation(tx, client, changed, "client_protocol_disabled", auditContext);
+        return { changed, result: { client: toClientAdminDetailDto(client) } };
+      }),
       adminAuditTransactionOptions(auditContext),
     );
-    return { client: toClientAdminDetailDto(result) };
   }
 
-  async function rotateClientCustomSsoSecret(
-    clientCode: string,
-    auditContext?: AdminAuditContext,
-  ) {
-    const result = await runLockedClientRuntimeMutation(
-      clientCode,
-      async (tx, existing) => {
-        if (existing.customSsoConfig?.mode !== CustomSsoClientMode.Independent) {
+  async function rotateClientCustomSsoSecret(clientCode: string, auditContext?: AdminAuditContext) {
+    return await basicMutation.locked(
+      tx => tx.clientRepository.lockClientByCode(clientCode),
+      () => new ClientNotFoundError("客户端不存在"),
+      async (tx, existing) => tx.bindTarget(existing.clientCode, async () => {
+        if (existing.customSsoConfig?.mode !== CustomSsoClientMode.Independent)
           throw new CustomSsoClientStateError("只有 Independent Custom SSO client 可以轮换 secret");
-        }
         if (existing.customSsoEnabled)
           throw new CustomSsoClientStateError("请先禁用 Custom SSO 再轮换 secret");
-        parseStoredCustomSsoConfig(existing.customSsoConfig);
         assertValidCustomSsoStorageState(existing);
-
         const customSsoSecret = deps.random.customSsoClientSecret();
         const customSsoSecretHash = await deps.passwordHasher.hashSecret(customSsoSecret);
-        const client = await tx.clientRepository.updateClientCustomSsoByCode(clientCode, {
-          customSsoSecretHash,
-        });
+        const client = await tx.clientRepository.updateClientCustomSsoByCode(clientCode, { customSsoSecretHash });
         assertValidCustomSsoStorageState(client);
         await tx.auditService.recordAuditLog(buildAdminClientAudit(
           "admin.client.custom_sso.rotate_secret",
           toGenericClientRuntimeDto(client),
           {
+            changed: true,
             mode: existing.customSsoConfig.mode,
             subjectClaims: existing.customSsoConfig.subjectClaims,
             customSsoState: CustomSsoClientState.Disabled,
@@ -440,78 +384,83 @@ export function createClientService(deps: AdminClientServiceDeps) {
           },
           auditContext,
         ));
-        registerCustomSsoInvalidation(
-          tx,
-          client,
-          "client_config_changed",
-          auditContext,
-        );
-        return { client, customSsoSecret };
-      },
+        registerCustomSsoRevocation(tx, client, true, "client_config_changed", auditContext);
+        return { changed: true, result: { client: toClientAdminDetailDto(client), customSsoSecret } };
+      }),
       adminAuditTransactionOptions(auditContext),
     );
-    return {
-      client: toClientAdminDetailDto(result.client),
-      customSsoSecret: result.customSsoSecret,
-    };
   }
 
   async function createClient(clientDto: ClientCreateDto, auditContext?: AdminAuditContext) {
-    const client = await clientMutation.transaction(async (tx, bindTarget) => {
+    return await basicMutation.transaction(async (tx) => {
       const existing = await tx.clientRepository.getAnyClientByCode(clientDto.clientCode);
       if (existing !== null)
         throw new ClientCodeExistsError("客户端编码已存在");
 
-      return await bindTarget(clientDto.clientCode, async () => {
+      return await tx.bindTarget(clientDto.clientCode, async () => {
         const client = await tx.clientRepository.createClient(clientDto);
+        if (client === null)
+          throw new Error("Client insert returned no row");
         const created = toGenericClientRuntimeDto(client);
         await tx.auditService.recordAuditLog(buildAdminClientAudit("admin.client.create", created, {
+          changed: true,
           clientSecretProvided: clientDto.clientSecret !== undefined,
         }, auditContext));
         tx.afterCommit.required("admin.client.cache.invalidate", async () => {
           await deps.clientCache.invalidateClient(created);
         });
-        return client;
+        return { changed: true, result: toClientAdminDetailDto(client) };
       });
     }, adminAuditTransactionOptions(auditContext));
-    return toClientAdminDetailDto(client);
   }
 
-  async function updateClient(
-    clientCode: string,
+  async function updateClientTarget(
+    target: string | { id: number; clientCode?: string },
     data: ClientUpdateDto,
     auditContext?: AdminAuditContext,
     actionOverride?: string,
   ) {
-    const updatedClient = await runLockedClientRuntimeMutation(
-      clientCode,
-      async (tx, existing) => {
+    if (!Object.values(data).some(value => value !== undefined))
+      throw new BadRequestError("至少提交一个客户端更新字段");
+    return await basicMutation.locked(
+      tx => typeof target === "string"
+        ? tx.clientRepository.lockClientByCode(target)
+        : tx.clientRepository.lockClientById(target.id),
+      () => new ClientNotFoundError("客户端不存在"),
+      async (tx, existing) => tx.bindTarget(existing.clientCode, async () => {
+        if (typeof target !== "string")
+          assertClientCodeUnchanged(existing.clientCode, target.clientCode);
+        const changed = (data.clientName !== undefined && data.clientName !== existing.clientName)
+          || (data.clientSecret !== undefined && data.clientSecret !== existing.clientSecret)
+          || (data.url !== undefined && data.url !== existing.url)
+          || (data.description !== undefined && data.description !== existing.description)
+          || (data.status !== undefined && data.status !== existing.status);
         const entersDisable = isEnteringClientDisable(existing.status, data.status);
-        const client = entersDisable
-          ? await tx.clientRepository.updateClientByCodeWithProtocolEpochs(
-              clientCode,
-              data,
-            )
-          : await tx.clientRepository.updateClientByCode(clientCode, data);
+        const client = changed
+          ? entersDisable
+            ? await tx.clientRepository.updateClientByCodeWithProtocolEpochs(existing.clientCode, data)
+            : await tx.clientRepository.updateClientByCode(existing.clientCode, data)
+          : existing;
+        if (client === null)
+          throw new Error("Locked Client update returned no row");
         const parsedExisting = toGenericClientRuntimeDto(existing);
         const parsedUpdated = toGenericClientRuntimeDto(client);
-        const secretRotated = data.clientSecret !== undefined && data.clientSecret !== parsedExisting.clientSecret;
-        const auditPatch: Record<string, unknown> = { ...data };
-        if ("clientSecret" in auditPatch) {
-          delete auditPatch.clientSecret;
-          auditPatch.clientSecretRotated = secretRotated;
-        }
-        await tx.auditService.recordAuditLog(buildAdminClientAudit(
-          actionOverride ?? (secretRotated ? "admin.client.rotate_secret" : "admin.client.update"),
-          parsedUpdated,
-          { previousClientCode: parsedExisting.clientCode, patch: auditPatch },
-          auditContext,
-        ));
-        tx.afterCommit.required("admin.client.cache.invalidate", async () => {
-          await deps.clientCache.invalidateUpdatedClient(
-            parsedExisting,
+        const secretRotated = data.clientSecret !== undefined && data.clientSecret !== existing.clientSecret;
+        if (changed || data.status !== undefined || data.clientSecret !== undefined) {
+          const auditPatch: Record<string, unknown> = { ...data };
+          if ("clientSecret" in auditPatch) {
+            delete auditPatch.clientSecret;
+            auditPatch.clientSecretRotated = secretRotated;
+          }
+          await tx.auditService.recordAuditLog(buildAdminClientAudit(
+            actionOverride ?? (secretRotated ? "admin.client.rotate_secret" : "admin.client.update"),
             parsedUpdated,
-          );
+            { changed, previousClientCode: existing.clientCode, patch: auditPatch },
+            auditContext,
+          ));
+        }
+        tx.afterCommit.required("admin.client.cache.invalidate", async () => {
+          await deps.clientCache.invalidateUpdatedClient(parsedExisting, parsedUpdated);
         });
         registerClientSessionRevocations(
           tx,
@@ -519,74 +468,42 @@ export function createClientService(deps: AdminClientServiceDeps) {
           client,
           auditContext,
         );
-        return client;
-      },
+        return { changed, result: null };
+      }),
       adminAuditTransactionOptions(auditContext),
     );
-    return toClientAdminDetailDto(updatedClient);
+  }
+
+  async function updateClient(
+    clientCode: string,
+    data: ClientUpdateDto,
+    auditContext?: AdminAuditContext,
+  ) {
+    return await updateClientTarget(clientCode, data, auditContext);
   }
 
   async function updateClientById(clientDto: ClientInputDto, auditContext?: AdminAuditContext) {
-    const updatedClient = await runLockedClientRuntimeMutation(
-      { id: clientDto.id },
-      async (tx, existing) => {
-        assertClientCodeUnchanged(existing.clientCode, clientDto.clientCode);
-        const entersDisable = isEnteringClientDisable(existing.status, clientDto.status);
-        const client = entersDisable
-          ? await tx.clientRepository
-              .updateClientByIdWithProtocolEpochs(clientDto)
-          : await tx.clientRepository.updateClientById(clientDto);
-        const parsedExisting = toGenericClientRuntimeDto(existing);
-        const parsedUpdated = toGenericClientRuntimeDto(client);
-        const secretRotated = clientDto.clientSecret !== undefined
-          && clientDto.clientSecret !== parsedExisting.clientSecret;
-        const auditPatch: Record<string, unknown> = { ...clientDto };
-        delete auditPatch.id;
-        delete auditPatch.clientSecret;
-        auditPatch.clientSecretRotated = secretRotated;
-        await tx.auditService.recordAuditLog(buildAdminClientAudit(
-          secretRotated ? "admin.client.rotate_secret" : "admin.client.update",
-          parsedUpdated,
-          {
-            previousClientCode: parsedExisting.clientCode,
-            patch: auditPatch,
-          },
-          auditContext,
-        ));
-        tx.afterCommit.required("admin.client.cache.invalidate", async () => {
-          await deps.clientCache.invalidateUpdatedClient(
-            parsedExisting,
-            parsedUpdated,
-          );
-        });
-        registerClientSessionRevocations(
-          tx,
-          resolveClientUpdateSessionRevocations(parsedExisting, clientDto),
-          client,
-          auditContext,
-        );
-        return client;
-      },
-      adminAuditTransactionOptions(auditContext),
-    );
-    return toClientAdminDetailDto(updatedClient);
+    const { id, clientCode, ...data } = clientDto;
+    return await updateClientTarget({ id, clientCode }, data, auditContext);
   }
 
   async function updateClientStatus(clientCode: string, status: ClientStatus, auditContext?: AdminAuditContext) {
-    await updateClient(clientCode, { status }, auditContext, "admin.client.status_update");
-    return true;
+    return await updateClientTarget(clientCode, { status }, auditContext, "admin.client.status_update");
   }
 
   async function deleteClient(clientCode: string, auditContext?: AdminAuditContext) {
-    await runLockedClientRuntimeMutation(
-      clientCode,
-      async (tx) => {
-        const client = await tx.clientRepository.softDeleteClientByCode(clientCode);
+    return await basicMutation.locked(
+      tx => tx.clientRepository.lockClientByCode(clientCode),
+      () => new ClientNotFoundError("客户端不存在"),
+      async (tx, existing) => tx.bindTarget(existing.clientCode, async () => {
+        const client = await tx.clientRepository.softDeleteClientByCode(existing.clientCode);
+        if (client === null)
+          throw new Error("Locked Client delete returned no row");
         const deleted = toGenericClientRuntimeDto(client);
         await tx.auditService.recordAuditLog(buildAdminClientAudit(
           "admin.client.delete",
           deleted,
-          { deleted: true },
+          { deleted: true, changed: true },
           auditContext,
         ));
         tx.afterCommit.required("admin.client.cache.delete", async () => {
@@ -595,10 +512,24 @@ export function createClientService(deps: AdminClientServiceDeps) {
         tx.afterCommit.bestEffort("admin.session_revoke.client_all_protocols", async () => {
           await txClientAllProtocolsRevocation(client, "client_deleted", auditContext);
         });
-      },
+        return { changed: true, result: null };
+      }),
       adminAuditTransactionOptions(auditContext),
     );
-    return true;
+  }
+
+  function registerOidcRevocation(
+    tx: AdminClientTransactionContext,
+    client: AdminClientRecord,
+    changed: boolean,
+    reason: "client_protocol_disabled" | "client_config_changed",
+    auditContext?: AdminAuditContext,
+  ) {
+    if (!changed)
+      return;
+    tx.afterCommit.bestEffort("admin.session_revoke.client_protocol", async () => {
+      await txClientProtocolRevocation(client, "oidc", reason, auditContext);
+    });
   }
 
   async function configureClientOidc(
@@ -606,13 +537,11 @@ export function createClientService(deps: AdminClientServiceDeps) {
     input: ClientOidcConfigureDto,
     auditContext?: AdminAuditContext,
   ) {
-    const oidcConfig = oidcClientConfigSchema.parse(input);
-    const result = await clientMutation.transaction(async (tx, bindTarget) => {
-      const existing = await tx.clientRepository.getClientByCode(clientCode);
-      if (existing === null)
-        throw new ClientNotFoundError("客户端不存在");
-
-      return await bindTarget(existing.clientCode, async () => {
+    const oidcConfig = normalizeOidcConfig(input);
+    return await basicMutation.locked(
+      tx => tx.clientRepository.lockClientByCode(clientCode),
+      () => new ClientNotFoundError("客户端不存在"),
+      async (tx, existing) => tx.bindTarget(existing.clientCode, async () => {
         let clientSecret: string | undefined;
         let oidcSecretHash = existing.oidcSecretHash;
         if (oidcConfig.clientType === OidcClientType.Public) {
@@ -622,14 +551,21 @@ export function createClientService(deps: AdminClientServiceDeps) {
           clientSecret = deps.random.oidcClientSecret();
           oidcSecretHash = await deps.passwordHasher.hashSecret(clientSecret);
         }
-
-        const client = await tx.clientRepository.updateClientOidcByCode(clientCode, {
-          oidcConfig,
-          oidcSecretHash,
-          oidcEnabled: existing.oidcConfig === null ? false : existing.oidcEnabled,
-        });
+        const oidcEnabled = existing.oidcConfig === null ? false : existing.oidcEnabled;
+        const changed = existing.oidcConfig === null
+          || JSON.stringify(normalizeOidcConfig(existing.oidcConfig)) !== JSON.stringify(oidcConfig)
+          || existing.oidcSecretHash !== oidcSecretHash
+          || existing.oidcEnabled !== oidcEnabled;
+        const client = changed
+          ? await tx.clientRepository.updateClientOidcByCode(clientCode, {
+              oidcConfig,
+              oidcSecretHash,
+              oidcEnabled,
+            })
+          : existing;
         assertValidOidcStorageState(client);
         await tx.auditService.recordAuditLog(buildAdminClientAudit("admin.client.oidc.configure", toGenericClientRuntimeDto(client), {
+          changed,
           clientType: oidcConfig.clientType,
           redirectUris: oidcConfig.redirectUris,
           postLogoutRedirectUris: oidcConfig.postLogoutRedirectUris,
@@ -637,13 +573,11 @@ export function createClientService(deps: AdminClientServiceDeps) {
           oidcEnabled: client.oidcEnabled,
           oidcConfigVersion: client.oidcConfigVersion,
         }, auditContext));
-        tx.afterCommit.bestEffort("admin.session_revoke.client_protocol", async () => {
-          await txClientProtocolRevocation(client, "oidc", "client_config_changed", auditContext);
-        });
-        return { client, clientSecret };
-      });
-    }, adminAuditTransactionOptions(auditContext));
-    return { client: toClientAdminDetailDto(result.client), clientSecret: result.clientSecret };
+        registerOidcRevocation(tx, client, changed, "client_config_changed", auditContext);
+        return { changed, result: { client: toClientAdminDetailDto(client), clientSecret } };
+      }),
+      adminAuditTransactionOptions(auditContext),
+    );
   }
 
   async function setClientOidcEnabled(
@@ -651,39 +585,37 @@ export function createClientService(deps: AdminClientServiceDeps) {
     enabled: boolean,
     auditContext?: AdminAuditContext,
   ) {
-    const result = await clientMutation.transaction(async (tx, bindTarget) => {
-      const existing = await tx.clientRepository.lockClientByCode(clientCode);
-      if (existing === null)
-        throw new ClientNotFoundError("客户端不存在");
-      return await bindTarget(existing.clientCode, async () => {
+    return await basicMutation.locked(
+      tx => tx.clientRepository.lockClientByCode(clientCode),
+      () => new ClientNotFoundError("客户端不存在"),
+      async (tx, existing) => tx.bindTarget(existing.clientCode, async () => {
         if (existing.oidcConfig === null)
           throw new OidcClientStateError("OIDC 尚未配置");
         assertValidOidcStorageState(existing);
-        if (existing.oidcEnabled === enabled) {
-          throw new OidcClientStateError(enabled ? "OIDC 已启用" : "OIDC 已禁用");
-        }
         if (enabled && !allowsProtocolEnable(existing.status)) {
           throw new OidcClientStateError("全局状态停用的客户端不能启用 OIDC");
         }
-        const client = await tx.clientRepository.updateClientOidcByCode(clientCode, { oidcEnabled: enabled });
+        const changed = existing.oidcEnabled !== enabled;
+        const client = changed
+          ? await tx.clientRepository.updateClientOidcByCode(clientCode, { oidcEnabled: enabled })
+          : existing;
         await tx.auditService.recordAuditLog(buildAdminClientAudit(
           enabled ? "admin.client.oidc.enable" : "admin.client.oidc.disable",
           toGenericClientRuntimeDto(client),
-          { oidcEnabled: enabled, oidcConfigVersion: client.oidcConfigVersion },
+          { changed, oidcEnabled: enabled, oidcConfigVersion: client.oidcConfigVersion },
           auditContext,
         ));
-        tx.afterCommit.bestEffort("admin.session_revoke.client_protocol", async () => {
-          await txClientProtocolRevocation(
-            client,
-            "oidc",
-            enabled ? "client_config_changed" : "client_protocol_disabled",
-            auditContext,
-          );
-        });
-        return client;
-      });
-    }, adminAuditTransactionOptions(auditContext));
-    return { client: toClientAdminDetailDto(result) };
+        registerOidcRevocation(
+          tx,
+          client,
+          changed,
+          enabled ? "client_config_changed" : "client_protocol_disabled",
+          auditContext,
+        );
+        return { changed, result: { client: toClientAdminDetailDto(client) } };
+      }),
+      adminAuditTransactionOptions(auditContext),
+    );
   }
 
   async function enableClientOidc(clientCode: string, auditContext?: AdminAuditContext) {
@@ -695,59 +627,55 @@ export function createClientService(deps: AdminClientServiceDeps) {
   }
 
   async function removeClientOidc(clientCode: string, auditContext?: AdminAuditContext) {
-    const result = await clientMutation.transaction(async (tx, bindTarget) => {
-      const existing = await tx.clientRepository.getClientByCode(clientCode);
-      if (existing === null)
-        throw new ClientNotFoundError("客户端不存在");
-      return await bindTarget(existing.clientCode, async () => {
-        if (existing.oidcConfig === null)
-          throw new OidcClientStateError("OIDC 尚未配置");
+    return await basicMutation.locked(
+      tx => tx.clientRepository.lockClientByCode(clientCode),
+      () => new ClientNotFoundError("客户端不存在"),
+      async (tx, existing) => tx.bindTarget(existing.clientCode, async () => {
         if (existing.oidcEnabled)
           throw new OidcClientStateError("请先禁用 OIDC 再移除配置");
-        const client = await tx.clientRepository.updateClientOidcByCode(clientCode, {
-          oidcEnabled: false,
-          oidcConfig: null,
-          oidcSecretHash: null,
-        });
+        const changed = existing.oidcConfig !== null || existing.oidcSecretHash !== null;
+        const client = changed
+          ? await tx.clientRepository.updateClientOidcByCode(clientCode, {
+              oidcEnabled: false,
+              oidcConfig: null,
+              oidcSecretHash: null,
+            })
+          : existing;
+        assertValidOidcStorageState(client);
         await tx.auditService.recordAuditLog(buildAdminClientAudit("admin.client.oidc.remove", toGenericClientRuntimeDto(client), {
+          changed,
           oidcConfigVersion: client.oidcConfigVersion,
         }, auditContext));
-        tx.afterCommit.bestEffort("admin.session_revoke.client_protocol", async () => {
-          await txClientProtocolRevocation(client, "oidc", "client_protocol_disabled", auditContext);
-        });
-        return client;
-      });
-    }, adminAuditTransactionOptions(auditContext));
-    return { client: toClientAdminDetailDto(result) };
+        registerOidcRevocation(tx, client, changed, "client_protocol_disabled", auditContext);
+        return { changed, result: { client: toClientAdminDetailDto(client) } };
+      }),
+      adminAuditTransactionOptions(auditContext),
+    );
   }
 
   async function rotateClientOidcSecret(clientCode: string, auditContext?: AdminAuditContext) {
-    const result = await clientMutation.transaction(async (tx, bindTarget) => {
-      const existing = await tx.clientRepository.getClientByCode(clientCode);
-      if (existing === null)
-        throw new ClientNotFoundError("客户端不存在");
-      return await bindTarget(existing.clientCode, async () => {
+    return await basicMutation.locked(
+      tx => tx.clientRepository.lockClientByCode(clientCode),
+      () => new ClientNotFoundError("客户端不存在"),
+      async (tx, existing) => tx.bindTarget(existing.clientCode, async () => {
         if (existing.oidcConfig?.clientType !== OidcClientType.Confidential) {
           throw new OidcClientStateError("只有 confidential OIDC client 可以轮换 secret");
         }
         const clientSecret = deps.random.oidcClientSecret();
         const oidcSecretHash = await deps.passwordHasher.hashSecret(clientSecret);
         const client = await tx.clientRepository.updateClientOidcByCode(clientCode, { oidcSecretHash });
+        assertValidOidcStorageState(client);
         await tx.auditService.recordAuditLog(buildAdminClientAudit(
           "admin.client.oidc.rotate_secret",
           toGenericClientRuntimeDto(client),
-          {
-            oidcConfigVersion: client.oidcConfigVersion,
-          },
+          { changed: true, oidcConfigVersion: client.oidcConfigVersion },
           auditContext,
         ));
-        tx.afterCommit.bestEffort("admin.session_revoke.client_protocol", async () => {
-          await txClientProtocolRevocation(client, "oidc", "client_config_changed", auditContext);
-        });
-        return { client, clientSecret };
-      });
-    }, adminAuditTransactionOptions(auditContext));
-    return { client: toClientAdminDetailDto(result.client), clientSecret: result.clientSecret };
+        registerOidcRevocation(tx, client, true, "client_config_changed", auditContext);
+        return { changed: true, result: { client: toClientAdminDetailDto(client), clientSecret } };
+      }),
+      adminAuditTransactionOptions(auditContext),
+    );
   }
 
   return {

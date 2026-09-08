@@ -46,6 +46,7 @@ describe("admin audit event builders", () => {
     expect(employmentAudit.buildEmploymentResignUserAudit(
       { id: 1001, username: "zhangsan", name: "张三" },
       { actorType: "system", actorSystemKey: "admin-api" },
+      true,
     )).toMatchObject({
       action: "admin.employment.resign_user",
       targetType: "user",
@@ -54,6 +55,7 @@ describe("admin audit event builders", () => {
       details: {
         username: "zhangsan",
         resigned: true,
+        changed: true,
       },
     });
   });
@@ -65,18 +67,20 @@ describe("admin audit event builders", () => {
         outcome: "success",
         result: {
           changed: true,
-          scope: "session",
-          revoked: {
-            principalSessions: 1,
-            bindings: 2,
-            credentials: 3,
-            artifacts: 4,
-          },
-          currentPrincipalSessionExcluded: false,
-          cleanup: {
-            attempted: 2,
-            succeeded: 1,
-            failed: 1,
+          result: {
+            scope: "session",
+            revoked: {
+              principalSessions: 1,
+              bindings: 2,
+              credentials: 3,
+              artifacts: 4,
+            },
+            currentPrincipalSessionExcluded: false,
+            cleanup: {
+              attempted: 2,
+              succeeded: 1,
+              failed: 1,
+            },
           },
         },
       },
@@ -120,18 +124,20 @@ describe("admin audit event builders", () => {
         outcome: "success",
         result: {
           changed: true,
-          scope: "user",
-          revoked: {
-            principalSessions: 1,
-            bindings: 2,
-            credentials: 3,
-            artifacts: 4,
-          },
-          currentPrincipalSessionExcluded: true,
-          cleanup: {
-            attempted: 2,
-            succeeded: 1,
-            failed: 1,
+          result: {
+            scope: "user",
+            revoked: {
+              principalSessions: 1,
+              bindings: 2,
+              credentials: 3,
+              artifacts: 4,
+            },
+            currentPrincipalSessionExcluded: true,
+            cleanup: {
+              attempted: 2,
+              succeeded: 1,
+              failed: 1,
+            },
           },
         },
       },

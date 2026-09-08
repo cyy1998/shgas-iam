@@ -17,8 +17,8 @@ import type {
 
 export interface AdminRoleTransactionStorePort {
   countAssignmentsByRoleId: (roleId: number) => Promise<number>;
-  createAssignment: (input: AdminRoleAssignmentCreateRecord) => Promise<AdminRoleAssignmentRecord>;
-  createRole: (input: AdminRoleCreateRecord) => Promise<Role>;
+  createAssignment: (input: AdminRoleAssignmentCreateRecord) => Promise<AdminRoleAssignmentRecord | null>;
+  createRole: (input: AdminRoleCreateRecord) => Promise<Role | null>;
   deleteAssignment: (roleId: number, assignmentId: number) => Promise<AdminRoleAssignmentRecord | null>;
   findAssignmentByRoleTarget: (
     roleId: number,
@@ -26,11 +26,12 @@ export interface AdminRoleTransactionStorePort {
     targetId: number,
   ) => Promise<unknown | null>;
   getAnyRoleByCode: (roleCode: string) => Promise<Role | null>;
-  getAssignmentByIdForRole: (roleId: number, assignmentId: number) => Promise<RoleAssignmentDto | null>;
+  lockAssignmentByIdForRole: (roleId: number, assignmentId: number) => Promise<RoleAssignmentDto | null>;
   getAssignableEmploymentById: (employmentId: number) => Promise<RoleAssignmentTargetSummaryDto | null>;
   getAssignableOrganizationByCode: (orgCode: string) => Promise<RoleAssignmentTargetSummaryDto | null>;
   getAssignablePositionByCode: (posCode: string) => Promise<RoleAssignmentTargetSummaryDto | null>;
   getClientByCode: (clientCode: string) => Promise<RoleClientSummaryDto | null>;
+  lockRoleByCode: (roleCode: string) => Promise<RoleDetailDto | null>;
   getRoleByCode: (roleCode: string) => Promise<RoleDetailDto | null>;
   softDeleteRoleByCode: (roleCode: string) => Promise<Role | null>;
   updateAssignmentScope: (

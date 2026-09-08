@@ -1,4 +1,5 @@
 import { apiClient } from '@admin/lib/api-client';
+import { runAdminMutation } from '@admin/services/admin-mutation';
 import type { AppRouter } from '@iam/admin-api/trpc';
 import type { inferRouterInputs, inferRouterOutputs } from '@trpc/server';
 
@@ -27,22 +28,28 @@ export function getRole(roleCode: string) {
 }
 
 export function createRole(body: RoleCreateInput) {
-  return apiClient.admin.role.create.mutate(body);
+  return runAdminMutation(() => apiClient.admin.role.create.mutate(body));
 }
 
 export function updateRole(roleCode: string, data: RoleUpdateInput) {
-  return apiClient.admin.role.update.mutate({ roleCode, data });
+  return runAdminMutation(() =>
+    apiClient.admin.role.update.mutate({ roleCode, data }),
+  );
 }
 
 export function updateRoleStatus(
   roleCode: string,
   status: AdminRoleInputs['updateStatus']['status'],
 ) {
-  return apiClient.admin.role.updateStatus.mutate({ roleCode, status });
+  return runAdminMutation(() =>
+    apiClient.admin.role.updateStatus.mutate({ roleCode, status }),
+  );
 }
 
 export function deleteRole(roleCode: string) {
-  return apiClient.admin.role.delete.mutate({ roleCode });
+  return runAdminMutation(() =>
+    apiClient.admin.role.delete.mutate({ roleCode }),
+  );
 }
 
 export function searchRoleAssignments(
@@ -56,7 +63,9 @@ export function createRoleAssignment(
   roleCode: string,
   data: RoleAssignmentCreateInput,
 ) {
-  return apiClient.admin.role.assignments.create.mutate({ roleCode, data });
+  return runAdminMutation(() =>
+    apiClient.admin.role.assignments.create.mutate({ roleCode, data }),
+  );
 }
 
 export function updateRoleAssignmentScope(
@@ -64,16 +73,20 @@ export function updateRoleAssignmentScope(
   assignmentId: number,
   includeDescendants: boolean,
 ) {
-  return apiClient.admin.role.assignments.updateScope.mutate({
-    roleCode,
-    assignmentId,
-    includeDescendants,
-  });
+  return runAdminMutation(() =>
+    apiClient.admin.role.assignments.updateScope.mutate({
+      roleCode,
+      assignmentId,
+      includeDescendants,
+    }),
+  );
 }
 
 export function deleteRoleAssignment(roleCode: string, assignmentId: number) {
-  return apiClient.admin.role.assignments.delete.mutate({
-    roleCode,
-    assignmentId,
-  });
+  return runAdminMutation(() =>
+    apiClient.admin.role.assignments.delete.mutate({
+      roleCode,
+      assignmentId,
+    }),
+  );
 }

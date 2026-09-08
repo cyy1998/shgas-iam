@@ -1,4 +1,5 @@
 import { apiClient } from '@admin/lib/api-client';
+import { runAdminMutation } from '@admin/services/admin-mutation';
 import type { AppRouter } from '@iam/admin-api/trpc';
 import type { inferRouterInputs, inferRouterOutputs } from '@trpc/server';
 
@@ -18,20 +19,29 @@ export function getPosition(posCode: string) {
 }
 
 export function createPosition(body: AdminPositionInputs['create']) {
-  return apiClient.admin.position.create.mutate(body);
+  return runAdminMutation(() => apiClient.admin.position.create.mutate(body));
 }
 
 export function updatePosition(
   posCode: string,
   data: AdminPositionInputs['update']['data'],
 ) {
-  return apiClient.admin.position.update.mutate({ posCode, data });
+  return runAdminMutation(() =>
+    apiClient.admin.position.update.mutate({ posCode, data }),
+  );
 }
 
-export function updatePositionStatus(posCode: string, status: AdminPositionInputs['updateStatus']['status']) {
-  return apiClient.admin.position.updateStatus.mutate({ posCode, status });
+export function updatePositionStatus(
+  posCode: string,
+  status: AdminPositionInputs['updateStatus']['status'],
+) {
+  return runAdminMutation(() =>
+    apiClient.admin.position.updateStatus.mutate({ posCode, status }),
+  );
 }
 
 export function deletePosition(posCode: string) {
-  return apiClient.admin.position.delete.mutate({ posCode });
+  return runAdminMutation(() =>
+    apiClient.admin.position.delete.mutate({ posCode }),
+  );
 }

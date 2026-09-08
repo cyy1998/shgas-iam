@@ -1,6 +1,6 @@
-import { requestUserOptions } from '@admin/pages/sessions/session-selectors';
 import LoginRestrictionsTab from '@admin/pages/sessions/LoginRestrictionsTab';
 import UserSummary from '@admin/pages/sessions/components/UserSummary';
+import { requestUserOptions } from '@admin/pages/sessions/session-selectors';
 import {
   listSessions,
   revokeSessions,
@@ -94,15 +94,17 @@ export default function SessionsPage() {
     null,
   );
   const [sessionRows, setSessionRows] = useState<SessionListItem[]>([]);
-  const [revokingTarget, setRevokingTarget] = useState<string | null>(
-    null,
-  );
+  const [auditFailedAfterEffect, setAuditFailedAfterEffect] = useState(false);
+  const [revokingTarget, setRevokingTarget] = useState<string | null>(null);
 
   const refreshSessions = () => {
     actionRef.current?.reload();
   };
 
-  const executeRevoke = async (input: SessionRevokeInput, targetKey: string) => {
+  const executeRevoke = async (
+    input: SessionRevokeInput,
+    targetKey: string,
+  ) => {
     let refreshAfterOperation = false;
     setRevokingTarget(targetKey);
     try {
@@ -110,9 +112,9 @@ export default function SessionsPage() {
       refreshAfterOperation = true;
       if (!result.changed) {
         message.warning('目标已失效或已被处理');
-      } else if (result.cleanup.failed > 0) {
+      } else if (result.result.cleanup.failed > 0) {
         message.warning(
-          `会话已下线，部分关联清理失败（${result.cleanup.failed} 项）`,
+          `会话已下线，部分关联清理失败（${result.result.cleanup.failed} 项）`,
         );
       } else {
         message.success('会话已下线');
@@ -123,9 +125,7 @@ export default function SessionsPage() {
         error.kind === SessionRevokeErrorKind.AuditFailedAfterEffect
       ) {
         refreshAfterOperation = true;
-        message.error(
-          '操作可能已生效，但审计记录失败，请刷新确认且不要自动重试',
-        );
+        setAuditFailedAfterEffect(true);
       } else if (
         error instanceof SessionRevokeError &&
         error.kind === SessionRevokeErrorKind.CurrentSessionProtected
@@ -271,9 +271,7 @@ export default function SessionsPage() {
           <Button
             danger
             disabled={session.isCurrentSession}
-            loading={
-              revokingTarget === `session:${session.principalSessionId}`
-            }
+            loading={revokingTarget === `session:${session.principalSessionId}`}
             onClick={() => confirmRevokeSession(session)}
           >
             强制下线本次
@@ -298,6 +296,14 @@ export default function SessionsPage() {
         type="info"
         message="登录来源仅供调查参考，不是可信设备身份或授权依据。"
       />
+      {auditFailedAfterEffect ? (
+        <Alert
+          showIcon
+          type="error"
+          message="操作可能已生效，但审计记录失败，请刷新确认且不要自动重试"
+          description="列表刷新成功不代表审计记录已补齐，请联系管理员核查。"
+        />
+      ) : null}
       {loadError ? (
         <Alert
           showIcon

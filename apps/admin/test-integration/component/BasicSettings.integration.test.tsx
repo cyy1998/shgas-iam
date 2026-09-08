@@ -6,6 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { render, screen, waitFor } from '~admin/test/render';
 import { adminClientDetail } from '../../test/mocks/fixtures';
 
+const updateClient = vi.hoisted(() => vi.fn());
 const updateClientStatus = vi.hoisted(() => vi.fn());
 const client: ClientDetailVo = {
   ...adminClientDetail,
@@ -19,13 +20,14 @@ const client: ClientDetailVo = {
 
 vi.mock('@admin/services/client', () => ({
   deleteClient: vi.fn(),
-  updateClient: vi.fn(),
+  updateClient,
   updateClientStatus,
 }));
 
 describe('BasicSettings client status updates', () => {
   beforeEach(() => {
-    updateClientStatus.mockResolvedValue(true);
+    updateClient.mockResolvedValue({ changed: true, result: null });
+    updateClientStatus.mockResolvedValue({ changed: true, result: null });
   });
 
   afterEach(() => {
@@ -39,6 +41,7 @@ describe('BasicSettings client status updates', () => {
         onDirtyChange={vi.fn()}
         onMutated={vi.fn().mockResolvedValue(undefined)}
         onDeleted={vi.fn()}
+        onCommitted={vi.fn().mockResolvedValue(undefined)}
       />,
     );
   }
@@ -51,6 +54,35 @@ describe('BasicSettings client status updates', () => {
     await user.click(await screen.findByTitle(label));
     await user.click(screen.getByRole('button', { name: '更新全局状态' }));
   }
+
+  it.each([false, true])(
+    'submits the generic secret only when explicitly edited: %s',
+    async (editSecret) => {
+      const { user } = renderSettings();
+      const name = screen.getByLabelText('应用名称');
+      await user.clear(name);
+      await user.type(name, '新的应用名称');
+      if (editSecret) {
+        const secret = screen.getByLabelText('通用应用密钥');
+        await user.clear(secret);
+        await user.type(secret, 'explicit-new-secret');
+      }
+      await user.click(screen.getByRole('button', { name: '保存基础信息' }));
+      await waitFor(() => expect(updateClient).toHaveBeenCalledTimes(1));
+      expect(updateClient.mock.calls[0][1]).toMatchObject({
+        clientName: '新的应用名称',
+      });
+      if (editSecret)
+        expect(updateClient.mock.calls[0][1]).toHaveProperty(
+          'clientSecret',
+          'explicit-new-secret',
+        );
+      else
+        expect(updateClient.mock.calls[0][1]).not.toHaveProperty(
+          'clientSecret',
+        );
+    },
+  );
 
   it('switches to maintenance without a second confirmation', async () => {
     const { user } = renderSettings();

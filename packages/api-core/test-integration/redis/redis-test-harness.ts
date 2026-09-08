@@ -2,7 +2,10 @@ import type { AuthorizationGrantRedemption } from "../../src/authorization-grant
 import type { LoginRestriction } from "../../src/login-restriction";
 import type {
   CleanupAdapter,
+  PrincipalRef,
   SessionKernel,
+  SessionKernelLogger,
+  SessionKernelPrincipalAccessFence,
   SessionKernelRedis,
 } from "../../src/session/kernel";
 import type {
@@ -50,6 +53,8 @@ export interface RedisTestHarness {
   }) => Promise<AuthorizationGrantRedisTestScope>;
   readonly createSessionKernelScope: (input?: {
     cleanupAdapters?: CleanupAdapter[];
+    principalAccessFence?: SessionKernelPrincipalAccessFence;
+    logger?: SessionKernelLogger;
   }) => Promise<SessionKernelRedisTestScope>;
   readonly createSubjectAccessScope: (input: {
     writerTransitionIds: readonly string[];
@@ -109,6 +114,10 @@ export interface SessionKernelRedisTestScope {
   readonly observer: SessionKernel;
   readonly ambiguousWriter: SessionKernel;
   readonly failNextCredentialCreateAfterCommit: () => void;
+  readonly failNextUserIndexRead: () => void;
+  readonly failNextPrincipalRevoke: () => void;
+  readonly seedPrincipalPayload: (id: string, payload: string) => Promise<void>;
+  readonly seedUserIndexMember: (principal: PrincipalRef, member: string) => Promise<void>;
   readonly cleanupTombstoneTtl: (input: {
     id: string;
     kind: "artifact" | "client_binding" | "credential";
@@ -255,6 +264,8 @@ export async function createRedisTestHarness(): Promise<RedisTestHarness> {
       let replaceObjectBeforeNextRevoke = false;
       let replaceTombstoneBeforeNextFinalize = false;
       let failNextCredentialCreateAfterCommit = false;
+      let failNextUserIndexRead = false;
+      let failNextPrincipalRevoke = false;
       const ambiguousWriter = createSessionKernelClient(
         createCommitThenErrorRedis(writerRedis, () => {
           if (!failNextCredentialCreateAfterCommit)
@@ -266,8 +277,21 @@ export async function createRedisTestHarness(): Promise<RedisTestHarness> {
       );
       const writerRedisWithHooks = new Proxy(writerRedis, {
         get(target, property) {
+          if (property === "zrange") {
+            return async (...args: Parameters<Redis["zrange"]>) => {
+              if (failNextUserIndexRead) {
+                failNextUserIndexRead = false;
+                throw new Error("simulated user index read failure");
+              }
+              return await target.zrange(...args);
+            };
+          }
           if (property === "eval") {
             return async (script: string, keyCount: number, ...args: Array<string | number>) => {
+              if (failNextPrincipalRevoke && script.includes("session-kernel-revoke-active-object-v1")) {
+                failNextPrincipalRevoke = false;
+                throw new Error("simulated principal revocation failure");
+              }
               if (
                 recreateObjectBeforeNextInactiveIndexRemoval
                 && script.includes("remove_index_member_if_object_inactive")
@@ -326,12 +350,17 @@ export async function createRedisTestHarness(): Promise<RedisTestHarness> {
           beforeNextPrincipalValidation = undefined;
           await pending?.();
         },
+        input.principalAccessFence,
+        input.logger,
       );
       const observer = createSessionKernelClient(
         observerRedis,
         keyPrefix,
         undefined,
         input.cleanupAdapters,
+        undefined,
+        input.principalAccessFence,
+        input.logger,
       );
       const close = createRedisTestScopeCloser({
         cleanupRedis,
@@ -341,6 +370,22 @@ export async function createRedisTestHarness(): Promise<RedisTestHarness> {
       });
 
       return {
+        failNextUserIndexRead() {
+          failNextUserIndexRead = true;
+        },
+        failNextPrincipalRevoke() {
+          failNextPrincipalRevoke = true;
+        },
+        async seedPrincipalPayload(id, payload) {
+          await writerRedis.set(createSessionKernelKeyBuilder(keyPrefix).active("principal_session", id), payload);
+        },
+        async seedUserIndexMember(principal, member) {
+          await writerRedis.zadd(
+            createSessionKernelKeyBuilder(keyPrefix).index.user(principal),
+            Date.now() + 30_000,
+            member,
+          );
+        },
         async activeObjectExists(input) {
           return await observerRedis.get(
             createSessionKernelKeyBuilder(keyPrefix).active(input.kind, input.id),
@@ -575,9 +620,12 @@ function createSessionKernelClient(
   beforeArtifactValidation?: () => Promise<void>,
   cleanupAdapters?: CleanupAdapter[],
   beforePrincipalValidation?: () => Promise<void>,
+  principalAccessFence?: SessionKernelPrincipalAccessFence,
+  logger?: SessionKernelLogger,
 ) {
   return createSessionKernel({
     cleanupAdapters,
+    logger,
     config: createSessionKernelConfig({
       lookupHmacKeys: {
         current: {
@@ -589,7 +637,7 @@ function createSessionKernelClient(
       principalAbsoluteTtlMs: 60_000,
       principalIdleTtlMs: 30_000,
     }),
-    principalAccessFence: {
+    principalAccessFence: principalAccessFence ?? {
       capture: async () => "00000000-0000-4000-8000-000000000002",
       validate: async () => {
         await beforePrincipalValidation?.();
