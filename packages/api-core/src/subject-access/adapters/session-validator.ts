@@ -1,4 +1,4 @@
-import type { ValidationResult } from "../../session/kernel";
+import type { ValidationResult } from "@iam/session-kernel";
 import type { SubjectAccessBarrier } from "../barrier";
 import { SubjectAccessDisabledError } from "../errors";
 

@@ -14,7 +14,7 @@ import {
   redirectToLogin,
   restoreLoginRedirectState,
 } from '@admin/utils/auth';
-import type { CustomSsoSubjectProjection } from '@iam/client-subject-projection/custom-sso';
+import type { CustomSsoSubjectProjection } from '@iam/custom-sso/wire';
 import type { AdminCapabilitySummary } from '@iam/contracts';
 import { history } from '@umijs/max';
 import { ConfigProvider } from 'antd';

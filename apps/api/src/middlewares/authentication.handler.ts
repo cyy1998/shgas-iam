@@ -1,14 +1,10 @@
 import type { ClientService } from "@api/services/client/client.service";
-import type { CustomSsoSessionKernelAdapter } from "@api/services/session/custom-sso-session-kernel.adapter";
 import type {
   CustomSsoSubjectDeliveryRequestScope,
 } from "@api/services/sso/subject-delivery/custom-sso-subject-delivery-request-scope";
-import type { CustomSsoTrafficGate } from "@api/services/sso/traffic-gate/custom-sso-traffic-gate.type";
+import type { CustomSso } from "@iam/custom-sso";
 import type { Context, Next } from "hono";
 import { mapCustomSsoRetryableError } from "@api/middlewares/custom-sso-retryable.error";
-import {
-  CustomSsoClientDeliveryUnauthorizedError,
-} from "@api/services/sso/subject-delivery/custom-sso-client-delivery.error";
 import {
   customSsoLocalSessionCookieName,
   decodeCustomSsoClientCode,
@@ -23,6 +19,9 @@ import {
   createSubjectAccessHttpAdapter,
 } from "@iam/api-core/subject-access";
 import { ClientCodeSchema } from "@iam/contracts";
+import {
+  CustomSsoClientDeliveryUnauthorizedError,
+} from "@iam/custom-sso";
 import { getCookie } from "hono/cookie";
 
 const subjectAccessHttp = createSubjectAccessHttpAdapter();
@@ -30,14 +29,13 @@ const subjectAccessHttp = createSubjectAccessHttpAdapter();
 export interface CreateApiAuthenticationHandlersDeps {
   clientService: Pick<ClientService, "getClientBySecret">;
   customSsoSession: Pick<
-    CustomSsoSessionKernelAdapter,
+    CustomSso,
     "resolvePublicAuthentication"
   >;
   subjectDeliveryRequests: Pick<
     CustomSsoSubjectDeliveryRequestScope,
     "runWithCapability"
   >;
-  trafficGate: Pick<CustomSsoTrafficGate, "assertSessionUseAllowed">;
   config: {
     readonly projectionRetryAfterSeconds: number;
   };
@@ -77,7 +75,6 @@ export function createApiAuthenticationHandlers(deps: CreateApiAuthenticationHan
       : [];
 
     try {
-      await deps.trafficGate.assertSessionUseAllowed(clientCode);
       return await subjectAccessHttp.run(c, {
         clearCookiesOnInvalidSession: sourceCookies,
         retryAfterSeconds: deps.config.projectionRetryAfterSeconds,

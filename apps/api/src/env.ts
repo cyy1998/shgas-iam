@@ -2,7 +2,7 @@ import { z } from "@hono/zod-openapi";
 import {
   DEFAULT_SESSION_LOOKUP_HMAC_CURRENT_ID,
   DEFAULT_SESSION_LOOKUP_HMAC_CURRENT_SECRET,
-} from "@iam/api-core/session/kernel";
+} from "@iam/session-kernel";
 
 function booleanString(defaultValue: boolean) {
   return z.string().optional().transform((value) => {

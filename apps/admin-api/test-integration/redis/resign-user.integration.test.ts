@@ -6,9 +6,10 @@ import { createAdminAuthorizationPolicy } from "@admin-api/services/admin-author
 import { createAdminSessionRevocationPort } from "@admin-api/services/session-revocation/session-revocation.port";
 import { createImmediateUnitOfWork } from "@admin-api/test/fakes";
 import { createResignUserUseCase } from "@admin-api/use-cases/employment/resign-user/resign-user.use-case";
-import { createSessionKernel, createSessionKernelConfig, createSessionKernelKeyBuilder } from "@iam/api-core/session/kernel";
 import { createRedisSubjectAccessStore, createSubjectAccessBarrier, createSubjectAccessBootstrap, createSubjectAccessLifecycle, createSubjectAccessPrincipalValidator } from "@iam/api-core/subject-access";
 import { EmploymentStatus, UserStatus } from "@iam/contracts";
+import { createSessionKernel, createSessionKernelConfig } from "@iam/session-kernel";
+import { createSessionKernelKeyBuilder } from "@iam/session-kernel/testing";
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, mock, test } from "bun:test";
 import { createAdminApiRedisTestHarness } from "./redis-test-harness";
 

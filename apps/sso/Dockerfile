@@ -22,6 +22,12 @@ ENV HUSKY=0
 COPY .npmrc pnpm-workspace.yaml package.json pnpm-lock.yaml ./
 COPY .husky/install.mjs ./.husky/install.mjs
 COPY packages/client-subject-projection/package.json ./packages/client-subject-projection/
+COPY packages/custom-sso/package.json ./packages/custom-sso/
+COPY packages/api-core/package.json ./packages/api-core/
+COPY packages/domain/package.json ./packages/domain/
+COPY packages/db/package.json ./packages/db/
+COPY packages/session-kernel/package.json ./packages/session-kernel/
+COPY packages/eslint-config/package.json ./packages/eslint-config/
 COPY packages/contracts/package.json ./packages/contracts/
 COPY apps/sso/package.json ./apps/sso/
 ARG HTTP_PROXY
@@ -53,6 +59,12 @@ ENV UMI_APP_SSO_LOGIN_CREDENTIAL_KID=$UMI_APP_SSO_LOGIN_CREDENTIAL_KID
 ENV UMI_APP_SSO_LOGIN_CREDENTIAL_PUBLIC_KEY=$UMI_APP_SSO_LOGIN_CREDENTIAL_PUBLIC_KEY
 ENV UMI_APP_SSO_WELL_KNOWN_URL=$UMI_APP_SSO_WELL_KNOWN_URL
 COPY packages/client-subject-projection/ ./packages/client-subject-projection/
+COPY packages/custom-sso/ ./packages/custom-sso/
+COPY packages/api-core/ ./packages/api-core/
+COPY packages/domain/ ./packages/domain/
+COPY packages/db/ ./packages/db/
+COPY packages/session-kernel/ ./packages/session-kernel/
+COPY packages/eslint-config/ ./packages/eslint-config/
 COPY packages/contracts/ ./packages/contracts/
 COPY apps/sso/ ./apps/sso/
 RUN pnpm rebuild && pnpm --filter @iam/sso run setup && pnpm --filter @iam/sso run build

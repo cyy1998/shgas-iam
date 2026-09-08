@@ -1,7 +1,7 @@
 import { LoggerSourceApp } from "@iam/api-core/logger";
-import { createSessionKernelConfig } from "@iam/api-core/session/kernel";
-import { createSessionKernelForTesting } from "@iam/api-core/session/kernel/testing";
 import { SubjectAccessDisabledError } from "@iam/api-core/subject-access";
+import { createSessionKernelConfig } from "@iam/session-kernel";
+import { createSessionKernelForTesting } from "@iam/session-kernel/testing";
 import { describe, expect, it } from "vitest";
 import {
   createOidcSessionKernelAdapter,

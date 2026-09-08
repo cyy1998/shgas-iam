@@ -1,4 +1,4 @@
-import type { AuthorizeSsoResult } from "@api/use-cases/sso/authorize-sso/authorize-sso.type";
+import type { AuthorizeSsoResult } from "@iam/custom-sso";
 import { createSsoHandlers } from "@api/routes/sso/sso.handlers";
 import { createSsoRoute } from "@api/routes/sso/sso.index";
 import {
@@ -83,13 +83,15 @@ function createHarness() {
         execute: completeCallback,
       },
       exchangeCode: { execute: exchangeCode },
+      logout: { execute: mock(async () => true as const) },
+    },
+    authentication: {
       loginWithOa: {
         execute: loginWithOa,
       },
       loginWithWechat: {
         execute: loginWithWechat,
       },
-      logout: { execute: mock(async () => true as const) },
     },
     config: {
       authCodeExpireSeconds: 60,

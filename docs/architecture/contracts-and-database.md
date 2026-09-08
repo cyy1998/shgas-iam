@@ -14,7 +14,7 @@
 | `packages/domain` 的纯规则文件 | 根据显式输入计算结果或抛出业务错误；依赖共享常量、纯 helper 和业务错误，不依赖数据库、OpenAPI、网络、运行时实例或 composition。 |
 | `packages/domain` 的 DTO/schema/mapper | 后端复用的领域输入输出；允许依赖数据库字段 schema、Drizzle schema 派生工具和既有 OpenAPI 工具，不执行数据库访问。 |
 | `packages/domain` 的 error/audit helper | 可复用业务错误和纯审计 payload 构造；实际审计写入由后端注入的能力负责。 |
-| 专用能力包 | 拥有完整业务能力及其公开 schema、类型和行为；已有 owner 的协议 schema 继续留在该 owner，例如 Custom SSO wire 由 projection 包拥有。 |
+| 专用能力包 | 拥有完整业务能力及其公开 schema、类型和行为；已有 owner 的协议 schema 继续留在该 owner，例如 Custom SSO wire 由 `custom-sso` 包拥有。 |
 | `packages/db`、`packages/api-core`、`packages/jobs` | 分别拥有持久化定义与查询基础能力、后端基础设施、BullMQ 基础能力；业务事实的解析规则由业务 owner 持有。 |
 | app 内部 | 单 app 的 enum、schema、error、流程类型和页面模型；有实际共享消费者后再评估提升位置。 |
 
@@ -46,10 +46,12 @@
 测试与构建失效粒度；不要求仅因共享包就互相调用。`resolution` 只是处理方式，不能成为所有解析逻辑的默认落点。
 选择独立包或共享包时，不以独立发布作为没有实际需求支撑的理由。
 
-当前三个服务端能力包的分工如下；本约定不改变它们的物理布局：
+当前专用能力包的分工如下；本约定不改变它们的物理布局：
 
 | 包 | 当前职责与消费关系 |
 |---|---|
+| `custom-sso` | root 拥有完整协议操作与 Grant；API 注入出站能力，OIDC 独立消费 cleanup/maintenance，Admin/SSO 消费支持浏览器的 `/wire`；测试构造与检查只走 `/testing`。 |
+| `session-kernel` | 协议中性的四类会话生命周期，由 API、Admin API、OIDC 与 API Core 的 Subject Access 及 Custom SSO Grant 适配方消费；不反向依赖这些消费者。 |
 | `role-assignment-resolution` | 统一有效角色与角色变化影响用户的解析；管理后端授权和 User Profile 构建/失效使用同一规则。 |
 | `organization-responsibility-resolution` | 统一有效责任与 holder 反向解析；当前生产直接消费者是 User Profile Read Model，用于构建和变更影响分析。 |
 | `user-profile-read-model` | 拥有派生档案的失效、重建、PostgreSQL 发布、Redis 缓存、查询与恢复；由 API、Admin API、OIDC Provider、Worker 按职责消费。Read Model 为读取整理数据，也负责写入和维护这些派生数据。 |
@@ -73,9 +75,9 @@
   `clientCode` 和 `SubjectClaimSelection`；Subject Facts、Subject Access 与 Authorization Freshness 由
   composition 注入最窄 port。协议 wire mapper 只能消费 package root public Projection Interface，不能导入其他
   core subpath 或直连 Facts persistence、client 配置、runtime 与 transport。Custom SSO V2 wire 的 runtime schema、
-  派生 TypeScript type、mapper 与 preview 统一由 `@iam/client-subject-projection/custom-sso` 拥有；API 只能复用该
+  派生 TypeScript type、mapper 与 preview 统一由 `@iam/custom-sso/wire` 拥有；API 只能复用该
   schema 添加 OpenAPI metadata，不得重写第二份 wire shape。Package root 拥有 Catalog/Selection V2、带 canonical responsibility 子项的协议中性
-  Employment Profile、V2 projection service 与 Custom SSO V2 strict wire；responsibility 仍是
+  Employment Profile 与 V2 projection service；Custom SSO 包独占 V2 strict wire；responsibility 仍是
   `profile:employments` 的原子子项，不形成独立 claim，也不进入 authorization employment。
 - 角色分配的正向 Effective Role 与反向受影响用户解析放在 `packages/role-assignment-resolution`；该 package
   接收 composition root 提供的 `DbClient`，调用方不复制 assignment 或组织闭包匹配规则。

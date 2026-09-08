@@ -1,8 +1,8 @@
 import { z } from "@hono/zod-openapi";
+import { ApiErrorCode } from "@iam/contracts";
 import {
   CustomSsoSubjectProjectionSchema,
-} from "@iam/client-subject-projection/custom-sso";
-import { ApiErrorCode } from "@iam/contracts";
+} from "@iam/custom-sso/wire";
 
 export const CustomSsoSubjectProjectionV2Schema
   = CustomSsoSubjectProjectionSchema.openapi(
@@ -11,7 +11,7 @@ export const CustomSsoSubjectProjectionV2Schema
 
 export type {
   CustomSsoSubjectProjection as CustomSsoSubjectProjectionV2Dto,
-} from "@iam/client-subject-projection/custom-sso";
+} from "@iam/custom-sso/wire";
 
 export const CustomSsoUnavailableResponseSchema = z.object({
   code: z.union([

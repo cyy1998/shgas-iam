@@ -16,8 +16,8 @@ Next review: 2026-10-31
 | Owner | 已消除的双时间路径 | 保留语义 |
 |---|---|---|
 | Kernel `storage/observation.ts`、`storage/store.ts`、`facade.ts` | TIME 与对象同次取得；创建、续期、消费、列表和清理不用应用 now 判定 deadline；续期同时维护原 lookup | idle/absolute、父上限、fixed-at-issue/extend-with-principal、payload/lookup CAS、tombstone、pending cleanup；取得后可继续，真实缺失/撤销/消费/冲突仍失败 |
-| Grant `authorization-grant/redis-store.ts` | initialize 消费 Kernel Artifact deadline；预占/heartbeat/release/consume 使用 Redis TIME | 单赢家、lease 不能越过原授权期限、每 attempt identity 和精确补偿；没有跨模块大事务 |
-| Custom SSO `custom-sso-session-kernel.adapter.ts` | Independent/Gateway 使用 `ceil((expiresAt-observedAt)/1000)`；不因应用时间或亚秒取整再次撤销 | 两模式身份来源、Subject Access、父对象/主体/配置保护；Gateway Cookie Max-Age 消费 TTL，ORCAS Cookie 契约保持 |
+| Grant `packages/custom-sso/src/grant/redis-store.ts` | initialize 消费 Kernel Artifact deadline；预占/heartbeat/release/consume 使用 Redis TIME | 单赢家、lease 不能越过原授权期限、每 attempt identity 和精确补偿；没有跨模块大事务 |
+| Custom SSO `packages/custom-sso/src/internal/session.ts` | Independent/Gateway 使用 `ceil((expiresAt-observedAt)/1000)`；不因应用时间或亚秒取整再次撤销 | 两模式身份来源、Subject Access、父对象/主体/配置保护；Gateway Cookie Max-Age 消费 TTL，ORCAS Cookie 契约保持 |
 | OIDC `storage/redis-adapter.ts` | 同次 Redis TIME 为对象/lookup/index 设置共同 deadline；共享索引只延长；清理根据实际对象和 CAS | Client/Grant ownership、配置版本、Kernel Credential mirror；Grant 增补 scope 再保存保持当前 PEXPIRETIME，缺失不复活 |
 | Provider Session state store | mapping 发布/刷新直接消费 Kernel 毫秒 deadline；staged 主数据/索引以 Redis TIME、60 秒和父 deadline 一致写入 | anchor generation、mapping owner、原子 claim、发布不确定确认与补偿 |
 | OIDC model/configuration | Code 每次取得重新观察 Kernel Principal，向上取整交付 AccessToken/IdToken TTL；Code/AccessToken/Grant/Session/Interaction 沿用本次 Redis 有效观察 | 已消费 Code 保留 consumed 进入原 replay revoke；观察不持久化；JWT exp/iat/auth_time、新鲜认证 max_age 含义保持 |
@@ -35,9 +35,9 @@ Redis TIME 不是 JWT 认证事件时间或主机稳定性保证。`authTime`/`a
 
 表中缩写均指既有 owner seam；测试存在不等于已经执行。真实 Redis 使用专用 URL，应用时钟独立注入，不能与 Redis 绑定到同一 fake。
 
-- **K-time**：[Kernel 时间](../../../packages/api-core/test-integration/redis/session-kernel-time.integration.test.ts)：四类对象偏差矩阵、跨实例与前后跳、父上限、续期 lookup、取得后到期、真实缺失与 pending cleanup。
-- **K-id**：[Credential](../../../packages/api-core/test-integration/redis/session-kernel-credential.integration.test.ts)：新 UUID、写前 identity、并发 owner、lookup、tombstone 与不确定写入补偿。
-- **Grant**：[Grant owner](../../../packages/api-core/test-integration/redis/authorization-grant-redemption.integration.test.ts)：Kernel deadline 联验、唯一赢家、租约、release/consume、接管及原上限。
+- **K-time**：[Kernel 时间](../../../packages/session-kernel/test-integration/redis/session-kernel-time.integration.test.ts)：四类对象偏差矩阵、跨实例与前后跳、父上限、续期 lookup、取得后到期、真实缺失与 pending cleanup。
+- **K-id**：[Credential](../../../packages/session-kernel/test-integration/redis/session-kernel-credential.integration.test.ts)：新 UUID、写前 identity、并发 owner、lookup、tombstone 与不确定写入补偿。
+- **Grant**：[Grant owner](../../../packages/custom-sso/test-integration/redis/authorization-grant-redemption.integration.test.ts)：Kernel deadline 联验、唯一赢家、租约、release/consume、接管及原上限。
 - **SSO**：[生产 adapter](../../../apps/api/test-integration/component/custom-sso-session-kernel.adapter.integration.test.ts)与
   [Cookie handler](../../../apps/api/test-integration/component/sso.handlers.integration.test.ts)：两模式交付/认证/退出、偏差、亚秒 TTL、途中到期和补偿。
 - **State**：[Provider Session state](../../../apps/oidc-provider/test-integration/redis/provider-session-state.integration.test.ts)：staged/claim/mapping/anchor、Kernel deadline 到 Code/Credential 与 generation 恢复。

@@ -37,7 +37,7 @@ Redis 作用后审计失败继续使用 `ADMIN_LOGIN_STATE_AUDIT_FAILED_AFTER_EF
 | I | [OIDC PostgreSQL](../../../apps/admin-api/test-integration/postgres/client-oidc-command.integration.test.ts)、[Client 浏览器](../../../apps/admin/test-integration/browser/clients.spec.ts) |
 | S | [Custom SSO PostgreSQL](../../../apps/admin-api/test-integration/postgres/client-custom-sso-command.integration.test.ts)、[PG/Redis composition](../../../apps/admin-api/test-integration/composition/client-runtime-hard-cutover-rehearsal.integration.test.ts) |
 | L | [Session/Restriction Redis](../../../apps/admin-api/test-integration/redis/session-management.integration.test.ts)、[Session adapter](../../../apps/admin-api/test-integration/component/session-management.adapter.integration.test.ts)、[Sessions 浏览器](../../../apps/admin/test-integration/browser/sessions.spec.ts) |
-| G | [离职 Redis](../../../apps/admin-api/test-integration/redis/resign-user.integration.test.ts)、[Kernel 捕获代际撤销](../../../packages/api-core/test-integration/redis/session-kernel-prepared-revocation.integration.test.ts) |
+| G | [离职 Redis](../../../apps/admin-api/test-integration/redis/resign-user.integration.test.ts)、[Kernel 捕获代际撤销](../../../packages/session-kernel/test-integration/redis/session-kernel-prepared-revocation.integration.test.ts) |
 | D | [Internal 委托写入与 resolver 联验](../../../apps/api/test-integration/postgres/privilege-delegation-writes.integration.test.ts)、[resolver fail-closed](../../../apps/api/test-integration/postgres/privilege-delegation-resolution.integration.test.ts) |
 | F | 既有 Full-system [Admin](../../../e2e/system/admin-custom-sso.spec.ts)、[HR](../../../e2e/system/hr-admin-user-management.spec.ts)、[OIDC](../../../e2e/system/oidc-pkce.spec.ts)；同一 exact-project、真实 Gateway/页面/后端/Worker/PG/Redis |
 

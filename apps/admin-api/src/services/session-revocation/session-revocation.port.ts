@@ -1,5 +1,5 @@
 import type { AdminAuditContext } from "@admin-api/services/audit/audit.context";
-import type { RevocationReason, RevokeSummary, SessionKernel } from "@iam/api-core/session/kernel";
+import type { RevocationReason, RevokeSummary, SessionKernel } from "@iam/session-kernel";
 
 export type AdminSessionProtocol = "custom-sso" | "oidc";
 

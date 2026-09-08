@@ -1,7 +1,7 @@
 import type {
   SessionKernelRedis,
   SessionKernelRedisTransaction,
-} from "@iam/api-core/session/kernel";
+} from "@iam/session-kernel";
 
 type RedisResult = [Error | null, unknown];
 

@@ -1,6 +1,3 @@
-import {
-  CustomSsoTrafficGateUnavailableError,
-} from "@api/services/sso/traffic-gate/custom-sso-traffic-gate";
 import { SERVICE_UNAVAILABLE } from "@iam/api-core/core/http-status-codes";
 import { AuthzMaintenanceError, CustomError } from "@iam/api-core/errors";
 import { SubjectAccessUnavailableError } from "@iam/api-core/subject-access";
@@ -9,6 +6,9 @@ import {
   ApiErrorCode,
   isRetryableServiceUnavailable,
 } from "@iam/contracts";
+import {
+  CustomSsoTrafficGateUnavailableError,
+} from "@iam/custom-sso";
 
 export interface MapCustomSsoRetryableErrorOptions {
   readonly retryAfterSeconds: number;

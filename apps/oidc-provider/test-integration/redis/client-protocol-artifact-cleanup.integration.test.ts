@@ -1,21 +1,21 @@
-import type { SessionKernelRedis } from "@iam/api-core/session/kernel";
+import type { SessionKernelRedis } from "@iam/session-kernel";
 import type { ProviderSessionStateRedis } from "../../src/session/provider-session-state.store.ts";
 import type {
   OidcProviderRedisTestHarness,
   OidcProviderRedisTestScope,
 } from "./redis-test-harness.ts";
 import { randomUUID } from "node:crypto";
+import { createCustomSsoCleanup } from "@iam/custom-sso/cleanup";
 import {
   AUTHORIZATION_GRANT_REDEMPTION_CLEANUP_KIND,
   AUTHORIZATION_GRANT_REDEMPTION_KEY_PREFIX,
-  createAuthorizationGrantRedemptionCleanupAdapter,
   createRedisAuthorizationGrantRedemptionStore,
-} from "@iam/api-core/authorization-grant";
+} from "@iam/custom-sso/testing";
 import {
   createSessionKernel,
   createSessionKernelConfig,
-  createSessionKernelKeyBuilder,
-} from "@iam/api-core/session/kernel";
+} from "@iam/session-kernel";
+import { createSessionKernelKeyBuilder } from "@iam/session-kernel/testing";
 import {
   afterAll,
   afterEach,
@@ -249,8 +249,8 @@ describe("client Protocol artifact cleanup real Redis contract", () => {
     testScope.trackKey(pendingProviderSessionBindingKey(authorizationAttemptId));
     testScope.trackKey(pendingProviderSessionBindingsByClientKey(clientCode));
 
+    testScope.trackKey(`${AUTHORIZATION_GRANT_REDEMPTION_KEY_PREFIX}${grantId}`);
     const redemptionStore = createRedisAuthorizationGrantRedemptionStore({
-      keyPrefix: `${prefix}authorization-grant:redemption:v1:`,
       redis: testScope.writer,
     });
     await redemptionStore.initialize({
@@ -273,7 +273,7 @@ describe("client Protocol artifact cleanup real Redis contract", () => {
         principalIdleTtlMs: 30_000,
       }),
       cleanupAdapters: [
-        createAuthorizationGrantRedemptionCleanupAdapter(redemptionStore),
+        createCustomSsoCleanup({ redis: testScope.writer }),
       ],
       principalAccessFence: {
         capture: async () => randomUUID(),
@@ -390,7 +390,7 @@ describe("client Protocol artifact cleanup real Redis contract", () => {
       auditKey,
       preservedValues[4],
     );
-    const redemptionKey = `${prefix}authorization-grant:redemption:v1:${grantId}`;
+    const redemptionKey = `${AUTHORIZATION_GRANT_REDEMPTION_KEY_PREFIX}${grantId}`;
     const redemptionBeforeDryRun = await testScope.observer.get(redemptionKey);
     const rawIndexSizeBeforeDryRun = await testScope.observer.zcard(rawIndex);
 

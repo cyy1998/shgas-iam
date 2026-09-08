@@ -4,6 +4,8 @@
 编码风格见 [../development/coding-style.md](../development/coding-style.md)，共享类型的所有权和运行环境边界见
 [contracts-and-database.md](contracts-and-database.md)。下列规则适用于新增代码；旧代码的收敛时机见本文末节。
 
+Admin 的 Custom SSO 配置 preview 与 Admin/SSO 协议类型统一消费 `@iam/custom-sso/wire`。该独立出口只加载浏览器可用的协议 schema/mapper/preview 与中性 Projection 契约，不通过服务端聚合入口加载 Kernel 或 Redis。Admin 的 Umi 配置将 `/wire` 精确映射到 workspace 源文件，与现有 Projection/Contracts alias 同路编译，避免 MFSU 预构建与 app 源模块混用。
+
 ## App 与状态边界
 
 - `apps/admin` 是管理前端，通过 app-local `src/services/` 消费 admin 能力；共享 tRPC client 位于

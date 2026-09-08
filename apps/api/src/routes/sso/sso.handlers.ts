@@ -1,12 +1,8 @@
 import type { LoggerPort } from "@api/composition/runtime";
-import type { SsoPrincipalTokenSource } from "@api/use-cases/sso/authorize-sso/authorize-sso.type";
-import type { AuthorizeSsoUseCase } from "@api/use-cases/sso/authorize-sso/authorize-sso.use-case";
+import type { LoginWithOaUseCase } from "@api/use-cases/authentication/login-with-oa/login-with-oa.use-case";
+import type { LoginWithWechatUseCase } from "@api/use-cases/authentication/login-with-wechat/login-with-wechat.use-case";
 import type { CheckSsoLoginContinuationUseCase } from "@api/use-cases/sso/check-login-continuation/check-login-continuation.use-case";
-import type { CompleteSsoCallbackUseCase } from "@api/use-cases/sso/complete-sso-callback/complete-sso-callback.use-case";
-import type { ExchangeSsoCodeUseCase } from "@api/use-cases/sso/exchange-sso-code/exchange-sso-code.use-case";
-import type { LoginWithOaUseCase } from "@api/use-cases/sso/login-with-oa/login-with-oa.use-case";
-import type { LoginWithWechatUseCase } from "@api/use-cases/sso/login-with-wechat/login-with-wechat.use-case";
-import type { LogoutSsoSessionUseCase } from "@api/use-cases/sso/logout-sso-session/logout-sso-session.use-case";
+import type { CustomSso, SsoPrincipalTokenSource } from "@iam/custom-sso";
 import type { Context } from "hono";
 import type { SsoRouteHandler } from "./sso.type";
 import { mapCustomSsoRetryableError } from "@api/middlewares/custom-sso-retryable.error";
@@ -36,13 +32,15 @@ const subjectAccessHttp = createSubjectAccessHttpAdapter();
 export interface CreateSsoHandlersDeps {
   logger: Pick<LoggerPort, "warn">;
   sso: {
-    authorize: AuthorizeSsoUseCase;
+    authorize: CustomSso["authorize"];
     checkLoginContinuation: CheckSsoLoginContinuationUseCase;
-    completeCallback: CompleteSsoCallbackUseCase;
-    exchangeCode: ExchangeSsoCodeUseCase;
+    completeCallback: CustomSso["completeCallback"];
+    exchangeCode: CustomSso["exchangeCode"];
+    logout: CustomSso["logout"];
+  };
+  authentication: {
     loginWithOa: LoginWithOaUseCase;
     loginWithWechat: LoginWithWechatUseCase;
-    logout: LogoutSsoSessionUseCase;
   };
   config: {
     authorizationEndpoint: string;
@@ -273,7 +271,7 @@ export function createSsoHandlers(deps: CreateSsoHandlersDeps) {
           : ["global_session"],
       }, async () => await deps.sso.logout.execute({ sessionToken: sessionId }));
     }
-    const data = await deps.sso.loginWithOa.execute({
+    const data = await deps.authentication.loginWithOa.execute({
       clientCode,
       loginId: loginid,
       timestamp: ts,
@@ -295,7 +293,7 @@ export function createSsoHandlers(deps: CreateSsoHandlersDeps) {
 
   const loginWX: SsoRouteHandler<"loginWX"> = async (c) => {
     const { code, redirectUrl, client, state } = c.req.valid("query");
-    const data = await deps.sso.loginWithWechat.execute(
+    const data = await deps.authentication.loginWithWechat.execute(
       { code },
       { requestContext: getApiAuditRequestContext(c) },
     );

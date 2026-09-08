@@ -1,5 +1,5 @@
-import type { SessionKernelRedis } from "@iam/api-core/session/kernel";
 import type { ProcessSmokeAttemptContext } from "@iam/api-core/testing/process-smoke-harness";
+import type { SessionKernelRedis } from "@iam/session-kernel";
 import type { SubjectFactsCacheRecord } from "@iam/user-profile-read-model/subject-facts";
 import { randomUUID } from "node:crypto";
 import { createServer } from "node:http";
@@ -8,7 +8,6 @@ import {
   createClientRuntimeSnapshotModule,
 } from "@iam/api-core/client-runtime-snapshot";
 import { hashSecret } from "@iam/api-core/security";
-import { createSessionKernel } from "@iam/api-core/session/kernel";
 import {
   createRedisSubjectAccessStore,
   createSubjectAccessBarrier,
@@ -38,6 +37,7 @@ import {
   CustomSsoClientMode,
   SubjectClaim,
 } from "@iam/contracts";
+import { createSessionKernel } from "@iam/session-kernel";
 import {
   createSubjectFactsRedisInspector,
   createSubjectFactsRedisPublisher,

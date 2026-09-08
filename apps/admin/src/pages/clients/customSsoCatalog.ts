@@ -38,4 +38,4 @@ export const CUSTOM_SSO_CLAIM_CATALOG = SUBJECT_CLAIM_CATALOG.claims.map(
   }),
 );
 
-export { buildCustomSsoPlaceholderPreview } from '@iam/client-subject-projection/custom-sso';
+export { buildCustomSsoPlaceholderPreview } from '@iam/custom-sso/wire';

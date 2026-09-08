@@ -1,7 +1,7 @@
 import type {
   CustomSsoEmployment,
   CustomSsoSubjectProjection,
-} from '@iam/client-subject-projection/custom-sso';
+} from '@iam/custom-sso/wire';
 import type { ApiErrorCode, ClientStatus } from '@iam/contracts';
 
 export type ApiEnvelope<T> = {

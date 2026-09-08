@@ -1,10 +1,10 @@
 import { createAuthHandlers } from "@api/routes/auth/auth.handlers";
-import { createCustomSsoTrafficGate } from "@api/services/sso/traffic-gate/custom-sso-traffic-gate";
 import {
   customSsoLocalSessionCookieName,
   encodeCustomSsoClientCode,
 } from "@api/services/sso/transport/custom-sso-client-code.transport";
 import * as HttpStatusCodes from "@iam/api-core/core/http-status-codes";
+import { AuthzMaintenanceError } from "@iam/api-core/errors/AuthzMaintenanceError";
 import { AuthzUnauthorizedError } from "@iam/api-core/errors/AuthzUnauthorizedError";
 import * as resp from "@iam/api-core/http";
 import { createErrorHandler } from "@iam/api-core/middlewares";
@@ -46,9 +46,7 @@ const authzService = mock(async () => encodedGatewaySubject);
 const getClientBySecret = mock(async (_secret: string): Promise<InternalTestClient | null> => null);
 const loggerInfo = mock(() => undefined);
 
-function createHandlers(options: {
-  trafficGate?: ReturnType<typeof createCustomSsoTrafficGate>;
-} = {}) {
+function createHandlers() {
   return createAuthHandlers({
     authentication: {
       loginWithMobile: { execute: loginMobileService },
@@ -65,10 +63,6 @@ function createHandlers(options: {
     },
     localSessionAuthorizer: {
       authorizeLocalSession: authzService,
-    },
-    trafficGate: options.trafficGate ?? {
-      assertIssuanceAllowed: async () => undefined,
-      assertSessionUseAllowed: async () => undefined,
     },
     config: {
       projectionRetryAfterSeconds: 3,
@@ -150,12 +144,11 @@ beforeEach(() => {
 });
 
 describe("createAuthHandlers", () => {
-  test("authz returns AUTH.MAINTENANCE without authorizing or clearing a local session", async () => {
-    const handlers = createHandlers({
-      trafficGate: createCustomSsoTrafficGate({
-        gate: { check: async () => ({ outcome: "maintenance" }) },
-      }),
+  test("authz returns AUTH.MAINTENANCE without clearing a local session", async () => {
+    authzService.mockImplementation(async () => {
+      throw new AuthzMaintenanceError();
     });
+    const handlers = createHandlers();
     const app = new Hono();
     app.get("/auth/authz", handlers.authz as never);
     app.onError(createErrorHandler({
@@ -178,7 +171,7 @@ describe("createAuthHandlers", () => {
       code: ApiErrorCode.Maintenance,
     });
     expect(response.headers.getSetCookie()).toEqual([]);
-    expect(authzService).not.toHaveBeenCalled();
+    expect(authzService).toHaveBeenCalledTimes(1);
   });
 
   test("authz writes encoded user info response header", async () => {

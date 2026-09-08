@@ -4,14 +4,11 @@
   "version": "0.0.1",
   "private": true,
   "exports": {
-    ".": "./src/index.ts",
-    "./custom-sso": "./src/custom-sso.ts"
+    ".": "./src/index.ts"
   },
   "scripts": {
     "lint": "eslint src test-integration eslint.config.js",
     "lint:fix": "eslint --fix src test-integration eslint.config.js",
-    "test": "pnpm test:unit",
-    "test:unit": "bun test --max-concurrency=2 src",
     "test:integration:component": "bun test --max-concurrency=2 test-integration/component",
     "typecheck": "pnpm exec tsc --noEmit"
   },

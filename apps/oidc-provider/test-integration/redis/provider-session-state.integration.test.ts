@@ -9,7 +9,7 @@ import { LoggerSourceApp } from "@iam/api-core/logger";
 import {
   createSessionKernel,
   createSessionKernelConfig,
-} from "@iam/api-core/session/kernel";
+} from "@iam/session-kernel";
 import Provider from "oidc-provider";
 import {
   afterAll,

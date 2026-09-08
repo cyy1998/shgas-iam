@@ -1,4 +1,4 @@
-import { createLoginWithWechatUseCase } from "@api/use-cases/sso/login-with-wechat/login-with-wechat.use-case";
+import { createLoginWithWechatUseCase } from "@api/use-cases/authentication/login-with-wechat/login-with-wechat.use-case";
 import { expect, mock, test } from "bun:test";
 
 const subjectIdentifier = "00000000-0000-4000-8000-000000001001";

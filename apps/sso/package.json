@@ -28,8 +28,8 @@
   "dependencies": {
     "@ant-design/cssinjs": "^2.1.2",
     "@ant-design/icons": "^6.3.2",
-    "@iam/client-subject-projection": "workspace:*",
     "@iam/contracts": "workspace:*",
+    "@iam/custom-sso": "workspace:*",
     "@umijs/max": "^4.6.79",
     "antd": "^6.5.1",
     "cap-widget": "^0.1.56",

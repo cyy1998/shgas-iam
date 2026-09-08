@@ -50,6 +50,8 @@ const protectedSourceRoots = [
   "apps/admin-api/src",
   "apps/oidc-provider/src",
   "apps/worker/src",
+  "packages/session-kernel/src",
+  "packages/custom-sso/src",
   "packages/client-subject-projection/src",
   "packages/organization-responsibility-resolution/src",
   "packages/role-assignment-resolution/src",
@@ -72,6 +74,8 @@ const excludedSourceDirectories = new Set([
 ]);
 
 const architectureWorkspaceRoots = new Map([
+  ["@iam/session-kernel", "packages/session-kernel"],
+  ["@iam/custom-sso", "packages/custom-sso"],
   ["@iam/client-subject-projection", "packages/client-subject-projection"],
   ["@iam/organization-responsibility-resolution", "packages/organization-responsibility-resolution"],
   ["@iam/role-assignment-resolution", "packages/role-assignment-resolution"],
@@ -97,6 +101,8 @@ interface WorkspaceDependencyNode {
 }
 
 const canonicalStaticSourceRoots = new Map([
+  ["@iam/session-kernel", "packages/session-kernel/src"],
+  ["@iam/custom-sso", "packages/custom-sso/src"],
   ["@iam/admin", "apps/admin/src"],
   ["@iam/admin-api", "apps/admin-api/src"],
   ["@iam/api", "apps/api/src"],
@@ -113,6 +119,7 @@ const canonicalStaticSourceRoots = new Map([
 ]);
 
 const clientSubjectProjectionExternalOwnerTargets: readonly StaticModulePattern[] = [
+  { kind: "prefix", module: "packages/session-kernel/src" },
   { kind: "prefix", module: "packages/api-core/src" },
   { kind: "prefix", module: "packages/db/src" },
   { kind: "prefix", module: "packages/domain/src" },
@@ -128,15 +135,27 @@ const clientSubjectProjectionExternalOwnerTargets: readonly StaticModulePattern[
 
 const staticModuleOwnershipRules: readonly StaticModuleOwnershipRule[] = [
   {
+    ruleId: "session-runtime-owner",
+    sourceScopes: ["packages/session-kernel/src"],
+    targets: [
+      { kind: "prefix", module: "packages/api-core/src" },
+      { kind: "package", module: "@iam/custom-sso" },
+      { kind: "prefix", module: "packages/custom-sso/src" },
+      { kind: "prefix", module: "apps" },
+    ],
+    allowedSources: [],
+    dependencyKind: "all",
+    message: moduleSpecifier =>
+      `Session Kernel must not import runtime or protocol owner "${moduleSpecifier}"; inject its external capabilities.`,
+  },
+  {
     ruleId: "client-subject-projection-owner",
     sourceScopes: ["packages/client-subject-projection/src"],
     targets: [
       ...clientSubjectProjectionExternalOwnerTargets,
-      { kind: "prefix", module: "packages/client-subject-projection/src/custom-sso" },
+      { kind: "prefix", module: "packages/custom-sso/src" },
     ],
-    allowedSources: [
-      "packages/client-subject-projection/src/custom-sso.ts",
-    ],
+    allowedSources: [],
     dependencyKind: "all",
     message: moduleSpecifier =>
       `Client Subject Projection implementation must not import runtime or protocol module "${moduleSpecifier}"; `
@@ -144,8 +163,12 @@ const staticModuleOwnershipRules: readonly StaticModuleOwnershipRule[] = [
   },
   {
     ruleId: "client-subject-projection-owner",
-    sourceScopes: ["packages/client-subject-projection/src/custom-sso.ts"],
-    targets: clientSubjectProjectionExternalOwnerTargets,
+    sourceScopes: ["packages/custom-sso/src/wire.ts"],
+    targets: [
+      ...clientSubjectProjectionExternalOwnerTargets,
+      { kind: "prefix", module: "packages/custom-sso/src" },
+    ],
+    allowedTargets: [{ kind: "exact", module: "packages/custom-sso/src/wire" }],
     allowedSources: [],
     dependencyKind: "all",
     message: moduleSpecifier =>
@@ -155,7 +178,7 @@ const staticModuleOwnershipRules: readonly StaticModuleOwnershipRule[] = [
   },
   {
     ruleId: "client-subject-projection-owner",
-    sourceScopes: ["packages/client-subject-projection/src/custom-sso.ts"],
+    sourceScopes: ["packages/custom-sso/src/wire.ts"],
     targets: [{ kind: "prefix", module: "packages/client-subject-projection/src" }],
     allowedTargets: [{ kind: "exact", module: "packages/client-subject-projection/src" }],
     allowedSources: [],
@@ -172,8 +195,8 @@ const staticModuleOwnershipRules: readonly StaticModuleOwnershipRule[] = [
       "apps/api/src/composition",
     ],
     targets: [
-      { kind: "prefix", module: "@iam/api-core/session" },
-      { kind: "exact", module: "apps/api/src/services/session/custom-sso-session-kernel.adapter" },
+      { kind: "prefix", module: "@iam/session-kernel" },
+      { kind: "prefix", module: "packages/custom-sso/src/internal" },
       { kind: "exact", module: "apps/api/src/lib/infra/redis" },
       { kind: "prefix", module: "apps/api/src/lib/integrations" },
     ],
@@ -185,6 +208,21 @@ const staticModuleOwnershipRules: readonly StaticModuleOwnershipRule[] = [
   },
   {
     ruleId: "session-runtime-owner",
+    sourceScopes: ["packages/custom-sso/src"],
+    targets: [
+      { kind: "prefix", module: "apps" },
+      { kind: "package", module: "@iam/db" },
+      { kind: "package", module: "hono" },
+    ],
+    allowedTargets: [],
+    allowedSources: ["packages/custom-sso/src/wire.ts"],
+    dependencyKind: "all",
+    message: moduleSpecifier =>
+      `Custom SSO application must not import app provider or HTTP module "${moduleSpecifier}"; `
+      + "declare its outbound capability locally and inject it from composition.",
+  },
+  {
+    ruleId: "session-runtime-owner",
     sourceScopes: [
       "apps/admin-api/src/services/user",
       "apps/admin-api/src/services/client",
@@ -192,7 +230,7 @@ const staticModuleOwnershipRules: readonly StaticModuleOwnershipRule[] = [
       "apps/admin-api/src/composition",
     ],
     targets: [
-      { kind: "prefix", module: "@iam/api-core/session/kernel" },
+      { kind: "prefix", module: "@iam/session-kernel" },
       { kind: "suffix", module: "custom-sso-session-kernel.adapter" },
       { kind: "suffix", module: "oidc-session-kernel.adapter" },
       { kind: "exact", module: "apps/admin-api/src/lib/infra/redis" },
@@ -205,6 +243,22 @@ const staticModuleOwnershipRules: readonly StaticModuleOwnershipRule[] = [
     message: moduleSpecifier =>
       `Admin user and client services must not import session runtime module "${moduleSpecifier}"; `
       + "depend on the consumer-owned Session Revocation port.",
+  },
+  {
+    ruleId: "session-runtime-owner",
+    sourceScopes: ["apps/oidc-provider/src"],
+    targets: [
+      { kind: "package", module: "@iam/custom-sso" },
+      { kind: "prefix", module: "packages/custom-sso/src" },
+    ],
+    allowedTargets: [
+      { kind: "exact", module: "packages/custom-sso/src/cleanup" },
+      { kind: "exact", module: "packages/custom-sso/src/maintenance" },
+    ],
+    allowedSources: [],
+    dependencyKind: "all",
+    message: moduleSpecifier =>
+      `OIDC must consume only independent Custom SSO cleanup or maintenance, not "${moduleSpecifier}".`,
   },
   {
     ruleId: "session-runtime-owner",
@@ -289,14 +343,15 @@ const staticModuleOwnershipRules: readonly StaticModuleOwnershipRule[] = [
   {
     ruleId: "session-runtime-owner",
     sourceScopes: ["apps/oidc-provider/src"],
-    targets: [{ kind: "exact", module: "@iam/api-core/session/kernel" }],
+    targets: [{ kind: "exact", module: "@iam/session-kernel" }],
     allowedSources: [
+      "apps/oidc-provider/src/env.ts",
       "apps/oidc-provider/src/composition/session",
       "apps/oidc-provider/src/session/oidc-session-kernel.adapter.ts",
     ],
     dependencyKind: "value",
     message: (moduleSpecifier, declaration) =>
-      `Only OIDC session composition and its Kernel adapter may ${valueDependencyOperation(declaration)} `
+      `Only OIDC environment configuration, session composition and its Kernel adapter may ${valueDependencyOperation(declaration)} `
       + `Session Kernel module "${moduleSpecifier}".`,
   },
   {

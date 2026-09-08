@@ -1,13 +1,13 @@
 import type { AuditLogInput } from "@admin-api/services/audit/audit.context";
 import type { LoginRestriction } from "@iam/api-core/login-restriction";
-import type { SessionKernel } from "@iam/api-core/session/kernel";
+import type { SessionKernel } from "@iam/session-kernel";
 import type { AdminApiRedisTestHarness, AdminApiRedisTestScope } from "./redis-test-harness";
 import { randomUUID } from "node:crypto";
 import { createSessionManagementService } from "@admin-api/services/session-management/session-management.service";
 import { createAdminSessionRevocationPort } from "@admin-api/services/session-revocation/session-revocation.port";
 import { createLoginRestriction, createRedisLoginRestrictionStore, LOGIN_FAILURE_THRESHOLD } from "@iam/api-core/login-restriction";
-import { createSessionKernel, createSessionKernelConfig } from "@iam/api-core/session/kernel";
 import { UserStatus } from "@iam/contracts";
+import { createSessionKernel, createSessionKernelConfig } from "@iam/session-kernel";
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, test } from "bun:test";
 import { createAdminApiRedisTestHarness } from "./redis-test-harness";
 

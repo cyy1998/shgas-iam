@@ -1,0 +1,38 @@
+{
+  "name": "@iam/custom-sso",
+  "type": "module",
+  "version": "0.0.1",
+  "private": true,
+  "exports": {
+    ".": "./src/index.ts",
+    "./wire": "./src/wire.ts",
+    "./cleanup": "./src/cleanup.ts",
+    "./maintenance": "./src/maintenance.ts",
+    "./testing": "./src/testing.ts"
+  },
+  "scripts": {
+    "lint": "eslint src test-integration eslint.config.js",
+    "lint:fix": "eslint --fix src test-integration eslint.config.js",
+    "test": "pnpm test:unit",
+    "test:unit": "bun test --max-concurrency=2 src",
+    "typecheck": "pnpm exec tsc --noEmit",
+    "test:integration:component": "bun test --max-concurrency=2 test-integration/component",
+    "test:integration:redis": "bun test --max-concurrency=1 test-integration/redis"
+  },
+  "dependencies": {
+    "@iam/client-subject-projection": "workspace:*",
+    "@iam/contracts": "workspace:*",
+    "zod": "^4.4.3",
+    "@iam/api-core": "workspace:*",
+    "@iam/domain": "workspace:*",
+    "@iam/session-kernel": "workspace:*"
+  },
+  "devDependencies": {
+    "@iam/eslint-config": "workspace:*",
+    "@types/bun": "latest",
+    "@typescript/native": "npm:typescript@7.0.2",
+    "eslint": "^10.7.0",
+    "typescript": "npm:@typescript/typescript6@6.0.2",
+    "ioredis": "^5.11.1"
+  }
+}

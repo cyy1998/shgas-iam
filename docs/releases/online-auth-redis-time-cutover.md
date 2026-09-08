@@ -37,6 +37,8 @@ Current runbook；本次不推进 Client epoch、不写 PostgreSQL，也不运�
 - 所需工具：固定候选 checkout、Node.js 24、仓库 pnpm、依赖已安装；命令账号允许目标 DB 的 SCAN、UNLINK 和连接管理。
   使用受控运维环境注入凭据，关闭 shell transcript/调试输出；不能把 Redis URL、完整 key、token、Cookie 或私钥写入记录。
 
+Kernel 与 Custom SSO 清单分别由 `@iam/session-kernel/maintenance`、`@iam/custom-sso/maintenance` 拥有；OIDC 命令仅加载这些窄出口。Spec #122 迁包不改变下列 key 或操作，也不要求为迁包执行本手册。
+
 ## 当前 owner 清单
 
 下表是固定键族说明，`<ns>` 为三个后端一致的实际 Kernel namespace（末尾冒号会规范化）。不接受操作员任意 pattern。
@@ -49,7 +51,7 @@ Current runbook；本次不推进 Client epoch、不写 PostgreSQL，也不运�
 | 3 OIDC protocol store | `oidc:model:`、`oidc:consumed:`、`oidc:grant-objects:`、`oidc:client-objects:`、`oidc:session-uid:`、`oidc:user-code:` | Session、Interaction、Grant、Code、Token 等该 owner 的主对象及各 lookup/index，包括已丢 index 的对象 |
 | 4 Provider Session state | `oidc:provider-session-binding-lookup:`、`oidc:provider-session-principal:`、`oidc:provider-session-generation-members:`、`oidc:pending-provider-session-binding:`、`oidc:pending-provider-session-bindings:client:` | mapping、anchor、generation members、staged payload 和 staged client index 各自重扫 |
 
-源码 owner 分别为 Kernel `storage/keys.ts`、Grant `redis-store.ts`、OIDC `storage/redis-adapter.ts` 和
+源码 owner 分别为 `@iam/session-kernel/maintenance`（Kernel `storage/keys.ts`）、Grant `redis-store.ts`、OIDC `storage/redis-adapter.ts` 和
 `session/provider-session.ts`。命令只顺序清理这些键族，不调用外部 logout、不读取任意 cleanup ref；当前清单覆盖的外围状态
 一并删除，因此不会留下待恢复的本代 pending cleanup。若已部署版本存在清单外 cleanup adapter，必须先核对其 owner 并补齐流程，
 不能删除 pending marker 后声称清理完成。

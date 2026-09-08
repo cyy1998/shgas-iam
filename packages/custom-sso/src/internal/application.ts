@@ -1,0 +1,55 @@
+import type { CustomSsoDeps } from "../custom-sso.port";
+import type { AuthorizationGrantRedemption } from "../grant";
+import { createAuthorizeSsoUseCase } from "./authorize-sso/authorize-sso.use-case";
+import { createCustomSsoClientSecretVerifier } from "./client-secret-verifier";
+import { createCompleteSsoCallbackUseCase } from "./complete-sso-callback/complete-sso-callback.use-case";
+import { createExchangeSsoCodeUseCase } from "./exchange-sso-code/exchange-sso-code.use-case";
+import { createCheckSsoLoginContinuation } from "./login-continuation";
+import { createSsoRedirectUrlValidator } from "./redirect-url.validator";
+import { createCustomSsoSessionKernelAdapter } from "./session";
+import { createCustomSsoSubjectDelivery } from "./subject-delivery";
+import { createCustomSsoTrafficGate } from "./traffic-gate";
+
+export function createCustomSsoApplication(deps: Omit<CustomSsoDeps, "redis"> & { authorizationGrantRedemption: AuthorizationGrantRedemption }) {
+  const trafficGate = createCustomSsoTrafficGate({ gate: deps.traffic });
+  const redirectUrls = createSsoRedirectUrlValidator({ logger: deps.logger });
+  const sessions = createCustomSsoSessionKernelAdapter({
+    ...deps,
+    subjectDelivery: createCustomSsoSubjectDelivery({ projection: deps.subjectProjection }),
+    userService: deps.users,
+  });
+  const operationDeps = { authorizationGrants: sessions, clients: deps.clients, trafficGate };
+
+  async function authorizeLocalSession(token: string, clientCode: string) {
+    await trafficGate.assertSessionUseAllowed(clientCode);
+    return await sessions.authorizeLocalSession(token, clientCode);
+  }
+
+  async function resolvePublicAuthentication(token: string, clientCode: string) {
+    await trafficGate.assertSessionUseAllowed(clientCode);
+    return await sessions.resolvePublicAuthentication(token, clientCode);
+  }
+
+  return {
+    authorize: createAuthorizeSsoUseCase({ ...operationDeps, redirectUrls }),
+    checkLoginContinuation: createCheckSsoLoginContinuation({
+      clients: deps.clients,
+      principalSessions: sessions,
+      redirectUrls,
+      trafficGate,
+    }),
+    exchangeCode: createExchangeSsoCodeUseCase({
+      ...operationDeps,
+      clientCredentials: createCustomSsoClientSecretVerifier({ repository: deps.clientSecrets, secrets: deps.secrets }),
+    }),
+    completeCallback: createCompleteSsoCallbackUseCase(operationDeps),
+    authorizeLocalSession,
+    resolvePublicAuthentication,
+    logout: {
+      async execute(input: { sessionToken?: string }) {
+        await sessions.logout(input.sessionToken);
+        return true as const;
+      },
+    },
+  };
+}

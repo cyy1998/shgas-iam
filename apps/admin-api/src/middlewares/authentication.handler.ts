@@ -1,5 +1,5 @@
 import type { UserService } from "@admin-api/services/user/user.service";
-import type { SessionKernel } from "@iam/api-core/session/kernel";
+import type { SessionKernel } from "@iam/session-kernel";
 import type { Context, Next } from "hono";
 import { AuthzForbiddenError } from "@iam/api-core/errors/AuthzForbiddenError";
 import { AuthzUnauthorizedError } from "@iam/api-core/errors/AuthzUnauthorizedError";

@@ -8,8 +8,8 @@ import {
   createClientRuntimeSnapshotModule,
 } from "@iam/api-core/client-runtime-snapshot";
 import { hashSecret } from "@iam/api-core/security";
-import { createSessionKernelConfigFromEnv } from "@iam/api-core/session/kernel";
 import { generateRandomPassword } from "@iam/api-core/utils";
+import { createSessionKernelConfigFromEnv } from "@iam/session-kernel";
 import { hash } from "bcrypt-ts";
 import { createAdminClientCache } from "./client-cache";
 

@@ -13,6 +13,84 @@ afterEach(() => {
 });
 
 describe("repository architecture guard", () => {
+  test("keeps OIDC on independently loadable Custom SSO capabilities", () => {
+    const repoRoot = createFixtureRepository({
+      "apps/oidc-provider/src/composition/session/index.ts": [
+        "import { createCustomSsoCleanup } from \"@iam/custom-sso/cleanup\";",
+        "import { customSsoMaintenancePrefixes } from \"@iam/custom-sso/maintenance\";",
+        "import { createCustomSso } from \"@iam/custom-sso\";",
+      ].join("\n"),
+    });
+    expect(analyzeRepositoryArchitecture(repoRoot)).toEqual([{
+      ruleId: "session-runtime-owner",
+      file: "apps/oidc-provider/src/composition/session/index.ts",
+      line: 3,
+      message: "OIDC must consume only independent Custom SSO cleanup or maintenance, not \"@iam/custom-sso\".",
+    }]);
+  });
+  test("keeps Session Kernel independent of protocol and runtime owners", () => {
+    const repoRoot = createFixtureRepository({
+      "packages/session-kernel/src/facade.ts": [
+        "import { z } from \"zod\";",
+        "import { randomUUID } from \"node:crypto\";",
+        "import type { CleanupAdapter } from \"./cleanup/cleanup\";",
+        "import { SystemLogEvent } from \"@iam/api-core/logger\";",
+        "import type { CustomSso } from \"@iam/custom-sso\";",
+        "import { provider } from \"../../../apps/api/src/provider\";",
+      ].join("\n"),
+    });
+    expect(analyzeRepositoryArchitecture(repoRoot)).toEqual([
+      ...["@iam/api-core/logger", "@iam/custom-sso", "../../../apps/api/src/provider"].map((module, index) => ({
+        ruleId: "session-runtime-owner",
+        file: "packages/session-kernel/src/facade.ts",
+        line: index + 4,
+        message: `Session Kernel must not import runtime or protocol owner "${module}"; inject its external capabilities.`,
+      })),
+    ]);
+  });
+
+  test("keeps Projection independent of the Session Kernel runtime", () => {
+    const repoRoot = createFixtureRepository({
+      "packages/client-subject-projection/src/internal/projection.ts": "import type { SessionKernel } from \"@iam/session-kernel\";",
+      "packages/custom-sso/src/wire.ts": "import type { Projection } from \"@iam/client-subject-projection\";",
+    });
+    expect(analyzeRepositoryArchitecture(repoRoot)).toEqual([{
+      ruleId: "client-subject-projection-owner",
+      file: "packages/client-subject-projection/src/internal/projection.ts",
+      line: 1,
+      message: "Client Subject Projection implementation must not import runtime or protocol module \"@iam/session-kernel\"; "
+        + "depend on its injected facts and safety ports.",
+    }]);
+  });
+
+  test("keeps Custom SSO application independent of app providers and HTTP", () => {
+    const repoRoot = createFixtureRepository({
+      "packages/custom-sso/src/internal/application.ts": [
+        "import type { UserService } from \"@api/services/user/user.service\";",
+        "import type { Context } from \"hono\";",
+        "import type { CustomSsoDeps } from \"../custom-sso.port\";",
+        "import type { SessionKernel } from \"@iam/session-kernel\";",
+        "import type { CustomSsoClientRuntimeDto } from \"@iam/domain/client\";",
+      ].join("\n"),
+      "apps/api/src/composition/services/index.ts": "import { createCustomSso } from \"@iam/custom-sso\";",
+    });
+    expect(analyzeRepositoryArchitecture(repoRoot)).toEqual([
+      {
+        ruleId: "session-runtime-owner",
+        file: "packages/custom-sso/src/internal/application.ts",
+        line: 1,
+        message: "Custom SSO application must not import app provider or HTTP module \"@api/services/user/user.service\"; "
+          + "declare its outbound capability locally and inject it from composition.",
+      },
+      {
+        ruleId: "session-runtime-owner",
+        file: "packages/custom-sso/src/internal/application.ts",
+        line: 2,
+        message: "Custom SSO application must not import app provider or HTTP module \"hono\"; "
+          + "declare its outbound capability locally and inject it from composition.",
+      },
+    ]);
+  });
   test("reports locatable violations when a production port imports a concrete repository", () => {
     const repoRoot = createFixtureRepository({
       "apps/api/src/services/user/user.port.ts": [
@@ -253,8 +331,8 @@ describe("repository architecture guard", () => {
     const repoRoot = createFixtureRepository({
       "packages/client-subject-projection/src/internal/projection.ts":
         "import type { SubjectFactsPort } from \"../index.ts\";",
-      "packages/client-subject-projection/src/custom-sso.ts": [
-        "import type { ClientSubjectProjection } from \"./index.ts\";",
+      "packages/custom-sso/src/wire.ts": [
+        "import type { ClientSubjectProjection } from \"@iam/client-subject-projection\";",
         "export type { ClientSubjectProjectionService } from \"@iam/client-subject-projection\";",
       ].join("\n"),
     });
@@ -292,14 +370,14 @@ describe("repository architecture guard", () => {
     const repoRoot = createFixtureRepository({
       "packages/client-subject-projection/src/internal/catalog.ts":
         "import type { CookieOptions } from \"hono/cookie\";",
-      "packages/client-subject-projection/src/custom-sso.ts":
+      "packages/custom-sso/src/wire.ts":
         "import type { Context } from \"hono/types\";",
     });
 
     expect(analyzeRepositoryArchitecture(repoRoot)).toEqual([
       {
         ruleId: "client-subject-projection-owner",
-        file: "packages/client-subject-projection/src/custom-sso.ts",
+        file: "packages/custom-sso/src/wire.ts",
         line: 1,
         message: "Custom SSO wire adapter must not import facts persistence, configuration, runtime, "
           + "or transport module \"hono/types\"; "
@@ -312,7 +390,7 @@ describe("repository architecture guard", () => {
         message: "Client Subject Projection implementation must not import runtime or protocol module "
           + "\"hono/cookie\"; depend on its injected facts and safety ports.",
       },
-    ]);
+    ].sort((a, b) => a.file.localeCompare(b.file) || a.line - b.line));
   });
 
   test("matches blocked external package roots only at exact or slash-subpath boundaries", () => {
@@ -360,14 +438,14 @@ describe("repository architecture guard", () => {
         "import \"@iam/sso/pages/login\";",
         "import \"@iam/worker/queues\";",
       ].join("\n"),
-      "packages/client-subject-projection/src/custom-sso.ts":
+      "packages/custom-sso/src/wire.ts":
         "import \"@iam/gateway-apisix/planner\";",
     });
 
     expect(analyzeRepositoryArchitecture(repoRoot)).toEqual([
       {
         ruleId: "client-subject-projection-owner",
-        file: "packages/client-subject-projection/src/custom-sso.ts",
+        file: "packages/custom-sso/src/wire.ts",
         line: 1,
         message: "Custom SSO wire adapter must not import facts persistence, configuration, runtime, "
           + "or transport module \"@iam/gateway-apisix/planner\"; "
@@ -415,12 +493,12 @@ describe("repository architecture guard", () => {
         message: "Client Subject Projection implementation must not import runtime or protocol module "
           + "\"@iam/worker/queues\"; depend on its injected facts and safety ports.",
       },
-    ]);
+    ].sort((a, b) => a.file.localeCompare(b.file) || a.line - b.line));
   });
 
   test("keeps the Custom SSO wire mapper independent of facts and runtime owners", () => {
     const repoRoot = createFixtureRepository({
-      "packages/client-subject-projection/src/custom-sso.ts": [
+      "packages/custom-sso/src/wire.ts": [
         "import type { SubjectFactsReader } from \"@iam/user-profile-read-model/query\";",
         "import type { Context } from \"hono\";",
       ].join("\n"),
@@ -429,7 +507,7 @@ describe("repository architecture guard", () => {
     expect(analyzeRepositoryArchitecture(repoRoot)).toEqual([
       {
         ruleId: "client-subject-projection-owner",
-        file: "packages/client-subject-projection/src/custom-sso.ts",
+        file: "packages/custom-sso/src/wire.ts",
         line: 1,
         message: "Custom SSO wire adapter must not import facts persistence, configuration, runtime, "
           + "or transport module \"@iam/user-profile-read-model/query\"; "
@@ -437,7 +515,7 @@ describe("repository architecture guard", () => {
       },
       {
         ruleId: "client-subject-projection-owner",
-        file: "packages/client-subject-projection/src/custom-sso.ts",
+        file: "packages/custom-sso/src/wire.ts",
         line: 2,
         message: "Custom SSO wire adapter must not import facts persistence, configuration, runtime, "
           + "or transport module \"hono\"; "
@@ -446,11 +524,28 @@ describe("repository architecture guard", () => {
     ]);
   });
 
-  test("normalizes canonical self-imports before enforcing the Projection protocol edge", () => {
+  test("keeps the wire entry independent of protocol runtime and Kernel", () => {
+    for (const module of ["@iam/custom-sso", "./internal/application", "@iam/session-kernel", "ioredis"]) {
+      const repoRoot = createFixtureRepository({
+        "packages/custom-sso/src/wire.ts": `import "${module}";`,
+      });
+
+      expect(analyzeRepositoryArchitecture(repoRoot)).toEqual([{
+        ruleId: "client-subject-projection-owner",
+        file: "packages/custom-sso/src/wire.ts",
+        line: 1,
+        message: "Custom SSO wire adapter must not import facts persistence, configuration, runtime, "
+          + `or transport module "${module}"; `
+          + "depend only on the root public Client Subject Projection interface.",
+      }]);
+    }
+  });
+
+  test("normalizes canonical imports before enforcing the Projection protocol edge", () => {
     const repoRoot = createFixtureRepository({
       "packages/client-subject-projection/src/internal/projection.ts":
-        "import type { CustomSsoSubjectProjectionV1 } "
-        + "from \"@iam/client-subject-projection/custom-sso\";",
+        "import type { CustomSsoSubjectProjection } "
+        + "from \"@iam/custom-sso/wire\";",
     });
 
     expect(analyzeRepositoryArchitecture(repoRoot)).toEqual([
@@ -459,7 +554,7 @@ describe("repository architecture guard", () => {
         file: "packages/client-subject-projection/src/internal/projection.ts",
         line: 1,
         message: "Client Subject Projection implementation must not import runtime or protocol module "
-          + "\"@iam/client-subject-projection/custom-sso\"; "
+          + "\"@iam/custom-sso/wire\"; "
           + "depend on its injected facts and safety ports.",
       },
     ]);
@@ -467,16 +562,16 @@ describe("repository architecture guard", () => {
 
   test("keeps the Custom SSO wire mapper on the root public Projection interface", () => {
     const repoRoot = createFixtureRepository({
-      "packages/client-subject-projection/src/custom-sso.ts":
-        "import { SUBJECT_CLAIM_CATALOG_V1 } from \"./catalog.ts\";",
+      "packages/custom-sso/src/wire.ts":
+        "import { SUBJECT_CLAIM_CATALOG } from \"@iam/client-subject-projection/internal/catalog\";",
     });
 
     expect(analyzeRepositoryArchitecture(repoRoot)).toEqual([
       {
         ruleId: "client-subject-projection-owner",
-        file: "packages/client-subject-projection/src/custom-sso.ts",
+        file: "packages/custom-sso/src/wire.ts",
         line: 1,
-        message: "Custom SSO wire adapter must not import non-root Projection module \"./catalog.ts\"; "
+        message: "Custom SSO wire adapter must not import non-root Projection module \"@iam/client-subject-projection/internal/catalog\"; "
           + "depend only on the root public Client Subject Projection interface.",
       },
     ]);
@@ -487,19 +582,19 @@ describe("repository architecture guard", () => {
       "packages/client-subject-projection/src/internal/projection.ts": [
         "import type { Context } from \"hono\";",
         "import type { UserProfileQuery } from \"@iam/user-profile-read-model/query\";",
-        "import type { CustomSsoSubjectProjectionV1 } from \"../custom-sso.ts\";",
+        "import type { CustomSsoSubjectProjection } from \"../../../custom-sso/src/wire.ts\";",
       ].join("\n"),
-      "packages/client-subject-projection/src/custom-sso.ts":
-        "import { createClientSubjectProjectionService } from \"./internal/client-subject-projection.ts\";",
+      "packages/custom-sso/src/wire.ts":
+        "import { createClientSubjectProjectionService } from \"../../client-subject-projection/src/internal/projection.ts\";",
     });
 
     expect(analyzeRepositoryArchitecture(repoRoot)).toEqual([
       {
         ruleId: "client-subject-projection-owner",
-        file: "packages/client-subject-projection/src/custom-sso.ts",
+        file: "packages/custom-sso/src/wire.ts",
         line: 1,
         message: "Custom SSO wire adapter must not import non-root Projection module "
-          + "\"./internal/client-subject-projection.ts\"; "
+          + "\"../../client-subject-projection/src/internal/projection.ts\"; "
           + "depend only on the root public Client Subject Projection interface.",
       },
       {
@@ -521,27 +616,27 @@ describe("repository architecture guard", () => {
         file: "packages/client-subject-projection/src/internal/projection.ts",
         line: 3,
         message: "Client Subject Projection implementation must not import runtime or protocol module "
-          + "\"../custom-sso.ts\"; depend on its injected facts and safety ports.",
+          + "\"../../../custom-sso/src/wire.ts\"; depend on its injected facts and safety ports.",
       },
-    ]);
+    ].sort((a, b) => a.file.localeCompare(b.file) || a.line - b.line));
   });
 
   test("keeps Custom SSO routes and use cases behind session runtime interfaces", () => {
     const repoRoot = createFixtureRepository({
       "apps/api/src/routes/sso/sso.handlers.ts": [
-        "import type { SessionKernel } from \"@iam/api-core/session/kernel.ts\";",
+        "import type { SessionKernel } from \"@iam/session-kernel.ts\";",
         "import type { RedisPort } from \"@api/lib/infra/redis\";",
       ].join("\n"),
       "apps/api/src/use-cases/sso/exchange-sso-code/exchange-sso-code.use-case.ts": [
-        "import type { SessionService } from \"@iam/api-core/session\";",
+        "import type { SessionService } from \"@iam/session-kernel\";",
         "import type { CustomSsoSessionKernelAdapter } "
-        + "from \"@api/services/session/custom-sso-session-kernel.adapter.ts\";",
+        + "from \"@iam/custom-sso/internal/session.ts\";",
         "import type { OrcasClient } from \"@api/lib/integrations/orcas\";",
       ].join("\n"),
       "apps/api/src/composition/services/index.ts": [
-        "import { createSessionKernel } from \"@iam/api-core/session/kernel\";",
+        "import { createSessionKernel } from \"@iam/session-kernel\";",
         "import { createCustomSsoSessionKernelAdapter } "
-        + "from \"@api/services/session/custom-sso-session-kernel.adapter\";",
+        + "from \"@iam/custom-sso/internal/session\";",
         "import redis from \"@api/lib/infra/redis\";",
         "import { createOrcasClient } from \"@api/lib/integrations/orcas\";",
       ].join("\n"),
@@ -553,7 +648,7 @@ describe("repository architecture guard", () => {
         file: "apps/api/src/routes/sso/sso.handlers.ts",
         line: 1,
         message: "Custom SSO routes and use cases must not import session runtime module "
-          + "\"@iam/api-core/session/kernel.ts\"; depend on their injected application interface.",
+          + "\"@iam/session-kernel.ts\"; depend on their injected application interface.",
       },
       {
         ruleId: "session-runtime-owner",
@@ -567,14 +662,14 @@ describe("repository architecture guard", () => {
         file: "apps/api/src/use-cases/sso/exchange-sso-code/exchange-sso-code.use-case.ts",
         line: 1,
         message: "Custom SSO routes and use cases must not import session runtime module "
-          + "\"@iam/api-core/session\"; depend on their injected application interface.",
+          + "\"@iam/session-kernel\"; depend on their injected application interface.",
       },
       {
         ruleId: "session-runtime-owner",
         file: "apps/api/src/use-cases/sso/exchange-sso-code/exchange-sso-code.use-case.ts",
         line: 2,
         message: "Custom SSO routes and use cases must not import session runtime module "
-          + "\"@api/services/session/custom-sso-session-kernel.adapter.ts\"; "
+          + "\"@iam/custom-sso/internal/session.ts\"; "
           + "depend on their injected application interface.",
       },
       {
@@ -595,15 +690,15 @@ describe("repository architecture guard", () => {
         "import type { Redis } from \"@admin-api/lib/infra/redis\";",
       ].join("\n"),
       "apps/admin-api/src/services/user/user.service.ts": [
-        "import type { SessionKernel } from \"@iam/api-core/session/kernel\";",
-        "import type { SessionKernelKey } from \"@iam/api-core/session/kernel/keys.ts\";",
+        "import type { SessionKernel } from \"@iam/session-kernel\";",
+        "import type { SessionKernelKey } from \"@iam/session-kernel/keys.ts\";",
         "import type { CustomSsoSessionAdapter } "
         + "from \"@admin-api/services/session/custom-sso-session-kernel.adapter\";",
       ].join("\n"),
       "apps/admin-api/src/services/session-revocation/session-revocation.port.ts":
-        "import type { SessionKernel } from \"@iam/api-core/session/kernel\";",
+        "import type { SessionKernel } from \"@iam/session-kernel\";",
       "apps/admin-api/src/composition/session/index.ts": [
-        "import { createSessionKernel } from \"@iam/api-core/session/kernel\";",
+        "import { createSessionKernel } from \"@iam/session-kernel\";",
         "import redis from \"@admin-api/lib/infra/redis\";",
       ].join("\n"),
     });
@@ -629,14 +724,14 @@ describe("repository architecture guard", () => {
         file: "apps/admin-api/src/services/user/user.service.ts",
         line: 1,
         message: "Admin user and client services must not import session runtime module "
-          + "\"@iam/api-core/session/kernel\"; depend on the consumer-owned Session Revocation port.",
+          + "\"@iam/session-kernel\"; depend on the consumer-owned Session Revocation port.",
       },
       {
         ruleId: "session-runtime-owner",
         file: "apps/admin-api/src/services/user/user.service.ts",
         line: 2,
         message: "Admin user and client services must not import session runtime module "
-          + "\"@iam/api-core/session/kernel/keys.ts\"; depend on the consumer-owned Session Revocation port.",
+          + "\"@iam/session-kernel/keys.ts\"; depend on the consumer-owned Session Revocation port.",
       },
       {
         ruleId: "session-runtime-owner",
@@ -721,12 +816,12 @@ describe("repository architecture guard", () => {
       "apps/oidc-provider/src/provider/middleware.ts": [
         "import { createClientAuthRateLimiter } from \"../security/client-auth-rate-limit.ts\";",
         "import { createOidcClientSecretVerifier } from \"../security/client-secret-verifier.ts\";",
-        "import { createSessionKernel } from \"@iam/api-core/session/kernel\";",
+        "import { createSessionKernel } from \"@iam/session-kernel\";",
       ].join("\n"),
       "apps/oidc-provider/src/interaction/handler.ts":
         "import { createOidcSessionKernelAdapter } from \"../session/oidc-session-kernel.adapter.ts\";",
       "apps/oidc-provider/src/session/oidc-session-kernel.adapter.ts":
-        "import { sessionOk } from \"@iam/api-core/session/kernel\";",
+        "import { sessionOk } from \"@iam/session-kernel\";",
       "apps/oidc-provider/src/composition/repositories/index.ts":
         "import { createOidcAccountRepository } from \"../../repositories/account.repository.ts\";",
       "apps/oidc-provider/src/composition/provider/index.ts":
@@ -737,8 +832,9 @@ describe("repository architecture guard", () => {
         "import { createClientAuthRateLimiter } from \"../../security/client-auth-rate-limit.ts\";",
         "import { createOidcClientSecretVerifier } from \"../../security/client-secret-verifier.ts\";",
       ].join("\n"),
+      "apps/oidc-provider/src/env.ts": "import { DEFAULT_SESSION_LOOKUP_HMAC_CURRENT_ID } from \"@iam/session-kernel\";",
       "apps/oidc-provider/src/composition/session/index.ts": [
-        "import { createSessionKernel } from \"@iam/api-core/session/kernel\";",
+        "import { createSessionKernel } from \"@iam/session-kernel\";",
         "import { createOidcSessionKernelAdapter } from \"../../session/oidc-session-kernel.adapter.ts\";",
       ].join("\n"),
     });
@@ -783,8 +879,8 @@ describe("repository architecture guard", () => {
         ruleId: "session-runtime-owner",
         file: "apps/oidc-provider/src/provider/middleware.ts",
         line: 3,
-        message: "Only OIDC session composition and its Kernel adapter may value-import Session Kernel module "
-          + "\"@iam/api-core/session/kernel\".",
+        message: "Only OIDC environment configuration, session composition and its Kernel adapter may value-import Session Kernel module "
+          + "\"@iam/session-kernel\".",
       },
     ]);
   });

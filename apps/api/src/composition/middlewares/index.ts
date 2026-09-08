@@ -13,10 +13,10 @@ export interface CreateApiMiddlewaresOptions {
 export async function createApiMiddlewares(options: CreateApiMiddlewaresOptions): Promise<CreateAppOptions["middlewares"]> {
   const authenticationHandlers = createApiAuthenticationHandlers({
     clientService: options.services.client,
-    customSsoSession: options.services.customSsoSession,
+    customSsoSession: options.services.customSso,
     subjectDeliveryRequests:
       options.services.customSsoSubjectDeliveryRequests,
-    trafficGate: options.services.customSsoTrafficGate,
+
     config: {
       projectionRetryAfterSeconds:
         options.runtime.config.env.sso.projectionRetryAfterSeconds,

@@ -2,8 +2,6 @@ import { createSsoHandlers } from "@api/routes/sso/sso.handlers";
 import {
   CustomSsoClientRuntimeUnavailableError,
 } from "@api/services/client/custom-sso-client-runtime.reader";
-import { PrincipalSessionInspectionUnavailableError } from "@api/services/session/principal-session-inspection.error";
-import { createAuthorizeSsoUseCase } from "@api/use-cases/sso/authorize-sso/authorize-sso.use-case";
 import { AuthzMaintenanceError } from "@iam/api-core/errors/AuthzMaintenanceError";
 import { createErrorHandler } from "@iam/api-core/middlewares";
 import {
@@ -12,13 +10,15 @@ import {
 } from "@iam/api-core/subject-access";
 import { SubjectProjectionNotReadyError } from "@iam/client-subject-projection";
 import {
-  CustomSsoSubjectProjectionInvariantError,
-} from "@iam/client-subject-projection/custom-sso";
-import {
   ApiErrorCode,
   CustomSsoClientMode,
   LoginPageGuardDecision,
 } from "@iam/contracts";
+import { PrincipalSessionInspectionUnavailableError } from "@iam/custom-sso";
+import { createAuthorizeSsoUseCase } from "@iam/custom-sso/testing";
+import {
+  CustomSsoSubjectProjectionInvariantError,
+} from "@iam/custom-sso/wire";
 import { beforeEach, describe, expect, mock, test } from "bun:test";
 import { Hono } from "hono";
 
@@ -81,9 +81,11 @@ function createHandlers(
       completeCallback: { execute: callback },
       exchangeCode: { execute: setToken },
       checkLoginContinuation: { execute: checkLoginContinuation },
+      logout: { execute: logout },
+    },
+    authentication: {
       loginWithOa: { execute: loginOA },
       loginWithWechat: { execute: loginWX },
-      logout: { execute: logout },
     },
     config: {
       authCodeExpireSeconds: 60,

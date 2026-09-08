@@ -41,9 +41,6 @@ function createContractApp() {
       })),
     },
     logger,
-    trafficGate: {
-      assertSessionUseAllowed: async () => undefined,
-    },
     config: {
       projectionRetryAfterSeconds: 3,
       redisExpireSeconds: 3600,

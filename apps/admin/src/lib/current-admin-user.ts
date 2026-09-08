@@ -1,4 +1,4 @@
-import type { CustomSsoSubjectProjection } from '@iam/client-subject-projection/custom-sso';
+import type { CustomSsoSubjectProjection } from '@iam/custom-sso/wire';
 
 export type CurrentAdminUser = {
   username: string;

@@ -42,6 +42,8 @@ const postgresIntegrationPassThroughEnv = [
 const redisIntegrationPassThroughEnv = [
   "IAM_ADMIN_API_TEST_REDIS_URL",
   "IAM_API_CORE_TEST_REDIS_URL",
+  "IAM_SESSION_KERNEL_TEST_REDIS_URL",
+  "IAM_CUSTOM_SSO_TEST_REDIS_URL",
   "IAM_API_TEST_REDIS_URL",
   "IAM_OIDC_PROVIDER_TEST_REDIS_URL",
   "IAM_USER_PROFILE_TEST_REDIS_URL",
@@ -74,6 +76,8 @@ const pnpmRecorderControlEnvNames = [
 ] as const;
 const integrationResourceEnvNames = [
   "IAM_API_CORE_TEST_REDIS_URL",
+  "IAM_SESSION_KERNEL_TEST_REDIS_URL",
+  "IAM_CUSTOM_SSO_TEST_REDIS_URL",
   "IAM_ADMIN_API_TEST_REDIS_URL",
   "IAM_ADMIN_API_TEST_DATABASE_URL",
   "IAM_API_TEST_DATABASE_URL",
@@ -1068,7 +1072,6 @@ describe("test orchestration", () => {
       {
         root: join(repoRoot, "packages", "client-subject-projection"),
         scripts: {
-          "test:unit": "bun test --max-concurrency=2 src",
           "test:integration:component": "bun test --max-concurrency=2 test-integration/component",
         },
       },

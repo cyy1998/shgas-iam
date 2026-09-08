@@ -1,4 +1,4 @@
-import type { SessionKernelRedis } from "@iam/api-core/session/kernel";
+import type { SessionKernelRedis } from "@iam/session-kernel";
 import type { AdminApiRuntimePorts } from "../runtime";
 import { createAdminSessionRevocationLogger } from "@admin-api/services/session-revocation/session-revocation.logger";
 import { createAdminSessionRevocationPort } from "@admin-api/services/session-revocation/session-revocation.port";
@@ -7,7 +7,6 @@ import {
   createLoginRestriction,
   createRedisLoginRestrictionStore,
 } from "@iam/api-core/login-restriction";
-import { createSessionKernel } from "@iam/api-core/session/kernel";
 import {
   createRedisSubjectAccessStore,
   createSubjectAccessBarrier,
@@ -15,6 +14,7 @@ import {
   createSubjectAccessPrincipalValidator,
 } from "@iam/api-core/subject-access";
 import db from "@iam/db";
+import { createSessionKernel } from "@iam/session-kernel";
 import { createSubjectAccessTransitionRepository } from "@iam/user-profile-read-model/subject-access-transition";
 
 export interface CreateAdminApiSessionOptions {

@@ -1,7 +1,7 @@
 import type { OwnedStateRedis } from "@iam/api-core/utils/redis-owned-state-maintenance";
-import { AUTHORIZATION_GRANT_REDEMPTION_KEY_PREFIX } from "@iam/api-core/authorization-grant";
-import { sessionKernelMaintenancePrefixes } from "@iam/api-core/session/kernel";
 import { maintainOwnedRedisState } from "@iam/api-core/utils/redis-owned-state-maintenance";
+import { customSsoMaintenancePrefixes } from "@iam/custom-sso/maintenance";
+import { sessionKernelMaintenancePrefixes } from "@iam/session-kernel/maintenance";
 import { providerSessionMaintenancePrefixes } from "../../session/provider-session.ts";
 import { oidcObjectMaintenanceOwner } from "../stores/online-auth-state.ts";
 
@@ -21,7 +21,7 @@ export async function maintainOnlineAuthState(options: {
     // Delete all online authority first, then its protocol state. No index is trusted as inventory.
     const owners = [
       { owner: "kernel", prefixes: sessionKernelMaintenancePrefixes(options.kernelNamespace) },
-      { owner: "grant", prefixes: [AUTHORIZATION_GRANT_REDEMPTION_KEY_PREFIX] },
+      { owner: "grant", prefixes: customSsoMaintenancePrefixes() },
       oidcObjectMaintenanceOwner(),
       { owner: "providerSession", prefixes: providerSessionMaintenancePrefixes() },
     ];

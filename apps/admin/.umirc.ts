@@ -11,6 +11,10 @@ export default defineConfig({
       '../../packages/client-subject-projection/src',
     ),
     '@iam/contracts': resolve(__dirname, '../../packages/contracts/src'),
+    '@iam/custom-sso/wire': resolve(
+      __dirname,
+      '../../packages/custom-sso/src/wire.ts',
+    ),
     '~admin': __dirname,
   },
   base: '/iam-admin',

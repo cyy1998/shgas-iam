@@ -37,6 +37,9 @@ importers:
 
   apps/admin:
     dependencies:
+      '@iam/custom-sso':
+        specifier: workspace:*
+        version: link:../../packages/custom-sso
       '@ant-design/icons':
         specifier: ^6.3.2
         version: 6.3.2(react-dom@19.2.7(react@19.2.7))(react@19.2.7)
@@ -140,6 +143,9 @@ importers:
 
   apps/admin-api:
     dependencies:
+      '@iam/session-kernel':
+        specifier: workspace:*
+        version: link:../../packages/session-kernel
       '@hono/zod-openapi':
         specifier: ^1.5.1
         version: 1.5.1(hono@4.12.30)(zod@4.4.3)
@@ -213,6 +219,12 @@ importers:
 
   apps/api:
     dependencies:
+      '@iam/custom-sso':
+        specifier: workspace:*
+        version: link:../../packages/custom-sso
+      '@iam/session-kernel':
+        specifier: workspace:*
+        version: link:../../packages/session-kernel
       '@cap.js/server':
         specifier: ^4.0.5
         version: 4.0.5
@@ -310,6 +322,12 @@ importers:
 
   apps/oidc-provider:
     dependencies:
+      '@iam/custom-sso':
+        specifier: workspace:*
+        version: link:../../packages/custom-sso
+      '@iam/session-kernel':
+        specifier: workspace:*
+        version: link:../../packages/session-kernel
       '@iam/api-core':
         specifier: workspace:*
         version: link:../../packages/api-core
@@ -380,15 +398,15 @@ importers:
 
   apps/sso:
     dependencies:
+      '@iam/custom-sso':
+        specifier: workspace:*
+        version: link:../../packages/custom-sso
       '@ant-design/cssinjs':
         specifier: ^2.1.2
         version: 2.1.2(react-dom@19.2.7(react@19.2.7))(react@19.2.7)
       '@ant-design/icons':
         specifier: ^6.3.2
         version: 6.3.2(react-dom@19.2.7(react@19.2.7))(react@19.2.7)
-      '@iam/client-subject-projection':
-        specifier: workspace:*
-        version: link:../../packages/client-subject-projection
       '@iam/contracts':
         specifier: workspace:*
         version: link:../../packages/contracts
@@ -603,6 +621,9 @@ importers:
 
   packages/api-core:
     dependencies:
+      '@iam/session-kernel':
+        specifier: workspace:*
+        version: link:../session-kernel
       '@hono/zod-openapi':
         specifier: ^1.5.1
         version: 1.5.1(hono@4.12.30)(zod@4.4.3)
@@ -668,6 +689,46 @@ importers:
         specifier: ^4.4.3
         version: 4.4.3
     devDependencies:
+      '@iam/eslint-config':
+        specifier: workspace:*
+        version: link:../eslint-config
+      '@types/bun':
+        specifier: latest
+        version: 1.3.14
+      '@typescript/native':
+        specifier: npm:typescript@7.0.2
+        version: typescript@7.0.2
+      eslint:
+        specifier: ^10.7.0
+        version: 10.7.0(jiti@2.7.0)
+      typescript:
+        specifier: npm:@typescript/typescript6@6.0.2
+        version: '@typescript/typescript6@6.0.2'
+
+  packages/custom-sso:
+    dependencies:
+      '@iam/api-core':
+        specifier: workspace:*
+        version: link:../api-core
+      '@iam/domain':
+        specifier: workspace:*
+        version: link:../domain
+      '@iam/session-kernel':
+        specifier: workspace:*
+        version: link:../session-kernel
+      '@iam/client-subject-projection':
+        specifier: workspace:*
+        version: link:../client-subject-projection
+      '@iam/contracts':
+        specifier: workspace:*
+        version: link:../contracts
+      zod:
+        specifier: ^4.4.3
+        version: 4.4.3
+    devDependencies:
+      ioredis:
+        specifier: ^5.11.1
+        version: 5.11.1
       '@iam/eslint-config':
         specifier: workspace:*
         version: link:../eslint-config
@@ -909,6 +970,31 @@ importers:
       postgres:
         specifier: ^3.4.9
         version: 3.4.9
+      typescript:
+        specifier: npm:@typescript/typescript6@6.0.2
+        version: '@typescript/typescript6@6.0.2'
+
+  packages/session-kernel:
+    dependencies:
+      zod:
+        specifier: ^4.4.3
+        version: 4.4.3
+    devDependencies:
+      '@iam/eslint-config':
+        specifier: workspace:*
+        version: link:../eslint-config
+      '@types/bun':
+        specifier: latest
+        version: 1.3.14
+      '@typescript/native':
+        specifier: npm:typescript@7.0.2
+        version: typescript@7.0.2
+      eslint:
+        specifier: ^10.7.0
+        version: 10.7.0(jiti@2.7.0)
+      ioredis:
+        specifier: ^5.11.1
+        version: 5.11.1
       typescript:
         specifier: npm:@typescript/typescript6@6.0.2
         version: '@typescript/typescript6@6.0.2'

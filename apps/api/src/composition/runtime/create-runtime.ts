@@ -7,7 +7,7 @@ import { createOrcasClient } from "@api/lib/integrations/orcas";
 import { createSmsClient } from "@api/lib/integrations/sms";
 import { createWechatClient } from "@api/lib/integrations/wechat";
 import { logger } from "@api/lib/logger";
-import { createSessionKernelConfigFromEnv } from "@iam/api-core/session/kernel";
+import { createSessionKernelConfigFromEnv } from "@iam/session-kernel";
 import { createApiPasswordHasher } from "./password-hasher";
 
 export interface CreateApiRuntimeOptions {

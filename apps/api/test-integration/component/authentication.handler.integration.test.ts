@@ -5,16 +5,13 @@ import {
   mapCustomSsoRetryableError,
 } from "@api/middlewares/custom-sso-retryable.error";
 import {
-  CustomSsoClientDeliveryUnauthorizedError,
-} from "@api/services/sso/subject-delivery/custom-sso-client-delivery.error";
-import {
   createCustomSsoSubjectDeliveryRequestScope,
 } from "@api/services/sso/subject-delivery/custom-sso-subject-delivery-request-scope";
-import { createCustomSsoTrafficGate } from "@api/services/sso/traffic-gate/custom-sso-traffic-gate";
 import {
   customSsoLocalSessionCookieName,
   encodeCustomSsoClientCode,
 } from "@api/services/sso/transport/custom-sso-client-code.transport";
+import { AuthzMaintenanceError } from "@iam/api-core/errors/AuthzMaintenanceError";
 import { AuthzUnauthorizedError } from "@iam/api-core/errors/AuthzUnauthorizedError";
 import { createErrorHandler } from "@iam/api-core/middlewares/error-handler";
 import {
@@ -24,6 +21,9 @@ import {
 } from "@iam/api-core/subject-access";
 import { SubjectProjectionNotReadyError } from "@iam/client-subject-projection";
 import { ApiErrorCode } from "@iam/contracts";
+import {
+  CustomSsoClientDeliveryUnauthorizedError,
+} from "@iam/custom-sso";
 import { describe, expect, mock, test } from "bun:test";
 import { Hono } from "hono";
 
@@ -34,16 +34,13 @@ type AuthenticationHandlerDeps = Parameters<
 function createApiAuthenticationHandlers(
   deps: Omit<
     AuthenticationHandlerDeps,
-    "subjectDeliveryRequests" | "trafficGate"
-  > & Pick<Partial<AuthenticationHandlerDeps>, "trafficGate">,
+    "subjectDeliveryRequests"
+  >,
 ) {
   return createApiAuthenticationHandlersImpl({
     ...deps,
     subjectDeliveryRequests:
       createCustomSsoSubjectDeliveryRequestScope(),
-    trafficGate: deps.trafficGate ?? {
-      assertSessionUseAllowed: async () => undefined,
-    },
   });
 }
 
@@ -76,17 +73,14 @@ function createMockLogger() {
 }
 
 describe("publicAuthenticationHandler", () => {
-  test("returns AUTH.MAINTENANCE without resolving or clearing a local session", async () => {
+  test("returns AUTH.MAINTENANCE without clearing a local session", async () => {
     const logger = createMockLogger();
     const resolvePublicAuthentication = mock(async () => {
-      throw new Error("session should not be resolved");
+      throw new AuthzMaintenanceError();
     });
     const handlers = createApiAuthenticationHandlers({
       clientService: { getClientBySecret: mock(async () => null) },
       customSsoSession: { resolvePublicAuthentication },
-      trafficGate: createCustomSsoTrafficGate({
-        gate: { check: async () => ({ outcome: "maintenance" }) },
-      }),
       config: { projectionRetryAfterSeconds: 3 },
     });
     const app = new Hono();
@@ -107,7 +101,7 @@ describe("publicAuthenticationHandler", () => {
       code: ApiErrorCode.Maintenance,
     });
     expect(response.headers.getSetCookie()).toEqual([]);
-    expect(resolvePublicAuthentication).not.toHaveBeenCalled();
+    expect(resolvePublicAuthentication).toHaveBeenCalledTimes(1);
   });
 
   test("returns bad request when Client header is missing", async () => {
@@ -118,7 +112,7 @@ describe("publicAuthenticationHandler", () => {
       },
       customSsoSession: {
         resolvePublicAuthentication: mock(async () => {
-          throw new Error("session should not be resolved");
+          throw new AuthzMaintenanceError();
         }),
       },
       config: { projectionRetryAfterSeconds: 3 },
@@ -147,7 +141,7 @@ describe("publicAuthenticationHandler", () => {
   test("rejects out-of-range client codes before resolving a session", async () => {
     const logger = createMockLogger();
     const resolvePublicAuthentication = mock(async () => {
-      throw new Error("session should not be resolved");
+      throw new AuthzMaintenanceError();
     });
     const handlers = createApiAuthenticationHandlers({
       clientService: {
@@ -388,9 +382,6 @@ describe("publicAuthenticationHandler", () => {
         })),
       },
       subjectDeliveryRequests,
-      trafficGate: {
-        assertSessionUseAllowed: async () => undefined,
-      },
       config: { projectionRetryAfterSeconds: 3 },
     });
     let downstreamContext: object | undefined;

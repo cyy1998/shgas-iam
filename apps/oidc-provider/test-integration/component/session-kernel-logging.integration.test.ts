@@ -1,8 +1,8 @@
-import { LoggerSourceApp, SystemLogEvent } from "@iam/api-core/logger";
+import { LoggerSourceApp } from "@iam/api-core/logger";
 import {
   createSessionKernelConfig,
-} from "@iam/api-core/session/kernel";
-import { createSessionKernelForTesting } from "@iam/api-core/session/kernel/testing";
+} from "@iam/session-kernel";
+import { createSessionKernelForTesting } from "@iam/session-kernel/testing";
 import { describe, expect, it } from "vitest";
 import {
   createOidcSessionKernelCleanupAdapter,
@@ -68,7 +68,7 @@ describe("oidc Session Kernel release logging", () => {
     await expect(kernel.consumeProtocolArtifact(code)).resolves.toMatchObject({ status: "consumed_replay" });
 
     const output = JSON.stringify(logs);
-    expect(output).toContain(SystemLogEvent.SessionKernelTombstoneReplayDetected);
+    expect(output).toContain("session_kernel.tombstone_replay.detected");
     expect(output).toContain(LoggerSourceApp.OidcProvider);
     expect(output).toContain("authorization_code");
     expect(output).not.toContain(code);
@@ -105,7 +105,7 @@ describe("oidc Session Kernel release logging", () => {
     await kernel.revokeCredential(credential.value.credentialId, "admin_revoke");
 
     const output = JSON.stringify(logs);
-    expect(output).toContain(SystemLogEvent.SessionKernelRevokeCleanupFailed);
+    expect(output).toContain("session_kernel.revoke.cleanup_failed");
     expect(output).toContain(LoggerSourceApp.OidcProvider);
     expect(output).toContain("public-client");
     expect(output).not.toContain(tokenRef);

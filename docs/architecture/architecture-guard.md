@@ -99,15 +99,14 @@ Architecture Guard 只覆盖仓库规范的静态写法。对同一依赖边采�
 - `dependency-direction`
 - `role-resolution-owner`
 - `user-profile-owner`
-- `session-runtime-owner`，可包含 Custom SSO、Session Revocation 与 OIDC 的 module dependency owner
+- `session-runtime-owner`，包含 Session Kernel 不依赖 API Core、Custom SSO 与 app 的 owner 边界、Custom SSO 包不得依赖 app provider/HTTP/数据库实例、OIDC 仅消费独立 Custom SSO cleanup/maintenance，以及 Session Revocation 与 OIDC 的 module dependency owner
 - `worker-ownership`
 - `docker-build-closure`
 
-`client-subject-projection-owner` 只观察 package 内 production source path 与规范静态依赖。除 Custom SSO wire 和普通测试外，
-Projection core 全部受保护，不能反向依赖 client 协议配置、数据库、User Profile
-implementation、shared provider DTO、app/Gateway runtime 或协议 transport，也不能依赖协议 wire surface。Custom
-SSO wire mapper 只能从 package root public Projection Interface 取得 core 类型或能力，不能直接依赖其他 core
-subpath、Facts persistence、client 配置、runtime 或 transport。该 package 的 canonical subpath 与
+`client-subject-projection-owner` 只观察 package 内 production source path 与规范静态依赖。除普通测试外，Projection core 全部受保护，不能反向依赖 client 协议配置、数据库、User Profile
+implementation、shared provider DTO、app/Gateway runtime 或协议 transport，也不能依赖 Custom SSO 协议包。Custom
+SSO 的 `packages/custom-sso/src/wire.ts` 只能从 package root public Projection Interface 取得 core 类型或能力，不能直接依赖其他 core
+subpath、Facts persistence、client 配置、runtime、transport 或本包服务端入口。两个 package 的 canonical subpath 与
 repository-relative path 使用同一 production-source owner 判断；全部 app 与 Gateway workspace manifest 中的
 canonical package name 均映射到各自 production source owner。Package exports、结构兼容与投影/wire 语义分别由
 typecheck 和公开 contract tests 证明。

@@ -1,4 +1,4 @@
-import { DEFAULT_SESSION_LOOKUP_HMAC_CURRENT_SECRET } from "@iam/api-core/session/kernel";
+import { DEFAULT_SESSION_LOOKUP_HMAC_CURRENT_SECRET } from "@iam/session-kernel";
 import { beforeAll, describe, expect, test } from "bun:test";
 
 type ParseApiEnv = typeof import("../env").parseApiEnv;

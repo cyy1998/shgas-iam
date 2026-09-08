@@ -1,5 +1,5 @@
 import type { UserDetailDto } from "@admin-api/services/user/user.type";
-import type { PrincipalSession } from "@iam/api-core/session/kernel";
+import type { PrincipalSession } from "@iam/session-kernel";
 import { createAdminAuthenticationHandlers } from "@admin-api/middlewares/authentication.handler";
 import { SubjectAccessUnavailableError } from "@iam/api-core/subject-access";
 import { UserStatus, UserType } from "@iam/contracts";

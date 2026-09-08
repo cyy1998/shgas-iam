@@ -1,4 +1,4 @@
-import { createLoginWithOaUseCase } from "@api/use-cases/sso/login-with-oa/login-with-oa.use-case";
+import { createLoginWithOaUseCase } from "@api/use-cases/authentication/login-with-oa/login-with-oa.use-case";
 import { UserType } from "@iam/contracts";
 import { expect, mock, test } from "bun:test";
 

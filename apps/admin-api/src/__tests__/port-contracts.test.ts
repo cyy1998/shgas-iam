@@ -51,8 +51,8 @@ import type {
 import type { CreateOrganizationResponsibilityAssignmentTransactionPorts } from "@admin-api/use-cases/organization-responsibility/create-assignment/create-assignment.port";
 import type { ManageOrganizationResponsibilityAssignmentLifecycleTransactionPorts } from "@admin-api/use-cases/organization-responsibility/manage-assignment-lifecycle/manage-assignment-lifecycle.port";
 import type { LoginRestriction } from "@iam/api-core/login-restriction";
-import type { SessionKernel } from "@iam/api-core/session/kernel";
 import type { RoleAssignmentResolver } from "@iam/role-assignment-resolution";
+import type { SessionKernel } from "@iam/session-kernel";
 import { expect, test } from "bun:test";
 
 function assertAssignable<Port, _Provider extends Port>() {}

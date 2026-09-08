@@ -1,7 +1,7 @@
 import type {
   SessionKernelRedis,
   SessionKernelValidationHooks,
-} from "@iam/api-core/session/kernel";
+} from "@iam/session-kernel";
 import type { Redis } from "ioredis";
 import type { OidcProviderEnv } from "../../env.ts";
 import type { OidcLogger } from "../../lib/logger.ts";
@@ -9,20 +9,17 @@ import type { ProviderSessionStateRedis } from "../../session/provider-session-s
 import type { OidcProviderRepositories } from "../repositories/index.ts";
 import type { OidcProviderStores } from "../stores/index.ts";
 import { randomUUID } from "node:crypto";
-import {
-  createAuthorizationGrantRedemptionCleanupAdapter,
-  createRedisAuthorizationGrantRedemptionStore,
-} from "@iam/api-core/authorization-grant";
 import { LoggerSourceApp } from "@iam/api-core/logger";
-import {
-  createSessionKernel,
-  createSessionKernelConfigFromEnv,
-} from "@iam/api-core/session/kernel";
 import {
   createRedisSubjectAccessStore,
   createSubjectAccessBarrier,
   createSubjectAccessPrincipalValidator,
 } from "@iam/api-core/subject-access";
+import { createCustomSsoCleanup } from "@iam/custom-sso/cleanup";
+import {
+  createSessionKernel,
+  createSessionKernelConfigFromEnv,
+} from "@iam/session-kernel";
 import {
   createOidcSessionKernelAdapter,
   createOidcSessionKernelCleanupAdapter,
@@ -97,6 +94,7 @@ export function createOidcProviderSession(deps: CreateOidcProviderSessionDeps) {
     },
   };
 
+  const customSsoCleanup = createCustomSsoCleanup({ redis: deps.redis });
   const kernel = createSessionKernel({
     redis: deps.redis as SessionKernelRedis,
     config: createOidcProviderSessionKernelConfig(deps.env),
@@ -105,9 +103,7 @@ export function createOidcProviderSession(deps: CreateOidcProviderSessionDeps) {
         providerSessionState,
         redis: deps.redis,
       }),
-      createAuthorizationGrantRedemptionCleanupAdapter(
-        createRedisAuthorizationGrantRedemptionStore({ redis: deps.redis }),
-      ),
+      customSsoCleanup,
     ],
     principalAccessFence: subjectAccessPrincipal,
     validationHooks,

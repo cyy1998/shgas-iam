@@ -62,8 +62,10 @@ Client Runtime Snapshot 的当前 namespace 清单位于 `packages/api-core/src/
 
 | 路径 | 职责与边界 |
 |---|---|
-| `packages/api-core/src` | 共享后端基础设施：`createApp`、route/OpenAPI/response helpers、errors、middleware、Redis、logging、observability、Session Kernel、LoginRestriction、Subject Access Barrier、UnitOfWork 和 tRPC utilities。共享 process-smoke harness 位于 `src/testing/`，只通过独立 testing export 暴露；它不实现 Redis 协议或 persistence seed。 |
-| `packages/client-subject-projection/src` | 协议中性的 Client Subject Projection deep Module；默认入口只公开 active V2 `resolve` Interface、Catalog 与 canonical responsibility Employment Profile，`/custom-sso` 独占 Custom SSO V2 strict wire。V1 投影与演练源码已移除。 |
+| `packages/api-core/src` | 共享后端基础设施：`createApp`、route/OpenAPI/response helpers、errors、middleware、Redis、logging、observability、LoginRestriction、Subject Access Barrier、UnitOfWork 和 tRPC utilities。共享 process-smoke harness 位于 `src/testing/`，只通过独立 testing export 暴露；它不实现 Redis 协议或 persistence seed。 |
+| `packages/session-kernel/src` | 协议中性的 Principal Session、Client Binding、Credential 与 Protocol Artifact 生命周期；配置、日志事件、Redis/Lua、同步 cleanup 与测试支持由包内拥有。根入口、`/maintenance`、`/testing` 按能力分离，API Core 的 Subject Access 与 Custom SSO Grant 单向消费该包。 |
+| `packages/custom-sso/src` | 完整 Custom SSO 应用与 Grant 状态的唯一 owner；root、cleanup、maintenance、testing 按能力分离，`/wire` 独占支持浏览器的 V2 schema、mapper 与 preview。连接及具体 provider 由 app 注入。 |
+| `packages/client-subject-projection/src` | 协议中性的 Client Subject Projection deep Module；默认入口只公开 active V2 `resolve` Interface、Catalog 与 canonical responsibility Employment Profile；Custom SSO wire 由独立协议包拥有。V1 投影与演练源码已移除。 |
 | `packages/contracts/src` | 跨端或跨 app/package 的稳定枚举、常量、runtime schemas、派生类型与相关协议 helper（包括 SSO 导航和登录 credential）；具体运行环境约束见共享契约文档。 |
 | `packages/domain/src` | 后端复用的 DTO schemas/types/mappers、pure domain rules、audit helpers 和业务错误；DTO 可依赖数据库 schema，纯规则文件保持独立，不将整个包视为浏览器运行时依赖。 |
 | `packages/db/src` | Drizzle schemas、relations、migrations、singleton client 和 query helpers。Schema/relations domain 为 `core` 与 `log`；共享 column helpers 位于 `schema/_shard/`。 |
@@ -84,10 +86,12 @@ Client Runtime Snapshot 的当前 namespace 清单位于 `packages/api-core/src/
 | 模块 | 内部职责目录 |
 |---|---|
 | `packages/user-profile-read-model/src` | `invalidation/`：影响分析与 dirty/job；`build/`：加载与文档构建；`publication/`：行转换与原子发布；`query/`：查询与 Filter；`schema/`：文档契约；`subject-facts/`：缓存、读写与观测；`subject-access/`：authority 与 transition repositories；`worker/`：重建与维护装配；`readiness/`：版本无关 gate 与 Profile inventory 校验规则；`employment/`：全库只读 Employment verifier/repository。根层保留六个公开入口文件。 |
-| `packages/client-subject-projection/src` | `internal/`：当前 V2 Catalog、contract 与 projection。公开入口、Custom SSO wire 与共享错误留在根层；测试 fixture 由测试文件本地持有。 |
-| `packages/api-core/src/session/kernel` | `state/`：模型、结果与时间；`storage/`：存储、key、Lua 与状态变更；`security/`：HMAC/token；`cleanup/`：清理。facade、配置和公开入口留在根层。 |
+| `packages/client-subject-projection/src` | `internal/`：当前 V2 Catalog、contract 与 projection。公开入口与共享错误留在根层；测试 fixture 由测试文件本地持有。 |
+| `packages/session-kernel/src` | `state/`：模型、结果与时间；`storage/`：存储、key、Lua 与状态变更；`security/`：HMAC/token；`cleanup/`：清理。facade、配置和公开入口留在根层。 |
 | `packages/api-core/src/subject-access` | `storage/`：store 与 Redis adapter；`adapters/`：HTTP、Session validator 和结果转换；`recovery/`：bootstrap、repair 与 transition recovery。在线 barrier/lifecycle、模型、错误与公开入口留在根层。 |
-| `apps/api/src/services/sso` | `subject-delivery/`：Subject 交付；`transport/`：Cookie、请求/schema、安全和 OpenAPI helper；`traffic-gate/`：流量 gate。redirect validator 留在根层。 |
+| `packages/custom-sso/src` | 单一 factory、出站 ports 与协议错误；`internal/` 拥有完整授权/兑换、访问/退出、续接校验、Subject 交付、Secret/redirect 与流量 gate。`grant/` 拥有 Grant 状态机与存储；cleanup/maintenance 直接进入窄模块，wire 不加载服务端流程。 |
+| `apps/api/src/services/sso` | `subject-delivery/`：请求 capability 桥接；`transport/`：Cookie、请求/schema、安全和 OpenAPI helper。门户 decision 映射在 `use-cases/sso/check-login-continuation/`。 |
+| `apps/api/src/use-cases/authentication` | 密码、手机、OA、微信统一认证用例；由 `composition/use-cases/authentication.ts` 装配，通过 `services/authentication/principal-session.adapter.ts` 使用 Kernel 创建根会话。OA/微信 HTTP 路径仍在 SSO route。 |
 | `apps/oidc-provider/src/provider` | `claims/`：claims port、snapshot 与 contract；`client/`：Client auth、runtime metadata 与 Traffic Gate。`claims.ts` 和 provider 装配、生命周期文件留在根层。 |
 | `apps/worker/src/commands` | `user-profile/`、`client-runtime/`、`client-protocol/`：对应命令族与其 helper/repository。Employment verifier 留在根层。 |
 

@@ -157,15 +157,15 @@ Internal Privilege Delegation 已在 API 自身的 service、repository 与 Unit
   可以使用最后发布事实；选择 `iam:authorization` 时，Module 根据 facts source version 调用 Authorization
   Freshness port。该 port 可以确认当前 facts、返回一次重载后的 facts，或报告 not-ready；Module 在组装任何已选
   claim 前采用已确认版本，无法证明新鲜时返回 `SubjectProjectionNotReadyError`。
-- 核心投影保持协议中性。`@iam/client-subject-projection/custom-sso` 只公开一个完整 V2 交付 Interface：
+- 核心投影保持协议中性。`@iam/custom-sso/wire` 只公开一个完整 V2 交付 Interface：
   `resolveCustomSsoSubjectProjection` 先调用 root Projection Service，再核对返回的 Subject Identifier 与 resolve input，
   随后执行 wire mapping 和 strict schema parse。Schema、Wire 类型与 placeholder preview
   继续公开。Subject mismatch 产生只含安全 reason `subject_mismatch` 的内部不变量错误，mapping/parse 失败产生
   `invalid_wire`；resolve 阶段的既有错误原样传播。该 subpath 只能通过 package root public Interface 取得 Projection
   类型或能力，不得导入其他 core subpath、Facts persistence、client 配置、runtime 或 transport。
-- Package root 是唯一 active V2 projection Interface；Custom SSO wire 只从 `/custom-sso` subpath 公开。Catalog V2 保持既有 claim vocabulary，
+- Package root 是唯一 active V2 projection Interface；Custom SSO wire 只从 `@iam/custom-sso/wire` 公开。Catalog V2 保持既有 claim vocabulary，
   选择 `profile:employments` 时每条 Employment 原子携带 canonical `responsibilities`/`[]`；authorization employment
-  继续只含 Employment identity、roles 与 privileges。Custom SSO subpath 拥有 V2 strict schema/mapper，缺失、
+  继续只含 Employment identity、roles 与 privileges。Custom SSO 的 `/wire` 拥有 V2 strict schema/mapper，缺失、
   未知或非法 responsibility 拒绝整份 projection，不提供 V1 alias、translation、fallback 或 caller version switch；
   V1 投影、wire 与演练源码已移除。
 - `@iam/user-profile-read-model/subject-facts` 提供同时满足 Facts 与 Freshness ports 的 deep reader：有效 Redis
@@ -347,6 +347,15 @@ User Profile 的初代 V1 builder、Facts reader/publisher 与 Subject Projectio
 
 ### Session runtime 与跨 App 边界
 
+- `@iam/session-kernel` 独占四类生命周期、配置、三个 Kernel 日志事件、存储与 Lua。根入口只公开生命周期能力和必要配置/接口类型，`/maintenance` 提供当前 namespace inventory，`/testing` 提供测试构造、种子与检查。Kernel 不依赖 API Core、Custom SSO 或 app；连接和日志实例、Subject Access fence 与协议 cleanup 由 composition 注入。旧 API Core Kernel 出口与实现已删除，不保留兼容转导出。
+
+- API 的四类身份认证统一由 `use-cases/authentication/` 拥有，production wiring 在
+  `composition/use-cases/authentication.ts`。密码、手机、OA、微信只消费各自的 Principal Session 创建 port；
+  `services/authentication/principal-session.adapter.ts` 直接使用同一 Session Kernel，负责 `browser_user`、AMR、
+  Session Origin 与创建结果/错误映射，不构造 Custom SSO facade。身份解析、凭据校验、登录限制与认证审计继续由
+  原用例拥有；OA/微信的 HTTP 路径和 Cookie 仍由 SSO route 适配。Custom SSO facade 不再提供根会话创建成员。
+- Custom SSO 登录续接仍通过协议 owner 校验 Client、Traffic Gate 和 redirect，再以 Kernel 检查 Principal Session；
+  `inspectPrincipalSession` 因仍有该协议消费者而保留。它只读、失败关闭，不续期、不创建 Credential，也不加载主体投影。
 - Session Kernel 的 Principal Session、Client Binding、Credential 与 Protocol Artifact 使用 Redis 时间计算生命周期期限；
   读取通过同一次 Redis 原子观察取得对象和当前时间，成功结果的 `observedAt` 是该观察的毫秒时间。
   签发派生对象与续期复用取得时的观察，校验通过后不按应用时钟或再次取得的当前时间追加到期拒绝；
@@ -380,7 +389,7 @@ User Profile 的初代 V1 builder、Facts reader/publisher 与 Subject Projectio
 - Admin `services/user/**` 和 `services/client/**` 的会话终止只经过 consumer-owned Session Revocation port。
   只有 `services/session-revocation/**` 与 `composition/**` 直接持有 Session Kernel、OIDC runtime、concrete
   session adapter 或 app-local Redis runtime dependency。
-- `@iam/api-core/session/kernel` 拥有用户根 Principal Session 的实时 inventory。默认全局索引为
+- `@iam/session-kernel` 拥有用户根 Principal Session 的实时 inventory。默认全局索引为
   `sess:v2:idx:principal_sessions`，member 沿用 lifecycle object 编码，score 为 `expiresAt`；创建、续期和撤销
   Principal Session 时，对象与该索引必须在同一 Redis transaction 中变化。
 - Inventory 只返回 `principalType=user` 的有效根会话，并通过全局索引或精确用户索引按 `expiresAt` 倒序分块读取；
@@ -446,14 +455,19 @@ User Profile 的初代 V1 builder、Facts reader/publisher 与 Subject Projectio
 
 ### Custom SSO Authorization Grant
 
-- `/sso/authorize`、`/sso/token` 和 `/sso/callback` 的 Application Use Case 拥有入口验证：在消费 authorization
-  code 或创建 credential/session 前，按端点完成 client 查询、client secret 校验和 redirect allowlist 校验。
-  三个 use case 分别只消费 `AuthorizationCodeIssuerPort`、`IndependentAuthorizationGrantPort` 和
-  `GatewayLoginCompletionPort`。
-- `custom-sso-session-kernel.adapter.ts` 是 Custom SSO deep module implementation。它拥有一次性 grant resolution、
-  PrincipalSession 与实时用户校验、Independent Client Credential、Gateway Local Session、ORCAS、最小 Kernel
-  metadata、audit 和失败补偿；共同的 resolved grant 只存在于 implementation 内。运行时不读取、规范化或删除
-  Legacy 私有 payload，所有 credential/session 都只保存严格版本化的最小 Kernel metadata。
+- `packages/custom-sso/src/index.ts` 的 `createCustomSso` 是完整应用入口，拥有 authorize、Independent
+  exchange、Gateway callback、续接检查、Public Authentication/UserInfo、Gateway authz 与 logout。原三个授权/兑换
+  use case 与 session adapter 位于包内 `internal/`，Grant 状态和存储位于 `grant/`；预占、签发中间态和补偿不作为生产公开操作。
+- 独立 `@iam/custom-sso/cleanup` 接收 Redis 并内部构造 Grant store；API/OIDC 先构造 cleanup，再注入 Kernel，API 最后构造完整 Custom SSO。OIDC 不加载或构造完整协议操作。`/maintenance` 提供 owner prefix 清单，`/testing` 提供实际测试所需构造与检查；各出口不经 root，浏览器只消费 `/wire`。
+- 模块内校验 Client mode/version/Secret、redirect allowlist，并解释 Traffic Gate 结果；外部能力由自有窄 ports
+  表达，Client Runtime/Secret reader、Secret hash verifier、ORCAS、User lookup、审计 writer、logger、Kernel 和 Redis
+  由 API composition 注入。模块不导入 API provider、repository、composition 或 HTTP；连接生命周期仍在 API。
+- 续接检查仅返回 `absent | invalid | valid`；API 门户用例将结果映射为页面 decision 和 Cookie 清除指令。
+  UserInfo capability 在模块中捕获已接受的 Client Snapshot；API 的 WeakMap request scope 仅负责请求对象绑定与释放。
+  Gateway 最小字段裁剪和 base64 编码由模块拥有，HTTP adapter 负责 header/body、Cookie 与 Retry-After 映射。
+- 内部 session implementation 拥有一次性 grant resolution、PrincipalSession 与实时用户校验、Independent Client
+  Credential、Gateway Local Session、ORCAS、最小 Kernel metadata、协议 audit 和失败补偿；resolved grant 不跨模块公开。
+  运行时不读取、规范化或删除 Legacy 私有 payload，credential/session 只保存严格版本化的最小 Kernel metadata。
 - Grant 固化已验证的 literal redirect、client mode/config version 与可选 opaque state。Gateway callback 通过
   callback-owned 窄 Client context 重新确认当前全局状态、Custom SSO 启用态、Gateway mode、ORCAS 配置与
   config version；该 context 不暴露通用 Client Secret。redirect 或版本错误在 reservation 前拒绝，因此错误
@@ -472,9 +486,8 @@ User Profile 的初代 V1 builder、Facts reader/publisher 与 Subject Projectio
   成功审计，也不清理 consumed artifact；当前 Grant attempt 不主动 release，heartbeat 停止后保持 `redeeming`，仅在 lease
   到期且原始 Grant 未过期时允许新 attempt 接管，且不得延长原始 expiry。Projection Not Ready 与 Subject Access unavailable
   仍保持既有 retryable `503`、`Retry-After` 和立即 release 语义。
-- Production adapter 通过 TypeScript structural typing 直接满足上述三个 consumer-owned ports。Composition 只注入
-  ORCAS 所需的最窄 `CustomSsoOrcasLoginPort`，不得增加 behaviorless wrapper，也不得恢复公开
-  `consumeAuthCode → createLocalSession` 两阶段 interface。
+- 内部 state implementation 通过 structural typing 满足三个操作的私有 ports；外部 ORCAS/User/audit/logger
+  provider 直接满足模块自有 ports。不得恢复公开 `consumeAuthCode → createLocalSession` 两阶段 interface。
 - SSO route 只拥有 HTTP query/header/Cookie 解析、response envelope、Gateway/ORCAS Cookie、redirect query 和
   status 适配，不接触 Session Kernel 模型，也不编排 grant、credential、session、ORCAS 或补偿步骤。
 - 现有 Redis key、credential discriminator 和 audit action 不因 module interface 收缩而重命名。旧 Session cleanup 命令已退役，旧环境或旧备份的迁移须另行安排。

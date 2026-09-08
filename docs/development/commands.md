@@ -343,6 +343,10 @@ pnpm --filter @iam/user-profile-read-model test:integration:postgres
 # User Profile Subject Facts 单条/CAS/batch prewarm contract（需专用 IAM_USER_PROFILE_TEST_REDIS_URL）
 pnpm --filter @iam/user-profile-read-model test:integration:redis
 
+# Session Kernel Redis contracts（需专用 owner URL）
+IAM_SESSION_KERNEL_TEST_REDIS_URL=<namespace-isolated-url> \
+pnpm --filter @iam/session-kernel test:integration:redis
+
 # API Core Redis contracts（需专用 owner URL；当前 Snapshot inventory 测试串行运行）
 IAM_API_CORE_TEST_REDIS_URL=<namespace-isolated-url> \
 pnpm --filter @iam/api-core test:integration:redis
@@ -421,8 +425,10 @@ Hook 不运行 lint、typecheck、test、build 或 tracker checker。按改动�
   和必要 password；所有操作要求已停流排空，无 runtime 默认目标推断。按当前 Kernel/Grant/OIDC owner 固定键族 SCAN、分批 UNLINK，
   不依赖 client index；apply 后必须在新进程 verify。安全 report 不含完整 key/凭据/原始错误，失败/超时非零；不写 PG，
   不推进 epoch，不操作非目标 owner 或退役 namespace，也不自动部署、切流或执行演练。
+- Session Kernel：`pnpm --filter @iam/session-kernel <lint|test|test:unit|test:integration:component|test:integration:redis|typecheck>`
 - API Core：`pnpm --filter @iam/api-core <lint|test|test:unit|test:integration:component|test:integration:process|test:integration:redis|client-runtime:hard-cutover-redis|typecheck>`
-- Client Subject Projection：`pnpm --filter @iam/client-subject-projection <lint|test|test:unit|test:integration:component|typecheck>`
+- Custom SSO：`pnpm --filter @iam/custom-sso <lint|test|test:unit|test:integration:component|test:integration:redis|typecheck>`；Redis 使用独立 `IAM_CUSTOM_SSO_TEST_REDIS_URL`。
+- Client Subject Projection：`pnpm --filter @iam/client-subject-projection <lint|test:integration:component|typecheck>`
 - User Profile Read Model：`pnpm --filter @iam/user-profile-read-model <lint|test|test:unit|test:integration:component|test:integration:postgres|test:integration:redis|typecheck>`
 - Worker：`pnpm --filter @iam/worker <dev|serve|lint|test|test:unit|test:integration:component|test:integration:process|test:integration:postgres|test:integration:redis|typecheck|employment:verify|user-profile:backfill|user-profile:repair|user-profile:verify-postgres|user-profile:verify-redis|client-protocol:epochs|client-runtime:repair|client-runtime:verify>`
 - Employment 全库只读诊断：

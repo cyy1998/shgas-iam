@@ -1,5 +1,5 @@
 import type { Env } from "@api/env";
-import type { SessionKernelConfig } from "@iam/api-core/session/kernel";
+import type { SessionKernelConfig } from "@iam/session-kernel";
 import type Redis from "ioredis";
 import type { Logger } from "pino";
 

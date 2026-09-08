@@ -1,8 +1,4 @@
 import {
-  createCustomSsoTrafficGate,
-  CustomSsoTrafficGateUnavailableError,
-} from "@api/services/sso/traffic-gate/custom-sso-traffic-gate";
-import {
   createClientRuntimeSnapshotModule,
 } from "@iam/api-core/client-runtime-snapshot";
 import {
@@ -11,6 +7,10 @@ import {
 } from "@iam/api-core/client-traffic-gate";
 import { AuthzMaintenanceError } from "@iam/api-core/errors/AuthzMaintenanceError";
 import { ClientStatus } from "@iam/contracts";
+import {
+  createCustomSsoTrafficGate,
+  CustomSsoTrafficGateUnavailableError,
+} from "@iam/custom-sso/testing";
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { createApiRedisTestHarness } from "./redis-test-harness";
 

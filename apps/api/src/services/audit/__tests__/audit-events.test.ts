@@ -1,4 +1,5 @@
 import { CustomSsoClientMode } from "@iam/contracts";
+import * as customSsoAuditEvents from "@iam/custom-sso/testing";
 import { describe, expect, test } from "bun:test";
 import * as authAudit from "../events/auth.audit";
 import * as internalAudit from "../events/internal.audit";
@@ -55,7 +56,7 @@ describe("api audit event builders", () => {
   test("builds sso and third-party login success payloads", () => {
     const user = { id: 1001, username: "zhangsan", name: "张三" } as never;
 
-    const gatewayAudit = authAudit.buildGatewayLoginSuccessAudit(
+    const gatewayAudit = customSsoAuditEvents.buildGatewayLoginSuccessAudit(
       "00000000-0000-4000-8000-000000001001",
       "portal",
     );
@@ -73,7 +74,7 @@ describe("api audit event builders", () => {
         mode: CustomSsoClientMode.Gateway,
       },
     });
-    const independentAudit = authAudit.buildIndependentLoginSuccessAudit(
+    const independentAudit = customSsoAuditEvents.buildIndependentLoginSuccessAudit(
       "00000000-0000-4000-8000-000000001001",
       "portal",
     );

@@ -5,8 +5,6 @@
   "private": true,
   "exports": {
     ".": "./src/index.ts",
-    "./authorization-grant": "./src/authorization-grant/index.ts",
-    "./authorization-grant/testing": "./src/authorization-grant/testing.ts",
     "./core": "./src/core/index.ts",
     "./core/*": "./src/core/*.ts",
     "./client-traffic-gate": "./src/client-traffic-gate/index.ts",
@@ -24,9 +22,6 @@
     "./observability": "./src/observability/index.ts",
     "./redis": "./src/redis/index.ts",
     "./security": "./src/security/index.ts",
-    "./session/kernel": "./src/session/kernel/index.ts",
-    "./session/kernel/env-config": "./src/session/kernel/env-config.ts",
-    "./session/kernel/testing": "./src/session/kernel/testing.ts",
     "./subject-access": "./src/subject-access/index.ts",
     "./subject-access/testing": "./src/subject-access/testing.ts",
     "./testing/external-test-resources": "./src/testing/external-test-resources.ts",
@@ -51,6 +46,7 @@
   "dependencies": {
     "@hono/zod-openapi": "^1.5.1",
     "@iam/contracts": "workspace:*",
+    "@iam/session-kernel": "workspace:*",
     "@scalar/hono-api-reference": "^0.11.11",
     "@trpc/server": "^11.18.0",
     "bcrypt-ts": "^9.0.1",

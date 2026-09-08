@@ -5,6 +5,7 @@ import {
   CustomSsoClientMode,
   LoginPageGuardDecision,
 } from "@iam/contracts";
+import { createCheckSsoLoginContinuation } from "@iam/custom-sso/testing";
 import { expect, mock, test } from "bun:test";
 
 const client = {
@@ -26,14 +27,14 @@ const client = {
 
 test("continues a valid Custom SSO request when the browser has a Valid Principal Session", async () => {
   const inspectPrincipalSession = mock(async () => "valid" as const);
-  const useCase = createCheckSsoLoginContinuationUseCase({
+  const useCase = createCheckSsoLoginContinuationUseCase({ checkLoginContinuation: createCheckSsoLoginContinuation({
     clients: { findRuntimeRecord: mock(async () => client) },
     principalSessions: { inspectPrincipalSession },
     redirectUrls: {
       normalizeAllowed: mock(() => "https://app.example.com/callback"),
     },
     trafficGate: { assertIssuanceAllowed: async () => undefined },
-  });
+  }) });
 
   await expect(useCase.execute({
     clientCode: "portal",
@@ -53,7 +54,7 @@ test.each([
   inspection,
   clearGlobalSessionCookie,
 ) => {
-  const useCase = createCheckSsoLoginContinuationUseCase({
+  const useCase = createCheckSsoLoginContinuationUseCase({ checkLoginContinuation: createCheckSsoLoginContinuation({
     clients: { findRuntimeRecord: mock(async () => client) },
     principalSessions: {
       inspectPrincipalSession: mock(async () => inspection),
@@ -62,7 +63,7 @@ test.each([
       normalizeAllowed: mock(() => "https://app.example.com/callback"),
     },
     trafficGate: { assertIssuanceAllowed: async () => undefined },
-  });
+  }) });
 
   await expect(useCase.execute({
     clientCode: "portal",
@@ -78,12 +79,12 @@ test.each([
 
 test("rejects an invalid continuation before inspecting the Principal Session", async () => {
   const inspectPrincipalSession = mock(async () => "valid" as const);
-  const useCase = createCheckSsoLoginContinuationUseCase({
+  const useCase = createCheckSsoLoginContinuationUseCase({ checkLoginContinuation: createCheckSsoLoginContinuation({
     clients: { findRuntimeRecord: mock(async () => client) },
     principalSessions: { inspectPrincipalSession },
     redirectUrls: { normalizeAllowed: mock(() => null) },
     trafficGate: { assertIssuanceAllowed: async () => undefined },
-  });
+  }) });
 
   await expect(useCase.execute({
     clientCode: "portal",

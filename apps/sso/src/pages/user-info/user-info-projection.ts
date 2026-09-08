@@ -1,4 +1,4 @@
-import type { CustomSsoEmployment } from '@iam/client-subject-projection/custom-sso';
+import type { CustomSsoEmployment } from '@iam/custom-sso/wire';
 import { OrganizationType } from '@iam/contracts';
 
 export function formatProjectionCompany(

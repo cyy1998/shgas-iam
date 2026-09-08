@@ -1,11 +1,11 @@
+import type { OidcAccountDto } from "@iam/domain/user";
 import type {
   CleanupAdapter,
   ClientBinding,
   PrincipalSession,
   RevokeSummary,
   SessionKernel,
-} from "@iam/api-core/session/kernel";
-import type { OidcAccountDto } from "@iam/domain/user";
+} from "@iam/session-kernel";
 import type { IncomingMessage } from "node:http";
 import type { AdapterPayload } from "oidc-provider";
 import type { ResolvedGlobalSession } from "../interaction/global-session.ts";

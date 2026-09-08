@@ -77,6 +77,12 @@ acquisition 由 canonical Snapshot Adapter/Reader 的 Component contract，以�
 在 `redis` 或 `composition` profile 建立，测试 fixture 不实现 Redis 协议、key、serialization、TTL、Lua 或 transaction
 排列。原 process-smoke RESP server、testing export 与 compatibility cases 已在真实 owner coverage 通过后退役。
 
+Session Kernel 的 Unit/Component/Redis 测试由 `@iam/session-kernel` 收集，Redis 使用专用 `IAM_SESSION_KERNEL_TEST_REDIS_URL`。
+Subject Access 与 Kernel 的三条协作场景留在 API Core；Grant 期限、Component 与完整协议 Redis 测试由 Custom SSO 收集，使用专用 `IAM_CUSTOM_SSO_TEST_REDIS_URL`，并通过 Kernel `/testing`
+复用仅含 Kernel 的真实 Redis 构造、种子与检查能力。各 owner 自己拥有资源 URL 和连接生命周期；Kernel 不反向依赖 API Core 或 Custom SSO。API 混合统一认证、协议、HTTP/门户矩阵继续作为消费方集成证据，纯协议用例和 Grant 矩阵位于 Custom SSO；不新建 Redis 模拟器。
+
+Custom SSO strict V2 schema、mapper、错误与 preview 契约由 `@iam/custom-sso` 的 Unit collection 收集；Projection 的中性裁剪与 Catalog 契约继续由其 Component collection 收集。API 保留 OpenAPI、输出交付与错误映射测试；Admin preview 和 SSO 展示由各自消费测试及前端构建证明，类型检查不替代浏览器执行。
+
 ## Root 与 package commands
 
 长期 root interface 为：

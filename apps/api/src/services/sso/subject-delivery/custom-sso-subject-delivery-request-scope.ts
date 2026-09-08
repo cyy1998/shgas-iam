@@ -1,6 +1,6 @@
 import type {
   CustomSsoSubjectDeliveryCapability,
-} from "./custom-sso-subject-delivery";
+} from "@iam/custom-sso";
 
 export function createCustomSsoSubjectDeliveryRequestScope() {
   const capabilities = new WeakMap<

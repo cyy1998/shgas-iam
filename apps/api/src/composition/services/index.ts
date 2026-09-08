@@ -1,42 +1,29 @@
 import type { ApiAuditLogWriter } from "@api/services/audit/audit.service";
-import type { SessionKernelRedis } from "@iam/api-core/session/kernel";
 import type { DbClient } from "@iam/db";
+import type { SessionKernelRedis } from "@iam/session-kernel";
 import type { ApiRepositories } from "../repositories";
 import type { ApiRuntimePorts } from "../runtime";
 import type { createApiUnitOfWork } from "../tx";
 import { createAccountRecoveryService } from "@api/services/account-recovery/account-recovery.service";
 import { createLoginCredentialParser } from "@api/services/authentication/login-credential.parser";
+import { createPrincipalSessionAdapter } from "@api/services/authentication/principal-session.adapter";
 import { createClientService } from "@api/services/client/client.service";
 import {
   createCustomSsoClientRuntimeReader,
   createCustomSsoClientRuntimeSnapshotAdapter,
 } from "@api/services/client/custom-sso-client-runtime.reader";
-import { createCustomSsoClientSecretVerifier } from "@api/services/client/custom-sso-client-secret-verifier";
 import { createCapService } from "@api/services/human-verification/cap.service";
 import { createHumanRiskService } from "@api/services/human-verification/human-risk.service";
 import { createMobileService } from "@api/services/mobile/mobile.service";
 import { createOrganizationService } from "@api/services/organization/organization.service";
 import { createPrivilegeDelegationService } from "@api/services/privilege/privilegeDelegation.service";
 import {
-  createCustomSsoSessionKernelAdapter,
-} from "@api/services/session/custom-sso-session-kernel.adapter";
-import { createSsoRedirectUrlValidator } from "@api/services/sso/redirect-url.validator";
-import {
-  createCustomSsoSubjectDelivery,
-} from "@api/services/sso/subject-delivery/custom-sso-subject-delivery";
-import {
   createCustomSsoSubjectDeliveryRequestScope,
 } from "@api/services/sso/subject-delivery/custom-sso-subject-delivery-request-scope";
-import { createCustomSsoTrafficGate } from "@api/services/sso/traffic-gate/custom-sso-traffic-gate";
 import { createV3UserProfileSearchAdapter } from "@api/services/user-profile-search/user-profile-search-v3.adapter";
 import { createUserMobileBinding } from "@api/services/user/user-mobile-binding.helper";
 import { createUserPasswordHelper } from "@api/services/user/user-password.helper";
 import { createUserService } from "@api/services/user/user.service";
-import {
-  createAuthorizationGrantRedemption,
-  createAuthorizationGrantRedemptionCleanupAdapter,
-  createRedisAuthorizationGrantRedemptionStore,
-} from "@iam/api-core/authorization-grant";
 import {
   createClientRuntimeSnapshotLoggerObservability,
   createClientRuntimeSnapshotModule,
@@ -50,7 +37,7 @@ import {
   createLoginRestriction,
   createRedisLoginRestrictionStore,
 } from "@iam/api-core/login-restriction";
-import { createSessionKernel } from "@iam/api-core/session/kernel";
+import { verifySecret } from "@iam/api-core/security";
 import {
   createRedisSubjectAccessStore,
   createSubjectAccessBarrier,
@@ -59,7 +46,10 @@ import {
 } from "@iam/api-core/subject-access";
 import { mapUnitOfWork } from "@iam/api-core/uow";
 import { createClientSubjectProjectionService } from "@iam/client-subject-projection";
+import { createCustomSso } from "@iam/custom-sso";
+import { createCustomSsoCleanup } from "@iam/custom-sso/cleanup";
 import db from "@iam/db";
+import { createSessionKernel } from "@iam/session-kernel";
 import {
   createInternalUserProfileQueryRepository,
   createInternalUserProfileQueryService,
@@ -104,7 +94,7 @@ export function createApiServices(options: CreateApiServicesOptions) {
 
   const subjectAccess = createApiSubjectAccess(runtime);
   const subjectAccessPrincipal = createSubjectAccessPrincipalValidator(subjectAccess);
-  const authorizationGrantRedemptionStore = createRedisAuthorizationGrantRedemptionStore({
+  const customSsoCleanup = createCustomSsoCleanup({
     redis: runtime.redis,
   });
   const sessionKernel = createSessionKernel({
@@ -115,7 +105,7 @@ export function createApiServices(options: CreateApiServicesOptions) {
     },
     principalAccessFence: subjectAccessPrincipal,
     cleanupAdapters: [
-      createAuthorizationGrantRedemptionCleanupAdapter(authorizationGrantRedemptionStore),
+      customSsoCleanup,
     ],
     logger: runtime.logger,
     sourceApp: LoggerSourceApp.Api,
@@ -126,11 +116,7 @@ export function createApiServices(options: CreateApiServicesOptions) {
     random: runtime.random,
     transitionIntent: createSubjectAccessTransitionRepository(db),
   });
-  const authorizationGrantRedemption = createAuthorizationGrantRedemption({
-    leaseDurationMs: 5_000,
-    random: runtime.random,
-    store: authorizationGrantRedemptionStore,
-  });
+  const principalSessions = createPrincipalSessionAdapter(sessionKernel);
   const subjectFacts = createSubjectFactsReader({
     db,
     cache: createSubjectFactsRedisCache(runtime.redis),
@@ -167,15 +153,6 @@ export function createApiServices(options: CreateApiServicesOptions) {
   const clientTrafficGate = createClientTrafficGateReader(
     clientRuntimeSnapshots.reader("traffic-gate"),
   );
-  const customSsoTrafficGate = createCustomSsoTrafficGate({
-    gate: clientTrafficGate,
-  });
-  const customSsoClientCredentials = createCustomSsoClientSecretVerifier({
-    repository: repositories.customSsoClient,
-  });
-  const customSsoSubjectDelivery = createCustomSsoSubjectDelivery({
-    projection: subjectProjection,
-  });
   const customSsoSubjectDeliveryRequests
     = createCustomSsoSubjectDeliveryRequestScope();
 
@@ -290,16 +267,18 @@ export function createApiServices(options: CreateApiServicesOptions) {
     })),
   });
 
-  const customSsoSession = createCustomSsoSessionKernelAdapter({
-    authorizationGrantRedemption,
+  const customSso = createCustomSso({
+    redis: runtime.redis,
+    clientSecrets: repositories.customSsoClient,
+    secrets: { verify: verifySecret },
+    traffic: clientTrafficGate,
     clients: customSsoClientRuntime,
     kernel: sessionKernel,
     logger: runtime.logger,
     orcas: runtime.integrations.orcas,
     random: runtime.random,
-    subjectDelivery: customSsoSubjectDelivery,
     subjectProjection,
-    userService,
+    users: userService,
     auditLogWriter,
     config: {
       authCodeExpireSeconds: runtime.config.auth.authCodeExpireSeconds,
@@ -325,27 +304,19 @@ export function createApiServices(options: CreateApiServicesOptions) {
     },
   });
 
-  const ssoRedirectUrl = createSsoRedirectUrlValidator({
-    logger: runtime.logger,
-  });
-
   return {
     accountRecovery: accountRecoveryService,
     cap: capService,
     client: clientService,
-    customSsoClientCredentials,
-    customSsoClientRuntime,
-    customSsoSession,
-    customSsoSubjectDelivery,
+    customSso,
     customSsoSubjectDeliveryRequests,
-    customSsoTrafficGate,
     humanRisk: humanRiskService,
     loginCredential: loginCredentialParser,
     loginRestriction,
     mobile: mobileService,
     organization: organizationService,
+    principalSessions,
     privilegeDelegation: privilegeDelegationService,
-    ssoRedirectUrl,
     subjectAccess,
     subjectAccessLifecycle,
     user: userService,

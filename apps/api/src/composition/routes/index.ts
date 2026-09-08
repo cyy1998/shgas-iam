@@ -31,10 +31,10 @@ export async function createApiRoutes(options: CreateApiRoutesOptions): Promise<
   const authHandlers = createAuthHandlers({
     authentication: useCases.authentication,
     clientService: services.client,
-    localSessionAuthorizer: services.customSsoSession,
+    localSessionAuthorizer: services.customSso,
     loginCredentialParser: services.loginCredential,
     logger: runtime.logger,
-    trafficGate: services.customSsoTrafficGate,
+
     config: {
       projectionRetryAfterSeconds:
         runtime.config.env.sso.projectionRetryAfterSeconds,
@@ -53,6 +53,7 @@ export async function createApiRoutes(options: CreateApiRoutesOptions): Promise<
   });
 
   const ssoHandlers = createSsoHandlers({
+    authentication: useCases.authentication,
     logger: runtime.logger,
     sso: useCases.sso,
     config: {

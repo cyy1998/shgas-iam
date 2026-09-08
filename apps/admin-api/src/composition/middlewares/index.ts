@@ -1,7 +1,7 @@
 import type { AdminAuthorizationPolicy } from "@admin-api/services/admin-authorization/admin-authorization.policy";
 import type { AdminRestOperationSurface } from "@admin-api/services/admin-authorization/admin-rest-operation.surface";
 import type { CreateAppOptions } from "@iam/api-core/core/create-app";
-import type { SessionKernel } from "@iam/api-core/session/kernel";
+import type { SessionKernel } from "@iam/session-kernel";
 import type { AdminApiRuntimePorts } from "../runtime";
 import type { AdminApiServices } from "../services";
 import { createAdminAuthenticationHandlers } from "@admin-api/middlewares/authentication.handler";

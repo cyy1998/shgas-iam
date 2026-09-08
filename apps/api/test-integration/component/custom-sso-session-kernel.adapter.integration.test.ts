@@ -1,29 +1,19 @@
-import type {
-  AuthorizationGrantRedemption,
-  AuthorizationGrantRedemptionScheduler,
-} from "@iam/api-core/authorization-grant";
-import type { SessionKernel } from "@iam/api-core/session/kernel";
+import type { ClientTrafficGateResult } from "@iam/api-core/client-traffic-gate";
+import type { AuthorizationGrantRedemption, AuthorizationGrantRedemptionScheduler, CustomSsoSessionKernelAdapterDeps } from "@iam/custom-sso/testing";
+
 import type { CustomSsoClientRuntimeDto } from "@iam/domain/client";
+import type { SessionKernel } from "@iam/session-kernel";
 import { randomUUID } from "node:crypto";
+import { createAuthenticationUseCases } from "@api/composition/use-cases/authentication";
+import { createPrincipalSessionAdapter } from "@api/services/authentication/principal-session.adapter";
 import {
   CustomSsoClientRuntimeUnavailableError,
 } from "@api/services/client/custom-sso-client-runtime.reader";
-import {
-  createCustomSsoSessionKernelAdapter,
-} from "@api/services/session/custom-sso-session-kernel.adapter";
-import { createAuthorizeSsoUseCase } from "@api/use-cases/sso/authorize-sso/authorize-sso.use-case";
-import { createLoginWithOaUseCase } from "@api/use-cases/sso/login-with-oa/login-with-oa.use-case";
-import { createLoginWithWechatUseCase } from "@api/use-cases/sso/login-with-wechat/login-with-wechat.use-case";
-import { createLogoutSsoSessionUseCase } from "@api/use-cases/sso/logout-sso-session/logout-sso-session.use-case";
-import { createAuthorizationGrantRedemption } from "@iam/api-core/authorization-grant";
-import {
-  createInMemoryAuthorizationGrantRedemptionStore,
-  createManualAuthorizationGrantRedemptionScheduler,
-} from "@iam/api-core/authorization-grant/testing";
+import { AuthzMaintenanceError } from "@iam/api-core/errors/AuthzMaintenanceError";
 import { AuthzUnauthorizedError } from "@iam/api-core/errors/AuthzUnauthorizedError";
+import { CustomError } from "@iam/api-core/errors/CustomError";
 import { InvalidAuthCodeError } from "@iam/api-core/errors/InvalidAuthCodeError";
 import { LoggerSourceApp, SystemLogEvent } from "@iam/api-core/logger";
-import { createSessionKernelForTesting } from "@iam/api-core/session/kernel/testing";
 import {
   SubjectAccessDisabledError,
   SubjectAccessUnavailableError,
@@ -31,7 +21,6 @@ import {
 import {
   SubjectProjectionNotReadyError,
 } from "@iam/client-subject-projection";
-import { CustomSsoSubjectProjectionInvariantError } from "@iam/client-subject-projection/custom-sso";
 import {
   ClientStatus,
   CustomSsoClientMode,
@@ -40,6 +29,10 @@ import {
   UserStatus,
   UserType,
 } from "@iam/contracts";
+import { createAuthorizationGrantRedemption, createAuthorizeSsoUseCase, createCustomSsoApplication, createCustomSsoSessionKernelAdapter, createInMemoryAuthorizationGrantRedemptionStore, createManualAuthorizationGrantRedemptionScheduler } from "@iam/custom-sso/testing";
+
+import { CustomSsoSubjectProjectionInvariantError } from "@iam/custom-sso/wire";
+import { createSessionKernelForTesting } from "@iam/session-kernel/testing";
 import { beforeEach, describe, expect, mock, test } from "bun:test";
 import { sm3 } from "sm-crypto";
 
@@ -343,6 +336,7 @@ function getGatewayClientContext(clientCode: "gateway" | "gateway-orcas") {
 }
 
 function createServices(options: {
+  traffic?: () => Promise<ClientTrafficGateResult>;
   applicationClock?: { now: () => number };
   authCodeExpireSeconds?: number;
   localSessionTtlSeconds?: number;
@@ -482,7 +476,8 @@ function createServices(options: {
       subjectIdentifier: context.subjectIdentifier,
     }), "utf8").toString("base64")),
   };
-  const customSsoSession = createCustomSsoSessionKernelAdapter({
+  const principalSessions = createPrincipalSessionAdapter(adapterKernel);
+  const sessionDeps = {
     authorizationGrantRedemption,
     clients: {
       findRuntimeRecord: options.findRuntimeClient
@@ -513,11 +508,26 @@ function createServices(options: {
       authCodeExpireSeconds: options.authCodeExpireSeconds ?? 60,
       localSessionTtlSeconds: options.localSessionTtlSeconds ?? 3600,
     },
+  } satisfies CustomSsoSessionKernelAdapterDeps;
+  const customSsoSession = createCustomSsoSessionKernelAdapter(sessionDeps);
+  const customSso = createCustomSsoApplication({
+    ...sessionDeps,
+    users: adapterUserService,
+    clientSecrets: {
+      findSecretRecord: async (clientCode: string) => {
+        const runtime = await sessionDeps.clients.findRuntimeRecord(clientCode);
+        return runtime === null ? null : { ...runtime, customSsoSecretHash: "test-secret-hash" };
+      },
+    },
+    secrets: { verify: async (secret: string) => secret === "test-secret" },
+    traffic: { check: options.traffic ?? (async () => ({ outcome: "enabled" as const })) },
   });
   const wechat = {
     getWxUserId: mock(async () => "wx-id"),
   };
   const ssoUsers = {
+    checkPassword: mock(async () => true),
+    getActiveUserByMobile: mock(async () => liveUserAvailable ? { ...userDetail, subjectIdentifier } : null),
     getActiveUserById: mock(async (userId: number) =>
       liveUserAvailable && userId === userDetail.id ? { ...userDetail, subjectIdentifier } : null),
     getActiveUserByUsername: mock(async (username: string) =>
@@ -530,29 +540,38 @@ function createServices(options: {
       return userDetail;
     }),
   };
-  const sso = {
-    loginWithOa: createLoginWithOaUseCase({
-      auditLogWriter,
-      clients: clientService,
+  const authentication = createAuthenticationUseCases({
+    auditLogWriter,
+    runtime: {
       clock: { now: () => fakeRedis.now() },
-      config: { nodeEnv: "test" },
-      principalSessions: customSsoSession,
-      users: ssoUsers,
-    }),
-    loginWithWechat: createLoginWithWechatUseCase({
-      auditLogWriter,
-      cache: fakeRedis,
-      delay: { wait: async () => undefined },
-      principalSessions: customSsoSession,
-      users: ssoUsers,
-      wechat,
-    }),
-    logout: createLogoutSsoSessionUseCase({ sessions: customSsoSession }),
+      config: { env: { nodeEnv: "test" }, auth: { magicCode: "MAGIC" } },
+      redis: fakeRedis,
+      integrations: { wechat },
+    },
+    services: {
+      cap: { ensureActionAllowed: async () => undefined },
+      client: clientService,
+      humanRisk: { recordLoginFailure: async () => undefined },
+      loginRestriction: {
+        getRestriction: async () => null,
+        clearLoginState: async () => undefined,
+        recordFailure: async () => ({ failureCount: 1, remainingAttempts: 4, restriction: null }),
+      },
+      mobile: { consumeVerificationCode: async () => true },
+      principalSessions,
+      user: ssoUsers,
+    },
+  });
+  const sso = {
+    logout: customSso.logout,
   };
 
   return {
+    authentication,
     authorizationGrantRedemption,
+    principalSessions,
     customSsoSession,
+    customSso,
     kernel,
     orcas,
     resolveAuthenticationContext: async (
@@ -573,8 +592,98 @@ function createServices(options: {
   };
 }
 
-async function createPrincipalToken(customSsoSession: ReturnType<typeof createServices>["customSsoSession"]) {
-  return (await customSsoSession.createPrincipalSession(subjectIdentifier, { amr: ["pwd"] })).token;
+test("complete protocol access operations reject maintenance before resolving credentials", async () => {
+  const resolveCredential = mock(async () => {
+    throw new Error("credential must not be read");
+  });
+  const services = createServices({
+    traffic: async () => ({ outcome: "maintenance" }),
+    decorateKernel: kernel => ({ ...kernel, resolveCredential }),
+  });
+  for (const operation of [
+    () => services.customSso.resolvePublicAuthentication("token", "gateway"),
+    () => services.customSso.authorizeLocalSession("token", "gateway"),
+  ]) {
+    let error: unknown;
+    try {
+      await operation();
+    }
+    catch (caught) {
+      error = caught;
+    }
+    expect(error).toBeInstanceOf(AuthzMaintenanceError);
+  }
+  expect(resolveCredential).not.toHaveBeenCalled();
+});
+
+test("complete Custom SSO operations own validation, continuation, redemption, delivery and logout", async () => {
+  const services = createServices();
+  const protocol = services.customSso;
+  const globalSessionToken = await createPrincipalToken(services.principalSessions);
+  const input = { clientCode: client.clientCode, globalSessionToken, redirectUrl: "https://app.example.com/callback" };
+  const inspection = await protocol.checkLoginContinuation.execute(input);
+  expect(inspection).toBe("valid");
+  const grant = await protocol.authorize.execute(
+    { ...input, tokenSource: "cookie" },
+    { requestContext: requestContext("full-operation") },
+  );
+  if (!grant.isLogin)
+    throw new Error("expected authorization grant");
+  let error: unknown;
+  try {
+    await protocol.exchangeCode.execute({
+      clientCode: client.clientCode,
+      clientSecret: "wrong",
+      code: grant.code,
+      redirectUri: input.redirectUrl,
+    });
+  }
+  catch (caught) {
+    error = caught;
+  }
+  expect(error).toBeInstanceOf(Error);
+  const credential = await protocol.exchangeCode.execute({
+    clientCode: client.clientCode,
+    clientSecret: "test-secret",
+    code: grant.code,
+    redirectUri: input.redirectUrl,
+  });
+  expect(credential.subject).toEqual({ version: 2, subjectIdentifier });
+  const authenticated = await protocol.resolvePublicAuthentication(credential.sid, client.clientCode);
+  const userInfo = await authenticated.subjectDeliveryCapability.resolveUserInfo();
+  expect(userInfo).toEqual(credential.subject);
+  const loggedOut = await protocol.logout.execute({ sessionToken: credential.sid });
+  expect(loggedOut).toBe(true);
+  const afterLogout = await protocol.checkLoginContinuation.execute(input);
+  expect(afterLogout).toBe("invalid");
+});
+
+test.each(["gateway", "gateway-orcas"] as const)("complete callback owns %s Local Session and delivery", async (clientCode) => {
+  const services = createServices();
+  const globalSessionToken = await createPrincipalToken(services.principalSessions);
+  const redirectUrl = "https://gateway.example.com/";
+  const grant = await services.customSso.authorize.execute({
+    clientCode,
+    globalSessionToken,
+    redirectUrl,
+    tokenSource: "cookie",
+    state: "opaque-state",
+  });
+  if (!grant.isLogin)
+    throw new Error("expected authorization grant");
+  const session = await services.customSso.completeCallback.execute({ clientCode, code: grant.code, redirectUrl });
+  expect(session.state).toBe("opaque-state");
+  expect(session.orcasSessionId).toBe(clientCode === "gateway-orcas" ? "orcas-session" : null);
+  expect(services.orcas.orcasLogin).toHaveBeenCalledTimes(clientCode === "gateway-orcas" ? 1 : 0);
+  const header = await services.customSso.authorizeLocalSession(session.token, clientCode);
+  expect(JSON.parse(Buffer.from(header, "base64").toString("utf8"))).toEqual({ version: 1, subjectIdentifier });
+  await services.customSso.logout.execute({ sessionToken: session.token });
+  const inspection = await services.customSso.checkLoginContinuation.execute({ clientCode, globalSessionToken, redirectUrl });
+  expect(inspection).toBe("invalid");
+});
+
+async function createPrincipalToken(principalSessions: ReturnType<typeof createServices>["principalSessions"]) {
+  return (await principalSessions.createPrincipalSession(subjectIdentifier, { amr: ["pwd"] })).token;
 }
 
 function requestContext(requestId: string) {
@@ -589,6 +698,28 @@ function requestContext(requestId: string) {
   };
 }
 
+function authenticationAttempts(services: ReturnType<typeof createServices>) {
+  const options = { requestContext: requestContext("req-authentication") };
+  const timestamp = String(fakeRedis.now());
+  return {
+    pwd: () => services.authentication.loginWithPassword.execute({
+      username: userDetail.username,
+      password: "correct-password",
+    }, options),
+    sms: () => services.authentication.loginWithMobile.execute({
+      phoneNumber: userDetail.mobile,
+      code: "123456",
+    }, options),
+    oa: () => services.authentication.loginWithOa.execute({
+      clientCode: client.clientCode,
+      loginId: userDetail.username,
+      timestamp,
+      token: createOaToken(userDetail.username, timestamp),
+    }, options),
+    wechat: () => services.authentication.loginWithWechat.execute({ code: "wx-code" }, options),
+  };
+}
+
 async function issueAuthorizationCode(
   services: ReturnType<typeof createServices>,
   options: {
@@ -600,7 +731,7 @@ async function issueAuthorizationCode(
     tokenSource?: "cookie" | "authorization_header" | "query";
   } = {},
 ) {
-  const principalToken = await createPrincipalToken(services.customSsoSession);
+  const principalToken = await createPrincipalToken(services.principalSessions);
   const authorization = await services.customSsoSession.issueAuthorizationCode({
     clientCode: options.clientCode ?? client.clientCode,
     configVersion: options.configVersion ?? 7,
@@ -1008,7 +1139,7 @@ describe("Custom SSO module interface", () => {
           : { ok: true };
       },
     });
-    const token = await createPrincipalToken(services.customSsoSession);
+    const token = await createPrincipalToken(services.principalSessions);
 
     await expect(services.customSsoSession.issueAuthorizationCode({
       clientCode: client.clientCode,
@@ -1113,7 +1244,7 @@ describe("Custom SSO module interface", () => {
     const services = createServices({
       validatePrincipal: async () => ({ ok: false, reason: "user_disabled" }),
     });
-    const token = await createPrincipalToken(services.customSsoSession);
+    const token = await createPrincipalToken(services.principalSessions);
 
     await expect(
       services.resolveAuthenticationContext(token),
@@ -1127,7 +1258,7 @@ describe("Custom SSO module interface", () => {
         throw unavailable;
       },
     });
-    const token = await createPrincipalToken(services.customSsoSession);
+    const token = await createPrincipalToken(services.principalSessions);
 
     await expect(
       services.resolveAuthenticationContext(token),
@@ -1154,7 +1285,7 @@ describe("Custom SSO module interface", () => {
 
   test("resolves Principal Session context through the Barrier without a legacy account lookup", async () => {
     const services = createServices();
-    const token = await createPrincipalToken(services.customSsoSession);
+    const token = await createPrincipalToken(services.principalSessions);
     services.userService.getActiveUserBySubjectIdentifier.mockClear();
     services.userService.getUserDetailById.mockClear();
 
@@ -1195,7 +1326,7 @@ describe("Custom SSO module interface", () => {
         : { ok: true },
     });
     const principalToken = await createPrincipalToken(
-      principalServices.customSsoSession,
+      principalServices.principalSessions,
     );
     principalDisabled = true;
 
@@ -1233,7 +1364,7 @@ describe("Custom SSO module interface", () => {
   test("inspects a Principal Session without issuing a protocol artifact", async () => {
     const services = createServices();
     const principalToken = await createPrincipalToken(
-      services.customSsoSession,
+      services.principalSessions,
     );
 
     await expect(
@@ -1250,7 +1381,7 @@ describe("Custom SSO module interface", () => {
 
   test("issues a strict V1 authorization grant and initializes its redemption record", async () => {
     const services = createServices();
-    const principalToken = await createPrincipalToken(services.customSsoSession);
+    const principalToken = await createPrincipalToken(services.principalSessions);
 
     const authorization = await services.customSsoSession.issueAuthorizationCode({
       clientCode: client.clientCode,
@@ -1327,7 +1458,7 @@ describe("Custom SSO module interface", () => {
       }),
     });
     const principalToken = await createPrincipalToken(
-      services.customSsoSession,
+      services.principalSessions,
     );
     const findRuntimeRecord = mock(async () => currentRuntimeClient);
     const authorize = createAuthorizeSsoUseCase({
@@ -1368,7 +1499,7 @@ describe("Custom SSO module interface", () => {
         initialize,
       }),
     });
-    const principalToken = await createPrincipalToken(services.customSsoSession);
+    const principalToken = await createPrincipalToken(services.principalSessions);
 
     await expect(services.customSsoSession.issueAuthorizationCode({
       clientCode: client.clientCode,
@@ -1846,7 +1977,7 @@ describe("Custom SSO module interface", () => {
 
   test("redeemIndependentGrant records narrow Subject-based audit context", async () => {
     const services = createServices();
-    const principalToken = await createPrincipalToken(services.customSsoSession);
+    const principalToken = await createPrincipalToken(services.principalSessions);
     const authorization = await services.customSsoSession.issueAuthorizationCode({
       clientCode: client.clientCode,
       configVersion: independentClient.configVersion,
@@ -1972,7 +2103,7 @@ describe("Custom SSO module interface", () => {
       }),
     });
     const principalToken = await createPrincipalToken(
-      services.customSsoSession,
+      services.principalSessions,
     );
 
     await expect(
@@ -2268,7 +2399,7 @@ describe("Custom SSO module interface", () => {
 
   test("logs legacy PrincipalSession bearer sources without leaking bearer values", async () => {
     const services = createServices();
-    const principalToken = await createPrincipalToken(services.customSsoSession);
+    const principalToken = await createPrincipalToken(services.principalSessions);
 
     await services.customSsoSession.issueAuthorizationCode({
       clientCode: client.clientCode,
@@ -2312,26 +2443,74 @@ describe("Custom SSO module interface", () => {
     expect(output).not.toContain("redirectUrl");
   });
 
-  test("OA and WeChat login create Kernel PrincipalSession tokens", async () => {
-    const services = createServices();
-    const ts = String(fakeRedis.now());
-    const oa = await services.sso.loginWithOa.execute({
-      clientCode: client.clientCode,
-      loginId: userDetail.username,
-      timestamp: ts,
-      token: createOaToken(userDetail.username, ts),
+  test("production authentication composition creates Principal Sessions for all four login methods", async () => {
+    const services = createServices({
+      applicationClock: { now: () => fakeRedis.now() + 86_400_000 },
     });
+    const tokens = new Set<string>();
+    const attempts = authenticationAttempts(services);
+    for (const [amr, login] of Object.entries(attempts)) {
+      const result = await login();
+      expect(result).toEqual({ token: expect.stringContaining("iam_ps_"), isMobileSet: true });
+      tokens.add(result.token);
+      const resolved = await services.kernel.resolvePrincipalSession(result.token);
+      expect(resolved).toMatchObject({
+        status: "resolved",
+        observedAt: fakeRedis.now(),
+        value: {
+          principal: { principalType: "user", subjectId: subjectIdentifier },
+          sessionKind: "browser_user",
+          amr: [amr],
+          authTime: fakeRedis.now() + 86_400_000,
+          expiresAt: fakeRedis.now() + 3_600_000,
+          origin: { ip: "203.0.113.10", userAgent: "api-test" },
+        },
+      });
+      const authenticationContext = await services.resolveAuthenticationContext(result.token);
+      expect(authenticationContext).toEqual({ authenticatedClientCode: "iam", subjectIdentifier });
+    }
+    expect(tokens.size).toBe(4);
+    expect(auditLogs).toHaveLength(4);
+    const wxRetry = await attempts.wechat();
+    expect(tokens.has(wxRetry.token)).toBe(false);
+    const retried = await services.kernel.resolvePrincipalSession(wxRetry.token);
+    expect(retried).toMatchObject({ status: "resolved", value: { amr: ["wechat"] } });
+    expect(auditLogs).toHaveLength(4);
+  });
 
-    expect(oa).toEqual({ token: expect.stringContaining("iam_ps_"), isMobileSet: true });
-    await expect(services.resolveAuthenticationContext(oa.token)).resolves.toEqual({
-      authenticatedClientCode: "iam",
-      subjectIdentifier,
+  test.each(["pwd", "sms", "oa", "wechat"] as const)("%s production wiring preserves Subject Access creation failure", async (method) => {
+    const failure = new SubjectAccessUnavailableError();
+    const services = createServices({
+      captureSubjectAccessTransitionId: async () => { throw failure; },
     });
+    let caught: unknown;
+    try {
+      await authenticationAttempts(services)[method]();
+    }
+    catch (error) {
+      caught = error;
+    }
+    expect(caught).toBe(failure);
+    expect(auditLogs).toHaveLength(0);
+  });
 
-    const wx = await services.sso.loginWithWechat.execute({ code: "wx-code" });
-    expect(wx).toEqual({ token: expect.stringContaining("iam_ps_"), isMobileSet: true });
-    const wxRetry = await services.sso.loginWithWechat.execute({ code: "wx-code" });
-    expect(wxRetry).toEqual({ token: expect.stringContaining("iam_ps_"), isMobileSet: true });
+  test.each(["pwd", "sms", "oa", "wechat"] as const)("%s production wiring preserves Kernel creation failure mapping", async (method) => {
+    const services = createServices({
+      decorateKernel: kernel => ({
+        ...kernel,
+        createPrincipalSession: async () => ({ status: "fail_closed", message: "unavailable" }),
+      }),
+    });
+    let caught: unknown;
+    try {
+      await authenticationAttempts(services)[method]();
+    }
+    catch (error) {
+      caught = error;
+    }
+    expect(caught).toBeInstanceOf(CustomError);
+    expect(caught).toMatchObject({ message: "全局session创建失败" });
+    expect(auditLogs).toHaveLength(0);
   });
 
   test("redeems an Independent grant once without a private payload", async () => {

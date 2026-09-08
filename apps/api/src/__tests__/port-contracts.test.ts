@@ -1,11 +1,11 @@
 import type { PrivilegeDelegationResolutionRepository } from "@api/composition/repositories/privilege-delegation-resolution.repository";
 import type { OrcasClient } from "@api/lib/integrations/orcas";
+import type { PrincipalSessionAdapter } from "@api/services/authentication/principal-session.adapter";
 import type { ClientReaderPort } from "@api/services/client/client.port";
 import type { ClientRepository } from "@api/services/client/client.repository";
 import type {
   CustomSsoClientRuntimeReader,
 } from "@api/services/client/custom-sso-client-runtime.reader";
-import type { CustomSsoClientSecretReader } from "@api/services/client/custom-sso-client-secret-verifier";
 import type { CustomSsoClientRepository } from "@api/services/client/custom-sso-client.repository";
 import type { EmploymentRepository } from "@api/services/employment/employment.repository";
 import type { MobileUserReaderPort } from "@api/services/mobile/mobile.port";
@@ -26,20 +26,6 @@ import type {
 } from "@api/services/privilege/privilegeDelegation.port";
 import type { PrivilegeDelegationRepository } from "@api/services/privilege/privilegeDelegation.repository";
 import type {
-  CustomSsoSessionKernelAdapter,
-} from "@api/services/session/custom-sso-session-kernel.adapter";
-import type {
-  CustomSsoGatewayOrcasUserPort,
-  CustomSsoOrcasLoginPort,
-  CustomSsoSubjectDeliveryPort,
-} from "@api/services/session/custom-sso-session-kernel.port";
-import type {
-  CustomSsoSubjectDelivery,
-} from "@api/services/sso/subject-delivery/custom-sso-subject-delivery";
-import type {
-  CustomSsoSubjectProjectionPort,
-} from "@api/services/sso/subject-delivery/custom-sso-subject-delivery.port";
-import type {
   UserDelegationReaderPort,
   UserMobileBindingPort,
   UserMobileVerificationPort,
@@ -53,10 +39,12 @@ import type {
   MobileLoginRestrictionPort,
   MobilePrincipalSessionPort,
 } from "@api/use-cases/authentication/login-with-mobile/login-with-mobile.port";
+import type { OaPrincipalSessionPort } from "@api/use-cases/authentication/login-with-oa/login-with-oa.port";
 import type {
   PasswordLoginRestrictionPort,
   PasswordPrincipalSessionPort,
 } from "@api/use-cases/authentication/login-with-password/login-with-password.port";
+import type { WechatPrincipalSessionPort } from "@api/use-cases/authentication/login-with-wechat/login-with-wechat.port";
 import type {
   RegisterPurveyorEmploymentStorePort,
   RegisterPurveyorMobilePort,
@@ -67,22 +55,26 @@ import type {
 import type {
   PrivilegeDelegationResolutionPort,
 } from "@api/use-cases/internal/resolve-privilege-delegations/resolve-privilege-delegations.port";
+import type { LoginRestriction } from "@iam/api-core/login-restriction";
+import type { ClientSubjectProjectionService } from "@iam/client-subject-projection";
+import type {
+  CustomSsoSubjectProjectionPort,
+} from "@iam/custom-sso";
 import type {
   AuthorizationCodeIssuerPort,
   AuthorizeSsoClientReaderPort,
-} from "@api/use-cases/sso/authorize-sso/authorize-sso.port";
-import type {
+  CustomSsoClientSecretReader,
+  CustomSsoGatewayOrcasUserPort,
+  CustomSsoOrcasLoginPort,
+  CustomSsoSessionKernelAdapter,
+  CustomSsoSubjectDelivery,
+  CustomSsoSubjectDeliveryPort,
   GatewayCallbackClientReaderPort,
   GatewayLoginCompletionPort,
-} from "@api/use-cases/sso/complete-sso-callback/complete-sso-callback.port";
-import type {
   IndependentAuthorizationGrantPort,
-} from "@api/use-cases/sso/exchange-sso-code/exchange-sso-code.port";
-import type { OaPrincipalSessionPort } from "@api/use-cases/sso/login-with-oa/login-with-oa.port";
-import type { WechatPrincipalSessionPort } from "@api/use-cases/sso/login-with-wechat/login-with-wechat.port";
-import type { LoginRestriction } from "@iam/api-core/login-restriction";
-import type { SessionOrigin } from "@iam/api-core/session/kernel";
-import type { ClientSubjectProjectionService } from "@iam/client-subject-projection";
+} from "@iam/custom-sso/testing";
+
+import type { SessionOrigin } from "@iam/session-kernel";
 import type { UserProfileQueryService } from "@iam/user-profile-read-model/query";
 import { expect, test } from "bun:test";
 
@@ -162,10 +154,10 @@ test("API providers structurally satisfy consumer-owned ports", () => {
 
   assertAssignable<PasswordLoginRestrictionPort, LoginRestriction>();
   assertAssignable<MobileLoginRestrictionPort, LoginRestriction>();
-  assertAssignable<PasswordPrincipalSessionPort, CustomSsoSessionKernelAdapter>();
-  assertAssignable<MobilePrincipalSessionPort, CustomSsoSessionKernelAdapter>();
-  assertAssignable<OaPrincipalSessionPort, CustomSsoSessionKernelAdapter>();
-  assertAssignable<WechatPrincipalSessionPort, CustomSsoSessionKernelAdapter>();
+  assertAssignable<PasswordPrincipalSessionPort, PrincipalSessionAdapter>();
+  assertAssignable<MobilePrincipalSessionPort, PrincipalSessionAdapter>();
+  assertAssignable<OaPrincipalSessionPort, PrincipalSessionAdapter>();
+  assertAssignable<WechatPrincipalSessionPort, PrincipalSessionAdapter>();
 
   assertAssignable<AuthorizationCodeIssuerPort, CustomSsoSessionKernelAdapter>();
   assertAssignable<IndependentAuthorizationGrantPort, CustomSsoSessionKernelAdapter>();

@@ -1,4 +1,4 @@
-import type { IssuedCredential } from "@iam/api-core/session/kernel";
+import type { IssuedCredential } from "@iam/session-kernel";
 import type { AdapterPayload } from "oidc-provider";
 import type {
   CreateOidcAuthorizationCodeSnapshotInput,
