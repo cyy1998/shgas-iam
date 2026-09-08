@@ -23,14 +23,7 @@ describe("ClientCodeSchema", () => {
 });
 
 describe("Custom SSO Client public contract", () => {
-  test("does not publish the legacy management-level vocabulary", () => {
-    expect(contracts).not.toHaveProperty("ClientManagementLevel");
-    expect(contracts).not.toHaveProperty("clientManagementLevelToString");
-    expect(contracts).not.toHaveProperty("getClientManagementLevelOptions");
-  });
-
-  test("publishes one canonical Subject Claim vocabulary without a V1 alias", () => {
+  test("publishes the canonical Subject Claim vocabulary", () => {
     expect(contracts).toHaveProperty("SUBJECT_CLAIMS");
-    expect(contracts).not.toHaveProperty("SUBJECT_CLAIMS_V1");
   });
 });

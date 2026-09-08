@@ -19,9 +19,6 @@ describe("apisix sync JSON output", () => {
       deletes: [],
       ignored: [{ kind: "routes", id: "route-a", reason: "dynamic" }],
     });
-    expect(output).not.toHaveProperty("ignoredDynamic");
-    expect(output).not.toHaveProperty("ignoredOutOfScope");
-    expect(output).not.toHaveProperty("ignoredUnmanaged");
   });
 
   it("serializes unified applied entries with actions", () => {

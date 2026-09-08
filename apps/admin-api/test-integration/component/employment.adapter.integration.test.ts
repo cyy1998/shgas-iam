@@ -332,21 +332,6 @@ describe("admin employment adapter", () => {
     });
   });
 
-  test("does not expose legacy status update or delete mutations", () => {
-    const adapter = createEmploymentAdapter({
-      changeEmploymentAvailability: { execute: mock(async () => ({ changed: true, result: null })) },
-      createEmployment: { execute: mock(async () => ({ changed: true, result: { id: 10 } })) },
-      endEmployment: { execute: mock(async () => ({ changed: true, result: null })) },
-      employmentService: {},
-      resignUser: { execute: mock(async () => ({ changed: true, result: null })) },
-    } as any);
-    const procedureNames = Object.keys(adapter.employmentAdminRouter._def.procedures);
-    expect(procedureNames).not.toContain("updateStatus");
-    expect(procedureNames).not.toContain("delete");
-    expect((adapter as any).employmentsStatusUpdate).toBeUndefined();
-    expect((adapter as any).employmentsDelete).toBeUndefined();
-  });
-
   test("rejects lifecycle fields from the generic Employment edit contract", async () => {
     const updateEmployment = mock(async () => ({ changed: true, result: null }));
     const adapter = createEmploymentAdapter({

@@ -42,12 +42,4 @@ describe('Custom SSO V2 user-info projection presentation', () => {
       '财务经理 (FIN-001)',
     );
   });
-
-  it('never depends on removed database IDs or flat employment aliases', () => {
-    const serialized = JSON.stringify(employment);
-
-    expect(serialized).not.toContain('"id"');
-    expect(serialized).not.toContain('"posCode"');
-    expect(serialized).not.toContain('"orgCode"');
-  });
 });

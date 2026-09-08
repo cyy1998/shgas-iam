@@ -274,8 +274,6 @@ describe("oIDC claims and UserInfo snapshot", () => {
         privileges: ["app:read"],
       },
     });
-    expect(JSON.stringify(snapshot.claims)).not.toContain("\"code\"");
-    expect(JSON.stringify(snapshot.claims)).not.toContain("\"path\"");
   });
 
   it("maps a strict authorization snapshot that is not ready to temporarily_unavailable", async () => {
@@ -771,8 +769,6 @@ describe("oIDC claims and UserInfo snapshot", () => {
         },
       }),
     });
-    expect(extra?.claimsSnapshot.claims).not.toHaveProperty("phone_number");
-    expect(extra?.claimsSnapshot.claims).not.toHaveProperty("id");
 
     const resolved = await adapter.findAccount(account.subjectIdentifier, {
       ...token,

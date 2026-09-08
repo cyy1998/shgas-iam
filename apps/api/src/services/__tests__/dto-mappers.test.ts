@@ -1,9 +1,7 @@
 import {
-  EmploymentStatus,
   OrganizationLevel,
   OrganizationStatus,
   OrganizationType,
-  PositionStatus,
   PrivilegeDelegationStatus,
   PrivilegeStatus,
   UserStatus,
@@ -51,42 +49,6 @@ function organization(id = 1, orgCode = `ORG${id}`, orgType = OrganizationType.D
     isVirtual: false,
     isEntity: true,
     status: OrganizationStatus.Enable,
-  };
-}
-
-function position(id = 1) {
-  return {
-    ...baseRecord(id),
-    posCode: `POS${id}`,
-    posName: `Position ${id}`,
-    status: PositionStatus.Enable,
-    description: null,
-  };
-}
-
-function employment() {
-  const company = organization(20, "COMP", OrganizationType.Company);
-  const dept = organization(10, "DEPT", OrganizationType.Department);
-  return {
-    ...baseRecord(1),
-    userId: 1,
-    posId: 1,
-    orgId: 10,
-    isPrimary: true,
-    status: EmploymentStatus.Enable,
-    startTime: createdAt,
-    endTime: null,
-    description: null,
-    user: user(1),
-    organization: {
-      assignedOrg: { ...dept, pathIndex: 1, distanceToAssignedOrg: 0 },
-      fullOrgPath: [
-        { ...company, pathIndex: 0, distanceToAssignedOrg: 1 },
-        { ...dept, pathIndex: 1, distanceToAssignedOrg: 0 },
-      ],
-      companyNodes: [{ ...company, pathIndex: 0, distanceToAssignedOrg: 1 }],
-    },
-    position: position(1),
   };
 }
 
@@ -143,48 +105,6 @@ describe("API DTO mappers", () => {
       parentCode: "PARENT",
       parentName: "PARENT name",
     });
-  });
-
-  test("maps employment details to a structured DTO", async () => {
-    const schemaModule = await import("../employment/employment.schema") as any;
-
-    expect(typeof schemaModule.toEmploymentDto).toBe("function");
-    const dto = schemaModule.toEmploymentDto(employment());
-
-    expect(dto).toMatchObject({
-      user: { username: "user1", name: "User 1" },
-      position: { posCode: "POS1", posName: "Position 1" },
-      organization: {
-        assignedOrg: { orgCode: "DEPT" },
-        companyNodes: [{ orgCode: "COMP" }],
-      },
-    });
-    for (const field of [
-      "username",
-      "name",
-      "mobile",
-      "wxId",
-      "posCode",
-      "posName",
-      "orgCode",
-      "orgName",
-      "orgType",
-      "compCode",
-      "compName",
-    ]) {
-      expect(dto).not.toHaveProperty(field);
-    }
-
-    const withoutCompany = schemaModule.toEmploymentDto({
-      ...employment(),
-      organization: {
-        ...employment().organization,
-        companyNodes: [],
-      },
-    });
-    expect(withoutCompany.organization.companyNodes).toEqual([]);
-    expect(withoutCompany).not.toHaveProperty("compCode");
-    expect(withoutCompany).not.toHaveProperty("compName");
   });
 
   test("maps privilege delegation details to summary and detail DTOs", async () => {

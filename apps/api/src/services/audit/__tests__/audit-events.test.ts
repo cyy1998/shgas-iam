@@ -59,8 +59,9 @@ describe("api audit event builders", () => {
       "00000000-0000-4000-8000-000000001001",
       "portal",
     );
-    expect(gatewayAudit).toMatchObject({
+    expect(gatewayAudit).toEqual({
       action: "auth.login.local",
+      actorType: "user",
       actorUserId: null,
       outcome: "success",
       targetCode: "00000000-0000-4000-8000-000000001001",
@@ -72,13 +73,13 @@ describe("api audit event builders", () => {
         mode: CustomSsoClientMode.Gateway,
       },
     });
-    expect(gatewayAudit.details).not.toHaveProperty("managementLevel");
     const independentAudit = authAudit.buildIndependentLoginSuccessAudit(
       "00000000-0000-4000-8000-000000001001",
       "portal",
     );
-    expect(independentAudit).toMatchObject({
+    expect(independentAudit).toEqual({
       action: "auth.login.local",
+      actorType: "user",
       actorUserId: null,
       outcome: "success",
       targetCode: "00000000-0000-4000-8000-000000001001",
@@ -90,7 +91,6 @@ describe("api audit event builders", () => {
         mode: CustomSsoClientMode.Independent,
       },
     });
-    expect(independentAudit.details).not.toHaveProperty("managementLevel");
     expect(authAudit.buildOaLoginSuccessAudit(user, "oa")).toMatchObject({
       action: "auth.login.oa",
       outcome: "success",

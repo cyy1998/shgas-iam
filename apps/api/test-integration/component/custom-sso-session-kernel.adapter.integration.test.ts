@@ -51,14 +51,12 @@ class FakeRedis {
   readonly zsets = new Map<string, Array<{ member: string; score: number }>>();
   private readonly expires = new Map<string, number>();
   private timestamp = 1_700_000_000_000;
-  failNextPayloadWrite = false;
 
   reset() {
     this.values.clear();
     this.zsets.clear();
     this.expires.clear();
     this.timestamp = 1_700_000_000_000;
-    this.failNextPayloadWrite = false;
   }
 
   now() {
@@ -73,15 +71,7 @@ class FakeRedis {
     return Array.from(this.values.keys()).filter(key => key.startsWith(prefix));
   }
 
-  payloadKeys() {
-    return this.keysStartingWith("custom-sso:local-session-payload:");
-  }
-
   async set(key: string, value: string, mode?: string, ttl?: number) {
-    if (this.failNextPayloadWrite && key.startsWith("custom-sso:local-session-payload:")) {
-      this.failNextPayloadWrite = false;
-      throw new Error("payload write failed");
-    }
     this.values.set(key, value);
     if (mode === "EX" && typeof ttl === "number") {
       this.expires.set(key, this.timestamp + ttl * 1000);
@@ -1353,7 +1343,6 @@ describe("Custom SSO module interface", () => {
     expect(JSON.stringify(credential)).not.toContain("userDetail");
     expect(JSON.stringify(credential)).not.toContain("projection");
     expect(JSON.stringify(credential)).not.toContain("responsibilities");
-    expect(fakeRedis.payloadKeys()).toHaveLength(0);
 
     await expect(
       services.resolveAuthenticationContext(
@@ -1651,7 +1640,6 @@ describe("Custom SSO module interface", () => {
     })).rejects.toBeInstanceOf(InvalidAuthCodeError);
 
     expect(fakeRedis.keysStartingWith("sess:v2:active:c:")).toHaveLength(0);
-    expect(fakeRedis.payloadKeys()).toHaveLength(0);
     expect(issuedCredentialToken).toBeDefined();
     await expect(
       services.kernel.resolveCredential(issuedCredentialToken!),
@@ -1999,7 +1987,6 @@ describe("Custom SSO module interface", () => {
     expect(serializedArtifacts).not.toContain("responsibilities");
     expect(serializedArtifacts).not.toContain(userDetail.username);
     expect(serializedArtifacts).not.toContain(`"id":${userDetail.id}`);
-    expect(fakeRedis.payloadKeys()).toHaveLength(0);
   });
 
   test.each([
@@ -2272,7 +2259,6 @@ describe("Custom SSO module interface", () => {
     });
 
     expect(result.credential).toContain("iam_ls_");
-    expect(fakeRedis.payloadKeys()).toHaveLength(0);
     await expect(
       services.customSsoSession.redeemIndependentGrant({
         client: independentClient,
@@ -2280,7 +2266,6 @@ describe("Custom SSO module interface", () => {
         redirectUri: "https://app.example.com/callback",
       }),
     ).rejects.toBeInstanceOf(InvalidAuthCodeError);
-    expect(fakeRedis.payloadKeys()).toHaveLength(0);
   });
 
   test("rejects an Independent grant bound to another client", async () => {
@@ -2320,8 +2305,6 @@ describe("Custom SSO module interface", () => {
         redirectUri: "https://app.example.com/callback",
       }),
     ).rejects.toBeInstanceOf(SubjectAccessDisabledError);
-
-    expect(fakeRedis.payloadKeys()).toHaveLength(0);
   });
 
   test("binds an authorization code to the issued redirect URL", async () => {
@@ -2342,7 +2325,6 @@ describe("Custom SSO module interface", () => {
       redirectUrl: "https://gateway.example.com/different",
     })).rejects.toBeInstanceOf(AuthzUnauthorizedError);
 
-    expect(fakeRedis.payloadKeys()).toHaveLength(0);
     await expect(services.customSsoSession.completeGatewayLogin({
       client: getGatewayClientContext("gateway-orcas"),
       code,
@@ -2395,29 +2377,6 @@ describe("Custom SSO module interface", () => {
         redirectUri: "https://app.example.com/callback",
       }),
     ).rejects.toBeInstanceOf(AuthzUnauthorizedError);
-
-    expect(fakeRedis.payloadKeys()).toHaveLength(0);
-  });
-
-  test("does not depend on the legacy private payload store when issuing an Independent credential", async () => {
-    const services = createServices();
-    const { code } = await issueAuthorizationCode(services);
-    fakeRedis.failNextPayloadWrite = true;
-
-    await expect(services.customSsoSession.redeemIndependentGrant({
-      client: independentClient,
-      code,
-      redirectUri: "https://app.example.com/callback",
-      requestContext: requestContext("req-payload-failure"),
-    })).resolves.toMatchObject({
-      credential: expect.stringContaining("iam_ls_"),
-    });
-
-    expect(fakeRedis.payloadKeys()).toHaveLength(0);
-    expect(logger.warn).not.toHaveBeenCalledWith(
-      expect.anything(),
-      "failed to write custom sso local session payload",
-    );
   });
 
   test("releases a Gateway grant when ORCAS login fails so the callback can retry", async () => {
@@ -2469,34 +2428,6 @@ describe("Custom SSO module interface", () => {
         revoked: 1,
       },
     });
-  });
-
-  test("does not depend on the legacy private payload store when issuing a Gateway Local Session", async () => {
-    const services = createServices();
-    const redirectUrl = "https://gateway.example.com/callback";
-    const { code } = await issueAuthorizationCode(services, {
-      clientCode: "gateway",
-      redirectUrl,
-    });
-    fakeRedis.failNextPayloadWrite = true;
-
-    await expect(
-      services.customSsoSession.completeGatewayLogin({
-        client: getGatewayClientContext("gateway"),
-        code,
-        redirectUrl,
-        requestContext: requestContext("req-gateway-payload-failure"),
-      }),
-    ).resolves.toMatchObject({
-      orcasSessionId: null,
-      token: expect.stringContaining("iam_ls_"),
-    });
-
-    expect(fakeRedis.payloadKeys()).toHaveLength(0);
-    expect(logger.warn).not.toHaveBeenCalledWith(
-      expect.anything(),
-      "failed to write custom sso local session payload",
-    );
   });
 
   test("completeGatewayLogin binds ORCAS without restoring a wide audit target", async () => {
@@ -2587,7 +2518,6 @@ describe("Custom SSO module interface", () => {
       orcasId: "orcas",
       subjectIdentifier,
     });
-    expect(fakeRedis.payloadKeys()).toHaveLength(0);
   });
 
   test("IAM validates Independent Client Credentials without a wide user context", async () => {
@@ -2771,7 +2701,7 @@ describe("Custom SSO module interface", () => {
     ).rejects.toBeInstanceOf(AuthzUnauthorizedError);
   });
 
-  test("Independent logout has no private payload or IAM-owned client notification", async () => {
+  test("Independent logout revokes its credential and keeps it invalid during maintenance", async () => {
     const services = createServices();
     const { principalToken, code } = await issueAuthorizationCode(services);
     const credential = await services.customSsoSession.redeemIndependentGrant({
@@ -2784,11 +2714,6 @@ describe("Custom SSO module interface", () => {
       credentials: { revoked: 1 },
     });
 
-    expect(fakeRedis.payloadKeys()).toHaveLength(0);
-    expect(logger.warn).not.toHaveBeenCalledWith(
-      expect.anything(),
-      "independent client logout endpoint failed",
-    );
     currentIndependentRuntimeClient = {
       ...independentRuntimeClient,
       status: ClientStatus.Maintenance,

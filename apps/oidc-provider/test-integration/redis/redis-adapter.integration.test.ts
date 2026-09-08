@@ -1,10 +1,10 @@
 import type Redis from "ioredis";
 import type { CreateOidcAuthorizationCodeSnapshotInput } from "../../src/provider/claims/claims-snapshot.ts";
+import type { AdapterOidcSessionKernel } from "../../src/storage/redis-adapter.port.ts";
 import type {
   OidcProviderRedisTestHarness,
   OidcProviderRedisTestScope,
 } from "./redis-test-harness.ts";
-import { randomInt } from "node:crypto";
 import {
   afterAll,
   afterEach,
@@ -42,39 +42,124 @@ afterAll(async () => {
 });
 
 describe("redis OIDC adapter real Redis contract", () => {
-  it("keeps access token authority in Session Kernel without legacy token indexes", async () => {
+  it("persists the Kernel credential identity and revokes that credential with its protocol mirror", async () => {
     const testScope = scope!;
     const clientId = testScope.unique("client");
     const providerSessionUid = testScope.unique("provider-session");
     const tokenId = testScope.unique("token");
-    const legacyUserId = randomInt(1, 2_147_483_647);
+    const credentialId = testScope.unique("kernel-credential");
     const tokenKey = `oidc:model:AccessToken:${tokenId}`;
     const consumedKey = `oidc:consumed:AccessToken:${tokenId}`;
     const currentClientIndex = `oidc:client-objects:${clientId}`;
-    const legacyKeys = [
-      `oidc:user-tokens:${legacyUserId}`,
-      `oidc:client-tokens:${clientId}`,
-      `oidc:global-session-tokens:${providerSessionUid}`,
-    ];
-    for (const key of [tokenKey, consumedKey, currentClientIndex, ...legacyKeys])
+    for (const key of [tokenKey, consumedKey, currentClientIndex])
       testScope.trackKey(key);
-    const adapter = createAdapter(testScope, "AccessToken");
+    const registrations: Parameters<AdapterOidcSessionKernel["registerAccessTokenCredential"]>[0][] = [];
+    const revoked: string[] = [];
+    const adapter = createAdapter(testScope, "AccessToken", {
+      registerAccessTokenCredential: async (input) => {
+        registrations.push(input);
+        return { credentialId } as never;
+      },
+      revokeAccessTokenCredential: async id => void revoked.push(id),
+    });
 
     await adapter.upsert(tokenId, {
       accountId: SUBJECT_IDENTIFIER,
       clientId,
-      extra: { globalSessionId: providerSessionUid, userId: legacyUserId },
       sessionUid: providerSessionUid,
     }, 60);
 
-    expect(await testScope.observer.exists(tokenKey)).toBe(1);
-    expect(await testScope.observer.zscore(currentClientIndex, tokenKey)).not.toBeNull();
-    expect(await testScope.observer.exists(...legacyKeys)).toBe(0);
-    expect(Object.keys(createOidcTokenStore(testScope.writer))).toEqual(["revokeAccessToken"]);
+    const serialized = await testScope.observer.get(tokenKey);
+    const membership = await testScope.observer.zscore(currentClientIndex, tokenKey);
+    expect(registrations).toEqual([expect.objectContaining({ providerTokenId: tokenId, providerTokenKey: tokenKey })]);
+    expect(JSON.parse(serialized ?? "null")).toEqual({
+      accountId: SUBJECT_IDENTIFIER,
+      clientId,
+      sessionUid: providerSessionUid,
+      oidcConfigVersion: 3,
+      oidcConfigVersions: { [clientId]: 3 },
+      kernelCredentialId: credentialId,
+      extra: { kernelCredentialId: credentialId },
+    });
+    expect(membership).not.toBeNull();
 
     await adapter.destroy(tokenId);
 
-    expect(await testScope.observer.exists(tokenKey, consumedKey)).toBe(0);
+    const remainingPayloads = await testScope.observer.exists(tokenKey, consumedKey);
+    expect(revoked).toEqual([credentialId]);
+    expect(remainingPayloads).toBe(0);
+  });
+
+  it("does not persist protocol payload or owner indexes when Kernel registration is rejected", async () => {
+    const testScope = scope!;
+    const clientId = testScope.unique("client");
+    const tokenId = testScope.unique("token");
+    const grantId = testScope.unique("grant");
+    const keys = [
+      `oidc:model:AccessToken:${tokenId}`,
+      `oidc:client-objects:${clientId}`,
+      `oidc:grant-objects:${grantId}`,
+    ];
+    keys.forEach(key => testScope.trackKey(key));
+    let registrationCalls = 0;
+    const adapter = createAdapter(testScope, "AccessToken", {
+      registerAccessTokenCredential: async () => {
+        registrationCalls += 1;
+        return null;
+      },
+    });
+    const failure = await adapter.upsert(tokenId, {
+      accountId: SUBJECT_IDENTIFIER,
+      clientId,
+      grantId,
+      sessionUid: testScope.unique("provider-session"),
+    }, 60).catch(error => error);
+    const persistedKeys = await testScope.observer.exists(...keys);
+
+    expect(failure).toEqual(new Error("OIDC access token Kernel credential registration failed"));
+    expect(registrationCalls).toBe(1);
+    expect(persistedKeys).toBe(0);
+  });
+
+  it("rejects a protocol mirror whose credential identity differs from the Kernel lookup", async () => {
+    const testScope = scope!;
+    const tokenId = testScope.unique("token");
+    const tokenKey = `oidc:model:AccessToken:${tokenId}`;
+    testScope.trackKey(tokenKey);
+    const payload = { kernelCredentialId: "other-credential", extra: { kernelCredentialId: "other-credential" } };
+    await testScope.writer.set(tokenKey, JSON.stringify(payload), "EX", 60);
+    const adapter = createAdapter(testScope, "AccessToken", {
+      resolveAccessTokenCredential: () => ({
+        credential: { credentialId: "kernel-credential" },
+        metadata: { providerTokenKey: tokenKey, providerTokenId: tokenId, oidcConfigVersion: 3 },
+      }),
+    });
+
+    const result = await adapter.find(tokenId);
+
+    expect(result).toBeUndefined();
+  });
+
+  it("reads the distinct payload key selected by the Kernel lookup", async () => {
+    const testScope = scope!;
+    const tokenId = testScope.unique("token");
+    const defaultKey = `oidc:model:AccessToken:${tokenId}`;
+    const selectedKey = `oidc:model:AccessToken:${testScope.unique("selected-payload")}`;
+    for (const key of [defaultKey, selectedKey])
+      testScope.trackKey(key);
+    const selectedPayload = { kernelCredentialId: "kernel-credential", scope: "openid profile" };
+    await testScope.writer.set(defaultKey, JSON.stringify({ ...selectedPayload, scope: "openid" }), "EX", 60);
+    await testScope.writer.set(selectedKey, JSON.stringify(selectedPayload), "EX", 60);
+    const adapter = createAdapter(testScope, "AccessToken", {
+      resolveAccessTokenCredential: () => ({
+        credential: { credentialId: "kernel-credential" },
+        metadata: { providerTokenKey: selectedKey, providerTokenId: tokenId, oidcConfigVersion: 3 },
+      }),
+    });
+
+    const result = await adapter.find(tokenId);
+
+    expect(result).toEqual(selectedPayload);
   });
 
   it("removes an access token provider payload during grant cleanup", async () => {
@@ -436,6 +521,8 @@ function createAdapter(
   testScope: OidcProviderRedisTestScope,
   model = "Session",
   options: {
+    registerAccessTokenCredential?: AdapterOidcSessionKernel["registerAccessTokenCredential"];
+    revokeAccessTokenCredential?: AdapterOidcSessionKernel["revokeAccessTokenCredential"];
     resolveAccessTokenCredential?: (tokenId: string) => unknown;
     version?: { value: number | null };
   } = {},
@@ -455,9 +542,10 @@ function createAdapter(
     oidcSession: {
       registerAuthorizationCodeArtifact: async () => true,
       consumeAuthorizationCodeArtifact: async () => null,
-      registerAccessTokenCredential: async input => ({ credentialId: `${input.providerTokenId}-credential` }) as never,
+      registerAccessTokenCredential: options.registerAccessTokenCredential
+        ?? (async input => ({ credentialId: `${input.providerTokenId}-credential` }) as never),
       resolveAccessTokenCredential: async tokenId => options.resolveAccessTokenCredential?.(tokenId) as never ?? null,
-      revokeAccessTokenCredential: async () => undefined,
+      revokeAccessTokenCredential: options.revokeAccessTokenCredential ?? (async () => undefined),
     },
     providerSessions: {
       consumeStaged: async () => null,

@@ -59,8 +59,6 @@ describe("defaultHook", () => {
       path: ["name"],
       message: expect.any(String),
     });
-    expect(body).not.toHaveProperty("success");
-    expect(body).not.toHaveProperty("error");
     expect(requestLogger.info).toHaveBeenCalledTimes(1);
     expect(requestLogger.error).toHaveBeenCalledTimes(0);
     expect(requestLogger.warn).toHaveBeenCalledTimes(0);

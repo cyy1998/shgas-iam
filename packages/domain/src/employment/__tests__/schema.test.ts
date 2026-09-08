@@ -86,35 +86,51 @@ function employmentInput(companyNodes = [
 
 describe("toEmploymentDto", () => {
   test("maps structured summaries, full path, and company nodes", () => {
-    const dto = toEmploymentDto(employmentInput());
+    const input = employmentInput();
+    const dto = toEmploymentDto({
+      ...input,
+      internalNote: "private employment context",
+      user: { ...input.user, password: "private password hash", subjectIdentifier: "private-subject" },
+      position: { ...input.position, internalNote: "private position context" },
+      organization: {
+        ...input.organization,
+        internalNote: "private organization context",
+        assignedOrg: { ...input.organization.assignedOrg, internalNote: "private node context" },
+        fullOrgPath: input.organization.fullOrgPath.map(node => ({ ...node, internalNote: "private path context" })),
+        companyNodes: input.organization.companyNodes.map(node => ({ ...node, internalNote: "private company context" })),
+      },
+    });
 
-    expect(dto.user).toMatchObject({ username: "u001", name: "用户" });
-    expect(dto.position).toMatchObject({ posCode: "POS", posName: "岗位" });
-    expect(dto.organization.fullOrgPath.map(node => node.orgCode)).toEqual(["ROOT", "COMP", "DEPT"]);
-    expect(dto.organization.companyNodes.map(node => node.orgCode)).toEqual(["ROOT", "COMP"]);
-    expect(dto.organization.assignedOrg.orgCode).toBe("DEPT");
-    for (const field of [
-      "username",
-      "name",
-      "mobile",
-      "wxId",
-      "posCode",
-      "posName",
-      "orgCode",
-      "orgName",
-      "orgType",
-      "compCode",
-      "compName",
-    ]) {
-      expect(dto).not.toHaveProperty(field);
-    }
+    const root = orgNode(1, "ROOT", "集团", OrganizationType.Company, 0, 2);
+    const company = orgNode(2, "COMP", "公司", OrganizationType.Company, 1, 1);
+    const department = orgNode(3, "DEPT", "部门", OrganizationType.Department, 2, 0);
+    expect(dto).toEqual({
+      ...base(10),
+      userId: 100,
+      posId: 200,
+      orgId: 3,
+      isPrimary: true,
+      status: EmploymentStatus.Enable,
+      startTime: now,
+      endTime: null,
+      description: null,
+      user: { id: 100, username: "u001", name: "用户", mobile: "13800000000", wxId: null },
+      position: { id: 200, posCode: "POS", posName: "岗位" },
+      organization: {
+        assignedOrg: department,
+        fullOrgPath: [root, company, department],
+        companyNodes: [root, company],
+      },
+    });
   });
 
   test("returns empty company nodes when no Company ancestor exists", () => {
     const dto = toEmploymentDto(employmentInput([]));
 
-    expect(dto.organization.companyNodes).toEqual([]);
-    expect(dto).not.toHaveProperty("compCode");
-    expect(dto).not.toHaveProperty("compName");
+    expect(dto.organization).toEqual({
+      assignedOrg: orgNode(3, "DEPT", "部门", OrganizationType.Department, 2, 0),
+      fullOrgPath: [{ ...orgNode(3, "DEPT", "部门", OrganizationType.Department, 2, 0), pathIndex: 0 }],
+      companyNodes: [],
+    });
   });
 });

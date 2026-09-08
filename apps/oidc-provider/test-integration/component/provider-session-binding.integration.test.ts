@@ -121,7 +121,7 @@ async function commitStagedBinding(
 
 describe("oIDC Provider Session client binding contract", () => {
   it("resolves the current Principal Session from the cookie without exposing bearer or database identifiers", async () => {
-    const { adapter, kernel } = createFixture();
+    const { accountReadSubjects, adapter, kernel } = createFixture();
     const principal = await kernel.createPrincipalSession(subjectIdentifier);
     expect(principal.status).toBe("created");
     if (principal.status !== "created")
@@ -137,9 +137,10 @@ describe("oIDC Provider Session client binding contract", () => {
       authTime: Math.floor(principal.value.authTime / 1000),
       sessionId: principal.value.principalSessionId,
     });
+    expect(accountReadSubjects).toEqual([subjectIdentifier]);
   });
 
-  it("publishes a staged client binding without duplicate session or database identifiers", async () => {
+  it("publishes the minimal provider-facing binding owned by its Principal Session", async () => {
     const { adapter, kernel } = createFixture();
     const session = await createPrincipalSession(kernel);
 
@@ -150,16 +151,16 @@ describe("oIDC Provider Session client binding contract", () => {
       providerSessionUid: null,
     });
 
-    expect(staged).toMatchObject({
+    expect(staged).toEqual({
       accountId: subjectIdentifier,
+      authTime: session.authTime,
       anchorGeneration: "attempt-minimal-view",
       bindingId: "pending",
       clientCode: "client-a",
       oidcConfigVersion: 1,
       principalSessionId: session.sessionId,
+      expiresAt: expect.any(Number),
     });
-    expect(staged).not.toHaveProperty("globalSessionId");
-    expect(staged).not.toHaveProperty("userId");
 
     const committed = await adapter.consumeStaged({
       accountId: subjectIdentifier,
@@ -168,13 +169,17 @@ describe("oIDC Provider Session client binding contract", () => {
       providerSessionUid: "provider-session-minimal-view",
     });
 
-    expect(committed).toMatchObject({
+    expect(committed).toEqual({
       accountId: subjectIdentifier,
+      authTime: session.authTime,
+      anchorGeneration: "attempt-minimal-view",
+      bindingId: expect.any(String),
       clientCode: "client-a",
+      oidcConfigVersion: 1,
       principalSessionId: session.sessionId,
+      expiresAt: expect.any(Number),
+      mappingOwnerId: expect.any(String),
     });
-    expect(committed).not.toHaveProperty("globalSessionId");
-    expect(committed).not.toHaveProperty("userId");
   });
 
   it("does not publish a staged Provider Session binding after the client epoch advances", async () => {

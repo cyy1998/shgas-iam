@@ -1,5 +1,4 @@
 import type { PrivilegeDelegationResolutionRepository } from "@api/composition/repositories/privilege-delegation-resolution.repository";
-import type { ApiServices } from "@api/composition/services";
 import type { OrcasClient } from "@api/lib/integrations/orcas";
 import type { ClientReaderPort } from "@api/services/client/client.port";
 import type { ClientRepository } from "@api/services/client/client.repository";
@@ -88,27 +87,6 @@ import type { UserProfileQueryService } from "@iam/user-profile-read-model/query
 import { expect, test } from "bun:test";
 
 function assertAssignable<Port, _Provider extends Port>() {}
-type AssertTrue<Value extends true> = Value;
-type ApiServicesExcludeRepositories = AssertTrue<
-  "customSsoClient" extends keyof ApiServices ? false : true
->;
-const apiServicesExcludeRepositories: ApiServicesExcludeRepositories = true;
-void apiServicesExcludeRepositories;
-type RemovedCustomSsoSessionAdapterMember
-  = | "lazyRevokeUserSessions"
-    | "resolveIndependentCredentialContext"
-    | "resolveLocalSessionContext"
-    | "resolvePrincipalSessionContext";
-type CustomSsoSessionAdapterExcludesInternalMembers = AssertTrue<
-  Extract<
-    RemovedCustomSsoSessionAdapterMember,
-    keyof CustomSsoSessionKernelAdapter
-  > extends never ? true : false
->;
-const customSsoSessionAdapterExcludesInternalMembers:
-CustomSsoSessionAdapterExcludesInternalMembers = true;
-void customSsoSessionAdapterExcludesInternalMembers;
-
 function assertPrincipalSessionCreationContracts(
   passwordSessions: PasswordPrincipalSessionPort,
   mobileSessions: MobilePrincipalSessionPort,

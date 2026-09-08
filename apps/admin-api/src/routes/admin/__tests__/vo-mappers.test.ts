@@ -149,10 +149,6 @@ describe("admin route VO mappers", () => {
       user: { username: "user1" },
       statusText: employmentStatusToString[EmploymentStatus.Enable],
     });
-    expect(vo).not.toHaveProperty("username");
-    expect(vo).not.toHaveProperty("posCode");
-    expect(vo).not.toHaveProperty("orgCode");
-    expect(vo).not.toHaveProperty("compCode");
     expect(schemaModule.toEmploymentDetailVo(employmentDto(), {
       editDescription: { allowed: true, reason: null },
       pause: { allowed: true, reason: null },

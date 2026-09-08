@@ -98,6 +98,39 @@ function orgPathRow(
 }
 
 describe("UserProfileBuilder", () => {
+  test("does not publish extra ORCAS Session Context from the input user into Detail", async () => {
+    const dataset: ProfileBuildDataset = {
+      responsibilityRows: [],
+      users: [user(1, { orcasId: "orcas-session-context" })],
+      employments: [],
+      positions: [],
+      orgPathRows: [],
+      roleRows: [],
+      privilegeRows: [],
+    };
+    const builder = createProfileBuilder({
+      buildRepository: { loadByUserIds: mock(async () => dataset) },
+      clock: { nowDate: () => now },
+      config: { batchSize: 100 },
+    });
+
+    const profile = await builder.buildOne({ userId: 1, sourceDirtyVersion: "9" });
+
+    expect(profile?.detail).toEqual({
+      ...base(1),
+      username: "user1",
+      wxId: "wx-1",
+      name: "User 1",
+      mobile: "13800000001",
+      userType: UserType.Formal,
+      orderNum: 1,
+      status: UserStatus.Enable,
+      employments: [],
+      roles: [],
+      privileges: [],
+    });
+  });
+
   test("binds the published identity fields to the requested Dirty Version", async () => {
     const dataset = {
       responsibilityRows: [],
@@ -391,7 +424,6 @@ describe("UserProfileBuilder", () => {
     expect(activeProfile.profileSchemaVersion).toBe(USER_PROFILE_SCHEMA_VERSION);
     expect(activeProfile.rebuiltAt).toBe(now);
     expect(activeProfile.searchVisible).toBe(true);
-    expect(activeProfile.detail).not.toHaveProperty("orcasId");
     expect(activeProfile.detail.employments).toHaveLength(2);
     expect(activeProfile.detail.employments[0]?.isPrimary).toBe(true);
     expect(activeProfile.detail.roles).toEqual([

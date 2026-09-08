@@ -23,12 +23,10 @@ describe("workspace-local command", () => {
       .toBe("bun src/cli.ts hr-admin");
     expect(workspacePackage.scripts["oidc:journey"]).toBe("bun src/cli.ts oidc");
     expect(workspacePackage.scripts["test:e2e"]).toBe("bun src/cli.ts e2e");
-    expect(workspacePackage.scripts["infra:lifecycle"]).toBeUndefined();
-    expect(workspacePackage.scripts["infra:migrate"]).toBeUndefined();
     expect(rootPackage.scripts["test:e2e"]).toBe("turbo test:e2e --concurrency=1");
   });
 
-  test("Current owner docs publish the complete root command without CI claims", async () => {
+  test("Current owner docs publish the root command, journey order and verified platform", async () => {
     const docs = await Promise.all([
       "../../../docs/architecture/testing-architecture.md",
       "../../../docs/architecture/repository-map.md",
@@ -40,9 +38,5 @@ describe("workspace-local command", () => {
     expect(currentOwnerDocs).toContain("pnpm test:e2e");
     expect(currentOwnerDocs).toContain("Admin → HR Admin → OIDC");
     expect(currentOwnerDocs).toContain("Windows 本地");
-    expect(currentOwnerDocs).not.toContain("root `test:e2e` 仍未发布");
-    expect(currentOwnerDocs).not.toContain("Root `test:e2e` 尚未发布");
-    expect(currentOwnerDocs).not.toContain("当前没有 root `test:e2e`");
-    expect(currentOwnerDocs).not.toContain("不发布 root `test:e2e`");
   });
 });

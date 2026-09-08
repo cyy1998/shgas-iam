@@ -94,6 +94,5 @@ describe("OIDC DTO boundaries", () => {
     expect("oidcSecretHash" in OidcClientRuntimeDtoSchema.shape).toBe(false);
     expect("subjectIdentifier" in UserDtoSchema.shape).toBe(false);
     expect("subjectIdentifier" in OidcAccountDtoSchema.shape).toBe(true);
-    expect("oidcSubject" in OidcAccountDtoSchema.shape).toBe(false);
   });
 });

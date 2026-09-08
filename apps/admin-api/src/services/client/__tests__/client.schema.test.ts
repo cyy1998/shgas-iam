@@ -46,23 +46,13 @@ describe("client update contracts", () => {
     },
   );
 
-  test("keeps all legacy Custom SSO fields out of Admin records", () => {
-    const legacyFields = [
-      "managementLevel",
-      "requireOrcas",
-      "validRedirectUrls",
-      "userExcluding",
-      "callbackEndpoint",
-      "logoutEndpoint",
-    ];
-
-    for (const field of legacyFields) {
-      expect(field in AdminClientRecordSchema.shape.extAttributes.shape).toBe(
-        false,
-      );
-      expect(
-        field in GenericClientRuntimeDtoSchema.shape.extAttributes.shape,
-      ).toBe(false);
+  test("parses empty extAttributes and rejects unknown attributes at both record boundaries", () => {
+    for (const schema of [
+      AdminClientRecordSchema.shape.extAttributes,
+      GenericClientRuntimeDtoSchema.shape.extAttributes,
+    ]) {
+      expect(schema.parse({})).toEqual({});
+      expect(schema.safeParse({ unexpectedAttribute: "value" }).success).toBe(false);
     }
   });
 
@@ -93,7 +83,7 @@ describe("client update contracts", () => {
       expect(result.data).not.toHaveProperty("clientSecret");
   });
 
-  test("rejects all managed Custom SSO fields and legacy extAttributes in generic inputs", () => {
+  test("rejects managed Custom SSO fields and unknown extAttributes in generic inputs", () => {
     for (const field of [
       "customSsoEnabled",
       "customSsoConfig",
@@ -108,18 +98,9 @@ describe("client update contracts", () => {
       }).success).toBe(false);
     }
 
-    for (const legacyField of [
-      "managementLevel",
-      "requireOrcas",
-      "validRedirectUrls",
-      "userExcluding",
-      "callbackEndpoint",
-      "logoutEndpoint",
-    ]) {
-      expect(ClientUpdateDtoSchema.safeParse({
-        extAttributes: { [legacyField]: legacyField === "requireOrcas" ? false : [] },
-      }).success).toBe(false);
-    }
+    expect(ClientUpdateDtoSchema.safeParse({
+      extAttributes: { unexpectedAttribute: "value" },
+    }).success).toBe(false);
 
     expect(ClientCreateDtoSchema.safeParse({
       clientCode: "portal",
@@ -175,7 +156,7 @@ describe("client update contracts", () => {
     }
   });
 
-  test("supports structured Custom SSO state and mode filters but rejects legacy management filters", () => {
+  test("supports structured Custom SSO state and mode filters", () => {
     const query = {
       pageNum: 1,
       pageSize: 10,
@@ -188,12 +169,5 @@ describe("client update contracts", () => {
       },
     };
     expect(ClientPaginationQueryDtoSchema.safeParse(query).success).toBe(true);
-    expect(ClientPaginationQueryDtoSchema.safeParse({
-      ...query,
-      conditions: {
-        ...query.conditions,
-        exactConditions: { managementLevels: ["Gateway"] },
-      },
-    }).success).toBe(false);
   });
 });

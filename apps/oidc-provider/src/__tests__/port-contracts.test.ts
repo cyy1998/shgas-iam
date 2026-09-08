@@ -7,7 +7,6 @@ import type {
   InteractionProviderSessionPrincipalReader,
   InteractionReturnHandleStore,
 } from "../interaction/interaction.port.ts";
-import type { OidcClaimsAdapter } from "../provider/claims.ts";
 import type {
   ClaimsAccountReader,
   ClaimsClientRuntimeReader,
@@ -42,17 +41,6 @@ type OidcProviderCompositionKeysAreClosed = AssertTrue<
 >;
 const oidcProviderCompositionKeysAreClosed: OidcProviderCompositionKeysAreClosed = true;
 void oidcProviderCompositionKeysAreClosed;
-type OidcSessionAdapterExcludesDirectBinding = AssertTrue<
-  "bind" extends keyof OidcSessionKernelAdapter ? false : true
->;
-const oidcSessionAdapterExcludesDirectBinding: OidcSessionAdapterExcludesDirectBinding = true;
-void oidcSessionAdapterExcludesDirectBinding;
-type OidcClaimsAdapterExcludesBindingRead = AssertTrue<
-  "readBinding" extends keyof OidcClaimsAdapter ? false : true
->;
-const oidcClaimsAdapterExcludesBindingRead: OidcClaimsAdapterExcludesBindingRead = true;
-void oidcClaimsAdapterExcludesBindingRead;
-
 function assertCompleteProviderSessionLifecycleFence(
   storage: AdapterProviderSessionBindingStore,
   session: OidcSessionKernelAdapter,
@@ -78,7 +66,7 @@ void assertCompleteProviderSessionLifecycleFence;
 
 function assertSubjectOnlyAccountReader(accounts: OidcSessionKernelAccountReader) {
   void accounts.findBySubject("subject-a");
-  // @ts-expect-error OIDC session resolution must not expose the legacy database-id lookup
+  // @ts-expect-error the subject-only account reader must not expose database-id lookup
   void accounts.findById(1);
 }
 
@@ -87,6 +75,7 @@ void assertSubjectOnlyAccountReader;
 describe("oIDC provider-to-port contracts", () => {
   it("repositories satisfy claims ports", () => {
     assertAssignable<ClaimsAccountReader, OidcAccountRepository>();
+    assertAssignable<OidcSessionKernelAccountReader, OidcAccountRepository>();
     assertAssignable<ClaimsSubjectProjectionResolver, ClientSubjectProjectionService>();
     expect(true).toBe(true);
   });

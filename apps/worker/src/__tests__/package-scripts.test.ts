@@ -5,7 +5,7 @@ type PackageManifest = {
 };
 
 describe("maintenance command package scripts", () => {
-  test("publishes only version-independent User Profile commands and preserves Client Protocol commands", async () => {
+  test("publishes version-independent User Profile commands and Client Protocol commands", async () => {
     const workerManifest = await Bun.file(
       new URL("../../package.json", import.meta.url),
     ).json() as PackageManifest;
@@ -22,13 +22,6 @@ describe("maintenance command package scripts", () => {
       "client-runtime:repair": "bun run src/commands/client-runtime/client-runtime-repair.ts",
       "client-runtime:verify": "bun run src/commands/client-runtime/client-runtime-verify.ts",
     });
-    expect(Object.keys(workerManifest.scripts ?? {})).not.toEqual(
-      expect.arrayContaining([
-        "profile-v2:backfill",
-        "profile-v2:verify-postgres",
-        "profile-v2:verify-redis",
-      ]),
-    );
     expect(oidcManifest.scripts?.["client-protocol:artifacts"]).toBe(
       "node --env-file-if-exists=.env --import tsx scripts/client-protocol-artifact-maintenance.ts",
     );

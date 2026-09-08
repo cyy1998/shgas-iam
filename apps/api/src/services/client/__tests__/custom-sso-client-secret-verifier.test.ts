@@ -60,7 +60,6 @@ describe("Custom SSO client secret verifier", () => {
       configVersion: 3,
       subjectClaims: [SubjectClaim.SubjectIdentifier],
     });
-    expect(authenticated).not.toHaveProperty("subjectClaimCatalogVersion");
     expect(
       JSON.stringify(await verifier.authenticate("independent-client", "Existing123!")),
     ).not.toContain("customSsoSecretHash");

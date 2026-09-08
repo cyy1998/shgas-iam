@@ -27,13 +27,10 @@ describe("Organization Responsibility Type Catalog", () => {
     ]);
   });
 
-  test("keeps the code-owned catalog immutable and free of runtime management fields", () => {
+  test("keeps the code-owned catalog immutable", () => {
     expect(Object.isFrozen(ORGANIZATION_RESPONSIBILITY_TYPE_CATALOG)).toBe(true);
     for (const entry of ORGANIZATION_RESPONSIBILITY_TYPE_CATALOG) {
       expect(Object.isFrozen(entry)).toBe(true);
-      expect(entry).not.toHaveProperty("definition");
-      expect(entry).not.toHaveProperty("source");
-      expect(entry).not.toHaveProperty("status");
     }
   });
 

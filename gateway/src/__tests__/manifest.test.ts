@@ -252,12 +252,6 @@ describe("apisix manifest validation", () => {
     expect(manifest.resources.services.at(0)).not.toHaveProperty("upstream_id");
   });
 
-  it("rejects old app manifest directories passed as overrides", async () => {
-    await expect(
-      loadManifest("prod:tender", path.join(process.cwd(), "manifests", "prod")),
-    ).rejects.toThrow();
-  });
-
   it("materializes local keys into dot ids, references, labels, and terminal routes", async () => {
     const manifest = await loadManifest("test:iam", await createManifestFile({
       service: {

@@ -196,12 +196,35 @@ describe("UserProfileQueryService", () => {
 
     const detail = await service.getDetailByUserId(1);
 
-    expect(detail).not.toHaveProperty("orcasId");
     expect(detail.createTime).toBeInstanceOf(Date);
     expect(detail.updateTime).toBeInstanceOf(Date);
     expect(detail.employments[0]?.startTime).toBeInstanceOf(Date);
     expect(detail.employments[0]?.createTime).toBeInstanceOf(Date);
     expect(detail.employments[0]?.updateTime).toBeInstanceOf(Date);
+  });
+
+  test("rejects ORCAS Session Context mixed into an otherwise valid Detail", async () => {
+    const malformed = profile({
+      detail: jsonDocument({
+        ...(profile().detail as Record<string, unknown>),
+        employments: [employmentDetail()],
+        orcasId: "orcas-session-context",
+      }) as UserProfile["detail"],
+    });
+    const service = createUserProfileQueryService({
+      profileRepository: {
+        getCurrentByUserId: mock(async () => malformed),
+        getCurrentByUsername: mock(async () => malformed),
+        getCurrentByMobile: mock(async () => malformed),
+        getCurrentByWxId: mock(async () => malformed),
+      },
+    });
+
+    const error = await service.getDetailByUserId(1).catch(error => error);
+
+    expect(error).toMatchObject({
+      issues: [{ code: "unrecognized_keys", keys: ["orcasId"], path: [] }],
+    });
   });
 
   test("rejects a legacy-shaped Detail from the strict current reader", async () => {

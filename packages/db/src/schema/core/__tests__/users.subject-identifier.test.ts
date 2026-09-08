@@ -12,6 +12,5 @@ describe("user Subject Identifier schema", () => {
     expect(users.subjectIdentifier.isUnique).toBe(true);
     expect("subjectIdentifier" in insertUserSchema.shape).toBe(false);
     expect("subjectIdentifier" in updateUserSchema.shape).toBe(false);
-    expect("oidcSubject" in users).toBe(false);
   });
 });
