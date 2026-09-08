@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { createOidcClaimsAdapter } from "../provider/claims.ts";
+import { createClaimsFixture as createOidcClaimsAdapter } from "../../test-integration/component/support/claims-fixture.ts";
 
 describe("oidc Subject Identifier continuity", () => {
   it("maps the IAM Subject Identifier to sub without changing its UUID", async () => {

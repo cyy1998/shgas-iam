@@ -112,12 +112,15 @@ function createCustomSsoMutationService(
   });
   const revocation = createAdminSessionRevocationPort({
     sessionKernel: {
+      revokePrincipalSession: async () => emptySummary(),
+      revokeUserSessionsByContext: async () => emptySummary(),
       revokeClientProtocol: emptySummary,
       revokeClient: emptySummary,
-      prepareUserSessionRevocation: async () => ({ revoke: emptySummary }),
-      revokeUserSessions: emptySummary,
+      prepareUserSessionRevocationByContext: async () => ({ revoke: emptySummary }),
+      revokeUserSessionRecords: emptySummary,
     },
     logger: {
+      logPreparationFailure: () => undefined,
       logClientAllProtocolsRevocation: () => undefined,
       logClientProtocolRevocation: () => undefined,
       logUserRevocation: () => undefined,

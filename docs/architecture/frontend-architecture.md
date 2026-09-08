@@ -51,6 +51,9 @@ Secret 未交付沿用指定提示和先修复再主动轮换流程。全部实�
 - 修改 Organization Responsibility 的 scoped selector、嵌入面板、操作按钮、Audit 可见性或隐藏 blocker 时，读取
   [HR 管理设计](../features/organization-responsibility/hr-admin-management-design.md#响应与前端)。
 
+Admin Sessions 使用会话记录语义：记录存在不代表账号当前可访问；筛选、分页、刷新与撤销反馈保持。
+后端自身许可每请求重查，前端不复制 Barrier 或代际判断；统一发布见[Subject Access 维护手册](../releases/subject-access-operation-cutover.md)。
+
 ## SSO 登录守卫
 
 - 受 guard 保护的登录流程只在 guard 明确允许登录后展示表单。检查中、续接中、无效请求和暂时不可用分别表达，

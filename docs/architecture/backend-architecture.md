@@ -114,7 +114,7 @@ Employment 创建、说明编辑、Pause、Resume 与 End 已使用公共 mutati
 
 基础任职级联采用固定取锁顺序：Employment 在前，Organization Responsibility Assignment 在后，各表均按主键升序。Pause/End 先锁任职，再一次选出本次 Enable/Open Assignment 的 ID，以身份锁定完整选中集合，然后才重验状态、更新父子并记录真实变化。Responsibility repository 的 `lockAssignmentsByIds` 同时为直接责任命令提供集合取锁能力。锁等待期间已经结束的选中责任不会被重新暂停或重写结束时间；后来新插入或从未选中的责任不在该集合中。创建时调整既有 Primary 的路径也先锁完整选中任职集合；不存在的目标与后来出现的 Primary 槽位仍不受行锁保护。
 
-上述方法只锁拟修改目标和级联选中行，User、Organization、Position 等只读父对象仍普通预检。它不防止 phantom，不提升跨表父对象、跨记录 Primary 或请求时 HR scope 的乐观保证。Set/Clear Primary 和 Transfer 也已采用统一结果与意图审计：主任职命令合法 no-op 不登记 dirty，Transfer 返回新任职的 `result:{id}`。这些命令在首次业务行锁前合并 URL 任职与拟清除的既有 Primary ID，一次按 ID 升序锁齐；Transfer 随后锁齐选中责任，才重验状态与候选并原子结束旧任职、结束责任、清除 Primary、创建新任职。审计记录实际清除的 Primary ID，非法重复 Transfer 不改写历史时间。Resignation 已统一 Full Admin 与 HR 的 `{ changed, result:null }` 结果：合法 no-op 保留 `changed:false` 意图审计，不登记 dirty、不重写既有结束时间，仍执行 Subject Access 与 Session 撤销重试。离职依次锁 User、精确 transition intent、按 ID 升序的完整选中 Employment 集合、按 ID 升序的完整选中 Assignment 集合，锁齐后重验 HR 资格，再以同一事务提交业务事实、审计及 dirty。该锁定范围仍仅覆盖拟修改的现存行与级联选中行，不提升上述乐观保证。离职在 pre-block 后、数据库事务前通过 Session Kernel 的 opaque `prepareUserSessionRevocation` 计划原始读取合法已存在 Principal Session 的代际，不做访问校验或触发 cleanup；提交后将捕获代际与 callback 的前代合并，按代际集合精确撤销。重试重新捕获遗留旧代，晚到撤销保留重新启用后的新代。准备失败仅记录 bestEffort 诊断并退回 callback 前代撤销，不阻断业务；本次未知的更早代留待后续重试。该读取不是全局原子快照：捕获后才落库的更早代极迟在途 Session 由下一次重试或访问校验处理，已 tombstone 对象的派生清理仍属既有 cleanup owner。
+上述方法只锁拟修改目标和级联选中行，User、Organization、Position 等只读父对象仍普通预检。它不防止 phantom，不提升跨表父对象、跨记录 Primary 或请求时 HR scope 的乐观保证。Set/Clear Primary 和 Transfer 也已采用统一结果与意图审计：主任职命令合法 no-op 不登记 dirty，Transfer 返回新任职的 `result:{id}`。这些命令在首次业务行锁前合并 URL 任职与拟清除的既有 Primary ID，一次按 ID 升序锁齐；Transfer 随后锁齐选中责任，才重验状态与候选并原子结束旧任职、结束责任、清除 Primary、创建新任职。审计记录实际清除的 Primary ID，非法重复 Transfer 不改写历史时间。Resignation 已统一 Full Admin 与 HR 的 `{ changed, result:null }` 结果：合法 no-op 保留 `changed:false` 意图审计，不登记 dirty、不重写既有结束时间，仍执行 Subject Access 与 Session 撤销重试。离职依次锁 User、精确 transition intent、按 ID 升序的完整选中 Employment 集合、按 ID 升序的完整选中 Assignment 集合，锁齐后重验 HR 资格，再以同一事务提交业务事实、审计及 dirty。该锁定范围仍仅覆盖拟修改的现存行与级联选中行，不提升上述乐观保证。离职在 pre-block 后、数据库事务前通过外层 Subject Access adapter 与 Kernel 的 `prepareUserSessionRevocationByContext` 计划原始读取合法已存在 Principal Session 的上下文，不做访问校验或触发 cleanup；提交后将捕获代际与 callback 的前代合并，按代际集合精确撤销。重试重新捕获遗留旧代，晚到撤销保留重新启用后的新代。准备失败仅记录 bestEffort 诊断并退回 callback 前代撤销，不阻断业务；本次未知的更早代留待后续重试。该读取不是全局原子快照：捕获后才落库的更早代极迟在途 Session 由下一次重试或访问校验处理，已 tombstone 对象的派生清理仍属既有 cleanup owner。
 
 组织省略初始状态时以 Enable 创建，显式非 Enable 输入被拒绝；成功创建原子完成路径及闭包关系。父组织保持普通预检，Open Employment、子组织与 Open Responsibility 的既有生命周期和安全范围阻断继续生效，不增加全父树锁或跨表强保证。
 
@@ -150,9 +150,9 @@ Internal Privilege Delegation 已在 API 自身的 service、repository 与 Unit
 
 ### Client Subject Projection
 
-- `@iam/client-subject-projection` 通过单一 `ClientSubjectProjectionService.resolve` Interface 隐藏 Catalog
+- `@iam/client-subject-projection` 通过单一 `PermittedClientSubjectProjectionService.resolve` Interface 隐藏 Catalog
   校验、Subject Facts 读取、client 裁剪、稳定排序与投影组装。调用方只提交 Subject Identifier、`clientCode` 和
-  `SubjectClaimSelection`；facts/access/freshness dependencies 只在 factory 处注入。
+  `SubjectClaimSelection` 与本操作许可证明；facts/permission/freshness dependencies 只在 factory 处注入。
 - Subject Facts port 只暴露显式 Profile 与当前有效任职事实，不暴露 Legacy User Detail。普通 Profile claim
   可以使用最后发布事实；选择 `iam:authorization` 时，Module 根据 facts source version 调用 Authorization
   Freshness port。该 port 可以确认当前 facts、返回一次重载后的 facts，或报告 not-ready；Module 在组装任何已选
@@ -202,7 +202,7 @@ Internal Privilege Delegation 已在 API 自身的 service、repository 与 Unit
   Subject Facts cache hit 热路径不访问 PostgreSQL。OIDC Provider production composition 已注入同一 Projection
   Module，并在 Authorization Code 持久化前按当前 client、scope、config version 与 Provider Session binding 创建严格
   Claims Snapshot；Access Token 只转移该快照，UserInfo/ID Token 只重放并复验快照，不重新读取当前主体事实。
-  Subject Access Barrier 已接入 API、Admin API 与 OIDC Provider 的 Session Kernel principal validation hook。
+  Subject Access 由 API、Admin API 与 OIDC Provider 的操作容器统一检查，Kernel 不再调用账号验证。
   API 的 Custom SSO retryable error adapter 将 Projection Not Ready 与 Subject Access unavailable 分别映射为稳定
   `503` code 和配置的 `Retry-After`，不复用于 OIDC。
 
@@ -297,6 +297,27 @@ User Profile 的初代 V1 builder、Facts reader/publisher 与 Subject Projectio
 
 ### Subject Access Barrier
 
+- API、Admin API、Custom SSO 与 OIDC 已统一使用每操作一次的 Subject Access Permission。
+  `createSubjectAccessOperations({ barrier, revocation })` 提供 `run(callback)`（自动关闭）和
+  `createOperation()`（调用方在 `finally` 关闭）。可信认证后用 `acquireForAuthentication` 取得新代际，
+  只读对象解析后用 `acquireForSession` 比较已有 context；同一个 pending Promise 固定成功、拒绝与暂态失败。
+  无主体和未解析出可信身份的无效凭据可以零读取结束；并行回调共享检查，新请求重新检查。
+- `requireSubjectAccessOperation` 拒绝缺失、伪造和已关闭容器，`requirePermission` 验证同主体的已有许可；
+  `getSubjectContext` 只接受该容器创建的许可。不同主体或代际直接拒绝，不换身份重查，也不向后台转交许可。
+  `encodeSubjectAccessContext` / `parseSubjectAccessContext` 严格编码 JSON string 中的
+  `{ version: 1, subjectIdentifier, transitionId }`。缺失、坏 JSON、额外字段、非法 UUID 或不支持版本失败关闭，
+  不按当前 Barrier 补齐；持久化 context 不是许可。
+- 许可成功后账号进入 blocking、disabled 或重新启用，不推翻本次判断；迟到签发沿用原代际。
+  下一调用重新检查，重新启用不恢复旧代。对象存在、到期、撤销、消费、归属和并发冲突仍由 Kernel 校验。
+- 明确拒绝使用 `SubjectAccessOperationDeniedError`：旧代撤当前根，disabled 按原凭据 context 精确撤销，
+  新认证尚无旧代时不撤销。撤销或 cleanup 失败仍拒绝。`createSubjectAccessSessionRevocation` 在 Subject Access
+  内将代际翻译成不透明 context，Kernel 不解释账号含义。blocking、缺失、坏记录和 Redis 故障不撤销、不清 Cookie。
+- Admin authentication 在管理员可信 Principal 解析后、资料和 REST/tRPC 业务处理前取得许可。
+  资料只按 Subject Identifier 查询；缺失仍是既有未登录结果，角色、scope 和目标用户业务状态保持独立。
+  session-management 使用中性 inventory/control 返回未过期、未撤销的 Principal Session Record，
+  不读取目标 Barrier，不触发账号拒绝清理。User、Client 和 Resignation 经统一 Session Revocation adapter 执行终止。
+  prepared 读取失败保持 bestEffort 诊断和 callback 前代 fallback；空集合不扩大撤销，新代不受晚到清理影响。
+  完整入口、故事核对和人工证据边界见[最终契约](../features/sso/subject-access-operation-contract.md)。
 - `@iam/api-core/subject-access` 是账号实时可访问性的唯一共享 seam。公开 Barrier 只接受严格版本化的
   `enabled`、`blocking`、`disabled` record；缺失、非法内容、Redis 失败和 `blocking` 都 fail closed。
   Redis adapter 独占 record、transition journal、repair ZSET 与 Lua 原子转换；rollback/finalize 只接受同一
@@ -304,14 +325,11 @@ User Profile 的初代 V1 builder、Facts reader/publisher 与 Subject Projectio
   factory、稳定错误和配置所需 port；record serializer、atomic store 结果和 Lua mechanics 保持模块私有。
   Barrier 写 adapter 的基础设施异常统一收敛为无 cause 的 `SubjectAccessWriteUnavailableError`，domain conflict
   仍使用 `SubjectAccessTransitionRejectedError`，原始 Redis error/message 不跨越写接口。
-- API、Admin API 与 OIDC Provider 的 Session Kernel composition 都注入同一个 principal validator 形状，因此
-  Principal Session、Client Binding 和 Credential 解析在返回调用方前检查 Barrier。`disabled` 形成
-  `user_disabled` validation failure 并级联撤销；不确定状态直接传播中性 unavailable error，不触发撤销。
-  API/Admin HTTP adapter 分别映射为 `401 / SESSION_INVALID`（清 Cookie）或
-  `503 / SUBJECT_ACCESS_UNAVAILABLE`（不清 Cookie）。所有浏览器 Cookie 删除都带原创建路径 `Path=/`、
-  epoch `Expires` 与 `Max-Age=0`。OIDC provider middleware 和原生 interaction handler 在协议边界分别映射
-  disabled 为 `login_required`（UserInfo 为 `invalid_token`），unavailable 为
-  `temporarily_unavailable`；只有 disabled 清除全局 Cookie。
+- API/Admin HTTP adapter 将明确拒绝映射为 `401 / SESSION_INVALID`（清 Cookie），暂态为
+  `503 / SUBJECT_ACCESS_UNAVAILABLE`（保留 Cookie）。Cookie 删除保持 `Path=/`、epoch `Expires` 和 `Max-Age=0`。
+  OIDC Subject Access 明确失效在 Token 返回 `401 / login_required`，UserInfo 返回 `401 / invalid_token`，
+  暂态失败返回 `503 / temporarily_unavailable`；只有明确失效清全局 Cookie。`invalid_grant` 属于已消费 Code
+  重放等协议拒绝，不是 Token 的 Subject Access 错误映射。原生 handler 继续保留各自路由错误契约。
 - Admin 用户创建、状态变更、删除与离职 use case 复用同一 lifecycle coordinator：数据库 mutation 前原子
   pre-block，回滚时恢复转换前状态；pre-block 前先独立持久化窄 PostgreSQL transition intent，实际 domain mutation
   与精确 intent 的 `FOR UPDATE`/committed outcome 处于同一 transaction，因此被回收的旧 owner 会在 domain write 前
@@ -347,7 +365,25 @@ User Profile 的初代 V1 builder、Facts reader/publisher 与 Subject Projectio
 
 ### Session runtime 与跨 App 边界
 
-- `@iam/session-kernel` 独占四类生命周期、配置、三个 Kernel 日志事件、存储与 Lua。根入口只公开生命周期能力和必要配置/接口类型，`/maintenance` 提供当前 namespace inventory，`/testing` 提供测试构造、种子与检查。Kernel 不依赖 API Core、Custom SSO 或 app；连接和日志实例、Subject Access fence 与协议 cleanup 由 composition 注入。旧 API Core Kernel 出口与实现已删除，不保留兼容转导出。
+- Custom SSO 的唯一工厂 `createCustomSsoOperations` 用 `forOperation` 绑定显式容器。
+  授权和续接在可信根解析后检查，授权早于 renew/Artifact；兑换与 callback 在 Artifact 的 mode、Client、redirect、
+  版本及主体一致性校验后、Grant 预占前检查，ORCAS 出站与签发均在其后。authz 和 Public UserInfo 在首次可信
+  Credential/根解析后检查，父对象和延迟交付复用许可。退出走中性终止能力，不要求目标许可。
+  API composition 把此工厂和同一 Kernel 接到 services、use-cases、routes 与 middlewares；Public 容器覆盖 `next()`
+  及延迟交付，结束后关闭。缺少许可没有 fallback。
+- `createPermittedClientSubjectProjectionService` 是唯一投影工厂，`resolve(input, proof)` 通过注入的窄
+  `assertPermission` 证明当前许可，不独立读取 Barrier。Facts、主体一致性、选择、Authorization Freshness 和
+  wire 规则保留。ORCAS 的 `findOrcasUserBySubjectIdentifier` 按可信主体查 ID，再复用 Profile 来源裁剪资料，
+  不以 status/isDelete 推翻许可；不影响其他用户业务查询。
+- `createSessionKernel` 是唯一中性工厂。新根必须显式接收 `subjectContext`；Binding、Credential 和带主体 Artifact
+  原样继承，续期不修改，派生调用不能替换父 context。无主体 Artifact 无此要求。Kernel 不调用账号 validator/fence，
+  不解释 Subject Access 代际，不持有 HTTP 容器，也不补齐缺失内容。
+  `revokeUserSessionsByContext` 与 `prepareUserSessionRevocationByContext` 按完整不透明 context 集合选择对象；
+  空捕获不变全用户撤销。Prepared 的原始读取不是全局快照，捕获后新建的同 context 根在执行时仍可选中。
+  全部旧工厂策略、专用字段/选项和双表示已退役；旧在线状态按[维护手册](../releases/subject-access-operation-cutover.md)
+  在停流排空后清理，消费者统一版本并重新登录。代码候选不表示环境已完成切换。
+
+- `@iam/session-kernel` 独占四类生命周期、配置、三个 Kernel 日志事件、存储与 Lua。根入口只公开生命周期能力和必要配置/接口类型，`/maintenance` 提供当前 namespace inventory，`/testing` 提供测试构造、种子与检查。Kernel 不依赖 API Core、Custom SSO 或 app；连接和日志实例、Client/protocol validation 与协议 cleanup 由 composition 注入。旧 API Core Kernel 出口与实现已删除，不保留兼容转导出。
 
 - API 的四类身份认证统一由 `use-cases/authentication/` 拥有，production wiring 在
   `composition/use-cases/authentication.ts`。密码、手机、OA、微信只消费各自的 Principal Session 创建 port；
@@ -367,7 +403,7 @@ User Profile 的初代 V1 builder、Facts reader/publisher 与 Subject Projectio
   #117 已让 Custom SSO Grant 初始化使用 Kernel Artifact deadline，与预占、heartbeat、release、consume 的 Redis 时间保持一致。
   Independent 响应 TTL 与 Gateway Local Session Cookie 的 Max-Age 从 Credential `expiresAt - observedAt` 向上取整为秒，
   亚秒有效结果仍交付一秒，不以取整或应用时间追加过期拒绝，也不延长 Redis 中的期限。ORCAS Cookie 保持原外部集成契约。
-  Independent 签发后与 Local Session 认证中的父 Session 读取继续保护对象存在、撤销和 Subject Access；这些独立操作仍可因真实缺失失败。
+  Independent 签发后与 Local Session 认证中的父 Session 读取继续保护对象存在和撤销，并复用本操作许可；这些独立操作仍可因真实缺失失败。
   每个兑换 attempt 的服务端 UUID 在签发前固定，不确定写入仍按同一 identity 精确补偿；后续 attempt 使用新 UUID。
   #118 已让 OIDC store 在一次 Redis Lua 写入中以 Redis 时间计算主对象、UID/user-code lookup 与 Grant/Client 索引的相同期限，
   共享索引只延长到期时间，短成员和重复写入不会缩短长成员的追踪期限。清理与盘点读取实际对象，清理不按应用时间裁剪成员；
@@ -392,11 +428,10 @@ User Profile 的初代 V1 builder、Facts reader/publisher 与 Subject Projectio
 - `@iam/session-kernel` 拥有用户根 Principal Session 的实时 inventory。默认全局索引为
   `sess:v2:idx:principal_sessions`，member 沿用 lifecycle object 编码，score 为 `expiresAt`；创建、续期和撤销
   Principal Session 时，对象与该索引必须在同一 Redis transaction 中变化。
-- Inventory 只返回 `principalType=user` 的有效根会话，并通过全局索引或精确用户索引按 `expiresAt` 倒序分块读取；
+- Inventory 只返回 `principalType=user` 的未过期且未撤销根记录，并通过全局索引或精确用户索引按 `expiresAt` 倒序分块读取；
   查询先批量清理到期 score，遇到悬空成员时删除并继续补足当前页，不执行 Redis `SCAN`。上线前未进入全局索引的旧
   会话不在读取时回填，只有后续续期才进入。
-- Admin `services/session-management/**` 只通过消费方拥有的 inventory/control port 读取或撤销 Valid Principal
-  Session，并通过一次批量用户摘要 port 补充正常、暂停、结束、已删除或未知账号状态。用户摘要基础设施错误正常
+- Admin `services/session-management/**` 只通过消费方拥有的 inventory/control port 读取或撤销 Principal Session Record，并通过一次批量用户摘要 port 补充正常、暂停、结束、已删除或未知账号状态。用户摘要基础设施错误正常
   传播，不把整页伪装成未知用户；production Session Kernel 与用户 repository 通过 structural typing 直接满足这些
   port。
 - `POST /admin/session-management/sessions/search`、`POST /admin/session-management/sessions/revoke` 与对应
@@ -476,7 +511,7 @@ User Profile 的初代 V1 builder、Facts reader/publisher 与 Subject Projectio
   一个赢家；reserved 工作由 heartbeat 定期续租，renew 必须匹配 grant、attempt 和上一 lease deadline，且只延长
   lease、不延长 Grant 原始 expiry。Independent 在任何 Credential issuance、post-validation、Grant consume、成功审计或
   consumed artifact cleanup 前，必须先取得通过 Subject equality 与 strict schema 的完整 V2 Wire；随后只有 Credential
-  签发并通过 Principal Session、Subject equality 与 Subject Access 复核后才 consume。Gateway 完成 Grant/Principal
+  签发并通过 Principal Session、Subject equality 校验后才 consume；全程复用已取得的 Subject Access 许可。Gateway 完成 Grant/Principal
   校验、可选 ORCAS 登录与最小 Local Session 签发后才 consume。两条路径都使用请求入口已接受的 Client Runtime
   Snapshot，不在签发后重新读取当前 Client 或 generation。消费前失败按语义 release，并补偿已创建的
   binding/credential；消费后 Session Kernel artifact 清理和成功审计是
@@ -497,6 +532,17 @@ User Profile 的初代 V1 builder、Facts reader/publisher 与 Subject Projectio
 ## Runtime-specific Composition
 
 ### OIDC Provider
+
+- OIDC 的正式 Session/Provider 工厂统一拥有操作许可链。Provider middleware 在 `ctx.state` 专用槽建立容器，
+  回调通过公开 `Provider.ctx` 桥接，finally 删除槽并关闭；原生 interaction、login guard、resume 各自显式 `run`。
+  可信 Principal、Binding、Credential 或有主体 Artifact 解析后检查，早于 renew/stage/claim/签发。
+  `load_account` 早于 policy，因此账户 hook 先解析当前根并取得许可，再读资料；已许可 reader 不按账号状态过滤。
+  Claims 与 Token extra 交付必须持有活跃许可，结束后捕获的 callback 不再有效。
+- 未消费 Code 的 `AuthorizationCode.find` 在可信 Artifact/Principal 解析和许可成功后才返回 Provider；
+  `consume` 在写消费标记前也要求该解析成功。UserInfo 首次 Credential 解析检查早于 Binding mapping 刷新。
+  后续 consume、findAccount、Claims 和签发复用许可。已消费 Code 直接返回消费标记供 Provider 拒绝重放并撤销
+  Grant 及关联协议载荷，不要求已消失的 Artifact 或本次许可。无主体 Return Handle 和退出保留中性路径。
+  Client/config、scope、Facts、新鲜度与对象归属仍独立生效。
 
 - `apps/oidc-provider/src/provider/claims.ts` 直接实现 `oidc-provider` claims hooks，属于 protocol adapter。
   Factory、返回类型和 deps type 分别使用 `createOidcClaimsAdapter`、`OidcClaimsAdapter` 和
@@ -530,7 +576,7 @@ User Profile 的初代 V1 builder、Facts reader/publisher 与 Subject Projectio
   后来的 generation。Session artifact 销毁只有同时持有匹配的 Principal Session 与 anchor generation mirror 时才能删除
   authoritative anchor；旧 payload 缺少任一 mirror 时必须 fail-safe no-op，由 bounded TTL 或后续完整 payload 的精确清理收敛。
 - 同一 Provider Session 对新 client 静默授权时，Code adapter 必须按精确 session UID/account 读取 authoritative anchor，
-  经 Session Kernel 重新校验 Principal、Subject Access Barrier、account 和当前 client config，再创建该 client 的独立
+  经中性 Session Kernel 校验 Principal，并在当前操作取得或复用 Subject Access Permission，再校验 account 资料和当前 client config，再创建该 client 的独立
   binding。anchor 不等价于 binding，也不得绕过这些校验。
 - Access Token、UserInfo 与 ID Token 复用 Authorization Code 的 Claims Snapshot，并校验 subject、client、scopes、
   Provider Session、Principal Session 与 binding ownership；撤销一个 client lifecycle 不得删除同一 Provider Session

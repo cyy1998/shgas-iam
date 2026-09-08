@@ -12,7 +12,7 @@ import {
   createRedisSubjectAccessStore,
   createSubjectAccessBarrier,
   createSubjectAccessBootstrap,
-  createSubjectAccessPrincipalValidator,
+  encodeSubjectAccessContext,
 } from "@iam/api-core/subject-access";
 import {
   cleanupRedisKeysMatchingOwnerMarkers,
@@ -35,6 +35,7 @@ import {
   ApiErrorCode,
   ClientStatus,
   CustomSsoClientMode,
+  LoginPageGuardDecision,
   SubjectClaim,
 } from "@iam/contracts";
 import { createSessionKernel } from "@iam/session-kernel";
@@ -259,7 +260,6 @@ function createProductionOwnerSeed(redis: Redis, namespace: string) {
         },
       },
     },
-    principalAccessFence: createSubjectAccessPrincipalValidator(subjectAccess),
   });
   return {
     sessionKernel,
@@ -276,6 +276,7 @@ async function seedPrincipalSession(
 ) {
   const principal = await owners.sessionKernel.createPrincipalSession(
     subjectIdentifier,
+    { subjectContext: encodeSubjectAccessContext({ version: 1, subjectIdentifier, transitionId: await owners.subjectAccess.readCommittedTransitionId(subjectIdentifier) }) },
     { amr: ["password"], sessionKind: "browser_user" },
   );
   if (principal.status !== "created")
@@ -1018,6 +1019,23 @@ describe("API explicit external entry", () => {
           if (!await probeApiDocs(origin, signal))
             return undefined;
 
+          const beforeGuard = await observerOwners.sessionKernel.resolvePrincipalSession(independentSession.principalToken);
+          const continuation = [];
+          for (const token of [independentSession.principalToken, undefined, "unknown-principal-token"]) {
+            const guardUrl = new URL(`${origin}/sso/login-guard`);
+            guardUrl.search = new URLSearchParams({ client: clientCode, redirectUrl: redirectUri }).toString();
+            const response = await fetch(guardUrl, {
+              headers: token === undefined ? {} : { cookie: `global_session=${token}` },
+              signal,
+            });
+            continuation.push({
+              status: response.status,
+              body: await response.json(),
+              cookies: response.headers.getSetCookie(),
+            });
+          }
+          const afterGuard = await observerOwners.sessionKernel.resolvePrincipalSession(independentSession.principalToken);
+
           const first = await authorize(
             origin,
             "ticket12-state-first",
@@ -1249,6 +1267,9 @@ describe("API explicit external entry", () => {
           );
 
           return {
+            continuation,
+            beforeGuard,
+            afterGuard,
             disabledAuthorize: {
               body: disabledAuthorizeBody,
               status: disabledAuthorize.status,
@@ -1292,6 +1313,17 @@ describe("API explicit external entry", () => {
 
       if (reenabledGatewaySession === undefined)
         throw new Error("API composition did not create the re-enabled Gateway session");
+      expect(result.continuation).toMatchObject([
+        { status: 200, body: { data: { decision: LoginPageGuardDecision.Continue } }, cookies: [] },
+        { status: 200, body: { data: { decision: LoginPageGuardDecision.Login } }, cookies: [] },
+        { status: 200, body: { data: { decision: LoginPageGuardDecision.Login } } },
+      ]);
+      expect(result.continuation[2]!.cookies.some(cookie => cookie.startsWith("global_session=") && cookie.includes("Max-Age=0"))).toBe(true);
+      expect(result.beforeGuard.status).toBe("resolved");
+      expect(result.afterGuard.status).toBe("resolved");
+      if (result.beforeGuard.status !== "resolved" || result.afterGuard.status !== "resolved")
+        throw new Error("Login guard lost its Principal Session");
+      expect(result.afterGuard.value).toEqual(result.beforeGuard.value);
       const [finalAccess] = await observerOwners.subjectAccessBootstrap.inspectMany([
         subjectIdentifier,
       ]);

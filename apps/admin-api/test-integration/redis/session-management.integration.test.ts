@@ -3,12 +3,20 @@ import type { LoginRestriction } from "@iam/api-core/login-restriction";
 import type { SessionKernel } from "@iam/session-kernel";
 import type { AdminApiRedisTestHarness, AdminApiRedisTestScope } from "./redis-test-harness";
 import { randomUUID } from "node:crypto";
+import { createAdminAuthenticationHandlers } from "@admin-api/middlewares/authentication.handler";
+import { createAdminAuthorizationAdapter } from "@admin-api/routes/admin/authorization/authorization.adapter";
+import { createAdminAuthorizationContextHandler } from "@admin-api/services/admin-authorization/admin-authorization.context";
+import { createAdminAuthorizationPolicy } from "@admin-api/services/admin-authorization/admin-authorization.policy";
 import { createSessionManagementService } from "@admin-api/services/session-management/session-management.service";
 import { createAdminSessionRevocationPort } from "@admin-api/services/session-revocation/session-revocation.port";
 import { createLoginRestriction, createRedisLoginRestrictionStore, LOGIN_FAILURE_THRESHOLD } from "@iam/api-core/login-restriction";
-import { UserStatus } from "@iam/contracts";
+import { createRedisSubjectAccessStore, createSubjectAccessBarrier, createSubjectAccessBootstrap, createSubjectAccessOperations, createSubjectAccessSessionRevocation, encodeSubjectAccessContext, SubjectAccessDisabledError } from "@iam/api-core/subject-access";
+import { createTRPCContext } from "@iam/api-core/trpc";
+import { UserStatus, UserType } from "@iam/contracts";
 import { createSessionKernel, createSessionKernelConfig } from "@iam/session-kernel";
+import { fetchRequestHandler } from "@trpc/server/adapters/fetch";
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, test } from "bun:test";
+import { Hono } from "hono";
 import { createAdminApiRedisTestHarness } from "./redis-test-harness";
 
 const subjectIdentifier = "00000000-0000-4000-8000-000000000007";
@@ -24,6 +32,7 @@ let auditWrites: AuditLogInput[];
 let auditFailure: Error | undefined;
 let cleanupFailure: boolean;
 let errorLogs: Record<string, unknown>[];
+let accountStatus: UserStatus;
 
 beforeAll(async () => {
   harness = await createAdminApiRedisTestHarness();
@@ -35,6 +44,7 @@ beforeEach(async () => {
   errorLogs = [];
   auditFailure = undefined;
   cleanupFailure = false;
+  accountStatus = UserStatus.Enable;
   const config = createSessionKernelConfig({
     namespace: scope.clientCode("session-management"),
     lookupHmacKeys: {
@@ -46,13 +56,8 @@ beforeEach(async () => {
     principalAbsoluteTtlMs: 60_000,
     principalIdleTtlMs: 30_000,
   });
-  const principalAccessFence = {
-    capture: async () => "00000000-0000-4000-8000-000000000002",
-    validate: async () => ({ ok: true as const }),
-  };
   kernel = createSessionKernel({
     config,
-    principalAccessFence,
     redis: scope.redis,
     cleanupAdapters: [{
       protocol: "oidc",
@@ -67,7 +72,7 @@ beforeEach(async () => {
       async cleanup() {},
     }],
   });
-  observer = createSessionKernel({ config, principalAccessFence, redis: scope.observer });
+  observer = createSessionKernel({ config, redis: scope.observer });
   const keyPrefix = scope.clientCode("login-restriction");
   restrictions = createLoginRestriction({
     clock: { now: Date.now },
@@ -84,7 +89,7 @@ beforeEach(async () => {
     subjectIdentifier,
     username: "admin",
     name: "Admin",
-    status: UserStatus.Enable,
+    get status() { return accountStatus; },
     isDelete: false,
   };
   service = createSessionManagementService({
@@ -105,6 +110,7 @@ beforeEach(async () => {
         logUserRevocation() {},
         logClientProtocolRevocation() {},
         logClientAllProtocolsRevocation() {},
+        logPreparationFailure() {},
       },
     }),
     users: {
@@ -125,7 +131,10 @@ afterAll(async () => {
 });
 
 async function createSessionTree(withCleanup = false) {
-  const root = await kernel.createPrincipalSession(subjectIdentifier);
+  const transitionId = "00000000-0000-4000-8000-000000000002";
+  const root = await kernel.createPrincipalSession(subjectIdentifier, {
+    subjectContext: encodeSubjectAccessContext({ version: 1, subjectIdentifier, transitionId }),
+  });
   if (root.status !== "created" || !root.externalToken)
     throw new Error("expected Principal Session fixture");
   const principalSessionId = root.value.principalSessionId;
@@ -189,6 +198,146 @@ async function restrictUser() {
 }
 
 describe("Admin session mutations with real Redis owners", () => {
+  for (const path of ["/admin/capabilities", "/rpc/capabilitySummary?input=%7B%7D"]) {
+    test(`real Redis permission survives in-flight disable and rejects the next ${path} request`, async () => {
+      const subject = randomUUID();
+      const keyPrefix = `${scope!.clientCode("operation-barrier")}:`;
+      const random = { uuid: randomUUID };
+      const clock = { nowDate: () => new Date() };
+      await createSubjectAccessBootstrap({ redis: scope!.redis, random, keyPrefix }).seedMany([{ subjectIdentifier: subject, state: "enabled" }], clock.nowDate());
+      const barrier = createSubjectAccessBarrier({ random, clock, store: createRedisSubjectAccessStore({ redis: scope!.redis, keyPrefix }) });
+      const transitionId = await barrier.readCommittedTransitionId(subject);
+      const root = await kernel.createPrincipalSession(subject, { subjectContext: encodeSubjectAccessContext({ version: 1, subjectIdentifier: subject, transitionId }) });
+      if (root.status !== "created" || !root.externalToken)
+        throw new Error("expected administrator root");
+      let reads = 0;
+      let profileReads = 0;
+      const operations = createSubjectAccessOperations({
+        barrier: { readCommittedTransitionId: async (id) => {
+          reads += 1;
+          return await barrier.readCommittedTransitionId(id);
+        } },
+        revocation: createSubjectAccessSessionRevocation(kernel),
+      });
+      const authentication = createAdminAuthenticationHandlers({
+        sessionKernel: kernel,
+        subjectAccess: operations,
+        config: { allowedClientCodes: ["iam-admin"] },
+        userService: { getUserDetailForPermittedAdmin: async (operation, id) => {
+          profileReads += 1;
+          const transition = await barrier.beginBlocking(subject);
+          await barrier.prepareRepair(transition, "disabled");
+          await barrier.finalize(transition, "disabled");
+          operation.requirePermission(id);
+          const resumed = await kernel.renewPrincipalSession(root.value.principalSessionId);
+          expect(resumed.status).toBe("resolved");
+          return { id: 99, username: "admin", name: "Admin", userType: UserType.Formal, mobile: null, wxId: null, status: UserStatus.Disable, orderNum: 0, isDelete: true, createTime: new Date(), updateTime: new Date(), description: null, employments: [], roles: ["iam:admin"], privileges: [] };
+        } },
+      });
+      const app = new Hono();
+      app.use("*", authentication.adminAuthenticationHandler);
+      app.use("*", createAdminAuthorizationContextHandler(createAdminAuthorizationPolicy({ logger: { warn() {} }, hrAdministrationScopeResolver: { resolveForActor: async () => null } })));
+      const adapter = createAdminAuthorizationAdapter();
+      app.get("/admin/capabilities", c => adapter.capabilitySummary(c as never, async () => {}));
+      app.all("/rpc/*", async c => await fetchRequestHandler({ endpoint: "/rpc", req: c.req.raw, router: adapter.authorizationAdminRouter, createContext: () => createTRPCContext({ honoCtx: c }) }));
+      app.onError((error, c) => c.text(error.message, ("httpStatus" in error ? error.httpStatus : 500) as never));
+      const request = () => app.request(`http://localhost${path}`, { headers: { Client: "iam-admin", Cookie: `global_session=${root.externalToken}` } });
+      const allowed = await request();
+      expect(allowed.status).toBe(200);
+      expect(reads).toBe(1);
+      const denied = await request();
+      expect(denied.status).toBe(401);
+      expect(denied.headers.getSetCookie()).toHaveLength(2);
+      expect(reads).toBe(2);
+      expect(profileReads).toBe(1);
+    });
+  }
+
+  test("lists and revokes old records without checking target access or cleaning their trees", async () => {
+    const target = await createSessionTree();
+    const another = await createSessionTree();
+    const adminSubject = "00000000-0000-4000-8000-000000000099";
+    const transitionId = "00000000-0000-4000-8000-000000000003";
+    const admin = await kernel.createPrincipalSession(adminSubject, {
+      subjectContext: encodeSubjectAccessContext({ version: 1, subjectIdentifier: adminSubject, transitionId }),
+    });
+    if (admin.status !== "created" || !admin.externalToken)
+      throw new Error("expected admin session");
+    let barrierReads = 0;
+    const operations = createSubjectAccessOperations({
+      barrier: {
+        async readCommittedTransitionId(subject) {
+          barrierReads += 1;
+          if (subject === adminSubject)
+            return transitionId;
+          throw new SubjectAccessDisabledError();
+        },
+      },
+      revocation: createSubjectAccessSessionRevocation(kernel),
+    });
+    accountStatus = UserStatus.Disable;
+    const actor = { actorUserId: 99, principalSessionId: "another-admin-root" };
+    const authentication = createAdminAuthenticationHandlers({
+      sessionKernel: kernel,
+      subjectAccess: operations,
+      config: { allowedClientCodes: ["iam-admin"] },
+      userService: {
+        async getUserDetailForPermittedAdmin(operation, subject) {
+          operation.requirePermission(subject);
+          return {
+            id: 99,
+            username: "admin",
+            name: "Admin",
+            userType: UserType.Formal,
+            mobile: null,
+            wxId: null,
+            status: UserStatus.Enable,
+            orderNum: 0,
+            isDelete: false,
+            createTime: new Date(),
+            updateTime: new Date(),
+            description: null,
+            employments: [],
+            roles: ["iam:admin"],
+            privileges: [],
+          };
+        },
+      },
+    });
+    const app = new Hono();
+    app.use("*", authentication.adminAuthenticationHandler);
+    app.get("/records", async c => c.json(await service.listSessions({ pageNum: 1, pageSize: 1, userId: 7 }, actor)));
+    const response = await app.request("http://localhost/records", {
+      headers: { Client: "iam-admin", Authorization: admin.externalToken },
+    });
+    expect(response.status).toBe(200);
+    const first = await response.json();
+    const second = await service.listSessions({ pageNum: 2, pageSize: 1, userId: 7 }, actor);
+    const refreshed = await service.listSessions({ pageNum: 1, pageSize: 10, userId: 7 }, actor);
+    expect(first).toMatchObject({ total: 2, pages: 2, result: [{ user: { accountStatus: "ended" } }] });
+    expect(second.result).toHaveLength(1);
+    expect(first).not.toMatchObject({ result: [{ principalSessionId: second.result[0]?.principalSessionId }] });
+    expect(refreshed.result).toHaveLength(2);
+    expect(barrierReads).toBe(1);
+    expect(auditWrites).toEqual([]);
+    const targetStates = await observeTree(target);
+    const anotherStates = await observeTree(another);
+    expect(targetStates).toEqual(["resolved", "resolved", "resolved", "resolved"]);
+    expect(anotherStates).toEqual(["resolved", "resolved", "resolved", "resolved"]);
+    const revoked = await service.revokeSessions({ target: { type: "user", userId: 7 } }, actor, auditContext);
+    expect(revoked).toMatchObject({ changed: true, result: { revoked: { principalSessions: 2 } } });
+    expect(barrierReads).toBe(1);
+    let rejection: unknown;
+    try {
+      await operations.run(operation => operation.acquireForAuthentication(subjectIdentifier));
+    }
+    catch (error) {
+      rejection = error;
+    }
+    expect(rejection).toBeInstanceOf(SubjectAccessDisabledError);
+    expect(barrierReads).toBe(2);
+  });
+
   test("protects the current root and its children from single-session revocation", async () => {
     const current = await createSessionTree();
     let failure: unknown;

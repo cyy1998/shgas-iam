@@ -1,6 +1,43 @@
 import type { AuthorizationGrantRedemptionScheduler } from "./authorization-grant-redemption";
 import type { AuthorizationGrantRedemptionRecord } from "./model";
 import type { AuthorizationGrantRedemptionStore } from "./store";
+import { z } from "zod";
+import { AUTHORIZATION_GRANT_REDEMPTION_KEY_PREFIX, createRedisAuthorizationGrantRemovalStore } from "./redis-store";
+
+const grantInspectionRecord = z.discriminatedUnion("state", [
+  z.object({ version: z.literal(1), grantId: z.string(), state: z.literal("issued"), expiresAt: z.number().int().positive() }).strict(),
+  z.object({ version: z.literal(1), grantId: z.string(), state: z.literal("consumed"), expiresAt: z.number().int().positive() }).strict(),
+  z.object({
+    version: z.literal(1),
+    grantId: z.string(),
+    state: z.literal("redeeming"),
+    expiresAt: z.number().int().positive(),
+    attemptId: z.string(),
+    leaseExpiresAt: z.number().int().positive(),
+  }).strict(),
+]);
+
+/** Read-only observations and exact cleanup for grants issued by the production owner. */
+export function createAuthorizationGrantRedisInspection(redis: {
+  get: (key: string) => Promise<string | null>;
+  del: (...keys: string[]) => Promise<number>;
+}) {
+  const removal = createRedisAuthorizationGrantRemovalStore({ redis });
+  return {
+    async inspect(grantId: string) {
+      const raw = await redis.get(`${AUTHORIZATION_GRANT_REDEMPTION_KEY_PREFIX}${grantId}`);
+      if (raw === null)
+        return null;
+      const record = grantInspectionRecord.parse(JSON.parse(raw));
+      if (record.grantId !== grantId)
+        throw new Error("Authorization Grant inspection identity mismatch");
+      return record.state === "redeeming"
+        ? { state: record.state, expiresAt: record.expiresAt, attemptId: record.attemptId, leaseExpiresAt: record.leaseExpiresAt }
+        : { state: record.state, expiresAt: record.expiresAt };
+    },
+    remove: removal.remove,
+  };
+}
 
 export interface CreateInMemoryAuthorizationGrantRedemptionStoreOptions {
   readonly clock?: {

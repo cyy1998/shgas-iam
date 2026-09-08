@@ -40,6 +40,7 @@ describe("Session Kernel credential real Redis contract", () => {
   test("gives one concurrent creator a caller-known identity without overwriting it", async () => {
     const principalSession = await scope!.writer.createPrincipalSession(
       subjectIdentifier,
+      { subjectContext: "test-context" },
     );
     if (principalSession.status !== "created")
       throw new Error("expected a Principal Session fixture");
@@ -90,6 +91,7 @@ describe("Session Kernel credential real Redis contract", () => {
   test("rejects a tombstoned identity while preserving credential indexes", async () => {
     const principalSession = await scope!.writer.createPrincipalSession(
       subjectIdentifier,
+      { subjectContext: "test-context" },
     );
     if (principalSession.status !== "created")
       throw new Error("expected a Principal Session fixture");
@@ -136,6 +138,7 @@ describe("Session Kernel credential real Redis contract", () => {
   test("keeps one lookup owner when concurrent identities use the same bearer token", async () => {
     const principalSession = await scope!.writer.createPrincipalSession(
       subjectIdentifier,
+      { subjectContext: "test-context" },
     );
     if (principalSession.status !== "created")
       throw new Error("expected a Principal Session fixture");
@@ -187,6 +190,7 @@ describe("Session Kernel credential real Redis contract", () => {
   test("uses fresh server UUIDs for new issuance after natural expiry", async () => {
     const principalSession = await scope!.writer.createPrincipalSession(
       subjectIdentifier,
+      { subjectContext: "test-context" },
     );
     if (principalSession.status !== "created")
       throw new Error("expected a Principal Session fixture");
@@ -243,6 +247,7 @@ describe("Session Kernel credential real Redis contract", () => {
   test("revokes a caller-known credential after Redis commits and the adapter reports failure", async () => {
     const principalSession = await scope!.writer.createPrincipalSession(
       subjectIdentifier,
+      { subjectContext: "test-context" },
     );
     if (principalSession.status !== "created")
       throw new Error("expected a Principal Session fixture");

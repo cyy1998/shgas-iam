@@ -6,6 +6,7 @@ import { createFakePasswordHasher, createFakeRandom, createImmediateUnitOfWork }
 import {
   createSubjectAccessBarrier,
   createSubjectAccessLifecycle,
+  createSubjectAccessOperations,
   createSubjectAccessRepair,
   SubjectAccessRecordV1Schema,
 } from "@iam/api-core/subject-access";
@@ -1197,3 +1198,31 @@ async function readStoreState(
     ? null
     : SubjectAccessRecordV1Schema.parse(JSON.parse(serialized)).state;
 }
+
+test("permitted Admin profile query preserves disabled and deleted profiles without another account decision", async () => {
+  const { service, deps } = createService();
+  const profile = user({ status: UserStatus.Disable, isDelete: true });
+  deps.userRepository.getUserBySubjectIdentifierForPermittedAdmin = mock(async () => profile);
+  const readBarrier = mock(async () => "20000000-0000-4000-8000-000000000001");
+  const operations = createSubjectAccessOperations({
+    barrier: { readCommittedTransitionId: readBarrier },
+    revocation: {
+      revokePrincipalSession: async () => revokeSummary(),
+      revokeUserSessions: async () => revokeSummary(),
+    },
+  });
+  const detail = await operations.run(async (operation) => {
+    await operation.acquireForAuthentication(subjectAccessMutationReceipt.subjectIdentifier);
+    return await service.getUserDetailForPermittedAdmin(operation, subjectAccessMutationReceipt.subjectIdentifier);
+  });
+  expect(detail).toMatchObject({ status: UserStatus.Disable, isDelete: true });
+  expect(readBarrier).toHaveBeenCalledTimes(1);
+  const unpermitted = operations.createOperation();
+  const failure = await captureFailure(async () => await service.getUserDetailForPermittedAdmin(
+    unpermitted,
+    subjectAccessMutationReceipt.subjectIdentifier,
+  ));
+  unpermitted.close();
+  expect(failure).toMatchObject({ name: "SubjectAccessPermissionRequiredError" });
+  expect(deps.userRepository.getUserBySubjectIdentifierForPermittedAdmin).toHaveBeenCalledTimes(1);
+});

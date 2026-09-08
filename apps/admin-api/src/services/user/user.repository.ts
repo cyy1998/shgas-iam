@@ -106,13 +106,8 @@ export function createUserRepository(db: DbClient) {
         },
       }) ?? null;
     },
-    async getUserBySubjectIdentifierForAdmin(subjectIdentifier: string) {
-      return await db.query.users.findFirst({
-        where: {
-          subjectIdentifier,
-          isDelete: false,
-        },
-      }) ?? null;
+    async getUserBySubjectIdentifierForPermittedAdmin(subjectIdentifier: string) {
+      return await db.query.users.findFirst({ where: { subjectIdentifier } }) ?? null;
     },
     async searchUsersFuzzyPaged(userPaginationQueryDto: UserPaginationQueryDto) {
       const { pageNum, pageSize } = userPaginationQueryDto;

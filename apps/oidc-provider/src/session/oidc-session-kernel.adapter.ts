@@ -24,7 +24,6 @@ import { createHash, randomUUID } from "node:crypto";
 import {
   SubjectAccessDisabledError,
   SubjectAccessUnavailableError,
-  translateSubjectAccessResolveResult,
 } from "@iam/api-core/subject-access";
 import { z } from "zod";
 import { getCookieValue } from "../interaction/global-session.ts";
@@ -194,16 +193,31 @@ export function createOidcSessionKernelCleanupAdapter(
   ];
 }
 
-export function createOidcSessionKernelAdapter(deps: OidcSessionKernelAdapterDeps) {
+export type OidcSessionLifecycle = Pick<SessionKernel, | "consumeProtocolArtifact"
+  | "createClientBinding"
+  | "createProtocolArtifact"
+  | "issueCredential"
+  | "renewPrincipalSession"
+  | "resolveClientBindingById"
+  | "resolveCredential"
+  | "resolvePrincipalSession"
+  | "resolvePrincipalSessionById"
+  | "resolveProtocolArtifact"
+  | "revokeBinding"
+  | "revokeClientProtocol"
+  | "revokeCredential"
+  | "revokePrincipalSession">;
+
+export function createOidcSessionKernelAdapter(
+  deps: Omit<OidcSessionKernelAdapterDeps, "kernel"> & { kernel: OidcSessionLifecycle },
+) {
   const providerSessionState = deps.providerSessionState;
   async function inspect(request: Pick<IncomingMessage, "headers">) {
     const externalToken = getCookieValue(request.headers.cookie, deps.cookieName);
     if (!externalToken)
       return { status: "absent" as const };
     try {
-      const principal = translateSubjectAccessResolveResult(
-        await deps.kernel.resolvePrincipalSession(externalToken),
-      );
+      const principal = await deps.kernel.resolvePrincipalSession(externalToken);
       if (principal.status === "fail_closed") {
         throw new SubjectAccessUnavailableError(principal.cause);
       }
@@ -223,9 +237,7 @@ export function createOidcSessionKernelAdapter(deps: OidcSessionKernelAdapterDep
     if (!externalToken)
       return null;
     try {
-      const principal = translateSubjectAccessResolveResult(
-        await deps.kernel.resolvePrincipalSession(externalToken),
-      );
+      const principal = await deps.kernel.resolvePrincipalSession(externalToken);
       if (principal.status !== "resolved")
         return null;
       return await toResolvedGlobalSession(principal.value);
@@ -236,16 +248,12 @@ export function createOidcSessionKernelAdapter(deps: OidcSessionKernelAdapterDep
   }
 
   async function resolveById(principalSessionId: string): Promise<ResolvedGlobalSession | null> {
-    const principal = translateSubjectAccessResolveResult(
-      await deps.kernel.resolvePrincipalSessionById(principalSessionId),
-    );
+    const principal = await deps.kernel.resolvePrincipalSessionById(principalSessionId);
     return principal.status === "resolved" ? await toResolvedGlobalSession(principal.value) : null;
   }
 
   async function renew(principalSessionId: string) {
-    const principal = translateSubjectAccessResolveResult(
-      await deps.kernel.renewPrincipalSession(principalSessionId),
-    );
+    const principal = await deps.kernel.renewPrincipalSession(principalSessionId);
     if (principal.status === "fail_closed")
       throw new SubjectAccessUnavailableError(principal.cause);
     return principal.status === "resolved";
@@ -273,26 +281,24 @@ export function createOidcSessionKernelAdapter(deps: OidcSessionKernelAdapterDep
     const anchorGeneration = publication.kind === "rebind"
       ? publication.attemptId
       : publication.anchor.generation;
-    const binding = translateSubjectAccessResolveResult(
-      await deps.kernel.createClientBinding({
-        principalSessionId: session.sessionId,
+    const binding = await deps.kernel.createClientBinding({
+      principalSessionId: session.sessionId,
+      protocol: OIDC_SESSION_PROTOCOL,
+      clientCode: context.clientId,
+      renewalPolicy: "extend_with_principal",
+      metadata: {
+        anchorGeneration,
+        mappingOwnerId,
+        providerSessionUid: sessionUid,
+        oidcConfigVersion: context.oidcConfigVersion,
+      },
+      cleanupRefs: [{
         protocol: OIDC_SESSION_PROTOCOL,
-        clientCode: context.clientId,
-        renewalPolicy: "extend_with_principal",
-        metadata: {
-          anchorGeneration,
-          mappingOwnerId,
-          providerSessionUid: sessionUid,
-          oidcConfigVersion: context.oidcConfigVersion,
-        },
-        cleanupRefs: [{
-          protocol: OIDC_SESSION_PROTOCOL,
-          kind: OIDC_PROVIDER_SESSION_MAPPING_CLEANUP_KIND,
-          ref: sessionUid,
-          metadata: { anchorGeneration, clientCode: context.clientId, mappingOwnerId },
-        }],
-      }),
-    );
+        kind: OIDC_PROVIDER_SESSION_MAPPING_CLEANUP_KIND,
+        ref: sessionUid,
+        metadata: { anchorGeneration, clientCode: context.clientId, mappingOwnerId },
+      }],
+    });
     if (binding.status !== "created")
       return null;
 
@@ -511,9 +517,7 @@ export function createOidcSessionKernelAdapter(deps: OidcSessionKernelAdapterDep
       }, "invalid OIDC provider session binding lookup");
       return null;
     }
-    const binding = translateSubjectAccessResolveResult(
-      await deps.kernel.resolveClientBindingById(parsedLookup.bindingId),
-    );
+    const binding = await deps.kernel.resolveClientBindingById(parsedLookup.bindingId);
     if (binding.status !== "resolved") {
       deps.logger.warn({
         sessionUidFingerprint: fingerprintForLog(sessionUid),
@@ -577,9 +581,7 @@ export function createOidcSessionKernelAdapter(deps: OidcSessionKernelAdapterDep
   }
 
   async function consumeReturnHandle(handle: string) {
-    const consumed = translateSubjectAccessResolveResult(
-      await deps.kernel.consumeProtocolArtifact(handle),
-    );
+    const consumed = await deps.kernel.consumeProtocolArtifact(handle);
     if (consumed.status === "fail_closed")
       throw new SubjectAccessUnavailableError(consumed.cause);
     if (consumed.status !== "resolved"
@@ -592,9 +594,7 @@ export function createOidcSessionKernelAdapter(deps: OidcSessionKernelAdapterDep
   }
 
   async function resolveReturnHandle(handle: string) {
-    const resolved = translateSubjectAccessResolveResult(
-      await deps.kernel.resolveProtocolArtifact(handle),
-    );
+    const resolved = await deps.kernel.resolveProtocolArtifact(handle);
     if (resolved.status === "fail_closed")
       throw new SubjectAccessUnavailableError(resolved.cause);
     if (resolved.status !== "resolved"
@@ -640,35 +640,33 @@ export function createOidcSessionKernelAdapter(deps: OidcSessionKernelAdapterDep
     if (!scopes)
       return false;
     const nonce = payloadString(input.payload, "nonce");
-    const artifact = translateSubjectAccessResolveResult(
-      await deps.kernel.createProtocolArtifact({
+    const artifact = await deps.kernel.createProtocolArtifact({
+      principalSessionId: input.binding.principalSessionId,
+      bindingId: input.binding.bindingId,
+      protocol: OIDC_SESSION_PROTOCOL,
+      clientCode: clientId,
+      artifactType: OIDC_AUTHORIZATION_CODE_ARTIFACT_TYPE,
+      ttlMs: input.expiresIn * 1000,
+      tokenKind: "authCode",
+      externalToken: input.providerCodeId,
+      metadata: {
+        providerCodeId: input.providerCodeId,
+        clientId,
+        clientCode: clientId,
         principalSessionId: input.binding.principalSessionId,
         bindingId: input.binding.bindingId,
+        redirectUriFingerprint: fingerprintPayloadValue(input.payload, "redirectUri"),
+        scopes,
+        ...(nonce ? { nonce } : {}),
+        oidcConfigVersion: version,
+      },
+      cleanupRefs: [{
         protocol: OIDC_SESSION_PROTOCOL,
-        clientCode: clientId,
-        artifactType: OIDC_AUTHORIZATION_CODE_ARTIFACT_TYPE,
-        ttlMs: input.expiresIn * 1000,
-        tokenKind: "authCode",
-        externalToken: input.providerCodeId,
-        metadata: {
-          providerCodeId: input.providerCodeId,
-          clientId,
-          clientCode: clientId,
-          principalSessionId: input.binding.principalSessionId,
-          bindingId: input.binding.bindingId,
-          redirectUriFingerprint: fingerprintPayloadValue(input.payload, "redirectUri"),
-          scopes,
-          ...(nonce ? { nonce } : {}),
-          oidcConfigVersion: version,
-        },
-        cleanupRefs: [{
-          protocol: OIDC_SESSION_PROTOCOL,
-          kind: OIDC_PROVIDER_MODEL_PAYLOAD_CLEANUP_KIND,
-          ref: providerModelKey("AuthorizationCode", input.providerCodeId),
-          metadata: { clientId },
-        }],
-      }),
-    );
+        kind: OIDC_PROVIDER_MODEL_PAYLOAD_CLEANUP_KIND,
+        ref: providerModelKey("AuthorizationCode", input.providerCodeId),
+        metadata: { clientId },
+      }],
+    });
     if (artifact.status !== "created") {
       deps.logger.warn({
         status: artifact.status,
@@ -681,9 +679,7 @@ export function createOidcSessionKernelAdapter(deps: OidcSessionKernelAdapterDep
   }
 
   async function resolveAuthorizationCodeSessionLifetime(providerCodeId: string) {
-    const artifact = translateSubjectAccessResolveResult(
-      await deps.kernel.resolveProtocolArtifact(providerCodeId),
-    );
+    const artifact = await deps.kernel.resolveProtocolArtifact(providerCodeId);
     if (artifact.status !== "resolved"
       || artifact.value.protocol !== OIDC_SESSION_PROTOCOL
       || artifact.value.artifactType !== OIDC_AUTHORIZATION_CODE_ARTIFACT_TYPE
@@ -691,18 +687,14 @@ export function createOidcSessionKernelAdapter(deps: OidcSessionKernelAdapterDep
       || !AuthorizationCodeMetadataSchema.safeParse(artifact.value.metadata).success) {
       return null;
     }
-    const principal = translateSubjectAccessResolveResult(
-      await deps.kernel.resolvePrincipalSessionById(artifact.value.principalSessionId),
-    );
+    const principal = await deps.kernel.resolvePrincipalSessionById(artifact.value.principalSessionId);
     if (principal.status !== "resolved")
       return null;
     return { remainingSeconds: Math.ceil((principal.value.expiresAt - principal.observedAt) / 1000) };
   }
 
   async function consumeAuthorizationCodeArtifact(providerCodeId: string) {
-    const consumed = translateSubjectAccessResolveResult(
-      await deps.kernel.consumeProtocolArtifact(providerCodeId),
-    );
+    const consumed = await deps.kernel.consumeProtocolArtifact(providerCodeId);
     if (consumed.status !== "resolved"
       || consumed.value.protocol !== OIDC_SESSION_PROTOCOL
       || consumed.value.artifactType !== OIDC_AUTHORIZATION_CODE_ARTIFACT_TYPE) {
@@ -726,38 +718,34 @@ export function createOidcSessionKernelAdapter(deps: OidcSessionKernelAdapterDep
     const scopes = normalizeOidcProtocolScopes(input.payload);
     if (!scopes)
       return null;
-    const credential = translateSubjectAccessResolveResult(
-      await deps.kernel.issueCredential({
-        principalSessionId: input.binding.principalSessionId,
-        bindingId: input.binding.bindingId,
+    const credential = await deps.kernel.issueCredential({
+      principalSessionId: input.binding.principalSessionId,
+      bindingId: input.binding.bindingId,
+      protocol: OIDC_SESSION_PROTOCOL,
+      clientCode: clientId,
+      credentialType: OIDC_ACCESS_TOKEN_CREDENTIAL_TYPE,
+      ttlMs: input.expiresIn * 1000,
+      renewalPolicy: "fixed_at_issue",
+      externalToken: input.providerTokenId,
+      metadata: {
+        providerTokenKey: input.providerTokenKey,
+        providerTokenId: input.providerTokenId,
+        scopes,
+        authTime: payloadNumber(input.payload, "authTime"),
+        oidcConfigVersion: version,
+      },
+      cleanupRefs: [{
         protocol: OIDC_SESSION_PROTOCOL,
-        clientCode: clientId,
-        credentialType: OIDC_ACCESS_TOKEN_CREDENTIAL_TYPE,
-        ttlMs: input.expiresIn * 1000,
-        renewalPolicy: "fixed_at_issue",
-        externalToken: input.providerTokenId,
-        metadata: {
-          providerTokenKey: input.providerTokenKey,
-          providerTokenId: input.providerTokenId,
-          scopes,
-          authTime: payloadNumber(input.payload, "authTime"),
-          oidcConfigVersion: version,
-        },
-        cleanupRefs: [{
-          protocol: OIDC_SESSION_PROTOCOL,
-          kind: OIDC_PROVIDER_TOKEN_PAYLOAD_CLEANUP_KIND,
-          ref: input.providerTokenKey,
-          metadata: { clientId },
-        }],
-      }),
-    );
+        kind: OIDC_PROVIDER_TOKEN_PAYLOAD_CLEANUP_KIND,
+        ref: input.providerTokenKey,
+        metadata: { clientId },
+      }],
+    });
     return credential.status === "created" ? credential.value : null;
   }
 
   async function resolveAccessTokenCredential(externalToken: string) {
-    const credential = translateSubjectAccessResolveResult(
-      await deps.kernel.resolveCredential(externalToken),
-    );
+    const credential = await deps.kernel.resolveCredential(externalToken);
     if (credential.status !== "resolved"
       || credential.value.protocol !== OIDC_SESSION_PROTOCOL
       || credential.value.credentialType !== OIDC_ACCESS_TOKEN_CREDENTIAL_TYPE) {
@@ -778,9 +766,7 @@ export function createOidcSessionKernelAdapter(deps: OidcSessionKernelAdapterDep
   async function logoutPrincipalSession(token: string | undefined): Promise<RevokeSummary | true> {
     if (!token)
       return true;
-    const principal = translateSubjectAccessResolveResult(
-      await deps.kernel.resolvePrincipalSession(token),
-    );
+    const principal = await deps.kernel.resolvePrincipalSession(token);
     if (principal.status === "resolved")
       return await deps.kernel.revokePrincipalSession(principal.value.principalSessionId, "logout");
     return true;
@@ -798,9 +784,7 @@ export function createOidcSessionKernelAdapter(deps: OidcSessionKernelAdapterDep
   }
 
   async function principalSessionExpiresAt(principalSessionId: string) {
-    const principal = translateSubjectAccessResolveResult(
-      await deps.kernel.resolvePrincipalSessionById(principalSessionId),
-    );
+    const principal = await deps.kernel.resolvePrincipalSessionById(principalSessionId);
     if (principal.status === "fail_closed")
       throw new SubjectAccessUnavailableError(principal.cause);
     if (principal.status !== "resolved")

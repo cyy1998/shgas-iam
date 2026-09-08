@@ -3,7 +3,7 @@ import { SubjectProjectionNotReadyError } from "@iam/client-subject-projection";
 import { OidcScope } from "@iam/contracts";
 import { errors } from "oidc-provider";
 import { describe, expect, it } from "vitest";
-import { createOidcClaimsAdapter } from "../provider/claims.ts";
+import { createClaimsFixture as createOidcClaimsAdapter } from "../../test-integration/component/support/claims-fixture.ts";
 
 function createOpenIdClaimsSnapshot(
   subjectIdentifier: string,

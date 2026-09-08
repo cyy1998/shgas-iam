@@ -15,3 +15,5 @@ export * from "./internal/session";
 export * from "./internal/session.port";
 export * from "./internal/subject-delivery";
 export * from "./internal/traffic-gate";
+
+export { bindCustomSsoOperationKernel } from "./operations";

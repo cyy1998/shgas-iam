@@ -22,13 +22,13 @@ export const sessionsSearch = createRoute({
   path: "/sessions/search",
   tags,
   request: {
-    body: jsonContentRequired(SessionManagementListSessionsInputSchema, "有效会话分页查询参数"),
+    body: jsonContentRequired(SessionManagementListSessionsInputSchema, "会话记录分页查询参数"),
   },
   responses: {
     ...commonErrorResponses,
     [HttpStatusCodes.OK]: jsonContent(
       createSuccessResponseSchema(SessionManagementSessionListResultVoSchema),
-      "分页有效会话列表",
+      "分页会话记录列表",
     ),
     [HttpStatusCodes.SERVICE_UNAVAILABLE]: jsonContent(
       StandardErrorResponseSchema,
@@ -42,13 +42,13 @@ export const sessionsRevoke = createRoute({
   path: "/sessions/revoke",
   tags,
   request: {
-    body: jsonContentRequired(SessionManagementRevokeSessionsInputSchema, "单个或用户全部有效会话撤销参数"),
+    body: jsonContentRequired(SessionManagementRevokeSessionsInputSchema, "单个或用户全部会话记录撤销参数"),
   },
   responses: {
     ...commonErrorResponses,
     [HttpStatusCodes.OK]: jsonContent(
       createSuccessResponseSchema(SessionManagementRevokeSessionsResultVoSchema),
-      "单个或用户全部有效会话撤销结果",
+      "单个或用户全部会话记录撤销结果",
     ),
     [HttpStatusCodes.SERVICE_UNAVAILABLE]: jsonContent(
       StandardErrorResponseSchema,

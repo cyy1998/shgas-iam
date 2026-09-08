@@ -39,7 +39,7 @@ export class SessionListError extends Error {
     super(
       kind === SessionListErrorKind.LoginStateUnavailable
         ? '登录状态服务暂时不可用'
-        : '有效会话加载失败',
+        : '会话记录加载失败',
     );
     this.name = SessionListError.name;
     this.kind = kind;

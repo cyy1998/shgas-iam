@@ -6,7 +6,7 @@ import { createAdminAuthorizationPolicy } from "@admin-api/services/admin-author
 import { createAdminSessionRevocationPort } from "@admin-api/services/session-revocation/session-revocation.port";
 import { createImmediateUnitOfWork } from "@admin-api/test/fakes";
 import { createResignUserUseCase } from "@admin-api/use-cases/employment/resign-user/resign-user.use-case";
-import { createRedisSubjectAccessStore, createSubjectAccessBarrier, createSubjectAccessBootstrap, createSubjectAccessLifecycle, createSubjectAccessPrincipalValidator } from "@iam/api-core/subject-access";
+import { createRedisSubjectAccessStore, createSubjectAccessBarrier, createSubjectAccessBootstrap, createSubjectAccessLifecycle, createSubjectAccessOperations, createSubjectAccessSessionContext, createSubjectAccessSessionRevocation } from "@iam/api-core/subject-access";
 import { EmploymentStatus, UserStatus } from "@iam/contracts";
 import { createSessionKernel, createSessionKernelConfig } from "@iam/session-kernel";
 import { createSessionKernelKeyBuilder } from "@iam/session-kernel/testing";
@@ -66,7 +66,7 @@ async function fixture() {
       return typeof value === "function" ? value.bind(target) : value;
     },
   });
-  const kernel = createSessionKernel({ redis: kernelRedis, config, principalAccessFence: createSubjectAccessPrincipalValidator(barrier) });
+  const kernel = createSessionKernel({ redis: kernelRedis, config });
   const keys = createSessionKernelKeyBuilder(config.namespace);
   const user = { id: 1, username: "holder", subjectIdentifier, status: UserStatus.Enable, isDelete: false };
   const employment = {
@@ -135,11 +135,12 @@ async function fixture() {
   });
   let failNextCleanup = false;
   let delayNextCleanup: (() => Promise<void>) | undefined;
+  const logPreparationFailure = mock();
   const revocation = createAdminSessionRevocationPort({
     sessionKernel: {
       ...kernel,
-      prepareUserSessionRevocation: async (principal) => {
-        const plan = await kernel.prepareUserSessionRevocation(principal);
+      prepareUserSessionRevocationByContext: async (principal) => {
+        const plan = await kernel.prepareUserSessionRevocationByContext(principal);
         return { revoke: async (...args: Parameters<typeof plan.revoke>) => {
           if (failNextCleanup) {
             failNextCleanup = false;
@@ -152,11 +153,14 @@ async function fixture() {
         } };
       },
     },
-    logger: { logUserRevocation: mock(), logClientProtocolRevocation: mock(), logClientAllProtocolsRevocation: mock() },
+    logger: { logPreparationFailure, logUserRevocation: mock(), logClientProtocolRevocation: mock(), logClientAllProtocolsRevocation: mock() },
   });
   const command = createResignUserUseCase({ clock, userReader, sessionRevocation: revocation, subjectAccessLifecycle: lifecycle, uow: createImmediateUnitOfWork(tx) });
   async function createSession() {
-    const result = await kernel.createPrincipalSession(subjectIdentifier);
+    const operation = createSubjectAccessOperations({ barrier, revocation: createSubjectAccessSessionRevocation(kernel) }).createOperation();
+    const permission = await operation.acquireForAuthentication(subjectIdentifier);
+    const result = await kernel.createPrincipalSession(subjectIdentifier, createSubjectAccessSessionContext(operation, permission));
+    operation.close();
     if (result.status !== "created")
       throw new Error("Principal Session fixture creation failed");
     return result;
@@ -165,6 +169,7 @@ async function fixture() {
     command,
     authorization,
     preparationFailure,
+    logPreparationFailure,
     failNextPreparation: () => { failNextPreparation = true; },
     kernel,
     audits,
@@ -208,6 +213,7 @@ describe("Resignation recovery with production Redis Session Kernel and fake bus
     const result = await subject.command.execute({ username: "holder" });
     expect(result).toEqual({ changed: true, result: null });
     expect(subject.preparationFailure).toHaveBeenCalledTimes(1);
+    expect(subject.logPreparationFailure).toHaveBeenCalledWith({ errorName: "Error" });
     const removed = await subject.exists(original.value.principalSessionId);
     expect(removed).toBe(0);
     expect(subject.dirty).toHaveBeenCalledTimes(1);

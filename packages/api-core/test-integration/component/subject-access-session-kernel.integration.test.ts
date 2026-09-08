@@ -1,11 +1,12 @@
-import type { SessionKernel, SessionKernelDependencies } from "@iam/session-kernel";
+import type { PrincipalSession, SessionKernelDependencies } from "@iam/session-kernel";
 import {
   createSubjectAccessBarrier,
   createSubjectAccessLifecycle,
-  createSubjectAccessPrincipalValidator,
+  createSubjectAccessOperations,
   createSubjectAccessRepair,
-  SubjectAccessDisabledError,
-  SubjectAccessUnavailableError,
+  createSubjectAccessSessionContext,
+  createSubjectAccessSessionRevocation,
+  SubjectAccessOperationDeniedError,
 } from "@iam/api-core/subject-access";
 import { createSessionKernelConfig } from "@iam/session-kernel";
 import { createSessionKernelForTesting, KernelFakeRedis } from "@iam/session-kernel/testing";
@@ -29,52 +30,45 @@ function createConfig(
   });
 }
 
-function createSessionKernel(
-  deps: Omit<SessionKernelDependencies, "principalAccessFence">
-    & Partial<Pick<SessionKernelDependencies, "principalAccessFence">>,
-) {
-  return createSessionKernelForTesting({
-    principalAccessFence: {
-      capture: () => "20000000-0000-4000-8000-000000000001",
-      validate: () => ({ ok: true }),
-    },
-    ...deps,
-  });
-}
-function createDerivedObject(
-  kernel: SessionKernel,
-  operation: "artifact" | "binding" | "credential",
-  principalSessionId: string,
-) {
-  if (operation === "binding") {
-    return kernel.createClientBinding({
-      principalSessionId,
-      protocol: "oidc",
-      clientCode: "portal",
-    });
-  }
-  if (operation === "credential") {
-    return kernel.issueCredential({
-      principalSessionId,
-      protocol: "oidc",
-      clientCode: "portal",
-      credentialType: "access_token",
-      ttlMs: 30_000,
-    });
-  }
-  return kernel.createProtocolArtifact({
-    principalSessionId,
-    protocol: "oidc",
-    clientCode: "portal",
-    artifactType: "authorization_code",
-    ttlMs: 30_000,
-  });
-}
-function subjectIdentifierFor(index: number) {
-  return `00000000-0000-4000-8000-${String(index).padStart(12, "0")}`;
+function createSessionKernel(deps: SessionKernelDependencies) {
+  return createSessionKernelForTesting(deps);
 }
 
 const principal = { principalType: "user", subjectId: subjectIdentifierFor(1) };
+
+async function login(
+  kernel: ReturnType<typeof createSessionKernel>,
+  barrier: ReturnType<typeof createSubjectAccessBarrier>,
+) {
+  return await createSubjectAccessOperations({
+    barrier,
+    revocation: createSubjectAccessSessionRevocation(kernel),
+  }).run(async (operation) => {
+    const permission = await operation.acquireForAuthentication(principal.subjectId);
+    return await kernel.createPrincipalSession(principal.subjectId, createSubjectAccessSessionContext(operation, permission));
+  });
+}
+
+async function authorize(
+  kernel: ReturnType<typeof createSessionKernel>,
+  barrier: ReturnType<typeof createSubjectAccessBarrier>,
+  session: PrincipalSession,
+) {
+  return await createSubjectAccessOperations({
+    barrier,
+    revocation: createSubjectAccessSessionRevocation(kernel),
+  }).run(async (operation) => {
+    return await operation.acquireForSession({
+      subjectIdentifier: session.principal.subjectId,
+      subjectContext: session.subjectContext,
+      principalSessionId: session.principalSessionId,
+    });
+  });
+}
+
+function subjectIdentifierFor(index: number) {
+  return `00000000-0000-4000-8000-${String(index).padStart(12, "0")}`;
+}
 
 describe("Subject Access and Session Kernel collaboration", () => {
   test("keeps a pre-disable session invalid after revocation failure, repair, and re-enable", async () => {
@@ -119,9 +113,8 @@ describe("Subject Access and Session Kernel collaboration", () => {
     const kernel = createSessionKernel({
       redis,
       config: createConfig(redis),
-      principalAccessFence: createSubjectAccessPrincipalValidator(barrier),
     });
-    const oldSession = await kernel.createPrincipalSession(principal.subjectId);
+    const oldSession = await login(kernel, barrier);
     if (oldSession.status !== "created")
       throw new Error("expected old Principal Session");
 
@@ -153,16 +146,18 @@ describe("Subject Access and Session Kernel collaboration", () => {
     await expect(repair.repairSubject(principal.subjectId)).resolves.toEqual({
       status: "enabled",
     });
-    const newSession = await kernel.createPrincipalSession(principal.subjectId);
+    const newSession = await login(kernel, barrier);
     if (newSession.status !== "created")
       throw new Error("expected new Principal Session");
 
-    await expect(kernel.resolvePrincipalSession(oldSession.externalToken!))
-      .resolves
-      .toMatchObject({
-        status: "validation_failed",
-        reason: "session_generation_stale",
-      });
+    let denial: unknown;
+    try {
+      await authorize(kernel, barrier, oldSession.value);
+    }
+    catch (error) { denial = error; }
+    expect(denial).toBeInstanceOf(SubjectAccessOperationDeniedError);
+    expect(denial).toMatchObject({ reason: "session_generation_stale" });
+    await authorize(kernel, barrier, newSession.value);
     await expect(kernel.resolvePrincipalSession(newSession.externalToken!))
       .resolves
       .toMatchObject({
@@ -215,9 +210,8 @@ describe("Subject Access and Session Kernel collaboration", () => {
     const kernel = createSessionKernel({
       redis,
       config: createConfig(redis),
-      principalAccessFence: createSubjectAccessPrincipalValidator(barrier),
     });
-    const oldSession = await kernel.createPrincipalSession(principal.subjectId);
+    const oldSession = await login(kernel, barrier);
     if (oldSession.status !== "created")
       throw new Error("expected old Principal Session");
 
@@ -236,7 +230,7 @@ describe("Subject Access and Session Kernel collaboration", () => {
       revokeSessions: async (_result, context) => {
         cleanupStarted();
         await cleanupCanFinish;
-        await kernel.revokeUserSessions(
+        await createSubjectAccessSessionRevocation(kernel).revokeUserSessions(
           principal,
           "user_disabled",
           {
@@ -266,7 +260,7 @@ describe("Subject Access and Session Kernel collaboration", () => {
       random: { uuid: () => "30000000-0000-4000-8000-000000000001" },
     });
     await repair.repairSubject(principal.subjectId);
-    const newSession = await kernel.createPrincipalSession(principal.subjectId);
+    const newSession = await login(kernel, barrier);
     if (newSession.status !== "created")
       throw new Error("expected new Principal Session");
 
@@ -281,73 +275,5 @@ describe("Subject Access and Session Kernel collaboration", () => {
           principalSessionId: newSession.value.principalSessionId,
         },
       });
-  });
-  test("preserves Subject Access classification across every Session Kernel create path", async () => {
-    for (const error of [
-      new SubjectAccessDisabledError(),
-      new SubjectAccessUnavailableError(),
-    ]) {
-      const redis = new KernelFakeRedis();
-      const kernel = createSessionKernel({
-        redis,
-        config: createConfig(redis),
-        principalAccessFence: {
-          capture: () => {
-            throw error;
-          },
-          validate: () => ({ ok: true }),
-        },
-      });
-
-      await expect(kernel.createPrincipalSession(principal.subjectId))
-        .rejects
-        .toBe(error);
-    }
-
-    for (const operation of ["binding", "credential", "artifact"] as const) {
-      let validation: "enabled" | "disabled" | "unavailable" = "enabled";
-      const unavailable = new SubjectAccessUnavailableError();
-      const redis = new KernelFakeRedis();
-      const kernel = createSessionKernel({
-        redis,
-        config: createConfig(redis),
-        principalAccessFence: {
-          capture: () => "20000000-0000-4000-8000-000000000001",
-          validate: () => {
-            if (validation === "disabled")
-              return { ok: false as const, reason: "user_disabled" as const };
-            if (validation === "unavailable")
-              throw unavailable;
-            return { ok: true as const };
-          },
-        },
-      });
-      const session = await kernel.createPrincipalSession(principal.subjectId);
-      expect(session.status).toBe("created");
-      if (session.status !== "created")
-        continue;
-
-      validation = "disabled";
-      await expect(createDerivedObject(
-        kernel,
-        operation,
-        session.value.principalSessionId,
-      )).resolves.toMatchObject({
-        status: "validation_failed",
-        reason: "user_disabled",
-      });
-
-      validation = "enabled";
-      const replacement = await kernel.createPrincipalSession(principal.subjectId);
-      expect(replacement.status).toBe("created");
-      if (replacement.status !== "created")
-        continue;
-      validation = "unavailable";
-      await expect(createDerivedObject(
-        kernel,
-        operation,
-        replacement.value.principalSessionId,
-      )).rejects.toBe(unavailable);
-    }
   });
 });

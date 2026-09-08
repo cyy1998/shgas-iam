@@ -74,6 +74,7 @@ export type CleanupRef = z.infer<typeof CleanupRefSchema>;
 
 const BaseLifecycleSchema = z.object({
   version: z.literal(SESSION_KERNEL_OBJECT_VERSION),
+  subjectContext: z.string().optional(),
   issuedAt: z.number().int().nonnegative(),
   expiresAt: z.number().int().nonnegative(),
   metadata: MetadataSchema.optional(),
@@ -82,7 +83,7 @@ const BaseLifecycleSchema = z.object({
 
 export const PrincipalSessionSchema = z.object({
   version: z.literal(SESSION_KERNEL_OBJECT_VERSION),
-  subjectAccessTransitionId: z.uuid(),
+  subjectContext: z.string().optional(),
   sessionKind: z.string().min(1).default("browser_user"),
   principalSessionId: z.string().min(1),
   externalTokenLookupHash: z.string().min(1),
@@ -103,7 +104,6 @@ export const PrincipalSessionSchema = z.object({
 export type PrincipalSession = z.infer<typeof PrincipalSessionSchema>;
 
 export const ClientBindingSchema = BaseLifecycleSchema.extend({
-  subjectAccessTransitionId: z.uuid(),
   bindingId: z.string().min(1),
   protocol: z.string().min(1),
   clientCode: z.string().min(1),
@@ -115,7 +115,6 @@ export const ClientBindingSchema = BaseLifecycleSchema.extend({
 export type ClientBinding = z.infer<typeof ClientBindingSchema>;
 
 export const IssuedCredentialSchema = BaseLifecycleSchema.extend({
-  subjectAccessTransitionId: z.uuid(),
   credentialId: z.string().min(1),
   protocol: z.string().min(1),
   credentialType: z.string().min(1),
@@ -130,7 +129,6 @@ export const IssuedCredentialSchema = BaseLifecycleSchema.extend({
 export type IssuedCredential = z.infer<typeof IssuedCredentialSchema>;
 
 export const ProtocolArtifactSchema = BaseLifecycleSchema.extend({
-  subjectAccessTransitionId: z.uuid().optional(),
   artifactId: z.string().min(1),
   protocol: z.string().min(1),
   artifactType: z.string().min(1),
@@ -143,12 +141,12 @@ export const ProtocolArtifactSchema = BaseLifecycleSchema.extend({
 }).superRefine((artifact, context) => {
   if (
     (artifact.principal !== undefined || artifact.principalSessionId !== undefined)
-    && artifact.subjectAccessTransitionId === undefined
+    && artifact.subjectContext === undefined
   ) {
     context.addIssue({
       code: "custom",
-      path: ["subjectAccessTransitionId"],
-      message: "principal-linked protocol artifact requires a Subject Access transition ID",
+      path: ["subjectContext"],
+      message: "principal-linked protocol artifact requires a subject context",
     });
   }
 });
@@ -181,9 +179,6 @@ export const FreshnessRequirementSchema = z.object({
 export type FreshnessRequirement = z.infer<typeof FreshnessRequirementSchema>;
 
 export const ValidationFailureReasonSchema = z.enum([
-  "user_disabled",
-  "user_deleted",
-  "session_generation_stale",
   "client_disabled",
   "client_deleted",
   "client_protocol_disabled",

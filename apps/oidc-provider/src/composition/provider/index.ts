@@ -1,14 +1,17 @@
+import type { SubjectAccessOperation } from "@iam/api-core/subject-access";
 import type { DbClient } from "@iam/db";
 import type { Redis } from "ioredis";
 import type { OidcProviderEnv } from "../../env.ts";
+import type { CreateOidcInteractionHandlerDeps, OidcInteractionHandler } from "../../interaction/handler.ts";
 import type { OidcLogger } from "../../lib/logger.ts";
 import type { OidcClaimsSnapshot } from "../../provider/claims/claims-snapshot.ts";
+import type { ClaimsAccountReader, ClaimsSubjectProjectionResolver } from "../../provider/claims/claims.port.ts";
 import type { SigningKey } from "../../security/signing-keys.ts";
-import type { OidcProviderRepositories } from "../repositories/index.ts";
 import type { OidcProviderSecurity } from "../security/index.ts";
 import type { OidcProviderSession } from "../session/index.ts";
 import type { OidcProviderStores } from "../stores/index.ts";
-import { createClientSubjectProjectionService } from "@iam/client-subject-projection";
+import { requireSubjectAccessOperation } from "@iam/api-core/subject-access";
+import { createPermittedClientSubjectProjectionService } from "@iam/client-subject-projection";
 import {
   createSubjectFactsLoggerObservability,
   createSubjectFactsReader,
@@ -22,6 +25,8 @@ import {
   registerOidcClientTrafficGate,
 } from "../../provider/client/client-traffic-gate.ts";
 import { createOidcProvider } from "../../provider/create-provider.ts";
+import { createOidcSubjectAccessBridge } from "../../provider/subject-access-operation.ts";
+import { createOidcProviderSessionBridge } from "../../provider/subject-access-session.ts";
 import { createOidcAdapterFactory } from "../../storage/redis-adapter.ts";
 
 export interface CreateOidcProviderRuntimeDeps {
@@ -33,27 +38,79 @@ export interface CreateOidcProviderRuntimeDeps {
     current: SigningKey;
     previous?: SigningKey;
   };
-  repositories: Pick<OidcProviderRepositories, "account">;
+  repositories: { account: ClaimsAccountReader };
   security: Pick<OidcProviderSecurity, "clientAuthRateLimiter" | "clientSecretVerifier">;
-  session: Pick<OidcProviderSession, "oidcSession" | "subjectAccess">;
+  session: OidcProviderSession;
   stores: Pick<OidcProviderStores, | "clientRuntime"
   | "clientTrafficGate"
   | "tokens">;
 }
 
 export function createOidcProviderRuntime(deps: CreateOidcProviderRuntimeDeps) {
-  const trafficGate = createOidcClientTrafficGate({ gate: deps.stores.clientTrafficGate });
+  const bridge = createOidcSubjectAccessBridge(deps.session.operations);
+  const oidcSession = createOidcProviderSessionBridge(deps.session.sessions, bridge);
   const subjectFacts = createSubjectFactsReader({
     db: deps.db,
     cache: createSubjectFactsRedisCache(deps.redis),
     observability: createSubjectFactsLoggerObservability(deps.logger),
   });
-  const projection = createClientSubjectProjectionService({
-    subjectAccess: deps.session.subjectAccess,
+  const projection = createPermittedClientSubjectProjectionService<SubjectAccessOperation>({
     subjectFacts,
     authorizationFreshness: subjectFacts,
+    assertPermission(operation, subjectIdentifier) {
+      requireSubjectAccessOperation(operation).requirePermission(subjectIdentifier);
+    },
   });
-  const claims = createOidcClaimsAdapter({
+  const runtime = assembleOidcProviderRuntime({
+    ...deps,
+    repositories: {
+      account: {
+        async findBySubject(subject) {
+          bridge.current().requirePermission(subject);
+          return await deps.repositories.account.findBySubject(subject);
+        },
+      },
+    },
+    session: { oidcSession },
+  }, {
+    resolve: input => projection.resolve(input, bridge.current()),
+  }, (handlerDeps) => {
+    function scoped(operation: SubjectAccessOperation) {
+      const session = deps.session.sessions.forOperation(operation);
+      return createOidcInteractionHandler({
+        ...handlerDeps,
+        globalSessions: session,
+        providerSessions: session,
+        returnHandles: session,
+      });
+    }
+    return {
+      handleInteraction: (request, response) => bridge.run(operation =>
+        scoped(operation).handleInteraction(request, response)),
+      handleLoginGuard: (request, response) => bridge.run(operation =>
+        scoped(operation).handleLoginGuard(request, response)),
+      handleResume: (request, response) => bridge.run(operation =>
+        scoped(operation).handleResume(request, response)),
+    };
+  }, claimsDeps => createOidcClaimsAdapter(
+    claimsDeps,
+    bridge.current,
+    () => oidcSession.resolve(bridge.request()),
+  ));
+  bridge.register(runtime.provider);
+  return { ...runtime, bridge };
+}
+
+function assembleOidcProviderRuntime(
+  deps: Omit<CreateOidcProviderRuntimeDeps, "session"> & {
+    session: { oidcSession: ReturnType<typeof createOidcProviderSessionBridge> };
+  },
+  projection: ClaimsSubjectProjectionResolver,
+  createInteractions: (deps: CreateOidcInteractionHandlerDeps) => OidcInteractionHandler,
+  createClaims: (deps: Parameters<typeof createOidcClaimsAdapter>[0]) => ReturnType<typeof createOidcClaimsAdapter>,
+) {
+  const trafficGate = createOidcClientTrafficGate({ gate: deps.stores.clientTrafficGate });
+  const claims = createClaims({
     accounts: deps.repositories.account,
     clients: deps.stores.clientRuntime,
     globalSessions: deps.session.oidcSession,
@@ -86,7 +143,7 @@ export function createOidcProviderRuntime(deps: CreateOidcProviderRuntimeDeps) {
     trafficGate,
   });
   registerOidcClientTrafficGate(provider, trafficGate);
-  const interactions = createOidcInteractionHandler({
+  const interactions = createInteractions({
     provider,
     interactionArtifacts: {
       async find(interactionUid) {

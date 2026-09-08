@@ -12,12 +12,15 @@ export type {
   ClientSubjectProjectionService,
   EmploymentProfile,
   EmploymentResponsibilitySnapshot,
+  PermittedClientSubjectProjectionService,
   ResolveClientSubjectInput,
   SubjectClaimSelection,
   SubjectFactsEmployment,
   SubjectFactsSnapshot,
 } from "./internal/contract";
-export { createClientSubjectProjectionService } from "./internal/projection";
+export {
+  createPermittedClientSubjectProjectionService,
+} from "./internal/projection";
 export { InvalidSubjectClaimSelectionError } from "./subject-claim-selection.error";
 
 export type OptionalSubjectClaim
@@ -84,8 +87,4 @@ export interface ClientAuthorizationBase {
   readonly employments: readonly ClientAuthorizationEmploymentBase[];
   readonly roles: readonly string[];
   readonly privileges: readonly string[];
-}
-
-export interface SubjectAccessPort {
-  readonly assertAccessible: (subjectIdentifier: string) => Promise<void>;
 }

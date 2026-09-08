@@ -1,10 +1,13 @@
+import type { DbClient } from "@iam/db";
+import type { SQL } from "drizzle-orm";
 import {
   ClientStatus,
   UserStatus,
 } from "@iam/contracts";
+import { PgDialect } from "drizzle-orm/pg-core";
 import { describe, expect, it } from "vitest";
+import { createOidcAccountRepository } from "../../src/repositories/account.repository.ts";
 import {
-  isOidcAccountAvailable,
   isOidcClientAvailable,
 } from "../../src/repositories/availability.ts";
 
@@ -32,10 +35,32 @@ describe("oIDC repository availability", () => {
     expect(isOidcClientAvailable(client as never)).toBe(false);
   });
 
-  it("accepts only enabled, non-deleted users", () => {
-    expect(isOidcAccountAvailable({ status: UserStatus.Enable, isDelete: false })).toBe(true);
-    expect(isOidcAccountAvailable({ status: UserStatus.Pause, isDelete: false })).toBe(false);
-    expect(isOidcAccountAvailable({ status: UserStatus.Disable, isDelete: false })).toBe(false);
-    expect(isOidcAccountAvailable({ status: UserStatus.Enable, isDelete: true })).toBe(false);
+  it("reads permitted account facts by subject without a later accessibility predicate", async () => {
+    const row = {
+      id: 42,
+      subjectIdentifier: "52de90c1-21a1-453e-84d6-428134e85957",
+      username: "permitted-user",
+      name: "Permitted User",
+      mobile: null,
+      status: UserStatus.Disable,
+      isDelete: true,
+    };
+    let predicate: SQL | undefined;
+    const db = {
+      select: () => ({
+        from: () => ({
+          where: (value: SQL) => {
+            predicate = value;
+            return { limit: async () => [row] };
+          },
+        }),
+      }),
+    } as unknown as DbClient;
+    const account = await createOidcAccountRepository(db).findBySubject(row.subjectIdentifier);
+    expect(account).toEqual(row);
+    expect(predicate).toBeDefined();
+    const query = new PgDialect().sqlToQuery(predicate!);
+    expect(query.sql).toBe("\"user\".\"subject_identifier\" = $1");
+    expect(query.params).toEqual([row.subjectIdentifier]);
   });
 });

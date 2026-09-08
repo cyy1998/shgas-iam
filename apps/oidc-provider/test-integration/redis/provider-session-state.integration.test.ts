@@ -612,10 +612,6 @@ describe("oIDC Provider Session real Redis contract", () => {
         principalAbsoluteTtlMs: 6000,
         principalIdleTtlMs: 3000,
       }),
-      principalAccessFence: {
-        capture: async () => randomUUID(),
-        validate: async () => ({ ok: true }),
-      },
       redis: testScope.writer,
       sourceApp: LoggerSourceApp.OidcProvider,
     });
@@ -645,7 +641,7 @@ describe("oIDC Provider Session real Redis contract", () => {
     const nativeNow = Date.now;
     let applicationOffset = offset;
     vi.spyOn(Date, "now").mockImplementation(() => nativeNow() + applicationOffset);
-    const principal = await kernel.createPrincipalSession(accountId);
+    const principal = await kernel.createPrincipalSession(accountId, { subjectContext: "opaque-test-context" });
     if (principal.status !== "created")
       throw new Error("expected a Principal Session fixture");
 

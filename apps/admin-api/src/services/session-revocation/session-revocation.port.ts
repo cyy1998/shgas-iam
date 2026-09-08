@@ -1,5 +1,6 @@
 import type { AdminAuditContext } from "@admin-api/services/audit/audit.context";
 import type { RevocationReason, RevokeSummary, SessionKernel } from "@iam/session-kernel";
+import { createSubjectAccessSessionRevocation } from "@iam/api-core/subject-access";
 
 export type AdminSessionProtocol = "custom-sso" | "oidc";
 
@@ -70,16 +71,54 @@ export interface AdminSessionRevocationPort {
 };
 
 export interface CreateAdminSessionRevocationPortDeps {
-  sessionKernel: Pick<SessionKernel, "prepareUserSessionRevocation" | "revokeUserSessions" | "revokeClientProtocol" | "revokeClient">;
-  logger: AdminSessionRevocationLogger;
+  sessionKernel: Pick<SessionKernel, | "prepareUserSessionRevocationByContext"
+  | "revokeUserSessionsByContext"
+  | "revokePrincipalSession"
+  | "revokeClientProtocol"
+  | "revokeClient"
+  | "revokeUserSessionRecords">;
+  logger: AdminSessionRevocationLogger & {
+    logPreparationFailure: (input: { errorName: string }) => void;
+  };
 }
 
+/** Lifecycle mutations retain their generation boundary outside the neutral Kernel. */
 export function createAdminSessionRevocationPort(
   deps: CreateAdminSessionRevocationPortDeps,
 ): AdminSessionRevocationPort {
+  const contextRevocation = createSubjectAccessSessionRevocation(deps.sessionKernel);
+  const prepare: ReturnType<typeof createSubjectAccessSessionRevocation>["prepareUserSessionRevocation"] = async (principal) => {
+    try {
+      return await contextRevocation.prepareUserSessionRevocation(principal);
+    }
+    catch (error) {
+      try {
+        deps.logger.logPreparationFailure({ errorName: error instanceof Error ? error.name : "Error" });
+      }
+      catch {
+        // Diagnostics must not prevent the authoritative mutation.
+      }
+      return {
+        async revoke(reason, options = {}) {
+          if (options.onlySubjectAccessTransitionId !== undefined)
+            return await contextRevocation.revokeUserSessions(principal, reason, { onlySubjectAccessTransitionId: options.onlySubjectAccessTransitionId });
+          return await deps.sessionKernel.revokeUserSessionsByContext(principal, reason, []);
+        },
+      };
+    }
+  };
+  const revoke = async (
+    principal: { principalType: "user"; subjectId: string },
+    reason: AdminSessionRevocationReason,
+    options: { onlySubjectAccessTransitionId?: string; exceptPrincipalSessionId?: string },
+  ) => {
+    if (options.onlySubjectAccessTransitionId !== undefined)
+      return await contextRevocation.revokeUserSessions(principal, reason, { onlySubjectAccessTransitionId: options.onlySubjectAccessTransitionId });
+    return await deps.sessionKernel.revokeUserSessionRecords(principal, reason, { exceptPrincipalSessionId: options.exceptPrincipalSessionId });
+  };
   return {
     async prepareUserSessionRevocation(input) {
-      const plan = await deps.sessionKernel.prepareUserSessionRevocation({
+      const plan = await prepare({
         principalType: "user",
         subjectId: input.subjectIdentifier,
       });
@@ -97,7 +136,7 @@ export function createAdminSessionRevocationPort(
       };
     },
     async revokeUserSessions(input) {
-      const summary = await deps.sessionKernel.revokeUserSessions(
+      const summary = await revoke(
         { principalType: "user", subjectId: input.subjectIdentifier },
         input.reason,
         {

@@ -34,7 +34,6 @@ import type {
   UserTransactionStorePort,
 } from "@api/services/user/user.port";
 import type { UserRepository } from "@api/services/user/user.repository";
-import type { UserService } from "@api/services/user/user.service";
 import type {
   MobileLoginRestrictionPort,
   MobilePrincipalSessionPort,
@@ -64,7 +63,6 @@ import type {
   AuthorizationCodeIssuerPort,
   AuthorizeSsoClientReaderPort,
   CustomSsoClientSecretReader,
-  CustomSsoGatewayOrcasUserPort,
   CustomSsoOrcasLoginPort,
   CustomSsoSessionKernelAdapter,
   CustomSsoSubjectDelivery,
@@ -168,7 +166,6 @@ test("API providers structurally satisfy consumer-owned ports", () => {
     ClientSubjectProjectionService
   >();
   assertAssignable<CustomSsoSubjectDeliveryPort, CustomSsoSubjectDelivery>();
-  assertAssignable<CustomSsoGatewayOrcasUserPort, UserService>();
 
   expect(true).toBe(true);
 });

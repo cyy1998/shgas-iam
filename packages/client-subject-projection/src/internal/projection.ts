@@ -5,9 +5,12 @@ import type {
 import type {
   ClientAuthorization,
   ClientAuthorizationEmployment,
-  ClientSubjectProjectionService,
-  CreateClientSubjectProjectionServiceOptions,
+  ClientSubjectProjection,
+  CreatePermittedClientSubjectProjectionServiceOptions,
   EmploymentProfile,
+  PermittedClientSubjectProjectionService,
+  ProjectionFactsOptions,
+  ResolveClientSubjectInput,
   SubjectFactsEmployment,
   SubjectFactsSnapshot,
 } from "./contract";
@@ -17,65 +20,72 @@ import { SubjectProjectionNotReadyError } from "../errors";
 import { assertSubjectClaimSelection } from "./catalog";
 import { EmploymentResponsibilitySnapshotSchema } from "./contract";
 
-export function createClientSubjectProjectionService(
-  options: CreateClientSubjectProjectionServiceOptions,
-): ClientSubjectProjectionService {
+export function createPermittedClientSubjectProjectionService<Permission>(
+  options: CreatePermittedClientSubjectProjectionServiceOptions<Permission>,
+): PermittedClientSubjectProjectionService<Permission> {
   return {
-    async resolve(input) {
-      await options.subjectAccess.assertAccessible(input.subjectIdentifier);
-      assertSubjectClaimSelection(input.selection);
-      const projection: {
-        subjectIdentifier: string;
-        username?: string;
-        name?: string;
-        phone?: string | null;
-        employments?: EmploymentProfile[];
-        authorization?: ClientAuthorization;
-      } = {
-        subjectIdentifier: input.subjectIdentifier,
-      };
-      if (input.selection.optionalClaims.length === 0)
-        return projection;
-
-      let facts = await options.subjectFacts.read(input.subjectIdentifier);
-      if (facts === null || facts.subjectIdentifier !== input.subjectIdentifier)
-        throw new SubjectProjectionNotReadyError();
-
-      if (input.selection.optionalClaims.includes(SubjectClaim.IamAuthorization)) {
-        const freshness = await options.authorizationFreshness.check({
-          subjectIdentifier: input.subjectIdentifier,
-          sourceDirtyVersion: facts.sourceDirtyVersion,
-        });
-        if (freshness.status === "not-ready")
-          throw new SubjectProjectionNotReadyError();
-        if (freshness.status === "refreshed") {
-          if (freshness.facts.subjectIdentifier !== input.subjectIdentifier)
-            throw new SubjectProjectionNotReadyError();
-          facts = freshness.facts;
-        }
-      }
-
-      if (input.selection.optionalClaims.includes(SubjectClaim.ProfileUsername))
-        projection.username = facts.profile.username;
-      if (input.selection.optionalClaims.includes(SubjectClaim.ProfileName))
-        projection.name = facts.profile.name;
-      if (input.selection.optionalClaims.includes(SubjectClaim.ProfilePhone))
-        projection.phone = facts.profile.phone;
-      if (input.selection.optionalClaims.includes(SubjectClaim.ProfileEmployments)) {
-        projection.employments = facts.employments
-          .map(toEmploymentProfileWithResponsibilities)
-          .sort(compareEmploymentProfiles);
-      }
-      if (input.selection.optionalClaims.includes(SubjectClaim.IamAuthorization)) {
-        projection.authorization = toClientAuthorization(
-          facts,
-          input.clientCode,
-        );
-      }
-
-      return projection;
+    async resolve(input, permission) {
+      options.assertPermission(permission, input.subjectIdentifier);
+      return resolveProjection(input, options);
     },
   };
+}
+
+async function resolveProjection(
+  input: ResolveClientSubjectInput,
+  options: ProjectionFactsOptions,
+): Promise<ClientSubjectProjection> {
+  assertSubjectClaimSelection(input.selection);
+  const projection: {
+    subjectIdentifier: string;
+    username?: string;
+    name?: string;
+    phone?: string | null;
+    employments?: EmploymentProfile[];
+    authorization?: ClientAuthorization;
+  } = {
+    subjectIdentifier: input.subjectIdentifier,
+  };
+  if (input.selection.optionalClaims.length === 0)
+    return projection;
+
+  let facts = await options.subjectFacts.read(input.subjectIdentifier);
+  if (facts === null || facts.subjectIdentifier !== input.subjectIdentifier)
+    throw new SubjectProjectionNotReadyError();
+
+  if (input.selection.optionalClaims.includes(SubjectClaim.IamAuthorization)) {
+    const freshness = await options.authorizationFreshness.check({
+      subjectIdentifier: input.subjectIdentifier,
+      sourceDirtyVersion: facts.sourceDirtyVersion,
+    });
+    if (freshness.status === "not-ready")
+      throw new SubjectProjectionNotReadyError();
+    if (freshness.status === "refreshed") {
+      if (freshness.facts.subjectIdentifier !== input.subjectIdentifier)
+        throw new SubjectProjectionNotReadyError();
+      facts = freshness.facts;
+    }
+  }
+
+  if (input.selection.optionalClaims.includes(SubjectClaim.ProfileUsername))
+    projection.username = facts.profile.username;
+  if (input.selection.optionalClaims.includes(SubjectClaim.ProfileName))
+    projection.name = facts.profile.name;
+  if (input.selection.optionalClaims.includes(SubjectClaim.ProfilePhone))
+    projection.phone = facts.profile.phone;
+  if (input.selection.optionalClaims.includes(SubjectClaim.ProfileEmployments)) {
+    projection.employments = facts.employments
+      .map(toEmploymentProfileWithResponsibilities)
+      .sort(compareEmploymentProfiles);
+  }
+  if (input.selection.optionalClaims.includes(SubjectClaim.IamAuthorization)) {
+    projection.authorization = toClientAuthorization(
+      facts,
+      input.clientCode,
+    );
+  }
+
+  return projection;
 }
 
 function toEmploymentProfileWithResponsibilities(

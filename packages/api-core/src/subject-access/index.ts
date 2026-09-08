@@ -6,11 +6,7 @@ export {
 export type {
   SubjectAccessHttpRunOptions,
 } from "./adapters/http-adapter";
-export { translateSubjectAccessResolveResult } from "./adapters/resolve-result";
-export { createSubjectAccessPrincipalValidator } from "./adapters/session-validator";
-export type {
-  SubjectAccessPrincipalValidationTarget,
-} from "./adapters/session-validator";
+export { createSubjectAccessSessionContext, createSubjectAccessSessionRevocation } from "./adapters/session-context";
 export { createSubjectAccessBarrier } from "./barrier";
 export type {
   CreateSubjectAccessBarrierOptions,
@@ -46,6 +42,22 @@ export type {
   SubjectAccessTransition,
   SubjectAccessTransitionTarget,
 } from "./model";
+export {
+  createSubjectAccessOperations,
+  requireSubjectAccessOperation,
+  SubjectAccessOperationDeniedError,
+  SubjectAccessPermissionRequiredError,
+} from "./operation";
+export type {
+  CreateSubjectAccessOperationsOptions,
+  SubjectAccessOperation,
+  SubjectAccessPermission,
+  SubjectAccessSessionTarget,
+} from "./operation";
+export type {
+  SubjectAccessOperationBarrierPort,
+  SubjectAccessOperationRevocationPort,
+} from "./operation.port";
 export { createSubjectAccessBootstrap } from "./recovery/bootstrap";
 export type {
   CreateSubjectAccessBootstrapOptions,
@@ -79,3 +91,5 @@ export type {
   CreateRedisSubjectAccessStoreOptions,
   SubjectAccessRedis,
 } from "./storage/redis-store";
+export { encodeSubjectAccessContext, parseSubjectAccessContext } from "./subject-context";
+export type { SubjectAccessContext } from "./subject-context";

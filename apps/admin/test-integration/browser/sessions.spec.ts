@@ -171,7 +171,7 @@ async function confirmLoginRestrictionRelease(dialog: Locator) {
 
 async function expectAuditWarningAfterRefreshAndTabSwitch(
   page: Page,
-  tabName: '有效会话' | '临时登录限制',
+  tabName: '会话记录' | '临时登录限制',
   listInputs: unknown[],
   mutationInputs: unknown[],
 ) {
@@ -187,7 +187,7 @@ async function expectAuditWarningAfterRefreshAndTabSwitch(
   await expect(warning).toBeVisible();
   await page
     .getByRole('tab', {
-      name: tabName === '有效会话' ? '临时登录限制' : '有效会话',
+      name: tabName === '会话记录' ? '临时登录限制' : '会话记录',
     })
     .click();
   await page.getByRole('tab', { name: tabName }).click();
@@ -311,7 +311,7 @@ async function revokeUserAndExpectReload(
   await expect.poll(() => listInputs.length).toBe(listRequestCount + 1);
 }
 
-test('valid sessions support navigation, exact user filtering, pagination, and manual refresh', async ({
+test('session records support navigation, exact user filtering, pagination, and manual refresh', async ({
   page,
 }) => {
   await mockAdminApi(page);
@@ -356,7 +356,17 @@ test('valid sessions support navigation, exact user filtering, pagination, and m
 
   await expect(page.getByRole('menuitem', { name: /会话管理/ })).toBeVisible();
   await expect(page.getByText('会话管理').first()).toBeVisible();
-  await expect(page.getByRole('tab', { name: '有效会话' })).toBeVisible();
+  await expect(page.getByRole('tab', { name: '会话记录' })).toBeVisible();
+  await expect(
+    page.getByText(
+      '仅展示尚未过期且未撤销的会话记录；记录存在不代表当前允许访问。',
+    ),
+  ).toBeVisible();
+  await expect(
+    page.getByText(
+      '账号状态或会话所属代际可能已失效，尚未清理的记录仍可在此撤销。',
+    ),
+  ).toBeVisible();
   await expect(page.getByRole('tab', { name: '临时登录限制' })).toBeVisible();
   await expect(
     page.getByRole('columnheader', { name: '登录时间' }),
@@ -367,6 +377,12 @@ test('valid sessions support navigation, exact user filtering, pagination, and m
   await expect(page.getByText('张三', { exact: true })).toBeVisible();
   await expect(page.getByText('zhangsan · ID 42')).toBeVisible();
   await expect(page.getByText('已删除').first()).toBeVisible();
+  await expect(
+    page
+      .getByRole('row')
+      .filter({ hasText: '已删除用户' })
+      .getByRole('button', { name: '强制下线本次' }),
+  ).toBeEnabled();
   await expect(page.getByText('密码、手机验证码')).toBeVisible();
   await expect(page.getByText('203.0.113.42')).toBeVisible();
   await expect(page.getByText('手机 / iOS / 微信')).toBeVisible();
@@ -638,7 +654,7 @@ test('restriction audit-after-effect refreshes once without retrying release', a
   );
 });
 
-test('valid sessions show the empty state', async ({ page }) => {
+test('session records show the empty state', async ({ page }) => {
   await mockAdminApi(page);
   await mockSessionListRoute(page, (input) => ({
     type: 'success',
@@ -656,7 +672,7 @@ test('valid sessions show the empty state', async ({ page }) => {
   await expect(page.locator('.ant-empty-description')).toHaveText('暂无数据');
 });
 
-test('valid sessions surface unavailable login state instead of presenting it as an empty result', async ({
+test('session records surface unavailable login state instead of presenting it as an empty result', async ({
   page,
 }) => {
   await mockAdminApi(page);
@@ -1018,7 +1034,7 @@ test('user audit-after-effect error refreshes once without retrying the mutation
   await expect(page.getByText('已删除用户')).toHaveCount(0);
   await expectAuditWarningAfterRefreshAndTabSwitch(
     page,
-    '有效会话',
+    '会话记录',
     listInputs,
     revokeInputs,
   );
@@ -1050,7 +1066,7 @@ test('audit-after-effect error refreshes state without retrying the revoke mutat
   await expect(page.getByText('已删除用户')).toHaveCount(0);
   await expectAuditWarningAfterRefreshAndTabSwitch(
     page,
-    '有效会话',
+    '会话记录',
     listInputs,
     revokeInputs,
   );

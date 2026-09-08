@@ -34,7 +34,7 @@ export interface AdminUserTransactionStorePort {
 export interface AdminUserReaderPort {
   getAnyUserByUsername: (username: string) => Promise<User | null>;
   getOpenEmploymentOrganizationIdsByUserId: (userId: number) => Promise<number[]>;
-  getUserBySubjectIdentifierForAdmin: (subjectIdentifier: string) => Promise<User | null>;
+  getUserBySubjectIdentifierForPermittedAdmin: (subjectIdentifier: string) => Promise<User | null>;
   getUserByUsernameForAdmin: (username: string) => Promise<User | null>;
   getUserByUsernameIncludingDeletedForAuthorization: (username: string) => Promise<User | null>;
   searchUsersFuzzyPaged: (query: UserPaginationQueryDto) => Promise<{

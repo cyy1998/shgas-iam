@@ -11,7 +11,8 @@ import {
   createRedisSubjectAccessStore,
   createSubjectAccessBarrier,
   createSubjectAccessLifecycle,
-  createSubjectAccessPrincipalValidator,
+  createSubjectAccessOperations,
+  createSubjectAccessSessionRevocation,
 } from "@iam/api-core/subject-access";
 import db from "@iam/db";
 import { createSessionKernel } from "@iam/session-kernel";
@@ -42,18 +43,20 @@ export function createAdminApiSession(options: CreateAdminApiSessionOptions) {
     }),
   });
   const subjectAccess = createAdminApiSubjectAccess(options.runtime);
-  const subjectAccessPrincipal = createSubjectAccessPrincipalValidator(subjectAccess);
+  const revocationLogger = createAdminSessionRevocationLogger({ logger: options.runtime.logger });
   const sessionKernel = createSessionKernel({
     redis: options.runtime.redis as SessionKernelRedis,
     config: {
       ...options.runtime.config.sessionKernel,
       clock: options.runtime.clock,
     },
-    principalAccessFence: subjectAccessPrincipal,
     logger: options.runtime.logger,
     sourceApp: LoggerSourceApp.AdminApi,
   });
-  const revocationLogger = createAdminSessionRevocationLogger({ logger: options.runtime.logger });
+  const subjectAccessOperations = createSubjectAccessOperations({
+    barrier: subjectAccess,
+    revocation: createSubjectAccessSessionRevocation(sessionKernel),
+  });
   const revocation = createAdminSessionRevocationPort({
     sessionKernel,
     logger: revocationLogger,
@@ -67,6 +70,7 @@ export function createAdminApiSession(options: CreateAdminApiSessionOptions) {
 
   return {
     kernel: sessionKernel,
+    subjectAccessOperations,
     loginRestriction,
     revocation,
     subjectAccess,

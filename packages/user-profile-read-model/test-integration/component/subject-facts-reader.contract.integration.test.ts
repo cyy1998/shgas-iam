@@ -1,6 +1,8 @@
+import type { ResolveClientSubjectInput } from "@iam/client-subject-projection";
 import type { SubjectFactsCacheRecord } from "../../src/subject-facts";
+import { createSubjectAccessOperations, SubjectAccessPermissionRequiredError } from "@iam/api-core/subject-access";
 import {
-  createClientSubjectProjectionService,
+  createPermittedClientSubjectProjectionService,
   SubjectProjectionNotReadyError,
 } from "@iam/client-subject-projection";
 import { UserProfileDirtyStatus } from "@iam/contracts";
@@ -12,6 +14,39 @@ import {
 } from "../../src/subject-facts";
 
 const SUBJECT_IDENTIFIER = "46739d0b-cdda-48f5-af1f-1f90e2d81169";
+
+function createPermittedProjectionFixture(
+  options: Omit<Parameters<typeof createPermittedClientSubjectProjectionService>[0], "assertPermission">,
+) {
+  const operations = createSubjectAccessOperations({
+    barrier: {
+      async readCommittedTransitionId(subjectIdentifier) {
+        if (subjectIdentifier !== SUBJECT_IDENTIFIER)
+          throw new Error("unexpected subject in projection fixture");
+        return "00000000-0000-4000-8000-000000000001";
+      },
+    },
+    revocation: {
+      async revokePrincipalSession() { throw new Error("unexpected root revocation"); },
+      async revokeUserSessions() { throw new Error("unexpected subject revocation"); },
+    },
+  });
+  return {
+    async resolve(input: ResolveClientSubjectInput) {
+      return await operations.run(async (operation) => {
+        const permission = await operation.acquireForAuthentication(input.subjectIdentifier);
+        const projection = createPermittedClientSubjectProjectionService({
+          ...options,
+          assertPermission(value, subjectIdentifier) {
+            if (operation.requirePermission(subjectIdentifier) !== value)
+              throw new SubjectAccessPermissionRequiredError();
+          },
+        });
+        return await projection.resolve(input, permission);
+      });
+    },
+  };
+}
 
 describe("Subject Facts Reader", () => {
   test("reads and compare-and-set publishes through the Subject-level Redis adapter", async () => {
@@ -271,10 +306,7 @@ describe("Subject Facts Reader", () => {
         publish: mock(async () => ({ status: "published" as const })),
       },
     });
-    const projection = createClientSubjectProjectionService({
-      subjectAccess: {
-        assertAccessible: async () => {},
-      },
+    const projection = createPermittedProjectionFixture({
       subjectFacts: reader,
       authorizationFreshness: {
         check: async () => {
@@ -322,10 +354,7 @@ describe("Subject Facts Reader", () => {
         publish: mock(async () => ({ status: "published" as const })),
       },
     });
-    const projection = createClientSubjectProjectionService({
-      subjectAccess: {
-        assertAccessible: async () => {},
-      },
+    const projection = createPermittedProjectionFixture({
       subjectFacts: reader,
       authorizationFreshness: reader,
     });
@@ -469,10 +498,7 @@ describe("Subject Facts Reader", () => {
         publish: mock(async () => ({ status: "published" as const })),
       },
     });
-    const projection = createClientSubjectProjectionService({
-      subjectAccess: {
-        assertAccessible: async () => {},
-      },
+    const projection = createPermittedProjectionFixture({
       subjectFacts: reader,
       authorizationFreshness: reader,
     });
@@ -525,10 +551,7 @@ describe("Subject Facts Reader", () => {
         publish,
       },
     });
-    const projection = createClientSubjectProjectionService({
-      subjectAccess: {
-        assertAccessible: async () => {},
-      },
+    const projection = createPermittedProjectionFixture({
       subjectFacts: reader,
       authorizationFreshness: reader,
     });
@@ -571,10 +594,7 @@ describe("Subject Facts Reader", () => {
         publish: mock(async () => ({ status: "published" as const })),
       },
     });
-    const projection = createClientSubjectProjectionService({
-      subjectAccess: {
-        assertAccessible: async () => {},
-      },
+    const projection = createPermittedProjectionFixture({
       subjectFacts: reader,
       authorizationFreshness: reader,
     });
@@ -622,10 +642,7 @@ describe("Subject Facts Reader", () => {
         publish: mock(async () => ({ status: "published" as const })),
       },
     });
-    const projection = createClientSubjectProjectionService({
-      subjectAccess: {
-        assertAccessible: async () => {},
-      },
+    const projection = createPermittedProjectionFixture({
       subjectFacts: reader,
       authorizationFreshness: reader,
     });

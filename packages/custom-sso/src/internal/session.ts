@@ -5,10 +5,9 @@ import type {
   IssuedCredential,
   ProtocolArtifact,
   RevokeSummary,
-  SessionKernel,
 } from "@iam/session-kernel";
 
-import type { CustomSsoAuditPort, CustomSsoLoggerPort as LoggerPort } from "../custom-sso.port";
+import type { CustomSsoAuditPort, CustomSsoKernelPort, CustomSsoLoggerPort as LoggerPort } from "../custom-sso.port";
 import type {
   AuthorizationGrantLease,
   AuthorizationGrantRedemption,
@@ -19,7 +18,7 @@ import type {
   CustomSsoSubjectProjectionPort,
 } from "../subject-projection.port";
 import type {
-  CustomSsoGatewayOrcasUserPort,
+  CustomSsoAccess,
   CustomSsoOrcasLoginPort,
   CustomSsoSubjectDeliveryPort,
 } from "./session.port";
@@ -29,8 +28,8 @@ import { InvalidAuthCodeError } from "@iam/api-core/errors/InvalidAuthCodeError"
 import { LoggerSourceApp, SystemLogEvent } from "@iam/api-core/logger";
 import { observabilityLogFields } from "@iam/api-core/observability";
 import {
+  requireSubjectAccessOperation,
   SubjectAccessDisabledError,
-  translateSubjectAccessResolveResult,
 } from "@iam/api-core/subject-access";
 import {
   parseSubjectClaimSelection,
@@ -147,18 +146,18 @@ type CustomSsoCredentialMetadata = z.infer<
 >;
 
 export interface CustomSsoSessionKernelAdapterDeps {
+  access: CustomSsoAccess;
   authorizationGrantRedemption: AuthorizationGrantRedemption;
   clients: {
     findRuntimeRecord: (
       clientCode: string,
     ) => Promise<CustomSsoClientRuntimeDto | null>;
   };
-  kernel: SessionKernel;
+  kernel: CustomSsoKernelPort;
   logger: Pick<LoggerPort, "info" | "warn">;
   orcas: CustomSsoOrcasLoginPort;
   subjectProjection: CustomSsoSubjectProjectionPort;
   subjectDelivery: CustomSsoSubjectDeliveryPort;
-  userService: CustomSsoGatewayOrcasUserPort;
   auditLogWriter: CustomSsoAuditPort;
   random: { uuid: () => string };
   config: {
@@ -182,47 +181,41 @@ export function createCustomSsoSessionKernelAdapter(deps: CustomSsoSessionKernel
       return { isLogin: false as const, code: null };
     }
 
-    const principal = translateSubjectAccessResolveResult(
-      await deps.kernel.resolvePrincipalSession(input.token),
-    );
+    const principal = await deps.kernel.resolvePrincipalSession(input.token);
     if (principal.status !== "resolved") {
       return { isLogin: false as const, code: null };
     }
     logLegacyBearerSource(input.tokenSource, input.clientCode, input.requestContext);
 
-    const renewed = translateSubjectAccessResolveResult(
-      await deps.kernel.renewPrincipalSession(principal.value.principalSessionId),
-    );
+    const renewed = await deps.kernel.renewPrincipalSession(principal.value.principalSessionId);
     if (renewed.status !== "resolved") {
       return { isLogin: false as const, code: null };
     }
 
     const artifactId = deps.random.uuid();
-    const artifact = translateSubjectAccessResolveResult(
-      await deps.kernel.createProtocolArtifact({
-        artifactId,
-        principalSessionId: renewed.value.principalSessionId,
+    const artifact = await deps.kernel.createProtocolArtifact({
+      artifactId,
+      principalSessionId: renewed.value.principalSessionId,
+      protocol: CUSTOM_SSO_PROTOCOL,
+      clientCode: input.clientCode,
+      artifactType: AUTH_CODE_ARTIFACT_TYPE,
+      cleanupRefs: [{
         protocol: CUSTOM_SSO_PROTOCOL,
+        kind: AUTHORIZATION_GRANT_REDEMPTION_CLEANUP_KIND,
+        ref: artifactId,
+      }],
+      ttlMs: deps.config.authCodeExpireSeconds * 1000,
+      tokenKind: "authCode",
+      metadata: {
+        version: 2,
+        subjectIdentifier: renewed.value.principal.subjectId,
         clientCode: input.clientCode,
-        artifactType: AUTH_CODE_ARTIFACT_TYPE,
-        cleanupRefs: [{
-          protocol: CUSTOM_SSO_PROTOCOL,
-          kind: AUTHORIZATION_GRANT_REDEMPTION_CLEANUP_KIND,
-          ref: artifactId,
-        }],
-        ttlMs: deps.config.authCodeExpireSeconds * 1000,
-        tokenKind: "authCode",
-        metadata: {
-          version: 2,
-          subjectIdentifier: renewed.value.principal.subjectId,
-          clientCode: input.clientCode,
-          mode: input.mode,
-          redirectUri: input.redirectUrl,
-          ...(input.state === undefined ? {} : { state: input.state }),
-          configVersion: input.configVersion,
-        },
-      }),
-    );
+        mode: input.mode,
+        redirectUri: input.redirectUrl,
+        ...(input.state === undefined ? {} : { state: input.state }),
+        configVersion: input.configVersion,
+      },
+    });
     if (artifact.status !== "created" || !artifact.externalToken) {
       throw new CustomError("授权码创建失败");
     }
@@ -251,9 +244,7 @@ export function createCustomSsoSessionKernelAdapter(deps: CustomSsoSessionKernel
       return "absent" as const;
 
     try {
-      const principal = translateSubjectAccessResolveResult(
-        await deps.kernel.resolvePrincipalSession(token),
-      );
+      const principal = await deps.kernel.resolvePrincipalSession(token);
       if (principal.status === "fail_closed") {
         throw new PrincipalSessionInspectionUnavailableError({
           cause: principal.cause,
@@ -276,9 +267,7 @@ export function createCustomSsoSessionKernelAdapter(deps: CustomSsoSessionKernel
     redirectUrl?: string;
     invalidCodeError?: "unauthorized" | "invalid_auth_code";
   }): Promise<ReservedGatewayAuthorizationGrant> {
-    const resolved = translateSubjectAccessResolveResult(
-      await deps.kernel.resolveProtocolArtifact(input.code),
-    );
+    const resolved = await deps.kernel.resolveProtocolArtifact(input.code);
     if (resolved.status !== "resolved") {
       throwInvalidCode(input.invalidCodeError);
     }
@@ -287,6 +276,7 @@ export function createCustomSsoSessionKernelAdapter(deps: CustomSsoSessionKernel
       input,
       input.invalidCodeError,
     );
+    await acquireGrantPermission(resolved.value, resolvedGrant.subjectIdentifier, resolvedGrant.principalSessionId);
 
     const reservation = await deps.authorizationGrantRedemption.begin(
       resolved.value.artifactId,
@@ -346,10 +336,8 @@ export function createCustomSsoSessionKernelAdapter(deps: CustomSsoSessionKernel
         let credentialIssueState: CredentialIssueState = "not_started";
         let subject;
         try {
-          const principalSession = translateSubjectAccessResolveResult(
-            await deps.kernel.resolvePrincipalSessionById(
-              authorizationGrant.principalSessionId,
-            ),
+          const principalSession = await deps.kernel.resolvePrincipalSessionById(
+            authorizationGrant.principalSessionId,
           );
           if (
             principalSession.status !== "resolved"
@@ -376,12 +364,10 @@ export function createCustomSsoSessionKernelAdapter(deps: CustomSsoSessionKernel
             principalSessionId: authorizationGrant.principalSessionId,
           });
           credentialIssueState = "issued";
-          // Preserve parent existence, revocation and Subject Access checks. Kernel
-          // owns this new Redis observation; the adapter does not recheck deadlines.
-          const postIssuePrincipal = translateSubjectAccessResolveResult(
-            await deps.kernel.resolvePrincipalSessionById(
-              authorizationGrant.principalSessionId,
-            ),
+          // Preserve parent existence and revocation. The operation-bound Kernel
+          // adapter reuses the permission; it does not recheck account state or deadlines.
+          const postIssuePrincipal = await deps.kernel.resolvePrincipalSessionById(
+            authorizationGrant.principalSessionId,
           );
           if (
             postIssuePrincipal.status !== "resolved"
@@ -458,9 +444,7 @@ export function createCustomSsoSessionKernelAdapter(deps: CustomSsoSessionKernel
     code: string;
     redirectUri: string;
   }): Promise<ResolvedIndependentAuthorizationGrant> {
-    const resolved = translateSubjectAccessResolveResult(
-      await deps.kernel.resolveProtocolArtifact(input.code),
-    );
+    const resolved = await deps.kernel.resolveProtocolArtifact(input.code);
     if (resolved.status !== "resolved")
       throw new InvalidAuthCodeError("非法Code");
     const artifact = resolved.value;
@@ -481,6 +465,7 @@ export function createCustomSsoSessionKernelAdapter(deps: CustomSsoSessionKernel
       throw new InvalidAuthCodeError("非法Code");
     }
 
+    await acquireGrantPermission(artifact, metadata.data.subjectIdentifier, artifact.principalSessionId);
     const reservation = await deps.authorizationGrantRedemption.begin(artifact.artifactId);
     if (reservation.status !== "reserved")
       throw new InvalidAuthCodeError("非法Code");
@@ -538,7 +523,7 @@ export function createCustomSsoSessionKernelAdapter(deps: CustomSsoSessionKernel
 
     let credential;
     try {
-      credential = translateSubjectAccessResolveResult(issued);
+      credential = issued;
     }
     catch (error) {
       throw new CustomSsoCredentialIssueFailure(error, false);
@@ -686,15 +671,18 @@ export function createCustomSsoSessionKernelAdapter(deps: CustomSsoSessionKernel
         let localSession: IssuedClientCredential | undefined;
         let credentialIssueState: CredentialIssueState = "not_started";
         try {
-          const revalidated = translateSubjectAccessResolveResult(
-            await deps.kernel.resolveProtocolArtifact(input.code),
-          );
+          const revalidated = await deps.kernel.resolveProtocolArtifact(input.code);
           if (revalidated.status !== "resolved")
             throw new AuthzUnauthorizedError("非法code");
           const revalidatedGrant = validateGatewayAuthorizationArtifact(
             revalidated.value,
             input,
             "unauthorized",
+          );
+          await acquireGrantPermission(
+            revalidated.value,
+            revalidatedGrant.subjectIdentifier,
+            revalidatedGrant.principalSessionId,
           );
           if (
             revalidated.value.artifactId !== authorizationGrant.artifactId
@@ -704,21 +692,15 @@ export function createCustomSsoSessionKernelAdapter(deps: CustomSsoSessionKernel
             throw new AuthzUnauthorizedError("非法code");
           }
 
-          const principalSession = translateSubjectAccessResolveResult(
-            await deps.kernel.resolvePrincipalSessionById(
-              authorizationGrant.principalSessionId,
-            ),
+          const principalSession = await deps.kernel.resolvePrincipalSessionById(
+            authorizationGrant.principalSessionId,
           );
           if (principalSession.status !== "resolved")
             throw new AuthzUnauthorizedError("全局session不存在或已过期");
 
           let orcas: CustomSsoOrcasContext | null = null;
           if (input.client.orcasEnabled) {
-            const liveUser = await assertLiveUserAvailable(
-              principalSession.value.principal.subjectId,
-              principalSession.value.subjectAccessTransitionId,
-            );
-            const userDetail = await getProfileUserDetailById(liveUser.id);
+            const userDetail = await resolveOrcasUser(principalSession.value);
             const { id, username, name, mobile } = userDetail;
             const { orcasSessionId, orcasId } = await deps.orcas.orcasLogin({
               id,
@@ -820,9 +802,7 @@ export function createCustomSsoSessionKernelAdapter(deps: CustomSsoSessionKernel
   }
 
   async function resolvePrincipalSessionContext(token: string) {
-    const principalSession = translateSubjectAccessResolveResult(
-      await deps.kernel.resolvePrincipalSession(token),
-    );
+    const principalSession = await deps.kernel.resolvePrincipalSession(token);
     if (principalSession.status !== "resolved") {
       throw new AuthzUnauthorizedError("未登录");
     }
@@ -891,16 +871,12 @@ export function createCustomSsoSessionKernelAdapter(deps: CustomSsoSessionKernel
       return true;
     }
 
-    const principal = translateSubjectAccessResolveResult(
-      await deps.kernel.resolvePrincipalSession(token),
-    );
+    const principal = await deps.kernel.resolvePrincipalSession(token);
     if (principal.status === "resolved") {
       return await deps.kernel.revokePrincipalSession(principal.value.principalSessionId, "logout");
     }
 
-    const credential = translateSubjectAccessResolveResult(
-      await deps.kernel.resolveCredential(token),
-    );
+    const credential = await deps.kernel.resolveCredential(token);
     if (credential.status === "resolved" && credential.value.protocol === CUSTOM_SSO_PROTOCOL) {
       await assertLogoutCredentialCurrent(credential.value);
       return await deps.kernel.revokePrincipalSession(credential.value.principalSessionId, "logout");
@@ -942,9 +918,7 @@ export function createCustomSsoSessionKernelAdapter(deps: CustomSsoSessionKernel
     clientCode: string,
     expectedMode?: CustomSsoClientMode,
   ): Promise<ValidatedCustomSsoCredentialContext> {
-    const credential = translateSubjectAccessResolveResult(
-      await deps.kernel.resolveCredential(localSessionToken),
-    );
+    const credential = await deps.kernel.resolveCredential(localSessionToken);
     if (credential.status !== "resolved") {
       throw new AuthzUnauthorizedError("未登录");
     }
@@ -990,9 +964,7 @@ export function createCustomSsoSessionKernelAdapter(deps: CustomSsoSessionKernel
       throw new AuthzUnauthorizedError("未登录");
     }
 
-    const principal = translateSubjectAccessResolveResult(
-      await deps.kernel.resolvePrincipalSessionById(credential.value.principalSessionId),
-    );
+    const principal = await deps.kernel.resolvePrincipalSessionById(credential.value.principalSessionId);
     if (principal.status !== "resolved") {
       await deps.kernel.revokeCredential(credential.value.credentialId, "credential_corrupted");
       throw new AuthzUnauthorizedError("未登录");
@@ -1034,30 +1006,20 @@ export function createCustomSsoSessionKernelAdapter(deps: CustomSsoSessionKernel
       : null;
   }
 
-  async function assertLiveUserAvailable(
-    subjectIdentifier: string,
-    subjectAccessTransitionId: string,
-  ) {
-    const user = await deps.userService.getActiveUserBySubjectIdentifier(subjectIdentifier);
-    if (user === null) {
-      await deps.kernel.revokeUserSessions({
-        principalType: "user",
-        subjectId: subjectIdentifier,
-      }, "user_disabled", {
-        onlySubjectAccessTransitionId: subjectAccessTransitionId,
-      });
-      throw new AuthzUnauthorizedError("未登录");
-    }
-    return user;
+  async function acquireGrantPermission(artifact: ProtocolArtifact, subjectIdentifier: string, principalSessionId: string) {
+    await requireSubjectAccessOperation(deps.access.operation).acquireForSession({
+      subjectIdentifier,
+      subjectContext: artifact.subjectContext,
+      principalSessionId,
+    });
   }
 
-  async function getProfileUserDetailById(userId: number) {
-    try {
-      return await deps.userService.getUserDetailById(userId);
-    }
-    catch {
+  async function resolveOrcasUser(principal: { principal: { subjectId: string } }) {
+    requireSubjectAccessOperation(deps.access.operation).requirePermission(principal.principal.subjectId);
+    const user = await deps.access.users.findOrcasUserBySubjectIdentifier(principal.principal.subjectId);
+    if (user === null)
       throw new AuthzUnauthorizedError("未登录");
-    }
+    return user;
   }
 
   function logLegacyBearerSource(

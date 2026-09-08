@@ -42,11 +42,10 @@ import {
   createRedisSubjectAccessStore,
   createSubjectAccessBarrier,
   createSubjectAccessLifecycle,
-  createSubjectAccessPrincipalValidator,
+  createSubjectAccessOperations,
+  createSubjectAccessSessionRevocation,
 } from "@iam/api-core/subject-access";
 import { mapUnitOfWork } from "@iam/api-core/uow";
-import { createClientSubjectProjectionService } from "@iam/client-subject-projection";
-import { createCustomSso } from "@iam/custom-sso";
 import { createCustomSsoCleanup } from "@iam/custom-sso/cleanup";
 import db from "@iam/db";
 import { createSessionKernel } from "@iam/session-kernel";
@@ -65,6 +64,8 @@ import {
   createV3UserProfileQueryRepository,
   createV3UserProfileQueryService,
 } from "@iam/user-profile-read-model/v3";
+import { createCustomSsoOperationAdapter } from "../custom-sso-operation.adapter";
+import { createApiCustomSsoOperations } from "../custom-sso-operations";
 import { createApiUserProfileSearch } from "./user-profile-search";
 
 type ApiUnitOfWork = ReturnType<typeof createApiUnitOfWork>;
@@ -93,7 +94,6 @@ export function createApiServices(options: CreateApiServicesOptions) {
   const { runtime, repositories, auditLogWriter, unitOfWork } = options;
 
   const subjectAccess = createApiSubjectAccess(runtime);
-  const subjectAccessPrincipal = createSubjectAccessPrincipalValidator(subjectAccess);
   const customSsoCleanup = createCustomSsoCleanup({
     redis: runtime.redis,
   });
@@ -103,7 +103,6 @@ export function createApiServices(options: CreateApiServicesOptions) {
       ...runtime.config.sessionKernel,
       clock: runtime.clock,
     },
-    principalAccessFence: subjectAccessPrincipal,
     cleanupAdapters: [
       customSsoCleanup,
     ],
@@ -116,18 +115,16 @@ export function createApiServices(options: CreateApiServicesOptions) {
     random: runtime.random,
     transitionIntent: createSubjectAccessTransitionRepository(db),
   });
-  const principalSessions = createPrincipalSessionAdapter(sessionKernel);
+  const subjectAccessOperations = createSubjectAccessOperations({
+    barrier: subjectAccess,
+    revocation: createSubjectAccessSessionRevocation(sessionKernel),
+  });
+  const principalSessions = createPrincipalSessionAdapter(sessionKernel, subjectAccessOperations);
   const subjectFacts = createSubjectFactsReader({
     db,
     cache: createSubjectFactsRedisCache(runtime.redis),
     observability: createSubjectFactsLoggerObservability(runtime.logger),
   });
-  const subjectProjection = createClientSubjectProjectionService({
-    subjectAccess,
-    subjectFacts,
-    authorizationFreshness: subjectFacts,
-  });
-
   const clientService = createClientService({
     redis: runtime.redis,
     clientRepository: repositories.client,
@@ -226,14 +223,11 @@ export function createApiServices(options: CreateApiServicesOptions) {
     mobileBinding: userMobileBinding,
     passwordHelper: userPasswordHelper,
     sessionRevocation: {
-      revokeUserSessions: async ({
-        reason,
-        onlySubjectAccessTransitionId,
-        subjectIdentifier,
-      }) => await sessionKernel.revokeUserSessions({
-        principalType: "user",
-        subjectId: subjectIdentifier,
-      }, reason, { onlySubjectAccessTransitionId }),
+      revokeUserSessions: async ({ reason, onlySubjectAccessTransitionId, subjectIdentifier }) =>
+        await createSubjectAccessSessionRevocation(sessionKernel).revokeUserSessions({
+          principalType: "user",
+          subjectId: subjectIdentifier,
+        }, reason, { onlySubjectAccessTransitionId }),
     },
     subjectAccessLifecycle,
     uow: mapUnitOfWork(unitOfWork, tx => ({
@@ -267,7 +261,7 @@ export function createApiServices(options: CreateApiServicesOptions) {
     })),
   });
 
-  const customSso = createCustomSso({
+  const customSsoOperations = createApiCustomSsoOperations({
     redis: runtime.redis,
     clientSecrets: repositories.customSsoClient,
     secrets: { verify: verifySecret },
@@ -277,8 +271,9 @@ export function createApiServices(options: CreateApiServicesOptions) {
     logger: runtime.logger,
     orcas: runtime.integrations.orcas,
     random: runtime.random,
-    subjectProjection,
-    users: userService,
+    subjectFacts,
+    authorizationFreshness: subjectFacts,
+    permittedUsers: userService,
     auditLogWriter,
     config: {
       authCodeExpireSeconds: runtime.config.auth.authCodeExpireSeconds,
@@ -308,7 +303,9 @@ export function createApiServices(options: CreateApiServicesOptions) {
     accountRecovery: accountRecoveryService,
     cap: capService,
     client: clientService,
-    customSso,
+    customSso: createCustomSsoOperationAdapter({ customSsoOperations, subjectAccessOperations }),
+    customSsoOperations,
+    subjectAccessOperations,
     customSsoSubjectDeliveryRequests,
     humanRisk: humanRiskService,
     loginCredential: loginCredentialParser,

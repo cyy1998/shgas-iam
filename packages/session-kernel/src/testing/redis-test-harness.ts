@@ -4,7 +4,6 @@ import type {
   SessionKernel,
   SessionKernelConfigInput,
   SessionKernelLogger,
-  SessionKernelPrincipalAccessFence,
   SessionKernelRedis,
 } from "../index";
 import { randomUUID } from "node:crypto";
@@ -18,7 +17,6 @@ import { createSessionKernelKeyBuilder, encodeIndexMember } from "../storage/key
 export interface RedisTestHarness {
   readonly createSessionKernelScope: (input?: {
     cleanupAdapters?: CleanupAdapter[];
-    principalAccessFence?: SessionKernelPrincipalAccessFence;
     logger?: SessionKernelLogger;
     writerClock?: { now: () => number };
     observerClock?: { now: () => number };
@@ -47,7 +45,7 @@ export interface SessionKernelRedisTestScope {
   readonly recreateObjectBeforeNextInactiveIndexRemoval: () => void;
   readonly replaceObjectBeforeNextRevoke: () => void;
   readonly replaceTombstoneBeforeNextFinalize: () => void;
-  readonly pauseNextPrincipalValidation: () => {
+  readonly pauseNextLifecycleObservation: (kind?: "principal_session" | "artifact") => {
     reached: Promise<void>;
     release: () => void;
   };
@@ -93,7 +91,8 @@ export async function createSessionKernelRedisTestHarness(redisUrl: string): Pro
       }
 
       let beforeNextArtifactValidation: (() => Promise<void>) | undefined;
-      let beforeNextPrincipalValidation: (() => Promise<void>) | undefined;
+      let pausedObjectCode = "p";
+      let afterNextLifecycleObservation: (() => Promise<void>) | undefined;
       let recreateObjectBeforeNextInactiveIndexRemoval = false;
       let replaceObjectBeforeNextRevoke = false;
       let replaceTombstoneBeforeNextFinalize = false;
@@ -163,7 +162,13 @@ export async function createSessionKernelRedisTestHarness(redisUrl: string): Pro
                 replacement.revokedAt += 1;
                 await target.set(key, JSON.stringify(replacement));
               }
-              return await target.eval(script, keyCount, ...args);
+              const result = await target.eval(script, keyCount, ...args);
+              if (script.includes("session-kernel-observe-v1") && String(args[0]).includes(`:active:${pausedObjectCode}:`)) {
+                const pending = afterNextLifecycleObservation;
+                afterNextLifecycleObservation = undefined;
+                await pending?.();
+              }
+              return result;
             };
           }
           const value = Reflect.get(target, property, target) as unknown;
@@ -179,12 +184,6 @@ export async function createSessionKernelRedisTestHarness(redisUrl: string): Pro
           await pending?.();
         },
         input.cleanupAdapters,
-        async () => {
-          const pending = beforeNextPrincipalValidation;
-          beforeNextPrincipalValidation = undefined;
-          await pending?.();
-        },
-        input.principalAccessFence,
         input.logger,
         { ...input.lifetime, clock: input.writerClock },
       );
@@ -193,8 +192,6 @@ export async function createSessionKernelRedisTestHarness(redisUrl: string): Pro
         keyPrefix,
         undefined,
         input.cleanupAdapters,
-        undefined,
-        input.principalAccessFence,
         input.logger,
         { ...input.lifetime, clock: input.observerClock },
       );
@@ -251,7 +248,8 @@ export async function createSessionKernelRedisTestHarness(redisUrl: string): Pro
         replaceTombstoneBeforeNextFinalize() {
           replaceTombstoneBeforeNextFinalize = true;
         },
-        pauseNextPrincipalValidation() {
+        pauseNextLifecycleObservation(kind = "principal_session") {
+          pausedObjectCode = kind === "principal_session" ? "p" : "a";
           let markReached = () => {};
           let release = () => {};
           const reached = new Promise<void>((resolve) => {
@@ -260,7 +258,7 @@ export async function createSessionKernelRedisTestHarness(redisUrl: string): Pro
           const released = new Promise<void>((resolve) => {
             release = resolve;
           });
-          beforeNextPrincipalValidation = async () => {
+          afterNextLifecycleObservation = async () => {
             markReached();
             await released;
           };
@@ -333,8 +331,6 @@ function createSessionKernelClient(
   namespace: string,
   beforeArtifactValidation?: () => Promise<void>,
   cleanupAdapters?: CleanupAdapter[],
-  beforePrincipalValidation?: () => Promise<void>,
-  principalAccessFence?: SessionKernelPrincipalAccessFence,
   logger?: SessionKernelLogger,
   config: Partial<Pick<SessionKernelConfigInput, "clock" | "principalIdleTtlMs" | "principalAbsoluteTtlMs" | "tombstoneTtlMs" | "tombstoneGraceMs">> = {},
 ) {
@@ -353,13 +349,6 @@ function createSessionKernelClient(
       principalIdleTtlMs: 30_000,
       ...config,
     }),
-    principalAccessFence: principalAccessFence ?? {
-      capture: async () => "00000000-0000-4000-8000-000000000002",
-      validate: async () => {
-        await beforePrincipalValidation?.();
-        return { ok: true };
-      },
-    },
     validationHooks: beforeArtifactValidation
       ? {
           validateClient: async (object) => {

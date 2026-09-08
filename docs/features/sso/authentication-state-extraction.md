@@ -58,10 +58,10 @@ API 提供 Client/Snapshot/Secret、User、ORCAS、审计与日志的具体能�
 | 25 | HTTP/错误/Retry-After/日志/审计语义保持 | A、C、API handlers |
 | 26 | Principal 创建/解析/续期不变 | K；#125 |
 | 27 | OIDC Binding 生命周期与撤销范围不变 | K、O；#125 |
-| 28 | Credential identity/lookup/tombstone 与补偿保持 | K、A；#125 |
+| 28 | Credential identity/lookup/tombstone 与补偿保持 | K、A；#125；当前职责见 [Spec #128 最终契约](subject-access-operation-contract.md) |
 | 29 | Artifact 消费、关联撤销与外围清理保持 | K、R、O |
 | 30 | Redis 时间与取得时观察保持 | K、A、R；#125 |
-| 31 | Kernel 注入 Subject Access fence，失败关闭 | K、A；#125 |
+| 31 | 提取时保留的 fence 已按 ADR-0029 退役；当前由操作许可失败关闭 | K、A；#125 |
 | 32 | Admin 列表、撤销、保护及数量接口保持 | K；#125 Admin 验证 |
 | 33 | 同步撤销、pending cleanup 与前向重试不变 | K、R、O；#125 |
 | 34 | Bun/Node 消费实际可加载 | API/OIDC Composition/Process；#125 Admin |

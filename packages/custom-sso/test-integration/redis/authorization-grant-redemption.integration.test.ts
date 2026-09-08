@@ -57,7 +57,7 @@ describe("Authorization Grant redemption real Redis contract", () => {
       observerClock: { now: () => Date.now() - applicationOffset },
     });
     try {
-      const principal = await kernelScope.writer.createPrincipalSession("00000000-0000-4000-8000-000000000001");
+      const principal = await kernelScope.writer.createPrincipalSession("00000000-0000-4000-8000-000000000001", { subjectContext: "grant-test-context" });
       if (principal.status !== "created")
         throw new Error("expected Principal Session");
       const artifact = await kernelScope.writer.createProtocolArtifact({

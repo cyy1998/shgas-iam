@@ -9,9 +9,8 @@ import {
   createClientRuntimeSnapshotModule,
 } from "@iam/api-core/client-runtime-snapshot";
 import { hashSecret } from "@iam/api-core/security";
-import {
-  createSubjectAccessBootstrap,
-} from "@iam/api-core/subject-access";
+import { createSubjectAccessBootstrap, createSubjectAccessSessionContext } from "@iam/api-core/subject-access";
+
 import {
   cleanupRedisKeysMatchingOwnerMarkers,
   createRedisKeyInventoryPort,
@@ -478,6 +477,7 @@ function createProductionOwnerSeed(input: {
     clientTrafficGate: stores.clientTrafficGate,
     redis: input.redis,
     sessionKernel: session.kernel,
+    operations: session.operations,
     subjectAccessBootstrap: createSubjectAccessBootstrap({
       random: { uuid: randomUUID },
       redis: input.redis,
@@ -496,10 +496,14 @@ async function seedExternalSessionState(
   }], new Date());
   if (access.seeded !== 1)
     throw new Error("OIDC composition Subject Access fixture was not newly seeded");
-  const principal = await owners.sessionKernel.createPrincipalSession(
-    subjectIdentifier,
-    { amr: ["password"], sessionKind: "browser_user" },
-  );
+  const principal = await owners.operations.run(async (operation) => {
+    const permission = await operation.acquireForAuthentication(subjectIdentifier);
+    return await owners.sessionKernel.createPrincipalSession(
+      subjectIdentifier,
+      createSubjectAccessSessionContext(operation, permission),
+      { amr: ["password"], sessionKind: "browser_user" },
+    );
+  });
   if (principal.status !== "created")
     throw new Error(`OIDC composition Principal Session seed failed: ${principal.status}`);
   if (principal.externalToken === undefined)

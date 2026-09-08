@@ -289,8 +289,14 @@ export default function SessionsPage() {
     },
   ];
 
-  const validSessions = (
+  const sessionRecords = (
     <Space orientation="vertical" size="middle" style={{ width: '100%' }}>
+      <Alert
+        showIcon
+        type="info"
+        message="仅展示尚未过期且未撤销的会话记录；记录存在不代表当前允许访问。"
+        description="账号状态或会话所属代际可能已失效，尚未清理的记录仍可在此撤销。"
+      />
       <Alert
         showIcon
         type="info"
@@ -311,7 +317,7 @@ export default function SessionsPage() {
           message={
             loadError === SessionListErrorKind.LoginStateUnavailable
               ? '登录状态服务暂时不可用'
-              : '有效会话加载失败'
+              : '会话记录加载失败'
           }
           description="请稍后手动刷新。"
         />
@@ -381,12 +387,12 @@ export default function SessionsPage() {
   return (
     <PageContainer title="会话管理">
       <Tabs
-        defaultActiveKey="valid"
+        defaultActiveKey="records"
         items={[
           {
-            key: 'valid',
-            label: '有效会话',
-            children: validSessions,
+            key: 'records',
+            label: '会话记录',
+            children: sessionRecords,
           },
           {
             key: 'restrictions',

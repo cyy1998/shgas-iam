@@ -1,8 +1,11 @@
 import {
+  createSubjectAccessOperations,
+  encodeSubjectAccessContext,
   SubjectAccessDisabledError,
   SubjectAccessUnavailableError,
 } from "@iam/api-core/subject-access";
 import { describe, expect, it, vi } from "vitest";
+import { createOidcSessionOperations } from "../../src/composition/session/session-operations.ts";
 import { isGlobalSessionCookieError } from "../../src/session/global-session-error-provenance.ts";
 import { createOidcSessionKernelAdapter } from "../../src/session/oidc-session-kernel.adapter.ts";
 import { ProviderSessionStateFake } from "./support/provider-session-state.ts";
@@ -11,22 +14,42 @@ function createAdapter(
   reason: "session_generation_stale" | "user_deleted" | "user_disabled"
     = "user_disabled",
 ) {
-  const validationFailure = {
-    status: "validation_failed" as const,
-    reason,
+  const record = {
+    status: "resolved" as const,
+    value: {
+      principal: { principalType: "user", subjectId: "00000000-0000-4000-8000-000000000007" },
+      principalSessionId: "00000000-0000-4000-8000-000000000008",
+      subjectContext: encodeSubjectAccessContext({
+        version: 1,
+        subjectIdentifier: "00000000-0000-4000-8000-000000000007",
+        transitionId: "20000000-0000-4000-8000-000000000001",
+      }),
+    },
   };
   const kernel = {
-    createClientBinding: vi.fn(async () => validationFailure),
-    createProtocolArtifact: vi.fn(async () => validationFailure),
-    issueCredential: vi.fn(async () => validationFailure),
-    resolveClientBindingById: vi.fn(async () => validationFailure),
-    resolveCredential: vi.fn(async () => validationFailure),
-    resolvePrincipalSession: vi.fn(async () => validationFailure),
-    resolvePrincipalSessionById: vi.fn(async () => validationFailure),
+    revokePrincipalSession: vi.fn(async () => ({ status: "revoked" })),
+    createClientBinding: vi.fn(async () => record),
+    createProtocolArtifact: vi.fn(async () => record),
+    issueCredential: vi.fn(async () => record),
+    resolveClientBindingById: vi.fn(async () => record),
+    resolveCredential: vi.fn(async () => record),
+    resolvePrincipalSession: vi.fn(async () => record),
+    resolvePrincipalSessionById: vi.fn(async () => record),
   };
   const providerSessionState = new ProviderSessionStateFake();
   providerSessionState.seedLookup("provider-session-a", "client-a", { bindingId: "binding-a" });
-  const adapter = createOidcSessionKernelAdapter({
+  const operations = createSubjectAccessOperations({
+    barrier: { readCommittedTransitionId: async () => {
+      if (reason !== "session_generation_stale")
+        throw new SubjectAccessDisabledError();
+      return "20000000-0000-4000-8000-000000000002";
+    } },
+    revocation: {
+      revokePrincipalSession: async () => { throw new Error("fixture cleanup unavailable"); },
+      revokeUserSessions: async () => { throw new Error("fixture cleanup unavailable"); },
+    },
+  });
+  const adapter = createOidcSessionOperations({
     accounts: {
       findBySubject: vi.fn(async () => null),
     },
@@ -39,7 +62,7 @@ function createAdapter(
     kernel,
     logger: { warn: vi.fn() },
     providerSessionState,
-  } as never);
+  } as never).forOperation(operations.createOperation());
   return { adapter, kernel };
 }
 
@@ -203,8 +226,7 @@ describe("oIDC Subject Access Session Adapter", () => {
     expect(cookieError).toBeInstanceOf(SubjectAccessDisabledError);
     expect(isGlobalSessionCookieError(cookieError)).toBe(true);
 
-    const byIdError = await adapter.resolveById("principal-a")
-      .catch(error => error);
+    const byIdError = await createAdapter(reason).adapter.resolveById("principal-a").catch(error => error);
     expect(byIdError).toBeInstanceOf(SubjectAccessDisabledError);
     expect(isGlobalSessionCookieError(byIdError)).toBe(false);
     await expect(adapter.read("provider-session-a", "client-a"))
@@ -214,8 +236,8 @@ describe("oIDC Subject Access Session Adapter", () => {
       .rejects
       .toBeInstanceOf(SubjectAccessDisabledError);
     await expect(adapter.logoutPrincipalSession("principal-token"))
-      .rejects
-      .toBeInstanceOf(SubjectAccessDisabledError);
+      .resolves
+      .toEqual({ status: "revoked" });
   });
 
   it("preserves disabled failures from every principal-linked create path", async () => {

@@ -1,5 +1,6 @@
 import type { CustomSsoDeps } from "../custom-sso.port";
 import type { AuthorizationGrantRedemption } from "../grant";
+import type { CustomSsoAccess } from "./session.port";
 import { createAuthorizeSsoUseCase } from "./authorize-sso/authorize-sso.use-case";
 import { createCustomSsoClientSecretVerifier } from "./client-secret-verifier";
 import { createCompleteSsoCallbackUseCase } from "./complete-sso-callback/complete-sso-callback.use-case";
@@ -10,13 +11,15 @@ import { createCustomSsoSessionKernelAdapter } from "./session";
 import { createCustomSsoSubjectDelivery } from "./subject-delivery";
 import { createCustomSsoTrafficGate } from "./traffic-gate";
 
-export function createCustomSsoApplication(deps: Omit<CustomSsoDeps, "redis"> & { authorizationGrantRedemption: AuthorizationGrantRedemption }) {
+export function createCustomSsoApplication(deps: Omit<CustomSsoDeps, "redis"> & {
+  authorizationGrantRedemption: AuthorizationGrantRedemption;
+  access: CustomSsoAccess;
+}) {
   const trafficGate = createCustomSsoTrafficGate({ gate: deps.traffic });
   const redirectUrls = createSsoRedirectUrlValidator({ logger: deps.logger });
   const sessions = createCustomSsoSessionKernelAdapter({
     ...deps,
     subjectDelivery: createCustomSsoSubjectDelivery({ projection: deps.subjectProjection }),
-    userService: deps.users,
   });
   const operationDeps = { authorizationGrants: sessions, clients: deps.clients, trafficGate };
 

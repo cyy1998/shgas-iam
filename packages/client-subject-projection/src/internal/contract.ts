@@ -3,7 +3,6 @@ import type {
   ClientAuthorizationEmploymentBase,
   EmploymentProfileBase,
   OptionalSubjectClaim,
-  SubjectAccessPort,
   SubjectFactsEmploymentBase,
   SubjectFactsSnapshotBase,
 } from "../index";
@@ -110,8 +109,20 @@ export type AuthorizationFreshnessCheckResult
     }
     | { readonly status: "not-ready" };
 
-export interface CreateClientSubjectProjectionServiceOptions {
-  readonly subjectAccess: SubjectAccessPort;
+export interface PermittedClientSubjectProjectionService<Permission> {
+  readonly resolve: (
+    input: ResolveClientSubjectInput,
+    permission: Permission,
+  ) => Promise<ClientSubjectProjection>;
+}
+
+export interface CreatePermittedClientSubjectProjectionServiceOptions<Permission>
+  extends ProjectionFactsOptions {
+  /** Prove the permission belongs to the current open operation and requested subject. */
+  readonly assertPermission: (permission: Permission, subjectIdentifier: string) => void;
+}
+
+export interface ProjectionFactsOptions {
   readonly subjectFacts: {
     readonly read: (
       subjectIdentifier: string,

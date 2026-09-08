@@ -63,6 +63,32 @@ export function createUserService(deps: UserServiceDeps) {
     return await deps.userRepository.getUserBySubjectIdentifier(subjectIdentifier);
   }
 
+  async function findOrcasUserBySubjectIdentifier(subjectIdentifier: string): Promise<{
+    id: number;
+    username: string;
+    name: string;
+    mobile?: string;
+  } | null> {
+    const identity = await deps.userRepository.findUserIdentityBySubjectIdentifier(subjectIdentifier);
+    if (identity === null)
+      return null;
+
+    let profile;
+    try {
+      profile = await deps.profileQuery.getDetailByUserId(identity.id);
+    }
+    catch {
+      // ORCAS has always treated unavailable Profile details as an absent login identity.
+      return null;
+    }
+    return {
+      id: profile.id,
+      username: profile.username,
+      name: profile.name,
+      ...(profile.mobile ? { mobile: profile.mobile } : {}),
+    };
+  }
+
   async function getActiveUserByUsername(username: string) {
     return await deps.userRepository.getUserByUsername(username);
   }
@@ -155,6 +181,7 @@ export function createUserService(deps: UserServiceDeps) {
     checkPassword,
     getActiveUserById,
     getActiveUserBySubjectIdentifier,
+    findOrcasUserBySubjectIdentifier,
     getActiveUserByMobile,
     getActiveUserByUsername,
     getActiveUserByWxId,

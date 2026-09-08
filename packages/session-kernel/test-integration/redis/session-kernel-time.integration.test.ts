@@ -27,7 +27,7 @@ describe("Session Kernel Redis lifecycle time", () => {
       writerClock: { now: () => Date.now() + writerOffset },
       observerClock: { now: () => Date.now() + observerOffset },
     });
-    const principal = await scope.writer.createPrincipalSession(subjectIdentifier);
+    const principal = await scope.writer.createPrincipalSession(subjectIdentifier, { subjectContext: "test-context" });
     if (principal.status !== "created")
       throw new Error("expected Principal Session");
     expect(principal.value.expiresAt - principal.observedAt).toBe(2_000);
@@ -77,7 +77,7 @@ describe("Session Kernel Redis lifecycle time", () => {
     const inventory = await scope.observer.listPrincipalSessions({ offset: 0, limit: 10 });
     expect(inventory.total).toBe(1);
     expect(inventory.items[0]?.principalSessionId).toBe(parent.principalSessionId);
-    const revoked = await scope.observer.revokeUserSessions(principal.value.principal);
+    const revoked = await scope.observer.revokeUserSessionRecords(principal.value.principal);
     expect(revoked.principalSessions.revoked).toBe(1);
     expect(revoked.bindings.revoked).toBe(1);
     expect(revoked.credentials.revoked).toBe(1);
@@ -87,10 +87,10 @@ describe("Session Kernel Redis lifecycle time", () => {
 
   test("keeps an acquired authentication result while a later renewal cannot resurrect its missing object", async () => {
     scope = await harness.createSessionKernelScope({ lifetime: { ...lifetime, principalIdleTtlMs: 200 } });
-    const principal = await scope.writer.createPrincipalSession(subjectIdentifier);
+    const principal = await scope.writer.createPrincipalSession(subjectIdentifier, { subjectContext: "test-context" });
     if (principal.status !== "created")
       throw new Error("expected Principal Session");
-    const pause = scope.pauseNextPrincipalValidation();
+    const pause = scope.pauseNextLifecycleObservation();
     const resolving = scope.writer.resolvePrincipalSession(principal.externalToken!);
     try {
       await pause.reached;
@@ -138,11 +138,11 @@ describe("Session Kernel Redis lifecycle time", () => {
 
   test.each(["binding", "credential", "artifact"] as const)("uses the acquired parent deadline when issuing %s across parent expiry", async (kind) => {
     scope = await harness.createSessionKernelScope({ lifetime: { ...lifetime, principalIdleTtlMs: 200 } });
-    const principal = await scope.writer.createPrincipalSession(subjectIdentifier);
+    const principal = await scope.writer.createPrincipalSession(subjectIdentifier, { subjectContext: "test-context" });
     if (principal.status !== "created")
       throw new Error("expected Principal Session");
     const input = { principalSessionId: principal.value.principalSessionId, clientCode: "portal", protocol: "oidc", ttlMs: 2_000 };
-    const pause = scope.pauseNextPrincipalValidation();
+    const pause = scope.pauseNextLifecycleObservation();
     const issuing = kind === "binding"
       ? scope.writer.createClientBinding(input)
       : kind === "credential"
@@ -157,22 +157,22 @@ describe("Session Kernel Redis lifecycle time", () => {
     }
     const issued = await issuing;
     if (issued.status !== "created")
-      throw new Error("expected issuance to preserve its acquired parent validation");
+      throw new Error("expected issuance to preserve its acquired parent observation");
     expect(issued.observedAt).toBeLessThan(principal.value.expiresAt);
     expect(issued.value.expiresAt).toBe(kind === "artifact" ? issued.observedAt + 2_000 : principal.value.expiresAt);
     const parent = await scope.observer.resolvePrincipalSession(principal.externalToken!);
     expect(parent.status).toBe("missing_or_expired");
   });
 
-  test.each(["renew", "consume"] as const)("does not resurrect a missing object after paused %s validation", async (operation) => {
+  test.each(["renew", "consume"] as const)("does not resurrect a missing object after paused %s observation", async (operation) => {
     scope = await harness.createSessionKernelScope({ lifetime: { ...lifetime, principalIdleTtlMs: 200 } });
-    const principal = await scope.writer.createPrincipalSession(subjectIdentifier);
+    const principal = await scope.writer.createPrincipalSession(subjectIdentifier, { subjectContext: "test-context" });
     if (principal.status !== "created")
       throw new Error("expected Principal Session");
     const artifact = await scope.writer.createProtocolArtifact({ principalSessionId: principal.value.principalSessionId, protocol: "oidc", artifactType: "code", ttlMs: 200 });
     if (artifact.status !== "created")
       throw new Error("expected Protocol Artifact");
-    const pause = scope.pauseNextPrincipalValidation();
+    const pause = scope.pauseNextLifecycleObservation(operation === "renew" ? "principal_session" : "artifact");
     const pending = operation === "renew"
       ? scope.writer.renewPrincipalSession(principal.value.principalSessionId)
       : scope.writer.consumeProtocolArtifact(artifact.externalToken!);

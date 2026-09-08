@@ -1,6 +1,7 @@
 import { createAdminSessionRevocationLogger } from "@admin-api/services/session-revocation/session-revocation.logger";
 import { createAdminSessionRevocationPort } from "@admin-api/services/session-revocation/session-revocation.port";
 import { SystemLogEvent } from "@iam/api-core/logger";
+import { encodeSubjectAccessContext } from "@iam/api-core/subject-access";
 import { describe, expect, mock, test } from "bun:test";
 
 function revokeSummary(overrides: Record<string, unknown> = {}) {
@@ -21,41 +22,114 @@ function createLogger() {
   };
 }
 
+describe("Admin context revocation", () => {
+  const subjectIdentifier = "00000000-0000-4000-8000-000000000001";
+  const transitionId = "00000000-0000-4000-8000-000000000002";
+  function fixture(failPreparation = false) {
+    const summary = revokeSummary();
+    const preparedRevoke = mock(async () => summary);
+    const kernel = {
+      prepareUserSessionRevocationByContext: mock(async () => {
+        if (failPreparation)
+          throw new Error("secret preparation payload");
+        return { revoke: preparedRevoke };
+      }),
+      revokeUserSessionsByContext: mock(async () => summary),
+      revokeUserSessionRecords: mock(async () => summary),
+      revokePrincipalSession: mock(async () => summary),
+      revokeClientProtocol: mock(async () => summary),
+      revokeClient: mock(async () => summary),
+    };
+    const logger = { logPreparationFailure: mock(), logUserRevocation: mock(), logClientProtocolRevocation: mock(), logClientAllProtocolsRevocation: mock() };
+    return { kernel, logger, preparedRevoke, port: createAdminSessionRevocationPort({ sessionKernel: kernel, logger }) };
+  }
+
+  test("prepared cleanup adds only the committed prior context", async () => {
+    const subject = fixture();
+    const plan = await subject.port.prepareUserSessionRevocation({ userId: 1, subjectIdentifier, reason: "user_disabled" });
+    await plan.revoke({ onlySubjectAccessTransitionId: transitionId });
+    expect(subject.preparedRevoke).toHaveBeenCalledWith("user_disabled", {
+      includeSubjectContext: encodeSubjectAccessContext({ version: 1, subjectIdentifier, transitionId }),
+    });
+    expect(subject.kernel.revokeUserSessionRecords).not.toHaveBeenCalled();
+  });
+
+  test("preparation and logger failures preserve exact fallback without widening an empty capture", async () => {
+    const subject = fixture(true);
+    subject.logger.logPreparationFailure.mockImplementation(() => {
+      throw new Error("logger unavailable");
+    });
+    const plan = await subject.port.prepareUserSessionRevocation({ userId: 1, subjectIdentifier, reason: "user_disabled" });
+    await plan.revoke({ onlySubjectAccessTransitionId: transitionId });
+    expect(subject.kernel.revokeUserSessionsByContext).toHaveBeenLastCalledWith(
+      { principalType: "user", subjectId: subjectIdentifier },
+      "user_disabled",
+      [encodeSubjectAccessContext({ version: 1, subjectIdentifier, transitionId })],
+    );
+    await plan.revoke({});
+    expect(subject.kernel.revokeUserSessionsByContext).toHaveBeenLastCalledWith(
+      { principalType: "user", subjectId: subjectIdentifier },
+      "user_disabled",
+      [],
+    );
+    expect(subject.logger.logPreparationFailure).toHaveBeenCalledWith({ errorName: "Error" });
+    expect(subject.kernel.revokeUserSessionRecords).not.toHaveBeenCalled();
+  });
+
+  for (const reason of ["user_disabled", "user_deleted"] as const) {
+    test(`${reason} revokes only the invalidated context`, async () => {
+      const subject = fixture();
+      await subject.port.revokeUserSessions({ userId: 1, subjectIdentifier, reason, onlySubjectAccessTransitionId: transitionId });
+      expect(subject.kernel.revokeUserSessionsByContext).toHaveBeenCalledWith(
+        { principalType: "user", subjectId: subjectIdentifier },
+        reason,
+        [encodeSubjectAccessContext({ version: 1, subjectIdentifier, transitionId })],
+      );
+      expect(subject.kernel.revokeUserSessionRecords).not.toHaveBeenCalled();
+    });
+  }
+});
+
 describe("createAdminSessionRevocationPort", () => {
   test("prepares by subject before passing the committed generation and audit context to cleanup", async () => {
     const summary = revokeSummary();
     const revoke = mock(async () => summary);
-    const prepareUserSessionRevocation = mock(async () => ({ revoke }));
-    const logger = { logUserRevocation: mock(), logClientProtocolRevocation: mock(), logClientAllProtocolsRevocation: mock() };
+    const prepareUserSessionRevocationByContext = mock(async () => ({ revoke }));
+    const logger = { logPreparationFailure: mock(), logUserRevocation: mock(), logClientProtocolRevocation: mock(), logClientAllProtocolsRevocation: mock() };
     const port = createAdminSessionRevocationPort({
       sessionKernel: {
-        prepareUserSessionRevocation,
-        revokeUserSessions: mock(async () => summary),
+        revokePrincipalSession: mock(async () => revokeSummary()),
+        revokeUserSessionsByContext: mock(async () => revokeSummary()),
+        prepareUserSessionRevocationByContext,
+        revokeUserSessionRecords: mock(async () => summary),
         revokeClientProtocol: mock(async () => summary),
         revokeClient: mock(async () => summary),
       },
       logger,
     });
     const auditContext = { actorType: "admin" as const, actorUserId: 99 };
-    const plan = await port.prepareUserSessionRevocation({ userId: 1, subjectIdentifier: "subject", reason: "user_disabled", auditContext });
-    expect(prepareUserSessionRevocation).toHaveBeenCalledWith({ principalType: "user", subjectId: "subject" });
+    const plan = await port.prepareUserSessionRevocation({ userId: 1, subjectIdentifier: "00000000-0000-4000-8000-000000000001", reason: "user_disabled", auditContext });
+    expect(prepareUserSessionRevocationByContext).toHaveBeenCalledWith({ principalType: "user", subjectId: "00000000-0000-4000-8000-000000000001" });
     expect(revoke).not.toHaveBeenCalled();
     expect(logger.logUserRevocation).not.toHaveBeenCalled();
-    const result = await plan.revoke({ onlySubjectAccessTransitionId: "previous-generation" });
+    const result = await plan.revoke({ onlySubjectAccessTransitionId: "00000000-0000-4000-8000-000000000002" });
     expect(result).toBe(summary);
-    expect(revoke).toHaveBeenCalledWith("user_disabled", { onlySubjectAccessTransitionId: "previous-generation" });
+    expect(revoke).toHaveBeenCalledWith("user_disabled", { includeSubjectContext: encodeSubjectAccessContext({ version: 1, subjectIdentifier: "00000000-0000-4000-8000-000000000001", transitionId: "00000000-0000-4000-8000-000000000002" }) });
     expect(logger.logUserRevocation).toHaveBeenCalledWith({ targetUserId: 1, reason: "user_disabled", auditContext, summary });
   });
 
   test("maps user revocation to Session Kernel with except current PrincipalSession", async () => {
     const logger = {
+      logPreparationFailure: mock(),
       logUserRevocation: mock(() => undefined),
       logClientProtocolRevocation: mock(() => undefined),
       logClientAllProtocolsRevocation: mock(() => undefined),
     };
     const kernel = {
-      prepareUserSessionRevocation: mock(async () => ({ revoke: async () => revokeSummary() })),
-      revokeUserSessions: mock(async () => revokeSummary()),
+      revokePrincipalSession: mock(async () => revokeSummary()),
+      revokeUserSessionsByContext: mock(async () => revokeSummary()),
+      prepareUserSessionRevocationByContext: mock(async () => ({ revoke: async () => revokeSummary() })),
+      revokeUserSessionRecords: mock(async () => revokeSummary()),
       revokeClientProtocol: mock(async () => revokeSummary()),
       revokeClient: mock(async () => revokeSummary()),
     };
@@ -72,7 +146,7 @@ describe("createAdminSessionRevocationPort", () => {
       auditContext: { actorType: "admin", actorUserId: 1 },
     });
 
-    expect(kernel.revokeUserSessions).toHaveBeenCalledWith(
+    expect(kernel.revokeUserSessionRecords).toHaveBeenCalledWith(
       {
         principalType: "user",
         subjectId: "00000000-0000-4000-8000-000000000001",
@@ -92,14 +166,17 @@ describe("createAdminSessionRevocationPort", () => {
       credentials: { revoked: 1, alreadyRevoked: 0, missing: 0, excluded: 0 },
     });
     const logger = {
+      logPreparationFailure: mock(),
       logUserRevocation: mock(() => undefined),
       logClientProtocolRevocation: mock(() => undefined),
       logClientAllProtocolsRevocation: mock(() => undefined),
     };
     const port = createAdminSessionRevocationPort({
       sessionKernel: {
-        prepareUserSessionRevocation: mock(async () => ({ revoke: async () => revokeSummary() })),
-        revokeUserSessions: mock(async () => revokeSummary()),
+        revokePrincipalSession: mock(async () => revokeSummary()),
+        revokeUserSessionsByContext: mock(async () => revokeSummary()),
+        prepareUserSessionRevocationByContext: mock(async () => ({ revoke: async () => revokeSummary() })),
+        revokeUserSessionRecords: mock(async () => revokeSummary()),
         revokeClientProtocol: mock(async () => summary),
         revokeClient: mock(async () => revokeSummary()),
       },

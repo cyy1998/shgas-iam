@@ -15,6 +15,10 @@ import { CustomError } from "@iam/api-core/errors/CustomError";
 import { InvalidAuthCodeError } from "@iam/api-core/errors/InvalidAuthCodeError";
 import { LoggerSourceApp, SystemLogEvent } from "@iam/api-core/logger";
 import {
+  createSubjectAccessOperations,
+  createSubjectAccessSessionRevocation,
+  encodeSubjectAccessContext,
+  parseSubjectAccessContext,
   SubjectAccessDisabledError,
   SubjectAccessUnavailableError,
 } from "@iam/api-core/subject-access";
@@ -29,7 +33,7 @@ import {
   UserStatus,
   UserType,
 } from "@iam/contracts";
-import { createAuthorizationGrantRedemption, createAuthorizeSsoUseCase, createCustomSsoApplication, createCustomSsoSessionKernelAdapter, createInMemoryAuthorizationGrantRedemptionStore, createManualAuthorizationGrantRedemptionScheduler } from "@iam/custom-sso/testing";
+import { bindCustomSsoOperationKernel, createAuthorizationGrantRedemption, createAuthorizeSsoUseCase, createCustomSsoApplication, createCustomSsoSessionKernelAdapter, createInMemoryAuthorizationGrantRedemptionStore, createManualAuthorizationGrantRedemptionScheduler } from "@iam/custom-sso/testing";
 
 import { CustomSsoSubjectProjectionInvariantError } from "@iam/custom-sso/wire";
 import { createSessionKernelForTesting } from "@iam/session-kernel/testing";
@@ -345,6 +349,7 @@ function createServices(options: {
     defaultRedemption: AuthorizationGrantRedemption,
   ) => AuthorizationGrantRedemption;
   captureSubjectAccessTransitionId?: () => string | Promise<string>;
+  decorateAuthenticationKernel?: (kernel: SessionKernel) => SessionKernel;
   decorateKernel?: (
     kernel: SessionKernel,
   ) => SessionKernel;
@@ -387,11 +392,6 @@ function createServices(options: {
   };
   const kernel = createSessionKernelForTesting({
     redis: fakeRedis as any,
-    principalAccessFence: {
-      capture: options.captureSubjectAccessTransitionId
-        ?? (async () => "20000000-0000-4000-8000-000000000001"),
-      validate: async () => ({ ok: true }),
-    },
     config: {
       namespace: "sess:v2:",
       principalIdleTtlMs: options.principalTtlMs ?? 3_600_000,
@@ -406,11 +406,9 @@ function createServices(options: {
       tombstoneGraceMs: 300_000,
       clock: options.applicationClock ?? { now: () => fakeRedis.now() },
     },
-    validationHooks: options.validatePrincipal === undefined
-      ? undefined
-      : { validatePrincipal: options.validatePrincipal },
     logger,
   }, { now: () => fakeRedis.now() });
+  const authenticationKernel = kernel;
   const adapterKernel = options.decorateKernel?.(kernel) ?? kernel;
   const adapterUserService = {
     getActiveUserBySubjectIdentifier: mock(async (input: string) => {
@@ -476,8 +474,20 @@ function createServices(options: {
       subjectIdentifier: context.subjectIdentifier,
     }), "utf8").toString("base64")),
   };
-  const principalSessions = createPrincipalSessionAdapter(adapterKernel);
-  const sessionDeps = {
+  const accessChecks = mock(async () => await (options.captureSubjectAccessTransitionId?.()
+    ?? "20000000-0000-4000-8000-000000000001"));
+  const authenticationAdapterKernel
+    = options.decorateAuthenticationKernel?.(authenticationKernel) ?? authenticationKernel;
+  const principalSessionCreations = mock(authenticationAdapterKernel.createPrincipalSession);
+  const principalSessions = createPrincipalSessionAdapter(
+    { createPrincipalSession: principalSessionCreations },
+    createSubjectAccessOperations({
+      barrier: { readCommittedTransitionId: accessChecks },
+      revocation: createSubjectAccessSessionRevocation(authenticationKernel),
+    }),
+  );
+  const sessionDeps: CustomSsoSessionKernelAdapterDeps = {
+    access: { users: { findOrcasUserBySubjectIdentifier: async () => profileAvailable ? userDetail : null } },
     authorizationGrantRedemption,
     clients: {
       findRuntimeRecord: options.findRuntimeClient
@@ -502,17 +512,45 @@ function createServices(options: {
     random: { uuid: randomUUID },
     subjectDelivery,
     subjectProjection,
-    userService: adapterUserService as any,
     auditLogWriter,
     config: {
       authCodeExpireSeconds: options.authCodeExpireSeconds ?? 60,
       localSessionTtlSeconds: options.localSessionTtlSeconds ?? 3600,
     },
   } satisfies CustomSsoSessionKernelAdapterDeps;
-  const customSsoSession = createCustomSsoSessionKernelAdapter(sessionDeps);
-  const customSso = createCustomSsoApplication({
-    ...sessionDeps,
-    users: adapterUserService,
+  const sessionOperations = createSubjectAccessOperations({
+    barrier: { readCommittedTransitionId: async () => {
+      const verdict = await options.validatePrincipal?.({ principal: { subjectId: subjectIdentifier } });
+      if (verdict && !verdict.ok)
+        throw new SubjectAccessDisabledError();
+      return await (options.captureSubjectAccessTransitionId?.() ?? "20000000-0000-4000-8000-000000000001");
+    } },
+    revocation: createSubjectAccessSessionRevocation(kernel),
+  });
+  function operationScoped<T extends object>(factory: (deps: typeof sessionDeps) => T): T {
+    const unbound = factory(sessionDeps);
+    return new Proxy(unbound, { get(target, key) {
+      const value = Reflect.get(target, key);
+      if (key === "logout")
+        return value;
+      const execute = (...args: unknown[]) => sessionOperations.run(async (operation) => {
+        const bound = factory({ ...sessionDeps, access: { ...sessionDeps.access, operation }, kernel: bindCustomSsoOperationKernel(adapterKernel, operation) });
+        const method = Reflect.get(bound, key);
+        if (typeof method === "function")
+          return await Reflect.apply(method, undefined, args);
+        if (typeof method !== "object" || method === null)
+          throw new Error("Expected operation method");
+        const handler: unknown = Reflect.get(method, "execute");
+        if (typeof handler !== "function")
+          throw new Error("Expected execute method");
+        return await Reflect.apply(handler, undefined, args);
+      });
+      return typeof value === "function" ? execute : { execute };
+    } });
+  }
+  const customSsoSession = operationScoped(createCustomSsoSessionKernelAdapter);
+  const customSso = operationScoped(scopedDeps => createCustomSsoApplication({
+    ...scopedDeps,
     clientSecrets: {
       findSecretRecord: async (clientCode: string) => {
         const runtime = await sessionDeps.clients.findRuntimeRecord(clientCode);
@@ -521,7 +559,7 @@ function createServices(options: {
     },
     secrets: { verify: async (secret: string) => secret === "test-secret" },
     traffic: { check: options.traffic ?? (async () => ({ outcome: "enabled" as const })) },
-  });
+  }));
   const wechat = {
     getWxUserId: mock(async () => "wx-id"),
   };
@@ -572,6 +610,8 @@ function createServices(options: {
     principalSessions,
     customSsoSession,
     customSso,
+    accessChecks,
+    principalSessionCreations,
     kernel,
     orcas,
     resolveAuthenticationContext: async (
@@ -1004,7 +1044,7 @@ describe("Custom SSO module interface", () => {
 
   test("rejects and revokes a legacy binding-backed Custom SSO Credential", async () => {
     const services = createServices();
-    const principal = await services.kernel.createPrincipalSession(subjectIdentifier);
+    const principal = await services.kernel.createPrincipalSession(subjectIdentifier, { subjectContext: encodeSubjectAccessContext({ version: 1, subjectIdentifier, transitionId: "20000000-0000-4000-8000-000000000001" }) });
     if (principal.status !== "created")
       throw new Error("expected Principal Session");
     const binding = await services.kernel.createClientBinding({
@@ -1129,35 +1169,36 @@ describe("Custom SSO module interface", () => {
     ).resolves.toMatchObject({ status: "resolved" });
   });
 
-  test("preserves Subject Access classification while creating an authorization artifact", async () => {
+  test("authorization checks once and keeps the permitted artifact creation in flight", async () => {
     let validationCalls = 0;
     const services = createServices({
       validatePrincipal: async () => {
         validationCalls += 1;
-        return validationCalls === 3
-          ? { ok: false, reason: "user_disabled" }
-          : { ok: true };
+        return validationCalls > 1 ? { ok: false, reason: "user_disabled" } : { ok: true };
       },
     });
     const token = await createPrincipalToken(services.principalSessions);
-
-    await expect(services.customSsoSession.issueAuthorizationCode({
+    const input = {
       clientCode: client.clientCode,
       configVersion: independentClient.configVersion,
       mode: CustomSsoClientMode.Independent,
       redirectUrl: "https://app.example.com/callback",
       token,
-      tokenSource: "cookie",
-    })).rejects.toBeInstanceOf(SubjectAccessDisabledError);
+      tokenSource: "cookie" as const,
+    };
+    const grant = await services.customSsoSession.issueAuthorizationCode(input);
+    expect(grant.isLogin).toBe(true);
+    expect(validationCalls).toBe(1);
+    let rejected: unknown;
+    try {
+      await services.customSsoSession.issueAuthorizationCode(input);
+    }
+    catch (error) { rejected = error; }
+    expect(rejected).toBeInstanceOf(SubjectAccessDisabledError);
+    expect(validationCalls).toBe(2);
   });
 
-  test.each([
-    ["while issuing the Credential", 3],
-    ["during post-issue Credential validation", 4],
-  ] as const)("preserves Subject Access classification %s", async (
-    _validationPhase,
-    failingValidationCall,
-  ) => {
+  test("redemption checks once through issue and post-issue validation, and the next access checks again", async () => {
     let countValidations = false;
     let validationCalls = 0;
     const services = createServices({
@@ -1165,19 +1206,24 @@ describe("Custom SSO module interface", () => {
         if (!countValidations)
           return { ok: true };
         validationCalls += 1;
-        return validationCalls === failingValidationCall
-          ? { ok: false, reason: "user_disabled" }
-          : { ok: true };
+        return validationCalls > 1 ? { ok: false, reason: "user_disabled" } : { ok: true };
       },
     });
     const { code } = await issueAuthorizationCode(services);
     countValidations = true;
-
-    await expect(services.customSsoSession.redeemIndependentGrant({
+    const credential = await services.customSsoSession.redeemIndependentGrant({
       client: independentClient,
       code,
       redirectUri: "https://app.example.com/callback",
-    })).rejects.toBeInstanceOf(SubjectAccessDisabledError);
+    });
+    expect(validationCalls).toBe(1);
+    let rejected: unknown;
+    try {
+      await services.resolveAuthenticationContext(credential.credential, client.clientCode);
+    }
+    catch (error) { rejected = error; }
+    expect(rejected).toBeInstanceOf(SubjectAccessDisabledError);
+    expect(validationCalls).toBe(2);
   });
 
   test("keeps pre-disable Local Session, Independent Credential, and Grant invalid after re-enable", async () => {
@@ -1318,7 +1364,7 @@ describe("Custom SSO module interface", () => {
     })).rejects.toBeInstanceOf(SubjectAccessDisabledError);
   });
 
-  test("preserves disabled validation when logout resolves either principal or credential", async () => {
+  test("logout revokes either principal or credential without subject access", async () => {
     let principalDisabled = false;
     const principalServices = createServices({
       validatePrincipal: async () => principalDisabled
@@ -1330,9 +1376,9 @@ describe("Custom SSO module interface", () => {
     );
     principalDisabled = true;
 
-    await expect(principalServices.customSsoSession.logout(principalToken))
-      .rejects
-      .toBeInstanceOf(SubjectAccessDisabledError);
+    await principalServices.customSsoSession.logout(principalToken);
+    const revokedPrincipal = await principalServices.kernel.resolvePrincipalSession(principalToken);
+    expect(revokedPrincipal.status).not.toBe("resolved");
 
     let credentialDisabled = false;
     const credentialServices = createServices({
@@ -1342,11 +1388,9 @@ describe("Custom SSO module interface", () => {
     });
     const credential = await redeemIndependentCredential(credentialServices);
     credentialDisabled = true;
-    await expect(
-      credentialServices.customSsoSession.logout(credential.credential),
-    )
-      .rejects
-      .toBeInstanceOf(SubjectAccessDisabledError);
+    await credentialServices.customSsoSession.logout(credential.credential);
+    const revokedCredential = await credentialServices.kernel.resolveCredential(credential.credential);
+    expect(revokedCredential.status).not.toBe("resolved");
   });
 
   test("issueAuthorizationCode reports an unauthenticated PrincipalSession", async () => {
@@ -2450,7 +2494,17 @@ describe("Custom SSO module interface", () => {
     const tokens = new Set<string>();
     const attempts = authenticationAttempts(services);
     for (const [amr, login] of Object.entries(attempts)) {
+      services.accessChecks.mockClear();
+      services.principalSessionCreations.mockClear();
       const result = await login();
+      expect(services.accessChecks).toHaveBeenCalledTimes(1);
+      expect(services.principalSessionCreations).toHaveBeenCalledTimes(1);
+      const creationContext = services.principalSessionCreations.mock.calls[0]![1];
+      expect(parseSubjectAccessContext(creationContext.subjectContext)).toEqual({
+        version: 1,
+        subjectIdentifier,
+        transitionId: "20000000-0000-4000-8000-000000000001",
+      });
       expect(result).toEqual({ token: expect.stringContaining("iam_ps_"), isMobileSet: true });
       tokens.add(result.token);
       const resolved = await services.kernel.resolvePrincipalSession(result.token);
@@ -2491,12 +2545,33 @@ describe("Custom SSO module interface", () => {
       caught = error;
     }
     expect(caught).toBe(failure);
+    expect(services.accessChecks).toHaveBeenCalledTimes(1);
+    expect(services.principalSessionCreations).not.toHaveBeenCalled();
+    expect(fakeRedis.keysStartingWith("sess:v2:")).toHaveLength(0);
+    expect(auditLogs).toHaveLength(0);
+  });
+
+  test.each(["pwd", "sms", "oa", "wechat"] as const)("%s rejects disabled Subject Access before creating a session", async (method) => {
+    const services = createServices({
+      captureSubjectAccessTransitionId: async () => { throw new SubjectAccessDisabledError(); },
+    });
+    let caught: unknown;
+    try {
+      await authenticationAttempts(services)[method]();
+    }
+    catch (error) {
+      caught = error;
+    }
+    expect(caught).toBeInstanceOf(SubjectAccessDisabledError);
+    expect(services.accessChecks).toHaveBeenCalledTimes(1);
+    expect(services.principalSessionCreations).not.toHaveBeenCalled();
+    expect(fakeRedis.keysStartingWith("sess:v2:")).toHaveLength(0);
     expect(auditLogs).toHaveLength(0);
   });
 
   test.each(["pwd", "sms", "oa", "wechat"] as const)("%s production wiring preserves Kernel creation failure mapping", async (method) => {
     const services = createServices({
-      decorateKernel: kernel => ({
+      decorateAuthenticationKernel: kernel => ({
         ...kernel,
         createPrincipalSession: async () => ({ status: "fail_closed", message: "unavailable" }),
       }),

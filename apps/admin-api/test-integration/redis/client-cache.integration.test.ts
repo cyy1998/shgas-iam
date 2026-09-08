@@ -475,12 +475,15 @@ function createTestClientService(
 ) {
   const revocation = createAdminSessionRevocationPort({
     sessionKernel: {
+      revokePrincipalSession: async () => emptyRevocationSummary(),
+      revokeUserSessionsByContext: async () => emptyRevocationSummary(),
       revokeClientProtocol: mock(async () => emptyRevocationSummary()),
       revokeClient: mock(async () => emptyRevocationSummary()),
-      prepareUserSessionRevocation: mock(async () => ({ revoke: async () => emptyRevocationSummary() })),
-      revokeUserSessions: mock(async () => emptyRevocationSummary()),
+      prepareUserSessionRevocationByContext: mock(async () => ({ revoke: async () => emptyRevocationSummary() })),
+      revokeUserSessionRecords: mock(async () => emptyRevocationSummary()),
     },
     logger: {
+      logPreparationFailure: () => undefined,
       logClientAllProtocolsRevocation: mock(() => undefined),
       logClientProtocolRevocation: mock(() => undefined),
       logUserRevocation: mock(() => undefined),

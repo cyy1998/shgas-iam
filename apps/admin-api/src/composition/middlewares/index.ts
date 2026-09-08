@@ -1,6 +1,8 @@
+import type { AdminAuthenticationHandlers } from "@admin-api/middlewares/authentication.handler";
 import type { AdminAuthorizationPolicy } from "@admin-api/services/admin-authorization/admin-authorization.policy";
 import type { AdminRestOperationSurface } from "@admin-api/services/admin-authorization/admin-rest-operation.surface";
 import type { CreateAppOptions } from "@iam/api-core/core/create-app";
+import type { createSubjectAccessOperations } from "@iam/api-core/subject-access";
 import type { SessionKernel } from "@iam/session-kernel";
 import type { AdminApiRuntimePorts } from "../runtime";
 import type { AdminApiServices } from "../services";
@@ -15,6 +17,7 @@ import {
 export interface CreateAdminApiMiddlewaresOptions {
   runtime: AdminApiRuntimePorts;
   sessionKernel: Pick<SessionKernel, "resolvePrincipalSession">;
+  subjectAccess: Pick<ReturnType<typeof createSubjectAccessOperations>, "run">;
   services: AdminApiServices;
   authorizationPolicy: AdminAuthorizationPolicy;
   restOperationSurface: AdminRestOperationSurface;
@@ -25,11 +28,17 @@ export async function createAdminApiMiddlewares(
 ): Promise<CreateAppOptions["middlewares"]> {
   const authenticationHandlers = createAdminAuthenticationHandlers({
     sessionKernel: options.sessionKernel,
+    subjectAccess: options.subjectAccess,
     userService: options.services.user,
-    config: {
-      allowedClientCodes: options.runtime.config.auth.adminClientCodes,
-    },
+    config: { allowedClientCodes: options.runtime.config.auth.adminClientCodes },
   });
+  return assembleAdminMiddlewares(options, authenticationHandlers);
+}
+
+function assembleAdminMiddlewares(
+  options: Pick<CreateAdminApiMiddlewaresOptions, "authorizationPolicy" | "restOperationSurface">,
+  authenticationHandlers: AdminAuthenticationHandlers,
+): CreateAppOptions["middlewares"] {
   const authorizationContextHandler = createAdminAuthorizationContextHandler(
     options.authorizationPolicy,
   );

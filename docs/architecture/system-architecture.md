@@ -79,6 +79,9 @@ TTL 或逐 Client 访问自然收敛。当前 full repair/verify 只拥有当前
 
 ## 一致性边界
 
+- **账号访问**：API、Admin、Custom SSO 与 OIDC 在每个受影响接口的首次可信主体解析后取得一次许可；成功、拒绝和暂态失败固定。已许可在途调用不复查账号状态，下一调用重新检查；Kernel 只管对象生命周期，Projection 复用许可。旧代不因重新启用恢复，协调切换见[维护手册](../releases/subject-access-operation-cutover.md)。
+
+
 - **数据库写入与发布**：影响 Profile 的源事实 mutation 与 invalidation 在同一源 transaction 内；publication 再原子提交
   Profile 与 Dirty processed，随后单调发布 Redis。`required` after-commit 失败仍可能已有数据库提交，不能据错误自动重放业务写入。
 - **Client 配置**：请求成功接受 Snapshot 后可继续使用；Admin mutation 的传播成功影响后续 acquisition。传播失败可能让后续请求

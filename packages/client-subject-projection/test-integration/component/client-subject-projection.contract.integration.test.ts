@@ -1,6 +1,6 @@
 import type { SubjectFactsSnapshot } from "@iam/client-subject-projection";
 import {
-  createClientSubjectProjectionService,
+  createPermittedClientSubjectProjectionService,
   InvalidSubjectClaimSelectionError,
   parseSubjectClaimSelection,
   SUBJECT_CLAIM_CATALOG,
@@ -15,6 +15,19 @@ import { describe, expect, test } from "bun:test";
 const subjectIdentifier = "00000000-0000-4000-8000-000000000001";
 
 describe("Client Subject Projection Interface", () => {
+  function createService(options: Omit<Parameters<typeof createPermittedClientSubjectProjectionService>[0], "assertPermission">) {
+    const permission = {};
+    const service = createPermittedClientSubjectProjectionService({
+      subjectFacts: options.subjectFacts,
+      authorizationFreshness: options.authorizationFreshness,
+      assertPermission: (value: object, subject: string) => {
+        if (value !== permission || subject !== subjectIdentifier)
+          throw new Error("Permission required");
+      },
+    });
+    return { resolve: (input: Parameters<typeof service.resolve>[0]) => service.resolve(input, permission) };
+  }
+
   test("publishes a closed V2 Catalog without a responsibility-only claim", () => {
     expect(SUBJECT_CLAIM_CATALOG).toEqual({
       version: 2,
@@ -85,8 +98,7 @@ describe("Client Subject Projection Interface", () => {
 
   test("projects canonical responsibilities only inside selected profile employments", async () => {
     const subjectIdentifier = "00000000-0000-4000-8000-000000000001";
-    const service = createClientSubjectProjectionService({
-      subjectAccess: { assertAccessible: async () => undefined },
+    const service = createService({
       subjectFacts: {
         read: async () => ({
           subjectIdentifier,
@@ -252,10 +264,7 @@ describe("Client Subject Projection Interface", () => {
   });
 
   test("fails closed when an untyped caller bypasses normalized Selection construction", async () => {
-    const service = createClientSubjectProjectionService({
-      subjectAccess: {
-        assertAccessible: async () => {},
-      },
+    const service = createService({
       subjectFacts: {
         read: async () => null,
       },
@@ -298,10 +307,7 @@ describe("Client Subject Projection Interface", () => {
   test("resolves the mandatory Subject Identifier without requiring Subject Facts", async () => {
     let factsReads = 0;
     let dirtyReads = 0;
-    const service = createClientSubjectProjectionService({
-      subjectAccess: {
-        assertAccessible: async () => {},
-      },
+    const service = createService({
       subjectFacts: {
         read: async () => {
           factsReads += 1;
@@ -333,10 +339,7 @@ describe("Client Subject Projection Interface", () => {
   });
 
   test("returns only selected scalar profile claims", async () => {
-    const service = createClientSubjectProjectionService({
-      subjectAccess: {
-        assertAccessible: async () => {},
-      },
+    const service = createService({
       subjectFacts: {
         read: async () => ({
           subjectIdentifier,
@@ -372,10 +375,7 @@ describe("Client Subject Projection Interface", () => {
   });
 
   test("preserves a selected nullable phone as a protocol-neutral fact", async () => {
-    const service = createClientSubjectProjectionService({
-      subjectAccess: {
-        assertAccessible: async () => {},
-      },
+    const service = createService({
       subjectFacts: {
         read: async () => ({
           subjectIdentifier,
@@ -417,10 +417,7 @@ describe("Client Subject Projection Interface", () => {
       name: "总部",
       type: "company",
     };
-    const service = createClientSubjectProjectionService({
-      subjectAccess: {
-        assertAccessible: async () => {},
-      },
+    const service = createService({
       subjectFacts: {
         read: async () => ({
           subjectIdentifier,
@@ -673,8 +670,7 @@ describe("Client Subject Projection Interface", () => {
         },
       ],
     } satisfies SubjectFactsSnapshot;
-    const service = createClientSubjectProjectionService({
-      subjectAccess: { assertAccessible: async () => {} },
+    const service = createService({
       subjectFacts: { read: async () => facts },
       authorizationFreshness: { check: async () => ({ status: "fresh" }) },
     });
@@ -814,10 +810,7 @@ describe("Client Subject Projection Interface", () => {
         }],
       }],
     } satisfies SubjectFactsSnapshot;
-    const service = createClientSubjectProjectionService({
-      subjectAccess: {
-        assertAccessible: async () => {},
-      },
+    const service = createService({
       subjectFacts: {
         read: async () => observedFacts,
       },
@@ -854,10 +847,7 @@ describe("Client Subject Projection Interface", () => {
   });
 
   test("fails the whole authorization projection when freshness cannot be proven", async () => {
-    const service = createClientSubjectProjectionService({
-      subjectAccess: {
-        assertAccessible: async () => {},
-      },
+    const service = createService({
       subjectFacts: {
         read: async () => ({
           subjectIdentifier,
@@ -886,6 +876,114 @@ describe("Client Subject Projection Interface", () => {
 
     const failure = await captureRejection(result);
     expect(failure).toBeInstanceOf(SubjectProjectionNotReadyError);
+  });
+});
+
+describe("Projection access proof", () => {
+  const input = {
+    subjectIdentifier,
+    clientCode: "client-a",
+    selection: { catalogVersion: 2, optionalClaims: [] },
+  } as const;
+
+  test("requires proof before facts, selection validation or identity-only delivery", async () => {
+    const permission = {};
+    const denied = new Error("Permission required");
+    const calls: string[] = [];
+    const service = createPermittedClientSubjectProjectionService({
+      assertPermission: (value: object, subject: string) => {
+        calls.push("permission");
+        if (value !== permission || subject !== subjectIdentifier)
+          throw denied;
+      },
+      subjectFacts: { read: async () => {
+        calls.push("facts");
+        return null;
+      } },
+      authorizationFreshness: { check: async () => {
+        calls.push("freshness");
+        return { status: "fresh" };
+      } },
+    });
+    for (const candidate of [input, { ...input, selection: { catalogVersion: 99, optionalClaims: [] } }]) {
+      const failure = await captureRejection(Reflect.apply(service.resolve, undefined, [candidate]));
+      expect(failure).toBe(denied);
+    }
+    const wrongProof = await captureRejection(service.resolve(input, {}));
+    expect(wrongProof).toBe(denied);
+    const wrongSubject = await captureRejection(service.resolve({ ...input, subjectIdentifier: "other" }, permission));
+    expect(wrongSubject).toBe(denied);
+    const projection = await service.resolve(input, permission);
+    expect(projection).toEqual({ subjectIdentifier });
+    expect(calls).toEqual(["permission", "permission", "permission", "permission", "permission"]);
+  });
+
+  test("rejects refreshed facts for another subject after permission and freshness checks", async () => {
+    const permission = {};
+    const calls: string[] = [];
+    const facts = {
+      subjectIdentifier,
+      sourceDirtyVersion: "1",
+      profile: { username: "user", name: "Name", phone: null },
+      employments: [],
+    } satisfies SubjectFactsSnapshot;
+    const service = createPermittedClientSubjectProjectionService({
+      assertPermission: (value: object) => {
+        if (value !== permission)
+          throw new Error("Permission required");
+        calls.push("permission");
+      },
+      subjectFacts: { read: async () => {
+        calls.push("facts");
+        return facts;
+      } },
+      authorizationFreshness: { check: async (input) => {
+        calls.push("freshness");
+        expect(input).toEqual({ subjectIdentifier, sourceDirtyVersion: "1" });
+        return { status: "refreshed", facts: { ...facts, subjectIdentifier: "other" } };
+      } },
+    });
+    const failure = await captureRejection(service.resolve({
+      ...input,
+      selection: { catalogVersion: 2, optionalClaims: ["profile:name", "iam:authorization"] },
+    }, permission));
+    expect(failure).toBeInstanceOf(SubjectProjectionNotReadyError);
+    expect(calls).toEqual(["permission", "facts", "freshness"]);
+  });
+
+  test.each([null, "other"])("rejects absent or mismatched facts (%s) after permission", async (subject) => {
+    const permission = {};
+    const calls: string[] = [];
+    const service = createPermittedClientSubjectProjectionService({
+      assertPermission: (value: object) => {
+        if (value !== permission)
+          throw new Error("Permission required");
+        calls.push("permission");
+      },
+      subjectFacts: {
+        read: async () => {
+          calls.push("facts");
+          return subject === null
+            ? null
+            : {
+                subjectIdentifier: subject,
+                sourceDirtyVersion: "1",
+                profile: { username: "user", name: "Name", phone: null },
+                employments: [],
+              };
+        },
+      },
+      authorizationFreshness: { check: async () => {
+        calls.push("freshness");
+        return { status: "fresh" };
+      } },
+    });
+    const failure = await captureRejection(service.resolve({
+      ...input,
+      selection: { catalogVersion: 2, optionalClaims: ["iam:authorization"] },
+    }, permission));
+    expect(failure).toBeInstanceOf(SubjectProjectionNotReadyError);
+    expect(calls).toEqual(["permission", "facts"]);
   });
 });
 

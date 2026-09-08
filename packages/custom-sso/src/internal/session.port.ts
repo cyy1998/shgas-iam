@@ -1,8 +1,16 @@
+import type { SubjectAccessOperation } from "@iam/api-core/subject-access";
 import type {
   CustomSsoSubjectProjection,
 } from "@iam/custom-sso/wire";
 import type { CustomSsoClientRuntimeDto } from "@iam/domain/client";
 import type { CustomSsoOrcasUser } from "../custom-sso.port";
+
+export interface CustomSsoAccess {
+  operation?: SubjectAccessOperation;
+  users: {
+    findOrcasUserBySubjectIdentifier: (subjectIdentifier: string) => Promise<CustomSsoOrcasUser | null>;
+  };
+}
 
 export interface CustomSsoOrcasLoginPort {
   orcasLogin: (input: {
@@ -35,11 +43,4 @@ export interface CustomSsoSubjectDeliveryPort {
     },
     client: CustomSsoClientRuntimeDto,
   ) => Promise<string>;
-}
-
-export interface CustomSsoGatewayOrcasUserPort {
-  getActiveUserBySubjectIdentifier: (
-    subjectIdentifier: string,
-  ) => Promise<{ id: number } | null>;
-  getUserDetailById: (userId: number) => Promise<CustomSsoOrcasUser>;
 }

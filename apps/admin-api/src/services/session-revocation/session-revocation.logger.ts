@@ -40,6 +40,14 @@ export function createAdminSessionRevocationLogger(deps: CreateAdminSessionRevoc
   }
 
   return {
+    logPreparationFailure(input: { errorName: string }) {
+      deps.logger.warn({
+        event: SystemLogEvent.AdminSessionRevokeCleanupFailed,
+        sourceApp: "iam-admin-api",
+        kind: "prepare_user_session_revocation",
+        errorName: input.errorName,
+      }, "admin session revocation preparation failed");
+    },
     logUserRevocation(input: Omit<SummaryLogInput, "event" | "clientCode" | "protocol">) {
       logSummary({
         ...input,

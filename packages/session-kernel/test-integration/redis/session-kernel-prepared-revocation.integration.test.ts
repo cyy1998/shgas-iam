@@ -17,30 +17,13 @@ const generations = [
 let harness: RedisTestHarness;
 let scope: SessionKernelRedisTestScope;
 let generation: string;
-let blocking: boolean;
-let validationCalls: number;
-let warnings: Record<string, unknown>[];
 
 beforeAll(async () => {
   harness = await createRedisTestHarness();
 });
 beforeEach(async () => {
   generation = generations[0];
-  blocking = false;
-  validationCalls = 0;
-  warnings = [];
-  scope = await harness.createSessionKernelScope({
-    principalAccessFence: {
-      capture: async () => generation,
-      validate: async () => {
-        validationCalls += 1;
-        if (blocking)
-          throw new Error("subject access is blocking");
-        return { ok: true };
-      },
-    },
-    logger: { warn: (fields) => { warnings.push(fields); } },
-  });
+  scope = await harness.createSessionKernelScope();
 });
 afterEach(async () => {
   await scope.close();
@@ -50,7 +33,7 @@ afterAll(async () => {
 });
 
 async function createPrincipal(subjectId = principal.subjectId) {
-  const result = await scope.writer.createPrincipalSession(subjectId);
+  const result = await scope.writer.createPrincipalSession(subjectId, { subjectContext: generation });
   if (result.status !== "created" || !result.externalToken)
     throw new Error("expected Principal Session fixture");
   return { session: result.value, token: result.externalToken };
@@ -63,13 +46,12 @@ async function isActive(id: string) {
 describe("prepared user session revocation real Redis contract", () => {
   test("recaptures G0 after failed cleanup while the subject is blocking", async () => {
     const old = await createPrincipal();
-    const first = await scope.writer.prepareUserSessionRevocation(principal);
+    const first = await scope.writer.prepareUserSessionRevocationByContext(principal);
     generation = generations[1];
-    blocking = true;
     scope.failNextPrincipalRevoke();
     let failure: unknown;
     try {
-      await first.revoke("user_disabled", { onlySubjectAccessTransitionId: generations[0] });
+      await first.revoke("user_disabled", { includeSubjectContext: generations[0] });
     }
     catch (error) {
       failure = error;
@@ -78,12 +60,10 @@ describe("prepared user session revocation real Redis contract", () => {
     const stillActive = await isActive(old.session.principalSessionId);
     expect(stillActive).toBe(true);
 
-    const callsBeforeCapture = validationCalls;
-    const second = await scope.writer.prepareUserSessionRevocation(principal);
-    expect(validationCalls).toBe(callsBeforeCapture);
+    const second = await scope.writer.prepareUserSessionRevocationByContext(principal);
     const activeAfterCapture = await isActive(old.session.principalSessionId);
     expect(activeAfterCapture).toBe(true);
-    const summary = await second.revoke("user_disabled", { onlySubjectAccessTransitionId: generations[1] });
+    const summary = await second.revoke("user_disabled", { includeSubjectContext: generations[1] });
     expect(summary.principalSessions.revoked).toBe(1);
     const activeAfterRevoke = await isActive(old.session.principalSessionId);
     expect(activeAfterRevoke).toBe(false);
@@ -91,12 +71,12 @@ describe("prepared user session revocation real Redis contract", () => {
 
   test("delayed cleanup includes callback previous generation and preserves reenabled G3", async () => {
     const old = await createPrincipal();
-    const plan = await scope.writer.prepareUserSessionRevocation(principal);
+    const plan = await scope.writer.prepareUserSessionRevocationByContext(principal);
     generation = generations[1];
     const previous = await createPrincipal();
     generation = generations[3];
     const fresh = await createPrincipal();
-    const summary = await plan.revoke("user_disabled", { onlySubjectAccessTransitionId: generations[1] });
+    const summary = await plan.revoke("user_disabled", { includeSubjectContext: generations[1] });
     expect(summary.principalSessions).toEqual({ revoked: 2, excluded: 1, alreadyRevoked: 0, missing: 0 });
     const oldResult = await scope.observer.resolvePrincipalSession(old.token);
     const previousResult = await scope.observer.resolvePrincipalSession(previous.token);
@@ -111,38 +91,34 @@ describe("prepared user session revocation real Redis contract", () => {
     expect(freshAfterRetry.status).toBe("resolved");
   });
 
-  test("capture failure returns an empty fallback that only cleans the callback generation", async () => {
+  test("capture failure propagates without broadening the revocation scope", async () => {
     const old = await createPrincipal();
     scope.failNextUserIndexRead();
-    const fallback = await scope.writer.prepareUserSessionRevocation(principal);
-    expect(warnings).toMatchObject([{ kind: "prepare_user_session_revocation" }]);
-    generation = generations[3];
-    const fresh = await createPrincipal();
-    const empty = await fallback.revoke("user_disabled");
-    expect(empty.principalSessions.revoked).toBe(0);
-    const beforeRevoke = await isActive(old.session.principalSessionId);
-    expect(beforeRevoke).toBe(true);
-    const summary = await fallback.revoke("user_disabled", { onlySubjectAccessTransitionId: generations[0] });
-    expect(summary.principalSessions.revoked).toBe(1);
-    const freshResult = await scope.observer.resolvePrincipalSession(fresh.token);
-    expect(freshResult.status).toBe("resolved");
+    let failure: unknown;
+    try {
+      await scope.writer.prepareUserSessionRevocationByContext(principal);
+    }
+    catch (error) { failure = error; }
+    expect(failure).toBeInstanceOf(Error);
+    const active = await isActive(old.session.principalSessionId);
+    expect(active).toBe(true);
   });
 
   test("unknown or malformed roots and another principal cannot broaden an empty plan", async () => {
     const malformed = await createPrincipal();
     await scope.seedPrincipalPayload(malformed.session.principalSessionId, JSON.stringify({
       ...malformed.session,
-      subjectAccessTransitionId: "unknown-generation",
+      subjectContext: undefined,
     }));
     const foreign = await createPrincipal("00000000-0000-4000-8000-000000000099");
     await scope.seedUserIndexMember(principal, encodeIndexMember("principal_session", foreign.session.principalSessionId));
     await scope.seedUserIndexMember(principal, "unknown:missing");
     await scope.seedUserIndexMember(principal, encodeIndexMember("principal_session", "missing-root"));
-    const plan = await scope.writer.prepareUserSessionRevocation(principal);
+    const plan = await scope.writer.prepareUserSessionRevocationByContext(principal);
     const fresh = await createPrincipal();
     const empty = await plan.revoke("user_disabled");
     expect(empty.principalSessions.revoked).toBe(0);
-    const targeted = await plan.revoke("user_disabled", { onlySubjectAccessTransitionId: generations[0] });
+    const targeted = await plan.revoke("user_disabled", { includeSubjectContext: generations[0] });
     expect(targeted.principalSessions.revoked).toBe(1);
     const foreignResult = await scope.observer.resolvePrincipalSession(foreign.token);
     const malformedActive = await isActive(malformed.session.principalSessionId);
@@ -156,7 +132,7 @@ describe("prepared user session revocation real Redis contract", () => {
     const old = await createPrincipal();
     generation = generations[1];
     const newer = await createPrincipal();
-    const plan = await scope.writer.prepareUserSessionRevocation(principal);
+    const plan = await scope.writer.prepareUserSessionRevocationByContext(principal);
     scope.failNextPrincipalRevoke();
     let failure: unknown;
     try {
@@ -171,7 +147,7 @@ describe("prepared user session revocation real Redis contract", () => {
       isActive(newer.session.principalSessionId),
     ]);
     expect(remaining.filter(Boolean)).toHaveLength(1);
-    const retry = await scope.writer.prepareUserSessionRevocation(principal);
+    const retry = await scope.writer.prepareUserSessionRevocationByContext(principal);
     const summary = await retry.revoke("user_disabled");
     expect(summary.principalSessions.revoked).toBe(1);
   });

@@ -45,6 +45,12 @@ export function createUserRepository(db: DbClient) {
         },
       }) ?? null;
     },
+    async findUserIdentityBySubjectIdentifier(subjectIdentifier: string) {
+      return await db.query.users.findFirst({
+        columns: { id: true },
+        where: { subjectIdentifier },
+      }) ?? null;
+    },
     async getUserByUsername(username: string) {
       return await db.query.users.findFirst({
         where: {

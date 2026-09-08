@@ -32,24 +32,29 @@ export interface CustomSsoOrcasUser {
   mobile?: string | null;
 }
 
-export interface CustomSsoUserPort {
-  getActiveUserBySubjectIdentifier: (subjectIdentifier: string) => Promise<{ id: number } | null>;
-  getUserDetailById: (userId: number) => Promise<CustomSsoOrcasUser>;
-}
-
 export interface CustomSsoOrcasPort {
   orcasLogin: (input: CustomSsoOrcasUser) => Promise<{ orcasSessionId: string; orcasId: string }>;
 }
 
+export type CustomSsoKernelPort = Pick<SessionKernel, | "createProtocolArtifact"
+  | "issueCredential"
+  | "renewPrincipalSession"
+  | "resolveCredential"
+  | "resolvePrincipalSession"
+  | "resolvePrincipalSessionById"
+  | "resolveProtocolArtifact"
+  | "revokeArtifact"
+  | "revokeCredential"
+  | "revokePrincipalSession">;
+
 export interface CustomSsoDeps {
   redis: AuthorizationGrantRedemptionRedis;
-  kernel: SessionKernel;
+  kernel: CustomSsoKernelPort;
   clients: { findRuntimeRecord: (clientCode: string) => Promise<CustomSsoClientRuntimeDto | null> };
   clientSecrets: { findSecretRecord: (clientCode: string) => Promise<CustomSsoClientSecretRecord | null> };
   secrets: { verify: (secret: string, hash: string) => Promise<boolean> };
   traffic: { check: (clientCode: string) => Promise<ClientTrafficGateResult> };
   subjectProjection: CustomSsoSubjectProjectionPort;
-  users: CustomSsoUserPort;
   orcas: CustomSsoOrcasPort;
   auditLogWriter: CustomSsoAuditPort;
   logger: CustomSsoLoggerPort;

@@ -8,6 +8,7 @@ import * as responsibilityRoutes from "@admin-api/routes/admin/organization-resp
 import { createAdminAuthorizationPolicy } from "@admin-api/services/admin-authorization/admin-authorization.policy";
 import { AdminMutationCommittedError } from "@admin-api/services/admin-mutation/admin-mutation";
 import { createOrganizationResponsibilityService } from "@admin-api/services/organization-responsibility/organization-responsibility.service";
+import { createSubjectAccessOperations, encodeSubjectAccessContext } from "@iam/api-core/subject-access";
 import {
   ApiErrorCode,
   ORGANIZATION_RESPONSIBILITY_TYPE_CATALOG,
@@ -24,7 +25,8 @@ import {
 } from "../helpers/admin-authorization";
 
 const principalSession = {
-  principalSessionId: "ps-admin",
+  principalSessionId: "30000000-0000-4000-8000-000000000001",
+  subjectContext: encodeSubjectAccessContext({ version: 1, subjectIdentifier: "00000000-0000-4000-8000-000000000001", transitionId: "20000000-0000-4000-8000-000000000001" }),
   principal: {
     principalType: "user",
     subjectId: "00000000-0000-4000-8000-000000000001",
@@ -39,8 +41,14 @@ function createProtectedCatalogApp(roles: string[]) {
         value: principalSession,
       }),
     },
+    subjectAccess: createSubjectAccessOperations({
+      barrier: { readCommittedTransitionId: async () => "20000000-0000-4000-8000-000000000001" },
+      revocation: { revokePrincipalSession: async () => {
+        throw new Error("unexpected cleanup");
+      }, revokeUserSessions: async () => { throw new Error("unexpected cleanup"); } },
+    }),
     userService: {
-      getUserDetailBySubjectIdentifierForAdmin: async () => ({
+      getUserDetailForPermittedAdmin: async () => ({
         id: 1,
         username: "catalog-reader",
         status: UserStatus.Enable,

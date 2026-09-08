@@ -1,7 +1,7 @@
 import { OidcScope } from "@iam/contracts";
 import { describe, expect, it } from "vitest";
+import { createClaimsFixture as createOidcClaimsAdapter } from "../../test-integration/component/support/claims-fixture.ts";
 import {
-  createOidcClaimsAdapter,
 } from "../provider/claims.ts";
 import {
   OidcClaimsSnapshotSchema,

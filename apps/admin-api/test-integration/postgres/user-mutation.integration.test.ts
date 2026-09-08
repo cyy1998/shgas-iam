@@ -6,7 +6,7 @@ import { createAdminApiUnitOfWork } from "@admin-api/composition/tx";
 import { AdminMutationCommittedError } from "@admin-api/services/admin-mutation/admin-mutation";
 import { createUserService } from "@admin-api/services/user/user.service";
 import { BadRequestError } from "@iam/api-core/errors";
-import { createSubjectAccessBarrier, createSubjectAccessLifecycle } from "@iam/api-core/subject-access";
+import { createSubjectAccessBarrier, createSubjectAccessLifecycle, createSubjectAccessOperations } from "@iam/api-core/subject-access";
 import { createInMemorySubjectAccessStore } from "@iam/api-core/subject-access/testing";
 import { mapUnitOfWork } from "@iam/api-core/uow";
 import { EmploymentStatus, OrganizationLevel, OrganizationType, UserStatus, UserType } from "@iam/contracts";
@@ -712,3 +712,29 @@ describe("User mutations through production PostgreSQL UnitOfWork", () => {
     });
   }
 });
+
+for (const profileState of [
+  { status: UserStatus.Pause, isDelete: false },
+  { status: UserStatus.Disable, isDelete: false },
+  { status: UserStatus.Disable, isDelete: true },
+]) {
+  test(`permitted Admin reads retained PostgreSQL profile ${JSON.stringify(profileState)}`, async () => {
+    const user = await seedUser(profileState.status, profileState.isDelete);
+    const command = createCommand();
+    const readBarrier = mock(async () => "20000000-0000-4000-8000-000000000001");
+    const operations = createSubjectAccessOperations({
+      barrier: { readCommittedTransitionId: readBarrier },
+      revocation: {
+        revokePrincipalSession: command.revokeUserSessions,
+        revokeUserSessions: command.revokeUserSessions,
+      },
+    });
+    const detail = await operations.run(async (operation) => {
+      await operation.acquireForAuthentication(user.subjectIdentifier);
+      return await command.service.getUserDetailForPermittedAdmin(operation, user.subjectIdentifier);
+    });
+    expect(detail).toMatchObject({ id: user.id, ...profileState });
+    expect(readBarrier).toHaveBeenCalledTimes(1);
+    expect(command.revokeUserSessions).toHaveBeenCalledTimes(0);
+  });
+}

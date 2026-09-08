@@ -81,6 +81,18 @@ Session Kernel 的 Unit/Component/Redis 测试由 `@iam/session-kernel` 收集�
 Subject Access 与 Kernel 的三条协作场景留在 API Core；Grant 期限、Component 与完整协议 Redis 测试由 Custom SSO 收集，使用专用 `IAM_CUSTOM_SSO_TEST_REDIS_URL`，并通过 Kernel `/testing`
 复用仅含 Kernel 的真实 Redis 构造、种子与检查能力。各 owner 自己拥有资源 URL 和连接生命周期；Kernel 不反向依赖 API Core 或 Custom SSO。API 混合统一认证、协议、HTTP/门户矩阵继续作为消费方集成证据，纯协议用例和 Grant 矩阵位于 Custom SSO；不新建 Redis 模拟器。
 
+Spec #128 已统一正式入口。API Core 的 Component/Redis 证明许可 single-flight、固定失败、context 严格解析、
+上下文继承、在途继续、新请求拒绝、晚到创建旧代失效和精确撤销保留新代；真实工厂为 `createSessionKernel`。
+Kernel 自身继续拥有期限、对象存在、消费、归属、CAS 和 cleanup 的行为证据，不再测试账号验证 hook。
+API 的四认证 Component、Custom SSO 完整 Redis 与 API HTTP/Redis 证明真实受保护入口在创建、预占、出站前取得许可，
+Projection 复用并保持 Facts/Authorization Freshness 规则。旧双工厂 fixture 已迁正式工厂。
+OIDC Component 与真实 Provider HTTP/Redis 证明授权、原生 interaction/login guard/resume、Token 和 UserInfo；
+Code 消费和 mapping 刷新前拒绝、多回调共享、失败固定、并发隔离、在途继续以及已消费 Code 重放撤销分别有直接断言。
+Admin Component/Redis 覆盖正式 REST/tRPC middleware、记录清单、context 撤销与 Resignation 准备失败 fallback；
+PostgreSQL 验证已许可资料读取和既有事务，Sessions browser 验证记录文案及交互。
+正式 Composition profiles 验证真实启动装配；其绿色结果不替代上述行为断言，也不证明环境已完成切换。
+全部故事、测试迁移依据和人工未执行项见[最终契约](../features/sso/subject-access-operation-contract.md)。
+
 Custom SSO strict V2 schema、mapper、错误与 preview 契约由 `@iam/custom-sso` 的 Unit collection 收集；Projection 的中性裁剪与 Catalog 契约继续由其 Component collection 收集。API 保留 OpenAPI、输出交付与错误映射测试；Admin preview 和 SSO 展示由各自消费测试及前端构建证明，类型检查不替代浏览器执行。
 
 ## Root 与 package commands

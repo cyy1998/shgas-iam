@@ -1,3 +1,4 @@
+import type { SubjectAccessOperation } from "@iam/api-core/subject-access";
 import type {
   ClientAuthorizationEmployment,
   EmploymentProfile,
@@ -12,6 +13,7 @@ import type {
   DeviceCode,
   UnknownObject,
 } from "oidc-provider";
+import type { ResolvedGlobalSession } from "../interaction/global-session.ts";
 import type {
   OidcUserInfoClaims,
 } from "./claims/claims-contract.ts";
@@ -153,7 +155,7 @@ function toOidcAuthorizationEmployment(
   };
 }
 
-export function createOidcClaimsAdapter(
+function createOidcClaimsCore(
   deps: CreateOidcClaimsAdapterDeps,
 ) {
   async function validateSnapshotBinding(
@@ -359,3 +361,48 @@ export function createOidcClaimsAdapter(
 export type OidcClaimsAdapter = ReturnType<
   typeof createOidcClaimsAdapter
 >;
+
+/** Claims remain capabilities of the operation that resolved them. */
+export function createOidcClaimsAdapter(
+  deps: CreateOidcClaimsAdapterDeps,
+  current: () => SubjectAccessOperation,
+  resolveAuthorizationSession: () => Promise<ResolvedGlobalSession | null>,
+) {
+  const claims = createOidcClaimsCore(deps);
+  return {
+    async createAuthorizationCodeSnapshot(input: Parameters<typeof claims.createAuthorizationCodeSnapshot>[0]) {
+      const operation = current();
+      operation.requirePermission(input.subjectIdentifier);
+      const snapshot = await claims.createAuthorizationCodeSnapshot(input);
+      operation.requirePermission(input.subjectIdentifier);
+      return snapshot;
+    },
+    async createAccessTokenExtra(...args: Parameters<typeof claims.createAccessTokenExtra>) {
+      const operation = current();
+      operation.requirePermission(args[0].accountId);
+      const extra = await claims.createAccessTokenExtra(...args);
+      operation.requirePermission(args[0].accountId);
+      return extra;
+    },
+    async findAccount(...args: Parameters<typeof claims.findAccount>) {
+      const operation = current();
+      if (!args[1]) {
+        const session = await resolveAuthorizationSession();
+        if (!session)
+          return undefined;
+        operation.requirePermission(args[0]);
+      }
+      const account = await claims.findAccount(...args);
+      if (!account)
+        return undefined;
+      operation.requirePermission(account.accountId);
+      return {
+        accountId: account.accountId,
+        async claims(...claimArgs: Parameters<typeof account.claims>) {
+          operation.requirePermission(account.accountId);
+          return await account.claims(...claimArgs);
+        },
+      };
+    },
+  };
+}

@@ -1,9 +1,7 @@
 import type { DbClient } from "@iam/db";
-import { UserStatus } from "@iam/contracts";
 import { users } from "@iam/db/schema";
 import { OidcAccountDtoSchema } from "@iam/domain/user";
-import { and, eq } from "drizzle-orm";
-import { isOidcAccountAvailable } from "./availability.ts";
+import { eq } from "drizzle-orm";
 
 export function createOidcAccountRepository(db: DbClient) {
   return {
@@ -16,15 +14,8 @@ export function createOidcAccountRepository(db: DbClient) {
         mobile: users.mobile,
         status: users.status,
         isDelete: users.isDelete,
-      }).from(users).where(and(
-        eq(users.subjectIdentifier, subject),
-        eq(users.status, UserStatus.Enable),
-        eq(users.isDelete, false),
-      )).limit(1);
-      if (!row)
-        return null;
-      const account = OidcAccountDtoSchema.parse(row);
-      return isOidcAccountAvailable(account) ? account : null;
+      }).from(users).where(eq(users.subjectIdentifier, subject)).limit(1);
+      return row ? OidcAccountDtoSchema.parse(row) : null;
     },
   };
 }

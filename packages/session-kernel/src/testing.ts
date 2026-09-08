@@ -22,8 +22,16 @@ export function createSessionKernelForTesting(
   deps: SessionKernelDependencies,
   redisClock = normalizeSessionKernelConfig(deps.config).clock,
 ) {
-  return createSessionKernelWithStateAdapterFactories(
-    deps,
+  return createSessionKernelWithStateAdapterFactories(deps, ...createTestingFactories(redisClock));
+}
+
+function createTestingFactories(redisClock: { now: () => number }): [
+  Parameters<typeof createSessionKernelWithStateAdapterFactories>[1],
+  Parameters<typeof createSessionKernelWithStateAdapterFactories>[2],
+  Parameters<typeof createSessionKernelWithStateAdapterFactories>[3],
+  Parameters<typeof createSessionKernelWithStateAdapterFactories>[4],
+] {
+  return [
     ({ redis, keys }) => {
       let consumersByNamespace = consumersByRedis.get(redis);
       if (!consumersByNamespace) {
@@ -62,7 +70,7 @@ export function createSessionKernelForTesting(
         return { observedAt, serialized: await redis.get(key) };
       },
     }),
-  );
+  ];
 }
 
 export { createSessionKernelKeyBuilder, encodeIndexMember } from "./storage/keys";

@@ -56,6 +56,10 @@
 | `organization-responsibility-resolution` | 统一有效责任与 holder 反向解析；当前生产直接消费者是 User Profile Read Model，用于构建和变更影响分析。 |
 | `user-profile-read-model` | 拥有派生档案的失效、重建、PostgreSQL 发布、Redis 缓存、查询与恢复；由 API、Admin API、OIDC Provider、Worker 按职责消费。Read Model 为读取整理数据，也负责写入和维护这些派生数据。 |
 
+Kernel 根出口只托管不透明 `subjectContext`，`/maintenance` 和 `/testing` 分离。Subject Access operation/context/拒绝编排
+由 API Core 单向消费 Kernel；不公开旧 fence、validator 或专用 Kernel 代际字段。Custom SSO root 要求显式操作容器，
+Projection 唯一工厂要求许可证明，均不在缺少容器时自动恢复访问检查。
+
 ## DTO 字段与兼容演进
 
 - 新增或修改跨边界 DTO 字段形状时，使用显式 `pick` 或 `z.object` 确定允许字段；允许从已经明确选字段的 DTO
@@ -72,7 +76,7 @@
 
 - client-scoped 主体信息裁剪、Subject Claim Catalog 与协议中性投影类型放在
   `packages/client-subject-projection`。调用方只通过公开 `resolve` Interface 提交 Subject Identifier、
-  `clientCode` 和 `SubjectClaimSelection`；Subject Facts、Subject Access 与 Authorization Freshness 由
+  `clientCode`、`SubjectClaimSelection` 和本操作许可证明；Subject Facts、许可断言与 Authorization Freshness 由
   composition 注入最窄 port。协议 wire mapper 只能消费 package root public Projection Interface，不能导入其他
   core subpath 或直连 Facts persistence、client 配置、runtime 与 transport。Custom SSO V2 wire 的 runtime schema、
   派生 TypeScript type、mapper 与 preview 统一由 `@iam/custom-sso/wire` 拥有；API 只能复用该

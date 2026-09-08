@@ -3,7 +3,7 @@ import type { CustomSsoClientRuntimeDto } from "@iam/domain/client";
 import { Buffer } from "node:buffer";
 import { AuthzUnauthorizedError } from "@iam/api-core/errors/AuthzUnauthorizedError";
 import {
-  createClientSubjectProjectionService,
+  createPermittedClientSubjectProjectionService,
 } from "@iam/client-subject-projection";
 import {
   ClientStatus,
@@ -110,15 +110,19 @@ const subjectFacts = {
 
 const factsRead = mock(async () => subjectFacts);
 const freshnessCheck = mock(async () => ({ status: "fresh" as const }));
-const assertAccessible = mock(async () => undefined);
+const permission = {};
+const assertPermission = mock((value: object) => {
+  if (value !== permission)
+    throw new Error("permission required");
+});
 
 function createDelivery(client: CustomSsoClientRuntimeDto) {
-  const projection = createClientSubjectProjectionService({
-    subjectAccess: { assertAccessible },
+  const projection = createPermittedClientSubjectProjectionService({
+    assertPermission,
     subjectFacts: { read: factsRead },
     authorizationFreshness: { check: freshnessCheck },
   });
-  const rawDelivery = createCustomSsoSubjectDelivery({ projection });
+  const rawDelivery = createCustomSsoSubjectDelivery({ projection: { resolve: input => projection.resolve(input, permission) } });
   return {
     delivery: {
       createUserInfoCapability: (
@@ -134,7 +138,7 @@ function createDelivery(client: CustomSsoClientRuntimeDto) {
 beforeEach(() => {
   factsRead.mockClear();
   freshnessCheck.mockClear();
-  assertAccessible.mockClear();
+  assertPermission.mockClear();
 });
 
 describe("Custom SSO subject delivery", () => {

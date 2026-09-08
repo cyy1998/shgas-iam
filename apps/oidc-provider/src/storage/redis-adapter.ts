@@ -562,6 +562,12 @@ export class RedisOidcAdapter<TClaimsSnapshot = unknown> implements Adapter {
   }
 
   async consume(id: string) {
+    // Provider normally calls find first. Keep direct consumption fail closed too:
+    // permission and the live Artifact/Principal must precede the consumed marker.
+    if (this.model === "AuthorizationCode"
+      && !await this.deps.oidcSession.resolveAuthorizationCodeSessionLifetime(id)) {
+      throw new Error("OIDC authorization code Kernel artifact is unavailable");
+    }
     const result = await this.redis.eval(
       ATOMIC_CONSUME_SCRIPT,
       2,

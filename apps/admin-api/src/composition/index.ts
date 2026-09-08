@@ -117,6 +117,7 @@ export async function createAdminApiComposition(
       runtime,
       services,
       sessionKernel: session.kernel,
+      subjectAccess: session.subjectAccessOperations,
     }),
   };
 }

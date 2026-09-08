@@ -228,7 +228,7 @@ describe('session management service wrapper', () => {
     ).rejects.toMatchObject({
       name: SessionListError.name,
       kind: SessionListErrorKind.RequestFailed,
-      message: '有效会话加载失败',
+      message: '会话记录加载失败',
     });
   });
 

@@ -16,14 +16,14 @@ export {
   type IssueCredentialInput,
   type ListPrincipalSessionsInput,
   type ListPrincipalSessionsResult,
-  type PreparedUserSessionRevocation,
+  type PreparedContextSessionRevocation,
   type PrincipalAuthenticationContext,
+  type PrincipalSessionContext,
   type PrincipalSessionInventoryItem,
   type RevokeUserSessionsOptions,
   type SessionKernel,
   type SessionKernelClientProtocolInventory,
   type SessionKernelDependencies,
-  type SessionKernelPrincipalAccessFence,
   type SessionKernelValidationHooks,
 } from "./facade";
 export { normalizeSessionOrigin } from "./state/model";

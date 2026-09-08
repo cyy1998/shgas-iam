@@ -5,15 +5,16 @@ import type {
 import type { Redis } from "ioredis";
 import type { OidcProviderEnv } from "../../env.ts";
 import type { OidcLogger } from "../../lib/logger.ts";
+import type { OidcSessionKernelAccountReader } from "../../session/oidc-session-kernel.adapter.ts";
 import type { ProviderSessionStateRedis } from "../../session/provider-session-state.store.ts";
-import type { OidcProviderRepositories } from "../repositories/index.ts";
 import type { OidcProviderStores } from "../stores/index.ts";
 import { randomUUID } from "node:crypto";
 import { LoggerSourceApp } from "@iam/api-core/logger";
 import {
   createRedisSubjectAccessStore,
   createSubjectAccessBarrier,
-  createSubjectAccessPrincipalValidator,
+  createSubjectAccessOperations,
+  createSubjectAccessSessionRevocation,
 } from "@iam/api-core/subject-access";
 import { createCustomSsoCleanup } from "@iam/custom-sso/cleanup";
 import {
@@ -21,16 +22,16 @@ import {
   createSessionKernelConfigFromEnv,
 } from "@iam/session-kernel";
 import {
-  createOidcSessionKernelAdapter,
   createOidcSessionKernelCleanupAdapter,
 } from "../../session/oidc-session-kernel.adapter.ts";
 import { createProviderSessionStateStore } from "../../session/provider-session-state.store.ts";
+import { createOidcSessionOperations } from "./session-operations.ts";
 
 export interface CreateOidcProviderSessionDeps {
   env: OidcProviderEnv;
   redis: Redis;
   logger: OidcLogger;
-  repositories: Pick<OidcProviderRepositories, "account">;
+  repositories: { account: OidcSessionKernelAccountReader };
   stores: Pick<OidcProviderStores, "clientRuntime">;
 }
 
@@ -65,12 +66,10 @@ function createOidcProviderSubjectAccess(
   });
 }
 
-export function createOidcProviderSession(deps: CreateOidcProviderSessionDeps) {
-  const subjectAccess = createOidcProviderSubjectAccess(deps);
+function createOidcProviderSessionDependencies(deps: CreateOidcProviderSessionDeps) {
   const providerSessionState = createProviderSessionStateStore(
     deps.redis as unknown as ProviderSessionStateRedis,
   );
-  const subjectAccessPrincipal = createSubjectAccessPrincipalValidator(subjectAccess);
   const validationHooks: SessionKernelValidationHooks = {
     async validateClient(object) {
       if (!object.clientCode)
@@ -95,23 +94,34 @@ export function createOidcProviderSession(deps: CreateOidcProviderSessionDeps) {
   };
 
   const customSsoCleanup = createCustomSsoCleanup({ redis: deps.redis });
-  const kernel = createSessionKernel({
-    redis: deps.redis as SessionKernelRedis,
-    config: createOidcProviderSessionKernelConfig(deps.env),
-    cleanupAdapters: [
-      ...createOidcSessionKernelCleanupAdapter({
-        providerSessionState,
-        redis: deps.redis,
-      }),
-      customSsoCleanup,
-    ],
-    principalAccessFence: subjectAccessPrincipal,
-    validationHooks,
-    logger: deps.logger,
-    sourceApp: LoggerSourceApp.OidcProvider,
-  });
+  return {
+    providerSessionState,
+    kernelDependencies: {
+      redis: deps.redis as SessionKernelRedis,
+      config: createOidcProviderSessionKernelConfig(deps.env),
+      cleanupAdapters: [
+        ...createOidcSessionKernelCleanupAdapter({
+          providerSessionState,
+          redis: deps.redis,
+        }),
+        customSsoCleanup,
+      ],
+      validationHooks,
+      logger: deps.logger,
+      sourceApp: LoggerSourceApp.OidcProvider,
+    },
+  };
+}
 
-  const adapter = createOidcSessionKernelAdapter({
+export function createOidcProviderSession(deps: CreateOidcProviderSessionDeps) {
+  const subjectAccess = createOidcProviderSubjectAccess(deps);
+  const { kernelDependencies, providerSessionState } = createOidcProviderSessionDependencies(deps);
+  const kernel = createSessionKernel(kernelDependencies);
+  const operations = createSubjectAccessOperations({
+    barrier: subjectAccess,
+    revocation: createSubjectAccessSessionRevocation(kernel),
+  });
+  const sessions = createOidcSessionOperations({
     kernel,
     providerSessionState,
     logger: deps.logger,
@@ -119,13 +129,7 @@ export function createOidcProviderSession(deps: CreateOidcProviderSessionDeps) {
     clients: deps.stores.clientRuntime,
     cookieName: deps.env.oidc.globalSessionCookie,
   });
-
-  return {
-    kernel,
-    oidcSession: adapter,
-    providerSessionState,
-    subjectAccess,
-  };
+  return { kernel, operations, sessions, providerSessionState, subjectAccess };
 }
 
 export type OidcProviderSession = ReturnType<typeof createOidcProviderSession>;

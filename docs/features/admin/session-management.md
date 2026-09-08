@@ -6,15 +6,20 @@
 
 ## 页面入口与数据边界
 
-页面通过 `src/services/session-management.ts` 消费 Valid Principal Session 列表与单会话/用户全部撤销，
-以及 Temporary Login Restriction 列表与解除能力。页面使用“有效会话”和“临时登录限制”两个标签页；两个列表都复用
+页面通过 `src/services/session-management.ts` 消费 Principal Session Record 列表与单会话/用户全部撤销，
+以及 Temporary Login Restriction 列表与解除能力。页面使用“会话记录”和“临时登录限制”两个标签页；两个列表都复用
 用户远程搜索提交精确 numeric user ID，使用默认 20、最大 100 的分页与手动刷新，不轮询。
 
 页面只渲染后端安全 VO，不接触原始 User-Agent、Session Kernel 模型或 cleanup failure 内容。Transport 错误由
 service wrapper 使用共享 API error code 归一化为稳定的页面错误；页面不得解析 tRPC `httpStatus`、展示
 `serviceCode` 或原始错误 message。
 
-## 有效会话与撤销
+## 会话记录与撤销
+
+生产列表通过中性 Kernel 返回尚未过期且未撤销的记录，不逐目标检查 Subject Access Barrier，
+也不因读取列表而触发账号拒绝清理。管理员自身仍在本次 REST/tRPC 调用取得许可。
+页面明确提示“记录存在不代表当前允许访问”：账号状态或所属代际可能已经失效，尚未清理的旧代记录仍可查询与撤销。
+管理员自身的访问许可、角色与范围授权继续生效；撤销目标不以目标账号当前可访问为前提。
 
 每行统一提供“强制下线本次”和“下线该用户全部”。当前管理会话的单会话按钮禁用；本人全部下线仍可用，确认框明确
 保留当前根会话但撤销其关联 IAM 凭证与其他 roots。确认框同时说明点式撤销的并发窗口、不能保证第三方本地会话退出、
@@ -39,6 +44,6 @@ Principal Session；不提供阈值、窗口或时长配置，不要求备注，
 
 ## 验收关注点
 
-修改相关交互时，通过现有前端测试通道验证精确用户筛选、分页与手动刷新、当前会话保护、确认内容、安全 VO 和稳定错误
-呈现。覆盖成功、幂等无变化、cleanup 部分失败、Redis 不可用及作用后审计失败；验证行内倒计时不重载列表、作用后
+修改相关交互时，通过现有前端测试通道验证会话记录提示、不可访问账号的记录仍可管理、精确用户筛选、分页与手动刷新、
+当前会话保护、确认内容、安全 VO 和稳定错误呈现。覆盖成功、幂等无变化、cleanup 部分失败、Redis 不可用及作用后审计失败；验证行内倒计时不重载列表、作用后
 审计失败不自动重试。测试通道与预算见 [测试架构](../../architecture/testing-architecture.md)。

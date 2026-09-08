@@ -13,13 +13,13 @@ import Provider from "oidc-provider";
 import { afterEach, describe, expect, it } from "vitest";
 import { createOidcInteractionHandler } from "../../src/interaction/handler.ts";
 import { createIamInteractionPolicy } from "../../src/interaction/policy.ts";
-import { createOidcClaimsAdapter } from "../../src/provider/claims.ts";
 import {
   registerOidcClientTrafficGate,
 } from "../../src/provider/client/client-traffic-gate.ts";
 import { createProviderConfiguration } from "../../src/provider/configuration.ts";
 import { registerProtocolModelPayloadExtensions } from "../../src/provider/protocol-models.ts";
 import { createOidcAdapterFactory } from "../../src/storage/redis-adapter.ts";
+import { createClaimsFixture as createOidcClaimsAdapter } from "./support/claims-fixture.ts";
 import { createClientTrafficGateController } from "./support/client-traffic-gate.ts";
 
 const subjectIdentifier = "57b0e34d-bf33-4671-87ea-4ed2f1b0e420";

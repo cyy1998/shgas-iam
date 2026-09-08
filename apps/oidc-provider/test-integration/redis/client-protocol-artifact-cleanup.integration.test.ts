@@ -79,9 +79,8 @@ describe("client Protocol artifact cleanup real Redis contract", () => {
         principalIdleTtlMs: 60_000,
         lookupHmacKeys: { current: { id: "reset", secret: "reset-test-secret-0000000000000000000000000" } },
       }),
-      principalAccessFence: { capture: async () => randomUUID(), validate: async () => ({ ok: true }) },
     });
-    const principal = await kernel.createPrincipalSession(randomUUID());
+    const principal = await kernel.createPrincipalSession(randomUUID(), { subjectContext: "opaque-test-context" });
     if (principal.status !== "created" || !principal.externalToken)
       throw new Error("Principal fixture failed");
     const clientCode = testScope.unique("client");
@@ -275,13 +274,10 @@ describe("client Protocol artifact cleanup real Redis contract", () => {
       cleanupAdapters: [
         createCustomSsoCleanup({ redis: testScope.writer }),
       ],
-      principalAccessFence: {
-        capture: async () => randomUUID(),
-        validate: async () => ({ ok: true }),
-      },
     });
     const principal = await kernel.createPrincipalSession(
       "00000000-0000-4000-8000-000000000024",
+      { subjectContext: "opaque-test-context" },
     );
     if (principal.status !== "created" || principal.externalToken === undefined)
       throw new Error("expected Principal Session fixture");

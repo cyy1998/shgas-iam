@@ -96,6 +96,7 @@ function createDeps(overrides: Record<string, unknown> = {}) {
     },
     userRepository: {
       getUserById: mock(async () => user),
+      findUserIdentityBySubjectIdentifier: mock(async () => ({ id: user.id })),
       getUserByMobile: mock(async () => user),
       getUserByUsername: mock(async () => user),
       getUserByWxId: mock(async () => user),
@@ -106,6 +107,60 @@ function createDeps(overrides: Record<string, unknown> = {}) {
 }
 
 describe("createUserService", () => {
+  test("reads permitted ORCAS fields from profile detail and excludes unrelated fields", async () => {
+    const deps = createDeps();
+    deps.profileQuery.getDetailByUserId.mockResolvedValue({
+      ...deps.user,
+      username: "profile-username",
+      name: "档案姓名",
+      mobile: "13900000000",
+      status: UserStatus.Disable,
+      isDelete: true,
+      roles: [{ code: "private-role" }],
+    });
+    const result = await createUserService(deps).findOrcasUserBySubjectIdentifier(deps.user.subjectIdentifier);
+
+    expect(result).toEqual({ id: 1, username: "profile-username", name: "档案姓名", mobile: "13900000000" });
+    expect(deps.userRepository.findUserIdentityBySubjectIdentifier).toHaveBeenCalledWith(deps.user.subjectIdentifier);
+    expect(deps.profileQuery.getDetailByUserId).toHaveBeenCalledWith(1);
+    expect(deps.userRepository.getUserById).not.toHaveBeenCalled();
+  });
+
+  test("omits absent ORCAS mobile and returns null for an unknown subject", async () => {
+    const deps = createDeps();
+    deps.profileQuery.getDetailByUserId.mockResolvedValue({ ...deps.user, mobile: null });
+    const service = createUserService(deps);
+    const result = await service.findOrcasUserBySubjectIdentifier(deps.user.subjectIdentifier);
+    expect(result).toEqual({ id: 1, username: "zhangsan", name: "张三" });
+
+    deps.userRepository.findUserIdentityBySubjectIdentifier.mockResolvedValue(null);
+    deps.profileQuery.getDetailByUserId.mockClear();
+    const missing = await service.findOrcasUserBySubjectIdentifier("unknown");
+    expect(missing).toBeNull();
+    expect(deps.profileQuery.getDetailByUserId).not.toHaveBeenCalled();
+  });
+
+  test("reports unavailable ORCAS Profile details as missing while identity lookup failures propagate", async () => {
+    for (const error of [new Error("profile missing"), new Error("profile unavailable")]) {
+      const deps = createDeps();
+      deps.profileQuery.getDetailByUserId.mockRejectedValue(error);
+      const result = await createUserService(deps).findOrcasUserBySubjectIdentifier(deps.user.subjectIdentifier);
+      expect(result).toBeNull();
+    }
+    const deps = createDeps();
+    const error = new Error("identity lookup unavailable");
+    deps.userRepository.findUserIdentityBySubjectIdentifier.mockRejectedValue(error);
+    let failure: unknown;
+    try {
+      await createUserService(deps).findOrcasUserBySubjectIdentifier(deps.user.subjectIdentifier);
+    }
+    catch (caught) {
+      failure = caught;
+    }
+    expect(failure).toBe(error);
+    expect(deps.profileQuery.getDetailByUserId).not.toHaveBeenCalled();
+  });
+
   test("changes an existing bcrypt password through the production runtime hasher", async () => {
     const deps = createDeps();
     deps.user.password = EXISTING_BCRYPT_TS_8_HASH;

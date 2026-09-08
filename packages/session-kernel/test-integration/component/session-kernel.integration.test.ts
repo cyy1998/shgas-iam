@@ -79,17 +79,8 @@ function createKernel(redis = new KernelFakeRedis(), overrides: Partial<Paramete
   return { redis, config, kernel: createSessionKernel({ redis, config }) };
 }
 
-function createSessionKernel(
-  deps: Omit<SessionKernelDependencies, "principalAccessFence">
-    & Partial<Pick<SessionKernelDependencies, "principalAccessFence">>,
-) {
-  return createSessionKernelForTesting({
-    principalAccessFence: {
-      capture: () => "20000000-0000-4000-8000-000000000001",
-      validate: () => ({ ok: true }),
-    },
-    ...deps,
-  });
+function createSessionKernel(deps: SessionKernelDependencies) {
+  return createSessionKernelForTesting(deps);
 }
 
 function createKernelLogCapture() {
@@ -137,27 +128,6 @@ function createDerivedObject(
   });
 }
 
-function createEmptyRevokeSummaryForExpectation() {
-  const counter = {
-    revoked: 0,
-    alreadyRevoked: 0,
-    missing: 0,
-    excluded: 0,
-  };
-  return {
-    principalSessions: counter,
-    bindings: counter,
-    credentials: counter,
-    artifacts: counter,
-    cleanup: {
-      attempted: 0,
-      succeeded: 0,
-      failed: 0,
-      failures: [],
-    },
-  };
-}
-
 function subjectIdentifierFor(index: number) {
   return `00000000-0000-4000-8000-${String(index).padStart(12, "0")}`;
 }
@@ -178,127 +148,6 @@ describe("session kernel module boundaries", () => {
     expect(token.startsWith("iam_ps_")).toBe(true);
   });
 
-  test("permanently rejects a stale subject generation without revoking newer sessions", async () => {
-    const redis = new KernelFakeRedis();
-    let currentGeneration = "20000000-0000-4000-8000-000000000001";
-    const kernel = createSessionKernel({
-      redis,
-      config: createConfig(redis),
-      principalAccessFence: {
-        capture: () => currentGeneration,
-        validate: session => (
-          session.subjectAccessTransitionId === currentGeneration
-            ? { ok: true }
-            : { ok: false, reason: "session_generation_stale" }
-        ),
-      },
-    });
-    const oldSession = await kernel.createPrincipalSession(principal.subjectId);
-    const oldSessionForRenew = await kernel.createPrincipalSession(principal.subjectId);
-    expect(oldSession.status).toBe("created");
-    expect(oldSessionForRenew.status).toBe("created");
-
-    currentGeneration = "20000000-0000-4000-8000-000000000002";
-    const newSession = await kernel.createPrincipalSession(principal.subjectId);
-    expect(newSession.status).toBe("created");
-    if (
-      oldSession.status !== "created"
-      || oldSessionForRenew.status !== "created"
-      || newSession.status !== "created"
-    ) {
-      throw new Error("expected Principal Sessions to be created");
-    }
-
-    await expect(kernel.renewPrincipalSession(oldSessionForRenew.value.principalSessionId))
-      .resolves
-      .toMatchObject({
-        status: "validation_failed",
-        reason: "session_generation_stale",
-      });
-    await expect(kernel.resolvePrincipalSession(oldSession.externalToken!))
-      .resolves
-      .toMatchObject({
-        status: "validation_failed",
-        reason: "session_generation_stale",
-      });
-    await expect(kernel.listPrincipalSessions({
-      limit: 10,
-      offset: 0,
-      subjectIdentifier: principal.subjectId,
-    })).resolves.toMatchObject({
-      items: [{
-        principalSessionId: newSession.value.principalSessionId,
-      }],
-      total: 1,
-    });
-    await expect(kernel.resolvePrincipalSession(newSession.externalToken!))
-      .resolves
-      .toMatchObject({
-        status: "resolved",
-        value: {
-          principalSessionId: newSession.value.principalSessionId,
-          subjectAccessTransitionId: "20000000-0000-4000-8000-000000000002",
-        },
-      });
-  });
-
-  test("does not let delayed disabled validation cleanup revoke a newer transition", async () => {
-    const redis = new KernelFakeRedis();
-    const oldTransitionId = "20000000-0000-4000-8000-000000000001";
-    const newTransitionId = "20000000-0000-4000-8000-000000000002";
-    let currentTransitionId = oldTransitionId;
-    let delayOldValidation = false;
-    const validationStarted = Promise.withResolvers<void>();
-    const validationCanFinish = Promise.withResolvers<void>();
-    const kernel = createSessionKernel({
-      redis,
-      config: createConfig(redis),
-      principalAccessFence: {
-        capture: () => currentTransitionId,
-        validate: async (target) => {
-          if (
-            delayOldValidation
-            && target.subjectAccessTransitionId === oldTransitionId
-          ) {
-            validationStarted.resolve();
-            await validationCanFinish.promise;
-          }
-          return target.subjectAccessTransitionId === currentTransitionId
-            ? { ok: true }
-            : { ok: false, reason: "user_disabled" };
-        },
-      },
-    });
-    const oldSession = await kernel.createPrincipalSession(principal.subjectId);
-    if (oldSession.status !== "created")
-      throw new Error("expected old Principal Session");
-
-    delayOldValidation = true;
-    const resolvingOld = kernel.resolvePrincipalSession(oldSession.externalToken!);
-    await validationStarted.promise;
-    currentTransitionId = newTransitionId;
-    const newSession = await kernel.createPrincipalSession(principal.subjectId);
-    if (newSession.status !== "created")
-      throw new Error("expected new Principal Session");
-
-    validationCanFinish.resolve();
-    await expect(resolvingOld).resolves.toMatchObject({
-      status: "validation_failed",
-      reason: "user_disabled",
-    });
-    await expect(kernel.resolvePrincipalSession(newSession.externalToken!))
-      .resolves
-      .toMatchObject({
-        status: "resolved",
-        value: {
-          principalSessionId: newSession.value.principalSessionId,
-          subjectAccessTransitionId: newTransitionId,
-        },
-      });
-  });
-});
-
-describe("session kernel config, keys, token, and HMAC", () => {
   test("rejects invalid lookup HMAC configuration", () => {
     const redis = new KernelFakeRedis();
     expect(() => createConfig(redis, {
@@ -332,7 +181,7 @@ describe("session kernel config, keys, token, and HMAC", () => {
       lookupHmacKeys: { current: { id: "previous", secret: "p".repeat(32) } },
     });
     const oldKernel = createSessionKernel({ redis, config: previousConfig });
-    const created = await oldKernel.createPrincipalSession(principal.subjectId);
+    const created = await oldKernel.createPrincipalSession(principal.subjectId, { subjectContext: "test-context" });
     expect(created.status).toBe("created");
     if (created.status !== "created" || !created.externalToken)
       return;
@@ -354,7 +203,7 @@ describe("session kernel config, keys, token, and HMAC", () => {
 
   test("evaluates freshness requirements", async () => {
     const { redis, kernel } = createKernel();
-    const created = await kernel.createPrincipalSession(principal.subjectId, {
+    const created = await kernel.createPrincipalSession(principal.subjectId, { subjectContext: "test-context" }, {
       amr: ["pwd", "mfa"],
       acr: "2",
     });
@@ -379,11 +228,20 @@ describe("session kernel config, keys, token, and HMAC", () => {
 });
 
 describe("session kernel lifecycle", () => {
-  test("creates a Principal Session from only a Subject Identifier and authentication context", async () => {
+  test("requires an explicit root context without manufacturing one", async () => {
+    const { kernel } = createKernel();
+    // @ts-expect-error Runtime callers must also supply the required opaque context.
+    const missing = await kernel.createPrincipalSession(principal.subjectId);
+    expect(missing.status).toBe("fail_closed");
+    const inventory = await kernel.listPrincipalSessions({ offset: 0, limit: 10 });
+    expect(inventory.total).toBe(0);
+  });
+
+  test("creates a Principal Session from a Subject Identifier, opaque context and authentication context", async () => {
     const { redis, kernel } = createKernel();
     const subjectIdentifier = "57b0e34d-bf33-4671-87ea-4ed2f1b0e420";
 
-    const created = await kernel.createPrincipalSession(subjectIdentifier, {
+    const created = await kernel.createPrincipalSession(subjectIdentifier, { subjectContext: "test-context" }, {
       amr: ["pwd"],
       origin: {
         ip: "203.0.113.10",
@@ -445,7 +303,7 @@ describe("session kernel lifecycle", () => {
   test("rejects a numeric database user ID at the Subject Identifier boundary", async () => {
     const { kernel } = createKernel();
 
-    await expect(kernel.createPrincipalSession("1001")).resolves.toMatchObject({
+    await expect(kernel.createPrincipalSession("1001", { subjectContext: "test-context" })).resolves.toMatchObject({
       status: "fail_closed",
     });
   });
@@ -453,7 +311,7 @@ describe("session kernel lifecycle", () => {
   test("stores bounded Session Origin while keeping origin-less Principal Sessions compatible", async () => {
     const { kernel } = createKernel();
     const longUserAgent = `browser/${"x".repeat(600)}`;
-    const withOrigin = await kernel.createPrincipalSession(principal.subjectId, {
+    const withOrigin = await kernel.createPrincipalSession(principal.subjectId, { subjectContext: "test-context" }, {
       origin: {
         ip: "203.0.113.10",
         userAgent: longUserAgent,
@@ -474,7 +332,7 @@ describe("session kernel lifecycle", () => {
       },
     });
 
-    const withoutOrigin = await kernel.createPrincipalSession(principal.subjectId);
+    const withoutOrigin = await kernel.createPrincipalSession(principal.subjectId, { subjectContext: "test-context" });
     expect(withoutOrigin.status).toBe("created");
     if (withoutOrigin.status !== "created")
       return;
@@ -489,11 +347,11 @@ describe("session kernel lifecycle", () => {
 
   test("lists only indexed user Principal Sessions by expiry without promising activity", async () => {
     const { redis, kernel } = createKernel();
-    const older = await kernel.createPrincipalSession(principal.subjectId, {
+    const older = await kernel.createPrincipalSession(principal.subjectId, { subjectContext: "test-context" }, {
       origin: { ip: "203.0.113.10", userAgent: "older-browser" },
     });
     redis.advance(1_000);
-    const newer = await kernel.createPrincipalSession(subjectIdentifierFor(2));
+    const newer = await kernel.createPrincipalSession(subjectIdentifierFor(2), { subjectContext: "test-context" });
     expect(older.status).toBe("created");
     expect(newer.status).toBe("created");
     if (older.status !== "created" || newer.status !== "created")
@@ -524,7 +382,7 @@ describe("session kernel lifecycle", () => {
       },
     });
     for (let index = 0; index < 105; index += 1) {
-      const created = await kernel.createPrincipalSession(subjectIdentifierFor(index));
+      const created = await kernel.createPrincipalSession(subjectIdentifierFor(index), { subjectContext: "test-context" });
       expect(created.status).toBe("created");
     }
     await redis.zadd(
@@ -547,8 +405,8 @@ describe("session kernel lifecycle", () => {
 
   test("uses the user index without backfilling legacy sessions until renewal and removes revoked sessions", async () => {
     const { redis, kernel } = createKernel();
-    const legacy = await kernel.createPrincipalSession(principal.subjectId);
-    const other = await kernel.createPrincipalSession(subjectIdentifierFor(2));
+    const legacy = await kernel.createPrincipalSession(principal.subjectId, { subjectContext: "test-context" });
+    const other = await kernel.createPrincipalSession(subjectIdentifierFor(2), { subjectContext: "test-context" });
     expect(legacy.status).toBe("created");
     expect(other.status).toBe("created");
     if (legacy.status !== "created" || other.status !== "created")
@@ -592,10 +450,10 @@ describe("session kernel lifecycle", () => {
 
   test("removes naturally expired inventory members before counting and filling the page", async () => {
     const { redis, kernel } = createKernel();
-    const expired = await kernel.createPrincipalSession(principal.subjectId);
+    const expired = await kernel.createPrincipalSession(principal.subjectId, { subjectContext: "test-context" });
     expect(expired.status).toBe("created");
     redis.advance(59_000);
-    const valid = await kernel.createPrincipalSession(subjectIdentifierFor(2));
+    const valid = await kernel.createPrincipalSession(subjectIdentifierFor(2), { subjectContext: "test-context" });
     expect(valid.status).toBe("created");
     if (expired.status !== "created" || valid.status !== "created")
       return;
@@ -612,7 +470,7 @@ describe("session kernel lifecycle", () => {
 
   test("creates, resolves, and renews principal sessions with extendable children", async () => {
     const { redis, kernel } = createKernel();
-    const session = await kernel.createPrincipalSession(principal.subjectId);
+    const session = await kernel.createPrincipalSession(principal.subjectId, { subjectContext: "test-context" });
     expect(session.status).toBe("created");
     if (session.status !== "created")
       return;
@@ -677,7 +535,7 @@ describe("session kernel lifecycle", () => {
 
   test("issues, resolves, and idempotently revokes credentials", async () => {
     const { kernel } = createKernel();
-    const session = await kernel.createPrincipalSession(principal.subjectId);
+    const session = await kernel.createPrincipalSession(principal.subjectId, { subjectContext: "test-context" });
     expect(session.status).toBe("created");
     if (session.status !== "created")
       return;
@@ -702,7 +560,7 @@ describe("session kernel lifecycle", () => {
 
   test("issues a credential with a caller-known identity without changing its bearer token", async () => {
     const { kernel } = createKernel();
-    const session = await kernel.createPrincipalSession(principal.subjectId);
+    const session = await kernel.createPrincipalSession(principal.subjectId, { subjectContext: "test-context" });
     expect(session.status).toBe("created");
     if (session.status !== "created")
       return;
@@ -730,7 +588,7 @@ describe("session kernel lifecycle", () => {
 
   test("consumes protocol artifacts once and reports replay through consumed tombstone", async () => {
     const { redis, kernel } = createKernel();
-    const session = await kernel.createPrincipalSession(principal.subjectId);
+    const session = await kernel.createPrincipalSession(principal.subjectId, { subjectContext: "test-context" });
     expect(session.status).toBe("created");
     if (session.status !== "created")
       return;
@@ -825,7 +683,7 @@ describe("session kernel tombstone, cleanup, validation, and fail closed behavio
     const config = createConfig(redis);
     const { logger, entries } = createKernelLogCapture();
     const kernel = createSessionKernel({ redis, config, logger, sourceApp: "test-kernel" });
-    const session = await kernel.createPrincipalSession(principal.subjectId);
+    const session = await kernel.createPrincipalSession(principal.subjectId, { subjectContext: "test-context" });
     expect(session.status).toBe("created");
     if (session.status !== "created")
       return;
@@ -847,7 +705,7 @@ describe("session kernel tombstone, cleanup, validation, and fail closed behavio
     const config = createConfig(redis);
     const { logger, entries } = createKernelLogCapture();
     const kernel = createSessionKernel({ redis, config, logger, sourceApp: "test-kernel" });
-    const session = await kernel.createPrincipalSession(principal.subjectId);
+    const session = await kernel.createPrincipalSession(principal.subjectId, { subjectContext: "test-context" });
     expect(session.status).toBe("created");
     if (session.status !== "created")
       return;
@@ -897,7 +755,7 @@ describe("session kernel tombstone, cleanup, validation, and fail closed behavio
       logger,
       sourceApp: "test-kernel",
     });
-    const session = await kernel.createPrincipalSession(principal.subjectId);
+    const session = await kernel.createPrincipalSession(principal.subjectId, { subjectContext: "test-context" });
     expect(session.status).toBe("created");
     if (session.status !== "created")
       return;
@@ -935,8 +793,8 @@ describe("session kernel tombstone, cleanup, validation, and fail closed behavio
 
   test("revokes user sessions with an excluded PrincipalSession while cascading its child objects", async () => {
     const { kernel } = createKernel();
-    const keptSession = await kernel.createPrincipalSession(principal.subjectId);
-    const revokedSession = await kernel.createPrincipalSession(principal.subjectId);
+    const keptSession = await kernel.createPrincipalSession(principal.subjectId, { subjectContext: "test-context" });
+    const revokedSession = await kernel.createPrincipalSession(principal.subjectId, { subjectContext: "test-context" });
     expect(keptSession.status).toBe("created");
     expect(revokedSession.status).toBe("created");
     if (keptSession.status !== "created" || revokedSession.status !== "created")
@@ -973,7 +831,7 @@ describe("session kernel tombstone, cleanup, validation, and fail closed behavio
       return;
     }
 
-    const summary = await kernel.revokeUserSessions(principal, "admin_revoke", {
+    const summary = await kernel.revokeUserSessionRecords(principal, "admin_revoke", {
       exceptPrincipalSessionId: keptSession.value.principalSessionId,
     });
 
@@ -994,7 +852,7 @@ describe("session kernel tombstone, cleanup, validation, and fail closed behavio
 
   test("revokes client protocol and all protocols with cleanup adapter missing summary", async () => {
     const { kernel } = createKernel();
-    const session = await kernel.createPrincipalSession(principal.subjectId);
+    const session = await kernel.createPrincipalSession(principal.subjectId, { subjectContext: "test-context" });
     expect(session.status).toBe("created");
     if (session.status !== "created")
       return;
@@ -1100,7 +958,7 @@ describe("session kernel tombstone, cleanup, validation, and fail closed behavio
         },
       }],
     });
-    const principalSession = await kernel.createPrincipalSession(principal.subjectId);
+    const principalSession = await kernel.createPrincipalSession(principal.subjectId, { subjectContext: "test-context" });
     if (principalSession.status !== "created")
       throw new Error("expected Principal Session fixture");
     const credential = await kernel.issueCredential({
@@ -1138,181 +996,60 @@ describe("session kernel tombstone, cleanup, validation, and fail closed behavio
 
   test("lazy-cleans expired zset members and does not write tombstones for natural expiry", async () => {
     const { redis, kernel } = createKernel();
-    const session = await kernel.createPrincipalSession(principal.subjectId);
+    const session = await kernel.createPrincipalSession(principal.subjectId, { subjectContext: "test-context" });
     expect(session.status).toBe("created");
     if (session.status !== "created")
       return;
     redis.advance(60_001);
 
-    const summary = await kernel.revokeUserSessions(principal);
+    const summary = await kernel.revokeUserSessionRecords(principal);
     expect(summary.principalSessions.revoked).toBe(0);
     expect(summary.principalSessions.missing).toBe(0);
     const lookupHash = createLookupHash(session.externalToken!, createConfig(redis).lookupHmacKeys.current);
     expect(await redis.get(kernel.keys.lookupTombstone("principal_session", lookupHash))).toBeNull();
   });
 
-  test("validation hooks fail closed and lazy revoke affected sessions", async () => {
-    const redis = new KernelFakeRedis();
-    const config = createConfig(redis);
-    let disabled = false;
-    const kernel = createSessionKernel({
-      redis,
-      config,
-      validationHooks: {
-        validatePrincipal: async () => disabled
-          ? { ok: false, reason: "user_disabled" }
-          : { ok: true },
-      },
-    });
-    const session = await kernel.createPrincipalSession(principal.subjectId);
-    expect(session.status).toBe("created");
-    if (session.status !== "created")
-      return;
-    const credential = await kernel.issueCredential({
-      principalSessionId: session.value.principalSessionId,
-      protocol: "oidc",
-      clientCode: "portal",
-      credentialType: "access_token",
-      ttlMs: 30_000,
-    });
-    expect(credential.status).toBe("created");
-    if (credential.status !== "created")
-      return;
-
-    disabled = true;
-    const resolved = await kernel.resolveCredential(credential.externalToken!);
-    expect(resolved.status).toBe("validation_failed");
-    if (resolved.status === "validation_failed")
-      expect(resolved.revokeSummary?.principalSessions.revoked).toBe(1);
-    await expect(kernel.resolvePrincipalSession(session.externalToken!)).resolves.toMatchObject({ status: "revoked" });
-  });
-
-  test("stops lifecycle validation at user_disabled before later validators can replace it", async () => {
-    for (const objectKind of ["credential", "binding"] as const) {
-      const redis = new KernelFakeRedis();
-      const config = createConfig(redis);
-      let rejectPrincipal = false;
-      let laterValidatorCalls = 0;
+  test("client validation rejects each derived lifecycle and keeps cleanup failures best effort", async () => {
+    for (const kind of ["artifact", "binding", "credential"] as const) {
+      const redis = new FailNextTransactionRedis();
+      let rejectClient = false;
+      let laterCalls = 0;
       const kernel = createSessionKernel({
         redis,
-        config,
+        config: createConfig(redis),
         validationHooks: {
-          validatePrincipal: async () => rejectPrincipal
-            ? { ok: false, reason: "user_disabled" }
-            : { ok: true },
-          validateClient: async () => {
-            laterValidatorCalls += 1;
-            throw new Error("later client validator must not replace user_disabled");
+          validateClient: () => rejectClient ? { ok: false, reason: "client_disabled" } : { ok: true },
+          validateProtocolVersion: () => {
+            laterCalls += 1;
+            return { ok: true };
           },
         },
       });
-      const session = await kernel.createPrincipalSession(principal.subjectId);
-      expect(session.status).toBe("created");
-      if (session.status !== "created")
-        continue;
-      const binding = await kernel.createClientBinding({
-        principalSessionId: session.value.principalSessionId,
-        protocol: "oidc",
-        clientCode: "portal",
-      });
-      expect(binding.status).toBe("created");
-      if (binding.status !== "created")
-        continue;
-      const credential = objectKind === "credential"
-        ? await kernel.issueCredential({
-            principalSessionId: session.value.principalSessionId,
-            bindingId: binding.value.bindingId,
-            protocol: "oidc",
-            clientCode: "portal",
-            credentialType: "access_token",
-            ttlMs: 30_000,
-          })
-        : undefined;
-      if (credential !== undefined)
-        expect(credential.status).toBe("created");
-
-      rejectPrincipal = true;
-      const resolved = objectKind === "credential" && credential?.status === "created"
-        ? await kernel.resolveCredential(credential.externalToken!)
-        : await kernel.resolveClientBindingById(binding.value.bindingId);
-
-      expect(resolved).toMatchObject({
-        status: "validation_failed",
-        reason: "user_disabled",
-        revokeSummary: {
-          principalSessions: { revoked: 1 },
-        },
-      });
-      expect(laterValidatorCalls).toBe(0);
-      await expect(kernel.resolvePrincipalSession(session.externalToken!))
-        .resolves
-        .toMatchObject({ status: "revoked" });
-    }
-  });
-
-  test("keeps lazy validation cleanup best-effort after the failure classification is known", async () => {
-    for (const reason of ["session_generation_stale", "user_disabled"] as const) {
-      for (const objectKind of ["principal_session", "credential", "artifact"] as const) {
-        const redis = new FailNextTransactionRedis();
-        const config = createConfig(redis);
-        const logs = createKernelLogCapture();
-        let rejectPrincipal = false;
-        const kernel = createSessionKernel({
-          redis,
-          config,
-          logger: logs.logger,
-          validationHooks: {
-            validatePrincipal: async () => rejectPrincipal
-              ? { ok: false, reason }
-              : { ok: true },
-          },
-        });
-        const session = await kernel.createPrincipalSession(principal.subjectId);
-        expect(session.status).toBe("created");
-        if (session.status !== "created")
-          continue;
-        const derived = objectKind === "principal_session"
-          ? undefined
-          : await createDerivedObject(
-              kernel,
-              objectKind,
-              session.value.principalSessionId,
-            );
-        if (derived !== undefined)
-          expect(derived.status).toBe("created");
-
-        rejectPrincipal = true;
-        redis.failNextTransaction = true;
-        const resolved = objectKind === "principal_session"
-          ? await kernel.resolvePrincipalSession(session.externalToken!)
-          : objectKind === "credential" && derived?.status === "created"
-            ? await kernel.resolveCredential(derived.externalToken!)
-            : derived?.status === "created"
-              ? await kernel.resolveProtocolArtifact(derived.externalToken!)
-              : undefined;
-
-        expect(resolved).toMatchObject({
-          status: "validation_failed",
-          reason,
-          revokeSummary: createEmptyRevokeSummaryForExpectation(),
-        });
-        expect(logs.entries).toContainEqual({
-          data: expect.objectContaining({
-            event: SessionKernelLogEvent.RevokeCleanupFailed,
-            kind: "validation_cleanup",
-            reason,
-          }),
-          level: "warn",
-          message: "session kernel validation cleanup failed",
-        });
-      }
+      const root = await kernel.createPrincipalSession(principal.subjectId, { subjectContext: "opaque-context" });
+      if (root.status !== "created")
+        throw new Error("expected root");
+      const derived = await createDerivedObject(kernel, kind, root.value.principalSessionId);
+      if (derived.status !== "created")
+        throw new Error("expected derived object");
+      rejectClient = true;
+      laterCalls = 0;
+      redis.failNextTransaction = true;
+      const result = kind === "binding"
+        ? await kernel.resolveClientBindingById("bindingId" in derived.value ? derived.value.bindingId! : "")
+        : kind === "credential"
+          ? await kernel.resolveCredential(derived.externalToken!)
+          : await kernel.resolveProtocolArtifact(derived.externalToken!);
+      expect(result).toMatchObject({ status: "validation_failed", reason: "client_disabled" });
+      expect(laterCalls).toBe(0);
+      const retainedRoot = await kernel.resolvePrincipalSession(root.externalToken!);
+      expect(retainedRoot.status).toBe("resolved");
     }
   });
 
   test("returns fail_closed when atomic create writes fail", async () => {
     const redis = new FailingRedis();
     const kernel = createSessionKernel({ redis, config: createConfig(redis) });
-    await expect(kernel.createPrincipalSession(principal.subjectId)).resolves.toMatchObject({
+    await expect(kernel.createPrincipalSession(principal.subjectId, { subjectContext: "test-context" })).resolves.toMatchObject({
       status: "fail_closed",
     });
     await expect(kernel.listPrincipalSessions({ offset: 0, limit: 10 })).resolves.toEqual({
@@ -1324,7 +1061,7 @@ describe("session kernel tombstone, cleanup, validation, and fail closed behavio
   test("keeps Principal Session state and inventory together when renew or revoke writes fail", async () => {
     const redis = new FailNextTransactionRedis();
     const kernel = createSessionKernel({ redis, config: createConfig(redis) });
-    const created = await kernel.createPrincipalSession(principal.subjectId);
+    const created = await kernel.createPrincipalSession(principal.subjectId, { subjectContext: "test-context" });
     expect(created.status).toBe("created");
     if (created.status !== "created")
       return;

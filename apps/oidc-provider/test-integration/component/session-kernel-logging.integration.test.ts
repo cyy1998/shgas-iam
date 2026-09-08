@@ -23,10 +23,6 @@ function createKernelFixture() {
   };
   const kernel = createSessionKernelForTesting({
     redis,
-    principalAccessFence: {
-      capture: () => "20000000-0000-4000-8000-000000000001",
-      validate: () => ({ ok: true }),
-    },
     config: createSessionKernelConfig({
       principalIdleTtlMs: 60_000,
       principalAbsoluteTtlMs: 300_000,
@@ -47,7 +43,7 @@ function createKernelFixture() {
 describe("oidc Session Kernel release logging", () => {
   it("logs authorization code replay without leaking code, token, verifier, secret, or cookie values", async () => {
     const { kernel, logs } = createKernelFixture();
-    const session = await kernel.createPrincipalSession("00000000-0000-4000-8000-000000000007");
+    const session = await kernel.createPrincipalSession("00000000-0000-4000-8000-000000000007", { subjectContext: "opaque-test-context" });
     expect(session.status).toBe("created");
     if (session.status !== "created")
       return;
@@ -79,7 +75,7 @@ describe("oidc Session Kernel release logging", () => {
 
   it("logs OIDC cleanup failure summaries without private payload refs", async () => {
     const { kernel, logs } = createKernelFixture();
-    const session = await kernel.createPrincipalSession("00000000-0000-4000-8000-000000000007");
+    const session = await kernel.createPrincipalSession("00000000-0000-4000-8000-000000000007", { subjectContext: "opaque-test-context" });
     expect(session.status).toBe("created");
     if (session.status !== "created")
       return;

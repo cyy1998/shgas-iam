@@ -1,8 +1,15 @@
 import type { UserDetailDto } from "@admin-api/services/user/user.type";
+import type { SubjectAccessOperation } from "@iam/api-core/subject-access";
 import type { PrincipalSession } from "@iam/session-kernel";
 import { createAdminAuthenticationHandlers } from "@admin-api/middlewares/authentication.handler";
-import { SubjectAccessUnavailableError } from "@iam/api-core/subject-access";
+import { createAdminAuthorizationAdapter } from "@admin-api/routes/admin/authorization/authorization.adapter";
+import { createAdminAuthorizationContextHandler } from "@admin-api/services/admin-authorization/admin-authorization.context";
+import { createAdminAuthorizationPolicy } from "@admin-api/services/admin-authorization/admin-authorization.policy";
+import { createSubjectAccessOperations, encodeSubjectAccessContext, SubjectAccessDisabledError, SubjectAccessUnavailableError } from "@iam/api-core/subject-access";
+import { createTRPCContext } from "@iam/api-core/trpc";
 import { UserStatus, UserType } from "@iam/contracts";
+import { UserNotFoundError } from "@iam/domain/user";
+import { fetchRequestHandler } from "@trpc/server/adapters/fetch";
 import { describe, expect, mock, test } from "bun:test";
 import { Hono } from "hono";
 
@@ -24,13 +31,20 @@ function createProtectedApp(options: {
   resolvePrincipalSession: (token: string) => Promise<{ status: string; value?: PrincipalSession }>;
   getUserDetailBySubjectIdentifierForAdmin: (subjectIdentifier: string) => Promise<UserDetailDto>;
   allowedClientCodes?: string[];
+  readBarrier?: () => Promise<string>;
 }) {
   const handlers = createAdminAuthenticationHandlers({
     sessionKernel: {
       resolvePrincipalSession: options.resolvePrincipalSession as never,
     },
+    subjectAccess: createSubjectAccessOperations({
+      barrier: { readCommittedTransitionId: options.readBarrier ?? (async () => "20000000-0000-4000-8000-000000000001") },
+      revocation: { revokePrincipalSession: async () => {
+        throw new Error("cleanup failed");
+      }, revokeUserSessions: async () => { throw new Error("cleanup failed"); } },
+    }),
     userService: {
-      getUserDetailBySubjectIdentifierForAdmin: options.getUserDetailBySubjectIdentifierForAdmin,
+      getUserDetailForPermittedAdmin: async (_operation, subjectIdentifier) => await options.getUserDetailBySubjectIdentifierForAdmin(subjectIdentifier),
     },
     config: {
       allowedClientCodes: options.allowedClientCodes ?? ["iam"],
@@ -136,10 +150,12 @@ describe("admin authentication handler", () => {
   ] as const) {
     test(`returns SESSION_INVALID semantics and clears cookies for ${reason}`, async () => {
       const app = createProtectedApp({
-        resolvePrincipalSession: mock(async () => ({
-          status: "validation_failed",
-          reason,
-        })),
+        resolvePrincipalSession: mock(async () => ({ status: "resolved", value: principalSession() })),
+        readBarrier: async () => {
+          if (reason === "session_generation_stale")
+            return "20000000-0000-4000-8000-000000000002";
+          throw new SubjectAccessDisabledError();
+        },
         getUserDetailBySubjectIdentifierForAdmin: mock(async () => adminUser()),
       });
 
@@ -203,9 +219,9 @@ describe("admin authentication handler", () => {
 function principalSession(overrides: Partial<PrincipalSession> = {}): PrincipalSession {
   return {
     version: 1,
-    subjectAccessTransitionId: "20000000-0000-4000-8000-000000000001",
+    subjectContext: encodeSubjectAccessContext({ version: 1, subjectIdentifier: "00000000-0000-4000-8000-000000000001", transitionId: "20000000-0000-4000-8000-000000000001" }),
     sessionKind: "browser_user",
-    principalSessionId: "ps-1",
+    principalSessionId: "30000000-0000-4000-8000-000000000001",
     externalTokenLookupHash: "hash",
     lookupKeyId: "kid",
     principal: {
@@ -241,4 +257,155 @@ function adminUser(overrides: Partial<UserDetailDto> = {}): UserDetailDto {
     privileges: [],
     ...overrides,
   } as UserDetailDto;
+}
+
+function createPermittedApp(options: {
+  readBarrier?: () => Promise<string>;
+  loadUser?: (operation: SubjectAccessOperation) => Promise<UserDetailDto>;
+} = {}) {
+  const subjectIdentifier = "00000000-0000-4000-8000-000000000001";
+  const transitionId = "20000000-0000-4000-8000-000000000001";
+  const readBarrier = mock(options.readBarrier ?? (async () => transitionId));
+  const revokePrincipalSession = mock(async () => {
+    throw new Error("cleanup failed");
+  });
+  const revokeUserSessions = mock(async () => {
+    throw new Error("cleanup failed");
+  });
+  const operations = createSubjectAccessOperations({
+    barrier: { readCommittedTransitionId: readBarrier },
+    revocation: { revokePrincipalSession, revokeUserSessions },
+  });
+  const loadUser = mock(options.loadUser ?? (async () => adminUser()));
+  const handlers = createAdminAuthenticationHandlers({
+    subjectAccess: operations,
+    sessionKernel: {
+      resolvePrincipalSession: async () => ({
+        status: "resolved",
+        observedAt: Date.now(),
+        value: {
+          ...principalSession(),
+          principalSessionId: "30000000-0000-4000-8000-000000000001",
+          subjectContext: encodeSubjectAccessContext({ version: 1, subjectIdentifier, transitionId }),
+        },
+      }),
+    },
+    userService: { getUserDetailForPermittedAdmin: loadUser },
+    config: { allowedClientCodes: ["iam"] },
+  });
+  const app = new Hono();
+  app.use("*", handlers.adminAuthenticationHandler);
+  app.use("*", createAdminAuthorizationContextHandler(createAdminAuthorizationPolicy({
+    logger: { warn: mock() },
+    hrAdministrationScopeResolver: { resolveForActor: async () => null },
+  })));
+  const adapter = createAdminAuthorizationAdapter();
+  app.get("/admin/capabilities", c => adapter.capabilitySummary(c as never, async () => {}));
+  app.all("/rpc/*", async c => await fetchRequestHandler({
+    endpoint: "/rpc",
+    req: c.req.raw,
+    router: adapter.authorizationAdminRouter,
+    createContext: () => createTRPCContext({ honoCtx: c }),
+  }));
+  app.onError((error, c) => c.text(error.message, ("httpStatus" in error ? error.httpStatus : 500) as never));
+  const request = (path: string) => app.request(`http://localhost${path}`, {
+    headers: { Client: "iam", Cookie: "global_session=valid; orcas_sso_sessionid=orcas" },
+  });
+  return { request, readBarrier, loadUser, revokePrincipalSession, revokeUserSessions };
+}
+
+for (const path of ["/admin/capabilities", "/rpc/capabilitySummary?input=%7B%7D"]) {
+  describe(`Admin operation permission ${path}`, () => {
+    test("keeps the in-flight permission through a disabled/deleted profile, then denies the next call", async () => {
+      let disabled = false;
+      let capturedOperation: SubjectAccessOperation | undefined;
+      const app = createPermittedApp({
+        readBarrier: async () => {
+          if (disabled)
+            throw new SubjectAccessDisabledError();
+          return "20000000-0000-4000-8000-000000000001";
+        },
+        loadUser: async (operation) => {
+          capturedOperation = operation;
+          disabled = true;
+          operation.requirePermission("00000000-0000-4000-8000-000000000001");
+          return adminUser({ status: UserStatus.Disable, isDelete: true });
+        },
+      });
+      const allowed = await app.request(path);
+      const payload = await allowed.json();
+      expect(allowed.status).toBe(200);
+      expect(JSON.stringify(payload)).toContain("visibleModules");
+      expect(app.readBarrier).toHaveBeenCalledTimes(1);
+      expect(() => capturedOperation!.requirePermission("00000000-0000-4000-8000-000000000001")).toThrow();
+      const denied = await app.request(path);
+      const message = await denied.text();
+      expect(denied.status).toBe(401);
+      expect(message).toBe("会话已失效");
+      expect(denied.headers.getSetCookie()).toHaveLength(2);
+      expect(app.readBarrier).toHaveBeenCalledTimes(2);
+      expect(app.loadUser).toHaveBeenCalledTimes(1);
+      expect(app.revokeUserSessions).toHaveBeenCalledTimes(1);
+    });
+
+    test("keeps independent role authorization after permission", async () => {
+      const app = createPermittedApp({ loadUser: async () => adminUser({ roles: ["iam:user"] }) });
+      const response = await app.request(path);
+      expect(response.status).toBe(403);
+      expect(app.readBarrier).toHaveBeenCalledTimes(1);
+      expect(response.headers.getSetCookie()).toHaveLength(0);
+    });
+
+    test("preserves unauthorized and cookie clearing when the permitted profile is missing", async () => {
+      const app = createPermittedApp({ loadUser: async () => {
+        throw new UserNotFoundError();
+      } });
+      const response = await app.request(path);
+      const message = await response.text();
+      expect(response.status).toBe(401);
+      expect(message).toBe("未登录");
+      expect(response.headers.getSetCookie()).toHaveLength(2);
+      expect(app.readBarrier).toHaveBeenCalledTimes(1);
+    });
+
+    test("does not treat an unrelated profile failure as account denial", async () => {
+      const app = createPermittedApp({ loadUser: async () => {
+        throw new Error("profile storage unavailable");
+      } });
+      const response = await app.request(path);
+      expect(response.status).toBe(500);
+      expect(response.headers.getSetCookie()).toHaveLength(0);
+      expect(app.revokePrincipalSession).toHaveBeenCalledTimes(0);
+      expect(app.revokeUserSessions).toHaveBeenCalledTimes(0);
+    });
+
+    test("preserves cookies and does not revoke on unavailable Barrier", async () => {
+      const app = createPermittedApp({ readBarrier: async () => {
+        throw new SubjectAccessUnavailableError();
+      } });
+      const response = await app.request(path);
+      expect(response.status).toBe(503);
+      expect(response.headers.getSetCookie()).toHaveLength(0);
+      expect(app.loadUser).toHaveBeenCalledTimes(0);
+      expect(app.revokeUserSessions).toHaveBeenCalledTimes(0);
+      expect(app.revokePrincipalSession).toHaveBeenCalledTimes(0);
+      expect(app.readBarrier).toHaveBeenCalledTimes(1);
+    });
+
+    test("rejects an old session generation and clears cookies despite cleanup failure", async () => {
+      const app = createPermittedApp({
+        readBarrier: async () => "20000000-0000-4000-8000-000000000002",
+      });
+      const response = await app.request(path);
+      expect(response.status).toBe(401);
+      expect(response.headers.getSetCookie()).toHaveLength(2);
+      expect(app.readBarrier).toHaveBeenCalledTimes(1);
+      expect(app.loadUser).toHaveBeenCalledTimes(0);
+      expect(app.revokePrincipalSession).toHaveBeenCalledWith(
+        "30000000-0000-4000-8000-000000000001",
+        "session_generation_stale",
+      );
+      expect(app.revokeUserSessions).toHaveBeenCalledTimes(0);
+    });
+  });
 }

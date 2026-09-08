@@ -1,6 +1,6 @@
 import type { AdminUserAuthorization } from "@admin-api/services/admin-authorization/admin-user-authorization.type";
 import type { AdminAuditContext } from "@admin-api/services/audit/audit.context";
-import type { SubjectAccessMutationReceipt } from "@iam/api-core/subject-access";
+import type { SubjectAccessMutationReceipt, SubjectAccessOperation } from "@iam/api-core/subject-access";
 import type { AdminUserServiceDeps, AdminUserTransactionStorePort } from "./user.port";
 import type { User, UserAdminCreateDto, UserDetailDto, UserPaginationQueryDto, UserUpdateDto } from "./user.type";
 import { createAdminMutation, runAdminSubjectAccessMutation } from "@admin-api/services/admin-mutation/admin-mutation";
@@ -12,6 +12,7 @@ import {
   UserDtoSchema,
 } from "@admin-api/services/user/user.schema";
 import { BadRequestError } from "@iam/api-core/errors";
+import { requireSubjectAccessOperation } from "@iam/api-core/subject-access";
 import { EmploymentStatus, UserStatus } from "@iam/contracts";
 import {
   UserHasOpenEmploymentError,
@@ -75,14 +76,17 @@ export function createUserService(deps: AdminUserServiceDeps) {
     return await getUserDetailForAdmin(user);
   }
 
-  async function getUserDetailBySubjectIdentifierForAdmin(
+  async function getUserDetailForPermittedAdmin(
+    operation: SubjectAccessOperation,
     subjectIdentifier: string,
   ): Promise<UserDetailDto> {
-    const user = await deps.userRepository.getUserBySubjectIdentifierForAdmin(subjectIdentifier);
-    if (user === null) {
+    requireSubjectAccessOperation(operation).requirePermission(subjectIdentifier);
+    const user = await deps.userRepository.getUserBySubjectIdentifierForPermittedAdmin(subjectIdentifier);
+    if (user === null)
       throw new UserNotFoundError("用户不存在");
-    }
-    return await getUserDetailForAdmin(user);
+    const detail = await getUserDetailForAdmin(user);
+    requireSubjectAccessOperation(operation).requirePermission(subjectIdentifier);
+    return detail;
   }
 
   async function getUserDetailForAdmin(user: Parameters<typeof UserDetailDtoSchema.parse>[0]) {
@@ -419,7 +423,7 @@ export function createUserService(deps: AdminUserServiceDeps) {
 
   return {
     deleteUser,
-    getUserDetailBySubjectIdentifierForAdmin,
+    getUserDetailForPermittedAdmin,
     getUserDetailByUsernameForAdmin,
     resetPasswordByUsername,
     searchUsersFuzzyForAdmin,

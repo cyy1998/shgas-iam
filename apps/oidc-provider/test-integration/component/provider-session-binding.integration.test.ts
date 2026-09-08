@@ -1,8 +1,9 @@
 import { LoggerSourceApp } from "@iam/api-core/logger";
-import { SubjectAccessDisabledError } from "@iam/api-core/subject-access";
+import { createSubjectAccessOperations, createSubjectAccessSessionRevocation, encodeSubjectAccessContext, SubjectAccessDisabledError } from "@iam/api-core/subject-access";
 import { createSessionKernelConfig } from "@iam/session-kernel";
 import { createSessionKernelForTesting } from "@iam/session-kernel/testing";
 import { describe, expect, it } from "vitest";
+import { createOidcSessionOperations } from "../../src/composition/session/session-operations.ts";
 import {
   createOidcSessionKernelAdapter,
   createOidcSessionKernelCleanupAdapter,
@@ -21,12 +22,6 @@ function createFixture() {
   let subjectEnabled = true;
   const kernel = createSessionKernelForTesting({
     redis,
-    principalAccessFence: {
-      capture: () => "20000000-0000-4000-8000-000000000001",
-      validate: () => subjectEnabled
-        ? { ok: true }
-        : { ok: false, reason: "user_disabled", message: "subject disabled" },
-    },
     config: createSessionKernelConfig({
       principalIdleTtlMs: 60_000,
       principalAbsoluteTtlMs: 300_000,
@@ -41,9 +36,9 @@ function createFixture() {
     logger: { warn: () => undefined },
     sourceApp: LoggerSourceApp.OidcProvider,
   });
-  const adapter = createOidcSessionKernelAdapter({
+  const adapterDeps = {
     accounts: {
-      findBySubject: async (subject) => {
+      findBySubject: async (subject: string) => {
         accountReadSubjects.push(subject);
         return subject === subjectIdentifier
           ? {
@@ -59,15 +54,27 @@ function createFixture() {
       },
     },
     clients: {
-      findActiveVersion: async clientId => clientId === "client-a" ? clientAVersion : clientId === "client-b" ? 2 : null,
+      findActiveVersion: async (clientId: string) => clientId === "client-a" ? clientAVersion : clientId === "client-b" ? 2 : null,
       findRuntime: async () => null,
     },
     cookieName: "global_session",
     kernel,
     logger: { warn: () => undefined },
     providerSessionState,
+  };
+  const adapter = createOidcSessionKernelAdapter(adapterDeps);
+  const operations = createSubjectAccessOperations({
+    barrier: { readCommittedTransitionId: async () => {
+      if (!subjectEnabled)
+        throw new SubjectAccessDisabledError();
+      return "20000000-0000-4000-8000-000000000001";
+    } },
+    revocation: createSubjectAccessSessionRevocation(kernel),
   });
+  const sessions = createOidcSessionOperations(adapterDeps);
   return {
+    sessions,
+    operations,
     accountReadSubjects,
     adapter,
     kernel,
@@ -85,7 +92,7 @@ function createFixture() {
 async function createPrincipalSession(
   kernel: ReturnType<typeof createSessionKernelForTesting>,
 ) {
-  const principal = await kernel.createPrincipalSession(subjectIdentifier);
+  const principal = await kernel.createPrincipalSession(subjectIdentifier, { subjectContext: encodeSubjectAccessContext({ version: 1, subjectIdentifier, transitionId: "20000000-0000-4000-8000-000000000001" }) });
   expect(principal.status).toBe("created");
   if (principal.status !== "created")
     throw new Error("Principal Session was not created");
@@ -121,7 +128,7 @@ async function commitStagedBinding(
 describe("oIDC Provider Session client binding contract", () => {
   it("resolves the current Principal Session from the cookie without exposing bearer or database identifiers", async () => {
     const { accountReadSubjects, adapter, kernel } = createFixture();
-    const principal = await kernel.createPrincipalSession(subjectIdentifier);
+    const principal = await kernel.createPrincipalSession(subjectIdentifier, { subjectContext: encodeSubjectAccessContext({ version: 1, subjectIdentifier, transitionId: "20000000-0000-4000-8000-000000000001" }) });
     expect(principal.status).toBe("created");
     if (principal.status !== "created")
       return;
@@ -225,7 +232,7 @@ describe("oIDC Provider Session client binding contract", () => {
 
   it("creates a second client binding from the same verified Principal Session and revokes clients independently", async () => {
     const { adapter, kernel } = createFixture();
-    const principal = await kernel.createPrincipalSession(subjectIdentifier);
+    const principal = await kernel.createPrincipalSession(subjectIdentifier, { subjectContext: encodeSubjectAccessContext({ version: 1, subjectIdentifier, transitionId: "20000000-0000-4000-8000-000000000001" }) });
     expect(principal.status).toBe("created");
     if (principal.status !== "created")
       return;
@@ -419,8 +426,8 @@ describe("oIDC Provider Session client binding contract", () => {
   });
 
   it("refuses to ensure a binding without the current config, matching account, and enabled Principal Session", async () => {
-    const { adapter, disableSubject, kernel } = createFixture();
-    const principal = await kernel.createPrincipalSession(subjectIdentifier);
+    const { adapter, disableSubject, kernel, sessions, operations } = createFixture();
+    const principal = await kernel.createPrincipalSession(subjectIdentifier, { subjectContext: encodeSubjectAccessContext({ version: 1, subjectIdentifier, transitionId: "20000000-0000-4000-8000-000000000001" }) });
     expect(principal.status).toBe("created");
     if (principal.status !== "created")
       return;
@@ -447,10 +454,10 @@ describe("oIDC Provider Session client binding contract", () => {
     const anchor = await adapter.readPrincipalAnchor("provider-session-a", subjectIdentifier);
     expect(anchor).not.toBeNull();
     disableSubject();
-    await expect(adapter.ensureClientBinding({
+    await expect(operations.run(operation => sessions.forOperation(operation).ensureClientBinding({
       ...input,
       anchorGeneration: anchor!.generation,
-    })).rejects.toBeInstanceOf(SubjectAccessDisabledError);
+    }))).rejects.toBeInstanceOf(SubjectAccessDisabledError);
     await expect(adapter.read("provider-session-a", "client-b")).resolves.toBeNull();
   });
 

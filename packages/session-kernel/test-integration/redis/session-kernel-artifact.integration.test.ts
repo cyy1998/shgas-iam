@@ -104,10 +104,10 @@ describe("Session Kernel artifact real Redis contract", () => {
   });
 
   test("does not let a delayed renewal recreate a revoked active session", async () => {
-    const principal = await scope!.writer.createPrincipalSession(subjectIdentifier);
+    const principal = await scope!.writer.createPrincipalSession(subjectIdentifier, { subjectContext: "test-context" });
     if (principal.status !== "created")
       throw new Error("expected a Principal Session fixture");
-    const update = scope!.pauseNextPrincipalValidation();
+    const update = scope!.pauseNextLifecycleObservation();
 
     const renewal = scope!.writer.renewPrincipalSession(
       principal.value.principalSessionId,
@@ -184,7 +184,7 @@ describe("Session Kernel artifact real Redis contract", () => {
         },
       }],
     });
-    const principal = await scope.writer.createPrincipalSession(subjectIdentifier);
+    const principal = await scope.writer.createPrincipalSession(subjectIdentifier, { subjectContext: "test-context" });
     if (principal.status !== "created")
       throw new Error("expected a Principal Session fixture");
     const credential = await scope.writer.issueCredential({
@@ -233,6 +233,7 @@ describe("Session Kernel artifact real Redis contract", () => {
   test("atomically consumes an artifact once across Redis clients", async () => {
     const principalSession = await scope!.writer.createPrincipalSession(
       subjectIdentifier,
+      { subjectContext: "test-context" },
     );
     if (principalSession.status !== "created")
       throw new Error("expected a Principal Session fixture");
