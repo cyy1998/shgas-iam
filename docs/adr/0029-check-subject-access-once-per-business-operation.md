@@ -4,6 +4,10 @@ status: accepted
 
 # 在独立业务操作开始时检查一次 Subject Access
 
+> 文中的 Custom SSO 预占/租约与 Grant 状态机描述记录原决策背景，已由
+> [ADR-0031](0031-consume-custom-sso-grants-before-issuance.md) 的签发前一次消费取代；#158/#159 已迁移两模式，
+> 前置许可、用途/版本、协议分工和对象生命周期保护保持。定向维护已由 #160 交付，环境未切换。
+
 维护者于 2026-09-08 确认将 Subject Access 从 Session Kernel 解耦：同一次接口调用只作一次账号访问判断，并接受已许可的在途操作继续。原 Kernel 在解析、续期和派生时重复检查，可能在同一调用观察不同状态。Spec #128 的 #129–136 已统一正式入口并删除旧保护契约；[最终契约核对](../features/sso/subject-access-operation-contract.md)记录各 owner 的证明范围，[维护手册](../releases/subject-access-operation-cutover.md)保存协调发布步骤。代码验收不代表环境停流、清理或切换已执行。
 
 ## 已确认决定

@@ -4,6 +4,10 @@ status: accepted
 
 # 将 Session Kernel 与 Custom SSO 应用能力分别迁入独立包
 
+> 文中的 Custom SSO 预占/租约与 Grant 状态机描述记录原决策背景，已由
+> [ADR-0031](0031-consume-custom-sso-grants-before-issuance.md) 的签发前一次消费取代；#158/#159 已迁移两模式，
+> 前置许可、用途/版本、协议分工和对象生命周期保护保持。定向维护已由 #160 交付，环境未切换。
+
 Session Kernel 已由 API、Admin API 与 OIDC Provider 共同消费；Custom SSO Grant 虽与 Kernel Protocol Artifact 的身份、期限和清理关联，两者仍属于协议中性生命周期与具体协议应用能力两个层次。本次讨论选择分别建立 `@iam/session-kernel`（`packages/session-kernel`）与 `@iam/custom-sso`（`packages/custom-sso`）两个 workspace package：前者拥有会话生命周期及其专属配置、日志事件、维护清单和测试支持；后者拥有授权、兑换、会话建立和补偿等完整协议应用能力，包含 Grant redemption，API 主要负责 HTTP 适配。采用两个包使具体协议消费 Kernel 的扩展接口，Kernel 不反向依赖 Custom SSO。
 
 迁移同时收紧公开出口，按实际消费者保留业务操作及必要的配置、维护和测试接口，隐藏无需对外承诺的存储实现。现有业务操作接口、Redis key 与存储格式、期限、撤销及兑换语义保持不变，不在本次迁移中重新设计 Kernel facade。完整 Custom SSO 能力的迁出涉及现有 app 编排的归属调整，不代表改变登录或兑换行为。

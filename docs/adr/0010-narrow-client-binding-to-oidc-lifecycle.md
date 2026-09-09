@@ -4,6 +4,10 @@ status: accepted
 
 # 将 Client Binding 收窄为 OIDC 生命周期
 
+> Custom SSO 的原 Code 恢复、attempt/lease 协调和最终精确补偿要求已由
+> [ADR-0031](0031-consume-custom-sso-grants-before-issuance.md) 局部取代：签发前一次消费，只保留同步尽力精确补偿。
+> Independent/Gateway 已由 #158/#159 实现，定向维护已由 #160 交付；下文保留原决策背景，OIDC Binding、写前 identity、防覆盖和协议分工继续有效。
+
 Client Binding 只表示 OIDC Provider Session 内一个 client 与已验证 Principal Session 之间可独立失效的生命周期，不再作为 Custom SSO artifact 层级；Custom SSO Authorization Grant 直接签发 client-scoped Credential。为在 Redis 写入已提交但结果未知时仍能精确补偿，Credential identity 必须在写入前确定，失败路径按该 identity 确认或撤销，不接受仅等待 TTL，也不把 Grant 消费与 Credential 签发耦合成跨模块大事务。OIDC 保留权威 Kernel Client Binding、最小 lookup、Principal anchor 与 generation membership，删除不参与授权、CAS 或 ownership 判定的 `ProviderSessionBinding` full Redis 派生副本，并从 lookup 经 Kernel 重建 provider-facing view。本决策只取代 ADR-0007 中 Custom SSO 必须持有 Client Binding 的要求；Grant 与 Credential 继续记录并校验 Custom SSO 配置版本，ADR-0007 的其余决定保持有效。
 
 ## Consequences

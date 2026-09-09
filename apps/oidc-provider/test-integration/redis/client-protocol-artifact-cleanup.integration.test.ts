@@ -9,7 +9,7 @@ import { createCustomSsoCleanup } from "@iam/custom-sso/cleanup";
 import {
   AUTHORIZATION_GRANT_REDEMPTION_CLEANUP_KIND,
   AUTHORIZATION_GRANT_REDEMPTION_KEY_PREFIX,
-  createRedisAuthorizationGrantRedemptionStore,
+  createLegacyAuthorizationGrantFixture,
 } from "@iam/custom-sso/testing";
 import {
   createSessionKernel,
@@ -115,7 +115,7 @@ describe("client Protocol artifact cleanup real Redis contract", () => {
       throw new Error("Artifact fixture failed");
     const grantKey = `${AUTHORIZATION_GRANT_REDEMPTION_KEY_PREFIX}${grantId}`;
     testScope.trackKey(grantKey);
-    const grants = createRedisAuthorizationGrantRedemptionStore({ redis: testScope.writer });
+    const grants = createLegacyAuthorizationGrantFixture({ redis: testScope.writer });
     await grants.initialize({ version: 1, grantId, state: "issued", expiresAt: artifact.value.expiresAt });
     const attempt = testScope.unique("attempt");
     const pendingKey = pendingProviderSessionBindingKey(attempt);
@@ -249,7 +249,7 @@ describe("client Protocol artifact cleanup real Redis contract", () => {
     testScope.trackKey(pendingProviderSessionBindingsByClientKey(clientCode));
 
     testScope.trackKey(`${AUTHORIZATION_GRANT_REDEMPTION_KEY_PREFIX}${grantId}`);
-    const redemptionStore = createRedisAuthorizationGrantRedemptionStore({
+    const redemptionStore = createLegacyAuthorizationGrantFixture({
       redis: testScope.writer,
     });
     await redemptionStore.initialize({

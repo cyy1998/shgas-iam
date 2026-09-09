@@ -47,7 +47,7 @@ API 的 ORCAS 后续资料读取、Admin 已许可管理员资料读取、OIDC �
 | 故事 | 类别 | 已建立的公开可观察证据与限制 |
 |---|---|---|
 | 1 每调用一次许可 | 共享＋消费者 | Permission 对一次操作的 Barrier seam 计数为 1；API HTTP、OIDC HTTP、Admin HTTP/Redis 分别观察一请求一次读取。此预算不代表端点总 Redis RTT。 |
-| 2 内部步骤共用 | 消费者 | SSO Redis 授权完成 renew 和真实 Grant 创建仍只读一次；兑换覆盖 reservation、issue、交付。OIDC HTTP Token 多回调成功且一次读取。 |
+| 2 内部步骤共用 | 消费者 | SSO Redis 授权完成 renew 和真实 Grant 创建仍只读一次；兑换覆盖消费、issue、交付。OIDC HTTP Token 多回调成功且一次读取。 |
 | 3 下一调用重查 | 共享＋消费者 | Permission 新 operation 增加读取；API/OIDC/Admin HTTP 第一请求在途成功、第二请求拒绝且读取从 1 增到 2。 |
 | 4 旅程分段 | 消费者 | SSO Redis 分别调用 authorize、continuation、redemption、UserInfo；OIDC HTTP native interaction 与 Provider 请求分别取得许可，guard/resume 独立计数。不是整个浏览器旅程缓存。API Composition 另由真实 `/sso/login-guard` 验证有效、缺失和无效 Cookie 的页面 decision、清 Cookie 与根记录不续期。 |
 | 5 并行共享 | 共享＋消费者 | Permission 在未释放同步 gate 前发起两个 acquire，只有一个读取且两者返回相同许可；OIDC HTTP 并发请求各自检查，不能彼此借用许可。 |
@@ -66,8 +66,8 @@ API 的 ORCAS 后续资料读取、Admin 已许可管理员资料读取、OIDC �
 | 18 无主体 Artifact | 共享＋消费者 | Context Redis 无 context 创建和消费一次，重复消费失败；OIDC Component/HTTP Return Handle 无 Subject Access 读取且不因检查而消费。 |
 | 19 authorize 作用前检查 | 消费者 | SSO Redis 初始 blocking/disabled 时零 Grant 且 root expiry 不变；成功后 renew 与 Grant 创建完成，读取仍为 1。 |
 | 20 continuation 只读 | 消费者 | SSO Redis 比较 continuation 前后的持久化 root value，期限不变且无 Grant/Credential；另一次 continuation 独立检查。 |
-| 21 Independent 预占前检查 | 消费者 | SSO Redis/API HTTP blocking 拒绝后 Grant 未 reservation/消费且无 Credential；恢复后同一码仍可兑换。 |
-| 22 callback/ORCAS 前检查 | 消费者 | SSO Redis/API HTTP Gateway 与 ORCAS 模式拒绝时观察零 ORCAS、零签发及未预占 Grant；恢复可继续原兑换。 |
+| 21 Independent 消费前检查 | 消费者 | SSO Redis/API HTTP blocking 拒绝后 Grant 未消费且无 Credential；恢复后同一码仍可兑换。 |
+| 22 callback/ORCAS 前检查 | 消费者 | SSO Redis/API HTTP Gateway 与 ORCAS 模式拒绝时观察零 ORCAS、零签发及未消费 Grant；恢复可继续原兑换。 |
 | 23 authz 共用 | 消费者 | SSO Redis Gateway/Gateway-ORCAS authz 解析 Credential、父 Session、交付 header 后仍只有一次读取，header 保持裁剪。 |
 | 24 UserInfo 四分支 | 消费者 | API HTTP 的 IAM、Independent、Gateway、Gateway-ORCAS 都运行真实请求；延迟交付仍在 scope 中、重复交付不增加 Barrier 读取、结束后 capability 拒绝。 |
 | 25 OIDC 所有授权入口 | 消费者 | OIDC HTTP 运行正式 authorization、native interaction、guard、resume；每个入口有独立操作且拒绝在受保护作用前发生。 |
@@ -84,7 +84,7 @@ API 的 ORCAS 后续资料读取、Admin 已许可管理员资料读取、OIDC �
 | 36 Client 与业务授权 | 消费者 | SSO Component 配置版本、redirect、Client mismatch/maintenance 仍拒绝；OIDC HTTP obsolete config、scope/freshness 仍拒绝；Admin Component 已许可但无角色仍拒绝。未扩大 HR scope。 |
 | 37 Projection 复用许可 | 共享＋消费者 | Projection 在缺失/错主体 proof 时先拒绝且 Facts/freshness 零读取；SSO Redis 多次交付一次 Barrier，API/OIDC 正式 composition 传入当前 operation proof。 |
 | 38 资料不追加账号判断 | 消费者 | ORCAS PostgreSQL 对 Disable/Pause/deleted 仍读取已许可主体资料，而原 active 查询仍拒绝；Admin HTTP/Redis 在途返回 disabled/deleted profile 仍成功；OIDC repository 已许可读取无状态过滤。 |
-| 39 缺资料/授权未就绪 | 消费者 | Projection 缺失、错主体、refreshed 错主体、freshness not-ready 均失败；SSO Redis ORCAS 缺 Profile 不出站且释放 Grant；OIDC HTTP account/Facts 消失仍失败。 |
+| 39 缺资料/授权未就绪 | 消费者 | Projection 缺失、错主体、refreshed 错主体、freshness not-ready 均失败；SSO Redis ORCAS 缺 Profile 不出站，消费后的 Grant 保持不可重用；OIDC HTTP account/Facts 消失仍失败。 |
 | 40 API/Admin 错误与 Cookie | 消费者 | API HTTP disabled/旧代返回既有错误并过期相应 Cookie；Admin Component/HTTP SESSION_INVALID 清理 Cookie，资料缺失仍未经授权。 |
 | 41 OIDC 协议错误 | 消费者 | OIDC HTTP Token 的 Subject Access 明确失效返回 `401 / login_required`，UserInfo 返回 `401 / invalid_token`；两者暂态失败返回 `503 / temporarily_unavailable`。`invalid_grant` 属于已消费 Code 重放等协议拒绝，见故事48；native guard/interaction 保留原路由错误语义。 |
 | 42 暂态不终止会话 | 共享＋消费者 | Permission unavailable/Redis failure 零撤销；API/OIDC/Admin HTTP 暂态分支保留 Cookie；OIDC 同 Code 恢复后成功，证明未消费。坏上下文矩阵由共享测试承担。 |
@@ -116,13 +116,14 @@ API 的 ORCAS 后续资料读取、Admin 已许可管理员资料读取、OIDC �
 并发签发、记录分页、prepared revocation 继续由中性工厂验证。测试里的旧双实例 `writer/lifecycle` 过渡构造收敛到同一最终 Kernel 表面。
 
 Custom SSO 原“在创建 Artifact/签发 Credential 中再次发现禁用”的断言，改为一次许可完成在途操作、下次调用拒绝；
-logout 原账号拒绝断言改为无需账号许可仍撤销根和 Credential。Grant reservation、未知写入补偿、补偿失败保留 reservation、
-ORCAS 失败释放、Client/redirect/config、Cookie、wire 及日志保密断言继续保留。Component 为可控调度复用正式操作 Kernel binding，
+logout 原账号拒绝断言改为无需账号许可仍撤销根和 Credential。Grant 消费、未知写入同步尽力补偿、补偿失败不恢复 Code、
+ORCAS 失败后重新授权、Client/redirect/config、Cookie、wire 及日志保密断言继续保留。Component 为可控调度复用正式操作 Kernel binding，
 真实 Redis/HTTP 另外证明生产存储与作用顺序。
 API 与 Custom SSO 操作 Redis fixture 通过 `@iam/custom-sso/testing` 的 `createAuthorizationGrantRedisInspection`
-按 Grant ID 取得状态/期限/预占摘要及精确清理；key、序列化与 removal adapter 留在 Grant owner，
-消费者不按 maintenance 清单顺序拼接 key。未预占、未消费、失败恢复与不确定补偿的原有断言保持，
-真实协议测试另验证精确移除一个 Grant 后另一 Grant 及非 owner sentinel 保留。
+按 Grant ID 取得旧库存状态/期限摘要及精确清理；key、序列化与 removal adapter 留在 Grant owner。
+新 Grant 只由 Kernel Artifact 表达，完整 Redis 操作直接回读消费状态、原期限与替换对象；旧库存由
+`createLegacyAuthorizationGrantFixture` 构造，OIDC cleanup 继续验证目标与非目标保留。
+#158/#159 按 ADR-0031 退役原 Code 恢复断言，保留消费前暂态无作用、一次赢家和同步尽力补偿证明。
 
 Projection 原 Barrier/permission 双工厂重复矩阵合为唯一 permission 矩阵，删除仅证明旧工厂独立 Barrier 的测试。
 资料、选择、错主体、授权 freshness、字段裁剪和协议输出断言没有随旧工厂删除。旧 live account 查询追加拒绝的测试目标

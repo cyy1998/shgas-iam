@@ -3,7 +3,6 @@ import type { PermittedClientSubjectProjectionService } from "@iam/client-subjec
 import type { SessionKernel } from "@iam/session-kernel";
 import type { CustomSsoDeps, CustomSsoKernelPort, CustomSsoOrcasUser } from "./custom-sso.port";
 import { requireSubjectAccessOperation } from "@iam/api-core/subject-access";
-import { createAuthorizationGrantRedemption, createRedisAuthorizationGrantRedemptionStore } from "./grant";
 import { createCustomSsoApplication } from "./internal/application";
 import { CustomSsoTrafficGateUnavailableError } from "./internal/traffic-gate";
 import { CustomSsoConfigurationUnavailableError } from "./protocol-validation.error";
@@ -23,11 +22,6 @@ export interface CustomSsoOperationsDeps extends Omit<CustomSsoDeps, "kernel" | 
 
 /** The caller owns the operation lifetime, including deferred subject delivery. */
 export function createCustomSsoOperations(deps: CustomSsoOperationsDeps) {
-  const authorizationGrantRedemption = createAuthorizationGrantRedemption({
-    leaseDurationMs: 5_000,
-    random: deps.random,
-    store: createRedisAuthorizationGrantRedemptionStore({ redis: deps.redis }),
-  });
   function application(operation?: SubjectAccessOperation) {
     const clients = new Map<string, ReturnType<typeof deps.clients.findRuntimeRecord>>();
     const traffic = new Map<string, ReturnType<typeof deps.traffic.check>>();
@@ -53,7 +47,6 @@ export function createCustomSsoOperations(deps: CustomSsoOperationsDeps) {
         }
         return result;
       } },
-      authorizationGrantRedemption,
       access: { operation, users: deps.permittedUsers },
       kernel: operation === undefined ? deps.kernel : bindCustomSsoOperationKernel(deps.kernel, operation),
       subjectProjection: {

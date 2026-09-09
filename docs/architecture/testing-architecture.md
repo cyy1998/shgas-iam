@@ -77,6 +77,12 @@ acquisition 由 canonical Snapshot Adapter/Reader 的 Component contract，以�
 在 `redis` 或 `composition` profile 建立，测试 fixture 不实现 Redis 协议、key、serialization、TTL、Lua 或 transaction
 排列。原 process-smoke RESP server、testing export 与 compatibility cases 已在真实 owner coverage 通过后退役。
 
+Spec #157 的 Independent/Gateway #158/#159 以完整 Custom SSO 操作/维护公开能力配真实 Redis、API 实际 handler/error middleware 为主要入口。
+消费唯一赢家、消费/签发已提交后的未知结果、同步补偿与非目标保留通过实际状态和可控中断证明，不称为生产崩溃演练。
+两模式旧 lease/release/heartbeat 与接管专用测试已迁为一次消费和重新授权证明；旧库存只保留维护 decoder、精确 cleanup 与专用 fixture。
+#160 定向维护组合与实际命令由 OIDC Redis profile 收集；Kernel/Custom SSO 的种子、故障与持久值/绝对 expiry 观察由各 owner testing 能力提供。
+只读核验使用新连接/进程及受限 Redis ACL，混合保留对象逐项对照；命令目标清零不替代发布环境保留集核验。
+
 Session Kernel 的 Unit/Component/Redis 测试由 `@iam/session-kernel` 收集，Redis 使用专用 `IAM_SESSION_KERNEL_TEST_REDIS_URL`。
 Subject Access 与 Kernel 的三条协作场景留在 API Core；Grant 期限、Component 与完整协议 Redis 测试由 Custom SSO 收集，使用专用 `IAM_CUSTOM_SSO_TEST_REDIS_URL`，并通过 Kernel `/testing`
 复用仅含 Kernel 的真实 Redis 构造、种子与检查能力。各 owner 自己拥有资源 URL 和连接生命周期；Kernel 不反向依赖 API Core 或 Custom SSO。API 混合统一认证、协议、HTTP/门户矩阵继续作为消费方集成证据，纯协议用例和 Grant 矩阵位于 Custom SSO；不新建 Redis 模拟器。
@@ -84,7 +90,7 @@ Subject Access 与 Kernel 的三条协作场景留在 API Core；Grant 期限、
 Spec #128 已统一正式入口。API Core 的 Component/Redis 证明许可 single-flight、固定失败、context 严格解析、
 上下文继承、在途继续、新请求拒绝、晚到创建旧代失效和精确撤销保留新代；真实工厂为 `createSessionKernel`。
 Kernel 自身继续拥有期限、对象存在、消费、归属、CAS 和 cleanup 的行为证据，不再测试账号验证 hook。
-API 的四认证 Component、Custom SSO 完整 Redis 与 API HTTP/Redis 证明真实受保护入口在创建、预占、出站前取得许可，
+API 的四认证 Component、Custom SSO 完整 Redis 与 API HTTP/Redis 证明真实受保护入口在创建、消费、出站前取得许可，
 Projection 复用并保持 Facts/Authorization Freshness 规则。旧双工厂 fixture 已迁正式工厂。
 OIDC Component 与真实 Provider HTTP/Redis 证明授权、原生 interaction/login guard/resume、Token 和 UserInfo；
 Code 消费和 mapping 刷新前拒绝、多回调共享、失败固定、并发隔离、在途继续以及已消费 Code 重放撤销分别有直接断言。
@@ -336,3 +342,7 @@ legacy 清理证据仅由[历史手册](../releases/client-runtime-snapshot-hard
 evidence 失败和 setup retries 继续保留；环境或代码根因修复后从头重启的完整流程可用于验收，但不得在同一流程内重试单个
 阶段或隐藏历史。当前没有 CI 平台；Linux/真实 CI 仍为 `pending`，平台状态不能通过 placeholder command、silent skip 或
 本地重跑伪装为已采用。
+
+Spec #157 的全部 56 条故事、20 项实现和 10 项测试决定见[一次消费最终账本](../features/sso/custom-sso-one-shot-grant-contract.md)。
+#161 在正式 HTTP/Redis 上组合定向清理、独立核验、同根新授权与已有凭据访问；完整 OIDC 保留集复用 #160。
+统一 writer/consumer、基线、停流排空、smoke 与回退见[保留会话升级手册](../releases/custom-sso-one-shot-grant-upgrade.md)，目标环境未执行。

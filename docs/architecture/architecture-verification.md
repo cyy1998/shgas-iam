@@ -53,7 +53,7 @@ Admin/SSO 前端、`api-core`、`domain`、`contracts`、`db`、`jobs`、Gateway
 | User Resignation Session 重试 / `@iam/admin-api`、`@iam/session-kernel` | [公开 Resignation 与真实 Redis](../../apps/admin-api/test-integration/redis/resign-user.integration.test.ts)及 Session Kernel owner 的 `redis` 测试；[源事务矩阵](../../apps/admin-api/test-integration/postgres/employment-mutation.integration.test.ts)用 Admin API `postgres`。 | Redis 证据覆盖 pre-block 后原始捕获代际、提交后按代际集合精确撤销、失败后的 no-op 重试及晚到撤销保留重新启用新代；Admin adapter 验证准备失败的 bestEffort 诊断与 callback 前代 fallback。Redis 测试中的 fake PostgreSQL 不证明事务原子性，真实 PG 矩阵单独证明锁序与业务、审计、dirty 原子提交。捕获不是全局快照，不保证捕获后才落库的更早代极迟在途 Session 本次被撤销，也不扩展已 tombstone 对象的派生 cleanup owner。 |
 | Session Kernel / LoginRestriction / `@iam/session-kernel`、`@iam/api-core` | [Credential contract](../../packages/session-kernel/test-integration/redis/session-kernel-credential.integration.test.ts)、[LoginRestriction contract](../../packages/api-core/test-integration/redis/login-restriction.integration.test.ts)；`redis`。 | Redis 实时状态、并发和原子清理；不替代 API/OIDC 的协议适配测试，也不保证第三方自有会话退出。 |
 | Session Kernel 生命周期时间 / `@iam/session-kernel` | [Redis 时间 contract](../../packages/session-kernel/test-integration/redis/session-kernel-time.integration.test.ts)与现有 Credential、Artifact、prepared revocation contracts；`redis`。 | 四类对象的零/正/负应用偏差、跨实例与前后跳、父上限、lookup 续期、取得时有效性、列表撤销与 pending cleanup 恢复；协议 TTL 消费由各协议 Adapter 证明，不代表生产已切换。 |
-| Custom SSO 完整操作与权威期限 / `@iam/custom-sso`、`@iam/api` | [完整操作与内部状态协作](../../apps/api/test-integration/component/custom-sso-session-kernel.adapter.integration.test.ts)、[Cookie handler](../../apps/api/test-integration/component/sso.handlers.integration.test.ts)使用 API `component`；[Grant owner](../../packages/custom-sso/test-integration/redis/authorization-grant-redemption.integration.test.ts)使用 Custom SSO `redis`；[真实完整入口与独立 cleanup](../../packages/custom-sso/test-integration/redis/custom-sso.integration.test.ts) 同属该 profile。 | 完整 factory 联验授权、Secret、续接、Independent/Gateway/ORCAS、UserInfo/authz 与退出；内部矩阵证明两种模式在独立应用偏差、跳变和跨实例下交付、认证与退出；亚秒取整和取得后跨 Credential deadline 不新增拒绝；真实 Kernel Artifact deadline 初始化 Grant、续租/释放/消费/接管保持原期限与唯一赢家，保留不确定写入补偿、Subject Access 和父 Session 保护。不证明第三方自有会话退出或维护切换完成。 |
+| Custom SSO 完整操作与权威期限 / `@iam/custom-sso`、`@iam/api` | [完整操作与内部状态协作](../../apps/api/test-integration/component/custom-sso-session-kernel.adapter.integration.test.ts)、[Cookie handler](../../apps/api/test-integration/component/sso.handlers.integration.test.ts)使用 API `component`；[Grant owner](../../packages/custom-sso/test-integration/redis/custom-sso-operation.integration.test.ts)使用 Custom SSO `redis`；[真实完整入口与独立 cleanup](../../packages/custom-sso/test-integration/redis/custom-sso.integration.test.ts) 同属该 profile。 | 完整 factory 联验授权、Secret、续接、Independent/Gateway/ORCAS、UserInfo/authz 与退出；内部矩阵证明两种模式在独立应用偏差、跳变和跨实例下交付、认证与退出；亚秒取整和取得后跨 Credential deadline 不新增拒绝；Independent/Gateway #158/#159 通过真实完整操作验证签发前唯一消费、未知结果停止、投影失败烧码、同步补偿/残留、新授权与原期限；Gateway ORCAS 故障、消费/签发中断和外部已成功但响应丢失均只通过可控替身观察 IAM 作用。Kernel 同时精确移除消费对象索引并保留重放 tombstone，Subject Access 与父 Session 保护保持。不证明第三方自有会话退出或维护切换完成。 |
 | Admin capability / HR scope / `@iam/admin-api`、`@iam/admin` | [Policy](../../apps/admin-api/test-integration/component/admin-authorization.policy.integration.test.ts)用 Admin API `component`；[请求时 scope](../../apps/admin-api/test-integration/postgres/hr-administration-scope.resolver.integration.test.ts)用 `postgres`；[HR UI](../../apps/admin/test-integration/browser/hr-administration.spec.ts)用 Admin `browser`。 | 后端策略、数据库事实和 UI 各有验证；Browser 的 mocked backend 不能证明服务端拒绝越权，真实联合路径由 Full-system HR journey 补充。 |
 | SSO 登录续接 / `@iam/api`、`@iam/sso` | [Guard use case](../../apps/api/test-integration/component/login-continuation-guard.use-case.integration.test.ts)用 API `component`；[Login Browser](../../apps/sso/test-integration/browser/login.spec.ts)用 SSO `browser`。 | Guard 语义与表单状态；mocked HTTP 不证明真实协议连接或完整第三方登录矩阵。 |
 | Gateway 与进程 lifecycle / `@iam/gateway-apisix`、各后端 app | [Gateway commands](../../gateway/test-integration/component/commands.integration.test.ts)用 Gateway `component`；以 API [process entry](../../apps/api/test-integration/process/entry.integration.test.ts) / [composition entry](../../apps/api/test-integration/composition/entry.integration.test.ts)为例，对应 app 使用 `process` / `composition`。 | Process 观察子进程、readiness 与退出清理；composition 按声明连接真实 adapter/resources。Gateway Component 不证明目标 APISIX routes 已发布或生效。 |
@@ -68,6 +68,16 @@ OIDC 校验迁出 Kernel 的直接回归由 `@iam/session-kernel` 的 Artifact R
 和 Kernel 的 [选择撤销 Redis contract](../../packages/session-kernel/test-integration/redis/session-kernel-selected-revocation.integration.test.ts)
 分别证明提交版本传播、晚到/乱序与 no-op、双协议边界，以及观察对象 CAS、新代子对象保留与未知版本诊断；
 替代 seam 和未装配 cleanup 的证明上限见[工程契约](../features/admin/client-protocol-revocation.md)。
+
+Independent/Gateway #158/#159 的新增证据位于[完整操作 Redis](../../packages/custom-sso/test-integration/redis/custom-sso-operation.integration.test.ts)和
+[authorize/token/callback HTTP](../../apps/api/test-integration/redis/custom-sso-redemption-operation-http.integration.test.ts)：可控中断观察实际已提交状态，
+不等于生产进程崩溃演练；同一根 Cookie 续接、错误 envelope/Retry-After、原 Code 拒绝与 V2 wire 均经正式入口。
+两种模式的旧恢复、heartbeat 与 lease 接管专用测试已移除，其并发、原期限、用途/版本、主体一致与补偿目标迁到上述
+真实操作；Gateway 也覆盖同根 Cookie 新授权、原码拒绝、既有 Cookie/redirect/state。
+#160 的[定向维护 Redis 测试](../../apps/oidc-provider/test-integration/redis/custom-sso-grant-maintenance.integration.test.ts)通过正式 maintenance
+组合及 CLI 证明无索引库存、旧三态/orphan、完整观察 CAS、未知数据保留、部分失败重跑与新进程 verify；Redis ACL 限制的只读账户完成核验。
+混合库存逐对象比较 Principal、两 Credential、OIDC Binding/Code/Token/Provider Session 持久值及绝对 expiry。
+命令只报告目标核验，环境保留集仍需发布 owner 对照独立基线，不能用 retained 数量替代。
 
 ## 聚合 Gate 与人工证据
 
@@ -124,3 +134,7 @@ verify:release = verify:ci -> test:e2e
 新增或改变跨 runtime 能力时，实现者先指认现有权威契约和 owner，明确观察时点、失败路径与恢复责任，再选择最高相关
 公开接口的行为验证及必要资源通道。若现有测试没有观察新不变量，应补验证或明确未证明项，不能以相邻绿色测试代替。
 只有 owner、公开 seam、验证层或关键证明范围变化时才更新本索引；普通内部测试增删不需要扩展成逐文件清单。
+
+Spec #157 的全部 56 条故事、20 项实现和 10 项测试决定见[一次消费最终账本](../features/sso/custom-sso-one-shot-grant-contract.md)。
+#161 在正式 HTTP/Redis 上组合定向清理、独立核验、同根新授权与已有凭据访问；完整 OIDC 保留集复用 #160。
+统一 writer/consumer、基线、停流排空、smoke 与回退见[保留会话升级手册](../releases/custom-sso-one-shot-grant-upgrade.md)，目标环境未执行。

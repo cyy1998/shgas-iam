@@ -36,7 +36,7 @@ Next review: 2026-10-31
   [操作契约](../oidc/oidc-operation-snapshots.md)。真实 Provider Token/UserInfo 与原生 HTTP、Kernel、协议 store。
 - **C**：[Custom SSO 操作矩阵](../../../packages/custom-sso/test-integration/redis/custom-sso-operation.integration.test.ts)、
   [完整操作](../../../packages/custom-sso/test-integration/redis/custom-sso.integration.test.ts)、
-  [Grant](../../../packages/custom-sso/test-integration/redis/authorization-grant-redemption.integration.test.ts)。
+  [Grant](../../../packages/custom-sso/test-integration/redis/custom-sso-operation.integration.test.ts)。
   正式协议工厂、真实 Kernel/Grant/cleanup，Client/Barrier/投影出站 ports 使用窄替代。
 - **H**：[API Public/authz HTTP](../../../apps/api/test-integration/redis/custom-sso-operation-http.integration.test.ts)、
   [兑换 HTTP](../../../apps/api/test-integration/redis/custom-sso-redemption-operation-http.integration.test.ts)。
@@ -60,7 +60,7 @@ Next review: 2026-10-31
 | 6 | H 两个正式 HTTP seam：合法 OIDC Credential/Code 误投 Custom SSO，对象与 roots 保留。 |
 | 7 | K Artifact 与 O：同协议错误 type 在消费前拒绝，合法对象仍可使用。 |
 | 8 | K/O/H：已知 Client 不匹配拒绝，不改变原对象。 |
-| 9 | O Code wrong redirect、C/H stale redirect：保留 Code/Grant，无预占。 |
+| 9 | O Code wrong redirect、C/H stale redirect：保留 Code/Grant，无消费。 |
 | 10 | O Return Handle browser binding 不符保留，后继匹配请求可继续。 |
 | 11 | O/H 使用真实合法跨协议 token；C invalid credentials 独立覆盖随机输入，不相互替代。 |
 | 12 | K 用途拒绝与 O/C/H：用途不符不触发 Subject Access 撤销编排。 |
@@ -83,7 +83,7 @@ Next review: 2026-10-31
 | 29 | O/C pending acquisition latch：并行回调共享正在进行的同一获取。 |
 | 30 | O/C 下一操作重新取得；HTTP 请求与关闭后 capability 不复用旧结果。 |
 | 31 | O Token 在消费/签发之间切配置仍交付旧代；C accepted redemption 和极迟 Code 在途继续。 |
-| 32 | K CAS/消费并发与 C Grant removed before reservation：已接受配置不保证完成，不复活对象。 |
+| 32 | K CAS/消费并发与 C Grant removed before consumption：已接受配置不保证完成，不复活对象。 |
 | 33 | A PG 返回的 committedVersion 进入实际 adapter，边界固定。 |
 | 34 | O/C 本票：旧对象先读→版本选择清理→正式协议新代签发→旧请求恢复，新代访问成功；高于 Snapshot 对象仅拒绝保留。 |
 | 35 | A 两协议真实传播→Kernel 新代签发→晚到撤销；边界及更高代回读保留。 |

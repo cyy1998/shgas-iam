@@ -1,12 +1,12 @@
 import type { CleanupAdapter } from "@iam/session-kernel";
-import type { AuthorizationGrantRedemptionStore } from "./store";
+import type { AuthorizationGrantRemovalStore } from "./store";
 
 export const AUTHORIZATION_GRANT_REDEMPTION_CLEANUP_KIND
   = "authorization-grant-redemption";
 export const CUSTOM_SSO_PROTOCOL = "custom-sso";
 
 export function createAuthorizationGrantRedemptionCleanupAdapter(
-  store: Pick<AuthorizationGrantRedemptionStore, "remove">,
+  store: AuthorizationGrantRemovalStore,
 ): CleanupAdapter {
   return {
     protocol: CUSTOM_SSO_PROTOCOL,

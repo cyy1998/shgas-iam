@@ -18,3 +18,6 @@ export function createCustomSsoRevocationSelector(committedVersion: number) {
 export function customSsoMaintenancePrefixes(): readonly string[] {
   return [AUTHORIZATION_GRANT_REDEMPTION_KEY_PREFIX];
 }
+
+export { createLegacyGrantMaintenance, createLegacyGrantVerifier } from "./grant/inventory-maintenance";
+export { decodeCustomSsoLegacyGrant, isCustomSsoAuthorizationArtifact } from "./grant/maintenance";

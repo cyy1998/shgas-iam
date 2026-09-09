@@ -89,7 +89,7 @@ Client Runtime Snapshot 的当前 namespace 清单位于 `packages/api-core/src/
 | `packages/client-subject-projection/src` | `internal/`：当前 V2 Catalog、contract 与 projection。公开入口与共享错误留在根层；测试 fixture 由测试文件本地持有。 |
 | `packages/session-kernel/src` | `state/`：模型、结果与时间；`storage/`：存储、key、Lua 与状态变更；`security/`：HMAC/token；`cleanup/`：清理。facade、配置和公开入口留在根层。 |
 | `packages/api-core/src/subject-access` | `storage/`：store 与 Redis adapter；`adapters/`：HTTP 错误映射；`recovery/`：bootstrap、repair 与 transition recovery。在线 barrier/lifecycle、操作许可/context/撤销编排、模型、错误与公开入口留在根层。 |
-| `packages/custom-sso/src` | 单一 factory、出站 ports 与协议错误；`internal/` 拥有完整授权/兑换、访问/退出、续接校验、Subject 交付、Secret/redirect 与流量 gate。`grant/` 拥有 Grant 状态机与存储；cleanup/maintenance 直接进入窄模块，wire 不加载服务端流程。 |
+| `packages/custom-sso/src` | 单一 factory、出站 ports 与协议错误；`internal/` 拥有完整授权/兑换、访问/退出、续接校验、Subject 交付、Secret/redirect 与流量 gate。`grant/` 只保留旧 Grant 库存 decoder、精确 cleanup 与维护 fixture；在线消费由 Kernel Artifact 拥有；cleanup/maintenance 直接进入窄模块，wire 不加载服务端流程。 |
 | `apps/api/src/services/sso` | `subject-delivery/`：请求 capability 桥接；`transport/`：Cookie、请求/schema、安全和 OpenAPI helper。门户 decision 映射在 `use-cases/sso/check-login-continuation/`。 |
 | `apps/api/src/use-cases/authentication` | 密码、手机、OA、微信统一认证用例；由 `composition/use-cases/authentication.ts` 装配，通过 `services/authentication/principal-session.adapter.ts` 使用 Kernel 创建根会话。OA/微信 HTTP 路径仍在 SSO route。 |
 | `apps/oidc-provider/src/provider` | `claims/`：claims port、snapshot 与 contract；`client/`：Client auth、runtime metadata 与 Traffic Gate。`claims.ts` 和 provider 装配、生命周期文件留在根层。 |

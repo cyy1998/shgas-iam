@@ -52,7 +52,6 @@ test.each(["independent", "gateway", "gateway-orcas"])("complete %s operations a
     };
     const events: string[] = [];
     const protocol = createCustomSsoOperations({
-      redis,
       kernel: scope.writer,
       clients: { findRuntimeRecord: async () => client },
       clientSecrets: { findSecretRecord: async () => ({ ...client, customSsoSecretHash: "test-hash" }) },
@@ -93,7 +92,7 @@ test.each(["independent", "gateway", "gateway-orcas"])("complete %s operations a
       const grantId = artifact.value.artifactId;
       grantIds.push(grantId);
       const record = await grants.inspect(grantId);
-      expect(record).toMatchObject({ state: "issued" });
+      expect(record).toBeNull();
       return grant.code;
     }
     const code = await authorize();
@@ -118,14 +117,6 @@ test.each(["independent", "gateway", "gateway-orcas"])("complete %s operations a
     const pendingCode = await authorize();
     await redis.set(sentinel, "keep");
     await authorize();
-    const removedGrantId = grantIds.at(-1)!;
-    const retainedGrantId = grantIds.at(-2)!;
-    const removed = await grants.remove(removedGrantId);
-    const removedRecord = await grants.inspect(removedGrantId);
-    const retainedRecord = await grants.inspect(retainedGrantId);
-    expect(removed).toBe("removed");
-    expect(removedRecord).toBeNull();
-    expect(retainedRecord).toMatchObject({ state: "issued" });
     await protocol.logout.execute({ sessionToken: principal.externalToken! });
     const remaining = await Promise.all(grantIds.map(id => grants.inspect(id)));
     const kept = await redis.get(sentinel);

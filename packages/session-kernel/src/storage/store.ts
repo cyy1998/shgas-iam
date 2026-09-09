@@ -379,6 +379,7 @@ export class SessionKernelStore {
     serializedArtifact: string;
     observedAt: number;
     tombstone: RevokedTombstone;
+    indexRemovals: Array<{ key: string; member: string }>;
   }): Promise<ResolveResult<ProtocolArtifact>> {
     const existing = await this.readTombstoneKey(this.keys.tombstone("artifact", input.artifact.artifactId));
     if (existing.status === "schema_invalid")

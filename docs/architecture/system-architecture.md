@@ -106,3 +106,7 @@ TTL 或逐 Client 访问自然收敛。当前 full repair/verify 只拥有当前
 进入 Alloy 后使用 debug exporter，不能据此宣称已有持久化 trace backend。采集标签、敏感字段、保留与 smoke 由
 [观测运行手册](../releases/observability-system-logs.md)负责。真实环境的 readiness、停流、旧实例 drain、恢复和放流证据
 由发布负责人取得，不能由本地测试或这张拓扑图代替。
+
+Spec #157 的全部 56 条故事、20 项实现和 10 项测试决定见[一次消费最终账本](../features/sso/custom-sso-one-shot-grant-contract.md)。
+#161 在正式 HTTP/Redis 上组合定向清理、独立核验、同根新授权与已有凭据访问；完整 OIDC 保留集复用 #160。
+统一 writer/consumer、基线、停流排空、smoke 与回退见[保留会话升级手册](../releases/custom-sso-one-shot-grant-upgrade.md)，目标环境未执行。

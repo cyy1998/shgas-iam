@@ -4,7 +4,7 @@ import type { OidcProviderRedisTestHarness, OidcProviderRedisTestScope } from ".
 import { createHash, randomUUID } from "node:crypto";
 import { createSubjectAccessBootstrap, createSubjectAccessSessionContext, SubjectAccessPermissionRequiredError } from "@iam/api-core/subject-access";
 import { UserProfileDirtyStatus } from "@iam/contracts";
-import { AUTHORIZATION_GRANT_REDEMPTION_CLEANUP_KIND, createAuthorizationGrantRedisInspection, createRedisAuthorizationGrantRedemptionStore } from "@iam/custom-sso/testing";
+import { AUTHORIZATION_GRANT_REDEMPTION_CLEANUP_KIND, createAuthorizationGrantRedisInspection, createLegacyAuthorizationGrantFixture } from "@iam/custom-sso/testing";
 import { createOidcRevocationSelector } from "@iam/domain/client/oidc-revocation-selector";
 import { createSubjectFactsRedisCache } from "@iam/user-profile-read-model/subject-facts";
 import { exportJWK, generateKeyPair } from "jose";
@@ -1043,7 +1043,7 @@ describe("oIDC protocol purpose isolation", () => {
       throw new Error("expected control roots");
     const credentials = [];
     const codes = [];
-    const grants = createRedisAuthorizationGrantRedemptionStore({ redis: scope.writer });
+    const grants = createLegacyAuthorizationGrantFixture({ redis: scope.writer });
     const grantInspection = createAuthorizationGrantRedisInspection(scope.writer);
     for (const [root, clientCode] of [[f.principal.value, f.client], [second.value, f.client], [third.value, `${f.client}-other`]] as const) {
       const credential = await f.session.kernel.issueCredential({
@@ -1068,8 +1068,9 @@ describe("oIDC protocol purpose isolation", () => {
       });
       if (credential.status !== "created" || code.status !== "created")
         throw new Error("expected Custom SSO objects");
-      const initialized = await grants.initialize({ version: 1, state: "issued", grantId, expiresAt: code.value.expiresAt });
-      expect(initialized).toBe("created");
+      await grants.initialize({ version: 1, state: "issued", grantId, expiresAt: code.value.expiresAt });
+      const initialized = await grantInspection.inspect(grantId);
+      expect(initialized).toMatchObject({ state: "issued", expiresAt: code.value.expiresAt });
       credentials.push(credential);
       codes.push(code);
     }

@@ -2,7 +2,7 @@
 
 Status: Current
 
-Last verified: 2026-09-08
+Last verified: 2026-09-09
 
 Next review: 2026-10-31
 
@@ -16,7 +16,7 @@ Next review: 2026-10-31
 | Owner | 已消除的双时间路径 | 保留语义 |
 |---|---|---|
 | Kernel `storage/observation.ts`、`storage/store.ts`、`facade.ts` | TIME 与对象同次取得；创建、续期、消费、列表和清理不用应用 now 判定 deadline；续期同时维护原 lookup | idle/absolute、父上限、fixed-at-issue/extend-with-principal、payload/lookup CAS、tombstone、pending cleanup；取得后可继续，真实缺失/撤销/消费/冲突仍失败 |
-| Grant `packages/custom-sso/src/grant/redis-store.ts` | initialize 消费 Kernel Artifact deadline；预占/heartbeat/release/consume 使用 Redis TIME | 单赢家、lease 不能越过原授权期限、每 attempt identity 和精确补偿；没有跨模块大事务 |
+| Grant `packages/custom-sso/src/internal/session.ts` | #158/#159 两模式直接使用 Kernel Artifact deadline 与消费权威，旧在线 store 已退役 | 单赢家、暂态不延期、写前新 identity 与同步尽力补偿；消费后失败重新授权，无跨模块大事务 |
 | Custom SSO `packages/custom-sso/src/internal/session.ts` | Independent/Gateway 使用 `ceil((expiresAt-observedAt)/1000)`；不因应用时间或亚秒取整再次撤销 | 两模式身份来源、Subject Access、父对象/主体/配置保护；Gateway Cookie Max-Age 消费 TTL，ORCAS Cookie 契约保持 |
 | OIDC `storage/redis-adapter.ts` | 同次 Redis TIME 为对象/lookup/index 设置共同 deadline；共享索引只延长；清理根据实际对象和 CAS | Client/Grant ownership、配置版本、Kernel Credential mirror；Grant 增补 scope 再保存保持当前 PEXPIRETIME，缺失不复活 |
 | Provider Session state store | mapping 发布/刷新直接消费 Kernel 毫秒 deadline；staged 主数据/索引以 Redis TIME、60 秒和父 deadline 一致写入 | anchor generation、mapping owner、原子 claim、发布不确定确认与补偿 |
@@ -37,7 +37,7 @@ Redis TIME 不是 JWT 认证事件时间或主机稳定性保证。`authTime`/`a
 
 - **K-time**：[Kernel 时间](../../../packages/session-kernel/test-integration/redis/session-kernel-time.integration.test.ts)：四类对象偏差矩阵、跨实例与前后跳、父上限、续期 lookup、取得后到期、真实缺失与 pending cleanup。
 - **K-id**：[Credential](../../../packages/session-kernel/test-integration/redis/session-kernel-credential.integration.test.ts)：新 UUID、写前 identity、并发 owner、lookup、tombstone 与不确定写入补偿。
-- **Grant**：[Grant owner](../../../packages/custom-sso/test-integration/redis/authorization-grant-redemption.integration.test.ts)：Kernel deadline 联验、唯一赢家、租约、release/consume、接管及原上限。
+- **Grant**：[Grant owner](../../../packages/custom-sso/test-integration/redis/custom-sso-operation.integration.test.ts)：Kernel deadline 联验、唯一赢家、暂态拒绝不延期、消费后失败与同步尽力补偿。
 - **SSO**：[生产 adapter](../../../apps/api/test-integration/component/custom-sso-session-kernel.adapter.integration.test.ts)与
   [Cookie handler](../../../apps/api/test-integration/component/sso.handlers.integration.test.ts)：两模式交付/认证/退出、偏差、亚秒 TTL、途中到期和补偿。
 - **State**：[Provider Session state](../../../apps/oidc-provider/test-integration/redis/provider-session-state.integration.test.ts)：staged/claim/mapping/anchor、Kernel deadline 到 Code/Credential 与 generation 恢复。
@@ -59,14 +59,14 @@ Redis TIME 不是 JWT 认证事件时间或主机稳定性保证。`authTime`/`a
 | 6 token lookup 续期 | 原 lookup 与对象一致续期并 CAS 检查 | K-time 原 token 与 ID 一致观察 |
 | 7 取得后继续 | 使用取得时有效观察，移除最终到期复查 | K-time、SSO；OIDC 已取得 model 更新/TTL |
 | 8 后续约束 | 缺失、撤销、消费、owner/CAS 仍失败 | K-time、K-id、State、OIDC 缺失后保存拒绝 |
-| 9 Grant 创建 | Artifact deadline 初始化 redemption | Grant 独立应用偏差联验 |
-| 10 Grant 唯一赢家 | 原预占、续租、接管保持 | Grant 并发与 lease owner 证明 |
-| 11 Grant 原期限 | lease 取原 deadline 上限 | Grant renew/接管，非无限续租 |
+| 9 Grant 创建 | Artifact 自身持有 Redis deadline，无独立 redemption | Grant 独立应用偏差联验 |
+| 10 Grant 唯一赢家 | Kernel 已观察对象 CAS 唯一消费 | Grant 完整操作并发与对象保护 |
+| 11 Grant 原期限 | 暂态拒绝保留原 deadline | Grant 真实状态回读，无延期或恢复 |
 | 12 Independent 兑换 | 生产 adapter 正常交付 Credential | SSO + Grant，第三方自建 Session 不在 IAM owner |
 | 13 Gateway 登录 | 生产 adapter 建立 Local Session | SSO + Cookie handler |
-| 14 新 UUID | Kernel 服务端 UUID；每新 attempt 新 identity | K-id、SSO；不验证 UUID 统计碰撞 |
+| 14 新 UUID | Kernel 服务端 UUID；每新授权签发新 identity | K-id、SSO；不验证 UUID 统计碰撞 |
 | 15 写前已知 identity | 内部预定 identity 随签发传递 | K-id 不确定提交后精确补偿 |
-| 16 同次不换 ID | 同次确认/补偿，下一 attempt 才换 identity | SSO 两模式正负偏差补偿矩阵 |
+| 16 同次不换 ID | 同次确认/补偿，新授权签发才换 identity | SSO 完整 Redis 两模式同步补偿与新授权矩阵 |
 | 17 防覆盖 | active identity、lookup、tombstone 保护保留 | K-id 并发唯一赢家和 tombstone |
 | 18 不保证自然过期复用 | 验收改为新的服务端 UUID 签发 | K-id natural expiry；没有永久历史去重 |
 | 19 SSO TTL | 权威观察之差向上取整 | SSO 750ms→1 秒及途中到期，不延长 Redis deadline |

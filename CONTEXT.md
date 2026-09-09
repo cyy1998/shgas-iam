@@ -2,6 +2,10 @@
 
 本上下文定义 IAM 用户身份、档案和外部 SSO 集成中的核心领域语言，帮助区分稳定用户事实与协议会话事实。
 
+Custom SSO Authorization Grant 与 Subject Projection Not Ready 的兑换语义采用
+[ADR-0031](docs/adr/0031-consume-custom-sso-grants-before-issuance.md)中已接受的修改目标；Independent 与 Gateway 已分别由 #158/#159 迁移，
+定向维护由 #160 交付，#161 已提供最终契约账本与升级手册；父级验收另记，环境尚未切换，不能据术语更新推断环境行为已改变。
+
 ## Language
 
 **User Profile**:
@@ -273,8 +277,8 @@ Gateway Custom SSO 显式启用 ORCAS 集成后，由 ORCAS 返回并绑定到�
 _Avoid_: user detail field, user profile attribute, subject claim, Independent client context
 
 **Custom SSO Authorization Grant**:
-基于有效 IAM 登录身份、授予指定 client 一次性继续 Custom SSO 登录的权利。兑换使用 `issued → redeeming → consumed` 状态机：通过已验证的 client、redirect URI 与配置版本原子预占后才能构建投影并签发，预占带 attempt ID 和短租约；Subject Projection 暂时不可用时恢复为 `issued` 且不延长原始有效期，进程异常时租约到期后可重试，只有 Credential 或 Local Session 成功签发时才原子进入 `consumed`，已消费 Grant 永不再次兑换。兑现结果按 client 接入模式是 Independent Client Credential 或 Gateway Local Session，grant 本身不是任一登录会话。
-_Avoid_: local session, client session, read-and-delete authorization code
+基于有效 IAM 登录身份、授予指定 client 一次性继续 Custom SSO 登录的权利，成功兑换按接入模式产生 Independent Client Credential 或 Gateway Local Session。两种模式都在前置校验通过后一次性消费，再构建主体投影并执行适用的外部登录和凭据签发；消费前暂态拒绝保留原有效期内的权利，消费后失败或结果未知通过重新授权恢复，不恢复原 Code，也不重放成功结果。
+_Avoid_: local session, client session, recoverable authorization code, replayable exchange result
 
 **Independent Client Credential**:
 IAM 向 Independent client 签发并管理的 client-scoped credential；第三方可以据此建立自己的本地会话，但该会话不属于 IAM。它只能由服务端通过 `POST /sso/token`、HTTP Basic Custom SSO client authentication 以及与 Authorization Grant 完全匹配的 redirect URI 兑换，不接受 GET 或 query secret 兼容入口。
@@ -329,7 +333,7 @@ IAM 向指定 client 交付的主体属性视图；它始终包含 Subject Ident
 _Avoid_: User Profile, session payload, mode-specific user info
 
 **Subject Projection Not Ready**:
-主体身份和 client 授权可能仍然有效、但当前 Subject Facts 尚未满足投影新鲜度要求时产生的暂态领域结果。Custom SSO Adapter 将其映射为 HTTP `503`、稳定 code `SUBJECT_PROJECTION_NOT_READY` 与可配置的短 `Retry-After`，不暴露 Dirty 状态、版本或失败原因；`/sso/token` 同时释放 Grant 预占。OIDC Adapter 映射为标准 `temporarily_unavailable` 并且不签发 Authorization Code。它不是未认证或无权限，不得映射为 `401` 或 `403`。
+主体身份和 client 授权可能仍然有效、但当前 Subject Facts 尚未满足投影新鲜度要求时产生的暂态领域结果，不表示未认证或无权限。Custom SSO 兑换中的该结果不恢复已消费 Grant，调用方需重新授权；既有 Credential 的 UserInfo 调用可以稍后重试，OIDC 授权仍在投影就绪前不签发 Authorization Code。
 _Avoid_: unauthorized, forbidden, dirty-state response
 
 **Gateway Subject Header**:

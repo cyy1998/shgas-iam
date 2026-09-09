@@ -2,10 +2,13 @@ import type { CustomSsoClientRuntimeDto } from "@iam/domain/client";
 import { Buffer } from "node:buffer";
 import { randomUUID } from "node:crypto";
 import process from "node:process";
-import { createCustomSsoOperationAdapter } from "@api/composition/custom-sso-operation.adapter";
+import { createApiOperationAuthenticationHandlers, createCustomSsoOperationAdapter } from "@api/composition/custom-sso-operation.adapter";
 import { createApiCustomSsoOperations } from "@api/composition/custom-sso-operations";
+import { createAuthHandlers } from "@api/routes/auth/auth.handlers";
+import { createAuthRoute } from "@api/routes/auth/auth.index";
 import { createSsoHandlers } from "@api/routes/sso/sso.handlers";
 import { createSsoRoute } from "@api/routes/sso/sso.index";
+import { createCustomSsoSubjectDeliveryRequestScope } from "@api/services/sso/subject-delivery/custom-sso-subject-delivery-request-scope";
 import { customSsoLocalSessionCookieName, encodeCustomSsoClientCode } from "@api/services/sso/transport/custom-sso-client-code.transport";
 import { createCheckSsoLoginContinuationUseCase } from "@api/use-cases/sso/check-login-continuation/check-login-continuation.use-case";
 import { createErrorHandler } from "@iam/api-core/middlewares/error-handler";
@@ -16,11 +19,15 @@ import {
   SubjectAccessDisabledError,
   SubjectAccessUnavailableError,
 } from "@iam/api-core/subject-access";
+import { SubjectProjectionNotReadyError } from "@iam/client-subject-projection";
 import { ApiErrorCode, ClientStatus, CustomSsoClientMode, SubjectClaim } from "@iam/contracts";
 import { createCustomSsoOperations } from "@iam/custom-sso";
 import { createCustomSsoCleanup } from "@iam/custom-sso/cleanup";
+import { createLegacyGrantMaintenance, createLegacyGrantVerifier, isCustomSsoAuthorizationArtifact } from "@iam/custom-sso/maintenance";
 import { createAuthorizationGrantRedisInspection } from "@iam/custom-sso/testing";
-import { createSessionKernelRedisTestHarness } from "@iam/session-kernel/testing";
+import { CustomSsoSubjectProjectionInvariantError } from "@iam/custom-sso/wire";
+import { createArtifactMaintenance, createArtifactMaintenanceVerifier } from "@iam/session-kernel/maintenance";
+import { createKernelMaintenanceFixture, createSessionKernelRedisTestHarness } from "@iam/session-kernel/testing";
 import { expect, test } from "bun:test";
 import { Hono } from "hono";
 import Redis from "ioredis";
@@ -70,18 +77,21 @@ test.each(["independent", "gateway", "gateway-orcas"])("%s redemption HTTP owns 
     let reads = 0;
     let factsReads = 0;
     let orcasCalls = 0;
+    let callbackFailure: "none" | "orcas" | "issuance" = "none";
     let userFailure: "none" | "identity" | "profile" = "none";
     let barrier: "enabled" | "blocking" | "disabled" | "new-generation" = "enabled";
     let changeAfterPermission = false;
+    let projectionFailure: "none" | "not-ready" | "invalid" = "none";
     const generatedIds: string[] = [];
     const common = {
-      redis,
       clients: { findRuntimeRecord: async () => client },
       clientSecrets: { findSecretRecord: async () => ({ ...client, customSsoSecretHash: "hash" }) },
       secrets: { verify: async () => true },
       traffic: { check: async () => ({ outcome: "enabled" as const }) },
       orcas: { orcasLogin: async () => {
         orcasCalls += 1;
+        if (callbackFailure === "orcas")
+          throw new Error("ORCAS response unavailable");
         return { orcasId: "orcas-user", orcasSessionId: "orcas-session" };
       } },
       auditLogWriter: { recordAuditLog: async () => {} },
@@ -120,7 +130,15 @@ test.each(["independent", "gateway", "gateway-orcas"])("%s redemption HTTP owns 
     });
     const operations = createApiCustomSsoOperations({
       ...common,
-      kernel: scope.writer,
+      kernel: {
+        ...scope.writer,
+        async issueCredential(input) {
+          const result = await scope.writer.issueCredential(input);
+          if (callbackFailure === "issuance")
+            throw new Error("credential committed, response unavailable");
+          return result;
+        },
+      },
       permittedUsers: { findOrcasUserBySubjectIdentifier: async () => {
         if (userFailure === "identity")
           throw new Error("identity query failed");
@@ -130,6 +148,10 @@ test.each(["independent", "gateway", "gateway-orcas"])("%s redemption HTTP owns 
       } },
       subjectFacts: { read: async () => {
         factsReads += 1;
+        if (projectionFailure === "not-ready")
+          throw new SubjectProjectionNotReadyError();
+        if (projectionFailure === "invalid")
+          throw new CustomSsoSubjectProjectionInvariantError("invalid_wire");
         return {
           subjectIdentifier,
           sourceDirtyVersion: "1",
@@ -200,12 +222,12 @@ test.each(["independent", "gateway", "gateway-orcas"])("%s redemption HTTP owns 
         throw new Error("Grant fixture resolution failed");
       const grantId = artifact.value.artifactId;
       grantIds.push(grantId);
-      return { code: grant.code, grantId };
+      return { code: grant.code, grantId, principalToken: principal.externalToken };
     }
 
     const grant = await seedGrant();
     const initialGrant = await grants.inspect(grant.grantId);
-    expect(initialGrant).toMatchObject({ state: "issued" });
+    expect(initialGrant).toBeNull();
     const original = await scope.writer.resolveProtocolArtifact(grant.code, { protocol: "custom-sso", artifactType: "auth_code" });
     if (original.status !== "resolved" || !original.value.principalSessionId)
       throw new Error("Expected original artifact");
@@ -288,6 +310,45 @@ test.each(["independent", "gateway", "gateway-orcas"])("%s redemption HTTP owns 
     expect(consumed.status).not.toBe("resolved");
 
     changeAfterPermission = false;
+    if (independent) {
+      barrier = "enabled";
+      async function authorizeAgain() {
+        const response = await app.request(`/sso/authorize?${new URLSearchParams({ client: clientCode, redirectUrl })}`, {
+          headers: { Cookie: `global_session=${grant.principalToken}` },
+        });
+        expect(response.status).toBe(302);
+        expect(response.headers.getSetCookie()).toEqual([]);
+        const location = new URL(response.headers.get("Location")!);
+        expect(location.origin + location.pathname).toBe(redirectUrl);
+        const code = location.searchParams.get("code");
+        if (!code)
+          throw new Error("Expected fresh code through authorization continuation");
+        return code;
+      }
+      for (const failure of ["not-ready", "invalid"] as const) {
+        const code = await authorizeAgain();
+        projectionFailure = failure;
+        const failed = await request(code);
+        const body = await failed.json();
+        expect(failed.status).toBe(failure === "not-ready" ? 503 : 500);
+        expect(body.code).toBe(failure === "not-ready" ? ApiErrorCode.SubjectProjectionNotReady : ApiErrorCode.InternalError);
+        expect(failed.headers.get("Retry-After")).toBe(failure === "not-ready" ? "3" : null);
+        expect(failed.headers.getSetCookie()).toEqual([]);
+        projectionFailure = "none";
+        const old = await request(code);
+        const oldBody = await old.json();
+        expect(old.status).toBe(401);
+        expect(oldBody.code).toBe(ApiErrorCode.InvalidAuthCode);
+        const fresh = await authorizeAgain();
+        expect(fresh).not.toBe(code);
+        const recovered = await request(fresh);
+        const recoveredBody = await recovered.json();
+        expect(recovered.status).toBe(200);
+        expect(recoveredBody.data.subject).toEqual({ version: 2, subjectIdentifier, profile: { name: "Test" } });
+        const retainedRoot = await scope.observer.resolvePrincipalSession(grant.principalToken);
+        expect(retainedRoot.status).toBe("resolved");
+      }
+    }
     // A distinct HTTP request checks the old generation and preserves browser-specific wire rules.
     for (const state of ["new-generation", "disabled"] as const) {
       const nextGrant = await seedGrant();
@@ -312,10 +373,208 @@ test.each(["independent", "gateway", "gateway-orcas"])("%s redemption HTTP owns 
         const response = await request(retryableGrant.code);
         expect(response.status).toBe(failure === "identity" ? 500 : 401);
         expect(orcasCalls).toBe(1);
-        const record = await grants.inspect(retryableGrant.grantId);
-        expect(record).toMatchObject({ state: "issued" });
+        const record = await scope.observer.resolveProtocolArtifact(retryableGrant.code, { protocol: "custom-sso", artifactType: "auth_code" });
+        expect(record.status).toBe("consumed_replay");
       }
     }
+    if (!independent) {
+      barrier = "enabled";
+      userFailure = "none";
+      const recoveryRoot = await seedGrant();
+      async function authorizeGatewayAgain() {
+        const response = await app.request(`/sso/authorize?${new URLSearchParams({ client: clientCode, redirectUrl, state: "fresh opaque state" })}`, {
+          headers: { Cookie: `global_session=${recoveryRoot.principalToken}` },
+        });
+        expect(response.status).toBe(302);
+        expect(response.headers.getSetCookie()).toEqual([]);
+        const location = new URL(response.headers.get("Location")!);
+        expect(location.origin + location.pathname).toBe("https://app.example.com/sso/callback");
+        expect(location.searchParams.get("redirectUrl")).toBe(redirectUrl);
+        const code = location.searchParams.get("code");
+        if (!code)
+          throw new Error("Expected Gateway authorization continuation");
+        return code;
+      }
+      for (const failure of mode === "gateway-orcas" ? ["orcas", "issuance"] as const : ["issuance"] as const) {
+        const code = await authorizeGatewayAgain();
+        callbackFailure = failure;
+        const failed = await request(code);
+        const body = await failed.json();
+        expect(failed.status).toBe(500);
+        expect(body).toMatchObject({ code: ApiErrorCode.InternalError });
+        expect(failed.headers.get("Location")).toBeNull();
+        expect(failed.headers.getSetCookie()).toEqual([]);
+        callbackFailure = "none";
+        const old = await request(code);
+        const oldBody = await old.json();
+        expect(old.status).toBe(401);
+        expect(oldBody.code).toBe(ApiErrorCode.Unauthorized);
+        expect(old.headers.getSetCookie()).toEqual([]);
+        const fresh = await authorizeGatewayAgain();
+        expect(fresh).not.toBe(code);
+        const recovered = await request(fresh);
+        expect(recovered.status).toBe(302);
+        const location = new URL(recovered.headers.get("Location")!);
+        expect(location.origin + location.pathname).toBe(redirectUrl);
+        expect(location.searchParams.get("state")).toBe("fresh opaque state");
+        expect(recovered.headers.getSetCookie().some(cookie => cookie.startsWith(`${cookieName}=`))).toBe(true);
+        expect(recovered.headers.getSetCookie().some(cookie => cookie.startsWith("orcas_sso_sessionid="))).toBe(mode === "gateway-orcas");
+        const retainedRoot = await scope.observer.resolvePrincipalSession(recoveryRoot.principalToken);
+        expect(retainedRoot.status).toBe("resolved");
+        const replay = await request(fresh); // Successful response lost: do not replay delivery.
+        expect(replay.status).toBe(401);
+        expect(replay.headers.getSetCookie()).toEqual([]);
+      }
+    }
+
+    // Final composition: maintenance zero-gate precedes every new authorization writer.
+    barrier = "enabled";
+    userFailure = "none";
+    callbackFailure = "none";
+    const cutoverRoot = await seedGrant();
+    async function authorizeCutover() {
+      const response = await app.request(`/sso/authorize?${new URLSearchParams({ client: clientCode, redirectUrl, state: "cutover state" })}`, {
+        headers: { Cookie: `global_session=${cutoverRoot.principalToken}` },
+      });
+      expect(response.status).toBe(302);
+      expect(response.headers.getSetCookie()).toEqual([]);
+      const location = new URL(response.headers.get("Location")!);
+      expect(location.origin + location.pathname).toBe(independent ? redirectUrl : "https://app.example.com/sso/callback");
+      const code = location.searchParams.get("code");
+      if (!code)
+        throw new Error("Expected cutover authorization Code");
+      return code;
+    }
+    async function redeemCutover(code: string) {
+      const response = await request(code);
+      expect(response.status).toBe(independent ? 200 : 302);
+      if (independent) {
+        const body = await response.json();
+        expect(body.data.subject).toEqual({ version: 2, subjectIdentifier, profile: { name: "Test" } });
+        expect(body.data.ttl).toBeGreaterThan(0);
+        return String(body.data.sid);
+      }
+      const location = new URL(response.headers.get("Location")!);
+      expect(location.origin + location.pathname).toBe(redirectUrl);
+      expect(location.searchParams.get("state")).toBe("cutover state");
+      expect(response.headers.getSetCookie().some(cookie => cookie.startsWith(`${cookieName}=`))).toBe(true);
+      return location.searchParams.get("token")!;
+    }
+    const beforeCode = await authorizeCutover();
+    const retainedToken = await redeemCutover(beforeCode);
+    const oldCode = await authorizeCutover();
+    const retainedCredential = await scope.observer.resolveCredential(retainedToken, { protocol: "custom-sso", credentialType: "local_session" });
+    const retainedPrincipal = await scope.observer.resolvePrincipalSession(cutoverRoot.principalToken);
+    if (retainedCredential.status !== "resolved" || retainedPrincipal.status !== "resolved")
+      throw new Error("Expected retained cutover objects");
+    const cutoverOidc = await scope.writer.createProtocolArtifact({
+      principalSessionId: retainedPrincipal.value.principalSessionId,
+      protocol: "oidc",
+      clientCode,
+      artifactType: "authorization_code",
+      ttlMs: 60_000,
+      metadata: { oidcConfigVersion: 7, redirectUri: redirectUrl },
+    });
+    if (cutoverOidc.status !== "created" || !cutoverOidc.externalToken)
+      throw new Error("Expected retained OIDC Code");
+    const inspection = createKernelMaintenanceFixture(redis, scope.namespace);
+    const principalBefore = await inspection.observe("principal_session", retainedPrincipal.value.principalSessionId);
+    const credentialBefore = await inspection.observe("credential", retainedCredential.value.credentialId);
+    const oidcBefore = await inspection.observe("artifact", cutoverOidc.value.artifactId);
+    const maintenanceOptions = {
+      namespace: scope.namespace,
+      writersStopped: true,
+      select: (object: Parameters<typeof isCustomSsoAuthorizationArtifact>[0]) => isCustomSsoAuthorizationArtifact(object) ? "select" as const : "retain" as const,
+    };
+    const inventory = await createArtifactMaintenanceVerifier({ ...maintenanceOptions, redis }).inventory();
+    expect(inventory.status).toBe("passed");
+    expect(inventory.targets).toBeGreaterThan(0);
+    const applied = await createArtifactMaintenance({ ...maintenanceOptions, redis }).apply();
+    const legacyApplied = await createLegacyGrantMaintenance({ redis, writersStopped: true }).apply();
+    expect(applied.status).toBe("passed");
+    expect(legacyApplied.status).toBe("passed");
+    const verifierRedis = new Redis(url, { lazyConnect: true, enableOfflineQueue: false, maxRetriesPerRequest: 0 });
+    try {
+      await verifierRedis.connect();
+      const reader = { scan: verifierRedis.scan.bind(verifierRedis), get: verifierRedis.get.bind(verifierRedis) };
+      const verified = await createArtifactMaintenanceVerifier({ ...maintenanceOptions, redis: reader }).verify();
+      const legacyVerified = await createLegacyGrantVerifier({ redis: reader, writersStopped: true }).verify();
+      expect(verified).toMatchObject({ status: "passed", targets: 0, failed: 0, unverified: 0, scanComplete: true });
+      expect(legacyVerified).toMatchObject({ status: "passed", targets: 0, failed: 0, unverified: 0, scanComplete: true });
+    }
+    finally {
+      verifierRedis.disconnect();
+    }
+    const oldAfterCleanup = await request(oldCode);
+    expect(oldAfterCleanup.status).toBe(401);
+    const oldAfterCleanupBody = await oldAfterCleanup.json();
+    expect(oldAfterCleanupBody.code).toBe(independent ? ApiErrorCode.InvalidAuthCode : ApiErrorCode.Unauthorized);
+    expect(oldAfterCleanup.headers.getSetCookie()).toEqual([]);
+    const principalAfter = await inspection.observe("principal_session", retainedPrincipal.value.principalSessionId);
+    const credentialAfter = await inspection.observe("credential", retainedCredential.value.credentialId);
+    const oidcAfter = await inspection.observe("artifact", cutoverOidc.value.artifactId);
+    expect(principalAfter).toEqual(principalBefore);
+    expect(credentialAfter).toEqual(credentialBefore);
+    expect(oidcAfter).toEqual(oidcBefore);
+    const freshCode = await authorizeCutover();
+    expect(freshCode).not.toBe(oldCode);
+    const freshToken = await redeemCutover(freshCode);
+    expect(freshToken).not.toBe(retainedToken);
+
+    const deliveries = createCustomSsoSubjectDeliveryRequestScope();
+    const accessHandlers = createApiOperationAuthenticationHandlers({
+      subjectAccessOperations,
+      customSsoOperations: operations,
+      clientService: { getClientBySecret: async () => null },
+      subjectDeliveryRequests: deliveries,
+      config: { projectionRetryAfterSeconds: 3 },
+    });
+    const accessApp = new Hono();
+    accessApp.use("/public/*", accessHandlers.publicAuthenticationHandler);
+    accessApp.get("/public/user-info", async context => context.json(await deliveries.resolveUserInfoForRequest(context)));
+    accessApp.route("/auth", createAuthRoute(createAuthHandlers({
+      authentication: {
+        loginWithMobile: { execute: async () => { throw new Error("unused"); } },
+        loginWithPassword: { execute: async () => { throw new Error("unused"); } },
+      },
+      clientService: { getClientBySecret: async () => null },
+      localSessionAuthorizer: adapter,
+      loginCredentialParser: { parseLoginPasswordCredential: async () => { throw new Error("unused"); } },
+      logger,
+      config: { projectionRetryAfterSeconds: 3, redisExpireSeconds: 120 },
+    })));
+    accessApp.onError(createErrorHandler(logger));
+    for (const accessToken of [retainedToken, freshToken]) {
+      for (const path of independent ? ["/public/user-info"] : ["/public/user-info", "/auth/authz"]) {
+        const accessRequest = () => accessApp.request(path, { headers: {
+          "Client": encodeCustomSsoClientCode(clientCode),
+          "Cookie": `${cookieName}=${accessToken}; global_session=${cutoverRoot.principalToken}`,
+          "X-Forwarded-Uri": "/business",
+        } });
+        barrier = "blocking";
+        const temporary = await accessRequest();
+        const temporaryBody = await temporary.json();
+        expect(temporary.status).toBe(503);
+        expect(temporaryBody.code).toBe(ApiErrorCode.SubjectAccessUnavailable);
+        expect(temporary.headers.get("Retry-After")).toBe("3");
+        expect(temporary.headers.getSetCookie()).toEqual([]);
+        barrier = "enabled";
+        const retried = await accessRequest();
+        expect(retried.status).toBe(200);
+        if (path === "/public/user-info") {
+          const wire = await retried.json();
+          expect(wire).toEqual(independent
+            ? { version: 2, subjectIdentifier, profile: { name: "Test" } }
+            : { version: 2, subjectIdentifier });
+        }
+        else {
+          expect(retried.headers.get("X-User-Info")).toBeTruthy();
+        }
+        expect(retried.headers.getSetCookie().some(cookie => cookie.includes("Max-Age=0"))).toBe(false);
+      }
+    }
+    const oidcStillValid = await scope.observer.resolveProtocolArtifact(cutoverOidc.externalToken, { protocol: "oidc", artifactType: "authorization_code" });
+    expect(oidcStillValid.status).toBe("resolved");
   }
   finally {
     if (grantIds.length > 0)

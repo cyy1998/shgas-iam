@@ -1,5 +1,4 @@
 import type { CustomSsoDeps } from "../custom-sso.port";
-import type { AuthorizationGrantRedemption } from "../grant";
 import type { CustomSsoAccess } from "./session.port";
 import { AuthzUnauthorizedError } from "@iam/api-core/errors/AuthzUnauthorizedError";
 import { createAuthorizeSsoUseCase } from "./authorize-sso/authorize-sso.use-case";
@@ -12,8 +11,7 @@ import { createCustomSsoSessionKernelAdapter } from "./session";
 import { createCustomSsoSubjectDelivery } from "./subject-delivery";
 import { createCustomSsoTrafficGate } from "./traffic-gate";
 
-export function createCustomSsoApplication(deps: Omit<CustomSsoDeps, "redis"> & {
-  authorizationGrantRedemption: AuthorizationGrantRedemption;
+export function createCustomSsoApplication(deps: CustomSsoDeps & {
   access: CustomSsoAccess;
 }) {
   const trafficGate = createCustomSsoTrafficGate({ gate: deps.traffic });

@@ -75,5 +75,6 @@ function createTestingFactories(redisClock: { now: () => number }): [
 
 export { createSessionKernelKeyBuilder, encodeIndexMember } from "./storage/keys";
 export { KernelFakeRedis } from "./testing/fake-redis";
+export { createKernelMaintenanceFixture } from "./testing/maintenance-fixture";
 export { createSessionKernelRedisTestHarness, waitForRedisCondition } from "./testing/redis-test-harness";
 export type { RedisTestHarness, SessionKernelRedisTestScope } from "./testing/redis-test-harness";

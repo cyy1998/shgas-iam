@@ -262,7 +262,6 @@ export function createApiServices(options: CreateApiServicesOptions) {
   });
 
   const customSsoOperations = createApiCustomSsoOperations({
-    redis: runtime.redis,
     clientSecrets: repositories.customSsoClient,
     secrets: { verify: verifySecret },
     traffic: clientTrafficGate,

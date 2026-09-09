@@ -116,7 +116,7 @@ IAM 授权成功后会重定向到：
 {redirectUrl的协议和域名}/sso/callback?code={code}&client={clientCode}&redirectUrl={urlencoded_redirect_url}
 ```
 
-IAM 的 `/sso/callback` 会：
+IAM 的 `/sso/callback` 在 Client/mode/用途/redirect/版本、根会话、Gate 和 Subject Access 校验通过后一次消费 Code，成功消费才执行 ORCAS 与 Local Session 签发。现有交付行为保持：
 
 1. 校验授权码和 `redirectUrl`。
 2. 为该业务系统创建 IAM 管理的 Gateway Local Session。
@@ -124,6 +124,12 @@ IAM 的 `/sso/callback` 会：
 4. 302 跳转回原始 `redirectUrl`，并在 URL 查询参数中附带 `token={sid}`。
 
 业务系统后续可以通过 Cookie 使用局部会话；如前后端分离或跨域调用，也可以读取回调 URL 中的 `token` 后交给业务后端建立自己的会话。
+
+Gateway callback 失败继续返回现有 JSON。用户应返回业务应用重新发起访问，不要刷新携带旧 Code 的 callback；暂态失败可按
+`Retry-After` 等待后重新授权，不自动循环跳转。有有效根会话时通常无需重新输入凭据，暂态失败不会清除有效根 Cookie。
+消费成功后的 ORCAS 失败、IAM 签发失败或成功响应丢失均不恢复原 Code。ORCAS 可能已经创建外部会话但返回不可用；新授权可能
+再次登录 ORCAS，IAM 不提供外部幂等、查询或撤销保证。写入结果不确定时只同步尽力撤销本次 Credential；未交付残留继续受父会话、
+账号、Client 版本与撤销约束，可能随根续期，受根绝对期限限制，不保证初始 TTL 后固定消失。
 
 ### 4.3 独立应用模式
 
@@ -146,7 +152,7 @@ code={code}&redirect_uri={urlencoded_redirect_uri}
 ```
 
 该端点不接受 query 参数、JSON body、Bearer client authentication 或浏览器 preflight。成功响应包含 IAM credential
-`sid`、剩余有效期和当前 Client 获准接收的 V1 主体投影：
+`sid`、剩余有效期和当前 Client 获准接收的 V2 主体投影：
 
 ```json
 {
@@ -156,7 +162,7 @@ code={code}&redirect_uri={urlencoded_redirect_uri}
     "sid": "independent-client-credential",
     "ttl": 86399,
     "subject": {
-      "version": 1,
+      "version": 2,
       "subjectIdentifier": "00000000-0000-4000-8000-000000001001",
       "profile": {
         "username": "138550",
@@ -183,15 +189,22 @@ IAM 不会在 `/sso/token` 成功时替 Independent 业务系统创建 Cookie、
 `customSsoSecret` 不得出现在浏览器地址、前端代码、日志、移动端包或第三方可见配置中。它与通用
 `clientSecret` 是两套独立凭据，不得混用。
 
-### 4.4 Client Maintenance 重试
+### 4.4 兑换失败与 Client Maintenance
 
-Client Maintenance 暂停 Custom SSO 在线流量，但不清除协议启用意图或延长任何对象的 TTL。`/sso/authorize`、Gateway
-`/sso/callback` 与 Independent `/sso/token` 在维护中返回 HTTP 503 与 `AUTH.MAINTENANCE`；受保护的 user-info/authz 使用也采用
-相同暂态语义。调用方不得把该响应当作 401 或登出，也不得丢弃仍未过期的 code、credential/session 或 Cookie。
+Independent `/sso/token` 经过 Client 认证、用途和请求归属、配置版本、根会话、Traffic Gate 与 Subject Access 校验后，一次消费
+Code，再构建完整 V2 主体投影并签发 Credential。同一 Code 只有一个成功消费者；成功结果不提供查询或重放。
 
-`/sso/token` 和 `/sso/callback` 会在消费一次性 Authorization Grant 前检查维护门禁，因此维护响应不会消费 code。Client 恢复正常后，
-调用方可以在原始有效期内用同一 code 重试；已经签发且未过期、未发生真实协议 mutation 的 credential/session 也恢复可用。Maintenance
-期间的 configure、enable、disable、remove 或 secret rotation 仍按 Custom SSO 原有规则推进版本并永久淘汰旧对象。
+兑换遇到暂态失败、内部失败或响应结果未知时，接入方统一放弃旧 Code，等待后重新调用 `/sso/authorize`。`Retry-After` 表示开始
+新授权前等待的秒数，不表示重放原 token 请求；仍有效的根 Cookie 通常允许直接续接，无需再次输入凭据。参数、Client 认证或
+配置错误应先修正，不能形成自动授权循环。没有新增消费阶段或恢复动作字段。
+
+Client Maintenance 在消费前返回 `503 AUTH.MAINTENANCE`；Client Snapshot、Gate 或 Subject Access 暂态失败也在消费前拒绝，
+原 Code 的期限不延长。即使服务端此次尚未消费，Independent 接入方也使用同一重新授权策略，不判断内部消费进度。
+已经签发的有效 Credential、根会话和 Cookie 应保留；UserInfo/authz 仍可按 `Retry-After` 用原凭据重试。
+Maintenance 期间真实 configure、enable、disable、remove 或 secret rotation 仍推进协议版本，旧对象不会因结束维护而恢复。
+
+当前功能分支的 Independent/Gateway 已由 #158/#159 迁移；定向维护已由 #160 交付，父规格尚未验收，环境未切换。
+该过渡候选不可部署，完整切换须等 #157 的维护清理与统一消费者升级完成。
 
 ### 4.5 Client Code 的 HTTP 传输
 
@@ -284,7 +297,7 @@ Authorization: {sid}
   "code": 200,
   "message": "success",
   "data": {
-    "version": 1,
+    "version": 2,
     "subjectIdentifier": "00000000-0000-4000-8000-000000001001",
     "profile": {
       "username": "138550",
@@ -372,7 +385,8 @@ Cookie/session，再调用 IAM `/sso/logout`。Client 配置中的 `logoutEndpoi
 | 回调换取 token 报“非法Code” | 授权码过期、重复使用或 code 传错 | 重新发起登录，不要缓存或复用授权码。 |
 | `/public/user-info` 返回 400 | 缺少 `Client`，或 `Client` 格式非法 | 传入已注册 Client Code 的合法 transport 编码。 |
 | `/public/user-info` 返回 401 | 缺少 IAM credential/session，或 credential/session 已过期 | 清理第三方本地会话并重新发起 SSO 授权登录。 |
-| `/sso/authorize`、`/sso/callback`、`/sso/token`、`/public/user-info` 或 `/auth/authz` 返回 503 | Client 明确处于 Maintenance，或 Client/Subject Access/主体投影暂时无法确认 | `AUTH.MAINTENANCE` 表示明确维护；其他 503 是通用暂态不可用。保留仍有效的 code、Cookie/session，按 `Retry-After` 或运维窗口重试。 |
+| Independent `/sso/token` 返回 503、500 或结果未知 | 兑换暂态、内部失败或响应丢失 | 放弃旧 Code，按 `Retry-After` 等待后重新授权；保留有效根 Cookie，不重放 token 请求。 |
+| `/sso/authorize`、`/public/user-info` 或 `/auth/authz` 返回 503 | Client Maintenance 或依赖暂态不可用 | 保留有效 Credential、Cookie/session；按 `Retry-After` 或维护窗口重试原操作。 |
 | 登出后业务系统仍显示已登录 | 业务系统只撤销了 IAM credential，未清理自己的 session | 业务退出入口先清理本地 Cookie/session，再调用 IAM `/sso/logout`。 |
 | 登录成功后循环跳登录页 | Cookie 域、反向代理路径或 `redirectUrl` 配置不一致 | 检查回调地址、Cookie 所属域和网关转发规则。 |
 
@@ -397,7 +411,9 @@ Cookie/session，再调用 IAM `/sso/logout`。Client 配置中的 `logoutEndpoi
 - 独立应用已提供 `callbackEndpoint` 和当前 V1 所需的预留 `logoutEndpoint`，且不依赖后者接收通知。
 - 未登录时能跳转到 `/sso/authorize`。
 - Independent 业务系统能在取得 `sid` 后自行建立并维护本地会话；Gateway client 能取得 Gateway Local Session。
-- 已配置所需 `subjectClaims`，且 `/public/user-info` 只返回该 Client 获准接收的 V1 主体投影。
+- 已配置所需 `subjectClaims`，且 `/public/user-info` 只返回该 Client 获准接收的 V2 主体投影。
 - Gateway `/auth/authz` 的 response body 与 `X-User-Info` 相同，解码后不含数据库 ID、phone、任职、授权或 ORCAS。
 - 业务系统退出能调用 `/sso/logout`。
 - Independent 业务系统能在调用 `/sso/logout` 的同时清理自己的本地 session。
+
+一次消费切换的目标/证据见[最终契约账本](custom-sso-one-shot-grant-contract.md)，统一版本与保留会话操作沿[升级手册](../../releases/custom-sso-one-shot-grant-upgrade.md)。环境切换仍需发布负责人另行验收。

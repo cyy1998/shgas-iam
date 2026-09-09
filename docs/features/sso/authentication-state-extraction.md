@@ -2,7 +2,7 @@
 
 Status: Current
 
-Last verified: 2026-09-08
+Last verified: 2026-09-09
 
 Next review: 2026-10-31
 
@@ -19,8 +19,8 @@ API 提供 Client/Snapshot/Secret、User、ORCAS、审计与日志的具体能�
 
 - **K**：[Kernel Component](../../../packages/session-kernel/test-integration/component/session-kernel.integration.test.ts) 与同 owner 的 Redis collection；#125 已执行四类生命周期、时间、索引、tombstone、pending cleanup 及 API/Admin/OIDC 消费验证。
 - **A**：[API 混合认证和协议矩阵](../../../apps/api/test-integration/component/custom-sso-session-kernel.adapter.integration.test.ts)；保留四种统一认证 production composition、Kernel/Grant 时序、Snapshot、错误、补偿与审计协作。测试经 testing 入口注入可控故障，生产只消费 root。
-- **C**：[Custom SSO Component](../../../packages/custom-sso/test-integration/component/authorize-sso.use-case.integration.test.ts) 及同目录兑换、callback、主体交付、Grant 矩阵；新 owner 收集原纯协议测试。没有删除原状态机断言。
-- **R**：[完整 root 与独立 cleanup 真实 Redis](../../../packages/custom-sso/test-integration/redis/custom-sso.integration.test.ts) 和[Grant Redis](../../../packages/custom-sso/test-integration/redis/authorization-grant-redemption.integration.test.ts)；三种模式通过正式 factory 授权/兑换/UserInfo/退出，坏 redirect 后仍可合法兑换，Kernel 撤销同步删除 Grant 并保留非目标状态；Grant 期限、heartbeat、接管、单赢家保持真实 Redis 验证。
+- **C**：[Custom SSO Component](../../../packages/custom-sso/test-integration/component/authorize-sso.use-case.integration.test.ts) 及同目录兑换、callback、主体交付、Grant 矩阵；新 owner 收集原纯协议测试。原状态机恢复断言已按 ADR-0031 退役，一次消费证据由 R 接替。
+- **R**：[完整 root 与独立 cleanup 真实 Redis](../../../packages/custom-sso/test-integration/redis/custom-sso.integration.test.ts) 和[Grant Redis](../../../packages/custom-sso/test-integration/redis/custom-sso-operation.integration.test.ts)；三种模式通过正式 factory 授权/兑换/UserInfo/退出，坏 redirect 后仍可合法兑换，Kernel 撤销同步删除 Grant 并保留非目标状态；原期限、单赢家、消费未知结果停止、ORCAS 故障与同步补偿由真实 Redis 完整操作验证；旧库存使用专用 fixture。
 - **O**：[OIDC 精确清理与维护](../../../apps/oidc-provider/test-integration/redis/client-protocol-artifact-cleanup.integration.test.ts)，以及 API/OIDC Composition/Process collections；OIDC 使用独立 cleanup，真实 Grant seed 改为生产 owner prefix 并按精确 key 登记清理，不用自定义测试 prefix 假装生产装配。
 - **W**：[wire contract](../../../packages/custom-sso/src/__tests__/custom-sso-v2.contract.test.ts)、Admin/SSO Unit/Component、production build 及 preview/UserInfo Browser；#126 的已执行证据记录在该票评论。
 - **S**：package exports、消费方 typecheck、Architecture Guard、Collection Guard、Docker closure 和文档检查。
@@ -43,14 +43,14 @@ API 提供 Client/Snapshot/Secret、User、ORCAS、审计与日志的具体能�
 | 10 | 协议返回 absent/invalid/valid，门户拥有 decision/Cookie | A、C |
 | 11 | Independent 校验 Secret/client/redirect 并返回 Credential/wire | A、C、R |
 | 12 | Gateway callback 完整建立 Local Session | A、C、R |
-| 13 | ORCAS 时机、交付与失败重试保持 | A、R |
+| 13 | ORCAS 在消费后调用，失败通过新授权恢复 | A、R |
 | 14 | 模块拥有外部调用与补偿顺序 | A、R |
 | 15 | API 提供具体外部能力，包使用自有窄 ports | A、S |
-| 16 | redirect 错误在 reservation 前拒绝并保留 Code；版本永久失效已由 #148 改为精确撤销，较新版本只拒绝保留 | A、C、R；[当前协议契约](custom-sso-protocol-validation.md) |
-| 17 | Grant 单赢家、renew/release/consume/takeover 保持 | A、C、R |
+| 16 | redirect 错误在消费前拒绝并保留 Code；版本永久失效已由 #148 改为精确撤销，较新版本只拒绝保留 | A、C、R；[当前协议契约](custom-sso-protocol-validation.md) |
+| 17 | Grant 单赢家保持，lease/release/takeover 已按 ADR-0031 退役 | A、C、R |
 | 18 | Grant 使用 Kernel Artifact 身份和权威期限 | A、R |
-| 19 | Independent 投影先于签发，复核先于消费 | A、R |
-| 20 | 每类失败保持 release/精确撤销/等待接管 | A、C、R |
+| 19 | Independent 前置校验后消费，再投影与签发 | A、R |
+| 20 | 消费后失败不恢复 Code，写前新 identity 与同步尽力精确补偿保持 | A、C、R |
 | 21 | 一次请求贯穿入口接受的 Snapshot | A、C |
 | 22 | Public UserInfo 交付协议受控投影 | A、C、R |
 | 23 | Gateway 仅最小字段且编码一致 | A、C |

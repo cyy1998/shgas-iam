@@ -425,6 +425,11 @@ Hook 不运行 lint、typecheck、test、build 或 tracker checker。按改动�
   和必要 password；所有操作要求已停流排空，无 runtime 默认目标推断。按当前 Kernel/Grant/OIDC owner 固定键族 SCAN、分批 UNLINK，
   不依赖 client index；apply 后必须在新进程 verify。安全 report 不含完整 key/凭据/原始错误，失败/超时非零；不写 PG，
   不推进 epoch，不操作非目标 owner 或退役 namespace，也不自动部署、切流或执行演练。
+- 旧 Custom SSO Grant 定向维护：`pnpm --filter @iam/oidc-provider custom-sso:grants -- <inventory|apply|verify> --writers-stopped`。
+  执行前完整读取[定向维护手册](../releases/custom-sso-grant-maintenance.md)及[统一升级流程](../releases/custom-sso-one-shot-grant-upgrade.md)。仅用于旧 writer 已停、请求已排空且新 writer 未启用的窗口；
+  显式注入 OIDC Redis host/port/db、Kernel namespace 与必要 password，不读取 `.env`。只扫描并 CAS 清理 Custom SSO auth_code
+  Artifact 与旧三态 redemption；Principal、Credential、OIDC 保留。verify 新进程只持 SCAN/GET，目标清零与保留集独立基线对照分开。
+  任一失败/未验证非零，保持停流修复后完整重跑；不能用全清命令代替。
 - Session Kernel：`pnpm --filter @iam/session-kernel <lint|test|test:unit|test:integration:component|test:integration:redis|typecheck>`
 - API Core：`pnpm --filter @iam/api-core <lint|test|test:unit|test:integration:component|test:integration:process|test:integration:redis|client-runtime:hard-cutover-redis|typecheck>`
 - Custom SSO：`pnpm --filter @iam/custom-sso <lint|test|test:unit|test:integration:component|test:integration:redis|typecheck>`；Redis 使用独立 `IAM_CUSTOM_SSO_TEST_REDIS_URL`。

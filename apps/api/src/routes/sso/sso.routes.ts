@@ -46,6 +46,7 @@ export const endpointsConfiguration = createRoute({
 export const callback = createRoute({
   method: "get",
   path: `${routePrefix}/callback`,
+  description: "授权码通过前置校验后一次消费。失败或响应丢失时返回业务应用重新发起访问；不要刷新携带旧 Code 的 callback。暂态失败可等待 Retry-After 后重新授权，有效根会话可续接。",
   tags,
   request: {
     query: z.object({
@@ -68,6 +69,7 @@ export const token = createRoute({
   method: "post",
   path: `${routePrefix}/token`,
   tags,
+  description: "暂态失败、内部失败或结果未知后放弃旧 Code，重新授权；有效根会话通常可续接。参数、Client 认证或配置错误须先修正。",
   security: [{ [CUSTOM_SSO_BASIC_SECURITY_SCHEME]: [] }],
   request: {
     body: {
@@ -91,7 +93,10 @@ export const token = createRoute({
       "Independent credential 与受控主体投影",
     ),
     [HttpStatusCodes.SERVICE_UNAVAILABLE]:
-      customSsoUnavailableResponse,
+      createCustomSsoUnavailableResponse(
+        "兑换暂时不可用；放弃旧 Code，等待后重新授权，不重放 token 请求",
+        "开始新授权前等待的秒数，不表示重试旧 Code",
+      ),
   },
 });
 

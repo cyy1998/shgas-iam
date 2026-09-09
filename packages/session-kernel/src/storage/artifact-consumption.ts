@@ -20,6 +20,9 @@ redis.call("PEXPIREAT", KEYS[3], ARGV[4])
 redis.call("SET", KEYS[4], ARGV[3])
 redis.call("PEXPIREAT", KEYS[4], ARGV[4])
 redis.call("DEL", KEYS[1], KEYS[2])
+for i = 5, #KEYS do
+  redis.call("ZREM", KEYS[i], ARGV[i])
+end
 return 1
 `;
 
@@ -27,6 +30,7 @@ export interface SessionKernelArtifactConsumeInput {
   readonly artifact: ProtocolArtifact;
   readonly serializedArtifact: string;
   readonly tombstone: RevokedTombstone;
+  readonly indexRemovals: ReadonlyArray<{ key: string; member: string }>;
 }
 
 export interface SessionKernelArtifactConsumer {
@@ -49,15 +53,17 @@ export function createRedisSessionKernelArtifactConsumer(
 
       const result = await redis.eval(
         CONSUME_ARTIFACT_SCRIPT,
-        4,
+        4 + input.indexRemovals.length,
         keys.active("artifact", input.artifact.artifactId),
         keys.lookup("artifact", input.artifact.lookupHash),
         keys.tombstone("artifact", input.artifact.artifactId),
         keys.lookupTombstone("artifact", input.artifact.lookupHash),
+        ...input.indexRemovals.map(index => index.key),
         input.serializedArtifact,
         input.artifact.artifactId,
         stringifyRevokedTombstone(input.tombstone),
         input.tombstone.expiresAt,
+        ...input.indexRemovals.map(index => index.member),
       );
       if (result === 1 || result === "1")
         return "consumed";
@@ -105,13 +111,15 @@ export function createInMemorySessionKernelArtifactConsumer(
         }
 
         const serializedTombstone = stringifyRevokedTombstone(input.tombstone);
-        const result = await redis.multi()
+        const transaction = redis.multi()
           .set(tombstoneKey, serializedTombstone)
           .pexpireat(tombstoneKey, input.tombstone.expiresAt)
           .set(lookupTombstoneKey, serializedTombstone)
           .pexpireat(lookupTombstoneKey, input.tombstone.expiresAt)
-          .del(activeKey, lookupKey)
-          .exec();
+          .del(activeKey, lookupKey);
+        for (const index of input.indexRemovals)
+          transaction.zrem(index.key, index.member);
+        const result = await transaction.exec();
         if (!result)
           throw new Error("session kernel Redis transaction failed");
         const failed = result.find(([error]) => error !== null);

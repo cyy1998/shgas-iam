@@ -1,5 +1,5 @@
 import type { ClientTrafficGateResult } from "@iam/api-core/client-traffic-gate";
-import type { AuthorizationGrantRedemption, AuthorizationGrantRedemptionScheduler, CustomSsoSessionKernelAdapterDeps } from "@iam/custom-sso/testing";
+import type { CustomSsoSessionKernelAdapterDeps } from "@iam/custom-sso/testing";
 
 import type { CustomSsoClientRuntimeDto } from "@iam/domain/client";
 import type { SessionKernel } from "@iam/session-kernel";
@@ -22,18 +22,15 @@ import {
   SubjectAccessDisabledError,
   SubjectAccessUnavailableError,
 } from "@iam/api-core/subject-access";
-import {
-  SubjectProjectionNotReadyError,
-} from "@iam/client-subject-projection";
+
 import {
   ClientStatus,
   CustomSsoClientMode,
-  RETRYABLE_SERVICE_UNAVAILABLE,
   SubjectClaim,
   UserStatus,
   UserType,
 } from "@iam/contracts";
-import { bindCustomSsoOperationKernel, createAuthorizationGrantRedemption, createAuthorizeSsoUseCase, createCustomSsoApplication, createCustomSsoSessionKernelAdapter, createInMemoryAuthorizationGrantRedemptionStore, createManualAuthorizationGrantRedemptionScheduler } from "@iam/custom-sso/testing";
+import { bindCustomSsoOperationKernel, createAuthorizeSsoUseCase, createCustomSsoApplication, createCustomSsoSessionKernelAdapter } from "@iam/custom-sso/testing";
 
 import { CustomSsoSubjectProjectionInvariantError } from "@iam/custom-sso/wire";
 import { createSessionKernelForTesting } from "@iam/session-kernel/testing";
@@ -234,7 +231,6 @@ const logger = {
 
 let liveUserAvailable = true;
 let profileAvailable = true;
-let orcasShouldFail = false;
 
 const subjectIdentifier = "00000000-0000-4000-8000-000000001001";
 
@@ -345,9 +341,7 @@ function createServices(options: {
   authCodeExpireSeconds?: number;
   localSessionTtlSeconds?: number;
   principalTtlMs?: number;
-  authorizationGrantRedemption?: (
-    defaultRedemption: AuthorizationGrantRedemption,
-  ) => AuthorizationGrantRedemption;
+
   captureSubjectAccessTransitionId?: () => string | Promise<string>;
   decorateAuthenticationKernel?: (kernel: SessionKernel) => SessionKernel;
   decorateKernel?: (
@@ -359,10 +353,7 @@ function createServices(options: {
   findRuntimeClient?: (
     clientCode: string,
   ) => Promise<CustomSsoClientRuntimeDto | null>;
-  grantLeaseDurationMs?: number;
   grantAttemptId?: string;
-  grantAttemptIds?: readonly string[];
-  grantScheduler?: AuthorizationGrantRedemptionScheduler;
   recordAuditLog?: (event: unknown) => Promise<void>;
   validatePrincipal?: (target: { principal: { subjectId: string } }) => Promise<
     | { ok: true }
@@ -428,28 +419,10 @@ function createServices(options: {
   };
   const orcas = {
     orcasLogin: mock(async () => {
-      if (orcasShouldFail) {
-        throw new Error("orcas failed");
-      }
       return { orcasId: "orcas", orcasSessionId: "orcas-session" };
     }),
   };
-  let grantAttemptIndex = 0;
-  const defaultAuthorizationGrantRedemption = createAuthorizationGrantRedemption({
-    leaseDurationMs: options.grantLeaseDurationMs ?? 5_000,
-    random: {
-      uuid: () => options.grantAttemptIds?.[grantAttemptIndex++]
-        ?? options.grantAttemptId
-        ?? randomUUID(),
-    },
-    scheduler: options.grantScheduler,
-    store: createInMemoryAuthorizationGrantRedemptionStore({
-      clock: { now: () => fakeRedis.now() },
-    }),
-  });
-  const authorizationGrantRedemption
-    = options.authorizationGrantRedemption?.(defaultAuthorizationGrantRedemption)
-      ?? defaultAuthorizationGrantRedemption;
+
   const subjectProjection = {
     resolve: mock(options.resolveSubjectProjection ?? (async (input: {
       subjectIdentifier: string;
@@ -488,7 +461,6 @@ function createServices(options: {
   );
   const sessionDeps: CustomSsoSessionKernelAdapterDeps = {
     access: { users: { findOrcasUserBySubjectIdentifier: async () => profileAvailable ? userDetail : null } },
-    authorizationGrantRedemption,
     clients: {
       findRuntimeRecord: options.findRuntimeClient
         ?? (async (clientCode: string) =>
@@ -509,7 +481,7 @@ function createServices(options: {
     kernel: adapterKernel,
     logger,
     orcas,
-    random: { uuid: randomUUID },
+    random: { uuid: () => options.grantAttemptId ?? randomUUID() },
     subjectDelivery,
     subjectProjection,
     auditLogWriter,
@@ -606,7 +578,6 @@ function createServices(options: {
 
   return {
     authentication,
-    authorizationGrantRedemption,
     principalSessions,
     customSsoSession,
     customSso,
@@ -803,54 +774,6 @@ async function redeemIndependentCredential(
   });
 }
 
-async function assertAmbiguousCredentialIssueRecovery(
-  prepareOperation: (
-    services: ReturnType<typeof createServices>,
-  ) => Promise<() => Promise<string>>,
-  offset: number,
-) {
-  const firstAttemptId = "10000000-0000-4000-8000-000000000001";
-  const secondAttemptId = "20000000-0000-4000-8000-000000000002";
-  const responseLoss = new Error("credential response lost");
-  let firstCredentialToken: string | undefined;
-  let issueAttempts = 0;
-  const services = createServices({
-    applicationClock: { now: () => fakeRedis.now() + offset },
-    authCodeExpireSeconds: 2,
-    localSessionTtlSeconds: 2,
-    grantAttemptIds: [firstAttemptId, secondAttemptId],
-    decorateKernel: kernel => ({
-      ...kernel,
-      async issueCredential(input) {
-        issueAttempts += 1;
-        const issued = await kernel.issueCredential(input);
-        if (issueAttempts === 1) {
-          firstCredentialToken = issued.status === "created"
-            ? issued.externalToken
-            : undefined;
-          throw responseLoss;
-        }
-        return issued;
-      },
-    }),
-  });
-  const execute = await prepareOperation(services);
-
-  await expect(execute()).rejects.toBe(responseLoss);
-  expect(firstCredentialToken).toBeDefined();
-  await expect(
-    services.kernel.resolveCredential(firstCredentialToken!, { protocol: "custom-sso", credentialType: "local_session" }),
-  ).resolves.toMatchObject({ status: "revoked" });
-
-  const retryToken = await execute();
-  await expect(
-    services.kernel.resolveCredential(retryToken, { protocol: "custom-sso", credentialType: "local_session" }),
-  ).resolves.toMatchObject({
-    status: "resolved",
-    value: { credentialId: secondAttemptId },
-  });
-}
-
 function createOaToken(loginid: string, ts: string, clientSecret = client.clientSecret) {
   return Buffer.from(sm3(`${loginid}|${ts}|${clientSecret}${clientSecret}`), "hex").toBase64();
 }
@@ -861,7 +784,6 @@ beforeEach(() => {
   logger.warn.mockClear();
   liveUserAvailable = true;
   profileAvailable = true;
-  orcasShouldFail = false;
   currentIndependentRuntimeClient = independentRuntimeClient;
   currentGatewayRuntimeClient = createGatewayRuntimeClient("gateway");
   currentGatewayOrcasRuntimeClient = createGatewayRuntimeClient("gateway-orcas");
@@ -948,7 +870,7 @@ describe("Custom SSO module interface", () => {
     expect(nextRequest.status).toBe("missing_or_expired");
   });
 
-  test("issues an Independent Credential with the reserved attempt identity and no Client Binding", async () => {
+  test("issues an Independent Credential with a known new identity and no Client Binding", async () => {
     const grantAttemptId = "10000000-0000-4000-8000-000000000001";
     const services = createServices({ grantAttemptId });
 
@@ -1006,40 +928,6 @@ describe("Custom SSO module interface", () => {
       code,
       redirectUri: "https://app.example.com/callback",
     })).rejects.toBeInstanceOf(InvalidAuthCodeError);
-  });
-
-  test.each([0, 5_000, -5_000])("recovers an Independent Grant after ambiguous commit with application offset %d", async (offset) => {
-    await assertAmbiguousCredentialIssueRecovery(async (services) => {
-      const { code } = await issueAuthorizationCode(services);
-      const input = {
-        client: independentClient,
-        code,
-        redirectUri: "https://app.example.com/callback",
-      };
-      return async () => {
-        const result = await services.customSsoSession.redeemIndependentGrant(input);
-        return result.credential;
-      };
-    }, offset);
-  });
-
-  test.each([0, 5_000, -5_000])("recovers a Gateway Grant after ambiguous commit with application offset %d", async (offset) => {
-    await assertAmbiguousCredentialIssueRecovery(async (services) => {
-      const redirectUrl = "https://gateway.example.com/callback";
-      const { code } = await issueAuthorizationCode(services, {
-        clientCode: "gateway",
-        redirectUrl,
-      });
-      const input = {
-        client: getGatewayClientContext("gateway"),
-        code,
-        redirectUrl,
-      };
-      return async () => {
-        const result = await services.customSsoSession.completeGatewayLogin(input);
-        return result.token;
-      };
-    }, offset);
   });
 
   test("rejects and revokes a legacy binding-backed Custom SSO Credential", async () => {
@@ -1423,7 +1311,7 @@ describe("Custom SSO module interface", () => {
     expect(fakeRedis.keysStartingWith("sess:v2:active:a:")).toHaveLength(0);
   });
 
-  test("issues a strict V1 authorization grant and initializes its redemption record", async () => {
+  test("issues a strict V2 authorization artifact without a redemption record", async () => {
     const services = createServices();
     const principalToken = await createPrincipalToken(services.principalSessions);
 
@@ -1464,15 +1352,6 @@ describe("Custom SSO module interface", () => {
     if (artifact.status !== "resolved") {
       throw new Error("expected authorization artifact");
     }
-    await expect(
-      services.authorizationGrantRedemption.begin(artifact.value.artifactId),
-    ).resolves.toMatchObject({
-      status: "reserved",
-      reservation: {
-        grantId: artifact.value.artifactId,
-        expiresAt: artifact.value.expiresAt,
-      },
-    });
   });
 
   test("keeps a newly issued authorization artifact when the accepted client changes during issuance", async () => {
@@ -1529,36 +1408,6 @@ describe("Custom SSO module interface", () => {
       throw new Error("expected issued authorization code");
     const artifact = await services.kernel.resolveProtocolArtifact(result.code, { protocol: "custom-sso", artifactType: "auth_code" });
     expect(artifact.status).toBe("resolved");
-  });
-
-  test("revokes the authorization artifact when redemption initialization cannot create its record", async () => {
-    let grantId: string | undefined;
-    const initialize = mock(async (input: { grantId: string }) => {
-      grantId = input.grantId;
-      return "exists" as const;
-    });
-    const services = createServices({
-      authorizationGrantRedemption: defaultRedemption => ({
-        ...defaultRedemption,
-        initialize,
-      }),
-    });
-    const principalToken = await createPrincipalToken(services.principalSessions);
-
-    await expect(services.customSsoSession.issueAuthorizationCode({
-      clientCode: client.clientCode,
-      configVersion: 7,
-      mode: CustomSsoClientMode.Independent,
-      redirectUrl: "https://app.example.com/callback",
-      token: principalToken,
-      tokenSource: "cookie",
-    })).rejects.toThrow("授权码创建失败");
-
-    expect(initialize).toHaveBeenCalledTimes(1);
-    expect(grantId).toBeDefined();
-    expect(
-      await fakeRedis.get(services.kernel.keys.active("artifact", grantId!)),
-    ).toBeNull();
   });
 
   test("redeems an Independent grant into a minimal credential and a client-scoped V2 projection", async () => {
@@ -1622,58 +1471,6 @@ describe("Custom SSO module interface", () => {
     })).rejects.toBeInstanceOf(InvalidAuthCodeError);
   });
 
-  test("keeps an invariant-failed Independent grant leased without starting Credential side effects", async () => {
-    const projectedSubjectIdentifier = "00000000-0000-4000-8000-000000001002";
-    let returnMismatchedSubject = true;
-    let credentialIssueAttempts = 0;
-    const services = createServices({
-      grantLeaseDurationMs: 60,
-      resolveSubjectProjection: async () => ({
-        subjectIdentifier: returnMismatchedSubject
-          ? projectedSubjectIdentifier
-          : subjectIdentifier,
-      }),
-      decorateKernel: kernel => ({
-        ...kernel,
-        async issueCredential(input) {
-          credentialIssueAttempts += 1;
-          return await kernel.issueCredential(input);
-        },
-      }),
-    });
-    const { code } = await issueAuthorizationCode(services);
-    const auditCountBeforeRedemption = auditLogs.length;
-    const input = {
-      client: independentClient,
-      code,
-      redirectUri: "https://app.example.com/callback",
-    };
-
-    await expect(
-      services.customSsoSession.redeemIndependentGrant(input),
-    ).rejects.toEqual(
-      new CustomSsoSubjectProjectionInvariantError("subject_mismatch"),
-    );
-    expect(credentialIssueAttempts).toBe(0);
-    expect(auditLogs).toHaveLength(auditCountBeforeRedemption);
-    await expect(services.kernel.resolveProtocolArtifact(code, { protocol: "custom-sso", artifactType: "auth_code" })).resolves.toMatchObject({
-      status: "resolved",
-    });
-    await expect(
-      services.customSsoSession.redeemIndependentGrant(input),
-    ).rejects.toBeInstanceOf(InvalidAuthCodeError);
-
-    returnMismatchedSubject = false;
-    fakeRedis.advance(61);
-    await expect(
-      services.customSsoSession.redeemIndependentGrant(input),
-    ).resolves.toMatchObject({
-      credential: expect.stringContaining("iam_ls_"),
-      subject: { version: 2, subjectIdentifier },
-    });
-    expect(credentialIssueAttempts).toBe(1);
-  });
-
   test("rejects an invalid Independent Wire before starting Credential side effects", async () => {
     let credentialIssueAttempts = 0;
     const services = createServices({
@@ -1709,112 +1506,14 @@ describe("Custom SSO module interface", () => {
     expect(credentialIssueAttempts).toBe(0);
     expect(auditLogs).toHaveLength(auditCountBeforeRedemption);
     await expect(services.kernel.resolveProtocolArtifact(code, { protocol: "custom-sso", artifactType: "auth_code" })).resolves.toMatchObject({
-      status: "resolved",
-    });
-  });
-
-  test.each([
-    ["projection not ready", new SubjectProjectionNotReadyError()],
-    ["Subject Access unavailable", new SubjectAccessUnavailableError()],
-    ["another typed retryable 503", Object.assign(
-      new Error("typed retryable dependency"),
-      { retryability: RETRYABLE_SERVICE_UNAVAILABLE },
-    )],
-  ])("releases the same grant attempt after retryable %s", async (_label, retryableError) => {
-    let projectionAttempts = 0;
-    const services = createServices({
-      resolveSubjectProjection: async ({ subjectIdentifier: inputSubjectIdentifier }) => {
-        projectionAttempts += 1;
-        if (projectionAttempts === 1)
-          throw retryableError;
-        return { subjectIdentifier: inputSubjectIdentifier };
-      },
-    });
-    const { code } = await issueAuthorizationCode(services);
-    const input = {
-      client: independentClient,
-      code,
-      redirectUri: "https://app.example.com/callback",
-    };
-
-    await expect(
-      services.customSsoSession.redeemIndependentGrant(input),
-    ).rejects.toBe(retryableError);
-    await expect(
-      services.customSsoSession.redeemIndependentGrant(input),
-    ).resolves.toMatchObject({
-      credential: expect.stringContaining("iam_ls_"),
-      subject: { version: 2, subjectIdentifier },
-    });
-    expect(projectionAttempts).toBe(2);
-  });
-
-  test("keeps retryable 503 semantics after projection crosses the original lease window", async () => {
-    const retryableError = new SubjectProjectionNotReadyError();
-    let projectionAttempts = 0;
-    const manualScheduler = createManualAuthorizationGrantRedemptionScheduler();
-    const services = createServices({
-      grantLeaseDurationMs: 60,
-      grantScheduler: manualScheduler.scheduler,
-      resolveSubjectProjection: async ({ subjectIdentifier: inputSubjectIdentifier }) => {
-        projectionAttempts += 1;
-        if (projectionAttempts === 1) {
-          fakeRedis.advance(35);
-          await expect(manualScheduler.advanceToNextHeartbeat()).resolves.toBe(20);
-          fakeRedis.advance(35);
-          await expect(manualScheduler.advanceToNextHeartbeat()).resolves.toBe(20);
-          fakeRedis.advance(25);
-          throw retryableError;
-        }
-        return { subjectIdentifier: inputSubjectIdentifier };
-      },
-    });
-    const { code } = await issueAuthorizationCode(services);
-    const input = {
-      client: independentClient,
-      code,
-      redirectUri: "https://app.example.com/callback",
-    };
-
-    await expect(
-      services.customSsoSession.redeemIndependentGrant(input),
-    ).rejects.toBe(retryableError);
-    await expect(
-      services.customSsoSession.redeemIndependentGrant(input),
-    ).resolves.toMatchObject({
-      credential: expect.stringContaining("iam_ls_"),
-    });
-  });
-
-  test("consumes a successful Independent grant after projection crosses one lease window", async () => {
-    const manualScheduler = createManualAuthorizationGrantRedemptionScheduler();
-    const services = createServices({
-      grantLeaseDurationMs: 60,
-      grantScheduler: manualScheduler.scheduler,
-      resolveSubjectProjection: async ({ subjectIdentifier: inputSubjectIdentifier }) => {
-        fakeRedis.advance(35);
-        await expect(manualScheduler.advanceToNextHeartbeat()).resolves.toBe(20);
-        fakeRedis.advance(35);
-        await expect(manualScheduler.advanceToNextHeartbeat()).resolves.toBe(20);
-        fakeRedis.advance(25);
-        return { subjectIdentifier: inputSubjectIdentifier };
-      },
-    });
-    const { code } = await issueAuthorizationCode(services);
-
-    await expect(services.customSsoSession.redeemIndependentGrant({
-      client: independentClient,
-      code,
-      redirectUri: "https://app.example.com/callback",
-    })).resolves.toMatchObject({
-      credential: expect.stringContaining("iam_ls_"),
+      status: "consumed_replay",
     });
   });
 
   test.each([
     ["unauthorized failure", new AuthzUnauthorizedError("未登录")],
     ["unexpected bug", new Error("projection bug")],
-  ])("does not release a grant attempt after a non-retryable %s", async (
+  ])("keeps Code consumed after a non-retryable %s", async (
     _label,
     nonRetryableError,
   ) => {
@@ -1867,101 +1566,6 @@ describe("Custom SSO module interface", () => {
       await expect(retry).resolves.toMatchObject({ credential: expect.stringContaining("iam_ls_") });
     else
       await expect(retry).rejects.toBeInstanceOf(InvalidAuthCodeError);
-  });
-
-  test("revokes a newly issued Credential when Grant consumption loses its fence", async () => {
-    let issuedCredentialToken: string | undefined;
-    const services = createServices({
-      authorizationGrantRedemption: (defaultRedemption) => {
-        const consume = mock(async () => "stale-attempt" as const);
-        return {
-          ...defaultRedemption,
-          consume,
-          withLease: async (_reservation, operation) => await operation({
-            consume,
-            release: async () => "stale-attempt" as const,
-          }),
-        };
-      },
-      decorateKernel: kernel => ({
-        ...kernel,
-        async issueCredential(input) {
-          const issued = await kernel.issueCredential(input);
-          issuedCredentialToken = issued.status === "created"
-            ? issued.externalToken
-            : undefined;
-          return issued;
-        },
-      }),
-    });
-    const { code } = await issueAuthorizationCode(services);
-
-    await expect(services.customSsoSession.redeemIndependentGrant({
-      client: independentClient,
-      code,
-      redirectUri: "https://app.example.com/callback",
-    })).rejects.toBeInstanceOf(InvalidAuthCodeError);
-
-    expect(fakeRedis.keysStartingWith("sess:v2:active:c:")).toHaveLength(0);
-    expect(issuedCredentialToken).toBeDefined();
-    await expect(
-      services.kernel.resolveCredential(issuedCredentialToken!, { protocol: "custom-sso", credentialType: "local_session" }),
-    ).resolves.toMatchObject({ status: "revoked" });
-  });
-
-  test("never returns a sid when consume and Credential compensation throw", async () => {
-    let issuedCredentialToken: string | undefined;
-    const consumeFailure = new Error("consume dependency failed");
-    const release = mock(async () => "released" as const);
-    const services = createServices({
-      authorizationGrantRedemption: (defaultRedemption) => {
-        const consume = mock(async () => {
-          throw consumeFailure;
-        });
-        return {
-          ...defaultRedemption,
-          consume,
-          withLease: async (_reservation, operation) => await operation({
-            consume,
-            release,
-          }),
-        };
-      },
-      decorateKernel: kernel => ({
-        ...kernel,
-        async issueCredential(input) {
-          const issued = await kernel.issueCredential(input);
-          issuedCredentialToken = issued.status === "created"
-            ? issued.externalToken
-            : undefined;
-          return issued;
-        },
-        async revokeCredential() {
-          throw new Error("credential revoke failed");
-        },
-      }),
-    });
-    const { code } = await issueAuthorizationCode(services, {
-      state: "unique-state-compensation-sentinel",
-    });
-
-    await expect(services.customSsoSession.redeemIndependentGrant({
-      client: independentClient,
-      code,
-      redirectUri: "https://app.example.com/callback",
-    })).rejects.toBe(consumeFailure);
-
-    expect(issuedCredentialToken).toBeDefined();
-    expect(logger.warn).toHaveBeenCalledWith(expect.objectContaining({
-      clientCode: independentClient.clientCode,
-      operation: "independent_credential_compensation",
-      outcome: "revoke_failed",
-    }), "custom sso credential compensation failed closed");
-    expect(release).not.toHaveBeenCalled();
-    const observableOutput = JSON.stringify(logger.warn.mock.calls);
-    expect(observableOutput).not.toContain(issuedCredentialToken!);
-    expect(observableOutput).not.toContain(code);
-    expect(observableOutput).not.toContain("unique-state-compensation-sentinel");
   });
 
   test.each([
@@ -2115,7 +1719,7 @@ describe("Custom SSO module interface", () => {
     expect(observableLog).not.toContain(credentialToken);
   });
 
-  test("does not consume a grant or retain a credential when pure projection mapping fails", async () => {
+  test("consumes Code without issuing a credential when pure projection mapping fails", async () => {
     const services = createServices({
       resolveSubjectProjection: async () => ({
         authorization: {
@@ -2718,57 +2322,6 @@ describe("Custom SSO module interface", () => {
         redirectUri: "https://app.example.com/callback",
       }),
     ).rejects.toBeInstanceOf(AuthzUnauthorizedError);
-  });
-
-  test("releases a Gateway grant when ORCAS login fails so the callback can retry", async () => {
-    const services = createServices();
-    const redirectUrl = "https://gateway.example.com/callback";
-    const { principalToken, code } = await issueAuthorizationCode(services, {
-      clientCode: "gateway-orcas",
-      redirectUrl,
-    });
-    const gatewayClient = getMockClientByCode("gateway-orcas");
-    if (gatewayClient === null) {
-      throw new Error("expected gateway-orcas client");
-    }
-    orcasShouldFail = true;
-
-    await expect(
-      services.customSsoSession.completeGatewayLogin({
-        client: getGatewayClientContext("gateway-orcas"),
-        code,
-        redirectUrl,
-      }),
-    ).rejects.toThrow("orcas failed");
-
-    orcasShouldFail = false;
-    await expect(
-      services.customSsoSession.completeGatewayLogin({
-        client: getGatewayClientContext("gateway-orcas"),
-        code,
-        redirectUrl,
-      }),
-    ).resolves.toMatchObject({
-      orcasSessionId: "orcas-session",
-      token: expect.stringContaining("iam_ls_"),
-    });
-    await expect(
-      services.customSsoSession.logout(principalToken),
-    ).resolves.toMatchObject({
-      principalSessions: { revoked: 1 },
-      bindings: {
-        alreadyRevoked: 0,
-        excluded: 0,
-        missing: 0,
-        revoked: 0,
-      },
-      credentials: {
-        alreadyRevoked: 0,
-        excluded: 0,
-        missing: 0,
-        revoked: 1,
-      },
-    });
   });
 
   test("completeGatewayLogin binds ORCAS without restoring a wide audit target", async () => {

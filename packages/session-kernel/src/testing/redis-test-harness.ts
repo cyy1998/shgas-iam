@@ -25,6 +25,7 @@ export interface RedisTestHarness {
   readonly close: () => Promise<void>;
 }
 export interface SessionKernelRedisTestScope {
+  readonly namespace: string;
   readonly redisNow: () => Promise<number>;
   readonly writer: SessionKernel;
   readonly observer: SessionKernel;
@@ -203,6 +204,7 @@ export async function createSessionKernelRedisTestHarness(redisUrl: string): Pro
       });
 
       return {
+        namespace: keyPrefix,
         async redisNow() {
           const [seconds, micros] = await observerRedis.time();
           return Number(seconds) * 1000 + Math.floor(Number(micros) / 1000);

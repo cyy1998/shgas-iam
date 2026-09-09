@@ -112,7 +112,7 @@ end
 return 0
 `;
 
-function artifactKey(model: string, id: string, keyPrefix = "") {
+export function artifactKey(model: string, id: string, keyPrefix = "") {
   return `${keyPrefix}oidc:model:${model}:${id}`;
 }
 

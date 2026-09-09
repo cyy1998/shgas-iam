@@ -8,11 +8,6 @@ import type {
 } from "@iam/session-kernel";
 
 import type { CustomSsoAuditPort, CustomSsoKernelPort, CustomSsoLoggerPort as LoggerPort } from "../custom-sso.port";
-import type {
-  AuthorizationGrantLease,
-  AuthorizationGrantRedemption,
-  AuthorizationGrantReservation,
-} from "../grant";
 
 import type {
   CustomSsoSubjectProjectionPort,
@@ -38,13 +33,9 @@ import {
 import {
   ClientStatus,
   CustomSsoClientMode,
-  isRetryableServiceUnavailable,
 } from "@iam/contracts";
 import { resolveCustomSsoSubjectProjection } from "@iam/custom-sso/wire";
 import { z } from "zod";
-import {
-  AUTHORIZATION_GRANT_REDEMPTION_CLEANUP_KIND,
-} from "../grant";
 import { PrincipalSessionInspectionUnavailableError } from "../principal-session-inspection.error";
 import { CustomSsoConfigurationUnavailableError, CustomSsoRequestMismatchError } from "../protocol-validation.error";
 import { buildGatewayLoginSuccessAudit, buildIndependentLoginSuccessAudit, withRequestContext } from "./audit";
@@ -55,11 +46,9 @@ const LOCAL_SESSION_CREDENTIAL_TYPE = "local_session";
 
 type CustomSsoPrincipalTokenSource = "cookie" | "authorization_header" | "query" | "none";
 
-interface ReservedGatewayAuthorizationGrant {
+interface ResolvedGatewayAuthorizationGrant {
   artifact: ProtocolArtifact;
-  artifactId: string;
   principalSessionId: string;
-  reservation: AuthorizationGrantReservation;
   subjectIdentifier: string;
   state?: string;
 }
@@ -77,8 +66,6 @@ class CustomSsoCredentialIssueFailure {
     readonly credentialMayExist: boolean,
   ) {}
 }
-
-type CredentialIssueState = "not_started" | "started" | "issued";
 
 interface CustomSsoOrcasContext {
   userId: string;
@@ -111,9 +98,7 @@ interface GatewayClientContext {
 
 interface ResolvedIndependentAuthorizationGrant {
   artifact: ProtocolArtifact;
-  artifactId: string;
   principalSessionId: string;
-  reservation: AuthorizationGrantReservation;
   subjectIdentifier: string;
 }
 
@@ -150,7 +135,6 @@ type CustomSsoCredentialMetadata = z.infer<
 
 export interface CustomSsoSessionKernelAdapterDeps {
   access: CustomSsoAccess;
-  authorizationGrantRedemption: AuthorizationGrantRedemption;
   clients: {
     findRuntimeRecord: (
       clientCode: string,
@@ -202,11 +186,7 @@ export function createCustomSsoSessionKernelAdapter(deps: CustomSsoSessionKernel
       protocol: CUSTOM_SSO_PROTOCOL,
       clientCode: input.clientCode,
       artifactType: AUTH_CODE_ARTIFACT_TYPE,
-      cleanupRefs: [{
-        protocol: CUSTOM_SSO_PROTOCOL,
-        kind: AUTHORIZATION_GRANT_REDEMPTION_CLEANUP_KIND,
-        ref: artifactId,
-      }],
+      cleanupRefs: [],
       ttlMs: deps.config.authCodeExpireSeconds * 1000,
       tokenKind: "authCode",
       metadata: {
@@ -220,20 +200,6 @@ export function createCustomSsoSessionKernelAdapter(deps: CustomSsoSessionKernel
       },
     });
     if (artifact.status !== "created" || !artifact.externalToken) {
-      throw new CustomError("授权码创建失败");
-    }
-    try {
-      const initialized = await deps.authorizationGrantRedemption.initialize({
-        expiresAt: artifact.value.expiresAt,
-        grantId: artifact.value.artifactId,
-      });
-      if (initialized !== "created")
-        throw new CustomError("授权码创建失败");
-    }
-    catch (error) {
-      await deps.kernel.revokeArtifact(artifact.value.artifactId, "unknown");
-      if (error instanceof CustomError)
-        throw error;
       throw new CustomError("授权码创建失败");
     }
     return {
@@ -269,7 +235,7 @@ export function createCustomSsoSessionKernelAdapter(deps: CustomSsoSessionKernel
     client: GatewayClientContext;
     redirectUrl?: string;
     invalidCodeError?: "unauthorized" | "invalid_auth_code";
-  }): Promise<ReservedGatewayAuthorizationGrant> {
+  }): Promise<ResolvedGatewayAuthorizationGrant> {
     const resolved = await deps.kernel.resolveProtocolArtifact(input.code, { protocol: CUSTOM_SSO_PROTOCOL, artifactType: AUTH_CODE_ARTIFACT_TYPE, clientCode: input.client.clientCode });
     if (resolved.status === "fail_closed")
       throw new CustomSsoConfigurationUnavailableError({ cause: resolved.cause });
@@ -284,25 +250,17 @@ export function createCustomSsoSessionKernelAdapter(deps: CustomSsoSessionKernel
     );
     await acquireGrantPermission(resolved.value, resolvedGrant.subjectIdentifier, resolvedGrant.principalSessionId);
 
-    const reservation = await deps.authorizationGrantRedemption.begin(
-      resolved.value.artifactId,
-    );
-    if (reservation.status !== "reserved") {
-      throwInvalidCode(input.invalidCodeError);
-    }
-
     return {
       artifact: resolved.value,
-      artifactId: resolved.value.artifactId,
       principalSessionId: resolvedGrant.principalSessionId,
-      reservation: reservation.reservation,
       subjectIdentifier: resolvedGrant.subjectIdentifier,
       ...(resolvedGrant.state === undefined ? {} : { state: resolvedGrant.state }),
     };
   }
 
   async function issueGatewayLocalSession(input: {
-    authorizationGrant: ReservedGatewayAuthorizationGrant;
+    authorizationGrant: ResolvedGatewayAuthorizationGrant;
+    credentialId: string;
     client: GatewayClientContext;
     orcas?: CustomSsoOrcasContext | null;
   }): Promise<IssuedClientCredential> {
@@ -313,7 +271,7 @@ export function createCustomSsoSessionKernelAdapter(deps: CustomSsoSessionKernel
     };
     const credential = await issueCustomSsoCredential({
       clientCode: input.client.clientCode,
-      credentialId: input.authorizationGrant.reservation.attemptId,
+      credentialId: input.credentialId,
       credentialMetadata: {
         ...metadata,
         ...(input.orcas === undefined || input.orcas === null
@@ -336,114 +294,76 @@ export function createCustomSsoSessionKernelAdapter(deps: CustomSsoSessionKernel
     requestContext?: AuditRequestContext;
   }) {
     const authorizationGrant = await resolveIndependentAuthorizationGrant(input);
-    return await deps.authorizationGrantRedemption.withLease(
-      authorizationGrant.reservation,
-      async (lease) => {
-        let credential: Awaited<ReturnType<typeof issueIndependentCredential>> | undefined;
-        let credentialIssueState: CredentialIssueState = "not_started";
-        let subject;
-        try {
-          const principalSession = await deps.kernel.resolvePrincipalSessionById(
-            authorizationGrant.principalSessionId,
-          );
-          if (
-            principalSession.status !== "resolved"
-            || principalSession.value.principal.subjectId
-            !== authorizationGrant.subjectIdentifier
-          ) {
-            throw new AuthzUnauthorizedError("全局session不存在或已过期");
-          }
+    const principal = await deps.kernel.resolvePrincipalSessionById(authorizationGrant.principalSessionId);
+    if (principal.status === "fail_closed")
+      throw new CustomSsoConfigurationUnavailableError({ cause: principal.cause });
+    if (principal.status !== "resolved" || principal.value.principal.subjectId !== authorizationGrant.subjectIdentifier)
+      throw new AuthzUnauthorizedError("全局session不存在或已过期");
 
-          const selection = parseSubjectClaimSelection({
-            catalogVersion: SUBJECT_CLAIM_CATALOG.version,
-            claims: [...input.client.subjectClaims],
-          });
-          subject = await resolveCustomSsoSubjectProjection(deps.subjectProjection, {
-            subjectIdentifier: authorizationGrant.subjectIdentifier,
-            clientCode: input.client.clientCode,
-            selection,
-          });
+    // One authority owns consumption. Only a confirmed CAS success permits effects.
+    const consumed = await deps.kernel.consumeProtocolArtifact(input.code, {
+      protocol: CUSTOM_SSO_PROTOCOL,
+      artifactType: AUTH_CODE_ARTIFACT_TYPE,
+      clientCode: input.client.clientCode,
+    }, authorizationGrant.artifact);
+    if (consumed.status === "fail_closed")
+      throw new CustomSsoConfigurationUnavailableError({ cause: consumed.cause });
+    if (consumed.status !== "resolved")
+      throw new InvalidAuthCodeError("非法Code");
 
-          credentialIssueState = "started";
-          credential = await issueIndependentCredential({
-            client: input.client,
-            credentialId: authorizationGrant.reservation.attemptId,
-            principalSessionId: authorizationGrant.principalSessionId,
-          });
-          credentialIssueState = "issued";
-          // Preserve parent existence and revocation. The operation-bound Kernel
-          // adapter reuses the permission; it does not recheck account state or deadlines.
-          const postIssuePrincipal = await deps.kernel.resolvePrincipalSessionById(
-            authorizationGrant.principalSessionId,
-          );
-          if (
-            postIssuePrincipal.status !== "resolved"
-            || postIssuePrincipal.value.principal.subjectId
-            !== authorizationGrant.subjectIdentifier
-          ) {
-            throw new AuthzUnauthorizedError("全局session不存在或已过期");
-          }
-          const consumed = await lease.consume();
-          if (consumed !== "consumed")
-            throw new InvalidAuthCodeError("非法Code");
-        }
-        catch (error) {
-          await handleCredentialIssueFailure({
-            clientCode: input.client.clientCode,
-            credentialId: authorizationGrant.reservation.attemptId,
-            credentialIssueState,
-            error,
-            operation: "independent_credential_compensation",
-            releaseGrant: async (reportedError, credentialMayExist) => {
-              await releaseRetryableIndependentGrant(
-                lease,
-                reportedError,
-                input.client.clientCode,
-                input.requestContext,
-                credentialMayExist,
-              );
-            },
-            requestContext: input.requestContext,
-          });
-        }
-        if (credential === undefined || subject === undefined)
-          throw new InvalidAuthCodeError("非法Code");
+    const selection = parseSubjectClaimSelection({
+      catalogVersion: SUBJECT_CLAIM_CATALOG.version,
+      claims: [...input.client.subjectClaims],
+    });
+    const subject = await resolveCustomSsoSubjectProjection(deps.subjectProjection, {
+      subjectIdentifier: authorizationGrant.subjectIdentifier,
+      clientCode: input.client.clientCode,
+      selection,
+    });
+    const credentialId = deps.random.uuid();
+    let credential;
+    try {
+      credential = await issueIndependentCredential({
+        client: input.client,
+        credentialId,
+        principalSessionId: authorizationGrant.principalSessionId,
+      });
+      // Keep parent existence/revocation and subject equality after issuance.
+      // The operation adapter reuses permission; no new account/config observation.
+      const postIssuePrincipal = await deps.kernel.resolvePrincipalSessionById(authorizationGrant.principalSessionId);
+      if (postIssuePrincipal.status !== "resolved"
+        || postIssuePrincipal.value.principal.subjectId !== authorizationGrant.subjectIdentifier) {
+        throw new AuthzUnauthorizedError("全局session不存在或已过期");
+      }
+    }
+    catch (error) {
+      const reportedError = error instanceof CustomSsoCredentialIssueFailure ? error.originalError : error;
+      if (!(error instanceof CustomSsoCredentialIssueFailure) || error.credentialMayExist) {
+        await revokeFailedCredential({
+          clientCode: input.client.clientCode,
+          credentialId,
+          operation: "independent_credential_compensation",
+          requestContext: input.requestContext,
+        });
+      }
+      throw reportedError;
+    }
 
-        try {
-          await deps.kernel.revokeObservedObject(authorizationGrant.artifact, "consumed");
-        }
-        catch {
-          deps.logger.warn({
-            clientCode: input.client.clientCode,
-            ...observabilityLogFields(input.requestContext),
-          }, "failed to remove consumed custom sso authorization artifact");
-        }
-        try {
-          await deps.auditLogWriter.recordAuditLog(
-            withRequestContext(
-              input.requestContext,
-              buildIndependentLoginSuccessAudit(
-                authorizationGrant.subjectIdentifier,
-                input.client.clientCode,
-              ),
-            ),
-          );
-        }
-        catch {
-          deps.logger.warn({
-            clientCode: input.client.clientCode,
-            operation: "independent_login_audit",
-            outcome: "audit_failed",
-            ...observabilityLogFields(input.requestContext),
-          }, "custom sso independent login audit after-effect failed");
-        }
-        return {
-          credential: credential.token,
-          ttl: credential.ttl,
-          subject,
-        };
-      },
-    );
+    try {
+      await deps.auditLogWriter.recordAuditLog(withRequestContext(
+        input.requestContext,
+        buildIndependentLoginSuccessAudit(authorizationGrant.subjectIdentifier, input.client.clientCode),
+      ));
+    }
+    catch {
+      deps.logger.warn({
+        clientCode: input.client.clientCode,
+        operation: "independent_login_audit",
+        outcome: "audit_failed",
+        ...observabilityLogFields(input.requestContext),
+      }, "custom sso independent login audit after-effect failed");
+    }
+    return { credential: credential.token, ttl: credential.ttl, subject };
   }
 
   async function resolveIndependentAuthorizationGrant(input: {
@@ -460,15 +380,9 @@ export function createCustomSsoSessionKernelAdapter(deps: CustomSsoSessionKernel
     const metadata = await validateAuthorizationArtifact(artifact, { client: input.client, redirectUrl: input.redirectUri }, CustomSsoClientMode.Independent);
 
     await acquireGrantPermission(artifact, metadata.subjectIdentifier, metadata.principalSessionId);
-    const reservation = await deps.authorizationGrantRedemption.begin(artifact.artifactId);
-    if (reservation.status !== "reserved")
-      throw new InvalidAuthCodeError("非法Code");
-
     return {
       artifact,
-      artifactId: artifact.artifactId,
       principalSessionId: metadata.principalSessionId,
-      reservation: reservation.reservation,
       subjectIdentifier: metadata.subjectIdentifier,
     };
   }
@@ -538,62 +452,6 @@ export function createCustomSsoSessionKernelAdapter(deps: CustomSsoSessionKernel
     };
   }
 
-  async function releaseRetryableIndependentGrant(
-    lease: AuthorizationGrantLease,
-    error: unknown,
-    clientCode: string,
-    requestContext?: AuditRequestContext,
-    releaseAfterCredentialIssue = false,
-  ) {
-    if (!releaseAfterCredentialIssue && !isRetryableServiceUnavailable(error))
-      return;
-    try {
-      const released = await lease.release();
-      if (released === "released")
-        return;
-      deps.logger.warn({
-        clientCode,
-        operation: "independent_grant_release",
-        outcome: released,
-        ...observabilityLogFields(requestContext),
-      }, "custom sso Independent grant release did not restore the issued state");
-    }
-    catch {
-      deps.logger.warn({
-        clientCode,
-        operation: "independent_grant_release",
-        outcome: "release_failed",
-        ...observabilityLogFields(requestContext),
-      }, "custom sso Independent grant release failed");
-    }
-  }
-
-  async function releaseGatewayLease(
-    lease: AuthorizationGrantLease,
-    clientCode: string,
-    requestContext?: AuditRequestContext,
-  ) {
-    try {
-      const released = await lease.release();
-      if (released !== "released") {
-        deps.logger.warn({
-          clientCode,
-          operation: "gateway_grant_release",
-          outcome: released,
-          ...observabilityLogFields(requestContext),
-        }, "custom sso Gateway grant release did not restore the issued state");
-      }
-    }
-    catch {
-      deps.logger.warn({
-        clientCode,
-        operation: "gateway_grant_release",
-        outcome: "release_failed",
-        ...observabilityLogFields(requestContext),
-      }, "custom sso Gateway grant release failed");
-    }
-  }
-
   async function revokeFailedCredential(input: {
     clientCode: string;
     credentialId: string;
@@ -605,7 +463,6 @@ export function createCustomSsoSessionKernelAdapter(deps: CustomSsoSessionKernel
         input.credentialId,
         "credential_corrupted",
       );
-      return true;
     }
     catch {
       deps.logger.warn({
@@ -614,38 +471,7 @@ export function createCustomSsoSessionKernelAdapter(deps: CustomSsoSessionKernel
         outcome: "revoke_failed",
         ...observabilityLogFields(input.requestContext),
       }, "custom sso credential compensation failed closed");
-      return false;
     }
-  }
-
-  async function handleCredentialIssueFailure(input: {
-    clientCode: string;
-    credentialId: string;
-    credentialIssueState: CredentialIssueState;
-    error: unknown;
-    operation: "gateway_local_session_compensation" | "independent_credential_compensation";
-    releaseGrant: (
-      reportedError: unknown,
-      credentialMayExist: boolean,
-    ) => Promise<void>;
-    requestContext?: AuditRequestContext;
-  }): Promise<never> {
-    const reportedError = input.error instanceof CustomSsoCredentialIssueFailure
-      ? input.error.originalError
-      : input.error;
-    const credentialMayExist = input.error instanceof CustomSsoCredentialIssueFailure
-      ? input.error.credentialMayExist
-      : input.credentialIssueState !== "not_started";
-    const compensated = !credentialMayExist
-      || await revokeFailedCredential({
-        clientCode: input.clientCode,
-        credentialId: input.credentialId,
-        operation: input.operation,
-        requestContext: input.requestContext,
-      });
-    if (compensated)
-      await input.releaseGrant(reportedError, credentialMayExist);
-    throw reportedError;
   }
 
   async function completeGatewayLogin(input: {
@@ -660,129 +486,73 @@ export function createCustomSsoSessionKernelAdapter(deps: CustomSsoSessionKernel
       redirectUrl: input.redirectUrl,
       invalidCodeError: "unauthorized",
     });
-    return await deps.authorizationGrantRedemption.withLease(
-      authorizationGrant.reservation,
-      async (lease) => {
-        let localSession: IssuedClientCredential | undefined;
-        let credentialIssueState: CredentialIssueState = "not_started";
-        try {
-          const revalidated = await deps.kernel.resolveProtocolArtifact(input.code, { protocol: CUSTOM_SSO_PROTOCOL, artifactType: AUTH_CODE_ARTIFACT_TYPE, clientCode: input.client.clientCode });
-          if (revalidated.status === "fail_closed")
-            throw new CustomSsoConfigurationUnavailableError({ cause: revalidated.cause });
-          if (revalidated.status !== "resolved")
-            throw new AuthzUnauthorizedError("非法code");
-          if (JSON.stringify(revalidated.value) !== JSON.stringify(authorizationGrant.artifact))
-            throw new AuthzUnauthorizedError("非法code");
-          const revalidatedGrant = await validateAuthorizationArtifact(
-            revalidated.value,
-            input,
-            CustomSsoClientMode.Gateway,
-            "unauthorized",
-          );
-          await acquireGrantPermission(
-            revalidated.value,
-            revalidatedGrant.subjectIdentifier,
-            revalidatedGrant.principalSessionId,
-          );
-          if (
-            revalidated.value.artifactId !== authorizationGrant.artifactId
-            || revalidatedGrant.principalSessionId
-            !== authorizationGrant.principalSessionId
-          ) {
-            throw new AuthzUnauthorizedError("非法code");
-          }
+    const principalSession = await deps.kernel.resolvePrincipalSessionById(authorizationGrant.principalSessionId);
+    if (principalSession.status === "fail_closed")
+      throw new CustomSsoConfigurationUnavailableError({ cause: principalSession.cause });
+    if (principalSession.status !== "resolved"
+      || principalSession.value.principal.subjectId !== authorizationGrant.subjectIdentifier) {
+      throw new AuthzUnauthorizedError("全局session不存在或已过期");
+    }
 
-          const principalSession = await deps.kernel.resolvePrincipalSessionById(
-            authorizationGrant.principalSessionId,
-          );
-          if (principalSession.status !== "resolved")
-            throw new AuthzUnauthorizedError("全局session不存在或已过期");
+    const consumed = await deps.kernel.consumeProtocolArtifact(input.code, {
+      protocol: CUSTOM_SSO_PROTOCOL,
+      artifactType: AUTH_CODE_ARTIFACT_TYPE,
+      clientCode: input.client.clientCode,
+    }, authorizationGrant.artifact);
+    if (consumed.status === "fail_closed")
+      throw new CustomSsoConfigurationUnavailableError({ cause: consumed.cause });
+    if (consumed.status !== "resolved")
+      throw new AuthzUnauthorizedError("非法code");
 
-          let orcas: CustomSsoOrcasContext | null = null;
-          if (input.client.orcasEnabled) {
-            const userDetail = await resolveOrcasUser(principalSession.value);
-            const { id, username, name, mobile } = userDetail;
-            const { orcasSessionId, orcasId } = await deps.orcas.orcasLogin({
-              id,
-              username,
-              name,
-              mobile,
-            });
-            orcas = {
-              userId: orcasId,
-              sessionId: orcasSessionId,
-            };
-          }
-          credentialIssueState = "started";
-          localSession = await issueGatewayLocalSession({
-            authorizationGrant,
-            client: input.client,
-            orcas,
-          });
-          credentialIssueState = "issued";
+    let orcas: CustomSsoOrcasContext | null = null;
+    if (input.client.orcasEnabled) {
+      const { id, username, name, mobile } = await resolveOrcasUser(principalSession.value);
+      const { orcasSessionId, orcasId } = await deps.orcas.orcasLogin({ id, username, name, mobile });
+      orcas = { userId: orcasId, sessionId: orcasSessionId };
+    }
+    const credentialId = deps.random.uuid();
+    let localSession;
+    try {
+      localSession = await issueGatewayLocalSession({ authorizationGrant, credentialId, client: input.client, orcas });
+      const postIssuePrincipal = await deps.kernel.resolvePrincipalSessionById(authorizationGrant.principalSessionId);
+      if (postIssuePrincipal.status !== "resolved"
+        || postIssuePrincipal.value.principal.subjectId !== authorizationGrant.subjectIdentifier) {
+        throw new AuthzUnauthorizedError("全局session不存在或已过期");
+      }
+    }
+    catch (error) {
+      const reportedError = error instanceof CustomSsoCredentialIssueFailure ? error.originalError : error;
+      if (!(error instanceof CustomSsoCredentialIssueFailure) || error.credentialMayExist) {
+        await revokeFailedCredential({
+          clientCode: input.client.clientCode,
+          credentialId,
+          operation: "gateway_local_session_compensation",
+          requestContext: input.requestContext,
+        });
+      }
+      throw reportedError;
+    }
 
-          const consumed = await lease.consume();
-          if (consumed !== "consumed")
-            throw new AuthzUnauthorizedError("非法code");
-        }
-        catch (error) {
-          await handleCredentialIssueFailure({
-            clientCode: input.client.clientCode,
-            credentialId: authorizationGrant.reservation.attemptId,
-            credentialIssueState,
-            error,
-            operation: "gateway_local_session_compensation",
-            releaseGrant: async () => {
-              await releaseGatewayLease(
-                lease,
-                input.client.clientCode,
-                input.requestContext,
-              );
-            },
-            requestContext: input.requestContext,
-          });
-        }
-        if (localSession === undefined)
-          throw new AuthzUnauthorizedError("局部session创建失败");
-
-        try {
-          await deps.kernel.revokeObservedObject(authorizationGrant.artifact, "consumed");
-        }
-        catch {
-          deps.logger.warn({
-            clientCode: input.client.clientCode,
-            ...observabilityLogFields(input.requestContext),
-          }, "failed to remove consumed custom sso authorization artifact");
-        }
-        try {
-          await deps.auditLogWriter.recordAuditLog(
-            withRequestContext(
-              input.requestContext,
-              buildGatewayLoginSuccessAudit(
-                authorizationGrant.subjectIdentifier,
-                input.client.clientCode,
-              ),
-            ),
-          );
-        }
-        catch {
-          deps.logger.warn({
-            clientCode: input.client.clientCode,
-            operation: "gateway_login_audit",
-            outcome: "audit_failed",
-            ...observabilityLogFields(input.requestContext),
-          }, "custom sso Gateway login audit after-effect failed");
-        }
-        return {
-          orcasSessionId: localSession.orcasSessionId,
-          ...(authorizationGrant.state === undefined
-            ? {}
-            : { state: authorizationGrant.state }),
-          token: localSession.token,
-          ttl: localSession.ttl,
-        };
-      },
-    );
+    try {
+      await deps.auditLogWriter.recordAuditLog(withRequestContext(
+        input.requestContext,
+        buildGatewayLoginSuccessAudit(authorizationGrant.subjectIdentifier, input.client.clientCode),
+      ));
+    }
+    catch {
+      deps.logger.warn({
+        clientCode: input.client.clientCode,
+        operation: "gateway_login_audit",
+        outcome: "audit_failed",
+        ...observabilityLogFields(input.requestContext),
+      }, "custom sso Gateway login audit after-effect failed");
+    }
+    return {
+      orcasSessionId: localSession.orcasSessionId,
+      ...(authorizationGrant.state === undefined ? {} : { state: authorizationGrant.state }),
+      token: localSession.token,
+      ttl: localSession.ttl,
+    };
   }
 
   async function authorizeLocalSession(

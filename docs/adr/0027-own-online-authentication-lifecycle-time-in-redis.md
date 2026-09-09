@@ -4,6 +4,10 @@ status: accepted
 
 # 由 Redis 统一拥有在线认证状态的生命周期时间
 
+> 本文延续的 Custom SSO 原 Code 可恢复兑换与最终精确补偿要求已由
+> [ADR-0031](0031-consume-custom-sso-grants-before-issuance.md) 局部取代；只保留同步尽力精确补偿，Independent/Gateway 已由 #158/#159 实现，定向维护已由 #160 交付。
+> Redis 时间、取得时有效性、写前新 identity 和防覆盖约束继续有效，OIDC 的恢复行为不因该决定改变。
+
 [Issue #94](https://github.com/cyy1998/shgas-iam/issues/94) 暴露了应用判定 Credential 已过期、Redis 却仍占用其 identity 的窗口。静态审查还发现 Session Kernel 四类对象、Custom SSO Grant 初始化与 OIDC 清理索引存在相关时间域混用。维护者于 2026-09-08 接受以下方向，完整范围和验收见 [Spec #115](https://github.com/cyy1998/shgas-iam/issues/115)；Session Kernel 部分已由 [Ticket #116](https://github.com/cyy1998/shgas-iam/issues/116) 实现：四类对象使用 Redis 观察时间计算期限、取得时校验和维护关联 lookup/索引；Custom SSO 由 [Ticket #117](https://github.com/cyy1998/shgas-iam/issues/117) 接入相同权威期限：Grant 初始化消费 Kernel Artifact deadline，Independent 响应与 Gateway Local Session Cookie 使用签发观察的剩余秒数；OIDC store 已由 [Ticket #118](https://github.com/cyy1998/shgas-iam/issues/118) 统一主对象、lookup 和 Grant/Client 索引的 Redis 期限，清理按实际对象存在性处理；OIDC mapping/staged binding 与协议期限消费已由 [Ticket #119](https://github.com/cyy1998/shgas-iam/issues/119) 接入 Redis deadline 和取得时观察；Code/AccessToken/Grant 的在线 opaque 模型沿用本次 Redis 有效观察，不改变 JWT 时间字段。维护切换仍未执行。
 
 Redis 拥有在线认证状态创建、读取、续期、消费与到期判定的时间权威，应用实例不得使用自身时钟重新裁决这些状态是否过期。对象、token lookup 与索引按同一生命周期维护，续期同步处理关联到期时间，索引不能因短有效期对象而早于仍需追踪的对象消失。本次修复范围包含 Session Kernel、Custom SSO Grant 和 OIDC 协议对象索引，可拆分实施，但以三者的一致性作为整体目标。

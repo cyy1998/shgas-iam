@@ -2,7 +2,6 @@ import type { ClientTrafficGateResult } from "@iam/api-core/client-traffic-gate"
 import type { AuditActorType, AuditDetails, AuditOutcome, AuditRequestContext } from "@iam/domain/audit";
 import type { CustomSsoClientRuntimeDto, CustomSsoClientSecretRecord } from "@iam/domain/client";
 import type { SessionKernel } from "@iam/session-kernel";
-import type { AuthorizationGrantRedemptionRedis } from "./grant";
 import type { CustomSsoSubjectProjectionPort } from "./subject-projection.port";
 
 export interface CustomSsoLoggerPort {
@@ -37,19 +36,18 @@ export interface CustomSsoOrcasPort {
 }
 
 export type CustomSsoKernelPort = Pick<SessionKernel, | "createProtocolArtifact"
+  | "consumeProtocolArtifact"
   | "issueCredential"
   | "renewPrincipalSession"
   | "resolveCredential"
   | "resolvePrincipalSession"
   | "resolvePrincipalSessionById"
   | "resolveProtocolArtifact"
-  | "revokeArtifact"
   | "revokeCredential"
   | "revokeObservedObject"
   | "revokePrincipalSession">;
 
 export interface CustomSsoDeps {
-  redis: AuthorizationGrantRedemptionRedis;
   kernel: CustomSsoKernelPort;
   clients: { findRuntimeRecord: (clientCode: string) => Promise<CustomSsoClientRuntimeDto | null> };
   clientSecrets: { findSecretRecord: (clientCode: string) => Promise<CustomSsoClientSecretRecord | null> };

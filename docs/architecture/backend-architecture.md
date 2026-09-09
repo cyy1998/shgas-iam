@@ -373,7 +373,7 @@ User Profile 的初代 V1 builder、Facts reader/publisher 与 Subject Projectio
 
 - Custom SSO 的唯一工厂 `createCustomSsoOperations` 用 `forOperation` 绑定显式容器。
   授权和续接在可信根解析后检查，授权早于 renew/Artifact；兑换与 callback 在 Artifact 的 mode、Client、redirect、
-  版本及主体一致性校验后、Grant 预占前检查，ORCAS 出站与签发均在其后。authz 和 Public UserInfo 在首次可信
+  版本及主体一致性校验后、Grant 消费前检查，ORCAS 出站与签发均在其后。authz 和 Public UserInfo 在首次可信
   Credential/根解析后检查，父对象和延迟交付复用许可。退出走中性终止能力，不要求目标许可。
   API composition 把此工厂和同一 Kernel 接到 services、use-cases、routes 与 middlewares；Public 容器覆盖 `next()`
   及延迟交付，结束后关闭。缺少许可没有 fallback。
@@ -406,7 +406,7 @@ User Profile 的初代 V1 builder、Facts reader/publisher 与 Subject Projectio
   共享索引不设置由某个成员决定的 TTL，读时按 Redis 时间清理到期 score；pending cleanup tombstone 在外围清理成功前保持存在，
   成功后按 Redis 时间恢复其原 tombstone 期限或删除。Credential 正常新签发使用服务端 UUID，内部已知 identity 与不确定写入补偿保持。
 - 上述 Kernel 契约由 [ADR-0027](../adr/0027-own-online-authentication-lifecycle-time-in-redis.md) 和 #116 落实；
-  #117 已让 Custom SSO Grant 初始化使用 Kernel Artifact deadline，与预占、heartbeat、release、consume 的 Redis 时间保持一致。
+  #158/#159 让两种 Custom SSO Grant 直接使用 Kernel Artifact 的 Redis deadline 与原子消费，不再初始化独立 redemption。
   Independent 响应 TTL 与 Gateway Local Session Cookie 的 Max-Age 从 Credential `expiresAt - observedAt` 向上取整为秒，
   亚秒有效结果仍交付一秒，不以取整或应用时间追加过期拒绝，也不延长 Redis 中的期限。ORCAS Cookie 保持原外部集成契约。
   Independent 签发后与 Local Session 认证中的父 Session 读取继续保护对象存在和撤销，并复用本操作许可；这些独立操作仍可因真实缺失失败。
@@ -496,13 +496,13 @@ User Profile 的初代 V1 builder、Facts reader/publisher 与 Subject Projectio
 
 ### Custom SSO Authorization Grant
 
-- `packages/custom-sso/src/index.ts` 的 `createCustomSso` 是完整应用入口，拥有 authorize、Independent
+- `packages/custom-sso/src/index.ts` 的 `createCustomSsoOperations` 是完整应用入口，拥有 authorize、Independent
   exchange、Gateway callback、续接检查、Public Authentication/UserInfo、Gateway authz 与 logout。原三个授权/兑换
-  use case 与 session adapter 位于包内 `internal/`，Grant 状态和存储位于 `grant/`；预占、签发中间态和补偿不作为生产公开操作。
-- 独立 `@iam/custom-sso/cleanup` 接收 Redis 并内部构造 Grant store；API/OIDC 先构造 cleanup，再注入 Kernel，API 最后构造完整 Custom SSO。OIDC 不加载或构造完整协议操作。`/maintenance` 提供 owner prefix 清单，`/testing` 提供实际测试所需构造与检查；各出口不经 root，浏览器只消费 `/wire`。
+  use case 与 session adapter 位于包内 `internal/`，旧 Grant 库存维护位于 `grant/`；在线消费由 Kernel Artifact 拥有，签发中间态和补偿不作为生产公开操作。
+- 独立 `@iam/custom-sso/cleanup` 接收 Redis 并内部构造 Grant store；API/OIDC 先构造 cleanup，再注入 Kernel，API 最后构造完整 Custom SSO。OIDC 不加载或构造完整协议操作。`/maintenance` 提供 owner prefix、旧库存 decoder 与目标判定，`/testing` 提供实际测试所需构造与检查；各出口不经 root，浏览器只消费 `/wire`。
 - 模块内校验 Client mode/version/Secret、redirect allowlist，并解释 Traffic Gate 结果；外部能力由自有窄 ports
-  表达，Client Runtime/Secret reader、Secret hash verifier、ORCAS、User lookup、审计 writer、logger、Kernel 和 Redis
-  由 API composition 注入。模块不导入 API provider、repository、composition 或 HTTP；连接生命周期仍在 API。
+  表达，Client Runtime/Secret reader、Secret hash verifier、ORCAS、User lookup、审计 writer、logger 和 Kernel
+  由 API composition 注入；Redis 仅由 cleanup/maintenance 消费。模块不导入 API provider、repository、composition 或 HTTP；连接生命周期仍在 API。
 - 续接检查仅返回 `absent | invalid | valid`；API 门户用例将结果映射为页面 decision 和 Cookie 清除指令。
   UserInfo capability 在模块中捕获已接受的 Client Snapshot；API 的 WeakMap request scope 仅负责请求对象绑定与释放。
   Gateway 最小字段裁剪和 base64 编码由模块拥有，HTTP adapter 负责 header/body、Cookie 与 Retry-After 映射。
@@ -511,23 +511,30 @@ User Profile 的初代 V1 builder、Facts reader/publisher 与 Subject Projectio
   运行时不读取、规范化或删除 Legacy 私有 payload，credential/session 只保存严格版本化的最小 Kernel metadata。
 - Grant 固化已验证的 literal redirect、client mode/config version 与可选 opaque state。Gateway callback 通过
   callback-owned 窄 Client context 使用本次操作首次取得的全局状态、Custom SSO 启用态、Gateway mode、ORCAS 配置与
-  config version；该 context 不暴露通用 Client Secret。redirect 归属不符、或对象版本高于本操作配置时，在 reservation
-  前拒绝并保留 Code/Grant；确认归属且对象版本低于本操作配置时，在 reservation 前拒绝并精确撤销已观察的 Artifact，
-  由其 cleanup owner 清理 Grant，不影响其他对象。不能把所有版本不符统一解释为“不烧码”。
-- Gateway 与 Independent 共用独立 Grant redemption state machine。`begin` 通过 attempt fence 保证并发兑换只有
-  一个赢家；reserved 工作由 heartbeat 定期续租，renew 必须匹配 grant、attempt 和上一 lease deadline，且只延长
-  lease、不延长 Grant 原始 expiry。Independent 在任何 Credential issuance、post-validation、Grant consume、成功审计或
-  consumed artifact cleanup 前，必须先取得通过 Subject equality 与 strict schema 的完整 V2 Wire；随后只有 Credential
-  签发并通过 Principal Session、Subject equality 校验后才 consume；全程复用已取得的 Subject Access 许可。Gateway 完成 Grant/Principal
-  校验、可选 ORCAS 登录与最小 Local Session 签发后才 consume。两条路径都使用请求入口已接受的 Client Runtime
-  Snapshot，不在签发后重新读取当前 Client 或 generation。消费前失败按语义 release，并补偿已创建的
-  binding/credential；消费后 Session Kernel artifact 清理和成功审计是
-  best-effort after-effect。
-- Custom SSO Subject Projection 不变量错误按未处理内部错误返回通用 `500`，不增加公开 error code、logger dependency 或
-  `Retry-After`。它发生在 Independent Credential issue state 为 `not_started` 时，不创建或撤销 Credential、不 consume、不写
-  成功审计，也不清理 consumed artifact；当前 Grant attempt 不主动 release，heartbeat 停止后保持 `redeeming`，仅在 lease
-  到期且原始 Grant 未过期时允许新 attempt 接管，且不得延长原始 expiry。Projection Not Ready 与 Subject Access unavailable
-  仍保持既有 retryable `503`、`Retry-After` 和立即 release 语义。
+  config version；该 context 不暴露通用 Client Secret。redirect 归属不符、或对象版本高于本操作配置时，在消费
+  前拒绝并保留 Code/Grant；确认归属且对象版本低于本操作配置时，在消费前拒绝并精确撤销已观察的 Artifact，
+  旧 redemption 由其 cleanup owner 清理，不影响其他对象。不能把所有版本不符统一解释为“不烧码”。
+- Independent 与 Gateway 使用 Kernel `consumeProtocolArtifact(code, purpose, observed)` 作为唯一消费权威；完整已观察 payload、lookup 和
+  tombstone 的原子比较保护替换、撤销与并发唯一赢家。成功消费同时删除该 Artifact 的 active/lookup 与精确索引成员，保留
+  consumed tombstone 供重放拒绝。消费报错或结果不明确不进入投影或签发，不新建恢复记录。
+- Independent 前置 Client/用途/mode/redirect/版本、根会话、Gate 与 Subject Access 通过后消费，再构建和严格验证完整 V2
+  主体，最后以写前新 UUID 签发 Credential。消费后任何错误不恢复 Code；未进入 Credential 写入时不创建补偿 identity。
+  写入结果不确定或签发后可处理失败按本次 identity 同步尽力撤销，失败不换 identity 重签、不建立队列或最终补偿承诺。
+  签发后的父会话存在与主体一致性保护保留；全程复用当前操作许可和配置/Gate，不增加响应前业务复查。
+- Independent 的 Projection Not Ready 仍为暂态 `503`；投影不变量或格式错误仍为通用 `500`，不新增公开字段或内部原因。
+  两类失败均要求重新授权，token 的 `Retry-After` 表示新授权前的等待；UserInfo/authz 继续原凭据重试。成功审计是 best-effort，
+  其失败不撤销可交付 Credential。未交付 Credential 保留 `extend_with_principal`，受根绝对期限、版本、账号与撤销约束。
+- Gateway 在前置校验与根主体一致后消费，成功才执行适用的 ORCAS，然后以写前新 UUID 签发 Local Session；签发后保留父会话
+  存在与主体一致性检查。ORCAS 或签发失败不恢复 Code，同步尽力补偿仅处理本次 Credential；ORCAS 外部成功但响应丢失仍可能
+  留下会话，新授权可能再次登录，外部幂等/撤销归 #145。callback 保持 JSON 失败与既有 Cookie/redirect/state，用户返回业务应用
+  重新访问，不刷新旧 callback 或自动循环授权。在线 reservation/lease/heartbeat/release/takeover 与固定租约配置已删除。
+- 维护 owner 保留 `authorization-grant:redemption:v1:` 的 issued/redeeming/consumed 库存 decoder、精确 removal 与 cleanup ref。
+  `/maintenance` 的 `decodeCustomSsoLegacyGrant` 严格核对 key/record identity，`isCustomSsoAuthorizationArtifact` 判定 active
+  或 tombstone 的 custom-sso/auth_code；不凭业务索引发现全部目标。两种模式的新 Artifact 均不带 redemption cleanup ref；旧三状态由 testing 专用 fixture 构造。
+  #160 已通过 OIDC `custom-sso:grants` 组合 Kernel `/maintenance` 的无索引 Artifact authority/lookup 扫描、已观察四值 CAS 和精确索引成员删除，
+  以及 Custom SSO `/maintenance` 的旧三态扫描/CAS。inventory/verify 独立只读 factory 仅持 SCAN/GET，apply 才持 eval；
+  未知归属、损坏状态、比较/扫描失败均非成功，不能触及 Principal、Credential、OIDC 或以成功计数推定核验。
+  仅在停旧 writer、排空后且启新 writer 前使用；保留集外部基线对照和能力退役条件见[定向维护手册](../releases/custom-sso-grant-maintenance.md)。
 - 内部 state implementation 通过 structural typing 满足三个操作的私有 ports；外部 ORCAS/User/audit/logger
   provider 直接满足模块自有 ports。不得恢复公开 `consumeAuthCode → createLocalSession` 两阶段 interface。
 - SSO route 只拥有 HTTP query/header/Cookie 解析、response envelope、Gateway/ORCAS Cookie、redirect query 和
@@ -672,3 +679,7 @@ User Profile 的初代 V1 builder、Facts reader/publisher 与 Subject Projectio
   tests 维护，不转写成脆弱的 AST 语义规则。
 - Process smoke 验证真实 production composition、进程生命周期与 readiness；PostgreSQL、浏览器和 Gateway 事实由
   对应外部资源通道验证。
+
+Spec #157 的全部 56 条故事、20 项实现和 10 项测试决定见[一次消费最终账本](../features/sso/custom-sso-one-shot-grant-contract.md)。
+#161 在正式 HTTP/Redis 上组合定向清理、独立核验、同根新授权与已有凭据访问；完整 OIDC 保留集复用 #160。
+统一 writer/consumer、基线、停流排空、smoke 与回退见[保留会话升级手册](../releases/custom-sso-one-shot-grant-upgrade.md)，目标环境未执行。

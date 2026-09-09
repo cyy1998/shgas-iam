@@ -4,6 +4,10 @@ status: accepted
 
 # 分离协议用途匹配、配置校验与会话撤销
 
+> 文中的 Custom SSO 预占/租约与 Grant 状态机描述记录原决策背景，已由
+> [ADR-0031](0031-consume-custom-sso-grants-before-issuance.md) 的签发前一次消费取代；#158/#159 已迁移两模式，
+> 前置许可、用途/版本、协议分工和对象生命周期保护保持。定向维护已由 #160 交付，环境未切换。
+
 [讨论 #139](https://github.com/cyy1998/shgas-iam/issues/139) 记录了合法 Custom SSO 产物进入 OIDC 后引发同 Client 跨用户误撤，以及已读入的旧配置请求迟到后撤销新版本 Credential 的问题。本地调查基线为 `6e10a2f2feb931fc28da4d23500b69d36a6b5a97`；这些证据不表示生产环境已发生事故。
 
 维护者于 2026-09-09 确认下列职责、接口、验证与发布方向。#147–150 已实现协议用途匹配、精确执行、两协议操作快照和 Admin 固定版本撤销；#151 的[最终契约](../features/sso/protocol-validation-contract.md)逐项核对 [Spec #146](https://github.com/cyy1998/shgas-iam/issues/146) 的 56 条故事与组合证据。各候选执行结果由 ticket 记录，父级聚合验收与环境升级仍是独立事实。

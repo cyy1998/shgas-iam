@@ -600,6 +600,7 @@ export function createSessionKernelWithStateAdapterFactories(
         serializedArtifact: observation.serialized,
         observedAt: observation.observedAt,
         tombstone: createTombstone("artifact", observed, "consumed", observation.observedAt),
+        indexRemovals: indexRemovalsForObject("artifact", observed),
       });
       observeResolveResult(result, { operation: "consume", objectType: "artifact" });
       return result;

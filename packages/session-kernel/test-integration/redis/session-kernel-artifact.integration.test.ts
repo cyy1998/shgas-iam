@@ -37,6 +37,28 @@ afterAll(async () => {
 });
 
 describe("Session Kernel artifact real Redis contract", () => {
+  test("consumption removes only its active inventory member and retains replay tombstone", async () => {
+    const artifacts = await Promise.all(["first", "peer"].map(name => scope!.writer.createProtocolArtifact({
+      protocol: "oidc",
+      artifactType: "authorization_code",
+      clientCode: "portal",
+      ttlMs: 30_000,
+      metadata: { name },
+    })));
+    const first = artifacts[0]!;
+    if (first.status !== "created" || !first.externalToken)
+      throw new Error("Expected artifact");
+    const purpose = { protocol: "oidc", artifactType: "authorization_code", clientCode: "portal" };
+    const observed = await scope!.writer.resolveProtocolArtifact(first.externalToken, purpose);
+    if (observed.status !== "resolved")
+      throw new Error("Expected observed artifact");
+    const consumed = await scope!.writer.consumeProtocolArtifact(first.externalToken, purpose, observed.value);
+    const inventory = await scope!.observer.inventoryClientProtocol("portal", "oidc");
+    const replay = await scope!.observer.resolveProtocolArtifact(first.externalToken, purpose);
+    expect(consumed.status).toBe("resolved");
+    expect(inventory.counts).toMatchObject({ total: 1, stale: 0, artifacts: 1 });
+    expect(replay.status).toBe("consumed_replay");
+  });
   test("reports and removes a dangling client protocol owner exactly", async () => {
     await scope!.seedClientProtocolIndexMember({
       clientCode: "portal",
