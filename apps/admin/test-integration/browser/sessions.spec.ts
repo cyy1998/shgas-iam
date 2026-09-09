@@ -759,7 +759,9 @@ test('single-session action protects the current session and confirms the third-
   const listRequestCount = listInputs.length;
   await confirmSessionRevoke(confirm);
 
-  await expect(page.getByText('会话已下线', { exact: true })).toBeVisible();
+  await expect(
+    page.getByText('已撤销 1 个根会话；关联对象已尽力处理', { exact: true }),
+  ).toBeVisible();
   await expectSingleTargetRevokeAndReload(
     revokeInputs,
     listInputs,
@@ -809,7 +811,9 @@ test('another user can be revoked from any row with point-in-time and follow-up 
     },
   });
 
-  await expect(page.getByText('会话已下线', { exact: true })).toBeVisible();
+  await expect(
+    page.getByText('已撤销 2 个根会话；关联对象已尽力处理', { exact: true }),
+  ).toBeVisible();
 });
 
 test('self user revoke keeps the unified action label and explains the current-root exception', async ({
@@ -846,8 +850,8 @@ test('self user revoke keeps the unified action label and explains the current-r
   const confirm = page.getByRole('dialog');
   await expect(confirm).toContainText('确认下线该用户全部会话？');
   await expect(confirm).toContainText('保留当前管理端根会话');
-  await expect(confirm).toContainText('该根会话关联的 IAM 凭证');
-  await expect(confirm).toContainText('本人的其他根 Principal Session');
+  await expect(confirm).toContainText('包括当前根');
+  await expect(confirm).toContainText('本人的其他根会话');
   await expect(confirm).toContainText('开始时已索引');
   await expect(confirm).toContainText('不能保证第三方自行建立的本地会话退出');
   await expect(confirm).toContainText('不会阻止未来重新登录');
@@ -856,7 +860,9 @@ test('self user revoke keeps the unified action label and explains the current-r
 
   await confirmSessionRevoke(confirm);
 
-  await expect(page.getByText('会话已下线', { exact: true })).toBeVisible();
+  await expect(
+    page.getByText('已撤销 1 个根会话；关联对象已尽力处理', { exact: true }),
+  ).toBeVisible();
   await expect
     .poll(() => revokeInputs)
     .toEqual([
@@ -870,6 +876,38 @@ test('self user revoke keeps the unified action label and explains the current-r
   await expect.poll(() => listInputs.length).toBe(listRequestCount + 1);
 });
 
+for (const currentRootRetained of [true, false]) {
+  test(`only child effects do not claim a root was revoked (current root retained: ${currentRootRetained})`, async ({
+    page,
+  }) => {
+    const { listInputs, revokeInputs } = await setupSessionRevoke(page, () => ({
+      type: 'success',
+      data: {
+        changed: true,
+        result: {
+          scope: 'user',
+          revoked: {
+            principalSessions: 0,
+            bindings: 1,
+            credentials: 1,
+            artifacts: 0,
+          },
+          currentPrincipalSessionExcluded: currentRootRetained,
+          cleanup: { attempted: 0, succeeded: 0, failed: 0 },
+        },
+      },
+    }));
+    await revokeUserAndExpectReload(page, revokeInputs, listInputs, {
+      rowText: currentRootRetained ? '张三' : '已删除用户',
+      userId: currentRootRetained ? 42 : 43,
+    });
+    await expect(
+      page.getByText('已撤销关联对象，本次未撤销根会话；关联对象已尽力处理', {
+        exact: true,
+      }),
+    ).toBeVisible();
+  });
+}
 test('user revoke no-op reports an already inactive target and refreshes once', async ({
   page,
 }) => {
@@ -899,7 +937,9 @@ test('user revoke no-op reports an already inactive target and refreshes once', 
     userId: 43,
   });
 
-  await expect(page.getByText('目标已失效或已被处理')).toBeVisible();
+  await expect(
+    page.getByText('未发生新的撤销；目标可能已失效、已被处理或当前根已保留'),
+  ).toBeVisible();
 });
 
 test('user revoke cleanup failure remains successful with only a safe failed count', async ({
@@ -932,7 +972,10 @@ test('user revoke cleanup failure remains successful with only a safe failed cou
   });
 
   await expect(
-    page.getByText('会话已下线，部分关联清理失败（2 项）', { exact: true }),
+    page.getByText(
+      '已撤销 2 个根会话；关联对象已尽力处理，部分外围清理失败（2 项）',
+      { exact: true },
+    ),
   ).toBeVisible();
   await expect(page.getByText('cleanup-ref-secret')).toHaveCount(0);
   await expect(page.getByText('remote cleanup error')).toHaveCount(0);
@@ -966,7 +1009,9 @@ test('single-session no-op shows an already inactive warning and refreshes the c
   const listRequestCount = listInputs.length;
   await confirmSessionRevoke(confirm);
 
-  await expect(page.getByText('目标已失效或已被处理')).toBeVisible();
+  await expect(
+    page.getByText('未发生新的撤销；目标可能已失效、已被处理或当前根已保留'),
+  ).toBeVisible();
   await expectSingleTargetRevokeAndReload(
     revokeInputs,
     listInputs,
@@ -1003,7 +1048,10 @@ test('single-session cleanup failure remains successful with a safe warning', as
   await confirmSessionRevoke(confirm);
 
   await expect(
-    page.getByText('会话已下线，部分关联清理失败（1 项）', { exact: true }),
+    page.getByText(
+      '已撤销 1 个根会话；关联对象已尽力处理，部分外围清理失败（1 项）',
+      { exact: true },
+    ),
   ).toBeVisible();
   await expectSingleTargetRevokeAndReload(
     revokeInputs,

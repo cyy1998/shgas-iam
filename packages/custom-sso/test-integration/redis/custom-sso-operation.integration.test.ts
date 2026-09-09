@@ -21,7 +21,7 @@ import { createCustomSsoOperations, CustomSsoConfigurationUnavailableError, Cust
 import { createCustomSsoCleanup } from "@iam/custom-sso/cleanup";
 import { createCustomSsoRevocationSelector, customSsoMaintenancePrefixes, decodeCustomSsoLegacyGrant, isCustomSsoAuthorizationArtifact } from "@iam/custom-sso/maintenance";
 import { createAuthorizationGrantRedisInspection, createLegacyAuthorizationGrantFixture } from "@iam/custom-sso/testing";
-import { createSessionKernelRedisTestHarness } from "@iam/session-kernel/testing";
+import { createSessionKernelRedisTestHarness, waitForRedisCondition } from "@iam/session-kernel/testing";
 import { afterAll, afterEach, beforeAll, beforeEach, expect, test } from "bun:test";
 import Redis from "ioredis";
 
@@ -64,9 +64,13 @@ afterAll(async () => {
 type AccessState = "enabled" | "disabled" | "blocking";
 type Mode = "independent" | "gateway" | "gateway-orcas" | "iam";
 
-async function fixture(mode: Mode = "gateway") {
-  const subjectIdentifier = randomUUID();
-  const transitionId = randomUUID();
+async function fixture(mode: Mode = "gateway", options: {
+  subjectIdentifier?: string;
+  transitionId?: string;
+  localSessionTtlSeconds?: number;
+} = {}) {
+  const subjectIdentifier = options.subjectIdentifier ?? randomUUID();
+  const transitionId = options.transitionId ?? randomUUID();
   const clientCode = mode === "iam" ? "iam" : `client-${randomUUID()}`;
   const redirectUrl = "https://app.example.com/callback";
   const independent = mode === "independent";
@@ -258,7 +262,7 @@ async function fixture(mode: Mode = "gateway") {
       state.attemptIds.push(id);
       return id;
     } },
-    config: { authCodeExpireSeconds: 60, localSessionTtlSeconds: 120 },
+    config: { authCodeExpireSeconds: 60, localSessionTtlSeconds: options.localSessionTtlSeconds ?? 120 },
   });
   const root = await operations.run(async (operation) => {
     const permission = await operation.acquireForAuthentication(subjectIdentifier);
@@ -270,7 +274,7 @@ async function fixture(mode: Mode = "gateway") {
       throw new Error("Principal Session creation failed");
     return { ...result, externalToken: result.externalToken };
   });
-  // Redemption is a separate migration ticket; seed its legitimate output through the neutral Kernel.
+  // Seed an existing peer Credential; redemption tests issue their target through the complete operation.
   const credential = await scope.writer.issueCredential({
     principalSessionId: root.value.principalSessionId,
     protocol: "custom-sso",
@@ -310,11 +314,12 @@ async function rejection(work: () => Promise<unknown>) {
   throw new Error("Expected rejection");
 }
 
-test("authorization checks once before renewal and persists its real Redis Grant", async () => {
+test("authorization checks once without renewing and persists its real Redis Grant", async () => {
   const f = await fixture();
+  const before = await scope.observer.resolvePrincipalSession(f.root.externalToken);
   const result = await f.operations.run(op => f.protocol.forOperation(op).authorize.execute(f.input));
   expect(result.isLogin).toBe(true);
-  expect(f.state).toMatchObject({ reads: 1, renewals: 1, artifacts: 1 });
+  expect(f.state).toMatchObject({ reads: 1, renewals: 0, artifacts: 1 });
   if (!result.isLogin)
     throw new Error("Authorization failed");
   const artifact = await scope.writer.resolveProtocolArtifact(result.code, { protocol: "custom-sso", artifactType: "auth_code" });
@@ -325,6 +330,8 @@ test("authorization checks once before renewal and persists its real Redis Grant
   const repeated = await f.operations.run(op => f.protocol.forOperation(op).authorize.execute(f.input));
   expect(repeated.isLogin).toBe(true);
   expect(f.state.reads).toBe(2);
+  const after = await scope.observer.resolvePrincipalSession(f.root.externalToken);
+  expect(after).toMatchObject({ status: "resolved", value: before.status === "resolved" ? before.value : null });
 });
 
 test("continuation inspects a real Principal Session without renewal or Grant issuance", async () => {
@@ -339,15 +346,15 @@ test("continuation inspects a real Principal Session without renewal or Grant is
   expect(f.state).toMatchObject({ reads: 1, renewals: 0, artifacts: 0 });
 });
 
-test.each(["blocking", "disabled"] as const)("authorization admitted before %s finishes; next call rejects before renewal", async (state) => {
+test.each(["blocking", "disabled"] as const)("authorization admitted before %s finishes; next call rejects before Grant issuance", async (state) => {
   const f = await fixture();
   f.state.afterRead = state;
   const result = await f.operations.run(op => f.protocol.forOperation(op).authorize.execute(f.input));
   expect(result.isLogin).toBe(true);
-  expect(f.state).toMatchObject({ reads: 1, renewals: 1, artifacts: 1 });
+  expect(f.state).toMatchObject({ reads: 1, renewals: 0, artifacts: 1 });
   const error = await rejection(() => f.operations.run(op => f.protocol.forOperation(op).authorize.execute(f.input)));
   expect(error).toBeInstanceOf(state === "disabled" ? SubjectAccessOperationDeniedError : SubjectAccessUnavailableError);
-  expect(f.state).toMatchObject({ reads: 2, renewals: 1, artifacts: 1 });
+  expect(f.state).toMatchObject({ reads: 2, renewals: 0, artifacts: 1 });
 });
 
 test.each(["blocking", "disabled"] as const)("initial %s denial creates no Grant and does not renew", async (state) => {
@@ -439,8 +446,31 @@ test.each(["blocking", "disabled"] as const)("logout under %s revokes the root a
   expect(f.state.reads).toBe(0);
 });
 
-async function redemptionFixture(mode: Exclude<Mode, "iam">) {
+test.each(["independent", "gateway"] as const)("%s logout completes the root despite child enumeration failure", async (mode) => {
   const f = await fixture(mode);
+  scope.failNextChildIndexRead();
+  await f.protocol.logout.execute({ sessionToken: f.token });
+  const root = await scope.observer.resolvePrincipalSession(f.root.externalToken);
+  const child = await scope.observer.resolveCredential(f.token, { protocol: "custom-sso", credentialType: "local_session" });
+  expect(root.status).toBe("revoked");
+  expect(child.status).toBe("resolved");
+  await f.protocol.logout.execute({ sessionToken: f.token });
+  const retried = await scope.observer.resolveCredential(f.token, { protocol: "custom-sso", credentialType: "local_session" });
+  expect(retried.status).toBe("revoked");
+});
+
+test("logout does not report success when root revocation fails after child effects", async () => {
+  const f = await fixture();
+  scope.failNextPrincipalRevoke();
+  const failure = await rejection(() => f.protocol.logout.execute({ sessionToken: f.token }));
+  expect(failure).toBeInstanceOf(Error);
+  const root = await scope.observer.resolvePrincipalSession(f.root.externalToken);
+  const child = await scope.observer.resolveCredential(f.token, { protocol: "custom-sso", credentialType: "local_session" });
+  expect(root.status).toBe("resolved");
+  expect(child.status).toBe("revoked");
+});
+async function redemptionFixture(mode: Exclude<Mode, "iam">, options: Parameters<typeof fixture>[1] = {}) {
+  const f = await fixture(mode, options);
   const grant = await f.operations.run(op => f.protocol.forOperation(op).authorize.execute({ ...f.input, state: "opaque-state" }));
   if (!grant.isLogin)
     throw new Error("Expected authorization code");
@@ -455,6 +485,78 @@ async function redemptionFixture(mode: Exclude<Mode, "iam">) {
     : await f.protocol.forOperation(op).completeCallback.execute({ clientCode: f.clientCode, code, redirectUrl: redirect }));
   return { ...f, redeem, grantId, artifact: artifact.value, code: grant.code };
 }
+
+test.each(["independent", "gateway"] as const)("%s clips a new fixed Credential to the five minutes remaining on its root", async (mode) => {
+  await scope.close();
+  scope = await harness.createSessionKernelScope({ lifetime: { principalIdleTtlMs: 300_000, principalAbsoluteTtlMs: 600_000 } });
+  const f = await redemptionFixture(mode, { localSessionTtlSeconds: 3600 });
+  const result = await f.redeem();
+  const token = "sid" in result ? result.sid : result.token;
+  const credential = await scope.observer.resolveCredential(token, { protocol: "custom-sso", credentialType: "local_session" });
+  if (credential.status !== "resolved")
+    throw new Error("Expected issued Credential");
+  expect(credential.value.renewalPolicy).toBe("fixed_at_issue");
+  expect(credential.value.expiresAt).toBe(f.root.value.expiresAt);
+  expect(credential.value.expiresAt).toBeLessThanOrEqual(f.root.value.absoluteExpiresAt);
+  expect(result.ttl).toBeGreaterThan(0);
+  expect(result.ttl).toBeLessThanOrEqual(300);
+  expect(f.state.renewals).toBe(0);
+});
+
+test.each(["independent", "gateway"] as const)("%s stays fixed during another Client's authorization and Maintenance", async (mode) => {
+  const f = await redemptionFixture(mode);
+  const result = await f.redeem();
+  const token = "sid" in result ? result.sid : result.token;
+  const before = await scope.observer.resolveCredential(token, { protocol: "custom-sso", credentialType: "local_session" });
+  const peer = await fixture("gateway", { subjectIdentifier: f.subjectIdentifier, transitionId: f.state.generation });
+  f.state.gate = "maintenance";
+  await rejection(() => f.operations.run(op => f.protocol.forOperation(op).resolvePublicAuthentication(token, f.clientCode)));
+  const grant = await peer.operations.run(op => peer.protocol.forOperation(op).authorize.execute({ ...peer.input, globalSessionToken: f.root.externalToken }));
+  if (!grant.isLogin)
+    throw new Error("Expected peer authorization on the same root");
+  const issued = await peer.operations.run(op => peer.protocol.forOperation(op).completeCallback.execute({ clientCode: peer.clientCode, code: grant.code, redirectUrl: peer.input.redirectUrl }));
+  await peer.operations.run(op => peer.protocol.forOperation(op).authorizeLocalSession(issued.token, peer.clientCode));
+  f.state.gate = "enabled";
+  await f.operations.run(async (op) => {
+    const auth = await f.protocol.forOperation(op).resolvePublicAuthentication(token, f.clientCode);
+    await auth.subjectDeliveryCapability.resolveUserInfo();
+  });
+  const after = await scope.observer.resolveCredential(token, { protocol: "custom-sso", credentialType: "local_session" });
+  const root = await scope.observer.resolvePrincipalSession(f.root.externalToken);
+  expect(after).toMatchObject({ status: "resolved", value: before.status === "resolved" ? before.value : null });
+  expect(root).toMatchObject({ status: "resolved", value: {
+    expiresAt: f.root.value.expiresAt,
+    absoluteExpiresAt: f.root.value.absoluteExpiresAt,
+    lastActiveAt: f.root.value.lastActiveAt,
+  } });
+  expect(peer.state.renewals).toBe(0);
+});
+
+test.each(["independent", "gateway"] as const)("%s business access never slides the fixed deadline and rejects after Redis expiry", async (mode) => {
+  const f = await redemptionFixture(mode, { localSessionTtlSeconds: 1 });
+  const result = await f.redeem();
+  const token = "sid" in result ? result.sid : result.token;
+  const initial = await scope.observer.resolveCredential(token, { protocol: "custom-sso", credentialType: "local_session" });
+  if (initial.status !== "resolved")
+    throw new Error("Expected issued Credential");
+  for (const elapsed of [200, 500]) {
+    await waitForRedisCondition(async () => await scope.redisNow() >= initial.observedAt + elapsed, "Redis must reach the access observation");
+    await f.operations.run(async (op) => {
+      const api = f.protocol.forOperation(op);
+      const auth = await api.resolvePublicAuthentication(token, f.clientCode);
+      await auth.subjectDeliveryCapability.resolveUserInfo();
+      if (mode === "gateway")
+        await api.authorizeLocalSession(token, f.clientCode);
+    });
+    const current = await scope.observer.resolveCredential(token, { protocol: "custom-sso", credentialType: "local_session" });
+    expect(current).toMatchObject({ status: "resolved", value: initial.value });
+  }
+  await waitForRedisCondition(async () => !await scope.activeObjectExists({ kind: "credential", id: initial.value.credentialId }), "Credential must expire without sliding");
+  await rejection(() => f.operations.run(op => f.protocol.forOperation(op).resolvePublicAuthentication(token, f.clientCode)));
+  const root = await scope.observer.resolvePrincipalSession(f.root.externalToken);
+  expect(root.status).toBe("resolved");
+  expect(f.state.renewals).toBe(0);
+});
 
 test.each(["config", "gate"] as const)("parallel callbacks share the pending %s acquisition and retain both accepted results", async (source) => {
   const f = await fixture();
@@ -813,7 +915,7 @@ test.each(["credential", "artifact"] as const)("unparseable %s version cannot au
 test("permanent rejection remains denied when authority revocation fails", async () => {
   const f = await redemptionFixture("gateway-orcas");
   f.state.configVersion = 8;
-  scope.failNextPrincipalRevoke();
+  scope.failNextChildRevoke();
   await rejection(() => f.redeem());
   const artifact = await scope.observer.resolveProtocolArtifact(f.code, { protocol: "custom-sso", artifactType: "auth_code" });
   expect(artifact.status).toBe("resolved");
@@ -1086,7 +1188,7 @@ test.each(["independent", "gateway-orcas"] as const)("%s consumption rejects rep
   }
 });
 
-test.each(["independent", "gateway-orcas"] as const)("%s undelivered Credential follows root renewal and disappears from access after root revocation", async (mode) => {
+test.each(["independent", "gateway-orcas"] as const)("%s undelivered Credential retains its fixed deadline through root renewal and is removed by normal cascade", async (mode) => {
   const f = await redemptionFixture(mode);
   f.state.uncertainIssue = true;
   f.state.failCompensation = true;
@@ -1099,9 +1201,9 @@ test.each(["independent", "gateway-orcas"] as const)("%s undelivered Credential 
   expect(renewed.status).toBe("resolved");
   const extended = await scope.observer.resolveCredential(token, { protocol: "custom-sso", credentialType: "local_session" });
   if (extended.status !== "resolved" || renewed.status !== "resolved" || residual.status !== "resolved")
-    throw new Error("Expected retained renewable credential");
-  expect(extended.value.renewalPolicy).toBe("extend_with_principal");
-  expect(extended.value.expiresAt).toBeGreaterThanOrEqual(residual.value.expiresAt);
+    throw new Error("Expected retained fixed credential");
+  expect(extended.value.renewalPolicy).toBe("fixed_at_issue");
+  expect(extended.value.expiresAt).toBe(residual.value.expiresAt);
   expect(extended.value.expiresAt).toBeLessThanOrEqual(renewed.value.absoluteExpiresAt);
   await scope.writer.revokePrincipalSession(f.root.value.principalSessionId);
   const exists = await scope.activeObjectExists({ kind: "credential", id });
@@ -1205,7 +1307,7 @@ test.each(["failed", "response-lost"] as const)("ORCAS %s burns Code and a fresh
   expect(f.state.orcasEffects).toBe(failure === "failed" ? 1 : 2);
 });
 
-test.each(["during-orcas", "after-issue"] as const)("Gateway parent revocation %s prevents delivery and keeps Code consumed", async (phase) => {
+test.each(["during-orcas", "after-issue"] as const)("Gateway parent revocation %s preserves the issuance observation and never revives revoked credentials", async (phase) => {
   const f = await redemptionFixture("gateway-orcas");
   const revoke = async () => {
     await scope.observer.revokePrincipalSession(f.root.value.principalSessionId);
@@ -1214,7 +1316,14 @@ test.each(["during-orcas", "after-issue"] as const)("Gateway parent revocation %
     f.state.beforeOrcas = revoke;
   else
     f.state.afterIssue = revoke;
-  await rejection(() => f.redeem());
+  if (phase === "during-orcas") {
+    await rejection(() => f.redeem());
+  }
+  else {
+    const delivered = await f.redeem();
+    const token = "sid" in delivered ? delivered.sid : delivered.token;
+    await rejection(() => f.operations.run(op => f.protocol.forOperation(op).resolvePublicAuthentication(token, f.clientCode)));
+  }
   await rejection(() => f.redeem());
   expect(f.state.orcasCalls).toBe(1);
   const retained = await scope.observer.resolveProtocolArtifact(f.code, { protocol: "custom-sso", artifactType: "auth_code" });

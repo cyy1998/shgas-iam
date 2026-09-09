@@ -191,12 +191,6 @@ describe("oIDC claims V2 contract", () => {
           return null;
         },
       },
-      globalSessions: {
-        resolveById: async () => {
-          reads.session += 1;
-          return null;
-        },
-      },
       projection: {
         resolve: async () => {
           reads.projection += 1;
@@ -204,7 +198,7 @@ describe("oIDC claims V2 contract", () => {
         },
       },
       providerSessions: {
-        read: async () => {
+        readForAccessToken: async () => {
           reads.providerSession += 1;
           return null;
         },
@@ -233,6 +227,7 @@ describe("oIDC claims V2 contract", () => {
       scopes: new Set(["openid"]),
     }, {
       kind: "AuthorizationCode",
+      authTime: 123,
       accountId: subjectIdentifier,
       clientId: "client-a",
       sessionUid: "provider-a",
@@ -297,7 +292,7 @@ describe("oIDC claims V2 contract", () => {
           };
         },
       },
-      providerSessions: { read: async () => null },
+      providerSessions: { readForAccessToken: async () => null },
       tokens: {
         resolveAccessTokenCredential: async () => null,
         revokeAccessTokenCredential: async () => undefined,
@@ -358,13 +353,6 @@ describe("oIDC claims V2 contract", () => {
       clients: {
         findRuntime: async () => ({ oidc_config_version: clientVersion }),
       },
-      globalSessions: {
-        resolveById: async () => ({
-          sessionId: "principal-a",
-          accountId: subjectIdentifier,
-          authTime: 123,
-        }),
-      },
       projection: {
         resolve: async () => {
           projectionReads += 1;
@@ -396,7 +384,7 @@ describe("oIDC claims V2 contract", () => {
         },
       },
       providerSessions: {
-        read: async () => ({
+        readForAccessToken: async () => ({
           principalSessionId: "principal-a",
           bindingId: "binding-a",
           clientCode: "client-a",
@@ -409,12 +397,14 @@ describe("oIDC claims V2 contract", () => {
       tokens: {
         resolveAccessTokenCredential: async () => ({
           credential: {
+            principal: { subjectId: subjectIdentifier },
             credentialId: "credential-a",
             principalSessionId: "principal-a",
             bindingId: "binding-a",
             clientCode: "client-a",
           },
           metadata: {
+            authTime: 123,
             providerTokenKey: "candidate:model:AccessToken:token-a",
             providerTokenId: "token-a",
             oidcConfigVersion: 3,
@@ -449,6 +439,7 @@ describe("oIDC claims V2 contract", () => {
     };
     const code = {
       kind: "AuthorizationCode",
+      authTime: 123,
       accountId: subjectIdentifier,
       clientId: "client-a",
       sessionUid: "provider-a",
@@ -472,7 +463,7 @@ describe("oIDC claims V2 contract", () => {
     const extra = await lifecycle.createAccessTokenExtra(token, code);
     const resolved = await lifecycle.findAccount(subjectIdentifier, {
       ...token,
-      extra: { ...extra, kernelCredentialId: "credential-a" },
+      extra: { authTime: 123, ...extra, kernelCredentialId: "credential-a" },
     });
 
     expect(projectionReads).toBe(1);
@@ -497,7 +488,7 @@ describe("oIDC claims V2 contract", () => {
     clientVersion = 4;
     await expect(lifecycle.findAccount(subjectIdentifier, {
       ...token,
-      extra: { ...extra, kernelCredentialId: "credential-a" },
+      extra: { authTime: 123, ...extra, kernelCredentialId: "credential-a" },
     })).resolves.toBeUndefined();
     expect(revokedCredentialIds).toEqual(["credential-a"]);
     expect(projectionReads).toBe(2);

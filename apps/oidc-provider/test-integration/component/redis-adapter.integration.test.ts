@@ -178,7 +178,7 @@ function createAdapter(
         oidcConfigVersion: version.value ?? 0,
         expiresAt: 1_782_263_600,
       }),
-      read: async () => ({
+      readForAuthorization: async () => ({
         principalSessionId: "principal-a",
         bindingId: "binding-a",
         clientCode: "client-a",
@@ -206,7 +206,7 @@ function createMultiClientAdapter(model: string, redis: FakeRedis, versions: Map
       consumeStaged: async () => null,
       destroyProviderSession: async () => true,
       ensureClientBinding: async () => null,
-      read: async () => null,
+      readForAuthorization: async () => null,
       readPrincipalAnchor: async () => null,
     },
     tokens,
@@ -369,7 +369,7 @@ describe("redis OIDC adapter", () => {
         destroyProviderSession: async () => true,
         ensureClientBinding: async () => null,
         readPrincipalAnchor: async () => null,
-        read: async () => null,
+        readForAuthorization: async () => null,
         consumeStaged: async (input) => {
           consumeStagedInput = input;
           return stagedBinding;
@@ -438,7 +438,7 @@ describe("redis OIDC adapter", () => {
         },
       },
       providerSessions: {
-        read: async () => binding,
+        readForAuthorization: async () => binding,
         consumeStaged: async () => null,
         ensureClientBinding: async () => binding,
         readPrincipalAnchor: async () => createPrincipalAnchor(binding.principalSessionId),
@@ -517,7 +517,7 @@ describe("redis OIDC adapter", () => {
         ensureClientBinding: async (input: { clientCode: string }) => input.clientCode === "client-b"
           ? bindingB
           : bindingA,
-        read: async (_sessionUid: string, clientCode: string) => clientCode === "client-b"
+        readForAuthorization: async (_sessionUid: string, clientCode: string) => clientCode === "client-b"
           ? bindingB
           : bindingA,
         readPrincipalAnchor: async () => createPrincipalAnchor(),
@@ -574,7 +574,7 @@ describe("redis OIDC adapter", () => {
       },
       providerSessions: {
         destroyProviderSession: async () => true,
-        read: async () => null,
+        readForAuthorization: async () => null,
         consumeStaged: async () => null,
         ensureClientBinding: async () => null,
         readPrincipalAnchor: async () => createPrincipalAnchor(),
@@ -621,7 +621,7 @@ describe("redis OIDC adapter", () => {
         },
       },
       providerSessions: {
-        read: async () => binding,
+        readForAuthorization: async () => binding,
         consumeStaged: async () => null,
         ensureClientBinding: async () => binding,
         readPrincipalAnchor: async () => createPrincipalAnchor(binding.principalSessionId),
@@ -707,7 +707,7 @@ describe("redis OIDC adapter", () => {
         consumeStaged: async () => null,
         destroyProviderSession: async () => true,
         ensureClientBinding: async () => null,
-        read: async () => null,
+        readForAuthorization: async () => null,
         readPrincipalAnchor: async () => null,
       },
       tokens,

@@ -11,6 +11,8 @@ Subject Facts、Client Authorization Claim、Subject Projection Not Ready 与 OI
 
 ## Language
 
+下文 Credential 与 Session Revocation 采用 [ADR-0033 已接受的目标](docs/adr/0033-trust-issued-credentials-without-principal-session-revalidation.md)：已有凭据使用不查父，兑换仍查父，根撤销继续尽力级联且不承诺派生访问全部失效；Credential 签发期限仍受当时根期限裁剪，Custom SSO 不再续根或续 Credential。代码已由 #164–#167 实现，发布采用一次性全体下线；术语不代替行为证据，环境尚未切换。
+
 **User Profile**:
 IAM 中关于一个用户的稳定档案视图，包括用户基础身份信息、任职、角色和权限。
 _Avoid_: session payload, protocol payload
@@ -295,6 +297,10 @@ _Avoid_: Independent Client Credential, third-party local session
 标识一次 Credential 签发的身份，在该次签发结果不确定时用于确认或补偿其作用。新的签发使用新的身份，旧 Credential 自然过期不构成复用其身份的业务契约。
 _Avoid_: reusable credential slot, bearer token, user identity
 
+**Credential**:
+IAM 向指定 client 签发并管理、承载主体身份与自身生命周期的访问凭据，其签发期限仍受当时父 Principal Session 期限限制。已有 Credential 的使用不以父会话当前仍有效为前提，但仍受自身有效性、主体访问和适用协议及授权规则约束；Custom SSO Credential 签发后不再续期。
+_Avoid_: Principal Session, Authorization Grant, unconditional access permission
+
 **Custom SSO Client Configuration**:
 一个 client 对 Custom SSO 接入模式、回调行为和所需 Subject Claims 的独立版本化声明；它由 `customSsoEnabled`、可空的 `customSsoConfig`、Independent 模式专用的 `customSsoSecretHash` 与单调递增的 `customSsoConfigVersion` 表达，不属于 OIDC 配置。未配置、已配置但停用、启用是三个不同状态；其中启用表达管理员的协议启用意图，不等于 Custom SSO 当前可用，全局 Client 生命周期状态另行决定是否接受运行流量。`mode` 只区分 Gateway 与 Independent，不使用 `None` 表示关闭；Independent 必须有 Secret Hash，Gateway 必须没有。配置是按 `mode` 区分的严格联合类型，跨模式无意义或未知字段必须被拒绝。配置、启停、Custom SSO secret 或 claim disclosure 的任何变更都原子递增版本；服务端 active Catalog 的任何 claim disclosure 变化都推进全部已配置 Custom SSO Client 的版本。Custom SSO Authorization Grant 与 Credential 必须记录并校验签发版本，因此旧 artifact 即使尚未被批量清理也会 fail closed。配置按服务端唯一 active Subject Claim Catalog 显式列出完整 `subjectClaims`，其中必须包含 Subject Identifier；Catalog 版本不由 client 选择或持久化，新 client 默认只包含 Subject Identifier。配置不内嵌永久的按用户维护绕过名单。
 _Avoid_: client ext attributes, shared clientSecret, plaintext secret, OIDC client configuration, unversioned SSO settings, userExcluding
@@ -424,5 +430,5 @@ _Avoid_: restriction cause, failure breakdown
 _Avoid_: trusted device, device identity, device fingerprint
 
 **Session Revocation**:
-使 IAM 管理的登录会话及其派生访问不再被 IAM 接受的终止操作；它不阻止未来登录，外围清理失败不会恢复其有效性，第三方自行建立的本地会话不在其保证范围内。
+使明确撤销的 IAM 会话对象不再被 IAM 接受的终止操作；根会话撤销成功不承诺全部派生 Credential 已失效。它不阻止未来登录，外围清理失败不会恢复已撤销对象的有效性，第三方自行建立的本地会话不在其保证范围内。
 _Avoid_: guaranteed third-party logout, reversible logout

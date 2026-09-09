@@ -33,6 +33,12 @@ Redis TIME 不是 JWT 认证事件时间或主机稳定性保证。`authTime`/`a
 
 ## 证据入口
 
+Spec #163 的 [#164](https://github.com/cyy1998/shgas-iam/issues/164) 已把两模式 Custom SSO 新 Credential 改为固定期限并取消授权续根；
+Redis 时间、签发时父期限裁剪和取得时有效性保持。完整 Custom SSO Redis 操作证明五分钟短根裁剪、跨 Client/Maintenance、
+业务访问直至到期、未交付残留不随根延长；API 实际 HTTP 比较签发观察与 Independent TTL/Gateway Cookie；
+OIDC `subject-access-authorization` Redis 测试经实际 HTTP 授权证明根和原 Binding 延长、同根两模式 Credential 不变。
+本票保留现有父检查，其退役归后续票；未运行生产下线。旧策略对象须按 ADR-0033 的全体下线选择清理，不能把本地证据当成混跑部署许可。
+
 表中缩写均指既有 owner seam；测试存在不等于已经执行。真实 Redis 使用专用 URL，应用时钟独立注入，不能与 Redis 绑定到同一 fake。
 
 - **K-time**：[Kernel 时间](../../../packages/session-kernel/test-integration/redis/session-kernel-time.integration.test.ts)：四类对象偏差矩阵、跨实例与前后跳、父上限、续期 lookup、取得后到期、真实缺失与 pending cleanup。

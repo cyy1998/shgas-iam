@@ -371,9 +371,10 @@ User Profile 的初代 V1 builder、Facts reader/publisher 与 Subject Projectio
 ### Session runtime 与跨 App 边界
 
 - Custom SSO 的唯一工厂 `createCustomSsoOperations` 用 `forOperation` 绑定显式容器。
-  授权和续接在可信根解析后检查，授权早于 renew/Artifact；兑换与 callback 在 Artifact 的 mode、Client、redirect、
+  授权和续接在可信根解析后检查，授权早于 Artifact 创建且不续根；兑换与 callback 在 Artifact 的 mode、Client、redirect、
   版本及主体一致性校验后、Grant 消费前检查，ORCAS 出站与签发均在其后。authz 和 Public UserInfo 在首次可信
-  Credential/根解析后检查，父对象和延迟交付复用许可。退出走中性终止能力，不要求目标许可。
+  Credential/根解析后检查。Custom SSO authz 与两模式 Public UserInfo 直接使用可信 Credential 的主体和严格 context，
+  不复查父会话；IAM 根 token 入口仍解析根。延迟交付复用许可，退出走中性终止能力，不要求目标许可。
   API composition 把此工厂和同一 Kernel 接到 services、use-cases、routes 与 middlewares；Public 容器覆盖 `next()`
   及延迟交付，结束后关闭。缺少许可没有 fallback。
 - `createPermittedClientSubjectProjectionService` 是唯一投影工厂，`resolve(input, proof)` 通过注入的窄
@@ -408,7 +409,9 @@ User Profile 的初代 V1 builder、Facts reader/publisher 与 Subject Projectio
   #158/#159 让两种 Custom SSO Grant 直接使用 Kernel Artifact 的 Redis deadline 与原子消费，不再初始化独立 redemption。
   Independent 响应 TTL 与 Gateway Local Session Cookie 的 Max-Age 从 Credential `expiresAt - observedAt` 向上取整为秒，
   亚秒有效结果仍交付一秒，不以取整或应用时间追加过期拒绝，也不延长 Redis 中的期限。ORCAS Cookie 保持原外部集成契约。
-  Independent 签发后与 Local Session 认证中的父 Session 读取继续保护对象存在和撤销，并复用本操作许可；这些独立操作仍可因真实缺失失败。
+  两模式签发后只核对已取得 Credential 观察的主体、context 和归属，不再读取父 Session 或重判期限；新授权、续接、
+  消费前及 Kernel 开始签发时仍校验根。根观察后撤销允许晚到写入；签发响应已取得后对象被撤销或消失，不复活对象，
+  也不保证拦截在途响应。下一次 Credential 使用按其自身有效性拒绝。根撤销尽力级联的漏项仍受固定期限、账号及协议约束。
   每个兑换 attempt 的服务端 UUID 在签发前固定，不确定写入仍按同一 identity 精确补偿；后续 attempt 使用新 UUID。
   #118 已让 OIDC store 在一次 Redis Lua 写入中以 Redis 时间计算主对象、UID/user-code lookup 与 Grant/Client 索引的相同期限，
   共享索引只延长到期时间，短成员和重复写入不会缩短长成员的追踪期限。清理与盘点读取实际对象，清理不按应用时间裁剪成员；
@@ -449,8 +452,10 @@ User Profile 的初代 V1 builder、Facts reader/publisher 与 Subject Projectio
   control port 之前失败并返回 `409 / ADMIN_SESSION_CURRENT_PROTECTED`；已失效或不存在的目标返回
   `200 / changed:false`。外围 cleanup 部分失败仍是成功结果，只暴露计数；Kernel inventory/control 不可用映射为
   `503 / ADMIN_LOGIN_STATE_UNAVAILABLE`。
+- 根撤销尽力处理已发现子对象，再独立执行根转换；子枚举或单子错误不打断根及其余对象。根失败或 CAS 结果未知仍报错；已发生子作用不回滚。用户批量命令继续尝试其他 roots 后报告根失败，不增加跨树事务、持续扫描或最终撤销承诺。
+  各类 revoked 只统计真实转换，比较冲突计入 excluded；子失败用有界独立日志表达，外围 cleanup/finalize 失败保持已撤销事实和既有 pending owner。根保留或缺失但子发生变化时，Admin changed 仍为 true。
 - 用户级撤销通过消费方拥有的 bulk control 一次处理操作开始时用户索引中的根 Principal Session，不在 Admin service
-  预取列表或逐行撤销。其他用户的全部根会话与 children 被撤销；actor 本人保留服务端当前根会话但仍撤销其 children
+  预取列表或逐行撤销。目标根会话被撤销，children 尽力处理；actor 本人保留服务端当前根会话但仍尽力处理其 children
   和其他 roots。本人缺少当前 Principal Session ID 时在 control 前 fail closed；操作不引入 user generation、
   revocation epoch、登录冻结或并发新登录屏障。
 - 单会话与用户级撤销统一返回 `{ changed, result }`；result 保留 scope、实际撤销数量、当前根会话例外和 cleanup 数量，
@@ -519,12 +524,13 @@ User Profile 的初代 V1 builder、Facts reader/publisher 与 Subject Projectio
 - Independent 前置 Client/用途/mode/redirect/版本、根会话、Gate 与 Subject Access 通过后消费，再构建和严格验证完整 V2
   主体，最后以写前新 UUID 签发 Credential。消费后任何错误不恢复 Code；未进入 Credential 写入时不创建补偿 identity。
   写入结果不确定或签发后可处理失败按本次 identity 同步尽力撤销，失败不换 identity 重签、不建立队列或最终补偿承诺。
-  签发后的父会话存在与主体一致性保护保留；全程复用当前操作许可和配置/Gate，不增加响应前业务复查。
+  签发后核对已取得 Credential 的主体、context 与归属，不重读父会话；全程复用当前操作许可和配置/Gate，不增加响应前业务复查。
 - Independent 的 Projection Not Ready 仍为暂态 `503`；投影不变量或格式错误仍为通用 `500`，不新增公开字段或内部原因。
   两类失败均要求重新授权，token 的 `Retry-After` 表示新授权前的等待；UserInfo/authz 继续原凭据重试。成功审计是 best-effort，
-  其失败不撤销可交付 Credential。未交付 Credential 保留 `extend_with_principal`，受根绝对期限、版本、账号与撤销约束。
-- Gateway 在前置校验与根主体一致后消费，成功才执行适用的 ORCAS，然后以写前新 UUID 签发 Local Session；签发后保留父会话
-  存在与主体一致性检查。ORCAS 或签发失败不恢复 Code，同步尽力补偿仅处理本次 Credential；ORCAS 外部成功但响应丢失仍可能
+  其失败不撤销可交付 Credential。两模式新 Credential（包括未交付残留）使用 `fixed_at_issue`，签发时裁剪到已观察的根当前及绝对期限，
+  受版本、账号与撤销约束。Custom SSO 授权和业务访问均不续期；OIDC 续根仍延长自身可续 Binding，但不延长固定 Credential。
+  #164 交付期限，#166/#167 已完成双协议使用时父检查退役；Spec #163 采用停流排空后全体下线，旧策略对象不保留混跑，环境未切换。
+- Gateway 在前置校验与根主体一致后消费，成功才执行适用的 ORCAS，然后以写前新 UUID 签发 Local Session；签发后核对可信 Credential 的主体、context 与归属，不追加父读取。ORCAS 或签发失败不恢复 Code，同步尽力补偿仅处理本次 Credential；ORCAS 外部成功但响应丢失仍可能
   留下会话，新授权可能再次登录，外部幂等/撤销归 #145。callback 保持 JSON 失败与既有 Cookie/redirect/state，用户返回业务应用
   重新访问，不刷新旧 callback 或自动循环授权。在线 reservation/lease/heartbeat/release/takeover 与固定租约配置已删除。
 - 维护 owner 保留 `authorization-grant:redemption:v1:` 的 issued/redeeming/consumed 库存 decoder、精确 removal 与 cleanup ref。
@@ -611,6 +617,9 @@ User Profile 的初代 V1 builder、Facts reader/publisher 与 Subject Projectio
 - Access Token、UserInfo 与 ID Token 复用 Authorization Code 的 Claims Snapshot，并校验 subject、client、scopes、
   Provider Session、Principal Session 与 binding ownership；撤销一个 client lifecycle 不得删除同一 Provider Session
   下其他 client 的 binding。
+  已有 AccessToken 经 `readForAccessToken` 仅验证 Binding 自身与可信 Token/Credential 认证时间，不再显式或间接读取父根、
+  也不经账户转换补身份；`readForAuthorization` 保留新签发及 Session 保存所需根检查。Code 的认证时间通过 Token extra
+  与 Credential metadata 传递，缺失或矛盾拒绝；原期限、OIDC 续期和一次操作许可保持，见[OIDC 操作契约](../features/oidc/oidc-operation-snapshots.md)。
 - OIDC artifact 生命周期不再与 Runtime cache invalidation 通过 Pub/Sub 串联。Admin mutation 仍通过 Session Kernel
   revocation seam 撤销当前 OIDC Client Binding 与 credential/token；Provider protocol object 在读取时使用本操作首次
   `oidcConfigVersion` fail closed，并由其 store 删除确认过期的对象，高于本操作版本的对象保留。显式 Client Protocol artifact cleanup 继续由独立

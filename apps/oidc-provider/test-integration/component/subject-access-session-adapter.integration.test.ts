@@ -21,7 +21,7 @@ function createAdapter(
       protocol: "oidc",
       credentialType: "access_token",
       clientCode: "client-a",
-      metadata: { anchorGeneration: "generation-a", providerTokenKey: "token-key", providerTokenId: "access-token", providerSessionUid: "provider-session-a", mappingOwnerId: "owner-a", oidcConfigVersion: 1 },
+      metadata: { authTime: 1, anchorGeneration: "generation-a", providerTokenKey: "token-key", providerTokenId: "access-token", providerSessionUid: "provider-session-a", mappingOwnerId: "owner-a", oidcConfigVersion: 1 },
       principal: { principalType: "user", subjectId: "00000000-0000-4000-8000-000000000007" },
       principalSessionId: "00000000-0000-4000-8000-000000000008",
       subjectContext: encodeSubjectAccessContext({
@@ -239,7 +239,7 @@ describe("oIDC Subject Access Session Adapter", () => {
     const byIdError = await createAdapter(reason).adapter.resolveById("principal-a").catch(error => error);
     expect(byIdError).toBeInstanceOf(SubjectAccessDisabledError);
     expect(isGlobalSessionCookieError(byIdError)).toBe(false);
-    await expect(adapter.read("provider-session-a", "client-a"))
+    await expect(adapter.readForAuthorization("provider-session-a", "client-a"))
       .rejects
       .toBeInstanceOf(SubjectAccessDisabledError);
     await expect(adapter.resolveAccessTokenCredential("access-token"))
@@ -286,7 +286,7 @@ describe("oIDC Subject Access Session Adapter", () => {
     await expect(adapter.registerAccessTokenCredential({
       binding,
       expiresIn: 60,
-      payload: { clientId: "client-a" },
+      payload: { clientId: "client-a", extra: { authTime: binding.authTime } },
       providerTokenId: "token-a",
       providerTokenKey: "token-key-a",
     } as never)).rejects.toBeInstanceOf(SubjectAccessDisabledError);

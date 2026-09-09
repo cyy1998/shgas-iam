@@ -1,8 +1,10 @@
 import type { AuditLogInput } from "@admin-api/services/audit/audit.context";
 import type { LoginRestriction } from "@iam/api-core/login-restriction";
 import type { SessionKernel } from "@iam/session-kernel";
+import type { RedisTestHarness, SessionKernelRedisTestScope } from "@iam/session-kernel/testing";
 import type { AdminApiRedisTestHarness, AdminApiRedisTestScope } from "./redis-test-harness";
 import { randomUUID } from "node:crypto";
+import process from "node:process";
 import { createAdminAuthenticationHandlers } from "@admin-api/middlewares/authentication.handler";
 import { createAdminAuthorizationAdapter } from "@admin-api/routes/admin/authorization/authorization.adapter";
 import { createAdminAuthorizationContextHandler } from "@admin-api/services/admin-authorization/admin-authorization.context";
@@ -13,7 +15,7 @@ import { createLoginRestriction, createRedisLoginRestrictionStore, LOGIN_FAILURE
 import { createRedisSubjectAccessStore, createSubjectAccessBarrier, createSubjectAccessBootstrap, createSubjectAccessOperations, createSubjectAccessSessionRevocation, encodeSubjectAccessContext, SubjectAccessDisabledError } from "@iam/api-core/subject-access";
 import { createTRPCContext } from "@iam/api-core/trpc";
 import { UserStatus, UserType } from "@iam/contracts";
-import { createSessionKernel, createSessionKernelConfig } from "@iam/session-kernel";
+import { createSessionKernelRedisTestHarness } from "@iam/session-kernel/testing";
 import { fetchRequestHandler } from "@trpc/server/adapters/fetch";
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, test } from "bun:test";
 import { Hono } from "hono";
@@ -23,6 +25,8 @@ const subjectIdentifier = "00000000-0000-4000-8000-000000000007";
 const auditContext = { actorType: "admin" as const, actorUserId: 7 };
 let harness: AdminApiRedisTestHarness | undefined;
 let scope: AdminApiRedisTestScope | undefined;
+let kernelHarness: RedisTestHarness | undefined;
+let kernelScope: SessionKernelRedisTestScope | undefined;
 let kernel: SessionKernel;
 let observer: SessionKernel;
 let restrictions: LoginRestriction;
@@ -36,6 +40,10 @@ let accountStatus: UserStatus;
 
 beforeAll(async () => {
   harness = await createAdminApiRedisTestHarness();
+  const redisUrl = process.env.IAM_ADMIN_API_TEST_REDIS_URL;
+  if (!redisUrl)
+    throw new Error("IAM_ADMIN_API_TEST_REDIS_URL is required; no fallback is allowed");
+  kernelHarness = await createSessionKernelRedisTestHarness(redisUrl);
 });
 
 beforeEach(async () => {
@@ -45,20 +53,8 @@ beforeEach(async () => {
   auditFailure = undefined;
   cleanupFailure = false;
   accountStatus = UserStatus.Enable;
-  const config = createSessionKernelConfig({
-    namespace: scope.clientCode("session-management"),
-    lookupHmacKeys: {
-      current: {
-        id: "admin-redis-test",
-        secret: "admin-session-management-redis-test-secret-000000000000",
-      },
-    },
-    principalAbsoluteTtlMs: 60_000,
-    principalIdleTtlMs: 30_000,
-  });
-  kernel = createSessionKernel({
-    config,
-    redis: scope.redis,
+  kernelScope = await kernelHarness!.createSessionKernelScope({
+    lifetime: { principalAbsoluteTtlMs: 60_000, principalIdleTtlMs: 30_000 },
     cleanupAdapters: [{
       protocol: "oidc",
       kind: "test-artifact",
@@ -72,7 +68,8 @@ beforeEach(async () => {
       async cleanup() {},
     }],
   });
-  observer = createSessionKernel({ config, redis: scope.observer });
+  kernel = kernelScope.writer;
+  observer = kernelScope.observer;
   const keyPrefix = scope.clientCode("login-restriction");
   restrictions = createLoginRestriction({
     clock: { now: Date.now },
@@ -121,13 +118,25 @@ beforeEach(async () => {
 });
 
 afterEach(async () => {
-  await scope?.close();
-  scope = undefined;
+  try {
+    await kernelScope?.close();
+  }
+  finally {
+    kernelScope = undefined;
+    await scope?.close();
+    scope = undefined;
+  }
 });
 
 afterAll(async () => {
-  await harness?.close();
-  harness = undefined;
+  try {
+    await kernelHarness?.close();
+  }
+  finally {
+    kernelHarness = undefined;
+    await harness?.close();
+    harness = undefined;
+  }
 });
 
 async function createSessionTree(withCleanup = false) {
@@ -392,6 +401,21 @@ describe("Admin session mutations with real Redis owners", () => {
     ]);
   });
 
+  test("root success and only-child success use actual counts despite enumeration failure", async () => {
+    const target = await createSessionTree();
+    const actor = { actorUserId: 7, principalSessionId: "another-current-root" };
+    const input = { target: { type: "session" as const, principalSessionId: target.principalSessionId } };
+    kernelScope!.failNextChildIndexRead();
+    const rootOnly = await service.revokeSessions(input, actor, auditContext);
+    expect(rootOnly).toMatchObject({ changed: true, result: { revoked: { principalSessions: 1, bindings: 0, credentials: 0, artifacts: 0 }, cleanup: { failed: 0 } } });
+    const partial = await observeTree(target);
+    expect(partial).toEqual(["revoked", "resolved", "resolved", "resolved"]);
+    const childrenOnly = await service.revokeSessions(input, actor, auditContext);
+    expect(childrenOnly).toMatchObject({ changed: true, result: { revoked: { principalSessions: 0, bindings: 1, credentials: 1, artifacts: 1 } } });
+    const final = await observeTree(target);
+    expect(final).toEqual(["revoked", "revoked", "revoked", "revoked"]);
+    expect(auditWrites).toMatchObject([{ details: { changed: true } }, { details: { changed: true } }]);
+  });
   test("user revocation preserves only the current root while revoking its children and other roots", async () => {
     const current = await createSessionTree();
     const other = await createSessionTree();

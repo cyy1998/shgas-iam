@@ -805,7 +805,7 @@ function createAdapter(
       consumeStaged: async () => null,
       destroyProviderSession: async () => true,
       ensureClientBinding: async () => null,
-      read: async (_sessionUid, clientCode) => ({
+      readForAuthorization: async (_sessionUid, clientCode) => ({
         accountId: SUBJECT_IDENTIFIER,
         authTime: 1_782_260_000,
         bindingId: `${clientCode}-binding`,

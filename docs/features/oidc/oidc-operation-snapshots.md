@@ -27,6 +27,23 @@ callbacks。原生方法本身不会进入 Provider 的请求 ALS。两种入口
 
 ## 在途请求与失败处理
 
+### 已签发 AccessToken 的独立使用
+
+[#167](https://github.com/cyy1998/shgas-iam/issues/167) 按 ADR-0033 将 Binding 读取分为 `readForAccessToken` 与
+`readForAuthorization`。前者验证 Binding 自身期限、撤销、用途、配置、lookup owner 与 anchor 归属，从 Binding 的可信
+主体取得身份，不解析父 Principal Session，也不经账户 adapter 补齐身份。Claims 不再持有根 resolver。
+后者继续验证根及其主体、认证时间，供新签发与 Provider Session 保存使用；根登录、interaction、续接与 Code 兑换仍查根。
+
+AccessToken 的 Provider 模型没有顶层 `authTime`。Token extra 从已验证 Code 继承认证时间，Credential 签发先比较该值与
+Binding，再写入自身 metadata；UserInfo 比较 Token extra、Credential metadata 和 Binding 的认证时间，并保留主体、scope、
+Client、Principal Session、Provider Session、Binding identity 与配置版本的一致性。缺失字段不回源父或当前账号修补。
+这是统一版本后的协议状态，不提供旧 Token 兼容；发布按 Spec #163 复用全体在线状态下线流程。
+
+正式根撤销只尽力处理子对象。漏索引而保留的 Credential、Binding 和协议配套状态可以继续访问；自身撤销、到期或配套无效
+仍拒绝。取得时有效的根和 Binding 允许在途签发继续，之后已撤销或删除的对象不会复活；在途响应可交付不表示后继访问成功。
+不增加提交时父屏障，签发仍受已观察根当前及绝对期限裁剪，Binding、lookup、anchor 使用原绝对期限；OIDC 根与 Binding
+续期保持。真实请求观察及具体证明范围见[独立访问证据](oidc-credential-authority-evidence.md)。
+
 已取得的旧配置和正常 Gate 允许当前调用继续消费 Code、处理 Binding、签发 Token 和交付 Claims；不在提交或响应前
 再次取得新配置来推翻本操作判断。当前对象缺失、已撤销、已消费或 CAS 冲突仍可使操作失败，首次结果不是完成保证。
 极迟签发的旧代对象在后续请求取得新配置时被拒绝并精确处理。

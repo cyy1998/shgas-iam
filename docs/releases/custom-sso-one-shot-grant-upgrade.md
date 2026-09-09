@@ -1,8 +1,10 @@
 # Custom SSO 一次消费的保留会话升级
 
+> 本文保留对象流程只适用于原规格单独升级。包含 Spec #163 / ADR-0033 的候选必须优先执行[全体在线状态下线](online-auth-redis-time-cutover.md)：停旧 writer、排空、四 owner 清理及新进程 verify 后统一版本并重新登录，不保留旧 Credential。原规格证据仍保留其历史适用范围，环境未切换。
+
 Status: Current
 
-Last verified: 2026-09-09
+Last verified: 2026-09-10
 
 Next review: 2026-10-31
 

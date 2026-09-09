@@ -352,7 +352,7 @@ describe("client Protocol artifact cleanup real Redis contract", () => {
         consumeStaged: unused,
         destroyProviderSession: unused,
         ensureClientBinding: unused,
-        read: unused,
+        readForAuthorization: unused,
         readPrincipalAnchor: unused,
       },
       tokens: { revokeAccessToken: unused },

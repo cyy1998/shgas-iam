@@ -465,7 +465,7 @@ it("preserves Principal, both Custom SSO Credentials and OIDC Binding, Code, Tok
   const deps = {
     claims: { createAuthorizationCodeSnapshot: async () => ({ subjectIdentifier: subject }) },
     clientVersions: { findActiveVersion: async () => 1 },
-    providerSessions: { read: async () => providerBinding, readPrincipalAnchor: async () => ({ accountId: subject, principalSessionId: principalId, generation }), ensureClientBinding: async () => providerBinding, consumeStaged: unused, destroyProviderSession: unused },
+    providerSessions: { readForAuthorization: async () => providerBinding, readPrincipalAnchor: async () => ({ accountId: subject, principalSessionId: principalId, generation }), ensureClientBinding: async () => providerBinding, consumeStaged: unused, destroyProviderSession: unused },
     tokens: { revokeAccessToken: unused },
     oidcSession: {
       async registerAuthorizationCodeArtifact(input: { providerCodeId: string }) {

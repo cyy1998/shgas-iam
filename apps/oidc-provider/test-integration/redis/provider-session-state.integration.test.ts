@@ -674,7 +674,7 @@ describe("oIDC Provider Session real Redis contract", () => {
     const mappingKey = providerSessionBindingLookupKey(providerSessionUid, clientCode);
     expect(await testScope.observer.pexpiretime(mappingKey)).toBe(principal.value.expiresAt);
     applicationOffset = 120_000;
-    await adapter.read(providerSessionUid, clientCode);
+    await adapter.readForAuthorization(providerSessionUid, clientCode);
     expect(await testScope.observer.pexpiretime(mappingKey)).toBe(principal.value.expiresAt);
     const codeId = testScope.unique("code");
     const payload = { clientId: clientCode, scope: "openid", authTime: session.authTime };
@@ -713,7 +713,7 @@ describe("oIDC Provider Session real Redis contract", () => {
     expect(replayFailure).toBeInstanceOf(Error);
     expect(await adapter.consumeAuthorizationCodeArtifact(codeId, lifetime!.artifact)).toBeNull();
     const tokenId = testScope.unique("token");
-    const credential = await adapter.registerAccessTokenCredential({ providerTokenId: tokenId, providerTokenKey: testScope.unique("payload"), payload, expiresIn: lifetime!.remainingSeconds, binding });
+    const credential = await adapter.registerAccessTokenCredential({ providerTokenId: tokenId, providerTokenKey: testScope.unique("payload"), payload: { ...payload, extra: { authTime: binding!.authTime } }, expiresIn: lifetime!.remainingSeconds, binding });
     expect(credential!.expiresAt).toBeLessThanOrEqual(principal.value.expiresAt);
     expect((await adapter.resolveAccessTokenCredential(tokenId))!.credential.credentialId).toBe(credential!.credentialId);
     await adapter.revokeAccessTokenCredential(credential!.credentialId);
@@ -723,7 +723,7 @@ describe("oIDC Provider Session real Redis contract", () => {
       status: "resolved",
       value: { bindingId: binding!.bindingId },
     });
-    await expect(adapter.read(providerSessionUid, clientCode)).resolves.toMatchObject({
+    await expect(adapter.readForAuthorization(providerSessionUid, clientCode)).resolves.toMatchObject({
       bindingId: binding!.bindingId,
       principalSessionId: principal.value.principalSessionId,
     });

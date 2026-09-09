@@ -1058,7 +1058,7 @@ describe("session kernel tombstone, cleanup, validation, and fail closed behavio
     redis.failNextTransaction = true;
     await expect(kernel.revokePrincipalSession(created.value.principalSessionId, "admin_revoke"))
       .rejects
-      .toThrow("redis transaction failed");
+      .toThrow("session kernel root revocation was not confirmed");
     await expect(kernel.listPrincipalSessions({ offset: 0, limit: 10 })).resolves.toMatchObject({
       items: [{ principalSessionId: created.value.principalSessionId }],
       total: 1,

@@ -57,12 +57,14 @@ function createFixture() {
   const revokedCredentialIds: string[] = [];
   const credential = {
     credential: {
+      principal: { subjectId: account.subjectIdentifier },
       credentialId: "credential-a",
       principalSessionId: session.sessionId,
       bindingId: "binding-a",
       clientCode: "client-a",
     },
     metadata: {
+      authTime: session.authTime,
       providerTokenKey: "oidc:model:AccessToken:token-a",
       providerTokenId: "token-a",
       oidcConfigVersion: client.oidc_config_version,
@@ -84,9 +86,6 @@ function createFixture() {
     clients: {
       findRuntime: async () => client,
     },
-    globalSessions: {
-      resolveById: async (sessionId: string) => sessionId === session.sessionId ? session : null,
-    },
     projection: {
       resolve: async () => ({
         subjectIdentifier: account.subjectIdentifier,
@@ -101,7 +100,7 @@ function createFixture() {
       }),
     },
     providerSessions: {
-      read: async (sessionUid: string, clientCode: string) => sessionUid === "provider-a"
+      readForAccessToken: async (sessionUid: string, clientCode: string) => sessionUid === "provider-a"
         && clientCode === "client-a"
         ? structuredClone(providerBinding)
         : null,
@@ -126,9 +125,6 @@ describe("oIDC claims and UserInfo snapshot", () => {
       clients: {
         findRuntime: async () => null,
       },
-      globalSessions: {
-        resolveById: async () => null,
-      },
       projection: {
         resolve: async (input: unknown) => {
           resolutions.push(input);
@@ -140,7 +136,7 @@ describe("oIDC claims and UserInfo snapshot", () => {
         },
       },
       providerSessions: {
-        read: async () => null,
+        readForAccessToken: async () => null,
       },
       tokens: {
         resolveAccessTokenCredential: async () => null,
@@ -186,7 +182,6 @@ describe("oIDC claims and UserInfo snapshot", () => {
     const adapter = createOidcClaimsAdapter({
       accounts: { findBySubject: async () => null },
       clients: { findRuntime: async () => null },
-      globalSessions: { resolveById: async () => null },
       projection: {
         resolve: async (input: unknown) => {
           resolutions.push(input);
@@ -215,7 +210,7 @@ describe("oIDC claims and UserInfo snapshot", () => {
           };
         },
       },
-      providerSessions: { read: async () => null },
+      providerSessions: { readForAccessToken: async () => null },
       tokens: {
         resolveAccessTokenCredential: async () => null,
         revokeAccessTokenCredential: async () => undefined,
@@ -280,13 +275,12 @@ describe("oIDC claims and UserInfo snapshot", () => {
     const adapter = createOidcClaimsAdapter({
       accounts: { findBySubject: async () => null },
       clients: { findRuntime: async () => null },
-      globalSessions: { resolveById: async () => null },
       projection: {
         resolve: async () => {
           throw new SubjectProjectionNotReadyError();
         },
       },
-      providerSessions: { read: async () => null },
+      providerSessions: { readForAccessToken: async () => null },
       tokens: {
         resolveAccessTokenCredential: async () => null,
         revokeAccessTokenCredential: async () => undefined,
@@ -334,12 +328,6 @@ describe("oIDC claims and UserInfo snapshot", () => {
           return null;
         },
       },
-      globalSessions: {
-        resolveById: async () => {
-          reads.globalSession += 1;
-          return null;
-        },
-      },
       projection: {
         resolve: async () => {
           reads.projection += 1;
@@ -347,7 +335,7 @@ describe("oIDC claims and UserInfo snapshot", () => {
         },
       },
       providerSessions: {
-        read: async () => {
+        readForAccessToken: async () => {
           reads.providerSession += 1;
           return null;
         },
@@ -383,6 +371,7 @@ describe("oIDC claims and UserInfo snapshot", () => {
     };
     const code = {
       kind: "AuthorizationCode",
+      authTime: 123,
       accountId: claimsSnapshot.subjectIdentifier,
       clientId: claimsSnapshot.clientId,
       sessionUid: claimsSnapshot.providerSessionUid,
@@ -396,7 +385,7 @@ describe("oIDC claims and UserInfo snapshot", () => {
       code: unknown,
     ) => Promise<unknown>)(token, code);
 
-    expect(extra).toEqual({ claimsSnapshot });
+    expect(extra).toEqual({ claimsSnapshot, authTime: 123 });
     expect(reads).toEqual({
       account: 0,
       authorization: 0,
@@ -430,13 +419,6 @@ describe("oIDC claims and UserInfo snapshot", () => {
           return { iam_client_id: 11, oidc_config_version: 3 };
         },
       },
-      globalSessions: {
-        resolveById: async () => ({
-          sessionId: "principal-a",
-          accountId: "57b0e34d-bf33-4671-87ea-4ed2f1b0e420",
-          authTime: 123,
-        }),
-      },
       projection: {
         resolve: async () => {
           reads.projection += 1;
@@ -444,7 +426,7 @@ describe("oIDC claims and UserInfo snapshot", () => {
         },
       },
       providerSessions: {
-        read: async () => ({
+        readForAccessToken: async () => ({
           principalSessionId: "principal-a",
           bindingId: "binding-a",
           clientCode: "client-a",
@@ -494,14 +476,13 @@ describe("oIDC claims and UserInfo snapshot", () => {
           return { iam_client_id: 11, oidc_config_version: 3 };
         },
       },
-      globalSessions: { resolveById: async () => null },
       projection: {
         resolve: async () => {
           reads.projection += 1;
           throw new Error("projection must not be rebuilt");
         },
       },
-      providerSessions: { read: async () => null },
+      providerSessions: { readForAccessToken: async () => null },
       tokens: {
         resolveAccessTokenCredential: async () => null,
         revokeAccessTokenCredential: async () => undefined,
@@ -551,13 +532,6 @@ describe("oIDC claims and UserInfo snapshot", () => {
       clients: {
         findRuntime: async () => ({ oidc_config_version: 3 }),
       },
-      globalSessions: {
-        resolveById: async () => ({
-          sessionId: "principal-a",
-          accountId: subjectIdentifier,
-          authTime: 123,
-        }),
-      },
       projection: {
         resolve: async () => {
           currentFactsReads.projection += 1;
@@ -565,7 +539,7 @@ describe("oIDC claims and UserInfo snapshot", () => {
         },
       },
       providerSessions: {
-        read: async () => ({
+        readForAccessToken: async () => ({
           principalSessionId: "principal-a",
           bindingId: "binding-a",
           clientCode: "client-a",
@@ -578,12 +552,14 @@ describe("oIDC claims and UserInfo snapshot", () => {
       tokens: {
         resolveAccessTokenCredential: async () => ({
           credential: {
+            principal: { subjectId: subjectIdentifier },
             credentialId: "credential-a",
             principalSessionId: "principal-a",
             bindingId: "binding-a",
             clientCode: "client-a",
           },
           metadata: {
+            authTime: 123,
             providerTokenKey: "oidc:model:AccessToken:token-a",
             providerTokenId: "token-a",
             oidcConfigVersion: 3,
@@ -601,7 +577,7 @@ describe("oIDC claims and UserInfo snapshot", () => {
       sessionUid: "provider-a",
       scope: "openid profile",
       scopes: new Set(["openid", "profile"]),
-      extra: { claimsSnapshot, kernelCredentialId: "credential-a" },
+      extra: { authTime: 123, claimsSnapshot, kernelCredentialId: "credential-a" },
     } as never);
 
     expect(await resolved?.claims("userinfo")).toEqual(claimsSnapshot.claims);
@@ -626,10 +602,7 @@ describe("oIDC claims and UserInfo snapshot", () => {
       sessionUid: "provider-a",
       scope: "openid",
       scopes: new Set(["openid"]),
-      extra: {
-        claimsSnapshot,
-        kernelCredentialId: "credential-a",
-      },
+      extra: { authTime: 123, claimsSnapshot, kernelCredentialId: "credential-a" },
     } as never);
 
     expect(resolved).toBeUndefined();
@@ -643,13 +616,10 @@ describe("oIDC claims and UserInfo snapshot", () => {
       sessionUid: "provider-a",
       scope: "openid iam:authorization",
       scopes: new Set(["openid", "iam:authorization"]),
-      extra: {
-        claimsSnapshot: {
-          ...createOpenIdClaimsSnapshot(account.subjectIdentifier, client.oidc_config_version),
-          scopes: ["openid", "iam:authorization"],
-        },
-        kernelCredentialId: "credential-a",
-      },
+      extra: { authTime: 123, claimsSnapshot: {
+        ...createOpenIdClaimsSnapshot(account.subjectIdentifier, client.oidc_config_version),
+        scopes: ["openid", "iam:authorization"],
+      }, kernelCredentialId: "credential-a" },
     } as never);
 
     expect(incomplete).toBeUndefined();
@@ -667,14 +637,13 @@ describe("oIDC claims and UserInfo snapshot", () => {
         },
       },
       clients: { findRuntime: async () => null },
-      globalSessions: { resolveById: async () => null },
       projection: {
         resolve: async () => {
           currentFactsReads.projection += 1;
           throw new Error("ID Token must not rebuild the projection");
         },
       },
-      providerSessions: { read: async () => null },
+      providerSessions: { readForAccessToken: async () => null },
       tokens: {
         resolveAccessTokenCredential: async () => null,
         revokeAccessTokenCredential: async () => undefined,
@@ -742,6 +711,7 @@ describe("oIDC claims and UserInfo snapshot", () => {
     });
     const code = {
       kind: "AuthorizationCode",
+      authTime: 123,
       accountId: account.subjectIdentifier,
       clientId: "client-a",
       sessionUid: "provider-a",
@@ -752,6 +722,7 @@ describe("oIDC claims and UserInfo snapshot", () => {
     const extra = await adapter.createAccessTokenExtra(token as never, code as never);
 
     expect(extra).toEqual({
+      authTime: 123,
       claimsSnapshot: expect.objectContaining({
         subjectIdentifier: account.subjectIdentifier,
         clientId: "client-a",
@@ -773,7 +744,7 @@ describe("oIDC claims and UserInfo snapshot", () => {
     const resolved = await adapter.findAccount(account.subjectIdentifier, {
       ...token,
       jti: "token-a",
-      extra: { ...extra, kernelCredentialId: "credential-a" },
+      extra: { authTime: 123, ...extra, kernelCredentialId: "credential-a" },
     } as never);
     expect(await resolved?.claims("userinfo")).toHaveProperty("iam:authorization");
     expect(await resolved?.claims("id_token")).not.toHaveProperty("iam:authorization");
@@ -827,13 +798,10 @@ describe("oIDC claims and UserInfo snapshot", () => {
       sessionUid: "provider-a",
       scope: "openid",
       scopes: new Set(["openid"]),
-      extra: {
-        claimsSnapshot: createOpenIdClaimsSnapshot(
-          account.subjectIdentifier,
-          client.oidc_config_version + 1,
-        ),
-        kernelCredentialId: "credential-a",
-      },
+      extra: { authTime: 123, claimsSnapshot: createOpenIdClaimsSnapshot(
+        account.subjectIdentifier,
+        client.oidc_config_version + 1,
+      ), kernelCredentialId: "credential-a" },
     } as never);
 
     expect(resolved).toBeUndefined();
@@ -850,10 +818,7 @@ describe("oIDC claims and UserInfo snapshot", () => {
       sessionUid: "provider-a",
       scope: "openid",
       scopes: new Set(["openid"]),
-      extra: {
-        claimsSnapshot: createOpenIdClaimsSnapshot(account.subjectIdentifier, client.oidc_config_version),
-        kernelCredentialId: "credential-a",
-      },
+      extra: { authTime: 123, claimsSnapshot: createOpenIdClaimsSnapshot(account.subjectIdentifier, client.oidc_config_version), kernelCredentialId: "credential-a" },
     } as never);
 
     expect(resolved).toBeUndefined();
@@ -872,19 +837,16 @@ describe("oIDC claims and UserInfo snapshot", () => {
       sessionUid: "provider-a",
       scope: "openid",
       scopes: new Set(["openid"]),
-      extra: {
-        claimsSnapshot: createOpenIdClaimsSnapshot(account.subjectIdentifier, client.oidc_config_version),
-        kernelCredentialId: "credential-a",
-      },
+      extra: { authTime: 123, claimsSnapshot: createOpenIdClaimsSnapshot(account.subjectIdentifier, client.oidc_config_version), kernelCredentialId: "credential-a" },
     } as never);
 
     expect(resolved).toBeUndefined();
     expect(revokedCredentialIds).toEqual(["credential-a"]);
   });
 
-  it("revokes a resolved credential when the global session no longer matches its binding", async () => {
-    const { account, adapter, client, revokedCredentialIds, session } = createFixture();
-    session.authTime = 999;
+  it("revokes a resolved credential when its authentication time no longer matches its binding", async () => {
+    const { account, adapter, client, revokedCredentialIds, credential } = createFixture();
+    credential.metadata.authTime = 999;
 
     const resolved = await adapter.findAccount(account.subjectIdentifier, {
       kind: "AccessToken",
@@ -894,10 +856,7 @@ describe("oIDC claims and UserInfo snapshot", () => {
       sessionUid: "provider-a",
       scope: "openid",
       scopes: new Set(["openid"]),
-      extra: {
-        claimsSnapshot: createOpenIdClaimsSnapshot(account.subjectIdentifier, client.oidc_config_version),
-        kernelCredentialId: "credential-a",
-      },
+      extra: { authTime: 123, claimsSnapshot: createOpenIdClaimsSnapshot(account.subjectIdentifier, client.oidc_config_version), kernelCredentialId: "credential-a" },
     } as never);
 
     expect(resolved).toBeUndefined();
@@ -916,10 +875,7 @@ describe("oIDC claims and UserInfo snapshot", () => {
       sessionUid: "provider-a",
       scope: "openid",
       scopes: new Set(["openid"]),
-      extra: {
-        claimsSnapshot: createOpenIdClaimsSnapshot(account.subjectIdentifier, client.oidc_config_version),
-        kernelCredentialId: "credential-a",
-      },
+      extra: { authTime: 123, claimsSnapshot: createOpenIdClaimsSnapshot(account.subjectIdentifier, client.oidc_config_version), kernelCredentialId: "credential-a" },
     } as never);
 
     expect(resolved).toBeUndefined();

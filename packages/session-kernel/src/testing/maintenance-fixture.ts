@@ -22,6 +22,75 @@ export function createKernelMaintenanceFixture(redis: Redis, namespace: string) 
     ];
   }
   return {
+    pauseNextPrincipalObservation(principalSessionId: string) {
+      let reached!: () => void;
+      let release!: () => void;
+      const paused = new Promise<void>((resolve) => {
+        reached = resolve;
+      });
+      const resumed = new Promise<void>((resolve) => {
+        release = resolve;
+      });
+      const original = redis.sendCommand;
+      redis.sendCommand = function (command, stream) {
+        const result = original.call(this, command, stream);
+        if (command.name === "eval" && String(command.args[0]).includes("session-kernel-observe-v1")
+          && command.getKeys().includes(keys.active("principal_session", principalSessionId))) {
+          redis.sendCommand = original;
+          return Promise.resolve(result).then(async (value) => {
+            reached();
+            await resumed;
+            return value;
+          });
+        }
+        return result;
+      };
+      return {
+        reached: paused,
+        release,
+        restore() {
+          redis.sendCommand = original;
+          release();
+        },
+      };
+    },
+    async forgetPrincipalChildIndex(principalSessionId: string) {
+      await redis.del(keys.index.principal(principalSessionId));
+    },
+    async corruptBinding(id: string, problem: "authentication_time" | "expired") {
+      const key = keys.active("client_binding", id);
+      const raw = await redis.get(key);
+      const parsed = raw === null ? null : parseLifecycleObject("client_binding", raw);
+      if (!parsed?.success)
+        throw new Error("Expected fixture Binding");
+      const value = parsed.data;
+      if (problem === "authentication_time")
+        value.authTime += 1000;
+      else
+        value.expiresAt = value.issuedAt;
+      await redis.set(key, JSON.stringify(value), "KEEPTTL");
+    },
+    async replaceCredentialSubject(id: string, subjectId: string) {
+      const key = keys.active("credential", id);
+      const raw = await redis.get(key);
+      const parsed = raw === null ? null : parseLifecycleObject("credential", raw);
+      if (!parsed?.success)
+        throw new Error("Expected fixture Credential");
+      parsed.data.principal.subjectId = subjectId;
+      await redis.set(key, JSON.stringify(parsed.data), "KEEPTTL");
+    },
+    async patchCredentialMetadata(id: string, metadata: Record<string, unknown>) {
+      const key = keys.active("credential", id);
+      const raw = await redis.get(key);
+      const parsed = raw === null ? null : parseLifecycleObject("credential", raw);
+      if (!parsed?.success)
+        throw new Error("Expected fixture Credential");
+      parsed.data.metadata = { ...parsed.data.metadata, ...metadata };
+      await redis.set(key, JSON.stringify(parsed.data), "KEEPTTL");
+    },
+    async removeObjectPayload(kind: LifecycleObjectKind, id: string) {
+      await redis.del(keys.active(kind, id));
+    },
     async observeArtifactReferences(value: ProtocolArtifact) {
       const references = [keys.active("artifact", value.artifactId), keys.lookup("artifact", value.lookupHash), keys.tombstone("artifact", value.artifactId), keys.lookupTombstone("artifact", value.lookupHash)];
       return await Promise.all(references.map(async key => ({ payload: await redis.get(key), expiresAt: await redis.pexpiretime(key) })));

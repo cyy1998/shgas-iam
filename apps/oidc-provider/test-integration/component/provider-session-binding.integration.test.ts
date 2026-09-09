@@ -209,7 +209,7 @@ describe("oIDC Provider Session client binding contract", () => {
       clientCode: "client-a",
       providerSessionUid: "provider-session-old-epoch",
     })).resolves.toBeNull();
-    await expect(adapter.read(
+    await expect(adapter.readForAuthorization(
       "provider-session-old-epoch",
       "client-a",
     )).resolves.toBeNull();
@@ -268,11 +268,11 @@ describe("oIDC Provider Session client binding contract", () => {
     });
     expect(bindingB?.bindingId).not.toBe(bindingA?.bindingId);
     await adapter.revokeClientProtocol("client-b", "client_config_changed");
-    await expect(adapter.read("provider-session-a", "client-b")).resolves.toBeNull();
+    await expect(adapter.readForAuthorization("provider-session-a", "client-b")).resolves.toBeNull();
     await expect(adapter.readPrincipalAnchor("provider-session-a", subjectIdentifier))
       .resolves
       .toMatchObject({ generation: anchor!.generation, principalSessionId });
-    await expect(adapter.read("provider-session-a", "client-a")).resolves.toMatchObject({
+    await expect(adapter.readForAuthorization("provider-session-a", "client-a")).resolves.toMatchObject({
       bindingId: bindingA?.bindingId,
       clientCode: "client-a",
       principalSessionId,
@@ -306,6 +306,7 @@ describe("oIDC Provider Session client binding contract", () => {
       binding: bindingA,
       expiresIn: 60,
       payload: {
+        extra: { authTime: bindingA!.authTime },
         accountId: subjectIdentifier,
         clientId: "client-a",
         scope: "openid",
@@ -318,6 +319,7 @@ describe("oIDC Provider Session client binding contract", () => {
       binding: bindingB,
       expiresIn: 60,
       payload: {
+        extra: { authTime: bindingB!.authTime },
         accountId: subjectIdentifier,
         clientId: "client-b",
         scope: "openid",
@@ -329,9 +331,9 @@ describe("oIDC Provider Session client binding contract", () => {
 
     await adapter.revokeClientProtocol("client-a", "client_config_changed");
 
-    await expect(adapter.read("provider-session-a", "client-a")).resolves.toBeNull();
+    await expect(adapter.readForAuthorization("provider-session-a", "client-a")).resolves.toBeNull();
     await expect(adapter.resolveAccessTokenCredential("token-a")).resolves.toBeNull();
-    await expect(adapter.read("provider-session-a", "client-b")).resolves.toMatchObject({
+    await expect(adapter.readForAuthorization("provider-session-a", "client-b")).resolves.toMatchObject({
       bindingId: bindingB?.bindingId,
       clientCode: "client-b",
     });
@@ -393,7 +395,7 @@ describe("oIDC Provider Session client binding contract", () => {
       mappingOwnerId: validBinding!.mappingOwnerId,
     });
 
-    await expect(adapter.read("provider-session-a", "client-a")).resolves.toBeNull();
+    await expect(adapter.readForAuthorization("provider-session-a", "client-a")).resolves.toBeNull();
   });
 
   it("rejects a Kernel binding outside the current Provider Session anchor generation", async () => {
@@ -410,7 +412,7 @@ describe("oIDC Provider Session client binding contract", () => {
       principalSessionId: session.sessionId,
     });
 
-    await expect(adapter.read("provider-session-a", "client-a")).resolves.toBeNull();
+    await expect(adapter.readForAuthorization("provider-session-a", "client-a")).resolves.toBeNull();
   });
 
   it("rejects a binding lookup without a mapping owner", async () => {
@@ -425,7 +427,7 @@ describe("oIDC Provider Session client binding contract", () => {
       bindingId: binding!.bindingId,
     });
 
-    await expect(adapter.read("provider-session-a", "client-a")).resolves.toBeNull();
+    await expect(adapter.readForAuthorization("provider-session-a", "client-a")).resolves.toBeNull();
   });
 
   it("refuses to ensure a binding without the current config, matching account, and enabled Principal Session", async () => {
@@ -461,7 +463,7 @@ describe("oIDC Provider Session client binding contract", () => {
       ...input,
       anchorGeneration: anchor!.generation,
     }))).rejects.toBeInstanceOf(SubjectAccessDisabledError);
-    await expect(adapter.read("provider-session-a", "client-b")).resolves.toBeNull();
+    await expect(adapter.readForAuthorization("provider-session-a", "client-b")).resolves.toBeNull();
   });
 
   it("atomically rotates the Principal anchor and binding ownership while preserving other clients", async () => {
@@ -476,6 +478,7 @@ describe("oIDC Provider Session client binding contract", () => {
       binding: oldBinding,
       expiresIn: 60,
       payload: {
+        extra: { authTime: oldBinding!.authTime },
         accountId: subjectIdentifier,
         clientId: "client-a",
         scope: "openid",
@@ -509,13 +512,13 @@ describe("oIDC Provider Session client binding contract", () => {
     await expect(adapter.readPrincipalAnchor("provider-session-a", subjectIdentifier))
       .resolves
       .toMatchObject({ principalSessionId: newSession.sessionId });
-    await expect(adapter.read("provider-session-a", "client-a")).resolves.toMatchObject({
+    await expect(adapter.readForAuthorization("provider-session-a", "client-a")).resolves.toMatchObject({
       bindingId: newBinding?.bindingId,
       principalSessionId: newSession.sessionId,
     });
     await expect(adapter.resolveAccessTokenCredential("old-token")).resolves.toBeNull();
     await adapter.revokeClientProtocol("client-a", "client_config_changed");
-    await expect(adapter.read("provider-session-a", "client-b")).resolves.toMatchObject({
+    await expect(adapter.readForAuthorization("provider-session-a", "client-b")).resolves.toMatchObject({
       bindingId: bindingB?.bindingId,
       principalSessionId: newSession.sessionId,
     });
@@ -532,6 +535,7 @@ describe("oIDC Provider Session client binding contract", () => {
       binding: oldBinding,
       expiresIn: 60,
       payload: {
+        extra: { authTime: oldBinding!.authTime },
         accountId: subjectIdentifier,
         clientId: "client-a",
         scope: "openid",
@@ -561,7 +565,7 @@ describe("oIDC Provider Session client binding contract", () => {
     await expect(adapter.readPrincipalAnchor("provider-session-a", subjectIdentifier))
       .resolves
       .toMatchObject({ principalSessionId: oldSession.sessionId });
-    await expect(adapter.read("provider-session-a", "client-a")).resolves.toMatchObject({
+    await expect(adapter.readForAuthorization("provider-session-a", "client-a")).resolves.toMatchObject({
       bindingId: oldBinding?.bindingId,
       principalSessionId: oldSession.sessionId,
     });
@@ -622,7 +626,7 @@ describe("oIDC Provider Session client binding contract", () => {
     await expect(adapter.readPrincipalAnchor("provider-session-a", subjectIdentifier))
       .resolves
       .toMatchObject({ principalSessionId: winner });
-    await expect(adapter.read("provider-session-a", "client-a"))
+    await expect(adapter.readForAuthorization("provider-session-a", "client-a"))
       .resolves
       .toMatchObject({ principalSessionId: winner });
   });
@@ -638,7 +642,7 @@ describe("oIDC Provider Session client binding contract", () => {
     });
 
     expect(binding).not.toBeNull();
-    await expect(adapter.read("provider-session-a", "client-a")).resolves.toMatchObject({
+    await expect(adapter.readForAuthorization("provider-session-a", "client-a")).resolves.toMatchObject({
       bindingId: binding?.bindingId,
       principalSessionId: session.sessionId,
     });

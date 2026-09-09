@@ -27,7 +27,7 @@ import { createLegacyGrantMaintenance, createLegacyGrantVerifier, isCustomSsoAut
 import { createAuthorizationGrantRedisInspection } from "@iam/custom-sso/testing";
 import { CustomSsoSubjectProjectionInvariantError } from "@iam/custom-sso/wire";
 import { createArtifactMaintenance, createArtifactMaintenanceVerifier } from "@iam/session-kernel/maintenance";
-import { createKernelMaintenanceFixture, createSessionKernelRedisTestHarness } from "@iam/session-kernel/testing";
+import { createKernelMaintenanceFixture, createSessionKernelRedisTestHarness, waitForRedisCondition } from "@iam/session-kernel/testing";
 import { expect, test } from "bun:test";
 import { Hono } from "hono";
 import Redis from "ioredis";
@@ -82,6 +82,10 @@ test.each(["independent", "gateway", "gateway-orcas"])("%s redemption HTTP owns 
     let barrier: "enabled" | "blocking" | "disabled" | "new-generation" = "enabled";
     let changeAfterPermission = false;
     let projectionFailure: "none" | "not-ready" | "invalid" = "none";
+    let issuedTtl = 0;
+    let issuedExpiresAt = 0;
+    let pauseIssuance: ReturnType<typeof Promise.withResolvers<{ release: () => void }>> | undefined;
+    let afterIssue: "revoke" | "remove" | undefined;
     const generatedIds: string[] = [];
     const common = {
       clients: { findRuntimeRecord: async () => client },
@@ -133,7 +137,21 @@ test.each(["independent", "gateway", "gateway-orcas"])("%s redemption HTTP owns 
       kernel: {
         ...scope.writer,
         async issueCredential(input) {
-          const result = await scope.writer.issueCredential(input);
+          const paused = pauseIssuance ? scope.pauseNextLifecycleObservation() : undefined;
+          const pending = scope.writer.issueCredential(input);
+          if (paused) {
+            await paused.reached;
+            pauseIssuance?.resolve(paused);
+          }
+          const result = await pending;
+          if (result.status === "created") {
+            issuedTtl = Math.ceil((result.value.expiresAt - result.observedAt) / 1000);
+            issuedExpiresAt = result.value.expiresAt;
+            if (afterIssue === "revoke")
+              await scope.observer.revokeCredential(result.value.credentialId);
+            if (afterIssue === "remove")
+              await scope.removeCredentialPayload(result.value.credentialId);
+          }
           if (callbackFailure === "issuance")
             throw new Error("credential committed, response unavailable");
           return result;
@@ -285,6 +303,7 @@ test.each(["independent", "gateway", "gateway-orcas"])("%s redemption HTTP owns 
     if (independent) {
       const body = await success.json();
       token = body.data.sid;
+      expect(body.data.ttl).toBe(issuedTtl);
       expect(body).toMatchObject({ data: { sid: expect.any(String), ttl: expect.any(Number), subject: {
         version: 2,
         subjectIdentifier,
@@ -299,12 +318,15 @@ test.each(["independent", "gateway", "gateway-orcas"])("%s redemption HTTP owns 
 
       expect(location.searchParams.get("orcasToken")).toBe(mode === "gateway-orcas" ? "orcas-session" : null);
       expect(success.headers.getSetCookie().some(cookie => cookie.startsWith(`${cookieName}=${token};`))).toBe(true);
+      expect(success.headers.getSetCookie().find(cookie => cookie.startsWith(`${cookieName}=${token};`))).toContain(`Max-Age=${issuedTtl}`);
     }
     const credential = await scope.writer.resolveCredential(token, { protocol: "custom-sso", credentialType: "local_session" });
     expect(credential.status).toBe("resolved");
     if (credential.status !== "resolved")
       throw new Error("Expected persisted credential");
     expect(credential.value.subjectContext).toBe(subjectContext);
+    expect(credential.value.renewalPolicy).toBe("fixed_at_issue");
+    expect(credential.value.expiresAt).toBe(issuedExpiresAt);
     const consumed = await scope.writer.resolveProtocolArtifact(grant.code, { protocol: "custom-sso", artifactType: "auth_code" });
     expect(consumed.status).not.toBe("resolved");
 
@@ -574,6 +596,108 @@ test.each(["independent", "gateway", "gateway-orcas"])("%s redemption HTTP owns 
     }
     const oidcStillValid = await scope.observer.resolveProtocolArtifact(cutoverOidc.externalToken, { protocol: "oidc", artifactType: "authorization_code" });
     expect(oidcStillValid.status).toBe("resolved");
+    const pendingBeforeLogout = await authorizeCutover();
+    // Logout keeps its root scope and HTTP contract even when associated credentials remain.
+    scope.failNextChildIndexRead();
+    const logout = await app.request(`/sso/logout?redirectUrl=${encodeURIComponent(redirectUrl)}`, {
+      headers: { Cookie: `global_session=${cutoverRoot.principalToken}` },
+    });
+    expect(logout.status).toBe(302);
+    expect(logout.headers.get("Location")).toBe(redirectUrl);
+    expect(logout.headers.getSetCookie().some(cookie => cookie.includes("global_session=") && cookie.includes("Max-Age=0"))).toBe(true);
+    const loggedOutRoot = await scope.observer.resolvePrincipalSession(cutoverRoot.principalToken);
+    const leftover = await scope.observer.resolveCredential(retainedToken, { protocol: "custom-sso", credentialType: "local_session" });
+    expect(loggedOutRoot.status).toBe("revoked");
+    expect(leftover.status).toBe("resolved");
+    const invalidExchange = await request(pendingBeforeLogout);
+    expect(invalidExchange.status).toBe(401);
+    const unconsumed = await scope.observer.resolveProtocolArtifact(pendingBeforeLogout, { protocol: "custom-sso", artifactType: "auth_code" });
+    expect(unconsumed.status).toBe("resolved");
+    const continuation = await adapter.checkLoginContinuation.execute({ clientCode, globalSessionToken: cutoverRoot.principalToken, redirectUrl });
+    expect(continuation).toBe("invalid");
+    const newAuthorization = await adapter.authorize.execute({ clientCode, globalSessionToken: cutoverRoot.principalToken, redirectUrl, tokenSource: "cookie" });
+    expect(newAuthorization.isLogin).toBe(false);
+
+    async function assertAccess(value: string, status: number) {
+      for (const path of independent ? ["/public/user-info"] : ["/public/user-info", "/auth/authz"]) {
+        const beforeReads = reads;
+        const response = await accessApp.request(path, { headers: {
+          "Client": encodeCustomSsoClientCode(clientCode),
+          "Cookie": `${cookieName}=${value}`,
+          "X-Forwarded-Uri": "/business",
+        } });
+        expect(response.status).toBe(status);
+        if (status === 200) {
+          expect(reads).toBe(beforeReads + 1);
+          expect(response.headers.getSetCookie()).toEqual([]);
+        }
+      }
+    }
+    await assertAccess(retainedToken, 200);
+    await scope.writer.revokeCredential(retainedCredential.value.credentialId);
+    await assertAccess(retainedToken, 401);
+    await assertAccess(freshToken, 200);
+
+    // The Kernel has observed the root but has not submitted the Credential write.
+    // Real logout finishes before this issued object's first Redis write.
+    const lateGrant = await seedGrant();
+    const lateRoot = await scope.observer.resolvePrincipalSession(lateGrant.principalToken);
+    if (lateRoot.status !== "resolved")
+      throw new Error("Expected late issuance root");
+    common.config.localSessionTtlSeconds = 1;
+    pauseIssuance = Promise.withResolvers<{ release: () => void }>();
+    const lateResponsePromise = request(lateGrant.code);
+    const paused = await pauseIssuance.promise;
+    try {
+      const logout = await app.request(`/sso/logout?redirectUrl=${encodeURIComponent(redirectUrl)}`, {
+        headers: { Cookie: `global_session=${lateGrant.principalToken}` },
+      });
+      expect(logout.status).toBe(302);
+      const root = await scope.observer.resolvePrincipalSession(lateGrant.principalToken);
+      expect(root.status).toBe("revoked");
+    }
+    finally {
+      pauseIssuance = undefined;
+      paused.release();
+    }
+    const lateResponse = await lateResponsePromise;
+    expect(lateResponse.status).toBe(independent ? 200 : 302);
+    const lateToken = independent ? String((await lateResponse.json()).data.sid) : new URL(lateResponse.headers.get("Location")!).searchParams.get("token")!;
+    const lateCredential = await scope.observer.resolveCredential(lateToken, { protocol: "custom-sso", credentialType: "local_session" });
+    if (lateCredential.status !== "resolved")
+      throw new Error("Expected active late Credential");
+    expect(lateCredential.value.expiresAt).toBeLessThanOrEqual(lateRoot.value.expiresAt);
+    expect(lateCredential.value.renewalPolicy).toBe("fixed_at_issue");
+    expect(lateCredential.value.subjectContext).toBe(subjectContext);
+    await assertAccess(lateToken, 200);
+    await waitForRedisCondition(async () => {
+      const current = await scope.observer.resolveCredential(lateToken, { protocol: "custom-sso", credentialType: "local_session" });
+      return current.status !== "resolved";
+    }, "late Credential expires at its own fixed deadline");
+    await assertAccess(lateToken, 401);
+    await assertAccess(freshToken, 200);
+    common.config.localSessionTtlSeconds = 120;
+    for (const mutation of ["revoke", "remove"] as const) {
+      const grant = await seedGrant();
+      afterIssue = mutation;
+      const response = await request(grant.code);
+      afterIssue = undefined;
+      expect(response.status).toBe(independent ? 200 : 302);
+      const token = independent ? String((await response.json()).data.sid) : new URL(response.headers.get("Location")!).searchParams.get("token")!;
+      await assertAccess(token, 401);
+      const credential = await scope.observer.resolveCredential(token, { protocol: "custom-sso", credentialType: "local_session" });
+      expect(credential.status).toBe(mutation === "revoke" ? "revoked" : "missing_or_expired");
+      const root = await scope.observer.resolvePrincipalSession(grant.principalToken);
+      expect(root.status).toBe("resolved");
+      const replay = await request(grant.code);
+      expect(replay.status).toBe(401);
+    }
+    for (const peer of peers) {
+      if (peer.status !== "created" || !peer.externalToken)
+        throw new Error("Expected peer credential");
+      const retained = await scope.observer.resolveCredential(peer.externalToken, { protocol: "custom-sso", credentialType: "local_session" });
+      expect(retained.status).toBe("resolved");
+    }
   }
   finally {
     if (grantIds.length > 0)

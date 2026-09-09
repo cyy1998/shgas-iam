@@ -2566,7 +2566,7 @@ describe("Custom SSO module interface", () => {
     });
   });
 
-  test("Independent credential resolution rejects client mismatch and an invalid PrincipalSession", async () => {
+  test("Independent credential resolution rejects client mismatch but accepts its own identity without the parent", async () => {
     const services = createServices();
     const result = await redeemIndependentCredential(services);
 
@@ -2588,12 +2588,10 @@ describe("Custom SSO module interface", () => {
         credential.value.principalSessionId,
       ),
     );
-    await expect(
-      services.resolveAuthenticationContext(
-        second.credential,
-        independentClient.clientCode,
-      ),
-    ).rejects.toBeInstanceOf(AuthzUnauthorizedError);
+    const context = await services.resolveAuthenticationContext(second.credential, independentClient.clientCode);
+    expect(context).toMatchObject({ subjectIdentifier });
+    const retained = await services.kernel.resolveCredential(second.credential, { protocol: "custom-sso", credentialType: "local_session" });
+    expect(retained.status).toBe("resolved");
   });
 
   test("Independent logout revokes its credential and keeps it invalid during maintenance", async () => {

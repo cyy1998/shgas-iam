@@ -174,15 +174,10 @@ export function createCustomSsoSessionKernelAdapter(deps: CustomSsoSessionKernel
     }
     logLegacyBearerSource(input.tokenSource, input.clientCode, input.requestContext);
 
-    const renewed = await deps.kernel.renewPrincipalSession(principal.value.principalSessionId);
-    if (renewed.status !== "resolved") {
-      return { isLogin: false as const, code: null };
-    }
-
     const artifactId = deps.random.uuid();
     const artifact = await deps.kernel.createProtocolArtifact({
       artifactId,
-      principalSessionId: renewed.value.principalSessionId,
+      principalSessionId: principal.value.principalSessionId,
       protocol: CUSTOM_SSO_PROTOCOL,
       clientCode: input.clientCode,
       artifactType: AUTH_CODE_ARTIFACT_TYPE,
@@ -191,7 +186,7 @@ export function createCustomSsoSessionKernelAdapter(deps: CustomSsoSessionKernel
       tokenKind: "authCode",
       metadata: {
         version: 2,
-        subjectIdentifier: renewed.value.principal.subjectId,
+        subjectIdentifier: principal.value.principal.subjectId,
         clientCode: input.clientCode,
         mode: input.mode,
         redirectUri: input.redirectUrl,
@@ -279,6 +274,7 @@ export function createCustomSsoSessionKernelAdapter(deps: CustomSsoSessionKernel
           : { orcasId: input.orcas.userId }),
       },
       principalSessionId: input.authorizationGrant.principalSessionId,
+      subjectIdentifier: input.authorizationGrant.subjectIdentifier,
     });
 
     return {
@@ -327,14 +323,8 @@ export function createCustomSsoSessionKernelAdapter(deps: CustomSsoSessionKernel
         client: input.client,
         credentialId,
         principalSessionId: authorizationGrant.principalSessionId,
+        subjectIdentifier: authorizationGrant.subjectIdentifier,
       });
-      // Keep parent existence/revocation and subject equality after issuance.
-      // The operation adapter reuses permission; no new account/config observation.
-      const postIssuePrincipal = await deps.kernel.resolvePrincipalSessionById(authorizationGrant.principalSessionId);
-      if (postIssuePrincipal.status !== "resolved"
-        || postIssuePrincipal.value.principal.subjectId !== authorizationGrant.subjectIdentifier) {
-        throw new AuthzUnauthorizedError("全局session不存在或已过期");
-      }
     }
     catch (error) {
       const reportedError = error instanceof CustomSsoCredentialIssueFailure ? error.originalError : error;
@@ -391,6 +381,7 @@ export function createCustomSsoSessionKernelAdapter(deps: CustomSsoSessionKernel
     client: IndependentClientContext;
     credentialId: string;
     principalSessionId: string;
+    subjectIdentifier: string;
   }) {
     const metadata = {
       version: 2 as const,
@@ -402,6 +393,7 @@ export function createCustomSsoSessionKernelAdapter(deps: CustomSsoSessionKernel
       credentialId: input.credentialId,
       credentialMetadata: metadata,
       principalSessionId: input.principalSessionId,
+      subjectIdentifier: input.subjectIdentifier,
     });
   }
 
@@ -410,6 +402,7 @@ export function createCustomSsoSessionKernelAdapter(deps: CustomSsoSessionKernel
     credentialId: string;
     credentialMetadata: Record<string, unknown>;
     principalSessionId: string;
+    subjectIdentifier: string;
   }) {
     const ttlMs = deps.config.localSessionTtlSeconds * 1000;
     let issued;
@@ -421,7 +414,7 @@ export function createCustomSsoSessionKernelAdapter(deps: CustomSsoSessionKernel
         clientCode: input.clientCode,
         credentialType: LOCAL_SESSION_CREDENTIAL_TYPE,
         ttlMs,
-        renewalPolicy: "extend_with_principal",
+        renewalPolicy: "fixed_at_issue",
         tokenKind: "localSession",
         metadata: input.credentialMetadata,
       });
@@ -444,6 +437,19 @@ export function createCustomSsoSessionKernelAdapter(deps: CustomSsoSessionKernel
       );
     }
 
+    // Validate the issued observation without re-reading its parent or rejudging time.
+    if (credential.value.principal.subjectId !== input.subjectIdentifier
+      || credential.value.principalSessionId !== input.principalSessionId
+      || credential.value.clientCode !== input.clientCode
+      || credential.value.protocol !== CUSTOM_SSO_PROTOCOL
+      || credential.value.credentialType !== LOCAL_SESSION_CREDENTIAL_TYPE) {
+      throw new CustomSsoCredentialIssueFailure(new AuthzUnauthorizedError("局部session主体或归属不一致"), true);
+    }
+    await requireSubjectAccessOperation(deps.access.operation).acquireForSession({
+      subjectIdentifier: credential.value.principal.subjectId,
+      subjectContext: credential.value.subjectContext,
+      principalSessionId: credential.value.principalSessionId,
+    });
     const ttl = Math.ceil((credential.value.expiresAt - credential.observedAt) / 1000);
     return {
       credentialId: credential.value.credentialId,
@@ -514,11 +520,6 @@ export function createCustomSsoSessionKernelAdapter(deps: CustomSsoSessionKernel
     let localSession;
     try {
       localSession = await issueGatewayLocalSession({ authorizationGrant, credentialId, client: input.client, orcas });
-      const postIssuePrincipal = await deps.kernel.resolvePrincipalSessionById(authorizationGrant.principalSessionId);
-      if (postIssuePrincipal.status !== "resolved"
-        || postIssuePrincipal.value.principal.subjectId !== authorizationGrant.subjectIdentifier) {
-        throw new AuthzUnauthorizedError("全局session不存在或已过期");
-      }
     }
     catch (error) {
       const reportedError = error instanceof CustomSsoCredentialIssueFailure ? error.originalError : error;
@@ -650,11 +651,15 @@ export function createCustomSsoSessionKernelAdapter(deps: CustomSsoSessionKernel
     }
 
     const principal = await deps.kernel.resolvePrincipalSession(token);
+    if (principal.status === "fail_closed" || principal.status === "schema_invalid")
+      throw new Error("logout root observation was not confirmed");
     if (principal.status === "resolved") {
       return await deps.kernel.revokePrincipalSession(principal.value.principalSessionId, "logout");
     }
 
     const credential = await deps.kernel.resolveCredential(token, { protocol: CUSTOM_SSO_PROTOCOL, credentialType: LOCAL_SESSION_CREDENTIAL_TYPE });
+    if (credential.status === "fail_closed" || credential.status === "schema_invalid")
+      throw new Error("logout credential observation was not confirmed");
     if (credential.status === "resolved" && credential.value.protocol === CUSTOM_SSO_PROTOCOL) {
       await assertLogoutCredentialCurrent(credential.value);
       return await deps.kernel.revokePrincipalSession(credential.value.principalSessionId, "logout");
@@ -755,16 +760,8 @@ export function createCustomSsoSessionKernelAdapter(deps: CustomSsoSessionKernel
       subjectContext: credential.value.subjectContext,
       principalSessionId: credential.value.principalSessionId,
     });
-    const principal = await deps.kernel.resolvePrincipalSessionById(credential.value.principalSessionId);
-    if (principal.status === "fail_closed")
-      throw new CustomSsoConfigurationUnavailableError({ cause: principal.cause });
-    if (principal.status !== "resolved") {
-      await deps.kernel.revokeObservedObject(credential.value, "credential_corrupted");
-      throw new AuthzUnauthorizedError("未登录");
-    }
-
     return {
-      subjectIdentifier: principal.value.principal.subjectId,
+      subjectIdentifier: credential.value.principal.subjectId,
       authenticatedClientCode: clientCode,
       credentialConfigVersion: credentialMetadata.data.configVersion,
       runtimeClient,

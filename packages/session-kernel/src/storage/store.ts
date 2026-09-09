@@ -335,7 +335,7 @@ export class SessionKernelStore {
         return concurrent;
       if (concurrent.status === "revoked")
         return { status: "already_revoked" as const, tombstone: concurrent.tombstone };
-      return { status: "missing" as const };
+      return { status: "comparison_conflict" as const };
     }
     return { status: "revoked" as const };
   }

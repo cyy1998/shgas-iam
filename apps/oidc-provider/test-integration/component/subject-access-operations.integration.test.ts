@@ -95,7 +95,7 @@ describe("oIDC operation-bound Session lifecycle", () => {
     expect(await adapter.stage(f.session, f.context)).not.toBeNull();
     const binding = await adapter.consumeStaged(f.claim);
     expect(binding?.accountId).toBe(subjectIdentifier);
-    expect(await adapter.read("provider-a", "client-a")).toEqual(binding);
+    expect(await adapter.readForAuthorization("provider-a", "client-a")).toEqual(binding);
     expect(f.readCommittedTransitionId).toHaveBeenCalledTimes(1);
     const next = f.sessions.forOperation(f.scopes.createOperation());
     const denied = await next.resolveById(f.session.sessionId).catch(error => error);
@@ -192,7 +192,7 @@ describe("oIDC operation-bound Session lifecycle", () => {
       adapter.readPrincipalAnchor("provider-a", subjectIdentifier),
       adapter.isStagedPrincipal("attempt-a", "client-a", f.session),
       adapter.isCurrentOrStagedPrincipal("provider-a", "client-a", f.session, "attempt-a"),
-      adapter.read("provider-a", "client-a"),
+      adapter.readForAuthorization("provider-a", "client-a"),
       adapter.inspect({ headers: {} }),
       adapter.stage(f.session, { ...f.context, authorizationAttemptId: undefined }),
     ].map(result => result.catch(error => error)));

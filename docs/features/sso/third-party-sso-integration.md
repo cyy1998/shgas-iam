@@ -111,6 +111,17 @@ IAM 处理逻辑：
 授权码有效期由 IAM API 环境变量 `IAM_API_AUTH_CODE_TTL_SECONDS` 控制，默认部署示例为 300 秒。授权码只表达一次
 Custom SSO Authorization Grant，不是登录会话，也不应在前端长期保存。
 
+按 [Spec #163](https://github.com/cyy1998/shgas-iam/issues/163) 的 #164 代码候选，Custom SSO 授权只验证根会话，不延长它。
+Independent Credential 与 Gateway Local Session 均使用 `fixed_at_issue`：签发期限取配置 TTL、当次 Redis 观察的根当前期限和
+根绝对期限的最早值。例如根只剩五分钟，新 Credential 最多五分钟。普通访问、同根其他 Client 活跃、OIDC 根续期或 Maintenance
+均不延长已签发凭据。Independent 响应 `ttl` 和 Gateway Cookie `Max-Age` 使用同一次签发观察的剩余毫秒向上取整为秒；
+到期后重新授权，没有 refresh token、滑动续期或 Cookie 刷新接口。OIDC 自身根与 Binding 的原续期规则保持。
+
+这是代码候选，环境尚未切换，不能混跑部署。旧 `extend_with_principal` 对象须按
+[ADR-0033](../../adr/0033-trust-issued-credentials-without-principal-session-revalidation.md) 和
+[在线认证状态维护手册](../../releases/online-auth-redis-time-cutover.md) 停流、排空旧 writer，执行现有全体下线与独立 verify 后统一启用新版本。
+本票不交付存量 policy 迁移；IAM 全体下线不保证第三方自建会话或离线 ID Token 退出。
+
 ### 4.2 网关托管模式
 
 网关托管模式适合业务系统和 IAM 位于同一访问域或同一反向代理下，由网关把业务系统的 `/sso/callback` 转发到 IAM 的 `/sso/callback`。
@@ -133,8 +144,8 @@ IAM 的 `/sso/callback` 在 Client/mode/用途/redirect/版本、根会话、Gat
 Gateway callback 失败继续返回现有 JSON。用户应返回业务应用重新发起访问，不要刷新携带旧 Code 的 callback；暂态失败可按
 `Retry-After` 等待后重新授权，不自动循环跳转。有有效根会话时通常无需重新输入凭据，暂态失败不会清除有效根 Cookie。
 消费成功后的 ORCAS 失败、IAM 签发失败或成功响应丢失均不恢复原 Code。ORCAS 可能已经创建外部会话但返回不可用；新授权可能
-再次登录 ORCAS，IAM 不提供外部幂等、查询或撤销保证。写入结果不确定时只同步尽力撤销本次 Credential；未交付残留继续受父会话、
-账号、Client 版本与撤销约束，可能随根续期，受根绝对期限限制，不保证初始 TTL 后固定消失。
+再次登录 ORCAS，IAM 不提供外部幂等、查询或撤销保证。写入结果不确定时只同步尽力撤销本次 Credential；未交付残留继续受自身期限、
+账号、Client 版本与撤销约束；新签发的未交付 Credential 同样固定到期，不因根续期延长。
 
 ### 4.3 独立应用模式
 
@@ -282,6 +293,10 @@ credential/session 过期视为重新发起 `/sso/authorize` 的信号。
 因此接入方只应依赖本文记录的最终 HTTP contract，不应依赖 IAM 内部的授权码消费、credential 创建或补偿顺序。
 
 ## 5. 获取当前用户信息
+
+已签发 Credential 的使用以凭据自身为依据，不重新检查父 Principal Session。根退出尽力撤销关联凭据，漏撤凭据可在自身固定期限内继续使用；
+自身撤销、到期、账号禁用、旧访问代际或协议配置拒绝仍阻止访问。Gateway authz 与两模式 UserInfo 采用相同原则。
+新授权、登录续接和 Code 兑换仍要求有效根；直接使用 IAM 根 token 的身份入口也继续验证根。
 
 业务系统可使用有效的 Independent Client Credential 或 Gateway Local Session，通过 IAM 公共用户接口获取当前
 Client 获准接收的主体投影：

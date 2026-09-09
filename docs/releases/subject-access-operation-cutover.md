@@ -2,7 +2,7 @@
 
 Status: Current
 
-Last verified: 2026-09-08
+Last verified: 2026-09-10
 
 Next review: 2026-10-31
 
@@ -94,7 +94,7 @@ issuer/JWKS及非目标依赖。Smoke写入后库存不应继续为零；若发�
 | 人工检查 | 通过条件 |
 |---|---|
 | 旧状态与重新登录 | 清理前测试Principal、Local Session、Independent Credential、OIDC Code/Token在线拒绝；新登录取得新context并正常访问，旧Cookie不阻止登录 |
-| 统一认证与Custom SSO | 部署启用的密码/手机/OA/微信入口成功；Independent authorize/token/UserInfo、Gateway callback/authz及ORCAS按实际集成验收；退出后IAM拒绝 |
+| 统一认证与Custom SSO | 部署启用的密码/手机/OA/微信入口成功；Independent authorize/token/UserInfo、Gateway callback/authz及ORCAS按实际集成验收；实际撤销对象随后被 IAM 拒绝，根撤销允许漏撤 Credential；Spec #163 smoke 以[全体下线手册](online-auth-redis-time-cutover.md)为准 |
 | OIDC | authorize/interaction/login guard/resume、Code→Token→UserInfo正常；PKCE错误及Code重放拒绝，logout后在线拒绝，协议输出保持 |
 | 账号访问 | 受控账号禁用后下一请求拒绝；重新启用后的新登录可用，旧代仍拒绝。暂态不可用不清Cookie；生产不为演练主动破坏Redis |
 | Admin记录与撤销 | 页面记录提示、筛选/分页/刷新、当前根保护、另一会话撤销、用户撤销数量和错误反馈保持；旧代记录存在不承诺可访问 |

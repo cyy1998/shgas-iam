@@ -3,8 +3,11 @@ import type { AddressInfo } from "node:net";
 import type { OidcProviderRedisTestHarness, OidcProviderRedisTestScope } from "./redis-test-harness.ts";
 import { createHash, randomUUID } from "node:crypto";
 import { createSubjectAccessBootstrap, createSubjectAccessSessionContext, SubjectAccessPermissionRequiredError } from "@iam/api-core/subject-access";
+import { ClientStatus, CustomSsoClientMode, SubjectClaim } from "@iam/contracts";
+import { createCustomSsoOperations } from "@iam/custom-sso";
 import { AUTHORIZATION_GRANT_REDEMPTION_CLEANUP_KIND, createAuthorizationGrantRedisInspection, createLegacyAuthorizationGrantFixture } from "@iam/custom-sso/testing";
 import { createOidcRevocationSelector } from "@iam/domain/client/oidc-revocation-selector";
+import { createKernelMaintenanceFixture } from "@iam/session-kernel/testing";
 import { createSubjectFactsRedisCache } from "@iam/user-profile-read-model/subject-facts";
 import { exportJWK, generateKeyPair } from "jose";
 import { errors } from "oidc-provider";
@@ -41,13 +44,24 @@ afterAll(async () => {
   await harness?.close();
 });
 
-async function runtimeFixture(options: { publishFacts?: boolean } = {}) {
+interface CommandObservation {
+  name: string;
+  startedAt: number;
+  completedAt: number;
+}
+
+async function runtimeFixture(options: { publishFacts?: boolean; renewableRoot?: boolean; observeCommand?: (value: CommandObservation) => void } = {}) {
   // Register the exact keys used by this isolated runtime, including generated Provider IDs.
   const sendCommand = scope.writer.sendCommand.bind(scope.writer);
   vi.spyOn(scope.writer, "sendCommand").mockImplementation((command, stream) => {
     for (const key of command.getKeys())
       scope.trackKey(String(key));
-    return sendCommand(command, stream);
+    const startedAt = performance.now();
+    const result = sendCommand(command, stream);
+    if (options.observeCommand) {
+      void Promise.resolve(result).then(() => options.observeCommand?.({ name: command.name, startedAt, completedAt: performance.now() }), () => {});
+    }
+    return result;
   });
   const subject = randomUUID();
   const client = scope.unique("client");
@@ -66,6 +80,12 @@ async function runtimeFixture(options: { publishFacts?: boolean } = {}) {
     IAM_OIDC_PROVIDER_COOKIE_SECURE: "false",
     IAM_OIDC_PROVIDER_CURRENT_JWK_JSON: "{}",
     IAM_OIDC_PROVIDER_SESSION_KERNEL_NAMESPACE: `${scope.unique("kernel")}:`,
+    ...(options.renewableRoot
+      ? {
+          IAM_OIDC_PROVIDER_SESSION_KERNEL_PRINCIPAL_IDLE_TTL_SECONDS: "300",
+          IAM_OIDC_PROVIDER_SESSION_KERNEL_PRINCIPAL_ABSOLUTE_TTL_SECONDS: "600",
+        }
+      : {}),
   });
   scope.trackPrefix(env.sessionKernel.namespace);
   const logger = { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() };
@@ -273,6 +293,295 @@ async function runtimeFixture(options: { publishFacts?: boolean } = {}) {
 }
 
 describe("oIDC Token and UserInfo operations through real Redis and production HTTP routing", () => {
+  it.each(["token-time", "missing-time", "binding-time", "binding-expired", "credential-time", "credential-subject", "snapshot-subject", "snapshot-session", "snapshot-client"] as const)("rejects inconsistent issued protocol facts: %s", async (problem) => {
+    const f = await runtimeFixture();
+    const token = JSON.parse((await f.exchange(await f.issueCode())).body).access_token;
+    const peer = JSON.parse((await f.exchange(await f.issueCode({ client_id: f.otherClient }), { client_id: f.otherClient })).body).access_token;
+    const credential = await f.session.kernel.resolveCredential(token, { protocol: "oidc", credentialType: "access_token", clientCode: f.client });
+    if (credential.status !== "resolved" || !credential.value.bindingId)
+      throw new Error("Expected Credential and Binding");
+    const inspection = createKernelMaintenanceFixture(scope.observer, f.env.sessionKernel.namespace);
+    if (problem.startsWith("binding-")) {
+      await inspection.corruptBinding(credential.value.bindingId, problem === "binding-time" ? "authentication_time" : "expired");
+    }
+    else if (problem.startsWith("credential-")) {
+      if (problem === "credential-time")
+        await inspection.patchCredentialMetadata(credential.value.credentialId, { authTime: Number(credential.value.metadata!.authTime) + 1 });
+      else
+        await inspection.replaceCredentialSubject(credential.value.credentialId, randomUUID());
+    }
+    else {
+      const key = `oidc:model:AccessToken:${token}`;
+      const changed = JSON.parse((await scope.observer.get(key))!);
+      if (problem === "token-time") {
+        changed.extra.authTime += 1;
+      }
+      else if (problem === "missing-time") {
+        delete changed.extra.authTime;
+      }
+      else if (problem === "snapshot-subject") {
+        changed.extra.claimsSnapshot.subjectIdentifier = randomUUID();
+        changed.extra.claimsSnapshot.claims.sub = changed.extra.claimsSnapshot.subjectIdentifier;
+      }
+      else if (problem === "snapshot-session") {
+        changed.extra.claimsSnapshot.principalSessionId = randomUUID();
+      }
+      else {
+        changed.extra.claimsSnapshot.clientId = f.otherClient;
+      }
+      await scope.observer.set(key, JSON.stringify(changed), "KEEPTTL");
+    }
+    expect((await f.userInfo(token)).response.status).toBe(401);
+    expect((await f.userInfo(peer)).response.status).toBe(200);
+    expect((await f.session.kernel.resolvePrincipalSession(f.principal.externalToken!)).status).toBe("resolved");
+  });
+
+  it.each(["retained", "revoked", "missing"] as const)("keeps the observed-root issuance boundary with a %s Binding", async (bindingState) => {
+    const f = await runtimeFixture({ renewableRoot: true });
+    const code = await f.issueCode();
+    const payload = JSON.parse((await scope.observer.get(`oidc:model:AuthorizationCode:${code}`))!);
+    const bindingId = payload.claimsSnapshot.providerSessionBindingId;
+    const inspection = createKernelMaintenanceFixture(scope.observer, f.env.sessionKernel.namespace);
+    const writerInspection = createKernelMaintenanceFixture(scope.writer, f.env.sessionKernel.namespace);
+    const principalBefore = await f.session.kernel.resolvePrincipalSession(f.principal.externalToken!);
+    if (principalBefore.status !== "resolved")
+      throw new Error("Expected active root");
+    let notifyReached!: () => void;
+    const reached = new Promise<void>((resolve) => {
+      notifyReached = resolve;
+    });
+    let pause: ReturnType<typeof writerInspection.pauseNextPrincipalObservation> | undefined;
+    const issue = f.session.kernel.issueCredential.bind(f.session.kernel);
+    vi.spyOn(f.session.kernel, "issueCredential").mockImplementationOnce((input) => {
+      pause = writerInspection.pauseNextPrincipalObservation(input.principalSessionId);
+      void pause.reached.then(notifyReached);
+      return issue(input);
+    });
+    const request = f.exchange(code);
+    try {
+      await reached;
+      await inspection.forgetPrincipalChildIndex(f.principal.value.principalSessionId);
+      await f.session.kernel.revokePrincipalSession(f.principal.value.principalSessionId, "logout");
+      if (bindingState === "revoked")
+        await f.session.kernel.revokeBinding(bindingId, "admin_revoke");
+      if (bindingState === "missing")
+        await inspection.removeObjectPayload("client_binding", bindingId);
+      pause!.release();
+      const result = await request;
+      if (bindingState === "retained") {
+        expect(result.response.status).toBe(200);
+        const token = JSON.parse(result.body).access_token;
+        const credential = await f.session.kernel.resolveCredential(token, { protocol: "oidc", credentialType: "access_token", clientCode: f.client });
+        if (credential.status !== "resolved")
+          throw new Error("Expected late Credential");
+        expect(credential.value.subjectContext).toBe(principalBefore.value.subjectContext);
+        expect(credential.value.expiresAt).toBeLessThanOrEqual(principalBefore.value.expiresAt);
+        expect(credential.value.expiresAt).toBeLessThanOrEqual(principalBefore.value.absoluteExpiresAt);
+        expect((await f.userInfo(token)).response.status).toBe(200);
+        await f.session.kernel.revokeCredential(credential.value.credentialId, "admin_revoke");
+        expect((await f.userInfo(token)).response.status).toBe(401);
+      }
+      else {
+        expect(result.response.status).toBe(200);
+        expect((await f.userInfo(JSON.parse(result.body).access_token)).response.status).toBe(401);
+        expect((await f.session.kernel.resolveClientBindingById(bindingId, { protocol: "oidc", clientCode: f.client })).status).toBe(bindingState === "revoked" ? "revoked" : "missing_or_expired");
+      }
+      expect((await f.session.kernel.resolvePrincipalSession(f.principal.externalToken!)).status).toBe("revoked");
+      expect((await f.exchange(code)).response.status).not.toBe(200);
+    }
+    finally {
+      pause?.restore();
+      await request;
+    }
+  });
+
+  it.each(["binding", "credential", "anchor", "payload"] as const)("accepts a missed child after real root revocation but rejects its own invalid %s", async (invalid) => {
+    const f = await runtimeFixture();
+    const token = JSON.parse((await f.exchange(await f.issueCode())).body).access_token;
+    const peerToken = JSON.parse((await f.exchange(await f.issueCode({ client_id: f.otherClient }), { client_id: f.otherClient })).body).access_token;
+    const code = await f.issueCode();
+    const credential = await f.session.kernel.resolveCredential(token, { protocol: "oidc", credentialType: "access_token", clientCode: f.client });
+    if (credential.status !== "resolved" || !credential.value.bindingId)
+      throw new Error("Expected issued Credential and Binding");
+    const inspection = createKernelMaintenanceFixture(scope.observer, f.env.sessionKernel.namespace);
+    const credentialBefore = await inspection.observe("credential", credential.value.credentialId);
+    const bindingBefore = await inspection.observe("client_binding", credential.value.bindingId);
+    await inspection.forgetPrincipalChildIndex(f.principal.value.principalSessionId);
+    const revoked = await f.session.kernel.revokePrincipalSession(f.principal.value.principalSessionId, "logout");
+    expect(revoked.principalSessions.revoked).toBe(1);
+    const root = await f.session.kernel.resolvePrincipalSession(f.principal.externalToken!);
+    expect(root.status).toBe("revoked");
+    f.account.findBySubject.mockClear();
+    f.barrier.mockClear();
+    const rootRead = vi.spyOn(f.session.kernel, "resolvePrincipalSessionById");
+    const used = await f.userInfo(token);
+    expect(used.response.status).toBe(200);
+    expect(JSON.parse(used.body)).toMatchObject({ sub: f.subject });
+    expect(rootRead).not.toHaveBeenCalled();
+    expect(f.account.findBySubject).not.toHaveBeenCalled();
+    expect(f.barrier).toHaveBeenCalledTimes(1);
+    expect(await inspection.observe("credential", credential.value.credentialId)).toMatchObject({ payload: credentialBefore.payload, expiresAt: credentialBefore.expiresAt, references: credentialBefore.references });
+    expect(await inspection.observe("client_binding", credential.value.bindingId)).toMatchObject({ payload: bindingBefore.payload, expiresAt: bindingBefore.expiresAt });
+    const refusedCode = await f.exchange(code);
+    expect(refusedCode.response.status).not.toBe(200);
+    const codeRecord = JSON.parse((await scope.observer.get(`oidc:model:AuthorizationCode:${code}`))!);
+    expect(codeRecord?.consumed).toBeUndefined();
+    const authorization = await f.authorize();
+    expect(authorization.location && new URL(authorization.location, issuer).searchParams.get("code")).toBeNull();
+    if (invalid === "binding") {
+      await f.session.kernel.revokeBinding(credential.value.bindingId, "admin_revoke");
+    }
+    else if (invalid === "credential") {
+      await f.session.kernel.revokeCredential(credential.value.credentialId, "admin_revoke");
+    }
+    else if (invalid === "payload") {
+      await f.stores.tokens.revokeAccessToken(`oidc:model:AccessToken:${token}`);
+    }
+    else {
+      const serialized = JSON.parse((await scope.observer.get(`oidc:model:AccessToken:${token}`))!);
+      const anchor = await f.session.providerSessionState.readAnchor(serialized.sessionUid);
+      await f.session.providerSessionState.destroyProviderSession(serialized.sessionUid, {
+        generation: anchor!.generation,
+        principalSessionId: f.principal.value.principalSessionId,
+      });
+    }
+    expect((await f.userInfo(token)).response.status).toBe(401);
+    if (invalid !== "anchor")
+      expect((await f.userInfo(peerToken)).response.status).toBe(200);
+  });
+
+  it("observes successful UserInfo Redis command round trips through Provider HTTP", async () => {
+    let observations: CommandObservation[] | undefined;
+    const f = await runtimeFixture({ observeCommand: value => observations?.push(value) });
+    const issued = await f.exchange(await f.issueCode());
+    expect(issued.response.status).toBe(200);
+    const token = JSON.parse(issued.body).access_token;
+    const monitor = await scope.observer.monitor();
+    let serverCommands: Array<{ name: string; source: string }> | undefined;
+    monitor.on("monitor", (_time, args: string[], source: string) => {
+      if (args[0]?.toLowerCase() !== "echo")
+        serverCommands?.push({ name: args[0]!.toLowerCase(), source: source === "lua" ? "lua" : "client" });
+    });
+    try {
+      const warmup = await f.userInfo(token);
+      expect(warmup.response.status).toBe(200);
+      for (let sample = 0; sample < 5; sample += 1) {
+        observations = [];
+        serverCommands = [];
+        const startedAt = performance.now();
+        const response = await f.userInfo(token);
+        expect(response.response.status).toBe(200);
+        const marker = randomUUID();
+        const drained = new Promise<void>((resolve) => {
+          const onMonitor = (_time: string, args: string[]) => {
+            if (args[0]?.toLowerCase() === "echo" && args[1] === marker) {
+              monitor.off("monitor", onMonitor);
+              resolve();
+            }
+          };
+          monitor.on("monitor", onMonitor);
+        });
+        await scope.observer.echo(marker);
+        await drained;
+        const commands = observations;
+        observations = undefined;
+        let waveEnd = -Infinity;
+        let waves = 0;
+        for (const value of commands.toSorted((a, b) => a.startedAt - b.startedAt)) {
+          if (value.startedAt >= waveEnd)
+            waves += 1;
+          waveEnd = Math.max(waveEnd, value.completedAt);
+        }
+        console.warn("OIDC UserInfo Redis observation", JSON.stringify({
+          sample,
+          waves,
+          commands: commands.map(value => ({ name: value.name, startMs: value.startedAt - startedAt, endMs: value.completedAt - startedAt, rttMs: value.completedAt - value.startedAt })),
+          serverCommands,
+        }));
+        serverCommands = undefined;
+      }
+    }
+    finally {
+      observations = undefined;
+      monitor.disconnect();
+    }
+  });
+
+  it("oIDC HTTP authorization renews its root and Binding without extending both same-root Custom SSO Credentials", async () => {
+    const f = await runtimeFixture({ renewableRoot: true });
+    const code = await f.issueCode();
+    const serialized = await scope.observer.get(`oidc:model:AuthorizationCode:${code}`);
+    const payload = serialized ? JSON.parse(serialized) : null;
+    const bindingId = payload?.claimsSnapshot?.providerSessionBindingId;
+    if (!bindingId)
+      throw new Error("Expected OIDC Binding");
+    const bindingBefore = await f.session.kernel.resolveClientBindingById(bindingId, { protocol: "oidc", clientCode: f.client });
+    const credentials = [];
+    for (const mode of [CustomSsoClientMode.Independent, CustomSsoClientMode.Gateway]) {
+      const rootBeforeAuthorization = await f.session.kernel.resolvePrincipalSession(f.principal.externalToken!);
+      const clientCode = scope.unique("custom-sso");
+      const redirectUrl = "https://client.example/callback";
+      const client = {
+        id: 2,
+        clientCode,
+        clientName: "Fixed lifetime",
+        status: ClientStatus.Enable,
+        isDelete: false,
+        customSsoEnabled: true,
+        customSsoConfigVersion: 1,
+        customSsoConfig: mode === CustomSsoClientMode.Independent
+          ? { mode, subjectClaims: [SubjectClaim.SubjectIdentifier], validRedirectUrls: [redirectUrl], callbackEndpoint: redirectUrl, logoutEndpoint: "https://client.example/logout" }
+          : { mode, subjectClaims: [SubjectClaim.SubjectIdentifier], validRedirectUrls: [redirectUrl], orcas: { enabled: false } },
+      };
+      const custom = createCustomSsoOperations({
+        kernel: f.session.kernel,
+        clients: { findRuntimeRecord: async () => client },
+        clientSecrets: { findSecretRecord: async () => ({ ...client, customSsoSecretHash: "hash" }) },
+        secrets: { verify: async () => true },
+        traffic: { check: async () => ({ outcome: "enabled" }) },
+        subjectProjection: { resolve: async () => ({ subjectIdentifier: f.subject }) },
+        permittedUsers: { findOrcasUserBySubjectIdentifier: async () => null },
+        orcas: { orcasLogin: async () => { throw new Error("ORCAS is disabled"); } },
+        auditLogWriter: { recordAuditLog: async () => {} },
+        logger: f.logger,
+        random: { uuid: randomUUID },
+        config: { authCodeExpireSeconds: 60, localSessionTtlSeconds: 120 },
+      });
+      const grant = await f.session.operations.run(op => custom.forOperation(op).authorize.execute({ clientCode, redirectUrl, globalSessionToken: f.principal.externalToken!, tokenSource: "cookie" }));
+      if (!grant.isLogin)
+        throw new Error("Expected Custom SSO authorization");
+      const issued = await f.session.operations.run(async op => mode === CustomSsoClientMode.Independent
+        ? await custom.forOperation(op).exchangeCode.execute({ clientCode, clientSecret: "secret", code: grant.code, redirectUri: redirectUrl })
+        : await custom.forOperation(op).completeCallback.execute({ clientCode, code: grant.code, redirectUrl }));
+      const token = "sid" in issued ? issued.sid : issued.token;
+      const credentialBefore = await f.session.kernel.resolveCredential(token, { protocol: "custom-sso", credentialType: "local_session", clientCode });
+      const rootAfterAuthorization = await f.session.kernel.resolvePrincipalSession(f.principal.externalToken!);
+      if (rootBeforeAuthorization.status !== "resolved" || rootAfterAuthorization.status !== "resolved")
+        throw new Error("Expected retained root after Custom SSO authorization");
+      expect(rootAfterAuthorization.value).toEqual(rootBeforeAuthorization.value);
+      credentials.push({ token, clientCode, credentialBefore });
+    }
+    const rootBefore = await f.session.kernel.resolvePrincipalSession(f.principal.externalToken!);
+    f.cookies.clear();
+    f.cookies.set("global_session", f.principal.externalToken!);
+    await f.issueCode();
+    const rootAfter = await f.session.kernel.resolvePrincipalSession(f.principal.externalToken!);
+    const bindingAfter = await f.session.kernel.resolveClientBindingById(bindingId, { protocol: "oidc", clientCode: f.client });
+    if (rootBefore.status !== "resolved" || rootAfter.status !== "resolved" || bindingBefore.status !== "resolved" || bindingAfter.status !== "resolved")
+      throw new Error("Expected retained sessions and Credential");
+    expect(rootAfter.value.expiresAt).toBeGreaterThan(rootBefore.value.expiresAt);
+    expect(bindingAfter.value.expiresAt).toBeGreaterThan(bindingBefore.value.expiresAt);
+    expect(bindingAfter.value.renewalPolicy).toBe("extend_with_principal");
+    for (const { token, clientCode, credentialBefore } of credentials) {
+      const credentialAfter = await f.session.kernel.resolveCredential(token, { protocol: "custom-sso", credentialType: "local_session", clientCode });
+      if (credentialBefore.status !== "resolved" || credentialAfter.status !== "resolved")
+        throw new Error("Expected retained Custom SSO Credential");
+      expect(credentialAfter.value).toEqual(credentialBefore.value);
+      expect(credentialAfter.value.renewalPolicy).toBe("fixed_at_issue");
+      expect(credentialAfter.value.principalSessionId).toBe(f.principal.value.principalSessionId);
+    }
+  });
+
   it("keeps independently accepted configuration and Gate through Code consumption and token issuance", async () => {
     const f = await runtimeFixture();
     const code = await f.issueCode();
@@ -453,7 +762,7 @@ describe("oIDC Token and UserInfo operations through real Redis and production H
     const denied = await f.bridge.run(async (operation) => {
       const session = f.session.sessions.forOperation(operation);
       return {
-        binding: await session.read(payload.claimsSnapshot.providerSessionUid, f.client),
+        binding: await session.readForAuthorization(payload.claimsSnapshot.providerSessionUid, f.client),
         grant: await f.provider.Grant.find(payload.grantId),
       };
     });
@@ -1361,7 +1670,7 @@ describe("oIDC protocol purpose isolation", () => {
     f.setClientVersion(2);
     if (failure === "maintenance")
       f.setClientAllowed(false);
-    const outcome = await f.session.operations.run(operation => f.session.sessions.forOperation(operation).read(providerSessionUid, f.client)).catch(error => error);
+    const outcome = await f.session.operations.run(operation => f.session.sessions.forOperation(operation).readForAuthorization(providerSessionUid, f.client)).catch(error => error);
     if (failure === "permanent")
       expect(outcome).toBeNull();
     else

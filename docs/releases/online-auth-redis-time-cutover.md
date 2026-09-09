@@ -2,13 +2,16 @@
 
 Status: Current
 
-Last verified: 2026-09-08
+Last verified: 2026-09-10
 
 Next review: 2026-10-31
 
 本手册交付 [Spec #115](https://github.com/cyy1998/shgas-iam/issues/115) 的维护准备。代码候选、最终验证及双轴评审记录在
 [#120](https://github.com/cyy1998/shgas-iam/issues/120)，实际目标环境切换和人工验收**尚未执行**。运行下列生产命令需要发布负责人
 在相应环境明确执行；实现授权不包含部署或删除生产状态。
+
+本手册同时拥有 [Spec #163](https://github.com/cyy1998/shgas-iam/issues/163) 的 Credential 独立访问全体下线发布。代码已实现，逐项证据见[最终账本](../features/sso/credential-authority-contract.md)，父级最终验收另记；本次目标环境停流、清理、部署、smoke 与放流均未执行。
+旧 `extend_with_principal` Custom SSO Credential 必须清除，不新增 policy 迁移或后台执行框架。此前 #146/#157/#156 的保留对象升级只适用于各自原规格单独发布，不适用于包含 #163 的统一候选。
 
 ## 适用版本与范围
 
@@ -98,10 +101,12 @@ Login Restriction、短信码/nonce、OIDC client-auth-failures、未知键族�
    | 验收 | 成功条件 |
    |---|---|
    | 旧状态拒绝 | 清理前保留的测试 Principal、Gateway Local Session、Independent Credential、OIDC Code/AccessToken 在 IAM 在线入口被拒绝，不复活 |
-   | 重新登录 | 用户重新取得新 Principal，正常访问与续期；旧 Cookie 不阻止重新登录 |
-   | Custom SSO | Independent authorize/token/user-info 与 Gateway authorize/callback/authz 成功，TTL 正常；退出后 IAM 在线入口拒绝 |
-   | OIDC | authorize/interaction/Code→Token/UserInfo 正常；PKCE、replay 拒绝、logout 后在线拒绝；JWT 签名及标准时间字段保持 |
-   | Admin | 当前管理会话保护、另一会话单次撤销、用户级撤销和实际数量/错误语义保持；撤销后旧凭据被拒绝 |
+   | 重新登录 | 用户重新取得新 Principal，两协议可签发与访问；OIDC 按原规则续根/Binding，旧 Cookie 不阻止重新登录 |
+   | Custom SSO | Independent authorize/token/user-info 与 Gateway authorize/callback/authz 成功；授权前后根期限不变，凭据 fixed_at_issue 且期限不超过签发时根当前/绝对期限及配置 TTL；五分钟根签发最多五分钟，响应/Cookie 使用同次 Redis 剩余 TTL |
+   | OIDC | authorize/interaction/Code→Token/UserInfo 正常；PKCE、replay 拒绝；根与 Binding 可按原规则续期，同根两模式 Custom SSO 凭据期限保持不变；JWT 签名及标准时间字段保持 |
+   | Admin | 当前管理会话保护、另一会话单次撤销、用户级撤销和实际数量/错误语义保持；根真实转换及数量准确，只有子对象变化也正确提示；实际已撤销对象随后被拒绝，不承诺所有派生对象立即失效 |
+   | 尽力退出边界 | 正常级联中已实际撤销的 Credential/Binding 后续访问拒绝；根成功但子索引遗漏、子失败或晚到签发时，合法残留允许按自身期限/账号/协议规则访问。OIDC 还要求 Binding 与 Snapshot 配套有效；自身 Binding 失效即拒绝。环境不做破坏性注入，允许漏撤的受控故障证据复用最终账本；不得把没有观察到漏项当成全子树保证 |
+   | 根入口保留 | 已无效根不能新授权、续接或兑换两协议 Code；Admin/IAM 根 token 仍拒绝。已有 Credential 访问不重查根 |
    | 非目标保留 | 用户/Client 配置及版本不变，其他 owner 的基线与自然 TTL 变化核对完成；第三方自建会话由其 owner 单独处理 |
 
 4. 发布负责人汇总停流/排空、四组 cleanup、独立 verify、非目标保留、统一 digest、smoke 和 Redis 时间记录。
@@ -133,7 +138,7 @@ Redis TIME 是在线生命周期权威，应用校时不能替代代码契约；
 
 | 分类 | 记录与状态 |
 |---|---|
-| 代码候选 | commit、镜像 digest、#120 最终验证与双轴评论链接；当前不表示已合入/push |
+| 代码候选 | commit、镜像 digest、适用 #120/#168 与父 #163 最终验证和双轴评论链接；当前不表示已合入/push |
 | 环境与冻结 | 受控环境标识、目标 DB、owner、流量停止时间、逐副本排空证明；未执行/通过/失败 |
 | 清理与回读 | 三个独立命令的时间/退出码/安全报告、目标一致性；未执行/通过/失败 |
 | 保留集与统一部署 | owner 基线对照、自然 TTL 说明、全部副本和自动恢复模板 digest；未执行/通过/失败 |

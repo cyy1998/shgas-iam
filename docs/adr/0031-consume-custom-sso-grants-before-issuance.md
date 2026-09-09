@@ -4,6 +4,8 @@ status: accepted
 
 # 在签发前一次性消费 Custom SSO Grant
 
+> [ADR-0033](0033-trust-issued-credentials-without-principal-session-revalidation.md) 已接受的新目标取消 Custom SSO 授权续根及 Credential 随根续期，局部取代本文关于未交付凭据可随根延长的描述；签发时根期限裁剪、兑换前根校验、一次消费和失败重新授权保持。该后续目标已由 #164 实现，独立访问由 #166/#167 实现；下文随根续期仅为原决策语境，环境尚未切换。
+
 [Issue #152](https://github.com/cyy1998/shgas-iam/issues/152) 重新评估原 Code 可恢复兑换的价值。维护者于 2026-09-09 逐项确认兑换、补偿、接入与发布边界，并要求形成正式规格，以失败后重新授权换取更简单的兑换流程；有效根登录会话通常允许续接授权，无需再次输入凭据。本文记录已接受的修改目标；Independent 与 Gateway 已分别由 #158/#159 迁移为签发前消费；在线预占、租约与失败释放已退役，定向维护已由 #160 交付，#161 已交付最终组合证据账本和升级手册；父规格聚合验收另由协调者记录，环境尚未切换。
 
 完整用户故事、实现与测试决定由 [Spec #157](https://github.com/cyy1998/shgas-iam/issues/157) 拥有；后续实施沿该规格拆票和验收。
@@ -36,6 +38,8 @@ Gateway 本次保持现有 callback 失败响应，由用户返回业务应用�
 接入说明、OpenAPI 的重试描述及相关错误提示在实现时同步修改，原先“所有 503 都保留 Code 并可重试”的说明失效。UserInfo/authz 的暂态重试与有效 Credential/Cookie 保留语义继续存在；本次不把登录兑换规则扩大到已有凭据的普通访问。
 
 ## 发布边界
+
+本文的保留会话步骤只适用于原 Spec #157 单独升级。包含 Spec #163 的候选必须执行[全体下线手册](../releases/online-auth-redis-time-cutover.md)，不保留旧 Credential；定向 Grant 维护能力仍存在，但不能作为本次全清证据。
 
 采用维护窗口切换：暂停受影响的 Custom SSO 授权与兑换流量，排空旧请求，只失效旧 Custom SSO Grant 及对应 Authorization Artifact，保留有效 Principal Session、已签发 Credential 和其他协议在线对象；全部兑换实例统一升级后恢复流量，不支持新旧兑换实现混跑。切换前取得的 Code 需要重新授权，有效根登录会话继续用于续接。
 

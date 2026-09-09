@@ -288,7 +288,7 @@ function createProviderSessionStore(options: {
         && staged.clientCode === clientId
         && staged.principalSessionId === session.sessionId;
     },
-    async read(sessionUid: string, clientCode: string) {
+    async readForAuthorization(sessionUid: string, clientCode: string) {
       const binding = bindings.get(key(sessionUid, clientCode)) ?? null;
       return binding && options.isPrincipalValid?.(binding.principalSessionId) !== false
         ? binding
@@ -817,7 +817,7 @@ describe("oIDC authorization Provider Session lifecycle", () => {
     expect(authorizedA.location?.searchParams.get("code")).toEqual(expect.any(String));
     const providerSessionUid = [...providerSessions.bindings.keys()][0]?.split(":", 1)[0];
     expect(providerSessionUid).toEqual(expect.any(String));
-    expect(await providerSessions.read(providerSessionUid!, "client-b")).toBeNull();
+    expect(await providerSessions.readForAuthorization(providerSessionUid!, "client-b")).toBeNull();
     const providerSession = await provider.Session.findByUid(providerSessionUid!);
     expect(providerSession).toMatchObject({
       accountId: subjectIdentifier,
@@ -828,7 +828,7 @@ describe("oIDC authorization Provider Session lifecycle", () => {
 
     const code = authorizedB.location?.searchParams.get("code");
     expect(code).toEqual(expect.any(String));
-    const bindingB = await providerSessions.read(providerSessionUid!, "client-b");
+    const bindingB = await providerSessions.readForAuthorization(providerSessionUid!, "client-b");
     expect(bindingB).toMatchObject({
       accountId: subjectIdentifier,
       clientCode: "client-b",
@@ -958,10 +958,10 @@ describe("oIDC authorization Provider Session lifecycle", () => {
 
     expect(authorizedB.location?.origin).toBe("https://client-b.example");
     expect(authorizedB.location?.searchParams.get("code")).toEqual(expect.any(String));
-    await expect(runtime.providerSessions.read(providerSessionUid!, "client-a")).resolves.toMatchObject({
+    await expect(runtime.providerSessions.readForAuthorization(providerSessionUid!, "client-a")).resolves.toMatchObject({
       clientCode: "client-a",
     });
-    await expect(runtime.providerSessions.read(providerSessionUid!, "client-b")).resolves.toMatchObject({
+    await expect(runtime.providerSessions.readForAuthorization(providerSessionUid!, "client-b")).resolves.toMatchObject({
       clientCode: "client-b",
     });
 
@@ -977,7 +977,7 @@ describe("oIDC authorization Provider Session lifecycle", () => {
     expect(authorizedA.location?.searchParams.get("code")).toEqual(expect.any(String));
     const providerSessionUid = [...providerSessions.bindings.keys()][0]?.split(":", 1)[0];
     expect(providerSessionUid).toEqual(expect.any(String));
-    const bindingA = await providerSessions.read(providerSessionUid!, "client-a");
+    const bindingA = await providerSessions.readForAuthorization(providerSessionUid!, "client-a");
     expect(bindingA).not.toBeNull();
     const authorizedB = await authorize(url, "client-b", cookies);
     expect(authorizedB.location?.searchParams.get("code")).toEqual(expect.any(String));
@@ -989,7 +989,7 @@ describe("oIDC authorization Provider Session lifecycle", () => {
 
     expect(providerSessions.stagedPrincipalSessionIds).toHaveLength(stagedBeforeRetry);
     expect(providerSessions.bindingCreationClientCodes).toHaveLength(creationsBeforeRetry);
-    await expect(providerSessions.read(providerSessionUid!, "client-a")).resolves.toMatchObject({
+    await expect(providerSessions.readForAuthorization(providerSessionUid!, "client-a")).resolves.toMatchObject({
       bindingId: bindingA?.bindingId,
       principalSessionId: oldPrincipalSessionId,
     });
@@ -1070,7 +1070,7 @@ describe("oIDC authorization Provider Session lifecycle", () => {
       subjectIdentifier,
     );
     expect(anchor).toMatchObject({ principalSessionId: newPrincipalSessionId });
-    const binding = await providerSessions.read(providerSessionUid!, "client-a");
+    const binding = await providerSessions.readForAuthorization(providerSessionUid!, "client-a");
     expect(binding).toMatchObject({ principalSessionId: newPrincipalSessionId });
     await expect(provider.Session.findByUid(providerSessionUid!)).resolves.toMatchObject({
       kernelPrincipalSessionId: newPrincipalSessionId,
@@ -1113,7 +1113,7 @@ describe("oIDC authorization Provider Session lifecycle", () => {
     expect(authorizedOld.location?.searchParams.get("code")).toEqual(expect.any(String));
     const providerSessionUid = [...providerSessions.bindings.keys()][0]?.split(":", 1)[0];
     expect(providerSessionUid).toEqual(expect.any(String));
-    const oldBinding = await providerSessions.read(providerSessionUid!, "client-a");
+    const oldBinding = await providerSessions.readForAuthorization(providerSessionUid!, "client-a");
     expect(oldBinding).not.toBeNull();
     rotatePrincipal({ keepPreviousValid: true });
     providerSessions.failNextBindingCommit();
@@ -1125,7 +1125,7 @@ describe("oIDC authorization Provider Session lifecycle", () => {
       accountId: subjectIdentifier,
       kernelPrincipalSessionId: oldPrincipalSessionId,
     });
-    await expect(providerSessions.read(providerSessionUid!, "client-a")).resolves.toMatchObject({
+    await expect(providerSessions.readForAuthorization(providerSessionUid!, "client-a")).resolves.toMatchObject({
       bindingId: oldBinding?.bindingId,
       principalSessionId: oldPrincipalSessionId,
     });
@@ -1142,6 +1142,6 @@ describe("oIDC authorization Provider Session lifecycle", () => {
     const authorizedB = await authorize(url, "client-b", cookies);
 
     expect(authorizedB.location?.searchParams.get("code") ?? null).toBeNull();
-    await expect(providerSessions.read(providerSessionUid!, "client-b")).resolves.toBeNull();
+    await expect(providerSessions.readForAuthorization(providerSessionUid!, "client-b")).resolves.toBeNull();
   });
 });

@@ -1,8 +1,10 @@
 # Custom SSO 一次消费最终契约
 
+> 本文原候选证据保留其规格语境。后续 Spec #163 / ADR-0033 已实现已有 Credential 使用不查父、Custom SSO 不续根/凭据及根撤销尽力级联；正常级联里根/子均失效不构成全子树保证。替代断言、固定候选与证明边界见[Credential 最终账本](credential-authority-contract.md)。包含 #163 的候选发布采用全体下线，不适用本文原规格的保留对象升级；环境未切换。
+
 Status: Current
 
-Last verified: 2026-09-09
+Last verified: 2026-09-10
 
 Next review: 2026-10-31
 
@@ -15,6 +17,15 @@ Next review: 2026-10-31
 > 当前读取及替代验证见 [已发布 Facts 契约](published-subject-facts-contract.md)。
 
 ## 固定候选与复用边界
+
+后续 [#164](https://github.com/cyy1998/shgas-iam/issues/164) 按 ADR-0033 取消 Custom SSO 授权续根，并将两模式新 Credential
+（包括未交付残留）改为固定签发期限。下文 #157 原候选的随根续期证据只保留历史语境；替代测试验证 root renewal 前后期限严格相等，
+仍保留正常级联清理、一次消费与同步尽力补偿。当前期限及全体下线发布选择见[对接契约](third-party-sso-integration.md)，环境尚未切换。
+
+后续 #166 同时退役已有 Credential 使用及两模式签发后的父读取；下表的“签发后父会话保护”只描述 #157 原候选。
+消费前和 Kernel 开始签发仍校验根，签发结果的主体/context/归属直接核对，保留取得时有效性。
+根观察后晚到签发可以完成，实际凭据被撤销或消失后不复活；后续访问拒绝，不承诺拦截已经取得的在途响应。
+当前组合行为和验证归属见[操作契约](custom-sso-protocol-validation.md)。
 
 | 来源 | 候选 | 复用的证据 |
 |---|---|---|

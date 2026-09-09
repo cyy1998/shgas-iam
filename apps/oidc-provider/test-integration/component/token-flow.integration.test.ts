@@ -138,11 +138,6 @@ async function createRuntime() {
         oidc_config_version: clientConfigVersions.get(clientId),
       } as never),
     },
-    globalSessions: {
-      resolveById: async sessionId => sessionId === "principal-a"
-        ? { sessionId, accountId: subject, authTime: 123 }
-        : null,
-    },
     projection: {
       resolve: async () => {
         projectionReads += 1;
@@ -171,7 +166,7 @@ async function createRuntime() {
       },
     },
     providerSessions: {
-      read: async (sessionUid, clientCode) => sessionUid === "provider-a" && clients.has(clientCode)
+      readForAccessToken: async (sessionUid, clientCode) => sessionUid === "provider-a" && clients.has(clientCode)
         ? {
             principalSessionId: "principal-a",
             bindingId: `binding-${clientCode}`,
@@ -192,12 +187,14 @@ async function createRuntime() {
           return null;
         return {
           credential: {
+            principal: { subjectId: subject },
             credentialId,
             principalSessionId: "principal-a",
             bindingId: `binding-${clientId}`,
             clientCode: clientId,
           },
           metadata: {
+            authTime: 123,
             providerTokenKey: `oidc:model:AccessToken:${externalToken}`,
             providerTokenId: externalToken,
             oidcConfigVersion: 1,

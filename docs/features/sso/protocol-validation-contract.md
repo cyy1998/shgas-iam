@@ -1,8 +1,10 @@
 # 协议校验、操作快照与版本撤销最终契约
 
+> 本文原候选证据保留其规格语境。后续 Spec #163 / ADR-0033 已实现已有 Credential 使用不查父、Custom SSO 不续根/凭据及根撤销尽力级联；正常级联里根/子均失效不构成全子树保证。替代断言、固定候选与证明边界见[Credential 最终账本](credential-authority-contract.md)。包含 #163 的候选发布采用全体下线，不适用本文原规格的保留对象升级；环境未切换。
+
 Status: Current
 
-Last verified: 2026-09-09
+Last verified: 2026-09-10
 
 Next review: 2026-10-31
 

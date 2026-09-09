@@ -32,7 +32,7 @@ export interface AdapterProviderSessionBindingStore {
     sessionUid: string,
     expected?: ProviderSessionLifecycleFence,
   ) => Promise<boolean>;
-  read: (sessionUid: string, clientCode: string) => Promise<ProviderSessionBinding | null>;
+  readForAuthorization: (sessionUid: string, clientCode: string) => Promise<ProviderSessionBinding | null>;
   consumeStaged: (input: {
     accountId: string;
     authorizationAttemptId: string;

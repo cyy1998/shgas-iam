@@ -34,7 +34,11 @@ test.each(["iam", "gateway", "gateway-orcas", "independent"])("Public UserInfo %
   const redis = new Redis(url, { lazyConnect: true, enableOfflineQueue: false, maxRetriesPerRequest: 0 });
   await redis.connect();
   const harness = await createSessionKernelRedisTestHarness(url);
-  const scope = await harness.createSessionKernelScope({ cleanupAdapters: [createCustomSsoCleanup({ redis })] });
+  let commandObservations: Array<{ name: string; startedAt: number; completedAt: number }> | undefined;
+  const scope = await harness.createSessionKernelScope({
+    cleanupAdapters: [createCustomSsoCleanup({ redis })],
+    observeWriterCommand: observation => commandObservations?.push(observation),
+  });
   const grantIds: string[] = [];
   const grants = createAuthorizationGrantRedisInspection(redis);
   try {
@@ -363,6 +367,69 @@ test.each(["iam", "gateway", "gateway-orcas", "independent"])("Public UserInfo %
     const updatedBody = await updated.json();
     expect(updated.status).toBe(200);
     expect(updatedBody).toMatchObject({ version: 2, subjectIdentifier, authorization: { roles: ["auditor"] } });
+    if (mode === "gateway" || mode === "independent") {
+      const monitor = await redis.monitor();
+      let serverCommands: Array<{ name: string; source: string }> | undefined;
+      monitor.on("monitor", (_time, args: string[], source: string) => {
+        if (args[0]?.toLowerCase() !== "echo")
+          serverCommands?.push({ name: args[0]!.toLowerCase(), source: source === "lua" ? "lua" : "client" });
+      });
+      try {
+        for (const [entry, action] of [
+          ["userinfo", () => request(token)],
+          ...(mode === "gateway" ? [["authz", () => authRequest(token)] as const] : []),
+        ] as const) {
+          const warmup = await action();
+          expect(warmup.status).toBe(200);
+          for (let sample = 0; sample < 5; sample += 1) {
+            commandObservations = [];
+            serverCommands = [];
+            const startedAt = performance.now();
+            const response = await action();
+            expect(response.status).toBe(200);
+            const marker = randomUUID();
+            const drained = new Promise<void>((resolve) => {
+              const onMonitor = (_time: string, args: string[]) => {
+                if (args[0]?.toLowerCase() === "echo" && args[1] === marker) {
+                  monitor.off("monitor", onMonitor);
+                  resolve();
+                }
+              };
+              monitor.on("monitor", onMonitor);
+            });
+            await redis.echo(marker);
+            await drained;
+            const observations = commandObservations;
+            commandObservations = undefined;
+            let waveEnd = -Infinity;
+            let waves = 0;
+            for (const observation of observations.toSorted((a, b) => a.startedAt - b.startedAt)) {
+              if (observation.startedAt >= waveEnd)
+                waves += 1;
+              waveEnd = Math.max(waveEnd, observation.completedAt);
+            }
+            console.warn("Credential Redis observation", JSON.stringify({
+              mode,
+              entry,
+              sample,
+              waves,
+              commands: observations.map(value => ({
+                name: value.name,
+                startMs: value.startedAt - startedAt,
+                endMs: value.completedAt - startedAt,
+                rttMs: value.completedAt - value.startedAt,
+              })),
+              serverCommands,
+            }));
+            serverCommands = undefined;
+          }
+        }
+      }
+      finally {
+        commandObservations = undefined;
+        monitor.disconnect();
+      }
+    }
     for (const deniedState of ["disabled", "new-generation"] as const) {
       const credential = await seedToken();
       barrier = deniedState;
@@ -374,6 +441,44 @@ test.each(["iam", "gateway", "gateway-orcas", "independent"])("Public UserInfo %
       expect(denied.headers.getSetCookie().some(cookie => cookie.startsWith(`${cookieName}=`) && cookie.includes("Max-Age=0"))).toBe(true);
       expect(reads).toBe(before + 1);
       barrier = "enabled";
+    }
+    if (mode === "iam") {
+      const rootToken = await seedToken();
+      const root = await scope.observer.resolvePrincipalSession(rootToken);
+      if (root.status !== "resolved")
+        throw new Error("Expected IAM root");
+      await scope.writer.revokePrincipalSession(root.value.principalSessionId);
+      const denied = await request(rootToken);
+      expect(denied.status).toBe(401);
+    }
+    else {
+      const peerToken = await seedToken();
+      for (const { context, status } of [
+        { context: undefined, status: 503 },
+        { context: "{broken", status: 503 },
+        { context: JSON.stringify({ version: 1, subjectIdentifier, transitionId: "invalid" }), status: 503 },
+        { context: encodeSubjectAccessContext({ version: 1, subjectIdentifier: randomUUID(), transitionId: generation }), status: 401 },
+      ]) {
+        const corruptedToken = await seedToken();
+        const credential = await scope.observer.resolveCredential(corruptedToken, { protocol: "custom-sso", credentialType: "local_session" });
+        if (credential.status !== "resolved")
+          throw new Error("Expected Credential before context corruption");
+        await scope.seedCredentialPayload(credential.value.credentialId, JSON.stringify({ ...credential.value, subjectContext: context }));
+        const before = { reads, factsReads };
+        const denied = await request(corruptedToken);
+        expect(denied.status).toBe(status);
+        if (!independent) {
+          const authz = await authRequest(corruptedToken);
+          expect(authz.status).toBe(status);
+        }
+        expect({ reads, factsReads }).toEqual(before);
+        const root = await scope.observer.resolvePrincipalSession(principalToken);
+        const peer = await scope.observer.resolveCredential(peerToken, { protocol: "custom-sso", credentialType: "local_session" });
+        expect(root.status).toBe("resolved");
+        expect(peer.status).toBe("resolved");
+      }
+      const acceptedPeer = await request(peerToken);
+      expect(acceptedPeer.status).toBe(200);
     }
   }
   finally {

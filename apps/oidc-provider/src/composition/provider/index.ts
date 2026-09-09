@@ -126,7 +126,6 @@ function assembleOidcProviderRuntime(
   const claims = createClaims({
     accounts: deps.repositories.account,
     clients: deps.stores.clientRuntime,
-    globalSessions: deps.session.oidcSession,
     projection,
     providerSessions: deps.session.oidcSession,
     tokens: deps.session.oidcSession,

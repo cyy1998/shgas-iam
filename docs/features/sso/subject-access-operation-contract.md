@@ -1,5 +1,7 @@
 # Subject Access 操作许可最终契约
 
+> 本文原候选证据保留其规格语境。后续 Spec #163 / ADR-0033 已实现已有 Credential 使用不查父、Custom SSO 不续根/凭据及根撤销尽力级联；正常级联里根/子均失效不构成全子树保证。替代断言、固定候选与证明边界见[Credential 最终账本](credential-authority-contract.md)。包含 #163 的候选发布采用全体下线，不适用本文原规格的保留对象升级；环境未切换。
+
 本文核对 [Spec #128](https://github.com/cyy1998/shgas-iam/issues/128) 的 62 条故事及最终公开入口，
 架构决定见 [ADR-0029](../../adr/0029-check-subject-access-once-per-business-operation.md)。
 #129–135 建立的过渡路径已由 #136 统一启用。本文列出可执行证据和证明边界；候选 SHA、实际命令、结果和评审轮次
@@ -51,7 +53,7 @@ API 的 ORCAS 后续资料读取、Admin 已许可管理员资料读取、OIDC �
 | 故事 | 类别 | 已建立的公开可观察证据与限制 |
 |---|---|---|
 | 1 每调用一次许可 | 共享＋消费者 | Permission 对一次操作的 Barrier seam 计数为 1；API HTTP、OIDC HTTP、Admin HTTP/Redis 分别观察一请求一次读取。此预算不代表端点总 Redis RTT。 |
-| 2 内部步骤共用 | 消费者 | SSO Redis 授权完成 renew 和真实 Grant 创建仍只读一次；兑换覆盖消费、issue、交付。OIDC HTTP Token 多回调成功且一次读取。 |
+| 2 内部步骤共用 | 消费者 | SSO Redis 授权创建真实 Grant 仍只读一次；#164 已取消 Custom SSO 授权续根。兑换覆盖消费、issue、交付。OIDC HTTP Token 多回调成功且一次读取。 |
 | 3 下一调用重查 | 共享＋消费者 | Permission 新 operation 增加读取；API/OIDC/Admin HTTP 第一请求在途成功、第二请求拒绝且读取从 1 增到 2。 |
 | 4 旅程分段 | 消费者 | SSO Redis 分别调用 authorize、continuation、redemption、UserInfo；OIDC HTTP native interaction 与 Provider 请求分别取得许可，guard/resume 独立计数。不是整个浏览器旅程缓存。API Composition 另由真实 `/sso/login-guard` 验证有效、缺失和无效 Cookie 的页面 decision、清 Cookie 与根记录不续期。 |
 | 5 并行共享 | 共享＋消费者 | Permission 在未释放同步 gate 前发起两个 acquire，只有一个读取且两者返回相同许可；OIDC HTTP 并发请求各自检查，不能彼此借用许可。 |
@@ -68,11 +70,11 @@ API 的 ORCAS 后续资料读取、Admin 已许可管理员资料读取、OIDC �
 | 16 续期不可升级 | 共享 | Context Redis renew 后 context 不变；向派生输入附加替换 context 不能覆盖父值，已撤销父对象不能借许可重新派生。 |
 | 17 坏上下文不补齐 | 共享＋消费者 | Permission 对缺失、null、非 JSON、缺字段、未知版本、坏代际和额外字段拒绝且不调用 Barrier；OIDC Component 对真实 principal context 的身份不一致拒绝。 |
 | 18 无主体 Artifact | 共享＋消费者 | Context Redis 无 context 创建和消费一次，重复消费失败；OIDC Component/HTTP Return Handle 无 Subject Access 读取且不因检查而消费。 |
-| 19 authorize 作用前检查 | 消费者 | SSO Redis 初始 blocking/disabled 时零 Grant 且 root expiry 不变；成功后 renew 与 Grant 创建完成，读取仍为 1。 |
+| 19 authorize 作用前检查 | 消费者 | SSO Redis 初始 blocking/disabled 时零 Grant 且 root expiry 不变；#164 成功后 Grant 创建完成但根期限不变，读取仍为 1。 |
 | 20 continuation 只读 | 消费者 | SSO Redis 比较 continuation 前后的持久化 root value，期限不变且无 Grant/Credential；另一次 continuation 独立检查。 |
 | 21 Independent 消费前检查 | 消费者 | SSO Redis/API HTTP blocking 拒绝后 Grant 未消费且无 Credential；恢复后同一码仍可兑换。 |
 | 22 callback/ORCAS 前检查 | 消费者 | SSO Redis/API HTTP Gateway 与 ORCAS 模式拒绝时观察零 ORCAS、零签发及未消费 Grant；恢复可继续原兑换。 |
-| 23 authz 共用 | 消费者 | SSO Redis Gateway/Gateway-ORCAS authz 解析 Credential、父 Session、交付 header 后仍只有一次读取，header 保持裁剪。 |
+| 23 authz 共用 | 消费者 | SSO Redis Gateway/Gateway-ORCAS authz 解析 Credential、交付 header 后仍只有一次读取，header 保持裁剪；#166 已退役 Credential 使用时父解析，主体与代际直接取可信 Credential。 |
 | 24 UserInfo 四分支 | 消费者 | API HTTP 的 IAM、Independent、Gateway、Gateway-ORCAS 都运行真实请求；延迟交付仍在 scope 中、重复交付不增加 Barrier 读取、结束后 capability 拒绝。 |
 | 25 OIDC 所有授权入口 | 消费者 | OIDC HTTP 运行正式 authorization、native interaction、guard、resume；每个入口有独立操作且拒绝在受保护作用前发生。 |
 | 26 Code 消费前检查 | 消费者 | OIDC HTTP 对 blocking/不可用断言 503、consume 零调用，恢复后同 Code 成功；disabled 也未消费新 Code。 |

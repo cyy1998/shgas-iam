@@ -68,8 +68,8 @@ const userRevokeSafetyGuidance =
 
 function buildUserRevokeConfirmationContent(isCurrentUser: boolean) {
   const impact = isCurrentUser
-    ? 'IAM 会保留当前管理端根会话，但仍会撤销该根会话关联的 IAM 凭证及本人的其他根 Principal Session。'
-    : 'IAM 会撤销该用户全部 Principal Session 及其派生访问。';
+    ? 'IAM 会保留当前管理端根会话，撤销本人的其他根会话，并尽力处理这些根会话（包括当前根）关联的 IAM 凭证。'
+    : 'IAM 会撤销该用户已索引的根会话，并尽力处理关联 IAM 凭证；关联访问可能仍持续至凭证失效。';
   return `${impact}${userRevokeSafetyGuidance}`;
 }
 
@@ -111,13 +111,22 @@ export default function SessionsPage() {
       const result = await revokeSessions(input);
       refreshAfterOperation = true;
       if (!result.changed) {
-        message.warning('目标已失效或已被处理');
-      } else if (result.result.cleanup.failed > 0) {
         message.warning(
-          `会话已下线，部分关联清理失败（${result.result.cleanup.failed} 项）`,
+          '未发生新的撤销；目标可能已失效、已被处理或当前根已保留',
         );
       } else {
-        message.success('会话已下线');
+        const effect =
+          result.result.revoked.principalSessions > 0
+            ? `已撤销 ${result.result.revoked.principalSessions} 个根会话`
+            : '已撤销关联对象，本次未撤销根会话';
+        const detail = `${effect}；关联对象已尽力处理`;
+        if (result.result.cleanup.failed > 0) {
+          message.warning(
+            `${detail}，部分外围清理失败（${result.result.cleanup.failed} 项）`,
+          );
+        } else {
+          message.success(detail);
+        }
       }
     } catch (error) {
       if (
@@ -151,7 +160,7 @@ export default function SessionsPage() {
     Modal.confirm({
       title: '确认强制下线本次会话？',
       content:
-        'IAM 会撤销此 Principal Session 及其派生访问，但不能保证第三方自行建立的本地会话退出。强制下线不会阻止未来重新登录；如怀疑凭据泄露，请同时执行密码重置、账号暂停或结束。',
+        'IAM 会撤销此根会话，并尽力处理关联 IAM 凭证；关联访问可能仍持续至凭证失效。不能保证第三方自行建立的本地会话退出。强制下线不会阻止未来重新登录；如怀疑凭据泄露，请同时执行密码重置、账号暂停或结束。',
       okText: '确认下线',
       okType: 'danger',
       cancelText: '取消',

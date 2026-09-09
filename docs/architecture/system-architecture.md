@@ -111,3 +111,12 @@ TTL 或逐 Client 访问自然收敛。当前 full repair/verify 只拥有当前
 Spec #157 的全部 56 条故事、20 项实现和 10 项测试决定见[一次消费最终账本](../features/sso/custom-sso-one-shot-grant-contract.md)。
 #161 在正式 HTTP/Redis 上组合定向清理、独立核验、同根新授权与已有凭据访问；完整 OIDC 保留集复用 #160。
 统一 writer/consumer、基线、停流排空、smoke 与回退见[保留会话升级手册](../releases/custom-sso-one-shot-grant-upgrade.md)，目标环境未执行。
+
+
+Spec #163 / ADR-0033 的 62 条故事、20 项实现和 12 项测试决定见[Credential 最终账本](../features/sso/credential-authority-contract.md)。
+已有 Credential 使用不再显式或经 Binding 间接复查根；新授权、两协议 Code 兑换、续接与 Admin/IAM 根 token 仍验证根。
+根撤销尽力处理子对象，允许漏撤与已观察根后的晚到签发；自身撤销、期限、Subject Access、配置/用途及 OIDC Binding/Snapshot 仍约束访问。
+Custom SSO 授权不续根，两模式 Credential 固定签发期限；同根 OIDC 续根/Binding 不延长它们。
+#164–#167 的实际行为与局部性能证据可复用，#168 在现有 Provider HTTP/Redis 增补三方同根同时存在的联合观察；不能将测试收集或文件存在当作已执行。
+本次统一发布必须执行[全体下线手册](../releases/online-auth-redis-time-cutover.md)，此前 #146/#157 的保留对象流程只属于原规格单独升级。
+四 owner 真实 Redis 维护证明不代替新进程 CLI verify、停流排空及新登录人工证据；代码已实现，目标环境未切换。

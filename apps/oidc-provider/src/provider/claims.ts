@@ -33,6 +33,7 @@ type FindAccountToken
     | BackchannelAuthenticationRequest;
 
 export type OidcAccessTokenExtra = UnknownObject & {
+  authTime: number;
   claimsSnapshot: claimsSnapshotContract.OidcClaimsSnapshot;
   kernelCredentialId?: string;
 };
@@ -54,11 +55,13 @@ function snapshotAccessTokenExtra(
     extra?.claimsSnapshot,
   );
   if (!claimsSnapshot
+    || typeof extra?.authTime !== "number" || !Number.isSafeInteger(extra.authTime) || extra.authTime < 0
     || (extra?.kernelCredentialId !== undefined
       && typeof extra.kernelCredentialId !== "string")) {
     return null;
   }
   return {
+    authTime: extra.authTime,
     claimsSnapshot,
     ...(extra?.kernelCredentialId
       ? { kernelCredentialId: extra.kernelCredentialId }
@@ -160,8 +163,9 @@ function createOidcClaimsCore(
 ) {
   async function validateSnapshotBinding(
     snapshot: claimsSnapshotContract.OidcClaimsSnapshot,
+    authTime: number,
   ) {
-    const binding = await deps.providerSessions.read(
+    const binding = await deps.providerSessions.readForAccessToken(
       snapshot.providerSessionUid,
       snapshot.clientId,
     );
@@ -170,16 +174,8 @@ function createOidcClaimsCore(
       || binding.accountId !== snapshot.subjectIdentifier
       || binding.principalSessionId !== snapshot.principalSessionId
       || binding.bindingId !== snapshot.providerSessionBindingId
+      || binding.authTime !== authTime
       || binding.oidcConfigVersion !== snapshot.oidcConfigVersion) {
-      return null;
-    }
-    const session = await deps.globalSessions.resolveById(
-      snapshot.principalSessionId,
-    );
-    if (!session
-      || session.sessionId !== snapshot.principalSessionId
-      || session.accountId !== snapshot.subjectIdentifier
-      || session.authTime !== binding.authTime) {
       return null;
     }
     return binding;
@@ -286,7 +282,9 @@ function createOidcClaimsCore(
         || !matchesSnapshotProtocolContext(snapshot, token)) {
         return undefined;
       }
-      return { claimsSnapshot: snapshot };
+      if (typeof code.authTime !== "number" || !Number.isSafeInteger(code.authTime) || code.authTime < 0)
+        return undefined;
+      return { claimsSnapshot: snapshot, authTime: code.authTime };
     },
 
     async findAccount(subject: string, token?: FindAccountToken) {
@@ -319,7 +317,7 @@ function createOidcClaimsCore(
           return undefined;
         const [client, validBinding] = await Promise.all([
           deps.clients.findRuntime(snapshot.clientId),
-          validateSnapshotBinding(snapshot),
+          validateSnapshotBinding(snapshot, credential.metadata.authTime),
         ]);
         if (!client
           || !matchesSnapshotProtocolContext(
@@ -328,6 +326,9 @@ function createOidcClaimsCore(
             subject,
           )
           || credential.credential.credentialId !== extra.kernelCredentialId
+          || credential.credential.principal.subjectId !== snapshot.subjectIdentifier
+          || credential.metadata.authTime !== extra.authTime
+          || credential.metadata.providerTokenId !== token.jti
           || credential.credential.principalSessionId
           !== snapshot.principalSessionId
           || credential.credential.bindingId

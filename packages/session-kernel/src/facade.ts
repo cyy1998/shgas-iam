@@ -641,10 +641,32 @@ export function createSessionKernelWithStateAdapterFactories(
     return summary;
   }
 
-  async function revokePrincipalSession(principalSessionId: string, reason: RevocationReason = "logout") {
+  async function revokePrincipalSession(
+    principalSessionId: string,
+    reason: RevocationReason = "logout",
+  ) {
+    return await revokePrincipalSessionObservation(principalSessionId, reason);
+  }
+
+  async function revokePrincipalSessionObservation(
+    principalSessionId: string,
+    reason: RevocationReason,
+    expected?: { value: PrincipalSession; serialized: string; observedAt: number },
+  ) {
     const summary = createEmptyRevokeSummary();
-    mergeRevokeSummary(summary, await revokePrincipalChildObjects(principalSessionId, reason));
-    mergeRevokeSummary(summary, await revokeObject("principal_session", principalSessionId, reason));
+    mergeRevokeSummary(summary, await revokePrincipalChildObjects(principalSessionId, reason, expected?.value));
+    try {
+      mergeRevokeSummary(summary, await revokeObject("principal_session", principalSessionId, reason, expected));
+    }
+    catch {
+      deps.logger?.warn?.({
+        event: "session_kernel.root_revocation.unconfirmed",
+        bindingsRevoked: summary.bindings.revoked,
+        credentialsRevoked: summary.credentials.revoked,
+        artifactsRevoked: summary.artifacts.revoked,
+      }, "root revocation was not confirmed; completed child effects remain effective");
+      throw new Error("session kernel root revocation was not confirmed");
+    }
     return summary;
   }
 
@@ -684,7 +706,6 @@ export function createSessionKernelWithStateAdapterFactories(
   ) {
     return await revokeUserSessionsMatching(principal, reason, {}, {
       contexts: new Set(subjectContexts),
-      continueAfterFailure: false,
     });
   }
 
@@ -715,7 +736,6 @@ export function createSessionKernelWithStateAdapterFactories(
           selected.add(options.includeSubjectContext);
         return await revokeUserSessionsMatching(target, reason, {}, {
           contexts: selected,
-          continueAfterFailure: true,
         });
       },
     };
@@ -725,7 +745,7 @@ export function createSessionKernelWithStateAdapterFactories(
     principal: PrincipalRef,
     reason: RevocationReason,
     options: RevokeUserSessionsOptions,
-    contextScope?: { contexts: ReadonlySet<string>; continueAfterFailure: boolean },
+    contextScope?: { contexts: ReadonlySet<string> },
   ) {
     const summary = createEmptyRevokeSummary();
     if (contextScope?.contexts.size === 0)
@@ -743,32 +763,40 @@ export function createSessionKernelWithStateAdapterFactories(
         continue;
 
       try {
-        if (contextScope !== undefined) {
-          const resolved = await store.resolveObject("principal_session", parsed.id);
+        const resolved = await store.resolveObjectForUpdate("principal_session", parsed.id);
+        if (resolved.status === "fail_closed" || resolved.status === "schema_invalid")
+          throw new Error("session kernel root selection was not confirmed");
+        if (resolved.status === "resolved") {
           if (
-            resolved.status !== "resolved"
-            || resolved.value.principal.principalType !== principal.principalType
+            resolved.value.principal.principalType !== principal.principalType
             || resolved.value.principal.subjectId !== principal.subjectId
             || resolved.value.principalSessionId !== parsed.id
-            || resolved.value.subjectContext === undefined
-            || !contextScope.contexts.has(resolved.value.subjectContext)
+            || (contextScope !== undefined && (resolved.value.subjectContext === undefined
+              || !contextScope.contexts.has(resolved.value.subjectContext)))
           ) {
             summary.principalSessions.excluded += 1;
             continue;
           }
         }
-
-        if (excludedPrincipalSessionIds.has(parsed.id)) {
-          summary.principalSessions.excluded += 1;
-          mergeRevokeSummary(summary, await revokePrincipalChildObjects(parsed.id, reason));
+        else {
+          if (resolved.status === "missing_or_expired")
+            summary.principalSessions.missing += 1;
+          else if (resolved.status === "revoked" || resolved.status === "consumed_replay")
+            summary.principalSessions.alreadyRevoked += 1;
+          else
+            throw new Error("session kernel root selection was not confirmed");
           continue;
         }
 
-        mergeRevokeSummary(summary, await revokePrincipalSession(parsed.id, reason));
+        if (excludedPrincipalSessionIds.has(parsed.id)) {
+          summary.principalSessions.excluded += 1;
+          mergeRevokeSummary(summary, await revokePrincipalChildObjects(parsed.id, reason, resolved.value));
+          continue;
+        }
+
+        mergeRevokeSummary(summary, await revokePrincipalSessionObservation(parsed.id, reason, resolved));
       }
       catch (error) {
-        if (!contextScope?.continueAfterFailure)
-          throw error;
         errors.push(error);
       }
     }
@@ -938,8 +966,51 @@ export function createSessionKernelWithStateAdapterFactories(
   async function revokePrincipalChildObjects(
     principalSessionId: string,
     reason: RevocationReason = "admin_revoke",
+    principal?: PrincipalSession,
   ) {
-    return await revokeByIndex(keys.index.principal(principalSessionId), reason, kind => kind !== "principal_session");
+    const summary = createEmptyRevokeSummary();
+    let failed = 0;
+    let members: string[];
+    try {
+      members = await store.readIndex(keys.index.principal(principalSessionId));
+    }
+    catch {
+      deps.logger?.warn?.({ event: "session_kernel.child_revocation.enumeration_failed" }, "child enumeration failed; root revocation may continue");
+      return summary;
+    }
+    for (const member of members) {
+      const parsed = parseIndexMember(member);
+      if (!parsed || parsed.kind === "principal_session")
+        continue;
+      try {
+        const observed = await store.resolveObjectForUpdate(parsed.kind, parsed.id);
+        if (observed.status !== "resolved") {
+          if (observed.status === "missing_or_expired")
+            counterForKind(summary, parsed.kind).missing += 1;
+          else if (observed.status === "revoked" || observed.status === "consumed_replay")
+            counterForKind(summary, parsed.kind).alreadyRevoked += 1;
+          else
+            failed += 1;
+          continue;
+        }
+        if (observed.value.principalSessionId !== principalSessionId
+          || (principal !== undefined && (observed.value.subjectContext !== principal.subjectContext
+            || observed.value.principal?.principalType !== principal.principal.principalType
+            || observed.value.principal?.subjectId !== principal.principal.subjectId))) {
+          counterForKind(summary, parsed.kind).excluded += 1;
+          continue;
+        }
+        const child = await revokeObject(parsed.kind, parsed.id, reason, observed);
+        mergeRevokeSummary(summary, child);
+        failed += counterForKind(child, parsed.kind).excluded;
+      }
+      catch {
+        failed += 1;
+      }
+    }
+    if (failed > 0)
+      deps.logger?.warn?.({ event: "session_kernel.child_revocation.incomplete", failed }, "some child revocations were not confirmed");
+    return summary;
   }
 
   async function revokeBindingObjects(bindingId: string, reason: RevocationReason = "admin_revoke") {
@@ -1042,8 +1113,7 @@ export function createSessionKernelWithStateAdapterFactories(
       return summary;
     }
     if (resolved.status !== "resolved") {
-      counterForKind(summary, kind).missing += 1;
-      return summary;
+      throw new Error("session kernel revocation observation was not confirmed");
     }
 
     const now = resolved.observedAt;
@@ -1066,11 +1136,17 @@ export function createSessionKernelWithStateAdapterFactories(
         deleteOwnedKeys: payloadKeys => store.deleteOwnedCleanupKeys(tombstone, payloadKeys),
       }, deps.logger);
       if (cleanupPending && summary.cleanup.failed === failedBeforeCleanup) {
-        await store.finalizeCleanupPending({
-          tombstone,
-          indexKey: cleanupPending.key,
-          member: cleanupPending.member,
-        });
+        try {
+          await store.finalizeCleanupPending({
+            tombstone,
+            indexKey: cleanupPending.key,
+            member: cleanupPending.member,
+          });
+        }
+        catch {
+          summary.cleanup.attempted += 1;
+          summary.cleanup.failed += 1;
+        }
       }
       logCleanupFailureSummary(tombstone, summary.cleanup.failed - failedBeforeCleanup);
     }
@@ -1080,8 +1156,11 @@ export function createSessionKernelWithStateAdapterFactories(
     else if (revokeResult.status === "missing") {
       counterForKind(summary, kind).missing += 1;
     }
+    else if (revokeResult.status === "comparison_conflict" && kind !== "principal_session") {
+      counterForKind(summary, kind).excluded += 1;
+    }
     else {
-      counterForKind(summary, kind).missing += 1;
+      throw new Error("session kernel revocation transition was not confirmed");
     }
     return summary;
   }

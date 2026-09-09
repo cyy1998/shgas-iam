@@ -11,7 +11,6 @@ import type {
   ClaimsAccountReader,
   ClaimsClientRuntimeReader,
   ClaimsProviderSessionBindingStore,
-  ClaimsSessionResolver,
   ClaimsSubjectProjectionResolver,
   ClaimsTokenRevoker,
 } from "../provider/claims/claims.port.ts";
@@ -87,7 +86,6 @@ describe("oIDC provider-to-port contracts", () => {
   });
 
   it("session adapter satisfies claims ports", () => {
-    assertAssignable<ClaimsSessionResolver, OidcSessionKernelAdapter>();
     assertAssignable<ClaimsProviderSessionBindingStore, OidcSessionKernelAdapter>();
     assertAssignable<ClaimsTokenRevoker, OidcSessionKernelAdapter>();
     expect(true).toBe(true);

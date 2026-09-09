@@ -119,10 +119,9 @@ describe("Session Kernel artifact real Redis contract", () => {
       "client_config_changed",
     );
 
-    expect(summary.artifacts).toMatchObject({ revoked: 0, missing: 1 });
-    await expect(scope!.observer.inventoryClientProtocol("portal", "oidc"))
-      .resolves
-      .toMatchObject({ counts: { artifacts: 1, total: 1 } });
+    expect(summary.artifacts).toMatchObject({ revoked: 0, excluded: 1, missing: 0 });
+    const inventory = await scope!.observer.inventoryClientProtocol("portal", "oidc");
+    expect(inventory).toMatchObject({ counts: { artifacts: 1, total: 1 } });
   });
 
   test("does not let a delayed renewal recreate a revoked active session", async () => {

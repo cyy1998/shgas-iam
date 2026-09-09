@@ -289,7 +289,7 @@ export class RedisOidcAdapter<TClaimsSnapshot = unknown> implements Adapter {
   ) {}
 
   private async readOrConsumeProviderSessionBinding(accountId: string, sessionUid: string, clientId: string) {
-    const existing = await this.deps.providerSessions.read(sessionUid, clientId);
+    const existing = await this.deps.providerSessions.readForAuthorization(sessionUid, clientId);
     return existing?.accountId === accountId && existing.clientCode === clientId
       ? existing
       : null;

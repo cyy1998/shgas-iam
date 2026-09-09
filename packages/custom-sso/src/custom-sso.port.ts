@@ -38,7 +38,6 @@ export interface CustomSsoOrcasPort {
 export type CustomSsoKernelPort = Pick<SessionKernel, | "createProtocolArtifact"
   | "consumeProtocolArtifact"
   | "issueCredential"
-  | "renewPrincipalSession"
   | "resolveCredential"
   | "resolvePrincipalSession"
   | "resolvePrincipalSessionById"

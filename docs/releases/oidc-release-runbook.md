@@ -2,10 +2,12 @@
 
 Type: runbook
 Status: Current
-Last verified: 2026-09-09
+Last verified: 2026-09-10
 Next review: 2026-10-31
 
 ## 发布前提
+
+包含 Spec #163 / ADR-0033 的候选优先完整执行[全体下线手册](online-auth-redis-time-cutover.md)，不采用下文 Spec #146 的保留对象升级，也不为本次运行数据库迁移或推进协议 epoch。根撤销是尽力级联；smoke 核对实际撤销对象拒绝与允许漏撤，不能将根退出等同于全部派生访问立即失效。环境未切换。
 
 Spec #146 对已满足当前数据契约的环境，优先完整遵守[保留对象升级手册](protocol-validation-preserving-upgrade.md)。
 该流程不执行本页初始部署的数据库迁移、协议禁用、artifact 清理或全部重新登录步骤；回退与放流同样按其保留边界处理。
@@ -132,5 +134,5 @@ Session Kernel external token lookup 使用 HMAC hash。轮换顺序是：
 | client enable matrix | 通过/失败 | 每个 client 的启用状态、smoke 路径和 requestId/traceId。 |
 | 协议 artifact 维护 | 通过/跳过 | 适用 manifest 的 dry-run/apply/verify 聚合摘要，不记录完整 key。 |
 | protocol smoke | 通过/失败 | Discovery、JWKS、authorize、token、UserInfo、replay、logout。 |
-| admin revoke | 通过/失败 | `admin.session_revoke.*` 日志与旧 token 拒绝结果。 |
+| admin revoke | 通过/失败 | `admin.session_revoke.*` 日志、实际撤销对象拒绝及允许漏撤边界。 |
 | redaction | 通过/失败 | 未发现 code、token、verifier、secret、cookie、完整 Redis key 或 private payload。 |

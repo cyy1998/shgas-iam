@@ -163,7 +163,8 @@ export function createOidcSessionOperations(deps: OidcSessionOperationsDeps) {
           return false;
         return await principal(session.sessionId, session.accountId);
       }),
-      read: scoped(adapter.read),
+      readForAuthorization: scoped(adapter.readForAuthorization),
+      readForAccessToken: scoped(adapter.readForAccessToken),
       readPrincipalAnchor: scoped(async (uid, accountId) => {
         const anchor = await adapter.readPrincipalAnchor(uid, accountId);
         return anchor && await principal(anchor.principalSessionId, anchor.accountId) ? anchor : null;
@@ -200,14 +201,14 @@ export function createOidcSessionOperations(deps: OidcSessionOperationsDeps) {
           }
         };
       }
-      return { read: scoped(adapter.read), readPrincipalAnchor: scoped(adapter.readPrincipalAnchor) };
+      return { readForAuthorization: scoped(adapter.readForAuthorization), readPrincipalAnchor: scoped(adapter.readPrincipalAnchor) };
     },
     termination: {
       destroyProviderSession: neutral.destroyProviderSession,
       logoutPrincipalSession: neutral.logoutPrincipalSession,
       revokeAccessTokenCredential: neutral.revokeAccessTokenCredential,
       revokeClientProtocol: neutral.revokeClientProtocol,
-      read: neutral.read,
+      readForAuthorization: neutral.readForAuthorization,
       readPrincipalAnchor: neutral.readPrincipalAnchor,
     },
   };

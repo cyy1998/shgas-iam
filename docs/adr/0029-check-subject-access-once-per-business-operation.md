@@ -4,6 +4,8 @@ status: accepted
 
 # 在独立业务操作开始时检查一次 Subject Access
 
+> [ADR-0033](0033-trust-issued-credentials-without-principal-session-revalidation.md) 已接受的新目标局部取代本文保留的已有 Credential 使用时父 Principal Session 生命周期检查；新授权、Code 兑换及根 token 认证仍查根，操作级 Subject Access 保持。该后续目标已由 #166/#167 实现；下文原父依赖描述仅保留决策语境，环境尚未切换。
+
 > 文中的 Custom SSO 预占/租约与 Grant 状态机描述记录原决策背景，已由
 > [ADR-0031](0031-consume-custom-sso-grants-before-issuance.md) 的签发前一次消费取代；#158/#159 已迁移两模式，
 > 前置许可、用途/版本、协议分工和对象生命周期保护保持。定向维护已由 #160 交付，环境未切换。
@@ -54,7 +56,7 @@ Kernel 通过中性的、不透明的主体上下文保存槽托管外部数据�
 | 密码、手机、OA、微信登录 | 统一 Principal Session adapter；已确认身份后、创建根会话前。 |
 | Custom SSO 授权与续接 | 每次应用操作的显式容器；根会话解析后、续期或授权产物创建前。 |
 | Custom SSO 兑换与 Gateway callback | 可信 Artifact 解析后、Grant 预占及外部调用前；后续 Kernel 与 Projection 共用许可。 |
-| Gateway authz 与 Public UserInfo | Credential 或根会话首次可信解析后取得许可，后续父会话与主体交付共用。 |
+| Gateway authz 与 Public UserInfo | Credential 或根会话首次可信解析后取得许可，主体交付共用；已有 Credential 不再读取父会话，根 token 仍校验根。 |
 | Admin REST 与 tRPC | authentication middleware 的请求范围；解析管理员身份后，进入业务操作前。列表目标不取得访问许可。 |
 | OIDC Provider 请求 | 现有 middleware 初始化请求容器；OIDC 专用桥接通过 `Provider.ctx.state` 取得容器。Kernel 不感知该框架。 |
 | OIDC 原生 interaction、login guard 与 resume | 原生 HTTP 分发拥有显式容器；这些路径不假设处于 Provider 的 AsyncLocalStorage 中。 |

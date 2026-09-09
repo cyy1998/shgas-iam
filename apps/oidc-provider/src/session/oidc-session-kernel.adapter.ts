@@ -66,6 +66,7 @@ const AuthorizationCodeMetadataSchema = z.object({
 }).passthrough();
 
 const AccessTokenMetadataSchema = z.object({
+  authTime: z.number().int().nonnegative(),
   providerTokenKey: z.string().min(1),
   providerTokenId: z.string().min(1),
   oidcConfigVersion: z.number().int().nonnegative(),
@@ -434,7 +435,7 @@ export function createOidcSessionKernelAdapter(
       || anchor.principalSessionId !== input.principalSessionId) {
       return null;
     }
-    const existing = await read(input.providerSessionUid, input.clientCode);
+    const existing = await readForAuthorization(input.providerSessionUid, input.clientCode);
     if (existing
       && existing.accountId === input.accountId
       && existing.anchorGeneration === input.anchorGeneration
@@ -516,7 +517,7 @@ export function createOidcSessionKernelAdapter(
     );
   }
 
-  async function read(sessionUid: string, clientCode: string): Promise<ProviderSessionBinding | null> {
+  async function readValidatedBinding(sessionUid: string, clientCode: string) {
     const lookup = await providerSessionState.readLookup(sessionUid, clientCode);
     if (!lookup.exists)
       return null;
@@ -557,18 +558,30 @@ export function createOidcSessionKernelAdapter(
     if (!await validateProtocolObject(binding.value))
       return null;
     await deps.permit?.(binding.value);
-    const principal = await resolveById(binding.value.principalSessionId);
-    if (!principal) {
-      deps.logger.warn({
-        sessionUidFingerprint: fingerprintForLog(sessionUid),
-        bindingId: parsedLookup.bindingId,
-        principalSessionId: binding.value.principalSessionId,
-      }, "failed to resolve OIDC provider session principal");
+    return binding.value;
+  }
+
+  async function readForAuthorization(sessionUid: string, clientCode: string): Promise<ProviderSessionBinding | null> {
+    const binding = await readValidatedBinding(sessionUid, clientCode);
+    if (!binding)
+      return null;
+    const principal = await resolveById(binding.principalSessionId);
+    if (!principal || principal.accountId !== binding.principal.subjectId
+      || principal.authTime !== Math.floor(binding.authTime / 1000)) {
       return null;
     }
-    const providerBinding = toProviderSessionBinding(binding.value, principal);
+    return await deliverProviderBinding(sessionUid, binding, principal.accountId);
+  }
+
+  async function readForAccessToken(sessionUid: string, clientCode: string): Promise<ProviderSessionBinding | null> {
+    const binding = await readValidatedBinding(sessionUid, clientCode);
+    return binding ? await deliverProviderBinding(sessionUid, binding, binding.principal.subjectId) : null;
+  }
+
+  async function deliverProviderBinding(sessionUid: string, binding: ClientBinding, accountId: string) {
+    const providerBinding = toProviderSessionBinding(binding, { accountId });
     if (providerBinding.mappingOwnerId)
-      await refreshProviderSessionBinding(sessionUid, providerBinding, binding.value.expiresAt);
+      await refreshProviderSessionBinding(sessionUid, providerBinding, binding.expiresAt);
     return providerBinding;
   }
 
@@ -762,6 +775,9 @@ export function createOidcSessionKernelAdapter(
     const scopes = normalizeOidcProtocolScopes(input.payload);
     if (!scopes)
       return null;
+    const extra = z.object({ authTime: z.number().int().nonnegative() }).safeParse(input.payload.extra);
+    if (!extra.success || extra.data.authTime !== input.binding.authTime)
+      return null;
     const credential = await deps.kernel.issueCredential({
       principalSessionId: input.binding.principalSessionId,
       bindingId: input.binding.bindingId,
@@ -775,7 +791,7 @@ export function createOidcSessionKernelAdapter(
         providerTokenKey: input.providerTokenKey,
         providerTokenId: input.providerTokenId,
         scopes,
-        authTime: payloadNumber(input.payload, "authTime"),
+        authTime: input.binding.authTime,
         oidcConfigVersion: version,
       },
       cleanupRefs: [{
@@ -876,7 +892,7 @@ export function createOidcSessionKernelAdapter(
       ClientBinding,
       "bindingId" | "clientCode" | "principalSessionId" | "authTime" | "expiresAt" | "metadata"
     >,
-    session: ResolvedGlobalSession,
+    session: Pick<ResolvedGlobalSession, "accountId">,
   ): ProviderSessionBinding {
     const metadata = z.object({
       anchorGeneration: z.string().min(1).optional(),
@@ -909,7 +925,8 @@ export function createOidcSessionKernelAdapter(
     isCurrentOrStagedPrincipal,
     isStagedPrincipal,
     logoutPrincipalSession,
-    read,
+    readForAuthorization,
+    readForAccessToken,
     readPrincipalAnchor,
     registerAccessTokenCredential,
     registerAuthorizationCodeArtifact,
@@ -936,11 +953,6 @@ function payloadClientId(payload: AdapterPayload) {
 function payloadString(payload: AdapterPayload, key: string) {
   const value = (payload as Record<string, unknown>)[key];
   return typeof value === "string" && value ? value : undefined;
-}
-
-function payloadNumber(payload: AdapterPayload, key: string) {
-  const value = (payload as Record<string, unknown>)[key];
-  return typeof value === "number" && Number.isFinite(value) ? value : undefined;
 }
 
 function fingerprintPayloadValue(payload: AdapterPayload, key: string) {

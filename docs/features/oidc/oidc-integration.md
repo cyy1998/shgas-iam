@@ -54,7 +54,8 @@ Session 与 Principal Session。选择 `iam:authorization` 时也采用取得的
 不执行请求时新鲜度检查。无法取得合法投影时返回标准 `temporarily_unavailable`，且不会签发 Code。
 
 Token Endpoint 只把 Code 中的 Snapshot 转移到 Access Token，不重新读取 Profile 或重新计算 Selection。UserInfo
-在确认 token、client、OIDC 配置版本和绑定 session 仍然有效后，只重放 Access Token Snapshot。因此授权完成后的
+在确认 token、client、OIDC 配置版本和 Binding 自身仍然有效、身份与认证时间及归属一致后，只重放 Access Token Snapshot。
+已有 AccessToken 使用不复查父 Principal Session；根撤销尽力处理关联对象，漏撤凭据仍受自身、Binding 和账号访问约束。因此授权完成后的
 档案或权限变化不会混入该 token 的 UserInfo；新 Facts 发布且被读取后，变化才进入新授权的 Snapshot，
 不保证撤权立即传播或在固定期限内传播。OIDC 与 Custom SSO
 只共享 Subject Identifier、Selection、Projection 和 Facts，不共享配置、Secret、wire、Snapshot、artifact 或 session。

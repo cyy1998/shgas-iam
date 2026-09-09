@@ -6,9 +6,9 @@ import type { OidcSubjectAccessBridge } from "./subject-access-operation.ts";
 export function createOidcProviderSessionBridge(
   sessions: {
     forOperation: (operation: SubjectAccessOperation) => OidcSessionKernelAdapter;
-    terminationForOperation: (operation: SubjectAccessOperation) => Pick<OidcSessionKernelAdapter, "read" | "readPrincipalAnchor">;
+    terminationForOperation: (operation: SubjectAccessOperation) => Pick<OidcSessionKernelAdapter, "readForAuthorization" | "readPrincipalAnchor">;
     termination: Pick<OidcSessionKernelAdapter, "destroyProviderSession" | "logoutPrincipalSession" | "revokeAccessTokenCredential" | "revokeClientProtocol"
-    | "read" | "readPrincipalAnchor">;
+    | "readForAuthorization" | "readPrincipalAnchor">;
   },
   bridge: OidcSubjectAccessBridge,
 ): OidcSessionKernelAdapter {
@@ -38,9 +38,10 @@ export function createOidcProviderSessionBridge(
       currentAdapter().isCurrentOrStagedPrincipal(...args),
     isStagedPrincipal: (...args) => currentAdapter().isStagedPrincipal(...args),
     logoutPrincipalSession: sessions.termination.logoutPrincipalSession,
-    read: (...args) => bridge.isLogout()
-      ? sessions.terminationForOperation(bridge.current()).read(...args)
-      : currentAdapter().read(...args),
+    readForAccessToken: (...args) => currentAdapter().readForAccessToken(...args),
+    readForAuthorization: (...args) => bridge.isLogout()
+      ? sessions.terminationForOperation(bridge.current()).readForAuthorization(...args)
+      : currentAdapter().readForAuthorization(...args),
     readPrincipalAnchor: (...args) => bridge.isLogout()
       ? sessions.terminationForOperation(bridge.current()).readPrincipalAnchor(...args)
       : currentAdapter().readPrincipalAnchor(...args),

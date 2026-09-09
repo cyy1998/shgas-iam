@@ -21,14 +21,11 @@ describe("oidc Subject Identifier continuity", () => {
       clients: {
         findRuntime: async () => null,
       },
-      globalSessions: {
-        resolveById: async () => null,
-      },
       projection: {
         resolve: async () => ({ subjectIdentifier }),
       },
       providerSessions: {
-        read: async () => null,
+        readForAccessToken: async () => null,
       },
       tokens: {
         resolveAccessTokenCredential: async () => null,
