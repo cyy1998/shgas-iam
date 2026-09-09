@@ -159,7 +159,6 @@ test.each(["independent", "gateway", "gateway-orcas"])("%s redemption HTTP owns 
           employments: [],
         };
       } },
-      authorizationFreshness: { check: async () => ({ status: "fresh" }) },
     });
     const adapter = createCustomSsoOperationAdapter({ subjectAccessOperations, customSsoOperations: operations });
     const handlers = createSsoHandlers({

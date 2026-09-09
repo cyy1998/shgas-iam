@@ -12,6 +12,11 @@
 4. Independent 业务系统用授权码取得 IAM 管理的 credential，再自行建立本地会话；Gateway client 则由 IAM 建立
    Gateway Local Session。
 
+主体资料和 `iam:authorization` 使用 IAM 已发布的事实；源角色或权限已改变但发布尚未完成时，
+兑换与 UserInfo 仍可能交付旧权限，重建持续失败时该窗口可以持续，不承诺固定撤权传播期限。
+第三方复制到自有会话或存储后自行负责刷新，IAM 不新增推送撤权或强制刷新机制；账号禁用保护与 Client 裁剪保持。
+无法取得合法资料时仍按本文的暂态失败规则处理，兑换重新授权，UserInfo 使用原有效凭据重试。
+
 ## 2. 基础地址与端点
 
 生产或测试环境的 IAM 基础地址由部署环境提供，以下使用 `{IAM_ORIGIN}` 表示，例如 `https://iam.example.com`。

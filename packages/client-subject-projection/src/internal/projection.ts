@@ -49,23 +49,9 @@ async function resolveProjection(
   if (input.selection.optionalClaims.length === 0)
     return projection;
 
-  let facts = await options.subjectFacts.read(input.subjectIdentifier);
+  const facts = await options.subjectFacts.read(input.subjectIdentifier);
   if (facts === null || facts.subjectIdentifier !== input.subjectIdentifier)
     throw new SubjectProjectionNotReadyError();
-
-  if (input.selection.optionalClaims.includes(SubjectClaim.IamAuthorization)) {
-    const freshness = await options.authorizationFreshness.check({
-      subjectIdentifier: input.subjectIdentifier,
-      sourceDirtyVersion: facts.sourceDirtyVersion,
-    });
-    if (freshness.status === "not-ready")
-      throw new SubjectProjectionNotReadyError();
-    if (freshness.status === "refreshed") {
-      if (freshness.facts.subjectIdentifier !== input.subjectIdentifier)
-        throw new SubjectProjectionNotReadyError();
-      facts = freshness.facts;
-    }
-  }
 
   if (input.selection.optionalClaims.includes(SubjectClaim.ProfileUsername))
     projection.username = facts.profile.username;

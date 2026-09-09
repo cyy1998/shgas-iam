@@ -5,7 +5,6 @@ export {
 } from "./internal/catalog";
 export { EmploymentResponsibilitySnapshotSchema } from "./internal/contract";
 export type {
-  AuthorizationFreshnessCheckResult,
   ClientAuthorization,
   ClientAuthorizationEmployment,
   ClientSubjectProjection,

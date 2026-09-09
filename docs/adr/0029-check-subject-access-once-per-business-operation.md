@@ -10,6 +10,9 @@ status: accepted
 
 维护者于 2026-09-08 确认将 Subject Access 从 Session Kernel 解耦：同一次接口调用只作一次账号访问判断，并接受已许可的在途操作继续。原 Kernel 在解析、续期和派生时重复检查，可能在同一调用观察不同状态。Spec #128 的 #129–136 已统一正式入口并删除旧保护契约；[最终契约核对](../features/sso/subject-access-operation-contract.md)记录各 owner 的证明范围，[维护手册](../releases/subject-access-operation-cutover.md)保存协调发布步骤。代码验收不代表环境停流、清理或切换已执行。
 
+> 后续 #156 已按 [ADR-0032](0032-consume-published-subject-facts-for-authorization.md) 取消请求时授权新鲜度要求。
+> 本文原验收语境中的 freshness 保证由已发布 Facts 语义取代，操作许可、一次消费与资料失败恢复规则不变；环境未切换。
+
 ## 已确认决定
 
 Subject Access 的检查范围是每次接口调用所代表的独立业务操作。该次操作开始受保护的业务处理前检查一次，内部连续调用 Kernel 操作时复用此次访问许可；下一次接口调用重新检查，不将一次登录、浏览器跳转、授权码兑换和后续访问合并为一次许可。

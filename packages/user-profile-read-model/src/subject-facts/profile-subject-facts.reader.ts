@@ -1,15 +1,11 @@
-import type {
-  AuthorizationFreshnessCheckResult,
-  SubjectFactsSnapshot,
-} from "@iam/client-subject-projection";
+import type { SubjectFactsSnapshot } from "@iam/client-subject-projection";
 import type { DbClient } from "@iam/db";
 import type { SubjectFactsCacheRecord } from "./profile-cache";
 import type {
   SubjectFactsReaderObservabilityPort,
   SubjectFactsReaderObservation,
 } from "./subject-facts-observability.contract";
-import { UserProfileDirtyStatus } from "@iam/contracts";
-import { userProfileDirty, userProfiles } from "@iam/db/schema";
+import { userProfiles } from "@iam/db/schema";
 import { eq } from "drizzle-orm";
 import { z } from "zod";
 import {
@@ -116,88 +112,6 @@ export function createSubjectFactsReader(
         return null;
       return toSubjectFactsSnapshot(record);
     },
-    async check(input: {
-      readonly subjectIdentifier: string;
-      readonly sourceDirtyVersion: string;
-    }): Promise<AuthorizationFreshnessCheckResult> {
-      const freshnessStartedAt = now();
-      const dirtyLoadStartedAt = now();
-      let dirty: Awaited<ReturnType<typeof loadAuthoritativeDirty>>;
-      try {
-        dirty = await loadAuthoritativeDirty(options.db, input.subjectIdentifier);
-        recordObservation(options.observability, {
-          operation: "dirty-load",
-          outcome: dirty === null ? "missing" : "ready",
-          durationMs: elapsedMilliseconds(dirtyLoadStartedAt, now()),
-        });
-      }
-      catch (error) {
-        recordObservation(options.observability, {
-          operation: "dirty-load",
-          outcome: "error",
-          durationMs: elapsedMilliseconds(dirtyLoadStartedAt, now()),
-        });
-        recordObservation(options.observability, {
-          operation: "authorization-freshness",
-          outcome: "error",
-          durationMs: elapsedMilliseconds(freshnessStartedAt, now()),
-        });
-        throw error;
-      }
-      if (
-        dirty === null
-        || dirty.status !== UserProfileDirtyStatus.Processed
-        || !isDirtyVersion(dirty.dirtyVersion)
-      ) {
-        recordObservation(options.observability, {
-          operation: "authorization-freshness",
-          outcome: "not-ready",
-          durationMs: elapsedMilliseconds(freshnessStartedAt, now()),
-        });
-        return { status: "not-ready" };
-      }
-      if (dirty.dirtyVersion === input.sourceDirtyVersion) {
-        recordObservation(options.observability, {
-          operation: "authorization-freshness",
-          outcome: "fresh",
-          durationMs: elapsedMilliseconds(freshnessStartedAt, now()),
-        });
-        return { status: "fresh" };
-      }
-
-      let reloaded: Awaited<ReturnType<typeof loadProfileSingleFlight>>;
-      try {
-        reloaded = await loadProfileSingleFlight(input.subjectIdentifier);
-      }
-      catch (error) {
-        recordObservation(options.observability, {
-          operation: "authorization-freshness",
-          outcome: "error",
-          durationMs: elapsedMilliseconds(freshnessStartedAt, now()),
-        });
-        throw error;
-      }
-      if (
-        reloaded === null
-        || reloaded.sourceDirtyVersion !== dirty.dirtyVersion
-      ) {
-        recordObservation(options.observability, {
-          operation: "authorization-freshness",
-          outcome: "not-ready",
-          durationMs: elapsedMilliseconds(freshnessStartedAt, now()),
-        });
-        return { status: "not-ready" };
-      }
-      recordObservation(options.observability, {
-        operation: "authorization-freshness",
-        outcome: "refreshed",
-        durationMs: elapsedMilliseconds(freshnessStartedAt, now()),
-      });
-      return {
-        status: "refreshed",
-        facts: toSubjectFactsSnapshot(reloaded),
-      };
-    },
   };
 }
 
@@ -253,22 +167,6 @@ async function loadProfileRecord(
   });
 }
 
-async function loadAuthoritativeDirty(
-  db: DbClient,
-  subjectIdentifier: string,
-) {
-  const rows = await db
-    .select({
-      dirtyVersion: userProfileDirty.dirtyVersion,
-      status: userProfileDirty.status,
-    })
-    .from(userProfileDirty)
-    .innerJoin(userProfiles, eq(userProfileDirty.userId, userProfiles.userId))
-    .where(eq(userProfiles.subjectIdentifier, subjectIdentifier))
-    .limit(1);
-  return rows[0] ?? null;
-}
-
 function parseCachedRecord(input: string | null) {
   if (input === null)
     return null;
@@ -293,8 +191,4 @@ function toSubjectFactsSnapshot(
     profile: record.profile,
     employments: record.facts.employments,
   };
-}
-
-function isDirtyVersion(value: unknown): value is string {
-  return typeof value === "string" && /^[1-9]\d*$/u.test(value);
 }

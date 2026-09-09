@@ -105,7 +105,9 @@ test.each(["iam", "gateway", "gateway-orcas", "independent"])("Public UserInfo %
     let barrier: "enabled" | "blocking" | "disabled" | "new-generation" = "enabled";
     let reads = 0;
     let factsReads = 0;
-    let failureMode: "none" | "handler" | "facts" | "freshness" | "block-in-facts" = "none";
+    let publishedRole: string | undefined;
+    let publishedVersion = 1;
+    let failureMode: "none" | "handler" | "facts" | "block-in-facts" = "none";
     const operations = createSubjectAccessOperations({
       barrier: { readCommittedTransitionId: async () => {
         reads += 1;
@@ -137,12 +139,19 @@ test.each(["iam", "gateway", "gateway-orcas", "independent"])("Public UserInfo %
           barrier = "blocking";
         return {
           subjectIdentifier,
-          sourceDirtyVersion: "1",
+          sourceDirtyVersion: String(publishedVersion),
           profile: { username: "test", name: "Test", phone: null },
-          employments: [],
+          employments: publishedRole === undefined
+            ? []
+            : [{
+                isPrimary: true,
+                organization: { code: "org", name: "Organization", type: "department", path: [{ code: "org", name: "Organization", type: "department" }] },
+                position: { code: "position", name: "Position" },
+                responsibilities: [],
+                clientAuthorizations: [{ clientCode, roles: [{ code: publishedRole, privileges: ["read"] }] }],
+              }],
         };
       } },
-      authorizationFreshness: { check: async () => failureMode === "freshness" ? { status: "not-ready" } : { status: "fresh" } },
     });
     const requests = createCustomSsoSubjectDeliveryRequestScope();
     let captured: CustomSsoSubjectDeliveryCapability | undefined;
@@ -332,7 +341,7 @@ test.each(["iam", "gateway", "gateway-orcas", "independent"])("Public UserInfo %
     expect(factsReads).toBe(1);
 
     barrier = "enabled";
-    for (const mode of ["handler", "facts", "freshness"] as const) {
+    for (const mode of ["handler", "facts"] as const) {
       failureMode = mode;
       const before = reads;
       const response = await request(token);
@@ -342,6 +351,18 @@ test.each(["iam", "gateway", "gateway-orcas", "independent"])("Public UserInfo %
       await assertClosed();
     }
     failureMode = "none";
+    publishedRole = "operator";
+    publishedVersion = 2;
+    const restored = await request(token);
+    const restoredBody = await restored.json();
+    expect(restored.status).toBe(200);
+    expect(restoredBody).toMatchObject({ version: 2, subjectIdentifier, authorization: { roles: ["operator"] } });
+    publishedRole = "auditor";
+    publishedVersion = 3;
+    const updated = await request(token);
+    const updatedBody = await updated.json();
+    expect(updated.status).toBe(200);
+    expect(updatedBody).toMatchObject({ version: 2, subjectIdentifier, authorization: { roles: ["auditor"] } });
     for (const deniedState of ["disabled", "new-generation"] as const) {
       const credential = await seedToken();
       barrier = deniedState;

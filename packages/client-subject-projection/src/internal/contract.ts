@@ -101,14 +101,6 @@ export interface ClientSubjectProjectionService {
   ) => Promise<ClientSubjectProjection>;
 }
 
-export type AuthorizationFreshnessCheckResult
-  = | { readonly status: "fresh" }
-    | {
-      readonly status: "refreshed";
-      readonly facts: SubjectFactsSnapshot;
-    }
-    | { readonly status: "not-ready" };
-
 export interface PermittedClientSubjectProjectionService<Permission> {
   readonly resolve: (
     input: ResolveClientSubjectInput,
@@ -127,11 +119,5 @@ export interface ProjectionFactsOptions {
     readonly read: (
       subjectIdentifier: string,
     ) => Promise<SubjectFactsSnapshot | null>;
-  };
-  readonly authorizationFreshness: {
-    readonly check: (input: {
-      readonly subjectIdentifier: string;
-      readonly sourceDirtyVersion: string;
-    }) => Promise<AuthorizationFreshnessCheckResult>;
   };
 }

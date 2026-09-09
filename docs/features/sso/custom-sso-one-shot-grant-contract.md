@@ -10,6 +10,10 @@ Next review: 2026-10-31
 [#161](https://github.com/cyy1998/shgas-iam/issues/161) 交付最终组合和[保留会话升级手册](../../releases/custom-sso-one-shot-grant-upgrade.md)。
 每票候选、实际命令和评审结果以 issue 验收评论为准；父规格固定最终候选的聚合验收由主协调者另记。本页不表示已合入、部署或放流。
 
+> #156 后续修订：授权新鲜度保证已由 [ADR-0032](../../adr/0032-consume-published-subject-facts-for-authorization.md) 取代，
+> 改为消费已发布 Facts；下文 #157 固定候选的 freshness 证据保留历史语境。投影缺失仍按一次消费规则失败，
+> 当前读取及替代验证见 [已发布 Facts 契约](published-subject-facts-contract.md)。
+
 ## 固定候选与复用边界
 
 | 来源 | 候选 | 复用的证据 |
@@ -177,7 +181,7 @@ OIDC 宽 `online-auth:state` 仍有其独立库存消费者，但不能用于这
 |---|---|
 | [#140](https://github.com/cyy1998/shgas-iam/issues/140) | 旧租约接管后的最终精确补偿义务被契约取代；不是旧缺陷已修复，也尚未关闭。 |
 | [#145](https://github.com/cyy1998/shgas-iam/issues/145) | ORCAS 幂等/期限/撤销仍有效，场景变为消费后失败→新授权→可能再次外部登录。 |
-| [#156](https://github.com/cyy1998/shgas-iam/issues/156) | 权限新鲜度耦合仍有效；兑换重启授权，UserInfo 原凭据重试。 |
+| [#156](https://github.com/cyy1998/shgas-iam/issues/156) | 已按 ADR-0032/#156 取消请求时权限新鲜度耦合；Facts 缺失时兑换重启授权，UserInfo 原凭据重试。 |
 | [#144](https://github.com/cyy1998/shgas-iam/issues/144) | 跨 Client 续期边界继续约束残留，不能声称固定 TTL 清除。 |
 | [#121](https://github.com/cyy1998/shgas-iam/issues/121)、[#141](https://github.com/cyy1998/shgas-iam/issues/141) | 附属清理与 OIDC 双状态协调独立。 |
 | [#71](https://github.com/cyy1998/shgas-iam/issues/71)、[#155](https://github.com/cyy1998/shgas-iam/issues/155) | 热路径预算与重复校验仍有效；新消费缩短相关路径不等于整体完成或性能提升，既有签发 try/catch 等剩余分支仍归 #155。 |

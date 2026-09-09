@@ -6,6 +6,10 @@
 以 [#136](https://github.com/cyy1998/shgas-iam/issues/136) 及父 Spec 的验收评论为准。
 表中的测试存在、静态核对或故事覆盖均不等同于某个候选已经执行通过，更不等同于目标环境已切换。
 
+> #156 后续修订：已按 [ADR-0032](../../adr/0032-consume-published-subject-facts-for-authorization.md) 退役授权新鲜度屏障；
+> 下文 #128 故事和旧候选账本保留当时验收语境，freshness/refreshed 专用断言不再代表当前要求。
+> 当前读取行为与替代证据见 [已发布 Facts 契约](published-subject-facts-contract.md)，许可与账号保护不变。
+
 ## 最终公开 owner
 
 | Owner | 正式契约 | 调用方责任 |
@@ -14,7 +18,7 @@
 | API Core `subject-access` | `encodeSubjectAccessContext` / `parseSubjectAccessContext` 解释版本、Subject Identifier、transition ID；`createSubjectAccessSessionContext` 仅返回不透明 `subjectContext`。`createSubjectAccessSessionRevocation` 拥有失败后的代际翻译和撤销编排。 | 存储上下文不是许可；外层校验并决定撤销范围，cleanup 失败仍拒绝。 |
 | Session Kernel | 唯一 `createSessionKernel`；根创建显式传入 `{ subjectContext }`，带主体的 Binding、Credential、Artifact 原样继承。列表通过 `listPrincipalSessions` 查询；上下文精确撤销通过 `revokeUserSessionsByContext` / `prepareUserSessionRevocationByContext`。 | Kernel 仅管理对象和不透明上下文，不读 Barrier，不解释账号代际，不感知 HTTP 容器。无主体 Artifact 保持独立生命周期。 |
 | API / Custom SSO | `createCustomSsoOperations(...).forOperation(operation)` 是受保护协议能力；API `createCustomSsoOperationAdapter` 包住独立调用，`createApiOperationAuthenticationHandlers` 包住整个 UserInfo middleware 与 `next()`。统一认证 adapter 在身份认证后、根创建前取得许可。登录续接 adapter 仅返回 operation-bound 原始检查，页面 decision 用例仅由 `composition/use-cases` 装配。 | 授权、续接、兑换、callback、authz、UserInfo 分别拥有操作；不能把整个浏览器旅程合为一个许可。logout 是独立终止访问能力。 |
-| Client Subject Projection | 唯一 `createPermittedClientSubjectProjectionService` 由调用方证明许可；没有独立 Barrier 工厂。 | API 和 OIDC 证明当前操作、许可身份与主体一致；Facts 缺失和授权新鲜度仍由 Projection 判定。 |
+| Client Subject Projection | 唯一 `createPermittedClientSubjectProjectionService` 由调用方证明许可；没有独立 Barrier 工厂。 | API 和 OIDC 证明当前操作、许可身份与主体一致；已发布 Facts 缺失与主体一致性由 Projection 判定，Dirty 新鲜度不参与。 |
 | OIDC Provider | 正式 `createOidcProviderRuntime` / `createOidcProviderSession` 使用请求桥接；`createOidcSessionOperations(...).forOperation` 与正式 Session adapter 共用操作。Provider callbacks 从请求状态取用；原生 interaction、guard、resume 显式创建容器。 | Code 的首次可信解析先于消费取得许可；AccessToken 首次可信解析先于 Binding mapping 刷新取得许可。已消费 Code 重放和 logout 保留终止访问例外。 |
 | Admin API / Admin | 正式 authentication handler 覆盖 REST 和 tRPC，在管理员业务处理前取得许可；已许可资料读取与角色、HR 范围、目标业务规则分别处理。页面展示 Principal Session Record。 | 列表不逐目标检查或撤销；管理员撤销权限仍有效，目标账号不必可访问。页面不能把记录存在解释为当前允许访问。 |
 
@@ -35,7 +39,7 @@ API 的 ORCAS 后续资料读取、Admin 已许可管理员资料读取、OIDC �
 | SSO Component | [API 完整认证与 Custom SSO Component](../../../apps/api/test-integration/component/custom-sso-session-kernel.adapter.integration.test.ts) | 四种认证 composition、协议效果、错误、配置、补偿和退出。 |
 | SSO Redis | [Custom SSO 操作 Redis](../../../packages/custom-sso/test-integration/redis/custom-sso-operation.integration.test.ts) | 真实 Grant/Kernel 的作用顺序、在途许可、下一调用拒绝、补偿及单赢家。 |
 | API HTTP | [四模式 UserInfo HTTP](../../../apps/api/test-integration/redis/custom-sso-operation-http.integration.test.ts)、[三模式兑换 HTTP](../../../apps/api/test-integration/redis/custom-sso-redemption-operation-http.integration.test.ts) | 正式操作装配 helper、Hono route/handler、真实 Redis，包含 Cookie、wire、header、scope 关闭和状态变化；不包含浏览器和 Gateway 部署。 |
-| Projection | [Projection Component](../../../packages/client-subject-projection/test-integration/component/client-subject-projection.contract.integration.test.ts)、[Custom SSO delivery Component](../../../packages/custom-sso/test-integration/component/custom-sso-subject-delivery.integration.test.ts) | 许可先于资料读取、字段裁剪、主体一致、Facts 和授权新鲜度失败、输出形状。 |
+| Projection | [Projection Component](../../../packages/client-subject-projection/test-integration/component/client-subject-projection.contract.integration.test.ts)、[Custom SSO delivery Component](../../../packages/custom-sso/test-integration/component/custom-sso-subject-delivery.integration.test.ts) | 许可先于资料读取、字段裁剪、主体一致、Facts 缺失失败、输出形状与读取到的已发布版本。 |
 | OIDC HTTP | [正式 Provider/原生 HTTP 与 Redis](../../../apps/oidc-provider/test-integration/redis/subject-access-authorization.integration.test.ts) | 实际 Token、UserInfo、授权、interaction/guard/resume、logout；Code 消费和 mapping 刷新顺序、并发隔离、协议错误。 |
 | OIDC Component | [操作 Session Component](../../../apps/oidc-provider/test-integration/component/subject-access-operations.integration.test.ts)、[Session adapter Component](../../../apps/oidc-provider/test-integration/component/subject-access-session-adapter.integration.test.ts) | Session staging、claim、binding、严格上下文、Return Handle 和退出。 |
 | Admin HTTP/Redis | [认证 Component](../../../apps/admin-api/test-integration/component/authentication.handler.integration.test.ts)、[管理会话 Redis](../../../apps/admin-api/test-integration/redis/session-management.integration.test.ts) | 正式 REST/tRPC 认证/授权适配、真实 Barrier 与 Kernel、账号变化、记录列表无目标检查及撤销反馈。 |

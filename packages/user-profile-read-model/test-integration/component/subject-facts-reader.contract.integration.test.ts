@@ -5,8 +5,7 @@ import {
   createPermittedClientSubjectProjectionService,
   SubjectProjectionNotReadyError,
 } from "@iam/client-subject-projection";
-import { UserProfileDirtyStatus } from "@iam/contracts";
-import { userProfileDirty, userProfiles } from "@iam/db/schema";
+import { userProfiles } from "@iam/db/schema";
 import { describe, expect, mock, test } from "bun:test";
 import {
   createSubjectFactsReader,
@@ -308,11 +307,6 @@ describe("Subject Facts Reader", () => {
     });
     const projection = createPermittedProjectionFixture({
       subjectFacts: reader,
-      authorizationFreshness: {
-        check: async () => {
-          throw new Error("profile-only projection must not check Dirty freshness");
-        },
-      },
     });
 
     const result = projection.resolve({
@@ -320,7 +314,7 @@ describe("Subject Facts Reader", () => {
       clientCode: "console",
       selection: {
         catalogVersion: 2,
-        optionalClaims: ["profile:name"],
+        optionalClaims: ["profile:name", "iam:authorization"],
       },
     });
 
@@ -328,24 +322,9 @@ describe("Subject Facts Reader", () => {
     expect(limit).toHaveBeenCalledTimes(1);
   });
 
-  test("allows authorization only after one authoritative processed Dirty query matches the cached version", async () => {
-    const limit = mock(async () => [{
-      dirtyVersion: "11",
-      status: UserProfileDirtyStatus.Processed,
-    }]);
-    const where = mock(() => ({ limit }));
-    const innerJoin = mock((table: unknown) => {
-      expect(table).toBe(userProfiles);
-      return { where };
-    });
-    const from = mock((table: unknown) => {
-      expect(table).toBe(userProfileDirty);
-      return { innerJoin };
-    });
-    const select = mock((columns: Record<string, unknown>) => {
-      expect(Object.keys(columns)).toEqual(["dirtyVersion", "status"]);
-      expect(columns).not.toHaveProperty("reasonCodes");
-      return { from };
+  test("delivers published authorization from a cache hit without PostgreSQL", async () => {
+    const select = mock(() => {
+      throw new Error("cached authorization must not require PostgreSQL");
     });
     const reader = createSubjectFactsReader({
       db: { select } as never,
@@ -356,17 +335,17 @@ describe("Subject Facts Reader", () => {
     });
     const projection = createPermittedProjectionFixture({
       subjectFacts: reader,
-      authorizationFreshness: reader,
     });
 
-    await expect(projection.resolve({
+    const result = await projection.resolve({
       subjectIdentifier: SUBJECT_IDENTIFIER,
       clientCode: "console",
       selection: {
         catalogVersion: 2,
         optionalClaims: ["iam:authorization"],
       },
-    })).resolves.toEqual({
+    });
+    expect(result).toEqual({
       subjectIdentifier: SUBJECT_IDENTIFIER,
       authorization: {
         employments: [],
@@ -374,291 +353,79 @@ describe("Subject Facts Reader", () => {
         privileges: [],
       },
     });
-    expect(select).toHaveBeenCalledTimes(1);
-    expect(limit).toHaveBeenCalledWith(1);
+    expect(select).not.toHaveBeenCalled();
   });
 
-  test("observes the authoritative Dirty query and freshness outcome", async () => {
-    const observations: Array<{
-      operation: string;
-      outcome: string;
-      durationMs: number;
-    }> = [];
-    const reader = createSubjectFactsReader({
-      db: {
-        select: () => ({
-          from: () => ({
-            innerJoin: () => ({
-              where: () => ({
-                limit: async () => [{
-                  dirtyVersion: "11",
-                  status: UserProfileDirtyStatus.Processed,
-                }],
-              }),
-            }),
-          }),
-        }),
-      } as never,
-      cache: {
-        read: async () => JSON.stringify(cacheRecord("11")),
-        publish: async () => ({ status: "published" as const }),
-      },
-      clock: { now: () => 300 },
-      observability: {
-        record: observation => observations.push(observation),
-      },
-    });
+  test.each([null, "{broken", JSON.stringify({ ...cacheRecord("8"), schemaVersion: 999 })])(
+    "delivers the published database authorization when cache is unusable (%s) even if refill fails",
+    async (cached) => {
+      const limit = mock(async () => [profileRow("8")]);
+      const reader = createSubjectFactsReader({
+        db: { select: () => ({ from: () => ({ where: () => ({ limit }) }) }) } as never,
+        cache: {
+          read: async () => cached,
+          publish: async () => { throw new Error("refill failed"); },
+        },
+      });
+      const projection = createPermittedProjectionFixture({ subjectFacts: reader });
+      const result = await projection.resolve({
+        subjectIdentifier: SUBJECT_IDENTIFIER,
+        clientCode: "console",
+        selection: { catalogVersion: 2, optionalClaims: ["profile:name", "iam:authorization"] },
+      });
+      expect(result).toEqual({
+        subjectIdentifier: SUBJECT_IDENTIFIER,
+        name: "Alice",
+        authorization: { employments: [], roles: [], privileges: [] },
+      });
+      expect(limit).toHaveBeenCalledTimes(1);
+    },
+  );
 
-    await expect(reader.check({
-      subjectIdentifier: SUBJECT_IDENTIFIER,
-      sourceDirtyVersion: "11",
-    })).resolves.toEqual({ status: "fresh" });
-
-    expect(observations).toEqual([
-      { operation: "dirty-load", outcome: "ready", durationMs: 0 },
-      { operation: "authorization-freshness", outcome: "fresh", durationMs: 0 },
-    ]);
-  });
-
-  test("observes authorization freshness failure when the required Profile reload fails", async () => {
-    const profileError = new Error("profile reload unavailable");
-    const observations: Array<{
-      operation: string;
-      outcome: string;
-      durationMs: number;
-    }> = [];
-    const select = mock((columns: Record<string, unknown>) => {
-      if ("dirtyVersion" in columns) {
-        return {
-          from: () => ({
-            innerJoin: () => ({
-              where: () => ({
-                limit: async () => [{
-                  dirtyVersion: "12",
-                  status: UserProfileDirtyStatus.Processed,
-                }],
-              }),
-            }),
-          }),
-        };
-      }
-      return {
-        from: () => ({
-          where: () => ({
-            limit: async () => {
-              throw profileError;
-            },
-          }),
-        }),
-      };
-    });
-    const reader = createSubjectFactsReader({
-      db: { select } as never,
-      cache: {
-        read: async () => JSON.stringify(cacheRecord("11")),
-        publish: async () => ({ status: "published" as const }),
-      },
-      clock: { now: () => 400 },
-      observability: {
-        record: observation => observations.push(observation),
-      },
-    });
-
-    await expect(reader.check({
-      subjectIdentifier: SUBJECT_IDENTIFIER,
-      sourceDirtyVersion: "11",
-    })).rejects.toBe(profileError);
-
-    expect(observations).toEqual([
-      { operation: "dirty-load", outcome: "ready", durationMs: 0 },
-      { operation: "profile-load", outcome: "error", durationMs: 0 },
-      { operation: "authorization-freshness", outcome: "error", durationMs: 0 },
-    ]);
-  });
-
-  test.each([
-    ["missing", []],
-    ["pending", [{ dirtyVersion: "11", status: UserProfileDirtyStatus.Pending }]],
-    ["processing", [{ dirtyVersion: "11", status: UserProfileDirtyStatus.Processing }]],
-    ["failed", [{ dirtyVersion: "11", status: UserProfileDirtyStatus.Failed }]],
-    ["invalid version", [{ dirtyVersion: "0", status: UserProfileDirtyStatus.Processed }]],
-  ])("fails the whole authorization projection for %s authoritative Dirty state", async (_, rows) => {
-    const limit = mock(async () => rows);
-    const select = mock(() => ({
-      from: mock(() => ({
-        innerJoin: mock(() => ({
-          where: mock(() => ({ limit })),
-        })),
-      })),
-    }));
-    const reader = createSubjectFactsReader({
-      db: { select } as never,
-      cache: {
-        read: mock(async () => JSON.stringify(cacheRecord("11"))),
-        publish: mock(async () => ({ status: "published" as const })),
-      },
-    });
-    const projection = createPermittedProjectionFixture({
-      subjectFacts: reader,
-      authorizationFreshness: reader,
-    });
-
-    const result = projection.resolve({
-      subjectIdentifier: SUBJECT_IDENTIFIER,
-      clientCode: "console",
-      selection: {
-        catalogVersion: 2,
-        optionalClaims: ["profile:name", "iam:authorization"],
-      },
-      allowStaleAuthorization: true,
-      dirtyReason: "user-updated",
-    } as never);
-
-    await expect(result).rejects.toBeInstanceOf(SubjectProjectionNotReadyError);
-    expect(select).toHaveBeenCalledTimes(1);
-  });
-
-  test("reloads user_profile once and assembles the whole projection from the current processed version", async () => {
-    const dirtyLimit = mock(async () => [{
-      dirtyVersion: "12",
-      status: UserProfileDirtyStatus.Processed,
-    }]);
-    const profileLimit = mock(async () => [{
-      ...profileRow("12"),
-      name: "Current Alice",
-    }]);
-    const select = mock((columns: Record<string, unknown>) => {
-      if ("dirtyVersion" in columns) {
-        return {
-          from: mock(() => ({
-            innerJoin: mock(() => ({
-              where: mock(() => ({ limit: dirtyLimit })),
-            })),
-          })),
-        };
-      }
-      return {
-        from: mock(() => ({
-          where: mock(() => ({ limit: profileLimit })),
-        })),
-      };
-    });
-    const publish = mock(async () => ({ status: "published" as const }));
-    const reader = createSubjectFactsReader({
-      db: { select } as never,
-      cache: {
-        read: mock(async () => JSON.stringify(cacheRecord("11"))),
-        publish,
-      },
-    });
-    const projection = createPermittedProjectionFixture({
-      subjectFacts: reader,
-      authorizationFreshness: reader,
-    });
-
-    await expect(projection.resolve({
-      subjectIdentifier: SUBJECT_IDENTIFIER,
-      clientCode: "console",
-      selection: {
-        catalogVersion: 2,
-        optionalClaims: ["profile:name", "iam:authorization"],
-      },
-    })).resolves.toEqual({
-      subjectIdentifier: SUBJECT_IDENTIFIER,
-      name: "Current Alice",
-      authorization: {
-        employments: [],
-        roles: [],
-        privileges: [],
-      },
-    });
-    expect(dirtyLimit).toHaveBeenCalledTimes(1);
-    expect(profileLimit).toHaveBeenCalledTimes(1);
-    expect(publish).toHaveBeenCalledWith({
-      ...cacheRecord("12"),
-      profile: {
-        ...cacheRecord("12").profile,
-        name: "Current Alice",
-      },
-    });
-  });
-
-  test("allows the last successful Facts for ordinary Profile claims without reading Dirty state", async () => {
+  test("does not fall back to PostgreSQL on a Redis read error", async () => {
+    const cacheError = new Error("Redis unavailable");
     const select = mock(() => {
-      throw new Error("ordinary Profile claims must not query authoritative Dirty state");
+      throw new Error("unexpected database fallback");
     });
     const reader = createSubjectFactsReader({
       db: { select } as never,
       cache: {
-        read: mock(async () => JSON.stringify(cacheRecord("11"))),
-        publish: mock(async () => ({ status: "published" as const })),
+        read: async () => { throw cacheError; },
+        publish: async () => ({ status: "published" }),
       },
     });
-    const projection = createPermittedProjectionFixture({
-      subjectFacts: reader,
-      authorizationFreshness: reader,
-    });
-
-    await expect(projection.resolve({
-      subjectIdentifier: SUBJECT_IDENTIFIER,
-      clientCode: "console",
-      selection: {
-        catalogVersion: 2,
-        optionalClaims: ["profile:name"],
-      },
-    })).resolves.toEqual({
-      subjectIdentifier: SUBJECT_IDENTIFIER,
-      name: "Alice",
-    });
-    expect(select).toHaveBeenCalledTimes(0);
+    let failure: unknown;
+    try {
+      await reader.read(SUBJECT_IDENTIFIER);
+    }
+    catch (error) {
+      failure = error;
+    }
+    expect(failure).toBe(cacheError);
+    expect(select).not.toHaveBeenCalled();
   });
 
-  test("fails without a partial Profile when the processed Dirty version is still unpublished", async () => {
-    const dirtyLimit = mock(async () => [{
-      dirtyVersion: "12",
-      status: UserProfileDirtyStatus.Processed,
-    }]);
-    const profileLimit = mock(async () => [profileRow("11")]);
-    const select = mock((columns: Record<string, unknown>) => {
-      if ("dirtyVersion" in columns) {
-        return {
-          from: mock(() => ({
-            innerJoin: mock(() => ({
-              where: mock(() => ({ limit: dirtyLimit })),
-            })),
-          })),
-        };
-      }
-      return {
-        from: mock(() => ({
-          where: mock(() => ({ limit: profileLimit })),
-        })),
-      };
-    });
+  test("preserves a database read error and its observation on cache miss", async () => {
+    const databaseError = new Error("PostgreSQL unavailable");
+    const observations: unknown[] = [];
     const reader = createSubjectFactsReader({
-      db: { select } as never,
-      cache: {
-        read: mock(async () => JSON.stringify(cacheRecord("11"))),
-        publish: mock(async () => ({ status: "published" as const })),
-      },
+      db: { select: () => ({ from: () => ({ where: () => ({ limit: async () => { throw databaseError; } }) }) }) } as never,
+      cache: { read: async () => null, publish: async () => ({ status: "published" }) },
+      clock: { now: () => 100 },
+      observability: { record: observation => observations.push(observation) },
     });
-    const projection = createPermittedProjectionFixture({
-      subjectFacts: reader,
-      authorizationFreshness: reader,
-    });
-
-    const result = projection.resolve({
-      subjectIdentifier: SUBJECT_IDENTIFIER,
-      clientCode: "console",
-      selection: {
-        catalogVersion: 2,
-        optionalClaims: ["profile:name", "iam:authorization"],
-      },
-    });
-
-    await expect(result).rejects.toBeInstanceOf(SubjectProjectionNotReadyError);
-    expect(dirtyLimit).toHaveBeenCalledTimes(1);
-    expect(profileLimit).toHaveBeenCalledTimes(1);
+    let failure: unknown;
+    try {
+      await reader.read(SUBJECT_IDENTIFIER);
+    }
+    catch (error) {
+      failure = error;
+    }
+    expect(failure).toBe(databaseError);
+    expect(observations).toEqual([
+      { operation: "cache-read", outcome: "miss", durationMs: 0 },
+      { operation: "profile-load", outcome: "error", durationMs: 0 },
+    ]);
   });
 });
 

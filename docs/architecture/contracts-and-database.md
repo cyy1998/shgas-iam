@@ -86,7 +86,7 @@ Kernel 的 `resolveClientBindingById`、`resolveCredential` 和 `resolveProtocol
 
 - client-scoped 主体信息裁剪、Subject Claim Catalog 与协议中性投影类型放在
   `packages/client-subject-projection`。调用方只通过公开 `resolve` Interface 提交 Subject Identifier、
-  `clientCode`、`SubjectClaimSelection` 和本操作许可证明；Subject Facts、许可断言与 Authorization Freshness 由
+  `clientCode`、`SubjectClaimSelection` 和本操作许可证明；已发布 Subject Facts 与许可断言由
   composition 注入最窄 port。协议 wire mapper 只能消费 package root public Projection Interface，不能导入其他
   core subpath 或直连 Facts persistence、client 配置、runtime 与 transport。Custom SSO V2 wire 的 runtime schema、
   派生 TypeScript type、mapper 与 preview 统一由 `@iam/custom-sso/wire` 拥有；API 只能复用该
@@ -109,9 +109,10 @@ Kernel 的 `resolveClientBindingById`、`resolveCredential` 和 `resolveProtocol
 - user-profile read-model producer/query/worker 逻辑放在 `packages/user-profile-read-model`。该 package 拥有
   version-bound Subject Facts 构建、`user_profile` 与 dirty row 的 PostgreSQL atomic publication、提交后的
   Redis monotonic publisher，以及 `subject-facts` subpath 下的 Redis read-through、单主体 single-flight、
-  PostgreSQL 窄行重载与 Dirty freshness 仲裁；调用方不复制 profile/facts projection、cache repair 或版本仲裁规则。
+  PostgreSQL 已发布 Facts 窄行回源；请求时不仲裁 Dirty 新鲜度，后台发布版本仲裁仍由该 package 拥有。
+  调用方不复制 profile/facts projection、cache repair 或发布版本仲裁规则。
 - User Profile v3 通过 `@iam/user-profile-read-model` 默认入口暴露 schema、Redis publisher/cache、strict Subject Facts
-  read-through/freshness reader 与只读 query seam；builder/publication 只由 `worker` subpath 组装。Internal Detail、Internal/Public
+  read-through reader 与只读 query seam；builder/publication 只由 `worker` subpath 组装。Internal Detail、Internal/Public
   legacy adapter 与 Delegation 基础搜索从同一个 `user_profile` v3 row 返回严格 Detail；canonical Filter engine 只查询并校验已发布的
   Search Document，Internal Filter DSL 从同一行的类型化列返回 `UserProfileBase`，不读取 Detail 或回查 source tables。Responsibility Snapshot 子项复用 Client Subject Projection
   的协议中性 contract，read-model 仍拥有 resolver 驱动的 Snapshot build。版本无关 Worker maintenance/readiness 命令复用

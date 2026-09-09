@@ -73,7 +73,7 @@ Client Runtime Snapshot 的当前 namespace 清单位于 `packages/api-core/src/
 | `packages/jobs/src` | 共享 BullMQ connection、queue、worker、job ID 和 default option helpers。 |
 | `packages/organization-responsibility-resolution/src` | 通过 `createOrganizationResponsibilityResolver(db)` 暴露 Organization Responsibility 的批量 Effective 正向解析与跨树 holder 反向解析；完整性、时间、cardinality、去重和排序规则留在 package 内。 |
 | `packages/role-assignment-resolution/src` | 通过 `createRoleAssignmentResolver(db)` 暴露正向 Effective Role 与反向受影响用户解析的唯一 public seam；assignment 来源、组织闭包、有效性、去重和排序规则留在 package 内。 |
-| `packages/user-profile-read-model/src` | API/admin-api/worker 消费的 strict v3 User Profile Read Model，包括 transaction-bound `UserProfileInvalidation`、dirty/rebuild workflow、带 responsibility 的 Detail/Search/Subject Facts builder、PostgreSQL atomic publication、提交后的 Redis monotonic publisher、strict v3 read-through/freshness reader、canonical Filter query、repositories 和 worker module。默认入口、`subject-facts`、`query` 与 `worker` 子路径共享同一 v3 version gate；版本无关 maintenance/readiness 复用现有 dirty/job/publication。 |
+| `packages/user-profile-read-model/src` | API/admin-api/worker 消费的 strict v3 User Profile Read Model，包括 transaction-bound `UserProfileInvalidation`、dirty/rebuild workflow、带 responsibility 的 Detail/Search/Subject Facts builder、PostgreSQL atomic publication、提交后的 Redis monotonic publisher、strict v3 read-through reader、canonical Filter query、repositories 和 worker module。默认入口、`subject-facts`、`query` 与 `worker` 子路径共享同一 v3 version gate；版本无关 maintenance/readiness 复用现有 dirty/job/publication。 |
 
 更详细的 package ownership、公开 exports、数据库和 transaction 规则见
 [共享契约与数据库](contracts-and-database.md)。

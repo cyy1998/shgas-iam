@@ -158,11 +158,11 @@ Internal Privilege Delegation 已在 API 自身的 service、repository 与 Unit
 
 - `@iam/client-subject-projection` 通过单一 `PermittedClientSubjectProjectionService.resolve` Interface 隐藏 Catalog
   校验、Subject Facts 读取、client 裁剪、稳定排序与投影组装。调用方只提交 Subject Identifier、`clientCode` 和
-  `SubjectClaimSelection` 与本操作许可证明；facts/permission/freshness dependencies 只在 factory 处注入。
-- Subject Facts port 只暴露显式 Profile 与当前有效任职事实，不暴露 Legacy User Detail。普通 Profile claim
-  可以使用最后发布事实；选择 `iam:authorization` 时，Module 根据 facts source version 调用 Authorization
-  Freshness port。该 port 可以确认当前 facts、返回一次重载后的 facts，或报告 not-ready；Module 在组装任何已选
-  claim 前采用已确认版本，无法证明新鲜时返回 `SubjectProjectionNotReadyError`。
+  `SubjectClaimSelection` 与本操作许可证明；facts/permission dependencies 只在 factory 处注入。
+- Subject Facts port 只暴露已发布 Profile 与有效任职事实，不暴露 Legacy User Detail。普通 Profile 与
+  `iam:authorization` 统一消费取得的合法已发布 Facts，允许源权限已改变但重建未完成或持续失败时仍交付旧权限，
+  不再查询 Dirty 或执行 Authorization Freshness Barrier。Facts 缺失或主体错配时整份投影失败；
+  撤权传播不承诺固定期限，第三方复制后自行刷新，见 [ADR-0032](../adr/0032-consume-published-subject-facts-for-authorization.md)。
 - 核心投影保持协议中性。`@iam/custom-sso/wire` 只公开一个完整 V2 交付 Interface：
   `resolveCustomSsoSubjectProjection` 先调用 root Projection Service，再核对返回的 Subject Identifier 与 resolve input，
   随后执行 wire mapping 和 strict schema parse。Schema、Wire 类型与 placeholder preview
@@ -174,10 +174,10 @@ Internal Privilege Delegation 已在 API 自身的 service、repository 与 Unit
   继续只含 Employment identity、roles 与 privileges。Custom SSO 的 `/wire` 拥有 V2 strict schema/mapper，缺失、
   未知或非法 responsibility 拒绝整份 projection，不提供 V1 alias、translation、fallback 或 caller version switch；
   V1 投影、wire 与演练源码已移除。
-- `@iam/user-profile-read-model/subject-facts` 提供同时满足 Facts 与 Freshness ports 的 deep reader：有效 Redis
-  record 直读；miss、损坏或未知 schema 按 Subject single-flight 查询一行窄 `user_profile` 并以版本 CAS 回填；
-  查询不读取 Legacy `detail`/`search_doc` 或联查源业务表。严格授权每次只从 PostgreSQL 读取权威 Dirty version/status，
-  仅 `processed` 且版本相等时放行；缓存落后时最多重载一次 Profile。普通 Profile 不读取 Dirty。
+- `@iam/user-profile-read-model/subject-facts` 只公开 Facts read 能力：有效 Redis record 直读；miss、损坏、
+  未知 schema 或主体错配按 Subject single-flight 查询一行窄 `user_profile` 并以版本 CAS 尽力回填；
+  回填失败仍可使用合法数据库 Facts。Redis 读取故障直接失败，不触发回源；数据库错误沿用既有失败路径。
+  查询不读取 Legacy `detail`/`search_doc`、Dirty 状态或联查源业务表，数据库行缺失或无效时返回 Projection Not Ready。
 - API production composition 已把 Projection Module 接入 Custom SSO Independent token exchange、
   `/public/user-info` 和 Gateway `/auth/authz`。前两者按当前 Client selection 输出 Custom SSO V2 wire；
   `/auth/authz` 强制收窄为 Subject Identifier 与可选 username/name，并把同一 Base64 值写入 body/header。
@@ -297,8 +297,7 @@ User Profile 的初代 V1 builder、Facts reader/publisher 与 Subject Projectio
   `user_profile` 窄行，并继续使用同一版本 CAS publisher。Facts cache 发布成功后，Worker 还通过注入的
   Subject Access repair port 尝试收敛对应账号；repair 失败不回滚已经提交的 Profile 或 Dirty 状态。
 - API 与 OIDC composition 为同一 Reader 注入 `subject_facts.operation.observed` logger adapter。事件只含
-  `operation`、`outcome`、`durationMs`：区分 cache hit/miss/invalid、Profile/Dirty load、single-flight wait 和
-  authorization freshness；不得包含 Subject Identifier、Facts/Dirty payload、Redis key 或 Token。observer 失败不会
+  `operation`、`outcome`、`durationMs`：区分 cache hit/miss/invalid、Profile load 与 single-flight wait；不得包含 Subject Identifier、Facts/Dirty payload、Redis key 或 Token。observer 失败不会
   改变认证结果。
 
 ### Subject Access Barrier
@@ -378,7 +377,7 @@ User Profile 的初代 V1 builder、Facts reader/publisher 与 Subject Projectio
   API composition 把此工厂和同一 Kernel 接到 services、use-cases、routes 与 middlewares；Public 容器覆盖 `next()`
   及延迟交付，结束后关闭。缺少许可没有 fallback。
 - `createPermittedClientSubjectProjectionService` 是唯一投影工厂，`resolve(input, proof)` 通过注入的窄
-  `assertPermission` 证明当前许可，不独立读取 Barrier。Facts、主体一致性、选择、Authorization Freshness 和
+  `assertPermission` 证明当前许可，不独立读取 Barrier。已发布 Facts、主体一致性、选择和
   wire 规则保留。ORCAS 的 `findOrcasUserBySubjectIdentifier` 按可信主体查 ID，再复用 Profile 来源裁剪资料，
   不以 status/isDelete 推翻许可；不影响其他用户业务查询。
 - `createSessionKernel` 是唯一中性工厂。新根必须显式接收 `subjectContext`；Binding、Credential 和带主体 Artifact
@@ -573,7 +572,7 @@ User Profile 的初代 V1 builder、Facts reader/publisher 与 Subject Projectio
   `consume` 在写消费标记前也要求该解析成功。UserInfo 首次 Credential 解析检查早于 Binding mapping 刷新。
   后续 consume、findAccount、Claims 和签发复用许可。已消费 Code 直接返回消费标记供 Provider 拒绝重放并撤销
   Grant 及关联协议载荷，不要求已消失的 Artifact 或本次许可。无主体 Return Handle 和退出保留中性路径。
-  Client/config、scope、Facts、新鲜度与对象归属仍独立生效。
+  Client/config、scope、Facts 可用性与对象归属仍独立生效。
 
 - `apps/oidc-provider/src/provider/claims.ts` 直接实现 `oidc-provider` claims hooks，属于 protocol adapter。
   Factory、返回类型和 deps type 分别使用 `createOidcClaimsAdapter`、`OidcClaimsAdapter` 和

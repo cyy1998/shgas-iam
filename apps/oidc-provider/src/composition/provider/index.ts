@@ -69,7 +69,6 @@ export function createOidcProviderRuntime(deps: CreateOidcProviderRuntimeDeps) {
   });
   const projection = createPermittedClientSubjectProjectionService<SubjectAccessOperation>({
     subjectFacts,
-    authorizationFreshness: subjectFacts,
     assertPermission(operation, subjectIdentifier) {
       requireSubjectAccessOperation(operation).requirePermission(subjectIdentifier);
     },

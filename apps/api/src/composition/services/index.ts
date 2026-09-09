@@ -271,7 +271,6 @@ export function createApiServices(options: CreateApiServicesOptions) {
     orcas: runtime.integrations.orcas,
     random: runtime.random,
     subjectFacts,
-    authorizationFreshness: subjectFacts,
     permittedUsers: userService,
     auditLogWriter,
     config: {

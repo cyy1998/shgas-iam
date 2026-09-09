@@ -73,12 +73,11 @@ async function fixture(mode: Mode = "gateway") {
   const state = {
     access: "enabled" as AccessState,
     afterRead: undefined as AccessState | undefined,
-    freshness: true,
+    factsAvailable: true,
     reads: 0,
     renewals: 0,
     artifacts: 0,
     facts: 0,
-    freshnessChecks: 0,
     generation: String(transitionId),
     afterGeneration: undefined as string | undefined,
     attemptIds: [] as string[],
@@ -206,18 +205,14 @@ async function fixture(mode: Mode = "gateway") {
       async read() {
         await state.beforeProjection?.();
         state.facts += 1;
+        if (!state.factsAvailable)
+          return null;
         return {
           subjectIdentifier: state.projectionInvalid ? randomUUID() : subjectIdentifier,
           sourceDirtyVersion: "1",
           profile: { username: "test", name: "Test", phone: null },
           employments: [],
         };
-      },
-    },
-    authorizationFreshness: {
-      async check() {
-        state.freshnessChecks += 1;
-        return state.freshness ? { status: "fresh" } : { status: "not-ready" };
       },
     },
   });
@@ -381,7 +376,7 @@ test.each(["independent", "gateway", "gateway-orcas", "iam"] as const)("%s Publi
   const second = await authentication.subjectDeliveryCapability.resolveUserInfo();
   expect(first).toEqual(second);
   expect(first).toMatchObject({ version: 2, subjectIdentifier: f.subjectIdentifier });
-  expect(f.state).toMatchObject({ reads: 1, facts: 2, freshnessChecks: 2 });
+  expect(f.state).toMatchObject({ reads: 1, facts: 2 });
   operation.close();
   const closed = await rejection(() => authentication.subjectDeliveryCapability.resolveUserInfo());
   expect(closed).toBeInstanceOf(SubjectAccessPermissionRequiredError);
@@ -392,23 +387,23 @@ test.each(["independent", "gateway", "gateway-orcas", "iam"] as const)("%s Publi
   expect(f.state.reads).toBe(2);
 });
 
-test.each(["gateway", "gateway-orcas"] as const)("%s authz checks once and selects no authorization freshness claim", async (mode) => {
+test.each(["gateway", "gateway-orcas"] as const)("%s authz checks once and selects only the minimal subject header", async (mode) => {
   const f = await fixture(mode);
   f.state.afterRead = "blocking";
   const header = await f.operations.run(op => f.protocol.forOperation(op).authorizeLocalSession(f.token, f.clientCode));
   expect(JSON.parse(Buffer.from(header, "base64").toString("utf8"))).toEqual({ version: 1, subjectIdentifier: f.subjectIdentifier, username: "test" });
-  expect(f.state).toMatchObject({ reads: 1, facts: 1, freshnessChecks: 0 });
+  expect(f.state).toMatchObject({ reads: 1, facts: 1 });
 });
 
-test("authorization freshness still rejects UserInfo after Subject Access permission", async () => {
+test("missing Facts still reject UserInfo after Subject Access permission", async () => {
   const f = await fixture();
-  f.state.freshness = false;
+  f.state.factsAvailable = false;
   const error = await rejection(() => f.operations.run(async (op) => {
     const authentication = await f.protocol.forOperation(op).resolvePublicAuthentication(f.token, f.clientCode);
     return await authentication.subjectDeliveryCapability.resolveUserInfo();
   }));
   expect(error).toBeInstanceOf(SubjectProjectionNotReadyError);
-  expect(f.state).toMatchObject({ reads: 1, facts: 1, freshnessChecks: 1 });
+  expect(f.state).toMatchObject({ reads: 1, facts: 1 });
 });
 
 test("missing and closed operations cannot authorize", async () => {
@@ -892,15 +887,15 @@ test.each(["independent", "gateway", "gateway-orcas"] as const)("%s rejects inva
   expect(f.state).toMatchObject({ reads: 0, attemptIds: [], issuedIds: [], orcasCalls: 0 });
 });
 
-test("Independent Projection freshness failure consumes Code and requires fresh authorization", async () => {
+test("Independent missing Facts consume Code and require new authorization", async () => {
   const f = await redemptionFixture("independent");
-  f.state.freshness = false;
+  f.state.factsAvailable = false;
   const error = await rejection(() => f.redeem());
   const artifact = await scope.observer.resolveProtocolArtifact(f.code, { protocol: "custom-sso", artifactType: "auth_code" });
   expect(error).toBeInstanceOf(SubjectProjectionNotReadyError);
   expect(artifact.status).not.toBe("resolved");
   expect(f.state).toMatchObject({ reads: 1, issuedIds: [] });
-  f.state.freshness = true;
+  f.state.factsAvailable = true;
   await rejection(() => f.redeem());
   expect(f.state.issuedIds).toHaveLength(0);
 });

@@ -91,7 +91,8 @@ Spec #128 已统一正式入口。API Core 的 Component/Redis 证明许可 sing
 上下文继承、在途继续、新请求拒绝、晚到创建旧代失效和精确撤销保留新代；真实工厂为 `createSessionKernel`。
 Kernel 自身继续拥有期限、对象存在、消费、归属、CAS 和 cleanup 的行为证据，不再测试账号验证 hook。
 API 的四认证 Component、Custom SSO 完整 Redis 与 API HTTP/Redis 证明真实受保护入口在创建、消费、出站前取得许可，
-Projection 复用并保持 Facts/Authorization Freshness 规则。旧双工厂 fixture 已迁正式工厂。
+Projection 复用许可并检查已发布 Facts 可用性。#156 已按 ADR-0032 取消请求时授权新鲜度检查，
+原 freshness 断言迁为缓存命中零数据库读取、旧权限交付与资料缺失失败；旧双工厂 fixture 已迁正式工厂。
 OIDC Component 与真实 Provider HTTP/Redis 证明授权、原生 interaction/login guard/resume、Token 和 UserInfo；
 Code 消费和 mapping 刷新前拒绝、多回调共享、失败固定、并发隔离、在途继续以及已消费 Code 重放撤销分别有直接断言。
 Admin Component/Redis 覆盖正式 REST/tRPC middleware、记录清单、context 撤销与 Resignation 准备失败 fallback；

@@ -88,7 +88,8 @@ TTL 或逐 Client 访问自然收敛。当前 full repair/verify 只拥有当前
   继续取得旧 Snapshot，须显式 repair；这不等于协议配置版本或 Session 撤销，见 [ADR-0022](../adr/0022-adopt-snapshot-consistency-for-client-traffic-gate.md)。
   同操作的协议配置与 Gate 分别固定首次结果，普通失败精确处理目标；Admin 协议变更只撤销早于本次提交版本的对象，
   晚到命令保留边界与更高代。枚举不是在途排空，极迟旧写入由下一调用精确拒绝；见[最终契约](../features/sso/protocol-validation-contract.md)。
-- **主体事实与授权**：普通 Profile 可以消费最后发布事实；`iam:authorization` 使用 Authorization Freshness Barrier。
+- **主体事实与授权**：普通 Profile 与 `iam:authorization` 均消费取得的已发布事实，缓存有效命中不查 PostgreSQL；
+  缓存缺失或无效才读取已发布 Profile，不查 Dirty 新鲜度，允许旧权限持续交付。账号访问保护独立保持。
   Custom SSO 在交付时构建投影，OIDC 在授权时创建 Claims Snapshot，后续协议交付复用该快照；见[投影契约](backend-architecture.md#client-subject-projection)。
 - **Admin 范围**：服务端按请求时 PostgreSQL 事实授权，已通过检查的请求可能在并发撤权后完成。该模型不保证提交时线性化撤权；
   适用范围及重新决策条件见 [ADR-0017](../adr/0017-centralize-admin-role-policy-with-request-time-scope.md)。

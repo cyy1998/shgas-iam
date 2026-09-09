@@ -3,7 +3,6 @@ import type { AddressInfo } from "node:net";
 import type { OidcProviderRedisTestHarness, OidcProviderRedisTestScope } from "./redis-test-harness.ts";
 import { createHash, randomUUID } from "node:crypto";
 import { createSubjectAccessBootstrap, createSubjectAccessSessionContext, SubjectAccessPermissionRequiredError } from "@iam/api-core/subject-access";
-import { UserProfileDirtyStatus } from "@iam/contracts";
 import { AUTHORIZATION_GRANT_REDEMPTION_CLEANUP_KIND, createAuthorizationGrantRedisInspection, createLegacyAuthorizationGrantFixture } from "@iam/custom-sso/testing";
 import { createOidcRevocationSelector } from "@iam/domain/client/oidc-revocation-selector";
 import { createSubjectFactsRedisCache } from "@iam/user-profile-read-model/subject-facts";
@@ -135,26 +134,36 @@ async function runtimeFixture(options: { publishFacts?: boolean } = {}) {
     captured.push(operation);
     return callback(operation);
   }));
-  if (options.publishFacts !== false) {
+  async function publishFacts(version: string, role?: string) {
     await createSubjectFactsRedisCache(scope.writer).publish({
       schemaVersion: 3,
-      sourceDirtyVersion: "1",
+      sourceDirtyVersion: version,
       publishedAt: new Date().toISOString(),
       subjectIdentifier: subject,
       profile: { username: "alice", name: "Alice", phone: null },
-      facts: { employments: [] },
+      facts: { employments: role === undefined
+        ? []
+        : [{
+            isPrimary: true,
+            organization: { code: "org", name: "Organization", type: "department", path: [{ code: "org", name: "Organization", type: "department" }] },
+            position: { code: "position", name: "Position" },
+            responsibilities: [],
+            clientAuthorizations: [{ clientCode: client, roles: [{ code: role, privileges: ["read"] }] }],
+          }] },
     });
   }
-  let fresh = true;
-  const freshness = vi.fn(async () => [{ dirtyVersion: "1", status: fresh ? UserProfileDirtyStatus.Processed : UserProfileDirtyStatus.Pending }]);
-  const query = { from: () => query, innerJoin: () => query, where: () => query, limit: freshness };
+  if (options.publishFacts !== false)
+    await publishFacts("1");
+  const profileReads = vi.fn(async () => []);
+  const query = { from: () => query, where: () => query, limit: profileReads };
+  const databaseSelect = vi.fn(() => query);
   const { privateKey } = await generateKeyPair("RS256", { extractable: true });
   const jwk = { ...await exportJWK(privateKey), alg: "RS256", kid: "current", use: "sig" };
   const runtime = createOidcProviderRuntime({
     env,
     redis: scope.writer,
     logger,
-    db: { select: () => query },
+    db: { select: databaseSelect },
     repositories: { account },
     session,
     stores,
@@ -228,7 +237,9 @@ async function runtimeFixture(options: { publishFacts?: boolean } = {}) {
     stage,
     refresh,
     captured,
-    freshness,
+    profileReads,
+    databaseSelect,
+    publishFacts,
     account,
     cookies,
     request,
@@ -256,7 +267,6 @@ async function runtimeFixture(options: { publishFacts?: boolean } = {}) {
     },
     setAccess,
     providerContexts,
-    setFresh(value: boolean) { fresh = value; },
     setClientAllowed(value: boolean) { allowed = value; },
     setClientVersion(value: number) { clientVersion = value; },
   };
@@ -757,17 +767,22 @@ describe("oIDC Token and UserInfo operations through real Redis and production H
     expect(consume).not.toHaveBeenCalled();
   });
 
-  it("keeps authorization-time claims when Facts freshness changes after Code issuance", async () => {
+  it("keeps issued claims after new Facts are published and uses new Facts on the next authorization", async () => {
     const runtime = await runtimeFixture();
+    await runtime.publishFacts("2", "operator");
     const code = await runtime.issueCode({ scope: "openid profile iam:authorization" });
-    runtime.setFresh(false);
-    runtime.freshness.mockClear();
+    await runtime.publishFacts("3", "auditor");
     const issued = await runtime.exchange(code);
     expect(issued.response.status).toBe(200);
     const info = await runtime.userInfo(JSON.parse(issued.body).access_token);
     expect(info.response.status).toBe(200);
-    expect(JSON.parse(info.body)).toMatchObject({ sub: runtime.subject, name: "Alice" });
-    expect(runtime.freshness).not.toHaveBeenCalled();
+    expect(JSON.parse(info.body)).toMatchObject({ "sub": runtime.subject, "name": "Alice", "iam:authorization": { roles: ["operator"] } });
+    const nextIssued = await runtime.exchange(await runtime.issueCode({ scope: "openid profile iam:authorization" }));
+    expect(nextIssued.response.status).toBe(200);
+    const nextInfo = await runtime.userInfo(JSON.parse(nextIssued.body).access_token);
+    expect(nextInfo.response.status).toBe(200);
+    expect(JSON.parse(nextInfo.body)).toMatchObject({ "iam:authorization": { roles: ["auditor"] } });
+    expect(runtime.databaseSelect).not.toHaveBeenCalled();
   });
 
   it("fails closed when permitted account data disappears", async () => {
@@ -1002,19 +1017,15 @@ describe("oIDC operation authorization through real Redis and production HTTP ro
     expect(runtime.barrier).toHaveBeenCalledTimes(1);
   });
 
-  it("retains client scope and freshness gates after subject permission", async () => {
+  it("delivers cached authorization without PostgreSQL while retaining client scope and traffic gates", async () => {
     const runtime = await runtimeFixture();
     const initial = await runtime.authorize();
     expect(new URL(initial.location!).searchParams.get("code")).toEqual(expect.any(String));
     const projected = await runtime.request(runtime.authorization({ scope: "openid iam:authorization" }));
     expect(new URL(projected.location!).searchParams.get("code")).toEqual(expect.any(String));
-    expect(runtime.freshness).toHaveBeenCalled();
+    expect(runtime.databaseSelect).not.toHaveBeenCalled();
     const invalidScope = await runtime.request(runtime.authorization({ scope: "openid phone" }));
     expect(new URL(invalidScope.location!).searchParams.get("error")).toBe("invalid_scope");
-    runtime.setFresh(false);
-    const stale = await runtime.request(runtime.authorization({ scope: "openid iam:authorization" }));
-    expect(new URL(stale.location!).searchParams.get("code")).toBeNull();
-    expect(runtime.freshness).toHaveBeenCalled();
     runtime.setClientAllowed(false);
     const maintenance = await runtime.request(runtime.authorization());
     expect(new URL(maintenance.location!).searchParams.get("error")).toBe("temporarily_unavailable");
@@ -1024,13 +1035,13 @@ describe("oIDC operation authorization through real Redis and production HTTP ro
     const runtime = await runtimeFixture({ publishFacts: false });
     const initial = await runtime.authorize();
     expect(new URL(initial.location!).searchParams.get("code")).toEqual(expect.any(String));
-    runtime.freshness.mockResolvedValueOnce([]);
     runtime.barrier.mockClear();
     const missing = await runtime.request(runtime.authorization({ scope: "openid iam:authorization" }));
     expect(new URL(missing.location!).searchParams.get("code")).toBeNull();
     expect(new URL(missing.location!).searchParams.get("error")).toBe("temporarily_unavailable");
     expect(runtime.barrier).toHaveBeenCalledTimes(1);
     expect(runtime.cookies.has("global_session")).toBe(true);
+    expect(runtime.profileReads).toHaveBeenCalledTimes(1);
   });
 });
 

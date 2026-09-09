@@ -50,12 +50,13 @@ fragment、通配符和模板变量。匹配时使用完整原始字符串，不
 
 授权完成后、Authorization Code 持久化前，Provider 会把实际授权 scope 映射为 Subject Claim Selection，并固化
 独立的 OIDC Claims Snapshot。Snapshot 绑定 Subject Identifier、client、实际 scope、OIDC config version、Provider
-Session 与 Principal Session。选择 `iam:authorization` 时会在此处执行 Authorization Freshness Barrier；投影尚未
-就绪会返回标准 `temporarily_unavailable`，且不会签发 Code。
+Session 与 Principal Session。选择 `iam:authorization` 时也采用取得的已发布主体事实，允许权限落后于源事实，
+不执行请求时新鲜度检查。无法取得合法投影时返回标准 `temporarily_unavailable`，且不会签发 Code。
 
 Token Endpoint 只把 Code 中的 Snapshot 转移到 Access Token，不重新读取 Profile 或重新计算 Selection。UserInfo
 在确认 token、client、OIDC 配置版本和绑定 session 仍然有效后，只重放 Access Token Snapshot。因此授权完成后的
-档案或权限变化不会混入该 token 的 UserInfo；变化会在下一次授权产生的新 Snapshot 中体现。OIDC 与 Custom SSO
+档案或权限变化不会混入该 token 的 UserInfo；新 Facts 发布且被读取后，变化才进入新授权的 Snapshot，
+不保证撤权立即传播或在固定期限内传播。OIDC 与 Custom SSO
 只共享 Subject Identifier、Selection、Projection 和 Facts，不共享配置、Secret、wire、Snapshot、artifact 或 session。
 
 ## CORS

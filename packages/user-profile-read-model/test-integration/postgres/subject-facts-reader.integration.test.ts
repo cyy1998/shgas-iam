@@ -1,3 +1,4 @@
+import { createPermittedClientSubjectProjectionService } from "@iam/client-subject-projection";
 import {
   OrganizationResponsibilityTypeCode,
   OrganizationType,
@@ -46,7 +47,7 @@ describe("Subject Facts PostgreSQL reader", () => {
     expect(publish).not.toHaveBeenCalled();
   });
 
-  test("reads one strict v3 responsibility row and verifies its processed Dirty version", async () => {
+  test("reads one strict v3 responsibility row and publishes its recorded version", async () => {
     await seedPublishedSubjectV3(harness, "22");
     const publish = mock(async () => ({ status: "published" as const }));
     const reader = createSubjectFactsReader({
@@ -75,11 +76,55 @@ describe("Subject Facts PostgreSQL reader", () => {
         }],
       },
     }]);
-    expect(await reader.check({
-      subjectIdentifier: SUBJECT_IDENTIFIER,
-      sourceDirtyVersion: "22",
-    })).toEqual({ status: "fresh" });
+    expect(facts?.sourceDirtyVersion).toBe("22");
     expect(publish).toHaveBeenCalledTimes(1);
+  });
+
+  test.each([
+    UserProfileDirtyStatus.Pending,
+    UserProfileDirtyStatus.Processing,
+    UserProfileDirtyStatus.Failed,
+    UserProfileDirtyStatus.Processed,
+    null,
+  ])("delivers published authorization from PostgreSQL and cache while Dirty is %s", async (status) => {
+    await seedPublishedSubjectV3(harness, "22");
+    if (status === null) {
+      await harness.sql`DELETE FROM user_profile_dirty WHERE user_id = 1`;
+    }
+    else {
+      await harness.sql`UPDATE user_profile_dirty SET dirty_version = 23, status = ${status} WHERE user_id = 1`;
+    }
+    let cached: string | null = null;
+    const reader = createSubjectFactsReader({
+      db: harness.db,
+      cache: {
+        read: async () => cached,
+        publish: async (record) => {
+          cached = JSON.stringify(record);
+          return { status: "published" };
+        },
+      },
+    });
+    const permission = {};
+    const projection = createPermittedClientSubjectProjectionService({
+      subjectFacts: reader,
+      assertPermission(value: object) {
+        if (value !== permission)
+          throw new Error("permission required");
+      },
+    });
+    const input = {
+      subjectIdentifier: SUBJECT_IDENTIFIER,
+      clientCode: "console",
+      selection: { catalogVersion: 2, optionalClaims: ["profile:name", "iam:authorization"] },
+    } as const;
+    const fromDatabase = await projection.resolve(input, permission);
+    const fromCache = await projection.resolve(input, permission);
+    expect(fromDatabase).toMatchObject({
+      name: "Alice",
+      authorization: { roles: ["operator"], privileges: ["approve"] },
+    });
+    expect(fromCache).toEqual(fromDatabase);
   });
 });
 
@@ -177,7 +222,7 @@ async function seedPublishedSubjectV3(
         }],
       },
       position: { code: "position-a", name: "甲岗位" },
-      clientAuthorizations: [],
+      clientAuthorizations: [{ clientCode: "console", roles: [{ code: "operator", privileges: ["approve"] }] }],
       responsibilities,
     }],
   };

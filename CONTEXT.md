@@ -6,6 +6,9 @@ Custom SSO Authorization Grant 与 Subject Projection Not Ready 的兑换语义�
 [ADR-0031](docs/adr/0031-consume-custom-sso-grants-before-issuance.md)中已接受的修改目标；Independent 与 Gateway 已分别由 #158/#159 迁移，
 定向维护由 #160 交付，#161 已提供最终契约账本与升级手册；父级验收另记，环境尚未切换，不能据术语更新推断环境行为已改变。
 
+Subject Facts、Client Authorization Claim、Subject Projection Not Ready 与 OIDC Claims Snapshot 采用
+[ADR-0032](docs/adr/0032-consume-published-subject-facts-for-authorization.md) 已接受的 #156 修改目标：主体交付允许已发布旧权限，原 Authorization Freshness Barrier 从目标词汇中退役。读取实现已迁移，环境尚未切换；代码验证与实际部署分别记录。
+
 ## Language
 
 **User Profile**:
@@ -333,7 +336,7 @@ IAM 向指定 client 交付的主体属性视图；它始终包含 Subject Ident
 _Avoid_: User Profile, session payload, mode-specific user info
 
 **Subject Projection Not Ready**:
-主体身份和 client 授权可能仍然有效、但当前 Subject Facts 尚未满足投影新鲜度要求时产生的暂态领域结果，不表示未认证或无权限。Custom SSO 兑换中的该结果不恢复已消费 Grant，调用方需重新授权；既有 Credential 的 UserInfo 调用可以稍后重试，OIDC 授权仍在投影就绪前不签发 Authorization Code。
+主体身份和 client 授权可能仍然有效、但无法取得合法已发布 Subject Facts 时产生的暂态领域结果，不表示未认证或无权限，源事实尚未完成新一轮发布也不单独构成该结果。Custom SSO 兑换中的该结果不恢复已消费 Grant，调用方需重新授权；既有 Credential 的 UserInfo 调用可以稍后重试，OIDC 授权仍在投影就绪前不签发 Authorization Code。
 _Avoid_: unauthorized, forbidden, dirty-state response
 
 **Gateway Subject Header**:
@@ -349,7 +352,7 @@ _Avoid_: UserDetail field list, arbitrary JSON path, protocol scope
 _Avoid_: ProjectionSpec, client configuration, protocol scope, requested HTTP fields
 
 **Subject Facts**:
-以 Subject Identifier 为键、供 IAM 内部投影使用的一份协议中性主体事实读模型。用户基础字段来自 User Profile Read Model Row 的显式类型化列；`subject_facts` JSON 只保存 Effective Employment，每条包含 `isPrimary`、最小组织及完整路径、最小岗位，以及按不可修改的 `clientCode` 标识的 `clientAuthorizations`，其中角色包含自身 code 与派生 privilege codes。没有任何角色的有效任职仍保留空 `clientAuthorizations`；没有 Effective Role 的 client 不建立授权项，投影时解释为空角色与空权限。它不重复保存顶层角色或权限，不含数据库标识、账号可用性、状态、描述或时间，全部数组在发布时去重并稳定排序。Redis 缓存按主体存一份，由 Client Subject Projection Module 在内存中按 client 和 Subject Claim Selection 裁剪，不持久化 user×client 投影或 `UserDetailDto`。缓存是可重建的性能 Adapter：仅请求 Subject Identifier 时无需读取；请求 Profile Claim 时优先读取 Redis，缺失、损坏或 schema 不支持时通过 single-flight 从 `user_profile` 按 Subject Identifier 读取一行并回填。数据库行缺失或不可解析时返回 Subject Projection Not Ready，不省略已声明字段，也不回退 Legacy Detail 或现场联查源表；投影交付复用该次操作已取得的 Subject Access Permission，不再追加账号可用性裁决。
+按 Subject Identifier 识别、供 IAM 内部投影使用的已发布协议中性主体事实，包含基础资料、发布版本中的 Effective Employment、组织及完整路径、岗位，以及按 Client 区分的 Effective Role 和派生权限；无角色的有效任职仍保留，无授权的 Client 在投影中表达空角色与空权限。它由同一主体的全部 Client Subject Projection 共同消费，不包含账号可访问性或授权决策，允许落后于源业务事实，且不承诺固定时间内完成更新；取得合法已发布事实不等于确认其与当前源事实一致。
 _Avoid_: User Profile DTO cache, client projection cache, session payload, legacy detail document, live aggregate fallback, cached account status
 
 **Subject Facts Publication**:
@@ -361,7 +364,7 @@ _Avoid_: best-effort profile publication, separate profile/processed commits, un
 _Avoid_: login-time migration, partial active-user backfill, runtime dual read
 
 **Subject Access Barrier**:
-以 Subject Identifier 标识、拥有账号当前可访问状态及访问代际的协议中性屏障，用于判断独立业务操作能否取得 Subject Access Permission；它不属于允许短暂陈旧的 Profile Claim，状态缺失或不确定时不能授予许可。禁用与删除阻止后续操作取得许可，重新启用须满足账号与主体事实的发布条件，且不会恢复旧代会话或已撤销会话的有效性。
+以 Subject Identifier 标识、拥有账号当前可访问状态及访问代际的协议中性屏障，用于判断独立业务操作能否取得 Subject Access Permission；它不属于允许使用已发布旧事实的 Subject Claims，状态缺失或不确定时不能授予许可。禁用与删除阻止后续操作取得许可，重新启用须满足账号与主体事实的发布条件，且不会恢复旧代会话或已撤销会话的有效性。
 _Avoid_: profile cache field, eventual account disable, protocol-specific blacklist
 
 **Subject Access Permission**:
@@ -369,12 +372,8 @@ _Avoid_: profile cache field, eventual account disable, protocol-specific blackl
 _Avoid_: request-wide boolean, persistent authorization, reusable access token
 
 **Client Authorization Claim**:
-`iam:authorization` 表达指定 client 可见的授权主体属性。它包含全部当前有效任职；每条任职使用与 Employment Profile Claim 相同的 `isPrimary`、组织、完整路径和岗位结构，并只附加该 client 的 Effective Roles 及其派生权限，即使没有角色也保留空数组。任职按 Employment Profile Claim 的规则排序，每条及顶层聚合的 role/privilege code 均去重并稳定排序。它不包含其他 client 的授权、数据库标识或授权决策。请求该 claim 时，IAM 只交付已确认与当前授权源一致的数据；授权事实处于待重建、处理中或失败状态时，整份 Client Subject Projection 不可用，不允许省略该 claim 或回退旧值。Custom SSO 在每次生成交付响应时保证新鲜；Independent client 复制到自有会话或存储中的快照由该 client 负责刷新，不属于 IAM 的持续一致性保证。OIDC 只在创建协议拥有的 Claims Snapshot 时保证新鲜，后续 UserInfo 继续读取该不可变快照；OIDC Adapter 保留既有组织与岗位字段名并新增 `isPrimary`，不复用 Custom SSO JSON 外形或输出双字段。
-_Avoid_: global roles, global privileges, authorization decision
-
-**Authorization Freshness Barrier**:
-构建 `iam:authorization` 前执行的 fail-closed 版本检查；每次严格授权交付都查询 PostgreSQL 中权威的 Dirty 状态与版本，Redis 缓存不能替代该检查。只有 Subject Facts 的 `sourceDirtyVersion` 等于当前 Dirty Version 且状态为 `processed` 时才允许构建；缓存落后但数据库已发布当前事实时先刷新缓存，事实尚未发布则返回可重试的 `503`。任何 `pending`、`processing`、`failed`、缺失或版本不匹配都使整份 Client Subject Projection 不可用，不按 Dirty Reason 例外放行；普通 Profile Claim 不受该屏障阻断。Custom SSO 每次交付时执行，OIDC 在 Authorization Code 签发前创建 Claims Snapshot 时执行；Gateway Subject Header 不选择 `iam:authorization`，因此 `/auth/authz` 的缓存命中路径不访问 PostgreSQL。
-_Avoid_: cache TTL check, Redis-only freshness check, dirty-reason allowlist, stale authorization fallback
+`iam:authorization` 表达指定 Client 在已发布 Subject Facts 中可见的授权主体属性，包含该版本全部 Effective Employment 的 `isPrimary`、组织、完整路径、岗位及仅属于该 Client 的 Effective Role 与派生权限；无角色任职保留空数组，任职沿 Employment Profile Claim 排序，逐任职及顶层 role/privilege code 去重并稳定排序，不包含其他 Client 授权、数据库标识或授权决策。Custom SSO 每次交付和 OIDC 创建 Claims Snapshot 时均允许采用落后于源事实的已发布权限，即使源权限已撤销或重建持续失败也不因此拒绝交付；无法取得合法 Facts 时不能省略该 Claim，第三方复制后的刷新由其自行负责，OIDC 后续交付继续使用原 Snapshot。
+_Avoid_: global roles, global privileges, authorization decision, guaranteed current authorization
 
 **Employment Profile Claim**:
 `profile:employments` 表达用户的 Effective Employment 非授权事实，只包含 `isPrimary`、组织 code/name/type、按根到当前组织且包含当前组织的完整路径，以及岗位 code/name；Position 与所属 Organization 由 Employment Integrity 保证，发布前发现异常时整份事实不可用。主任职优先，其余按组织 code、岗位 code 稳定排序，无有效任职时返回空数组；它不含角色、权限、数据库标识、状态、层级数字、起止时间、描述或审计时间，Custom SSO 通过 Catalog 声明，OIDC 仅在 `iam:employments` scope 获准时映射到 UserInfo Claims Snapshot，不扩展标准 `profile` scope 或 ID Token。
@@ -393,7 +392,7 @@ _Avoid_: account disable, employment deletion, user deletion
 _Avoid_: User Resignation, account disable, employment cascade deletion
 
 **OIDC Claims Snapshot**:
-OIDC 在授权完成且 Authorization Code 签发前，按 Subject Identifier、OIDC Client Binding、scope、OIDC 配置版本及当时授权状态创建并固化的协议专用声明视图；选择 `iam:authorization` 时必须先通过 Authorization Freshness Barrier，未就绪则不签发 Code。Authorization Code 持有该 Snapshot，Token Endpoint 只将它转移到 Access Token，不重新读取档案；ID Token 从同一 Snapshot 映射但排除 `iam:authorization` 与 `iam:employments`，后续 UserInfo 也只重放 Snapshot，不混入当前事实。
+OIDC 在授权完成且 Authorization Code 签发前，按 Subject Identifier、OIDC Client Binding、scope、OIDC 配置版本及该次取得的已发布 Subject Facts 创建并固化的协议专用声明视图；选择 `iam:authorization` 不要求事实与当前授权源一致，但无法取得合法投影时不签发 Code。Authorization Code 持有该 Snapshot，Token Endpoint 只将它转移到 Access Token，不重新读取档案；ID Token 从同一 Snapshot 映射但排除 `iam:authorization` 与 `iam:employments`，后续 UserInfo 也只重放 Snapshot，不混入新发布事实。
 _Avoid_: token-endpoint live projection, current user profile, current authorization view
 
 **Valid Principal Session**:

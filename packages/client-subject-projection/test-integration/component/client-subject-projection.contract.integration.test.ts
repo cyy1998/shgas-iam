@@ -19,7 +19,6 @@ describe("Client Subject Projection Interface", () => {
     const permission = {};
     const service = createPermittedClientSubjectProjectionService({
       subjectFacts: options.subjectFacts,
-      authorizationFreshness: options.authorizationFreshness,
       assertPermission: (value: object, subject: string) => {
         if (value !== permission || subject !== subjectIdentifier)
           throw new Error("Permission required");
@@ -159,9 +158,6 @@ describe("Client Subject Projection Interface", () => {
           ],
         }),
       },
-      authorizationFreshness: {
-        check: async () => ({ status: "fresh" }),
-      },
     });
 
     const projection = await service.resolve({
@@ -268,11 +264,6 @@ describe("Client Subject Projection Interface", () => {
       subjectFacts: {
         read: async () => null,
       },
-      authorizationFreshness: {
-        check: async () => {
-          throw new Error("Profile claims must allow last published Subject Facts");
-        },
-      },
     });
     const invalidSelections = [
       {
@@ -306,18 +297,11 @@ describe("Client Subject Projection Interface", () => {
 
   test("resolves the mandatory Subject Identifier without requiring Subject Facts", async () => {
     let factsReads = 0;
-    let dirtyReads = 0;
     const service = createService({
       subjectFacts: {
         read: async () => {
           factsReads += 1;
           return null;
-        },
-      },
-      authorizationFreshness: {
-        check: async () => {
-          dirtyReads += 1;
-          return { status: "not-ready" };
         },
       },
     });
@@ -332,10 +316,7 @@ describe("Client Subject Projection Interface", () => {
     });
 
     expect(projection).toEqual({ subjectIdentifier });
-    expect({ factsReads, dirtyReads }).toEqual({
-      factsReads: 0,
-      dirtyReads: 0,
-    });
+    expect(factsReads).toBe(0);
   });
 
   test("returns only selected scalar profile claims", async () => {
@@ -351,11 +332,6 @@ describe("Client Subject Projection Interface", () => {
           },
           employments: [],
         }),
-      },
-      authorizationFreshness: {
-        check: async () => {
-          throw new Error("Profile claims must allow last published Subject Facts");
-        },
       },
     });
 
@@ -387,11 +363,6 @@ describe("Client Subject Projection Interface", () => {
           },
           employments: [],
         }),
-      },
-      authorizationFreshness: {
-        check: async () => {
-          throw new Error("Profile claims must allow last published Subject Facts");
-        },
       },
     });
 
@@ -510,11 +481,6 @@ describe("Client Subject Projection Interface", () => {
           updateTime: "must-not-leak",
           orcasId: "must-not-leak",
         }),
-      },
-      authorizationFreshness: {
-        check: async () => {
-          throw new Error("Profile claims must allow last published Subject Facts");
-        },
       },
     });
 
@@ -672,7 +638,6 @@ describe("Client Subject Projection Interface", () => {
     } satisfies SubjectFactsSnapshot;
     const service = createService({
       subjectFacts: { read: async () => facts },
-      authorizationFreshness: { check: async () => ({ status: "fresh" }) },
     });
     const selection = {
       catalogVersion: 2,
@@ -759,7 +724,7 @@ describe("Client Subject Projection Interface", () => {
     ]);
   });
 
-  test("assembles all selected claims from facts refreshed by the freshness barrier", async () => {
+  test("assembles each projection from the published facts read for that call", async () => {
     const employment = {
       isPrimary: true,
       organization: {
@@ -810,15 +775,10 @@ describe("Client Subject Projection Interface", () => {
         }],
       }],
     } satisfies SubjectFactsSnapshot;
+    let publishedFacts = observedFacts;
     const service = createService({
       subjectFacts: {
-        read: async () => observedFacts,
-      },
-      authorizationFreshness: {
-        check: async () => ({
-          status: "refreshed",
-          facts: refreshedFacts,
-        }),
+        read: async () => publishedFacts,
       },
     });
 
@@ -831,7 +791,18 @@ describe("Client Subject Projection Interface", () => {
       },
     });
 
-    expect(projection).toEqual({
+    expect(projection).toMatchObject({
+      name: "旧姓名",
+      authorization: { roles: ["old-role"], privileges: ["old-privilege"] },
+    });
+    publishedFacts = refreshedFacts;
+    const nextProjection = await service.resolve({
+      subjectIdentifier,
+      clientCode: "client-a",
+      selection: { catalogVersion: 2, optionalClaims: ["profile:name", "iam:authorization"] },
+    });
+
+    expect(nextProjection).toEqual({
       subjectIdentifier,
       name: "新姓名",
       authorization: {
@@ -844,38 +815,6 @@ describe("Client Subject Projection Interface", () => {
         privileges: ["new-privilege"],
       },
     });
-  });
-
-  test("fails the whole authorization projection when freshness cannot be proven", async () => {
-    const service = createService({
-      subjectFacts: {
-        read: async () => ({
-          subjectIdentifier,
-          sourceDirtyVersion: "12",
-          profile: {
-            username: "zhangsan",
-            name: "张三",
-            phone: null,
-          },
-          employments: [],
-        }),
-      },
-      authorizationFreshness: {
-        check: async () => ({ status: "not-ready" }),
-      },
-    });
-
-    const result = service.resolve({
-      subjectIdentifier,
-      clientCode: "client-a",
-      selection: {
-        catalogVersion: 2,
-        optionalClaims: ["iam:authorization"],
-      },
-    });
-
-    const failure = await captureRejection(result);
-    expect(failure).toBeInstanceOf(SubjectProjectionNotReadyError);
   });
 });
 
@@ -900,10 +839,6 @@ describe("Projection access proof", () => {
         calls.push("facts");
         return null;
       } },
-      authorizationFreshness: { check: async () => {
-        calls.push("freshness");
-        return { status: "fresh" };
-      } },
     });
     for (const candidate of [input, { ...input, selection: { catalogVersion: 99, optionalClaims: [] } }]) {
       const failure = await captureRejection(Reflect.apply(service.resolve, undefined, [candidate]));
@@ -916,39 +851,6 @@ describe("Projection access proof", () => {
     const projection = await service.resolve(input, permission);
     expect(projection).toEqual({ subjectIdentifier });
     expect(calls).toEqual(["permission", "permission", "permission", "permission", "permission"]);
-  });
-
-  test("rejects refreshed facts for another subject after permission and freshness checks", async () => {
-    const permission = {};
-    const calls: string[] = [];
-    const facts = {
-      subjectIdentifier,
-      sourceDirtyVersion: "1",
-      profile: { username: "user", name: "Name", phone: null },
-      employments: [],
-    } satisfies SubjectFactsSnapshot;
-    const service = createPermittedClientSubjectProjectionService({
-      assertPermission: (value: object) => {
-        if (value !== permission)
-          throw new Error("Permission required");
-        calls.push("permission");
-      },
-      subjectFacts: { read: async () => {
-        calls.push("facts");
-        return facts;
-      } },
-      authorizationFreshness: { check: async (input) => {
-        calls.push("freshness");
-        expect(input).toEqual({ subjectIdentifier, sourceDirtyVersion: "1" });
-        return { status: "refreshed", facts: { ...facts, subjectIdentifier: "other" } };
-      } },
-    });
-    const failure = await captureRejection(service.resolve({
-      ...input,
-      selection: { catalogVersion: 2, optionalClaims: ["profile:name", "iam:authorization"] },
-    }, permission));
-    expect(failure).toBeInstanceOf(SubjectProjectionNotReadyError);
-    expect(calls).toEqual(["permission", "facts", "freshness"]);
   });
 
   test.each([null, "other"])("rejects absent or mismatched facts (%s) after permission", async (subject) => {
@@ -973,10 +875,6 @@ describe("Projection access proof", () => {
               };
         },
       },
-      authorizationFreshness: { check: async () => {
-        calls.push("freshness");
-        return { status: "fresh" };
-      } },
     });
     const failure = await captureRejection(service.resolve({
       ...input,

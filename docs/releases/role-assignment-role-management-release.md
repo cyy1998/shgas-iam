@@ -55,6 +55,9 @@ pnpm --filter @iam/worker user-profile:repair
 
 ## 一致性 smoke
 
+按 [ADR-0032](../adr/0032-consume-published-subject-facts-for-authorization.md) 等待 Profile/Facts 发布收敛后再比较，
+OIDC 必须发起新的授权以取得新 Snapshot；旧 Snapshot 或重建期间的旧权限不属于本 smoke 的即时一致性保证。
+
 - API/admin-api 角色聚合：选择一个包含岗位、组织和任职直接角色的测试用户，确认 API 的 User Profile 与 admin 用户/
   任职详情一致，且同一 role 多来源命中时只保留一个 role code。
 - OIDC claims：使用启用 OIDC 的测试 client 完成 authorize/token/UserInfo，确认角色与权限 claims 与同一用户的

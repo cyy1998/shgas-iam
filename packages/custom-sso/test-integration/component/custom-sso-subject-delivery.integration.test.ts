@@ -109,7 +109,6 @@ const subjectFacts = {
 };
 
 const factsRead = mock(async () => subjectFacts);
-const freshnessCheck = mock(async () => ({ status: "fresh" as const }));
 const permission = {};
 const assertPermission = mock((value: object) => {
   if (value !== permission)
@@ -120,7 +119,6 @@ function createDelivery(client: CustomSsoClientRuntimeDto) {
   const projection = createPermittedClientSubjectProjectionService({
     assertPermission,
     subjectFacts: { read: factsRead },
-    authorizationFreshness: { check: freshnessCheck },
   });
   const rawDelivery = createCustomSsoSubjectDelivery({ projection: { resolve: input => projection.resolve(input, permission) } });
   return {
@@ -137,7 +135,6 @@ function createDelivery(client: CustomSsoClientRuntimeDto) {
 
 beforeEach(() => {
   factsRead.mockClear();
-  freshnessCheck.mockClear();
   assertPermission.mockClear();
 });
 
@@ -158,7 +155,6 @@ describe("Custom SSO subject delivery", () => {
       subjectIdentifier: SUBJECT_IDENTIFIER,
     });
     expect(factsRead).not.toHaveBeenCalled();
-    expect(freshnessCheck).not.toHaveBeenCalled();
   });
 
   test("hard-filters a wide client selection to username and name for Gateway authz", async () => {
@@ -192,7 +188,6 @@ describe("Custom SSO subject delivery", () => {
     expect(JSON.stringify(decoded)).not.toContain("orcas");
     expect(JSON.stringify(decoded)).not.toContain("id");
     expect(factsRead).toHaveBeenCalledTimes(1);
-    expect(freshnessCheck).not.toHaveBeenCalled();
   });
 
   test("uses the complete current client selection for public user-info", async () => {
@@ -231,7 +226,6 @@ describe("Custom SSO subject delivery", () => {
     expect(JSON.stringify(projection)).not.toContain("other-admin");
     expect(JSON.stringify(projection)).not.toContain("other:write");
     expect(JSON.stringify(projection)).not.toContain("orcas");
-    expect(freshnessCheck).toHaveBeenCalledTimes(1);
   });
 
   test("keeps the accepted request selection when the client mutates during projection", async () => {

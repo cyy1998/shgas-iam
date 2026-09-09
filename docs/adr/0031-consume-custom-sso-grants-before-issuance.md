@@ -8,6 +8,9 @@ status: accepted
 
 完整用户故事、实现与测试决定由 [Spec #157](https://github.com/cyy1998/shgas-iam/issues/157) 拥有；后续实施沿该规格拆票和验收。
 
+> 后续 #156 已按 [ADR-0032](0032-consume-published-subject-facts-for-authorization.md) 取消请求时授权新鲜度要求。
+> 本文原验收语境中的 freshness 保证由已发布 Facts 语义取代，操作许可、一次消费与资料失败恢复规则不变；环境未切换。
+
 ## 已确认的决定
 
 Independent 与 Gateway 使用相同的一次性消费语义。Client 认证（适用时）、用途、请求归属、redirect、协议版本、根会话、Traffic Gate 与 Subject Access 前置校验通过后，原子地消费同一已验证 Grant；同一 Code 只能有一个消费成功者，失败请求不能以普通读后删除代替并发消费约束。消费前 Maintenance 等暂态拒绝保留 Code 且不延长原有效期；错用途、错归属及永久失效对象继续按原精确处理边界执行，不能把所有校验失败一律视为可恢复。

@@ -14,14 +14,12 @@ type ProjectionOptions = Parameters<
 export function createApiCustomSsoOperations(
   deps: Omit<CustomSsoOperationsDeps, "subjectProjection"> & {
     subjectFacts: ProjectionOptions["subjectFacts"];
-    authorizationFreshness: ProjectionOptions["authorizationFreshness"];
   },
 ) {
   return createCustomSsoOperations({
     ...deps,
     subjectProjection: createPermittedClientSubjectProjectionService<CustomSsoProjectionPermission>({
       subjectFacts: deps.subjectFacts,
-      authorizationFreshness: deps.authorizationFreshness,
       assertPermission(proof, subjectIdentifier) {
         const operation = requireSubjectAccessOperation(proof?.operation);
         if (operation.requirePermission(subjectIdentifier) !== proof.permission)
