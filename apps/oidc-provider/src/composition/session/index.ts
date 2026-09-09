@@ -1,6 +1,5 @@
 import type {
   SessionKernelRedis,
-  SessionKernelValidationHooks,
 } from "@iam/session-kernel";
 import type { Redis } from "ioredis";
 import type { OidcProviderEnv } from "../../env.ts";
@@ -32,7 +31,7 @@ export interface CreateOidcProviderSessionDeps {
   redis: Redis;
   logger: OidcLogger;
   repositories: { account: OidcSessionKernelAccountReader };
-  stores: Pick<OidcProviderStores, "clientRuntime">;
+  stores: Pick<OidcProviderStores, "clientRuntime" | "clientTrafficGate">;
 }
 
 export function createOidcProviderSessionKernelConfig(env: OidcProviderEnv) {
@@ -70,29 +69,6 @@ function createOidcProviderSessionDependencies(deps: CreateOidcProviderSessionDe
   const providerSessionState = createProviderSessionStateStore(
     deps.redis as unknown as ProviderSessionStateRedis,
   );
-  const validationHooks: SessionKernelValidationHooks = {
-    async validateClient(object) {
-      if (!object.clientCode)
-        return { ok: true };
-      return await deps.stores.clientRuntime.findRuntime(object.clientCode)
-        ? { ok: true }
-        : { ok: false, reason: "client_disabled", message: "OIDC client is unavailable" };
-    },
-    async validateProtocolVersion(object) {
-      if (!object.clientCode)
-        return { ok: true };
-      const expected = typeof object.metadata?.oidcConfigVersion === "number"
-        ? object.metadata.oidcConfigVersion
-        : undefined;
-      if (expected === undefined)
-        return { ok: false, reason: "client_config_changed", message: "OIDC config version is missing" };
-      const current = await deps.stores.clientRuntime.findActiveVersion(object.clientCode);
-      return current === expected
-        ? { ok: true }
-        : { ok: false, reason: "client_config_changed", message: "OIDC config version changed" };
-    },
-  };
-
   const customSsoCleanup = createCustomSsoCleanup({ redis: deps.redis });
   return {
     providerSessionState,
@@ -102,11 +78,9 @@ function createOidcProviderSessionDependencies(deps: CreateOidcProviderSessionDe
       cleanupAdapters: [
         ...createOidcSessionKernelCleanupAdapter({
           providerSessionState,
-          redis: deps.redis,
         }),
         customSsoCleanup,
       ],
-      validationHooks,
       logger: deps.logger,
       sourceApp: LoggerSourceApp.OidcProvider,
     },
@@ -127,6 +101,7 @@ export function createOidcProviderSession(deps: CreateOidcProviderSessionDeps) {
     logger: deps.logger,
     accounts: deps.repositories.account,
     clients: deps.stores.clientRuntime,
+    traffic: deps.stores.clientTrafficGate,
     cookieName: deps.env.oidc.globalSessionCookie,
   });
   return { kernel, operations, sessions, providerSessionState, subjectAccess };

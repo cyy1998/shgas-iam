@@ -3,7 +3,6 @@ import type {
   RevokedTombstone,
   RevokeObjectCounter,
   RevokeSummary,
-  ValidationFailureReason,
 } from "./model";
 
 export type ResolvedResult<T> = {
@@ -30,13 +29,6 @@ export type SchemaInvalidResult = {
   issues?: unknown;
 };
 
-export type ValidationFailedResult = {
-  status: "validation_failed";
-  reason: ValidationFailureReason;
-  message?: string;
-  revokeSummary?: RevokeSummary;
-};
-
 export type ConsumedReplayResult = {
   status: "consumed_replay";
   tombstone: RevokedTombstone;
@@ -49,10 +41,10 @@ export type FailClosedResult = {
 };
 
 export type LifecycleFailureResult
-  = | RevokedResult
+  = | { status: "purpose_mismatch" }
+    | RevokedResult
     | MissingOrExpiredResult
     | SchemaInvalidResult
-    | ValidationFailedResult
     | ConsumedReplayResult
     | FailClosedResult;
 

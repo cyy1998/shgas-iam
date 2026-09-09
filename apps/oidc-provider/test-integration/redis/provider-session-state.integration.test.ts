@@ -599,7 +599,6 @@ describe("oIDC Provider Session real Redis contract", () => {
     const kernel = createSessionKernel({
       cleanupAdapters: createOidcSessionKernelCleanupAdapter({
         providerSessionState,
-        redis: ambiguousRedis,
       }),
       config: createSessionKernelConfig({
         lookupHmacKeys: {
@@ -694,12 +693,12 @@ describe("oIDC Provider Session real Redis contract", () => {
     const codes = protocolAdapter("AuthorizationCode");
     await codes.upsert(codeId, { ...payload, kind: "AuthorizationCode", accountId, sessionUid: providerSessionUid }, 60);
     expect(await provider.AuthorizationCode.find(codeId)).toBeDefined();
-    const lifetime = await adapter.resolveAuthorizationCodeSessionLifetime(codeId);
+    const lifetime = await adapter.resolveAuthorizationCodeSessionLifetime(codeId, (await testScope.observer.get(`oidc:model:AuthorizationCode:${codeId}`))!);
     expect(lifetime!.remainingSeconds).toBeGreaterThan(0);
     expect(lifetime!.remainingSeconds).toBeLessThanOrEqual(3);
     applicationOffset = -120_000;
     await codes.consume(codeId);
-    expect(await adapter.resolveAuthorizationCodeSessionLifetime(codeId)).toBeNull();
+    expect(await adapter.resolveAuthorizationCodeSessionLifetime(codeId, (await testScope.observer.get(`oidc:model:AuthorizationCode:${codeId}`))!)).toBeNull();
     const replay = await provider.AuthorizationCode.find(codeId, { ignoreExpiration: true });
     expect(replay).toMatchObject({ consumed: expect.any(Number), clientId: clientCode });
     expect(replay!.isExpired).toBe(false);
@@ -712,7 +711,7 @@ describe("oIDC Provider Session real Redis contract", () => {
       replayFailure = error;
     }
     expect(replayFailure).toBeInstanceOf(Error);
-    expect(await adapter.consumeAuthorizationCodeArtifact(codeId)).toBeNull();
+    expect(await adapter.consumeAuthorizationCodeArtifact(codeId, lifetime!.artifact)).toBeNull();
     const tokenId = testScope.unique("token");
     const credential = await adapter.registerAccessTokenCredential({ providerTokenId: tokenId, providerTokenKey: testScope.unique("payload"), payload, expiresIn: lifetime!.remainingSeconds, binding });
     expect(credential!.expiresAt).toBeLessThanOrEqual(principal.value.expiresAt);
@@ -720,7 +719,7 @@ describe("oIDC Provider Session real Redis contract", () => {
     await adapter.revokeAccessTokenCredential(credential!.credentialId);
     expect(await adapter.resolveAccessTokenCredential(tokenId)).toBeNull();
 
-    await expect(kernel.resolveClientBindingById(binding!.bindingId)).resolves.toMatchObject({
+    await expect(kernel.resolveClientBindingById(binding!.bindingId, { protocol: "oidc" })).resolves.toMatchObject({
       status: "resolved",
       value: { bindingId: binding!.bindingId },
     });

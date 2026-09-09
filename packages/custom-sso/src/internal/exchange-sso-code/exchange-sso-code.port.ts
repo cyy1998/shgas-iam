@@ -1,6 +1,7 @@
 import type { SubjectClaimName } from "@iam/contracts";
 import type { CustomSsoSubjectProjection } from "@iam/custom-sso/wire";
 import type { CustomSsoClientRuntimeDto } from "@iam/domain/client";
+import type { RejectedAuthorizationGrantPort } from "../authorization-grant.port";
 import type { ExchangeSsoCodeOptions } from "./exchange-sso-code.type";
 
 export interface AuthenticatedIndependentClient {
@@ -9,7 +10,7 @@ export interface AuthenticatedIndependentClient {
   readonly subjectClaims: readonly SubjectClaimName[];
 }
 
-export interface IndependentAuthorizationGrantPort {
+export interface IndependentAuthorizationGrantPort extends RejectedAuthorizationGrantPort {
   redeemIndependentGrant: (input: {
     client: AuthenticatedIndependentClient;
     code: string;

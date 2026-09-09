@@ -29,6 +29,9 @@ HMAC rotation 的发布顺序是：先把旧 current 配为 previous、新 key �
 
 ## 当前维护范围
 
+满足当前数据契约的 Spec #146 升级采用[保留对象流程](../../releases/protocol-validation-preserving-upgrade.md)，
+不执行下列全清、协议 artifact apply 或 epoch 推进；这些旧迁移命令的引用不表示本次升级需要清理。
+
 两条旧 Session cleanup 命令及其公开入口已撤销。当前 Session Kernel 撤销、正常清理、pending cleanup 和 OIDC cleanup adapters 继续有效。
 `client-protocol:artifacts` 按 manifest 精确清理协议 artifact 并保护 Principal Session 与非目标状态，详见
 [Client Protocol artifact 手册](../../releases/client-protocol-v2-artifact-cutover.md)。它不是旧工具的完整等价替代，也不提供全体登出或全量认证状态重置。

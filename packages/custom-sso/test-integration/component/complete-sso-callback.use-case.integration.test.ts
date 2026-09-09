@@ -33,7 +33,7 @@ test("delegates once and maps the completed Gateway Local Session", async () => 
     token: "local-token",
   }));
   const useCase = createCompleteSsoCallbackUseCase({
-    authorizationGrants: { completeGatewayLogin },
+    authorizationGrants: { rejectAuthorizationGrant: mock(async () => {}), completeGatewayLogin },
     clients: { findRuntimeRecord },
     trafficGate: enabledTrafficGate,
   });
@@ -103,7 +103,7 @@ describe("current Gateway client state", () => {
       token: "should-not-exist",
     }));
     const useCase = createCompleteSsoCallbackUseCase({
-      authorizationGrants: { completeGatewayLogin },
+      authorizationGrants: { rejectAuthorizationGrant: mock(async () => {}), completeGatewayLogin },
       clients: { findRuntimeRecord: mock(async () => currentClient) },
       trafficGate: enabledTrafficGate,
     });
@@ -125,7 +125,7 @@ test("does not consume the Gateway grant or establish a Local Session while traf
     token: "should-not-exist",
   }));
   const useCase = createCompleteSsoCallbackUseCase({
-    authorizationGrants: { completeGatewayLogin },
+    authorizationGrants: { rejectAuthorizationGrant: mock(async () => {}), completeGatewayLogin },
     clients: { findRuntimeRecord: mock(async () => ({
       ...client,
       status: ClientStatus.Maintenance,
@@ -151,7 +151,7 @@ test("delegates the literal redirect to the grant without reapplying a redirect 
     throw new Error("grant redirect mismatch");
   });
   const useCase = createCompleteSsoCallbackUseCase({
-    authorizationGrants: { completeGatewayLogin },
+    authorizationGrants: { rejectAuthorizationGrant: mock(async () => {}), completeGatewayLogin },
     clients: { findRuntimeRecord: mock(async () => client) },
     trafficGate: enabledTrafficGate,
   });

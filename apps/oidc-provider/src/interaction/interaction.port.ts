@@ -62,6 +62,6 @@ export interface InteractionProviderSessionBindingStore
 
 export interface InteractionReturnHandleStore {
   create: (payload: OidcReturnHandlePayload, ttlSeconds: number) => Promise<string | null>;
-  resolveReturnHandle: (handle: string) => Promise<OidcReturnHandlePayload | null>;
-  consume: (handle: string) => Promise<OidcReturnHandlePayload | null>;
+  resolveReturnHandle: (handle: string, expected: { browserBinding: string; returnTarget: string; clientId?: string; interactionUid?: string }) => Promise<OidcReturnHandlePayload | null>;
+  consume: (handle: string, payload: OidcReturnHandlePayload) => Promise<OidcReturnHandlePayload | null>;
 }

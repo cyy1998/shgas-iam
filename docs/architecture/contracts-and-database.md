@@ -60,6 +60,16 @@ Kernel 根出口只托管不透明 `subjectContext`，`/maintenance` 和 `/testi
 由 API Core 单向消费 Kernel；不公开旧 fence、validator 或专用 Kernel 代际字段。Custom SSO root 要求显式操作容器，
 Projection 唯一工厂要求许可证明，均不在缺少容器时自动恢复访问检查。
 
+Kernel 的 `resolveClientBindingById`、`resolveCredential` 和 `resolveProtocolArtifact` 要求显式用途；Credential/Artifact
+同时要求具体 type。`consumeProtocolArtifact` 还要求已观察 Artifact，`revokeObservedObject` 仅撤销观察对象及合法从属
+对象；identity 被替换时 CAS 保留替换者。Principal 读取和管理盘点仍中性。用途错误不触发协议配置校验、Subject Access
+或隐式批量撤销；OIDC 与 Custom SSO 必须通过各自 owner 完成后续协议检查，不存在可省略用途的在线兼容入口。
+
+`CleanupAdapter.cleanup` 的 `CleanupExecution` 参数只提供 `deleteOwnedKeys`。Kernel 隐藏 lookup/tombstone key 与原子
+所有权比较，OIDC payload adapter 只提供其拥有的协议 key；实时撤销与 pending 重试都绑定原 tombstone，当前存储格式保持不变。
+
+
+
 ## DTO 字段与兼容演进
 
 - 新增或修改跨边界 DTO 字段形状时，使用显式 `pick` 或 `z.object` 确定允许字段；允许从已经明确选字段的 DTO

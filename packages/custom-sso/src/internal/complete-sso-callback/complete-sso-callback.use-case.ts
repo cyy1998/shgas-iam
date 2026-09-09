@@ -12,7 +12,15 @@ export function createCompleteSsoCallbackUseCase(deps: CompleteSsoCallbackDeps) 
     input: CompleteSsoCallbackInput,
     options: CompleteSsoCallbackOptions = {},
   ): Promise<CompleteSsoCallbackResult> {
-    await deps.trafficGate.assertIssuanceAllowed(input.clientCode);
+    const rejectedGrant = { code: input.code, clientCode: input.clientCode, redirectUri: input.redirectUrl, mode: CustomSsoClientMode.Gateway };
+    try {
+      await deps.trafficGate.assertIssuanceAllowed(input.clientCode);
+    }
+    catch (error) {
+      if (error instanceof InvalidSsoClientError)
+        await deps.authorizationGrants.rejectAuthorizationGrant(rejectedGrant);
+      throw error;
+    }
     const client = await deps.clients.findRuntimeRecord(input.clientCode);
     if (
       client === null
@@ -22,6 +30,7 @@ export function createCompleteSsoCallbackUseCase(deps: CompleteSsoCallbackDeps) 
       || client.customSsoConfig?.mode !== CustomSsoClientMode.Gateway
       || client.customSsoConfig.orcas === undefined
     ) {
+      await deps.authorizationGrants.rejectAuthorizationGrant(rejectedGrant);
       throw new InvalidSsoClientError("非法client代码");
     }
     const { token, ttl, orcasSessionId, state } = await deps.authorizationGrants.completeGatewayLogin({

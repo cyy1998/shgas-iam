@@ -166,7 +166,7 @@ test.each(["independent", "gateway", "gateway-orcas"])("%s redemption HTTP owns 
     const app = new Hono().route("/sso", createSsoRoute(handlers));
     app.onError(createErrorHandler(logger));
     const cookieName = customSsoLocalSessionCookieName(clientCode);
-    function request(code: string) {
+    function request(code: string, redirect = redirectUrl) {
       return independent
         ? app.request("/sso/token", {
             method: "POST",
@@ -174,9 +174,9 @@ test.each(["independent", "gateway", "gateway-orcas"])("%s redemption HTTP owns 
               "Authorization": `Basic ${Buffer.from(`${encodeCustomSsoClientCode(clientCode)}:secret`).toString("base64")}`,
               "Content-Type": "application/x-www-form-urlencoded",
             },
-            body: new URLSearchParams({ code, redirect_uri: redirectUrl }),
+            body: new URLSearchParams({ code, redirect_uri: redirect }),
           })
-        : app.request(`/sso/callback?${new URLSearchParams({ code, client: clientCode, redirectUrl })}`, {
+        : app.request(`/sso/callback?${new URLSearchParams({ code, client: clientCode, redirectUrl: redirect })}`, {
             headers: { Cookie: `global_session=global; ${cookieName}=local; orcas_sso_sessionid=orcas` },
           });
     }
@@ -195,7 +195,7 @@ test.each(["independent", "gateway", "gateway-orcas"])("%s redemption HTTP owns 
       }));
       if (!grant.isLogin)
         throw new Error("Grant fixture creation failed");
-      const artifact = await scope.writer.resolveProtocolArtifact(grant.code);
+      const artifact = await scope.writer.resolveProtocolArtifact(grant.code, { protocol: "custom-sso", artifactType: "auth_code" });
       if (artifact.status !== "resolved")
         throw new Error("Grant fixture resolution failed");
       const grantId = artifact.value.artifactId;
@@ -206,6 +206,36 @@ test.each(["independent", "gateway", "gateway-orcas"])("%s redemption HTTP owns 
     const grant = await seedGrant();
     const initialGrant = await grants.inspect(grant.grantId);
     expect(initialGrant).toMatchObject({ state: "issued" });
+    const original = await scope.writer.resolveProtocolArtifact(grant.code, { protocol: "custom-sso", artifactType: "auth_code" });
+    if (original.status !== "resolved" || !original.value.principalSessionId)
+      throw new Error("Expected original artifact");
+    const oidc = await scope.writer.createProtocolArtifact({ principalSessionId: original.value.principalSessionId, protocol: "oidc", clientCode, artifactType: "authorization_code", ttlMs: 60_000, metadata: { oidcConfigVersion: 7, redirectUri: redirectUrl } });
+    if (oidc.status !== "created" || !oidc.externalToken)
+      throw new Error("Expected real OIDC artifact");
+    const otherRoot = await scope.writer.createPrincipalSession(randomUUID(), { subjectContext: "unrelated" });
+    if (otherRoot.status !== "created")
+      throw new Error("Expected unrelated root");
+    const peers = await Promise.all([clientCode, `other-${randomUUID()}`].map(code => scope.writer.issueCredential({ principalSessionId: otherRoot.value.principalSessionId, protocol: "custom-sso", clientCode: code, credentialType: "local_session", metadata: { version: 2, mode: CustomSsoClientMode.Gateway, configVersion: 7 } })));
+    barrier = "disabled";
+    const denied = await request(oidc.externalToken);
+    const wrongRedirect = await request(grant.code, "https://wrong.example.com/callback");
+    expect(denied.status).toBeGreaterThanOrEqual(400);
+    expect(wrongRedirect.status).toBeGreaterThanOrEqual(400);
+    expect(denied.headers.getSetCookie()).toEqual([]);
+    expect(wrongRedirect.headers.getSetCookie()).toEqual([]);
+    const oidcRetained = await scope.observer.resolveProtocolArtifact(oidc.externalToken, { protocol: "oidc", artifactType: "authorization_code" });
+    const grantRetained = await grants.inspect(grant.grantId);
+    const roots = await Promise.all([original.value.principalSessionId, otherRoot.value.principalSessionId].map(id => scope.observer.resolvePrincipalSessionById(id)));
+    for (const peer of peers) {
+      if (peer.status !== "created" || !peer.externalToken)
+        throw new Error("Expected peer credential");
+      const retained = await scope.observer.resolveCredential(peer.externalToken, { protocol: "custom-sso", credentialType: "local_session" });
+      expect(retained.status).toBe("resolved");
+    }
+    expect(oidcRetained.status).toBe("resolved");
+    expect(grantRetained).toEqual(initialGrant);
+    expect(roots.map(value => value.status)).toEqual(["resolved", "resolved"]);
+    expect({ reads, factsReads, orcasCalls }).toEqual({ reads: 0, factsReads: 0, orcasCalls: 0 });
     barrier = "blocking";
     const blocked = await request(grant.code);
     const blockedBody = await blocked.json();
@@ -249,12 +279,12 @@ test.each(["independent", "gateway", "gateway-orcas"])("%s redemption HTTP owns 
       expect(location.searchParams.get("orcasToken")).toBe(mode === "gateway-orcas" ? "orcas-session" : null);
       expect(success.headers.getSetCookie().some(cookie => cookie.startsWith(`${cookieName}=${token};`))).toBe(true);
     }
-    const credential = await scope.writer.resolveCredential(token);
+    const credential = await scope.writer.resolveCredential(token, { protocol: "custom-sso", credentialType: "local_session" });
     expect(credential.status).toBe("resolved");
     if (credential.status !== "resolved")
       throw new Error("Expected persisted credential");
     expect(credential.value.subjectContext).toBe(subjectContext);
-    const consumed = await scope.writer.resolveProtocolArtifact(grant.code);
+    const consumed = await scope.writer.resolveProtocolArtifact(grant.code, { protocol: "custom-sso", artifactType: "auth_code" });
     expect(consumed.status).not.toBe("resolved");
 
     changeAfterPermission = false;

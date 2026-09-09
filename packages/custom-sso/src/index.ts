@@ -15,4 +15,5 @@ export { createCustomSsoOperations } from "./operations";
 export type { CustomSsoOperations, CustomSsoOperationsDeps, CustomSsoProjectionPermission } from "./operations";
 
 export { PrincipalSessionInspectionUnavailableError } from "./principal-session-inspection.error";
+export { CustomSsoConfigurationUnavailableError, CustomSsoRequestMismatchError } from "./protocol-validation.error";
 export type { CustomSsoSubjectProjectionPort } from "./subject-projection.port";

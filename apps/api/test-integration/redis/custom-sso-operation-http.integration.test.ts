@@ -5,6 +5,8 @@ import { randomUUID } from "node:crypto";
 import process from "node:process";
 import { createApiOperationAuthenticationHandlers, createCustomSsoOperationAdapter } from "@api/composition/custom-sso-operation.adapter";
 import { createApiCustomSsoOperations } from "@api/composition/custom-sso-operations";
+import { createAuthHandlers } from "@api/routes/auth/auth.handlers";
+import { createAuthRoute } from "@api/routes/auth/auth.index";
 import { createCustomSsoSubjectDeliveryRequestScope } from "@api/services/sso/subject-delivery/custom-sso-subject-delivery-request-scope";
 import { customSsoLocalSessionCookieName, encodeCustomSsoClientCode } from "@api/services/sso/transport/custom-sso-client-code.transport";
 import { createErrorHandler } from "@iam/api-core/middlewares/error-handler";
@@ -65,12 +67,22 @@ test.each(["iam", "gateway", "gateway-orcas", "independent"])("Public UserInfo %
           },
     };
     const logger = { info() {}, warn() {}, error() {}, bindings: () => ({ sourceApp: "api-operation-test" }) };
+    let configurationUnavailable = false;
+    let gateUnavailable = false;
     const common = {
       redis,
-      clients: { findRuntimeRecord: async () => client },
+      clients: { findRuntimeRecord: async () => {
+        if (configurationUnavailable)
+          throw new Error("configuration reader failed");
+        return client;
+      } },
       clientSecrets: { findSecretRecord: async () => ({ ...client, customSsoSecretHash: "hash" }) },
       secrets: { verify: async () => true },
-      traffic: { check: async () => ({ outcome: "enabled" as const }) },
+      traffic: { check: async () => {
+        if (gateUnavailable)
+          throw new Error("gate reader failed");
+        return { outcome: "enabled" as const };
+      } },
       orcas: { orcasLogin: async () => ({ orcasId: "orcas-user", orcasSessionId: "orcas-session" }) },
       auditLogWriter: { recordAuditLog: async () => {} },
       logger,
@@ -178,7 +190,7 @@ test.each(["iam", "gateway", "gateway-orcas", "independent"])("Public UserInfo %
       }));
       if (!grant.isLogin)
         throw new Error("Grant fixture creation failed");
-      const artifact = await scope.writer.resolveProtocolArtifact(grant.code);
+      const artifact = await scope.writer.resolveProtocolArtifact(grant.code, { protocol: "custom-sso", artifactType: "auth_code" });
       if (artifact.status !== "resolved")
         throw new Error("Grant fixture resolution failed");
       grantIds.push(artifact.value.artifactId);
@@ -205,6 +217,53 @@ test.each(["iam", "gateway", "gateway-orcas", "independent"])("Public UserInfo %
     });
 
     const token = await seedToken();
+    const authApp = new Hono().route("/auth", createAuthRoute(createAuthHandlers({
+      authentication: {
+        loginWithMobile: { execute: async () => { throw new Error("unused"); } },
+        loginWithPassword: { execute: async () => { throw new Error("unused"); } },
+      },
+      clientService: { getClientBySecret: async () => null },
+      localSessionAuthorizer: adapter,
+      loginCredentialParser: { parseLoginPasswordCredential: async () => { throw new Error("unused"); } },
+      logger,
+      config: { projectionRetryAfterSeconds: 3, redisExpireSeconds: 120 },
+    })));
+    authApp.onError(createErrorHandler(logger));
+    const authRequest = (value: string) => authApp.request("/auth/authz", {
+      headers: { "Client": encodeCustomSsoClientCode(clientCode), "X-Forwarded-Uri": "/business", "Cookie": `${customSsoLocalSessionCookieName(clientCode)}=${value}; orcas_sso_sessionid=orcas` },
+    });
+    if (mode !== "iam") {
+      const principal = await scope.writer.resolvePrincipalSession(principalToken);
+      if (principal.status !== "resolved")
+        throw new Error("Expected fixture root");
+      const oidc = await scope.writer.issueCredential({ principalSessionId: principal.value.principalSessionId, protocol: "oidc", clientCode, credentialType: "access_token", metadata: { oidcConfigVersion: 7 } });
+      if (oidc.status !== "created" || !oidc.externalToken)
+        throw new Error("Expected real OIDC credential");
+      barrier = "disabled";
+      const responses = await Promise.all([request(oidc.externalToken), authRequest(oidc.externalToken)]);
+      expect(responses.map(value => value.status)).toEqual([401, 401]);
+      expect(responses.flatMap(value => value.headers.getSetCookie())).toEqual([]);
+      const retained = await scope.observer.resolveCredential(oidc.externalToken, { protocol: "oidc", credentialType: "access_token" });
+      const retainedCustom = await scope.observer.resolveCredential(token, { protocol: "custom-sso", credentialType: "local_session" });
+      const root = await scope.observer.resolvePrincipalSession(principalToken);
+      expect([retained.status, retainedCustom.status, root.status]).toEqual(["resolved", "resolved", "resolved"]);
+      expect(reads).toBe(0);
+      barrier = "enabled";
+      for (const failure of ["configuration", "gate"] as const) {
+        configurationUnavailable = failure === "configuration";
+        gateUnavailable = failure === "gate";
+        const unavailable = await request(token);
+        const body = await unavailable.json();
+        expect(unavailable.status).toBe(503);
+        expect(body).toMatchObject({ code: ApiErrorCode.InternalError });
+        expect(unavailable.headers.getSetCookie()).toEqual([]);
+        expect(reads).toBe(0);
+        const unchanged = await scope.observer.resolveCredential(token, { protocol: "custom-sso", credentialType: "local_session" });
+        expect(unchanged.status).toBe("resolved");
+      }
+      configurationUnavailable = false;
+      gateUnavailable = false;
+    }
     const invalid = await request("invalid-token");
     expect(invalid.status).toBe(401);
     expect(reads).toBe(0);
@@ -223,7 +282,7 @@ test.each(["iam", "gateway", "gateway-orcas", "independent"])("Public UserInfo %
     expect(granted.isLogin).toBe(true);
     if (!granted.isLogin)
       throw new Error("Expected authorization grant");
-    const pending = await scope.writer.resolveProtocolArtifact(granted.code);
+    const pending = await scope.writer.resolveProtocolArtifact(granted.code, { protocol: "custom-sso", artifactType: "auth_code" });
     if (pending.status !== "resolved")
       throw new Error("Expected persisted grant");
     grantIds.push(pending.value.artifactId);

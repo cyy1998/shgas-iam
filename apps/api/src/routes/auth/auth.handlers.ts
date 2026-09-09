@@ -20,6 +20,7 @@ import { SystemLogEvent } from "@iam/api-core/logger";
 import { verifyInternalClient } from "@iam/api-core/middlewares";
 import { createSubjectAccessHttpAdapter } from "@iam/api-core/subject-access";
 import { ClientCodeSchema } from "@iam/contracts";
+import { CustomSsoRequestMismatchError } from "@iam/custom-sso";
 import { getCookie, setCookie } from "hono/cookie";
 
 const subjectAccessHttp = createSubjectAccessHttpAdapter();
@@ -122,6 +123,7 @@ export function createAuthHandlers(deps: CreateAuthHandlersDeps) {
     catch (error) {
       if (
         error instanceof AuthzUnauthorizedError
+        && !(error instanceof CustomSsoRequestMismatchError)
         && localSessionCookie !== undefined
       ) {
         expireCustomSsoCookies(c, [

@@ -6,44 +6,55 @@ import type { OidcSubjectAccessBridge } from "./subject-access-operation.ts";
 export function createOidcProviderSessionBridge(
   sessions: {
     forOperation: (operation: SubjectAccessOperation) => OidcSessionKernelAdapter;
+    terminationForOperation: (operation: SubjectAccessOperation) => Pick<OidcSessionKernelAdapter, "read" | "readPrincipalAnchor">;
     termination: Pick<OidcSessionKernelAdapter, "destroyProviderSession" | "logoutPrincipalSession" | "revokeAccessTokenCredential" | "revokeClientProtocol"
     | "read" | "readPrincipalAnchor">;
   },
   bridge: OidcSubjectAccessBridge,
 ): OidcSessionKernelAdapter {
+  const adapters = new WeakMap<SubjectAccessOperation, OidcSessionKernelAdapter>();
+  function currentAdapter() {
+    const operation = bridge.current();
+    let adapter = adapters.get(operation);
+    if (!adapter) {
+      adapter = sessions.forOperation(operation);
+      adapters.set(operation, adapter);
+    }
+    return adapter;
+  }
   return {
     consumeAuthorizationCodeArtifact: (...args) =>
-      sessions.forOperation(bridge.current()).consumeAuthorizationCodeArtifact(...args),
+      currentAdapter().consumeAuthorizationCodeArtifact(...args),
     resolveAuthorizationCodeSessionLifetime: (...args) =>
-      sessions.forOperation(bridge.current()).resolveAuthorizationCodeSessionLifetime(...args),
-    consume: (...args) => sessions.forOperation(bridge.current()).consume(...args),
-    create: (...args) => sessions.forOperation(bridge.current()).create(...args),
-    resolveReturnHandle: (...args) => sessions.forOperation(bridge.current()).resolveReturnHandle(...args),
-    consumeStaged: (...args) => sessions.forOperation(bridge.current()).consumeStaged(...args),
+      currentAdapter().resolveAuthorizationCodeSessionLifetime(args[0], args[1], bridge.authorizationCodeRequest()),
+    consume: (...args) => currentAdapter().consume(...args),
+    create: (...args) => currentAdapter().create(...args),
+    resolveReturnHandle: (...args) => currentAdapter().resolveReturnHandle(...args),
+    consumeStaged: (...args) => currentAdapter().consumeStaged(...args),
     destroyProviderSession: sessions.termination.destroyProviderSession,
-    ensureClientBinding: (...args) => sessions.forOperation(bridge.current()).ensureClientBinding(...args),
-    inspect: (...args) => sessions.forOperation(bridge.current()).inspect(...args),
+    ensureClientBinding: (...args) => currentAdapter().ensureClientBinding(...args),
+    inspect: (...args) => currentAdapter().inspect(...args),
     isCurrentOrStagedPrincipal: (...args) =>
-      sessions.forOperation(bridge.current()).isCurrentOrStagedPrincipal(...args),
-    isStagedPrincipal: (...args) => sessions.forOperation(bridge.current()).isStagedPrincipal(...args),
+      currentAdapter().isCurrentOrStagedPrincipal(...args),
+    isStagedPrincipal: (...args) => currentAdapter().isStagedPrincipal(...args),
     logoutPrincipalSession: sessions.termination.logoutPrincipalSession,
     read: (...args) => bridge.isLogout()
-      ? sessions.termination.read(...args)
-      : sessions.forOperation(bridge.current()).read(...args),
+      ? sessions.terminationForOperation(bridge.current()).read(...args)
+      : currentAdapter().read(...args),
     readPrincipalAnchor: (...args) => bridge.isLogout()
-      ? sessions.termination.readPrincipalAnchor(...args)
-      : sessions.forOperation(bridge.current()).readPrincipalAnchor(...args),
+      ? sessions.terminationForOperation(bridge.current()).readPrincipalAnchor(...args)
+      : currentAdapter().readPrincipalAnchor(...args),
     registerAccessTokenCredential: (...args) =>
-      sessions.forOperation(bridge.current()).registerAccessTokenCredential(...args),
+      currentAdapter().registerAccessTokenCredential(...args),
     registerAuthorizationCodeArtifact: (...args) =>
-      sessions.forOperation(bridge.current()).registerAuthorizationCodeArtifact(...args),
-    renew: (...args) => sessions.forOperation(bridge.current()).renew(...args),
-    resolve: (...args) => sessions.forOperation(bridge.current()).resolve(...args),
+      currentAdapter().registerAuthorizationCodeArtifact(...args),
+    renew: (...args) => currentAdapter().renew(...args),
+    resolve: (...args) => currentAdapter().resolve(...args),
     resolveAccessTokenCredential: (...args) =>
-      sessions.forOperation(bridge.current()).resolveAccessTokenCredential(...args),
-    resolveById: (...args) => sessions.forOperation(bridge.current()).resolveById(...args),
+      currentAdapter().resolveAccessTokenCredential(...args),
+    resolveById: (...args) => currentAdapter().resolveById(...args),
     revokeAccessTokenCredential: sessions.termination.revokeAccessTokenCredential,
     revokeClientProtocol: sessions.termination.revokeClientProtocol,
-    stage: (...args) => sessions.forOperation(bridge.current()).stage(...args),
+    stage: (...args) => currentAdapter().stage(...args),
   };
 }

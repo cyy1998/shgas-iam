@@ -114,8 +114,7 @@ function createCustomSsoMutationService(
     sessionKernel: {
       revokePrincipalSession: async () => emptySummary(),
       revokeUserSessionsByContext: async () => emptySummary(),
-      revokeClientProtocol: emptySummary,
-      revokeClient: emptySummary,
+      revokeSelectedClientProtocolObjects: emptySummary,
       prepareUserSessionRevocationByContext: async () => ({ revoke: emptySummary }),
       revokeUserSessionRecords: emptySummary,
     },

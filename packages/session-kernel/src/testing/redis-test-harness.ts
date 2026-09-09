@@ -334,7 +334,7 @@ function createSessionKernelClient(
   logger?: SessionKernelLogger,
   config: Partial<Pick<SessionKernelConfigInput, "clock" | "principalIdleTtlMs" | "principalAbsoluteTtlMs" | "tombstoneTtlMs" | "tombstoneGraceMs">> = {},
 ) {
-  return createSessionKernel({
+  const kernel = createSessionKernel({
     cleanupAdapters,
     logger,
     config: createSessionKernelConfig({
@@ -349,17 +349,16 @@ function createSessionKernelClient(
       principalIdleTtlMs: 30_000,
       ...config,
     }),
-    validationHooks: beforeArtifactValidation
-      ? {
-          validateClient: async (object) => {
-            if ("artifactId" in object)
-              await beforeArtifactValidation();
-            return { ok: true };
-          },
-        }
-      : undefined,
     redis,
   });
+  return {
+    ...kernel,
+    async resolveProtocolArtifact(...args: Parameters<SessionKernel["resolveProtocolArtifact"]>) {
+      const result = await kernel.resolveProtocolArtifact(...args);
+      await beforeArtifactValidation?.();
+      return result;
+    },
+  };
 }
 
 function createCommitThenErrorRedis(

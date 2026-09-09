@@ -166,6 +166,13 @@ describe("Custom SSO public commands with production PostgreSQL transactions", (
     expect(JSON.stringify(detail)).not.toContain("one-time-secret");
     expect(invalidateClient).toHaveBeenCalledTimes(3);
     expect(revoke).toHaveBeenCalledTimes(3);
+    for (const [index, committedVersion] of [11, 12, 13].entries()) {
+      expect(revoke).toHaveBeenNthCalledWith(index + 1, expect.objectContaining({
+        clientCode: "portal",
+        protocol: "custom-sso",
+        committedVersion,
+      }));
+    }
   });
 
   test("lifecycle retries audit no-op without writing a new epoch or revoking again", async () => {
@@ -182,6 +189,8 @@ describe("Custom SSO public commands with production PostgreSQL transactions", (
     expect(after.audits).toMatchObject([false, true, false, true, false].map(changed => ({ details: { changed } })));
     expect(invalidateClient).toHaveBeenCalledTimes(5);
     expect(revoke).toHaveBeenCalledTimes(2);
+    expect(revoke).toHaveBeenNthCalledWith(1, expect.objectContaining({ protocol: "custom-sso", committedVersion: 11 }));
+    expect(revoke).toHaveBeenNthCalledWith(2, expect.objectContaining({ protocol: "custom-sso", committedVersion: 12 }));
   });
 
   for (const operation of ["configure", "rotate"] as const) {

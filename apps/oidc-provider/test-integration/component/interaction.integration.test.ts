@@ -222,7 +222,7 @@ describe("oIDC login page continuation guard", () => {
     await handler.handleInteraction(request as never, retry.response as never);
 
     expect(consume).toHaveBeenCalledOnce();
-    expect(consume).toHaveBeenCalledWith("login-completion");
+    expect(consume).toHaveBeenCalledWith("login-completion", expect.objectContaining({ clientId: expect.any(String) }));
     expect(interactionFinished).toHaveBeenCalledOnce();
     expect(retry.result.headers["set-cookie"]).toMatch(
       /^oidc_login_completion=; Path=\/oidc;/u,
@@ -514,7 +514,7 @@ describe("oIDC interaction Subject Access protocol boundary", () => {
     expect(interactionFinished).not.toHaveBeenCalled();
     expect(stage).not.toHaveBeenCalled();
     expect(consume).toHaveBeenCalledOnce();
-    expect(consume).toHaveBeenCalledWith("return-handle");
+    expect(consume).toHaveBeenCalledWith("return-handle", expect.objectContaining({ clientId: expect.any(String) }));
     expect(recovered.headers).not.toHaveProperty("set-cookie");
 
     stage.mockClear();

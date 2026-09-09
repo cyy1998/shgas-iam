@@ -2,12 +2,13 @@ import type {
   ClientStatus,
   CustomSsoClientMode,
 } from "@iam/contracts";
+import type { RejectedAuthorizationGrantPort } from "../authorization-grant.port";
 import type {
   CompleteSsoCallbackOptions,
   CompleteSsoCallbackResult,
 } from "./complete-sso-callback.type";
 
-export interface GatewayLoginCompletionPort {
+export interface GatewayLoginCompletionPort extends RejectedAuthorizationGrantPort {
   completeGatewayLogin: (input: {
     client: {
       readonly clientCode: string;

@@ -77,12 +77,12 @@ describe("Session Kernel credential real Redis contract", () => {
     const rejectedToken = writerResult.status === "created"
       ? "observer-bearer-token"
       : "writer-bearer-token";
-    const createdCredential = await scope!.writer.resolveCredential(createdToken);
+    const createdCredential = await scope!.writer.resolveCredential(createdToken, { protocol: "custom-sso", credentialType: "local_sid" });
     expect(createdCredential).toMatchObject({
       status: "resolved",
       value: { credentialId },
     });
-    const rejectedCredential = await scope!.observer.resolveCredential(rejectedToken);
+    const rejectedCredential = await scope!.observer.resolveCredential(rejectedToken, { protocol: "custom-sso", credentialType: "local_sid" });
     expect(rejectedCredential).toMatchObject({
       status: "missing_or_expired",
     });
@@ -125,11 +125,11 @@ describe("Session Kernel credential real Redis contract", () => {
     });
 
     expect(reused).toMatchObject({ status: "fail_closed" });
-    const revokedCredential = await scope!.observer.resolveCredential("revoked-bearer-token");
+    const revokedCredential = await scope!.observer.resolveCredential("revoked-bearer-token", { protocol: "custom-sso", credentialType: "local_sid" });
     expect(revokedCredential).toMatchObject({
       status: "revoked",
     });
-    const replacementCredential = await scope!.writer.resolveCredential("replacement-bearer-token");
+    const replacementCredential = await scope!.writer.resolveCredential("replacement-bearer-token", { protocol: "custom-sso", credentialType: "local_sid" });
     expect(replacementCredential).toMatchObject({
       status: "missing_or_expired",
     });
@@ -173,7 +173,7 @@ describe("Session Kernel credential real Redis contract", () => {
       "created",
       "fail_closed",
     ]);
-    const resolved = await scope!.writer.resolveCredential(externalToken);
+    const resolved = await scope!.writer.resolveCredential(externalToken, { protocol: "custom-sso", credentialType: "local_sid" });
     expect(resolved.status).toBe("resolved");
     if (resolved.status !== "resolved")
       return;
@@ -208,9 +208,9 @@ describe("Session Kernel credential real Redis contract", () => {
       throw new Error("expected a Credential fixture");
     expect(expired.value.credentialId).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/);
     await waitForRedisCondition(async () =>
-      (await scope!.observer.resolveCredential("expiring-bearer-token")).status === "missing_or_expired", "Credential did not expire within the observation deadline");
+      (await scope!.observer.resolveCredential("expiring-bearer-token", { protocol: "custom-sso", credentialType: "local_sid" })).status === "missing_or_expired", "Credential did not expire within the observation deadline");
 
-    const resolvedExpired = await scope!.observer.resolveCredential("expiring-bearer-token");
+    const resolvedExpired = await scope!.observer.resolveCredential("expiring-bearer-token", { protocol: "custom-sso", credentialType: "local_sid" });
     expect(resolvedExpired).toMatchObject({
       status: "missing_or_expired",
     });
@@ -237,7 +237,7 @@ describe("Session Kernel credential real Redis contract", () => {
       throw new Error("expected a new Credential");
     expect(replacement.value.credentialId).not.toBe(expired.value.credentialId);
     expect(replacement.value.credentialId).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/);
-    const resolvedReplacement = await scope!.observer.resolveCredential("replacement-after-expiry");
+    const resolvedReplacement = await scope!.observer.resolveCredential("replacement-after-expiry", { protocol: "custom-sso", credentialType: "local_sid" });
     expect(resolvedReplacement).toMatchObject({
       status: "resolved",
       value: { credentialId: replacement.value.credentialId },

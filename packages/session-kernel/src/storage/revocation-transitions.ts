@@ -3,6 +3,18 @@ import type {
   SessionKernelRevocationTransitions,
 } from "./store";
 
+const DELETE_OWNED_CLEANUP_KEYS_SCRIPT = `
+-- session-kernel-delete-owned-cleanup-keys-v1
+if redis.call("EXISTS", KEYS[1]) == 1
+  or redis.call("GET", KEYS[2]) ~= ARGV[1] then
+  return 0
+end
+for index = 3, #KEYS do
+  redis.call("DEL", KEYS[index])
+end
+return 1
+`;
+
 const REVOKE_ACTIVE_OBJECT_SCRIPT = `
 -- session-kernel-revoke-active-object-v1
 if redis.call("EXISTS", KEYS[2]) == 1
@@ -120,6 +132,16 @@ export function createRedisSessionKernelRevocationTransitions(
   }
 
   return {
+    async deleteOwnedCleanupKeys(input) {
+      return parseTransitionResult(await redis.eval!(
+        DELETE_OWNED_CLEANUP_KEYS_SCRIPT,
+        2 + input.payloadKeys.length,
+        input.lookupKey,
+        input.lookupTombstoneKey,
+        ...input.payloadKeys,
+        input.serializedTombstone,
+      ));
+    },
     async finalizeCleanupPending(input) {
       const keys = [input.tombstoneKey, input.indexKey];
       if (input.lookupTombstoneKey)
@@ -191,6 +213,16 @@ export function createInMemorySessionKernelRevocationTransitions(
   };
 
   return {
+    deleteOwnedCleanupKeys(input) {
+      return enqueue(async () => {
+        if (await redis.get(input.lookupKey) !== null
+          || await redis.get(input.lookupTombstoneKey) !== input.serializedTombstone) {
+          return false;
+        }
+        await redis.del(...input.payloadKeys);
+        return true;
+      });
+    },
     finalizeCleanupPending(input) {
       return enqueue(async () => {
         if (await redis.get(input.tombstoneKey) !== input.serializedTombstone)

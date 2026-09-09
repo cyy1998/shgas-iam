@@ -46,7 +46,7 @@ API 提供 Client/Snapshot/Secret、User、ORCAS、审计与日志的具体能�
 | 13 | ORCAS 时机、交付与失败重试保持 | A、R |
 | 14 | 模块拥有外部调用与补偿顺序 | A、R |
 | 15 | API 提供具体外部能力，包使用自有窄 ports | A、S |
-| 16 | redirect/version 错误在 reservation 前拒绝，不烧码 | A、C、R |
+| 16 | redirect 错误在 reservation 前拒绝并保留 Code；版本永久失效已由 #148 改为精确撤销，较新版本只拒绝保留 | A、C、R；[当前协议契约](custom-sso-protocol-validation.md) |
 | 17 | Grant 单赢家、renew/release/consume/takeover 保持 | A、C、R |
 | 18 | Grant 使用 Kernel Artifact 身份和权威期限 | A、R |
 | 19 | Independent 投影先于签发，复核先于消费 | A、R |

@@ -1,6 +1,7 @@
 import type { CustomSsoDeps } from "../custom-sso.port";
 import type { AuthorizationGrantRedemption } from "../grant";
 import type { CustomSsoAccess } from "./session.port";
+import { AuthzUnauthorizedError } from "@iam/api-core/errors/AuthzUnauthorizedError";
 import { createAuthorizeSsoUseCase } from "./authorize-sso/authorize-sso.use-case";
 import { createCustomSsoClientSecretVerifier } from "./client-secret-verifier";
 import { createCompleteSsoCallbackUseCase } from "./complete-sso-callback/complete-sso-callback.use-case";
@@ -24,12 +25,26 @@ export function createCustomSsoApplication(deps: Omit<CustomSsoDeps, "redis"> & 
   const operationDeps = { authorizationGrants: sessions, clients: deps.clients, trafficGate };
 
   async function authorizeLocalSession(token: string, clientCode: string) {
-    await trafficGate.assertSessionUseAllowed(clientCode);
+    try {
+      await trafficGate.assertSessionUseAllowed(clientCode);
+    }
+    catch (error) {
+      if (error instanceof AuthzUnauthorizedError)
+        return await sessions.authorizeLocalSession(token, clientCode, true);
+      throw error;
+    }
     return await sessions.authorizeLocalSession(token, clientCode);
   }
 
   async function resolvePublicAuthentication(token: string, clientCode: string) {
-    await trafficGate.assertSessionUseAllowed(clientCode);
+    try {
+      await trafficGate.assertSessionUseAllowed(clientCode);
+    }
+    catch (error) {
+      if (error instanceof AuthzUnauthorizedError)
+        return await sessions.resolvePublicAuthentication(token, clientCode, true);
+      throw error;
+    }
     return await sessions.resolvePublicAuthentication(token, clientCode);
   }
 

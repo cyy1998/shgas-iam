@@ -9,6 +9,7 @@ import {
   SubjectAccessOperationDeniedError,
   SubjectAccessUnavailableError,
 } from "@iam/api-core/subject-access";
+import { createOidcOperationSnapshots } from "../../provider/client/operation-snapshots.ts";
 import { createOidcSessionKernelAdapter } from "../../session/oidc-session-kernel.adapter.ts";
 
 export type OidcSessionOperationsDeps = Omit<OidcSessionKernelAdapterDeps, "kernel"> & {
@@ -24,9 +25,14 @@ type SubjectSession = {
 /** The caller owns one operation per HTTP request, including native interaction requests. */
 export function createOidcSessionOperations(deps: OidcSessionOperationsDeps) {
   const neutral = createOidcSessionKernelAdapter(deps);
+  const snapshots = createOidcOperationSnapshots(deps);
+  const adapters = new WeakMap<SubjectAccessOperation, ReturnType<typeof createOidcSessionKernelAdapter>>();
 
   function forOperation(value: SubjectAccessOperation) {
     const operation = requireSubjectAccessOperation(value);
+    const existing = adapters.get(operation);
+    if (existing)
+      return existing;
 
     function scoped<Args extends unknown[], Result>(run: (...args: Args) => Promise<Result>) {
       return async (...args: Args): Promise<Result> => {
@@ -72,9 +78,6 @@ export function createOidcSessionOperations(deps: OidcSessionOperationsDeps) {
       ...deps.kernel,
       resolvePrincipalSession: async token => checked(await deps.kernel.resolvePrincipalSession(token)),
       resolvePrincipalSessionById: async id => checked(await deps.kernel.resolvePrincipalSessionById(id)),
-      resolveClientBindingById: async id => checked(await deps.kernel.resolveClientBindingById(id)),
-      resolveCredential: async token => checked(await deps.kernel.resolveCredential(token)),
-      resolveProtocolArtifact: async token => checked(await deps.kernel.resolveProtocolArtifact(token)),
       async renewPrincipalSession(id) {
         if (!await principal(id))
           return { status: "missing_or_expired" };
@@ -90,7 +93,7 @@ export function createOidcSessionOperations(deps: OidcSessionOperationsDeps) {
         if (input.principalSessionId && !await principal(input.principalSessionId))
           return { status: "missing_or_expired" };
         if (input.bindingId) {
-          const binding = await checked(await deps.kernel.resolveClientBindingById(input.bindingId));
+          const binding = await checked(await deps.kernel.resolveClientBindingById(input.bindingId, { protocol: input.protocol, clientCode: input.clientCode }));
           if (binding.status !== "resolved")
             return binding;
         }
@@ -100,23 +103,19 @@ export function createOidcSessionOperations(deps: OidcSessionOperationsDeps) {
         if (!await principal(input.principalSessionId))
           return { status: "missing_or_expired" };
         if (input.bindingId) {
-          const binding = await checked(await deps.kernel.resolveClientBindingById(input.bindingId));
+          const binding = await checked(await deps.kernel.resolveClientBindingById(input.bindingId, { protocol: input.protocol, clientCode: input.clientCode }));
           if (binding.status !== "resolved")
             return binding;
         }
         return await deps.kernel.issueCredential(input);
       },
-      async consumeProtocolArtifact(token) {
-        const artifact = await checked(await deps.kernel.resolveProtocolArtifact(token));
-        if (artifact.status !== "resolved")
-          return artifact;
-        return await deps.kernel.consumeProtocolArtifact(token);
-      },
     };
 
     const adapter = createOidcSessionKernelAdapter({
       ...deps,
+      ...snapshots.forOperation(operation),
       kernel,
+      permit,
       providerSessionState: {
         ...deps.providerSessionState,
         claim: async (input) => {
@@ -145,7 +144,7 @@ export function createOidcSessionOperations(deps: OidcSessionOperationsDeps) {
         refresh: input => deps.providerSessionState.refresh(input),
       },
     });
-    return {
+    const scopedAdapter = {
       consumeAuthorizationCodeArtifact: scoped(adapter.consumeAuthorizationCodeArtifact),
       resolveAuthorizationCodeSessionLifetime: scoped(adapter.resolveAuthorizationCodeSessionLifetime),
       consume: scoped(adapter.consume),
@@ -181,10 +180,28 @@ export function createOidcSessionOperations(deps: OidcSessionOperationsDeps) {
       revokeAccessTokenCredential: neutral.revokeAccessTokenCredential,
       revokeClientProtocol: neutral.revokeClientProtocol,
     } satisfies ReturnType<typeof createOidcSessionKernelAdapter>;
+    adapters.set(operation, scopedAdapter);
+    return scopedAdapter;
   }
 
   return {
     forOperation,
+    snapshotsForOperation: snapshots.forOperation,
+    terminationForOperation(operation: SubjectAccessOperation) {
+      const adapter = createOidcSessionKernelAdapter({ ...deps, ...snapshots.forOperation(operation) });
+      function scoped<Args extends unknown[], Result>(run: (...args: Args) => Promise<Result>) {
+        return async (...args: Args) => {
+          requireSubjectAccessOperation(operation);
+          try {
+            return await run(...args);
+          }
+          finally {
+            requireSubjectAccessOperation(operation);
+          }
+        };
+      }
+      return { read: scoped(adapter.read), readPrincipalAnchor: scoped(adapter.readPrincipalAnchor) };
+    },
     termination: {
       destroyProviderSession: neutral.destroyProviderSession,
       logoutPrincipalSession: neutral.logoutPrincipalSession,

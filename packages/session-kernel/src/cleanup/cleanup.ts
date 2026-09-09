@@ -1,10 +1,15 @@
 import type { CleanupRef, RevokeSummary } from "../state/model";
 
+export type CleanupExecution = {
+  /** Deletes external payload keys only while this revoked object still owns its lookup tombstone. */
+  deleteOwnedKeys: (keys: readonly string[]) => Promise<void>;
+};
+
 export type CleanupAdapter = {
   protocol: string;
   kind: string;
   /** Cleanup can be replayed after an ambiguous failure and must be idempotent. */
-  cleanup: (refs: CleanupRef[]) => Promise<void>;
+  cleanup: (refs: CleanupRef[], execution: CleanupExecution) => Promise<void>;
 };
 
 export type SessionKernelLogger = {
@@ -16,6 +21,7 @@ export async function runCleanupRefs(
   refs: CleanupRef[],
   adapters: CleanupAdapter[] = [],
   summary: RevokeSummary,
+  execution: CleanupExecution,
   logger?: SessionKernelLogger,
 ) {
   const grouped = groupCleanupRefs(refs);
@@ -38,7 +44,7 @@ export async function runCleanupRefs(
     }
 
     try {
-      await adapter.cleanup(groupRefs);
+      await adapter.cleanup(groupRefs, execution);
       summary.cleanup.succeeded += groupRefs.length;
     }
     catch (error) {

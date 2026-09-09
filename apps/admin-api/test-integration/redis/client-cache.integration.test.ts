@@ -477,8 +477,7 @@ function createTestClientService(
     sessionKernel: {
       revokePrincipalSession: async () => emptyRevocationSummary(),
       revokeUserSessionsByContext: async () => emptyRevocationSummary(),
-      revokeClientProtocol: mock(async () => emptyRevocationSummary()),
-      revokeClient: mock(async () => emptyRevocationSummary()),
+      revokeSelectedClientProtocolObjects: mock(async () => emptyRevocationSummary()),
       prepareUserSessionRevocationByContext: mock(async () => ({ revoke: async () => emptyRevocationSummary() })),
       revokeUserSessionRecords: mock(async () => emptyRevocationSummary()),
     },

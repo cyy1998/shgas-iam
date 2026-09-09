@@ -45,6 +45,7 @@ export type CustomSsoKernelPort = Pick<SessionKernel, | "createProtocolArtifact"
   | "resolveProtocolArtifact"
   | "revokeArtifact"
   | "revokeCredential"
+  | "revokeObservedObject"
   | "revokePrincipalSession">;
 
 export interface CustomSsoDeps {

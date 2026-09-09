@@ -126,6 +126,12 @@ Client 基础创建、code 编辑、legacy ID 编辑、状态和删除已通过�
 
 Client required after-commit 失败映射公共 `ADMIN_MUTATION_COMMITTED`，未知 COMMIT 原错误与保守失效路径保持。Client 页面自动读详情且持续显示尚需修复的传播提示，创建以已知 code 恢复，删除后的 404 也不清除提示；不自动重发 mutation。协议页面同时识别该共享失败语义，一次性 Secret 未交付时保留主动修复和重新轮换流程。真实 PostgreSQL 证明竞争、审计回滚与提交边界，PG/Redis composition 通过真实 ClientService 和三个公开 Reader 证明已提交后的旧 Snapshot 窗口与 no-op required invalidation；它不证明生产环境已修复。
 
+Client 协议配置撤销固定本次 `RETURNING` 新行中的 canonical Client 与版本边界，仅选择 `< V` 的对象；停用/删除分别
+携带两个协议版本。Kernel 显式批量接口由协议公开 selector 解释必要 metadata，选择后保留原序列化观察值用于 CAS，
+各子对象独立选择，旧 Binding 不无条件级联新代。未知版本跳过并聚合诊断，在线仍拒绝；Admin 未装配的 cleanup adapter
+继续产生 pending，单次枚举不保证排空极迟旧写入。完整 owner、no-op/unknown COMMIT 和验证边界见
+[Client 协议版本撤销](../features/admin/client-protocol-revocation.md)。
+
 岗位、组织、Role、Role Assignment 及上述 User、Employment、Responsibility 命令及 Client 基础、OIDC 与 Custom SSO 命令的 REST、legacy、tRPC 和页面已协调修改；整个集成分支的混合中间态不得部署，外部 REST 调用方核验仍是最终切换前的责任。
 
 成功业务结果通过现有 REST envelope 或直接通过 tRPC 返回，并协调切换调用方。状态/生命周期、主任职、授权、协议、凭据及会话命令的合法 no-op 保留意图审计，普通资料无变化不记变更审计。保留的 Client Runtime invalidation、提交后传播失败的专用错误语义及一次性 Secret 恢复由 ADR-0025 统一约束。
@@ -177,9 +183,9 @@ Internal Privilege Delegation 已在 API 自身的 service、repository 与 Unit
   `/auth/authz` 强制收窄为 Subject Identifier 与可选 username/name，并把同一 Base64 值写入 body/header。
   Gateway Local Session 解析形成最小 Subject/client/ORCAS 认证数据，并携带仅供跨请求凭据校验的 config version；
   该版本不进入 projection 或 wire。Authorize、callback、token、`/public/user-info` 与 Gateway `/auth/authz` 各自在
-  request boundary 接受一次 Runtime Snapshot，并把该 request capability 贯穿 Session Kernel 与 delivery；一旦接受，
+  request boundary 分别固定协议配置和 Gate 的首次结果（含并行进行中、拒绝与暂态失败），并把该 request capability 贯穿 Session Kernel 与 delivery；一旦接受，
   当前请求不会在 artifact/credential/projection 副作用前后重读 generation 或当前 Client。并发 mutation 只影响后续请求，
-  已签发凭据仍在下一次独立请求按当前 Snapshot 校验。Gateway Header 继续使用独立最小 mapping、Subject equality 与
+  已签发凭据仍在下一次独立请求按当前 Snapshot 校验。已确认旧代对象精确撤销，高于本操作配置的对象只拒绝并保留，错误用途不清可恢复 Cookie；详细顺序与证明范围见 [Custom SSO 操作契约](../features/sso/custom-sso-protocol-validation.md)。Gateway Header 继续使用独立最小 mapping、Subject equality 与
   Base64 路径。Custom SSO Runtime 已使用 `@iam/api-core` 的 Client Runtime Snapshot Module：API composition 注册
   `custom-sso` canonical Adapter，并通过绑定 kind 的窄 Reader 取得 present/absent Snapshot；positive/negative TTL
   分别为 30 秒/3 秒。Adapter 只拥有 PostgreSQL loader、strict codec 与 TTL，业务调用方不接触 control、generation、
@@ -383,7 +389,7 @@ User Profile 的初代 V1 builder、Facts reader/publisher 与 Subject Projectio
   全部旧工厂策略、专用字段/选项和双表示已退役；旧在线状态按[维护手册](../releases/subject-access-operation-cutover.md)
   在停流排空后清理，消费者统一版本并重新登录。代码候选不表示环境已完成切换。
 
-- `@iam/session-kernel` 独占四类生命周期、配置、三个 Kernel 日志事件、存储与 Lua。根入口只公开生命周期能力和必要配置/接口类型，`/maintenance` 提供当前 namespace inventory，`/testing` 提供测试构造、种子与检查。Kernel 不依赖 API Core、Custom SSO 或 app；连接和日志实例、Client/protocol validation 与协议 cleanup 由 composition 注入。旧 API Core Kernel 出口与实现已删除，不保留兼容转导出。
+- `@iam/session-kernel` 独占四类生命周期、配置、三个 Kernel 日志事件、存储与 Lua。根入口只公开生命周期能力和必要配置/接口类型，`/maintenance` 提供当前 namespace inventory，`/testing` 提供测试构造、种子与检查。Kernel 不依赖 API Core、Custom SSO 或 app；连接和日志实例、协议 cleanup 由 composition 注入；协议配置校验由各协议 owner 拥有，不再注入 Kernel。旧 API Core Kernel 出口与实现已删除，不保留兼容转导出。
 
 - API 的四类身份认证统一由 `use-cases/authentication/` 拥有，production wiring 在
   `composition/use-cases/authentication.ts`。密码、手机、OA、微信只消费各自的 Principal Session 创建 port；
@@ -504,9 +510,10 @@ User Profile 的初代 V1 builder、Facts reader/publisher 与 Subject Projectio
   Credential、Gateway Local Session、ORCAS、最小 Kernel metadata、协议 audit 和失败补偿；resolved grant 不跨模块公开。
   运行时不读取、规范化或删除 Legacy 私有 payload，credential/session 只保存严格版本化的最小 Kernel metadata。
 - Grant 固化已验证的 literal redirect、client mode/config version 与可选 opaque state。Gateway callback 通过
-  callback-owned 窄 Client context 重新确认当前全局状态、Custom SSO 启用态、Gateway mode、ORCAS 配置与
-  config version；该 context 不暴露通用 Client Secret。redirect 或版本错误在 reservation 前拒绝，因此错误
-  callback 不烧码。
+  callback-owned 窄 Client context 使用本次操作首次取得的全局状态、Custom SSO 启用态、Gateway mode、ORCAS 配置与
+  config version；该 context 不暴露通用 Client Secret。redirect 归属不符、或对象版本高于本操作配置时，在 reservation
+  前拒绝并保留 Code/Grant；确认归属且对象版本低于本操作配置时，在 reservation 前拒绝并精确撤销已观察的 Artifact，
+  由其 cleanup owner 清理 Grant，不影响其他对象。不能把所有版本不符统一解释为“不烧码”。
 - Gateway 与 Independent 共用独立 Grant redemption state machine。`begin` 通过 attempt fence 保证并发兑换只有
   一个赢家；reserved 工作由 heartbeat 定期续租，renew 必须匹配 grant、attempt 和上一 lease deadline，且只延长
   lease、不延长 Grant 原始 expiry。Independent 在任何 Credential issuance、post-validation、Grant consume、成功审计或
@@ -533,11 +540,28 @@ User Profile 的初代 V1 builder、Facts reader/publisher 与 Subject Projectio
 
 ### OIDC Provider
 
+- 在线 Kernel 解析要求预期 protocol/type，已知 Client 时一并匹配；用途拒绝早于 Subject Access。
+  OIDC owner 校验 Binding、Code、AccessToken 和 Return Handle 的配置版本。Binding 的 mapping/anchor、Code 的已认证
+  Client/redirect、Return Handle 的浏览器/回调归属先于永久清理。永久失效调用 Kernel 的已观察对象精确撤销，暂态
+  Gate/读取失败保留对象与可恢复 Cookie。Artifact 消费携带同一已观察对象，CAS 不重新选择替换对象或复查期限。
+  Code 同时保留首次 Provider payload：消费前核对其字节，再消费同一 Kernel Artifact，最后 CAS 写入 Provider 消费标记。
+  替换对象不能取得旧请求的消费标记；普通读取的版本失败清理也按首次 Provider payload 原子比较删除，保留替换对象及其标记。
+  两个 owner 的状态转换仍不是一般原子事务，双状态恢复由独立议题拥有。
+  Kernel cleanup 回调取得瞬时 `deleteOwnedKeys` 能力：仅在 lookup 已移除且 lookup tombstone 仍等于原撤销对象时原子删除
+  Code/Token payload 与消费标记；当前或已消费的新 owner 均使旧清理成为无作用操作。pending cleanup 重试重新绑定原
+  tombstone 的同一约束，不新增持久字段，不退回无条件删除；Binding mapping 继续使用其原有 owner compare-delete。
+  显式整 Client/协议管理撤销仍独立存在；Admin 配置变更已使用固定提交版本选择，见[版本撤销契约](../features/admin/client-protocol-revocation.md)。
+  高于本操作配置版本的对象只拒绝并保留，不能由版本不等推断永久失效。
+
 - OIDC 的正式 Session/Provider 工厂统一拥有操作许可链。Provider middleware 在 `ctx.state` 专用槽建立容器，
   回调通过公开 `Provider.ctx` 桥接，finally 删除槽并关闭；原生 interaction、login guard、resume 各自显式 `run`。
   可信 Principal、Binding、Credential 或有主体 Artifact 解析后检查，早于 renew/stage/claim/签发。
   `load_account` 早于 policy，因此账户 hook 先解析当前根并取得许可，再读资料；已许可 reader 不按账号状态过滤。
   Claims 与 Token extra 交付必须持有活跃许可，结束后捕获的 callback 不再有效。
+  同一 operation 的各个 facade 共享配置与 Gate 各自首次 Promise；版本从本次完整配置派生，成功、拒绝和暂态失败均固定。
+  原生 `run` 的私有 ALS 把同一 operation 传给 Provider 原生方法间接调用的 storage callbacks，结束时关闭，不能供后台任务复用。
+  Provider Client、Session/Interaction/Grant/Code/Token adapter、Claims、policy 与原生 handler 均接入；退出读取保持中性许可语义。
+  两类 Snapshot 不构成原子联合事实，不增加提交或响应前复查；完整边界与验证见 [OIDC 操作契约](../features/oidc/oidc-operation-snapshots.md)。
 - 未消费 Code 的 `AuthorizationCode.find` 在可信 Artifact/Principal 解析和许可成功后才返回 Provider；
   `consume` 在写消费标记前也要求该解析成功。UserInfo 首次 Credential 解析检查早于 Binding mapping 刷新。
   后续 consume、findAccount、Claims 和签发复用许可。已消费 Code 直接返回消费标记供 Provider 拒绝重放并撤销
@@ -582,8 +606,8 @@ User Profile 的初代 V1 builder、Facts reader/publisher 与 Subject Projectio
   Provider Session、Principal Session 与 binding ownership；撤销一个 client lifecycle 不得删除同一 Provider Session
   下其他 client 的 binding。
 - OIDC artifact 生命周期不再与 Runtime cache invalidation 通过 Pub/Sub 串联。Admin mutation 仍通过 Session Kernel
-  revocation seam 撤销当前 OIDC Client Binding 与 credential/token；Provider protocol object 在读取时使用当前
-  `oidcConfigVersion` fail closed，并由其 store 删除确认过期的对象。显式 Client Protocol artifact cleanup 继续由独立
+  revocation seam 撤销当前 OIDC Client Binding 与 credential/token；Provider protocol object 在读取时使用本操作首次
+  `oidcConfigVersion` fail closed，并由其 store 删除确认过期的对象，高于本操作版本的对象保留。显式 Client Protocol artifact cleanup 继续由独立
   maintenance command 拥有，不作为 Runtime Snapshot invalidation 的在线副作用。旧 OIDC Runtime key 已退出当前
   Snapshot Module 的 repair/verify inventory。
 - Provider protocol module 可以静态 import `oidc-provider` types 和纯 protocol helpers，但不得静态绑定 app-local

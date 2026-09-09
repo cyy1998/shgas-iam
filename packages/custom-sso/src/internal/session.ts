@@ -46,6 +46,7 @@ import {
   AUTHORIZATION_GRANT_REDEMPTION_CLEANUP_KIND,
 } from "../grant";
 import { PrincipalSessionInspectionUnavailableError } from "../principal-session-inspection.error";
+import { CustomSsoConfigurationUnavailableError, CustomSsoRequestMismatchError } from "../protocol-validation.error";
 import { buildGatewayLoginSuccessAudit, buildIndependentLoginSuccessAudit, withRequestContext } from "./audit";
 
 const CUSTOM_SSO_PROTOCOL = "custom-sso";
@@ -55,6 +56,7 @@ const LOCAL_SESSION_CREDENTIAL_TYPE = "local_session";
 type CustomSsoPrincipalTokenSource = "cookie" | "authorization_header" | "query" | "none";
 
 interface ReservedGatewayAuthorizationGrant {
+  artifact: ProtocolArtifact;
   artifactId: string;
   principalSessionId: string;
   reservation: AuthorizationGrantReservation;
@@ -108,6 +110,7 @@ interface GatewayClientContext {
 }
 
 interface ResolvedIndependentAuthorizationGrant {
+  artifact: ProtocolArtifact;
   artifactId: string;
   principalSessionId: string;
   reservation: AuthorizationGrantReservation;
@@ -267,13 +270,16 @@ export function createCustomSsoSessionKernelAdapter(deps: CustomSsoSessionKernel
     redirectUrl?: string;
     invalidCodeError?: "unauthorized" | "invalid_auth_code";
   }): Promise<ReservedGatewayAuthorizationGrant> {
-    const resolved = await deps.kernel.resolveProtocolArtifact(input.code);
+    const resolved = await deps.kernel.resolveProtocolArtifact(input.code, { protocol: CUSTOM_SSO_PROTOCOL, artifactType: AUTH_CODE_ARTIFACT_TYPE, clientCode: input.client.clientCode });
+    if (resolved.status === "fail_closed")
+      throw new CustomSsoConfigurationUnavailableError({ cause: resolved.cause });
     if (resolved.status !== "resolved") {
       throwInvalidCode(input.invalidCodeError);
     }
-    const resolvedGrant = validateGatewayAuthorizationArtifact(
+    const resolvedGrant = await validateAuthorizationArtifact(
       resolved.value,
       input,
+      CustomSsoClientMode.Gateway,
       input.invalidCodeError,
     );
     await acquireGrantPermission(resolved.value, resolvedGrant.subjectIdentifier, resolvedGrant.principalSessionId);
@@ -286,6 +292,7 @@ export function createCustomSsoSessionKernelAdapter(deps: CustomSsoSessionKernel
     }
 
     return {
+      artifact: resolved.value,
       artifactId: resolved.value.artifactId,
       principalSessionId: resolvedGrant.principalSessionId,
       reservation: reservation.reservation,
@@ -403,7 +410,7 @@ export function createCustomSsoSessionKernelAdapter(deps: CustomSsoSessionKernel
           throw new InvalidAuthCodeError("非法Code");
 
         try {
-          await deps.kernel.revokeArtifact(authorizationGrant.artifactId, "consumed");
+          await deps.kernel.revokeObservedObject(authorizationGrant.artifact, "consumed");
         }
         catch {
           deps.logger.warn({
@@ -444,37 +451,25 @@ export function createCustomSsoSessionKernelAdapter(deps: CustomSsoSessionKernel
     code: string;
     redirectUri: string;
   }): Promise<ResolvedIndependentAuthorizationGrant> {
-    const resolved = await deps.kernel.resolveProtocolArtifact(input.code);
+    const resolved = await deps.kernel.resolveProtocolArtifact(input.code, { protocol: CUSTOM_SSO_PROTOCOL, artifactType: AUTH_CODE_ARTIFACT_TYPE, clientCode: input.client.clientCode });
+    if (resolved.status === "fail_closed")
+      throw new CustomSsoConfigurationUnavailableError({ cause: resolved.cause });
     if (resolved.status !== "resolved")
       throw new InvalidAuthCodeError("非法Code");
     const artifact = resolved.value;
-    const metadata = AuthCodeMetadataSchema.safeParse(artifact.metadata);
-    if (
-      artifact.protocol !== CUSTOM_SSO_PROTOCOL
-      || artifact.artifactType !== AUTH_CODE_ARTIFACT_TYPE
-      || artifact.clientCode !== input.client.clientCode
-      || artifact.principalSessionId === undefined
-      || artifact.principal === undefined
-      || !metadata.success
-      || metadata.data.subjectIdentifier !== artifact.principal.subjectId
-      || metadata.data.clientCode !== input.client.clientCode
-      || metadata.data.mode !== CustomSsoClientMode.Independent
-      || metadata.data.redirectUri !== input.redirectUri
-      || metadata.data.configVersion !== input.client.configVersion
-    ) {
-      throw new InvalidAuthCodeError("非法Code");
-    }
+    const metadata = await validateAuthorizationArtifact(artifact, { client: input.client, redirectUrl: input.redirectUri }, CustomSsoClientMode.Independent);
 
-    await acquireGrantPermission(artifact, metadata.data.subjectIdentifier, artifact.principalSessionId);
+    await acquireGrantPermission(artifact, metadata.subjectIdentifier, metadata.principalSessionId);
     const reservation = await deps.authorizationGrantRedemption.begin(artifact.artifactId);
     if (reservation.status !== "reserved")
       throw new InvalidAuthCodeError("非法Code");
 
     return {
+      artifact,
       artifactId: artifact.artifactId,
-      principalSessionId: artifact.principalSessionId,
+      principalSessionId: metadata.principalSessionId,
       reservation: reservation.reservation,
-      subjectIdentifier: metadata.data.subjectIdentifier,
+      subjectIdentifier: metadata.subjectIdentifier,
     };
   }
 
@@ -671,12 +666,17 @@ export function createCustomSsoSessionKernelAdapter(deps: CustomSsoSessionKernel
         let localSession: IssuedClientCredential | undefined;
         let credentialIssueState: CredentialIssueState = "not_started";
         try {
-          const revalidated = await deps.kernel.resolveProtocolArtifact(input.code);
+          const revalidated = await deps.kernel.resolveProtocolArtifact(input.code, { protocol: CUSTOM_SSO_PROTOCOL, artifactType: AUTH_CODE_ARTIFACT_TYPE, clientCode: input.client.clientCode });
+          if (revalidated.status === "fail_closed")
+            throw new CustomSsoConfigurationUnavailableError({ cause: revalidated.cause });
           if (revalidated.status !== "resolved")
             throw new AuthzUnauthorizedError("非法code");
-          const revalidatedGrant = validateGatewayAuthorizationArtifact(
+          if (JSON.stringify(revalidated.value) !== JSON.stringify(authorizationGrant.artifact))
+            throw new AuthzUnauthorizedError("非法code");
+          const revalidatedGrant = await validateAuthorizationArtifact(
             revalidated.value,
             input,
+            CustomSsoClientMode.Gateway,
             "unauthorized",
           );
           await acquireGrantPermission(
@@ -746,7 +746,7 @@ export function createCustomSsoSessionKernelAdapter(deps: CustomSsoSessionKernel
           throw new AuthzUnauthorizedError("局部session创建失败");
 
         try {
-          await deps.kernel.revokeArtifact(authorizationGrant.artifactId, "consumed");
+          await deps.kernel.revokeObservedObject(authorizationGrant.artifact, "consumed");
         }
         catch {
           deps.logger.warn({
@@ -788,11 +788,13 @@ export function createCustomSsoSessionKernelAdapter(deps: CustomSsoSessionKernel
   async function authorizeLocalSession(
     localSessionToken: string,
     clientCode: string,
+    clientDenied = false,
   ) {
     const context = await resolveValidatedCustomSsoCredential(
       localSessionToken,
       clientCode,
       CustomSsoClientMode.Gateway,
+      clientDenied,
     );
     return await deps.subjectDelivery.resolveGatewaySubjectHeader({
       subjectIdentifier: context.subjectIdentifier,
@@ -831,7 +833,13 @@ export function createCustomSsoSessionKernelAdapter(deps: CustomSsoSessionKernel
   async function resolvePublicAuthentication(
     sessionToken: string,
     clientCode: string,
+    clientDenied = false,
   ) {
+    if (clientDenied) {
+      if (clientCode !== "iam")
+        await resolveValidatedCustomSsoCredential(sessionToken, clientCode, undefined, true);
+      throw new AuthzUnauthorizedError("未登录");
+    }
     if (clientCode === "iam") {
       const principal = await resolvePrincipalSessionContext(sessionToken);
       const authenticationContext = {
@@ -876,7 +884,7 @@ export function createCustomSsoSessionKernelAdapter(deps: CustomSsoSessionKernel
       return await deps.kernel.revokePrincipalSession(principal.value.principalSessionId, "logout");
     }
 
-    const credential = await deps.kernel.resolveCredential(token);
+    const credential = await deps.kernel.resolveCredential(token, { protocol: CUSTOM_SSO_PROTOCOL, credentialType: LOCAL_SESSION_CREDENTIAL_TYPE });
     if (credential.status === "resolved" && credential.value.protocol === CUSTOM_SSO_PROTOCOL) {
       await assertLogoutCredentialCurrent(credential.value);
       return await deps.kernel.revokePrincipalSession(credential.value.principalSessionId, "logout");
@@ -889,8 +897,8 @@ export function createCustomSsoSessionKernelAdapter(deps: CustomSsoSessionKernel
     credential: IssuedCredential,
   ) {
     if (credential.bindingId !== undefined) {
-      await deps.kernel.revokeCredential(
-        credential.credentialId,
+      await deps.kernel.revokeObservedObject(
+        credential,
         "credential_corrupted",
       );
       throw new AuthzUnauthorizedError("未登录");
@@ -917,19 +925,27 @@ export function createCustomSsoSessionKernelAdapter(deps: CustomSsoSessionKernel
     localSessionToken: string,
     clientCode: string,
     expectedMode?: CustomSsoClientMode,
+    clientDenied = false,
   ): Promise<ValidatedCustomSsoCredentialContext> {
-    const credential = await deps.kernel.resolveCredential(localSessionToken);
+    const credential = await deps.kernel.resolveCredential(localSessionToken, { protocol: CUSTOM_SSO_PROTOCOL, credentialType: LOCAL_SESSION_CREDENTIAL_TYPE, clientCode });
+    if (credential.status === "purpose_mismatch")
+      throw new CustomSsoRequestMismatchError();
+    if (credential.status === "fail_closed")
+      throw new CustomSsoConfigurationUnavailableError({ cause: credential.cause });
     if (credential.status !== "resolved") {
       throw new AuthzUnauthorizedError("未登录");
     }
+    const mode = z.object({ mode: z.enum(CustomSsoClientMode) }).safeParse(credential.value.metadata);
+    if (expectedMode !== undefined && mode.success && mode.data.mode !== expectedMode)
+      throw new CustomSsoRequestMismatchError();
     if (credential.value.protocol !== CUSTOM_SSO_PROTOCOL
       || credential.value.credentialType !== LOCAL_SESSION_CREDENTIAL_TYPE
       || credential.value.clientCode !== clientCode) {
-      throw new AuthzUnauthorizedError("未登录");
+      throw new CustomSsoRequestMismatchError();
     }
     if (credential.value.bindingId !== undefined) {
-      await deps.kernel.revokeCredential(
-        credential.value.credentialId,
+      await deps.kernel.revokeObservedObject(
+        credential.value,
         "credential_corrupted",
       );
       throw new AuthzUnauthorizedError("未登录");
@@ -939,8 +955,8 @@ export function createCustomSsoSessionKernelAdapter(deps: CustomSsoSessionKernel
       credential.value.metadata,
     );
     if (!credentialMetadata.success) {
-      await deps.kernel.revokeCredential(
-        credential.value.credentialId,
+      await deps.kernel.revokeObservedObject(
+        credential.value,
         "credential_corrupted",
       );
       throw new AuthzUnauthorizedError("未登录");
@@ -952,21 +968,28 @@ export function createCustomSsoSessionKernelAdapter(deps: CustomSsoSessionKernel
       throw new AuthzUnauthorizedError("未登录");
     }
 
-    const runtimeClient = await findCredentialClient(
-      clientCode,
-      credentialMetadata.data,
-    );
-    if (runtimeClient === null) {
-      await deps.kernel.revokeCredential(
-        credential.value.credentialId,
+    const currentClient = await deps.clients.findRuntimeRecord(clientCode);
+    if (currentClient !== null && credentialMetadata.data.configVersion > currentClient.customSsoConfigVersion)
+      throw new CustomSsoRequestMismatchError();
+    const runtimeClient = isCredentialClientCurrentRecord(currentClient, clientCode, credentialMetadata.data) ? currentClient : null;
+    if (clientDenied || runtimeClient === null) {
+      await deps.kernel.revokeObservedObject(
+        credential.value,
         "client_config_changed",
       );
       throw new AuthzUnauthorizedError("未登录");
     }
 
+    await requireSubjectAccessOperation(deps.access.operation).acquireForSession({
+      subjectIdentifier: credential.value.principal.subjectId,
+      subjectContext: credential.value.subjectContext,
+      principalSessionId: credential.value.principalSessionId,
+    });
     const principal = await deps.kernel.resolvePrincipalSessionById(credential.value.principalSessionId);
+    if (principal.status === "fail_closed")
+      throw new CustomSsoConfigurationUnavailableError({ cause: principal.cause });
     if (principal.status !== "resolved") {
-      await deps.kernel.revokeCredential(credential.value.credentialId, "credential_corrupted");
+      await deps.kernel.revokeObservedObject(credential.value, "credential_corrupted");
       throw new AuthzUnauthorizedError("未登录");
     }
 
@@ -994,6 +1017,10 @@ export function createCustomSsoSessionKernelAdapter(deps: CustomSsoSessionKernel
     metadata: CustomSsoCredentialMetadata,
   ) {
     const client = await deps.clients.findRuntimeRecord(clientCode);
+    return isCredentialClientCurrentRecord(client, clientCode, metadata) ? client : null;
+  }
+
+  function isCredentialClientCurrentRecord(client: CustomSsoClientRuntimeDto | null, clientCode: string, metadata: CustomSsoCredentialMetadata) {
     return client !== null
       && client.clientCode === clientCode
       && client.status !== ClientStatus.Disable
@@ -1001,9 +1028,7 @@ export function createCustomSsoSessionKernelAdapter(deps: CustomSsoSessionKernel
       && client.customSsoEnabled
       && client.customSsoConfig !== null
       && client.customSsoConfig.mode === metadata.mode
-      && client.customSsoConfigVersion === metadata.configVersion
-      ? client
-      : null;
+      && client.customSsoConfigVersion === metadata.configVersion;
   }
 
   async function acquireGrantPermission(artifact: ProtocolArtifact, subjectIdentifier: string, principalSessionId: string) {
@@ -1012,6 +1037,69 @@ export function createCustomSsoSessionKernelAdapter(deps: CustomSsoSessionKernel
       subjectContext: artifact.subjectContext,
       principalSessionId,
     });
+  }
+
+  async function validateAuthorizationArtifact(
+    artifact: ProtocolArtifact,
+    input: { client: { clientCode: string; configVersion?: number }; redirectUrl?: string },
+    mode: CustomSsoClientMode,
+    invalidCodeError?: "unauthorized" | "invalid_auth_code",
+    clientDenied = false,
+  ) {
+    const ownership = z.object({
+      clientCode: z.string(),
+      mode: z.enum(CustomSsoClientMode),
+      redirectUri: z.string(),
+    }).safeParse(artifact.metadata);
+    // Establish request ownership independently of the version/full metadata parser.
+    if (artifact.protocol !== CUSTOM_SSO_PROTOCOL
+      || artifact.artifactType !== AUTH_CODE_ARTIFACT_TYPE
+      || artifact.clientCode !== input.client.clientCode
+      || !ownership.success
+      || ownership.data.clientCode !== input.client.clientCode
+      || ownership.data.mode !== mode
+      || (input.redirectUrl !== undefined && ownership.data.redirectUri !== input.redirectUrl)) {
+      throwInvalidCode(invalidCodeError);
+    }
+
+    const metadata = AuthCodeMetadataSchema.safeParse(artifact.metadata);
+    if (metadata.success && input.client.configVersion !== undefined
+      && metadata.data.configVersion > input.client.configVersion) {
+      throwInvalidCode(invalidCodeError);
+    }
+    if (clientDenied || !metadata.success || artifact.principalSessionId === undefined || artifact.principal === undefined
+      || metadata.data.subjectIdentifier !== artifact.principal.subjectId
+      || metadata.data.configVersion !== input.client.configVersion) {
+      await deps.kernel.revokeObservedObject(artifact, metadata.success ? "client_config_changed" : "credential_corrupted");
+      throwInvalidCode(invalidCodeError);
+    }
+    return {
+      principalSessionId: artifact.principalSessionId,
+      subjectIdentifier: metadata.data.subjectIdentifier,
+      ...(metadata.data.state === undefined ? {} : { state: metadata.data.state }),
+    };
+  }
+
+  async function rejectAuthorizationGrant(input: {
+    code: string;
+    clientCode: string;
+    redirectUri: string;
+    mode: CustomSsoClientMode;
+  }) {
+    const resolved = await deps.kernel.resolveProtocolArtifact(input.code, {
+      protocol: CUSTOM_SSO_PROTOCOL,
+      artifactType: AUTH_CODE_ARTIFACT_TYPE,
+      clientCode: input.clientCode,
+    });
+    if (resolved.status === "fail_closed")
+      throw new CustomSsoConfigurationUnavailableError({ cause: resolved.cause });
+    if (resolved.status === "resolved") {
+      const client = await deps.clients.findRuntimeRecord(input.clientCode);
+      await validateAuthorizationArtifact(resolved.value, {
+        client: { clientCode: input.clientCode, configVersion: client?.customSsoConfigVersion },
+        redirectUrl: input.redirectUri,
+      }, input.mode, input.mode === CustomSsoClientMode.Gateway ? "unauthorized" : "invalid_auth_code", true);
+    }
   }
 
   async function resolveOrcasUser(principal: { principal: { subjectId: string } }) {
@@ -1045,6 +1133,7 @@ export function createCustomSsoSessionKernelAdapter(deps: CustomSsoSessionKernel
     inspectPrincipalSession,
     logout,
     redeemIndependentGrant,
+    rejectAuthorizationGrant,
     resolvePublicAuthentication,
   };
 }
@@ -1058,38 +1147,6 @@ function toLocalSessionContext(
     ...(context.orcasId === undefined
       ? {}
       : { orcasId: context.orcasId }),
-  };
-}
-
-function validateGatewayAuthorizationArtifact(
-  artifact: ProtocolArtifact,
-  input: {
-    client: GatewayClientContext;
-    redirectUrl?: string;
-  },
-  invalidCodeError?: "unauthorized" | "invalid_auth_code",
-) {
-  const metadata = AuthCodeMetadataSchema.safeParse(artifact.metadata);
-  if (
-    artifact.protocol !== CUSTOM_SSO_PROTOCOL
-    || artifact.artifactType !== AUTH_CODE_ARTIFACT_TYPE
-    || artifact.clientCode !== input.client.clientCode
-    || artifact.principalSessionId === undefined
-    || artifact.principal === undefined
-    || !metadata.success
-    || metadata.data.subjectIdentifier !== artifact.principal.subjectId
-    || metadata.data.clientCode !== input.client.clientCode
-    || metadata.data.mode !== CustomSsoClientMode.Gateway
-    || metadata.data.configVersion !== input.client.configVersion
-    || (input.redirectUrl !== undefined
-      && metadata.data.redirectUri !== input.redirectUrl)
-  ) {
-    throwInvalidCode(invalidCodeError);
-  }
-  return {
-    principalSessionId: artifact.principalSessionId,
-    subjectIdentifier: metadata.data.subjectIdentifier,
-    ...(metadata.data.state === undefined ? {} : { state: metadata.data.state }),
   };
 }
 

@@ -5,6 +5,8 @@ import type { CustomSsoDeps, CustomSsoKernelPort, CustomSsoOrcasUser } from "./c
 import { requireSubjectAccessOperation } from "@iam/api-core/subject-access";
 import { createAuthorizationGrantRedemption, createRedisAuthorizationGrantRedemptionStore } from "./grant";
 import { createCustomSsoApplication } from "./internal/application";
+import { CustomSsoTrafficGateUnavailableError } from "./internal/traffic-gate";
+import { CustomSsoConfigurationUnavailableError } from "./protocol-validation.error";
 
 export interface CustomSsoProjectionPermission {
   readonly operation: SubjectAccessOperation;
@@ -27,8 +29,30 @@ export function createCustomSsoOperations(deps: CustomSsoOperationsDeps) {
     store: createRedisAuthorizationGrantRedemptionStore({ redis: deps.redis }),
   });
   function application(operation?: SubjectAccessOperation) {
+    const clients = new Map<string, ReturnType<typeof deps.clients.findRuntimeRecord>>();
+    const traffic = new Map<string, ReturnType<typeof deps.traffic.check>>();
     return createCustomSsoApplication({
       ...deps,
+      clients: { findRuntimeRecord(clientCode) {
+        let result = clients.get(clientCode);
+        if (!result) {
+          result = Promise.resolve().then(() => deps.clients.findRuntimeRecord(clientCode)).then(value => structuredClone(value)).catch((cause: unknown) => {
+            throw new CustomSsoConfigurationUnavailableError({ cause });
+          });
+          clients.set(clientCode, result);
+        }
+        return result;
+      } },
+      traffic: { check(clientCode) {
+        let result = traffic.get(clientCode);
+        if (!result) {
+          result = Promise.resolve().then(() => deps.traffic.check(clientCode)).then(value => structuredClone(value)).catch((cause: unknown) => {
+            throw new CustomSsoTrafficGateUnavailableError({ cause });
+          });
+          traffic.set(clientCode, result);
+        }
+        return result;
+      } },
       authorizationGrantRedemption,
       access: { operation, users: deps.permittedUsers },
       kernel: operation === undefined ? deps.kernel : bindCustomSsoOperationKernel(deps.kernel, operation),
@@ -42,46 +66,56 @@ export function createCustomSsoOperations(deps: CustomSsoOperationsDeps) {
     });
   }
 
+  const applications = new WeakMap<SubjectAccessOperation, ReturnType<typeof application>>();
   function forOperation(operation: SubjectAccessOperation) {
     requireSubjectAccessOperation(operation);
-    const bound = application(operation);
+    let bound = applications.get(operation);
+    if (!bound) {
+      bound = application(operation);
+      applications.set(operation, bound);
+    }
+    const active = bound;
     return {
       exchangeCode: {
-        async execute(...args: Parameters<typeof bound.exchangeCode.execute>) {
+        async execute(...args: Parameters<typeof active.exchangeCode.execute>) {
           requireSubjectAccessOperation(operation);
-          return await bound.exchangeCode.execute(...args);
+          return await active.exchangeCode.execute(...args);
         },
       },
       completeCallback: {
-        async execute(...args: Parameters<typeof bound.completeCallback.execute>) {
+        async execute(...args: Parameters<typeof active.completeCallback.execute>) {
           requireSubjectAccessOperation(operation);
-          return await bound.completeCallback.execute(...args);
+          return await active.completeCallback.execute(...args);
         },
       },
       authorize: {
-        async execute(...args: Parameters<typeof bound.authorize.execute>) {
+        async execute(...args: Parameters<typeof active.authorize.execute>) {
           requireSubjectAccessOperation(operation);
-          return await bound.authorize.execute(...args);
+          return await active.authorize.execute(...args);
         },
       },
       checkLoginContinuation: {
-        async execute(...args: Parameters<typeof bound.checkLoginContinuation.execute>) {
+        async execute(...args: Parameters<typeof active.checkLoginContinuation.execute>) {
           requireSubjectAccessOperation(operation);
-          return await bound.checkLoginContinuation.execute(...args);
+          return await active.checkLoginContinuation.execute(...args);
         },
       },
-      async authorizeLocalSession(...args: Parameters<typeof bound.authorizeLocalSession>) {
+      async authorizeLocalSession(...args: Parameters<typeof active.authorizeLocalSession>) {
         requireSubjectAccessOperation(operation);
-        return await bound.authorizeLocalSession(...args);
+        return await active.authorizeLocalSession(...args);
       },
-      async resolvePublicAuthentication(...args: Parameters<typeof bound.resolvePublicAuthentication>) {
+      async resolvePublicAuthentication(...args: Parameters<typeof active.resolvePublicAuthentication>) {
         requireSubjectAccessOperation(operation);
-        return await bound.resolvePublicAuthentication(...args);
+        return await active.resolvePublicAuthentication(...args);
       },
     };
   }
 
-  return { forOperation, logout: application().logout };
+  return { forOperation, logout: {
+    async execute(...args: Parameters<ReturnType<typeof application>["logout"]["execute"]>) {
+      return await application().logout.execute(...args);
+    },
+  } };
 }
 
 export type CustomSsoOperations = ReturnType<typeof createCustomSsoOperations>;
@@ -109,12 +143,6 @@ export function bindCustomSsoOperationKernel(kernel: SessionKernel, operation: S
     },
     async resolvePrincipalSessionById(id) {
       const result = await kernel.resolvePrincipalSessionById(id);
-      if (result.status === "resolved")
-        await acquire(result.value);
-      return result;
-    },
-    async resolveCredential(token) {
-      const result = await kernel.resolveCredential(token);
       if (result.status === "resolved")
         await acquire(result.value);
       return result;

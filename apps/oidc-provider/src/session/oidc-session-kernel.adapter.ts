@@ -1,8 +1,11 @@
+import type { ClientTrafficGateResult } from "@iam/api-core/client-traffic-gate";
 import type { OidcAccountDto } from "@iam/domain/user";
 import type {
   CleanupAdapter,
   ClientBinding,
+  IssuedCredential,
   PrincipalSession,
+  ProtocolArtifact,
   RevokeSummary,
   SessionKernel,
 } from "@iam/session-kernel";
@@ -25,10 +28,14 @@ import {
   SubjectAccessDisabledError,
   SubjectAccessUnavailableError,
 } from "@iam/api-core/subject-access";
+import { errors } from "oidc-provider";
 import { z } from "zod";
 import { getCookieValue } from "../interaction/global-session.ts";
 import { normalizeOidcProtocolScopes } from "../protocol/scopes.ts";
+import { OidcOnlineAccessUnavailableError } from "../provider/client/client-traffic-gate.ts";
 import { markGlobalSessionCookieError } from "./global-session-error-provenance.ts";
+
+const returnHandleObservations = new WeakMap<OidcReturnHandlePayload, ProtocolArtifact>();
 
 export const OIDC_SESSION_PROTOCOL = "oidc";
 export const OIDC_RETURN_HANDLE_ARTIFACT_TYPE = "login_return_handle";
@@ -125,6 +132,8 @@ export interface OidcSessionKernelAdapterDeps {
   accounts: OidcSessionKernelAccountReader;
   clients: OidcSessionKernelClientReader;
   cookieName: string;
+  traffic?: { check: (clientCode: string) => Promise<ClientTrafficGateResult> };
+  permit?: (object: ClientBinding | IssuedCredential | ProtocolArtifact) => Promise<void>;
 }
 
 export interface ProviderSessionBindingContext {
@@ -156,7 +165,6 @@ export type OidcAccessTokenExtraWithKernel = {
 export function createOidcSessionKernelCleanupAdapter(
   deps: {
     providerSessionState: Pick<OidcSessionKernelProviderSessionStateStore, "deleteOwned">;
-    redis: { del: (...keys: string[]) => Promise<unknown> };
   },
 ): CleanupAdapter[] {
   return [
@@ -179,15 +187,15 @@ export function createOidcSessionKernelCleanupAdapter(
     {
       protocol: OIDC_SESSION_PROTOCOL,
       kind: OIDC_PROVIDER_TOKEN_PAYLOAD_CLEANUP_KIND,
-      async cleanup(refs) {
-        await deps.redis.del(...refs.map(ref => ref.ref));
+      async cleanup(refs, execution) {
+        await execution.deleteOwnedKeys(refs.map(ref => ref.ref));
       },
     },
     {
       protocol: OIDC_SESSION_PROTOCOL,
       kind: OIDC_PROVIDER_MODEL_PAYLOAD_CLEANUP_KIND,
-      async cleanup(refs) {
-        await deps.redis.del(...refs.flatMap(ref => [ref.ref, consumedProviderModelKey(ref.ref)]));
+      async cleanup(refs, execution) {
+        await execution.deleteOwnedKeys(refs.flatMap(ref => [ref.ref, consumedProviderModelKey(ref.ref)]));
       },
     },
   ];
@@ -203,6 +211,7 @@ export type OidcSessionLifecycle = Pick<SessionKernel, | "consumeProtocolArtifac
   | "resolvePrincipalSession"
   | "resolvePrincipalSessionById"
   | "resolveProtocolArtifact"
+  | "revokeObservedObject"
   | "revokeBinding"
   | "revokeClientProtocol"
   | "revokeCredential"
@@ -212,6 +221,7 @@ export function createOidcSessionKernelAdapter(
   deps: Omit<OidcSessionKernelAdapterDeps, "kernel"> & { kernel: OidcSessionLifecycle },
 ) {
   const providerSessionState = deps.providerSessionState;
+  const codeObservations = new Map<string, { remainingSeconds: number; artifact: ProtocolArtifact; serializedProviderCode: string }>();
   async function inspect(request: Pick<IncomingMessage, "headers">) {
     const externalToken = getCookieValue(request.headers.cookie, deps.cookieName);
     if (!externalToken)
@@ -517,7 +527,7 @@ export function createOidcSessionKernelAdapter(
       }, "invalid OIDC provider session binding lookup");
       return null;
     }
-    const binding = await deps.kernel.resolveClientBindingById(parsedLookup.bindingId);
+    const binding = await deps.kernel.resolveClientBindingById(parsedLookup.bindingId, { protocol: OIDC_SESSION_PROTOCOL, clientCode });
     if (binding.status !== "resolved") {
       deps.logger.warn({
         sessionUidFingerprint: fingerprintForLog(sessionUid),
@@ -539,6 +549,14 @@ export function createOidcSessionKernelAdapter(
       }, "OIDC provider session binding owner mismatch");
       return null;
     }
+    const expectedAnchor = await readPrincipalAnchor(sessionUid, binding.value.principal.subjectId);
+    if (!expectedAnchor || expectedAnchor.generation !== binding.value.metadata?.anchorGeneration
+      || expectedAnchor.principalSessionId !== binding.value.principalSessionId) {
+      return null;
+    }
+    if (!await validateProtocolObject(binding.value))
+      return null;
+    await deps.permit?.(binding.value);
     const principal = await resolveById(binding.value.principalSessionId);
     if (!principal) {
       deps.logger.warn({
@@ -549,18 +567,6 @@ export function createOidcSessionKernelAdapter(
       return null;
     }
     const providerBinding = toProviderSessionBinding(binding.value, principal);
-    const anchor = providerBinding.anchorGeneration
-      ? await readPrincipalAnchor(sessionUid, providerBinding.accountId)
-      : null;
-    if (!anchor
-      || anchor.generation !== providerBinding.anchorGeneration
-      || anchor.principalSessionId !== providerBinding.principalSessionId) {
-      deps.logger.warn({
-        sessionUidFingerprint: fingerprintForLog(sessionUid),
-        bindingId: parsedLookup.bindingId,
-      }, "OIDC provider session binding anchor mismatch");
-      return null;
-    }
     if (providerBinding.mappingOwnerId)
       await refreshProviderSessionBinding(sessionUid, providerBinding, binding.value.expiresAt);
     return providerBinding;
@@ -580,30 +586,47 @@ export function createOidcSessionKernelAdapter(
     return artifact.status === "created" && artifact.externalToken ? artifact.externalToken : null;
   }
 
-  async function consumeReturnHandle(handle: string) {
-    const consumed = await deps.kernel.consumeProtocolArtifact(handle);
+  async function consumeReturnHandle(handle: string, payload: OidcReturnHandlePayload) {
+    const artifact = returnHandleObservations.get(payload);
+    if (!artifact)
+      return null;
+    const consumed = await deps.kernel.consumeProtocolArtifact(handle, {
+      protocol: OIDC_SESSION_PROTOCOL,
+      artifactType: OIDC_RETURN_HANDLE_ARTIFACT_TYPE,
+      clientCode: payload.clientId,
+    }, artifact);
     if (consumed.status === "fail_closed")
       throw new SubjectAccessUnavailableError(consumed.cause);
-    if (consumed.status !== "resolved"
-      || consumed.value.protocol !== OIDC_SESSION_PROTOCOL
-      || consumed.value.artifactType !== OIDC_RETURN_HANDLE_ARTIFACT_TYPE) {
-      return null;
-    }
-    const parsed = ReturnHandleMetadataSchema.safeParse(consumed.value.metadata);
-    return parsed.success ? parsed.data : null;
+    return consumed.status === "resolved" ? payload : null;
   }
 
-  async function resolveReturnHandle(handle: string) {
-    const resolved = await deps.kernel.resolveProtocolArtifact(handle);
+  async function resolveReturnHandle(handle: string, expected: {
+    browserBinding: string;
+    returnTarget: string;
+    clientId?: string;
+    interactionUid?: string;
+  }) {
+    const resolved = await deps.kernel.resolveProtocolArtifact(handle, {
+      protocol: OIDC_SESSION_PROTOCOL,
+      artifactType: OIDC_RETURN_HANDLE_ARTIFACT_TYPE,
+      ...(expected.clientId ? { clientCode: expected.clientId } : {}),
+    });
     if (resolved.status === "fail_closed")
       throw new SubjectAccessUnavailableError(resolved.cause);
-    if (resolved.status !== "resolved"
-      || resolved.value.protocol !== OIDC_SESSION_PROTOCOL
-      || resolved.value.artifactType !== OIDC_RETURN_HANDLE_ARTIFACT_TYPE) {
+    if (resolved.status !== "resolved")
+      return null;
+    const parsed = ReturnHandleMetadataSchema.safeParse(resolved.value.metadata);
+    if (!parsed.success
+      || parsed.data.clientId !== resolved.value.clientCode
+      || parsed.data.browserBinding !== expected.browserBinding
+      || parsed.data.returnTarget !== expected.returnTarget
+      || (expected.interactionUid !== undefined && parsed.data.interactionUid !== expected.interactionUid)) {
       return null;
     }
-    const parsed = ReturnHandleMetadataSchema.safeParse(resolved.value.metadata);
-    return parsed.success ? parsed.data : null;
+    if (!await validateProtocolObject(resolved.value))
+      return null;
+    returnHandleObservations.set(parsed.data, resolved.value);
+    return parsed.data;
   }
 
   async function registerAuthorizationCodeArtifact(input: RegisterAuthorizationCodeArtifactInput) {
@@ -678,8 +701,18 @@ export function createOidcSessionKernelAdapter(
     return artifact.status === "created";
   }
 
-  async function resolveAuthorizationCodeSessionLifetime(providerCodeId: string) {
-    const artifact = await deps.kernel.resolveProtocolArtifact(providerCodeId);
+  async function resolveAuthorizationCodeSessionLifetime(providerCodeId: string, serializedProviderCode: string, expected?: { clientCode: string; code: string; redirectUri: string }) {
+    if (expected && expected.code !== providerCodeId)
+      return null;
+    const acquired = codeObservations.get(providerCodeId);
+    if (acquired) {
+      if (expected && (acquired.artifact.clientCode !== expected.clientCode
+        || acquired.artifact.metadata?.redirectUriFingerprint !== createHash("sha256").update(expected.redirectUri).digest("base64url"))) {
+        return null;
+      }
+      return acquired;
+    }
+    const artifact = await deps.kernel.resolveProtocolArtifact(providerCodeId, { protocol: OIDC_SESSION_PROTOCOL, artifactType: OIDC_AUTHORIZATION_CODE_ARTIFACT_TYPE, ...(expected ? { clientCode: expected.clientCode } : {}) });
     if (artifact.status !== "resolved"
       || artifact.value.protocol !== OIDC_SESSION_PROTOCOL
       || artifact.value.artifactType !== OIDC_AUTHORIZATION_CODE_ARTIFACT_TYPE
@@ -687,14 +720,25 @@ export function createOidcSessionKernelAdapter(
       || !AuthorizationCodeMetadataSchema.safeParse(artifact.value.metadata).success) {
       return null;
     }
+    if (expected && artifact.value.metadata?.redirectUriFingerprint !== createHash("sha256").update(expected.redirectUri).digest("base64url"))
+      return null;
+    if (!await validateProtocolObject(artifact.value))
+      return null;
+    await deps.permit?.(artifact.value);
     const principal = await deps.kernel.resolvePrincipalSessionById(artifact.value.principalSessionId);
     if (principal.status !== "resolved")
       return null;
-    return { remainingSeconds: Math.ceil((principal.value.expiresAt - principal.observedAt) / 1000) };
+    const acquiredLifetime = { serializedProviderCode, remainingSeconds: Math.ceil((principal.value.expiresAt - principal.observedAt) / 1000), artifact: artifact.value };
+    codeObservations.set(providerCodeId, acquiredLifetime);
+    return acquiredLifetime;
   }
 
-  async function consumeAuthorizationCodeArtifact(providerCodeId: string) {
-    const consumed = await deps.kernel.consumeProtocolArtifact(providerCodeId);
+  async function consumeAuthorizationCodeArtifact(providerCodeId: string, artifact: ProtocolArtifact) {
+    if (artifact.protocol !== OIDC_SESSION_PROTOCOL || artifact.artifactType !== OIDC_AUTHORIZATION_CODE_ARTIFACT_TYPE)
+      return null;
+    await deps.permit?.(artifact);
+    const consumed = await deps.kernel.consumeProtocolArtifact(providerCodeId, { protocol: OIDC_SESSION_PROTOCOL, artifactType: OIDC_AUTHORIZATION_CODE_ARTIFACT_TYPE }, artifact);
+    codeObservations.delete(providerCodeId);
     if (consumed.status !== "resolved"
       || consumed.value.protocol !== OIDC_SESSION_PROTOCOL
       || consumed.value.artifactType !== OIDC_AUTHORIZATION_CODE_ARTIFACT_TYPE) {
@@ -745,14 +789,41 @@ export function createOidcSessionKernelAdapter(
   }
 
   async function resolveAccessTokenCredential(externalToken: string) {
-    const credential = await deps.kernel.resolveCredential(externalToken);
+    const credential = await deps.kernel.resolveCredential(externalToken, { protocol: OIDC_SESSION_PROTOCOL, credentialType: OIDC_ACCESS_TOKEN_CREDENTIAL_TYPE });
     if (credential.status !== "resolved"
       || credential.value.protocol !== OIDC_SESSION_PROTOCOL
       || credential.value.credentialType !== OIDC_ACCESS_TOKEN_CREDENTIAL_TYPE) {
       return null;
     }
     const metadata = AccessTokenMetadataSchema.safeParse(credential.value.metadata);
-    return metadata.success ? { credential: credential.value, metadata: metadata.data } : null;
+    if (!metadata.success || !await validateProtocolObject(credential.value))
+      return null;
+    await deps.permit?.(credential.value);
+    return { credential: credential.value, metadata: metadata.data };
+  }
+
+  async function validateProtocolObject(object: ClientBinding | IssuedCredential | ProtocolArtifact) {
+    if (object.clientCode && deps.traffic) {
+      const gate = await deps.traffic.check(object.clientCode);
+      if (gate.outcome === "maintenance" || gate.outcome === "unavailable") {
+        throw "credentialType" in object
+          ? new OidcOnlineAccessUnavailableError()
+          : new errors.TemporarilyUnavailable();
+      }
+    }
+    const version = object.metadata?.oidcConfigVersion;
+    const current = object.clientCode ? await deps.clients.findActiveVersion(object.clientCode) : null;
+    if (current !== null && Number.isSafeInteger(version) && current === version)
+      return true;
+    if (current !== null && typeof version === "number" && Number.isSafeInteger(version) && version > current)
+      return false;
+    try {
+      await deps.kernel.revokeObservedObject(object, current !== null ? "client_config_changed" : "client_disabled");
+    }
+    catch {
+      deps.logger.warn({ protocol: OIDC_SESSION_PROTOCOL }, "OIDC invalid object cleanup failed");
+    }
+    return false;
   }
 
   async function revokeAccessTokenCredential(credentialId: string) {

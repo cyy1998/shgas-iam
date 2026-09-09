@@ -23,7 +23,11 @@ describe("AuthorizationGrantRedemption", () => {
     await adapter.cleanup([
       { protocol: "custom-sso", kind: "authorization-grant-redemption", ref: "grant-1" },
       { protocol: "custom-sso", kind: "authorization-grant-redemption", ref: "grant-2" },
-    ]);
+    ], {
+      deleteOwnedKeys: async () => {
+        throw new Error("Grant cleanup uses its own identity");
+      },
+    });
 
     expect(removed).toEqual(["grant-1", "grant-2"]);
   });

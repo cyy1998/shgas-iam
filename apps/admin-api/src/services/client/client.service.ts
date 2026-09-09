@@ -153,7 +153,7 @@ export function createClientService(deps: AdminClientServiceDeps) {
   });
 
   async function txClientProtocolRevocation(
-    client: Pick<AdminClientRecord, "clientCode">,
+    client: Pick<AdminClientRecord, "clientCode" | "oidcConfigVersion" | "customSsoConfigVersion">,
     protocol: "custom-sso" | "oidc",
     reason: "client_protocol_disabled" | "client_config_changed",
     auditContext?: AdminAuditContext,
@@ -161,18 +161,20 @@ export function createClientService(deps: AdminClientServiceDeps) {
     await deps.sessionRevocation.revokeClientProtocol({
       clientCode: client.clientCode,
       protocol,
+      committedVersion: protocol === "oidc" ? client.oidcConfigVersion : client.customSsoConfigVersion,
       reason,
       auditContext,
     });
   }
 
   async function txClientAllProtocolsRevocation(
-    client: Pick<AdminClientRecord, "clientCode">,
+    client: Pick<AdminClientRecord, "clientCode" | "oidcConfigVersion" | "customSsoConfigVersion">,
     reason: "client_disabled" | "client_deleted" | "client_config_changed",
     auditContext?: AdminAuditContext,
   ) {
     await deps.sessionRevocation.revokeClientAllProtocols({
       clientCode: client.clientCode,
+      committedVersions: { oidc: client.oidcConfigVersion, customSso: client.customSsoConfigVersion },
       reason,
       auditContext,
     });
@@ -181,7 +183,7 @@ export function createClientService(deps: AdminClientServiceDeps) {
   function registerClientSessionRevocations(
     tx: AdminClientTransactionContext,
     decisions: ClientSessionRevocationDecision[],
-    client: Pick<AdminClientRecord, "clientCode">,
+    client: Pick<AdminClientRecord, "clientCode" | "oidcConfigVersion" | "customSsoConfigVersion">,
     auditContext?: AdminAuditContext,
   ) {
     for (const decision of decisions) {
@@ -200,7 +202,7 @@ export function createClientService(deps: AdminClientServiceDeps) {
 
   function registerCustomSsoRevocation(
     tx: AdminClientTransactionContext,
-    client: Pick<AdminClientRecord, "clientCode">,
+    client: Pick<AdminClientRecord, "clientCode" | "oidcConfigVersion" | "customSsoConfigVersion">,
     changed: boolean,
     reason: "client_protocol_disabled" | "client_config_changed",
     auditContext?: AdminAuditContext,

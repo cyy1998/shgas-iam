@@ -59,7 +59,24 @@ Admin/SSO 前端、`api-core`、`domain`、`contracts`、`db`、`jobs`、Gateway
 | Gateway 与进程 lifecycle / `@iam/gateway-apisix`、各后端 app | [Gateway commands](../../gateway/test-integration/component/commands.integration.test.ts)用 Gateway `component`；以 API [process entry](../../apps/api/test-integration/process/entry.integration.test.ts) / [composition entry](../../apps/api/test-integration/composition/entry.integration.test.ts)为例，对应 app 使用 `process` / `composition`。 | Process 观察子进程、readiness 与退出清理；composition 按声明连接真实 adapter/resources。Gateway Component 不证明目标 APISIX routes 已发布或生效。 |
 | 代表性系统旅程 / `@iam/e2e-system` | 根 `pnpm test:e2e`；[Admin](../../e2e/system/admin-custom-sso.spec.ts)、[HR](../../e2e/system/hr-admin-user-management.spec.ts)、[OIDC](../../e2e/system/oidc-pkce.spec.ts)。 | 固定 synthetic 场景中的真实仓库系统协作。Workspace-local journey 是调试入口；不证明生产代理信任、真实外部集成、备份恢复或全部协议场景。 |
 
+OIDC 校验迁出 Kernel 的直接回归由 `@iam/session-kernel` 的 Artifact Redis contract 和
+`@iam/oidc-provider` 的 [真实协议 HTTP/Redis](../../apps/oidc-provider/test-integration/redis/subject-access-authorization.integration.test.ts)
+拥有：用途/type/已知 Client 拒绝、未消费、同 identity 替换保护、两个 Custom SSO 误投入口、错误 redirect、暂态保留及
+已读旧 Credential 在清理/新代签发后恢复的隔离。Code 替换矩阵分别修改 Kernel、Provider 或两侧，直接回读消费标记与替换对象；Binding 正式读取覆盖永久失效的精确级联及 Maintenance 保留。原 Kernel client/version hooks 测试按用途拒绝与精确执行契约替换；
+操作 Snapshot 另由 #148/#149 的协议测试拥有。Admin 批量版本选择由
+[真实 PG/Redis composition](../../apps/admin-api/test-integration/composition/client-protocol-revocation.integration.test.ts)
+和 Kernel 的 [选择撤销 Redis contract](../../packages/session-kernel/test-integration/redis/session-kernel-selected-revocation.integration.test.ts)
+分别证明提交版本传播、晚到/乱序与 no-op、双协议边界，以及观察对象 CAS、新代子对象保留与未知版本诊断；
+替代 seam 和未装配 cleanup 的证明上限见[工程契约](../features/admin/client-protocol-revocation.md)。
+
 ## 聚合 Gate 与人工证据
+
+协议校验的[56 条故事最终核对](../features/sso/protocol-validation-contract.md)逐项连接 #147–151 候选、实现/测试决定与证明边界。
+OIDC HTTP/Redis 和 Custom SSO 正式工厂/Redis 把旧对象读取、版本选择清理、新代协议签发及旧请求恢复串在同一测试；
+Custom SSO 另证明清理完成后极迟旧 Code 写入及下一调用的精确拒绝。Admin 真实 PG/Redis 联合测试拥有提交传播、晚到/逆序/重试，
+其中新代由 Kernel 签发，不能与协议 suite 拼称一个 PG+HTTP 场景。类型和既有边界 Guard 不替代这些直接行为。
+[保留对象手册](../releases/protocol-validation-preserving-upgrade.md)的停流、Client 写冻结、drain、统一版本、保留及双协议误投/合法 smoke
+仍由环境 owner 验收；旧全清命令不适用于满足当前格式的此次升级，父级聚合与实际环境操作分别记录。
 
 Subject Access 的[最终契约核对](../features/sso/subject-access-operation-contract.md)逐条连接全部 62 条故事与可观察证据。
 API Core 共享容器及真实 Redis 证明许可和中性 Kernel 协作；API/Custom SSO HTTP/Redis、Admin REST/tRPC/Redis/PG、

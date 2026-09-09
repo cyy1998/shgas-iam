@@ -184,9 +184,9 @@ async function createSessionTree(withCleanup = false) {
 
 async function observeTree(tree: Awaited<ReturnType<typeof createSessionTree>>) {
   const root = await observer.resolvePrincipalSession(tree.rootToken);
-  const binding = await observer.resolveClientBindingById(tree.bindingId);
-  const credential = await observer.resolveCredential(tree.credentialToken);
-  const artifact = await observer.resolveProtocolArtifact(tree.artifactToken);
+  const binding = await observer.resolveClientBindingById(tree.bindingId, { protocol: "oidc" });
+  const credential = await observer.resolveCredential(tree.credentialToken, { protocol: "oidc", credentialType: "access_token" });
+  const artifact = await observer.resolveProtocolArtifact(tree.artifactToken, { protocol: "oidc", artifactType: "authorization_code" });
   return [root.status, binding.status, credential.status, artifact.status];
 }
 

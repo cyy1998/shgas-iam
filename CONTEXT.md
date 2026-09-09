@@ -293,8 +293,12 @@ _Avoid_: reusable credential slot, bearer token, user identity
 _Avoid_: client ext attributes, shared clientSecret, plaintext secret, OIDC client configuration, unversioned SSO settings, userExcluding
 
 **Client Runtime Snapshot**:
-IAM 在线协议入口为一次请求取得的 Client Traffic Gate 与协议配置时点视图；成功取得后，后续 Admin mutation 不追溯使其失效。Admin mutation 只有在运行时传播成功后才约束后续取得的 Snapshot；传播失败时，先前已发布的 Snapshot 可以继续被新请求取得，直到显式修复。它不是 Client 业务事实或协议 artifact version。
+IAM 在线协议入口为一次业务操作取得的 Client 时点事实；同一 Client 的协议配置与 Client Traffic Gate 分别固定首次结果，彼此不是原子联合视图，后续 Admin mutation 不追溯推翻本操作已接受的事实。新操作重新取得，传播失败时仍可能取得先前已发布的事实，直到显式修复；Snapshot 不代替对象存在、撤销或消费状态。
 _Avoid_: live Client row, protocol config version, linearizable Client state
+
+**Protocol Configuration Revocation**:
+由一次明确的协议配置变化发起、只终止该次变化之前协议代际对象的撤销；迟到执行或重试不得终止该次及后续配置代际的访问。它不同于普通请求拒绝，也不保证覆盖枚举结束后才由旧配置在途操作创建的对象。
+_Avoid_: validation failure cleanup, unconditional client-wide revocation, Runtime Snapshot invalidation
 
 **Client Maintenance**:
 Client 暂时拒绝 IAM 控制的 client-scoped 在线协议流量、但允许管理员完成各协议全部配置与生命周期准备的可恢复状态；恢复正常服务后，各协议已经声明的启用意图自动生效，协议之间仍保持独立配置与生命周期。在线协议入口只有在成功取得的 Client Runtime Snapshot 明确表示 Client 正常时才允许流量，无法取得可信 Snapshot 时同样暂时拒绝；已提交的状态变更若未成功传播，先前的正常 Snapshot 可以继续被取得，直到显式修复。协议 discovery、JWKS、公共认证配置和健康检查不属于该门禁范围。进入或退出维护状态本身不使既有协议访问永久失效；未发生协议变更的访问在恢复正常后继续有效，维护期间发生变更的协议按自己的生命周期规则使旧产物失效。维护不暂停 Authorization Grant、Authorization Code、Credential、Token 或 Session 的原始有效期；恢复正常时只有尚未过期且未因协议变更失效的访问可以继续。维护期间仍允许退出与撤销，并且由此终止的访问在恢复正常后不会复活。维护状态不保证追溯阻止已经离开 IAM、由 client 离线验证的 OIDC ID Token。

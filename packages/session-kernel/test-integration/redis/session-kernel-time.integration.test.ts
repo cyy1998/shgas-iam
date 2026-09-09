@@ -46,15 +46,15 @@ describe("Session Kernel Redis lifecycle time", () => {
     writerOffset += 86_400_000;
     observerOffset -= 86_400_000;
     const readPrincipal = await scope.observer.resolvePrincipalSession(principal.externalToken!);
-    const readBinding = await scope.observer.resolveClientBindingById(binding.value.bindingId);
-    const readCredential = await scope.observer.resolveCredential(credential.externalToken!);
-    const readArtifact = await scope.observer.resolveProtocolArtifact(artifact.externalToken!);
+    const readBinding = await scope.observer.resolveClientBindingById(binding.value.bindingId, { protocol: "oidc" });
+    const readCredential = await scope.observer.resolveCredential(credential.externalToken!, credential.value);
+    const readArtifact = await scope.observer.resolveProtocolArtifact(artifact.externalToken!, artifact.value);
     for (const result of [readPrincipal, readBinding, readCredential, readArtifact])
       expect(result.status).toBe("resolved");
     expect(readPrincipal).toMatchObject({ value: { authTime: principal.value.authTime } });
-    const consumed = await scope.observer.consumeProtocolArtifact(artifact.externalToken!);
+    const consumed = await scope.observer.consumeProtocolArtifact(artifact.externalToken!, artifact.value, artifact.value);
     expect(consumed.status).toBe("resolved");
-    const replay = await scope.writer.consumeProtocolArtifact(artifact.externalToken!);
+    const replay = await scope.writer.consumeProtocolArtifact(artifact.externalToken!, artifact.value, artifact.value);
     expect(replay.status).toBe("consumed_replay");
 
     await waitForRedisCondition(async () => (await scope!.redisNow()) >= principal.observedAt + 1_000, "Redis did not reach renewal observation");
@@ -68,11 +68,11 @@ describe("Session Kernel Redis lifecycle time", () => {
     await waitForRedisCondition(async () => (await scope!.redisNow()) >= principal.value.expiresAt, "Redis did not reach original deadline");
     const byToken = await scope.observer.resolvePrincipalSession(principal.externalToken!);
     const byId = await scope.observer.resolvePrincipalSessionById(parent.principalSessionId);
-    const renewedCredential = await scope.observer.resolveCredential(credential.externalToken!);
-    const renewedBinding = await scope.observer.resolveClientBindingById(binding.value.bindingId);
+    const renewedCredential = await scope.observer.resolveCredential(credential.externalToken!, credential.value);
+    const renewedBinding = await scope.observer.resolveClientBindingById(binding.value.bindingId, { protocol: "oidc" });
     for (const result of [byToken, byId, renewedCredential, renewedBinding])
       expect(result).toMatchObject({ status: "resolved", value: { expiresAt: renewed.value.expiresAt } });
-    const expiredFixed = await scope.observer.resolveCredential(fixed.externalToken!);
+    const expiredFixed = await scope.observer.resolveCredential(fixed.externalToken!, fixed.value);
     expect(expiredFixed.status).toBe("missing_or_expired");
     const inventory = await scope.observer.listPrincipalSessions({ offset: 0, limit: 10 });
     expect(inventory.total).toBe(1);
@@ -81,7 +81,7 @@ describe("Session Kernel Redis lifecycle time", () => {
     expect(revoked.principalSessions.revoked).toBe(1);
     expect(revoked.bindings.revoked).toBe(1);
     expect(revoked.credentials.revoked).toBe(1);
-    const revokedCredential = await scope.writer.resolveCredential(credential.externalToken!);
+    const revokedCredential = await scope.writer.resolveCredential(credential.externalToken!, credential.value);
     expect(revokedCredential.status).toBe("revoked");
   });
 
@@ -120,7 +120,7 @@ describe("Session Kernel Redis lifecycle time", () => {
       throw new Error("expected artifact");
     const revoked = await scope.writer.revokeClientProtocol("portal", "oidc");
     expect(revoked.cleanup.failed).toBe(1);
-    const tombstone = await scope.observer.resolveProtocolArtifact(artifact.externalToken!);
+    const tombstone = await scope.observer.resolveProtocolArtifact(artifact.externalToken!, artifact.value);
     if (tombstone.status !== "revoked")
       throw new Error("expected tombstone");
     await waitForRedisCondition(async () => (await scope!.redisNow()) >= tombstone.tombstone.expiresAt, "Redis did not reach tombstone deadline");
@@ -132,7 +132,7 @@ describe("Session Kernel Redis lifecycle time", () => {
     expect(retried.cleanup).toMatchObject({ attempted: 1, succeeded: 1, failed: 0 });
     const completed = await scope.writer.inventoryClientProtocol("portal", "oidc");
     expect(completed.counts.total).toBe(0);
-    const missing = await scope.writer.resolveProtocolArtifact(artifact.externalToken!);
+    const missing = await scope.writer.resolveProtocolArtifact(artifact.externalToken!, artifact.value);
     expect(missing.status).toBe("missing_or_expired");
   });
 
@@ -175,7 +175,12 @@ describe("Session Kernel Redis lifecycle time", () => {
     const pause = scope.pauseNextLifecycleObservation(operation === "renew" ? "principal_session" : "artifact");
     const pending = operation === "renew"
       ? scope.writer.renewPrincipalSession(principal.value.principalSessionId)
-      : scope.writer.consumeProtocolArtifact(artifact.externalToken!);
+      : (async () => {
+          const observed = await scope!.writer.resolveProtocolArtifact(artifact.externalToken!, artifact.value);
+          if (observed.status !== "resolved")
+            return observed;
+          return await scope!.writer.consumeProtocolArtifact(artifact.externalToken!, artifact.value, observed.value);
+        })();
     try {
       await pause.reached;
       await waitForRedisCondition(async () => !await scope!.activeObjectExists(operation === "renew"

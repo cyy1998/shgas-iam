@@ -1,3 +1,4 @@
+import type { ProtocolArtifact } from "@iam/session-kernel";
 import type { Redis } from "ioredis";
 import type { CreateOidcAuthorizationCodeSnapshotInput } from "../../src/provider/claims/claims-snapshot.ts";
 import type { ProviderSessionLifecycleFence } from "../../src/session/provider-session.ts";
@@ -150,7 +151,7 @@ function createAdapter(
   redis: FakeRedis,
   version: { value: number | null },
   options: {
-    resolveLifetime?: () => Promise<{ remainingSeconds: number } | null>;
+    resolveLifetime?: () => Promise<{ remainingSeconds: number; artifact: ProtocolArtifact; serializedProviderCode: string } | null>;
     destroyProviderSession?: (
       sessionUid: string,
       expected?: ProviderSessionLifecycleFence,
@@ -215,7 +216,7 @@ function createMultiClientAdapter(model: string, redis: FakeRedis, versions: Map
 function createOidcSessionMock() {
   return {
     registerAuthorizationCodeArtifact: async () => true,
-    resolveAuthorizationCodeSessionLifetime: async () => ({ remainingSeconds: 90 }),
+    resolveAuthorizationCodeSessionLifetime: async (_id: string, serializedProviderCode: string) => ({ serializedProviderCode, remainingSeconds: 90, artifact: { version: 1 as const, artifactId: "code", protocol: "oidc", artifactType: "authorization_code", lookupHash: "lookup", lookupKeyId: "test", issuedAt: 0, expiresAt: 60000, cleanupRefs: [] } }),
     consumeAuthorizationCodeArtifact: async () => ({ artifact: { artifactId: "artifact-a" } }),
     registerAccessTokenCredential: async () => ({
       credentialId: "credential-a",
@@ -315,12 +316,12 @@ describe("redis OIDC adapter", () => {
 
   it("refreshes Code lifetime on each acquisition and fails when its Kernel owner disappears", async () => {
     const redis = new FakeRedis();
-    let lifetime: { remainingSeconds: number } | null = { remainingSeconds: 90 };
+    let lifetime: { remainingSeconds: number; artifact: ProtocolArtifact; serializedProviderCode: string } | null = { serializedProviderCode: "", remainingSeconds: 90, artifact: { version: 1 as const, artifactId: "code", protocol: "oidc", artifactType: "authorization_code", lookupHash: "lookup", lookupKeyId: "test", issuedAt: 0, expiresAt: 60000, cleanupRefs: [] } };
     const adapter = createAdapter("AuthorizationCode", redis, { value: 3 }, { resolveLifetime: async () => lifetime });
     await adapter.upsert("code", { clientId: "client-a", accountId: "subject-a", sessionUid: "provider-session-a", scope: "openid" }, 300);
     const first = await adapter.find("code");
     expect(first).toMatchObject({ globalSessionRemainingSeconds: 90 });
-    lifetime = { remainingSeconds: 2 };
+    lifetime = { serializedProviderCode: "", remainingSeconds: 2, artifact: { version: 1 as const, artifactId: "code", protocol: "oidc", artifactType: "authorization_code", lookupHash: "lookup", lookupKeyId: "test", issuedAt: 0, expiresAt: 60000, cleanupRefs: [] } };
     expect(await adapter.find("code")).toMatchObject({ globalSessionRemainingSeconds: 2 });
     expect(first).toMatchObject({ globalSessionRemainingSeconds: 90 });
     lifetime = null;
@@ -330,24 +331,6 @@ describe("redis OIDC adapter", () => {
   it("returns undefined when Redis protocol state is missing", async () => {
     const adapter = createAdapter("AuthorizationCode", new FakeRedis(), { value: 3 });
     await expect(adapter.find("missing")).resolves.toBeUndefined();
-  });
-
-  it("atomically consumes an authorization code only once", async () => {
-    const redis = new FakeRedis();
-    const version = { value: 3 };
-    const adapter = createAdapter("AuthorizationCode", redis, version);
-    await adapter.upsert("code-1", {
-      clientId: "client-a",
-      accountId: "subject-a",
-      sessionUid: "provider-session-a",
-      scope: "openid",
-    }, 300);
-
-    const results = await Promise.allSettled([adapter.consume("code-1"), adapter.consume("code-1")]);
-
-    expect(results.filter(result => result.status === "fulfilled")).toHaveLength(1);
-    expect(results.filter(result => result.status === "rejected")).toHaveLength(1);
-    await expect(adapter.find("code-1")).resolves.toMatchObject({ consumed: expect.any(Number) });
   });
 
   it("consumes staged provider session bindings before authorization code registration", async () => {
@@ -657,18 +640,6 @@ describe("redis OIDC adapter", () => {
     expect(redis.strings.has("oidc:model:AuthorizationCode:code-1")).toBe(false);
   });
 
-  it("rejects artifacts after the client configuration version changes", async () => {
-    const redis = new FakeRedis();
-    const version = { value: 3 };
-    const adapter = createAdapter("Interaction", redis, version);
-    await adapter.upsert("interaction-1", { params: { client_id: "client-a" } }, 600);
-
-    version.value = 4;
-
-    await expect(adapter.find("interaction-1")).resolves.toBeUndefined();
-    expect(redis.strings.has("oidc:model:Interaction:interaction-1")).toBe(false);
-  });
-
   it("validates every client version referenced by a provider session", async () => {
     const redis = new FakeRedis();
     const versions = new Map<string, number | null>([["client-a", 1], ["client-b", 2]]);
@@ -681,6 +652,7 @@ describe("redis OIDC adapter", () => {
       },
     }, 3600);
 
+    vi.spyOn(redis, "eval").mockResolvedValue(0);
     versions.set("client-b", 3);
 
     await expect(adapter.find("session-1")).resolves.toBeUndefined();

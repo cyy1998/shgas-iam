@@ -33,7 +33,7 @@ function createKernelFixture() {
       },
       clock: { now: () => redis.now },
     }),
-    cleanupAdapters: createOidcSessionKernelCleanupAdapter({ providerSessionState, redis }),
+    cleanupAdapters: createOidcSessionKernelCleanupAdapter({ providerSessionState }),
     logger,
     sourceApp: LoggerSourceApp.OidcProvider,
   });
@@ -58,10 +58,12 @@ describe("oidc Session Kernel release logging", () => {
       externalToken: code,
     });
     expect(artifact.status).toBe("created");
-    await kernel.consumeProtocolArtifact(code);
+    if (artifact.status !== "created")
+      throw new Error("expected artifact");
+    await kernel.consumeProtocolArtifact(code, { protocol: "oidc", artifactType: "authorization_code" }, artifact.value);
     logs.length = 0;
 
-    await expect(kernel.consumeProtocolArtifact(code)).resolves.toMatchObject({ status: "consumed_replay" });
+    await expect(kernel.consumeProtocolArtifact(code, { protocol: "oidc", artifactType: "authorization_code" }, artifact.value)).resolves.toMatchObject({ status: "consumed_replay" });
 
     const output = JSON.stringify(logs);
     expect(output).toContain("session_kernel.tombstone_replay.detected");

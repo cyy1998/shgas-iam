@@ -178,24 +178,6 @@ export const FreshnessRequirementSchema = z.object({
 });
 export type FreshnessRequirement = z.infer<typeof FreshnessRequirementSchema>;
 
-export const ValidationFailureReasonSchema = z.enum([
-  "client_disabled",
-  "client_deleted",
-  "client_protocol_disabled",
-  "client_config_changed",
-  "binding_invalid",
-  "credential_corrupted",
-]);
-export type ValidationFailureReason = z.infer<typeof ValidationFailureReasonSchema>;
-
-export type ValidationResult
-  = | { ok: true }
-    | {
-      ok: false;
-      reason: ValidationFailureReason;
-      message?: string;
-    };
-
 export type RevokeObjectCounter = {
   revoked: number;
   alreadyRevoked: number;

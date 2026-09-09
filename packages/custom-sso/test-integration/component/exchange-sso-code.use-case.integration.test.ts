@@ -50,7 +50,7 @@ test("authenticates with the dedicated credential verifier and returns only the 
     subject,
   }));
   const useCase = createExchangeSsoCodeUseCase({
-    authorizationGrants: { redeemIndependentGrant },
+    authorizationGrants: { rejectAuthorizationGrant: mock(async () => {}), redeemIndependentGrant },
     clientCredentials: { authenticate },
     clients: { findRuntimeRecord: mock(async () => runtimeClient) },
     trafficGate: enabledTrafficGate,
@@ -102,7 +102,7 @@ test("rejects a wrong client secret before redeeming the authorization grant", a
     subject,
   }));
   const useCase = createExchangeSsoCodeUseCase({
-    authorizationGrants: { redeemIndependentGrant },
+    authorizationGrants: { rejectAuthorizationGrant: mock(async () => {}), redeemIndependentGrant },
     clientCredentials: { authenticate: mock(async () => null) },
     clients: { findRuntimeRecord: mock(async () => runtimeClient) },
     trafficGate: enabledTrafficGate,
@@ -125,7 +125,7 @@ test("does not redeem an authenticated client's grant while traffic is suspended
     subject,
   }));
   const useCase = createExchangeSsoCodeUseCase({
-    authorizationGrants: { redeemIndependentGrant },
+    authorizationGrants: { rejectAuthorizationGrant: mock(async () => {}), redeemIndependentGrant },
     clientCredentials: { authenticate: mock(async () => authenticatedClient) },
     clients: { findRuntimeRecord: mock(async () => runtimeClient) },
     trafficGate: {
@@ -153,7 +153,7 @@ test("does not expose the supplied secret or a generic client record to grant re
     subject,
   }));
   const useCase = createExchangeSsoCodeUseCase({
-    authorizationGrants: { redeemIndependentGrant },
+    authorizationGrants: { rejectAuthorizationGrant: mock(async () => {}), redeemIndependentGrant },
     clientCredentials: { authenticate },
     clients: { findRuntimeRecord: mock(async () => runtimeClient) },
     trafficGate: enabledTrafficGate,
@@ -197,7 +197,7 @@ test("keeps one accepted runtime Snapshot through the credential side effect", a
     };
   });
   const useCase = createExchangeSsoCodeUseCase({
-    authorizationGrants: { redeemIndependentGrant },
+    authorizationGrants: { rejectAuthorizationGrant: mock(async () => {}), redeemIndependentGrant },
     clientCredentials: {
       authenticate: mock(async () => {
         events.push("authenticate");

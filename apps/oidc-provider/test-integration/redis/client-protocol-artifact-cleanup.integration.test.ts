@@ -232,7 +232,7 @@ describe("client Protocol artifact cleanup real Redis contract", () => {
     const retained = await testScope.observer.mget(...preserved);
     expect(retained).toEqual(preserved.map(() => "preserved"));
     const oldPrincipal = await kernel.resolvePrincipalSession(principal.externalToken);
-    const oldCredential = await kernel.resolveCredential(credential.externalToken);
+    const oldCredential = await kernel.resolveCredential(credential.externalToken, credential.value);
     expect(oldPrincipal.status).not.toBe("resolved");
     expect(oldCredential.status).not.toBe("resolved");
   });
@@ -343,7 +343,7 @@ describe("client Protocol artifact cleanup real Redis contract", () => {
       oidcSession: {
         registerAccessTokenCredential: unused,
         registerAuthorizationCodeArtifact: unused,
-        resolveAuthorizationCodeSessionLifetime: async () => ({ remainingSeconds: 90 }),
+        resolveAuthorizationCodeSessionLifetime: async (_id: string, serializedProviderCode: string) => ({ serializedProviderCode, remainingSeconds: 90, artifact: { version: 1 as const, artifactId: "code", protocol: "oidc", artifactType: "authorization_code", lookupHash: "lookup", lookupKeyId: "test", issuedAt: 0, expiresAt: 60000, cleanupRefs: [] } }),
         consumeAuthorizationCodeArtifact: unused,
         resolveAccessTokenCredential: unused,
         revokeAccessTokenCredential: unused,
@@ -461,13 +461,13 @@ describe("client Protocol artifact cleanup real Redis contract", () => {
     expect(await kernel.resolvePrincipalSession(principal.externalToken)).toMatchObject({
       status: "resolved",
     });
-    expect(await kernel.consumeProtocolArtifact(artifact.externalToken)).toMatchObject({
+    expect(await kernel.consumeProtocolArtifact(artifact.externalToken, artifact.value, artifact.value)).toMatchObject({
       status: "revoked",
     });
-    expect(await kernel.resolveCredential(gatewaySession.externalToken)).toMatchObject({
+    expect(await kernel.resolveCredential(gatewaySession.externalToken, gatewaySession.value)).toMatchObject({
       status: "revoked",
     });
-    expect(await kernel.resolveCredential(oidcCredential.externalToken)).toMatchObject({
+    expect(await kernel.resolveCredential(oidcCredential.externalToken, oidcCredential.value)).toMatchObject({
       status: "revoked",
     });
     expect(await testScope.observer.mget(...preservedKeys)).toEqual(preservedValues);

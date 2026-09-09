@@ -37,8 +37,7 @@ describe("Admin context revocation", () => {
       revokeUserSessionsByContext: mock(async () => summary),
       revokeUserSessionRecords: mock(async () => summary),
       revokePrincipalSession: mock(async () => summary),
-      revokeClientProtocol: mock(async () => summary),
-      revokeClient: mock(async () => summary),
+      revokeSelectedClientProtocolObjects: mock(async () => summary),
     };
     const logger = { logPreparationFailure: mock(), logUserRevocation: mock(), logClientProtocolRevocation: mock(), logClientAllProtocolsRevocation: mock() };
     return { kernel, logger, preparedRevoke, port: createAdminSessionRevocationPort({ sessionKernel: kernel, logger }) };
@@ -102,8 +101,7 @@ describe("createAdminSessionRevocationPort", () => {
         revokeUserSessionsByContext: mock(async () => revokeSummary()),
         prepareUserSessionRevocationByContext,
         revokeUserSessionRecords: mock(async () => summary),
-        revokeClientProtocol: mock(async () => summary),
-        revokeClient: mock(async () => summary),
+        revokeSelectedClientProtocolObjects: mock(async () => summary),
       },
       logger,
     });
@@ -130,8 +128,7 @@ describe("createAdminSessionRevocationPort", () => {
       revokeUserSessionsByContext: mock(async () => revokeSummary()),
       prepareUserSessionRevocationByContext: mock(async () => ({ revoke: async () => revokeSummary() })),
       revokeUserSessionRecords: mock(async () => revokeSummary()),
-      revokeClientProtocol: mock(async () => revokeSummary()),
-      revokeClient: mock(async () => revokeSummary()),
+      revokeSelectedClientProtocolObjects: mock(async () => revokeSummary()),
     };
     const port = createAdminSessionRevocationPort({
       sessionKernel: kernel,
@@ -177,17 +174,18 @@ describe("createAdminSessionRevocationPort", () => {
         revokeUserSessionsByContext: mock(async () => revokeSummary()),
         prepareUserSessionRevocationByContext: mock(async () => ({ revoke: async () => revokeSummary() })),
         revokeUserSessionRecords: mock(async () => revokeSummary()),
-        revokeClientProtocol: mock(async () => summary),
-        revokeClient: mock(async () => revokeSummary()),
+        revokeSelectedClientProtocolObjects: mock(async () => summary),
       },
       logger,
     });
 
-    await expect(port.revokeClientProtocol({
+    const result = await port.revokeClientProtocol({
       clientCode: "portal",
       protocol: "custom-sso",
+      committedVersion: 2,
       reason: "client_config_changed",
-    })).resolves.toMatchObject({
+    });
+    expect(result).toMatchObject({
       bindings: { revoked: 0 },
       credentials: { revoked: 1 },
     });

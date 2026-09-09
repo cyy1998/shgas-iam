@@ -4,8 +4,11 @@ import type { OidcProviderRedisTestHarness, OidcProviderRedisTestScope } from ".
 import { createHash, randomUUID } from "node:crypto";
 import { createSubjectAccessBootstrap, createSubjectAccessSessionContext, SubjectAccessPermissionRequiredError } from "@iam/api-core/subject-access";
 import { UserProfileDirtyStatus } from "@iam/contracts";
+import { AUTHORIZATION_GRANT_REDEMPTION_CLEANUP_KIND, createAuthorizationGrantRedisInspection, createRedisAuthorizationGrantRedemptionStore } from "@iam/custom-sso/testing";
+import { createOidcRevocationSelector } from "@iam/domain/client/oidc-revocation-selector";
 import { createSubjectFactsRedisCache } from "@iam/user-profile-read-model/subject-facts";
 import { exportJWK, generateKeyPair } from "jose";
+import { errors } from "oidc-provider";
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { createOidcHttpServer } from "../../src/composition/http/create-http-server.ts";
 import { createOidcProviderRuntime } from "../../src/composition/provider/index.ts";
@@ -49,6 +52,7 @@ async function runtimeFixture(options: { publishFacts?: boolean } = {}) {
   });
   const subject = randomUUID();
   const client = scope.unique("client");
+  const otherClient = scope.unique("other-client");
   await createSubjectAccessBootstrap({ redis: scope.writer, random: { uuid: randomUUID } }).seedMany(
     [{ subjectIdentifier: subject, state: "enabled" }],
     new Date(),
@@ -95,8 +99,8 @@ async function runtimeFixture(options: { publishFacts?: boolean } = {}) {
   };
   const stores = {
     clientRuntime: {
-      findRuntime: async (id: string) => id === client ? metadata : null,
-      findActiveVersion: async (id: string) => id === client ? clientVersion : null,
+      findRuntime: async (id: string) => [client, otherClient].includes(id) ? { ...metadata, client_id: id, oidc_config_version: clientVersion } : null,
+      findActiveVersion: async (id: string) => [client, otherClient].includes(id) ? clientVersion : null,
     },
     clientTrafficGate: { check: async () => ({ outcome: allowed ? "enabled" : "maintenance" }) },
     tokens: createOidcTokenStore(scope.writer),
@@ -211,9 +215,14 @@ async function runtimeFixture(options: { publishFacts?: boolean } = {}) {
   }
   return {
     ...runtime,
+    env,
+    logger,
+    stores,
+    principal,
     session,
     subject,
     client,
+    otherClient,
     barrier,
     renew,
     stage,
@@ -254,6 +263,268 @@ async function runtimeFixture(options: { publishFacts?: boolean } = {}) {
 }
 
 describe("oIDC Token and UserInfo operations through real Redis and production HTTP routing", () => {
+  it("keeps independently accepted configuration and Gate through Code consumption and token issuance", async () => {
+    const f = await runtimeFixture();
+    const code = await f.issueCode();
+    const config = vi.spyOn(f.stores.clientRuntime, "findRuntime");
+    const gate = vi.spyOn(f.stores.clientTrafficGate, "check");
+    const consume = f.session.kernel.consumeProtocolArtifact;
+    vi.spyOn(f.session.kernel, "consumeProtocolArtifact").mockImplementationOnce(async (...args) => {
+      f.setClientVersion(2);
+      f.setClientAllowed(false);
+      return consume(...args);
+    });
+    const issued = await f.exchange(code);
+    expect(issued.response.status).toBe(200);
+    expect(config).toHaveBeenCalledTimes(1);
+    expect(gate).toHaveBeenCalledTimes(1);
+    const token = JSON.parse(issued.body).access_token;
+    const purpose = { protocol: "oidc", credentialType: "access_token", clientCode: f.client };
+    const credential = await f.session.kernel.resolveCredential(token, purpose);
+    expect(credential).toMatchObject({ status: "resolved", value: { metadata: { oidcConfigVersion: 1 } } });
+    const maintained = await f.userInfo(token);
+    expect(maintained.response.status).toBe(503);
+    const retained = await f.session.kernel.resolveCredential(token, purpose);
+    expect(retained.status).toBe("resolved");
+    f.setClientAllowed(true);
+    const obsolete = await f.userInfo(token);
+    expect(obsolete.response.status).toBe(401);
+    const removed = await f.session.kernel.resolveCredential(token, purpose);
+    expect(removed.status).toBe("revoked");
+  });
+
+  it("keeps UserInfo's accepted configuration and Gate across later Binding and Claims callbacks", async () => {
+    const f = await runtimeFixture();
+    const issued = await f.exchange(await f.issueCode());
+    const token = JSON.parse(issued.body).access_token;
+    const config = vi.spyOn(f.stores.clientRuntime, "findRuntime");
+    const gate = vi.spyOn(f.stores.clientTrafficGate, "check");
+    const refresh = f.session.providerSessionState.refresh;
+    f.refresh.mockImplementationOnce(async (...args) => {
+      f.setClientVersion(2);
+      f.setClientAllowed(false);
+      return refresh(...args);
+    });
+    const delivered = await f.userInfo(token);
+    expect(delivered.response.status).toBe(200);
+    expect(JSON.parse(delivered.body)).toMatchObject({ sub: f.subject });
+    expect(config).toHaveBeenCalledTimes(1);
+    expect(gate).toHaveBeenCalledTimes(1);
+    const denied = await f.userInfo(token);
+    expect(denied.response.status).toBe(503);
+  });
+
+  it.each(["success", "absent", "config-error", "maintenance", "unavailable", "gate-error", "disabled"] as const)("fixes %s across concurrent callback facades, then reacquires next request", async (result) => {
+    const f = await runtimeFixture();
+    const issued = await f.exchange(await f.issueCode());
+    const token = JSON.parse(issued.body).access_token;
+    const readConfig = f.stores.clientRuntime.findRuntime;
+    const readGate = f.stores.clientTrafficGate.check;
+    let configReady!: () => void;
+    let releaseConfig!: () => void;
+    let gateReady!: () => void;
+    let releaseGate!: () => void;
+    const configStarted = new Promise<void>((resolve) => {
+      configReady = resolve;
+    });
+    const configLatch = new Promise<void>((resolve) => {
+      releaseConfig = resolve;
+    });
+    const gateStarted = new Promise<void>((resolve) => {
+      gateReady = resolve;
+    });
+    const gateLatch = new Promise<void>((resolve) => {
+      releaseGate = resolve;
+    });
+    const failure = new errors.TemporarilyUnavailable();
+    const config = vi.spyOn(f.stores.clientRuntime, "findRuntime").mockImplementationOnce(async (client) => {
+      const value = await readConfig(client);
+      configReady();
+      await configLatch;
+      if (result === "config-error")
+        throw failure;
+      return result === "absent" ? null : value;
+    });
+    const gate = vi.spyOn(f.stores.clientTrafficGate, "check").mockImplementationOnce(async () => {
+      gateReady();
+      await gateLatch;
+      if (result === "gate-error")
+        throw failure;
+      return { outcome: result === "maintenance" || result === "unavailable" || result === "disabled" ? result : "enabled" };
+    });
+    const find = RedisOidcAdapter.prototype.find;
+    const attempts: unknown[][] = [];
+    let retainedScope: ReturnType<typeof f.session.sessions.snapshotsForOperation> | undefined;
+    const wrapped = vi.spyOn(RedisOidcAdapter.prototype, "find").mockImplementation(async function (this: RedisOidcAdapter, id) {
+      if (id !== token)
+        return find.call(this, id);
+      const operation = f.bridge.current();
+      const first = f.session.sessions.snapshotsForOperation(operation);
+      const second = f.session.sessions.snapshotsForOperation(operation);
+      retainedScope = first;
+      attempts.push(await Promise.all([
+        first.clients.findRuntime(f.client).catch(error => error),
+        second.clients.findRuntime(f.client).catch(error => error),
+      ]));
+      attempts.push(await Promise.all([
+        first.traffic!.check(f.client).catch(error => error),
+        second.traffic!.check(f.client).catch(error => error),
+      ]));
+      // Source recovery cannot alter a decision already taken by this operation.
+      config.mockImplementation(readConfig);
+      gate.mockImplementation(readGate);
+      return find.call(this, id);
+    });
+    const pending = f.userInfo(token);
+    await configStarted;
+    expect(config).toHaveBeenCalledTimes(1);
+    // Config and Gate are separate acquisitions: Gate has not started yet.
+    expect(gate).not.toHaveBeenCalled();
+    releaseConfig();
+    await gateStarted;
+    expect(gate).toHaveBeenCalledTimes(1);
+    releaseGate();
+    const response = await pending;
+    expect(response.response.status).toBe(result === "success" ? 200 : result === "absent" || result === "disabled" ? 401 : result.endsWith("error") ? 400 : 503);
+    if (result.endsWith("error"))
+      expect(JSON.parse(response.body).error).toBe("temporarily_unavailable");
+    expect(config).toHaveBeenCalledTimes(1);
+    expect(gate).toHaveBeenCalledTimes(1);
+    for (const pair of attempts) expect(pair[1]).toBe(pair[0]);
+    wrapped.mockRestore();
+    const closedConfig = await retainedScope!.clients.findRuntime(f.client).catch(error => error);
+    const closedGate = await retainedScope!.traffic!.check(f.client).catch(error => error);
+    expect(closedConfig).toBeInstanceOf(SubjectAccessPermissionRequiredError);
+    expect(closedGate).toBeInstanceOf(SubjectAccessPermissionRequiredError);
+    const state = await f.session.kernel.resolveCredential(token, { protocol: "oidc", credentialType: "access_token", clientCode: f.client });
+    expect(state.status).toBe(result === "absent" ? "revoked" : "resolved");
+    if (result !== "absent") {
+      const next = await f.userInfo(token);
+      expect(next.response.status).toBe(200);
+      expect(config).toHaveBeenCalledTimes(2);
+      expect(gate).toHaveBeenCalledTimes(2);
+    }
+    else {
+      const next = await f.exchange(await f.issueCode());
+      expect(next.response.status).toBe(200);
+      expect(config.mock.calls.length).toBeGreaterThan(1);
+    }
+  });
+
+  it.each(["code", "credential"] as const)("rejects a newer %s against an older operation snapshot without revoking it", async (kind) => {
+    const f = await runtimeFixture();
+    f.setClientVersion(2);
+    const code = await f.issueCode();
+    const token = kind === "code" ? code : JSON.parse((await f.exchange(code)).body).access_token;
+    f.setClientVersion(1);
+    const denied = kind === "code" ? await f.exchange(token) : await f.userInfo(token);
+    expect(denied.response.status).toBe(kind === "code" ? 400 : 401);
+    const object = kind === "code"
+      ? await f.session.kernel.resolveProtocolArtifact(token, { protocol: "oidc", artifactType: "authorization_code", clientCode: f.client })
+      : await f.session.kernel.resolveCredential(token, { protocol: "oidc", credentialType: "access_token", clientCode: f.client });
+    expect(object).toMatchObject({ status: "resolved", value: { metadata: { oidcConfigVersion: 2 } } });
+    f.setClientVersion(2);
+    const next = kind === "code" ? await f.exchange(token) : await f.userInfo(token);
+    expect(next.response.status).toBe(200);
+  });
+
+  it("preserves newer Binding and Provider Grant objects when a snapshot is older", async () => {
+    const f = await runtimeFixture();
+    f.setClientVersion(2);
+    const code = await f.issueCode();
+    const serialized = await scope.observer.get(`oidc:model:AuthorizationCode:${code}`);
+    if (!serialized)
+      throw new Error("expected Code");
+    const payload = JSON.parse(serialized);
+    const grantKey = `oidc:model:Grant:${payload.grantId}`;
+    const grantBefore = await scope.observer.get(grantKey);
+    expect(grantBefore).not.toBeNull();
+    f.setClientVersion(1);
+    const denied = await f.bridge.run(async (operation) => {
+      const session = f.session.sessions.forOperation(operation);
+      return {
+        binding: await session.read(payload.claimsSnapshot.providerSessionUid, f.client),
+        grant: await f.provider.Grant.find(payload.grantId),
+      };
+    });
+    expect(denied.binding).toBeNull();
+    expect(denied.grant).toBeUndefined();
+    const binding = await f.session.kernel.resolveClientBindingById(payload.claimsSnapshot.providerSessionBindingId, { protocol: "oidc", clientCode: f.client });
+    expect(binding).toMatchObject({ status: "resolved", value: { metadata: { oidcConfigVersion: 2 } } });
+    const grantAfter = await scope.observer.get(grantKey);
+    expect(grantAfter).toBe(grantBefore);
+    f.setClientVersion(2);
+    const next = await f.exchange(code);
+    expect(next.response.status).toBe(200);
+  });
+
+  it("preserves a replacement Provider payload when an observed Grant fails its delayed configuration read", async () => {
+    const f = await runtimeFixture();
+    const code = await f.issueCode();
+    const codePayload = await scope.observer.get(`oidc:model:AuthorizationCode:${code}`);
+    if (!codePayload)
+      throw new Error("expected Code");
+    const grantId = JSON.parse(codePayload).grantId;
+    const grantKey = `oidc:model:Grant:${grantId}`;
+    let reached!: () => void;
+    let release!: () => void;
+    const paused = new Promise<void>((resolve) => {
+      reached = resolve;
+    });
+    const latch = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const readConfig = f.stores.clientRuntime.findRuntime;
+    vi.spyOn(f.stores.clientRuntime, "findRuntime").mockImplementationOnce(async (client) => {
+      reached();
+      await latch;
+      return readConfig(client);
+    });
+    const pending = f.bridge.run(async () => f.provider.Grant.find(grantId));
+    await paused;
+    try {
+      f.setClientVersion(2);
+      const freshCode = await f.issueCode();
+      const freshCodePayload = await scope.observer.get(`oidc:model:AuthorizationCode:${freshCode}`);
+      if (!freshCodePayload)
+        throw new Error("expected fresh Code");
+      const freshGrantId = JSON.parse(freshCodePayload).grantId;
+      const freshGrant = await scope.observer.get(`oidc:model:Grant:${freshGrantId}`);
+      if (!freshGrant)
+        throw new Error("expected fresh Grant");
+      const replacement = JSON.stringify({ ...JSON.parse(freshGrant), jti: grantId });
+      await scope.observer.set(grantKey, replacement, "KEEPTTL");
+      release();
+      const denied = await pending;
+      expect(denied).toBeUndefined();
+      const retained = await scope.observer.get(grantKey);
+      expect(retained).toBe(replacement);
+      const next = await f.bridge.run(async () => f.provider.Grant.find(grantId));
+      expect(next).toBeDefined();
+    }
+    finally {
+      release();
+      await pending;
+    }
+  });
+
+  it("rejects completion of a pending acquisition after its HTTP operation is closed", async () => {
+    const f = await runtimeFixture();
+    const issued = await f.exchange(await f.issueCode());
+    const token = JSON.parse(issued.body).access_token;
+    const config = f.stores.clientRuntime.findRuntime;
+    vi.spyOn(f.stores.clientRuntime, "findRuntime").mockImplementationOnce(async (client) => {
+      const value = await config(client);
+      f.bridge.current().close();
+      return value;
+    });
+    const response = await f.userInfo(token);
+    expect(response.response.status).toBe(500);
+    const retained = await f.session.kernel.resolveCredential(token, { protocol: "oidc", credentialType: "access_token", clientCode: f.client });
+    expect(retained.status).toBe("resolved");
+    const next = await f.userInfo(token);
+    expect(next.response.status).toBe(200);
+  });
   it("shares one permission across Token callbacks, isolates parallel requests and closes their claims", async () => {
     const runtime = await runtimeFixture();
     const codes = [await runtime.issueCode(), await runtime.issueCode()];
@@ -512,6 +783,89 @@ describe("oIDC Token and UserInfo operations through real Redis and production H
 });
 
 describe("oIDC operation authorization through real Redis and production HTTP routing", () => {
+  it("isolates concurrent native login guards and preserves a newer Return Handle", async () => {
+    const f = await runtimeFixture();
+    f.setClientVersion(2);
+    const principalToken = f.cookies.get("global_session")!;
+    f.cookies.delete("global_session");
+    const auth = await f.request(f.authorization());
+    const login = await f.request(auth.location!);
+    const handle = new URL(login.location!).searchParams.get("oidcReturn")!;
+    const path = `/oidc/login-guard?oidcReturn=${encodeURIComponent(handle)}`;
+    f.cookies.set("global_session", principalToken);
+    f.setClientVersion(1);
+    const old = await f.request(path);
+    expect(old.response.status).toBe(400);
+    const retained = await f.session.kernel.resolveProtocolArtifact(handle, { protocol: "oidc", artifactType: "login_return_handle", clientCode: f.client });
+    expect(retained).toMatchObject({ status: "resolved", value: { metadata: { oidcConfigVersion: 2 } } });
+    f.setClientVersion(2);
+    f.captured.splice(0);
+    const config = vi.spyOn(f.stores.clientRuntime, "findRuntime");
+    const gate = vi.spyOn(f.stores.clientTrafficGate, "check");
+    const replies = await Promise.all([f.request(path, new Map(f.cookies)), f.request(path, new Map(f.cookies))]);
+    expect(replies.map(reply => reply.response.status)).toEqual([200, 200]);
+    expect(config).toHaveBeenCalledTimes(2);
+    expect(gate).toHaveBeenCalledTimes(2);
+    expect(new Set(f.captured).size).toBe(2);
+    for (const operation of f.captured)
+      expect(() => f.session.sessions.snapshotsForOperation(operation)).toThrow(SubjectAccessPermissionRequiredError);
+  });
+  it.each(["interaction", "login-guard", "resume"] as const)("shares configuration and Gate across native %s and its Provider callbacks", async (entry) => {
+    const f = await runtimeFixture();
+    let path: string;
+    if (entry === "interaction") {
+      path = (await f.request(f.authorization())).location!;
+    }
+    else {
+      const principalToken = f.cookies.get("global_session")!;
+      f.cookies.delete("global_session");
+      const auth = await f.request(f.authorization());
+      const login = await f.request(auth.location!);
+      const handle = new URL(login.location!).searchParams.get("oidcReturn")!;
+      path = `/oidc/${entry}?oidcReturn=${encodeURIComponent(handle)}`;
+      f.cookies.set("global_session", principalToken);
+    }
+    f.captured.splice(0);
+    const readConfig = f.stores.clientRuntime.findRuntime;
+    const readGate = f.stores.clientTrafficGate.check;
+    let configAccepted = false;
+    let gateAccepted = false;
+    const shiftAfterBothAcquisitions = () => {
+      if (configAccepted && gateAccepted) {
+        f.setClientVersion(2);
+        f.setClientAllowed(false);
+      }
+    };
+    const config = vi.spyOn(f.stores.clientRuntime, "findRuntime").mockImplementation(async (client) => {
+      const value = await readConfig(client);
+      configAccepted = true;
+      shiftAfterBothAcquisitions();
+      return value;
+    });
+    const gate = vi.spyOn(f.stores.clientTrafficGate, "check").mockImplementation(async () => {
+      const value = await readGate();
+      gateAccepted = true;
+      shiftAfterBothAcquisitions();
+      return value;
+    });
+    const result = await f.request(path);
+    expect(result.response.status).toBe(entry === "interaction" ? 303 : entry === "login-guard" ? 200 : 302);
+    expect(config).toHaveBeenCalledTimes(1);
+    expect(gate).toHaveBeenCalledTimes(1);
+    expect(f.captured).toHaveLength(1);
+    expect(f.cookies.has("global_session")).toBe(true);
+    expect(() => f.session.sessions.snapshotsForOperation(f.captured[0]!)).toThrow(SubjectAccessPermissionRequiredError);
+    const root = await f.session.kernel.resolvePrincipalSession(f.principal.externalToken!);
+    expect(root.status).toBe("resolved");
+    if (entry !== "resume") {
+      config.mockImplementation(readConfig);
+      gate.mockImplementation(readGate);
+      f.setClientAllowed(true);
+      const next = await f.request(path);
+      expect(next.response.status).toBeGreaterThanOrEqual(400);
+      expect(config).toHaveBeenCalledTimes(2);
+    }
+  });
   it("isolates concurrent HTTP requests and rejects claims use outside Provider scope", async () => {
     const runtime = await runtimeFixture();
     await runtime.authorize();
@@ -677,5 +1031,624 @@ describe("oIDC operation authorization through real Redis and production HTTP ro
     expect(new URL(missing.location!).searchParams.get("error")).toBe("temporarily_unavailable");
     expect(runtime.barrier).toHaveBeenCalledTimes(1);
     expect(runtime.cookies.has("global_session")).toBe(true);
+  });
+});
+
+describe("oIDC protocol purpose isolation", () => {
+  it("rejects Custom SSO bearer and code at real HTTP entries without consuming or revoking any scope", async () => {
+    const f = await runtimeFixture();
+    const second = await f.session.kernel.createPrincipalSession(randomUUID(), { subjectContext: "other-user" });
+    const third = await f.session.kernel.createPrincipalSession(randomUUID(), { subjectContext: "other-client" });
+    if (second.status !== "created" || third.status !== "created")
+      throw new Error("expected control roots");
+    const credentials = [];
+    const codes = [];
+    const grants = createRedisAuthorizationGrantRedemptionStore({ redis: scope.writer });
+    const grantInspection = createAuthorizationGrantRedisInspection(scope.writer);
+    for (const [root, clientCode] of [[f.principal.value, f.client], [second.value, f.client], [third.value, `${f.client}-other`]] as const) {
+      const credential = await f.session.kernel.issueCredential({
+        principalSessionId: root.principalSessionId,
+        protocol: "custom-sso",
+        clientCode,
+        credentialType: "local_session",
+        ttlMs: 60_000,
+        metadata: { version: 2, configVersion: 1, mode: "gateway" },
+      });
+      const grantId = randomUUID();
+      const code = await f.session.kernel.createProtocolArtifact({
+        artifactId: grantId,
+        cleanupRefs: [{ protocol: "custom-sso", kind: AUTHORIZATION_GRANT_REDEMPTION_CLEANUP_KIND, ref: grantId }],
+        principalSessionId: root.principalSessionId,
+        protocol: "custom-sso",
+        clientCode,
+        artifactType: "auth_code",
+        ttlMs: 60_000,
+        tokenKind: "authCode",
+        metadata: { version: 2, subjectIdentifier: root.principal.subjectId, clientCode, configVersion: 1, redirectUri: "https://client.example/callback", mode: "gateway" },
+      });
+      if (credential.status !== "created" || code.status !== "created")
+        throw new Error("expected Custom SSO objects");
+      const initialized = await grants.initialize({ version: 1, state: "issued", grantId, expiresAt: code.value.expiresAt });
+      expect(initialized).toBe("created");
+      credentials.push(credential);
+      codes.push(code);
+    }
+    f.barrier.mockClear();
+    const bearer = await f.userInfo(credentials[0]!.externalToken!);
+    expect(bearer.response.status).toBe(401);
+    const resume = await f.request(`/oidc/resume?oidcReturn=${codes[0]!.externalToken}`, new Map());
+    expect(resume.response.status).toBeGreaterThanOrEqual(400);
+    expect(f.barrier).not.toHaveBeenCalled();
+    for (const credential of credentials) {
+      const retained = await f.session.kernel.resolveCredential(credential.externalToken!, credential.value);
+      expect(retained).toMatchObject({ status: "resolved", value: JSON.parse(JSON.stringify(credential.value)) });
+    }
+    for (const code of codes) {
+      const retained = await f.session.kernel.resolveProtocolArtifact(code.externalToken!, code.value);
+      expect(retained).toMatchObject({ status: "resolved", value: JSON.parse(JSON.stringify(code.value)) });
+      const grant = await grantInspection.inspect(code.value.artifactId);
+      expect(grant).toMatchObject({ state: "issued" });
+    }
+    for (const root of [f.principal, second, third]) {
+      const retained = await f.session.kernel.resolvePrincipalSession(root.externalToken!);
+      expect(retained.status).toBe("resolved");
+    }
+  });
+
+  it("keeps a Code with wrong redirect and rejects its later permanent version failure precisely", async () => {
+    const f = await runtimeFixture();
+    const code = await f.issueCode();
+    const purpose = { protocol: "oidc", artifactType: "authorization_code", clientCode: f.client };
+    f.setClientVersion(2);
+    const wrongClient = await f.exchange(code, { client_id: f.otherClient });
+    expect(wrongClient.response.status).toBe(400);
+    const afterWrongClient = await f.session.kernel.resolveProtocolArtifact(code, purpose);
+    expect(afterWrongClient.status).toBe("resolved");
+    const wrong = await f.exchange(code, { redirect_uri: "https://wrong.example/callback" });
+    expect(wrong.response.status).toBe(400);
+    const retained = await f.session.kernel.resolveProtocolArtifact(code, purpose);
+    expect(retained.status).toBe("resolved");
+    const correct = await f.exchange(code);
+    expect(correct.response.status).toBe(400);
+    const revoked = await f.session.kernel.resolveProtocolArtifact(code, purpose);
+    expect(revoked.status).toBe("revoked");
+    const root = await f.session.kernel.resolvePrincipalSession(f.principal.externalToken!);
+    expect(root.status).toBe("resolved");
+  });
+
+  it("keeps Return Handle and browser cookies when maintenance blocks an expired configuration", async () => {
+    const f = await runtimeFixture();
+    const payload = { browserBinding: "browser", clientId: f.client, interactionUid: "interaction", oidcConfigVersion: 1, returnTarget: `${issuer}/resume` };
+    const handle = await f.session.operations.run(operation => f.session.sessions.forOperation(operation).create(payload, 60));
+    if (!handle)
+      throw new Error("expected handle");
+    f.setClientVersion(2);
+    f.setClientAllowed(false);
+    const jar = new Map([["oidc_interaction_binding", "browser"]]);
+    const denied = await f.request(`/oidc/resume?oidcReturn=${handle}`, jar);
+    expect(denied.response.status).toBe(503);
+    const retained = await f.session.kernel.resolveProtocolArtifact(handle, { protocol: "oidc", artifactType: "login_return_handle", clientCode: f.client });
+    expect(retained.status).toBe("resolved");
+    expect(denied.response.headers.getSetCookie()).toEqual([]);
+  });
+  it("a paused old UserInfo request preserves protocol-issued access after version-selected cleanup", async () => {
+    const f = await runtimeFixture();
+    const code = await f.issueCode();
+    const exchanged = await f.exchange(code);
+    expect(exchanged.response.status).toBe(200);
+    const oldToken = JSON.parse(exchanged.body).access_token as string;
+    const otherRoot = await f.session.kernel.createPrincipalSession(randomUUID(), { subjectContext: "control" });
+    if (otherRoot.status !== "created")
+      throw new Error("expected control root");
+    const controlCredential = await f.session.kernel.issueCredential({
+      principalSessionId: otherRoot.value.principalSessionId,
+      protocol: "oidc",
+      clientCode: f.client,
+      credentialType: "access_token",
+      ttlMs: 60_000,
+      metadata: { oidcConfigVersion: 2 },
+    });
+    if (controlCredential.status !== "created")
+      throw new Error("expected control Credential");
+    const controlToken = controlCredential.externalToken!;
+    const otherClient = await f.session.kernel.issueCredential({
+      principalSessionId: otherRoot.value.principalSessionId,
+      protocol: "oidc",
+      clientCode: `${f.client}-control`,
+      credentialType: "access_token",
+      metadata: { oidcConfigVersion: 1 },
+    });
+    if (otherClient.status !== "created" || !otherClient.externalToken)
+      throw new Error("expected other Client Credential");
+    const purpose = { protocol: "oidc", credentialType: "access_token", clientCode: f.client };
+    const old = await f.session.kernel.resolveCredential(oldToken, purpose);
+    if (old.status !== "resolved")
+      throw new Error("expected old Credential");
+    let reached!: () => void;
+    let release!: () => void;
+    const paused = new Promise<void>((resolve) => {
+      reached = resolve;
+    });
+    const resume = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const findVersion = f.stores.clientRuntime.findRuntime;
+    const versionRead = vi.spyOn(f.stores.clientRuntime, "findRuntime");
+    versionRead.mockImplementationOnce(async () => {
+      reached();
+      await resume;
+      return { ...await findVersion(f.client), oidc_config_version: 2 } as Awaited<ReturnType<typeof findVersion>>;
+    });
+    const pending = f.userInfo(oldToken);
+    await paused;
+    try {
+      f.setClientVersion(2);
+      await f.session.kernel.revokeSelectedClientProtocolObjects(f.client, "oidc", createOidcRevocationSelector(2), "client_config_changed");
+      const cleaned = await f.session.kernel.resolveCredential(oldToken, purpose);
+      expect(cleaned.status).toBe("revoked");
+      versionRead.mockImplementation(findVersion);
+      const freshCode = await f.issueCode();
+      const freshExchange = await f.exchange(freshCode);
+      expect(freshExchange.response.status).toBe(200);
+      const freshToken = JSON.parse(freshExchange.body).access_token as string;
+      release();
+      const denied = await pending;
+      expect(denied.response.status).toBe(401);
+      const fresh = await f.userInfo(freshToken);
+      expect(fresh.response.status).toBe(200);
+      const control = await f.session.kernel.resolveCredential(controlToken, purpose);
+      expect(control.status).toBe("resolved");
+      const root = await f.session.kernel.resolvePrincipalSession(f.principal.externalToken!);
+      expect(root.status).toBe("resolved");
+      const other = await f.session.kernel.resolveCredential(otherClient.externalToken, { protocol: "oidc", credentialType: "access_token" });
+      const controlRoot = await f.session.kernel.resolvePrincipalSessionById(otherRoot.value.principalSessionId);
+      expect([other.status, controlRoot.status]).toEqual(["resolved", "resolved"]);
+      const late = await f.userInfo(oldToken);
+      expect(late.response.status).toBe(401);
+    }
+    finally {
+      release();
+      await pending;
+    }
+  });
+
+  it.each(["unavailable", "cleanup-failure"] as const)("rejects %s without granting access or revoking controls", async (failure) => {
+    const f = await runtimeFixture();
+    const exchanged = await f.exchange(await f.issueCode());
+    const token = JSON.parse(exchanged.body).access_token as string;
+    const purpose = { protocol: "oidc", credentialType: "access_token", clientCode: f.client };
+    const revoke = vi.spyOn(f.session.kernel, "revokeObservedObject");
+    if (failure === "unavailable") {
+      vi.spyOn(f.stores.clientRuntime, "findRuntime").mockRejectedValue(new Error("reader unavailable"));
+    }
+    else {
+      f.setClientVersion(2);
+      revoke.mockRejectedValue(new Error("cleanup unavailable"));
+    }
+    const denied = await f.userInfo(token);
+    expect(denied.response.status).toBeGreaterThanOrEqual(400);
+    if (failure === "unavailable")
+      expect(revoke).not.toHaveBeenCalled();
+    else
+      expect(revoke).toHaveBeenCalledOnce();
+    const retained = await f.session.kernel.resolveCredential(token, purpose);
+    expect(retained.status).toBe("resolved");
+    const root = await f.session.kernel.resolvePrincipalSession(f.principal.externalToken!);
+    expect(root.status).toBe("resolved");
+  });
+  it.each(["kernel", "provider", "both"] as const)("does not mark a replacement Code consumed when %s state changes after find", async (replacement) => {
+    const f = await runtimeFixture();
+    const code = await f.issueCode();
+    const purpose = { protocol: "oidc", clientCode: f.client, artifactType: "authorization_code" };
+    const original = await f.session.kernel.resolveProtocolArtifact(code, purpose);
+    if (original.status !== "resolved")
+      throw new Error("expected original Kernel Artifact");
+    const providerKey = `oidc:model:AuthorizationCode:${code}`;
+    const markerKey = `oidc:consumed:AuthorizationCode:${code}`;
+    const originalPayload = await scope.observer.get(providerKey);
+    if (!originalPayload)
+      throw new Error("expected original Provider Code");
+    let reached!: () => void;
+    let release!: () => void;
+    const paused = new Promise<void>((resolve) => {
+      reached = resolve;
+    });
+    const resume = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const Code = f.provider.AuthorizationCode;
+    const consume = Code.prototype.consume;
+    vi.spyOn(Code.prototype, "consume").mockImplementationOnce(async function (this: InstanceType<typeof Code>) {
+      reached();
+      await resume;
+      return await consume.call(this);
+    });
+    const pending = f.exchange(code);
+    await paused;
+    let replacementPayload = originalPayload;
+    try {
+      if (replacement !== "provider") {
+        const created = await f.session.kernel.createProtocolArtifact({
+          artifactId: original.value.artifactId,
+          externalToken: code,
+          protocol: original.value.protocol,
+          clientCode: original.value.clientCode,
+          artifactType: original.value.artifactType,
+          principalSessionId: original.value.principalSessionId,
+          bindingId: original.value.bindingId,
+          cleanupRefs: original.value.cleanupRefs,
+          metadata: { ...original.value.metadata, nonce: "replacement" },
+          ttlMs: 60_000,
+        });
+        expect(created.status).toBe("created");
+      }
+      if (replacement !== "kernel") {
+        // Fault injection changes one field of a Code issued by the real Provider.
+        replacementPayload = JSON.stringify({ ...JSON.parse(originalPayload), nonce: "replacement" });
+        await scope.observer.set(providerKey, replacementPayload, "KEEPTTL");
+      }
+      release();
+      const denied = await pending;
+      expect(denied.response.status).toBeGreaterThanOrEqual(400);
+      expect(JSON.parse(denied.body)).not.toHaveProperty("access_token");
+      const marker = await scope.observer.get(markerKey);
+      expect(marker).toBeNull();
+      const retainedPayload = await scope.observer.get(providerKey);
+      expect(retainedPayload).toBe(replacementPayload);
+      const retained = await f.session.kernel.resolveProtocolArtifact(code, purpose);
+      expect(retained.status).toBe("resolved");
+      if (retained.status === "resolved")
+        expect(retained.value.artifactId).toBe(original.value.artifactId);
+      const root = await f.session.kernel.resolvePrincipalSession(f.principal.externalToken!);
+      expect(root.status).toBe("resolved");
+      const next = await f.exchange(code);
+      expect(next.response.status).toBe(200);
+    }
+    finally {
+      release();
+      await pending;
+    }
+  });
+
+  it.each(["permanent", "maintenance"] as const)("binding.read handles %s configuration failure without widening the cascade", async (failure) => {
+    const f = await runtimeFixture();
+    const tokenResponse = await f.exchange(await f.issueCode());
+    expect(tokenResponse.response.status).toBe(200);
+    const token = JSON.parse(tokenResponse.body).access_token as string;
+    const code = await f.issueCode();
+    const credential = await f.session.kernel.resolveCredential(token, { protocol: "oidc", credentialType: "access_token", clientCode: f.client });
+    if (credential.status !== "resolved" || !credential.value.bindingId)
+      throw new Error("expected target Credential");
+    const binding = await f.session.kernel.resolveClientBindingById(credential.value.bindingId, { protocol: "oidc", clientCode: f.client });
+    if (binding.status !== "resolved")
+      throw new Error("expected target Binding");
+    const providerSessionUid = String(binding.value.metadata?.providerSessionUid);
+    const controls = [];
+    for (const clientCode of [f.client, f.otherClient]) {
+      const subject = randomUUID();
+      await createSubjectAccessBootstrap({ redis: scope.writer, random: { uuid: randomUUID } }).seedMany(
+        [{ subjectIdentifier: subject, state: "enabled" }],
+        new Date(),
+      );
+      const control = await f.session.operations.run(async (operation) => {
+        const permission = await operation.acquireForAuthentication(subject);
+        const root = await f.session.kernel.createPrincipalSession(subject, createSubjectAccessSessionContext(operation, permission));
+        if (root.status !== "created")
+          throw new Error("expected control Principal");
+        const childBinding = await f.session.kernel.createClientBinding({ principalSessionId: root.value.principalSessionId, protocol: "oidc", clientCode, metadata: { oidcConfigVersion: 1 } });
+        if (childBinding.status !== "created")
+          throw new Error("expected control Binding");
+        const childCode = await f.session.kernel.createProtocolArtifact({ principalSessionId: root.value.principalSessionId, bindingId: childBinding.value.bindingId, protocol: "oidc", clientCode, artifactType: "authorization_code", ttlMs: 60_000, metadata: { oidcConfigVersion: 1 } });
+        const childToken = await f.session.kernel.issueCredential({ principalSessionId: root.value.principalSessionId, bindingId: childBinding.value.bindingId, protocol: "oidc", clientCode, credentialType: "access_token", ttlMs: 60_000, metadata: { oidcConfigVersion: 1 } });
+        if (childCode.status !== "created" || childToken.status !== "created")
+          throw new Error("expected control Code and Credential");
+        return { root, binding: childBinding, code: childCode, credential: childToken };
+      });
+      controls.push(control);
+    }
+    f.setClientVersion(2);
+    if (failure === "maintenance")
+      f.setClientAllowed(false);
+    const outcome = await f.session.operations.run(operation => f.session.sessions.forOperation(operation).read(providerSessionUid, f.client)).catch(error => error);
+    if (failure === "permanent")
+      expect(outcome).toBeNull();
+    else
+      expect(outcome).toBeInstanceOf(Error);
+    const expectedStatus = failure === "permanent" ? "revoked" : "resolved";
+    const targetBinding = await f.session.kernel.resolveClientBindingById(binding.value.bindingId, { protocol: "oidc", clientCode: f.client });
+    const targetCode = await f.session.kernel.resolveProtocolArtifact(code, { protocol: "oidc", clientCode: f.client, artifactType: "authorization_code" });
+    const targetToken = await f.session.kernel.resolveCredential(token, { protocol: "oidc", clientCode: f.client, credentialType: "access_token" });
+    expect(targetBinding.status).toBe(expectedStatus);
+    expect(targetCode.status).toBe(expectedStatus);
+    expect(targetToken.status).toBe(expectedStatus);
+    const codePayload = await scope.observer.get(`oidc:model:AuthorizationCode:${code}`);
+    const tokenPayload = await scope.observer.get(String(credential.value.metadata?.providerTokenKey));
+    if (failure === "permanent") {
+      expect(codePayload).toBeNull();
+      expect(tokenPayload).toBeNull();
+    }
+    else {
+      expect(codePayload).not.toBeNull();
+      expect(tokenPayload).not.toBeNull();
+    }
+    for (const control of controls) {
+      const controlBinding = await f.session.kernel.resolveClientBindingById(control.binding.value.bindingId, control.binding.value);
+      const controlCode = await f.session.kernel.resolveProtocolArtifact(control.code.externalToken!, control.code.value);
+      const controlToken = await f.session.kernel.resolveCredential(control.credential.externalToken!, control.credential.value);
+      const root = await f.session.kernel.resolvePrincipalSession(control.root.externalToken!);
+      expect([controlBinding.status, controlCode.status, controlToken.status, root.status]).toEqual(["resolved", "resolved", "resolved", "resolved"]);
+    }
+    const root = await f.session.kernel.resolvePrincipalSession(f.principal.externalToken!);
+    expect(root.status).toBe("resolved");
+  });
+  it("does not write a marker onto a Provider Code replaced after Kernel consumption", async () => {
+    const f = await runtimeFixture();
+    const code = await f.issueCode();
+    const providerKey = `oidc:model:AuthorizationCode:${code}`;
+    const markerKey = `oidc:consumed:AuthorizationCode:${code}`;
+    const originalPayload = await scope.observer.get(providerKey);
+    if (!originalPayload)
+      throw new Error("expected Provider Code");
+    let reached!: () => void;
+    let release!: () => void;
+    const paused = new Promise<void>((resolve) => {
+      reached = resolve;
+    });
+    const resume = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const consume = f.session.kernel.consumeProtocolArtifact;
+    vi.spyOn(f.session.kernel, "consumeProtocolArtifact").mockImplementationOnce(async (...args) => {
+      const result = await consume(...args);
+      expect(result.status).toBe("resolved");
+      reached();
+      await resume;
+      return result;
+    });
+    const pending = f.exchange(code);
+    await paused;
+    try {
+      const replacementPayload = JSON.stringify({ ...JSON.parse(originalPayload), nonce: "late-replacement" });
+      await scope.observer.set(providerKey, replacementPayload, "KEEPTTL");
+      release();
+      const denied = await pending;
+      expect(denied.response.status).toBeGreaterThanOrEqual(400);
+      const marker = await scope.observer.get(markerKey);
+      const retained = await scope.observer.get(providerKey);
+      expect(marker).toBeNull();
+      expect(retained).toBe(replacementPayload);
+      // The earlier Kernel transition remains committed; this is not a two-owner rollback.
+      const artifact = await f.session.kernel.resolveProtocolArtifact(code, { protocol: "oidc", clientCode: f.client, artifactType: "authorization_code" });
+      expect(artifact.status).toBe("consumed_replay");
+    }
+    finally {
+      release();
+      await pending;
+    }
+  });
+  it.each(["live", "consumed"] as const)("preserves a %s new Code generation when an old Provider payload fails its delayed version read", async (replacementState) => {
+    const f = await runtimeFixture();
+    const code = await f.issueCode();
+    const purpose = { protocol: "oidc", clientCode: f.client, artifactType: "authorization_code" };
+    const original = await f.session.kernel.resolveProtocolArtifact(code, purpose);
+    if (original.status !== "resolved")
+      throw new Error("expected original Kernel Artifact");
+    const providerKey = `oidc:model:AuthorizationCode:${code}`;
+    const markerKey = `oidc:consumed:AuthorizationCode:${code}`;
+    let reached!: () => void;
+    let release!: () => void;
+    const paused = new Promise<void>((resolve) => {
+      reached = resolve;
+    });
+    const resume = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    f.setClientVersion(2);
+    const revoke = f.session.kernel.revokeObservedObject;
+    vi.spyOn(f.session.kernel, "revokeObservedObject")
+      .mockImplementationOnce(async (...args) => {
+        reached();
+        await resume;
+        return revoke(...args);
+      });
+    const pending = f.exchange(code);
+    await paused;
+    try {
+      f.setClientVersion(2);
+      const browser = new Map([["global_session", f.principal.externalToken!]]);
+      let authorization = await f.request(f.authorization(), browser);
+      for (let hop = 0; hop < 8 && authorization.location && new URL(authorization.location, issuer).hostname !== "client.example"; hop += 1)
+        authorization = await f.request(authorization.location, browser);
+      const freshCode = authorization.location && new URL(authorization.location).searchParams.get("code");
+      if (!freshCode)
+        throw new Error("expected production v2 authorization Code");
+      const fresh = await f.session.kernel.resolveProtocolArtifact(freshCode, purpose);
+      const freshPayload = await scope.observer.get(`oidc:model:AuthorizationCode:${freshCode}`);
+      if (fresh.status !== "resolved" || !freshPayload)
+        throw new Error("expected current Code owners");
+      const replacement = await f.session.kernel.createProtocolArtifact({
+        artifactId: original.value.artifactId,
+        externalToken: code,
+        protocol: fresh.value.protocol,
+        clientCode: fresh.value.clientCode,
+        artifactType: fresh.value.artifactType,
+        principalSessionId: fresh.value.principalSessionId,
+        bindingId: fresh.value.bindingId,
+        metadata: { ...fresh.value.metadata, providerCodeId: code },
+        cleanupRefs: fresh.value.cleanupRefs.map(ref => ({ ...ref, ref: providerKey })),
+        ttlMs: 60_000,
+      });
+      expect(replacement.status).toBe("created");
+      // Replace the old identity with an otherwise production-issued v2 payload.
+      const replacementPayload = JSON.stringify({ ...JSON.parse(freshPayload), jti: code });
+      await scope.observer.set(providerKey, replacementPayload, "KEEPTTL");
+      if (replacementState === "consumed") {
+        const exchanged = await f.exchange(code);
+        expect(exchanged.response.status).toBe(200);
+      }
+      const replacementMarker = await scope.observer.get(markerKey);
+      if (replacementState === "consumed")
+        expect(replacementMarker).not.toBeNull();
+      release();
+      const denied = await pending;
+      expect(denied.response.status).toBe(400);
+      const retainedPayload = await scope.observer.get(providerKey);
+      const marker = await scope.observer.get(markerKey);
+      const retained = await f.session.kernel.resolveProtocolArtifact(code, purpose);
+      expect(retainedPayload).toBe(replacementPayload);
+      expect(marker).toBe(replacementMarker);
+      if (replacementState === "live")
+        expect(retained).toMatchObject({ status: "resolved", value: { artifactId: original.value.artifactId, metadata: { oidcConfigVersion: 2 } } });
+      else
+        expect(retained.status).toBe("consumed_replay");
+      const next = await f.exchange(replacementState === "live" ? code : freshCode);
+      expect(next.response.status).toBe(200);
+      const root = await f.session.kernel.resolvePrincipalSession(f.principal.externalToken!);
+      expect(root.status).toBe("resolved");
+    }
+    finally {
+      release();
+      await pending;
+    }
+  });
+  it.each(["same-client-live", "retry-other-client-live", "retry-other-client-consumed"] as const)("keeps a production upsert replacement during precise cleanup: %s", async (scenario) => {
+    const f = await runtimeFixture();
+    const code = await f.issueCode();
+    const purpose = { protocol: "oidc", clientCode: f.client, artifactType: "authorization_code" };
+    const original = await f.session.kernel.resolveProtocolArtifact(code, purpose);
+    if (original.status !== "resolved")
+      throw new Error("expected original Artifact A");
+    let reached!: () => void;
+    let release!: () => void;
+    const paused = new Promise<void>((resolve) => {
+      reached = resolve;
+    });
+    const resume = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    f.setClientVersion(2);
+    const revoke = f.session.kernel.revokeObservedObject;
+    vi.spyOn(f.session.kernel, "revokeObservedObject").mockImplementationOnce(async (...args) => {
+      reached();
+      await resume;
+      return revoke(...args);
+    });
+    const pending = f.exchange(code);
+    await paused;
+    try {
+      f.setClientVersion(2);
+      const clientCode = scenario === "same-client-live" ? f.client : f.otherClient;
+      const browser = new Map([["global_session", f.principal.externalToken!]]);
+      let authorization = await f.request(f.authorization({ client_id: clientCode }), browser);
+      for (let hop = 0; hop < 8 && authorization.location && new URL(authorization.location, issuer).hostname !== "client.example"; hop += 1)
+        authorization = await f.request(authorization.location, browser);
+      const freshCode = authorization.location && new URL(authorization.location).searchParams.get("code");
+      if (!freshCode)
+        throw new Error("expected fresh production authorization");
+      const serialized = await scope.observer.get(`oidc:model:AuthorizationCode:${freshCode}`);
+      if (!serialized)
+        throw new Error("expected fresh Provider payload");
+      const payload = JSON.parse(serialized);
+      await f.session.operations.run(async (operation) => {
+        const session = f.session.sessions.forOperation(operation);
+        const adapter = new RedisOidcAdapter("AuthorizationCode", scope.observer, {
+          oidcSession: session,
+          providerSessions: session,
+          clientVersions: f.stores.clientRuntime,
+          claims: { createAuthorizationCodeSnapshot: async () => payload.claimsSnapshot },
+          tokens: f.stores.tokens,
+        });
+        await adapter.upsert(code, { ...payload, jti: code, authorizationAttemptId: undefined }, 60);
+      });
+      const replacementPurpose = { ...purpose, clientCode };
+      const replacement = await f.session.kernel.resolveProtocolArtifact(code, replacementPurpose);
+      if (replacement.status !== "resolved")
+        throw new Error("expected production Artifact B");
+      expect(replacement.value.artifactId).not.toBe(original.value.artifactId);
+      const providerKey = `oidc:model:AuthorizationCode:${code}`;
+      const markerKey = `oidc:consumed:AuthorizationCode:${code}`;
+      const replacementPayload = await scope.observer.get(providerKey);
+      let token: string | undefined;
+      if (scenario === "retry-other-client-consumed") {
+        const exchanged = await f.exchange(code, { client_id: clientCode });
+        expect(exchanged.response.status).toBe(200);
+        token = JSON.parse(exchanged.body).access_token;
+      }
+      const replacementMarker = await scope.observer.get(markerKey);
+      if (token)
+        expect(replacementMarker).not.toBeNull();
+      if (scenario.startsWith("retry-")) {
+        let failCleanup = true;
+        const evaluate = scope.writer.eval.bind(scope.writer);
+        vi.spyOn(scope.writer, "eval").mockImplementation(async (...args) => {
+          if (failCleanup && String(args[0]).includes("session-kernel-delete-owned-cleanup-keys-v1")) {
+            failCleanup = false;
+            throw new Error("cleanup connection unavailable");
+          }
+          return await evaluate(...args);
+        });
+      }
+      release();
+      const denied = await pending;
+      expect(denied.response.status).toBe(400);
+      const originalState = await scope.observer.get(f.session.kernel.keys.tombstone("artifact", original.value.artifactId));
+      expect(originalState).not.toBeNull();
+      if (scenario.startsWith("retry-")) {
+        const inventory = await f.session.kernel.inventoryClientProtocol(f.client, "oidc");
+        expect(inventory.counts.cleanupPending).toBe(1);
+        const recovered = createOidcProviderSession({ env: f.env, redis: scope.observer, logger: f.logger, repositories: { account: f.account }, stores: f.stores } as never);
+        const retried = await recovered.kernel.revokeClientProtocol(f.client, "oidc", "client_config_changed");
+        expect(retried.cleanup.succeeded).toBeGreaterThan(0);
+        expect(retried.cleanup.failed).toBe(0);
+      }
+      const retainedPayload = await scope.observer.get(providerKey);
+      const retainedMarker = await scope.observer.get(markerKey);
+      const retained = await f.session.kernel.resolveProtocolArtifact(code, replacementPurpose);
+      expect(retainedPayload).toBe(replacementPayload);
+      expect(retainedMarker).toBe(replacementMarker);
+      expect(retained.status).toBe(token ? "consumed_replay" : "resolved");
+      if (token) {
+        const info = await f.userInfo(token);
+        expect(info.response.status).toBe(200);
+      }
+      else {
+        const next = await f.exchange(code, { client_id: clientCode });
+        expect(next.response.status).toBe(200);
+      }
+      const root = await f.session.kernel.resolvePrincipalSession(f.principal.externalToken!);
+      expect(root.status).toBe("resolved");
+    }
+    finally {
+      release();
+      await pending;
+    }
+  });
+  it("allows exactly one concurrent HTTP redemption of the same Code", async () => {
+    const f = await runtimeFixture();
+    const code = await f.issueCode();
+    const Code = f.provider.AuthorizationCode;
+    const consume = Code.prototype.consume;
+    let arrivals = 0;
+    let release!: () => void;
+    const bothAcquired = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    vi.spyOn(Code.prototype, "consume").mockImplementation(async function (this: InstanceType<typeof Code>) {
+      arrivals += 1;
+      if (arrivals === 2)
+        release();
+      await bothAcquired;
+      return await consume.call(this);
+    });
+    const results = await Promise.all([f.exchange(code), f.exchange(code)]);
+    expect(results.filter(result => result.response.status === 200)).toHaveLength(1);
+    expect(results.filter(result => result.response.status >= 400)).toHaveLength(1);
+    const artifact = await f.session.kernel.resolveProtocolArtifact(code, { protocol: "oidc", clientCode: f.client, artifactType: "authorization_code" });
+    expect(artifact.status).toBe("consumed_replay");
+    const marker = await scope.observer.get(`oidc:consumed:AuthorizationCode:${code}`);
+    expect(marker).not.toBeNull();
+    const replay = await f.exchange(code);
+    expect(replay.response.status).toBe(400);
+    expect(JSON.parse(replay.body).error).toBe("invalid_grant");
   });
 });

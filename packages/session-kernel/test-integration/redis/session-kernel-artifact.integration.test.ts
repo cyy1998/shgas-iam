@@ -249,8 +249,8 @@ describe("Session Kernel artifact real Redis contract", () => {
       throw new Error("expected an authorization artifact fixture");
 
     const results = await Promise.all([
-      scope!.writer.consumeProtocolArtifact(artifact.externalToken),
-      scope!.observer.consumeProtocolArtifact(artifact.externalToken),
+      scope!.writer.consumeProtocolArtifact(artifact.externalToken, artifact.value, artifact.value),
+      scope!.observer.consumeProtocolArtifact(artifact.externalToken, artifact.value, artifact.value),
     ]);
 
     expect(results.map(result => result.status).sort()).toEqual([
@@ -259,6 +259,8 @@ describe("Session Kernel artifact real Redis contract", () => {
     ]);
     const replay = await scope!.observer.consumeProtocolArtifact(
       artifact.externalToken,
+      artifact.value,
+      artifact.value,
     );
     expect(replay).toMatchObject({
       status: "consumed_replay",
@@ -283,12 +285,60 @@ describe("Session Kernel artifact real Redis contract", () => {
       }),
     });
 
+    const observed = await scope!.writer.resolveProtocolArtifact(artifact.externalToken, artifact.value);
+    if (observed.status !== "resolved")
+      throw new Error("expected observed artifact");
     const result = await scope!.writer.consumeProtocolArtifact(
       artifact.externalToken,
+      artifact.value,
+      observed.value,
     );
     expect(result).toMatchObject({
       status: "missing_or_expired",
     });
+  });
+  test("purpose and observed identity constrain consumption and precise revocation", async () => {
+    const original = await scope!.writer.createProtocolArtifact({
+      protocol: "oidc",
+      clientCode: "portal",
+      artifactType: "authorization_code",
+      ttlMs: 30_000,
+      metadata: { oidcConfigVersion: 1 },
+    });
+    if (original.status !== "created" || !original.externalToken)
+      throw new Error("expected original");
+    for (const purpose of [
+      { protocol: "custom-sso", artifactType: "authorization_code", clientCode: "portal" },
+      { protocol: "oidc", artifactType: "login_return_handle", clientCode: "portal" },
+      { protocol: "oidc", artifactType: "authorization_code", clientCode: "other" },
+    ]) {
+      const rejected = await scope!.writer.resolveProtocolArtifact(original.externalToken, purpose);
+      expect(rejected.status).toBe("purpose_mismatch");
+      const consumed = await scope!.writer.consumeProtocolArtifact(original.externalToken, purpose, original.value);
+      expect(consumed.status).toBe("fail_closed");
+      const retained = await scope!.observer.resolveProtocolArtifact(original.externalToken, original.value);
+      expect(retained.status).toBe("resolved");
+    }
+    const observed = await scope!.writer.resolveProtocolArtifact(original.externalToken, original.value);
+    if (observed.status !== "resolved")
+      throw new Error("expected observed object");
+    const replacement = await scope!.observer.createProtocolArtifact({
+      artifactId: original.value.artifactId,
+      externalToken: original.externalToken,
+      protocol: "oidc",
+      clientCode: "portal",
+      artifactType: "authorization_code",
+      ttlMs: 30_000,
+      metadata: { oidcConfigVersion: 2 },
+    });
+    if (replacement.status !== "created")
+      throw new Error("expected replacement");
+    const consumed = await scope!.writer.consumeProtocolArtifact(original.externalToken, original.value, observed.value);
+    expect(consumed.status).toBe("missing_or_expired");
+    const revoked = await scope!.writer.revokeObservedObject(observed.value, "client_config_changed");
+    expect(revoked.artifacts.revoked).toBe(0);
+    const retained = await scope!.observer.resolveProtocolArtifact(original.externalToken, original.value);
+    expect(retained).toMatchObject({ status: "resolved", value: { metadata: { oidcConfigVersion: 2 } } });
   });
 });
 

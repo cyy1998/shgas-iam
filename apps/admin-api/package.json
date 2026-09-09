@@ -38,6 +38,7 @@
     "@iam/jobs": "workspace:*",
     "@iam/role-assignment-resolution": "workspace:*",
     "@iam/session-kernel": "workspace:*",
+    "@iam/custom-sso": "workspace:*",
     "@iam/user-profile-read-model": "workspace:*",
     "@scalar/hono-api-reference": "^0.11.11",
     "@trpc/server": "^11.18.0",

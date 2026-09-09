@@ -8,6 +8,7 @@ import { describe, expect, it, vi } from "vitest";
 import { createOidcSessionOperations } from "../../src/composition/session/session-operations.ts";
 import { isGlobalSessionCookieError } from "../../src/session/global-session-error-provenance.ts";
 import { createOidcSessionKernelAdapter } from "../../src/session/oidc-session-kernel.adapter.ts";
+import { clientRuntime } from "./support/client-runtime.ts";
 import { ProviderSessionStateFake } from "./support/provider-session-state.ts";
 
 function createAdapter(
@@ -17,6 +18,10 @@ function createAdapter(
   const record = {
     status: "resolved" as const,
     value: {
+      protocol: "oidc",
+      credentialType: "access_token",
+      clientCode: "client-a",
+      metadata: { anchorGeneration: "generation-a", providerTokenKey: "token-key", providerTokenId: "access-token", providerSessionUid: "provider-session-a", mappingOwnerId: "owner-a", oidcConfigVersion: 1 },
       principal: { principalType: "user", subjectId: "00000000-0000-4000-8000-000000000007" },
       principalSessionId: "00000000-0000-4000-8000-000000000008",
       subjectContext: encodeSubjectAccessContext({
@@ -37,7 +42,12 @@ function createAdapter(
     resolvePrincipalSessionById: vi.fn(async () => record),
   };
   const providerSessionState = new ProviderSessionStateFake();
-  providerSessionState.seedLookup("provider-session-a", "client-a", { bindingId: "binding-a" });
+  providerSessionState.seedLookup("provider-session-a", "client-a", { bindingId: "binding-a", mappingOwnerId: "owner-a" });
+  providerSessionState.seedAnchor("provider-session-a", {
+    accountId: record.value.principal.subjectId,
+    principalSessionId: record.value.principalSessionId,
+    generation: "generation-a",
+  });
   const operations = createSubjectAccessOperations({
     barrier: { readCommittedTransitionId: async () => {
       if (reason !== "session_generation_stale")
@@ -55,7 +65,7 @@ function createAdapter(
     },
     clients: {
       findActiveVersion: vi.fn(async () => 1),
-      findRuntime: vi.fn(async () => null),
+      findRuntime: vi.fn(async (client: string) => clientRuntime(client)),
     },
     clock: { now: () => Date.now() },
     cookieName: "global_session",
@@ -163,8 +173,7 @@ describe("oIDC Subject Access Session Adapter", () => {
 
     for (const operation of [
       adapter.create(payload, 60),
-      adapter.resolveReturnHandle("return-handle"),
-      adapter.consume("return-handle"),
+      adapter.resolveReturnHandle("return-handle", payload),
     ]) {
       const error = await operation.catch(cause => cause);
       expect(error).toBeInstanceOf(SubjectAccessUnavailableError);
@@ -191,7 +200,7 @@ describe("oIDC Subject Access Session Adapter", () => {
     const consumeProtocolArtifact = vi.fn();
     const adapter = createOidcSessionKernelAdapter({
       accounts: { findBySubject: vi.fn() },
-      clients: { findActiveVersion: vi.fn(), findRuntime: vi.fn() },
+      clients: { findActiveVersion: vi.fn(async () => 1), findRuntime: vi.fn() },
       clock: { now: () => Date.now() },
       cookieName: "global_session",
       kernel: {
@@ -200,6 +209,7 @@ describe("oIDC Subject Access Session Adapter", () => {
           status: "resolved",
           value: {
             artifactType: "login_return_handle",
+            clientCode: "client-a",
             metadata,
             protocol: "oidc",
           },
@@ -209,7 +219,7 @@ describe("oIDC Subject Access Session Adapter", () => {
       providerSessionState: new ProviderSessionStateFake(),
     } as never);
 
-    await expect(adapter.resolveReturnHandle("return-handle")).resolves.toEqual(metadata);
+    await expect(adapter.resolveReturnHandle("return-handle", metadata)).resolves.toEqual(metadata);
     expect(consumeProtocolArtifact).not.toHaveBeenCalled();
   });
 

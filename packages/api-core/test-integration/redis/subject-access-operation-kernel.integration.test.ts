@@ -100,8 +100,8 @@ describe("Subject Access operation with the neutral Redis Kernel", () => {
     }
     if (artifact.status !== "created" || !artifact.externalToken)
       throw new Error("expected artifact");
-    const consumed = await scope.writer.consumeProtocolArtifact(artifact.externalToken);
-    const replay = await scope.writer.consumeProtocolArtifact(artifact.externalToken);
+    const consumed = await scope.writer.consumeProtocolArtifact(artifact.externalToken, artifact.value, artifact.value);
+    const replay = await scope.writer.consumeProtocolArtifact(artifact.externalToken, artifact.value, artifact.value);
     expect(consumed.status).toBe("resolved");
     expect(replay.status).toBe("consumed_replay");
     expect(reads).toBe(1);
@@ -129,7 +129,7 @@ describe("Subject Access operation with the neutral Redis Kernel", () => {
     expect(fresh.context.subjectContext).not.toBe(context.subjectContext);
     const error = await rejected(operations().run(op => op.acquireForSession({ subjectIdentifier: subject, subjectContext: late.value.subjectContext, principalSessionId: late.value.principalSessionId })));
     expect(error).toBeInstanceOf(SubjectAccessOperationDeniedError);
-    const revokedChild = await scope.writer.resolveCredential(child.externalToken);
+    const revokedChild = await scope.writer.resolveCredential(child.externalToken, child.value);
     const newRoot = await scope.writer.resolvePrincipalSession(fresh.externalToken);
     expect(revokedChild.status).toBe("revoked");
     expect(newRoot.status).toBe("resolved");
@@ -175,7 +175,7 @@ describe("Subject Access operation with the neutral Redis Kernel", () => {
     if (artifact.status !== "created" || !artifact.externalToken)
       throw new Error("expected artifact");
     expect(artifact.value.subjectContext).toBeUndefined();
-    const consumed = await scope.writer.consumeProtocolArtifact(artifact.externalToken);
+    const consumed = await scope.writer.consumeProtocolArtifact(artifact.externalToken, artifact.value, artifact.value);
     expect(consumed.status).toBe("resolved");
     expect(reads).toBe(0);
   });

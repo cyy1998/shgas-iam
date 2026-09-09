@@ -158,7 +158,7 @@ export function createOidcInteractionHandler(deps: CreateOidcInteractionHandlerD
     const handle = getCookieValue(request.headers.cookie, LOGIN_COMPLETION_COOKIE);
     if (!handle)
       return null;
-    const payload = await deps.returnHandles.resolveReturnHandle(handle);
+    const payload = await deps.returnHandles.resolveReturnHandle(handle, { ...expected, returnTarget: LOGIN_COMPLETION_RETURN_TARGET });
     if (!matchesLoginCompletion(payload, expected)) {
       return null;
     }
@@ -222,7 +222,7 @@ export function createOidcInteractionHandler(deps: CreateOidcInteractionHandlerD
         return failClosed(response);
       }
       if (loginCompletion) {
-        const consumed = await deps.returnHandles.consume(loginCompletion.handle);
+        const consumed = await deps.returnHandles.consume(loginCompletion.handle, loginCompletion.payload);
         if (!matchesLoginCompletion(consumed, loginCompletion.payload)) {
           return failClosed(response);
         }
@@ -277,9 +277,13 @@ export function createOidcInteractionHandler(deps: CreateOidcInteractionHandlerD
       failClosed(response);
       return null;
     }
-    const payload = await deps.returnHandles.resolveReturnHandle(handle);
     const browserBinding = getCookieValue(request.headers.cookie, BROWSER_BINDING_COOKIE);
     const expectedReturnTarget = new URL("/oidc/resume", deps.env.oidc.issuer).href;
+    if (!browserBinding) {
+      failClosed(response);
+      return null;
+    }
+    const payload = await deps.returnHandles.resolveReturnHandle(handle, { browserBinding, returnTarget: expectedReturnTarget });
     if (!payload
       || payload.returnTarget !== expectedReturnTarget
       || !browserBinding
@@ -345,7 +349,7 @@ export function createOidcInteractionHandler(deps: CreateOidcInteractionHandlerD
     const session = await deps.globalSessions.resolve(request);
     if (!session)
       return failClosed(response);
-    if (!await deps.returnHandles.consume(continuation.handle))
+    if (!await deps.returnHandles.consume(continuation.handle, continuation.payload))
       return failClosed(response);
     const interactionUrl = new URL(
       `${deps.env.oidc.issuer}/interaction/${continuation.payload.interactionUid}`,

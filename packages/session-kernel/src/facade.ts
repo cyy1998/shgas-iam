@@ -15,7 +15,6 @@ import type {
   RevokedTombstone,
   RevokeSummary,
   SessionOrigin,
-  ValidationResult,
 } from "./state/model";
 import type { CreateResult, ResolveResult } from "./state/result";
 import type { SessionKernelArtifactConsumer } from "./storage/artifact-consumption";
@@ -51,16 +50,23 @@ import { createRedisSessionKernelObservation } from "./storage/observation";
 import { createRedisSessionKernelRevocationTransitions } from "./storage/revocation-transitions";
 import { SessionKernelStore } from "./storage/store";
 
-type MaybePromise<T> = Promise<T> | T;
 type ProtocolValidationTarget = ClientBinding | IssuedCredential | ProtocolArtifact;
+
+const observations = new WeakMap<object, { serialized: string; observedAt: number }>();
 
 const PRINCIPAL_SESSION_INVENTORY_CHUNK_SIZE = 100;
 
-export type SessionKernelValidationHooks = {
-  validateClient?: (object: ProtocolValidationTarget) => MaybePromise<ValidationResult>;
-  validateProtocolVersion?: (
-    object: ProtocolValidationTarget,
-  ) => MaybePromise<ValidationResult>;
+export type ProtocolPurpose = { protocol: string; clientCode?: string };
+export type CredentialPurpose = ProtocolPurpose & { credentialType: string };
+export type ArtifactPurpose = ProtocolPurpose & { artifactType: string };
+
+/** Only explicit bulk commands receive this projection; online reads never invoke it. */
+export type ClientProtocolRevocationSelector = {
+  readonly metadataFields: readonly string[];
+  readonly select: (object: {
+    readonly kind: Exclude<LifecycleObjectKind, "principal_session">;
+    readonly metadata: Readonly<Record<string, unknown>>;
+  }) => "select" | "retain" | "unconfirmed";
 };
 
 export type SessionKernelDependencies = {
@@ -69,7 +75,6 @@ export type SessionKernelDependencies = {
   random?: {
     uuid: () => string;
   };
-  validationHooks?: SessionKernelValidationHooks;
   cleanupAdapters?: CleanupAdapter[];
   logger?: SessionKernelLogger;
   sourceApp?: string;
@@ -451,6 +456,7 @@ export function createSessionKernelWithStateAdapterFactories(
         object: binding,
         indexes: clientBindingIndexes(binding),
       });
+      observations.set(binding, { serialized: JSON.stringify(binding), observedAt: now });
       return { status: "created", value: binding, observedAt: now };
     }
     catch (cause) {
@@ -458,13 +464,12 @@ export function createSessionKernelWithStateAdapterFactories(
     }
   }
 
-  async function resolveClientBindingById(bindingId: string) {
-    const result = await store.resolveObject("client_binding", bindingId);
+  async function resolveClientBindingById(bindingId: string, purpose: ProtocolPurpose) {
+    const result = await store.resolveObjectForUpdate("client_binding", bindingId);
     observeResolveResult(result, { operation: "resolve_by_id", objectType: "client_binding" });
     if (result.status !== "resolved")
       return result;
-    const validation = await validateLifecycleObject(result.value);
-    return validation.ok ? result : validation;
+    return matchPurpose(result, purpose);
   }
 
   async function issueCredential(input: IssueCredentialInput): Promise<CreateResult<IssuedCredential>> {
@@ -511,6 +516,7 @@ export function createSessionKernelWithStateAdapterFactories(
       });
       if (createResult !== "created")
         return failClosed(credentialCreateFailureMessage(createResult));
+      observations.set(credential, { serialized: JSON.stringify(credential), observedAt: now });
       return { status: "created", value: credential, observedAt: now, externalToken };
     }
     catch (cause) {
@@ -518,10 +524,10 @@ export function createSessionKernelWithStateAdapterFactories(
     }
   }
 
-  async function resolveCredential(externalToken: string) {
-    const result = await store.resolveByExternalToken("credential", externalToken);
+  async function resolveCredential(externalToken: string, purpose: CredentialPurpose) {
+    const result = await store.resolveStoredByExternalToken("credential", externalToken);
     observeResolveResult(result, { operation: "resolve", objectType: "credential" });
-    return await applyCredentialValidation(result);
+    return matchPurpose(result, purpose);
   }
 
   async function createProtocolArtifact(input: CreateProtocolArtifactInput): Promise<CreateResult<ProtocolArtifact>> {
@@ -564,6 +570,7 @@ export function createSessionKernelWithStateAdapterFactories(
         lookupHash: lookup.lookupHash,
         indexes: artifactIndexes(artifact),
       });
+      observations.set(artifact, { serialized: JSON.stringify(artifact), observedAt: now });
       return { status: "created", value: artifact, observedAt: now, externalToken };
     }
     catch (cause) {
@@ -571,42 +578,66 @@ export function createSessionKernelWithStateAdapterFactories(
     }
   }
 
-  async function resolveProtocolArtifact(externalToken: string) {
-    const result = await store.resolveByExternalToken("artifact", externalToken);
+  async function resolveProtocolArtifact(externalToken: string, purpose: ArtifactPurpose) {
+    const result = await store.resolveStoredByExternalToken("artifact", externalToken);
     observeResolveResult(result, { operation: "resolve", objectType: "artifact" });
-    return await applyArtifactValidation(result);
+    return matchPurpose(result, purpose);
   }
 
-  async function consumeProtocolArtifact(externalToken: string): Promise<ResolveResult<ProtocolArtifact>> {
-    const stored = await store.resolveArtifactForConsumption(externalToken);
-    const resolved: ResolveResult<ProtocolArtifact> = stored.status === "resolved"
-      ? {
-          status: "resolved",
-          value: stored.value,
-          observedAt: stored.observedAt,
-          lookupKeyId: stored.lookupKeyId,
-        }
-      : stored;
-    observeResolveResult(resolved, { operation: "consume", objectType: "artifact" });
-    const result = await applyArtifactValidation(resolved);
-    if (result.status !== "resolved") {
-      return result;
-    }
-    const now = result.observedAt;
-    const tombstone = createTombstone("artifact", result.value, "consumed", now);
+  async function consumeProtocolArtifact(
+    externalToken: string,
+    purpose: ArtifactPurpose,
+    observed: ProtocolArtifact,
+  ): Promise<ResolveResult<ProtocolArtifact>> {
+    const observation = observations.get(observed);
+    if (!observation || !purposeMatches(observed, purpose))
+      return failClosed("artifact consumption requires the observed object and matching purpose");
+    if (!store.tokenMatchesObject(externalToken, observed))
+      return failClosed("artifact token does not match the observed object");
     try {
-      if (stored.status !== "resolved")
-        return stored;
-      return await store.consumeArtifact({
-        artifact: result.value,
-        serializedArtifact: stored.serialized,
-        observedAt: result.observedAt,
-        tombstone,
+      const result = await store.consumeArtifact({
+        artifact: observed,
+        serializedArtifact: observation.serialized,
+        observedAt: observation.observedAt,
+        tombstone: createTombstone("artifact", observed, "consumed", observation.observedAt),
       });
+      observeResolveResult(result, { operation: "consume", objectType: "artifact" });
+      return result;
     }
     catch (cause) {
       return failClosed("failed to consume protocol artifact", cause);
     }
+  }
+
+  /** Revoke only the object acquired by this Kernel; a replacement must survive. */
+  async function revokeObservedObject(object: ProtocolValidationTarget, reason: RevocationReason) {
+    const observation = observations.get(object);
+    if (!observation)
+      throw new Error("revocation requires an object observed by this Kernel");
+    const kind = lifecycleObjectKind(object);
+    const children: Array<{ kind: LifecycleObjectKind; id: string; value: LifecycleObject; serialized: string; observedAt: number }> = [];
+    if (kind === "client_binding") {
+      for (const member of await store.readIndexWithoutMutation(keys.index.binding((object as ClientBinding).bindingId))) {
+        const parsed = parseIndexMember(member);
+        if (!parsed || parsed.kind === "client_binding" || parsed.kind === "principal_session")
+          continue;
+        const child = await store.resolveObjectForUpdate(parsed.kind, parsed.id);
+        if (child.status === "resolved" && child.value.bindingId === (object as ClientBinding).bindingId
+          && child.value.protocol === object.protocol && child.value.clientCode === object.clientCode
+          && child.value.principalSessionId === object.principalSessionId) {
+          children.push({ kind: parsed.kind, id: parsed.id, ...child });
+        }
+      }
+    }
+    const summary = await revokeObject(kind, objectIdForKind(kind, object), reason, {
+      value: object,
+      ...observation,
+    });
+    if (kind === "client_binding" && summary.bindings.revoked > 0) {
+      for (const child of children)
+        mergeRevokeSummary(summary, await revokeObject(child.kind, child.id, reason, child));
+    }
+    return summary;
   }
 
   async function revokePrincipalSession(principalSessionId: string, reason: RevocationReason = "logout") {
@@ -767,6 +798,60 @@ export function createSessionKernelWithStateAdapterFactories(
     return summary;
   }
 
+  async function revokeSelectedClientProtocolObjects(
+    clientCode: string,
+    protocol: string,
+    selector: ClientProtocolRevocationSelector,
+    reason: RevocationReason = "admin_revoke",
+  ) {
+    if (!clientCode || !protocol)
+      throw new RangeError("Client protocol revocation requires a client and protocol");
+    const summary = createEmptyRevokeSummary();
+    let unconfirmed = 0;
+    // Capture each selected object's serialized observation before executing any cleanup.
+    // Descendants are selected independently: revoking an old Binding cannot widen this scope.
+    const selected: Array<{
+      kind: Exclude<LifecycleObjectKind, "principal_session">;
+      id: string;
+      value: LifecycleObject;
+      serialized: string;
+      observedAt: number;
+    }> = [];
+    for (const member of await store.readIndexWithoutMutation(keys.index.clientProtocol(clientCode, protocol))) {
+      const parsed = parseIndexMember(member);
+      if (!parsed || parsed.kind === "principal_session")
+        continue;
+      const observed = await store.resolveObjectForUpdate(parsed.kind, parsed.id);
+      if (observed.status !== "resolved")
+        continue;
+      if (observed.value.clientCode !== clientCode || observed.value.protocol !== protocol)
+        continue;
+      const metadata = Object.freeze(structuredClone(Object.fromEntries(
+        selector.metadataFields.map(field => [field, observed.value.metadata?.[field]]),
+      )));
+      const decision = selector.select(Object.freeze({ kind: parsed.kind, metadata }));
+      if (decision === "select") {
+        selected.push({ kind: parsed.kind, id: parsed.id, ...observed });
+      }
+      else {
+        counterForKind(summary, parsed.kind).excluded += 1;
+        if (decision !== "retain")
+          unconfirmed += 1;
+      }
+    }
+    if (unconfirmed > 0) {
+      deps.logger?.warn?.({
+        event: "session_kernel.bulk_revocation.unconfirmed",
+        clientCode,
+        protocol,
+        count: unconfirmed,
+      }, "client protocol objects skipped because selection could not be confirmed");
+    }
+    for (const object of selected)
+      mergeRevokeSummary(summary, await revokeObject(object.kind, object.id, reason, object));
+    return summary;
+  }
+
   async function inventoryClientProtocol(
     clientCode: string,
     protocol: string,
@@ -922,7 +1007,9 @@ export function createSessionKernelWithStateAdapterFactories(
     }
     counterForKind(summary, parsed.kind).alreadyRevoked += 1;
     const failedBeforeCleanup = summary.cleanup.failed;
-    await runCleanupRefs(result.tombstone.cleanupRefs, cleanupAdapters, summary, deps.logger);
+    await runCleanupRefs(result.tombstone.cleanupRefs, cleanupAdapters, summary, {
+      deleteOwnedKeys: payloadKeys => store.deleteOwnedCleanupKeys(result.tombstone, payloadKeys),
+    }, deps.logger);
     if (summary.cleanup.failed === failedBeforeCleanup) {
       await store.finalizeCleanupPending({
         tombstone: result.tombstone,
@@ -941,9 +1028,10 @@ export function createSessionKernelWithStateAdapterFactories(
     kind: LifecycleObjectKind,
     id: string,
     reason: RevocationReason,
+    expected?: { value: LifecycleObject; serialized: string; observedAt: number },
   ): Promise<RevokeSummary> {
     const summary = createEmptyRevokeSummary();
-    const resolved = await store.resolveObject(kind, id);
+    const resolved = expected ? { status: "resolved" as const, ...expected } : await store.resolveObjectForUpdate(kind, id);
     if (resolved.status === "revoked" || resolved.status === "consumed_replay") {
       counterForKind(summary, kind).alreadyRevoked += 1;
       return summary;
@@ -961,6 +1049,7 @@ export function createSessionKernelWithStateAdapterFactories(
     const tombstone = createTombstone(kind, resolved.value, reason, now);
     const cleanupPending = cleanupPendingIndexForTombstone(tombstone);
     const revokeResult = await store.revokeActiveObject({
+      expectedSerialized: resolved.serialized,
       kind,
       id,
       lookupHash: lookupHashForObject(resolved.value),
@@ -972,7 +1061,9 @@ export function createSessionKernelWithStateAdapterFactories(
     if (revokeResult.status === "revoked") {
       counterForKind(summary, kind).revoked += 1;
       const failedBeforeCleanup = summary.cleanup.failed;
-      await runCleanupRefs(tombstone.cleanupRefs, cleanupAdapters, summary, deps.logger);
+      await runCleanupRefs(tombstone.cleanupRefs, cleanupAdapters, summary, {
+        deleteOwnedKeys: payloadKeys => store.deleteOwnedCleanupKeys(tombstone, payloadKeys),
+      }, deps.logger);
       if (cleanupPending && summary.cleanup.failed === failedBeforeCleanup) {
         await store.finalizeCleanupPending({
           tombstone,
@@ -1028,89 +1119,22 @@ export function createSessionKernelWithStateAdapterFactories(
     }
   }
 
-  async function applyCredentialValidation(
-    result: ResolveResult<IssuedCredential>,
-  ): Promise<ResolveResult<IssuedCredential>> {
-    if (result.status !== "resolved")
-      return result;
-    const validation = await validateLifecycleObject(result.value);
-    if (validation.ok)
-      return result;
-    return validation;
-  }
-
-  async function applyArtifactValidation(
-    result: ResolveResult<ProtocolArtifact>,
-  ): Promise<ResolveResult<ProtocolArtifact>> {
-    if (result.status !== "resolved")
-      return result;
-    const validation = await validateLifecycleObject(result.value);
-    if (validation.ok)
-      return result;
-    return validation;
-  }
-
-  async function validateLifecycleObject(object: ClientBinding | IssuedCredential | ProtocolArtifact) {
-    let validation: ValidationResult = { ok: true };
-    if (deps.validationHooks?.validateClient) {
-      validation = await deps.validationHooks.validateClient(object);
-      if (!validation.ok)
-        return await validationFailure(object, validation);
-    }
-    if (deps.validationHooks?.validateProtocolVersion) {
-      validation = await deps.validationHooks.validateProtocolVersion(object);
-      if (!validation.ok)
-        return await validationFailure(object, validation);
-    }
-    return { ok: true as const };
-  }
-
-  async function validationFailure(
-    object: ClientBinding | IssuedCredential | ProtocolArtifact,
-    failure: Extract<ValidationResult, { ok: false }>,
-  ) {
-    const clientCode = "clientCode" in object ? object.clientCode : undefined;
-    const cleanup = clientCode
-      ? async () => await revokeClientProtocol(clientCode, object.protocol, failure.reason)
-      : undefined;
-    const revokeSummary = cleanup === undefined
-      ? createEmptyRevokeSummary()
-      : await runValidationCleanup(object, failure, cleanup);
-    return {
-      ok: false as const,
-      status: "validation_failed" as const,
-      reason: failure.reason,
-      message: failure.message,
-      revokeSummary,
-    };
-  }
-
-  async function runValidationCleanup(
-    object: PrincipalSession | ClientBinding | IssuedCredential | ProtocolArtifact,
-    failure: Extract<ValidationResult, { ok: false }>,
-    cleanup: () => Promise<RevokeSummary>,
-  ): Promise<RevokeSummary> {
-    try {
-      return await cleanup();
-    }
-    catch (error) {
-      try {
-        deps.logger?.warn?.({
-          event: SessionKernelLogEvent.RevokeCleanupFailed,
-          sourceApp: deps.sourceApp ?? "session-kernel",
-          kind: "validation_cleanup",
-          refType: lifecycleObjectKind(object),
-          reason: failure.reason,
-          protocol: "protocol" in object ? object.protocol : undefined,
-          clientCode: "clientCode" in object ? object.clientCode : undefined,
-          errorName: error instanceof Error ? error.name : "Error",
-        }, "session kernel validation cleanup failed");
+  function matchPurpose<T extends ProtocolValidationTarget>(
+    result: ResolveResult<T> & { serialized?: string },
+    purpose: ProtocolPurpose | CredentialPurpose | ArtifactPurpose,
+  ): ResolveResult<T> {
+    if (result.status !== "resolved") {
+      if ((result.status === "revoked" || result.status === "consumed_replay")
+        && !purposeMatches({ ...result.tombstone, ...result.tombstone.metadata }, purpose)) {
+        return { status: "purpose_mismatch" };
       }
-      catch {
-        // Validation classification must survive telemetry failures as well.
-      }
-      return createEmptyRevokeSummary();
+      return result;
     }
+    if (!purposeMatches(result.value, purpose))
+      return { status: "purpose_mismatch" };
+    if (result.serialized !== undefined)
+      observations.set(result.value, { serialized: result.serialized, observedAt: result.observedAt });
+    return { status: "resolved", value: result.value, observedAt: result.observedAt, lookupKeyId: result.lookupKeyId };
   }
 
   function principalSessionIndexes(session: PrincipalSession): StoreIndexWrite[] {
@@ -1303,11 +1327,13 @@ export function createSessionKernelWithStateAdapterFactories(
     revokeBinding,
     revokeCredential,
     revokeArtifact,
+    revokeObservedObject,
     revokeUserSessionRecords,
     revokeUserSessionsByContext,
     prepareUserSessionRevocationByContext,
     inventoryClientProtocol,
     revokeClientProtocol,
+    revokeSelectedClientProtocolObjects,
     revokeClient,
     revokePrincipalObjects,
     revokeBindingObjects,
@@ -1393,4 +1419,14 @@ function tombstoneMetadata(kind: LifecycleObjectKind, object: LifecycleObject) {
 function readTombstoneMetadataString(tombstone: RevokedTombstone, key: string) {
   const value = tombstone.metadata?.[key];
   return typeof value === "string" ? value : undefined;
+}
+
+function purposeMatches(
+  object: { protocol?: string; clientCode?: string; credentialType?: unknown; artifactType?: unknown },
+  purpose: ProtocolPurpose | CredentialPurpose | ArtifactPurpose,
+) {
+  return !!purpose && object.protocol === purpose.protocol
+    && (purpose.clientCode === undefined || object.clientCode === purpose.clientCode)
+    && (!("credentialType" in purpose) || object.credentialType === purpose.credentialType)
+    && (!("artifactType" in purpose) || object.artifactType === purpose.artifactType);
 }

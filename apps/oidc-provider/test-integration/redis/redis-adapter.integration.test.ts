@@ -715,9 +715,12 @@ describe("redis OIDC adapter real Redis contract", () => {
       expect(Math.abs(afterMaintenanceExpiresAt[index]! - originalExpiresAt[index]!)).toBeLessThan(100);
 
     version.value = 4;
-    for (const artifact of artifacts)
-      await expect(artifact.adapter.find(artifact.id)).resolves.toBeUndefined();
-    expect(await testScope.observer.exists(...keys)).toBe(0);
+    for (const artifact of artifacts) {
+      const resolved = await artifact.adapter.find(artifact.id);
+      expect(resolved).toBeUndefined();
+    }
+    const remaining = await testScope.observer.exists(...keys);
+    expect(remaining).toBe(0);
   });
 
   it("preserves a newer Session owner when an old artifact is destroyed late", async () => {
@@ -791,7 +794,7 @@ function createAdapter(
     },
     oidcSession: {
       registerAuthorizationCodeArtifact: async () => true,
-      resolveAuthorizationCodeSessionLifetime: async () => ({ remainingSeconds: 90 }),
+      resolveAuthorizationCodeSessionLifetime: async (_id: string, serializedProviderCode: string) => ({ serializedProviderCode, remainingSeconds: 90, artifact: { version: 1 as const, artifactId: "code", protocol: "oidc", artifactType: "authorization_code", lookupHash: "lookup", lookupKeyId: "test", issuedAt: 0, expiresAt: 60000, cleanupRefs: [] } }),
       consumeAuthorizationCodeArtifact: async () => null,
       registerAccessTokenCredential: options.registerAccessTokenCredential
         ?? (async input => ({ credentialId: `${input.providerTokenId}-credential` }) as never),

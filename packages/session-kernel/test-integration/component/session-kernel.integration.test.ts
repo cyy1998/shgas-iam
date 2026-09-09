@@ -521,12 +521,13 @@ describe("session kernel lifecycle", () => {
     expect(renewed.value.lastActiveAt).toBe(redis.now);
     expect(renewed.value.expiresAt).toBe(redis.now + 60_000);
 
-    const renewedCredential = await kernel.resolveCredential(credential.externalToken!);
+    const renewedCredential = await kernel.resolveCredential(credential.externalToken!, credential.value);
     expect(renewedCredential.status).toBe("resolved");
     if (renewedCredential.status === "resolved")
       expect(renewedCredential.value.expiresAt).toBe(renewed.value.expiresAt);
     const renewedDirectCredential = await kernel.resolveCredential(
       directCredential.externalToken!,
+      directCredential.value,
     );
     expect(renewedDirectCredential.status).toBe("resolved");
     if (renewedDirectCredential.status === "resolved")
@@ -550,10 +551,10 @@ describe("session kernel lifecycle", () => {
     if (credential.status !== "created")
       return;
 
-    await expect(kernel.resolveCredential(credential.externalToken!)).resolves.toMatchObject({ status: "resolved" });
+    await expect(kernel.resolveCredential(credential.externalToken!, credential.value)).resolves.toMatchObject({ status: "resolved" });
     const revoked = await kernel.revokeCredential(credential.value.credentialId, "logout");
     expect(revoked.credentials.revoked).toBe(1);
-    await expect(kernel.resolveCredential(credential.externalToken!)).resolves.toMatchObject({ status: "revoked" });
+    await expect(kernel.resolveCredential(credential.externalToken!, credential.value)).resolves.toMatchObject({ status: "revoked" });
     const second = await kernel.revokeCredential(credential.value.credentialId, "admin_revoke");
     expect(second.credentials.alreadyRevoked).toBe(1);
   });
@@ -580,7 +581,7 @@ describe("session kernel lifecycle", () => {
       return;
     expect(credential.value.credentialId).toBe(credentialId);
     expect(credential.externalToken).not.toBe(credentialId);
-    await expect(kernel.resolveCredential(credential.externalToken!)).resolves.toMatchObject({
+    await expect(kernel.resolveCredential(credential.externalToken!, credential.value)).resolves.toMatchObject({
       status: "resolved",
       value: { credentialId },
     });
@@ -604,14 +605,14 @@ describe("session kernel lifecycle", () => {
       return;
 
     const concurrentResults = await Promise.all([
-      kernel.consumeProtocolArtifact(artifact.externalToken!),
-      kernel.consumeProtocolArtifact(artifact.externalToken!),
+      kernel.consumeProtocolArtifact(artifact.externalToken!, artifact.value, artifact.value),
+      kernel.consumeProtocolArtifact(artifact.externalToken!, artifact.value, artifact.value),
     ]);
     expect(concurrentResults.map(result => result.status).sort()).toEqual([
       "consumed_replay",
       "resolved",
     ]);
-    await expect(kernel.consumeProtocolArtifact(artifact.externalToken!)).resolves.toMatchObject({
+    await expect(kernel.consumeProtocolArtifact(artifact.externalToken!, artifact.value, artifact.value)).resolves.toMatchObject({
       status: "consumed_replay",
     });
 
@@ -626,7 +627,7 @@ describe("session kernel lifecycle", () => {
     if (expired.status !== "created")
       return;
     redis.advance(1_001);
-    await expect(kernel.resolveProtocolArtifact(expired.externalToken!)).resolves.toMatchObject({
+    await expect(kernel.resolveProtocolArtifact(expired.externalToken!, expired.value)).resolves.toMatchObject({
       status: "missing_or_expired",
     });
     expect(await redis.get(kernel.keys.lookupTombstone("artifact", expired.value.lookupHash))).toBeNull();
@@ -635,25 +636,9 @@ describe("session kernel lifecycle", () => {
   test("does not consume an artifact whose stored payload changes after resolution", async () => {
     const redis = new KernelFakeRedis();
     const config = createConfig(redis);
-    let activeArtifactKey: string | undefined;
-    let corruptBeforeConsume = false;
     const kernel = createSessionKernel({
       redis,
       config,
-      validationHooks: {
-        validateClient: () => {
-          if (corruptBeforeConsume && activeArtifactKey !== undefined) {
-            const serialized = redis.values.get(activeArtifactKey);
-            if (serialized) {
-              redis.values.set(activeArtifactKey, JSON.stringify({
-                ...JSON.parse(serialized) as Record<string, unknown>,
-                artifactType: "replaced_authorization_code",
-              }));
-            }
-          }
-          return { ok: true };
-        },
-      },
     });
     const artifact = await kernel.createProtocolArtifact({
       protocol: "oidc",
@@ -665,14 +650,20 @@ describe("session kernel lifecycle", () => {
     if (artifact.status !== "created")
       return;
 
-    activeArtifactKey = kernel.keys.active(
+    const activeArtifactKey = kernel.keys.active(
       "artifact",
       artifact.value.artifactId,
     );
-    corruptBeforeConsume = true;
+    const serialized = redis.values.get(activeArtifactKey);
+    if (!serialized)
+      throw new Error("expected artifact");
+    redis.values.set(activeArtifactKey, JSON.stringify({
+      ...JSON.parse(serialized) as Record<string, unknown>,
+      artifactType: "replaced_authorization_code",
+    }));
 
     await expect(
-      kernel.consumeProtocolArtifact(artifact.externalToken!),
+      kernel.consumeProtocolArtifact(artifact.externalToken!, artifact.value, artifact.value),
     ).resolves.toMatchObject({ status: "missing_or_expired" });
   });
 });
@@ -722,9 +713,9 @@ describe("session kernel tombstone, cleanup, validation, and fail closed behavio
     if (artifact.status !== "created")
       return;
 
-    await kernel.consumeProtocolArtifact(replayedCode);
+    await kernel.consumeProtocolArtifact(replayedCode, { protocol: "oidc", artifactType: "authorization_code" }, artifact.value);
     entries.length = 0;
-    await expect(kernel.consumeProtocolArtifact(replayedCode)).resolves.toMatchObject({
+    await expect(kernel.consumeProtocolArtifact(replayedCode, { protocol: "oidc", artifactType: "authorization_code" }, artifact.value)).resolves.toMatchObject({
       status: "consumed_replay",
     });
 
@@ -782,7 +773,7 @@ describe("session kernel tombstone, cleanup, validation, and fail closed behavio
     expect(output).toContain("\"failureCount\":1");
     expect(output).not.toContain("client:portal");
     expect(output).not.toContain("token-secret-12345678901234567890");
-    expect(await kernel.resolveCredential(credential.externalToken!)).toMatchObject({ status: "revoked" });
+    expect(await kernel.resolveCredential(credential.externalToken!, credential.value)).toMatchObject({ status: "revoked" });
     expect(redis.expiresAt.get(
       kernel.keys.lookupTombstone("credential", credential.value.lookupHash),
     )).toBeUndefined();
@@ -844,10 +835,10 @@ describe("session kernel tombstone, cleanup, validation, and fail closed behavio
     await expect(kernel.resolvePrincipalSession(revokedSession.externalToken!)).resolves.toMatchObject({
       status: "revoked",
     });
-    await expect(kernel.resolveClientBindingById(keptBinding.value.bindingId)).resolves.toMatchObject({
+    await expect(kernel.resolveClientBindingById(keptBinding.value.bindingId, { protocol: "oidc" })).resolves.toMatchObject({
       status: "revoked",
     });
-    await expect(kernel.resolveCredential(keptCredential.externalToken!)).resolves.toMatchObject({ status: "revoked" });
+    await expect(kernel.resolveCredential(keptCredential.externalToken!, keptCredential.value)).resolves.toMatchObject({ status: "revoked" });
   });
 
   test("revokes client protocol and all protocols with cleanup adapter missing summary", async () => {
@@ -930,7 +921,7 @@ describe("session kernel tombstone, cleanup, validation, and fail closed behavio
     await expect(kernel.resolvePrincipalSession(session.externalToken!)).resolves.toMatchObject({
       status: "resolved",
     });
-    await expect(kernel.resolveCredential(customCredential.externalToken!)).resolves.toMatchObject({
+    await expect(kernel.resolveCredential(customCredential.externalToken!, customCredential.value)).resolves.toMatchObject({
       status: "resolved",
     });
 
@@ -938,7 +929,7 @@ describe("session kernel tombstone, cleanup, validation, and fail closed behavio
 
     expect(allProtocolsSummary.bindings.revoked).toBe(0);
     expect(allProtocolsSummary.credentials.revoked).toBe(1);
-    await expect(kernel.resolveCredential(customCredential.externalToken!)).resolves.toMatchObject({
+    await expect(kernel.resolveCredential(customCredential.externalToken!, customCredential.value)).resolves.toMatchObject({
       status: "revoked",
     });
   });
@@ -1009,40 +1000,25 @@ describe("session kernel tombstone, cleanup, validation, and fail closed behavio
     expect(await redis.get(kernel.keys.lookupTombstone("principal_session", lookupHash))).toBeNull();
   });
 
-  test("client validation rejects each derived lifecycle and keeps cleanup failures best effort", async () => {
+  test("wrong protocol rejects each derived lifecycle without revoking its root or target", async () => {
     for (const kind of ["artifact", "binding", "credential"] as const) {
-      const redis = new FailNextTransactionRedis();
-      let rejectClient = false;
-      let laterCalls = 0;
-      const kernel = createSessionKernel({
-        redis,
-        config: createConfig(redis),
-        validationHooks: {
-          validateClient: () => rejectClient ? { ok: false, reason: "client_disabled" } : { ok: true },
-          validateProtocolVersion: () => {
-            laterCalls += 1;
-            return { ok: true };
-          },
-        },
-      });
+      const { kernel } = createKernel();
       const root = await kernel.createPrincipalSession(principal.subjectId, { subjectContext: "opaque-context" });
       if (root.status !== "created")
         throw new Error("expected root");
       const derived = await createDerivedObject(kernel, kind, root.value.principalSessionId);
       if (derived.status !== "created")
         throw new Error("expected derived object");
-      rejectClient = true;
-      laterCalls = 0;
-      redis.failNextTransaction = true;
       const result = kind === "binding"
-        ? await kernel.resolveClientBindingById("bindingId" in derived.value ? derived.value.bindingId! : "")
+        ? await kernel.resolveClientBindingById("bindingId" in derived.value ? derived.value.bindingId! : "", { protocol: "custom-sso" })
         : kind === "credential"
-          ? await kernel.resolveCredential(derived.externalToken!)
-          : await kernel.resolveProtocolArtifact(derived.externalToken!);
-      expect(result).toMatchObject({ status: "validation_failed", reason: "client_disabled" });
-      expect(laterCalls).toBe(0);
+          ? await kernel.resolveCredential(derived.externalToken!, { protocol: "custom-sso", credentialType: "access_token" })
+          : await kernel.resolveProtocolArtifact(derived.externalToken!, { protocol: "custom-sso", artifactType: "authorization_code" });
+      expect(result).toMatchObject({ status: "purpose_mismatch" });
       const retainedRoot = await kernel.resolvePrincipalSession(root.externalToken!);
       expect(retainedRoot.status).toBe("resolved");
+      const inventory = await kernel.inventoryClientProtocol("portal", "oidc");
+      expect(inventory.counts.total).toBeGreaterThan(0);
     }
   });
 

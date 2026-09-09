@@ -839,12 +839,12 @@ async function assertAmbiguousCredentialIssueRecovery(
   await expect(execute()).rejects.toBe(responseLoss);
   expect(firstCredentialToken).toBeDefined();
   await expect(
-    services.kernel.resolveCredential(firstCredentialToken!),
+    services.kernel.resolveCredential(firstCredentialToken!, { protocol: "custom-sso", credentialType: "local_session" }),
   ).resolves.toMatchObject({ status: "revoked" });
 
   const retryToken = await execute();
   await expect(
-    services.kernel.resolveCredential(retryToken),
+    services.kernel.resolveCredential(retryToken, { protocol: "custom-sso", credentialType: "local_session" }),
   ).resolves.toMatchObject({
     status: "resolved",
     value: { credentialId: secondAttemptId },
@@ -899,7 +899,7 @@ describe("Custom SSO module interface", () => {
     await observer.customSsoSession.logout(independent.credential);
     await observer.customSsoSession.logout(gateway.token);
     for (const token of [independent.credential, gateway.token]) {
-      const result = await services.kernel.resolveCredential(token);
+      const result = await services.kernel.resolveCredential(token, { protocol: "custom-sso", credentialType: "local_session" });
       expect(result.status).toBe("revoked");
     }
   });
@@ -944,7 +944,7 @@ describe("Custom SSO module interface", () => {
         });
     expect(result.ttl).toBe(1);
     const token = "token" in result ? result.token : result.credential;
-    const nextRequest = await services.kernel.resolveCredential(token);
+    const nextRequest = await services.kernel.resolveCredential(token, { protocol: "custom-sso", credentialType: "local_session" });
     expect(nextRequest.status).toBe("missing_or_expired");
   });
 
@@ -953,7 +953,7 @@ describe("Custom SSO module interface", () => {
     const services = createServices({ grantAttemptId });
 
     const result = await redeemIndependentCredential(services);
-    const credential = await services.kernel.resolveCredential(result.credential);
+    const credential = await services.kernel.resolveCredential(result.credential, { protocol: "custom-sso", credentialType: "local_session" });
 
     expect(credential).toMatchObject({
       status: "resolved",
@@ -987,7 +987,7 @@ describe("Custom SSO module interface", () => {
       ),
     ).rejects.toBeInstanceOf(AuthzUnauthorizedError);
     await expect(
-      services.kernel.resolveCredential(result.credential),
+      services.kernel.resolveCredential(result.credential, { protocol: "custom-sso", credentialType: "local_session" }),
     ).resolves.toMatchObject({ status: "revoked" });
   });
 
@@ -1102,13 +1102,13 @@ describe("Custom SSO module interface", () => {
       ),
     ).rejects.toBeInstanceOf(AuthzUnauthorizedError);
     await expect(
-      services.kernel.resolveCredential(legacyCredential.externalToken),
+      services.kernel.resolveCredential(legacyCredential.externalToken, legacyCredential.value),
     ).resolves.toMatchObject({ status: "revoked" });
     await expect(
       services.customSsoSession.logout(legacyLogoutCredential.externalToken),
     ).rejects.toBeInstanceOf(AuthzUnauthorizedError);
     await expect(
-      services.kernel.resolveCredential(legacyLogoutCredential.externalToken),
+      services.kernel.resolveCredential(legacyLogoutCredential.externalToken, legacyLogoutCredential.value),
     ).resolves.toMatchObject({ status: "revoked" });
     await expect(
       services.kernel.resolvePrincipalSession(principal.externalToken),
@@ -1165,7 +1165,7 @@ describe("Custom SSO module interface", () => {
     expect(attemptedCredentialId).toBe(grantAttemptId);
     expect(redemptionError).toBeInstanceOf(AuthzUnauthorizedError);
     await expect(
-      services.kernel.resolveCredential("preexisting-collision-token"),
+      services.kernel.resolveCredential("preexisting-collision-token", { protocol: "custom-sso", credentialType: "local_session" }),
     ).resolves.toMatchObject({ status: "resolved" });
   });
 
@@ -1389,7 +1389,7 @@ describe("Custom SSO module interface", () => {
     const credential = await redeemIndependentCredential(credentialServices);
     credentialDisabled = true;
     await credentialServices.customSsoSession.logout(credential.credential);
-    const revokedCredential = await credentialServices.kernel.resolveCredential(credential.credential);
+    const revokedCredential = await credentialServices.kernel.resolveCredential(credential.credential, { protocol: "custom-sso", credentialType: "local_session" });
     expect(revokedCredential.status).not.toBe("resolved");
   });
 
@@ -1440,7 +1440,7 @@ describe("Custom SSO module interface", () => {
       throw new Error("expected auth code");
     }
 
-    const artifact = await services.kernel.resolveProtocolArtifact(authorization.code);
+    const artifact = await services.kernel.resolveProtocolArtifact(authorization.code, { protocol: "custom-sso", artifactType: "auth_code" });
     expect(artifact).toMatchObject({
       status: "resolved",
       value: {
@@ -1527,7 +1527,7 @@ describe("Custom SSO module interface", () => {
     expect(revokeArtifact).not.toHaveBeenCalled();
     if (!result.isLogin)
       throw new Error("expected issued authorization code");
-    const artifact = await services.kernel.resolveProtocolArtifact(result.code);
+    const artifact = await services.kernel.resolveProtocolArtifact(result.code, { protocol: "custom-sso", artifactType: "auth_code" });
     expect(artifact.status).toBe("resolved");
   });
 
@@ -1589,7 +1589,7 @@ describe("Custom SSO module interface", () => {
       },
     });
 
-    const credential = await services.kernel.resolveCredential(result.credential);
+    const credential = await services.kernel.resolveCredential(result.credential, { protocol: "custom-sso", credentialType: "local_session" });
     expect(credential).toMatchObject({
       status: "resolved",
       value: {
@@ -1656,7 +1656,7 @@ describe("Custom SSO module interface", () => {
     );
     expect(credentialIssueAttempts).toBe(0);
     expect(auditLogs).toHaveLength(auditCountBeforeRedemption);
-    await expect(services.kernel.resolveProtocolArtifact(code)).resolves.toMatchObject({
+    await expect(services.kernel.resolveProtocolArtifact(code, { protocol: "custom-sso", artifactType: "auth_code" })).resolves.toMatchObject({
       status: "resolved",
     });
     await expect(
@@ -1708,7 +1708,7 @@ describe("Custom SSO module interface", () => {
 
     expect(credentialIssueAttempts).toBe(0);
     expect(auditLogs).toHaveLength(auditCountBeforeRedemption);
-    await expect(services.kernel.resolveProtocolArtifact(code)).resolves.toMatchObject({
+    await expect(services.kernel.resolveProtocolArtifact(code, { protocol: "custom-sso", artifactType: "auth_code" })).resolves.toMatchObject({
       status: "resolved",
     });
   });
@@ -1858,13 +1858,15 @@ describe("Custom SSO module interface", () => {
       ...mismatch,
       code,
     })).rejects.toBeInstanceOf(InvalidAuthCodeError);
-    await expect(services.customSsoSession.redeemIndependentGrant({
+    const retry = services.customSsoSession.redeemIndependentGrant({
       client: independentClient,
       code,
       redirectUri: "https://app.example.com/callback",
-    })).resolves.toMatchObject({
-      credential: expect.stringContaining("iam_ls_"),
     });
+    if (_label === "redirect URI")
+      await expect(retry).resolves.toMatchObject({ credential: expect.stringContaining("iam_ls_") });
+    else
+      await expect(retry).rejects.toBeInstanceOf(InvalidAuthCodeError);
   });
 
   test("revokes a newly issued Credential when Grant consumption loses its fence", async () => {
@@ -1903,7 +1905,7 @@ describe("Custom SSO module interface", () => {
     expect(fakeRedis.keysStartingWith("sess:v2:active:c:")).toHaveLength(0);
     expect(issuedCredentialToken).toBeDefined();
     await expect(
-      services.kernel.resolveCredential(issuedCredentialToken!),
+      services.kernel.resolveCredential(issuedCredentialToken!, { protocol: "custom-sso", credentialType: "local_session" }),
     ).resolves.toMatchObject({ status: "revoked" });
   });
 
@@ -1989,7 +1991,7 @@ describe("Custom SSO module interface", () => {
       ),
     ).rejects.toBeInstanceOf(AuthzUnauthorizedError);
     await expect(
-      services.kernel.resolveCredential(result.credential),
+      services.kernel.resolveCredential(result.credential, { protocol: "custom-sso", credentialType: "local_session" }),
     ).resolves.toMatchObject({ status: "revoked" });
   });
 
@@ -2232,7 +2234,7 @@ describe("Custom SSO module interface", () => {
       code,
       redirectUrl,
     });
-    const credential = await services.kernel.resolveCredential(result.token);
+    const credential = await services.kernel.resolveCredential(result.token, { protocol: "custom-sso", credentialType: "local_session" });
     if (credential.status !== "resolved")
       throw new Error("expected resolved Gateway credential");
 
@@ -2328,7 +2330,7 @@ describe("Custom SSO module interface", () => {
       subjectIdentifier,
     });
     await expect(
-      services.kernel.resolveCredential(result.token),
+      services.kernel.resolveCredential(result.token, { protocol: "custom-sso", credentialType: "local_session" }),
     ).resolves.toMatchObject({ status: "resolved" });
   });
 
@@ -2697,9 +2699,7 @@ describe("Custom SSO module interface", () => {
       client: getGatewayClientContext("gateway"),
       code,
       redirectUrl,
-    })).resolves.toMatchObject({
-      token: expect.stringContaining("iam_ls_"),
-    });
+    })).rejects.toBeInstanceOf(AuthzUnauthorizedError);
   });
 
   test("rejects an Independent grant when the referenced PrincipalSession is revoked", async () => {
@@ -2840,7 +2840,7 @@ describe("Custom SSO module interface", () => {
       code,
       redirectUrl,
     });
-    const credential = await services.kernel.resolveCredential(result.token);
+    const credential = await services.kernel.resolveCredential(result.token, { protocol: "custom-sso", credentialType: "local_session" });
     if (credential.status !== "resolved")
       throw new Error("expected resolved Gateway credential");
 
@@ -3025,7 +3025,7 @@ describe("Custom SSO module interface", () => {
     ).rejects.toBeInstanceOf(AuthzUnauthorizedError);
 
     const second = await redeemIndependentCredential(services);
-    const credential = await services.kernel.resolveCredential(second.credential);
+    const credential = await services.kernel.resolveCredential(second.credential, { protocol: "custom-sso", credentialType: "local_session" });
     if (credential.status !== "resolved") {
       throw new Error("expected credential");
     }

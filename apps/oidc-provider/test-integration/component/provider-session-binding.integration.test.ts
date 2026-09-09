@@ -8,6 +8,7 @@ import {
   createOidcSessionKernelAdapter,
   createOidcSessionKernelCleanupAdapter,
 } from "../../src/session/oidc-session-kernel.adapter.ts";
+import { clientRuntime } from "./support/client-runtime.ts";
 import { KernelRedis } from "./support/kernel-redis.ts";
 import { ProviderSessionStateFake } from "./support/provider-session-state.ts";
 
@@ -32,7 +33,7 @@ function createFixture() {
       },
       clock: { now: () => redis.now },
     }),
-    cleanupAdapters: createOidcSessionKernelCleanupAdapter({ providerSessionState, redis }),
+    cleanupAdapters: createOidcSessionKernelCleanupAdapter({ providerSessionState }),
     logger: { warn: () => undefined },
     sourceApp: LoggerSourceApp.OidcProvider,
   });
@@ -55,7 +56,9 @@ function createFixture() {
     },
     clients: {
       findActiveVersion: async (clientId: string) => clientId === "client-a" ? clientAVersion : clientId === "client-b" ? 2 : null,
-      findRuntime: async () => null,
+      findRuntime: async (clientId: string) => ["client-a", "client-b"].includes(clientId)
+        ? clientRuntime(clientId, clientId === "client-a" ? clientAVersion : 2)
+        : null,
     },
     cookieName: "global_session",
     kernel,

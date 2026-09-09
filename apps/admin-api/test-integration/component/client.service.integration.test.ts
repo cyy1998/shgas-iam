@@ -808,7 +808,8 @@ describe("createClientService", () => {
       oidcConfigVersion: 2,
     }));
 
-    await expect(service.updateClientStatus("portal", ClientStatus.Disable)).resolves.toEqual({ changed: true, result: null });
+    const result = await service.updateClientStatus("portal", ClientStatus.Disable);
+    expect(result).toEqual({ changed: true, result: null });
 
     expect(tx.clientRepository.updateClientByCodeWithProtocolEpochs).toHaveBeenCalledWith("portal", {
       status: ClientStatus.Disable,
@@ -818,6 +819,7 @@ describe("createClientService", () => {
     expect(deps.sessionRevocation.revokeClientAllProtocols).toHaveBeenCalledWith({
       clientCode: "portal",
       reason: "client_disabled",
+      committedVersions: { oidc: 2, customSso: 8 },
       auditContext: undefined,
     });
   });
@@ -1120,7 +1122,8 @@ describe("createClientService", () => {
       oidcConfigVersion: 2,
     }));
 
-    await expect(service.deleteClient("portal")).resolves.toEqual({ changed: true, result: null });
+    const result = await service.deleteClient("portal");
+    expect(result).toEqual({ changed: true, result: null });
 
     expect(tx.clientRepository.updateClientCustomSsoByCode).not.toHaveBeenCalled();
     expect(deps.clientCache.invalidateClient).toHaveBeenCalledWith(
@@ -1130,6 +1133,7 @@ describe("createClientService", () => {
     expect(deps.sessionRevocation.revokeClientAllProtocols).toHaveBeenCalledWith({
       clientCode: "portal",
       reason: "client_deleted",
+      committedVersions: { oidc: 2, customSso: 8 },
       auditContext: undefined,
     });
   });
@@ -1179,7 +1183,8 @@ describe("createClientService", () => {
       oidcConfigVersion: 2,
     }));
 
-    await expect(service.configureClientOidc("portal", input)).resolves.toMatchObject({
+    const result = await service.configureClientOidc("portal", input);
+    expect(result).toMatchObject({
       changed: true,
       result: {
         client: {
@@ -1201,6 +1206,7 @@ describe("createClientService", () => {
     expect(deps.sessionRevocation.revokeClientProtocol).toHaveBeenCalledWith({
       clientCode: "portal",
       protocol: "oidc",
+      committedVersion: 2,
       reason: "client_config_changed",
       auditContext: undefined,
     });

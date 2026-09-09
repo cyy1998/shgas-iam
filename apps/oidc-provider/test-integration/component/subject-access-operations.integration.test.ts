@@ -11,6 +11,7 @@ import { createSessionKernelConfig } from "@iam/session-kernel";
 import { createSessionKernelForTesting } from "@iam/session-kernel/testing";
 import { describe, expect, it, vi } from "vitest";
 import { createOidcSessionOperations } from "../../src/composition/session/session-operations.ts";
+import { clientRuntime } from "./support/client-runtime.ts";
 import { KernelRedis } from "./support/kernel-redis.ts";
 import { ProviderSessionStateFake } from "./support/provider-session-state.ts";
 
@@ -52,7 +53,7 @@ async function fixture() {
       subjectIdentifier,
       username: "alice",
     }) },
-    clients: { findActiveVersion: async () => 1, findRuntime: async () => null },
+    clients: { findActiveVersion: async () => 1, findRuntime: async client => clientRuntime(client) },
     cookieName: "global_session",
     logger: { warn: () => undefined },
     providerSessionState: state,
@@ -132,13 +133,15 @@ describe("oIDC operation-bound Session lifecycle", () => {
       metadata: { providerCodeId: "provider-code-a", clientId: "client-a", oidcConfigVersion: 1 },
     });
     expect(code.status).toBe("created");
+    if (code.status !== "created")
+      throw new Error("expected code");
     const consume = vi.spyOn(f.kernel, "consumeProtocolArtifact");
     f.readCommittedTransitionId.mockRejectedValue(new SubjectAccessUnavailableError());
     const adapter = f.sessions.forOperation(f.scopes.createOperation());
-    const denied = await adapter.consumeAuthorizationCodeArtifact("provider-code-a").catch(error => error);
+    const denied = await adapter.consumeAuthorizationCodeArtifact("provider-code-a", code.value).catch(error => error);
     expect(denied).toBeInstanceOf(SubjectAccessUnavailableError);
     expect(consume).not.toHaveBeenCalled();
-    const retained = await f.kernel.resolveProtocolArtifact("provider-code-a");
+    const retained = await f.kernel.resolveProtocolArtifact("provider-code-a", { protocol: "oidc", artifactType: "authorization_code" });
     expect(retained.status).toBe("resolved");
   });
 
@@ -168,8 +171,11 @@ describe("oIDC operation-bound Session lifecycle", () => {
     const handle = await adapter.create(payload, 60);
     if (!handle)
       throw new Error("Return handle missing");
-    expect(await adapter.resolveReturnHandle(handle)).toEqual(payload);
-    expect(await adapter.consume(handle)).toEqual(payload);
+    const resolved = await adapter.resolveReturnHandle(handle, payload);
+    expect(resolved).toEqual(payload);
+    if (!resolved)
+      throw new Error("expected handle");
+    expect(await adapter.consume(handle, resolved)).toEqual(payload);
     const logout = await adapter.logoutPrincipalSession(f.token);
     expect(logout).not.toBe(true);
     expect(f.readCommittedTransitionId).not.toHaveBeenCalled();

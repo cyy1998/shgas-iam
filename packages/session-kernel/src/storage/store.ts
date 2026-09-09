@@ -79,6 +79,12 @@ export type StoreIndexWrite = {
 };
 
 export type SessionKernelRevocationTransitions = {
+  deleteOwnedCleanupKeys: (input: {
+    lookupKey: string;
+    lookupTombstoneKey: string;
+    serializedTombstone: string;
+    payloadKeys: readonly string[];
+  }) => Promise<boolean>;
   updateActiveObject: (input: {
     activeKey: string;
     expectedActive: string;
@@ -120,6 +126,10 @@ export class SessionKernelStore {
     private readonly observation: SessionKernelObservation,
   ) {}
 
+  tokenMatchesObject(token: string, object: ProtocolArtifact) {
+    return createLookupHashCandidates(token, this.config).some(candidate => candidate.lookupHash === object.lookupHash);
+  }
+
   async now() {
     return await this.observation.now();
   }
@@ -133,13 +143,7 @@ export class SessionKernelStore {
     );
   }
 
-  async resolveArtifactForConsumption(
-    externalToken: string,
-  ): Promise<StoredResolveResult<ProtocolArtifact>> {
-    return await this.resolveStoredByExternalToken("artifact", externalToken);
-  }
-
-  private async resolveStoredByExternalToken<K extends ExternalKind>(
+  async resolveStoredByExternalToken<K extends ExternalKind>(
     kind: K,
     externalToken: string,
   ): Promise<StoredResolveResult<LifecycleObjectByKind[K]>> {
@@ -281,6 +285,7 @@ export class SessionKernelStore {
   }
 
   async revokeActiveObject(input: {
+    expectedSerialized?: string;
     kind: LifecycleObjectKind;
     id: string;
     lookupHash?: string;
@@ -309,7 +314,7 @@ export class SessionKernelStore {
             },
           }
         : {}),
-      expectedActive: active,
+      expectedActive: input.expectedSerialized ?? active,
       expiresAt: input.tombstone.expiresAt,
       indexRemovals: input.indexRemovals ?? [],
       ...(input.lookupHash && isExternalKind(input.kind)
@@ -333,6 +338,19 @@ export class SessionKernelStore {
       return { status: "missing" as const };
     }
     return { status: "revoked" as const };
+  }
+
+  async deleteOwnedCleanupKeys(tombstone: RevokedTombstone, payloadKeys: readonly string[]) {
+    if (payloadKeys.length === 0)
+      return;
+    if (!tombstone.lookupHash || !isExternalKind(tombstone.objectKind))
+      throw new Error("external payload cleanup requires a lookup-bound revoked object");
+    await this.revocationTransitions.deleteOwnedCleanupKeys({
+      lookupKey: this.keys.lookup(tombstone.objectKind, tombstone.lookupHash),
+      lookupTombstoneKey: this.keys.lookupTombstone(tombstone.objectKind, tombstone.lookupHash),
+      serializedTombstone: stringifyRevokedTombstone(tombstone),
+      payloadKeys,
+    });
   }
 
   async finalizeCleanupPending(input: {

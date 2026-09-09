@@ -2,10 +2,13 @@
 
 Type: runbook
 Status: Current
-Last verified: 2026-09-07
+Last verified: 2026-09-09
 Next review: 2026-10-31
 
 ## 发布前提
+
+Spec #146 对已满足当前数据契约的环境，优先完整遵守[保留对象升级手册](protocol-validation-preserving-upgrade.md)。
+该流程不执行本页初始部署的数据库迁移、协议禁用、artifact 清理或全部重新登录步骤；回退与放流同样按其保留边界处理。
 
 在线状态由应用时间切换为 Redis 时间时，先完整执行[专用维护手册](online-auth-redis-time-cutover.md)，
 其中的停流、排空、全 owner 清理、统一版本与独立 verify 门禁优先；本页的普通协议发布、轮换和 smoke 说明继续适用。

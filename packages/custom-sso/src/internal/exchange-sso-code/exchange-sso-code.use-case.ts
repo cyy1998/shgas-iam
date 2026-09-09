@@ -19,18 +19,31 @@ export function createExchangeSsoCodeUseCase(deps: ExchangeSsoCodeDeps) {
     if (client === null) {
       throw new InvalidSsoClientError("非法Client");
     }
-    await deps.trafficGate.assertIssuanceAllowed(input.clientCode);
+    const rejectedGrant = { code: input.code, clientCode: input.clientCode, redirectUri: input.redirectUri, mode: CustomSsoClientMode.Independent };
+    try {
+      await deps.trafficGate.assertIssuanceAllowed(input.clientCode);
+    }
+    catch (error) {
+      if (error instanceof InvalidSsoClientError)
+        await deps.authorizationGrants.rejectAuthorizationGrant(rejectedGrant);
+      throw error;
+    }
     const runtimeClient = await deps.clients.findRuntimeRecord(input.clientCode);
+    if (runtimeClient !== null && (runtimeClient.clientCode !== client.clientCode
+      || runtimeClient.customSsoConfigVersion !== client.configVersion)) {
+      // Authentication and the accepted runtime may straddle a configuration change.
+      // That mismatch does not establish permanent invalidity of the submitted Grant.
+      throw new InvalidSsoClientError("非法Client");
+    }
     if (
       runtimeClient === null
-      || runtimeClient.clientCode !== client.clientCode
       || runtimeClient.status === ClientStatus.Disable
       || runtimeClient.isDelete
       || !runtimeClient.customSsoEnabled
       || runtimeClient.customSsoConfig?.mode
       !== CustomSsoClientMode.Independent
-      || runtimeClient.customSsoConfigVersion !== client.configVersion
     ) {
+      await deps.authorizationGrants.rejectAuthorizationGrant(rejectedGrant);
       throw new InvalidSsoClientError("非法Client");
     }
     const { credential, ttl, subject } = await deps.authorizationGrants.redeemIndependentGrant({

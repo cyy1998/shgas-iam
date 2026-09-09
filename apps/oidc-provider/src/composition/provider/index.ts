@@ -48,6 +48,19 @@ export interface CreateOidcProviderRuntimeDeps {
 
 export function createOidcProviderRuntime(deps: CreateOidcProviderRuntimeDeps) {
   const bridge = createOidcSubjectAccessBridge(deps.session.operations);
+  const snapshots = () => deps.session.sessions.snapshotsForOperation(bridge.current());
+  const clients = {
+    findRuntime: (clientCode: string) => snapshots().clients.findRuntime(clientCode),
+    findActiveVersion: (clientCode: string) => snapshots().clients.findActiveVersion(clientCode),
+  };
+  const clientTrafficGate = {
+    check(clientCode: string) {
+      const traffic = snapshots().traffic;
+      if (!traffic)
+        throw new Error("OIDC operation Traffic Gate is required");
+      return traffic.check(clientCode);
+    },
+  };
   const oidcSession = createOidcProviderSessionBridge(deps.session.sessions, bridge);
   const subjectFacts = createSubjectFactsReader({
     db: deps.db,
@@ -63,6 +76,7 @@ export function createOidcProviderRuntime(deps: CreateOidcProviderRuntimeDeps) {
   });
   const runtime = assembleOidcProviderRuntime({
     ...deps,
+    stores: { ...deps.stores, clientRuntime: clients, clientTrafficGate },
     repositories: {
       account: {
         async findBySubject(subject) {

@@ -1,4 +1,4 @@
-export type { CleanupAdapter, SessionKernelLogger } from "./cleanup/cleanup";
+export type { CleanupAdapter, CleanupExecution, SessionKernelLogger } from "./cleanup/cleanup";
 export { createSessionKernelConfig } from "./config";
 export type {
   SessionKernelClock,
@@ -10,9 +10,12 @@ export type {
 } from "./config";
 export * from "./env-config";
 export {
+  type ArtifactPurpose,
+  type ClientProtocolRevocationSelector,
   type CreateClientBindingInput,
   type CreateProtocolArtifactInput,
   createSessionKernel,
+  type CredentialPurpose,
   type IssueCredentialInput,
   type ListPrincipalSessionsInput,
   type ListPrincipalSessionsResult,
@@ -20,11 +23,11 @@ export {
   type PrincipalAuthenticationContext,
   type PrincipalSessionContext,
   type PrincipalSessionInventoryItem,
+  type ProtocolPurpose,
   type RevokeUserSessionsOptions,
   type SessionKernel,
   type SessionKernelClientProtocolInventory,
   type SessionKernelDependencies,
-  type SessionKernelValidationHooks,
 } from "./facade";
 export { normalizeSessionOrigin } from "./state/model";
 export type {
@@ -41,8 +44,6 @@ export type {
   RevocationReason,
   RevokeSummary,
   SessionOrigin,
-  ValidationFailureReason,
-  ValidationResult,
 } from "./state/model";
 export type { CreateResult, ResolveResult } from "./state/result";
 export type { SessionKernelRedis, SessionKernelRedisTransaction } from "./storage/store";

@@ -443,7 +443,7 @@ async function createAuthorizationRuntime(options: { rejectEnsure?: boolean } = 
     };
   }>();
   const oidcSession = {
-    resolveAuthorizationCodeSessionLifetime: async () => ({ remainingSeconds: 90 }),
+    resolveAuthorizationCodeSessionLifetime: async (_id: string, serializedProviderCode: string) => ({ remainingSeconds: 90, serializedProviderCode }),
     consumeAuthorizationCodeArtifact: async () => ({}),
     registerAccessTokenCredential: async (input: {
       binding: ProviderSessionBinding | null;

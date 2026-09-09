@@ -17,8 +17,9 @@ import {
 } from "@iam/api-core/subject-access";
 import { createPermittedClientSubjectProjectionService, SubjectProjectionNotReadyError } from "@iam/client-subject-projection";
 import { ClientStatus, CustomSsoClientMode, SubjectClaim } from "@iam/contracts";
-import { createCustomSsoOperations } from "@iam/custom-sso";
+import { createCustomSsoOperations, CustomSsoConfigurationUnavailableError, CustomSsoRequestMismatchError, CustomSsoTrafficGateUnavailableError } from "@iam/custom-sso";
 import { createCustomSsoCleanup } from "@iam/custom-sso/cleanup";
+import { createCustomSsoRevocationSelector } from "@iam/custom-sso/maintenance";
 import { createAuthorizationGrantRedisInspection } from "@iam/custom-sso/testing";
 import { createSessionKernelRedisTestHarness } from "@iam/session-kernel/testing";
 import { afterAll, afterEach, beforeAll, beforeEach, expect, test } from "bun:test";
@@ -86,6 +87,15 @@ async function fixture(mode: Mode = "gateway") {
     userMissing: false,
     uncertainIssue: false,
     failCompensation: false,
+    configReads: 0,
+    gateReads: 0,
+    configVersion: 7,
+    clientResult: "present" as "present" | "absent" | "unavailable",
+    gate: "enabled" as "enabled" | "disabled" | "deleted" | "maintenance" | "unavailable",
+    gateThrows: false,
+    beforeConfig: undefined as (() => Promise<void>) | undefined,
+    beforeGate: undefined as (() => Promise<void>) | undefined,
+    afterPermission: undefined as (() => Promise<void>) | undefined,
   };
   const kernel = {
     ...scope.writer,
@@ -128,6 +138,7 @@ async function fixture(mode: Mode = "gateway") {
         const accepted = state.generation;
         if (state.afterGeneration)
           state.generation = state.afterGeneration;
+        await state.afterPermission?.();
         return accepted;
       },
     },
@@ -181,10 +192,24 @@ async function fixture(mode: Mode = "gateway") {
   const protocol = createCustomSsoOperations({
     redis,
     kernel,
-    clients: { findRuntimeRecord: async code => code === clientCode ? client : null },
-    clientSecrets: { findSecretRecord: async () => ({ ...client, customSsoSecretHash: "test-hash" }) },
+    clients: { findRuntimeRecord: async (code) => {
+      state.configReads += 1;
+      await state.beforeConfig?.();
+      if (state.clientResult === "unavailable")
+        throw new Error("configuration unavailable");
+      return state.clientResult === "present" && code === clientCode ? { ...client, customSsoConfigVersion: state.configVersion } : null;
+    } },
+    clientSecrets: { findSecretRecord: async () => ({ ...client, customSsoConfigVersion: state.configVersion, customSsoSecretHash: "test-hash" }) },
     secrets: { verify: async () => true },
-    traffic: { check: async () => ({ outcome: "enabled" }) },
+    traffic: { check: async () => {
+      state.gateReads += 1;
+      await state.beforeGate?.();
+      if (state.gateThrows)
+        throw new Error("gate read failed");
+      if (state.gate === "unavailable")
+        return { outcome: "unavailable", reason: "read-failed" };
+      return { outcome: state.gate };
+    } },
     subjectProjection,
     permittedUsers: { findOrcasUserBySubjectIdentifier: async () => state.userMissing ? null : ({ id: 1, username: "test", name: "Test" }) },
     orcas: { orcasLogin: async () => {
@@ -234,6 +259,7 @@ async function fixture(mode: Mode = "gateway") {
     credential,
     clientCode,
     subjectIdentifier,
+    client,
     token: mode === "iam" ? root.externalToken : credential.externalToken,
     input: { clientCode, redirectUrl, globalSessionToken: root.externalToken, tokenSource: "cookie" as const },
   };
@@ -256,7 +282,7 @@ test("authorization checks once before renewal and persists its real Redis Grant
   expect(f.state).toMatchObject({ reads: 1, renewals: 1, artifacts: 1 });
   if (!result.isLogin)
     throw new Error("Authorization failed");
-  const artifact = await scope.writer.resolveProtocolArtifact(result.code);
+  const artifact = await scope.writer.resolveProtocolArtifact(result.code, { protocol: "custom-sso", artifactType: "auth_code" });
   const records = await Promise.all(grantIds.map(id => grants.inspect(id)));
   expect(artifact.status).toBe("resolved");
   expect(records).toHaveLength(1);
@@ -372,7 +398,7 @@ test.each(["blocking", "disabled"] as const)("logout under %s revokes the root a
   f.state.access = state;
   await f.protocol.logout.execute({ sessionToken: f.token });
   const root = await scope.writer.resolvePrincipalSession(f.root.externalToken);
-  const credential = await scope.writer.resolveCredential(f.token);
+  const credential = await scope.writer.resolveCredential(f.token, { protocol: "custom-sso", credentialType: "local_session" });
   expect(root.status).toBe("revoked");
   expect(credential.status).toBe("revoked");
   expect(f.state.reads).toBe(0);
@@ -383,7 +409,7 @@ async function redemptionFixture(mode: Exclude<Mode, "iam">) {
   const grant = await f.operations.run(op => f.protocol.forOperation(op).authorize.execute({ ...f.input, state: "opaque-state" }));
   if (!grant.isLogin)
     throw new Error("Expected authorization code");
-  const artifact = await scope.writer.resolveProtocolArtifact(grant.code);
+  const artifact = await scope.writer.resolveProtocolArtifact(grant.code, { protocol: "custom-sso", artifactType: "auth_code" });
   if (artifact.status !== "resolved")
     throw new Error("Expected real authorization artifact");
   const grantId = artifact.value.artifactId;
@@ -396,6 +422,387 @@ async function redemptionFixture(mode: Exclude<Mode, "iam">) {
   return { ...f, redeem, grantId, original, artifact: artifact.value, code: grant.code };
 }
 
+test.each(["config", "gate"] as const)("parallel callbacks share the pending %s acquisition and retain both accepted results", async (source) => {
+  const f = await fixture();
+  const entered = Promise.withResolvers<void>();
+  const release = Promise.withResolvers<void>();
+  const wait = async () => {
+    entered.resolve();
+    await release.promise;
+  };
+  if (source === "config")
+    f.state.beforeConfig = wait;
+  else f.state.beforeGate = wait;
+  const operation = f.operations.createOperation();
+  try {
+    const first = f.protocol.forOperation(operation).checkLoginContinuation.execute(f.input);
+    await entered.promise;
+    const second = f.protocol.forOperation(operation).authorize.execute(f.input);
+    release.resolve();
+    const [continued, authorized] = await Promise.all([first, second]);
+    expect(continued).toBe("valid");
+    expect(authorized.isLogin).toBe(true);
+    expect(f.state).toMatchObject({ configReads: 1, gateReads: 1, reads: 1 });
+    f.state.configVersion = 8;
+    f.state.gate = "maintenance";
+    const accepted = await f.protocol.forOperation(operation).resolvePublicAuthentication(f.token, f.clientCode);
+    expect(accepted.authenticationContext.subjectIdentifier).toBe(f.subjectIdentifier);
+    expect(f.state).toMatchObject({ configReads: 1, gateReads: 1 });
+  }
+  finally {
+    release.resolve();
+    operation.close();
+  }
+  await rejection(() => f.operations.run(op => f.protocol.forOperation(op).authorize.execute(f.input)));
+  expect(f.state.gateReads).toBe(2);
+});
+
+test.each(["config-absent", "config-unavailable", "gate-disabled", "gate-maintenance", "gate-unavailable", "gate-throw"] as const)("%s is fixed for concurrent and repeated callbacks, with a fresh result next operation", async (failure) => {
+  const f = await fixture();
+  if (failure === "config-absent")
+    f.state.clientResult = "absent";
+  if (failure === "config-unavailable")
+    f.state.clientResult = "unavailable";
+  if (failure === "gate-disabled")
+    f.state.gate = "disabled";
+  if (failure === "gate-maintenance")
+    f.state.gate = "maintenance";
+  if (failure === "gate-unavailable")
+    f.state.gate = "unavailable";
+  if (failure === "gate-throw")
+    f.state.gateThrows = true;
+  const operation = f.operations.createOperation();
+  try {
+    const results = await Promise.allSettled([
+      f.protocol.forOperation(operation).authorize.execute(f.input),
+      f.protocol.forOperation(operation).checkLoginContinuation.execute(f.input),
+    ]);
+    expect(results.map(result => result.status)).toEqual(["rejected", "rejected"]);
+    const counts = { configReads: f.state.configReads, gateReads: f.state.gateReads };
+    f.state.clientResult = "present";
+    f.state.gate = "enabled";
+    f.state.gateThrows = false;
+    const repeated = await rejection(() => f.protocol.forOperation(operation).authorize.execute(f.input));
+    if (failure === "config-unavailable")
+      expect(repeated).toBeInstanceOf(CustomSsoConfigurationUnavailableError);
+    if (failure === "gate-unavailable" || failure === "gate-throw")
+      expect(repeated).toBeInstanceOf(CustomSsoTrafficGateUnavailableError);
+    expect(f.state).toMatchObject({ ...counts, reads: 0, renewals: 0, artifacts: 0 });
+  }
+  finally { operation.close(); }
+  const next = await f.operations.run(op => f.protocol.forOperation(op).authorize.execute(f.input));
+  expect(next.isLogin).toBe(true);
+  expect(f.state.gateReads).toBe(2);
+});
+
+test.each(["independent", "gateway-orcas"] as const)("%s stale redirect rejection leaves Grant untouched, then exact permanent rejection cleans only that Grant", async (mode) => {
+  const f = await redemptionFixture(mode);
+  const other = await fixture();
+  f.state.configVersion = 8;
+  f.state.access = "disabled";
+  await rejection(() => f.redeem(f.code, "https://wrong.example/callback"));
+  const retained = await grants.inspect(f.grantId);
+  expect(retained).toEqual(f.original);
+  expect(f.state).toMatchObject({ reads: 0, attemptIds: [], issuedIds: [], orcasCalls: 0 });
+  await rejection(() => f.redeem());
+  const artifact = await scope.observer.resolveProtocolArtifact(f.code, { protocol: "custom-sso", artifactType: "auth_code" });
+  const cleaned = await grants.inspect(f.grantId);
+  const roots = await Promise.all([scope.observer.resolvePrincipalSession(f.root.externalToken), scope.observer.resolvePrincipalSession(other.root.externalToken)]);
+  const credential = await scope.observer.resolveCredential(f.token, { protocol: "custom-sso", credentialType: "local_session" });
+  expect(artifact.status).toBe("revoked");
+  expect(cleaned).toBeNull();
+  expect(roots.map(value => value.status)).toEqual(["resolved", "resolved"]);
+  expect(credential.status).toBe("resolved");
+  expect(f.state).toMatchObject({ reads: 0, attemptIds: [], issuedIds: [], orcasCalls: 0 });
+});
+
+test.each(["independent", "gateway-orcas"] as const)("%s accepted redemption creates the old version in flight; next operation precisely rejects it", async (mode) => {
+  const f = await redemptionFixture(mode);
+  f.state.afterPermission = async () => {
+    f.state.configVersion = 8;
+    f.state.gate = "maintenance";
+  };
+  const result = await f.redeem();
+  const token = "sid" in result ? result.sid : result.token;
+  const issued = await scope.observer.resolveCredential(token, { protocol: "custom-sso", credentialType: "local_session" });
+  expect(issued.status).toBe("resolved");
+  if (issued.status !== "resolved")
+    throw new Error("Expected issued credential");
+  expect(issued.value.metadata).toMatchObject({ configVersion: 7 });
+  f.state.afterPermission = undefined;
+  f.state.gate = "enabled";
+  await rejection(() => f.operations.run(op => f.protocol.forOperation(op).resolvePublicAuthentication(token, f.clientCode)));
+  const revoked = await scope.observer.resolveCredential(token, { protocol: "custom-sso", credentialType: "local_session" });
+  const root = await scope.observer.resolvePrincipalSession(f.root.externalToken);
+  expect(revoked.status).toBe("revoked");
+  expect(root.status).toBe("resolved");
+});
+
+test.each(["independent", "gateway-orcas"] as const)("%s accepted configuration cannot redeem a Grant removed before reservation", async (mode) => {
+  const f = await redemptionFixture(mode);
+  f.state.afterPermission = async () => {
+    f.state.configVersion = 8;
+    await scope.observer.revokeArtifact(f.grantId, "client_config_changed");
+  };
+  await rejection(() => f.redeem());
+  const grant = await grants.inspect(f.grantId);
+  expect(grant).toBeNull();
+  expect(f.state).toMatchObject({ reads: 1, issuedIds: [], orcasCalls: 0 });
+});
+
+test.each(["independent", "gateway-orcas"] as const)("%s authorization writes an old Code after version cleanup; next redemption precisely removes it", async (mode) => {
+  const f = await fixture(mode);
+  const other = await fixture();
+  const entered = Promise.withResolvers<void>();
+  const resume = Promise.withResolvers<void>();
+  f.state.afterPermission = async () => {
+    entered.resolve();
+    await resume.promise;
+  };
+  const pending = f.operations.run(op => f.protocol.forOperation(op).authorize.execute(f.input));
+  await entered.promise;
+  try {
+    f.state.afterPermission = undefined;
+    f.state.configVersion = 8;
+    await scope.observer.revokeSelectedClientProtocolObjects(f.clientCode, "custom-sso", createCustomSsoRevocationSelector(8), "client_config_changed");
+    const afterCleanup = await scope.observer.inventoryClientProtocol(f.clientCode, "custom-sso");
+    expect(afterCleanup.counts.credentials).toBe(0);
+    const current = await f.operations.run(op => f.protocol.forOperation(op).authorize.execute(f.input));
+    if (!current.isLogin)
+      throw new Error("Expected new Code");
+    resume.resolve();
+    const late = await pending;
+    if (!late.isLogin)
+      throw new Error("Expected in-flight old Code");
+    const purpose = { protocol: "custom-sso", artifactType: "auth_code", clientCode: f.clientCode };
+    const observed = await scope.observer.resolveProtocolArtifact(late.code, purpose);
+    expect(observed).toMatchObject({ status: "resolved", value: { metadata: { configVersion: 7 } } });
+    if (observed.status !== "resolved")
+      throw new Error("Expected old Artifact");
+    await rejection(() => f.operations.run(async op => mode === "independent"
+      ? await f.protocol.forOperation(op).exchangeCode.execute({ code: late.code, clientCode: f.clientCode, clientSecret: "secret", redirectUri: f.input.redirectUrl })
+      : await f.protocol.forOperation(op).completeCallback.execute({ code: late.code, clientCode: f.clientCode, redirectUrl: f.input.redirectUrl })));
+    const removed = await scope.observer.resolveProtocolArtifact(late.code, purpose);
+    const grant = await grants.inspect(observed.value.artifactId);
+    const retained = await scope.observer.resolveProtocolArtifact(current.code, purpose);
+    const control = await scope.observer.resolveCredential(other.token, { protocol: "custom-sso", credentialType: "local_session" });
+    const root = await scope.observer.resolvePrincipalSession(f.root.externalToken);
+    expect(removed.status).toBe("revoked");
+    expect(grant).toBeNull();
+    expect(retained).toMatchObject({ status: "resolved", value: { metadata: { configVersion: 8 } } });
+    expect([control.status, root.status]).toEqual(["resolved", "resolved"]);
+    expect(f.state.issuedIds).toEqual([]);
+  }
+  finally {
+    resume.resolve();
+    await pending;
+  }
+});
+
+test("an older accepted configuration refuses a newer Credential without deleting it; the next operation accepts it", async () => {
+  const f = await fixture();
+  const operation = f.operations.createOperation();
+  try {
+    await f.protocol.forOperation(operation).checkLoginContinuation.execute(f.input);
+    f.state.configVersion = 8;
+    const newer = await scope.writer.issueCredential({ principalSessionId: f.root.value.principalSessionId, protocol: "custom-sso", clientCode: f.clientCode, credentialType: "local_session", metadata: { version: 2, mode: CustomSsoClientMode.Gateway, configVersion: 8 } });
+    if (newer.status !== "created" || !newer.externalToken)
+      throw new Error("Expected newer credential");
+    const token = newer.externalToken;
+    const error = await rejection(() => f.protocol.forOperation(operation).resolvePublicAuthentication(token, f.clientCode));
+    expect(error).toBeInstanceOf(CustomSsoRequestMismatchError);
+    const retained = await scope.observer.resolveCredential(token, { protocol: "custom-sso", credentialType: "local_session" });
+    expect(retained.status).toBe("resolved");
+    const next = await f.operations.run(op => f.protocol.forOperation(op).resolvePublicAuthentication(token, f.clientCode));
+    expect(next.authenticationContext.subjectIdentifier).toBe(f.subjectIdentifier);
+  }
+  finally { operation.close(); }
+});
+
+test("logout refuses a newer Credential under an older configuration without destroying the root", async () => {
+  const f = await fixture();
+  f.state.configVersion = 6;
+  const error = await rejection(() => f.protocol.logout.execute({ sessionToken: f.token }));
+  const credential = await scope.observer.resolveCredential(f.token, { protocol: "custom-sso", credentialType: "local_session" });
+  const root = await scope.observer.resolvePrincipalSession(f.root.externalToken);
+  expect(error).toBeInstanceOf(Error);
+  expect([credential.status, root.status]).toEqual(["resolved", "resolved"]);
+  f.state.configVersion = 7;
+  await f.protocol.logout.execute({ sessionToken: f.token });
+  const ended = await scope.observer.resolvePrincipalSession(f.root.externalToken);
+  expect(ended.status).toBe("revoked");
+  expect(f.state.reads).toBe(0);
+});
+
+test.each(["independent", "gateway-orcas"] as const)("%s delayed Credential rejection preserves protocol-issued access after version-selected cleanup", async (mode) => {
+  const f = await fixture(mode);
+  const other = await fixture();
+  const sameClientOtherUser = await scope.writer.issueCredential({ principalSessionId: other.root.value.principalSessionId, protocol: "custom-sso", clientCode: f.clientCode, credentialType: "local_session", metadata: { version: 2, mode: CustomSsoClientMode.Gateway, configVersion: 8 } });
+  if (sameClientOtherUser.status !== "created" || !sameClientOtherUser.externalToken)
+    throw new Error("Expected other-user credential");
+  f.state.configVersion = 8;
+  const entered = Promise.withResolvers<void>();
+  const resume = Promise.withResolvers<void>();
+  f.state.beforeConfig = async () => {
+    entered.resolve();
+    await resume.promise;
+  };
+  const pending = rejection(() => f.operations.run(op => f.protocol.forOperation(op).resolvePublicAuthentication(f.token, f.clientCode)));
+  await entered.promise;
+  try {
+    await scope.observer.revokeSelectedClientProtocolObjects(f.clientCode, "custom-sso", createCustomSsoRevocationSelector(8), "client_config_changed");
+    const cleaned = await scope.observer.resolveCredential(f.token, { protocol: "custom-sso", credentialType: "local_session" });
+    expect(cleaned.status).toBe("revoked");
+    f.state.beforeConfig = undefined;
+    const authorized = await f.operations.run(op => f.protocol.forOperation(op).authorize.execute(f.input));
+    if (!authorized.isLogin)
+      throw new Error("Expected new authorization");
+    const newer = await f.operations.run(async op => mode === "independent"
+      ? await f.protocol.forOperation(op).exchangeCode.execute({ code: authorized.code, clientCode: f.clientCode, clientSecret: "secret", redirectUri: f.input.redirectUrl })
+      : await f.protocol.forOperation(op).completeCallback.execute({ code: authorized.code, clientCode: f.clientCode, redirectUrl: f.input.redirectUrl }));
+    const token = "sid" in newer ? newer.sid : newer.token;
+    resume.resolve();
+    await pending;
+    const remaining = await Promise.all([token, sameClientOtherUser.externalToken, other.token].map(value => scope.observer.resolveCredential(value, { protocol: "custom-sso", credentialType: "local_session" })));
+    const roots = await Promise.all([f.root.externalToken, other.root.externalToken].map(value => scope.observer.resolvePrincipalSession(value)));
+    expect(remaining.map(value => value.status)).toEqual(["resolved", "resolved", "resolved"]);
+    expect(roots.map(value => value.status)).toEqual(["resolved", "resolved"]);
+    const accepted = await f.operations.run(op => f.protocol.forOperation(op).resolvePublicAuthentication(token, f.clientCode));
+    expect(accepted.authenticationContext.subjectIdentifier).toBe(f.subjectIdentifier);
+    await rejection(() => f.operations.run(op => f.protocol.forOperation(op).resolvePublicAuthentication(f.token, f.clientCode)));
+  }
+  finally {
+    resume.resolve();
+    await pending;
+  }
+});
+
+test.each(["credential", "artifact"] as const)("permanent %s rejection is bound to its original observed object during a real Redis replacement", async (kind) => {
+  const f = await redemptionFixture("gateway-orcas");
+  f.state.configVersion = 8;
+  scope.replaceObjectBeforeNextRevoke();
+  await rejection(() => kind === "credential"
+    ? f.operations.run(op => f.protocol.forOperation(op).resolvePublicAuthentication(f.token, f.clientCode))
+    : f.redeem());
+  const retained = kind === "credential"
+    ? await scope.observer.resolveCredential(f.token, { protocol: "custom-sso", credentialType: "local_session" })
+    : await scope.observer.resolveProtocolArtifact(f.code, { protocol: "custom-sso", artifactType: "auth_code" });
+  expect(retained.status).toBe("resolved");
+  if (retained.status !== "resolved")
+    throw new Error("Expected replacement to survive");
+  expect(retained.value.metadata).toEqual({ concurrentReplacement: true });
+  const unchanged = await grants.inspect(f.grantId);
+  expect(unchanged).toEqual(f.original);
+  expect(f.state).toMatchObject({ reads: 0, attemptIds: [], issuedIds: [], orcasCalls: 0 });
+});
+
+test.each(["independent", "gateway-orcas"] as const)("%s preserves newer Code with an older accepted snapshot and accepts it in the next operation", async (mode) => {
+  const f = await fixture(mode);
+  const operation = f.operations.createOperation();
+  try {
+    await f.protocol.forOperation(operation).checkLoginContinuation.execute(f.input);
+    f.state.configVersion = 8;
+    const code = await f.operations.run(op => f.protocol.forOperation(op).authorize.execute(f.input));
+    if (!code.isLogin)
+      throw new Error("Expected code");
+    const redeem = (op: Parameters<typeof f.protocol.forOperation>[0]) => mode === "independent"
+      ? f.protocol.forOperation(op).exchangeCode.execute({ code: code.code, clientCode: f.clientCode, clientSecret: "secret", redirectUri: f.input.redirectUrl })
+      : f.protocol.forOperation(op).completeCallback.execute({ code: code.code, clientCode: f.clientCode, redirectUrl: f.input.redirectUrl });
+    await rejection(() => redeem(operation));
+    const artifact = await scope.observer.resolveProtocolArtifact(code.code, { protocol: "custom-sso", artifactType: "auth_code" });
+    expect(artifact.status).toBe("resolved");
+    if (artifact.status !== "resolved")
+      throw new Error("Expected retained code");
+    const grant = await grants.inspect(artifact.value.artifactId);
+    expect(grant).toMatchObject({ state: "issued" });
+    await f.operations.run(async op => await redeem(op));
+  }
+  finally { operation.close(); }
+});
+
+test.each(["independent", "gateway-orcas"] as const)("%s temporary config/Gate failures preserve the real Grant without reservation or ORCAS", async (mode) => {
+  const f = await redemptionFixture(mode);
+  for (const failure of ["config", "maintenance", "unavailable"] as const) {
+    f.state.clientResult = failure === "config" ? "unavailable" : "present";
+    f.state.gate = failure === "config" ? "enabled" : failure;
+    await rejection(() => f.redeem());
+    const retained = await grants.inspect(f.grantId);
+    expect(retained).toEqual(f.original);
+    expect(f.state).toMatchObject({ reads: 0, attemptIds: [], issuedIds: [], orcasCalls: 0 });
+  }
+  f.state.clientResult = "present";
+  f.state.gate = "enabled";
+  const result = await f.redeem();
+  expect("sid" in result ? result.sid : result.token).toBeTruthy();
+});
+
+test.each(["missing", "disabled", "protocol-disabled", "gate-disabled", "gate-deleted"] as const)("permanent %s rejection cleans only the request-owned Grant before reservation", async (failure) => {
+  const f = await redemptionFixture("gateway-orcas");
+  if (failure === "missing")
+    f.state.clientResult = "absent";
+  if (failure === "disabled")
+    f.client.status = ClientStatus.Disable;
+  if (failure === "protocol-disabled")
+    f.client.customSsoEnabled = false;
+  if (failure === "gate-disabled")
+    f.state.gate = "disabled";
+  if (failure === "gate-deleted")
+    f.state.gate = "deleted";
+  await rejection(() => f.redeem());
+  const artifact = await scope.observer.resolveProtocolArtifact(f.code, { protocol: "custom-sso", artifactType: "auth_code" });
+  const grant = await grants.inspect(f.grantId);
+  const root = await scope.observer.resolvePrincipalSession(f.root.externalToken);
+  expect(artifact.status).toBe("revoked");
+  expect(grant).toBeNull();
+  expect(root.status).toBe("resolved");
+  expect(f.state).toMatchObject({ reads: 0, attemptIds: [], issuedIds: [], orcasCalls: 0 });
+});
+
+test.each(["credential", "artifact"] as const)("unparseable %s version cannot authorize and is handled precisely", async (kind) => {
+  const f = await fixture("gateway-orcas");
+  const object = kind === "credential"
+    ? await scope.writer.issueCredential({ principalSessionId: f.root.value.principalSessionId, protocol: "custom-sso", clientCode: f.clientCode, credentialType: "local_session", metadata: { version: 2, mode: CustomSsoClientMode.Gateway } })
+    : await scope.writer.createProtocolArtifact({ principalSessionId: f.root.value.principalSessionId, protocol: "custom-sso", clientCode: f.clientCode, artifactType: "auth_code", ttlMs: 60_000, metadata: { version: 2, mode: CustomSsoClientMode.Gateway, clientCode: f.clientCode, subjectIdentifier: f.subjectIdentifier, redirectUri: f.input.redirectUrl } });
+  if (object.status !== "created" || !object.externalToken)
+    throw new Error("Expected malformed-version fixture");
+  const token = object.externalToken;
+  await rejection(() => f.operations.run(async op => kind === "credential"
+    ? await f.protocol.forOperation(op).resolvePublicAuthentication(token, f.clientCode)
+    : await f.protocol.forOperation(op).completeCallback.execute({ code: token, clientCode: f.clientCode, redirectUrl: f.input.redirectUrl })));
+  const invalid = kind === "credential"
+    ? await scope.observer.resolveCredential(token, { protocol: "custom-sso", credentialType: "local_session" })
+    : await scope.observer.resolveProtocolArtifact(token, { protocol: "custom-sso", artifactType: "auth_code" });
+  const valid = await scope.observer.resolveCredential(f.token, { protocol: "custom-sso", credentialType: "local_session" });
+  expect(invalid.status).toBe("revoked");
+  expect(valid.status).toBe("resolved");
+  expect(f.state).toMatchObject({ reads: 0, issuedIds: [], orcasCalls: 0 });
+});
+
+test.each(["authority", "cleanup"] as const)("permanent rejection remains denied when %s revocation work fails", async (failure) => {
+  if (failure === "cleanup") {
+    await scope.close();
+    const cleanup = createCustomSsoCleanup({ redis });
+    scope = await harness.createSessionKernelScope({ cleanupAdapters: [{
+      ...cleanup,
+      cleanup: async () => {
+        throw new Error("cleanup unavailable");
+      },
+    }] });
+  }
+  const f = await redemptionFixture("gateway-orcas");
+  f.state.configVersion = 8;
+  if (failure === "authority")
+    scope.failNextPrincipalRevoke();
+  await rejection(() => f.redeem());
+  const artifact = await scope.observer.resolveProtocolArtifact(f.code, { protocol: "custom-sso", artifactType: "auth_code" });
+  const grant = await grants.inspect(f.grantId);
+  expect(artifact.status).toBe(failure === "authority" ? "resolved" : "revoked");
+  const inventory = await scope.observer.inventoryClientProtocol(f.clientCode, "custom-sso");
+  expect(inventory.counts.cleanupPending).toBe(failure === "cleanup" ? 1 : 0);
+  expect(grant).toEqual(f.original);
+  expect(f.state).toMatchObject({ reads: 0, attemptIds: [], issuedIds: [], orcasCalls: 0 });
+});
+
 test.each(["independent", "gateway", "gateway-orcas"] as const)("%s rejects before Grant reservation and resumes the same code after blocking", async (mode) => {
   const f = await redemptionFixture(mode);
   f.state.access = "blocking";
@@ -407,7 +814,7 @@ test.each(["independent", "gateway", "gateway-orcas"] as const)("%s rejects befo
   f.state.access = "enabled";
   const result = await f.redeem();
   const token = "sid" in result ? result.sid : result.token;
-  const credential = await scope.writer.resolveCredential(token);
+  const credential = await scope.writer.resolveCredential(token, { protocol: "custom-sso", credentialType: "local_session" });
   expect(credential.status).toBe("resolved");
   expect(f.state).toMatchObject({ reads: 2, orcasCalls: mode === "gateway-orcas" ? 1 : 0 });
   expect(f.state.issuedIds).toHaveLength(1);
@@ -439,7 +846,7 @@ test.each(["independent", "gateway", "gateway-orcas"] as const)("%s in-flight re
   f.state.afterGeneration = randomUUID();
   const result = await f.redeem();
   const token = "sid" in result ? result.sid : result.token;
-  const credential = await scope.writer.resolveCredential(token);
+  const credential = await scope.writer.resolveCredential(token, { protocol: "custom-sso", credentialType: "local_session" });
   expect(credential.status).toBe("resolved");
   if (credential.status !== "resolved")
     throw new Error("Expected issued credential");
@@ -522,7 +929,7 @@ test.each(["independent", "gateway", "gateway-orcas"] as const)("%s permission s
     f.state.afterRead = access;
     const result = await f.redeem();
     const token = "sid" in result ? result.sid : result.token;
-    const credential = await scope.writer.resolveCredential(token);
+    const credential = await scope.writer.resolveCredential(token, { protocol: "custom-sso", credentialType: "local_session" });
     expect(credential.status).toBe("resolved");
     expect(f.state.reads).toBe(1);
     const denied = await rejection(() => f.operations.run(op =>

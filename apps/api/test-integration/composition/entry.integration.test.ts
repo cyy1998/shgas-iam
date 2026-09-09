@@ -973,11 +973,13 @@ describe("API explicit external entry", () => {
       expect(
         await observerOwners.sessionKernel.resolveCredential(
           gatewaySession.localToken,
+          { protocol: "custom-sso", credentialType: "local_session" },
         ),
       ).toMatchObject({ status: "resolved" });
       expect(
         await observerOwners.sessionKernel.resolveCredential(
           logoutSession.credentialToken,
+          { protocol: "custom-sso", credentialType: "local_session" },
         ),
       ).toMatchObject({
         status: "resolved",
@@ -992,7 +994,7 @@ describe("API explicit external entry", () => {
 
       const issuedCodes: string[] = [];
       async function registerAuthorizationCode(code: string) {
-        const artifact = await observerOwners.sessionKernel.resolveProtocolArtifact(code);
+        const artifact = await observerOwners.sessionKernel.resolveProtocolArtifact(code, { protocol: "custom-sso", artifactType: "auth_code" });
         if (artifact.status !== "resolved") {
           throw new Error(
             `API composition could not observe an issued authorization code: ${artifact.status}`,
@@ -1345,11 +1347,13 @@ describe("API explicit external entry", () => {
       expect(
         await observerOwners.sessionKernel.resolveCredential(
           gatewaySession.localToken,
+          { protocol: "custom-sso", credentialType: "local_session" },
         ),
       ).not.toMatchObject({ status: "resolved" });
       expect(
         await observerOwners.sessionKernel.resolveCredential(
           reenabledGatewaySession.localToken,
+          { protocol: "custom-sso", credentialType: "local_session" },
         ),
       ).toMatchObject({ status: "resolved" });
       expect(
@@ -1360,6 +1364,7 @@ describe("API explicit external entry", () => {
       expect(
         await observerOwners.sessionKernel.resolveCredential(
           logoutSession.credentialToken,
+          { protocol: "custom-sso", credentialType: "local_session" },
         ),
       ).not.toMatchObject({ status: "resolved" });
 

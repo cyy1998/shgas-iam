@@ -1,6 +1,8 @@
 import type { AdminAuditContext } from "@admin-api/services/audit/audit.context";
 import type { RevocationReason, RevokeSummary, SessionKernel } from "@iam/session-kernel";
 import { createSubjectAccessSessionRevocation } from "@iam/api-core/subject-access";
+import { createCustomSsoRevocationSelector } from "@iam/custom-sso/maintenance";
+import { createOidcRevocationSelector } from "@iam/domain/client/oidc-revocation-selector";
 
 export type AdminSessionProtocol = "custom-sso" | "oidc";
 
@@ -57,6 +59,7 @@ export interface AdminSessionRevocationPort {
   revokeClientProtocol: (input: {
     clientCode: string;
     protocol: AdminSessionProtocol;
+    committedVersion: number;
     reason: Extract<
       AdminSessionRevocationReason,
       "client_disabled" | "client_deleted" | "client_protocol_disabled" | "client_config_changed"
@@ -65,6 +68,7 @@ export interface AdminSessionRevocationPort {
   }) => Promise<RevokeSummary>;
   revokeClientAllProtocols: (input: {
     clientCode: string;
+    committedVersions: { readonly oidc: number; readonly customSso: number };
     reason: Extract<AdminSessionRevocationReason, "client_disabled" | "client_deleted" | "client_config_changed">;
     auditContext?: AdminAuditContext;
   }) => Promise<RevokeSummary>;
@@ -74,8 +78,7 @@ export interface CreateAdminSessionRevocationPortDeps {
   sessionKernel: Pick<SessionKernel, | "prepareUserSessionRevocationByContext"
   | "revokeUserSessionsByContext"
   | "revokePrincipalSession"
-  | "revokeClientProtocol"
-  | "revokeClient"
+  | "revokeSelectedClientProtocolObjects"
   | "revokeUserSessionRecords">;
   logger: AdminSessionRevocationLogger & {
     logPreparationFailure: (input: { errorName: string }) => void;
@@ -159,7 +162,15 @@ export function createAdminSessionRevocationPort(
     },
 
     async revokeClientProtocol(input) {
-      const summary = await deps.sessionKernel.revokeClientProtocol(input.clientCode, input.protocol, input.reason);
+      const selector = input.protocol === "oidc"
+        ? createOidcRevocationSelector(input.committedVersion)
+        : createCustomSsoRevocationSelector(input.committedVersion);
+      const summary = await deps.sessionKernel.revokeSelectedClientProtocolObjects(
+        input.clientCode,
+        input.protocol,
+        selector,
+        input.reason,
+      );
       deps.logger.logClientProtocolRevocation({
         clientCode: input.clientCode,
         protocol: input.protocol,
@@ -171,7 +182,28 @@ export function createAdminSessionRevocationPort(
     },
 
     async revokeClientAllProtocols(input) {
-      const summary = await deps.sessionKernel.revokeClient(input.clientCode, input.reason);
+      const oidcSelector = createOidcRevocationSelector(input.committedVersions.oidc);
+      const customSsoSelector = createCustomSsoRevocationSelector(input.committedVersions.customSso);
+      const summary = await deps.sessionKernel.revokeSelectedClientProtocolObjects(
+        input.clientCode,
+        "oidc",
+        oidcSelector,
+        input.reason,
+      );
+      const customSso = await deps.sessionKernel.revokeSelectedClientProtocolObjects(
+        input.clientCode,
+        "custom-sso",
+        customSsoSelector,
+        input.reason,
+      );
+      for (const kind of ["principalSessions", "bindings", "credentials", "artifacts"] as const) {
+        for (const counter of ["revoked", "alreadyRevoked", "missing", "excluded"] as const)
+          summary[kind][counter] += customSso[kind][counter];
+      }
+      summary.cleanup.attempted += customSso.cleanup.attempted;
+      summary.cleanup.succeeded += customSso.cleanup.succeeded;
+      summary.cleanup.failed += customSso.cleanup.failed;
+      summary.cleanup.failures.push(...customSso.cleanup.failures);
       deps.logger.logClientAllProtocolsRevocation({
         clientCode: input.clientCode,
         reason: input.reason,

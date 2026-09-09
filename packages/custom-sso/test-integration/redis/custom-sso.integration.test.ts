@@ -87,7 +87,7 @@ test.each(["independent", "gateway", "gateway-orcas"])("complete %s operations a
       const grant = await operations.run(operation => protocol.forOperation(operation).authorize.execute(input));
       if (!grant.isLogin)
         throw new Error("Authorization failed");
-      const artifact = await scope.observer.resolveProtocolArtifact(grant.code);
+      const artifact = await scope.observer.resolveProtocolArtifact(grant.code, { protocol: "custom-sso", artifactType: "auth_code" });
       if (artifact.status !== "resolved")
         throw new Error("Artifact was not persisted");
       const grantId = artifact.value.artifactId;
@@ -129,8 +129,8 @@ test.each(["independent", "gateway", "gateway-orcas"])("complete %s operations a
     await protocol.logout.execute({ sessionToken: principal.externalToken! });
     const remaining = await Promise.all(grantIds.map(id => grants.inspect(id)));
     const kept = await redis.get(sentinel);
-    const pending = await scope.observer.resolveProtocolArtifact(pendingCode);
-    const credential = await scope.observer.resolveCredential(token);
+    const pending = await scope.observer.resolveProtocolArtifact(pendingCode, { protocol: "custom-sso", artifactType: "auth_code" });
+    const credential = await scope.observer.resolveCredential(token, { protocol: "custom-sso", credentialType: "local_session" });
     expect(remaining).toEqual(grantIds.map(() => null));
     expect(kept).toBe("keep");
     expect(pending.status).not.toBe("resolved");

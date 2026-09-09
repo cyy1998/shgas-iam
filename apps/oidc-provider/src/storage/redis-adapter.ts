@@ -70,6 +70,7 @@ return 1
 const ATOMIC_CONSUME_SCRIPT = `
 local value = redis.call("GET", KEYS[1])
 if not value then return 0 end
+if ARGV[2] ~= "" and value ~= ARGV[2] then return -2 end
 local ttl = redis.call("PTTL", KEYS[1])
 if ttl <= 0 then return 0 end
 local stored = redis.call("SET", KEYS[2], ARGV[1], "PX", ttl, "NX")
@@ -517,13 +518,30 @@ export class RedisOidcAdapter<TClaimsSnapshot = unknown> implements Adapter {
       oidcConfigVersion?: number;
       oidcConfigVersions?: Record<string, number>;
     };
-    for (const clientId of payloadClientIds(payload)) {
+    // Consumed codes must reach the provider replay branch, which revokes their Grant.
+    // Their Kernel artifact has already been consumed and cannot supply a new issuance lifetime.
+    if (this.model === "AuthorizationCode" && !consumed) {
+      const lifetime = await this.deps.oidcSession.resolveAuthorizationCodeSessionLifetime(id, value);
+      if (!lifetime)
+        return undefined;
+      payload.globalSessionRemainingSeconds = lifetime.remainingSeconds;
+    }
+    for (const clientId of this.model === "AuthorizationCode" && consumed ? [] : payloadClientIds(payload)) {
       const expectedVersion = payload.oidcConfigVersions?.[clientId] ?? payload.oidcConfigVersion;
       const currentVersion = await this.deps.clientVersions.findActiveVersion(clientId);
       if (currentVersion === null || currentVersion !== expectedVersion) {
-        await this.redis.del(
+        if (currentVersion !== null && typeof expectedVersion === "number"
+          && Number.isSafeInteger(expectedVersion) && expectedVersion > currentVersion) {
+          return undefined;
+        }
+        await this.redis.eval(
+          DELETE_INDEXED_PROTOCOL_OBJECT_IF_UNCHANGED_SCRIPT,
+          2,
           key,
           consumedKey(this.model, id, this.keyPrefix),
+          value,
+          id,
+          0,
         );
         return undefined;
       }
@@ -534,14 +552,6 @@ export class RedisOidcAdapter<TClaimsSnapshot = unknown> implements Adapter {
       const credentialId = readKernelCredentialId(value);
       if (credentialId !== resolvedCredential.credential.credentialId)
         return undefined;
-    }
-    // Consumed codes must reach the provider replay branch, which revokes their Grant.
-    // Their Kernel artifact has already been consumed and cannot supply a new issuance lifetime.
-    if (this.model === "AuthorizationCode" && !consumed) {
-      const lifetime = await this.deps.oidcSession.resolveAuthorizationCodeSessionLifetime(id);
-      if (!lifetime)
-        return undefined;
-      payload.globalSessionRemainingSeconds = lifetime.remainingSeconds;
     }
     if (["AuthorizationCode", "AccessToken", "Grant", "Session", "Interaction"].includes(this.model)) {
       payload.redisLifetimeObserved = true;
@@ -564,9 +574,24 @@ export class RedisOidcAdapter<TClaimsSnapshot = unknown> implements Adapter {
   async consume(id: string) {
     // Provider normally calls find first. Keep direct consumption fail closed too:
     // permission and the live Artifact/Principal must precede the consumed marker.
-    if (this.model === "AuthorizationCode"
-      && !await this.deps.oidcSession.resolveAuthorizationCodeSessionLifetime(id)) {
+    const code = this.model === "AuthorizationCode"
+      ? await this.redis.get(artifactKey(this.model, id, this.keyPrefix))
+      : null;
+    const lifetime = code === null
+      ? null
+      : await this.deps.oidcSession.resolveAuthorizationCodeSessionLifetime(id, code);
+    if (this.model === "AuthorizationCode" && !lifetime) {
       throw new Error("OIDC authorization code Kernel artifact is unavailable");
+    }
+    if (lifetime) {
+      if (code !== lifetime.serializedProviderCode)
+        throw new Error("OIDC authorization code changed after acquisition");
+      // A rejected Kernel observation must not leave a Provider replay marker.
+      // The final Provider CAS separately protects replacements during this call;
+      // these two owner transitions are not a cross-store atomic transaction.
+      const consumed = await this.deps.oidcSession.consumeAuthorizationCodeArtifact(id, lifetime.artifact);
+      if (!consumed)
+        throw new Error("OIDC authorization code Kernel artifact consume failed");
     }
     const result = await this.redis.eval(
       ATOMIC_CONSUME_SCRIPT,
@@ -574,14 +599,12 @@ export class RedisOidcAdapter<TClaimsSnapshot = unknown> implements Adapter {
       artifactKey(this.model, id, this.keyPrefix),
       consumedKey(this.model, id, this.keyPrefix),
       String(Math.floor(Date.now() / 1000)),
+      lifetime?.serializedProviderCode ?? "",
     );
     if (result === -1)
       throw new Error(`${this.model} has already been consumed`);
-    if (result === 1 && this.model === "AuthorizationCode") {
-      const consumed = await this.deps.oidcSession.consumeAuthorizationCodeArtifact(id);
-      if (!consumed)
-        throw new Error("OIDC authorization code Kernel artifact consume failed");
-    }
+    if (this.model === "AuthorizationCode" && result !== 1)
+      throw new Error("OIDC authorization code changed or disappeared after acquisition");
   }
 
   async destroy(id: string) {

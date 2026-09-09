@@ -21,6 +21,7 @@ import {
 import { ClientCodeSchema } from "@iam/contracts";
 import {
   CustomSsoClientDeliveryUnauthorizedError,
+  CustomSsoRequestMismatchError,
 } from "@iam/custom-sso";
 import { getCookie } from "hono/cookie";
 
@@ -109,6 +110,7 @@ export function createApiAuthenticationHandlers(deps: CreateApiAuthenticationHan
     catch (error) {
       if (
         error instanceof AuthzUnauthorizedError
+        && !(error instanceof CustomSsoRequestMismatchError)
         && sourceCookies.length > 0
         && !(
           sessionCookieName === "global_session"

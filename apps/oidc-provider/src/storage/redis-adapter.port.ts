@@ -1,4 +1,5 @@
-import type { IssuedCredential } from "@iam/session-kernel";
+import type { IssuedCredential, ProtocolArtifact } from "@iam/session-kernel";
+
 import type { AdapterPayload } from "oidc-provider";
 import type {
   CreateOidcAuthorizationCodeSnapshotInput,
@@ -53,14 +54,14 @@ export interface AdapterProviderSessionBindingStore {
 }
 
 export interface AdapterOidcSessionKernel {
-  resolveAuthorizationCodeSessionLifetime: (providerCodeId: string) => Promise<{ remainingSeconds: number } | null>;
+  resolveAuthorizationCodeSessionLifetime: (providerCodeId: string, serializedProviderCode: string) => Promise<{ remainingSeconds: number; artifact: ProtocolArtifact; serializedProviderCode: string } | null>;
   registerAuthorizationCodeArtifact: (input: {
     providerCodeId: string;
     payload: AdapterPayload;
     expiresIn: number;
     binding: ProviderSessionBinding | null;
   }) => Promise<boolean>;
-  consumeAuthorizationCodeArtifact: (providerCodeId: string) => Promise<unknown>;
+  consumeAuthorizationCodeArtifact: (providerCodeId: string, artifact: ProtocolArtifact) => Promise<unknown>;
   registerAccessTokenCredential: (input: {
     providerTokenId: string;
     providerTokenKey: string;

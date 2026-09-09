@@ -143,6 +143,9 @@ importers:
 
   apps/admin-api:
     dependencies:
+      '@iam/custom-sso':
+        specifier: workspace:*
+        version: link:../../packages/custom-sso
       '@iam/session-kernel':
         specifier: workspace:*
         version: link:../../packages/session-kernel
