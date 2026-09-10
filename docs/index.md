@@ -66,9 +66,9 @@
 | [docs/adr/0033-trust-issued-credentials-without-principal-session-revalidation.md](adr/0033-trust-issued-credentials-without-principal-session-revalidation.md) | decision | Current | 2026-09-10 | 2026-10-31 | Accepted：Spec #163 由 #138 形成，采用 Credential 使用不查父、兑换仍查父、根撤销尽力级联；Custom SSO 不续根或凭据、签发裁剪到根期限；复用现有全体下线命令切换；#164–#167 已实现，#168 交付最终账本，环境未切换。 |
 | [docs/agents/code-investigation.md](agents/code-investigation.md) | agent-config | Current | 2026-09-05 | 2026-10-31 | 项目级 `code_researcher`/`deep_researcher` 的分层路由、只读调查、证据返回和 GitHub issue 外置记忆规则；运行配置以对应 TOML 为准。 |
 | [docs/agents/domain.md](agents/domain.md) | agent-config | Current | 2026-07-16 | 2026-10-31 | Engineering skills 的 single-context domain documentation 消费规则。 |
-| [docs/agents/issue-tracker.md](agents/issue-tracker.md) | agent-config | Current | 2026-08-14 | 2026-10-31 | `cyy1998/shgas-iam` GitHub Issues 的 spec、ticket、跨会话状态与 wayfinding 约定。 |
+| [docs/agents/issue-tracker.md](agents/issue-tracker.md) | agent-config | Current | 2026-09-10 | 2026-10-31 | `cyy1998/shgas-iam` GitHub Issues 的 spec、ticket、跨会话状态与 wayfinding 约定；设计提交、分支交接和 Spec 关闭沿用工作流。 |
 | [docs/agents/triage-labels.md](agents/triage-labels.md) | agent-config | Current | 2026-07-16 | 2026-10-31 | Engineering skills 使用的默认 triage 标签映射。 |
-| [docs/agents/workflow.md](agents/workflow.md) | agent-config | Current | 2026-09-07 | 2026-10-31 | Matt skills 的仓库薄适配：GitHub tracker、批量实施子代理、分支、验证、授权和本地合入；每票统一静态验证含 Collection Guard，最终验证先于收尾授权。 |
+| [docs/agents/workflow.md](agents/workflow.md) | agent-config | Current | 2026-09-10 | 2026-10-31 | Matt skills 的仓库薄适配：首次落盘建分支并全程复用、Spec 发布前独立设计提交、批量实施与验证；人工授权且本地合入核对成功后关闭 Spec，再清理本地分支。 |
 | [docs/architecture/architecture-guard.md](architecture/architecture-guard.md) | architecture | Current | 2026-09-08 | 2026-10-31 | 架构守卫规范的验证层选择、允许观察模型、永久规则准入、封闭目录与复杂度边界；覆盖说明链接验证归属。 |
 | [docs/architecture/architecture-verification.md](architecture/architecture-verification.md) | architecture | Current | 2026-09-10 | 2026-10-31 | 系统约束的行为/资源/静态与人工证明边界；包含协议最终 56 故事、版本清理与协议签发组合、独立 Admin PG/Redis 及保留升级验收。 |
 | [docs/architecture/backend-architecture.md](architecture/backend-architecture.md) | architecture | Current | 2026-09-10 | 2026-10-31 | 后端 ownership、UoW、Profile/Runtime 与分层验证；Admin 版本限定撤销及两协议操作快照已接入，保留跨表乐观及部署边界。 |

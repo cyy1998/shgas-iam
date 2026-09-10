@@ -43,17 +43,19 @@ GitHub Issues 与 PR 共用编号空间。遇到裸 `#42` 时，先运行
 
 创建 GitHub issue：
 
-- `/to-spec` 把 spec 发布为一个 issue；
+- `/to-spec` 按[设计文档提交与交接](workflow.md#设计文档提交与交接)完成发布前提交，再把 spec 发布为一个 issue；
 - `/to-tickets` 按 blockers-first 顺序为每张 implementation ticket 创建独立 issue，并用 GitHub 原生关系或正文中的
   issue 引用表达来源与阻塞边；
 - `/wayfinder` 按下文的 map/child issue 结构发布决策记录。
 
 需要跨会话恢复时，GitHub issue 自身就是外置记忆：
 
-- spec issue 正文保存 feature 范围、设计和测试决策；
+- spec issue 正文保存 feature 范围、设计和测试决策，以及工作流要求的分支与提交交接记录；
 - ticket 正文保存独立切片、验收条件和 blockers；
 - assignee 表达认领，open/closed 表达是否完成，triage label 表达当前处理角色；
 - 评论只追加重要决策、验证摘要、评审结果和下一安全动作，并链接正式来源，不复制整份 spec 或 ticket。
+
+父 Spec 与 implementation ticket 的完成、关闭时机以[完成与本地合入](workflow.md#完成与本地合入)为准。
 
 ## 当 skill 要求“fetch the relevant ticket”
 
