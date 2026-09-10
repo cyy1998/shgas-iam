@@ -216,7 +216,7 @@ function createMultiClientAdapter(model: string, redis: FakeRedis, versions: Map
 function createOidcSessionMock() {
   return {
     registerAuthorizationCodeArtifact: async () => true,
-    resolveAuthorizationCodeSessionLifetime: async (_id: string, serializedProviderCode: string) => ({ serializedProviderCode, remainingSeconds: 90, artifact: { version: 1 as const, artifactId: "code", protocol: "oidc", artifactType: "authorization_code", lookupHash: "lookup", lookupKeyId: "test", issuedAt: 0, expiresAt: 60000, cleanupRefs: [] } }),
+    resolveAuthorizationCodeSessionLifetime: async (_id: string, serializedProviderCode: string) => ({ serializedProviderCode, remainingSeconds: 90, artifact: { version: 1 as const, artifactId: "code", protocol: "oidc", artifactType: "authorization_code", lookupHash: "lookup", issuedAt: 0, expiresAt: 60000, cleanupRefs: [] } }),
     consumeAuthorizationCodeArtifact: async () => ({ artifact: { artifactId: "artifact-a" } }),
     registerAccessTokenCredential: async () => ({
       credentialId: "credential-a",
@@ -316,12 +316,12 @@ describe("redis OIDC adapter", () => {
 
   it("refreshes Code lifetime on each acquisition and fails when its Kernel owner disappears", async () => {
     const redis = new FakeRedis();
-    let lifetime: { remainingSeconds: number; artifact: ProtocolArtifact; serializedProviderCode: string } | null = { serializedProviderCode: "", remainingSeconds: 90, artifact: { version: 1 as const, artifactId: "code", protocol: "oidc", artifactType: "authorization_code", lookupHash: "lookup", lookupKeyId: "test", issuedAt: 0, expiresAt: 60000, cleanupRefs: [] } };
+    let lifetime: { remainingSeconds: number; artifact: ProtocolArtifact; serializedProviderCode: string } | null = { serializedProviderCode: "", remainingSeconds: 90, artifact: { version: 1 as const, artifactId: "code", protocol: "oidc", artifactType: "authorization_code", lookupHash: "lookup", issuedAt: 0, expiresAt: 60000, cleanupRefs: [] } };
     const adapter = createAdapter("AuthorizationCode", redis, { value: 3 }, { resolveLifetime: async () => lifetime });
     await adapter.upsert("code", { clientId: "client-a", accountId: "subject-a", sessionUid: "provider-session-a", scope: "openid" }, 300);
     const first = await adapter.find("code");
     expect(first).toMatchObject({ globalSessionRemainingSeconds: 90 });
-    lifetime = { serializedProviderCode: "", remainingSeconds: 2, artifact: { version: 1 as const, artifactId: "code", protocol: "oidc", artifactType: "authorization_code", lookupHash: "lookup", lookupKeyId: "test", issuedAt: 0, expiresAt: 60000, cleanupRefs: [] } };
+    lifetime = { serializedProviderCode: "", remainingSeconds: 2, artifact: { version: 1 as const, artifactId: "code", protocol: "oidc", artifactType: "authorization_code", lookupHash: "lookup", issuedAt: 0, expiresAt: 60000, cleanupRefs: [] } };
     expect(await adapter.find("code")).toMatchObject({ globalSessionRemainingSeconds: 2 });
     expect(first).toMatchObject({ globalSessionRemainingSeconds: 90 });
     lifetime = null;

@@ -2,7 +2,7 @@
 
 Status: Current
 
-Last verified: 2026-09-09
+Last verified: 2026-09-10
 
 Next review: 2026-10-31
 
@@ -15,7 +15,7 @@ Next review: 2026-10-31
 
 | Owner | 已消除的双时间路径 | 保留语义 |
 |---|---|---|
-| Kernel `storage/observation.ts`、`storage/store.ts`、`facade.ts` | TIME 与对象同次取得；创建、续期、消费、列表和清理不用应用 now 判定 deadline；续期同时维护原 lookup | idle/absolute、父上限、fixed-at-issue/extend-with-principal、payload/lookup CAS、tombstone、pending cleanup；取得后可继续，真实缺失/撤销/消费/冲突仍失败 |
+| Kernel `storage/observation.ts`、`storage/store.ts`、`facade.ts` | TIME 与对象同次取得；创建、续期、消费、列表和清理不用应用 now 判定 deadline；三类 token 续期/终态同步反向 ID 期限 | idle/absolute、签发父上限、同状态与 ID owner CAS、同记录终态和 pending cleanup；Custom SSO 按 ADR-0033 固定签发期限，Binding 仍按 ID；取得后可继续，真实缺失/撤销/消费/冲突仍失败 |
 | Grant `packages/custom-sso/src/internal/session.ts` | #158/#159 两模式直接使用 Kernel Artifact deadline 与消费权威，旧在线 store 已退役 | 单赢家、暂态不延期、写前新 identity 与同步尽力补偿；消费后失败重新授权，无跨模块大事务 |
 | Custom SSO `packages/custom-sso/src/internal/session.ts` | Independent/Gateway 使用 `ceil((expiresAt-observedAt)/1000)`；不因应用时间或亚秒取整再次撤销 | 两模式身份来源、Subject Access、父对象/主体/配置保护；Gateway Cookie Max-Age 消费 TTL，ORCAS Cookie 契约保持 |
 | OIDC `storage/redis-adapter.ts` | 同次 Redis TIME 为对象/lookup/index 设置共同 deadline；共享索引只延长；清理根据实际对象和 CAS | Client/Grant ownership、配置版本、Kernel Credential mirror；Grant 增补 scope 再保存保持当前 PEXPIRETIME，缺失不复活 |

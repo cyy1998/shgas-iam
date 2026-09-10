@@ -45,7 +45,7 @@ Runtime Snapshot、BullMQ、Temporary Login Restriction、短信码/nonce、OIDC
 
 | 顺序 / owner | 清理键族 | 独立 verify |
 |---|---|---|
-| 1 / Session Kernel | `<ns>active:`、`<ns>lookup:`、`<ns>revoked:`、`<ns>revoked_lookup:`、`<ns>idx:` | 重扫五族；Principal、Binding、Credential、Artifact、lookup、tombstone、全局/用户/client/protocol/parent/binding/cleanupPending索引均为零 |
+| 1 / Session Kernel | `<ns>active:`、`<ns>lookup:`、`<ns>revoked:`、`<ns>revoked_lookup:`、三类 `<ns>state:p/c/a:` 与 `<ns>id:p/c/a:`、`<ns>idx:` | 重扫源与目标各族；Principal、Binding、Credential、Artifact、反向 ID、源 lookup/tombstone 与全局/用户/client/protocol/parent/binding/cleanupPending 索引均为零 |
 | 2 / Custom SSO Grant | `authorization-grant:redemption:v1:` | issued/redeeming/consumed，包括无 cleanup ref 的残留均为零 |
 | 3 / OIDC protocol | `oidc:model:`、`oidc:consumed:`、`oidc:grant-objects:`、`oidc:client-objects:`、`oidc:session-uid:`、`oidc:user-code:` | Session、Interaction、Grant、Code、Token 主对象及各索引/lookup均为零 |
 | 4 / Provider Session | `oidc:provider-session-binding-lookup:`、`oidc:provider-session-principal:`、`oidc:provider-session-generation-members:`、`oidc:pending-provider-session-binding:`、`oidc:pending-provider-session-bindings:client:` | mapping、anchor、generation members、pending payload/index均为零 |

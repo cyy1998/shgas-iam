@@ -15,7 +15,7 @@ import {
   createSessionKernel,
   createSessionKernelConfig,
 } from "@iam/session-kernel";
-import { createSessionKernelKeyBuilder } from "@iam/session-kernel/testing";
+import { createKernelMaintenanceFixture, createSessionKernelKeyBuilder } from "@iam/session-kernel/testing";
 import {
   afterAll,
   afterEach,
@@ -77,7 +77,6 @@ describe("client Protocol artifact cleanup real Redis contract", () => {
         namespace,
         principalAbsoluteTtlMs: 60_000,
         principalIdleTtlMs: 60_000,
-        lookupHmacKeys: { current: { id: "reset", secret: "reset-test-secret-0000000000000000000000000" } },
       }),
     });
     const principal = await kernel.createPrincipalSession(randomUUID(), { subjectContext: "opaque-test-context" });
@@ -166,7 +165,7 @@ describe("client Protocol artifact cleanup real Redis contract", () => {
     testScope.trackKey(objectKey);
     testScope.trackKey(consumedKey);
     await testScope.writer.mset(objectKey, "orphan", consumedKey, "consumed");
-    // Keep a real tombstone + lookup tombstone alongside an active Credential.
+    // Keep a real pending same-record terminal state alongside an active Credential.
     const revokedCredential = await kernel.issueCredential({
       clientCode,
       principalSessionId: principal.value.principalSessionId,
@@ -174,11 +173,23 @@ describe("client Protocol artifact cleanup real Redis contract", () => {
       credentialType: "gateway_local_session",
       tokenKind: "localSession",
       ttlMs: 30_000,
+      cleanupRefs: [{ protocol: "custom-sso", kind: "unavailable-owner", ref: "pending" }],
     });
     if (revokedCredential.status !== "created")
       throw new Error("Revoked credential fixture failed");
-    await kernel.revokeCredential(revokedCredential.value.credentialId);
+    const revocation = await kernel.revokeCredential(revokedCredential.value.credentialId);
+    expect(revocation.cleanup.failed).toBe(1);
+    const maintenanceFixture = createKernelMaintenanceFixture(testScope.writer, namespace);
+    const pendingCredential = await maintenanceFixture.observe("credential", revokedCredential.value.credentialId);
+    expect(pendingCredential.expiresAt).toBe(-1);
+    expect(pendingCredential.references.map(reference => reference.expiresAt)).toEqual([-1]);
     const keys = createSessionKernelKeyBuilder(namespace);
+    const principalFaults = await createKernelMaintenanceFixture(testScope.writer, namespace).seedDirectStateMaintenanceFaults("principal_session");
+    const originalPrincipalFaults = await principalFaults.observe();
+    const credentialFaults = await createKernelMaintenanceFixture(testScope.writer, namespace).seedDirectStateMaintenanceFaults("credential");
+    const originalCredentialFaults = await credentialFaults.observe();
+    const artifactFaults = await createKernelMaintenanceFixture(testScope.writer, namespace).seedDirectStateMaintenanceFaults("artifact");
+    const originalArtifactFaults = await artifactFaults.observe();
     await testScope.writer.del(keys.index.principalSessions, keys.index.client(clientCode), pendingIndex);
     const preserved = [
       `${namespace}unknown:preserved`,
@@ -201,6 +212,12 @@ describe("client Protocol artifact cleanup real Redis contract", () => {
     expect(noConfirmation.status).toBe("failed");
     const dryRun = await maintainOnlineAuthState({ ...options, redis: testScope.writer, operation: "dry-run" });
     expect(dryRun.status).toBe("passed");
+    const pendingAfterInventory = await maintenanceFixture.observe("credential", revokedCredential.value.credentialId);
+    expect(pendingAfterInventory).toEqual(pendingCredential);
+    expect(await principalFaults.observe()).toEqual(originalPrincipalFaults);
+    expect(await credentialFaults.observe()).toEqual(originalCredentialFaults);
+    const retainedArtifactFaults = await artifactFaults.observe();
+    expect(retainedArtifactFaults).toEqual(originalArtifactFaults);
     expect(dryRun.counts.oidcObjects?.observed).toBe(2);
     const before = await testScope.observer.mget(grantKey, objectKey, pendingKey);
     expect(before.every(value => value !== null)).toBe(true);
@@ -225,6 +242,13 @@ describe("client Protocol artifact cleanup real Redis contract", () => {
     expect(applied.status).toBe("passed");
     const verified = await maintainOnlineAuthState({ ...options, redis: testScope.observer, operation: "verify" });
     expect(verified.status).toBe("passed");
+    const pendingAfterApply = await maintenanceFixture.observe("credential", revokedCredential.value.credentialId);
+    expect(pendingAfterApply.payload).toBeNull();
+    expect(pendingAfterApply.expiresAt).toBe(-2);
+    expect(await principalFaults.observe()).toEqual(originalPrincipalFaults.map(() => null));
+    expect(await credentialFaults.observe()).toEqual(originalCredentialFaults.map(() => null));
+    const removedArtifactFaults = await artifactFaults.observe();
+    expect(removedArtifactFaults).toEqual(originalArtifactFaults.map(() => null));
     const repeated = await maintainOnlineAuthState({ ...options, redis: testScope.writer, operation: "apply" });
     expect(Object.values(repeated.counts).every(count => count.removed === 0)).toBe(true);
     const readback = await testScope.observer.mget(grantKey, objectKey, consumedKey, pendingKey, ...mappingKeys);
@@ -261,12 +285,6 @@ describe("client Protocol artifact cleanup real Redis contract", () => {
     const kernel = createSessionKernel({
       redis: testScope.writer as unknown as SessionKernelRedis,
       config: createSessionKernelConfig({
-        lookupHmacKeys: {
-          current: {
-            id: "cleanup-test-current",
-            secret: "cleanup-test-session-kernel-secret-000000000000",
-          },
-        },
         namespace: `${prefix}session`,
         principalAbsoluteTtlMs: 60_000,
         principalIdleTtlMs: 30_000,
@@ -343,7 +361,7 @@ describe("client Protocol artifact cleanup real Redis contract", () => {
       oidcSession: {
         registerAccessTokenCredential: unused,
         registerAuthorizationCodeArtifact: unused,
-        resolveAuthorizationCodeSessionLifetime: async (_id: string, serializedProviderCode: string) => ({ serializedProviderCode, remainingSeconds: 90, artifact: { version: 1 as const, artifactId: "code", protocol: "oidc", artifactType: "authorization_code", lookupHash: "lookup", lookupKeyId: "test", issuedAt: 0, expiresAt: 60000, cleanupRefs: [] } }),
+        resolveAuthorizationCodeSessionLifetime: async (_id: string, serializedProviderCode: string) => ({ serializedProviderCode, remainingSeconds: 90, artifact: { version: 1 as const, artifactId: "code", protocol: "oidc", artifactType: "authorization_code", lookupHash: "lookup", issuedAt: 0, expiresAt: 60000, cleanupRefs: [] } }),
         consumeAuthorizationCodeArtifact: unused,
         resolveAccessTokenCredential: unused,
         revokeAccessTokenCredential: unused,

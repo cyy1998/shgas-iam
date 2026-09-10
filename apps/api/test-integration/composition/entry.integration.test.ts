@@ -71,8 +71,6 @@ const redisConfig = parseDedicatedRedisTestUrl({
   name: redisUrlName,
   value: redisUrl,
 });
-const lookupHmacId = "entry-external";
-const lookupHmacSecret = "api-entry-external-secret-that-is-at-least-32-bytes";
 const loginCredentialPrivateKey = "319b4e59ca80d7b4cc35955b63da4edf1ed51772ec8f33c0a4f769dda7b9fc65";
 const subjectIdentifier = randomUUID();
 const resourceSuffix = subjectIdentifier.replaceAll("-", "");
@@ -120,7 +118,7 @@ function createEntryEnvironment(
     source: process.env,
     temporaryDirectory: context.temporaryDirectory,
     overrides: {
-      NODE_ENV: "test",
+      NODE_ENV: "production",
       IAM_API_DATABASE_URL: databaseUrl,
       IAM_API_PASSWORD_HASH_ROUNDS: "4",
       IAM_API_SMS_SIGNATURE_KEY: "unreachable-external-signature",
@@ -153,8 +151,6 @@ function createEntryEnvironment(
         "entry-external": loginCredentialPrivateKey,
       }),
       IAM_API_SESSION_KERNEL_NAMESPACE: namespace,
-      IAM_API_SESSION_LOOKUP_HMAC_CURRENT_ID: lookupHmacId,
-      IAM_API_SESSION_LOOKUP_HMAC_CURRENT_SECRET: lookupHmacSecret,
       FORCE_COLOR: "0",
       NO_COLOR: "1",
       NO_PROXY: "127.0.0.1,localhost",
@@ -253,12 +249,6 @@ function createProductionOwnerSeed(redis: Redis, namespace: string) {
       namespace,
       principalIdleTtlMs: 60 * 60 * 1_000,
       principalAbsoluteTtlMs: 60 * 60 * 1_000,
-      lookupHmacKeys: {
-        current: {
-          id: lookupHmacId,
-          secret: lookupHmacSecret,
-        },
-      },
     },
   });
   return {
@@ -598,7 +588,7 @@ async function probeLegacyArtifactRejection(
   };
 }
 
-async function probeGatewayProjectionRetry(
+async function probeGatewayPublishedFactsDuringRebuild(
   origin: string,
   signal: AbortSignal,
   sql: ReturnType<typeof postgres>,
@@ -609,7 +599,7 @@ async function probeGatewayProjectionRetry(
   authorizeUrl.search = new URLSearchParams({
     client: gatewayClientCode,
     redirectUrl: gatewayRetryRedirectUri,
-    state: "gateway-pnr-retry-state",
+    state: "gateway-published-facts-state",
   }).toString();
   const authorizeResponse = await fetch(authorizeUrl, {
     headers: { cookie: `global_session=${gatewayPrincipalToken}` },
@@ -619,13 +609,13 @@ async function probeGatewayProjectionRetry(
   const callbackLocation = authorizeResponse.headers.get("location");
   if (authorizeResponse.status !== 302 || callbackLocation === null) {
     throw new FatalReadinessError(
-      `Gateway PNR authorize returned unexpected ${authorizeResponse.status}`,
+      `Gateway published-facts authorize returned unexpected ${authorizeResponse.status}`,
     );
   }
   const issuedCallback = new URL(callbackLocation);
   const authorizationCode = issuedCallback.searchParams.get("code");
   if (authorizationCode === null)
-    throw new FatalReadinessError("Gateway PNR authorize returned no code");
+    throw new FatalReadinessError("Gateway published-facts authorize returned no code");
   await registerAuthorizationCode(authorizationCode);
   const localCallback = new URL(
     `${issuedCallback.pathname}${issuedCallback.search}`,
@@ -639,18 +629,18 @@ async function probeGatewayProjectionRetry(
   const loginLocation = loginCallback.headers.get("location");
   if (loginCallback.status !== 302 || loginLocation === null) {
     throw new FatalReadinessError(
-      `Gateway PNR login callback returned unexpected ${loginCallback.status}`,
+      `Gateway published-facts login callback returned unexpected ${loginCallback.status}`,
     );
   }
   const completed = new URL(loginLocation);
   const localToken = completed.searchParams.get("token");
   if (
     completed.origin + completed.pathname !== gatewayRetryRedirectUri
-    || completed.searchParams.get("state") !== "gateway-pnr-retry-state"
+    || completed.searchParams.get("state") !== "gateway-published-facts-state"
     || localToken === null
   ) {
     throw new FatalReadinessError(
-      "Gateway PNR login did not deliver the original flow",
+      "Gateway published-facts login did not deliver the original flow",
     );
   }
 
@@ -687,7 +677,7 @@ async function probeGatewayProjectionRetry(
   };
 }
 
-async function probeIndependentGrantProjectionRetry(
+async function probeIndependentGrantPublishedFactsDuringRebuild(
   origin: string,
   signal: AbortSignal,
   sql: ReturnType<typeof postgres>,
@@ -696,7 +686,7 @@ async function probeIndependentGrantProjectionRetry(
 ) {
   const grant = await authorize(
     origin,
-    "independent-pnr-retry-state",
+    "independent-published-facts-state",
     principalToken,
     signal,
   );
@@ -728,17 +718,7 @@ async function probeIndependentGrantProjectionRetry(
     originalSecret,
     signal,
   );
-  const retryData = retryExchange.body.data as Record<string, unknown> | undefined;
-  const retrySubject = retryData?.subject as Record<string, unknown> | undefined;
-
-  return {
-    firstExchange,
-    retryExchange: {
-      setCookie: retryExchange.setCookie,
-      status: retryExchange.status,
-      subjectIdentifier: retrySubject?.subjectIdentifier,
-    },
-  };
+  return { firstExchange, replayExchange: retryExchange };
 }
 
 describe("API explicit external entry", () => {
@@ -1052,15 +1032,15 @@ describe("API explicit external entry", () => {
             signal,
           );
           const replay = await exchange(origin, first.code, originalSecret, signal);
-          const gatewayProjectionRetry = await probeGatewayProjectionRetry(
+          const gatewayPublishedFactsDuringRebuild = await probeGatewayPublishedFactsDuringRebuild(
             origin,
             signal,
             sql,
             gatewaySession.principalToken,
             registerAuthorizationCode,
           );
-          const independentGrantProjectionRetry
-            = await probeIndependentGrantProjectionRetry(
+          const independentGrantPublishedFactsDuringRebuild
+            = await probeIndependentGrantPublishedFactsDuringRebuild(
               origin,
               signal,
               sql,
@@ -1282,8 +1262,8 @@ describe("API explicit external entry", () => {
             disabledSubject,
             first,
             firstExchange,
-            gatewayProjectionRetry,
-            independentGrantProjectionRetry,
+            gatewayPublishedFactsDuringRebuild,
+            independentGrantPublishedFactsDuringRebuild,
             legacyKeysRejected,
             publicAfterLogout,
             authzAfterLogout,
@@ -1369,22 +1349,23 @@ describe("API explicit external entry", () => {
       ).not.toMatchObject({ status: "resolved" });
 
       expect(result.first).toMatchObject({ status: 302 });
-      expect(result.gatewayProjectionRetry).toEqual({
+      expect(result.gatewayPublishedFactsDuringRebuild).toMatchObject({
         loginCallback: {
-          setCookie: expect.stringContaining(
-            `local_${gatewayClientCode}_session=`,
-          ),
+          setCookie: expect.stringContaining(`local_${gatewayClientCode}_session=`),
           status: 302,
         },
         firstUserInfo: {
           body: {
-            code: ApiErrorCode.SubjectProjectionNotReady,
-            data: null,
-            message: "主体信息暂未就绪",
+            code: 200,
+            data: {
+              subjectIdentifier,
+              profile: { username: "ticket12-user", name: "Ticket 12 User" },
+              authorization: { roles: [], privileges: [] },
+            },
           },
-          retryAfter: "7",
+          retryAfter: null,
           setCookie: null,
-          status: 503,
+          status: 200,
         },
         retryUserInfo: {
           setCookie: null,
@@ -1392,21 +1373,30 @@ describe("API explicit external entry", () => {
           subjectIdentifier,
         },
       });
-      expect(result.independentGrantProjectionRetry).toEqual({
+      expect(result.independentGrantPublishedFactsDuringRebuild).toMatchObject({
         firstExchange: {
           body: {
-            code: ApiErrorCode.SubjectProjectionNotReady,
-            data: null,
-            message: "主体信息暂未就绪",
+            code: 200,
+            data: {
+              sid: expect.stringMatching(/^iam_ls_/u),
+              subject: {
+                subjectIdentifier,
+                profile: { username: "ticket12-user", name: "Ticket 12 User" },
+                authorization: {
+                  roles: ["ticket12:user"],
+                  privileges: ["ticket12:read"],
+                },
+              },
+            },
           },
-          retryAfter: "7",
-          setCookie: null,
-          status: 503,
-        },
-        retryExchange: {
+          retryAfter: null,
           setCookie: null,
           status: 200,
-          subjectIdentifier,
+        },
+        replayExchange: {
+          body: { code: ApiErrorCode.InvalidAuthCode },
+          setCookie: null,
+          status: 401,
         },
       });
       expect(result.firstExchange).toMatchObject({

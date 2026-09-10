@@ -1,8 +1,4 @@
 import { z } from "@hono/zod-openapi";
-import {
-  DEFAULT_SESSION_LOOKUP_HMAC_CURRENT_ID,
-  DEFAULT_SESSION_LOOKUP_HMAC_CURRENT_SECRET,
-} from "@iam/session-kernel";
 
 function booleanString(defaultValue: boolean) {
   return z.string().optional().transform((value) => {
@@ -87,10 +83,6 @@ const RawEnvSchema = z.object({
   IAM_API_SESSION_KERNEL_PRINCIPAL_ABSOLUTE_TTL_SECONDS: z.coerce.number().int().positive().optional(),
   IAM_API_SESSION_KERNEL_TOMBSTONE_TTL_SECONDS: z.coerce.number().int().positive().default(24 * 60 * 60),
   IAM_API_SESSION_KERNEL_TOMBSTONE_GRACE_SECONDS: z.coerce.number().int().positive().default(5 * 60),
-  IAM_API_SESSION_LOOKUP_HMAC_CURRENT_ID: z.string().min(1).default(DEFAULT_SESSION_LOOKUP_HMAC_CURRENT_ID),
-  IAM_API_SESSION_LOOKUP_HMAC_CURRENT_SECRET: z.string().min(32).default(DEFAULT_SESSION_LOOKUP_HMAC_CURRENT_SECRET),
-  IAM_API_SESSION_LOOKUP_HMAC_PREVIOUS_ID: optionalNonEmptyString(),
-  IAM_API_SESSION_LOOKUP_HMAC_PREVIOUS_SECRET: optionalNonEmptyString(),
   IAM_API_USER_PROFILE_DSL_MAX_LIMIT: z.coerce.number().int().positive().max(500).default(100),
 }).superRefine((raw, ctx) => {
   if (raw.IAM_API_LOGIN_CREDENTIAL_PRIVATE_KEYS_JSON[raw.IAM_API_LOGIN_CREDENTIAL_ACTIVE_KID] === undefined) {
@@ -98,35 +90,6 @@ const RawEnvSchema = z.object({
       code: "custom",
       path: ["IAM_API_LOGIN_CREDENTIAL_ACTIVE_KID"],
       message: "IAM_API_LOGIN_CREDENTIAL_ACTIVE_KID must exist in IAM_API_LOGIN_CREDENTIAL_PRIVATE_KEYS_JSON",
-    });
-  }
-  const hasPreviousId = raw.IAM_API_SESSION_LOOKUP_HMAC_PREVIOUS_ID !== undefined;
-  const hasPreviousSecret = raw.IAM_API_SESSION_LOOKUP_HMAC_PREVIOUS_SECRET !== undefined;
-  if (hasPreviousId !== hasPreviousSecret) {
-    ctx.addIssue({
-      code: "custom",
-      path: ["IAM_API_SESSION_LOOKUP_HMAC_PREVIOUS_ID"],
-      message: "IAM_API_SESSION_LOOKUP_HMAC_PREVIOUS_ID and IAM_API_SESSION_LOOKUP_HMAC_PREVIOUS_SECRET must be configured together",
-    });
-  }
-  if (
-    raw.IAM_API_SESSION_LOOKUP_HMAC_PREVIOUS_SECRET !== undefined
-    && raw.IAM_API_SESSION_LOOKUP_HMAC_PREVIOUS_SECRET.length < 32
-  ) {
-    ctx.addIssue({
-      code: "custom",
-      path: ["IAM_API_SESSION_LOOKUP_HMAC_PREVIOUS_SECRET"],
-      message: "IAM_API_SESSION_LOOKUP_HMAC_PREVIOUS_SECRET must be at least 32 characters",
-    });
-  }
-  if (
-    raw.NODE_ENV === "production"
-    && raw.IAM_API_SESSION_LOOKUP_HMAC_CURRENT_SECRET === DEFAULT_SESSION_LOOKUP_HMAC_CURRENT_SECRET
-  ) {
-    ctx.addIssue({
-      code: "custom",
-      path: ["IAM_API_SESSION_LOOKUP_HMAC_CURRENT_SECRET"],
-      message: "IAM_API_SESSION_LOOKUP_HMAC_CURRENT_SECRET must be set in production",
     });
   }
 });
@@ -177,10 +140,6 @@ export interface Env extends Record<string, unknown> {
     principalAbsoluteTtlSeconds?: number;
     tombstoneTtlSeconds: number;
     tombstoneGraceSeconds: number;
-    lookupHmacCurrentId: string;
-    lookupHmacCurrentSecret: string;
-    lookupHmacPreviousId?: string;
-    lookupHmacPreviousSecret?: string;
   };
   integrations: {
     orcas: {
@@ -254,10 +213,6 @@ function toApiEnv(raw: RawEnv): Env {
       principalAbsoluteTtlSeconds: raw.IAM_API_SESSION_KERNEL_PRINCIPAL_ABSOLUTE_TTL_SECONDS,
       tombstoneTtlSeconds: raw.IAM_API_SESSION_KERNEL_TOMBSTONE_TTL_SECONDS,
       tombstoneGraceSeconds: raw.IAM_API_SESSION_KERNEL_TOMBSTONE_GRACE_SECONDS,
-      lookupHmacCurrentId: raw.IAM_API_SESSION_LOOKUP_HMAC_CURRENT_ID,
-      lookupHmacCurrentSecret: raw.IAM_API_SESSION_LOOKUP_HMAC_CURRENT_SECRET,
-      lookupHmacPreviousId: raw.IAM_API_SESSION_LOOKUP_HMAC_PREVIOUS_ID,
-      lookupHmacPreviousSecret: raw.IAM_API_SESSION_LOOKUP_HMAC_PREVIOUS_SECRET,
     },
     integrations: {
       orcas: {

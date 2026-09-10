@@ -52,8 +52,8 @@ Admin/SSO 前端、`api-core`、`domain`、`contracts`、`db`、`jobs`、Gateway
 | Subject Access Permission / `@iam/api-core` | [共享操作容器](../../packages/api-core/test-integration/component/subject-access-operation.integration.test.ts)用 `component`。 | 公开工厂与窄出站 ports 证明 single-flight、结果固定、身份与代际绑定、严格 context、关闭后失效和拒绝撤销范围；晚到清理测试证明传出的原代际范围，不替代真实 Kernel 存储筛选或生产协议入口接入证据。 |
 | User Resignation Session 重试 / `@iam/admin-api`、`@iam/session-kernel` | [公开 Resignation 与真实 Redis](../../apps/admin-api/test-integration/redis/resign-user.integration.test.ts)及 Session Kernel owner 的 `redis` 测试；[源事务矩阵](../../apps/admin-api/test-integration/postgres/employment-mutation.integration.test.ts)用 Admin API `postgres`。 | Redis 证据覆盖 pre-block 后原始捕获代际、提交后按代际集合精确撤销、失败后的 no-op 重试及晚到撤销保留重新启用新代；Admin adapter 验证准备失败的 bestEffort 诊断与 callback 前代 fallback。Redis 测试中的 fake PostgreSQL 不证明事务原子性，真实 PG 矩阵单独证明锁序与业务、审计、dirty 原子提交。捕获不是全局快照，不保证捕获后才落库的更早代极迟在途 Session 本次被撤销，也不扩展已 tombstone 对象的派生 cleanup owner。 |
 | Session Kernel / LoginRestriction / `@iam/session-kernel`、`@iam/api-core` | [Credential contract](../../packages/session-kernel/test-integration/redis/session-kernel-credential.integration.test.ts)、[LoginRestriction contract](../../packages/api-core/test-integration/redis/login-restriction.integration.test.ts)；`redis`。 | Redis 实时状态、并发和原子清理；不替代 API/OIDC 的协议适配测试，也不保证第三方自有会话退出。 |
-| Session Kernel 生命周期时间 / `@iam/session-kernel` | [Redis 时间 contract](../../packages/session-kernel/test-integration/redis/session-kernel-time.integration.test.ts)与现有 Credential、Artifact、prepared revocation contracts；`redis`。 | 四类对象的零/正/负应用偏差、跨实例与前后跳、父上限、lookup 续期、取得时有效性、列表撤销与 pending cleanup 恢复；协议 TTL 消费由各协议 Adapter 证明，不代表生产已切换。 |
-| Custom SSO 完整操作与权威期限 / `@iam/custom-sso`、`@iam/api` | [完整操作与内部状态协作](../../apps/api/test-integration/component/custom-sso-session-kernel.adapter.integration.test.ts)、[Cookie handler](../../apps/api/test-integration/component/sso.handlers.integration.test.ts)使用 API `component`；[Grant owner](../../packages/custom-sso/test-integration/redis/custom-sso-operation.integration.test.ts)使用 Custom SSO `redis`；[真实完整入口与独立 cleanup](../../packages/custom-sso/test-integration/redis/custom-sso.integration.test.ts) 同属该 profile。 | 完整 factory 联验授权、Secret、续接、Independent/Gateway/ORCAS、UserInfo/authz 与退出；内部矩阵证明两种模式在独立应用偏差、跳变和跨实例下交付、认证与退出；亚秒取整和取得后跨 Credential deadline 不新增拒绝；Independent/Gateway #158/#159 通过真实完整操作验证签发前唯一消费、未知结果停止、投影失败烧码、同步补偿/残留、新授权与原期限；Gateway ORCAS 故障、消费/签发中断和外部已成功但响应丢失均只通过可控替身观察 IAM 作用。Kernel 同时精确移除消费对象索引并保留重放 tombstone，Subject Access 与父 Session 保护保持。不证明第三方自有会话退出或维护切换完成。 |
+| Session Kernel 生命周期时间 / `@iam/session-kernel` | [Redis 时间 contract](../../packages/session-kernel/test-integration/redis/session-kernel-time.integration.test.ts)与现有 Credential、Artifact、prepared revocation contracts；`redis`。 | 四类对象的零/正/负应用偏差、跨实例与前后跳、父上限、状态与反向 ID 同期限、取得时有效性、列表撤销与 pending cleanup 恢复；协议 TTL 消费由各协议 Adapter 证明，不代表生产已切换。 |
+| Custom SSO 完整操作与权威期限 / `@iam/custom-sso`、`@iam/api` | [完整操作与内部状态协作](../../apps/api/test-integration/component/custom-sso-session-kernel.adapter.integration.test.ts)、[Cookie handler](../../apps/api/test-integration/component/sso.handlers.integration.test.ts)使用 API `component`；[Grant owner](../../packages/custom-sso/test-integration/redis/custom-sso-operation.integration.test.ts)使用 Custom SSO `redis`；[真实完整入口与独立 cleanup](../../packages/custom-sso/test-integration/redis/custom-sso.integration.test.ts) 同属该 profile。 | 完整 factory 联验授权、Secret、续接、Independent/Gateway/ORCAS、UserInfo/authz 与退出；内部矩阵证明两种模式在独立应用偏差、跳变和跨实例下交付、认证与退出；亚秒取整和取得后跨 Credential deadline 不新增拒绝；Independent/Gateway #158/#159 通过真实完整操作验证签发前唯一消费、未知结果停止、投影失败烧码、同步补偿/残留、新授权与原期限；Gateway ORCAS 故障、消费/签发中断和外部已成功但响应丢失均只通过可控替身观察 IAM 作用。Kernel 同时精确移除消费对象索引，并以同记录 consumed 终态保留重放分类，Subject Access 与父 Session 保护保持。不证明第三方自有会话退出或维护切换完成。 |
 | Admin capability / HR scope / `@iam/admin-api`、`@iam/admin` | [Policy](../../apps/admin-api/test-integration/component/admin-authorization.policy.integration.test.ts)用 Admin API `component`；[请求时 scope](../../apps/admin-api/test-integration/postgres/hr-administration-scope.resolver.integration.test.ts)用 `postgres`；[HR UI](../../apps/admin/test-integration/browser/hr-administration.spec.ts)用 Admin `browser`。 | 后端策略、数据库事实和 UI 各有验证；Browser 的 mocked backend 不能证明服务端拒绝越权，真实联合路径由 Full-system HR journey 补充。 |
 | SSO 登录续接 / `@iam/api`、`@iam/sso` | [Guard use case](../../apps/api/test-integration/component/login-continuation-guard.use-case.integration.test.ts)用 API `component`；[Login Browser](../../apps/sso/test-integration/browser/login.spec.ts)用 SSO `browser`。 | Guard 语义与表单状态；mocked HTTP 不证明真实协议连接或完整第三方登录矩阵。 |
 | Gateway 与进程 lifecycle / `@iam/gateway-apisix`、各后端 app | [Gateway commands](../../gateway/test-integration/component/commands.integration.test.ts)用 Gateway `component`；以 API [process entry](../../apps/api/test-integration/process/entry.integration.test.ts) / [composition entry](../../apps/api/test-integration/composition/entry.integration.test.ts)为例，对应 app 使用 `process` / `composition`。 | Process 观察子进程、readiness 与退出清理；composition 按声明连接真实 adapter/resources。Gateway Component 不证明目标 APISIX routes 已发布或生效。 |
@@ -81,12 +81,20 @@ Independent/Gateway #158/#159 的新增证据位于[完整操作 Redis](../../pa
 
 ## 聚合 Gate 与人工证据
 
+Spec #170 / ADR-0034 的 Principal、Credential、Artifact 使用 SHA-256 单状态与反向 ID，Kernel lookup HMAC 已退役；
+配置、生产消费者与替代测试入口见[运行时证据](../features/sso/token-state-runtime-evidence.md)。该页区分实际命令结果与待验证项，
+不能由源码零命中、配置类型或 collection 通过推断协议行为已验收。无 token Binding 的 ID 生命周期、Provider 自有 lookup、
+Cookie/JWT 签名和 Client Secret 校验继续由各 owner 的现有测试证明。
+正常 token 解析的一次 Lua 只表示 Kernel 局部成本；历史 HMAC previous 基线与完整请求的命令、RTT、波次分开记录。
+源四键 decoder/CAS 仅用于停 writer 后的离线维护；全部66/20/12及原始成本见[最终账本](../features/sso/token-state-contract.md)，
+环境 owner 另按[全体下线手册](../releases/online-auth-redis-time-cutover.md)取得停流、清理源/目标、新进程 verify、统一版本与重登录证据。
+
 协议校验的[56 条故事最终核对](../features/sso/protocol-validation-contract.md)逐项连接 #147–151 候选、实现/测试决定与证明边界。
 OIDC HTTP/Redis 和 Custom SSO 正式工厂/Redis 把旧对象读取、版本选择清理、新代协议签发及旧请求恢复串在同一测试；
 Custom SSO 另证明清理完成后极迟旧 Code 写入及下一调用的精确拒绝。Admin 真实 PG/Redis 联合测试拥有提交传播、晚到/逆序/重试，
 其中新代由 Kernel 签发，不能与协议 suite 拼称一个 PG+HTTP 场景。类型和既有边界 Guard 不替代这些直接行为。
 [保留对象手册](../releases/protocol-validation-preserving-upgrade.md)的停流、Client 写冻结、drain、统一版本、保留及双协议误投/合法 smoke
-仍由环境 owner 验收；旧全清命令不适用于满足当前格式的此次升级，父级聚合与实际环境操作分别记录。
+只适用于 #146 固定旧候选，仍由环境 owner 验收；包含 #170 的当前候选采用全体下线，父级聚合与实际环境操作分别记录。
 
 Subject Access 的[最终契约核对](../features/sso/subject-access-operation-contract.md)逐条连接全部 62 条故事与可观察证据。
 API Core 共享容器及真实 Redis 证明许可和中性 Kernel 协作；API/Custom SSO HTTP/Redis、Admin REST/tRPC/Redis/PG、
@@ -137,7 +145,7 @@ verify:release = verify:ci -> test:e2e
 
 Spec #157 的全部 56 条故事、20 项实现和 10 项测试决定见[一次消费最终账本](../features/sso/custom-sso-one-shot-grant-contract.md)。
 #161 在正式 HTTP/Redis 上组合定向清理、独立核验、同根新授权与已有凭据访问；完整 OIDC 保留集复用 #160。
-统一 writer/consumer、基线、停流排空、smoke 与回退见[保留会话升级手册](../releases/custom-sso-one-shot-grant-upgrade.md)，目标环境未执行。
+原 #157 固定旧候选的 writer/consumer、基线和保留 smoke 见[保留会话升级手册](../releases/custom-sso-one-shot-grant-upgrade.md)。包含 #170 的当前候选必须按[全体下线手册](../releases/online-auth-redis-time-cutover.md)统一切换并重新登录，不能沿用保留对象流程；目标环境未执行。
 
 
 Spec #163 / ADR-0033 的 62 条故事、20 项实现和 12 项测试决定见[Credential 最终账本](../features/sso/credential-authority-contract.md)。

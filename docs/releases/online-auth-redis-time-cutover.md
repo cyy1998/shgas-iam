@@ -11,7 +11,12 @@ Next review: 2026-10-31
 在相应环境明确执行；实现授权不包含部署或删除生产状态。
 
 本手册同时拥有 [Spec #163](https://github.com/cyy1998/shgas-iam/issues/163) 的 Credential 独立访问全体下线发布。代码已实现，逐项证据见[最终账本](../features/sso/credential-authority-contract.md)，父级最终验收另记；本次目标环境停流、清理、部署、smoke 与放流均未执行。
-旧 `extend_with_principal` Custom SSO Credential 必须清除，不新增 policy 迁移或后台执行框架。此前 #146/#157/#156 的保留对象升级只适用于各自原规格单独发布，不适用于包含 #163 的统一候选。
+旧 `extend_with_principal` Custom SSO Credential 必须清除，不新增 policy 迁移或后台执行框架。此前 #146/#157/#156 的保留对象升级只适用于各自原规格单独发布，不适用于包含 #163 或 #170 的统一候选。
+
+Spec #170 / ADR-0034 的三类 token 已使用 SHA-256 单状态与反向 ID，Kernel lookup HMAC 配置已退役；
+当前运行时边界见[运行时契约](../features/sso/token-state-runtime-evidence.md)。#175 已补齐全体下线维护与实际命令验证，证据见下文；#176 最终账本及验收评论保存聚合证据，实际环境切换未执行。
+切换必须同时清理源 HMAC 四键布局与目标 state/ID，包含无索引库存及 pending；不双读、不保留旧对象、不在线迁移。
+旧四键的 decoder/CAS 仅用于已停 writer 后的离线维护，不构成当前 runtime 的 HMAC 要求。
 
 ## 适用版本与范围
 
@@ -29,6 +34,8 @@ Current runbook；本次不推进 Client epoch、不写 PostgreSQL，也不运�
 发布负责人先填写并保存：
 
 - 源版本、目标 commit 与每个服务不可变镜像 digest、回退候选及其存储兼容核对；禁止浮动 tag。
+- 单独固定用于正向切换和回退的维护候选 commit/digest，核对其清单同时理解源四键及目标 `state:p/c/a:`、`id:p/c/a:` 和全部关联 owner。
+  维护候选可以是已验收的目标候选；不能直接使用不理解目标布局的旧应用作为回退清理工具。源/目标/回退应用与维护工具分别记录，不能只写“当前版本”。
 - 精确部署集群、Redis primary/逻辑 DB、故障切换节点清单，以及 API、Admin API、OIDC Provider 的 Session namespace 配置。
   Redis host/port/db/namespace 必须与所有 reader/writer 实际配置一致；命令不自动发现环境。多个独立 Redis DB 分别执行完整流程。
   namespace 不一致时先停止发布并核对全部实际 namespace，不能只清默认值。
@@ -49,7 +56,7 @@ Kernel 与 Custom SSO 清单分别由 `@iam/session-kernel/maintenance`、`@iam/
 
 | 顺序 / owner | 当前清理键族 | 独立回读范围 |
 |---|---|---|
-| 1 Kernel | `<ns>active:` 的 Principal/Binding/Credential/Artifact；`lookup:`、`revoked:`、`revoked_lookup:`、`idx:` | 直接重扫五个键族，涵盖 user/client/protocol/parent/binding 与 cleanupPending 索引，不依赖这些索引完整 |
+| 1 Kernel | 源 token 布局及仍按 ID 的 Binding `active:`、`lookup:`、`revoked:`、`revoked_lookup:`；新 Principal `state:p:`、`id:p:`；新 Credential `state:c:`、`id:c:`；新 Artifact `state:a:`、`id:a:`；共用 `idx:` | 直接重扫各键族，涵盖 user/client/protocol/parent/binding 与 cleanupPending 索引，不依赖这些索引完整 |
 | 2 Custom SSO Grant | `authorization-grant:redemption:v1:` | issued/redeeming/consumed record，含无 cleanup ref 的旧 record |
 | 3 OIDC protocol store | `oidc:model:`、`oidc:consumed:`、`oidc:grant-objects:`、`oidc:client-objects:`、`oidc:session-uid:`、`oidc:user-code:` | Session、Interaction、Grant、Code、Token 等该 owner 的主对象及各 lookup/index，包括已丢 index 的对象 |
 | 4 Provider Session state | `oidc:provider-session-binding-lookup:`、`oidc:provider-session-principal:`、`oidc:provider-session-generation-members:`、`oidc:pending-provider-session-binding:`、`oidc:pending-provider-session-bindings:client:` | mapping、anchor、generation members、staged payload 和 staged client index 各自重扫 |
@@ -74,7 +81,8 @@ Login Restriction、短信码/nonce、OIDC client-auth-failures、未知键族�
 3. 在新应用启动前，用固定目标候选的维护命令连接同一 Redis primary/DB。命令不启动 HTTP、队列或 PostgreSQL 连接。
    显式设置 `IAM_OIDC_PROVIDER_REDIS_HOST`、`IAM_OIDC_PROVIDER_REDIS_PORT`、`IAM_OIDC_PROVIDER_REDIS_DB`、
    `IAM_OIDC_PROVIDER_SESSION_KERNEL_NAMESPACE`，需要认证时设置 `IAM_OIDC_PROVIDER_REDIS_PASSWORD`。
-   前四项没有命令默认值；不要把 `.env` 的开发连接当发布目标。即使只读 inventory/verify 也要求已停流确认。
+   前四项没有命令默认值；package 命令不读取 `.env`，维护 runtime 不加载认证 Kernel、HMAC 配置或应用 env schema。
+   不要把开发连接当发布目标。即使只读 inventory/verify 也要求已停流确认。
 4. 每条命令在一个独立进程执行，保存安全报告及退出码；任一非零退出、报告缺失或 `failed` 都阻断发布：
 
    ```bash
@@ -119,7 +127,8 @@ Login Restriction、短信码/nonce、OIDC client-auth-failures、未知键族�
   修复后使用同一候选和同一目标从 dry-run → apply → 新进程 verify 完整重跑。删除幂等，不能恢复已删除的在线状态。
   不手工跳过某 owner 或从失败计数推断已完成范围。五分钟不足时先调查规模/环境，再安排受控窗口，不直接放流。
 - **部署/readiness/smoke 失败**：关闭受控入口，停止并排空候选所有 writer。优先修复统一候选后重跑；若选择回退，固定兼容
-  当前 key 契约的回退 digest，用固定维护候选先重新清理 smoke 新建状态并独立 verify，再统一启动回退版本。
+  源布局的回退应用 digest，用执行前固定、能理解目标布局的维护候选重新运行 dry-run → apply → 新进程 verify，清除 smoke 和新 writer
+  已生成的目标状态及关联 owner，再统一启动回退版本。旧应用不承担读取或清理目标布局的职责。
   回退后同样重新登录、执行两协议和 Admin 验收，再决定放流。不得恢复旧登录态，也不允许新旧实例混跑。
 - **备份/故障切换**：禁止通过恢复旧 Redis snapshot 找回登录态。恢复可能重新引入旧时间域状态时，先保持停流，核对备份版本、
   primary/replica 和恢复 owner，重新执行本手册清理/verify；Runtime Snapshot/Subject Access 等恢复遵守各自 Current runbook。
@@ -138,7 +147,7 @@ Redis TIME 是在线生命周期权威，应用校时不能替代代码契约；
 
 | 分类 | 记录与状态 |
 |---|---|
-| 代码候选 | commit、镜像 digest、适用 #120/#168 与父 #163 最终验证和双轴评论链接；当前不表示已合入/push |
+| 代码候选 | 源/目标/回退应用 commit 与镜像 digest、独立维护候选及源/目标清单核对；适用 #120/#168/#175/#176 与父 #163/#170 最终验证和双轴评论链接；不表示已合入/push |
 | 环境与冻结 | 受控环境标识、目标 DB、owner、流量停止时间、逐副本排空证明；未执行/通过/失败 |
 | 清理与回读 | 三个独立命令的时间/退出码/安全报告、目标一致性；未执行/通过/失败 |
 | 保留集与统一部署 | owner 基线对照、自然 TTL 说明、全部副本和自动恢复模板 digest；未执行/通过/失败 |
@@ -148,3 +157,24 @@ Redis TIME 是在线生命周期权威，应用校时不能替代代码契约；
 
 本手册没有自动化切换演练或系统 E2E 门禁。维护能力的行为验证归已有 OIDC production adapter + 真实 Redis contract；
 完整代码证据汇总见[最终契约核对](../features/oidc/online-auth-redis-time-contract.md)。
+
+## Spec #170 维护能力的自动化证据
+
+[#175](https://github.com/cyy1998/shgas-iam/issues/175) 固定 review base 为 `0e9ef005a25cae3f18b6fd056743884e69d04e0c`，
+最终候选、实际命令与两轴评审结果由该票评论保存。Kernel 的源四族、目标三类 state/ID 与索引清单已随 #171–#173 演进，
+本票复用四 owner，不新增平行清理命令或迁移框架。
+
+| 证明目标 | 现有入口与直接观察 |
+|---|---|
+| 全部固定键族、无索引/损坏/无 TTL/孤立库存 | [全体维护 Redis contract](../../apps/oidc-provider/test-integration/redis/online-auth-state.integration.test.ts)逐 owner prefix 建立有/无 TTL 的损坏库存，源和目标同时存在；apply 后逐项确认消失，新进程完整 verify 为零。 |
+| 正常生产对象与 pending | [生产对象混合 contract](../../apps/oidc-provider/test-integration/redis/client-protocol-artifact-cleanup.integration.test.ts)经 Kernel 创建 Principal、Binding、Credential、Artifact，经 Grant/Provider Session owner 建立关联状态；外围 cleanup 缺失后的 Credential 终态与反向 ID 均无 TTL，dry-run 保持，apply 清除。 |
+| 只读与独立进程 | 全体维护 contract 真正调用 package `online-auth:state`；dry-run/dirty verify 前后逐值和绝对 expiry 相等。apply 与每次 verify 是新进程；成功清理后重新放入一条离线 fixture，后续 verify 必须非零，不能由前次删除计数判定。另以只有 SCAN 权限的 ACL reader 验证只读操作，拒绝 UNLINK 与不完整扫描。 |
+| 失败与恢复 | 生产对象 contract 注入第二批删除失败；全体维护 contract 在真实 UNLINK 提交后丢失响应，确认 failed、残留 verify 非零及完整重跑成功。预先 abort 拒绝写入，TCP 无响应证明实际命令 timeout 非零且安全输出，恢复 Redis 后可重跑。已清空 apply/verify 重复通过。 |
+| 非目标保留与配置独立 | 逐值/绝对 expiry 对照未知 Kernel state/ID、其他 namespace、Subject/Facts、Runtime、队列、登录限制、短信码/nonce、OIDC auth failures 与退役族 sentinel。production 模式无认证 env 执行 package 命令，缺目标或停 writer 确认时非零且库存不变。 |
+
+离线混合库存只证明清理能力，不授权生产新旧 reader/writer 混跑，也不证明真实环境已经停流或排空。
+实际 package 命令测试复用共享 process harness 的 Windows Job / POSIX process group，正常完成、失败、测试 timeout 和 AbortSignal
+均在 finally 清理整棵命令进程树，并由 afterEach/afterAll 登记兜底。额外用维护 Node 后代持有的 TCP 连接关闭证明 timeout/中断后的清理，
+随后核对 Redis 库存与重新执行清理/verify；测试只终止本次创建的进程树。
+保留 sentinel 不等价于生产业务数据库验收；命令没有 PostgreSQL 连接或业务写入，实际保留集仍按上述人工基线逐 owner 核对。
+本票没有执行目标环境部署、全体下线、停流/排空、统一镜像、新登录、双协议/Admin smoke 或放流，也没有新增系统 E2E 或自动部署演练。

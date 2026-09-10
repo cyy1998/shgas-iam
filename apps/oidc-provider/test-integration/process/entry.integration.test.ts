@@ -12,8 +12,6 @@ import { afterEach, describe, expect, it } from "vitest";
 
 const oidcProviderRoot = fileURLToPath(new URL("../../", import.meta.url));
 const entryListeningEvidence = "OIDC provider listening";
-const lookupHmacId = "entry-smoke";
-const lookupHmacSecret = "oidc-entry-smoke-secret-that-is-at-least-32-bytes";
 const entrySmoke = createProcessSmokeSuite({
   label: "OIDC provider entry",
   temporaryDirectoryPrefix: "iam-oidc-entry-smoke-",
@@ -45,7 +43,7 @@ function createEntryEnvironment(
     source: process.env,
     temporaryDirectory: context.temporaryDirectory,
     overrides: {
-      NODE_ENV: "test",
+      NODE_ENV: "production",
       IAM_OIDC_PROVIDER_DATABASE_URL: options.databaseUrl,
       IAM_OIDC_PROVIDER_REDIS_HOST: options.redis.host,
       IAM_OIDC_PROVIDER_REDIS_PORT: String(options.redis.port),
@@ -59,8 +57,6 @@ function createEntryEnvironment(
       IAM_OIDC_PROVIDER_CURRENT_JWK_JSON: currentJwkJson,
       IAM_OIDC_PROVIDER_SESSION_KERNEL_NAMESPACE: options.sessionKernelNamespace
         ?? `sess:oidc-entry-smoke:${context.port}:`,
-      IAM_OIDC_PROVIDER_SESSION_LOOKUP_HMAC_CURRENT_ID: lookupHmacId,
-      IAM_OIDC_PROVIDER_SESSION_LOOKUP_HMAC_CURRENT_SECRET: lookupHmacSecret,
       FORCE_COLOR: "0",
       NO_COLOR: "1",
     },

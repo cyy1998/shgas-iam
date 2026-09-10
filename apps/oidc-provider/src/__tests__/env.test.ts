@@ -11,7 +11,6 @@ function validEnv(): NodeJS.ProcessEnv {
     IAM_OIDC_PROVIDER_PUBLIC_ORIGIN: "https://iam.example.com",
     IAM_OIDC_PROVIDER_COOKIE_KEYS: `${"a".repeat(32)},${"b".repeat(32)}`,
     IAM_OIDC_PROVIDER_CURRENT_JWK_JSON: "{}",
-    IAM_OIDC_PROVIDER_SESSION_LOOKUP_HMAC_CURRENT_SECRET: "c".repeat(32),
   };
 }
 
@@ -63,39 +62,25 @@ describe("oIDC provider environment", () => {
     assert.throws(() => parseOidcProviderEnv(source), /at least two comma-separated keys/);
   });
 
-  it("requires previous Session Kernel HMAC id and secret to be configured together", () => {
-    const env = parseOidcProviderEnv({
-      ...validEnv(),
-      IAM_OIDC_PROVIDER_SESSION_LOOKUP_HMAC_PREVIOUS_ID: "",
-      IAM_OIDC_PROVIDER_SESSION_LOOKUP_HMAC_PREVIOUS_SECRET: "",
-    });
-    assert.equal(env.sessionKernel.lookupHmacPreviousId, undefined);
-    assert.equal(env.sessionKernel.lookupHmacPreviousSecret, undefined);
+  it("builds the production Session Kernel without lookup secrets", () => {
+    const env = parseOidcProviderEnv({ ...validEnv(), NODE_ENV: "production" });
+    const config = createOidcProviderSessionKernelConfig(env);
 
-    assert.throws(() => parseOidcProviderEnv({
-      ...validEnv(),
-      IAM_OIDC_PROVIDER_SESSION_LOOKUP_HMAC_PREVIOUS_ID: "previous",
-    }), /must be configured together/);
-    assert.throws(() => parseOidcProviderEnv({
-      ...validEnv(),
-      IAM_OIDC_PROVIDER_SESSION_LOOKUP_HMAC_PREVIOUS_SECRET: "p".repeat(32),
-    }), /must be configured together/);
+    assert.equal(config.namespace, "sess:v2:");
+    assert.deepEqual(env.oidc.cookieKeys, ["a".repeat(32), "b".repeat(32)]);
+    assert.equal(env.oidc.currentJwkJson, "{}");
   });
 
-  it("rejects ambiguous previous Session Kernel HMAC rotation config", () => {
-    const duplicateId = parseOidcProviderEnv({
+  it("still requires Cookie keys and a signing key in production", () => {
+    assert.throws(() => parseOidcProviderEnv({
       ...validEnv(),
-      IAM_OIDC_PROVIDER_SESSION_LOOKUP_HMAC_CURRENT_ID: "same",
-      IAM_OIDC_PROVIDER_SESSION_LOOKUP_HMAC_PREVIOUS_ID: "same",
-      IAM_OIDC_PROVIDER_SESSION_LOOKUP_HMAC_PREVIOUS_SECRET: "p".repeat(32),
-    });
-    assert.throws(() => createOidcProviderSessionKernelConfig(duplicateId), /ids must be different/);
-
-    const duplicateSecret = parseOidcProviderEnv({
+      NODE_ENV: "production",
+      IAM_OIDC_PROVIDER_COOKIE_KEYS: "short",
+    }), /at least two comma-separated keys/);
+    assert.throws(() => parseOidcProviderEnv({
       ...validEnv(),
-      IAM_OIDC_PROVIDER_SESSION_LOOKUP_HMAC_PREVIOUS_ID: "previous",
-      IAM_OIDC_PROVIDER_SESSION_LOOKUP_HMAC_PREVIOUS_SECRET: "c".repeat(32),
-    });
-    assert.throws(() => createOidcProviderSessionKernelConfig(duplicateSecret), /secrets must be different/);
+      NODE_ENV: "production",
+      IAM_OIDC_PROVIDER_CURRENT_JWK_JSON: "",
+    }), /IAM_OIDC_PROVIDER_CURRENT_JWK_JSON/);
   });
 });

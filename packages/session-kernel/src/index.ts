@@ -4,8 +4,6 @@ export type {
   SessionKernelClock,
   SessionKernelConfig,
   SessionKernelConfigInput,
-  SessionKernelHmacKey,
-  SessionKernelHmacKeyInput,
   SessionKernelTokenPrefixes,
 } from "./config";
 export * from "./env-config";

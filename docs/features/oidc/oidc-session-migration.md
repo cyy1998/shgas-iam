@@ -1,7 +1,9 @@
 # OIDC 与 Session Kernel 当前维护边界
 
-OIDC Provider、custom SSO 和 admin revoke 现在统一通过 Session Kernel 管理会话生命周期。新版本使用
-`sess:v2:` namespace 保存 active lifecycle object、HMAC lookup、revoked tombstone 和索引；旧
+OIDC Provider、custom SSO 和 admin revoke 现在统一通过 Session Kernel 管理会话生命周期。当前代码使用
+`sess:v2:` namespace；Principal、Credential、Artifact 的完整 token 经普通 SHA-256 直接定位按类型隔离的 `state:p/c/a:`，
+同记录表达 active/revoked（Artifact 消费为 revoked 且 reason=consumed），`id:p/c/a:` 只提供内部 ID 反向管理定位，索引不拥有权威状态。
+无 token Client Binding 保持按内部 ID 的 active/revoked 生命周期，Provider 自有模型 lookup 和 mapping/anchor 保留；旧
 `global_session:*` envelope、custom SSO local session authority key、OIDC provider runtime/index key 不再作为
 登录态或 token 状态来源。
 
@@ -21,16 +23,18 @@ Token 生命周期由 Session Kernel credential/token 与 provider-object owners
 - `*_SESSION_KERNEL_NAMESPACE` 默认是 `sess:v2:`。
 - `*_SESSION_KERNEL_PRINCIPAL_IDLE_TTL_SECONDS` 和 `*_SESSION_KERNEL_PRINCIPAL_ABSOLUTE_TTL_SECONDS` 以秒配置，进入 Kernel 前转换为毫秒。
 - `*_SESSION_KERNEL_TOMBSTONE_TTL_SECONDS` 和 `*_SESSION_KERNEL_TOMBSTONE_GRACE_SECONDS` 控制 tombstone 保留窗口。
-- `*_SESSION_LOOKUP_HMAC_CURRENT_ID` 和 `*_SESSION_LOOKUP_HMAC_CURRENT_SECRET` 用于生成当前 lookup hash。
-- `*_SESSION_LOOKUP_HMAC_PREVIOUS_ID` 和 `*_SESSION_LOOKUP_HMAC_PREVIOUS_SECRET` 只用于平滑 lookup rotation，必须成对配置。
-- 生产环境不得使用开发默认 HMAC secret；current 和 previous 的 id、secret 都不得冲突。
+- Kernel lookup HMAC 的 current/previous 配置、`*_SESSION_LOOKUP_HMAC_*` 环境变量及轮换流程已退役，当前启动不需要定位密钥。
+- Cookie/JWT 签名、Client Secret 校验及 Provider 自有 lookup 不属于此次退役范围。
 
-HMAC rotation 的发布顺序是：先把旧 current 配为 previous、新 key 配为 current；确认旧 session TTL 全部过期后，再移除 previous。
+解析只接受原始 token，摘要和内部 ID 均不能作为 bearer。三类对象一次 Lua 观察状态与 Redis 时间，
+不预读独立 lookup/tombstone；按 ID 撤销、关联与补偿仍访问同一权威状态。详见[运行时契约](../sso/token-state-runtime-evidence.md)。
 
 ## 当前维护范围
 
-满足当前数据契约的 Spec #146 升级采用[保留对象流程](../../releases/protocol-validation-preserving-upgrade.md)，
-不执行下列全清、协议 artifact apply 或 epoch 推进；这些旧迁移命令的引用不表示本次升级需要清理。
+Spec #146 的[保留对象流程](../../releases/protocol-validation-preserving-upgrade.md)仅用于原规格固定旧候选。
+包含 Spec #170 / ADR-0034 的当前候选必须按[全体下线流程](../../releases/online-auth-redis-time-cutover.md)
+停流、排空、清理源及目标布局、独立 verify、统一版本并重新登录；不双读、不保留旧对象、不在线迁移。
+全体下线维护已由 #175 交付，最终核对见[最终账本](../sso/token-state-contract.md)；目标环境切换未执行。
 
 两条旧 Session cleanup 命令及其公开入口已撤销。当前 Session Kernel 撤销、正常清理、pending cleanup 和 OIDC cleanup adapters 继续有效。
 `client-protocol:artifacts` 按 manifest 精确清理协议 artifact 并保护 Principal Session 与非目标状态，详见

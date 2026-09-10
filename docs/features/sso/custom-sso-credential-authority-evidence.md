@@ -2,7 +2,7 @@
 
 Status: Current
 
-Last verified: 2026-09-09
+Last verified: 2026-09-10
 
 Next review: 2026-10-31
 
@@ -42,7 +42,7 @@ MONITOR 不输出参数、token、Subject、完整 key 或 marker。时间表保
 
 每行 5 个样本的命令序列相同：before 客户端为 `GET, GET, GET, EVAL, GET, EVAL`，Lua 内部为 `TIME, GET, TIME, GET`；
 after 客户端为 `GET, GET, GET, EVAL`，Lua 内部为 `TIME, GET`。包含 EVAL 本身在内的服务端总命令由 10 减为 6。
-源码路径核对与上述真实观察共同证明 `resolveValidatedCustomSsoCredential` 的父读取退役；自身 lookup、tombstone 与生命周期检查仍存在。
+源码路径核对与上述真实观察共同证明 `resolveValidatedCustomSsoCredential` 的父读取退役；该固定历史候选的自身 lookup、tombstone 与生命周期检查仍存在。当前三类 token 已迁单状态，替代边界见[运行时契约](token-state-runtime-evidence.md)。
 样本量小、运行受本机调度影响，不承诺毫秒预算，不把此次局部结果解释为 [#71](https://github.com/cyy1998/shgas-iam/issues/71) 全热路径完成，
 也没有实施 [#137](https://github.com/cyy1998/shgas-iam/issues/137) 的 token 定位或存储布局优化。
 

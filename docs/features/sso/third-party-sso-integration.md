@@ -275,7 +275,7 @@ Gateway Local Session：
 清理后，所有用户和 custom SSO client 都需要重新登录或重新发起授权。业务系统应把 401、非法 code、IAM
 credential/session 过期视为重新发起 `/sso/authorize` 的信号。
 
-如发布需要回滚到旧 custom SSO session 实现，必须先停止 login、authorize、callback、token 和 authz 流量，并清理新版本 `sess:v2:` active/lookup/revoked/index key。`custom-sso:local-session-payload:*` 只能由维护窗口的独立清理命令处理；
+包含 Spec #170 的候选回退先按[全体下线手册](../../releases/online-auth-redis-time-cutover.md)停止并排空全部 reader/writer，清理源及目标状态并独立 verify，再统一回退和重新登录；不得只删旧 active/lookup/revoked/index 而遗漏三类 state/ID。退役 namespace 或更早 custom SSO session 实现须另行固定迁移边界。`custom-sso:local-session-payload:*` 只能由另行确定的维护窗口与独立 owner 处理；
 当前 production runtime 不读取、写入、规范化该 payload，也不据此通知 client logout。回滚后必须重新执行 custom SSO
 登录、网关鉴权和退出 smoke。
 
@@ -436,4 +436,4 @@ Cookie/session，再调用 IAM `/sso/logout`。Client 配置中的 `logoutEndpoi
 - 业务系统退出能调用 `/sso/logout`。
 - Independent 业务系统能在调用 `/sso/logout` 的同时清理自己的本地 session。
 
-一次消费切换的目标/证据见[最终契约账本](custom-sso-one-shot-grant-contract.md)，统一版本与保留会话操作沿[升级手册](../../releases/custom-sso-one-shot-grant-upgrade.md)。环境切换仍需发布负责人另行验收。
+一次消费切换的目标/证据见[最终契约账本](custom-sso-one-shot-grant-contract.md)，原固定旧候选的保留会话操作见[升级手册](../../releases/custom-sso-one-shot-grant-upgrade.md)；包含 #170 的当前候选按[全体下线手册](../../releases/online-auth-redis-time-cutover.md)统一版本并重新登录。环境切换仍需发布负责人另行验收。

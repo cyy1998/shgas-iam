@@ -73,11 +73,6 @@ export function createApiRuntime(options: CreateApiRuntimeOptions = {}): ApiRunt
         defaultPrincipalTtlSeconds: runtimeEnv.auth.sessionDefaultTtlSeconds,
         tombstoneTtlSeconds: runtimeEnv.sessionKernel.tombstoneTtlSeconds,
         tombstoneGraceSeconds: runtimeEnv.sessionKernel.tombstoneGraceSeconds,
-        lookupHmacCurrentId: runtimeEnv.sessionKernel.lookupHmacCurrentId,
-        lookupHmacCurrentSecret: runtimeEnv.sessionKernel.lookupHmacCurrentSecret,
-        lookupHmacPreviousId: runtimeEnv.sessionKernel.lookupHmacPreviousId,
-        lookupHmacPreviousSecret: runtimeEnv.sessionKernel.lookupHmacPreviousSecret,
-        nodeEnv: runtimeEnv.nodeEnv,
       }),
       userProfile: {
         dslMaxLimit: runtimeEnv.userProfile.dslMaxLimit,

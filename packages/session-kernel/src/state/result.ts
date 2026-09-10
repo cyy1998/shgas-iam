@@ -10,7 +10,6 @@ export type ResolvedResult<T> = {
   value: T;
   /** Redis acquisition time in milliseconds; deadline consumers must use this observation, not their local clock. */
   observedAt: number;
-  lookupKeyId?: string;
 };
 
 export type RevokedResult = {

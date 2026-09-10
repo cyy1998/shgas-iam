@@ -183,6 +183,7 @@ async function createSessionTree(withCleanup = false) {
   if (artifact.status !== "created" || !artifact.externalToken)
     throw new Error("expected Protocol Artifact fixture");
   return {
+    clientCode,
     principalSessionId,
     rootToken: root.externalToken,
     bindingId: binding.value.bindingId,
@@ -206,7 +207,114 @@ async function restrictUser() {
   expect(restriction).not.toBeNull();
 }
 
+async function createMixedSessionTree(withCleanup = false) {
+  const tree = await createSessionTree(withCleanup);
+  const credentials = [];
+  for (const mode of ["independent", "gateway"]) {
+    const issued = await kernel.issueCredential({
+      principalSessionId: tree.principalSessionId,
+      clientCode: scope!.clientCode(mode),
+      protocol: "custom-sso",
+      credentialType: "local_session",
+      renewalPolicy: "fixed_at_issue",
+      ttlMs: 30_000,
+      metadata: { mode },
+    });
+    if (issued.status !== "created" || !issued.externalToken)
+      throw new Error("expected Custom SSO Credential fixture");
+    credentials.push(issued.externalToken);
+  }
+  const artifact = await kernel.createProtocolArtifact({
+    principalSessionId: tree.principalSessionId,
+    clientCode: scope!.clientCode("independent"),
+    protocol: "custom-sso",
+    artifactType: "auth_code",
+    ttlMs: 30_000,
+  });
+  if (artifact.status !== "created" || !artifact.externalToken)
+    throw new Error("expected Custom SSO Auth Code fixture");
+  return { ...tree, credentials, customArtifactToken: artifact.externalToken };
+}
+
+async function observeMixedTree(tree: Awaited<ReturnType<typeof createMixedSessionTree>>) {
+  const states = await observeTree(tree);
+  for (const token of tree.credentials) {
+    const credential = await observer.resolveCredential(token, { protocol: "custom-sso", credentialType: "local_session" });
+    states.push(credential.status);
+  }
+  const artifact = await observer.resolveProtocolArtifact(tree.customArtifactToken, { protocol: "custom-sso", artifactType: "auth_code" });
+  states.push(artifact.status);
+  return states;
+}
+
 describe("Admin session mutations with real Redis owners", () => {
+  test("mixed protocol root cascade counts each object once and preserves current and non-target trees", async () => {
+    const current = await createMixedSessionTree();
+    const target = await createMixedSessionTree();
+    const other = await createMixedSessionTree();
+    const actor = { actorUserId: 7, principalSessionId: current.principalSessionId };
+    const input = { target: { type: "session" as const, principalSessionId: target.principalSessionId } };
+    const result = await service.revokeSessions(input, actor, auditContext);
+    expect(result).toMatchObject({ changed: true, result: {
+      revoked: { principalSessions: 1, bindings: 1, credentials: 3, artifacts: 2 },
+      cleanup: { attempted: 0, succeeded: 0, failed: 0 },
+    } });
+    const targetStates = await observeMixedTree(target);
+    const currentStates = await observeMixedTree(current);
+    const otherStates = await observeMixedTree(other);
+    expect(targetStates).toEqual(["revoked", "revoked", "revoked", "revoked", "revoked", "revoked", "revoked"]);
+    expect(currentStates).toEqual(["resolved", "resolved", "resolved", "resolved", "resolved", "resolved", "resolved"]);
+    expect(otherStates).toEqual(["resolved", "resolved", "resolved", "resolved", "resolved", "resolved", "resolved"]);
+    const repeated = await service.revokeSessions(input, actor, auditContext);
+    expect(repeated).toMatchObject({ changed: false, result: {
+      revoked: { principalSessions: 0, bindings: 0, credentials: 0, artifacts: 0 },
+    } });
+  });
+
+  test("mixed user revocation excludes the current root but includes its protocol children", async () => {
+    const current = await createMixedSessionTree();
+    const target = await createMixedSessionTree();
+    const result = await service.revokeSessions(
+      { target: { type: "user", userId: 7 } },
+      { actorUserId: 7, principalSessionId: current.principalSessionId },
+      auditContext,
+    );
+    expect(result).toMatchObject({ changed: true, result: {
+      currentPrincipalSessionExcluded: true,
+      revoked: { principalSessions: 1, bindings: 2, credentials: 6, artifacts: 4 },
+    } });
+    const currentStates = await observeMixedTree(current);
+    const targetStates = await observeMixedTree(target);
+    expect(currentStates).toEqual(["resolved", "revoked", "revoked", "revoked", "revoked", "revoked", "revoked"]);
+    expect(targetStates).toEqual(["revoked", "revoked", "revoked", "revoked", "revoked", "revoked", "revoked"]);
+  });
+
+  test("mixed cascade keeps failed cleanup reachable and owner retry preserves unrelated objects", async () => {
+    const target = await createMixedSessionTree(true);
+    const other = await createMixedSessionTree();
+    cleanupFailure = true;
+    const result = await service.revokeSessions(
+      { target: { type: "session", principalSessionId: target.principalSessionId } },
+      { actorUserId: 7, principalSessionId: other.principalSessionId },
+      auditContext,
+    );
+    expect(result).toMatchObject({ changed: true, result: {
+      revoked: { principalSessions: 1, bindings: 1, credentials: 3, artifacts: 2 },
+      cleanup: { attempted: 2, succeeded: 1, failed: 1 },
+    } });
+    const pending = await observer.inventoryClientProtocol(target.clientCode, "oidc");
+    expect(pending.counts.cleanupPending).toBe(1);
+    cleanupFailure = false;
+    const recovered = await kernel.revokeClientProtocol(target.clientCode, "oidc");
+    expect(recovered.cleanup).toMatchObject({ attempted: 2, succeeded: 2, failed: 0 });
+    const inventory = await observer.inventoryClientProtocol(target.clientCode, "oidc");
+    expect(inventory.counts.cleanupPending).toBe(0);
+    const targetStates = await observeMixedTree(target);
+    const otherStates = await observeMixedTree(other);
+    expect(targetStates).toEqual(["revoked", "revoked", "revoked", "revoked", "revoked", "revoked", "revoked"]);
+    expect(otherStates).toEqual(["resolved", "resolved", "resolved", "resolved", "resolved", "resolved", "resolved"]);
+  });
+
   for (const path of ["/admin/capabilities", "/rpc/capabilitySummary?input=%7B%7D"]) {
     test(`real Redis permission survives in-flight disable and rejects the next ${path} request`, async () => {
       const subject = randomUUID();

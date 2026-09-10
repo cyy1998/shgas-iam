@@ -476,9 +476,6 @@ Playwright Chromium 系统依赖时，preflight 会提示运行 `pnpm e2e:instal
 | `IAM_API_SESSION_KERNEL_PRINCIPAL_ABSOLUTE_TTL_SECONDS` | PrincipalSession absolute TTL（秒） | `86400` |
 | `IAM_API_SESSION_KERNEL_TOMBSTONE_TTL_SECONDS` | Session Kernel tombstone 保留时间（秒） | `86400` |
 | `IAM_API_SESSION_KERNEL_TOMBSTONE_GRACE_SECONDS` | Session Kernel tombstone grace 时间（秒） | `300` |
-| `IAM_API_SESSION_LOOKUP_HMAC_CURRENT_ID` | 当前 Session lookup HMAC key id        | `2026-06-primary`  |
-| `IAM_API_SESSION_LOOKUP_HMAC_CURRENT_SECRET` | 当前 Session lookup HMAC secret；生产必填且至少 32 字符 | 必填 |
-| `IAM_API_SESSION_LOOKUP_HMAC_PREVIOUS_ID` / `IAM_API_SESSION_LOOKUP_HMAC_PREVIOUS_SECRET` | 上一个 lookup HMAC key，用于轮换窗口 | 可选 |
 | `IAM_API_WECHAT_CORP_ID` / `IAM_API_WECHAT_CORP_SECRET` | 企业微信配置             | 必填               |
 | `IAM_API_SMS_URL` / `IAM_API_SMS_SIGNATURE_KEY` | 短信服务配置                    | 必填               |
 | `IAM_API_ORCAS_URL`             | ORCAS 服务地址                                   | 必填               |
@@ -518,8 +515,6 @@ Playwright Chromium 系统依赖时，preflight 会提示运行 `pnpm e2e:instal
 | `IAM_ADMIN_API_SESSION_KERNEL_PRINCIPAL_ABSOLUTE_TTL_SECONDS` | PrincipalSession absolute TTL（秒） | `86400` |
 | `IAM_ADMIN_API_SESSION_KERNEL_TOMBSTONE_TTL_SECONDS` | Session Kernel tombstone 保留时间（秒） | `86400` |
 | `IAM_ADMIN_API_SESSION_KERNEL_TOMBSTONE_GRACE_SECONDS` | Session Kernel tombstone grace 时间（秒） | `300` |
-| `IAM_ADMIN_API_SESSION_LOOKUP_HMAC_CURRENT_ID` / `IAM_ADMIN_API_SESSION_LOOKUP_HMAC_CURRENT_SECRET` | 当前 Session lookup HMAC key；需与公共 API 一致 | 必填 |
-| `IAM_ADMIN_API_SESSION_LOOKUP_HMAC_PREVIOUS_ID` / `IAM_ADMIN_API_SESSION_LOOKUP_HMAC_PREVIOUS_SECRET` | 上一个 lookup HMAC key，用于轮换窗口 | 可选 |
 
 ### OIDC Provider（`apps/oidc-provider/.env`）
 
@@ -536,7 +531,13 @@ Playwright Chromium 系统依赖时，preflight 会提示运行 `pnpm e2e:instal
 | `IAM_OIDC_PROVIDER_CURRENT_JWK_JSON` / `IAM_OIDC_PROVIDER_PREVIOUS_JWK_JSON` | current/previous RS256 private JWK | 必填 / 可选 |
 | `IAM_OIDC_PROVIDER_*_TTL_SECONDS` | global session、authorization code、interaction、access token、ID token、client cache TTL | 见 `.env.example` |
 | `IAM_OIDC_PROVIDER_CLIENT_AUTH_FAILURE_LIMIT` / `IAM_OIDC_PROVIDER_CLIENT_AUTH_FAILURE_WINDOW_SECONDS` | client 认证失败限流配置 | `5` / `60` |
-| `IAM_OIDC_PROVIDER_SESSION_KERNEL_*` / `IAM_OIDC_PROVIDER_SESSION_LOOKUP_HMAC_*` | Session Kernel 配置；需与 API/admin-api 协调 | 见 `.env.example` |
+| `IAM_OIDC_PROVIDER_SESSION_KERNEL_*` | Session Kernel namespace 与生命周期期限；需与 API/admin-api 协调 | 见 `.env.example` |
+
+Principal Session、Credential 和 Protocol Artifact 以原始 token 的普通 SHA-256 直接定位同一 active/revoked 状态，
+内部 ID 通过反向定位用于管理；无 token Binding 仍按 ID。Kernel lookup HMAC 的 current/previous 配置、
+`*_SESSION_LOOKUP_HMAC_*` 环境变量及轮换已退役，当前启动不需要定位密钥。OIDC Cookie/JWT 签名和 Client Secret 保留。
+包含此改造的候选按[全体下线手册](docs/releases/online-auth-redis-time-cutover.md)统一切换并重新登录；
+运行时与证据边界见[运行时契约](docs/features/sso/token-state-runtime-evidence.md)，最终核对见[最终账本](docs/features/sso/token-state-contract.md)，目标环境未切换。
 
 ### Worker（`apps/worker/.env`）
 

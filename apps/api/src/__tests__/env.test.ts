@@ -1,4 +1,3 @@
-import { DEFAULT_SESSION_LOOKUP_HMAC_CURRENT_SECRET } from "@iam/session-kernel";
 import { beforeAll, describe, expect, test } from "bun:test";
 
 type ParseApiEnv = typeof import("../env").parseApiEnv;
@@ -82,16 +81,21 @@ describe("API environment", () => {
     })).toThrow();
   });
 
-  test("rejects the default Session Kernel HMAC secret in production", () => {
-    expect(() => parseApiEnv({
+  test("accepts production configuration without lookup secrets", () => {
+    const env = parseApiEnv({
       ...validEnv(),
       NODE_ENV: "production",
-    })).toThrow("IAM_API_SESSION_LOOKUP_HMAC_CURRENT_SECRET must be set in production");
+    });
 
+    expect(env.nodeEnv).toBe("production");
+    expect(env.sessionKernel.namespace).toBe("sess:v2:");
+  });
+
+  test("still requires a configured active login credential key in production", () => {
     expect(() => parseApiEnv({
       ...validEnv(),
       NODE_ENV: "production",
-      IAM_API_SESSION_LOOKUP_HMAC_CURRENT_SECRET: DEFAULT_SESSION_LOOKUP_HMAC_CURRENT_SECRET,
-    })).toThrow("IAM_API_SESSION_LOOKUP_HMAC_CURRENT_SECRET must be set in production");
+      IAM_API_LOGIN_CREDENTIAL_ACTIVE_KID: "missing",
+    })).toThrow("IAM_API_LOGIN_CREDENTIAL_ACTIVE_KID must exist");
   });
 });

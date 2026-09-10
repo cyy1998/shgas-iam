@@ -58,7 +58,6 @@ async function fixture() {
     namespace: `${scope.clientCode("kernel")}:`,
     principalIdleTtlMs: 300_000,
     principalAbsoluteTtlMs: 300_000,
-    lookupHmacKeys: { current: { id: "test", secret: "test-only-key-material-32-bytes-long" } },
   } });
   const snapshots = createClientRuntimeSnapshotModule({ redis: scope.redis, adapters: [
     createOidcClientRuntimeSnapshotAdapter({ repository: createOidcClientRepository(postgres.db), cacheTtlSeconds: 30 }),

@@ -28,20 +28,22 @@ type Options = {
 
 const REMOVE_OBSERVED_ARTIFACT = `
 -- session-kernel-maintain-observed-artifact-v1
-for i = 1, 4 do
+local count = tonumber(ARGV[1])
+for i = 1, count do
   local value = redis.call("GET", KEYS[i])
-  local present = ARGV[(i - 1) * 2 + 1] == "1"
-  if (present and value ~= ARGV[(i - 1) * 2 + 2]) or (not present and value) then
+  local present = ARGV[(i - 1) * 2 + 2] == "1"
+  if (present and value ~= ARGV[(i - 1) * 2 + 3]) or (not present and value) then
     return 0
   end
 end
 -- Validate every index before the first write: Lua runtime errors do not roll back writes.
-for i = 5, #KEYS do
+for i = count + 1, #KEYS do
   local kind = redis.call("TYPE", KEYS[i]).ok
   if kind ~= "none" and kind ~= "zset" then return -1 end
 end
-local removed = redis.call("DEL", KEYS[1], KEYS[2], KEYS[3], KEYS[4])
-for i = 5, #KEYS do redis.call("ZREM", KEYS[i], ARGV[9]) end
+local removed = 0
+for i = 1, count do removed = removed + redis.call("DEL", KEYS[i]) end
+for i = count + 1, #KEYS do redis.call("ZREM", KEYS[i], ARGV[count * 2 + 2]) end
 return removed > 0 and 1 or 0
 `;
 
@@ -71,7 +73,7 @@ async function scanArtifacts(options: Options & { redis: ArtifactMaintenanceRead
     if (!options.writersStopped || !options.namespace.trim() || /[*?[\]\\]/.test(options.namespace))
       throw new Error("Explicit stopped writers and literal namespace required");
     const keys = createSessionKernelKeyBuilder(options.namespace);
-    const families = ["active", "revoked", "lookup", "revoked_lookup"] as const;
+    const families = ["state", "id", "active", "revoked", "lookup", "revoked_lookup"] as const;
     const seen = new Set<string>();
     const attempted = new Set<string>();
     for (const family of families) {
@@ -94,7 +96,36 @@ async function scanArtifacts(options: Options & { redis: ArtifactMaintenanceRead
               continue;
             let object: ArtifactMaintenanceObject;
             let selectedObjectRaw = raw;
-            if (family === "active" || family === "lookup") {
+            const direct = family === "state" || family === "id";
+            if (direct) {
+              const value = family === "id" ? await options.redis.get(keys.state("artifact", raw)) : raw;
+              if (value === null)
+                throw new Error("Unconfirmed Artifact identity");
+              selectedObjectRaw = value;
+              const decoded: unknown = JSON.parse(value);
+              if (decoded && typeof decoded === "object" && "state" in decoded) {
+                const parsed = parseRevokedTombstone(value);
+                if (decoded.state !== "revoked" || !parsed.success || parsed.data.objectKind !== "artifact"
+                  || !parsed.data.protocol || typeof parsed.data.metadata?.artifactType !== "string") {
+                  throw new Error("Unconfirmed Artifact terminal state");
+                }
+                object = parsed.data;
+              }
+              else {
+                const parsed = parseLifecycleObject("artifact", value);
+                if (!parsed.success)
+                  throw new Error("Unconfirmed Artifact state");
+                object = parsed.data;
+              }
+              const id = "artifactId" in object ? object.artifactId : object.objectId;
+              const hash = object.lookupHash;
+              if (!hash || !/^[a-f0-9]{64}$/.test(hash)
+                || key !== (family === "state" ? keys.state("artifact", hash) : keys.identity("artifact", id))
+                || (family === "id" && raw !== hash)) {
+                throw new Error("Artifact direct identity mismatch");
+              }
+            }
+            else if (family === "active" || family === "lookup") {
               const value = family === "lookup" ? await options.redis.get(keys.active("artifact", raw)) : raw;
               const parsed = value === null ? null : parseLifecycleObject("artifact", value);
               if (!parsed?.success)
@@ -130,13 +161,19 @@ async function scanArtifacts(options: Options & { redis: ArtifactMaintenanceRead
               continue;
             attempted.add(id);
             const hash = object.lookupHash!;
-            const related = [keys.active("artifact", id), keys.lookup("artifact", hash), keys.tombstone("artifact", id), keys.lookupTombstone("artifact", hash)];
+            const related = direct
+              ? [keys.state("artifact", hash), keys.identity("artifact", id)]
+              : [keys.active("artifact", id), keys.lookup("artifact", hash), keys.tombstone("artifact", id), keys.lookupTombstone("artifact", hash)];
             const observed = await Promise.all(related.map(target => options.redis.get(target)));
             // The selection is bound to the original bytes, even if this identity changes while reading its siblings.
             if (observed[related.indexOf(key)] !== raw)
               throw new Error("Selected artifact changed");
             const active = "artifactId" in object;
-            if (active) {
+            if (direct) {
+              if (observed[0] !== selectedObjectRaw || observed[1] !== hash)
+                throw new Error("Conflicting direct Artifact ownership");
+            }
+            else if (active) {
               if (observed[0] !== selectedObjectRaw || observed[2] !== null || observed[3] !== null || (observed[1] !== null && observed[1] !== id))
                 throw new Error("Conflicting artifact ownership");
             }
@@ -150,7 +187,7 @@ async function scanArtifacts(options: Options & { redis: ArtifactMaintenanceRead
               ...(object.clientCode && object.protocol ? [keys.index.client(object.clientCode), keys.index.clientProtocol(object.clientCode, object.protocol), keys.index.clientProtocolCleanup(object.clientCode, object.protocol)] : []),
             ];
             options.signal?.throwIfAborted();
-            const result = await writer.eval(REMOVE_OBSERVED_ARTIFACT, 4 + indexes.length, ...related, ...indexes, ...observed.flatMap(value => [value === null ? "0" : "1", value ?? ""]), encodeIndexMember("artifact", id));
+            const result = await writer.eval(REMOVE_OBSERVED_ARTIFACT, related.length + indexes.length, ...related, ...indexes, related.length, ...observed.flatMap(value => [value === null ? "0" : "1", value ?? ""]), encodeIndexMember("artifact", id));
             if (result !== 1 && result !== "1")
               throw new Error("Artifact removal not confirmed");
             report.removed++;

@@ -2,7 +2,7 @@
 
 Status: Current
 
-Last verified: 2026-09-09
+Last verified: 2026-09-10
 
 Next review: 2026-10-31
 
@@ -30,7 +30,7 @@ API 的 authorize、续接、Independent token exchange、Gateway callback 与 a
 | Maintenance、配置/Gate 或生命周期读取故障 | 拒绝本次操作，保留对象、Grant 与可恢复 Cookie；既有 HTTP 暂态映射保持，读取故障不冒充 Maintenance。 |
 | 权威撤销或外围 cleanup 失败 | 仍拒绝访问。权威对象是否已撤销与 cleanup pending 分别可观察；恢复继续由现有显式维护能力承担。 |
 
-Credential 的协议归属与配置检查先于 Subject Access；Code 的全部上述检查和访问许可先于 Grant 消费、投影、Credential 签发及 ORCAS 调用。精确撤销使用 Kernel 的已观察对象能力，相同 identity 被替换时不删除替换对象。Grant 消费原子移除同一已观察 Artifact 的 active/lookup/索引并保留 tombstone；不新增通用持久化身份格式。
+Credential 的协议归属与配置检查先于 Subject Access；Code 的全部上述检查和访问许可先于 Grant 消费、投影、Credential 签发及 ORCAS 调用。精确撤销使用 Kernel 的已观察对象能力，相同 identity 被替换时不删除替换对象。Grant 消费原子比较同一已观察 Artifact 的状态与反向 ID，转换为同记录 revoked 且 reason=consumed，并移除精确索引；后续识别 consumed_replay。三类 token 的当前存储契约见[运行时契约](token-state-runtime-evidence.md)。
 
 [#166](https://github.com/cyy1998/shgas-iam/issues/166) 按 ADR-0033 移除 Gateway authz 和两模式 Public UserInfo 的父会话读取。
 可信主体与访问代际只取自 Credential；缺失、坏 JSON、非法代际和主体矛盾失败关闭，不查父对象或当前账号代际补齐。

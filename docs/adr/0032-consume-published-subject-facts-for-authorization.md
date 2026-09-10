@@ -48,4 +48,4 @@ Custom SSO 消费 Grant 后发生投影失败，仍须重新授权；有效根�
 
 ## 实施状态
 
-Reader 保留缓存失效时的窄行 `user_profile` 读取，Projection 与两协议装配已删除 Authorization Freshness port、Dirty 查询及其观测事件。缓存有效命中不证明源事实没有新变化，本决定明确接受这一差异。Catalog、wire、Snapshot 和协议 epoch 保持；[升级手册](../releases/published-subject-facts-upgrade.md)记录统一部署、保留对象和回退边界，实际环境未执行。
+Reader 保留缓存失效时的窄行 `user_profile` 读取，Projection 与两协议装配已删除 Authorization Freshness port、Dirty 查询及其观测事件。缓存有效命中不证明源事实没有新变化，本决定明确接受这一差异。Catalog、wire、Snapshot 和协议 epoch 保持；[升级手册](../releases/published-subject-facts-upgrade.md)记录原 #156 固定旧候选的保留对象边界。包含 #170 的当前候选按[全体下线手册](../releases/online-auth-redis-time-cutover.md)统一切换并重新登录，实际环境未执行。

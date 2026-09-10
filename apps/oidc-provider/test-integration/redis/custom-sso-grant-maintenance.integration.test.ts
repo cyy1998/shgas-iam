@@ -36,7 +36,7 @@ it("inventories without writing, invalidates only Custom SSO authorization artif
   scope.trackPrefix(namespace);
   const kernel = createSessionKernel({
     redis: scope.writer,
-    config: createSessionKernelConfig({ namespace, principalIdleTtlMs: 120_000, principalAbsoluteTtlMs: 240_000, lookupHmacKeys: { current: { id: "test", secret: "maintenance-test-secret-00000000000000000000" } } }),
+    config: createSessionKernelConfig({ namespace, principalIdleTtlMs: 120_000, principalAbsoluteTtlMs: 240_000 }),
   });
   const principal = await kernel.createPrincipalSession(randomUUID(), { subjectContext: "opaque-context" });
   if (principal.status !== "created")
@@ -79,7 +79,6 @@ async function scenario() {
     namespace,
     principalIdleTtlMs: 120_000,
     principalAbsoluteTtlMs: 240_000,
-    lookupHmacKeys: { current: { id: "test", secret: "maintenance-test-secret-00000000000000000000" } },
   }) });
   const options = { kernelNamespace: namespace, writersStopped: true };
   const reader = { scan: scope.observer.scan.bind(scope.observer), get: scope.observer.get.bind(scope.observer) };
@@ -135,7 +134,7 @@ it("discovers unindexed artifacts, consumed tombstones and orphan legacy records
   expect(repeated.grants.removed).toBe(0);
 });
 
-it("preserves a replacement selected before CAS, including its later lookup discovery in the same run", async () => {
+it("preserves a replacement selected before CAS, including its later identity discovery in the same run", async () => {
   const s = await scenario();
   const target = await s.target();
   let replacement: Awaited<ReturnType<typeof s.fixture.observe>> | undefined;
@@ -172,7 +171,7 @@ it.each(["json", "version", "identity"] as const)("retains %s authority and fail
   expect(after).toEqual(before);
 });
 
-it("does not infer ownership of an orphan lookup", async () => {
+it("does not infer ownership of an orphan identity", async () => {
   const s = await scenario();
   const target = await s.target();
   await s.fixture.removeArtifactPayload(target.value.artifactId);
@@ -186,7 +185,7 @@ it("does not infer ownership of an orphan lookup", async () => {
   expect(after).toEqual(before);
 });
 
-it("keeps changed lookup owners and non-target objects intact", async () => {
+it("keeps changed identity owners and non-target objects intact", async () => {
   const s = await scenario();
   const target = await s.target();
   const other = await s.target("oidc", "authorization_code");
@@ -201,7 +200,7 @@ it("keeps changed lookup owners and non-target objects intact", async () => {
   expect(otherAfter).toEqual(otherBefore);
 });
 
-it("compares lookup and tombstone observations before every destructive operation", async () => {
+it("compares identity and terminal state observations before every destructive operation", async () => {
   const s = await scenario();
   const target = await s.target();
   const other = await s.target("oidc", "authorization_code");

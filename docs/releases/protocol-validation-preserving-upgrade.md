@@ -1,6 +1,6 @@
 # 协议校验修复的保留对象升级
 
-> 本文保留对象流程只适用于原规格单独升级。包含 Spec #163 / ADR-0033 的候选必须优先执行[全体在线状态下线](online-auth-redis-time-cutover.md)：停旧 writer、排空、四 owner 清理及新进程 verify 后统一版本并重新登录，不保留旧 Credential。原规格证据仍保留其历史适用范围，环境未切换。
+> 本文以下步骤仅适用于原规格验收记录所固定的旧候选及其存储契约；历史保留流程不能套用当前 checkout。包含 Spec #163 / ADR-0033 或 Spec #170 / ADR-0034 的候选必须执行[全体在线状态下线](online-auth-redis-time-cutover.md)：停旧 writer、排空、清理源及目标布局、新进程 verify、统一版本并重新登录，不保留旧在线对象。下文的 HMAC 或保留要求仅属于固定旧候选；当前 Kernel lookup HMAC 已退役。环境未切换。
 
 Status: Current
 

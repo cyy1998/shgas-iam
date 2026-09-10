@@ -44,12 +44,12 @@ apply 额外需要 `EVAL` 以及脚本内的 `GET`、`TYPE`、`DEL`、`ZREM`。�
 
 | Owner | 发现与处理 | 不属于本命令的范围 |
 |---|---|---|
-| `@iam/session-kernel/maintenance` | 直接扫描实际 namespace 的 Artifact `active:a:`、`revoked:a:`、`lookup:a:`、`revoked_lookup:a:`，不依赖 client/protocol/parent 索引。按 owner parser 校验版本、identity、用途归属，选择 Custom SSO `auth_code` 的 active 和 tombstone；原子比较本次观察的四个关联值后删除，精确移除该 Artifact 的已知索引成员。 | Principal、Binding、Credential、其他协议/用途 Artifact；不执行全 Kernel namespace 删除、跨协议级联或任意 cleanup ref。 |
+| `@iam/session-kernel/maintenance` | 直接扫描实际 namespace 的 Artifact 当前 `state:a:`、`id:a:` 及源布局 `active:a:`、`revoked:a:`、`lookup:a:`、`revoked_lookup:a:`，不依赖 client/protocol/parent 索引。按 owner parser 校验版本、identity、用途归属，选择 Custom SSO `auth_code` 的 active 和 tombstone；当前布局原子比较本次观察的状态与反向 ID，源布局比较四个关联值后删除，精确移除该 Artifact 的已知索引成员。 | Principal、Binding、Credential、其他协议/用途 Artifact；不执行全 Kernel namespace 删除、跨协议级联或任意 cleanup ref。 |
 | `@iam/custom-sso/maintenance` | 直接扫描 `authorization-grant:redemption:v1:`，严格解析 issued/redeeming/consumed 和 key/record identity，按完整已观察值 CAS 删除，包括没有 Artifact 的孤立 redemption。 | 不读取或重建旧 lease，不恢复已消费 Code，不签发 Credential。 |
 | OIDC maintenance runtime | 组合上述两个窄 owner，管理独立命令进程、连接和安全报告。 | 不删除 OIDC protocol store、Provider Session、Client 配置或推进任何协议 epoch。 |
 
 未知版本、损坏 payload、identity 不符、没有可确认 authority 的 lookup、冲突 active/tombstone、错误类型索引或比较失败均保留并
-报告非成功。无法判定归属时不扩大删除。只有携带合法完整 tombstone 的孤立 revoked lookup 可以独立确定其归属。
+报告非成功。无法判定归属时不扩大删除。源布局只有携带合法完整 tombstone 的孤立 revoked lookup 可以独立确定其归属。当前 direct state 必须有匹配的反向 ID 才能定向删除；孤立或冲突 state/ID 无法确认时保留报错，全体切换由独立全清 owner 处理。
 同一轮已尝试的 Artifact identity 不因后续 lookup 扫描而重新选择；replacement 保留，随后保持停流核对 writer 原因。
 自然过期或并发变化造成比较失败也按失败处理，由新一轮观察确认，不能推定成功。
 

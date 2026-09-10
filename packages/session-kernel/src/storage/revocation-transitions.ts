@@ -3,18 +3,6 @@ import type {
   SessionKernelRevocationTransitions,
 } from "./store";
 
-const DELETE_OWNED_CLEANUP_KEYS_SCRIPT = `
--- session-kernel-delete-owned-cleanup-keys-v1
-if redis.call("EXISTS", KEYS[1]) == 1
-  or redis.call("GET", KEYS[2]) ~= ARGV[1] then
-  return 0
-end
-for index = 3, #KEYS do
-  redis.call("DEL", KEYS[index])
-end
-return 1
-`;
-
 const REVOKE_ACTIVE_OBJECT_SCRIPT = `
 -- session-kernel-revoke-active-object-v1
 if redis.call("EXISTS", KEYS[2]) == 1
@@ -24,9 +12,8 @@ end
 
 local serializedTombstone = ARGV[2]
 local expiresAt = ARGV[3]
-local hasLookup = ARGV[7] == "1"
-local hasCleanupPending = ARGV[8] == "1"
-local removalCount = tonumber(ARGV[9])
+local hasCleanupPending = ARGV[6] == "1"
+local removalCount = tonumber(ARGV[7])
 local keyCursor = 3
 
 redis.call("SET", KEYS[2], serializedTombstone)
@@ -35,26 +22,13 @@ if not hasCleanupPending then
 end
 redis.call("DEL", KEYS[1])
 
-if hasLookup then
-  local lookupKey = KEYS[keyCursor]
-  local lookupTombstoneKey = KEYS[keyCursor + 1]
-  if redis.call("GET", lookupKey) == ARGV[4] then
-    redis.call("SET", lookupTombstoneKey, serializedTombstone)
-    if not hasCleanupPending then
-      redis.call("PEXPIREAT", lookupTombstoneKey, expiresAt)
-    end
-    redis.call("DEL", lookupKey)
-  end
-  keyCursor = keyCursor + 2
-end
-
 if hasCleanupPending then
-  redis.call("ZADD", KEYS[keyCursor], ARGV[6], ARGV[5])
+  redis.call("ZADD", KEYS[keyCursor], ARGV[5], ARGV[4])
   keyCursor = keyCursor + 1
 end
 
 for index = 1, removalCount do
-  redis.call("ZREM", KEYS[keyCursor], ARGV[9 + index])
+  redis.call("ZREM", KEYS[keyCursor], ARGV[7 + index])
   keyCursor = keyCursor + 1
 end
 
@@ -67,26 +41,11 @@ if redis.call("GET", KEYS[1]) ~= ARGV[1] then
   return 0
 end
 
-local hasLookupTombstone = ARGV[5] == "1"
-if hasLookupTombstone
-  and redis.call("EXISTS", KEYS[3]) == 1
-  and redis.call("GET", KEYS[3]) ~= ARGV[1] then
-  return 0
-end
-
 redis.call("ZREM", KEYS[2], ARGV[2])
 if tonumber(ARGV[3]) <= tonumber(ARGV[4]) then
   redis.call("DEL", KEYS[1])
-  if hasLookupTombstone
-    and redis.call("GET", KEYS[3]) == ARGV[1] then
-    redis.call("DEL", KEYS[3])
-  end
 else
   redis.call("PEXPIREAT", KEYS[1], ARGV[3])
-  if hasLookupTombstone
-    and redis.call("GET", KEYS[3]) == ARGV[1] then
-    redis.call("PEXPIREAT", KEYS[3], ARGV[3])
-  end
 end
 
 return 1
@@ -100,14 +59,6 @@ if redis.call("EXISTS", KEYS[2]) == 1
 end
 
 local indexCount = tonumber(ARGV[4])
-local lookupOwner = ARGV[5 + indexCount * 2]
-if lookupOwner ~= "" then
-  if redis.call("GET", KEYS[3 + indexCount]) ~= lookupOwner
-    or redis.call("EXISTS", KEYS[4 + indexCount]) == 1 then
-    return 0
-  end
-  redis.call("PEXPIREAT", KEYS[3 + indexCount], ARGV[3])
-end
 redis.call("SET", KEYS[1], ARGV[2])
 redis.call("PEXPIREAT", KEYS[1], ARGV[3])
 for index = 1, indexCount do
@@ -132,20 +83,8 @@ export function createRedisSessionKernelRevocationTransitions(
   }
 
   return {
-    async deleteOwnedCleanupKeys(input) {
-      return parseTransitionResult(await redis.eval!(
-        DELETE_OWNED_CLEANUP_KEYS_SCRIPT,
-        2 + input.payloadKeys.length,
-        input.lookupKey,
-        input.lookupTombstoneKey,
-        ...input.payloadKeys,
-        input.serializedTombstone,
-      ));
-    },
     async finalizeCleanupPending(input) {
       const keys = [input.tombstoneKey, input.indexKey];
-      if (input.lookupTombstoneKey)
-        keys.push(input.lookupTombstoneKey);
       return parseTransitionResult(await redis.eval!(
         FINALIZE_CLEANUP_PENDING_SCRIPT,
         keys.length,
@@ -154,13 +93,10 @@ export function createRedisSessionKernelRevocationTransitions(
         input.member,
         input.expiresAt,
         input.now,
-        input.lookupTombstoneKey ? 1 : 0,
       ));
     },
     async revokeActiveObject(input) {
       const keys = [input.activeKey, input.tombstoneKey];
-      if (input.lookup)
-        keys.push(input.lookup.activeKey, input.lookup.tombstoneKey);
       if (input.cleanupPending)
         keys.push(input.cleanupPending.key);
       keys.push(...input.indexRemovals.map(removal => removal.key));
@@ -171,10 +107,8 @@ export function createRedisSessionKernelRevocationTransitions(
         input.expectedActive,
         input.serializedTombstone,
         input.expiresAt,
-        input.lookup?.expectedOwner ?? "",
         input.cleanupPending?.member ?? "",
         input.cleanupPending?.score ?? 0,
-        input.lookup ? 1 : 0,
         input.cleanupPending ? 1 : 0,
         input.indexRemovals.length,
         ...input.indexRemovals.map(removal => removal.member),
@@ -185,7 +119,6 @@ export function createRedisSessionKernelRevocationTransitions(
         input.activeKey,
         input.tombstoneKey,
         ...input.indexes.map(index => index.key),
-        ...(input.lookup ? [input.lookup.key, input.lookup.tombstoneKey] : []),
       ];
       return parseTransitionResult(await redis.eval!(
         UPDATE_ACTIVE_OBJECT_SCRIPT,
@@ -196,7 +129,6 @@ export function createRedisSessionKernelRevocationTransitions(
         input.expiresAt,
         input.indexes.length,
         ...input.indexes.flatMap(index => [index.score, index.member]),
-        input.lookup?.expectedOwner ?? "",
       ));
     },
   };
@@ -213,38 +145,16 @@ export function createInMemorySessionKernelRevocationTransitions(
   };
 
   return {
-    deleteOwnedCleanupKeys(input) {
-      return enqueue(async () => {
-        if (await redis.get(input.lookupKey) !== null
-          || await redis.get(input.lookupTombstoneKey) !== input.serializedTombstone) {
-          return false;
-        }
-        await redis.del(...input.payloadKeys);
-        return true;
-      });
-    },
     finalizeCleanupPending(input) {
       return enqueue(async () => {
         if (await redis.get(input.tombstoneKey) !== input.serializedTombstone)
           return false;
-        if (
-          input.lookupTombstoneKey
-          && await redis.get(input.lookupTombstoneKey) !== null
-          && await redis.get(input.lookupTombstoneKey) !== input.serializedTombstone
-        ) {
-          return false;
-        }
         const transaction = redis.multi().zrem(input.indexKey, input.member);
         if (input.expiresAt <= input.now) {
-          transaction.del(
-            input.tombstoneKey,
-            ...(input.lookupTombstoneKey ? [input.lookupTombstoneKey] : []),
-          );
+          transaction.del(input.tombstoneKey);
         }
         else {
           transaction.pexpireat(input.tombstoneKey, input.expiresAt);
-          if (input.lookupTombstoneKey)
-            transaction.pexpireat(input.lookupTombstoneKey, input.expiresAt);
         }
         await assertTransitionTransaction(transaction.exec());
         return true;
@@ -271,16 +181,6 @@ export function createInMemorySessionKernelRevocationTransitions(
         else {
           transaction.pexpireat(input.tombstoneKey, input.expiresAt);
         }
-        if (
-          input.lookup
-          && await redis.get(input.lookup.activeKey) === input.lookup.expectedOwner
-        ) {
-          transaction
-            .set(input.lookup.tombstoneKey, input.serializedTombstone)
-            .del(input.lookup.activeKey);
-          if (!input.cleanupPending)
-            transaction.pexpireat(input.lookup.tombstoneKey, input.expiresAt);
-        }
         for (const removal of input.indexRemovals)
           transaction.zrem(removal.key, removal.member);
         await assertTransitionTransaction(transaction.exec());
@@ -295,17 +195,9 @@ export function createInMemorySessionKernelRevocationTransitions(
         ) {
           return false;
         }
-        if (input.lookup && (
-          await redis.get(input.lookup.key) !== input.lookup.expectedOwner
-          || await redis.get(input.lookup.tombstoneKey) !== null
-        )) {
-          return false;
-        }
         const transaction = redis.multi()
           .set(input.activeKey, input.serializedObject)
           .pexpireat(input.activeKey, input.expiresAt);
-        if (input.lookup)
-          transaction.pexpireat(input.lookup.key, input.expiresAt);
         for (const index of input.indexes)
           transaction.zadd(index.key, index.score, index.member);
         await assertTransitionTransaction(transaction.exec());

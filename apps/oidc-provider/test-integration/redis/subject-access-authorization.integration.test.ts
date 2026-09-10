@@ -293,6 +293,47 @@ async function runtimeFixture(options: { publishFacts?: boolean; renewableRoot?:
 }
 
 describe("oIDC Token and UserInfo operations through real Redis and production HTTP routing", () => {
+  it.each(["empty", "json", "redis_type"] as const)("issued Code rejects Artifact state failure %s without affecting its peer", async (problem) => {
+    const f = await runtimeFixture();
+    const code = await f.issueCode();
+    const peer = await f.issueCode({ client_id: f.otherClient });
+    const artifact = await f.session.kernel.resolveProtocolArtifact(code, { protocol: "oidc", artifactType: "authorization_code" });
+    if (artifact.status !== "resolved")
+      throw new Error("Expected issued Artifact");
+    for (const input of [artifact.value.artifactId, artifact.value.lookupHash]) {
+      const denied = await f.exchange(input);
+      expect(denied.response.status).toBe(400);
+      expect(JSON.parse(denied.body).error).toBe("invalid_grant");
+    }
+    const inspection = createKernelMaintenanceFixture(scope.observer, f.env.sessionKernel.namespace);
+    await inspection.corruptArtifact(artifact.value.artifactId, problem);
+    const denied = await f.exchange(code);
+    expect(denied.response.status).toBe(problem === "redis_type" ? 500 : 400);
+    expect(JSON.parse(denied.body).error).toBe(problem === "redis_type" ? "server_error" : "invalid_grant");
+    const retained = await f.exchange(peer, { client_id: f.otherClient });
+    expect(retained.response.status).toBe(200);
+  });
+
+  it.each(["empty", "json", "redis_type"] as const)("issued AccessToken rejects Credential state failure %s without affecting its peer", async (problem) => {
+    const f = await runtimeFixture();
+    const issued = await f.exchange(await f.issueCode());
+    expect(issued.response.status).toBe(200);
+    const token = JSON.parse(issued.body).access_token;
+    const peer = JSON.parse((await f.exchange(await f.issueCode({ client_id: f.otherClient }), { client_id: f.otherClient })).body).access_token;
+    const credential = await f.session.kernel.resolveCredential(token, { protocol: "oidc", credentialType: "access_token", clientCode: f.client });
+    if (credential.status !== "resolved")
+      throw new Error("Expected issued Credential");
+    for (const input of [credential.value.credentialId, credential.value.lookupHash]) {
+      const denied = await f.userInfo(input);
+      expect(denied.response.status).toBe(401);
+    }
+    await createKernelMaintenanceFixture(scope.observer, f.env.sessionKernel.namespace).corruptCredential(credential.value.credentialId, problem);
+    const denied = await f.userInfo(token);
+    expect(denied.response.status).toBe(problem === "redis_type" ? 500 : 401);
+    const retained = await f.userInfo(peer);
+    expect(retained.response.status).toBe(200);
+  });
+
   it.each(["token-time", "missing-time", "binding-time", "binding-expired", "credential-time", "credential-subject", "snapshot-subject", "snapshot-session", "snapshot-client"] as const)("rejects inconsistent issued protocol facts: %s", async (problem) => {
     const f = await runtimeFixture();
     const token = JSON.parse((await f.exchange(await f.issueCode())).body).access_token;
@@ -450,7 +491,7 @@ describe("oIDC Token and UserInfo operations through real Redis and production H
       expect((await f.userInfo(peerToken)).response.status).toBe(200);
   });
 
-  it("observes successful UserInfo Redis command round trips through Provider HTTP", async () => {
+  it.each(["UserInfo", "Code exchange"] as const)("observes successful %s Redis command round trips through Provider HTTP", async (entry) => {
     let observations: CommandObservation[] | undefined;
     const f = await runtimeFixture({ observeCommand: value => observations?.push(value) });
     const issued = await f.exchange(await f.issueCode());
@@ -462,27 +503,33 @@ describe("oIDC Token and UserInfo operations through real Redis and production H
       if (args[0]?.toLowerCase() !== "echo")
         serverCommands?.push({ name: args[0]!.toLowerCase(), source: source === "lua" ? "lua" : "client" });
     });
+    async function drainMonitor() {
+      const marker = randomUUID();
+      const drained = new Promise<void>((resolve) => {
+        const onMonitor = (_time: string, args: string[]) => {
+          if (args[0]?.toLowerCase() === "echo" && args[1] === marker) {
+            monitor.off("monitor", onMonitor);
+            resolve();
+          }
+        };
+        monitor.on("monitor", onMonitor);
+      });
+      await scope.observer.echo(marker);
+      await drained;
+    }
     try {
-      const warmup = await f.userInfo(token);
+      const warmup = entry === "UserInfo" ? await f.userInfo(token) : await f.exchange(await f.issueCode());
       expect(warmup.response.status).toBe(200);
       for (let sample = 0; sample < 5; sample += 1) {
+        const code = entry === "Code exchange" ? await f.issueCode() : undefined;
+        await drainMonitor();
         observations = [];
         serverCommands = [];
         const startedAt = performance.now();
-        const response = await f.userInfo(token);
+        const response = code === undefined ? await f.userInfo(token) : await f.exchange(code);
+        const requestMs = performance.now() - startedAt;
         expect(response.response.status).toBe(200);
-        const marker = randomUUID();
-        const drained = new Promise<void>((resolve) => {
-          const onMonitor = (_time: string, args: string[]) => {
-            if (args[0]?.toLowerCase() === "echo" && args[1] === marker) {
-              monitor.off("monitor", onMonitor);
-              resolve();
-            }
-          };
-          monitor.on("monitor", onMonitor);
-        });
-        await scope.observer.echo(marker);
-        await drained;
+        await drainMonitor();
         const commands = observations;
         observations = undefined;
         let waveEnd = -Infinity;
@@ -492,12 +539,13 @@ describe("oIDC Token and UserInfo operations through real Redis and production H
             waves += 1;
           waveEnd = Math.max(waveEnd, value.completedAt);
         }
-        console.warn("OIDC UserInfo Redis observation", JSON.stringify({
+        process.stdout.write(`OIDC ${entry} Redis observation ${JSON.stringify({
           sample,
+          requestMs,
           waves,
           commands: commands.map(value => ({ name: value.name, startMs: value.startedAt - startedAt, endMs: value.completedAt - startedAt, rttMs: value.completedAt - value.startedAt })),
           serverCommands,
-        }));
+        })}\n`);
         serverCommands = undefined;
       }
     }
@@ -1589,6 +1637,8 @@ describe("oIDC protocol purpose isolation", () => {
     let replacementPayload = originalPayload;
     try {
       if (replacement !== "provider") {
+        const inspection = createKernelMaintenanceFixture(scope.observer, f.env.sessionKernel.namespace);
+        await inspection.expireArtifactGeneration(original.value);
         const created = await f.session.kernel.createProtocolArtifact({
           artifactId: original.value.artifactId,
           externalToken: code,
@@ -1787,6 +1837,8 @@ describe("oIDC protocol purpose isolation", () => {
       const freshPayload = await scope.observer.get(`oidc:model:AuthorizationCode:${freshCode}`);
       if (fresh.status !== "resolved" || !freshPayload)
         throw new Error("expected current Code owners");
+      const inspection = createKernelMaintenanceFixture(scope.observer, f.env.sessionKernel.namespace);
+      await inspection.expireArtifactGeneration(original.value);
       const replacement = await f.session.kernel.createProtocolArtifact({
         artifactId: original.value.artifactId,
         externalToken: code,
@@ -1832,7 +1884,7 @@ describe("oIDC protocol purpose isolation", () => {
       await pending;
     }
   });
-  it.each(["same-client-live", "retry-other-client-live", "retry-other-client-consumed"] as const)("keeps a production upsert replacement during precise cleanup: %s", async (scenario) => {
+  it.each(["same-client-live", "retry-other-client-live", "retry-other-client-consumed"] as const)("rejects occupied Code upsert and preserves an independent Code during precise cleanup: %s", async (scenario) => {
     const f = await runtimeFixture();
     const code = await f.issueCode();
     const purpose = { protocol: "oidc", clientCode: f.client, artifactType: "authorization_code" };
@@ -1870,7 +1922,7 @@ describe("oIDC protocol purpose isolation", () => {
       if (!serialized)
         throw new Error("expected fresh Provider payload");
       const payload = JSON.parse(serialized);
-      await f.session.operations.run(async (operation) => {
+      const collision = await f.session.operations.run(async (operation) => {
         const session = f.session.sessions.forOperation(operation);
         const adapter = new RedisOidcAdapter("AuthorizationCode", scope.observer, {
           oidcSession: session,
@@ -1880,30 +1932,33 @@ describe("oIDC protocol purpose isolation", () => {
           tokens: f.stores.tokens,
         });
         await adapter.upsert(code, { ...payload, jti: code, authorizationAttemptId: undefined }, 60);
-      });
+      }).catch((cause: unknown) => cause);
+      expect(collision).toBeInstanceOf(Error);
+      expect(collision).toMatchObject({ message: "OIDC authorization code Kernel artifact registration failed" });
+      const occupied = await f.session.kernel.resolveProtocolArtifact(code, purpose);
+      expect(occupied).toMatchObject({ status: "resolved", value: original.value });
       const replacementPurpose = { ...purpose, clientCode };
-      const replacement = await f.session.kernel.resolveProtocolArtifact(code, replacementPurpose);
+      const replacement = await f.session.kernel.resolveProtocolArtifact(freshCode, replacementPurpose);
       if (replacement.status !== "resolved")
         throw new Error("expected production Artifact B");
       expect(replacement.value.artifactId).not.toBe(original.value.artifactId);
-      const providerKey = `oidc:model:AuthorizationCode:${code}`;
-      const markerKey = `oidc:consumed:AuthorizationCode:${code}`;
+      const providerKey = `oidc:model:AuthorizationCode:${freshCode}`;
+      const markerKey = `oidc:consumed:AuthorizationCode:${freshCode}`;
       const replacementPayload = await scope.observer.get(providerKey);
       let token: string | undefined;
       if (scenario === "retry-other-client-consumed") {
-        const exchanged = await f.exchange(code, { client_id: clientCode });
+        const exchanged = await f.exchange(freshCode, { client_id: clientCode });
         expect(exchanged.response.status).toBe(200);
         token = JSON.parse(exchanged.body).access_token;
       }
       const replacementMarker = await scope.observer.get(markerKey);
       if (token)
         expect(replacementMarker).not.toBeNull();
+      let cleanupUnavailable = scenario.startsWith("retry-");
       if (scenario.startsWith("retry-")) {
-        let failCleanup = true;
         const evaluate = scope.writer.eval.bind(scope.writer);
         vi.spyOn(scope.writer, "eval").mockImplementation(async (...args) => {
-          if (failCleanup && String(args[0]).includes("session-kernel-delete-owned-cleanup-keys-v1")) {
-            failCleanup = false;
+          if (cleanupUnavailable && String(args[0]).includes("session-kernel-direct-cleanup-v1")) {
             throw new Error("cleanup connection unavailable");
           }
           return await evaluate(...args);
@@ -1912,11 +1967,12 @@ describe("oIDC protocol purpose isolation", () => {
       release();
       const denied = await pending;
       expect(denied.response.status).toBe(400);
-      const originalState = await scope.observer.get(f.session.kernel.keys.tombstone("artifact", original.value.artifactId));
+      const originalState = await scope.observer.get(f.session.kernel.keys.state("artifact", original.value.lookupHash));
       expect(originalState).not.toBeNull();
       if (scenario.startsWith("retry-")) {
         const inventory = await f.session.kernel.inventoryClientProtocol(f.client, "oidc");
         expect(inventory.counts.cleanupPending).toBe(1);
+        cleanupUnavailable = false;
         const recovered = createOidcProviderSession({ env: f.env, redis: scope.observer, logger: f.logger, repositories: { account: f.account }, stores: f.stores } as never);
         const retried = await recovered.kernel.revokeClientProtocol(f.client, "oidc", "client_config_changed");
         expect(retried.cleanup.succeeded).toBeGreaterThan(0);
@@ -1924,7 +1980,7 @@ describe("oIDC protocol purpose isolation", () => {
       }
       const retainedPayload = await scope.observer.get(providerKey);
       const retainedMarker = await scope.observer.get(markerKey);
-      const retained = await f.session.kernel.resolveProtocolArtifact(code, replacementPurpose);
+      const retained = await f.session.kernel.resolveProtocolArtifact(freshCode, replacementPurpose);
       expect(retainedPayload).toBe(replacementPayload);
       expect(retainedMarker).toBe(replacementMarker);
       expect(retained.status).toBe(token ? "consumed_replay" : "resolved");
@@ -1933,7 +1989,7 @@ describe("oIDC protocol purpose isolation", () => {
         expect(info.response.status).toBe(200);
       }
       else {
-        const next = await f.exchange(code, { client_id: clientCode });
+        const next = await f.exchange(freshCode, { client_id: clientCode });
         expect(next.response.status).toBe(200);
       }
       const root = await f.session.kernel.resolvePrincipalSession(f.principal.externalToken!);

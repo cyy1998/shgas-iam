@@ -387,12 +387,6 @@ function createServices(options: {
       namespace: "sess:v2:",
       principalIdleTtlMs: options.principalTtlMs ?? 3_600_000,
       principalAbsoluteTtlMs: options.principalTtlMs ?? 3_600_000,
-      lookupHmacKeys: {
-        current: {
-          id: "test-current",
-          secret: "test-session-lookup-hmac-secret-32-bytes",
-        },
-      },
       tombstoneTtlMs: 86_400_000,
       tombstoneGraceMs: 300_000,
       clock: options.applicationClock ?? { now: () => fakeRedis.now() },
@@ -1742,7 +1736,7 @@ describe("Custom SSO module interface", () => {
       new CustomSsoSubjectProjectionInvariantError("invalid_wire"),
     );
 
-    expect(fakeRedis.keysStartingWith("sess:v2:active:c:")).toHaveLength(0);
+    expect(fakeRedis.keysStartingWith("sess:v2:state:c:")).toHaveLength(0);
   });
 
   test("keeps Maintenance out of permanent authorization-version validation", async () => {
@@ -2313,7 +2307,7 @@ describe("Custom SSO module interface", () => {
     if (principal.status !== "resolved") {
       throw new Error("expected principal session");
     }
-    await fakeRedis.del(services.kernel.keys.active("principal_session", principal.value.principalSessionId));
+    await fakeRedis.del(services.kernel.keys.state("principal_session", principal.value.externalTokenLookupHash));
 
     await expect(
       services.customSsoSession.redeemIndependentGrant({

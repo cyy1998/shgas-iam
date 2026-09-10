@@ -794,7 +794,7 @@ function createAdapter(
     },
     oidcSession: {
       registerAuthorizationCodeArtifact: async () => true,
-      resolveAuthorizationCodeSessionLifetime: async (_id: string, serializedProviderCode: string) => ({ serializedProviderCode, remainingSeconds: 90, artifact: { version: 1 as const, artifactId: "code", protocol: "oidc", artifactType: "authorization_code", lookupHash: "lookup", lookupKeyId: "test", issuedAt: 0, expiresAt: 60000, cleanupRefs: [] } }),
+      resolveAuthorizationCodeSessionLifetime: async (_id: string, serializedProviderCode: string) => ({ serializedProviderCode, remainingSeconds: 90, artifact: { version: 1 as const, artifactId: "code", protocol: "oidc", artifactType: "authorization_code", lookupHash: "lookup", issuedAt: 0, expiresAt: 60000, cleanupRefs: [] } }),
       consumeAuthorizationCodeArtifact: async () => null,
       registerAccessTokenCredential: options.registerAccessTokenCredential
         ?? (async input => ({ credentialId: `${input.providerTokenId}-credential` }) as never),

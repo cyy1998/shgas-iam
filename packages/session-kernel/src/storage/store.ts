@@ -1,4 +1,3 @@
-import type { SessionKernelConfig } from "../config";
 import type {
   IssuedCredential,
   LifecycleObjectByKind,
@@ -13,11 +12,10 @@ import type {
   ResolveResult,
   RevokedResult,
 } from "../state/result";
-import type { SessionKernelArtifactConsumer } from "./artifact-consumption";
-import type { SessionKernelCredentialCreator } from "./credential-creation";
+import type { DirectStateTransitions } from "./direct-state-transitions";
 import type { SessionKernelKeyBuilder } from "./keys";
 import type { SessionKernelObservation } from "./observation";
-import { createLookupHashCandidates } from "../security/hmac";
+import { tokenDigest } from "../security/digest";
 import {
   parseLifecycleObject,
   parseRevokedTombstone,
@@ -34,6 +32,20 @@ if redis.call("EXISTS", KEYS[1]) == 0 then
   return redis.call("ZREM", KEYS[2], ARGV[1])
 end
 return 0
+`;
+
+const REMOVE_DIRECT_INDEX_MEMBER_IF_INACTIVE_SCRIPT = `
+-- remove_index_member_if_object_inactive_direct
+local hash = redis.call("GET", KEYS[1])
+if hash and (string.len(hash) ~= 64 or string.find(hash, "[^a-f0-9]")) then return 0 end
+local value = hash and redis.call("GET", ARGV[2] .. hash)
+if value then
+  local ok, state = pcall(cjson.decode, value)
+  if not ok or type(state) ~= "table" or state.state ~= "revoked" then
+    return 0
+  end
+end
+return redis.call("ZREM", KEYS[2], ARGV[1])
 `;
 
 type StoredResolveResult<T>
@@ -79,18 +91,11 @@ export type StoreIndexWrite = {
 };
 
 export type SessionKernelRevocationTransitions = {
-  deleteOwnedCleanupKeys: (input: {
-    lookupKey: string;
-    lookupTombstoneKey: string;
-    serializedTombstone: string;
-    payloadKeys: readonly string[];
-  }) => Promise<boolean>;
   updateActiveObject: (input: {
     activeKey: string;
     expectedActive: string;
     expiresAt: number;
     indexes: StoreIndexWrite[];
-    lookup?: { key: string; tombstoneKey: string; expectedOwner: string };
     serializedObject: string;
     tombstoneKey: string;
   }) => Promise<boolean>;
@@ -100,14 +105,12 @@ export type SessionKernelRevocationTransitions = {
     expectedActive: string;
     expiresAt: number;
     indexRemovals: Array<{ key: string; member: string }>;
-    lookup?: { activeKey: string; tombstoneKey: string; expectedOwner: string };
     serializedTombstone: string;
     tombstoneKey: string;
   }) => Promise<boolean>;
   finalizeCleanupPending: (input: {
     expiresAt: number;
     indexKey: string;
-    lookupTombstoneKey?: string;
     member: string;
     now: number;
     serializedTombstone: string;
@@ -119,15 +122,13 @@ export class SessionKernelStore {
   constructor(
     private readonly redis: SessionKernelRedis,
     private readonly keys: SessionKernelKeyBuilder,
-    private readonly config: SessionKernelConfig,
-    private readonly artifactConsumer: SessionKernelArtifactConsumer,
-    private readonly credentialCreator: SessionKernelCredentialCreator | undefined,
     private readonly revocationTransitions: SessionKernelRevocationTransitions,
     private readonly observation: SessionKernelObservation,
+    private readonly direct: DirectStateTransitions,
   ) {}
 
   tokenMatchesObject(token: string, object: ProtocolArtifact) {
-    return createLookupHashCandidates(token, this.config).some(candidate => candidate.lookupHash === object.lookupHash);
+    return tokenDigest(token) === object.lookupHash;
   }
 
   async now() {
@@ -147,33 +148,7 @@ export class SessionKernelStore {
     kind: K,
     externalToken: string,
   ): Promise<StoredResolveResult<LifecycleObjectByKind[K]>> {
-    for (const candidate of createLookupHashCandidates(externalToken, this.config)) {
-      const lookupTombstone = await this.readTombstoneKey(this.keys.lookupTombstone(kind, candidate.lookupHash));
-      if (lookupTombstone.status === "schema_invalid")
-        return lookupTombstone;
-      if (lookupTombstone.status === "revoked")
-        return tombstoneResolveResult(lookupTombstone.tombstone);
-
-      const id = await this.redis.get(this.keys.lookup(kind, candidate.lookupHash));
-      if (!id)
-        continue;
-
-      const resolved = await this.resolveStoredObject(kind, id);
-      if (resolved.status === "resolved") {
-        const objectLookupHash = lookupHashForResolvedObject(resolved.value);
-        if (objectLookupHash !== candidate.lookupHash) {
-          return {
-            status: "schema_invalid",
-            objectKind: kind,
-            objectId: id,
-            issues: "lookup hash mismatch",
-          };
-        }
-        return { ...resolved, lookupKeyId: candidate.keyId };
-      }
-      return resolved;
-    }
-    return { status: "missing_or_expired" };
+    return await this.resolveDirectState(kind, tokenDigest(externalToken));
   }
 
   async resolveObject<K extends LifecycleObjectKind>(
@@ -194,6 +169,12 @@ export class SessionKernelStore {
     kind: K,
     id: string,
   ): Promise<StoredResolveResult<LifecycleObjectByKind[K]>> {
+    if (isExternalKind(kind)) {
+      const hash = await this.redis.get(this.keys.identity(kind, id));
+      if (hash === null)
+        return { status: "missing_or_expired" };
+      return await this.resolveDirectState(kind, hash, id);
+    }
     const tombstone = await this.readTombstoneKey(this.keys.tombstone(kind, id));
     if (tombstone.status === "schema_invalid")
       return tombstone;
@@ -225,15 +206,22 @@ export class SessionKernelStore {
     lookupHash?: string;
     indexes?: StoreIndexWrite[];
   }) {
+    if (isExternalKind(input.kind)) {
+      if (!input.lookupHash)
+        throw new Error("Direct state creation requires a token digest");
+      const created = await this.direct.create({
+        ...this.directLocation(input.kind, input.id, input.lookupHash),
+        serialized: stringifyLifecycleObject(input.object),
+        expiresAt: input.object.expiresAt,
+        indexes: input.indexes ?? [],
+      });
+      if (!created)
+        throw new Error("lifecycle identity or token state is already owned");
+      return;
+    }
     const transaction = this.redis.multi()
       .set(this.keys.active(input.kind, input.id), stringifyLifecycleObject(input.object))
       .pexpireat(this.keys.active(input.kind, input.id), input.object.expiresAt);
-
-    if (input.lookupHash && isExternalKind(input.kind)) {
-      transaction
-        .set(this.keys.lookup(input.kind, input.lookupHash), input.id)
-        .pexpireat(this.keys.lookup(input.kind, input.lookupHash), input.object.expiresAt);
-    }
 
     for (const index of input.indexes ?? [])
       transaction.zadd(index.key, index.score, index.member);
@@ -245,16 +233,12 @@ export class SessionKernelStore {
     credential: IssuedCredential;
     indexes: StoreIndexWrite[];
   }) {
-    if (this.credentialCreator)
-      return await this.credentialCreator.create(input);
-    await this.putObject({
-      kind: "credential",
-      id: input.credential.credentialId,
-      object: input.credential,
-      lookupHash: input.credential.lookupHash,
+    return await this.direct.create({
+      ...this.directLocation("credential", input.credential.credentialId, input.credential.lookupHash),
+      serialized: stringifyLifecycleObject(input.credential),
+      expiresAt: input.credential.expiresAt,
       indexes: input.indexes,
     });
-    return "created" as const;
   }
 
   async updateObject<K extends LifecycleObjectKind>(input: {
@@ -267,18 +251,22 @@ export class SessionKernelStore {
     const lookupHash = "externalTokenLookupHash" in input.object
       ? input.object.externalTokenLookupHash
       : "lookupHash" in input.object ? input.object.lookupHash : undefined;
+    if (isExternalKind(input.kind)) {
+      if (!lookupHash)
+        throw new Error("Direct state update requires a token digest");
+      return await this.direct.update({
+        ...this.directLocation(input.kind, input.id, lookupHash),
+        expected: input.expectedSerialized,
+        serialized: stringifyLifecycleObject(input.object),
+        expiresAt: input.object.expiresAt,
+        indexes: input.indexes ?? [],
+      });
+    }
     return await this.revocationTransitions.updateActiveObject({
       activeKey: this.keys.active(input.kind, input.id),
       expectedActive: input.expectedSerialized,
       expiresAt: input.object.expiresAt,
       indexes: input.indexes ?? [],
-      ...(lookupHash && isExternalKind(input.kind)
-        ? { lookup: {
-            key: this.keys.lookup(input.kind, lookupHash),
-            tombstoneKey: this.keys.lookupTombstone(input.kind, lookupHash),
-            expectedOwner: input.id,
-          } }
-        : {}),
       serializedObject: stringifyLifecycleObject(input.object),
       tombstoneKey: this.keys.tombstone(input.kind, input.id),
     });
@@ -293,6 +281,30 @@ export class SessionKernelStore {
     indexRemovals?: Array<{ key: string; member: string }>;
     cleanupPending?: { key: string; member: string };
   }) {
+    if (isExternalKind(input.kind)) {
+      if (!input.lookupHash)
+        throw new Error("Direct state revocation requires a token digest");
+      // The facade already acquired validity. Compare that observation without rejudging its deadline.
+      const current = await this.redis.get(this.keys.state(input.kind, input.lookupHash));
+      if (current === null)
+        return { status: "missing" as const };
+      const transitioned = await this.direct.revoke({
+        ...this.directLocation(input.kind, input.id, input.lookupHash),
+        expected: input.expectedSerialized ?? current,
+        serialized: directTombstone(input.tombstone),
+        expiresAt: input.tombstone.expiresAt,
+        indexRemovals: input.indexRemovals ?? [],
+        pending: input.cleanupPending ? { ...input.cleanupPending, score: input.tombstone.revokedAt } : undefined,
+      });
+      if (transitioned)
+        return { status: "revoked" as const };
+      const concurrent = await this.resolveStoredObject(input.kind, input.id);
+      if (concurrent.status === "schema_invalid")
+        return concurrent;
+      if (concurrent.status === "revoked" || concurrent.status === "consumed_replay")
+        return { status: "already_revoked" as const, tombstone: concurrent.tombstone };
+      return { status: "comparison_conflict" as const };
+    }
     const existing = await this.readTombstoneKey(this.keys.tombstone(input.kind, input.id));
     if (existing.status === "schema_invalid")
       return existing;
@@ -317,15 +329,6 @@ export class SessionKernelStore {
       expectedActive: input.expectedSerialized ?? active,
       expiresAt: input.tombstone.expiresAt,
       indexRemovals: input.indexRemovals ?? [],
-      ...(input.lookupHash && isExternalKind(input.kind)
-        ? {
-            lookup: {
-              activeKey: this.keys.lookup(input.kind, input.lookupHash),
-              tombstoneKey: this.keys.lookupTombstone(input.kind, input.lookupHash),
-              expectedOwner: input.id,
-            },
-          }
-        : {}),
       serializedTombstone: stringifyRevokedTombstone(input.tombstone),
       tombstoneKey,
     });
@@ -345,10 +348,10 @@ export class SessionKernelStore {
       return;
     if (!tombstone.lookupHash || !isExternalKind(tombstone.objectKind))
       throw new Error("external payload cleanup requires a lookup-bound revoked object");
-    await this.revocationTransitions.deleteOwnedCleanupKeys({
-      lookupKey: this.keys.lookup(tombstone.objectKind, tombstone.lookupHash),
-      lookupTombstoneKey: this.keys.lookupTombstone(tombstone.objectKind, tombstone.lookupHash),
-      serializedTombstone: stringifyRevokedTombstone(tombstone),
+
+    await this.direct.deleteOwned({
+      ...this.directLocation(tombstone.objectKind, tombstone.objectId, tombstone.lookupHash),
+      expected: directTombstone(tombstone),
       payloadKeys,
     });
   }
@@ -358,15 +361,23 @@ export class SessionKernelStore {
     indexKey: string;
     member: string;
   }) {
+    if (isExternalKind(input.tombstone.objectKind)) {
+      if (!input.tombstone.lookupHash)
+        throw new Error("Direct state cleanup requires a token digest");
+      await this.direct.finalize({
+        ...this.directLocation(input.tombstone.objectKind, input.tombstone.objectId, input.tombstone.lookupHash),
+        expected: directTombstone(input.tombstone),
+        expiresAt: input.tombstone.expiresAt,
+        now: await this.now(),
+        indexKey: input.indexKey,
+        member: input.member,
+      });
+      return;
+    }
     const tombstoneKey = this.keys.tombstone(input.tombstone.objectKind, input.tombstone.objectId);
-    const lookupTombstoneKey = input.tombstone.lookupHash
-      && isExternalKind(input.tombstone.objectKind)
-      ? this.keys.lookupTombstone(input.tombstone.objectKind, input.tombstone.lookupHash)
-      : undefined;
     await this.revocationTransitions.finalizeCleanupPending({
       expiresAt: input.tombstone.expiresAt,
       indexKey: input.indexKey,
-      ...(lookupTombstoneKey ? { lookupTombstoneKey } : {}),
       member: input.member,
       now: await this.now(),
       serializedTombstone: stringifyRevokedTombstone(input.tombstone),
@@ -381,23 +392,19 @@ export class SessionKernelStore {
     tombstone: RevokedTombstone;
     indexRemovals: Array<{ key: string; member: string }>;
   }): Promise<ResolveResult<ProtocolArtifact>> {
-    const existing = await this.readTombstoneKey(this.keys.tombstone("artifact", input.artifact.artifactId));
-    if (existing.status === "schema_invalid")
-      return existing;
-    if (existing.status === "revoked")
-      return tombstoneResolveResult(existing.tombstone);
-
-    const tombstoneKey = this.keys.tombstone("artifact", input.artifact.artifactId);
-    const result = await this.artifactConsumer.consume(input);
-    if (result === "consumed")
+    const consumed = await this.direct.revoke({
+      ...this.directLocation("artifact", input.artifact.artifactId, input.artifact.lookupHash),
+      expected: input.serializedArtifact,
+      serialized: directTombstone(input.tombstone),
+      expiresAt: input.tombstone.expiresAt,
+      indexRemovals: input.indexRemovals,
+    });
+    if (consumed)
       return { status: "resolved", value: input.artifact, observedAt: input.observedAt };
-
-    const tombstone = await this.readTombstoneKey(tombstoneKey);
-    if (tombstone.status === "schema_invalid")
-      return tombstone;
-    if (tombstone.status === "revoked")
-      return tombstoneResolveResult(tombstone.tombstone);
-    return { status: "missing_or_expired" };
+    const current = await this.resolveDirectState("artifact", input.artifact.lookupHash, input.artifact.artifactId);
+    if (current.status !== "resolved")
+      return current;
+    return failClosed("artifact changed since observation");
   }
 
   async readIndex(key: string) {
@@ -439,12 +446,64 @@ export class SessionKernelStore {
     if (!this.redis.eval)
       throw new Error("Session Kernel stale index cleanup requires Redis EVAL");
     await this.redis.eval(
-      REMOVE_INDEX_MEMBER_IF_OBJECT_INACTIVE_SCRIPT,
+      isExternalKind(kind) ? REMOVE_DIRECT_INDEX_MEMBER_IF_INACTIVE_SCRIPT : REMOVE_INDEX_MEMBER_IF_OBJECT_INACTIVE_SCRIPT,
       2,
-      this.keys.active(kind, id),
+      isExternalKind(kind) ? this.keys.identity(kind, id) : this.keys.active(kind, id),
       indexKey,
       member,
+      ...(isExternalKind(kind) ? [this.keys.state(kind, "")] : []),
     );
+  }
+
+  private directLocation(kind: LifecycleObjectKind, id: string, hash: string) {
+    return { stateKey: this.keys.state(kind, hash), idKey: this.keys.identity(kind, id), idOwner: hash };
+  }
+
+  private async resolveDirectState<K extends LifecycleObjectKind>(
+    kind: K,
+    hash: string,
+    id?: string,
+  ): Promise<StoredResolveResult<LifecycleObjectByKind[K]>> {
+    const invalid = { status: "schema_invalid" as const, objectKind: kind, objectId: id, issues: "state identity or schema mismatch" };
+    if (!/^[a-f0-9]{64}$/.test(hash))
+      return invalid;
+    const { serialized, observedAt } = await this.observation.read(this.keys.state(kind, hash));
+    if (serialized === null)
+      return { status: "missing_or_expired" };
+    let value: unknown;
+    try {
+      value = JSON.parse(serialized);
+    }
+    catch { return invalid; }
+    if (value && typeof value === "object" && "state" in value) {
+      if (value.state !== "revoked")
+        return invalid;
+      const parsed = parseRevokedTombstone(serialized);
+      if (!parsed.success || parsed.data.objectKind !== kind || parsed.data.lookupHash !== hash
+        || (id !== undefined && parsed.data.objectId !== id)) {
+        return invalid;
+      }
+      // Pending records intentionally outlive their original diagnostic deadline.
+      return tombstoneResolveResult(parsed.data);
+    }
+    const parsed = parseLifecycleObject(kind, serialized);
+    if (!parsed.success)
+      return invalid;
+    const object = parsed.data;
+    const objectHash = "externalTokenLookupHash" in object
+      ? object.externalTokenLookupHash
+      : "lookupHash" in object ? object.lookupHash : undefined;
+    const objectId = "credentialId" in object
+      ? object.credentialId
+      : "artifactId" in object
+        ? object.artifactId
+        : "principalSessionId" in object ? object.principalSessionId : undefined;
+    if (objectHash !== hash || (id !== undefined && objectId !== id)) {
+      return invalid;
+    }
+    if (object.expiresAt <= observedAt)
+      return { status: "missing_or_expired" };
+    return { status: "resolved", value: object, observedAt, serialized };
   }
 
   private async readTombstoneKey(key: string): Promise<
@@ -467,23 +526,19 @@ export class SessionKernelStore {
   }
 }
 
+function directTombstone(tombstone: RevokedTombstone) {
+  return JSON.stringify({ ...tombstone, state: "revoked" });
+}
+
 function withoutSerialized<T>(
   result: StoredResolveResult<T>,
 ): ResolveResult<T> {
   if (result.status !== "resolved")
     return result;
-  if (result.lookupKeyId === undefined) {
-    return {
-      status: "resolved",
-      value: result.value,
-      observedAt: result.observedAt,
-    };
-  }
   return {
     status: "resolved",
     value: result.value,
     observedAt: result.observedAt,
-    lookupKeyId: result.lookupKeyId,
   };
 }
 
@@ -517,8 +572,4 @@ export function catchAsFailClosed<T>(
 
 export function getLookupHash(object: IssuedCredential | ProtocolArtifact) {
   return object.lookupHash;
-}
-
-function lookupHashForResolvedObject(object: LifecycleObjectByKind[ExternalKind]) {
-  return "externalTokenLookupHash" in object ? object.externalTokenLookupHash : object.lookupHash;
 }

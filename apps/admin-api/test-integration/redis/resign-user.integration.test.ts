@@ -9,7 +9,6 @@ import { createResignUserUseCase } from "@admin-api/use-cases/employment/resign-
 import { createRedisSubjectAccessStore, createSubjectAccessBarrier, createSubjectAccessBootstrap, createSubjectAccessLifecycle, createSubjectAccessOperations, createSubjectAccessSessionContext, createSubjectAccessSessionRevocation } from "@iam/api-core/subject-access";
 import { EmploymentStatus, UserStatus } from "@iam/contracts";
 import { createSessionKernel, createSessionKernelConfig } from "@iam/session-kernel";
-import { createSessionKernelKeyBuilder } from "@iam/session-kernel/testing";
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, mock, test } from "bun:test";
 import { createAdminApiRedisTestHarness } from "./redis-test-harness";
 
@@ -44,7 +43,6 @@ async function fixture() {
   });
   const config = createSessionKernelConfig({
     namespace,
-    lookupHmacKeys: { current: { id: "resign-test", secret: "resign-test-secret-00000000000000000000000000" } },
     principalAbsoluteTtlMs: 60_000,
     principalIdleTtlMs: 30_000,
   });
@@ -67,7 +65,6 @@ async function fixture() {
     },
   });
   const kernel = createSessionKernel({ redis: kernelRedis, config });
-  const keys = createSessionKernelKeyBuilder(config.namespace);
   const user = { id: 1, username: "holder", subjectIdentifier, status: UserStatus.Enable, isDelete: false };
   const employment = {
     id: 1,
@@ -177,7 +174,7 @@ async function fixture() {
     createSession,
     failNextCleanup: () => { failNextCleanup = true; },
     delayNextCleanup: (delay: () => Promise<void>) => { delayNextCleanup = delay; },
-    exists: async (id: string) => await scope.observer.exists(keys.active("principal_session", id)),
+    exists: async (id: string) => (await kernel.resolvePrincipalSessionById(id)).status === "resolved" ? 1 : 0,
     reenable: async () => {
       user.status = UserStatus.Enable;
       const transition = await barrier.beginBlocking(subjectIdentifier);

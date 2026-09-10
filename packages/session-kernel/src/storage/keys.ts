@@ -23,16 +23,18 @@ const codeObjectKinds = {
 
 export type SessionKernelKeyBuilder = ReturnType<typeof createSessionKernelKeyBuilder>;
 
-/** Current lifecycle state only; callers must stop and drain every writer before deletion. */
+/** Offline source/target inventory, including orphaned state and pending cleanup; never an online read fallback. */
 export function sessionKernelMaintenancePrefixes(namespace: string) {
   const ns = createSessionKernelKeyBuilder(namespace).namespace;
-  return ["active:", "lookup:", "revoked:", "revoked_lookup:", "idx:"].map(kind => `${ns}${kind}`);
+  return ["active:", "lookup:", "revoked:", "revoked_lookup:", "state:p:", "id:p:", "state:c:", "id:c:", "state:a:", "id:a:", "idx:"].map(kind => `${ns}${kind}`);
 }
 
 export function createSessionKernelKeyBuilder(namespace = "sess:v2:") {
   const ns = namespace.endsWith(":") ? namespace : `${namespace}:`;
   return {
     namespace: ns,
+    state: (kind: LifecycleObjectKind, hash: string) => `${ns}state:${objectKindCodes[kind]}:${hash}`,
+    identity: (kind: LifecycleObjectKind, id: string) => `${ns}id:${objectKindCodes[kind]}:${id}`,
     active: (kind: LifecycleObjectKind, id: string) => `${ns}active:${objectKindCodes[kind]}:${id}`,
     lookup: (kind: Extract<LifecycleObjectKind, "principal_session" | "credential" | "artifact">, lookupHash: string) =>
       `${ns}lookup:${objectKindCodes[kind]}:${lookupHash}`,
@@ -42,6 +44,7 @@ export function createSessionKernelKeyBuilder(namespace = "sess:v2:") {
       lookupHash: string,
     ) => `${ns}revoked_lookup:${objectKindCodes[kind]}:${lookupHash}`,
     index: {
+      principalCleanup: `${ns}idx:principal_cleanup`,
       principalSessions: `${ns}idx:principal_sessions`,
       user: (principal: PrincipalRef) =>
         `${ns}idx:user:${encodePart(principal.principalType)}:${encodePart(principal.subjectId)}:principal`,

@@ -7,9 +7,9 @@ Next review: 2026-10-31
 
 ## 发布前提
 
-包含 Spec #163 / ADR-0033 的候选优先完整执行[全体下线手册](online-auth-redis-time-cutover.md)，不采用下文 Spec #146 的保留对象升级，也不为本次运行数据库迁移或推进协议 epoch。根撤销是尽力级联；smoke 核对实际撤销对象拒绝与允许漏撤，不能将根退出等同于全部派生访问立即失效。环境未切换。
+包含 Spec #163 / ADR-0033 或 Spec #170 / ADR-0034 的候选优先完整执行[全体下线手册](online-auth-redis-time-cutover.md)，不采用下文 Spec #146 的保留对象升级，也不为本次运行数据库迁移或推进协议 epoch。根撤销是尽力级联；smoke 核对实际撤销对象拒绝与允许漏撤，不能将根退出等同于全部派生访问立即失效。环境未切换。
 
-Spec #146 对已满足当前数据契约的环境，优先完整遵守[保留对象升级手册](protocol-validation-preserving-upgrade.md)。
+Spec #146 的原固定旧候选对已满足该候选数据契约的环境，完整遵守[保留对象升级手册](protocol-validation-preserving-upgrade.md)。
 该流程不执行本页初始部署的数据库迁移、协议禁用、artifact 清理或全部重新登录步骤；回退与放流同样按其保留边界处理。
 
 在线状态由应用时间切换为 Redis 时间时，先完整执行[专用维护手册](online-auth-redis-time-cutover.md)，
@@ -27,10 +27,7 @@ Spec #146 对已满足当前数据契约的环境，优先完整遵守[保留对
    - `IAM_OIDC_PROVIDER_SESSION_KERNEL_PRINCIPAL_ABSOLUTE_TTL_SECONDS`
    - `IAM_OIDC_PROVIDER_SESSION_KERNEL_TOMBSTONE_TTL_SECONDS`
    - `IAM_OIDC_PROVIDER_SESSION_KERNEL_TOMBSTONE_GRACE_SECONDS`
-   - `IAM_OIDC_PROVIDER_SESSION_LOOKUP_HMAC_CURRENT_ID`
-   - `IAM_OIDC_PROVIDER_SESSION_LOOKUP_HMAC_CURRENT_SECRET`
-   - 可选的 previous HMAC key pair
-7. 生产环境不得使用开发默认 `IAM_OIDC_PROVIDER_SESSION_LOOKUP_HMAC_CURRENT_SECRET`。previous HMAC key 只用于平滑 lookup rotation，current/previous 的 id 和 secret 不得冲突。
+7. Kernel lookup HMAC 的 current/previous 配置与环境变量已退役；三个后端使用相同 namespace 和生命周期期限，启动不需要定位密钥。Cookie/JWT 签名及 Client Secret 校验保留。
 8. 执行任何 APISIX apply 前，必须验证并比较 dev/prod 配置：
 
 ```bash
@@ -57,20 +54,15 @@ OIDC ID Token 使用 RS256 signing JWK。轮换时按以下顺序执行：
 
 如果 current/previous `kid` 冲突、不是可用 RSA private key 或配置缺失，provider 必须启动失败，不得降级为临时内存 key。
 
-## Session Kernel HMAC Lookup Rotation
+## Session Kernel token 定位与切换
 
-Session Kernel external token lookup 使用 HMAC hash。轮换顺序是：
+Principal Session、Credential、Protocol Artifact 的完整 token 经普通 SHA-256 直接定位按类型隔离的单状态记录；
+内部 ID 仅反向定位到同一状态，无 token Binding 仍按 ID。当前 Kernel 没有 lookup HMAC 密钥或轮换窗口，
+也没有 previous candidate、旧布局双读、摘要或 ID bearer fallback。Provider 自有 lookup 与 Cookie/JWT 签名保持。
 
-1. 将旧 current 配为 `IAM_OIDC_PROVIDER_SESSION_LOOKUP_HMAC_PREVIOUS_ID` 和
-   `IAM_OIDC_PROVIDER_SESSION_LOOKUP_HMAC_PREVIOUS_SECRET`。
-2. 配置新的 `IAM_OIDC_PROVIDER_SESSION_LOOKUP_HMAC_CURRENT_ID` 和
-   `IAM_OIDC_PROVIDER_SESSION_LOOKUP_HMAC_CURRENT_SECRET`。
-3. 部署 provider，确认 current/previous 的 id 和 secret 均不冲突，previous 成对存在。
-4. 在旧 PrincipalSession、authorization code、access token 或 lookup 最大 TTL 覆盖窗口内保留 previous。
-5. 确认旧 lookup 全部过期或用户已重新登录后，移除 previous HMAC key pair。
-
-生产环境不得使用开发默认 HMAC secret。HMAC rotation 失败时，优先恢复上一组 current/previous 配置；不要清理
-`sess:v2:` key，除非明确执行跨版本回滚。
+包含 Spec #170 的候选切换必须停流、排空、清理源及目标在线状态、以新进程独立 verify、统一版本并重新登录；
+smoke 后重跑或回退同样先清理当前状态。完整 owner、命令及人工门禁沿[全体下线手册](online-auth-redis-time-cutover.md)。
+#175 已交付全体下线维护，#176 最终账本与验收评论保存候选证据，目标环境未执行；运行时边界见[证据](../features/sso/token-state-runtime-evidence.md)。
 
 ## 逐 Client 启用矩阵
 
@@ -130,7 +122,7 @@ Session Kernel external token lookup 使用 HMAC hash。轮换顺序是：
 |---|---|---|
 | build/test | 通过/失败 | `@iam/oidc-provider` test、lint、typecheck 摘要。 |
 | JWK rotation | 通过/跳过 | current/previous `kid`、JWKS public key 数量、token header `kid`。 |
-| HMAC lookup rotation | 通过/跳过 | current/previous id、保留窗口、移除 previous 时间。 |
+| Kernel 定位切换 | 未执行/通过/失败 | 固定候选、全体停流/排空、源及目标布局清理、新进程 verify、统一版本和重新登录；不记录 token、摘要或完整 key。 |
 | client enable matrix | 通过/失败 | 每个 client 的启用状态、smoke 路径和 requestId/traceId。 |
 | 协议 artifact 维护 | 通过/跳过 | 适用 manifest 的 dry-run/apply/verify 聚合摘要，不记录完整 key。 |
 | protocol smoke | 通过/失败 | Discovery、JWKS、authorize、token、UserInfo、replay、logout。 |

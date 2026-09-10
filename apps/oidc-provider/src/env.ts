@@ -1,7 +1,3 @@
-import {
-  DEFAULT_SESSION_LOOKUP_HMAC_CURRENT_ID,
-  DEFAULT_SESSION_LOOKUP_HMAC_CURRENT_SECRET,
-} from "@iam/session-kernel";
 import { z } from "zod";
 
 const positiveSeconds = z.coerce.number().int().positive();
@@ -73,42 +69,6 @@ const RawOidcProviderEnvSchema = z.object({
   IAM_OIDC_PROVIDER_SESSION_KERNEL_PRINCIPAL_ABSOLUTE_TTL_SECONDS: positiveSeconds.optional(),
   IAM_OIDC_PROVIDER_SESSION_KERNEL_TOMBSTONE_TTL_SECONDS: positiveSeconds.default(86400),
   IAM_OIDC_PROVIDER_SESSION_KERNEL_TOMBSTONE_GRACE_SECONDS: positiveSeconds.default(300),
-  IAM_OIDC_PROVIDER_SESSION_LOOKUP_HMAC_CURRENT_ID: z.string().min(1).default(DEFAULT_SESSION_LOOKUP_HMAC_CURRENT_ID),
-  IAM_OIDC_PROVIDER_SESSION_LOOKUP_HMAC_CURRENT_SECRET: z.string().min(32).default(
-    DEFAULT_SESSION_LOOKUP_HMAC_CURRENT_SECRET,
-  ),
-  IAM_OIDC_PROVIDER_SESSION_LOOKUP_HMAC_PREVIOUS_ID: optionalNonEmptyString(),
-  IAM_OIDC_PROVIDER_SESSION_LOOKUP_HMAC_PREVIOUS_SECRET: optionalNonEmptyString(),
-}).superRefine((raw, ctx) => {
-  const hasPreviousId = raw.IAM_OIDC_PROVIDER_SESSION_LOOKUP_HMAC_PREVIOUS_ID !== undefined;
-  const hasPreviousSecret = raw.IAM_OIDC_PROVIDER_SESSION_LOOKUP_HMAC_PREVIOUS_SECRET !== undefined;
-  if (hasPreviousId !== hasPreviousSecret) {
-    ctx.addIssue({
-      code: "custom",
-      path: ["IAM_OIDC_PROVIDER_SESSION_LOOKUP_HMAC_PREVIOUS_ID"],
-      message: "IAM_OIDC_PROVIDER_SESSION_LOOKUP_HMAC_PREVIOUS_ID and IAM_OIDC_PROVIDER_SESSION_LOOKUP_HMAC_PREVIOUS_SECRET must be configured together",
-    });
-  }
-  if (
-    raw.IAM_OIDC_PROVIDER_SESSION_LOOKUP_HMAC_PREVIOUS_SECRET !== undefined
-    && raw.IAM_OIDC_PROVIDER_SESSION_LOOKUP_HMAC_PREVIOUS_SECRET.length < 32
-  ) {
-    ctx.addIssue({
-      code: "custom",
-      path: ["IAM_OIDC_PROVIDER_SESSION_LOOKUP_HMAC_PREVIOUS_SECRET"],
-      message: "IAM_OIDC_PROVIDER_SESSION_LOOKUP_HMAC_PREVIOUS_SECRET must be at least 32 characters",
-    });
-  }
-  if (
-    raw.NODE_ENV === "production"
-    && raw.IAM_OIDC_PROVIDER_SESSION_LOOKUP_HMAC_CURRENT_SECRET === DEFAULT_SESSION_LOOKUP_HMAC_CURRENT_SECRET
-  ) {
-    ctx.addIssue({
-      code: "custom",
-      path: ["IAM_OIDC_PROVIDER_SESSION_LOOKUP_HMAC_CURRENT_SECRET"],
-      message: "IAM_OIDC_PROVIDER_SESSION_LOOKUP_HMAC_CURRENT_SECRET must be set in production",
-    });
-  }
 });
 
 type RawOidcProviderEnv = z.infer<typeof RawOidcProviderEnvSchema>;
@@ -153,10 +113,6 @@ export interface OidcProviderEnv {
     principalAbsoluteTtlSeconds?: number;
     tombstoneTtlSeconds: number;
     tombstoneGraceSeconds: number;
-    lookupHmacCurrentId: string;
-    lookupHmacCurrentSecret: string;
-    lookupHmacPreviousId?: string;
-    lookupHmacPreviousSecret?: string;
   };
 }
 
@@ -201,10 +157,6 @@ function toOidcProviderEnv(raw: RawOidcProviderEnv): OidcProviderEnv {
       principalAbsoluteTtlSeconds: raw.IAM_OIDC_PROVIDER_SESSION_KERNEL_PRINCIPAL_ABSOLUTE_TTL_SECONDS,
       tombstoneTtlSeconds: raw.IAM_OIDC_PROVIDER_SESSION_KERNEL_TOMBSTONE_TTL_SECONDS,
       tombstoneGraceSeconds: raw.IAM_OIDC_PROVIDER_SESSION_KERNEL_TOMBSTONE_GRACE_SECONDS,
-      lookupHmacCurrentId: raw.IAM_OIDC_PROVIDER_SESSION_LOOKUP_HMAC_CURRENT_ID,
-      lookupHmacCurrentSecret: raw.IAM_OIDC_PROVIDER_SESSION_LOOKUP_HMAC_CURRENT_SECRET,
-      lookupHmacPreviousId: raw.IAM_OIDC_PROVIDER_SESSION_LOOKUP_HMAC_PREVIOUS_ID,
-      lookupHmacPreviousSecret: raw.IAM_OIDC_PROVIDER_SESSION_LOOKUP_HMAC_PREVIOUS_SECRET,
     },
   };
 }

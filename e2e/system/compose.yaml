@@ -124,8 +124,6 @@ services:
       IAM_API_LOGIN_CREDENTIAL_ACTIVE_KID: 2026-05-primary
       IAM_API_LOGIN_CREDENTIAL_PRIVATE_KEYS_JSON: '{"2026-05-primary":"319b4e59ca80d7b4cc35955b63da4edf1ed51772ec8f33c0a4f769dda7b9fc65"}'
       IAM_API_SESSION_KERNEL_NAMESPACE: "sess:v2:"
-      IAM_API_SESSION_LOOKUP_HMAC_CURRENT_ID: e2e-current
-      IAM_API_SESSION_LOOKUP_HMAC_CURRENT_SECRET: iam-e2e-session-lookup-hmac-secret-local-only
       IAM_API_WECHAT_CORP_ID: e2e-disabled
       IAM_API_WECHAT_CORP_SECRET: e2e-disabled
       IAM_API_SMS_URL: http://127.0.0.1:9/disabled
@@ -162,8 +160,6 @@ services:
       IAM_ADMIN_API_LOG_FORMAT: json
       IAM_ADMIN_API_ADMIN_CLIENT_CODES: ${IAM_E2E_ADMIN_CLIENT_CODE:-iam-admin}
       IAM_ADMIN_API_SESSION_KERNEL_NAMESPACE: "sess:v2:"
-      IAM_ADMIN_API_SESSION_LOOKUP_HMAC_CURRENT_ID: e2e-current
-      IAM_ADMIN_API_SESSION_LOOKUP_HMAC_CURRENT_SECRET: iam-e2e-session-lookup-hmac-secret-local-only
     depends_on: *runtime-dependencies
     healthcheck:
       test: ["CMD", "bun", "-e", "const r=await fetch('http://127.0.0.1:30001/admin/users/search');if(r.status!==403)process.exit(1)"]
@@ -194,8 +190,6 @@ services:
       IAM_OIDC_PROVIDER_COOKIE_KEYS: iam-e2e-cookie-primary-key-32-characters,iam-e2e-cookie-secondary-key-32-characters
       IAM_OIDC_PROVIDER_COOKIE_SECURE: "false"
       IAM_OIDC_PROVIDER_SESSION_KERNEL_NAMESPACE: "sess:v2:"
-      IAM_OIDC_PROVIDER_SESSION_LOOKUP_HMAC_CURRENT_ID: e2e-current
-      IAM_OIDC_PROVIDER_SESSION_LOOKUP_HMAC_CURRENT_SECRET: iam-e2e-session-lookup-hmac-secret-local-only
     depends_on: *runtime-dependencies
     healthcheck:
       test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:30002/health').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"]

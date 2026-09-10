@@ -223,7 +223,6 @@ function principalSession(overrides: Partial<PrincipalSession> = {}): PrincipalS
     sessionKind: "browser_user",
     principalSessionId: "30000000-0000-4000-8000-000000000001",
     externalTokenLookupHash: "hash",
-    lookupKeyId: "kid",
     principal: {
       principalType: "user",
       subjectId: "00000000-0000-4000-8000-000000000001",

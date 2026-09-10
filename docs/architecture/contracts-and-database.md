@@ -65,8 +65,14 @@ Kernel 的 `resolveClientBindingById`、`resolveCredential` 和 `resolveProtocol
 对象；identity 被替换时 CAS 保留替换者。Principal 读取和管理盘点仍中性。用途错误不触发协议配置校验、Subject Access
 或隐式批量撤销；OIDC 与 Custom SSO 必须通过各自 owner 完成后续协议检查，不存在可省略用途的在线兼容入口。
 
-`CleanupAdapter.cleanup` 的 `CleanupExecution` 参数只提供 `deleteOwnedKeys`。Kernel 隐藏 lookup/tombstone key 与原子
-所有权比较，OIDC payload adapter 只提供其拥有的协议 key；实时撤销与 pending 重试都绑定原 tombstone，当前存储格式保持不变。
+`CleanupAdapter.cleanup` 的 `CleanupExecution` 参数只提供 `deleteOwnedKeys`。Kernel 隐藏状态定位与原子
+所有权比较，OIDC payload adapter 只提供其拥有的协议 key；实时撤销与 pending 重试都绑定原终态。
+#171–#173 的 Principal、Credential 与 Artifact 已使用 SHA-256 单状态和反向 ID；无 token Binding 继续按内部 ID 定位。
+Artifact 消费原子比较已观察状态与 ID owner，并写入同记录 revoked、reason=consumed；重复消费识别 consumed_replay。
+三类对象的 cleanup 均比较原终态字节与反向 owner，不能删除较新对象；见[Artifact 状态证据](../features/sso/artifact-direct-state-evidence.md)。
+Kernel lookup HMAC 的 current/previous 配置、环境变量、公开类型和派生候选已退役；三类对象在线定位与消费匹配均使用普通 SHA-256。
+Provider 自有 lookup、OIDC Cookie/JWT 签名及 Client Secret 校验保留；见[运行时契约](../features/sso/token-state-runtime-evidence.md)。
+全体下线维护已由 #175 完成，全部逐项验收和原始基线成本见 [最终账本](../features/sso/token-state-contract.md)，实际环境切换未执行。
 
 
 

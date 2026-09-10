@@ -832,7 +832,7 @@ describe("repository architecture guard", () => {
         "import { createClientAuthRateLimiter } from \"../../security/client-auth-rate-limit.ts\";",
         "import { createOidcClientSecretVerifier } from \"../../security/client-secret-verifier.ts\";",
       ].join("\n"),
-      "apps/oidc-provider/src/env.ts": "import { DEFAULT_SESSION_LOOKUP_HMAC_CURRENT_ID } from \"@iam/session-kernel\";",
+      "apps/oidc-provider/src/env.ts": "import { createSessionKernelConfigFromEnv } from \"@iam/session-kernel\";",
       "apps/oidc-provider/src/composition/session/index.ts": [
         "import { createSessionKernel } from \"@iam/session-kernel\";",
         "import { createOidcSessionKernelAdapter } from \"../../session/oidc-session-kernel.adapter.ts\";",

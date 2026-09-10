@@ -8,7 +8,7 @@
   },
   "scripts": {
     "custom-sso:grants": "node --import tsx src/commands/custom-sso-grant-command.ts",
-    "online-auth:state": "node --env-file-if-exists=.env --import tsx src/commands/online-auth-state-command.ts",
+    "online-auth:state": "node --import tsx src/commands/online-auth-state-command.ts",
     "dev": "node --watch --import tsx src/index.ts",
     "serve": "node --import tsx src/index.ts",
     "client-protocol:artifacts": "node --env-file-if-exists=.env --import tsx scripts/client-protocol-artifact-maintenance.ts",

@@ -17,11 +17,7 @@ import type {
   SessionOrigin,
 } from "./state/model";
 import type { CreateResult, ResolveResult } from "./state/result";
-import type { SessionKernelArtifactConsumer } from "./storage/artifact-consumption";
-import type {
-  CredentialCreateResult,
-  SessionKernelCredentialCreator,
-} from "./storage/credential-creation";
+import type { DirectStateTransitions } from "./storage/direct-state-transitions";
 import type { SessionKernelObservation } from "./storage/observation";
 import type {
   SessionKernelRedis,
@@ -32,7 +28,7 @@ import { randomUUID } from "node:crypto";
 import { runCleanupRefs } from "./cleanup/cleanup";
 import { normalizeSessionKernelConfig } from "./config";
 import { SessionKernelLogEvent } from "./log-events";
-import { createCurrentLookupHash } from "./security/hmac";
+import { tokenDigest } from "./security/digest";
 import { generateKernelToken } from "./security/token";
 import { normalizeSessionOrigin, PrincipalRefSchema } from "./state/model";
 import { counterForKind, createEmptyRevokeSummary, failClosed, mergeRevokeSummary } from "./state/result";
@@ -43,8 +39,7 @@ import {
   clampDerivedExpiresAt,
   createPrincipalSessionWindow,
 } from "./state/time";
-import { createRedisSessionKernelArtifactConsumer } from "./storage/artifact-consumption";
-import { createRedisSessionKernelCredentialCreator } from "./storage/credential-creation";
+import { createRedisDirectStateTransitions } from "./storage/direct-state-transitions";
 import { createSessionKernelKeyBuilder, encodeIndexMember, parseIndexMember } from "./storage/keys";
 import { createRedisSessionKernelObservation } from "./storage/observation";
 import { createRedisSessionKernelRevocationTransitions } from "./storage/revocation-transitions";
@@ -184,10 +179,6 @@ export type SessionKernel = ReturnType<typeof createSessionKernel>;
 export function createSessionKernel(deps: SessionKernelDependencies) {
   return createSessionKernelWithStateAdapterFactories(
     deps,
-    ({ redis, keys }) =>
-      createRedisSessionKernelArtifactConsumer(redis, keys),
-    ({ redis, keys }) =>
-      createRedisSessionKernelCredentialCreator(redis, keys),
     ({ redis }) => createRedisSessionKernelRevocationTransitions(redis),
     createRedisSessionKernelObservation,
   );
@@ -195,30 +186,15 @@ export function createSessionKernel(deps: SessionKernelDependencies) {
 
 export function createSessionKernelWithStateAdapterFactories(
   deps: SessionKernelDependencies,
-  createArtifactConsumer: (input: {
-    redis: SessionKernelRedis;
-    keys: ReturnType<typeof createSessionKernelKeyBuilder>;
-  }) => SessionKernelArtifactConsumer,
-  createCredentialCreator: (input: {
-    redis: SessionKernelRedis;
-    keys: ReturnType<typeof createSessionKernelKeyBuilder>;
-  }) => SessionKernelCredentialCreator | undefined,
   createRevocationTransitions: (input: {
     redis: SessionKernelRedis;
     keys: ReturnType<typeof createSessionKernelKeyBuilder>;
   }) => SessionKernelRevocationTransitions,
   createObservation: (redis: SessionKernelRedis) => SessionKernelObservation,
+  createDirectTransitions: (redis: SessionKernelRedis) => DirectStateTransitions = createRedisDirectStateTransitions,
 ) {
   const config = normalizeSessionKernelConfig(deps.config);
   const keys = createSessionKernelKeyBuilder(config.namespace);
-  const artifactConsumer = createArtifactConsumer({
-    redis: deps.redis,
-    keys,
-  });
-  const credentialCreator = createCredentialCreator({
-    redis: deps.redis,
-    keys,
-  });
   const revocationTransitions = createRevocationTransitions({
     redis: deps.redis,
     keys,
@@ -226,11 +202,9 @@ export function createSessionKernelWithStateAdapterFactories(
   const store = new SessionKernelStore(
     deps.redis,
     keys,
-    config,
-    artifactConsumer,
-    credentialCreator,
     revocationTransitions,
     createObservation(deps.redis),
+    createDirectTransitions(deps.redis),
   );
   const cleanupAdapters = deps.cleanupAdapters ?? [];
   const uuid = deps.random?.uuid ?? randomUUID;
@@ -242,7 +216,7 @@ export function createSessionKernelWithStateAdapterFactories(
   ): Promise<CreateResult<PrincipalSession>> {
     let prepared: {
       externalToken: string;
-      lookup: ReturnType<typeof createCurrentLookupHash>;
+      lookup: { lookupHash: string };
       principalSessionId: string;
       window: ReturnType<typeof createPrincipalSessionWindow>;
       principal: PrincipalRef;
@@ -250,7 +224,7 @@ export function createSessionKernelWithStateAdapterFactories(
     try {
       const now = await store.now();
       const externalToken = generateKernelToken(config, "principalSession");
-      const lookup = createCurrentLookupHash(externalToken, config);
+      const lookup = { lookupHash: tokenDigest(externalToken) };
       const principalSessionId = uuid();
       const window = { ...createPrincipalSessionWindow(now, config), authTime: config.clock.now() };
       const principal = PrincipalRefSchema.parse({
@@ -279,7 +253,6 @@ export function createSessionKernelWithStateAdapterFactories(
         sessionKind: authenticationContext.sessionKind ?? "browser_user",
         principalSessionId: prepared.principalSessionId,
         externalTokenLookupHash: prepared.lookup.lookupHash,
-        lookupKeyId: prepared.lookup.keyId,
         principal: prepared.principal,
         authTime: prepared.window.authTime,
         lastActiveAt: prepared.window.lastActiveAt,
@@ -299,6 +272,7 @@ export function createSessionKernelWithStateAdapterFactories(
         lookupHash: prepared.lookup.lookupHash,
         indexes: principalSessionIndexes(session),
       });
+      observations.set(session, { serialized: JSON.stringify(session), observedAt: prepared.window.lastActiveAt });
       return { status: "created", value: session, observedAt: prepared.window.lastActiveAt, externalToken: prepared.externalToken };
     }
     catch (cause) {
@@ -307,14 +281,22 @@ export function createSessionKernelWithStateAdapterFactories(
   }
 
   async function resolvePrincipalSession(externalToken: string) {
-    const result = await store.resolveByExternalToken("principal_session", externalToken);
+    const result = await store.resolveStoredByExternalToken("principal_session", externalToken);
     observeResolveResult(result, { operation: "resolve", objectType: "principal_session" });
+    if (result.status === "resolved") {
+      observations.set(result.value, { serialized: result.serialized, observedAt: result.observedAt });
+      return { status: "resolved" as const, value: result.value, observedAt: result.observedAt };
+    }
     return result;
   }
 
   async function resolvePrincipalSessionById(principalSessionId: string) {
-    const result = await store.resolveObject("principal_session", principalSessionId);
+    const result = await store.resolveObjectForUpdate("principal_session", principalSessionId);
     observeResolveResult(result, { operation: "resolve_by_id", objectType: "principal_session" });
+    if (result.status === "resolved") {
+      observations.set(result.value, { serialized: result.serialized, observedAt: result.observedAt });
+      return { status: "resolved" as const, value: result.value, observedAt: result.observedAt };
+    }
     return result;
   }
 
@@ -345,8 +327,9 @@ export function createSessionKernelWithStateAdapterFactories(
         indexes: principalSessionIndexes(renewed),
       });
       if (!updated)
-        return await store.resolveObject("principal_session", principalSessionId);
+        return await resolvePrincipalSessionById(principalSessionId);
       await renewPrincipalChildren(renewed);
+      observations.set(renewed, { serialized: JSON.stringify(renewed), observedAt: now });
       return { status: "resolved", value: renewed, observedAt: now };
     }
     catch (cause) {
@@ -480,7 +463,7 @@ export function createSessionKernelWithStateAdapterFactories(
     try {
       const now = principal.observedAt;
       const externalToken = input.externalToken ?? generateKernelToken(config, input.tokenKind ?? "credential");
-      const lookup = createCurrentLookupHash(externalToken, config);
+      const lookupHash = tokenDigest(externalToken);
       const expiresAt = clampDerivedExpiresAt({
         now,
         ttlMs: input.ttlMs,
@@ -498,8 +481,7 @@ export function createSessionKernelWithStateAdapterFactories(
         credentialId,
         protocol: input.protocol,
         credentialType: input.credentialType,
-        lookupHash: lookup.lookupHash,
-        lookupKeyId: lookup.keyId,
+        lookupHash,
         principalSessionId: input.principalSessionId,
         bindingId: input.bindingId,
         clientCode: input.clientCode,
@@ -514,8 +496,8 @@ export function createSessionKernelWithStateAdapterFactories(
         credential,
         indexes: credentialIndexes(credential),
       });
-      if (createResult !== "created")
-        return failClosed(credentialCreateFailureMessage(createResult));
+      if (!createResult)
+        return failClosed("credential identity or token state is already owned");
       observations.set(credential, { serialized: JSON.stringify(credential), observedAt: now });
       return { status: "created", value: credential, observedAt: now, externalToken };
     }
@@ -542,7 +524,7 @@ export function createSessionKernelWithStateAdapterFactories(
       if (!Number.isSafeInteger(input.ttlMs) || input.ttlMs <= 0)
         return failClosed("artifact TTL must be a positive integer");
       const externalToken = input.externalToken ?? generateKernelToken(config, input.tokenKind ?? "artifact");
-      const lookup = createCurrentLookupHash(externalToken, config);
+      const lookupHash = tokenDigest(externalToken);
       const artifactId = input.artifactId ?? uuid();
       if (artifactId.length === 0)
         return failClosed("artifact identity is invalid");
@@ -552,8 +534,7 @@ export function createSessionKernelWithStateAdapterFactories(
         artifactId,
         protocol: input.protocol,
         artifactType: input.artifactType,
-        lookupHash: lookup.lookupHash,
-        lookupKeyId: lookup.keyId,
+        lookupHash,
         principalSessionId: input.principalSessionId,
         bindingId: input.bindingId,
         clientCode: input.clientCode,
@@ -567,7 +548,7 @@ export function createSessionKernelWithStateAdapterFactories(
         kind: "artifact",
         id: artifact.artifactId,
         object: artifact,
-        lookupHash: lookup.lookupHash,
+        lookupHash,
         indexes: artifactIndexes(artifact),
       });
       observations.set(artifact, { serialized: JSON.stringify(artifact), observedAt: now });
@@ -611,10 +592,12 @@ export function createSessionKernelWithStateAdapterFactories(
   }
 
   /** Revoke only the object acquired by this Kernel; a replacement must survive. */
-  async function revokeObservedObject(object: ProtocolValidationTarget, reason: RevocationReason) {
+  async function revokeObservedObject(object: ProtocolValidationTarget | PrincipalSession, reason: RevocationReason) {
     const observation = observations.get(object);
     if (!observation)
       throw new Error("revocation requires an object observed by this Kernel");
+    if ("sessionKind" in object)
+      return await revokePrincipalSessionObservation(object.principalSessionId, reason, { value: object, ...observation });
     const kind = lifecycleObjectKind(object);
     const children: Array<{ kind: LifecycleObjectKind; id: string; value: LifecycleObject; serialized: string; observedAt: number }> = [];
     if (kind === "client_binding") {
@@ -1106,6 +1089,24 @@ export function createSessionKernelWithStateAdapterFactories(
     const resolved = expected ? { status: "resolved" as const, ...expected } : await store.resolveObjectForUpdate(kind, id);
     if (resolved.status === "revoked" || resolved.status === "consumed_replay") {
       counterForKind(summary, kind).alreadyRevoked += 1;
+      if (kind === "principal_session" && resolved.tombstone.cleanupRefs.length > 0) {
+        await runCleanupRefs(resolved.tombstone.cleanupRefs, cleanupAdapters, summary, {
+          deleteOwnedKeys: payloadKeys => store.deleteOwnedCleanupKeys(resolved.tombstone, payloadKeys),
+        }, deps.logger);
+        if (summary.cleanup.failed === 0) {
+          try {
+            await store.finalizeCleanupPending({
+              tombstone: resolved.tombstone,
+              indexKey: keys.index.principalCleanup,
+              member: encodeIndexMember(kind, id),
+            });
+          }
+          catch {
+            summary.cleanup.attempted += 1;
+            summary.cleanup.failed += 1;
+          }
+        }
+      }
       return summary;
     }
     if (resolved.status === "missing_or_expired") {
@@ -1214,7 +1215,7 @@ export function createSessionKernelWithStateAdapterFactories(
       return { status: "purpose_mismatch" };
     if (result.serialized !== undefined)
       observations.set(result.value, { serialized: result.serialized, observedAt: result.observedAt });
-    return { status: "resolved", value: result.value, observedAt: result.observedAt, lookupKeyId: result.lookupKeyId };
+    return { status: "resolved", value: result.value, observedAt: result.observedAt };
   }
 
   function principalSessionIndexes(session: PrincipalSession): StoreIndexWrite[] {
@@ -1303,6 +1304,8 @@ export function createSessionKernelWithStateAdapterFactories(
   }
 
   function cleanupPendingIndexForTombstone(tombstone: RevokedTombstone) {
+    if (tombstone.objectKind === "principal_session" && tombstone.cleanupRefs.length > 0)
+      return { key: keys.index.principalCleanup, member: encodeIndexMember(tombstone.objectKind, tombstone.objectId) };
     if (
       tombstone.cleanupRefs.length === 0
       || tombstone.clientCode === undefined
@@ -1419,21 +1422,6 @@ export function createSessionKernelWithStateAdapterFactories(
     revokeBindingObjects,
     revokeProtocol,
   };
-}
-
-function credentialCreateFailureMessage(
-  result: Exclude<CredentialCreateResult, "created">,
-) {
-  switch (result) {
-    case "active_identity_conflict":
-      return "credential identity is already active";
-    case "identity_tombstoned":
-      return "credential identity is revoked";
-    case "lookup_owned":
-      return "credential bearer token is already owned";
-    case "lookup_tombstoned":
-      return "credential bearer token is revoked";
-  }
 }
 
 function lifecycleObjectKind(

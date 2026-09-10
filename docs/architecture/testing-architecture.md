@@ -294,6 +294,10 @@ API Core 的 Client Runtime full restore contract 使用现有 `IAM_API_CORE_TES
 
 ## 默认验证与交付
 
+Spec #170 的[最终账本](../features/sso/token-state-contract.md)连接三类直接状态、正式协议HTTP/Redis、混合管理和实际维护CLI的逐项断言。
+#176补充消费终态自然到期与HTTP在途自身撤销的直接证明，并在独立原始源码/依赖上复跑成本。
+固定候选的全仓verify与额外Integration结果由该票评论记录，不由前票切片绿色推断；环境切换仍由发布owner验收。
+
 基础 `pnpm verify` 固定 fail fast：
 
 ```mermaid
@@ -346,4 +350,4 @@ evidence 失败和 setup retries 继续保留；环境或代码根因修复后�
 
 Spec #157 的全部 56 条故事、20 项实现和 10 项测试决定见[一次消费最终账本](../features/sso/custom-sso-one-shot-grant-contract.md)。
 #161 在正式 HTTP/Redis 上组合定向清理、独立核验、同根新授权与已有凭据访问；完整 OIDC 保留集复用 #160。
-统一 writer/consumer、基线、停流排空、smoke 与回退见[保留会话升级手册](../releases/custom-sso-one-shot-grant-upgrade.md)，目标环境未执行。
+原 #157 固定旧候选的 writer/consumer、基线和保留 smoke 见[保留会话升级手册](../releases/custom-sso-one-shot-grant-upgrade.md)。包含 #170 的当前候选必须按[全体下线手册](../releases/online-auth-redis-time-cutover.md)统一切换并重新登录，不能沿用保留对象流程；目标环境未执行。

@@ -1,4 +1,3 @@
-import { DEFAULT_SESSION_LOOKUP_HMAC_CURRENT_SECRET } from "@iam/session-kernel";
 import { beforeAll, describe, expect, test } from "bun:test";
 
 type ParseAdminApiEnv = typeof import("../env").parseAdminApiEnv;
@@ -20,26 +19,13 @@ describe("admin API environment", () => {
     ({ parseAdminApiEnv } = await import("../env"));
   });
 
-  test("rejects the default Session Kernel HMAC secret in production", () => {
-    expect(() => parseAdminApiEnv({
-      ...validEnv(),
-      NODE_ENV: "production",
-    })).toThrow("IAM_ADMIN_API_SESSION_LOOKUP_HMAC_CURRENT_SECRET must be set in production");
-
-    expect(() => parseAdminApiEnv({
-      ...validEnv(),
-      NODE_ENV: "production",
-      IAM_ADMIN_API_SESSION_LOOKUP_HMAC_CURRENT_SECRET: DEFAULT_SESSION_LOOKUP_HMAC_CURRENT_SECRET,
-    })).toThrow("IAM_ADMIN_API_SESSION_LOOKUP_HMAC_CURRENT_SECRET must be set in production");
-  });
-
-  test("accepts an explicit production Session Kernel HMAC secret", () => {
+  test("accepts production configuration without lookup secrets", () => {
     const env = parseAdminApiEnv({
       ...validEnv(),
       NODE_ENV: "production",
-      IAM_ADMIN_API_SESSION_LOOKUP_HMAC_CURRENT_SECRET: "p".repeat(32),
     });
 
-    expect(env.sessionKernel.lookupHmacCurrentSecret).toBe("p".repeat(32));
+    expect(env.nodeEnv).toBe("production");
+    expect(env.sessionKernel.namespace).toBe("sess:v2:");
   });
 });

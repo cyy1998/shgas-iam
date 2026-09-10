@@ -1,13 +1,22 @@
 import type Redis from "ioredis";
 import type { LifecycleObjectKind, ProtocolArtifact } from "../state/model";
+import { randomUUID } from "node:crypto";
 import { parseLifecycleObject } from "../state/model";
 import { createSessionKernelKeyBuilder, encodeIndexMember } from "../storage/keys";
 
 /** Semantic inventory faults and byte/absolute-expiry observations owned by Kernel. */
 export function createKernelMaintenanceFixture(redis: Redis, namespace: string) {
   const keys = createSessionKernelKeyBuilder(namespace);
+  async function objectKey(kind: LifecycleObjectKind, id: string) {
+    if (kind === "client_binding")
+      return keys.active(kind, id);
+    const hash = await redis.get(keys.identity(kind, id));
+    if (!hash)
+      throw new Error("Expected direct state identity");
+    return keys.state(kind, hash);
+  }
   async function artifact(id: string) {
-    const raw = await redis.get(keys.active("artifact", id));
+    const raw = await redis.get(await objectKey("artifact", id));
     const parsed = raw === null ? null : parseLifecycleObject("artifact", raw);
     if (!parsed?.success)
       throw new Error("Expected fixture artifact");
@@ -22,6 +31,26 @@ export function createKernelMaintenanceFixture(redis: Redis, namespace: string) 
     ];
   }
   return {
+    async expireArtifactGeneration(value: ProtocolArtifact) {
+      await redis.del(keys.state("artifact", value.lookupHash), keys.identity("artifact", value.artifactId));
+    },
+    async seedDirectStateMaintenanceFaults(kind: "principal_session" | "credential" | "artifact") {
+      const id = randomUUID();
+      const hash = "f".repeat(64);
+      const references = [
+        keys.state(kind, hash),
+        keys.identity(kind, id),
+        keys.active(kind, id),
+        keys.lookup(kind, hash),
+        keys.tombstone(kind, id),
+        keys.lookupTombstone(kind, hash),
+      ];
+      for (const key of references)
+        await redis.set(key, "malformed-orphan-without-ttl");
+      return {
+        async observe() { return await redis.mget(...references); },
+      };
+    },
     pauseNextPrincipalObservation(principalSessionId: string) {
       let reached!: () => void;
       let release!: () => void;
@@ -35,9 +64,13 @@ export function createKernelMaintenanceFixture(redis: Redis, namespace: string) 
       redis.sendCommand = function (command, stream) {
         const result = original.call(this, command, stream);
         if (command.name === "eval" && String(command.args[0]).includes("session-kernel-observe-v1")
-          && command.getKeys().includes(keys.active("principal_session", principalSessionId))) {
-          redis.sendCommand = original;
+          && command.getKeys().some(key => String(key).startsWith(`${keys.namespace}state:p:`))) {
           return Promise.resolve(result).then(async (value) => {
+            if (!Array.isArray(value) || typeof value[1] !== "string"
+              || JSON.parse(value[1]).principalSessionId !== principalSessionId) {
+              return value;
+            }
+            redis.sendCommand = original;
             reached();
             await resumed;
             return value;
@@ -71,7 +104,7 @@ export function createKernelMaintenanceFixture(redis: Redis, namespace: string) 
       await redis.set(key, JSON.stringify(value), "KEEPTTL");
     },
     async replaceCredentialSubject(id: string, subjectId: string) {
-      const key = keys.active("credential", id);
+      const key = await objectKey("credential", id);
       const raw = await redis.get(key);
       const parsed = raw === null ? null : parseLifecycleObject("credential", raw);
       if (!parsed?.success)
@@ -79,8 +112,18 @@ export function createKernelMaintenanceFixture(redis: Redis, namespace: string) 
       parsed.data.principal.subjectId = subjectId;
       await redis.set(key, JSON.stringify(parsed.data), "KEEPTTL");
     },
+    async corruptCredential(id: string, problem: "empty" | "json" | "redis_type") {
+      const key = await objectKey("credential", id);
+      if (problem === "redis_type") {
+        await redis.del(key);
+        await redis.lpush(key, "wrong-type");
+      }
+      else {
+        await redis.set(key, problem === "empty" ? "" : "{broken", "KEEPTTL");
+      }
+    },
     async patchCredentialMetadata(id: string, metadata: Record<string, unknown>) {
-      const key = keys.active("credential", id);
+      const key = await objectKey("credential", id);
       const raw = await redis.get(key);
       const parsed = raw === null ? null : parseLifecycleObject("credential", raw);
       if (!parsed?.success)
@@ -89,26 +132,23 @@ export function createKernelMaintenanceFixture(redis: Redis, namespace: string) 
       await redis.set(key, JSON.stringify(parsed.data), "KEEPTTL");
     },
     async removeObjectPayload(kind: LifecycleObjectKind, id: string) {
-      await redis.del(keys.active(kind, id));
+      await redis.del(await objectKey(kind, id));
     },
     async observeArtifactReferences(value: ProtocolArtifact) {
-      const references = [keys.active("artifact", value.artifactId), keys.lookup("artifact", value.lookupHash), keys.tombstone("artifact", value.artifactId), keys.lookupTombstone("artifact", value.lookupHash)];
+      const references = [keys.state("artifact", value.lookupHash), keys.identity("artifact", value.artifactId)];
       return await Promise.all(references.map(async key => ({ payload: await redis.get(key), expiresAt: await redis.pexpiretime(key) })));
     },
     async redirectArtifactLookup(from: ProtocolArtifact, to: ProtocolArtifact) {
-      await redis.set(keys.lookup("artifact", from.lookupHash), to.artifactId, "KEEPTTL");
+      await redis.set(keys.identity("artifact", from.artifactId), to.lookupHash, "KEEPTTL");
     },
     async observe(kind: LifecycleObjectKind, id: string) {
-      const key = keys.active(kind, id);
+      if (kind !== "client_binding" && await redis.get(keys.identity(kind, id)) === null)
+        return { payload: null, expiresAt: -2, references: [], memberships: [] };
+      const key = await objectKey(kind, id);
       const payload = await redis.get(key);
       const parsed = payload === null ? null : parseLifecycleObject(kind, payload);
       const object = parsed?.success ? parsed.data : undefined;
-      const hash = object && "externalTokenLookupHash" in object
-        ? object.externalTokenLookupHash
-        : object && "lookupHash" in object ? object.lookupHash : undefined;
-      const references = kind !== "client_binding" && hash
-        ? [keys.lookup(kind, hash), keys.tombstone(kind, id), keys.lookupTombstone(kind, hash)]
-        : [];
+      const references = kind !== "client_binding" ? [keys.identity(kind, id)] : [];
       const objectIndexes = object
         ? [
             ...(object.principalSessionId ? [keys.index.principal(object.principalSessionId)] : []),
@@ -125,25 +165,33 @@ export function createKernelMaintenanceFixture(redis: Redis, namespace: string) 
       };
     },
     async observeTombstone(id: string) {
-      const key = keys.tombstone("artifact", id);
+      if (await redis.get(keys.identity("artifact", id)) === null)
+        return { payload: null, expiresAt: -2 };
+      const key = await objectKey("artifact", id);
       return { payload: await redis.get(key), expiresAt: await redis.pexpiretime(key) };
     },
     async forgetArtifactIndexes(id: string) {
       const value = await artifact(id);
       for (const key of indexes(value)) await redis.zrem(key, encodeIndexMember("artifact", id));
     },
-    async removeArtifactPayload(id: string) { await redis.del(keys.active("artifact", id)); },
-    async corruptArtifact(id: string, problem: "json" | "version" | "identity") {
+    async removeArtifactPayload(id: string) { await redis.del(await objectKey("artifact", id)); },
+    async corruptArtifact(id: string, problem: "empty" | "redis_type" | "json" | "version" | "identity") {
       const value = await artifact(id);
-      const raw = problem === "json" ? "{broken" : JSON.stringify({ ...value, ...(problem === "version" ? { version: 999 } : { artifactId: "other-owner" }) });
-      await redis.set(keys.active("artifact", id), raw, "KEEPTTL");
+      const key = await objectKey("artifact", id);
+      if (problem === "redis_type") {
+        await redis.del(key);
+        await redis.lpush(key, "wrong-type");
+        return;
+      }
+      const raw = problem === "empty" ? "" : problem === "json" ? "{broken" : JSON.stringify({ ...value, ...(problem === "version" ? { version: 999 } : { artifactId: "other-owner" }) });
+      await redis.set(await objectKey("artifact", id), raw, "KEEPTTL");
     },
     async replaceArtifact(id: string) {
       const value = await artifact(id);
-      await redis.set(keys.active("artifact", id), JSON.stringify({ ...value, metadata: { replacement: true } }), "KEEPTTL");
+      await redis.set(await objectKey("artifact", id), JSON.stringify({ ...value, metadata: { replacement: true } }), "KEEPTTL");
     },
     async replaceTombstone(id: string) {
-      const key = keys.tombstone("artifact", id);
+      const key = await objectKey("artifact", id);
       const raw = await redis.get(key);
       if (!raw)
         throw new Error("Expected fixture tombstone");

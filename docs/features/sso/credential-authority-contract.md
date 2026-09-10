@@ -167,7 +167,7 @@ Custom before=`f7ef9815`、after=`59d69df8`，Bun 1.3.14、Redis 8.8.0、ioredis
 OIDC before=`847469e1`、after=`8aabe7d6`，Node 24.18.0、Vitest 4.1.10、相同 Redis/ioredis/Windows；同容器端口 38746。
 两套测试的替身范围不同，不能横向比较绝对 RTT 或把其总和宣称完整登录收益。Custom 只观测 Kernel Redis；Client/Gate/Barrier/Facts/Secret/ORCAS 为替身，未覆盖真实 TCP HTTP/APISIX。
 OIDC 使用真实 Provider TCP HTTP、Kernel/Barrier/Facts/Provider stores，但 Runtime/Gate/account repository 为替身；真实 PG/Redis production Composition 是另外的接线证据，不属于该性能采样。
-剩余成本属于 Credential lookup/tombstone/期限、Subject Access、配置/Gate、OIDC Binding/anchor/payload、主体交付与网络。失败、授权、兑换及真实第三方未测性能，小样本不承诺延迟预算，不宣称 [#71](https://github.com/cyy1998/shgas-iam/issues/71) 或 [#137](https://github.com/cyy1998/shgas-iam/issues/137) 完成。
+上述固定历史候选的剩余成本属于 Credential lookup/tombstone/期限、Subject Access、配置/Gate、OIDC Binding/anchor/payload、主体交付与网络。失败、授权、兑换及真实第三方未测性能，小样本不承诺延迟预算，不宣称 [#71](https://github.com/cyy1998/shgas-iam/issues/71) 或 [#137](https://github.com/cyy1998/shgas-iam/issues/137) 完成。
 
 ## 测试迁移及最终交接
 

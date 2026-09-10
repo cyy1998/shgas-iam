@@ -2,7 +2,7 @@
 
 [Issue #156](https://github.com/cyy1998/shgas-iam/issues/156) 按 [ADR-0032](../../adr/0032-consume-published-subject-facts-for-authorization.md)
 统一 Custom SSO 与 OIDC 的主体读取。实现已移除授权新鲜度 port、Reader 的 Dirty 查询及对应观测事件，保留现有缓存、发布与账号保护。
-生产环境尚未切换，升级流程见[保留对象升级](../../releases/published-subject-facts-upgrade.md)。
+生产环境尚未切换；[保留对象升级](../../releases/published-subject-facts-upgrade.md)只适用于原 #156 固定旧候选，包含 #170 的当前候选按[全体下线手册](../../releases/online-auth-redis-time-cutover.md)统一切换并重新登录。
 
 ## 行为与责任
 

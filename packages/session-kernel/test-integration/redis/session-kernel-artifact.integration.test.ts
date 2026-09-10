@@ -67,9 +67,8 @@ describe("Session Kernel artifact real Redis contract", () => {
       protocol: "oidc",
     });
 
-    await expect(scope!.observer.inventoryClientProtocol("portal", "oidc"))
-      .resolves
-      .toMatchObject({ counts: { stale: 1, total: 1 } });
+    const observedResult1 = await scope!.observer.inventoryClientProtocol("portal", "oidc");
+    expect(observedResult1).toMatchObject({ counts: { stale: 1, total: 1 } });
 
     await scope!.writer.revokeClientProtocol(
       "portal",
@@ -77,9 +76,8 @@ describe("Session Kernel artifact real Redis contract", () => {
       "client_config_changed",
     );
 
-    await expect(scope!.observer.inventoryClientProtocol("portal", "oidc"))
-      .resolves
-      .toMatchObject({ counts: { stale: 0, total: 0 } });
+    const observedResult2 = await scope!.observer.inventoryClientProtocol("portal", "oidc");
+    expect(observedResult2).toMatchObject({ counts: { stale: 0, total: 0 } });
   });
 
   test("does not erase an owner member when the same object identity is recreated concurrently", async () => {
@@ -97,9 +95,8 @@ describe("Session Kernel artifact real Redis contract", () => {
       "client_config_changed",
     );
 
-    await expect(scope!.observer.inventoryClientProtocol("portal", "oidc"))
-      .resolves
-      .toMatchObject({ counts: { invalid: 1, total: 1 } });
+    const observedResult3 = await scope!.observer.inventoryClientProtocol("portal", "oidc");
+    expect(observedResult3).toMatchObject({ counts: { invalid: 1, total: 1 } });
   });
 
   test("does not revoke an object replaced after resolution", async () => {
@@ -149,10 +146,11 @@ describe("Session Kernel artifact real Redis contract", () => {
     const renewed = await withinTestStep(renewal, "delayed renewal did not settle");
 
     expect(renewed).toMatchObject({ status: "revoked" });
-    await expect(scope!.activeObjectExists({
+    const observedResult4 = await scope!.activeObjectExists({
       id: principal.value.principalSessionId,
       kind: "principal_session",
-    })).resolves.toBe(false);
+    });
+    expect(observedResult4).toBe(false);
   });
 
   test("does not finalize cleanup against a replaced tombstone owner", async () => {
@@ -181,9 +179,8 @@ describe("Session Kernel artifact real Redis contract", () => {
       "client_config_changed",
     );
 
-    await expect(scope.observer.inventoryClientProtocol("portal", "oidc"))
-      .resolves
-      .toMatchObject({ counts: { cleanupPending: 1, total: 1 } });
+    const observedResult5 = await scope.observer.inventoryClientProtocol("portal", "oidc");
+    expect(observedResult5).toMatchObject({ counts: { cleanupPending: 1, total: 1 } });
     expect(await scope.cleanupTombstoneTtl({
       id: artifact.value.artifactId,
       kind: "artifact",
@@ -226,9 +223,8 @@ describe("Session Kernel artifact real Redis contract", () => {
     );
     expect(failed.cleanup.failed).toBe(1);
     expect(cleanupAttempts).toBe(1);
-    await expect(scope.observer.inventoryClientProtocol("portal", "oidc"))
-      .resolves
-      .toMatchObject({ counts: { cleanupPending: 1, total: 1 } });
+    const observedResult6 = await scope.observer.inventoryClientProtocol("portal", "oidc");
+    expect(observedResult6).toMatchObject({ counts: { cleanupPending: 1, total: 1 } });
     expect(await scope.cleanupTombstoneTtl({
       id: credential.value.credentialId,
       kind: "credential",
@@ -242,9 +238,8 @@ describe("Session Kernel artifact real Redis contract", () => {
     );
     expect(retried.cleanup).toMatchObject({ attempted: 1, succeeded: 1, failed: 0 });
     expect(cleanupAttempts).toBe(2);
-    await expect(scope.writer.inventoryClientProtocol("portal", "oidc"))
-      .resolves
-      .toMatchObject({ counts: { cleanupPending: 0, total: 0 } });
+    const observedResult7 = await scope.writer.inventoryClientProtocol("portal", "oidc");
+    expect(observedResult7).toMatchObject({ counts: { cleanupPending: 0, total: 0 } });
     expect(await scope.cleanupTombstoneTtl({
       id: credential.value.credentialId,
       kind: "credential",
@@ -315,7 +310,7 @@ describe("Session Kernel artifact real Redis contract", () => {
       observed.value,
     );
     expect(result).toMatchObject({
-      status: "missing_or_expired",
+      status: "fail_closed",
     });
   });
   test("purpose and observed identity constrain consumption and precise revocation", async () => {
@@ -343,6 +338,7 @@ describe("Session Kernel artifact real Redis contract", () => {
     const observed = await scope!.writer.resolveProtocolArtifact(original.externalToken, original.value);
     if (observed.status !== "resolved")
       throw new Error("expected observed object");
+    await scope!.expireArtifactGeneration(original.value);
     const replacement = await scope!.observer.createProtocolArtifact({
       artifactId: original.value.artifactId,
       externalToken: original.externalToken,
@@ -355,7 +351,7 @@ describe("Session Kernel artifact real Redis contract", () => {
     if (replacement.status !== "created")
       throw new Error("expected replacement");
     const consumed = await scope!.writer.consumeProtocolArtifact(original.externalToken, original.value, observed.value);
-    expect(consumed.status).toBe("missing_or_expired");
+    expect(consumed.status).toBe("fail_closed");
     const revoked = await scope!.writer.revokeObservedObject(observed.value, "client_config_changed");
     expect(revoked.artifacts.revoked).toBe(0);
     const retained = await scope!.observer.resolveProtocolArtifact(original.externalToken, original.value);

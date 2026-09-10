@@ -109,6 +109,7 @@ test.each(["iam", "gateway", "gateway-orcas", "independent"])("Public UserInfo %
     let barrier: "enabled" | "blocking" | "disabled" | "new-generation" = "enabled";
     let reads = 0;
     let factsReads = 0;
+    let duringFacts: (() => Promise<void>) | undefined;
     let publishedRole: string | undefined;
     let publishedVersion = 1;
     let failureMode: "none" | "handler" | "facts" | "block-in-facts" = "none";
@@ -137,6 +138,7 @@ test.each(["iam", "gateway", "gateway-orcas", "independent"])("Public UserInfo %
       kernel: scope.writer,
       subjectFacts: { read: async () => {
         factsReads += 1;
+        await duringFacts?.();
         if (failureMode === "facts")
           return null;
         if (failureMode === "block-in-facts")
@@ -367,7 +369,7 @@ test.each(["iam", "gateway", "gateway-orcas", "independent"])("Public UserInfo %
     const updatedBody = await updated.json();
     expect(updated.status).toBe(200);
     expect(updatedBody).toMatchObject({ version: 2, subjectIdentifier, authorization: { roles: ["auditor"] } });
-    if (mode === "gateway" || mode === "independent") {
+    if (mode === "iam" || mode === "gateway" || mode === "independent") {
       const monitor = await redis.monitor();
       let serverCommands: Array<{ name: string; source: string }> | undefined;
       monitor.on("monitor", (_time, args: string[], source: string) => {
@@ -377,15 +379,36 @@ test.each(["iam", "gateway", "gateway-orcas", "independent"])("Public UserInfo %
       try {
         for (const [entry, action] of [
           ["userinfo", () => request(token)],
+          ...(mode === "iam"
+            ? [["kernel-root", async () => {
+                const result = await scope.writer.resolvePrincipalSession(token);
+                expect(result.status).toBe("resolved");
+                return new Response(null, { status: 200 });
+              }] as const]
+            : []),
           ...(mode === "gateway" ? [["authz", () => authRequest(token)] as const] : []),
         ] as const) {
           const warmup = await action();
           expect(warmup.status).toBe(200);
+          const warmupMarker = randomUUID();
+          const warmupDrained = new Promise<void>((resolve) => {
+            const onMonitor = (_time: string, args: string[]) => {
+              if (args[0]?.toLowerCase() === "echo" && args[1] === warmupMarker) {
+                monitor.off("monitor", onMonitor);
+                resolve();
+              }
+            };
+            monitor.on("monitor", onMonitor);
+          });
+          await redis.echo(warmupMarker);
+          await warmupDrained;
           for (let sample = 0; sample < 5; sample += 1) {
             commandObservations = [];
             serverCommands = [];
             const startedAt = performance.now();
             const response = await action();
+            await response.arrayBuffer();
+            const requestMs = performance.now() - startedAt;
             expect(response.status).toBe(200);
             const marker = randomUUID();
             const drained = new Promise<void>((resolve) => {
@@ -412,6 +435,7 @@ test.each(["iam", "gateway", "gateway-orcas", "independent"])("Public UserInfo %
               mode,
               entry,
               sample,
+              requestMs,
               waves,
               commands: observations.map(value => ({
                 name: value.name,
@@ -450,9 +474,52 @@ test.each(["iam", "gateway", "gateway-orcas", "independent"])("Public UserInfo %
       await scope.writer.revokePrincipalSession(root.value.principalSessionId);
       const denied = await request(rootToken);
       expect(denied.status).toBe(401);
+      const invalidInputs = ["unknown", root.value.principalSessionId, root.value.externalTokenLookupHash];
+      for (const input of invalidInputs) {
+        const rejected = await request(input);
+        expect(rejected.status).toBe(401);
+      }
+      const corruptToken = await seedToken();
+      const corruptRoot = await scope.observer.resolvePrincipalSession(corruptToken);
+      if (corruptRoot.status !== "resolved")
+        throw new Error("expected root");
+      await scope.seedPrincipalPayload(corruptRoot.value.principalSessionId, "{broken");
+      const corrupt = await request(corruptToken);
+      expect(corrupt.status).toBe(401);
+      const faultToken = await seedToken();
+      scope.failNextPrincipalRead();
+      const unavailable = await request(faultToken);
+      expect(unavailable.status).toBe(500);
+      const restored = await request(faultToken);
+      expect(restored.status).toBe(200);
     }
     else {
       const peerToken = await seedToken();
+      const own = await scope.observer.resolveCredential(peerToken, { protocol: "custom-sso", credentialType: "local_session" });
+      if (own.status !== "resolved")
+        throw new Error("expected Credential");
+      for (const input of ["unknown", own.value.credentialId, own.value.lookupHash, principalToken]) {
+        const denied = await request(input);
+        expect(denied.status).toBe(401);
+        if (!independent) {
+          const authz = await authRequest(input);
+          expect(authz.status).toBe(401);
+        }
+      }
+      for (const malformed of ["", "{broken"]) {
+        const token = await seedToken();
+        const issued = await scope.observer.resolveCredential(token, { protocol: "custom-sso", credentialType: "local_session" });
+        if (issued.status !== "resolved")
+          throw new Error("expected Credential");
+        await scope.seedCredentialPayload(issued.value.credentialId, malformed);
+        const denied = await request(token);
+        expect(denied.status).toBe(401);
+      }
+      scope.failNextCredentialRead();
+      const unavailable = await request(peerToken);
+      expect(unavailable.status).toBe(500);
+      const recovered = await request(peerToken);
+      expect(recovered.status).toBe(200);
       for (const { context, status } of [
         { context: undefined, status: 503 },
         { context: "{broken", status: 503 },
@@ -480,6 +547,25 @@ test.each(["iam", "gateway", "gateway-orcas", "independent"])("Public UserInfo %
       const acceptedPeer = await request(peerToken);
       expect(acceptedPeer.status).toBe(200);
     }
+    const inFlightToken = await seedToken();
+    const resolved = mode === "iam"
+      ? await scope.observer.resolvePrincipalSession(inFlightToken)
+      : await scope.observer.resolveCredential(inFlightToken, { protocol: "custom-sso", credentialType: "local_session" });
+    if (resolved.status !== "resolved")
+      throw new Error("Expected token before in-flight revocation");
+    let revocations = 0;
+    duringFacts = async () => {
+      duringFacts = undefined;
+      const report = await scope.observer.revokeObservedObject(resolved.value, "admin_revoke");
+      revocations = mode === "iam" ? report.principalSessions.revoked : report.credentials.revoked;
+    };
+    const inFlight = await request(inFlightToken);
+    const delivered = await inFlight.json();
+    expect(revocations).toBe(1);
+    expect(inFlight.status).toBe(200);
+    expect(delivered).toMatchObject({ subjectIdentifier });
+    const nextRequest = await request(inFlightToken);
+    expect(nextRequest.status).toBe(401);
   }
   finally {
     if (grantIds.length > 0)

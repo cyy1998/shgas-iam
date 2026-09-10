@@ -102,7 +102,7 @@ export class KernelRedis implements SessionKernelRedis {
         return transaction;
       },
       del: (...keys) => {
-        operations.push(() => this.deleteWithoutFailure(...keys));
+        operations.push(() => this.del(...keys));
         return transaction;
       },
       zadd: (key, score, member) => {

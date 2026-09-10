@@ -79,6 +79,12 @@ TTL 或逐 Client 访问自然收敛。当前 full repair/verify 只拥有当前
 
 ## 一致性边界
 
+- **token 生命周期状态**：Principal、Credential、Artifact 的完整 token 经普通 SHA-256 直接定位按类型隔离的单状态记录，
+  active/revoked 与 Artifact consumed 终态由同记录拥有；内部 ID 通过反向定位访问同一权威状态。Kernel lookup HMAC 配置与轮换已退役，
+  无 token Binding 仍按 ID，Provider 自有 lookup 与 Cookie/JWT/Client Secret 密码功能保留。pending 时保持终态和反向定位可达，
+  不承诺后台自动清理成功；全部66/20/12、最高入口组合与原始基线成本见[最终契约](../features/sso/token-state-contract.md)，
+  配置退役与装配见[运行时契约](../features/sso/token-state-runtime-evidence.md)。目标环境未切换。
+
 - **账号访问**：API、Admin、Custom SSO 与 OIDC 在每个受影响接口的首次可信主体解析后取得一次许可；成功、拒绝和暂态失败固定。已许可在途调用不复查账号状态，下一调用重新检查；Kernel 只管对象生命周期，Projection 复用许可。旧代不因重新启用恢复，协调切换见[维护手册](../releases/subject-access-operation-cutover.md)。
 
 
@@ -110,7 +116,7 @@ TTL 或逐 Client 访问自然收敛。当前 full repair/verify 只拥有当前
 
 Spec #157 的全部 56 条故事、20 项实现和 10 项测试决定见[一次消费最终账本](../features/sso/custom-sso-one-shot-grant-contract.md)。
 #161 在正式 HTTP/Redis 上组合定向清理、独立核验、同根新授权与已有凭据访问；完整 OIDC 保留集复用 #160。
-统一 writer/consumer、基线、停流排空、smoke 与回退见[保留会话升级手册](../releases/custom-sso-one-shot-grant-upgrade.md)，目标环境未执行。
+原 #157 固定旧候选的 writer/consumer、基线和保留 smoke 见[保留会话升级手册](../releases/custom-sso-one-shot-grant-upgrade.md)。包含 #170 的当前候选必须按[全体下线手册](../releases/online-auth-redis-time-cutover.md)统一切换并重新登录，不能沿用保留对象流程；目标环境未执行。
 
 
 Spec #163 / ADR-0033 的 62 条故事、20 项实现和 12 项测试决定见[Credential 最终账本](../features/sso/credential-authority-contract.md)。

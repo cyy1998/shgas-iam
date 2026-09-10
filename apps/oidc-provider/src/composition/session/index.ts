@@ -43,11 +43,6 @@ export function createOidcProviderSessionKernelConfig(env: OidcProviderEnv) {
       defaultPrincipalTtlSeconds: env.oidc.globalSessionTtlSeconds,
       tombstoneTtlSeconds: env.sessionKernel.tombstoneTtlSeconds,
       tombstoneGraceSeconds: env.sessionKernel.tombstoneGraceSeconds,
-      lookupHmacCurrentId: env.sessionKernel.lookupHmacCurrentId,
-      lookupHmacCurrentSecret: env.sessionKernel.lookupHmacCurrentSecret,
-      lookupHmacPreviousId: env.sessionKernel.lookupHmacPreviousId,
-      lookupHmacPreviousSecret: env.sessionKernel.lookupHmacPreviousSecret,
-      nodeEnv: env.nodeEnv,
     }),
     clock: { now: Date.now },
   };

@@ -30,7 +30,7 @@ function createEntryEnvironment(context: ProcessSmokeAttemptContext) {
     source: process.env,
     temporaryDirectory: context.temporaryDirectory,
     overrides: {
-      NODE_ENV: "test",
+      NODE_ENV: "production",
       IAM_API_DATABASE_URL: "postgresql://iam:password@127.0.0.1:1/iam",
       IAM_API_PASSWORD_HASH_ROUNDS: "4",
       IAM_API_SMS_SIGNATURE_KEY: "unreachable-smoke-signature",
@@ -60,9 +60,6 @@ function createEntryEnvironment(context: ProcessSmokeAttemptContext) {
         "entry-smoke": loginCredentialPrivateKey,
       }),
       IAM_API_SESSION_KERNEL_NAMESPACE: `sess:api-entry-smoke:${context.port}:`,
-      IAM_API_SESSION_LOOKUP_HMAC_CURRENT_ID: "entry-smoke",
-      IAM_API_SESSION_LOOKUP_HMAC_CURRENT_SECRET:
-        "api-entry-smoke-secret-that-is-at-least-32-bytes",
       FORCE_COLOR: "0",
       NO_COLOR: "1",
       NO_PROXY: "127.0.0.1,localhost",

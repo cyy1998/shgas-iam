@@ -28,9 +28,6 @@ function createKernelFixture() {
       principalAbsoluteTtlMs: 300_000,
       tombstoneTtlMs: 60_000,
       tombstoneGraceMs: 5_000,
-      lookupHmacKeys: {
-        current: { id: "current", secret: "c".repeat(32) },
-      },
       clock: { now: () => redis.now },
     }),
     cleanupAdapters: createOidcSessionKernelCleanupAdapter({ providerSessionState }),

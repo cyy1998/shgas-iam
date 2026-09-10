@@ -39,7 +39,7 @@ Gateway 本次保持现有 callback 失败响应，由用户返回业务应用�
 
 ## 发布边界
 
-本文的保留会话步骤只适用于原 Spec #157 单独升级。包含 Spec #163 的候选必须执行[全体下线手册](../releases/online-auth-redis-time-cutover.md)，不保留旧 Credential；定向 Grant 维护能力仍存在，但不能作为本次全清证据。
+本文的保留会话步骤只适用于原 Spec #157 验收记录的固定旧候选。包含 Spec #163 或 #170 的候选必须执行[全体下线手册](../releases/online-auth-redis-time-cutover.md)，不保留旧 Credential；定向 Grant 维护能力仍存在，但不能作为本次全清证据。
 
 采用维护窗口切换：暂停受影响的 Custom SSO 授权与兑换流量，排空旧请求，只失效旧 Custom SSO Grant 及对应 Authorization Artifact，保留有效 Principal Session、已签发 Credential 和其他协议在线对象；全部兑换实例统一升级后恢复流量，不支持新旧兑换实现混跑。切换前取得的 Code 需要重新授权，有效根登录会话继续用于续接。
 
@@ -73,8 +73,9 @@ Grant redemption 记录与对应 Artifact 在 owner 能力上可独立清理，�
 
 ## #158 的消费与维护交接
 
-新流程复用 Kernel `consumeProtocolArtifact(code, purpose, observed)`，以完整已观察对象、lookup 与 tombstone CAS 保证唯一成功消费者。
-同一原子操作移除该 Artifact 的 active/lookup 和精确索引成员，保留重放 tombstone；消费成功不依赖另一份 redemption 记录。
+新流程复用 Kernel `consumeProtocolArtifact(code, purpose, observed)` 保证唯一成功消费者。#158 固定候选使用四键布局；
+后续 ADR-0034 改为比较同一状态字节与反向 ID owner，原子转换为同记录 revoked、reason=consumed 并移除精确索引。
+重放仍返回 consumed_replay，消费成功不依赖另一份 redemption 记录；当前契约见[运行时证据](../features/sso/token-state-runtime-evidence.md)。
 消费报错或结果未知即停止；两种模式的新 Artifact 均不带旧 redemption cleanup ref。#159 已删除 Gateway 过渡路径和在线旧机制，
 ORCAS 仅在消费成功后调用，写前新 identity 与同步尽力补偿保持；#160 已交付定向维护，父规格最终验收尚未完成，环境未切换。
 

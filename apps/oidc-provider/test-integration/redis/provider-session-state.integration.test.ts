@@ -601,12 +601,6 @@ describe("oIDC Provider Session real Redis contract", () => {
         providerSessionState,
       }),
       config: createSessionKernelConfig({
-        lookupHmacKeys: {
-          current: {
-            id: "redis-test-current",
-            secret: "oidc-provider-redis-test-secret-0000000000000000",
-          },
-        },
         namespace: kernelNamespace,
         principalAbsoluteTtlMs: 6000,
         principalIdleTtlMs: 3000,

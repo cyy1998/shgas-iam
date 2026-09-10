@@ -55,8 +55,6 @@ import { createOidcProviderRedisTestHarness } from "../redis/redis-test-harness.
 
 const oidcRoot = fileURLToPath(new URL("../../", import.meta.url));
 const entryListeningEvidence = "OIDC provider listening";
-const lookupHmacId = "entry-external";
-const lookupHmacSecret = "oidc-entry-external-secret-that-is-at-least-32-bytes";
 const subjectIdentifier = randomUUID();
 const resourceSuffix = subjectIdentifier.replaceAll("-", "");
 const username = "oidc-sensitive-username";
@@ -127,7 +125,8 @@ function createEntryEnvironment(
     source: process.env,
     temporaryDirectory: context.temporaryDirectory,
     overrides: {
-      NODE_ENV: "test",
+      NODE_ENV: "production",
+      IAM_OIDC_PROVIDER_COOKIE_SECURE: "false",
       IAM_OIDC_PROVIDER_DATABASE_URL: databaseUrl,
       IAM_OIDC_PROVIDER_REDIS_HOST: redisConfig.host,
       IAM_OIDC_PROVIDER_REDIS_PORT: String(redisConfig.port),
@@ -140,8 +139,6 @@ function createEntryEnvironment(
       IAM_OIDC_PROVIDER_COOKIE_KEYS: `${"a".repeat(32)},${"b".repeat(32)}`,
       IAM_OIDC_PROVIDER_CURRENT_JWK_JSON: currentJwkJson,
       IAM_OIDC_PROVIDER_SESSION_KERNEL_NAMESPACE: sessionKernelNamespace,
-      IAM_OIDC_PROVIDER_SESSION_LOOKUP_HMAC_CURRENT_ID: lookupHmacId,
-      IAM_OIDC_PROVIDER_SESSION_LOOKUP_HMAC_CURRENT_SECRET: lookupHmacSecret,
       FORCE_COLOR: "0",
       NO_COLOR: "1",
     },

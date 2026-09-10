@@ -402,9 +402,10 @@ User Profile 的初代 V1 builder、Facts reader/publisher 与 Subject Projectio
   读取通过同一次 Redis 原子观察取得对象和当前时间，成功结果的 `observedAt` 是该观察的毫秒时间。
   签发派生对象与续期复用取得时的观察，校验通过后不按应用时钟或再次取得的当前时间追加到期拒绝；
   后续对象缺失、撤销、消费和 CAS 冲突仍可阻止操作，不恢复已消失的对象。`authTime` 保留应用记录的原认证事件时间。
-- 续期以 active payload CAS 维护对象与索引；有 token lookup 的对象还校验 lookup owner 和 lookup tombstone，并同步延长 lookup。
-  共享索引不设置由某个成员决定的 TTL，读时按 Redis 时间清理到期 score；pending cleanup tombstone 在外围清理成功前保持存在，
-  成功后按 Redis 时间恢复其原 tombstone 期限或删除。Credential 正常新签发使用服务端 UUID，内部已知 identity 与不确定写入补偿保持。
+- Principal 续期以状态字节及反向 ID owner 的 CAS 维护同一状态、反向定位期限与索引；无 token Binding 按原 ID 状态 CAS 更新。
+  固定 Credential 和 Artifact 不随根续期。共享索引不设置由某个成员决定的 TTL，读时按 Redis 时间清理到期 score；
+  三类 token 对象 pending cleanup 期间保留同记录终态与反向 ID，成功后按 Redis 时间恢复原终态截止或删除。
+  Credential 正常新签发使用服务端 UUID，内部已知 identity 与不确定写入补偿保持。
 - 上述 Kernel 契约由 [ADR-0027](../adr/0027-own-online-authentication-lifecycle-time-in-redis.md) 和 #116 落实；
   #158/#159 让两种 Custom SSO Grant 直接使用 Kernel Artifact 的 Redis deadline 与原子消费，不再初始化独立 redemption。
   Independent 响应 TTL 与 Gateway Local Session Cookie 的 Max-Age 从 Credential `expiresAt - observedAt` 向上取整为秒，
@@ -419,7 +420,7 @@ User Profile 的初代 V1 builder、Facts reader/publisher 与 Subject Projectio
   #119 将 mapping 发布/刷新改为 Kernel 毫秒绝对 deadline，anchor 与 generation membership 只延长期限。
   staged binding 以 Redis TIME 和 Principal deadline 的较小值限制最长 60 秒，并与索引原子写入；claim 后不按应用时间复查。
   每次未消费 Code 读取重新取得 Kernel Principal 的 `expiresAt - observedAt` 并向上取整，供本次 AccessToken/IdToken TTL 使用；
-  该观察不持久化；已消费 Code 返回原消费标记供 provider 拒绝回放并撤销关联 Grant，不要求已删除的 Kernel artifact 提供签发期限。
+  该观察不持久化；已消费 Code 返回原消费标记供 provider 拒绝回放并撤销关联 Grant，不要求已消费或已消失的 Kernel Artifact 提供签发期限。
   Code、AccessToken 与 Grant 的 opaque 模型只在本次 Redis adapter 取得成功时沿用有效结果，
   不再由模型的本地 `exp` 校验推翻；后续读取仍须经过 Redis 存在性、Kernel 和配置校验。JWT `exp`、`auth_time` 保持协议语义。
   已取得的 Grant 增补 scope 后再保存时，Lua 保留 Redis 当前绝对期限并要求对象仍存在，不消费模型按应用时钟计算的 remainingTTL。
@@ -518,9 +519,10 @@ User Profile 的初代 V1 builder、Facts reader/publisher 与 Subject Projectio
   config version；该 context 不暴露通用 Client Secret。redirect 归属不符、或对象版本高于本操作配置时，在消费
   前拒绝并保留 Code/Grant；确认归属且对象版本低于本操作配置时，在消费前拒绝并精确撤销已观察的 Artifact，
   旧 redemption 由其 cleanup owner 清理，不影响其他对象。不能把所有版本不符统一解释为“不烧码”。
-- Independent 与 Gateway 使用 Kernel `consumeProtocolArtifact(code, purpose, observed)` 作为唯一消费权威；完整已观察 payload、lookup 和
-  tombstone 的原子比较保护替换、撤销与并发唯一赢家。成功消费同时删除该 Artifact 的 active/lookup 与精确索引成员，保留
-  consumed tombstone 供重放拒绝。消费报错或结果不明确不进入投影或签发，不新建恢复记录。
+- Independent 与 Gateway 使用 Kernel `consumeProtocolArtifact(code, purpose, observed)` 作为唯一消费权威；完整已观察状态字节
+  与反向 ID owner 的原子比较保护替换、撤销与并发唯一赢家。成功消费将同一状态原子转换为 revoked、reason=consumed，
+  移除精确索引成员并同步状态与反向 ID 的终态截止，后续解析识别 consumed_replay。不存在在线 active/lookup 删除或独立
+  tombstone 预读；消费报错或结果不明确不进入投影或签发，不新建恢复记录。
 - Independent 前置 Client/用途/mode/redirect/版本、根会话、Gate 与 Subject Access 通过后消费，再构建和严格验证完整 V2
   主体，最后以写前新 UUID 签发 Credential。消费后任何错误不恢复 Code；未进入 Credential 写入时不创建补偿 identity。
   写入结果不确定或签发后可处理失败按本次 identity 同步尽力撤销，失败不换 identity 重签、不建立队列或最终补偿承诺。
@@ -536,8 +538,10 @@ User Profile 的初代 V1 builder、Facts reader/publisher 与 Subject Projectio
 - 维护 owner 保留 `authorization-grant:redemption:v1:` 的 issued/redeeming/consumed 库存 decoder、精确 removal 与 cleanup ref。
   `/maintenance` 的 `decodeCustomSsoLegacyGrant` 严格核对 key/record identity，`isCustomSsoAuthorizationArtifact` 判定 active
   或 tombstone 的 custom-sso/auth_code；不凭业务索引发现全部目标。两种模式的新 Artifact 均不带 redemption cleanup ref；旧三状态由 testing 专用 fixture 构造。
-  #160 已通过 OIDC `custom-sso:grants` 组合 Kernel `/maintenance` 的无索引 Artifact authority/lookup 扫描、已观察四值 CAS 和精确索引成员删除，
-  以及 Custom SSO `/maintenance` 的旧三态扫描/CAS。inventory/verify 独立只读 factory 仅持 SCAN/GET，apply 才持 eval；
+  OIDC `custom-sso:grants` 组合 Kernel 与 Custom SSO 两个维护 owner。Kernel 无索引扫描当前 Artifact `state:a:`/`id:a:`，
+  apply 对已观察状态与反向 ID 做两值 CAS，再删除目标状态、反向定位及精确索引成员；缺少匹配 ID 时保留并报错。
+  源布局 `active:a:`/`lookup:a:`/`revoked:a:`/`revoked_lookup:a:` 的扫描与四值 CAS 仅供停止 writer 后的离线库存维护，
+  不构成在线双读。Custom SSO owner 继续旧 redemption 三态扫描/CAS。inventory/verify 独立只读 factory 仅持 SCAN/GET，apply 才持 eval；
   未知归属、损坏状态、比较/扫描失败均非成功，不能触及 Principal、Credential、OIDC 或以成功计数推定核验。
   仅在停旧 writer、排空后且启新 writer 前使用；保留集外部基线对照和能力退役条件见[定向维护手册](../releases/custom-sso-grant-maintenance.md)。
 - 内部 state implementation 通过 structural typing 满足三个操作的私有 ports；外部 ORCAS/User/audit/logger
@@ -559,9 +563,15 @@ User Profile 的初代 V1 builder、Facts reader/publisher 与 Subject Projectio
   Code 同时保留首次 Provider payload：消费前核对其字节，再消费同一 Kernel Artifact，最后 CAS 写入 Provider 消费标记。
   替换对象不能取得旧请求的消费标记；普通读取的版本失败清理也按首次 Provider payload 原子比较删除，保留替换对象及其标记。
   两个 owner 的状态转换仍不是一般原子事务，双状态恢复由独立议题拥有。
-  Kernel cleanup 回调取得瞬时 `deleteOwnedKeys` 能力：仅在 lookup 已移除且 lookup tombstone 仍等于原撤销对象时原子删除
-  Code/Token payload 与消费标记；当前或已消费的新 owner 均使旧清理成为无作用操作。pending cleanup 重试重新绑定原
-  tombstone 的同一约束，不新增持久字段，不退回无条件删除；Binding mapping 继续使用其原有 owner compare-delete。
+  #171–#173 的 Principal、Credential 与 Artifact 已使用 SHA-256 单状态、独立 ID 反向定位及同记录 revoked。
+  创建、更新、撤销和 cleanup 复用 Kernel direct-state 转换，比较同一状态字节及 ID owner；Artifact 消费原子转换为
+  revoked 且 reason=consumed，保留 consumed_replay 分类，不再读取独立 lookup 或 tombstone。
+  Kernel cleanup 回调取得瞬时 `deleteOwnedKeys` 能力：仅在同记录终态仍等于原撤销对象且反向 ID owner 匹配时，
+  原子删除 Code/Token payload 与消费标记；当前或已消费的新 owner 均使旧清理成为无作用操作。pending cleanup 重试
+  重新绑定原终态的同一约束，不退回无条件删除；无 token Binding 的 mapping 继续使用原有 owner compare-delete。
+  Kernel lookup HMAC current/previous 的配置、env、公开类型和候选派生已退役；三类 token 在线定位及消费匹配使用普通 SHA-256。
+  Provider 自有 lookup、Cookie/JWT 签名和 Client Secret 校验保留。#175 已交付全体下线维护，#176 的最终账本连接全部验收和原始基线成本；固定候选 gate 与评审由该票评论记录，实际环境切换未执行，
+  见[Artifact 状态证据](../features/sso/artifact-direct-state-evidence.md)。
   显式整 Client/协议管理撤销仍独立存在；Admin 配置变更已使用固定提交版本选择，见[版本撤销契约](../features/admin/client-protocol-revocation.md)。
   高于本操作配置版本的对象只拒绝并保留，不能由版本不等推断永久失效。
 
@@ -690,4 +700,4 @@ User Profile 的初代 V1 builder、Facts reader/publisher 与 Subject Projectio
 
 Spec #157 的全部 56 条故事、20 项实现和 10 项测试决定见[一次消费最终账本](../features/sso/custom-sso-one-shot-grant-contract.md)。
 #161 在正式 HTTP/Redis 上组合定向清理、独立核验、同根新授权与已有凭据访问；完整 OIDC 保留集复用 #160。
-统一 writer/consumer、基线、停流排空、smoke 与回退见[保留会话升级手册](../releases/custom-sso-one-shot-grant-upgrade.md)，目标环境未执行。
+原 #157 固定旧候选的 writer/consumer、基线和保留 smoke 见[保留会话升级手册](../releases/custom-sso-one-shot-grant-upgrade.md)。包含 #170 的当前候选必须按[全体下线手册](../releases/online-auth-redis-time-cutover.md)统一切换并重新登录，不能沿用保留对象流程；目标环境未执行。

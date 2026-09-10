@@ -9,7 +9,6 @@ import * as sessionKernelPublicModule from "@iam/session-kernel";
 import { createSessionKernelForTesting, KernelFakeRedis } from "@iam/session-kernel/testing";
 import { describe, expect, test } from "bun:test";
 import { SessionKernelLogEvent } from "../../src/log-events";
-import { createLookupHash } from "../../src/security/hmac";
 import { generateKernelToken } from "../../src/security/token";
 import { parseLifecycleObject } from "../../src/state/model";
 
@@ -66,9 +65,6 @@ function createConfig(
     principalAbsoluteTtlMs: 300_000,
     tombstoneTtlMs: 10_000,
     tombstoneGraceMs: 5_000,
-    lookupHmacKeys: {
-      current: { id: "current", secret: "c".repeat(32) },
-    },
     clock: { now: () => redis.now },
     ...overrides,
   });
@@ -135,10 +131,7 @@ function subjectIdentifierFor(index: number) {
 const principal = { principalType: "user", subjectId: subjectIdentifierFor(1) };
 
 describe("session kernel module boundaries", () => {
-  test("keeps artifact consumption mechanics out of the public module", () => {
-    expect(sessionKernelPublicModule).not.toHaveProperty(
-      "createRedisSessionKernelArtifactConsumer",
-    );
+  test("keeps storage mechanics out of the public module", () => {
     expect(sessionKernelPublicModule).not.toHaveProperty("SessionKernelStore");
   });
 
@@ -146,22 +139,6 @@ describe("session kernel module boundaries", () => {
     const redis = new KernelFakeRedis();
     const token = generateKernelToken(createConfig(redis), "principalSession");
     expect(token.startsWith("iam_ps_")).toBe(true);
-  });
-
-  test("rejects invalid lookup HMAC configuration", () => {
-    const redis = new KernelFakeRedis();
-    expect(() => createConfig(redis, {
-      lookupHmacKeys: { current: { id: "", secret: "c".repeat(32) } },
-    })).toThrow("key id");
-    expect(() => createConfig(redis, {
-      lookupHmacKeys: { current: { id: "short", secret: "too-short" } },
-    })).toThrow("at least 32 bytes");
-    expect(() => createConfig(redis, {
-      lookupHmacKeys: {
-        current: { id: "same", secret: "c".repeat(32) },
-        previous: { id: "same", secret: "p".repeat(32) },
-      },
-    })).toThrow("ids must be different");
   });
 
   test("builds namespaced keys and parses compact index members", () => {
@@ -175,30 +152,26 @@ describe("session kernel module boundaries", () => {
     });
   });
 
-  test("uses current lookup first and previous lookup fallback without storing bearer plaintext", async () => {
+  test("locates Credential across Kernel instances without storing bearer plaintext", async () => {
     const redis = new KernelFakeRedis();
-    const previousConfig = createConfig(redis, {
-      lookupHmacKeys: { current: { id: "previous", secret: "p".repeat(32) } },
-    });
-    const oldKernel = createSessionKernel({ redis, config: previousConfig });
-    const created = await oldKernel.createPrincipalSession(principal.subjectId, { subjectContext: "test-context" });
+    const writerConfig = createConfig(redis);
+    const writerKernel = createSessionKernel({ redis, config: writerConfig });
+    const created = await writerKernel.createPrincipalSession(principal.subjectId, { subjectContext: "test-context" });
     expect(created.status).toBe("created");
     if (created.status !== "created" || !created.externalToken)
       return;
 
-    const currentConfig = createConfig(redis, {
-      lookupHmacKeys: {
-        current: { id: "current", secret: "c".repeat(32) },
-        previous: { id: "previous", secret: "p".repeat(32) },
-      },
-    });
-    const kernel = createSessionKernel({ redis, config: currentConfig });
-    const resolved = await kernel.resolvePrincipalSession(created.externalToken);
+    const credential = await writerKernel.issueCredential({ principalSessionId: created.value.principalSessionId, protocol: "test", credentialType: "access", clientCode: "test" });
+    if (credential.status !== "created" || !credential.externalToken)
+      throw new Error("expected credential");
+    const readerConfig = createConfig(redis);
+    const kernel = createSessionKernel({ redis, config: readerConfig });
+    const resolved = await kernel.resolveCredential(credential.externalToken, { protocol: "test", credentialType: "access" });
 
     expect(resolved.status).toBe("resolved");
     if (resolved.status === "resolved")
-      expect(resolved.lookupKeyId).toBe("previous");
-    expect(redis.allStoredText()).not.toContain(created.externalToken);
+      expect(resolved.value.credentialId).toBe(credential.value.credentialId);
+    expect(redis.allStoredText()).not.toContain(credential.externalToken);
   });
 
   test("evaluates freshness requirements", async () => {
@@ -279,7 +252,6 @@ describe("session kernel lifecycle", () => {
       sessionKind: "browser_user",
       principalSessionId: "ps-legacy-snapshot",
       externalTokenLookupHash: "lookup-hash",
-      lookupKeyId: "lookup-key",
       principal: {
         principalType: "user",
         subjectId: "57b0e34d-bf33-4671-87ea-4ed2f1b0e420",
@@ -464,7 +436,7 @@ describe("session kernel lifecycle", () => {
       total: 1,
     });
     expect(await redis.get(
-      kernel.keys.tombstone("principal_session", expired.value.principalSessionId),
+      kernel.keys.state("principal_session", expired.value.externalTokenLookupHash),
     )).toBeNull();
   });
 
@@ -650,9 +622,9 @@ describe("session kernel lifecycle", () => {
     if (artifact.status !== "created")
       return;
 
-    const activeArtifactKey = kernel.keys.active(
+    const activeArtifactKey = kernel.keys.state(
       "artifact",
-      artifact.value.artifactId,
+      artifact.value.lookupHash,
     );
     const serialized = redis.values.get(activeArtifactKey);
     if (!serialized)
@@ -664,7 +636,7 @@ describe("session kernel lifecycle", () => {
 
     await expect(
       kernel.consumeProtocolArtifact(artifact.externalToken!, artifact.value, artifact.value),
-    ).resolves.toMatchObject({ status: "missing_or_expired" });
+    ).resolves.toMatchObject({ status: "fail_closed" });
   });
 });
 
@@ -679,7 +651,7 @@ describe("session kernel tombstone, cleanup, validation, and fail closed behavio
     if (session.status !== "created")
       return;
 
-    redis.values.set(kernel.keys.active("principal_session", session.value.principalSessionId), "{not-json");
+    redis.values.set(kernel.keys.state("principal_session", session.value.externalTokenLookupHash), "{not-json");
     await expect(kernel.resolvePrincipalSession(session.externalToken!)).resolves.toMatchObject({
       status: "schema_invalid",
     });
@@ -688,7 +660,7 @@ describe("session kernel tombstone, cleanup, validation, and fail closed behavio
     expect(output).toContain(SessionKernelLogEvent.SchemaCorrupted);
     expect(output).toContain("test-kernel");
     expect(output).not.toContain(session.externalToken!);
-    expect(output).not.toContain(kernel.keys.active("principal_session", session.value.principalSessionId));
+    expect(output).not.toContain(kernel.keys.state("principal_session", session.value.externalTokenLookupHash));
   });
 
   test("logs tombstone replay with protocol summary and without replayed token", async () => {
@@ -775,7 +747,7 @@ describe("session kernel tombstone, cleanup, validation, and fail closed behavio
     expect(output).not.toContain("token-secret-12345678901234567890");
     expect(await kernel.resolveCredential(credential.externalToken!, credential.value)).toMatchObject({ status: "revoked" });
     expect(redis.expiresAt.get(
-      kernel.keys.lookupTombstone("credential", credential.value.lookupHash),
+      kernel.keys.state("credential", credential.value.lookupHash),
     )).toBeUndefined();
     await expect(kernel.inventoryClientProtocol("portal", "oidc")).resolves.toMatchObject({
       counts: { cleanupPending: 1, total: 1 },
@@ -996,8 +968,7 @@ describe("session kernel tombstone, cleanup, validation, and fail closed behavio
     const summary = await kernel.revokeUserSessionRecords(principal);
     expect(summary.principalSessions.revoked).toBe(0);
     expect(summary.principalSessions.missing).toBe(0);
-    const lookupHash = createLookupHash(session.externalToken!, createConfig(redis).lookupHmacKeys.current);
-    expect(await redis.get(kernel.keys.lookupTombstone("principal_session", lookupHash))).toBeNull();
+    expect(await redis.get(kernel.keys.state("principal_session", session.value.externalTokenLookupHash))).toBeNull();
   });
 
   test("wrong protocol rejects each derived lifecycle without revoking its root or target", async () => {

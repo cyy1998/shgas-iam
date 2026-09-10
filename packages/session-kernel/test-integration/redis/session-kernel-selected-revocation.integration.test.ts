@@ -96,12 +96,13 @@ describe("explicit selected Client protocol revocation", () => {
     expect((await scope.observer.inventoryClientProtocol("portal", "oidc")).counts.cleanupPending).toBe(1);
   });
 
-  test("a production reissue under the observed artifact identity retains its new token and owner", async () => {
+  test("a reissue after the observed artifact expires retains its new token and owner", async () => {
     const old = created(await scope.writer.createProtocolArtifact({ artifactId: "reissued", protocol: "oidc", clientCode: "portal", artifactType: "code", ttlMs: 30_000, metadata: { epoch: 1 }, cleanupRefs: [{ protocol: "oidc", kind: "payload", ref: "old-payload" }] }));
     const pause = scope.pauseNextLifecycleObservation("artifact");
     const pending = scope.writer.revokeSelectedClientProtocolObjects("portal", "oidc", selector(2), "client_config_changed");
     try {
       await pause.reached;
+      await scope.expireArtifactGeneration(old);
       const replacement = await scope.observer.createProtocolArtifact({ artifactId: old.artifactId, protocol: "oidc", clientCode: "portal", artifactType: "code", ttlMs: 30_000, metadata: { epoch: 3 } });
       if (replacement.status !== "created" || !replacement.externalToken)
         throw new Error("replacement fixture failed");

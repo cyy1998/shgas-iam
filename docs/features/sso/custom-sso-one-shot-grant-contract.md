@@ -1,6 +1,6 @@
 # Custom SSO 一次消费最终契约
 
-> 本文原候选证据保留其规格语境。后续 Spec #163 / ADR-0033 已实现已有 Credential 使用不查父、Custom SSO 不续根/凭据及根撤销尽力级联；正常级联里根/子均失效不构成全子树保证。替代断言、固定候选与证明边界见[Credential 最终账本](credential-authority-contract.md)。包含 #163 的候选发布采用全体下线，不适用本文原规格的保留对象升级；环境未切换。
+> 本文原候选证据保留其规格语境。后续 Spec #163 / ADR-0033 已实现已有 Credential 使用不查父、Custom SSO 不续根/凭据及根撤销尽力级联；正常级联里根/子均失效不构成全子树保证。替代断言、固定候选与证明边界见[Credential 最终账本](credential-authority-contract.md)。包含 #163 或 #170 的候选发布采用全体下线，不适用本文原规格的保留对象升级；环境未切换。
 
 Status: Current
 
@@ -168,8 +168,8 @@ Next review: 2026-10-31
 `createCustomSsoOperations.forOperation()` → `createCustomSsoApplication`。
 [session.ts](../../../packages/custom-sso/src/internal/session.ts) 的 `issueAuthorizationCode` 只创建 Kernel Artifact，`cleanupRefs: []`；
 `redeemIndependentGrant`、`completeGatewayLogin` 各有一个 `consumeProtocolArtifact` 调用，二者使用同一权威。
-[Kernel facade](../../../packages/session-kernel/src/facade.ts) → [消费存储](../../../packages/session-kernel/src/storage/artifact-consumption.ts)
-比较完整观察及 lookup/tombstone，原子移除 active/lookup/精确索引，保留 consumed tombstone。OIDC 自己的消费调用独立保留，
+[Kernel facade](../../../packages/session-kernel/src/facade.ts) → [消费存储](../../../packages/session-kernel/src/storage/store.ts)
+按 ADR-0034 比较同一状态字节与反向 ID，原子转换为同记录 revoked、reason=consumed 并移除精确索引，保留 consumed_replay 分类。原 #157 候选的四键消费为历史证据，当前布局见[运行时契约](token-state-runtime-evidence.md)。OIDC 自己的消费调用独立保留，
 不能把“唯一权威”写成“全仓一个调用点”。
 
 API [services composition](../../../apps/api/src/composition/services/index.ts) 和 OIDC [session composition](../../../apps/oidc-provider/src/composition/session/index.ts)

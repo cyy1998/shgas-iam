@@ -87,7 +87,7 @@ Client Runtime Snapshot 的当前 namespace 清单位于 `packages/api-core/src/
 |---|---|
 | `packages/user-profile-read-model/src` | `invalidation/`：影响分析与 dirty/job；`build/`：加载与文档构建；`publication/`：行转换与原子发布；`query/`：查询与 Filter；`schema/`：文档契约；`subject-facts/`：缓存、读写与观测；`subject-access/`：authority 与 transition repositories；`worker/`：重建与维护装配；`readiness/`：版本无关 gate 与 Profile inventory 校验规则；`employment/`：全库只读 Employment verifier/repository。根层保留六个公开入口文件。 |
 | `packages/client-subject-projection/src` | `internal/`：当前 V2 Catalog、contract 与 projection。公开入口与共享错误留在根层；测试 fixture 由测试文件本地持有。 |
-| `packages/session-kernel/src` | `state/`：模型、结果与时间；`storage/`：存储、key、Lua 与状态变更；`security/`：HMAC/token；`cleanup/`：清理。facade、配置和公开入口留在根层。 |
+| `packages/session-kernel/src` | `state/`：模型、结果与时间；`storage/`：SHA-256 单状态、反向 ID、key、Lua 与状态变更；`security/`：随机 token 与摘要；`cleanup/`：清理。facade、配置和公开入口留在根层；Kernel lookup HMAC 已退役。 |
 | `packages/api-core/src/subject-access` | `storage/`：store 与 Redis adapter；`adapters/`：HTTP 错误映射；`recovery/`：bootstrap、repair 与 transition recovery。在线 barrier/lifecycle、操作许可/context/撤销编排、模型、错误与公开入口留在根层。 |
 | `packages/custom-sso/src` | 单一 factory、出站 ports 与协议错误；`internal/` 拥有完整授权/兑换、访问/退出、续接校验、Subject 交付、Secret/redirect 与流量 gate。`grant/` 只保留旧 Grant 库存 decoder、精确 cleanup 与维护 fixture；在线消费由 Kernel Artifact 拥有；cleanup/maintenance 直接进入窄模块，wire 不加载服务端流程。 |
 | `apps/api/src/services/sso` | `subject-delivery/`：请求 capability 桥接；`transport/`：Cookie、请求/schema、安全和 OpenAPI helper。门户 decision 映射在 `use-cases/sso/check-login-continuation/`。 |

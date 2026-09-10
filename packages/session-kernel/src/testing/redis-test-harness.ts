@@ -34,12 +34,15 @@ export interface SessionKernelRedisTestScope {
   readonly failNextCredentialCreateAfterCommit: () => void;
   readonly failNextUserIndexRead: () => void;
   readonly failNextPrincipalRevoke: () => void;
+  readonly failNextPrincipalRead: () => void;
+  readonly failNextCredentialRead: () => void;
   readonly failNextChildIndexRead: () => void;
   readonly failNextChildRevoke: () => void;
   readonly failNextCleanupFinalize: () => void;
   readonly failNextPrincipalRevokeAfterCommit: () => void;
   readonly seedPrincipalPayload: (id: string, payload: string) => Promise<void>;
   readonly seedCredentialPayload: (id: string, payload: string) => Promise<void>;
+  readonly expireArtifactGeneration: (value: { artifactId: string; lookupHash: string }) => Promise<void>;
   readonly removeCredentialPayload: (id: string) => Promise<void>;
   readonly seedUserIndexMember: (principal: PrincipalRef, member: string) => Promise<void>;
   readonly cleanupTombstoneTtl: (input: {
@@ -117,6 +120,8 @@ export async function createSessionKernelRedisTestHarness(redisUrl: string): Pro
       let failNextCredentialCreateAfterCommit = false;
       let failNextUserIndexRead = false;
       let failNextPrincipalRevoke = false;
+      let failNextPrincipalRead = false;
+      let failNextCredentialRead = false;
       let failNextChildIndexRead = false;
       let failNextChildRevoke = false;
       let failNextCleanupFinalize = false;
@@ -147,15 +152,23 @@ export async function createSessionKernelRedisTestHarness(redisUrl: string): Pro
           }
           if (property === "eval") {
             return async (script: string, keyCount: number, ...args: Array<string | number>) => {
-              if (failNextPrincipalRevoke && script.includes("session-kernel-revoke-active-object-v1") && String(args[0]).includes(":active:p:")) {
+              if (failNextCredentialRead && script.includes("session-kernel-observe-v1") && String(args[0]).includes(":state:c:")) {
+                failNextCredentialRead = false;
+                throw new Error("simulated Credential Redis observation failure");
+              }
+              if (failNextPrincipalRead && script.includes("session-kernel-observe-v1") && String(args[0]).includes(":state:p:")) {
+                failNextPrincipalRead = false;
+                throw new Error("simulated principal Redis observation failure");
+              }
+              if (failNextPrincipalRevoke && script.includes("session-kernel-direct-revoke-v1") && String(args[0]).includes(":state:p:")) {
                 failNextPrincipalRevoke = false;
                 throw new Error("simulated principal revocation failure");
               }
-              if (failNextChildRevoke && script.includes("session-kernel-revoke-active-object-v1") && !String(args[0]).includes(":active:p:")) {
+              if (failNextChildRevoke && (script.includes("session-kernel-revoke-active-object-v1") || script.includes("session-kernel-direct-revoke-v1")) && !String(args[0]).includes(":state:p:")) {
                 failNextChildRevoke = false;
                 throw new Error("simulated child revocation failure");
               }
-              if (failNextCleanupFinalize && script.includes("session-kernel-finalize-cleanup-pending-v1")) {
+              if (failNextCleanupFinalize && (script.includes("session-kernel-finalize-cleanup-pending-v1") || script.includes("session-kernel-direct-finalize-v1"))) {
                 failNextCleanupFinalize = false;
                 throw new Error("simulated cleanup finalization failure");
               }
@@ -168,7 +181,7 @@ export async function createSessionKernelRedisTestHarness(redisUrl: string): Pro
               }
               if (
                 replaceObjectBeforeNextRevoke
-                && script.includes("session-kernel-revoke-active-object-v1")
+                && (script.includes("session-kernel-revoke-active-object-v1") || script.includes("session-kernel-direct-revoke-v1"))
               ) {
                 replaceObjectBeforeNextRevoke = false;
                 const key = String(args[0]);
@@ -181,7 +194,7 @@ export async function createSessionKernelRedisTestHarness(redisUrl: string): Pro
               }
               if (
                 replaceTombstoneBeforeNextFinalize
-                && script.includes("session-kernel-finalize-cleanup-pending-v1")
+                && (script.includes("session-kernel-finalize-cleanup-pending-v1") || script.includes("session-kernel-direct-finalize-v1"))
               ) {
                 replaceTombstoneBeforeNextFinalize = false;
                 const key = String(args[0]);
@@ -197,11 +210,11 @@ export async function createSessionKernelRedisTestHarness(redisUrl: string): Pro
                 await target.set(key, JSON.stringify(replacement));
               }
               const result = await target.eval(script, keyCount, ...args);
-              if (failNextPrincipalRevokeAfterCommit && script.includes("session-kernel-revoke-active-object-v1") && String(args[0]).includes(":active:p:")) {
+              if (failNextPrincipalRevokeAfterCommit && script.includes("session-kernel-direct-revoke-v1") && String(args[0]).includes(":state:p:")) {
                 failNextPrincipalRevokeAfterCommit = false;
                 throw new Error("simulated root revocation response loss");
               }
-              if (script.includes("session-kernel-observe-v1") && String(args[0]).includes(`:active:${pausedObjectCode}:`)) {
+              if (script.includes("session-kernel-observe-v1") && String(args[0]).includes(`:state:${pausedObjectCode}:`)) {
                 const pending = afterNextLifecycleObservation;
                 afterNextLifecycleObservation = undefined;
                 await pending?.();
@@ -252,6 +265,12 @@ export async function createSessionKernelRedisTestHarness(redisUrl: string): Pro
         failNextPrincipalRevoke() {
           failNextPrincipalRevoke = true;
         },
+        failNextPrincipalRead() {
+          failNextPrincipalRead = true;
+        },
+        failNextCredentialRead() {
+          failNextCredentialRead = true;
+        },
         failNextChildIndexRead() {
           failNextChildIndexRead = true;
         },
@@ -265,13 +284,28 @@ export async function createSessionKernelRedisTestHarness(redisUrl: string): Pro
           failNextPrincipalRevokeAfterCommit = true;
         },
         async seedPrincipalPayload(id, payload) {
-          await writerRedis.set(createSessionKernelKeyBuilder(keyPrefix).active("principal_session", id), payload);
+          const keys = createSessionKernelKeyBuilder(keyPrefix);
+          const hash = await writerRedis.get(keys.identity("principal_session", id));
+          if (!hash)
+            throw new Error("expected principal identity");
+          await writerRedis.set(keys.state("principal_session", hash), payload, "KEEPTTL");
         },
         async seedCredentialPayload(id, payload) {
-          await writerRedis.set(createSessionKernelKeyBuilder(keyPrefix).active("credential", id), payload, "KEEPTTL");
+          const keys = createSessionKernelKeyBuilder(keyPrefix);
+          const hash = await writerRedis.get(keys.identity("credential", id));
+          if (!hash)
+            throw new Error("expected credential identity");
+          await writerRedis.set(keys.state("credential", hash), payload, "KEEPTTL");
+        },
+        async expireArtifactGeneration(value) {
+          const keys = createSessionKernelKeyBuilder(keyPrefix);
+          await writerRedis.del(keys.state("artifact", value.lookupHash), keys.identity("artifact", value.artifactId));
         },
         async removeCredentialPayload(id) {
-          await writerRedis.del(createSessionKernelKeyBuilder(keyPrefix).active("credential", id));
+          const keys = createSessionKernelKeyBuilder(keyPrefix);
+          const hash = await writerRedis.get(keys.identity("credential", id));
+          if (hash)
+            await writerRedis.del(keys.state("credential", hash));
         },
         async seedUserIndexMember(principal, member) {
           await writerRedis.zadd(
@@ -281,12 +315,23 @@ export async function createSessionKernelRedisTestHarness(redisUrl: string): Pro
           );
         },
         async activeObjectExists(input) {
+          if (input.kind !== "client_binding") {
+            const keys = createSessionKernelKeyBuilder(keyPrefix);
+            const hash = await observerRedis.get(keys.identity(input.kind, input.id));
+            const value = hash ? await observerRedis.get(keys.state(input.kind, hash)) : null;
+            return value !== null && !("state" in JSON.parse(value));
+          }
           return await observerRedis.get(
             createSessionKernelKeyBuilder(keyPrefix).active(input.kind, input.id),
           ) !== null;
         },
         ambiguousWriter,
         async cleanupTombstoneTtl(tombstone) {
+          const keys = createSessionKernelKeyBuilder(keyPrefix);
+          if (tombstone.kind !== "client_binding") {
+            const hash = await writerRedis.get(keys.identity(tombstone.kind, tombstone.id));
+            return hash ? await writerRedis.pttl(keys.state(tombstone.kind, hash)) : -2;
+          }
           return await writerRedis.pttl(
             createSessionKernelKeyBuilder(keyPrefix).tombstone(tombstone.kind, tombstone.id),
           );
@@ -323,12 +368,12 @@ export async function createSessionKernelRedisTestHarness(redisUrl: string): Pro
         },
         writer,
         replaceArtifactPayloadBeforeNextValidation(input) {
-          const key = createSessionKernelKeyBuilder(keyPrefix).active(
-            "artifact",
-            input.artifactId,
-          );
           beforeNextArtifactValidation = async () => {
-            await writerRedis.set(key, input.serializedPayload);
+            const keys = createSessionKernelKeyBuilder(keyPrefix);
+            const hash = await writerRedis.get(keys.identity("artifact", input.artifactId));
+            if (!hash)
+              throw new Error("expected Artifact identity");
+            await writerRedis.set(keys.state("artifact", hash), input.serializedPayload, "KEEPTTL");
           };
         },
         async seedClientProtocolIndexMember(index) {
@@ -395,12 +440,6 @@ function createSessionKernelClient(
     cleanupAdapters,
     logger,
     config: createSessionKernelConfig({
-      lookupHmacKeys: {
-        current: {
-          id: "redis-test-current",
-          secret: "session-kernel-redis-test-secret-0000000000000000",
-        },
-      },
       namespace,
       principalAbsoluteTtlMs: 60_000,
       principalIdleTtlMs: 30_000,
@@ -427,7 +466,7 @@ function createCommitThenErrorRedis(
       if (property === "eval") {
         return async (...args: Parameters<NonNullable<SessionKernelRedis["eval"]>>) => {
           const result = await target.eval(...args);
-          if (args[0].includes("session-kernel-create-credential-v1") && shouldFailAfterCommit())
+          if (args[0].includes("session-kernel-direct-create-v1") && String(args[2]).includes(":state:c:") && shouldFailAfterCommit())
             throw new Error("simulated connection loss after Redis commit");
           return result;
         };
