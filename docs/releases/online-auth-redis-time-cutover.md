@@ -81,7 +81,7 @@ Login Restriction、短信码/nonce、OIDC client-auth-failures、未知键族�
 3. 在新应用启动前，用固定目标候选的维护命令连接同一 Redis primary/DB。命令不启动 HTTP、队列或 PostgreSQL 连接。
    显式设置 `IAM_OIDC_PROVIDER_REDIS_HOST`、`IAM_OIDC_PROVIDER_REDIS_PORT`、`IAM_OIDC_PROVIDER_REDIS_DB`、
    `IAM_OIDC_PROVIDER_SESSION_KERNEL_NAMESPACE`，需要认证时设置 `IAM_OIDC_PROVIDER_REDIS_PASSWORD`。
-   前四项没有命令默认值；package 命令不读取 `.env`，维护 runtime 不加载认证 Kernel、HMAC 配置或应用 env schema。
+   前四项没有命令默认值；package 命令会加载 `apps/oidc-provider/.env`（若存在），已有进程环境变量优先；维护 runtime 不加载认证 Kernel、HMAC 配置或应用 env schema。
    不要把开发连接当发布目标。即使只读 inventory/verify 也要求已停流确认。
 4. 每条命令在一个独立进程执行，保存安全报告及退出码；任一非零退出、报告缺失或 `failed` 都阻断发布：
 
