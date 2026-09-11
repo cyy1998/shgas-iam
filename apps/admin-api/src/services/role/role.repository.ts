@@ -40,6 +40,13 @@ export function createRoleRepository(db: DbClient) {
     }
   }
   return {
+    async getRoleNamesByIds(ids: number[]) {
+      if (ids.length === 0)
+        return [];
+      return db.select({ roleCode: roles.roleCode, roleName: roles.roleName })
+        .from(roles)
+        .where(inArray(roles.id, ids));
+    },
     async lockRoleByCode(roleCode: string) {
       const rows = await db.select().from(roles).where(and(eq(roles.roleCode, roleCode), eq(roles.isDelete, false))).for("update");
       return firstRow(await attachRoleContext(rows, db));

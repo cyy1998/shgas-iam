@@ -189,6 +189,7 @@ function createService(options: {
       getAllEmploymentsByUserIdForAdmin: mock(async () => []),
     },
     passwordHasher: createFakePasswordHasher(),
+    roleRepository: { getRoleNamesByIds: async () => [] },
     privilegeRepository: {
       getPrivilegesByRoleIds: mock(async () => []),
     },
@@ -328,7 +329,12 @@ describe("createUserService", () => {
       [5, [{ id: 13, roleCode: "legacy" }]],
     ]));
     deps.privilegeRepository.getPrivilegesByRoleIds.mockImplementation(async (roleIds: number[]) =>
-      roleIds.map(roleId => ({ privilegeCode: `privilege:${roleId}` })));
+      roleIds.map(roleId => ({ privilegeCode: `privilege:${roleId}`, privilegeName: `权限${roleId}` })));
+    deps.roleRepository.getRoleNamesByIds = mock(async () => [
+      { roleCode: "admin", roleName: "管理员" },
+      { roleCode: "reviewer", roleName: "审核员" },
+      { roleCode: "legacy", roleName: "历史角色" },
+    ]);
 
     const detail = await service.getUserDetailByUsernameForAdmin("zhangsan");
 
@@ -344,6 +350,10 @@ describe("createUserService", () => {
     ]);
     expect(detail.roles).toEqual(["admin", "reviewer"]);
     expect(detail.privileges).toEqual(["privilege:11", "privilege:12"]);
+    expect(detail.roleNames).toEqual({ admin: "管理员", reviewer: "审核员" });
+    expect(detail.privilegeNames).toEqual({ "privilege:11": "权限11", "privilege:12": "权限12" });
+    expect(detail.employments[1]?.roleNames).toEqual({ legacy: "历史角色" });
+    expect(deps.roleRepository.getRoleNamesByIds).toHaveBeenCalledWith([11, 12, 13]);
   });
 
   test("keeps empty Effective Role results empty in user detail", async () => {
@@ -1034,6 +1044,7 @@ describe("createUserService", () => {
         getAllEmploymentsByUserIdForAdmin: mock(async () => []),
       },
       passwordHasher: createFakePasswordHasher(),
+      roleRepository: { getRoleNamesByIds: async () => [] },
       privilegeRepository: { getPrivilegesByRoleIds: mock(async () => []) },
       random: createFakeRandom(),
       roleAssignmentResolver: { resolveEffectiveRoles: mock(async () => new Map()) },
@@ -1145,6 +1156,7 @@ function createLifecycleService(options: {
       getAllEmploymentsByUserIdForAdmin: mock(async () => []),
     },
     passwordHasher: createFakePasswordHasher(),
+    roleRepository: { getRoleNamesByIds: async () => [] },
     privilegeRepository: {
       getPrivilegesByRoleIds: mock(async () => []),
     },

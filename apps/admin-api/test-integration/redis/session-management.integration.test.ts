@@ -348,7 +348,7 @@ describe("Admin session mutations with real Redis owners", () => {
           operation.requirePermission(id);
           const resumed = await kernel.renewPrincipalSession(root.value.principalSessionId);
           expect(resumed.status).toBe("resolved");
-          return { id: 99, username: "admin", name: "Admin", userType: UserType.Formal, mobile: null, wxId: null, status: UserStatus.Disable, orderNum: 0, isDelete: true, createTime: new Date(), updateTime: new Date(), description: null, employments: [], roles: ["iam:admin"], privileges: [] };
+          return { id: 99, username: "admin", name: "Admin", userType: UserType.Formal, mobile: null, wxId: null, status: UserStatus.Disable, orderNum: 0, isDelete: true, createTime: new Date(), updateTime: new Date(), description: null, employments: [], roles: ["iam:admin"], roleNames: {}, privilegeNames: {}, privileges: [] };
         } },
       });
       const app = new Hono();
@@ -416,6 +416,8 @@ describe("Admin session mutations with real Redis owners", () => {
             description: null,
             employments: [],
             roles: ["iam:admin"],
+            roleNames: {},
+            privilegeNames: {},
             privileges: [],
           };
         },

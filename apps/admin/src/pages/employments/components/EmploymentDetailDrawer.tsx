@@ -270,7 +270,11 @@ function EmploymentDetailDrawerContent({
                       {detail.roles.length === 0 ? (
                         <span style={{ color: '#999' }}>无</span>
                       ) : (
-                        detail.roles.map((r: string) => <Tag key={r}>{r}</Tag>)
+                        detail.roles.map((r: string) => (
+                          <Tag key={r}>
+                            {detail.roleNames[r] || '未命名角色'}
+                          </Tag>
+                        ))
                       )}
                     </div>
                     <div>
@@ -279,7 +283,9 @@ function EmploymentDetailDrawerContent({
                         <span style={{ color: '#999' }}>无</span>
                       ) : (
                         detail.privileges.map((p: string) => (
-                          <Tag key={p}>{p}</Tag>
+                          <Tag key={p}>
+                            {detail.privilegeNames[p] || '未命名权限'}
+                          </Tag>
                         ))
                       )}
                     </div>

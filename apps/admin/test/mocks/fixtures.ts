@@ -225,6 +225,8 @@ export const adminEmployments = [
     updateTime: '2026-01-05T08:00:00.000Z',
     roles: ['iam:hr-admin'],
     privileges: ['people:read'],
+    roleNames: { 'iam:hr-admin': '人事管理员' },
+    privilegeNames: { 'people:read': '查看人员' },
     managementPath: '/employments?employmentId=42',
   },
 ];
@@ -292,6 +294,8 @@ export const adminUserDetail = {
   updateTime: '2026-01-05T08:00:00.000Z',
   roles: ['iam:admin'],
   privileges: [],
+  roleNames: { 'iam:admin': '系统管理员' },
+  privilegeNames: {},
   employments: adminEmployments.map((employment) => ({
     ...employment,
     allowedActions: createHrEmploymentAllowedActions(
@@ -312,6 +316,8 @@ export const hrAdminUserDetail = {
   ...adminUserDetail,
   roles: ['iam:hr-admin'],
   privileges: ['people:read'],
+  roleNames: { 'iam:hr-admin': '人事管理员' },
+  privilegeNames: { 'people:read': '查看人员' },
   allowedActions: {
     editProfile: allowedAction,
     resetPassword: allowedAction,

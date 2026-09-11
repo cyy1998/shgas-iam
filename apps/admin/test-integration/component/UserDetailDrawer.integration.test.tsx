@@ -10,7 +10,7 @@ import {
   UserType,
 } from '@iam/contracts';
 import { ConfigProvider, message, Modal } from 'antd';
-import type { CSSProperties } from 'react';
+import type { CSSProperties, ReactNode } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { __setAccess } from '~admin/test/mocks/umijs-max';
 import { act, render, screen, waitFor, within } from '~admin/test/render';
@@ -104,7 +104,19 @@ vi.mock('@admin/services/organization-responsibility', () => ({
 }));
 
 vi.mock('@ant-design/pro-components', () => {
-  const ProDescriptions = () => null;
+  const ProDescriptions = ({
+    dataSource,
+    columns,
+  }: {
+    dataSource: { roles: string[]; roleNames: Record<string, string> };
+    columns: {
+      dataIndex: unknown;
+      render?: (_: unknown, row: typeof dataSource) => ReactNode;
+    }[];
+  }) =>
+    columns
+      .find((column) => column.dataIndex === 'roles')
+      ?.render?.(null, dataSource) ?? null;
   return {
     default: { ProDescriptions },
     ProDescriptions,
@@ -210,6 +222,26 @@ function detail(
 }
 
 describe('UserDetailDrawer Employment lifecycle actions', () => {
+  it('displays the role name in the user summary', async () => {
+    lifecycle.getUser.mockResolvedValue({
+      ...detail(EmploymentStatus.Enable),
+      roles: ['iam:hr-admin'],
+      roleNames: { 'iam:hr-admin': '人事管理员' },
+      privilegeNames: {},
+    });
+    render(
+      <UserDetailDrawer
+        open
+        username="zhangsan"
+        onClose={vi.fn()}
+        onEdit={vi.fn()}
+        onChanged={vi.fn()}
+      />,
+    );
+    expect(await screen.findByText('人事管理员')).toBeInTheDocument();
+    expect(screen.queryByText('iam:hr-admin')).not.toBeInTheDocument();
+  });
+
   beforeEach(() => {
     ConfigProvider.config({
       holderRender: (children) => (

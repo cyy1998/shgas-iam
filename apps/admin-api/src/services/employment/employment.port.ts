@@ -49,7 +49,7 @@ export interface AdminEmploymentEffectiveRoleResolverPort {
 }
 
 export interface AdminEmploymentPrivilegeReaderPort {
-  getPrivilegesByRoleIds: (roleIds: number[]) => Promise<Array<{ privilegeCode: string }>>;
+  getPrivilegesByRoleIds: (roleIds: number[]) => Promise<Array<{ privilegeCode: string; privilegeName: string }>>;
 }
 
 export interface AdminEmploymentTransactionPorts {
@@ -65,6 +65,7 @@ export type AdminEmploymentUnitOfWorkPort = UnitOfWorkPort<AdminEmploymentTransa
 export interface AdminEmploymentServiceDeps {
   employmentRepository: AdminEmploymentReaderPort;
   roleAssignmentResolver: AdminEmploymentEffectiveRoleResolverPort;
+  roleRepository: { getRoleNamesByIds: (ids: number[]) => Promise<Array<{ roleCode: string; roleName: string }>> };
   privilegeRepository: AdminEmploymentPrivilegeReaderPort;
   uow: AdminEmploymentUnitOfWorkPort;
 }

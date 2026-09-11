@@ -54,6 +54,7 @@ export function createAdminApiServices(options: CreateAdminApiServicesOptions) {
     userRepository: repositories.user,
     employmentRepository: repositories.employment,
     roleAssignmentResolver,
+    roleRepository: repositories.role,
     privilegeRepository: repositories.privilege,
     passwordHasher: runtime.passwordHasher,
     random: runtime.random,
@@ -116,6 +117,7 @@ export function createAdminApiServices(options: CreateAdminApiServicesOptions) {
   const employmentService = createEmploymentService({
     employmentRepository: repositories.employment,
     roleAssignmentResolver,
+    roleRepository: repositories.role,
     privilegeRepository: repositories.privilege,
     uow: mapUnitOfWork(unitOfWork, tx => ({
       employmentRepository: tx.repositories.employment,

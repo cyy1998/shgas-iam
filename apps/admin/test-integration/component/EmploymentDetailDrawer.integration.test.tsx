@@ -121,6 +121,26 @@ const assignment = {
 };
 
 describe('EmploymentDetailDrawer responsibility wayfinding', () => {
+  it('displays role and privilege names while preserving distinct roles with the same name', async () => {
+    services.getEmployment.mockResolvedValue({
+      ...employment,
+      roles: ['app:admin', 'other:admin'],
+      privileges: ['people:read'],
+      roleNames: { 'app:admin': '管理员', 'other:admin': '管理员' },
+      privilegeNames: { 'people:read': '查看人员' },
+    });
+    const { user } = render(
+      <EmploymentDetailDrawer open employmentId={42} onClose={vi.fn()} />,
+    );
+    await user.click(
+      await screen.findByRole('tab', { name: '角色 / 权限 (2/1)' }),
+    );
+    expect(screen.getAllByText('管理员')).toHaveLength(2);
+    expect(screen.getByText('查看人员')).toBeInTheDocument();
+    expect(screen.queryByText('app:admin')).not.toBeInTheDocument();
+    expect(screen.queryByText('people:read')).not.toBeInTheDocument();
+  });
+
   it('edits description and renders only the server-granted lifecycle actions', async () => {
     services.getEmployment.mockResolvedValue(employment);
     services.updateEmployment.mockResolvedValue({

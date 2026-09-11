@@ -57,7 +57,7 @@ export interface AdminUserEffectiveRoleResolverPort {
 }
 
 export interface AdminUserPrivilegeReaderPort {
-  getPrivilegesByRoleIds: (roleIds: number[]) => Promise<Array<{ privilegeCode: string }>>;
+  getPrivilegesByRoleIds: (roleIds: number[]) => Promise<Array<{ privilegeCode: string; privilegeName: string }>>;
 }
 
 export interface AdminUserTransactionPorts {
@@ -103,6 +103,7 @@ export interface AdminUserServiceDeps {
   userRepository: AdminUserReaderPort;
   employmentRepository: AdminUserEmploymentReaderPort;
   roleAssignmentResolver: AdminUserEffectiveRoleResolverPort;
+  roleRepository: { getRoleNamesByIds: (ids: number[]) => Promise<Array<{ roleCode: string; roleName: string }>> };
   privilegeRepository: AdminUserPrivilegeReaderPort;
   passwordHasher: Pick<PasswordHasherPort, "hashPassword">;
   random: Pick<RandomPort, "password" | "uuid">;

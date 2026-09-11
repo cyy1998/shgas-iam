@@ -1,9 +1,32 @@
 import { z } from "@hono/zod-openapi";
 import { createPageQuerySchema } from "@iam/api-core/core/pagination/schema";
 import { EmploymentStatus, OrganizationType } from "@iam/contracts";
+import { EmploymentDetailDtoSchema as SharedEmploymentDetailDtoSchema } from "@iam/domain/employment";
+
+export const EmploymentDetailDtoSchema = SharedEmploymentDetailDtoSchema.pick({
+  id: true,
+  userId: true,
+  orgId: true,
+  posId: true,
+  isPrimary: true,
+  status: true,
+  startTime: true,
+  endTime: true,
+  description: true,
+  isDelete: true,
+  createTime: true,
+  updateTime: true,
+  user: true,
+  position: true,
+  organization: true,
+  roles: true,
+  privileges: true,
+}).extend({
+  roleNames: z.record(z.string(), z.string()).default({}),
+  privilegeNames: z.record(z.string(), z.string()).default({}),
+});
 
 export {
-  EmploymentDetailDtoSchema,
   EmploymentDetailSchema,
   EmploymentDtoSchema,
   EmploymentSchema,

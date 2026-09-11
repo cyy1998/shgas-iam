@@ -341,6 +341,7 @@ function createService(
     roleAssignmentResolver: {
       resolveEffectiveRoles: mock(async () => new Map()),
     },
+    roleRepository: repositories.role,
     privilegeRepository: {
       getPrivilegesByRoleIds: mock(async () => []),
     },

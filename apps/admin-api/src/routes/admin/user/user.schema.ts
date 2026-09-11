@@ -38,6 +38,8 @@ export function toUserVo(input: unknown) {
 }
 
 export const UserDetailVoSchema = UserVoSchema.extend({
+  roleNames: UserDetailDtoSchema.shape.roleNames,
+  privilegeNames: UserDetailDtoSchema.shape.privilegeNames,
   allowedActions: AdminUserAllowedActionsSchema,
   employments: z.array(EmploymentDetailDtoSchema.extend({
     allowedActions: AdminEmploymentAllowedActionsSchema,

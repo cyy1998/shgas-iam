@@ -111,6 +111,22 @@ async function seedRole(roleCode = "ROLE") {
   return role!;
 }
 
+test("loads names only for the requested role identities, including duplicate names", async () => {
+  const first = await seedRole("APP:ADMIN");
+  const second = await seedRole("OTHER:ADMIN");
+  await seedRole("UNRELATED");
+  await harness.db.update(roles).set({ roleName: "管理员" }).where(eq(roles.id, first.id));
+  await harness.db.update(roles).set({ roleName: "管理员" }).where(eq(roles.id, second.id));
+  const repository = createAdminApiRepositories(harness.db).role;
+  const names = await repository.getRoleNamesByIds([first.id, second.id, first.id]);
+  expect(names.sort((a, b) => a.roleCode.localeCompare(b.roleCode))).toEqual([
+    { roleCode: "APP:ADMIN", roleName: "管理员" },
+    { roleCode: "OTHER:ADMIN", roleName: "管理员" },
+  ]);
+  const empty = await repository.getRoleNamesByIds([]);
+  expect(empty).toEqual([]);
+});
+
 async function seedHolder(
   roleId: number,
   targetType = RoleAssignmentTargetType.Employment,

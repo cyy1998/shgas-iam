@@ -127,6 +127,7 @@ function createService() {
       })),
       searchEmploymentsFuzzyForAdminPaged: mock(async () => ({ rows: [], total: 0 })),
     },
+    roleRepository: { getRoleNamesByIds: async () => [] },
     privilegeRepository: {
       getPrivilegesByRoleIds: mock(async () => []),
     },
@@ -311,16 +312,22 @@ describe("createEmploymentService", () => {
       ]],
     ]));
     deps.privilegeRepository.getPrivilegesByRoleIds.mockResolvedValueOnce([
-      { privilegeCode: "user:read" },
-      { privilegeCode: "user:write" },
+      { privilegeCode: "user:read", privilegeName: "查看用户" },
+      { privilegeCode: "user:write", privilegeName: "编辑用户" },
     ]);
 
+    deps.roleRepository.getRoleNamesByIds = mock(async () => [
+      { roleCode: "admin", roleName: "管理员" },
+      { roleCode: "reviewer", roleName: "管理员" },
+    ]);
     const detail = await service.getEmploymentDetailByIdForAdmin(4);
 
     expect(deps.roleAssignmentResolver.resolveEffectiveRoles).toHaveBeenCalledWith({ employmentIds: [4] });
     expect(deps.privilegeRepository.getPrivilegesByRoleIds).toHaveBeenCalledWith([11, 12]);
     expect(detail.roles).toEqual(["admin", "reviewer"]);
     expect(detail.privileges).toEqual(["user:read", "user:write"]);
+    expect(detail.roleNames).toEqual({ admin: "管理员", reviewer: "管理员" });
+    expect(detail.privilegeNames).toEqual({ "user:read": "查看用户", "user:write": "编辑用户" });
   });
 
   test("keeps the existing employment-not-found behavior before resolving roles", async () => {

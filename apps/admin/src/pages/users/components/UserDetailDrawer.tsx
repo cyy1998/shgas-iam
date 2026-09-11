@@ -495,7 +495,7 @@ function UserDetailDrawerContent({
                             <div style={roleListStyle}>
                               {r.roles.map((code: string) => (
                                 <Tag key={code} style={roleTagStyle}>
-                                  {code}
+                                  {r.roleNames[code] || '未命名角色'}
                                 </Tag>
                               ))}
                             </div>

@@ -66,6 +66,7 @@ function createCommand(
       userRepository: repositories.user,
       employmentRepository: repositories.employment,
       roleAssignmentResolver: { resolveEffectiveRoles: async () => new Map() },
+      roleRepository: repositories.role,
       privilegeRepository: { getPrivilegesByRoleIds: async () => [] },
       passwordHasher: { hashPassword: async password => `hash:${password}` },
       random,

@@ -1,11 +1,31 @@
 import { z } from "@hono/zod-openapi";
 import { createPageQuerySchema } from "@iam/api-core/core/pagination/schema";
 import { UserStatus, UserType } from "@iam/contracts";
-import { UserSchema as SharedUserSchema } from "@iam/domain/user";
+import { UserDetailDtoSchema as SharedUserDetailDtoSchema, UserSchema as SharedUserSchema } from "@iam/domain/user";
+import { EmploymentDetailDtoSchema } from "../employment/employment.schema";
+
+export const UserDetailDtoSchema = SharedUserDetailDtoSchema.pick({
+  id: true,
+  username: true,
+  name: true,
+  wxId: true,
+  mobile: true,
+  userType: true,
+  orderNum: true,
+  status: true,
+  isDelete: true,
+  createTime: true,
+  updateTime: true,
+  roles: true,
+  privileges: true,
+}).extend({
+  employments: z.array(EmploymentDetailDtoSchema).default([]),
+  roleNames: z.record(z.string(), z.string()).default({}),
+  privilegeNames: z.record(z.string(), z.string()).default({}),
+});
 
 export {
   UserCreateDtoSchema,
-  UserDetailDtoSchema,
   UserDtoSchema,
   UserSchema,
 } from "@iam/domain/user";

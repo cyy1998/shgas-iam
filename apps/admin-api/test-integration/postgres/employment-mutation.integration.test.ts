@@ -120,6 +120,7 @@ function commands(decorate: (tx: TransactionContext<AdminApiTxPorts>) => AdminAp
     })) }),
     profile: createEmploymentService({
       employmentRepository: repositories.employment,
+      roleRepository: repositories.role,
       privilegeRepository: repositories.privilege,
       roleAssignmentResolver: { resolveEffectiveRoles: async () => new Map() },
       uow: mapUnitOfWork(uow, tx => ({

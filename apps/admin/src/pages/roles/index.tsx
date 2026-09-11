@@ -97,8 +97,14 @@ export default function RolesPage() {
   };
 
   const columns: ProColumns<RoleVo>[] = [
-    { title: '角色编码', dataIndex: 'roleCode', width: 170 },
-    { title: '角色名称', dataIndex: 'roleName', width: 180 },
+    {
+      title: '角色',
+      dataIndex: 'text',
+      hideInTable: true,
+      fieldProps: { placeholder: '角色编码或名称' },
+    },
+    { title: '角色编码', dataIndex: 'roleCode', width: 170, search: false },
+    { title: '角色名称', dataIndex: 'roleName', width: 180, search: false },
     {
       title: '所属应用',
       dataIndex: 'clientCode',
@@ -188,19 +194,16 @@ export default function RolesPage() {
             const {
               current = 1,
               pageSize = 20,
-              roleCode,
-              roleName,
+              text,
               clientCode,
               status,
             } = params as {
               current?: number;
               pageSize?: number;
-              roleCode?: string;
-              roleName?: string;
+              text?: string;
               clientCode?: string;
               status?: string | number;
             };
-            const text = (roleCode || roleName || '') as string;
             const statusValue =
               status === undefined ? undefined : (Number(status) as RoleStatus);
             const data = await searchRoles({

@@ -96,18 +96,28 @@ export function createUserService(deps: AdminUserServiceDeps) {
       employmentIds: employments.map(employment => employment.id),
     });
     const employmentDtos = [];
+    const roleIds = [...new Set([...rolesByEmployment.values()].flatMap(roles => roles.map(role => role.id)))];
+    const roleNames = new Map((await deps.roleRepository.getRoleNamesByIds(roleIds))
+      .map(role => [role.roleCode, role.roleName]));
     for (const employment of employments) {
       const roles = rolesByEmployment.get(employment.id) ?? [];
       const privileges = await deps.privilegeRepository.getPrivilegesByRoleIds(roles.map(r => r.id));
       const employmentDto = EmploymentDetailDtoSchema.parse(toEmploymentDto(employment));
       employmentDto.roles = roles.map(r => r.roleCode);
       employmentDto.privileges = privileges.map(p => p.privilegeCode);
+      employmentDto.roleNames = Object.fromEntries(roles.flatMap((role) => {
+        const name = roleNames.get(role.roleCode);
+        return name === undefined ? [] : [[role.roleCode, name]];
+      }));
+      employmentDto.privilegeNames = Object.fromEntries(privileges.map(p => [p.privilegeCode, p.privilegeName]));
       employmentDtos.push(employmentDto);
     }
     userDto.employments = employmentDtos;
     const currentEmploymentDtos = employmentDtos.filter(e => e.status === EmploymentStatus.Enable);
     userDto.roles = [...new Set(currentEmploymentDtos.flatMap(e => e.roles))];
     userDto.privileges = [...new Set(currentEmploymentDtos.flatMap(e => e.privileges))];
+    userDto.roleNames = Object.fromEntries(currentEmploymentDtos.flatMap(e => Object.entries(e.roleNames)));
+    userDto.privilegeNames = Object.fromEntries(currentEmploymentDtos.flatMap(e => Object.entries(e.privilegeNames)));
     return userDto;
   }
 
