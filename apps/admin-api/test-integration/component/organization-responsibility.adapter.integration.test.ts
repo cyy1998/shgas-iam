@@ -1,4 +1,5 @@
 import type { CreateOrganizationResponsibilityAdapterDeps } from "@admin-api/routes/admin/organization-responsibility/organization-responsibility.adapter";
+import type { OrganizationResponsibilityAssignmentSearchPage } from "@admin-api/services/organization-responsibility/organization-responsibility.schema";
 import type { CreateOrganizationResponsibilityServiceDeps } from "@admin-api/services/organization-responsibility/organization-responsibility.service";
 import type { Context } from "hono";
 import { createAdminAuthenticationHandlers } from "@admin-api/middlewares/authentication.handler";
@@ -173,6 +174,7 @@ describe("Organization Responsibility Type Catalog admin adapter", () => {
     const getAssignmentDetailForAdmin = mock(async () => assignment);
     const repository = {
       listAssignmentsForAdmin,
+      searchAssignmentPageForAdmin: mock(async () => ({ items: [assignment], total: 1 })),
       getAssignmentDetailForAdmin,
     } satisfies CreateOrganizationResponsibilityServiceDeps["repository"];
     const service = createOrganizationResponsibilityService({
@@ -340,7 +342,7 @@ describe("Organization Responsibility Type Catalog admin adapter", () => {
   });
 
   test("exposes global Assignment discovery with recoverable cursor filters", async () => {
-    const searchAssignments = mock(async () => ({
+    const searchAssignments = mock(async (): Promise<OrganizationResponsibilityAssignmentSearchPage> => ({
       items: [],
       nextCursor: "40",
     }));
@@ -405,13 +407,35 @@ describe("Organization Responsibility Type Catalog admin adapter", () => {
         req: { header: () => undefined, method: "POST", path: "/rpc/admin.organizationResponsibility.searchAssignments" },
       } as unknown as Context,
     });
-    await expect(
-      caller.searchAssignments({
-        employmentId: 7,
-        lifecycle: "ended",
-        limit: 20,
-      }),
-    ).resolves.toEqual({ items: [], nextCursor: "40" });
+    const cursorResult = await caller.searchAssignments({
+      employmentId: 7,
+      lifecycle: "ended",
+      limit: 20,
+    });
+    expect(cursorResult).toEqual({ items: [], nextCursor: "40" });
+
+    searchAssignments.mockResolvedValueOnce({ items: [], nextCursor: null, total: 42 });
+    const pageResponse = await app.request(
+      "http://localhost/admin/organization-responsibilities/assignments?pageNum=3&pageSize=20&lifecycle=all",
+    );
+    const pageBody = await pageResponse.json() as { data: unknown };
+    expect(pageResponse.status).toBe(200);
+    expect(pageBody.data).toEqual({ items: [], nextCursor: null, total: 42 });
+    expect(searchAssignments).toHaveBeenLastCalledWith(
+      { pageNum: 3, pageSize: 20, lifecycle: "all", limit: 20 },
+      expect.objectContaining({ kind: "full" }),
+    );
+    await caller.searchAssignments({ pageNum: 2, pageSize: 10 });
+    expect(searchAssignments).toHaveBeenLastCalledWith(
+      { pageNum: 2, pageSize: 10, lifecycle: "open", limit: 20 },
+      expect.objectContaining({ kind: "full" }),
+    );
+    for (const query of ["pageNum=0", "pageSize=101", "pageNum=2&cursor=41"]) {
+      const invalidResponse = await app.request(
+        `http://localhost/admin/organization-responsibilities/assignments?${query}`,
+      );
+      expect(invalidResponse.status).toBe(422);
+    }
 
     const detailResponse = await app.request(
       "http://localhost/admin/organization-responsibilities/assignments/41",

@@ -58,6 +58,8 @@ export type OrganizationResponsibilityAssignmentState = {
   typeCode?: OrganizationResponsibilityTypeCode;
   lifecycle: OrganizationResponsibilityAssignmentLifecycle;
   assignmentId: number | null;
+  pageNum?: number;
+  pageSize?: number;
 };
 
 type Host =
@@ -289,7 +291,7 @@ export default function OrganizationResponsibilityAssignmentModule({
   const access = useAccess();
   const fixedTarget =
     host.kind === 'organization' ? host.targetOrganizationCode : undefined;
-  const initialState =
+  const initialState: OrganizationResponsibilityAssignmentState =
     host.kind === 'global'
       ? host.state
       : {
@@ -302,7 +304,12 @@ export default function OrganizationResponsibilityAssignmentModule({
   const [items, setItems] = useState<
     OrganizationResponsibilityAssignmentView[]
   >([]);
-  const [nextCursor, setNextCursor] = useState<string | null>(null);
+  const [pagination, setPagination] = useState({
+    current: initialState.pageNum ?? 1,
+    pageSize: initialState.pageSize ?? PAGE_SIZE,
+    total: 0,
+  });
+  const paginationRef = useRef(pagination);
   const [loading, setLoading] = useState(false);
   const [createOpen, setCreateOpen] = useState(false);
   const [detailOpen, setDetailOpen] = useState(false);
@@ -316,11 +323,15 @@ export default function OrganizationResponsibilityAssignmentModule({
   const detailRequestIdRef = useRef(0);
 
   const loadPage = useCallback(
-    async (cursor?: string, options: { preserveOnError?: boolean } = {}) => {
+    async (
+      pageNum = paginationRef.current.current,
+      pageSize = paginationRef.current.pageSize,
+      options: { preserveOnError?: boolean } = {},
+    ) => {
       const requestId = ++listRequestIdRef.current;
       setLoading(true);
       try {
-        const page = await searchOrganizationResponsibilityAssignments({
+        const query = {
           ...(filters.targetOrganizationCode
             ? {
                 targetOrganizationCode: filters.targetOrganizationCode,
@@ -331,19 +342,35 @@ export default function OrganizationResponsibilityAssignmentModule({
             : {}),
           ...(filters.typeCode ? { typeCode: filters.typeCode } : {}),
           lifecycle: filters.lifecycle,
-          ...(cursor ? { cursor } : {}),
-          limit: PAGE_SIZE,
+          pageSize,
+        };
+        let page = await searchOrganizationResponsibilityAssignments({
+          ...query,
+          pageNum,
         });
         if (requestId !== listRequestIdRef.current) return;
-        setItems((current) =>
-          cursor ? [...current, ...page.items] : page.items,
-        );
-        setNextCursor(page.nextCursor);
+        const lastPage = Math.max(1, Math.ceil((page.total ?? 0) / pageSize));
+        if (pageNum > lastPage) {
+          pageNum = lastPage;
+          page = await searchOrganizationResponsibilityAssignments({
+            ...query,
+            pageNum,
+          });
+        }
+        if (requestId !== listRequestIdRef.current) return;
+        setItems(page.items);
+        paginationRef.current = {
+          current: pageNum,
+          pageSize,
+          total: page.total ?? 0,
+        };
+        setPagination(paginationRef.current);
       } catch (error) {
         if (requestId !== listRequestIdRef.current) return;
-        if (!cursor && !options.preserveOnError) {
+        if (!options.preserveOnError) {
           setItems([]);
-          setNextCursor(null);
+          paginationRef.current = { current: pageNum, pageSize, total: 0 };
+          setPagination(paginationRef.current);
         }
         message.error(
           error instanceof Error ? error.message : '加载责任任命失败',
@@ -404,7 +431,10 @@ export default function OrganizationResponsibilityAssignmentModule({
 
   useEffect(() => {
     let cancelled = false;
-    void loadPage().then(() => {
+    void loadPage(
+      initialState.pageNum ?? 1,
+      initialState.pageSize ?? PAGE_SIZE,
+    ).then(() => {
       if (!cancelled && initialState.assignmentId) {
         void loadDetail(initialState.assignmentId);
       }
@@ -414,7 +444,13 @@ export default function OrganizationResponsibilityAssignmentModule({
       listRequestIdRef.current += 1;
       detailRequestIdRef.current += 1;
     };
-  }, [initialState.assignmentId, loadDetail, loadPage]);
+  }, [
+    initialState.assignmentId,
+    initialState.pageNum,
+    initialState.pageSize,
+    loadDetail,
+    loadPage,
+  ]);
 
   const applyFilters = (values: AssignmentSearchFormValues) => {
     const nextState: OrganizationResponsibilityAssignmentState = {
@@ -452,7 +488,12 @@ export default function OrganizationResponsibilityAssignmentModule({
 
   const openDetail = (id: number) => {
     if (host.kind === 'global') {
-      host.onStateChange({ ...filters, assignmentId: id });
+      host.onStateChange({
+        ...filters,
+        assignmentId: id,
+        pageNum: pagination.current,
+        pageSize: pagination.pageSize,
+      });
       return;
     }
     void loadDetail(id);
@@ -487,7 +528,7 @@ export default function OrganizationResponsibilityAssignmentModule({
       );
     } finally {
       await Promise.all([
-        loadPage(undefined, { preserveOnError: true }),
+        loadPage(undefined, undefined, { preserveOnError: true }),
         loadDetail(assignmentId, {
           allowOutOfScope: true,
           preserveCurrent: true,
@@ -523,7 +564,17 @@ export default function OrganizationResponsibilityAssignmentModule({
         headerTitle="责任任命列表"
         search={{ labelWidth: 'auto' }}
         scroll={{ x: 1200 }}
-        pagination={false}
+        pagination={{
+          ...pagination,
+          showSizeChanger: true,
+          pageSizeOptions: [10, 20, 50, 100],
+          onChange: (current, pageSize) =>
+            void loadPage(
+              pageSize === pagination.pageSize ? current : 1,
+              pageSize,
+              { preserveOnError: true },
+            ),
+        }}
         onSubmit={applyFilters}
         onReset={resetFilters}
         toolBarRender={() =>
@@ -541,21 +592,16 @@ export default function OrganizationResponsibilityAssignmentModule({
         }
         locale={{ emptyText: '无符合条件的责任任命' }}
       />
-      {nextCursor && (
-        <div style={{ textAlign: 'center', marginTop: 16 }}>
-          <Button loading={loading} onClick={() => void loadPage(nextCursor)}>
-            加载更多
-          </Button>
-        </div>
-      )}
 
       {access.canCreateOrganizationResponsibility && (
         <OrganizationResponsibilityAssignmentFormModal
           open={createOpen}
           orgCode={fixedTarget}
           onOpenChange={setCreateOpen}
-          onFailure={() => loadPage(undefined, { preserveOnError: true })}
-          onSuccess={() => void loadPage()}
+          onFailure={() =>
+            loadPage(undefined, undefined, { preserveOnError: true })
+          }
+          onSuccess={() => void loadPage(1)}
         />
       )}
 

@@ -265,7 +265,8 @@ export function createOrganizationResponsibilityRepository(db: DbClient) {
     id?: number;
     cursorId?: number;
     limit: number;
-  }): Promise<OrganizationResponsibilityAssignmentData[]> {
+    offset?: number;
+  }): Promise<{ items: OrganizationResponsibilityAssignmentData[]; total: number }> {
     const holderOrganization = alias(
       organizations,
       "responsibility_holder_organization",
@@ -309,7 +310,7 @@ export function createOrganizationResponsibilityRepository(db: DbClient) {
         );
       }
     }
-    const rows = await db
+    const query = db
       .select({
         id: organizationResponsibilityAssignments.id,
         typeCode: organizationResponsibilityAssignments.typeCode,
@@ -415,9 +416,13 @@ export function createOrganizationResponsibilityRepository(db: DbClient) {
               )
             : undefined,
         ),
-      )
-      .orderBy(desc(organizationResponsibilityAssignments.id))
-      .limit(input.limit);
+      );
+    const total = input.offset === undefined
+      ? 0
+      : await db.$count(query.as("filtered_assignments"));
+    const rows = await query.orderBy(desc(organizationResponsibilityAssignments.id))
+      .limit(input.limit)
+      .offset(input.offset ?? 0);
 
     if (input.id !== undefined && rows[0] !== undefined) {
       const targetOrganizationCode = requireValue(
@@ -429,7 +434,7 @@ export function createOrganizationResponsibilityRepository(db: DbClient) {
         input.targetOrganizationCode !== undefined
         && targetOrganizationCode !== input.targetOrganizationCode
       ) {
-        return [];
+        return { items: [], total };
       }
     }
 
@@ -503,7 +508,7 @@ export function createOrganizationResponsibilityRepository(db: DbClient) {
     ]);
     const paths = await readOrganizationPaths(organizationIds);
 
-    return rows.map((row) => {
+    const items = rows.map((row) => {
       assertAssignmentParentLifecycle({
         id: row.id,
         assignmentStatus: row.status,
@@ -581,6 +586,7 @@ export function createOrganizationResponsibilityRepository(db: DbClient) {
         },
       };
     });
+    return { items, total };
   }
 
   async function readOrganizationPaths(orgIds: number[]) {
@@ -776,7 +782,24 @@ export function createOrganizationResponsibilityRepository(db: DbClient) {
       ) {
         return [];
       }
-      return await readAssignmentViews({ ...input, readScope });
+      return (await readAssignmentViews({ ...input, readScope })).items;
+    },
+    async searchAssignmentPageForAdmin(input: {
+      targetOrganizationCode?: string;
+      employmentId?: number;
+      typeCode?: OrganizationResponsibilityTypeCode;
+      lifecycle: OrganizationResponsibilityAssignmentLifecycle;
+      pageNum: number;
+      pageSize: number;
+    }, readScope: OrganizationResponsibilityReadScope) {
+      if (readScope.kind === "scoped" && readScope.organizationIds.length === 0)
+        return { items: [], total: 0 };
+      return await readAssignmentViews({
+        ...input,
+        readScope,
+        limit: input.pageSize,
+        offset: (input.pageNum - 1) * input.pageSize,
+      });
     },
     async getAssignmentDetailForAdmin(
       input: { orgCode?: string; id: number },
@@ -790,13 +813,13 @@ export function createOrganizationResponsibilityRepository(db: DbClient) {
       }
       return (
         firstRow(
-          await readAssignmentViews({
+          (await readAssignmentViews({
             readScope,
             targetOrganizationCode: input.orgCode,
             id: input.id,
             lifecycle: "all",
             limit: 1,
-          }),
+          })).items,
         ) ?? null
       );
     },

@@ -3,6 +3,7 @@ import type { OrganizationResponsibilityRepository } from "./organization-respon
 import type {
   OrganizationResponsibilityAssignmentData,
   OrganizationResponsibilityAssignmentLifecycle,
+  OrganizationResponsibilityAssignmentSearchPage,
   OrganizationResponsibilityAssignmentSearchQuery,
 } from "./organization-responsibility.schema";
 import { OrganizationResponsibilityAssignmentNotFoundError } from "@iam/domain/organization-responsibility";
@@ -10,7 +11,7 @@ import { OrganizationResponsibilityAssignmentNotFoundError } from "@iam/domain/o
 export interface CreateOrganizationResponsibilityServiceDeps {
   repository: Pick<
     OrganizationResponsibilityRepository,
-    "getAssignmentDetailForAdmin" | "listAssignmentsForAdmin"
+    "getAssignmentDetailForAdmin" | "listAssignmentsForAdmin" | "searchAssignmentPageForAdmin"
   >;
 }
 
@@ -39,7 +40,22 @@ export function createOrganizationResponsibilityService(
   async function searchAssignments(
     input: AssignmentSearchInput,
     authorization: AdminOrganizationResponsibilityAuthorization,
-  ) {
+  ): Promise<OrganizationResponsibilityAssignmentSearchPage> {
+    if (input.pageNum !== undefined || input.pageSize !== undefined) {
+      const page = await deps.repository.searchAssignmentPageForAdmin({
+        targetOrganizationCode: input.targetOrganizationCode,
+        employmentId: input.employmentId,
+        typeCode: input.typeCode,
+        lifecycle: input.lifecycle ?? "open",
+        pageNum: input.pageNum ?? 1,
+        pageSize: input.pageSize ?? input.limit,
+      }, authorization.readScope);
+      return {
+        items: page.items.map(assignment => withAllowedActions(assignment, authorization)),
+        total: page.total,
+        nextCursor: null,
+      };
+    }
     const rows = await deps.repository.listAssignmentsForAdmin({
       ...input,
       lifecycle: input.lifecycle ?? "open",

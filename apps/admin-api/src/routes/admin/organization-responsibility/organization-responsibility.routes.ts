@@ -3,6 +3,7 @@ import {
   OrganizationResponsibilityAssignmentCreateDtoSchema,
   OrganizationResponsibilityAssignmentCursorPageSchema,
   OrganizationResponsibilityAssignmentListQuerySchema,
+  OrganizationResponsibilityAssignmentSearchPageSchema,
   OrganizationResponsibilityAssignmentSearchQuerySchema,
   OrganizationResponsibilityAssignmentViewSchema,
 } from "@admin-api/services/organization-responsibility/organization-responsibility.schema";
@@ -73,9 +74,9 @@ export const organizationResponsibilityAssignmentsSearch = createRoute({
     ...commonErrorResponses,
     [HttpStatusCodes.OK]: jsonContent(
       createSuccessResponseSchema(
-        OrganizationResponsibilityAssignmentCursorPageSchema,
+        OrganizationResponsibilityAssignmentSearchPageSchema,
       ),
-      "全局组织责任任命游标搜索",
+      "全局组织责任任命搜索（支持页码或游标分页）",
     ),
   },
 });

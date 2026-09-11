@@ -7,7 +7,8 @@ import {
   OrganizationStatus,
   OrganizationType,
 } from '@iam/contracts';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { ConfigProvider, message, Modal } from 'antd';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { render, screen, waitFor, within } from '~admin/test/render';
 
 const responsibilityService = vi.hoisted(() => ({
@@ -77,9 +78,17 @@ const assignment = {
 
 describe('OrganizationResponsibilityAssignmentsPanel', () => {
   beforeEach(() => {
+    ConfigProvider.config({
+      holderRender: (children) => (
+        <ConfigProvider theme={{ token: { motion: false } }}>
+          {children}
+        </ConfigProvider>
+      ),
+    });
     vi.clearAllMocks();
     responsibilityService.listAssignments.mockResolvedValue({
       items: [assignment],
+      total: 1,
       nextCursor: '100',
     });
     responsibilityService.endAssignment.mockResolvedValue({
@@ -96,7 +105,13 @@ describe('OrganizationResponsibilityAssignmentsPanel', () => {
     });
   });
 
-  it('loads the default Open cursor list and opens detail by stable numeric id', async () => {
+  afterEach(() => {
+    Modal.destroyAll();
+    message.destroy();
+    ConfigProvider.config({ holderRender: undefined });
+  });
+
+  it('loads the default Open page and opens detail by stable numeric id', async () => {
     responsibilityService.detailAssignment.mockResolvedValue(assignment);
 
     const { user } = render(
@@ -109,7 +124,8 @@ describe('OrganizationResponsibilityAssignmentsPanel', () => {
     expect(responsibilityService.listAssignments).toHaveBeenCalledWith({
       targetOrganizationCode: 'FIN',
       lifecycle: 'open',
-      limit: 20,
+      pageNum: 1,
+      pageSize: 20,
     });
     expect(screen.getByText('张三（zhangsan）')).toBeInTheDocument();
     expect(screen.getByText('运营负责人（OPS-LEAD）')).toBeInTheDocument();
@@ -251,10 +267,14 @@ describe('OrganizationResponsibilityAssignmentsPanel', () => {
     expect(screen.getByRole('dialog')).toBeInTheDocument();
   });
 
-  it('continues the Open list with the opaque cursor returned by the server', async () => {
+  it('replaces rows when switching pages and can return to the first page', async () => {
     responsibilityService.listAssignments
       .mockReset()
-      .mockResolvedValueOnce({ items: [assignment], nextCursor: '100' })
+      .mockResolvedValueOnce({
+        items: [assignment],
+        total: 21,
+        nextCursor: null,
+      })
       .mockResolvedValueOnce({
         items: [
           {
@@ -263,6 +283,12 @@ describe('OrganizationResponsibilityAssignmentsPanel', () => {
             typeCode: OrganizationResponsibilityTypeCode.Supervising,
           },
         ],
+        total: 21,
+        nextCursor: null,
+      })
+      .mockResolvedValueOnce({
+        items: [assignment],
+        total: 21,
         nextCursor: null,
       });
 
@@ -270,25 +296,135 @@ describe('OrganizationResponsibilityAssignmentsPanel', () => {
       <OrganizationResponsibilityAssignmentsPanel orgCode="FIN" />,
     );
     await screen.findByRole('button', { name: '详情' });
-    await user.click(screen.getByRole('button', { name: '加载更多' }));
+    await user.click(screen.getByTitle('2'));
 
     expect(await screen.findAllByRole('button', { name: '详情' })).toHaveLength(
-      2,
+      1,
     );
     expect(responsibilityService.listAssignments).toHaveBeenNthCalledWith(2, {
       targetOrganizationCode: 'FIN',
       lifecycle: 'open',
-      cursor: '100',
-      limit: 20,
+      pageNum: 2,
+      pageSize: 20,
     });
+    await screen.findByText('分管领导（supervising）');
+    await user.click(screen.getByTitle('1'));
+    await waitFor(() =>
+      expect(responsibilityService.listAssignments).toHaveBeenLastCalledWith({
+        targetOrganizationCode: 'FIN',
+        lifecycle: 'open',
+        pageNum: 1,
+        pageSize: 20,
+      }),
+    );
+    expect(await screen.findAllByRole('button', { name: '详情' })).toHaveLength(
+      1,
+    );
+  });
+
+  it('returns to the last available page after ending its only assignment', async () => {
+    responsibilityService.listAssignments
+      .mockReset()
+      .mockResolvedValueOnce({
+        items: [assignment],
+        total: 21,
+        nextCursor: null,
+      })
+      .mockResolvedValueOnce({
+        items: [{ ...assignment, id: 100 }],
+        total: 21,
+        nextCursor: null,
+      })
+      .mockResolvedValueOnce({ items: [], total: 20, nextCursor: null })
+      .mockResolvedValueOnce({
+        items: [assignment],
+        total: 20,
+        nextCursor: null,
+      });
+    responsibilityService.detailAssignment.mockResolvedValue({
+      ...assignment,
+      id: 100,
+    });
+    const { user } = render(
+      <OrganizationResponsibilityAssignmentsPanel orgCode="FIN" />,
+    );
+    await screen.findByRole('button', { name: '详情' });
+    await user.click(screen.getByTitle('2'));
+    await waitFor(() =>
+      expect(responsibilityService.listAssignments).toHaveBeenCalledTimes(2),
+    );
+    await user.click(screen.getByRole('button', { name: '详情' }));
+    const dialog = await screen.findByRole('dialog');
+    await user.click(within(dialog).getByRole('button', { name: '结束任命' }));
+    await user.click(await screen.findByRole('button', { name: '确认结束' }));
+    await waitFor(() =>
+      expect(responsibilityService.listAssignments).toHaveBeenCalledTimes(4),
+    );
+    expect(responsibilityService.listAssignments).toHaveBeenNthCalledWith(3, {
+      targetOrganizationCode: 'FIN',
+      lifecycle: 'open',
+      pageNum: 2,
+      pageSize: 20,
+    });
+    expect(responsibilityService.listAssignments).toHaveBeenLastCalledWith({
+      targetOrganizationCode: 'FIN',
+      lifecycle: 'open',
+      pageNum: 1,
+      pageSize: 20,
+    });
+  });
+
+  it('resets the page when changing page size or resetting filters', async () => {
+    responsibilityService.listAssignments.mockResolvedValue({
+      items: [assignment],
+      total: 51,
+      nextCursor: null,
+    });
+    const { user } = render(
+      <OrganizationResponsibilityAssignmentsPanel orgCode="FIN" />,
+    );
+    await screen.findByRole('button', { name: '详情' });
+    await user.click(screen.getByTitle('2'));
+    await waitFor(() =>
+      expect(responsibilityService.listAssignments).toHaveBeenLastCalledWith({
+        targetOrganizationCode: 'FIN',
+        lifecycle: 'open',
+        pageNum: 2,
+        pageSize: 20,
+      }),
+    );
+    await user.click(screen.getByRole('combobox', { name: '页码' }));
+    await user.click(await screen.findByTitle('50 条/页'));
+    await waitFor(() =>
+      expect(responsibilityService.listAssignments).toHaveBeenLastCalledWith({
+        targetOrganizationCode: 'FIN',
+        lifecycle: 'open',
+        pageNum: 1,
+        pageSize: 50,
+      }),
+    );
+    await user.click(screen.getByTitle('2'));
+    await user.click(screen.getByRole('button', { name: '重 置' }));
+    await waitFor(() =>
+      expect(responsibilityService.listAssignments).toHaveBeenLastCalledWith({
+        targetOrganizationCode: 'FIN',
+        lifecycle: 'open',
+        pageNum: 1,
+        pageSize: 20,
+      }),
+    );
   });
 
   it('discards an in-flight detail when the host Organization changes', async () => {
     let resolveDetail!: (value: typeof assignment) => void;
     responsibilityService.listAssignments
       .mockReset()
-      .mockResolvedValueOnce({ items: [assignment], nextCursor: null })
-      .mockResolvedValueOnce({ items: [], nextCursor: null });
+      .mockResolvedValueOnce({
+        items: [assignment],
+        total: 1,
+        nextCursor: null,
+      })
+      .mockResolvedValueOnce({ items: [], total: 1, nextCursor: null });
     responsibilityService.detailAssignment.mockReturnValue(
       new Promise((resolve) => {
         resolveDetail = resolve;
@@ -313,7 +449,8 @@ describe('OrganizationResponsibilityAssignmentsPanel', () => {
     expect(responsibilityService.listAssignments).toHaveBeenLastCalledWith({
       targetOrganizationCode: 'OPS',
       lifecycle: 'open',
-      limit: 20,
+      pageNum: 1,
+      pageSize: 20,
     });
   });
 
@@ -377,7 +514,8 @@ describe('OrganizationResponsibilityAssignmentsPanel', () => {
     expect(responsibilityService.listAssignments).toHaveBeenCalledWith({
       targetOrganizationCode: 'FIN',
       lifecycle: 'open',
-      limit: 20,
+      pageNum: 1,
+      pageSize: 20,
     });
   });
 });

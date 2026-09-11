@@ -122,7 +122,12 @@ test('manages both Organization Responsibility types inside Organization detail'
   );
   await page.route(
     '**/rpc/admin.organizationResponsibility.searchAssignments**',
-    (route) => fulfillTrpc(route, { items: assignments, nextCursor: null }),
+    (route) =>
+      fulfillTrpc(route, {
+        items: assignments,
+        total: assignments.length,
+        nextCursor: null,
+      }),
   );
   await page.route(
     '**/rpc/admin.organizationResponsibility.detailAssignment**',

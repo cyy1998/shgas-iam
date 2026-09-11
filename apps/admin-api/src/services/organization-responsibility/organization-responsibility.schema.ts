@@ -23,6 +23,11 @@ export const OrganizationResponsibilityAssignmentListQuerySchema
 export const OrganizationResponsibilityAssignmentSearchQuerySchema
   = OrganizationResponsibilityAssignmentListQuerySchema.extend({
     targetOrganizationCode: z.string().min(1).optional(),
+    pageNum: z.coerce.number().int().positive().optional(),
+    pageSize: z.coerce.number().int().min(1).max(100).optional(),
+  }).refine(input => input.cursor === undefined || (input.pageNum === undefined && input.pageSize === undefined), {
+    message: "页码分页不能同时指定游标",
+    path: ["cursor"],
   });
 
 export type OrganizationResponsibilityAssignmentLifecycle = z.infer<
@@ -70,6 +75,15 @@ export const OrganizationResponsibilityAssignmentCursorPageSchema = z.object({
   items: z.array(OrganizationResponsibilityAssignmentViewSchema),
   nextCursor: z.string().nullable(),
 });
+
+export const OrganizationResponsibilityAssignmentSearchPageSchema
+  = OrganizationResponsibilityAssignmentCursorPageSchema.extend({
+    total: z.number().int().nonnegative().optional(),
+  });
+
+export type OrganizationResponsibilityAssignmentSearchPage = z.infer<
+  typeof OrganizationResponsibilityAssignmentSearchPageSchema
+>;
 
 export type OrganizationResponsibilityAssignmentCreateDto = z.infer<
   typeof OrganizationResponsibilityAssignmentCreateDtoSchema

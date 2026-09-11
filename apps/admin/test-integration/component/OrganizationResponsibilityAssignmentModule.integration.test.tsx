@@ -127,6 +127,7 @@ describe('OrganizationResponsibilityAssignmentModule', () => {
     );
     responsibilityService.searchAssignments.mockResolvedValue({
       items: [assignment],
+      total: 1,
       nextCursor: null,
     });
     responsibilityService.detailAssignment.mockResolvedValue(assignment);
@@ -205,7 +206,8 @@ describe('OrganizationResponsibilityAssignmentModule', () => {
       employmentId: 42,
       typeCode: OrganizationResponsibilityTypeCode.Head,
       lifecycle: 'all',
-      limit: 20,
+      pageNum: 1,
+      pageSize: 20,
     });
     expect(responsibilityService.detailAssignment).toHaveBeenCalledWith({
       id: 101,
@@ -235,6 +237,41 @@ describe('OrganizationResponsibilityAssignmentModule', () => {
     await screen.findByText(
       '{"targetType":"organization_responsibility_assignment","targetId":101}',
     );
+  });
+
+  it('preserves the current page and page size when opening global detail', async () => {
+    responsibilityService.searchAssignments.mockResolvedValue({
+      items: [assignment],
+      total: 21,
+      nextCursor: null,
+    });
+    const onStateChange = vi.fn();
+    const { user } = render(
+      <OrganizationResponsibilityAssignmentModule
+        host={{
+          kind: 'global',
+          state: {
+            lifecycle: 'all',
+            assignmentId: null,
+            pageNum: 2,
+            pageSize: 10,
+          },
+          onStateChange,
+        }}
+      />,
+    );
+    await user.click(await screen.findByRole('button', { name: '详情' }));
+    expect(responsibilityService.searchAssignments).toHaveBeenCalledWith({
+      lifecycle: 'all',
+      pageNum: 2,
+      pageSize: 10,
+    });
+    expect(onStateChange).toHaveBeenCalledWith({
+      lifecycle: 'all',
+      assignmentId: 101,
+      pageNum: 2,
+      pageSize: 10,
+    });
   });
 
   it('offers scoped HR Create and server-owned lifecycle actions while keeping Audit hidden', async () => {
@@ -545,6 +582,7 @@ describe('OrganizationResponsibilityAssignmentModule', () => {
           allowedActions: pausedAllowedActions,
         },
       ],
+      total: 1,
       nextCursor: null,
     });
     responsibilityService.detailAssignment.mockResolvedValueOnce({
@@ -578,6 +616,7 @@ describe('OrganizationResponsibilityAssignmentModule', () => {
           allowedActions: endedAllowedActions,
         },
       ],
+      total: 1,
       nextCursor: null,
     });
     responsibilityService.detailAssignment.mockResolvedValueOnce({
@@ -697,6 +736,7 @@ describe('OrganizationResponsibilityAssignmentModule', () => {
     );
     responsibilityService.searchAssignments.mockResolvedValueOnce({
       items: [],
+      total: 1,
       nextCursor: null,
     });
 

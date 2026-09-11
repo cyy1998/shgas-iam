@@ -103,7 +103,7 @@ test('creates a responsibility assignment from the global toolbar without exposi
       fulfillJson(route, [
         { result: { data: [targetOrganization] } },
         { result: { data: [targetOrganization] } },
-        { result: { data: { items: [], nextCursor: null } } },
+        { result: { data: { items: [], total: 21, nextCursor: null } } },
       ]),
   );
   await page.route('**/rpc/admin.organization.selector**', (route) =>
@@ -111,7 +111,7 @@ test('creates a responsibility assignment from the global toolbar without exposi
   );
   await page.route(
     '**/rpc/admin.organizationResponsibility.searchAssignments**',
-    (route) => fulfillTrpc(route, { items: [], nextCursor: null }),
+    (route) => fulfillTrpc(route, { items: [], total: 21, nextCursor: null }),
   );
   await page.route('**/rpc/admin.employment.search**', (route) =>
     fulfillTrpc(route, {
@@ -204,11 +204,11 @@ async function manageLifecycle(page: Page, changed: boolean) {
   await page.route(
     '**/rpc/admin.organizationResponsibility.searchAssignments**',
     (route) => {
-      const input = parseTrpcBatchInput<{ cursor?: string }>(route);
+      const input = parseTrpcBatchInput<{ pageNum?: number }>(route);
       searchInputs.push(input);
       return fulfillTrpc(
         route,
-        input.cursor
+        input.pageNum === 2
           ? {
               items: [
                 {
@@ -219,6 +219,7 @@ async function manageLifecycle(page: Page, changed: boolean) {
                   allowedActions: allowedActionsForStatus(currentStatus),
                 },
               ],
+              total: 21,
               nextCursor: null,
             }
           : {
@@ -230,6 +231,7 @@ async function manageLifecycle(page: Page, changed: boolean) {
                   allowedActions: allowedActionsForStatus(currentStatus),
                 },
               ],
+              total: 21,
               nextCursor: '100',
             },
       );
@@ -290,7 +292,7 @@ async function manageLifecycle(page: Page, changed: boolean) {
         { result: { data: [] } },
         {
           result: {
-            data: { items: [assignment], nextCursor: '100' },
+            data: { items: [assignment], total: 21, nextCursor: '100' },
           },
         },
       ]);
@@ -316,6 +318,7 @@ async function manageLifecycle(page: Page, changed: boolean) {
                   allowedActions: allowedActionsForStatus(currentStatus),
                 },
               ],
+              total: 21,
               nextCursor: '100',
             },
           },
@@ -352,7 +355,8 @@ async function manageLifecycle(page: Page, changed: boolean) {
       employmentId: 42,
       typeCode: OrganizationResponsibilityTypeCode.Head,
       lifecycle: 'all',
-      limit: 20,
+      pageNum: 1,
+      pageSize: 20,
     });
 
   await page
@@ -402,8 +406,8 @@ async function manageLifecycle(page: Page, changed: boolean) {
 
   await page.getByRole('dialog').getByRole('button', { name: '关闭' }).click();
   await expect(page.getByRole('dialog')).toBeHidden();
-  await page.getByRole('button', { name: '加载更多' }).click();
-  await expect(page.getByRole('button', { name: '详情' })).toHaveCount(2);
+  await page.getByTitle('2', { exact: true }).click();
+  await expect(page.getByRole('button', { name: '详情' })).toHaveCount(1);
   await expect
     .poll(() => searchInputs.at(-1))
     .toEqual({
@@ -411,8 +415,8 @@ async function manageLifecycle(page: Page, changed: boolean) {
       employmentId: 42,
       typeCode: OrganizationResponsibilityTypeCode.Head,
       lifecycle: 'all',
-      cursor: '100',
-      limit: 20,
+      pageNum: 2,
+      pageSize: 20,
     });
 }
 
@@ -450,7 +454,9 @@ test('preserves authority context after internal and forbidden lifecycle failure
         ) {
           searchCount += 1;
           return {
-            result: { data: { items: [assignment], nextCursor: null } },
+            result: {
+              data: { items: [assignment], total: 21, nextCursor: null },
+            },
           };
         }
         if (operation === 'admin.organizationResponsibility.detailAssignment') {
@@ -516,7 +522,7 @@ test('rejects invalid responsibility deep-link parameters without widening scope
     '**/rpc/admin.organizationResponsibility.searchAssignments**',
     (route) => {
       searchCount += 1;
-      return fulfillTrpc(route, { items: [], nextCursor: null });
+      return fulfillTrpc(route, { items: [], total: 21, nextCursor: null });
     },
   );
 

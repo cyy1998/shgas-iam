@@ -31,6 +31,8 @@ function parseOrganizationResponsibilityAssignmentState(
   const params = new URLSearchParams(search);
   const employmentId = parsePositiveInteger(params.get('employment'));
   const assignmentId = parsePositiveInteger(params.get('assignment'));
+  const pageNum = parsePositiveInteger(params.get('page'));
+  const pageSize = parsePositiveInteger(params.get('pageSize'));
   const typeCode = params.get('type');
   const targetOrganizationCode = params.get('target');
   const lifecycle = params.get('lifecycle') ?? 'open';
@@ -38,6 +40,9 @@ function parseOrganizationResponsibilityAssignmentState(
   if (
     employmentId === null ||
     assignmentId === null ||
+    pageNum === null ||
+    pageSize === null ||
+    (pageSize !== undefined && pageSize > 100) ||
     (params.has('target') && !targetOrganizationCode) ||
     (typeCode !== null && !typeCodes.has(typeCode)) ||
     !lifecycles.has(lifecycle)
@@ -54,6 +59,8 @@ function parseOrganizationResponsibilityAssignmentState(
     lifecycle:
       lifecycle as OrganizationResponsibilityAssignmentState['lifecycle'],
     assignmentId: assignmentId ?? null,
+    ...(pageNum === undefined ? {} : { pageNum }),
+    ...(pageSize === undefined ? {} : { pageSize }),
   };
 }
 
@@ -66,6 +73,10 @@ function serializeState(state: OrganizationResponsibilityAssignmentState) {
   if (state.typeCode) params.set('type', state.typeCode);
   params.set('lifecycle', state.lifecycle);
   if (state.assignmentId) params.set('assignment', String(state.assignmentId));
+  if (state.pageNum && state.pageNum !== 1)
+    params.set('page', String(state.pageNum));
+  if (state.pageSize && state.pageSize !== 20)
+    params.set('pageSize', String(state.pageSize));
   return `${assignmentPath}?${params.toString()}`;
 }
 

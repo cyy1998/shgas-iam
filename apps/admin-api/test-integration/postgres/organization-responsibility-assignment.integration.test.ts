@@ -2180,6 +2180,33 @@ describe("Organization Responsibility Assignment PostgreSQL command", () => {
     ]);
     expect(secondPage.nextCursor).toBeNull();
 
+    const numberedPage = await service.searchAssignments({
+      lifecycle: "open",
+      limit: 20,
+      pageNum: 2,
+      pageSize: 1,
+    }, authorization);
+    expect(numberedPage.total).toBe(2);
+    expect(numberedPage.items.map(item => item.id)).toEqual([visibleCrossRoot!.id]);
+    const emptyPage = await service.searchAssignments({
+      lifecycle: "open",
+      limit: 20,
+      pageNum: 3,
+      pageSize: 1,
+    }, authorization);
+    expect(emptyPage).toEqual({ items: [], total: 2, nextCursor: null });
+    const filteredPage = await service.searchAssignments({
+      targetOrganizationCode: "TARGET",
+      employmentId: fixture.employmentId,
+      typeCode: OrganizationResponsibilityTypeCode.Head,
+      lifecycle: "all",
+      limit: 20,
+      pageNum: 1,
+      pageSize: 10,
+    }, authorization);
+    expect(filteredPage.total).toBe(1);
+    expect(filteredPage.items.map(item => item.id)).toEqual([visibleHead!.id]);
+
     const targetList = await service.listAssignments({
       orgCode: "TARGET",
       lifecycle: "open",

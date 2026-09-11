@@ -49,7 +49,7 @@ async function mockHrAdmin(page: Page) {
   });
   await page.route(
     '**/rpc/admin.organizationResponsibility.searchAssignments**',
-    (route) => fulfillTrpc(route, { items: [], nextCursor: null }),
+    (route) => fulfillTrpc(route, { items: [], total: 0, nextCursor: null }),
   );
   const userUpdates: unknown[] = [];
   const passwordResets: unknown[] = [];
