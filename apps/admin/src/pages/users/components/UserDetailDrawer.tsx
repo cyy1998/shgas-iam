@@ -279,7 +279,7 @@ function UserDetailDrawerContent({
       key: 'responsibilities',
       width: 280,
       render: (_: unknown, row: EmploymentRow) => (
-        <EmploymentResponsibilitySummary employmentId={row.id} />
+        <EmploymentResponsibilitySummary employmentId={row.id} compact />
       ),
     });
   }

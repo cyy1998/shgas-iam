@@ -49,15 +49,18 @@ export default function TopBar() {
         >
           <div className="topbar-user">
             <Avatar
-              size="small"
+              size={32}
               style={{
                 backgroundColor: '#1560d1',
-                marginRight: 8,
+                fontSize: 18,
+                flexShrink: 0,
               }}
             >
               {userInfo.profile?.name?.[0] ?? ''}
             </Avatar>
-            <span>{userInfo.profile?.name ?? ''}</span>
+            <span className="topbar-user-name">
+              {userInfo.profile?.name ?? ''}
+            </span>
           </div>
         </Dropdown>
       )}

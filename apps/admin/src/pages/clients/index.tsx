@@ -51,8 +51,14 @@ export default function ClientsPage() {
     message.error(err instanceof Error ? err.message : '操作失败');
 
   const columns: ProColumns<ClientVo>[] = [
-    { title: '应用编码', dataIndex: 'clientCode', width: 150 },
-    { title: '应用名称', dataIndex: 'clientName', width: 180 },
+    {
+      title: '应用',
+      dataIndex: 'text',
+      hideInTable: true,
+      fieldProps: { placeholder: '应用编码或名称' },
+    },
+    { title: '应用编码', dataIndex: 'clientCode', width: 150, search: false },
+    { title: '应用名称', dataIndex: 'clientName', width: 180, search: false },
     { title: '访问地址', dataIndex: 'url', ellipsis: true, search: false },
     {
       title: '全局状态',
@@ -173,8 +179,7 @@ export default function ClientsPage() {
             const {
               current = 1,
               pageSize = 20,
-              clientCode,
-              clientName,
+              text: searchText,
               status,
               customSsoState,
               customSsoMode,
@@ -182,7 +187,7 @@ export default function ClientsPage() {
               oidcClientType,
               oidcAllowedScopes,
             } = params;
-            const text = String(clientCode || clientName || '');
+            const text = String(searchText || '');
             const statusNumber =
               status === undefined || status === null || status === ''
                 ? undefined

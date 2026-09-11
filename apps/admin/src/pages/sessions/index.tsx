@@ -300,17 +300,6 @@ export default function SessionsPage() {
 
   const sessionRecords = (
     <Space orientation="vertical" size="middle" style={{ width: '100%' }}>
-      <Alert
-        showIcon
-        type="info"
-        message="仅展示尚未过期且未撤销的会话记录；记录存在不代表当前允许访问。"
-        description="账号状态或会话所属代际可能已失效，尚未清理的记录仍可在此撤销。"
-      />
-      <Alert
-        showIcon
-        type="info"
-        message="登录来源仅供调查参考，不是可信设备身份或授权依据。"
-      />
       {auditFailedAfterEffect ? (
         <Alert
           showIcon

@@ -1,5 +1,5 @@
 import { logout } from '@admin/utils/auth';
-import { LogoutOutlined } from '@ant-design/icons';
+import { LogoutOutlined, UserOutlined } from '@ant-design/icons';
 import { Dropdown } from 'antd';
 import type { ReactElement } from 'react';
 
@@ -11,7 +11,14 @@ export default function AvatarDropdown({
   return (
     <Dropdown
       menu={{
-        items: [{ key: 'logout', icon: <LogoutOutlined />, label: '退出登录' }],
+        items: [
+          {
+            key: 'profile',
+            icon: <UserOutlined />,
+            label: <a href="/portal/userInfo">个人信息</a>,
+          },
+          { key: 'logout', icon: <LogoutOutlined />, label: '退出登录' },
+        ],
         onClick: ({ key }) => {
           if (key === 'logout') logout();
         },

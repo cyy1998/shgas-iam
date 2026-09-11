@@ -133,7 +133,8 @@ export const layout = ({ initialState }: { initialState?: InitialState }) => {
         ),
       ]),
     avatarProps: {
-      size: 'small' as const,
+      size: 32,
+      style: { fontSize: 18 },
       title: displayName,
       children: avatarText,
       className: 'iam-admin-user-avatar',

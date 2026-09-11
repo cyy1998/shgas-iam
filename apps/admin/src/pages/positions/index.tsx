@@ -60,8 +60,14 @@ export default function PositionsPage() {
   };
 
   const columns: ProColumns<PositionVo>[] = [
-    { title: '岗位编码', dataIndex: 'posCode', width: 160 },
-    { title: '岗位名称', dataIndex: 'posName', width: 200 },
+    {
+      title: '岗位',
+      dataIndex: 'text',
+      hideInTable: true,
+      fieldProps: { placeholder: '岗位编码或名称' },
+    },
+    { title: '岗位编码', dataIndex: 'posCode', width: 160, search: false },
+    { title: '岗位名称', dataIndex: 'posName', width: 200, search: false },
     { title: '描述', dataIndex: 'description', ellipsis: true, search: false },
     {
       title: '状态',
@@ -124,15 +130,12 @@ export default function PositionsPage() {
             const {
               current = 1,
               pageSize = 10,
-              posCode,
-              posName,
+              text,
             } = params as {
               current?: number;
               pageSize?: number;
-              posCode?: string;
-              posName?: string;
+              text?: string;
             };
-            const text = (posCode || posName || '') as string;
             const data = await searchPositions({
               pageNum: current,
               pageSize,

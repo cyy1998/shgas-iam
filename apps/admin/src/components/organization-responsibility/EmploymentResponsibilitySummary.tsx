@@ -1,6 +1,6 @@
 import { searchOrganizationResponsibilityAssignments } from '@admin/services/organization-responsibility';
 import { Link } from '@umijs/max';
-import { Empty, List, Skeleton, Space, Tag, Typography } from 'antd';
+import { List, Skeleton, Space, Tag, Typography } from 'antd';
 import { useEffect, useState } from 'react';
 import {
   formatOrganizationResponsibilityStatus,
@@ -18,8 +18,10 @@ function assignmentPath(employmentId: number, assignmentId?: number) {
 
 export default function EmploymentResponsibilitySummary({
   employmentId,
+  compact = false,
 }: {
   employmentId: number;
+  compact?: boolean;
 }) {
   const [result, setResult] = useState<Awaited<
     ReturnType<typeof searchOrganizationResponsibilityAssignments>
@@ -44,23 +46,25 @@ export default function EmploymentResponsibilitySummary({
     };
   }, [employmentId]);
 
-  if (!result && !failed) return <Skeleton active paragraph={{ rows: 1 }} />;
+  if (!result && !failed)
+    return <Skeleton active title={false} paragraph={{ rows: 1 }} />;
+
+  const items = result?.items ?? [];
+  const hasMore = result?.nextCursor || (compact && items.length > 2);
 
   return (
     <Space direction="vertical" size={8} style={{ width: '100%' }}>
       {failed ? (
         <Typography.Text type="danger">组织责任加载失败</Typography.Text>
       ) : result?.items.length === 0 ? (
-        <Empty
-          image={Empty.PRESENTED_IMAGE_SIMPLE}
-          description="暂无组织责任"
-        />
+        <Typography.Text type="secondary">暂无组织责任</Typography.Text>
       ) : (
         <List
           size="small"
-          dataSource={result?.items ?? []}
+          split={!compact}
+          dataSource={compact ? items.slice(0, 2) : items}
           renderItem={(assignment) => (
-            <List.Item>
+            <List.Item style={compact ? { padding: '2px 0' } : undefined}>
               <Space wrap>
                 <span>
                   {formatOrganizationResponsibilityType(assignment.typeCode)}
@@ -81,7 +85,7 @@ export default function EmploymentResponsibilitySummary({
         />
       )}
       <Link to={assignmentPath(employmentId)} aria-label="查看全部组织责任">
-        查看全部组织责任{result?.nextCursor ? '（还有更多）' : ''}
+        查看全部组织责任{hasMore ? '（还有更多）' : ''}
       </Link>
     </Space>
   );

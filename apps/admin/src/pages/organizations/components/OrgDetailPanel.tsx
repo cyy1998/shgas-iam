@@ -15,7 +15,7 @@ import {
   OrganizationStatus,
 } from '@iam/contracts';
 import { useAccess } from '@umijs/max';
-import { Empty, message, Modal, Space, Table, Tabs, Typography } from 'antd';
+import { Empty, message, Modal, Space, Table, Tabs } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
 import OrganizationResponsibilityAssignmentsPanel from './OrganizationResponsibilityAssignmentsPanel';
 
@@ -123,9 +123,6 @@ export default function OrgDetailPanel({
 
   return (
     <div style={{ padding: 16 }}>
-      <Typography.Paragraph type="secondary">
-        暂停、停用或删除时，服务端会检查该组织及全部下级组织是否仍有开放责任任命。
-      </Typography.Paragraph>
       <div
         style={{
           display: 'flex',

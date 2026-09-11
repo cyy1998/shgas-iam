@@ -357,16 +357,6 @@ test('session records support navigation, exact user filtering, pagination, and 
   await expect(page.getByRole('menuitem', { name: /会话管理/ })).toBeVisible();
   await expect(page.getByText('会话管理').first()).toBeVisible();
   await expect(page.getByRole('tab', { name: '会话记录' })).toBeVisible();
-  await expect(
-    page.getByText(
-      '仅展示尚未过期且未撤销的会话记录；记录存在不代表当前允许访问。',
-    ),
-  ).toBeVisible();
-  await expect(
-    page.getByText(
-      '账号状态或会话所属代际可能已失效，尚未清理的记录仍可在此撤销。',
-    ),
-  ).toBeVisible();
   await expect(page.getByRole('tab', { name: '临时登录限制' })).toBeVisible();
   await expect(
     page.getByRole('columnheader', { name: '登录时间' }),
@@ -387,7 +377,6 @@ test('session records support navigation, exact user filtering, pagination, and 
   await expect(page.getByText('203.0.113.42')).toBeVisible();
   await expect(page.getByText('手机 / iOS / 微信')).toBeVisible();
   await expect(page.getByText('当前会话')).toBeVisible();
-  await expect(page.getByText('登录来源仅供调查参考')).toBeVisible();
 
   await page.locator('.ant-pagination-next').click();
   await expect(
