@@ -71,7 +71,9 @@ const organization = {
   },
 };
 const reads = { detail: vi.fn(), children: vi.fn() };
+let fullPath: { orgCode: string; orgName: string }[];
 beforeEach(() => {
+  fullPath = [organization];
   __setAccess({
     canCreateOrganizationRoot: true,
     canAccessOrganizationResponsibility: false,
@@ -89,6 +91,13 @@ beforeEach(() => {
           if (procedure === 'admin.organization.detail') {
             reads.detail();
             return { result: { data: organization } };
+          }
+          if (procedure === 'admin.organization.selector') {
+            return {
+              result: {
+                data: [{ ...organization, fullPath }],
+              },
+            };
           }
           reads.children();
           const result =
@@ -165,6 +174,26 @@ async function page() {
 }
 
 describe('OrganizationsPage mutation results through the organization service', () => {
+  it.each([
+    [[organization], 'ROOT-A（Root A）'],
+    [
+      [
+        { orgCode: 'GROUP', orgName: '集团' },
+        { orgCode: 'COMPANY', orgName: '公司' },
+        organization,
+      ],
+      'GROUP（集团） / COMPANY（公司） / ROOT-A（Root A）',
+    ],
+  ])(
+    'shows organization codes and names for the full path',
+    async (nodes, label) => {
+      fullPath = nodes;
+      await page();
+      expect(await screen.findByText(label)).toBeInTheDocument();
+      expect(screen.queryByText('/10')).not.toBeInTheDocument();
+    },
+  );
+
   it('creates only an enabled organization and refreshes the tree', async () => {
     const requests = mutation('create');
     const { user } = await page();

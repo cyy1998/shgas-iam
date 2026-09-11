@@ -6,6 +6,7 @@ import type { AdminMutationCommittedError } from '@admin/services/admin-mutation
 import {
   getOrganization,
   getOrganizationChildren,
+  getOrganizationSelectorNodes,
   type OrganizationChildrenPage,
   type OrganizationDetailVo,
 } from '@admin/services/organization';
@@ -28,9 +29,9 @@ export default function OrganizationsPage() {
   const [committedWarning, setCommittedWarning] = useState<string>();
   const [formState, setFormState] = useState<FormState>({ open: false });
 
-  const [detailData, setDetailData] = useState<OrganizationDetailVo | null>(
-    null,
-  );
+  const [detailData, setDetailData] = useState<
+    (OrganizationDetailVo & { pathLabel: string }) | null
+  >(null);
   const [detailLoading, setDetailLoading] = useState(false);
   const [detailChildrenPage, setDetailChildrenPage] =
     useState<OrganizationChildrenPage | null>(null);
@@ -51,8 +52,15 @@ export default function OrganizationsPage() {
   const loadDetail = useCallback(async (orgCode: string) => {
     setDetailLoading(true);
     try {
-      const d = await getOrganization(orgCode);
-      setDetailData(d);
+      const [d, nodes] = await Promise.all([
+        getOrganization(orgCode),
+        getOrganizationSelectorNodes({ orgCode }),
+      ]);
+      const pathLabel = nodes
+        .find((node) => node.orgCode === orgCode)
+        ?.fullPath.map((node) => `${node.orgCode}（${node.orgName}）`)
+        .join(' / ');
+      setDetailData({ ...d, pathLabel: pathLabel || '—' });
     } catch (err) {
       setDetailData(null);
       message.error(err instanceof Error ? err.message : '加载组织详情失败');
@@ -172,6 +180,7 @@ export default function OrganizationsPage() {
             <OrgDetailPanel
               loading={detailLoading}
               detail={detailData}
+              pathLabel={detailData?.pathLabel}
               childrenPage={detailChildrenPage}
               childrenLoading={detailChildrenLoading}
               onChildrenPageChange={onDetailChildrenPageChange}

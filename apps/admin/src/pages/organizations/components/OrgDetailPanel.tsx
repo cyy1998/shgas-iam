@@ -22,6 +22,7 @@ import OrganizationResponsibilityAssignmentsPanel from './OrganizationResponsibi
 type Props = {
   loading: boolean;
   detail: OrganizationDetailVo | null;
+  pathLabel?: string;
   childrenPage: OrganizationChildrenPage | null;
   childrenLoading: boolean;
   onChildrenPageChange: (pageNum: number, pageSize: number) => void;
@@ -53,6 +54,7 @@ const childColumns = (
 export default function OrgDetailPanel({
   loading,
   detail,
+  pathLabel,
   childrenPage,
   childrenLoading,
   onChildrenPageChange,
@@ -192,7 +194,16 @@ export default function OrgDetailPanel({
                     { title: '名称', dataIndex: 'orgName' },
                     { title: '类型', dataIndex: 'orgType' },
                     { title: '层级', dataIndex: 'level' },
-                    { title: '路径', dataIndex: 'path', span: 2 },
+                    {
+                      title: '路径',
+                      dataIndex: 'path',
+                      span: 2,
+                      render: () => (
+                        <span style={{ overflowWrap: 'anywhere' }}>
+                          {pathLabel || '—'}
+                        </span>
+                      ),
+                    },
                     {
                       title: '上级',
                       dataIndex: 'parentName',
