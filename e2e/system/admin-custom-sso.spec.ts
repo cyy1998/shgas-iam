@@ -104,8 +104,9 @@ test("Admin prepares Custom SSO in Maintenance and existing access resumes after
   await expect(page.getByRole("button", { name: "启用 SSO", exact: true })).toBeDisabled();
   await page.getByLabel("SSO 协议", { exact: true }).click();
   await page.getByTitle("Custom SSO", { exact: true }).click();
-  await page.getByLabel("Callback 完整地址", { exact: true }).fill(`${origin}/sso/callback`);
-  await page.getByLabel("允许落地地址（每行一个）", { exact: true }).fill(customSsoRedirectUri);
+  await page.getByLabel("回调地址", { exact: true }).fill(`${origin}/sso/callback`);
+  await page.getByLabel("Redirect URIs", { exact: true }).fill(customSsoRedirectUri);
+  await page.getByLabel("Redirect URIs", { exact: true }).press("Enter");
   for (const claim of ["profile:username", "profile:employments", "iam:authorization"]) {
     await page.getByLabel("主体披露字段", { exact: true }).fill(claim);
     await page.locator(".ant-select-dropdown:visible").getByTitle(claim, { exact: true }).click();
@@ -285,8 +286,8 @@ test("Admin prepares Custom SSO in Maintenance and existing access resumes after
 
   await openClientSection(page, customSsoClientCode, "custom-sso");
   await expect(page.getByRole("button", { name: "停用 SSO", exact: true })).toBeVisible();
-  await expect(page.getByLabel("Callback 完整地址", { exact: true })).toHaveValue(`${origin}/sso/callback`);
-  await expect(page.getByLabel("允许落地地址（每行一个）", { exact: true })).toHaveValue(customSsoRedirectUri);
+  await expect(page.getByLabel("回调地址", { exact: true })).toHaveValue(`${origin}/sso/callback`);
+  await expect(page.getByText(customSsoRedirectUri, { exact: true })).toBeVisible();
   await expect(page.locator(".ant-select-selection-item").filter({ hasText: "profile:username" })).toBeVisible();
   await expect(page.locator(".ant-select-selection-item").filter({ hasText: "profile:employments" })).toBeVisible();
 });

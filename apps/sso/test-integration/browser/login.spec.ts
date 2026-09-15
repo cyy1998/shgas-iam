@@ -13,7 +13,6 @@ test('login page opens and shows mocked password login failure', async ({
     '/portal/login?client=iam-admin&redirectUrl=http%3A%2F%2Fexample.test%2Fiam-admin',
   );
 
-  await expect(page.getByText('欢迎登录')).toBeVisible();
   await page.getByPlaceholder('请输入您的工号').fill('zhangsan');
   await page.getByPlaceholder('请输入登录密码').fill('secret123');
   await page.getByRole('button', { name: /安全登录/ }).click();

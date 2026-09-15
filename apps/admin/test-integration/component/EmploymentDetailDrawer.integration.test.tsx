@@ -163,17 +163,6 @@ describe('EmploymentDetailDrawer responsibility wayfinding', () => {
         }),
       ).toBeEnabled();
     }
-    for (const action of [
-      '编辑备注',
-      /转\s*岗/,
-      '取消主岗',
-      /暂\s*停/,
-      /结\s*束/,
-    ]) {
-      expect(screen.getByRole('button', { name: action })).toHaveClass(
-        'ant-btn-variant-outlined',
-      );
-    }
     await user.click(edit);
     await user.type(screen.getByRole('textbox', { name: '备注' }), 'HR note');
     await user.click(screen.getByRole('button', { name: /保\s*存/ }));

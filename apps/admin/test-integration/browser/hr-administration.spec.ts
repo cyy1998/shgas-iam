@@ -288,7 +288,6 @@ test('HR admin reads scoped directories and manages an authorized User from deta
   await page.goto('/iam-admin/');
 
   await expect(page).toHaveURL(/\/iam-admin\/users$/);
-  await expect(page.getByText('人事管理员(hradmin)')).toBeVisible();
   await expect(page.getByRole('menuitem', { name: /用户管理/ })).toBeVisible();
   await expect(page.getByRole('menuitem', { name: /职位管理/ })).toBeVisible();
   await expect(page.getByRole('menuitem', { name: /组织管理/ })).toBeVisible();
@@ -300,9 +299,6 @@ test('HR admin reads scoped directories and manages an authorized User from deta
   await expect(page.getByRole('menuitem', { name: /审计日志/ })).toHaveCount(0);
   await expect(page.getByRole('menuitem', { name: /系统日志/ })).toHaveCount(0);
 
-  await expect(page.getByRole('cell', { name: '张三' })).toBeVisible();
-  await expect(page.getByRole('cell', { name: '李四' })).toBeVisible();
-  await expect(page.getByRole('cell', { name: '王五' })).toBeVisible();
   const viewActions = page.locator('td a').filter({ hasText: '查看' });
   await expect(viewActions).toHaveCount(3);
   await expect(page.getByRole('button', { name: /新建用户/ })).toHaveCount(0);
@@ -394,20 +390,9 @@ test('HR admin reads scoped directories and manages an authorized User from deta
   const employmentRow = employmentPanel
     .getByRole('row')
     .filter({ hasText: '财务部' });
-  const viewEmploymentFontWeight = await employmentRow
-    .getByRole('link', { name: '查看任职' })
-    .evaluate((element) => getComputedStyle(element).fontWeight);
   for (const action of [/转\s*岗/, '取消主岗', /暂\s*停/, /结\s*束/]) {
     const actionButton = employmentRow.getByRole('button', { name: action });
     await expect(actionButton).toBeEnabled();
-    await expect(actionButton).toHaveClass(/ant-btn-link/);
-    await expect(actionButton).toHaveCSS('padding-left', '0px');
-    await expect(actionButton).toHaveCSS('padding-right', '0px');
-    expect(
-      await actionButton.evaluate(
-        (element) => getComputedStyle(element).fontWeight,
-      ),
-    ).toBe(viewEmploymentFontWeight);
   }
   await expect(
     employmentPanel.getByRole('button', { name: /新增雇佣/ }),

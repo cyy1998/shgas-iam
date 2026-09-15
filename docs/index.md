@@ -75,10 +75,10 @@
 | [docs/architecture/architecture-verification.md](architecture/architecture-verification.md) | architecture | Current | 2026-09-15 | 2026-10-31 | 系统约束的行为/资源/静态与人工证明边界；包含协议最终 56 故事、版本清理与协议签发组合、独立 Admin PG/Redis 及保留升级验收。 |
 | [docs/architecture/backend-architecture.md](architecture/backend-architecture.md) | architecture | Current | 2026-09-15 | 2026-10-31 | 后端 ownership、UoW、Profile/Runtime 与分层验证；Admin 版本限定撤销及两协议操作快照已接入，保留跨表乐观及部署边界。 |
 | [docs/architecture/contracts-and-database.md](architecture/contracts-and-database.md) | architecture | Current | 2026-09-15 | 2026-10-31 | 共享代码选址、纯规则与后端 DTO 分层、公开接口、建包条件、DTO 字段演进与渐进收敛；保留专用能力包、事务与 Drizzle 契约。 |
-| [docs/architecture/frontend-architecture.md](architecture/frontend-architecture.md) | architecture | Current | 2026-09-08 | 2026-10-31 | Admin/SSO 通用 service、页面状态、路由/capability、登录守卫与渐进收敛规则；Admin 统一结果及已提交失败恢复已迁移，消费者协调切换另行核验。 |
+| [docs/architecture/frontend-architecture.md](architecture/frontend-architecture.md) | architecture | Current | 2026-09-15 | 2026-10-31 | Admin/SSO 通用 service、页面状态、路由/capability、登录守卫与渐进收敛规则；Admin 统一结果及已提交失败恢复已迁移，消费者协调切换另行核验；禁止纯展示测试，保留功能行为证明。 |
 | [docs/architecture/repository-map.md](architecture/repository-map.md) | architecture | Current | 2026-09-15 | 2026-10-31 | monorepo apps/packages、共享 contracts/domain 职责、User Profile v3 read-model、root-owned E2E workspace、基础设施与生成目录边界。 |
 | [docs/architecture/system-architecture.md](architecture/system-architecture.md) | architecture | Current | 2026-09-15 | 2026-10-31 | 运行时拓扑、信任边界与权威来源；两协议操作快照、精确失败、固定版本撤销及恢复责任，代码与部署证据分离。 |
-| [docs/architecture/testing-architecture.md](architecture/testing-architecture.md) | architecture | Current | 2026-09-15 | 2026-10-31 | Unit/Integration/E2E canonical collections、资源预算与验证契约；含当前契约分类、删除证据、mapper owner 与消费方能力规则；每票与最终聚合入口包含 Collection Guard。 |
+| [docs/architecture/testing-architecture.md](architecture/testing-architecture.md) | architecture | Current | 2026-09-15 | 2026-10-31 | Unit/Integration/E2E canonical collections、资源预算与验证契约；含当前契约分类、删除证据、mapper owner、消费方能力及禁止纯展示测试规则；每票与最终聚合入口包含 Collection Guard。 |
 | [docs/development/backend-implementation.md](development/backend-implementation.md) | development | Current | 2026-07-26 | 2026-10-31 | backend response envelope、OpenAPI status、logger、audit event 和 Architecture Guard 验证分层。 |
 | [docs/development/coding-style.md](development/coding-style.md) | development | Current | 2026-08-07 | 2026-10-31 | TypeScript、formatter 边界、文件命名、React 命名和 import alias 风格约定。 |
 | [docs/development/commands.md](development/commands.md) | development | Current | 2026-09-15 | 2026-10-31 | 聚焦实现、canonical Unit/Integration commands、每票 verify:static 与完整 verify、显式资源 profiles、Architecture Guard、性能与 commit guard 的可执行入口；Employment 全库诊断统一为 employment:verify；Subject Access repair 包含 PostgreSQL intent 回收。 |
@@ -147,6 +147,7 @@
 | [docs/releases/user-profile-dirty-queue-release.md](releases/user-profile-dirty-queue-release.md) | runbook | Current | 2026-07-25 | 2026-10-31 | scope producer 停止、旧 job 五类排空、worker-last 发布门禁，以及现有 Bull Board/repair/backfill 操作语义。 |
 | [docs/releases/user-profile-v3-hard-cutover.md](releases/user-profile-v3-hard-cutover.md) | runbook | Current | 2026-08-22 | 2026-10-31 | User Profile v2→v3 单代原地重建的 freeze、固定 candidate、backfill/收敛、双 gate、smoke、失败关闭与一次性放流手册；不推进 Client Protocol epoch 或清理 artifact。 |
 | [docs/reviews/SOFTWARE_ENGINEERING_PRINCIPLES_REVIEW_2026-07-03.md](reviews/SOFTWARE_ENGINEERING_PRINCIPLES_REVIEW_2026-07-03.md) | review | Historical | 2026-07-03 | n/a | 2026-07-03 的软件工程原则审查快照；用于追溯风险，不替代当前代码检查。 |
+| [docs/reviews/static-ui-test-cleanup-2026-09-15.md](reviews/static-ui-test-cleanup-2026-09-15.md) | review | Historical | 2026-09-15 | n/a | 固定基线的纯展示测试盘点及 Q1–Q3 清理边界；列出 5 条用例与混合断言，不表示已删除或已通过行为验证。 |
 
 ## 维护方式
 

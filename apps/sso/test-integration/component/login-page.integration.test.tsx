@@ -43,12 +43,12 @@ describe('LoginPage', () => {
     fireEvent.click(screen.getByText('安全登录').closest('button')!);
 
     await waitFor(() => {
-      expect(modalError).toHaveBeenCalledWith({
-        centered: true,
-        title: '登录失败',
-        content: '账号或密码错误',
-        okText: '确定',
-      });
+      expect(modalError).toHaveBeenCalledWith(
+        expect.objectContaining({
+          title: '登录失败',
+          content: '账号或密码错误',
+        }),
+      );
     });
   });
 

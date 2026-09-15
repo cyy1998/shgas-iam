@@ -49,6 +49,35 @@ DTO/wire 的完整结果由正式 mapper/serializer owner 验证，包括必要�
 这些分类由实现与评审核对，不新增断言语义扫描器、永久历史词典、baseline 或逐文件 mapping Guard；Architecture Guard
 与 Collection Guard 继续遵守各自既有观察模型。
 
+## 禁止纯展示测试
+
+所有 collection 均禁止新增或保留只锁定静态 UI、展示文案或视觉实现细节的测试与断言，包括固定标题、说明文字、
+静态标签字典、装饰图标、CSS class、颜色、间距、字重、固定 DOM 排列，以及只保存这些内容的 HTML/DOM/截图快照。
+仅检查固定 mock 数据中的姓名、电话或目录字段被原样显示，也属于纯展示；它不足以成为独立的行为用例。
+仅为使测试显得有交互而打开页面、点击展开固定说明或等待一次请求，不会使静态展示检查变成行为验证。
+
+前端行为测试应能说明：给定什么输入、权限、状态或用户操作，产品必须产生什么可观察的功能结果。没有用户点击不代表
+没有行为；权限控制、数据转换、条件展示和异步状态变化都可以具有独立的功能契约。
+
+| 观察目标 | 处置 |
+|---|---|
+| 固定页面标题、帮助文字、按钮配色或布局；导出的静态字典逐项等于硬编码文案 | 删除独立用例；混合用例只删除这些断言。 |
+| 权限未加载时不开放操作、只读目录不提供写入口、登录检查中不展示表单 | 保留对应权限或状态条件与可见、隐藏、禁用等功能结果。 |
+| 提交后的错误反馈、重试恢复、跳转、刷新、表单校验及提交参数 | 保留触发条件与结果；纯样式和无关固定说明不附带进入断言。 |
+| 数据排序或格式化、嵌套数据转换、缺失值回退、状态或错误类型映射到相应提示 | 保留真实输入到输出的规则；不把固定样例回显或复制静态标签表包装成映射测试。 |
+| 协议响应、序列化、转义或敏感信息不泄露 | 按相应协议或安全契约保留，不能因输出是文本或 HTML 而归为纯展示。 |
+
+`getByText`、`getByRole`、`toBeVisible`、`toHaveTextContent` 等 API 本身不是删除依据。使用文案定位操作目标、
+等待页面就绪或观察功能状态可以保留；精确文案只有在措辞本身属于当前功能契约时才需要锁定。行为测试中的整页快照
+不能替代对目标功能结果的直接断言，也不能成为附带锁定视觉细节的理由。
+
+清理按用例和断言逐项进行，保留混合文件中的行为证明，并移除只供已删检查使用的 import、fixture 和 helper。
+仍成立的功能要求缺少直接证明时，沿用上节的替代验证规则；不以把纯渲染用例改名为行为测试、增加无关点击或复制到
+其他 collection 的方式保留它。
+
+本规则由测试编写者与评审者按保护目标执行。不通过 matcher 黑名单、断言文本扫描器或快照文件计数判断行为价值；
+Architecture Guard 与 Collection Guard 的既有观察边界保持不变。
+
 ## 路径、命名与 collection
 
 - Unit 保留 owner-local 窄根，通常为 `src/**/*.test.ts[x]`；tooling owner 可以使用 `test/` 或
@@ -85,7 +114,7 @@ OIDC 模块 Redis 使用 `IAM_OIDC_TEST_REDIS_URL`，API HTTP 使用 `IAM_API_TE
 配置 no-op/COMMIT/Secret隔离归 Admin；source 五模型/特殊 Client/非目标/ACL/部分失败归 Worker 新进程 CLI。
 详细最高入口与证明限制见[验证归属](architecture-verification.md)。所有正常状态由 production owner 建立，破坏变体和离线 schema
 留在 owner `/testing`，消费者不手写协议 key、Lua 或 serialization。历史 writer 的冻结 SHA 证据在统一维护手册单列。
-Custom SSO strict V2 schema、mapper、错误与 preview 契约由 `@iam/custom-sso` 的 Unit collection 收集；Projection 的中性裁剪与 Catalog 契约继续由其 Component collection 收集。API 保留 OpenAPI、输出交付与错误映射测试；Admin preview 和 SSO 展示由各自消费测试及前端构建证明，类型检查不替代浏览器执行。
+Custom SSO strict V2 schema、mapper、错误与 preview 契约由 `@iam/custom-sso` 的 Unit collection 收集；Projection 的中性裁剪与 Catalog 契约继续由其 Component collection 收集。API 保留 OpenAPI、输出交付与错误映射测试；Admin preview 的配置响应、SSO 数据处理与页面状态由各自行为测试证明，固定样例回显不单独建测试。前端构建与类型检查不替代浏览器行为执行。
 
 ## Root 与 package commands
 

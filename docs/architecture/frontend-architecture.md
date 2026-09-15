@@ -74,6 +74,8 @@ Admin Sessions 使用会话记录语义：记录存在不代表账号当前可�
   setup 与 `*.integration.test.ts[x]` 收集规则。
 - 类型与公开出口通过 typecheck 验证，service 的响应与错误语义使用行为测试；路由、权限 UI 和 guard 状态使用
   组件或浏览器测试。具体通道与预算遵守 [testing-architecture.md](testing-architecture.md)。
+- 禁止只验证静态 UI、固定文案或样式的测试；混合行为用例中的纯展示断言也应删除。权限、状态、输入和操作驱动的
+  功能展示仍可通过组件或浏览器测试验证；判定示例与清理规则见[禁止纯展示测试](testing-architecture.md#禁止纯展示测试)。
 - 不要直接编辑 Umi generated directory 或 frontend build output；generated 和 vendored path 规则见
   [repository-map.md](repository-map.md)。
 

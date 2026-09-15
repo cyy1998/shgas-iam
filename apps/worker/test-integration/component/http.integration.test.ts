@@ -67,8 +67,9 @@ describe("worker HTTP app", () => {
     });
 
     const response = await app.request("/healthz");
+    const body = await response.json();
     expect(response.status).toBe(200);
-    await expect(response.json()).resolves.toMatchObject({
+    expect(body).toMatchObject({
       ok: true,
       enabledModules: ["user-profile"],
       dashboardOnly: false,
@@ -92,7 +93,6 @@ describe("worker HTTP app", () => {
 
     expect(response.status).toBe(200);
     expect(response.headers.get("content-type")).toContain("text/html");
-    expect(await response.text()).toContain("Bull Dashboard");
   });
 
   test("configures dashboard queue adapters as read-only by default", () => {

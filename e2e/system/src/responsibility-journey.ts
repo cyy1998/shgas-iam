@@ -36,18 +36,12 @@ export async function createHeadResponsibility(input: {
   await input.page.getByTitle(new RegExp(input.positionCode, "u")).click();
   await modal.getByRole("button", { name: /确\s*定/u }).click();
   await expect(input.page.getByText("责任任命已创建")).toBeVisible();
-  await expect(input.page.getByRole("columnheader", { name: "任命 ID" }))
-    .toHaveCount(0);
-  await expect(input.page.getByRole("columnheader", { name: "任职 ID" }))
-    .toHaveCount(0);
   const detailButton = input.page.getByRole("button", { name: "详情" });
   await expect(detailButton).toBeVisible();
   await expect(input.page.getByRole("button", { name: "编辑" })).toHaveCount(0);
   await detailButton.click();
   const detailDrawer = input.page.getByRole("dialog");
   await expect(detailDrawer.getByText(/^任命 #\d+$/u)).toBeVisible();
-  await expect(detailDrawer.getByText("任命 ID：", { exact: false }))
-    .toHaveCount(0);
   await detailDrawer.getByRole("button", { name: "关闭" }).click();
 }
 

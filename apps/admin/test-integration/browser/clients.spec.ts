@@ -22,13 +22,10 @@ test('client list has one edit entry with protocol summaries', async ({
 
   await page.goto('/iam-admin/clients');
 
-  await expect(page.getByText('应用管理').first()).toBeVisible();
-  await expect(page.getByText('IAM 管理后台')).toBeVisible();
   await expect(
     page.getByRole('columnheader', { name: 'SSO 协议' }),
   ).toBeVisible();
   await expect(page.getByRole('columnheader', { name: 'SSO 启用' })).toBeVisible();
-  await expect(page.getByText(ClientSsoProtocol.CustomSso, { exact: true }).first()).toBeVisible();
   await expect(page.getByRole('link', { name: '编辑' })).toHaveCount(1);
   await expect(page.getByRole('link', { name: 'SSO 启用' })).toHaveCount(0);
 
