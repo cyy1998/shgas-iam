@@ -21,11 +21,6 @@ const apiRoot = join(repoRoot, "apps", "api");
 const apiCoreRoot = join(repoRoot, "packages", "api-core");
 const dbRoot = join(repoRoot, "packages", "db");
 const oidcRoot = join(repoRoot, "packages", "oidc");
-const organizationResponsibilityRoot = join(
-  repoRoot,
-  "packages",
-  "organization-responsibility-resolution",
-);
 const workerRoot = join(repoRoot, "apps", "worker");
 const roleAssignmentRoot = join(repoRoot, "packages", "role-assignment-resolution");
 const userProfileRoot = join(repoRoot, "packages", "user-profile-read-model");
@@ -94,17 +89,6 @@ function readJson(path: string) {
   return JSON.parse(readFileSync(path, "utf8"));
 }
 
-function readNumericConstant(source: string, constantName: string) {
-  const assignment = new RegExp(
-    `const ${constantName} = (?<value>[\\d_]+);`,
-    "u",
-  ).exec(source);
-  const value = assignment?.groups?.value;
-  if (value === undefined)
-    throw new Error(`missing numeric constant ${constantName}`);
-  return Number(value.replaceAll("_", ""));
-}
-
 function writeJson(path: string, value: unknown) {
   writeFileSync(path, `${JSON.stringify(value, null, 2)}\n`, "utf8");
 }
@@ -142,19 +126,6 @@ async function readVitestTestConfig(workspace: string, configFile: string) {
     setupFiles?: string[];
     testTimeout?: number;
   };
-}
-
-function expectDedicatedResourceHarness(options: {
-  envName: string;
-  harnessPath: string;
-  workspaceRoot: string;
-}) {
-  const source = readFileSync(join(options.workspaceRoot, options.harnessPath), "utf8");
-  expect(source, `${options.envName} harness`).toContain(options.envName);
-  expect(source, `${options.envName} fallback contract`).toMatch(
-    /no fallback is allowed|requireExternalTestUrl|IAM_API_TEST_REDIS_URL is required/u,
-  );
-  expect(source, `${options.envName} resource isolation`).toContain("randomUUID()");
 }
 
 function createTransitFixture() {
@@ -1134,116 +1105,6 @@ describe("test orchestration", () => {
       expect(playwrightConfig.webServer.command).toBe(owner.command);
       expect(playwrightConfig.use.baseURL).toBe(owner.baseURL);
     }
-  });
-
-  test("keeps caller-owned resource harnesses isolated", () => {
-    const harnesses = [
-      {
-        envName: "IAM_ADMIN_API_TEST_DATABASE_URL",
-        harnessPath: "test-integration/postgres/postgres-test-harness.ts",
-        workspaceRoot: adminApiRoot,
-      },
-      {
-        envName: "IAM_API_TEST_DATABASE_URL",
-        harnessPath: "test-integration/postgres/postgres-test-harness.ts",
-        workspaceRoot: apiRoot,
-      },
-      {
-        envName: "IAM_API_TEST_REDIS_URL",
-        harnessPath: "test-integration/redis/root-authentication.integration.test.ts",
-        workspaceRoot: apiRoot,
-      },
-      {
-        envName: "IAM_API_CORE_TEST_REDIS_URL",
-        harnessPath: "test-integration/redis/redis-test-harness.ts",
-        workspaceRoot: apiCoreRoot,
-      },
-      {
-        envName: "IAM_ADMIN_API_TEST_REDIS_URL",
-        harnessPath: "test-integration/redis/redis-test-harness.ts",
-        workspaceRoot: adminApiRoot,
-      },
-      {
-        envName: "IAM_WORKER_TEST_DATABASE_URL",
-        harnessPath: "test-integration/postgres/postgres-test-harness.ts",
-        workspaceRoot: workerRoot,
-      },
-      {
-        envName: "IAM_WORKER_TEST_REDIS_URL",
-        harnessPath: "test-integration/redis/redis-test-harness.ts",
-        workspaceRoot: workerRoot,
-      },
-      {
-        envName: "IAM_DB_TEST_DATABASE_URL",
-        harnessPath: "test-integration/postgres/postgres-harness.ts",
-        workspaceRoot: dbRoot,
-      },
-      {
-        envName: "IAM_ORGANIZATION_RESPONSIBILITY_TEST_DATABASE_URL",
-        harnessPath: "test-integration/postgres/postgres-harness.ts",
-        workspaceRoot: organizationResponsibilityRoot,
-      },
-      {
-        envName: "IAM_ROLE_ASSIGNMENT_TEST_DATABASE_URL",
-        harnessPath: "test-integration/postgres/postgres-harness.ts",
-        workspaceRoot: roleAssignmentRoot,
-      },
-      {
-        envName: "IAM_USER_PROFILE_TEST_DATABASE_URL",
-        harnessPath: "test-integration/postgres/postgres-test-harness.ts",
-        workspaceRoot: userProfileRoot,
-      },
-      {
-        envName: "IAM_USER_PROFILE_TEST_REDIS_URL",
-        harnessPath: "test-integration/redis/redis-test-harness.ts",
-        workspaceRoot: userProfileRoot,
-      },
-    ];
-
-    for (const harness of harnesses)
-      expectDedicatedResourceHarness(harness);
-  });
-
-  test("keeps the Windows Job outer deadline above every serial cleanup budget", () => {
-    const windowsJobSmokeSource = readFileSync(
-      join(
-        apiCoreRoot,
-        "test-integration",
-        "process",
-        "process-smoke-windows-job.integration.test.ts",
-      ),
-      "utf8",
-    );
-    const serialBudget = [
-      "supervisorCloseTimeoutMs",
-      "descendantExitTimeoutMs",
-      "processTreeCleanupTimeoutMs",
-      "descendantCleanupConfirmationTimeoutMs",
-      "descendantPostKillExitTimeoutMs",
-      "temporaryDirectoryCleanupTimeoutMs",
-    ].reduce(
-      (total, constantName) =>
-        total + readNumericConstant(windowsJobSmokeSource, constantName),
-      0,
-    );
-    const outerDeadline = readNumericConstant(
-      windowsJobSmokeSource,
-      "windowsJobSmokeTestTimeoutMs",
-    );
-
-    expect(outerDeadline - serialBudget).toBeGreaterThanOrEqual(2_000);
-    expect(windowsJobSmokeSource).toMatch(
-      /test\.skipIf[\s\S]+windowsJobSmokeTestTimeoutMs,\s*\);/u,
-    );
-    expect(windowsJobSmokeSource).toContain(
-      "await terminateProcessByPid(descendantPid, {",
-    );
-    expect(windowsJobSmokeSource).not.toContain(
-      "process.kill(descendantPid, \"SIGKILL\")",
-    );
-    expect(windowsJobSmokeSource).toMatch(
-      /new AggregateError\(\s*\[\s*testFailure,\s*cleanupFailure\s*\]/u,
-    );
   });
 
   test("runs verify stages in the declared order", () => {

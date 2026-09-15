@@ -53,11 +53,10 @@ import type {
 
 import type { LoginRestriction } from "@iam/api-core/login-restriction";
 import type { UserProfileQueryService } from "@iam/user-profile-read-model/query";
-import { expect, test } from "bun:test";
 
 type PrincipalSessionAdapter = ReturnType<typeof createUserSessionAuthenticationAdapter>;
 
-function assertAssignable<Port, _Provider extends Port>() {}
+type AssertAssignable<Port, _Provider extends Port> = true;
 function assertPrincipalSessionCreationContracts(
   passwordSessions: PasswordPrincipalSessionPort,
   mobileSessions: MobilePrincipalSessionPort,
@@ -93,41 +92,49 @@ function assertPrincipalSessionCreationContracts(
 
 void assertPrincipalSessionCreationContracts;
 
-test("API providers structurally satisfy consumer-owned ports", () => {
-  assertAssignable<ClientReaderPort, ClientRepository>();
-  assertAssignable<MobileUserReaderPort, UserRepository>();
-  assertAssignable<OrganizationReaderPort, OrganizationRepository>();
-  assertAssignable<OrganizationTransactionStorePort, OrganizationRepository>();
+type _ClientReaderPort = AssertAssignable<ClientReaderPort, ClientRepository>;
+type _MobileUserReaderPort = AssertAssignable<MobileUserReaderPort, UserRepository>;
+type _OrganizationReaderPort = AssertAssignable<OrganizationReaderPort, OrganizationRepository>;
+type _OrganizationTransactionStorePort = AssertAssignable<OrganizationTransactionStorePort, OrganizationRepository>;
 
-  assertAssignable<PrivilegeDelegationUserReaderPort, UserRepository>();
-  assertAssignable<PrivilegeDelegationOrganizationReaderPort, OrganizationRepository>();
-  assertAssignable<PrivilegeDelegationPrivilegeReaderPort, PrivilegeRepository>();
-  assertAssignable<PrivilegeDelegationTransactionStorePort, PrivilegeDelegationRepository>();
-  assertAssignable<PrivilegeDelegationSearchPort, PrivilegeDelegationRepository>();
-  assertAssignable<
-    PrivilegeDelegationResolutionPort,
-    PrivilegeDelegationResolutionRepository
-  >();
+type _PrivilegeDelegationUserReaderPort = AssertAssignable<PrivilegeDelegationUserReaderPort, UserRepository>;
+type _PrivilegeDelegationOrganizationReaderPort = AssertAssignable<
+  PrivilegeDelegationOrganizationReaderPort,
+  OrganizationRepository
+>;
+type _PrivilegeDelegationPrivilegeReaderPort = AssertAssignable<
+  PrivilegeDelegationPrivilegeReaderPort,
+  PrivilegeRepository
+>;
+type _PrivilegeDelegationTransactionStorePort = AssertAssignable<
+  PrivilegeDelegationTransactionStorePort,
+  PrivilegeDelegationRepository
+>;
+type _PrivilegeDelegationSearchPort = AssertAssignable<PrivilegeDelegationSearchPort, PrivilegeDelegationRepository>;
+type _PrivilegeDelegationResolutionPort = AssertAssignable<
+  PrivilegeDelegationResolutionPort,
+  PrivilegeDelegationResolutionRepository
+>;
 
-  assertAssignable<UserProfileReaderPort, UserProfileQueryService>();
-  assertAssignable<UserDelegationReaderPort, PrivilegeDelegationRepository>();
-  assertAssignable<UserMobileBindingPort, MobileService>();
-  assertAssignable<UserMobileVerificationPort, MobileService>();
-  assertAssignable<UserStorePort, UserRepository>();
-  assertAssignable<UserTransactionStorePort, UserRepository>();
+type _UserProfileReaderPort = AssertAssignable<UserProfileReaderPort, UserProfileQueryService>;
+type _UserDelegationReaderPort = AssertAssignable<UserDelegationReaderPort, PrivilegeDelegationRepository>;
+type _UserMobileBindingPort = AssertAssignable<UserMobileBindingPort, MobileService>;
+type _UserMobileVerificationPort = AssertAssignable<UserMobileVerificationPort, MobileService>;
+type _UserStorePort = AssertAssignable<UserStorePort, UserRepository>;
+type _UserTransactionStorePort = AssertAssignable<UserTransactionStorePort, UserRepository>;
 
-  assertAssignable<RegisterPurveyorEmploymentStorePort, EmploymentRepository>();
-  assertAssignable<RegisterPurveyorOrganizationReaderPort, OrganizationRepository>();
-  assertAssignable<RegisterPurveyorPositionReaderPort, PositionRepository>();
-  assertAssignable<RegisterPurveyorUserStorePort, UserRepository>();
-  assertAssignable<RegisterPurveyorMobilePort, MobileService>();
+type _RegisterPurveyorEmploymentStorePort = AssertAssignable<RegisterPurveyorEmploymentStorePort, EmploymentRepository>;
+type _RegisterPurveyorOrganizationReaderPort = AssertAssignable<
+  RegisterPurveyorOrganizationReaderPort,
+  OrganizationRepository
+>;
+type _RegisterPurveyorPositionReaderPort = AssertAssignable<RegisterPurveyorPositionReaderPort, PositionRepository>;
+type _RegisterPurveyorUserStorePort = AssertAssignable<RegisterPurveyorUserStorePort, UserRepository>;
+type _RegisterPurveyorMobilePort = AssertAssignable<RegisterPurveyorMobilePort, MobileService>;
 
-  assertAssignable<PasswordLoginRestrictionPort, LoginRestriction>();
-  assertAssignable<MobileLoginRestrictionPort, LoginRestriction>();
-  assertAssignable<PasswordPrincipalSessionPort, PrincipalSessionAdapter>();
-  assertAssignable<MobilePrincipalSessionPort, PrincipalSessionAdapter>();
-  assertAssignable<OaPrincipalSessionPort, PrincipalSessionAdapter>();
-  assertAssignable<WechatPrincipalSessionPort, PrincipalSessionAdapter>();
-
-  expect(true).toBe(true);
-});
+type _PasswordLoginRestrictionPort = AssertAssignable<PasswordLoginRestrictionPort, LoginRestriction>;
+type _MobileLoginRestrictionPort = AssertAssignable<MobileLoginRestrictionPort, LoginRestriction>;
+type _PasswordPrincipalSessionPort = AssertAssignable<PasswordPrincipalSessionPort, PrincipalSessionAdapter>;
+type _MobilePrincipalSessionPort = AssertAssignable<MobilePrincipalSessionPort, PrincipalSessionAdapter>;
+type _OaPrincipalSessionPort = AssertAssignable<OaPrincipalSessionPort, PrincipalSessionAdapter>;
+type _WechatPrincipalSessionPort = AssertAssignable<WechatPrincipalSessionPort, PrincipalSessionAdapter>;

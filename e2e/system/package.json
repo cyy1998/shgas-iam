@@ -20,11 +20,12 @@
     "runtime:cleanup": "bun src/cli.ts cleanup",
     "runtime:lifecycle": "bun src/cli.ts run",
     "test:e2e": "bun src/cli.ts e2e",
-    "lint": "eslint src admin-custom-sso.spec.ts hr-admin-user-management.spec.ts oidc-pkce.spec.ts playwright.config.ts eslint.config.js",
-    "lint:fix": "eslint --fix src admin-custom-sso.spec.ts hr-admin-user-management.spec.ts oidc-pkce.spec.ts playwright.config.ts eslint.config.js",
+    "lint": "eslint src test-integration admin-custom-sso.spec.ts hr-admin-user-management.spec.ts oidc-pkce.spec.ts playwright.config.ts eslint.config.js",
+    "lint:fix": "eslint --fix src test-integration admin-custom-sso.spec.ts hr-admin-user-management.spec.ts oidc-pkce.spec.ts playwright.config.ts eslint.config.js",
     "test": "pnpm test:unit",
     "test:unit": "bun test --max-concurrency=1 src",
-    "typecheck": "pnpm exec tsc --noEmit"
+    "typecheck": "pnpm exec tsc --noEmit",
+    "test:integration:process": "bun test --max-concurrency=1 test-integration/process"
   },
   "devDependencies": {
     "@iam/eslint-config": "workspace:*",

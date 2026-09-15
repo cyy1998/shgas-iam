@@ -1,5 +1,4 @@
 import type { AuthenticatedSubjectVariables } from "../lib";
-import { expect, test } from "bun:test";
 
 type ExpectedVariableKey
   = | "authenticatedClientCode"
@@ -19,8 +18,5 @@ type HasOnlyExpectedKeys
     ? true
     : never;
 
-test("shared authenticated subject variables stay protocol-neutral", () => {
-  const hasOnlyExpectedKeys: HasOnlyExpectedKeys = true;
-
-  expect(hasOnlyExpectedKeys).toBe(true);
-});
+const hasOnlyExpectedKeys: HasOnlyExpectedKeys = true;
+void hasOnlyExpectedKeys;

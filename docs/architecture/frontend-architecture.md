@@ -64,6 +64,10 @@ Admin Sessions 使用会话记录语义：记录存在不代表账号当前可�
 
 ## 测试与生成路径
 
+测试场景、替身和异步控制统一遵守[测试质量原则](testing-architecture.md#测试质量原则)。Service wrapper 验证对外请求、
+返回值与错误转换；页面验证输入、权限和状态驱动的结果。Pending/重试优先由受控请求或时钟建立明确边界，
+不以固定等待一小段时间证明永久不会重试，也不重复共享协议 owner 的算法或字段词典。
+
 - 前端测试应在可用时使用 app-local Vitest setup、React Testing Library helper、MSW handler 和 Umi runtime mock。
   当前 test workflow 由两个前端 package 的 `vitest.unit.config.ts`、`vitest.integration.component.config.ts`、
   `playwright.config.ts`、canonical scripts 和已提交测试共同维护；

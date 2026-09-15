@@ -106,7 +106,7 @@ describe("Register Purveyor Contact PostgreSQL concurrency contract", () => {
       },
     };
 
-    await expect(Promise.all([
+    const results = await Promise.all([
       useCase.execute({
         mobile,
         name: "张三",
@@ -119,7 +119,8 @@ describe("Register Purveyor Contact PostgreSQL concurrency contract", () => {
         orgCode: "SUP",
         username: "supplier-b",
       }, options),
-    ])).resolves.toEqual([true, true]);
+    ]);
+    expect(results).toEqual([true, true]);
 
     const persistedUsers = await harness!.db
       .select({ id: users.id })

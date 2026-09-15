@@ -129,10 +129,11 @@ test.skipIf(process.platform !== "win32")(
           expect(descendantPid).toBeGreaterThan(0);
           expect(output).toContain(`TEMP_DIRECTORY=${temporaryDirectory}`);
           expect(output).toContain(tailMarker);
-          await expect(waitForPidExit(
+          const descendantExited = await waitForPidExit(
             descendantPid,
             descendantExitTimeoutMs,
-          )).resolves.toBe(true);
+          );
+          expect(descendantExited).toBe(true);
         }
         catch (error) {
           testFailure = toError(error);
@@ -174,7 +175,11 @@ test.skipIf(process.platform !== "win32")(
       },
     });
 
-    await expect(access(ownedTemporaryDirectory)).rejects.toMatchObject({ code: "ENOENT" });
+    const directoryError = await access(ownedTemporaryDirectory).then(
+      () => undefined,
+      error => error,
+    );
+    expect(directoryError).toMatchObject({ code: "ENOENT" });
   },
   windowsJobSmokeTestTimeoutMs,
 );

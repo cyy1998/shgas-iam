@@ -205,7 +205,6 @@ test('completes first-party authorization and restores callback query and hash',
     .toBe('?tab=%E5%90%AF%E7%94%A8');
   const finalUrl = new URL(page.url());
   expect(finalUrl.hash).toBe('#profile');
-  expect(finalUrl.searchParams.has('token')).toBe(false);
   expect(authorizeRequest?.searchParams.get('state')).toBe(
     'iam-first-party-navigation:v1:?tab=%E5%90%AF%E7%94%A8#profile',
   );

@@ -21,7 +21,7 @@
 | 要证明的事实 | 入口与 owner | 范围限制 |
 |---|---|---|
 | 稳定依赖方向、owner 路径与 Docker build closure | 根 `pnpm check:architecture`；[analyzer](../../scripts/architecture-guard.ts) 与[公开接口 fixtures](../../scripts/__tests__/architecture-guard.test.ts)。 | 仅检查允许观察模型和受保护 source roots，不能证明业务授权、事务原子性或 runtime wiring。 |
-| Package 公开出口与结构兼容 | 所属 package exports、消费方 `typecheck`，例如 [Admin ports type contract](../../apps/admin-api/src/__tests__/port-contracts.test.ts)。 | Type-only 兼容不证明浏览器运行时可加载，也不证明 DTO 字段裁剪；对应边界见[共享契约](contracts-and-database.md#现存差距与验证)。 |
+| Package 公开出口与结构兼容 | 所属 package exports、消费方 `typecheck`，例如 [Admin ports type contract](../../apps/admin-api/src/__tests__/port-contracts.type-contract.ts)。 | Type-only 兼容不证明浏览器运行时可加载，也不证明 DTO 字段裁剪；对应边界见[共享契约](contracts-and-database.md#现存差距与验证)。 |
 | 每个测试候选唯一收集且 root task 可达 | 根 `pnpm check:test-collection`；[collection 入口](../../scripts/check-test-collection.ts)。 | 不读取断言、不推断资源使用；已纳入静态与完整验证入口，成功只证明收集正确，不证明测试断言通过。 |
 | 文档登记、状态日期与本地目标存在 | 根 `pnpm check:docs`；[文档检查实现](../../scripts/check-docs-index.ts)。 | 当前检查 `docs/**/*.md`，不验证语义一致性、根 AGENTS.md 链接或 Markdown 锚点；这些变更须另行核对。 |
 

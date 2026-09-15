@@ -32,7 +32,7 @@ describe('client service wrappers', () => {
     vi.clearAllMocks();
   });
 
-  it('preserves create and no-op results and normalizes committed failures', async () => {
+  it('preserves the create result', async () => {
     const created = { changed: true, result: { clientCode: 'new-client' } };
     clientCreateMutate.mockResolvedValueOnce(created);
     const result = await createClient({
@@ -43,6 +43,9 @@ describe('client service wrappers', () => {
       extAttributes: {},
     });
     expect(result).toEqual(created);
+  });
+
+  it('preserves a no-op status result', async () => {
     clientUpdateStatusMutate.mockResolvedValueOnce({
       changed: false,
       result: null,
@@ -50,6 +53,9 @@ describe('client service wrappers', () => {
     expect(await updateClientStatus('new-client', ClientStatus.Enable)).toEqual(
       { changed: false, result: null },
     );
+  });
+
+  it('normalizes a committed status failure', async () => {
     clientUpdateStatusMutate.mockRejectedValueOnce({
       data: { serviceCode: ApiErrorCode.AdminMutationCommitted },
     });
@@ -58,7 +64,7 @@ describe('client service wrappers', () => {
     ).rejects.toBeInstanceOf(AdminMutationCommittedError);
   });
 
-  it('passes search params to admin.client.search query', () => {
+  it('passes search params to admin.client.search query', async () => {
     const params = {
       pageNum: 1,
       pageSize: 20,
@@ -68,28 +74,37 @@ describe('client service wrappers', () => {
       },
     };
 
-    searchClients(params as Parameters<typeof searchClients>[0]);
+    await searchClients(params as Parameters<typeof searchClients>[0]);
 
     expect(clientSearchQuery).toHaveBeenCalledWith(params);
   });
 
-  it('wraps detail, create and status procedures', () => {
-    const createBody = {
-      clientCode: 'iam-admin',
-      clientName: 'IAM 管理后台',
-    } as Parameters<typeof createClient>[0];
-    getClient('iam-admin');
-    createClient(createBody);
-    updateClientStatus('iam-admin', ClientStatus.Disable);
-
-    expect(clientDetailQuery).toHaveBeenCalledWith({
-      clientCode: 'iam-admin',
-    });
-    expect(clientCreateMutate).toHaveBeenCalledWith(createBody);
-    expect(clientUpdateStatusMutate).toHaveBeenCalledWith({
-      clientCode: 'iam-admin',
-      status: ClientStatus.Disable,
-    });
+  it.each([
+    {
+      name: 'detail',
+      call: () => getClient('iam-admin'),
+      port: clientDetailQuery,
+      input: { clientCode: 'iam-admin' },
+    },
+    {
+      name: 'create',
+      call: () =>
+        createClient({
+          clientCode: 'iam-admin',
+          clientName: 'IAM 管理后台',
+        } as Parameters<typeof createClient>[0]),
+      port: clientCreateMutate,
+      input: { clientCode: 'iam-admin', clientName: 'IAM 管理后台' },
+    },
+    {
+      name: 'status',
+      call: () => updateClientStatus('iam-admin', ClientStatus.Disable),
+      port: clientUpdateStatusMutate,
+      input: { clientCode: 'iam-admin', status: ClientStatus.Disable },
+    },
+  ])('maps $name input to its procedure', async ({ call, port, input }) => {
+    await call();
+    expect(port).toHaveBeenCalledWith(input);
   });
 
   it.each([

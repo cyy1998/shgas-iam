@@ -4,8 +4,8 @@ import { ServiceError } from '@sso/utils/request';
 import { Modal } from 'antd';
 import { HttpResponse, http } from 'msw';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { act, fireEvent, render, screen, waitFor } from '~sso/test/render';
 import { server } from '~sso/test/mocks/server';
+import { act, fireEvent, render, screen, waitFor } from '~sso/test/render';
 
 const withHumanVerification = vi.hoisted(() => vi.fn());
 const modalError = vi.spyOn(Modal, 'error').mockReturnValue({
@@ -53,9 +53,18 @@ describe('LoginPage', () => {
   });
 
   it('does not render the login form while the continuation check is pending', async () => {
+    let release!: () => void;
+    let started!: () => void;
+    const pending = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const requestStarted = new Promise<void>((resolve) => {
+      started = resolve;
+    });
     server.use(
       http.get('*/sso/login-guard', async () => {
-        await new Promise((resolve) => setTimeout(resolve, 100));
+        started();
+        await pending;
         return HttpResponse.json({
           code: 200,
           data: { decision: LoginPageGuardDecision.Login },
@@ -66,8 +75,17 @@ describe('LoginPage', () => {
 
     render(<LoginPage />);
 
-    expect(screen.getByText('正在检查登录状态…')).toBeInTheDocument();
-    expect(screen.queryByPlaceholderText('请输入您的工号')).not.toBeInTheDocument();
+    try {
+      await act(async () => {
+        await requestStarted;
+      });
+      expect(screen.getByText('正在检查登录状态…')).toBeInTheDocument();
+      expect(
+        screen.queryByPlaceholderText('请输入您的工号'),
+      ).not.toBeInTheDocument();
+    } finally {
+      release();
+    }
     await screen.findByPlaceholderText('请输入您的工号');
   });
 
@@ -86,7 +104,9 @@ describe('LoginPage', () => {
     expect(
       await screen.findByText('登录请求已失效，请返回应用重新发起登录'),
     ).toBeInTheDocument();
-    expect(screen.queryByPlaceholderText('请输入您的工号')).not.toBeInTheDocument();
+    expect(
+      screen.queryByPlaceholderText('请输入您的工号'),
+    ).not.toBeInTheDocument();
   });
 
   it('keeps the form hidden on temporary failure and retries only on demand', async () => {
@@ -113,7 +133,9 @@ describe('LoginPage', () => {
     expect(
       await screen.findByText('统一身份认证服务暂时不可用，请稍后重试'),
     ).toBeInTheDocument();
-    expect(screen.queryByPlaceholderText('请输入您的工号')).not.toBeInTheDocument();
+    expect(
+      screen.queryByPlaceholderText('请输入您的工号'),
+    ).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: /重\s*试/ }));
     await screen.findByPlaceholderText('请输入您的工号');
     expect(attempts).toBe(2);
@@ -124,9 +146,13 @@ describe('LoginPage', () => {
     let requestWasAborted = false;
     server.use(
       http.get('*/sso/login-guard', async ({ request }) => {
-        request.signal.addEventListener('abort', () => {
-          requestWasAborted = true;
-        }, { once: true });
+        request.signal.addEventListener(
+          'abort',
+          () => {
+            requestWasAborted = true;
+          },
+          { once: true },
+        );
         return await new Promise<never>(() => {});
       }),
     );
@@ -141,10 +167,11 @@ describe('LoginPage', () => {
       expect(
         screen.getByText('统一身份认证服务暂时不可用，请稍后重试'),
       ).toBeInTheDocument();
-      expect(screen.queryByPlaceholderText('请输入您的工号')).not.toBeInTheDocument();
+      expect(
+        screen.queryByPlaceholderText('请输入您的工号'),
+      ).not.toBeInTheDocument();
       expect(requestWasAborted).toBe(true);
-    }
-    finally {
+    } finally {
       vi.useRealTimers();
     }
   });
@@ -175,6 +202,8 @@ describe('LoginPage', () => {
     view.rerender(<LoginPage />);
 
     expect(screen.getByText('正在检查登录状态…')).toBeInTheDocument();
-    expect(screen.queryByPlaceholderText('请输入您的工号')).not.toBeInTheDocument();
+    expect(
+      screen.queryByPlaceholderText('请输入您的工号'),
+    ).not.toBeInTheDocument();
   });
 });

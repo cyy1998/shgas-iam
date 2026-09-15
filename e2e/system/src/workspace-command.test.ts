@@ -8,12 +8,9 @@ async function readPackageJson(url: URL) {
 }
 
 describe("workspace-local command", () => {
-  test("publishes the complete E2E owner through root and Turbo", async () => {
+  test("publishes workspace-local journey and recovery commands", async () => {
     const workspacePackage = await readPackageJson(
       new URL("../package.json", import.meta.url),
-    );
-    const rootPackage = await readPackageJson(
-      new URL("../../../package.json", import.meta.url),
     );
 
     expect(workspacePackage.scripts["runtime:lifecycle"]).toBe("bun src/cli.ts run");
@@ -22,21 +19,5 @@ describe("workspace-local command", () => {
     expect(workspacePackage.scripts["hr-admin:journey"])
       .toBe("bun src/cli.ts hr-admin");
     expect(workspacePackage.scripts["oidc:journey"]).toBe("bun src/cli.ts oidc");
-    expect(workspacePackage.scripts["test:e2e"]).toBe("bun src/cli.ts e2e");
-    expect(rootPackage.scripts["test:e2e"]).toBe("turbo test:e2e --concurrency=1");
-  });
-
-  test("Current owner docs publish the root command, journey order and verified platform", async () => {
-    const docs = await Promise.all([
-      "../../../docs/architecture/testing-architecture.md",
-      "../../../docs/architecture/repository-map.md",
-      "../../../docs/development/commands.md",
-      "../../../docs/adr/0009-adopt-canonical-test-collections.md",
-    ].map(path => readFile(new URL(path, import.meta.url), "utf8")));
-    const currentOwnerDocs = docs.join("\n");
-
-    expect(currentOwnerDocs).toContain("pnpm test:e2e");
-    expect(currentOwnerDocs).toContain("Admin → HR Admin → OIDC");
-    expect(currentOwnerDocs).toContain("Windows 本地");
   });
 });

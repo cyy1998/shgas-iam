@@ -138,7 +138,8 @@ describe("Subject Access real Redis contract", () => {
   });
 
   test("reports a durable redacted repair backlog count and oldest age", async () => {
-    await expect(scope!.observerBacklog.inspectRepairBacklog()).resolves.toEqual({
+    const emptyBacklog = await scope!.observerBacklog.inspectRepairBacklog();
+    expect(emptyBacklog).toEqual({
       count: 0,
       oldestAgeMs: null,
     });

@@ -408,7 +408,7 @@ Hook 不运行 lint、typecheck、test、build 或 tracker checker。按改动�
 
 - Full-system E2E lifecycle：
   root `pnpm test:e2e`；workspace-local
-  `pnpm --filter @iam/e2e-system <test:e2e|runtime:lifecycle|admin:journey|hr-admin:journey|oidc:journey|runtime:cleanup|lint|test|test:unit|typecheck>`。
+  `pnpm --filter @iam/e2e-system <test:e2e|runtime:lifecycle|admin:journey|hr-admin:journey|oidc:journey|runtime:cleanup|lint|test|test:unit|test:integration:process|typecheck>`。
   当前只完成 Windows 本地验收，未宣称 Linux/CI adoption
 - API backend：`pnpm --filter @iam/api <dev|serve|lint|test|test:unit|test:integration:component|test:integration:process|test:integration:composition|test:integration:postgres|test:integration:redis|typecheck>`
 - Admin API backend：`pnpm --filter @iam/admin-api <dev|serve|lint|test|test:unit|test:integration:component|test:integration:process|test:integration:postgres|test:integration:composition|test:integration:redis|typecheck>`

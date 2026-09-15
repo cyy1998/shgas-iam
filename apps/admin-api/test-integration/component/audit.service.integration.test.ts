@@ -4,12 +4,13 @@ import { beforeEach, describe, expect, mock, test } from "bun:test";
 
 const insertedValues: unknown[] = [];
 let selectedRows: unknown[] = [];
+let selectedTotal: number | undefined;
 const createAuditLog = mock(async (value: unknown) => {
   insertedValues.push(value);
 });
 const searchAuditLogsPaged = mock(async () => ({
   rows: selectedRows,
-  total: selectedRows.length,
+  total: selectedTotal ?? selectedRows.length,
 }));
 
 const auditService = createAdminAuditService({
@@ -22,6 +23,7 @@ const auditService = createAdminAuditService({
 beforeEach(() => {
   insertedValues.length = 0;
   selectedRows = [];
+  selectedTotal = undefined;
   createAuditLog.mockClear();
   searchAuditLogsPaged.mockClear();
 });
@@ -106,36 +108,25 @@ describe("admin auditService.searchAuditLogsForAdmin", () => {
       pageSize: 10,
     });
   });
-  test("returns target user audit records", async () => {
-    selectedRows = [auditRow()];
-
-    await expect(auditService.searchAuditLogsForAdmin({
-      conditions: { targetType: "user", targetId: 1001 },
-      pageNum: 1,
-      pageSize: 10,
-    })).resolves.toMatchObject({
-      result: [{ targetType: "user", targetId: 1001 }],
-      total: 1,
-      pages: 1,
-    });
+  test.each([
+    { targetType: "user", targetId: 1001 },
+    { targetType: "employment", targetId: 4001 },
+  ])("forwards target filter %j to the repository", async (conditions) => {
+    const query = { conditions, pageNum: 2, pageSize: 10 };
+    await auditService.searchAuditLogsForAdmin(query);
+    expect(searchAuditLogsPaged).toHaveBeenCalledWith(query);
   });
 
-  test("returns target employment audit records", async () => {
-    selectedRows = [auditRow({
-      action: "admin.employment.transfer",
-      targetType: "employment",
-      targetId: 4001,
-      targetCode: null,
-    })];
-
-    await expect(auditService.searchAuditLogsForAdmin({
-      conditions: { targetType: "employment", targetId: 4001 },
-      pageNum: 1,
+  test("maps returned rows and derives pages from the total rather than page length", async () => {
+    selectedRows = [auditRow()];
+    selectedTotal = 21;
+    const result = await auditService.searchAuditLogsForAdmin({ conditions: {}, pageNum: 3, pageSize: 10 });
+    expect(result).toMatchObject({
+      result: [{ targetType: "user", targetId: 1001 }],
+      total: 21,
+      pageNum: 3,
       pageSize: 10,
-    })).resolves.toMatchObject({
-      result: [{ targetType: "employment", targetId: 4001 }],
-      total: 1,
-      pages: 1,
+      pages: 3,
     });
   });
 

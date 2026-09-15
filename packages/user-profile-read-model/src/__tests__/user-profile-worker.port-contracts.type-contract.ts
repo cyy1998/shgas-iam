@@ -8,9 +8,8 @@ import type {
   createUserProfileJobProcessor,
   UserProfileJobProcessor,
 } from "../worker/user-profile-worker.module";
-import { describe, test } from "bun:test";
 
-function assertAssignable<Port, _Provider extends Port>() {}
+type AssertAssignable<Port, _Provider extends Port> = true;
 
 type Assert<T extends true> = T;
 type IsEqual<TActual, TExpected> = (
@@ -22,15 +21,32 @@ type _JobProcessorMatchesFactoryReturn = Assert<
   IsEqual<UserProfileJobProcessor, ReturnType<typeof createUserProfileJobProcessor>>
 >;
 
-describe("User Profile worker port contracts", () => {
-  test("production providers satisfy the consumer-owned worker ports", () => {
-    assertAssignable<UserProfileMaintenanceUserRepositoryPort, UserProfileMaintenanceRepository>();
-    assertAssignable<UserProfileMaintenanceDirtyRepositoryPort, UserProfileDirtyRepository>();
-    assertAssignable<UserProfileMaintenanceJobProducerPort, UserProfileJobProducer>();
+type _UserProfileMaintenanceUserRepositoryPort = AssertAssignable<
+  UserProfileMaintenanceUserRepositoryPort,
+  UserProfileMaintenanceRepository
+>;
+type _UserProfileMaintenanceDirtyRepositoryPort = AssertAssignable<
+  UserProfileMaintenanceDirtyRepositoryPort,
+  UserProfileDirtyRepository
+>;
+type _UserProfileMaintenanceJobProducerPort = AssertAssignable<
+  UserProfileMaintenanceJobProducerPort,
+  UserProfileJobProducer
+>;
 
-    assertAssignable<UserProfilePublicationPort, ReturnType<ReturnType<typeof createCurrentUserProfileProjectionBundle>["createPublicationRepository"]>>();
-    assertAssignable<SubjectFactsPublisherPort, ReturnType<typeof createSubjectFactsRedisPublisher>>();
-    assertAssignable<UserProfileRebuildDirtyStorePort, UserProfileDirtyRepository>();
-    assertAssignable<UserProfileRebuildBuilderPort, ReturnType<typeof createProfileBuilder>>();
-  });
-});
+type _UserProfilePublicationPort = AssertAssignable<
+  UserProfilePublicationPort,
+  ReturnType<ReturnType<typeof createCurrentUserProfileProjectionBundle>["createPublicationRepository"]>
+>;
+type _SubjectFactsPublisherPort = AssertAssignable<
+  SubjectFactsPublisherPort,
+  ReturnType<typeof createSubjectFactsRedisPublisher>
+>;
+type _UserProfileRebuildDirtyStorePort = AssertAssignable<
+  UserProfileRebuildDirtyStorePort,
+  UserProfileDirtyRepository
+>;
+type _UserProfileRebuildBuilderPort = AssertAssignable<
+  UserProfileRebuildBuilderPort,
+  ReturnType<typeof createProfileBuilder>
+>;

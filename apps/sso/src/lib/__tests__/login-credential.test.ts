@@ -36,7 +36,7 @@ describe('createPasswordLoginCredential', () => {
     ).toThrow('登录加密配置未就绪');
   });
 
-  it('returns an opaque credential without leaking raw login material', async () => {
+  it('forwards login input and encryption config and returns the protocol credential', async () => {
     const { createLoginCredential, createPasswordLoginCredential } =
       await loadCredentialModule({
         kid: '2026-05-primary',
@@ -48,9 +48,7 @@ describe('createPasswordLoginCredential', () => {
       password: 'raw-secret',
     });
 
-    expect(credential.startsWith(`${LOGIN_CREDENTIAL_PREFIX}.`)).toBe(true);
-    expect(credential).not.toContain('zhangsan');
-    expect(credential).not.toContain('raw-secret');
+    expect(credential).toBe(`${LOGIN_CREDENTIAL_PREFIX}.opaque-token`);
     expect(createLoginCredential).toHaveBeenCalledWith({
       username: 'zhangsan',
       password: 'raw-secret',

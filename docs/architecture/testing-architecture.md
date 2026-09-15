@@ -22,6 +22,30 @@
 
 profile 不是新的测试层级、速度标签或 Gate。多资源测试按测试重点与 harness owner 唯一归属。
 
+## 测试质量原则
+
+测试应对行为变化敏感，对不改变行为的内部重构保持稳定。优先通过所属模块的公开接口，给出明确输入、状态或操作，
+观察结果、错误及必要副作用；失败时应能直接知道哪项要求被破坏。以下原则适用于所有 collection，资源需求仍按上节分类。
+
+- 一个用例聚焦一个可命名的行为场景。同一行为的前后状态、返回值和副作用可以一起断言；互不依赖的成功、拒绝、
+  恢复和输入变体使用独立用例或具名参数化案例，不把所有 API 调用塞进一个测试。
+- 测试独立建立并清理状态，不依赖执行顺序。异步操作必须等待完成；并发与 pending 状态优先使用显式同步信号、
+  受控 Promise 或适用的受控时钟。真实 Redis 到期和进程退出仍使用真实资源，不用应用假时钟替代资源语义。
+- 只在所测模块的外部边界替换依赖，优先保留模块内部真实协作。出站接口上的提交参数、脱敏、零写入和禁止重放是
+  有价值的行为观察；内部 helper 名称、调用顺序和调用次数只有本身属于当前契约时才锁定。
+- Fake 必须让待验证行为有失败的可能：缓存测试应区分命中与再次回源；筛选测试应观察传出的条件或真实筛选结果。
+  固定返回值相等不能证明缓存有效，mock 加密输出不含明文不能证明生产加密安全。
+- 纯类型兼容由 typecheck 收集的 `*.type-contract.ts` 验证，保留正向约束和必要的 `@ts-expect-error`；不创建空函数
+  调用或恒真断言的运行时测试。共享 mapper 的完整结果由 owner 验证，消费方只验证自身适配。
+- 行为测试不通过其他源文件中的变量名、注释或调用文本推断资源隔离、清理和业务语义；使用能观察该事实的接口。
+  静态分析工具自身的路径/import fixture 是其公开输入，继续按 Architecture Guard 的允许模型验证。
+- 性能采样与正确性证明分开。已接受的资源预算应有直接、适用的证据；不把一次实现的完整端点调用数或 socket
+  `data` 回调次数冻结成永久正确性契约。采样结果不能冒充命令数、往返数或业务串行波次。
+
+评审时检查：去掉待保护的行为，测试是否会失败；只改变内部实现，测试是否仍可通过；失败能否定位具体要求。
+不以测试数量、mock 数量、matcher 名称或覆盖率代替这些判断，也不为本原则增加断言扫描器。
+原则来源：[好的与不好的单元测试](https://chatgpt.com/share/6aa8d88c-bd6c-83e9-9a84-84646123864d)。
+
 ## 当前契约与测试清理
 
 永久测试应证明去掉迁移背景后仍成立的当前可观察要求。评审候选时按保护目标分类，不按 `legacy`、`V1` 或
@@ -115,6 +139,9 @@ OIDC 模块 Redis 使用 `IAM_OIDC_TEST_REDIS_URL`，API HTTP 使用 `IAM_API_TE
 详细最高入口与证明限制见[验证归属](architecture-verification.md)。所有正常状态由 production owner 建立，破坏变体和离线 schema
 留在 owner `/testing`，消费者不手写协议 key、Lua 或 serialization。历史 writer 的冻结 SHA 证据在统一维护手册单列。
 Custom SSO strict V2 schema、mapper、错误与 preview 契约由 `@iam/custom-sso` 的 Unit collection 收集；Projection 的中性裁剪与 Catalog 契约继续由其 Component collection 收集。API 保留 OpenAPI、输出交付与错误映射测试；Admin preview 的配置响应、SSO 数据处理与页面状态由各自行为测试证明，固定样例回显不单独建测试。前端构建与类型检查不替代浏览器行为执行。
+
+E2E workspace 的 command runner 输出隔离和取消清理在其 `Integration/process` 中通过真实子进程验证，
+由 `pnpm --filter @iam/e2e-system test:integration:process` 收集；纯 capture 与 discovery parser 留在 Unit。
 
 ## Root 与 package commands
 

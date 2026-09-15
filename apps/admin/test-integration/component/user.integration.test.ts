@@ -42,7 +42,7 @@ describe('user service wrappers', () => {
     vi.clearAllMocks();
   });
 
-  it('passes search params to admin.user.search query', () => {
+  it('passes search params to admin.user.search query', async () => {
     const params = {
       pageNum: 1,
       pageSize: 20,
@@ -52,32 +52,59 @@ describe('user service wrappers', () => {
       },
     };
 
-    searchUsers(params as Parameters<typeof searchUsers>[0]);
+    await searchUsers(params as Parameters<typeof searchUsers>[0]);
 
     expect(userSearchQuery).toHaveBeenCalledWith(params);
   });
 
-  it('wraps detail and every User mutation procedure', () => {
-    getUser('zhangsan');
-    createUser({ username: 'zhangsan' } as Parameters<typeof createUser>[0]);
-    updateUser('zhangsan', { name: '张三丰' });
-    updateUserStatus('zhangsan', UserStatus.Pause);
-    deleteUser('zhangsan');
-    resetUserPassword('zhangsan');
-    generateRandomPassword();
-
-    expect(userDetailQuery).toHaveBeenCalledWith({ username: 'zhangsan' });
-    expect(userCreateMutate).toHaveBeenCalledWith({ username: 'zhangsan' });
-    expect(userUpdateMutate).toHaveBeenCalledWith({
-      username: 'zhangsan',
-      data: { name: '张三丰' },
-    });
-    expect(userUpdateStatusMutate).toHaveBeenCalledWith({
-      username: 'zhangsan',
-      status: UserStatus.Pause,
-    });
-    expect(userDeleteMutate).toHaveBeenCalledWith({ username: 'zhangsan' });
-    expect(userResetPasswordMutate).toHaveBeenCalledWith({ username: 'zhangsan' });
-    expect(userGeneratePasswordQuery).toHaveBeenCalledWith(undefined);
+  it.each([
+    {
+      name: 'detail',
+      call: () => getUser('zhangsan'),
+      port: userDetailQuery,
+      input: { username: 'zhangsan' },
+    },
+    {
+      name: 'create',
+      call: () =>
+        createUser({ username: 'zhangsan' } as Parameters<
+          typeof createUser
+        >[0]),
+      port: userCreateMutate,
+      input: { username: 'zhangsan' },
+    },
+    {
+      name: 'update',
+      call: () => updateUser('zhangsan', { name: '张三丰' }),
+      port: userUpdateMutate,
+      input: { username: 'zhangsan', data: { name: '张三丰' } },
+    },
+    {
+      name: 'status',
+      call: () => updateUserStatus('zhangsan', UserStatus.Pause),
+      port: userUpdateStatusMutate,
+      input: { username: 'zhangsan', status: UserStatus.Pause },
+    },
+    {
+      name: 'delete',
+      call: () => deleteUser('zhangsan'),
+      port: userDeleteMutate,
+      input: { username: 'zhangsan' },
+    },
+    {
+      name: 'reset password',
+      call: () => resetUserPassword('zhangsan'),
+      port: userResetPasswordMutate,
+      input: { username: 'zhangsan' },
+    },
+    {
+      name: 'generate password',
+      call: () => generateRandomPassword(),
+      port: userGeneratePasswordQuery,
+      input: undefined,
+    },
+  ])('maps $name input to its procedure', async ({ call, port, input }) => {
+    await call();
+    expect(port).toHaveBeenCalledWith(input);
   });
 });

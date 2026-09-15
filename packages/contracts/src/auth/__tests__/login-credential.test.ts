@@ -26,6 +26,24 @@ const FIXED_INPUT = {
 };
 
 describe("login credential protocol", () => {
+  test("does not expose login plaintext in the wire envelope", () => {
+    const input = {
+      ...FIXED_INPUT,
+      username: "plaintext-username-sentinel",
+      password: "plaintext-password-sentinel",
+    };
+    const credential = createLoginCredential(input);
+    const encodedEnvelope = credential.split(".")[1]!;
+    const envelope = Buffer.from(encodedEnvelope, "base64url").toString("utf8");
+    for (const plaintext of [input.username, input.password]) {
+      expect(credential).not.toContain(plaintext);
+      expect(envelope).not.toContain(plaintext);
+    }
+    expect(decryptLoginCredential(credential, {
+      [input.kid]: KEY_PAIR.privateKey,
+    }).payload).toMatchObject({ username: input.username, password: input.password });
+  });
+
   test("creates a SM login credential that decrypts to password login payload", () => {
     const credential = createLoginCredential(FIXED_INPUT);
 

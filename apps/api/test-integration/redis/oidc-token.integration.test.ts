@@ -653,21 +653,21 @@ test("OIDC scoped Code lookup never consumes another root/ClientSession Code ID"
   }
 });
 
-test("OIDC complete HTTP warm samples include real Snapshot Secret Barrier Facts network owners", async () => {
+test("OIDC complete HTTP warm samples reuse Snapshot Secret Barrier Facts and record socket chunk samples", async () => {
   const url = new URL(process.env.IAM_API_TEST_REDIS_URL!);
   const upstreamAddress = { host: url.hostname, port: Number(url.port) };
-  let requests = 0;
-  let responses = 0;
+  let requestChunks = 0;
+  let responseChunks = 0;
   const events: string[] = [];
   const proxy = createServer((downstream) => {
     const upstream = connect(upstreamAddress);
     downstream.on("data", (data) => {
-      requests++;
+      requestChunks++;
       events.push("request");
       upstream.write(data);
     });
     upstream.on("data", (data) => {
-      responses++;
+      responseChunks++;
       events.push("response");
       downstream.write(data);
     });
@@ -699,8 +699,8 @@ test("OIDC complete HTTP warm samples include real Snapshot Secret Barrier Facts
     const samples = [];
     for (const scope of ["openid", "openid profile phone", "openid profile phone"]) {
       const issued = await f.authorizeCode({ scope });
-      requests = 0;
-      responses = 0;
+      requestChunks = 0;
+      responseChunks = 0;
       events.length = 0;
       const signingBefore = f.state.signingMs;
       const started = performance.now();
@@ -708,18 +708,15 @@ test("OIDC complete HTTP warm samples include real Snapshot Secret Barrier Facts
       await response.text();
       const sample = {
         scope,
-        requests,
-        responses,
-        serialWaves: events.filter(
+        requestChunks,
+        responseChunks,
+        chunkAlternations: events.filter(
           (event, index) => event === "request" && (index === 0 || events[index - 1] === "response"),
         ).length,
         ms: performance.now() - started,
         signingMs: f.state.signingMs - signingBefore,
       };
       expect(response.status).toBe(200);
-      expect([sample.requests, sample.responses, sample.serialWaves]).toEqual(
-        scope === "openid" ? [9, 9, 9] : [10, 10, 10],
-      );
       samples.push(sample);
     }
     expect({

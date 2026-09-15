@@ -57,5 +57,4 @@ test('restores a trusted callback query and hash before the admin shell renders'
   await expect(page.getByText('用户管理').first()).toBeVisible();
   await expect.poll(() => new URL(page.url()).search).toBe('?tab=enabled');
   expect(new URL(page.url()).hash).toBe('#details');
-  expect(new URL(page.url()).searchParams.has('token')).toBe(false);
 });

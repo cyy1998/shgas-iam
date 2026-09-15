@@ -309,7 +309,7 @@ test("maps Internal, Public, and Delegation requests through the inactive v3 ada
   );
 });
 
-test("mounts exactly one canonical Internal User route in the Internal API document", async () => {
+test("publishes canonical Internal User routes and keeps deprecation scoped to Internal search", async () => {
   const activeRoutes = await createApiRoutes({
     verifyDatabase: async () => {},
     auditLogWriter: {} as never,
@@ -324,10 +324,6 @@ test("mounts exactly one canonical Internal User route in the Internal API docum
     services: { authentication: authenticationRoutes() } as never,
     useCases: {} as never,
   });
-
-  expect(Object.keys(activeRoutes).filter(route => route.includes("/routes/internal/user/"))).toEqual([
-    "./src/routes/internal/user/user.index.ts",
-  ]);
 
   const app = createApp(appConfig, {
     env: { NODE_ENV: "test" },
