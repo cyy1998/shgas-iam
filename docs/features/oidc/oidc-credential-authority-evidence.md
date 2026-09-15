@@ -1,10 +1,12 @@
 # OIDC Credential 独立访问证据
 
-Status: Current
+本文保留固定旧候选的契约与验证证据，不是 #194 当前在线实现。当前接线和维护以 [ADR-0035](../../adr/0035-unify-user-and-client-session-lifecycles.md) 与[统一维护手册](../../releases/unified-session-maintenance.md)为准。
+
+Status: Historical
 
 Last verified: 2026-09-09
 
-Next review: 2026-10-31
+Next review: n/a
 
 本文记录 [#167](https://github.com/cyy1998/shgas-iam/issues/167) 的实际请求验证，目标来自 Spec #163 与 ADR-0033。
 协议规则见[操作契约](oidc-operation-snapshots.md)。after 生产与测试提交为 `8aabe7d62d03807d7d9793ff021f535355f9d42f`；

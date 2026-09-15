@@ -40,6 +40,15 @@ export async function rollbackSubjectProjectionCutover(
 
   return await input.sql.begin(async (tx) => {
     await tx.unsafe(`LOCK TABLE ${journalTable} IN SHARE ROW EXCLUSIVE MODE`);
+    const [sourceSchema] = await tx<{ supported: boolean }[]>`
+      SELECT EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_schema = current_schema()
+          AND table_name = 'client' AND column_name = 'custom_sso_config'
+      ) AS supported
+    `;
+    if (!sourceSchema?.supported)
+      throw new Error("Subject Projection rollback requires the pre-contraction schema and matching backup");
     const rows = await tx.unsafe<MigrationJournalRow[]>(`
       SELECT id, hash, created_at::text AS "createdAt", name
       FROM ${journalTable}

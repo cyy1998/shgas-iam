@@ -16,7 +16,7 @@ groups:
               from: 300
               to: 0
             model:
-              expr: sum by (service) (count_over_time({env=~"$env", service=~"api|admin-api|oidc-provider", level=~"error|fatal"}[5m]))
+              expr: sum by (service) (count_over_time({env=~"$env", service=~"api|admin-api", level=~"error|fatal"}[5m]))
               refId: A
           - refId: C
             datasourceUid: __expr__
@@ -81,7 +81,7 @@ groups:
           severity: warning
 
       - uid: iam-oidc-provider-server-error
-        title: OIDC provider server error
+        title: OIDC API server error
         condition: C
         data:
           - refId: A
@@ -90,7 +90,7 @@ groups:
               from: 300
               to: 0
             model:
-              expr: sum(count_over_time({service="oidc-provider", level=~"error|fatal"} | json | event=~"oidc.provider.server_error|oidc.provider.protocol_error" [5m]))
+              expr: sum(count_over_time({service="api", level=~"error|fatal"} | json | event=~"oidc_server_error" [5m]))
               refId: A
           - refId: C
             datasourceUid: __expr__
@@ -113,7 +113,7 @@ groups:
         execErrState: Error
         for: 1m
         annotations:
-          summary: OIDC provider emitted protocol or server errors.
+          summary: API OIDC endpoints emitted server errors.
         labels:
           severity: critical
 
@@ -127,7 +127,7 @@ groups:
               from: 600
               to: 0
             model:
-              expr: sum(count_over_time({service=~"api|admin-api|oidc-provider|apisix"}[10m]))
+              expr: sum(count_over_time({service=~"api|admin-api|apisix"}[10m]))
               refId: A
           - refId: C
             datasourceUid: __expr__

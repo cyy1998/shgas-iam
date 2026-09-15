@@ -2,7 +2,7 @@ import type { CreateOrganizationResponsibilityAdapterDeps } from "@admin-api/rou
 import type { OrganizationResponsibilityAssignmentSearchPage } from "@admin-api/services/organization-responsibility/organization-responsibility.schema";
 import type { CreateOrganizationResponsibilityServiceDeps } from "@admin-api/services/organization-responsibility/organization-responsibility.service";
 import type { Context } from "hono";
-import { createAdminAuthenticationHandlers } from "@admin-api/middlewares/authentication.handler";
+import { createAdminRootAuthenticationHandlers } from "@admin-api/middlewares/authentication.handler";
 import { createOrganizationResponsibilityAdapter } from "@admin-api/routes/admin/organization-responsibility/organization-responsibility.adapter";
 import { createOrganizationResponsibilityRoute } from "@admin-api/routes/admin/organization-responsibility/organization-responsibility.index";
 import * as responsibilityRoutes from "@admin-api/routes/admin/organization-responsibility/organization-responsibility.routes";
@@ -25,23 +25,11 @@ import {
   getTestAdminAuthorizationValue,
 } from "../helpers/admin-authorization";
 
-const principalSession = {
-  principalSessionId: "30000000-0000-4000-8000-000000000001",
-  subjectContext: encodeSubjectAccessContext({ version: 1, subjectIdentifier: "00000000-0000-4000-8000-000000000001", transitionId: "20000000-0000-4000-8000-000000000001" }),
-  principal: {
-    principalType: "user",
-    subjectId: "00000000-0000-4000-8000-000000000001",
-  },
-};
+const principalSession = { userSessionId: "30000000-0000-4000-8000-000000000001", subjectIdentifier: "00000000-0000-4000-8000-000000000001", subjectContext: encodeSubjectAccessContext({ version: 1, subjectIdentifier: "00000000-0000-4000-8000-000000000001", transitionId: "20000000-0000-4000-8000-000000000001" }) };
 
 function createProtectedCatalogApp(roles: string[]) {
-  const authentication = createAdminAuthenticationHandlers({
-    sessionKernel: {
-      resolvePrincipalSession: async () => ({
-        status: "resolved",
-        value: principalSession,
-      }),
-    },
+  const authentication = createAdminRootAuthenticationHandlers({
+    resolveRoot: async () => principalSession,
     subjectAccess: createSubjectAccessOperations({
       barrier: { readCommittedTransitionId: async () => "20000000-0000-4000-8000-000000000001" },
       revocation: { revokePrincipalSession: async () => {

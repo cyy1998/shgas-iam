@@ -6,7 +6,9 @@ export {
 export type {
   SubjectAccessHttpRunOptions,
 } from "./adapters/http-adapter";
-export { createSubjectAccessSessionContext, createSubjectAccessSessionRevocation } from "./adapters/session-context";
+export { createSubjectAccessSessionContext } from "./adapters/session-context";
+export { createUnifiedSubjectAccessSessionRevocation } from "./adapters/unified-session";
+export type { UnifiedSessionRevocationSummary } from "./adapters/unified-session";
 export { createSubjectAccessBarrier } from "./barrier";
 export type {
   CreateSubjectAccessBarrierOptions,

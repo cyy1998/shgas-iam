@@ -51,7 +51,7 @@ export interface MobilePrincipalSessionPort {
       amr: readonly ["sms"];
       origin?: SessionOrigin;
     },
-  ) => Promise<{ token: string }>;
+  ) => Promise<{ token: string; remainingSeconds?: number }>;
 }
 
 export interface LoginWithMobileDeps {

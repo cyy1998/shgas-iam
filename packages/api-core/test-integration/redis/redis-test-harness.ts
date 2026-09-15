@@ -5,7 +5,6 @@ import type {
 } from "../../src/subject-access";
 import type { SubjectAccessAtomicStore } from "../../src/subject-access/storage/store";
 import { randomUUID } from "node:crypto";
-import { createSessionKernelRedisTestHarness } from "@iam/session-kernel/testing";
 import Redis from "ioredis";
 import {
   createLoginRestriction,
@@ -27,7 +26,6 @@ export interface RedisTestScope {
 }
 
 export interface RedisTestHarness {
-  readonly createSessionKernelScope: Awaited<ReturnType<typeof createSessionKernelRedisTestHarness>>["createSessionKernelScope"];
   readonly createScope: () => Promise<RedisTestScope>;
   readonly createSubjectAccessScope: (input: {
     writerTransitionIds: readonly string[];
@@ -79,11 +77,9 @@ export interface SubjectAccessRedisTestScope {
 export async function createRedisTestHarness(): Promise<RedisTestHarness> {
   const redisUrl = requireDedicatedRedisTestUrl();
   const cleanupRedis = createRedisClient(redisUrl);
-  let kernelHarness: Awaited<ReturnType<typeof createSessionKernelRedisTestHarness>>;
 
   try {
     await connectRedis(cleanupRedis);
-    kernelHarness = await createSessionKernelRedisTestHarness(redisUrl);
   }
   catch (error) {
     cleanupRedis.disconnect();
@@ -91,7 +87,6 @@ export async function createRedisTestHarness(): Promise<RedisTestHarness> {
   }
 
   return {
-    createSessionKernelScope: kernelHarness.createSessionKernelScope,
     async createScope() {
       const keyPrefix = `iam:test:login-restriction:${randomUUID()}:`;
       const writerRedis = createRedisClient(redisUrl);
@@ -208,7 +203,7 @@ export async function createRedisTestHarness(): Promise<RedisTestHarness> {
       };
     },
     async close() {
-      await Promise.all([cleanupRedis.quit(), kernelHarness.close()]);
+      await cleanupRedis.quit();
     },
   };
 }

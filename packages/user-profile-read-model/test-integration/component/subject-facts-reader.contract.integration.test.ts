@@ -1,16 +1,16 @@
 import type { ResolveClientSubjectInput } from "@iam/client-subject-projection";
 import type { SubjectFactsCacheRecord } from "../../src/subject-facts";
-import { createSubjectAccessOperations, SubjectAccessPermissionRequiredError } from "@iam/api-core/subject-access";
+import {
+  createSubjectAccessOperations,
+  SubjectAccessPermissionRequiredError,
+} from "@iam/api-core/subject-access";
 import {
   createPermittedClientSubjectProjectionService,
   SubjectProjectionNotReadyError,
 } from "@iam/client-subject-projection";
 import { userProfiles } from "@iam/db/schema";
 import { describe, expect, mock, test } from "bun:test";
-import {
-  createSubjectFactsReader,
-  createSubjectFactsRedisCache,
-} from "../../src/subject-facts";
+import { createSubjectFactsReader, createSubjectFactsRedisCache } from "../../src/subject-facts";
 
 const SUBJECT_IDENTIFIER = "46739d0b-cdda-48f5-af1f-1f90e2d81169";
 
@@ -26,8 +26,12 @@ function createPermittedProjectionFixture(
       },
     },
     revocation: {
-      async revokePrincipalSession() { throw new Error("unexpected root revocation"); },
-      async revokeUserSessions() { throw new Error("unexpected subject revocation"); },
+      async revokePrincipalSession() {
+        throw new Error("unexpected root revocation");
+      },
+      async revokeUserSessions() {
+        throw new Error("unexpected subject revocation");
+      },
     },
   });
   return {
@@ -52,10 +56,7 @@ describe("Subject Facts Reader", () => {
     const record = cacheRecord("6");
     const get = mock(async () => JSON.stringify(record));
     const evalScript = mock(async () => 1);
-    const cache = createSubjectFactsRedisCache(
-      { get, eval: evalScript },
-      { keyPrefix: "facts:test:" },
-    );
+    const cache = createSubjectFactsRedisCache({ get, eval: evalScript }, { keyPrefix: "facts:test:" });
 
     await expect(cache.read(SUBJECT_IDENTIFIER)).resolves.toBe(JSON.stringify(record));
     await expect(cache.publish(record)).resolves.toEqual({ status: "published" });
@@ -113,11 +114,13 @@ describe("Subject Facts Reader", () => {
 
     await reader.read(SUBJECT_IDENTIFIER);
 
-    expect(observations).toEqual([{
-      operation: "cache-read",
-      outcome: "hit",
-      durationMs: 7,
-    }]);
+    expect(observations).toEqual([
+      {
+        operation: "cache-read",
+        outcome: "hit",
+        durationMs: 7,
+      },
+    ]);
     expect(JSON.stringify(observations)).not.toContain(SUBJECT_IDENTIFIER);
     expect(JSON.stringify(observations)).not.toContain("alice");
   });
@@ -138,10 +141,11 @@ describe("Subject Facts Reader", () => {
         }),
       } as never,
       cache: {
-        read: async () => JSON.stringify({
-          ...cacheRecord("7"),
-          subjectIdentifier: "f81d4fae-7dec-4f9f-a847-76c5d8b55232",
-        }),
+        read: async () =>
+          JSON.stringify({
+            ...cacheRecord("7"),
+            subjectIdentifier: "f81d4fae-7dec-4f9f-a847-76c5d8b55232",
+          }),
         publish: async () => ({ status: "published" as const }),
       },
       clock: { now: () => 100 },
@@ -222,20 +226,20 @@ describe("Subject Facts Reader", () => {
       },
     });
 
-    const snapshots = await Promise.all(
-      Array.from({ length: 16 }, () => reader.read(SUBJECT_IDENTIFIER)),
-    );
+    const snapshots = await Promise.all(Array.from({ length: 16 }, () => reader.read(SUBJECT_IDENTIFIER)));
 
-    expect(snapshots).toEqual(Array.from({ length: 16 }, () => ({
-      subjectIdentifier: SUBJECT_IDENTIFIER,
-      sourceDirtyVersion: "9",
-      profile: {
-        username: "alice",
-        name: "Alice",
-        phone: "13800138000",
-      },
-      employments: [],
-    })));
+    expect(snapshots).toEqual(
+      Array.from({ length: 16 }, () => ({
+        subjectIdentifier: SUBJECT_IDENTIFIER,
+        sourceDirtyVersion: "9",
+        profile: {
+          username: "alice",
+          name: "Alice",
+          phone: "13800138000",
+        },
+        employments: [],
+      })),
+    );
     expect(select).toHaveBeenCalledTimes(1);
     expect(publish).toHaveBeenCalledTimes(1);
   });
@@ -265,10 +269,7 @@ describe("Subject Facts Reader", () => {
       },
     });
 
-    await Promise.all([
-      reader.read(SUBJECT_IDENTIFIER),
-      reader.read(SUBJECT_IDENTIFIER),
-    ]);
+    await Promise.all([reader.read(SUBJECT_IDENTIFIER), reader.read(SUBJECT_IDENTIFIER)]);
 
     expect(observations.filter(({ operation }) => operation === "cache-read")).toEqual([
       { operation: "cache-read", outcome: "miss", durationMs: 0 },
@@ -298,10 +299,12 @@ describe("Subject Facts Reader", () => {
         })),
       } as never,
       cache: {
-        read: mock(async () => JSON.stringify({
-          ...cacheRecord("10"),
-          schemaVersion: 999,
-        })),
+        read: mock(async () =>
+          JSON.stringify({
+            ...cacheRecord("10"),
+            schemaVersion: 999,
+          }),
+        ),
         publish: mock(async () => ({ status: "published" as const })),
       },
     });
@@ -364,7 +367,9 @@ describe("Subject Facts Reader", () => {
         db: { select: () => ({ from: () => ({ where: () => ({ limit }) }) }) } as never,
         cache: {
           read: async () => cached,
-          publish: async () => { throw new Error("refill failed"); },
+          publish: async () => {
+            throw new Error("refill failed");
+          },
         },
       });
       const projection = createPermittedProjectionFixture({ subjectFacts: reader });
@@ -390,7 +395,9 @@ describe("Subject Facts Reader", () => {
     const reader = createSubjectFactsReader({
       db: { select } as never,
       cache: {
-        read: async () => { throw cacheError; },
+        read: async () => {
+          throw cacheError;
+        },
         publish: async () => ({ status: "published" }),
       },
     });
@@ -409,7 +416,17 @@ describe("Subject Facts Reader", () => {
     const databaseError = new Error("PostgreSQL unavailable");
     const observations: unknown[] = [];
     const reader = createSubjectFactsReader({
-      db: { select: () => ({ from: () => ({ where: () => ({ limit: async () => { throw databaseError; } }) }) }) } as never,
+      db: {
+        select: () => ({
+          from: () => ({
+            where: () => ({
+              limit: async () => {
+                throw databaseError;
+              },
+            }),
+          }),
+        }),
+      } as never,
       cache: { read: async () => null, publish: async () => ({ status: "published" }) },
       clock: { now: () => 100 },
       observability: { record: observation => observations.push(observation) },

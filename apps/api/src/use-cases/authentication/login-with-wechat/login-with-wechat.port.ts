@@ -37,7 +37,7 @@ export interface WechatPrincipalSessionPort {
       amr: readonly ["wechat"];
       origin?: SessionOrigin;
     },
-  ) => Promise<{ token: string }>;
+  ) => Promise<{ token: string; remainingSeconds?: number }>;
 }
 
 export interface LoginWithWechatDeps {

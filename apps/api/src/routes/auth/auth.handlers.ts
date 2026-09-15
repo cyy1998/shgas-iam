@@ -45,40 +45,18 @@ export interface CreateAuthHandlersDeps {
   };
 }
 
-export function createAuthHandlers(deps: CreateAuthHandlersDeps) {
-  const loginPassword: AuthRouteHandler<"loginPassword"> = async (c) => {
-    const { credential, capToken } = c.req.valid("json");
-    const { username, password } = await deps.loginCredentialParser.parseLoginPasswordCredential(credential);
-    const requestContext = getApiAuditRequestContext(c);
-    const data = await deps.authentication.loginWithPassword.execute(
-      { capToken, password, username },
-      { requestContext },
-    );
-    setCookie(c, "global_session", data.token, {
-      httpOnly: true,
-      sameSite: "Lax",
-      maxAge: deps.config.redisExpireSeconds,
-      path: "/",
-    });
-    return c.json(resp.ok(data), HttpStatusCodes.OK);
+export function createInternalAuthzHandler(deps: Pick<CreateAuthHandlersDeps, "clientService" | "logger">) {
+  const internalAuthz: AuthRouteHandler<"internalAuthz"> = async (c) => {
+    const clientSecret = c.req.header("apikey");
+    const sourceIp = c.req.header("IP-Chain");
+    deps.logger.info({ event: SystemLogEvent.InternalAuthzChecked, requestId: c.get("requestId"), sourceIp, hasClientSecret: clientSecret !== undefined }, "internal authorization checked");
+    await verifyInternalClient(c, { getClientBySecret: deps.clientService.getClientBySecret });
+    return c.json(resp.ok(true), HttpStatusCodes.OK);
   };
+  return internalAuthz;
+}
 
-  const loginMobile: AuthRouteHandler<"loginMobile"> = async (c) => {
-    const { code, phoneNumber, capToken } = c.req.valid("json");
-    const requestContext = getApiAuditRequestContext(c);
-    const data = await deps.authentication.loginWithMobile.execute(
-      { capToken, code, phoneNumber },
-      { requestContext },
-    );
-    setCookie(c, "global_session", data.token, {
-      httpOnly: true,
-      sameSite: "Lax",
-      maxAge: deps.config.redisExpireSeconds,
-      path: "/",
-    });
-    return c.json(resp.ok(data), HttpStatusCodes.OK);
-  };
-
+export function createLocalSessionAuthzHandler(deps: Pick<CreateAuthHandlersDeps, "localSessionAuthorizer" | "config">) {
   const authz: AuthRouteHandler<"authz"> = async (c) => {
     const encodedClientCode = c.req.header("Client");
     const clientCodeResult = ClientCodeSchema.safeParse(
@@ -137,27 +115,44 @@ export function createAuthHandlers(deps: CreateAuthHandlersDeps) {
     return c.json(resp.ok(data), HttpStatusCodes.OK);
   };
 
-  const internalAuthz: AuthRouteHandler<"internalAuthz"> = async (c) => {
-    const clientSecret = c.req.header("apikey");
-    const sourceIp = c.req.header("IP-Chain");
-    deps.logger.info({
-      event: SystemLogEvent.InternalAuthzChecked,
-      requestId: c.get("requestId"),
-      sourceIp,
-      hasClientSecret: clientSecret !== undefined,
-    }, "internal authorization checked");
-    await verifyInternalClient(c, {
-      getClientBySecret: deps.clientService.getClientBySecret,
-    });
-    return c.json(resp.ok(true), HttpStatusCodes.OK);
-  };
-
-  return {
-    authz,
-    internalAuthz,
-    loginMobile,
-    loginPassword,
-  };
+  return authz;
 }
 
-export type AuthHandlers = ReturnType<typeof createAuthHandlers>;
+export function createRootAuthHandlers(deps: Pick<CreateAuthHandlersDeps, "authentication" | "loginCredentialParser"> & {
+  config: Pick<CreateAuthHandlersDeps["config"], "redisExpireSeconds">;
+}) {
+  const loginPassword: AuthRouteHandler<"loginPassword"> = async (c) => {
+    const { credential, capToken } = c.req.valid("json");
+    const { username, password } = await deps.loginCredentialParser.parseLoginPasswordCredential(credential);
+    const requestContext = getApiAuditRequestContext(c);
+    const data = await deps.authentication.loginWithPassword.execute(
+      { capToken, password, username },
+      { requestContext },
+    );
+    setCookie(c, "global_session", data.token, {
+      httpOnly: true,
+      sameSite: "Lax",
+      maxAge: data.remainingSeconds ?? deps.config.redisExpireSeconds,
+      path: "/",
+    });
+    return c.json(resp.ok({ token: data.token, isMobileSet: data.isMobileSet }), HttpStatusCodes.OK);
+  };
+
+  const loginMobile: AuthRouteHandler<"loginMobile"> = async (c) => {
+    const { code, phoneNumber, capToken } = c.req.valid("json");
+    const requestContext = getApiAuditRequestContext(c);
+    const data = await deps.authentication.loginWithMobile.execute(
+      { capToken, code, phoneNumber },
+      { requestContext },
+    );
+    setCookie(c, "global_session", data.token, {
+      httpOnly: true,
+      sameSite: "Lax",
+      maxAge: data.remainingSeconds ?? deps.config.redisExpireSeconds,
+      path: "/",
+    });
+    return c.json(resp.ok({ token: data.token, isMobileSet: data.isMobileSet }), HttpStatusCodes.OK);
+  };
+
+  return { loginMobile, loginPassword };
+}

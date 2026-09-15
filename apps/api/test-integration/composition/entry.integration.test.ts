@@ -1,18 +1,14 @@
-import type { ProcessSmokeAttemptContext } from "@iam/api-core/testing/process-smoke-harness";
-import type { SessionKernelRedis } from "@iam/session-kernel";
-import type { SubjectFactsCacheRecord } from "@iam/user-profile-read-model/subject-facts";
-import { randomUUID } from "node:crypto";
-import { createServer } from "node:http";
+import type { SubjectAccessOperation } from "@iam/api-core/subject-access";
+import { createHash, createPublicKey, randomInt, randomUUID, verify } from "node:crypto";
 import { fileURLToPath } from "node:url";
-import {
-  createClientRuntimeSnapshotModule,
-} from "@iam/api-core/client-runtime-snapshot";
-import { hashSecret } from "@iam/api-core/security";
+import { createClientSnapshots } from "@iam/api-core/client-snapshot/composition";
 import {
   createRedisSubjectAccessStore,
   createSubjectAccessBarrier,
   createSubjectAccessBootstrap,
-  encodeSubjectAccessContext,
+  createSubjectAccessOperations,
+  createUnifiedSubjectAccessSessionRevocation,
+  requireSubjectAccessOperation,
 } from "@iam/api-core/subject-access";
 import {
   cleanupRedisKeysMatchingOwnerMarkers,
@@ -24,1523 +20,360 @@ import {
 } from "@iam/api-core/testing/external-test-resources";
 import {
   createBoundedProcessLogCapture,
-  createProcessSmokeEnvironment,
   createProcessSmokeSuite,
   FatalReadinessError,
-  PortCollisionError,
   PROCESS_SMOKE_TEST_TIMEOUT_MS,
   spawnOwnedProcessTree,
 } from "@iam/api-core/testing/process-smoke-harness";
-import {
-  ApiErrorCode,
-  ClientStatus,
-  CustomSsoClientMode,
-  LoginPageGuardDecision,
-  SubjectClaim,
-} from "@iam/contracts";
-import { createSessionKernel } from "@iam/session-kernel";
-import {
-  createSubjectFactsRedisInspector,
-  createSubjectFactsRedisPublisher,
-} from "@iam/user-profile-read-model/subject-facts";
-import { afterEach, describe, expect, test } from "bun:test";
+import { ClientSsoProtocol, ClientStatus, OidcClientType, OidcScope, SubjectClaim } from "@iam/contracts";
+import { createUnifiedSessionKernel } from "@iam/session-kernel";
+import { createSubjectFactsRedisCache } from "@iam/user-profile-read-model/subject-facts";
+import { afterEach, expect, test } from "bun:test";
 import Redis from "ioredis";
-import postgres from "postgres";
+import { createApiPostgresTestHarness } from "../postgres/postgres-test-harness";
+import { createEntryEnvironment } from "../process/api-env.fixture";
 
-const apiRoot = fileURLToPath(new URL("../../", import.meta.url));
-const databaseUrlName = "IAM_API_TEST_DATABASE_URL";
-const redisUrlName = "IAM_API_TEST_REDIS_URL";
-const databaseUrl = requireDedicatedPostgresTestUrl({
+requireDedicatedPostgresTestUrl({
+  name: "IAM_API_TEST_DATABASE_URL",
+  value: requireExternalTestUrl({
+    environment: process.env,
+    lane: "API composition",
+    name: "IAM_API_TEST_DATABASE_URL",
+  }),
   forbidden: [
     { name: "DATABASE_URL", value: process.env.DATABASE_URL },
     { name: "IAM_API_DATABASE_URL", value: process.env.IAM_API_DATABASE_URL },
   ],
-  name: databaseUrlName,
-  value: requireExternalTestUrl({
-    environment: process.env,
-    lane: "the explicit API external lane",
-    name: databaseUrlName,
-  }),
 });
 const redisUrl = requireExternalTestUrl({
   environment: process.env,
-  lane: "the explicit API external lane",
-  name: redisUrlName,
+  lane: "API composition",
+  name: "IAM_API_TEST_REDIS_URL",
 });
-const redisConfig = parseDedicatedRedisTestUrl({
-  name: redisUrlName,
-  value: redisUrl,
-});
-const loginCredentialPrivateKey = "319b4e59ca80d7b4cc35955b63da4edf1ed51772ec8f33c0a4f769dda7b9fc65";
-const subjectIdentifier = randomUUID();
-const resourceSuffix = subjectIdentifier.replaceAll("-", "");
-const clientCode = `ticket01-independent-${resourceSuffix}`;
-const gatewayClientCode = `ticket01-public-gateway-${resourceSuffix}`;
-const originalSecret = "ticket12-original-secret";
-const rotatedSecret = "ticket12-rotated-secret";
-const callbackEndpoint = "https://ticket12-independent.example.test/callback";
-const redirectUri = "https://ticket12-independent.example.test/complete";
-const gatewayRetryRedirectUri = "https://ticket12-gateway.example.test/pnr-complete";
-const legacyGlobalSessionId = `legacy-global-${resourceSuffix}`;
-const legacyAuthorizationCode = `legacy-code-${resourceSuffix}`;
-const legacyLocalSessionId = `legacy-local-${resourceSuffix}`;
-const legacyPayloadRef = `legacy-payload-${resourceSuffix}`;
-const legacyPayloadKey = `custom-sso:local-session-payload:${legacyPayloadRef}`;
-const legacyRedirectUri = "https://ticket12-gateway.example.test/legacy-complete";
-const legacyArtifactEntries = new Map([
-  [`global_session:${legacyGlobalSessionId}`, "legacy-principal-session"],
-  [`auth_code:${legacyAuthorizationCode}`, "legacy-authorization-grant"],
-  [`local_${gatewayClientCode}_session:${legacyLocalSessionId}`, "legacy-local-session"],
-  [`local_session_reverse:${legacyLocalSessionId}`, "legacy-reverse-index"],
-  [`local_session_set:${legacyGlobalSessionId}`, "legacy-session-set"],
-  [legacyPayloadKey, "legacy-payload"],
-]);
-const userId = 900_098;
-const sourceDirtyVersion = "98";
-const externalEntry = createProcessSmokeSuite({
-  label: "API explicit external entry",
-  temporaryDirectoryPrefix: "iam-api-entry-external-",
+const redisConfig = parseDedicatedRedisTestUrl({ name: "IAM_API_TEST_REDIS_URL", value: redisUrl });
+const suite = createProcessSmokeSuite({
+  label: "unified API production entry",
+  temporaryDirectoryPrefix: "iam-api-unified-",
   hostname: "localhost",
 });
+afterEach(suite.cleanup);
 
-afterEach(externalEntry.cleanup);
-
-function entryOrigin(context: ProcessSmokeAttemptContext) {
-  return `http://${context.hostname}:${context.port}`;
-}
-
-function createEntryEnvironment(
-  context: ProcessSmokeAttemptContext,
-  namespace: string,
-) {
-  const origin = entryOrigin(context);
-  return createProcessSmokeEnvironment({
-    source: process.env,
-    temporaryDirectory: context.temporaryDirectory,
-    overrides: {
-      NODE_ENV: "production",
-      IAM_API_DATABASE_URL: databaseUrl,
-      IAM_API_PASSWORD_HASH_ROUNDS: "4",
-      IAM_API_SMS_SIGNATURE_KEY: "unreachable-external-signature",
-      IAM_API_SMS_URL: "http://127.0.0.1:1/sms",
-      IAM_API_SESSION_DEFAULT_TTL_SECONDS: "3600",
-      IAM_API_SESSION_KERNEL_PRINCIPAL_IDLE_TTL_SECONDS: "3600",
-      IAM_API_SESSION_KERNEL_PRINCIPAL_ABSOLUTE_TTL_SECONDS: "3600",
-      IAM_API_AUTH_CODE_TTL_SECONDS: "300",
-      IAM_API_CUSTOM_SSO_PROJECTION_RETRY_AFTER_SECONDS: "7",
-      IAM_API_ORCAS_URL: "http://127.0.0.1:1/orcas",
-      IAM_API_PORT: String(context.port),
-      IAM_API_WECHAT_CORP_ID: "unreachable-external-corp",
-      IAM_API_WECHAT_CORP_SECRET: "unreachable-external-secret",
-      IAM_API_MAGIC_CODE: "000000",
-      IAM_API_REDIS_HOST: redisConfig.host,
-      IAM_API_REDIS_PORT: String(redisConfig.port),
-      IAM_API_REDIS_PASSWORD: redisConfig.password,
-      IAM_API_REDIS_DB: String(redisConfig.db),
-      IAM_API_LOGIN_ENDPOINT: "/login",
-      IAM_API_SSO_INTERNAL_ORIGIN: origin,
-      IAM_API_SSO_EXTERNAL_ORIGIN: origin,
-      IAM_API_AUTHORIZATION_ENDPOINT: "/sso/authorize",
-      IAM_API_LOGOUT_ENDPOINT: "/sso/logout",
-      IAM_API_THIRDPARTY_OA_ENDPOINT: "/sso/thirdparty/oa",
-      IAM_API_LOG_LEVEL: "info",
-      IAM_API_LOG_FORMAT: "json",
-      IAM_API_CAP_ENABLED: "false",
-      IAM_API_LOGIN_CREDENTIAL_ACTIVE_KID: "entry-external",
-      IAM_API_LOGIN_CREDENTIAL_PRIVATE_KEYS_JSON: JSON.stringify({
-        "entry-external": loginCredentialPrivateKey,
-      }),
-      IAM_API_SESSION_KERNEL_NAMESPACE: namespace,
-      FORCE_COLOR: "0",
-      NO_COLOR: "1",
-      NO_PROXY: "127.0.0.1,localhost",
-      no_proxy: "127.0.0.1,localhost",
-    },
-  });
-}
-
-async function probeApiDocs(origin: string, signal: AbortSignal) {
-  const response = await fetch(`${origin}/public/doc`, { signal });
-  if (response.status !== 200)
-    return false;
-  const document = await response.json() as Record<string, unknown>;
-  if (document.openapi !== "3.1.0") {
-    throw new PortCollisionError(
-      "port did not serve the API OpenAPI document",
-    );
-  }
-  return true;
-}
-
-async function authorize(
-  origin: string,
-  state: string,
-  principalToken: string,
-  signal: AbortSignal,
-) {
-  const url = new URL(`${origin}/sso/authorize`);
-  url.search = new URLSearchParams({
-    client: clientCode,
-    redirectUrl: redirectUri,
-    state,
-  }).toString();
-  const response = await fetch(url, {
-    headers: { cookie: `global_session=${principalToken}` },
-    redirect: "manual",
-    signal,
-  });
-  const location = response.headers.get("location");
-  if (response.status !== 302 || location === null) {
-    throw new FatalReadinessError(
-      `Independent authorize returned unexpected ${response.status}/${location}`,
-    );
-  }
-  const callback = new URL(location);
-  const code = callback.searchParams.get("code");
-  if (
-    callback.origin + callback.pathname !== callbackEndpoint
-    || callback.searchParams.get("client") !== clientCode
-    || callback.searchParams.get("redirectUrl") !== redirectUri
-    || callback.searchParams.get("state") !== state
-    || code === null
-  ) {
-    throw new FatalReadinessError("Independent authorize did not preserve its callback contract");
-  }
-  return { code, status: response.status };
-}
-
-async function exchange(
-  origin: string,
-  code: string,
-  secret: string,
-  signal: AbortSignal,
-) {
-  const response = await fetch(`${origin}/sso/token`, {
-    body: new URLSearchParams({ code, redirect_uri: redirectUri }),
-    headers: {
-      "Authorization": `Basic ${Buffer.from(`${clientCode}:${secret}`).toString("base64")}`,
-      "Content-Type": "application/x-www-form-urlencoded",
-    },
-    method: "POST",
-    signal,
-  });
-  return {
-    body: await response.json() as Record<string, unknown>,
-    retryAfter: response.headers.get("retry-after"),
-    setCookie: response.headers.get("set-cookie"),
-    status: response.status,
-  };
-}
-
-function createProductionOwnerSeed(redis: Redis, namespace: string) {
-  const random = { uuid: randomUUID };
-  const subjectAccessBootstrap = createSubjectAccessBootstrap({
-    random,
-    redis,
-  });
-  const subjectAccess = createSubjectAccessBarrier({
-    clock: { nowDate: () => new Date() },
-    random,
-    store: createRedisSubjectAccessStore({ redis }),
-  });
-  const sessionKernel = createSessionKernel({
-    redis: redis as SessionKernelRedis,
-    config: {
-      namespace,
-      principalIdleTtlMs: 60 * 60 * 1_000,
-      principalAbsoluteTtlMs: 60 * 60 * 1_000,
-    },
-  });
-  return {
-    sessionKernel,
-    subjectAccess,
-    subjectAccessBootstrap,
-    subjectFacts: createSubjectFactsRedisPublisher(redis),
-    subjectFactsInspector: createSubjectFactsRedisInspector(redis),
-  };
-}
-
-async function seedPrincipalSession(
-  owners: ReturnType<typeof createProductionOwnerSeed>,
-  diagnosticLabel: string,
-) {
-  const principal = await owners.sessionKernel.createPrincipalSession(
-    subjectIdentifier,
-    { subjectContext: encodeSubjectAccessContext({ version: 1, subjectIdentifier, transitionId: await owners.subjectAccess.readCommittedTransitionId(subjectIdentifier) }) },
-    { amr: ["password"], sessionKind: "browser_user" },
-  );
-  if (principal.status !== "created")
-    throw new Error(`${diagnosticLabel} seed failed: ${principal.status}`);
-  if (principal.externalToken === undefined)
-    throw new Error(`${diagnosticLabel} seed returned no external token`);
-  return {
-    externalToken: principal.externalToken,
-    session: principal.value,
-  };
-}
-
-async function seedLogoutSession(
-  owners: ReturnType<typeof createProductionOwnerSeed>,
-) {
-  const principal = await seedPrincipalSession(
-    owners,
-    "API composition logout Principal Session",
-  );
-  const credential = await owners.sessionKernel.issueCredential({
-    cleanupRefs: [{
-      protocol: "custom-sso",
-      kind: "local_session_payload",
-      ref: legacyPayloadRef,
-    }],
-    clientCode,
-    credentialType: "local_session",
-    metadata: {
-      version: 2,
-      mode: CustomSsoClientMode.Independent,
-      configVersion: 1,
-    },
-    principalSessionId: principal.session.principalSessionId,
-    protocol: "custom-sso",
-    renewalPolicy: "extend_with_principal",
-    tokenKind: "localSession",
-  });
-  if (credential.status !== "created")
-    throw new Error(`API composition logout Credential seed failed: ${credential.status}`);
-  if (credential.externalToken === undefined)
-    throw new Error("API composition logout Credential seed returned no external token");
-  return {
-    credentialToken: credential.externalToken,
-    externalToken: principal.externalToken,
-  };
-}
-
-async function seedExternalSessionState(
-  owners: ReturnType<typeof createProductionOwnerSeed>,
-) {
-  const bootstrap = await owners.subjectAccessBootstrap.seedMany([{
-    state: "enabled",
-    subjectIdentifier,
-  }], new Date());
-  if (bootstrap.seeded !== 1)
-    throw new Error("API composition Subject Access fixture was not newly seeded");
-  const principal = await seedPrincipalSession(
-    owners,
-    "API composition Independent Principal Session",
-  );
-  const facts = await owners.subjectFacts.publish(
-    subjectFactsRecord(sourceDirtyVersion, "Ticket 12 User"),
-  );
-  if (facts.status !== "published")
-    throw new Error(`API composition Subject Facts seed failed: ${facts.status}`);
-  return {
-    principalToken: principal.externalToken,
-  };
-}
-
-async function seedGatewayPublicEntry(
-  owners: ReturnType<typeof createProductionOwnerSeed>,
-) {
-  const metadata = {
-    version: 2,
-    mode: CustomSsoClientMode.Gateway,
-    configVersion: 1,
-  };
-  const principal = await seedPrincipalSession(
-    owners,
-    "API composition Gateway Principal Session",
-  );
-  const credential = await owners.sessionKernel.issueCredential({
-    clientCode: gatewayClientCode,
-    credentialType: "local_session",
-    metadata: { ...metadata, orcasId: `orcas-${resourceSuffix}` },
-    principalSessionId: principal.session.principalSessionId,
-    protocol: "custom-sso",
-    renewalPolicy: "extend_with_principal",
-    tokenKind: "localSession",
-  });
-  if (credential.status !== "created")
-    throw new Error(`API composition Gateway Local Session seed failed: ${credential.status}`);
-  if (credential.externalToken === undefined)
-    throw new Error("API composition Gateway Local Session seed returned no external token");
-
-  const staleMetadata = { ...metadata, configVersion: 0 };
-  const staleCredential = await owners.sessionKernel.issueCredential({
-    clientCode: gatewayClientCode,
-    credentialType: "local_session",
-    metadata: staleMetadata,
-    principalSessionId: principal.session.principalSessionId,
-    protocol: "custom-sso",
-    renewalPolicy: "extend_with_principal",
-    tokenKind: "localSession",
-  });
-  if (staleCredential.status !== "created") {
-    throw new Error(
-      `API composition stale Gateway Local Session seed failed: ${staleCredential.status}`,
-    );
-  }
-  if (staleCredential.externalToken === undefined) {
-    throw new Error(
-      "API composition stale Gateway Local Session seed returned no external token",
-    );
-  }
-  return {
-    localToken: credential.externalToken,
-    principalToken: principal.externalToken,
-    staleLocalToken: staleCredential.externalToken,
-  };
-}
-
-function subjectFactsRecord(version: string, name: string): SubjectFactsCacheRecord {
-  return {
-    schemaVersion: 3,
-    sourceDirtyVersion: version,
-    publishedAt: new Date().toISOString(),
-    subjectIdentifier,
-    profile: {
-      username: "ticket12-user",
-      name,
-      phone: null,
-    },
-    facts: {
-      employments: [{
-        isPrimary: true,
-        organization: {
-          code: "ticket12-department",
-          name: "Ticket 12 Department",
-          type: "department",
-          path: [{
-            code: "ticket12-department",
-            name: "Ticket 12 Department",
-            type: "department",
-          }],
-        },
-        position: { code: "engineer", name: "Engineer" },
-        clientAuthorizations: [{
-          clientCode,
-          roles: [{ code: "ticket12:user", privileges: ["ticket12:read"] }],
-        }],
-        responsibilities: [],
-      }],
-    },
-  };
-}
-
-async function publicUserInfo(
-  origin: string,
-  signal: AbortSignal,
-  localToken: string,
-) {
-  const response = await fetch(`${origin}/public/user-info`, {
-    headers: {
-      Client: gatewayClientCode,
-      Cookie: `local_${gatewayClientCode}_session=${localToken}`,
-    },
-    signal,
-  });
-  return {
-    body: await response.json() as Record<string, unknown>,
-    retryAfter: response.headers.get("retry-after"),
-    setCookie: response.headers.get("set-cookie"),
-    status: response.status,
-  };
-}
-
-async function gatewayAuthz(
-  origin: string,
-  signal: AbortSignal,
-  localToken: string,
-) {
-  const response = await gatewayAuthzResponse(origin, signal, localToken);
-  const { body, encoded } = response;
-  if (
-    response.status !== 200
-    || body.code !== 200
-    || typeof body.data !== "string"
-    || encoded !== body.data
-  ) {
-    throw new FatalReadinessError(
-      `Gateway authz projection returned unexpected ${response.status}/${String(body.code)}`,
-    );
-  }
-  try {
-    return {
-      ...response,
-      decoded: JSON.parse(
-        Buffer.from(encoded, "base64").toString("utf8"),
-      ) as Record<string, unknown>,
-    };
-  }
-  catch (error) {
-    throw new FatalReadinessError(
-      "Gateway authz projection was not valid Base64 JSON",
-      { cause: error },
-    );
-  }
-}
-
-async function gatewayAuthzResponse(
-  origin: string,
-  signal: AbortSignal,
-  localToken: string,
-) {
-  const response = await fetch(`${origin}/auth/authz`, {
-    headers: {
-      "Client": gatewayClientCode,
-      "Cookie": `local_${gatewayClientCode}_session=${localToken}`,
-      "X-Forwarded-Uri": "/gateway/composition",
-    },
-    signal,
-  });
-  const body = await response.json() as Record<string, unknown>;
-  const encoded = response.headers.get("X-User-Info");
-  return {
-    body,
-    encoded,
-    retryAfter: response.headers.get("retry-after"),
-    setCookie: response.headers.get("set-cookie"),
-    status: response.status,
-  };
-}
-
-async function logoutPrincipalSession(
-  origin: string,
-  signal: AbortSignal,
-  principalToken: string,
-) {
-  const redirectUrl = `${origin}/logout-complete`;
-  const url = new URL(`${origin}/sso/logout`);
-  url.search = new URLSearchParams({
-    redirectUrl,
-    token: principalToken,
-  }).toString();
-  const response = await fetch(url, { redirect: "manual", signal });
-  return {
-    location: response.headers.get("location"),
-    status: response.status,
-  };
-}
-
-async function createClientNotificationObserver() {
-  const requests: string[] = [];
-  const server = createServer((request, response) => {
-    requests.push(`${request.method} ${request.url}`);
-    response.writeHead(204);
-    response.end();
-  });
-  await new Promise<void>((resolve, reject) => {
-    server.once("error", reject);
-    server.listen(0, "127.0.0.1", resolve);
-  });
-  const address = server.address();
-  if (typeof address !== "object" || address === null)
-    throw new Error("API composition client notification observer did not bind a port");
-  return {
-    close: async () => await new Promise<void>((resolve, reject) => {
-      server.close(error => error ? reject(error) : resolve());
-    }),
-    endpoint: `http://127.0.0.1:${address.port}/legacy-client-logout`,
-    requests,
-  };
-}
-
-async function probeLegacyArtifactRejection(
-  origin: string,
-  signal: AbortSignal,
-) {
-  const authorizeUrl = new URL(`${origin}/sso/authorize`);
-  authorizeUrl.search = new URLSearchParams({
-    client: gatewayClientCode,
-    redirectUrl: legacyRedirectUri,
-    token: legacyGlobalSessionId,
-  }).toString();
-  const authorize = await fetch(authorizeUrl, { redirect: "manual", signal });
-  const authorizeLocation = authorize.headers.get("location");
-
-  const callbackUrl = new URL(`${origin}/sso/callback`);
-  callbackUrl.search = new URLSearchParams({
-    client: gatewayClientCode,
-    code: legacyAuthorizationCode,
-    redirectUrl: legacyRedirectUri,
-  }).toString();
-  const callback = await fetch(callbackUrl, { redirect: "manual", signal });
-  const legacyCookie = `local_${gatewayClientCode}_session=${legacyLocalSessionId}`;
-  const userInfo = await fetch(`${origin}/public/user-info`, {
-    headers: { Client: gatewayClientCode, Cookie: legacyCookie },
-    signal,
-  });
-  const authz = await fetch(`${origin}/auth/authz`, {
-    headers: {
-      "Client": gatewayClientCode,
-      "Cookie": legacyCookie,
-      "X-Forwarded-Uri": "/gateway/legacy-cutover-composition",
-    },
-    signal,
-  });
-
-  return {
-    authorizeRedirectedToLogin: authorize.status === 302
-      && authorizeLocation !== null
-      && new URL(authorizeLocation, origin).pathname === "/login",
-    authorizeStatus: authorize.status,
-    authzStatus: authz.status,
-    callbackStatus: callback.status,
-    userInfoStatus: userInfo.status,
-  };
-}
-
-async function probeGatewayPublishedFactsDuringRebuild(
-  origin: string,
-  signal: AbortSignal,
-  sql: ReturnType<typeof postgres>,
-  gatewayPrincipalToken: string,
-  registerAuthorizationCode: (code: string) => Promise<void>,
-) {
-  const authorizeUrl = new URL(`${origin}/sso/authorize`);
-  authorizeUrl.search = new URLSearchParams({
-    client: gatewayClientCode,
-    redirectUrl: gatewayRetryRedirectUri,
-    state: "gateway-published-facts-state",
-  }).toString();
-  const authorizeResponse = await fetch(authorizeUrl, {
-    headers: { cookie: `global_session=${gatewayPrincipalToken}` },
-    redirect: "manual",
-    signal,
-  });
-  const callbackLocation = authorizeResponse.headers.get("location");
-  if (authorizeResponse.status !== 302 || callbackLocation === null) {
-    throw new FatalReadinessError(
-      `Gateway published-facts authorize returned unexpected ${authorizeResponse.status}`,
-    );
-  }
-  const issuedCallback = new URL(callbackLocation);
-  const authorizationCode = issuedCallback.searchParams.get("code");
-  if (authorizationCode === null)
-    throw new FatalReadinessError("Gateway published-facts authorize returned no code");
-  await registerAuthorizationCode(authorizationCode);
-  const localCallback = new URL(
-    `${issuedCallback.pathname}${issuedCallback.search}`,
-    origin,
-  );
-  const loginCallback = await fetch(localCallback, {
-    headers: { cookie: `global_session=${gatewayPrincipalToken}` },
-    redirect: "manual",
-    signal,
-  });
-  const loginLocation = loginCallback.headers.get("location");
-  if (loginCallback.status !== 302 || loginLocation === null) {
-    throw new FatalReadinessError(
-      `Gateway published-facts login callback returned unexpected ${loginCallback.status}`,
-    );
-  }
-  const completed = new URL(loginLocation);
-  const localToken = completed.searchParams.get("token");
-  if (
-    completed.origin + completed.pathname !== gatewayRetryRedirectUri
-    || completed.searchParams.get("state") !== "gateway-published-facts-state"
-    || localToken === null
-  ) {
-    throw new FatalReadinessError(
-      "Gateway published-facts login did not deliver the original flow",
-    );
-  }
-
-  await sql`
-    UPDATE user_profile_dirty
-    SET status = 'processing',
-        processed_at = NULL,
-        update_time = NOW()
-    WHERE user_id = ${userId}
-  `;
-  const firstUserInfo = await publicUserInfo(origin, signal, localToken);
-
-  await sql`
-    UPDATE user_profile_dirty
-    SET status = 'processed',
-        processed_at = NOW(),
-        update_time = NOW()
-    WHERE user_id = ${userId}
-  `;
-  const retryUserInfo = await publicUserInfo(origin, signal, localToken);
-  const retryData = retryUserInfo.body.data as Record<string, unknown> | undefined;
-
-  return {
-    firstUserInfo,
-    loginCallback: {
-      setCookie: loginCallback.headers.get("set-cookie"),
-      status: loginCallback.status,
-    },
-    retryUserInfo: {
-      setCookie: retryUserInfo.setCookie,
-      status: retryUserInfo.status,
-      subjectIdentifier: retryData?.subjectIdentifier,
-    },
-  };
-}
-
-async function probeIndependentGrantPublishedFactsDuringRebuild(
-  origin: string,
-  signal: AbortSignal,
-  sql: ReturnType<typeof postgres>,
-  principalToken: string,
-  registerAuthorizationCode: (code: string) => Promise<void>,
-) {
-  const grant = await authorize(
-    origin,
-    "independent-published-facts-state",
-    principalToken,
-    signal,
-  );
-  await registerAuthorizationCode(grant.code);
-  await sql`
-    UPDATE user_profile_dirty
-    SET status = 'processing',
-        processed_at = NULL,
-        update_time = NOW()
-    WHERE user_id = ${userId}
-  `;
-  const firstExchange = await exchange(
-    origin,
-    grant.code,
-    originalSecret,
-    signal,
-  );
-
-  await sql`
-    UPDATE user_profile_dirty
-    SET status = 'processed',
-        processed_at = NOW(),
-        update_time = NOW()
-    WHERE user_id = ${userId}
-  `;
-  const retryExchange = await exchange(
-    origin,
-    grant.code,
-    originalSecret,
-    signal,
-  );
-  return { firstExchange, replayExchange: retryExchange };
-}
-
-describe("API explicit external entry", () => {
-  test("runs Independent rotation/replay and public Subject Access through real PostgreSQL and Redis", async () => {
+test(
+  "production API serves root, Custom and OIDC with one live session generation and shared PostgreSQL/Redis owners",
+  async () => {
     await runWithOwnedTestResources(async ({ registerCleanup }) => {
-      const sql = postgres(databaseUrl, { max: 1 });
-      registerCleanup(async () => await sql.end({ timeout: 5 }));
-      registerCleanup(async () => {
-        await sql.begin(async (transaction) => {
-          await transaction`DELETE FROM user_profile_dirty WHERE user_id = ${userId}`;
-          await transaction`DELETE FROM user_profile WHERE user_id = ${userId} OR subject_identifier = ${subjectIdentifier}`;
-          await transaction`
-            DELETE FROM client
-            WHERE client_code IN (${clientCode}, ${gatewayClientCode})
-          `;
-        });
-      });
-      const redis = new Redis(redisUrl, {
-        enableReadyCheck: true,
-        maxRetriesPerRequest: 1,
-      });
-      const clientRuntimeSnapshots = createClientRuntimeSnapshotModule({
-        redis,
-        adapters: [] as const,
-      });
+      const pg = await createApiPostgresTestHarness();
+      const sql = pg.sql;
+      registerCleanup(() => pg.close());
+      const redis = new Redis(redisUrl, { maxRetriesPerRequest: 1 });
       registerCleanup(() => redis.disconnect());
-      const observerRedis = new Redis(redisUrl, {
-        enableReadyCheck: true,
-        maxRetriesPerRequest: 1,
-      });
-      registerCleanup(() => observerRedis.disconnect());
-      const notificationObserver = await createClientNotificationObserver();
-      registerCleanup(async () => await notificationObserver.close());
-      const redisInventory = createRedisKeyInventoryPort(observerRedis);
-      const namespace = `sess:api-real-entry:${resourceSuffix}:`;
-      const ownedRedisMarkers = new Set([
-        namespace,
-        subjectIdentifier,
-        clientCode,
-        gatewayClientCode,
-        legacyGlobalSessionId,
-        legacyAuthorizationCode,
-        legacyLocalSessionId,
-        legacyPayloadRef,
-      ]);
+      const subjectIdentifier = randomUUID();
+      const userId = randomInt(100000000, 1000000000);
+      const namespace = `api194:${randomUUID()}`;
+      const custom = `custom-${randomUUID()}`;
+      const managed = `managed-${randomUUID()}`;
+      const oidc = `oidc-${randomUUID()}`;
+      const redirectUri = "https://rp.example/complete";
+      const secret = "original-secret";
+      const rotatedSecret = "rotated-secret";
       registerCleanup(async () => {
         await cleanupRedisKeysMatchingOwnerMarkers({
-          diagnosticLabel: "API composition",
-          ownerMarkers: ownedRedisMarkers,
-          redis: redisInventory,
+          diagnosticLabel: "API unified composition",
+          ownerMarkers: new Set([namespace, subjectIdentifier, custom, managed, oidc]),
+          redis: createRedisKeyInventoryPort(redis),
         });
       });
-      const originalSecretHash = await hashSecret(originalSecret, 4);
-      const rotatedSecretHash = await hashSecret(rotatedSecret, 4);
-      const productionOwners = createProductionOwnerSeed(redis, namespace);
-      const observerOwners = createProductionOwnerSeed(observerRedis, namespace);
-      let logCapture: ReturnType<typeof createBoundedProcessLogCapture> | undefined;
-      registerCleanup(() => logCapture?.dispose());
-
-      await sql.begin(async (transaction) => {
-        await transaction`DELETE FROM user_profile_dirty WHERE user_id = ${userId}`;
-        await transaction`DELETE FROM user_profile WHERE user_id = ${userId} OR subject_identifier = ${subjectIdentifier}`;
-        await transaction`
-          DELETE FROM client
-          WHERE client_code IN (${clientCode}, ${gatewayClientCode})
-        `;
-        await transaction`
-          INSERT INTO client (
-            client_code,
-            client_name,
-            client_secret,
-            status,
-            is_delete,
-            ext_attributes,
-            custom_sso_enabled,
-            custom_sso_config,
-            custom_sso_secret_hash,
-            custom_sso_config_version
-          )
-          VALUES (
-            ${clientCode},
-            'Ticket 12 Independent',
-            'unused-generic-client-placeholder',
-            1,
-            FALSE,
-            '{}'::jsonb,
-            TRUE,
-            ${transaction.json({
-              mode: "independent",
-              validRedirectUrls: [redirectUri],
-              subjectClaims: [
-                "subjectIdentifier",
-                "profile:username",
-                "profile:name",
-                "profile:employments",
-                "iam:authorization",
-              ],
-              callbackEndpoint,
-              logoutEndpoint: "https://ticket12-independent.example.test/logout",
-            })},
-            ${originalSecretHash},
-            1
-          )
-        `;
-        await transaction`
-          INSERT INTO client (
-            client_code,
-            client_name,
-            client_secret,
-            status,
-            is_delete,
-            ext_attributes,
-            custom_sso_enabled,
-            custom_sso_config,
-            custom_sso_secret_hash,
-            custom_sso_config_version
-          )
-          VALUES (
-            ${gatewayClientCode},
-            'Ticket 12 public Gateway',
-            'unused-generic-client-placeholder',
-            1,
-            FALSE,
-            '{}'::jsonb,
-            TRUE,
-            ${transaction.json({
-              mode: CustomSsoClientMode.Gateway,
-              orcas: { enabled: false },
-              subjectClaims: [
-                SubjectClaim.SubjectIdentifier,
-                SubjectClaim.ProfileUsername,
-                SubjectClaim.ProfileName,
-                SubjectClaim.ProfileEmployments,
-                SubjectClaim.IamAuthorization,
-              ],
-              validRedirectUrls: ["https://ticket12-gateway.example.test/*"],
-            })},
-            NULL,
-            1
-          )
-        `;
-        await transaction`
-          INSERT INTO user_profile (
-            user_id,
-            subject_identifier,
-            username,
-            name,
-            mobile,
-            wx_id,
-            status,
-            is_delete,
-            search_visible,
-            profile_schema_version,
-            source_dirty_version,
-            detail,
-            search_doc,
-            subject_facts,
-            rebuilt_at
-          )
-          VALUES (
-            ${userId},
-            ${subjectIdentifier},
-            'ticket12-user',
-            'Ticket 12 User',
-            NULL,
-            NULL,
-            1,
-            FALSE,
-            TRUE,
-            2,
-            ${sourceDirtyVersion},
-            '{}'::jsonb,
-            '{}'::jsonb,
-            ${transaction.json(subjectFactsRecord(sourceDirtyVersion, "Ticket 12 User").facts)},
-            NOW()
-          )
-        `;
-        await transaction`
-          INSERT INTO user_profile_dirty (
-            user_id,
-            dirty_version,
-            status,
-            reason_codes,
-            dirty_at,
-            processed_at
-          )
-          VALUES (
-            ${userId},
-            ${sourceDirtyVersion},
-            'processed',
-            '["user-updated"]'::jsonb,
-            NOW(),
-            NOW()
-          )
-        `;
+      registerCleanup(async () => {
+        await sql`DELETE FROM user_profile_dirty WHERE user_id = ${userId}`;
+        await sql`DELETE FROM user_profile WHERE subject_identifier = ${subjectIdentifier}`;
+        await sql`DELETE FROM client WHERE client_code IN (${custom}, ${managed}, ${oidc})`;
       });
-
-      // Retired legacy artifact shapes have no production owner. They are the
-      // only raw fixture inputs here; every current session is created below
-      // through Session Kernel and its real Subject Access fence.
-      const ordinaryLegacyArtifactEntries = new Map(legacyArtifactEntries);
-      ordinaryLegacyArtifactEntries.set(
-        legacyPayloadKey,
-        notificationObserver.endpoint,
-      );
-      await redis.mset(
-        ...[...ordinaryLegacyArtifactEntries].flatMap(entry => entry),
-      );
-
-      const independentSession = await seedExternalSessionState(productionOwners);
-      const gatewaySession = await seedGatewayPublicEntry(productionOwners);
-      const logoutSession = await seedLogoutSession(productionOwners);
-      const [initialAccess] = await observerOwners.subjectAccessBootstrap.inspectMany([
+      const facts = {
+        schemaVersion: 3 as const,
+        sourceDirtyVersion: "1",
+        publishedAt: new Date().toISOString(),
         subjectIdentifier,
-      ]);
-      const [initialFacts] = await observerOwners.subjectFactsInspector.inspectMany([
-        subjectIdentifier,
-      ]);
-      expect(initialAccess).toMatchObject({
-        status: "valid",
-        record: { state: "enabled", subjectIdentifier },
-      });
-      expect(initialFacts).toMatchObject({
-        status: "valid",
-        record: { sourceDirtyVersion, subjectIdentifier },
-      });
-      expect(
-        await observerOwners.sessionKernel.resolvePrincipalSession(
-          independentSession.principalToken,
-        ),
-      ).toMatchObject({ status: "resolved" });
-      expect(
-        await observerOwners.sessionKernel.resolveCredential(
-          gatewaySession.localToken,
-          { protocol: "custom-sso", credentialType: "local_session" },
-        ),
-      ).toMatchObject({ status: "resolved" });
-      expect(
-        await observerOwners.sessionKernel.resolveCredential(
-          logoutSession.credentialToken,
-          { protocol: "custom-sso", credentialType: "local_session" },
-        ),
-      ).toMatchObject({
-        status: "resolved",
-        value: {
-          cleanupRefs: [{
-            protocol: "custom-sso",
-            kind: "local_session_payload",
-            ref: legacyPayloadRef,
-          }],
+        profile: { username: "production194", name: "Published Name", phone: null },
+        facts: { employments: [] },
+      };
+      await sql`INSERT INTO user_profile (user_id, subject_identifier, username, name, mobile, wx_id, status, is_delete, search_visible, profile_schema_version, source_dirty_version, detail, search_doc, subject_facts, rebuilt_at) VALUES (${userId}, ${subjectIdentifier}, 'production194', 'Published Name', NULL, NULL, 1, FALSE, TRUE, 3, 1, '{}'::jsonb, '{}'::jsonb, ${JSON.stringify(facts.facts)}::jsonb, NOW())`;
+      await sql`INSERT INTO user_profile_dirty (user_id, dirty_version, status, reason_codes, dirty_at, processed_at) VALUES (${userId}, 1, 'processed', '["user-updated"]'::jsonb, NOW(), NOW())`;
+      const factsCache = createSubjectFactsRedisCache(redis);
+      await factsCache.publish(facts);
+      const clientConfig = {
+        protocol: ClientSsoProtocol.CustomSso,
+        callbackEndpoint: "https://rp.example/callback",
+        validRedirectUrls: [redirectUri],
+        subjectClaims: [SubjectClaim.SubjectIdentifier, SubjectClaim.ProfileName],
+      };
+      for (const code of [custom, managed]) {
+        await sql`INSERT INTO client (client_code, client_name, client_secret, status, is_delete, ext_attributes, sso_enabled, sso_config, sso_secret, sso_credential_id, sso_secret_updated_at) VALUES (${code}, 'API Custom fixture', ${`internal-${code}`}, 1, FALSE, '{}'::jsonb, TRUE, ${JSON.stringify(clientConfig)}::jsonb, ${secret}, ${randomUUID()}, NOW())`;
+      }
+      await sql`INSERT INTO client (client_code, client_name, client_secret, status, is_delete, ext_attributes, sso_enabled, sso_config, sso_secret, sso_credential_id, sso_secret_updated_at) VALUES (${oidc}, 'API OIDC fixture', 'unused-internal', 1, FALSE, '{}'::jsonb, TRUE, ${JSON.stringify({ protocol: ClientSsoProtocol.Oidc, clientType: OidcClientType.Confidential, redirectUris: [redirectUri], postLogoutRedirectUris: [redirectUri], allowedScopes: [OidcScope.OpenId, OidcScope.Profile] })}::jsonb, ${secret}, ${randomUUID()}, NOW())`;
+      const snapshots = createClientSnapshots({
+        redis,
+        source: {
+          loadClient: async () => {
+            throw new Error("Invalidation owner never reads PostgreSQL");
+          },
+          loadCredential: async () => null,
         },
       });
-
-      const issuedCodes: string[] = [];
-      async function registerAuthorizationCode(code: string) {
-        const artifact = await observerOwners.sessionKernel.resolveProtocolArtifact(code, { protocol: "custom-sso", artifactType: "auth_code" });
-        if (artifact.status !== "resolved") {
-          throw new Error(
-            `API composition could not observe an issued authorization code: ${artifact.status}`,
-          );
-        }
-        issuedCodes.push(code);
-        ownedRedisMarkers.add(artifact.value.artifactId);
+      const barrier = createSubjectAccessBarrier({
+        store: createRedisSubjectAccessStore({ redis }),
+        clock: { nowDate: () => new Date() },
+        random: { uuid: randomUUID },
+      });
+      await createSubjectAccessBootstrap({ redis, random: { uuid: randomUUID } }).seedMany(
+        [{ subjectIdentifier, state: "enabled" }],
+        new Date(),
+      );
+      const kernel = createUnifiedSessionKernel<SubjectAccessOperation>({
+        redis,
+        namespace,
+        userSessionTtlSeconds: 86400,
+        clientSessionTtlSeconds: 3600,
+        assertOperationActive: requireSubjectAccessOperation,
+      });
+      let operations: ReturnType<typeof createSubjectAccessOperations>;
+      const revocation = createUnifiedSubjectAccessSessionRevocation(kernel, {
+        run: callback => operations.run(callback),
+      });
+      operations = createSubjectAccessOperations({ barrier, revocation });
+      async function root() {
+        return await operations.run(async (operation) => {
+          const permission = await operation.acquireForAuthentication(subjectIdentifier);
+          return await kernel
+            .forOperation(operation)
+            .createUserSession({
+              subjectIdentifier,
+              subjectContext: operation.getSubjectContext(permission),
+              amr: ["pwd"],
+            });
+        });
       }
-      let reenabledGatewaySession:
-        Awaited<ReturnType<typeof seedGatewayPublicEntry>> | undefined;
-      const result = await externalEntry.run({
+      const browser = await root();
+      const otherBrowser = await root();
+      let capture: ReturnType<typeof createBoundedProcessLogCapture> | undefined;
+      registerCleanup(() => capture?.dispose());
+      const result = await suite.run({
         start(context) {
           const child = spawnOwnedProcessTree({
             executable: process.execPath,
             args: ["--no-env-file", "run", "src/index.ts"],
-            cwd: apiRoot,
-            env: createEntryEnvironment(context, namespace),
+            cwd: fileURLToPath(new URL("../../", import.meta.url)),
+            env: createEntryEnvironment(context, {
+              IAM_API_DATABASE_URL: pg.databaseUrl,
+              IAM_API_REDIS_HOST: redisConfig.host,
+              IAM_API_REDIS_PORT: String(redisConfig.port),
+              IAM_API_REDIS_PASSWORD: redisConfig.password,
+              IAM_API_REDIS_DB: String(redisConfig.db),
+              IAM_API_SESSION_KERNEL_NAMESPACE: namespace,
+              IAM_API_OIDC_NAMESPACE: `${namespace}:oidc`,
+              IAM_API_USER_SESSION_TTL_SECONDS: "86400",
+              IAM_API_CLIENT_SESSION_TTL_SECONDS: "3600",
+              IAM_API_CUSTOM_SSO_TOKEN_TTL_SECONDS: "900",
+              IAM_API_LOGIN_ENDPOINT: "https://login.example/custom-entry",
+            }),
           });
-          logCapture = createBoundedProcessLogCapture(child, { maxBytes: 128 * 1024 });
+          capture = createBoundedProcessLogCapture(child, { maxBytes: 128 * 1024 });
           return child;
         },
+        childReadinessEvidence: context => `server: http://${context.hostname}:${context.port}`,
         async probe(context, signal) {
-          const origin = entryOrigin(context);
-          if (!await probeApiDocs(origin, signal))
+          const origin = `http://${context.hostname}:${context.port}`;
+          const readiness = await fetch(`${origin}/ready`, { signal });
+          if (readiness.status !== 200)
             return undefined;
-
-          const beforeGuard = await observerOwners.sessionKernel.resolvePrincipalSession(independentSession.principalToken);
-          const continuation = [];
-          for (const token of [independentSession.principalToken, undefined, "unknown-principal-token"]) {
-            const guardUrl = new URL(`${origin}/sso/login-guard`);
-            guardUrl.search = new URLSearchParams({ client: clientCode, redirectUrl: redirectUri }).toString();
-            const response = await fetch(guardUrl, {
-              headers: token === undefined ? {} : { cookie: `global_session=${token}` },
-              signal,
-            });
-            continuation.push({
-              status: response.status,
-              body: await response.json(),
-              cookies: response.headers.getSetCookie(),
-            });
-          }
-          const afterGuard = await observerOwners.sessionKernel.resolvePrincipalSession(independentSession.principalToken);
-
-          const first = await authorize(
-            origin,
-            "ticket12-state-first",
-            independentSession.principalToken,
-            signal,
-          );
-          await registerAuthorizationCode(first.code);
-          const firstExchange = await exchange(
-            origin,
-            first.code,
-            originalSecret,
-            signal,
-          );
-          const replay = await exchange(origin, first.code, originalSecret, signal);
-          const gatewayPublishedFactsDuringRebuild = await probeGatewayPublishedFactsDuringRebuild(
-            origin,
-            signal,
-            sql,
-            gatewaySession.principalToken,
-            registerAuthorizationCode,
-          );
-          const independentGrantPublishedFactsDuringRebuild
-            = await probeIndependentGrantPublishedFactsDuringRebuild(
-              origin,
-              signal,
-              sql,
-              independentSession.principalToken,
-              registerAuthorizationCode,
+          const request = (path: string, init: RequestInit = {}) =>
+            fetch(`${origin}${path}`, { ...init, redirect: "manual", signal });
+          async function authorize(client = custom, bearer = browser.bearer) {
+            const response = await request(
+              `/sso/authorize?${new URLSearchParams({ client, redirectUrl: redirectUri, state: "opaque-production-state" })}`,
+              { headers: { Cookie: `global_session=${bearer}` } },
             );
-
-          await sql`
-            UPDATE client
-            SET custom_sso_secret_hash = ${rotatedSecretHash},
-                custom_sso_config_version = 2,
-                update_time = NOW()
-            WHERE client_code = ${clientCode}
-          `;
-          await clientRuntimeSnapshots.invalidateClient(clientCode);
-          const rotated = await authorize(
-            origin,
-            "ticket12-state-rotated",
-            independentSession.principalToken,
-            signal,
-          );
-          await registerAuthorizationCode(rotated.code);
-          const oldSecret = await exchange(
-            origin,
-            rotated.code,
-            originalSecret,
-            signal,
-          );
-          const rotatedExchange = await exchange(
-            origin,
-            rotated.code,
-            rotatedSecret,
-            signal,
-          );
-
-          const beforeDisable = await authorize(
-            origin,
-            "ticket12-state-before-disable",
-            independentSession.principalToken,
-            signal,
-          );
-          await registerAuthorizationCode(beforeDisable.code);
-          await sql`
-            UPDATE client
-            SET custom_sso_enabled = FALSE,
-                custom_sso_config_version = 3,
-                update_time = NOW()
-            WHERE client_code = ${clientCode}
-          `;
-          await clientRuntimeSnapshots.invalidateClient(clientCode);
-          const disabledGrant = await exchange(
-            origin,
-            beforeDisable.code,
-            rotatedSecret,
-            signal,
-          );
-          const disabledAuthorizeUrl = new URL(`${origin}/sso/authorize`);
-          disabledAuthorizeUrl.search = new URLSearchParams({
-            client: clientCode,
-            redirectUrl: redirectUri,
-          }).toString();
-          const disabledAuthorize = await fetch(disabledAuthorizeUrl, {
-            headers: {
-              cookie: `global_session=${independentSession.principalToken}`,
-            },
-            redirect: "manual",
-            signal,
-          });
-          const disabledAuthorizeBody = await disabledAuthorize.json() as Record<string, unknown>;
-
-          const publicPositive = await publicUserInfo(
-            origin,
-            signal,
-            gatewaySession.localToken,
-          );
-          const authzPositive = await gatewayAuthz(
-            origin,
-            signal,
-            gatewaySession.localToken,
-          );
-          await sql`
-            UPDATE client
-            SET status = ${ClientStatus.Maintenance},
-                update_time = NOW()
-            WHERE client_code = ${gatewayClientCode}
-          `;
-          await clientRuntimeSnapshots.invalidateClient(gatewayClientCode);
-          const maintenancePublic = await publicUserInfo(
-            origin,
-            signal,
-            gatewaySession.localToken,
-          );
-          const maintenanceAuthz = await gatewayAuthzResponse(
-            origin,
-            signal,
-            gatewaySession.localToken,
-          );
-
-          await sql`
-            UPDATE client
-            SET status = ${ClientStatus.Enable},
-                update_time = NOW()
-            WHERE client_code = ${gatewayClientCode}
-          `;
-          await clientRuntimeSnapshots.invalidateClient(gatewayClientCode);
-          const publicAfterMaintenance = await publicUserInfo(
-            origin,
-            signal,
-            gatewaySession.localToken,
-          );
-          const authzAfterMaintenance = await gatewayAuthz(
-            origin,
-            signal,
-            gatewaySession.localToken,
-          );
-          const legacyKeysRejected
-            = await probeLegacyArtifactRejection(origin, signal);
-          const logoutPayloadBefore = await observerRedis.get(legacyPayloadKey);
-          const logout = await logoutPrincipalSession(
-            origin,
-            signal,
-            logoutSession.externalToken,
-          );
-          const logoutPayloadAfter = await observerRedis.get(legacyPayloadKey);
-          const publicAfterLogout = await publicUserInfo(origin, signal, gatewaySession.localToken);
-          const authzAfterLogout = await gatewayAuthz(origin, signal, gatewaySession.localToken);
-          const staleGateway = await publicUserInfo(
-            origin,
-            signal,
-            gatewaySession.staleLocalToken,
-          );
-          const temporaryBlock = await productionOwners.subjectAccess.beginBlocking(
-            subjectIdentifier,
-          );
-          const unavailable = await publicUserInfo(
-            origin,
-            signal,
-            gatewaySession.localToken,
-          );
-          await productionOwners.subjectAccess.rollback(temporaryBlock);
-          const steadyResponses = [];
-          for (let request = 0; request < 20; request += 1) {
-            steadyResponses.push(await publicUserInfo(
-              origin,
-              signal,
-              gatewaySession.localToken,
-            ));
+            expect(response.status).toBe(302);
+            return new URL(response.headers.get("location")!);
           }
-          const steadyUnavailable = steadyResponses.filter(
-            response => response.status === 503,
-          ).length;
-          const disableTransition = await productionOwners.subjectAccess.beginBlocking(
-            subjectIdentifier,
-          );
-          await productionOwners.subjectAccess.prepareRepair(
-            disableTransition,
-            "disabled",
-          );
-          await productionOwners.subjectAccess.finalize(
-            disableTransition,
-            "disabled",
-          );
-          const disabledSubject = await publicUserInfo(
-            origin,
-            signal,
-            gatewaySession.localToken,
-          );
-          const reenableTransition = await productionOwners.subjectAccess.beginBlocking(
-            subjectIdentifier,
-          );
-          await productionOwners.subjectAccess.prepareRepair(
-            reenableTransition,
-            "enabled",
-          );
-          await productionOwners.subjectAccess.finalize(
-            reenableTransition,
-            "enabled",
-          );
-          const oldSessionAfterReenable = await publicUserInfo(
-            origin,
-            signal,
-            gatewaySession.localToken,
-          );
-          await sql`
-            UPDATE user_profile
-            SET source_dirty_version = '99',
-                name = 'Ticket 12 User Re-enabled',
-                rebuilt_at = NOW()
-            WHERE user_id = ${userId}
-          `;
-          await sql`
-            UPDATE user_profile_dirty
-            SET dirty_version = '99',
-                status = 'processed',
-                processed_at = NOW()
-            WHERE user_id = ${userId}
-          `;
-          await productionOwners.subjectFacts.publish(
-            subjectFactsRecord("99", "Ticket 12 User Re-enabled"),
-          );
-          reenabledGatewaySession = await seedGatewayPublicEntry(productionOwners);
-          const newSessionAfterReenable = await publicUserInfo(
-            origin,
-            signal,
-            reenabledGatewaySession.localToken,
-          );
-
-          return {
-            continuation,
-            beforeGuard,
-            afterGuard,
-            disabledAuthorize: {
-              body: disabledAuthorizeBody,
-              status: disabledAuthorize.status,
-            },
-            authzAfterMaintenance,
-            authzPositive,
-            disabledGrant,
-            disabledSubject,
-            first,
-            firstExchange,
-            gatewayPublishedFactsDuringRebuild,
-            independentGrantPublishedFactsDuringRebuild,
-            legacyKeysRejected,
-            publicAfterLogout,
-            authzAfterLogout,
-            logout,
-            logoutPayloadAfter,
-            logoutPayloadBefore,
-            maintenanceAuthz,
-            maintenancePublic,
-            notificationRequests: [...notificationObserver.requests],
-            newSessionAfterReenable,
-            oldSecret,
-            oldSessionAfterReenable,
-            publicPositive,
-            publicAfterMaintenance,
-            replay,
-            rotated,
-            rotatedExchange,
-            staleGateway,
-            steadyMetric: {
-              requests: steadyResponses.length,
-              unavailable: steadyUnavailable,
-              unavailableRate: steadyUnavailable / steadyResponses.length,
-            },
-            unavailable,
-          };
-        },
-        childReadinessEvidence: context => `server: ${entryOrigin(context)}`,
-      });
-
-      if (reenabledGatewaySession === undefined)
-        throw new Error("API composition did not create the re-enabled Gateway session");
-      expect(result.continuation).toMatchObject([
-        { status: 200, body: { data: { decision: LoginPageGuardDecision.Continue } }, cookies: [] },
-        { status: 200, body: { data: { decision: LoginPageGuardDecision.Login } }, cookies: [] },
-        { status: 200, body: { data: { decision: LoginPageGuardDecision.Login } } },
-      ]);
-      expect(result.continuation[2]!.cookies.some(cookie => cookie.startsWith("global_session=") && cookie.includes("Max-Age=0"))).toBe(true);
-      expect(result.beforeGuard.status).toBe("resolved");
-      expect(result.afterGuard.status).toBe("resolved");
-      if (result.beforeGuard.status !== "resolved" || result.afterGuard.status !== "resolved")
-        throw new Error("Login guard lost its Principal Session");
-      expect(result.afterGuard.value).toEqual(result.beforeGuard.value);
-      const [finalAccess] = await observerOwners.subjectAccessBootstrap.inspectMany([
-        subjectIdentifier,
-      ]);
-      const [finalFacts] = await observerOwners.subjectFactsInspector.inspectMany([
-        subjectIdentifier,
-      ]);
-      expect(finalAccess).toMatchObject({
-        status: "valid",
-        record: { state: "enabled", subjectIdentifier },
-      });
-      expect(finalFacts).toMatchObject({
-        status: "valid",
-        record: {
-          profile: { name: "Ticket 12 User Re-enabled" },
-          sourceDirtyVersion: "99",
-          subjectIdentifier,
-        },
-      });
-      expect(
-        await observerOwners.sessionKernel.resolveCredential(
-          gatewaySession.localToken,
-          { protocol: "custom-sso", credentialType: "local_session" },
-        ),
-      ).not.toMatchObject({ status: "resolved" });
-      expect(
-        await observerOwners.sessionKernel.resolveCredential(
-          reenabledGatewaySession.localToken,
-          { protocol: "custom-sso", credentialType: "local_session" },
-        ),
-      ).toMatchObject({ status: "resolved" });
-      expect(
-        await observerOwners.sessionKernel.resolvePrincipalSession(
-          logoutSession.externalToken,
-        ),
-      ).not.toMatchObject({ status: "resolved" });
-      expect(
-        await observerOwners.sessionKernel.resolveCredential(
-          logoutSession.credentialToken,
-          { protocol: "custom-sso", credentialType: "local_session" },
-        ),
-      ).not.toMatchObject({ status: "resolved" });
-
-      expect(result.first).toMatchObject({ status: 302 });
-      expect(result.gatewayPublishedFactsDuringRebuild).toMatchObject({
-        loginCallback: {
-          setCookie: expect.stringContaining(`local_${gatewayClientCode}_session=`),
-          status: 302,
-        },
-        firstUserInfo: {
-          body: {
-            code: 200,
-            data: {
-              subjectIdentifier,
-              profile: { username: "ticket12-user", name: "Ticket 12 User" },
-              authorization: { roles: [], privileges: [] },
-            },
-          },
-          retryAfter: null,
-          setCookie: null,
-          status: 200,
-        },
-        retryUserInfo: {
-          setCookie: null,
-          status: 200,
-          subjectIdentifier,
-        },
-      });
-      expect(result.independentGrantPublishedFactsDuringRebuild).toMatchObject({
-        firstExchange: {
-          body: {
-            code: 200,
-            data: {
-              sid: expect.stringMatching(/^iam_ls_/u),
-              subject: {
-                subjectIdentifier,
-                profile: { username: "ticket12-user", name: "Ticket 12 User" },
-                authorization: {
-                  roles: ["ticket12:user"],
-                  privileges: ["ticket12:read"],
-                },
+          const exchange = (code: string, password = secret) =>
+            request("/sso/token", {
+              method: "POST",
+              headers: {
+                "Authorization": `Basic ${Buffer.from(`${custom}:${password}`).toString("base64")}`,
+                "Content-Type": "application/x-www-form-urlencoded",
               },
-            },
-          },
-          retryAfter: null,
-          setCookie: null,
-          status: 200,
-        },
-        replayExchange: {
-          body: { code: ApiErrorCode.InvalidAuthCode },
-          setCookie: null,
-          status: 401,
-        },
-      });
-      expect(result.firstExchange).toMatchObject({
-        status: 200,
-        setCookie: null,
-        body: {
-          code: 200,
-          data: {
-            sid: expect.stringMatching(/^iam_ls_/u),
-            subject: {
-              version: 2,
-              subjectIdentifier,
-              profile: {
-                username: "ticket12-user",
-                name: "Ticket 12 User",
+              body: new URLSearchParams({ code, redirect_uri: redirectUri }),
+            });
+          const info = (token: string, client = custom) =>
+            request("/public/user-info", { headers: { Authorization: token, Client: client } });
+          try {
+            await sql`UPDATE client SET sso_config = ${JSON.stringify({ ...clientConfig, callbackEndpoint: `${origin}/sso/callback`, orcas: { enabled: false } })}::jsonb WHERE client_code = ${managed}`;
+            await snapshots.invalidateClient(managed);
+            const health = await request("/oidc/health");
+            expect(health.status).toBe(200);
+            const needsLogin = await request(
+              `/sso/authorize?${new URLSearchParams({ client: custom, redirectUrl: redirectUri })}`,
+            );
+            expect(needsLogin.status).toBe(302);
+            const loginLocation = new URL(needsLogin.headers.get("location")!);
+            expect(`${loginLocation.origin}${loginLocation.pathname}`).toBe(
+              "https://login.example/custom-entry",
+            );
+            const discovery = await request("/oidc/.well-known/openid-configuration");
+            expect(await discovery.json()).toMatchObject({
+              issuer: `${origin}/oidc`,
+              authorization_endpoint: `${origin}/oidc/auth`,
+              token_endpoint: `${origin}/oidc/token`,
+              userinfo_endpoint: `${origin}/oidc/me`,
+            });
+            const jwks = await request("/oidc/jwks");
+            const keys = await jwks.json();
+            expect(keys.keys[0]).toMatchObject({ kid: "api-process", alg: "RS256" });
+            expect(keys.keys.map((key: { kid: string }) => key.kid)).toEqual(["api-process", "api-previous"]);
+            for (const key of keys.keys) expect(key).not.toHaveProperty("d");
+            const before = await operations.run(operation =>
+              kernel.forOperation(operation).resolveUserSession(browser.bearer),
+            );
+            const accepted = await authorize();
+            const sessions = await operations.run(operation =>
+              kernel
+                .forOperation(operation)
+                .listSessions({ kind: "clientSession", subjectIdentifier, offset: 0, limit: 10 }),
+            );
+            expect(sessions.records).toHaveLength(1);
+            const relationship = sessions.records[0]!;
+            expect(relationship.expiresAt - relationship.createdAt).toBe(3600000);
+            expect(relationship.expiresAt).toBeLessThan(browser.observation.userSession.expiresAt);
+            expect(accepted.searchParams.get("state")).toBe("opaque-production-state");
+            const firstCode = accepted.searchParams.get("code")!;
+            const firstResponse = await exchange(firstCode);
+            expect(firstResponse.status).toBe(200);
+            const first = (await firstResponse.json()).data;
+            expect(typeof first.sid).toBe("string");
+            expect(typeof first.ttl).toBe("number");
+            expect(first.ttl).toBeGreaterThan(850);
+            expect(first.ttl).toBeLessThanOrEqual(900);
+            expect(first.subject.subjectIdentifier).toBe(subjectIdentifier);
+            expect(first.subject.profile.name).toBe("Published Name");
+            const firstInfo = await info(first.sid);
+            expect(firstInfo.status).toBe(200);
+            const replay = await exchange(firstCode);
+            expect(replay.status).toBeGreaterThanOrEqual(400);
+            expect(replay.headers.get("X-IAM-Client-Session-Revocation")).not.toBeNull();
+            const afterReplay = await info(first.sid);
+            expect(afterReplay.status).toBe(401);
+            const rotatedCode = (await authorize()).searchParams.get("code")!;
+            await sql`UPDATE client SET sso_secret = ${rotatedSecret}, sso_credential_id = ${randomUUID()}, sso_secret_updated_at = NOW() WHERE client_code = ${custom}`;
+            await snapshots.invalidateClient(custom);
+            const oldSecret = await exchange(rotatedCode);
+            expect(oldSecret.status).toBe(400);
+            const rotatedResponse = await exchange(rotatedCode, rotatedSecret);
+            expect(rotatedResponse.status).toBe(200);
+            const rotated = (await rotatedResponse.json()).data;
+            await sql`UPDATE client SET status = ${ClientStatus.Maintenance} WHERE client_code = ${custom}`;
+            await snapshots.invalidateClient(custom);
+            const maintenance = await info(rotated.sid);
+            expect(maintenance.status).toBe(503);
+            expect(maintenance.headers.get("retry-after")).toBe("7");
+            expect(maintenance.headers.getSetCookie()).toEqual([]);
+            await sql`UPDATE client SET status = ${ClientStatus.Enable} WHERE client_code = ${custom}`;
+            await snapshots.invalidateClient(custom);
+            const resumed = await info(rotated.sid);
+            expect(resumed.status).toBe(200);
+            const managedLocation = await authorize(managed);
+            const callback = await request(managedLocation.pathname + managedLocation.search);
+            expect(callback.status).toBe(302);
+            expect(callback.headers.getSetCookie()[0]).toContain("HttpOnly");
+            const managedToken = new URL(callback.headers.get("location")!).searchParams.get("token")!;
+            const managedInfo = await info(managedToken, managed);
+            expect(managedInfo.status).toBe(200);
+            const authz = await request("/auth/authz", {
+              headers: { "Authorization": managedToken, "Client": managed, "X-Forwarded-Uri": "/home" },
+            });
+            expect(authz.status).toBe(200);
+            expect(authz.headers.get("X-User-Info")).not.toBeNull();
+            const internalAuthz = await request("/auth/internal-authz", {
+              headers: { apikey: `internal-${managed}` },
+            });
+            expect(internalAuthz.status).toBe(200);
+            const verifier = "production-pkce-verifier-abcdefghijklmnopqrstuvwxyz";
+            const challenge = createHash("sha256").update(verifier).digest("base64url");
+            const authorization = await request(
+              `/oidc/auth?${new URLSearchParams({ client_id: oidc, redirect_uri: redirectUri, response_type: "code", scope: "openid profile", code_challenge: challenge, code_challenge_method: "S256", state: "oidc-production-state" })}`,
+              { headers: { Cookie: `global_session=${browser.bearer}` } },
+            );
+            expect(authorization.status).toBe(303);
+            const oidcCode = new URL(authorization.headers.get("location")!).searchParams.get("code")!;
+            const token = await request("/oidc/token", {
+              method: "POST",
+              headers: {
+                "Authorization": `Basic ${Buffer.from(`${oidc}:${secret}`).toString("base64")}`,
+                "Content-Type": "application/x-www-form-urlencoded",
               },
-              authorization: {
-                roles: ["ticket12:user"],
-                privileges: ["ticket12:read"],
-              },
-            },
-          },
+              body: new URLSearchParams({
+                grant_type: "authorization_code",
+                code: oidcCode,
+                redirect_uri: redirectUri,
+                code_verifier: verifier,
+              }),
+            });
+            expect(token.status).toBe(200);
+            const oidcTokens = await token.json();
+            expect(typeof oidcTokens.id_token).toBe("string");
+            const jwt = oidcTokens.id_token.split(".");
+            const signingPublicKey = createPublicKey({ key: keys.keys[0], format: "jwk" });
+            expect(
+              verify(
+                "RSA-SHA256",
+                Buffer.from(`${jwt[0]}.${jwt[1]}`),
+                signingPublicKey,
+                Buffer.from(jwt[2], "base64url"),
+              ),
+            ).toBe(true);
+            const claims = JSON.parse(Buffer.from(jwt[1], "base64url").toString("utf8"));
+            expect(claims.iss).toBe(`${origin}/oidc`);
+            expect(claims.aud).toBe(oidc);
+            const me = await request("/oidc/me", {
+              headers: { Authorization: `Bearer ${oidcTokens.access_token}` },
+            });
+            expect(me.status).toBe(200);
+            expect(await me.json()).toMatchObject({ sub: subjectIdentifier });
+            const blocking = await barrier.beginBlocking(subjectIdentifier);
+            const temporary = await info(rotated.sid);
+            expect(temporary.status).toBe(503);
+            expect(temporary.headers.getSetCookie()).toEqual([]);
+            await barrier.rollback(blocking);
+            const after = await operations.run(operation =>
+              kernel.forOperation(operation).resolveUserSession(browser.bearer),
+            );
+            if (before.status !== "resolved" || after.status !== "resolved")
+              throw new Error("Root unexpectedly terminated");
+            expect(after.value.userSession.expiresAt).toBe(before.value.userSession.expiresAt);
+            const logout = await request(`/sso/logout?${new URLSearchParams({ redirectUrl: redirectUri })}`, {
+              headers: { Cookie: `global_session=${browser.bearer}` },
+            });
+            expect(logout.status).toBe(302);
+            expect(logout.headers.getSetCookie()).toContainEqual(expect.stringContaining("global_session=;"));
+            const denied = await info(rotated.sid);
+            expect(denied.status).toBe(401);
+            const deniedOidc = await request("/oidc/me", {
+              headers: { Authorization: `Bearer ${oidcTokens.access_token}` },
+            });
+            expect(deniedOidc.status).toBe(401);
+            const other = await operations.run(operation =>
+              kernel.forOperation(operation).resolveUserSession(otherBrowser.bearer),
+            );
+            expect(other.status).toBe("resolved");
+            return true;
+          }
+          catch (cause) {
+            throw new FatalReadinessError("Unified API production behavior failed", { cause });
+          }
         },
       });
-      expect(result.replay.status).not.toBe(200);
-      expect(result.rotated).toMatchObject({ status: 302 });
-      expect(result.oldSecret.status).not.toBe(200);
-      expect(result.rotatedExchange).toMatchObject({ status: 200 });
-      expect(result.disabledGrant.status).not.toBe(200);
-      expect(result.disabledAuthorize).toMatchObject({
-        status: 400,
-        body: { code: ApiErrorCode.InvalidSsoClient },
-      });
-      expect(result.publicPositive).toMatchObject({
-        status: 200,
-        setCookie: null,
-        body: {
-          code: 200,
-          data: {
-            version: 2,
-            subjectIdentifier,
-          },
-        },
-      });
-      expect(result.authzPositive).toMatchObject({
-        body: { code: 200, data: expect.any(String), message: "success" },
-        decoded: {
-          version: 1,
-          subjectIdentifier,
-          username: "ticket12-user",
-          name: "Ticket 12 User",
-        },
-        setCookie: null,
-        status: 200,
-      });
-      expect(result.authzPositive.decoded).not.toHaveProperty("orcasId");
-      expect(result.maintenancePublic).toEqual({
-        body: {
-          code: ApiErrorCode.Maintenance,
-          data: null,
-          message: "系统维护中",
-        },
-        retryAfter: "7",
-        setCookie: null,
-        status: 503,
-      });
-      expect(result.maintenanceAuthz).toMatchObject({
-        body: {
-          code: ApiErrorCode.Maintenance,
-          data: null,
-          message: "系统维护中",
-        },
-        retryAfter: "7",
-        setCookie: null,
-        status: 503,
-      });
-      expect(result.publicAfterMaintenance).toEqual(result.publicPositive);
-      expect(result.authzAfterMaintenance).toEqual(result.authzPositive);
-      expect(result.logout).toEqual({
-        location: expect.stringContaining("/logout-complete"),
-        status: 302,
-      });
-      expect({
-        after: result.logoutPayloadAfter,
-        before: result.logoutPayloadBefore,
-      }).toEqual({
-        after: notificationObserver.endpoint,
-        before: notificationObserver.endpoint,
-      });
-      expect(result.notificationRequests).toEqual([]);
-      expect(result.legacyKeysRejected).toEqual({
-        authorizeRedirectedToLogin: true,
-        authorizeStatus: 302,
-        authzStatus: 401,
-        callbackStatus: 401,
-        userInfoStatus: 401,
-      });
-      expect(result.publicAfterLogout).toEqual(result.publicPositive);
-      expect(result.authzAfterLogout).toEqual(result.authzPositive);
-      expect(result.staleGateway).toMatchObject({
-        status: 401,
-      });
-      expect(result.unavailable).toMatchObject({
-        status: 503,
-        setCookie: null,
-        body: { code: ApiErrorCode.SubjectAccessUnavailable },
-      });
-      expect(result.steadyMetric).toEqual({
-        requests: 20,
-        unavailable: 0,
-        unavailableRate: 0,
-      });
-      expect(result.disabledSubject.status).toBe(401);
-      expect(result.disabledSubject.setCookie).toContain(
-        `local_${gatewayClientCode}_session=`,
-      );
-      expect(result.oldSessionAfterReenable.status).toBe(401);
-      expect(result.newSessionAfterReenable).toMatchObject({
-        status: 200,
-        setCookie: null,
-        body: {
-          code: 200,
-          data: {
-            subjectIdentifier,
-            profile: { name: "Ticket 12 User Re-enabled" },
-          },
-        },
-      });
-
-      const output = logCapture?.snapshot() ?? "";
-      for (const sensitiveValue of [
-        originalSecret,
-        rotatedSecret,
-        independentSession.principalToken,
-        gatewaySession.principalToken,
-        gatewaySession.localToken,
-        gatewaySession.staleLocalToken,
-        logoutSession.externalToken,
-        reenabledGatewaySession.principalToken,
-        reenabledGatewaySession.localToken,
-        ...issuedCodes,
-      ]) {
-        expect(output).not.toContain(sensitiveValue);
-      }
+      expect(result).toBe(true);
+      await suite.cleanup();
     });
-  }, PROCESS_SMOKE_TEST_TIMEOUT_MS);
-});
+  },
+  PROCESS_SMOKE_TEST_TIMEOUT_MS,
+);

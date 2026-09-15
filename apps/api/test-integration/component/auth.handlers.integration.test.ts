@@ -1,4 +1,5 @@
-import { createAuthHandlers } from "@api/routes/auth/auth.handlers";
+import type { CreateAuthHandlersDeps } from "@api/routes/auth/auth.handlers";
+import { createInternalAuthzHandler, createLocalSessionAuthzHandler, createRootAuthHandlers } from "@api/routes/auth/auth.handlers";
 import {
   customSsoLocalSessionCookieName,
   encodeCustomSsoClientCode,
@@ -47,7 +48,7 @@ const getClientBySecret = mock(async (_secret: string): Promise<InternalTestClie
 const loggerInfo = mock(() => undefined);
 
 function createHandlers() {
-  return createAuthHandlers({
+  const deps = {
     authentication: {
       loginWithMobile: { execute: loginMobileService },
       loginWithPassword: { execute: loginPasswordService },
@@ -68,7 +69,12 @@ function createHandlers() {
       projectionRetryAfterSeconds: 3,
       redisExpireSeconds: 3600,
     },
-  } as any);
+  } as CreateAuthHandlersDeps;
+  return {
+    ...createRootAuthHandlers(deps),
+    authz: createLocalSessionAuthzHandler(deps),
+    internalAuthz: createInternalAuthzHandler(deps),
+  };
 }
 
 function makeLoginContext() {
@@ -143,7 +149,7 @@ beforeEach(() => {
   getClientBySecret.mockImplementation(async () => null);
 });
 
-describe("createAuthHandlers", () => {
+describe("authentication HTTP handlers", () => {
   test("authz returns AUTH.MAINTENANCE without clearing a local session", async () => {
     authzService.mockImplementation(async () => {
       throw new AuthzMaintenanceError();

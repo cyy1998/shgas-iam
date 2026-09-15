@@ -118,6 +118,7 @@ function createProductionRestOperationSurface() {
     runtime: { random: {} },
     services: {
       client: {},
+      clientSso: { service: {} },
       employment: {},
       organization: {},
       organizationResponsibility: {},

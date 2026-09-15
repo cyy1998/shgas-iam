@@ -3,13 +3,8 @@ import { randomBytes, randomInt, randomUUID } from "node:crypto";
 import env from "@admin-api/env";
 import redis from "@admin-api/lib/infra/redis";
 import { logger } from "@admin-api/lib/logger";
-import {
-  createClientRuntimeSnapshotLoggerObservability,
-  createClientRuntimeSnapshotModule,
-} from "@iam/api-core/client-runtime-snapshot";
 import { hashSecret } from "@iam/api-core/security";
 import { generateRandomPassword } from "@iam/api-core/utils";
-import { createSessionKernelConfigFromEnv } from "@iam/session-kernel";
 import { hash } from "bcrypt-ts";
 import { createAdminClientCache } from "./client-cache";
 
@@ -23,11 +18,6 @@ export function createAdminApiRuntime(options: CreateAdminApiRuntimeOptions = {}
   const runtimeEnv = options.env ?? env;
   const runtimeLogger = options.logger ?? logger;
   const runtimeRedis = options.redis ?? redis;
-  const clientRuntimeSnapshots = createClientRuntimeSnapshotModule({
-    redis: runtimeRedis,
-    adapters: [] as const,
-    observability: createClientRuntimeSnapshotLoggerObservability(runtimeLogger),
-  });
   return {
     logger: runtimeLogger,
     afterCommitLogger: runtimeLogger,
@@ -67,17 +57,10 @@ export function createAdminApiRuntime(options: CreateAdminApiRuntimeOptions = {}
       auth: {
         adminClientCodes: runtimeEnv.auth.adminClientCodes,
       },
-      sessionKernel: createSessionKernelConfigFromEnv({
-        namespace: runtimeEnv.sessionKernel.namespace,
-        principalIdleTtlSeconds: runtimeEnv.sessionKernel.principalIdleTtlSeconds,
-        principalAbsoluteTtlSeconds: runtimeEnv.sessionKernel.principalAbsoluteTtlSeconds,
-        tombstoneTtlSeconds: runtimeEnv.sessionKernel.tombstoneTtlSeconds,
-        tombstoneGraceSeconds: runtimeEnv.sessionKernel.tombstoneGraceSeconds,
-      }),
+      sessionKernel: runtimeEnv.sessionKernel,
     },
     integrations: {
       clientCache: createAdminClientCache({ redis: runtimeRedis }),
-      clientRuntimeInvalidation: clientRuntimeSnapshots,
     },
   };
 }

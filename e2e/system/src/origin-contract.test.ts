@@ -11,7 +11,7 @@ describe("canonical origin rendered configuration", () => {
     const rendered = renderedComposeContract(contract);
 
     expect(() => assertCanonicalOriginComposeConfig(rendered, contract)).not.toThrow();
-    rendered.services["oidc-provider"].environment.IAM_OIDC_PROVIDER_ISSUER
+    rendered.services.api.environment.IAM_API_OIDC_ISSUER
       = "http://wrong.test/oidc";
     expect(() => assertCanonicalOriginComposeConfig(rendered, contract)).toThrow(
       "rendered Compose configuration does not use the canonical origin contract",
@@ -30,10 +30,8 @@ function renderedComposeContract(input: {
       "api": { environment: {
         IAM_API_SSO_INTERNAL_ORIGIN: input.canonicalOrigin,
         IAM_API_SSO_EXTERNAL_ORIGIN: input.canonicalOrigin,
-      } },
-      "oidc-provider": { environment: {
-        IAM_OIDC_PROVIDER_ISSUER: `${input.canonicalOrigin}/oidc`,
-        IAM_OIDC_PROVIDER_PUBLIC_ORIGIN: input.canonicalOrigin,
+        IAM_API_OIDC_ISSUER: `${input.canonicalOrigin}/oidc`,
+        IAM_API_OIDC_PUBLIC_ORIGIN: input.canonicalOrigin,
       } },
       "gateway-sync": { environment: {
         IAM_SSO_INTERNAL_HOST: authority,

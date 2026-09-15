@@ -1,89 +1,107 @@
 import type { DbClient } from "@iam/db";
 import type {
-  AdminClientCustomSsoUpdate,
-  AdminClientOidcUpdate,
   ClientCreateDto,
   ClientInputDto,
   ClientPaginationQueryDto,
   ClientUpdateDto,
 } from "./client.type";
-import {
-  CustomSsoClientState,
-  OidcClientState,
-} from "@iam/contracts";
 import { extractPostgresError } from "@iam/db/postgres-error";
 import { compactUpdate, firstRow, ilikeContainsIf, inArrayIf } from "@iam/db/query-utils";
 import { clients } from "@iam/db/schema";
 import { ClientCodeExistsError } from "@iam/domain/client";
-import { and, count, eq, isNotNull, isNull, or, sql } from "drizzle-orm";
+import { and, count, eq, isNotNull, or, sql } from "drizzle-orm";
 import { toAdminClientRecord } from "./client.schema";
+
+const columns = {
+  id: clients.id,
+  clientCode: clients.clientCode,
+  clientName: clients.clientName,
+  clientSecret: clients.clientSecret,
+  url: clients.url,
+  status: clients.status,
+  description: clients.description,
+  isDelete: clients.isDelete,
+  createTime: clients.createTime,
+  updateTime: clients.updateTime,
+  ssoEnabled: clients.ssoEnabled,
+  ssoConfig: clients.ssoConfig,
+  hasSsoSecret: isNotNull(clients.ssoSecret),
+};
 
 export function createClientRepository(db: DbClient) {
   return {
     async createClient(clientDto: ClientCreateDto) {
       const { extAttributes, ...data } = clientDto;
       try {
-        const rows = await db.insert(clients).values({
-          ...data,
-          extAttributes: sql`${JSON.stringify(extAttributes)}::jsonb`,
-        }).returning();
+        const rows = await db
+          .insert(clients)
+          .values({
+            ...data,
+            extAttributes: sql`${JSON.stringify(extAttributes)}::jsonb`,
+          })
+          .returning(columns);
         const row = firstRow(rows);
         return row === null ? null : toAdminClientRecord(row);
       }
       catch (error) {
         const detail = extractPostgresError(error);
-        if (detail?.code === "23505"
-          && (detail.constraint === "client_client_code_unique" || detail.constraint === "client_client_code_key")) {
+        if (
+          detail?.code === "23505"
+          && (detail.constraint === "client_client_code_unique"
+            || detail.constraint === "client_client_code_key")
+        ) {
           throw new ClientCodeExistsError();
         }
         throw error;
       }
     },
     async getClientByCode(clientCode: string) {
-      const row = await db.query.clients.findFirst({
-        where: {
-          clientCode,
-          isDelete: false,
-        },
-      });
-      return row === undefined ? null : toAdminClientRecord(row);
+      const row = firstRow(
+        await db
+          .select(columns)
+          .from(clients)
+          .where(and(eq(clients.clientCode, clientCode), eq(clients.isDelete, false))),
+      );
+      return row === null ? null : toAdminClientRecord(row);
     },
     async lockClientByCode(clientCode: string) {
-      const row = firstRow(await db
-        .select()
-        .from(clients)
-        .where(and(eq(clients.clientCode, clientCode), eq(clients.isDelete, false)))
-        .for("update"));
+      const row = firstRow(
+        await db
+          .select(columns)
+          .from(clients)
+          .where(and(eq(clients.clientCode, clientCode), eq(clients.isDelete, false)))
+          .for("update"),
+      );
       return row === null ? null : toAdminClientRecord(row);
     },
     async lockClientById(id: number) {
-      const row = firstRow(await db
-        .select()
-        .from(clients)
-        .where(and(eq(clients.id, id), eq(clients.isDelete, false)))
-        .for("update"));
+      const row = firstRow(
+        await db
+          .select(columns)
+          .from(clients)
+          .where(and(eq(clients.id, id), eq(clients.isDelete, false)))
+          .for("update"),
+      );
       return row === null ? null : toAdminClientRecord(row);
     },
     async getAnyClientByCode(clientCode: string) {
-      const row = await db.query.clients.findFirst({
-        where: { clientCode },
-      });
-      return row === undefined ? null : toAdminClientRecord(row);
+      const row = firstRow(await db.select(columns).from(clients).where(eq(clients.clientCode, clientCode)));
+      return row === null ? null : toAdminClientRecord(row);
     },
     async getClientById(id: number) {
-      const row = await db.query.clients.findFirst({
-        where: {
-          id,
-          isDelete: false,
-        },
-      });
-      return row === undefined ? null : toAdminClientRecord(row);
+      const row = firstRow(
+        await db
+          .select(columns)
+          .from(clients)
+          .where(and(eq(clients.id, id), eq(clients.isDelete, false))),
+      );
+      return row === null ? null : toAdminClientRecord(row);
     },
     async searchClientsPaged(dto: ClientPaginationQueryDto) {
       const where = clientsSearchWhere(dto);
       const [rows, totalRows] = await Promise.all([
         db
-          .select()
+          .select(columns)
           .from(clients)
           .where(where)
           .orderBy(clients.id)
@@ -101,82 +119,7 @@ export function createClientRepository(db: DbClient) {
         .update(clients)
         .set(toClientStorageUpdate(data))
         .where(and(eq(clients.clientCode, clientCode), eq(clients.isDelete, false)))
-        .returning();
-      const row = firstRow(rows);
-      return row === null ? null : toAdminClientRecord(row);
-    },
-    async updateClientByCodeWithProtocolEpochs(clientCode: string, data: ClientUpdateDto) {
-      const rows = await db
-        .update(clients)
-        .set({
-          ...toClientStorageUpdate(data),
-          customSsoConfigVersion:
-            sql`${clients.customSsoConfigVersion} + 1`,
-          oidcConfigVersion: sql`${clients.oidcConfigVersion} + 1`,
-        })
-        .where(and(eq(clients.clientCode, clientCode), eq(clients.isDelete, false)))
-        .returning();
-      const row = firstRow(rows);
-      return row === null ? null : toAdminClientRecord(row);
-    },
-    async updateClientById(clientDto: ClientInputDto) {
-      const { id, clientCode: _clientCode, ...data } = clientDto;
-      const rows = await db
-        .update(clients)
-        .set(toClientStorageUpdate(data))
-        .where(and(eq(clients.id, id), eq(clients.isDelete, false)))
-        .returning();
-      const row = firstRow(rows);
-      return row === null ? null : toAdminClientRecord(row);
-    },
-    async updateClientByIdWithProtocolEpochs(clientDto: ClientInputDto) {
-      const { id, clientCode: _clientCode, ...data } = clientDto;
-      const rows = await db
-        .update(clients)
-        .set({
-          ...toClientStorageUpdate(data),
-          customSsoConfigVersion:
-            sql`${clients.customSsoConfigVersion} + 1`,
-          oidcConfigVersion: sql`${clients.oidcConfigVersion} + 1`,
-        })
-        .where(and(eq(clients.id, id), eq(clients.isDelete, false)))
-        .returning();
-      const row = firstRow(rows);
-      return row === null ? null : toAdminClientRecord(row);
-    },
-    async updateClientOidcByCode(clientCode: string, data: AdminClientOidcUpdate) {
-      const rows = await db
-        .update(clients)
-        .set({ ...data, oidcConfigVersion: sql`${clients.oidcConfigVersion} + 1` })
-        .where(and(eq(clients.clientCode, clientCode), eq(clients.isDelete, false)))
-        .returning();
-      const row = firstRow(rows);
-      if (row === null)
-        throw new Error("Locked Client OIDC update returned no row");
-      return toAdminClientRecord(row);
-    },
-    async updateClientCustomSsoByCode(clientCode: string, data: AdminClientCustomSsoUpdate) {
-      const rows = await db
-        .update(clients)
-        .set({ ...data, customSsoConfigVersion: sql`${clients.customSsoConfigVersion} + 1` })
-        .where(and(eq(clients.clientCode, clientCode), eq(clients.isDelete, false)))
-        .returning();
-      const row = firstRow(rows);
-      if (row === null)
-        throw new Error("Locked Client Custom SSO update returned no row");
-      return toAdminClientRecord(row);
-    },
-    async softDeleteClientByCode(clientCode: string) {
-      const rows = await db
-        .update(clients)
-        .set({
-          isDelete: true,
-          customSsoConfigVersion:
-            sql`${clients.customSsoConfigVersion} + 1`,
-          oidcConfigVersion: sql`${clients.oidcConfigVersion} + 1`,
-        })
-        .where(and(eq(clients.clientCode, clientCode), eq(clients.isDelete, false)))
-        .returning();
+        .returning(columns);
       const row = firstRow(rows);
       return row === null ? null : toAdminClientRecord(row);
     },
@@ -184,64 +127,6 @@ export function createClientRepository(db: DbClient) {
 }
 
 export type ClientRepository = ReturnType<typeof createClientRepository>;
-
-function customSsoStatesWhere(values: ClientPaginationQueryDto["conditions"]["exactConditions"]["customSsoStates"]) {
-  if (values === undefined)
-    return undefined;
-  if (values.length === 0)
-    return sql`false`;
-  return or(...values.map((value) => {
-    if (value === CustomSsoClientState.Unconfigured)
-      return isNull(clients.customSsoConfig);
-    if (value === CustomSsoClientState.Disabled) {
-      return and(isNotNull(clients.customSsoConfig), eq(clients.customSsoEnabled, false));
-    }
-    return eq(clients.customSsoEnabled, true);
-  }));
-}
-
-function customSsoModesWhere(values: ClientPaginationQueryDto["conditions"]["exactConditions"]["customSsoModes"]) {
-  if (values === undefined)
-    return undefined;
-  if (values.length === 0)
-    return sql`false`;
-  return or(
-    ...values.map(
-      value => sql`${clients.customSsoConfig}->>'mode' = ${value}`,
-    ),
-  );
-}
-
-function oidcStatesWhere(values: ClientPaginationQueryDto["conditions"]["exactConditions"]["oidcStates"]) {
-  if (values === undefined)
-    return undefined;
-  if (values.length === 0)
-    return sql`false`;
-  return or(...values.map((value) => {
-    if (value === OidcClientState.Unconfigured)
-      return isNull(clients.oidcConfig);
-    if (value === OidcClientState.Disabled) {
-      return and(isNotNull(clients.oidcConfig), eq(clients.oidcEnabled, false));
-    }
-    return eq(clients.oidcEnabled, true);
-  }));
-}
-
-function oidcClientTypesWhere(values: ClientPaginationQueryDto["conditions"]["exactConditions"]["oidcClientTypes"]) {
-  if (values === undefined)
-    return undefined;
-  if (values.length === 0)
-    return sql`false`;
-  return or(...values.map(value => sql`${clients.oidcConfig}->>'clientType' = ${value}`));
-}
-
-function oidcAllowedScopesWhere(values: ClientPaginationQueryDto["conditions"]["exactConditions"]["oidcAllowedScopes"]) {
-  if (values === undefined)
-    return undefined;
-  if (values.length === 0)
-    return sql`false`;
-  return or(...values.map(value => sql`${clients.oidcConfig}->'allowedScopes' ? ${value}`));
-}
 
 function clientsSearchWhere(dto: ClientPaginationQueryDto) {
   const { fuzzyConditions, exactConditions } = dto.conditions;
@@ -256,11 +141,16 @@ function clientsSearchWhere(dto: ClientPaginationQueryDto) {
         )
       : undefined,
     inArrayIf(clients.status, exactConditions.statuses),
-    customSsoStatesWhere(exactConditions.customSsoStates),
-    customSsoModesWhere(exactConditions.customSsoModes),
-    oidcStatesWhere(exactConditions.oidcStates),
-    oidcClientTypesWhere(exactConditions.oidcClientTypes),
-    oidcAllowedScopesWhere(exactConditions.oidcAllowedScopes),
+    exactConditions.ssoEnabled === undefined ? undefined : eq(clients.ssoEnabled, exactConditions.ssoEnabled),
+    exactConditions.ssoProtocols === undefined
+      ? undefined
+      : exactConditions.ssoProtocols.length === 0
+        ? sql`false`
+        : or(
+            ...exactConditions.ssoProtocols.map(
+              protocol => sql`${clients.ssoConfig}->>'protocol' = ${protocol}`,
+            ),
+          ),
     eq(clients.isDelete, false),
   );
 }

@@ -30,7 +30,6 @@ type Props = {
 
 type BasicFormValues = {
   clientName: string;
-  clientSecret: string;
   url?: string;
   description?: string;
 };
@@ -43,6 +42,8 @@ export default function BasicSettings({
   onDeleted,
 }: Props) {
   const [form] = Form.useForm<BasicFormValues>();
+  const [secretForm] = Form.useForm<{ clientSecret: string }>();
+  const [secretDirty, setSecretDirty] = useState(false);
   const [pendingStatus, setPendingStatus] = useState<ClientStatus | null>(null);
   const [formDirty, setFormDirty] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -50,25 +51,29 @@ export default function BasicSettings({
   const statusDirty = pendingStatus !== null && pendingStatus !== client.status;
 
   useEffect(() => {
-    form.setFieldsValue({
-      clientName: client.clientName,
-      clientSecret: client.clientSecret,
-      url: client.url ?? undefined,
-      description: client.description ?? undefined,
-    });
-  }, [client, form]);
+    if (!formDirty)
+      form.setFieldsValue({
+        clientName: client.clientName,
+        url: client.url ?? undefined,
+        description: client.description ?? undefined,
+      });
+    if (!secretDirty)
+      secretForm.setFieldsValue({ clientSecret: client.clientSecret });
+  }, [client, form, secretForm, formDirty, secretDirty]);
 
   useEffect(() => {
-    onDirtyChange(formDirty || statusDirty);
-  }, [formDirty, onDirtyChange, statusDirty]);
+    onDirtyChange(formDirty || secretDirty || statusDirty);
+  }, [formDirty, secretDirty, onDirtyChange, statusDirty]);
 
   const handleError = async (
     err: unknown,
+    section: 'profile' | 'secret' | 'status' | 'delete',
     kind: ClientCommittedFailureKind = 'mutation',
   ) => {
     if (err instanceof AdminMutationCommittedError) {
-      setFormDirty(false);
-      setPendingStatus(null);
+      if (section === 'profile') setFormDirty(false);
+      if (section === 'secret') setSecretDirty(false);
+      if (section === 'status') setPendingStatus(null);
       await onCommitted(kind);
       return;
     }
@@ -87,9 +92,6 @@ export default function BasicSettings({
             try {
               const outcome = await updateClient(client.clientCode, {
                 clientName: values.clientName,
-                ...(values.clientSecret !== client.clientSecret
-                  ? { clientSecret: values.clientSecret }
-                  : {}),
                 url: values.url || null,
                 description: values.description || null,
                 extAttributes: {},
@@ -99,7 +101,7 @@ export default function BasicSettings({
               else message.info('无需修改');
               await onMutated();
             } catch (err) {
-              await handleError(err);
+              await handleError(err, 'profile');
             } finally {
               setSaving(false);
             }
@@ -111,14 +113,6 @@ export default function BasicSettings({
             rules={[{ required: true, message: '请输入应用名称' }]}
           >
             <Input />
-          </Form.Item>
-          <Form.Item
-            name="clientSecret"
-            label="通用应用密钥"
-            extra="不用于 Custom SSO 或 OIDC。"
-            rules={[{ required: true, message: '请输入应用密钥' }]}
-          >
-            <Input.Password />
           </Form.Item>
           <Form.Item name="url" label="访问地址">
             <Input />
@@ -132,6 +126,41 @@ export default function BasicSettings({
         </Form>
       </Card>
 
+      <Card title="内部 API 凭据">
+        <Form
+          form={secretForm}
+          layout="vertical"
+          onValuesChange={() => setSecretDirty(true)}
+          onFinish={async ({ clientSecret }) => {
+            setSaving(true);
+            try {
+              const outcome = await updateClient(client.clientCode, {
+                clientSecret,
+              });
+              setSecretDirty(false);
+              if (outcome.changed) message.success('内部 API 凭据已保存');
+              else message.info('无需修改');
+              await onMutated();
+            } catch (error) {
+              await handleError(error, 'secret');
+            } finally {
+              setSaving(false);
+            }
+          }}
+        >
+          <Form.Item
+            name="clientSecret"
+            label="通用应用密钥"
+            extra="用于内部 API 访问，独立保存。"
+            rules={[{ required: true, message: '请输入应用密钥' }]}
+          >
+            <Input.Password />
+          </Form.Item>
+          <Button htmlType="submit" loading={saving} disabled={formDirty}>
+            保存内部 API 凭据
+          </Button>
+        </Form>
+      </Card>
       <Card title="全局状态">
         <Space wrap>
           <Select
@@ -145,13 +174,13 @@ export default function BasicSettings({
             onChange={setPendingStatus}
           />
           <Button
-            disabled={formDirty || status === client.status}
+            disabled={formDirty || secretDirty || status === client.status}
             onClick={async () => {
               if (
                 status === ClientStatus.Disable &&
                 !(await confirmClientSettingAction(
                   '更新应用全局状态？',
-                  '协议配置与启用意图会保留，但已有协议对象将被撤销。',
+                  '协议配置与启用意图会保留，已有会话不会因此终止。',
                 ))
               ) {
                 return;
@@ -166,7 +195,7 @@ export default function BasicSettings({
                 else message.info('无需修改');
                 await onMutated();
               } catch (err) {
-                await handleError(err);
+                await handleError(err, 'status');
               }
             }}
           >
@@ -178,7 +207,7 @@ export default function BasicSettings({
       <Card title="删除应用">
         <Space orientation="vertical">
           <Typography.Text type="secondary">
-            删除是软删除，会撤销协议对象，但不要求先分别移除协议配置。
+            删除是软删除，会终止此应用的会话，但不要求先移除协议配置。
           </Typography.Text>
           <Button
             danger
@@ -196,7 +225,7 @@ export default function BasicSettings({
                 message.success('已删除');
                 onDeleted();
               } catch (err) {
-                await handleError(err);
+                await handleError(err, 'delete');
               }
             }}
           >

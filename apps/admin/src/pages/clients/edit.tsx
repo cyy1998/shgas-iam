@@ -1,7 +1,6 @@
 import StatusTag from '@admin/components/StatusTag';
+import ClientSsoPage from '@admin/pages/clients/ClientSsoPage';
 import BasicSettings from '@admin/pages/clients/components/BasicSettings';
-import CustomSsoSettings from '@admin/pages/clients/components/CustomSsoSettings';
-import OidcSettings from '@admin/pages/clients/components/OidcSettings';
 import {
   ClientDetailError,
   ClientDetailErrorKind,
@@ -25,7 +24,7 @@ import {
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { ClientCommittedFailureKind } from './components/settingsHelpers';
 
-type ClientSection = 'basic' | 'custom-sso' | 'oidc';
+type ClientSection = 'basic' | 'sso';
 
 type LoadState =
   | { status: 'loading' }
@@ -33,7 +32,7 @@ type LoadState =
   | { status: 'not-found' }
   | { status: 'error' };
 
-const sections = new Set<ClientSection>(['basic', 'custom-sso', 'oidc']);
+const sections = new Set<ClientSection>(['basic', 'sso']);
 
 function parseSection(search: string): ClientSection {
   const value = new URLSearchParams(search).get('section');
@@ -57,19 +56,13 @@ export default function ClientEditPage() {
   });
   const [dirty, setDirty] = useState<Record<ClientSection, boolean>>({
     basic: false,
-    'custom-sso': false,
-    oidc: false,
-  });
-  const [pendingOneTimeSecret, setPendingOneTimeSecret] = useState({
-    'custom-sso': false,
-    oidc: false,
+    sso: false,
   });
   const [discardRevision, setDiscardRevision] = useState<
     Record<ClientSection, number>
   >({
     basic: 0,
-    'custom-sso': 0,
-    oidc: 0,
+    sso: 0,
   });
   const unblockRef = useRef<null | (() => void)>(null);
 
@@ -80,39 +73,6 @@ export default function ClientEditPage() {
       ),
     [],
   );
-  const setCustomSsoDirty = useCallback(
-    (value: boolean) =>
-      setDirty((current) =>
-        current['custom-sso'] === value
-          ? current
-          : { ...current, 'custom-sso': value },
-      ),
-    [],
-  );
-  const setOidcDirty = useCallback(
-    (value: boolean) =>
-      setDirty((current) =>
-        current.oidc === value ? current : { ...current, oidc: value },
-      ),
-    [],
-  );
-  const setCustomSsoOneTimeSecretPending = useCallback(
-    (value: boolean) =>
-      setPendingOneTimeSecret((current) =>
-        current['custom-sso'] === value
-          ? current
-          : { ...current, 'custom-sso': value },
-      ),
-    [],
-  );
-  const setOidcOneTimeSecretPending = useCallback(
-    (value: boolean) =>
-      setPendingOneTimeSecret((current) =>
-        current.oidc === value ? current : { ...current, oidc: value },
-      ),
-    [],
-  );
-
   const loadClient = useCallback(async () => {
     try {
       const client = await getClient(clientCode);
@@ -133,9 +93,7 @@ export default function ClientEditPage() {
       const client = await getClient(clientCode);
       setLoadState({ status: 'ready', client });
     } catch {
-      message.error(
-        '操作已成功，但应用详情刷新失败；请先安全保存一次性 secret，再重试加载。',
-      );
+      message.error('操作已成功，但应用详情刷新失败，请重试加载。');
     }
   }, [clientCode]);
 
@@ -144,9 +102,9 @@ export default function ClientEditPage() {
   ) => {
     setRepairMessage(
       kind === 'rotation'
-        ? '轮换已生效，新 Secret 出现错误。请先联系管理员修复传播，再主动重新轮换。'
+        ? '轮换已生效，但后续处理失败。请联系管理员修复传播，再主动读取当前 Secret。'
         : kind === 'configuration'
-          ? '配置已生效，若生成了新 Secret，此次未交付。请先联系管理员修复传播，再主动轮换获取新 Secret。'
+          ? '配置已生效，但后续处理失败。请联系管理员修复传播，再主动读取当前状态。'
           : '操作已生效，但后续处理失败；请联系管理员修复传播。详情可读不代表传播已恢复。',
     );
     await loadClient();
@@ -173,22 +131,10 @@ export default function ClientEditPage() {
     () => Object.values(dirty).some(Boolean),
     [dirty],
   );
-  const hasPendingOneTimeSecret = useMemo(
-    () => Object.values(pendingOneTimeSecret).some(Boolean),
-    [pendingOneTimeSecret],
-  );
-
   useEffect(() => {
-    if (!hasDirtyChanges && !hasPendingOneTimeSecret) return;
+    if (!hasDirtyChanges) return;
     let confirmationOpen = false;
     const unblock = history.block((transition) => {
-      if (hasPendingOneTimeSecret) {
-        message.warning({
-          key: 'client-one-time-secret-navigation-blocked',
-          content: '请先在一次性 secret 弹窗中确认已安全保存，然后再离开页面。',
-        });
-        return;
-      }
       if (confirmationOpen) return;
       confirmationOpen = true;
       Modal.confirm({
@@ -221,7 +167,7 @@ export default function ClientEditPage() {
       }
       unblock();
     };
-  }, [hasDirtyChanges, hasPendingOneTimeSecret, section]);
+  }, [hasDirtyChanges, section]);
 
   const goToSection = (nextSection: ClientSection) => {
     if (nextSection === section) return;
@@ -237,8 +183,7 @@ export default function ClientEditPage() {
     unblockRef.current = null;
     setDirty({
       basic: false,
-      'custom-sso': false,
-      oidc: false,
+      sso: false,
     });
     history.push('/clients');
   };
@@ -311,6 +256,7 @@ export default function ClientEditPage() {
     >
       {repairAlert}
       <Tabs
+        destroyOnHidden
         activeKey={section}
         onChange={(key) => goToSection(key as ClientSection)}
         items={[
@@ -329,32 +275,9 @@ export default function ClientEditPage() {
             ),
           },
           {
-            key: 'custom-sso',
-            label: 'Custom SSO',
-            children: (
-              <CustomSsoSettings
-                key={`custom-sso-${discardRevision['custom-sso']}`}
-                client={client}
-                onDirtyChange={setCustomSsoDirty}
-                onCommitted={handleCommitted}
-                onMutated={refreshClient}
-                onOneTimeSecretPendingChange={setCustomSsoOneTimeSecretPending}
-              />
-            ),
-          },
-          {
-            key: 'oidc',
-            label: 'OIDC',
-            children: (
-              <OidcSettings
-                key={`oidc-${discardRevision.oidc}`}
-                client={client}
-                onDirtyChange={setOidcDirty}
-                onCommitted={handleCommitted}
-                onMutated={refreshClient}
-                onOneTimeSecretPendingChange={setOidcOneTimeSecretPending}
-              />
-            ),
+            key: 'sso',
+            label: 'SSO 配置',
+            children: <ClientSsoPage />,
           },
         ]}
       />

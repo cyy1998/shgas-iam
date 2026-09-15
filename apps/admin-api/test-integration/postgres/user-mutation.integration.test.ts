@@ -37,14 +37,7 @@ function createCommand(
   const warn = mock(() => undefined);
   const enqueueRebuildJobs = mock(async () => ({ enqueued: 1, jobIds: ["user-job"] }));
   const revokeUserSessions = mock(async () => {
-    const counts = { revoked: 0, alreadyRevoked: 0, missing: 0, excluded: 0 };
-    return {
-      principalSessions: counts,
-      bindings: counts,
-      credentials: counts,
-      artifacts: counts,
-      cleanup: { attempted: 0, succeeded: 0, failed: 0, failures: [] },
-    };
+    return { userSessionsTerminated: 0, clientSessionsTerminated: 0, results: [], unfinished: [] };
   });
   const clock = { nowDate: () => new Date("2026-09-07T00:00:00Z") };
   const random = { uuid: randomUUID, password: mock(() => "Random123!") };

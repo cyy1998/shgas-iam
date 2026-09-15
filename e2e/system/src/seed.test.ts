@@ -2,7 +2,7 @@ import type {
   E2EScenarioOwner,
   E2EScenarioReferences,
 } from "./seed.ts";
-import { CustomSsoClientMode, OidcClientType } from "@iam/contracts";
+import { OidcClientType } from "@iam/contracts";
 import { describe, expect, test } from "bun:test";
 import { seedE2EScenario } from "./seed.ts";
 
@@ -181,16 +181,16 @@ function completeReadBack(references: E2EScenarioReferences) {
     },
     adminClient: {
       active: true,
-      customSsoEnabled: true,
+      ssoEnabled: true,
       clientCode: references.adminClientCode,
-      mode: CustomSsoClientMode.Gateway,
+      callbackEndpoint: `${references.canonicalOrigin}/sso/callback`,
       redirectUris: [references.adminRedirectUri],
     },
     customSsoClient: {
       active: true,
-      customSsoEnabled: false,
+      ssoEnabled: false,
       clientCode: references.customSsoClientCode,
-      mode: null,
+      callbackEndpoint: null,
       redirectUris: [],
     },
     oidcClient: {

@@ -8,60 +8,6 @@ function createAdapterStub() {
   });
 }
 
-describe("Custom SSO Admin OpenAPI contract", () => {
-  test("all five operations expose changed/result, safe Client and optional one-time Secret", () => {
-    const document = createClientRoute(createAdapterStub() as never).getOpenAPI31Document({
-      openapi: "3.1.0",
-      info: { title: "test", version: "1" },
-    });
-    const schemas = JSON.parse(JSON.stringify(document.components?.schemas));
-    const paths = JSON.parse(JSON.stringify(document.paths));
-    for (const action of ["configure", "enable", "disable", "remove", "rotate-secret"]) {
-      const method = action === "configure" ? "put" : "post";
-      const responses = paths[`/clients/:clientCode/custom-sso/${action}`][method].responses;
-      expect(responses[409]).toBeDefined();
-      expect(responses[500]).toBeDefined();
-      expect(responses[200].content["application/json"].schema.properties.data)
-        .toEqual({ $ref: "#/components/schemas/ClientCustomSsoMutationResult" });
-    }
-    expect(schemas.ClientCustomSsoMutationResult).toMatchObject({
-      type: "object",
-      required: ["changed", "result"],
-      properties: {
-        changed: { type: "boolean" },
-        result: {
-          type: "object",
-          required: ["client"],
-          properties: {
-            client: { $ref: "#/components/schemas/ClientAdminDetailDto" },
-            customSsoSecret: { type: "string" },
-          },
-        },
-      },
-    });
-  });
-
-  test("publishes five dedicated Custom SSO operations with their exact methods and paths", () => {
-    const route = createClientRoute(createAdapterStub() as never);
-    const document = route.getOpenAPI31Document({
-      openapi: "3.1.0",
-      info: { title: "test", version: "1" },
-    });
-
-    expect(document.paths).toMatchObject({
-      "/clients/:clientCode/custom-sso/configure": { put: expect.any(Object) },
-      "/clients/:clientCode/custom-sso/enable": { post: expect.any(Object) },
-      "/clients/:clientCode/custom-sso/disable": { post: expect.any(Object) },
-      "/clients/:clientCode/custom-sso/remove": { post: expect.any(Object) },
-      "/clients/:clientCode/custom-sso/rotate-secret": { post: expect.any(Object) },
-    });
-    expect(document.components?.schemas).toMatchObject({
-      ClientCustomSsoConfigureDto: expect.any(Object),
-      ClientCustomSsoMutationResult: expect.any(Object),
-    });
-  });
-});
-
 describe("Client base mutation OpenAPI contract", () => {
   test("publishes unified mutation results and common failures for REST and legacy commands", () => {
     const route = createClientRoute(createAdapterStub() as never);
@@ -98,10 +44,6 @@ describe("Client base mutation OpenAPI contract", () => {
         required: ["changed", "result"],
       });
     }
-    expect(paths["/clients/:clientCode/oidc/configure"].put.responses[200].content["application/json"].schema.properties.data)
-      .toEqual({ $ref: "#/components/schemas/ClientOidcMutationResult" });
-    expect(paths["/clients/:clientCode/custom-sso/configure"].put.responses[200].content["application/json"].schema.properties.data)
-      .toEqual({ $ref: "#/components/schemas/ClientCustomSsoMutationResult" });
   });
 
   test("publishes only the explicit base input fields and keeps code out of standard updates", () => {
@@ -117,33 +59,5 @@ describe("Client base mutation OpenAPI contract", () => {
     for (const name of ["ClientCreateDto", "ClientUpdateDto", "ClientInputDto"]) {
       expect(schemas[name].additionalProperties).toBe(false);
     }
-  });
-});
-
-test("OIDC OpenAPI exposes the unified result with the Client and optional one-time secret", () => {
-  const document = createClientRoute(createAdapterStub() as never).getOpenAPI31Document({
-    openapi: "3.1.0",
-    info: { title: "test", version: "1" },
-  });
-  const schemas = JSON.parse(JSON.stringify(document.components?.schemas));
-  const paths = JSON.parse(JSON.stringify(document.paths));
-  for (const action of ["configure", "enable", "disable", "remove", "rotate-secret"]) {
-    const method = action === "configure" ? "put" : "post";
-    const responses = paths[`/clients/:clientCode/oidc/${action}`][method].responses;
-    expect(responses[409]).toBeDefined();
-    expect(responses[200].content["application/json"].schema.properties.data)
-      .toEqual({ $ref: "#/components/schemas/ClientOidcMutationResult" });
-  }
-  expect(schemas.ClientOidcMutationResult).toMatchObject({
-    type: "object",
-    required: ["changed", "result"],
-    properties: {
-      changed: { type: "boolean" },
-      result: {
-        type: "object",
-        required: ["client"],
-        properties: { client: { $ref: "#/components/schemas/ClientAdminDetailDto" }, clientSecret: { type: "string" } },
-      },
-    },
   });
 });

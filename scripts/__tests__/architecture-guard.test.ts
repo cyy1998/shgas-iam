@@ -13,20 +13,28 @@ afterEach(() => {
 });
 
 describe("repository architecture guard", () => {
-  test("keeps OIDC on independently loadable Custom SSO capabilities", () => {
+  test("keeps new OIDC independent of protocol, transport, app and database owners while allowing composition", () => {
     const repoRoot = createFixtureRepository({
-      "apps/oidc-provider/src/composition/session/index.ts": [
-        "import { createCustomSsoCleanup } from \"@iam/custom-sso/cleanup\";",
-        "import { customSsoMaintenancePrefixes } from \"@iam/custom-sso/maintenance\";",
-        "import { createCustomSso } from \"@iam/custom-sso\";",
+      "packages/oidc/src/authorization.ts": [
+        "import type { Kernel } from \"@iam/session-kernel\";",
+        "import type { Reader } from \"@iam/api-core/client-snapshot\";",
+        "import { custom } from \"@iam/custom-sso\";",
+        "import { Provider } from \"oidc-provider\";",
+        "import { Hono } from \"hono\";",
+        "import { provider } from \"../../../apps/api/src/provider\";",
+        "import { db } from \"@iam/db\";",
+      ].join("\n"),
+      "apps/api/src/composition/oidc.ts": [
+        "import { createOidcAuthorization } from \"@iam/oidc\";",
+        "import type { DbClient } from \"@iam/db\";",
       ].join("\n"),
     });
-    expect(analyzeRepositoryArchitecture(repoRoot)).toEqual([{
+    expect(analyzeRepositoryArchitecture(repoRoot)).toEqual(["@iam/custom-sso", "oidc-provider", "hono", "../../../apps/api/src/provider", "@iam/db"].map((module, index) => ({
       ruleId: "session-runtime-owner",
-      file: "apps/oidc-provider/src/composition/session/index.ts",
-      line: 3,
-      message: "OIDC must consume only independent Custom SSO cleanup or maintenance, not \"@iam/custom-sso\".",
-    }]);
+      file: "packages/oidc/src/authorization.ts",
+      line: index + 3,
+      message: `OIDC must not import another protocol, app or HTTP owner "${module}"; inject its external capabilities.`,
+    })));
   });
   test("keeps Session Kernel independent of protocol and runtime owners", () => {
     const repoRoot = createFixtureRepository({
@@ -37,10 +45,11 @@ describe("repository architecture guard", () => {
         "import { SystemLogEvent } from \"@iam/api-core/logger\";",
         "import type { CustomSso } from \"@iam/custom-sso\";",
         "import { provider } from \"../../../apps/api/src/provider\";",
+        "import type { OidcAuthorization } from \"@iam/oidc\";",
       ].join("\n"),
     });
     expect(analyzeRepositoryArchitecture(repoRoot)).toEqual([
-      ...["@iam/api-core/logger", "@iam/custom-sso", "../../../apps/api/src/provider"].map((module, index) => ({
+      ...["@iam/api-core/logger", "@iam/custom-sso", "../../../apps/api/src/provider", "@iam/oidc"].map((module, index) => ({
         ruleId: "session-runtime-owner",
         file: "packages/session-kernel/src/facade.ts",
         line: index + 4,
@@ -320,7 +329,7 @@ describe("repository architecture guard", () => {
         "import type { UserProfileQueryService } from \"@iam/user-profile-read-model\";",
       "apps/admin-api/src/services/user/user.type.ts":
         "export type { UserProfileQueryService } from \"@iam/user-profile-read-model/query\";",
-      "apps/oidc-provider/src/repositories/profile.ts":
+      "apps/api/src/composition/repositories/profile.ts":
         "import \"@iam/user-profile-read-model\";",
     });
 
@@ -434,7 +443,7 @@ describe("repository architecture guard", () => {
         "import \"@iam/admin/routes/client\";",
         "import \"@iam/admin-api/routes/client\";",
         "import \"@iam/api\";",
-        "import \"@iam/oidc-provider/session\";",
+        "import \"@iam/api/session\";",
         "import \"@iam/sso/pages/login\";",
         "import \"@iam/worker/queues\";",
       ].join("\n"),
@@ -477,7 +486,7 @@ describe("repository architecture guard", () => {
         file: "packages/client-subject-projection/src/internal/catalog.ts",
         line: 4,
         message: "Client Subject Projection implementation must not import runtime or protocol module "
-          + "\"@iam/oidc-provider/session\"; depend on its injected facts and safety ports.",
+          + "\"@iam/api/session\"; depend on its injected facts and safety ports.",
       },
       {
         ruleId: "client-subject-projection-owner",
@@ -740,147 +749,6 @@ describe("repository architecture guard", () => {
         message: "Admin user and client services must not import session runtime module "
           + "\"@admin-api/services/session/custom-sso-session-kernel.adapter\"; "
           + "depend on the consumer-owned Session Revocation port.",
-      },
-    ]);
-  });
-
-  test("keeps OIDC database, Redis, and logger value edges behind their owners", () => {
-    const repoRoot = createFixtureRepository({
-      "apps/oidc-provider/src/provider/claims.ts": [
-        "import db from \"@iam/db\";",
-        "import { users } from \"@iam/db/schema\";",
-      ].join("\n"),
-      "apps/oidc-provider/src/provider/create-provider.ts":
-        "import { createLogger } from \"../lib/logger.ts\";",
-      "apps/oidc-provider/src/provider/middleware.ts":
-        "import redis from \"../lib/redis.ts\";",
-      "apps/oidc-provider/src/invalidation/client-invalidation.ts":
-        "import Redis from \"ioredis\";",
-      "apps/oidc-provider/src/composition/index.ts": [
-        "import db from \"@iam/db\";",
-        "import { createLogger } from \"../lib/logger.ts\";",
-        "import { createProviderRedis } from \"../lib/redis.ts\";",
-      ].join("\n"),
-      "apps/oidc-provider/src/composition/provider/index.ts":
-        "import type { Redis } from \"ioredis\";",
-      "apps/oidc-provider/src/repositories/account.repository.ts": [
-        "import type { DbClient } from \"@iam/db\";",
-        "import { users } from \"@iam/db/schema\";",
-      ].join("\n"),
-      "apps/oidc-provider/src/stores/client.store.ts":
-        "import Redis from \"ioredis\";",
-      "apps/oidc-provider/src/storage/redis-adapter.ts":
-        "import { Redis } from \"ioredis\";",
-    });
-
-    expect(analyzeRepositoryArchitecture(repoRoot)).toEqual([
-      {
-        ruleId: "session-runtime-owner",
-        file: "apps/oidc-provider/src/invalidation/client-invalidation.ts",
-        line: 1,
-        message: "Only OIDC stores and storage modules may value-import Redis client \"ioredis\".",
-      },
-      {
-        ruleId: "session-runtime-owner",
-        file: "apps/oidc-provider/src/provider/claims.ts",
-        line: 1,
-        message: "Only OIDC composition may value-import runtime infrastructure module \"@iam/db\".",
-      },
-      {
-        ruleId: "session-runtime-owner",
-        file: "apps/oidc-provider/src/provider/claims.ts",
-        line: 2,
-        message: "Only OIDC repository implementations may value-import database schema \"@iam/db/schema\".",
-      },
-      {
-        ruleId: "session-runtime-owner",
-        file: "apps/oidc-provider/src/provider/create-provider.ts",
-        line: 1,
-        message: "Only OIDC composition may value-import runtime infrastructure module \"../lib/logger.ts\".",
-      },
-      {
-        ruleId: "session-runtime-owner",
-        file: "apps/oidc-provider/src/provider/middleware.ts",
-        line: 1,
-        message: "Only OIDC composition may value-import runtime infrastructure module \"../lib/redis.ts\".",
-      },
-    ]);
-  });
-
-  test("keeps OIDC implementation materialization in its corresponding composition owner", () => {
-    const repoRoot = createFixtureRepository({
-      "apps/oidc-provider/src/provider/claims.ts":
-        "import { createOidcAccountRepository } from \"../repositories/account.repository.ts\";",
-      "apps/oidc-provider/src/provider/create-provider.ts":
-        "import { createOidcAdapterFactory } from \"../storage/redis-adapter.ts\";",
-      "apps/oidc-provider/src/provider/middleware.ts": [
-        "import { createClientAuthRateLimiter } from \"../security/client-auth-rate-limit.ts\";",
-        "import { createOidcClientSecretVerifier } from \"../security/client-secret-verifier.ts\";",
-        "import { createSessionKernel } from \"@iam/session-kernel\";",
-      ].join("\n"),
-      "apps/oidc-provider/src/interaction/handler.ts":
-        "import { createOidcSessionKernelAdapter } from \"../session/oidc-session-kernel.adapter.ts\";",
-      "apps/oidc-provider/src/session/oidc-session-kernel.adapter.ts":
-        "import { sessionOk } from \"@iam/session-kernel\";",
-      "apps/oidc-provider/src/composition/repositories/index.ts":
-        "import { createOidcAccountRepository } from \"../../repositories/account.repository.ts\";",
-      "apps/oidc-provider/src/composition/provider/index.ts":
-        "import { createOidcAdapterFactory } from \"../../storage/redis-adapter.ts\";",
-      "apps/oidc-provider/src/composition/stores/index.ts":
-        "import { createOidcProtocolObjectStore } from \"../../storage/redis-adapter.ts\";",
-      "apps/oidc-provider/src/composition/security/index.ts": [
-        "import { createClientAuthRateLimiter } from \"../../security/client-auth-rate-limit.ts\";",
-        "import { createOidcClientSecretVerifier } from \"../../security/client-secret-verifier.ts\";",
-      ].join("\n"),
-      "apps/oidc-provider/src/env.ts": "import { createSessionKernelConfigFromEnv } from \"@iam/session-kernel\";",
-      "apps/oidc-provider/src/composition/session/index.ts": [
-        "import { createSessionKernel } from \"@iam/session-kernel\";",
-        "import { createOidcSessionKernelAdapter } from \"../../session/oidc-session-kernel.adapter.ts\";",
-      ].join("\n"),
-    });
-
-    expect(analyzeRepositoryArchitecture(repoRoot)).toEqual([
-      {
-        ruleId: "session-runtime-owner",
-        file: "apps/oidc-provider/src/interaction/handler.ts",
-        line: 1,
-        message: "Only OIDC session composition may value-import session implementation "
-          + "\"../session/oidc-session-kernel.adapter.ts\".",
-      },
-      {
-        ruleId: "session-runtime-owner",
-        file: "apps/oidc-provider/src/provider/claims.ts",
-        line: 1,
-        message: "Only OIDC repository composition may value-import concrete repository "
-          + "\"../repositories/account.repository.ts\".",
-      },
-      {
-        ruleId: "session-runtime-owner",
-        file: "apps/oidc-provider/src/provider/create-provider.ts",
-        line: 1,
-        message: "Only declared OIDC storage composition owners may value-import storage implementation "
-          + "\"../storage/redis-adapter.ts\".",
-      },
-      {
-        ruleId: "session-runtime-owner",
-        file: "apps/oidc-provider/src/provider/middleware.ts",
-        line: 1,
-        message: "Only OIDC security composition may value-import security implementation "
-          + "\"../security/client-auth-rate-limit.ts\".",
-      },
-      {
-        ruleId: "session-runtime-owner",
-        file: "apps/oidc-provider/src/provider/middleware.ts",
-        line: 2,
-        message: "Only OIDC security composition may value-import security implementation "
-          + "\"../security/client-secret-verifier.ts\".",
-      },
-      {
-        ruleId: "session-runtime-owner",
-        file: "apps/oidc-provider/src/provider/middleware.ts",
-        line: 3,
-        message: "Only OIDC environment configuration, session composition and its Kernel adapter may value-import Session Kernel module "
-          + "\"@iam/session-kernel\".",
       },
     ]);
   });
@@ -1839,7 +1707,7 @@ describe("repository architecture guard", () => {
 
   test("exits nonzero and prints stable diagnostics for repository violations", () => {
     const repoRoot = createFixtureRepository({
-      "apps/oidc-provider/src/session/session.port.ts": [
+      "apps/api/src/services/session/session.port.ts": [
         "interface SessionService { find: () => Promise<unknown> }",
         "type SessionReader = Pick<SessionService, \"find\">;",
       ].join("\n"),
@@ -1862,7 +1730,7 @@ describe("repository architecture guard", () => {
       exitCode: 1,
       stderr: [
         "Architecture guard failed with 1 violation:",
-        "- [consumer-owned-port] apps/oidc-provider/src/session/session.port.ts:2 "
+        "- [consumer-owned-port] apps/api/src/services/session/session.port.ts:2 "
         + "Consumer-owned ports must not derive their interface from provider type \"SessionService\" with Pick; "
         + "declare the required members directly.",
         "",

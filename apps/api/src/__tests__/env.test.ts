@@ -6,13 +6,16 @@ let parseApiEnv: ParseApiEnv;
 
 function validEnv(): NodeJS.ProcessEnv {
   return {
+    IAM_API_OIDC_ISSUER: "https://iam.example.com/oidc",
+    IAM_API_OIDC_PUBLIC_ORIGIN: "https://iam.example.com",
+    IAM_API_OIDC_CURRENT_JWK_JSON: "runtime-validates-signing-material",
     IAM_API_DATABASE_URL: "postgresql://iam:password@localhost/iam",
     IAM_API_REDIS_HOST: "localhost",
     IAM_API_REDIS_PORT: "6379",
     IAM_API_REDIS_DB: "0",
     IAM_API_SMS_SIGNATURE_KEY: "sms-signature",
     IAM_API_SMS_URL: "https://sms.example.com/send",
-    IAM_API_SESSION_DEFAULT_TTL_SECONDS: "86400",
+    IAM_API_CUSTOM_SSO_TOKEN_TTL_SECONDS: "86400",
     IAM_API_AUTH_CODE_TTL_SECONDS: "300",
     IAM_API_ORCAS_URL: "https://orcas.example.com/login",
     IAM_API_WECHAT_CORP_ID: "corp-id",
@@ -88,7 +91,58 @@ describe("API environment", () => {
     });
 
     expect(env.nodeEnv).toBe("production");
-    expect(env.sessionKernel.namespace).toBe("sess:v2:");
+    expect(env.sessionKernel.namespace).toBe("iam:session");
+  });
+
+  test("validates OIDC issuer ownership and explicit signing configuration", () => {
+    for (const override of [
+      { IAM_API_OIDC_ISSUER: "https://iam.example.com/other" },
+      { IAM_API_OIDC_PUBLIC_ORIGIN: "https://other.example.com" },
+      { IAM_API_OIDC_PUBLIC_ORIGIN: "https://iam.example.com/path" },
+      { IAM_API_OIDC_CURRENT_JWK_JSON: "" },
+      { IAM_API_OIDC_TOKEN_TTL_SECONDS: "0" },
+      { IAM_API_SESSION_KERNEL_NAMESPACE: "unsafe namespace" },
+    ]) {
+      expect(() => parseApiEnv({ ...validEnv(), ...override })).toThrow();
+    }
+  });
+
+  test("maps OIDC rotation and lifetime configuration with production Secure default", () => {
+    const env = parseApiEnv({
+      ...validEnv(),
+      NODE_ENV: "production",
+      IAM_API_OIDC_PREVIOUS_JWK_JSON: "previous-private-jwk",
+      IAM_API_OIDC_CONTINUATION_TTL_SECONDS: "120",
+    });
+    expect(env.oidc).toMatchObject({
+      issuer: "https://iam.example.com/oidc",
+      publicOrigin: "https://iam.example.com",
+      previousJwkJson: "previous-private-jwk",
+      namespace: "iam:oidc",
+      continuationTtlSeconds: 120,
+      cookieSecure: true,
+    });
+    expect(parseApiEnv({ ...validEnv(), IAM_API_OIDC_COOKIE_SECURE: "false" }).oidc.cookieSecure).toBe(false);
+    expect(env.sessionKernel).toEqual({ namespace: "iam:session", userSessionTtlSeconds: 86400, clientSessionTtlSeconds: 86400 });
+  });
+
+  test("configures each session lifetime independently from protocol tokens and preserves the login endpoint", () => {
+    const env = parseApiEnv({
+      ...validEnv(),
+      IAM_API_USER_SESSION_TTL_SECONDS: "86400",
+      IAM_API_CLIENT_SESSION_TTL_SECONDS: "3600",
+      IAM_API_CUSTOM_SSO_TOKEN_TTL_SECONDS: "900",
+      IAM_API_OIDC_TOKEN_TTL_SECONDS: "600",
+      IAM_API_LOGIN_ENDPOINT: "https://login.example.com/custom-entry",
+    });
+    expect(env.sessionKernel).toMatchObject({ userSessionTtlSeconds: 86400, clientSessionTtlSeconds: 3600 });
+    expect(env.auth.customSsoTokenTtlSeconds).toBe(900);
+    expect(env.oidc.tokenTtlSeconds).toBe(600);
+    expect(env.oidc.trustProxy).toBe(true);
+    expect(parseApiEnv({ ...validEnv(), IAM_API_OIDC_TRUST_PROXY: "false" }).oidc.trustProxy).toBe(false);
+    expect(env.sso.loginEndpoint).toBe("https://login.example.com/custom-entry");
+    for (const key of ["IAM_API_USER_SESSION_TTL_SECONDS", "IAM_API_CLIENT_SESSION_TTL_SECONDS"])
+      expect(() => parseApiEnv({ ...validEnv(), [key]: "0" })).toThrow();
   });
 
   test("still requires a configured active login credential key in production", () => {

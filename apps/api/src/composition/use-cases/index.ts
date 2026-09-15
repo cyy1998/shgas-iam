@@ -8,10 +8,8 @@ import { createResetPasswordUseCase } from "@api/use-cases/account-recovery/rese
 import { createVerifyPasswordResetCodeUseCase } from "@api/use-cases/account-recovery/verify-password-reset-code/verify-password-reset-code.use-case";
 import { createRegisterPurveyorContactUseCase } from "@api/use-cases/internal/register-purveyor-contact/register-purveyor-contact.use-case";
 import { createResolvePrivilegeDelegationsUseCase } from "@api/use-cases/internal/resolve-privilege-delegations/resolve-privilege-delegations.use-case";
-import { createCheckSsoLoginContinuationUseCase } from "@api/use-cases/sso/check-login-continuation/check-login-continuation.use-case";
 import { mapUnitOfWork } from "@iam/api-core/uow";
 import { createPrivilegeDelegationResolutionRepository } from "../repositories/privilege-delegation-resolution.repository";
-import { createAuthenticationUseCases } from "./authentication";
 
 type ApiUnitOfWork = ReturnType<typeof createApiUnitOfWork>;
 
@@ -55,13 +53,6 @@ export function createApiUseCases(options: CreateApiUseCasesOptions) {
     }),
   };
 
-  const authentication = createAuthenticationUseCases({ auditLogWriter, runtime, services });
-
-  const sso = {
-    ...services.customSso,
-    checkLoginContinuation: createCheckSsoLoginContinuationUseCase(services.customSso),
-  };
-
   const registerPurveyorContact = createRegisterPurveyorContactUseCase({
     auditLogWriter,
     config: {
@@ -90,10 +81,8 @@ export function createApiUseCases(options: CreateApiUseCasesOptions) {
 
   return {
     accountRecovery,
-    authentication,
     registerPurveyorContact,
     resolvePrivilegeDelegations,
-    sso,
   };
 }
 

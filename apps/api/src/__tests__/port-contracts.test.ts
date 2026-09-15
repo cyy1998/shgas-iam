@@ -1,12 +1,7 @@
 import type { PrivilegeDelegationResolutionRepository } from "@api/composition/repositories/privilege-delegation-resolution.repository";
-import type { OrcasClient } from "@api/lib/integrations/orcas";
-import type { PrincipalSessionAdapter } from "@api/services/authentication/principal-session.adapter";
+import type { createUserSessionAuthenticationAdapter } from "@api/services/authentication/user-session.adapter";
 import type { ClientReaderPort } from "@api/services/client/client.port";
 import type { ClientRepository } from "@api/services/client/client.repository";
-import type {
-  CustomSsoClientRuntimeReader,
-} from "@api/services/client/custom-sso-client-runtime.reader";
-import type { CustomSsoClientRepository } from "@api/services/client/custom-sso-client.repository";
 import type { EmploymentRepository } from "@api/services/employment/employment.repository";
 import type { MobileUserReaderPort } from "@api/services/mobile/mobile.port";
 import type { MobileService } from "@api/services/mobile/mobile.service";
@@ -25,6 +20,7 @@ import type {
   PrivilegeDelegationUserReaderPort,
 } from "@api/services/privilege/privilegeDelegation.port";
 import type { PrivilegeDelegationRepository } from "@api/services/privilege/privilegeDelegation.repository";
+import type { SessionOrigin } from "@api/services/session/session-origin";
 import type {
   UserDelegationReaderPort,
   UserMobileBindingPort,
@@ -54,27 +50,12 @@ import type {
 import type {
   PrivilegeDelegationResolutionPort,
 } from "@api/use-cases/internal/resolve-privilege-delegations/resolve-privilege-delegations.port";
-import type { LoginRestriction } from "@iam/api-core/login-restriction";
-import type { ClientSubjectProjectionService } from "@iam/client-subject-projection";
-import type {
-  CustomSsoSubjectProjectionPort,
-} from "@iam/custom-sso";
-import type {
-  AuthorizationCodeIssuerPort,
-  AuthorizeSsoClientReaderPort,
-  CustomSsoClientSecretReader,
-  CustomSsoOrcasLoginPort,
-  CustomSsoSessionKernelAdapter,
-  CustomSsoSubjectDelivery,
-  CustomSsoSubjectDeliveryPort,
-  GatewayCallbackClientReaderPort,
-  GatewayLoginCompletionPort,
-  IndependentAuthorizationGrantPort,
-} from "@iam/custom-sso/testing";
 
-import type { SessionOrigin } from "@iam/session-kernel";
+import type { LoginRestriction } from "@iam/api-core/login-restriction";
 import type { UserProfileQueryService } from "@iam/user-profile-read-model/query";
 import { expect, test } from "bun:test";
+
+type PrincipalSessionAdapter = ReturnType<typeof createUserSessionAuthenticationAdapter>;
 
 function assertAssignable<Port, _Provider extends Port>() {}
 function assertPrincipalSessionCreationContracts(
@@ -114,15 +95,6 @@ void assertPrincipalSessionCreationContracts;
 
 test("API providers structurally satisfy consumer-owned ports", () => {
   assertAssignable<ClientReaderPort, ClientRepository>();
-  assertAssignable<CustomSsoClientSecretReader, CustomSsoClientRepository>();
-  assertAssignable<
-    GatewayCallbackClientReaderPort,
-    CustomSsoClientRuntimeReader
-  >();
-  assertAssignable<
-    AuthorizeSsoClientReaderPort,
-    CustomSsoClientRuntimeReader
-  >();
   assertAssignable<MobileUserReaderPort, UserRepository>();
   assertAssignable<OrganizationReaderPort, OrganizationRepository>();
   assertAssignable<OrganizationTransactionStorePort, OrganizationRepository>();
@@ -156,16 +128,6 @@ test("API providers structurally satisfy consumer-owned ports", () => {
   assertAssignable<MobilePrincipalSessionPort, PrincipalSessionAdapter>();
   assertAssignable<OaPrincipalSessionPort, PrincipalSessionAdapter>();
   assertAssignable<WechatPrincipalSessionPort, PrincipalSessionAdapter>();
-
-  assertAssignable<AuthorizationCodeIssuerPort, CustomSsoSessionKernelAdapter>();
-  assertAssignable<IndependentAuthorizationGrantPort, CustomSsoSessionKernelAdapter>();
-  assertAssignable<GatewayLoginCompletionPort, CustomSsoSessionKernelAdapter>();
-  assertAssignable<CustomSsoOrcasLoginPort, OrcasClient>();
-  assertAssignable<
-    CustomSsoSubjectProjectionPort,
-    ClientSubjectProjectionService
-  >();
-  assertAssignable<CustomSsoSubjectDeliveryPort, CustomSsoSubjectDelivery>();
 
   expect(true).toBe(true);
 });

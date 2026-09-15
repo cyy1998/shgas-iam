@@ -11,6 +11,7 @@ const TEST_DATABASE_URL_ENV = "IAM_API_TEST_DATABASE_URL";
 const RESERVED_DATABASE_NAMES = new Set(["postgres", "template0", "template1"]);
 
 export interface ApiPostgresTestHarness {
+  readonly databaseUrl: string;
   readonly db: DbClient;
   readonly sql: ReturnType<typeof postgres>;
   readonly reset: () => Promise<void>;
@@ -38,7 +39,10 @@ export async function createApiPostgresTestHarness(): Promise<ApiPostgresTestHar
     );
     await migrate(db, { migrationsFolder, migrationsSchema: schemaName });
 
+    const scopedUrl = new URL(databaseUrl);
+    scopedUrl.searchParams.set("search_path", schemaName);
     return {
+      databaseUrl: scopedUrl.href,
       db,
       sql: scopedSql,
       async reset() {

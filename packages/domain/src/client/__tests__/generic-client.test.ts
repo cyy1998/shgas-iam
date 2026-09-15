@@ -1,9 +1,5 @@
 import {
   ClientStatus,
-  CustomSsoClientMode,
-  OidcClientType,
-  OidcScope,
-  OidcTokenEndpointAuthMethod,
   SubjectClaim,
 } from "@iam/contracts";
 import { expect, test } from "bun:test";
@@ -25,25 +21,16 @@ test("generic Client runtime exposes only the protocol-neutral storage projectio
       managementLevel: "Gateway",
       requireOrcas: true,
     },
-    oidcEnabled: true,
-    oidcConfig: {
-      clientType: OidcClientType.Public,
-      redirectUris: ["https://oidc.example.com/callback"],
-      postLogoutRedirectUris: [],
-      allowedScopes: [OidcScope.OpenId],
-      tokenEndpointAuthMethod: OidcTokenEndpointAuthMethod.None,
-    },
-    oidcSecretHash: null,
-    oidcConfigVersion: 2,
-    customSsoEnabled: true,
-    customSsoConfig: {
-      mode: CustomSsoClientMode.Gateway,
+    ssoEnabled: true,
+    ssoConfig: {
+      protocol: "custom-sso",
+      callbackEndpoint: "https://portal.example.com/sso/callback",
       validRedirectUrls: ["https://portal.example.com/*"],
       subjectClaims: [SubjectClaim.SubjectIdentifier],
-      orcas: { enabled: false },
     },
-    customSsoSecretHash: null,
-    customSsoConfigVersion: 3,
+    ssoSecret: "sensitive-sso-secret",
+    ssoCredentialId: "sensitive-identity",
+    ssoSecretUpdatedAt: new Date(),
   });
 
   expect(runtime).toEqual({

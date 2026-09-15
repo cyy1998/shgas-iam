@@ -154,16 +154,13 @@ export const ADMIN_OPERATION_REGISTRY = {
   "admin.client.updateLegacy": clientMutation(["clientCode", "id"]),
   "admin.client.updateStatus": clientMutation(["clientCode"]),
   "admin.client.delete": clientMutation(["clientCode"]),
-  "admin.client.customSsoConfigure": clientMutation(["clientCode"]),
-  "admin.client.customSsoEnable": clientMutation(["clientCode"]),
-  "admin.client.customSsoDisable": clientMutation(["clientCode"]),
-  "admin.client.customSsoRemove": clientMutation(["clientCode"]),
-  "admin.client.customSsoRotateSecret": clientMutation(["clientCode"]),
-  "admin.client.oidcConfigure": clientMutation(["clientCode"]),
-  "admin.client.oidcEnable": clientMutation(["clientCode"]),
-  "admin.client.oidcDisable": clientMutation(["clientCode"]),
-  "admin.client.oidcRemove": clientMutation(["clientCode"]),
-  "admin.client.oidcRotateSecret": clientMutation(["clientCode"]),
+  "admin.clientSso.delete": clientMutation(["clientCode"]),
+  "admin.clientSso.detail": { module: "client", type: "query", resourceType: "client" },
+  "admin.clientSso.save": clientMutation(["clientCode"]),
+  "admin.clientSso.selectProtocol": clientMutation(["clientCode"]),
+  "admin.clientSso.setEnabled": clientMutation(["clientCode"]),
+  "admin.clientSso.rotateSecret": clientMutation(["clientCode"]),
+  "admin.clientSso.readSecret": clientMutation(["clientCode"]),
 
   "admin.employment.search": { module: "employment", type: "query", resourceType: "employment" },
   "admin.employment.detail": { module: "employment", type: "query", resourceType: "employment" },
@@ -244,7 +241,8 @@ export const ADMIN_OPERATION_REGISTRY = {
   "admin.user.resetPassword": userMutation(["username"]),
 } as const satisfies Record<string, AdminOperationClassification>;
 
-export type AdminOperationId = keyof typeof ADMIN_OPERATION_REGISTRY;
+export const ADMIN_AUTHORIZATION_OPERATION_REGISTRY = ADMIN_OPERATION_REGISTRY;
+export type AdminOperationId = keyof typeof ADMIN_AUTHORIZATION_OPERATION_REGISTRY;
 
 export const ADMIN_REST_ONLY_OPERATION_IDS = [
   "admin.client.updateLegacy",

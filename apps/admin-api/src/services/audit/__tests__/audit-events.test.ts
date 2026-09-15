@@ -67,21 +67,7 @@ describe("admin audit event builders", () => {
         outcome: "success",
         result: {
           changed: true,
-          result: {
-            scope: "session",
-            revoked: {
-              principalSessions: 1,
-              bindings: 2,
-              credentials: 3,
-              artifacts: 4,
-            },
-            currentPrincipalSessionExcluded: false,
-            cleanup: {
-              attempted: 2,
-              succeeded: 1,
-              failed: 1,
-            },
-          },
+          result: { scope: "session", generation: "unified" as const, currentPrincipalSessionExcluded: false, sessions: { userSessionsTerminated: 1, clientSessionsTerminated: 2, excluded: 0, failed: 0, unknown: 0 }, batch: { results: [], unfinished: [] }, artifactCleanup: { attempted: 0, succeeded: 0, failed: 0 } },
         },
       },
       {
@@ -101,18 +87,7 @@ describe("admin audit event builders", () => {
       requestId: "req-1",
       targetType: "principal_session",
       targetCode: "ps-target",
-      details: {
-        scope: "session",
-        changed: true,
-        revoked: {
-          principalSessions: 1,
-          bindings: 2,
-          credentials: 3,
-          artifacts: 4,
-        },
-        currentPrincipalSessionExcluded: false,
-        cleanupFailedCount: 1,
-      },
+      details: { scope: "session", changed: true, currentPrincipalSessionExcluded: false, sessions: { userSessionsTerminated: 1, clientSessionsTerminated: 2, excluded: 0, failed: 0, unknown: 0 } },
     });
     expect(JSON.stringify(audit)).not.toContain("ps-actor-must-not-be-persisted");
   });
@@ -124,21 +99,7 @@ describe("admin audit event builders", () => {
         outcome: "success",
         result: {
           changed: true,
-          result: {
-            scope: "user",
-            revoked: {
-              principalSessions: 1,
-              bindings: 2,
-              credentials: 3,
-              artifacts: 4,
-            },
-            currentPrincipalSessionExcluded: true,
-            cleanup: {
-              attempted: 2,
-              succeeded: 1,
-              failed: 1,
-            },
-          },
+          result: { scope: "user", generation: "unified" as const, currentPrincipalSessionExcluded: true, sessions: { userSessionsTerminated: 1, clientSessionsTerminated: 2, excluded: 0, failed: 0, unknown: 0 }, batch: { results: [], unfinished: [] }, artifactCleanup: { attempted: 0, succeeded: 0, failed: 0 } },
         },
       },
       {
@@ -158,18 +119,7 @@ describe("admin audit event builders", () => {
       requestId: "req-user-revoke",
       targetType: "user",
       targetId: 42,
-      details: {
-        scope: "user",
-        changed: true,
-        revoked: {
-          principalSessions: 1,
-          bindings: 2,
-          credentials: 3,
-          artifacts: 4,
-        },
-        currentPrincipalSessionExcluded: true,
-        cleanupFailedCount: 1,
-      },
+      details: { scope: "user", changed: true, currentPrincipalSessionExcluded: true, sessions: { userSessionsTerminated: 1, clientSessionsTerminated: 2, excluded: 0, failed: 0, unknown: 0 } },
     });
     const persistedAudit = JSON.stringify(audit);
     expect(persistedAudit).not.toContain("ps-actor-must-not-be-persisted");

@@ -11,6 +11,7 @@ import {
   SessionRevokeError,
   SessionRevokeErrorKind,
   type SessionRevokeInput,
+  type SessionRevokeResult,
 } from '@admin/services/session-management';
 import {
   type ActionType,
@@ -66,13 +67,6 @@ const browserDisplay = {
 const userRevokeSafetyGuidance =
   '操作开始时已索引的会话将被处理；操作期间或之后建立的新会话仍可能存在。IAM 不能保证第三方自行建立的本地会话退出。强制下线不会阻止未来重新登录；如怀疑凭据泄露，请同时执行密码重置、账号暂停或结束。';
 
-function buildUserRevokeConfirmationContent(isCurrentUser: boolean) {
-  const impact = isCurrentUser
-    ? 'IAM 会保留当前管理端根会话，撤销本人的其他根会话，并尽力处理这些根会话（包括当前根）关联的 IAM 凭证。'
-    : 'IAM 会撤销该用户已索引的根会话，并尽力处理关联 IAM 凭证；关联访问可能仍持续至凭证失效。';
-  return `${impact}${userRevokeSafetyGuidance}`;
-}
-
 function renderOrigin(session: SessionListItem) {
   if (!session.origin) return '未知';
   const { origin } = session;
@@ -96,6 +90,10 @@ export default function SessionsPage() {
   const [sessionRows, setSessionRows] = useState<SessionListItem[]>([]);
   const [auditFailedAfterEffect, setAuditFailedAfterEffect] = useState(false);
   const [revokingTarget, setRevokingTarget] = useState<string | null>(null);
+  const [canRevoke, setCanRevoke] = useState(false);
+  const [unfinished, setUnfinished] = useState<
+    NonNullable<SessionRevokeResult['result']['batch']>['unfinished']
+  >([]);
 
   const refreshSessions = () => {
     actionRef.current?.reload();
@@ -110,23 +108,27 @@ export default function SessionsPage() {
     try {
       const result = await revokeSessions(input);
       refreshAfterOperation = true;
-      if (!result.changed) {
+      const sessions = result.result.sessions;
+      setUnfinished(result.result.batch?.unfinished ?? []);
+      const batch = result.result.batch;
+      const cleanup = result.result.artifactCleanup;
+      const finished = batch
+        ? `；缺失/过期 ${batch.results.filter((item) => item.status === 'missing' || item.status === 'expired').length} 项，原已终止 ${batch.results.filter((item) => item.status === 'already_terminated').length} 项，替换保留 ${batch.results.filter((item) => item.status === 'replaced').length} 项`
+        : '';
+      const artifact = cleanup
+        ? `；产物回收尝试 ${cleanup.attempted} 项、成功 ${cleanup.succeeded} 项、失败 ${cleanup.failed} 项`
+        : '';
+      const detail = `已终止 ${sessions.userSessionsTerminated} 个根会话、${sessions.clientSessionsTerminated} 个应用会话；保留 ${sessions.excluded} 个当前根${finished}${artifact}`;
+      if (sessions.failed > 0 || sessions.unknown > 0) {
         message.warning(
-          '未发生新的撤销；目标可能已失效、已被处理或当前根已保留',
+          `${detail}；失败 ${sessions.failed} 项，结果未知 ${sessions.unknown} 项，${result.result.batch ? '可主动重试原未完成集合' : '请刷新后明确发起新操作'}`,
         );
+      } else if (cleanup && cleanup.failed > 0) {
+        message.warning(detail);
+      } else if (result.changed) {
+        message.success(detail);
       } else {
-        const effect =
-          result.result.revoked.principalSessions > 0
-            ? `已撤销 ${result.result.revoked.principalSessions} 个根会话`
-            : '已撤销关联对象，本次未撤销根会话';
-        const detail = `${effect}；关联对象已尽力处理`;
-        if (result.result.cleanup.failed > 0) {
-          message.warning(
-            `${detail}，部分外围清理失败（${result.result.cleanup.failed} 项）`,
-          );
-        } else {
-          message.success(detail);
-        }
+        message.info(detail);
       }
     } catch (error) {
       if (
@@ -135,6 +137,8 @@ export default function SessionsPage() {
       ) {
         refreshAfterOperation = true;
         setAuditFailedAfterEffect(true);
+        if (input.target.type === 'captured')
+          setUnfinished(input.target.targets);
       } else if (
         error instanceof SessionRevokeError &&
         error.kind === SessionRevokeErrorKind.CurrentSessionProtected
@@ -157,21 +161,32 @@ export default function SessionsPage() {
   };
 
   const confirmRevokeSession = (session: SessionListItem) => {
+    const record = session.record;
+    if (!record) return;
     Modal.confirm({
       title: '确认强制下线本次会话？',
       content:
-        'IAM 会撤销此根会话，并尽力处理关联 IAM 凭证；关联访问可能仍持续至凭证失效。不能保证第三方自行建立的本地会话退出。强制下线不会阻止未来重新登录；如怀疑凭据泄露，请同时执行密码重置、账号暂停或结束。',
+        record.kind === 'clientSession'
+          ? `终止这个原确切 ClientSession，其协议凭据后续访问将被拒绝；保留根登录和其他应用关系。${userRevokeSafetyGuidance}`
+          : `终止这个根登录并尽力处理其已捕获的应用关系；根终止后新协议访问将被拒绝。${userRevokeSafetyGuidance}`,
       okText: '确认下线',
       okType: 'danger',
       cancelText: '取消',
       onOk: () =>
         executeRevoke(
-          {
-            target: {
-              type: 'session',
-              principalSessionId: session.principalSessionId,
-            },
-          },
+          record.kind === 'clientSession'
+            ? {
+                target: {
+                  type: 'captured',
+                  targets: [record.identity],
+                },
+              }
+            : {
+                target: {
+                  type: 'session',
+                  principalSessionId: session.principalSessionId,
+                },
+              },
           `session:${session.principalSessionId}`,
         ),
     });
@@ -183,7 +198,7 @@ export default function SessionsPage() {
 
     Modal.confirm({
       title: '确认下线该用户全部会话？',
-      content: buildUserRevokeConfirmationContent(session.isCurrentUser),
+      content: `${session.isCurrentUser ? '保留当前管理端根会话（UserSession）本身；尝试终止包括当前根在内的目标根下已捕获应用关系，以及本人的其他根会话；' : ''}先捕获该用户的根登录和应用关系，再精确终止原实例；重试只处理未完成集合。${userRevokeSafetyGuidance}`,
       okText: '确认下线',
       okType: 'danger',
       cancelText: '取消',
@@ -201,6 +216,21 @@ export default function SessionsPage() {
   };
 
   const columns: ProColumns<SessionListItem>[] = [
+    {
+      title: '记录类型',
+      dataIndex: 'kind',
+      valueType: 'select',
+      valueEnum: {
+        userSession: 'UserSession（根登录）',
+        clientSession: 'ClientSession（应用关系）',
+      },
+      render: (_, session) =>
+        session.record?.kind === 'clientSession'
+          ? `ClientSession · ${session.record.clientId} · ${session.record.protocol}`
+          : session.record
+            ? 'UserSession'
+            : '记录不可用',
+    },
     {
       title: '用户',
       dataIndex: 'userId',
@@ -279,7 +309,13 @@ export default function SessionsPage() {
         <Space orientation="vertical" size="small">
           <Button
             danger
-            disabled={session.isCurrentSession}
+            disabled={
+              !canRevoke ||
+              !session.record ||
+              session.isCurrentSession ||
+              revokingTarget !== null ||
+              unfinished.length > 0
+            }
             loading={revokingTarget === `session:${session.principalSessionId}`}
             onClick={() => confirmRevokeSession(session)}
           >
@@ -287,7 +323,13 @@ export default function SessionsPage() {
           </Button>
           <Button
             danger
-            disabled={session.user.id === null}
+            disabled={
+              !canRevoke ||
+              !session.record ||
+              session.user.id === null ||
+              revokingTarget !== null ||
+              unfinished.length > 0
+            }
             loading={revokingTarget === `user:${session.user.id}`}
             onClick={() => confirmRevokeUser(session)}
           >
@@ -300,6 +342,32 @@ export default function SessionsPage() {
 
   const sessionRecords = (
     <Space orientation="vertical" size="middle" style={{ width: '100%' }}>
+      {unfinished.length > 0 ? (
+        <Alert
+          type="warning"
+          showIcon
+          message={`原批次仍有 ${unfinished.length} 项未确认完成`}
+          description="重试只处理保存的原实例。结果丢失后需重新查询并发起新操作，不会自动扩大旧批次。"
+          action={
+            <Button
+              disabled={!canRevoke || revokingTarget !== null}
+              onClick={() =>
+                Modal.confirm({
+                  title: '确认重试原未完成集合？',
+                  content: '只重试上次返回的原确切实例，不纳入后来创建的会话。',
+                  onOk: () =>
+                    executeRevoke(
+                      { target: { type: 'captured', targets: unfinished } },
+                      'retry',
+                    ),
+                })
+              }
+            >
+              重试未完成集合
+            </Button>
+          }
+        />
+      ) : null}
       {auditFailedAfterEffect ? (
         <Alert
           showIcon
@@ -322,7 +390,9 @@ export default function SessionsPage() {
       ) : null}
       <ProTable<SessionListItem>
         actionRef={actionRef}
-        rowKey="principalSessionId"
+        rowKey={(session) =>
+          session.record?.identity.id ?? session.principalSessionId
+        }
         columns={columns}
         dataSource={sessionRows}
         search={{ labelWidth: 'auto' }}
@@ -339,20 +409,24 @@ export default function SessionsPage() {
             current = 1,
             pageSize = 20,
             userId,
+            kind,
           } = params as {
             current?: number;
             pageSize?: number;
             userId?: number;
+            kind?: 'userSession' | 'clientSession';
           };
           try {
             const response = await listSessions({
               conditions: {
                 userId: typeof userId === 'number' ? userId : undefined,
+                kind,
               },
               pageNum: current,
               pageSize,
             });
             setLoadError(null);
+            setCanRevoke(response.allowedActions?.revoke === true);
             setSessionRows(response.result);
             return {
               data: response.result,
@@ -360,6 +434,7 @@ export default function SessionsPage() {
               success: true,
             };
           } catch (error) {
+            setCanRevoke(false);
             setLoadError(
               error instanceof SessionListError
                 ? error.kind

@@ -31,7 +31,7 @@
     "verbatimModuleSyntax": true,
     "skipLibCheck": true
   },
-  "include": ["src/**/*.ts", "test-integration/**/*.ts", "app.config.ts", "eslint.config.js"],
+  "include": ["src/**/*.ts", "test-integration/**/*.ts", "app.config.ts", "playwright.config.ts", "eslint.config.js"],
   "exclude": [
     "scripts"
   ]

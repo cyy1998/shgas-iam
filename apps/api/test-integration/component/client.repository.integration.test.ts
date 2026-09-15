@@ -49,19 +49,9 @@ test("generic Client provider reads only the protocol-neutral projection", async
   const fake = createSelectDb(genericClientRecord);
   const repository = createClientRepository(fake.db as never);
 
-  await expect(repository.findClientTrafficState("portal")).resolves.toEqual({
-    clientCode: "portal",
-    isDelete: false,
-    status: ClientStatus.Enable,
-  });
   await expect(repository.getClientByCode("portal")).resolves.toEqual(genericClientRecord);
   await expect(repository.getClientBySecret("general-secret")).resolves.toEqual(genericClientRecord);
   expect(fake.selections).toEqual([
-    [
-      "clientCode",
-      "isDelete",
-      "status",
-    ],
     [
       "id",
       "clientCode",

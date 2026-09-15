@@ -1,10 +1,10 @@
 import { mapCustomSsoRetryableError } from "@api/middlewares/custom-sso-retryable.error";
-import { CustomSsoClientRuntimeUnavailableError } from "@api/services/client/custom-sso-client-runtime.reader";
+import { ClientSnapshotUnavailableError } from "@iam/api-core/client-snapshot";
 import { AuthzMaintenanceError } from "@iam/api-core/errors/AuthzMaintenanceError";
 import { createErrorHandler } from "@iam/api-core/middlewares/error-handler";
 import { SubjectProjectionNotReadyError } from "@iam/client-subject-projection";
 import { ApiErrorCode } from "@iam/contracts";
-import { CustomSsoTrafficGateUnavailableError } from "@iam/custom-sso/testing";
+import { CustomSsoTrafficGateUnavailableError } from "@iam/custom-sso";
 import { describe, expect, mock, test } from "bun:test";
 import { Hono } from "hono";
 
@@ -109,9 +109,7 @@ describe("Custom SSO retryable HTTP error adapter", () => {
 
   test("maps typed client runtime uncertainty to a generic unavailable response without exposing its cause", async () => {
     const mapped = mapCustomSsoRetryableError(
-      new CustomSsoClientRuntimeUnavailableError({
-        cause: new Error("redis://secret@internal"),
-      }),
+      new ClientSnapshotUnavailableError(),
       { retryAfterSeconds: 3 },
     );
 

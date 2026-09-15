@@ -6,10 +6,34 @@ import { createAdminApiUnitOfWork } from "@admin-api/composition/tx";
 import { createOrganizationService } from "@admin-api/services/organization/organization.service";
 import { BadRequestError } from "@iam/api-core/errors";
 import { mapUnitOfWork } from "@iam/api-core/uow";
-import { EmploymentStatus, OrganizationLevel, OrganizationResponsibilityAssignmentStatus, OrganizationResponsibilityTypeCode, OrganizationStatus, OrganizationType, UserType } from "@iam/contracts";
+import {
+  EmploymentStatus,
+  OrganizationLevel,
+  OrganizationResponsibilityAssignmentStatus,
+  OrganizationResponsibilityTypeCode,
+  OrganizationStatus,
+  OrganizationType,
+  UserType,
+} from "@iam/contracts";
 import { extractPostgresError } from "@iam/db/postgres-error";
-import { auditLogs, employments, organizationClosures, organizationResponsibilityAssignments, organizations, positions, userProfileDirty, users } from "@iam/db/schema";
-import { OrganizationCodeExistsError, OrganizationCreateDtoSchema, OrganizationHasChildrenError, OrganizationHasEmploymentError, OrganizationHasOpenResponsibilityAssignmentError, OrganizationNotFoundError } from "@iam/domain/organization";
+import {
+  auditLogs,
+  employments,
+  organizationClosures,
+  organizationResponsibilityAssignments,
+  organizations,
+  positions,
+  userProfileDirty,
+  users,
+} from "@iam/db/schema";
+import {
+  OrganizationCodeExistsError,
+  OrganizationCreateDtoSchema,
+  OrganizationHasChildrenError,
+  OrganizationHasEmploymentError,
+  OrganizationHasOpenResponsibilityAssignmentError,
+  OrganizationNotFoundError,
+} from "@iam/domain/organization";
 import { afterAll, beforeAll, beforeEach, describe, expect, mock, test } from "bun:test";
 import { eq } from "drizzle-orm";
 import { createAdminApiPostgresTestHarness } from "./postgres-test-harness";
@@ -42,25 +66,29 @@ function createCommand(
     service: createOrganizationService({
       organizationRepository: createAdminApiRepositories(harness.db).organization,
       responsibilityReader: createAdminApiRepositories(harness.db).organizationResponsibility,
-      uow: mapUnitOfWork(uow, tx => decorate({
-        organizationRepository: tx.repositories.organization,
-        auditService: tx.auditService,
-        responsibilityParentLifecycle: tx.responsibilityParentLifecycle,
-        userProfileInvalidation: tx.userProfileInvalidation,
-      })),
+      uow: mapUnitOfWork(uow, tx =>
+        decorate({
+          organizationRepository: tx.repositories.organization,
+          auditService: tx.auditService,
+          responsibilityParentLifecycle: tx.responsibilityParentLifecycle,
+          userProfileInvalidation: tx.userProfileInvalidation,
+        })),
     }),
   };
 }
 
 async function seedOrganization(orgCode = "ORGANIZATION") {
-  const [organization] = await harness.db.insert(organizations).values({
-    orgCode,
-    orgName: orgCode,
-    status: OrganizationStatus.Enable,
-    path: "",
-    level: OrganizationLevel.One,
-    orgType: OrganizationType.Department,
-  }).returning();
+  const [organization] = await harness.db
+    .insert(organizations)
+    .values({
+      orgCode,
+      orgName: orgCode,
+      status: OrganizationStatus.Enable,
+      path: "",
+      level: OrganizationLevel.One,
+      orgType: OrganizationType.Department,
+    })
+    .returning();
   await harness.db.insert(organizationClosures).values({
     ancestorId: organization!.id,
     descendantId: organization!.id,
@@ -70,19 +98,36 @@ async function seedOrganization(orgCode = "ORGANIZATION") {
 }
 
 async function seedEmployment(organizationId: number, status = EmploymentStatus.Enable) {
-  const [user] = await harness.db.insert(users).values({ username: "holder", name: "Holder", userType: UserType.Formal }).returning();
-  const [position] = await harness.db.insert(positions).values({
-    posCode: "POSITION",
-    posName: "Position",
-  }).returning();
-  await harness.db.insert(employments).values({ userId: user!.id, orgId: organizationId, posId: position!.id, status, startTime: new Date("2026-08-01T00:00:00Z") });
+  const [user] = await harness.db
+    .insert(users)
+    .values({ username: "holder", name: "Holder", userType: UserType.Formal })
+    .returning();
+  const [position] = await harness.db
+    .insert(positions)
+    .values({
+      posCode: "POSITION",
+      posName: "Position",
+    })
+    .returning();
+  await harness.db
+    .insert(employments)
+    .values({
+      userId: user!.id,
+      orgId: organizationId,
+      posId: position!.id,
+      status,
+      startTime: new Date("2026-08-01T00:00:00Z"),
+    });
   return user!;
 }
 
 async function facts() {
   return {
     organizations: await harness.db.select().from(organizations).orderBy(organizations.id),
-    closures: await harness.db.select().from(organizationClosures).orderBy(organizationClosures.ancestorId, organizationClosures.descendantId),
+    closures: await harness.db
+      .select()
+      .from(organizationClosures)
+      .orderBy(organizationClosures.ancestorId, organizationClosures.descendantId),
     audits: await harness.db.select().from(auditLogs).orderBy(auditLogs.id),
     dirty: await harness.db.select().from(userProfileDirty),
   };
@@ -124,21 +169,30 @@ describe("Organization mutations through production PostgreSQL UnitOfWork", () =
           throw new OrganizationNotFoundError();
         throw new Error("Unexpected authorization denial");
       });
-      const authorization: AdminOrganizationAuthorization | undefined = actor === "full-outside"
-        ? undefined
-        : {
-            kind: "scoped",
-            rootOrganizationIds: [parent.id],
-            organizationIds: actor === "scoped-inside" ? [parent.id, other.id] : [parent.id],
-            getAllowedActions: () => { throw new Error("UI policy is outside this command"); },
-            denyMutation,
-          };
-      const pending = failure(() => service.setOrganization(OrganizationCreateDtoSchema.parse({
-        orgCode: "RACED",
-        orgName: "Losing request",
-        orgType: OrganizationType.Department,
-        parentCode: "PARENT",
-      }), undefined, authorization));
+      const authorization: AdminOrganizationAuthorization | undefined
+        = actor === "full-outside"
+          ? undefined
+          : {
+              kind: "scoped",
+              rootOrganizationIds: [parent.id],
+              organizationIds: actor === "scoped-inside" ? [parent.id, other.id] : [parent.id],
+              getAllowedActions: () => {
+                throw new Error("UI policy is outside this command");
+              },
+              denyMutation,
+            };
+      const pending = failure(() =>
+        service.setOrganization(
+          OrganizationCreateDtoSchema.parse({
+            orgCode: "RACED",
+            orgName: "Losing request",
+            orgType: OrganizationType.Department,
+            parentCode: "PARENT",
+          }),
+          undefined,
+          authorization,
+        ),
+      );
       await Promise.race([prechecked.promise, pending]);
       try {
         // A separate production UoW wins after the first transaction observed no occupied code.
@@ -146,19 +200,23 @@ describe("Organization mutations through production PostgreSQL UnitOfWork", () =
           await createCommand().service.updateOrganization("OTHER", { orgCode: "RACED" });
         }
         else {
-          await createCommand().service.setOrganization(OrganizationCreateDtoSchema.parse({
-            orgCode: "RACED",
-            orgName: "Winner",
-            orgType: OrganizationType.Department,
-            parentCode: "OTHER",
-          }));
+          await createCommand().service.setOrganization(
+            OrganizationCreateDtoSchema.parse({
+              orgCode: "RACED",
+              orgName: "Winner",
+              orgType: OrganizationType.Department,
+              parentCode: "OTHER",
+            }),
+          );
         }
       }
       finally {
         release.resolve();
       }
       const error = await pending;
-      expect(error).toBeInstanceOf(actor === "scoped-outside" ? OrganizationNotFoundError : OrganizationCodeExistsError);
+      expect(error).toBeInstanceOf(
+        actor === "scoped-outside" ? OrganizationNotFoundError : OrganizationCodeExistsError,
+      );
       if (actor === "scoped-outside") {
         expect(denyMutation).toHaveBeenCalledWith({
           operationId: "admin.organization.create",
@@ -175,39 +233,48 @@ describe("Organization mutations through production PostgreSQL UnitOfWork", () =
       expect(after.organizations.find(row => row.orgCode === "RACED")).toMatchObject({
         orgName: actor === "scoped-inside" ? "OTHER" : "Winner",
       });
-      expect(after.audits).toMatchObject([{
-        action: actor === "scoped-inside" ? "admin.organization.update" : "admin.organization.create",
-      }]);
+      expect(after.audits).toMatchObject([
+        {
+          action: actor === "scoped-inside" ? "admin.organization.update" : "admin.organization.create",
+        },
+      ]);
       expect(after.dirty).toEqual([]);
     });
   }
 
   test("default and explicit Enable creation build canonical paths and complete closure relations", async () => {
     const { service } = createCommand();
-    const root = await service.setOrganization(OrganizationCreateDtoSchema.parse({
-      orgCode: "ROOT",
-      orgName: "Root",
-      orgType: OrganizationType.Department,
-    }));
+    const root = await service.setOrganization(
+      OrganizationCreateDtoSchema.parse({
+        orgCode: "ROOT",
+        orgName: "Root",
+        orgType: OrganizationType.Department,
+      }),
+    );
     expect(root).toMatchObject({
       changed: true,
       result: { status: OrganizationStatus.Enable, level: OrganizationLevel.One, parentCode: null },
     });
-    const child = await service.setOrganization(OrganizationCreateDtoSchema.parse({
-      orgCode: "CHILD",
-      orgName: "Child",
-      orgType: OrganizationType.Department,
-      parentCode: "ROOT",
-      status: OrganizationStatus.Enable,
-    }));
+    const child = await service.setOrganization(
+      OrganizationCreateDtoSchema.parse({
+        orgCode: "CHILD",
+        orgName: "Child",
+        orgType: OrganizationType.Department,
+        parentCode: "ROOT",
+        status: OrganizationStatus.Enable,
+      }),
+    );
     const after = await facts();
     const [rootRow, childRow] = after.organizations;
-    expect(child).toMatchObject({ changed: true, result: {
-      status: OrganizationStatus.Enable,
-      parentCode: "ROOT",
-      level: OrganizationLevel.Two,
-      path: `/${rootRow!.id}/${childRow!.id}`,
-    } });
+    expect(child).toMatchObject({
+      changed: true,
+      result: {
+        status: OrganizationStatus.Enable,
+        parentCode: "ROOT",
+        level: OrganizationLevel.Two,
+        path: `/${rootRow!.id}/${childRow!.id}`,
+      },
+    });
     expect(after.closures).toMatchObject([
       { ancestorId: rootRow!.id, descendantId: rootRow!.id, depth: 0 },
       { ancestorId: rootRow!.id, descendantId: childRow!.id, depth: 1 },
@@ -218,7 +285,14 @@ describe("Organization mutations through production PostgreSQL UnitOfWork", () =
 
   for (const status of [OrganizationStatus.Pause, OrganizationStatus.Disable]) {
     test(`explicit non-Enable creation ${status} is rejected without partial facts`, async () => {
-      const input = { orgCode: "INVALID", orgName: "Invalid", orgType: OrganizationType.Department, path: "", level: OrganizationLevel.One, status };
+      const input = {
+        orgCode: "INVALID",
+        orgName: "Invalid",
+        orgType: OrganizationType.Department,
+        path: "",
+        level: OrganizationLevel.One,
+        status,
+      };
       expect(OrganizationCreateDtoSchema.safeParse(input).success).toBe(false);
       const after = await facts();
       expect(after.organizations).toEqual([]);
@@ -235,7 +309,14 @@ describe("Organization mutations through production PostgreSQL UnitOfWork", () =
       const { service } = createCommand();
       const before = await facts();
       for (const command of [
-        () => service.setOrganization(OrganizationCreateDtoSchema.parse({ orgCode: "OCCUPIED", orgName: "New", orgType: OrganizationType.Department })),
+        () =>
+          service.setOrganization(
+            OrganizationCreateDtoSchema.parse({
+              orgCode: "OCCUPIED",
+              orgName: "New",
+              orgType: OrganizationType.Department,
+            }),
+          ),
         () => service.updateOrganization("ORGANIZATION", { orgCode: "OCCUPIED" }),
       ]) {
         const error = await failure(command);
@@ -250,14 +331,19 @@ describe("Organization mutations through production PostgreSQL UnitOfWork", () =
     const target = await seedOrganization();
     const child = await seedOrganization("CHILD");
     await harness.db.update(organizations).set({ parentId: target.id }).where(eq(organizations.id, child.id));
-    await harness.db.insert(organizationClosures).values({ ancestorId: target.id, descendantId: child.id, depth: 1 });
+    await harness.db
+      .insert(organizationClosures)
+      .values({ ancestorId: target.id, descendantId: child.id, depth: 1 });
     const { service } = createCommand();
     const childrenError = await failure(() => service.deleteOrganization("ORGANIZATION"));
     expect(childrenError).toBeInstanceOf(OrganizationHasChildrenError);
     const holder = await seedOrganization("HOLDER");
     await seedEmployment(holder.id);
     const [employment] = await harness.db.select().from(employments);
-    const openStatuses = [OrganizationResponsibilityAssignmentStatus.Enable, OrganizationResponsibilityAssignmentStatus.Pause];
+    const openStatuses = [
+      OrganizationResponsibilityAssignmentStatus.Enable,
+      OrganizationResponsibilityAssignmentStatus.Pause,
+    ];
     for (const status of openStatuses) {
       await harness.db.insert(organizationResponsibilityAssignments).values({
         employmentId: employment!.id,
@@ -285,29 +371,35 @@ describe("Organization mutations through production PostgreSQL UnitOfWork", () =
       await seedOrganization();
       const written = Promise.withResolvers<void>();
       const release = Promise.withResolvers<void>();
-      const first = createCommand(tx => ({ ...tx, organizationRepository: {
-        ...tx.organizationRepository,
-        updateOrganizationByCode: async (code, patch) => {
-          const row = await tx.organizationRepository.updateOrganizationByCode(code, patch);
-          written.resolve();
-          await release.promise;
-          return row;
+      const first = createCommand(tx => ({
+        ...tx,
+        organizationRepository: {
+          ...tx.organizationRepository,
+          updateOrganizationByCode: async (code, patch) => {
+            const row = await tx.organizationRepository.updateOrganizationByCode(code, patch);
+            written.resolve();
+            await release.promise;
+            return row;
+          },
+          softDeleteOrganizationByCode: async (code) => {
+            const row = await tx.organizationRepository.softDeleteOrganizationByCode(code);
+            written.resolve();
+            await release.promise;
+            return row;
+          },
         },
-        softDeleteOrganizationByCode: async (code) => {
-          const row = await tx.organizationRepository.softDeleteOrganizationByCode(code);
-          written.resolve();
-          await release.promise;
-          return row;
-        },
-      } })).service;
-      const firstPending = firstOperation === "rename"
-        ? first.updateOrganization("ORGANIZATION", { orgCode: "RENAMED" })
-        : first.deleteOrganization("ORGANIZATION");
+      })).service;
+      const firstPending
+        = firstOperation === "rename"
+          ? first.updateOrganization("ORGANIZATION", { orgCode: "RENAMED" })
+          : first.deleteOrganization("ORGANIZATION");
       await Promise.race([written.promise, firstPending]);
       const second = createCommand().service;
-      const secondPending = failure(() => firstOperation === "rename"
-        ? second.deleteOrganization("ORGANIZATION")
-        : second.updateOrganization("ORGANIZATION", { orgName: "Unexpected" }));
+      const secondPending = failure(() =>
+        firstOperation === "rename"
+          ? second.deleteOrganization("ORGANIZATION")
+          : second.updateOrganization("ORGANIZATION", { orgName: "Unexpected" }),
+      );
       try {
         const deadline = Date.now() + 2000;
         let blocked = false;
@@ -361,9 +453,10 @@ describe("Organization mutations through production PostgreSQL UnitOfWork", () =
       const second = createCommand().service;
       const firstPending = first.updateOrganizationStatus("ORGANIZATION", OrganizationStatus.Pause);
       await Promise.race([written.promise, firstPending]);
-      const secondPending = secondOperation === "status"
-        ? second.updateOrganizationStatus("ORGANIZATION", OrganizationStatus.Pause)
-        : second.updateOrganization("ORGANIZATION", { orgName: "New name" });
+      const secondPending
+        = secondOperation === "status"
+          ? second.updateOrganizationStatus("ORGANIZATION", OrganizationStatus.Pause)
+          : second.updateOrganization("ORGANIZATION", { orgName: "New name" });
       try {
         const deadline = Date.now() + 2000;
         let blocked = false;
@@ -403,10 +496,22 @@ describe("Organization mutations through production PostgreSQL UnitOfWork", () =
 
   test("creates a DTO and atomically commits an edit, audit and dirty before waking the queue", async () => {
     const { service, enqueueRebuildJobs } = createCommand();
-    const created = await service.setOrganization({ path: "", level: OrganizationLevel.One, orgType: OrganizationType.Department, orgCode: "ORGANIZATION", orgName: "ORGANIZATION", status: OrganizationStatus.Enable });
-    expect(created).toMatchObject({ changed: true, result: { orgCode: "ORGANIZATION", orgName: "ORGANIZATION" } });
+    const created = await service.setOrganization({
+      path: "",
+      level: OrganizationLevel.One,
+      orgType: OrganizationType.Department,
+      orgCode: "ORGANIZATION",
+      orgName: "ORGANIZATION",
+      status: OrganizationStatus.Enable,
+    });
+    expect(created).toMatchObject({
+      changed: true,
+      result: { orgCode: "ORGANIZATION", orgName: "ORGANIZATION" },
+    });
     const initial = await facts();
-    expect(initial.audits).toMatchObject([{ action: "admin.organization.create", details: { changed: true } }]);
+    expect(initial.audits).toMatchObject([
+      { action: "admin.organization.create", details: { changed: true } },
+    ]);
     const user = await seedEmployment(initial.organizations[0]!.id);
     let observedAtWakeup: Awaited<ReturnType<typeof facts>> | undefined;
     enqueueRebuildJobs.mockImplementation(async () => {
@@ -426,7 +531,10 @@ describe("Organization mutations through production PostgreSQL UnitOfWork", () =
     await seedEmployment(organization.id);
     const { service, enqueueRebuildJobs } = createCommand();
     const before = await facts();
-    const edit = await service.updateOrganization("ORGANIZATION", { orgName: "ORGANIZATION", orgType: OrganizationType.Department });
+    const edit = await service.updateOrganization("ORGANIZATION", {
+      orgName: "ORGANIZATION",
+      orgType: OrganizationType.Department,
+    });
     expect(edit).toEqual({ changed: false, result: null });
     const afterEdit = await facts();
     expect(afterEdit).toEqual(before);
@@ -434,7 +542,9 @@ describe("Organization mutations through production PostgreSQL UnitOfWork", () =
     expect(status).toEqual({ changed: false, result: null });
     const after = await facts();
     expect(after.organizations).toEqual(before.organizations);
-    expect(after.audits).toMatchObject([{ action: "admin.organization.status_update", details: { changed: false } }]);
+    expect(after.audits).toMatchObject([
+      { action: "admin.organization.status_update", details: { changed: false } },
+    ]);
     expect(after.dirty).toEqual([]);
     expect(enqueueRebuildJobs).not.toHaveBeenCalled();
     const updateStatus = await service.updateOrganization("ORGANIZATION", {
@@ -482,7 +592,10 @@ describe("Organization mutations through production PostgreSQL UnitOfWork", () =
       await seedEmployment(organization.id, status);
       const { service } = createCommand();
       const before = await facts();
-      for (const command of [() => service.updateOrganizationStatus("ORGANIZATION", OrganizationStatus.Pause), () => service.deleteOrganization("ORGANIZATION")]) {
+      for (const command of [
+        () => service.updateOrganizationStatus("ORGANIZATION", OrganizationStatus.Pause),
+        () => service.deleteOrganization("ORGANIZATION"),
+      ]) {
         const error = await failure(command);
         expect(error).toBeInstanceOf(OrganizationHasEmploymentError);
       }
@@ -499,17 +612,28 @@ describe("Organization mutations through production PostgreSQL UnitOfWork", () =
       const { service, enqueueRebuildJobs } = createCommand(tx => ({
         ...tx,
         ...(stage === "audit"
-          ? { auditService: { ...tx.auditService, recordAuditLog: async (input) => {
-              await tx.auditService.recordAuditLog(input);
-              throw sentinel;
-            } } }
-          : { userProfileInvalidation: { recordChanges: async (changes) => {
-              await tx.userProfileInvalidation.recordChanges(changes);
-              throw sentinel;
-            } } }),
+          ? {
+              auditService: {
+                ...tx.auditService,
+                recordAuditLog: async (input) => {
+                  await tx.auditService.recordAuditLog(input);
+                  throw sentinel;
+                },
+              },
+            }
+          : {
+              userProfileInvalidation: {
+                recordChanges: async (changes) => {
+                  await tx.userProfileInvalidation.recordChanges(changes);
+                  throw sentinel;
+                },
+              },
+            }),
       }));
       const before = await facts();
-      const error = await failure(() => service.updateOrganization("ORGANIZATION", { orgName: "Rolled back" }));
+      const error = await failure(() =>
+        service.updateOrganization("ORGANIZATION", { orgName: "Rolled back" }),
+      );
       expect(error).toBe(sentinel);
       const after = await facts();
       expect(after).toEqual(before);
@@ -520,9 +644,12 @@ describe("Organization mutations through production PostgreSQL UnitOfWork", () =
   test("bestEffort queue failure preserves committed success and dirty recovery", async () => {
     const organization = await seedOrganization();
     await seedEmployment(organization.id);
-    const { service, warn } = createCommand(tx => tx, mock(async () => {
-      throw new Error("queue unavailable");
-    }));
+    const { service, warn } = createCommand(
+      tx => tx,
+      mock(async () => {
+        throw new Error("queue unavailable");
+      }),
+    );
     const result = await service.updateOrganization("ORGANIZATION", { orgName: "Committed" });
     expect(result).toEqual({ changed: true, result: null });
     const after = await facts();
@@ -532,7 +659,11 @@ describe("Organization mutations through production PostgreSQL UnitOfWork", () =
     expect(warn).toHaveBeenCalled();
   });
 
-  for (const method of ["setOrganization", "updateOrganizationByCode", "softDeleteOrganizationByCode"] as const) {
+  for (const method of [
+    "setOrganization",
+    "updateOrganizationByCode",
+    "softDeleteOrganizationByCode",
+  ] as const) {
     test(`controlled zero-row ${method} fails closed without audit or dirty`, async () => {
       if (method !== "setOrganization")
         await seedOrganization();
@@ -541,9 +672,20 @@ describe("Organization mutations through production PostgreSQL UnitOfWork", () =
         organizationRepository: { ...tx.organizationRepository, [method]: async () => null },
       }));
       const before = await facts();
-      const error = await failure(() => method === "setOrganization"
-        ? service.setOrganization({ path: "", level: OrganizationLevel.One, orgType: OrganizationType.Department, orgCode: "NEW", orgName: "New", status: OrganizationStatus.Enable })
-        : method === "updateOrganizationByCode" ? service.updateOrganization("ORGANIZATION", { orgName: "New" }) : service.deleteOrganization("ORGANIZATION"));
+      const error = await failure(() =>
+        method === "setOrganization"
+          ? service.setOrganization({
+              path: "",
+              level: OrganizationLevel.One,
+              orgType: OrganizationType.Department,
+              orgCode: "NEW",
+              orgName: "New",
+              status: OrganizationStatus.Enable,
+            })
+          : method === "updateOrganizationByCode"
+            ? service.updateOrganization("ORGANIZATION", { orgName: "New" })
+            : service.deleteOrganization("ORGANIZATION"),
+      );
       expect(error).toBeInstanceOf(Error);
       expect(error).not.toBeInstanceOf(OrganizationCodeExistsError);
       const after = await facts();
@@ -558,7 +700,15 @@ describe("Organization mutations through production PostgreSQL UnitOfWork", () =
     await service.deleteOrganization("OCCUPIED");
     const before = await facts();
     for (const command of [
-      () => service.setOrganization({ path: "", level: OrganizationLevel.One, orgType: OrganizationType.Department, orgCode: "OCCUPIED", orgName: "New", status: OrganizationStatus.Enable }),
+      () =>
+        service.setOrganization({
+          path: "",
+          level: OrganizationLevel.One,
+          orgType: OrganizationType.Department,
+          orgCode: "OCCUPIED",
+          orgName: "New",
+          status: OrganizationStatus.Enable,
+        }),
       () => service.updateOrganization("ORGANIZATION", { orgCode: "OCCUPIED" }),
     ]) {
       const error = await failure(command);
@@ -570,15 +720,37 @@ describe("Organization mutations through production PostgreSQL UnitOfWork", () =
 
   test("extracts real Drizzle cause metadata and preserves unknown unique constraints", async () => {
     await seedOrganization();
-    const raw = await failure(() => harness.db.insert(organizations).values({ orgCode: "ORGANIZATION", orgName: "Other", path: "", level: OrganizationLevel.One, orgType: OrganizationType.Department }));
+    const raw = await failure(() =>
+      harness.db
+        .insert(organizations)
+        .values({
+          orgCode: "ORGANIZATION",
+          orgName: "Other",
+          path: "",
+          level: OrganizationLevel.One,
+          orgType: OrganizationType.Department,
+        }),
+    );
     expect(raw).toHaveProperty("cause");
     expect(extractPostgresError(raw)).toEqual({ code: "23505", constraint: "organization_org_code_key" });
     await harness.sql`create unique index organization_test_name_unique on organization (org_name)`;
     try {
       const { service } = createCommand();
-      const error = await failure(() => service.setOrganization({ path: "", level: OrganizationLevel.One, orgType: OrganizationType.Department, orgCode: "OTHER", orgName: "ORGANIZATION", status: OrganizationStatus.Enable }));
+      const error = await failure(() =>
+        service.setOrganization({
+          path: "",
+          level: OrganizationLevel.One,
+          orgType: OrganizationType.Department,
+          orgCode: "OTHER",
+          orgName: "ORGANIZATION",
+          status: OrganizationStatus.Enable,
+        }),
+      );
       expect(error).not.toBeInstanceOf(OrganizationCodeExistsError);
-      expect(extractPostgresError(error)).toEqual({ code: "23505", constraint: "organization_test_name_unique" });
+      expect(extractPostgresError(error)).toEqual({
+        code: "23505",
+        constraint: "organization_test_name_unique",
+      });
       const after = await facts();
       expect(after.organizations).toHaveLength(1);
       expect(after.audits).toEqual([]);
@@ -597,22 +769,36 @@ describe("Organization mutations through production PostgreSQL UnitOfWork", () =
       }
       let arrived = 0;
       const gate = Promise.withResolvers<void>();
-      const { service } = createCommand(tx => ({ ...tx, organizationRepository: {
-        ...tx.organizationRepository,
-        getAnyOrganizationByCode: async (code) => {
-          const current = await tx.organizationRepository.getAnyOrganizationByCode(code);
-          if (code === "WINNER") {
-            arrived++;
-            if (arrived === 2)
-              gate.resolve();
-            await gate.promise;
-          }
-          return current;
+      const { service } = createCommand(tx => ({
+        ...tx,
+        organizationRepository: {
+          ...tx.organizationRepository,
+          getAnyOrganizationByCode: async (code) => {
+            const current = await tx.organizationRepository.getAnyOrganizationByCode(code);
+            if (code === "WINNER") {
+              arrived++;
+              if (arrived === 2)
+                gate.resolve();
+              await gate.promise;
+            }
+            return current;
+          },
         },
-      } }));
-      const results = await Promise.allSettled(operation === "create"
-        ? ["First", "Second"].map(orgName => service.setOrganization({ path: "", level: OrganizationLevel.One, orgType: OrganizationType.Department, orgCode: "WINNER", orgName, status: OrganizationStatus.Enable }))
-        : ["FIRST", "SECOND"].map(code => service.updateOrganization(code, { orgCode: "WINNER" })));
+      }));
+      const results = await Promise.allSettled(
+        operation === "create"
+          ? ["First", "Second"].map(orgName =>
+              service.setOrganization({
+                path: "",
+                level: OrganizationLevel.One,
+                orgType: OrganizationType.Department,
+                orgCode: "WINNER",
+                orgName,
+                status: OrganizationStatus.Enable,
+              }),
+            )
+          : ["FIRST", "SECOND"].map(code => service.updateOrganization(code, { orgCode: "WINNER" })),
+      );
       expect(arrived).toBe(2);
       expect(results.filter(result => result.status === "fulfilled")).toHaveLength(1);
       const rejected = results.find(result => result.status === "rejected");

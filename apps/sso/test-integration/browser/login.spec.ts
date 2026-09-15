@@ -60,16 +60,17 @@ test('continues an existing session without form flash and replaces login histor
 
   await page.goto(`/portal/login?oidcReturn=${oidcReturn}`);
   await expect.poll(() => guardRequests, { timeout: 2_000 }).toBe(1);
-  await expect(page.getByText('应用已接收授权')).toBeVisible({ timeout: 10_000 });
+  await expect(page.getByText('应用已接收授权')).toBeVisible({
+    timeout: 10_000,
+  });
   expect(
     await page.evaluate(() => localStorage.getItem('login-form-was-mounted')),
   ).toBeNull();
 
   await page.evaluate(() => window.setTimeout(() => history.back(), 0));
-  await expect.poll(
-    () => new URL(page.url()).pathname,
-    { timeout: 10_000 },
-  ).toBe('/portal/reset-password');
+  await expect
+    .poll(() => new URL(page.url()).pathname, { timeout: 10_000 })
+    .toBe('/portal/reset-password');
 });
 
 test('keeps login hidden while unavailable and retries only after user action', async ({
@@ -110,7 +111,9 @@ test('distinguishes an invalid continuation from temporary unavailability', asyn
   await expect(
     page.getByText('登录请求已失效，请返回应用重新发起登录'),
   ).toBeVisible();
-  await expect(page.getByText('统一身份认证服务暂时不可用，请稍后重试')).toHaveCount(0);
+  await expect(
+    page.getByText('统一身份认证服务暂时不可用，请稍后重试'),
+  ).toHaveCount(0);
   await expect(page.getByRole('button', { name: /重\s*试/ })).toHaveCount(0);
   await expect(page.getByPlaceholder('请输入您的工号')).toHaveCount(0);
 });
@@ -120,6 +123,14 @@ test('continues a Custom SSO session even when the entry requested mobile bindin
 }) => {
   await mockSsoApi(page, { loginGuard: 'continue' });
   let authorizeRequest: URL | undefined;
+  let guardRequest: URL | undefined;
+  const ssoReturn = 'c'.repeat(43);
+  await page.route(/\/sso\/login-guard\?/, async (route) => {
+    guardRequest = new URL(route.request().url());
+    await route.fulfill({
+      json: { code: 200, data: { decision: 'continue' }, message: 'OK' },
+    });
+  });
   await page.route(/\/sso\/authorize\?/, async (route) => {
     authorizeRequest = new URL(route.request().url());
     await route.fulfill({
@@ -129,11 +140,14 @@ test('continues a Custom SSO session even when the entry requested mobile bindin
   });
 
   await page.goto(
-    '/portal/login?client=iam-admin&loginType=BMN&redirectUrl=http%3A%2F%2Fexample.test%2Fiam-admin',
+    `/portal/login?client=iam-admin&loginType=BMN&redirectUrl=http%3A%2F%2Fexample.test%2Fiam-admin&ssoReturn=${ssoReturn}&state=opaque`,
   );
 
   await expect(page.getByText('Custom SSO 已续接')).toBeVisible();
   expect(authorizeRequest?.searchParams.get('client')).toBe('iam-admin');
+  expect(authorizeRequest?.searchParams.get('ssoReturn')).toBe(ssoReturn);
+  expect(authorizeRequest?.searchParams.get('state')).toBe('opaque');
+  expect(guardRequest?.searchParams.get('ssoReturn')).toBe(ssoReturn);
   await expect(page.getByText('您的账号尚未绑定手机号')).toHaveCount(0);
   await expect(page.getByPlaceholder('请输入您的工号')).toHaveCount(0);
 });

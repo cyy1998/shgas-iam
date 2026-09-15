@@ -1,6 +1,8 @@
 # 认证状态能力提取验收
 
-Status: Current
+> Historical：本页保留旧候选的契约与证据；Spec #178 最终在线模型已由 ADR-0035 取代，当前发布以统一会话维护手册为准。
+
+Status: Historical
 
 Last verified: 2026-09-09
 
@@ -17,11 +19,11 @@ API 提供 Client/Snapshot/Secret、User、ORCAS、审计与日志的具体能�
 
 ## 证据索引及复用边界
 
-- **K**：[Kernel Component](../../../packages/session-kernel/test-integration/component/session-kernel.integration.test.ts) 与同 owner 的 Redis collection；#125 已执行四类生命周期、时间、索引、tombstone、pending cleanup 及 API/Admin/OIDC 消费验证。
-- **A**：[API 混合认证和协议矩阵](../../../apps/api/test-integration/component/custom-sso-session-kernel.adapter.integration.test.ts)；保留四种统一认证 production composition、Kernel/Grant 时序、Snapshot、错误、补偿与审计协作。测试经 testing 入口注入可控故障，生产只消费 root。
-- **C**：[Custom SSO Component](../../../packages/custom-sso/test-integration/component/authorize-sso.use-case.integration.test.ts) 及同目录兑换、callback、主体交付、Grant 矩阵；新 owner 收集原纯协议测试。原状态机恢复断言已按 ADR-0031 退役，一次消费证据由 R 接替。
-- **R**：[完整 root 与独立 cleanup 真实 Redis](../../../packages/custom-sso/test-integration/redis/custom-sso.integration.test.ts) 和[Grant Redis](../../../packages/custom-sso/test-integration/redis/custom-sso-operation.integration.test.ts)；三种模式通过正式 factory 授权/兑换/UserInfo/退出，坏 redirect 后仍可合法兑换，Kernel 撤销同步删除 Grant 并保留非目标状态；原期限、单赢家、消费未知结果停止、ORCAS 故障与同步补偿由真实 Redis 完整操作验证；旧库存使用专用 fixture。
-- **O**：[OIDC 精确清理与维护](../../../apps/oidc-provider/test-integration/redis/client-protocol-artifact-cleanup.integration.test.ts)，以及 API/OIDC Composition/Process collections；OIDC 使用独立 cleanup，真实 Grant seed 改为生产 owner prefix 并按精确 key 登记清理，不用自定义测试 prefix 假装生产装配。
+- **K**：[Kernel Component](https://github.com/cyy1998/shgas-iam/blob/aeb2dc45294f3553ad596cda5194e9643378c31b/packages/session-kernel/test-integration/component/session-kernel.integration.test.ts) 与同 owner 的 Redis collection；#125 已执行四类生命周期、时间、索引、tombstone、pending cleanup 及 API/Admin/OIDC 消费验证。
+- **A**：[API 混合认证和协议矩阵](https://github.com/cyy1998/shgas-iam/blob/aeb2dc45294f3553ad596cda5194e9643378c31b/apps/api/test-integration/component/custom-sso-session-kernel.adapter.integration.test.ts)；保留四种统一认证 production composition、Kernel/Grant 时序、Snapshot、错误、补偿与审计协作。测试经 testing 入口注入可控故障，生产只消费 root。
+- **C**：[Custom SSO Component](https://github.com/cyy1998/shgas-iam/blob/aeb2dc45294f3553ad596cda5194e9643378c31b/packages/custom-sso/test-integration/component/authorize-sso.use-case.integration.test.ts) 及同目录兑换、callback、主体交付、Grant 矩阵；新 owner 收集原纯协议测试。原状态机恢复断言已按 ADR-0031 退役，一次消费证据由 R 接替。
+- **R**：[完整 root 与独立 cleanup 真实 Redis](https://github.com/cyy1998/shgas-iam/blob/aeb2dc45294f3553ad596cda5194e9643378c31b/packages/custom-sso/test-integration/redis/custom-sso.integration.test.ts) 和[Grant Redis](https://github.com/cyy1998/shgas-iam/blob/aeb2dc45294f3553ad596cda5194e9643378c31b/packages/custom-sso/test-integration/redis/custom-sso-operation.integration.test.ts)；三种模式通过正式 factory 授权/兑换/UserInfo/退出，坏 redirect 后仍可合法兑换，Kernel 撤销同步删除 Grant 并保留非目标状态；原期限、单赢家、消费未知结果停止、ORCAS 故障与同步补偿由真实 Redis 完整操作验证；旧库存使用专用 fixture。
+- **O**：[OIDC 精确清理与维护](https://github.com/cyy1998/shgas-iam/blob/aeb2dc45294f3553ad596cda5194e9643378c31b/apps/oidc-provider/test-integration/redis/client-protocol-artifact-cleanup.integration.test.ts)，以及 API/OIDC Composition/Process collections；OIDC 使用独立 cleanup，真实 Grant seed 改为生产 owner prefix 并按精确 key 登记清理，不用自定义测试 prefix 假装生产装配。
 - **W**：[wire contract](../../../packages/custom-sso/src/__tests__/custom-sso-v2.contract.test.ts)、Admin/SSO Unit/Component、production build 及 preview/UserInfo Browser；#126 的已执行证据记录在该票评论。
 - **S**：package exports、消费方 typecheck、Architecture Guard、Collection Guard、Docker closure 和文档检查。
 

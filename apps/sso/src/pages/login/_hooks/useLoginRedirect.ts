@@ -12,6 +12,7 @@ export function useLoginRedirect() {
   const oidcReturn = getQuery('oidcReturn') ?? '';
   const redirectUrl = getQuery('redirectUrl') ?? '';
   const state = getQuery('state') ?? undefined;
+  const ssoReturn = getQuery('ssoReturn') ?? undefined;
   const fallbackClientLabel = oidcReturn
     ? 'OIDC'
     : client === 'iam-admin'
@@ -51,26 +52,30 @@ export function useLoginRedirect() {
         message.error('OIDC 登录请求已失效，请返回应用重新发起登录');
         return;
       }
-      window.location.replace(`/oidc/resume?oidcReturn=${encodeURIComponent(oidcReturn)}`);
+      window.location.replace(
+        `/oidc/resume?oidcReturn=${encodeURIComponent(oidcReturn)}`,
+      );
       return;
     }
     if (!authConfig || !client) {
       message.error('SSO 配置未就绪，请刷新重试');
       return;
     }
-    window.location.replace(buildAuthorizeUrl(
-      authConfig,
-      redirectUrl,
-      client,
-      state,
-    ));
-  }, [authConfig, client, oidcReturn, redirectUrl, state]);
+    const authorizeUrl = new URL(
+      buildAuthorizeUrl(authConfig, redirectUrl, client, state),
+      window.location.origin,
+    );
+    if (ssoReturn !== undefined)
+      authorizeUrl.searchParams.set('ssoReturn', ssoReturn);
+    window.location.replace(authorizeUrl.href);
+  }, [authConfig, client, oidcReturn, redirectUrl, state, ssoReturn]);
 
   return {
     client,
     oidcReturn,
     redirectUrl,
     state,
+    ssoReturn,
     clientLabel,
     isUnsafeEntry,
     isContinuationReady: Boolean(oidcReturn || (authConfig && client)),

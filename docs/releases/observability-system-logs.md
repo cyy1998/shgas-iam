@@ -2,14 +2,14 @@
 
 Type: runbook
 Status: Current
-Last verified: 2026-07-03
+Last verified: 2026-09-15
 Next review: 2026-10-31
 
 ## 范围
 
 该栈通过 Docker stdout/stderr、Grafana Alloy、Loki 和 Grafana 收集带有
 `shgas-iam.logs.enabled=true` 标签的 IAM 容器运行时系统日志。当前 dev/prod compose 会采集 `api`、
-`admin-api`、`oidc-provider`、`worker-user-profile`、`worker-dashboard` 与 `apisix`。它不替代
+`admin-api`、`worker-user-profile`、`worker-dashboard` 与 `apisix`。它不替代
 PostgreSQL 审计日志，也不会创建 `system_log` 表。
 
 前端 `admin` 和 `sso` 容器当前未打日志采集标签，仍有意排除在系统日志栈之外。
@@ -112,8 +112,8 @@ Grafana provisioning 文件位于 `observability/grafana/provisioning/`。
 
 - Datasource UID：`iam-loki`。
 - Dashboard UID：`iam-overview`、`iam-request-drilldown`、`iam-error-center`。
-- 告警规则覆盖核心 service error spike、APISIX 5xx spike、OIDC provider server/protocol error，以及采集失败。
-  当前 service error spike 规则聚焦 `api`、`admin-api` 和 `oidc-provider`；worker 日志已进入 Loki 与 dashboard，
+- 告警规则覆盖核心 service error spike、APISIX 5xx spike、API OIDC server error，以及采集失败。
+  当前 service error spike 规则聚焦 `api` 和 `admin-api`；worker 日志已进入 Loki 与 dashboard，
   但专门告警需按队列运行指标或 worker 事件另行补充。
 
 开发环境告警默认使用 null webhook，以避免本地通知噪音。生产通知路由应通过环境管理的 Grafana provisioning 替换默认 contact point。
@@ -147,7 +147,7 @@ Grafana data link 和管理端深链只能携带技术关联字段：
 1. 带合法 `traceparent` 访问一个经过 APISIX 的 IAM API endpoint，记录请求使用的 `X-Request-Id`。
 2. 在 Loki 中查询 `service="apisix"` 的 gateway access log，确认同一请求包含 `event="gateway.request.completed"`、
    `traceId`、`spanId`、`traceparent`、`requestId`、`statusCode`、`durationMs` 和 upstream 字段。
-3. 查询 backend 日志，确认同一 `requestId` 或 `traceId` 可以找到 `api`、`admin-api` 或 `oidc-provider`
+3. 查询 backend 日志，确认同一 `requestId` 或 `traceId` 可以找到 `api` 或 `admin-api`
    的 request log。
 4. 触发一条会写审计的操作，确认 `audit_log.request_id` 与 `audit_log.trace_id` 可与 gateway/backend 日志关联。
 5. 不带 `traceparent` 再访问一次 gateway，确认 APISIX OpenTelemetry 创建 trace context，并将 trace 字段传给上游。
@@ -161,7 +161,7 @@ Authorization header、Cookie、请求体、响应体、完整业务 URL query�
 系统日志使用如下 JSON 字段：
 
 - `event`：稳定的小写点分事件名。
-- `sourceApp`：`iam-api`、`iam-admin-api`、`iam-oidc-provider`、`iam-worker` 或 `apisix`。
+- `sourceApp`：`iam-api`、`iam-admin-api`、`iam-worker` 或 `apisix`。
 - `requestId`：来自 `X-Request-Id` 的主要关联 ID。
 - `traceId`：存在时记录标准 trace context 的 trace id。
 - `spanId`：gateway access log 中记录 APISIX OpenTelemetry span id。
@@ -188,3 +188,5 @@ Authorization header、Cookie、请求体、响应体、完整业务 URL query�
 Alloy 会对常见敏感 key name 执行二次脱敏。APISIX 访问日志不包含 body、敏感 header 或原始查询字符串。
 
 管理端 Grafana 深链只包含 requestId、traceId、service、env，以及围绕审计事件的时间范围。不得包含 username、userId、mobile、client secret、token、审计详情、业务查询字符串或堆栈。
+
+OIDC 现在随 API 写入 service=api。结构化 oidc_server_error/error 用于依赖与服务失败，oidc_protocol_error/warn 用于已知协议拒绝；只记录安全 code/outcome/path/status，不记录原始请求或凭据。

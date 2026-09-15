@@ -1,22 +1,29 @@
-import type { ArtifactMaintenanceReader, ArtifactMaintenanceWriter } from "@iam/session-kernel/maintenance";
 import { decodeCustomSsoLegacyGrant } from "./maintenance";
 import { AUTHORIZATION_GRANT_REDEMPTION_KEY_PREFIX } from "./redis-store";
+
+interface LegacyGrantReader {
+  scan: (cursor: string, match: "MATCH", pattern: string, count: "COUNT", size: number) => Promise<[string, string[]]>;
+  get: (key: string) => Promise<string | null>;
+}
+interface LegacyGrantWriter extends LegacyGrantReader {
+  eval: (script: string, keyCount: number, ...args: Array<string | number>) => Promise<unknown>;
+}
 
 const REMOVE_OBSERVED_GRANT = `
 -- custom-sso-remove-observed-legacy-grant-v1
 if redis.call("GET", KEYS[1]) ~= ARGV[1] then return 0 end
 return redis.call("DEL", KEYS[1])
 `;
-interface Options { redis: ArtifactMaintenanceReader; writersStopped: boolean; signal?: AbortSignal }
+interface Options { redis: LegacyGrantReader; writersStopped: boolean; signal?: AbortSignal }
 
 export function createLegacyGrantVerifier(options: Options) {
   return { inventory: () => scanGrants(options, false), verify: () => scanGrants(options, true) };
 }
-export function createLegacyGrantMaintenance(options: Options & { redis: ArtifactMaintenanceWriter }) {
+export function createLegacyGrantMaintenance(options: Options & { redis: LegacyGrantWriter }) {
   return { apply: () => scanGrants(options, false, options.redis) };
 }
 
-async function scanGrants(options: Options, verify: boolean, writer?: ArtifactMaintenanceWriter) {
+async function scanGrants(options: Options, verify: boolean, writer?: LegacyGrantWriter) {
   const report = {
     status: "failed" as "passed" | "failed",
     targets: 0,

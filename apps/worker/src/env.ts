@@ -1,5 +1,24 @@
 import { z } from "zod";
 
+export function parseOfflineMaintenanceEnv(env: NodeJS.ProcessEnv) {
+  const requiredInteger = (value: string | undefined, max: number) => {
+    if (value === undefined || !/^\d+$/u.test(value))
+      throw new Error("Explicit maintenance resource required");
+    return z.coerce.number().int().min(0).max(max).parse(value);
+  };
+  const port = requiredInteger(env.IAM_WORKER_REDIS_PORT, 65535);
+  if (!port)
+    throw new Error("Explicit maintenance port required");
+  return {
+    host: z.string().trim().min(1).parse(env.IAM_WORKER_REDIS_HOST),
+    port,
+    db: requiredInteger(env.IAM_WORKER_REDIS_DB, 2147483647),
+    username: env.IAM_WORKER_REDIS_USERNAME || undefined,
+    password: env.IAM_WORKER_REDIS_PASSWORD || undefined,
+  };
+}
+export type OfflineMaintenanceEnv = ReturnType<typeof parseOfflineMaintenanceEnv>;
+
 const moduleKeySchema = z.string().trim().min(1);
 
 export type WorkerModuleSelection = {
@@ -123,16 +142,6 @@ const UserProfilePostgresReadinessCommandEnvSchema = z.object({
   IAM_WORKER_USER_PROFILE_BACKFILL_BATCH_SIZE: z.coerce.number().int().positive().default(500),
 });
 
-const ClientRuntimeMaintenanceCommandEnvSchema = z.object({
-  IAM_WORKER_REDIS_HOST: z.string().min(1),
-  IAM_WORKER_REDIS_PORT: z.coerce.number().int().min(1).max(65535).default(6379),
-  IAM_WORKER_REDIS_PASSWORD: optionalNonEmptyString(),
-  IAM_WORKER_REDIS_DB: z.coerce.number().int().min(0).default(0),
-  NODE_ENV: z.enum(["development", "test", "production"]).default("development"),
-  IAM_WORKER_LOG_LEVEL: z.string().default("info"),
-  IAM_WORKER_LOG_FORMAT: z.enum(["auto", "json", "pretty"]).default("auto"),
-});
-
 type RawWorkerEnv = z.infer<typeof RawWorkerEnvSchema>;
 
 export interface WorkerEnv {
@@ -193,12 +202,6 @@ export interface UserProfilePostgresReadinessCommandEnv {
     rebuildBatchSize: number;
     backfillBatchSize: number;
   };
-}
-
-export interface ClientRuntimeMaintenanceCommandEnv {
-  redis: WorkerEnv["redis"];
-  nodeEnv: WorkerEnv["nodeEnv"];
-  log: WorkerEnv["log"];
 }
 
 function toWorkerEnv(raw: RawWorkerEnv): WorkerEnv {
@@ -282,6 +285,13 @@ export function parseAuditActionMaintenanceCommandEnv(source: NodeJS.ProcessEnv)
   return { databaseUrl };
 }
 
+export function parseClientSsoUpgradeCommandEnv(source: NodeJS.ProcessEnv) {
+  const databaseUrl = z.string().min(1).parse(source.IAM_WORKER_DATABASE_URL);
+  if (!["postgres:", "postgresql:"].includes(new URL(databaseUrl).protocol))
+    throw new Error("invalid database configuration");
+  return { databaseUrl };
+}
+
 export function parseUserProfilePostgresReadinessCommandEnv(
   source: NodeJS.ProcessEnv,
 ): UserProfilePostgresReadinessCommandEnv {
@@ -297,25 +307,6 @@ export function parseUserProfilePostgresReadinessCommandEnv(
     userProfile: {
       rebuildBatchSize: raw.IAM_WORKER_USER_PROFILE_REBUILD_BATCH_SIZE,
       backfillBatchSize: raw.IAM_WORKER_USER_PROFILE_BACKFILL_BATCH_SIZE,
-    },
-  };
-}
-
-export function parseClientRuntimeMaintenanceCommandEnv(
-  source: NodeJS.ProcessEnv,
-): ClientRuntimeMaintenanceCommandEnv {
-  const raw = ClientRuntimeMaintenanceCommandEnvSchema.parse(source);
-  return {
-    redis: {
-      host: raw.IAM_WORKER_REDIS_HOST,
-      port: raw.IAM_WORKER_REDIS_PORT,
-      password: raw.IAM_WORKER_REDIS_PASSWORD,
-      db: raw.IAM_WORKER_REDIS_DB,
-    },
-    nodeEnv: raw.NODE_ENV,
-    log: {
-      level: raw.IAM_WORKER_LOG_LEVEL,
-      format: raw.IAM_WORKER_LOG_FORMAT,
     },
   };
 }

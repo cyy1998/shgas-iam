@@ -22,21 +22,7 @@ function createDocument() {
       })),
       revokeSessions: mock(async () => ({
         changed: false,
-        result: {
-          scope: "session" as const,
-          revoked: {
-            principalSessions: 0,
-            bindings: 0,
-            credentials: 0,
-            artifacts: 0,
-          },
-          currentPrincipalSessionExcluded: false,
-          cleanup: {
-            attempted: 0,
-            succeeded: 0,
-            failed: 0,
-          },
-        },
+        result: { scope: "session" as const, generation: "unified" as const, currentPrincipalSessionExcluded: false, sessions: { userSessionsTerminated: 0, clientSessionsTerminated: 0, excluded: 0, failed: 0, unknown: 0 }, batch: { results: [], unfinished: [] }, artifactCleanup: { attempted: 0, succeeded: 0, failed: 0 } },
       })),
       releaseLoginRestriction: mock(async () => ({
         changed: false,
@@ -215,6 +201,7 @@ test("documents an exact safe session VO without raw or secret session fields", 
   expect(session.additionalProperties).toBe(false);
   expect(Object.keys(session.properties ?? {})).toEqual([
     "principalSessionId",
+    "record",
     "user",
     "authMethods",
     "authTime",
@@ -318,6 +305,13 @@ test("documents strict session and user revoke targets without client-owned acto
     expect.objectContaining({
       additionalProperties: false,
       properties: expect.objectContaining({
+        type: expect.objectContaining({ enum: ["captured"] }),
+        targets: expect.objectContaining({ type: "array", maxItems: 10000 }),
+      }),
+    }),
+    expect.objectContaining({
+      additionalProperties: false,
+      properties: expect.objectContaining({
         type: expect.objectContaining({ enum: ["session"] }),
         principalSessionId: expect.any(Object),
       }),
@@ -341,11 +335,16 @@ test("documents strict session and user revoke targets without client-owned acto
   expect(serializedInput).not.toContain("exceptPrincipalSessionId");
 });
 
-test("documents an exact safe revoke result with counts but no target or cleanup internals", () => {
+test("documents only unified counts and fixed targets without secret or cleanup internals", () => {
+  type Payload = {
+    additionalProperties?: boolean;
+    properties?: Record<string, { additionalProperties?: boolean; properties?: Record<string, unknown> }>;
+  };
   const document = createDocument();
   const result = document.components?.schemas?.SessionManagementRevokeSessionsResultVo as {
     additionalProperties?: boolean;
     properties?: Record<string, {
+      anyOf?: Payload[];
       additionalProperties?: boolean;
       properties?: Record<string, { additionalProperties?: boolean; properties?: Record<string, unknown> }>;
     }>;
@@ -356,28 +355,25 @@ test("documents an exact safe revoke result with counts but no target or cleanup
     "changed",
     "result",
   ]);
-  const payload = result.properties?.result;
-  expect(payload?.additionalProperties).toBe(false);
-  expect(Object.keys(payload?.properties ?? {})).toEqual([
+  const unified = result.properties?.result;
+  expect(unified?.additionalProperties).toBe(false);
+  expect(Object.keys(unified?.properties ?? {})).toEqual([
     "scope",
-    "revoked",
+    "generation",
+    "sessions",
     "currentPrincipalSessionExcluded",
-    "cleanup",
+    "batch",
+    "artifactCleanup",
   ]);
-  expect(payload?.properties?.revoked?.additionalProperties).toBe(false);
-  expect(Object.keys(payload?.properties?.revoked?.properties ?? {})).toEqual([
-    "principalSessions",
-    "bindings",
-    "credentials",
-    "artifacts",
-  ]);
-  expect(payload?.properties?.cleanup?.additionalProperties).toBe(false);
-  expect(Object.keys(payload?.properties?.cleanup?.properties ?? {})).toEqual([
-    "attempted",
-    "succeeded",
+  expect(unified?.properties?.sessions?.additionalProperties).toBe(false);
+  expect(Object.keys(unified?.properties?.sessions?.properties ?? {})).toEqual([
+    "userSessionsTerminated",
+    "clientSessionsTerminated",
+    "excluded",
     "failed",
+    "unknown",
   ]);
-  expect(payload?.properties?.scope).toMatchObject({
+  expect(unified?.properties?.scope).toMatchObject({
     type: "string",
     enum: ["session", "user"],
   });

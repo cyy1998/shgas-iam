@@ -60,13 +60,11 @@ GET {IAM_ORIGIN}/sso/.well-known/authentication-configuration
 | 配置项 | 说明 |
 |---|---|
 | `clientCode` | 业务系统唯一编码。发起授权时作为 `client` 参数传入，例如 `tender`。 |
-| `customSsoSecret` | Custom SSO 专用客户端密钥。仅 Independent 模式兑现 grant 时使用，与通用 `clientSecret` 无关；明文只在配置或轮换时展示一次，必须保存在服务端。 |
+| `ssoSecret` | Custom SSO 专用客户端密钥。仅 Independent 模式兑现 grant 时使用，与通用 `clientSecret` 无关；普通详情不含明文，生成/轮换及超级管理员审计重读通过独立能力交付，必须保存在服务端。 |
 | `validRedirectUrls` | 允许登录完成后返回的业务地址 pattern 列表。支持 origin、一级子域 wildcard（如 `https://*.example.com`）和 path 末尾 `/*`；命中任一 wildcard pattern 的实际地址可携带查询参数。 |
-| `mode` | Custom SSO 接入模式，严格区分 `gateway` 与 `independent`。 |
 | `subjectClaims` | 该 Client 获准接收的主体字段；必须包含 Subject Identifier，其他 Profile、任职和授权字段按需选择。 |
-| `callbackEndpoint` | 独立应用模式下接收授权码的业务系统后端回调地址。 |
-| `logoutEndpoint` | Independent 模式必填的预留地址。当前 V1 保存并校验该配置，但不会调用它发送后台登出通知；业务系统必须在自己的退出流程中清理本地会话。 |
-| `orcas.enabled` | 仅 Gateway 可配置。启用时 IAM 额外交付 ORCAS Cookie/query/专用 endpoint；ORCAS 不进入主体投影。 |
+| `callbackEndpoint` | 唯一回调地址；匹配 IAM 托管回调时采用托管交付，否则为业务自行接入。 |
+| `orcas.enabled` | 仅托管回调可配置。启用时 IAM 额外交付 ORCAS Cookie/query/专用 endpoint；ORCAS 不进入主体投影。 |
 
 建议业务系统至少准备以下地址：
 
@@ -74,7 +72,6 @@ GET {IAM_ORIGIN}/sso/.well-known/authentication-configuration
 |---|---|---|
 | `https://biz.example.com/` | 前端 | 业务系统首页或登录后落地页，作为 `redirectUrl`。 |
 | `https://biz.example.com/sso/callback` | 后端 | 独立应用模式下接收 IAM 授权码。 |
-| `https://biz.example.com/sso/logout` | 后端 | Independent 配置所需的预留地址；当前 V1 不会向其发送后台通知，业务系统仍须在自己的退出入口清理 session。 |
 
 ## 4. 登录流程
 
@@ -92,7 +89,7 @@ GET {IAM_ORIGIN}/sso/.well-known/authentication-configuration
 |---|---|---|
 | `client` | 是 | IAM 中注册的 `clientCode`。 |
 | `redirectUrl` | 是 | 登录成功后最终回到业务系统的地址，需要 URL 编码。 |
-| `token` | 否 | 已有 IAM PrincipalSession token 时可传入。该 query 参数仅为 legacy 兼容路径，新 client 不应使用 URL query 传递 PrincipalSession token。浏览器场景通常依赖 HttpOnly Cookie。 |
+| `token` | 否 | 已有 IAM UserSession token 时可传入。该 query 参数仅为 legacy 兼容路径，新 client 不应使用 URL query 传递 UserSession token。浏览器场景通常依赖 HttpOnly Cookie。 |
 
 示例：
 
@@ -132,7 +129,7 @@ IAM 授权成功后会重定向到：
 {redirectUrl的协议和域名}/sso/callback?code={code}&client={clientCode}&redirectUrl={urlencoded_redirect_url}
 ```
 
-IAM 的 `/sso/callback` 在 Client/mode/用途/redirect/版本、根会话、Gate 和 Subject Access 校验通过后一次消费 Code，成功消费才执行 ORCAS 与 Local Session 签发。现有交付行为保持：
+IAM 的 `/sso/callback` 在 Client/原 Code 用途/redirect、两类会话关系、Snapshot 和 Subject Access 校验通过后一次消费 Code，成功消费才执行 ORCAS 与 Local Session 签发。现有交付行为保持：
 
 1. 校验授权码和 `redirectUrl`。
 2. 为该业务系统创建 IAM 管理的 Gateway Local Session。
@@ -202,12 +199,12 @@ code={code}&redirect_uri={urlencoded_redirect_uri}
 IAM 不会在 `/sso/token` 成功时替 Independent 业务系统创建 Cookie、session database 记录或其他第三方本地会话。
 第三方本地会话的建立、存储和清理由业务系统自己负责。
 
-`customSsoSecret` 不得出现在浏览器地址、前端代码、日志、移动端包或第三方可见配置中。它与通用
+`ssoSecret` 不得出现在浏览器地址、前端代码、日志、移动端包或第三方可见配置中。它与通用
 `clientSecret` 是两套独立凭据，不得混用。
 
 ### 4.4 兑换失败与 Client Maintenance
 
-Independent `/sso/token` 经过 Client 认证、用途和请求归属、配置版本、根会话、Traffic Gate 与 Subject Access 校验后，一次消费
+业务 `/sso/token` 经过适用 Client 认证与原 ClientSession 定位后，一次消费
 Code，再构建完整 V2 主体投影并签发 Credential。同一 Code 只有一个成功消费者；成功结果不提供查询或重放。
 
 兑换遇到暂态失败、内部失败或响应结果未知时，接入方统一放弃旧 Code，等待后重新调用 `/sso/authorize`。`Retry-After` 表示开始
@@ -217,10 +214,9 @@ Code，再构建完整 V2 主体投影并签发 Credential。同一 Code 只有�
 Client Maintenance 在消费前返回 `503 AUTH.MAINTENANCE`；Client Snapshot、Gate 或 Subject Access 暂态失败也在消费前拒绝，
 原 Code 的期限不延长。即使服务端此次尚未消费，Independent 接入方也使用同一重新授权策略，不判断内部消费进度。
 已经签发的有效 Credential、根会话和 Cookie 应保留；UserInfo/authz 仍可按 `Retry-After` 用原凭据重试。
-Maintenance 期间真实 configure、enable、disable、remove 或 secret rotation 仍推进协议版本，旧对象不会因结束维护而恢复。
+配置、启停、协议选择和 Secret 轮换不推进版本或自动撤销；适用认证和定位后的兑换失败按冻结规则有界尝试终止原实例，暂态操作不误清可恢复 Cookie。
 
-当前功能分支的 Independent/Gateway 已由 #158/#159 迁移；定向维护已由 #160 交付，父规格尚未验收，环境未切换。
-该过渡候选不可部署，完整切换须等 #157 的维护清理与统一消费者升级完成。
+最终消费者已由 #194 统一；环境尚未切换，首次迁移须按统一维护手册完成旧工具数据核验、收缩及全体重新登录。
 
 ### 4.5 Client Code 的 HTTP 传输
 
@@ -244,40 +240,14 @@ JavaScript UTF-16 `length` 或 `transportClientCode` 编码后的字节/文本�
 
 ### 4.6 Session Kernel 会话边界
 
-当前 custom SSO 通过 Session Kernel 管理 PrincipalSession、授权码、Independent Client Credential 和
-Gateway Local Session：
+Kernel 只拥有 UserSession 和 ClientSession；Custom SSO 拥有 Code、Token 与续接。根 Cookie 是浏览器登录来源，
+应用关系固定根和 Client。单回调决定交付方式，配置中不再接受 `mode` 或 `logoutEndpoint`。
+业务系统将 Code、sid 和 Cookie 中 Token 作为不可自行构造的值处理；Code 一次消费，不重放成功结果。
+已有 Token 使用仍验证自身、根、ClientSession、当前 Client 和 Subject Access；配置/Secret/启停不自动撤销。
+托管 authz 只输出最小 Subject/username/name；UserInfo 按当前披露配置交付已发布事实。
 
-- PrincipalSession token、auth code、Independent `sid` 和 Gateway session token 都是 opaque bearer，业务系统不得解析、
-  拼接或依赖其中格式。
-- `/sso/authorize` 解析 PrincipalSession 的首选来源是 HttpOnly Cookie。
-- `Authorization` header 和 query `token` 作为 PrincipalSession 来源仅保留 legacy 兼容和过渡观测；新接入不要把 PrincipalSession 放到 URL query。
-- Gateway 模式的 `local_{transportClientCode}_session` Cookie 携带 Gateway Local Session；Independent 模式的 `sid`
-  是 IAM 管理的 Independent Client Credential。二者都是 opaque、client-scoped bearer，但只有 Gateway 前者是
-  IAM 建立的 local session。
-- Gateway Local Session 只保存 Subject Identifier 引用、Client/mode/config version、生命周期和可选 ORCAS
-  reference，不保存 User Detail 或主体投影。每次使用时 IAM 都按当前 Client 状态、Custom SSO 配置版本和 Subject
-  Access Barrier 重新校验。
-- auth code 一次性使用，重放会命中 Session Kernel artifact tombstone 并被拒绝。
-
-发布 Session Kernel 版本前，运维会在维护窗口内清理旧 custom SSO Redis key：
-
-- `global_session:*`
-- `auth_code:*`
-- `local_*_session:*`
-- `local_session_reverse:*`
-- `local_session_set:*`
-- `custom-sso:local-session-payload:*`
-
-运维先运行专用 cleanup command 的 dry-run，再要求残留 `--verify` 非零；范围复核后执行 `--apply`，最后要求 clean
-`--verify` 零退出。该 profile 不扫描或删除 `oidc:*` key。完整冻结、备份、取消和 smoke 顺序见
-[Custom SSO Subject Projection 硬切换与回滚手册](../../releases/custom-sso-subject-projection-release.md)。
-
-清理后，所有用户和 custom SSO client 都需要重新登录或重新发起授权。业务系统应把 401、非法 code、IAM
-credential/session 过期视为重新发起 `/sso/authorize` 的信号。
-
-包含 Spec #170 的候选回退先按[全体下线手册](../../releases/online-auth-redis-time-cutover.md)停止并排空全部 reader/writer，清理源及目标状态并独立 verify，再统一回退和重新登录；不得只删旧 active/lookup/revoked/index 而遗漏三类 state/ID。退役 namespace 或更早 custom SSO session 实现须另行固定迁移边界。`custom-sso:local-session-payload:*` 只能由另行确定的维护窗口与独立 owner 处理；
-当前 production runtime 不读取、写入、规范化该 payload，也不据此通知 client logout。回滚后必须重新执行 custom SSO
-登录、网关鉴权和退出 smoke。
+首次升级全体重新登录，旧状态不会转换为新关系；维护、数据选择、收缩 DDL、source/unified 清理和独立 verify
+由[统一维护手册](../../releases/unified-session-maintenance.md)规定。本文更新不表示已执行环境切换。
 
 ### 4.7 IAM 内部职责边界
 
@@ -286,7 +256,7 @@ credential/session 过期视为重新发起 `/sso/authorize` 的信号。
 - Endpoint use case 在任何授权码消费或 credential/session 创建前完成入口验证：`/sso/authorize` 校验 client 与
   redirect，`/sso/token` 校验 client 与 client secret，`/sso/callback` 校验 client 与 redirect。
 - Custom SSO deep module 负责一次性 grant resolution、Independent Client Credential 或 Gateway Local Session 的完整
-  生命周期，以及 Gateway 所需的 ORCAS、最小 Kernel metadata、审计和失败补偿。公开交付时再按当前 Client 配置解析
+  生命周期，以及 Gateway 所需的 ORCAS、最小会话关系、审计和失败补偿。公开交付时再按当前 Client 配置解析
   主体投影；共同 resolved grant 不作为调用方可见的中间结果。
 - Route 只负责 HTTP 参数、response envelope、Cookie、redirect query 和 302 等协议适配。
 
@@ -294,9 +264,9 @@ credential/session 过期视为重新发起 `/sso/authorize` 的信号。
 
 ## 5. 获取当前用户信息
 
-已签发 Credential 的使用以凭据自身为依据，不重新检查父 Principal Session。根退出尽力撤销关联凭据，漏撤凭据可在自身固定期限内继续使用；
-自身撤销、到期、账号禁用、旧访问代际或协议配置拒绝仍阻止访问。Gateway authz 与两模式 UserInfo 采用相同原则。
-新授权、登录续接和 Code 兑换仍要求有效根；直接使用 IAM 根 token 的身份入口也继续验证根。
+已签发 Custom Token 的使用必须验证其原 ClientSession、原 UserSession、Client 归属和自身期限。根终止后，即使关联索引漏项、
+Token 尚未物理回收，后续在线访问仍拒绝；自身撤销、到期、账号禁用、旧访问代际或当前 Client 配置拒绝同样阻止访问。
+Gateway authz、业务及托管 UserInfo 采用相同原则。新授权、登录续接、Code 兑换和直接使用 IAM 根 Token 的入口也验证有效根。
 
 业务系统可使用有效的 Independent Client Credential 或 Gateway Local Session，通过 IAM 公共用户接口获取当前
 Client 获准接收的主体投影：
@@ -389,12 +359,11 @@ authorization 和 ORCAS 永远不会进入 Gateway Subject Header。`/auth/authz
 | 参数 | 必填 | 说明 |
 |---|---|---|
 | `redirectUrl` | 是 | IAM 清理会话后跳回的地址。 |
-| `token` | 否 | 当前 Independent Client Credential 或 Gateway Local Session。浏览器有 `global_session` Cookie 时可不传；独立应用建议传。 |
+| `token` | 否 | 支持根 UserSession Token，也支持由 Custom 协议 owner 验证并定位原根的应用 Token；浏览器优先使用 `global_session` Cookie。退出不要求账号仍能取得在线访问许可，不影响其他独立根。 |
 
 IAM 会清理全局会话以及该全局会话下的有效 IAM credential/session，但不拥有 Independent 业务系统在 IAM 之外创建的
 本地 session，也不保证 IAM logout 能终止该 session。Independent 业务系统的退出入口应同时清理自己的 HttpOnly
-Cookie/session，再调用 IAM `/sso/logout`。Client 配置中的 `logoutEndpoint` 是当前 V1 的预留字段，IAM 不会调用
-它发送后台通知；业务系统不得依赖该字段清理当前 V1 credential 对应的本地会话。
+Cookie/session，再调用 IAM `/sso/logout`。Client 配置已删除 `logoutEndpoint`，IAM 不发送后台退出通知；业务系统自行负责本地会话。
 
 ## 8. 异常与排错
 
@@ -412,23 +381,23 @@ Cookie/session，再调用 IAM `/sso/logout`。Client 配置中的 `logoutEndpoi
 
 ## 9. 安全要求
 
-1. `customSsoSecret` 只允许保存在业务系统服务端，不得与通用 `clientSecret` 混用。
+1. `ssoSecret` 只允许保存在业务系统服务端，不得与通用 `clientSecret` 混用。
 2. `redirectUrl` 应使用 HTTPS，生产环境不要使用 IP、明文 HTTP 或通配式回调。
 3. Independent 业务系统不要把 `sid` 写入可被脚本读取的持久化存储；应只在后端保存，并用自己的 HttpOnly Cookie
    表达第三方本地会话。
-4. 服务端日志需要脱敏 `code`、`sid`、`customSsoSecret`、手机号等敏感信息。
+4. 服务端日志需要脱敏 `code`、`sid`、`ssoSecret`、手机号等敏感信息。
 5. 业务系统应在收到 401 后立即清理本地登录态，避免用失效会话继续请求。
 6. Independent 应把 IAM credential 撤销和业务本地 session 清理编排为同一次退出操作，不依赖 IAM 管理第三方 session。
-7. 新接入不得通过 URL query 传递 PrincipalSession token；legacy query token 只允许在过渡期使用，并会被系统日志标记来源。
+7. 新接入不得通过 URL query 传递 UserSession token；legacy query token 只允许在过渡期使用，并会被系统日志标记来源。
 
 ## 10. 最小接入清单
 
 接入联调前请确认：
 
 - IAM 已创建客户端，并提供 `clientCode`。
-- 独立应用已安全保存一次性展示的 `customSsoSecret`。
+- 独立应用已安全保存一次性展示的 `ssoSecret`。
 - `validRedirectUrls` 覆盖业务系统登录后落地页。
-- 独立应用已提供 `callbackEndpoint` 和当前 V1 所需的预留 `logoutEndpoint`，且不依赖后者接收通知。
+- 业务应用已提供唯一 `callbackEndpoint`，并拥有自己的本地退出流程。
 - 未登录时能跳转到 `/sso/authorize`。
 - Independent 业务系统能在取得 `sid` 后自行建立并维护本地会话；Gateway client 能取得 Gateway Local Session。
 - 已配置所需 `subjectClaims`，且 `/public/user-info` 只返回该 Client 获准接收的 V2 主体投影。

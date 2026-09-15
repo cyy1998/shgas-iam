@@ -1,8 +1,10 @@
 # Client Runtime Snapshot 恢复手册
 
+> Historical：本页保留旧候选的契约与证据；Spec #178 最终在线模型已由 ADR-0035 取代，当前发布以统一会话维护手册为准。
+
 Type: runbook
 
-Status: Current
+Status: Historical
 
 Last verified: 2026-09-07
 
@@ -11,6 +13,10 @@ Next review: 2026-10-31
 本文用于当前 Snapshot 部署在 Redis backup restore 后恢复 Client Runtime。维护 owner 必须保持协议停流，执行全量 repair、
 独立 verify 与 mutation/acquisition smoke，最后确认放流。命令不会自动停止实例、冻结写入或控制路由；真实环境操作须有维护者
 对窗口、候选和目标环境的授权。本文不证明任何环境已经恢复或完成首次切换。
+
+包含 Spec #178 的统一 Client Snapshot 使用[Worker 新维护入口](unified-session-maintenance.md#新-snapshot-的定向修复与全量恢复)：
+`client-snapshot:repair/verify` 拥有 `client-snapshot:v1` 的普通/敏感双 payload。下文三 reader、
+`client-runtime:repair/verify` 与旧 namespace 仅适用于仍使用旧生产图的固定候选，不能以其成功证明新 namespace 已恢复。
 
 ## 适用范围与 owner
 

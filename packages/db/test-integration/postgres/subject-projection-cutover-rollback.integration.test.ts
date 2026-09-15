@@ -1,4 +1,7 @@
 import type { PostgresTestHarness } from "./postgres-harness";
+import { cp, mkdtemp, readdir, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { basename, dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, test } from "bun:test";
 import { readMigrationFiles } from "drizzle-orm/migrator";
@@ -11,9 +14,7 @@ import {
 import { relations } from "../../src/relations";
 import { createPostgresTestHarness } from "./postgres-harness";
 
-const migrationsFolder = fileURLToPath(
-  new URL("../../src/migrations", import.meta.url),
-);
+const migrationsFolder = fileURLToPath(new URL("../../src/migrations", import.meta.url));
 
 interface JournalRow {
   id: number;
@@ -24,7 +25,7 @@ interface JournalRow {
 
 describe("Subject Projection cutover migration rollback journal", () => {
   test("replays the exact migration after an idempotent rollback without changing other journal rows", async () => {
-    await withMigratedHarness(async (harness) => {
+    await withMigratedHarness(async (harness, migrationsFolder) => {
       const before = await readJournal(harness);
       const targetBefore = requireTargetMigration(before);
       const otherBefore = before.filter(row => row.id !== targetBefore.id);
@@ -47,7 +48,7 @@ describe("Subject Projection cutover migration rollback journal", () => {
       const rolledBackJournal = await readJournal(harness);
       expect(rolledBackJournal).toEqual(otherBefore);
 
-      await runMigrations(harness);
+      await runMigrations(harness, migrationsFolder);
       expect(await indexExists(harness)).toBe(true);
       expect(await subjectIdentifierNullable(harness)).toBe("NO");
       const replayedJournal = await readJournal(harness);
@@ -61,18 +62,16 @@ describe("Subject Projection cutover migration rollback journal", () => {
         createdAt: String(localTarget!.folderMillis),
         name: SUBJECT_PROJECTION_CUTOVER_MIGRATION,
       });
-      expect(replayedJournal.filter(row => row.id !== replayedTarget.id)).toEqual(
-        otherBefore,
-      );
+      expect(replayedJournal.filter(row => row.id !== replayedTarget.id)).toEqual(otherBefore);
     });
   });
 
   test("refuses a same-name journal row with a different migration identity", async () => {
-    await withMigratedHarness(async (harness) => {
-      await harness.sql.unsafe(
-        `UPDATE ${journalTable(harness)} SET hash = $1 WHERE name = $2`,
-        ["unexpected-hash", SUBJECT_PROJECTION_CUTOVER_MIGRATION],
-      );
+    await withMigratedHarness(async (harness, migrationsFolder) => {
+      await harness.sql.unsafe(`UPDATE ${journalTable(harness)} SET hash = $1 WHERE name = $2`, [
+        "unexpected-hash",
+        SUBJECT_PROJECTION_CUTOVER_MIGRATION,
+      ]);
 
       let caught: unknown;
       try {
@@ -89,30 +88,74 @@ describe("Subject Projection cutover migration rollback journal", () => {
       expect(caught).toBeInstanceOf(Error);
       expect((caught as Error).message).toContain("journal identity mismatch");
       expect(await indexExists(harness)).toBe(true);
-      expect(requireTargetMigration(await readJournal(harness)).hash).toBe(
-        "unexpected-hash",
-      );
+      expect(requireTargetMigration(await readJournal(harness)).hash).toBe("unexpected-hash");
     });
+  });
+
+  test("refuses the final contracted schema before changing Profile or journal", async () => {
+    await withMigratedHarness(async (harness) => {
+      const before = await readJournal(harness);
+      let caught: unknown;
+      try {
+        await rollbackSubjectProjectionCutover({
+          sql: harness.sql,
+          migrationsFolder,
+          migrationsSchema: harness.schemaName,
+        });
+      }
+      catch (error) {
+        caught = error;
+      }
+      expect(caught).toBeInstanceOf(Error);
+      expect(caught instanceof Error && caught.message).toContain("pre-contraction schema");
+      const after = await readJournal(harness);
+      expect(after).toEqual(before);
+      const exists = await indexExists(harness);
+      const nullable = await subjectIdentifierNullable(harness);
+      expect(exists).toBe(true);
+      expect(nullable).toBe("NO");
+    }, false);
   });
 });
 
 async function withMigratedHarness(
-  run: (harness: PostgresTestHarness) => Promise<void>,
+  run: (harness: PostgresTestHarness, folder: string) => Promise<void>,
+  sourceSchema = true,
 ) {
   const harness = await createPostgresTestHarness();
+  let sourceFolder: string | undefined;
   try {
-    await runMigrations(harness);
-    await run(harness);
+    if (sourceSchema)
+      sourceFolder = await mkdtemp(join(tmpdir(), "iam194-projection-rollback-"));
+    if (sourceFolder) {
+      for (const entry of await readdir(migrationsFolder, { withFileTypes: true })) {
+        if (entry.name < "20260914173743_confused_mystique")
+          await cp(join(migrationsFolder, entry.name), join(sourceFolder, entry.name), { recursive: true });
+      }
+    }
+    const folder = sourceFolder ?? migrationsFolder;
+    await runMigrations(harness, folder);
+    await run(harness, folder);
   }
   finally {
-    await harness.close();
+    await Promise.all([harness.close(), ...(sourceFolder ? [removeSourceFolder(sourceFolder)] : [])]);
   }
 }
 
-async function runMigrations(harness: PostgresTestHarness) {
+async function removeSourceFolder(folder: string) {
+  if (
+    dirname(resolve(folder)) !== resolve(tmpdir())
+    || !basename(folder).startsWith("iam194-projection-rollback-")
+  ) {
+    throw new Error("Unexpected rollback migration fixture directory");
+  }
+  await rm(folder, { recursive: true });
+}
+
+async function runMigrations(harness: PostgresTestHarness, folder = migrationsFolder) {
   const db = drizzle({ client: harness.sql, relations });
   await migrate(db, {
-    migrationsFolder,
+    migrationsFolder: folder,
     migrationsSchema: harness.schemaName,
   });
 }
@@ -127,9 +170,7 @@ async function readJournal(harness: PostgresTestHarness) {
 }
 
 function requireTargetMigration(rows: JournalRow[]) {
-  const target = rows.find(
-    row => row.name === SUBJECT_PROJECTION_CUTOVER_MIGRATION,
-  );
+  const target = rows.find(row => row.name === SUBJECT_PROJECTION_CUTOVER_MIGRATION);
   if (!target)
     throw new Error("Subject Projection cutover journal row was not found");
   return target;

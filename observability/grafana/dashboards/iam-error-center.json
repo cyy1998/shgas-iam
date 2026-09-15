@@ -189,7 +189,7 @@
     },
     {
       "id": 3,
-      "title": "OIDC provider errors",
+      "title": "OIDC API errors",
       "type": "stat",
       "datasource": {
         "type": "loki",
@@ -198,7 +198,7 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "sum(count_over_time({env=\"$env\", service=\"oidc-provider\", level=~\"error|fatal\"}[$__range]))"
+          "expr": "sum(count_over_time({env=\"$env\", service=\"api\", level=~\"error|fatal\"} | json | event=\"oidc_server_error\" [$__range]))"
         }
       ],
       "fieldConfig": {

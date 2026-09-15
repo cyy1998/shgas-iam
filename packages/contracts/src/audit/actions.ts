@@ -1,4 +1,6 @@
 export const auditActionCatalog = [
+  { action: "admin.client.sso_secret_rotate", label: "轮换 SSO Secret" },
+  { action: "admin.client.sso_secret_read", label: "读取当前 SSO Secret" },
   {
     action: "auth.login",
     label: "登录",
@@ -90,6 +92,14 @@ export const auditActionCatalog = [
   {
     action: "admin.client.delete",
     label: "删除应用",
+  },
+  {
+    action: "admin.client.sso_select",
+    label: "选择 SSO 协议配置",
+  },
+  {
+    action: "admin.client.sso_enabled",
+    label: "设置 SSO 启用意图",
   },
   {
     action: "admin.client.rotate_secret",

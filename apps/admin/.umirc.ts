@@ -98,6 +98,11 @@ export default defineConfig({
       access: getAdminRouteAccess('/clients'),
     },
     {
+      path: '/clients/:clientCode/sso',
+      component: './clients/ClientSsoPage',
+      access: getAdminRouteAccess('/clients/:clientCode/sso'),
+    },
+    {
       path: '/clients/:clientCode/edit',
       component: './clients/edit',
       access: getAdminRouteAccess('/clients/:clientCode/edit'),

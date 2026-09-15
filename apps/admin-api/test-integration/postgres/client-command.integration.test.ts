@@ -1,6 +1,7 @@
 import type { AdminClientTransactionPorts } from "@admin-api/services/client/client.port";
 import type { AdminApiPostgresTestHarness } from "./postgres-test-harness";
 import { createAdminApiRepositories } from "@admin-api/composition/repositories";
+import { createClientSsoManagement } from "@admin-api/composition/services/client-sso-management";
 import { createAdminApiUnitOfWork } from "@admin-api/composition/tx";
 import { createClientService } from "@admin-api/services/client/client.service";
 import { BadRequestError } from "@iam/api-core/errors";
@@ -24,7 +25,9 @@ afterAll(async () => {
   await harness?.close();
 });
 
-function createCommand(decorate: (tx: AdminClientTransactionPorts) => AdminClientTransactionPorts = tx => tx) {
+function createCommand(
+  decorate: (tx: AdminClientTransactionPorts) => AdminClientTransactionPorts = tx => tx,
+) {
   const warn = mock(() => undefined);
   const invalidateClient = mock(async (_clientCode: string) => undefined);
   const revokeClientAllProtocols = mock(async () => ({
@@ -49,19 +52,32 @@ function createCommand(decorate: (tx: AdminClientTransactionPorts) => AdminClien
     },
     clientRuntimeInvalidation: { invalidateClient },
     clientMutationLogger: { error: mock(() => undefined) },
-    sessionRevocation: { revokeClientAllProtocols, revokeClientProtocol: revokeClientAllProtocols },
+    management: createClientSsoManagement({
+      db: harness.db,
+      logger: { warn, error: mock() },
+      invalidation: { invalidateClient },
+      callback: { isManagedCallback: () => false },
+      sessionTermination: { revokeClientSessions: revokeClientAllProtocols },
+    }).service,
     passwordHasher: { hashSecret: async secret => `hash-${secret}` },
     random: { customSsoClientSecret: () => "custom-secret", oidcClientSecret: () => "oidc-secret" },
-    uow: mapUnitOfWork(uow, tx => decorate({
-      clientRepository: tx.repositories.client,
-      auditService: tx.auditService,
-    })),
+    uow: mapUnitOfWork(uow, tx =>
+      decorate({
+        clientRepository: tx.repositories.client,
+        auditService: tx.auditService,
+      })),
   });
   return { service, invalidateClient, revokeClientAllProtocols, enqueueRebuildJobs, warn };
 }
 
 function input(clientCode = "portal") {
-  return { clientCode, clientName: clientCode, clientSecret: "secret", status: ClientStatus.Enable, extAttributes: {} };
+  return {
+    clientCode,
+    clientName: clientCode,
+    clientSecret: "secret",
+    status: ClientStatus.Enable,
+    extAttributes: {},
+  };
 }
 
 async function seedClient(clientCode = "portal") {
@@ -94,11 +110,19 @@ describe("Client commands through production PostgreSQL UnitOfWork", () => {
     expect(created).toMatchObject({ changed: true, result: { clientCode: "portal", clientName: "portal" } });
     const before = await facts();
     expect(before.audits).toMatchObject([{ action: "admin.client.create", details: { changed: true } }]);
-    const unchanged = await service.updateClient("portal", { clientName: "portal", description: null, extAttributes: {} });
+    const unchanged = await service.updateClient("portal", {
+      clientName: "portal",
+      description: null,
+      extAttributes: {},
+    });
     expect(unchanged).toEqual({ changed: false, result: null });
     const after = await facts();
     expect(after).toEqual(before);
-    const legacy = await service.updateClientById({ id: before.clients[0]!.id, clientCode: "portal", clientName: "Edited" });
+    const legacy = await service.updateClientById({
+      id: before.clients[0]!.id,
+      clientCode: "portal",
+      clientName: "Edited",
+    });
     expect(legacy).toEqual({ changed: true, result: null });
     const edited = await facts();
     expect(edited.clients[0]).toMatchObject({ clientCode: "portal", clientName: "Edited" });
@@ -112,9 +136,10 @@ describe("Client commands through production PostgreSQL UnitOfWork", () => {
     test(`same-value explicit credential intent via ${path} is audited without changing persisted facts`, async () => {
       const row = await seedClient();
       const { service, invalidateClient, revokeClientAllProtocols, enqueueRebuildJobs } = createCommand();
-      const result = path === "code"
-        ? await service.updateClient(row.clientCode, { clientSecret: row.clientSecret })
-        : await service.updateClientById({ id: row.id, clientSecret: row.clientSecret });
+      const result
+        = path === "code"
+          ? await service.updateClient(row.clientCode, { clientSecret: row.clientSecret })
+          : await service.updateClientById({ id: row.id, clientSecret: row.clientSecret });
       expect(result).toEqual({ changed: false, result: null });
       const after = await facts();
       expect(after.clients).toEqual([row]);
@@ -143,57 +168,32 @@ describe("Client commands through production PostgreSQL UnitOfWork", () => {
       const error = await failure(command);
       expect(error).toBeInstanceOf(BadRequestError);
     }
-    const renamed = await failure(() => service.updateClientById({ id: row.id, clientCode: "renamed", clientName: "Other" }));
+    const renamed = await failure(() =>
+      service.updateClientById({ id: row.id, clientCode: "renamed", clientName: "Other" }),
+    );
     expect(renamed).toBeInstanceOf(ClientCodeImmutableError);
     const after = await facts();
     expect(after).toEqual(before);
     expect(invalidateClient).not.toHaveBeenCalled();
   });
 
-  test("status no-op audits intent without epochs or dirty; disable bumps both epochs only once", async () => {
-    const row = await seedClient();
-    const { service, revokeClientAllProtocols, invalidateClient, warn } = createCommand();
-    const unchanged = await service.updateClientStatus("portal", ClientStatus.Enable);
-    expect(unchanged).toEqual({ changed: false, result: null });
-    const afterNoop = await facts();
-    expect(afterNoop.clients).toEqual([row]);
-    expect(afterNoop.audits).toMatchObject([{ action: "admin.client.status_update", details: { changed: false } }]);
-    revokeClientAllProtocols.mockImplementation(async () => {
-      throw new Error("revocation unavailable");
-    });
-    const disabled = await service.updateClientStatus("portal", ClientStatus.Disable);
-    expect(disabled).toEqual({ changed: true, result: null });
-    const repeated = await service.updateClientById({ id: row.id, status: ClientStatus.Disable });
-    expect(repeated).toEqual({ changed: false, result: null });
-    const after = await facts();
-    expect(after.clients[0]).toMatchObject({
-      status: ClientStatus.Disable,
-      oidcConfigVersion: row.oidcConfigVersion + 1,
-      customSsoConfigVersion: row.customSsoConfigVersion + 1,
-    });
-    expect(after.audits).toMatchObject([
-      { details: { changed: false } },
-      { details: { changed: true } },
-      { details: { changed: false } },
-    ]);
-    expect(after.dirty).toEqual([]);
-    expect(revokeClientAllProtocols).toHaveBeenCalledTimes(1);
-    expect(invalidateClient).toHaveBeenCalledTimes(3);
-    expect(warn).toHaveBeenCalled();
-  });
-
-  test("audit failure rolls back disable and both epochs without propagation", async () => {
+  test("audit failure rolls back the internal credential write without propagation", async () => {
     await seedClient();
     const sentinel = new Error("audit unavailable");
     const { service, invalidateClient, revokeClientAllProtocols } = createCommand(tx => ({
       ...tx,
-      auditService: { ...tx.auditService, recordAuditLog: async (event) => {
-        await tx.auditService.recordAuditLog(event);
-        throw sentinel;
-      } },
+      auditService: {
+        ...tx.auditService,
+        recordAuditLog: async (event) => {
+          await tx.auditService.recordAuditLog(event);
+          throw sentinel;
+        },
+      },
     }));
     const before = await facts();
-    const error = await failure(() => service.updateClientStatus("portal", ClientStatus.Disable));
+    const error = await failure(() =>
+      service.updateClient("portal", { clientSecret: "changed-internal-secret" }),
+    );
     expect(error).toBe(sentinel);
     const after = await facts();
     expect(after).toEqual(before);
@@ -232,41 +232,48 @@ describe("Client commands through production PostgreSQL UnitOfWork", () => {
     expect(invalidateClient).not.toHaveBeenCalled();
   });
 
-  test("delete is factual, repeated deletion is missing, and tombstone code stays occupied", async () => {
+  test("delete is factual, repeated deletion retries termination, and tombstone code stays occupied", async () => {
     await seedClient();
-    const { service } = createCommand();
+    const { service, revokeClientAllProtocols } = createCommand();
     const deleted = await service.deleteClient("portal");
     expect(deleted).toEqual({ changed: true, result: null });
     const before = await facts();
     expect(before.clients[0]!.isDelete).toBe(true);
     expect(before.audits).toMatchObject([{ action: "admin.client.delete", details: { changed: true } }]);
-    const repeated = await failure(() => service.deleteClient("portal"));
-    expect(repeated).toBeInstanceOf(ClientNotFoundError);
+    const repeated = await service.deleteClient("portal");
+    expect(repeated).toEqual({ changed: false, result: null });
+    expect(revokeClientAllProtocols).toHaveBeenCalledTimes(2);
     const occupied = await failure(() => service.createClient(input()));
     expect(occupied).toBeInstanceOf(ClientCodeExistsError);
     expect(occupied).toMatchObject({ httpStatus: 409 });
     const after = await facts();
-    expect(after).toEqual(before);
+    expect(after.clients).toEqual(before.clients);
+    expect(after.audits).toHaveLength(2);
   });
 
   test("independent create transactions pass prechecks and unique constraint chooses one winner", async () => {
     let arrived = 0;
     const gate = Promise.withResolvers<void>();
-    const { service } = createCommand(tx => ({ ...tx, clientRepository: {
-      ...tx.clientRepository,
-      getAnyClientByCode: async (code) => {
-        const current = await tx.clientRepository.getAnyClientByCode(code);
-        arrived++;
-        if (arrived === 2)
-          gate.resolve();
-        await gate.promise;
-        return current;
+    const { service } = createCommand(tx => ({
+      ...tx,
+      clientRepository: {
+        ...tx.clientRepository,
+        getAnyClientByCode: async (code) => {
+          const current = await tx.clientRepository.getAnyClientByCode(code);
+          arrived++;
+          if (arrived === 2)
+            gate.resolve();
+          await gate.promise;
+          return current;
+        },
       },
-    } }));
+    }));
     const results = await Promise.allSettled([service.createClient(input()), service.createClient(input())]);
     expect(arrived).toBe(2);
     expect(results.filter(result => result.status === "fulfilled")).toHaveLength(1);
-    expect(results.find(result => result.status === "rejected")?.reason).toBeInstanceOf(ClientCodeExistsError);
+    expect(results.find(result => result.status === "rejected")?.reason).toBeInstanceOf(
+      ClientCodeExistsError,
+    );
     const after = await facts();
     expect(after.clients).toHaveLength(1);
     expect(after.audits).toHaveLength(1);
@@ -298,15 +305,17 @@ describe("Client commands through production PostgreSQL UnitOfWork", () => {
       await harness.sql`create trigger client_test_zero_row before insert or update on client for each row execute function client_test_zero_row()`;
       try {
         const before = await facts();
-        const error = await failure(() => operation === "create"
-          ? service.createClient(input("new-client"))
-          : operation === "code"
-            ? service.updateClient("portal", { clientName: "New" })
-            : operation === "id"
-              ? service.updateClientById({ id: row.id, clientName: "New" })
-              : operation === "disable"
-                ? service.updateClientStatus("portal", ClientStatus.Disable)
-                : service.deleteClient("portal"));
+        const error = await failure(() =>
+          operation === "create"
+            ? service.createClient(input("new-client"))
+            : operation === "code"
+              ? service.updateClient("portal", { clientName: "New" })
+              : operation === "id"
+                ? service.updateClientById({ id: row.id, clientName: "New" })
+                : operation === "disable"
+                  ? service.updateClientStatus("portal", ClientStatus.Disable)
+                  : service.deleteClient("portal"),
+        );
         expect(error).toBeInstanceOf(Error);
         expect(error).not.toBeInstanceOf(ClientCodeExistsError);
         const after = await facts();
@@ -319,56 +328,4 @@ describe("Client commands through production PostgreSQL UnitOfWork", () => {
       }
     });
   }
-
-  test("code and legacy id commands serialize on the same row and reread committed status", async () => {
-    const row = await seedClient();
-    const written = Promise.withResolvers<void>();
-    const release = Promise.withResolvers<void>();
-    const first = createCommand(tx => ({ ...tx, clientRepository: {
-      ...tx.clientRepository,
-      updateClientByCodeWithProtocolEpochs: async (code, patch) => {
-        const result = await tx.clientRepository.updateClientByCodeWithProtocolEpochs(code, patch);
-        written.resolve();
-        await release.promise;
-        return result;
-      },
-    } })).service;
-    const second = createCommand().service;
-    const firstPending = first.updateClientStatus("portal", ClientStatus.Disable);
-    await Promise.race([written.promise, firstPending]);
-    const secondPending = second.updateClientById({ id: row.id, status: ClientStatus.Disable, clientName: "Edited" });
-    try {
-      const deadline = Date.now() + 2000;
-      let blocked = false;
-      while (Date.now() < deadline && !blocked) {
-        const rows = await harness.sql<{ blocked: boolean }[]>`
-          select exists (
-            select 1 from pg_stat_activity
-            where wait_event_type = 'Lock' and query like '%"client"%'
-              and application_name = current_setting('application_name')
-              and pid <> pg_backend_pid()
-          ) as blocked
-        `;
-        blocked = rows[0]!.blocked;
-      }
-      expect(blocked).toBe(true);
-    }
-    finally {
-      release.resolve();
-      await Promise.allSettled([firstPending, secondPending]);
-    }
-    const firstResult = await firstPending;
-    const secondResult = await secondPending;
-    expect(firstResult).toEqual({ changed: true, result: null });
-    expect(secondResult).toEqual({ changed: true, result: null });
-    const after = await facts();
-    expect(after.clients[0]).toMatchObject({
-      status: ClientStatus.Disable,
-      clientName: "Edited",
-      oidcConfigVersion: row.oidcConfigVersion + 1,
-      customSsoConfigVersion: row.customSsoConfigVersion + 1,
-    });
-    expect(after.audits).toHaveLength(2);
-    expect(after.dirty).toEqual([]);
-  });
 });

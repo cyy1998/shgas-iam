@@ -2,7 +2,11 @@ import type { SessionManagementService } from "@admin-api/services/session-manag
 import type { Context } from "hono";
 import type { z } from "zod";
 import type { SessionManagementRouteHandler } from "./session-management.type";
-import { defineAdminApiMutationOperation, defineAdminApiQueryOperation } from "@admin-api/lib/admin-api-adapter";
+import {
+  defineAdminApiMutationOperation,
+  defineAdminApiQueryOperation,
+} from "@admin-api/lib/admin-api-adapter";
+import { getAdminAuthorizationContext } from "@admin-api/services/admin-authorization/admin-authorization.context";
 import { resolveAdminAuditContext } from "@admin-api/services/audit/audit.context";
 import { AuthzUnauthorizedError } from "@iam/api-core/errors";
 import { router } from "@iam/api-core/trpc";
@@ -11,6 +15,7 @@ import {
   SessionManagementListSessionsInputSchema,
   SessionManagementReleaseLoginRestrictionInputSchema,
   SessionManagementRevokeSessionsInputSchema,
+  SessionManagementSessionListResultVoSchema,
   toSessionManagementLoginRestrictionListResultVo,
   toSessionManagementReleaseLoginRestrictionResultVo,
   toSessionManagementRevokeSessionsResultVo,
@@ -20,10 +25,7 @@ import {
 export interface CreateSessionManagementAdapterDeps {
   sessionManagementService: Pick<
     SessionManagementService,
-    | "listLoginRestrictions"
-    | "listSessions"
-    | "releaseLoginRestriction"
-    | "revokeSessions"
+    "listLoginRestrictions" | "listSessions" | "releaseLoginRestriction" | "revokeSessions"
   >;
 }
 
@@ -48,12 +50,24 @@ export function createSessionManagementAdapter(deps: CreateSessionManagementAdap
     input: SessionManagementListSessionsInputSchema,
     restInput: c => c.req.valid("json") as z.infer<typeof SessionManagementListSessionsInputSchema>,
     handler: async (input, context) => {
-      const result = await deps.sessionManagementService.listSessions({
-        pageNum: input.pageNum,
-        pageSize: input.pageSize,
-        userId: input.conditions.userId,
-      }, getServerActor(context?.hono));
-      return toSessionManagementSessionListResultVo(result);
+      const result = await deps.sessionManagementService.listSessions(
+        {
+          pageNum: input.pageNum,
+          pageSize: input.pageSize,
+          userId: input.conditions.userId,
+          kind: input.conditions.kind,
+        },
+        getServerActor(context?.hono),
+      );
+      const { policy, actor } = getAdminAuthorizationContext(context.hono);
+      const decision = await policy.decideOperation({
+        actor,
+        operationId: "admin.sessionManagement.revokeSessions",
+      });
+      return SessionManagementSessionListResultVoSchema.parse({
+        ...toSessionManagementSessionListResultVo(result),
+        allowedActions: { revoke: decision.allowed },
+      });
     },
   });
 
@@ -109,17 +123,12 @@ export type SessionManagementAdapter = ReturnType<typeof createSessionManagement
 function getServerActor(context: Context | undefined) {
   const actorUserId = context?.get("userId");
   const principalSessionId = context?.get("principalSessionId");
-  if (
-    typeof actorUserId !== "number"
-    || !Number.isSafeInteger(actorUserId)
-    || actorUserId <= 0
-  ) {
+  if (typeof actorUserId !== "number" || !Number.isSafeInteger(actorUserId) || actorUserId <= 0) {
     throw new AuthzUnauthorizedError("未登录");
   }
   return {
     actorUserId,
-    principalSessionId: typeof principalSessionId === "string" && principalSessionId.trim()
-      ? principalSessionId
-      : null,
+    principalSessionId:
+      typeof principalSessionId === "string" && principalSessionId.trim() ? principalSessionId : null,
   };
 }

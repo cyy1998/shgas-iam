@@ -2,12 +2,10 @@ import { beforeAll, describe, expect, test } from "bun:test";
 
 type ParseWorkerEnv = typeof import("../env").parseWorkerEnv;
 type ParsePostgresReadinessEnv = typeof import("../env").parseUserProfilePostgresReadinessCommandEnv;
-type ParseClientRuntimeMaintenanceEnv = typeof import("../env").parseClientRuntimeMaintenanceCommandEnv;
 type ParseAuditActionMaintenanceEnv = typeof import("../env").parseAuditActionMaintenanceCommandEnv;
 
 let parseWorkerEnv: ParseWorkerEnv;
 let parsePostgresReadinessEnv: ParsePostgresReadinessEnv;
-let parseClientRuntimeMaintenanceEnv: ParseClientRuntimeMaintenanceEnv;
 let parseAuditActionMaintenanceEnv: ParseAuditActionMaintenanceEnv;
 
 function validEnv(): NodeJS.ProcessEnv {
@@ -24,7 +22,6 @@ describe("worker environment", () => {
     Object.assign(process.env, validEnv());
     ({
       parseAuditActionMaintenanceCommandEnv: parseAuditActionMaintenanceEnv,
-      parseClientRuntimeMaintenanceCommandEnv: parseClientRuntimeMaintenanceEnv,
       parseUserProfilePostgresReadinessCommandEnv: parsePostgresReadinessEnv,
       parseWorkerEnv,
     } = await import("../env"));
@@ -47,38 +44,6 @@ describe("worker environment", () => {
     expect(parseAuditActionMaintenanceEnv({
       IAM_WORKER_DATABASE_URL: "postgres://iam:password@localhost/iam",
     })).toEqual({ databaseUrl: "postgres://iam:password@localhost/iam" });
-  });
-
-  test("parses Client Runtime maintenance without PostgreSQL or general Worker runtime configuration", () => {
-    const previousDatabaseUrl = process.env.DATABASE_URL;
-    process.env.DATABASE_URL = "postgresql://unchanged-sentinel";
-    try {
-      expect(parseClientRuntimeMaintenanceEnv({
-        IAM_WORKER_REDIS_HOST: "redis.internal",
-        IAM_WORKER_REDIS_PORT: "6380",
-        IAM_WORKER_REDIS_PASSWORD: "redis-password",
-        IAM_WORKER_REDIS_DB: "4",
-        NODE_ENV: "production",
-        IAM_WORKER_LOG_LEVEL: "warn",
-        IAM_WORKER_LOG_FORMAT: "json",
-      })).toEqual({
-        redis: {
-          host: "redis.internal",
-          port: 6380,
-          password: "redis-password",
-          db: 4,
-        },
-        nodeEnv: "production",
-        log: { level: "warn", format: "json" },
-      });
-      expect(process.env.DATABASE_URL).toBe("postgresql://unchanged-sentinel");
-    }
-    finally {
-      if (previousDatabaseUrl === undefined)
-        delete process.env.DATABASE_URL;
-      else
-        process.env.DATABASE_URL = previousDatabaseUrl;
-    }
   });
 
   test("parses PostgreSQL readiness without Redis or Worker runtime configuration", () => {

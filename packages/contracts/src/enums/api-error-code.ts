@@ -1,4 +1,5 @@
 export enum ApiErrorCode {
+  AdminClientSecretReadAuditFailed = "ADMIN_CLIENT_SECRET_READ_AUDIT_FAILED",
   InternalError = "COMMON.INTERNAL_ERROR",
   NotFound = "COMMON.NOT_FOUND",
   BadRequest = "COMMON.BAD_REQUEST",
@@ -55,8 +56,6 @@ export enum ApiErrorCode {
   OrganizationResponsibilityAssignmentCardinalityConflict = "ORG_RESPONSIBILITY.ASSIGNMENT_CARDINALITY_CONFLICT",
   OrganizationResponsibilityAssignmentUnmanageableConflict = "ORG_RESPONSIBILITY.ASSIGNMENT_UNMANAGEABLE_CONFLICT",
 
-  OidcClientStateConflict = "CLIENT.OIDC_STATE_CONFLICT",
-  CustomSsoClientStateConflict = "CLIENT.CUSTOM_SSO_STATE_CONFLICT",
   ClientNotFound = "CLIENT.NOT_FOUND",
   ClientCodeExists = "CLIENT.CODE_EXISTS",
 

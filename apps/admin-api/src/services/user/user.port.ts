@@ -1,11 +1,13 @@
 import type { PasswordHasherPort, RandomPort } from "@admin-api/composition/runtime";
+import type { AdminAuditContext } from "@admin-api/services/audit/audit.context";
 import type { AuditLogWriterPort } from "@admin-api/services/audit/audit.service";
-import type { AdminSessionRevocationPort } from "@admin-api/services/session-revocation/session-revocation.port";
+import type { UnifiedSessionEffectSchema } from "@admin-api/services/session-management/session-management.schema";
 import type {
   SubjectAccessMutationReceipt,
   SubjectAccessTransitionTarget,
 } from "@iam/api-core/subject-access";
 import type { UnitOfWorkPort } from "@iam/api-core/uow";
+import type { z } from "zod";
 import type {
   User,
   UserCreateDto,
@@ -107,7 +109,22 @@ export interface AdminUserServiceDeps {
   privilegeRepository: AdminUserPrivilegeReaderPort;
   passwordHasher: Pick<PasswordHasherPort, "hashPassword">;
   random: Pick<RandomPort, "password" | "uuid">;
-  sessionRevocation: Pick<AdminSessionRevocationPort, "revokeUserSessions">;
+  sessionRevocation: {
+    revokeUserSessions: (input: {
+      userId: number;
+      subjectIdentifier: string;
+      reason: "user_disabled" | "user_deleted" | "admin_revoke";
+      exceptPrincipalSessionId?: string;
+      onlySubjectAccessTransitionId?: string;
+      auditContext?: AdminAuditContext;
+    }) => Promise<unknown>;
+  };
+  resetPasswordSessionEffect?: (input: {
+    userId: number;
+    subjectIdentifier: string;
+    exceptPrincipalSessionId?: string;
+    auditContext?: AdminAuditContext;
+  }) => Promise<z.infer<typeof UnifiedSessionEffectSchema>>;
   subjectAccessLifecycle: AdminSubjectAccessLifecyclePort;
   uow: AdminUserUnitOfWorkPort;
 }

@@ -10,6 +10,7 @@ export interface LoginWithWechatOptions {
 
 export interface LoginWithWechatResult {
   token: string;
+  remainingSeconds?: number;
   isMobileSet: boolean;
 }
 

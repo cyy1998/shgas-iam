@@ -75,6 +75,7 @@ export async function createAdminApiComposition(
     clock: runtime.clock,
   });
   const services = createAdminApiServices({
+    db: compositionDb,
     auditService,
     roleAssignmentResolver,
     repositories,
@@ -116,7 +117,6 @@ export async function createAdminApiComposition(
       restOperationSurface: routeComposition.restOperationSurface,
       runtime,
       services,
-      sessionKernel: session.kernel,
       subjectAccess: session.subjectAccessOperations,
     }),
   };

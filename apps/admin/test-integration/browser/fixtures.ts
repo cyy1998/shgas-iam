@@ -144,7 +144,15 @@ export async function mockSessionListRoute(
   return mockTrpcQueryRoute(
     page,
     'admin.sessionManagement.listSessions',
-    respond,
+    async (input: SessionListInput, requestNumber) => {
+      const response = await respond(input, requestNumber);
+      return response.type === 'success'
+        ? {
+            ...response,
+            data: { allowedActions: { revoke: true }, ...response.data },
+          }
+        : response;
+    },
   );
 }
 

@@ -44,7 +44,8 @@
     },
     "test:integration:browser": {
       "dependsOn": ["transit"],
-      "cache": false
+      "cache": false,
+      "passThroughEnv": ["IAM_API_TEST_REDIS_URL"]
     },
     "test:integration:process": {
       "dependsOn": ["transit"],
@@ -72,8 +73,6 @@
         "IAM_API_CORE_TEST_REDIS_URL",
         "IAM_API_TEST_DATABASE_URL",
         "IAM_API_TEST_REDIS_URL",
-        "IAM_OIDC_PROVIDER_TEST_DATABASE_URL",
-        "IAM_OIDC_PROVIDER_TEST_REDIS_URL",
         "IAM_USER_PROFILE_TEST_REDIS_URL",
         "IAM_WORKER_TEST_REDIS_URL"
       ]
@@ -85,9 +84,8 @@
         "IAM_ADMIN_API_TEST_REDIS_URL",
         "IAM_API_CORE_TEST_REDIS_URL",
         "IAM_SESSION_KERNEL_TEST_REDIS_URL",
-  "IAM_CUSTOM_SSO_TEST_REDIS_URL",
+        "IAM_OIDC_TEST_REDIS_URL",
         "IAM_API_TEST_REDIS_URL",
-        "IAM_OIDC_PROVIDER_TEST_REDIS_URL",
         "IAM_USER_PROFILE_TEST_REDIS_URL",
         "IAM_WORKER_TEST_REDIS_URL"
       ]

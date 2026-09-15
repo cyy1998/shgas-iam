@@ -501,11 +501,6 @@ describe('OrganizationResponsibilityAssignmentsPanel', () => {
       'aria-selected',
       'true',
     );
-    expect(
-      screen.getByText(
-        '暂停、停用或删除时，服务端会检查该组织及全部下级组织是否仍有开放责任任命。',
-      ),
-    ).toBeInTheDocument();
     await user.click(screen.getByRole('tab', { name: '责任任命' }));
 
     expect(

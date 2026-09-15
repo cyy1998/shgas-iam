@@ -1,0 +1,51 @@
+diff --git a/src/main/java/net/openid/conformance/openid/AbstractOIDCCServerSecurityProfileTest.java b/src/main/java/net/openid/conformance/openid/AbstractOIDCCServerSecurityProfileTest.java
+index 1884cc6..32c34de 100644
+--- a/src/main/java/net/openid/conformance/openid/AbstractOIDCCServerSecurityProfileTest.java
++++ b/src/main/java/net/openid/conformance/openid/AbstractOIDCCServerSecurityProfileTest.java
+@@ -130,0 +131,7 @@ public abstract class AbstractOIDCCServerSecurityProfileTest extends AbstractOID
++
++	@Override
++	protected boolean useIamS256() {
++		// Dedicated PKCE tests retain their original positive and negative request construction.
++		return false;
++	}
++
+diff --git a/src/main/java/net/openid/conformance/openid/AbstractOIDCCServerTest.java b/src/main/java/net/openid/conformance/openid/AbstractOIDCCServerTest.java
+index 2309043..34043de 100644
+--- a/src/main/java/net/openid/conformance/openid/AbstractOIDCCServerTest.java
++++ b/src/main/java/net/openid/conformance/openid/AbstractOIDCCServerTest.java
+@@ -10,0 +11 @@ import net.openid.conformance.condition.client.AddClientIdToRequest;
++import net.openid.conformance.condition.client.AddCodeVerifierToTokenEndpointRequest;
+@@ -90,0 +92 @@ import net.openid.conformance.sequence.client.PerformStandardIdTokenChecks;
++import net.openid.conformance.sequence.client.SetupPkceAndAddToAuthorizationRequest;
+@@ -94,0 +97 @@ import net.openid.conformance.variant.ClientRegistration;
++import net.openid.conformance.variant.ConfigurationFields;
+@@ -105,0 +109 @@ import java.util.function.Supplier;
++@ConfigurationFields({"iam_s256_required"})
+@@ -542,0 +547,4 @@ public abstract class AbstractOIDCCServerTest extends AbstractRedirectServerTest
++	protected boolean useIamS256() {
++		return Boolean.TRUE.equals(env.getBoolean("config", "iam_s256_required")) && responseType.includesCode();
++	}
++
+@@ -544 +552,5 @@ public abstract class AbstractOIDCCServerTest extends AbstractRedirectServerTest
+-		return new CreateAuthorizationRequestSteps(formPost);
++		ConditionSequence steps = new CreateAuthorizationRequestSteps(formPost);
++		if (useIamS256()) {
++			steps = steps.then(new SetupPkceAndAddToAuthorizationRequest());
++		}
++		return steps;
+@@ -630,0 +643,3 @@ public abstract class AbstractOIDCCServerTest extends AbstractRedirectServerTest
++		if (useIamS256()) {
++			callAndStopOnFailure(AddCodeVerifierToTokenEndpointRequest.class, "RFC7636-4.5");
++		}
+diff --git a/src/main/java/net/openid/conformance/openid/OIDCCEnsureRequestWithValidPkceSucceeds.java b/src/main/java/net/openid/conformance/openid/OIDCCEnsureRequestWithValidPkceSucceeds.java
+index 89181d0..8aaf0de 100644
+--- a/src/main/java/net/openid/conformance/openid/OIDCCEnsureRequestWithValidPkceSucceeds.java
++++ b/src/main/java/net/openid/conformance/openid/OIDCCEnsureRequestWithValidPkceSucceeds.java
+@@ -16,0 +17,6 @@ public class OIDCCEnsureRequestWithValidPkceSucceeds extends AbstractOIDCCServer
++	@Override
++	protected boolean useIamS256() {
++		// Dedicated PKCE tests retain their original positive and negative request construction.
++		return false;
++	}
++

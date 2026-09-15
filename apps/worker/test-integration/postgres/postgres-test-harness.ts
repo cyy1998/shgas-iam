@@ -1,5 +1,8 @@
 import type { DbClient } from "@iam/db";
 import { randomUUID } from "node:crypto";
+import { cp, mkdtemp, readdir, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { basename, dirname, join, resolve } from "node:path";
 import process from "node:process";
 import { fileURLToPath } from "node:url";
 import { relations } from "@iam/db/relations";
@@ -18,7 +21,9 @@ export interface WorkerPostgresTestHarness {
   readonly close: () => Promise<void>;
 }
 
-export async function createWorkerPostgresTestHarness(): Promise<WorkerPostgresTestHarness> {
+export async function createWorkerPostgresTestHarness(
+  options: { clientSsoUpgradeSource?: boolean } = {},
+): Promise<WorkerPostgresTestHarness> {
   const databaseUrl = requireDedicatedTestDatabaseUrl();
   const schemaName = `iam_worker_${randomUUID().replaceAll("-", "")}`;
   const adminSql = postgres(databaseUrl, { max: 1 });
@@ -37,7 +42,28 @@ export async function createWorkerPostgresTestHarness(): Promise<WorkerPostgresT
     const migrationsFolder = fileURLToPath(
       new URL("../../../../packages/db/src/migrations", import.meta.url),
     );
-    await migrate(db, { migrationsFolder, migrationsSchema: schemaName });
+    if (options.clientSsoUpgradeSource) {
+      // The upgrade command intentionally consumes the frozen pre-contraction layout.
+      // Run the same migrator against that immutable prefix, not a hand-made database fixture.
+      const prefix = "iam194-client-upgrade-source-";
+      const temporaryMigrations = await mkdtemp(join(tmpdir(), prefix));
+      try {
+        for (const entry of await readdir(migrationsFolder, { withFileTypes: true })) {
+          if (entry.name !== "20260914173743_confused_mystique") {
+            await cp(join(migrationsFolder, entry.name), join(temporaryMigrations, entry.name), {
+              recursive: true,
+            });
+          }
+        }
+        await migrate(db, { migrationsFolder: temporaryMigrations, migrationsSchema: schemaName });
+      }
+      finally {
+        await removeMigrationFixture(temporaryMigrations, prefix);
+      }
+    }
+    else {
+      await migrate(db, { migrationsFolder, migrationsSchema: schemaName });
+    }
 
     return {
       db,
@@ -76,20 +102,13 @@ function requireDedicatedTestDatabaseUrl() {
 
   const databaseName = decodeURIComponent(parsed.pathname.slice(1));
   if (!databaseName || RESERVED_DATABASE_NAMES.has(databaseName.toLowerCase())) {
-    throw new Error(
-      `${TEST_DATABASE_URL_ENV} must name a dedicated, non-system test database`,
-    );
+    throw new Error(`${TEST_DATABASE_URL_ENV} must name a dedicated, non-system test database`);
   }
 
   for (const developmentEnv of ["DATABASE_URL", "IAM_WORKER_DATABASE_URL"] as const) {
     const developmentUrl = process.env[developmentEnv];
-    if (
-      developmentUrl
-      && databaseIdentity(developmentUrl) === databaseIdentity(databaseUrl)
-    ) {
-      throw new Error(
-        `${TEST_DATABASE_URL_ENV} must not identify the same database as ${developmentEnv}`,
-      );
+    if (developmentUrl && databaseIdentity(developmentUrl) === databaseIdentity(databaseUrl)) {
+      throw new Error(`${TEST_DATABASE_URL_ENV} must not identify the same database as ${developmentEnv}`);
     }
   }
 
@@ -114,4 +133,10 @@ function quoteIdentifier(identifier: string) {
   if (!/^[a-z0-9_]+$/u.test(identifier))
     throw new Error("test schema name contains unsafe characters");
   return `"${identifier}"`;
+}
+
+async function removeMigrationFixture(path: string, prefix: string) {
+  if (dirname(resolve(path)) !== resolve(tmpdir()) || !basename(path).startsWith(prefix))
+    throw new Error("Unexpected migration fixture directory");
+  await rm(path, { recursive: true });
 }

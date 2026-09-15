@@ -2,16 +2,16 @@ import type { ProcessSmokeAttemptContext } from "@iam/api-core/testing/process-s
 import process from "node:process";
 import { fileURLToPath } from "node:url";
 import {
-  createProcessSmokeEnvironment,
+  createBoundedProcessLogCapture,
   createProcessSmokeSuite,
   PortCollisionError,
   PROCESS_SMOKE_TEST_TIMEOUT_MS,
   spawnOwnedProcessTree,
 } from "@iam/api-core/testing/process-smoke-harness";
 import { afterEach, describe, expect, test } from "bun:test";
+import { createEntryEnvironment } from "./api-env.fixture";
 
 const apiRoot = fileURLToPath(new URL("../../", import.meta.url));
-const loginCredentialPrivateKey = "319b4e59ca80d7b4cc35955b63da4edf1ed51772ec8f33c0a4f769dda7b9fc65";
 const entrySmoke = createProcessSmokeSuite({
   label: "API entry",
   temporaryDirectoryPrefix: "iam-api-entry-smoke-",
@@ -22,50 +22,6 @@ afterEach(entrySmoke.cleanup);
 
 function entryOrigin(context: ProcessSmokeAttemptContext) {
   return `http://${context.hostname}:${context.port}`;
-}
-
-function createEntryEnvironment(context: ProcessSmokeAttemptContext) {
-  const origin = entryOrigin(context);
-  return createProcessSmokeEnvironment({
-    source: process.env,
-    temporaryDirectory: context.temporaryDirectory,
-    overrides: {
-      NODE_ENV: "production",
-      IAM_API_DATABASE_URL: "postgresql://iam:password@127.0.0.1:1/iam",
-      IAM_API_PASSWORD_HASH_ROUNDS: "4",
-      IAM_API_SMS_SIGNATURE_KEY: "unreachable-smoke-signature",
-      IAM_API_SMS_URL: "http://127.0.0.1:1/sms",
-      IAM_API_SESSION_DEFAULT_TTL_SECONDS: "3600",
-      IAM_API_AUTH_CODE_TTL_SECONDS: "300",
-      IAM_API_CUSTOM_SSO_PROJECTION_RETRY_AFTER_SECONDS: "7",
-      IAM_API_ORCAS_URL: "http://127.0.0.1:1/orcas",
-      IAM_API_PORT: String(context.port),
-      IAM_API_WECHAT_CORP_ID: "unreachable-smoke-corp",
-      IAM_API_WECHAT_CORP_SECRET: "unreachable-smoke-secret",
-      IAM_API_MAGIC_CODE: "000000",
-      IAM_API_REDIS_HOST: "127.0.0.1",
-      IAM_API_REDIS_PORT: "1",
-      IAM_API_REDIS_DB: "15",
-      IAM_API_LOGIN_ENDPOINT: "/login",
-      IAM_API_SSO_INTERNAL_ORIGIN: origin,
-      IAM_API_SSO_EXTERNAL_ORIGIN: origin,
-      IAM_API_AUTHORIZATION_ENDPOINT: "/sso/authorize",
-      IAM_API_LOGOUT_ENDPOINT: "/sso/logout",
-      IAM_API_THIRDPARTY_OA_ENDPOINT: "/sso/thirdparty/oa",
-      IAM_API_LOG_LEVEL: "info",
-      IAM_API_LOG_FORMAT: "json",
-      IAM_API_CAP_ENABLED: "false",
-      IAM_API_LOGIN_CREDENTIAL_ACTIVE_KID: "entry-smoke",
-      IAM_API_LOGIN_CREDENTIAL_PRIVATE_KEYS_JSON: JSON.stringify({
-        "entry-smoke": loginCredentialPrivateKey,
-      }),
-      IAM_API_SESSION_KERNEL_NAMESPACE: `sess:api-entry-smoke:${context.port}:`,
-      FORCE_COLOR: "0",
-      NO_COLOR: "1",
-      NO_PROXY: "127.0.0.1,localhost",
-      no_proxy: "127.0.0.1,localhost",
-    },
-  });
 }
 
 async function probeApiDocs(origin: string, signal: AbortSignal) {
@@ -126,17 +82,51 @@ async function readOpenApiDocument(
 
 describe("API entry", () => {
   test("starts the production entry with canonical Internal User routes", async () => {
+    let capture: ReturnType<typeof createBoundedProcessLogCapture> | undefined;
     const result = await entrySmoke.run({
-      start: context => spawnOwnedProcessTree({
-        executable: process.execPath,
-        args: ["--no-env-file", "run", "src/index.ts"],
-        cwd: apiRoot,
-        env: createEntryEnvironment(context),
-      }),
-      probe: (context, signal) => probeApiDocs(entryOrigin(context), signal),
+      start: (context) => {
+        const child = spawnOwnedProcessTree({
+          executable: process.execPath,
+          args: ["--no-env-file", "run", "src/index.ts"],
+          cwd: apiRoot,
+          env: createEntryEnvironment(context),
+        });
+        capture = createBoundedProcessLogCapture(child, { maxBytes: 128 * 1024 });
+        return child;
+      },
+      async probe(context, signal) {
+        const origin = entryOrigin(context);
+        const docs = await probeApiDocs(origin, signal);
+        const [health, ready, protocol, dependency, ssoSchema] = await Promise.all([
+          fetch(`${origin}/oidc/health`, { signal }),
+          fetch(`${origin}/ready`, { signal }),
+          fetch(`${origin}/oidc/auth`, { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}", signal }),
+          fetch(`${origin}/oidc/auth?client_id=fixture-client&response_type=code&redirect_uri=https%3A%2F%2Frp.example%2Fcallback&scope=openid&state=private-state`, { signal }),
+          fetch(`${origin}/sso/doc`, { signal }),
+        ]);
+        return { ...docs, ssoSchema: { status: ssoSchema.status, body: await ssoSchema.json() }, health: health.status, ready: ready.status, protocol: { status: protocol.status, body: await protocol.json() }, dependency: { status: dependency.status, body: await dependency.json(), retryAfter: dependency.headers.get("Retry-After") } };
+      },
       childReadinessEvidence: context => `server: ${entryOrigin(context)}`,
     });
 
+    expect(result.health).toBe(503);
+    expect(result.ssoSchema.status).toBe(200);
+    expect(result.ssoSchema.body.components.securitySchemes.CustomSsoBasic).toEqual({
+      type: "http",
+      scheme: "basic",
+      description: "Basic username is the UTF-8 percent-encoded Client Code; password is the Custom SSO Client Secret.",
+    });
+    expect(result.ssoSchema.body.paths["/sso/token"].post.security).toEqual([{ CustomSsoBasic: [] }]);
+    expect(result.ssoSchema.body.paths["/sso/token"].post.requestBody.content).toHaveProperty("application/x-www-form-urlencoded");
+    expect(result.ssoSchema.body.paths["/sso/token"]).not.toHaveProperty("get");
+    expect(result.ready).toBe(503);
+    expect(result.protocol).toMatchObject({ status: 400, body: { error: "invalid_request" } });
+    expect(result.dependency).toMatchObject({ status: 503, retryAfter: "3", body: { error: "temporarily_unavailable" } });
+    const logs = capture?.snapshot() ?? "";
+    capture?.dispose();
+    expect(logs).toContain("\"event\":\"oidc_protocol_error\"");
+    expect(logs).toContain("\"event\":\"oidc_server_error\"");
+    expect(logs).not.toContain("private-state");
     expect(result.publicDocument).toMatchObject({
       openapi: "3.1.0",
       info: { title: "通用用户API", version: "1.0.0" },

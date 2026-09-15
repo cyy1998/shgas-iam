@@ -2,8 +2,9 @@ import type { CreateAppOptions } from "@iam/api-core/core/create-app";
 import env from "@api/env";
 import { logger } from "@api/lib/logger";
 import { createApiAuditLogWriter } from "@api/services/audit/audit.service";
-import db from "@iam/db";
+import db, { closeDb } from "@iam/db";
 import { createUserProfileJobProducer } from "@iam/user-profile-read-model/producer";
+import { sql } from "drizzle-orm";
 import { createInternalDelegationQueryResource } from "./internal-delegation-query";
 import { createApiMiddlewares } from "./middlewares";
 import { createApiRepositories } from "./repositories";
@@ -82,13 +83,18 @@ export async function createApiComposition(options: CreateApiCompositionOptions 
     unitOfWork,
     services,
     useCases,
-    routes: await createApiRoutes({ auditLogWriter, runtime, services, useCases }),
+    routes: await createApiRoutes({ auditLogWriter, runtime, services, useCases, verifyDatabase: () => db.execute(sql`SELECT 1`) }),
     middlewares: await createApiMiddlewares({ runtime, services }),
     async close() {
-      await Promise.all([
+      const results = await Promise.allSettled([
         delegationResolutionResource.close(),
         userProfileResources.close(),
+        closeDb({ timeoutSeconds: 5 }),
       ]);
+      runtime.redis.disconnect();
+      const failed = results.find(result => result.status === "rejected");
+      if (failed?.status === "rejected")
+        throw failed.reason;
     },
   };
 }

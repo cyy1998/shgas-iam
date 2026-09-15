@@ -13,17 +13,14 @@ flowchart LR
   gateway --> web["Admin / SSO 静态资源"]
   gateway --> api["API · Bun / Hono"]
   gateway --> admin["Admin API · Bun / Hono"]
-  gateway --> oidc["OIDC Provider · Node.js"]
   gateway --> business["接入业务 upstream"]
   gateway -. "部分业务路由的 forward-auth" .-> api
   gateway --> etcd["etcd：Gateway 配置"]
   api --> pg["PostgreSQL"]
   admin --> pg
-  oidc --> pg
   worker["Worker · Bun"] --> pg
   api --> redis["Redis：登录状态 / 缓存 / BullMQ"]
   admin --> redis
-  oidc --> redis
   worker --> redis
   api --> integrations["短信 / 企业微信 / ORCAS"]
 ```
@@ -37,7 +34,7 @@ flowchart LR
 | `/portal`、`/iam-admin` 及其子路径 | SSO 与 Admin 静态前端；页面通过 app-local service 发起业务请求。 |
 | `/api/iam/public/*`、`/api/iam/open/*`、`/api/iam/internal/*`、`/api/iam/auth/*`；`/sso/*` | API；前四类由 Gateway 去除 `/api/iam` 前缀，协议解析和鉴权按 API 的具体入口处理。 |
 | `/api/iam/admin/*`、`/api/iam/rpc/*` | Admin API；Gateway 去除 `/api/iam` 前缀，REST 与 tRPC 复用管理能力。 |
-| `/oidc` 及其子路径 | OIDC Provider；自身 HTTP composition 分发 interaction、登录守卫与 OIDC protocol。 |
+| `/oidc` 及其子路径 | API；`@iam/oidc` 拥有完整协议操作，API HTTP adapter 拥有 Cookie、错误、重定向与 lifecycle。 |
 | Queue consumer、health/readiness、可选 Bull Board、one-shot repair | Worker；HTTP 面不是业务 API，命令与 consumer 的资源生命周期由 Worker composition 拥有。 |
 
 IAM 自身 routes 不统一使用 `forward-auth`。例如 [Tender manifests](../../gateway/manifests/prod/tender.yaml)中的部分
@@ -50,7 +47,7 @@ IAM 自身 routes 不统一使用 `forward-auth`。例如 [Tender manifests](../
 |---|---|
 | 浏览器 → 后端 | 浏览器输入、菜单和按钮状态不构成授权事实。Admin capability 与 `allowedActions` 镜像服务端决定，每次请求仍由 Admin API 授权；见[前端契约](frontend-architecture.md#管理路由与权限)与 [ADR-0017](../adr/0017-centralize-admin-role-policy-with-request-time-scope.md)。 |
 | 代理 → IAM / 接入业务 | Gateway 拥有 host/path rewrite、真实 IP 信任配置与按 route 设置的 header。可信代理 CIDR、入口网络和实际端口可达范围需要部署验收，仓库图不能证明 header 来源可信或后端不可直连；见[Gateway 发布手册](../releases/apisix-gateway-release.md)。 |
-| 协议入口 → 业务模块 | API、Admin API、OIDC Provider 分别拥有各自协议解析、认证和错误映射；normalized actor 与请求上下文通过显式接口流入业务层，见[后端架构](backend-architecture.md#请求审计与可观测上下文)。 |
+| 协议入口 → 业务模块 | API、Admin API 分别拥有各自协议解析、认证和错误映射；normalized actor 与请求上下文通过显式接口流入业务层，见[后端架构](backend-architecture.md#请求审计与可观测上下文)。 |
 | IAM → 第三方 | Custom SSO 与 OIDC 共享主体投影能力，但各自拥有 wire 与 artifact 生命周期；Independent client 自建的本地会话由第三方负责，IAM 撤销不等于第三方本地退出。见[第三方 SSO 对接](../features/sso/third-party-sso-integration.md)与 [OIDC 对接](../features/oidc/oidc-integration.md)。 |
 
 短信、企业微信和 ORCAS 由 API composition 注入外部 adapter，分别服务于验证码、微信登录与 Custom SSO Session workflow；
@@ -64,9 +61,9 @@ IAM 自身 routes 不统一使用 `forward-auth`。例如 [Tender manifests](../
 |---|---|---|
 | 用户、任职、组织、角色、Client 配置等业务事实 | PostgreSQL；业务写入口拥有 mutation，`@iam/db` 拥有 schema 与持久化基础能力。 | 共享包选址和 DTO 演进遵守[共享契约](contracts-and-database.md)，读模型或队列不反向成为源业务事实。 |
 | User Profile / Subject Facts | `@iam/user-profile-read-model` 从源事实构建；PostgreSQL 的 Profile 与 Dirty Version 记录发布及新鲜度状态。 | Redis Facts 是可重建缓存；Worker 拥有重建与 publication，Reader 拥有窄行 read-through，见[发布契约](backend-architecture.md#user-profile-subject-facts-publication)。 |
-| Principal Session / Temporary Login Restriction | Redis 实时状态，由 Session Kernel / LoginRestriction 拥有。 | PostgreSQL 审计不能重建登录状态或历史会话清单；丢失状态的后果见 [ADR-0005](../adr/0005-keep-live-login-state-in-redis.md)。 |
+| UserSession / ClientSession / Temporary Login Restriction | Redis 实时状态，由 Session Kernel / LoginRestriction 拥有。 | PostgreSQL 审计不能重建登录状态或历史会话清单；丢失状态的后果见 [ADR-0005](../adr/0005-keep-live-login-state-in-redis.md)。 |
 | Subject Access Barrier | Redis 保存请求时访问屏障；lifecycle coordinator 和 Worker recovery 对照 PostgreSQL 账号、transition intent 与当前 Facts 收敛。 | 缺失或不确定状态失败关闭，不能按普通缓存 miss 默认启用；恢复入口及调度责任见[Barrier 契约](backend-architecture.md#subject-access-barrier)。 |
-| Client Runtime Snapshot | PostgreSQL 拥有 Client 配置；共享 Snapshot Module 拥有 Redis control 与三类 Runtime payload。 | 可重建，但不等于普通 TTL 缓存。Worker 拥有 targeted repair 和停流后的 full repair/verify，见 [ADR-0021](../adr/0021-bind-protocol-runtime-cache-consistency-to-snapshot-acquisition.md)。 |
+| Client Runtime Snapshot | PostgreSQL 拥有 Client 配置；共享 Snapshot Module 拥有 Redis control、统一安全 payload 与独立敏感 Credential payload。 | 可重建，但不等于普通 TTL 缓存。Worker 拥有 targeted repair 和停流后的 full repair/verify，见 [ADR-0021](../adr/0021-bind-protocol-runtime-cache-consistency-to-snapshot-acquisition.md)。 |
 | BullMQ rebuild 工作 | Queue 是唤醒和处理通道；User Profile 的待处理事实保存在 PostgreSQL Dirty 状态。 | 入队成功不证明 publication 完成；提交后 enqueue 失败由 repair 恢复，见[失效契约](backend-architecture.md#user-profile-失效)。 |
 | Audit 与运行日志 | PostgreSQL `audit_log` 记录业务审计；应用日志经 Alloy → Loki，由 Grafana 查询。 | 日志不替代当前授权或业务事实。敏感字段与 after-effect 审计失败见[审计契约](../features/audit/audit-logging.md)。 |
 
@@ -79,12 +76,9 @@ TTL 或逐 Client 访问自然收敛。当前 full repair/verify 只拥有当前
 
 ## 一致性边界
 
-- **token 生命周期状态**：Principal、Credential、Artifact 的完整 token 经普通 SHA-256 直接定位按类型隔离的单状态记录，
-  active/revoked 与 Artifact consumed 终态由同记录拥有；内部 ID 通过反向定位访问同一权威状态。Kernel lookup HMAC 配置与轮换已退役，
-  无 token Binding 仍按 ID，Provider 自有 lookup 与 Cookie/JWT/Client Secret 密码功能保留。pending 时保持终态和反向定位可达，
-  不承诺后台自动清理成功；全部66/20/12、最高入口组合与原始基线成本见[最终契约](../features/sso/token-state-contract.md)，
-  配置退役与装配见[运行时契约](../features/sso/token-state-runtime-evidence.md)。目标环境未切换。
-
+- **会话与协议状态**：Kernel 只拥有 UserSession/ClientSession。应用关系固定根与 Client，open 可复用有效实例并更新协议标记；固定期限不滑动。
+  Custom SSO 与 OIDC 各自拥有 Code、Token、续接及协议状态。访问验证自身、根、应用关系与当前 Client/Subject Access；
+  不依赖异步枚举 Token 清理来阻止已终止关系的访问。离线旧布局只供显式维护，不进入线上探测。
 - **账号访问**：API、Admin、Custom SSO 与 OIDC 在每个受影响接口的首次可信主体解析后取得一次许可；成功、拒绝和暂态失败固定。已许可在途调用不复查账号状态，下一调用重新检查；Kernel 只管对象生命周期，Projection 复用许可。旧代不因重新启用恢复，协调切换见[维护手册](../releases/subject-access-operation-cutover.md)。
 
 
@@ -92,11 +86,10 @@ TTL 或逐 Client 访问自然收敛。当前 full repair/verify 只拥有当前
   Profile 与 Dirty processed，随后单调发布 Redis。`required` after-commit 失败仍可能已有数据库提交，不能据错误自动重放业务写入。
 - **Client 配置**：请求成功接受 Snapshot 后可继续使用；Admin mutation 的传播成功影响后续 acquisition。传播失败可能让后续请求
   继续取得旧 Snapshot，须显式 repair；这不等于协议配置版本或 Session 撤销，见 [ADR-0022](../adr/0022-adopt-snapshot-consistency-for-client-traffic-gate.md)。
-  同操作的协议配置与 Gate 分别固定首次结果，普通失败精确处理目标；Admin 协议变更只撤销早于本次提交版本的对象，
-  晚到命令保留边界与更高代。枚举不是在途排空，极迟旧写入由下一调用精确拒绝；见[最终契约](../features/sso/protocol-validation-contract.md)。
+  单次 acquisition 共同固定 Client 状态与单协议配置。启停、配置和 Secret 维护不自动撤销；显式撤销作用于捕获的精确实例。
 - **主体事实与授权**：普通 Profile 与 `iam:authorization` 均消费取得的已发布事实，缓存有效命中不查 PostgreSQL；
   缓存缺失或无效才读取已发布 Profile，不查 Dirty 新鲜度，允许旧权限持续交付。账号访问保护独立保持。
-  Custom SSO 在交付时构建投影，OIDC 在授权时创建 Claims Snapshot，后续协议交付复用该快照；见[投影契约](backend-architecture.md#client-subject-projection)。
+  Custom SSO 与 OIDC UserInfo 在实际交付时按当前披露范围构建投影；Code 只保留原授权事实，已签发 ID Token 内容固定；见[投影契约](backend-architecture.md#client-subject-projection)。
 - **Admin 范围**：服务端按请求时 PostgreSQL 事实授权，已通过检查的请求可能在并发撤权后完成。该模型不保证提交时线性化撤权；
   适用范围及重新决策条件见 [ADR-0017](../adr/0017-centralize-admin-role-policy-with-request-time-scope.md)。
 
@@ -114,15 +107,8 @@ TTL 或逐 Client 访问自然收敛。当前 full repair/verify 只拥有当前
 [观测运行手册](../releases/observability-system-logs.md)负责。真实环境的 readiness、停流、旧实例 drain、恢复和放流证据
 由发布负责人取得，不能由本地测试或这张拓扑图代替。
 
-Spec #157 的全部 56 条故事、20 项实现和 10 项测试决定见[一次消费最终账本](../features/sso/custom-sso-one-shot-grant-contract.md)。
-#161 在正式 HTTP/Redis 上组合定向清理、独立核验、同根新授权与已有凭据访问；完整 OIDC 保留集复用 #160。
-原 #157 固定旧候选的 writer/consumer、基线和保留 smoke 见[保留会话升级手册](../releases/custom-sso-one-shot-grant-upgrade.md)。包含 #170 的当前候选必须按[全体下线手册](../releases/online-auth-redis-time-cutover.md)统一切换并重新登录，不能沿用保留对象流程；目标环境未执行。
-
-
-Spec #163 / ADR-0033 的 62 条故事、20 项实现和 12 项测试决定见[Credential 最终账本](../features/sso/credential-authority-contract.md)。
-已有 Credential 使用不再显式或经 Binding 间接复查根；新授权、两协议 Code 兑换、续接与 Admin/IAM 根 token 仍验证根。
-根撤销尽力处理子对象，允许漏撤与已观察根后的晚到签发；自身撤销、期限、Subject Access、配置/用途及 OIDC Binding/Snapshot 仍约束访问。
-Custom SSO 授权不续根，两模式 Credential 固定签发期限；同根 OIDC 续根/Binding 不延长它们。
-#164–#167 的实际行为与局部性能证据可复用，#168 在现有 Provider HTTP/Redis 增补三方同根同时存在的联合观察；不能将测试收集或文件存在当作已执行。
-本次统一发布必须执行[全体下线手册](../releases/online-auth-redis-time-cutover.md)，此前 #146/#157 的保留对象流程只属于原规格单独升级。
-四 owner 真实 Redis 维护证明不代替新进程 CLI verify、停流排空及新登录人工证据；代码已实现，目标环境未切换。
+Spec #178 的最终在线图由 API、Admin API、Worker 和前端共同消费一代模型；旧 OIDC app、Kernel 四对象、双协议列、
+Claims Snapshot 和三类旧 Snapshot/Gate 已退出生产。旧候选的历史测试不能代替当前候选执行。
+首次升级与旧布局清理按[统一维护手册](../releases/unified-session-maintenance.md)：先用固定旧工具完成 Client apply/verify，
+再应用收缩 migration，清理 source/unified 状态并独立核验，完成 Snapshot repair/verify、业务数据和新登录验收后才放流。
+本仓库变更没有执行目标环境切换；人工发布责任仍由发布负责人承担。

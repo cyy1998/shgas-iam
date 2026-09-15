@@ -57,7 +57,7 @@ function createOperations(signal?: AbortSignal) {
       join(workspaceRoot, "docker", "migrate.Dockerfile"),
       join(workspaceRoot, "docker", "seed.Dockerfile"),
       join(workspaceRoot, "docker", "gateway-sync.Dockerfile"),
-      join(workspaceRoot, "docker", "start-oidc.sh"),
+      join(workspaceRoot, "docker", "start-api.sh"),
       join(repositoryRoot, "gateway", "config", "config.dev.yaml"),
       join(repositoryRoot, "gateway", "manifests", "dev", "iam.yaml"),
       join(repositoryRoot, "packages", "db", "drizzle.config.ts"),

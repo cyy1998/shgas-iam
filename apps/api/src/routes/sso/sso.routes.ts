@@ -106,6 +106,7 @@ export const authorize = createRoute({
   tags,
   request: {
     query: z.object({
+      ssoReturn: z.string().regex(/^[\w-]{43}$/u).optional(),
       client: CustomSsoClientCodeSchema,
       redirectUrl: z.url().openapi({ example: "http://localhost:8080" }),
       state: z.string().optional().openapi({ example: "opaque-client-state" }),
@@ -128,6 +129,7 @@ export const loginGuard = createRoute({
   tags,
   request: {
     query: z.object({
+      ssoReturn: z.string().regex(/^[\w-]{43}$/u).optional(),
       client: CustomSsoClientCodeSchema,
       redirectUrl: z.url().openapi({ example: "http://localhost:8080" }),
       state: z.string().optional().openapi({ example: "opaque-client-state" }),
@@ -172,6 +174,7 @@ export const loginOA = createRoute({
       clientCode: CustomSsoClientCodeSchema.openapi({ example: "oa" }),
     }),
     query: z.object({
+      ssoReturn: z.string().regex(/^[\w-]{43}$/u).optional(),
       loginid: z.string().openapi({ example: "138550" }),
       ts: z.string().openapi({ example: "1234" }),
       token: z.string().openapi({ example: "138550" }),
@@ -194,6 +197,7 @@ export const loginWX = createRoute({
   tags,
   request: {
     query: z.object({
+      ssoReturn: z.string().regex(/^[\w-]{43}$/u).optional(),
       code: z.string().openapi({ example: "1234" }),
       redirectUrl: z.url().openapi({ example: "http://localhost:8080" }),
       client: CustomSsoClientCodeSchema,

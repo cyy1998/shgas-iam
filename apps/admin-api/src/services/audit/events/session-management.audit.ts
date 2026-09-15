@@ -32,6 +32,26 @@ export function buildAdminSessionRevokeAudit(
   };
 }
 
+export function buildAdminSessionBatchRevokeAudit(
+  input: BuildAdminSessionRevokeAuditBaseInput,
+  auditContext: AdminAuditContext,
+): AuditLogInput {
+  const fields = buildSafeAdminSessionRevokeAuditFields(input, auditContext);
+  const results = "sessions" in input.result.result ? input.result.result.batch?.results ?? [] : [];
+  return {
+    ...fields,
+    action: "admin.session.revoke",
+    targetType: "session_batch",
+    details: {
+      ...fields.details,
+      alreadyTerminated: results.filter(result => result.status === "already_terminated").length,
+      missing: results.filter(result => result.status === "missing").length,
+      expired: results.filter(result => result.status === "expired").length,
+      replaced: results.filter(result => result.status === "replaced").length,
+    },
+  };
+}
+
 export interface BuildAdminSessionRevokeUserAuditInput
   extends BuildAdminSessionRevokeAuditBaseInput {
   userId: number;
@@ -85,12 +105,11 @@ function buildSafeAdminSessionRevokeAuditFields(
     details: {
       scope: input.result.result.scope,
       changed: input.result.changed,
-      revoked: { ...input.result.result.revoked },
+      sessions: { ...input.result.result.sessions },
       currentPrincipalSessionExcluded: input.result.result.currentPrincipalSessionExcluded,
       ...(input.currentPrincipalSessionProtected
         ? { currentPrincipalSessionProtected: true }
         : {}),
-      cleanupFailedCount: input.result.result.cleanup.failed,
     },
   };
 }

@@ -10,11 +10,6 @@ type AdminClientOutputs = inferRouterOutputs<AppRouter>['admin']['client'];
 export type ClientVo = AdminClientOutputs['search']['result'][number];
 export type ClientDetailVo = AdminClientOutputs['detail'];
 export type ClientSearchParams = AdminClientInputs['search'];
-export type ClientOidcConfigureInput =
-  AdminClientInputs['oidcConfigure']['data'];
-export type ClientCustomSsoConfigureInput =
-  AdminClientInputs['customSsoConfigure']['data'];
-
 export const ClientDetailErrorKind = {
   NotFound: 'not-found',
   RequestFailed: 'request-failed',
@@ -80,75 +75,6 @@ export function updateClientStatus(
 export function deleteClient(clientCode: string) {
   return runAdminMutation(() =>
     apiClient.admin.client.delete.mutate({ clientCode }),
-  );
-}
-
-export function configureClientOidc(
-  clientCode: string,
-  data: ClientOidcConfigureInput,
-) {
-  return runAdminMutation(() =>
-    apiClient.admin.client.oidcConfigure.mutate({ clientCode, data }),
-  );
-}
-
-export function enableClientOidc(clientCode: string) {
-  return runAdminMutation(() =>
-    apiClient.admin.client.oidcEnable.mutate({ clientCode }),
-  );
-}
-
-export function disableClientOidc(clientCode: string) {
-  return runAdminMutation(() =>
-    apiClient.admin.client.oidcDisable.mutate({ clientCode }),
-  );
-}
-
-export function removeClientOidc(clientCode: string) {
-  return runAdminMutation(() =>
-    apiClient.admin.client.oidcRemove.mutate({ clientCode }),
-  );
-}
-
-export function rotateClientOidcSecret(clientCode: string) {
-  return runAdminMutation(() =>
-    apiClient.admin.client.oidcRotateSecret.mutate({ clientCode }),
-  );
-}
-
-export function configureClientCustomSso(
-  clientCode: string,
-  data: ClientCustomSsoConfigureInput,
-) {
-  return runAdminMutation(() =>
-    apiClient.admin.client.customSsoConfigure.mutate({
-      clientCode,
-      data,
-    }),
-  );
-}
-
-export function enableClientCustomSso(clientCode: string) {
-  return runAdminMutation(() =>
-    apiClient.admin.client.customSsoEnable.mutate({ clientCode }),
-  );
-}
-
-export function disableClientCustomSso(clientCode: string) {
-  return runAdminMutation(() =>
-    apiClient.admin.client.customSsoDisable.mutate({ clientCode }),
-  );
-}
-
-export function removeClientCustomSso(clientCode: string) {
-  return runAdminMutation(() =>
-    apiClient.admin.client.customSsoRemove.mutate({ clientCode }),
-  );
-}
-
-export function rotateClientCustomSsoSecret(clientCode: string) {
-  return runAdminMutation(() =>
-    apiClient.admin.client.customSsoRotateSecret.mutate({ clientCode }),
   );
 }
 

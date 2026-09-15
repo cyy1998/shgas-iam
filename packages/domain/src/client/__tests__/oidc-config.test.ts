@@ -1,33 +1,29 @@
 import {
+  ClientSsoOidcConfigSchema,
+  ClientSsoProtocol,
+  getClientSsoTokenEndpointAuthMethod,
   OidcClientType,
   OidcScope,
   OidcTokenEndpointAuthMethod,
 } from "@iam/contracts";
-import {
-  oidcClientConfigSchema,
-  oidcClientSecretStateSchema,
-  oidcRedirectUriSchema,
-} from "@iam/db/schema";
 import { describe, expect, test } from "bun:test";
 import { OidcAccountDtoSchema, UserDtoSchema } from "../../user";
-import { OidcClientRuntimeDtoSchema } from "../schema";
 
 const publicConfig = {
+  protocol: ClientSsoProtocol.Oidc,
   clientType: OidcClientType.Public,
   redirectUris: ["http://app.example.com/callback?from=iam"],
   postLogoutRedirectUris: [],
   allowedScopes: [OidcScope.OpenId, OidcScope.Profile],
-  tokenEndpointAuthMethod: OidcTokenEndpointAuthMethod.None,
 };
-
-describe("OIDC redirect URI validation", () => {
-  test.each([
-    "http://app.example.com/callback",
-    "https://APP.example.com:443/callback?b=2&a=1",
-  ])("accepts absolute HTTP/HTTPS URI without normalization: %s", (uri) => {
-    expect(oidcRedirectUriSchema.safeParse(uri).success).toBe(true);
-  });
-
+describe("OIDC configured redirect URI", () => {
+  test.each(["http://app.example.com/callback", "https://APP.example.com:443/callback?b=2&a=1"])(
+    "accepts exact HTTP/HTTPS URI without normalization: %s",
+    (uri) => {
+      const parsed = ClientSsoOidcConfigSchema.parse({ ...publicConfig, redirectUris: [uri] });
+      expect(parsed.redirectUris).toEqual([uri]);
+    },
+  );
   test.each([
     "/callback",
     "ftp://app.example.com/callback",
@@ -35,64 +31,31 @@ describe("OIDC redirect URI validation", () => {
     "https://*.example.com/callback",
     "https://app.example.com/{tenant}/callback",
     " https://app.example.com/callback",
-  ])("rejects unsafe redirect URI: %s", (uri) => {
-    expect(oidcRedirectUriSchema.safeParse(uri).success).toBe(false);
+    "https://user:password@app.example.com/callback",
+  ])("rejects unsafe redirect URI %s", (uri) => {
+    expect(ClientSsoOidcConfigSchema.safeParse({ ...publicConfig, redirectUris: [uri] }).success).toBe(false);
   });
-});
-
-describe("OIDC client config validation", () => {
-  test("accepts public and confidential discriminants", () => {
-    expect(oidcClientConfigSchema.safeParse(publicConfig).success).toBe(true);
-    expect(oidcClientConfigSchema.safeParse({
-      ...publicConfig,
-      allowedScopes: [OidcScope.OpenId, OidcScope.IamEmployments],
-    }).success).toBe(true);
-    expect(oidcClientConfigSchema.safeParse({
+  test("accepts both client types and derives their authentication method", () => {
+    const publicClient = ClientSsoOidcConfigSchema.parse(publicConfig);
+    const confidential = ClientSsoOidcConfigSchema.parse({
       ...publicConfig,
       clientType: OidcClientType.Confidential,
-      tokenEndpointAuthMethod: OidcTokenEndpointAuthMethod.ClientSecretBasic,
-    }).success).toBe(true);
+    });
+    expect(getClientSsoTokenEndpointAuthMethod(publicClient)).toBe(OidcTokenEndpointAuthMethod.None);
+    expect(getClientSsoTokenEndpointAuthMethod(confidential)).toBe(
+      OidcTokenEndpointAuthMethod.ClientSecretBasic,
+    );
   });
-
-  test("rejects auth method mismatch, missing openid, and duplicate URI", () => {
-    expect(oidcClientConfigSchema.safeParse({
-      ...publicConfig,
-      tokenEndpointAuthMethod: OidcTokenEndpointAuthMethod.ClientSecretBasic,
-    }).success).toBe(false);
-    expect(oidcClientConfigSchema.safeParse({
-      ...publicConfig,
-      allowedScopes: [OidcScope.Profile],
-    }).success).toBe(false);
-    expect(oidcClientConfigSchema.safeParse({
-      ...publicConfig,
-      redirectUris: [publicConfig.redirectUris[0], publicConfig.redirectUris[0]],
-    }).success).toBe(false);
-  });
-
-  test("enforces secret state for public and confidential clients", () => {
-    expect(oidcClientSecretStateSchema.safeParse({
-      oidcConfig: publicConfig,
-      oidcSecretHash: null,
-    }).success).toBe(true);
-    expect(oidcClientSecretStateSchema.safeParse({
-      oidcConfig: publicConfig,
-      oidcSecretHash: "hash",
-    }).success).toBe(false);
-    expect(oidcClientSecretStateSchema.safeParse({
-      oidcConfig: {
-        ...publicConfig,
-        clientType: OidcClientType.Confidential,
-        tokenEndpointAuthMethod: OidcTokenEndpointAuthMethod.ClientSecretBasic,
-      },
-      oidcSecretHash: "hash",
-    }).success).toBe(true);
+  test("rejects missing openid, duplicate redirects and duplicate scopes", () => {
+    for (const config of [
+      { ...publicConfig, allowedScopes: [OidcScope.Profile] },
+      { ...publicConfig, redirectUris: [publicConfig.redirectUris[0], publicConfig.redirectUris[0]] },
+      { ...publicConfig, allowedScopes: [OidcScope.OpenId, OidcScope.OpenId] },
+    ])
+      expect(ClientSsoOidcConfigSchema.safeParse(config).success).toBe(false);
   });
 });
-
-describe("OIDC DTO boundaries", () => {
-  test("keeps protocol-neutral Subject Identifiers out of common DTOs", () => {
-    expect("oidcSecretHash" in OidcClientRuntimeDtoSchema.shape).toBe(false);
-    expect("subjectIdentifier" in UserDtoSchema.shape).toBe(false);
-    expect("subjectIdentifier" in OidcAccountDtoSchema.shape).toBe(true);
-  });
+test("user and protocol account DTOs preserve their existing subject identifier boundary", () => {
+  expect("subjectIdentifier" in UserDtoSchema.shape).toBe(false);
+  expect("subjectIdentifier" in OidcAccountDtoSchema.shape).toBe(true);
 });

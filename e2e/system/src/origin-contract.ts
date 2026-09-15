@@ -15,8 +15,8 @@ export function assertCanonicalOriginComposeConfig(
   const expected = [
     ["services.api.environment.IAM_API_SSO_INTERNAL_ORIGIN", contract.canonicalOrigin],
     ["services.api.environment.IAM_API_SSO_EXTERNAL_ORIGIN", contract.canonicalOrigin],
-    ["services.oidc-provider.environment.IAM_OIDC_PROVIDER_ISSUER", `${contract.canonicalOrigin}/oidc`],
-    ["services.oidc-provider.environment.IAM_OIDC_PROVIDER_PUBLIC_ORIGIN", contract.canonicalOrigin],
+    ["services.api.environment.IAM_API_OIDC_ISSUER", `${contract.canonicalOrigin}/oidc`],
+    ["services.api.environment.IAM_API_OIDC_PUBLIC_ORIGIN", contract.canonicalOrigin],
     ["services.gateway-sync.environment.IAM_SSO_INTERNAL_HOST", authority],
     ["services.gateway-sync.environment.IAM_SSO_EXTERNAL_HOST", authority],
     ["services.admin-api.environment.IAM_ADMIN_API_ADMIN_CLIENT_CODES", contract.adminClientCode],

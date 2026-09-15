@@ -6,18 +6,15 @@
   "exports": {
     ".": "./src/index.ts",
     "./wire": "./src/wire.ts",
-    "./cleanup": "./src/cleanup.ts",
     "./maintenance": "./src/maintenance.ts",
     "./testing": "./src/testing.ts"
   },
   "scripts": {
-    "lint": "eslint src test-integration eslint.config.js",
-    "lint:fix": "eslint --fix src test-integration eslint.config.js",
+    "lint": "eslint src eslint.config.js",
+    "lint:fix": "eslint --fix src eslint.config.js",
     "test": "pnpm test:unit",
     "test:unit": "bun test --max-concurrency=2 src",
-    "typecheck": "pnpm exec tsc --noEmit",
-    "test:integration:component": "bun test --max-concurrency=2 test-integration/component",
-    "test:integration:redis": "bun test --max-concurrency=1 test-integration/redis"
+    "typecheck": "pnpm exec tsc --noEmit"
   },
   "dependencies": {
     "@iam/client-subject-projection": "workspace:*",

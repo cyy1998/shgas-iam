@@ -1,8 +1,12 @@
 import type { AdminAuditContext, AuditLogInput } from "@admin-api/services/audit/audit.context";
+import type { UnifiedSessionRevocationSummary } from "@iam/api-core/subject-access";
 import type { UserStatus } from "@iam/contracts";
+import type { CapturedSession } from "@iam/session-kernel";
+import type { AdminSessionListItem } from "./session-management.type";
 
 export interface AdminSessionInventoryItem {
   principalSessionId: string;
+  record?: AdminSessionListItem["record"];
   principal: {
     subjectId: string;
   };
@@ -20,6 +24,7 @@ export interface AdminSessionInventoryPort {
     offset: number;
     limit: number;
     subjectIdentifier?: string;
+    kind?: "userSession" | "clientSession";
   }) => Promise<{
     items: AdminSessionInventoryItem[];
     total: number;
@@ -36,9 +41,7 @@ export interface AdminSessionUserSummary {
 }
 
 export interface AdminSessionUserSummaryPort {
-  getSessionManagementUserSummaries: (
-    userIds: readonly number[],
-  ) => Promise<AdminSessionUserSummary[]>;
+  getSessionManagementUserSummaries: (userIds: readonly number[]) => Promise<AdminSessionUserSummary[]>;
   getSessionManagementUserSummariesBySubjectIdentifiers: (
     subjectIdentifiers: readonly string[],
   ) => Promise<AdminSessionUserSummary[]>;
@@ -53,11 +56,7 @@ export interface AdminLoginRestrictionState {
 }
 
 export interface AdminLoginRestrictionPort {
-  listRestrictions: (input: {
-    offset: number;
-    limit: number;
-    userId?: number;
-  }) => Promise<{
+  listRestrictions: (input: { offset: number; limit: number; userId?: number }) => Promise<{
     items: AdminLoginRestrictionState[];
     total: number;
   }>;
@@ -68,19 +67,13 @@ export interface AdminLoginRestrictionPort {
   }>;
 }
 
-export interface AdminSessionControlSummary {
-  principalSessions: { revoked: number };
-  bindings: { revoked: number };
-  credentials: { revoked: number };
-  artifacts: { revoked: number };
-  cleanup: {
-    attempted: number;
-    succeeded: number;
-    failed: number;
-  };
-}
+export type AdminSessionControlSummary = { sessions: UnifiedSessionRevocationSummary };
 
 export interface AdminSessionControlPort {
+  executeCapturedSessions?: (
+    targets: readonly CapturedSession[],
+    excludeUserSessionId: string,
+  ) => Promise<AdminSessionControlSummary>;
   revokePrincipalSession: (
     principalSessionId: string,
     reason: "admin_revoke",

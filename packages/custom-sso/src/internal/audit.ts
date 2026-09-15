@@ -1,6 +1,6 @@
 import type { AuditRequestContext } from "@iam/domain/audit";
 import type { CustomSsoAuditInput as AuditLogInput } from "../custom-sso.port";
-import { AuditActions, CustomSsoClientMode } from "@iam/contracts";
+import { AuditActions } from "@iam/contracts";
 
 export function buildIndependentLoginSuccessAudit(
   subjectIdentifier: string,
@@ -9,7 +9,7 @@ export function buildIndependentLoginSuccessAudit(
   return buildSubjectLoginSuccessAudit(
     subjectIdentifier,
     clientCode,
-    CustomSsoClientMode.Independent,
+    "independent",
   );
 }
 
@@ -20,14 +20,15 @@ export function buildGatewayLoginSuccessAudit(
   return buildSubjectLoginSuccessAudit(
     subjectIdentifier,
     clientCode,
-    CustomSsoClientMode.Gateway,
+    "gateway",
   );
 }
 
 function buildSubjectLoginSuccessAudit(
   subjectIdentifier: string,
   clientCode: string,
-  mode: CustomSsoClientMode,
+  // Historical audit labels describe the completed delivery, never Client configuration.
+  mode: "independent" | "gateway",
 ): AuditLogInput {
   return {
     action: AuditActions["auth.login.local"],

@@ -21,8 +21,6 @@ const codeObjectKinds = {
   a: "artifact",
 } as const satisfies Record<IndexMemberKind, LifecycleObjectKind>;
 
-export type SessionKernelKeyBuilder = ReturnType<typeof createSessionKernelKeyBuilder>;
-
 /** Offline source/target inventory, including orphaned state and pending cleanup; never an online read fallback. */
 export function sessionKernelMaintenancePrefixes(namespace: string) {
   const ns = createSessionKernelKeyBuilder(namespace).namespace;
@@ -58,10 +56,6 @@ export function createSessionKernelKeyBuilder(namespace = "sess:v2:") {
       protocol: (protocol: string) => `${ns}idx:protocol:${encodePart(protocol)}`,
     },
   };
-}
-
-export function encodeIndexMember(kind: LifecycleObjectKind, id: string) {
-  return `${objectKindCodes[kind]}:${id}`;
 }
 
 export function parseIndexMember(member: string): ParsedIndexMember | null {

@@ -339,7 +339,13 @@ async function searchDsl(
     },
   );
   expect(response.status()).toBe(200);
-  return readData(await response.json());
+  const data = readData(await response.json());
+  expect(Array.isArray(data)).toBe(true);
+  if (!Array.isArray(data))
+    throw new Error("Internal user search requires a profile array");
+  for (const profile of data)
+    expect(typeof readRecord(profile)?.username).toBe("string");
+  return data;
 }
 
 async function readInternalUserDetail(
@@ -377,18 +383,23 @@ function readData(value: unknown) {
   return readRecord(value)?.data;
 }
 
-function readUsernames(value: unknown) {
-  const usernames = readRecords(value).map(item => item.username);
-  return usernames.filter(
-    (username): username is string => typeof username === "string",
-  );
+export function readUsernames(value: unknown) {
+  return readRecords(value).map((item) => {
+    if (typeof item.username !== "string")
+      throw new Error("User profile requires a string username");
+    return item.username;
+  });
 }
 
-function readRecords(value: unknown) {
+export function readRecords(value: unknown) {
   if (!Array.isArray(value))
-    return [];
-  return value.map(readRecord)
-    .filter((record): record is Record<string, unknown> => record !== undefined);
+    throw new Error("Expected a response data array");
+  return value.map((item) => {
+    const record = readRecord(item);
+    if (record === undefined)
+      throw new Error("Expected an object in the response data array");
+    return record;
+  });
 }
 
 function readRecord(value: unknown) {

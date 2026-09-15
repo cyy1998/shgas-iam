@@ -1,0 +1,402 @@
+[
+  {
+    "plan": "OIDCCBasicTestPlan",
+    "moduleClass": "OIDCCServerTest",
+    "testName": "oidcc-server",
+    "logoutScreenshotPlaceholder": false,
+    "pkce": "iam_s256_required=true base S256",
+    "clientAuth": "client_secret_basic"
+  },
+  {
+    "plan": "OIDCCBasicTestPlan",
+    "moduleClass": "OIDCCResponseTypeMissing",
+    "testName": "oidcc-response-type-missing",
+    "logoutScreenshotPlaceholder": false,
+    "pkce": "iam_s256_required=true base S256",
+    "clientAuth": "client_secret_basic"
+  },
+  {
+    "plan": "OIDCCBasicTestPlan",
+    "moduleClass": "OIDCCIdTokenSignature",
+    "testName": "oidcc-idtoken-signature",
+    "logoutScreenshotPlaceholder": false,
+    "pkce": "iam_s256_required=true base S256",
+    "clientAuth": "client_secret_basic"
+  },
+  {
+    "plan": "OIDCCBasicTestPlan",
+    "moduleClass": "OIDCCIdTokenUnsigned",
+    "testName": "oidcc-idtoken-unsigned",
+    "logoutScreenshotPlaceholder": false,
+    "pkce": "iam_s256_required=true base S256",
+    "clientAuth": "client_secret_basic"
+  },
+  {
+    "plan": "OIDCCBasicTestPlan",
+    "moduleClass": "OIDCCUserInfoGet",
+    "testName": "oidcc-userinfo-get",
+    "logoutScreenshotPlaceholder": false,
+    "pkce": "iam_s256_required=true base S256",
+    "clientAuth": "client_secret_basic"
+  },
+  {
+    "plan": "OIDCCBasicTestPlan",
+    "moduleClass": "OIDCCUserInfoPostHeader",
+    "testName": "oidcc-userinfo-post-header",
+    "logoutScreenshotPlaceholder": false,
+    "pkce": "iam_s256_required=true base S256",
+    "clientAuth": "client_secret_basic"
+  },
+  {
+    "plan": "OIDCCBasicTestPlan",
+    "moduleClass": "OIDCCUserInfoPostBody",
+    "testName": "oidcc-userinfo-post-body",
+    "logoutScreenshotPlaceholder": false,
+    "pkce": "iam_s256_required=true base S256",
+    "clientAuth": "client_secret_basic"
+  },
+  {
+    "plan": "OIDCCBasicTestPlan",
+    "moduleClass": "OIDCCEnsureRequestWithoutNonceSucceedsForCodeFlow",
+    "testName": "oidcc-ensure-request-without-nonce-succeeds-for-code-flow",
+    "logoutScreenshotPlaceholder": false,
+    "pkce": "iam_s256_required=true base S256",
+    "clientAuth": "client_secret_basic"
+  },
+  {
+    "plan": "OIDCCBasicTestPlan",
+    "moduleClass": "OIDCCScopeProfile",
+    "testName": "oidcc-scope-profile",
+    "logoutScreenshotPlaceholder": false,
+    "pkce": "iam_s256_required=true base S256",
+    "clientAuth": "client_secret_basic"
+  },
+  {
+    "plan": "OIDCCBasicTestPlan",
+    "moduleClass": "OIDCCScopeEmail",
+    "testName": "oidcc-scope-email",
+    "logoutScreenshotPlaceholder": false,
+    "pkce": "iam_s256_required=true base S256",
+    "clientAuth": "client_secret_basic"
+  },
+  {
+    "plan": "OIDCCBasicTestPlan",
+    "moduleClass": "OIDCCScopeAddress",
+    "testName": "oidcc-scope-address",
+    "logoutScreenshotPlaceholder": false,
+    "pkce": "iam_s256_required=true base S256",
+    "clientAuth": "client_secret_basic"
+  },
+  {
+    "plan": "OIDCCBasicTestPlan",
+    "moduleClass": "OIDCCScopePhone",
+    "testName": "oidcc-scope-phone",
+    "logoutScreenshotPlaceholder": false,
+    "pkce": "iam_s256_required=true base S256",
+    "clientAuth": "client_secret_basic"
+  },
+  {
+    "plan": "OIDCCBasicTestPlan",
+    "moduleClass": "OIDCCScopeAll",
+    "testName": "oidcc-scope-all",
+    "logoutScreenshotPlaceholder": false,
+    "pkce": "iam_s256_required=true base S256",
+    "clientAuth": "client_secret_basic"
+  },
+  {
+    "plan": "OIDCCBasicTestPlan",
+    "moduleClass": "OIDCCAlternateHappyFlow",
+    "testName": "oidcc-alternate-happy-flow",
+    "logoutScreenshotPlaceholder": false,
+    "pkce": "iam_s256_required=true base S256",
+    "clientAuth": "client_secret_basic"
+  },
+  {
+    "plan": "OIDCCBasicTestPlan",
+    "moduleClass": "OIDCCDisplayPage",
+    "testName": "oidcc-display-page",
+    "logoutScreenshotPlaceholder": false,
+    "pkce": "iam_s256_required=true base S256",
+    "clientAuth": "client_secret_basic"
+  },
+  {
+    "plan": "OIDCCBasicTestPlan",
+    "moduleClass": "OIDCCDisplayPopup",
+    "testName": "oidcc-display-popup",
+    "logoutScreenshotPlaceholder": false,
+    "pkce": "iam_s256_required=true base S256",
+    "clientAuth": "client_secret_basic"
+  },
+  {
+    "plan": "OIDCCBasicTestPlan",
+    "moduleClass": "OIDCCPromptLogin",
+    "testName": "oidcc-prompt-login",
+    "logoutScreenshotPlaceholder": false,
+    "pkce": "iam_s256_required=true base S256",
+    "clientAuth": "client_secret_basic"
+  },
+  {
+    "plan": "OIDCCBasicTestPlan",
+    "moduleClass": "OIDCCPromptNoneNotLoggedIn",
+    "testName": "oidcc-prompt-none-not-logged-in",
+    "logoutScreenshotPlaceholder": false,
+    "pkce": "iam_s256_required=true base S256",
+    "clientAuth": "client_secret_basic"
+  },
+  {
+    "plan": "OIDCCBasicTestPlan",
+    "moduleClass": "OIDCCPromptNoneLoggedIn",
+    "testName": "oidcc-prompt-none-logged-in",
+    "logoutScreenshotPlaceholder": false,
+    "pkce": "iam_s256_required=true base S256",
+    "clientAuth": "client_secret_basic"
+  },
+  {
+    "plan": "OIDCCBasicTestPlan",
+    "moduleClass": "OIDCCMaxAge1",
+    "testName": "oidcc-max-age-1",
+    "logoutScreenshotPlaceholder": false,
+    "pkce": "iam_s256_required=true base S256",
+    "clientAuth": "client_secret_basic"
+  },
+  {
+    "plan": "OIDCCBasicTestPlan",
+    "moduleClass": "OIDCCMaxAge10000",
+    "testName": "oidcc-max-age-10000",
+    "logoutScreenshotPlaceholder": false,
+    "pkce": "iam_s256_required=true base S256",
+    "clientAuth": "client_secret_basic"
+  },
+  {
+    "plan": "OIDCCBasicTestPlan",
+    "moduleClass": "OIDCCEnsureRequestWithUnknownParameterSucceeds",
+    "testName": "oidcc-ensure-request-with-unknown-parameter-succeeds",
+    "logoutScreenshotPlaceholder": false,
+    "pkce": "iam_s256_required=true base S256",
+    "clientAuth": "client_secret_basic"
+  },
+  {
+    "plan": "OIDCCBasicTestPlan",
+    "moduleClass": "OIDCCIdTokenHint",
+    "testName": "oidcc-id-token-hint",
+    "logoutScreenshotPlaceholder": false,
+    "pkce": "iam_s256_required=true base S256",
+    "clientAuth": "client_secret_basic"
+  },
+  {
+    "plan": "OIDCCBasicTestPlan",
+    "moduleClass": "OIDCCLoginHint",
+    "testName": "oidcc-login-hint",
+    "logoutScreenshotPlaceholder": false,
+    "pkce": "iam_s256_required=true base S256",
+    "clientAuth": "client_secret_basic"
+  },
+  {
+    "plan": "OIDCCBasicTestPlan",
+    "moduleClass": "OIDCCUiLocales",
+    "testName": "oidcc-ui-locales",
+    "logoutScreenshotPlaceholder": false,
+    "pkce": "iam_s256_required=true base S256",
+    "clientAuth": "client_secret_basic"
+  },
+  {
+    "plan": "OIDCCBasicTestPlan",
+    "moduleClass": "OIDCCClaimsLocales",
+    "testName": "oidcc-claims-locales",
+    "logoutScreenshotPlaceholder": false,
+    "pkce": "iam_s256_required=true base S256",
+    "clientAuth": "client_secret_basic"
+  },
+  {
+    "plan": "OIDCCBasicTestPlan",
+    "moduleClass": "OIDCCEnsureRequestWithAcrValuesSucceeds",
+    "testName": "oidcc-ensure-request-with-acr-values-succeeds",
+    "logoutScreenshotPlaceholder": false,
+    "pkce": "iam_s256_required=true base S256",
+    "clientAuth": "client_secret_basic"
+  },
+  {
+    "plan": "OIDCCBasicTestPlan",
+    "moduleClass": "OIDCCAuthCodeReuse",
+    "testName": "oidcc-codereuse",
+    "logoutScreenshotPlaceholder": false,
+    "pkce": "iam_s256_required=true base S256",
+    "clientAuth": "client_secret_basic"
+  },
+  {
+    "plan": "OIDCCBasicTestPlan",
+    "moduleClass": "OIDCCAuthCodeReuseAfter30Seconds",
+    "testName": "oidcc-codereuse-30seconds",
+    "logoutScreenshotPlaceholder": false,
+    "pkce": "iam_s256_required=true base S256",
+    "clientAuth": "client_secret_basic"
+  },
+  {
+    "plan": "OIDCCBasicTestPlan",
+    "moduleClass": "OIDCCEnsureRegisteredRedirectUri",
+    "testName": "oidcc-ensure-registered-redirect-uri",
+    "logoutScreenshotPlaceholder": false,
+    "pkce": "iam_s256_required=true base S256",
+    "clientAuth": "client_secret_basic"
+  },
+  {
+    "plan": "OIDCCBasicTestPlan",
+    "moduleClass": "OIDCCEnsurePostRequestSucceeds",
+    "testName": "oidcc-ensure-post-request-succeeds",
+    "logoutScreenshotPlaceholder": false,
+    "pkce": "iam_s256_required=true base S256",
+    "clientAuth": "client_secret_basic"
+  },
+  {
+    "plan": "OIDCCBasicTestPlan",
+    "moduleClass": "OIDCCServerTestClientSecretPost",
+    "testName": "oidcc-server-client-secret-post",
+    "logoutScreenshotPlaceholder": false,
+    "pkce": "iam_s256_required=true base S256",
+    "clientAuth": "client_secret_post"
+  },
+  {
+    "plan": "OIDCCBasicTestPlan",
+    "moduleClass": "OIDCCRequestUriUnsignedSupportedCorrectlyOrRejectedAsUnsupported",
+    "testName": "oidcc-request-uri-unsigned-supported-correctly-or-rejected-as-unsupported",
+    "logoutScreenshotPlaceholder": false,
+    "pkce": "iam_s256_required=true base S256",
+    "clientAuth": "client_secret_basic"
+  },
+  {
+    "plan": "OIDCCBasicTestPlan",
+    "moduleClass": "OIDCCUnsignedRequestObjectSupportedCorrectlyOrRejectedAsUnsupported",
+    "testName": "oidcc-unsigned-request-object-supported-correctly-or-rejected-as-unsupported",
+    "logoutScreenshotPlaceholder": false,
+    "pkce": "iam_s256_required=true base S256",
+    "clientAuth": "client_secret_basic"
+  },
+  {
+    "plan": "OIDCCBasicTestPlan",
+    "moduleClass": "OIDCCClaimsEssential",
+    "testName": "oidcc-claims-essential",
+    "logoutScreenshotPlaceholder": false,
+    "pkce": "iam_s256_required=true base S256",
+    "clientAuth": "client_secret_basic"
+  },
+  {
+    "plan": "OIDCCBasicTestPlan",
+    "moduleClass": "OIDCCEnsureRequestObjectWithRedirectUri",
+    "testName": "oidcc-ensure-request-object-with-redirect-uri",
+    "logoutScreenshotPlaceholder": false,
+    "pkce": "iam_s256_required=true base S256",
+    "clientAuth": "client_secret_basic"
+  },
+  {
+    "plan": "OIDCCBasicTestPlan",
+    "moduleClass": "OIDCCRefreshToken",
+    "testName": "oidcc-refresh-token",
+    "logoutScreenshotPlaceholder": false,
+    "pkce": "iam_s256_required=true base S256",
+    "clientAuth": "client_secret_basic"
+  },
+  {
+    "plan": "OIDCCBasicTestPlan",
+    "moduleClass": "OIDCCEnsureRequestWithValidPkceSucceeds",
+    "testName": "oidcc-ensure-request-with-valid-pkce-succeeds",
+    "logoutScreenshotPlaceholder": false,
+    "pkce": "upstream dedicated S256",
+    "clientAuth": "client_secret_basic"
+  },
+  {
+    "plan": "OIDCCConfigTestPlan",
+    "moduleClass": "OIDCCDiscoveryEndpointVerification",
+    "testName": "oidcc-discovery-endpoint-verification",
+    "logoutScreenshotPlaceholder": false,
+    "pkce": "no authorization flow",
+    "clientAuth": "not fixed"
+  },
+  {
+    "plan": "OIDCCRpInitiatedLogoutTestPlan",
+    "moduleClass": "OIDCCRpInitiatedLogoutDiscoveryEndpointVerification",
+    "testName": "oidcc-rp-initiated-logout-discovery-endpoint-verification",
+    "logoutScreenshotPlaceholder": false,
+    "pkce": "no authorization flow",
+    "clientAuth": "not fixed"
+  },
+  {
+    "plan": "OIDCCRpInitiatedLogoutTestPlan",
+    "moduleClass": "OIDCCRpInitiatedLogout",
+    "testName": "oidcc-rp-initiated-logout",
+    "logoutScreenshotPlaceholder": false,
+    "pkce": "iam_s256_required=true base S256",
+    "clientAuth": "client_secret_basic"
+  },
+  {
+    "plan": "OIDCCRpInitiatedLogoutTestPlan",
+    "moduleClass": "OIDCCRpInitiatedLogoutBadLogoutRedirectUri",
+    "testName": "oidcc-rp-initiated-logout-bad-post-logout-redirect-uri",
+    "logoutScreenshotPlaceholder": true,
+    "pkce": "iam_s256_required=true base S256",
+    "clientAuth": "client_secret_basic"
+  },
+  {
+    "plan": "OIDCCRpInitiatedLogoutTestPlan",
+    "moduleClass": "OIDCCRpInitiatedLogoutModifiedIdTokenHint",
+    "testName": "oidcc-rp-initiated-logout-modified-id-token-hint",
+    "logoutScreenshotPlaceholder": true,
+    "pkce": "iam_s256_required=true base S256",
+    "clientAuth": "client_secret_basic"
+  },
+  {
+    "plan": "OIDCCRpInitiatedLogoutTestPlan",
+    "moduleClass": "OIDCCRpInitiatedLogoutNoIdTokenHint",
+    "testName": "oidcc-rp-initiated-logout-no-id-token-hint",
+    "logoutScreenshotPlaceholder": true,
+    "pkce": "iam_s256_required=true base S256",
+    "clientAuth": "client_secret_basic"
+  },
+  {
+    "plan": "OIDCCRpInitiatedLogoutTestPlan",
+    "moduleClass": "OIDCCRpInitiatedLogoutNoParams",
+    "testName": "oidcc-rp-initiated-logout-no-params",
+    "logoutScreenshotPlaceholder": true,
+    "pkce": "iam_s256_required=true base S256",
+    "clientAuth": "client_secret_basic"
+  },
+  {
+    "plan": "OIDCCRpInitiatedLogoutTestPlan",
+    "moduleClass": "OIDCCRpInitiatedLogoutNoPostLogoutRedirectUri",
+    "testName": "oidcc-rp-initiated-logout-no-post-logout-redirect-uri",
+    "logoutScreenshotPlaceholder": true,
+    "pkce": "iam_s256_required=true base S256",
+    "clientAuth": "client_secret_basic"
+  },
+  {
+    "plan": "OIDCCRpInitiatedLogoutTestPlan",
+    "moduleClass": "OIDCCRpInitiatedLogoutNoState",
+    "testName": "oidcc-rp-initiated-logout-no-state",
+    "logoutScreenshotPlaceholder": false,
+    "pkce": "iam_s256_required=true base S256",
+    "clientAuth": "client_secret_basic"
+  },
+  {
+    "plan": "OIDCCRpInitiatedLogoutTestPlan",
+    "moduleClass": "OIDCCRpInitiatedLogoutOnlyState",
+    "testName": "oidcc-rp-initiated-logout-only-state",
+    "logoutScreenshotPlaceholder": true,
+    "pkce": "iam_s256_required=true base S256",
+    "clientAuth": "client_secret_basic"
+  },
+  {
+    "plan": "OIDCCRpInitiatedLogoutTestPlan",
+    "moduleClass": "OIDCCRpInitiatedLogoutQueryAddedToLogoutRedirectUri",
+    "testName": "oidcc-rp-initiated-logout-query-added-to-post-logout-redirect-uri",
+    "logoutScreenshotPlaceholder": true,
+    "pkce": "iam_s256_required=true base S256",
+    "clientAuth": "client_secret_basic"
+  },
+  {
+    "plan": "OIDCCRpInitiatedLogoutTestPlan",
+    "moduleClass": "OIDCCRpInitiatedLogoutBadIdTokenHint",
+    "testName": "oidcc-rp-initiated-logout-bad-id-token-hint",
+    "logoutScreenshotPlaceholder": true,
+    "pkce": "iam_s256_required=true base S256",
+    "clientAuth": "client_secret_basic"
+  }
+]

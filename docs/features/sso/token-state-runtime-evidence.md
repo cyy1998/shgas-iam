@@ -1,5 +1,7 @@
 # 无 lookup 密钥的认证 runtime 验证
 
+> Historical：本页保留旧候选的契约与证据；Spec #178 最终在线模型已由 ADR-0035 取代，当前发布以统一会话维护手册为准。
+
 本页记录 Spec #170 的 #174 配置退役与生产消费者组合，固定 review base 为
 `abd18346a3c7ed77c626635e29dd5fcc7c8e746f`。三类状态的基础生命周期分别由
 [Principal](principal-direct-state-evidence.md)、[Credential](credential-direct-state-evidence.md)和
@@ -61,7 +63,7 @@ API composition 的旧断言还把 Dirty `processing` 当成 Projection Not Read
 现经真实 PG/Redis 验证重建期间 Gateway/Independent 仍交付已发布主体和 Client 裁剪权限，Gateway 同凭据继续成功，
 Independent 同 Code 重放为 `401 / InvalidAuthCode`。没有改变生产投影或消费规则。
 真正投影不可用、失败烧码及重新授权继续由
-[正式 API HTTP/Redis 测试](../../../apps/api/test-integration/redis/custom-sso-redemption-operation-http.integration.test.ts)验证。
+[正式 API HTTP/Redis 测试](https://github.com/cyy1998/shgas-iam/blob/aeb2dc45294f3553ad596cda5194e9643378c31b/apps/api/test-integration/redis/custom-sso-redemption-operation-http.integration.test.ts)验证。
 失效 HMAC 参数校验测试随配置退役，替代为无 lookup 配置的生产 env 和真实 production process/composition；
 跨实例解析、期限、摘要/ID bearer 拒绝与独立 Cookie/JWK/Secret 保护仍有行为回归。
 

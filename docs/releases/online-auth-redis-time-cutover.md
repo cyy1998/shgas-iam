@@ -1,8 +1,10 @@
 # 在线认证状态 Redis 时间切换
 
-Status: Current
+> Historical：本页保留旧候选的契约与证据；Spec #178 最终在线模型已由 ADR-0035 取代，当前发布以统一会话维护手册为准。
 
-Last verified: 2026-09-10
+Status: Historical
+
+Last verified: 2026-09-15
 
 Next review: 2026-10-31
 
@@ -19,6 +21,11 @@ Spec #170 / ADR-0034 的三类 token 已使用 SHA-256 单状态与反向 ID，K
 旧四键的 decoder/CAS 仅用于已停 writer 后的离线维护，不构成当前 runtime 的 HMAC 要求。
 
 ## 适用版本与范围
+
+包含 Spec #178 的候选先执行下文「Client 单协议业务数据升级」；本页原 #163/#170 的在线状态清单和 smoke
+只证明对应旧候选。#193 已提供[新 owner 的统一 Worker 维护命令](unified-session-maintenance.md)，
+#194 负责生产图切换与最终旧列删除，#196 负责聚合验收。
+不得直接把旧 Provider 清理的零报告当作新 UserSession/ClientSession/协议状态已清空。
 
 仅适用于当前 Session Kernel `sess:v2:`（或实际配置的同类 namespace）、Custom SSO Grant v1 和当前 OIDC store。
 源版本必须支持当前 owner key 契约；退役的 `global_session:*`、旧 local session/旧 OIDC token index 或旧 Runtime namespace
@@ -166,8 +173,8 @@ Redis TIME 是在线生命周期权威，应用校时不能替代代码契约；
 
 | 证明目标 | 现有入口与直接观察 |
 |---|---|
-| 全部固定键族、无索引/损坏/无 TTL/孤立库存 | [全体维护 Redis contract](../../apps/oidc-provider/test-integration/redis/online-auth-state.integration.test.ts)逐 owner prefix 建立有/无 TTL 的损坏库存，源和目标同时存在；apply 后逐项确认消失，新进程完整 verify 为零。 |
-| 正常生产对象与 pending | [生产对象混合 contract](../../apps/oidc-provider/test-integration/redis/client-protocol-artifact-cleanup.integration.test.ts)经 Kernel 创建 Principal、Binding、Credential、Artifact，经 Grant/Provider Session owner 建立关联状态；外围 cleanup 缺失后的 Credential 终态与反向 ID 均无 TTL，dry-run 保持，apply 清除。 |
+| 全部固定键族、无索引/损坏/无 TTL/孤立库存 | [全体维护 Redis contract](https://github.com/cyy1998/shgas-iam/blob/aeb2dc45294f3553ad596cda5194e9643378c31b/apps/oidc-provider/test-integration/redis/online-auth-state.integration.test.ts)逐 owner prefix 建立有/无 TTL 的损坏库存，源和目标同时存在；apply 后逐项确认消失，新进程完整 verify 为零。 |
+| 正常生产对象与 pending | [生产对象混合 contract](https://github.com/cyy1998/shgas-iam/blob/aeb2dc45294f3553ad596cda5194e9643378c31b/apps/oidc-provider/test-integration/redis/client-protocol-artifact-cleanup.integration.test.ts)经 Kernel 创建 Principal、Binding、Credential、Artifact，经 Grant/Provider Session owner 建立关联状态；外围 cleanup 缺失后的 Credential 终态与反向 ID 均无 TTL，dry-run 保持，apply 清除。 |
 | 只读与独立进程 | 全体维护 contract 真正调用 package `online-auth:state`；dry-run/dirty verify 前后逐值和绝对 expiry 相等。apply 与每次 verify 是新进程；成功清理后重新放入一条离线 fixture，后续 verify 必须非零，不能由前次删除计数判定。另以只有 SCAN 权限的 ACL reader 验证只读操作，拒绝 UNLINK 与不完整扫描。 |
 | 失败与恢复 | 生产对象 contract 注入第二批删除失败；全体维护 contract 在真实 UNLINK 提交后丢失响应，确认 failed、残留 verify 非零及完整重跑成功。预先 abort 拒绝写入，TCP 无响应证明实际命令 timeout 非零且安全输出，恢复 Redis 后可重跑。已清空 apply/verify 重复通过。 |
 | 非目标保留与配置独立 | 逐值/绝对 expiry 对照未知 Kernel state/ID、其他 namespace、Subject/Facts、Runtime、队列、登录限制、短信码/nonce、OIDC auth failures 与退役族 sentinel。production 模式无认证 env 执行 package 命令，缺目标或停 writer 确认时非零且库存不变。 |
@@ -178,3 +185,110 @@ Redis TIME 是在线生命周期权威，应用校时不能替代代码契约；
 随后核对 Redis 库存与重新执行清理/verify；测试只终止本次创建的进程树。
 保留 sentinel 不等价于生产业务数据库验收；命令没有 PostgreSQL 连接或业务写入，实际保留集仍按上述人工基线逐 owner 核对。
 本票没有执行目标环境部署、全体下线、停流/排空、统一镜像、新登录、双协议/Admin smoke 或放流，也没有新增系统 E2E 或自动部署演练。
+
+## Client 单协议业务数据升级
+
+本节是 #192 对现有人工发布流程的补充，不是自动发布器。代码工具通过不表示任何环境已经迁移。
+发布 owner 固定独立维护候选的 commit、lockfile、Bun 和制品；该候选须包含
+`client-sso:upgrade`，并保留 #180 扩展后的完整新旧 Client 列。源为 Catalog V2 的旧 OIDC/Custom SSO 配置，
+目标为 `sso_enabled`、严格 `sso_config` 和当前 Secret 三列；工具不新增或删除 schema。
+旧布局缺列、已删除旧列、额外未知 Client 列均拒绝；最终删除旧列仍由 #194 的迁移生成和核验负责。
+固定维护制品不得随着应用切到 #194 后的 schema 定义而重新构建替换。
+
+### 停写与输入
+
+沿上文执行前清单保存备份、恢复引用和源/目标/回退候选。冻结 Client、Role 的所有管理写入和直连 SQL，
+停止旧、新认证 reader/writer 并排空在途；命令全部要求 `--writers-stopped`，但该声明不证明平台停写。
+工具只连接显式 `IAM_WORKER_DATABASE_URL` 的 PostgreSQL/schema，不回退 `DATABASE_URL`，不连接 Redis、队列或 HTTP。
+盘点/核验需要 SELECT，apply 另需 Client UPDATE 和 Client/Role 表锁权限。
+
+```bash
+pnpm --filter @iam/worker client-sso:upgrade -- inventory --writers-stopped
+pnpm --filter @iam/worker client-sso:upgrade -- apply --writers-stopped --manifest /controlled/client-upgrade.json
+pnpm --filter @iam/worker client-sso:upgrade -- verify --writers-stopped --manifest /controlled/client-upgrade.json
+pnpm --filter @iam/worker client-sso:upgrade -- verify --writers-stopped --manifest /controlled/all-clients.json --all
+```
+
+inventory 对每个 Client 给出 canonical code、`sourceDigest`、随机的新 `credentialId`、旧可选协议和状态。
+摘要覆盖该 Client 除五个新 SSO 列外的全部字段（包括稳定 ID、Internal 凭据、旧配置/Hash、业务字段与时间），
+以及归属该 Client 的全部 Role 行；只输出 SHA-256，不输出原始事实。
+`pending-selection` 表示旧双协议，必须人工选择；`unmigrated` 包括可直接规划的单协议或 Internal-only；
+`target-present` 只表示目标已占用，是否完成必须用原批准清单 verify，不能靠重新 inventory 判定。
+未知/损坏库存为 `unknown`，不输出其未知内容，不改写或忽略该行。
+
+发布 owner 从 inventory 复制明确范围的 code/digest/credentialId，形成以下严格 JSON。占位字符串必须替换为真实盘点值。
+只列本次批准的 Client，禁止复制 report 的其他字段作为输入；原批准文件和它的受控校验摘要需要保留到发布完成。
+
+```json
+{
+  "version": 1,
+  "layout": "dual-to-single-v1",
+  "trustedIamOrigins": ["https://iam.example.com"],
+  "managedCallbackUrls": ["https://iam.example.com/sso/callback"],
+  "clients": [
+    {
+      "clientCode": "business-client",
+      "sourceDigest": "从 inventory 复制的 64 位十六进制摘要",
+      "credentialId": "从 inventory 复制的新 UUID",
+      "protocol": "custom-sso",
+      "gatewayCallback": "https://iam.example.com/sso/callback"
+    }
+  ]
+}
+```
+
+单协议允许省略 `protocol`，按唯一旧配置迁移；双协议必须明确 `oidc` 或 `custom-sso`，不根据启用状态猜用途，
+也不允许用 null 丢弃旧配置。Internal-only 省略或填 null，保持无配置、未启用和原业务身份。
+启用意图来自所选旧协议，即使旧配置停用也保留；Client 整体状态、删除标记及 Internal API 凭据不改变。
+
+旧 Independent 保留原实际 callback，删除无消费者的 logoutEndpoint；不接受额外 callback 覆盖。
+旧 Gateway 必须填 `gatewayCallback`，且它必须是发布 owner 核验已部署的完整 IAM handler URL，列在
+`managedCallbackUrls` 中并属于 `trustedIamOrigins`。完整 URL 分类与 #184 授权共用
+`createClientSsoCallbackClassifier`；业务 origin、相同 pathname、Host/Forwarded 和推导的转发路径不构成已部署证据。
+URL 列表由服务端真实配置及 Gateway owner 的路由回读提供，示例域名不是部署事实。
+
+### Apply、Secret 与独立门禁
+
+apply 先取得 Client/Role 的 `SHARE ROW EXCLUSIVE` 锁，等待旧事务结束，再重新盘点和规划整个明确范围。
+任一缺输入、源摘要漂移、未知数据、目标冲突都在 UPDATE 前阻断整批；成功仅写五个新 SSO 列，保留旧列供核验和回退。
+写后同事务重新比较 Client/Role 保留事实、非目标 Client 和目标值，异常触发整批回滚。
+每份库存最多 1000 Client、输入文件最多 1 MiB；超界整体拒绝，不截断为成功。大于该范围的环境须先由 owner
+调整并验证有界方案，不通过拆 scope 绕过全量库存边界。连接 10 秒、等锁 10 秒、单语句与事务空闲 5 分钟，关闭等待 5 秒。
+
+最终 Confidential OIDC 或业务自行回调 Custom Client 使用 32 字节密码学随机新 Secret及清单中的凭据 ID和数据库时间。
+Public/托管不新增外部 Secret，Internal-only 不写凭据。旧 Hash 从不还原或复制为当前原文，Internal Secret 不参与轮换。
+仅当当前目标严格配置、启用意图及本清单固定凭据 ID 都匹配，且所需新 Secret/时间完整时，重跑才是零更新；
+其他非空目标拒绝覆盖。重新 inventory 会生成新的候选凭据 ID，因此不能丢弃原清单后把新清单当作重跑输入。
+完成 Secret 不输出到 stdout、日志或报告；完整管理员通过 #182 已授权且有审计的独立重读能力取得当前值，
+经既有受控渠道分发给接入负责人。命令不调用管理重读、不自动分发、不新增 Hash-only 重读例外。
+
+每次 verify 必须是新进程/新连接的 `REPEATABLE READ READ ONLY` 事务，重新比较源保留摘要、所选最终配置、
+启用意图和新凭据身份/完整性。普通 verify 只证明 manifest 范围；`--all` 还要求清单恰好覆盖数据库全部 Client，
+包含 Internal-only 和已删除行，作为 #194 收缩旧列前的数据 gate。不能用局部 verify 代替全库门禁，也不能用 apply 的更新数量代替 verify。
+分批成功后合并各份原始批准 selection 成全量清单，再独立 `verify --all`；不要重生成已迁移 Client 的凭据 ID。
+
+退出 0 且 `completed` 才证明本命令范围通过；inventory 的 completed 仍允许 pending-selection。
+退出 1 表示未知数据、待输入、目标不符、范围不全、配置/事务/连接/关闭故障；退出 2 表示命令参数不合法且未创建连接。
+安全报告只含版本、模式、状态、固定原因、计数与 canonical Client code/安全定位字段，不含 URL、原文、Hash 或驱动异常。
+`operation-failed` 不代表必定回滚：提交响应或关闭失败仍可能已提交。保持停写，以原清单新进程 verify/同范围 apply
+确认；已完成部分保留凭据，不自动扩大范围或重新轮换。源漂移由业务 owner 依据实际事实重新核对批准输入，不自动更新摘要。
+
+### 消费者协调、收缩与回退责任
+
+业务数据 verify 与 Snapshot repair 分开：本工具不推进旧 epoch、不清缓存、不撤销/转换在线对象。
+放流前按 #193 的各 owner 命令清理源/目标会话与协议状态，执行新 Snapshot/Gate/Secret namespace repair 和独立 verify；
+旧 Snapshot repair 的成功不能证明新 namespace，也不能替代 PostgreSQL Client 升级。
+发布 owner 保存全量数据 gate 后，才执行 #194 的旧列收缩；保持停流，统一 API/Admin API/Worker/Admin/SSO 制品、
+OIDC issuer/入口并入 API 的路由与配置，禁止旧 reader/writer、线上双读双写或旧对象转换。
+接入负责人逐 Client 确认所选协议、回调实际路由、新 Secret 配置（适用时）、重新登录与兑换/UserInfo smoke；
+凭据交付确认只记录负责人、凭据 ID和安全结果。任何消费者未确认都不开放该升级窗口流量。
+
+apply 前失败保持原数据；apply 后优先修复同候选并用原 scope 重跑。选择回退时继续遵守本页停流、清除新在线状态、
+固定兼容回退候选和全体重新登录的责任。DB owner 在旧列尚存阶段核对保留的源业务事实与源布局兼容性；
+旧列已删除时按 #194 固定的 schema/备份恢复流程恢复，不能凭单协议结果猜回被放弃协议或 Secret Hash。
+接入负责人协调回退版本所需的凭据与协议配置；新 Secret 不会自动写回旧 Hash，也不保证新值适用于旧应用。
+旧备份恢复后须重新完成适用布局盘点、升级/全量核验和消费者确认，不能直接放流。
+
+直接证据在 Worker `client-sso-upgrade-command.integration.test.ts`：真实 PG、正式 CLI 进程验证人工选择、
+缺部署地址、换新/重跑、只读独立核验、事务回滚、保留事实/非目标、范围门禁及安全失败。
+这些证据不证明实际环境停写、路由已部署、Secret 已分发或生产已切换。

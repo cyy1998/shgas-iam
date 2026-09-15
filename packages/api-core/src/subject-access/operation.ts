@@ -1,7 +1,7 @@
-import type { RevokeSummary } from "@iam/session-kernel";
 import type {
   SubjectAccessOperationBarrierPort,
   SubjectAccessOperationRevocationPort,
+  SubjectAccessRevocationSummary,
 } from "./operation.port";
 import type { SubjectAccessContext } from "./subject-context";
 import { z } from "zod";
@@ -24,7 +24,7 @@ export class SubjectAccessPermissionRequiredError extends Error {
 
 export class SubjectAccessOperationDeniedError extends SubjectAccessDisabledError {
   readonly reason: "user_disabled" | "session_generation_stale" | "identity_mismatch";
-  revokeSummary?: RevokeSummary;
+  revokeSummary?: SubjectAccessRevocationSummary;
 
   constructor(reason: SubjectAccessOperationDeniedError["reason"]) {
     super();

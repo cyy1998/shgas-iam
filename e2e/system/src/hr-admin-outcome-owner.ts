@@ -194,8 +194,8 @@ export function createProductionHrAdminOutcomeOwner(
 }
 
 function containsResponsibilityTarget(subjectFacts: unknown, code: string) {
-  const parsed = ProfileSubjectFactsDocumentSchema.safeParse(subjectFacts);
-  return parsed.success && parsed.data.employments.some(employment =>
+  const parsed = ProfileSubjectFactsDocumentSchema.parse(subjectFacts);
+  return parsed.employments.some(employment =>
     employment.responsibilities.some(responsibility =>
       responsibility.targetOrganization.code === code));
 }

@@ -1,6 +1,8 @@
 # 在线认证生命周期最终契约核对
 
-Status: Current
+> Historical：本页保留旧候选的契约与证据；Spec #178 最终在线模型已由 ADR-0035 取代，当前发布以统一会话维护手册为准。
+
+Status: Historical
 
 Last verified: 2026-09-10
 
@@ -41,16 +43,16 @@ OIDC `subject-access-authorization` Redis 测试经实际 HTTP 授权证明根�
 
 表中缩写均指既有 owner seam；测试存在不等于已经执行。真实 Redis 使用专用 URL，应用时钟独立注入，不能与 Redis 绑定到同一 fake。
 
-- **K-time**：[Kernel 时间](../../../packages/session-kernel/test-integration/redis/session-kernel-time.integration.test.ts)：四类对象偏差矩阵、跨实例与前后跳、父上限、续期 lookup、取得后到期、真实缺失与 pending cleanup。
-- **K-id**：[Credential](../../../packages/session-kernel/test-integration/redis/session-kernel-credential.integration.test.ts)：新 UUID、写前 identity、并发 owner、lookup、tombstone 与不确定写入补偿。
-- **Grant**：[Grant owner](../../../packages/custom-sso/test-integration/redis/custom-sso-operation.integration.test.ts)：Kernel deadline 联验、唯一赢家、暂态拒绝不延期、消费后失败与同步尽力补偿。
-- **SSO**：[生产 adapter](../../../apps/api/test-integration/component/custom-sso-session-kernel.adapter.integration.test.ts)与
+- **K-time**：[Kernel 时间](https://github.com/cyy1998/shgas-iam/blob/aeb2dc45294f3553ad596cda5194e9643378c31b/packages/session-kernel/test-integration/redis/session-kernel-time.integration.test.ts)：四类对象偏差矩阵、跨实例与前后跳、父上限、续期 lookup、取得后到期、真实缺失与 pending cleanup。
+- **K-id**：[Credential](https://github.com/cyy1998/shgas-iam/blob/aeb2dc45294f3553ad596cda5194e9643378c31b/packages/session-kernel/test-integration/redis/session-kernel-credential.integration.test.ts)：新 UUID、写前 identity、并发 owner、lookup、tombstone 与不确定写入补偿。
+- **Grant**：[Grant owner](https://github.com/cyy1998/shgas-iam/blob/aeb2dc45294f3553ad596cda5194e9643378c31b/packages/custom-sso/test-integration/redis/custom-sso-operation.integration.test.ts)：Kernel deadline 联验、唯一赢家、暂态拒绝不延期、消费后失败与同步尽力补偿。
+- **SSO**：[生产 adapter](https://github.com/cyy1998/shgas-iam/blob/aeb2dc45294f3553ad596cda5194e9643378c31b/apps/api/test-integration/component/custom-sso-session-kernel.adapter.integration.test.ts)与
   [Cookie handler](../../../apps/api/test-integration/component/sso.handlers.integration.test.ts)：两模式交付/认证/退出、偏差、亚秒 TTL、途中到期和补偿。
-- **State**：[Provider Session state](../../../apps/oidc-provider/test-integration/redis/provider-session-state.integration.test.ts)：staged/claim/mapping/anchor、Kernel deadline 到 Code/Credential 与 generation 恢复。
-- **OIDC**：[Redis adapter 与真实 Provider model](../../../apps/oidc-provider/test-integration/redis/redis-adapter.integration.test.ts)：共享索引、独立 observer、配置与 mirror、Grant 再保存，以及 Session/Interaction 跨 writer 和真实 interactionDetails/interactionResult、persist/rolling save。
-- **Flow**：[token flow](../../../apps/oidc-provider/test-integration/component/token-flow.integration.test.ts)：PKCE、RS256、nonce、auth_time、exp-iat、replay、配置变化和 UserInfo。
-- **Admin**：[Session Management](../../../apps/admin-api/test-integration/redis/session-management.integration.test.ts)：真实 Kernel 消费方的当前会话保护、级联数量、重复 no-op、用户例外和安全失败摘要；时间由 K-time 证明。
-- **Cleanup**：[既有 artifact owner seam](../../../apps/oidc-provider/test-integration/redis/client-protocol-artifact-cleanup.integration.test.ts)：per-client cleanup 与新的全体在线状态维护分别验证，覆盖无索引/损坏对象、部分失败重跑、独立 scan/readback、非目标保留。
+- **State**：[Provider Session state](https://github.com/cyy1998/shgas-iam/blob/aeb2dc45294f3553ad596cda5194e9643378c31b/apps/oidc-provider/test-integration/redis/provider-session-state.integration.test.ts)：staged/claim/mapping/anchor、Kernel deadline 到 Code/Credential 与 generation 恢复。
+- **OIDC**：[Redis adapter 与真实 Provider model](https://github.com/cyy1998/shgas-iam/blob/aeb2dc45294f3553ad596cda5194e9643378c31b/apps/oidc-provider/test-integration/redis/redis-adapter.integration.test.ts)：共享索引、独立 observer、配置与 mirror、Grant 再保存，以及 Session/Interaction 跨 writer 和真实 interactionDetails/interactionResult、persist/rolling save。
+- **Flow**：[token flow](https://github.com/cyy1998/shgas-iam/blob/aeb2dc45294f3553ad596cda5194e9643378c31b/apps/oidc-provider/test-integration/component/token-flow.integration.test.ts)：PKCE、RS256、nonce、auth_time、exp-iat、replay、配置变化和 UserInfo。
+- **Admin**：[Session Management](https://github.com/cyy1998/shgas-iam/blob/aeb2dc45294f3553ad596cda5194e9643378c31b/apps/admin-api/test-integration/redis/session-management.integration.test.ts)：真实 Kernel 消费方的当前会话保护、级联数量、重复 no-op、用户例外和安全失败摘要；时间由 K-time 证明。
+- **Cleanup**：[既有 artifact owner seam](https://github.com/cyy1998/shgas-iam/blob/aeb2dc45294f3553ad596cda5194e9643378c31b/apps/oidc-provider/test-integration/redis/client-protocol-artifact-cleanup.integration.test.ts)：per-client cleanup 与新的全体在线状态维护分别验证，覆盖无索引/损坏对象、部分失败重跑、独立 scan/readback、非目标保留。
 - **Manual**：[维护手册](../../releases/online-auth-redis-time-cutover.md)：目标环境人工 gate；尚未执行，不由自动化测试代替。
 
 ## 42 条故事逐项核对

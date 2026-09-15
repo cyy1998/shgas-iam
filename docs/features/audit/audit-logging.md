@@ -30,6 +30,11 @@ actor Principal Session ID 或原始异常。Redis 撤销作用先于 PostgreSQL
 
 ## 管理端用户级会话撤销
 
+#191 统一会话候选的固定集合继续使用 `admin.session.revoke`，目标类型为 `session_batch`，不编造根会话 targetCode。
+Details 保留新代实际 userSessions/clientSessions 终止数、排除/失败/未知，以及 alreadyTerminated/missing/expired/replaced
+数量；不保存原集合 ID、instance、主体 context 或 actor 当前根。可重试 identity 只交付在管理响应中。
+仅 unknown 而无确认变化时，之后的审计失败仍归 `ADMIN_LOGIN_STATE_AUDIT_FAILED_AFTER_EFFECT`，不能误报无作用。
+
 `admin.session.revoke_user` 记录管理员对一个用户执行点式 Session Revocation 的意图。审计 target 必须是
 `targetType: user` 与目标用户 ID；details 只允许保存 scope、`changed`、各类 IAM 对象的脱敏撤销数量、
 `currentPrincipalSessionExcluded` / `currentPrincipalSessionProtected` 当前根例外或保护状态，以及

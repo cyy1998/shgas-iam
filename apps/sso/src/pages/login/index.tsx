@@ -1,7 +1,4 @@
 import {
-  LoginGuardNotice,
-} from './_components/LoginGuardNotice';
-import {
   CheckCircleOutlined,
   LockOutlined,
   LoginOutlined,
@@ -20,14 +17,15 @@ import { ServiceError } from '@sso/utils/request';
 import { history } from '@umijs/max';
 import { Button, Form, Modal, Tabs, message } from 'antd';
 import { useState } from 'react';
+import { LoginGuardNotice } from './_components/LoginGuardNotice';
 import {
   PasswordLoginForm,
   type PasswordLoginValues,
 } from './_components/PasswordLoginForm';
 import { SmsLoginForm, type SmsLoginValues } from './_components/SmsLoginForm';
 import { UnsafeEntryNotice } from './_components/UnsafeEntryNotice';
-import { useLoginRedirect } from './_hooks/useLoginRedirect';
 import { useLoginPageGuard } from './_hooks/useLoginPageGuard';
+import { useLoginRedirect } from './_hooks/useLoginRedirect';
 import './index.less';
 
 type LoginMode = 'PWD' | 'SMS' | 'BMN';
@@ -53,6 +51,7 @@ export default function LoginPage() {
     redirectAfterLogin,
     redirectUrl,
     state,
+    ssoReturn,
   } = loginRedirect;
   const loginGuard = useLoginPageGuard({
     client: client ?? '',
@@ -62,6 +61,7 @@ export default function LoginPage() {
     redirectAfterLogin,
     redirectUrl,
     state,
+    ssoReturn,
   });
 
   const showLoginFailureModal = (msg: string) => {
@@ -198,7 +198,12 @@ export default function LoginPage() {
   if (loginGuard.status !== 'login') {
     return (
       <LoginGuardNotice
-        status={loginGuard.status as Exclude<typeof loginGuard.status, 'login' | 'unsafe'>}
+        status={
+          loginGuard.status as Exclude<
+            typeof loginGuard.status,
+            'login' | 'unsafe'
+          >
+        }
         onRetry={loginGuard.retry}
       />
     );

@@ -16,12 +16,6 @@ export enum OidcTokenEndpointAuthMethod {
   ClientSecretBasic = "client_secret_basic",
 }
 
-export enum OidcClientState {
-  Unconfigured = "unconfigured",
-  Disabled = "disabled",
-  Enabled = "enabled",
-}
-
 export const OIDC_SUPPORTED_SCOPES = [
   OidcScope.OpenId,
   OidcScope.Profile,

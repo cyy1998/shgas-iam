@@ -9,16 +9,29 @@ import {
 import { createApiRoutes } from "@api/composition/routes";
 import { createApiUserProfileSearch } from "@api/composition/services/user-profile-search";
 import { createApiUserProfileResources } from "@api/composition/user-profile-resources";
-import {
-  PRIVILEGE_DELEGATION_RESOLUTION_HANDLER_TIMEOUT_MS,
-} from "@api/routes/internal/delegation/delegation.handlers";
+import { PRIVILEGE_DELEGATION_RESOLUTION_HANDLER_TIMEOUT_MS } from "@api/routes/internal/delegation/delegation.handlers";
 import { INTERNAL_USER_HANDLER_TIMEOUT_MS } from "@api/routes/internal/user/user.handlers";
+import { createPublicHandlers } from "@api/routes/public/public.handlers";
+import * as publicRoutes from "@api/routes/public/public.routes";
 import { createV3UserProfileSearchAdapter } from "@api/services/user-profile-search/user-profile-search-v3.adapter";
 import createApp from "@iam/api-core/core/create-app";
+import { createRouter } from "@iam/api-core/core/create-router";
 import { UserStatus, UserType } from "@iam/contracts";
 import { expect, mock, test } from "bun:test";
 import pino from "pino";
 import appConfig from "~api/app.config";
+
+// This component exercises search transport; authentication is covered by the real root composition.
+function authenticationRoutes(userProfileSearch?: unknown) {
+  const publicRouter = createRouter<import("@iam/api-core/types").PublicBindings>();
+  if (userProfileSearch) {
+    const handlers = createPublicHandlers({ userProfileSearch } as never);
+    publicRouter.openapi(publicRoutes.usersSearch, handlers.usersSearch);
+  }
+  return {
+    routers: { auth: createRouter(), sso: createRouter(), oidc: createRouter(), public: publicRouter },
+  };
+}
 
 test("owns dedicated Internal query clients with fixed budgets and deterministic shutdown", async () => {
   expect(INTERNAL_USER_STATEMENT_TIMEOUT_MS).toBe(2_000);
@@ -41,9 +54,7 @@ test("owns dedicated Internal query clients with fixed budgets and deterministic
   for (const expected of resources) {
     const end = mock(async () => {});
     const queryClient = { end };
-    const createSql = mock(
-      (_databaseUrl: string, _options: unknown) => queryClient as never,
-    );
+    const createSql = mock((_databaseUrl: string, _options: unknown) => queryClient as never);
     const createDatabase = mock((_client: unknown) => ({}) as never);
     const resource = expected.createResource({
       databaseUrl: expected.databaseUrl,
@@ -51,15 +62,12 @@ test("owns dedicated Internal query clients with fixed budgets and deterministic
       createDatabase,
     });
 
-    expect(createSql).toHaveBeenCalledWith(
-      expected.databaseUrl,
-      {
-        connection: {
-          application_name: expected.applicationName,
-          statement_timeout: 2_000,
-        },
+    expect(createSql).toHaveBeenCalledWith(expected.databaseUrl, {
+      connection: {
+        application_name: expected.applicationName,
+        statement_timeout: 2_000,
       },
-    );
+    });
     await resource.close();
     expect(end).toHaveBeenCalledTimes(1);
   }
@@ -93,6 +101,7 @@ test("wires canonical Filter through every production search entry and rejects t
     },
   });
   const activeRoutes = await createApiRoutes({
+    verifyDatabase: async () => {},
     auditLogWriter: {} as never,
     runtime: {
       logger: {},
@@ -104,6 +113,7 @@ test("wires canonical Filter through every production search entry and rejects t
     } as never,
     services: {
       ...userProfileSearch,
+      authentication: authenticationRoutes(userProfileSearch.userProfileSearch),
     } as never,
     useCases: {} as never,
   });
@@ -113,11 +123,12 @@ test("wires canonical Filter through every production search entry and rejects t
     routes: activeRoutes,
     middlewares: {},
   });
-  const request = (path: string, body: unknown) => app.request(`http://localhost${path}`, {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify(body),
-  });
+  const request = (path: string, body: unknown) =>
+    app.request(`http://localhost${path}`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(body),
+    });
 
   const internalLegacy = await request("/internal/users/search", { usernames: ["internal-user"] });
   const publicLegacy = await request("/public/users/search", { usernames: ["public-user"] });
@@ -165,11 +176,7 @@ test("wires canonical Filter through every production search entry and rejects t
   ]).toEqual([200, 200, 200, 200, 422]);
   expect(searchLegacyUsers).toHaveBeenCalledTimes(3);
   expect(searchDsl).toHaveBeenCalledTimes(1);
-  expect(getDelegationsByUserAndOrganizationScopeAndPrivilege).toHaveBeenCalledWith(
-    [],
-    "ORG",
-    "privilege:a",
-  );
+  expect(getDelegationsByUserAndOrganizationScopeAndPrivilege).toHaveBeenCalledWith([], "ORG", "privilege:a");
 });
 
 test("maps Internal, Public, and Delegation requests through the inactive v3 adapter facade", async () => {
@@ -203,6 +210,7 @@ test("maps Internal, Public, and Delegation requests through the inactive v3 ada
     },
   });
   const activeRoutes = await createApiRoutes({
+    verifyDatabase: async () => {},
     auditLogWriter: {} as never,
     runtime: {
       logger: {},
@@ -212,7 +220,10 @@ test("maps Internal, Public, and Delegation requests through the inactive v3 ada
         userProfile: { dslMaxLimit: 100 },
       },
     } as never,
-    services: { ...userProfileSearch } as never,
+    services: {
+      ...userProfileSearch,
+      authentication: authenticationRoutes(userProfileSearch.userProfileSearch),
+    } as never,
     useCases: {} as never,
   });
   const app = createApp(appConfig, {
@@ -221,11 +232,12 @@ test("maps Internal, Public, and Delegation requests through the inactive v3 ada
     routes: activeRoutes,
     middlewares: {},
   });
-  const request = (path: string, body: unknown) => app.request(`http://localhost${path}`, {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify(body),
-  });
+  const request = (path: string, body: unknown) =>
+    app.request(`http://localhost${path}`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(body),
+    });
 
   const internalResponse = await request("/internal/users/search", {
     usernames: ["zhangsan", "lisi"],
@@ -299,6 +311,7 @@ test("maps Internal, Public, and Delegation requests through the inactive v3 ada
 
 test("mounts exactly one canonical Internal User route in the Internal API document", async () => {
   const activeRoutes = await createApiRoutes({
+    verifyDatabase: async () => {},
     auditLogWriter: {} as never,
     runtime: {
       logger: {},
@@ -308,13 +321,13 @@ test("mounts exactly one canonical Internal User route in the Internal API docum
         userProfile: { dslMaxLimit: 100 },
       },
     } as never,
-    services: {} as never,
+    services: { authentication: authenticationRoutes() } as never,
     useCases: {} as never,
   });
 
-  expect(Object.keys(activeRoutes).filter(route =>
-    route.includes("/routes/internal/user/"),
-  )).toEqual(["./src/routes/internal/user/user.index.ts"]);
+  expect(Object.keys(activeRoutes).filter(route => route.includes("/routes/internal/user/"))).toEqual([
+    "./src/routes/internal/user/user.index.ts",
+  ]);
 
   const app = createApp(appConfig, {
     env: { NODE_ENV: "test" },
@@ -325,7 +338,7 @@ test("mounts exactly one canonical Internal User route in the Internal API docum
   const response = await app.request("http://localhost/internal/doc");
 
   expect(response.status).toBe(200);
-  const document = await response.json() as {
+  const document = (await response.json()) as {
     paths: Record<string, { post?: { deprecated?: boolean } }>;
   };
   expect(document.paths).toMatchObject({
@@ -336,7 +349,7 @@ test("mounts exactly one canonical Internal User route in the Internal API docum
 
   const publicResponse = await app.request("http://localhost/public/doc");
   expect(publicResponse.status).toBe(200);
-  const publicDocument = await publicResponse.json() as {
+  const publicDocument = (await publicResponse.json()) as {
     paths: Record<string, { post?: { deprecated?: boolean } }>;
   };
   expect(publicDocument.paths["/public/users/search"]?.post?.deprecated).toBeUndefined();

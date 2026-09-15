@@ -1,6 +1,8 @@
 # 旧 Custom SSO Grant 定向维护
 
-Status: Current
+> Historical：本页保留旧候选的契约与证据；Spec #178 最终在线模型已由 ADR-0035 取代，当前发布以统一会话维护手册为准。
+
+Status: Historical
 
 Last verified: 2026-09-09
 
@@ -102,7 +104,7 @@ PostgreSQL 和其他 namespace 保持原职责。不得用 `online-auth:state`�
 2026-10-31 复核所有适用环境是否已有目标清零、保留对照与切换记录，以及旧备份是否已禁止直接恢复；全部确认后另行变更退役该入口
 及专用 fixture/测试。没有建立永久历史版本词典、双读开关或旧名称 Guard。
 
-自动化证据位于 [真实 Redis 维护测试](../../apps/oidc-provider/test-integration/redis/custom-sso-grant-maintenance.integration.test.ts)：
+自动化证据位于 [真实 Redis 维护测试](https://github.com/cyy1998/shgas-iam/blob/aeb2dc45294f3553ad596cda5194e9643378c31b/apps/oidc-provider/test-integration/redis/custom-sso-grant-maintenance.integration.test.ts)：
 正式 owner 构造和观察证明定向失效、无索引库存、三态及孤立记录、replacement/CAS、未知数据保留、部分失败重跑、真实 CLI 非零门禁，
 并用 Redis ACL 拒绝 `EVAL` 的只读账户完成核验。混合库存对 Principal、两 Credential、OIDC Binding/Code/Token/Provider Session
 逐对象比较持久值与绝对 expiry。这些证据不证明目标环境停流、生产崩溃、实际部署或外部 ORCAS 状态。

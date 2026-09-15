@@ -38,7 +38,7 @@ import { ADMIN_MODULE_CODES, EmploymentStatus, OrganizationLevel as Organization
 import { EmploymentNotFoundError } from "@iam/domain/employment";
 import { OrganizationNotFoundError } from "@iam/domain/organization";
 import { OrganizationResponsibilityAssignmentNotFoundError } from "@iam/domain/organization-responsibility";
-import { ADMIN_OPERATION_REGISTRY } from "./admin-operation.registry";
+import { ADMIN_AUTHORIZATION_OPERATION_REGISTRY } from "./admin-operation.registry";
 
 export interface AdminAuthorizationActor {
   userId: number;
@@ -479,7 +479,7 @@ export function createAdminAuthorizationPolicy(
       authorization: null;
     }
   > {
-    if (!Object.hasOwn(ADMIN_OPERATION_REGISTRY, input.operationId))
+    if (!Object.hasOwn(ADMIN_AUTHORIZATION_OPERATION_REGISTRY, input.operationId))
       return { decision: actionNotGrantedDecision, authorization: null };
     if (hasFullAdminCapability(input.actor)) {
       return {
@@ -562,8 +562,8 @@ export function createAdminAuthorizationPolicy(
     if (evaluation.authorization !== null)
       return evaluation.authorization;
 
-    const operation = Object.hasOwn(ADMIN_OPERATION_REGISTRY, input.operationId)
-      ? ADMIN_OPERATION_REGISTRY[input.operationId as AdminOperationId]
+    const operation = Object.hasOwn(ADMIN_AUTHORIZATION_OPERATION_REGISTRY, input.operationId)
+      ? ADMIN_AUTHORIZATION_OPERATION_REGISTRY[input.operationId as AdminOperationId]
       : undefined;
     if (operation?.type === "mutation") {
       logMutationDenial(input.actor, {
@@ -588,7 +588,7 @@ export function createAdminAuthorizationPolicy(
     ) {
       return;
     }
-    const operation = ADMIN_OPERATION_REGISTRY["admin.user.update"];
+    const operation = ADMIN_AUTHORIZATION_OPERATION_REGISTRY["admin.user.update"];
     logMutationDenial(input.actor, {
       operationId: input.operationId,
       resourceType: operation.resourceType,

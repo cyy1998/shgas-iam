@@ -50,31 +50,24 @@
 
 | 包 | 当前职责与消费关系 |
 |---|---|
-| `custom-sso` | root 拥有完整协议操作与 Grant；API 注入出站能力，OIDC 独立消费 cleanup/maintenance，Admin/SSO 消费支持浏览器的 `/wire`；测试构造与检查只走 `/testing`。 |
-| `session-kernel` | 协议中性的四类会话生命周期，由 API、Admin API、OIDC 与 API Core 的 Subject Access 及 Custom SSO Grant 适配方消费；不反向依赖这些消费者。 |
+| `custom-sso` | root 拥有完整协议操作与 Code/Token；API 注入出站能力，Worker 消费 maintenance，Admin/SSO 消费支持浏览器的 `/wire`；测试构造与检查只走 `/testing`。 |
+| `session-kernel` | 协议中性的 UserSession/ClientSession 生命周期，由 API、Admin API、两协议与 API Core Subject Access 适配方消费；不反向依赖这些消费者。 |
 | `role-assignment-resolution` | 统一有效角色与角色变化影响用户的解析；管理后端授权和 User Profile 构建/失效使用同一规则。 |
 | `organization-responsibility-resolution` | 统一有效责任与 holder 反向解析；当前生产直接消费者是 User Profile Read Model，用于构建和变更影响分析。 |
-| `user-profile-read-model` | 拥有派生档案的失效、重建、PostgreSQL 发布、Redis 缓存、查询与恢复；由 API、Admin API、OIDC Provider、Worker 按职责消费。Read Model 为读取整理数据，也负责写入和维护这些派生数据。 |
+| `user-profile-read-model` | 拥有派生档案的失效、重建、PostgreSQL 发布、Redis 缓存、查询与恢复；由 API、Admin API、Worker 按职责消费。Read Model 为读取整理数据，也负责写入和维护这些派生数据。 |
 
 Kernel 根出口只托管不透明 `subjectContext`，`/maintenance` 和 `/testing` 分离。Subject Access operation/context/拒绝编排
 由 API Core 单向消费 Kernel；不公开旧 fence、validator 或专用 Kernel 代际字段。Custom SSO root 要求显式操作容器，
 Projection 唯一工厂要求许可证明，均不在缺少容器时自动恢复访问检查。
 
-Kernel 的 `resolveClientBindingById`、`resolveCredential` 和 `resolveProtocolArtifact` 要求显式用途；Credential/Artifact
-同时要求具体 type。`consumeProtocolArtifact` 还要求已观察 Artifact，`revokeObservedObject` 仅撤销观察对象及合法从属
-对象；identity 被替换时 CAS 保留替换者。Principal 读取和管理盘点仍中性。用途错误不触发协议配置校验、Subject Access
-或隐式批量撤销；OIDC 与 Custom SSO 必须通过各自 owner 完成后续协议检查，不存在可省略用途的在线兼容入口。
+Kernel 的在线根出口只公开 UserSession/ClientSession 生命周期与观察身份。Code/Token 属于各协议 owner；
+协议调用方必须显式取得操作许可和 Client Snapshot，再验证会话关系，不能从旧四对象出口恢复线上读取。
+旧 Kernel/Provider/Grant decoder 仅通过独立维护或测试出口供冻结 source 布局清理。
 
-`CleanupAdapter.cleanup` 的 `CleanupExecution` 参数只提供 `deleteOwnedKeys`。Kernel 隐藏状态定位与原子
-所有权比较，OIDC payload adapter 只提供其拥有的协议 key；实时撤销与 pending 重试都绑定原终态。
-#171–#173 的 Principal、Credential 与 Artifact 已使用 SHA-256 单状态和反向 ID；无 token Binding 继续按内部 ID 定位。
-Artifact 消费原子比较已观察状态与 ID owner，并写入同记录 revoked、reason=consumed；重复消费识别 consumed_replay。
-三类对象的 cleanup 均比较原终态字节与反向 owner，不能删除较新对象；见[Artifact 状态证据](../features/sso/artifact-direct-state-evidence.md)。
-Kernel lookup HMAC 的 current/previous 配置、环境变量、公开类型和派生候选已退役；三类对象在线定位与消费匹配均使用普通 SHA-256。
-Provider 自有 lookup、OIDC Cookie/JWT 签名及 Client Secret 校验保留；见[运行时契约](../features/sso/token-state-runtime-evidence.md)。
-全体下线维护已由 #175 完成，全部逐项验收和原始基线成本见 [最终账本](../features/sso/token-state-contract.md)，实际环境切换未执行。
-
-
+Client 数据库只有统一 `ssoEnabled`、可空单协议 `ssoConfig` 与独立当前 SSO Secret/id/updatedAt；Internal API secret 独立。
+普通管理与 Runtime DTO 使用显式安全字段，不能默认选择 SSO Secret；认证与超级管理员 Secret 重读各用窄能力。
+最终 migration 先锁 Client 表并拒绝未完成旧配置选择/凭据迁移的记录，再删除旧双协议列与约束。
+必须在固定旧候选上完成 #192 apply 与全量 verify 后执行最终 DDL，见[统一维护手册](../releases/unified-session-maintenance.md)。
 
 ## DTO 字段与兼容演进
 

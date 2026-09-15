@@ -8,6 +8,7 @@
     "./schema": "./src/schema/public.ts",
     "./schema/role-assignments": "./src/schema/role-assignments.ts",
     "./relations": "./src/relations/index.ts",
+    "./client-snapshot": "./src/client-snapshot.ts",
     "./query-utils": "./src/query-utils.ts",
     "./postgres-error": "./src/postgres-error.ts"
   },

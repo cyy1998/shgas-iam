@@ -1,6 +1,5 @@
 import type { UserService } from "@admin-api/services/user/user.service";
-import type { createSubjectAccessOperations } from "@iam/api-core/subject-access";
-import type { SessionKernel } from "@iam/session-kernel";
+import type { createSubjectAccessOperations, SubjectAccessOperation } from "@iam/api-core/subject-access";
 import type { Context, Next } from "hono";
 import { AuthzForbiddenError } from "@iam/api-core/errors/AuthzForbiddenError";
 import { AuthzUnauthorizedError } from "@iam/api-core/errors/AuthzUnauthorizedError";
@@ -24,18 +23,20 @@ function clearGlobalSessionCookies(c: Context) {
   }
 }
 
-export type AdminAuthenticationHandlers = ReturnType<typeof createAdminAuthenticationHandlers>;
+export type AdminAuthenticationHandlers = ReturnType<typeof createAdminRootAuthenticationHandlers>;
 
-export interface CreateAdminAuthenticationHandlersDeps {
-  sessionKernel: Pick<SessionKernel, "resolvePrincipalSession">;
+export interface CreateAdminRootAuthenticationHandlersDeps {
   subjectAccess: Pick<ReturnType<typeof createSubjectAccessOperations>, "run">;
   userService: Pick<UserService, "getUserDetailForPermittedAdmin">;
   config: { allowedClientCodes: string[] };
+  resolveRoot: (token: string, operation: SubjectAccessOperation) => Promise<{
+    userSessionId: string;
+    subjectIdentifier: string;
+    subjectContext: unknown;
+  } | null>;
 }
 
-export function createAdminAuthenticationHandlers(
-  deps: CreateAdminAuthenticationHandlersDeps,
-) {
+export function createAdminRootAuthenticationHandlers(deps: CreateAdminRootAuthenticationHandlersDeps) {
   async function adminAuthenticationHandler(c: Context, next: Next) {
     const clientCode = c.req.header("Client");
     if (!clientCode || !deps.config.allowedClientCodes.includes(clientCode))
@@ -53,21 +54,20 @@ export function createAdminAuthenticationHandlers(
         ? []
         : [GLOBAL_SESSION_COOKIE, ORCAS_SESSION_COOKIE],
     }, async () => await deps.subjectAccess.run(async (operation) => {
-      const resolved = await deps.sessionKernel.resolvePrincipalSession(token);
-      if (resolved.status !== "resolved" || resolved.value.principal.principalType !== "user") {
+      const principal = await deps.resolveRoot(token, operation);
+      if (principal === null) {
         if (sessionCookie !== undefined)
           clearGlobalSessionCookies(c);
         throw new AuthzUnauthorizedError("未登录");
       }
-      const principal = resolved.value;
       await operation.acquireForSession({
-        subjectIdentifier: principal.principal.subjectId,
+        subjectIdentifier: principal.subjectIdentifier,
         subjectContext: principal.subjectContext,
-        principalSessionId: principal.principalSessionId,
+        principalSessionId: principal.userSessionId,
       });
       const user = await deps.userService.getUserDetailForPermittedAdmin(
         operation,
-        principal.principal.subjectId,
+        principal.subjectIdentifier,
       ).catch((error: unknown) => {
         if (error instanceof UserNotFoundError) {
           clearGlobalSessionCookies(c);
@@ -78,7 +78,7 @@ export function createAdminAuthenticationHandlers(
       c.set("userId", user.id);
       c.set("username", user.username);
       c.set("userDetailDto", user);
-      c.set("principalSessionId", principal.principalSessionId);
+      c.set("principalSessionId", principal.userSessionId);
       await next();
       if (c.error !== undefined)
         throw c.error;

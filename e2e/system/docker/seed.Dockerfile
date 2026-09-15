@@ -15,6 +15,7 @@ ENV HUSKY=0
 COPY .npmrc pnpm-workspace.yaml package.json pnpm-lock.yaml ./
 COPY e2e/system/package.json ./e2e/system/package.json
 COPY packages/api-core/package.json ./packages/api-core/package.json
+COPY packages/session-kernel/package.json ./packages/session-kernel/package.json
 COPY packages/client-subject-projection/package.json ./packages/client-subject-projection/package.json
 COPY packages/contracts/package.json ./packages/contracts/package.json
 COPY packages/db/package.json ./packages/db/package.json
@@ -30,6 +31,7 @@ RUN --mount=type=cache,id=iam-e2e-pnpm-v11,target=/pnpm/store \
 FROM deps AS builder
 COPY e2e/system ./e2e/system
 COPY packages/api-core ./packages/api-core
+COPY packages/session-kernel ./packages/session-kernel
 COPY packages/client-subject-projection ./packages/client-subject-projection
 COPY packages/contracts ./packages/contracts
 COPY packages/db ./packages/db

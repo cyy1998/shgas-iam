@@ -63,13 +63,13 @@ UnitOfWork 边界。
 
 - 直接实现 framework/protocol hooks、并在 public signature 中使用 framework protocol types 的模块使用 Adapter、
   Resolver、Policy、Verifier 等实际角色命名，不因其含业务数据就命名为 Application Service。
-- OIDC claims hook 保留在 `provider/claims.ts`，使用 `createOidcClaimsAdapter`/`OidcClaimsAdapter`；不要迁入
-  `services/claims`，也不要保留 `*ClaimsService` compatibility alias。
-- `apps/oidc-provider` 按 `composition/provider`、`composition/security`、`composition/session` 等 ownership 物化
-  components。Provider/interaction wiring 直接接收所需 facade，不建立混合 `composition/services` 或 session resolver
-  的 services alias。
-- Protocol adapter tests 通过 factory 注入 account/client/authorization/session/token ports，断言 claims、token extra、
-  validation 和 revoke 等调用方可观察行为；根级 Architecture Guard 只约束稳定的 production module edge owner。
+- OIDC 协议操作由 `packages/oidc` 拥有，API 的 `routes/oidc/oidc.http.ts` 负责 HTTP 适配，
+  `composition/root-authentication.ts` 接入统一 Kernel、Client Snapshot、主体披露与签名能力。旧 Provider app 和 claims hook 已退役，
+  不重建旧 Provider facade 或 compatibility alias。
+- UserInfo 在 OIDC owner 中按当前允许的披露选择调用 Subject Projection；HTTP adapter 不自行拼装业务 claims、
+  重查会话或实现另一套 Code/Token 生命周期。
+- Protocol adapter tests 通过正式 factory 注入所需 ports，断言 claims、认证与验证错误、Code/Token 消费及撤销等
+  调用方可观察行为；根级 Architecture Guard 只约束稳定的 production module edge owner。
 
 ## Audit 与 Architecture Guards
 

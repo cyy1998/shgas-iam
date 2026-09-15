@@ -1,19 +1,8 @@
 import type { APIResponse, Page, Response } from "@playwright/test";
 import { expect } from "@playwright/test";
 
-const clientProtocolLifecycleProcedures = {
-  "custom-sso": {
-    启用: "admin.client.customSsoEnable",
-    禁用: "admin.client.customSsoDisable",
-  },
-  "oidc": {
-    启用: "admin.client.oidcEnable",
-    禁用: "admin.client.oidcDisable",
-  },
-} as const;
-
-type ClientProtocol = keyof typeof clientProtocolLifecycleProcedures;
-type ClientProtocolLifecycleAction = keyof typeof clientProtocolLifecycleProcedures[ClientProtocol];
+type ClientProtocol = "custom-sso" | "oidc";
+type ClientProtocolLifecycleAction = "启用" | "禁用";
 
 export async function loginToAdmin(input: {
   adminPassword: string;
@@ -51,7 +40,7 @@ export async function openClientSection(
 ) {
   const detailResponse = page.waitForResponse(isClientDetailResponse);
   await page.goto(
-    `/iam-admin/clients/${encodeURIComponent(clientCode)}/edit?section=${section}`,
+    `/iam-admin/clients/${encodeURIComponent(clientCode)}/edit?section=${section === "basic" ? "basic" : "sso"}`,
   );
   await detailResponse;
   await expect(page.getByText(clientCode, { exact: true })).toBeVisible();
@@ -77,23 +66,14 @@ export async function updateClientStatus(
 
 export async function runClientProtocolLifecycleAction(
   page: Page,
-  protocol: ClientProtocol,
   action: ClientProtocolLifecycleAction,
 ) {
-  const procedure = clientProtocolLifecycleProcedures[protocol][action];
-  const actionName = action === "启用" ? /启\s*用/u : /禁\s*用/u;
-  await page.getByRole("button", { name: actionName }).click();
-  const response = page.waitForResponse(candidate =>
-    isSuccessfulRpcResponse(candidate, procedure));
-  await page.getByRole("button", { name: /确\s*定/u }).click();
-  await expectRpcMutationResult(await response, procedure, true, {
-    client: expect.any(Object),
-  });
-  await expect(page.getByText(action === "启用" ? "已启用" : "已禁用", {
-    exact: true,
-  })).toBeVisible();
+  const procedure = "admin.clientSso.setEnabled";
+  const response = page.waitForResponse(candidate => isSuccessfulRpcResponse(candidate, procedure));
+  await page.getByRole("button", { name: action === "启用" ? "启用 SSO" : "停用 SSO", exact: true }).click();
+  await expectRpcMutationResult(await response, procedure, true, expect.any(Object));
+  await expect(page.getByRole("button", { name: action === "启用" ? "停用 SSO" : "启用 SSO", exact: true })).toBeVisible();
 }
-
 export function isClientDetailResponse(response: Response) {
   return isSuccessfulRpcResponse(response, "admin.client.detail");
 }
@@ -123,18 +103,13 @@ export async function saveUnchangedClientProtocolConfiguration(
   expectedEnabled: boolean,
 ) {
   await openClientSection(page, clientCode, protocol);
-  const procedure = protocol === "oidc"
-    ? "admin.client.oidcConfigure"
-    : "admin.client.customSsoConfigure";
+  const procedure = "admin.clientSso.selectProtocol";
   const response = page.waitForResponse(candidate => isSuccessfulRpcResponse(candidate, procedure));
-  await page.getByRole("button", {
-    name: protocol === "oidc" ? "保存 OIDC 配置" : "保存 Custom SSO 配置",
-  }).click();
+  await page.getByRole("button", { name: "保存协议及配置", exact: true }).click();
   await expectRpcMutationResult(await response, procedure, false, expect.any(Object));
   await expect(page.getByText("无需修改", { exact: true })).toBeVisible();
-  await expect(page.getByText(expectedEnabled ? "已启用" : "已禁用", { exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: expectedEnabled ? "停用 SSO" : "启用 SSO", exact: true })).toBeVisible();
 }
-
 function rpcProcedures(url: string) {
   return new URL(url).pathname.split("/rpc/")[1]?.split(",") ?? [];
 }

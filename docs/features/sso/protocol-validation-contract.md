@@ -1,8 +1,10 @@
 # 协议校验、操作快照与版本撤销最终契约
 
+> Historical：本页保留旧候选的契约与证据；Spec #178 最终在线模型已由 ADR-0035 取代，当前发布以统一会话维护手册为准。
+
 > 本文原候选证据保留其规格语境。后续 Spec #163 / ADR-0033 已实现已有 Credential 使用不查父、Custom SSO 不续根/凭据及根撤销尽力级联；正常级联里根/子均失效不构成全子树保证。替代断言、固定候选与证明边界见[Credential 最终账本](credential-authority-contract.md)。包含 #163 或 #170 的候选发布采用全体下线，不适用本文原规格的保留对象升级；环境未切换。
 
-Status: Current
+Status: Historical
 
 Last verified: 2026-09-10
 
@@ -30,20 +32,20 @@ Next review: 2026-10-31
 
 以下简称用于逐项表，均指生产工厂或公开 Interface 的行为测试，不指源码字符串检查。
 
-- **K**：[Kernel Artifact](../../../packages/session-kernel/test-integration/redis/session-kernel-artifact.integration.test.ts)、
-  [Credential](../../../packages/session-kernel/test-integration/redis/session-kernel-credential.integration.test.ts)、
-  [选择撤销](../../../packages/session-kernel/test-integration/redis/session-kernel-selected-revocation.integration.test.ts)。
+- **K**：[Kernel Artifact](https://github.com/cyy1998/shgas-iam/blob/aeb2dc45294f3553ad596cda5194e9643378c31b/packages/session-kernel/test-integration/redis/session-kernel-artifact.integration.test.ts)、
+  [Credential](https://github.com/cyy1998/shgas-iam/blob/aeb2dc45294f3553ad596cda5194e9643378c31b/packages/session-kernel/test-integration/redis/session-kernel-credential.integration.test.ts)、
+  [选择撤销](https://github.com/cyy1998/shgas-iam/blob/aeb2dc45294f3553ad596cda5194e9643378c31b/packages/session-kernel/test-integration/redis/session-kernel-selected-revocation.integration.test.ts)。
   真实 Redis 的用途、消费、同观察对象 CAS、独立代际选择与 pending 状态。
-- **O**：[OIDC 正式 HTTP](../../../apps/oidc-provider/test-integration/redis/subject-access-authorization.integration.test.ts)、
+- **O**：[OIDC 正式 HTTP](https://github.com/cyy1998/shgas-iam/blob/aeb2dc45294f3553ad596cda5194e9643378c31b/apps/oidc-provider/test-integration/redis/subject-access-authorization.integration.test.ts)、
   [操作契约](../oidc/oidc-operation-snapshots.md)。真实 Provider Token/UserInfo 与原生 HTTP、Kernel、协议 store。
-- **C**：[Custom SSO 操作矩阵](../../../packages/custom-sso/test-integration/redis/custom-sso-operation.integration.test.ts)、
-  [完整操作](../../../packages/custom-sso/test-integration/redis/custom-sso.integration.test.ts)、
-  [Grant](../../../packages/custom-sso/test-integration/redis/custom-sso-operation.integration.test.ts)。
+- **C**：[Custom SSO 操作矩阵](https://github.com/cyy1998/shgas-iam/blob/aeb2dc45294f3553ad596cda5194e9643378c31b/packages/custom-sso/test-integration/redis/custom-sso-operation.integration.test.ts)、
+  [完整操作](https://github.com/cyy1998/shgas-iam/blob/aeb2dc45294f3553ad596cda5194e9643378c31b/packages/custom-sso/test-integration/redis/custom-sso.integration.test.ts)、
+  [Grant](https://github.com/cyy1998/shgas-iam/blob/aeb2dc45294f3553ad596cda5194e9643378c31b/packages/custom-sso/test-integration/redis/custom-sso-operation.integration.test.ts)。
   正式协议工厂、真实 Kernel/Grant/cleanup，Client/Barrier/投影出站 ports 使用窄替代。
-- **H**：[API Public/authz HTTP](../../../apps/api/test-integration/redis/custom-sso-operation-http.integration.test.ts)、
-  [兑换 HTTP](../../../apps/api/test-integration/redis/custom-sso-redemption-operation-http.integration.test.ts)。
+- **H**：[API Public/authz HTTP](https://github.com/cyy1998/shgas-iam/blob/aeb2dc45294f3553ad596cda5194e9643378c31b/apps/api/test-integration/redis/custom-sso-operation-http.integration.test.ts)、
+  [兑换 HTTP](https://github.com/cyy1998/shgas-iam/blob/aeb2dc45294f3553ad596cda5194e9643378c31b/apps/api/test-integration/redis/custom-sso-redemption-operation-http.integration.test.ts)。
   合法反向误投、redirect、非目标对象、Cookie 和无 ORCAS/预占作用。
-- **A**：[Admin PG/Redis 联合](../../../apps/admin-api/test-integration/composition/client-protocol-revocation.integration.test.ts)、
+- **A**：[Admin PG/Redis 联合](https://github.com/cyy1998/shgas-iam/blob/aeb2dc45294f3553ad596cda5194e9643378c31b/apps/admin-api/test-integration/composition/client-protocol-revocation.integration.test.ts)、
   [Client PG mutation](../../../apps/admin-api/test-integration/postgres/client-mutation.integration.test.ts)、
   [Admin 版本撤销契约](../admin/client-protocol-revocation.md)。事务事实与实际撤销 adapter，资源证明范围分开。
 - **M**：[人工维护流程](../../releases/protocol-validation-preserving-upgrade.md)。停流、保留与 smoke 尚待目标环境执行。

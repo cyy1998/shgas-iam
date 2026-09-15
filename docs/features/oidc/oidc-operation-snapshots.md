@@ -1,5 +1,7 @@
 # OIDC 操作内配置与 Gate 契约
 
+本文保留固定旧候选的契约与验证证据，不是 #194 当前在线实现。当前接线和维护以 [ADR-0035](../../adr/0035-unify-user-and-client-session-lifecycles.md) 与[统一维护手册](../../releases/unified-session-maintenance.md)为准。
+
 [Spec #146](https://github.com/cyy1998/shgas-iam/issues/146) 的
 [#149](https://github.com/cyy1998/shgas-iam/issues/149) 负责 OIDC 的操作内首次结果复用。
 长期决定见 [ADR-0030](../../adr/0030-separate-protocol-validation-from-kernel-lifecycle.md)。

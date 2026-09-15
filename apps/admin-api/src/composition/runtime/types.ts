@@ -1,9 +1,7 @@
 import type { Env } from "@admin-api/env";
 import type {
   AdminClientCachePort,
-  AdminClientRuntimeInvalidationPort,
 } from "@admin-api/services/client/client.port";
-import type { SessionKernelConfig } from "@iam/session-kernel";
 import type Redis from "ioredis";
 import type { Logger } from "pino";
 
@@ -35,12 +33,11 @@ export interface AdminApiRuntimeConfig {
   auth: {
     adminClientCodes: string[];
   };
-  sessionKernel: SessionKernelConfig;
+  sessionKernel: Env["sessionKernel"];
 }
 
 export interface AdminApiIntegrationPorts {
   clientCache: AdminClientCachePort;
-  clientRuntimeInvalidation: AdminClientRuntimeInvalidationPort;
 }
 
 export interface AdminApiRuntimePorts {

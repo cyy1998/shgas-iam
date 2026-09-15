@@ -11,34 +11,10 @@ import {
   type ProColumns,
   ProTable,
 } from '@ant-design/pro-components';
-import {
-  type ClientStatus,
-  CustomSsoClientMode,
-  CustomSsoClientState,
-  OidcClientState,
-  OidcClientType,
-  OidcScope,
-} from '@iam/contracts';
+import { type ClientStatus, ClientSsoProtocol } from '@iam/contracts';
 import { history, Link } from '@umijs/max';
-import { Button, message, Space, Tag } from 'antd';
+import { Button, message, Tag } from 'antd';
 import { useState } from 'react';
-
-const customSsoStateLabels = {
-  [CustomSsoClientState.Unconfigured]: '未配置',
-  [CustomSsoClientState.Disabled]: '已禁用',
-  [CustomSsoClientState.Enabled]: '已启用',
-} as const;
-
-const customSsoModeLabels = {
-  [CustomSsoClientMode.Gateway]: 'Gateway',
-  [CustomSsoClientMode.Independent]: 'Independent',
-} as const;
-
-const protocolStateColors = {
-  unconfigured: 'default',
-  disabled: 'orange',
-  enabled: 'green',
-} as const;
 
 function editClient(clientCode: string) {
   history.push(`/clients/${encodeURIComponent(clientCode)}/edit?section=basic`);
@@ -68,82 +44,18 @@ export default function ClientsPage() {
       render: (_, row) => <StatusTag domain="client" status={row.status} />,
     },
     {
-      title: 'Custom SSO',
-      dataIndex: 'customSsoState',
-      width: 210,
+      title: 'SSO 协议',
+      dataIndex: 'ssoProtocol',
       valueType: 'select',
-      valueEnum: Object.fromEntries(
-        Object.entries(customSsoStateLabels).map(([value, text]) => [
-          value,
-          { text },
-        ]),
-      ),
-      render: (_, row) => (
-        <Space size={4}>
-          <Tag color={protocolStateColors[row.customSsoState]}>
-            {customSsoStateLabels[row.customSsoState]}
-          </Tag>
-          {row.customSsoMode && (
-            <Tag>{customSsoModeLabels[row.customSsoMode]}</Tag>
-          )}
-        </Space>
-      ),
+      valueEnum: { [ClientSsoProtocol.Oidc]: 'OIDC', [ClientSsoProtocol.CustomSso]: 'Custom SSO' },
+      render: (_, row) => row.ssoConfig?.protocol ?? '未配置',
     },
     {
-      title: 'Custom SSO 模式',
-      dataIndex: 'customSsoMode',
+      title: 'SSO 启用',
+      dataIndex: 'ssoEnabled',
       valueType: 'select',
-      hideInTable: true,
-      valueEnum: {
-        [CustomSsoClientMode.Gateway]: { text: 'Gateway' },
-        [CustomSsoClientMode.Independent]: { text: 'Independent' },
-      },
-    },
-    {
-      title: 'OIDC',
-      dataIndex: 'oidcState',
-      width: 140,
-      valueType: 'select',
-      valueEnum: {
-        [OidcClientState.Unconfigured]: { text: '未配置' },
-        [OidcClientState.Disabled]: { text: '已配置/禁用' },
-        [OidcClientState.Enabled]: { text: '已启用' },
-      },
-      render: (_, row) => (
-        <Tag color={protocolStateColors[row.oidcState]}>
-          {
-            {
-              [OidcClientState.Unconfigured]: '未配置',
-              [OidcClientState.Disabled]: '已禁用',
-              [OidcClientState.Enabled]: '已启用',
-            }[row.oidcState]
-          }
-        </Tag>
-      ),
-    },
-    {
-      title: 'OIDC Client 类型',
-      dataIndex: 'oidcClientType',
-      valueType: 'select',
-      hideInTable: true,
-      valueEnum: {
-        [OidcClientType.Public]: { text: 'Public' },
-        [OidcClientType.Confidential]: { text: 'Confidential' },
-      },
-    },
-    {
-      title: 'OIDC Scopes',
-      dataIndex: 'oidcAllowedScopes',
-      valueType: 'select',
-      hideInTable: true,
-      fieldProps: { mode: 'multiple' },
-      valueEnum: {
-        [OidcScope.OpenId]: { text: 'openid' },
-        [OidcScope.Profile]: { text: 'profile' },
-        [OidcScope.Phone]: { text: 'phone' },
-        [OidcScope.IamEmployments]: { text: 'iam:employments' },
-        [OidcScope.IamAuthorization]: { text: 'iam:authorization' },
-      },
+      valueEnum: { true: '已启用', false: '已停用' },
+      render: (_, row) => <Tag color={row.ssoEnabled ? 'green' : 'default'}>{row.ssoEnabled ? '已启用' : '已停用'}</Tag>,
     },
     {
       title: '创建时间',
@@ -181,11 +93,8 @@ export default function ClientsPage() {
               pageSize = 20,
               text: searchText,
               status,
-              customSsoState,
-              customSsoMode,
-              oidcState,
-              oidcClientType,
-              oidcAllowedScopes,
+              ssoProtocol,
+              ssoEnabled,
             } = params;
             const text = String(searchText || '');
             const statusNumber =
@@ -200,23 +109,8 @@ export default function ClientsPage() {
                 exactConditions: {
                   statuses:
                     statusNumber === undefined ? undefined : [statusNumber],
-                  customSsoStates: customSsoState
-                    ? [customSsoState as CustomSsoClientState]
-                    : undefined,
-                  customSsoModes: customSsoMode
-                    ? [customSsoMode as CustomSsoClientMode]
-                    : undefined,
-                  oidcStates: oidcState
-                    ? [oidcState as OidcClientState]
-                    : undefined,
-                  oidcClientTypes: oidcClientType
-                    ? [oidcClientType as OidcClientType]
-                    : undefined,
-                  oidcAllowedScopes:
-                    Array.isArray(oidcAllowedScopes) &&
-                    oidcAllowedScopes.length > 0
-                      ? (oidcAllowedScopes as OidcScope[])
-                      : undefined,
+                  ssoProtocols: ssoProtocol ? [ssoProtocol as ClientSsoProtocol] : undefined,
+                  ssoEnabled: ssoEnabled === undefined || ssoEnabled === '' ? undefined : String(ssoEnabled) === 'true',
                 },
               },
             } satisfies ClientSearchParams;

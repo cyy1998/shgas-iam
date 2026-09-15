@@ -307,14 +307,16 @@ describe('session management service wrapper', () => {
       changed: false,
       result: {
         scope: 'session' as const,
-        revoked: {
-          principalSessions: 0,
-          bindings: 0,
-          credentials: 0,
-          artifacts: 0,
-        },
+        generation: 'unified' as const,
         currentPrincipalSessionExcluded: false,
-        cleanup: {
+        sessions: {
+          userSessionsTerminated: 0,
+          clientSessionsTerminated: 0,
+          excluded: 0,
+          failed: 0,
+          unknown: 0,
+        },
+        artifactCleanup: {
           attempted: 0,
           succeeded: 0,
           failed: 0,
@@ -338,14 +340,16 @@ describe('session management service wrapper', () => {
       changed: true,
       result: {
         scope: 'user' as const,
-        revoked: {
-          principalSessions: 2,
-          bindings: 3,
-          credentials: 4,
-          artifacts: 1,
-        },
+        generation: 'unified' as const,
         currentPrincipalSessionExcluded: true,
-        cleanup: {
+        sessions: {
+          userSessionsTerminated: 2,
+          clientSessionsTerminated: 3,
+          excluded: 0,
+          failed: 0,
+          unknown: 0,
+        },
+        artifactCleanup: {
           attempted: 1,
           succeeded: 1,
           failed: 0,

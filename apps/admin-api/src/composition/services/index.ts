@@ -1,10 +1,5 @@
 import type { AdminAuditService } from "@admin-api/services/audit/audit.service";
-import type {
-  AdminLoginRestrictionPort,
-  AdminSessionControlPort,
-  AdminSessionInventoryPort,
-  AdminSessionUserSummaryPort,
-} from "@admin-api/services/session-management/session-management.port";
+import type { DbClient } from "@iam/db";
 import type { RoleAssignmentResolver } from "@iam/role-assignment-resolution";
 import type { AdminApiRepositories } from "../repositories";
 import type { AdminApiRuntimePorts } from "../runtime";
@@ -16,64 +11,79 @@ import { createOrganizationResponsibilityService } from "@admin-api/services/org
 import { createOrganizationService } from "@admin-api/services/organization/organization.service";
 import { createPositionService } from "@admin-api/services/position/position.service";
 import { createRoleService } from "@admin-api/services/role/role.service";
-import { createSessionManagementService } from "@admin-api/services/session-management/session-management.service";
-import { createUserService } from "@admin-api/services/user/user.service";
 import { mapUnitOfWork } from "@iam/api-core/uow";
+import { createRootSecurityComposition } from "../root-security";
+import { createClientSsoSnapshotManagement } from "./client-sso-snapshots";
 
 type AdminApiUnitOfWork = ReturnType<typeof createAdminApiUnitOfWork>;
 
 export interface CreateAdminApiServicesOptions {
+  db: DbClient;
   auditService: Pick<AdminAuditService, "recordAuditLog">;
   roleAssignmentResolver: RoleAssignmentResolver;
   runtime: AdminApiRuntimePorts;
   repositories: AdminApiRepositories;
   session: Pick<
     AdminApiSession,
-    "kernel" | "loginRestriction" | "revocation" | "subjectAccessLifecycle"
+    "kernel" | "loginRestriction" | "revocation" | "subjectAccessLifecycle" | "subjectAccess"
   >;
   unitOfWork: AdminApiUnitOfWork;
 }
 
 export function createAdminApiServices(options: CreateAdminApiServicesOptions) {
   const { roleAssignmentResolver, runtime, repositories, session, unitOfWork } = options;
-  const sessionControl: AdminSessionControlPort = session.kernel;
-  const sessionInventory: AdminSessionInventoryPort = session.kernel;
-  const sessionLoginRestrictions: AdminLoginRestrictionPort = session.loginRestriction;
-  const sessionUsers: AdminSessionUserSummaryPort = repositories.user;
-  const sessionManagementService = createSessionManagementService({
-    audit: options.auditService,
-    control: sessionControl,
-    inventory: sessionInventory,
-    loginRestrictions: sessionLoginRestrictions,
+  const rootSecurity = createRootSecurityComposition({
+    kernel: session.kernel,
+    barrier: session.subjectAccess,
+    config: { allowedClientCodes: runtime.config.auth.adminClientCodes },
+    sessions: {
+      audit: options.auditService,
+      loginRestrictions: session.loginRestriction,
+      logger: runtime.logger,
+      users: repositories.user,
+    },
+    user: {
+      userRepository: repositories.user,
+      employmentRepository: repositories.employment,
+      roleAssignmentResolver,
+      roleRepository: repositories.role,
+      privilegeRepository: repositories.privilege,
+      passwordHasher: runtime.passwordHasher,
+      random: runtime.random,
+      subjectAccessLifecycle: session.subjectAccessLifecycle,
+      uow: mapUnitOfWork(unitOfWork, tx => ({
+        userRepository: tx.repositories.user,
+        auditService: tx.auditService,
+        subjectAccessMutation: tx.subjectAccessMutation,
+        userProfileInvalidation: tx.userProfileInvalidation,
+      })),
+    },
+  });
+
+  const clientSso = createClientSsoSnapshotManagement({
+    clientCache: runtime.integrations.clientCache,
+    db: options.db,
+    redis: runtime.redis,
     logger: runtime.logger,
-    userControl: session.revocation,
-    users: sessionUsers,
+    callback: {
+      isManagedCallback: callback => [runtime.config.env.sso.internalOrigin, runtime.config.env.sso.externalOrigin]
+        .some(origin => new URL("/sso/callback", origin).href === new URL(callback).href),
+    },
+    sessionTermination: {
+      async revokeClientSessions(clientCode) {
+        const result = await rootSecurity.revocation.revokeClientSessions(clientCode);
+        if (result.unfinished.length > 0)
+          throw new Error("Client session termination was not confirmed");
+        return result;
+      },
+    },
   });
-
-  const userService = createUserService({
-    userRepository: repositories.user,
-    employmentRepository: repositories.employment,
-    roleAssignmentResolver,
-    roleRepository: repositories.role,
-    privilegeRepository: repositories.privilege,
-    passwordHasher: runtime.passwordHasher,
-    random: runtime.random,
-    sessionRevocation: session.revocation,
-    subjectAccessLifecycle: session.subjectAccessLifecycle,
-    uow: mapUnitOfWork(unitOfWork, tx => ({
-      userRepository: tx.repositories.user,
-      auditService: tx.auditService,
-      subjectAccessMutation: tx.subjectAccessMutation,
-      userProfileInvalidation: tx.userProfileInvalidation,
-    })),
-  });
-
   const clientService = createClientService({
     clientRepository: repositories.client,
     clientCache: runtime.integrations.clientCache,
-    clientRuntimeInvalidation: runtime.integrations.clientRuntimeInvalidation,
+    clientRuntimeInvalidation: clientSso.snapshots,
     clientMutationLogger: runtime.logger,
-    sessionRevocation: session.revocation,
+    management: clientSso.management.service,
     passwordHasher: runtime.passwordHasher,
     random: runtime.random,
     uow: mapUnitOfWork(unitOfWork, tx => ({
@@ -128,13 +138,15 @@ export function createAdminApiServices(options: CreateAdminApiServicesOptions) {
 
   return {
     client: clientService,
+    clientSso: clientSso.management,
     employment: employmentService,
     organization: organizationService,
     organizationResponsibility: organizationResponsibilityService,
     position: positionService,
     role: roleService,
-    sessionManagement: sessionManagementService,
-    user: userService,
+    rootSecurity,
+    sessionManagement: rootSecurity.sessionManagement,
+    user: rootSecurity.user,
   };
 }
 

@@ -3,11 +3,7 @@ import type {
   AuthenticationLoginRestrictionStatus,
 } from "../login-restriction.type";
 import type { LoginWithMobileDeps } from "./login-with-mobile.port";
-import type {
-  LoginWithMobileInput,
-  LoginWithMobileOptions,
-  MobileLoginUser,
-} from "./login-with-mobile.type";
+import type { LoginWithMobileInput, LoginWithMobileOptions, MobileLoginUser } from "./login-with-mobile.type";
 import { HumanVerificationAction } from "@api/enums/humanVerification.action";
 import { VerificationCodeUsage } from "@api/enums/verificationCode.usage";
 import {
@@ -25,10 +21,7 @@ import {
 } from "../login-restriction-message";
 
 export function createLoginWithMobileUseCase(deps: LoginWithMobileDeps) {
-  async function execute(
-    input: LoginWithMobileInput,
-    options: LoginWithMobileOptions = {},
-  ) {
+  async function execute(input: LoginWithMobileInput, options: LoginWithMobileOptions = {}) {
     const requestContext = options.requestContext;
     const context = createHumanVerificationContext(requestContext, input.phoneNumber);
     await deps.humanVerification.ensureActionAllowed(
@@ -38,22 +31,16 @@ export function createLoginWithMobileUseCase(deps: LoginWithMobileDeps) {
     );
 
     const activeUser = await deps.users.getActiveUserByMobile(input.phoneNumber);
-    const runLoginProtection = <T>(
-      user: MobileLoginUser,
-      operation: () => Promise<T>,
-    ) => runLoginProtectionOperation({
-      operation,
-      auditUnavailable: async () => {
-        await deps.auditLogWriter.recordAuditLog({
-          ...requestContext,
-          ...buildMobileLoginFailureAudit(
-            input.phoneNumber,
-            "login_protection_unavailable",
-            user,
-          ),
-        });
-      },
-    });
+    const runLoginProtection = <T>(user: MobileLoginUser, operation: () => Promise<T>) =>
+      runLoginProtectionOperation({
+        operation,
+        auditUnavailable: async () => {
+          await deps.auditLogWriter.recordAuditLog({
+            ...requestContext,
+            ...buildMobileLoginFailureAudit(input.phoneNumber, "login_protection_unavailable", user),
+          });
+        },
+      });
     if (activeUser !== null) {
       const restriction: AuthenticationLoginRestrictionStatus | null = await runLoginProtection(
         activeUser,
@@ -64,28 +51,25 @@ export function createLoginWithMobileUseCase(deps: LoginWithMobileDeps) {
           ...requestContext,
           ...buildMobileLoginFailureAudit(input.phoneNumber, "too_many_login_failures", activeUser),
         });
-        throw new InvalidVerificationCodeError(
-          formatTemporaryLoginRestrictionMessage(restriction),
-        );
+        throw new InvalidVerificationCodeError(formatTemporaryLoginRestrictionMessage(restriction));
       }
     }
 
-    const verificationCodeValid = input.code === deps.config.magicCode
-      || await deps.verificationCodes.consumeVerificationCode(
-        VerificationCodeUsage.Login,
-        input.phoneNumber,
-        input.code,
-      );
+    const verificationCodeValid
+      = input.code === deps.config.magicCode
+        || (await deps.verificationCodes.consumeVerificationCode(
+          VerificationCodeUsage.Login,
+          input.phoneNumber,
+          input.code,
+        ));
     if (!verificationCodeValid) {
       await deps.humanRisk.recordLoginFailure(HumanVerificationAction.MobileLogin, context);
       if (activeUser !== null) {
-        const failureResult: AuthenticationLoginFailureStatus = await runLoginProtection(
-          activeUser,
-          () => deps.loginRestriction.recordFailure({
+        const failureResult: AuthenticationLoginFailureStatus = await runLoginProtection(activeUser, () =>
+          deps.loginRestriction.recordFailure({
             userId: activeUser.id,
             triggerMethod: "mobile",
-          }),
-        );
+          }));
         await deps.auditLogWriter.recordAuditLog({
           ...requestContext,
           ...buildMobileLoginFailureAudit(input.phoneNumber, "invalid_verification_code", activeUser),
@@ -103,19 +87,23 @@ export function createLoginWithMobileUseCase(deps: LoginWithMobileDeps) {
     }
 
     const userDetail = await deps.users.getUserDetailById(activeUser.id);
-    await runLoginProtection(
-      activeUser,
-      () => deps.loginRestriction.clearLoginState(userDetail.id),
+    await runLoginProtection(activeUser, () => deps.loginRestriction.clearLoginState(userDetail.id));
+    const { token, remainingSeconds } = await deps.principalSessions.createPrincipalSession(
+      activeUser.subjectIdentifier,
+      {
+        amr: ["sms"],
+        origin: toSessionOrigin(requestContext),
+      },
     );
-    const { token } = await deps.principalSessions.createPrincipalSession(activeUser.subjectIdentifier, {
-      amr: ["sms"],
-      origin: toSessionOrigin(requestContext),
-    });
     await deps.auditLogWriter.recordAuditLog({
       ...requestContext,
       ...buildMobileLoginSuccessAudit(userDetail),
     });
-    return { token, isMobileSet: userDetail.mobile !== null };
+    return {
+      token,
+      ...(remainingSeconds === undefined ? {} : { remainingSeconds }),
+      isMobileSet: userDetail.mobile !== null,
+    };
   }
 
   return { execute };

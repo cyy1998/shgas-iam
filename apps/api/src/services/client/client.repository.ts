@@ -1,4 +1,3 @@
-import type { ClientTrafficGateSourceRecord } from "@iam/api-core/client-traffic-gate";
 import type { DbClient } from "@iam/db";
 import type { GenericClientRecord } from "@iam/domain/client";
 import { clients } from "@iam/db/schema";
@@ -20,17 +19,6 @@ const genericClientSelection = {
 
 export function createClientRepository(db: DbClient) {
   return {
-    async findClientTrafficState(clientCode: string): Promise<ClientTrafficGateSourceRecord | null> {
-      const [row] = await db.select({
-        clientCode: clients.clientCode,
-        isDelete: clients.isDelete,
-        status: clients.status,
-      })
-        .from(clients)
-        .where(eq(clients.clientCode, clientCode))
-        .limit(1);
-      return row ?? null;
-    },
     async getClientByCode(clientCode: string): Promise<GenericClientRecord | null> {
       const [row] = await db.select(genericClientSelection)
         .from(clients)

@@ -140,13 +140,7 @@ function employment(id: number, status: EmploymentStatus) {
 }
 
 function revokeSummary() {
-  return {
-    principalSessions: { revoked: 0, alreadyRevoked: 0, missing: 0, excluded: 0 },
-    bindings: { revoked: 0, alreadyRevoked: 0, missing: 0, excluded: 0 },
-    credentials: { revoked: 0, alreadyRevoked: 0, missing: 0, excluded: 0 },
-    artifacts: { revoked: 0, alreadyRevoked: 0, missing: 0, excluded: 0 },
-    cleanup: { attempted: 0, succeeded: 0, failed: 0, failures: [] },
-  };
+  return { userSessionsTerminated: 0, clientSessionsTerminated: 0, results: [], unfinished: [] };
 }
 
 function createAfterCommitLogger() {

@@ -44,7 +44,7 @@ const RawEnvSchema = z.object({
   IAM_API_PASSWORD_HASH_ROUNDS: z.coerce.number().int().positive().default(10),
   IAM_API_SMS_SIGNATURE_KEY: z.string().min(1),
   IAM_API_SMS_URL: z.string().min(1),
-  IAM_API_SESSION_DEFAULT_TTL_SECONDS: z.coerce.number().int().positive(),
+  IAM_API_CUSTOM_SSO_TOKEN_TTL_SECONDS: z.coerce.number().int().positive().default(86400),
   IAM_API_AUTH_CODE_TTL_SECONDS: z.coerce.number().int().positive(),
   IAM_API_ORCAS_URL: z.string().min(1),
   IAM_API_PORT: z.coerce.number().int().min(1).max(65535).default(30000),
@@ -78,13 +78,34 @@ const RawEnvSchema = z.object({
   IAM_API_LOGIN_CREDENTIAL_PRIVATE_KEYS_JSON: jsonRecordString("IAM_API_LOGIN_CREDENTIAL_PRIVATE_KEYS_JSON"),
   IAM_API_LOGIN_CREDENTIAL_MAX_SKEW_MS: z.coerce.number().int().positive().default(5 * 60 * 1000),
   IAM_API_LOGIN_CREDENTIAL_NONCE_TTL_SECONDS: z.coerce.number().int().positive().default(6 * 60),
-  IAM_API_SESSION_KERNEL_NAMESPACE: z.string().default("sess:v2:"),
-  IAM_API_SESSION_KERNEL_PRINCIPAL_IDLE_TTL_SECONDS: z.coerce.number().int().positive().optional(),
-  IAM_API_SESSION_KERNEL_PRINCIPAL_ABSOLUTE_TTL_SECONDS: z.coerce.number().int().positive().optional(),
-  IAM_API_SESSION_KERNEL_TOMBSTONE_TTL_SECONDS: z.coerce.number().int().positive().default(24 * 60 * 60),
-  IAM_API_SESSION_KERNEL_TOMBSTONE_GRACE_SECONDS: z.coerce.number().int().positive().default(5 * 60),
+  IAM_API_SESSION_KERNEL_NAMESPACE: z.string().regex(/^[\w:-]+$/u).default("iam:session"),
+  IAM_API_USER_SESSION_TTL_SECONDS: z.coerce.number().int().positive().default(86400),
+  IAM_API_CLIENT_SESSION_TTL_SECONDS: z.coerce.number().int().positive().default(86400),
+  IAM_API_OIDC_ISSUER: z.url().refine(value => new URL(value).pathname === "/oidc", {
+    message: "IAM_API_OIDC_ISSUER must use the /oidc path",
+  }),
+  IAM_API_OIDC_PUBLIC_ORIGIN: z.url().refine(value => new URL(value).pathname === "/", {
+    message: "IAM_API_OIDC_PUBLIC_ORIGIN must not contain a path",
+  }),
+  IAM_API_OIDC_CURRENT_JWK_JSON: z.string().min(1),
+  IAM_API_OIDC_PREVIOUS_JWK_JSON: optionalNonEmptyString(),
+  IAM_API_OIDC_NAMESPACE: z.string().regex(/^[\w:-]+$/u).default("iam:oidc"),
+  IAM_API_OIDC_TRUST_PROXY: booleanString(true),
+  IAM_API_OIDC_AUTHORIZATION_CODE_TTL_SECONDS: z.coerce.number().int().positive().default(300),
+  IAM_API_OIDC_CONTINUATION_TTL_SECONDS: z.coerce.number().int().positive().default(600),
+  IAM_API_OIDC_TOKEN_TTL_SECONDS: z.coerce.number().int().positive().default(3600),
+  IAM_API_OIDC_LOGOUT_CONFIRMATION_TTL_SECONDS: z.coerce.number().int().positive().default(600),
+  IAM_API_OIDC_COOKIE_SECURE: z.string().optional().transform(value =>
+    value === undefined || value.trim() === "" ? undefined : ["1", "true", "yes", "on"].includes(value.trim().toLowerCase())),
   IAM_API_USER_PROFILE_DSL_MAX_LIMIT: z.coerce.number().int().positive().max(500).default(100),
 }).superRefine((raw, ctx) => {
+  if (new URL(raw.IAM_API_OIDC_ISSUER).origin !== new URL(raw.IAM_API_OIDC_PUBLIC_ORIGIN).origin) {
+    ctx.addIssue({
+      code: "custom",
+      path: ["IAM_API_OIDC_ISSUER"],
+      message: "IAM_API_OIDC_ISSUER and IAM_API_OIDC_PUBLIC_ORIGIN must use the same origin",
+    });
+  }
   if (raw.IAM_API_LOGIN_CREDENTIAL_PRIVATE_KEYS_JSON[raw.IAM_API_LOGIN_CREDENTIAL_ACTIVE_KID] === undefined) {
     ctx.addIssue({
       code: "custom",
@@ -114,7 +135,7 @@ export interface Env extends Record<string, unknown> {
   auth: {
     magicCode: string;
     authCodeTtlSeconds: number;
-    sessionDefaultTtlSeconds: number;
+    customSsoTokenTtlSeconds: number;
   };
   cap: {
     enabled: boolean;
@@ -136,10 +157,21 @@ export interface Env extends Record<string, unknown> {
   };
   sessionKernel: {
     namespace: string;
-    principalIdleTtlSeconds?: number;
-    principalAbsoluteTtlSeconds?: number;
-    tombstoneTtlSeconds: number;
-    tombstoneGraceSeconds: number;
+    userSessionTtlSeconds: number;
+    clientSessionTtlSeconds: number;
+  };
+  oidc: {
+    issuer: string;
+    publicOrigin: string;
+    currentJwkJson: string;
+    previousJwkJson?: string;
+    namespace: string;
+    authorizationCodeTtlSeconds: number;
+    trustProxy: boolean;
+    continuationTtlSeconds: number;
+    tokenTtlSeconds: number;
+    logoutConfirmationTtlSeconds: number;
+    cookieSecure: boolean;
   };
   integrations: {
     orcas: {
@@ -187,7 +219,7 @@ function toApiEnv(raw: RawEnv): Env {
     auth: {
       magicCode: raw.IAM_API_MAGIC_CODE,
       authCodeTtlSeconds: raw.IAM_API_AUTH_CODE_TTL_SECONDS,
-      sessionDefaultTtlSeconds: raw.IAM_API_SESSION_DEFAULT_TTL_SECONDS,
+      customSsoTokenTtlSeconds: raw.IAM_API_CUSTOM_SSO_TOKEN_TTL_SECONDS,
     },
     cap: {
       enabled: raw.IAM_API_CAP_ENABLED,
@@ -209,10 +241,21 @@ function toApiEnv(raw: RawEnv): Env {
     },
     sessionKernel: {
       namespace: raw.IAM_API_SESSION_KERNEL_NAMESPACE,
-      principalIdleTtlSeconds: raw.IAM_API_SESSION_KERNEL_PRINCIPAL_IDLE_TTL_SECONDS,
-      principalAbsoluteTtlSeconds: raw.IAM_API_SESSION_KERNEL_PRINCIPAL_ABSOLUTE_TTL_SECONDS,
-      tombstoneTtlSeconds: raw.IAM_API_SESSION_KERNEL_TOMBSTONE_TTL_SECONDS,
-      tombstoneGraceSeconds: raw.IAM_API_SESSION_KERNEL_TOMBSTONE_GRACE_SECONDS,
+      userSessionTtlSeconds: raw.IAM_API_USER_SESSION_TTL_SECONDS,
+      clientSessionTtlSeconds: raw.IAM_API_CLIENT_SESSION_TTL_SECONDS,
+    },
+    oidc: {
+      issuer: raw.IAM_API_OIDC_ISSUER,
+      publicOrigin: new URL(raw.IAM_API_OIDC_PUBLIC_ORIGIN).origin,
+      currentJwkJson: raw.IAM_API_OIDC_CURRENT_JWK_JSON,
+      previousJwkJson: raw.IAM_API_OIDC_PREVIOUS_JWK_JSON,
+      namespace: raw.IAM_API_OIDC_NAMESPACE,
+      trustProxy: raw.IAM_API_OIDC_TRUST_PROXY,
+      authorizationCodeTtlSeconds: raw.IAM_API_OIDC_AUTHORIZATION_CODE_TTL_SECONDS,
+      continuationTtlSeconds: raw.IAM_API_OIDC_CONTINUATION_TTL_SECONDS,
+      tokenTtlSeconds: raw.IAM_API_OIDC_TOKEN_TTL_SECONDS,
+      logoutConfirmationTtlSeconds: raw.IAM_API_OIDC_LOGOUT_CONFIRMATION_TTL_SECONDS,
+      cookieSecure: raw.IAM_API_OIDC_COOKIE_SECURE ?? (raw.NODE_ENV === "production"),
     },
     integrations: {
       orcas: {

@@ -20,7 +20,7 @@ const adminApiRoot = join(repoRoot, "apps", "admin-api");
 const apiRoot = join(repoRoot, "apps", "api");
 const apiCoreRoot = join(repoRoot, "packages", "api-core");
 const dbRoot = join(repoRoot, "packages", "db");
-const oidcRoot = join(repoRoot, "apps", "oidc-provider");
+const oidcRoot = join(repoRoot, "packages", "oidc");
 const organizationResponsibilityRoot = join(
   repoRoot,
   "packages",
@@ -43,9 +43,8 @@ const redisIntegrationPassThroughEnv = [
   "IAM_ADMIN_API_TEST_REDIS_URL",
   "IAM_API_CORE_TEST_REDIS_URL",
   "IAM_SESSION_KERNEL_TEST_REDIS_URL",
-  "IAM_CUSTOM_SSO_TEST_REDIS_URL",
+  "IAM_OIDC_TEST_REDIS_URL",
   "IAM_API_TEST_REDIS_URL",
-  "IAM_OIDC_PROVIDER_TEST_REDIS_URL",
   "IAM_USER_PROFILE_TEST_REDIS_URL",
   "IAM_WORKER_TEST_REDIS_URL",
 ];
@@ -77,14 +76,12 @@ const pnpmRecorderControlEnvNames = [
 const integrationResourceEnvNames = [
   "IAM_API_CORE_TEST_REDIS_URL",
   "IAM_SESSION_KERNEL_TEST_REDIS_URL",
-  "IAM_CUSTOM_SSO_TEST_REDIS_URL",
+  "IAM_OIDC_TEST_REDIS_URL",
   "IAM_ADMIN_API_TEST_REDIS_URL",
   "IAM_ADMIN_API_TEST_DATABASE_URL",
   "IAM_API_TEST_DATABASE_URL",
   "IAM_API_TEST_REDIS_URL",
   "IAM_DB_TEST_DATABASE_URL",
-  "IAM_OIDC_PROVIDER_TEST_DATABASE_URL",
-  "IAM_OIDC_PROVIDER_TEST_REDIS_URL",
   "IAM_ORGANIZATION_RESPONSIBILITY_TEST_DATABASE_URL",
   "IAM_ROLE_ASSIGNMENT_TEST_DATABASE_URL",
   "IAM_USER_PROFILE_TEST_DATABASE_URL",
@@ -155,7 +152,7 @@ function expectDedicatedResourceHarness(options: {
   const source = readFileSync(join(options.workspaceRoot, options.harnessPath), "utf8");
   expect(source, `${options.envName} harness`).toContain(options.envName);
   expect(source, `${options.envName} fallback contract`).toMatch(
-    /no fallback is allowed|requireExternalTestUrl/u,
+    /no fallback is allowed|requireExternalTestUrl|IAM_API_TEST_REDIS_URL is required/u,
   );
   expect(source, `${options.envName} resource isolation`).toContain("randomUUID()");
 }
@@ -908,8 +905,6 @@ describe("test orchestration", () => {
         "IAM_API_CORE_TEST_REDIS_URL",
         "IAM_API_TEST_DATABASE_URL",
         "IAM_API_TEST_REDIS_URL",
-        "IAM_OIDC_PROVIDER_TEST_DATABASE_URL",
-        "IAM_OIDC_PROVIDER_TEST_REDIS_URL",
         "IAM_USER_PROFILE_TEST_REDIS_URL",
         "IAM_WORKER_TEST_REDIS_URL",
       ],
@@ -952,17 +947,7 @@ describe("test orchestration", () => {
 
     expect(existsSync(join(repoRoot, "vitest.config.ts"))).toBe(false);
     expect(existsSync(join(repoRoot, "vitest.workspace.ts"))).toBe(false);
-    expect(oidcPackage.scripts["test:unit"])
-      .toBe("vitest run --config vitest.unit.config.ts");
-    expect(oidcPackage.scripts["test:integration:component"])
-      .toBe("vitest run --config vitest.integration.component.config.ts");
-    expect(oidcPackage.scripts["test:integration:process"])
-      .toBe("vitest run --config vitest.integration.process.config.ts");
-    expect(oidcPackage.scripts["test:integration:composition"])
-      .toBe("vitest run --config vitest.integration.composition.config.ts");
-    expect(oidcPackage.scripts["test:integration:redis"])
-      .toBe("vitest run --config vitest.integration.redis.config.ts");
-
+    expect(oidcPackage.scripts["test:integration:redis"]).toBe("bun test --max-concurrency=1 test-integration/redis");
     for (const workspace of ["apps/admin", "apps/sso"]) {
       const config = await readVitestTestConfig(workspace, "vitest.unit.config.ts");
       expect(config.maxWorkers).toBe(4);
@@ -975,21 +960,6 @@ describe("test orchestration", () => {
       expect(componentConfig.maxWorkers).toBe("25%");
       expect(componentConfig.testTimeout).toBe(10_000);
     }
-
-    const oidcUnitConfig = await readVitestTestConfig(
-      "apps/oidc-provider",
-      "vitest.unit.config.ts",
-    );
-    expect(oidcUnitConfig.maxWorkers).toBe("25%");
-    expect(oidcUnitConfig.testTimeout).toBe(10_000);
-
-    const processConfig = await readVitestTestConfig(
-      "apps/oidc-provider",
-      "vitest.integration.process.config.ts",
-    );
-    expect(processConfig.include).toEqual(["test-integration/process/**/*.integration.test.ts"]);
-    expect(processConfig.maxWorkers).toBe(1);
-    expect(processConfig.fileParallelism).toBe(false);
 
     const bunWorkspaces = readWorkspacePackages()
       .filter(({ packageJson }) => packageJson.scripts?.["test:unit"]?.startsWith("bun test"));
@@ -1061,13 +1031,7 @@ describe("test orchestration", () => {
       },
       {
         root: oidcRoot,
-        scripts: {
-          "test:unit": "vitest run --config vitest.unit.config.ts",
-          "test:integration:component": "vitest run --config vitest.integration.component.config.ts",
-          "test:integration:process": "vitest run --config vitest.integration.process.config.ts",
-          "test:integration:composition": "vitest run --config vitest.integration.composition.config.ts",
-          "test:integration:redis": "vitest run --config vitest.integration.redis.config.ts",
-        },
+        scripts: { "test:integration:redis": "bun test --max-concurrency=1 test-integration/redis" },
       },
       {
         root: join(repoRoot, "packages", "client-subject-projection"),
@@ -1155,8 +1119,8 @@ describe("test orchestration", () => {
 
   test("keeps frontend browser runner contracts package-local", async () => {
     const owners = [
-      { root: adminRoot, baseURL: "http://127.0.0.1:8001" },
-      { root: ssoRoot, baseURL: "http://127.0.0.1:8000" },
+      { root: adminRoot, baseURL: "http://127.0.0.1:8001", command: "pnpm dev:e2e" },
+      { root: ssoRoot, baseURL: "http://127.0.0.1:8000", command: "pnpm dev:e2e" },
     ];
 
     for (const owner of owners) {
@@ -1167,7 +1131,7 @@ describe("test orchestration", () => {
       expect(playwrightConfig.testDir).toBe("./test-integration/browser");
       expect(playwrightConfig.projects).toHaveLength(1);
       expect(playwrightConfig.projects[0].name).toBe("chromium");
-      expect(playwrightConfig.webServer.command).toBe("pnpm dev:e2e");
+      expect(playwrightConfig.webServer.command).toBe(owner.command);
       expect(playwrightConfig.use.baseURL).toBe(owner.baseURL);
     }
   });
@@ -1186,7 +1150,7 @@ describe("test orchestration", () => {
       },
       {
         envName: "IAM_API_TEST_REDIS_URL",
-        harnessPath: "test-integration/redis/redis-test-harness.ts",
+        harnessPath: "test-integration/redis/root-authentication.integration.test.ts",
         workspaceRoot: apiRoot,
       },
       {

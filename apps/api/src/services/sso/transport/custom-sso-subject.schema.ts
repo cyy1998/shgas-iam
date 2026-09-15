@@ -5,7 +5,7 @@ import {
 } from "@iam/custom-sso/wire";
 
 export const CustomSsoSubjectProjectionV2Schema
-  = CustomSsoSubjectProjectionSchema.openapi(
+  = z.readonly(CustomSsoSubjectProjectionSchema).openapi(
     "CustomSsoSubjectProjectionV2",
   );
 

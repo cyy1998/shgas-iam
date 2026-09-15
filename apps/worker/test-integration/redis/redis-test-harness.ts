@@ -1,10 +1,7 @@
 import type { Redis as RedisType } from "ioredis";
 import { randomUUID } from "node:crypto";
 import process from "node:process";
-import {
-  CLIENT_RUNTIME_SNAPSHOT_RESTORE_CLEANUP_PATTERNS,
-  clientRuntimeSnapshotTestingKeys,
-} from "@iam/api-core/client-runtime-snapshot/testing";
+import { createClientSnapshotVerifier } from "@iam/api-core/client-snapshot/maintenance";
 import { createProcessSmokeEnvironment } from "@iam/api-core/testing/process-smoke-harness";
 import Redis from "ioredis";
 
@@ -13,10 +10,9 @@ const TEST_REDIS_URL_ENV = "IAM_WORKER_TEST_REDIS_URL";
 export interface WorkerRedisTestHarness {
   readonly writer: RedisType;
   readonly observer: RedisType;
-  readonly ownedClientCode: (label: string) => string;
   readonly ownedRestoreFixtureKey: (key: string) => string;
   readonly ownedSentinelKey: (label: string) => string;
-  readonly inventoryRestoreOwnerKeys: () => Promise<string[]>;
+  readonly seedNonOwnerSentinels: (prefixes: readonly string[]) => Promise<string[]>;
   readonly commandEnvironment: (temporaryDirectory: string) => NodeJS.ProcessEnv;
   readonly close: () => Promise<void>;
 }
@@ -29,16 +25,11 @@ export async function createWorkerRedisTestHarness(
   const writer = createRedisClient(redisUrl);
   const observer = createRedisClient(redisUrl);
   const cleanup = createRedisClient(redisUrl);
-  const ownedClientCodes: string[] = [];
   const ownedRestoreFixtureKeys: string[] = [];
   const ownedSentinelKeys: string[] = [];
 
   try {
-    await Promise.all([
-      connectRedis(writer),
-      connectRedis(observer),
-      connectRedis(cleanup),
-    ]);
+    await Promise.all([connectRedis(writer), connectRedis(observer), connectRedis(cleanup)]);
   }
   catch (error) {
     writer.disconnect();
@@ -50,11 +41,6 @@ export async function createWorkerRedisTestHarness(
   return {
     writer,
     observer,
-    ownedClientCode(label) {
-      const clientCode = `w68-${label}-${randomUUID()}`;
-      ownedClientCodes.push(clientCode);
-      return clientCode;
-    },
     ownedRestoreFixtureKey(key) {
       ownedRestoreFixtureKeys.push(key);
       return key;
@@ -64,43 +50,39 @@ export async function createWorkerRedisTestHarness(
       ownedSentinelKeys.push(key);
       return key;
     },
-    async inventoryRestoreOwnerKeys() {
-      return await inventoryClientRuntimeOwnerKeys(observer);
+    async seedNonOwnerSentinels(prefixes) {
+      // Deliberately opaque resource sentinels, not serialized records of another production owner.
+      const keys: string[] = [];
+      for (const prefix of prefixes) {
+        const key = `${prefix}${randomUUID()}`;
+        ownedSentinelKeys.push(key);
+        keys.push(key);
+        await writer.set(key, "sensitive-fixture", "PX", 120000);
+      }
+      return keys;
     },
     commandEnvironment(temporaryDirectory) {
-      return createClientRuntimeMaintenanceProcessEnvironment(
-        parsed,
-        temporaryDirectory,
-      );
+      return createClientRuntimeMaintenanceProcessEnvironment(parsed, temporaryDirectory);
     },
     async close() {
       const errors: unknown[] = [];
-      const ownedKeys = [
-        ...ownedClientCodes.flatMap((clientCode) => {
-          const keys = clientRuntimeSnapshotTestingKeys(clientCode);
-          return [keys.control, ...keys.payloads];
-        }),
-        ...ownedRestoreFixtureKeys,
-        ...ownedSentinelKeys,
-      ];
+      const ownedKeys = [...ownedRestoreFixtureKeys, ...ownedSentinelKeys];
       try {
         if (ownedKeys.length > 0)
           await cleanup.unlink(...ownedKeys);
-        const remainingOwnerInventory = await inventoryClientRuntimeOwnerKeys(observer);
-        if (remainingOwnerInventory.length > 0) {
+        const remainingOwnerInventory = await createClientSnapshotVerifier(
+          observer,
+        ).verifyAllAfterRedisRestore({ protocolTrafficStopped: true });
+        if (remainingOwnerInventory.matchingKeys > 0) {
           throw new Error(
-            `Worker Redis test left ${remainingOwnerInventory.length} Client Runtime owner key(s)`,
+            `Worker Redis test left ${remainingOwnerInventory.matchingKeys} Client Runtime owner key(s)`,
           );
         }
       }
       catch (error) {
         errors.push(error);
       }
-      const closeResults = await Promise.allSettled([
-        writer.quit(),
-        observer.quit(),
-        cleanup.quit(),
-      ]);
+      const closeResults = await Promise.allSettled([writer.quit(), observer.quit(), cleanup.quit()]);
       for (const result of closeResults) {
         if (result.status === "rejected")
           errors.push(result.reason);
@@ -111,10 +93,7 @@ export async function createWorkerRedisTestHarness(
   };
 }
 
-function createClientRuntimeMaintenanceProcessEnvironment(
-  parsed: URL,
-  temporaryDirectory: string,
-) {
+function createClientRuntimeMaintenanceProcessEnvironment(parsed: URL, temporaryDirectory: string) {
   return createProcessSmokeEnvironment({
     source: process.env,
     temporaryDirectory,
@@ -122,12 +101,8 @@ function createClientRuntimeMaintenanceProcessEnvironment(
       NODE_ENV: "test",
       IAM_WORKER_REDIS_HOST: parsed.hostname,
       IAM_WORKER_REDIS_PORT: parsed.port || "6379",
-      IAM_WORKER_REDIS_PASSWORD: parsed.password
-        ? decodeURIComponent(parsed.password)
-        : undefined,
-      IAM_WORKER_REDIS_DB: parsed.pathname.length > 1
-        ? decodeURIComponent(parsed.pathname.slice(1))
-        : "0",
+      IAM_WORKER_REDIS_PASSWORD: parsed.password ? decodeURIComponent(parsed.password) : undefined,
+      IAM_WORKER_REDIS_DB: parsed.pathname.length > 1 ? decodeURIComponent(parsed.pathname.slice(1)) : "0",
       IAM_WORKER_LOG_LEVEL: "warn",
       IAM_WORKER_LOG_FORMAT: "json",
       FORCE_COLOR: "0",
@@ -158,34 +133,16 @@ export function resolveWorkerRedisTestUrl(source: NodeJS.ProcessEnv) {
   const runtimeHost = source.IAM_WORKER_REDIS_HOST;
   const runtimePort = source.IAM_WORKER_REDIS_PORT || "6379";
   const runtimeDb = source.IAM_WORKER_REDIS_DB || "0";
-  const testDb = parsed.pathname.length > 1
-    ? decodeURIComponent(parsed.pathname.slice(1))
-    : "0";
+  const testDb = parsed.pathname.length > 1 ? decodeURIComponent(parsed.pathname.slice(1)) : "0";
   if (
     runtimeHost
     && parsed.hostname.toLowerCase() === runtimeHost.toLowerCase()
     && (parsed.port || "6379") === runtimePort
     && testDb === runtimeDb
   ) {
-    throw new Error(
-      `${TEST_REDIS_URL_ENV} must not identify the Worker runtime Redis resource`,
-    );
+    throw new Error(`${TEST_REDIS_URL_ENV} must not identify the Worker runtime Redis resource`);
   }
   return redisUrl;
-}
-
-async function inventoryClientRuntimeOwnerKeys(redis: RedisType) {
-  const keys = new Set<string>();
-  for (const { pattern } of CLIENT_RUNTIME_SNAPSHOT_RESTORE_CLEANUP_PATTERNS) {
-    let cursor = "0";
-    do {
-      const [nextCursor, batch] = await redis.scan(cursor, "MATCH", pattern, "COUNT", 100);
-      cursor = nextCursor;
-      for (const key of batch)
-        keys.add(key);
-    } while (cursor !== "0");
-  }
-  return [...keys].sort();
 }
 
 function createRedisClient(redisUrl: string) {

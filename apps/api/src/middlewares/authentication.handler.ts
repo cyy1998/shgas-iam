@@ -1,8 +1,6 @@
+import type { createRootSessionService } from "@api/services/authentication/root-session.service";
 import type { ClientService } from "@api/services/client/client.service";
-import type {
-  CustomSsoSubjectDeliveryRequestScope,
-} from "@api/services/sso/subject-delivery/custom-sso-subject-delivery-request-scope";
-import type { CustomSso } from "@iam/custom-sso";
+import type { CustomSsoSubjectDeliveryRequestScope } from "@api/services/sso/subject-delivery/custom-sso-subject-delivery-request-scope";
 import type { Context, Next } from "hono";
 import { mapCustomSsoRetryableError } from "@api/middlewares/custom-sso-retryable.error";
 import {
@@ -29,14 +27,8 @@ const subjectAccessHttp = createSubjectAccessHttpAdapter();
 
 export interface CreateApiAuthenticationHandlersDeps {
   clientService: Pick<ClientService, "getClientBySecret">;
-  customSsoSession: Pick<
-    CustomSso,
-    "resolvePublicAuthentication"
-  >;
-  subjectDeliveryRequests: Pick<
-    CustomSsoSubjectDeliveryRequestScope,
-    "runWithCapability"
-  >;
+  customSsoSession: Pick<ReturnType<ReturnType<typeof createRootSessionService>["forOperation"]>, "resolvePublicAuthentication">;
+  subjectDeliveryRequests: Pick<CustomSsoSubjectDeliveryRequestScope, "runWithCapability">;
   config: {
     readonly projectionRetryAfterSeconds: number;
   };

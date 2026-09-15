@@ -1,5 +1,5 @@
+import type { createUnifiedAdminLifecycleRevocation } from "@admin-api/composition/session/unified-lifecycle";
 import type { AdminUserAuthorization } from "@admin-api/services/admin-authorization/admin-user-authorization.type";
-import type { AdminSessionRevocationPort } from "@admin-api/services/session-revocation/session-revocation.port";
 import type {
   SubjectAccessMutationReceipt,
   SubjectAccessTransitionTarget,
@@ -29,6 +29,8 @@ import {
 import { afterAll, beforeAll, beforeEach, describe, expect, mock, test } from "bun:test";
 import { asc, eq, inArray } from "drizzle-orm";
 import { createAdminApiPostgresTestHarness } from "./postgres-test-harness";
+
+type AdminSessionRevocationPort = ReturnType<typeof createUnifiedAdminLifecycleRevocation>;
 
 let harness: Awaited<ReturnType<typeof createAdminApiPostgresTestHarness>>;
 
@@ -370,13 +372,7 @@ function createService(
 }
 
 function revokeSummary() {
-  return {
-    principalSessions: { revoked: 0, alreadyRevoked: 0, missing: 0, excluded: 0 },
-    bindings: { revoked: 0, alreadyRevoked: 0, missing: 0, excluded: 0 },
-    credentials: { revoked: 0, alreadyRevoked: 0, missing: 0, excluded: 0 },
-    artifacts: { revoked: 0, alreadyRevoked: 0, missing: 0, excluded: 0 },
-    cleanup: { attempted: 0, succeeded: 0, failed: 0, failures: [] },
-  };
+  return { userSessionsTerminated: 0, clientSessionsTerminated: 0, results: [], unfinished: [] };
 }
 
 async function scopedAuthorization(

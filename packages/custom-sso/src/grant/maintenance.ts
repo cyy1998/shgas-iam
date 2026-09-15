@@ -24,15 +24,3 @@ export function decodeCustomSsoLegacyGrant(key: string, raw: string) {
     throw new Error("Custom SSO Grant inventory identity mismatch");
   return record;
 }
-
-/** Apply only during the stopped-writer inventory captured before the new deployment. */
-export function isCustomSsoAuthorizationArtifact(object: {
-  readonly protocol?: string;
-  readonly artifactType?: string;
-  readonly objectKind?: string;
-  readonly metadata?: Readonly<Record<string, unknown>>;
-}) {
-  return object.protocol === "custom-sso"
-    && (object.artifactType === "auth_code"
-      || (object.objectKind === "artifact" && object.metadata?.artifactType === "auth_code"));
-}

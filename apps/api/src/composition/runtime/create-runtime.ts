@@ -7,7 +7,7 @@ import { createOrcasClient } from "@api/lib/integrations/orcas";
 import { createSmsClient } from "@api/lib/integrations/sms";
 import { createWechatClient } from "@api/lib/integrations/wechat";
 import { logger } from "@api/lib/logger";
-import { createSessionKernelConfigFromEnv } from "@iam/session-kernel";
+import { createOidcSigningKeys } from "@iam/oidc";
 import { createApiPasswordHasher } from "./password-hasher";
 
 export interface CreateApiRuntimeOptions {
@@ -38,6 +38,7 @@ export function createApiRuntime(options: CreateApiRuntimeOptions = {}): ApiRunt
     logger: runtimeLogger,
     afterCommitLogger: runtimeLogger,
     redis: runtimeRedis,
+    oidcSigning: createOidcSigningKeys(runtimeEnv.oidc),
     passwordHasher: createApiPasswordHasher(runtimeEnv.passwordHashRounds),
     random: runtimeRandom,
     clock: runtimeClock,
@@ -46,7 +47,7 @@ export function createApiRuntime(options: CreateApiRuntimeOptions = {}): ApiRunt
       auth: {
         magicCode: runtimeEnv.auth.magicCode,
         authCodeExpireSeconds: runtimeEnv.auth.authCodeTtlSeconds,
-        redisExpireSeconds: runtimeEnv.auth.sessionDefaultTtlSeconds,
+        redisExpireSeconds: runtimeEnv.auth.customSsoTokenTtlSeconds,
       },
       cap: {
         enabled: runtimeEnv.cap.enabled,
@@ -66,14 +67,12 @@ export function createApiRuntime(options: CreateApiRuntimeOptions = {}): ApiRunt
         maxSkewMs: runtimeEnv.loginCredential.maxSkewMs,
         nonceTtlSeconds: runtimeEnv.loginCredential.nonceTtlSeconds,
       },
-      sessionKernel: createSessionKernelConfigFromEnv({
+      sessionKernel: {
         namespace: runtimeEnv.sessionKernel.namespace,
-        principalIdleTtlSeconds: runtimeEnv.sessionKernel.principalIdleTtlSeconds,
-        principalAbsoluteTtlSeconds: runtimeEnv.sessionKernel.principalAbsoluteTtlSeconds,
-        defaultPrincipalTtlSeconds: runtimeEnv.auth.sessionDefaultTtlSeconds,
-        tombstoneTtlSeconds: runtimeEnv.sessionKernel.tombstoneTtlSeconds,
-        tombstoneGraceSeconds: runtimeEnv.sessionKernel.tombstoneGraceSeconds,
-      }),
+        userSessionTtlSeconds: runtimeEnv.sessionKernel.userSessionTtlSeconds,
+        clientSessionTtlSeconds: runtimeEnv.sessionKernel.clientSessionTtlSeconds,
+      },
+      oidc: runtimeEnv.oidc,
       userProfile: {
         dslMaxLimit: runtimeEnv.userProfile.dslMaxLimit,
       },

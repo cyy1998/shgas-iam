@@ -1,3 +1,4 @@
+import type { createUnifiedAdminLifecycleRevocation } from "@admin-api/composition/session/unified-lifecycle";
 import type {
   AdminClientReaderPort,
   AdminClientTransactionStorePort,
@@ -29,12 +30,9 @@ import type {
 import type { RoleRepository } from "@admin-api/services/role/role.repository";
 import type {
   AdminLoginRestrictionPort,
-  AdminSessionControlPort,
-  AdminSessionInventoryPort,
   AdminSessionUserControlPort,
   AdminSessionUserSummaryPort,
 } from "@admin-api/services/session-management/session-management.port";
-import type { AdminSessionRevocationPort } from "@admin-api/services/session-revocation/session-revocation.port";
 import type {
   AdminUserEffectiveRoleResolverPort,
   AdminUserEmploymentReaderPort,
@@ -52,8 +50,9 @@ import type { CreateOrganizationResponsibilityAssignmentTransactionPorts } from 
 import type { ManageOrganizationResponsibilityAssignmentLifecycleTransactionPorts } from "@admin-api/use-cases/organization-responsibility/manage-assignment-lifecycle/manage-assignment-lifecycle.port";
 import type { LoginRestriction } from "@iam/api-core/login-restriction";
 import type { RoleAssignmentResolver } from "@iam/role-assignment-resolution";
-import type { SessionKernel } from "@iam/session-kernel";
 import { expect, test } from "bun:test";
+
+type AdminSessionRevocationPort = ReturnType<typeof createUnifiedAdminLifecycleRevocation>;
 
 function assertAssignable<Port, _Provider extends Port>() {}
 
@@ -116,10 +115,7 @@ test("Admin API providers structurally satisfy consumer-owned ports", () => {
   >();
   assertAssignable<AdminUserPrivilegeReaderPort, PrivilegeRepository>();
 
-  assertAssignable<AdminSessionInventoryPort, SessionKernel>();
-  assertAssignable<AdminSessionControlPort, SessionKernel>();
   assertAssignable<AdminLoginRestrictionPort, LoginRestriction>();
-  assertAssignable<AdminSessionUserControlPort, AdminSessionRevocationPort>();
   assertAssignable<AdminSessionUserSummaryPort, UserRepository>();
   assertAssignable<
     ResignUserSessionRevocationPort,

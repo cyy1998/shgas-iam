@@ -1,4 +1,5 @@
 import { UserDetailVoSchema, UserVoSchema } from "@admin-api/routes/admin/user/user.schema";
+import { UnifiedSessionEffectSchema } from "@admin-api/services/session-management/session-management.schema";
 import {
   UserAdminCreateDtoSchema,
   UserPaginationQueryDtoSchema,
@@ -123,7 +124,7 @@ export const usersResetPassword = createRoute({
     [HttpStatusCodes.OK]: jsonContent(
       createSuccessResponseSchema(createAdminMutationResultSchema(
         z.string().openapi({ example: "Z8m2xq7W", description: "新的明文密码" }),
-      )),
+      ).extend({ sessions: UnifiedSessionEffectSchema.optional() })),
       "密码已重置",
     ),
   },

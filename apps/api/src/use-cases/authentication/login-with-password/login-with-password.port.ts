@@ -51,7 +51,7 @@ export interface PasswordPrincipalSessionPort {
       amr: readonly ["pwd"];
       origin?: SessionOrigin;
     },
-  ) => Promise<{ token: string }>;
+  ) => Promise<{ token: string; remainingSeconds?: number }>;
 }
 
 export interface LoginWithPasswordDeps {

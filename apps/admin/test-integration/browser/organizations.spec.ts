@@ -103,23 +103,44 @@ test('manages both Organization Responsibility types inside Organization detail'
     },
   ];
 
-  await page.route('**/rpc/admin.organization.children**', (route) =>
-    fulfillTrpc(route, {
-      result: parseTrpcBatchInput<{ parentOrgCode?: string | null }>(route)
-        .parentOrgCode
-        ? []
-        : [detail],
-      pageNum: 1,
-      pageSize: 50,
-      total: parseTrpcBatchInput<{ parentOrgCode?: string | null }>(route)
-        .parentOrgCode
-        ? 0
-        : 1,
-    }),
-  );
-  await page.route('**/rpc/admin.organization.detail**', (route) =>
-    fulfillTrpc(route, detail),
-  );
+  await page.route('**/rpc/admin.organization.*', (route) => {
+    const url = new URL(route.request().url());
+    const procedures = url.pathname.split('/').at(-1)!.split(',');
+    const inputs: Record<string, { parentOrgCode?: string | null }> =
+      JSON.parse(url.searchParams.get('input') ?? '{}');
+    return fulfillJson(
+      route,
+      procedures.map((procedure, index) => {
+        if (procedure === 'admin.organization.detail')
+          return { result: { data: detail } };
+        if (procedure === 'admin.organization.selector')
+          return {
+            result: {
+              data: [
+                {
+                  ...detail,
+                  fullPath: [{ ...detail, pathIndex: 0 }],
+                  pathText: detail.orgName,
+                  selectable: true,
+                },
+              ],
+            },
+          };
+        expect(procedure).toBe('admin.organization.children');
+        const isChild = inputs[String(index)]?.parentOrgCode;
+        return {
+          result: {
+            data: {
+              result: isChild ? [] : [detail],
+              pageNum: 1,
+              pageSize: 50,
+              total: isChild ? 0 : 1,
+            },
+          },
+        };
+      }),
+    );
+  });
   await page.route(
     '**/rpc/admin.organizationResponsibility.searchAssignments**',
     (route) =>
@@ -193,11 +214,7 @@ test('manages both Organization Responsibility types inside Organization detail'
   await page.goto('/iam-admin/organizations');
   await expect(page.getByRole('button', { name: /新建根组织/ })).toBeVisible();
   await page.getByText('财务部').first().click();
-  await expect(
-    page.getByText(
-      '暂停、停用或删除时，服务端会检查该组织及全部下级组织是否仍有开放责任任命。',
-    ),
-  ).toBeVisible();
+  await expect(page.getByRole('button', { name: /状\s*态/u })).toBeEnabled();
   await page.getByRole('button', { name: /状\s*态/u }).click();
   await page.getByText(/切为.*暂停/u).click();
   const statusConfirmation = page.getByRole('dialog');

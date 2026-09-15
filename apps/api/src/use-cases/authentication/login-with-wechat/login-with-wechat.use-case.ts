@@ -20,6 +20,7 @@ export function createLoginWithWechatUseCase(deps: LoginWithWechatDeps) {
     maxTimes: number = 5,
   ): Promise<{
     token: string;
+    remainingSeconds?: number;
     isMobileSet: boolean;
   }> {
     if (retryTimes > maxTimes) {
@@ -40,11 +41,18 @@ export function createLoginWithWechatUseCase(deps: LoginWithWechatDeps) {
       throw new LoginFailedError("用户不存在");
     }
     const userDetail = await deps.users.getUserDetailById(liveUser.id);
-    const { token } = await deps.principalSessions.createPrincipalSession(liveUser.subjectIdentifier, {
-      amr: ["wechat"],
-      origin: toSessionOrigin(requestContext),
-    });
-    return { token, isMobileSet: userDetail.mobile !== null };
+    const { token, remainingSeconds } = await deps.principalSessions.createPrincipalSession(
+      liveUser.subjectIdentifier,
+      {
+        amr: ["wechat"],
+        origin: toSessionOrigin(requestContext),
+      },
+    );
+    return {
+      token,
+      ...(remainingSeconds === undefined ? {} : { remainingSeconds }),
+      isMobileSet: userDetail.mobile !== null,
+    };
   }
 
   async function execute(input: LoginWithWechatInput, options: LoginWithWechatOptions = {}) {
@@ -59,16 +67,23 @@ export function createLoginWithWechatUseCase(deps: LoginWithWechatDeps) {
       throw new LoginFailedError("用户不存在");
     }
     const userDetail = await deps.users.getUserDetailById(liveUser.id);
-    const { token } = await deps.principalSessions.createPrincipalSession(liveUser.subjectIdentifier, {
-      amr: ["wechat"],
-      origin: toSessionOrigin(options.requestContext),
-    });
+    const { token, remainingSeconds } = await deps.principalSessions.createPrincipalSession(
+      liveUser.subjectIdentifier,
+      {
+        amr: ["wechat"],
+        origin: toSessionOrigin(options.requestContext),
+      },
+    );
     await deps.auditLogWriter.recordAuditLog({
       ...options.requestContext,
       ...buildWechatLoginSuccessAudit(userDetail),
     });
     await deps.cache.set(`wx-code:${input.code}`, JSON.stringify({ userId: liveUser.id }), "EX", 600);
-    return { token, isMobileSet: userDetail.mobile !== null };
+    return {
+      token,
+      ...(remainingSeconds === undefined ? {} : { remainingSeconds }),
+      isMobileSet: userDetail.mobile !== null,
+    };
   }
 
   return { execute };

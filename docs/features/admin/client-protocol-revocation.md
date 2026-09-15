@@ -1,5 +1,7 @@
 # Client 配置提交后的版本限定撤销
 
+> Historical：本页保留旧候选的契约与证据；Spec #178 最终在线模型已由 ADR-0035 取代，当前发布以统一会话维护手册为准。
+
 本文记录 [Spec #146](https://github.com/cyy1998/shgas-iam/issues/146) 的
 [#150](https://github.com/cyy1998/shgas-iam/issues/150) 实现边界；长期决定见
 [ADR-0030](../../adr/0030-separate-protocol-validation-from-kernel-lifecycle.md)。实际执行的候选与验证结果由 ticket 保存，本文不代表环境已升级。

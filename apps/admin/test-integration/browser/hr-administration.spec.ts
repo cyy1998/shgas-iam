@@ -13,8 +13,8 @@ import {
   adminEmploymentSearchResult,
   adminPositionSearchResult,
   adminUserDetail,
-  currentAdminUser,
   createHrEmploymentAllowedActions,
+  currentAdminUser,
   currentHrAdminUser,
   hrAdminCapabilitySummary,
   hrAdminEmploymentDetail,
@@ -102,55 +102,71 @@ async function mockHrAdmin(page: Page) {
     pathText: root.orgName,
     selectable: true,
   }));
-  await page.route('**/rpc/admin.organization.children**', (route) => {
-    const input = parseTrpcBatchInput<{ parentOrgCode?: string | null }>(route);
-    return fulfillTrpc(route, {
-      result: input.parentOrgCode ? [] : roots,
-      total: input.parentOrgCode ? 0 : roots.length,
-      pageNum: 1,
-      pageSize: 50,
-      pages: input.parentOrgCode ? 0 : 1,
-    });
-  });
-  await page.route('**/rpc/admin.organization.search**', (route) =>
-    fulfillTrpc(route, {
-      result: [],
-      total: 0,
-      pageNum: 1,
-      pageSize: 20,
-      pages: 0,
-    }),
-  );
-  await page.route('**/rpc/admin.organization.selector**', (route) =>
-    fulfillTrpc(route, selectorNodes),
-  );
-  await page.route('**/rpc/admin.organization.detail**', (route) => {
-    const { orgCode } = parseTrpcBatchInput<{ orgCode: string }>(route);
-    const root = roots.find((item) => item.orgCode === orgCode) ?? roots[0];
-    return fulfillTrpc(route, {
-      ...root,
-      businessParentId: -1,
-      path: `/${root.id}`,
-      isVirtual: false,
-      isEntity: true,
-      isDelete: false,
-      parentCode: null,
-      parentName: null,
-      statusText: '正常',
-      childrenCount: 0,
-      employmentCount: 1,
-      createTime: '2026-08-20T00:00:00.000Z',
-      updateTime: '2026-08-20T00:00:00.000Z',
-      allowedActions: {
-        createChild: { allowed: true, reason: null },
-        edit: { allowed: true, reason: null },
-        changeStatus: {
-          allowed: false,
-          reason: 'INTEGRITY_GUARD_BLOCKED',
+  await page.route('**/rpc/admin.organization.*', (route) => {
+    const url = new URL(route.request().url());
+    const procedures = url.pathname.split('/').at(-1)!.split(',');
+    const inputs: Record<
+      string,
+      { orgCode?: string; parentOrgCode?: string | null }
+    > = JSON.parse(url.searchParams.get('input') ?? '{}');
+    const responses = procedures.map((procedure, index) => {
+      const input = inputs[String(index)] ?? {};
+      if (procedure === 'admin.organization.selector')
+        return { result: { data: selectorNodes } };
+      if (procedure === 'admin.organizationResponsibility.searchAssignments')
+        return { result: { data: { items: [], total: 0, nextCursor: null } } };
+      if (
+        procedure === 'admin.organization.children' ||
+        procedure === 'admin.organization.search'
+      ) {
+        const result =
+          procedure.endsWith('.children') && !input.parentOrgCode ? roots : [];
+        return {
+          result: {
+            data: {
+              result,
+              total: result.length,
+              pageNum: 1,
+              pageSize: procedure === 'admin.organization.search' ? 20 : 50,
+              pages: result.length ? 1 : 0,
+            },
+          },
+        };
+      }
+      if (procedure !== 'admin.organization.detail')
+        throw new Error(`Unexpected organization mock procedure: ${procedure}`);
+      const root =
+        roots.find((item) => item.orgCode === input.orgCode) ?? roots[0];
+      return {
+        result: {
+          data: {
+            ...root,
+            businessParentId: -1,
+            path: `/${root.id}`,
+            isVirtual: false,
+            isEntity: true,
+            isDelete: false,
+            parentCode: null,
+            parentName: null,
+            statusText: '正常',
+            childrenCount: 0,
+            employmentCount: 1,
+            createTime: '2026-08-20T00:00:00.000Z',
+            updateTime: '2026-08-20T00:00:00.000Z',
+            allowedActions: {
+              createChild: { allowed: true, reason: null },
+              edit: { allowed: true, reason: null },
+              changeStatus: {
+                allowed: false,
+                reason: 'INTEGRITY_GUARD_BLOCKED',
+              },
+              delete: { allowed: false, reason: 'INTEGRITY_GUARD_BLOCKED' },
+            },
+          },
         },
-        delete: { allowed: false, reason: 'INTEGRITY_GUARD_BLOCKED' },
-      },
+      };
     });
+    return fulfillJson(route, responses);
   });
   const employmentSearchInputs: unknown[] = [];
   const employmentUpdates: unknown[] = [];
@@ -175,9 +191,7 @@ async function mockHrAdmin(page: Page) {
       ...employmentDetail,
       status,
       endTime:
-        status === EmploymentStatus.Disable
-          ? '2026-08-24T00:00:00.000Z'
-          : null,
+        status === EmploymentStatus.Disable ? '2026-08-24T00:00:00.000Z' : null,
       allowedActions: createHrEmploymentAllowedActions(
         status,
         employmentDetail.isPrimary,
@@ -320,9 +334,15 @@ test('HR admin reads scoped directories and manages an authorized User from deta
 
   await editProfile.click();
   const editUserDialog = page.getByRole('dialog', { name: '编辑用户' });
-  await editUserDialog.getByRole('textbox', { name: '姓名' }).fill('张三（更新）');
-  await editUserDialog.getByRole('textbox', { name: '手机号' }).fill('13900000000');
-  await editUserDialog.getByRole('textbox', { name: '微信 ID' }).fill('zhangsan-wx');
+  await editUserDialog
+    .getByRole('textbox', { name: '姓名' })
+    .fill('张三（更新）');
+  await editUserDialog
+    .getByRole('textbox', { name: '手机号' })
+    .fill('13900000000');
+  await editUserDialog
+    .getByRole('textbox', { name: '微信 ID' })
+    .fill('zhangsan-wx');
   await editUserDialog.getByRole('button', { name: /确\s*定/ }).click();
   await expect.poll(() => userUpdates.length).toBe(1);
   expect(userUpdates[0]).toEqual({
@@ -377,12 +397,7 @@ test('HR admin reads scoped directories and manages an authorized User from deta
   const viewEmploymentFontWeight = await employmentRow
     .getByRole('link', { name: '查看任职' })
     .evaluate((element) => getComputedStyle(element).fontWeight);
-  for (const action of [
-    /转\s*岗/,
-    '取消主岗',
-    /暂\s*停/,
-    /结\s*束/,
-  ]) {
+  for (const action of [/转\s*岗/, '取消主岗', /暂\s*停/, /结\s*束/]) {
     const actionButton = employmentRow.getByRole('button', { name: action });
     await expect(actionButton).toBeEnabled();
     await expect(actionButton).toHaveClass(/ant-btn-link/);
@@ -517,10 +532,14 @@ test('HR admin sees only executable User status actions and submits the selected
   await expect(page.getByText('切为「启用」', { exact: true })).toHaveCount(0);
   await page.getByText('切为「暂停」', { exact: true }).click();
 
-  await expect.poll(() => statusMutations).toEqual([{
-    username: 'zhangsan',
-    status: UserStatus.Pause,
-  }]);
+  await expect
+    .poll(() => statusMutations)
+    .toEqual([
+      {
+        username: 'zhangsan',
+        status: UserStatus.Pause,
+      },
+    ]);
   await expect(page.getByText('状态已更新', { exact: true })).toBeVisible();
 });
 
@@ -559,7 +578,10 @@ test('HR admin completes resignation and can retry the server-confirmed complete
   await page.route('**/rpc/admin.employment.resignUser**', (route) => {
     resignations.push(parseTrpcBatchInput(route));
     currentDetail = completedDetail;
-    return fulfillTrpc(route, { changed: resignations.length === 1, result: null });
+    return fulfillTrpc(route, {
+      changed: resignations.length === 1,
+      result: null,
+    });
   });
 
   await page.goto('/iam-admin/users');
@@ -574,7 +596,11 @@ test('HR admin completes resignation and can retry the server-confirmed complete
     await confirmation.getByRole('button', { name: /确\s*定/ }).click();
     await expect.poll(() => resignations.length).toBe(expectedCount);
     await expect(
-      page.getByText(expectedCount === 1 ? '离职已完成' : '已处于离职状态，无需修改').last(),
+      page
+        .getByText(
+          expectedCount === 1 ? '离职已完成' : '已处于离职状态，无需修改',
+        )
+        .last(),
     ).toBeVisible();
     await expect(drawer.getByRole('button', { name: /离\s*职/ })).toBeEnabled();
   }
@@ -672,19 +698,21 @@ test('HR admin does not report resignation success when the mutation is rejected
     },
   });
   await page.route('**/rpc/admin.employment.resignUser**', (route) =>
-    fulfillJson(route, [{
-      error: {
-        message: '离职资格已变化，请刷新后重试',
-        code: -32603,
-        data: {
-          code: 'FORBIDDEN',
-          httpStatus: 403,
-          path: 'admin.employment.resignUser',
-          serviceCode: 'AUTHZ.FORBIDDEN',
-          serviceMessage: '离职资格已变化，请刷新后重试',
+    fulfillJson(route, [
+      {
+        error: {
+          message: '离职资格已变化，请刷新后重试',
+          code: -32603,
+          data: {
+            code: 'FORBIDDEN',
+            httpStatus: 403,
+            path: 'admin.employment.resignUser',
+            serviceCode: 'AUTHZ.FORBIDDEN',
+            serviceMessage: '离职资格已变化，请刷新后重试',
+          },
         },
       },
-    }]),
+    ]),
   );
 
   await page.goto('/iam-admin/users');
@@ -699,7 +727,9 @@ test('HR admin does not report resignation success when the mutation is rejected
   await expect(page.getByText('离职资格已变化，请刷新后重试')).toBeVisible();
   await expect(page.getByText('离职已完成')).toHaveCount(0);
   expect(
-    mutationRequests.filter((url) => url.includes('admin.employment.resignUser')),
+    mutationRequests.filter((url) =>
+      url.includes('admin.employment.resignUser'),
+    ),
   ).toHaveLength(1);
 });
 
@@ -786,41 +816,28 @@ test('HR admin manages the granted Employment description and current lifecycle 
     data: { description: 'HR 核验备注' },
   });
 
-  await expect(
-    drawer.getByRole('button', { name: /暂\s*停/ }),
-  ).toBeEnabled();
-  await expect(
-    drawer.getByRole('button', { name: /结\s*束/ }),
-  ).toBeEnabled();
+  await expect(drawer.getByRole('button', { name: /暂\s*停/ })).toBeEnabled();
+  await expect(drawer.getByRole('button', { name: /结\s*束/ })).toBeEnabled();
   await expect(drawer.getByRole('button', { name: /恢\s*复/ })).toHaveCount(0);
 
   await drawer.getByRole('button', { name: /暂\s*停/ }).click();
   await page.getByRole('button', { name: '暂停任职' }).click();
   await expect.poll(() => employmentLifecycleMutations).toEqual(['pause']);
-  await expect(
-    drawer.getByRole('button', { name: /恢\s*复/ }),
-  ).toBeEnabled();
-  await expect(
-    drawer.getByRole('button', { name: /结\s*束/ }),
-  ).toBeEnabled();
+  await expect(drawer.getByRole('button', { name: /恢\s*复/ })).toBeEnabled();
+  await expect(drawer.getByRole('button', { name: /结\s*束/ })).toBeEnabled();
   await expect(drawer.getByRole('button', { name: /暂\s*停/ })).toHaveCount(0);
 
   await drawer.getByRole('button', { name: /恢\s*复/ }).click();
-  await expect.poll(() => employmentLifecycleMutations).toEqual([
-    'pause',
-    'resume',
-  ]);
-  await expect(
-    drawer.getByRole('button', { name: /暂\s*停/ }),
-  ).toBeEnabled();
+  await expect
+    .poll(() => employmentLifecycleMutations)
+    .toEqual(['pause', 'resume']);
+  await expect(drawer.getByRole('button', { name: /暂\s*停/ })).toBeEnabled();
 
   await drawer.getByRole('button', { name: /结\s*束/ }).click();
   await page.getByRole('button', { name: '结束任职' }).click();
-  await expect.poll(() => employmentLifecycleMutations).toEqual([
-    'pause',
-    'resume',
-    'end',
-  ]);
+  await expect
+    .poll(() => employmentLifecycleMutations)
+    .toEqual(['pause', 'resume', 'end']);
   for (const action of [/暂\s*停/, /恢\s*复/, /结\s*束/]) {
     await expect(drawer.getByRole('button', { name: action })).toHaveCount(0);
   }
@@ -857,12 +874,8 @@ test('HR admin manages Primary and transfers between scoped roots with the globa
   const clearPrimaryDialog = page
     .getByRole('dialog')
     .filter({ hasText: '取消 张三 的主任职' });
-  await clearPrimaryDialog
-    .getByRole('button', { name: '取消主岗' })
-    .click();
-  await expect.poll(() => employmentPrimaryMutations).toEqual([
-    'clearPrimary',
-  ]);
+  await clearPrimaryDialog.getByRole('button', { name: '取消主岗' }).click();
+  await expect.poll(() => employmentPrimaryMutations).toEqual(['clearPrimary']);
   await expect(drawer.getByRole('button', { name: '设主岗' })).toBeEnabled();
 
   await drawer.getByRole('button', { name: '设主岗' }).click();
@@ -870,13 +883,10 @@ test('HR admin manages Primary and transfers between scoped roots with the globa
     .getByRole('dialog')
     .filter({ hasText: '将 张三 的主岗设为 财务经理' });
   await setPrimaryDialog.getByRole('button', { name: '设为主岗' }).click();
-  await expect.poll(() => employmentPrimaryMutations).toEqual([
-    'clearPrimary',
-    'setPrimary',
-  ]);
-  await expect(
-    drawer.getByRole('button', { name: '取消主岗' }),
-  ).toBeEnabled();
+  await expect
+    .poll(() => employmentPrimaryMutations)
+    .toEqual(['clearPrimary', 'setPrimary']);
+  await expect(drawer.getByRole('button', { name: '取消主岗' })).toBeEnabled();
 
   await drawer.getByRole('button', { name: /转\s*岗/ }).click();
   const transferDialog = page

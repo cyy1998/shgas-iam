@@ -18,5 +18,11 @@ const app = createApp(appConfig, {
   middlewares: composition.middlewares,
 });
 
+export const appLifecycle = {
+  started(port: number) { composition.logger.info({ event: "api_started", port }, `server: http://localhost:${port}`); },
+  stopped() { composition.logger.info({ event: "api_stopped" }, "API stopped"); },
+  shutdownFailed() { composition.logger.error({ event: "api_shutdown_failed" }, "API shutdown failed"); },
+};
+
 export type AppType = typeof app;
 export default app;

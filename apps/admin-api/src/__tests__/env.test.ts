@@ -26,6 +26,17 @@ describe("admin API environment", () => {
     });
 
     expect(env.nodeEnv).toBe("production");
-    expect(env.sessionKernel.namespace).toBe("sess:v2:");
+    expect(env.sessionKernel.namespace).toBe("iam:session");
+  });
+
+  test("configures root and client lifetimes independently", () => {
+    const env = parseAdminApiEnv({
+      ...validEnv(),
+      IAM_ADMIN_API_USER_SESSION_TTL_SECONDS: "86400",
+      IAM_ADMIN_API_CLIENT_SESSION_TTL_SECONDS: "3600",
+    });
+    expect(env.sessionKernel).toEqual({ namespace: "iam:session", userSessionTtlSeconds: 86400, clientSessionTtlSeconds: 3600 });
+    for (const key of ["IAM_ADMIN_API_USER_SESSION_TTL_SECONDS", "IAM_ADMIN_API_CLIENT_SESSION_TTL_SECONDS"])
+      expect(() => parseAdminApiEnv({ ...validEnv(), [key]: "0" })).toThrow();
   });
 });

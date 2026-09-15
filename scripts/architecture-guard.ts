@@ -48,10 +48,10 @@ type StaticModuleOwnershipRule = Readonly<{
 const protectedSourceRoots = [
   "apps/api/src",
   "apps/admin-api/src",
-  "apps/oidc-provider/src",
   "apps/worker/src",
   "packages/session-kernel/src",
   "packages/custom-sso/src",
+  "packages/oidc/src",
   "packages/client-subject-projection/src",
   "packages/organization-responsibility-resolution/src",
   "packages/role-assignment-resolution/src",
@@ -76,6 +76,7 @@ const excludedSourceDirectories = new Set([
 const architectureWorkspaceRoots = new Map([
   ["@iam/session-kernel", "packages/session-kernel"],
   ["@iam/custom-sso", "packages/custom-sso"],
+  ["@iam/oidc", "packages/oidc"],
   ["@iam/client-subject-projection", "packages/client-subject-projection"],
   ["@iam/organization-responsibility-resolution", "packages/organization-responsibility-resolution"],
   ["@iam/role-assignment-resolution", "packages/role-assignment-resolution"],
@@ -103,6 +104,7 @@ interface WorkspaceDependencyNode {
 const canonicalStaticSourceRoots = new Map([
   ["@iam/session-kernel", "packages/session-kernel/src"],
   ["@iam/custom-sso", "packages/custom-sso/src"],
+  ["@iam/oidc", "packages/oidc/src"],
   ["@iam/admin", "apps/admin/src"],
   ["@iam/admin-api", "apps/admin-api/src"],
   ["@iam/api", "apps/api/src"],
@@ -111,7 +113,6 @@ const canonicalStaticSourceRoots = new Map([
   ["@iam/db", "packages/db/src"],
   ["@iam/domain", "packages/domain/src"],
   ["@iam/gateway-apisix", "gateway/src"],
-  ["@iam/oidc-provider", "apps/oidc-provider/src"],
   ["@iam/organization-responsibility-resolution", "packages/organization-responsibility-resolution/src"],
   ["@iam/sso", "apps/sso/src"],
   ["@iam/user-profile-read-model", "packages/user-profile-read-model/src"],
@@ -136,11 +137,26 @@ const clientSubjectProjectionExternalOwnerTargets: readonly StaticModulePattern[
 const staticModuleOwnershipRules: readonly StaticModuleOwnershipRule[] = [
   {
     ruleId: "session-runtime-owner",
+    sourceScopes: ["packages/oidc/src"],
+    targets: [
+      { kind: "prefix", module: "packages/custom-sso/src" },
+      { kind: "prefix", module: "apps" },
+      { kind: "package", module: "oidc-provider" },
+      { kind: "package", module: "hono" },
+      { kind: "package", module: "@iam/db" },
+    ],
+    allowedSources: [],
+    dependencyKind: "all",
+    message: moduleSpecifier => `OIDC must not import another protocol, app or HTTP owner "${moduleSpecifier}"; inject its external capabilities.`,
+  },
+  {
+    ruleId: "session-runtime-owner",
     sourceScopes: ["packages/session-kernel/src"],
     targets: [
       { kind: "prefix", module: "packages/api-core/src" },
       { kind: "package", module: "@iam/custom-sso" },
       { kind: "prefix", module: "packages/custom-sso/src" },
+      { kind: "prefix", module: "packages/oidc/src" },
       { kind: "prefix", module: "apps" },
     ],
     allowedSources: [],
@@ -243,129 +259,6 @@ const staticModuleOwnershipRules: readonly StaticModuleOwnershipRule[] = [
     message: moduleSpecifier =>
       `Admin user and client services must not import session runtime module "${moduleSpecifier}"; `
       + "depend on the consumer-owned Session Revocation port.",
-  },
-  {
-    ruleId: "session-runtime-owner",
-    sourceScopes: ["apps/oidc-provider/src"],
-    targets: [
-      { kind: "package", module: "@iam/custom-sso" },
-      { kind: "prefix", module: "packages/custom-sso/src" },
-    ],
-    allowedTargets: [
-      { kind: "exact", module: "packages/custom-sso/src/cleanup" },
-      { kind: "exact", module: "packages/custom-sso/src/maintenance" },
-    ],
-    allowedSources: [],
-    dependencyKind: "all",
-    message: moduleSpecifier =>
-      `OIDC must consume only independent Custom SSO cleanup or maintenance, not "${moduleSpecifier}".`,
-  },
-  {
-    ruleId: "session-runtime-owner",
-    sourceScopes: ["apps/oidc-provider/src"],
-    targets: [
-      { kind: "exact", module: "@iam/db" },
-      { kind: "exact", module: "apps/oidc-provider/src/lib/redis" },
-      { kind: "exact", module: "apps/oidc-provider/src/lib/logger" },
-    ],
-    allowedSources: ["apps/oidc-provider/src/composition"],
-    dependencyKind: "value",
-    message: (moduleSpecifier, declaration) =>
-      `Only OIDC composition may ${valueDependencyOperation(declaration)} `
-      + `runtime infrastructure module "${moduleSpecifier}".`,
-  },
-  {
-    ruleId: "session-runtime-owner",
-    sourceScopes: ["apps/oidc-provider/src"],
-    targets: [{ kind: "exact", module: "@iam/db/schema" }],
-    allowedSources: [{
-      prefix: "apps/oidc-provider/src/repositories",
-      suffix: ".repository.ts",
-    }],
-    dependencyKind: "value",
-    message: (moduleSpecifier, declaration) =>
-      `Only OIDC repository implementations may ${valueDependencyOperation(declaration)} `
-      + `database schema "${moduleSpecifier}".`,
-  },
-  {
-    ruleId: "session-runtime-owner",
-    sourceScopes: ["apps/oidc-provider/src"],
-    targets: [{ kind: "package", module: "ioredis" }],
-    allowedSources: [
-      "apps/oidc-provider/src/stores",
-      "apps/oidc-provider/src/storage",
-    ],
-    dependencyKind: "value",
-    message: (moduleSpecifier, declaration) =>
-      `Only OIDC stores and storage modules may ${valueDependencyOperation(declaration)} `
-      + `Redis client "${moduleSpecifier}".`,
-  },
-  {
-    ruleId: "session-runtime-owner",
-    sourceScopes: ["apps/oidc-provider/src"],
-    targets: [{
-      kind: "prefix-suffix",
-      prefix: "apps/oidc-provider/src/repositories",
-      suffix: ".repository",
-    }],
-    allowedSources: ["apps/oidc-provider/src/composition/repositories"],
-    dependencyKind: "value",
-    message: (moduleSpecifier, declaration) =>
-      `Only OIDC repository composition may ${valueDependencyOperation(declaration)} `
-      + `concrete repository "${moduleSpecifier}".`,
-  },
-  {
-    ruleId: "session-runtime-owner",
-    sourceScopes: ["apps/oidc-provider/src"],
-    targets: [{ kind: "exact", module: "apps/oidc-provider/src/storage/redis-adapter" }],
-    allowedSources: [
-      "apps/oidc-provider/src/composition/provider",
-      "apps/oidc-provider/src/composition/stores",
-    ],
-    dependencyKind: "value",
-    message: (moduleSpecifier, declaration) =>
-      `Only declared OIDC storage composition owners may ${valueDependencyOperation(declaration)} `
-      + `storage implementation "${moduleSpecifier}".`,
-  },
-  {
-    ruleId: "session-runtime-owner",
-    sourceScopes: ["apps/oidc-provider/src"],
-    targets: [
-      { kind: "exact", module: "apps/oidc-provider/src/security/client-auth-rate-limit" },
-      { kind: "exact", module: "apps/oidc-provider/src/security/client-secret-verifier" },
-    ],
-    allowedSources: ["apps/oidc-provider/src/composition/security"],
-    dependencyKind: "value",
-    message: (moduleSpecifier, declaration) =>
-      `Only OIDC security composition may ${valueDependencyOperation(declaration)} `
-      + `security implementation "${moduleSpecifier}".`,
-  },
-  {
-    ruleId: "session-runtime-owner",
-    sourceScopes: ["apps/oidc-provider/src"],
-    targets: [{ kind: "exact", module: "@iam/session-kernel" }],
-    allowedSources: [
-      "apps/oidc-provider/src/env.ts",
-      "apps/oidc-provider/src/composition/session",
-      "apps/oidc-provider/src/session/oidc-session-kernel.adapter.ts",
-    ],
-    dependencyKind: "value",
-    message: (moduleSpecifier, declaration) =>
-      `Only OIDC environment configuration, session composition and its Kernel adapter may ${valueDependencyOperation(declaration)} `
-      + `Session Kernel module "${moduleSpecifier}".`,
-  },
-  {
-    ruleId: "session-runtime-owner",
-    sourceScopes: ["apps/oidc-provider/src"],
-    targets: [{
-      kind: "exact",
-      module: "apps/oidc-provider/src/session/oidc-session-kernel.adapter",
-    }],
-    allowedSources: ["apps/oidc-provider/src/composition/session"],
-    dependencyKind: "value",
-    message: (moduleSpecifier, declaration) =>
-      `Only OIDC session composition may ${valueDependencyOperation(declaration)} `
-      + `session implementation "${moduleSpecifier}".`,
   },
   {
     ruleId: "worker-ownership",
@@ -940,7 +833,7 @@ function isRoleAssignmentSchemaOwner(file: string) {
 }
 
 function isRoleAssignmentResolverValueOwner(file: string) {
-  return /^apps\/(?:api|admin-api|oidc-provider|worker)\/src\/composition(?:\/|$)/u.test(file)
+  return /^apps\/(?:api|admin-api|worker)\/src\/composition(?:\/|$)/u.test(file)
     || file === "packages/user-profile-read-model/src/invalidation/user-profile-invalidation.ts"
     || file === "packages/user-profile-read-model/src/worker/user-profile-worker.module.ts";
 }

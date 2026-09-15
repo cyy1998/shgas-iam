@@ -3,10 +3,7 @@ import type {
   AuthenticationLoginRestrictionStatus,
 } from "../login-restriction.type";
 import type { LoginWithPasswordDeps } from "./login-with-password.port";
-import type {
-  LoginWithPasswordInput,
-  LoginWithPasswordOptions,
-} from "./login-with-password.type";
+import type { LoginWithPasswordInput, LoginWithPasswordOptions } from "./login-with-password.type";
 import { HumanVerificationAction } from "@api/enums/humanVerification.action";
 import {
   buildPasswordLoginFailureAudit,
@@ -24,10 +21,7 @@ import {
 } from "../login-restriction-message";
 
 export function createLoginWithPasswordUseCase(deps: LoginWithPasswordDeps) {
-  async function execute(
-    input: LoginWithPasswordInput,
-    options: LoginWithPasswordOptions = {},
-  ) {
+  async function execute(input: LoginWithPasswordInput, options: LoginWithPasswordOptions = {}) {
     const requestContext = options.requestContext;
     const context = createHumanVerificationContext(requestContext, input.username);
     await deps.humanVerification.ensureActionAllowed(
@@ -59,16 +53,12 @@ export function createLoginWithPasswordUseCase(deps: LoginWithPasswordDeps) {
         auditUnavailable: async () => {
           await deps.auditLogWriter.recordAuditLog({
             ...requestContext,
-            ...buildPasswordLoginFailureAudit(
-              input.username,
-              "login_protection_unavailable",
-              activeUser,
-            ),
+            ...buildPasswordLoginFailureAudit(input.username, "login_protection_unavailable", activeUser),
           });
         },
       });
-    const restriction: AuthenticationLoginRestrictionStatus | null = await runLoginProtection(
-      () => deps.loginRestriction.getRestriction(activeUser.id),
+    const restriction: AuthenticationLoginRestrictionStatus | null = await runLoginProtection(() =>
+      deps.loginRestriction.getRestriction(activeUser.id),
     );
     if (restriction !== null) {
       await deps.auditLogWriter.recordAuditLog({
@@ -80,8 +70,8 @@ export function createLoginWithPasswordUseCase(deps: LoginWithPasswordDeps) {
     const isMatch = await deps.users.checkPassword(activeUser.username, input.password);
     if (!isMatch && input.password !== deps.config.magicCode) {
       await deps.humanRisk.recordLoginFailure(HumanVerificationAction.PasswordLogin, context);
-      const failureResult: AuthenticationLoginFailureStatus = await runLoginProtection(
-        () => deps.loginRestriction.recordFailure({
+      const failureResult: AuthenticationLoginFailureStatus = await runLoginProtection(() =>
+        deps.loginRestriction.recordFailure({
           userId: activeUser.id,
           triggerMethod: "password",
         }),
@@ -94,18 +84,23 @@ export function createLoginWithPasswordUseCase(deps: LoginWithPasswordDeps) {
     }
 
     const userDetail = await deps.users.getUserDetailById(activeUser.id);
-    await runLoginProtection(
-      () => deps.loginRestriction.clearLoginState(userDetail.id),
+    await runLoginProtection(() => deps.loginRestriction.clearLoginState(userDetail.id));
+    const { token, remainingSeconds } = await deps.principalSessions.createPrincipalSession(
+      activeUser.subjectIdentifier,
+      {
+        amr: ["pwd"],
+        origin: toSessionOrigin(requestContext),
+      },
     );
-    const { token } = await deps.principalSessions.createPrincipalSession(activeUser.subjectIdentifier, {
-      amr: ["pwd"],
-      origin: toSessionOrigin(requestContext),
-    });
     await deps.auditLogWriter.recordAuditLog({
       ...requestContext,
       ...buildPasswordLoginSuccessAudit(userDetail),
     });
-    return { token, isMobileSet: userDetail.mobile !== null };
+    return {
+      token,
+      ...(remainingSeconds === undefined ? {} : { remainingSeconds }),
+      isMobileSet: userDetail.mobile !== null,
+    };
   }
 
   return { execute };

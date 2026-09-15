@@ -58,6 +58,16 @@ function expectSsoRoutesClassifyEntryNetwork(
   expect(routes.map(route => getEntryNetwork(route)?.["X-IAM-Entry-Network"]).sort()).toEqual(["external", "internal"]);
   expect(routes.every(route => (route.plugins as Record<string, unknown> | undefined)?.cors === undefined)).toBe(true);
 
+  const oidc = manifest.resources.routes.find(route => route.id === `iam.oidc-provider.${manifest.scope.env}`);
+  expect(oidc).toMatchObject({
+    uris: ["/oidc", "/oidc/*"],
+    upstream_id: `iam.api.${manifest.scope.env}`,
+  });
+  expect(oidc?.plugins).toMatchObject({
+    "proxy-rewrite": { headers: { set: { "X-Forwarded-Host": "$http_host", "X-Forwarded-Proto": "$scheme" } } },
+  });
+  expect(oidc).not.toHaveProperty("plugins.proxy-rewrite.regex_uri");
+
   const ssoPluginConfig = manifest.resources.plugin_configs.find(
     config => config.id === `iam.sso-api-plugin.${manifest.scope.env}`,
   );
@@ -180,8 +190,6 @@ describe("apisix manifest validation", () => {
         DEV_IAM_ADMIN_FRONTEND_UPSTREAM_PORT: "80",
         DEV_IAM_API_UPSTREAM_HOST: "api",
         DEV_IAM_API_UPSTREAM_PORT: "3000",
-        DEV_IAM_OIDC_PROVIDER_UPSTREAM_HOST: "oidc-provider",
-        DEV_IAM_OIDC_PROVIDER_UPSTREAM_PORT: "3002",
         DEV_IAM_SSO_FRONTEND_UPSTREAM_HOST: "sso",
         DEV_IAM_SSO_FRONTEND_UPSTREAM_PORT: "80",
         IAM_SSO_EXTERNAL_HOST: "127.0.0.1:43123",
@@ -211,8 +219,6 @@ describe("apisix manifest validation", () => {
         PROD_IAM_ADMIN_FRONTEND_UPSTREAM_PORT: "80",
         PROD_IAM_API_UPSTREAM_HOST: "iam-api.internal",
         PROD_IAM_API_UPSTREAM_PORT: "30000",
-        PROD_IAM_OIDC_PROVIDER_UPSTREAM_HOST: "iam-oidc-provider.internal",
-        PROD_IAM_OIDC_PROVIDER_UPSTREAM_PORT: "30002",
         PROD_IAM_SSO_FRONTEND_UPSTREAM_HOST: "iam-sso.internal",
         PROD_IAM_SSO_FRONTEND_UPSTREAM_PORT: "80",
         APISIX_OTEL_COLLECTOR_ENDPOINT: "alloy:4318",

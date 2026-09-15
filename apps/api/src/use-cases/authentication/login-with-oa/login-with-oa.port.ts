@@ -37,7 +37,7 @@ export interface OaPrincipalSessionPort {
       amr: readonly ["oa"];
       origin?: SessionOrigin;
     },
-  ) => Promise<{ token: string }>;
+  ) => Promise<{ token: string; remainingSeconds?: number }>;
 }
 
 export interface LoginWithOaDeps {

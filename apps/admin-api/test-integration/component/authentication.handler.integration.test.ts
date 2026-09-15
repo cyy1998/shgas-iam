@@ -1,17 +1,24 @@
 import type { UserDetailDto } from "@admin-api/services/user/user.type";
 import type { SubjectAccessOperation } from "@iam/api-core/subject-access";
-import type { PrincipalSession } from "@iam/session-kernel";
-import { createAdminAuthenticationHandlers } from "@admin-api/middlewares/authentication.handler";
+import type { UserSession } from "@iam/session-kernel";
+import { createAdminRootAuthenticationHandlers } from "@admin-api/middlewares/authentication.handler";
 import { createAdminAuthorizationAdapter } from "@admin-api/routes/admin/authorization/authorization.adapter";
 import { createAdminAuthorizationContextHandler } from "@admin-api/services/admin-authorization/admin-authorization.context";
 import { createAdminAuthorizationPolicy } from "@admin-api/services/admin-authorization/admin-authorization.policy";
-import { createSubjectAccessOperations, encodeSubjectAccessContext, SubjectAccessDisabledError, SubjectAccessUnavailableError } from "@iam/api-core/subject-access";
+import {
+  createSubjectAccessOperations,
+  encodeSubjectAccessContext,
+  SubjectAccessDisabledError,
+  SubjectAccessUnavailableError,
+} from "@iam/api-core/subject-access";
 import { createTRPCContext } from "@iam/api-core/trpc";
 import { UserStatus, UserType } from "@iam/contracts";
 import { UserNotFoundError } from "@iam/domain/user";
 import { fetchRequestHandler } from "@trpc/server/adapters/fetch";
 import { describe, expect, mock, test } from "bun:test";
 import { Hono } from "hono";
+
+type PrincipalSession = Pick<UserSession, "userSessionId" | "subjectIdentifier" | "subjectContext">;
 
 type TestResponse = {
   status: number;
@@ -33,18 +40,28 @@ function createProtectedApp(options: {
   allowedClientCodes?: string[];
   readBarrier?: () => Promise<string>;
 }) {
-  const handlers = createAdminAuthenticationHandlers({
-    sessionKernel: {
-      resolvePrincipalSession: options.resolvePrincipalSession as never,
+  const handlers = createAdminRootAuthenticationHandlers({
+    resolveRoot: async (token) => {
+      const result = await options.resolvePrincipalSession(token);
+      return result.status === "resolved" ? (result.value ?? null) : null;
     },
     subjectAccess: createSubjectAccessOperations({
-      barrier: { readCommittedTransitionId: options.readBarrier ?? (async () => "20000000-0000-4000-8000-000000000001") },
-      revocation: { revokePrincipalSession: async () => {
-        throw new Error("cleanup failed");
-      }, revokeUserSessions: async () => { throw new Error("cleanup failed"); } },
+      barrier: {
+        readCommittedTransitionId:
+          options.readBarrier ?? (async () => "20000000-0000-4000-8000-000000000001"),
+      },
+      revocation: {
+        revokePrincipalSession: async () => {
+          throw new Error("cleanup failed");
+        },
+        revokeUserSessions: async () => {
+          throw new Error("cleanup failed");
+        },
+      },
     }),
     userService: {
-      getUserDetailForPermittedAdmin: async (_operation, subjectIdentifier) => await options.getUserDetailBySubjectIdentifierForAdmin(subjectIdentifier),
+      getUserDetailForPermittedAdmin: async (_operation, subjectIdentifier) =>
+        await options.getUserDetailBySubjectIdentifierForAdmin(subjectIdentifier),
     },
     config: {
       allowedClientCodes: options.allowedClientCodes ?? ["iam"],
@@ -72,11 +89,13 @@ describe("admin authentication handler", () => {
       getUserDetailBySubjectIdentifierForAdmin,
     });
 
-    const res = asTestResponse(await app.request("http://localhost/rpc/admin.user.search", {
-      headers: {
-        Client: "iam",
-      },
-    }));
+    const res = asTestResponse(
+      await app.request("http://localhost/rpc/admin.user.search", {
+        headers: {
+          Client: "iam",
+        },
+      }),
+    );
 
     expect(res.status).toBe(401);
     expect(await res.text()).toBe("未登录");
@@ -101,12 +120,14 @@ describe("admin authentication handler", () => {
       getUserDetailBySubjectIdentifierForAdmin,
     });
 
-    const res = asTestResponse(await app.request("http://localhost/rpc/admin.user.search", {
-      headers: {
-        Client: "iam",
-        Cookie: "global_session=iam_ps_valid",
-      },
-    }));
+    const res = asTestResponse(
+      await app.request("http://localhost/rpc/admin.user.search", {
+        headers: {
+          Client: "iam",
+          Cookie: "global_session=iam_ps_valid",
+        },
+      }),
+    );
 
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual({ ok: true });
@@ -124,12 +145,14 @@ describe("admin authentication handler", () => {
       getUserDetailBySubjectIdentifierForAdmin,
     });
 
-    const res = asTestResponse(await app.request("http://localhost/rpc/admin.user.search", {
-      headers: {
-        Client: "iam",
-        Cookie: "global_session=legacy-session-id; orcas_sso_sessionid=legacy-orcas",
-      },
-    }));
+    const res = asTestResponse(
+      await app.request("http://localhost/rpc/admin.user.search", {
+        headers: {
+          Client: "iam",
+          Cookie: "global_session=legacy-session-id; orcas_sso_sessionid=legacy-orcas",
+        },
+      }),
+    );
 
     expect(res.status).toBe(401);
     expect(await res.text()).toBe("未登录");
@@ -143,11 +166,7 @@ describe("admin authentication handler", () => {
     }
   });
 
-  for (const reason of [
-    "user_disabled",
-    "user_deleted",
-    "session_generation_stale",
-  ] as const) {
+  for (const reason of ["user_disabled", "user_deleted", "session_generation_stale"] as const) {
     test(`returns SESSION_INVALID semantics and clears cookies for ${reason}`, async () => {
       const app = createProtectedApp({
         resolvePrincipalSession: mock(async () => ({ status: "resolved", value: principalSession() })),
@@ -159,12 +178,14 @@ describe("admin authentication handler", () => {
         getUserDetailBySubjectIdentifierForAdmin: mock(async () => adminUser()),
       });
 
-      const res = asTestResponse(await app.request("http://localhost/rpc/admin.user.search", {
-        headers: {
-          Client: "iam",
-          Cookie: "global_session=disabled-session; orcas_sso_sessionid=legacy-orcas",
-        },
-      }));
+      const res = asTestResponse(
+        await app.request("http://localhost/rpc/admin.user.search", {
+          headers: {
+            Client: "iam",
+            Cookie: "global_session=disabled-session; orcas_sso_sessionid=legacy-orcas",
+          },
+        }),
+      );
 
       expect(res.status).toBe(401);
       expect(await res.text()).toBe("会话已失效");
@@ -181,12 +202,14 @@ describe("admin authentication handler", () => {
       getUserDetailBySubjectIdentifierForAdmin: mock(async () => adminUser()),
     });
 
-    const res = asTestResponse(await app.request("http://localhost/rpc/admin.user.search", {
-      headers: {
-        Client: "iam",
-        Cookie: "global_session=uncertain-session; orcas_sso_sessionid=legacy-orcas",
-      },
-    }));
+    const res = asTestResponse(
+      await app.request("http://localhost/rpc/admin.user.search", {
+        headers: {
+          Client: "iam",
+          Cookie: "global_session=uncertain-session; orcas_sso_sessionid=legacy-orcas",
+        },
+      }),
+    );
 
     expect(res.status).toBe(503);
     expect(await res.text()).toBe("账号访问状态暂时不可用");
@@ -204,12 +227,14 @@ describe("admin authentication handler", () => {
       getUserDetailBySubjectIdentifierForAdmin,
     });
 
-    const res = asTestResponse(await app.request("http://localhost/rpc/admin.user.search", {
-      headers: {
-        Client: "iam",
-        Cookie: "global_session=iam_ps_valid",
-      },
-    }));
+    const res = asTestResponse(
+      await app.request("http://localhost/rpc/admin.user.search", {
+        headers: {
+          Client: "iam",
+          Cookie: "global_session=iam_ps_valid",
+        },
+      }),
+    );
 
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual({ ok: true });
@@ -218,21 +243,13 @@ describe("admin authentication handler", () => {
 
 function principalSession(overrides: Partial<PrincipalSession> = {}): PrincipalSession {
   return {
-    version: 1,
-    subjectContext: encodeSubjectAccessContext({ version: 1, subjectIdentifier: "00000000-0000-4000-8000-000000000001", transitionId: "20000000-0000-4000-8000-000000000001" }),
-    sessionKind: "browser_user",
-    principalSessionId: "30000000-0000-4000-8000-000000000001",
-    externalTokenLookupHash: "hash",
-    principal: {
-      principalType: "user",
-      subjectId: "00000000-0000-4000-8000-000000000001",
-    },
-    authTime: 1,
-    lastActiveAt: 1,
-    expiresAt: Date.now() + 60_000,
-    absoluteExpiresAt: Date.now() + 60_000,
-    amr: ["pwd"],
-    cleanupRefs: [],
+    userSessionId: "30000000-0000-4000-8000-000000000001",
+    subjectIdentifier: "00000000-0000-4000-8000-000000000001",
+    subjectContext: encodeSubjectAccessContext({
+      version: 1,
+      subjectIdentifier: "00000000-0000-4000-8000-000000000001",
+      transitionId: "20000000-0000-4000-8000-000000000001",
+    }),
     ...overrides,
   };
 }
@@ -258,10 +275,12 @@ function adminUser(overrides: Partial<UserDetailDto> = {}): UserDetailDto {
   } as UserDetailDto;
 }
 
-function createPermittedApp(options: {
-  readBarrier?: () => Promise<string>;
-  loadUser?: (operation: SubjectAccessOperation) => Promise<UserDetailDto>;
-} = {}) {
+function createPermittedApp(
+  options: {
+    readBarrier?: () => Promise<string>;
+    loadUser?: (operation: SubjectAccessOperation) => Promise<UserDetailDto>;
+  } = {},
+) {
   const subjectIdentifier = "00000000-0000-4000-8000-000000000001";
   const transitionId = "20000000-0000-4000-8000-000000000001";
   const readBarrier = mock(options.readBarrier ?? (async () => transitionId));
@@ -276,40 +295,43 @@ function createPermittedApp(options: {
     revocation: { revokePrincipalSession, revokeUserSessions },
   });
   const loadUser = mock(options.loadUser ?? (async () => adminUser()));
-  const handlers = createAdminAuthenticationHandlers({
+  const handlers = createAdminRootAuthenticationHandlers({
     subjectAccess: operations,
-    sessionKernel: {
-      resolvePrincipalSession: async () => ({
-        status: "resolved",
-        observedAt: Date.now(),
-        value: {
-          ...principalSession(),
-          principalSessionId: "30000000-0000-4000-8000-000000000001",
-          subjectContext: encodeSubjectAccessContext({ version: 1, subjectIdentifier, transitionId }),
-        },
-      }),
-    },
+    resolveRoot: async () => ({
+      ...principalSession(),
+      subjectContext: encodeSubjectAccessContext({ version: 1, subjectIdentifier, transitionId }),
+    }),
     userService: { getUserDetailForPermittedAdmin: loadUser },
     config: { allowedClientCodes: ["iam"] },
   });
   const app = new Hono();
   app.use("*", handlers.adminAuthenticationHandler);
-  app.use("*", createAdminAuthorizationContextHandler(createAdminAuthorizationPolicy({
-    logger: { warn: mock() },
-    hrAdministrationScopeResolver: { resolveForActor: async () => null },
-  })));
+  app.use(
+    "*",
+    createAdminAuthorizationContextHandler(
+      createAdminAuthorizationPolicy({
+        logger: { warn: mock() },
+        hrAdministrationScopeResolver: { resolveForActor: async () => null },
+      }),
+    ),
+  );
   const adapter = createAdminAuthorizationAdapter();
   app.get("/admin/capabilities", c => adapter.capabilitySummary(c as never, async () => {}));
-  app.all("/rpc/*", async c => await fetchRequestHandler({
-    endpoint: "/rpc",
-    req: c.req.raw,
-    router: adapter.authorizationAdminRouter,
-    createContext: () => createTRPCContext({ honoCtx: c }),
-  }));
+  app.all(
+    "/rpc/*",
+    async c =>
+      await fetchRequestHandler({
+        endpoint: "/rpc",
+        req: c.req.raw,
+        router: adapter.authorizationAdminRouter,
+        createContext: () => createTRPCContext({ honoCtx: c }),
+      }),
+  );
   app.onError((error, c) => c.text(error.message, ("httpStatus" in error ? error.httpStatus : 500) as never));
-  const request = (path: string) => app.request(`http://localhost${path}`, {
-    headers: { Client: "iam", Cookie: "global_session=valid; orcas_sso_sessionid=orcas" },
-  });
+  const request = (path: string) =>
+    app.request(`http://localhost${path}`, {
+      headers: { Client: "iam", Cookie: "global_session=valid; orcas_sso_sessionid=orcas" },
+    });
   return { request, readBarrier, loadUser, revokePrincipalSession, revokeUserSessions };
 }
 
@@ -356,9 +378,11 @@ for (const path of ["/admin/capabilities", "/rpc/capabilitySummary?input=%7B%7D"
     });
 
     test("preserves unauthorized and cookie clearing when the permitted profile is missing", async () => {
-      const app = createPermittedApp({ loadUser: async () => {
-        throw new UserNotFoundError();
-      } });
+      const app = createPermittedApp({
+        loadUser: async () => {
+          throw new UserNotFoundError();
+        },
+      });
       const response = await app.request(path);
       const message = await response.text();
       expect(response.status).toBe(401);
@@ -368,9 +392,11 @@ for (const path of ["/admin/capabilities", "/rpc/capabilitySummary?input=%7B%7D"
     });
 
     test("does not treat an unrelated profile failure as account denial", async () => {
-      const app = createPermittedApp({ loadUser: async () => {
-        throw new Error("profile storage unavailable");
-      } });
+      const app = createPermittedApp({
+        loadUser: async () => {
+          throw new Error("profile storage unavailable");
+        },
+      });
       const response = await app.request(path);
       expect(response.status).toBe(500);
       expect(response.headers.getSetCookie()).toHaveLength(0);
@@ -379,9 +405,11 @@ for (const path of ["/admin/capabilities", "/rpc/capabilitySummary?input=%7B%7D"
     });
 
     test("preserves cookies and does not revoke on unavailable Barrier", async () => {
-      const app = createPermittedApp({ readBarrier: async () => {
-        throw new SubjectAccessUnavailableError();
-      } });
+      const app = createPermittedApp({
+        readBarrier: async () => {
+          throw new SubjectAccessUnavailableError();
+        },
+      });
       const response = await app.request(path);
       expect(response.status).toBe(503);
       expect(response.headers.getSetCookie()).toHaveLength(0);

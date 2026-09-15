@@ -10,12 +10,11 @@ import type {
 import { hashSecret } from "@iam/api-core/security";
 import { createSubjectAccessBootstrap } from "@iam/api-core/subject-access";
 import {
+  ClientSsoProtocol,
   ClientStatus,
-  CustomSsoClientMode,
   EmploymentStatus,
   OidcClientType,
   OidcScope,
-  OidcTokenEndpointAuthMethod,
   OrganizationLevel,
   OrganizationResponsibilityAssignmentStatus,
   OrganizationResponsibilityTypeCode,
@@ -46,9 +45,7 @@ import {
 import { roleAssignments } from "@iam/db/schema/role-assignments";
 import { createRoleAssignmentResolver } from "@iam/role-assignment-resolution";
 import { createSubjectFactsRedisInspector } from "@iam/user-profile-read-model/subject-facts";
-import {
-  createUserProfileWorkerModule,
-} from "@iam/user-profile-read-model/worker";
+import { createUserProfileWorkerModule } from "@iam/user-profile-read-model/worker";
 import { and, eq } from "drizzle-orm";
 
 export interface CreateProductionE2EScenarioOwnerInput {
@@ -76,34 +73,34 @@ export function createProductionE2EScenarioOwner(
       internalApiKey: string;
     },
   ) {
-    const passwordHash = await hashSecret(
-      scenario.adminPassword,
-      input.passwordHashCost,
-    );
+    const passwordHash = await hashSecret(scenario.adminPassword, input.passwordHashCost);
     let generatedReferences: E2EScenarioGeneratedReferences | undefined;
     await input.db.transaction(async (tx) => {
-      const [adminClient] = await tx.insert(clients).values({
-        clientCode: scenario.adminClientCode,
-        clientName: `E2E Admin ${scenario.runId}`,
-        clientSecret: input.random.uuid(),
-        url: `${scenario.canonicalOrigin}/iam-admin`,
-        status: ClientStatus.Enable,
-        extAttributes: {},
-        customSsoEnabled: true,
-        customSsoConfigVersion: 1,
-        customSsoConfig: {
-          mode: CustomSsoClientMode.Gateway,
-          validRedirectUrls: [scenario.adminRedirectUri],
-          subjectClaims: [
-            SubjectClaim.SubjectIdentifier,
-            SubjectClaim.ProfileUsername,
-            SubjectClaim.ProfileName,
-            SubjectClaim.IamAuthorization,
-          ],
-          orcas: { enabled: false },
-        },
-        customSsoSecretHash: null,
-      }).returning({ id: clients.id });
+      const [adminClient] = await tx
+        .insert(clients)
+        .values({
+          clientCode: scenario.adminClientCode,
+          clientName: `E2E Admin ${scenario.runId}`,
+          clientSecret: input.random.uuid(),
+          url: `${scenario.canonicalOrigin}/iam-admin`,
+          status: ClientStatus.Enable,
+          extAttributes: {},
+          ssoEnabled: true,
+          ssoConfig: {
+            protocol: ClientSsoProtocol.CustomSso,
+            callbackEndpoint: `${scenario.canonicalOrigin}/sso/callback`,
+            validRedirectUrls: [scenario.adminRedirectUri],
+            subjectClaims: [
+              SubjectClaim.SubjectIdentifier,
+              SubjectClaim.ProfileUsername,
+              SubjectClaim.ProfileName,
+              SubjectClaim.IamAuthorization,
+            ],
+            orcas: { enabled: false },
+          },
+          ssoSecret: null,
+        })
+        .returning({ id: clients.id });
       if (adminClient === undefined)
         throw new Error("E2E Admin client was not created");
 
@@ -114,10 +111,9 @@ export function createProductionE2EScenarioOwner(
         url: scenario.customSsoRedirectUri,
         status: ClientStatus.Enable,
         extAttributes: {},
-        customSsoEnabled: false,
-        customSsoConfigVersion: 0,
-        customSsoConfig: null,
-        customSsoSecretHash: null,
+        ssoEnabled: false,
+        ssoConfig: null,
+        ssoSecret: null,
       });
 
       await tx.insert(clients).values({
@@ -136,36 +132,35 @@ export function createProductionE2EScenarioOwner(
         url: scenario.oidcRedirectUri,
         status: ClientStatus.Enable,
         extAttributes: {},
-        oidcEnabled: true,
-        oidcConfigVersion: 1,
-        oidcConfig: {
+        ssoEnabled: true,
+        ssoConfig: {
+          protocol: ClientSsoProtocol.Oidc,
           clientType: OidcClientType.Public,
-          tokenEndpointAuthMethod: OidcTokenEndpointAuthMethod.None,
           redirectUris: [scenario.oidcRedirectUri],
           postLogoutRedirectUris: [scenario.oidcPostLogoutRedirectUri],
-          allowedScopes: [
-            OidcScope.OpenId,
-            OidcScope.Profile,
-            OidcScope.IamEmployments,
-          ],
+          allowedScopes: [OidcScope.OpenId, OidcScope.Profile, OidcScope.IamEmployments],
         },
-        oidcSecretHash: null,
+        ssoSecret: null,
       });
 
-      const [organization] = await tx.insert(organizations).values({
-        orgCode: scenario.organizationCode,
-        orgName: `E2E Organization ${scenario.runId}`,
-        parentId: -1,
-        businessParentId: -1,
-        path: "/pending",
-        level: OrganizationLevel.One,
-        orgType: OrganizationType.Company,
-        status: OrganizationStatus.Enable,
-        isEntity: true,
-      }).returning({ id: organizations.id });
+      const [organization] = await tx
+        .insert(organizations)
+        .values({
+          orgCode: scenario.organizationCode,
+          orgName: `E2E Organization ${scenario.runId}`,
+          parentId: -1,
+          businessParentId: -1,
+          path: "/pending",
+          level: OrganizationLevel.One,
+          orgType: OrganizationType.Company,
+          status: OrganizationStatus.Enable,
+          isEntity: true,
+        })
+        .returning({ id: organizations.id });
       if (organization === undefined)
         throw new Error("E2E organization was not created");
-      await tx.update(organizations)
+      await tx
+        .update(organizations)
         .set({ path: `/${organization.id}` })
         .where(eq(organizations.id, organization.id));
       await tx.insert(organizationClosures).values({
@@ -191,7 +186,8 @@ export function createProductionE2EScenarioOwner(
       if (responsibilityHolderOrganization === undefined) {
         throw new Error("E2E responsibility holder Organization was not created");
       }
-      await tx.update(organizations)
+      await tx
+        .update(organizations)
         .set({
           path: `/${organization.id}/${responsibilityHolderOrganization.id}`,
         })
@@ -226,7 +222,8 @@ export function createProductionE2EScenarioOwner(
       if (responsibilityTargetOrganization === undefined) {
         throw new Error("E2E responsibility target Organization was not created");
       }
-      await tx.update(organizations)
+      await tx
+        .update(organizations)
         .set({ path: `/${responsibilityTargetOrganization.id}` })
         .where(eq(organizations.id, responsibilityTargetOrganization.id));
       await tx.insert(organizationClosures).values({
@@ -252,7 +249,8 @@ export function createProductionE2EScenarioOwner(
       if (hrSecondScopeRootOrganization === undefined) {
         throw new Error("E2E HR second Scope Root was not created");
       }
-      await tx.update(organizations)
+      await tx
+        .update(organizations)
         .set({ path: `/${hrSecondScopeRootOrganization.id}` })
         .where(eq(organizations.id, hrSecondScopeRootOrganization.id));
       await tx.insert(organizationClosures).values({
@@ -278,7 +276,8 @@ export function createProductionE2EScenarioOwner(
       if (hrResponsibilityTargetOrganization === undefined) {
         throw new Error("E2E HR responsibility target was not created");
       }
-      await tx.update(organizations)
+      await tx
+        .update(organizations)
         .set({
           path: `/${hrSecondScopeRootOrganization.id}/${hrResponsibilityTargetOrganization.id}`,
         })
@@ -296,28 +295,37 @@ export function createProductionE2EScenarioOwner(
         },
       ]);
 
-      const [position] = await tx.insert(positions).values({
-        posCode: scenario.positionCode,
-        posName: `E2E Position ${scenario.runId}`,
-        status: PositionStatus.Enable,
-      }).returning({ id: positions.id });
+      const [position] = await tx
+        .insert(positions)
+        .values({
+          posCode: scenario.positionCode,
+          posName: `E2E Position ${scenario.runId}`,
+          status: PositionStatus.Enable,
+        })
+        .returning({ id: positions.id });
       if (position === undefined)
         throw new Error("E2E position was not created");
 
-      const [responsibilityHolderPosition] = await tx.insert(positions).values({
-        posCode: scenario.responsibilityHolderPositionCode,
-        posName: `E2E Responsibility Holder ${scenario.runId}`,
-        status: PositionStatus.Enable,
-      }).returning({ id: positions.id });
+      const [responsibilityHolderPosition] = await tx
+        .insert(positions)
+        .values({
+          posCode: scenario.responsibilityHolderPositionCode,
+          posName: `E2E Responsibility Holder ${scenario.runId}`,
+          status: PositionStatus.Enable,
+        })
+        .returning({ id: positions.id });
       if (responsibilityHolderPosition === undefined) {
         throw new Error("E2E responsibility holder Position was not created");
       }
 
-      const [globalPosition] = await tx.insert(positions).values({
-        posCode: scenario.globalPositionCode,
-        posName: `E2E Global Position ${scenario.runId}`,
-        status: PositionStatus.Enable,
-      }).returning({ id: positions.id });
+      const [globalPosition] = await tx
+        .insert(positions)
+        .values({
+          posCode: scenario.globalPositionCode,
+          posName: `E2E Global Position ${scenario.runId}`,
+          status: PositionStatus.Enable,
+        })
+        .returning({ id: positions.id });
       if (globalPosition === undefined)
         throw new Error("E2E global unassigned Position was not created");
 
@@ -333,23 +341,29 @@ export function createProductionE2EScenarioOwner(
         throw new Error("E2E outside responsibility holder Position was not created");
       }
 
-      const [admin] = await tx.insert(users).values({
-        subjectIdentifier: scenario.adminSubjectIdentifier,
-        username: scenario.adminUsername,
-        name: `E2E Admin ${scenario.runId}`,
-        password: passwordHash,
-        status: UserStatus.Enable,
-      }).returning({ id: users.id });
+      const [admin] = await tx
+        .insert(users)
+        .values({
+          subjectIdentifier: scenario.adminSubjectIdentifier,
+          username: scenario.adminUsername,
+          name: `E2E Admin ${scenario.runId}`,
+          password: passwordHash,
+          status: UserStatus.Enable,
+        })
+        .returning({ id: users.id });
       if (admin === undefined)
         throw new Error("E2E admin subject was not created");
 
-      const [hrAdmin] = await tx.insert(users).values({
-        subjectIdentifier: scenario.hrAdminSubjectIdentifier,
-        username: scenario.hrAdminUsername,
-        name: `E2E HR Admin ${scenario.runId}`,
-        password: passwordHash,
-        status: UserStatus.Enable,
-      }).returning({ id: users.id });
+      const [hrAdmin] = await tx
+        .insert(users)
+        .values({
+          subjectIdentifier: scenario.hrAdminSubjectIdentifier,
+          username: scenario.hrAdminUsername,
+          name: `E2E HR Admin ${scenario.runId}`,
+          password: passwordHash,
+          status: UserStatus.Enable,
+        })
+        .returning({ id: users.id });
       if (hrAdmin === undefined)
         throw new Error("E2E HR Admin subject was not created");
 
@@ -375,27 +389,34 @@ export function createProductionE2EScenarioOwner(
         },
       ]);
 
-      const [noScopeHrAdmin] = await tx.insert(users).values({
-        subjectIdentifier: scenario.noScopeHrAdminSubjectIdentifier,
-        username: scenario.noScopeHrAdminUsername,
-        name: `E2E No Scope HR Admin ${scenario.runId}`,
-        password: passwordHash,
-        status: UserStatus.Enable,
-      }).returning({ id: users.id });
+      const [noScopeHrAdmin] = await tx
+        .insert(users)
+        .values({
+          subjectIdentifier: scenario.noScopeHrAdminSubjectIdentifier,
+          username: scenario.noScopeHrAdminUsername,
+          name: `E2E No Scope HR Admin ${scenario.runId}`,
+          password: passwordHash,
+          status: UserStatus.Enable,
+        })
+        .returning({ id: users.id });
       if (noScopeHrAdmin === undefined)
         throw new Error("E2E no-scope HR Admin subject was not created");
 
-      const [employment] = await tx.insert(employments).values({
-        userId: admin.id,
-        orgId: organization.id,
-        posId: position.id,
-        isPrimary: true,
-        status: EmploymentStatus.Enable,
-      }).returning({ id: employments.id });
+      const [employment] = await tx
+        .insert(employments)
+        .values({
+          userId: admin.id,
+          orgId: organization.id,
+          posId: position.id,
+          isPrimary: true,
+          status: EmploymentStatus.Enable,
+        })
+        .returning({ id: employments.id });
       if (employment === undefined)
         throw new Error("E2E employment was not created");
 
-      const [responsibilityHolderEmployment] = await tx.insert(employments)
+      const [responsibilityHolderEmployment] = await tx
+        .insert(employments)
         .values({
           userId: admin.id,
           orgId: responsibilityHolderOrganization.id,
@@ -408,23 +429,29 @@ export function createProductionE2EScenarioOwner(
         throw new Error("E2E responsibility holder Employment was not created");
       }
 
-      const [hrRoleBearingEmployment] = await tx.insert(employments).values({
-        userId: hrAdmin.id,
-        orgId: responsibilityHolderOrganization.id,
-        posId: position.id,
-        isPrimary: true,
-        status: EmploymentStatus.Enable,
-      }).returning({ id: employments.id });
+      const [hrRoleBearingEmployment] = await tx
+        .insert(employments)
+        .values({
+          userId: hrAdmin.id,
+          orgId: responsibilityHolderOrganization.id,
+          posId: position.id,
+          isPrimary: true,
+          status: EmploymentStatus.Enable,
+        })
+        .returning({ id: employments.id });
       if (hrRoleBearingEmployment === undefined)
         throw new Error("E2E HR role-bearing Employment was not created");
 
-      const [hrOrdinaryEmployment] = await tx.insert(employments).values({
-        userId: hrAdmin.id,
-        orgId: responsibilityTargetOrganization.id,
-        posId: outsideResponsibilityHolderPosition.id,
-        isPrimary: false,
-        status: EmploymentStatus.Enable,
-      }).returning({ id: employments.id });
+      const [hrOrdinaryEmployment] = await tx
+        .insert(employments)
+        .values({
+          userId: hrAdmin.id,
+          orgId: responsibilityTargetOrganization.id,
+          posId: outsideResponsibilityHolderPosition.id,
+          isPrimary: false,
+          status: EmploymentStatus.Enable,
+        })
+        .returning({ id: employments.id });
       if (hrOrdinaryEmployment === undefined)
         throw new Error("E2E HR ordinary Employment was not created");
 
@@ -456,72 +483,83 @@ export function createProductionE2EScenarioOwner(
         throw new Error("E2E no-scope HR Employment was not created");
       }
 
-      const [role] = await tx.insert(roles).values({
-        roleCode: scenario.adminRoleCode,
-        roleName: `E2E Admin Role ${scenario.runId}`,
-        clientId: adminClient.id,
-        status: RoleStatus.Enable,
-      }).returning({ id: roles.id });
+      const [role] = await tx
+        .insert(roles)
+        .values({
+          roleCode: scenario.adminRoleCode,
+          roleName: `E2E Admin Role ${scenario.runId}`,
+          clientId: adminClient.id,
+          status: RoleStatus.Enable,
+        })
+        .returning({ id: roles.id });
       if (role === undefined)
         throw new Error("E2E admin role was not created");
-      const [hrRole] = await tx.insert(roles).values({
-        roleCode: scenario.hrAdminRoleCode,
-        roleName: `E2E HR Admin Role ${scenario.runId}`,
-        clientId: adminClient.id,
-        status: RoleStatus.Enable,
-      }).returning({ id: roles.id });
+      const [hrRole] = await tx
+        .insert(roles)
+        .values({
+          roleCode: scenario.hrAdminRoleCode,
+          roleName: `E2E HR Admin Role ${scenario.runId}`,
+          clientId: adminClient.id,
+          status: RoleStatus.Enable,
+        })
+        .returning({ id: roles.id });
       if (hrRole === undefined)
         throw new Error("E2E HR Admin role was not created");
-      const [privilege] = await tx.insert(privileges).values({
-        privilegeCode: scenario.adminPrivilegeCode,
-        privilegeName: `E2E Admin Privilege ${scenario.runId}`,
-        status: PrivilegeStatus.Enable,
-      }).returning({ id: privileges.id });
+      const [privilege] = await tx
+        .insert(privileges)
+        .values({
+          privilegeCode: scenario.adminPrivilegeCode,
+          privilegeName: `E2E Admin Privilege ${scenario.runId}`,
+          status: PrivilegeStatus.Enable,
+        })
+        .returning({ id: privileges.id });
       if (privilege === undefined)
         throw new Error("E2E admin privilege was not created");
       await tx.insert(rolePrivileges).values({
         roleId: role.id,
         privilegeId: privilege.id,
       });
-      const createdRoleAssignments = await tx.insert(roleAssignments).values([
-        {
-          roleId: role.id,
-          targetType: RoleAssignmentTargetType.Employment,
-          targetId: employment.id,
-          includeDescendants: false,
-        },
-        {
-          roleId: hrRole.id,
-          targetType: RoleAssignmentTargetType.Employment,
-          targetId: hrRoleBearingEmployment.id,
-          includeDescendants: false,
-        },
-        {
-          roleId: hrRole.id,
-          targetType: RoleAssignmentTargetType.Employment,
-          targetId: hrSecondScopeRoleBearingEmployment.id,
-          includeDescendants: false,
-        },
-        {
-          roleId: hrRole.id,
-          targetType: RoleAssignmentTargetType.Employment,
-          targetId: employment.id,
-          includeDescendants: false,
-        },
-        {
-          roleId: hrRole.id,
-          targetType: RoleAssignmentTargetType.Employment,
-          targetId: noScopeHrRoleBearingEmployment.id,
-          includeDescendants: false,
-        },
-      ]).returning({
-        id: roleAssignments.id,
-        roleId: roleAssignments.roleId,
-        targetId: roleAssignments.targetId,
-      });
+      const createdRoleAssignments = await tx
+        .insert(roleAssignments)
+        .values([
+          {
+            roleId: role.id,
+            targetType: RoleAssignmentTargetType.Employment,
+            targetId: employment.id,
+            includeDescendants: false,
+          },
+          {
+            roleId: hrRole.id,
+            targetType: RoleAssignmentTargetType.Employment,
+            targetId: hrRoleBearingEmployment.id,
+            includeDescendants: false,
+          },
+          {
+            roleId: hrRole.id,
+            targetType: RoleAssignmentTargetType.Employment,
+            targetId: hrSecondScopeRoleBearingEmployment.id,
+            includeDescendants: false,
+          },
+          {
+            roleId: hrRole.id,
+            targetType: RoleAssignmentTargetType.Employment,
+            targetId: employment.id,
+            includeDescendants: false,
+          },
+          {
+            roleId: hrRole.id,
+            targetType: RoleAssignmentTargetType.Employment,
+            targetId: noScopeHrRoleBearingEmployment.id,
+            includeDescendants: false,
+          },
+        ])
+        .returning({
+          id: roleAssignments.id,
+          roleId: roleAssignments.roleId,
+          targetId: roleAssignments.targetId,
+        });
       const adminMixedRoleAssignment = createdRoleAssignments.find(
-        assignment => assignment.roleId === hrRole.id
-          && assignment.targetId === employment.id,
+        assignment => assignment.roleId === hrRole.id && assignment.targetId === employment.id,
       );
       if (adminMixedRoleAssignment === undefined) {
         throw new Error("E2E Admin mixed Role Assignment was not created");
@@ -551,8 +589,7 @@ export function createProductionE2EScenarioOwner(
         adminMixedRoleAssignmentId: adminMixedRoleAssignment.id,
         hiddenResponsibilityAssignmentId: hiddenResponsibilityAssignment.id,
         hrSecondScopeRoleAssignmentId: hrSecondScopeRoleAssignment.id,
-        outsideResponsibilityHolderEmploymentId:
-          hrOrdinaryEmployment.id,
+        outsideResponsibilityHolderEmploymentId: hrOrdinaryEmployment.id,
         responsibilityHolderEmploymentId: responsibilityHolderEmployment.id,
       };
 
@@ -582,9 +619,7 @@ export function createProductionE2EScenarioOwner(
       },
     });
     if (legacyProfile?.profileSchemaVersion !== 2) {
-      throw new Error(
-        "E2E User Profile cutover did not start from a stored v2 row",
-      );
+      throw new Error("E2E User Profile cutover did not start from a stored v2 row");
     }
 
     const profileModule = createUserProfileWorkerModule({
@@ -607,9 +642,7 @@ export function createProductionE2EScenarioOwner(
     try {
       const backfill = await profileModule.maintenance.backfillAllUsers({ batchSize: 100 });
       if (backfill.enqueued !== 6) {
-        throw new Error(
-          "E2E User Profile backfill did not enqueue all six seeded users",
-        );
+        throw new Error("E2E User Profile backfill did not enqueue all six seeded users");
       }
     }
     finally {
@@ -617,36 +650,37 @@ export function createProductionE2EScenarioOwner(
     }
 
     await waitForPublishedProfiles(scenario);
-    const access = await subjectAccess.seedMany([
-      {
-        subjectIdentifier: scenario.adminSubjectIdentifier,
-        state: "enabled",
-      },
-      {
-        subjectIdentifier: scenario.hrAdminSubjectIdentifier,
-        state: "enabled",
-      },
-      {
-        subjectIdentifier: scenario.delegateeSubjectIdentifier,
-        state: "enabled",
-      },
-      {
-        subjectIdentifier: scenario.pausedSubjectIdentifier,
-        state: "disabled",
-      },
-      {
-        subjectIdentifier: scenario.disabledSubjectIdentifier,
-        state: "disabled",
-      },
-      {
-        subjectIdentifier: scenario.noScopeHrAdminSubjectIdentifier,
-        state: "enabled",
-      },
-    ], input.clock.nowDate());
+    const access = await subjectAccess.seedMany(
+      [
+        {
+          subjectIdentifier: scenario.adminSubjectIdentifier,
+          state: "enabled",
+        },
+        {
+          subjectIdentifier: scenario.hrAdminSubjectIdentifier,
+          state: "enabled",
+        },
+        {
+          subjectIdentifier: scenario.delegateeSubjectIdentifier,
+          state: "enabled",
+        },
+        {
+          subjectIdentifier: scenario.pausedSubjectIdentifier,
+          state: "disabled",
+        },
+        {
+          subjectIdentifier: scenario.disabledSubjectIdentifier,
+          state: "disabled",
+        },
+        {
+          subjectIdentifier: scenario.noScopeHrAdminSubjectIdentifier,
+          state: "enabled",
+        },
+      ],
+      input.clock.nowDate(),
+    );
     if (access.seeded !== 6 || access.retainedExisting !== 0) {
-      throw new Error(
-        "E2E Subject Access bootstrap did not seed all six users",
-      );
+      throw new Error("E2E Subject Access bootstrap did not seed all six users");
     }
     if (generatedReferences === undefined) {
       throw new Error("E2E generated scenario references were not captured");
@@ -665,36 +699,33 @@ export function createProductionE2EScenarioOwner(
       references.noScopeHrAdminSubjectIdentifier,
     ];
     while (Date.now() < deadline) {
-      const rows = await input.db.select({
-        subjectIdentifier: userProfiles.subjectIdentifier,
-        profileSchemaVersion: userProfiles.profileSchemaVersion,
-        profileVersion: userProfiles.sourceDirtyVersion,
-        dirtyVersion: userProfileDirty.dirtyVersion,
-        dirtyStatus: userProfileDirty.status,
-      })
+      const rows = await input.db
+        .select({
+          subjectIdentifier: userProfiles.subjectIdentifier,
+          profileSchemaVersion: userProfiles.profileSchemaVersion,
+          profileVersion: userProfiles.sourceDirtyVersion,
+          dirtyVersion: userProfileDirty.dirtyVersion,
+          dirtyStatus: userProfileDirty.status,
+        })
         .from(userProfiles)
-        .innerJoin(
-          userProfileDirty,
-          eq(userProfileDirty.userId, userProfiles.userId),
-        );
-      const selectedRows = rows.filter(row =>
-        subjectIdentifiers.includes(row.subjectIdentifier));
+        .innerJoin(userProfileDirty, eq(userProfileDirty.userId, userProfiles.userId));
+      const selectedRows = rows.filter(row => subjectIdentifiers.includes(row.subjectIdentifier));
       const facts = await subjectFactsInspector.inspectMany(subjectIdentifiers);
       if (
         selectedRows.length === subjectIdentifiers.length
-        && selectedRows.every(row =>
-          row.profileSchemaVersion === 3
-          && row.profileVersion === row.dirtyVersion
-          && row.dirtyStatus === UserProfileDirtyStatus.Processed)
+        && selectedRows.every(
+          row =>
+            row.profileSchemaVersion === 3
+            && row.profileVersion === row.dirtyVersion
+            && row.dirtyStatus === UserProfileDirtyStatus.Processed,
+        )
         && facts.every(result => result.status === "valid")
       ) {
         return;
       }
       await Bun.sleep(250);
     }
-    throw new Error(
-      "E2E production Worker did not publish all v3 User Profiles before the deadline",
-    );
+    throw new Error("E2E production Worker did not publish all v3 User Profiles before the deadline");
   }
 
   async function readBack(references: E2EScenarioReferences) {
@@ -795,151 +826,172 @@ export function createProductionE2EScenarioOwner(
         where: { roleCode: references.hrAdminRoleCode, isDelete: false },
       }),
     ]);
-    const employment = admin === undefined || organization === undefined || position === undefined
-      ? undefined
-      : await input.db.query.employments.findFirst({
-          where: {
-            userId: admin.id,
-            orgId: organization.id,
-            posId: position.id,
-            isDelete: false,
-          },
-        });
-    const responsibilityHolderEmployment = admin === undefined
-      || responsibilityHolderOrganization === undefined
-      || responsibilityHolderPosition === undefined
-      ? undefined
-      : await input.db.query.employments.findFirst({
-          where: {
-            userId: admin.id,
-            orgId: responsibilityHolderOrganization.id,
-            posId: responsibilityHolderPosition.id,
-            isDelete: false,
-          },
-        });
-    const outsideResponsibilityHolderEmployment = hrAdmin === undefined
-      || responsibilityTargetOrganization === undefined
-      || outsideResponsibilityHolderPosition === undefined
-      ? undefined
-      : await input.db.query.employments.findFirst({
-          where: {
-            id: references.outsideResponsibilityHolderEmploymentId,
-            userId: hrAdmin.id,
-            orgId: responsibilityTargetOrganization.id,
-            posId: outsideResponsibilityHolderPosition.id,
-            isDelete: false,
-          },
-        });
-    const hrRoleBearingEmployment = hrAdmin === undefined
-      || responsibilityHolderOrganization === undefined
-      || position === undefined
-      ? undefined
-      : await input.db.query.employments.findFirst({
-          where: {
-            userId: hrAdmin.id,
-            orgId: responsibilityHolderOrganization.id,
-            posId: position.id,
-            isDelete: false,
-          },
-        });
-    const hrOrdinaryEmployment = hrAdmin === undefined
-      || responsibilityTargetOrganization === undefined
-      || outsideResponsibilityHolderPosition === undefined
-      ? undefined
-      : await input.db.query.employments.findFirst({
-          where: {
-            userId: hrAdmin.id,
-            orgId: responsibilityTargetOrganization.id,
-            posId: outsideResponsibilityHolderPosition.id,
-            isDelete: false,
-          },
-        });
-    const hrSecondScopeRoleBearingEmployment = hrAdmin === undefined
-      || hrSecondScopeRootOrganization === undefined
-      || position === undefined
-      ? undefined
-      : await input.db.query.employments.findFirst({
-          where: {
-            userId: hrAdmin.id,
-            orgId: hrSecondScopeRootOrganization.id,
-            posId: position.id,
-            isDelete: false,
-          },
-        });
-    const noScopeHrRoleBearingEmployment = noScopeHrAdmin === undefined
-      || organization === undefined
-      || position === undefined
-      ? undefined
-      : await input.db.query.employments.findFirst({
-          where: {
-            userId: noScopeHrAdmin.id,
-            orgId: organization.id,
-            posId: position.id,
-            isDelete: false,
-          },
-        });
+    const employment
+      = admin === undefined || organization === undefined || position === undefined
+        ? undefined
+        : await input.db.query.employments.findFirst({
+            where: {
+              userId: admin.id,
+              orgId: organization.id,
+              posId: position.id,
+              isDelete: false,
+            },
+          });
+    const responsibilityHolderEmployment
+      = admin === undefined
+        || responsibilityHolderOrganization === undefined
+        || responsibilityHolderPosition === undefined
+        ? undefined
+        : await input.db.query.employments.findFirst({
+            where: {
+              userId: admin.id,
+              orgId: responsibilityHolderOrganization.id,
+              posId: responsibilityHolderPosition.id,
+              isDelete: false,
+            },
+          });
+    const outsideResponsibilityHolderEmployment
+      = hrAdmin === undefined
+        || responsibilityTargetOrganization === undefined
+        || outsideResponsibilityHolderPosition === undefined
+        ? undefined
+        : await input.db.query.employments.findFirst({
+            where: {
+              id: references.outsideResponsibilityHolderEmploymentId,
+              userId: hrAdmin.id,
+              orgId: responsibilityTargetOrganization.id,
+              posId: outsideResponsibilityHolderPosition.id,
+              isDelete: false,
+            },
+          });
+    const hrRoleBearingEmployment
+      = hrAdmin === undefined || responsibilityHolderOrganization === undefined || position === undefined
+        ? undefined
+        : await input.db.query.employments.findFirst({
+            where: {
+              userId: hrAdmin.id,
+              orgId: responsibilityHolderOrganization.id,
+              posId: position.id,
+              isDelete: false,
+            },
+          });
+    const hrOrdinaryEmployment
+      = hrAdmin === undefined
+        || responsibilityTargetOrganization === undefined
+        || outsideResponsibilityHolderPosition === undefined
+        ? undefined
+        : await input.db.query.employments.findFirst({
+            where: {
+              userId: hrAdmin.id,
+              orgId: responsibilityTargetOrganization.id,
+              posId: outsideResponsibilityHolderPosition.id,
+              isDelete: false,
+            },
+          });
+    const hrSecondScopeRoleBearingEmployment
+      = hrAdmin === undefined || hrSecondScopeRootOrganization === undefined || position === undefined
+        ? undefined
+        : await input.db.query.employments.findFirst({
+            where: {
+              userId: hrAdmin.id,
+              orgId: hrSecondScopeRootOrganization.id,
+              posId: position.id,
+              isDelete: false,
+            },
+          });
+    const noScopeHrRoleBearingEmployment
+      = noScopeHrAdmin === undefined || organization === undefined || position === undefined
+        ? undefined
+        : await input.db.query.employments.findFirst({
+            where: {
+              userId: noScopeHrAdmin.id,
+              orgId: organization.id,
+              posId: position.id,
+              isDelete: false,
+            },
+          });
     const hiddenResponsibilityAssignment
       = await input.db.query.organizationResponsibilityAssignments.findFirst({
         where: { id: references.hiddenResponsibilityAssignmentId },
       });
-    const effectiveRoles = employment === undefined || adminClient === undefined
-      ? []
-      : (await roleAssignmentResolver.resolveEffectiveRoles({
-          employmentIds: [employment.id],
-          clientId: adminClient.id,
-        })).get(employment.id) ?? [];
-    const hrEffectiveRoles = hrRoleBearingEmployment === undefined
-      || adminClient === undefined
-      ? []
-      : (await roleAssignmentResolver.resolveEffectiveRoles({
-          employmentIds: [hrRoleBearingEmployment.id],
-          clientId: adminClient.id,
-        })).get(hrRoleBearingEmployment.id) ?? [];
-    const hrSecondScopeEffectiveRoles
-      = hrSecondScopeRoleBearingEmployment === undefined
-        || adminClient === undefined
+    const effectiveRoles
+      = employment === undefined || adminClient === undefined
         ? []
-        : (await roleAssignmentResolver.resolveEffectiveRoles({
-            employmentIds: [hrSecondScopeRoleBearingEmployment.id],
-            clientId: adminClient.id,
-          })).get(hrSecondScopeRoleBearingEmployment.id) ?? [];
-    const noScopeEffectiveRoles = noScopeHrRoleBearingEmployment === undefined
-      || adminClient === undefined
-      ? []
-      : (await roleAssignmentResolver.resolveEffectiveRoles({
-          employmentIds: [noScopeHrRoleBearingEmployment.id],
-          clientId: adminClient.id,
-        })).get(noScopeHrRoleBearingEmployment.id) ?? [];
-    const profileState = admin === undefined
-      ? undefined
-      : (await input.db.select({
-          profileVersion: userProfiles.sourceDirtyVersion,
-          profileSchemaVersion: userProfiles.profileSchemaVersion,
-          dirtyVersion: userProfileDirty.dirtyVersion,
-          dirtyStatus: userProfileDirty.status,
-        })
-          .from(userProfiles)
-          .innerJoin(userProfileDirty, eq(userProfileDirty.userId, userProfiles.userId))
-          .where(and(
-            eq(userProfiles.userId, admin.id),
-            eq(userProfiles.subjectIdentifier, references.adminSubjectIdentifier),
-          ))
-          .limit(1))[0];
-    const hrProfileState = hrAdmin === undefined
-      ? undefined
-      : (await input.db.select({
-          profileVersion: userProfiles.sourceDirtyVersion,
-          profileSchemaVersion: userProfiles.profileSchemaVersion,
-          dirtyVersion: userProfileDirty.dirtyVersion,
-          dirtyStatus: userProfileDirty.status,
-        })
-          .from(userProfiles)
-          .innerJoin(userProfileDirty, eq(userProfileDirty.userId, userProfiles.userId))
-          .where(and(
-            eq(userProfiles.userId, hrAdmin.id),
-            eq(userProfiles.subjectIdentifier, references.hrAdminSubjectIdentifier),
-          ))
-          .limit(1))[0];
+        : ((
+            await roleAssignmentResolver.resolveEffectiveRoles({
+              employmentIds: [employment.id],
+              clientId: adminClient.id,
+            })
+          ).get(employment.id) ?? []);
+    const hrEffectiveRoles
+      = hrRoleBearingEmployment === undefined || adminClient === undefined
+        ? []
+        : ((
+            await roleAssignmentResolver.resolveEffectiveRoles({
+              employmentIds: [hrRoleBearingEmployment.id],
+              clientId: adminClient.id,
+            })
+          ).get(hrRoleBearingEmployment.id) ?? []);
+    const hrSecondScopeEffectiveRoles
+      = hrSecondScopeRoleBearingEmployment === undefined || adminClient === undefined
+        ? []
+        : ((
+            await roleAssignmentResolver.resolveEffectiveRoles({
+              employmentIds: [hrSecondScopeRoleBearingEmployment.id],
+              clientId: adminClient.id,
+            })
+          ).get(hrSecondScopeRoleBearingEmployment.id) ?? []);
+    const noScopeEffectiveRoles
+      = noScopeHrRoleBearingEmployment === undefined || adminClient === undefined
+        ? []
+        : ((
+            await roleAssignmentResolver.resolveEffectiveRoles({
+              employmentIds: [noScopeHrRoleBearingEmployment.id],
+              clientId: adminClient.id,
+            })
+          ).get(noScopeHrRoleBearingEmployment.id) ?? []);
+    const profileState
+      = admin === undefined
+        ? undefined
+        : (
+            await input.db
+              .select({
+                profileVersion: userProfiles.sourceDirtyVersion,
+                profileSchemaVersion: userProfiles.profileSchemaVersion,
+                dirtyVersion: userProfileDirty.dirtyVersion,
+                dirtyStatus: userProfileDirty.status,
+              })
+              .from(userProfiles)
+              .innerJoin(userProfileDirty, eq(userProfileDirty.userId, userProfiles.userId))
+              .where(
+                and(
+                  eq(userProfiles.userId, admin.id),
+                  eq(userProfiles.subjectIdentifier, references.adminSubjectIdentifier),
+                ),
+              )
+              .limit(1)
+          )[0];
+    const hrProfileState
+      = hrAdmin === undefined
+        ? undefined
+        : (
+            await input.db
+              .select({
+                profileVersion: userProfiles.sourceDirtyVersion,
+                profileSchemaVersion: userProfiles.profileSchemaVersion,
+                dirtyVersion: userProfileDirty.dirtyVersion,
+                dirtyStatus: userProfileDirty.status,
+              })
+              .from(userProfiles)
+              .innerJoin(userProfileDirty, eq(userProfileDirty.userId, userProfiles.userId))
+              .where(
+                and(
+                  eq(userProfiles.userId, hrAdmin.id),
+                  eq(userProfiles.subjectIdentifier, references.hrAdminSubjectIdentifier),
+                ),
+              )
+              .limit(1)
+          )[0];
     const barriers = await subjectAccess.inspectMany([
       references.adminSubjectIdentifier,
       references.hrAdminSubjectIdentifier,
@@ -952,12 +1004,8 @@ export function createProductionE2EScenarioOwner(
     ]);
     const factsResult = facts[0];
     const hrFactsResult = facts[1];
-    const factEmployments = factsResult?.status === "valid"
-      ? factsResult.record.facts.employments
-      : [];
-    const hrFactEmployments = hrFactsResult?.status === "valid"
-      ? hrFactsResult.record.facts.employments
-      : [];
+    const factEmployments = factsResult?.status === "valid" ? factsResult.record.facts.employments : [];
+    const hrFactEmployments = hrFactsResult?.status === "valid" ? hrFactsResult.record.facts.employments : [];
 
     return {
       admin: {
@@ -968,23 +1016,20 @@ export function createProductionE2EScenarioOwner(
       },
       hrAdmin: {
         active: hrAdmin?.status === UserStatus.Enable && hrAdmin.isDelete === false,
-        passwordConfigured: typeof hrAdmin?.password === "string"
-          && hrAdmin.password.length > 0,
+        passwordConfigured: typeof hrAdmin?.password === "string" && hrAdmin.password.length > 0,
         subjectIdentifier: hrAdmin?.subjectIdentifier ?? "",
         username: hrAdmin?.username ?? "",
       },
       delegatee: {
         active: delegatee?.status === UserStatus.Enable && delegatee.isDelete === false,
-        passwordConfigured: typeof delegatee?.password === "string"
-          && delegatee.password.length > 0,
+        passwordConfigured: typeof delegatee?.password === "string" && delegatee.password.length > 0,
         subjectIdentifier: delegatee?.subjectIdentifier ?? "",
         username: delegatee?.username ?? "",
       },
       noScopeHrAdmin: {
-        active: noScopeHrAdmin?.status === UserStatus.Enable
-          && noScopeHrAdmin.isDelete === false,
-        passwordConfigured: typeof noScopeHrAdmin?.password === "string"
-          && noScopeHrAdmin.password.length > 0,
+        active: noScopeHrAdmin?.status === UserStatus.Enable && noScopeHrAdmin.isDelete === false,
+        passwordConfigured:
+          typeof noScopeHrAdmin?.password === "string" && noScopeHrAdmin.password.length > 0,
         subjectIdentifier: noScopeHrAdmin?.subjectIdentifier ?? "",
         username: noScopeHrAdmin?.username ?? "",
       },
@@ -993,25 +1038,26 @@ export function createProductionE2EScenarioOwner(
         code: organization?.orgCode ?? "",
       },
       responsibilityHolderOrganization: {
-        active: responsibilityHolderOrganization?.status
-          === OrganizationStatus.Enable
+        active:
+          responsibilityHolderOrganization?.status === OrganizationStatus.Enable
           && responsibilityHolderOrganization.isDelete === false,
         code: responsibilityHolderOrganization?.orgCode ?? "",
       },
       responsibilityTargetOrganization: {
-        active: responsibilityTargetOrganization?.status === OrganizationStatus.Enable
+        active:
+          responsibilityTargetOrganization?.status === OrganizationStatus.Enable
           && responsibilityTargetOrganization.isDelete === false,
         code: responsibilityTargetOrganization?.orgCode ?? "",
       },
       hrSecondScopeRootOrganization: {
-        active: hrSecondScopeRootOrganization?.status
-          === OrganizationStatus.Enable
+        active:
+          hrSecondScopeRootOrganization?.status === OrganizationStatus.Enable
           && hrSecondScopeRootOrganization.isDelete === false,
         code: hrSecondScopeRootOrganization?.orgCode ?? "",
       },
       hrResponsibilityTargetOrganization: {
-        active: hrResponsibilityTargetOrganization?.status
-          === OrganizationStatus.Enable
+        active:
+          hrResponsibilityTargetOrganization?.status === OrganizationStatus.Enable
           && hrResponsibilityTargetOrganization.isDelete === false,
         code: hrResponsibilityTargetOrganization?.orgCode ?? "",
       },
@@ -1020,13 +1066,12 @@ export function createProductionE2EScenarioOwner(
         code: position?.posCode ?? "",
       },
       globalPosition: {
-        active: globalPosition?.status === PositionStatus.Enable
-          && globalPosition.isDelete === false,
+        active: globalPosition?.status === PositionStatus.Enable && globalPosition.isDelete === false,
         code: globalPosition?.posCode ?? "",
       },
       outsideResponsibilityHolderPosition: {
-        active: outsideResponsibilityHolderPosition?.status
-          === PositionStatus.Enable
+        active:
+          outsideResponsibilityHolderPosition?.status === PositionStatus.Enable
           && outsideResponsibilityHolderPosition.isDelete === false,
         code: outsideResponsibilityHolderPosition?.posCode ?? "",
       },
@@ -1034,157 +1079,171 @@ export function createProductionE2EScenarioOwner(
         active: employment?.status === EmploymentStatus.Enable && employment.isDelete === false,
       },
       responsibilityHolderEmployment: {
-        active: responsibilityHolderEmployment?.status === EmploymentStatus.Enable
+        active:
+          responsibilityHolderEmployment?.status === EmploymentStatus.Enable
           && responsibilityHolderEmployment.isDelete === false,
       },
       outsideResponsibilityHolderEmployment: {
-        active: outsideResponsibilityHolderEmployment?.status
-          === EmploymentStatus.Enable
+        active:
+          outsideResponsibilityHolderEmployment?.status === EmploymentStatus.Enable
           && outsideResponsibilityHolderEmployment.isDelete === false,
         id: outsideResponsibilityHolderEmployment?.id ?? 0,
       },
       role: {
         active: role?.status === RoleStatus.Enable && role.isDelete === false,
         assigned: effectiveRoles.some(
-          effectiveRole => effectiveRole.id === role?.id
-            && effectiveRole.roleCode === references.adminRoleCode,
+          effectiveRole =>
+            effectiveRole.id === role?.id && effectiveRole.roleCode === references.adminRoleCode,
         ),
         code: role?.roleCode ?? "",
       },
       hrRole: {
         active: hrRole?.status === RoleStatus.Enable && hrRole.isDelete === false,
         assigned: hrEffectiveRoles.some(
-          effectiveRole => effectiveRole.id === hrRole?.id
-            && effectiveRole.roleCode === references.hrAdminRoleCode,
+          effectiveRole =>
+            effectiveRole.id === hrRole?.id && effectiveRole.roleCode === references.hrAdminRoleCode,
         ),
         code: hrRole?.roleCode ?? "",
       },
       hrRoleBearingEmployment: {
-        active: hrRoleBearingEmployment?.status === EmploymentStatus.Enable
+        active:
+          hrRoleBearingEmployment?.status === EmploymentStatus.Enable
           && hrRoleBearingEmployment.isDelete === false,
       },
       hrSecondScopeRoleBearingEmployment: {
-        active: hrSecondScopeRoleBearingEmployment?.status
-          === EmploymentStatus.Enable
+        active:
+          hrSecondScopeRoleBearingEmployment?.status === EmploymentStatus.Enable
           && hrSecondScopeRoleBearingEmployment.isDelete === false
           && hrSecondScopeEffectiveRoles.some(
-            effectiveRole => effectiveRole.id === hrRole?.id
-              && effectiveRole.roleCode === references.hrAdminRoleCode,
+            effectiveRole =>
+              effectiveRole.id === hrRole?.id && effectiveRole.roleCode === references.hrAdminRoleCode,
           ),
       },
       hrOrdinaryEmployment: {
-        active: hrOrdinaryEmployment?.status === EmploymentStatus.Enable
-          && hrOrdinaryEmployment.isDelete === false,
+        active:
+          hrOrdinaryEmployment?.status === EmploymentStatus.Enable && hrOrdinaryEmployment.isDelete === false,
       },
       adminHasMixedRole: effectiveRoles.some(
-        effectiveRole => effectiveRole.id === hrRole?.id
-          && effectiveRole.roleCode === references.hrAdminRoleCode,
+        effectiveRole =>
+          effectiveRole.id === hrRole?.id && effectiveRole.roleCode === references.hrAdminRoleCode,
       ),
       noScopeHrRoleIsIneffective:
         noScopeHrRoleBearingEmployment?.status === EmploymentStatus.Pause
         && noScopeEffectiveRoles.length === 0,
       hiddenResponsibilityAssignment: {
-        active: hiddenResponsibilityAssignment?.status
-          === OrganizationResponsibilityAssignmentStatus.Enable,
+        active: hiddenResponsibilityAssignment?.status === OrganizationResponsibilityAssignmentStatus.Enable,
         id: hiddenResponsibilityAssignment?.id ?? 0,
-        holderEmploymentId:
-          hiddenResponsibilityAssignment?.employmentId ?? 0,
+        holderEmploymentId: hiddenResponsibilityAssignment?.employmentId ?? 0,
         targetOrganizationCode:
-          hiddenResponsibilityAssignment?.targetOrganizationId
-          === hrResponsibilityTargetOrganization?.id
-            ? hrResponsibilityTargetOrganization?.orgCode ?? ""
+          hiddenResponsibilityAssignment?.targetOrganizationId === hrResponsibilityTargetOrganization?.id
+            ? (hrResponsibilityTargetOrganization?.orgCode ?? "")
             : "",
       },
       adminClient: {
-        active: adminClient?.status === ClientStatus.Enable
-          && adminClient.isDelete === false,
-        customSsoEnabled: adminClient?.customSsoEnabled ?? false,
+        active: adminClient?.status === ClientStatus.Enable && adminClient.isDelete === false,
+        ssoEnabled: adminClient?.ssoEnabled ?? false,
         clientCode: adminClient?.clientCode ?? "",
-        mode: adminClient?.customSsoConfig?.mode ?? null,
-        redirectUris: adminClient?.customSsoConfig?.validRedirectUrls ?? [],
+        callbackEndpoint:
+          adminClient?.ssoConfig?.protocol === ClientSsoProtocol.CustomSso
+            ? adminClient.ssoConfig.callbackEndpoint
+            : null,
+        redirectUris:
+          adminClient?.ssoConfig?.protocol === ClientSsoProtocol.CustomSso
+            ? adminClient.ssoConfig.validRedirectUrls
+            : [],
       },
       customSsoClient: {
-        active: customSsoClient?.status === ClientStatus.Enable
-          && customSsoClient.isDelete === false,
-        customSsoEnabled: customSsoClient?.customSsoEnabled ?? false,
+        active: customSsoClient?.status === ClientStatus.Enable && customSsoClient.isDelete === false,
+        ssoEnabled: customSsoClient?.ssoEnabled ?? false,
         clientCode: customSsoClient?.clientCode ?? "",
-        mode: customSsoClient?.customSsoConfig?.mode ?? null,
-        redirectUris: customSsoClient?.customSsoConfig?.validRedirectUrls ?? [],
+        callbackEndpoint:
+          customSsoClient?.ssoConfig?.protocol === ClientSsoProtocol.CustomSso
+            ? customSsoClient.ssoConfig.callbackEndpoint
+            : null,
+        redirectUris:
+          customSsoClient?.ssoConfig?.protocol === ClientSsoProtocol.CustomSso
+            ? customSsoClient.ssoConfig.validRedirectUrls
+            : [],
       },
       internalClient: {
-        active: internalClient?.status === ClientStatus.Enable
-          && internalClient.isDelete === false,
+        active: internalClient?.status === ClientStatus.Enable && internalClient.isDelete === false,
         clientCode: internalClient?.clientCode ?? "",
       },
       oidcClient: {
-        active: oidcClient?.status === ClientStatus.Enable
-          && oidcClient.oidcEnabled
+        active:
+          oidcClient?.status === ClientStatus.Enable
+          && oidcClient.ssoEnabled
           && oidcClient.isDelete === false,
         clientCode: oidcClient?.clientCode ?? "",
-        clientType: oidcClient?.oidcConfig?.clientType ?? null,
-        redirectUris: oidcClient?.oidcConfig?.redirectUris ?? [],
+        clientType:
+          oidcClient?.ssoConfig?.protocol === ClientSsoProtocol.Oidc ? oidcClient.ssoConfig.clientType : null,
+        redirectUris:
+          oidcClient?.ssoConfig?.protocol === ClientSsoProtocol.Oidc ? oidcClient.ssoConfig.redirectUris : [],
       },
-      subjectAccess: barrierResult?.status === "valid"
-        ? barrierResult.record.state
-        : barrierResult?.status ?? "missing",
+      subjectAccess:
+        barrierResult?.status === "valid" ? barrierResult.record.state : (barrierResult?.status ?? "missing"),
       subjectFacts: {
         ready: factsResult?.status === "valid",
-        subjectIdentifier: factsResult?.status === "valid"
-          ? factsResult.record.subjectIdentifier
-          : "",
-        sourceDirtyVersion: factsResult?.status === "valid"
-          ? factsResult.record.sourceDirtyVersion
-          : "",
-        profileUsername: factsResult?.status === "valid"
-          ? factsResult.record.profile.username
-          : "",
-        organizationCodes: unique(factEmployments.map(
-          fact => fact.organization.code,
-        )),
+        subjectIdentifier: factsResult?.status === "valid" ? factsResult.record.subjectIdentifier : "",
+        sourceDirtyVersion: factsResult?.status === "valid" ? factsResult.record.sourceDirtyVersion : "",
+        profileUsername: factsResult?.status === "valid" ? factsResult.record.profile.username : "",
+        organizationCodes: unique(factEmployments.map(fact => fact.organization.code)),
         positionCodes: unique(factEmployments.map(fact => fact.position.code)),
-        clientCodes: unique(factEmployments.flatMap(fact =>
-          fact.clientAuthorizations.map(authorization => authorization.clientCode))),
-        roleCodes: unique(factEmployments.flatMap(fact =>
-          fact.clientAuthorizations.flatMap(authorization =>
-            authorization.roles.map(factRole => factRole.code)))),
-        responsibilityTypeCodes: unique(factEmployments.flatMap(fact =>
-          fact.responsibilities.map(responsibility => responsibility.type.code))),
+        clientCodes: unique(
+          factEmployments.flatMap(fact =>
+            fact.clientAuthorizations.map(authorization => authorization.clientCode),
+          ),
+        ),
+        roleCodes: unique(
+          factEmployments.flatMap(fact =>
+            fact.clientAuthorizations.flatMap(authorization =>
+              authorization.roles.map(factRole => factRole.code),
+            ),
+          ),
+        ),
+        responsibilityTypeCodes: unique(
+          factEmployments.flatMap(fact =>
+            fact.responsibilities.map(responsibility => responsibility.type.code),
+          ),
+        ),
         responsibilityTargetOrganizationCodes: unique(
-          factEmployments.flatMap(fact => fact.responsibilities.map(
-            responsibility => responsibility.targetOrganization.code,
-          )),
+          factEmployments.flatMap(fact =>
+            fact.responsibilities.map(responsibility => responsibility.targetOrganization.code),
+          ),
         ),
       },
-      subjectProfileReady: profileState !== undefined
+      subjectProfileReady:
+        profileState !== undefined
         && profileState.dirtyStatus === UserProfileDirtyStatus.Processed
         && profileState.profileVersion === profileState.dirtyVersion,
       subjectProfileVersion: profileState?.profileVersion ?? "",
       subjectProfileSchemaVersion: profileState?.profileSchemaVersion ?? 0,
-      hrSubjectAccess: hrBarrierResult?.status === "valid"
-        ? hrBarrierResult.record.state
-        : hrBarrierResult?.status ?? "missing",
+      hrSubjectAccess:
+        hrBarrierResult?.status === "valid"
+          ? hrBarrierResult.record.state
+          : (hrBarrierResult?.status ?? "missing"),
       hrSubjectFacts: {
         ready: hrFactsResult?.status === "valid",
-        subjectIdentifier: hrFactsResult?.status === "valid"
-          ? hrFactsResult.record.subjectIdentifier
-          : "",
-        sourceDirtyVersion: hrFactsResult?.status === "valid"
-          ? hrFactsResult.record.sourceDirtyVersion
-          : "",
-        profileUsername: hrFactsResult?.status === "valid"
-          ? hrFactsResult.record.profile.username
-          : "",
-        organizationCodes: unique(hrFactEmployments.map(
-          fact => fact.organization.code,
-        )),
+        subjectIdentifier: hrFactsResult?.status === "valid" ? hrFactsResult.record.subjectIdentifier : "",
+        sourceDirtyVersion: hrFactsResult?.status === "valid" ? hrFactsResult.record.sourceDirtyVersion : "",
+        profileUsername: hrFactsResult?.status === "valid" ? hrFactsResult.record.profile.username : "",
+        organizationCodes: unique(hrFactEmployments.map(fact => fact.organization.code)),
         positionCodes: unique(hrFactEmployments.map(fact => fact.position.code)),
-        clientCodes: unique(hrFactEmployments.flatMap(fact =>
-          fact.clientAuthorizations.map(authorization => authorization.clientCode))),
-        roleCodes: unique(hrFactEmployments.flatMap(fact =>
-          fact.clientAuthorizations.flatMap(authorization =>
-            authorization.roles.map(factRole => factRole.code)))),
+        clientCodes: unique(
+          hrFactEmployments.flatMap(fact =>
+            fact.clientAuthorizations.map(authorization => authorization.clientCode),
+          ),
+        ),
+        roleCodes: unique(
+          hrFactEmployments.flatMap(fact =>
+            fact.clientAuthorizations.flatMap(authorization =>
+              authorization.roles.map(factRole => factRole.code),
+            ),
+          ),
+        ),
       },
-      hrSubjectProfileReady: hrProfileState !== undefined
+      hrSubjectProfileReady:
+        hrProfileState !== undefined
         && hrProfileState.dirtyStatus === UserProfileDirtyStatus.Processed
         && hrProfileState.profileVersion === hrProfileState.dirtyVersion,
       hrSubjectProfileVersion: hrProfileState?.profileVersion ?? "",

@@ -1,4 +1,4 @@
-import type { ClockPort, RedisPort } from "@api/composition/runtime";
+import type { ClockPort } from "@api/composition/runtime";
 import { createHash } from "node:crypto";
 import { CustomError } from "@iam/api-core/errors/CustomError";
 import { InvalidLoginCredentialError } from "@iam/api-core/errors/InvalidLoginCredentialError";
@@ -21,7 +21,7 @@ type RedisNonceStore = {
 
 export interface LoginCredentialParserDeps {
   clock: Pick<ClockPort, "now">;
-  nonceStore: Pick<RedisPort, "set">;
+  nonceStore: RedisNonceStore;
   config: {
     privateKeysByKid: Record<string, string>;
     maxSkewMs: number;

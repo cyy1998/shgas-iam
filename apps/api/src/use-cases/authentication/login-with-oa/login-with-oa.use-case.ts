@@ -15,8 +15,10 @@ export function createLoginWithOaUseCase(deps: LoginWithOaDeps) {
       throw new InvalidSsoClientError("非法client代码");
     }
     const currentTimestamp = deps.clock.now();
-    if (deps.config.nodeEnv === "production"
-      && Math.abs(currentTimestamp - Number.parseInt(input.timestamp)) >= 1000 * 300) {
+    if (
+      deps.config.nodeEnv === "production"
+      && Math.abs(currentTimestamp - Number.parseInt(input.timestamp)) >= 1000 * 300
+    ) {
       throw new AuthzUnauthorizedError("token过期");
     }
     const hashString = Buffer.from(
@@ -34,15 +36,22 @@ export function createLoginWithOaUseCase(deps: LoginWithOaDeps) {
       throw new LoginFailedError("用户类别不支持OA登录");
     }
     const userDetail = await deps.users.getUserDetailById(liveUser.id);
-    const { token: sessionId } = await deps.principalSessions.createPrincipalSession(liveUser.subjectIdentifier, {
-      amr: ["oa"],
-      origin: toSessionOrigin(options.requestContext),
-    });
+    const { token: sessionId, remainingSeconds } = await deps.principalSessions.createPrincipalSession(
+      liveUser.subjectIdentifier,
+      {
+        amr: ["oa"],
+        origin: toSessionOrigin(options.requestContext),
+      },
+    );
     await deps.auditLogWriter.recordAuditLog({
       ...options.requestContext,
       ...buildOaLoginSuccessAudit(userDetail, input.clientCode),
     });
-    return { token: sessionId, isMobileSet: userDetail.mobile !== null };
+    return {
+      token: sessionId,
+      ...(remainingSeconds === undefined ? {} : { remainingSeconds }),
+      isMobileSet: userDetail.mobile !== null,
+    };
   }
 
   return { execute };

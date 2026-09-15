@@ -1,20 +1,26 @@
 import process from "node:process";
-import app, { closeAppComposition } from "./app";
+import app, { appLifecycle, closeAppComposition } from "./app";
 import env from "./env";
 
-const port = env.port;
-
+const server = Bun.serve({ port: env.port, fetch: app.fetch });
+appLifecycle.started(server.port!);
 let shutdownStarted = false;
 for (const signal of ["SIGINT", "SIGTERM"] as const) {
   process.once(signal, () => {
     if (shutdownStarted)
       return;
     shutdownStarted = true;
-    void closeAppComposition().finally(() => process.exit(0));
+    void (async () => {
+      try {
+        await server.stop(false);
+        await closeAppComposition();
+        appLifecycle.stopped();
+        process.exit(0);
+      }
+      catch {
+        appLifecycle.shutdownFailed();
+        process.exit(1);
+      }
+    })();
   });
 }
-
-export default {
-  port,
-  fetch: app.fetch,
-};

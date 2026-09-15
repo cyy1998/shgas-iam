@@ -1,4 +1,4 @@
-import { CustomSsoClientMode, OidcClientType } from "@iam/contracts";
+import { OidcClientType } from "@iam/contracts";
 
 export interface E2EScenarioReferences {
   version: 1;
@@ -136,16 +136,16 @@ export interface E2EScenarioReadBack {
   };
   adminClient: {
     active: boolean;
-    customSsoEnabled: boolean;
+    ssoEnabled: boolean;
     clientCode: string;
-    mode: CustomSsoClientMode | null;
+    callbackEndpoint: string | null;
     redirectUris: string[];
   };
   customSsoClient: {
     active: boolean;
-    customSsoEnabled: boolean;
+    ssoEnabled: boolean;
     clientCode: string;
-    mode: CustomSsoClientMode | null;
+    callbackEndpoint: string | null;
     redirectUris: string[];
   };
   internalClient: { active: boolean; clientCode: string };
@@ -365,15 +365,15 @@ function assertScenarioReadBack(
     && actual.hiddenResponsibilityAssignment.targetOrganizationCode
     === expected.hrResponsibilityTargetOrganizationCode
     && actual.adminClient.active
-    && actual.adminClient.customSsoEnabled
+    && actual.adminClient.ssoEnabled
     && actual.adminClient.clientCode === expected.adminClientCode
-    && actual.adminClient.mode === CustomSsoClientMode.Gateway
+    && actual.adminClient.callbackEndpoint === `${expected.canonicalOrigin}/sso/callback`
     && actual.adminClient.redirectUris.length === 1
     && actual.adminClient.redirectUris[0] === expected.adminRedirectUri
     && actual.customSsoClient.active
-    && !actual.customSsoClient.customSsoEnabled
+    && !actual.customSsoClient.ssoEnabled
     && actual.customSsoClient.clientCode === expected.customSsoClientCode
-    && actual.customSsoClient.mode === null
+    && actual.customSsoClient.callbackEndpoint === null
     && actual.customSsoClient.redirectUris.length === 0
     && actual.internalClient.active
     && actual.internalClient.clientCode === expected.internalClientCode

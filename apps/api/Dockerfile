@@ -26,6 +26,7 @@ COPY .npmrc pnpm-workspace.yaml package.json pnpm-lock.yaml ./
 COPY .husky/install.mjs ./.husky/install.mjs
 COPY packages/client-subject-projection/package.json ./packages/client-subject-projection/
 COPY packages/custom-sso/package.json ./packages/custom-sso/
+COPY packages/oidc/package.json ./packages/oidc/
 COPY packages/contracts/package.json ./packages/contracts/
 COPY packages/db/package.json ./packages/db/
 COPY packages/api-core/package.json ./packages/api-core/
@@ -49,6 +50,7 @@ RUN --mount=type=cache,id=iam-pnpm-v11,target=/pnpm/store \
 FROM deps AS builder
 COPY packages/client-subject-projection/ ./packages/client-subject-projection/
 COPY packages/custom-sso/ ./packages/custom-sso/
+COPY packages/oidc/ ./packages/oidc/
 COPY packages/contracts/ ./packages/contracts/
 COPY packages/db/ ./packages/db/
 COPY packages/api-core/ ./packages/api-core/

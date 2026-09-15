@@ -17,7 +17,6 @@ export const RenewalPolicySchema = z.enum([
   "fixed_at_issue",
   "never_extend",
 ]);
-export type RenewalPolicy = z.infer<typeof RenewalPolicySchema>;
 
 export const RevocationReasonSchema = z.enum([
   "logout",
@@ -35,7 +34,6 @@ export const RevocationReasonSchema = z.enum([
   "replaced",
   "unknown",
 ]);
-export type RevocationReason = z.infer<typeof RevocationReasonSchema>;
 
 const MetadataSchema = z.record(z.string(), z.unknown());
 
@@ -70,7 +68,6 @@ export const CleanupRefSchema = z.object({
   ref: z.string().min(1),
   metadata: MetadataSchema.optional(),
 });
-export type CleanupRef = z.infer<typeof CleanupRefSchema>;
 
 const BaseLifecycleSchema = z.object({
   version: z.literal(SESSION_KERNEL_OBJECT_VERSION),
@@ -100,7 +97,6 @@ export const PrincipalSessionSchema = z.object({
   metadata: MetadataSchema.optional(),
   cleanupRefs: z.array(CleanupRefSchema).default([]),
 }).strict();
-export type PrincipalSession = z.infer<typeof PrincipalSessionSchema>;
 
 export const ClientBindingSchema = BaseLifecycleSchema.extend({
   bindingId: z.string().min(1),
@@ -111,7 +107,6 @@ export const ClientBindingSchema = BaseLifecycleSchema.extend({
   authTime: z.number().int().nonnegative(),
   renewalPolicy: RenewalPolicySchema,
 });
-export type ClientBinding = z.infer<typeof ClientBindingSchema>;
 
 export const IssuedCredentialSchema = BaseLifecycleSchema.extend({
   credentialId: z.string().min(1),
@@ -124,7 +119,6 @@ export const IssuedCredentialSchema = BaseLifecycleSchema.extend({
   principal: PrincipalRefSchema,
   renewalPolicy: RenewalPolicySchema,
 });
-export type IssuedCredential = z.infer<typeof IssuedCredentialSchema>;
 
 export const ProtocolArtifactSchema = BaseLifecycleSchema.extend({
   artifactId: z.string().min(1),
@@ -147,7 +141,6 @@ export const ProtocolArtifactSchema = BaseLifecycleSchema.extend({
     });
   }
 });
-export type ProtocolArtifact = z.infer<typeof ProtocolArtifactSchema>;
 
 export const RevokedTombstoneSchema = z.object({
   version: z.literal(SESSION_KERNEL_OBJECT_VERSION),
@@ -164,103 +157,6 @@ export const RevokedTombstoneSchema = z.object({
   cleanupRefs: z.array(CleanupRefSchema).default([]),
   metadata: MetadataSchema.optional(),
 });
-export type RevokedTombstone = z.infer<typeof RevokedTombstoneSchema>;
-
-export const FreshnessRequirementSchema = z.object({
-  forceReauthentication: z.boolean().optional(),
-  maxAgeSeconds: z.number().int().positive().optional(),
-  requiredAmr: z.array(z.string()).optional(),
-  minimumAcr: z.string().optional(),
-  acrRank: z.record(z.string(), z.number()).optional(),
-});
-export type FreshnessRequirement = z.infer<typeof FreshnessRequirementSchema>;
-
-export type RevokeObjectCounter = {
-  revoked: number;
-  alreadyRevoked: number;
-  missing: number;
-  excluded: number;
-};
-
-export type CleanupFailure = {
-  protocol: string;
-  kind: string;
-  ref: string;
-  error: string;
-};
-
-export type RevokeSummary = {
-  principalSessions: RevokeObjectCounter;
-  bindings: RevokeObjectCounter;
-  credentials: RevokeObjectCounter;
-  artifacts: RevokeObjectCounter;
-  cleanup: {
-    attempted: number;
-    succeeded: number;
-    failed: number;
-    failures: CleanupFailure[];
-  };
-};
-
-export type LifecycleObjectByKind = {
-  principal_session: PrincipalSession;
-  client_binding: ClientBinding;
-  credential: IssuedCredential;
-  artifact: ProtocolArtifact;
-};
-
-export type LifecycleObject = LifecycleObjectByKind[LifecycleObjectKind];
-
-export const lifecycleObjectSchemas = {
-  principal_session: PrincipalSessionSchema,
-  client_binding: ClientBindingSchema,
-  credential: IssuedCredentialSchema,
-  artifact: ProtocolArtifactSchema,
-} satisfies Record<LifecycleObjectKind, z.ZodType>;
-
-export type ParseLifecycleObjectResult<K extends LifecycleObjectKind>
-  = | { success: true; data: LifecycleObjectByKind[K] }
-    | { success: false; issues: z.core.$ZodIssue[]; cause?: unknown };
-
-export function parseLifecycleObject<K extends LifecycleObjectKind>(
-  kind: K,
-  serialized: string,
-): ParseLifecycleObjectResult<K> {
-  try {
-    const parsed = JSON.parse(serialized) as unknown;
-    const result = lifecycleObjectSchemas[kind].safeParse(parsed);
-    if (result.success)
-      return { success: true, data: result.data as LifecycleObjectByKind[K] };
-    return { success: false, issues: result.error.issues };
-  }
-  catch (cause) {
-    return {
-      success: false,
-      cause,
-      issues: [{ code: "custom", message: "invalid JSON", path: [] }],
-    };
-  }
-}
-
-export function parseRevokedTombstone(serialized: string) {
-  try {
-    return RevokedTombstoneSchema.safeParse(JSON.parse(serialized) as unknown);
-  }
-  catch (cause) {
-    return {
-      success: false as const,
-      error: { issues: [{ code: "custom", message: "invalid JSON", path: [], cause }] },
-    };
-  }
-}
-
-export function stringifyLifecycleObject(object: LifecycleObject) {
-  return JSON.stringify(object);
-}
-
-export function stringifyRevokedTombstone(tombstone: RevokedTombstone) {
-  return JSON.stringify(tombstone);
-}
 
 function normalizeBoundedOriginValue(
   value: string | null | undefined,

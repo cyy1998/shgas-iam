@@ -1,4 +1,3 @@
-import { CustomSsoClientMode } from "@iam/contracts";
 import * as customSsoAuditEvents from "@iam/custom-sso/testing";
 import { describe, expect, test } from "bun:test";
 import * as authAudit from "../events/auth.audit";
@@ -71,7 +70,7 @@ describe("api audit event builders", () => {
       details: {
         clientCode: "portal",
         loginType: "local",
-        mode: CustomSsoClientMode.Gateway,
+        mode: "gateway",
       },
     });
     const independentAudit = customSsoAuditEvents.buildIndependentLoginSuccessAudit(
@@ -89,7 +88,7 @@ describe("api audit event builders", () => {
       details: {
         clientCode: "portal",
         loginType: "local",
-        mode: CustomSsoClientMode.Independent,
+        mode: "independent",
       },
     });
     expect(authAudit.buildOaLoginSuccessAudit(user, "oa")).toMatchObject({

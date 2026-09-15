@@ -16,8 +16,8 @@
   "scripts": {
     "dev": "bun --hot src/index.ts",
     "serve": "bun run src/index.ts",
-    "lint": "eslint src test-integration app.config.ts eslint.config.js",
-    "lint:fix": "eslint --fix src test-integration app.config.ts eslint.config.js",
+    "lint": "eslint src test-integration app.config.ts playwright.config.ts eslint.config.js",
+    "lint:fix": "eslint --fix src test-integration app.config.ts playwright.config.ts eslint.config.js",
     "db:generate": "pnpm --filter @iam/db db:generate",
     "db:migrate": "pnpm --filter @iam/db db:migrate",
     "db:push": "pnpm --filter @iam/db db:push",
@@ -27,6 +27,7 @@
     "test:integration:postgres": "bun test --max-concurrency=1 test-integration/postgres",
     "test:integration:process": "bun test --max-concurrency=1 test-integration/process",
     "test:integration:redis": "bun test --max-concurrency=1 test-integration/redis",
+    "test:integration:browser": "playwright test",
     "test:unit": "bun test --max-concurrency=2 src",
     "typecheck": "pnpm exec tsc --noEmit"
   },
@@ -40,6 +41,7 @@
     "@iam/db": "workspace:*",
     "@iam/domain": "workspace:*",
     "@iam/jobs": "workspace:*",
+    "@iam/oidc": "workspace:*",
     "@iam/role-assignment-resolution": "workspace:*",
     "@iam/session-kernel": "workspace:*",
     "@iam/user-profile-read-model": "workspace:*",
@@ -60,11 +62,14 @@
   },
   "devDependencies": {
     "@iam/eslint-config": "workspace:*",
+    "@playwright/test": "^1.61.1",
     "@types/bun": "latest",
     "@types/sm-crypto": "^0.3.4",
     "@typescript/native": "npm:typescript@7.0.2",
     "drizzle-kit": "1.0.0-rc.2",
     "eslint": "^10.7.0",
+    "openid-client": "6.8.1",
+    "tsx": "4.23.1",
     "typescript": "npm:@typescript/typescript6@6.0.2"
   }
 }

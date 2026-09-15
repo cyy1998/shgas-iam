@@ -1,13 +1,9 @@
-import type { DbTransaction } from "@iam/db";
 import type { UserProfilePostgresReadinessCommandEnv, WorkerEnv } from "@worker/env";
 import type { WorkerLogger } from "./runtime";
-import { createClientRuntimeSnapshotModule } from "@iam/api-core/client-runtime-snapshot";
-import { createRedisClient } from "@iam/api-core/redis";
 import {
   createSubjectAccessRepair,
   createSubjectAccessTransitionRecovery,
 } from "@iam/api-core/subject-access";
-import { createUnitOfWork } from "@iam/api-core/uow";
 import db, { closeDb } from "@iam/db";
 import { createSubjectFactsRedisPublisher } from "@iam/user-profile-read-model";
 import {
@@ -31,8 +27,6 @@ import {
   startWorkerModules,
 } from "@worker/modules/registry";
 import { sql } from "drizzle-orm";
-import { createClientProtocolEpochCutover } from "../commands/client-protocol/client-protocol-epoch-cutover";
-import { createClientProtocolEpochCutoverRepository } from "../commands/client-protocol/client-protocol-epoch-cutover.repository";
 import { closeWorkerCommandResources } from "./command-shutdown";
 import { createWorkerRuntime } from "./runtime";
 import { createWorkerSubjectAccess } from "./subject-access";
@@ -184,40 +178,6 @@ export type WorkerComposition = Awaited<ReturnType<typeof createWorkerCompositio
 
 export async function createWorkerCommandComposition(options: Omit<CreateWorkerCompositionOptions, "commandOnly">) {
   return await createWorkerComposition({ ...options, commandOnly: true });
-}
-
-export function createClientProtocolEpochCommandComposition(
-  options: Pick<CreateWorkerCompositionOptions, "env" | "logger">,
-) {
-  const inventory = createClientProtocolEpochCutoverRepository(db);
-  const redis = createRedisClient(options.env.redis);
-  const clientRuntimeSnapshots = createClientRuntimeSnapshotModule({
-    redis,
-    adapters: [] as const,
-  });
-  const uow = createUnitOfWork<DbTransaction, {
-    clients: Pick<ReturnType<typeof createClientProtocolEpochCutoverRepository>, "advanceEpochs">;
-  }>({
-    db,
-    logger: options.logger,
-    createTxPorts: tx => ({
-      clients: createClientProtocolEpochCutoverRepository(tx),
-    }),
-  });
-  return {
-    cutover: createClientProtocolEpochCutover({
-      runtimeSnapshot: clientRuntimeSnapshots,
-      uow,
-    }),
-    inventory,
-    logger: options.logger,
-    async shutdown() {
-      await Promise.all([
-        redis.quit(),
-        closeDb({ timeoutSeconds: COMMAND_DB_SHUTDOWN_TIMEOUT_SECONDS }),
-      ]);
-    },
-  };
 }
 
 export async function createWorkerSubjectAccessRepairComposition(

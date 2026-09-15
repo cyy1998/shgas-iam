@@ -32,25 +32,12 @@ test("publishes all four login-state intents under admin.sessionManagement", asy
       }),
       revokeSessions: async input => ({
         changed: false,
-        result: {
-          scope: input.target.type,
-          revoked: {
-            principalSessions: 0,
-            bindings: 0,
-            credentials: 0,
-            artifacts: 0,
-          },
-          currentPrincipalSessionExcluded: input.target.type === "user" && input.target.userId === 7,
-          cleanup: {
-            attempted: 0,
-            succeeded: 0,
-            failed: 0,
-          },
-        },
+        result: { scope: input.target.type === "user" ? "user" : "session", currentPrincipalSessionExcluded: input.target.type === "user" && input.target.userId === 7, sessions: { userSessionsTerminated: 0, clientSessionsTerminated: 0, excluded: 0, failed: 0, unknown: 0 }, generation: "unified" as const, batch: { results: [], unfinished: [] }, artifactCleanup: { attempted: 0, succeeded: 0, failed: 0 } },
       }),
     },
   }).sessionManagementAdminRouter;
   const appRouter = createAppRouter(createAdminRouter({
+    clientSso: emptyRouter as never,
     audit: emptyRouter,
     client: emptyRouter,
     employment: emptyRouter,
@@ -86,6 +73,7 @@ test("publishes all four login-state intents under admin.sessionManagement", asy
   await expect(caller.admin.sessionManagement.listSessions({
     conditions: { userId: 42 },
   })).resolves.toEqual({
+    allowedActions: { revoke: true },
     result: [],
     total: 0,
     pageNum: 1,
@@ -110,21 +98,7 @@ test("publishes all four login-state intents under admin.sessionManagement", asy
     },
   })).resolves.toEqual({
     changed: false,
-    result: {
-      scope: "session",
-      revoked: {
-        principalSessions: 0,
-        bindings: 0,
-        credentials: 0,
-        artifacts: 0,
-      },
-      currentPrincipalSessionExcluded: false,
-      cleanup: {
-        attempted: 0,
-        succeeded: 0,
-        failed: 0,
-      },
-    },
+    result: { scope: "session", currentPrincipalSessionExcluded: false, sessions: { userSessionsTerminated: 0, clientSessionsTerminated: 0, excluded: 0, failed: 0, unknown: 0 }, generation: "unified" as const, batch: { results: [], unfinished: [] }, artifactCleanup: { attempted: 0, succeeded: 0, failed: 0 } },
   });
 
   await expect(caller.admin.sessionManagement.revokeSessions({
@@ -134,21 +108,7 @@ test("publishes all four login-state intents under admin.sessionManagement", asy
     },
   })).resolves.toEqual({
     changed: false,
-    result: {
-      scope: "user",
-      revoked: {
-        principalSessions: 0,
-        bindings: 0,
-        credentials: 0,
-        artifacts: 0,
-      },
-      currentPrincipalSessionExcluded: true,
-      cleanup: {
-        attempted: 0,
-        succeeded: 0,
-        failed: 0,
-      },
-    },
+    result: { scope: "user", currentPrincipalSessionExcluded: true, sessions: { userSessionsTerminated: 0, clientSessionsTerminated: 0, excluded: 0, failed: 0, unknown: 0 }, generation: "unified" as const, batch: { results: [], unfinished: [] }, artifactCleanup: { attempted: 0, succeeded: 0, failed: 0 } },
   });
 
   await expect(caller.admin.sessionManagement.releaseLoginRestriction({

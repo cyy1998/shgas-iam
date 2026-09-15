@@ -20,11 +20,11 @@ const RawEnvSchema = z.object({
   IAM_ADMIN_API_LOG_LEVEL: z.string().default("info"),
   IAM_ADMIN_API_LOG_FORMAT: z.enum(["auto", "json", "pretty"]).default("auto"),
   IAM_ADMIN_API_ADMIN_CLIENT_CODES: listString("iam-admin"),
-  IAM_ADMIN_API_SESSION_KERNEL_NAMESPACE: z.string().default("sess:v2:"),
-  IAM_ADMIN_API_SESSION_KERNEL_PRINCIPAL_IDLE_TTL_SECONDS: z.coerce.number().int().positive().default(24 * 60 * 60),
-  IAM_ADMIN_API_SESSION_KERNEL_PRINCIPAL_ABSOLUTE_TTL_SECONDS: z.coerce.number().int().positive().default(24 * 60 * 60),
-  IAM_ADMIN_API_SESSION_KERNEL_TOMBSTONE_TTL_SECONDS: z.coerce.number().int().positive().default(24 * 60 * 60),
-  IAM_ADMIN_API_SESSION_KERNEL_TOMBSTONE_GRACE_SECONDS: z.coerce.number().int().positive().default(5 * 60),
+  IAM_ADMIN_API_SESSION_KERNEL_NAMESPACE: z.string().regex(/^[\w:-]+$/u).default("iam:session"),
+  IAM_ADMIN_API_USER_SESSION_TTL_SECONDS: z.coerce.number().int().positive().default(86400),
+  IAM_ADMIN_API_CLIENT_SESSION_TTL_SECONDS: z.coerce.number().int().positive().default(86400),
+  IAM_ADMIN_API_SSO_INTERNAL_ORIGIN: z.url().default("http://iam-sso.internal.localhost:30080"),
+  IAM_ADMIN_API_SSO_EXTERNAL_ORIGIN: z.url().default("http://iam-sso.localhost:30080"),
 });
 
 type RawEnv = z.infer<typeof RawEnvSchema>;
@@ -47,12 +47,11 @@ export interface Env extends Record<string, unknown> {
   auth: {
     adminClientCodes: string[];
   };
+  sso: { internalOrigin: string; externalOrigin: string };
   sessionKernel: {
     namespace: string;
-    principalIdleTtlSeconds: number;
-    principalAbsoluteTtlSeconds: number;
-    tombstoneTtlSeconds: number;
-    tombstoneGraceSeconds: number;
+    userSessionTtlSeconds: number;
+    clientSessionTtlSeconds: number;
   };
 }
 
@@ -75,12 +74,14 @@ function toAdminApiEnv(raw: RawEnv): Env {
     auth: {
       adminClientCodes: raw.IAM_ADMIN_API_ADMIN_CLIENT_CODES,
     },
+    sso: {
+      internalOrigin: new URL(raw.IAM_ADMIN_API_SSO_INTERNAL_ORIGIN).origin,
+      externalOrigin: new URL(raw.IAM_ADMIN_API_SSO_EXTERNAL_ORIGIN).origin,
+    },
     sessionKernel: {
       namespace: raw.IAM_ADMIN_API_SESSION_KERNEL_NAMESPACE,
-      principalIdleTtlSeconds: raw.IAM_ADMIN_API_SESSION_KERNEL_PRINCIPAL_IDLE_TTL_SECONDS,
-      principalAbsoluteTtlSeconds: raw.IAM_ADMIN_API_SESSION_KERNEL_PRINCIPAL_ABSOLUTE_TTL_SECONDS,
-      tombstoneTtlSeconds: raw.IAM_ADMIN_API_SESSION_KERNEL_TOMBSTONE_TTL_SECONDS,
-      tombstoneGraceSeconds: raw.IAM_ADMIN_API_SESSION_KERNEL_TOMBSTONE_GRACE_SECONDS,
+      userSessionTtlSeconds: raw.IAM_ADMIN_API_USER_SESSION_TTL_SECONDS,
+      clientSessionTtlSeconds: raw.IAM_ADMIN_API_CLIENT_SESSION_TTL_SECONDS,
     },
   };
 }

@@ -1,6 +1,8 @@
 # Custom SSO 操作配置与精确失败处理
 
-Status: Current
+> Historical：本页保留旧候选的契约与证据；Spec #178 最终在线模型已由 ADR-0035 取代，当前发布以统一会话维护手册为准。
+
+Status: Historical
 
 Last verified: 2026-09-10
 
@@ -45,8 +47,8 @@ Credential 的协议归属与配置检查先于 Subject Access；Code 的全部�
 
 `logout` 保持根范围：根 token 撤销该根；合法 Custom SSO Local Session token 通过用途和协议配置校验后撤销其所属根，仍尝试同根其他对象。子枚举、单子撤销或 CAS 冲突不阻止根撤销成功；根自身失败或读取结果不确定不能返回退出成功。成功仍清除 global Cookie 并按原契约 redirect，重复退出保持幂等；这不等同于单 Credential logout，也不承诺全部派生访问已失效。根与子实际作用、cleanup 失败分别记录，漏撤不新增后台恢复机制。#165 的真实操作及 API HTTP 覆盖撤销边界；#166 的同一 HTTP/Redis seam 进一步覆盖漏撤访问、受控晚到签发、自身撤销/消失/到期和非目标保留。
 
-- [Custom SSO Redis 操作矩阵](../../../packages/custom-sso/test-integration/redis/custom-sso-operation.integration.test.ts) 使用真实工厂、Kernel/Grant 与独立观察连接，覆盖首次成功/拒绝/暂态、两种 pending 获取并行复用、下一操作重取、关闭后失效、旧代晚到、较新 Code/Credential 保留、同 identity 替换、永久与暂态失败的状态回读、权威撤销故障；新 Artifact 无旧 redemption cleanup 依赖。
-- [API Public/authz HTTP](../../../apps/api/test-integration/redis/custom-sso-operation-http.integration.test.ts) 覆盖反向 OIDC Credential 误投、Cookie 保留和读取故障 503；[兑换 HTTP](../../../apps/api/test-integration/redis/custom-sso-redemption-operation-http.integration.test.ts) 覆盖合法 OIDC Code 误投、错误 redirect、同 Client 其他用户、其他 Client 与根对象保留，以及无 Grant 消费和 ORCAS 作用。
+- [Custom SSO Redis 操作矩阵](https://github.com/cyy1998/shgas-iam/blob/aeb2dc45294f3553ad596cda5194e9643378c31b/packages/custom-sso/test-integration/redis/custom-sso-operation.integration.test.ts) 使用真实工厂、Kernel/Grant 与独立观察连接，覆盖首次成功/拒绝/暂态、两种 pending 获取并行复用、下一操作重取、关闭后失效、旧代晚到、较新 Code/Credential 保留、同 identity 替换、永久与暂态失败的状态回读、权威撤销故障；新 Artifact 无旧 redemption cleanup 依赖。
+- [API Public/authz HTTP](https://github.com/cyy1998/shgas-iam/blob/aeb2dc45294f3553ad596cda5194e9643378c31b/apps/api/test-integration/redis/custom-sso-operation-http.integration.test.ts) 覆盖反向 OIDC Credential 误投、Cookie 保留和读取故障 503；[兑换 HTTP](https://github.com/cyy1998/shgas-iam/blob/aeb2dc45294f3553ad596cda5194e9643378c31b/apps/api/test-integration/redis/custom-sso-redemption-operation-http.integration.test.ts) 覆盖合法 OIDC Code 误投、错误 redirect、同 Client 其他用户、其他 Client 与根对象保留，以及无 Grant 消费和 ORCAS 作用。
 - 原 API Component 中“版本不符后仍能兑换”的两条断言按永久精确失效修订，错误 redirect 后合法兑换的保护继续保留。持久化隔离由上述 Redis owner 证明，不以 Component 状态模拟替代。
 
 各候选实际执行的命令、结果和未运行项由 #148 交接及验收评论保存；测试存在不代表最终父规格验收、部署或第三方自有会话退出已完成。

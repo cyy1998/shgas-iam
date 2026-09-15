@@ -32,6 +32,22 @@ export function confirmResetPassword({
               <Typography.Text>
                 请将下列密码复制并转交给用户，关闭后不再显示：
               </Typography.Text>
+              {outcome.sessions && (
+                <Typography.Text
+                  type={
+                    outcome.sessions.failed || outcome.sessions.unknown
+                      ? 'warning'
+                      : undefined
+                  }
+                >
+                  已终止 {outcome.sessions.userSessionsTerminated} 个根会话、
+                  {outcome.sessions.clientSessionsTerminated} 个应用会话；保留{' '}
+                  {outcome.sessions.excluded} 个当前根。
+                  {(outcome.sessions.failed > 0 ||
+                    outcome.sessions.unknown > 0) &&
+                    `失败 ${outcome.sessions.failed} 项，结果未知 ${outcome.sessions.unknown} 项，请刷新确认。`}
+                </Typography.Text>
+              )}
               <Typography.Paragraph
                 code
                 copyable={{ text: newPassword }}

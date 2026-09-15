@@ -41,6 +41,12 @@ pnpm test:integration:<component|process|redis|postgres|composition|browser>
 
 ## Workspace 命令
 
+Spec #178 的维护入口为 Worker `online-auth:state`、`client-snapshot:repair`、`client-snapshot:verify`。
+它们与 `client-sso:upgrade` 均通过 `bun run` 默认读取 `apps/worker/.env`，已有进程环境变量优先。
+资源变量、source/unified 布局、namespace、停流/排空、退出码和完整命令见
+[统一维护手册](../releases/unified-session-maintenance.md)。旧 `client-runtime`/Provider 命令的去向也在该页逐项登记；
+代码候选通过不授权目标环境维护。
+
 - `pnpm dev`
 - `pnpm build`
 - `pnpm lint`
@@ -109,7 +115,6 @@ pnpm --filter @iam/api-core test:integration:process
 pnpm --filter @iam/api test:integration:process
 pnpm --filter @iam/admin-api test:integration:process
 pnpm --filter @iam/worker test:integration:process
-pnpm --filter @iam/oidc-provider test:integration:process
 ```
 
 `@iam/api-core` 已作为 collection migration 的 Bun tracer bullet 发布 package-local canonical commands：
@@ -121,7 +126,7 @@ pnpm --filter @iam/api-core test:integration:process
 pnpm --filter @iam/api-core test:integration:redis
 ```
 
-`@iam/api` 已发布完整的六个 package-local canonical commands：
+`@iam/api` 已发布以下 package-local canonical commands：
 
 ```bash
 pnpm --filter @iam/api test:unit
@@ -130,17 +135,10 @@ pnpm --filter @iam/api test:integration:process
 pnpm --filter @iam/api test:integration:composition
 pnpm --filter @iam/api test:integration:postgres
 pnpm --filter @iam/api test:integration:redis
+pnpm --filter @iam/api test:integration:browser
 ```
 
-`@iam/oidc-provider` 已发布五个 package-local canonical commands：
-
-```bash
-pnpm --filter @iam/oidc-provider test:unit
-pnpm --filter @iam/oidc-provider test:integration:component
-pnpm --filter @iam/oidc-provider test:integration:process
-pnpm --filter @iam/oidc-provider test:integration:composition
-pnpm --filter @iam/oidc-provider test:integration:redis
-```
+OIDC 完整协议由 `@iam/oidc` Redis collection 与 `@iam/api` 的 HTTP/process/composition/browser collection 验证。
 
 `@iam/admin-api` 已发布 Unit、component、process、postgres、composition 与 redis package-local canonical commands；`@iam/worker` 已发布
 Unit、component、process、postgres 与 redis commands：
@@ -192,7 +190,6 @@ pnpm --filter @iam/contracts test:unit
 pnpm --filter @iam/domain test:unit
 pnpm --filter @iam/eslint-config test:unit
 pnpm --filter @iam/jobs test:unit
-pnpm --filter @iam/client-subject-projection test:unit
 pnpm --filter @iam/client-subject-projection test:integration:component
 pnpm --filter @iam/gateway-apisix test:unit
 pnpm --filter @iam/gateway-apisix test:integration:component
@@ -216,7 +213,7 @@ Browser Integration 保留原 API mocks、package-local `webServer`、base URL �
 
 `@iam/e2e-system` 通过 root `pnpm test:e2e` 发布完整 Full-system collection：受独立 60 秒 deadline 约束的 preflight 通过后才创建唯一 Compose
 project，以动态 Gateway host port 等待 PostgreSQL、Redis、etcd 与 APISIX healthy，在空 volumes 上执行真实 Drizzle migrations，
-再启动 API、Admin API、OIDC Provider、Worker、Admin 与 SSO。Runtime healthy 后命令校验 rendered Compose 的 canonical origin 合同，
+再启动 API、Admin API、Worker、Admin 与 SSO。Runtime healthy 后命令校验 rendered Compose 的 canonical origin 合同，
 通过 production owner 建立固定 synthetic scenario 并写安全 seed receipt，依次运行 production Worker 的
 `user-profile:verify-postgres` 与 `user-profile:verify-redis`；两道 gate 均通过后才渲染 repo-owned Gateway routes，并从
 canonical origin 完成 protocol readiness；OIDC
@@ -235,7 +232,7 @@ Preflight 发生在 descriptor/resource 之前；其失败直接非零退出，�
 Organization Responsibility，轮询 Internal Detail/DSL 与 Custom SSO UserInfo 验证 Profile/Facts 发布，并证明 Gateway/authorization
 裁剪责任；随后通过真实状态 mutation 将独立目标 client 切入 Maintenance，在维护中配置并启用 Gateway Custom SSO。公开
 authorize/user-info 验证维护阻断，恢复正常后复用未变更的 Local Session，再以维护中的真实 disable/enable mutation 验证旧 Session
-永久失效，并由同一 Principal Session 签发新 V2 artifact。该命令固定
+经显式捕获会话撤销后永久失效，并由同一有效 UserSession 重新授权。该命令固定
 单 project、单 worker、零 retry；浏览器启动 preflight 失败时在资源创建前退出，journey 失败时则保留 raw trace/PNG/WebM 并进入统一
 diagnostics 与 exact-project cleanup。`hr-admin:journey` 使用真实 `iam-admin` Client、普通 `iam:hr-admin` Role、Role Assignment、
 两棵一级根组织及跨根普通任职，通过真实 Worker 发布后经 SSO 登录 Admin；它证明四模块 UI、全局只读 Position、User/Employment
@@ -282,13 +279,8 @@ Explicit recovery 的 cleanup 有独立 120 秒 deadline，对 exact project 执
 diagnostics 或 cleanup。命令名不表示已经接入 CI provider，也不授予 merge、发布或部署权限。Integration 资源与 Full-system
 E2E lifecycle 的详细契约分别由本页后续专用资源说明和 [测试编排架构](../architecture/testing-architecture.md) 持有。
 
-Client Runtime Snapshot 当前恢复不提供 feature-specific root runner。候选验证由发布平台或 release owner 对同一固定候选逐项调用
-`pnpm verify`（含 Collection Guard）、相关 Module/Adapter/Admin/Worker package commands 与 `pnpm test:e2e`，并独立保存每项
-退出状态与证据。其中 `pnpm --filter @iam/admin-api client-runtime:hard-cutover-rehearsal` 通过真实 Admin mutation、临时 PostgreSQL
-schema、真实 Redis 与三类公开 Reader 验证 mutation 后事实及恢复，并精确清理本次 owner 资源。各真实资源命令要求调用方提供专用
-URL，且不会创建、推断或清理这些调用方资源；测试命令也不执行 production freeze、部署、drain、namespace reset 或切流。
-当前命令矩阵与恢复阶段见[Client Runtime Snapshot 恢复手册](../releases/client-runtime-snapshot-restore.md)；
-[首次 hard-cutover 手册](../releases/client-runtime-snapshot-hard-cutover.md)仅作为旧代切换历史参考。
+统一 Snapshot 通过 Core Redis、Admin composition 和 Worker CLI 验证；最终 schema/数据门禁分别使用 DB/Worker PostgreSQL。
+维护命令与固定旧工具迁移顺序见[统一维护手册](../releases/unified-session-maintenance.md)，测试不提供目标环境操作授权。
 
 当前 Windows 本地聚合 evidence 与平台 adoption 状态见
 [测试编排架构的“默认验证与交付”](../architecture/testing-architecture.md#默认验证与交付)；Linux/真实 CI 尚未验收。
@@ -298,12 +290,10 @@ URL，且不会创建、推断或清理这些调用方资源；测试命令也�
 ```bash
 # API/OIDC 真实 production entry 联合 PG/Redis 验证；全部资源由调用方独占、非生产且可销毁
 IAM_API_TEST_DATABASE_URL=<dedicated-url> IAM_API_TEST_REDIS_URL=<dedicated-url> \
-IAM_OIDC_PROVIDER_TEST_DATABASE_URL=<dedicated-url> IAM_OIDC_PROVIDER_TEST_REDIS_URL=<dedicated-url> \
 pnpm test:integration:composition
 
 # 也可按 package 单独运行；缺少该 package 的任一 URL 会 fail fast，不会 skip 或回退
 pnpm --filter @iam/api test:integration:composition
-pnpm --filter @iam/oidc-provider test:integration:composition
 
 # Database migration contract（guard、raw rollback、Drizzle journal replay、普通索引锁；需专用 IAM_DB_TEST_DATABASE_URL）
 pnpm --filter @iam/db db:check
@@ -334,8 +324,6 @@ pnpm --filter @iam/api test:integration:redis
 # Admin API Custom SSO Client cache mutation contract（需由调用方提供专用 IAM_ADMIN_API_TEST_REDIS_URL）
 pnpm --filter @iam/admin-api test:integration:redis
 
-# OIDC Provider Session binding Redis contract（需专用 IAM_OIDC_PROVIDER_TEST_REDIS_URL）
-pnpm --filter @iam/oidc-provider test:integration:redis
 
 # User Profile V3 publication、readiness 与查询 contracts（需专用 IAM_USER_PROFILE_TEST_DATABASE_URL）
 pnpm --filter @iam/user-profile-read-model test:integration:postgres
@@ -413,29 +401,23 @@ Hook 不运行 lint、typecheck、test、build 或 tracker checker。按改动�
 
 ## Workspace 入口
 
+- OIDC：`pnpm --filter @iam/oidc <lint|typecheck|test:integration:redis>`；Redis 使用独立 `IAM_OIDC_TEST_REDIS_URL`。
+  本包的完整授权 HTTP 组合由 API Redis profile 收集，生产已由 API 默认装配，旧 Provider app 已删除。
+  退出浏览器回归为 `pnpm --filter @iam/api test:integration:browser`，使用专用 `IAM_API_TEST_REDIS_URL` 和已安装 Chromium；
+  单 worker、零重试，由 fixture 启动动态 loopback 候选 API/测试 RP，不创建 Docker 或使用运行环境。
+
 - Full-system E2E lifecycle：
   root `pnpm test:e2e`；workspace-local
   `pnpm --filter @iam/e2e-system <test:e2e|runtime:lifecycle|admin:journey|hr-admin:journey|oidc:journey|runtime:cleanup|lint|test|test:unit|typecheck>`。
   当前只完成 Windows 本地验收，未宣称 Linux/CI adoption
 - API backend：`pnpm --filter @iam/api <dev|serve|lint|test|test:unit|test:integration:component|test:integration:process|test:integration:composition|test:integration:postgres|test:integration:redis|typecheck>`
-- Admin API backend：`pnpm --filter @iam/admin-api <dev|serve|lint|test|test:unit|test:integration:component|test:integration:process|test:integration:postgres|test:integration:composition|test:integration:redis|client-runtime:hard-cutover-rehearsal|typecheck>`
-- OIDC provider：`pnpm --filter @iam/oidc-provider <dev|serve|lint|test|test:unit|test:integration:component|test:integration:process|test:integration:composition|test:integration:redis|typecheck|client-protocol:artifacts>`
-- 全体当前在线认证状态维护：`pnpm --filter @iam/oidc-provider online-auth:state -- <dry-run|apply|verify> --writers-stopped`。
-  执行前完整读取[Redis 时间切换手册](../releases/online-auth-redis-time-cutover.md)。显式设置 OIDC Redis host/port/db、Kernel namespace
-  和必要 password；所有操作要求已停流排空，无 runtime 默认目标推断。按当前 Kernel/Grant/OIDC owner 固定键族 SCAN、分批 UNLINK，
-  不依赖 client index；apply 后必须在新进程 verify。安全 report 不含完整 key/凭据/原始错误，失败/超时非零；不写 PG，
-  不推进 epoch，不操作非目标 owner 或退役 namespace，也不自动部署、切流或执行演练。
-- 旧 Custom SSO Grant 定向维护：`pnpm --filter @iam/oidc-provider custom-sso:grants -- <inventory|apply|verify> --writers-stopped`。
-  执行前完整读取[定向维护手册](../releases/custom-sso-grant-maintenance.md)及[统一升级流程](../releases/custom-sso-one-shot-grant-upgrade.md)。仅用于旧 writer 已停、请求已排空且新 writer 未启用的窗口；
-  显式注入 OIDC Redis host/port/db、Kernel namespace 与必要 password，不读取 `.env`。只扫描并 CAS 清理 Custom SSO auth_code
-  Artifact 与旧三态 redemption；Principal、Credential、OIDC 保留。verify 新进程只持 SCAN/GET，目标清零与保留集独立基线对照分开。
-  任一失败/未验证非零，保持停流修复后完整重跑；不能用全清命令代替。
-- Session Kernel：`pnpm --filter @iam/session-kernel <lint|test|test:unit|test:integration:component|test:integration:redis|typecheck>`
-- API Core：`pnpm --filter @iam/api-core <lint|test|test:unit|test:integration:component|test:integration:process|test:integration:redis|client-runtime:hard-cutover-redis|typecheck>`
-- Custom SSO：`pnpm --filter @iam/custom-sso <lint|test|test:unit|test:integration:component|test:integration:redis|typecheck>`；Redis 使用独立 `IAM_CUSTOM_SSO_TEST_REDIS_URL`。
+- Admin API backend：`pnpm --filter @iam/admin-api <dev|serve|lint|test|test:unit|test:integration:component|test:integration:process|test:integration:postgres|test:integration:composition|test:integration:redis|typecheck>`
+- Session Kernel：`pnpm --filter @iam/session-kernel <lint|test:integration:redis|typecheck>`
+- API Core：`pnpm --filter @iam/api-core <lint|test|test:unit|test:integration:component|test:integration:process|test:integration:redis|typecheck>`
+- Custom SSO：`pnpm --filter @iam/custom-sso <lint|test|test:unit|typecheck>`；完整 HTTP/Redis 在 API collection。
 - Client Subject Projection：`pnpm --filter @iam/client-subject-projection <lint|test:integration:component|typecheck>`
 - User Profile Read Model：`pnpm --filter @iam/user-profile-read-model <lint|test|test:unit|test:integration:component|test:integration:postgres|test:integration:redis|typecheck>`
-- Worker：`pnpm --filter @iam/worker <dev|serve|lint|test|test:unit|test:integration:component|test:integration:process|test:integration:postgres|test:integration:redis|typecheck|employment:verify|user-profile:backfill|user-profile:repair|user-profile:verify-postgres|user-profile:verify-redis|client-protocol:epochs|client-runtime:repair|client-runtime:verify>`
+- Worker：`pnpm --filter @iam/worker <dev|serve|lint|test|test:unit|test:integration:component|test:integration:process|test:integration:postgres|test:integration:redis|typecheck|employment:verify|user-profile:backfill|user-profile:repair|user-profile:verify-postgres|user-profile:verify-redis|client-sso:upgrade|client-snapshot:repair|client-snapshot:verify|online-auth:state>`
 - Employment 全库只读诊断：
   `IAM_WORKER_DATABASE_URL=<target-url> pnpm --filter @iam/worker employment:verify`
 - 历史审计 action 一次性规范化：显式 `IAM_WORKER_DATABASE_URL` 下运行
@@ -443,6 +425,11 @@ Hook 不运行 lint、typecheck、test、build 或 tracker checker。按改动�
   `pnpm --filter @iam/worker audit:actions -- apply --writers-stopped` 和独立
   `pnpm --filter @iam/worker audit:actions -- verify`。固定映射、退出码、事务锁及发布/恢复门禁见
   [操作手册](../releases/audit-action-canonicalization.md)；当前代码候选已移除运行时别名，工具继续独立保留；代码交付不证明目标环境已迁移。
+- Client 单协议一次性升级：显式 `IAM_WORKER_DATABASE_URL` 下运行 Worker `client-sso:upgrade`。
+  `inventory --writers-stopped` 输出安全库存；`apply --writers-stopped --manifest <path>` 只处理明确 scope；
+  新进程 `verify --writers-stopped --manifest <path>` 核验该范围，另加 `--all` 才作为收缩旧列前的全量数据 gate。
+  执行前完整读取[现有发布流程中的 Client 升级](../releases/online-auth-redis-time-cutover.md#client-单协议业务数据升级)，
+  使用停写盘点的原摘要、协议选择、实际部署回调和固定新凭据 ID；不提供 Secret 输出、Snapshot repair 或线上迁移。
 - Subject Access 恢复：
   `pnpm --filter @iam/worker run user-profile:repair -- --subject-access-only --limit <positive-integer>`。
   该模式依次执行 PostgreSQL stale pending transition intent 回收、Redis transition recovery 与 authority repair，
@@ -455,30 +442,9 @@ Hook 不运行 lint、typecheck、test、build 或 tracker checker。按改动�
   `pnpm --filter @iam/worker user-profile:verify-postgres -- [--batch-size <positive-integer>]` 和
   `pnpm --filter @iam/worker user-profile:verify-redis -- [--batch-size <positive-integer>]`。Backfill 的 `enqueued`
   只表示已派发，不表示 readiness 已通过；两个 gate 任一失败都必须修复并重跑。
-- Client Protocol V2 epoch 与 artifact cleanup：
-  `pnpm --filter @iam/worker client-protocol:epochs -- <dry-run|apply|verify> --manifest <path>`，随后运行
-  `pnpm --filter @iam/oidc-provider client-protocol:artifacts -- <dry-run|apply|verify> --manifest <path>`；完整顺序与不可逆边界见
-  [Client Protocol V2 epoch 与 artifact 清理](../releases/client-protocol-v2-artifact-cutover.md)。
-  与 Organization Responsibility V2、User Profile v3 协调切换时，遵循
-  [完整 hard-cutover 手册](../releases/organization-responsibility-v2-hard-cutover.md)；当前切换不得运行
-  `session:cleanup-custom-sso-cutover` 或 `session:cleanup-legacy-keys`。
-- 单 Client Runtime repair：
-  `pnpm --filter @iam/worker client-runtime:repair -- --client-code <clientCode>`。该 targeted 入口只接受一个由 canonical
-  `ClientCodeSchema` 验证的 code；缺失、空值、额外位置参数、`--all` 或 traffic-stopped/full-mode 参数均在创建 Redis
-  resource 前失败。命令只修复可重建 Runtime cache，不读取 PostgreSQL、不重放业务 mutation、不推进协议版本，也不撤销
-  Session/artifact 或轮换 Secret。`completed` report 退出 0，`failed` report 或 cleanup failure 非零退出。
-- Redis restore 后的 Client Runtime full repair 与独立 verify：
-  `pnpm --filter @iam/worker client-runtime:repair -- --all --protocol-traffic-stopped` 与
-  `pnpm --filter @iam/worker client-runtime:verify -- --all --protocol-traffic-stopped`。Full repair 与 targeted 参数互斥，
-  两个 full command 都必须显式确认协议流量已关闭；缺少确认时在创建 Redis resource 前失败。Repair 以 `SCAN` 和分批
-  `UNLINK` 只清理当前 Module-owned Snapshot namespace，部分失败后保持停流并从头安全重跑；
-  verify 在新的 Worker process 中只读重扫，只有完整扫描成功且 owner key 为零时报告 `completed` 并退出 0。Safe report
-  不包含 Redis URL、key、control、payload、credential 或原始错误；status 是发布 gate，计数只用于诊断，verify 不证明
-  traffic freeze、实例 drain、业务可用或旧 namespace 已清空。七条旧 Runtime pattern 已退出 inventory，当前 namespace 的
-  `v1` 存储版本继续有效。两条 full command 的默认 deadline 是 5 分钟；受控演练可通过
-  正整数 `IAM_WORKER_CLIENT_RUNTIME_MAINTENANCE_TIMEOUT_MS` 收紧 deadline，超时必须输出 failed report、非零退出并完成资源
-  shutdown。完整恢复顺序见[Client Runtime Snapshot 恢复手册](../releases/client-runtime-snapshot-restore.md)。
-  旧部署或旧备份迁移须另行固定适用候选与操作边界，不得混跑旧 reader/writer。
+- 统一 Snapshot repair/verify 与 source/unified 状态维护：使用 Worker `client-snapshot:repair`、`client-snapshot:verify`、
+  `online-auth:state`，完整停流/资源/参数/失败重跑边界见[统一维护手册](../releases/unified-session-maintenance.md)。
+  旧 `client-runtime:*`、Provider 维护和 epoch 命令已退役；`client-sso:upgrade` 必须在固定扩展期旧制品与旧 schema 下先完成。
 - Admin frontend：`pnpm --filter @iam/admin <dev|build|lint|test|test:unit|test:integration:component|test:integration:browser|typecheck|format>`
 - SSO frontend：`pnpm --filter @iam/sso <dev|build|lint|test|test:unit|test:integration:component|test:integration:browser|typecheck|format>`
 - Database：`pnpm --filter @iam/db <lint|test|test:unit|test:integration:postgres|typecheck|db:push|db:generate|db:migrate|db:check>`

@@ -6,12 +6,8 @@ import { BadRequestError } from "@iam/api-core/errors";
 import { createErrorHandler } from "@iam/api-core/middlewares";
 import {
   ClientStatus,
-  CustomSsoClientMode,
-  OidcClientType,
-  OidcScope,
-  OidcTokenEndpointAuthMethod,
 } from "@iam/contracts";
-import { ClientCodeExistsError, ClientCodeImmutableError, ClientNotFoundError, CustomSsoClientStateError, OidcClientStateError } from "@iam/domain/client";
+import { ClientCodeExistsError, ClientCodeImmutableError, ClientNotFoundError } from "@iam/domain/client";
 import { fetchRequestHandler } from "@trpc/server/adapters/fetch";
 import { beforeEach, describe, expect, mock, test } from "bun:test";
 import { Hono } from "hono";
@@ -140,65 +136,6 @@ describe("admin client adapter", () => {
       "portal",
       expect.objectContaining({ actorUserId: 1001, actorUsername: "admin", requestId: "req-1" }),
     );
-  });
-
-  test("delegates OIDC configure input with audit context", async () => {
-    const data = {
-      clientType: OidcClientType.Public,
-      redirectUris: ["https://portal.example.com/callback"],
-      postLogoutRedirectUris: [],
-      allowedScopes: [OidcScope.OpenId],
-      tokenEndpointAuthMethod: OidcTokenEndpointAuthMethod.None,
-    };
-    clientService.configureClientOidc.mockResolvedValue({ changed: true, result: { client: {} } });
-
-    const context = createContext({ json: data, param: { clientCode: "portal" } });
-    await expect(handlers.clientOidcConfigure(context, async () => {})).resolves.toMatchObject({ code: 200 });
-
-    expect(clientService.configureClientOidc).toHaveBeenCalledWith(
-      "portal",
-      data,
-      expect.objectContaining({ actorUserId: 1001, actorUsername: "admin", requestId: "req-1" }),
-    );
-  });
-
-  test("delegates strict Custom SSO configure input with audit context", async () => {
-    const data = {
-      mode: CustomSsoClientMode.Gateway,
-      validRedirectUrls: ["https://portal.example.com/sso/*"],
-      subjectClaims: ["subjectIdentifier"],
-      orcas: { enabled: true },
-    };
-    clientService.configureClientCustomSso.mockResolvedValue({ changed: true, result: { client: {} } });
-
-    const context = createContext({ json: data, param: { clientCode: "portal" } });
-    await expect(handlers.clientCustomSsoConfigure(context, async () => {})).resolves.toMatchObject({ code: 200 });
-
-    expect(clientService.configureClientCustomSso).toHaveBeenCalledWith(
-      "portal",
-      data,
-      expect.objectContaining({ actorUserId: 1001, actorUsername: "admin", requestId: "req-1" }),
-    );
-  });
-
-  test("delegates all state-only Custom SSO operations with audit context", async () => {
-    const cases = [
-      ["clientCustomSsoEnable", "enableClientCustomSso"],
-      ["clientCustomSsoDisable", "disableClientCustomSso"],
-      ["clientCustomSsoRemove", "removeClientCustomSso"],
-      ["clientCustomSsoRotateSecret", "rotateClientCustomSsoSecret"],
-    ] as const;
-
-    for (const [handlerName, serviceName] of cases) {
-      clientService[serviceName].mockResolvedValueOnce({ changed: true, result: { client: {} } });
-      const context = createContext({ param: { clientCode: "portal" } });
-
-      await expect(handlers[handlerName](context, async () => {})).resolves.toMatchObject({ code: 200 });
-      expect(clientService[serviceName]).toHaveBeenCalledWith(
-        "portal",
-        expect.objectContaining({ actorUserId: 1001, actorUsername: "admin", requestId: "req-1" }),
-      );
-    }
   });
 });
 
@@ -363,125 +300,5 @@ describe("Client base mutation public protocols", () => {
     expect(trpc.status).toBe(403);
     expect(clientService.createClient).not.toHaveBeenCalled();
     expect(clientService.updateClientById).not.toHaveBeenCalled();
-  });
-});
-
-describe("OIDC public mutation results", () => {
-  const config = {
-    clientType: OidcClientType.Public,
-    redirectUris: ["https://portal.example.com/callback"],
-    postLogoutRedirectUris: [],
-    allowedScopes: [OidcScope.OpenId],
-    tokenEndpointAuthMethod: OidcTokenEndpointAuthMethod.None,
-  };
-  const commands = [
-    { method: "PUT", action: "configure", service: "configureClientOidc", procedure: "oidcConfigure", body: config },
-    { method: "POST", action: "enable", service: "enableClientOidc", procedure: "oidcEnable", body: undefined },
-    { method: "POST", action: "disable", service: "disableClientOidc", procedure: "oidcDisable", body: undefined },
-    { method: "POST", action: "remove", service: "removeClientOidc", procedure: "oidcRemove", body: undefined },
-    { method: "POST", action: "rotate-secret", service: "rotateClientOidcSecret", procedure: "oidcRotateSecret", body: undefined },
-  ] as const;
-
-  test("all REST and tRPC commands preserve resource, change status and one-time delivery", async () => {
-    const surface = createPublicSurface();
-    for (const command of commands) {
-      for (const changed of command.action === "rotate-secret" ? [true] : [true, false]) {
-        const result = {
-          client: { clientCode: "portal" },
-          ...(changed && ["configure", "rotate-secret"].includes(command.action) ? { clientSecret: "one-time-secret" } : {}),
-        };
-        const outcome = { changed, result };
-        clientService[command.service].mockResolvedValue(outcome);
-        const rest = await surface.rest(command.method, `/portal/oidc/${command.action}`, command.body);
-        const trpc = await surface.trpc(command.procedure, { clientCode: "portal", ...(command.body ? { data: command.body } : {}) });
-        expect(rest).toEqual({ status: 200, body: { code: 200, data: outcome, message: "success" } });
-        expect(trpc).toEqual({ status: 200, body: { result: { data: outcome } } });
-      }
-    }
-  });
-
-  test("OIDC illegal transitions remain conflicts through REST and tRPC", async () => {
-    const surface = createPublicSurface();
-    for (const command of commands) {
-      const error = new OidcClientStateError();
-      clientService[command.service].mockRejectedValue(error);
-      const rest = await surface.rest(command.method, `/portal/oidc/${command.action}`, command.body);
-      const trpc = await surface.trpc(command.procedure, { clientCode: "portal", ...(command.body ? { data: command.body } : {}) });
-      expect(rest).toMatchObject({ status: 409, body: { code: error.code, data: null } });
-      expect(trpc).toMatchObject({ status: 409, body: { error: { data: { code: "CONFLICT", serviceCode: error.code } } } });
-    }
-  });
-
-  test("all OIDC transports expose committed failures without a resource or secret", async () => {
-    const surface = createPublicSurface();
-    for (const command of commands) {
-      clientService[command.service].mockRejectedValue(new AdminMutationCommittedError());
-      const rest = await surface.rest(command.method, `/portal/oidc/${command.action}`, command.body);
-      const trpc = await surface.trpc(command.procedure, { clientCode: "portal", ...(command.body ? { data: command.body } : {}) });
-      expect(rest).toMatchObject({ status: 500, body: { code: "ADMIN_MUTATION_COMMITTED", data: null } });
-      expect(trpc).toMatchObject({ status: 500, body: { error: { data: { serviceCode: "ADMIN_MUTATION_COMMITTED" } } } });
-      expect(trpc.body).not.toHaveProperty("result");
-      expect(JSON.stringify([rest.body, trpc.body])).not.toContain("clientSecret");
-    }
-  });
-});
-
-describe("Custom SSO public mutation results", () => {
-  const config = {
-    mode: CustomSsoClientMode.Independent,
-    validRedirectUrls: ["https://portal.example.com/callback"],
-    subjectClaims: ["subjectIdentifier"],
-    callbackEndpoint: "https://portal.example.com/callback",
-    logoutEndpoint: "https://portal.example.com/logout",
-  };
-  const commands = [
-    { method: "PUT", action: "configure", service: "configureClientCustomSso", procedure: "customSsoConfigure", body: config },
-    { method: "POST", action: "enable", service: "enableClientCustomSso", procedure: "customSsoEnable", body: undefined },
-    { method: "POST", action: "disable", service: "disableClientCustomSso", procedure: "customSsoDisable", body: undefined },
-    { method: "POST", action: "remove", service: "removeClientCustomSso", procedure: "customSsoRemove", body: undefined },
-    { method: "POST", action: "rotate-secret", service: "rotateClientCustomSsoSecret", procedure: "customSsoRotateSecret", body: undefined },
-  ] as const;
-
-  test("all REST and tRPC commands preserve resource, change status and one-time delivery", async () => {
-    const surface = createPublicSurface();
-    for (const command of commands) {
-      for (const changed of command.action === "rotate-secret" ? [true] : [true, false]) {
-        const result = {
-          client: { clientCode: "portal" },
-          ...(changed && ["configure", "rotate-secret"].includes(command.action) ? { customSsoSecret: "one-time-secret" } : {}),
-        };
-        const outcome = { changed, result };
-        clientService[command.service].mockResolvedValue(outcome);
-        const rest = await surface.rest(command.method, `/portal/custom-sso/${command.action}`, command.body);
-        const trpc = await surface.trpc(command.procedure, { clientCode: "portal", ...(command.body ? { data: command.body } : {}) });
-        expect(rest).toEqual({ status: 200, body: { code: 200, data: outcome, message: "success" } });
-        expect(trpc).toEqual({ status: 200, body: { result: { data: outcome } } });
-      }
-    }
-  });
-
-  test("Custom SSO illegal transitions remain conflicts through REST and tRPC", async () => {
-    const surface = createPublicSurface();
-    for (const command of commands) {
-      const error = new CustomSsoClientStateError();
-      clientService[command.service].mockRejectedValue(error);
-      const rest = await surface.rest(command.method, `/portal/custom-sso/${command.action}`, command.body);
-      const trpc = await surface.trpc(command.procedure, { clientCode: "portal", ...(command.body ? { data: command.body } : {}) });
-      expect(rest).toMatchObject({ status: 409, body: { code: error.code, data: null } });
-      expect(trpc).toMatchObject({ status: 409, body: { error: { data: { code: "CONFLICT", serviceCode: error.code } } } });
-    }
-  });
-
-  test("all Custom SSO transports expose committed failures without a resource or secret", async () => {
-    const surface = createPublicSurface();
-    for (const command of commands) {
-      clientService[command.service].mockRejectedValue(new AdminMutationCommittedError());
-      const rest = await surface.rest(command.method, `/portal/custom-sso/${command.action}`, command.body);
-      const trpc = await surface.trpc(command.procedure, { clientCode: "portal", ...(command.body ? { data: command.body } : {}) });
-      expect(rest).toMatchObject({ status: 500, body: { code: "ADMIN_MUTATION_COMMITTED", data: null } });
-      expect(trpc).toMatchObject({ status: 500, body: { error: { data: { serviceCode: "ADMIN_MUTATION_COMMITTED" } } } });
-      expect(trpc.body).not.toHaveProperty("result");
-      expect(JSON.stringify([rest.body, trpc.body])).not.toContain("customSsoSecret");
-    }
   });
 });

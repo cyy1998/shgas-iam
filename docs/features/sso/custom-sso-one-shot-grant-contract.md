@@ -1,8 +1,10 @@
 # Custom SSO 一次消费最终契约
 
+> Historical：本页保留旧候选的契约与证据；Spec #178 最终在线模型已由 ADR-0035 取代，当前发布以统一会话维护手册为准。
+
 > 本文原候选证据保留其规格语境。后续 Spec #163 / ADR-0033 已实现已有 Credential 使用不查父、Custom SSO 不续根/凭据及根撤销尽力级联；正常级联里根/子均失效不构成全子树保证。替代断言、固定候选与证明边界见[Credential 最终账本](credential-authority-contract.md)。包含 #163 或 #170 的候选发布采用全体下线，不适用本文原规格的保留对象升级；环境未切换。
 
-Status: Current
+Status: Historical
 
 Last verified: 2026-09-10
 
@@ -52,12 +54,12 @@ Next review: 2026-10-31
 
 下列代号用于逐项账本；一个入口的通过不能扩大为整规格或环境完成。
 
-- **C**：[完整操作 Redis](../../../packages/custom-sso/test-integration/redis/custom-sso-operation.integration.test.ts)，正式 Custom SSO 工厂与 Kernel；按下文测试行为定位。Client/Barrier/Facts/ORCAS/审计出站使用既有窄替身。
-- **K**：[Kernel Artifact](../../../packages/session-kernel/test-integration/redis/session-kernel-artifact.integration.test.ts)、[Credential](../../../packages/session-kernel/test-integration/redis/session-kernel-credential.integration.test.ts)、[Redis 时间](../../../packages/session-kernel/test-integration/redis/session-kernel-time.integration.test.ts)，公开生命周期与真实 Redis。
-- **H**：[兑换 HTTP/Redis](../../../apps/api/test-integration/redis/custom-sso-redemption-operation-http.integration.test.ts)，真实 authorize/token/callback handlers、error middleware、生产 mapper/Kernel；包含 #161 的 `Final composition` 场景，覆盖 Independent、Gateway、Gateway+ORCAS。
-- **U**：[Public UserInfo/authz HTTP/Redis](../../../apps/api/test-integration/redis/custom-sso-operation-http.integration.test.ts)，普通访问配置/Gate/Facts/许可暂态、Cookie、裁剪和后续请求；H 追加清理后旧/新凭据的相同访问组合。
-- **M**：[维护 Redis/CLI](../../../apps/oidc-provider/test-integration/redis/custom-sso-grant-maintenance.integration.test.ts)，正式 maintenance composition、新连接只读 verifier、真实 ACL、混合 Provider/Kernel 对象保留。
-- **O**：[OIDC HTTP/Redis](../../../apps/oidc-provider/test-integration/redis/subject-access-authorization.integration.test.ts)，原协议用途、Claims Snapshot、Code/Token/UserInfo 与 replay。M 证明清理不改写其 Binding/Code/Token/Session/Interaction/Grant 和 anchor/lookup/membership；H 额外串联同窗口 OIDC Code 保留。
+- **C**：[完整操作 Redis](https://github.com/cyy1998/shgas-iam/blob/aeb2dc45294f3553ad596cda5194e9643378c31b/packages/custom-sso/test-integration/redis/custom-sso-operation.integration.test.ts)，正式 Custom SSO 工厂与 Kernel；按下文测试行为定位。Client/Barrier/Facts/ORCAS/审计出站使用既有窄替身。
+- **K**：[Kernel Artifact](https://github.com/cyy1998/shgas-iam/blob/aeb2dc45294f3553ad596cda5194e9643378c31b/packages/session-kernel/test-integration/redis/session-kernel-artifact.integration.test.ts)、[Credential](https://github.com/cyy1998/shgas-iam/blob/aeb2dc45294f3553ad596cda5194e9643378c31b/packages/session-kernel/test-integration/redis/session-kernel-credential.integration.test.ts)、[Redis 时间](https://github.com/cyy1998/shgas-iam/blob/aeb2dc45294f3553ad596cda5194e9643378c31b/packages/session-kernel/test-integration/redis/session-kernel-time.integration.test.ts)，公开生命周期与真实 Redis。
+- **H**：[兑换 HTTP/Redis](https://github.com/cyy1998/shgas-iam/blob/aeb2dc45294f3553ad596cda5194e9643378c31b/apps/api/test-integration/redis/custom-sso-redemption-operation-http.integration.test.ts)，真实 authorize/token/callback handlers、error middleware、生产 mapper/Kernel；包含 #161 的 `Final composition` 场景，覆盖 Independent、Gateway、Gateway+ORCAS。
+- **U**：[Public UserInfo/authz HTTP/Redis](https://github.com/cyy1998/shgas-iam/blob/aeb2dc45294f3553ad596cda5194e9643378c31b/apps/api/test-integration/redis/custom-sso-operation-http.integration.test.ts)，普通访问配置/Gate/Facts/许可暂态、Cookie、裁剪和后续请求；H 追加清理后旧/新凭据的相同访问组合。
+- **M**：[维护 Redis/CLI](https://github.com/cyy1998/shgas-iam/blob/aeb2dc45294f3553ad596cda5194e9643378c31b/apps/oidc-provider/test-integration/redis/custom-sso-grant-maintenance.integration.test.ts)，正式 maintenance composition、新连接只读 verifier、真实 ACL、混合 Provider/Kernel 对象保留。
+- **O**：[OIDC HTTP/Redis](https://github.com/cyy1998/shgas-iam/blob/aeb2dc45294f3553ad596cda5194e9643378c31b/apps/oidc-provider/test-integration/redis/subject-access-authorization.integration.test.ts)，原协议用途、Claims Snapshot、Code/Token/UserInfo 与 replay。M 证明清理不改写其 Binding/Code/Token/Session/Interaction/Grant 和 anchor/lookup/membership；H 额外串联同窗口 OIDC Code 保留。
 - **W**：[接入说明](third-party-sso-integration.md)、[OpenAPI routes](../../../apps/api/src/routes/sso/sso.routes.ts)、[错误映射](../../../apps/api/src/middlewares/custom-sso-retryable.error.ts)。
 - **P**：[升级手册](../../releases/custom-sso-one-shot-grant-upgrade.md)、[定向命令](../../releases/custom-sso-grant-maintenance.md)。人工环境项目均未执行。
 
@@ -166,16 +168,16 @@ Next review: 2026-10-31
 
 最终链为 Gateway `/sso/token`、`/sso/*` → API `createSsoHandlers` → `createCustomSsoOperationAdapter` →
 `createCustomSsoOperations.forOperation()` → `createCustomSsoApplication`。
-[session.ts](../../../packages/custom-sso/src/internal/session.ts) 的 `issueAuthorizationCode` 只创建 Kernel Artifact，`cleanupRefs: []`；
+[session.ts](https://github.com/cyy1998/shgas-iam/blob/aeb2dc45294f3553ad596cda5194e9643378c31b/packages/custom-sso/src/internal/session.ts) 的 `issueAuthorizationCode` 只创建 Kernel Artifact，`cleanupRefs: []`；
 `redeemIndependentGrant`、`completeGatewayLogin` 各有一个 `consumeProtocolArtifact` 调用，二者使用同一权威。
-[Kernel facade](../../../packages/session-kernel/src/facade.ts) → [消费存储](../../../packages/session-kernel/src/storage/store.ts)
+[Kernel facade](https://github.com/cyy1998/shgas-iam/blob/aeb2dc45294f3553ad596cda5194e9643378c31b/packages/session-kernel/src/facade.ts) → [消费存储](https://github.com/cyy1998/shgas-iam/blob/aeb2dc45294f3553ad596cda5194e9643378c31b/packages/session-kernel/src/storage/store.ts)
 按 ADR-0034 比较同一状态字节与反向 ID，原子转换为同记录 revoked、reason=consumed 并移除精确索引，保留 consumed_replay 分类。原 #157 候选的四键消费为历史证据，当前布局见[运行时契约](token-state-runtime-evidence.md)。OIDC 自己的消费调用独立保留，
 不能把“唯一权威”写成“全仓一个调用点”。
 
-API [services composition](../../../apps/api/src/composition/services/index.ts) 和 OIDC [session composition](../../../apps/oidc-provider/src/composition/session/index.ts)
+API [services composition](../../../apps/api/src/composition/services/index.ts) 和 OIDC [session composition](https://github.com/cyy1998/shgas-iam/blob/aeb2dc45294f3553ad596cda5194e9643378c31b/apps/oidc-provider/src/composition/session/index.ts)
 均装配 `createCustomSsoCleanup`。旧 `authorization-grant-redemption` cleanup ref 仍能精确删除；Admin 使用版本 selector，
-OIDC [正式维护 composition](../../../apps/oidc-provider/src/composition/session/custom-sso-grant-maintenance.ts) 与
-[command](../../../apps/oidc-provider/src/commands/custom-sso-grant-command.ts) 消费两个 maintenance owner。
+OIDC [正式维护 composition](https://github.com/cyy1998/shgas-iam/blob/aeb2dc45294f3553ad596cda5194e9643378c31b/apps/oidc-provider/src/composition/session/custom-sso-grant-maintenance.ts) 与
+[command](https://github.com/cyy1998/shgas-iam/blob/aeb2dc45294f3553ad596cda5194e9643378c31b/apps/oidc-provider/src/commands/custom-sso-grant-command.ts) 消费两个 maintenance owner。
 OIDC 宽 `online-auth:state` 仍有其独立库存消费者，但不能用于这次保留升级。
 
 #159 删除旧在线工厂、reservation/begin/renew/release/consume Lua、lease scheduler/heartbeat/takeover、固定租期、

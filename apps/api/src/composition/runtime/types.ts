@@ -1,5 +1,5 @@
 import type { Env } from "@api/env";
-import type { SessionKernelConfig } from "@iam/session-kernel";
+import type { OidcHintVerificationPort, OidcSigningPort } from "@iam/oidc";
 import type Redis from "ioredis";
 import type { Logger } from "pino";
 
@@ -48,7 +48,12 @@ export interface ApiRuntimeConfig {
     maxSkewMs: number;
     nonceTtlSeconds: number;
   };
-  sessionKernel: SessionKernelConfig;
+  sessionKernel: {
+    namespace: string;
+    userSessionTtlSeconds: number;
+    clientSessionTtlSeconds: number;
+  };
+  oidc: Env["oidc"];
   userProfile: {
     dslMaxLimit: number;
   };
@@ -101,6 +106,7 @@ export interface ApiRuntimePorts {
   afterCommitLogger: AfterCommitLoggerPort;
   redis: RedisPort;
   passwordHasher: PasswordHasherPort;
+  oidcSigning: OidcSigningPort & OidcHintVerificationPort;
   random: RandomPort;
   clock: ClockPort;
   config: ApiRuntimeConfig;

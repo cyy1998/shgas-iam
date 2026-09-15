@@ -1,30 +1,24 @@
-import type { SessionKernelRedis } from "@iam/session-kernel";
+import type { SubjectAccessOperation } from "@iam/api-core/subject-access";
 import type { AdminApiRuntimePorts } from "../runtime";
-import { createAdminSessionRevocationLogger } from "@admin-api/services/session-revocation/session-revocation.logger";
-import { createAdminSessionRevocationPort } from "@admin-api/services/session-revocation/session-revocation.port";
-import { LoggerSourceApp } from "@iam/api-core/logger";
-import {
-  createLoginRestriction,
-  createRedisLoginRestrictionStore,
-} from "@iam/api-core/login-restriction";
+import { createLoginRestriction, createRedisLoginRestrictionStore } from "@iam/api-core/login-restriction";
 import {
   createRedisSubjectAccessStore,
   createSubjectAccessBarrier,
   createSubjectAccessLifecycle,
   createSubjectAccessOperations,
-  createSubjectAccessSessionRevocation,
+  createUnifiedSubjectAccessSessionRevocation,
+  requireSubjectAccessOperation,
 } from "@iam/api-core/subject-access";
 import db from "@iam/db";
-import { createSessionKernel } from "@iam/session-kernel";
+import { createUnifiedSessionKernel } from "@iam/session-kernel";
 import { createSubjectAccessTransitionRepository } from "@iam/user-profile-read-model/subject-access-transition";
+import { createUnifiedAdminLifecycleRevocation } from "./unified-lifecycle";
 
 export interface CreateAdminApiSessionOptions {
   runtime: AdminApiRuntimePorts;
 }
 
-function createAdminApiSubjectAccess(
-  runtime: Pick<AdminApiRuntimePorts, "clock" | "random" | "redis">,
-) {
+function createAdminApiSubjectAccess(runtime: Pick<AdminApiRuntimePorts, "clock" | "random" | "redis">) {
   return createSubjectAccessBarrier({
     clock: runtime.clock,
     random: runtime.random,
@@ -43,24 +37,20 @@ export function createAdminApiSession(options: CreateAdminApiSessionOptions) {
     }),
   });
   const subjectAccess = createAdminApiSubjectAccess(options.runtime);
-  const revocationLogger = createAdminSessionRevocationLogger({ logger: options.runtime.logger });
-  const sessionKernel = createSessionKernel({
-    redis: options.runtime.redis as SessionKernelRedis,
-    config: {
-      ...options.runtime.config.sessionKernel,
-      clock: options.runtime.clock,
-    },
-    logger: options.runtime.logger,
-    sourceApp: LoggerSourceApp.AdminApi,
+  const sessionKernel = createUnifiedSessionKernel<SubjectAccessOperation>({
+    redis: options.runtime.redis,
+    ...options.runtime.config.sessionKernel,
+    assertOperationActive: requireSubjectAccessOperation,
   });
-  const subjectAccessOperations = createSubjectAccessOperations({
+  let subjectAccessOperations: ReturnType<typeof createSubjectAccessOperations>;
+  const unifiedRevocation = createUnifiedSubjectAccessSessionRevocation(sessionKernel, {
+    run: callback => subjectAccessOperations.run(callback),
+  });
+  subjectAccessOperations = createSubjectAccessOperations({
     barrier: subjectAccess,
-    revocation: createSubjectAccessSessionRevocation(sessionKernel),
+    revocation: unifiedRevocation,
   });
-  const revocation = createAdminSessionRevocationPort({
-    sessionKernel,
-    logger: revocationLogger,
-  });
+  const revocation = createUnifiedAdminLifecycleRevocation(unifiedRevocation, options.runtime.logger);
   const subjectAccessLifecycle = createSubjectAccessLifecycle({
     barrier: subjectAccess,
     logger: options.runtime.logger,
@@ -70,6 +60,7 @@ export function createAdminApiSession(options: CreateAdminApiSessionOptions) {
 
   return {
     kernel: sessionKernel,
+    unifiedRevocation,
     subjectAccessOperations,
     loginRestriction,
     revocation,

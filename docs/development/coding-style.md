@@ -5,7 +5,7 @@
 ## Formatter 边界
 
 - 根工具脚本（`scripts/`、`eslint.root.config.mjs`）以及 API/backend/shared/gateway packages（`apps/api`、
-  `apps/admin-api`、`apps/oidc-provider`、`apps/worker`、
+  `apps/admin-api`、`apps/worker`、
   `packages/api-core`, `packages/contracts`, `packages/db`, `packages/domain`, `packages/jobs`,
   `packages/client-subject-projection`、`packages/organization-responsibility-resolution`、
   `packages/role-assignment-resolution`,

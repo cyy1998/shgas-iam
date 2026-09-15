@@ -2,7 +2,10 @@ import type {
   ResignUserTransactionPorts,
   ResignUserUseCaseDeps,
 } from "@admin-api/use-cases/employment/resign-user/resign-user.port";
-import type { SubjectAccessLifecycleRunInput, SubjectAccessMutationReceipt } from "@iam/api-core/subject-access";
+import type {
+  SubjectAccessLifecycleRunInput,
+  SubjectAccessMutationReceipt,
+} from "@iam/api-core/subject-access";
 import { createAdminAuthorizationPolicy } from "@admin-api/services/admin-authorization/admin-authorization.policy";
 import { createFakeClock, createImmediateUnitOfWork } from "@admin-api/testing/fakes";
 import { createResignUserUseCase } from "@admin-api/use-cases/employment/resign-user/resign-user.use-case";
@@ -27,10 +30,8 @@ const defaultTarget = {
 
 function createSubjectAccessMutation(): ResignUserTransactionPorts["subjectAccessMutation"] {
   return {
-    runMutation: async <T>(
-      _receipt: SubjectAccessMutationReceipt,
-      mutation: () => Promise<T>,
-    ) => await mutation(),
+    runMutation: async <T>(_receipt: SubjectAccessMutationReceipt, mutation: () => Promise<T>) =>
+      await mutation(),
   };
 }
 
@@ -72,7 +73,9 @@ function createSubjectAccessLifecycle(preBlockError?: Error) {
 function createUserReader(
   value: ResignUserUseCaseDeps["userReader"] extends {
     getUserByUsernameForAdmin: (...args: never[]) => Promise<infer T>;
-  } ? T : never = defaultTarget,
+  }
+    ? T
+    : never = defaultTarget,
 ) {
   return {
     getUserByUsernameForAdmin: mock(async () => value),
@@ -119,7 +122,9 @@ function createTransaction(): ResignUserTransactionPorts {
     employmentStore: {
       getOpenEmploymentIdsByUserId: mock(async () => []),
       lockEmploymentsByIds: mock(async () => []),
-      updateEmploymentRecord: mock(async () => { throw new Error("unexpected employment write"); }),
+      updateEmploymentRecord: mock(async () => {
+        throw new Error("unexpected employment write");
+      }),
     },
     responsibilityParentLifecycle: createResponsibilityParentLifecycle(),
     userProfileInvalidation: { recordChanges: mock(async () => undefined) },
@@ -136,16 +141,20 @@ describe("createResignUserUseCase", () => {
       sessionRevocation: createSessionRevocation(),
       subjectAccessLifecycle: createSubjectAccessLifecycle(),
       userReader: createUserReader(),
-      uow: { transaction: async (callback) => {
-        await callback({ ...tx, afterCommit: { required: mock(), bestEffort: mock() } });
-        throw sentinel;
-      } },
+      uow: {
+        transaction: async (callback) => {
+          await callback({ ...tx, afterCommit: { required: mock(), bestEffort: mock() } });
+          throw sentinel;
+        },
+      },
     });
     let failure: unknown;
     try {
       await useCase.execute({ username: "zhangsan" });
     }
-    catch (error) { failure = error; }
+    catch (error) {
+      failure = error;
+    }
     expect(failure).toBe(sentinel);
   });
 
@@ -164,7 +173,9 @@ describe("createResignUserUseCase", () => {
     try {
       await useCase.execute({ username: "zhangsan" });
     }
-    catch (error) { failure = error; }
+    catch (error) {
+      failure = error;
+    }
     expect(failure).toBe(sentinel);
     expect(tx.userStore.lockUserByUsername).not.toHaveBeenCalled();
     expect(tx.auditLogWriter.recordAuditLog).not.toHaveBeenCalled();
@@ -184,7 +195,9 @@ describe("createResignUserUseCase", () => {
     try {
       await useCase.execute({ username: "missing" });
     }
-    catch (error) { failure = error; }
+    catch (error) {
+      failure = error;
+    }
     expect(failure).toMatchObject({ httpStatus: 404 });
     expect(lifecycle.runSpy).not.toHaveBeenCalled();
   });
@@ -209,7 +222,13 @@ describe("createResignUserUseCase", () => {
     const tx = {
       auditLogWriter: { recordAuditLog: mock(async () => undefined) },
       subjectAccessMutation: createSubjectAccessMutation(),
-      employmentStore: { getOpenEmploymentIdsByUserId: mock(async () => []), lockEmploymentsByIds: mock(async () => []), updateEmploymentRecord: mock(async () => { throw new Error("unexpected write"); }) },
+      employmentStore: {
+        getOpenEmploymentIdsByUserId: mock(async () => []),
+        lockEmploymentsByIds: mock(async () => []),
+        updateEmploymentRecord: mock(async () => {
+          throw new Error("unexpected write");
+        }),
+      },
       responsibilityParentLifecycle: createResponsibilityParentLifecycle(),
       userProfileInvalidation: { recordChanges: mock(async () => undefined) },
       userStore: {
@@ -228,13 +247,16 @@ describe("createResignUserUseCase", () => {
 
     let failure: unknown;
     try {
-      await useCase.execute({ username: "zhangsan" }, {
-        authorization,
-        auditContext: {
-          actorType: "admin",
-          actorUserId: target.id,
+      await useCase.execute(
+        { username: "zhangsan" },
+        {
+          authorization,
+          auditContext: {
+            actorType: "admin",
+            actorUserId: target.id,
+          },
         },
-      });
+      );
     }
     catch (error) {
       failure = error;
@@ -282,8 +304,9 @@ describe("createResignUserUseCase", () => {
         getUserByUsernameForAdmin: mock(async () => target),
         getUserByUsernameIncludingDeletedForAuthorization: mock(async () => target),
         getOpenEmploymentOrganizationIdsByUserId: mock(async () => []),
-        getEndedEmploymentOrganizationIdsByUserId: mock(async () =>
-          [...facts.endedEmploymentOrganizationIds]),
+        getEndedEmploymentOrganizationIdsByUserId: mock(async () => [
+          ...facts.endedEmploymentOrganizationIds,
+        ]),
       };
       const useCase = createResignUserUseCase({
         clock: createFakeClock(),
@@ -292,7 +315,13 @@ describe("createResignUserUseCase", () => {
         uow: createImmediateUnitOfWork({
           auditLogWriter: { recordAuditLog: mock(async () => undefined) },
           subjectAccessMutation: createSubjectAccessMutation(),
-          employmentStore: { getOpenEmploymentIdsByUserId: mock(async () => []), lockEmploymentsByIds: mock(async () => []), updateEmploymentRecord: mock(async () => { throw new Error("unexpected write"); }) },
+          employmentStore: {
+            getOpenEmploymentIdsByUserId: mock(async () => []),
+            lockEmploymentsByIds: mock(async () => []),
+            updateEmploymentRecord: mock(async () => {
+              throw new Error("unexpected write");
+            }),
+          },
           responsibilityParentLifecycle: createResponsibilityParentLifecycle(),
           userProfileInvalidation: { recordChanges: mock(async () => undefined) },
           userStore: createUserStore(),
@@ -302,10 +331,7 @@ describe("createResignUserUseCase", () => {
 
       let failure: unknown;
       try {
-        await useCase.execute(
-          { username: "zhangsan" },
-          { authorization: await createScopedAuthorization() },
-        );
+        await useCase.execute({ username: "zhangsan" }, { authorization: await createScopedAuthorization() });
       }
       catch (error) {
         failure = error;
@@ -334,7 +360,13 @@ describe("createResignUserUseCase", () => {
     const tx = {
       auditLogWriter: { recordAuditLog: mock(async () => undefined) },
       subjectAccessMutation: createSubjectAccessMutation(),
-      employmentStore: { getOpenEmploymentIdsByUserId: mock(async () => []), lockEmploymentsByIds: mock(async () => []), updateEmploymentRecord: mock(async () => { throw new Error("unexpected write"); }) },
+      employmentStore: {
+        getOpenEmploymentIdsByUserId: mock(async () => []),
+        lockEmploymentsByIds: mock(async () => []),
+        updateEmploymentRecord: mock(async () => {
+          throw new Error("unexpected write");
+        }),
+      },
       responsibilityParentLifecycle: createResponsibilityParentLifecycle(),
       userProfileInvalidation: { recordChanges: mock(async () => undefined) },
       userStore: {
@@ -357,10 +389,7 @@ describe("createResignUserUseCase", () => {
 
     let failure: unknown;
     try {
-      await useCase.execute(
-        { username: "zhangsan" },
-        { authorization: await createScopedAuthorization() },
-      );
+      await useCase.execute({ username: "zhangsan" }, { authorization: await createScopedAuthorization() });
     }
     catch (error) {
       failure = error;
@@ -377,12 +406,15 @@ describe("createResignUserUseCase", () => {
   test("rechecks HR scope after the complete responsibility lock wait", async () => {
     const tx = createTransaction();
     let locked = false;
-    tx.userStore.getOpenEmploymentOrganizationIdsByUserId = mock(async () => locked ? [10, 20] : [10]);
+    tx.userStore.getOpenEmploymentOrganizationIdsByUserId = mock(async () => (locked ? [10, 20] : [10]));
     tx.responsibilityParentLifecycle.lockAssignmentsForEmployments = mock(async () => {
       locked = true;
       return [];
     });
-    const reader = { ...createUserReader(), getOpenEmploymentOrganizationIdsByUserId: mock(async () => [10]) };
+    const reader = {
+      ...createUserReader(),
+      getOpenEmploymentOrganizationIdsByUserId: mock(async () => [10]),
+    };
     const useCase = createResignUserUseCase({
       clock: createFakeClock(),
       sessionRevocation: createSessionRevocation(),
@@ -424,7 +456,13 @@ describe("createResignUserUseCase", () => {
     const tx = {
       auditLogWriter: { recordAuditLog: mock(async () => undefined) },
       subjectAccessMutation: createSubjectAccessMutation(),
-      employmentStore: { getOpenEmploymentIdsByUserId: mock(async () => []), lockEmploymentsByIds: mock(async () => []), updateEmploymentRecord: mock(async () => { throw new Error("unexpected write"); }) },
+      employmentStore: {
+        getOpenEmploymentIdsByUserId: mock(async () => []),
+        lockEmploymentsByIds: mock(async () => []),
+        updateEmploymentRecord: mock(async () => {
+          throw new Error("unexpected write");
+        }),
+      },
       responsibilityParentLifecycle: createResponsibilityParentLifecycle(),
       userProfileInvalidation: { recordChanges: mock(async () => undefined) },
       userStore: {
@@ -451,12 +489,16 @@ describe("createResignUserUseCase", () => {
     expect(result).toEqual({ changed: false, result: null });
 
     expect(tx.employmentStore.updateEmploymentRecord).not.toHaveBeenCalled();
-    expect(tx.responsibilityParentLifecycle.endOpenAssignmentsForUserResignation).toHaveBeenCalledWith(expect.objectContaining({ selectedAssignments: [] }));
+    expect(tx.responsibilityParentLifecycle.endOpenAssignmentsForUserResignation).toHaveBeenCalledWith(
+      expect.objectContaining({ selectedAssignments: [] }),
+    );
     expect(tx.userStore.updateUserByUsername).not.toHaveBeenCalled();
-    expect(tx.auditLogWriter.recordAuditLog).toHaveBeenCalledWith(expect.objectContaining({
-      action: "admin.employment.resign_user",
-      details: expect.objectContaining({ changed: false }),
-    }));
+    expect(tx.auditLogWriter.recordAuditLog).toHaveBeenCalledWith(
+      expect.objectContaining({
+        action: "admin.employment.resign_user",
+        details: expect.objectContaining({ changed: false }),
+      }),
+    );
     expect(tx.userProfileInvalidation.recordChanges).not.toHaveBeenCalled();
     expect(sessionRevocation.revokeUserSessions).toHaveBeenCalledTimes(1);
   });

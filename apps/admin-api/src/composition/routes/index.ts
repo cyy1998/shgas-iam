@@ -9,6 +9,7 @@ import { createAuditAdminRouter } from "@admin-api/routes/admin/audit/audit.trpc
 import { createAdminAuthorizationAdapter } from "@admin-api/routes/admin/authorization/authorization.adapter";
 import { createAdminAuthorizationRoute } from "@admin-api/routes/admin/authorization/authorization.index";
 import { createAdminAuthorizationAdminRouter } from "@admin-api/routes/admin/authorization/authorization.trpc";
+import { createClientSsoAdapter } from "@admin-api/routes/admin/client-sso/client-sso.adapter";
 import { createClientAdapter } from "@admin-api/routes/admin/client/client.adapter";
 import { createClientRoute } from "@admin-api/routes/admin/client/client.index";
 import { createClientAdminRouter } from "@admin-api/routes/admin/client/client.trpc";
@@ -87,7 +88,9 @@ export function createAdminApiRouteComposition(
     userService: services.user,
   });
 
+  const clientSsoAdapter = createClientSsoAdapter(services.clientSso.service);
   const adminRouter = createAdminRouter({
+    clientSso: clientSsoAdapter.trpc,
     authorization: createAdminAuthorizationAdminRouter(
       authorizationAdapter,
     ),
@@ -111,6 +114,7 @@ export function createAdminApiRouteComposition(
     throw new Error("Admin API config must declare the admin tier");
 
   const routes: CreateAppOptions["routes"] = {
+    "./src/routes/admin/client-sso/client-sso.index.ts": { default: clientSsoAdapter.rest },
     "./src/routes/admin/authorization/authorization.index.ts": {
       default: createAdminAuthorizationRoute(authorizationAdapter),
     },

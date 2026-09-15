@@ -1,54 +1,37 @@
 import type { ApiAuditLogWriter } from "@api/services/audit/audit.service";
+import type { SubjectAccessOperation } from "@iam/api-core/subject-access";
 import type { DbClient } from "@iam/db";
-import type { SessionKernelRedis } from "@iam/session-kernel";
 import type { ApiRepositories } from "../repositories";
 import type { ApiRuntimePorts } from "../runtime";
 import type { createApiUnitOfWork } from "../tx";
 import { createAccountRecoveryService } from "@api/services/account-recovery/account-recovery.service";
 import { createLoginCredentialParser } from "@api/services/authentication/login-credential.parser";
-import { createPrincipalSessionAdapter } from "@api/services/authentication/principal-session.adapter";
 import { createClientService } from "@api/services/client/client.service";
-import {
-  createCustomSsoClientRuntimeReader,
-  createCustomSsoClientRuntimeSnapshotAdapter,
-} from "@api/services/client/custom-sso-client-runtime.reader";
 import { createCapService } from "@api/services/human-verification/cap.service";
 import { createHumanRiskService } from "@api/services/human-verification/human-risk.service";
 import { createMobileService } from "@api/services/mobile/mobile.service";
 import { createOrganizationService } from "@api/services/organization/organization.service";
 import { createPrivilegeDelegationService } from "@api/services/privilege/privilegeDelegation.service";
-import {
-  createCustomSsoSubjectDeliveryRequestScope,
-} from "@api/services/sso/subject-delivery/custom-sso-subject-delivery-request-scope";
 import { createV3UserProfileSearchAdapter } from "@api/services/user-profile-search/user-profile-search-v3.adapter";
 import { createUserMobileBinding } from "@api/services/user/user-mobile-binding.helper";
 import { createUserPasswordHelper } from "@api/services/user/user-password.helper";
 import { createUserService } from "@api/services/user/user.service";
-import {
-  createClientRuntimeSnapshotLoggerObservability,
-  createClientRuntimeSnapshotModule,
-} from "@iam/api-core/client-runtime-snapshot";
-import {
-  createClientTrafficGateReader,
-  createClientTrafficGateSnapshotAdapter,
-} from "@iam/api-core/client-traffic-gate";
-import { LoggerSourceApp } from "@iam/api-core/logger";
-import {
-  createLoginRestriction,
-  createRedisLoginRestrictionStore,
-} from "@iam/api-core/login-restriction";
-import { verifySecret } from "@iam/api-core/security";
+import { createClientSnapshots } from "@iam/api-core/client-snapshot/composition";
+import { createClientSecretAuthenticator } from "@iam/api-core/client-snapshot/credentials";
+import { createLoginRestriction, createRedisLoginRestrictionStore } from "@iam/api-core/login-restriction";
 import {
   createRedisSubjectAccessStore,
   createSubjectAccessBarrier,
   createSubjectAccessLifecycle,
   createSubjectAccessOperations,
-  createSubjectAccessSessionRevocation,
+  createUnifiedSubjectAccessSessionRevocation,
+  requireSubjectAccessOperation,
 } from "@iam/api-core/subject-access";
 import { mapUnitOfWork } from "@iam/api-core/uow";
-import { createCustomSsoCleanup } from "@iam/custom-sso/cleanup";
 import db from "@iam/db";
-import { createSessionKernel } from "@iam/session-kernel";
+import { createClientSnapshotRepository } from "@iam/db/client-snapshot";
+import { createOidcClientAuthRateLimiter } from "@iam/oidc";
+import { createUnifiedSessionKernel } from "@iam/session-kernel";
 import {
   createInternalUserProfileQueryRepository,
   createInternalUserProfileQueryService,
@@ -57,15 +40,12 @@ import {
 } from "@iam/user-profile-read-model";
 import { createUserProfileQueryService } from "@iam/user-profile-read-model/query";
 import { createSubjectAccessTransitionRepository } from "@iam/user-profile-read-model/subject-access-transition";
-import {
-  createSubjectFactsLoggerObservability,
-} from "@iam/user-profile-read-model/subject-facts";
+import { createSubjectFactsLoggerObservability } from "@iam/user-profile-read-model/subject-facts";
 import {
   createV3UserProfileQueryRepository,
   createV3UserProfileQueryService,
 } from "@iam/user-profile-read-model/v3";
-import { createCustomSsoOperationAdapter } from "../custom-sso-operation.adapter";
-import { createApiCustomSsoOperations } from "../custom-sso-operations";
+import { createRootAuthenticationComposition } from "../root-authentication";
 import { createApiUserProfileSearch } from "./user-profile-search";
 
 type ApiUnitOfWork = ReturnType<typeof createApiUnitOfWork>;
@@ -78,9 +58,7 @@ export interface CreateApiServicesOptions {
   userProfileQueryDb: DbClient;
 }
 
-function createApiSubjectAccess(
-  runtime: Pick<ApiRuntimePorts, "clock" | "random" | "redis">,
-) {
+function createApiSubjectAccess(runtime: Pick<ApiRuntimePorts, "clock" | "random" | "redis">) {
   return createSubjectAccessBarrier({
     clock: runtime.clock,
     random: runtime.random,
@@ -94,20 +72,12 @@ export function createApiServices(options: CreateApiServicesOptions) {
   const { runtime, repositories, auditLogWriter, unitOfWork } = options;
 
   const subjectAccess = createApiSubjectAccess(runtime);
-  const customSsoCleanup = createCustomSsoCleanup({
+  const sessionKernel = createUnifiedSessionKernel<SubjectAccessOperation>({
     redis: runtime.redis,
-  });
-  const sessionKernel = createSessionKernel({
-    redis: runtime.redis as SessionKernelRedis,
-    config: {
-      ...runtime.config.sessionKernel,
-      clock: runtime.clock,
+    ...runtime.config.sessionKernel,
+    assertOperationActive: (operation) => {
+      requireSubjectAccessOperation(operation);
     },
-    cleanupAdapters: [
-      customSsoCleanup,
-    ],
-    logger: runtime.logger,
-    sourceApp: LoggerSourceApp.Api,
   });
   const subjectAccessLifecycle = createSubjectAccessLifecycle({
     barrier: subjectAccess,
@@ -115,11 +85,14 @@ export function createApiServices(options: CreateApiServicesOptions) {
     random: runtime.random,
     transitionIntent: createSubjectAccessTransitionRepository(db),
   });
-  const subjectAccessOperations = createSubjectAccessOperations({
-    barrier: subjectAccess,
-    revocation: createSubjectAccessSessionRevocation(sessionKernel),
+  let subjectAccessOperations: ReturnType<typeof createSubjectAccessOperations>;
+  const sessionRevocation = createUnifiedSubjectAccessSessionRevocation(sessionKernel, {
+    run: callback => subjectAccessOperations.run(callback),
   });
-  const principalSessions = createPrincipalSessionAdapter(sessionKernel, subjectAccessOperations);
+  subjectAccessOperations = createSubjectAccessOperations({
+    barrier: subjectAccess,
+    revocation: sessionRevocation,
+  });
   const subjectFacts = createSubjectFactsReader({
     db,
     cache: createSubjectFactsRedisCache(runtime.redis),
@@ -129,29 +102,11 @@ export function createApiServices(options: CreateApiServicesOptions) {
     redis: runtime.redis,
     clientRepository: repositories.client,
   });
-  const clientRuntimeSnapshots = createClientRuntimeSnapshotModule({
+  const clientSnapshots = createClientSnapshots({
     redis: runtime.redis,
-    adapters: [
-      createCustomSsoClientRuntimeSnapshotAdapter({
-        repository: repositories.customSsoClient,
-      }),
-      createClientTrafficGateSnapshotAdapter({
-        source: repositories.client,
-      }),
-    ],
-    createEpoch: runtime.random.uuid,
-    observability: createClientRuntimeSnapshotLoggerObservability(
-      runtime.logger,
-    ),
+    source: createClientSnapshotRepository(db),
   });
-  const customSsoClientRuntime = createCustomSsoClientRuntimeReader(
-    clientRuntimeSnapshots.reader("custom-sso"),
-  );
-  const clientTrafficGate = createClientTrafficGateReader(
-    clientRuntimeSnapshots.reader("traffic-gate"),
-  );
-  const customSsoSubjectDeliveryRequests
-    = createCustomSsoSubjectDeliveryRequestScope();
+  const credentials = createClientSecretAuthenticator(clientSnapshots.credential);
 
   const mobileService = createMobileService({
     redis: runtime.redis,
@@ -190,15 +145,11 @@ export function createApiServices(options: CreateApiServicesOptions) {
     profileRepository: repositories.userProfile,
   });
   const internalUserProfileQuery = createInternalUserProfileQueryService({
-    profileRepository: createInternalUserProfileQueryRepository(
-      options.userProfileQueryDb,
-    ),
+    profileRepository: createInternalUserProfileQueryRepository(options.userProfileQueryDb),
   });
   const canonicalUserProfileSearch = createV3UserProfileSearchAdapter(
     createV3UserProfileQueryService({
-      profileRepository: createV3UserProfileQueryRepository(
-        options.userProfileQueryDb,
-      ),
+      profileRepository: createV3UserProfileQueryRepository(options.userProfileQueryDb),
     }),
   );
   const { userDelegationQuery, userProfileSearch } = createApiUserProfileSearch({
@@ -224,10 +175,13 @@ export function createApiServices(options: CreateApiServicesOptions) {
     passwordHelper: userPasswordHelper,
     sessionRevocation: {
       revokeUserSessions: async ({ reason, onlySubjectAccessTransitionId, subjectIdentifier }) =>
-        await createSubjectAccessSessionRevocation(sessionKernel).revokeUserSessions({
-          principalType: "user",
-          subjectId: subjectIdentifier,
-        }, reason, { onlySubjectAccessTransitionId }),
+        await sessionRevocation.revokeUserSessions(
+          {
+            subjectId: subjectIdentifier,
+          },
+          reason,
+          { onlySubjectAccessTransitionId },
+        ),
     },
     subjectAccessLifecycle,
     uow: mapUnitOfWork(unitOfWork, tx => ({
@@ -261,24 +215,6 @@ export function createApiServices(options: CreateApiServicesOptions) {
     })),
   });
 
-  const customSsoOperations = createApiCustomSsoOperations({
-    clientSecrets: repositories.customSsoClient,
-    secrets: { verify: verifySecret },
-    traffic: clientTrafficGate,
-    clients: customSsoClientRuntime,
-    kernel: sessionKernel,
-    logger: runtime.logger,
-    orcas: runtime.integrations.orcas,
-    random: runtime.random,
-    subjectFacts,
-    permittedUsers: userService,
-    auditLogWriter,
-    config: {
-      authCodeExpireSeconds: runtime.config.auth.authCodeExpireSeconds,
-      localSessionTtlSeconds: runtime.config.auth.redisExpireSeconds,
-    },
-  });
-
   const loginRestriction = createLoginRestriction({
     clock: runtime.clock,
     random: runtime.random,
@@ -297,20 +233,16 @@ export function createApiServices(options: CreateApiServicesOptions) {
     },
   });
 
-  return {
+  const services = {
     accountRecovery: accountRecoveryService,
     cap: capService,
     client: clientService,
-    customSso: createCustomSsoOperationAdapter({ customSsoOperations, subjectAccessOperations }),
-    customSsoOperations,
     subjectAccessOperations,
-    customSsoSubjectDeliveryRequests,
     humanRisk: humanRiskService,
     loginCredential: loginCredentialParser,
     loginRestriction,
     mobile: mobileService,
     organization: organizationService,
-    principalSessions,
     privilegeDelegation: privilegeDelegationService,
     subjectAccess,
     subjectAccessLifecycle,
@@ -321,6 +253,78 @@ export function createApiServices(options: CreateApiServicesOptions) {
     userProfileSearch,
     internalUserProfileQuery,
   };
+  const authentication = createRootAuthenticationComposition({
+    kernel: sessionKernel,
+    barrier: subjectAccess,
+    authentication: { auditLogWriter, runtime, services },
+    clients: clientSnapshots.client,
+    subjectFacts,
+    loginCredentialParser,
+    internalClients: clientService,
+    internalAuthzLogger: runtime.logger,
+    logger: runtime.logger,
+    endpoints: {
+      logger: runtime.logger,
+      config: {
+        authorizationEndpoint: runtime.config.env.sso.authorizationEndpoint,
+        logoutEndpoint: runtime.config.env.sso.logoutEndpoint,
+        thirdPartyOAEndpoint: runtime.config.env.sso.thirdPartyOAEndpoint,
+        ssoExternalOrigin: runtime.config.env.sso.externalOrigin,
+        ssoInternalOrigin: runtime.config.env.sso.internalOrigin,
+      },
+    },
+    publicServices: { organizationService, userService, userProfileSearch },
+    config: {
+      ...runtime.config.auth,
+      loginEndpoint: new URL(runtime.config.env.sso.loginEndpoint, runtime.config.env.sso.externalOrigin)
+        .href,
+      projectionRetryAfterSeconds: runtime.config.env.sso.projectionRetryAfterSeconds,
+    },
+    customSso: {
+      redis: runtime.redis,
+      namespace: runtime.config.sessionKernel.namespace,
+      codeTtlSeconds: runtime.config.auth.authCodeExpireSeconds,
+      continuationTtlSeconds: runtime.config.auth.authCodeExpireSeconds,
+      trustedIamOrigins: [runtime.config.env.sso.internalOrigin, runtime.config.env.sso.externalOrigin],
+      managedCallbackUrls: [runtime.config.env.sso.internalOrigin, runtime.config.env.sso.externalOrigin].map(
+        origin => new URL("/sso/callback", origin).href,
+      ),
+    },
+    customSsoAccess: {
+      credentials,
+      tokenTtlSeconds: runtime.config.auth.redisExpireSeconds,
+      business: { audit: auditLogWriter, logger: runtime.logger },
+      managed: {
+        orcas: runtime.integrations.orcas,
+        users: userService,
+        audit: auditLogWriter,
+        logger: runtime.logger,
+      },
+    },
+    oidc: {
+      redis: runtime.redis,
+      namespace: runtime.config.oidc.namespace,
+      issuer: runtime.config.oidc.issuer,
+      secureCookies: runtime.config.oidc.cookieSecure,
+      codeTtlSeconds: runtime.config.oidc.authorizationCodeTtlSeconds,
+      continuationTtlSeconds: runtime.config.oidc.continuationTtlSeconds,
+    },
+    oidcTokens: {
+      credentials,
+      signing: runtime.oidcSigning,
+      tokenTtlSeconds: runtime.config.oidc.tokenTtlSeconds,
+    },
+    oidcClientAuth: createOidcClientAuthRateLimiter({
+      redis: runtime.redis,
+      namespace: runtime.config.oidc.namespace,
+    }),
+    oidcTrustProxy: runtime.config.oidc.trustProxy,
+    oidcLogout: {
+      verification: runtime.oidcSigning,
+      confirmationTtlSeconds: runtime.config.oidc.logoutConfirmationTtlSeconds,
+    },
+  });
+  return { ...services, authentication, sessionKernel, clientSnapshots };
 }
 
 export type ApiServices = ReturnType<typeof createApiServices>;

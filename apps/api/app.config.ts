@@ -15,10 +15,12 @@ export default defineConfig({
   },
 
   tiers: [
+    { name: "health", basePath: "/", title: "Health" },
     { name: "public", title: "通用用户API" },
     { name: "open", title: "公开API" },
     { name: "internal", title: "内部API" },
     { name: "sso", title: "单点登录API" },
     { name: "auth", title: "认证API" },
+    { name: "oidc", title: "OpenID Connect" },
   ],
 });

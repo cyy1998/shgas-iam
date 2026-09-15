@@ -1,14 +1,3 @@
-export enum CustomSsoClientMode {
-  Gateway = "gateway",
-  Independent = "independent",
-}
-
-export enum CustomSsoClientState {
-  Unconfigured = "unconfigured",
-  Disabled = "disabled",
-  Enabled = "enabled",
-}
-
 export const SubjectClaim = {
   SubjectIdentifier: "subjectIdentifier",
   ProfileUsername: "profile:username",

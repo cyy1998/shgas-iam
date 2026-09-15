@@ -25,133 +25,41 @@
 | 每个测试候选唯一收集且 root task 可达 | 根 `pnpm check:test-collection`；[collection 入口](../../scripts/check-test-collection.ts)。 | 不读取断言、不推断资源使用；已纳入静态与完整验证入口，成功只证明收集正确，不证明测试断言通过。 |
 | 文档登记、状态日期与本地目标存在 | 根 `pnpm check:docs`；[文档检查实现](../../scripts/check-docs-index.ts)。 | 当前检查 `docs/**/*.md`，不验证语义一致性、根 AGENTS.md 链接或 Markdown 锚点；这些变更须另行核对。 |
 
-Architecture Guard 当前 production source roots 为四个后端 app（API、Admin API、OIDC Provider、Worker）及
-Session Kernel、Custom SSO、Client Subject Projection、Organization Responsibility Resolution、Role Assignment Resolution、User Profile Read Model 六个包。
+Architecture Guard 当前 production source roots 为三个后端 app（API、Admin API、Worker）及
+Session Kernel、Custom SSO、OIDC、Client Subject Projection、Organization Responsibility Resolution、Role Assignment Resolution、User Profile Read Model 七个包。
 Admin/SSO 前端、`api-core`、`domain`、`contracts`、`db`、`jobs`、Gateway 等源码内部不在该扫描范围；被某条规则识别为
 依赖目标不等于其内部也被扫描。Docker closure 另按 workspace manifests 与 Dockerfile `COPY` 检查。
 改变该覆盖范围时同步维护本说明，不扩张扫描器去推断业务语义。
 
 ## 行为、资源与系统验证
 
-下表的 owner 是 workspace 名称；Integration 命令使用
-`pnpm --filter <owner> test:integration:<profile>`，其中 profile 只取表中列出的值。表中链接是现有代表性测试，
-实现者仍需按本次不变量选择或补充断言，不能把跑完所在 package 当作自动覆盖新行为。
-
-| 契约与 owner | 代表性证据 / profile | 能证明什么，不能替代什么 |
+| 能力 | 当前最高相关入口 | 证明范围与限制 |
 |---|---|---|
-| UnitOfWork / `@iam/api-core` | [UoW contract](../../packages/api-core/test-integration/component/unit-of-work.integration.test.ts)；`component`。 | 提交后的顺序、尝试所有 task、required failure 语义；fake adapter 不证明 PostgreSQL 原子性。 |
-| Internal Privilege Delegation / `@iam/api` | [写入与解析联验](../../apps/api/test-integration/postgres/privilege-delegation-writes.integration.test.ts)、[读端失败关闭](../../apps/api/test-integration/postgres/privilege-delegation-resolution.integration.test.ts)；`postgres`。 | 公开写入、production UoW 和 resolver 联验组织覆盖、期间、状态、独立事务串行协调与审计失败回滚；不证明引用对象并发生命周期强保证，也不替代目标环境发布验收。 |
-| 业务写入、审计与 invalidation / `@iam/admin-api` | [责任任命事务](../../apps/admin-api/test-integration/postgres/organization-responsibility-assignment.integration.test.ts)、[Client mutation](../../apps/admin-api/test-integration/postgres/client-mutation.integration.test.ts)；`postgres`。 | 真实 PostgreSQL 与 production UoW 的 commit/rollback、提交后失败；被替代的 queue 或 Redis seam 不构成真实投递证据。 |
-| 历史审计 action 规范化 / `@iam/worker` | [维护命令](../../apps/worker/test-integration/postgres/audit-action-command.integration.test.ts)；`postgres`。 | 真实 CLI/PG 验证八映射、事实与数量保持、冲突零写、锁等待后的全量预检、失败回滚、幂等及独立 verify；不证明目标环境已停写、完成迁移或查询验收。 |
-| 迁移后审计查询与展示 / `@iam/admin-api`、`@iam/admin` | [迁移后查询](../../apps/admin-api/test-integration/postgres/audit-action-query.integration.test.ts)；`postgres`。[展示入口](../../apps/admin/test-integration/component/AuditLogTable.integration.test.tsx)；`component`。 | 独立工具迁移混合数据后，真实 Admin service/repository 验证精确 action/outcome、计数、分页与其他事实保持；展示验证规范中文标签及未知原文回退。不替代目标环境发布门禁。 |
-| Profile invalidation / publication / `@iam/user-profile-read-model` | [失效归并](../../packages/user-profile-read-model/test-integration/component/user-profile-invalidation.integration.test.ts)用 `component`；[原子发布](../../packages/user-profile-read-model/test-integration/postgres/profile-publication.integration.test.ts)用 `postgres`。 | Source changes 归并、提交后唤醒注册、Profile 与 Dirty Version 同事务发布；不单独证明 BullMQ 已成功处理。 |
-| Profile readiness / Employment 诊断 / `@iam/user-profile-read-model`、`@iam/worker` | [双 gate](../../packages/user-profile-read-model/test-integration/component/user-profile-readiness.integration.test.ts)用 `component`，真实库存与缓存使用 package `postgres` / `redis`；[Employment](../../packages/user-profile-read-model/test-integration/postgres/employment-verifier.integration.test.ts)与 [Worker 命令](../../apps/worker/test-integration/postgres/employment-command.integration.test.ts)用 `postgres`。 | 双 gate 验证完整分页和发布收敛；`employment:verify` 单独报告全库非墓碑异常，保持完整 ID 集合、稳定排序与只读访问。Profile builder 的父对象 fail-closed 守卫不替代全库诊断；Full-system E2E 继续运行两道 production gate。 |
-| Facts 单调缓存与已发布授权读取 / `@iam/user-profile-read-model` | [Redis publisher](../../packages/user-profile-read-model/test-integration/redis/subject-facts-publisher-v3.integration.test.ts)用 `redis`；[Facts reader](../../packages/user-profile-read-model/test-integration/postgres/subject-facts-reader.integration.test.ts)用 `postgres`。 | 版本单调写入、strict v3 回源及 Dirty pending/processing/failed/较新 processed/缺失时仍交付已发布授权；Reader Component 证明缓存命中零数据库读取与回源失败边界，协议 HTTP/Redis 证明 Custom SSO 同凭据更新及 OIDC 旧快照保持。各资源 seam 不等于生产升级证明，见 [#156 验证说明](../features/sso/published-subject-facts-contract.md)。 |
-| Client Runtime Snapshot / `@iam/api-core`、`@iam/admin-api`、`@iam/worker` | [Snapshot Redis contract](../../packages/api-core/test-integration/redis/client-runtime-snapshot.integration.test.ts)用 API Core `redis`；上面的 Client mutation 用 Admin API `postgres`；Worker `redis` 验证 production maintenance command。 | Late refill、共享 invalidation、当前 namespace 的 full repair/独立 scan-only verify、部分失败恢复与 non-owner key 保留分别有 owner；旧 Runtime key 残留不使 verify 失败。真实 Admin mutation 与三类 Reader 的联合证据由现有 `client-runtime:hard-cutover-rehearsal` 补充，当前矩阵见[恢复手册](../releases/client-runtime-snapshot-restore.md)。不能证明旧 namespace 已清空或 production 已完成恢复。 |
-| Subject Access lifecycle / `@iam/api-core`、`@iam/user-profile-read-model` | [Redis transition/lease/repair](../../packages/api-core/test-integration/redis/subject-access.integration.test.ts)用 API Core `redis`；[durable transition intent](../../packages/user-profile-read-model/test-integration/postgres/subject-access-transition.integration.test.ts)用 Read Model `postgres`。 | 各存储 owner 的原子行为与恢复事实；实际定时调度、恢复 SLO 和持续排空由部署 owner 验收。 |
-| Subject Access Permission / `@iam/api-core` | [共享操作容器](../../packages/api-core/test-integration/component/subject-access-operation.integration.test.ts)用 `component`。 | 公开工厂与窄出站 ports 证明 single-flight、结果固定、身份与代际绑定、严格 context、关闭后失效和拒绝撤销范围；晚到清理测试证明传出的原代际范围，不替代真实 Kernel 存储筛选或生产协议入口接入证据。 |
-| User Resignation Session 重试 / `@iam/admin-api`、`@iam/session-kernel` | [公开 Resignation 与真实 Redis](../../apps/admin-api/test-integration/redis/resign-user.integration.test.ts)及 Session Kernel owner 的 `redis` 测试；[源事务矩阵](../../apps/admin-api/test-integration/postgres/employment-mutation.integration.test.ts)用 Admin API `postgres`。 | Redis 证据覆盖 pre-block 后原始捕获代际、提交后按代际集合精确撤销、失败后的 no-op 重试及晚到撤销保留重新启用新代；Admin adapter 验证准备失败的 bestEffort 诊断与 callback 前代 fallback。Redis 测试中的 fake PostgreSQL 不证明事务原子性，真实 PG 矩阵单独证明锁序与业务、审计、dirty 原子提交。捕获不是全局快照，不保证捕获后才落库的更早代极迟在途 Session 本次被撤销，也不扩展已 tombstone 对象的派生 cleanup owner。 |
-| Session Kernel / LoginRestriction / `@iam/session-kernel`、`@iam/api-core` | [Credential contract](../../packages/session-kernel/test-integration/redis/session-kernel-credential.integration.test.ts)、[LoginRestriction contract](../../packages/api-core/test-integration/redis/login-restriction.integration.test.ts)；`redis`。 | Redis 实时状态、并发和原子清理；不替代 API/OIDC 的协议适配测试，也不保证第三方自有会话退出。 |
-| Session Kernel 生命周期时间 / `@iam/session-kernel` | [Redis 时间 contract](../../packages/session-kernel/test-integration/redis/session-kernel-time.integration.test.ts)与现有 Credential、Artifact、prepared revocation contracts；`redis`。 | 四类对象的零/正/负应用偏差、跨实例与前后跳、父上限、状态与反向 ID 同期限、取得时有效性、列表撤销与 pending cleanup 恢复；协议 TTL 消费由各协议 Adapter 证明，不代表生产已切换。 |
-| Custom SSO 完整操作与权威期限 / `@iam/custom-sso`、`@iam/api` | [完整操作与内部状态协作](../../apps/api/test-integration/component/custom-sso-session-kernel.adapter.integration.test.ts)、[Cookie handler](../../apps/api/test-integration/component/sso.handlers.integration.test.ts)使用 API `component`；[Grant owner](../../packages/custom-sso/test-integration/redis/custom-sso-operation.integration.test.ts)使用 Custom SSO `redis`；[真实完整入口与独立 cleanup](../../packages/custom-sso/test-integration/redis/custom-sso.integration.test.ts) 同属该 profile。 | 完整 factory 联验授权、Secret、续接、Independent/Gateway/ORCAS、UserInfo/authz 与退出；内部矩阵证明两种模式在独立应用偏差、跳变和跨实例下交付、认证与退出；亚秒取整和取得后跨 Credential deadline 不新增拒绝；Independent/Gateway #158/#159 通过真实完整操作验证签发前唯一消费、未知结果停止、投影失败烧码、同步补偿/残留、新授权与原期限；Gateway ORCAS 故障、消费/签发中断和外部已成功但响应丢失均只通过可控替身观察 IAM 作用。Kernel 同时精确移除消费对象索引，并以同记录 consumed 终态保留重放分类，Subject Access 与父 Session 保护保持。不证明第三方自有会话退出或维护切换完成。 |
-| Admin capability / HR scope / `@iam/admin-api`、`@iam/admin` | [Policy](../../apps/admin-api/test-integration/component/admin-authorization.policy.integration.test.ts)用 Admin API `component`；[请求时 scope](../../apps/admin-api/test-integration/postgres/hr-administration-scope.resolver.integration.test.ts)用 `postgres`；[HR UI](../../apps/admin/test-integration/browser/hr-administration.spec.ts)用 Admin `browser`。 | 后端策略、数据库事实和 UI 各有验证；Browser 的 mocked backend 不能证明服务端拒绝越权，真实联合路径由 Full-system HR journey 补充。 |
-| SSO 登录续接 / `@iam/api`、`@iam/sso` | [Guard use case](../../apps/api/test-integration/component/login-continuation-guard.use-case.integration.test.ts)用 API `component`；[Login Browser](../../apps/sso/test-integration/browser/login.spec.ts)用 SSO `browser`。 | Guard 语义与表单状态；mocked HTTP 不证明真实协议连接或完整第三方登录矩阵。 |
-| Gateway 与进程 lifecycle / `@iam/gateway-apisix`、各后端 app | [Gateway commands](../../gateway/test-integration/component/commands.integration.test.ts)用 Gateway `component`；以 API [process entry](../../apps/api/test-integration/process/entry.integration.test.ts) / [composition entry](../../apps/api/test-integration/composition/entry.integration.test.ts)为例，对应 app 使用 `process` / `composition`。 | Process 观察子进程、readiness 与退出清理；composition 按声明连接真实 adapter/resources。Gateway Component 不证明目标 APISIX routes 已发布或生效。 |
-| 代表性系统旅程 / `@iam/e2e-system` | 根 `pnpm test:e2e`；[Admin](../../e2e/system/admin-custom-sso.spec.ts)、[HR](../../e2e/system/hr-admin-user-management.spec.ts)、[OIDC](../../e2e/system/oidc-pkce.spec.ts)。 | 固定 synthetic 场景中的真实仓库系统协作。Workspace-local journey 是调试入口；不证明生产代理信任、真实外部集成、备份恢复或全部协议场景。 |
+| 两类会话 | [Kernel Redis](../../packages/session-kernel/test-integration/redis/unified-session-lifecycle.integration.test.ts) | 并发 open、根/应用关系期限、损坏/观察身份、精确撤销、索引及旧实例替换保护；不证明协议交付。 |
+| Subject Access | [Core Redis](../../packages/api-core/test-integration/redis/subject-access-operation-kernel.integration.test.ts) | 操作固定、重启用后旧代拒绝、prepared 原上下文、损坏上下文失败、迟到撤销保留新代；数据库原子性由 Admin PG 另证。 |
+| Snapshot | [Core Snapshot Redis](../../packages/api-core/test-integration/redis/client-snapshot.integration.test.ts) | 统一普通/敏感 acquisition、缓存损坏、晚到回填、required invalidation、失败和 repair；专用 DB0 清空库存与 scan-only verify。 |
+| Client 管理与传播 | [Admin composition](../../apps/admin-api/test-integration/composition/client-sso-snapshot.integration.test.ts)、[PG](../../apps/admin-api/test-integration/postgres/client-sso-management.integration.test.ts) | 单协议状态、竞争/锁、审计回滚、no-op、COMMIT 不确定和实际传播；Secret 与 Internal credential 隔离。 |
+| 管理会话与账号 | [Root security](../../apps/admin-api/test-integration/composition/root-security.integration.test.ts) | 根与应用关系固定目标、失败/未知/重试、新实例保护；Admin user PG/HR scope 保持独立验证。 |
+| 完整认证和协议 | [API HTTP Redis](../../apps/api/test-integration/redis/root-authentication.integration.test.ts) | 默认操作 factory 下 Custom/OIDC、认证、回调、一次消费、替换与失败作用、ORCAS 替身、当前披露、取消/确认退出；第三方真实作用仍由接入方证明。 |
+| OIDC 模块 | [OIDC Redis](../../packages/oidc/test-integration/redis) 与 API HTTP | 协议 Code/Token/索引/续接/退出确认/密钥；正式进程/env/JWK/故障由 API process/composition 补足。 |
+| 进程生命周期 | [API process](../../apps/api/test-integration/process/entry.integration.test.ts)、[composition](../../apps/api/test-integration/composition/entry.integration.test.ts) | 默认接线、issuer/path、真实 PG/Redis、健康与关闭；不能据启动成功替代协议行为。 |
+| 最终 DB 收缩 | [DB gate](../../packages/db/test-integration/postgres/client-sso-contraction.integration.test.ts)、[Worker CLI](../../apps/worker/test-integration/postgres/client-sso-contraction-command.integration.test.ts) | 拒绝未迁移旧记录、真实旧 CLI apply/verify 后允许 DDL、安全投影、非目标业务保留及最终 schema 拒绝旧升级命令。 |
+| 离线维护 | [Worker Redis CLI](../../apps/worker/test-integration/redis/online-state-command.integration.test.ts) | 新进程 inventory/apply/verify、全部来源模型/索引、特殊 Client、非目标、ACL、部分失败重跑；历史真实 Provider writer 证据在统一维护手册固定 SHA。 |
+| 代表系统旅程 | 根 `pnpm test:e2e`：[Admin](../../e2e/system/admin-custom-sso.spec.ts)、[HR](../../e2e/system/hr-admin-user-management.spec.ts)、[OIDC](../../e2e/system/oidc-pkce.spec.ts) | 同一临时 PG/Redis/APISIX 与全部正式 runtime；不证明真实外部集成或目标环境切换。 |
 
-OIDC 校验迁出 Kernel 的直接回归由 `@iam/session-kernel` 的 Artifact Redis contract 和
-`@iam/oidc-provider` 的 [真实协议 HTTP/Redis](../../apps/oidc-provider/test-integration/redis/subject-access-authorization.integration.test.ts)
-拥有：用途/type/已知 Client 拒绝、未消费、同 identity 替换保护、两个 Custom SSO 误投入口、错误 redirect、暂态保留及
-已读旧 Credential 在清理/新代签发后恢复的隔离。Code 替换矩阵分别修改 Kernel、Provider 或两侧，直接回读消费标记与替换对象；Binding 正式读取覆盖永久失效的精确级联及 Maintenance 保留。原 Kernel client/version hooks 测试按用途拒绝与精确执行契约替换；
-操作 Snapshot 另由 #148/#149 的协议测试拥有。Admin 批量版本选择由
-[真实 PG/Redis composition](../../apps/admin-api/test-integration/composition/client-protocol-revocation.integration.test.ts)
-和 Kernel 的 [选择撤销 Redis contract](../../packages/session-kernel/test-integration/redis/session-kernel-selected-revocation.integration.test.ts)
-分别证明提交版本传播、晚到/乱序与 no-op、双协议边界，以及观察对象 CAS、新代子对象保留与未知版本诊断；
-替代 seam 和未装配 cleanup 的证明上限见[工程契约](../features/admin/client-protocol-revocation.md)。
-
-Independent/Gateway #158/#159 的新增证据位于[完整操作 Redis](../../packages/custom-sso/test-integration/redis/custom-sso-operation.integration.test.ts)和
-[authorize/token/callback HTTP](../../apps/api/test-integration/redis/custom-sso-redemption-operation-http.integration.test.ts)：可控中断观察实际已提交状态，
-不等于生产进程崩溃演练；同一根 Cookie 续接、错误 envelope/Retry-After、原 Code 拒绝与 V2 wire 均经正式入口。
-两种模式的旧恢复、heartbeat 与 lease 接管专用测试已移除，其并发、原期限、用途/版本、主体一致与补偿目标迁到上述
-真实操作；Gateway 也覆盖同根 Cookie 新授权、原码拒绝、既有 Cookie/redirect/state。
-#160 的[定向维护 Redis 测试](../../apps/oidc-provider/test-integration/redis/custom-sso-grant-maintenance.integration.test.ts)通过正式 maintenance
-组合及 CLI 证明无索引库存、旧三态/orphan、完整观察 CAS、未知数据保留、部分失败重跑与新进程 verify；Redis ACL 限制的只读账户完成核验。
-混合库存逐对象比较 Principal、两 Credential、OIDC Binding/Code/Token/Provider Session 持久值及绝对 expiry。
-命令只报告目标核验，环境保留集仍需发布 owner 对照独立基线，不能用 retained 数量替代。
+旧 Kernel 四对象、Provider、配置版本和旧 Snapshot/Gate 测试随被替代模型删除；其仍成立的行为分别由上表
+会话/协议/配置/账号/维护最高入口承接。历史 schema/旧 writer 证明不能冒称在最终候选重跑。
 
 ## 聚合 Gate 与人工证据
 
-Spec #170 / ADR-0034 的 Principal、Credential、Artifact 使用 SHA-256 单状态与反向 ID，Kernel lookup HMAC 已退役；
-配置、生产消费者与替代测试入口见[运行时证据](../features/sso/token-state-runtime-evidence.md)。该页区分实际命令结果与待验证项，
-不能由源码零命中、配置类型或 collection 通过推断协议行为已验收。无 token Binding 的 ID 生命周期、Provider 自有 lookup、
-Cookie/JWT 签名和 Client Secret 校验继续由各 owner 的现有测试证明。
-正常 token 解析的一次 Lua 只表示 Kernel 局部成本；历史 HMAC previous 基线与完整请求的命令、RTT、波次分开记录。
-源四键 decoder/CAS 仅用于停 writer 后的离线维护；全部66/20/12及原始成本见[最终账本](../features/sso/token-state-contract.md)，
-环境 owner 另按[全体下线手册](../releases/online-auth-redis-time-cutover.md)取得停流、清理源/目标、新进程 verify、统一版本与重登录证据。
-
-协议校验的[56 条故事最终核对](../features/sso/protocol-validation-contract.md)逐项连接 #147–151 候选、实现/测试决定与证明边界。
-OIDC HTTP/Redis 和 Custom SSO 正式工厂/Redis 把旧对象读取、版本选择清理、新代协议签发及旧请求恢复串在同一测试；
-Custom SSO 另证明清理完成后极迟旧 Code 写入及下一调用的精确拒绝。Admin 真实 PG/Redis 联合测试拥有提交传播、晚到/逆序/重试，
-其中新代由 Kernel 签发，不能与协议 suite 拼称一个 PG+HTTP 场景。类型和既有边界 Guard 不替代这些直接行为。
-[保留对象手册](../releases/protocol-validation-preserving-upgrade.md)的停流、Client 写冻结、drain、统一版本、保留及双协议误投/合法 smoke
-只适用于 #146 固定旧候选，仍由环境 owner 验收；包含 #170 的当前候选采用全体下线，父级聚合与实际环境操作分别记录。
-
-Subject Access 的[最终契约核对](../features/sso/subject-access-operation-contract.md)逐条连接全部 62 条故事与可观察证据。
-API Core 共享容器及真实 Redis 证明许可和中性 Kernel 协作；API/Custom SSO HTTP/Redis、Admin REST/tRPC/Redis/PG、
-OIDC 正式 Provider/原生 HTTP/Redis 分别证明生产入口的作用顺序和一次检查。最终统一工厂已替换旧生产 wiring，
-没有保留旧 fence、Projection Barrier 或账号资料重复裁决。前票中间候选结果不替代最终候选重跑。
-Admin prepared 失败诊断由外层 adapter 拥有，Kernel 仅原始读取不透明 context；列表不读目标 Barrier。
-现有 OIDC online-auth maintenance Redis contract 验证精确清理、非目标保留、部分失败重跑和独立扫描；
-[人工维护手册](../releases/subject-access-operation-cutover.md)的停流、drain、统一版本、清理和重登录仍由环境 owner 验收，
-本规格不新增系统 E2E 或自动切换演练。候选实际命令及结果由 #136 和父 #128 记录。
-
-在线认证 Redis 时间的 42 条故事与当前 owner 证据见[最终契约核对](../features/oidc/online-auth-redis-time-contract.md)。
-Session/Interaction 的真实 Provider 方法与 Redis adapter、全体在线状态维护的无索引残留/部分失败重跑/独立回读，
-继续归既有 OIDC `redis` seam。该规格只采用共享生命周期与真实 Redis、协议 production adapter 两类自动化；
-不要求系统 E2E 或自动化维护演练，目标环境人工 gate 按[维护手册](../releases/online-auth-redis-time-cutover.md)单独记录。
-
-Admin 统一 mutation 的逐命令、42 条故事、实现/测试决策及多行取锁证据见
-[最终契约核对](../features/admin/admin-mutation-contract.md)。既有三条 Full-system journey 已增加真实 changed/no-op、
-重复 End 与同配置保存后的 Session/Code 连续性断言；它们不替代 PostgreSQL 并发、事务失败和真实 Redis 恢复测试。
-外部 REST/legacy 消费者与真实部署由[协调切换清单](../releases/admin-mutation-contract-cutover.md)的 owner 核验，不能用本地系统测试代替。
-
-当前[基础 runner](../../scripts/verify.mjs)与[聚合 runner](../../scripts/run-verification-gate.mjs)实际执行：
-
-```text
-verify         = static -> typecheck -> test:unit -> build
-verify:static  = lint -> check:docs -> check:env-names -> check:architecture -> check:test-collection
-verify:ci      = verify -> test:integration
-verify:release = verify:ci -> test:e2e
-```
-
-`verify` 的 static 阶段与 `verify:static` 共用命令列表，因此上述完整聚合均包含 Collection Guard；
-[最终候选验证](testing-architecture.md#默认验证与交付)无需另外重复运行它。命令名 `verify:ci` 不代表已接入 CI 平台；
-当前 Linux/真实 CI adoption 仍未验收。未配置的自动合入限制不能用本地执行记录代替。
-
-运维 readiness、repair、verify 是操作命令，不属于测试 collection。它们的成功报告只证明自己的检查范围：
-例如 Runtime namespace verify 不证明停流或业务可用；Profile backfill 入队不证明 Profile/Facts 已收敛。
-发布负责人按对应 Current runbook 组合这些报告与人工证据，尤其核对：
-
-- [Gateway](../releases/apisix-gateway-release.md)：生效 route、可信代理、真实 IP、限流与目标 upstream smoke。
-- [Runtime Snapshot 恢复](../releases/client-runtime-snapshot-restore.md)：freeze、实例与 writer drain、当前 namespace repair/verify、mutation/acquisition smoke 与独立放流 read-back；旧部署或旧备份迁移另行安排。[首次切换历史](../releases/client-runtime-snapshot-hard-cutover.md)仅记录当时的旧代清理与 PONR 边界。
-- [User Profile v3](../releases/user-profile-v3-hard-cutover.md)：固定 candidate、writer 停止、完整 backfill、PostgreSQL/Redis 两道 gate 与放流条件。
-- [OIDC](../releases/oidc-release-runbook.md)及[观测](../releases/observability-system-logs.md)：目标部署的协议、轮换、采集与查询 smoke。
+每票交接执行 `pnpm verify:static`、完整受影响 typecheck 和行为通道，固定最终候选记录实际结果。
+`pnpm verify` 最终聚合由 #196 执行；#195 官方固定 OIDC 套件独立，当前组合/E2E 不能替代其验收。
+发布负责人仍须按[统一维护](../releases/unified-session-maintenance.md)、[Gateway](../releases/apisix-gateway-release.md)、
+[OIDC 发布](../releases/oidc-release-runbook.md)、[观测](../releases/observability-system-logs.md)核验停流、drain、数据、
+新登录、真实代理信任和放流。代码接线及临时测试均不表示已执行目标环境切换。
 
 ## 变更时如何维护
 
 新增或改变跨 runtime 能力时，实现者先指认现有权威契约和 owner，明确观察时点、失败路径与恢复责任，再选择最高相关
 公开接口的行为验证及必要资源通道。若现有测试没有观察新不变量，应补验证或明确未证明项，不能以相邻绿色测试代替。
 只有 owner、公开 seam、验证层或关键证明范围变化时才更新本索引；普通内部测试增删不需要扩展成逐文件清单。
-
-Spec #157 的全部 56 条故事、20 项实现和 10 项测试决定见[一次消费最终账本](../features/sso/custom-sso-one-shot-grant-contract.md)。
-#161 在正式 HTTP/Redis 上组合定向清理、独立核验、同根新授权与已有凭据访问；完整 OIDC 保留集复用 #160。
-原 #157 固定旧候选的 writer/consumer、基线和保留 smoke 见[保留会话升级手册](../releases/custom-sso-one-shot-grant-upgrade.md)。包含 #170 的当前候选必须按[全体下线手册](../releases/online-auth-redis-time-cutover.md)统一切换并重新登录，不能沿用保留对象流程；目标环境未执行。
-
-
-Spec #163 / ADR-0033 的 62 条故事、20 项实现和 12 项测试决定见[Credential 最终账本](../features/sso/credential-authority-contract.md)。
-已有 Credential 使用不再显式或经 Binding 间接复查根；新授权、两协议 Code 兑换、续接与 Admin/IAM 根 token 仍验证根。
-根撤销尽力处理子对象，允许漏撤与已观察根后的晚到签发；自身撤销、期限、Subject Access、配置/用途及 OIDC Binding/Snapshot 仍约束访问。
-Custom SSO 授权不续根，两模式 Credential 固定签发期限；同根 OIDC 续根/Binding 不延长它们。
-#164–#167 的实际行为与局部性能证据可复用，#168 在现有 Provider HTTP/Redis 增补三方同根同时存在的联合观察；不能将测试收集或文件存在当作已执行。
-本次统一发布必须执行[全体下线手册](../releases/online-auth-redis-time-cutover.md)，此前 #146/#157 的保留对象流程只属于原规格单独升级。
-四 owner 真实 Redis 维护证明不代替新进程 CLI verify、停流排空及新登录人工证据；代码已实现，目标环境未切换。

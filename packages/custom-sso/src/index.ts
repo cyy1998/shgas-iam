@@ -1,19 +1,10 @@
-import type { CustomSsoOperations } from "./operations";
+import type { UnifiedCustomSsoOperations } from "./unified";
 
-export type CustomSso = ReturnType<CustomSsoOperations["forOperation"]> & Pick<CustomSsoOperations, "logout">;
+export type CustomSso = ReturnType<UnifiedCustomSsoOperations["forOperation"]>;
 export { CustomSsoClientDeliveryUnauthorizedError } from "./client-delivery.error";
-export type { CustomSsoAuditPort, CustomSsoDeps, CustomSsoLoggerPort, CustomSsoOrcasPort } from "./custom-sso.port";
-export type { SsoPrincipalTokenSource } from "./internal/authorize-sso/authorize-sso.type";
-export type { AuthorizeSsoInput, AuthorizeSsoOptions, AuthorizeSsoResult } from "./internal/authorize-sso/authorize-sso.type";
-export type { CompleteSsoCallbackInput, CompleteSsoCallbackOptions, CompleteSsoCallbackResult } from "./internal/complete-sso-callback/complete-sso-callback.type";
-export type { ExchangeSsoCodeInput, ExchangeSsoCodeOptions, ExchangeSsoCodeResult } from "./internal/exchange-sso-code/exchange-sso-code.type";
-export type { CheckSsoLoginContinuationInput } from "./internal/login-continuation.type";
-
+export type { CustomSsoAuditPort, CustomSsoLoggerPort, CustomSsoOrcasPort, CustomSsoProjectionPermission } from "./custom-sso.port";
+export { createSsoRedirectUrlValidator } from "./internal/redirect-url.validator";
 export type { CustomSsoSubjectDeliveryCapability } from "./internal/subject-delivery";
 export { CustomSsoTrafficGateUnavailableError } from "./internal/traffic-gate";
-export { createCustomSsoOperations } from "./operations";
-export type { CustomSsoOperations, CustomSsoOperationsDeps, CustomSsoProjectionPermission } from "./operations";
-
-export { PrincipalSessionInspectionUnavailableError } from "./principal-session-inspection.error";
-export { CustomSsoConfigurationUnavailableError, CustomSsoRequestMismatchError } from "./protocol-validation.error";
-export type { CustomSsoSubjectProjectionPort } from "./subject-projection.port";
+export { CustomSsoRequestMismatchError } from "./protocol-validation.error";
+export * from "./unified";

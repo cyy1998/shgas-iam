@@ -99,9 +99,14 @@ Architecture Guard 只覆盖仓库规范的静态写法。对同一依赖边采�
 - `dependency-direction`
 - `role-resolution-owner`
 - `user-profile-owner`
-- `session-runtime-owner`，包含 Session Kernel 不依赖 API Core、Custom SSO 与 app 的 owner 边界、Custom SSO 包不得依赖 app provider/HTTP/数据库实例、OIDC 仅消费独立 Custom SSO cleanup/maintenance，以及 Session Revocation 与 OIDC 的 module dependency owner
+- `session-runtime-owner`，包含 Session Kernel 不依赖 API Core、Custom SSO 与 app 的 owner 边界、Custom SSO 包不得依赖 app provider/HTTP/数据库实例、OIDC 不依赖 Custom SSO，以及两协议单向消费 Kernel/Snapshot 的 module dependency owner
 - `worker-ownership`
 - `docker-build-closure`
+
+新 `packages/oidc` 同属 `session-runtime-owner`：不依赖 Custom SSO、旧 Provider、app、HTTP 或数据库 owner，
+Kernel 不反向依赖 OIDC。此规则沿已有静态 import/路径模型保护协议独立性，允许正常 Kernel/Snapshot 注入能力；
+新包纳入 source roots、canonical workspace mapping 与 Docker closure。API 的默认 HTTP 负责 transport，见
+[候选契约](../features/oidc/authorization-candidate.md)。
 
 `client-subject-projection-owner` 只观察 package 内 production source path 与规范静态依赖。除普通测试外，Projection core 全部受保护，不能反向依赖 client 协议配置、数据库、User Profile
 implementation、shared provider DTO、app/Gateway runtime 或协议 transport，也不能依赖 Custom SSO 协议包。Custom

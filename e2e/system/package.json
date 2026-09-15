@@ -7,6 +7,7 @@
     "@iam/api-core": "workspace:*",
     "@iam/contracts": "workspace:*",
     "@iam/db": "workspace:*",
+    "@iam/domain": "workspace:*",
     "@iam/role-assignment-resolution": "workspace:*",
     "@iam/user-profile-read-model": "workspace:*",
     "drizzle-orm": "1.0.0-rc.2",

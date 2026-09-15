@@ -42,19 +42,6 @@ export function createPublicHandlers(deps: CreatePublicHandlersDeps) {
     return account;
   }
 
-  const userInfo: PublicRouteHandler<"userInfo"> = async (c) => {
-    try {
-      const data
-        = await deps.subjectDeliveryRequests.resolveUserInfoForRequest(c);
-      return c.json(resp.ok(data), HttpStatusCodes.OK);
-    }
-    catch (error) {
-      throw mapCustomSsoRetryableError(error, {
-        retryAfterSeconds: deps.config.projectionRetryAfterSeconds,
-      });
-    }
-  };
-
   const orcasId: PublicRouteHandler<"orcasId"> = async (c) => {
     return c.json(resp.ok({ orcasId: c.get("orcasId") ?? null }), HttpStatusCodes.OK);
   };
@@ -94,9 +81,24 @@ export function createPublicHandlers(deps: CreatePublicHandlersDeps) {
     orcasId,
     organizationsSearch,
     passwordChange,
-    userInfo,
+    ...createRootPublicHandlers(deps),
     usersSearch,
   };
 }
 
-export type PublicHandlers = ReturnType<typeof createPublicHandlers>;
+export function createRootPublicHandlers(deps: Pick<CreatePublicHandlersDeps, "subjectDeliveryRequests" | "config">) {
+  const userInfo: PublicRouteHandler<"userInfo"> = async (c) => {
+    try {
+      const data
+        = await deps.subjectDeliveryRequests.resolveUserInfoForRequest(c);
+      return c.json(resp.ok(data), HttpStatusCodes.OK);
+    }
+    catch (error) {
+      throw mapCustomSsoRetryableError(error, {
+        retryAfterSeconds: deps.config.projectionRetryAfterSeconds,
+      });
+    }
+  };
+
+  return { userInfo };
+}

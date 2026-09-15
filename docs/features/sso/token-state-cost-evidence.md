@@ -1,10 +1,12 @@
 # Token 状态原始基线成本证据
 
-Status: Current
+本文保留固定旧候选的契约与验证证据，不是 #194 当前在线实现。当前接线和维护以 [ADR-0035](../../adr/0035-unify-user-and-client-session-lifecycles.md) 与[统一维护手册](../../releases/unified-session-maintenance.md)为准。
+
+Status: Historical
 
 Last verified: 2026-09-10
 
-Next review: 2026-10-31
+Next review: n/a
 
 [Spec #170](https://github.com/cyy1998/shgas-iam/issues/170) 原始基线为
 `33305c0463747e535ccb8e1fc98b42efb598b954`，设计 `89c04cf9fdfe6dfc7786651a63f983177581d8b0`无runtime差异。

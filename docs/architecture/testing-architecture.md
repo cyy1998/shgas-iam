@@ -59,6 +59,11 @@ DTO/wire 的完整结果由正式 mapper/serializer owner 验证，包括必要�
   的使用决定 Node/DOM 环境。Node 与 DOM 仍属于同一个 Unit collection，不形成新的公开命令或 profile。
 - 非 browser Integration 位于 `test-integration/<profile>/**/*.integration.test.ts[x]`。
 - Browser Integration 位于 `test-integration/browser/**/*.spec.ts`。
+
+API 的 OIDC 退出 Browser Integration 使用真实候选 API、动态 loopback 测试 RP 和专用 `IAM_API_TEST_REDIS_URL`，
+不 mock IAM 协议请求。该通道单 Chromium、单 worker、零重试；fixture 子进程经 readiness 后交付浏览器种子，父进程关闭
+stdin 后清理本次 HTTP server 与随机 Redis namespace，启动失败也进入同一收尾。其取消/确认、Cookie、state 与安全错误
+证据不替代全系统 E2E、真实第三方 RP 或部署；后者继续使用独立通道。
 - Full-system E2E 独占 `e2e/system/**/*.spec.ts`。Root `pnpm test:e2e` 是唯一完整 collection owner；workspace-local
   `admin:journey`、`hr-admin:journey` 与 `oidc:journey` 只保留为单 journey 调试入口。
 - 版本无关的 User Profile backfill、repair 与 readiness 是操作命令，不采用测试命名，也不属于任何 collection；
@@ -69,40 +74,23 @@ DTO/wire 的完整结果由正式 mapper/serializer owner 验证，包括必要�
   覆盖分类、完整 ID 集合与稳定排序，PostgreSQL contract 验证真实只读库存和命令退出码。它不等价于 Profile builder
   发布前的父对象 fail-closed 守卫，后者的独立行为测试继续保留。
 
-每个测试候选必须由一个且仅一个 canonical collection 收集。Admin API 的 client runtime 真实 contract 位于 `redis`
-profile：Custom SSO 与 Traffic Gate 通过 production Admin runtime 的 `clientRuntimeInvalidation` seam 与真实 Client service
-mutation 验证 required Snapshot invalidation；legacy `clientCache` 只验证仍由它拥有的通用 cache invalidation。Traffic Gate
-acquisition 由 canonical Snapshot Adapter/Reader 的 Component contract，以及共享真实 Redis 与 production composition contract
-覆盖。该 profile 不初始化与 contract 无关的 queue；process profile 只保留 entry/readiness/exit/cleanup。Redis-dependent 状态由各 production owner
-在 `redis` 或 `composition` profile 建立，测试 fixture 不实现 Redis 协议、key、serialization、TTL、Lua 或 transaction
-排列。原 process-smoke RESP server、testing export 与 compatibility cases 已在真实 owner coverage 通过后退役。
+每个测试候选必须由一个且仅一个 canonical collection 收集。Admin Client 配置/Secret/状态的真实传播位于
+`composition`，generic InternalAuthz cache 另保留 Redis contract；共享统一 Snapshot 与 Subject Access 在 Core Redis。
+Kernel 两类会话只发布 Redis collection（`IAM_SESSION_KERNEL_TEST_REDIS_URL`）；Custom SSO 纯 wire/redirect Unit 保留，
+完整协议与故障由 API HTTP Redis 的正式操作 factory 承接，旧空 Custom component/redis 命令已删除。
+OIDC 模块 Redis 使用 `IAM_OIDC_TEST_REDIS_URL`，API HTTP 使用 `IAM_API_TEST_REDIS_URL`。
 
-Spec #157 的 Independent/Gateway #158/#159 以完整 Custom SSO 操作/维护公开能力配真实 Redis、API 实际 handler/error middleware 为主要入口。
-消费唯一赢家、消费/签发已提交后的未知结果、同步补偿与非目标保留通过实际状态和可控中断证明，不称为生产崩溃演练。
-两模式旧 lease/release/heartbeat 与接管专用测试已迁为一次消费和重新授权证明；旧库存只保留维护 decoder、精确 cleanup 与专用 fixture。
-#160 定向维护组合与实际命令由 OIDC Redis profile 收集；Kernel/Custom SSO 的种子、故障与持久值/绝对 expiry 观察由各 owner testing 能力提供。
-只读核验使用新连接/进程及受限 Redis ACL，混合保留对象逐项对照；命令目标清零不替代发布环境保留集核验。
-
-Session Kernel 的 Unit/Component/Redis 测试由 `@iam/session-kernel` 收集，Redis 使用专用 `IAM_SESSION_KERNEL_TEST_REDIS_URL`。
-Subject Access 与 Kernel 的三条协作场景留在 API Core；Grant 期限、Component 与完整协议 Redis 测试由 Custom SSO 收集，使用专用 `IAM_CUSTOM_SSO_TEST_REDIS_URL`，并通过 Kernel `/testing`
-复用仅含 Kernel 的真实 Redis 构造、种子与检查能力。各 owner 自己拥有资源 URL 和连接生命周期；Kernel 不反向依赖 API Core 或 Custom SSO。API 混合统一认证、协议、HTTP/门户矩阵继续作为消费方集成证据，纯协议用例和 Grant 矩阵位于 Custom SSO；不新建 Redis 模拟器。
-
-Spec #128 已统一正式入口。API Core 的 Component/Redis 证明许可 single-flight、固定失败、context 严格解析、
-上下文继承、在途继续、新请求拒绝、晚到创建旧代失效和精确撤销保留新代；真实工厂为 `createSessionKernel`。
-Kernel 自身继续拥有期限、对象存在、消费、归属、CAS 和 cleanup 的行为证据，不再测试账号验证 hook。
-API 的四认证 Component、Custom SSO 完整 Redis 与 API HTTP/Redis 证明真实受保护入口在创建、消费、出站前取得许可，
-Projection 复用许可并检查已发布 Facts 可用性。#156 已按 ADR-0032 取消请求时授权新鲜度检查，
-原 freshness 断言迁为缓存命中零数据库读取、旧权限交付与资料缺失失败；旧双工厂 fixture 已迁正式工厂。
-OIDC Component 与真实 Provider HTTP/Redis 证明授权、原生 interaction/login guard/resume、Token 和 UserInfo；
-Code 消费和 mapping 刷新前拒绝、多回调共享、失败固定、并发隔离、在途继续以及已消费 Code 重放撤销分别有直接断言。
-Admin Component/Redis 覆盖正式 REST/tRPC middleware、记录清单、context 撤销与 Resignation 准备失败 fallback；
-PostgreSQL 验证已许可资料读取和既有事务，Sessions browser 验证记录文案及交互。
-正式 Composition profiles 验证真实启动装配；其绿色结果不替代上述行为断言，也不证明环境已完成切换。
-全部故事、测试迁移依据和人工未执行项见[最终契约](../features/sso/subject-access-operation-contract.md)。
-
+旧四对象/Provider/version/Claims Snapshot 测试随旧在线图退役；当前替代必须按行为观察，不能用计数或启动替代。
+并发、损坏、归属、期限与索引归 Kernel；消费与失败结果、补偿、ORCAS、当前披露、取消/确认退出归 API/协议 owner；
+配置 no-op/COMMIT/Secret隔离归 Admin；source 五模型/特殊 Client/非目标/ACL/部分失败归 Worker 新进程 CLI。
+详细最高入口与证明限制见[验证归属](architecture-verification.md)。所有正常状态由 production owner 建立，破坏变体和离线 schema
+留在 owner `/testing`，消费者不手写协议 key、Lua 或 serialization。历史 writer 的冻结 SHA 证据在统一维护手册单列。
 Custom SSO strict V2 schema、mapper、错误与 preview 契约由 `@iam/custom-sso` 的 Unit collection 收集；Projection 的中性裁剪与 Catalog 契约继续由其 Component collection 收集。API 保留 OpenAPI、输出交付与错误映射测试；Admin preview 和 SSO 展示由各自消费测试及前端构建证明，类型检查不替代浏览器执行。
 
 ## Root 与 package commands
+
+新 OIDC owner 的状态/维护 Redis 测试由 `@iam/oidc` 收集，使用专用 `IAM_OIDC_TEST_REDIS_URL`；
+API 正式根认证与 OIDC HTTP 组合使用 API Redis profile。旧 Provider app 已退役，历史 writer 证明独立固定 SHA，不能当最终候选执行。候选的实际能力和后续验证边界见 [OIDC 授权候选](../features/oidc/authorization-candidate.md)。
 
 长期 root interface 为：
 
@@ -124,9 +112,9 @@ pnpm check:test-collection
 collection 的 package 不发布空 `test`。旧 `test:smoke`、`test:external`、package-local `test:postgres`/
 `test:redis` 与 frontend `e2e` collection aliases 已删除。
 
-`@iam/e2e-system` 当前通过 root `pnpm test:e2e` 从 exact-project 空 volumes 运行 migrations、六个 repo
+`@iam/e2e-system` 当前通过 root `pnpm test:e2e` 从 exact-project 空 volumes 运行 migrations、五个 repo
 runtimes、固定 synthetic scenario seed、单一 `127.0.0.1` Gateway route readiness、失败诊断与 cleanup。Runtime healthy 后先校验
-rendered Compose 中 API、OIDC Provider、Gateway、Admin 与 seed 的 canonical origin/authority 合同，再运行 seed；seed 通过 production
+rendered Compose 中 API、Gateway、Admin 与 seed 的 canonical origin/authority 合同，再运行 seed；seed 通过 production
 Drizzle、Role Assignment、User Profile 与 Subject Access owner 建立数据并做 owner read-back，不复制 Redis key、serializer 或 Lua 协议。
 Descriptor 落盘后、infra 与 migration 前会先
 构建 project-scoped Gateway 诊断查询镜像，使早期失败也能在 cleanup 前保存 route state；诊断阶段不临时 build 或暴露
@@ -159,9 +147,10 @@ readiness 对 OIDC discovery 不只检查 HTTP 200，还精确核对 canonical o
 `admin:journey` 在上述 lifecycle 的 protocol readiness 之后运行浏览器 preflight，并以单 Chromium project、单 worker、零 retry
 执行 `admin-custom-sso.spec.ts`。Journey 用 bootstrap Admin client 通过真实 SSO 登录 Admin，由真实 Admin UI 创建跨树 Organization
 Responsibility，再轮询 Internal Detail/DSL 与 Custom SSO UserInfo 证明 PostgreSQL/Redis 发布一致，并证明 Gateway/authorization 裁剪责任。
-随后 Admin UI 将目标 client 切入 Maintenance，在维护中配置并启用 Gateway Custom SSO；公开 authorize 与 user-info 观察
-`503 AUTH.MAINTENANCE`，恢复正常后取得并复用未变更的 Local Session，再在维护中执行真实 disable/enable mutation、确认旧 Session
-永久失效，并由同一 Principal Session 签发新的 V2 artifact。浏览器失败证据沿用 run-scoped Playwright staging，随后进入统一
+随后 Admin UI 配置并启用 managed Custom SSO，将目标 Client 切入 Maintenance；公开 authorize 与 user-info 观察
+`503 AUTH.MAINTENANCE`，恢复正常后取得并复用同一 Custom Token，再在维护中执行真实 disable/enable mutation。
+Admin 通过捕获的 ClientSession 身份显式撤销目标 Client 的会话，确认旧 Token 永久失效，并由同一有效 UserSession 重新授权。
+浏览器失败证据沿用 run-scoped Playwright staging，随后进入统一
 diagnostics 与 exact-project cleanup。`hr-admin:journey` 复用同一 lifecycle 与浏览器约束；seed 通过真实 `iam-admin` Client、
 两个 HR Scope Roots、跨根 role-bearing Employment、双端四组合、隐藏 Open blocker、mixed-role Full Admin、ordinary actor
 与无有效 scope 的 HR actor 建立不扩权场景，经 production Worker 发布后真实 SSO 登录。Journey 验收 Organization
@@ -176,11 +165,12 @@ URL/猜测 ID、REST/tRPC 四组合（in/in 进入领域冲突，其他组合 40
 并以隐藏 Assignment 的 Pause/Resume 证明两种身份都保持全局读取与 mutation 能力。
 `oidc:journey` 复用同一 lifecycle 与浏览器约束；独立 Admin 浏览器上下文在 Maintenance 中执行
 OIDC disable/enable 并恢复正常，test-owned RP helper 生成 S256 verifier/challenge 并接收 registered callback。公开 authorize、token 与
-`/oidc/me` 验收标准暂态错误、恢复、PKCE、code 单次使用与 `iam:employments` responsibility snapshot；Authorization Code 取得后通过
-真实 Employment Pause 级联使当前 Profile 不再含责任，既有 Code→Token→UserInfo 仍重放 authorization-time snapshot，ID Token 明确排除
-employment/authorization responsibility。Discovery、JWKS 与 `/oidc/health` 在维护中保持可用，
-RP-initiated logout 在维护中永久终止访问。Local HTTP 配置只令 interaction Cookie `Secure=false`，并继续验证 `HttpOnly`、
-`SameSite=Lax` 与 `Path=/oidc`。三个 journey 都不使用
+`/oidc/me` 验收标准暂态错误、恢复、PKCE、Code 单次使用与当前 `iam:employments` 披露。Authorization Code 取得后通过
+真实 Employment Pause → Resume → End 验证当前发布事实；错误 PKCE 消费 Code 并终止其原 ClientSession，正确 verifier 重试仍失败，
+同一有效 UserSession 重新授权后取得新 Code 与 Token。UserInfo 读取当前事实，已结束任职的责任不再披露；ID Token 明确排除
+employment/authorization responsibility。Discovery、JWKS 与 `/oidc/health` 在单个 Client 维护中保持可用，
+RP-initiated logout 在维护中终止当前根下的访问。Local HTTP 配置令 API 的 `oidc_interaction_binding` Cookie `Secure=false`，
+并继续验证 `HttpOnly`、`SameSite=Lax` 与 `Path=/oidc`；登录后的根 Cookie 则使用 `Path=/`。三个 journey 都不使用
 `page.route` 替代 repo-owned core。完整命令在同一个 exact-project lifecycle 中固定按 Admin → HR Admin → OIDC 运行；任一 journey
 失败都先收集 diagnostics 再尝试 cleanup，cleanup failure 始终使 root command 非零。
 
@@ -280,8 +270,7 @@ Admin API 的真实事务与 PostgreSQL correctness contract 使用 owner-specif
 `IAM_WORKER_TEST_REDIS_URL`，不为 full repair 增加第二个 cleanup URL，也不枚举或推断其他可见 test/runtime Redis 的
 hostname、port 或 logical DB identity。调用方仍须提供专用、非 production Redis；harness 保留 #68 对 Worker 自身 runtime
 tuple 的直接防误用检查，full restore contract 在写 fixture 前证明 Module-owned inventory 为空，并只登记本次
-Client/restore fixture 与 non-owner sentinel。该 profile 运行 production Redis-only command composition：targeted contract 以独立 observer 验证三类
-payload 均重新回源、重复 repair 安全且 sentinel 保留；restore contract 建立当前 Snapshot owner inventory，验证
+Client/restore fixture 与 non-owner sentinel。该 profile 运行 production Redis-only command composition：targeted contract 以独立 observer 验证普通/敏感 payload 均重新回源、重复 repair 安全且 sentinel 保留；restore contract 建立当前 Snapshot owner inventory，验证
 分批 full repair、部分失败重跑、另起 Worker process 的 scan-only full verify 与 non-owner sentinel 保留。
 旧 OIDC、Custom SSO 与 Traffic Gate key 不属于当前 owner inventory，其残留不使 verify 失败；测试不证明旧 namespace 已清空。
 测试结束只精确 `UNLINK` 本次登记键并验证
@@ -294,9 +283,7 @@ API Core 的 Client Runtime full restore contract 使用现有 `IAM_API_CORE_TES
 
 ## 默认验证与交付
 
-Spec #170 的[最终账本](../features/sso/token-state-contract.md)连接三类直接状态、正式协议HTTP/Redis、混合管理和实际维护CLI的逐项断言。
-#176补充消费终态自然到期与HTTP在途自身撤销的直接证明，并在独立原始源码/依赖上复跑成本。
-固定候选的全仓verify与额外Integration结果由该票评论记录，不由前票切片绿色推断；环境切换仍由发布owner验收。
+Spec #178 当前候选的实际命令与结果按逐票交接记录；历史切片结果不代替最终树，环境切换另行验收。
 
 基础 `pnpm verify` 固定 fail fast：
 
@@ -327,14 +314,8 @@ cleanup，也不把命令名解释为 provider adoption。各 owner command 的�
 `pnpm check:test-collection`。独立命令保留用于聚焦排查。收集检查通过不表示测试断言已执行或通过；执行或解析失败
 同样阻断交接与交付。责任、交接材料和失败处理见[开发工作流](../agents/workflow.md#验证节奏)。
 
-Client Runtime Snapshot 不增加 feature-specific root gate；验收矩阵由发布平台或 release owner 显式调用共享 Module
-Component/Redis、三类 Adapter Component、Admin Component/PostgreSQL/composition rehearsal、Worker Component/Process/Redis 与
-Full-system E2E 的 owner commands。API Core 的真实 Redis contract 证明 Module 的受控 source fact/invalidation；Admin composition
-rehearsal 再用临时 PostgreSQL schema、真实 Admin target-bound mutation、required Redis invalidation 和 OIDC/Custom SSO/Traffic
-Gate 公开 Reader 证明 canary 的 Maintenance 事实与恢复事实均被重新 acquisition。Maintenance 与可信 Snapshot acquisition failure
-的不同业务映射仍由各 Adapter 的 Component contract 负责。任何测试结果都不能替代 production freeze、drain 或当前 namespace
-verify 证据。当前恢复矩阵与操作阶段见[恢复手册](../releases/client-runtime-snapshot-restore.md)；首次旧代切换的 PONR 与
-legacy 清理证据仅由[历史手册](../releases/client-runtime-snapshot-hard-cutover.md)记录，不属于当前 repair/verify 的证明范围。
+统一 Snapshot 使用 Core Redis、Admin PG/Redis composition 与 Worker 新进程 CLI，测试不能代替停流/drain/独立核验。
+当前操作流程见[统一维护手册](../releases/unified-session-maintenance.md)，旧三类 Snapshot 恢复仅为历史。
 
 | 阶段 | 最小范围 |
 |---|---|
@@ -347,7 +328,3 @@ legacy 清理证据仅由[历史手册](../releases/client-runtime-snapshot-hard
 evidence 失败和 setup retries 继续保留；环境或代码根因修复后从头重启的完整流程可用于验收，但不得在同一流程内重试单个
 阶段或隐藏历史。当前没有 CI 平台；Linux/真实 CI 仍为 `pending`，平台状态不能通过 placeholder command、silent skip 或
 本地重跑伪装为已采用。
-
-Spec #157 的全部 56 条故事、20 项实现和 10 项测试决定见[一次消费最终账本](../features/sso/custom-sso-one-shot-grant-contract.md)。
-#161 在正式 HTTP/Redis 上组合定向清理、独立核验、同根新授权与已有凭据访问；完整 OIDC 保留集复用 #160。
-原 #157 固定旧候选的 writer/consumer、基线和保留 smoke 见[保留会话升级手册](../releases/custom-sso-one-shot-grant-upgrade.md)。包含 #170 的当前候选必须按[全体下线手册](../releases/online-auth-redis-time-cutover.md)统一切换并重新登录，不能沿用保留对象流程；目标环境未执行。

@@ -1,3 +1,4 @@
+import { ClientSnapshotUnavailableError } from "@iam/api-core/client-snapshot";
 import { SERVICE_UNAVAILABLE } from "@iam/api-core/core/http-status-codes";
 import { AuthzMaintenanceError, CustomError } from "@iam/api-core/errors";
 import { SubjectAccessUnavailableError } from "@iam/api-core/subject-access";
@@ -46,7 +47,7 @@ export function mapCustomSsoRetryableError(
       options.retryAfterSeconds,
     );
   }
-  if (error instanceof CustomSsoTrafficGateUnavailableError) {
+  if (error instanceof CustomSsoTrafficGateUnavailableError || error instanceof ClientSnapshotUnavailableError) {
     assertRetryAfterSeconds(options.retryAfterSeconds);
     return new CustomSsoRetryableUnavailableError(
       ApiErrorCode.InternalError,

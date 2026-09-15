@@ -5,7 +5,8 @@
   "private": true,
   "exports": {
     ".": "./src/app.ts",
-    "./trpc": "./src/trpc/trpc.router.ts"
+    "./trpc": "./src/trpc/trpc.router.ts",
+    "./client-sso/trpc": "./src/routes/admin/client-sso/client-sso.adapter.ts"
   },
   "module": "index.ts",
   "devEngines": {
@@ -20,7 +21,6 @@
     "lint": "eslint src test-integration test-smoke app.config.ts eslint.config.js",
     "lint:fix": "eslint --fix src test-integration test-smoke app.config.ts eslint.config.js",
     "test": "pnpm test:unit",
-    "client-runtime:hard-cutover-rehearsal": "bun test --max-concurrency=1 test-integration/composition/client-runtime-hard-cutover-rehearsal.integration.test.ts",
     "test:integration:component": "bun test --max-concurrency=2 test-integration/component",
     "test:integration:composition": "bun test --max-concurrency=1 test-integration/composition",
     "test:integration:process": "bun test --max-concurrency=1 test-integration/process",

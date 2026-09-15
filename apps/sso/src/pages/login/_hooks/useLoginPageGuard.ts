@@ -19,8 +19,7 @@ function initialStatus(input: {
   isUnsafeEntry: boolean;
   oidcReturn: string;
 }): LoginPageGuardStatus {
-  if (input.isUnsafeEntry)
-    return 'unsafe';
+  if (input.isUnsafeEntry) return 'unsafe';
   if (input.oidcReturn && !isValidOidcReturnHandle(input.oidcReturn))
     return 'invalid_request';
   return 'checking';
@@ -34,6 +33,7 @@ export function useLoginPageGuard(input: {
   redirectAfterLogin: () => void;
   redirectUrl: string;
   state?: string;
+  ssoReturn?: string;
 }) {
   const {
     client,
@@ -43,6 +43,7 @@ export function useLoginPageGuard(input: {
     redirectAfterLogin,
     redirectUrl,
     state,
+    ssoReturn,
   } = input;
   const continuationKey = JSON.stringify([
     client,
@@ -50,6 +51,7 @@ export function useLoginPageGuard(input: {
     oidcReturn,
     redirectUrl,
     state,
+    ssoReturn,
   ]);
   const continuationInitialStatus = initialStatus({
     isUnsafeEntry,
@@ -76,10 +78,8 @@ export function useLoginPageGuard(input: {
     : guardState.status;
 
   useEffect(() => {
-    if (isUnsafeEntry)
-      return;
-    if (oidcReturn && !isValidOidcReturnHandle(oidcReturn))
-      return;
+    if (isUnsafeEntry) return;
+    if (oidcReturn && !isValidOidcReturnHandle(oidcReturn)) return;
     const requestGeneration = ++requestGenerationRef.current;
     const abortController = new AbortController();
     void (async () => {
@@ -88,7 +88,7 @@ export function useLoginPageGuard(input: {
         const guardRequest = oidcReturn
           ? checkOidcLoginPageGuard(oidcReturn, abortController.signal)
           : checkCustomSsoLoginPageGuard(
-              { client, redirectUrl, state },
+              { client, redirectUrl, state, ssoReturn },
               abortController.signal,
             );
         const outcome = await Promise.race([
@@ -100,22 +100,18 @@ export function useLoginPageGuard(input: {
             }, GUARD_TIMEOUT_MS);
           }),
         ]);
-        if (requestGenerationRef.current !== requestGeneration)
-          return;
+        if (requestGenerationRef.current !== requestGeneration) return;
         if (outcome === 'continue') {
           setGuardState({ continuationKey, status: 'continuing' });
           return;
         }
         setGuardState({ continuationKey, status: outcome });
-      }
-      catch {
+      } catch {
         if (requestGenerationRef.current === requestGeneration) {
           setGuardState({ continuationKey, status: 'unavailable' });
         }
-      }
-      finally {
-        if (timeout !== undefined)
-          window.clearTimeout(timeout);
+      } finally {
+        if (timeout !== undefined) window.clearTimeout(timeout);
       }
     })();
     return () => {
@@ -132,16 +128,16 @@ export function useLoginPageGuard(input: {
     oidcReturn,
     redirectUrl,
     state,
+    ssoReturn,
   ]);
 
   useEffect(() => {
-    if (status === 'continuing' && isContinuationReady)
-      redirectAfterLogin();
+    if (status === 'continuing' && isContinuationReady) redirectAfterLogin();
   }, [isContinuationReady, redirectAfterLogin, status]);
 
   const retry = useCallback(() => {
     setGuardState({ continuationKey, status: 'checking' });
-    setAttempt(value => value + 1);
+    setAttempt((value) => value + 1);
   }, [continuationKey]);
   return { retry, status };
 }

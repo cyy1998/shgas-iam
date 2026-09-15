@@ -1,3 +1,4 @@
+import type { CapturedSession } from "@iam/session-kernel";
 import type { z } from "zod";
 import type { AdminLoginRestrictionReleaseResultSchema, AdminSessionRevokeResultSchema } from "./session-management.schema";
 
@@ -61,6 +62,7 @@ export interface AdminSessionListInput {
   pageNum: number;
   pageSize: number;
   userId?: number;
+  kind?: "userSession" | "clientSession";
 }
 
 export interface AdminSessionActorContext {
@@ -70,6 +72,7 @@ export interface AdminSessionActorContext {
 
 export interface AdminSessionRevokeInput {
   target:
+    | { type: "captured"; targets: CapturedSession[] }
     | {
       type: "session";
       principalSessionId: string;
@@ -91,6 +94,12 @@ export interface AdminSessionOriginSummary {
 
 export interface AdminSessionListItem {
   principalSessionId: string;
+  record?: {
+    kind: "userSession" | "clientSession";
+    identity: CapturedSession;
+    clientId?: string;
+    protocol?: "oidc" | "custom_sso";
+  };
   user: {
     id: number | null;
     subjectId: string;

@@ -99,41 +99,23 @@ test("Admin prepares Custom SSO in Maintenance and existing access resumes after
     responsibilityHolderPositionCode,
   });
 
-  await openClientSection(page, customSsoClientCode, "custom-sso");
-  await expect(page.getByText("未配置", { exact: true })).toBeVisible();
   await updateClientStatus(page, customSsoClientCode, "维护中");
   await openClientSection(page, customSsoClientCode, "custom-sso");
-
-  await expect(page.getByText(customSsoClientCode, { exact: true })).toBeVisible();
-  await expect(page.getByText("维护中", { exact: true })).toBeVisible();
-  await expect(page.getByText("未配置", { exact: true })).toBeVisible();
-  await page.getByLabel("允许的 Redirect Patterns").fill(customSsoRedirectUri);
-  await page.getByLabel("允许的 Redirect Patterns").press("Enter");
-  await page.getByRole("checkbox", { name: /用户名/u }).check();
-  await page.getByRole("checkbox", { name: /有效任职/u }).check();
-  await page.getByRole("checkbox", { name: /当前应用授权/u }).check();
-
-  const configureResponse = page.waitForResponse(response =>
-    isSuccessfulRpcResponse(response, "admin.client.customSsoConfigure"));
-  await page.getByRole("button", { name: "保存 Custom SSO 配置" }).click();
-  await expectRpcMutationResult(await configureResponse, "admin.client.customSsoConfigure", true, {
-    client: expect.any(Object),
-  });
-  await expect(page.getByText("已禁用", { exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "启用 SSO", exact: true })).toBeDisabled();
+  await page.getByLabel("SSO 协议", { exact: true }).click();
+  await page.getByTitle("Custom SSO", { exact: true }).click();
+  await page.getByLabel("Callback 完整地址", { exact: true }).fill(`${origin}/sso/callback`);
+  await page.getByLabel("允许落地地址（每行一个）", { exact: true }).fill(customSsoRedirectUri);
+  for (const claim of ["profile:username", "profile:employments", "iam:authorization"]) {
+    await page.getByLabel("主体披露字段", { exact: true }).fill(claim);
+    await page.locator(".ant-select-dropdown:visible").getByTitle(claim, { exact: true }).click();
+  }
+  await page.getByLabel("主体披露字段", { exact: true }).press("Escape");
+  const configureResponse = page.waitForResponse(response => isSuccessfulRpcResponse(response, "admin.clientSso.selectProtocol"));
+  await page.getByRole("button", { name: "保存协议及配置", exact: true }).click();
+  await expectRpcMutationResult(await configureResponse, "admin.clientSso.selectProtocol", true, expect.any(Object));
   await saveUnchangedClientProtocolConfiguration(page, customSsoClientCode, "custom-sso", false);
-
-  await page.getByRole("button", { name: /启\s*用/u }).click();
-  await expect(page.locator(".ant-modal-confirm-title").filter({
-    hasText: "启用 Custom SSO？",
-  })).toBeVisible();
-  const enableResponse = page.waitForResponse(response =>
-    isSuccessfulRpcResponse(response, "admin.client.customSsoEnable"));
-  await page.getByRole("button", { name: /确\s*定/u }).click();
-  await expectRpcMutationResult(await enableResponse, "admin.client.customSsoEnable", true, {
-    client: expect.any(Object),
-  });
-  await expect(page.getByText("已启用", { exact: true })).toBeVisible();
-
+  await runClientProtocolLifecycleAction(page, "启用");
   const authorize = new URL("/sso/authorize", origin);
   authorize.search = new URLSearchParams({
     client: customSsoClientCode,
@@ -243,9 +225,37 @@ test("Admin prepares Custom SSO in Maintenance and existing access resumes after
 
   await updateClientStatus(page, customSsoClientCode, "维护中");
   await openClientSection(page, customSsoClientCode, "custom-sso");
-  await runClientProtocolLifecycleAction(page, "custom-sso", "禁用");
-  await runClientProtocolLifecycleAction(page, "custom-sso", "启用");
+  await runClientProtocolLifecycleAction(page, "禁用");
+  await runClientProtocolLifecycleAction(page, "启用");
   await updateClientStatus(page, customSsoClientCode, "正常");
+  const enabledAgainUserInfo = await userInfoRequest();
+  expect(enabledAgainUserInfo.status()).toBe(200);
+
+  const adminHeaders = { Client: encodeURIComponent(requireEnvironment("IAM_E2E_ADMIN_CLIENT_CODE")) };
+  const inventoryResponse = await context.request.post(`${origin}/api/iam/admin/session-management/sessions/search`, {
+    headers: adminHeaders,
+    data: { conditions: { kind: "clientSession" }, pageNum: 1, pageSize: 100 },
+  });
+  expect(inventoryResponse.status()).toBe(200);
+  const inventory = await inventoryResponse.json();
+  expect(inventory.data.total).toBeLessThanOrEqual(100);
+  const targets = inventory.data.result.flatMap((item: {
+    record?: { kind: string; clientId?: string; identity: unknown };
+  }) => item.record?.kind === "clientSession" && item.record.clientId === customSsoClientCode
+    ? [item.record.identity]
+    : []);
+  expect(targets.length).toBeGreaterThan(0);
+  const revokeResponse = await context.request.post(`${origin}/api/iam/admin/session-management/sessions/revoke`, {
+    headers: adminHeaders,
+    data: { target: { type: "captured", targets } },
+  });
+  expect(revokeResponse.status()).toBe(200);
+  expect(await revokeResponse.json()).toMatchObject({ data: { changed: true, result: { sessions: {
+    userSessionsTerminated: 0,
+    clientSessionsTerminated: targets.length,
+    failed: 0,
+    unknown: 0,
+  } } } });
   const revokedUserInfo = await userInfoRequest();
   expect(revokedUserInfo.status()).toBe(401);
 
@@ -274,9 +284,9 @@ test("Admin prepares Custom SSO in Maintenance and existing access resumes after
   )).toBe(true);
 
   await openClientSection(page, customSsoClientCode, "custom-sso");
-  await expect(page.getByText("已启用", { exact: true })).toBeVisible();
-  await expect(page.getByText("Gateway", { exact: true }).first()).toBeVisible();
-  await expect(page.getByText(customSsoRedirectUri, { exact: true })).toBeVisible();
-  await expect(page.getByRole("checkbox", { name: /用户名/u })).toBeChecked();
-  await expect(page.getByRole("checkbox", { name: /有效任职/u })).toBeChecked();
+  await expect(page.getByRole("button", { name: "停用 SSO", exact: true })).toBeVisible();
+  await expect(page.getByLabel("Callback 完整地址", { exact: true })).toHaveValue(`${origin}/sso/callback`);
+  await expect(page.getByLabel("允许落地地址（每行一个）", { exact: true })).toHaveValue(customSsoRedirectUri);
+  await expect(page.locator(".ant-select-selection-item").filter({ hasText: "profile:username" })).toBeVisible();
+  await expect(page.locator(".ant-select-selection-item").filter({ hasText: "profile:employments" })).toBeVisible();
 });

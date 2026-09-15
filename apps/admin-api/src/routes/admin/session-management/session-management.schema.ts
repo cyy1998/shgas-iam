@@ -16,10 +16,12 @@ import {
 } from "@admin-api/services/session-management/session-management.type";
 import { z } from "@hono/zod-openapi";
 import { createPageResultSchema } from "@iam/api-core/core/pagination/schema";
+import { CapturedSessionSchema } from "@iam/session-kernel";
 
 export const SessionManagementListSessionsInputSchema = z.object({
   conditions: z.object({
     userId: z.int().positive().optional().openapi({ example: 42 }),
+    kind: z.enum(["userSession", "clientSession"]).optional(),
   }).strict().default({}),
   pageNum: z.int().positive().default(1),
   pageSize: z.int().positive().max(100).default(20),
@@ -35,6 +37,12 @@ export const SessionManagementListLoginRestrictionsInputSchema = z.object({
 
 export const SessionManagementSessionVoSchema = z.object({
   principalSessionId: z.string().min(1),
+  record: z.object({
+    kind: z.enum(["userSession", "clientSession"]),
+    identity: CapturedSessionSchema,
+    clientId: z.string().optional(),
+    protocol: z.enum(["oidc", "custom_sso"]).optional(),
+  }).strict().optional(),
   user: z.object({
     id: z.int().positive().nullable(),
     subjectId: z.uuid(),
@@ -57,7 +65,7 @@ export const SessionManagementSessionVoSchema = z.object({
 
 export const SessionManagementSessionListResultVoSchema = createPageResultSchema(
   z.array(SessionManagementSessionVoSchema),
-).openapi("SessionManagementSessionListResultVo");
+).extend({ allowedActions: z.object({ revoke: z.boolean() }).strict().optional() }).openapi("SessionManagementSessionListResultVo");
 
 export const SessionManagementLoginRestrictionVoSchema = z.object({
   user: z.object({
@@ -85,6 +93,7 @@ export const SessionManagementReleaseLoginRestrictionResultVoSchema = AdminLogin
 
 export const SessionManagementRevokeSessionsInputSchema = z.object({
   target: z.discriminatedUnion("type", [
+    z.object({ type: z.literal("captured"), targets: z.array(CapturedSessionSchema).min(1).max(10000) }).strict(),
     z.object({
       type: z.literal("session"),
       principalSessionId: z.string().min(1).max(128),
@@ -103,6 +112,7 @@ export function toSessionManagementSessionListResultVo(input: AdminSessionListRe
   const result = {
     result: input.result.map(session => ({
       principalSessionId: session.principalSessionId,
+      ...(session.record ? { record: session.record } : {}),
       user: {
         id: session.user.id,
         subjectId: session.user.subjectId,
@@ -170,24 +180,21 @@ export function toSessionManagementReleaseLoginRestrictionResultVo(
 }
 
 export function toSessionManagementRevokeSessionsResultVo(input: AdminSessionRevokeResult) {
-  const result = {
+  return SessionManagementRevokeSessionsResultVoSchema.parse({
     changed: input.changed,
     result: {
       scope: input.result.scope,
-      revoked: {
-        principalSessions: input.result.revoked.principalSessions,
-        bindings: input.result.revoked.bindings,
-        credentials: input.result.revoked.credentials,
-        artifacts: input.result.revoked.artifacts,
-      },
+      generation: "unified",
       currentPrincipalSessionExcluded: input.result.currentPrincipalSessionExcluded,
-      cleanup: {
-        attempted: input.result.cleanup.attempted,
-        succeeded: input.result.cleanup.succeeded,
-        failed: input.result.cleanup.failed,
+      sessions: {
+        userSessionsTerminated: input.result.sessions.userSessionsTerminated,
+        clientSessionsTerminated: input.result.sessions.clientSessionsTerminated,
+        excluded: input.result.sessions.excluded,
+        failed: input.result.sessions.failed,
+        unknown: input.result.sessions.unknown,
       },
+      ...(input.result.batch ? { batch: input.result.batch } : {}),
+      ...(input.result.artifactCleanup ? { artifactCleanup: input.result.artifactCleanup } : {}),
     },
-  };
-  SessionManagementRevokeSessionsResultVoSchema.parse(result);
-  return result;
+  });
 }

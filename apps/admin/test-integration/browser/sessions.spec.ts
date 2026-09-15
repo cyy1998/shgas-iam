@@ -38,6 +38,16 @@ const firstPageSessions = [
     },
     isCurrentSession: true,
     isCurrentUser: true,
+    record: {
+      kind: 'userSession' as const,
+      identity: {
+        kind: 'userSession' as const,
+        id: 'ps-current',
+        instance: '00000000-0000-4000-8000-000000000194',
+        userSessionId: 'ps-current',
+        subjectIdentifier: '00000000-0000-4000-8000-000000000042',
+      },
+    },
   },
   {
     principalSessionId: 'ps-deleted',
@@ -54,6 +64,16 @@ const firstPageSessions = [
     origin: null,
     isCurrentSession: false,
     isCurrentUser: false,
+    record: {
+      kind: 'userSession' as const,
+      identity: {
+        kind: 'userSession' as const,
+        id: 'ps-deleted',
+        instance: '00000000-0000-4000-8000-000000000194',
+        userSessionId: 'ps-deleted',
+        subjectIdentifier: '00000000-0000-4000-8000-000000000043',
+      },
+    },
   },
 ] satisfies SessionListItem[];
 
@@ -77,6 +97,16 @@ const secondPageSession = {
   },
   isCurrentSession: false,
   isCurrentUser: false,
+  record: {
+    kind: 'userSession' as const,
+    identity: {
+      kind: 'userSession' as const,
+      id: 'ps-page-two',
+      instance: '00000000-0000-4000-8000-000000000194',
+      userSessionId: 'ps-page-two',
+      subjectIdentifier: '00000000-0000-4000-8000-999999999999',
+    },
+  },
 } satisfies SessionListItem;
 
 const firstPageLoginRestrictions = [
@@ -107,6 +137,148 @@ const firstPageLoginRestrictions = [
 ] satisfies LoginRestrictionListItem[];
 
 type SessionRevokeResponder = Parameters<typeof mockSessionRevokeRoute>[1];
+
+test('ClientSession retries keep the original identity across capability and list refreshes', async ({
+  page,
+}) => {
+  const identity = {
+    kind: 'clientSession' as const,
+    id: '00000000-0000-4000-8000-000000000191',
+    instance: '00000000-0000-4000-8000-000000000192',
+    userSessionId: '00000000-0000-4000-8000-000000000193',
+    subjectIdentifier: firstPageSessions[0].user.subjectId,
+    clientId: 'portal',
+  };
+  const row: SessionListItem = {
+    ...firstPageSessions[0],
+    isCurrentSession: false,
+    record: {
+      kind: 'clientSession',
+      identity,
+      clientId: 'portal',
+      protocol: 'oidc',
+    },
+  };
+  await mockAdminApi(page);
+  let allowed = false;
+  await mockLoginRestrictionListRoute(page, () => ({
+    type: 'success',
+    data: { result: [], total: 0, pageNum: 1, pageSize: 20, pages: 0 },
+  }));
+  const queries = await mockSessionListRoute(page, (input) => ({
+    type: 'success',
+    data: {
+      result: [row],
+      total: 1,
+      pageNum: input.pageNum ?? 1,
+      pageSize: input.pageSize ?? 20,
+      pages: 1,
+      allowedActions: { revoke: allowed },
+    },
+  }));
+  const mutations = await mockSessionRevokeRoute(page, (_input, count) => ({
+    type: 'success',
+    data: {
+      changed: count > 1,
+      result: {
+        scope: 'session',
+        generation: 'unified',
+        currentPrincipalSessionExcluded: false,
+        sessions: {
+          userSessionsTerminated: 0,
+          clientSessionsTerminated: count > 1 ? 1 : 0,
+          excluded: 0,
+          failed: 0,
+          unknown: count === 1 ? 1 : 0,
+        },
+        batch: {
+          results: [
+            {
+              target: identity,
+              status: count === 1 ? 'unknown' : 'terminated',
+            },
+          ],
+          unfinished: count === 1 ? [identity] : [],
+        },
+        artifactCleanup: { attempted: 0, succeeded: 0, failed: 0 },
+      },
+    },
+  }));
+  await page.goto('/iam-admin/sessions');
+  await expect(page.getByText('ClientSession · portal · oidc')).toBeVisible();
+  await expect(
+    page.getByRole('button', { name: '强制下线本次' }),
+  ).toBeDisabled();
+  allowed = true;
+  await page.getByRole('button', { name: '手动刷新', exact: true }).click();
+  await expect(
+    page.getByRole('button', { name: '强制下线本次' }),
+  ).toBeEnabled();
+  await page.getByRole('button', { name: '强制下线本次' }).click();
+  await page.getByRole('button', { name: '确认下线', exact: true }).click();
+  await expect(page.getByText('原批次仍有 1 项未确认完成')).toBeVisible();
+  expect(mutations).toEqual([
+    { target: { type: 'captured', targets: [identity] } },
+  ]);
+  allowed = false;
+  await page.getByRole('button', { name: '手动刷新', exact: true }).click();
+  await expect(
+    page.getByRole('button', { name: '重试未完成集合' }),
+  ).toBeDisabled();
+  await page.getByRole('tab', { name: '临时登录限制' }).click();
+  await page.getByRole('tab', { name: '会话记录' }).click();
+  await expect(page.getByText('原批次仍有 1 项未确认完成')).toBeVisible();
+  expect(mutations).toHaveLength(1);
+  allowed = true;
+  await page.getByRole('button', { name: '手动刷新', exact: true }).click();
+  await expect(
+    page.getByRole('button', { name: '重试未完成集合' }),
+  ).toBeEnabled();
+  await page.getByRole('button', { name: '重试未完成集合' }).click();
+  await page
+    .getByRole('dialog')
+    .getByRole('button', { name: /确.*定/ })
+    .click();
+  await expect(page.getByText('原批次仍有 1 项未确认完成')).toHaveCount(0);
+  expect(mutations).toEqual([
+    { target: { type: 'captured', targets: [identity] } },
+    { target: { type: 'captured', targets: [identity] } },
+  ]);
+  expect(queries.length).toBeGreaterThanOrEqual(4);
+});
+
+test('unified self revoke reports application effects and uncertain outcomes without legacy counters', async ({
+  page,
+}) => {
+  const { listInputs, revokeInputs } = await setupSessionRevoke(page, () => ({
+    type: 'success',
+    data: {
+      changed: true,
+      result: {
+        scope: 'user',
+        generation: 'unified',
+        currentPrincipalSessionExcluded: true,
+        sessions: {
+          userSessionsTerminated: 0,
+          clientSessionsTerminated: 2,
+          excluded: 1,
+          failed: 0,
+          unknown: 1,
+        },
+      },
+    },
+  }));
+  await revokeUserAndExpectReload(page, revokeInputs, listInputs, {
+    rowText: '张三',
+    userId: 42,
+  });
+  await expect(
+    page.getByText(
+      '已终止 0 个根会话、2 个应用会话；保留 1 个当前根；失败 0 项，结果未知 1 项，请刷新后明确发起新操作',
+      { exact: true },
+    ),
+  ).toBeVisible();
+});
 type LoginRestrictionReleaseResponder = Parameters<
   typeof mockLoginRestrictionReleaseRoute
 >[1];
@@ -174,6 +346,7 @@ async function expectAuditWarningAfterRefreshAndTabSwitch(
   tabName: '会话记录' | '临时登录限制',
   listInputs: unknown[],
   mutationInputs: unknown[],
+  verifyRefreshedState?: () => Promise<void>,
 ) {
   const panel = page.getByRole('tabpanel', { name: tabName });
   const warning = panel.getByRole('alert').filter({
@@ -183,7 +356,11 @@ async function expectAuditWarningAfterRefreshAndTabSwitch(
   const listRequestCount = listInputs.length;
   await panel.getByRole('button', { name: '手动刷新' }).click();
   await expect.poll(() => listInputs.length).toBe(listRequestCount + 1);
-  await expect(panel.getByText('已删除用户')).toHaveCount(0);
+  if (verifyRefreshedState) {
+    await verifyRefreshedState();
+  } else {
+    await expect(panel.getByText('已删除用户')).toHaveCount(0);
+  }
   await expect(warning).toBeVisible();
   await page
     .getByRole('tab', {
@@ -715,14 +892,16 @@ test('single-session action protects the current session and confirms the third-
       changed: true,
       result: {
         scope: 'session',
-        revoked: {
-          principalSessions: 1,
-          bindings: 1,
-          credentials: 1,
-          artifacts: 0,
-        },
+        generation: 'unified' as const,
         currentPrincipalSessionExcluded: false,
-        cleanup: {
+        sessions: {
+          userSessionsTerminated: 1,
+          clientSessionsTerminated: 1,
+          excluded: 0,
+          failed: 0,
+          unknown: 0,
+        },
+        artifactCleanup: {
           attempted: 1,
           succeeded: 1,
           failed: 0,
@@ -749,7 +928,10 @@ test('single-session action protects the current session and confirms the third-
   await confirmSessionRevoke(confirm);
 
   await expect(
-    page.getByText('已撤销 1 个根会话；关联对象已尽力处理', { exact: true }),
+    page.getByText(
+      '已终止 1 个根会话、1 个应用会话；保留 0 个当前根；产物回收尝试 1 项、成功 1 项、失败 0 项',
+      { exact: true },
+    ),
   ).toBeVisible();
   await expectSingleTargetRevokeAndReload(
     revokeInputs,
@@ -767,14 +949,16 @@ test('another user can be revoked from any row with point-in-time and follow-up 
       changed: true,
       result: {
         scope: 'user',
-        revoked: {
-          principalSessions: 2,
-          bindings: 2,
-          credentials: 2,
-          artifacts: 0,
-        },
+        generation: 'unified' as const,
         currentPrincipalSessionExcluded: false,
-        cleanup: {
+        sessions: {
+          userSessionsTerminated: 2,
+          clientSessionsTerminated: 2,
+          excluded: 0,
+          failed: 0,
+          unknown: 0,
+        },
+        artifactCleanup: {
           attempted: 1,
           succeeded: 1,
           failed: 0,
@@ -801,7 +985,10 @@ test('another user can be revoked from any row with point-in-time and follow-up 
   });
 
   await expect(
-    page.getByText('已撤销 2 个根会话；关联对象已尽力处理', { exact: true }),
+    page.getByText(
+      '已终止 2 个根会话、2 个应用会话；保留 0 个当前根；产物回收尝试 1 项、成功 1 项、失败 0 项',
+      { exact: true },
+    ),
   ).toBeVisible();
 });
 
@@ -814,14 +1001,16 @@ test('self user revoke keeps the unified action label and explains the current-r
       changed: true,
       result: {
         scope: 'user',
-        revoked: {
-          principalSessions: 1,
-          bindings: 2,
-          credentials: 2,
-          artifacts: 1,
-        },
+        generation: 'unified' as const,
         currentPrincipalSessionExcluded: true,
-        cleanup: {
+        sessions: {
+          userSessionsTerminated: 1,
+          clientSessionsTerminated: 2,
+          excluded: 1,
+          failed: 0,
+          unknown: 0,
+        },
+        artifactCleanup: {
           attempted: 1,
           succeeded: 1,
           failed: 0,
@@ -850,7 +1039,10 @@ test('self user revoke keeps the unified action label and explains the current-r
   await confirmSessionRevoke(confirm);
 
   await expect(
-    page.getByText('已撤销 1 个根会话；关联对象已尽力处理', { exact: true }),
+    page.getByText(
+      '已终止 1 个根会话、2 个应用会话；保留 1 个当前根；产物回收尝试 1 项、成功 1 项、失败 0 项',
+      { exact: true },
+    ),
   ).toBeVisible();
   await expect
     .poll(() => revokeInputs)
@@ -875,14 +1067,16 @@ for (const currentRootRetained of [true, false]) {
         changed: true,
         result: {
           scope: 'user',
-          revoked: {
-            principalSessions: 0,
-            bindings: 1,
-            credentials: 1,
-            artifacts: 0,
-          },
+          generation: 'unified' as const,
           currentPrincipalSessionExcluded: currentRootRetained,
-          cleanup: { attempted: 0, succeeded: 0, failed: 0 },
+          sessions: {
+            userSessionsTerminated: 0,
+            clientSessionsTerminated: 1,
+            excluded: currentRootRetained ? 1 : 0,
+            failed: 0,
+            unknown: 0,
+          },
+          artifactCleanup: { attempted: 0, succeeded: 0, failed: 0 },
         },
       },
     }));
@@ -891,9 +1085,12 @@ for (const currentRootRetained of [true, false]) {
       userId: currentRootRetained ? 42 : 43,
     });
     await expect(
-      page.getByText('已撤销关联对象，本次未撤销根会话；关联对象已尽力处理', {
-        exact: true,
-      }),
+      page.getByText(
+        `已终止 0 个根会话、1 个应用会话；保留 ${currentRootRetained ? 1 : 0} 个当前根；产物回收尝试 0 项、成功 0 项、失败 0 项`,
+        {
+          exact: true,
+        },
+      ),
     ).toBeVisible();
   });
 }
@@ -906,14 +1103,16 @@ test('user revoke no-op reports an already inactive target and refreshes once', 
       changed: false,
       result: {
         scope: 'user',
-        revoked: {
-          principalSessions: 0,
-          bindings: 0,
-          credentials: 0,
-          artifacts: 0,
-        },
+        generation: 'unified' as const,
         currentPrincipalSessionExcluded: false,
-        cleanup: {
+        sessions: {
+          userSessionsTerminated: 0,
+          clientSessionsTerminated: 0,
+          excluded: 0,
+          failed: 0,
+          unknown: 0,
+        },
+        artifactCleanup: {
           attempted: 0,
           succeeded: 0,
           failed: 0,
@@ -927,7 +1126,9 @@ test('user revoke no-op reports an already inactive target and refreshes once', 
   });
 
   await expect(
-    page.getByText('未发生新的撤销；目标可能已失效、已被处理或当前根已保留'),
+    page.getByText(
+      '已终止 0 个根会话、0 个应用会话；保留 0 个当前根；产物回收尝试 0 项、成功 0 项、失败 0 项',
+    ),
   ).toBeVisible();
 });
 
@@ -940,14 +1141,16 @@ test('user revoke cleanup failure remains successful with only a safe failed cou
       changed: true,
       result: {
         scope: 'user',
-        revoked: {
-          principalSessions: 2,
-          bindings: 2,
-          credentials: 2,
-          artifacts: 0,
-        },
+        generation: 'unified' as const,
         currentPrincipalSessionExcluded: false,
-        cleanup: {
+        sessions: {
+          userSessionsTerminated: 2,
+          clientSessionsTerminated: 2,
+          excluded: 0,
+          failed: 0,
+          unknown: 0,
+        },
+        artifactCleanup: {
           attempted: 3,
           succeeded: 1,
           failed: 2,
@@ -962,7 +1165,7 @@ test('user revoke cleanup failure remains successful with only a safe failed cou
 
   await expect(
     page.getByText(
-      '已撤销 2 个根会话；关联对象已尽力处理，部分外围清理失败（2 项）',
+      '已终止 2 个根会话、2 个应用会话；保留 0 个当前根；产物回收尝试 3 项、成功 1 项、失败 2 项',
       { exact: true },
     ),
   ).toBeVisible();
@@ -979,14 +1182,16 @@ test('single-session no-op shows an already inactive warning and refreshes the c
       changed: false,
       result: {
         scope: 'session',
-        revoked: {
-          principalSessions: 0,
-          bindings: 0,
-          credentials: 0,
-          artifacts: 0,
-        },
+        generation: 'unified' as const,
         currentPrincipalSessionExcluded: false,
-        cleanup: {
+        sessions: {
+          userSessionsTerminated: 0,
+          clientSessionsTerminated: 0,
+          excluded: 0,
+          failed: 0,
+          unknown: 0,
+        },
+        artifactCleanup: {
           attempted: 0,
           succeeded: 0,
           failed: 0,
@@ -999,7 +1204,9 @@ test('single-session no-op shows an already inactive warning and refreshes the c
   await confirmSessionRevoke(confirm);
 
   await expect(
-    page.getByText('未发生新的撤销；目标可能已失效、已被处理或当前根已保留'),
+    page.getByText(
+      '已终止 0 个根会话、0 个应用会话；保留 0 个当前根；产物回收尝试 0 项、成功 0 项、失败 0 项',
+    ),
   ).toBeVisible();
   await expectSingleTargetRevokeAndReload(
     revokeInputs,
@@ -1017,14 +1224,16 @@ test('single-session cleanup failure remains successful with a safe warning', as
       changed: true,
       result: {
         scope: 'session',
-        revoked: {
-          principalSessions: 1,
-          bindings: 1,
-          credentials: 1,
-          artifacts: 0,
-        },
+        generation: 'unified' as const,
         currentPrincipalSessionExcluded: false,
-        cleanup: {
+        sessions: {
+          userSessionsTerminated: 1,
+          clientSessionsTerminated: 1,
+          excluded: 0,
+          failed: 0,
+          unknown: 0,
+        },
+        artifactCleanup: {
           attempted: 2,
           succeeded: 1,
           failed: 1,
@@ -1038,7 +1247,7 @@ test('single-session cleanup failure remains successful with a safe warning', as
 
   await expect(
     page.getByText(
-      '已撤销 1 个根会话；关联对象已尽力处理，部分外围清理失败（1 项）',
+      '已终止 1 个根会话、1 个应用会话；保留 0 个当前根；产物回收尝试 2 项、成功 1 项、失败 1 项',
       { exact: true },
     ),
   ).toBeVisible();
@@ -1074,6 +1283,31 @@ test('user audit-after-effect error refreshes once without retrying the mutation
     '会话记录',
     listInputs,
     revokeInputs,
+  );
+});
+
+test('self unknown termination followed by audit failure refreshes once and preserves repair guidance', async ({
+  page,
+}) => {
+  const { listInputs, revokeInputs } = await setupSessionRevoke(page, () => ({
+    type: 'audit-failed-after-effect',
+  }));
+  await revokeUserAndExpectReload(page, revokeInputs, listInputs, {
+    rowText: '张三',
+    userId: 42,
+  });
+  await expect(
+    page.getByText('操作可能已生效，但审计记录失败，请刷新确认且不要自动重试'),
+  ).toBeVisible();
+  await expect(page.getByText('会话下线失败', { exact: true })).toHaveCount(0);
+  await expectAuditWarningAfterRefreshAndTabSwitch(
+    page,
+    '会话记录',
+    listInputs,
+    revokeInputs,
+    async () => {
+      await expect(page.getByText('张三', { exact: true })).toBeVisible();
+    },
   );
 });
 

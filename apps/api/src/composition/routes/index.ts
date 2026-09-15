@@ -3,8 +3,6 @@ import type { CreateAppOptions } from "@iam/api-core/core/create-app";
 import type { ApiRuntimePorts } from "../runtime";
 import type { ApiServices } from "../services";
 import type { ApiUseCases } from "../use-cases";
-import { createAuthHandlers } from "@api/routes/auth/auth.handlers";
-import { createAuthRoute } from "@api/routes/auth/auth.index";
 import { createDelegationHandlers } from "@api/routes/internal/delegation/delegation.handlers";
 import { createDelegationRoute } from "@api/routes/internal/delegation/delegation.index";
 import { createOrganizationHandlers } from "@api/routes/internal/organization/organization.handlers";
@@ -13,12 +11,10 @@ import { createUserHandlers } from "@api/routes/internal/user/user.handlers";
 import { createUserRoute } from "@api/routes/internal/user/user.index";
 import { createOpenHandlers } from "@api/routes/open/open.handlers";
 import { createOpenRoute } from "@api/routes/open/open.index";
-import { createPublicHandlers } from "@api/routes/public/public.handlers";
-import { createPublicRoute } from "@api/routes/public/public.index";
-import { createSsoHandlers } from "@api/routes/sso/sso.handlers";
-import { createSsoRoute } from "@api/routes/sso/sso.index";
+import { createRouter } from "@iam/api-core/core/create-router";
 
 export interface CreateApiRoutesOptions {
+  verifyDatabase: () => Promise<unknown>;
   auditLogWriter: ApiAuditLogWriter;
   runtime: ApiRuntimePorts;
   services: ApiServices;
@@ -28,20 +24,6 @@ export interface CreateApiRoutesOptions {
 export async function createApiRoutes(options: CreateApiRoutesOptions): Promise<CreateAppOptions["routes"]> {
   const { auditLogWriter, runtime, services, useCases } = options;
 
-  const authHandlers = createAuthHandlers({
-    authentication: useCases.authentication,
-    clientService: services.client,
-    localSessionAuthorizer: services.customSso,
-    loginCredentialParser: services.loginCredential,
-    logger: runtime.logger,
-
-    config: {
-      projectionRetryAfterSeconds:
-        runtime.config.env.sso.projectionRetryAfterSeconds,
-      redisExpireSeconds: runtime.config.auth.redisExpireSeconds,
-    },
-  });
-
   const openHandlers = createOpenHandlers({
     accountRecovery: useCases.accountRecovery,
     auditLogWriter,
@@ -50,36 +32,6 @@ export async function createApiRoutes(options: CreateApiRoutesOptions): Promise<
     humanRiskService: services.humanRisk,
     mobileService: services.mobile,
     userService: services.user,
-  });
-
-  const ssoHandlers = createSsoHandlers({
-    authentication: useCases.authentication,
-    logger: runtime.logger,
-    sso: useCases.sso,
-    config: {
-      authorizationEndpoint: runtime.config.env.sso.authorizationEndpoint,
-      authCodeExpireSeconds: runtime.config.auth.authCodeExpireSeconds,
-      loginEndpoint: runtime.config.env.sso.loginEndpoint,
-      logoutEndpoint: runtime.config.env.sso.logoutEndpoint,
-      projectionRetryAfterSeconds:
-        runtime.config.env.sso.projectionRetryAfterSeconds,
-      redisExpireSeconds: runtime.config.auth.redisExpireSeconds,
-      ssoExternalOrigin: runtime.config.env.sso.externalOrigin,
-      ssoInternalOrigin: runtime.config.env.sso.internalOrigin,
-      thirdPartyOAEndpoint: runtime.config.env.sso.thirdPartyOAEndpoint,
-    },
-  });
-
-  const publicHandlers = createPublicHandlers({
-    organizationService: services.organization,
-    subjectDeliveryRequests:
-      services.customSsoSubjectDeliveryRequests,
-    userService: services.user,
-    userProfileSearch: services.userProfileSearch,
-    config: {
-      projectionRetryAfterSeconds:
-        runtime.config.env.sso.projectionRetryAfterSeconds,
-    },
   });
 
   const organizationHandlers = createOrganizationHandlers({
@@ -99,15 +51,39 @@ export async function createApiRoutes(options: CreateApiRoutesOptions): Promise<
     userProfileSearch: services.userProfileSearch,
   });
 
+  const health = createRouter();
+  health.get("/health", async (c) => {
+    try {
+      await runtime.redis.ping();
+      return c.json({ status: "ok" });
+    }
+    catch { return c.json({ status: "unavailable" }, 503); }
+  });
+  health.get("/oidc/health", async (c) => {
+    try {
+      await runtime.redis.ping();
+      return c.json({ status: "ok" });
+    }
+    catch { return c.json({ status: "unavailable" }, 503); }
+  });
+  health.get("/ready", async (c) => {
+    try {
+      await Promise.all([runtime.redis.ping(), options.verifyDatabase()]);
+      return c.json({ status: "ok" });
+    }
+    catch { return c.json({ status: "unavailable" }, 503); }
+  });
   return {
-    "./src/routes/auth/auth.index.ts": { default: createAuthRoute(authHandlers) },
+    "./src/routes/health/health.index.ts": { default: health },
+    "./src/routes/oidc/oidc.index.ts": { default: services.authentication.routers.oidc },
+    "./src/routes/auth/auth.index.ts": { default: services.authentication.routers.auth },
     "./src/routes/internal/delegation/delegation.index.ts": { default: createDelegationRoute(delegationHandlers) },
     "./src/routes/internal/organization/organization.index.ts": { default: createOrganizationRoute(organizationHandlers) },
     "./src/routes/internal/user/user.index.ts": {
       default: createUserRoute(userHandlers),
     },
     "./src/routes/open/open.index.ts": { default: createOpenRoute(openHandlers) },
-    "./src/routes/public/public.index.ts": { default: createPublicRoute(publicHandlers) },
-    "./src/routes/sso/sso.index.ts": { default: createSsoRoute(ssoHandlers) },
+    "./src/routes/public/public.index.ts": { default: services.authentication.routers.public },
+    "./src/routes/sso/sso.index.ts": { default: services.authentication.routers.sso },
   };
 }

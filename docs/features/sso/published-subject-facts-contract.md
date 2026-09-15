@@ -2,7 +2,7 @@
 
 [Issue #156](https://github.com/cyy1998/shgas-iam/issues/156) 按 [ADR-0032](../../adr/0032-consume-published-subject-facts-for-authorization.md)
 统一 Custom SSO 与 OIDC 的主体读取。实现已移除授权新鲜度 port、Reader 的 Dirty 查询及对应观测事件，保留现有缓存、发布与账号保护。
-生产环境尚未切换；[保留对象升级](../../releases/published-subject-facts-upgrade.md)只适用于原 #156 固定旧候选，包含 #170 的当前候选按[全体下线手册](../../releases/online-auth-redis-time-cutover.md)统一切换并重新登录。
+生产环境尚未切换；[保留对象升级](../../releases/published-subject-facts-upgrade.md)只适用于原 #156 固定旧候选，包含 #178 的当前候选按[统一维护手册](../../releases/unified-session-maintenance.md)统一切换并重新登录。
 
 ## 行为与责任
 
@@ -15,10 +15,9 @@ Reader 按 Subject single-flight 读取一行 `user_profile`，严格解析并�
 有效命中不为了发现更高版本回源，因此“已发布”不等于“全系统最新”。没有固定撤权传播期限，也不增加缓存 TTL 或 Redis 新鲜度屏障。
 后台 Dirty、原子发布、单调 CAS、repair/readiness 及 Subject Access 恢复条件保持。
 
-Custom SSO 每次交付重新取得 Facts；同一有效 Credential 在 Facts 更新后可取得新属性。OIDC 仅在授权时创建 Snapshot，
-Code、Token 与 UserInfo 重放原内容，新 Facts 只进入之后读取到它的新授权。第三方复制后自行刷新。
-账号禁用/代际、Client 裁剪、字段/schema 与协议生命周期继续有效；本次不调整 Admin 请求时业务授权。
-Facts 缺失仍保留兑换失败重新授权、UserInfo 原凭据重试及 OIDC 不签发 Code 的区别。
+Custom SSO 与 OIDC UserInfo 在实际交付时取得 Facts，按当前 Client 披露范围裁剪；旧 Token 也适用当前披露。
+已签发 ID Token 内容固定，Code 不再携带 Claims Snapshot。事实允许已发布旧权限，账号访问和会话关系校验独立保持。
+Facts 不可得时交付失败，不恢复已消费 Code；既有 Token 的 UserInfo 可稍后重试。第三方复制后的刷新由其负责。
 
 ## 行为验证归属
 
@@ -28,9 +27,9 @@ Facts 缺失仍保留兑换失败重新授权、UserInfo 原凭据重试及 OIDC
 | Projection | [Projection Component](../../../packages/client-subject-projection/test-integration/component/client-subject-projection.contract.integration.test.ts) | 当前操作许可、主体一致、按 Client 裁剪、同一次读取组成全部字段，以及新调用采用新版本。 |
 | PostgreSQL 回源 | [Reader PostgreSQL](../../../packages/user-profile-read-model/test-integration/postgres/subject-facts-reader.integration.test.ts) | 真实 Profile 和 Dirty 为 pending/processing/failed/较新 processed/缺失时，数据库回源和随后缓存均交付已发布角色；不模拟完整角色命令事务。 |
 | Redis publisher | [单调发布](../../../packages/user-profile-read-model/test-integration/redis/subject-facts-publisher-v3.integration.test.ts) | 保留正式 Redis CAS 的旧版本不覆盖新版本、格式与缓存边界；不代表跨数据库事务。 |
-| Custom SSO 操作 | [完整操作 Redis](../../../packages/custom-sso/test-integration/redis/custom-sso-operation.integration.test.ts) | 实际 Grant/Credential、账号许可、无 Facts 失败和消费不可重放；外部 ORCAS 为替身。 |
-| Custom SSO HTTP | [UserInfo HTTP](../../../apps/api/test-integration/redis/custom-sso-operation-http.integration.test.ts)、[兑换 HTTP](../../../apps/api/test-integration/redis/custom-sso-redemption-operation-http.integration.test.ts) | 独立 issuer 创建的当前格式对象由正式 consumer 使用；四模式原凭据在资料失败后恢复、权限随后更新，三模式消费失败与同根新授权。Facts 出站替身不证明数据库。 |
-| OIDC HTTP | [Provider HTTP/Redis](../../../apps/oidc-provider/test-integration/redis/subject-access-authorization.integration.test.ts) | 正式装配与真实 Redis，授权缓存命中零数据库调用；新版本发布后旧 Code 兑换和旧 Token UserInfo 保留旧角色，新授权取得新角色；scope、Gate、账号与资料缺失仍拒绝。 |
+| Custom SSO 操作 | [完整操作 Redis](https://github.com/cyy1998/shgas-iam/blob/aeb2dc45294f3553ad596cda5194e9643378c31b/packages/custom-sso/test-integration/redis/custom-sso-operation.integration.test.ts) | 实际 Grant/Credential、账号许可、无 Facts 失败和消费不可重放；外部 ORCAS 为替身。 |
+| Custom SSO HTTP | [UserInfo HTTP](https://github.com/cyy1998/shgas-iam/blob/aeb2dc45294f3553ad596cda5194e9643378c31b/apps/api/test-integration/redis/custom-sso-operation-http.integration.test.ts)、[兑换 HTTP](https://github.com/cyy1998/shgas-iam/blob/aeb2dc45294f3553ad596cda5194e9643378c31b/apps/api/test-integration/redis/custom-sso-redemption-operation-http.integration.test.ts) | 独立 issuer 创建的当前格式对象由正式 consumer 使用；四模式原凭据在资料失败后恢复、权限随后更新，三模式消费失败与同根新授权。Facts 出站替身不证明数据库。 |
+| OIDC HTTP | [Provider HTTP/Redis](https://github.com/cyy1998/shgas-iam/blob/aeb2dc45294f3553ad596cda5194e9643378c31b/apps/oidc-provider/test-integration/redis/subject-access-authorization.integration.test.ts) | 正式装配与真实 Redis，授权缓存命中零数据库调用；新版本发布后旧 Code 兑换和旧 Token UserInfo 保留旧角色，新授权取得新角色；scope、Gate、账号与资料缺失仍拒绝。 |
 
 原“授权必须查询 Dirty”“pending/processing/failed 必须拒绝”“freshness 刷新整份 Facts”及其观测断言不再成立，
 已替换为上述已发布事实行为。旧刷新分支的主体错配测试由唯一 Facts 读取的主体错配测试覆盖，

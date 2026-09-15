@@ -126,13 +126,6 @@ upstreams:
     pass_host: pass
     nodes:
       ${PROD_IAM_ADMIN_API_UPSTREAM_HOST}:${PROD_IAM_ADMIN_API_UPSTREAM_PORT}: 1
-  - key: oidc-provider
-    desc: IAM OIDC provider upstream for production
-    type: roundrobin
-    scheme: http
-    pass_host: pass
-    nodes:
-      ${PROD_IAM_OIDC_PROVIDER_UPSTREAM_HOST}:${PROD_IAM_OIDC_PROVIDER_UPSTREAM_PORT}: 1
   - key: sso-frontend
     desc: IAM SSO frontend nginx upstream for production
     type: roundrobin
@@ -205,7 +198,7 @@ routes:
             X-Forwarded-Proto: $scheme
         use_real_request_uri_unsafe: false
     priority: 200
-    upstream: oidc-provider
+    upstream: api
     plugin_config: oidc-provider-ip-rate-limit
   - key: public
     desc: IAM public tier through APISIX with /api/iam prefix

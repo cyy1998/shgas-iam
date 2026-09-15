@@ -2,16 +2,10 @@
 
 本上下文定义 IAM 用户身份、档案和外部 SSO 集成中的核心领域语言，帮助区分稳定用户事实与协议会话事实。
 
-Custom SSO Authorization Grant 与 Subject Projection Not Ready 的兑换语义采用
-[ADR-0031](docs/adr/0031-consume-custom-sso-grants-before-issuance.md)中已接受的修改目标；Independent 与 Gateway 已分别由 #158/#159 迁移，
-定向维护由 #160 交付，#161 已提供最终契约账本与升级手册；父级验收另记，环境尚未切换，不能据术语更新推断环境行为已改变。
-
-Subject Facts、Client Authorization Claim、Subject Projection Not Ready 与 OIDC Claims Snapshot 采用
-[ADR-0032](docs/adr/0032-consume-published-subject-facts-for-authorization.md) 已接受的 #156 修改目标：主体交付允许已发布旧权限，原 Authorization Freshness Barrier 从目标词汇中退役。读取实现已迁移，环境尚未切换；代码验证与实际部署分别记录。
+当前词汇采用 [ADR-0035](docs/adr/0035-unify-user-and-client-session-lifecycles.md) 已接受的统一会话模型。
+两类会话表达根登录和应用关系；配置、启停与凭据维护不等于永久撤销。代码和环境的交付状态见发布手册。
 
 ## Language
-
-下文 Credential 与 Session Revocation 采用 [ADR-0033 已接受的目标](docs/adr/0033-trust-issued-credentials-without-principal-session-revalidation.md)：已有凭据使用不查父，兑换仍查父，根撤销继续尽力级联且不承诺派生访问全部失效；Credential 签发期限仍受当时根期限裁剪，Custom SSO 不再续根或续 Credential。代码已由 #164–#167 实现，发布采用一次性全体下线；术语不代替行为证据，环境尚未切换。
 
 **User Profile**:
 IAM 中关于一个用户的稳定档案视图，包括用户基础身份信息、任职、角色和权限。
@@ -100,6 +94,14 @@ _Avoid_: OIDC-owned subject, protocol session ID, username
 **Principal Reference**:
 Session Kernel 用 `{ principalType, subjectId }` 指向会话主体的最小引用；用户主体的 `subjectId` 是 Subject Identifier，不包含数据库主键、显示名称或档案快照。Principal Session 不再另存通用 Principal Snapshot；协议确需固化的声明快照由各协议自行拥有。
 _Avoid_: user snapshot, display user, database user reference
+
+**UserSession**:
+用户一次 IAM 认证形成的根登录关系，拥有该次可信主体、原认证事实、主体访问代际和固定到期时间。协议活动不延长它，同一账号的不同根登录彼此独立。
+_Avoid_: ClientSession, protocol Token, renewable login slot
+
+**ClientSession**:
+指定 UserSession 与一个 Client 的持续应用关系，同一对最多存在一个有效实例，在线使用同时要求该实例和原根有效；后续授权可更新其协议标记并在原根期限内延长。协议切换本身不终止该关系，符合协议前置条件的 Code 兑换失败可触发原实例终止；实例终止或过期后新授权建立新实例，旧 Code/Token 不随之改绑或延长。
+_Avoid_: Provider Session, protocol Token, per-protocol relationship, per-authorization scope container
 
 **Authenticated Subject Context**:
 共享 HTTP 认证中间件验证 Principal Session 或 Gateway Local Session 后产生的最小请求上下文，只包含 Subject Identifier、已验证的 client code，以及适用时独立保存的 ORCAS session 引用。它不包含 `UserDetailDto`、数据库用户主键、username 或 Client Subject Projection；需要内部账号字段的旧用例必须通过自己的 Account Resolver 按 Subject Identifier 获取。
@@ -282,51 +284,63 @@ Gateway Custom SSO 显式启用 ORCAS 集成后，由 ORCAS 返回并绑定到�
 _Avoid_: user detail field, user profile attribute, subject claim, Independent client context
 
 **Custom SSO Authorization Grant**:
-基于有效 IAM 登录身份、授予指定 client 一次性继续 Custom SSO 登录的权利，成功兑换按接入模式产生 Independent Client Credential 或 Gateway Local Session。两种模式都在前置校验通过后一次性消费，再构建主体投影并执行适用的外部登录和凭据签发；消费前暂态拒绝保留原有效期内的权利，消费后失败或结果未知通过重新授权恢复，不恢复原 Code，也不重放成功结果。
+授予指定 Client 一次性继续 Custom SSO 登录的 Code。适用认证和原实例定位通过后消费；后续失败不恢复 Code，并按兑换规则在本请求内有界尝试终止原 ClientSession。
 _Avoid_: local session, client session, recoverable authorization code, replayable exchange result
 
 **Independent Client Credential**:
-IAM 向 Independent client 签发并管理的 client-scoped credential；第三方可以据此建立自己的本地会话，但该会话不属于 IAM。它只能由服务端通过 `POST /sso/token`、HTTP Basic Custom SSO client authentication 以及与 Authorization Grant 完全匹配的 redirect URI 兑换，不接受 GET 或 query secret 兼容入口。
+业务自行接入 Custom SSO 时取得的 Client scoped Token；第三方可以据此建立自己的本地会话，但本地会话不属于 IAM。
 _Avoid_: third-party local session, IAM-created third-party session
 
 **Gateway Local Session**:
-IAM 为 Gateway client 建立并管理的 client-scoped 登录会话。
+IAM 托管接入为浏览器保存的 Custom SSO Token 及其 ClientSession 关系；它受根登录、应用关系和当前接入规则约束。
 _Avoid_: Independent Client Credential, third-party local session
 
 **Credential Identity**:
-标识一次 Credential 签发的身份，在该次签发结果不确定时用于确认或补偿其作用。新的签发使用新的身份，旧 Credential 自然过期不构成复用其身份的业务契约。
+标识一次协议 Token 签发的身份，用于在该次签发结果不确定时确认或补偿作用。
 _Avoid_: reusable credential slot, bearer token, user identity
 
 **Credential**:
-IAM 向指定 client 签发并管理、承载主体身份与自身生命周期的访问凭据，其签发期限仍受当时父 Principal Session 期限限制。已有 Credential 的使用不以父会话当前仍有效为前提，但仍受自身有效性、主体访问和适用协议及授权规则约束；Custom SSO Credential 签发后不再续期。
+旧模型中访问凭据的名称；统一模型以协议 Token 表达访问凭据，以 UserSession 和 ClientSession 表达登录关系。
 _Avoid_: Principal Session, Authorization Grant, unconditional access permission
 
 **Custom SSO Client Configuration**:
-一个 client 对 Custom SSO 接入模式、回调行为和所需 Subject Claims 的独立版本化声明；它由 `customSsoEnabled`、可空的 `customSsoConfig`、Independent 模式专用的 `customSsoSecretHash` 与单调递增的 `customSsoConfigVersion` 表达，不属于 OIDC 配置。未配置、已配置但停用、启用是三个不同状态；其中启用表达管理员的协议启用意图，不等于 Custom SSO 当前可用，全局 Client 生命周期状态另行决定是否接受运行流量。`mode` 只区分 Gateway 与 Independent，不使用 `None` 表示关闭；Independent 必须有 Secret Hash，Gateway 必须没有。配置是按 `mode` 区分的严格联合类型，跨模式无意义或未知字段必须被拒绝。配置、启停、Custom SSO secret 或 claim disclosure 的任何变更都原子递增版本；服务端 active Catalog 的任何 claim disclosure 变化都推进全部已配置 Custom SSO Client 的版本。Custom SSO Authorization Grant 与 Credential 必须记录并校验签发版本，因此旧 artifact 即使尚未被批量清理也会 fail closed。配置按服务端唯一 active Subject Claim Catalog 显式列出完整 `subjectClaims`，其中必须包含 Subject Identifier；Catalog 版本不由 client 选择或持久化，新 client 默认只包含 Subject Identifier。配置不内嵌永久的按用户维护绕过名单。
-_Avoid_: client ext attributes, shared clientSecret, plaintext secret, OIDC client configuration, unversioned SSO settings, userExcluding
+一个选择 Custom SSO 的 Client 对单个回调地址、允许的业务落地地址和主体披露范围的声明；回调指向 IAM 托管入口时采用托管交付，否则由业务自行回调。它不使用独立接入模式开关，普通编辑不等于终止已有会话，接入启用意图由 SSO Enablement 表达。
+_Avoid_: Independent/Gateway mode, OIDC client configuration, per-request callback selection, ClientSession state
+
+**SSO Enablement**:
+一个 Client 对所选 SSO 协议接入能力的启用意图，独立于 Client 的整体状态、Internal API 调用能力和显式会话撤销。关闭时保留配置和既有访问关系，恢复启用只允许仍在原期限内且未被终止的访问继续使用。
+_Avoid_: Client Disablement, configuration deletion, Session Revocation
+
+**SSO Client Secret**:
+IAM 为 Client 签发、用于所选 SSO 协议的客户端认证凭据，与 Internal API 凭据独立。轮换替换当前值而不撤销既有会话或协议授权，IAM 不主动提供新旧值并存的宽限期。
+_Avoid_: Internal API credential, user password, Authorization Code, Session Token
+
+**Client Protocol Selection**:
+Client 当前采用的 SSO 协议及其相应配置，决定后续操作允许使用的协议。改变选择不自动撤销已有应用关系，后续授权可以复用有效关系；切回后仍满足自身条件的旧访问可以恢复，永久终止由显式撤销表达。
+_Avoid_: immutable ClientSession protocol, protocol revocation epoch, Session Revocation
 
 **Client Runtime Snapshot**:
-IAM 在线协议入口为一次业务操作取得的 Client 时点事实；同一 Client 的协议配置与 Client Traffic Gate 分别固定首次结果，彼此不是原子联合视图，后续 Admin mutation 不追溯推翻本操作已接受的事实。新操作重新取得，传播失败时仍可能取得先前已发布的事实，直到显式修复；Snapshot 不代替对象存在、撤销或消费状态。
-_Avoid_: live Client row, protocol config version, linearizable Client state
+IAM 在线协议入口为一次业务操作取得的 Client 通行状态与所选协议配置，两者来自同一次源事实观察，后续变更不追溯推翻本操作已接受的事实。新操作重新取得，传播失败时仍可能取得先前已发布的事实；它不代表全局最新配置、Secret 认证结果或会话及协议产物的有效性。
+_Avoid_: live Client row, protocol config version, linearizable Client state, Client authentication result
 
 **Protocol Configuration Revocation**:
-由一次明确的协议配置变化发起、只终止该次变化之前协议代际对象的撤销；迟到执行或重试不得终止该次及后续配置代际的访问。它不同于普通请求拒绝，也不保证覆盖枚举结束后才由旧配置在途操作创建的对象。
+旧模型中配置编辑驱动协议代际撤销的名称，已退役；当前配置维护与显式会话撤销相互独立。
 _Avoid_: validation failure cleanup, unconditional client-wide revocation, Runtime Snapshot invalidation
 
 **Client Maintenance**:
-Client 暂时拒绝 IAM 控制的 client-scoped 在线协议流量、但允许管理员完成各协议全部配置与生命周期准备的可恢复状态；恢复正常服务后，各协议已经声明的启用意图自动生效，协议之间仍保持独立配置与生命周期。在线协议入口只有在成功取得的 Client Runtime Snapshot 明确表示 Client 正常时才允许流量，无法取得可信 Snapshot 时同样暂时拒绝；已提交的状态变更若未成功传播，先前的正常 Snapshot 可以继续被取得，直到显式修复。协议 discovery、JWKS、公共认证配置和健康检查不属于该门禁范围。进入或退出维护状态本身不使既有协议访问永久失效；未发生协议变更的访问在恢复正常后继续有效，维护期间发生变更的协议按自己的生命周期规则使旧产物失效。维护不暂停 Authorization Grant、Authorization Code、Credential、Token 或 Session 的原始有效期；恢复正常时只有尚未过期且未因协议变更失效的访问可以继续。维护期间仍允许退出与撤销，并且由此终止的访问在恢复正常后不会复活。维护状态不保证追溯阻止已经离开 IAM、由 client 离线验证的 OIDC ID Token。
+Client 可恢复地暂停在线协议流量的状态；它保留配置、启用意图和原有期限，恢复后未过期且未被撤销的访问可以继续。退出与显式撤销仍可执行，discovery、JWKS 和健康检查不属于该门禁。
 _Avoid_: configuration freeze, protocol disablement, maintenance bypass
 
 **Client Disablement**:
-Client 被明确行政停用并拒绝协议运行流量的状态；进入该状态是全协议永久失效事件，会终止此前的 IAM 管理访问，但保留既有协议配置与启用意图。停用期间不允许把原本停用的协议新设为启用；离开该状态本身不再次推进协议生命周期，只有停用期间真实发生的协议配置、Secret 或启停变化按所属协议规则使旧产物失效。
+Client 被明确行政停用并拒绝在线协议流量的状态；配置和既有关系保留，恢复不会续期，永久终止由显式撤销表达。
 _Avoid_: Client Maintenance, configuration removal, protocol reset
 
 **Client Maintenance Unavailable**:
-Client Runtime Snapshot 明确表示目标 Client 处于 Client Maintenance 时，IAM 在线协议入口产生的可重试暂态结果；它不表示 client、credential、token 或 session 永久无效，也不得消费 Authorization Grant/Code、删除协议产物、撤销访问或清除仍可能恢复有效的 Cookie。Custom SSO 将其映射为 HTTP `503`、稳定错误码 `AUTH.MAINTENANCE` 和可选重试提示，OIDC 使用适合相应 endpoint 的 `temporarily_unavailable` 或 HTTP `503` 语义。无法取得可信 Client Runtime Snapshot 属于通用暂态不可用，不得冒充明确的 Client Maintenance。
+Client Snapshot 明确表示目标 Client 处于 Client Maintenance 时，IAM 在线协议入口产生的可重试暂态结果。配置进入维护本身不终止会话或协议产物；普通访问遇到维护不清除仍可能恢复有效的 Cookie。兑换若已完成认证并定位原 ClientSession，后续失败仍按该兑换操作的既定补偿规则终止原实例，不能由“维护可恢复”推导豁免；认证前拒绝不消费 Code 或作用于会话。Custom SSO 将维护映射为 HTTP `503`、稳定错误码 `AUTH.MAINTENANCE` 和可选重试提示，OIDC 使用相应 endpoint 的 `temporarily_unavailable` 或 HTTP `503` 语义。无法取得可信 Client Snapshot 属于通用暂态不可用，不得冒充明确的 Client Maintenance。
 _Avoid_: invalid client, invalid token, unauthorized, protocol revocation
 
 **Custom SSO Redirect Pattern**:
-Custom SSO client 对允许的实际 redirect URI 使用的显式受限模式。无通配的 URI 只匹配精确路径；只有以 `/*` 结尾才匹配路径子树，主机 `*.` 只匹配一级子域且不匹配根域或多级子域；scheme 与 port 必须精确一致。禁止裸 `*`、公共后缀或 IP 通配、URL credentials、动态 query 与 fragment，动态往返信息改由 `state` 承载。Authorization 阶段先按模式允许实际 URI，随后 Authorization Grant 保存该规范化实际值，callback 或 token 兑换必须与 Grant 逐字匹配；配置版本变化使旧 Grant 失效。
+Custom SSO client 对允许的实际 redirect URI 使用的显式受限模式。无通配的 URI 只匹配精确路径；只有以 `/*` 结尾才匹配路径子树，主机 `*.` 只匹配一级子域且不匹配根域或多级子域；scheme 与 port 必须精确一致。禁止裸 `*`、公共后缀或 IP 通配、URL credentials、动态 query 与 fragment，动态往返信息改由 `state` 承载。Authorization 阶段先按模式允许实际 URI，随后 Code 保存该规范化实际值，callback 或 token 兑换必须与 Code 逐字匹配；允许列表变化约束新授权，不以已退役的配置版本比较使旧 Code 失效。
 _Avoid_: exact-only redirect registry, implicit origin/path subtree, grant-time pattern rematch
 
 **Custom SSO State**:
@@ -334,15 +348,15 @@ Custom SSO V1 中由 client 可选提供的 opaque 流程关联值；存在时 I
 _Avoid_: required V1 state, session credential, server-side return URL
 
 **OIDC Client Binding**:
-在一个 OIDC Provider Session 内，将一个 client 独立关联到已验证 Principal Session 的 client-scoped 生命周期；该 client 的 Authorization Code、Claims Snapshot 与 Access Token 共同从属于这一关系，并可在不影响同一 Provider Session 下其他 client 的情况下独立失效。它不属于 Custom SSO；Custom SSO Credential 自身承载其 client-scoped 生命周期。
+旧 OIDC 模型中的 Client 关系名称；统一模型由协议中性的 ClientSession 表达应用关系。
 _Avoid_: generic Client Binding, Custom SSO binding, client configuration, credential
 
 **Client Subject Projection**:
-IAM 向指定 client 交付的主体属性视图；它始终包含 Subject Identifier、不暴露 IAM 数据库主键，其余字段由该 client 显式声明并受 IAM 允许词汇约束。Independent Client Credential 与 Gateway Local Session 使用同一投影契约。该投影在交付响应时构建，不固化到 Custom SSO credential、session 或其私有 payload 中。Custom SSO 的 JSON Wire Contract 使用版本化嵌套结构，Catalog Claim 由协议 Adapter 映射到字段；未声明字段及其空父对象不出现。`/sso/token` 通过 `subject` 字段返回该投影，不保留 `userInfo` 别名；`/public/user-info` 的 `data` 直接返回该投影。OIDC 使用自己的 Claim 映射，不复用 Custom SSO JSON 外形。
+IAM 向指定 Client 实际交付的主体属性视图，始终包含 Subject Identifier，其余字段受该 Client 当前披露配置和 IAM 允许词汇约束，不暴露数据库用户标识。两协议在实际交付时使用同一主体事实与裁剪语义，但保留各自响应形状；OIDC UserInfo 的新披露范围也适用于旧 Token，已签 ID Token 内容固定。
 _Avoid_: User Profile, session payload, mode-specific user info
 
 **Subject Projection Not Ready**:
-主体身份和 client 授权可能仍然有效、但无法取得合法已发布 Subject Facts 时产生的暂态领域结果，不表示未认证或无权限，源事实尚未完成新一轮发布也不单独构成该结果。Custom SSO 兑换中的该结果不恢复已消费 Grant，调用方需重新授权；既有 Credential 的 UserInfo 调用可以稍后重试，OIDC 授权仍在投影就绪前不签发 Authorization Code。
+实际主体交付时无法取得合法已发布 Subject Facts 的暂态结果，不表示未认证或无权限。已消费 Code 不恢复；既有 Token 的 UserInfo 可以稍后重试。
 _Avoid_: unauthorized, forbidden, dirty-state response
 
 **Gateway Subject Header**:
@@ -354,7 +368,7 @@ IAM 定义的版本化语义 claim 词汇，client 从服务端唯一 active Cat
 _Avoid_: UserDetail field list, arbitrary JSON path, protocol scope
 
 **Subject Claim Selection**:
-协议 Adapter 从服务端配置及该次已授权范围归一化出的瞬时内部值对象，由 Claim Catalog 版本和可选 claim 集合组成；Subject Identifier 始终隐式包含。它不单独持久化、不进入 session 或 credential，也不接受客户端请求直接指定。
+IAM 按 Client 当前披露配置及适用协议规则确定的本次主体字段选择，始终包含 Subject Identifier。它不是客户端直接指定的字段清单，也不作为会话或 Token 的固定披露快照；OIDC UserInfo 不以旧 Token 原申请范围限制当前选择。
 _Avoid_: ProjectionSpec, client configuration, protocol scope, requested HTTP fields
 
 **Subject Facts**:
@@ -378,11 +392,11 @@ _Avoid_: profile cache field, eventual account disable, protocol-specific blackl
 _Avoid_: request-wide boolean, persistent authorization, reusable access token
 
 **Client Authorization Claim**:
-`iam:authorization` 表达指定 Client 在已发布 Subject Facts 中可见的授权主体属性，包含该版本全部 Effective Employment 的 `isPrimary`、组织、完整路径、岗位及仅属于该 Client 的 Effective Role 与派生权限；无角色任职保留空数组，任职沿 Employment Profile Claim 排序，逐任职及顶层 role/privilege code 去重并稳定排序，不包含其他 Client 授权、数据库标识或授权决策。Custom SSO 每次交付和 OIDC 创建 Claims Snapshot 时均允许采用落后于源事实的已发布权限，即使源权限已撤销或重建持续失败也不因此拒绝交付；无法取得合法 Facts 时不能省略该 Claim，第三方复制后的刷新由其自行负责，OIDC 后续交付继续使用原 Snapshot。
+`iam:authorization` 表达指定 Client 在已发布 Subject Facts 中可见的授权主体属性，包括有效任职及仅属于该 Client 的有效角色与派生权限，不包含其他 Client 的授权、数据库标识或授权决策。两协议实际交付时均可使用落后于源事实的已发布权限，无法取得合法 Facts 时不能省略必要声明伪装成功，第三方复制后的刷新由其自行负责。
 _Avoid_: global roles, global privileges, authorization decision, guaranteed current authorization
 
 **Employment Profile Claim**:
-`profile:employments` 表达用户的 Effective Employment 非授权事实，只包含 `isPrimary`、组织 code/name/type、按根到当前组织且包含当前组织的完整路径，以及岗位 code/name；Position 与所属 Organization 由 Employment Integrity 保证，发布前发现异常时整份事实不可用。主任职优先，其余按组织 code、岗位 code 稳定排序，无有效任职时返回空数组；它不含角色、权限、数据库标识、状态、层级数字、起止时间、描述或审计时间，Custom SSO 通过 Catalog 声明，OIDC 仅在 `iam:employments` scope 获准时映射到 UserInfo Claims Snapshot，不扩展标准 `profile` scope 或 ID Token。
+`profile:employments` 表达用户有效任职的非授权事实，包括主任职标记、组织及完整路径、岗位，不包含角色、权限、数据库标识或任职历史。Custom SSO 按当前 Catalog 声明交付，OIDC 按 Client 当前 `iam:employments` 披露范围交付到 UserInfo，不扩展标准 `profile` scope 或 ID Token。
 _Avoid_: raw employment record, Client Authorization Claim, employment history
 
 **Account Recovery**:
@@ -398,23 +412,23 @@ _Avoid_: account disable, employment deletion, user deletion
 _Avoid_: User Resignation, account disable, employment cascade deletion
 
 **OIDC Claims Snapshot**:
-OIDC 在授权完成且 Authorization Code 签发前，按 Subject Identifier、OIDC Client Binding、scope、OIDC 配置版本及该次取得的已发布 Subject Facts 创建并固化的协议专用声明视图；选择 `iam:authorization` 不要求事实与当前授权源一致，但无法取得合法投影时不签发 Code。Authorization Code 持有该 Snapshot，Token Endpoint 只将它转移到 Access Token，不重新读取档案；ID Token 从同一 Snapshot 映射但排除 `iam:authorization` 与 `iam:employments`，后续 UserInfo 也只重放 Snapshot，不混入新发布事实。
+旧 OIDC 模型中授权时固化的声明视图，已退出当前在线模型；当前 UserInfo 按 Client 当前披露范围交付已发布 Subject Facts，已签发 ID Token 内容固定。
 _Avoid_: token-endpoint live projection, current user profile, current authorization view
 
 **Valid Principal Session**:
-用户完成 IAM 身份验证后形成、尚未过期、未被撤销且主体访问状态与所属代际仍允许使用的根登录会话；客户端是否仍打开不影响其有效性。
+旧模型中有效根登录的名称；当前使用有效 UserSession，要求根未过期、未撤销且主体访问许可仍成立。
 _Avoid_: online session, 在线会话
 
 **Principal Session Record**:
-供管理查询和撤销使用、尚未过期且未被撤销的根登录会话记录；记录存在不承诺主体当前可访问或其代际仍有效，因此不等同于 Valid Principal Session。
+旧模型中管理可观察根记录的名称；当前管理查询观察 UserSession，记录可见不等于本次访问获准。
 _Avoid_: valid session, online user, 在线用户
 
 **Authentication Continuation**:
-IAM 在身份验证前保留、并在身份验证完成后继续原 Custom SSO 或 OIDC 授权请求的协议上下文；用户持有 Valid Principal Session 时重入统一登录页，应继续该上下文而不是创建新的 Principal Session。普通登录页参数不能绕过续接，Protocol Reauthentication Requirement 则终止本次授权而不再次进入身份验证。
+IAM 在身份验证前保留、并在身份验证后继续原 Custom SSO 或 OIDC 授权请求的上下文，包含首次已接受的授权事实。恢复不因普通配置编辑重新审核原 redirect/scope 允许范围，但仍受当前流量、协议启用与适用认证规则约束；有效根登录应被复用，普通登录页参数不能绕过续接。
 _Avoid_: post-login homepage, new login attempt, generic redirect, force-login query
 
 **Protocol Reauthentication Requirement**:
-OIDC Client 对当前授权请求提出、并由 OIDC Provider 验证和绑定到 Authentication Continuation 的新鲜身份验证要求；没有有效会话时它可通过首次登录满足，已有 Valid Principal Session 时 IAM 不再次执行身份验证，而以 `login_required` 终止本次授权。任意登录页 query 或 Custom SSO 参数不构成该要求。
+OIDC Client 对当前授权请求提出、并由 OIDC 验证和绑定到 Authentication Continuation 的新鲜身份验证要求；没有有效会话时它可通过首次登录满足，已有有效 UserSession 时 IAM 不再次执行身份验证，而以 `login_required` 终止本次授权。任意登录页 query 或 Custom SSO 参数不构成该要求。
 _Avoid_: force-login query, repeated login, session refresh
 
 **Temporary Login Restriction**:
@@ -430,5 +444,5 @@ _Avoid_: restriction cause, failure breakdown
 _Avoid_: trusted device, device identity, device fingerprint
 
 **Session Revocation**:
-使明确撤销的 IAM 会话对象不再被 IAM 接受的终止操作；根会话撤销成功不承诺全部派生 Credential 已失效。它不阻止未来登录，外围清理失败不会恢复已撤销对象的有效性，第三方自行建立的本地会话不在其保证范围内。
+使明确捕获的 UserSession 或 ClientSession 不再被 IAM 接受的终止操作；Token 使用验证根与应用关系，旁路协议清理失败不会恢复已终止关系。它不阻止未来登录，不保证第三方自行建立的本地会话退出。
 _Avoid_: guaranteed third-party logout, reversible logout

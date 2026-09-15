@@ -1,13 +1,13 @@
 # IAM (Identity and Access Management) Monorepo
 
-基于 pnpm workspace + Turborepo 的身份与访问管理平台。仓库包含公共 IAM API、管理端 API、OIDC Provider、
+基于 pnpm workspace + Turborepo 的身份与访问管理平台。仓库包含公共 IAM API、管理端 API、
 后台 worker、管理后台前端和 SSO 门户前端，并把数据库层、API 基础设施、领域 DTO、队列和跨端契约拆分为
 独立 workspace package。
 
 ## ✨ 特性
 
 - **Monorepo 一体化开发**：pnpm workspace 管理依赖，Turborepo 编排开发、构建和检查任务
-- **服务分层**：`apps/api` 承载 public/open/internal/sso/auth 等公共能力，`apps/admin-api` 承载 admin REST 与管理端 tRPC，`apps/oidc-provider` 承载标准 OIDC 协议面，`apps/worker` 承载后台队列消费和运维面板
+- **服务分层**：`apps/api` 承载 public/open/internal/sso/auth 等公共能力，`apps/admin-api` 承载 admin REST 与管理端 tRPC，API 同时承载标准 OIDC 协议面，`apps/worker` 承载后台队列消费和运维面板
 - **共享包拆分**：`packages/db` 提供 Drizzle schema/relations/client/migrations，`packages/api-core` 提供 Hono/OpenAPI/tRPC/Redis/Session Kernel/日志/中间件等基础设施，`packages/contracts` 提供跨端共享枚举和稳定契约，`packages/domain` 提供共享 DTO、审计 helper 和业务错误，`packages/jobs` 与 `packages/user-profile-read-model` 提供 BullMQ 队列与用户档案读模型能力
 - **类型安全调用**：管理后台通过 `@trpc/client` 消费 `@iam/admin-api/trpc` 暴露的 `AppRouter` 类型
 - **声明式后端装配**：API 后端的 `app.config.ts` 声明 API tier，app-local composition root materialize 路由和 tier 中间件，再交给 `@iam/api-core` 挂载
@@ -49,17 +49,6 @@ iam-service/
 │   │   ├── src/services/            # 页面侧服务封装
 │   │   ├── src/models/              # Umi Max model
 │   │   ├── .umirc.ts                # 路由、base、proxy 配置
-│   │   └── .env.example
-│   ├── oidc-provider/               # Node.js OIDC Provider（@iam/oidc-provider）
-│   │   ├── src/
-│   │   │   ├── composition/         # Provider/http/repository/session/store/worker 装配
-│   │   │   ├── provider/            # oidc-provider 配置与事件处理
-│   │   │   ├── session/             # Session Kernel 适配
-│   │   │   ├── storage/             # OIDC adapter 存储
-│   │   │   ├── stores/              # Redis/DB-backed store
-│   │   │   ├── app.ts
-│   │   │   └── env.ts
-│   │   ├── Dockerfile
 │   │   └── .env.example
 │   ├── worker/                      # 后台任务 runtime（@iam/worker）
 │   │   ├── src/
@@ -117,9 +106,7 @@ API 后端公共装配逻辑在 `packages/api-core/src/core/`。`apps/api` 和 `
 `createApp` 只负责按 app config 的 tier/basePath 挂载这些记录并配置 OpenAPI/Scalar、请求日志和错误处理，不再在
 app 入口里创建 app-specific DI 实例。
 
-`apps/oidc-provider` 不走 Hono tier 模型；它是 Node.js 24 + `oidc-provider` 应用，通过 `src/composition/`
-装配 provider、HTTP server、session、repositories 和 stores。`apps/worker` 是 Bun 后台任务 runtime，通过
-`IAM_WORKER_ENABLED_MODULES` 选择模块，当前模块为 `user-profile`，并可开启 health endpoint 和 Bull Board。
+OIDC 由 API composition 装配 `@iam/oidc`，HTTP adapter 保持外部 `/oidc` issuer/path，随 API 共享资源和关闭生命周期。
 
 ### 共享包职责
 
@@ -132,12 +119,12 @@ app 入口里创建 app-specific DI 实例。
 
 ## 🛠️ 技术栈
 
-### 后端（`apps/api`、`apps/admin-api`、`apps/oidc-provider`、`apps/worker`）
+### 后端（`apps/api`、`apps/admin-api`、`apps/worker`）
 
-- **运行时**：`apps/api`、`apps/admin-api` 和 `apps/worker` 使用 Bun；`apps/oidc-provider` 使用 Node.js 24
+- **运行时**：`apps/api`、`apps/admin-api` 和 `apps/worker` 使用 Bun
 - **Web 框架**：Hono + `@hono/zod-openapi`（API 后端与 worker HTTP）
 - **RPC**：tRPC v11（管理端 tRPC 位于 `apps/admin-api`）
-- **OIDC**：Node.js 24 + `oidc-provider` 9
+- **OIDC**：API + `@iam/oidc`
 - **后台任务**：Bun + BullMQ worker，Bull Board 作为可选运维面板
 - **API 文档**：Scalar UI + OpenAPI 3.1
 - **数据库**：PostgreSQL + Drizzle ORM v1 / Drizzle Kit（集中在 `packages/db`）
@@ -166,7 +153,7 @@ app 入口里创建 app-specific DI 实例。
 ### 环境要求
 
 - Bun 1.x
-- Node.js 24.x（OIDC Provider、前端构建镜像和部分工具链使用）
+- Node.js 24.x（前端构建镜像和部分工具链使用）
 - pnpm 11.x（根 `packageManager` 当前为 `pnpm@11.14.0`）
 - PostgreSQL（本地 compose 使用 `postgres:18`）
 - Redis
@@ -189,7 +176,7 @@ docker compose -f docker/docker-compose-dev.yml up -d db redis
 `localhost:6390`。如果在宿主机直接运行 Bun 服务，本地环境变量请按应用使用
 `IAM_API_REDIS_HOST=localhost` / `IAM_API_REDIS_PORT=6390`、
 `IAM_ADMIN_API_REDIS_HOST=localhost` / `IAM_ADMIN_API_REDIS_PORT=6390`、
-`IAM_OIDC_PROVIDER_REDIS_HOST=localhost` / `IAM_OIDC_PROVIDER_REDIS_PORT=6390` 或
+
 `IAM_WORKER_REDIS_HOST=localhost` / `IAM_WORKER_REDIS_PORT=6390`。
 
 ### 配置环境变量
@@ -198,7 +185,6 @@ docker compose -f docker/docker-compose-dev.yml up -d db redis
 cp packages/db/.env.example packages/db/.env
 cp apps/api/.env.example apps/api/.env
 cp apps/admin-api/.env.example apps/admin-api/.env
-cp apps/oidc-provider/.env.example apps/oidc-provider/.env
 cp apps/worker/.env.example apps/worker/.env
 cp apps/admin/.env.example apps/admin/.env.local
 cp apps/sso/.env.example apps/sso/.env.local
@@ -242,7 +228,7 @@ pnpm dev
 
 - 公共 API：<http://localhost:30000>
 - 管理端 API：<http://localhost:30001>
-- OIDC Provider 直连：默认 <http://localhost:30002>，Docker dev 宿主机端口为 <http://localhost:30015>
+- OIDC：由公共 API 提供 `/oidc`，外部 issuer 使用 Gateway 地址。
 - Worker dashboard：Docker dev 宿主机端口默认 <http://localhost:30016/admin/queues>（需启用 Bull Board）
 - 公共 API Scalar 文档：<http://localhost:30000>
 - 管理端 API Scalar 文档：<http://localhost:30001>
@@ -254,7 +240,6 @@ pnpm dev
 ```bash
 pnpm --filter @iam/api dev
 pnpm --filter @iam/admin-api dev
-pnpm --filter @iam/oidc-provider dev
 pnpm --filter @iam/worker dev
 pnpm --filter @iam/admin dev
 pnpm --filter @iam/sso dev
@@ -310,17 +295,6 @@ pnpm --filter @iam/admin-api lint
 pnpm --filter @iam/admin-api lint:fix
 pnpm --filter @iam/admin-api test
 pnpm --filter @iam/admin-api typecheck
-```
-
-### OIDC Provider
-
-```bash
-pnpm --filter @iam/oidc-provider dev
-pnpm --filter @iam/oidc-provider serve
-pnpm --filter @iam/oidc-provider lint
-pnpm --filter @iam/oidc-provider lint:fix
-pnpm --filter @iam/oidc-provider test
-pnpm --filter @iam/oidc-provider typecheck
 ```
 
 ### Worker
@@ -472,14 +446,12 @@ Playwright Chromium 系统依赖时，preflight 会提示运行 `pnpm e2e:instal
 | `IAM_API_LOGIN_CREDENTIAL_MAX_SKEW_MS` | 密码登录凭证时间戳允许偏差（毫秒）       | `300000`           |
 | `IAM_API_LOGIN_CREDENTIAL_NONCE_TTL_SECONDS` | 密码登录 nonce 防重放 TTL（秒）   | `360`              |
 | `IAM_API_SESSION_KERNEL_NAMESPACE` | Session Kernel Redis key namespace           | `sess:v2:`         |
-| `IAM_API_SESSION_KERNEL_PRINCIPAL_IDLE_TTL_SECONDS` | PrincipalSession idle TTL（秒） | `86400` |
-| `IAM_API_SESSION_KERNEL_PRINCIPAL_ABSOLUTE_TTL_SECONDS` | PrincipalSession absolute TTL（秒） | `86400` |
-| `IAM_API_SESSION_KERNEL_TOMBSTONE_TTL_SECONDS` | Session Kernel tombstone 保留时间（秒） | `86400` |
-| `IAM_API_SESSION_KERNEL_TOMBSTONE_GRACE_SECONDS` | Session Kernel tombstone grace 时间（秒） | `300` |
 | `IAM_API_WECHAT_CORP_ID` / `IAM_API_WECHAT_CORP_SECRET` | 企业微信配置             | 必填               |
 | `IAM_API_SMS_URL` / `IAM_API_SMS_SIGNATURE_KEY` | 短信服务配置                    | 必填               |
 | `IAM_API_ORCAS_URL`             | ORCAS 服务地址                                   | 必填               |
-| `IAM_API_SESSION_DEFAULT_TTL_SECONDS` | Redis 默认过期时间（秒）                  | `86400`            |
+| `IAM_API_USER_SESSION_TTL_SECONDS` | UserSession 固定根期限（秒） | `86400` |
+| `IAM_API_CLIENT_SESSION_TTL_SECONDS` | ClientSession 独立期限（秒），两协议共用并受根上限裁剪 | `86400` |
+| `IAM_API_CUSTOM_SSO_TOKEN_TTL_SECONDS` | Custom Token 自身签发期限（秒），不替代两类会话 TTL | `86400` |
 | `IAM_API_AUTH_CODE_TTL_SECONDS` | 授权码过期时间（秒）                             | `300`              |
 | `IAM_API_CUSTOM_SSO_PROJECTION_RETRY_AFTER_SECONDS` | Custom SSO Subject Access 或 Projection 暂不可用时的建议重试秒数 | `3` |
 | `IAM_API_LOGIN_ENDPOINT`        | 登录端点                                         | `/portal/login`    |
@@ -511,34 +483,13 @@ Playwright Chromium 系统依赖时，preflight 会提示运行 `pnpm e2e:instal
 | `IAM_ADMIN_API_PASSWORD_HASH_ROUNDS` | 密码哈希轮数                        | `10`               |
 | `IAM_ADMIN_API_ADMIN_CLIENT_CODES` | 允许访问管理端 API 的 client code，逗号分隔 | `iam-admin` |
 | `IAM_ADMIN_API_SESSION_KERNEL_NAMESPACE` | Session Kernel Redis key namespace；需与公共 API 一致 | `sess:v2:` |
-| `IAM_ADMIN_API_SESSION_KERNEL_PRINCIPAL_IDLE_TTL_SECONDS` | PrincipalSession idle TTL（秒） | `86400` |
-| `IAM_ADMIN_API_SESSION_KERNEL_PRINCIPAL_ABSOLUTE_TTL_SECONDS` | PrincipalSession absolute TTL（秒） | `86400` |
-| `IAM_ADMIN_API_SESSION_KERNEL_TOMBSTONE_TTL_SECONDS` | Session Kernel tombstone 保留时间（秒） | `86400` |
-| `IAM_ADMIN_API_SESSION_KERNEL_TOMBSTONE_GRACE_SECONDS` | Session Kernel tombstone grace 时间（秒） | `300` |
 
-### OIDC Provider（`apps/oidc-provider/.env`）
+### API OIDC 配置
 
-以 `apps/oidc-provider/.env.example` 和 `apps/oidc-provider/src/env.ts` 为准。关键变量包括：
-
-| 变量名 | 说明 | 默认值/示例 |
-| --- | --- | --- |
-| `IAM_OIDC_PROVIDER_DATABASE_URL` | PostgreSQL 连接字符串 | `postgresql://...` |
-| `IAM_OIDC_PROVIDER_REDIS_HOST` / `IAM_OIDC_PROVIDER_REDIS_PORT` / `IAM_OIDC_PROVIDER_REDIS_DB` | Redis 连接配置 | `localhost` / `6379` / `0` |
-| `IAM_OIDC_PROVIDER_PORT` | 容器内监听端口；Docker dev 映射到宿主机 `30015` | `30002` |
-| `IAM_OIDC_PROVIDER_ISSUER` | 对外 issuer，必须以 `/oidc` 结尾 | `http://localhost:30080/oidc` |
-| `IAM_OIDC_PROVIDER_PUBLIC_ORIGIN` | 对外 origin，必须与 issuer origin 一致且不带 path | `http://localhost:30080` |
-| `IAM_OIDC_PROVIDER_COOKIE_KEYS` | 至少两个逗号分隔的 cookie key，每个至少 32 字符 | 必填 |
-| `IAM_OIDC_PROVIDER_CURRENT_JWK_JSON` / `IAM_OIDC_PROVIDER_PREVIOUS_JWK_JSON` | current/previous RS256 private JWK | 必填 / 可选 |
-| `IAM_OIDC_PROVIDER_*_TTL_SECONDS` | global session、authorization code、interaction、access token、ID token、client cache TTL | 见 `.env.example` |
-| `IAM_OIDC_PROVIDER_CLIENT_AUTH_FAILURE_LIMIT` / `IAM_OIDC_PROVIDER_CLIENT_AUTH_FAILURE_WINDOW_SECONDS` | client 认证失败限流配置 | `5` / `60` |
-| `IAM_OIDC_PROVIDER_SESSION_KERNEL_*` | Session Kernel namespace 与生命周期期限；需与 API/admin-api 协调 | 见 `.env.example` |
-
-Principal Session、Credential 和 Protocol Artifact 以原始 token 的普通 SHA-256 直接定位同一 active/revoked 状态，
-内部 ID 通过反向定位用于管理；无 token Binding 仍按 ID。Kernel lookup HMAC 的 current/previous 配置、
-`*_SESSION_LOOKUP_HMAC_*` 环境变量及轮换已退役，当前启动不需要定位密钥。OIDC Cookie/JWT 签名和 Client Secret 保留。
-包含此改造的候选按[全体下线手册](docs/releases/online-auth-redis-time-cutover.md)统一切换并重新登录；
-运行时与证据边界见[运行时契约](docs/features/sso/token-state-runtime-evidence.md)，最终核对见[最终账本](docs/features/sso/token-state-contract.md)，目标环境未切换。
-
+`IAM_API_OIDC_ISSUER`、`IAM_API_OIDC_PUBLIC_ORIGIN` 与 `IAM_API_OIDC_CURRENT_JWK_JSON` 必填；previous JWK 可选。
+完整 TTL、namespace、secure Cookie 与登录路径见 [API env](apps/api/.env.example)。旧 Provider env/镜像/Cookie keys 已退役。
+API/Admin 共用 Kernel namespace 和固定根期限；旧 idle/absolute/tombstone 配置已移除。
+首次升级按[统一维护手册](docs/releases/unified-session-maintenance.md)，环境尚未切换。
 ### Worker（`apps/worker/.env`）
 
 以 `apps/worker/.env.example` 和 `apps/worker/src/env.ts` 为准。关键变量包括：
@@ -624,7 +575,6 @@ pnpm install --frozen-lockfile
 pnpm --filter @iam/db db:migrate
 pnpm --filter @iam/api serve
 pnpm --filter @iam/admin-api serve
-pnpm --filter @iam/oidc-provider serve
 pnpm --filter @iam/worker serve
 ```
 
@@ -644,7 +594,7 @@ pnpm --filter @iam/sso build
 
 - `/public`、`/open`、`/internal`、`/sso`、`/auth` 代理到公共 API 服务
 - `/admin`、`/rpc` 代理到管理端 API 服务
-- `/oidc` 代理到 Node.js OIDC Provider，并保留外部 Host 与协议转发头
+- `/oidc` 代理到 API，并保留外部 Host 与协议转发头
 
 ### Docker
 
@@ -653,12 +603,10 @@ pnpm --filter @iam/sso build
 ```bash
 docker build -f apps/api/Dockerfile -t iam-api .
 docker build -f apps/admin-api/Dockerfile -t iam-admin-api .
-docker build -f apps/oidc-provider/Dockerfile -t iam-oidc-provider .
 docker build -f apps/worker/Dockerfile -t iam-worker .
 
 docker run --rm -p 30000:30000 --env-file apps/api/.env iam-api
 docker run --rm -p 30001:30001 --env-file apps/admin-api/.env iam-admin-api
-docker run --rm -p 30002:30002 --env-file apps/oidc-provider/.env iam-oidc-provider
 docker run --rm -p 30003:30003 --env-file apps/worker/.env iam-worker
 ```
 
@@ -675,12 +623,12 @@ docker compose -f docker/docker-compose-dev.yml up -d
 ```
 
 `docker/docker-compose-dev.yml` 是唯一的开发编排入口，会同时编排 PostgreSQL、Redis、APISIX、公共 API、
-管理端 API、OIDC Provider、worker-user-profile、worker-dashboard、SSO 前端和管理端前端。开发环境变量模板在
+管理端 API、worker-user-profile、worker-dashboard、SSO 前端和管理端前端。开发环境变量模板在
 `docker/.env.dev.example`，复制为 `docker/.env` 后按需替换本地端口、代理、第三方服务和开发密钥。
 如需同时启动 Loki、Grafana 和 Alloy，追加 `--profile observability`。
 
 ```bash
-docker compose -f docker/docker-compose-dev.yml up -d --build oidc-provider apisix-etcd apisix
+docker compose -f docker/docker-compose-dev.yml up -d --build api apisix-etcd apisix
 pnpm gateway:apisix:validate -- --env dev:iam
 pnpm gateway:apisix:diff -- --env dev:iam --env-file .env
 ```
@@ -691,7 +639,7 @@ pnpm gateway:apisix:diff -- --env dev:iam --env-file .env
 `127.0.0.1` 在宿主机 `NO_PROXY` 中。Gateway CLI 的 APISIX Admin API 地址和 key 配置在
 `gateway/.env`，模板见 `gateway/.env.example`；通过 `pnpm gateway:apisix:*` 执行时，`--env-file .env`
 会解析到 gateway package 目录下的 `.env`。生产模板还包含
-OIDC Provider 和 Worker，使用前必须补齐 issuer、current/previous RS256 JWK、cookie keys、Redis、worker
+API OIDC 和 Worker，使用前必须补齐 issuer、current/previous RS256 JWK、Redis、worker
 dashboard 凭据和限流参数。
 
 OIDC 接入见 [docs/features/oidc/oidc-integration.md](docs/features/oidc/oidc-integration.md)，发布与回滚见
@@ -699,11 +647,11 @@ OIDC 接入见 [docs/features/oidc/oidc-integration.md](docs/features/oidc/oidc-
 
 ## 🔧 调试与排障
 
-- 日志：`IAM_API_LOG_LEVEL`、`IAM_ADMIN_API_LOG_LEVEL` 或 `IAM_OIDC_PROVIDER_LOG_LEVEL` 控制 Pino 输出级别
+- 日志：`IAM_API_LOG_LEVEL`、`IAM_ADMIN_API_LOG_LEVEL` 控制 Pino 输出级别
 - API 调试：开发环境分别访问 <http://localhost:30000> 和 <http://localhost:30001>
 - 数据调试：Drizzle Kit 命令或直接连接本地 PostgreSQL
 - 前端代理：查看 `apps/admin/.umirc.ts` 和 `apps/sso/.umirc.ts`
-- 测试：`pnpm test` 等价于 `pnpm test:unit`；Integration 按 profile 显式运行；前端和 OIDC Provider 使用 Vitest，Playwright mock-browser 测试通过 `pnpm test:integration:browser` 执行
+- 测试：`pnpm test` 等价于 `pnpm test:unit`；Integration 按 profile 显式运行；前端使用 Vitest，API OIDC 使用 Bun/Playwright，Playwright mock-browser 测试通过 `pnpm test:integration:browser` 执行
 - 类型检查：`pnpm typecheck`
 
 ## 🤝 贡献指南

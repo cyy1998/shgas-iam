@@ -2,11 +2,7 @@ import {
   ClientAdminDetailDtoSchema,
   ClientAdminListDtoSchema,
   ClientCreateDtoSchema,
-  ClientCustomSsoConfigureDtoSchema,
-  ClientCustomSsoMutationResultSchema,
   ClientInputDtoSchema,
-  ClientOidcConfigureDtoSchema,
-  ClientOidcMutationResultSchema,
   ClientPaginationQueryDtoSchema,
   ClientStatusUpdateDtoSchema,
   ClientUpdateDtoSchema,
@@ -104,102 +100,6 @@ export const clientDelete = createRoute({
     [HttpStatusCodes.OK]: jsonContent(createSuccessResponseSchema(createAdminMutationResultSchema(z.null())), "软删除成功"),
   },
 });
-
-export const clientOidcConfigure = createRoute({
-  method: "put",
-  path: "/:clientCode/oidc/configure",
-  tags,
-  request: {
-    params: z.object({ clientCode: z.string() }),
-    body: jsonContentRequired(ClientOidcConfigureDtoSchema, "OIDC 配置"),
-  },
-  responses: {
-    ...commonErrorResponses,
-    [HttpStatusCodes.OK]: jsonContent(
-      createSuccessResponseSchema(ClientOidcMutationResultSchema),
-      "OIDC 配置成功",
-    ),
-  },
-});
-
-function createClientProtocolActionRoute<T extends z.ZodSchema>(
-  path: string,
-  description: string,
-  resultSchema: T,
-) {
-  return createRoute({
-    method: "post",
-    path,
-    tags,
-    request: { params: z.object({ clientCode: z.string() }) },
-    responses: {
-      ...commonErrorResponses,
-      [HttpStatusCodes.OK]: jsonContent(
-        createSuccessResponseSchema(resultSchema),
-        description,
-      ),
-    },
-  });
-}
-
-export const clientOidcEnable = createClientProtocolActionRoute(
-  "/:clientCode/oidc/enable",
-  "OIDC 启用成功",
-  ClientOidcMutationResultSchema,
-);
-export const clientOidcDisable = createClientProtocolActionRoute(
-  "/:clientCode/oidc/disable",
-  "OIDC 禁用成功",
-  ClientOidcMutationResultSchema,
-);
-export const clientOidcRemove = createClientProtocolActionRoute(
-  "/:clientCode/oidc/remove",
-  "OIDC 配置移除成功",
-  ClientOidcMutationResultSchema,
-);
-export const clientOidcRotateSecret = createClientProtocolActionRoute(
-  "/:clientCode/oidc/rotate-secret",
-  "OIDC secret 轮换成功",
-  ClientOidcMutationResultSchema,
-);
-
-export const clientCustomSsoConfigure = createRoute({
-  method: "put",
-  path: "/:clientCode/custom-sso/configure",
-  tags,
-  request: {
-    params: z.object({ clientCode: z.string() }),
-    body: jsonContentRequired(ClientCustomSsoConfigureDtoSchema, "Custom SSO 配置"),
-  },
-  responses: {
-    ...commonErrorResponses,
-    [HttpStatusCodes.OK]: jsonContent(
-      createSuccessResponseSchema(ClientCustomSsoMutationResultSchema),
-      "Custom SSO 配置成功",
-    ),
-  },
-});
-
-export const clientCustomSsoEnable = createClientProtocolActionRoute(
-  "/:clientCode/custom-sso/enable",
-  "Custom SSO 启用成功",
-  ClientCustomSsoMutationResultSchema,
-);
-export const clientCustomSsoDisable = createClientProtocolActionRoute(
-  "/:clientCode/custom-sso/disable",
-  "Custom SSO 禁用成功",
-  ClientCustomSsoMutationResultSchema,
-);
-export const clientCustomSsoRemove = createClientProtocolActionRoute(
-  "/:clientCode/custom-sso/remove",
-  "Custom SSO 配置移除成功",
-  ClientCustomSsoMutationResultSchema,
-);
-export const clientCustomSsoRotateSecret = createClientProtocolActionRoute(
-  "/:clientCode/custom-sso/rotate-secret",
-  "Custom SSO secret 轮换成功",
-  ClientCustomSsoMutationResultSchema,
-);
 
 export const clientCreateLegacy = createRoute({
   method: "post",

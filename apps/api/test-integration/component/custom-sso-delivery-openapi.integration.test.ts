@@ -1,78 +1,87 @@
-import { createAuthHandlers } from "@api/routes/auth/auth.handlers";
-import { createAuthRoute } from "@api/routes/auth/auth.index";
-import { createPublicHandlers } from "@api/routes/public/public.handlers";
-import { createPublicRoute } from "@api/routes/public/public.index";
+import type { SubjectAccessOperation } from "@iam/api-core/subject-access";
+import { createRootAuthenticationComposition } from "@api/composition/root-authentication";
 import createApp from "@iam/api-core/core/create-app";
 import { defineConfig } from "@iam/api-core/core/define-config";
+import { requireSubjectAccessOperation } from "@iam/api-core/subject-access";
 import { ApiErrorCode } from "@iam/contracts";
-import { describe, expect, mock, test } from "bun:test";
+import { createUnifiedSessionKernel } from "@iam/session-kernel";
+import { describe, expect, test } from "bun:test";
 import pino from "pino";
 
 const CUSTOM_SSO_SESSION_AUTHORIZATION_SECURITY_SCHEME
   = "CustomSsoSessionAuthorization";
 
+function unexpectedDependencyCall(): never {
+  throw new Error("OpenAPI and missing-header validation must not access backing services");
+}
+
 function createContractApp() {
   const logger = pino({ enabled: false });
-  const authHandlers = createAuthHandlers({
-    authentication: {
-      loginWithMobile: {
-        execute: mock(async () => ({
-          isMobileSet: true,
-          token: "principal-session",
-        })),
-      },
-      loginWithPassword: {
-        execute: mock(async () => ({
-          isMobileSet: true,
-          token: "principal-session",
-        })),
-      },
-    },
-    clientService: {
-      getClientBySecret: mock(async () => null),
-    },
-    localSessionAuthorizer: {
-      authorizeLocalSession: mock(async () => "base64-subject"),
-    },
-    loginCredentialParser: {
-      parseLoginPasswordCredential: mock(async () => ({
-        password: "password",
-        username: "username",
-      })),
-    },
+  const redis = { eval: unexpectedDependencyCall };
+  const composition = createRootAuthenticationComposition({
+    kernel: createUnifiedSessionKernel<SubjectAccessOperation>({
+      redis,
+      namespace: "openapi-test",
+      userSessionTtlSeconds: 3600,
+      clientSessionTtlSeconds: 3600,
+      assertOperationActive: requireSubjectAccessOperation,
+    }),
+    barrier: { readCommittedTransitionId: unexpectedDependencyCall },
+    clients: { acquire: unexpectedDependencyCall },
+    subjectFacts: { read: unexpectedDependencyCall },
+    internalClients: { getClientBySecret: unexpectedDependencyCall },
+    internalAuthzLogger: logger,
+    loginCredentialParser: { parseLoginPasswordCredential: unexpectedDependencyCall },
     logger,
-    config: {
-      projectionRetryAfterSeconds: 3,
-      redisExpireSeconds: 3600,
+    config: { projectionRetryAfterSeconds: 3, redisExpireSeconds: 3600, loginEndpoint: "/login" },
+    customSso: {
+      redis,
+      namespace: "openapi-test",
+      codeTtlSeconds: 60,
+      continuationTtlSeconds: 60,
+      trustedIamOrigins: ["https://iam.example.test"],
+      managedCallbackUrls: ["https://iam.example.test/sso/callback"],
+    },
+    customSsoAccess: { tokenTtlSeconds: 3600, credentials: { authenticate: unexpectedDependencyCall } },
+    authentication: {
+      auditLogWriter: { recordAuditLog: unexpectedDependencyCall },
+      runtime: {
+        clock: { now: unexpectedDependencyCall },
+        config: { auth: { magicCode: "test" }, env: { nodeEnv: "test" } },
+        redis: { get: unexpectedDependencyCall, set: unexpectedDependencyCall, del: unexpectedDependencyCall },
+        integrations: { wechat: { getWxUserId: unexpectedDependencyCall } },
+      },
+      services: {
+        cap: { ensureActionAllowed: unexpectedDependencyCall },
+        client: { getClientByCode: unexpectedDependencyCall },
+        humanRisk: { recordLoginFailure: unexpectedDependencyCall },
+        loginRestriction: {
+          getRestriction: unexpectedDependencyCall,
+          clearLoginState: unexpectedDependencyCall,
+          recordFailure: unexpectedDependencyCall,
+        },
+        mobile: { consumeVerificationCode: unexpectedDependencyCall },
+        user: {
+          checkPassword: unexpectedDependencyCall,
+          getActiveUserByUsername: unexpectedDependencyCall,
+          getActiveUserByMobile: unexpectedDependencyCall,
+          getActiveUserByWxId: unexpectedDependencyCall,
+          getActiveUserById: unexpectedDependencyCall,
+          getUserDetailById: unexpectedDependencyCall,
+        },
+      },
+    },
+    publicServices: {
+      organizationService: { searchOrganizations: unexpectedDependencyCall },
+      userProfileSearch: { searchLegacyUsers: unexpectedDependencyCall },
+      userService: {
+        getActiveUserBySubjectIdentifier: unexpectedDependencyCall,
+        getUserDetailById: unexpectedDependencyCall,
+        setMobile: unexpectedDependencyCall,
+        setPassword: unexpectedDependencyCall,
+      },
     },
   });
-  const publicHandlers = createPublicHandlers({
-    organizationService: {
-      searchOrganizations: mock(async () => []),
-    },
-    subjectDeliveryRequests: {
-      resolveUserInfoForRequest: mock(async () => ({
-        version: 1 as const,
-        subjectIdentifier: "00000000-0000-4000-8000-000000001001",
-      })),
-    },
-    userService: {
-      getActiveUserBySubjectIdentifier: mock(async () => null),
-      getUserDetailById: mock(async () => {
-        throw new Error("not used");
-      }),
-      searchUsers: mock(async () => []),
-      setMobile: mock(async () => true),
-      setPassword: mock(async () => true),
-    },
-    userProfileSearch: {
-      searchLegacyUsers: mock(async () => []),
-    },
-    config: {
-      projectionRetryAfterSeconds: 3,
-    },
-  } as never);
-
   return createApp(defineConfig({
     prefix: "",
     openapi: { enabled: true, docEndpoint: "/doc" },
@@ -84,12 +93,8 @@ function createContractApp() {
     env: { NODE_ENV: "test" },
     logger,
     routes: {
-      "src/routes/auth/auth.index.ts": {
-        default: createAuthRoute(authHandlers),
-      },
-      "src/routes/public/public.index.ts": {
-        default: createPublicRoute(publicHandlers),
-      },
+      "src/routes/auth/auth.index.ts": { default: composition.routers.auth },
+      "src/routes/public/public.index.ts": { default: composition.routers.public },
     },
     middlewares: {},
   });
