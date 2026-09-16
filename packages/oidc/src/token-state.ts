@@ -4,6 +4,7 @@ import { OidcStateUnavailableError } from "./errors";
 import { digest, statePrefix } from "./state";
 
 export const tokenRecordSchema = z.object({
+  issuer: z.url(),
   version: z.literal(1),
   purpose: z.literal("oidc_access"),
   id: z.uuid(),

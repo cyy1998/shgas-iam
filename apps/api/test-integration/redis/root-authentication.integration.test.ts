@@ -354,7 +354,7 @@ async function fixture(codeTtlSeconds = 30, networkUrl?: string, tokenTtlSeconds
     config: {
       redisExpireSeconds: 999,
       projectionRetryAfterSeconds: 3,
-      loginEndpoint: "https://iam.example/portal/login",
+      loginEndpoint: "/portal/login",
     },
     authentication: {
       auditLogWriter: {
@@ -479,6 +479,39 @@ test("the protocol fixture requires its dedicated Redis URL before creating stat
   }
 });
 
+test.each(["https://internal.example", "https://public.example"])("Custom login stays on entry %s and preserves its configured public managed callback", async (origin) => {
+  const f = await fixture();
+  try {
+    f.setClient({
+      ...f.getClient(),
+      ssoConfig: {
+        protocol: ClientSsoProtocol.CustomSso,
+        callbackEndpoint: "https://iam.example/sso/callback",
+        validRedirectUrls: ["https://app.example/callback"],
+        subjectClaims: [SubjectClaim.SubjectIdentifier],
+      },
+    });
+    const response = await f.app.request(`${origin}/sso/authorize?client=iam&redirectUrl=https://app.example/callback`);
+    expect(response.status).toBe(302);
+    const location = response.headers.get("Location")!;
+    expect(location).toStartWith("/portal/login?");
+    const login = new URL(location, origin);
+    expect(login.origin).toBe(origin);
+    const binding = /custom_sso_continuation=([^;]+)/u.exec(response.headers.get("set-cookie")!)![1];
+    const token = await f.login();
+    const resumed = await f.app.request(`${origin}/sso/authorize?${login.searchParams}`, {
+      headers: { Cookie: `global_session=${token}; custom_sso_continuation=${binding}` },
+    });
+    expect(resumed.status).toBe(302);
+    const callback = new URL(resumed.headers.get("Location")!);
+    expect(callback.origin + callback.pathname).toBe("https://iam.example/sso/callback");
+    expect(callback.searchParams.get("redirectUrl")).toBe("https://app.example/callback");
+  }
+  finally {
+    await f.scope.close();
+  }
+});
+
 test("Custom candidate accepts browser-bound continuation, preserves original callback and redirect after edits", async () => {
   const f = await fixture();
   try {
@@ -489,7 +522,8 @@ test("Custom candidate accepts browser-bound continuation, preserves original ca
     });
     const start = await f.app.request(`/sso/authorize?${query}`);
     expect(start.status).toBe(302);
-    const login = new URL(start.headers.get("location")!);
+    expect(start.headers.get("location")).toStartWith("/portal/login?");
+    const login = new URL(start.headers.get("location")!, "https://internal.example");
     const binding = /custom_sso_continuation=([^;]+)/u.exec(start.headers.get("set-cookie")!)![1];
     expect(login.searchParams.has("token")).toBe(false);
     expect(login.searchParams.get("ssoReturn")).toHaveLength(43);

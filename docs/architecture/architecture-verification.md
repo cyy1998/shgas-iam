@@ -46,6 +46,7 @@ Admin/SSO 前端、`api-core`、`domain`、`contracts`、`db`、`jobs`、Gateway
 | 最终 DB 收缩 | [DB gate](../../packages/db/test-integration/postgres/client-sso-contraction.integration.test.ts)、[Worker CLI](../../apps/worker/test-integration/postgres/client-sso-contraction-command.integration.test.ts) | 拒绝未迁移旧记录、真实旧 CLI apply/verify 后允许 DDL、安全投影、非目标业务保留及最终 schema 拒绝旧升级命令。 |
 | 离线维护 | [Worker Redis CLI](../../apps/worker/test-integration/redis/online-state-command.integration.test.ts) | 新进程 inventory/apply/verify、全部来源模型/索引、特殊 Client、非目标、ACL、部分失败重跑；历史真实 Provider writer 证据在统一维护手册固定 SHA。 |
 | 代表系统旅程 | 根 `pnpm test:e2e`：[Admin](../../e2e/system/admin-custom-sso.spec.ts)、[HR](../../e2e/system/hr-admin-user-management.spec.ts)、[OIDC](../../e2e/system/oidc-pkce.spec.ts) | 同一临时 PG/Redis/APISIX 与全部正式 runtime；不证明真实外部集成或目标环境切换。 |
+| 双入口联合验收 | [双hostname浏览器](../../e2e/system/dual-entry.spec.ts)、[独立RP](../../apps/api/test-integration/composition/oidc-rp.integration.test.ts)、[旧来源演练](../../apps/api/test-integration/composition/dual-entry-upgrade.fixture.ts) | 正式APISIX与独立same-origin场景、两issuer协议、固定旧HTTP writer→三Worker全清→新拒绝及非目标保留；suite逐模块、实际命令与发布边界见[完整账本](../features/sso/dual-entry-acceptance.md)。 |
 
 旧 Kernel 四对象、Provider、配置版本和旧 Snapshot/Gate 测试随被替代模型删除；其仍成立的行为分别由上表
 会话/协议/配置/账号/维护最高入口承接。历史 schema/旧 writer 证明不能冒称在最终候选重跑。

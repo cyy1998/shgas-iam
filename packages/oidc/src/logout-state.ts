@@ -6,6 +6,7 @@ import { OidcReturnHandleSchema } from "./wire";
 
 export const logoutRecordSchema = z
   .object({
+    issuer: z.url(),
     version: z.literal(1),
     clientId: z.string().min(1).nullable(),
     hint: z

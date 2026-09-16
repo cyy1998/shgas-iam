@@ -6,6 +6,7 @@ import { expireCustomSsoCookies } from "@api/services/sso/transport/custom-sso-c
 import * as HttpStatusCodes from "@iam/api-core/core/http-status-codes";
 import * as resp from "@iam/api-core/http";
 import { createSubjectAccessHttpAdapter } from "@iam/api-core/subject-access";
+import { appendNavigationParameters } from "@iam/contracts";
 import { getCookie, setCookie } from "hono/cookie";
 
 export function createUnifiedAuthorizationHandlers(deps: {
@@ -57,7 +58,7 @@ export function createUnifiedAuthorizationHandlers(deps: {
       });
       if (data.state !== undefined)
         query.set("state", data.state);
-      return c.redirect(`${deps.loginEndpoint}?${query}`);
+      return c.redirect(appendNavigationParameters(deps.loginEndpoint, query));
     }
     const callback = new URL(data.callbackEndpoint);
     callback.searchParams.set("client", data.clientCode);

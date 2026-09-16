@@ -27,6 +27,19 @@ describe('LoginPage', () => {
     withHumanVerification.mockReset();
   });
 
+  it.each(['', `?ssoReturn=${'a'.repeat(43)}`])(
+    'rejects a login entry without protocol context: %s',
+    async (query) => {
+      window.history.replaceState({}, '', `/portal/login${query}`);
+      render(<LoginPage />);
+      expect(await screen.findByText('登录地址校验未通过')).toBeInTheDocument();
+      expect(
+        screen.queryByPlaceholderText('请输入您的工号'),
+      ).not.toBeInTheDocument();
+      expect(withHumanVerification).not.toHaveBeenCalled();
+    },
+  );
+
   it('shows a strong failure prompt when password login is rejected', async () => {
     withHumanVerification.mockRejectedValue(
       new ServiceError('账号或密码错误', ApiErrorCode.LoginFailed),

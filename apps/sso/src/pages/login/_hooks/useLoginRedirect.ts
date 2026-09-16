@@ -67,7 +67,9 @@ export function useLoginRedirect() {
     );
     if (ssoReturn !== undefined)
       authorizeUrl.searchParams.set('ssoReturn', ssoReturn);
-    window.location.replace(authorizeUrl.href);
+    window.location.replace(
+      `${authorizeUrl.pathname}${authorizeUrl.search}${authorizeUrl.hash}`,
+    );
   }, [authConfig, client, oidcReturn, redirectUrl, state, ssoReturn]);
 
   return {

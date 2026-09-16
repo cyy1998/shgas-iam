@@ -9,6 +9,7 @@ export interface OidcStateRedis {
 export const randomHandle = () => randomBytes(32).toString("base64url");
 export const digest = (value: string) => createHash("sha256").update(value).digest("hex");
 export const acceptedAuthorizationSchema = z.object({
+  issuer: z.url(),
   clientId: z.string().min(1),
   redirectUri: z.url(),
   scope: z.string().min(1),

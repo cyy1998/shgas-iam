@@ -173,7 +173,7 @@ test(
               IAM_API_USER_SESSION_TTL_SECONDS: "86400",
               IAM_API_CLIENT_SESSION_TTL_SECONDS: "3600",
               IAM_API_CUSTOM_SSO_TOKEN_TTL_SECONDS: "900",
-              IAM_API_LOGIN_ENDPOINT: "https://login.example/custom-entry",
+              IAM_API_LOGIN_ENDPOINT: "/custom-entry",
             }),
           });
           capture = createBoundedProcessLogCapture(child, { maxBytes: 128 * 1024 });
@@ -186,7 +186,7 @@ test(
           if (readiness.status !== 200)
             return undefined;
           const request = (path: string, init: RequestInit = {}) =>
-            fetch(`${origin}${path}`, { ...init, redirect: "manual", signal });
+            fetch(`${origin}${path}`, { ...init, headers: { "X-IAM-Entry-Network": "external", ...init.headers }, redirect: "manual", signal });
           async function authorize(client = custom, bearer = browser.bearer) {
             const response = await request(
               `/sso/authorize?${new URLSearchParams({ client, redirectUrl: redirectUri, state: "opaque-production-state" })}`,
@@ -215,10 +215,7 @@ test(
               `/sso/authorize?${new URLSearchParams({ client: custom, redirectUrl: redirectUri })}`,
             );
             expect(needsLogin.status).toBe(302);
-            const loginLocation = new URL(needsLogin.headers.get("location")!);
-            expect(`${loginLocation.origin}${loginLocation.pathname}`).toBe(
-              "https://login.example/custom-entry",
-            );
+            expect(needsLogin.headers.get("location")).toStartWith("/custom-entry?");
             const discovery = await request("/oidc/.well-known/openid-configuration");
             expect(await discovery.json()).toMatchObject({
               issuer: `${origin}/oidc`,

@@ -29,8 +29,12 @@ Token 请求必须包含原始 `redirect_uri`、authorization code 和匹配的 
 Confidential Basic 认证按 Client 与 IP 统计失败，首次失败开始 60 秒固定窗口，达到 5 次后正确 Secret 也暂时拒绝；
 成功兑换清除该 Client/IP 的失败计数。这个认证门槛拒绝时不消费 Code、不撤销会话。
 `IAM_API_OIDC_TRUST_PROXY` 默认 `true`，沿用受信代理部署的 `X-Forwarded-For` 首项；设为 `false` 或没有该头时使用连接地址，
-不以 `X-Real-IP` 或 `CF-Connecting-IP` 替代。门户入口使用 `IAM_API_LOGIN_ENDPOINT`，相对路径按 IAM 外部 origin 解析；
+不以 `X-Real-IP` 或 `CF-Connecting-IP` 替代。门户入口使用 `IAM_API_LOGIN_ENDPOINT`，仅接受安全根相对路径并保留当前 IAM 入口；旧绝对 URL 配置必须显式迁移。
 旧候选的 `IAM_API_OIDC_SSO_LOGIN_PATH` 已删除，不再保留两个不一致的登录入口配置。
+
+登录导航拒绝绝对 URL、协议相对 URL、反斜杠、控制字符及可改变 authority 的歧义路径。IAM 登录、续接、退出确认与默认
+退出成功页使用根相对导航；Portal 取得完整发现端点后先校验它属于当前入口，再构造相对授权/退出导航。Discovery 与
+Custom 配置发现仍返回完整协议地址；登记的业务回调与 Custom `callbackEndpoint` 保持完整配置，包括明确配置的跨入口 IAM 托管回调。
 
 ## Redirect URI
 

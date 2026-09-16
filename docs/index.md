@@ -66,6 +66,7 @@
 | [docs/adr/0033-trust-issued-credentials-without-principal-session-revalidation.md](adr/0033-trust-issued-credentials-without-principal-session-revalidation.md) | decision | Current | 2026-09-10 | 2026-10-31 | Accepted：Spec #163 由 #138 形成，采用 Credential 使用不查父、兑换仍查父、根撤销尽力级联；Custom SSO 不续根或凭据、签发裁剪到根期限；复用现有全体下线命令切换；#164–#167 已实现，#168 交付最终账本，环境未切换。 |
 | [docs/adr/0034-locate-token-state-records-directly.md](adr/0034-locate-token-state-records-directly.md) | decision | Current | 2026-09-10 | 2026-10-31 | Accepted：#137 三类对象以 SHA-256 直接定位、独立 ID 反向管理、同记录终态、pending 保留及全体下线切换；三类状态及 Kernel HMAC runtime 配置退役已落地；#175 维护已交付，#176 最终逐项账本与原始基线成本已记录；候选 gate/评审另记，环境未切换。 |
 | [docs/adr/0035-unify-user-and-client-session-lifecycles.md](adr/0035-unify-user-and-client-session-lifecycles.md) | decision | Current | 2026-09-15 | 2026-10-31 | Accepted：Q40 整体确认 Q34–Q39 的三段 Custom 业务 Code、认证/定位门槛及请求内有界失败撤销；交接记录见 #177，尚未实施或部署。 |
+| [docs/adr/0036-bind-oidc-to-internal-and-external-issuers.md](adr/0036-bind-oidc-to-internal-and-external-issuers.md) | decision | Current | 2026-09-16 | 2026-10-31 | Accepted：相对导航、固定配置回调、origin 派生 issuer、共享配置/密钥、相同 origin 合并、跨 issuer 兑换失败有界撤销及升级全体重新登录；维护者要求发布 Spec 并确认测试边界，尚未实施。 |
 | [docs/agents/code-investigation.md](agents/code-investigation.md) | agent-config | Current | 2026-09-05 | 2026-10-31 | 项目级 `code_researcher`/`deep_researcher` 的分层路由、只读调查、证据返回和 GitHub issue 外置记忆规则；运行配置以对应 TOML 为准。 |
 | [docs/agents/domain.md](agents/domain.md) | agent-config | Current | 2026-07-16 | 2026-10-31 | Engineering skills 的 single-context domain documentation 消费规则。 |
 | [docs/agents/issue-tracker.md](agents/issue-tracker.md) | agent-config | Current | 2026-09-10 | 2026-10-31 | `cyy1998/shgas-iam` GitHub Issues 的 spec、ticket、跨会话状态与 wayfinding 约定；设计提交、分支交接和 Spec 关闭沿用工作流。 |
@@ -93,7 +94,7 @@
 | [docs/features/oidc/oidc-operation-snapshots.md](features/oidc/oidc-operation-snapshots.md) | feature | Historical | 2026-09-15 | n/a | 固定旧候选的契约/证据；当前统一会话接线与操作见 ADR-0035 和统一维护手册。 |
 | [docs/features/oidc/oidc-session-migration.md](features/oidc/oidc-session-migration.md) | feature | Current | 2026-09-10 | 2026-09-30 | 三类 SHA-256 单状态/反向 ID、HMAC 配置退役与维护边界；#170 统一全体下线，旧保留流程仅适用固定旧候选。 |
 | [docs/features/oidc/online-auth-redis-time-contract.md](features/oidc/online-auth-redis-time-contract.md) | feature | Historical | 2026-09-15 | n/a | 旧候选契约与来源证据；当前由统一会话模型和维护手册替代。 |
-| [docs/features/oidc/protocol-conformance.md](features/oidc/protocol-conformance.md) | release-record | Historical | 2026-09-15 | n/a | #195 固定官方套件59项、独立openid-client八路径、逐项偏离/截图判读及临时环境记录；不代表官方认证或部署。 |
+| [docs/features/oidc/protocol-conformance.md](features/oidc/protocol-conformance.md) | release-record | Historical | 2026-09-15 | n/a | #195 固定官方套件59项历史矩阵；2026-09-16默认Browser输出清理使本地原日志/截图丢失，原结论不重写，不代表官方认证或部署。 |
 | [docs/features/organization-responsibility/hr-admin-management-design.md](features/organization-responsibility/hr-admin-management-design.md) | design | Current | 2026-09-07 | 2026-10-31 | 已实现：HR 双端 scoped 责任管理及直接命令统一结果、行锁与 no-op 意图审计；保留原 Full-system 验证及协调发布边界。 |
 | [docs/features/sso/artifact-direct-state-evidence.md](features/sso/artifact-direct-state-evidence.md) | feature | Current | 2026-09-10 | 2026-10-31 | #173 Artifact 单状态、唯一消费、协议及定向维护与成本证据；切片历史成本与当前行为分别记录，环境未切换。 |
 | [docs/features/sso/authentication-state-extraction.md](features/sso/authentication-state-extraction.md) | feature | Historical | 2026-09-15 | n/a | 旧候选契约与来源证据；当前由统一会话模型和维护手册替代。 |
@@ -107,6 +108,8 @@
 | [docs/features/sso/custom-sso-one-shot-grant-contract.md](features/sso/custom-sso-one-shot-grant-contract.md) | feature | Historical | 2026-09-15 | n/a | 旧候选契约与来源证据；当前由统一会话模型和维护手册替代。 |
 | [docs/features/sso/custom-sso-protocol-validation.md](features/sso/custom-sso-protocol-validation.md) | feature | Historical | 2026-09-15 | n/a | 旧候选契约与来源证据；当前由统一会话模型和维护手册替代。 |
 | [docs/features/sso/custom-sso-subject-projection-design.md](features/sso/custom-sso-subject-projection-design.md) | design | Historical | 2026-08-12 | n/a | 初代 Catalog V1 与 per-Client Catalog version 目标设计快照；相关决定已由 ADR-0016 取代，不代表当前实现。 |
+| [docs/features/sso/dual-entry-acceptance.md](features/sso/dual-entry-acceptance.md) | feature | Current | 2026-09-16 | 2026-10-31 | #200 的 S1–S64 逐项账本、真实双hostname APISIX/browser、两issuer固定suite/RP和固定旧writer全owner演练；候选验收与人工发布分开。 |
+| [docs/features/sso/dual-entry-login-design.md](features/sso/dual-entry-login-design.md) | design | Current | 2026-09-16 | 2026-10-31 | 已接受的双入口完整设计与测试边界；#198 导航已交付，#199 协议与配置已交付；#200 联合验收记录另列，升级清除全部 IAM 会话，环境未部署。 |
 | [docs/features/sso/login-page-reentry-guard.md](features/sso/login-page-reentry-guard.md) | design | Current | 2026-08-14 | 2026-09-30 | 已接受的登录页重入守卫设计；定义协议所有权、页面状态、OIDC 重新认证边界、验收与协调切换。 |
 | [docs/features/sso/principal-direct-state-evidence.md](features/sso/principal-direct-state-evidence.md) | feature | Current | 2026-09-10 | 2026-10-31 | #171 Principal 单状态、ID 管理与生命周期证据、根入口实际前后成本；切片历史成本与当前行为分别记录，环境未切换。 |
 | [docs/features/sso/protocol-validation-contract.md](features/sso/protocol-validation-contract.md) | feature | Historical | 2026-09-15 | n/a | 旧候选契约与来源证据；当前由统一会话模型和维护手册替代。 |
@@ -134,7 +137,7 @@
 | [docs/releases/custom-sso-subject-projection-rehearsal-2026-08-02.md](releases/custom-sso-subject-projection-rehearsal-2026-08-02.md) | release-record | Historical | 2026-08-02 | n/a | Ticket 12 的临时近似规模手动联合演练简洁记录；不包含机器 receipt/manifest/transcript。 |
 | [docs/releases/custom-sso-subject-projection-release.md](releases/custom-sso-subject-projection-release.md) | runbook | Historical | 2026-08-21 | n/a | 已由 strict V2 activation 取代；保留初代 Subject Projection 切换历史，不得执行其中已撤销命令。 |
 | [docs/releases/observability-system-logs.md](releases/observability-system-logs.md) | runbook | Current | 2026-09-15 | 2026-10-31 | Loki/Grafana/Alloy 系统日志观测运行手册；补充 APISIX trace、Alloy OTLP 和证据留存。 |
-| [docs/releases/oidc-release-runbook.md](releases/oidc-release-runbook.md) | runbook | Current | 2026-09-15 | 2026-10-31 | OIDC 当前架构发布、JWK rotation 与回滚；Kernel HMAC rotation 已退役，包含 #163/#170 必须全体下线；旧保留流程限定固定旧候选。 |
+| [docs/releases/oidc-release-runbook.md](releases/oidc-release-runbook.md) | runbook | Current | 2026-09-16 | 2026-10-31 | OIDC 双 issuer 入口、共享 JWK 与固定旧无 issuer 工具的全体下线切换；当前 schema 严格读取，环境未发布。 |
 | [docs/releases/online-auth-redis-time-cutover.md](releases/online-auth-redis-time-cutover.md) | runbook | Historical | 2026-09-15 | n/a | 旧候选契约与来源证据；当前由统一会话模型和维护手册替代。 |
 | [docs/releases/organization-responsibility-v2-hard-cutover.md](releases/organization-responsibility-v2-hard-cutover.md) | runbook | Current | 2026-08-22 | 2026-10-31 | Organization Responsibility V2、User Profile v3 与 Client Protocol V2 的完整 freeze、双 data gate、epoch/cleanup、Full-system/release smoke、一次性放流与 forward-only 回滚边界。 |
 | [docs/releases/protocol-validation-preserving-upgrade.md](releases/protocol-validation-preserving-upgrade.md) | runbook | Current | 2026-09-10 | 2026-10-31 | Spec #146 固定旧候选保留升级边界；当前 #170 候选全体下线，旧 HMAC 要求仅属历史候选；环境未执行。 |

@@ -19,8 +19,8 @@ export const OidcAuthorizationResponseSchema = z.object({
   redirectUri: z.url(),
   responseMode: OidcResponseModeSchema,
   parameters: z.union([
-    z.object({ code: z.string(), state: z.string() }).strict(),
-    OidcErrorSchema.extend({ state: z.string().optional() }).strict(),
+    z.object({ code: z.string(), state: z.string(), iss: z.url() }).strict(),
+    OidcErrorSchema.extend({ state: z.string().optional(), iss: z.url() }).strict(),
   ]),
 }).strict();
 export type OidcAuthorizationResponse = z.infer<typeof OidcAuthorizationResponseSchema>;

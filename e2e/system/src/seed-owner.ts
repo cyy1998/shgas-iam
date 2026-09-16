@@ -143,6 +143,42 @@ export function createProductionE2EScenarioOwner(
         ssoSecret: null,
       });
 
+      await tx.insert(clients).values({
+        clientCode: `${scenario.oidcClientCode}-dual`,
+        clientName: `E2E Dual Entry RP ${scenario.runId}`,
+        clientSecret: input.random.uuid(),
+        url: scenario.oidcRedirectUri,
+        status: ClientStatus.Enable,
+        extAttributes: {},
+        ssoEnabled: true,
+        ssoConfig: {
+          protocol: ClientSsoProtocol.Oidc,
+          clientType: OidcClientType.Public,
+          redirectUris: [scenario.oidcRedirectUri],
+          postLogoutRedirectUris: [scenario.oidcPostLogoutRedirectUri],
+          allowedScopes: [OidcScope.OpenId, OidcScope.Profile],
+        },
+        ssoSecret: null,
+      });
+
+      await tx.insert(clients).values({
+        clientCode: `${scenario.customSsoClientCode}-dual`,
+        clientName: `E2E Fixed Callback ${scenario.runId}`,
+        clientSecret: input.random.uuid(),
+        url: `${scenario.canonicalOrigin}/e2e/custom-sso/callback`,
+        status: ClientStatus.Enable,
+        extAttributes: {},
+        ssoEnabled: true,
+        ssoConfig: {
+          protocol: ClientSsoProtocol.CustomSso,
+          callbackEndpoint: `${scenario.canonicalOrigin}/sso/callback`,
+          validRedirectUrls: [`${scenario.canonicalOrigin}/e2e/custom-sso/callback`],
+          subjectClaims: [SubjectClaim.SubjectIdentifier, SubjectClaim.ProfileUsername],
+          orcas: { enabled: false },
+        },
+        ssoSecret: null,
+      });
+
       const [organization] = await tx
         .insert(organizations)
         .values({

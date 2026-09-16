@@ -1,21 +1,4 @@
-import { WELL_KNOWN_URL } from '@sso/constants/config';
 import type { AuthConfig } from '@sso/types/api';
-
-export async function fetchAuthenticationConfig(): Promise<AuthConfig | null> {
-  try {
-    const res = await fetch(WELL_KNOWN_URL, { credentials: 'include' });
-    if (!res.ok) return null;
-    const body = await res.json();
-    const cfg = body?.data ?? body;
-    if (!cfg?.authorizationEndpoint || !cfg?.logoutEndpoint) return null;
-    return {
-      authorizationEndpoint: cfg.authorizationEndpoint,
-      logoutEndpoint: cfg.logoutEndpoint,
-    };
-  } catch {
-    return null;
-  }
-}
 
 export function buildAuthorizeUrl(
   cfg: AuthConfig,
@@ -25,9 +8,8 @@ export function buildAuthorizeUrl(
 ): string {
   const r = encodeURIComponent(redirectUrl);
   const c = encodeURIComponent(client);
-  const stateQuery = state === undefined
-    ? ''
-    : `&state=${encodeURIComponent(state)}`;
+  const stateQuery =
+    state === undefined ? '' : `&state=${encodeURIComponent(state)}`;
   return `${cfg.authorizationEndpoint}?redirectUrl=${r}&client=${c}${stateQuery}`;
 }
 

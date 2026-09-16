@@ -38,13 +38,13 @@ export function createOidcUserInfo(options: {
       requireSubjectAccessOperation(operation).requirePermission(subject),
   });
   return {
-    forOperation(operation: SubjectAccessOperation) {
+    forOperation(operation: SubjectAccessOperation, issuer: string) {
       requireSubjectAccessOperation(operation);
       return {
         async read(bearer: string, origin?: string, allowOrigin?: () => void) {
           let resolved;
           try {
-            resolved = await options.tokens.forOperation(operation).resolveAccessToken(bearer);
+            resolved = await options.tokens.forOperation(operation, issuer).resolveAccessToken(bearer);
           }
           catch (error) {
             if (error instanceof OidcProtocolError && error.status !== 503)

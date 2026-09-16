@@ -3,6 +3,7 @@ export * from "./admin-mutation";
 export * from "./audit/actions";
 export * from "./auth/login-credential";
 export * from "./auth/login-page-guard";
+export * from "./auth/navigation";
 export * from "./client";
 export * from "./client-sso";
 export * from "./custom-sso/client";

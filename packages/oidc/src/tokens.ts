@@ -29,7 +29,6 @@ export interface OidcTokenOptions {
   credentials: ReturnType<typeof createClientSecretAuthenticator>;
   subjectFacts: { read: (subjectIdentifier: string) => Promise<SubjectFactsSnapshot | null> };
   signing: OidcSigningPort;
-  issuer: string;
   redis: OidcStateRedis;
   namespace: string;
   tokenTtlSeconds: number;
@@ -94,13 +93,13 @@ export function createOidcTokens(options: OidcTokenOptions) {
   });
   return {
     jwks: options.signing.jwks,
-    discovery: () => ({
-      token_endpoint: `${options.issuer}/token`,
-      jwks_uri: `${options.issuer}/jwks`,
+    discovery: (issuer: string) => ({
+      token_endpoint: `${issuer}/token`,
+      jwks_uri: `${issuer}/jwks`,
       token_endpoint_auth_methods_supported: ["none", "client_secret_basic"],
       id_token_signing_alg_values_supported: ["RS256"],
     }),
-    forOperation(operation: SubjectAccessOperation) {
+    forOperation(operation: SubjectAccessOperation, issuer: string) {
       requireSubjectAccessOperation(operation);
       const sessions = options.kernel.forOperation(operation);
       async function permitted(target: { userSessionId: string; clientSessionId: string; clientId: string }) {
@@ -213,6 +212,7 @@ export function createOidcTokens(options: OidcTokenOptions) {
             const code = parsed.data;
             if (
               codeDigest(code.clientId, code) !== codeDigest(input.clientId, identity)
+              || code.issuer !== issuer
               || code.clientId !== input.clientId
               || code.userSessionInstance !== root.value.target.instance
               || code.clientSessionInstance !== located.value.target.instance
@@ -258,7 +258,7 @@ export function createOidcTokens(options: OidcTokenOptions) {
             );
             const idToken = await options.signing.sign({
               sub: subject.subjectIdentifier,
-              iss: options.issuer,
+              iss: code.issuer,
               aud: input.clientId,
               iat: Math.floor(lifetime.issuedAt / 1000),
               exp: Math.floor(lifetime.expiresAt / 1000),
@@ -270,6 +270,7 @@ export function createOidcTokens(options: OidcTokenOptions) {
             });
             const bearer = `oa_${randomHandle()}`;
             await tokens.save(bearer, {
+              issuer: code.issuer,
               version: 1,
               purpose: "oidc_access",
               id: randomUUID(),
@@ -310,7 +311,7 @@ export function createOidcTokens(options: OidcTokenOptions) {
         },
         async resolveAccessToken(bearer: string) {
           const record = await tokens.read(bearer);
-          if (!record)
+          if (!record || record.issuer !== issuer)
             invalidGrant();
           const snapshot = await options.clients.acquire(record.clientId);
           if (snapshot.kind !== "present" || snapshot.value.clientCode !== record.clientId)

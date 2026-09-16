@@ -6,6 +6,7 @@ export interface RunDescriptor {
   project: string;
   gatewayPort: number;
   origin: string;
+  internalOrigin?: string;
   artifactDirectory: string;
   labels: {
     "com.docker.compose.project": string;

@@ -74,7 +74,7 @@ async function fixture() {
   async function authorize(clientId: string, loggedIn = true) {
     return await operations.run(operation =>
       oidc
-        .forOperation(operation)
+        .forOperation(operation, "https://iam.example/oidc")
         .authorize(
           new URLSearchParams({
             client_id: clientId,

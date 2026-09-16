@@ -106,6 +106,10 @@ API Core `client-snapshot` 拥有当前 Snapshot 与敏感 Credential 布局，W
 
 ## 基础设施与仓库工具
 
+#200 的 root Full-system owner另在同 origin 基线之后启动双 hostname 的 exact project，复用上述全部资源和
+生命周期，仅运行 `dual-entry.spec.ts` 的入口、协议与 Cookie 场景。API 的固定 suite/RP与旧源码升级演练仍归
+API composition测试支持，不将旧 writer 加回生产图；入口和证据见[双入口账本](../features/sso/dual-entry-acceptance.md)。
+
 | 路径 | 职责 |
 |---|---|
 | `gateway/` | APISIX manifest package（`@iam/gateway-apisix`），包含 dev/prod manifests、config template，以及 sync/validate/diff/apply scripts。 |

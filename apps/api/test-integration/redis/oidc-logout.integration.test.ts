@@ -80,6 +80,19 @@ async function use(f: Fixture) {
 }
 
 describe("OIDC candidate logout HTTP and real Redis", () => {
+  it.each([false, true])("keeps default logout navigation relative when confirmed=%s", async (yes) => {
+    const f = await setup();
+    const start = await begin(f, new URLSearchParams());
+    expect(start.response.status).toBe(200);
+    expect(start.html).toContain("action=\"/oidc/session/end/confirm\"");
+    const response = await confirm(f, start.xsrf, yes);
+    expect(response.status).toBe(303);
+    expect(response.headers.get("Location")).toBe("/oidc/session/end/success");
+    const status = await rootStatus(f);
+    expect(status).toBe(yes ? "terminated" : "resolved");
+    const landing = await f.request(response.headers.get("Location")!);
+    expect(landing.status).toBe(200);
+  });
   it.each([false, true])(
     "accepts GET/form POST=%s, confirms with safe state redirect during Maintenance and terminates only request root",
     async (post) => {

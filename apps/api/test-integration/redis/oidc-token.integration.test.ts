@@ -87,7 +87,7 @@ async function setup(
     }
     async function resolve(bearer: string) {
       return await f.operations.run(operation =>
-        f.oidcTokens!.forOperation(operation).resolveAccessToken(bearer),
+        f.oidcTokens!.forOperation(operation, f.issuers.external).resolveAccessToken(bearer),
       );
     }
     return { ...f, authorizeCode: authorize, exchange, resolve, basic };
@@ -469,7 +469,7 @@ test("OIDC delivery failure reports saved residual Token and original exact revo
       await f.operations.run(operation =>
         f
           .oidcTokens!
-          .forOperation(operation)
+          .forOperation(operation, f.issuers.external)
           .exchange(
             {
               clientId: f.clientId,

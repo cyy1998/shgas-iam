@@ -4,6 +4,9 @@ import process from "node:process";
 import { expect, test } from "@playwright/test";
 import { z } from "zod";
 
+// The browser exercises the API adapter; a real Gateway owns this header in system E2E.
+test.use({ extraHTTPHeaders: { "X-IAM-Entry-Network": "external" } });
+
 async function start(failToken = false) {
   if (!process.env.IAM_API_TEST_REDIS_URL)
     throw new Error("IAM_API_TEST_REDIS_URL is required");

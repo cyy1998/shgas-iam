@@ -1,4 +1,4 @@
-import { fetchAuthenticationConfig } from '@sso/lib/sso';
+import { fetchAuthenticationConfig } from '@sso/services/authentication-config';
 import { getCurrentUserInfo } from '@sso/services/public';
 import type { AuthConfig, UserInfo } from '@sso/types/api';
 import { useCallback, useEffect, useState } from 'react';

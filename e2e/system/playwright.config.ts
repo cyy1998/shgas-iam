@@ -22,13 +22,16 @@ export default defineConfig({
   retries: 0,
   testDir: ".",
   testMatch: journey === "oidc"
-    ? "oidc-pkce.spec.ts"
+    ? process.env.IAM_E2E_DUAL_ONLY === "1" ? "dual-entry.spec.ts" : ["oidc-pkce.spec.ts", "dual-entry.spec.ts"]
     : journey === "hr-admin"
       ? "hr-admin-user-management.spec.ts"
       : "admin-custom-sso.spec.ts",
   timeout: 120_000,
   use: {
     baseURL: origin,
+    launchOptions: {
+      args: ["--host-resolver-rules=MAP internal.iam.localhost 127.0.0.1, MAP external.iam.localhost 127.0.0.1"],
+    },
     screenshot: "only-on-failure",
     trace: "retain-on-failure",
     video: "retain-on-failure",

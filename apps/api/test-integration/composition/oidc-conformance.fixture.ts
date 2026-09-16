@@ -16,6 +16,12 @@ import { createApiPostgresTestHarness } from "../postgres/postgres-test-harness"
 import { createEntryEnvironment } from "../process/api-env.fixture";
 import { runConformanceCleanup } from "./oidc-conformance-lifecycle.fixture";
 
+export interface OidcCandidateSource {
+  /** Full workspace root; code is only loaded by a separate API process. */
+  sourceDirectory: string;
+  sourceRevision: string;
+}
+
 /** Caller supplies dedicated PG/Redis; this fixture never starts Docker or reads runtime env files. */
 export async function createOidcConformanceCandidate(options: {
   redirectUris: string[];
@@ -23,6 +29,10 @@ export async function createOidcConformanceCandidate(options: {
   tls?: { keyPath: string; certPath: string };
   logPath: string;
   lifecycle?: OidcConformanceLifecycle;
+  issuerMode?: "same-origin" | "dual";
+  /** Caller owns loopback DNS mapping and, for TLS, matching certificate SANs. */
+  hostnames?: { internal: string; external: string };
+  source?: OidcCandidateSource;
 }) {
   const checkpoint = async (phase: string) => options.lifecycle?.checkpoint(phase);
   await checkpoint("setup");
@@ -44,7 +54,9 @@ export async function createOidcConformanceCandidate(options: {
     options.lifecycle?.own(once);
   }
   registerCleanup(() => rm(temporaryDirectory, { recursive: true, force: true }));
+  let closed = false;
   async function close() {
+    closed = true;
     const failures: unknown[] = [];
     for (const cleanup of cleanups.splice(0).reverse()) {
       try {
@@ -102,79 +114,135 @@ export async function createOidcConformanceCandidate(options: {
     const allocation = Bun.serve({ hostname: "127.0.0.1", port: 0, fetch: () => new Response() });
     const port = allocation.port!;
     await allocation.stop(true);
-    const internalOrigin = `http://127.0.0.1:${port}`;
-    const proxy = options.tls
-      ? Bun.serve({
-          hostname: "127.0.0.1",
-          port: 0,
-          tls: { key: await readFile(options.tls.keyPath), cert: await readFile(options.tls.certPath) },
-          async fetch(request) {
-            const incoming = new URL(request.url);
-            return await fetch(new Request(`${internalOrigin}${incoming.pathname}${incoming.search}`, request), { redirect: "manual" });
-          },
-        })
+    const apiOrigin = `http://127.0.0.1:${port}`;
+    const tls = options.tls
+      ? { key: await readFile(options.tls.keyPath), cert: await readFile(options.tls.certPath) }
       : undefined;
-    if (proxy)
+    function entryProxy(network: "internal" | "external") {
+      // Test-owned trusted entry; actual APISIX routing belongs to system E2E.
+      const proxy = Bun.serve({
+        hostname: "127.0.0.1",
+        port: 0,
+        ...(tls ? { tls } : {}),
+        async fetch(request) {
+          const incoming = new URL(request.url);
+          const forwarded = new Request(`${apiOrigin}${incoming.pathname}${incoming.search}`, request);
+          forwarded.headers.set("X-IAM-Entry-Network", network);
+          return await fetch(forwarded, { redirect: "manual" });
+        },
+      });
       registerCleanup(() => proxy.stop(true));
-    await checkpoint("before-api-start");
-    const origin = proxy ? `https://127.0.0.1:${proxy.port}` : internalOrigin;
+      return proxy;
+    }
+    const externalProxy = entryProxy("external");
+    const internalProxy = options.issuerMode === "dual" ? entryProxy("internal") : externalProxy;
+    const scheme = tls ? "https" : "http";
+    const externalOrigin = `${scheme}://${options.hostnames?.external ?? "127.0.0.1"}:${externalProxy.port}`;
+    const internalOrigin = options.issuerMode === "dual"
+      ? `${scheme}://${options.hostnames?.internal ?? "127.0.0.1"}:${internalProxy.port}`
+      : externalOrigin;
+    const origins = { internal: internalOrigin, external: externalOrigin };
+    const origin = externalOrigin;
     const context = { attemptNumber: 1, hostname: "127.0.0.1", port, temporaryDirectory };
     const loginKeys = sm2.generateKeyPairHex();
-    const child = spawnOwnedProcessTree({
-      executable: process.execPath,
-      args: ["--no-env-file", "run", "src/index.ts"],
-      cwd: fileURLToPath(new URL("../../", import.meta.url)),
-      env: createEntryEnvironment(context, {
-        IAM_API_DATABASE_URL: pg.databaseUrl,
-        IAM_API_REDIS_HOST: redisConfig.host,
-        IAM_API_REDIS_PORT: String(redisConfig.port),
-        IAM_API_REDIS_PASSWORD: redisConfig.password,
-        IAM_API_REDIS_DB: String(redisConfig.db),
-        IAM_API_SESSION_KERNEL_NAMESPACE: namespace,
-        IAM_API_OIDC_NAMESPACE: `${namespace}:oidc`,
-        IAM_API_LOGIN_ENDPOINT: `${origin}/login`,
-        IAM_API_OIDC_ISSUER: `${origin}/oidc`,
-        IAM_API_OIDC_PUBLIC_ORIGIN: origin,
-        IAM_API_SSO_INTERNAL_ORIGIN: origin,
-        IAM_API_SSO_EXTERNAL_ORIGIN: origin,
-        IAM_API_OIDC_COOKIE_SECURE: String(Boolean(proxy)),
-        IAM_API_LOGIN_CREDENTIAL_PRIVATE_KEYS_JSON: JSON.stringify({ "entry-smoke": loginKeys.privateKey }),
-      }),
+    const resourceEnvironment = createEntryEnvironment(context, {
+      IAM_API_DATABASE_URL: pg.databaseUrl,
+      IAM_API_REDIS_HOST: redisConfig.host,
+      IAM_API_REDIS_PORT: String(redisConfig.port),
+      IAM_API_REDIS_PASSWORD: redisConfig.password,
+      IAM_API_REDIS_DB: String(redisConfig.db),
+      IAM_API_SESSION_KERNEL_NAMESPACE: namespace,
+      IAM_API_OIDC_NAMESPACE: `${namespace}:oidc`,
+      IAM_API_LOGIN_ENDPOINT: "/login",
+      IAM_API_SSO_INTERNAL_ORIGIN: internalOrigin,
+      IAM_API_SSO_EXTERNAL_ORIGIN: externalOrigin,
+      IAM_API_OIDC_COOKIE_SECURE: String(Boolean(options.tls)),
+      IAM_API_LOGIN_CREDENTIAL_PRIVATE_KEYS_JSON: JSON.stringify({ "entry-smoke": loginKeys.privateKey }),
     });
+    let child: ReturnType<typeof spawnOwnedProcessTree> | undefined;
     let log = "";
-    const capture = (chunk: unknown) => {
-      log = `${log}${String(chunk)}`.slice(-2 * 1024 * 1024);
-    };
-    child.stdout?.on("data", capture);
-    child.stderr?.on("data", capture);
-    registerCleanup(async () => {
+    async function stopCandidate() {
+      if (!child)
+        return;
+      const stopping = child;
       try {
-        await terminateProcessTree(child, { timeoutMs: 5000 });
+        await terminateProcessTree(stopping, { timeoutMs: 5000 });
+        child = undefined;
       }
       finally {
         await writeFile(options.logPath, log, "utf8");
       }
-    });
-    await writeFile(`${options.logPath}.owner.json`, JSON.stringify({ pid: child.pid, port, proxyPort: proxy?.port, namespace, temporaryDirectory, schema: new URL(pg.databaseUrl).searchParams.get("search_path") }));
-    const deadline = Date.now() + 30000;
-    while (true) {
-      await checkpoint("api-readiness");
-      let ready = false;
-      try {
-        ready = (await fetch(`${internalOrigin}/ready`, { signal: AbortSignal.timeout(1000) })).status === 200;
-      }
-      catch {
-        /* Readiness only; behavioral requests are never retried. */
-      }
-      if (ready)
-        break;
-      if (child.exitCode !== null || Date.now() >= deadline)
-        throw new Error(`Candidate API did not become ready: ${log}`);
-      await Bun.sleep(100);
     }
-    await checkpoint("api-ready");
+    registerCleanup(stopCandidate);
+    async function restartCandidate(source?: OidcCandidateSource) {
+      if (closed)
+        throw new Error("Cannot restart a closed OIDC candidate");
+      await stopCandidate();
+      await checkpoint("before-api-start");
+      const env = { ...resourceEnvironment };
+      // Fixed pre-dual-issuer writer: explicit env adapter, never an in-process source import.
+      if (source?.sourceRevision.startsWith("5c6707ef")) {
+        env.IAM_API_OIDC_ISSUER = `${externalOrigin}/oidc`;
+        env.IAM_API_OIDC_PUBLIC_ORIGIN = externalOrigin;
+      }
+      child = spawnOwnedProcessTree({
+        executable: process.execPath,
+        args: ["--no-env-file", "run", "src/index.ts"],
+        cwd: source ? join(source.sourceDirectory, "apps/api") : fileURLToPath(new URL("../../", import.meta.url)),
+        env,
+      });
+      let spawnError: unknown;
+      child.once("error", (error) => {
+        spawnError = error;
+      });
+      const capture = (chunk: unknown) => {
+        log = `${log}${String(chunk)}`.slice(-2 * 1024 * 1024);
+      };
+      child.stdout?.on("data", capture);
+      child.stderr?.on("data", capture);
+      await writeFile(`${options.logPath}.owner.json`, JSON.stringify({
+        pid: child.pid,
+        port,
+        proxyPort: externalProxy.port,
+        internalProxyPort: internalProxy.port,
+        namespace,
+        temporaryDirectory,
+        schema: new URL(pg.databaseUrl).searchParams.get("search_path"),
+        sourceRevision: source?.sourceRevision ?? "working-tree",
+      }));
+      const deadline = Date.now() + 30000;
+      while (true) {
+        await checkpoint("api-readiness");
+        let ready = false;
+        try {
+          ready = (await fetch(`${apiOrigin}/ready`, { signal: AbortSignal.timeout(1000) })).status === 200;
+        }
+        catch {
+          /* Readiness only; behavioral requests are never retried. */
+        }
+        if (spawnError || child.exitCode !== null || child.signalCode !== null)
+          throw new Error(`Candidate API exited before readiness: ${String(spawnError ?? log)}`);
+        if (ready)
+          break;
+        if (Date.now() >= deadline)
+          throw new Error(`Candidate API did not become ready: ${log}`);
+        await Bun.sleep(100);
+      }
+      await checkpoint("api-ready");
+    }
+    await restartCandidate(options.source);
     return {
       origin,
+      origins,
+      internalOrigin,
+      externalOrigin,
+      stopCandidate,
+      restartCandidate,
+      resourceEnvironment,
+      postgresHarness: pg,
+      redis,
+      namespace,
+      oidcNamespace: `${namespace}:oidc`,
       clientId,
       publicClientId,
       secondClientId,

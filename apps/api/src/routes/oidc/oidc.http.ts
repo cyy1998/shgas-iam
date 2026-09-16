@@ -14,6 +14,7 @@ import type { Context } from "hono";
 import { Buffer } from "node:buffer";
 import * as HttpStatusCodes from "@iam/api-core/core/http-status-codes";
 import { getRequestId, getTraceId } from "@iam/api-core/core/request-context";
+import { appendNavigationParameters } from "@iam/contracts";
 import { OidcExchangeFailure, OidcLogoutFailure, OidcProtocolError } from "@iam/oidc";
 import {
   OidcAuthorizationResponseSchema,
@@ -58,22 +59,34 @@ export function createOidcHttpRouter(options: {
   reportLogoutEffect?: (effect: OidcLogoutEffect | OidcLogoutFailure, request: OidcRequestContext) => void;
   reportExchangeFailure?: (failure: OidcExchangeFailure, request: OidcRequestContext) => void;
   operations: ReturnType<typeof createSubjectAccessOperations>;
-  issuer: string;
+  issuers: { internal: string; external: string };
   loginEndpoint: string;
   secureCookies: boolean;
 }) {
-  const issuer = new URL(options.issuer);
-  if (
-    !["http:", "https:"].includes(issuer.protocol)
-    || issuer.pathname !== "/oidc"
-    || issuer.search
-    || issuer.hash
-    || issuer.username
-    || issuer.password
-  ) {
-    throw new Error("OIDC issuer must end in /oidc");
+  const issuers = Object.fromEntries((["internal", "external"] as const).map((entry) => {
+    const value = options.issuers[entry];
+    const issuer = new URL(value);
+    if (
+      !["http:", "https:"].includes(issuer.protocol)
+      || issuer.pathname !== "/oidc"
+      || issuer.search
+      || issuer.hash
+      || issuer.username
+      || issuer.password
+    ) {
+      throw new Error("OIDC issuer must end in /oidc");
+    }
+    return [entry, issuer.href];
+  }));
+  function configuredIssuer(entry: string | undefined) {
+    return entry === "internal" || entry === "external" ? issuers[entry] : undefined;
   }
-  const login = new URL(options.loginEndpoint);
+  function requestIssuer(c: Context) {
+    const issuer = configuredIssuer(c.req.header("X-IAM-Entry-Network"));
+    if (!issuer)
+      throw new OidcProtocolError("invalid_request", "A trusted IAM entry is required");
+    return issuer;
+  }
   const router = new Hono();
   const requestContexts = new WeakMap<Request, OidcRequestContext>();
   function requestContext(c: Context): OidcRequestContext {
@@ -138,15 +151,16 @@ export function createOidcHttpRouter(options: {
     if (value.kind === "response")
       return respond(c, value.response);
     setCookie(c, "oidc_interaction_binding", value.browserBinding, { ...cookieOptions, maxAge: value.ttl });
-    const target = new URL(login);
-    target.searchParams.set("oidcReturn", value.handle);
-    return c.redirect(target.href);
+    return c.redirect(
+      appendNavigationParameters(options.loginEndpoint, new URLSearchParams({ oidcReturn: value.handle })),
+    );
   }
   router.use("*", async (c, next) => {
     c.header("X-Request-Id", requestContext(c).requestId);
     c.header("Cache-Control", "no-store");
     c.header("Pragma", "no-cache");
     c.header("Referrer-Policy", "no-referrer");
+    requestIssuer(c);
     await next();
   });
   router.onError((error, c) => {
@@ -171,10 +185,13 @@ export function createOidcHttpRouter(options: {
         return respond(c, error.response);
       if (error.status === 503)
         c.header("Retry-After", "3");
-      if (new URL(c.req.url).pathname.endsWith("/me"))
-        c.header("WWW-Authenticate", `Bearer realm="${issuer.href}", error="${error.errorCode}"`);
-      else if (error.status === 401)
+      if (new URL(c.req.url).pathname.endsWith("/me")) {
+        const realm = configuredIssuer(c.req.header("X-IAM-Entry-Network")) ?? "oidc";
+        c.header("WWW-Authenticate", `Bearer realm="${realm}", error="${error.errorCode}"`);
+      }
+      else if (error.status === 401) {
         c.header("WWW-Authenticate", "Basic realm=\"oidc\"");
+      }
       return c.json(
         OidcErrorSchema.parse({ error: error.errorCode, error_description: error.description }),
         error.status,
@@ -208,10 +225,10 @@ export function createOidcHttpRouter(options: {
       return c.body(null, HttpStatusCodes.NO_CONTENT);
     }
     return c.json({
-      ...options.authorization.discovery(issuer.href),
-      ...options.tokens?.discovery(),
-      ...options.logout?.discovery(),
-      ...(options.userInfo ? { userinfo_endpoint: `${issuer.href}/me` } : {}),
+      ...options.authorization.discovery(requestIssuer(c)),
+      ...options.tokens?.discovery(requestIssuer(c)),
+      ...options.logout?.discovery(requestIssuer(c)),
+      ...(options.userInfo ? { userinfo_endpoint: `${requestIssuer(c)}/me` } : {}),
     });
   });
   if (options.logout) {
@@ -236,7 +253,7 @@ export function createOidcHttpRouter(options: {
     router.on(["GET", "POST"], "/session/end", async (c) => {
       const parameters = await logoutParameters(c);
       const value = await options.operations.run(operation =>
-        logout.forOperation(operation).begin(parameters, logoutBrowser(c)),
+        logout.forOperation(operation, requestIssuer(c)).begin(parameters, logoutBrowser(c)),
       );
       if (value.clearGlobalSessionCookie)
         deleteCookie(c, "global_session", { path: "/" });
@@ -244,7 +261,7 @@ export function createOidcHttpRouter(options: {
       setCookie(c, "oidc_logout_request", value.handle, { ...logoutCookies, maxAge: value.ttl });
       c.header(
         "Content-Security-Policy",
-        `default-src 'none'; script-src 'unsafe-inline'; form-action 'self' ${new URL(value.redirectUri ?? issuer.href).origin}; base-uri 'none'; frame-ancestors 'none'`,
+        `default-src 'none'; script-src 'unsafe-inline'; form-action 'self' ${new URL(value.redirectUri ?? requestIssuer(c)).origin}; base-uri 'none'; frame-ancestors 'none'`,
       );
       const buttons = value.autoSubmit
         ? "<input type=\"hidden\" name=\"logout\" value=\"yes\"><noscript><button type=\"submit\">Continue</button></noscript>"
@@ -256,7 +273,7 @@ export function createOidcHttpRouter(options: {
     router.post("/session/end/confirm", async (c) => {
       const parameters = await logoutParameters(c);
       const value = await options.operations.run(operation =>
-        logout.forOperation(operation).confirm(parameters, logoutBrowser(c)),
+        logout.forOperation(operation, requestIssuer(c)).confirm(parameters, logoutBrowser(c)),
       );
       options.reportLogoutEffect?.(value.effect, requestContext(c));
       if (value.clearGlobalSessionCookie) {
@@ -322,7 +339,7 @@ export function createOidcHttpRouter(options: {
           throw new OidcProtocolError("invalid_request", "Invalid Bearer authorization header");
       }
       if (!bearer) {
-        c.header("WWW-Authenticate", `Bearer realm="${issuer.href}"`);
+        c.header("WWW-Authenticate", `Bearer realm="${requestIssuer(c)}"`);
         return c.json(
           OidcErrorSchema.parse({ error: "invalid_token", error_description: "Access Token is required" }),
           HttpStatusCodes.UNAUTHORIZED,
@@ -332,7 +349,7 @@ export function createOidcHttpRouter(options: {
       return await options.operations.run(async operation =>
         c.json(
           await userInfo
-            .forOperation(operation)
+            .forOperation(operation, requestIssuer(c))
             .read(bearer, origin, () => c.header("Access-Control-Allow-Origin", origin!)),
         ),
       );
@@ -416,7 +433,7 @@ export function createOidcHttpRouter(options: {
       }
       try {
         const response = await options.operations.run(operation =>
-          tokens.forOperation(operation).exchange(
+          tokens.forOperation(operation, requestIssuer(c)).exchange(
             {
               clientId,
               clientSecret,
@@ -465,14 +482,14 @@ export function createOidcHttpRouter(options: {
     return result(
       c,
       await options.operations.run(operation =>
-        options.authorization.forOperation(operation).authorize(parameters, browser(c)),
+        options.authorization.forOperation(operation, requestIssuer(c)).authorize(parameters, browser(c)),
       ),
     );
   });
   router.get("/login-guard", async (c) => {
     const value = await options.operations.run(operation =>
       options.authorization
-        .forOperation(operation)
+        .forOperation(operation, requestIssuer(c))
         .checkLoginContinuation(c.req.query("oidcReturn") ?? "", browser(c)),
     );
     if (value.clearGlobalSessionCookie)
@@ -483,7 +500,7 @@ export function createOidcHttpRouter(options: {
   });
   router.get("/resume", async (c) => {
     const value = await options.operations.run(operation =>
-      options.authorization.forOperation(operation).resume(c.req.query("oidcReturn") ?? "", browser(c)),
+      options.authorization.forOperation(operation, requestIssuer(c)).resume(c.req.query("oidcReturn") ?? "", browser(c)),
     );
     if (value.kind === "response" && "code" in value.response.parameters)
       deleteCookie(c, "oidc_login_completion", cookieOptions);

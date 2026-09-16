@@ -276,8 +276,7 @@ export function createApiServices(options: CreateApiServicesOptions) {
     publicServices: { organizationService, userService, userProfileSearch },
     config: {
       ...runtime.config.auth,
-      loginEndpoint: new URL(runtime.config.env.sso.loginEndpoint, runtime.config.env.sso.externalOrigin)
-        .href,
+      loginEndpoint: runtime.config.env.sso.loginEndpoint,
       projectionRetryAfterSeconds: runtime.config.env.sso.projectionRetryAfterSeconds,
     },
     customSso: {
@@ -304,7 +303,10 @@ export function createApiServices(options: CreateApiServicesOptions) {
     oidc: {
       redis: runtime.redis,
       namespace: runtime.config.oidc.namespace,
-      issuer: runtime.config.oidc.issuer,
+      issuers: {
+        internal: `${runtime.config.env.sso.internalOrigin}/oidc`,
+        external: `${runtime.config.env.sso.externalOrigin}/oidc`,
+      },
       secureCookies: runtime.config.oidc.cookieSecure,
       codeTtlSeconds: runtime.config.oidc.authorizationCodeTtlSeconds,
       continuationTtlSeconds: runtime.config.oidc.continuationTtlSeconds,

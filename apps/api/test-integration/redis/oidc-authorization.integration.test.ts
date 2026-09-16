@@ -15,11 +15,30 @@ function responseCode(response: Response) {
   return location.searchParams.get("code") ?? new URLSearchParams(location.hash.slice(1)).get("code");
 }
 
+test.each(["https://internal.example", "https://public.example"])("OIDC login stays on requesting entry %s", async (origin) => {
+  const f = await fixture();
+  try {
+    const response = await f.request(`${origin}/oidc/auth?${f.parameters()}`);
+    expect(response.status).toBe(302);
+    const location = response.headers.get("Location")!;
+    expect(location).toStartWith("/portal/login?");
+    const target = new URL(location, origin);
+    expect(target.origin).toBe(origin);
+    const guard = await f.request(`/oidc/login-guard?${target.searchParams}`);
+    const decision = await guard.json();
+    expect(decision).toEqual({ decision: "login" });
+  }
+  finally {
+    await f.close();
+  }
+});
+
 for (const method of ["GET", "POST"]) {
   for (const mode of ["query", "fragment", "form_post"]) {
-    test(`OIDC ${method} ${mode} uses a real authenticated root, one permission/Snapshot and isolated Code`, async () => {
+    test.each(["internal", "external"] as const)(`OIDC %s ${method} ${mode} uses a real authenticated root, one permission/Snapshot and isolated Code`, async (entry) => {
       const f = await fixture();
       try {
+        f.setEntry(entry);
         await f.login();
         const before = { reads: f.state.reads, acquisitions: f.state.acquisitions };
         const response = await f.authorize(
@@ -40,6 +59,7 @@ for (const method of ["GET", "POST"]) {
         expect(code?.split(".")).toHaveLength(3);
         const record = await f.oidcState.readCode(f.clientId, code!);
         expect(record).toMatchObject({
+          issuer: f.issuers[entry],
           nonce: "nonce-1",
           state: "state<&\"",
           responseMode: mode,
@@ -52,8 +72,14 @@ for (const method of ["GET", "POST"]) {
         const other = await f.oidcState.readCode("other-client", code!);
         expect(other).toBeNull();
         if (mode === "form_post") {
+          expect(body).toContain(`name="iss" value="${f.issuers[entry]}"`);
           expect(body).toContain("method=\"post\" action=\"https://rp.example/callback\"");
           expect(body).toContain("state&lt;&amp;&quot;");
+        }
+        else {
+          const location = new URL(response.headers.get("Location")!);
+          const params = mode === "query" ? location.searchParams : new URLSearchParams(location.hash.slice(1));
+          expect(params.get("iss")).toBe(f.issuers[entry]);
         }
       }
       finally {
@@ -70,7 +96,7 @@ test("OIDC continuation keeps accepted redirect/scope/nonce through configuratio
     expect(first.status).toBe(302);
     expect(first.headers.get("set-cookie")).toContain("HttpOnly");
     expect(first.headers.get("set-cookie")).toContain("Path=/oidc");
-    const handle = new URL(first.headers.get("Location")!).searchParams.get("oidcReturn")!;
+    const handle = new URL(first.headers.get("Location")!, "https://internal.example").searchParams.get("oidcReturn")!;
     const guard = await f.request(`/oidc/login-guard?oidcReturn=${handle}`);
     const decision = await guard.json();
     expect(decision).toEqual({ decision: "login" });
@@ -109,7 +135,7 @@ for (const parameters of freshParameters) {
     const f = await fixture();
     try {
       const first = await f.authorize(parameters);
-      const handle = new URL(first.headers.get("Location")!).searchParams.get("oidcReturn")!;
+      const handle = new URL(first.headers.get("Location")!, "https://internal.example").searchParams.get("oidcReturn")!;
       const guard = await f.request(`/oidc/login-guard?oidcReturn=${handle}`);
       expect(guard.status).toBe(200);
       const proof = f.cookies.get("oidc_login_completion")!;
@@ -137,7 +163,7 @@ test("OIDC missing/wrong browser binding cannot use another continuation even wi
   const f = await fixture();
   try {
     const first = await f.authorize();
-    const handle = new URL(first.headers.get("Location")!).searchParams.get("oidcReturn")!;
+    const handle = new URL(first.headers.get("Location")!, "https://internal.example").searchParams.get("oidcReturn")!;
     const binding = f.cookies.get("oidc_interaction_binding")!;
     await f.login();
     for (const value of ["", "wrong-binding"]) {
@@ -268,7 +294,7 @@ test("OIDC unknown/disabled parameter compatibility, optional nonce and exact Di
         },
       }));
       const metadata = await f.operations.run(operation =>
-        f.oidc!.forOperation(operation).clientMetadata(f.clientId),
+        f.oidc!.forOperation(operation, f.issuers.external).clientMetadata(f.clientId),
       );
       expect(metadata.token_endpoint_auth_method).toBe(
         clientType === OidcClientType.Public
@@ -298,7 +324,7 @@ test("OIDC concurrent authorization reuses one original ClientSession and contin
     expect(splicedRecord).toBeNull();
     f.cookies.delete("global_session");
     const initial = await f.authorize();
-    const handle = new URL(initial.headers.get("Location")!).searchParams.get("oidcReturn")!;
+    const handle = new URL(initial.headers.get("Location")!, "https://internal.example").searchParams.get("oidcReturn")!;
     await f.login();
     const resumes = await Promise.all([
       f.request(`/oidc/resume?oidcReturn=${handle}`),
@@ -315,7 +341,7 @@ test("OIDC transient dependency failures preserve cookies/continuation, maintena
   const f = await fixture();
   try {
     const initial = await f.authorize();
-    const handle = new URL(initial.headers.get("Location")!).searchParams.get("oidcReturn")!;
+    const handle = new URL(initial.headers.get("Location")!, "https://internal.example").searchParams.get("oidcReturn")!;
     await f.login();
     f.state.permission = "unknown";
     const transient = await f.request(`/oidc/resume?oidcReturn=${handle}`);
@@ -421,7 +447,7 @@ test("OIDC candidate responds on real loopback HTTP using the formal factory and
   try {
     const bearer = await f.login();
     const response = await fetch(`http://127.0.0.1:${server.port}/oidc/auth?${f.parameters()}`, {
-      headers: { Cookie: `global_session=${bearer}` },
+      headers: { "X-IAM-Entry-Network": "external", "Cookie": `global_session=${bearer}` },
       redirect: "manual",
     });
     await response.arrayBuffer();
@@ -429,7 +455,7 @@ test("OIDC candidate responds on real loopback HTTP using the formal factory and
     const code = await f.oidcState.readCode(f.clientId, responseCode(response)!);
     expect(code).toMatchObject({ clientId: f.clientId, state: "rp-state" });
     const discovery = await fetch(`http://127.0.0.1:${server.port}/oidc/.well-known/openid-configuration`, {
-      headers: { Origin: "https://rp.example" },
+      headers: { "X-IAM-Entry-Network": "external", "Origin": "https://rp.example" },
     });
     const metadata = await discovery.json();
     expect(metadata).toMatchObject({ issuer: "https://iam.example/oidc" });
@@ -445,7 +471,7 @@ test("OIDC Redis TTL expires Code and continuation while positive max_age reject
   const f = await fixture({ code: 1, continuation: 1 });
   try {
     const initial = await f.authorize();
-    const handle = new URL(initial.headers.get("Location")!).searchParams.get("oidcReturn")!;
+    const handle = new URL(initial.headers.get("Location")!, "https://internal.example").searchParams.get("oidcReturn")!;
     await f.login();
     const first = await f.authorize();
     const code = responseCode(first)!;
@@ -472,7 +498,7 @@ for (const corruption of ["record", "index"] as const) {
       const f = await fixture();
       try {
         const initial = await f.authorize({ response_mode: "fragment" });
-        const handle = new URL(initial.headers.get("Location")!).searchParams.get("oidcReturn")!;
+        const handle = new URL(initial.headers.get("Location")!, "https://internal.example").searchParams.get("oidcReturn")!;
         const bearer = await f.login();
         const authorized = await f.authorize();
         const originalCode = responseCode(authorized)!;

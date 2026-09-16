@@ -283,7 +283,7 @@ function requireCanonicalOrigin(value: string) {
   if (
     url.origin !== value
     || url.protocol !== "http:"
-    || url.hostname !== "127.0.0.1"
+    || !["127.0.0.1", "external.iam.localhost"].includes(url.hostname)
     || url.port === ""
     || url.username !== ""
     || url.password !== ""

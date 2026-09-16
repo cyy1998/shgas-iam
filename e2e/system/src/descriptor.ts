@@ -8,6 +8,7 @@ export function createRunDescriptor(options: {
   artifactRoot: string;
   gatewayPort: number;
   runId: string;
+  dualEntry?: boolean;
 }): RunDescriptor {
   if (!runIdPattern.test(options.runId))
     throw new Error("E2E run id must be a lowercase Docker-safe identifier");
@@ -25,7 +26,8 @@ export function createRunDescriptor(options: {
     runId: options.runId,
     project,
     gatewayPort: options.gatewayPort,
-    origin: `http://127.0.0.1:${options.gatewayPort}`,
+    origin: `http://${options.dualEntry ? "external.iam.localhost" : "127.0.0.1"}:${options.gatewayPort}`,
+    ...(options.dualEntry ? { internalOrigin: `http://internal.iam.localhost:${options.gatewayPort}` } : {}),
     artifactDirectory: resolve(options.artifactRoot, options.runId),
     labels: {
       "com.docker.compose.project": project,

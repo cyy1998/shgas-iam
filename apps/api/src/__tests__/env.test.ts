@@ -6,8 +6,6 @@ let parseApiEnv: ParseApiEnv;
 
 function validEnv(): NodeJS.ProcessEnv {
   return {
-    IAM_API_OIDC_ISSUER: "https://iam.example.com/oidc",
-    IAM_API_OIDC_PUBLIC_ORIGIN: "https://iam.example.com",
     IAM_API_OIDC_CURRENT_JWK_JSON: "runtime-validates-signing-material",
     IAM_API_DATABASE_URL: "postgresql://iam:password@localhost/iam",
     IAM_API_REDIS_HOST: "localhost",
@@ -94,11 +92,29 @@ describe("API environment", () => {
     expect(env.sessionKernel.namespace).toBe("iam:session");
   });
 
-  test("validates OIDC issuer ownership and explicit signing configuration", () => {
+  test.each([
+    "ftp://iam.example.com",
+    "https://user:password@iam.example.com",
+    "https://iam.example.com/path",
+    "https://iam.example.com?entry=internal",
+    "https://iam.example.com#fragment",
+    " https://iam.example.com",
+    "https://iam.example.com/\\path",
+    "not-an-origin",
+    "",
+  ])("rejects invalid SSO origin %s before enabling either OIDC entry", (origin) => {
+    for (const key of ["IAM_API_SSO_INTERNAL_ORIGIN", "IAM_API_SSO_EXTERNAL_ORIGIN"])
+      expect(() => parseApiEnv({ ...validEnv(), [key]: origin })).toThrow();
+  });
+
+  test("normalizes both configured origins and allows a single canonical origin", () => {
+    const env = parseApiEnv({ ...validEnv(), IAM_API_SSO_INTERNAL_ORIGIN: "https://IAM.EXAMPLE.COM:443/" });
+    expect(env.sso.internalOrigin).toBe("https://iam.example.com");
+    expect(env.sso.internalOrigin).toBe(env.sso.externalOrigin);
+  });
+
+  test("validates OIDC signing configuration and protocol lifetimes", () => {
     for (const override of [
-      { IAM_API_OIDC_ISSUER: "https://iam.example.com/other" },
-      { IAM_API_OIDC_PUBLIC_ORIGIN: "https://other.example.com" },
-      { IAM_API_OIDC_PUBLIC_ORIGIN: "https://iam.example.com/path" },
       { IAM_API_OIDC_CURRENT_JWK_JSON: "" },
       { IAM_API_OIDC_TOKEN_TTL_SECONDS: "0" },
       { IAM_API_SESSION_KERNEL_NAMESPACE: "unsafe namespace" },
@@ -115,8 +131,6 @@ describe("API environment", () => {
       IAM_API_OIDC_CONTINUATION_TTL_SECONDS: "120",
     });
     expect(env.oidc).toMatchObject({
-      issuer: "https://iam.example.com/oidc",
-      publicOrigin: "https://iam.example.com",
       previousJwkJson: "previous-private-jwk",
       namespace: "iam:oidc",
       continuationTtlSeconds: 120,
@@ -133,16 +147,33 @@ describe("API environment", () => {
       IAM_API_CLIENT_SESSION_TTL_SECONDS: "3600",
       IAM_API_CUSTOM_SSO_TOKEN_TTL_SECONDS: "900",
       IAM_API_OIDC_TOKEN_TTL_SECONDS: "600",
-      IAM_API_LOGIN_ENDPOINT: "https://login.example.com/custom-entry",
+      IAM_API_LOGIN_ENDPOINT: "/custom-entry",
     });
     expect(env.sessionKernel).toMatchObject({ userSessionTtlSeconds: 86400, clientSessionTtlSeconds: 3600 });
     expect(env.auth.customSsoTokenTtlSeconds).toBe(900);
     expect(env.oidc.tokenTtlSeconds).toBe(600);
     expect(env.oidc.trustProxy).toBe(true);
     expect(parseApiEnv({ ...validEnv(), IAM_API_OIDC_TRUST_PROXY: "false" }).oidc.trustProxy).toBe(false);
-    expect(env.sso.loginEndpoint).toBe("https://login.example.com/custom-entry");
+    expect(env.sso.loginEndpoint).toBe("/custom-entry");
     for (const key of ["IAM_API_USER_SESSION_TTL_SECONDS", "IAM_API_CLIENT_SESSION_TTL_SECONDS"])
       expect(() => parseApiEnv({ ...validEnv(), [key]: "0" })).toThrow();
+  });
+
+  test.each([
+    "https://login.example.com/portal/login",
+    "//evil.example/login",
+    "///evil.example/login",
+    "/\\evil.example/login",
+    "/portal\\login",
+    " /portal/login",
+    "/\t/evil.example",
+    "/%2f/evil.example",
+    "/%5cevil.example",
+    "/../ /login",
+    "/..//evil.example",
+    "/%2e%2e//evil.example",
+  ])("rejects unsafe login navigation configuration %s", (endpoint) => {
+    expect(() => parseApiEnv({ ...validEnv(), IAM_API_LOGIN_ENDPOINT: endpoint })).toThrow("safe root-relative path");
   });
 
   test("still requires a configured active login credential key in production", () => {

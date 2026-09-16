@@ -1,27 +1,7 @@
-import { HttpResponse, http } from 'msw';
-import { afterAll, describe, expect, it, vi } from 'vitest';
-import { server } from '../../../test/mocks/server';
-import { registerMswLifecycle } from '../../../test/setup-msw';
-import {
-  buildAuthorizeUrl,
-  buildLogoutUrl,
-  fetchAuthenticationConfig,
-} from '../sso';
+import { describe, expect, it } from 'vitest';
+import { buildAuthorizeUrl, buildLogoutUrl } from '../sso';
 
-vi.hoisted(() => {
-  vi.stubEnv(
-    'UMI_APP_SSO_WELL_KNOWN_URL',
-    'http://localhost/sso/.well-known/authentication-configuration',
-  );
-});
-
-registerMswLifecycle();
-
-afterAll(() => {
-  vi.unstubAllEnvs();
-});
-
-describe('sso helpers', () => {
+describe('sso navigation helpers', () => {
   it('builds encoded authorize and logout urls', () => {
     const cfg = {
       authorizationEndpoint: '/sso/authorize',
@@ -60,22 +40,5 @@ describe('sso helpers', () => {
         'independent',
       ),
     ).not.toContain('state=');
-  });
-
-  it('consumes authentication configuration envelopes', async () => {
-    await expect(fetchAuthenticationConfig()).resolves.toEqual({
-      authorizationEndpoint: '/sso/authorize',
-      logoutEndpoint: '/sso/logout',
-    });
-  });
-
-  it('returns null when authentication configuration is unavailable', async () => {
-    server.use(
-      http.get('*/sso/.well-known/authentication-configuration', () =>
-        HttpResponse.json({ code: 200, message: 'OK', data: {} }),
-      ),
-    );
-
-    await expect(fetchAuthenticationConfig()).resolves.toBeNull();
   });
 });

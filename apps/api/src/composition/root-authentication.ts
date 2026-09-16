@@ -91,7 +91,7 @@ export interface RootAuthenticationCompositionOptions {
     "organizationService" | "userService" | "userProfileSearch"
   >;
   customSso?: Omit<UnifiedCustomSsoAuthorizationOptions, "kernel" | "clients" | "redirectUrls">;
-  oidc?: Omit<OidcAuthorizationOptions, "kernel" | "clients"> & { issuer: string; secureCookies: boolean };
+  oidc?: Omit<OidcAuthorizationOptions, "kernel" | "clients"> & { issuers: { internal: string; external: string }; secureCookies: boolean };
   oidcClientAuth?: OidcClientAuthRateLimiter;
   oidcTrustProxy?: boolean;
   oidcTokens?: Pick<
@@ -349,7 +349,7 @@ export function createRootAuthenticationComposition(options: RootAuthenticationC
         userInfo:
           oidcTokens && createOidcUserInfo({ tokens: oidcTokens, subjectFacts: options.subjectFacts }),
         operations,
-        issuer: options.oidc.issuer,
+        issuers: options.oidc.issuers,
         secureCookies: options.oidc.secureCookies,
         loginEndpoint: options.config.loginEndpoint,
         reportExchangeFailure: (failure, request) =>

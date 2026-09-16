@@ -1,4 +1,5 @@
 import { z } from "@hono/zod-openapi";
+import { isRootRelativeNavigation } from "@iam/contracts";
 
 function booleanString(defaultValue: boolean) {
   return z.string().optional().transform((value) => {
@@ -36,7 +37,11 @@ function optionalNonEmptyString() {
 }
 
 function originString() {
-  return z.url().transform(value => new URL(value).origin);
+  return z.string().regex(/^[^\\\s]+$/u).pipe(z.url()).refine((value) => {
+    const url = new URL(value);
+    return ["http:", "https:"].includes(url.protocol) && url.pathname === "/"
+      && !url.search && !url.hash && !url.username && !url.password;
+  }, { message: "SSO entry must be an HTTP(S) origin without credentials, path, query or fragment" }).transform(value => new URL(value).origin);
 }
 
 const RawEnvSchema = z.object({
@@ -56,7 +61,9 @@ const RawEnvSchema = z.object({
   IAM_API_REDIS_PORT: z.coerce.number().int().min(1).max(65535),
   IAM_API_REDIS_PASSWORD: optionalNonEmptyString(),
   IAM_API_REDIS_DB: z.coerce.number().int().min(0),
-  IAM_API_LOGIN_ENDPOINT: z.string().min(1),
+  IAM_API_LOGIN_ENDPOINT: z.string().refine(isRootRelativeNavigation, {
+    message: "IAM_API_LOGIN_ENDPOINT must be a safe root-relative path",
+  }),
   IAM_API_SSO_INTERNAL_ORIGIN: originString(),
   IAM_API_SSO_EXTERNAL_ORIGIN: originString(),
   IAM_API_AUTHORIZATION_ENDPOINT: z.string().min(1),
@@ -81,12 +88,6 @@ const RawEnvSchema = z.object({
   IAM_API_SESSION_KERNEL_NAMESPACE: z.string().regex(/^[\w:-]+$/u).default("iam:session"),
   IAM_API_USER_SESSION_TTL_SECONDS: z.coerce.number().int().positive().default(86400),
   IAM_API_CLIENT_SESSION_TTL_SECONDS: z.coerce.number().int().positive().default(86400),
-  IAM_API_OIDC_ISSUER: z.url().refine(value => new URL(value).pathname === "/oidc", {
-    message: "IAM_API_OIDC_ISSUER must use the /oidc path",
-  }),
-  IAM_API_OIDC_PUBLIC_ORIGIN: z.url().refine(value => new URL(value).pathname === "/", {
-    message: "IAM_API_OIDC_PUBLIC_ORIGIN must not contain a path",
-  }),
   IAM_API_OIDC_CURRENT_JWK_JSON: z.string().min(1),
   IAM_API_OIDC_PREVIOUS_JWK_JSON: optionalNonEmptyString(),
   IAM_API_OIDC_NAMESPACE: z.string().regex(/^[\w:-]+$/u).default("iam:oidc"),
@@ -99,13 +100,6 @@ const RawEnvSchema = z.object({
     value === undefined || value.trim() === "" ? undefined : ["1", "true", "yes", "on"].includes(value.trim().toLowerCase())),
   IAM_API_USER_PROFILE_DSL_MAX_LIMIT: z.coerce.number().int().positive().max(500).default(100),
 }).superRefine((raw, ctx) => {
-  if (new URL(raw.IAM_API_OIDC_ISSUER).origin !== new URL(raw.IAM_API_OIDC_PUBLIC_ORIGIN).origin) {
-    ctx.addIssue({
-      code: "custom",
-      path: ["IAM_API_OIDC_ISSUER"],
-      message: "IAM_API_OIDC_ISSUER and IAM_API_OIDC_PUBLIC_ORIGIN must use the same origin",
-    });
-  }
   if (raw.IAM_API_LOGIN_CREDENTIAL_PRIVATE_KEYS_JSON[raw.IAM_API_LOGIN_CREDENTIAL_ACTIVE_KID] === undefined) {
     ctx.addIssue({
       code: "custom",
@@ -161,8 +155,6 @@ export interface Env extends Record<string, unknown> {
     clientSessionTtlSeconds: number;
   };
   oidc: {
-    issuer: string;
-    publicOrigin: string;
     currentJwkJson: string;
     previousJwkJson?: string;
     namespace: string;
@@ -245,8 +237,6 @@ function toApiEnv(raw: RawEnv): Env {
       clientSessionTtlSeconds: raw.IAM_API_CLIENT_SESSION_TTL_SECONDS,
     },
     oidc: {
-      issuer: raw.IAM_API_OIDC_ISSUER,
-      publicOrigin: new URL(raw.IAM_API_OIDC_PUBLIC_ORIGIN).origin,
       currentJwkJson: raw.IAM_API_OIDC_CURRENT_JWK_JSON,
       previousJwkJson: raw.IAM_API_OIDC_PREVIOUS_JWK_JSON,
       namespace: raw.IAM_API_OIDC_NAMESPACE,

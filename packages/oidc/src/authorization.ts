@@ -42,7 +42,7 @@ export function createOidcAuthorization(options: OidcAuthorizationOptions) {
   const continuationTtl = z.number().int().positive().parse(options.continuationTtlSeconds);
   const state = createOidcState(options.redis, options.namespace);
   return {
-    forOperation(operation: SubjectAccessOperation) {
+    forOperation(operation: SubjectAccessOperation, issuer: string) {
       requireSubjectAccessOperation(operation);
       const sessions = options.kernel.forOperation(operation);
       async function client(clientId: string) {
@@ -96,6 +96,7 @@ export function createOidcAuthorization(options: OidcAuthorizationOptions) {
             redirectUri: redirectUri!,
             responseMode: responseMode.success ? responseMode.data : "query",
             parameters: {
+              iss: issuer,
               error,
               error_description: description,
               ...(stateValue ? { state: stateValue } : {}),
@@ -133,6 +134,7 @@ export function createOidcAuthorization(options: OidcAuthorizationOptions) {
         if (maxAge !== undefined && (!Number.isSafeInteger(maxAge) || maxAge < 0))
           reject("invalid_request", "max_age must be a non-negative integer");
         return {
+          issuer,
           clientId,
           redirectUri,
           scope: scopes.join(" "),
@@ -187,6 +189,7 @@ export function createOidcAuthorization(options: OidcAuthorizationOptions) {
             redirectUri: accepted.redirectUri,
             responseMode: accepted.responseMode,
             parameters: {
+              iss: accepted.issuer,
               error: "login_required",
               error_description: "Fresh authentication is required",
               state: accepted.state,
@@ -210,7 +213,7 @@ export function createOidcAuthorization(options: OidcAuthorizationOptions) {
           throw new OidcProtocolError(error, description, 503, {
             redirectUri: accepted.redirectUri,
             responseMode: accepted.responseMode,
-            parameters: { error, error_description: description, state: accepted.state },
+            parameters: { iss: accepted.issuer, error, error_description: description, state: accepted.state },
           });
         }
         const lifetime = await sessions.getIssuanceLifetime(opened.value, codeTtl);
@@ -236,6 +239,7 @@ export function createOidcAuthorization(options: OidcAuthorizationOptions) {
             redirectUri: accepted.redirectUri,
             responseMode: accepted.responseMode,
             parameters: {
+              iss: accepted.issuer,
               code: `${codeId}.${userSession.userSessionId}.${clientSession.clientSessionId}`,
               state: accepted.state,
             },
@@ -244,7 +248,7 @@ export function createOidcAuthorization(options: OidcAuthorizationOptions) {
       }
       async function continuation(handle: string, browser: OidcBrowserInput): Promise<OidcContinuation> {
         const saved = await state.readContinuation(handle, browser.browserBinding ?? "");
-        if (!saved)
+        if (!saved || saved.authorization.issuer !== issuer)
           invalid("Login request is invalid or expired");
         await client(saved.authorization.clientId);
         return saved;
@@ -327,6 +331,7 @@ export function createOidcAuthorization(options: OidcAuthorizationOptions) {
     discovery(issuer: string) {
       return {
         issuer,
+        authorization_response_iss_parameter_supported: true,
         authorization_endpoint: `${issuer}/auth`,
         response_types_supported: ["code"],
         response_modes_supported: ["query", "fragment", "form_post"],

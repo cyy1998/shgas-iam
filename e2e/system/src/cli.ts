@@ -130,6 +130,11 @@ async function runFullSystemJourneyLifecycle() {
     }),
     "full-system-e2e-passed-and-cleaned",
   );
+  await runJourneyLifecycle(
+    options => createOidcJourneyOperations(options),
+    "dual-entry-e2e-passed-and-cleaned",
+    true,
+  );
 }
 
 async function runJourneyLifecycle(
@@ -137,6 +142,7 @@ async function runJourneyLifecycle(
     options: JourneyFactoryOptions,
   ) => JourneyOperations,
   status: string,
+  dualEntry = false,
 ) {
   await withCapturableSignals(async (signal) => {
     const operations = createOperations(signal);
@@ -157,6 +163,7 @@ async function runJourneyLifecycle(
       async createDescriptor() {
         return createRunDescriptor({
           artifactRoot,
+          dualEntry,
           gatewayPort: await allocateAvailablePort(),
           runId: createRunId(),
         });

@@ -4,6 +4,44 @@ import { expect, test } from '@playwright/test';
 import { currentUserInfo } from '../../test/mocks/fixtures';
 import { mockSsoApi } from './fixtures';
 
+test('Custom continuation uses same-entry discovery navigation and retains business parameters', async ({
+  page,
+}) => {
+  await mockSsoApi(page, { loginGuard: 'continue' });
+  await page.route(
+    '**/sso/.well-known/authentication-configuration',
+    async (route) => {
+      const origin = new URL(route.request().url()).origin;
+      await route.fulfill({
+        json: {
+          data: {
+            authorizationEndpoint: `${origin}/sso/authorize`,
+            logoutEndpoint: `${origin}/sso/logout`,
+          },
+        },
+      });
+    },
+  );
+  await page.route('**/sso/authorize?**', (route) =>
+    route.fulfill({ body: '<p>Authorized</p>' }),
+  );
+  const redirect = 'https://business.example/callback%2Ftenant?keep=a%26b';
+  const query = new URLSearchParams({
+    client: 'iam-admin',
+    redirectUrl: redirect,
+    state: 'opaque & state',
+    ssoReturn: 'a'.repeat(43),
+  });
+  await page.goto(`/portal/login?${query}`);
+  const origin = new URL(page.url()).origin;
+  await page.waitForURL('**/sso/authorize?**');
+  const target = new URL(page.url());
+  expect(target.origin).toBe(origin);
+  expect(target.searchParams.get('redirectUrl')).toBe(redirect);
+  expect(target.searchParams.get('state')).toBe('opaque & state');
+  expect(target.searchParams.get('ssoReturn')).toBe('a'.repeat(43));
+});
+
 test('login page opens and shows mocked password login failure', async ({
   page,
 }) => {

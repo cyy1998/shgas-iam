@@ -372,6 +372,12 @@ pnpm --filter @iam/db subject-projection:rollback
 
 ## 工具链强制执行
 
+#200 后 `pnpm test:e2e` 在原同 origin 全系统基线之后，再启动独立 exact project 执行两个不同 hostname 的
+`dual-entry.spec.ts`；不需要另设环境变量选择第二阶段。workspace-local journey 仍只服务聚焦调试。
+双入口协议/固定旧状态演练的显式命令、资源和证据见[验收账本](../features/sso/dual-entry-acceptance.md)。
+API Browser 的输出固定到 `test-results/browser`；suite 的 outputDirectory 应选择独立任务目录，不能依赖
+其他 runner 的可清理输出根保存跨通道验收材料。
+
 ```bash
 # 绕过 Turbo task cache 的强制执行
 pnpm exec turbo typecheck --force --concurrency=3

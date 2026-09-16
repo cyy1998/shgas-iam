@@ -100,8 +100,8 @@ describe("API entry", () => {
         const [health, ready, protocol, dependency, ssoSchema] = await Promise.all([
           fetch(`${origin}/oidc/health`, { signal }),
           fetch(`${origin}/ready`, { signal }),
-          fetch(`${origin}/oidc/auth`, { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}", signal }),
-          fetch(`${origin}/oidc/auth?client_id=fixture-client&response_type=code&redirect_uri=https%3A%2F%2Frp.example%2Fcallback&scope=openid&state=private-state`, { signal }),
+          fetch(`${origin}/oidc/auth`, { method: "POST", headers: { "X-IAM-Entry-Network": "external", "Content-Type": "application/json" }, body: "{}", signal }),
+          fetch(`${origin}/oidc/auth?client_id=fixture-client&response_type=code&redirect_uri=https%3A%2F%2Frp.example%2Fcallback&scope=openid&state=private-state`, { headers: { "X-IAM-Entry-Network": "external" }, signal }),
           fetch(`${origin}/sso/doc`, { signal }),
         ]);
         return { ...docs, ssoSchema: { status: ssoSchema.status, body: await ssoSchema.json() }, health: health.status, ready: ready.status, protocol: { status: protocol.status, body: await protocol.json() }, dependency: { status: dependency.status, body: await dependency.json(), retryAfter: dependency.headers.get("Retry-After") } };

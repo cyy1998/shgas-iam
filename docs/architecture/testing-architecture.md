@@ -242,6 +242,19 @@ component -> process -> redis -> postgres -> composition -> browser
 每项专用 URL 均不得回退 runtime 或其他 test URL。缺少任一 URL 时，命令在启动 profile 前失败。
 Agent 可以补齐临时资源后重新运行，但命令不得 skip、自动 retry 或读取 runtime/development 配置。
 
+## 双入口验收与产物隔离
+
+#200 为 root Full-system collection 添加独立双入口阶段：先完成上述同 origin 基线，再启动另一个 exact project，
+以 `internal.iam.localhost` / `external.iam.localhost` 和动态 Gateway 端口执行
+`dual-entry.spec.ts`。基线的 OIDC selector 也收集该文件，因此相同 origin 另有实际场景；
+双入口阶段只运行该文件，复用完整 migrations、seed、readiness、正式 APISIX 与诊断/清理 owner。
+它直接观察两协议相对登录、固定外网 Custom callback、host-only Cookie、授权 `iss`、退出与未知 host/伪造 header。
+旧状态升级使用显式固定源码目录的独立演练，不在普通 composition 中隐式拉取旧代码；
+suite/RP、三个旧 Worker 进程和非目标保留的证据入口见[双入口验收](../features/sso/dual-entry-acceptance.md)。
+
+API Browser Integration 的 Playwright 输出固定为 `apps/api/test-results/browser`，不能使用会清理其他通道产物的
+默认 `apps/api/test-results` 根。独立协议套件的持久验收材料放在调用方明确的任务目录，避免被浏览器 runner 清理。
+
 ## Collection Guard
 
 `pnpm check:test-collection` 是永久 Guard，只验证：

@@ -91,6 +91,10 @@ _Avoid_: protocol session row, client projection row, untyped profile blob
 IAM 身份域为一个用户持有的稳定 opaque 标识，也是 User Profile Search 的公开精确身份路径；登录协议可以将它映射到各自契约，但任何协议都不拥有该标识。
 _Avoid_: OIDC-owned subject, protocol session ID, username
 
+**IAM Entry**:
+调用方访问 IAM 时选用的内网或公网入口，决定同入口导航使用的 IAM 地址及 OIDC issuer；显式配置的 Custom SSO 回调可以跨入口。它表达所选入口，不表示用户实际身处哪个网络，也不构成独立用户或 Client。
+_Avoid_: client network location, independent IAM tenant
+
 **Principal Reference**:
 Session Kernel 用 `{ principalType, subjectId }` 指向会话主体的最小引用；用户主体的 `subjectId` 是 Subject Identifier，不包含数据库主键、显示名称或档案快照。Principal Session 不再另存通用 Principal Snapshot；协议确需固化的声明快照由各协议自行拥有。
 _Avoid_: user snapshot, display user, database user reference

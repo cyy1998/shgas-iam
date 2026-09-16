@@ -12,8 +12,6 @@ export function createEntryEnvironment(context: ProcessSmokeAttemptContext, over
     temporaryDirectory: context.temporaryDirectory,
     overrides: {
       NODE_ENV: "production",
-      IAM_API_OIDC_ISSUER: `${origin}/oidc`,
-      IAM_API_OIDC_PUBLIC_ORIGIN: origin,
       IAM_API_OIDC_CURRENT_JWK_JSON: signingKey,
       IAM_API_OIDC_PREVIOUS_JWK_JSON: previousKey,
       IAM_API_OIDC_COOKIE_SECURE: "false",

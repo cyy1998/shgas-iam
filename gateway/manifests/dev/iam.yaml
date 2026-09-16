@@ -185,15 +185,36 @@ routes:
         sampler:
           name: always_on
     upstream: admin-frontend
-  - key: oidc-provider
-    desc: IAM OIDC provider through same-origin /oidc issuer
+  - key: oidc-external
+    desc: IAM OIDC external entry
     uris:
       - /oidc
       - /oidc/*
+    vars:
+      - [http_host, ==, "${IAM_SSO_EXTERNAL_HOST}"]
     plugins:
       proxy-rewrite:
         headers:
           set:
+            X-IAM-Entry-Network: external
+            X-Forwarded-Host: $http_host
+            X-Forwarded-Proto: $scheme
+        use_real_request_uri_unsafe: false
+    priority: 200
+    upstream: api
+    plugin_config: oidc-provider-ip-rate-limit
+  - key: oidc-internal
+    desc: IAM OIDC internal entry
+    uris:
+      - /oidc
+      - /oidc/*
+    vars:
+      - [http_host, ==, "${IAM_SSO_INTERNAL_HOST}"]
+    plugins:
+      proxy-rewrite:
+        headers:
+          set:
+            X-IAM-Entry-Network: internal
             X-Forwarded-Host: $http_host
             X-Forwarded-Proto: $scheme
         use_real_request_uri_unsafe: false

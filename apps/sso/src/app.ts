@@ -1,5 +1,5 @@
 import { StyleProvider } from '@ant-design/cssinjs';
-import { fetchAuthenticationConfig } from '@sso/lib/sso';
+import { fetchAuthenticationConfig } from '@sso/services/authentication-config';
 import type { AuthConfig } from '@sso/types/api';
 import { restoreLoginRedirectState } from '@sso/utils/url';
 import { createElement, type ReactNode } from 'react';

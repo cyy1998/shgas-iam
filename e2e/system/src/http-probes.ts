@@ -5,7 +5,7 @@ export async function probeGateway(origin: string, signal?: AbortSignal) {
     if (signal?.aborted)
       throw signal.reason ?? new Error("Gateway probe aborted");
     try {
-      await fetch(new URL("/", origin), {
+      await requestGateway(new URL("/", origin), {
         redirect: "manual",
         signal: probeSignal(signal),
       });
@@ -33,7 +33,7 @@ export async function probeHttpRoute(
     if (signal?.aborted)
       throw signal.reason ?? new Error("Gateway route probe aborted");
     try {
-      const response = await fetch(new URL(path, origin), {
+      const response = await requestGateway(new URL(path, origin), {
         redirect: "manual",
         signal: probeSignal(signal),
       });
@@ -68,7 +68,7 @@ export async function probeSsoConfiguration(
   options: SsoConfigurationProbeOptions = {},
 ) {
   const maxAttempts = options.maxAttempts ?? Number.POSITIVE_INFINITY;
-  const request = options.request ?? fetch;
+  const request = options.request ?? requestGateway;
   const retryDelayMs = options.retryDelayMs ?? 250;
   const expectedData = {
     authorizationEndpoint: new URL("/sso/authorize", origin).href,
@@ -107,7 +107,7 @@ export async function probeOidcDiscovery(
   options: OidcDiscoveryProbeOptions = {},
 ) {
   const maxAttempts = options.maxAttempts ?? Number.POSITIVE_INFINITY;
-  const request = options.request ?? fetch;
+  const request = options.request ?? requestGateway;
   const retryDelayMs = options.retryDelayMs ?? 250;
   if (maxAttempts !== Number.POSITIVE_INFINITY
     && (!Number.isInteger(maxAttempts) || maxAttempts <= 0)) {
@@ -240,4 +240,16 @@ function waitForProbeRetry(
 function probeSignal(signal?: AbortSignal) {
   const timeout = AbortSignal.timeout(2_000);
   return signal === undefined ? timeout : AbortSignal.any([signal, timeout]);
+}
+
+// Only the two synthetic E2E authorities are resolved locally. The Host still
+// reaches the real APISIX routes and determines their configured entry.
+async function requestGateway(input: string | URL | Request, init?: RequestInit) {
+  const url = new URL(input instanceof Request ? input.url : input);
+  if (!["internal.iam.localhost", "external.iam.localhost"].includes(url.hostname))
+    return fetch(input, init);
+  const headers = new Headers(init?.headers);
+  headers.set("Host", url.host);
+  url.hostname = "127.0.0.1";
+  return fetch(url, { ...init, headers });
 }

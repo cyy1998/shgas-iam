@@ -58,15 +58,20 @@ function expectSsoRoutesClassifyEntryNetwork(
   expect(routes.map(route => getEntryNetwork(route)?.["X-IAM-Entry-Network"]).sort()).toEqual(["external", "internal"]);
   expect(routes.every(route => (route.plugins as Record<string, unknown> | undefined)?.cors === undefined)).toBe(true);
 
-  const oidc = manifest.resources.routes.find(route => route.id === `iam.oidc-provider.${manifest.scope.env}`);
-  expect(oidc).toMatchObject({
-    uris: ["/oidc", "/oidc/*"],
-    upstream_id: `iam.api.${manifest.scope.env}`,
-  });
-  expect(oidc?.plugins).toMatchObject({
-    "proxy-rewrite": { headers: { set: { "X-Forwarded-Host": "$http_host", "X-Forwarded-Proto": "$scheme" } } },
-  });
-  expect(oidc).not.toHaveProperty("plugins.proxy-rewrite.regex_uri");
+  const oidc = manifest.resources.routes.filter(route => Array.isArray(route.uris) && route.uris.includes("/oidc"));
+  expect(oidc).toHaveLength(2);
+  expect(oidc.map(route => getEntryNetwork(route)?.["X-IAM-Entry-Network"]).sort()).toEqual(["external", "internal"]);
+  for (const route of oidc) {
+    expect(route).toMatchObject({ uris: ["/oidc", "/oidc/*"], upstream_id: `iam.api.${manifest.scope.env}` });
+    expect(route.plugins).toMatchObject({
+      "proxy-rewrite": { headers: { set: { "X-Forwarded-Host": "$http_host", "X-Forwarded-Proto": "$scheme" } } },
+    });
+    expect(route).not.toHaveProperty("plugins.proxy-rewrite.regex_uri");
+  }
+  if ("hosts" in matcher)
+    expect(oidc.map(route => route.hosts).flat().sort()).toEqual([...matcher.hosts].sort());
+  else
+    expect(oidc.map(route => route.vars).sort()).toEqual(matcher.authorities.map(authority => [["http_host", "==", authority]]).sort());
 
   const ssoPluginConfig = manifest.resources.plugin_configs.find(
     config => config.id === `iam.sso-api-plugin.${manifest.scope.env}`,
@@ -198,8 +203,8 @@ describe("apisix manifest validation", () => {
     });
 
     const routes = manifest.resources.routes.filter(route =>
-      route.uri === "/sso/*" || route.uri === "/sso/token");
-    expect(routes).toHaveLength(4);
+      route.uri === "/sso/*" || route.uri === "/sso/token" || (Array.isArray(route.uris) && route.uris.includes("/oidc")));
+    expect(routes).toHaveLength(6);
     expect(routes.every(route => route.hosts === undefined)).toBe(true);
     expect(routes.every(route => JSON.stringify(route.vars) === JSON.stringify([
       ["http_host", "==", "127.0.0.1:43123"],

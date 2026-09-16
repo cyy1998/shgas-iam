@@ -4,6 +4,7 @@ import { resolve } from 'node:path';
 export default defineConfig({
   alias: {
     '@sso': resolve(__dirname, 'src'),
+    '@iam/contracts': resolve(__dirname, '../../packages/contracts/src'),
     '~sso': __dirname,
   },
   base: '/portal',

@@ -16,13 +16,13 @@ test("OIDC HTTP reports safe protocol and dependency failure classifications wit
       throw new Error("redis://secret@internal/private");
     } } as never,
     operations,
-    issuer: "https://iam.example/oidc",
-    loginEndpoint: "https://iam.example/login",
+    issuers: { internal: "https://iam.internal/oidc", external: "https://iam.example/oidc" },
+    loginEndpoint: "/login",
     secureCookies: true,
     reportProtocolFailure: failure => failures.push(failure),
   });
   const traceId = "1234567890abcdef1234567890abcdef";
-  const headers = { "X-Request-Id": "oidc-error-request", "traceparent": `00-${traceId}-1234567890abcdef-01` };
+  const headers = { "X-IAM-Entry-Network": "external", "X-Request-Id": "oidc-error-request", "traceparent": `00-${traceId}-1234567890abcdef-01` };
   const protocol = await router.request("/auth?state=secret-state", { method: "POST", headers: { ...headers, "Content-Type": "application/json" }, body: "{}" });
   expect(protocol.status).toBe(400);
   expect(protocol.headers.get("X-Request-Id")).toBe("oidc-error-request");

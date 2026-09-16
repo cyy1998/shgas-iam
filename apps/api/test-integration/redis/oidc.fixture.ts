@@ -82,6 +82,7 @@ export async function fixture(
   clientAuthWindowSeconds?: number,
   trustProxy = true,
   joint = false,
+  issuers = { internal: "https://iam.internal/oidc", external: "https://iam.example/oidc" },
 ) {
   const url = networkUrl ?? process.env.IAM_API_TEST_REDIS_URL;
   if (!url)
@@ -300,7 +301,7 @@ export async function fixture(
         namespace: oidcState.namespace,
         codeTtlSeconds: ttl.code,
         continuationTtlSeconds: ttl.continuation,
-        issuer: "https://iam.example/oidc",
+        issuers,
         secureCookies,
       },
       oidcLogout: { verification: signing, confirmationTtlSeconds: ttl.continuation },
@@ -337,6 +338,7 @@ export async function fixture(
       },
       clients: {
         async acquire(code) {
+          ownClient(code);
           state.acquisitions++;
           if (state.clientFailure)
             throw new Error("Snapshot unavailable");
@@ -374,7 +376,7 @@ export async function fixture(
       config: {
         redisExpireSeconds: 999,
         projectionRetryAfterSeconds: 3,
-        loginEndpoint: "https://iam.example/portal/login",
+        loginEndpoint: "/portal/login",
       },
       authentication: {
         auditLogWriter: { async recordAuditLog() {} },
@@ -429,8 +431,8 @@ export async function fixture(
     const preparedAccessTokens: string[] = [];
     if (composition.oidcTokens) {
       const forOperation = composition.oidcTokens.forOperation.bind(composition.oidcTokens);
-      composition.oidcTokens.forOperation = (operation) => {
-        const scope = forOperation(operation);
+      composition.oidcTokens.forOperation = (operation, issuer) => {
+        const scope = forOperation(operation, issuer);
         return {
           ...scope,
           async exchange(input, deliver) {
@@ -461,6 +463,7 @@ export async function fixture(
         code_challenge_method: "S256",
         ...extra,
       });
+    let entry: "internal" | "external" = "external";
     const cookies = new Map<string, string>();
     function storeCookies(response: Response) {
       for (const header of response.headers.getSetCookie()) {
@@ -475,7 +478,8 @@ export async function fixture(
         ...options,
         redirect: "manual" as const,
         headers: {
-          Cookie: [...cookies].map(([key, value]) => `${key}=${value}`).join("; "),
+          "X-IAM-Entry-Network": entry,
+          "Cookie": [...cookies].map(([key, value]) => `${key}=${value}`).join("; "),
           ...options.headers,
         },
       };
@@ -515,6 +519,8 @@ export async function fixture(
     }
     return {
       ...composition,
+      issuers,
+      setEntry(value: "internal" | "external") { entry = value; },
       app,
       preparedAccessTokens,
       reports,

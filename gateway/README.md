@@ -348,3 +348,11 @@ pnpm gateway:apisix:apply -- --env prod:iam --env-file .env.prod --admin-url htt
 ```
 
 第三方应用只能选择平台定义的策略模板，例如 `auth=sso`、`rateLimit=standard`、`cors=trusted-domains`。IAM 将模板展开为 APISIX 对象，业务方不能直接提交任意 APISIX plugin 配置。
+
+### OIDC 内外网入口
+
+`/oidc` 与 `/oidc/*` 由 `oidc-internal`、`oidc-external` 两条受控入口转发至 API，保留原路径及限流。
+与 SSO 共享 `IAM_SSO_INTERNAL_HOST` / `IAM_SSO_EXTERNAL_HOST`；dev 匹配包含端口的 authority，prod 匹配 host。
+每条 route 覆盖 `X-IAM-Entry-Network` 为固定值。未知 host 无 OIDC 兜底；两项 host 相同可匹配任一标签，API 的相同
+origin 必须派生同一 issuer。切换时按指定 scope 的 diff/dry-run/prune 删除旧无 host 的 `oidc-provider` route，确认 API
+不可被外部直连绕过。实际发布与双域浏览器核验见 [OIDC 手册](../docs/releases/oidc-release-runbook.md)。

@@ -15,7 +15,6 @@ export interface OidcLogoutOptions {
   clients: ClientSnapshotReader;
   redis: OidcStateRedis;
   namespace: string;
-  issuer: string;
   verification: OidcHintVerificationPort;
   confirmationTtlSeconds: number;
 }
@@ -41,7 +40,7 @@ export function createOidcLogout(options: OidcLogoutOptions) {
   const ttl = z.number().int().positive().parse(options.confirmationTtlSeconds);
   const store = createOidcLogoutState(options.redis, options.namespace);
   return {
-    forOperation(operation: SubjectAccessOperation) {
+    forOperation(operation: SubjectAccessOperation, issuer: string) {
       requireSubjectAccessOperation(operation);
       const sessions = options.kernel.forOperation(operation);
       async function client(clientId: string) {
@@ -85,7 +84,7 @@ export function createOidcLogout(options: OidcLogoutOptions) {
           if (token) {
             let claims;
             try {
-              claims = await options.verification.verifyLogoutHint(token, options.issuer);
+              claims = await options.verification.verifyLogoutHint(token, issuer);
             }
             catch {
               invalid("Invalid id_token_hint");
@@ -101,7 +100,7 @@ export function createOidcLogout(options: OidcLogoutOptions) {
           const observed = await root(browser.globalSessionToken);
           const binding = randomHandle();
           const saved = await store.save(
-            { clientId, hint, redirectUri, state: parameters.get("state") },
+            { issuer, clientId, hint, redirectUri, state: parameters.get("state") },
             binding,
             ttl,
           );
@@ -124,7 +123,7 @@ export function createOidcLogout(options: OidcLogoutOptions) {
             browser.binding ?? "",
             parameters.get("xsrf") ?? "",
           );
-          if (!saved)
+          if (!saved || saved.value.issuer !== issuer)
             invalid("Logout request is invalid or expired");
           const confirmed = Boolean(parameters.get("logout"));
           if (confirmed && saved.value.clientId)
@@ -141,14 +140,16 @@ export function createOidcLogout(options: OidcLogoutOptions) {
             throw new OidcLogoutFailure(revocation);
           }
           const effect: OidcLogoutEffect = { choice: confirmed ? "confirm" : "cancel", revocation };
-          const target = new URL(saved.value.redirectUri ?? `${options.issuer}/session/end/success`);
+          if (!saved.value.redirectUri)
+            return { redirectUri: "/oidc/session/end/success", clearGlobalSessionCookie: confirmed, effect };
+          const target = new URL(saved.value.redirectUri);
           if (saved.value.redirectUri && saved.value.state !== null)
             target.searchParams.set("state", saved.value.state);
           return { redirectUri: target.href, clearGlobalSessionCookie: confirmed, effect };
         },
       };
     },
-    discovery: () => ({ end_session_endpoint: `${options.issuer}/session/end` }),
+    discovery: (issuer: string) => ({ end_session_endpoint: `${issuer}/session/end` }),
   };
 }
 export type OidcLogout = ReturnType<typeof createOidcLogout>;

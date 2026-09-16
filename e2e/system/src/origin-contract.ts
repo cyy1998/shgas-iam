@@ -1,6 +1,7 @@
 export interface CanonicalOriginContract {
   adminClientCode: string;
   canonicalOrigin: string;
+  internalOrigin?: string;
   runId: string;
 }
 
@@ -13,11 +14,9 @@ export function assertCanonicalOriginComposeConfig(
 ) {
   const authority = new URL(contract.canonicalOrigin).host;
   const expected = [
-    ["services.api.environment.IAM_API_SSO_INTERNAL_ORIGIN", contract.canonicalOrigin],
+    ["services.api.environment.IAM_API_SSO_INTERNAL_ORIGIN", contract.internalOrigin ?? contract.canonicalOrigin],
     ["services.api.environment.IAM_API_SSO_EXTERNAL_ORIGIN", contract.canonicalOrigin],
-    ["services.api.environment.IAM_API_OIDC_ISSUER", `${contract.canonicalOrigin}/oidc`],
-    ["services.api.environment.IAM_API_OIDC_PUBLIC_ORIGIN", contract.canonicalOrigin],
-    ["services.gateway-sync.environment.IAM_SSO_INTERNAL_HOST", authority],
+    ["services.gateway-sync.environment.IAM_SSO_INTERNAL_HOST", new URL(contract.internalOrigin ?? contract.canonicalOrigin).host],
     ["services.gateway-sync.environment.IAM_SSO_EXTERNAL_HOST", authority],
     ["services.admin-api.environment.IAM_ADMIN_API_ADMIN_CLIENT_CODES", contract.adminClientCode],
     ["services.admin.build.args.UMI_APP_ADMIN_CLIENT_CODE", contract.adminClientCode],

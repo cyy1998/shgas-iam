@@ -6,7 +6,7 @@
 
 ## 结果与证据
 
-[逐模块矩阵](conformance-results.json)完整登记 Basic 38、Config 1、RP-Initiated Logout 11 和 Public 补充 9，
+本地逐模块矩阵 `test-results/oidc-conformance/conformance-results.json` 完整登记 Basic 38、Config 1、RP-Initiated Logout 11 和 Public 补充 9，
 共 59 项：本地通过 46、不适用 13、失败 0、未执行 0。原始官方结果与本地判读分开保存：
 
 | 官方结果 | 数量 | 本地处理 |
@@ -21,7 +21,14 @@
 `run6` 提供 Basic/Config/Logout 的主体证据；`run7` 只补重新配置后的 bad-id-token-hint 和 Public。
 每个 run 保存实际 `environment.json`、`driver-input.json`、原始 plan JSON、每模块 event log、截图及对应
 `*-requirement.json`。矩阵记录日志 SHA-256 和本地路径；这些材料未上传外部，不冒称可从远端仓库下载。
-完整源码模块清单见 [固定来源清单](conformance-suite-modules.json)。
+完整源码模块清单保存在本地 `test-results/oidc-conformance/conformance-suite-modules.json`。
+这两份 JSON 是验收附件，按仓库根目录的 `test-results/` 规则忽略，不随 Git checkout 分发；仓库保留本页摘要和复现所需的 S256 补丁。
+
+2026-09-16 的 #200 验证中，API Browser Integration 使用 Playwright 默认 `test-results` 输出目录，
+启动清理删除了上述本地 `conformance-195` 生成目录。已中止该进程并将 API 浏览器输出限定到
+`test-results/browser`；本页历史结论及矩阵内容保持不变，但原本地 run6/run7 日志与截图现已不可用，
+不能继续把该路径描述为仍可下载或复核的原始材料。本次未找到可确认的原字节备份，也没有重生成并冒充历史证据。
+#200 的双 issuer 证据另在独立任务目录完整重跑，见[双入口验收](../sso/dual-entry-acceptance.md)。
 
 四项 WARNING 的具体边界：
 

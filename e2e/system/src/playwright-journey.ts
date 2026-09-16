@@ -74,6 +74,7 @@ export function createPlaywrightJourneyOperations(
             IAM_E2E_ADMIN_PASSWORD: syntheticAdminPassword,
             IAM_E2E_ADMIN_USERNAME: scenario.adminUsername,
             IAM_E2E_ORIGIN: descriptor.origin,
+            IAM_E2E_INTERNAL_ORIGIN: descriptor.internalOrigin ?? descriptor.origin,
             IAM_E2E_PLAYWRIGHT_OUTPUT_DIR:
               playwrightStagingDirectory(descriptor),
             IAM_E2E_RUN_ID: descriptor.runId,

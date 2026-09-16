@@ -115,6 +115,8 @@ export function descriptorEnvironment(descriptor: RunDescriptor) {
     COMPOSE_DISABLE_ENV_FILE: "1",
     IAM_E2E_GATEWAY_PORT: String(descriptor.gatewayPort),
     IAM_E2E_GATEWAY_AUTHORITY: new URL(descriptor.origin).host,
+    IAM_E2E_INTERNAL_AUTHORITY: new URL(descriptor.internalOrigin ?? descriptor.origin).host,
+    IAM_E2E_INTERNAL_ORIGIN: descriptor.internalOrigin ?? descriptor.origin,
     IAM_E2E_ADMIN_CLIENT_CODE: scenario.adminClientCode,
     IAM_E2E_ADMIN_ROLE_CODE: scenario.adminRoleCode,
     IAM_E2E_ORIGIN: descriptor.origin,
@@ -350,6 +352,7 @@ export function createDockerInfraOperations(
       assertCanonicalOriginComposeConfig(renderedConfig, {
         adminClientCode: scenario.adminClientCode,
         canonicalOrigin: descriptor.origin,
+        internalOrigin: descriptor.internalOrigin,
         runId: descriptor.runId,
       });
     },
@@ -449,6 +452,10 @@ export function createDockerInfraOperations(
         descriptor.origin,
         signal ?? options.signal,
       );
+      if (descriptor.internalOrigin) {
+        await options.probeOidcDiscovery(descriptor.internalOrigin, signal ?? options.signal);
+        await options.probeSsoConfiguration(descriptor.internalOrigin, signal ?? options.signal);
+      }
     },
 
     async collectDiagnostics(

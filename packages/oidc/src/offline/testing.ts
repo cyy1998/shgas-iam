@@ -48,6 +48,7 @@ export function createOidcMaintenanceTestFixture(
         };
         const bearer = `oa_${randomHandle()}`;
         const token = {
+          issuer: "https://iam.example/oidc",
           ...identity,
           version: 1 as const,
           purpose: "oidc_access" as const,
@@ -62,6 +63,7 @@ export function createOidcMaintenanceTestFixture(
         await tokens.save(orphanBearer, { ...token, id: randomUUID(), digest: digest(orphanBearer) });
         await redis.del(`${prefix}token:${digest(orphanBearer)}`);
         const authorization = {
+          issuer: "https://iam.example/oidc",
           clientId,
           redirectUri: "https://client.example/cb",
           scope: "openid",
@@ -79,7 +81,7 @@ export function createOidcMaintenanceTestFixture(
           codeId: randomHandle(),
         });
         await state.saveContinuation({ authorization, completionDigest: null }, "browser", 120);
-        await logout.save({ clientId, hint: null, redirectUri: null, state: null }, "browser", 120);
+        await logout.save({ issuer: "https://iam.example/oidc", clientId, hint: null, redirectUri: null, state: null }, "browser", 120);
         const keys = await redis.keys(`${prefix}*`);
         for (const key of keys) await redis.persist(key);
         return keys;

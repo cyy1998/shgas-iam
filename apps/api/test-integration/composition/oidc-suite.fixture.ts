@@ -18,13 +18,26 @@ async function main() {
       ],
       postLogoutRedirectUris: [`${suite}/test/a/iam195/post_logout_redirect`],
       tls: options.tls,
+      issuerMode: options.issuerMode ?? "dual",
+      hostnames: options.hostnames,
       logPath: join(output, "candidate-api.log"),
       lifecycle,
     });
     const configPath = join(output, "driver-input.json");
     await writeFile(
       configPath,
-      JSON.stringify({ ...options, candidateRuntime: candidate, loginCredential: candidate.loginCredential }),
+      JSON.stringify({
+        ...options,
+        candidateRuntime: {
+          origin: candidate.origin,
+          origins: candidate.origins,
+          clientId: candidate.clientId,
+          publicClientId: candidate.publicClientId,
+          secondClientId: candidate.secondClientId,
+          secret: candidate.secret,
+        },
+        loginCredential: candidate.loginCredential,
+      }),
     );
     await lifecycle.checkpoint("before-driver-start");
     lifecycle.signal.throwIfAborted();

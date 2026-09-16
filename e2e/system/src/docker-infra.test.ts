@@ -328,8 +328,6 @@ function renderedComposeContract() {
       "api": { environment: {
         IAM_API_SSO_INTERNAL_ORIGIN: descriptor.origin,
         IAM_API_SSO_EXTERNAL_ORIGIN: descriptor.origin,
-        IAM_API_OIDC_ISSUER: `${descriptor.origin}/oidc`,
-        IAM_API_OIDC_PUBLIC_ORIGIN: descriptor.origin,
       } },
       "gateway-sync": { environment: {
         IAM_SSO_INTERNAL_HOST: "127.0.0.1:43210",

@@ -486,7 +486,10 @@ Playwright Chromium 系统依赖时，preflight 会提示运行 `pnpm e2e:instal
 
 ### API OIDC 配置
 
-`IAM_API_OIDC_ISSUER`、`IAM_API_OIDC_PUBLIC_ORIGIN` 与 `IAM_API_OIDC_CURRENT_JWK_JSON` 必填；previous JWK 可选。
+`IAM_API_SSO_INTERNAL_ORIGIN`、`IAM_API_SSO_EXTERNAL_ORIGIN` 与 `IAM_API_OIDC_CURRENT_JWK_JSON` 必填；previous JWK 可选。
+两项 HTTP(S) origin 分别加 `/oidc` 得到固定 issuer，相同 origin 合并为同一身份。Gateway 按受控 host 覆盖
+`X-IAM-Entry-Network`，API 拒绝缺失/非法标记；单 issuer/public-origin 输入已退役。两入口共用 Client、密钥及会话关系。
+本次双 issuer 切换须先以固定旧维护工具清除全部会话与协议状态，见[OIDC 发布手册](docs/releases/oidc-release-runbook.md)。
 完整 TTL、namespace、secure Cookie 与登录路径见 [API env](apps/api/.env.example)。旧 Provider env/镜像/Cookie keys 已退役。
 API/Admin 共用 Kernel namespace 和固定根期限；旧 idle/absolute/tombstone 配置已移除。
 首次升级按[统一维护手册](docs/releases/unified-session-maintenance.md)，环境尚未切换。
