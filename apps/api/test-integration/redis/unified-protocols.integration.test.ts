@@ -1,6 +1,6 @@
 import type { ClientSsoConfig } from "@iam/contracts";
 import { Buffer } from "node:buffer";
-import { ApiErrorCode, ClientSsoProtocol, OidcClientType, OidcScope, SubjectClaim } from "@iam/contracts";
+import { ApiErrorCode, ClientSsoCallbackType, ClientSsoProtocol, OidcClientType, OidcScope, SubjectClaim } from "@iam/contracts";
 import { expect, test } from "bun:test";
 import { fixture } from "./oidc.fixture";
 
@@ -29,6 +29,7 @@ test("joint HTTP original relationship rejects both protocols after a late Token
     };
     const customConfig: ClientSsoConfig = {
       protocol: ClientSsoProtocol.CustomSso,
+      callbackType: ClientSsoCallbackType.Business,
       callbackEndpoint: "https://rp.example/callback",
       validRedirectUrls: ["https://rp.example/callback"],
       subjectClaims: [SubjectClaim.SubjectIdentifier, SubjectClaim.ProfileName],

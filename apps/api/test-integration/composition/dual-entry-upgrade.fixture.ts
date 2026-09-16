@@ -10,7 +10,7 @@ import { promisify } from "node:util";
 import { createClientSnapshots } from "@iam/api-core/client-snapshot/composition";
 import { createRedisSubjectAccessStore, SubjectAccessRecordV1Schema } from "@iam/api-core/subject-access";
 import { runProcessCommandSmoke, spawnOwnedProcessTree } from "@iam/api-core/testing/process-smoke-harness";
-import { ClientSsoProtocol, SubjectClaim } from "@iam/contracts";
+import { ClientSsoCallbackType, ClientSsoProtocol, SubjectClaim } from "@iam/contracts";
 import { createClientSnapshotRepository } from "@iam/db/client-snapshot";
 import { createInternalUserProfileQueryRepository, createSubjectFactsReader, createSubjectFactsRedisCache } from "@iam/user-profile-read-model";
 import {
@@ -226,6 +226,7 @@ export async function runDualEntryUpgradeRehearsal(options: {
     const sql = candidate.postgresHarness.sql;
     const config = {
       protocol: ClientSsoProtocol.CustomSso,
+      callbackType: ClientSsoCallbackType.Business,
       callbackEndpoint: upgradeRedirectUri,
       validRedirectUrls: [upgradeRedirectUri],
       subjectClaims: [SubjectClaim.SubjectIdentifier, SubjectClaim.ProfileName],

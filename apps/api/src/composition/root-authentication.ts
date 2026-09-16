@@ -103,7 +103,7 @@ export interface RootAuthenticationCompositionOptions {
     UnifiedCustomSsoOperationsOptions,
     "credentials" | "tokenTtlSeconds" | "failureEffectTimeoutMs" | "business"
   > & {
-    managed?: Omit<NonNullable<UnifiedCustomSsoOperationsOptions["managed"]>, "callbackUrls">;
+    managed?: UnifiedCustomSsoOperationsOptions["managed"];
   };
 }
 
@@ -134,10 +134,6 @@ export function createRootAuthenticationComposition(options: RootAuthenticationC
       && options.customSsoAccess
       && createUnifiedCustomSsoOperations({
         ...options.customSsoAccess,
-        managed: options.customSsoAccess.managed && {
-          ...options.customSsoAccess.managed,
-          callbackUrls: options.customSso.managedCallbackUrls,
-        },
         redis: options.customSso.redis,
         namespace: options.customSso.namespace,
         kernel: options.kernel,

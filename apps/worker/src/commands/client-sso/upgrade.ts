@@ -148,7 +148,7 @@ export async function runClientSsoUpgrade(
             });
             continue;
           }
-          const plan = planClientSsoUpgrade(found.data, selection, manifest);
+          const plan = planClientSsoUpgrade(found.data, selection);
           if (plan.kind === "pending") {
             results.push({ clientCode: selection.clientCode, status: "pending", reason: plan.reason });
             continue;

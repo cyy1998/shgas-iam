@@ -17,7 +17,6 @@ import {
   SubjectAccessUnavailableError,
 } from "@iam/api-core/subject-access";
 import { ClientSsoProtocol, ClientStatus, LoginPageGuardDecision } from "@iam/contracts";
-import { createClientSsoCallbackClassifier } from "@iam/domain/client/sso-callback";
 import { SessionStorageError } from "@iam/session-kernel";
 import { z } from "zod";
 import { CustomSsoTrafficGateUnavailableError } from "../internal/traffic-gate";
@@ -30,9 +29,6 @@ export interface UnifiedCustomSsoAuthorizationOptions {
   namespace: string;
   codeTtlSeconds: number;
   continuationTtlSeconds: number;
-  trustedIamOrigins: readonly string[];
-  /** Actual deployed complete URLs of the managed handler, supplied by server composition. */
-  managedCallbackUrls: readonly string[];
   redirectUrls: ReturnType<typeof createSsoRedirectUrlValidator>;
 }
 
@@ -48,7 +44,6 @@ interface AuthorizationInput {
 export function createUnifiedCustomSsoAuthorization(options: UnifiedCustomSsoAuthorizationOptions) {
   const codeTtl = z.number().int().positive().parse(options.codeTtlSeconds);
   const continuationTtl = z.number().int().positive().parse(options.continuationTtlSeconds);
-  const isManagedCallback = createClientSsoCallbackClassifier(options);
   const state = createCustomSsoState(options.redis, options.namespace);
   return {
     forOperation(operation: SubjectAccessOperation) {
@@ -100,7 +95,7 @@ export function createUnifiedCustomSsoAuthorization(options: UnifiedCustomSsoAut
           clientCode: input.clientCode,
           redirectUrl,
           callbackEndpoint,
-          redeemer: isManagedCallback(callbackEndpoint) ? "managed" : "business",
+          redeemer: config.callbackType,
           ...(input.state === undefined ? {} : { state: input.state }),
         };
       }

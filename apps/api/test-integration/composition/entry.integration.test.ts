@@ -25,7 +25,7 @@ import {
   PROCESS_SMOKE_TEST_TIMEOUT_MS,
   spawnOwnedProcessTree,
 } from "@iam/api-core/testing/process-smoke-harness";
-import { ClientSsoProtocol, ClientStatus, OidcClientType, OidcScope, SubjectClaim } from "@iam/contracts";
+import { ClientSsoCallbackType, ClientSsoProtocol, ClientStatus, OidcClientType, OidcScope, SubjectClaim } from "@iam/contracts";
 import { createUnifiedSessionKernel } from "@iam/session-kernel";
 import { createSubjectFactsRedisCache } from "@iam/user-profile-read-model/subject-facts";
 import { afterEach, expect, test } from "bun:test";
@@ -102,6 +102,7 @@ test(
       await factsCache.publish(facts);
       const clientConfig = {
         protocol: ClientSsoProtocol.CustomSso,
+        callbackType: ClientSsoCallbackType.Business,
         callbackEndpoint: "https://rp.example/callback",
         validRedirectUrls: [redirectUri],
         subjectClaims: [SubjectClaim.SubjectIdentifier, SubjectClaim.ProfileName],
@@ -207,7 +208,7 @@ test(
           const info = (token: string, client = custom) =>
             request("/public/user-info", { headers: { Authorization: token, Client: client } });
           try {
-            await sql`UPDATE client SET sso_config = ${JSON.stringify({ ...clientConfig, callbackEndpoint: `${origin}/sso/callback`, orcas: { enabled: false } })}::jsonb WHERE client_code = ${managed}`;
+            await sql`UPDATE client SET sso_config = ${JSON.stringify({ ...clientConfig, callbackType: ClientSsoCallbackType.Managed, callbackEndpoint: `${origin}/sso/callback`, orcas: { enabled: false } })}::jsonb WHERE client_code = ${managed}`;
             await snapshots.invalidateClient(managed);
             const health = await request("/oidc/health");
             expect(health.status).toBe(200);

@@ -63,15 +63,16 @@ GET {IAM_ORIGIN}/sso/.well-known/authentication-configuration
 | `ssoSecret` | Custom SSO 专用客户端密钥。仅 Independent 模式兑现 grant 时使用，与通用 `clientSecret` 无关；普通详情不含明文，生成/轮换及超级管理员审计重读通过独立能力交付，必须保存在服务端。 |
 | `validRedirectUrls` | 允许登录完成后返回的业务地址 pattern 列表。支持 origin、一级子域 wildcard（如 `https://*.example.com`）和 path 末尾 `/*`；命中任一 wildcard pattern 的实际地址可携带查询参数。 |
 | `subjectClaims` | 该 Client 获准接收的主体字段；必须包含 Subject Identifier，其他 Profile、任职和授权字段按需选择。 |
-| `callbackEndpoint` | 唯一回调地址；匹配 IAM 托管回调时采用托管交付，否则为业务自行接入。 |
-| `orcas.enabled` | 仅托管回调可配置。启用时 IAM 额外交付 ORCAS Cookie/query/专用 endpoint；ORCAS 不进入主体投影。 |
+| `callbackType` | 管理员必选 `managed`（托管回调）或 `business`（业务回调）；不根据 URL 判断。业务回调禁止开启 ORCAS。 |
+| `callbackEndpoint` | 唯一完整回调地址，允许 query；托管地址不限域名及路径，管理员负责实际代理到 IAM。 |
+| `orcas.enabled` | 仅托管回调实际执行。启用时 IAM 额外交付 ORCAS Cookie/query/专用 endpoint；ORCAS 不进入主体投影。 |
 
 建议业务系统至少准备以下地址：
 
 | 地址 | 归属 | 说明 |
 |---|---|---|
 | `https://biz.example.com/` | 前端 | 业务系统首页或登录后落地页，作为 `redirectUrl`。 |
-| `https://biz.example.com/sso/callback` | 后端 | 独立应用模式下接收 IAM 授权码。 |
+| `https://biz.example.com/auth/callback` | 后端 | 业务自行接收 IAM 授权码。 |
 
 ## 4. 登录流程
 
@@ -121,12 +122,12 @@ Independent Credential 与 Gateway Local Session 均使用 `fixed_at_issue`：�
 
 ### 4.2 网关托管模式
 
-网关托管模式适合业务系统和 IAM 位于同一访问域或同一反向代理下，由网关把业务系统的 `/sso/callback` 转发到 IAM 的 `/sso/callback`。
+网关托管模式适合业务系统和 IAM 位于同一访问域或同一反向代理下，由网关把配置的业务回调地址转发到 IAM 的 `/sso/callback`。
 
-IAM 授权成功后会重定向到：
+IAM 授权成功后使用 Client 配置的固定完整 callback，不从业务落地地址推导：
 
 ```text
-{redirectUrl的协议和域名}/sso/callback?code={code}&client={clientCode}&redirectUrl={urlencoded_redirect_url}
+{Client配置的完整callbackEndpoint，并保留非协议query参数} + code/client/redirectUrl
 ```
 
 IAM 的 `/sso/callback` 在 Client/原 Code 用途/redirect、两类会话关系、Snapshot 和 Subject Access 校验通过后一次消费 Code，成功消费才执行 ORCAS 与 Local Session 签发。现有交付行为保持：
@@ -135,6 +136,8 @@ IAM 的 `/sso/callback` 在 Client/原 Code 用途/redirect、两类会话关系
 2. 为该业务系统创建 IAM 管理的 Gateway Local Session。
 3. 写入 HttpOnly Cookie：`local_{transportClientCode}_session={sid}`。
 4. 302 跳转回原始 `redirectUrl`，并在 URL 查询参数中附带 `token={sid}`。
+
+Cookie 为 host-only，属于实际访问回调的主机，不跨主机同步。托管/业务由 `callbackType` 决定，与路径及大小写无关。
 
 业务系统后续可以通过 Cookie 使用局部会话；如前后端分离或跨域调用，也可以读取回调 URL 中的 `token` 后交给业务后端建立自己的会话。
 
@@ -149,7 +152,7 @@ Gateway callback 失败继续返回现有 JSON。用户应返回业务应用重�
 独立应用模式适合业务系统完全自管后端会话。IAM 授权成功后会重定向到客户端注册的 `callbackEndpoint`：
 
 ```text
-https://biz.example.com/sso/callback?code={code}&client={clientCode}&redirectUrl={urlencoded_redirect_url}
+https://biz.example.com/auth/callback?code={code}&client={clientCode}&redirectUrl={urlencoded_redirect_url}
 ```
 
 业务系统后端收到回调后，通过 HTTP Basic 认证和 form body 调 IAM 兑现 Authorization Grant，换取 Independent

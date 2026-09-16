@@ -114,8 +114,6 @@ describe("Client single-protocol upgrade through independent command processes",
     const result: ClientSsoUpgradeManifest = {
       version: 1,
       layout: "dual-to-single-v1",
-      trustedIamOrigins: ["https://iam.test"],
-      managedCallbackUrls: ["https://iam.test/sso/callback"],
       clients,
     };
     return result;
@@ -142,9 +140,7 @@ describe("Client single-protocol upgrade through independent command processes",
     const afterPending = await facts();
     expect(afterPending).toEqual(before);
     input.clients[0]!.protocol = ClientSsoProtocol.Oidc;
-    input.clients[1]!.gatewayCallback = "https://business.test/sso/callback";
-    await execute("apply", input, 1);
-    input.clients[1]!.gatewayCallback = "https://iam.test/sso/callback";
+    input.clients[1]!.gatewayCallback = "https://business.test:8443/login/finish?tenant=fixed";
     const applied = await execute("apply", input);
     expect(applied.report.updatedRows).toBe(2);
     const after = await facts();
@@ -170,7 +166,8 @@ describe("Client single-protocol upgrade through independent command processes",
     expect(after[1]!.data.sso_secret).toBeNull();
     expect(after[1]!.data.sso_config).toMatchObject({
       protocol: "custom-sso",
-      callbackEndpoint: "https://iam.test/sso/callback",
+      callbackType: "managed",
+      callbackEndpoint: "https://business.test:8443/login/finish?tenant=fixed",
       orcas: { enabled: true },
     });
     expect(applied.output).not.toContain(after[0]!.data.sso_secret);
@@ -316,8 +313,6 @@ describe("Client single-protocol upgrade through independent command processes",
     const empty: ClientSsoUpgradeManifest = {
       version: 1,
       layout: "dual-to-single-v1",
-      trustedIamOrigins: [],
-      managedCallbackUrls: [],
       clients: [],
     };
     await execute("verify", empty, 0, true);

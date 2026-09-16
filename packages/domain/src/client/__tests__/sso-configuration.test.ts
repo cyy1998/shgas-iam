@@ -1,5 +1,6 @@
 import type { ClientSsoConfig } from "@iam/contracts";
 import {
+  ClientSsoCallbackType,
   ClientSsoConfigSchema,
   ClientSsoProtocol,
   ClientStatus,
@@ -22,6 +23,7 @@ const oidc = {
 } satisfies ClientSsoConfig;
 const custom = {
   protocol: ClientSsoProtocol.CustomSso,
+  callbackType: ClientSsoCallbackType.Business,
   callbackEndpoint: "https://rp.example/cb",
   validRedirectUrls: ["https://rp.example/*"],
   subjectClaims: ["subjectIdentifier"],
@@ -30,8 +32,9 @@ const custom = {
 test("strict single protocol configuration derives authentication and rejects mixed/retired fields", () => {
   expect(ClientSsoConfigSchema.parse(oidc)).toEqual(oidc);
   expect(ClientSsoConfigSchema.parse(custom)).toEqual(custom);
-  expect(ClientSsoConfigSchema.parse({ ...custom, orcas: { enabled: true } })).toEqual({
+  expect(ClientSsoConfigSchema.parse({ ...custom, callbackType: ClientSsoCallbackType.Managed, orcas: { enabled: true } })).toEqual({
     ...custom,
+    callbackType: ClientSsoCallbackType.Managed,
     orcas: { enabled: true },
   });
   expect(getClientSsoTokenEndpointAuthMethod(oidc)).toBe(OidcTokenEndpointAuthMethod.None);

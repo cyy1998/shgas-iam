@@ -1,96 +1,26 @@
-import type { ChildProcessWithoutNullStreams } from "node:child_process";
-import { execSync, spawn } from "node:child_process";
-import process from "node:process";
 import { expect, test } from "@playwright/test";
 import { z } from "zod";
+import { startBrowserFixture } from "./fixture-process";
 
 // The browser exercises the API adapter; a real Gateway owns this header in system E2E.
 test.use({ extraHTTPHeaders: { "X-IAM-Entry-Network": "external" } });
 
 async function start(failToken = false) {
-  if (!process.env.IAM_API_TEST_REDIS_URL)
-    throw new Error("IAM_API_TEST_REDIS_URL is required");
-  // Resolve the real executable through the installed CLI shim, then own the direct child.
-  const executable = execSync("bun -e \"console.log(process.execPath)\"", {
-    encoding: "utf8",
-    windowsHide: true,
-    timeout: 10000,
-    maxBuffer: 4096,
-  }).trim();
-  const child = spawn(
-    executable,
-    ["test-integration/browser/oidc-server.fixture.ts", ...(failToken ? ["--fail-token"] : [])],
-    { cwd: process.cwd(), env: process.env, windowsHide: true, stdio: "pipe" },
-  );
-  const exit = new Promise<number | null>((resolve, reject) => {
-    child.once("error", reject);
-    child.once("exit", resolve);
-  });
-  let stderr = "";
-  child.stderr.on("data", (chunk) => {
-    stderr = (stderr + String(chunk)).slice(-4096);
-  });
-  async function close() {
-    child.stdin.end();
-    const timer = setTimeout(() => child.kill(), 5000);
-    try {
-      const code = await exit;
-      if (code !== 0)
-        throw new Error(`Browser fixture failed (${code}): ${stderr}`);
-    }
-    finally {
-      clearTimeout(timer);
-    }
-  }
+  const running = await startBrowserFixture("test-integration/browser/oidc-server.fixture.ts", failToken ? ["--fail-token"] : []);
   try {
-    const line = await readReady(child, exit);
-    const seed = z
-      .object({
-        origin: z.url(),
-        logoutUri: z.url(),
-        token: z.string(),
-        clientId: z.string(),
-        id_token: z.string(),
-        access_token: z.string(),
-      })
-      .parse(JSON.parse(line));
-    return { ...seed, close };
+    const seed = z.object({
+      origin: z.url(),
+      logoutUri: z.url(),
+      token: z.string(),
+      clientId: z.string(),
+      id_token: z.string(),
+      access_token: z.string(),
+    }).parse(JSON.parse(running.ready));
+    return { ...seed, close: running.close };
   }
   catch (failure) {
-    try {
-      await close();
-    }
-    catch (cleanup) {
-      throw new AggregateError([failure, cleanup], "Browser fixture startup and cleanup failed", {
-        cause: failure,
-      });
-    }
+    await running.close();
     throw failure;
-  }
-}
-async function readReady(child: ChildProcessWithoutNullStreams, exit: Promise<number | null>) {
-  let timer: ReturnType<typeof setTimeout>;
-  try {
-    return await Promise.race([
-      new Promise<string>((resolve, reject) => {
-        let stdout = "";
-        child.stdout.on("data", (chunk) => {
-          stdout = (stdout + String(chunk)).slice(0, 32769);
-          if (stdout.length > 32768)
-            reject(new Error("Browser fixture readiness exceeded limit"));
-          const newline = stdout.indexOf("\n");
-          if (newline >= 0)
-            resolve(stdout.slice(0, newline));
-        });
-        timer = setTimeout(() => reject(new Error("Browser fixture readiness timed out")), 10000);
-      }),
-      exit.then(() => {
-        throw new Error("Browser fixture exited before readiness");
-      }),
-    ]);
-  }
-  finally {
-    clearTimeout(timer!);
   }
 }
 

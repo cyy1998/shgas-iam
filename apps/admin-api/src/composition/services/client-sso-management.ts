@@ -13,7 +13,6 @@ export function createClientSsoManagement(options: {
   db: DbClient;
   logger: AfterCommitLoggerPort;
   invalidation: ClientSsoServiceDeps["invalidation"];
-  callback: ClientSsoServiceDeps["callback"];
   sessionTermination?: ClientSsoServiceDeps["sessionTermination"];
 }) {
   const service = createClientSsoService({
@@ -28,7 +27,6 @@ export function createClientSsoManagement(options: {
       }),
     }),
     invalidation: options.invalidation,
-    callback: options.callback,
     logger: options.logger,
     credentials: { create: () => ({ secret: randomBytes(32).toString("base64url"), id: randomUUID(), updatedAt: new Date().toISOString() }) },
   });

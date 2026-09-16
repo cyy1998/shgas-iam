@@ -3,7 +3,7 @@ import { Buffer } from "node:buffer";
 import { createPublicKey, randomBytes, randomUUID, verify } from "node:crypto";
 import { connect, createServer } from "node:net";
 import process from "node:process";
-import { ClientSsoProtocol, ClientStatus, OidcClientType } from "@iam/contracts";
+import { ClientSsoCallbackType, ClientSsoProtocol, ClientStatus, OidcClientType } from "@iam/contracts";
 import { createOidcClientAuthRateLimiter, createOidcSigningKeys, OidcExchangeFailure } from "@iam/oidc";
 import { createOidcInventory, createOidcMaintenance, createOidcVerifier } from "@iam/oidc/maintenance";
 import { expect, test } from "bun:test";
@@ -277,6 +277,7 @@ for (const failure of failures) {
           ...value,
           ssoConfig: {
             protocol: ClientSsoProtocol.CustomSso,
+            callbackType: ClientSsoCallbackType.Business,
             callbackEndpoint: "https://app.example/callback",
             validRedirectUrls: ["https://app.example/callback"],
             subjectClaims: ["subjectIdentifier"],

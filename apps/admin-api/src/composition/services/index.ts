@@ -65,10 +65,6 @@ export function createAdminApiServices(options: CreateAdminApiServicesOptions) {
     db: options.db,
     redis: runtime.redis,
     logger: runtime.logger,
-    callback: {
-      isManagedCallback: callback => [runtime.config.env.sso.internalOrigin, runtime.config.env.sso.externalOrigin]
-        .some(origin => new URL("/sso/callback", origin).href === new URL(callback).href),
-    },
     sessionTermination: {
       async revokeClientSessions(clientCode) {
         const result = await rootSecurity.revocation.revokeClientSessions(clientCode);

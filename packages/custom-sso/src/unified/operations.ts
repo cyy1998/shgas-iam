@@ -26,7 +26,7 @@ import {
 import { observabilityLogFields } from "@iam/api-core/observability";
 import { requireSubjectAccessOperation, SubjectAccessUnavailableError } from "@iam/api-core/subject-access";
 import { parseSubjectClaimSelection } from "@iam/client-subject-projection";
-import { ClientSsoProtocol, ClientStatus, SubjectClaim } from "@iam/contracts";
+import { ClientSsoCallbackType, ClientSsoProtocol, ClientStatus, SubjectClaim } from "@iam/contracts";
 import { SessionStorageError } from "@iam/session-kernel";
 import { z } from "zod";
 import {
@@ -57,7 +57,6 @@ export interface UnifiedCustomSsoOperationsOptions {
   tokenTtlSeconds: number;
   business?: { audit: CustomSsoAuditPort; logger: CustomSsoLoggerPort };
   managed?: {
-    callbackUrls: readonly string[];
     orcas: CustomSsoOrcasPort;
     users: {
       findOrcasUserBySubjectIdentifier: (subjectIdentifier: string) => Promise<CustomSsoOrcasUser | null>;
@@ -127,7 +126,6 @@ export function createUnifiedCustomSsoOperations(options: UnifiedCustomSsoOperat
   }
   const codes = createCustomSsoState(options.redis, options.namespace);
   const tokens = createCustomSsoTokenState(options.redis, options.namespace);
-  const managedCallbacks = new Set(options.managed?.callbackUrls.map(value => new URL(value).href));
   return {
     forOperation(operation: SubjectAccessOperation) {
       requireSubjectAccessOperation(operation);
@@ -268,7 +266,7 @@ export function createUnifiedCustomSsoOperations(options: UnifiedCustomSsoOperat
           try {
             const managed = options.managed;
             const config = await accept(input.clientCode);
-            if (!managed || !managedCallbacks.has(new URL(config.callbackEndpoint).href))
+            if (!managed || config.callbackType !== ClientSsoCallbackType.Managed)
               throw new InvalidSsoClientError();
             let code;
             try {
@@ -490,11 +488,6 @@ export function createUnifiedCustomSsoOperations(options: UnifiedCustomSsoOperat
           ) {
             throw new AuthzUnauthorizedError();
           }
-          const purpose = managedCallbacks.has(new URL(client.value.ssoConfig.callbackEndpoint).href)
-            ? "managed"
-            : "business";
-          if (record.purpose !== purpose)
-            throw new AuthzUnauthorizedError();
           // Logout observes the original relationship without asking Subject Access permission.
           const root = await sessions.resolveUserSessionById(record.userSessionId);
           if (root.status === "corrupt")

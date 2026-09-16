@@ -56,6 +56,7 @@ export async function createWorkerPostgresTestHarness(
           }
         }
         await migrate(db, { migrationsFolder: temporaryMigrations, migrationsSchema: schemaName });
+        await scopedSql.file(new URL("../../../../packages/db/src/migrations/20260916050609_explicit_callback_type/migration.sql", import.meta.url), { cache: false });
       }
       finally {
         await removeMigrationFixture(temporaryMigrations, prefix);

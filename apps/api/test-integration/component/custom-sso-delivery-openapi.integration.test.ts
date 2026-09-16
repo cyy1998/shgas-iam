@@ -39,8 +39,6 @@ function createContractApp() {
       namespace: "openapi-test",
       codeTtlSeconds: 60,
       continuationTtlSeconds: 60,
-      trustedIamOrigins: ["https://iam.example.test"],
-      managedCallbackUrls: ["https://iam.example.test/sso/callback"],
     },
     customSsoAccess: { tokenTtlSeconds: 3600, credentials: { authenticate: unexpectedDependencyCall } },
     authentication: {

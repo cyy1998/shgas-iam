@@ -222,3 +222,41 @@ source decoder 及其专用 fixture 属于 Kernel/Custom/OIDC 离线维护 owner
 | 不能删除的作用 | 错误用途/Client 不误撤，暂态保留 Cookie，Code 唯一消费、未知结果、有界原实例撤销、替换 identity 与本次 Token 精确补偿仍由 API HTTP Redis 直接验证。 |
 
 #155/#162 仅在此记录最终实现去向，不关闭来源 issue。内存检查收缩不宣称 Redis/PG 往返或端点性能收益；完整成本另归 #71/#196。
+
+## 显式回调类型的保留状态升级
+
+[ADR-0037](../adr/0037-classify-managed-sso-callbacks-by-path.md) 的修订要求保留现有会话、Code、续接、Token 和 Secret。
+本流程只迁移 Client 配置，不执行首次旧模型升级的全体下线，也不删除在线认证状态。
+新授权按显式 `callbackType` 选择托管/业务，始终跳转配置的完整地址；已有 Code 保留用途和绑定，不能转换兑换方式。
+业务域名的托管地址需要事先部署代理，Cookie 属于实际访问回调的主机。修改类型后原 Token 仍可退出。
+
+### 单协议存量切换
+
+1. 固定来源与新候选，备份 PostgreSQL（包含 schema、Client 配置与 Drizzle journal），保留可恢复备份和原应用制品。
+   暂停相关协议流量和全部 Client 配置写入，排空在途请求；不得仅靠表锁代替停写。
+2. 在新候选中显式设置目标 `DATABASE_URL`，先运行 `pnpm --filter @iam/db client-callback:upgrade inventory --writers-stopped`。
+   报告仅列 Client code、目标类型和是否关闭 ORCAS，不输出地址或凭据。来源必须为已存在 `sso_config` 的布局。
+3. 核对报告后运行 `pnpm --filter @iam/db client-callback:upgrade apply --writers-stopped`，保存成功报告。
+   工具在同一事务锁定 Client 表、校验全部来源、补齐类型并替换约束；失败整笔回滚。
+   仅缺少类型的 Custom 配置按 URL 解析后的 pathname 精确等于 `/sso/callback` 回填 `managed`，其余为 `business`。
+   业务且 ORCAS 已开启时写为关闭并报告；已有显式类型不会被重算。OIDC、Secret、其他 Client 字段均保留。
+4. 运行 `pnpm --filter @iam/db db:migrate` 登记并应用 `20260916050609_explicit_callback_type` 及按序迁移。
+   该 DDL 使用同一份新约束，可在准备命令已应用约束后再次执行；有未补齐的配置时直接 DDL 会失败。
+   新装空库直接运行 `db:migrate`。不要通过 `db:push` 绕过迁移记录。
+5. 用新进程运行 `pnpm --filter @iam/db client-callback:upgrade verify --writers-stopped`，确认全部配置均可严格读取。
+   重跑 apply 不改写已有显式类型或 Secret；异常数据拒绝迁移，先修复来源再重跑。
+6. 协调更新 Admin、Admin API、API 和 Worker，按本手册现有 Snapshot repair/verify 流程全量重建并独立核验配置快照。
+   旧严格读取端不兼容新字段，禁止新旧版本混跑；新端不接受缺失类型，不提供在线推断回退。
+7. 在恢复流量前核验管理选择、业务 Secret 兑换、托管 Cookie、旧 Code/Token 和退出；通过后恢复写入和流量。
+
+### 旧双协议来源与恢复
+
+旧双协议列仍存在时，当前 Worker `client-sso:upgrade` 将 Independent 映射为 `business`、Gateway 映射为 `managed`，
+Gateway 的 `gatewayCallback` 仍必须显式提供，但不限制路径。先用本节准备命令升级既有 `sso_config` 和约束，
+再运行当前 Worker 的旧配置 apply/verify；确认全量通过后才能执行既有收缩 DDL。固定历史制品的 manifest 与输出
+仍遵循其自身版本，不得把当前格式提交给旧制品。正常单协议升级不运行旧双协议迁移工具。
+
+准备命令失败时事务回滚，可在保持停写下修正后重试。准备已提交而后续步骤失败时保持停流，优先修复并继续；
+如必须回退，恢复切换前 PostgreSQL 备份及对应 journal，统一恢复旧制品并重建旧版配置快照，再核验恢复。
+不能只删除类型字段：管理员的新显式选择和 ORCAS 清理无法无损反推。回退不清空 Redis 会话，也不得恢复过期的认证快照。
+本次自动化验证不代表已执行目标环境迁移、代理部署或发布。

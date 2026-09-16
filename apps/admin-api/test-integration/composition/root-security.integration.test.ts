@@ -739,7 +739,7 @@ test("Client ordinary edits preserve real sessions; formal deletion and explicit
       db: pg.db,
       redis: f.redis,
       logger: f.logger,
-      callback: { isManagedCallback: () => false },
+
       sessionTermination: f.lifecycleRevocation,
     });
     for (const patch of [
@@ -951,7 +951,7 @@ test("Client deletion audit rollback and unknown COMMIT preserve their true Post
       db: pg.db,
       redis: f.redis,
       logger: f.logger,
-      callback: { isManagedCallback: () => false },
+
       sessionTermination: f.lifecycleRevocation,
     });
     const warm = await snapshots.client.acquire(code);
@@ -973,7 +973,7 @@ test("Client deletion audit rollback and unknown COMMIT preserve their true Post
       }),
       invalidation: snapshots,
       logger: f.logger,
-      callback: { isManagedCallback: () => false },
+
       credentials: {
         create: () => {
           throw new Error("Deletion cannot rotate credentials");
@@ -1022,7 +1022,7 @@ test("Client deletion audit rollback and unknown COMMIT preserve their true Post
       db: uncertainDb,
       redis: f.redis,
       logger: f.logger,
-      callback: { isManagedCallback: () => false },
+
       sessionTermination: f.lifecycleRevocation,
     });
     let outcome: unknown;

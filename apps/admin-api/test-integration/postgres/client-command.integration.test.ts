@@ -56,7 +56,7 @@ function createCommand(
       db: harness.db,
       logger: { warn, error: mock() },
       invalidation: { invalidateClient },
-      callback: { isManagedCallback: () => false },
+
       sessionTermination: { revokeClientSessions: revokeClientAllProtocols },
     }).service,
     passwordHasher: { hashSecret: async secret => `hash-${secret}` },

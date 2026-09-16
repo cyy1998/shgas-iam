@@ -1,6 +1,5 @@
 import type { ClientSsoConfig } from "@iam/contracts";
-import { ClientCodeSchema, ClientSsoProtocol, ClientStatus, OidcClientType } from "@iam/contracts";
-import { createClientSsoCallbackClassifier } from "@iam/domain/client/sso-callback";
+import { ClientCodeSchema, ClientSsoCallbackType, ClientSsoProtocol, ClientStatus, OidcClientType } from "@iam/contracts";
 import { normalizeClientSsoConfig } from "@iam/domain/client/sso-configuration";
 import { z } from "zod";
 import {
@@ -23,8 +22,6 @@ export const ClientSsoUpgradeManifestSchema = z
   .object({
     version: z.literal(1),
     layout: z.literal("dual-to-single-v1"),
-    trustedIamOrigins: z.array(z.url()),
-    managedCallbackUrls: z.array(z.url()),
     clients: z
       .array(UpgradeSelectionSchema)
       .max(1000)
@@ -82,10 +79,8 @@ export function readLegacyClient(input: unknown) {
 export function planClientSsoUpgrade(
   input: unknown,
   selection: z.infer<typeof UpgradeSelectionSchema>,
-  manifest: ClientSsoUpgradeManifest,
 ) {
   const source = readLegacyClient(input);
-  const isManaged = createClientSsoCallbackClassifier(manifest);
   const available = [
     ...(source.oidc ? [ClientSsoProtocol.Oidc] : []),
     ...(source.custom ? [ClientSsoProtocol.CustomSso] : []),
@@ -116,12 +111,11 @@ export function planClientSsoUpgrade(
     config = normalizeClientSsoConfig({
       protocol,
       callbackEndpoint,
+      callbackType: custom.mode === CustomSsoClientMode.Gateway ? ClientSsoCallbackType.Managed : ClientSsoCallbackType.Business,
       validRedirectUrls: custom.validRedirectUrls,
       subjectClaims: custom.subjectClaims,
       ...(custom.mode === CustomSsoClientMode.Gateway ? { orcas: custom.orcas } : {}),
     });
-    if (custom.mode === CustomSsoClientMode.Gateway && !isManaged(callbackEndpoint))
-      return { kind: "pending" as const, reason: "deployed-callback-required" };
     enabled = source.row.custom_sso_enabled;
   }
   if (
@@ -134,6 +128,6 @@ export function planClientSsoUpgrade(
     = config !== null
       && (config.protocol === ClientSsoProtocol.Oidc
         ? config.clientType === OidcClientType.Confidential
-        : !isManaged(config.callbackEndpoint));
+        : config.callbackType !== ClientSsoCallbackType.Managed);
   return { kind: "ready" as const, config, enabled, requiresSecret };
 }

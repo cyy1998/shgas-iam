@@ -37,7 +37,7 @@ test("fixed source CLI apply and independent all-client verify precede successfu
     }
     expect(blocked).toMatchObject({ code: "23514" });
     const inventory = await command(["inventory", "--writers-stopped"]);
-    const manifest = { version: 1, layout: "dual-to-single-v1", trustedIamOrigins: [], managedCallbackUrls: [], clients: inventory.clients.map(({ clientCode, sourceDigest, credentialId }: {
+    const manifest = { version: 1, layout: "dual-to-single-v1", clients: inventory.clients.map(({ clientCode, sourceDigest, credentialId }: {
       clientCode: string;
       sourceDigest: string;
       credentialId: string;

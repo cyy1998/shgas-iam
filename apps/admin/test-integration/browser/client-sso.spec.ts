@@ -2,6 +2,7 @@
 import type { ClientSsoDetail } from '@admin/services/client-sso';
 import {
   ApiErrorCode,
+  ClientSsoCallbackType,
   ClientSsoProtocol,
   ClientStatus,
   OidcClientType,
@@ -223,6 +224,7 @@ test('candidate configures, enables and directly switches single protocol withou
       data: {
         config: {
           protocol: ClientSsoProtocol.CustomSso,
+          callbackType: ClientSsoCallbackType.Business,
           callbackEndpoint: 'https://business.example/cb',
           validRedirectUrls: ['https://business.example/*'],
           subjectClaims: ['subjectIdentifier'],
@@ -453,6 +455,7 @@ test('protocol drafts survive profile saves and refreshes while rotation and ena
     ...initial(),
     ssoConfig: {
       protocol: ClientSsoProtocol.CustomSso,
+      callbackType: ClientSsoCallbackType.Business,
       callbackEndpoint: 'https://business.example/cb',
       validRedirectUrls: ['https://business.example/*'],
       subjectClaims: ['subjectIdentifier'],

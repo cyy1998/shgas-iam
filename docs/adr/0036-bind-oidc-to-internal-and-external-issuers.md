@@ -104,7 +104,7 @@ ClientSession 后，跨 issuer 兑换失败也在本次请求内有界尝试终�
 | OIDC 路由 | [生产 Gateway manifest](../../gateway/manifests/prod/iam.yaml) 与[开发 manifest](../../gateway/manifests/dev/iam.yaml) 当前 `/oidc` route 未注入入口网络标记；现有 `X-Forwarded-Host/Proto` 不等于 issuer 选择。 |
 | OIDC 产物 | [授权状态](../../packages/oidc/src/state.ts)、[Token 状态](../../packages/oidc/src/token-state.ts)与[退出状态](../../packages/oidc/src/logout-state.ts)不保存 issuer；[Token 操作](../../packages/oidc/src/tokens.ts)以启动时固定 issuer 签发。 |
 | Cookie 与会话 | [OIDC HTTP](../../apps/api/src/routes/oidc/oidc.http.ts)与[Custom 授权 HTTP](../../apps/api/src/routes/sso/unified-authorization.handlers.ts)设置无 Domain 的 Cookie；[Kernel 模型](../../packages/session-kernel/src/unified/model.ts)不包含 issuer。 |
-| 托管回调 | [回调分类规则](../../packages/domain/src/client/sso-callback.ts)匹配受信 origins 的完整 `/sso/callback`，授权保存并跳往固定完整 callback；不能把任意同路径业务 URL 当作 IAM 回调。 |
+| 托管回调 | 讨论时按受信 origins 的完整 `/sso/callback` 分类；此限制现已由 [ADR-0037](0037-classify-managed-sso-callbacks-by-path.md) 的显式类型取代，固定完整 callback 跳转保留。 |
 | 浏览器证据 | [全系统 E2E 配置](../../e2e/system/compose.yaml)把内外 origins 设为相同值，不能证明不同主机下的 Cookie 与入口行为。 |
 
 OA/微信当前由 [SSO routes](../../apps/api/src/routes/sso/sso.routes.ts)承接第三方回跳，成功后的 authorize resume

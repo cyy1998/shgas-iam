@@ -26,8 +26,9 @@ OIDC 浏览器绑定和首次认证完成证明由 #187 继续迁移。
 
 ## callback 和 Code 所有权
 
-服务器 composition 注入受信 IAM origins 与实际部署的完整托管 handler URL。只有完整 URL 在该集合内才是托管用途；
-构造时拒绝不在受信 origin 的 handler URL。请求 Host、Forwarded、单独 pathname 和业务落地地址都不参与分类。
+按 [ADR-0037](../../adr/0037-classify-managed-sso-callbacks-by-path.md)，配置的 `callbackType` 显式选择 `managed` 或 `business`，不根据 URL 判断。
+托管地址不限域名、端口或路径，允许 query；始终跳转到配置的完整地址，管理员负责部署实际代理。
+请求 Host、Forwarded 和业务落地地址不参与分类。
 API 始终跳到授权结果保存的单个 callback，不从业务 origin 推导 `/sso/callback`，也不增加请求侧 mode/delivery/callback。
 
 Custom owner 使用 `namespace:custom-sso:v1:` 保存 Code 与续接，Kernel 不登记协议产物。Code 是

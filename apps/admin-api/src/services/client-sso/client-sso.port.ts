@@ -21,6 +21,5 @@ export interface ClientSsoServiceDeps {
   uow: UnitOfWorkPort<ClientSsoTransactionPorts>;
   invalidation: AdminClientRuntimeInvalidationPort;
   logger: AdminClientMutationLoggerPort;
-  callback: { isManagedCallback: (callbackEndpoint: string) => boolean };
   credentials: { create: () => { secret: string; id: string; updatedAt: string } };
 }

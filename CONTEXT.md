@@ -308,7 +308,7 @@ _Avoid_: reusable credential slot, bearer token, user identity
 _Avoid_: Principal Session, Authorization Grant, unconditional access permission
 
 **Custom SSO Client Configuration**:
-一个选择 Custom SSO 的 Client 对单个回调地址、允许的业务落地地址和主体披露范围的声明；回调指向 IAM 托管入口时采用托管交付，否则由业务自行回调。它不使用独立接入模式开关，普通编辑不等于终止已有会话，接入启用意图由 SSO Enablement 表达。
+一个选择 Custom SSO 的 Client 对单个回调地址、回调类型、允许的业务落地地址和主体披露范围的声明；回调类型由管理员显式选择为托管回调或业务回调，表达由 IAM 还是业务处理，与地址独立。普通编辑不等于终止已有会话，接入启用意图由 SSO Enablement 表达；显式回调类型见 [ADR-0037](docs/adr/0037-classify-managed-sso-callbacks-by-path.md)。
 _Avoid_: Independent/Gateway mode, OIDC client configuration, per-request callback selection, ClientSession state
 
 **SSO Enablement**:

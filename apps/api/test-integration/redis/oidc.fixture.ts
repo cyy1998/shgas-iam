@@ -272,8 +272,6 @@ export async function fixture(
               namespace: customState.namespace,
               codeTtlSeconds: ttl.code,
               continuationTtlSeconds: ttl.continuation,
-              trustedIamOrigins: ["https://iam.example"],
-              managedCallbackUrls: ["https://iam.example/sso/callback"],
             },
             customSsoAccess: { credentials, tokenTtlSeconds },
           }

@@ -1,6 +1,6 @@
 import type { APIRequestContext, Page } from "@playwright/test";
 import { Buffer } from "node:buffer";
-import { ApiErrorCode, ClientSsoConfigSchema, ClientSsoProtocol, SubjectClaim } from "@iam/contracts";
+import { ApiErrorCode, ClientSsoCallbackType, ClientSsoConfigSchema, ClientSsoProtocol, SubjectClaim } from "@iam/contracts";
 import { normalizeClientSsoConfig } from "@iam/domain/client";
 import { expect } from "@playwright/test";
 import { createPkceS256Pair, receiveOidcAuthorizationCallback } from "./oidc-rp.ts";
@@ -32,6 +32,7 @@ export async function exerciseUnifiedSession(input: {
   const oidcConfig = normalizeClientSsoConfig(originalConfig);
   const customConfig = normalizeClientSsoConfig({
     protocol: ClientSsoProtocol.CustomSso,
+    callbackType: ClientSsoCallbackType.Business,
     callbackEndpoint: redirectUri,
     validRedirectUrls: [redirectUri],
     subjectClaims: [SubjectClaim.ProfileName, SubjectClaim.SubjectIdentifier],

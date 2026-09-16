@@ -64,6 +64,7 @@ export function createUnifiedAuthorizationHandlers(deps: {
     callback.searchParams.set("client", data.clientCode);
     callback.searchParams.set("redirectUrl", data.redirectUrl);
     callback.searchParams.set("code", data.code);
+    callback.searchParams.delete("state");
     if (data.redeemer === "business" && data.state !== undefined)
       callback.searchParams.set("state", data.state);
     return c.redirect(callback.href);

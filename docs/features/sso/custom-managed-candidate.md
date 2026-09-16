@@ -7,10 +7,10 @@
 
 `createUnifiedCustomSsoOperations().forOperation().completeCallback` 接收 code、clientCode、redirectUrl 和可选审计上下文。
 API `createRootAuthenticationComposition` 的 `customSsoAccess.managed` 注入现有 ORCAS adapter、许可内专用用户 reader、
-审计和 logger；完整托管 URL 集合直接取同一个 `customSso.managedCallbackUrls`，由授权 factory 校验受信 origin。
+审计和 logger；按 [ADR-0037](../../adr/0037-classify-managed-sso-callbacks-by-path.md)，授权和兑换读取显式 `callbackType`，不根据地址识别类型。
 候选正式 GET `/sso/callback` 保留 code/client/redirectUrl。请求 Host、根 Cookie 和内部读取 Secret 不成为托管认证依据。
 
-操作取得一次当前 Client Snapshot，校验启停、所选协议及 callback 属于服务端完整托管 URL 集合，再读取原范围 Code。
+操作取得一次当前 Client Snapshot，校验启停、所选协议及配置 `callbackType` 为 `managed`，再读取原范围 Code。
 原 Code 必须保持 managed 兑换方、原 callback 与当前 callback 一致、实际落地地址一致；业务 Code 不能因为配置后来改为
 托管而绕过 Secret。不同 Client/原根/实例/Code ID 的状态定位隔离。已接受的实际落地地址不按后来编辑的允许列表重审。
 原根、确切 ClientSession、不可变 instance 及本操作账号许可通过后，才原子消费完整已观察 Code。

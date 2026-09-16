@@ -1,7 +1,7 @@
 import type { ClientSnapshotValue } from "@iam/api-core/client-snapshot";
 import type { SubjectFactsSnapshot } from "@iam/client-subject-projection";
 import { randomUUID } from "node:crypto";
-import { ClientSsoProtocol, ClientStatus, OidcClientType, OidcScope, OrganizationType } from "@iam/contracts";
+import { ClientSsoCallbackType, ClientSsoProtocol, ClientStatus, OidcClientType, OidcScope, OrganizationType } from "@iam/contracts";
 import { expect, test } from "bun:test";
 import { userInfoFixture } from "./oidc-userinfo.fixture";
 
@@ -199,6 +199,7 @@ test("UserInfo protocol/enablement/maintenance changes recover original Token un
       {
         ssoConfig: {
           protocol: ClientSsoProtocol.CustomSso,
+          callbackType: ClientSsoCallbackType.Business,
           callbackEndpoint: "https://rp.example/callback",
           validRedirectUrls: ["https://rp.example/*"],
           subjectClaims: ["subjectIdentifier"],

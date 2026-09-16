@@ -7,7 +7,7 @@ import { adminAuditTransactionOptions } from "@admin-api/services/audit/audit.co
 import { createAdminClientMutation } from "@admin-api/services/client/client-mutation";
 import { INTERNAL_SERVER_ERROR } from "@iam/api-core/core/http-status-codes";
 import { BadRequestError, CustomError } from "@iam/api-core/errors";
-import { ApiErrorCode, ClientSsoProtocol, OidcClientType } from "@iam/contracts";
+import { ApiErrorCode, ClientSsoCallbackType, ClientSsoProtocol, OidcClientType } from "@iam/contracts";
 import { ClientNotFoundError, normalizeClientSsoConfig, toClientSsoAdminDto } from "@iam/domain/client";
 import { ClientSsoSaveSchema, ClientSsoSelectSchema } from "./client-sso.schema";
 
@@ -93,7 +93,7 @@ export function createClientSsoService(deps: ClientSsoServiceDeps) {
       return {};
     const required = config.protocol === ClientSsoProtocol.Oidc
       ? config.clientType === OidcClientType.Confidential
-      : !deps.callback.isManagedCallback(config.callbackEndpoint);
+      : config.callbackType === ClientSsoCallbackType.Business;
     if (!required)
       return {};
     const credential = deps.credentials.create();

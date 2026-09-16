@@ -284,10 +284,6 @@ export function createApiServices(options: CreateApiServicesOptions) {
       namespace: runtime.config.sessionKernel.namespace,
       codeTtlSeconds: runtime.config.auth.authCodeExpireSeconds,
       continuationTtlSeconds: runtime.config.auth.authCodeExpireSeconds,
-      trustedIamOrigins: [runtime.config.env.sso.internalOrigin, runtime.config.env.sso.externalOrigin],
-      managedCallbackUrls: [runtime.config.env.sso.internalOrigin, runtime.config.env.sso.externalOrigin].map(
-        origin => new URL("/sso/callback", origin).href,
-      ),
     },
     customSsoAccess: {
       credentials,

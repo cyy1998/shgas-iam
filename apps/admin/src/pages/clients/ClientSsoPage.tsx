@@ -7,6 +7,7 @@ import {
   type ClientSsoSecret,
 } from '@admin/services/client-sso';
 import {
+  ClientSsoCallbackType,
   ClientSsoConfigSchema,
   ClientSsoProtocol,
   OidcClientType,
@@ -36,6 +37,7 @@ type FormValues = {
   redirectUris: string[];
   postLogoutRedirectUris: string[];
   allowedScopes: OidcScope[];
+  callbackType: ClientSsoCallbackType;
   callbackEndpoint: string;
   validRedirectUrls: string[];
   subjectClaims: string[];
@@ -88,6 +90,10 @@ export default function ClientSsoPage() {
             config?.protocol === ClientSsoProtocol.Oidc
               ? config.allowedScopes
               : [OidcScope.OpenId],
+          callbackType:
+            config?.protocol === ClientSsoProtocol.CustomSso
+              ? config.callbackType
+              : undefined,
           callbackEndpoint:
             config?.protocol === ClientSsoProtocol.CustomSso
               ? config.callbackEndpoint
@@ -216,6 +222,7 @@ export default function ClientSsoPage() {
           }
         : {
             protocol: values.protocol,
+            callbackType: values.callbackType,
             callbackEndpoint: values.callbackEndpoint,
             validRedirectUrls: values.validRedirectUrls,
             subjectClaims: values.subjectClaims,
@@ -234,6 +241,7 @@ export default function ClientSsoPage() {
         'redirectUris',
         'postLogoutRedirectUris',
         'allowedScopes',
+        'callbackType',
         'callbackEndpoint',
         'validRedirectUrls',
         'subjectClaims',
@@ -334,6 +342,21 @@ export default function ClientSsoPage() {
             )}
             {protocol === ClientSsoProtocol.CustomSso && (
               <>
+                <Form.Item name="callbackType" label="回调类型" required>
+                  <Select
+                    placeholder="请选择回调类型"
+                    options={[
+                      {
+                        value: ClientSsoCallbackType.Managed,
+                        label: '托管回调',
+                      },
+                      {
+                        value: ClientSsoCallbackType.Business,
+                        label: '业务回调',
+                      },
+                    ]}
+                  />
+                </Form.Item>
                 <Form.Item name="callbackEndpoint" label="回调地址">
                   <Input />
                 </Form.Item>

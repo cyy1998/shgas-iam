@@ -67,6 +67,7 @@
 | [docs/adr/0034-locate-token-state-records-directly.md](adr/0034-locate-token-state-records-directly.md) | decision | Current | 2026-09-10 | 2026-10-31 | Accepted：#137 三类对象以 SHA-256 直接定位、独立 ID 反向管理、同记录终态、pending 保留及全体下线切换；三类状态及 Kernel HMAC runtime 配置退役已落地；#175 维护已交付，#176 最终逐项账本与原始基线成本已记录；候选 gate/评审另记，环境未切换。 |
 | [docs/adr/0035-unify-user-and-client-session-lifecycles.md](adr/0035-unify-user-and-client-session-lifecycles.md) | decision | Current | 2026-09-15 | 2026-10-31 | Accepted：Q40 整体确认 Q34–Q39 的三段 Custom 业务 Code、认证/定位门槛及请求内有界失败撤销；交接记录见 #177，尚未实施或部署。 |
 | [docs/adr/0036-bind-oidc-to-internal-and-external-issuers.md](adr/0036-bind-oidc-to-internal-and-external-issuers.md) | decision | Current | 2026-09-16 | 2026-10-31 | Accepted：相对导航、固定配置回调、origin 派生 issuer、共享配置/密钥、相同 origin 合并、跨 issuer 兑换失败有界撤销及升级全体重新登录；维护者要求发布 Spec 并确认测试边界，尚未实施。 |
+| [docs/adr/0037-classify-managed-sso-callbacks-by-path.md](adr/0037-classify-managed-sso-callbacks-by-path.md) | decision | Current | 2026-09-16 | 2026-10-31 | Accepted：显式托管/业务类型取代 URL 分类，Q9–Q19 已确认并实现；一次性配置迁移、业务 ORCAS 禁止与保留状态切换，环境未迁移。 |
 | [docs/agents/code-investigation.md](agents/code-investigation.md) | agent-config | Current | 2026-09-05 | 2026-10-31 | 项目级 `code_researcher`/`deep_researcher` 的分层路由、只读调查、证据返回和 GitHub issue 外置记忆规则；运行配置以对应 TOML 为准。 |
 | [docs/agents/domain.md](agents/domain.md) | agent-config | Current | 2026-07-16 | 2026-10-31 | Engineering skills 的 single-context domain documentation 消费规则。 |
 | [docs/agents/issue-tracker.md](agents/issue-tracker.md) | agent-config | Current | 2026-09-10 | 2026-10-31 | `cyy1998/shgas-iam` GitHub Issues 的 spec、ticket、跨会话状态与 wayfinding 约定；设计提交、分支交接和 Spec 关闭沿用工作流。 |
@@ -117,7 +118,7 @@
 | [docs/features/sso/published-subject-facts-contract.md](features/sso/published-subject-facts-contract.md) | feature | Current | 2026-09-15 | 2026-10-31 | #156 已发布权限、Reader 与协议行为证据、旧断言迁移及环境证明边界。 |
 | [docs/features/sso/root-authentication-candidate.md](features/sso/root-authentication-candidate.md) | feature | Current | 2026-09-14 | 2026-10-31 | #183 根认证、许可、本人安全及候选装配；#194 已接入正式默认图，环境未切换。 |
 | [docs/features/sso/subject-access-operation-contract.md](features/sso/subject-access-operation-contract.md) | feature | Current | 2026-09-15 | 2026-10-31 | Spec #128 全部62故事、最终owner、直接行为证据与测试迁移；最终聚合验收由父规格记录。 |
-| [docs/features/sso/third-party-sso-integration.md](features/sso/third-party-sso-integration.md) | feature | Current | 2026-09-15 | 2026-09-30 | Independent/Gateway 失败重新授权、既有 wire 和普通访问重试分离；定向维护已由 #160 交付，候选不可部署。 |
+| [docs/features/sso/third-party-sso-integration.md](features/sso/third-party-sso-integration.md) | feature | Current | 2026-09-16 | 2026-09-30 | Independent/Gateway 失败重新授权、既有 wire 和普通访问重试分离；定向维护已由 #160 交付，候选不可部署。 |
 | [docs/features/sso/token-state-contract.md](features/sso/token-state-contract.md) | feature | Historical | 2026-09-15 | n/a | 旧候选契约与来源证据；当前由统一会话模型和维护手册替代。 |
 | [docs/features/sso/token-state-cost-evidence.md](features/sso/token-state-cost-evidence.md) | feature | Historical | 2026-09-15 | n/a | 固定旧候选的契约/证据；当前统一会话接线与操作见 ADR-0035 和统一维护手册。 |
 | [docs/features/sso/token-state-runtime-evidence.md](features/sso/token-state-runtime-evidence.md) | feature | Historical | 2026-09-15 | n/a | 旧候选契约与来源证据；当前由统一会话模型和维护手册替代。 |
@@ -146,7 +147,7 @@
 | [docs/releases/session-kernel-release-smoke.md](releases/session-kernel-release-smoke.md) | release-record | Historical | 2026-07-03 | n/a | 2026-06-24 Session Kernel 发布 smoke 证据快照，并提供后续可复用 smoke 模板。 |
 | [docs/releases/sm-encrypted-password-login-release.md](releases/sm-encrypted-password-login-release.md) | runbook | Current | 2026-07-16 | 2026-10-31 | SM2/SM4 加密密码登录、API/SSO 同步发布、Cap 重试、错误码和 rollback matrix。 |
 | [docs/releases/subject-access-operation-cutover.md](releases/subject-access-operation-cutover.md) | runbook | Current | 2026-09-10 | 2026-10-31 | 操作许可统一切换：停流drain、当前owner清理/保留、独立verify、统一版本、重新登录及回退；目标环境未执行。 |
-| [docs/releases/unified-session-maintenance.md](releases/unified-session-maintenance.md) | runbook | Current | 2026-09-15 | 2026-10-31 | #193 Worker source/unified owner 维护、新 Snapshot repair/verify、真实 CLI 故障与保留证据；#162 命令去向及 #121/#145 剩余责任，环境未执行。 |
+| [docs/releases/unified-session-maintenance.md](releases/unified-session-maintenance.md) | runbook | Current | 2026-09-16 | 2026-10-31 | #193 Worker source/unified owner 维护、新 Snapshot repair/verify、真实 CLI 故障与保留证据；#162 命令去向及 #121/#145 剩余责任，环境未执行。 |
 | [docs/releases/user-profile-dirty-queue-release.md](releases/user-profile-dirty-queue-release.md) | runbook | Current | 2026-07-25 | 2026-10-31 | scope producer 停止、旧 job 五类排空、worker-last 发布门禁，以及现有 Bull Board/repair/backfill 操作语义。 |
 | [docs/releases/user-profile-v3-hard-cutover.md](releases/user-profile-v3-hard-cutover.md) | runbook | Current | 2026-08-22 | 2026-10-31 | User Profile v2→v3 单代原地重建的 freeze、固定 candidate、backfill/收敛、双 gate、smoke、失败关闭与一次性放流手册；不推进 Client Protocol epoch 或清理 artifact。 |
 | [docs/reviews/SOFTWARE_ENGINEERING_PRINCIPLES_REVIEW_2026-07-03.md](reviews/SOFTWARE_ENGINEERING_PRINCIPLES_REVIEW_2026-07-03.md) | review | Historical | 2026-07-03 | n/a | 2026-07-03 的软件工程原则审查快照；用于追溯风险，不替代当前代码检查。 |

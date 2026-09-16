@@ -453,6 +453,9 @@ Hook 不运行 lint、typecheck、test、build 或 tracker checker。按改动�
   旧 `client-runtime:*`、Provider 维护和 epoch 命令已退役；`client-sso:upgrade` 必须在固定扩展期旧制品与旧 schema 下先完成。
 - Admin frontend：`pnpm --filter @iam/admin <dev|build|lint|test|test:unit|test:integration:component|test:integration:browser|typecheck|format>`
 - SSO frontend：`pnpm --filter @iam/sso <dev|build|lint|test|test:unit|test:integration:component|test:integration:browser|typecheck|format>`
+- Custom SSO 显式回调类型升级：`pnpm --filter @iam/db client-callback:upgrade <inventory|apply|verify> --writers-stopped`。
+  使用显式 `DATABASE_URL`，先读[协调切换流程](../releases/unified-session-maintenance.md#显式回调类型的保留状态升级)；
+  准备命令事务内补齐配置并应用新约束，随后 `db:migrate` 登记版本，不修改 Redis 会话。
 - Database：`pnpm --filter @iam/db <lint|test|test:unit|test:integration:postgres|typecheck|db:push|db:generate|db:migrate|db:check>`
 - Role Assignment：`pnpm --filter @iam/role-assignment-resolution <lint|test:integration:component|test:integration:postgres|typecheck>`
 - Organization Responsibility Resolution：`pnpm --filter @iam/organization-responsibility-resolution <lint|test:integration:component|test:integration:postgres|typecheck>`

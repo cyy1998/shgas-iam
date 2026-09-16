@@ -10,6 +10,7 @@ import type {
 import { hashSecret } from "@iam/api-core/security";
 import { createSubjectAccessBootstrap } from "@iam/api-core/subject-access";
 import {
+  ClientSsoCallbackType,
   ClientSsoProtocol,
   ClientStatus,
   EmploymentStatus,
@@ -88,6 +89,7 @@ export function createProductionE2EScenarioOwner(
           ssoEnabled: true,
           ssoConfig: {
             protocol: ClientSsoProtocol.CustomSso,
+            callbackType: ClientSsoCallbackType.Managed,
             callbackEndpoint: `${scenario.canonicalOrigin}/sso/callback`,
             validRedirectUrls: [scenario.adminRedirectUri],
             subjectClaims: [
@@ -171,6 +173,7 @@ export function createProductionE2EScenarioOwner(
         ssoEnabled: true,
         ssoConfig: {
           protocol: ClientSsoProtocol.CustomSso,
+          callbackType: ClientSsoCallbackType.Managed,
           callbackEndpoint: `${scenario.canonicalOrigin}/sso/callback`,
           validRedirectUrls: [`${scenario.canonicalOrigin}/e2e/custom-sso/callback`],
           subjectClaims: [SubjectClaim.SubjectIdentifier, SubjectClaim.ProfileUsername],

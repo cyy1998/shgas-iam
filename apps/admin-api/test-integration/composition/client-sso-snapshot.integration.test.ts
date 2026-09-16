@@ -30,7 +30,6 @@ afterAll(async () => {
   await resource?.close();
 });
 const logger = { error() {}, warn() {} };
-const callback = { isManagedCallback: () => false };
 const oidc = {
   protocol: ClientSsoProtocol.Oidc,
   clientType: OidcClientType.Confidential,
@@ -92,7 +91,7 @@ test("rotation authentication uses cached current credentials, retains accepted 
       clientCache: createAdminClientCache({ redis: scope.redis }),
       db: pg.db,
       logger,
-      callback,
+
       redis: {
         async eval(script, count, ...args) {
           if (unavailable)
@@ -179,7 +178,7 @@ test("actual PG projection and candidate Admin mutation invalidate ordinary and 
       db: pg.db,
       redis: scope.redis,
       logger,
-      callback,
+
     });
     const cold = await candidate.snapshots.client.acquire(code);
     const warm = await candidate.snapshots.client.acquire(code);
@@ -271,7 +270,7 @@ test("actual committed mutation with failed Redis propagation retains old value 
       clientCache: createAdminClientCache({ redis: scope.redis }),
       db: pg.db,
       logger,
-      callback,
+
       redis: {
         async eval(script, count, ...args) {
           if (failInvalidation)
@@ -336,7 +335,7 @@ for (const operation of ["save", "rotateSecret"] as const) {
       const service = createClientSsoService({
         client: createClientSsoRepository(pg.db),
         logger,
-        callback,
+
         credentials: {
           create: () => ({
             secret: "unknown-commit-current",
@@ -431,7 +430,7 @@ for (const kind of ["client", "credential"] as const) {
         db: pg.db,
         redis: scope.observer,
         logger,
-        callback,
+
       });
       if (kind === "credential")
         await admin.management.service.rotateSecret(code);

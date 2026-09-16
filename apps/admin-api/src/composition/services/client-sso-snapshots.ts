@@ -13,7 +13,6 @@ export function createClientSsoSnapshotManagement(options: {
   clientCache: AdminClientCachePort;
   redis: ClientSnapshotsOptions["redis"];
   logger: AfterCommitLoggerPort;
-  callback: ClientSsoServiceDeps["callback"];
   sessionTermination?: ClientSsoServiceDeps["sessionTermination"];
 }) {
   const snapshots = createClientSnapshots({

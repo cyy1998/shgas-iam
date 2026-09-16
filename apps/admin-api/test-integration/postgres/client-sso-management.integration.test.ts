@@ -16,7 +16,7 @@ import {
 } from "@admin-api/services/client/client.schema";
 import { createErrorHandler } from "@iam/api-core/middlewares";
 import { createUnitOfWork } from "@iam/api-core/uow";
-import { ApiErrorCode, ClientSsoProtocol, ClientStatus, OidcClientType, OidcScope } from "@iam/contracts";
+import { ApiErrorCode, ClientSsoCallbackType, ClientSsoProtocol, ClientStatus, OidcClientType, OidcScope } from "@iam/contracts";
 import { auditLogs, clients, roles } from "@iam/db/schema";
 import { toClientAdminDetailDto } from "@iam/domain/client";
 import { fetchRequestHandler } from "@trpc/server/adapters/fetch";
@@ -37,9 +37,6 @@ afterAll(async () => {
   await harness?.close();
 });
 const logger = { error: mock(() => undefined), warn: mock(() => undefined) };
-const callback = {
-  isManagedCallback: (url: string) => url === "https://iam.example/sso/callback",
-};
 const oidc = {
   protocol: ClientSsoProtocol.Oidc,
   clientType: OidcClientType.Confidential,
@@ -49,6 +46,7 @@ const oidc = {
 } satisfies ClientSsoConfig;
 const custom = {
   protocol: ClientSsoProtocol.CustomSso,
+  callbackType: ClientSsoCallbackType.Business,
   callbackEndpoint: "https://rp.example/cb",
   validRedirectUrls: ["https://rp.example/*"],
   subjectClaims: ["subjectIdentifier"],
@@ -93,7 +91,7 @@ function system() {
     ...createClientSsoManagement({
       db: harness.db,
       logger,
-      callback,
+
       invalidation: { invalidateClient },
     }),
     invalidateClient,
@@ -336,7 +334,7 @@ function decoratedService(
   return createClientSsoService({
     client: createClientSsoRepository(harness.db),
     logger,
-    callback,
+
     invalidation: { invalidateClient: async () => undefined },
     credentials: {
       create: () => ({
@@ -551,7 +549,7 @@ test("unknown COMMIT after actual PG commit preserves original error, conservati
   const service = createClientSsoService({
     client: createClientSsoRepository(harness.db),
     logger,
-    callback,
+
     invalidation: { invalidateClient },
     credentials: {
       create: () => ({
@@ -584,7 +582,7 @@ test("unknown COMMIT after actual PG commit preserves original error, conservati
   expect(after.audits).toHaveLength(1);
 });
 
-test("Public and managed callback do not require initial secret; actual owner callback port determines requirement", async () => {
+test("Public and managed callback do not require initial secret; explicit callback type determines requirement", async () => {
   await seed();
   const candidate = system();
   await candidate.service.selectProtocol("portal", {
@@ -596,7 +594,8 @@ test("Public and managed callback do not require initial secret; actual owner ca
   expect(publicFacts.clients[0]!.ssoSecret).toBeNull();
   await candidate.service.selectProtocol("portal", {
     ...custom,
-    callbackEndpoint: "https://iam.example/sso/callback",
+    callbackType: ClientSsoCallbackType.Managed,
+    callbackEndpoint: "https://business.example:8443/login/finish?tenant=fixed",
     orcas: { enabled: true },
   });
   const managedFacts = await facts();
@@ -608,6 +607,26 @@ test("Public and managed callback do not require initial secret; actual owner ca
   });
   const businessFacts = await facts();
   expect(businessFacts.clients[0]!.ssoSecret).toBeString();
+  await candidate.service.selectProtocol("portal", { ...custom, callbackType: ClientSsoCallbackType.Managed, callbackEndpoint: "https://business.example/sso/callback" });
+  const retained = await facts();
+  expect(retained.clients[0]!.ssoSecret).toBe(businessFacts.clients[0]!.ssoSecret);
+});
+
+test("business ORCAS configuration is rejected without changing the saved callback or credentials", async () => {
+  await seed();
+  const candidate = system();
+  await candidate.service.selectProtocol("portal", custom);
+  const before = await candidate.service.detail("portal");
+  let failure: unknown;
+  try {
+    await candidate.service.selectProtocol("portal", { ...custom, orcas: { enabled: true } });
+  }
+  catch (error) {
+    failure = error;
+  }
+  expect(failure).toBeDefined();
+  const after = await candidate.service.detail("portal");
+  expect(after).toEqual(before);
 });
 
 test("candidate HTTP detail serializes server capability without sensitive storage", async () => {
