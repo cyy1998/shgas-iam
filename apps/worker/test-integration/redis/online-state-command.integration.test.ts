@@ -11,7 +11,7 @@ import {
   withOwnedTemporaryDirectory,
 } from "@iam/api-core/testing/process-smoke-harness";
 import { ClientStatus } from "@iam/contracts";
-import { createOfflineGrantVerifier } from "@iam/custom-sso/maintenance";
+import { createOfflineGrantVerifier, createUnifiedCustomSsoMaintenance } from "@iam/custom-sso/maintenance";
 import { createCustomSsoMaintenanceTestFixture } from "@iam/custom-sso/testing";
 import { createOfflineOidcVerifier } from "@iam/oidc/offline-maintenance";
 import { createOidcMaintenanceTestFixture } from "@iam/oidc/testing";
@@ -84,6 +84,9 @@ async function command(
   return { ...result, report };
 }
 const stopped = ["--writers-stopped", "--drained"];
+function authorizationScope(ns: string) {
+  return ["--layout", "unified", "--owner", "custom-sso", "--custom-namespace", ns, "--client-code", "alpha", "--artifacts", "authorization", ...stopped];
+}
 const source = (ns: string, mode: string) => [mode, "--layout", "source", "--kernel-namespace", ns, ...stopped];
 function target(ns: string, mode: string) {
   return [
@@ -189,6 +192,80 @@ test("scoped protocol cleanup preserves another Client byte-for-byte and include
   await command("online-auth:state", ["verify", ...scope]);
   expect(await harness.observer.exists(own)).toBe(0);
   expect(await observation([other])).toEqual(before);
+}, 30_000);
+
+test("authorization CLI clears every target purpose while preserving same-Client Tokens, all reverse indexes and sessions", async () => {
+  const ns = `iam204:${randomUUID()}`;
+  const custom = fixtures(ns).custom;
+  const target = await custom.seedAuthorizationPreservation();
+  const other = await custom.seedAuthorizationPreservation("business");
+  const later = await custom.seedAuthorizationPreservation("later-managed");
+  const retained = [...target.retained, ...other.retained, ...other.authorization, ...later.retained, ...later.authorization, ...(await fixtures(ns).kernel.seedUnified()), ...(await fixtures(ns).oidc.seedUnified()), ...(await fixtures(`other:${ns}`).custom.seedUnified())];
+  const before = await observation(retained);
+  const scope = authorizationScope(ns);
+  const inventory = await command("online-auth:state", ["inventory", ...scope]);
+  expect(inventory.report.owners[0].matching).toBe(target.authorization.length);
+  await command("online-auth:state", ["verify", ...scope], 1);
+  await command("online-auth:state", ["apply", ...scope]);
+  await command("online-auth:state", ["verify", ...scope]);
+  await command("online-auth:state", ["apply", ...scope]);
+  const after = await observation(retained);
+  const remaining = await harness.observer.exists(...target.authorization);
+  expect(after).toEqual(before);
+  expect(remaining).toBe(0);
+}, 45_000);
+
+test("authorization CLI retains bad unclassifiable Code and blocks all modes until explicitly repaired", async () => {
+  const ns = `iam204:${randomUUID()}`;
+  const custom = fixtures(ns).custom;
+  const target = await custom.seedAuthorizationPreservation();
+  const bad = await custom.seedCorruptUnified();
+  const unknown = await custom.seedUnknownUnifiedFamily();
+  const retained = [...target.retained, bad, unknown];
+  const before = await observation(retained);
+  for (const mode of ["inventory", "apply", "verify"])
+    await command("online-auth:state", [mode, ...authorizationScope(ns)], 1);
+  const after = await observation(retained);
+  expect(after).toEqual(before);
+  await harness.writer.unlink(bad, unknown);
+  await command("online-auth:state", ["apply", ...authorizationScope(ns)]);
+  await command("online-auth:state", ["verify", ...authorizationScope(ns)]);
+}, 45_000);
+
+test("authorization owner paginates and reports CAS replacement without touching preserved Tokens", async () => {
+  const ns = `iam204:${randomUUID()}`;
+  const target = await fixtures(ns).custom.seedAuthorizationPreservation();
+  const before = await observation(target.retained);
+  let replaced = false;
+  const owner = createUnifiedCustomSsoMaintenance({
+    scan: async (...args) => await harness.writer.scan(...args),
+    get: async key => await harness.writer.get(key),
+    async eval(script, count, ...args) {
+      if (!replaced) {
+        // Generic transport-side race: the observed string changes before the production CAS.
+        await harness.writer.append(args[0]!, " ");
+        replaced = true;
+      }
+      return await harness.writer.eval(script, count, ...args);
+    },
+  }, ns);
+  let cursor = "0";
+  let changed = 0;
+  let removed = 0;
+  do {
+    const result = await owner.apply({ cursor, limit: 1, clientCode: "alpha", artifacts: "authorization" });
+    cursor = result.nextCursor;
+    changed += result.changed;
+    removed += result.removed;
+    expect(result.unknown).toBe(0);
+  } while (cursor !== "0");
+  expect(changed).toBe(1);
+  expect(removed).toBe(target.authorization.length - 1);
+  await command("online-auth:state", ["verify", ...authorizationScope(ns)], 1);
+  await command("online-auth:state", ["apply", ...authorizationScope(ns)]);
+  await command("online-auth:state", ["verify", ...authorizationScope(ns)]);
+  const after = await observation(target.retained);
+  expect(after).toEqual(before);
 }, 30_000);
 
 test.each(["app.web", "业务系统"])(
@@ -344,6 +421,8 @@ test("Snapshot CLI shares control across ordinary and sensitive readers without 
 test("invalid input is rejected before connecting and nonresponding Redis is bounded", async () => {
   const ns = `iam193:${randomUUID()}`;
   await command("online-auth:state", ["apply", "--layout", "unified"], 2);
+  await command("online-auth:state", ["apply", ...target(ns, "inventory").slice(1), "--artifacts", "authorization"], 2);
+  await command("online-auth:state", ["apply", "--layout", "unified", "--owner", "custom-sso", "--custom-namespace", ns, "--artifacts", "authorization", ...stopped], 2);
   await command("online-auth:state", target(ns, "inventory"), 1, { IAM_WORKER_REDIS_HOST: "" });
   const sockets = new Set<Socket>();
   const server = createServer((socket) => {
@@ -367,9 +446,12 @@ test("invalid input is rejected before connecting and nonresponding Redis is bou
   expect(Date.now() - started).toBeLessThan(10_000);
 }, 30_000);
 
-test("actual CLI reports committed deletion with lost response as unknown and a fresh process safely reruns", async () => {
+test.each([false, true])("actual CLI reports committed deletion with lost response and safely reruns (authorization only: %s)", async (authorizationOnly) => {
   const ns = `iam193:${randomUUID()}`;
-  const fixture = await seedUnified(ns);
+  const selected = authorizationOnly ? await fixtures(ns).custom.seedAuthorizationPreservation() : undefined;
+  const fixture = selected ? { allKeys: selected.authorization } : await seedUnified(ns);
+  const retainedBefore = selected ? await observation(selected.retained) : [];
+  const args = (mode: string) => authorizationOnly ? [mode, ...authorizationScope(ns)] : target(ns, mode);
   const url = new URL(resolveWorkerRedisTestUrl(process.env));
   const sockets = new Set<Socket>();
   let drop = false;
@@ -415,12 +497,16 @@ test("actual CLI reports committed deletion with lost response as unknown and a 
   const address = server.address();
   if (!address || typeof address === "string")
     throw new Error("Missing loopback proxy");
-  await command("online-auth:state", target(ns, "apply"), 1, { IAM_WORKER_REDIS_PORT: String(address.port) });
+  await command("online-auth:state", args("apply"), 1, { IAM_WORKER_REDIS_PORT: String(address.port) });
   expect(committed).toBe(true);
   const remaining = await harness.observer.exists(...fixture.allKeys);
   expect(remaining).toBeGreaterThan(0);
   expect(remaining).toBeLessThan(fixture.allKeys.length);
-  await command("online-auth:state", target(ns, "verify"), 1);
-  await command("online-auth:state", target(ns, "apply"));
-  await command("online-auth:state", target(ns, "verify"));
+  await command("online-auth:state", args("verify"), 1);
+  await command("online-auth:state", args("apply"));
+  await command("online-auth:state", args("verify"));
+  if (selected) {
+    const retainedAfter = await observation(selected.retained);
+    expect(retainedAfter).toEqual(retainedBefore);
+  }
 }, 45_000);

@@ -33,8 +33,8 @@ const workspaceRoot = fileURLToPath(new URL("../../../../", import.meta.url));
 type Candidate = Awaited<ReturnType<typeof createOidcConformanceCandidate>>;
 
 /** Archive checkouts have no .git. Verify every tracked blob against the fixed source tree before opening resources. */
-async function verifySource(sourceDirectory: string) {
-  const { stdout } = await promisify(execFile)("git", ["ls-tree", "-r", "-z", sourceRevision], {
+export async function verifyUpgradeSource(sourceDirectory: string, revision: string) {
+  const { stdout } = await promisify(execFile)("git", ["ls-tree", "-r", "-z", revision], {
     cwd: workspaceRoot,
     maxBuffer: 8 * 1024 * 1024,
   });
@@ -211,7 +211,7 @@ export async function runDualEntryUpgradeRehearsal(options: {
 }) {
   const checkpoint = async (phase: string) => options.lifecycle?.checkpoint(phase);
   await checkpoint("upgrade-source-verification");
-  const verifiedSourceFiles = await verifySource(options.sourceDirectory);
+  const verifiedSourceFiles = await verifyUpgradeSource(options.sourceDirectory, sourceRevision);
   await checkpoint("upgrade-source-verified");
   const candidate = await createOidcConformanceCandidate({
     issuerMode: "dual",

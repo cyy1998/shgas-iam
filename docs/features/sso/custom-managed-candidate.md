@@ -11,9 +11,12 @@ API `createRootAuthenticationComposition` 的 `customSsoAccess.managed` 注入�
 候选正式 GET `/sso/callback` 保留 code/client/redirectUrl。请求 Host、根 Cookie 和内部读取 Secret 不成为托管认证依据。
 
 操作取得一次当前 Client Snapshot，校验启停、所选协议及配置 `callbackType` 为 `managed`，再读取原范围 Code。
-原 Code 必须保持 managed 兑换方、原 callback 与当前 callback 一致、实际落地地址一致；业务 Code 不能因为配置后来改为
+原 Code 必须保持 managed 兑换方、原 callback 等于其原落地 origin 加 `/sso/callback`、请求与原实际落地地址一致；业务 Code 不能因为配置后来改为
 托管而绕过 Secret。不同 Client/原根/实例/Code ID 的状态定位隔离。已接受的实际落地地址不按后来编辑的允许列表重审。
 原根、确切 ClientSession、不可变 instance 及本操作账号许可通过后，才原子消费完整已观察 Code。
+
+#202 按 ADR-0038 不再比较当前 managed 配置中的旧地址。当前类型改变时，托管和业务兑换均拒绝原类型 Code；
+business 仍比较原 callback 与登记地址并验证 Secret。HTTP 不新增实际 origin 校验，允许代理改写 Host。
 
 只有明确 consumed 才继续专用用户读取、适用 ORCAS、Token 签发及响应构造。与旧托管路径一致，这里没有完整 Subject
 消费者，不额外读取通用 Projection。ORCAS 启用时先断言已有许可，再使用 API 现有

@@ -283,7 +283,7 @@ export function createUnifiedCustomSsoOperations(options: UnifiedCustomSsoOperat
             // Original purpose is immutable: a later configuration edit cannot bypass the business Secret.
             if (
               code.redeemer !== "managed"
-              || code.callbackEndpoint !== new URL(config.callbackEndpoint).href
+              || code.callbackEndpoint !== `${new URL(code.redirectUrl).origin}/sso/callback`
               || code.redirectUrl !== input.redirectUrl
             ) {
               throw new CustomSsoRequestMismatchError();
@@ -405,6 +405,7 @@ export function createUnifiedCustomSsoOperations(options: UnifiedCustomSsoOperat
             }
             if (
               code.redeemer !== "business"
+              || config.callbackType !== ClientSsoCallbackType.Business
               || code.callbackEndpoint !== new URL(config.callbackEndpoint).href
               || code.redirectUrl !== input.redirectUri
             ) {

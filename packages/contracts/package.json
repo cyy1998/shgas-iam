@@ -4,7 +4,8 @@
   "version": "0.0.1",
   "private": true,
   "exports": {
-    ".": "./src/index.ts"
+    ".": "./src/index.ts",
+    "./offline-client-sso": "./src/offline-client-sso.ts"
   },
   "scripts": {
     "lint": "eslint src eslint.config.js",

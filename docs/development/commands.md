@@ -41,8 +41,29 @@ pnpm test:integration:<component|process|redis|postgres|composition|browser>
 
 ## Workspace 命令
 
+当前单协议 Client 的 managed 地址准备（#203）使用 Worker 命令：
+
+```powershell
+# IAM_WORKER_DATABASE_URL 与 DB migrate 的 DATABASE_URL 由调用方指向同一已备份、停流停写并排空旧实例的目标库。
+pnpm --filter @iam/worker client-managed-callback:upgrade inventory --writers-stopped
+pnpm --filter @iam/worker client-managed-callback:upgrade apply --writers-stopped
+pnpm --filter @iam/db db:migrate
+pnpm --filter @iam/worker client-managed-callback:upgrade verify --writers-stopped
+```
+
+Worker 在 inventory/apply/verify 全量使用 Domain `ValidatedClientSsoConfigSchema` 校验 URL、pattern 与 claims，
+包括无需转换的 managed/business/OIDC；不规范化写回非目标配置。DB 窄维护出口只拥有锁、journal 与减键事务，避免数据库反向依赖 Domain。
+默认 journal schema 为 `drizzle`，自定义部署需显式传 `--migrations-schema <schema>`。
+命令要求当前单协议 schema，且截至 `20260916050609_explicit_callback_type` 的历史 migrations 名称与时间戳已登记；不比较历史 SQL 字节 hash。
+不能跳过早期 Client 转换/收缩阶段。inventory 报告稳定排序的 `managedClients` 及本轮待转换 `changes`；发布负责人须保存
+首次 inventory 的 Client 集合，供后续定向 Code/续接清理使用。apply 在单个独占锁事务中全量规划后只删除 managed
+地址键并安装最终约束，异常整笔回滚；不写 journal，随后正式 migrate 登记新增 migration。重复执行不轮换凭据、不改业务事实。
+verify 独立解析全部配置并拒绝旧地址残留。新装空库直接执行 `db:migrate`。这些命令只完成配置阶段，不能据此放流；
+在线状态、Snapshot 和完整来源升级步骤已交付于[同代保留手册](../releases/managed-callback-origin-preserving-upgrade.md)
+与[b648 跨代手册](../releases/b648-managed-callback-upgrade.md)，目标环境尚未执行。
+
 Spec #178 的维护入口为 Worker `online-auth:state`、`client-snapshot:repair`、`client-snapshot:verify`。
-它们与 `client-sso:upgrade` 均通过 `bun run` 默认读取 `apps/worker/.env`，已有进程环境变量优先。
+它们均通过 `bun run` 默认读取 `apps/worker/.env`，已有进程环境变量优先。
 资源变量、source/unified 布局、namespace、停流/排空、退出码和完整命令见
 [统一维护手册](../releases/unified-session-maintenance.md)。旧 `client-runtime`/Provider 命令的去向也在该页逐项登记；
 代码候选通过不授权目标环境维护。
@@ -357,24 +378,19 @@ API Core full restore contract 使用现有 `IAM_API_CORE_TEST_REDIS_URL`，写 
 用于证明当前 repair 保留它们且 verify 不以其残留失败。测试仅精确清理自己登记的 fixture，维护命令不拥有旧 key。
 
 旧 Ticket 12 的 V1 rehearsal/backfill/verify 入口已随 strict V2 激活撤销。维护者只使用本页列出的
-User Profile maintenance、API/OIDC external entry、hermetic process smoke 与数据库 rollback seams；不得把 URL credential、
+User Profile maintenance、API/OIDC external entry、hermetic process smoke；不得把 URL credential、
 Token、Subject、完整 Redis key 或 Secret 写入验收记录。
-
-Subject Projection tightening migration 通过 Drizzle 应用后，rollback 必须在 authentication traffic 与 user/client writes
-均已停止的 maintenance freeze 内运行下列命令。命令读取显式 `DATABASE_URL`，默认精确补偿
-`drizzle.__drizzle_migrations` 中 `20260801144944_sturdy_landau` 的 name、timestamp 与本地 migration SHA-256；identity
-不一致时 fail closed，且 DDL 与 journal delete 位于同一 transaction。未通过 Drizzle migrator 的 raw-SQL rehearsal
-没有 journal row，可直接执行 migration 目录内的幂等 `rollback.sql`。
-
-```bash
-pnpm --filter @iam/db subject-projection:rollback
-```
 
 ## 工具链强制执行
 
 #200 后 `pnpm test:e2e` 在原同 origin 全系统基线之后，再启动独立 exact project 执行两个不同 hostname 的
 `dual-entry.spec.ts`；不需要另设环境变量选择第二阶段。workspace-local journey 仍只服务聚焦调试。
 双入口协议/固定旧状态演练的显式命令、资源和证据见[验收账本](../features/sso/dual-entry-acceptance.md)。
+
+#206 的精确 b648 直升演练由调用方提供空的任务独占 Redis DB、PostgreSQL 及冻结依赖的旧源码目录，
+显式执行 `bun --no-env-file run apps/api/test-integration/composition/b648-upgrade.fixture.ts <fixed-source-dir> [evidence-dir]`。
+不在普通 collection 中隐式安装旧版本。真实 writer、正式 CLI 顺序及不同来源的证据见
+[托管回调验收账本](../features/sso/managed-callback-origin-acceptance.md)和[跨代手册](../releases/b648-managed-callback-upgrade.md)。
 API Browser 的输出固定到 `test-results/browser`；suite 的 outputDirectory 应选择独立任务目录，不能依赖
 其他 runner 的可清理输出根保存跨通道验收材料。
 
@@ -423,7 +439,7 @@ Hook 不运行 lint、typecheck、test、build 或 tracker checker。按改动�
 - Custom SSO：`pnpm --filter @iam/custom-sso <lint|test|test:unit|typecheck>`；完整 HTTP/Redis 在 API collection。
 - Client Subject Projection：`pnpm --filter @iam/client-subject-projection <lint|test:integration:component|typecheck>`
 - User Profile Read Model：`pnpm --filter @iam/user-profile-read-model <lint|test|test:unit|test:integration:component|test:integration:postgres|test:integration:redis|typecheck>`
-- Worker：`pnpm --filter @iam/worker <dev|serve|lint|test|test:unit|test:integration:component|test:integration:process|test:integration:postgres|test:integration:redis|typecheck|employment:verify|user-profile:backfill|user-profile:repair|user-profile:verify-postgres|user-profile:verify-redis|client-sso:upgrade|client-snapshot:repair|client-snapshot:verify|online-auth:state>`
+- Worker：`pnpm --filter @iam/worker <dev|serve|lint|test|test:unit|test:integration:component|test:integration:process|test:integration:postgres|test:integration:redis|typecheck|employment:verify|user-profile:backfill|user-profile:repair|user-profile:verify-postgres|user-profile:verify-redis|client-snapshot:repair|client-snapshot:verify|online-auth:state>`
 - Employment 全库只读诊断：
   `IAM_WORKER_DATABASE_URL=<target-url> pnpm --filter @iam/worker employment:verify`
 - 历史审计 action 一次性规范化：显式 `IAM_WORKER_DATABASE_URL` 下运行
@@ -431,11 +447,10 @@ Hook 不运行 lint、typecheck、test、build 或 tracker checker。按改动�
   `pnpm --filter @iam/worker audit:actions -- apply --writers-stopped` 和独立
   `pnpm --filter @iam/worker audit:actions -- verify`。固定映射、退出码、事务锁及发布/恢复门禁见
   [操作手册](../releases/audit-action-canonicalization.md)；当前代码候选已移除运行时别名，工具继续独立保留；代码交付不证明目标环境已迁移。
-- Client 单协议一次性升级：显式 `IAM_WORKER_DATABASE_URL` 下运行 Worker `client-sso:upgrade`。
-  `inventory --writers-stopped` 输出安全库存；`apply --writers-stopped --manifest <path>` 只处理明确 scope；
-  新进程 `verify --writers-stopped --manifest <path>` 核验该范围，另加 `--all` 才作为收缩旧列前的全量数据 gate。
-  执行前完整读取[现有发布流程中的 Client 升级](../releases/online-auth-redis-time-cutover.md#client-单协议业务数据升级)，
-  使用停写盘点的原摘要、协议选择、实际部署回调和固定新凭据 ID；不提供 Secret 输出、Snapshot repair 或线上迁移。
+- Client 单协议一次性升级：旧通用 CLI 已退役。固定 b648 数据库使用一次性 `bun --cwd apps/worker --no-env-file scripts/b648-upgrade/index.ts` 的完整分阶段链，不使用历史扩展期流程；执行前完整读取
+  [b648 数据库手册](../releases/b648-client-database-upgrade.md)。新入口所有 apply/verify 都要求全量清单，
+  `contract` 在锁内启动独立 verify 后执行原历史收缩，receipt 为最终保留核验服务。阶段截止与最终转换均封装在一次性脚本中；
+  普通 `db:migrate` 使用 `drizzle-kit migrate`，不承担 b648 专用门禁；不提供 Secret 输出、Snapshot repair 或线上迁移。
 - Subject Access 恢复：
   `pnpm --filter @iam/worker run user-profile:repair -- --subject-access-only --limit <positive-integer>`。
   该模式依次执行 PostgreSQL stale pending transition intent 回收、Redis transition recovery 与 authority repair，
@@ -450,12 +465,13 @@ Hook 不运行 lint、typecheck、test、build 或 tracker checker。按改动�
   只表示已派发，不表示 readiness 已通过；两个 gate 任一失败都必须修复并重跑。
 - 统一 Snapshot repair/verify 与 source/unified 状态维护：使用 Worker `client-snapshot:repair`、`client-snapshot:verify`、
   `online-auth:state`，完整停流/资源/参数/失败重跑边界见[统一维护手册](../releases/unified-session-maintenance.md)。
-  旧 `client-runtime:*`、Provider 维护和 epoch 命令已退役；`client-sso:upgrade` 必须在固定扩展期旧制品与旧 schema 下先完成。
+  旧 `client-runtime:*`、Provider 维护、epoch 和扩展期 Client 升级命令已退役。
+- Custom 托管 origin 同代升级：Worker `client-managed-callback:upgrade <inventory|apply|verify> --writers-stopped`，
+  配置通过后使用 `online-auth:state --artifacts authorization` 限定原 managed Client 的 Code/续接。
+  完整来源、固定清单、停流/drain、正式迁移、Snapshot 和失败重跑顺序见
+  [同代保留升级手册](../releases/managed-callback-origin-preserving-upgrade.md)，不得用全 Client 清理替代。
 - Admin frontend：`pnpm --filter @iam/admin <dev|build|lint|test|test:unit|test:integration:component|test:integration:browser|typecheck|format>`
 - SSO frontend：`pnpm --filter @iam/sso <dev|build|lint|test|test:unit|test:integration:component|test:integration:browser|typecheck|format>`
-- Custom SSO 显式回调类型升级：`pnpm --filter @iam/db client-callback:upgrade <inventory|apply|verify> --writers-stopped`。
-  使用显式 `DATABASE_URL`，先读[协调切换流程](../releases/unified-session-maintenance.md#显式回调类型的保留状态升级)；
-  准备命令事务内补齐配置并应用新约束，随后 `db:migrate` 登记版本，不修改 Redis 会话。
 - Database：`pnpm --filter @iam/db <lint|test|test:unit|test:integration:postgres|typecheck|db:push|db:generate|db:migrate|db:check>`
 - Role Assignment：`pnpm --filter @iam/role-assignment-resolution <lint|test:integration:component|test:integration:postgres|typecheck>`
 - Organization Responsibility Resolution：`pnpm --filter @iam/organization-responsibility-resolution <lint|test:integration:component|test:integration:postgres|typecheck>`

@@ -28,6 +28,7 @@ describe("E2E scenario seed", () => {
     const result = await seedE2EScenario({
       adminPassword: "SYNTHETIC-PASSWORD-ONLY-FOR-E2E",
       canonicalOrigin: "http://127.0.0.1:43123",
+      internalOrigin: "http://internal.iam.localhost:43123",
       owner,
       random: { uuid: () => "3b766c91-1daa-4c09-89e4-ea87ad123456" },
       runId: "20260806123000000-a1b2c3d4",
@@ -37,6 +38,7 @@ describe("E2E scenario seed", () => {
       version: 1,
       runId: "20260806123000000-a1b2c3d4",
       canonicalOrigin: "http://127.0.0.1:43123",
+      internalOrigin: "http://internal.iam.localhost:43123",
       adminSubjectIdentifier: "3b766c91-1daa-4c09-89e4-ea87ad123456",
       adminUsername: "e2e-admin-123000000-a1b2c3d4",
       hrAdminSubjectIdentifier: "3b766c91-1daa-4c09-89e4-ea87ad123456",
@@ -183,7 +185,7 @@ function completeReadBack(references: E2EScenarioReferences) {
       active: true,
       ssoEnabled: true,
       clientCode: references.adminClientCode,
-      callbackEndpoint: `${references.canonicalOrigin}/sso/callback`,
+      callbackEndpoint: null,
       redirectUris: [references.adminRedirectUri],
     },
     customSsoClient: {

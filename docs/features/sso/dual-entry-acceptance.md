@@ -11,6 +11,9 @@ Next review: 2026-10-31
 `a8a85d2132d7caea3252156f71334b2b2c38959e`。代码候选、实际提交和双轴评审结论由 #200 评论固定；
 父 Spec 的全仓 `pnpm verify` 由协调者执行。本页不表示目标环境已清理、合入或部署。
 
+本页保存 #197/#200 固定候选的验收事实。Custom managed 固定外网回调的目标已由 ADR-0038 / Spec #201
+改为按本次落地 origin 推导；当前正式 Gateway 旅程与两条来源升级的结果见[托管回调账本](managed-callback-origin-acceptance.md)。
+
 ## 证据入口与证明范围
 
 - **N**：[导航票 #198](https://github.com/cyy1998/shgas-iam/issues/198)，固定候选 `5c6707ef`，

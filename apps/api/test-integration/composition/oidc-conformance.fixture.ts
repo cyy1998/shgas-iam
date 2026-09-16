@@ -33,6 +33,8 @@ export async function createOidcConformanceCandidate(options: {
   /** Caller owns loopback DNS mapping and, for TLS, matching certificate SANs. */
   hostnames?: { internal: string; external: string };
   source?: OidcCandidateSource;
+  /** Explicit source rehearsal only; ordinary candidates always use current migrations. */
+  migrationsFolder?: string;
 }) {
   const checkpoint = async (phase: string) => options.lifecycle?.checkpoint(phase);
   await checkpoint("setup");
@@ -72,7 +74,7 @@ export async function createOidcConformanceCandidate(options: {
   try {
     await writeFile(`${options.logPath}.owner.json`, JSON.stringify({ temporaryDirectory }));
     await checkpoint("temporary-directory-ready");
-    const pg = await createApiPostgresTestHarness();
+    const pg = await createApiPostgresTestHarness({ migrationsFolder: options.migrationsFolder });
     registerCleanup(() => pg.close());
     await checkpoint("postgres-ready");
     const redis = new Redis(redisUrl, { maxRetriesPerRequest: 1 });
@@ -128,6 +130,8 @@ export async function createOidcConformanceCandidate(options: {
           const incoming = new URL(request.url);
           const forwarded = new Request(`${apiOrigin}${incoming.pathname}${incoming.search}`, request);
           forwarded.headers.set("X-IAM-Entry-Network", network);
+          // Rehearsals stop and replace the backend on this port; do not reuse a socket owned by the old process.
+          forwarded.headers.set("Connection", "close");
           return await fetch(forwarded, { redirect: "manual" });
         },
       });

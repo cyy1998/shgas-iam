@@ -1,0 +1,138 @@
+{
+  "constraints": [
+    {
+      "name": "client_client_code_key",
+      "definition": "UNIQUE (client_code)",
+      "validated": true
+    },
+    {
+      "name": "client_client_code_not_null",
+      "definition": "NOT NULL client_code",
+      "validated": true
+    },
+    {
+      "name": "client_client_name_not_null",
+      "definition": "NOT NULL client_name",
+      "validated": true
+    },
+    {
+      "name": "client_client_secret_not_null",
+      "definition": "NOT NULL client_secret",
+      "validated": true
+    },
+    {
+      "name": "client_create_time_not_null",
+      "definition": "NOT NULL create_time",
+      "validated": true
+    },
+    {
+      "name": "client_custom_sso_config_version_check",
+      "definition": "CHECK (custom_sso_config_version >= 0)",
+      "validated": true
+    },
+    {
+      "name": "client_custom_sso_config_version_not_null",
+      "definition": "NOT NULL custom_sso_config_version",
+      "validated": true
+    },
+    {
+      "name": "client_custom_sso_enabled_not_null",
+      "definition": "NOT NULL custom_sso_enabled",
+      "validated": true
+    },
+    {
+      "name": "client_custom_sso_state_check",
+      "definition": "CHECK ((custom_sso_config IS NULL AND NOT custom_sso_enabled AND custom_sso_secret_hash IS NULL OR custom_sso_config IS NOT NULL AND custom_sso_config_version > 0 AND jsonb_typeof(custom_sso_config) = 'object'::text AND jsonb_typeof(custom_sso_config -> 'validRedirectUrls'::text) = 'array'::text AND jsonb_array_length(custom_sso_config -> 'validRedirectUrls'::text) > 0 AND NOT jsonb_path_exists(custom_sso_config, '$.\"validRedirectUrls\"[*]?(@.type() != \"string\" || @ == \"\")'::jsonpath) AND jsonb_typeof(custom_sso_config -> 'subjectClaims'::text) = 'array'::text AND jsonb_array_length(custom_sso_config -> 'subjectClaims'::text) > 0 AND (custom_sso_config -> 'subjectClaims'::text) @> '[\"subjectIdentifier\"]'::jsonb AND ((custom_sso_config ->> 'mode'::text) = 'gateway'::text AND custom_sso_secret_hash IS NULL AND (custom_sso_config - ARRAY['validRedirectUrls'::text, 'subjectClaims'::text, 'mode'::text, 'orcas'::text]) = '{}'::jsonb AND jsonb_typeof(custom_sso_config -> 'orcas'::text) = 'object'::text AND ((custom_sso_config -> 'orcas'::text) - 'enabled'::text) = '{}'::jsonb AND jsonb_typeof((custom_sso_config -> 'orcas'::text) -> 'enabled'::text) = 'boolean'::text OR (custom_sso_config ->> 'mode'::text) = 'independent'::text AND custom_sso_secret_hash IS NOT NULL AND (custom_sso_config - ARRAY['validRedirectUrls'::text, 'subjectClaims'::text, 'mode'::text, 'callbackEndpoint'::text, 'logoutEndpoint'::text]) = '{}'::jsonb AND jsonb_typeof(custom_sso_config -> 'callbackEndpoint'::text) = 'string'::text AND (custom_sso_config ->> 'callbackEndpoint'::text) <> ''::text AND (custom_sso_config ->> 'callbackEndpoint'::text) ~ '^[A-Za-z][A-Za-z0-9+.-]*:[^[:space:]]+$'::text AND jsonb_typeof(custom_sso_config -> 'logoutEndpoint'::text) = 'string'::text AND (custom_sso_config ->> 'logoutEndpoint'::text) <> ''::text AND (custom_sso_config ->> 'logoutEndpoint'::text) ~ '^[A-Za-z][A-Za-z0-9+.-]*:[^[:space:]]+$'::text)) IS TRUE)",
+      "validated": true
+    },
+    {
+      "name": "client_ext_attributes_not_null",
+      "definition": "NOT NULL ext_attributes",
+      "validated": true
+    },
+    {
+      "name": "client_id_not_null",
+      "definition": "NOT NULL id",
+      "validated": true
+    },
+    {
+      "name": "client_is_delete_not_null",
+      "definition": "NOT NULL is_delete",
+      "validated": true
+    },
+    {
+      "name": "client_oidc_config_version_not_null",
+      "definition": "NOT NULL oidc_config_version",
+      "validated": true
+    },
+    {
+      "name": "client_oidc_enabled_config_check",
+      "definition": "CHECK (NOT oidc_enabled OR oidc_config IS NOT NULL)",
+      "validated": true
+    },
+    {
+      "name": "client_oidc_enabled_not_null",
+      "definition": "NOT NULL oidc_enabled",
+      "validated": true
+    },
+    {
+      "name": "client_pkey",
+      "definition": "PRIMARY KEY (id)",
+      "validated": true
+    },
+    {
+      "name": "client_status_not_null",
+      "definition": "NOT NULL status",
+      "validated": true
+    },
+    {
+      "name": "client_update_time_not_null",
+      "definition": "NOT NULL update_time",
+      "validated": true
+    }
+  ],
+  "defaults": [
+    {
+      "name": "create_time",
+      "expression": "now()"
+    },
+    {
+      "name": "custom_sso_config_version",
+      "expression": "0"
+    },
+    {
+      "name": "custom_sso_enabled",
+      "expression": "false"
+    },
+    {
+      "name": "is_delete",
+      "expression": "false"
+    },
+    {
+      "name": "oidc_config_version",
+      "expression": "0"
+    },
+    {
+      "name": "oidc_enabled",
+      "expression": "false"
+    },
+    {
+      "name": "status",
+      "expression": "1"
+    },
+    {
+      "name": "update_time",
+      "expression": "now()"
+    }
+  ],
+  "indexes": [
+    {
+      "name": "client_client_code_key",
+      "definition": " USING btree (client_code)"
+    },
+    {
+      "name": "client_pkey",
+      "definition": " USING btree (id)"
+    }
+  ]
+}

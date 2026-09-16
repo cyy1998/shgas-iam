@@ -17,10 +17,11 @@ RUN --mount=type=cache,id=iam-e2e-pnpm-v11,target=/pnpm/store \
     pnpm install --filter @iam/gateway-apisix... --prod --frozen-lockfile --ignore-scripts
 
 COPY gateway ./gateway
+COPY e2e/system/src/gateway-sync.ts ./e2e/system/src/gateway-sync.ts
 
 FROM docker.xuanyuan.run/oven/bun:1.3.14-alpine
 
 WORKDIR /workspace
 COPY --from=workspace /workspace /workspace
 
-CMD ["bun", "gateway/src/cli.ts", "apply", "--env", "e2e:iam", "--manifest", "gateway/manifests/dev/iam.yaml", "--render-env", "--admin-url", "http://apisix:9180/apisix/admin", "--admin-key", "dev-local-admin-key-change-me", "--prune", "--json"]
+CMD ["bun", "e2e/system/src/gateway-sync.ts"]

@@ -4,6 +4,11 @@ status: accepted
 
 # 显式配置 Custom SSO 回调类型
 
+后续 [ADR-0038](0038-derive-managed-sso-callback-from-redirect-origin.md) 保留本文的显式类型，另行确认托管回调从
+业务落地 origin 推导、托管配置移除地址的决定，已由 Spec #201 实现并完成本地行为验证。
+本文的托管固定地址约定保留为被取代的历史决定；当前同代及旧版直升流程分别见
+[同代手册](../releases/managed-callback-origin-preserving-upgrade.md)和[跨代手册](../releases/b648-managed-callback-upgrade.md)，环境尚未迁移。
+
 ## 2026-09-16 重新讨论：显式回调类型
 
 维护者在原候选完成后修改 Q1：增加由管理员选择的“托管回调 / 业务回调”配置，不再根据 URL 判断类型。

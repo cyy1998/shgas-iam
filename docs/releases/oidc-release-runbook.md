@@ -76,7 +76,7 @@ inventory、apply、verify。清理包括根、应用关系和两协议产物/�
    核验后端不可绕过、TLS/DNS、readiness 和两条入口各自的完整 Discovery。相同 origin 环境核验为同一个 issuer。
 6. 在受控入口重放旧根 Cookie、两协议 Code/Token、Authentication Continuation 和退出确认，确认不能恢复旧登录。
    随后分别从内、外入口真实新登录、授权、callback、Token/UserInfo、取消/确认退出；检查相对导航、host-only Cookie、
-   固定跨入口 Custom callback、伪造 header 覆盖和未知 host 拒绝。接入方独立校验本次 `iss`、签名、audience、nonce
+   managed 按落地 origin 回调、business 固定 callback、伪造 header 覆盖和未知 host 拒绝。接入方独立校验本次 `iss`、签名、audience、nonce
    及业务回调配置。全部完成后由发布负责人逐入口恢复流量，保留控制面 read-back 与执行时间。
 
 若步骤5或6失败，关闭受控入口并排空新候选；使用与新 schema 匹配的维护工具清理演练中新建的在线状态并独立 verify，

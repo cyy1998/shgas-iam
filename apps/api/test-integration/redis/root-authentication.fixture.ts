@@ -40,7 +40,7 @@ import Redis from "ioredis";
 import postgres from "postgres";
 import { sm2, sm3 } from "sm-crypto";
 
-export async function fixture(codeTtlSeconds = 30, networkUrl?: string, tokenTtlSeconds = 45) {
+export async function fixture(codeTtlSeconds = 30, networkUrl?: string, tokenTtlSeconds = 45, continuationTtlSeconds = 60) {
   const url = networkUrl ?? process.env.IAM_API_TEST_REDIS_URL;
   if (!url)
     throw new Error("IAM_API_TEST_REDIS_URL is required");
@@ -205,7 +205,7 @@ export async function fixture(codeTtlSeconds = 30, networkUrl?: string, tokenTtl
       redis: codes.redis,
       namespace: codes.namespace,
       codeTtlSeconds,
-      continuationTtlSeconds: 60,
+      continuationTtlSeconds,
     },
     customSsoAccess: {
       tokenTtlSeconds,

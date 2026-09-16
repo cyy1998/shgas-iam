@@ -4,6 +4,7 @@ export interface E2EScenarioReferences {
   version: 1;
   runId: string;
   canonicalOrigin: string;
+  internalOrigin?: string;
   adminSubjectIdentifier: string;
   adminUsername: string;
   hrAdminSubjectIdentifier: string;
@@ -202,6 +203,7 @@ export interface E2EScenarioOwner {
 export interface SeedE2EScenarioInput {
   adminPassword: string;
   canonicalOrigin: string;
+  internalOrigin?: string;
   owner: E2EScenarioOwner;
   random: { uuid: () => string };
   runId: string;
@@ -210,7 +212,7 @@ export interface SeedE2EScenarioInput {
 export async function seedE2EScenario(
   input: SeedE2EScenarioInput,
 ): Promise<E2EScenarioReferences> {
-  const origin = requireCanonicalOrigin(input.canonicalOrigin);
+  const origin = requireEntryOrigin(input.canonicalOrigin, "external");
   const identity = createE2EScenarioIdentity(input.runId);
   if (input.adminPassword.length < 12)
     throw new Error("E2E synthetic admin credential is too short");
@@ -219,6 +221,7 @@ export async function seedE2EScenario(
     version: 1,
     runId: input.runId,
     canonicalOrigin: origin,
+    internalOrigin: input.internalOrigin === undefined ? origin : requireEntryOrigin(input.internalOrigin, "internal"),
     adminSubjectIdentifier: input.random.uuid(),
     hrAdminSubjectIdentifier: input.random.uuid(),
     delegateeSubjectIdentifier: input.random.uuid(),
@@ -278,17 +281,17 @@ export function createE2EScenarioInternalApiKey(runId: string) {
   return `iam-e2e-internal-api-key-${requireRunKey(runId)}`;
 }
 
-function requireCanonicalOrigin(value: string) {
+function requireEntryOrigin(value: string, entry: "internal" | "external") {
   const url = new URL(value);
   if (
     url.origin !== value
     || url.protocol !== "http:"
-    || !["127.0.0.1", "external.iam.localhost"].includes(url.hostname)
+    || !["127.0.0.1", `${entry}.iam.localhost`].includes(url.hostname)
     || url.port === ""
     || url.username !== ""
     || url.password !== ""
   ) {
-    throw new Error("E2E canonical origin must be http://127.0.0.1:<port>");
+    throw new Error(`E2E ${entry} origin must use its loopback hostname and an explicit HTTP port`);
   }
   return value;
 }
@@ -367,7 +370,7 @@ function assertScenarioReadBack(
     && actual.adminClient.active
     && actual.adminClient.ssoEnabled
     && actual.adminClient.clientCode === expected.adminClientCode
-    && actual.adminClient.callbackEndpoint === `${expected.canonicalOrigin}/sso/callback`
+    && actual.adminClient.callbackEndpoint === null
     && actual.adminClient.redirectUris.length === 1
     && actual.adminClient.redirectUris[0] === expected.adminRedirectUri
     && actual.customSsoClient.active

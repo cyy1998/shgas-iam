@@ -13,7 +13,7 @@ async function main() {
     process.exitCode = 2;
     return;
   }
-  const report = { version: 1, mode: input.mode, layout: input.layout, status: "failed", reason: "operation-failed", preservation: "requires_independent_baseline_comparison", owners: [] as Array<{
+  const report = { version: 1, mode: input.mode, layout: input.layout, artifacts: input.artifacts, clientCode: input.clientCode, status: "failed", reason: "operation-failed", preservation: "requires_independent_baseline_comparison", owners: [] as Array<{
     owner: string;
     status: string;
     matching?: number;

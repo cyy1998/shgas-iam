@@ -42,9 +42,6 @@ test('administrator chooses callback type, corrects ORCAS and reloads the saved 
   await page.getByLabel('SSO 协议', { exact: true }).click();
   await page.getByTitle('Custom SSO', { exact: true }).click();
   await page
-    .getByLabel('回调地址', { exact: true })
-    .fill('https://app.test/login/finish');
-  await page
     .getByLabel('Redirect URIs', { exact: true })
     .fill('https://app.test/home');
   await page.getByLabel('Redirect URIs', { exact: true }).press('Enter');
@@ -60,13 +57,17 @@ test('administrator chooses callback type, corrects ORCAS and reloads the saved 
   expect(current.ssoConfig).toMatchObject({
     protocol: ClientSsoProtocol.CustomSso,
     callbackType: 'managed',
-    callbackEndpoint: 'https://app.test/login/finish',
     orcas: { enabled: true },
   });
+  expect(current.ssoConfig).not.toHaveProperty('callbackEndpoint');
   await page.reload();
+  await expect(page.getByLabel('回调地址', { exact: true })).toHaveCount(0);
   await expect(page.getByLabel('托管交付启用 ORCAS')).toBeChecked();
   await page.getByLabel('回调类型', { exact: true }).click();
   await page.getByTitle('业务回调', { exact: true }).click();
+  await page
+    .getByLabel('回调地址', { exact: true })
+    .fill('https://app.test/sso/callback');
   await save.click();
   await expect(
     page.getByText('业务回调不能启用 ORCAS，请先关闭 ORCAS'),
@@ -88,4 +89,26 @@ test('administrator chooses callback type, corrects ORCAS and reloads the saved 
   );
   await expect(page.getByTitle('业务回调', { exact: true })).toBeVisible();
   expect(writes).toBe(2);
+  await page.getByLabel('回调类型', { exact: true }).click();
+  await page.getByTitle('托管回调', { exact: true }).click();
+  await save.click();
+  await expect(page.getByText('已保存').last()).toBeVisible();
+  expect(current.ssoConfig).not.toHaveProperty('callbackEndpoint');
+  await page.reload();
+  await page.getByLabel('回调类型', { exact: true }).click();
+  await page.getByTitle('业务回调', { exact: true }).click();
+  await expect(page.getByLabel('回调地址', { exact: true })).toHaveValue('');
+  await save.click();
+  await expect(page.getByRole('alert').last()).toBeVisible();
+  expect(writes).toBe(3);
+  await page
+    .getByLabel('回调地址', { exact: true })
+    .fill('https://app.test/new/callback');
+  await save.click();
+  await expect(page.getByText('已保存').last()).toBeVisible();
+  expect(current.ssoConfig).toMatchObject({
+    callbackType: 'business',
+    callbackEndpoint: 'https://app.test/new/callback',
+  });
+  expect(writes).toBe(4);
 });

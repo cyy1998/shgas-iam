@@ -147,7 +147,6 @@ export const adminClients = [
     ssoConfig: {
       protocol: ClientSsoProtocol.CustomSso,
       callbackType: ClientSsoCallbackType.Managed,
-      callbackEndpoint: 'http://localhost:8001/sso/callback',
       validRedirectUrls: ['http://localhost:8001/iam-admin/*'],
       subjectClaims: [
         SubjectClaim.SubjectIdentifier,

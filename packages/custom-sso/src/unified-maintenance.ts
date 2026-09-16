@@ -21,6 +21,8 @@ export interface CustomSsoInventoryInput {
   cursor?: string;
   limit?: number;
   clientCode?: string;
+  /** Authorization invalidation preserves Tokens and every reverse index, including orphans. */
+  artifacts?: "all" | "authorization";
 }
 
 export function createUnifiedCustomSsoVerifier(
@@ -76,6 +78,10 @@ function createInventory(redis: CustomSsoInventoryRedis, namespace: string) {
     }> = [];
     let unknown = 0;
     for (const key of keys) {
+      if (input.artifacts === "authorization"
+        && (key.startsWith(`${prefix}token:`) || key.startsWith(`${prefix}token-id:`))) {
+        continue;
+      }
       const raw = await redis.get(key);
       if (raw === null)
         continue;

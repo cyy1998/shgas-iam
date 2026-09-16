@@ -60,6 +60,7 @@ export default function ClientSsoPage() {
   const secretRequestRef = useRef(0);
   const [form] = Form.useForm<FormValues>();
   const protocol = Form.useWatch('protocol', form);
+  const callbackType = Form.useWatch('callbackType', form);
 
   const refresh = useCallback(
     async (savedFields: (keyof FormValues)[] = []) => {
@@ -95,7 +96,8 @@ export default function ClientSsoPage() {
               ? config.callbackType
               : undefined,
           callbackEndpoint:
-            config?.protocol === ClientSsoProtocol.CustomSso
+            config?.protocol === ClientSsoProtocol.CustomSso &&
+            config.callbackType === ClientSsoCallbackType.Business
               ? config.callbackEndpoint
               : '',
           validRedirectUrls:
@@ -223,7 +225,9 @@ export default function ClientSsoPage() {
         : {
             protocol: values.protocol,
             callbackType: values.callbackType,
-            callbackEndpoint: values.callbackEndpoint,
+            ...(values.callbackType === ClientSsoCallbackType.Business
+              ? { callbackEndpoint: values.callbackEndpoint }
+              : {}),
             validRedirectUrls: values.validRedirectUrls,
             subjectClaims: values.subjectClaims,
             ...(values.orcas ? { orcas: { enabled: true } } : {}),
@@ -357,9 +361,11 @@ export default function ClientSsoPage() {
                     ]}
                   />
                 </Form.Item>
-                <Form.Item name="callbackEndpoint" label="回调地址">
-                  <Input />
-                </Form.Item>
+                {callbackType === ClientSsoCallbackType.Business && (
+                  <Form.Item name="callbackEndpoint" label="回调地址" required>
+                    <Input />
+                  </Form.Item>
+                )}
                 <Form.Item name="validRedirectUrls" label="Redirect URIs">
                   <Select mode="tags" open={false} suffixIcon={null} />
                 </Form.Item>

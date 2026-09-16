@@ -1,8 +1,5 @@
 // Browser Integration uses a mocked backend; this is not a full-system journey.
-import {
-  ApiErrorCode,
-  ClientSsoProtocol,
-} from '@iam/contracts';
+import { ApiErrorCode, ClientSsoProtocol, ClientStatus } from '@iam/contracts';
 import { expect, test } from '@playwright/test';
 import {
   adminClientDetail,
@@ -25,7 +22,9 @@ test('client list has one edit entry with protocol summaries', async ({
   await expect(
     page.getByRole('columnheader', { name: 'SSO 协议' }),
   ).toBeVisible();
-  await expect(page.getByRole('columnheader', { name: 'SSO 启用' })).toBeVisible();
+  await expect(
+    page.getByRole('columnheader', { name: 'SSO 启用' }),
+  ).toBeVisible();
   await expect(page.getByRole('link', { name: '编辑' })).toHaveCount(1);
   await expect(page.getByRole('link', { name: 'SSO 启用' })).toHaveCount(0);
 
@@ -56,8 +55,7 @@ test('client list applies structured single protocol and enable filters', async 
     const matches =
       JSON.stringify(exactConditions?.ssoProtocols) ===
         JSON.stringify([ClientSsoProtocol.CustomSso]) &&
-      JSON.stringify(exactConditions?.ssoEnabled) ===
-        JSON.stringify(false);
+      JSON.stringify(exactConditions?.ssoEnabled) === JSON.stringify(false);
     return fulfillTrpc(
       route,
       matches ? adminClientSearchResult : { result: [], total: 0 },
@@ -89,9 +87,7 @@ test('client list applies structured single protocol and enable filters', async 
       },
     });
   await expect(page.getByText('IAM 管理后台', { exact: true })).toBeVisible();
-  await expect(
-    page.getByText('已停用', { exact: true }).first(),
-  ).toBeVisible();
+  await expect(page.getByText('已停用', { exact: true }).first()).toBeVisible();
 });
 
 test('creating a basic client opens its unified editor', async ({ page }) => {
@@ -131,13 +127,17 @@ test('maintenance status updates without a destructive confirmation', async ({
   await expect(page.getByText('全局状态已更新')).toBeVisible();
 });
 
-test('basic editor guards unsaved Internal API credentials across tabs and history', async ({ page }) => {
+test('basic editor guards unsaved Internal API credentials across tabs and history', async ({
+  page,
+}) => {
   await mockAdminApi(page);
   await page.goto('/iam-admin/clients');
   await page.getByRole('link', { name: '编辑' }).click();
   await page.getByLabel('通用应用密钥').fill('unsaved-secret');
   await page.getByRole('tab', { name: 'SSO 配置' }).click();
-  const confirmation = page.locator('.ant-modal-confirm-title').filter({ hasText: '放弃未保存的修改？' });
+  const confirmation = page
+    .locator('.ant-modal-confirm-title')
+    .filter({ hasText: '放弃未保存的修改？' });
   await expect(confirmation).toBeVisible();
   await page.getByRole('button', { name: /取\s*消/ }).click();
   await expect(confirmation).toHaveCount(0);
@@ -148,7 +148,9 @@ test('basic editor guards unsaved Internal API credentials across tabs and histo
   await page.getByRole('button', { name: '放弃修改' }).click();
   await expect(page).toHaveURL(/clients$/);
   await page.getByRole('link', { name: '编辑' }).click();
-  await expect(page.getByLabel('通用应用密钥')).toHaveValue(adminClientDetail.clientSecret);
+  await expect(page.getByLabel('通用应用密钥')).toHaveValue(
+    adminClientDetail.clientSecret,
+  );
 });
 
 test('unknown section falls back to basic and delete returns to list', async ({
@@ -348,3 +350,54 @@ for (const operation of ['update', 'updateStatus'] as const) {
     await expect(page.getByText('无需修改', { exact: true })).toBeVisible();
   });
 }
+
+test('basic name edits preserve concurrent status and status changes use their own command', async ({
+  page,
+}) => {
+  await mockAdminApi(page);
+  let current = { ...adminClientDetail };
+  const profiles: Record<string, unknown>[] = [];
+  const statuses: number[] = [];
+  await page.route('**/rpc/admin.client.detail**', (route) =>
+    fulfillTrpc(route, current),
+  );
+  await page.route('**/rpc/admin.client.update**', (route) => {
+    const { data } = parseTrpcBatchInput<{ data: Record<string, unknown> }>(
+      route,
+    );
+    profiles.push(data);
+    current = { ...current, clientName: String(data.clientName) };
+    return fulfillTrpc(route, { changed: true, result: null });
+  });
+  await page.route('**/rpc/admin.client.updateStatus**', (route) => {
+    const { status } = parseTrpcBatchInput<{ status: typeof current.status }>(
+      route,
+    );
+    statuses.push(status);
+    current = { ...current, status };
+    return fulfillTrpc(route, { changed: true, result: null });
+  });
+  await page.goto('/iam-admin/clients/iam-admin/edit?section=basic');
+  await expect(page.getByLabel('应用名称', { exact: true })).toHaveValue(
+    current.clientName,
+  );
+  current = { ...current, status: ClientStatus.Maintenance };
+  await page.getByLabel('应用名称', { exact: true }).fill('Rename');
+  await page.getByRole('button', { name: '保存基础信息' }).click();
+  await expect(page.getByText('基础信息已保存').last()).toBeVisible();
+  expect(profiles[0]).not.toHaveProperty('status');
+  expect(current.status).toBe(ClientStatus.Maintenance);
+  await page.getByLabel('全局状态').click();
+  await page
+    .locator('.ant-select-dropdown:visible')
+    .getByText('正常', { exact: true })
+    .click();
+  await page.getByRole('button', { name: '更新全局状态' }).click();
+  await expect(page.getByText('全局状态已更新')).toBeVisible();
+  expect(statuses).toEqual([ClientStatus.Enable]);
+  await page.getByLabel('应用名称', { exact: true }).fill('Rename again');
+  await page.getByRole('button', { name: '保存基础信息' }).click();
+  await expect.poll(() => profiles.length).toBe(2);
+  expect(profiles[1]).not.toHaveProperty('status');
+  expect(current.status).toBe(ClientStatus.Enable);
+});

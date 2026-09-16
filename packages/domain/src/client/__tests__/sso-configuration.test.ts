@@ -29,14 +29,16 @@ const custom = {
   subjectClaims: ["subjectIdentifier"],
 } satisfies ClientSsoConfig;
 
+const managed = { protocol: custom.protocol, callbackType: ClientSsoCallbackType.Managed, validRedirectUrls: custom.validRedirectUrls, subjectClaims: custom.subjectClaims } satisfies ClientSsoConfig;
+
 test("strict single protocol configuration derives authentication and rejects mixed/retired fields", () => {
   expect(ClientSsoConfigSchema.parse(oidc)).toEqual(oidc);
   expect(ClientSsoConfigSchema.parse(custom)).toEqual(custom);
-  expect(ClientSsoConfigSchema.parse({ ...custom, callbackType: ClientSsoCallbackType.Managed, orcas: { enabled: true } })).toEqual({
-    ...custom,
-    callbackType: ClientSsoCallbackType.Managed,
+  expect(ClientSsoConfigSchema.parse({ ...managed, orcas: { enabled: true } })).toEqual({
+    ...managed,
     orcas: { enabled: true },
   });
+  expect(normalizeClientSsoConfig(managed)).toEqual(managed);
   expect(getClientSsoTokenEndpointAuthMethod(oidc)).toBe(OidcTokenEndpointAuthMethod.None);
   expect(
     getClientSsoTokenEndpointAuthMethod({

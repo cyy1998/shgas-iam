@@ -17,7 +17,7 @@ ClientSession。有效实例复用、protocol 更新、单调延长和根期限�
 未登录的 authorize 把已接受的实际落地地址、callback、兑换方和可选 state 保存为有期限的服务端续接，返回
 `ssoReturn`。HttpOnly/Lax、Path `/` 的短期 `custom_sso_continuation` Cookie 绑定浏览器，页面 guard 和恢复请求同时
 携带 handle；handle 本身不能取代绑定。恢复核对原 Client/落地地址/state，并重新检查当前 Gate、协议和根许可，
-但不按后来编辑的允许列表重新判定原地址，也不把原业务 callback 重新分类为托管 callback。
+但不按后来编辑的允许列表重新判定原地址；当前 callbackType 与首次接受的用途不同时拒绝续接，要求重新授权。
 直接进入旧形状登录页仍支持 guard；未经过 authorize 的请求尚未形成持久化的已接受授权。
 
 SSO 页面继续使用互斥 guard 状态、超时/手动重试、迟到响应隔离和 history replacement。密码/短信完成后透传 handle；
@@ -26,10 +26,17 @@ OIDC 浏览器绑定和首次认证完成证明由 #187 继续迁移。
 
 ## callback 和 Code 所有权
 
-按 [ADR-0037](../../adr/0037-classify-managed-sso-callbacks-by-path.md)，配置的 `callbackType` 显式选择 `managed` 或 `business`，不根据 URL 判断。
-托管地址不限域名、端口或路径，允许 query；始终跳转到配置的完整地址，管理员负责部署实际代理。
-请求 Host、Forwarded 和业务落地地址不参与分类。
-API 始终跳到授权结果保存的单个 callback，不从业务 origin 推导 `/sso/callback`，也不增加请求侧 mode/delivery/callback。
+按 [ADR-0038](../../adr/0038-derive-managed-sso-callback-from-redirect-origin.md)，配置的 `callbackType` 显式选择 `managed` 或 `business`，不根据 URL 判断。
+managed 首次通过完整落地校验后，从规范化 `redirectUrl` 的 origin 推导根路径 `/sso/callback`，保留协议、主机和非默认端口。
+落地路径/query 与旧配置 callbackEndpoint 的路径/query 不进入基础回调；business 继续使用登记的完整 callbackEndpoint。
+请求 Host、Forwarded 不参与目标选择。管理员负责为每个允许的业务 origin 部署 `/sso/callback` 代理。
+API 始终跳到授权结果保存的单个 callback，不增加请求侧 mode/delivery/callback。
+
+#203 已移除 managed 配置字段：请求、持久化、普通输出和 Snapshot 均严格禁止 `callbackEndpoint`；business 继续必填。
+Admin 类型切换按实际分支提交，已有 Secret 和 ORCAS 限制保持。存量配置须在维护窗口经
+`client-managed-callback:upgrade` 准备与正式 migration。在线状态定向清理、Snapshot 和放流步骤已交付于
+[同代保留手册](../../releases/managed-callback-origin-preserving-upgrade.md)；固定 b648 来源使用
+[跨代直升手册](../../releases/b648-managed-callback-upgrade.md)。不能混跑旧消费者，目标环境尚未执行切换。
 
 Custom owner 使用 `namespace:custom-sso:v1:` 保存 Code 与续接，Kernel 不登记协议产物。Code 是
 `Code ID.UserSession ID.ClientSession ID`；随机 Code ID 无 MAC 或签名。记录保存原根和子实例 ID/不可变 instance、Client、

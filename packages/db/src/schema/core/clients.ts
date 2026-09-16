@@ -49,8 +49,10 @@ export const clients = snakeCase.table("client", {
         AND (${table.ssoConfig} - ARRAY['protocol','callbackType','callbackEndpoint','validRedirectUrls','subjectClaims','orcas']) = '{}'::jsonb
         AND ${table.ssoConfig}->>'callbackType' IN ('managed','business')
         AND (${table.ssoConfig}->>'callbackType' = 'managed' OR NOT COALESCE((${table.ssoConfig}->'orcas'->>'enabled')::boolean, false))
-        AND jsonb_typeof(${table.ssoConfig}->'callbackEndpoint') = 'string'
-        AND ${table.ssoConfig}->>'callbackEndpoint' ~ '^https?://[^[:space:]]+$'
+        AND ((${table.ssoConfig}->>'callbackType' = 'managed' AND NOT (${table.ssoConfig} ? 'callbackEndpoint'))
+          OR (${table.ssoConfig}->>'callbackType' = 'business'
+            AND jsonb_typeof(${table.ssoConfig}->'callbackEndpoint') = 'string'
+            AND ${table.ssoConfig}->>'callbackEndpoint' ~ '^https?://[^[:space:]]+$'))
         AND jsonb_typeof(${table.ssoConfig}->'validRedirectUrls') = 'array'
         AND jsonb_array_length(${table.ssoConfig}->'validRedirectUrls') > 0
         AND jsonb_typeof(${table.ssoConfig}->'subjectClaims') = 'array'

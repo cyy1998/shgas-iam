@@ -208,7 +208,7 @@ test(
           const info = (token: string, client = custom) =>
             request("/public/user-info", { headers: { Authorization: token, Client: client } });
           try {
-            await sql`UPDATE client SET sso_config = ${JSON.stringify({ ...clientConfig, callbackType: ClientSsoCallbackType.Managed, callbackEndpoint: `${origin}/sso/callback`, orcas: { enabled: false } })}::jsonb WHERE client_code = ${managed}`;
+            await sql`UPDATE client SET sso_config = ${JSON.stringify({ protocol: clientConfig.protocol, callbackType: ClientSsoCallbackType.Managed, validRedirectUrls: clientConfig.validRedirectUrls, subjectClaims: clientConfig.subjectClaims, orcas: { enabled: false } })}::jsonb WHERE client_code = ${managed}`;
             await snapshots.invalidateClient(managed);
             const health = await request("/oidc/health");
             expect(health.status).toBe(200);

@@ -97,26 +97,48 @@ for (const entry of entries) {
         expect(retainedRoot).toBeUndefined();
     });
   }
-  test(`${entry.name} Custom browser preserves internal navigation and the fixed external managed callback`, async ({ page, request }) => {
-    const destination = `${externalOrigin}/e2e/custom-sso/callback`;
+  test(`${entry.name} Custom browser derives the managed callback from its landing origin`, async ({ page, request }) => {
+    if (process.env.IAM_E2E_DUAL_ONLY === "1")
+      expect(new URL(internalOrigin).hostname).not.toBe(new URL(externalOrigin).hostname);
+    const destination = `${entry.origin}/e2e/custom-sso/callback?view=orders&filter=a%2Bb`;
+    const state = `managed-${entry.name}`;
     const authorization = new URL("/sso/authorize", entry.origin);
-    authorization.search = new URLSearchParams({ client: customClient(), redirectUrl: destination, state: `fixed-${entry.name}` }).toString();
+    authorization.search = new URLSearchParams({ client: customClient(), redirectUrl: destination, state }).toString();
     const firstResponse = page.waitForResponse(response => new URL(response.url()).pathname === "/sso/authorize");
     await page.goto(authorization.href);
     expect((await firstResponse).headers().location).toMatch(/^\/portal\/login\?/u);
     const managedCallback = page.waitForRequest(request => new URL(request.url()).pathname === "/sso/callback");
+    const landingResponse = page.waitForResponse(response => response.request().isNavigationRequest()
+      && new URL(response.url()).origin === entry.origin
+      && new URL(response.url()).pathname === "/e2e/custom-sso/callback");
     await login(page, entry.origin);
     const actualCallback = new URL((await managedCallback).url());
-    expect(actualCallback.origin).toBe(externalOrigin);
+    expect(actualCallback.origin).toBe(entry.origin);
+    expect(actualCallback.pathname).toBe("/sso/callback");
+    expect(actualCallback.searchParams.get("client")).toBe(customClient());
+    expect(actualCallback.searchParams.get("code")).toBeTruthy();
     expect(actualCallback.searchParams.get("redirectUrl")).toBe(destination);
-    await expect(page).toHaveURL(url => url.origin === externalOrigin && url.pathname === "/e2e/custom-sso/callback" && url.searchParams.has("token"));
+    await expect(page).toHaveURL(url => url.origin === entry.origin && url.pathname === "/e2e/custom-sso/callback" && url.searchParams.has("token"));
+    expect((await landingResponse).status()).toBe(200);
     const final = new URL(page.url());
-    expect(final.searchParams.get("state")).toBe(`fixed-${entry.name}`);
+    expect(final.searchParams.get("state")).toBe(state);
     const token = final.searchParams.get("token")!;
+    expect(token).toBeTruthy();
+    final.searchParams.delete("state");
+    final.searchParams.delete("token");
+    expect(final.href).toBe(destination);
     const roots = (await page.context().cookies()).filter(cookie => cookie.name === "global_session");
     expect(roots).toHaveLength(1);
-    expect(roots[0]).toMatchObject({ domain: new URL(entry.origin).hostname, path: "/", httpOnly: true });
-    const userInfo = () => gatewayRequest(request, externalOrigin, "/api/iam/public/user-info", { headers: { Authorization: token, Client: customClient() } });
+    expect(roots[0]).toMatchObject({ domain: new URL(entry.origin).hostname, path: "/", httpOnly: true, sameSite: "Lax" });
+    const other = entry.origin === internalOrigin ? externalOrigin : internalOrigin;
+    if (other !== entry.origin)
+      expect((await page.context().cookies(other)).find(cookie => cookie.name === "global_session")).toBeUndefined();
+    const localCookieName = `local_${customClient()}_session`;
+    expect((await page.context().cookies(entry.origin)).find(cookie => cookie.name === localCookieName))
+      .toMatchObject({ value: token, domain: new URL(entry.origin).hostname, path: "/", httpOnly: true, sameSite: "Lax" });
+    if (other !== entry.origin)
+      expect((await page.context().cookies(other)).find(cookie => cookie.name === localCookieName)).toBeUndefined();
+    const userInfo = () => gatewayRequest(request, entry.origin, "/api/iam/public/user-info", { headers: { Authorization: token, Client: customClient() } });
     const before = await userInfo();
     expect(before.status()).toBe(200);
     expect(await before.json()).toMatchObject({ data: { profile: { username: requireEnvironment("IAM_E2E_ADMIN_USERNAME") } } });
@@ -125,6 +147,42 @@ for (const entry of entries) {
     const after = await userInfo();
     expect(after.status()).toBe(401);
     expect((await page.context().cookies(entry.origin)).find(cookie => cookie.name === "global_session")).toBeUndefined();
+  });
+
+  test(`${entry.name} business callback stays registered and exchanges its Code through APISIX`, async ({ page, request }) => {
+    const businessClient = requireEnvironment("IAM_E2E_BUSINESS_CLIENT_CODE");
+    const destination = `${entry.origin}/e2e/business/landing?view=orders`;
+    const state = `business-${entry.name}`;
+    await page.goto(`${entry.origin}/sso/authorize?${new URLSearchParams({ client: businessClient, redirectUrl: destination, state })}`);
+    const callbackResponse = page.waitForResponse(response => response.request().isNavigationRequest()
+      && new URL(response.url()).origin === externalOrigin
+      && new URL(response.url()).pathname === "/e2e/business/callback");
+    await login(page, entry.origin);
+    await expect(page).toHaveURL(url => url.origin === externalOrigin && url.pathname === "/e2e/business/callback" && url.searchParams.has("code"));
+    expect((await callbackResponse).status()).toBe(200);
+    const callback = new URL(page.url());
+    expect(callback.searchParams.get("registered")).toBe("1");
+    expect(callback.searchParams.get("redirectUrl")).toBe(destination);
+    expect(callback.searchParams.get("client")).toBe(businessClient);
+    expect(callback.searchParams.get("state")).toBe(state);
+    expect(callback.searchParams.has("token")).toBe(false);
+    const exchanged = await gatewayRequest(request, entry.origin, "/sso/token", {
+      method: "POST",
+      headers: { Authorization: `Basic ${Buffer.from(`${businessClient}:e2e-business-secret-local-only`).toString("base64")}` },
+      form: { code: callback.searchParams.get("code")!, redirect_uri: destination },
+    });
+    expect(exchanged.status()).toBe(200);
+    const result = await exchanged.json();
+    expect(result.data.sid).toBeTruthy();
+    expect(result.data.ttl).toBeGreaterThan(0);
+    const userInfo = await gatewayRequest(request, entry.origin, "/api/iam/public/user-info", {
+      headers: { Authorization: result.data.sid, Client: businessClient },
+    });
+    expect(userInfo.status()).toBe(200);
+    expect(await userInfo.json()).toMatchObject({ data: { profile: { username: requireEnvironment("IAM_E2E_ADMIN_USERNAME") } } });
+    const landingResponse = await page.goto(destination);
+    expect(landingResponse?.status()).toBe(200);
+    await expect(page).toHaveURL(destination);
   });
 }
 

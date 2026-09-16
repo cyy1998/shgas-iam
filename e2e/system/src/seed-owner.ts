@@ -75,6 +75,7 @@ export function createProductionE2EScenarioOwner(
     },
   ) {
     const passwordHash = await hashSecret(scenario.adminPassword, input.passwordHashCost);
+    const entryOrigins = [...new Set([scenario.canonicalOrigin, scenario.internalOrigin ?? scenario.canonicalOrigin])];
     let generatedReferences: E2EScenarioGeneratedReferences | undefined;
     await input.db.transaction(async (tx) => {
       const [adminClient] = await tx
@@ -90,7 +91,6 @@ export function createProductionE2EScenarioOwner(
           ssoConfig: {
             protocol: ClientSsoProtocol.CustomSso,
             callbackType: ClientSsoCallbackType.Managed,
-            callbackEndpoint: `${scenario.canonicalOrigin}/sso/callback`,
             validRedirectUrls: [scenario.adminRedirectUri],
             subjectClaims: [
               SubjectClaim.SubjectIdentifier,
@@ -165,7 +165,7 @@ export function createProductionE2EScenarioOwner(
 
       await tx.insert(clients).values({
         clientCode: `${scenario.customSsoClientCode}-dual`,
-        clientName: `E2E Fixed Callback ${scenario.runId}`,
+        clientName: `E2E Managed Origins ${scenario.runId}`,
         clientSecret: input.random.uuid(),
         url: `${scenario.canonicalOrigin}/e2e/custom-sso/callback`,
         status: ClientStatus.Enable,
@@ -174,12 +174,32 @@ export function createProductionE2EScenarioOwner(
         ssoConfig: {
           protocol: ClientSsoProtocol.CustomSso,
           callbackType: ClientSsoCallbackType.Managed,
-          callbackEndpoint: `${scenario.canonicalOrigin}/sso/callback`,
-          validRedirectUrls: [`${scenario.canonicalOrigin}/e2e/custom-sso/callback`],
+          validRedirectUrls: entryOrigins.map(origin => `${origin}/e2e/custom-sso/*`),
           subjectClaims: [SubjectClaim.SubjectIdentifier, SubjectClaim.ProfileUsername],
           orcas: { enabled: false },
         },
         ssoSecret: null,
+      });
+
+      await tx.insert(clients).values({
+        clientCode: `${scenario.customSsoClientCode}-business`,
+        clientName: `E2E Business Callback ${scenario.runId}`,
+        clientSecret: input.random.uuid(),
+        url: `${scenario.canonicalOrigin}/e2e/business/callback`,
+        status: ClientStatus.Enable,
+        extAttributes: {},
+        ssoEnabled: true,
+        ssoConfig: {
+          protocol: ClientSsoProtocol.CustomSso,
+          callbackType: ClientSsoCallbackType.Business,
+          callbackEndpoint: `${scenario.canonicalOrigin}/e2e/business/callback?registered=1`,
+          validRedirectUrls: entryOrigins.map(origin => `${origin}/e2e/business/*`),
+          subjectClaims: [SubjectClaim.SubjectIdentifier, SubjectClaim.ProfileUsername],
+          orcas: { enabled: false },
+        },
+        ssoSecret: "e2e-business-secret-local-only",
+        ssoCredentialId: input.random.uuid(),
+        ssoSecretUpdatedAt: input.clock.nowDate().toISOString(),
       });
 
       const [organization] = await tx
@@ -1184,6 +1204,7 @@ export function createProductionE2EScenarioOwner(
         clientCode: adminClient?.clientCode ?? "",
         callbackEndpoint:
           adminClient?.ssoConfig?.protocol === ClientSsoProtocol.CustomSso
+          && adminClient.ssoConfig.callbackType === ClientSsoCallbackType.Business
             ? adminClient.ssoConfig.callbackEndpoint
             : null,
         redirectUris:
@@ -1197,6 +1218,7 @@ export function createProductionE2EScenarioOwner(
         clientCode: customSsoClient?.clientCode ?? "",
         callbackEndpoint:
           customSsoClient?.ssoConfig?.protocol === ClientSsoProtocol.CustomSso
+          && customSsoClient.ssoConfig.callbackType === ClientSsoCallbackType.Business
             ? customSsoClient.ssoConfig.callbackEndpoint
             : null,
         redirectUris:

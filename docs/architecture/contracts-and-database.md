@@ -69,7 +69,30 @@ Client 数据库只有统一 `ssoEnabled`、可空单协议 `ssoConfig` 与独�
 最终 migration 先锁 Client 表并拒绝未完成旧配置选择/凭据迁移的记录，再删除旧双协议列与约束。
 必须在固定旧候选上完成 #192 apply 与全量 verify 后执行最终 DDL，见[统一维护手册](../releases/unified-session-maintenance.md)。
 
+#202 将离线 Client 配置契约与在线 schema 分离：`@iam/contracts/offline-client-sso` 只供离线中间格式，
+由 managed 配置准备和 b648 独立迁移/核验使用。中间格式冻结于本功能实施前的 `546fecb3`；
+Worker 来源模式、Secret hash、ORCAS 与 claims 按 `b6481f2de5c2930fc381d99e70520e0783091e9d` 保存。
+b648 离线 normalizer 保留排序、ORCAS false 省略及地址 pattern 校验。在线配置不导入该出口，也不接受中间兼容分支。
+上述冻结记录 #202 阶段的边界。当前 #205 已交付固定 b648 的分阶段直升，Gateway 中间地址由工具生成，
+manifest 不再接受 gatewayCallback；历史 SQL 不变，执行顺序见下文数据库升级手册。
+
+#203 的在线 Custom 配置按 `callbackType` 严格分支：managed 禁止 `callbackEndpoint`，business 必填完整地址。
+Admin 表单仅在 business 回填、展示和提交地址；隐藏控件的旧值不得进入 managed 请求。Domain、普通 DTO、Snapshot
+和数据库最终约束消费同一形状。ORCAS 仅 managed 可启用，普通类型切换保留已有 SSO Secret。
+当前单协议库的字段准备由 Worker `client-managed-callback:upgrade` 组合完整 Domain 配置校验与
+DB `@iam/db/managed-callback-upgrade` 窄维护能力：所有模式在锁内全量校验来源（含合法 URL/pattern/claims）与历史 journal 身份，
+只减去 managed JSON 的地址键，保留其他行、字段及凭据；完成后仍须正式 `db:migrate` 登记新增约束迁移。
+新装空库直接执行正式 migrations。冻结离线中间格式保持独立，不能交给在线 reader；维护窗口、在线状态和 Snapshot
+处理分别遵循[同代保留手册](../releases/managed-callback-origin-preserving-upgrade.md)与
+[b648 跨代手册](../releases/b648-managed-callback-upgrade.md)，环境尚未迁移。
+
 ## DTO 字段与兼容演进
+
+固定 b648 Client 来源的离线直升由 `apps/worker/scripts/b648-upgrade/index.ts` 一次性脚本承担，完整顺序见
+[数据库升级手册](../releases/b648-client-database-upgrade.md)。来源校验、catalog 和阶段 runner 均私有于该脚本目录，
+不进入 DB 公开出口或普通迁移命令；`db:migrate` 使用 `drizzle-kit migrate`。脚本保留原 migration SQL/hash/journal，
+非空旧库收缩前在锁内调用独立脚本进程全量 verify。Gateway 的 `.invalid` 中间地址仅用于历史 CHECK，最终删除并严格核验，
+不属于在线兼容契约。来源 catalog 证据固定 PostgreSQL 18.4 和 b648，漂移拒绝；receipt 只保存本次目标事实摘要。
 
 - 新增或修改跨边界 DTO 字段形状时，使用显式 `pick` 或 `z.object` 确定允许字段；允许从已经明确选字段的 DTO
   继续 `omit`、`extend` 或调整可选性。直接从整表 shape 排除少数字段，不能保证新增数据库字段仍留在持久化边界内。
@@ -174,10 +197,8 @@ Client 数据库只有统一 `ssoEnabled`、可空单协议 `ssoConfig` 与独�
   strict v3 与顶层只允许 `employments` 由唯一 active Worker writer 和 read-side parser 在应用边界保证。数据库仍可
   保留历史 V1 row 供迁移核验，但 active runtime 不双读、不 fallback。查询用 `search_doc` 保留现有 GIN，
   `subject_facts` 不建立 GIN。普通唯一索引需要在 maintenance
-  freeze 中执行；显式 rollback 只回退本次收紧的唯一索引、四个 `NOT NULL` 与相关 CHECK。Drizzle-migrated database
-  必须通过 package rollback command 在同一 transaction 内精确补偿该 migration 的 name、folder timestamp 与 SHA-256
-  journal identity；不得删除或改写其他 migration 行。同名 identity 不一致时 fail closed，raw-SQL rehearsal 则可直接运行
-  migration 目录中的幂等 DDL rollback。
+  freeze 中执行。旧 Subject Projection 专用回退工具已退役；历史 migration 与 rollback SQL 仅作为旧版本记录保留。
+  当前数据库回退须使用匹配旧制品及备份，不通过删除 migration journal 重放旧迁移。
 - Worker publication transaction 必须锁定并重验同一 `user_profile_dirty` 的 user/version/processing 状态，再以
   单调 `source_dirty_version` 写入或删除 profile，并在同一 transaction 标记 dirty processed。Redis publication
   只能发生在 PostgreSQL 提交后，失败不得回滚已提交事实。

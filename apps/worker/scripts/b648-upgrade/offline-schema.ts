@@ -1,14 +1,15 @@
-import { OidcClientType, OidcScope, OidcTokenEndpointAuthMethod, SUBJECT_CLAIMS, SubjectClaim } from "@iam/contracts";
+import { OidcClientType, OidcScope, OidcTokenEndpointAuthMethod } from "@iam/contracts";
+import { OFFLINE_SUBJECT_CLAIMS } from "@iam/contracts/offline-client-sso";
 import { z } from "zod";
-/** Frozen source configuration vocabulary; never exported by the online contracts. */
+/** Frozen source b6481f2de5c2930fc381d99e70520e0783091e9d configuration vocabulary; never exported by the online contracts. */
 export enum CustomSsoClientMode {
   Gateway = "gateway",
   Independent = "independent",
 }
-const customSsoSubjectClaimsSchema = z.array(z.enum(SUBJECT_CLAIMS))
+const customSsoSubjectClaimsSchema = z.array(z.enum(OFFLINE_SUBJECT_CLAIMS))
   .min(1)
   .superRefine((claims, ctx) => {
-    if (!claims.includes(SubjectClaim.SubjectIdentifier)) {
+    if (!claims.includes("subjectIdentifier")) {
       ctx.addIssue({
         code: "custom",
         message: "Custom SSO subjectClaims 必须包含 subjectIdentifier",

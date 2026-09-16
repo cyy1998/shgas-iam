@@ -8,13 +8,14 @@
     "./schema": "./src/schema/public.ts",
     "./schema/role-assignments": "./src/schema/role-assignments.ts",
     "./relations": "./src/relations/index.ts",
+    "./managed-callback-upgrade": "./src/managed-callback-upgrade.ts",
     "./client-snapshot": "./src/client-snapshot.ts",
     "./query-utils": "./src/query-utils.ts",
     "./postgres-error": "./src/postgres-error.ts"
   },
   "scripts": {
-    "lint": "eslint scripts src test-integration drizzle.config.ts eslint.config.js",
-    "lint:fix": "eslint --fix scripts src test-integration drizzle.config.ts eslint.config.js",
+    "lint": "eslint src test-integration drizzle.config.ts eslint.config.js",
+    "lint:fix": "eslint --fix src test-integration drizzle.config.ts eslint.config.js",
     "test": "pnpm test:unit",
     "test:unit": "bun test --max-concurrency=2 src",
     "test:integration:postgres": "bun test --max-concurrency=1 test-integration/postgres",
@@ -22,9 +23,7 @@
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate",
     "db:push": "drizzle-kit push",
-    "db:check": "drizzle-kit check",
-    "client-callback:upgrade": "bun scripts/migrate-client-callback-type.ts",
-    "subject-projection:rollback": "bun scripts/rollback-subject-projection-cutover.ts"
+    "db:check": "drizzle-kit check"
   },
   "dependencies": {
     "@iam/contracts": "workspace:*",

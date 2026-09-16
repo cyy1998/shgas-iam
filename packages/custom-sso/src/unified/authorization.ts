@@ -16,7 +16,7 @@ import {
   SubjectAccessDisabledError,
   SubjectAccessUnavailableError,
 } from "@iam/api-core/subject-access";
-import { ClientSsoProtocol, ClientStatus, LoginPageGuardDecision } from "@iam/contracts";
+import { ClientSsoCallbackType, ClientSsoProtocol, ClientStatus, LoginPageGuardDecision } from "@iam/contracts";
 import { SessionStorageError } from "@iam/session-kernel";
 import { z } from "zod";
 import { CustomSsoTrafficGateUnavailableError } from "../internal/traffic-gate";
@@ -77,6 +77,7 @@ export function createUnifiedCustomSsoAuthorization(options: UnifiedCustomSsoAut
             || accepted.clientCode !== input.clientCode
             || accepted.redirectUrl !== input.redirectUrl
             || accepted.state !== input.state
+            || accepted.redeemer !== snapshot.value.ssoConfig.callbackType
           ) {
             throw new BadRequestError("登录请求已失效，请返回应用重新发起登录");
           }
@@ -90,7 +91,9 @@ export function createUnifiedCustomSsoAuthorization(options: UnifiedCustomSsoAut
         );
         if (redirectUrl === null)
           throw new InvalidRedirectUriError("非法重定向地址");
-        const callbackEndpoint = new URL(config.callbackEndpoint).href;
+        const callbackEndpoint = config.callbackType === ClientSsoCallbackType.Managed
+          ? `${new URL(redirectUrl).origin}/sso/callback`
+          : new URL(config.callbackEndpoint).href;
         return {
           clientCode: input.clientCode,
           redirectUrl,

@@ -1,7 +1,7 @@
-import type { ClientSsoConfig } from "@iam/contracts";
+import type { OfflineClientSsoConfig } from "@iam/contracts/offline-client-sso";
 import { ClientCodeSchema, ClientSsoCallbackType, ClientSsoProtocol, ClientStatus, OidcClientType } from "@iam/contracts";
-import { normalizeClientSsoConfig } from "@iam/domain/client/sso-configuration";
 import { z } from "zod";
+import { normalizeOfflineClientSsoConfig } from "./offline-configuration";
 import {
   CustomSsoClientMode,
   customSsoClientStorageStateSchema,
@@ -14,7 +14,6 @@ export const UpgradeSelectionSchema = z
     sourceDigest: z.string().regex(/^[a-f0-9]{64}$/u),
     credentialId: z.uuid(),
     protocol: z.enum(ClientSsoProtocol).nullable().optional(),
-    gatewayCallback: z.url().optional(),
   })
   .strict();
 
@@ -95,20 +94,18 @@ export function planClientSsoUpgrade(
     return { kind: "pending" as const, reason: "protocol-selection-required" };
   if (available.length === 0 && protocol != null)
     return { kind: "pending" as const, reason: "protocol-not-configured" };
-  let config: ClientSsoConfig | null = null;
+  let config: OfflineClientSsoConfig | null = null;
   let enabled = false;
   if (protocol === ClientSsoProtocol.Oidc && source.oidc) {
     const { tokenEndpointAuthMethod: _method, ...fields } = source.oidc;
-    config = normalizeClientSsoConfig({ protocol, ...fields });
+    config = normalizeOfflineClientSsoConfig({ protocol, ...fields });
     enabled = source.row.oidc_enabled;
   }
   if (protocol === ClientSsoProtocol.CustomSso && source.custom) {
     const custom = source.custom;
     const callbackEndpoint
-      = custom.mode === CustomSsoClientMode.Independent ? custom.callbackEndpoint : selection.gatewayCallback;
-    if (!callbackEndpoint)
-      return { kind: "pending" as const, reason: "deployed-callback-required" };
-    config = normalizeClientSsoConfig({
+      = custom.mode === CustomSsoClientMode.Independent ? custom.callbackEndpoint : offlineGatewayCallback(source.row.id);
+    config = normalizeOfflineClientSsoConfig({
       protocol,
       callbackEndpoint,
       callbackType: custom.mode === CustomSsoClientMode.Gateway ? ClientSsoCallbackType.Managed : ClientSsoCallbackType.Business,
@@ -118,16 +115,15 @@ export function planClientSsoUpgrade(
     });
     enabled = source.row.custom_sso_enabled;
   }
-  if (
-    selection.gatewayCallback
-    && !(protocol === ClientSsoProtocol.CustomSso && source.custom?.mode === CustomSsoClientMode.Gateway)
-  ) {
-    return { kind: "pending" as const, reason: "unexpected-callback-input" };
-  }
   const requiresSecret
     = config !== null
       && (config.protocol === ClientSsoProtocol.Oidc
         ? config.clientType === OidcClientType.Confidential
         : config.callbackType !== ClientSsoCallbackType.Managed);
   return { kind: "ready" as const, config, enabled, requiresSecret };
+}
+
+/** Reserved .invalid origin: only an offline CHECK bridge, never a deployed callback. */
+export function offlineGatewayCallback(id: number) {
+  return `https://iam-offline-upgrade.invalid/client/${id}/sso/callback`;
 }

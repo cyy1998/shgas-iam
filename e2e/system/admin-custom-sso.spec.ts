@@ -104,7 +104,8 @@ test("Admin prepares Custom SSO in Maintenance and existing access resumes after
   await expect(page.getByRole("button", { name: "启用 SSO", exact: true })).toBeDisabled();
   await page.getByLabel("SSO 协议", { exact: true }).click();
   await page.getByTitle("Custom SSO", { exact: true }).click();
-  await page.getByLabel("回调地址", { exact: true }).fill(`${origin}/sso/callback`);
+  await page.getByLabel("回调类型", { exact: true }).click();
+  await page.getByTitle("托管回调", { exact: true }).click();
   await page.getByLabel("Redirect URIs", { exact: true }).fill(customSsoRedirectUri);
   await page.getByLabel("Redirect URIs", { exact: true }).press("Enter");
   for (const claim of ["profile:username", "profile:employments", "iam:authorization"]) {
@@ -114,7 +115,9 @@ test("Admin prepares Custom SSO in Maintenance and existing access resumes after
   await page.getByLabel("主体披露字段", { exact: true }).press("Escape");
   const configureResponse = page.waitForResponse(response => isSuccessfulRpcResponse(response, "admin.clientSso.selectProtocol"));
   await page.getByRole("button", { name: "保存协议及配置", exact: true }).click();
-  await expectRpcMutationResult(await configureResponse, "admin.clientSso.selectProtocol", true, expect.any(Object));
+  await expectRpcMutationResult(await configureResponse, "admin.clientSso.selectProtocol", true, expect.objectContaining({
+    ssoConfig: expect.objectContaining({ callbackType: "managed" }),
+  }));
   await saveUnchangedClientProtocolConfiguration(page, customSsoClientCode, "custom-sso", false);
   await runClientProtocolLifecycleAction(page, "启用");
   const authorize = new URL("/sso/authorize", origin);
@@ -286,7 +289,8 @@ test("Admin prepares Custom SSO in Maintenance and existing access resumes after
 
   await openClientSection(page, customSsoClientCode, "custom-sso");
   await expect(page.getByRole("button", { name: "停用 SSO", exact: true })).toBeVisible();
-  await expect(page.getByLabel("回调地址", { exact: true })).toHaveValue(`${origin}/sso/callback`);
+  await expect(page.getByTitle("托管回调", { exact: true })).toBeVisible();
+  await expect(page.getByLabel("回调地址", { exact: true })).toHaveCount(0);
   await expect(page.getByText(customSsoRedirectUri, { exact: true })).toBeVisible();
   await expect(page.locator(".ant-select-selection-item").filter({ hasText: "profile:username" })).toBeVisible();
   await expect(page.locator(".ant-select-selection-item").filter({ hasText: "profile:employments" })).toBeVisible();

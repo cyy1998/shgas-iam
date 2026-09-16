@@ -18,7 +18,7 @@ export interface ApiPostgresTestHarness {
   readonly close: () => Promise<void>;
 }
 
-export async function createApiPostgresTestHarness(): Promise<ApiPostgresTestHarness> {
+export async function createApiPostgresTestHarness(options: { migrationsFolder?: string } = {}): Promise<ApiPostgresTestHarness> {
   const databaseUrl = requireDedicatedTestDatabaseUrl();
   const schemaName = `iam_api_${randomUUID().replaceAll("-", "")}`;
   const adminSql = postgres(databaseUrl, { max: 1 });
@@ -34,7 +34,7 @@ export async function createApiPostgresTestHarness(): Promise<ApiPostgresTestHar
       max: 6,
     });
     const db = drizzle({ client: scopedSql, relations });
-    const migrationsFolder = fileURLToPath(
+    const migrationsFolder = options.migrationsFolder ?? fileURLToPath(
       new URL("../../../../packages/db/src/migrations", import.meta.url),
     );
     await migrate(db, { migrationsFolder, migrationsSchema: schemaName });

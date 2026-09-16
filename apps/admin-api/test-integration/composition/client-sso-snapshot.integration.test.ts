@@ -1,3 +1,4 @@
+import type { ClientSsoConfig } from "@iam/contracts";
 import type { DbClient } from "@iam/db";
 import { randomUUID } from "node:crypto";
 import { createAdminClientCache } from "@admin-api/composition/runtime/client-cache";
@@ -9,13 +10,16 @@ import { createClientSsoService } from "@admin-api/services/client-sso/client-ss
 import { createClientSnapshots } from "@iam/api-core/client-snapshot/composition";
 import { createClientSecretAuthenticator } from "@iam/api-core/client-snapshot/credentials";
 import { createClientSnapshotMaintenance } from "@iam/api-core/client-snapshot/maintenance";
+import { createErrorHandler } from "@iam/api-core/middlewares";
 import { createUnitOfWork } from "@iam/api-core/uow";
-import { ApiErrorCode, ClientSsoProtocol, ClientStatus, OidcClientType, OidcScope } from "@iam/contracts";
+import { ApiErrorCode, ClientSsoCallbackType, ClientSsoProtocol, ClientStatus, OidcClientType, OidcScope } from "@iam/contracts";
 import { createClientSnapshotRepository } from "@iam/db/client-snapshot";
 import { auditLogs, clients } from "@iam/db/schema";
 import { createUnifiedSessionKernel } from "@iam/session-kernel";
 import { afterAll, beforeAll, expect, test } from "bun:test";
 import { eq } from "drizzle-orm";
+import { Hono } from "hono";
+import { addTestAdminAuthorizationMiddleware } from "../helpers/admin-authorization";
 import { createAdminApiPostgresTestHarness } from "../postgres/postgres-test-harness";
 import { createAdminApiRedisTestHarness } from "../redis/redis-test-harness";
 
@@ -65,6 +69,128 @@ function latch() {
   });
   return { promise, release };
 }
+
+const managed = {
+  protocol: ClientSsoProtocol.CustomSso,
+  callbackType: ClientSsoCallbackType.Managed,
+  validRedirectUrls: ["https://app.example/work/*"],
+  subjectClaims: ["subjectIdentifier"],
+  orcas: { enabled: true },
+} satisfies ClientSsoConfig;
+
+async function createManagedRestFixture() {
+  const scope = await resource.createScope();
+  try {
+    const code = scope.clientCode("managed");
+    await seed(code);
+    const candidate = createClientSsoSnapshotManagement({
+      clientCache: createAdminClientCache({ redis: scope.redis }),
+      db: pg.db,
+      redis: scope.redis,
+      logger,
+    });
+    const app = new Hono();
+    addTestAdminAuthorizationMiddleware(app, ["iam:admin"]);
+    app.onError(createErrorHandler({ ...logger, info() {} }));
+    app.route("/admin", candidate.management.rest);
+    const endpoint = `/admin/clients-sso/${encodeURIComponent(code)}`;
+    const save = (config: unknown) => app.request(`${endpoint}/protocol`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ config }),
+    });
+    return { scope, code, candidate, app, endpoint, save };
+  }
+  catch (error) {
+    await scope.close();
+    throw error;
+  }
+}
+
+test("managed REST save persists and publishes the strict shape without exposing credentials", async () => {
+  const { scope, code, candidate, app, endpoint, save } = await createManagedRestFixture();
+  try {
+    await candidate.snapshots.client.acquire(code);
+    const response = await save(managed);
+    expect(response.status).toBe(200);
+    const body = await response.json();
+    expect(body).toMatchObject({ data: { result: { ssoConfig: managed } } });
+    expect(JSON.stringify(body)).not.toContain("SENTINEL");
+    const detailResponse = await app.request(endpoint);
+    const detail = await detailResponse.json();
+    expect(detail).toMatchObject({ data: { ssoConfig: managed } });
+    const persisted = await pg.db.select().from(clients).where(eq(clients.clientCode, code));
+    expect(persisted[0]!.ssoConfig).toEqual(managed);
+    const published = await candidate.snapshots.client.acquire(code);
+    expect(published).toMatchObject({ kind: "present", value: { ssoConfig: managed } });
+    const audits = await pg.db.select().from(auditLogs).where(eq(auditLogs.targetCode, code));
+    expect(JSON.stringify(audits)).not.toContain("SENTINEL");
+  }
+  finally { await scope.close(); }
+});
+
+test.each([
+  ["managed callbackEndpoint string", { ...managed, callbackEndpoint: "https://obsolete.example/cb" }],
+  ["managed callbackEndpoint null", { ...managed, callbackEndpoint: null }],
+  ["business without callbackEndpoint", { ...managed, callbackType: ClientSsoCallbackType.Business, orcas: { enabled: false } }],
+  ["business with enabled ORCAS", { ...managed, callbackType: ClientSsoCallbackType.Business, callbackEndpoint: "https://business.example/cb" }],
+])("REST rejects %s without changing saved managed configuration", async (_name, invalid) => {
+  const { scope, code, save } = await createManagedRestFixture();
+  try {
+    const saved = await save(managed);
+    expect(saved.status).toBe(200);
+    const before = await pg.db.select().from(clients).where(eq(clients.clientCode, code));
+    const rejected = await save(invalid);
+    expect(rejected.status).toBe(422);
+    const after = await pg.db.select().from(clients).where(eq(clients.clientCode, code));
+    expect(after).toEqual(before);
+  }
+  finally { await scope.close(); }
+});
+
+test("managed to business and back preserves the existing SSO credential", async () => {
+  const { scope, candidate, code, save } = await createManagedRestFixture();
+  try {
+    const originalSecret = await candidate.management.service.readSecret(code);
+    const saved = await save(managed);
+    expect(saved.status).toBe(200);
+    const business = { ...managed, callbackType: ClientSsoCallbackType.Business, callbackEndpoint: "https://business.example/sso/callback", orcas: { enabled: false } };
+    const switched = await save(business);
+    expect(switched.status).toBe(200);
+    const switchedBack = await save(managed);
+    expect(switchedBack.status).toBe(200);
+    const secret = await candidate.management.service.readSecret(code);
+    expect(secret).toEqual(originalSecret);
+    const persisted = await pg.db.select().from(clients).where(eq(clients.clientCode, code));
+    expect(persisted[0]!.ssoConfig).toEqual(managed);
+  }
+  finally { await scope.close(); }
+});
+
+test("managed Snapshot repair makes a fresh reader load the strict persisted shape", async () => {
+  const { scope, code, candidate, save } = await createManagedRestFixture();
+  try {
+    const saved = await save(managed);
+    expect(saved.status).toBe(200);
+    await candidate.snapshots.client.acquire(code);
+    await createClientSnapshotMaintenance(scope.redis).repairClient(code);
+    const source = createClientSnapshotRepository(pg.db);
+    let loads = 0;
+    const fresh = createClientSnapshots({ redis: scope.observer, source: {
+      ...source,
+      async loadClient(value) {
+        loads++;
+        return source.loadClient(value);
+      },
+    } });
+    const acquired = await fresh.client.acquire(code);
+    expect(loads).toBe(1);
+    expect(acquired).toMatchObject({ kind: "present", value: { ssoConfig: managed } });
+    const audits = await pg.db.select().from(auditLogs).where(eq(auditLogs.targetCode, code));
+    expect(JSON.stringify(audits)).not.toContain("SENTINEL");
+  }
+  finally { await scope.close(); }
+});
 
 test("rotation authentication uses cached current credentials, retains accepted in-flight authentication and failed propagation until repair", async () => {
   const scope = await resource.createScope();

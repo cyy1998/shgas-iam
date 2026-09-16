@@ -11,6 +11,7 @@ export function parseOnlineStateArgs(argv: string[]) {
     "custom-namespace": { type: "string" },
     "oidc-namespace": { type: "string" },
     "client-code": { type: "string" },
+    "artifacts": { type: "string" },
     "writers-stopped": { type: "boolean" },
     "drained": { type: "boolean" },
     "deadline-ms": { type: "string" },
@@ -26,6 +27,9 @@ export function parseOnlineStateArgs(argv: string[]) {
   const customNamespace = values["custom-namespace"] === undefined ? undefined : namespace.parse(values["custom-namespace"]);
   const oidcNamespace = values["oidc-namespace"] === undefined ? undefined : namespace.parse(values["oidc-namespace"]);
   const clientCode = values["client-code"] === undefined ? undefined : ClientCodeSchema.parse(values["client-code"]);
+  const artifacts = z.enum(["all", "authorization"]).parse(values.artifacts ?? "all");
+  if (artifacts === "authorization" && (layout !== "unified" || owner !== "custom-sso" || !clientCode))
+    throw new Error("Authorization cleanup requires an explicit unified Custom Client scope");
   if (((owner === "all" || owner === "kernel") && !kernelNamespace)
     || (layout === "unified" && ((owner === "all" || owner === "custom-sso") && !customNamespace))
     || (layout === "unified" && ((owner === "all" || owner === "oidc") && !oidcNamespace))
@@ -34,6 +38,6 @@ export function parseOnlineStateArgs(argv: string[]) {
     throw new Error("Maintenance scope is incomplete");
   }
   const deadlineMs = values["deadline-ms"] === undefined ? 300_000 : z.coerce.number().int().positive().max(300_000).parse(values["deadline-ms"]);
-  return { mode, layout, owner, kernelNamespace, customNamespace, oidcNamespace, clientCode, deadlineMs };
+  return { mode, layout, owner, kernelNamespace, customNamespace, oidcNamespace, clientCode, artifacts, deadlineMs };
 }
 export type OnlineStateInput = ReturnType<typeof parseOnlineStateArgs>;

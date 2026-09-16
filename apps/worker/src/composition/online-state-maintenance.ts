@@ -166,8 +166,8 @@ export function createOnlineStateMaintenance(
       const verifier = createUnifiedCustomSsoVerifier(scan, input.customNamespace!);
       add(
         "unified-custom-sso",
-        cursor => inventory.inventory({ cursor, clientCode: input.clientCode }),
-        cursor => maintenance.apply({ cursor, clientCode: input.clientCode }),
+        cursor => inventory.inventory({ cursor, clientCode: input.clientCode, artifacts: input.artifacts }),
+        cursor => maintenance.apply({ cursor, clientCode: input.clientCode, artifacts: input.artifacts }),
         () => verifier.verify(signal),
       );
     }

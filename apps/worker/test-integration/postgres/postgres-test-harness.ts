@@ -1,6 +1,6 @@
 import type { DbClient } from "@iam/db";
 import { randomUUID } from "node:crypto";
-import { cp, mkdtemp, readdir, rm } from "node:fs/promises";
+import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { basename, dirname, join, resolve } from "node:path";
 import process from "node:process";
@@ -17,12 +17,13 @@ export interface WorkerPostgresTestHarness {
   readonly db: DbClient;
   readonly sql: ReturnType<typeof postgres>;
   readonly commandDatabaseUrl: string;
+  readonly schemaName: string;
   readonly reset: () => Promise<void>;
   readonly close: () => Promise<void>;
 }
 
 export async function createWorkerPostgresTestHarness(
-  options: { clientSsoUpgradeSource?: boolean } = {},
+  options: { b648ClientSource?: boolean } = {},
 ): Promise<WorkerPostgresTestHarness> {
   const databaseUrl = requireDedicatedTestDatabaseUrl();
   const schemaName = `iam_worker_${randomUUID().replaceAll("-", "")}`;
@@ -42,24 +43,24 @@ export async function createWorkerPostgresTestHarness(
     const migrationsFolder = fileURLToPath(
       new URL("../../../../packages/db/src/migrations", import.meta.url),
     );
-    if (options.clientSsoUpgradeSource) {
-      // The upgrade command intentionally consumes the frozen pre-contraction layout.
-      // Run the same migrator against that immutable prefix, not a hand-made database fixture.
-      const prefix = "iam194-client-upgrade-source-";
-      const temporaryMigrations = await mkdtemp(join(tmpdir(), prefix));
+    if (options.b648ClientSource) {
+      const prefix = "iam205-b648-source-";
+      const directory = await mkdtemp(join(tmpdir(), prefix));
       try {
-        for (const entry of await readdir(migrationsFolder, { withFileTypes: true })) {
-          if (entry.name !== "20260914173743_confused_mystique") {
-            await cp(join(migrationsFolder, entry.name), join(temporaryMigrations, entry.name), {
-              recursive: true,
-            });
-          }
+        const repoRoot = fileURLToPath(new URL("../../../../", import.meta.url));
+        const archive = join(directory, "source.tar");
+        for (const command of [
+          ["git", "archive", "--format=tar", `--output=${archive}`, "b6481f2de5c2930fc381d99e70520e0783091e9d", "packages/db/src/migrations"],
+          ["tar", "-xf", archive, "-C", directory],
+        ]) {
+          const child = Bun.spawn(command, { cwd: repoRoot, stdout: "ignore", stderr: "ignore" });
+          if (await child.exited !== 0)
+            throw new Error("Cannot materialize exact b648 migrations");
         }
-        await migrate(db, { migrationsFolder: temporaryMigrations, migrationsSchema: schemaName });
-        await scopedSql.file(new URL("../../../../packages/db/src/migrations/20260916050609_explicit_callback_type/migration.sql", import.meta.url), { cache: false });
+        await migrate(db, { migrationsFolder: join(directory, "packages/db/src/migrations"), migrationsSchema: schemaName });
       }
       finally {
-        await removeMigrationFixture(temporaryMigrations, prefix);
+        await removeMigrationFixture(directory, prefix);
       }
     }
     else {
@@ -70,6 +71,7 @@ export async function createWorkerPostgresTestHarness(
       db,
       sql: scopedSql,
       commandDatabaseUrl: databaseUrlWithSearchPath(databaseUrl, schemaName),
+      schemaName,
       async reset() {
         await scopedSql!.unsafe("TRUNCATE TABLE client RESTART IDENTITY CASCADE");
       },

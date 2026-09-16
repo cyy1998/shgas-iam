@@ -34,8 +34,8 @@ Next review: 2026-10-31
 | AR | [apps/admin-api/test-integration/composition/root-security.integration.test.ts](../../../apps/admin-api/test-integration/composition/root-security.integration.test.ts) |
 | UI | [apps/admin/test-integration/browser/client-sso.spec.ts](../../../apps/admin/test-integration/browser/client-sso.spec.ts) |
 | WR | [apps/worker/test-integration/redis/online-state-command.integration.test.ts](../../../apps/worker/test-integration/redis/online-state-command.integration.test.ts) |
-| WP | [apps/worker/test-integration/postgres/client-sso-upgrade-command.integration.test.ts](../../../apps/worker/test-integration/postgres/client-sso-upgrade-command.integration.test.ts) |
-| WC | [apps/worker/test-integration/postgres/client-sso-contraction-command.integration.test.ts](../../../apps/worker/test-integration/postgres/client-sso-contraction-command.integration.test.ts) |
+| WP | `client-sso-upgrade-command.integration.test.ts`（历史验收入口，已随旧 CLI 退役；当前升级验证见 b648 独立脚本测试） |
+| WC | `client-sso-contraction-command.integration.test.ts`（历史验收入口，已随旧 CLI 退役；当前升级验证见 b648 独立脚本测试） |
 | DB | [packages/db/test-integration/postgres/client-sso-contraction.integration.test.ts](../../../packages/db/test-integration/postgres/client-sso-contraction.integration.test.ts) |
 | J | [apps/api/test-integration/redis/unified-protocols.integration.test.ts](../../../apps/api/test-integration/redis/unified-protocols.integration.test.ts) |
 | E | [e2e/system/src/unified-session-journey.ts](../../../e2e/system/src/unified-session-journey.ts) |

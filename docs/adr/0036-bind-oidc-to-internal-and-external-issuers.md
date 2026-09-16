@@ -6,7 +6,7 @@ status: accepted
 
 维护者于 2026-09-16 要求 OIDC 与 Custom SSO 的登录跳转沿用浏览器当前入口，并为 OIDC 提供内外网两个固定
 issuer。本决策记录 `grill-with-docs` 讨论中逐项确认的目标；维护者随后调用 `to-spec` 发布当前设计，
-并确认沿用已讨论的测试边界。当前为已接受的修改目标，尚未实施或部署。
+并确认沿用已讨论的测试边界。Spec #197 已实现双入口并完成本地验收，见[双入口账本](../features/sso/dual-entry-acceptance.md)；目标环境尚未部署。
 Custom SSO 的内外网配置目前选择协议端点 origin，不具有 OIDC issuer 的身份语义。
 
 [完整设计](../features/sso/dual-entry-login-design.md)连接入口配置、导航、协议绑定、失败、切换与验证；
@@ -18,7 +18,7 @@ Q8 已按维护者最新选择修订，原 Q11 的前提随之撤回。设计与
 
 登录页、认证续接、退出确认等 IAM 内部浏览器跳转统一使用以 `/` 开头的路径，沿用浏览器当前入口。
 业务应用回调仍使用其登记和验证后的完整地址；Discovery 的 issuer 和协议端点继续返回完整 URL。
-Q6 明确 IAM 托管回调也保留配置的完整地址，属于本规则的例外；Custom SSO 不承诺整条流程始终同源。
+Q6 原托管固定地址例外已由 ADR-0038 实现取代：managed 按已接受落地 origin 推导，business 保留登记地址；Custom SSO 不承诺整条流程始终同源。
 登录地址配置仅接受安全的根相对路径；既有绝对配置显式迁移，不静默丢弃域名。具体边界见完整设计。
 
 ### Q2：每条 OIDC 流程固定一个 issuer
@@ -47,6 +47,9 @@ UserSession/ClientSession 继续保持协议中性，不按 issuer 新增关系�
 不承诺端口级会话隔离。同一根与同一个 Client 仍只有一个有效 ClientSession，其撤销作用不按 issuer 拆分。
 
 ### Q6：Custom SSO 回调按实际配置执行
+
+后续 [ADR-0038](0038-derive-managed-sso-callback-from-redirect-origin.md) 的托管 origin 推导已由 Spec #201 实现，
+局部取代本节的托管固定地址决定。下面保留被取代的历史约定，业务回调部分保持；环境尚未迁移。
 
 维护者选择继续使用 Client 实际配置的完整 callback URL；IAM 托管回调与业务自行托管的回调均不按本次内外网
 入口改写。内网授权若配置了公网 `/sso/callback`，登录成功后仍跳该公网地址，这是明确接受的跨入口导航。

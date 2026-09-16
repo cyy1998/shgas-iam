@@ -248,7 +248,8 @@ Agent 可以补齐临时资源后重新运行，但命令不得 skip、自动 re
 以 `internal.iam.localhost` / `external.iam.localhost` 和动态 Gateway 端口执行
 `dual-entry.spec.ts`。基线的 OIDC selector 也收集该文件，因此相同 origin 另有实际场景；
 双入口阶段只运行该文件，复用完整 migrations、seed、readiness、正式 APISIX 与诊断/清理 owner。
-它直接观察两协议相对登录、固定外网 Custom callback、host-only Cookie、授权 `iss`、退出与未知 host/伪造 header。
+它直接观察两协议相对登录、同一 managed Client 按本次落地 origin 回调、固定 business callback、host-only Cookie、授权 `iss`、退出与未知 host/伪造 header。
+E2E 从正式 manifest 发布 API upstream 的受控 Host rewrite，并回读已发布 upstream 后才运行旅程；不改生产 manifest 的部署输入。
 旧状态升级使用显式固定源码目录的独立演练，不在普通 composition 中隐式拉取旧代码；
 suite/RP、三个旧 Worker 进程和非目标保留的证据入口见[双入口验收](../features/sso/dual-entry-acceptance.md)。
 

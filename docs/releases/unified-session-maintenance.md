@@ -29,7 +29,7 @@ Kernel 不依赖协议；OIDC 与 Custom SSO 不互相依赖。Worker 不读取 
 | 布局与 owner | 实际库存 | 解析及作用 |
 |---|---|---|
 | source / Kernel | 显式 `<kernel-namespace>`，末尾冒号由旧 owner 规范化；`active/lookup/revoked/revoked_lookup` 四族、`state:p/c/a`、`id:p/c/a`、全部已知 `idx` | 四种旧对象、active/revoked/consumed、pending、无 TTL、无索引、孤立状态和合法反向 ID/索引分别发现。严格 schema、类型及 key identity 校验；逐观察值 CAS 删除。 |
-| source / Custom SSO | 固定 `authorization-grant:redemption:v1:` | 旧 issued/redeeming/consumed、孤立 redemption 独立解析和 CAS；不恢复 lease、不重新消费或签发。Custom 的旧 Code/续接仍属于旧 Kernel Artifact，故全体升级必须同时处理 Kernel。 |
+| source / Custom SSO | 固定 `authorization-grant:redemption:v1:` | 旧 issued/redeeming/consumed、孤立 redemption 独立解析和 CAS；不恢复 lease、不重新消费或签发。Custom 的旧 Code 属于旧 Kernel Artifact，故全体升级必须同时处理 Kernel。精确 b648 已退役 redemption writer，其 Custom 续接为原 query 加根 Cookie；仍运行该 owner gate 检查恢复残留。 |
 | source / OIDC | 固定 `oidc:model/consumed/grant-objects/client-objects/session-uid/user-code`；Provider binding lookup、principal anchor、generation members、pending binding 与 pending client index | 冻结 Provider 9.9.1 当前五种 model：Session、Interaction、Grant、AuthorizationCode、AccessToken；保留 strict Claims Snapshot V2 decoder。String、ZSET、SET 按原形状处理。包括退出 Session state、续接 Interaction、staged/pending、无索引和无 TTL；不跟随任意 cleanup ref。 |
 | unified / Kernel | 精确 `<kernel-namespace>:unified:v1:` | UserSession/ClientSession active 与 terminated、user-id、slot、subject/subject-clients/children/client-index/inventory。扫描主记录和索引，不依赖管理索引完整；根/实例身份和期限由该 owner 解析。 |
 | unified / Custom SSO | 精确 `<custom-namespace>:custom-sso:v1:` | Code、Token、token-id、Authentication Continuation。业务/托管 Token 共 owner；全量可处理合法孤立 reverse，Client 范围不能猜孤立对象归属。 |
@@ -128,6 +128,9 @@ full repair 只清新 owner 的三个族，独立 scan-only verify 要求完整�
 
 ## 首次升级的数据库收缩顺序
 
+本节为固定旧制品的历史流程；当前仓库已退役旧升级 CLI。精确 b648 来源使用
+[独立数据库升级脚本](b648-client-database-upgrade.md)，不得在当前 workspace 执行下列旧命令。
+
 最终 migration `20260914173743_confused_mystique` 在独占 Client 表锁内执行门禁，再删除旧八列与三条约束。
 未选择新协议、配置来源不符、必需 Secret/id/time 缺失、Secret 仍是旧哈希等状态被拒绝，DDL 不继续。
 门禁不能替代批准 manifest 和全量 verify：先保持所有 reader/writer 停止、drain 与备份核验，执行以下固定顺序。
@@ -146,8 +149,8 @@ full repair 只清新 owner 的三个族，独立 scan-only verify 要求完整�
 此 DDL 无数据无损自动 down migration。备份须包含业务库、扩展期旧配置和受控 Secret 分发记录；若收缩后需回退，保持停流，
 按备份恢复旧 schema/data 与匹配固定旧制品，再清理两代在线状态并重新登录、完整核验，不混跑旧进程与新 schema。
 恢复点后的业务写入须由发布 owner 单独处理，不能靠重建空旧列宣称完成回滚。
-旧 `subject-projection:rollback` 同样仅服务扩展期旧 schema；最终 schema 下在改变 Profile 或 journal 前拒绝。
-需要回退时恢复匹配旧制品/备份，不能删除旧 journal 后在已收缩库中重放旧 migration。
+旧 Subject Projection 专用回退工具已退役。需要回退时恢复匹配旧制品/备份，
+不能删除旧 journal 后在已收缩库中重放旧 migration。
 真实 PG 测试证明未迁拒绝及旧 CLI apply/verify→最终 DDL 成功；测试没有执行任何目标环境迁移。
 
 ## #162 逐命令去向
@@ -159,7 +162,7 @@ full repair 只清新 owner 的三个族，独立 scan-only verify 要求完整�
 | Provider `client-protocol:artifacts` | 基于旧版本/Binding 的维护用途退役；新协议产物由 Worker unified 单 owner/Client scope 替代 | 日常配置编辑、协议切换、Secret 轮换不调用撤销/清理。明确离线 Client 产物清理使用本页 filter；业务永久撤销使用 Admin 捕获实例能力。 |
 | Worker `client-protocol:epochs` | 旧双协议 epoch manifest 退役；首次业务数据改用 `client-sso:upgrade` | #192 的原批准 manifest、全量只读数据 gate 与凭据身份保持；缓存和在线状态另行执行本页流程。 |
 | Worker `client-runtime:repair/verify` | 新模型由 `client-snapshot:repair/verify` 替代 | 旧三 reader namespace 工具仅服务固定旧候选恢复；其零报告不能证明新模型。最终候选已删除旧入口。 |
-| Worker `client-sso:upgrade` | 保留 | PG-only 业务迁移；固定维护制品须保留扩展期列，不能随 #194 收缩后重建替换。 |
+| Worker `client-sso:upgrade` | 已退役 | b648 转换核心移入独立脚本；其他旧来源只能使用匹配的历史制品。 |
 | Worker `user-profile:backfill/repair/verify-*`、`employment:verify`、`audit:actions` | 保留 | 原 owner/资源/运行手册继续适用，不由会话全清或 Snapshot repair 代替。 |
 
 旧生产图在 #193 固定候选中保留；最终 #194 已删除旧 app/scripts，现行保护迁到统一 owner 与正式入口，
@@ -225,38 +228,33 @@ source decoder 及其专用 fixture 属于 Kernel/Custom/OIDC 离线维护 owner
 
 ## 显式回调类型的保留状态升级
 
+下列步骤记录 ADR-0037 增加 callbackType 时的旧阶段。升级到 ADR-0038 无地址 managed 候选时，必须改用
+[同代 origin 保留升级手册](managed-callback-origin-preserving-upgrade.md)：捕获原 managed Client 集合，配置转换后只清其 Code/续接，
+保留 Token 和会话。旧字段准备不能直接跨越最新最终 CHECK，也不能把本节“保留 Code”应用到 ADR-0038。
+
 [ADR-0037](../adr/0037-classify-managed-sso-callbacks-by-path.md) 的修订要求保留现有会话、Code、续接、Token 和 Secret。
 本流程只迁移 Client 配置，不执行首次旧模型升级的全体下线，也不删除在线认证状态。
 新授权按显式 `callbackType` 选择托管/业务，始终跳转配置的完整地址；已有 Code 保留用途和绑定，不能转换兑换方式。
 业务域名的托管地址需要事先部署代理，Cookie 属于实际访问回调的主机。修改类型后原 Token 仍可退出。
 
-### 单协议存量切换
+### 旧单协议中间版本工具已退役
 
-1. 固定来源与新候选，备份 PostgreSQL（包含 schema、Client 配置与 Drizzle journal），保留可恢复备份和原应用制品。
-   暂停相关协议流量和全部 Client 配置写入，排空在途请求；不得仅靠表锁代替停写。
-2. 在新候选中显式设置目标 `DATABASE_URL`，先运行 `pnpm --filter @iam/db client-callback:upgrade inventory --writers-stopped`。
-   报告仅列 Client code、目标类型和是否关闭 ORCAS，不输出地址或凭据。来源必须为已存在 `sso_config` 的布局。
-3. 核对报告后运行 `pnpm --filter @iam/db client-callback:upgrade apply --writers-stopped`，保存成功报告。
-   工具在同一事务锁定 Client 表、校验全部来源、补齐类型并替换约束；失败整笔回滚。
-   仅缺少类型的 Custom 配置按 URL 解析后的 pathname 精确等于 `/sso/callback` 回填 `managed`，其余为 `business`。
-   业务且 ORCAS 已开启时写为关闭并报告；已有显式类型不会被重算。OIDC、Secret、其他 Client 字段均保留。
-4. 运行 `pnpm --filter @iam/db db:migrate` 登记并应用 `20260916050609_explicit_callback_type` 及按序迁移。
-   该 DDL 使用同一份新约束，可在准备命令已应用约束后再次执行；有未补齐的配置时直接 DDL 会失败。
-   新装空库直接运行 `db:migrate`。不要通过 `db:push` 绕过迁移记录。
-5. 用新进程运行 `pnpm --filter @iam/db client-callback:upgrade verify --writers-stopped`，确认全部配置均可严格读取。
-   重跑 apply 不改写已有显式类型或 Secret；异常数据拒绝迁移，先修复来源再重跑。
-6. 协调更新 Admin、Admin API、API 和 Worker，按本手册现有 Snapshot repair/verify 流程全量重建并独立核验配置快照。
-   旧严格读取端不兼容新字段，禁止新旧版本混跑；新端不接受缺失类型，不提供在线推断回退。
-7. 在恢复流量前核验管理选择、业务 Secret 兑换、托管 Cookie、旧 Code/Token 和退出；通过后恢复写入和流量。
+`client-callback:upgrade` 及其专属实现、测试已退役。它仅用于为尚无显式类型的单协议配置补齐
+`callbackType`；以上保留状态语义记录该历史阶段，不再提供当前可执行命令。
+需要处理中间版本时使用与来源匹配的历史制品及备份。
+
+当前已具备显式类型的来源按[同代 origin 保留升级](managed-callback-origin-preserving-upgrade.md)执行。
+b648 独立脚本按旧 Gateway/Independent 模式直接映射类型，不依赖已退役脚本；
+`20260916050609_explicit_callback_type` 历史 migration SQL 仍保留并由分阶段链执行。
 
 ### 旧双协议来源与恢复
 
-旧双协议列仍存在时，当前 Worker `client-sso:upgrade` 将 Independent 映射为 `business`、Gateway 映射为 `managed`，
-Gateway 的 `gatewayCallback` 仍必须显式提供，但不限制路径。先用本节准备命令升级既有 `sso_config` 和约束，
-再运行当前 Worker 的旧配置 apply/verify；确认全量通过后才能执行既有收缩 DDL。固定历史制品的 manifest 与输出
-仍遵循其自身版本，不得把当前格式提交给旧制品。正常单协议升级不运行旧双协议迁移工具。
+旧扩展期 `client-sso:upgrade` 已退役，b648 依赖的转换核心移入独立脚本目录。
+精确 b648 来源使用[独立数据库升级脚本](b648-client-database-upgrade.md)：Independent 映射为 business，
+Gateway 映射为 managed，脚本在独立核验后收缩旧列并删除 managed 中间地址。
+其他旧双协议中间版本需使用与来源匹配的历史制品和备份；当前单协议升级不执行旧双协议转换。
 
 准备命令失败时事务回滚，可在保持停写下修正后重试。准备已提交而后续步骤失败时保持停流，优先修复并继续；
 如必须回退，恢复切换前 PostgreSQL 备份及对应 journal，统一恢复旧制品并重建旧版配置快照，再核验恢复。
 不能只删除类型字段：管理员的新显式选择和 ORCAS 清理无法无损反推。回退不清空 Redis 会话，也不得恢复过期的认证快照。
-本次自动化验证不代表已执行目标环境迁移、代理部署或发布。
+历史 migration SQL 保留，不以修改 journal 或跳过约束替代升级。

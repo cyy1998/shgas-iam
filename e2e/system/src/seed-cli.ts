@@ -32,6 +32,7 @@ async function runSeed() {
     const references = await seedE2EScenario({
       adminPassword: requireEnvironment("IAM_E2E_ADMIN_PASSWORD"),
       canonicalOrigin,
+      internalOrigin: process.env.IAM_E2E_INTERNAL_ORIGIN,
       owner: createProductionE2EScenarioOwner({
         db,
         redis,

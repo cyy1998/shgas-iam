@@ -43,7 +43,7 @@ test("the protocol fixture requires its dedicated Redis URL before creating stat
   }
 });
 
-test.each(["https://internal.example", "https://public.example"])("Custom login stays on entry %s and preserves its configured public managed callback", async (origin) => {
+test.each(["https://internal.example", "https://public.example"])("Custom login stays on entry %s and derives its managed callback from the business origin", async (origin) => {
   const f = await fixture();
   try {
     f.setClient({
@@ -51,7 +51,6 @@ test.each(["https://internal.example", "https://public.example"])("Custom login 
       ssoConfig: {
         protocol: ClientSsoProtocol.CustomSso,
         callbackType: ClientSsoCallbackType.Managed,
-        callbackEndpoint: "https://iam.example/sso/callback",
         validRedirectUrls: ["https://app.example/callback"],
         subjectClaims: [SubjectClaim.SubjectIdentifier],
       },
@@ -69,7 +68,7 @@ test.each(["https://internal.example", "https://public.example"])("Custom login 
     });
     expect(resumed.status).toBe(302);
     const callback = new URL(resumed.headers.get("Location")!);
-    expect(callback.origin + callback.pathname).toBe("https://iam.example/sso/callback");
+    expect(callback.origin + callback.pathname).toBe("https://app.example/sso/callback");
     expect(callback.searchParams.get("redirectUrl")).toBe("https://app.example/callback");
   }
   finally {
@@ -96,8 +95,8 @@ test("Custom candidate accepts browser-bound continuation, preserves original ca
       ...f.getClient(),
       ssoConfig: {
         protocol: ClientSsoProtocol.CustomSso,
-        callbackType: ClientSsoCallbackType.Managed,
-        callbackEndpoint: "https://iam.example/sso/callback",
+        callbackType: ClientSsoCallbackType.Business,
+        callbackEndpoint: "https://app.example/callback",
         validRedirectUrls: ["https://other.example/home"],
         subjectClaims: [SubjectClaim.SubjectIdentifier],
       },
@@ -266,8 +265,9 @@ test("Custom callback type controls authorization independently of path and host
         ...f.getClient(),
         ssoConfig: {
           protocol: ClientSsoProtocol.CustomSso,
-          callbackType: redeemer,
-          callbackEndpoint: callbackEndpoint!,
+          ...(redeemer === ClientSsoCallbackType.Business
+            ? { callbackType: redeemer, callbackEndpoint: callbackEndpoint! }
+            : { callbackType: ClientSsoCallbackType.Managed }),
           validRedirectUrls: ["https://app.example/callback"],
           subjectClaims: [SubjectClaim.SubjectIdentifier],
         },
@@ -284,7 +284,7 @@ test("Custom callback type controls authorization independently of path and host
       );
       expect(response.status).toBe(302);
       const callback = new URL(response.headers.get("location")!);
-      expect(callback.origin + callback.pathname).toBe(callbackEndpoint!);
+      expect(callback.origin + callback.pathname).toBe(redeemer === ClientSsoCallbackType.Managed ? "https://app.example/sso/callback" : callbackEndpoint!);
       const record = await f.codes.inspectCode("iam", callback.searchParams.get("code")!);
       expect(record!.redeemer).toBe(redeemer!);
       expect(record!.state).toBeUndefined();
@@ -684,7 +684,6 @@ async function managedFixture(orcasEnabled = true) {
   const config = {
     protocol: ClientSsoProtocol.CustomSso,
     callbackType: ClientSsoCallbackType.Managed,
-    callbackEndpoint: "https://iam.example/sso/callback",
     validRedirectUrls: ["https://app.example/callback"],
     subjectClaims: [SubjectClaim.SubjectIdentifier, SubjectClaim.ProfileName],
     orcas: { enabled: orcasEnabled },
@@ -713,20 +712,16 @@ async function managedFixture(orcasEnabled = true) {
   };
 }
 
-test("business-host managed callback preserves custom query, controls protocol parameters and delivers ORCAS", async () => {
+test("managed callback without a configured address controls protocol parameters and delivers ORCAS", async () => {
   const f = await managedFixture();
   try {
-    f.setClient({ ...f.getClient(), ssoConfig: {
-      ...f.config,
-      callbackEndpoint: "https://business.example:8443/login/finish?tenant=fixed&client=wrong&code=wrong&redirectUrl=wrong&state=wrong",
-    } });
     const authorized = await f.request("/sso/authorize?client=app&redirectUrl=https://app.example/callback", {
       headers: { Cookie: `global_session=${f.root}` },
     });
     expect(authorized.status).toBe(302);
     const callback = new URL(authorized.headers.get("Location")!);
-    expect(callback.origin).toBe("https://business.example:8443");
-    expect(callback.searchParams.get("tenant")).toBe("fixed");
+    expect(callback.origin + callback.pathname).toBe("https://app.example/sso/callback");
+    expect(callback.searchParams.has("tenant")).toBe(false);
     expect(callback.searchParams.get("client")).toBe("app");
     expect(callback.searchParams.get("redirectUrl")).toBe("https://app.example/callback");
     expect(callback.searchParams.has("state")).toBe(false);
@@ -760,35 +755,6 @@ test.each(["managed", "business"])("%s Token can logout after callback classific
     expect(logout.status).toBe(302);
     const used = await f.use(token);
     expect(used.status).toBe(401);
-  }
-  finally {
-    await f.close();
-  }
-});
-
-test("pre-upgrade business Codes on the managed path keep their original exchange and Token purpose", async () => {
-  const f = await managedFixture(false);
-  try {
-    f.setClient({ ...f.getClient(), ssoConfig: { ...f.config, callbackEndpoint: "https://business.example/sso/callback" } });
-    const code = await f.authorize();
-    // The unchanged state format can contain Codes issued by the old origin classifier.
-    await f.codes.replaceCode("app", code, { redeemer: "business" });
-    const wrongEndpoint = await f.callback(code);
-    expect(wrongEndpoint.status).not.toBe(302);
-    const issued = await f.exchange(code);
-    expect(issued.status).toBe(200);
-    const token = (await issued.json()).data.sid;
-    const stored = await f.codes.inspectToken(token);
-    expect(stored?.record.purpose).toBe("business");
-    const used = await f.use(token);
-    expect(used.status).toBe(200);
-    const fresh = await f.authorize();
-    const freshCode = await f.codes.inspectCode("app", fresh);
-    expect(freshCode?.redeemer).toBe("managed");
-    const delivered = await f.callback(fresh);
-    expect(delivered.status).toBe(302);
-    const logout = await f.request(`/sso/logout?${new URLSearchParams({ token, redirectUrl: "https://app.example/logout" })}`);
-    expect(logout.status).toBe(302);
   }
   finally {
     await f.close();
@@ -851,7 +817,6 @@ test("managed Gateway consumes real published old Facts without SQL or ORCAS-spe
       ssoConfig: {
         protocol: ClientSsoProtocol.CustomSso,
         callbackType: ClientSsoCallbackType.Managed,
-        callbackEndpoint: "https://iam.example/sso/callback",
         validRedirectUrls: ["https://app.example/callback"],
         subjectClaims: [
           SubjectClaim.SubjectIdentifier,
@@ -949,7 +914,7 @@ for (const failure of [
       if (failure === "business-edit") {
         f.setClient({
           ...f.getClient(),
-          ssoConfig: { ...f.config, callbackEndpoint: "https://app.example/callback" },
+          ssoConfig: { ...f.config, callbackType: ClientSsoCallbackType.Business, callbackEndpoint: "https://app.example/callback", orcas: { enabled: false } },
         });
       }
       const code = await f.authorize();
@@ -2063,7 +2028,12 @@ test("application Token logout terminates its root after the callback delivery p
       throw new Error("Expected Custom config");
     f.setClient({
       ...client,
-      ssoConfig: { ...client.ssoConfig, callbackEndpoint: "https://iam.example/sso/callback" },
+      ssoConfig: {
+        protocol: ClientSsoProtocol.CustomSso,
+        callbackType: ClientSsoCallbackType.Managed,
+        validRedirectUrls: client.ssoConfig.validRedirectUrls,
+        subjectClaims: client.ssoConfig.subjectClaims,
+      },
     });
     const response = await f.request(
       `/sso/logout?${new URLSearchParams({ token: body.data.sid, redirectUrl: "https://app.example/logout" })}`,

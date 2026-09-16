@@ -99,6 +99,7 @@ services:
       IAM_E2E_REDIS_DB: "0"
       IAM_E2E_RUN_ID: ${IAM_E2E_RUN_ID:-preflight}
       IAM_E2E_ORIGIN: ${IAM_E2E_ORIGIN:-http://127.0.0.1:49152}
+      IAM_E2E_INTERNAL_ORIGIN: ${IAM_E2E_INTERNAL_ORIGIN:-http://127.0.0.1:49152}
       IAM_E2E_ADMIN_PASSWORD: iam-e2e-admin-password-local-only
       IAM_E2E_SEED_RECEIPT_PATH: /artifacts/${IAM_E2E_RUN_ID:-preflight}/seed-receipt.json
     volumes:
@@ -237,6 +238,8 @@ services:
         UMI_APP_SSO_LOGIN_CREDENTIAL_PUBLIC_KEY: 04112ddd8854e8262db2520bba112535844884c03348a45fcf4ee0f9a967979be52bd46caf43be697ae557ed2e4fa5b4dca8d2dbfa08c0f2f710c0f61591bb17dc
         UMI_APP_SSO_WELL_KNOWN_URL: /sso/.well-known/authentication-configuration
     labels: *e2e-labels
+    volumes:
+      - ./docker/rp-terminal.html:/usr/share/nginx/html/portal/e2e-rp.html:ro
     healthcheck:
       test: ["CMD", "wget", "--quiet", "--spider", "http://127.0.0.1/portal/login"]
       interval: 2s

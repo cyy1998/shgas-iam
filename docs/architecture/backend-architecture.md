@@ -424,8 +424,9 @@ API env 注入 current/previous RS256 JWK，JWKS 只输出公钥；非法配置�
 - `createWorkerCommandComposition` 使用 `commandOnly` 模式复用 DB/Redis/module wiring，但不启动 consumers、不注册
   dashboard queues，也不启动 HTTP server；`src/commands/` 的 backfill/repair entrypoints 使用该入口。
 - 当前 Snapshot repair/verify 使用独立 Redis-only composition，普通/敏感 payload 共享控制，targeted 与 full 分开，
-  full 必须停流，另起进程 scan-only verify；旧三类 Runtime command 已删除。Client 业务升级使用 PostgreSQL-only
-  `client-sso:upgrade`，最终 DDL 前固定旧扩展期制品完成 apply/verify。命令不重放业务写入或提供通用可靠执行器。- `createEmploymentCommandComposition` 是更窄的 PostgreSQL-only composition：只从
+  full 必须停流，另起进程 scan-only verify；旧三类 Runtime command 已删除。b648 Client 业务升级由独立
+  `scripts/b648-upgrade/` 脚本承担，旧扩展期 CLI 已退役。
+- `createEmploymentCommandComposition` 是更窄的 PostgreSQL-only composition：只从
   `@iam/user-profile-read-model/worker` 组装 Employment Verifier 与只读 repository，不构造 Redis、queue、consumer、
   dashboard 或 HTTP server。对应命令仅由运维人员按需显式调用，不进入普通 Worker 启动或请求路径。
 - `audit:actions` 是独立 PostgreSQL-only 一次性命令，入口直接拥有单连接与关闭，不加载 Worker composition barrel。

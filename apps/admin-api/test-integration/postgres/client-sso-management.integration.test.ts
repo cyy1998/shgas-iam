@@ -593,9 +593,10 @@ test("Public and managed callback do not require initial secret; explicit callba
   const publicFacts = await facts();
   expect(publicFacts.clients[0]!.ssoSecret).toBeNull();
   await candidate.service.selectProtocol("portal", {
-    ...custom,
+    protocol: custom.protocol,
+    validRedirectUrls: custom.validRedirectUrls,
+    subjectClaims: custom.subjectClaims,
     callbackType: ClientSsoCallbackType.Managed,
-    callbackEndpoint: "https://business.example:8443/login/finish?tenant=fixed",
     orcas: { enabled: true },
   });
   const managedFacts = await facts();
@@ -607,7 +608,7 @@ test("Public and managed callback do not require initial secret; explicit callba
   });
   const businessFacts = await facts();
   expect(businessFacts.clients[0]!.ssoSecret).toBeString();
-  await candidate.service.selectProtocol("portal", { ...custom, callbackType: ClientSsoCallbackType.Managed, callbackEndpoint: "https://business.example/sso/callback" });
+  await candidate.service.selectProtocol("portal", { protocol: custom.protocol, validRedirectUrls: custom.validRedirectUrls, subjectClaims: custom.subjectClaims, callbackType: ClientSsoCallbackType.Managed });
   const retained = await facts();
   expect(retained.clients[0]!.ssoSecret).toBe(businessFacts.clients[0]!.ssoSecret);
 });

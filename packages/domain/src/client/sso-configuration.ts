@@ -1,5 +1,5 @@
 import type { ClientSsoConfig } from "@iam/contracts";
-import { ClientSsoConfigSchema, ClientSsoProtocol } from "@iam/contracts";
+import { ClientSsoCallbackType, ClientSsoConfigSchema, ClientSsoProtocol } from "@iam/contracts";
 import { validateRedirectUrlPattern } from "./redirect-url-pattern";
 
 export const ValidatedClientSsoConfigSchema = ClientSsoConfigSchema.superRefine((config, ctx) => {
@@ -25,8 +25,9 @@ export function normalizeClientSsoConfig(input: ClientSsoConfig): ClientSsoConfi
   }
   return {
     protocol: config.protocol,
-    callbackEndpoint: config.callbackEndpoint,
-    callbackType: config.callbackType,
+    ...(config.callbackType === ClientSsoCallbackType.Business
+      ? { callbackType: config.callbackType, callbackEndpoint: config.callbackEndpoint }
+      : { callbackType: config.callbackType }),
     validRedirectUrls: [...config.validRedirectUrls].sort(),
     subjectClaims: [...config.subjectClaims].sort(),
     ...(config.orcas?.enabled ? { orcas: { enabled: true } } : {}),

@@ -21,7 +21,7 @@ async function main() {
       port: 0,
       async fetch(request) {
         const url = new URL(request.url);
-        if (url.pathname === "/login/finish") {
+        if (url.pathname === "/sso/callback") {
           callbackQuery = url.search;
           const upstream = await fetch(`${iamOrigin}/sso/callback${url.search}`, { redirect: "manual" });
           return new Response(upstream.body, { status: upstream.status, headers: upstream.headers });
@@ -29,20 +29,19 @@ async function main() {
         return Response.json({ cookie: request.headers.get("Cookie"), callbackQuery });
       },
     });
-    const businessOrigin = `http://localhost:${proxy.port}`;
-    const redirectUrl = `${businessOrigin}/done`;
+    const businessOrigins = [`http://internal.localhost:${proxy.port}`, `http://external.localhost:${proxy.port}`];
+    const redirectUrls = businessOrigins.map(origin => `${origin}/work/done?order=123`);
     f.setClient({
       ...f.getClient(),
       ssoConfig: {
         protocol: ClientSsoProtocol.CustomSso,
         callbackType: ClientSsoCallbackType.Managed,
-        callbackEndpoint: `${businessOrigin}/login/finish?tenant=fixed&state=configured-state`,
-        validRedirectUrls: [redirectUrl],
+        validRedirectUrls: businessOrigins.map(origin => `${origin}/work/*`),
         subjectClaims: [SubjectClaim.SubjectIdentifier],
       },
     });
     const token = await f.login();
-    process.stdout.write(`${JSON.stringify({ iamOrigin, businessOrigin, redirectUrl, token })}\n`);
+    process.stdout.write(`${JSON.stringify({ iamOrigin, businessOrigins, redirectUrls, token })}\n`);
     for await (const _chunk of process.stdin) {
       // EOF is the parent's ownership signal.
     }
