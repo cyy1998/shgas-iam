@@ -10,6 +10,11 @@ export interface MobileUserReaderPort {
 }
 
 export interface MobileServiceDeps {
+  cooldown: {
+    /** Returns zero when acquired, otherwise the remaining wait in seconds. */
+    acquire: (phone: string) => Promise<number>;
+    remainingSeconds: (phone: string) => Promise<number>;
+  };
   redis: Pick<RedisPort, "del" | "eval" | "get" | "set" | "ttl">;
   smsSender: SmsSenderPort;
   userRepository: MobileUserReaderPort;

@@ -2,8 +2,8 @@ import type { MobileServiceDeps } from "./mobile.port";
 import type { MobileVerificationCodeReservation } from "./mobile.type";
 import { randomUUID } from "node:crypto";
 import { VerificationCodeUsage } from "@api/enums/verificationCode.usage";
-import { CustomError } from "@iam/api-core/errors/CustomError";
 import { InvalidMobileError, UserNotFoundError } from "@iam/domain/user";
+import { SmsCooldownError, SmsSendFailedError, SmsUnavailableError } from "./mobile.error";
 
 const MOBILE_REGEX = /^1[3-9]\d{9}$/;
 const CONFIRM_RESERVED_VERIFICATION_CODE_KEY_COUNT = 2;
@@ -48,11 +48,38 @@ export function createMobileService(deps: MobileServiceDeps) {
     if (!await checkExistingPhoneNumber(phoneNumber) && usage !== VerificationCodeUsage.BindPhone) {
       throw new UserNotFoundError("手机号不存在");
     }
-    const result = await deps.smsSender.sendVerificationCode(phoneNumber);
-    if (result.success === false) {
-      throw new CustomError(`短信发送失败:${phoneNumber}`);
+    let remaining: number;
+    try {
+      remaining = await deps.cooldown.acquire(phoneNumber);
     }
-    await deps.redis.set(mobileCodeKey(usage, phoneNumber), result.code, "EX", deps.config.verificationCodeTtlSeconds);
+    catch {
+      throw new SmsUnavailableError();
+    }
+    if (remaining > 0)
+      throw new SmsCooldownError(remaining);
+
+    let code: number | string;
+    try {
+      const result = await deps.smsSender.sendVerificationCode(phoneNumber);
+      if (!result.success)
+        throw new Error("SMS provider rejected send");
+      code = result.code;
+    }
+    catch {
+      try {
+        remaining = await deps.cooldown.remainingSeconds(phoneNumber);
+      }
+      catch {
+        throw new SmsUnavailableError();
+      }
+      throw new SmsSendFailedError(remaining);
+    }
+    try {
+      await deps.redis.set(mobileCodeKey(usage, phoneNumber), code, "EX", deps.config.verificationCodeTtlSeconds);
+    }
+    catch {
+      throw new SmsUnavailableError();
+    }
     return true;
   }
 

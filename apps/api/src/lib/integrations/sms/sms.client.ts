@@ -42,9 +42,11 @@ export function createSmsClient(deps: CreateSmsClientDeps) {
 
   return {
     async sendVerificationCode(phoneNumber: string) {
+      const signal = AbortSignal.timeout(10_000);
       const random4Digit = deps.random.integer(1000, 10000);
       const message = `验证码：${random4Digit}`;
       const res = await fetchFn(deps.config.smsUrl, {
+        signal,
         method: "POST",
         body: JSON.stringify(createSignedRequest(phoneNumber, message)),
         headers: { "Content-Type": "application/json", "Accept": "application/json" },
@@ -52,6 +54,7 @@ export function createSmsClient(deps: CreateSmsClientDeps) {
       const smsResult = SMSServiceResultSchema
         .catch(SMS_SERVICE_RESULT_FALLBACK)
         .parse(await res.json().catch(() => null));
+      signal.throwIfAborted();
       if (smsResult.resultCode !== "0000") {
         return {
           success: false,

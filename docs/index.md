@@ -121,6 +121,7 @@
 | [docs/features/sso/public-thirdparty-unified-login.md](features/sso/public-thirdparty-unified-login.md) | feature | Current | 2026-09-07 | 2026-09-30 | 第三方统一登录入口、目标系统会话所有权与 Custom SSO 职责边界说明。 |
 | [docs/features/sso/published-subject-facts-contract.md](features/sso/published-subject-facts-contract.md) | feature | Current | 2026-09-15 | 2026-10-31 | #156 已发布权限、Reader 与协议行为证据、旧断言迁移及环境证明边界。 |
 | [docs/features/sso/root-authentication-candidate.md](features/sso/root-authentication-candidate.md) | feature | Current | 2026-09-14 | 2026-10-31 | #183 根认证、许可、本人安全及候选装配；#194 已接入正式默认图，环境未切换。 |
+| [docs/features/sso/sms-phone-cooldown.md](features/sso/sms-phone-cooldown.md) | design | Current | 2026-09-17 | 2026-10-31 | 手机号短信验证码冷却 Q1–Q8 已实现，双轴评审、根 verify 与定向 Redis/Component 验证通过，待本地合入授权，未部署。 |
 | [docs/features/sso/subject-access-operation-contract.md](features/sso/subject-access-operation-contract.md) | feature | Current | 2026-09-15 | 2026-10-31 | Spec #128 全部62故事、最终owner、直接行为证据与测试迁移；最终聚合验收由父规格记录。 |
 | [docs/features/sso/third-party-sso-integration.md](features/sso/third-party-sso-integration.md) | feature | Current | 2026-09-16 | 2026-09-30 | Independent/Gateway 失败重新授权、既有 wire 和普通访问重试分离；定向维护已由 #160 交付，候选不可部署。 |
 | [docs/features/sso/token-state-contract.md](features/sso/token-state-contract.md) | feature | Historical | 2026-09-15 | n/a | 旧候选契约与来源证据；当前由统一会话模型和维护手册替代。 |

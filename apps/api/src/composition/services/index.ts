@@ -9,6 +9,7 @@ import { createLoginCredentialParser } from "@api/services/authentication/login-
 import { createClientService } from "@api/services/client/client.service";
 import { createCapService } from "@api/services/human-verification/cap.service";
 import { createHumanRiskService } from "@api/services/human-verification/human-risk.service";
+import { createMobileCodeCooldown } from "@api/services/mobile/mobile-code-cooldown";
 import { createMobileService } from "@api/services/mobile/mobile.service";
 import { createOrganizationService } from "@api/services/organization/organization.service";
 import { createPrivilegeDelegationService } from "@api/services/privilege/privilegeDelegation.service";
@@ -109,6 +110,7 @@ export function createApiServices(options: CreateApiServicesOptions) {
   const credentials = createClientSecretAuthenticator(clientSnapshots.credential);
 
   const mobileService = createMobileService({
+    cooldown: createMobileCodeCooldown(runtime.redis),
     redis: runtime.redis,
     smsSender: runtime.integrations.sms,
     userRepository: repositories.user,

@@ -24,12 +24,12 @@ import { history, useModel } from '@umijs/max';
 import { Button, Form, Input, Spin, Table, Tabs, message } from 'antd';
 import { useEffect, useState } from 'react';
 import TopBar from './_components/TopBar';
+import './index.less';
 import {
   formatProjectionCompany,
   formatProjectionOrganizationPath,
   formatProjectionPosition,
 } from './user-info-projection';
-import './index.less';
 
 type TabKey = 'password' | 'mobile';
 
@@ -38,7 +38,8 @@ export default function UserInfoPage() {
   const [activeKey, setActiveKey] = useState<TabKey>('password');
   const [submitting, setSubmitting] = useState(false);
   const [smsSending, setSmsSending] = useState(false);
-  const { countdown, isCounting, startCountdown } = useSmsCodeCountdown();
+  const { countdown, isCounting, startCountdown, restoreCountdown } =
+    useSmsCodeCountdown();
   const [pwdForm] = Form.useForm();
   const [mobileForm] = Form.useForm();
 
@@ -63,6 +64,7 @@ export default function UserInfoPage() {
       );
       startCountdown();
     } catch (e) {
+      restoreCountdown(e);
       if (!(e instanceof ServiceError)) throw e;
     } finally {
       setSmsSending(false);
@@ -186,7 +188,7 @@ export default function UserInfoPage() {
               </div>
 
               <Table<Employment>
-                rowKey={employment =>
+                rowKey={(employment) =>
                   `${employment.organization.code}:${employment.position.code}`
                 }
                 size="middle"
@@ -196,8 +198,7 @@ export default function UserInfoPage() {
                   {
                     title: '公司',
                     dataIndex: ['organization', 'path'],
-                    render: (_value, row) =>
-                      formatProjectionCompany(row),
+                    render: (_value, row) => formatProjectionCompany(row),
                   },
                   {
                     title: '组织',
@@ -208,8 +209,7 @@ export default function UserInfoPage() {
                   {
                     title: '岗位',
                     dataIndex: ['position', 'name'],
-                    render: (_value, row) =>
-                      formatProjectionPosition(row),
+                    render: (_value, row) => formatProjectionPosition(row),
                   },
                 ]}
               />

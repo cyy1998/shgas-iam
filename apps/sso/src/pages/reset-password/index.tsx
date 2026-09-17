@@ -79,8 +79,13 @@ export default function ResetPasswordPage() {
   const [mobileOptions, setMobileOptions] = useState<
     { label: string; value: string }[]
   >([]);
-  const { countdown, isCounting, startCountdown, resetCountdown } =
-    useSmsCodeCountdown();
+  const {
+    countdown,
+    isCounting,
+    startCountdown,
+    resetCountdown,
+    restoreCountdown,
+  } = useSmsCodeCountdown();
   const [form1] = Form.useForm<Step1>();
   const [form2] = Form.useForm<Step2>();
   const [form3] = Form.useForm<Step3>();
@@ -180,6 +185,7 @@ export default function ResetPasswordPage() {
       );
       startCountdown();
     } catch (e) {
+      restoreCountdown(e);
       if (!(e instanceof ServiceError)) throw e;
     } finally {
       setLoading(false);

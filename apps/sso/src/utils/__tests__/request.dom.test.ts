@@ -1,10 +1,31 @@
 import { HttpResponse, http } from 'msw';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { server } from '../../../test/mocks/server';
-import { registerMswLifecycle } from '../../../test/setup-msw';
 import { history } from '../../../test/mocks/umijs-max';
+import { registerMswLifecycle } from '../../../test/setup-msw';
 import { request } from '../request';
 import { restoreLoginRedirectState } from '../url';
+
+describe('request retry metadata', () => {
+  it('preserves the server retry delay on a failed SMS request', async () => {
+    server.use(
+      http.post('*/open/code/send', () =>
+        HttpResponse.json(
+          { code: 'SMS.COOLDOWN', message: '稍后重试', data: null },
+          { status: 429, headers: { 'Retry-After': '37' } },
+        ),
+      ),
+    );
+    const failure = await request('/open/code/send', {
+      method: 'POST',
+      suppressErrorMessage: true,
+    }).catch((error) => error);
+    expect(failure).toMatchObject({
+      code: 'SMS.COOLDOWN',
+      retryAfterSeconds: 37,
+    });
+  });
+});
 
 registerMswLifecycle();
 
@@ -37,20 +58,13 @@ describe('request auth redirect', () => {
   });
 
   it('moves a first-party page query and hash into state', async () => {
-    window.history.pushState(
-      {},
-      '',
-      '/portal/userInfo?tab=启用#profile',
-    );
+    window.history.pushState({}, '', '/portal/userInfo?tab=启用#profile');
 
     await requestUserInfo();
 
     const loginLocation = history.replace.mock.calls[0]?.[0];
     expect(typeof loginLocation).toBe('string');
-    const loginUrl = new URL(
-      loginLocation as string,
-      'http://localhost:3000',
-    );
+    const loginUrl = new URL(loginLocation as string, 'http://localhost:3000');
     expect(loginUrl.pathname).toBe('/login');
     expect(loginUrl.searchParams.get('redirectUrl')).toBe(
       'http://localhost:3000/portal/userInfo',
@@ -60,21 +74,20 @@ describe('request auth redirect', () => {
     );
     expect(loginUrl.searchParams.has('tab')).toBe(false);
 
-    const callbackUrl = new URL(
-      loginUrl.searchParams.get('redirectUrl')!,
-    );
+    const callbackUrl = new URL(loginUrl.searchParams.get('redirectUrl')!);
     callbackUrl.searchParams.set('token', 'local-session');
-    callbackUrl.searchParams.set(
-      'state',
-      loginUrl.searchParams.get('state')!,
-    );
+    callbackUrl.searchParams.set('state', loginUrl.searchParams.get('state')!);
     const replaceState = vi.fn();
     const eventTarget = { dispatchEvent: vi.fn() };
     expect(
-      restoreLoginRedirectState(callbackUrl.toString(), {
-        state: null,
-        replaceState,
-      }, eventTarget),
+      restoreLoginRedirectState(
+        callbackUrl.toString(),
+        {
+          state: null,
+          replaceState,
+        },
+        eventTarget,
+      ),
     ).toBe(true);
     expect(replaceState).toHaveBeenCalledWith(
       null,

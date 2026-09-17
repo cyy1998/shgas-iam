@@ -23,6 +23,10 @@ export enum ApiErrorCode {
 
   InvalidHumanVerificationSite = "HUMAN_VERIFICATION.INVALID_SITE",
 
+  SmsCooldown = "SMS.COOLDOWN",
+  SmsSendFailed = "SMS.SEND_FAILED",
+  SmsUnavailable = "SMS.UNAVAILABLE",
+
   UserNotFound = "USER.NOT_FOUND",
   UsernameAlreadyExists = "USER.USERNAME_ALREADY_EXISTS",
   InvalidMobile = "USER.INVALID_MOBILE",

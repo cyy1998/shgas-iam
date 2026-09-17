@@ -40,7 +40,8 @@ export default function LoginPage() {
   const [submitting, setSubmitting] = useState(false);
   const [smsSending, setSmsSending] = useState(false);
   const [pwdForm] = Form.useForm<PasswordLoginValues>();
-  const { countdown, isCounting, startCountdown } = useSmsCodeCountdown();
+  const { countdown, isCounting, startCountdown, restoreCountdown } =
+    useSmsCodeCountdown();
   const loginRedirect = useLoginRedirect();
   const {
     client,
@@ -185,6 +186,7 @@ export default function LoginPage() {
       );
       startCountdown();
     } catch (e) {
+      restoreCountdown(e);
       if (!(e instanceof ServiceError)) throw e;
     } finally {
       setSmsSending(false);

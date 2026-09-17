@@ -5,6 +5,7 @@ import { commonErrorResponses } from "@iam/api-core/core/openapi/helpers/common-
 import jsonContent from "@iam/api-core/core/openapi/helpers/json-content";
 import jsonContentRequired from "@iam/api-core/core/openapi/helpers/json-content-required";
 import createSuccessResponseSchema from "@iam/api-core/core/openapi/schemas/create-success-schema";
+import { StandardErrorResponseSchema } from "@iam/api-core/core/openapi/schemas/error-response-schema";
 import { GenericClientRuntimeDtoSchema } from "@iam/domain/client";
 import { MaskedMobileSchema } from "./open.schema";
 
@@ -75,6 +76,11 @@ export const codeSend = createRoute({
   responses: {
     ...commonErrorResponses,
     [HttpStatusCodes.OK]: jsonContent(createSuccessResponseSchema(z.boolean()), "短信发送结果"),
+    [HttpStatusCodes.TOO_MANY_REQUESTS]: {
+      ...jsonContent(StandardErrorResponseSchema, "同手机号短信冷却中"),
+      headers: { "Retry-After": { schema: { type: "integer", minimum: 1 }, description: "剩余冷却秒数" } },
+    },
+    [HttpStatusCodes.SERVICE_UNAVAILABLE]: jsonContent(StandardErrorResponseSchema, "短信服务暂时不可用"),
   },
 });
 

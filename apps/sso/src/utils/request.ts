@@ -1,7 +1,4 @@
-import {
-  ApiErrorCode,
-  splitFirstPartySsoNavigation,
-} from '@iam/contracts';
+import { ApiErrorCode, splitFirstPartySsoNavigation } from '@iam/contracts';
 import { API_PREFIX, SSO_CLIENT_CODE } from '@sso/constants/config';
 import type { ApiEnvelope } from '@sso/types/api';
 import { currentSearchParams } from '@sso/utils/url';
@@ -13,6 +10,7 @@ export class ServiceError extends Error {
   constructor(
     msg: string,
     code: ApiErrorCode | number | string,
+    public readonly retryAfterSeconds?: number,
   ) {
     super(msg);
     this.name = 'ServiceError';
@@ -62,15 +60,19 @@ function gotoMaintenance() {
   history.replace(`/systemMaintenance${preserveQuery()}`);
 }
 
-function isCode(
-  body: Pick<ApiEnvelope<unknown>, 'code'>,
-  code: ApiErrorCode,
-) {
+function isCode(body: Pick<ApiEnvelope<unknown>, 'code'>, code: ApiErrorCode) {
   return body.code === code;
 }
 
 async function readEnvelope<T>(res: Response): Promise<ApiEnvelope<T> | null> {
   return ((await res.clone().json()) as ApiEnvelope<T>) ?? null;
+}
+
+function readRetryAfter(res: Response): number | undefined {
+  const value = res.headers.get('Retry-After');
+  if (!value || !/^\d+$/.test(value)) return undefined;
+  const seconds = Number(value);
+  return Number.isSafeInteger(seconds) && seconds > 0 ? seconds : undefined;
 }
 
 export async function request<T>(
@@ -106,10 +108,7 @@ export async function request<T>(
 
   if (!res.ok) {
     const errorBody = await readEnvelope<T>(res).catch(() => null);
-    if (
-      errorBody &&
-      isCode(errorBody, ApiErrorCode.Maintenance)
-    ) {
+    if (errorBody && isCode(errorBody, ApiErrorCode.Maintenance)) {
       gotoMaintenance();
       return new Promise<T>(() => {});
     }
@@ -121,15 +120,16 @@ export async function request<T>(
       throw new ServiceError(msg, errorBody.code);
     }
     if (!init.suppressErrorMessage) message.error(msg);
-    throw new ServiceError(msg, errorBody?.code ?? res.status);
+    throw new ServiceError(
+      msg,
+      errorBody?.code ?? res.status,
+      readRetryAfter(res),
+    );
   }
 
   const body = (await res.json()) as ApiEnvelope<T>;
 
-  if (
-    isCode(body, ApiErrorCode.Unauthorized) &&
-    !init.skipAuthRedirect
-  ) {
+  if (isCode(body, ApiErrorCode.Unauthorized) && !init.skipAuthRedirect) {
     gotoLogin();
     return new Promise<T>(() => {});
   }

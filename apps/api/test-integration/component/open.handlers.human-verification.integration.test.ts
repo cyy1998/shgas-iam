@@ -1,6 +1,8 @@
 import { VerificationCodeUsage } from "@api/enums/verificationCode.usage";
 import { createOpenHandlers } from "@api/routes/open/open.handlers";
 import { createOpenRoute } from "@api/routes/open/open.index";
+import { SmsCooldownError, SmsSendFailedError, SmsUnavailableError } from "@api/services/mobile/mobile.error";
+import { createErrorHandler } from "@iam/api-core/middlewares/error-handler";
 import { ApiErrorCode } from "@iam/contracts";
 import { beforeEach, describe, expect, mock, test } from "bun:test";
 
@@ -85,6 +87,26 @@ beforeEach(() => {
 });
 
 describe("createOpenHandlers human verification", () => {
+  test.each([
+    [new SmsCooldownError(37), 429, "37"],
+    [new SmsSendFailedError(50), 500, "50"],
+    [new SmsUnavailableError(), 503, null],
+  ] as const)("serializes SMS error %s with its retry delay", async (error, status, retryAfter) => {
+    sendCode.mockRejectedValueOnce(error);
+    const app = createOpenRoute(createHandlers());
+    app.onError(createErrorHandler({ info() {}, warn() {}, error() {} }));
+    const response = await app.request("/code/send", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ phoneNumber: "13800000000", usage: "login" }),
+    });
+    const body = await response.json();
+    expect(response.status).toBe(status);
+    expect(response.headers.get("Retry-After")).toBe(retryAfter);
+    expect(body).toMatchObject({ code: error.code });
+    expect(recordAuditLog).not.toHaveBeenCalled();
+  });
+
   test("does not send an SMS code when Cap verification is required", async () => {
     const handlers = createHandlers();
     ensureActionAllowed.mockRejectedValue(Object.assign(new Error("需要人机校验"), {

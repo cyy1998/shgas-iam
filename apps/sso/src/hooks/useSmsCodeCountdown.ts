@@ -1,3 +1,5 @@
+import { ApiErrorCode } from '@iam/contracts';
+import { ServiceError } from '@sso/utils/request';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
 const DEFAULT_COUNTDOWN_SECONDS = 60;
@@ -42,10 +44,25 @@ export function useSmsCodeCountdown() {
 
   useEffect(() => clearTimer, [clearTimer]);
 
+  const restoreCountdown = useCallback(
+    (error: unknown) => {
+      if (
+        error instanceof ServiceError &&
+        (error.code === ApiErrorCode.SmsCooldown ||
+          error.code === ApiErrorCode.SmsSendFailed) &&
+        error.retryAfterSeconds !== undefined
+      ) {
+        startCountdown(error.retryAfterSeconds);
+      }
+    },
+    [startCountdown],
+  );
+
   return {
     countdown,
     isCounting: countdown > 0,
     startCountdown,
     resetCountdown,
+    restoreCountdown,
   };
 }
