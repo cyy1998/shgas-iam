@@ -36,7 +36,7 @@ export interface CreateOpenHandlersDeps {
   >;
   humanRiskService: Pick<HumanRiskServicePort, "recordOpenUserInfoLookup">;
   mobileService: Pick<MobileService, "sendCode" | "checkVerificationCode">;
-  userService: Pick<UserService, "getUserDetailByUsername">;
+  userService: Pick<UserService, "getUserMobileByUsername">;
 }
 
 export function createOpenHandlers(deps: CreateOpenHandlersDeps) {
@@ -46,8 +46,9 @@ export function createOpenHandlers(deps: CreateOpenHandlersDeps) {
     return c.json(resp.ok(data), OK);
   };
 
-  const userInfo: OpenRouteHandler<"userInfo"> = async (c) => {
-    const { username, capToken } = c.req.valid("query");
+  const maskedMobile: OpenRouteHandler<"maskedMobile"> = async (c) => {
+    const { username } = c.req.valid("param");
+    const { capToken } = c.req.valid("query");
     const requestContext = getApiAuditRequestContext(c);
     const context = createHumanVerificationContext(requestContext, username);
     await deps.humanVerification.ensureActionAllowed(
@@ -56,11 +57,9 @@ export function createOpenHandlers(deps: CreateOpenHandlersDeps) {
       context,
     );
     await deps.humanRiskService.recordOpenUserInfoLookup(username, context);
-    const data = await deps.userService.getUserDetailByUsername(username);
+    const mobile = await deps.userService.getUserMobileByUsername(username);
     return c.json(resp.ok({
-      username: data.username,
-      name: data.name,
-      mobile: maskMobile(data.mobile),
+      mobile: maskMobile(mobile),
     }), OK);
   };
 
@@ -149,7 +148,7 @@ export function createOpenHandlers(deps: CreateOpenHandlersDeps) {
     codeSend,
     codeVerify,
     passwordReset,
-    userInfo,
+    maskedMobile,
   };
 }
 

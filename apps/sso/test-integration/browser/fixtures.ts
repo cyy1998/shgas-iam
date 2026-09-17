@@ -3,7 +3,7 @@ import { ApiErrorCode, LoginPageGuardDecision } from '@iam/contracts';
 import type { Page, Route } from '@playwright/test';
 import {
   authenticationConfig,
-  resetPasswordUserInfo,
+  resetPasswordMaskedMobile,
 } from '../../test/mocks/fixtures';
 
 type SsoMockOptions = {
@@ -36,9 +36,10 @@ export async function mockSsoApi(page: Page, options: SsoMockOptions = {}) {
     return fulfillJson(
       route,
       ok({
-        decision: loginGuard === 'continue'
-          ? LoginPageGuardDecision.Continue
-          : LoginPageGuardDecision.Login,
+        decision:
+          loginGuard === 'continue'
+            ? LoginPageGuardDecision.Continue
+            : LoginPageGuardDecision.Login,
       }),
     );
   });
@@ -73,8 +74,8 @@ export async function mockSsoApi(page: Page, options: SsoMockOptions = {}) {
   await page.route('**/open/password/reset', (route) =>
     fulfillJson(route, ok(null)),
   );
-  await page.route('**/open/users/userInfo**', (route) =>
-    fulfillJson(route, ok(resetPasswordUserInfo)),
+  await page.route('**/open/users/*/masked-mobile**', (route) =>
+    fulfillJson(route, ok(resetPasswordMaskedMobile)),
   );
   await page.route('**/public/mobile/set', (route) =>
     fulfillJson(route, ok(null)),

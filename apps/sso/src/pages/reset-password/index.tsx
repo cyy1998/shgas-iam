@@ -13,9 +13,9 @@ import { useSmsCodeCountdown } from '@sso/hooks/useSmsCodeCountdown';
 import { withHumanVerification } from '@sso/lib/human-verification';
 import {
   codeVerify,
+  getMaskedMobile,
   passwordReset,
   sendMessage,
-  usersUserInfo,
 } from '@sso/services/open';
 import { confirmPasswordRule, passwordRule } from '@sso/utils/form-check';
 import { ServiceError } from '@sso/utils/request';
@@ -98,8 +98,8 @@ export default function ResetPasswordPage() {
         const body = { username: v.username };
         const data = await withHumanVerification(
           'openUserInfoLookup',
-          () => usersUserInfo(body),
-          (capToken) => usersUserInfo({ ...body, capToken }),
+          () => getMaskedMobile(body),
+          (capToken) => getMaskedMobile({ ...body, capToken }),
         );
         if (data.mobile) {
           setMobileOptions([
@@ -108,17 +108,17 @@ export default function ResetPasswordPage() {
           form2.setFieldValue('phoneNumber', data.mobile);
         } else {
           setMobileOptions([
-            { label: '手机号：暂未绑定手机号', value: '暂未绑定手机号' },
+            { label: '无法获取绑定手机号', value: '无法获取绑定手机号' },
           ]);
-          form2.setFieldValue('phoneNumber', '暂未绑定手机号');
+          form2.setFieldValue('phoneNumber', '无法获取绑定手机号');
         }
         setCurrent(1);
         return;
       }
       if (current === 1) {
         const v = await form2.validateFields();
-        if (v.phoneNumber === '暂未绑定手机号') {
-          message.warning('请先绑定手机号！');
+        if (v.phoneNumber === '无法获取绑定手机号') {
+          message.warning('无法获取绑定手机号');
           return;
         }
         const verification = await codeVerify({
@@ -161,8 +161,8 @@ export default function ResetPasswordPage() {
 
   const sendCode = async () => {
     const phoneNumber = form2.getFieldValue('phoneNumber');
-    if (phoneNumber === '暂未绑定手机号') {
-      message.warning('请先绑定手机号！');
+    if (phoneNumber === '无法获取绑定手机号') {
+      message.warning('无法获取绑定手机号');
       return;
     }
     if (isCounting) return;
@@ -290,9 +290,7 @@ export default function ResetPasswordPage() {
                       prefix={<LockOutlined />}
                       buttonDisabled={isCounting}
                       buttonText={
-                        countdown <= 0
-                          ? '获取验证码'
-                          : `${countdown} 秒后重试`
+                        countdown <= 0 ? '获取验证码' : `${countdown} 秒后重试`
                       }
                       onSendCode={sendCode}
                     />

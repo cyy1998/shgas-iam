@@ -4,7 +4,7 @@ import { createUserPasswordHelper } from "@api/services/user/user-password.helpe
 import { createUserService } from "@api/services/user/user.service";
 import { createImmediateUnitOfWork } from "@api/testing/fakes";
 import { UserStatus } from "@iam/contracts";
-import { UserPasswordUnchangedError } from "@iam/domain/user";
+import { UserNotFoundError, UserPasswordUnchangedError } from "@iam/domain/user";
 import { describe, expect, mock, test } from "bun:test";
 
 const EXISTING_BCRYPT_TS_8_HASH = "$2b$04$ZwwFh9CSK/owUc7IdLKdFOPiqfxmljguVbVqfGRZq8J9tkkdrcxH2";
@@ -96,6 +96,7 @@ function createDeps(overrides: Record<string, unknown> = {}) {
     },
     userRepository: {
       getUserById: mock(async () => user),
+      findUserIdentityByUsername: mock(async () => ({ id: user.id })),
       findUserIdentityBySubjectIdentifier: mock(async () => ({ id: user.id })),
       getUserByMobile: mock(async () => user),
       getUserByUsername: mock(async () => user),
@@ -107,6 +108,38 @@ function createDeps(overrides: Record<string, unknown> = {}) {
 }
 
 describe("createUserService", () => {
+  test.each(["13800000000", null])("returns only the published mobile for account recovery: %s", async (mobile) => {
+    const deps = createDeps();
+    deps.profileQuery.getDetailByUsername.mockResolvedValue({ ...deps.user, mobile });
+    const result = await createUserService(deps).getUserMobileByUsername("zhangsan");
+    expect(result).toBe(mobile);
+  });
+
+  test("returns null only when a missing Profile belongs to an absent account", async () => {
+    const deps = createDeps();
+    deps.profileQuery.getDetailByUsername.mockRejectedValue(new UserNotFoundError("用户画像不存在"));
+    deps.userRepository.findUserIdentityByUsername.mockResolvedValue(null);
+    const result = await createUserService(deps).getUserMobileByUsername("unknown");
+    expect(result).toBeNull();
+    expect(deps.userRepository.findUserIdentityByUsername).toHaveBeenCalledWith("unknown");
+  });
+
+  test.each([new UserNotFoundError("用户画像不存在"), new Error("database unavailable")])(
+    "preserves Profile failures for an existing account: %s",
+    async (error) => {
+      const deps = createDeps();
+      deps.profileQuery.getDetailByUsername.mockRejectedValue(error);
+      let failure: unknown;
+      try {
+        await createUserService(deps).getUserMobileByUsername("zhangsan");
+      }
+      catch (caught) {
+        failure = caught;
+      }
+      expect(failure).toBe(error);
+    },
+  );
+
   test("reads permitted ORCAS fields from profile detail and excludes unrelated fields", async () => {
     const deps = createDeps();
     deps.profileQuery.getDetailByUserId.mockResolvedValue({

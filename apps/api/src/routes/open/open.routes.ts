@@ -6,7 +6,7 @@ import jsonContent from "@iam/api-core/core/openapi/helpers/json-content";
 import jsonContentRequired from "@iam/api-core/core/openapi/helpers/json-content-required";
 import createSuccessResponseSchema from "@iam/api-core/core/openapi/schemas/create-success-schema";
 import { GenericClientRuntimeDtoSchema } from "@iam/domain/client";
-import { OpenUserInfoSchema } from "./open.schema";
+import { MaskedMobileSchema } from "./open.schema";
 
 const routePrefix = "";
 const tags = ["Open"];
@@ -31,19 +31,32 @@ export const clientStatus = createRoute({
   },
 });
 
-export const userInfo = createRoute({
+export const maskedMobile = createRoute({
   method: "get",
-  path: `${routePrefix}/users/userInfo`,
+  path: `${routePrefix}/users/{username}/masked-mobile`,
   tags,
   request: {
+    params: z.object({
+      username: z.string().transform((value, ctx) => {
+        try {
+          // Hono removes the outer URL encoding; decode the opaque username layer.
+          return decodeURIComponent(value);
+        }
+        catch {
+          ctx.addIssue({ code: "custom", message: "Invalid encoded username" });
+          return z.NEVER;
+        }
+      }).openapi({
+        description: "用户名先做百分号编码（包括点），再作为路径段进行 URL 编码，例如 . 使用 %252E",
+      }),
+    }),
     query: z.object({
-      username: z.string(),
       capToken: z.string().optional(),
     }),
   },
   responses: {
     ...commonErrorResponses,
-    [HttpStatusCodes.OK]: jsonContent(createSuccessResponseSchema(OpenUserInfoSchema), "用户脱敏信息"),
+    [HttpStatusCodes.OK]: jsonContent(createSuccessResponseSchema(MaskedMobileSchema), "脱敏手机号"),
   },
 });
 

@@ -60,6 +60,12 @@ export function createUserRepository(db: DbClient) {
         },
       }) ?? null;
     },
+    async findUserIdentityByUsername(username: string) {
+      return await db.query.users.findFirst({
+        columns: { id: true },
+        where: { username, isDelete: false },
+      }) ?? null;
+    },
     async getUserByWxId(wxId: string) {
       return await db.query.users.findFirst({
         where: {

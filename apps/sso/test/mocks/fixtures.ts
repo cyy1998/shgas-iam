@@ -14,8 +14,6 @@ export const currentUserInfo = {
   },
 };
 
-export const resetPasswordUserInfo = {
-  username: 'zhangsan',
-  name: '张三',
-  mobile: '13800000000',
+export const resetPasswordMaskedMobile = {
+  mobile: '138****0000',
 };

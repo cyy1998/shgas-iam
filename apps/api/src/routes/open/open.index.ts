@@ -7,7 +7,7 @@ export function createOpenRoute(handlers: OpenHandlers) {
     .openapi(routes.clientStatus, handlers.clientStatus)
     .openapi(routes.capChallenge, handlers.capChallenge)
     .openapi(routes.capRedeem, handlers.capRedeem)
-    .openapi(routes.userInfo, handlers.userInfo)
+    .openapi(routes.maskedMobile, handlers.maskedMobile)
     .openapi(routes.codeSend, handlers.codeSend)
     .openapi(routes.codeVerify, handlers.codeVerify)
     .openapi(routes.passwordReset, handlers.passwordReset);

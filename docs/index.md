@@ -98,6 +98,7 @@
 | [docs/features/oidc/online-auth-redis-time-contract.md](features/oidc/online-auth-redis-time-contract.md) | feature | Historical | 2026-09-15 | n/a | 旧候选契约与来源证据；当前由统一会话模型和维护手册替代。 |
 | [docs/features/oidc/protocol-conformance.md](features/oidc/protocol-conformance.md) | release-record | Historical | 2026-09-15 | n/a | #195 固定官方套件59项历史矩阵；2026-09-16默认Browser输出清理使本地原日志/截图丢失，原结论不重写，不代表官方认证或部署。 |
 | [docs/features/organization-responsibility/hr-admin-management-design.md](features/organization-responsibility/hr-admin-management-design.md) | design | Current | 2026-09-07 | 2026-10-31 | 已实现：HR 双端 scoped 责任管理及直接命令统一结果、行锁与 no-op 意图审计；保留原 Full-system 验证及协调发布边界。 |
+| [docs/features/sso/account-recovery-masked-mobile.md](features/sso/account-recovery-masked-mobile.md) | design | Current | 2026-09-17 | 2026-10-31 | Q1–Q4 已整体确认资源路径、最小响应、统一 null 提示与真实失败，并授权实施。 |
 | [docs/features/sso/artifact-direct-state-evidence.md](features/sso/artifact-direct-state-evidence.md) | feature | Current | 2026-09-10 | 2026-10-31 | #173 Artifact 单状态、唯一消费、协议及定向维护与成本证据；切片历史成本与当前行为分别记录，环境未切换。 |
 | [docs/features/sso/authentication-state-extraction.md](features/sso/authentication-state-extraction.md) | feature | Historical | 2026-09-15 | n/a | 旧候选契约与来源证据；当前由统一会话模型和维护手册替代。 |
 | [docs/features/sso/client-snapshot-contract.md](features/sso/client-snapshot-contract.md) | feature | Current | 2026-09-15 | 2026-10-31 | #181 统一普通/敏感 Snapshot 候选、Admin 提交传播与局部 socket 成本；#193 接入 Worker CLI，生产切换由 #194 交付。 |

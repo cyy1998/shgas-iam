@@ -168,6 +168,19 @@ export function createUserService(deps: UserServiceDeps) {
     return await deps.profileQuery.getDetailByUsername(username);
   }
 
+  async function getUserMobileByUsername(username: string): Promise<string | null> {
+    try {
+      const profile = await deps.profileQuery.getDetailByUsername(username);
+      return profile.mobile;
+    }
+    catch (error) {
+      // A missing published Profile does not prove the account is absent.
+      if (error instanceof UserNotFoundError && await deps.userRepository.findUserIdentityByUsername(username) === null)
+        return null;
+      throw error;
+    }
+  }
+
   async function getUserDetailByMobile(mobile: string): Promise<UserDetailDto> {
     return await deps.profileQuery.getDetailByMobile(mobile);
   }
@@ -189,6 +202,7 @@ export function createUserService(deps: UserServiceDeps) {
     setMobile,
     getUserDetailById,
     getUserDetailByUsername,
+    getUserMobileByUsername,
     getUserDetailByMobile,
     getUserDetailByWxId,
   };

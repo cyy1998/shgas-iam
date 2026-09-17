@@ -1,6 +1,6 @@
 import type {
-  AccountLookupUserInfo,
   ClientStatusResult,
+  MaskedMobile,
   SmsUsage,
 } from '@sso/types/api';
 import { request } from '@sso/utils/request';
@@ -60,10 +60,16 @@ export function clientStatus(params: { clientCode: string }) {
   });
 }
 
-export function usersUserInfo(params: { username: string; capToken?: string }) {
-  const qs = toQueryString(params);
-  return request<AccountLookupUserInfo>(
-    `/open/users/userInfo?${qs}`,
-    { skipAuthRedirect: true },
+export function getMaskedMobile(params: {
+  username: string;
+  capToken?: string;
+}) {
+  const qs = toQueryString({ capToken: params.capToken });
+  // The inner encoding preserves opaque usernames, including URL dot segments.
+  const username = encodeURIComponent(
+    encodeURIComponent(params.username).replaceAll('.', '%2E'),
   );
+  return request<MaskedMobile>(`/open/users/${username}/masked-mobile?${qs}`, {
+    skipAuthRedirect: true,
+  });
 }

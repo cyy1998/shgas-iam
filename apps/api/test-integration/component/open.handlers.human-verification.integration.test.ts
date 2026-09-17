@@ -1,5 +1,6 @@
 import { VerificationCodeUsage } from "@api/enums/verificationCode.usage";
 import { createOpenHandlers } from "@api/routes/open/open.handlers";
+import { createOpenRoute } from "@api/routes/open/open.index";
 import { ApiErrorCode } from "@iam/contracts";
 import { beforeEach, describe, expect, mock, test } from "bun:test";
 
@@ -11,11 +12,7 @@ const checkVerificationCode = mock(async () => true);
 const sendCode = mock(async () => true);
 const recordAuditLog = mock(async () => undefined);
 const recordAuditLogFromContext = mock(async () => undefined);
-const getUserDetailByUsername = mock(async () => ({
-  mobile: "17721462865",
-  name: "张三",
-  username: "zhangsan",
-}));
+const getUserMobileByUsername = mock(async (): Promise<string | null> => "17721462865");
 const requestPasswordResetCode = mock(async () => true);
 const verifyPasswordResetCode = mock(async () => true);
 const resetAccountPassword = mock(async () => true);
@@ -48,7 +45,7 @@ function createHandlers() {
       sendCode,
     },
     userService: {
-      getUserDetailByUsername,
+      getUserMobileByUsername,
     },
   } as any);
 }
@@ -80,12 +77,8 @@ beforeEach(() => {
   recordAuditLog.mockResolvedValue(undefined);
   recordAuditLogFromContext.mockReset();
   recordAuditLogFromContext.mockResolvedValue(undefined);
-  getUserDetailByUsername.mockReset();
-  getUserDetailByUsername.mockResolvedValue({
-    mobile: "17721462865",
-    name: "张三",
-    username: "zhangsan",
-  });
+  getUserMobileByUsername.mockReset();
+  getUserMobileByUsername.mockResolvedValue("17721462865");
   requestPasswordResetCode.mockClear();
   verifyPasswordResetCode.mockClear();
   resetAccountPassword.mockClear();
@@ -174,43 +167,58 @@ describe("createOpenHandlers human verification", () => {
     });
   });
 
-  test("does not query user info when Cap verification is required", async () => {
+  test("does not query masked mobile when Cap verification is required", async () => {
     const handlers = createHandlers();
     ensureActionAllowed.mockRejectedValue(Object.assign(new Error("需要人机校验"), {
       code: ApiErrorCode.HumanVerificationRequired,
     }));
 
-    await expect(handlers.userInfo(makeContext({
-      query: {
-        username: "zhangsan",
-      },
+    await expect(handlers.maskedMobile(makeContext({
+      param: { username: "zhangsan" },
+      query: {},
     }) as never, undefined as never)).rejects.toHaveProperty("code", ApiErrorCode.HumanVerificationRequired);
 
-    expect(getUserDetailByUsername).not.toHaveBeenCalled();
+    expect(getUserMobileByUsername).not.toHaveBeenCalled();
     expect(recordOpenUserInfoLookup).not.toHaveBeenCalled();
   });
 
-  test("returns masked user info after Cap verification succeeds", async () => {
-    const handlers = createHandlers();
+  test("returns only masked mobile through the resource route after Cap verification succeeds", async () => {
+    const app = createOpenRoute(createHandlers());
+    const response = await app.request("/users/zhangsan/masked-mobile?capToken=cap-token");
+    const result = await response.json();
 
-    const result = await handlers.userInfo(makeContext({
-      query: {
-        capToken: "cap-token",
-        username: "zhangsan",
-      },
-    }) as never, undefined as never);
-
-    expect(result as unknown).toEqual({
+    expect(response.status).toBe(200);
+    expect(result).toEqual({
       code: 200,
       data: {
         mobile: "177****2865",
-        name: "张三",
-        username: "zhangsan",
       },
       message: "success",
     });
     expect(recordOpenUserInfoLookup).toHaveBeenCalled();
-    expect(getUserDetailByUsername).toHaveBeenCalledWith("zhangsan");
+    expect(getUserMobileByUsername).toHaveBeenCalledWith("zhangsan");
+    expect(ensureActionAllowed).toHaveBeenCalledWith("openUserInfoLookup", "cap-token", expect.any(Object));
+  });
+
+  test("returns a successful null mobile without extra user fields", async () => {
+    getUserMobileByUsername.mockResolvedValue(null);
+    const response = await createOpenRoute(createHandlers()).request("/users/unknown/masked-mobile");
+    const result = await response.json();
+    expect(response.status).toBe(200);
+    expect(result).toEqual({ code: 200, data: { mobile: null }, message: "success" });
+  });
+
+  test.each([
+    ["张 三", "%25E5%25BC%25A0%2520%25E4%25B8%2589"],
+    ["a/b?c#d%", "a%252Fb%253Fc%2523d%2525"],
+    ["a@example.com", "a%2540example%252Ecom"],
+    [".", "%252E"],
+    ["..", "%252E%252E"],
+    ["%2E", "%25252E"],
+  ])("decodes username path segments: %s", async (username, segment) => {
+    const response = await createOpenRoute(createHandlers()).request(`/users/${segment}/masked-mobile`);
+    expect(response.status).toBe(200);
+    expect(getUserMobileByUsername).toHaveBeenCalledWith(username);
   });
 
   test("returns the Account Recovery verification result without consuming in the route", async () => {

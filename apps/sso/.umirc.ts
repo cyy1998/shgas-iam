@@ -1,5 +1,6 @@
 import { defineConfig } from '@umijs/max';
 import { resolve } from 'node:path';
+import { ssoTheme } from './src/theme';
 
 export default defineConfig({
   alias: {
@@ -11,7 +12,7 @@ export default defineConfig({
   publicPath: '/portal/',
   hash: true,
   esbuildMinifyIIFE: true,
-  antd: {},
+  antd: { theme: ssoTheme },
   access: {},
   model: {},
   initialState: {},

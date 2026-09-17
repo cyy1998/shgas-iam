@@ -7,7 +7,7 @@ import { HttpResponse, http } from 'msw';
 import {
   authenticationConfig,
   currentUserInfo,
-  resetPasswordUserInfo,
+  resetPasswordMaskedMobile,
 } from './fixtures';
 
 function ok<T>(data: T) {
@@ -52,6 +52,8 @@ export const handlers = [
       extAttributes: {},
     }),
   ),
-  http.get('*/open/users/userInfo', () => ok(resetPasswordUserInfo)),
+  http.get('*/open/users/:username/masked-mobile', () =>
+    ok(resetPasswordMaskedMobile),
+  ),
   http.post('*/public/mobile/set', () => ok(null)),
 ];
