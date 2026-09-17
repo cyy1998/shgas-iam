@@ -877,6 +877,7 @@ describe("test orchestration", () => {
         "IAM_API_TEST_DATABASE_URL",
         "IAM_API_TEST_REDIS_URL",
         "IAM_USER_PROFILE_TEST_REDIS_URL",
+        "IAM_WORKER_TEST_DATABASE_URL",
         "IAM_WORKER_TEST_REDIS_URL",
       ],
     });

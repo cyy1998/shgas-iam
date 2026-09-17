@@ -1,5 +1,8 @@
 # b648 Client 数据库离线直升
 
+需要自动完成数据库、认证状态及 Snapshot 全链时，优先使用[无人值守离线入口](b648-unattended-upgrade.md)。
+下文为保留的数据库分阶段入口，不与自动入口交错执行或用它生成的记录接管手工半迁移。
+
 本手册交付 Spec #201 / Ticket #205 的数据库阶段。来源只支持
 `b6481f2de5c2930fc381d99e70520e0783091e9d`，目标是无地址的 managed 配置。
 在线状态清理、部署配置、Snapshot 和上线验收继续按 [跨代整链手册](b648-managed-callback-upgrade.md)

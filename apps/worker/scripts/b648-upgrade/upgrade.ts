@@ -50,6 +50,10 @@ async function readInventory(tx: postgres.TransactionSql) {
     WHERE attrelid = 'client'::regclass AND attnum > 0 AND NOT attisdropped ORDER BY attname`;
   if (JSON.stringify(columns.map(row => row.name)) !== JSON.stringify(expectedColumns))
     throw new Error("Unsupported source/target layout");
+  return await readClientUpgradeRows(tx);
+}
+
+export async function readClientUpgradeRows(tx: postgres.TransactionSql) {
   const rows = await tx<InventoryRow[]>`SELECT to_jsonb(c) AS data,
     jsonb_build_object('client', to_jsonb(c) - ${targetColumns}::text[],
       'roles', COALESCE((SELECT jsonb_agg(to_jsonb(r) ORDER BY r.id) FROM role r WHERE r.client_id = c.id), '[]'::jsonb))::text AS preserved

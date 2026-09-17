@@ -41,6 +41,14 @@ pnpm test:integration:<component|process|redis|postgres|composition|browser>
 
 ## Workspace 命令
 
+b648 默认范围无人值守离线迁移：`pnpm --filter @iam/worker b648-upgrade`。
+调用者预先备份、停流并排空；命令读取 Worker 连接配置，自动完成数据库、认证状态、Snapshot 和保留核验，
+恢复文件默认保存在 `apps/worker/.b648-upgrade/`，中断后原命令续跑，成功后重跑只读。
+支持 `--state-dir <持久目录>`、`--migrations-schema <schema>`；完整边界见
+[无人值守手册](../releases/b648-unattended-upgrade.md)。
+验证入口为 `pnpm --filter @iam/worker test:integration:composition`，显式提供独占
+`IAM_WORKER_TEST_DATABASE_URL`、`IAM_WORKER_TEST_REDIS_URL`，不得指向运行环境。
+
 当前单协议 Client 的 managed 地址准备（#203）使用 Worker 命令：
 
 ```powershell

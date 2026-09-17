@@ -1,5 +1,8 @@
 # b648 到托管 origin 回调的跨代升级
 
+默认 namespace、同一 Redis DB 的来源现在可使用[无人值守离线入口](b648-unattended-upgrade.md)，
+自动完成本文数据库、在线状态及 Snapshot 阶段和保留核验。备份、停流、部署、接入方切换与放流责任不变。
+
 本手册适用于精确来源 `b6481f2de5c2930fc381d99e70520e0783091e9d`，在一个维护窗口完成离线阶段，
 最后只启动最新 API/Admin API/Worker/Admin/SSO/Gateway。全部 IAM 用户重新登录，不转换旧登录态。
 已经采用统一会话及双 issuer 的来源使用[同代保留手册](managed-callback-origin-preserving-upgrade.md)，不能执行本页全清。

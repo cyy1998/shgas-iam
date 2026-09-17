@@ -48,3 +48,6 @@ package-lock.json
 .superpowers/
 
 tmp/
+
+# Persistent offline migration evidence (keep across retries and releases)
+.b648-upgrade/

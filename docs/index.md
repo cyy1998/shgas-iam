@@ -101,6 +101,7 @@
 | [docs/features/sso/account-recovery-masked-mobile.md](features/sso/account-recovery-masked-mobile.md) | design | Current | 2026-09-17 | 2026-10-31 | Q1–Q4 已整体确认资源路径、最小响应、统一 null 提示与真实失败，并授权实施。 |
 | [docs/features/sso/artifact-direct-state-evidence.md](features/sso/artifact-direct-state-evidence.md) | feature | Current | 2026-09-10 | 2026-10-31 | #173 Artifact 单状态、唯一消费、协议及定向维护与成本证据；切片历史成本与当前行为分别记录，环境未切换。 |
 | [docs/features/sso/authentication-state-extraction.md](features/sso/authentication-state-extraction.md) | feature | Historical | 2026-09-15 | n/a | 旧候选契约与来源证据；当前由统一会话模型和维护手册替代。 |
+| [docs/features/sso/b648-unattended-upgrade-design.md](features/sso/b648-unattended-upgrade-design.md) | design | Current | 2026-09-17 | 2026-10-31 | Q1–Q10 已实现，48 项真实资源测试、全仓 verify 及双轴评审通过；待本地合入，未操作环境。 |
 | [docs/features/sso/client-snapshot-contract.md](features/sso/client-snapshot-contract.md) | feature | Current | 2026-09-15 | 2026-10-31 | #181 统一普通/敏感 Snapshot 候选、Admin 提交传播与局部 socket 成本；#193 接入 Worker CLI，生产切换由 #194 交付。 |
 | [docs/features/sso/credential-authority-contract.md](features/sso/credential-authority-contract.md) | feature | Historical | 2026-09-15 | n/a | 旧候选契约与来源证据；当前由统一会话模型和维护手册替代。 |
 | [docs/features/sso/credential-direct-state-evidence.md](features/sso/credential-direct-state-evidence.md) | feature | Current | 2026-09-10 | 2026-10-31 | #172 Credential 单状态、ID 撤销与补偿、pending 清理和双协议实际前后成本；切片历史成本与当前行为分别记录，环境未切换。 |
@@ -137,6 +138,7 @@
 | [docs/releases/audit-login-log-retirement-release.md](releases/audit-login-log-retirement-release.md) | runbook | Historical | 2026-07-16 | n/a | 已完成的 `login_log` 一次性退役记录；其迁移实现已不在当前仓库，不可作为当前 runbook。 |
 | [docs/releases/b648-client-database-upgrade.md](releases/b648-client-database-upgrade.md) | runbook | Current | 2026-09-16 | 2026-10-31 | #205：固定 b648 Client 数据库正式分阶段直升、独立核验收缩与最终无地址门禁；在线状态和上线另由 #206 验收。 |
 | [docs/releases/b648-managed-callback-upgrade.md](releases/b648-managed-callback-upgrade.md) | runbook | Current | 2026-09-16 | 2026-10-31 | #206：精确旧 writer、数据库及 source/target/Snapshot 链、最新运行图、新 Secret、恢复与人工放流；环境未操作。 |
+| [docs/releases/b648-unattended-upgrade.md](releases/b648-unattended-upgrade.md) | runbook | Current | 2026-09-17 | 2026-10-31 | 单入口离线迁移、默认范围、恢复文件与成功后只读重跑；部署放流独立，环境未操作。 |
 | [docs/releases/client-protocol-v2-artifact-cutover.md](releases/client-protocol-v2-artifact-cutover.md) | runbook | Current | 2026-09-08 | 2026-10-31 | 服务端 Catalog V2 硬切换的 owner checklist、无 Catalog target 的 epoch 不可逆边界与精确 artifact cleanup；OIDC 新写入保持 Redis 索引期限，不自动覆盖历史孤立对象。 |
 | [docs/releases/client-runtime-snapshot-hard-cutover.md](releases/client-runtime-snapshot-hard-cutover.md) | runbook | Historical | 2026-09-07 | n/a | 首次旧代切换历史参考，旧 inventory 操作不适用于当前候选；日常恢复见 Current restore runbook。 |
 | [docs/releases/client-runtime-snapshot-restore.md](releases/client-runtime-snapshot-restore.md) | runbook | Historical | 2026-09-15 | n/a | 旧候选契约与来源证据；当前由统一会话模型和维护手册替代。 |
