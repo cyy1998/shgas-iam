@@ -16,6 +16,8 @@ function configure(f: Awaited<ReturnType<typeof fixture>>, patterns: string[], t
 
 test.each([
   ["https://app.example/work", "https://app.example/work", "https://app.example"],
+  ["http://localhost:9962/", "http://localhost:9962/#/djDesk/orgStruct?tab=1", "http://localhost:9962"],
+  ["http://localhost:9962/#/djDesk/orgStruct", "http://localhost:9962/#/djDesk/orgStruct", "http://localhost:9962"],
   ["https://app.example/work/*", "https://app.example/work/orders?order=123", "https://app.example"],
   ["https://*.example.com/work/*", "https://internal.example.com/work/orders", "https://internal.example.com"],
   ["https://*.example.com/work/*", "https://external.example.com/work/orders", "https://external.example.com"],
@@ -42,6 +44,7 @@ test.each([
     const landing = new URL(delivered.headers.get("location")!);
     expect(landing.origin + landing.pathname).toBe(new URL(redirectUrl!).origin + new URL(redirectUrl!).pathname);
     expect(landing.searchParams.get("order")).toBe(new URL(redirectUrl!).searchParams.get("order"));
+    expect(landing.hash).toBe(new URL(redirectUrl!).hash);
     expect(landing.searchParams.get("state")).toBe("original");
     expect(landing.searchParams.get("token")).toBeTruthy();
     const replay = await f.app.request(`/sso/callback${callback.search}`);
@@ -53,7 +56,6 @@ test.each([
 test.each([
   "ftp://app.example/work/order",
   "https://user:pass@app.example/work/order",
-  "https://app.example/work/order#fragment",
   "https://app.example:8443/work/order",
   "https://app.example/other",
   "https://deep.app.example/work/order",

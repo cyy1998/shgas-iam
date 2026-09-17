@@ -24,6 +24,11 @@ SSO 页面继续使用互斥 guard 状态、超时/手动重试、迟到响应�
 OA/微信现有回跳 handler 同样保留可选 handle。无效续接返回 400，暂态返回 503 并保留根 Cookie；明确无效根才清 Cookie。
 OIDC 浏览器绑定和首次认证完成证明由 #187 继续迁移。
 
+实际 `redirectUrl` 支持 fragment/hash 路由，并完整绑定到 Code；调用方须将嵌套地址作为 query 参数编码。
+允许列表未指定 fragment 时只按原有协议、主机、端口和路径规则匹配；指定时对规范化后的 fragment 精确匹配，
+包括空 `#`，不在 fragment 内展开通配。fragment 内的 `?` 是 hash 内容；真正的 URL query 仍只在匹配通配模式时允许。
+业务兑换的 `redirect_uri` 必须带上原 fragment，托管交付保留它。`callbackEndpoint` 自身的限制不变。
+
 ## callback 和 Code 所有权
 
 按 [ADR-0038](../../adr/0038-derive-managed-sso-callback-from-redirect-origin.md)，配置的 `callbackType` 显式选择 `managed` 或 `business`，不根据 URL 判断。

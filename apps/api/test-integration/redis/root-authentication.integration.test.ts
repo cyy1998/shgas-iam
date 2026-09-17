@@ -608,9 +608,9 @@ async function businessFixture(codeTtlSeconds = 30, networkUrl?: string, tokenTt
   const request = (path: string, init?: RequestInit) =>
     fetch(new URL(path, server.url), { ...init, redirect: "manual" });
   const root = await f.login();
-  async function authorize(client = f.businessClientCode, bearer = root) {
+  async function authorize(client = f.businessClientCode, bearer = root, redirectUrl = "https://app.example/callback") {
     const response = await request(
-      `/sso/authorize?${new URLSearchParams({ client, redirectUrl: "https://app.example/callback" })}`,
+      `/sso/authorize?${new URLSearchParams({ client, redirectUrl })}`,
       { headers: { Cookie: `global_session=${bearer}` } },
     );
     expect(response.status).toBe(302);
@@ -1146,11 +1146,12 @@ test("managed Gateway dynamically trims published facts and preserves temporary 
   }
 });
 
-test("business exchange consumes its Code and delivers the fixed-purpose bearer", async () => {
+test.each(["", "#/djDesk/orgStruct?tab=1"])("business exchange consumes its Code and delivers the fixed-purpose bearer with fragment %s", async (fragment) => {
   const f = await businessFixture();
   try {
-    const code = await f.authorize();
-    const response = await f.exchange(code);
+    const redirectUrl = `https://app.example/callback${fragment}`;
+    const code = await f.authorize(undefined, undefined, redirectUrl);
+    const response = await f.exchange(code, undefined, undefined, redirectUrl);
     expect(response.status).toBe(200);
     const { data } = await response.json();
     expect(data.sid).toMatch(/^cs_/u);

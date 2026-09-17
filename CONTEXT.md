@@ -344,7 +344,7 @@ Client Snapshot 明确表示目标 Client 处于 Client Maintenance 时，IAM �
 _Avoid_: invalid client, invalid token, unauthorized, protocol revocation
 
 **Custom SSO Redirect Pattern**:
-Custom SSO client 对允许的实际 redirect URI 使用的显式受限模式。无通配的 URI 只匹配精确路径；只有以 `/*` 结尾才匹配路径子树，主机 `*.` 只匹配一级子域且不匹配根域或多级子域；scheme 与 port 必须精确一致。禁止裸 `*`、公共后缀或 IP 通配、URL credentials、动态 query 与 fragment，动态往返信息改由 `state` 承载。Authorization 阶段先按模式允许实际 URI，随后 Code 保存该规范化实际值，callback 或 token 兑换必须与 Code 逐字匹配；允许列表变化约束新授权，不以已退役的配置版本比较使旧 Code 失效。
+Custom SSO client 对允许的实际 redirect URI 使用的显式受限模式。无通配的 URI 只匹配精确路径；只有以 `/*` 结尾才匹配路径子树，主机 `*.` 只匹配一级子域且不匹配根域或多级子域；scheme 与 port 必须精确一致。禁止裸 `*`、公共后缀或 IP 通配及 URL credentials。模式不允许 query；实际地址仅在命中主机或路径通配模式时允许 query。实际地址允许 fragment；模式未指定 fragment 时不限制它，指定时精确匹配规范化后的完整 fragment（包含 `#`，空 `#` 与未指定不同），不对 fragment 展开通配，fragment 内的 `?` 不属于 URL query。动态往返信息也可由 `state` 承载。Authorization 阶段先按模式允许实际 URI，随后 Code 保存包含 fragment 的规范化实际值，callback 或 token 兑换必须与 Code 逐字匹配；允许列表变化约束新授权，不以已退役的配置版本比较使旧 Code 失效。
 _Avoid_: exact-only redirect registry, implicit origin/path subtree, grant-time pattern rematch
 
 **Custom SSO State**:

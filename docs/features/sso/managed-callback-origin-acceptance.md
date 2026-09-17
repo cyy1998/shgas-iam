@@ -29,7 +29,7 @@
 | 5 | A：只允许业务子树仍能授权同 origin 的根 callback。 | 切片已证 |
 | 6 | A：一级子域匹配成功，多级子域仍拒绝。 | 切片已证 |
 | 7 | A：真实浏览器最终完整落地 query 保留。 | 切片已证 |
-| 8 | A：非法协议、凭据、fragment、端口及路径分别拒绝。 | 切片已证 |
+| 8 | A：当时非法协议、凭据、fragment、端口及路径分别拒绝；后续 fragment 已放开，现行规则见[授权契约](custom-authorization-candidate.md)。 | 原切片已证，fragment 拒绝已取代 |
 | 9 | A：正式请求仅用既有 client/redirectUrl/可选 state 完成授权。 | 切片已证 |
 | 10 | A/B：旧托管地址 path/query 不参与 Location；最终配置不含该字段。 | 切片已证 |
 | 11 | A：省略 state 可完成；已有 state 绑定和最终交付保持，query 篡改不能覆盖。 | 切片已证 |

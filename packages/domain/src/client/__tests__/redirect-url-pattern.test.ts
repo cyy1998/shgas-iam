@@ -22,10 +22,9 @@ describe("redirect URL pattern", () => {
     );
   });
 
-  test("rejects credentials and fragment in an actual redirect URL", () => {
+  test("rejects credentials in an actual redirect URL", () => {
     for (const redirectUrl of [
       "https://user:password@app.example.com/callback",
-      "https://app.example.com/callback#fragment",
     ]) {
       expect(() => normalizeRedirectUrl(redirectUrl)).toThrow();
     }
@@ -50,21 +49,32 @@ describe("redirect URL pattern", () => {
     );
   });
 
-  test("preserves an empty query delimiter but still rejects fragment delimiters", () => {
+  test("preserves an empty query delimiter", () => {
     expect(normalizeRedirectUrl("https://app.example.com/callback?")).toBe(
       "https://app.example.com/callback?",
     );
+  });
 
-    for (const redirectUrl of [
-      "https://app.example.com/callback#",
-      "https://app.example.com/callback?#",
-    ]) {
-      expect(() => normalizeRedirectUrl(redirectUrl)).toThrow("query_or_fragment_not_allowed");
-      expect(() => matchRedirectUrlPattern(
-        redirectUrl,
-        "https://app.example.com/callback",
-      )).toThrow("query_or_fragment_not_allowed");
-    }
+  test("normalization preserves the hash route and its query", () => {
+    const target = "http://localhost:9962/#/djDesk/orgStruct?tab=1";
+    expect(normalizeRedirectUrl(target)).toBe(target);
+  });
+
+  test.each([
+    ["unspecified fragment", "#/djDesk/orgStruct?tab=1", "", true],
+    ["exact fragment", "#/djDesk/orgStruct?tab=1", "#/djDesk/orgStruct?tab=1", true],
+    ["different fragment", "#/other", "#/djDesk/orgStruct?tab=1", false],
+    ["missing required fragment", "", "#/djDesk/orgStruct?tab=1", false],
+    ["empty fragment", "#", "#", true],
+    ["missing empty fragment", "", "#", false],
+    ["nonempty fragment against empty", "#/other", "#", false],
+    ["query without wildcard", "?x=1#/djDesk/orgStruct?tab=1", "#/djDesk/orgStruct?tab=1", false],
+    ["query with path wildcard", "app?x=1#/djDesk/orgStruct?tab=1", "*#/djDesk/orgStruct?tab=1", true],
+    ["fragment mismatch with path wildcard", "app#/other", "*#/djDesk/orgStruct?tab=1", false],
+    ["literal star in fragment", "#/app", "#/*", false],
+  ] as const)("hash routing: %s", (_name, target, pattern, allowed) => {
+    const base = "http://localhost:9962/";
+    expect(matchRedirectUrlPattern(`${base}${target}`, `${base}${pattern}`)).toBe(allowed);
   });
 
   test("matches only one wildcard host label", () => {
@@ -114,20 +124,18 @@ describe("redirect URL pattern", () => {
     )).toBe(false);
   });
 
-  test("rejects query and fragment in patterns", () => {
+  test("rejects query in patterns", () => {
     expect(validateRedirectUrlPattern("https://app.example.com/callback?x=1").ok).toBe(false);
-    expect(validateRedirectUrlPattern("https://app.example.com/callback#x").ok).toBe(false);
   });
 
-  test("rejects empty query and fragment delimiters in patterns", () => {
+  test("rejects empty query delimiters in patterns", () => {
     for (const pattern of [
       "https://app.example.com/callback?",
-      "https://app.example.com/callback#",
       "https://app.example.com/callback?#",
     ]) {
       expect(validateRedirectUrlPattern(pattern)).toMatchObject({
         ok: false,
-        reason: "query_or_fragment_not_allowed",
+        reason: "query_not_allowed",
       });
     }
   });
@@ -157,7 +165,6 @@ describe("redirect URL pattern", () => {
       "https://app.example.com/foo*",
       "https://app.example.com/*/callback",
       "https://app.example.com/callback?x=1",
-      "https://app.example.com/callback#x",
       "https://app.example.com:*",
     ];
 

@@ -8,10 +8,11 @@ export interface RedirectUrlPattern {
   hostWildcardSuffix: string | null;
   pathMode: "exact" | "wildcard-subtree";
   pathname: string;
+  fragment: string | null;
 }
 
 export const RedirectUrlPatternFailureReasons = {
-  DynamicQueryOrFragment: "query_or_fragment_not_allowed",
+  DynamicQuery: "query_not_allowed",
   EmptyOrBareWildcard: "empty_or_bare_wildcard",
   HostWildcardInvalid: "host_wildcard_invalid",
   HostWildcardIp: "host_wildcard_ip_not_allowed",
@@ -135,9 +136,9 @@ export function parseRedirectUrlPattern(pattern: string): RedirectUrlPattern {
       RedirectUrlPatternFailureReasons.EmptyOrBareWildcard,
     );
   }
-  if (trimmed.includes("?") || trimmed.includes("#")) {
+  if (trimmed.split("#", 1)[0]!.includes("?")) {
     throw new RedirectUrlPatternSyntaxError(
-      RedirectUrlPatternFailureReasons.DynamicQueryOrFragment,
+      RedirectUrlPatternFailureReasons.DynamicQuery,
     );
   }
 
@@ -149,9 +150,9 @@ export function parseRedirectUrlPattern(pattern: string): RedirectUrlPattern {
       RedirectUrlPatternFailureReasons.UrlCredentials,
     );
   }
-  if (url.search !== "" || url.hash !== "") {
+  if (url.search !== "") {
     throw new RedirectUrlPatternSyntaxError(
-      RedirectUrlPatternFailureReasons.DynamicQueryOrFragment,
+      RedirectUrlPatternFailureReasons.DynamicQuery,
     );
   }
 
@@ -165,6 +166,7 @@ export function parseRedirectUrlPattern(pattern: string): RedirectUrlPattern {
     port: url.port,
     hostWildcardSuffix,
     ...path,
+    fragment: trimmed.includes("#") ? url.href.slice(url.href.indexOf("#")) : null,
   };
 }
 
@@ -185,23 +187,12 @@ export function validateRedirectUrlPattern(pattern: string): RedirectUrlPatternV
 }
 
 export function normalizeRedirectUrl(redirectUrl: string) {
-  if (redirectUrl.includes("#")) {
-    throw new RedirectUrlPatternSyntaxError(
-      RedirectUrlPatternFailureReasons.DynamicQueryOrFragment,
-    );
-  }
-
   assertNoRawUserinfo(redirectUrl);
   const url = parseUrl(redirectUrl);
   assertSupportedProtocol(url);
   if (url.username !== "" || url.password !== "") {
     throw new RedirectUrlPatternSyntaxError(
       RedirectUrlPatternFailureReasons.UrlCredentials,
-    );
-  }
-  if (url.hash !== "") {
-    throw new RedirectUrlPatternSyntaxError(
-      RedirectUrlPatternFailureReasons.DynamicQueryOrFragment,
     );
   }
   return url.toString();
@@ -242,7 +233,9 @@ export function matchRedirectUrlPattern(redirectUrl: string, pattern: string | R
     && url.port === parsedPattern.port
     && matchesHostname(parsedPattern, url.hostname)
     && matchesPath(parsedPattern, url.pathname)
-    && (!normalizedRedirectUrl.includes("?") || hasWildcard(parsedPattern));
+    && (parsedPattern.fragment === null
+      || (url.href.includes("#") ? url.href.slice(url.href.indexOf("#")) : null) === parsedPattern.fragment)
+    && (!normalizedRedirectUrl.split("#", 1)[0]!.includes("?") || hasWildcard(parsedPattern));
 }
 
 export function isRedirectUrlAllowedByPatterns(redirectUrl: string, patterns: string[]) {
