@@ -74,6 +74,12 @@ export async function createUnifiedCustomSsoRedisTestScope(url: string) {
     async corruptToken(bearer: string) {
       await redis.set(`${namespace}:custom-sso:v1:token:${tokenDigest(bearer)}`, "broken", "KEEPTTL");
     },
+    async replaceToken(bearer: string, patch: object) {
+      const token = await tokens.read(bearer);
+      if (!token)
+        throw new Error("Token fixture missing");
+      await redis.set(`${namespace}:custom-sso:v1:token:${tokenDigest(bearer)}`, JSON.stringify({ ...token.record, ...patch }), "KEEPTTL");
+    },
     async tokenInventory() {
       const keys = await redis.keys(`${namespace}:custom-sso:v1:token:*`);
       return await Promise.all(

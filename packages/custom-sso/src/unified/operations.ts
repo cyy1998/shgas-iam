@@ -198,6 +198,7 @@ export function createUnifiedCustomSsoOperations(options: UnifiedCustomSsoOperat
       async function prepareToken(
         access: Awaited<ReturnType<typeof permitted>>,
         purpose: "business" | "managed",
+        orcas?: CustomSsoTokenRecord["orcas"],
       ) {
         const lifetime = await sessions.getIssuanceLifetime(access.observation, tokenTtl);
         if (lifetime.remainingSeconds <= 0)
@@ -215,6 +216,7 @@ export function createUnifiedCustomSsoOperations(options: UnifiedCustomSsoOperat
           clientSessionInstance: clientSession.instance,
           issuedAt: lifetime.issuedAt,
           expiresAt: lifetime.expiresAt,
+          ...(orcas ? { orcas } : {}),
         };
         return { bearer: `cs_${randomHandle()}`, record, ttl: lifetime.remainingSeconds };
       }
@@ -249,7 +251,7 @@ export function createUnifiedCustomSsoOperations(options: UnifiedCustomSsoOperat
         if (!matches(token.record, access.observation))
           throw new AuthzUnauthorizedError();
         const config = await accept(clientCode);
-        return { access, config };
+        return { access, config, record: token.record };
       }
       return {
         async completeCallback<T = CustomSsoManagedResult>(
@@ -299,7 +301,7 @@ export function createUnifiedCustomSsoOperations(options: UnifiedCustomSsoOperat
             consumption = await codes.consumeCode(code);
             if (consumption !== "consumed")
               throw new AuthzUnauthorizedError("Code 已失效，请重新授权");
-            let orcasSessionId: string | null = null;
+            let orcas: CustomSsoTokenRecord["orcas"];
             if (config.orcas?.enabled) {
               operation.requirePermission(access.observation.userSession.subjectIdentifier);
               const user = await managed.users.findOrcasUserBySubjectIdentifier(
@@ -307,10 +309,11 @@ export function createUnifiedCustomSsoOperations(options: UnifiedCustomSsoOperat
               );
               if (!user)
                 throw new AuthzUnauthorizedError();
-              orcasSessionId = (await managed.orcas.orcasLogin(user)).orcasSessionId;
+              const result = await managed.orcas.orcasLogin(user);
+              orcas = { userId: result.orcasId, sessionId: result.orcasSessionId };
             }
-            // This delivery needs no full Subject. ORCAS references never enter the generic Projection or Token.
-            const prepared = await prepareToken(access, "managed");
+            // ORCAS references belong to this managed Token, outside shared sessions and Subject Projection.
+            const prepared = await prepareToken(access, "managed", orcas);
             knownToken = prepared;
             await tokens.save(prepared.bearer, prepared.record);
             try {
@@ -340,7 +343,7 @@ export function createUnifiedCustomSsoOperations(options: UnifiedCustomSsoOperat
               ttl: prepared.ttl,
               redirectUrl: code.redirectUrl,
               state: code.state,
-              orcasSessionId,
+              orcasSessionId: orcas?.sessionId ?? null,
             };
             return deliver ? await deliver(result) : result;
           }
@@ -507,11 +510,12 @@ export function createUnifiedCustomSsoOperations(options: UnifiedCustomSsoOperat
           clientCode: string,
           purpose?: "business" | "managed",
         ) {
-          const { access, config } = await authenticateToken(bearer, clientCode, purpose);
+          const { access, config, record } = await authenticateToken(bearer, clientCode, purpose);
           return {
             authenticationContext: {
               subjectIdentifier: access.observation.userSession.subjectIdentifier,
               authenticatedClientCode: clientCode,
+              ...(record.orcas ? { orcasId: record.orcas.userId } : {}),
             },
             subjectDeliveryCapability: Object.freeze({
               resolveUserInfo: () => project(clientCode, access, [...config.subjectClaims]),

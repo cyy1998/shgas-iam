@@ -739,6 +739,128 @@ test("managed callback without a configured address controls protocol parameters
   }
 });
 
+test("managed ORCAS callback preserves the external identity through public authentication", async () => {
+  const f = await managedFixture();
+  try {
+    const code = await f.authorize();
+    const callback = await f.callback(code);
+    expect(callback.status).toBe(302);
+    const token = new URL(callback.headers.get("Location")!).searchParams.get("token")!;
+    const response = await f.request("/public/orcasId", {
+      headers: { Authorization: token, Client: "app" },
+    });
+    expect(response.status).toBe(200);
+    const body = await response.json();
+    expect(body.data).toEqual({ orcasId: "external-user-reference" });
+    const stored = await f.codes.inspectToken(token);
+    expect(stored?.record).toMatchObject({
+      purpose: "managed",
+      orcas: { userId: "external-user-reference", sessionId: "external-session" },
+    });
+    const userInfo = await f.use(token);
+    const userInfoBody = await userInfo.json();
+    expect(JSON.stringify(userInfoBody)).not.toContain("external-");
+    const gateway = await f.use(token, "app", true);
+    expect(gateway.status).toBe(200);
+    const gatewaySubject = Buffer.from(gateway.headers.get("X-User-Info")!, "base64").toString();
+    expect(gatewaySubject).not.toContain("external-");
+  }
+  finally {
+    await f.close();
+  }
+});
+
+test("managed ORCAS Token cannot disclose its identity to another Client", async () => {
+  const f = await managedFixture();
+  try {
+    const code = await f.authorize();
+    const callback = await f.callback(code);
+    expect(callback.status).toBe(302);
+    const token = new URL(callback.headers.get("Location")!).searchParams.get("token")!;
+    const response = await f.request("/public/orcasId", {
+      headers: { Authorization: token, Client: "other" },
+    });
+    expect(response.status).toBe(401);
+  }
+  finally {
+    await f.close();
+  }
+});
+
+test.each(["managed", "business"])("%s Token without ORCAS returns no external identity", async (purpose) => {
+  const f = await managedFixture(false);
+  try {
+    if (purpose === "business") {
+      f.setClient({
+        ...f.getClient(),
+        ssoConfig: { ...f.config, callbackType: ClientSsoCallbackType.Business, callbackEndpoint: "https://app.example/callback" },
+      });
+    }
+    const code = await f.authorize();
+    const callback = purpose === "managed" ? await f.callback(code) : await f.exchange(code);
+    const token = purpose === "managed"
+      ? new URL(callback.headers.get("Location")!).searchParams.get("token")!
+      : (await callback.json()).data.sid;
+    const response = await f.request("/public/orcasId", {
+      headers: { Authorization: token, Client: "app" },
+    });
+    expect(response.status).toBe(200);
+    const body = await response.json();
+    expect(body.data).toEqual({ orcasId: null });
+    expect(f.received).toEqual([]);
+    const stored = await f.codes.inspectToken(token);
+    expect(stored?.record.orcas).toBeUndefined();
+  }
+  finally {
+    await f.close();
+  }
+});
+
+test("owner maintenance recognizes and removes a managed ORCAS Token", async () => {
+  const f = await managedFixture();
+  try {
+    const code = await f.authorize();
+    const callback = await f.callback(code);
+    expect(callback.status).toBe(302);
+    const token = new URL(callback.headers.get("Location")!).searchParams.get("token")!;
+    const report = await f.codes.maintenance.apply({ clientCode: "app", limit: 1000 });
+    expect(report.removed).toBe(1);
+    expect(report.unknown).toBe(0);
+    const stored = await f.codes.inspectToken(token);
+    expect(stored).toBeNull();
+    const verification = await f.codes.independentInventory();
+    expect(verification.matching).toBe(0);
+  }
+  finally {
+    await f.close();
+  }
+});
+
+test.each([
+  { name: "missing user ID", patch: { orcas: { sessionId: "external-session" } } },
+  { name: "empty session ID", patch: { orcas: { userId: "external-user-reference", sessionId: "" } } },
+  { name: "unknown field", patch: { orcas: { userId: "external-user-reference", sessionId: "external-session", extra: true } } },
+  { name: "business purpose", patch: { purpose: "business" } },
+])("invalid ORCAS Token with $name fails authentication and inventory validation", async ({ patch }) => {
+  const f = await managedFixture();
+  try {
+    const code = await f.authorize();
+    const callback = await f.callback(code);
+    expect(callback.status).toBe(302);
+    const token = new URL(callback.headers.get("Location")!).searchParams.get("token")!;
+    await f.codes.replaceToken(token, patch);
+    const response = await f.request("/public/orcasId", {
+      headers: { Authorization: token, Client: "app" },
+    });
+    expect(response.status).toBe(503);
+    const report = await f.codes.maintenance.inventory({ clientCode: "app", limit: 1000 });
+    expect(report.unknown).toBe(1);
+  }
+  finally {
+    await f.close();
+  }
+});
+
 test.each(["managed", "business"])("%s Token can logout after callback classification changes", async (purpose) => {
   const f = await managedFixture(false);
   try {
@@ -882,7 +1004,7 @@ test("managed real HTTP delivery preserves Cookie attributes, Token lifetime, bo
     }
     expect(f.received).toEqual([{ id: 1001, username: "138550", name: "测试用户", mobile: "17721462865" }]);
     expect(f.state.factsReads).toBe(0);
-    expect(JSON.stringify(stored)).not.toContain("external-");
+    expect(stored?.record.orcas).toEqual({ userId: "external-user-reference", sessionId: "external-session" });
     expect(f.audits.some(audit => audit.action === "auth.login.local")).toBe(true);
     const replay = await f.callback(code);
     expect(replay.status).not.toBe(302);

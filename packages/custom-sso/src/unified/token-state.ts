@@ -15,7 +15,11 @@ export const tokenRecordSchema = z.object({
   clientSessionInstance: z.uuid(),
   issuedAt: z.number().int().nonnegative(),
   expiresAt: z.number().int().positive(),
-}).strict();
+  orcas: z.object({
+    userId: z.string().min(1),
+    sessionId: z.string().min(1),
+  }).strict().optional(),
+}).strict().refine(record => record.purpose === "managed" || record.orcas === undefined);
 export type CustomSsoTokenRecord = z.infer<typeof tokenRecordSchema>;
 export const tokenDigest = (bearer: string) => createHash("sha256").update(bearer).digest("hex");
 
