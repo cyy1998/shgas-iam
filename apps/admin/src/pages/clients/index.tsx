@@ -66,6 +66,7 @@ export default function ClientsPage() {
     },
     {
       title: '操作',
+      fixed: 'right',
       valueType: 'option',
       width: 90,
       render: (_, row) => [

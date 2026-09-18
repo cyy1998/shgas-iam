@@ -75,6 +75,7 @@ export default function UsersPage() {
     },
     {
       title: '操作',
+      fixed: 'right',
       valueType: 'option',
       width: 80,
       render: (_, row) => (

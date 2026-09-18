@@ -284,6 +284,7 @@ export function createSessionManagementService(deps: AdminSessionManagementServi
         limit: input.pageSize,
         subjectIdentifier: filteredUser?.subjectIdentifier,
         kind: input.kind,
+        userSessionId: input.userSessionId,
       });
     }
     catch (cause) {

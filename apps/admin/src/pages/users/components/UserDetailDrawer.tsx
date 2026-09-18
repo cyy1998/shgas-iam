@@ -287,6 +287,7 @@ function UserDetailDrawerContent({
   if (access.canAccessEmployment) {
     employmentColumns.push({
       title: '操作',
+      fixed: 'right',
       key: 'action',
       width: 280,
       render: (_: unknown, row: EmploymentRow) => {

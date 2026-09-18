@@ -7,7 +7,9 @@
 同一候选不读取旧会话，不按 bearer 或记录格式回退。`lifecycleRevocation` 同时供 UserService、
 `createAdminApiUseCases` 的离职流程和 `createClientSsoSnapshotManagement` 的 `sessionTermination` 消费。
 
-会话页默认列出 UserSession，可选择 ClientSession；后者显示所属 Client 与最近授权协议，当前根下的应用关系仍可单独终止。
+会话页主列表仅列出用户会话（UserSession），不展示或筛选记录类型。用户列显示姓名、工号与账号状态，不展示内部 ID。
+每条用户会话通过“应用会话”入口展开该根下的 ClientSession，显示所属 Client、最近授权协议、授权和过期时间，支持独立分页、手动刷新与单独下线；当前根下的应用关系仍可单独终止。
+应用会话查询通过 `kind=clientSession` 与 `userSessionId` 限定到原根，由 Kernel 复用 children 索引原子计算分页和 total，不在前端过滤全局分页。
 列表只取安全记录和账号展示字段，不读取目标账号许可，不因查询触发撤销；管理员自身每次请求仍认证并经集中策略授权。
 页面按每次列表返回的 `allowedActions.revoke` 更新按钮，读取失败或缺少能力时关闭操作。记录及管理 identity
 不能转成在线父观察或 Subject Access Permission。

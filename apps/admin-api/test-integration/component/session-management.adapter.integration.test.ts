@@ -416,7 +416,7 @@ describe("admin session management adapter", () => {
       },
     });
     const input = {
-      conditions: { userId: 42 },
+      conditions: { userId: 42, kind: "clientSession" as const, userSessionId: "00000000-0000-4000-8000-000000000042" },
       pageNum: 1,
       pageSize: 20,
     };
@@ -429,12 +429,12 @@ describe("admin session management adapter", () => {
 
     expect(listSessions).toHaveBeenNthCalledWith(
       1,
-      { pageNum: 1, pageSize: 20, userId: 42 },
+      { pageNum: 1, pageSize: 20, userId: 42, kind: "clientSession", userSessionId: "00000000-0000-4000-8000-000000000042" },
       { actorUserId: 7, principalSessionId: "ps-admin" },
     );
     expect(listSessions).toHaveBeenNthCalledWith(
       2,
-      { pageNum: 1, pageSize: 20, userId: 42 },
+      { pageNum: 1, pageSize: 20, userId: 42, kind: "clientSession", userSessionId: "00000000-0000-4000-8000-000000000042" },
       { actorUserId: 7, principalSessionId: "ps-admin" },
     );
     expect(restResult).toMatchObject({ code: 200, data: trpcResult });

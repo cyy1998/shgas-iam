@@ -146,6 +146,7 @@ end
 if request.action == 'list' then
   local indexKey = key('inventory', request.kind)
   if request.subjectIdentifier then indexKey = key(request.kind == 'userSession' and 'subject' or 'subject-clients', request.subjectIdentifier) end
+  if request.userSessionId then indexKey = key('children', request.userSessionId) end
   if not validIndex(indexKey) then return reply('corrupt') end
   local expired = redis.call('ZCOUNT', indexKey, '-inf', now)
   local total = redis.call('ZCARD', indexKey) - expired
@@ -156,6 +157,7 @@ if request.action == 'list' then
     local record
     if request.kind == 'userSession' then record = root(id) else record = read(key('client', id)) end
     if not record or record.kind ~= request.kind or record.state ~= 'active'
+      or (request.userSessionId and record.userSessionId ~= request.userSessionId)
       or (request.subjectIdentifier and record.subjectIdentifier ~= request.subjectIdentifier) then return reply('corrupt') end
     table.insert(records, record)
   end

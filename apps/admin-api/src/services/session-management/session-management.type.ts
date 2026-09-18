@@ -63,6 +63,7 @@ export interface AdminSessionListInput {
   pageSize: number;
   userId?: number;
   kind?: "userSession" | "clientSession";
+  userSessionId?: string;
 }
 
 export interface AdminSessionActorContext {

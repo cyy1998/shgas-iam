@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { SessionManagementSessionVoSchema } from "../session-management.schema";
+import { SessionManagementListSessionsInputSchema, SessionManagementSessionVoSchema } from "../session-management.schema";
 
 function sessionVo(subjectId: string) {
   return {
@@ -21,6 +21,17 @@ function sessionVo(subjectId: string) {
 }
 
 describe("Session Management response contract", () => {
+  test("root filtering requires application session queries", () => {
+    const userSessionId = "00000000-0000-4000-8000-000000000042";
+    for (const kind of [undefined, "userSession"]) {
+      const result = SessionManagementListSessionsInputSchema.safeParse({ conditions: { kind, userSessionId } });
+      expect(result.success).toBe(false);
+    }
+    const valid = SessionManagementListSessionsInputSchema.parse({
+      conditions: { kind: "clientSession", userSessionId },
+    });
+    expect(valid.conditions.userSessionId).toBe(userSessionId);
+  });
   test("reports an invalid UUID at the public Subject Identifier field", () => {
     const result = SessionManagementSessionVoSchema.safeParse(sessionVo("42"));
 

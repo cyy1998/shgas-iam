@@ -1,4 +1,5 @@
 import LoginRestrictionsTab from '@admin/pages/sessions/LoginRestrictionsTab';
+import ClientSessionsTable from '@admin/pages/sessions/components/ClientSessionsTable';
 import UserSummary from '@admin/pages/sessions/components/UserSummary';
 import { requestUserOptions } from '@admin/pages/sessions/session-selectors';
 import {
@@ -29,7 +30,7 @@ import {
   Tag,
   Typography,
 } from 'antd';
-import { useRef, useState } from 'react';
+import { useCallback, useRef, useState } from 'react';
 
 const authMethodDisplay = {
   password: '密码',
@@ -84,6 +85,10 @@ function renderOrigin(session: SessionListItem) {
 
 export default function SessionsPage() {
   const actionRef = useRef<ActionType>(undefined);
+  const clientActionRef = useRef<ActionType>(undefined);
+  const [expandedSessionId, setExpandedSessionId] = useState<string | null>(
+    null,
+  );
   const [loadError, setLoadError] = useState<SessionListErrorKindValue | null>(
     null,
   );
@@ -91,12 +96,20 @@ export default function SessionsPage() {
   const [auditFailedAfterEffect, setAuditFailedAfterEffect] = useState(false);
   const [revokingTarget, setRevokingTarget] = useState<string | null>(null);
   const [canRevoke, setCanRevoke] = useState(false);
+  const capabilityRequestRef = useRef(0);
+  const beginCapabilityRead = useCallback(() => {
+    const sequence = ++capabilityRequestRef.current;
+    return (allowed: boolean) => {
+      if (sequence === capabilityRequestRef.current) setCanRevoke(allowed);
+    };
+  }, []);
   const [unfinished, setUnfinished] = useState<
     NonNullable<SessionRevokeResult['result']['batch']>['unfinished']
   >([]);
 
   const refreshSessions = () => {
     actionRef.current?.reload();
+    clientActionRef.current?.reload();
   };
 
   const executeRevoke = async (
@@ -167,7 +180,7 @@ export default function SessionsPage() {
       title: '确认强制下线本次会话？',
       content:
         record.kind === 'clientSession'
-          ? `终止这个原确切 ClientSession，其协议凭据后续访问将被拒绝；保留根登录和其他应用关系。${userRevokeSafetyGuidance}`
+          ? `终止这个应用会话，其协议凭据后续访问将被拒绝；保留用户登录和其他应用会话。${userRevokeSafetyGuidance}`
           : `终止这个根登录并尽力处理其已捕获的应用关系；根终止后新协议访问将被拒绝。${userRevokeSafetyGuidance}`,
       okText: '确认下线',
       okType: 'danger',
@@ -187,7 +200,7 @@ export default function SessionsPage() {
                   principalSessionId: session.principalSessionId,
                 },
               },
-          `session:${session.principalSessionId}`,
+          `session:${record.identity.id}`,
         ),
     });
   };
@@ -217,21 +230,6 @@ export default function SessionsPage() {
 
   const columns: ProColumns<SessionListItem>[] = [
     {
-      title: '记录类型',
-      dataIndex: 'kind',
-      valueType: 'select',
-      valueEnum: {
-        userSession: 'UserSession（根登录）',
-        clientSession: 'ClientSession（应用关系）',
-      },
-      render: (_, session) =>
-        session.record?.kind === 'clientSession'
-          ? `ClientSession · ${session.record.clientId} · ${session.record.protocol}`
-          : session.record
-            ? 'UserSession'
-            : '记录不可用',
-    },
-    {
       title: '用户',
       dataIndex: 'userId',
       hideInTable: true,
@@ -246,12 +244,11 @@ export default function SessionsPage() {
     {
       title: '用户',
       key: 'user',
-      width: 220,
+      width: 160,
       search: false,
       render: (_, session) => (
         <UserSummary
           accountStatus={session.user.accountStatus}
-          id={session.user.id ?? session.user.subjectId}
           name={session.user.name}
           username={session.user.username}
         />
@@ -260,7 +257,7 @@ export default function SessionsPage() {
     {
       title: '登录方式',
       dataIndex: 'authMethods',
-      width: 150,
+      width: 110,
       search: false,
       render: (_, session) =>
         session.authMethods
@@ -302,12 +299,33 @@ export default function SessionsPage() {
     },
     {
       title: '操作',
+      fixed: 'right',
       key: 'actions',
-      width: 180,
+      width: 160,
       search: false,
       render: (_, session) => (
-        <Space orientation="vertical" size="small">
+        <Space orientation="vertical" align="start" size={0}>
           <Button
+            type="link"
+            size="small"
+            style={{ paddingInline: 0, fontWeight: 500 }}
+            disabled={session.record?.kind !== 'userSession'}
+            onClick={() =>
+              setExpandedSessionId((current) =>
+                current === session.principalSessionId
+                  ? null
+                  : session.principalSessionId,
+              )
+            }
+          >
+            {expandedSessionId === session.principalSessionId
+              ? '收起应用会话'
+              : '应用会话'}
+          </Button>
+          <Button
+            type="link"
+            size="small"
+            style={{ paddingInline: 0, fontWeight: 500 }}
             danger
             disabled={
               !canRevoke ||
@@ -322,6 +340,9 @@ export default function SessionsPage() {
             强制下线本次
           </Button>
           <Button
+            type="link"
+            size="small"
+            style={{ paddingInline: 0, fontWeight: 500 }}
             danger
             disabled={
               !canRevoke ||
@@ -394,9 +415,26 @@ export default function SessionsPage() {
           session.record?.identity.id ?? session.principalSessionId
         }
         columns={columns}
+        expandable={{
+          expandedRowKeys: expandedSessionId ? [expandedSessionId] : [],
+          showExpandColumn: false,
+          expandedRowRender: (session, _index, _indent, expanded) =>
+            expanded ? (
+              <ClientSessionsTable
+                key={session.principalSessionId}
+                userSessionId={session.principalSessionId}
+                actionRef={clientActionRef}
+                revokingTarget={revokingTarget}
+                hasUnfinished={unfinished.length > 0}
+                canRevoke={canRevoke}
+                onRevoke={confirmRevokeSession}
+                beginCapabilityRead={beginCapabilityRead}
+              />
+            ) : null,
+        }}
         dataSource={sessionRows}
         search={{ labelWidth: 'auto' }}
-        scroll={{ x: 1350 }}
+        scroll={{ x: 1160 }}
         options={{ reload: false }}
         locale={loadError ? { emptyText: '加载失败' } : undefined}
         pagination={{
@@ -405,28 +443,27 @@ export default function SessionsPage() {
           showSizeChanger: true,
         }}
         request={async (params) => {
+          const updateCapability = beginCapabilityRead();
           const {
             current = 1,
             pageSize = 20,
             userId,
-            kind,
           } = params as {
             current?: number;
             pageSize?: number;
             userId?: number;
-            kind?: 'userSession' | 'clientSession';
           };
           try {
             const response = await listSessions({
               conditions: {
                 userId: typeof userId === 'number' ? userId : undefined,
-                kind,
+                kind: 'userSession',
               },
               pageNum: current,
               pageSize,
             });
             setLoadError(null);
-            setCanRevoke(response.allowedActions?.revoke === true);
+            updateCapability(response.allowedActions?.revoke === true);
             setSessionRows(response.result);
             return {
               data: response.result,
@@ -434,7 +471,7 @@ export default function SessionsPage() {
               success: true,
             };
           } catch (error) {
-            setCanRevoke(false);
+            updateCapability(false);
             setLoadError(
               error instanceof SessionListError
                 ? error.kind

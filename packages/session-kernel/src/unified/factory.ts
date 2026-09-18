@@ -439,6 +439,7 @@ export function createUnifiedSessionKernel<Operation extends object>(
       async listSessions(input: {
         kind: "userSession" | "clientSession";
         subjectIdentifier?: string;
+        userSessionId?: string;
         offset: number;
         limit: number;
       }) {
@@ -447,10 +448,15 @@ export function createUnifiedSessionKernel<Operation extends object>(
           .object({
             kind: z.enum(["userSession", "clientSession"]),
             subjectIdentifier: z.uuid().optional(),
+            userSessionId: z.uuid().optional(),
             offset: z.int().nonnegative(),
             limit: z.int().min(1).max(1000),
           })
           .strict()
+          .refine(query => query.userSessionId === undefined || query.kind === "clientSession", {
+            message: "userSessionId requires clientSession kind",
+            path: ["userSessionId"],
+          })
           .parse(input);
         const response = await storage.execute({ action: "list", ...query });
         active();

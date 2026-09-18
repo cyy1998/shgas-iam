@@ -106,6 +106,32 @@ test("bounded neutral inventory lists both record kinds without minting an onlin
   expect(rootStatus.status).toBe("resolved");
 });
 
+test("application inventory paginates within one root and excludes other logins of the same user", async () => {
+  const { api, root, child } = await fixture();
+  const sibling = await open(api, root.observation, "client-b");
+  const anotherRoot = await api.createUserSession(authentication);
+  await open(api, anotherRoot.observation);
+  const query = {
+    kind: "clientSession" as const,
+    userSessionId: root.observation.userSession.userSessionId,
+    limit: 1,
+  };
+  const first = await api.listSessions({ ...query, offset: 0 });
+  const second = await api.listSessions({ ...query, offset: 1 });
+  expect(first.total).toBe(2);
+  expect(second.total).toBe(2);
+  expect([...first.records, ...second.records]).toEqual(expect.arrayContaining([
+    child.clientSession,
+    sibling.clientSession,
+  ]));
+  await api.revokeObservedClientSession(child);
+  const remaining = await api.listSessions({ ...query, offset: 0 });
+  expect(remaining.total).toBe(1);
+  expect(remaining.records).toEqual([sibling.clientSession]);
+  const invalid = await rejection(() => api.listSessions({ ...query, kind: "userSession", offset: 0 }));
+  expect(invalid).toBeInstanceOf(Error);
+});
+
 test("parallel authorization has one live instance and protocol changes reuse it without extending roots or old artifact deadlines", async () => {
   const { api, root, child } = await fixture();
   const oldLifetime = await api.getIssuanceLifetime(child, 600);

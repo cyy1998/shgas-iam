@@ -25,6 +25,7 @@ export interface AdminSessionInventoryPort {
     limit: number;
     subjectIdentifier?: string;
     kind?: "userSession" | "clientSession";
+    userSessionId?: string;
   }) => Promise<{
     items: AdminSessionInventoryItem[];
     total: number;

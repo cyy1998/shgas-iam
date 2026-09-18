@@ -161,6 +161,31 @@ function expectNoPrincipalSessionEffects(harness: ReturnType<typeof createLoginR
   expect(harness.revokeUserSessions).not.toHaveBeenCalled();
 }
 
+test("application session queries preserve root scope and pagination at the inventory boundary", async () => {
+  const listPrincipalSessions = mock(async () => ({ items: [], total: 0 }));
+  const service = createSessionManagementService({
+    ...unusedMutationDeps(),
+    inventory: { listPrincipalSessions },
+    users: {
+      getSessionManagementUserSummaries: async () => [],
+      getSessionManagementUserSummariesBySubjectIdentifiers: async () => [],
+    },
+  });
+  const userSessionId = "00000000-0000-4000-8000-000000000042";
+  const result = await service.listSessions(
+    { kind: "clientSession", userSessionId, pageNum: 2, pageSize: 20 },
+    { actorUserId: 7, principalSessionId: "current" },
+  );
+  expect(listPrincipalSessions).toHaveBeenCalledWith({
+    kind: "clientSession",
+    userSessionId,
+    offset: 20,
+    limit: 20,
+    subjectIdentifier: undefined,
+  });
+  expect(result).toMatchObject({ result: [], total: 0, pageNum: 2 });
+});
+
 interface CreateRevokeHarnessOptions {
   deps?: Partial<AdminSessionManagementServiceDeps>;
   input?: AdminSessionRevokeInput;

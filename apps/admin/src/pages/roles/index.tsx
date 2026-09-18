@@ -144,6 +144,7 @@ export default function RolesPage() {
     },
     {
       title: '操作',
+      fixed: 'right',
       valueType: 'option',
       width: 260,
       render: (_, row) => [

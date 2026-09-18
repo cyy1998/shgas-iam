@@ -126,12 +126,11 @@ export default function LoginRestrictionsTab() {
     {
       title: '用户',
       key: 'user',
-      width: 220,
+      width: 160,
       search: false,
       render: (_, restriction) => (
         <UserSummary
           accountStatus={restriction.user.accountStatus}
-          id={restriction.user.id}
           name={restriction.user.name}
           username={restriction.user.username}
         />
@@ -174,11 +173,15 @@ export default function LoginRestrictionsTab() {
     },
     {
       title: '操作',
+      fixed: 'right',
       key: 'actions',
       width: 120,
       search: false,
       render: (_, restriction) => (
         <Button
+          type="link"
+          size="small"
+          style={{ paddingInline: 0, fontWeight: 500 }}
           danger
           loading={releasingUserId === restriction.user.id}
           onClick={() => confirmRelease(restriction)}
@@ -222,7 +225,7 @@ export default function LoginRestrictionsTab() {
         columns={columns}
         dataSource={restrictionRows}
         search={{ labelWidth: 'auto' }}
-        scroll={{ x: 1110 }}
+        scroll={{ x: 1050 }}
         options={{ reload: false }}
         locale={loadError ? { emptyText: '加载失败' } : undefined}
         pagination={{

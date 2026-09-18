@@ -79,6 +79,7 @@ export default function PositionsPage() {
     { title: '雇佣人数', dataIndex: 'memberNumber', width: 100, search: false },
     {
       title: '操作',
+      fixed: 'right',
       valueType: 'option',
       width: 220,
       render: (_, row) =>

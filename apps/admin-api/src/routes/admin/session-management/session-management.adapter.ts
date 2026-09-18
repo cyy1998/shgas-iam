@@ -56,6 +56,7 @@ export function createSessionManagementAdapter(deps: CreateSessionManagementAdap
           pageSize: input.pageSize,
           userId: input.conditions.userId,
           kind: input.conditions.kind,
+          userSessionId: input.conditions.userSessionId,
         },
         getServerActor(context?.hono),
       );

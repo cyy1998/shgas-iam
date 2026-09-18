@@ -172,6 +172,7 @@ export default function RoleDetailDrawer({
     },
     {
       title: '操作',
+      fixed: 'right',
       valueType: 'option',
       width: 150,
       render: (_, row) => [

@@ -22,7 +22,11 @@ export const SessionManagementListSessionsInputSchema = z.object({
   conditions: z.object({
     userId: z.int().positive().optional().openapi({ example: 42 }),
     kind: z.enum(["userSession", "clientSession"]).optional(),
-  }).strict().default({}),
+    userSessionId: z.uuid().optional(),
+  }).strict().refine(
+    conditions => conditions.userSessionId === undefined || conditions.kind === "clientSession",
+    { message: "userSessionId requires clientSession kind", path: ["userSessionId"] },
+  ).default({}),
   pageNum: z.int().positive().default(1),
   pageSize: z.int().positive().max(100).default(20),
 }).strict().openapi("SessionManagementListSessionsInput");

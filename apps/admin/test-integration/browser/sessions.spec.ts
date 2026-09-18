@@ -145,7 +145,7 @@ test('ClientSession retries keep the original identity across capability and lis
     kind: 'clientSession' as const,
     id: '00000000-0000-4000-8000-000000000191',
     instance: '00000000-0000-4000-8000-000000000192',
-    userSessionId: '00000000-0000-4000-8000-000000000193',
+    userSessionId: firstPageSessions[0].principalSessionId,
     subjectIdentifier: firstPageSessions[0].user.subjectId,
     clientId: 'portal',
   };
@@ -168,7 +168,10 @@ test('ClientSession retries keep the original identity across capability and lis
   const queries = await mockSessionListRoute(page, (input) => ({
     type: 'success',
     data: {
-      result: [row],
+      result:
+        input.conditions?.kind === 'clientSession'
+          ? [row]
+          : [firstPageSessions[0]],
       total: 1,
       pageNum: input.pageNum ?? 1,
       pageSize: input.pageSize ?? 20,
@@ -205,16 +208,32 @@ test('ClientSession retries keep the original identity across capability and lis
     },
   }));
   await page.goto('/iam-admin/sessions');
-  await expect(page.getByText('ClientSession · portal · oidc')).toBeVisible();
+  await page.getByRole('button', { name: '应用会话', exact: true }).click();
+  await expect
+    .poll(() => queries.at(-1)?.conditions)
+    .toEqual({
+      kind: 'clientSession',
+      userSessionId: firstPageSessions[0].principalSessionId,
+    });
   await expect(
-    page.getByRole('button', { name: '强制下线本次' }),
+    page.getByRole('button', { name: '下线应用会话' }),
+  ).toBeDisabled();
+  allowed = true;
+  await page.getByRole('button', { name: '刷新应用会话', exact: true }).click();
+  await expect(
+    page.getByRole('button', { name: '下线应用会话' }),
+  ).toBeEnabled();
+  allowed = false;
+  await page.getByRole('button', { name: '手动刷新', exact: true }).click();
+  await expect(
+    page.getByRole('button', { name: '下线应用会话' }),
   ).toBeDisabled();
   allowed = true;
   await page.getByRole('button', { name: '手动刷新', exact: true }).click();
   await expect(
-    page.getByRole('button', { name: '强制下线本次' }),
+    page.getByRole('button', { name: '下线应用会话' }),
   ).toBeEnabled();
-  await page.getByRole('button', { name: '强制下线本次' }).click();
+  await page.getByRole('button', { name: '下线应用会话' }).click();
   await page.getByRole('button', { name: '确认下线', exact: true }).click();
   await expect(page.getByText('原批次仍有 1 项未确认完成')).toBeVisible();
   expect(mutations).toEqual([
@@ -246,6 +265,164 @@ test('ClientSession retries keep the original identity across capability and lis
   ]);
   expect(queries.length).toBeGreaterThanOrEqual(4);
 });
+
+test('application sessions are loaded on demand per root, paginate, and clear stale actions on failure', async ({
+  page,
+}) => {
+  await mockAdminApi(page);
+  let unavailable = false;
+  const queries = await mockSessionListRoute(page, (input) => {
+    if (input.conditions?.kind !== 'clientSession') {
+      return {
+        type: 'success',
+        data: {
+          result: firstPageSessions,
+          total: 2,
+          pageNum: 1,
+          pageSize: 20,
+          pages: 1,
+        },
+      };
+    }
+    if (unavailable) return { type: 'login-state-unavailable' };
+    const root = firstPageSessions.find(
+      (row) => row.principalSessionId === input.conditions?.userSessionId,
+    )!;
+    const clientId = `${root.principalSessionId}-app-${input.pageNum ?? 1}`;
+    const child: SessionListItem = {
+      ...root,
+      isCurrentSession: false,
+      record: {
+        kind: 'clientSession',
+        clientId,
+        protocol: 'oidc',
+        identity: {
+          ...root.record.identity,
+          kind: 'clientSession',
+          id: clientId,
+          clientId,
+        },
+      },
+    };
+    return {
+      type: 'success',
+      data: {
+        result: [child],
+        total: 21,
+        pageNum: input.pageNum ?? 1,
+        pageSize: 20,
+        pages: 2,
+      },
+    };
+  });
+  await page.goto('/iam-admin/sessions');
+  const entry = page.getByRole('button', { name: '应用会话', exact: true });
+  await expect(entry).toHaveCount(2);
+  expect(
+    queries.every((query) => query.conditions?.kind === 'userSession'),
+  ).toBe(true);
+  await entry.first().click();
+  await expect(
+    page.getByText('ps-current-app-1', { exact: true }),
+  ).toBeVisible();
+  const nested = page.locator('.ant-table-expanded-row');
+  await nested.locator('.ant-pagination-next').click();
+  await expect(
+    page.getByText('ps-current-app-2', { exact: true }),
+  ).toBeVisible();
+  await expect
+    .poll(() => queries.at(-1))
+    .toMatchObject({
+      conditions: { kind: 'clientSession', userSessionId: 'ps-current' },
+      pageNum: 2,
+    });
+  await entry.click();
+  await expect(
+    page.getByText('ps-deleted-app-1', { exact: true }),
+  ).toBeVisible();
+  await expect
+    .poll(() => queries.at(-1))
+    .toMatchObject({
+      conditions: { kind: 'clientSession', userSessionId: 'ps-deleted' },
+      pageNum: 1,
+    });
+  unavailable = true;
+  await page.getByRole('button', { name: '刷新应用会话' }).click();
+  await expect(page.getByText('登录状态服务暂时不可用')).toBeVisible();
+  await expect(page.getByRole('button', { name: '下线应用会话' })).toHaveCount(
+    0,
+  );
+});
+
+for (const change of ['switch-root', 'refresh-root'] as const) {
+  test(`a late application query cannot restore revoked capabilities after ${change}`, async ({
+    page,
+  }) => {
+    await mockAdminApi(page);
+    const delayed = Promise.withResolvers<void>();
+    let delayedStarted = false;
+    await mockSessionListRoute(page, async (input) => {
+      if (input.conditions?.kind !== 'clientSession') {
+        return {
+          type: 'success',
+          data: {
+            result: firstPageSessions,
+            total: 2,
+            pageNum: 1,
+            pageSize: 20,
+            pages: 1,
+            allowedActions: { revoke: !delayedStarted },
+          },
+        };
+      }
+      const isFirstRoot = input.conditions.userSessionId === 'ps-current';
+      if (isFirstRoot) {
+        delayedStarted = true;
+        await delayed.promise;
+      }
+      return {
+        type: 'success',
+        data: {
+          result: [],
+          total: 0,
+          pageNum: 1,
+          pageSize: 20,
+          pages: 0,
+          allowedActions: { revoke: isFirstRoot },
+        },
+      };
+    });
+    await page.goto('/iam-admin/sessions');
+    const entry = page.getByRole('button', { name: '应用会话', exact: true });
+    await entry.first().click();
+    await expect.poll(() => delayedStarted).toBe(true);
+    if (change === 'switch-root') {
+      await entry.click();
+      await expect(page.getByText('暂无应用会话')).toBeVisible();
+    } else {
+      await page.getByRole('button', { name: '手动刷新', exact: true }).click();
+    }
+    const revoke = page.getByRole('button', { name: '下线该用户全部' }).last();
+    await expect(revoke).toBeDisabled();
+    const responsePromise = page.waitForResponse((response) => {
+      const input = decodeURIComponent(response.url());
+      return (
+        input.includes('sessionManagement.listSessions') &&
+        input.includes('ps-current')
+      );
+    });
+    delayed.resolve();
+    const response = await responsePromise;
+    await response.finished();
+    await page.evaluate(
+      () =>
+        new Promise<void>((resolve) => {
+          requestAnimationFrame(() => requestAnimationFrame(() => resolve()));
+        }),
+    );
+    await expect(revoke).toBeDisabled();
+  });
+}
 
 test('unified self revoke reports application effects and uncertain outcomes without legacy counters', async ({
   page,
@@ -542,7 +719,6 @@ test('session records support navigation, exact user filtering, pagination, and 
     page.getByRole('columnheader', { name: '过期时间' }),
   ).toBeVisible();
   await expect(page.getByText('张三', { exact: true })).toBeVisible();
-  await expect(page.getByText('zhangsan · ID 42')).toBeVisible();
   await expect(page.getByText('已删除').first()).toBeVisible();
   await expect(
     page
@@ -556,9 +732,6 @@ test('session records support navigation, exact user filtering, pagination, and 
   await expect(page.getByText('当前会话')).toBeVisible();
 
   await page.locator('.ant-pagination-next').click();
-  await expect(
-    page.getByText('无用户名 · ID 00000000-0000-4000-8000-999999999999'),
-  ).toBeVisible();
   await expect(page.getByText('未知').first()).toBeVisible();
   await expect.poll(() => inputs.at(-1)?.pageNum).toBe(2);
 

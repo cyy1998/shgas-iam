@@ -55,6 +55,7 @@ export function createRootSecurityComposition(options: RootSecurityCompositionOp
             .listSessions({
               kind: input.kind ?? "userSession",
               subjectIdentifier: input.subjectIdentifier,
+              userSessionId: input.userSessionId,
               offset: input.offset,
               limit: input.limit,
             });
