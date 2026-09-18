@@ -1,3 +1,4 @@
+import type { LoginWithOaResult } from "@api/use-cases/authentication/login-with-oa/login-with-oa.type";
 import { createRootSsoHandlers, createSsoEndpointsHandler } from "@api/routes/sso/sso.handlers";
 import { createUnifiedAuthorizationHandlers } from "@api/routes/sso/unified-authorization.handlers";
 import { ClientSnapshotUnavailableError } from "@iam/api-core/client-snapshot";
@@ -20,7 +21,7 @@ const errorLogger = {
   warn: mock(() => undefined),
 };
 
-const loginOA = mock(async () => ({ token: "global-session", isMobileSet: true }));
+const loginOA = mock(async (): Promise<LoginWithOaResult> => ({ kind: "authenticated", token: "global-session", isMobileSet: true }));
 const loginWX = mock(async () => ({ token: "global-session", isMobileSet: true }));
 const logout = mock(async () => true as const);
 const checkLoginContinuation = mock(
@@ -390,20 +391,21 @@ describe("root SSO HTTP adaptation", () => {
     });
   });
 
-  test("OA login replaces the previous session and redirects through authorize", async () => {
+  test("OA login passes the current session to authentication and redirects through authorize", async () => {
     const handlers = createHandlers();
     const context = createOaContext();
-    loginOA.mockResolvedValueOnce({ token: "oa-session", isMobileSet: true });
+    loginOA.mockResolvedValueOnce({ kind: "authenticated", token: "oa-session", isMobileSet: true });
 
     await handlers.loginOA(context as never, async () => {});
 
-    expect(logout).toHaveBeenCalledWith({ sessionToken: "previous-session" });
+    expect(logout).not.toHaveBeenCalled();
     expect(loginOA).toHaveBeenCalledWith(
       {
         clientCode: "oa",
         loginId: "138550",
         timestamp: "1700000000000",
         token: "oa-signature",
+        currentSessionToken: "previous-session",
       },
       {
         requestContext: expect.objectContaining({
@@ -422,25 +424,24 @@ describe("root SSO HTTP adaptation", () => {
     );
   });
 
-  test("OA login stops when replacing the old session hits invalid or unavailable Subject Access", async () => {
+  test("OA login maps Subject Access failures without clearing the current cookie", async () => {
     const handlers = createHandlers();
     const app = createOaHandlerApp(handlers.loginOA);
 
-    logout.mockRejectedValueOnce(new SubjectAccessSessionInvalidHttpError());
+    loginOA.mockRejectedValueOnce(new SubjectAccessSessionInvalidHttpError());
     const disabled = await app.request("/sso/thirdparty/oa/oa", {
       headers: { Cookie: "global_session=global-token" },
     });
     expect(disabled.status).toBe(401);
-    expect(disabled.headers.getSetCookie()).toHaveLength(1);
-    expect(loginOA).not.toHaveBeenCalled();
+    expect(disabled.headers.getSetCookie()).toEqual([]);
 
-    logout.mockRejectedValueOnce(new SubjectAccessUnavailableError());
+    loginOA.mockRejectedValueOnce(new SubjectAccessUnavailableError());
     const unavailable = await app.request("/sso/thirdparty/oa/oa", {
       headers: { Cookie: "global_session=global-token" },
     });
     expect(unavailable.status).toBe(503);
     expect(unavailable.headers.getSetCookie()).toEqual([]);
-    expect(loginOA).not.toHaveBeenCalled();
+    expect(logout).not.toHaveBeenCalled();
   });
 
   test("WeChat login writes the global session and redirects through authorize", async () => {

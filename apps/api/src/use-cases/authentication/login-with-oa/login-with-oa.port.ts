@@ -54,6 +54,10 @@ export interface LoginWithOaDeps {
     nodeEnv: string;
   };
   principalSessions: OaPrincipalSessionPort;
+  currentSessions: {
+    resolve: (token: string) => Promise<{ subjectIdentifier: string; remainingSeconds: number } | null>;
+    logout: (token: string) => Promise<unknown>;
+  };
   users: {
     getActiveUserByUsername: (username: string) => Promise<OaLoginUser | null>;
     getUserDetailById: (userId: number) => Promise<UserDetailDto>;

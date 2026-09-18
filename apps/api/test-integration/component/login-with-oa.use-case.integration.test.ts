@@ -52,6 +52,7 @@ test("creates an OA PrincipalSession and audits the active Formal user", async (
       method: null,
     },
   })).resolves.toEqual({
+    kind: "authenticated",
     token: "oa-session",
     isMobileSet: true,
   });

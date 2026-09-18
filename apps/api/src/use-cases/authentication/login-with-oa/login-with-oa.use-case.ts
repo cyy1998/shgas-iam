@@ -1,5 +1,5 @@
 import type { LoginWithOaDeps } from "./login-with-oa.port";
-import type { LoginWithOaInput, LoginWithOaOptions } from "./login-with-oa.type";
+import type { LoginWithOaInput, LoginWithOaOptions, LoginWithOaResult } from "./login-with-oa.type";
 import { buildOaLoginSuccessAudit } from "@api/services/audit/events/auth.audit";
 import { toSessionOrigin } from "@api/services/session/session-origin";
 import { AuthzUnauthorizedError } from "@iam/api-core/errors/AuthzUnauthorizedError";
@@ -9,7 +9,7 @@ import { UserType } from "@iam/contracts";
 import { sm3 } from "sm-crypto";
 
 export function createLoginWithOaUseCase(deps: LoginWithOaDeps) {
-  async function execute(input: LoginWithOaInput, options: LoginWithOaOptions = {}) {
+  async function execute(input: LoginWithOaInput, options: LoginWithOaOptions = {}): Promise<LoginWithOaResult> {
     const client = await deps.clients.getClientByCode(input.clientCode);
     if (client === null) {
       throw new InvalidSsoClientError("非法client代码");
@@ -35,6 +35,18 @@ export function createLoginWithOaUseCase(deps: LoginWithOaDeps) {
     if (liveUser.userType !== UserType.Formal) {
       throw new LoginFailedError("用户类别不支持OA登录");
     }
+    if (input.currentSessionToken) {
+      const current = await deps.currentSessions.resolve(input.currentSessionToken);
+      if (current?.subjectIdentifier === liveUser.subjectIdentifier) {
+        return {
+          kind: "reused",
+          token: input.currentSessionToken,
+          remainingSeconds: current.remainingSeconds,
+        };
+      }
+      if (current !== null)
+        await deps.currentSessions.logout(input.currentSessionToken);
+    }
     const userDetail = await deps.users.getUserDetailById(liveUser.id);
     const { token: sessionId, remainingSeconds } = await deps.principalSessions.createPrincipalSession(
       liveUser.subjectIdentifier,
@@ -48,6 +60,7 @@ export function createLoginWithOaUseCase(deps: LoginWithOaDeps) {
       ...buildOaLoginSuccessAudit(userDetail, input.clientCode),
     });
     return {
+      kind: "authenticated",
       token: sessionId,
       ...(remainingSeconds === undefined ? {} : { remainingSeconds }),
       isMobileSet: userDetail.mobile !== null,

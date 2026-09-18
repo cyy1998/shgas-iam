@@ -42,11 +42,14 @@ import {
   CUSTOM_SSO_SESSION_AUTHORIZATION_SECURITY_SCHEME,
 } from "@api/services/sso/transport/custom-sso-delivery.security";
 import { createRouter } from "@iam/api-core/core/create-router";
+import { AuthzUnauthorizedError } from "@iam/api-core/errors/AuthzUnauthorizedError";
 import {
   createSubjectAccessOperations,
   createUnifiedSubjectAccessSessionRevocation,
   requireSubjectAccessOperation,
+  SubjectAccessOperationDeniedError,
   SubjectAccessPermissionRequiredError,
+  SubjectAccessUnavailableError,
 } from "@iam/api-core/subject-access";
 import { createPermittedClientSubjectProjectionService } from "@iam/client-subject-projection";
 import {
@@ -74,7 +77,7 @@ export interface RootAuthenticationCompositionOptions {
   kernel: UnifiedSessionKernel<SubjectAccessOperation>;
   barrier: SubjectAccessOperationBarrierPort;
   authentication: Omit<AuthenticationOptions, "services"> & {
-    services: Omit<AuthenticationOptions["services"], "principalSessions">;
+    services: Omit<AuthenticationOptions["services"], "principalSessions" | "oaCurrentSessions">;
   };
   clients: ClientSnapshotReader;
   subjectFacts: ProjectionOptions["subjectFacts"];
@@ -114,13 +117,6 @@ export function createRootAuthenticationComposition(options: RootAuthenticationC
     run: callback => operations.run(callback),
   });
   operations = createSubjectAccessOperations({ barrier: options.barrier, revocation });
-  const authentication = createAuthenticationUseCases({
-    ...options.authentication,
-    services: {
-      ...options.authentication.services,
-      principalSessions: createUserSessionAuthenticationAdapter(options.kernel, operations),
-    },
-  });
   const projection = createPermittedClientSubjectProjectionService<CustomSsoProjectionPermission>({
     subjectFacts: options.subjectFacts,
     assertPermission(proof, subjectIdentifier) {
@@ -146,6 +142,35 @@ export function createRootAuthenticationComposition(options: RootAuthenticationC
     kernel: options.kernel,
     clients: options.clients,
     projection,
+  });
+  const authentication = createAuthenticationUseCases({
+    ...options.authentication,
+    services: {
+      ...options.authentication.services,
+      principalSessions: createUserSessionAuthenticationAdapter(options.kernel, operations),
+      oaCurrentSessions: {
+        resolve: token => operations.run(async (operation) => {
+          try {
+            const { observation } = await roots.forOperation(operation).resolvePermittedRoot(token);
+            return {
+              subjectIdentifier: observation.userSession.subjectIdentifier,
+              remainingSeconds: observation.remainingSeconds,
+            };
+          }
+          catch (error) {
+            if (error instanceof AuthzUnauthorizedError)
+              return null;
+            if (error instanceof SubjectAccessOperationDeniedError) {
+              if (error.reason === "identity_mismatch")
+                throw new SubjectAccessUnavailableError(error);
+              return null;
+            }
+            throw error;
+          }
+        }),
+        logout: token => operations.run(async operation => await roots.forOperation(operation).logout(token)),
+      },
+    },
   });
   const auth = createRootAuthHandlers({
     authentication,

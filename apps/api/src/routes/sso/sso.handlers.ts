@@ -100,30 +100,28 @@ export function createRootSsoHandlers(deps: CreateRootSsoHandlersDeps) {
     const { loginid, ts, token, redirectUrl, client, state, ssoReturn } = c.req.valid("query");
     const globalSessionCookie = getCookie(c, "global_session");
     const sessionId = globalSessionCookie ?? c.req.header("Authorization");
-    if (sessionId) {
-      await subjectAccessHttp.run(
-        c,
+    const data = await subjectAccessHttp.run(
+      c,
+      { clearCookiesOnInvalidSession: [] },
+      async () => await deps.authentication.loginWithOa.execute(
         {
-          clearCookiesOnInvalidSession: globalSessionCookie === undefined ? [] : ["global_session"],
+          clientCode,
+          loginId: loginid,
+          timestamp: ts,
+          token,
+          currentSessionToken: sessionId,
         },
-        async () => await deps.sso.logout.execute({ sessionToken: sessionId }),
-      );
-    }
-    const data = await deps.authentication.loginWithOa.execute(
-      {
-        clientCode,
-        loginId: loginid,
-        timestamp: ts,
-        token,
-      },
-      { requestContext: getApiAuditRequestContext(c) },
+        { requestContext: getApiAuditRequestContext(c) },
+      ),
     );
-    setCookie(c, "global_session", data.token, {
-      httpOnly: true,
-      sameSite: "Lax",
-      maxAge: data.remainingSeconds ?? deps.config.redisExpireSeconds,
-      path: "/",
-    });
+    if (data.kind === "authenticated" || globalSessionCookie === undefined) {
+      setCookie(c, "global_session", data.token, {
+        httpOnly: true,
+        sameSite: "Lax",
+        maxAge: data.remainingSeconds ?? deps.config.redisExpireSeconds,
+        path: "/",
+      });
+    }
     return c.redirect(
       buildAuthorizeResumeUrl({
         client,

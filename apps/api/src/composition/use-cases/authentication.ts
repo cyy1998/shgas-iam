@@ -22,6 +22,7 @@ interface AuthenticationCompositionOptions {
   services: {
     cap: LoginWithPasswordDeps["humanVerification"] & LoginWithMobileDeps["humanVerification"];
     client: LoginWithOaDeps["clients"];
+    oaCurrentSessions: LoginWithOaDeps["currentSessions"];
     humanRisk: LoginWithPasswordDeps["humanRisk"] & LoginWithMobileDeps["humanRisk"];
     loginRestriction: LoginWithPasswordDeps["loginRestriction"] & LoginWithMobileDeps["loginRestriction"];
     mobile: LoginWithMobileDeps["verificationCodes"];
@@ -58,6 +59,7 @@ export function createAuthenticationUseCases({ auditLogWriter, runtime, services
     loginWithOa: createLoginWithOaUseCase({
       auditLogWriter,
       clients: services.client,
+      currentSessions: services.oaCurrentSessions,
       clock: runtime.clock,
       config: { nodeEnv: runtime.config.env.nodeEnv },
       principalSessions: services.principalSessions,
