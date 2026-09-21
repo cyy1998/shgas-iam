@@ -37,8 +37,9 @@ Admin 的 Custom SSO 配置 preview 与 Admin/SSO 协议类型统一消费 `@iam
 
 现存 Admin mutation 已统一消费 `{ changed, result }`：页面区分已修改与无需修改，创建与凭据从 result 取得必要资源。
 公共 service 归一化已提交错误，页面自动重读事实但不重放写入；普通刷新成功不清除尚需修复的提示。
-Secret 未交付沿用指定提示和先修复再主动轮换流程。全部实际入口与代表性测试见
-[最终契约核对](../features/admin/admin-mutation-contract.md)，后端/页面/外部消费者按[协调清单](../releases/admin-mutation-contract-cutover.md)切换。
+生成密码未交付时先修复再主动重置。SSO Secret 的配置/轮换只返回安全结果，原文经独立授权和审计读取；
+读取响应丢失可重读当前值，不自动再次轮换，详见[Client 配置契约](../features/admin/client-sso-configuration.md)。通用结果与恢复见
+[写入结果契约](../features/admin/admin-mutation-contract.md)；首次消费者切换仅见[历史协调清单](https://github.com/cyy1998/shgas-iam/blob/73315e4cef6f96dd79b29e18f74d68af30e559ec/docs/releases/admin-mutation-contract-cutover.md)。
 
 - 新管理路由登记到 `admin-route-registry`，复用模块 access key 和既有拒绝访问路径。
 - 模块可见性与 collection action 消费服务端 capability；服务端提供资源 `allowedActions` 时，行或详情按钮
@@ -52,7 +53,7 @@ Secret 未交付沿用指定提示和先修复再主动轮换流程。全部实�
   [HR 管理设计](../features/organization-responsibility/hr-admin-management-design.md#响应与前端)。
 
 Admin Sessions 使用会话记录语义：记录存在不代表账号当前可访问；筛选、分页、刷新与撤销反馈保持。
-后端自身许可每请求重查，前端不复制 Barrier 或代际判断；统一发布见[Subject Access 维护手册](../releases/subject-access-operation-cutover.md)。
+后端自身许可每请求重查，前端不复制 Barrier 或代际判断；当前恢复见[Profile 与 Subject Access 维护](../releases/user-profile-maintenance.md)。
 
 ## SSO 登录守卫
 
@@ -60,7 +61,7 @@ Admin Sessions 使用会话记录语义：记录存在不代表账号当前可�
   检查失败不能回退成无会话。
 - Service 解析协议结果；hook 管理超时、取消和过期响应；页面渲染互斥状态并执行对应交互。
 - 修改 `/portal/login` 的重入检查、协议续接、超时重试或浏览器历史时，读取
-  [统一登录页重入守卫设计](../features/sso/login-page-reentry-guard.md)，其中定义适用范围、状态转换和协议语义。
+  [登录与恢复契约](../features/sso/authentication-and-recovery.md)，其中定义适用范围、状态转换和协议语义。
 
 ## 测试与生成路径
 

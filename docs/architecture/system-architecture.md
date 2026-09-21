@@ -71,21 +71,21 @@ IAM 自身 routes 不统一使用 `forward-auth`。例如 [Tender manifests](../
 owner 与恢复路径。Redis backup restore 后的 Client Runtime 必须在停流下执行 full repair 与独立 verify，不能依赖
 TTL 或逐 Client 访问自然收敛。当前 full repair/verify 只拥有当前 Snapshot namespace，不清理或验证旧 Runtime key；
 旧部署、旧备份的升级迁移须另行安排，不能混跑旧 reader/writer。完整步骤由
-[Snapshot 恢复手册](../releases/client-runtime-snapshot-restore.md)拥有，首次切换的历史边界见
-[历史 hard-cutover 手册](../releases/client-runtime-snapshot-hard-cutover.md)。
+[统一维护手册的 Snapshot 恢复流程](../releases/unified-session-maintenance.md#新-snapshot-的定向修复与全量恢复)拥有，首次切换的历史边界见
+[历史 hard-cutover 手册](https://github.com/cyy1998/shgas-iam/blob/73315e4cef6f96dd79b29e18f74d68af30e559ec/docs/releases/client-runtime-snapshot-hard-cutover.md)。
 
 ## 一致性边界
 
-- **会话与协议状态**：Kernel 只拥有 UserSession/ClientSession。应用关系固定根与 Client，open 可复用有效实例并更新协议标记；固定期限不滑动。
+- **会话与协议状态**：Kernel 只拥有 UserSession/ClientSession。UserSession 使用固定期限；应用关系固定根与 Client，open 可复用有效实例、更新协议标记并单调延长期限，但不超过原根。
   Custom SSO 与 OIDC 各自拥有 Code、Token、续接及协议状态。访问验证自身、根、应用关系与当前 Client/Subject Access；
   不依赖异步枚举 Token 清理来阻止已终止关系的访问。离线旧布局只供显式维护，不进入线上探测。
-- **账号访问**：API、Admin、Custom SSO 与 OIDC 在每个受影响接口的首次可信主体解析后取得一次许可；成功、拒绝和暂态失败固定。已许可在途调用不复查账号状态，下一调用重新检查；Kernel 只管对象生命周期，Projection 复用许可。旧代不因重新启用恢复，协调切换见[维护手册](../releases/subject-access-operation-cutover.md)。
+- **账号访问**：API、Admin、Custom SSO 与 OIDC 在每个受影响接口的首次可信主体解析后取得一次许可；成功、拒绝和暂态失败固定。已许可在途调用不复查账号状态，下一调用重新检查；Kernel 只管对象生命周期，Projection 复用许可。旧代不因重新启用恢复，恢复步骤见[Profile 与 Subject Access 维护](../releases/user-profile-maintenance.md)。
 
 
 - **数据库写入与发布**：影响 Profile 的源事实 mutation 与 invalidation 在同一源 transaction 内；publication 再原子提交
   Profile 与 Dirty processed，随后单调发布 Redis。`required` after-commit 失败仍可能已有数据库提交，不能据错误自动重放业务写入。
 - **Client 配置**：请求成功接受 Snapshot 后可继续使用；Admin mutation 的传播成功影响后续 acquisition。传播失败可能让后续请求
-  继续取得旧 Snapshot，须显式 repair；这不等于协议配置版本或 Session 撤销，见 [ADR-0022](../adr/0022-adopt-snapshot-consistency-for-client-traffic-gate.md)。
+  继续取得旧 Snapshot，须显式 repair；这不等于协议配置版本或 Session 撤销，见 [ADR-0021](../adr/0021-bind-protocol-runtime-cache-consistency-to-snapshot-acquisition.md)。
   单次 acquisition 共同固定 Client 状态与单协议配置。启停、配置和 Secret 维护不自动撤销；显式撤销作用于捕获的精确实例。
 - **主体事实与授权**：普通 Profile 与 `iam:authorization` 均消费取得的已发布事实，缓存有效命中不查 PostgreSQL；
   缓存缺失或无效才读取已发布 Profile，不查 Dirty 新鲜度，允许旧权限持续交付。账号访问保护独立保持。
@@ -109,6 +109,6 @@ TTL 或逐 Client 访问自然收敛。当前 full repair/verify 只拥有当前
 
 Spec #178 的最终在线图由 API、Admin API、Worker 和前端共同消费一代模型；旧 OIDC app、Kernel 四对象、双协议列、
 Claims Snapshot 和三类旧 Snapshot/Gate 已退出生产。旧候选的历史测试不能代替当前候选执行。
-首次升级与旧布局清理按[统一维护手册](../releases/unified-session-maintenance.md)：先用固定旧工具完成 Client apply/verify，
-再应用收缩 migration，清理 source/unified 状态并独立核验，完成 Snapshot repair/verify、业务数据和新登录验收后才放流。
-本仓库变更没有执行目标环境切换；人工发布责任仍由发布负责人承担。
+当前维护按[会话与 Snapshot 手册](../releases/unified-session-maintenance.md)及[Profile 恢复手册](../releases/user-profile-maintenance.md)。
+旧来源的数据库和状态迁移按[历史工具入口](../development/commands.md#历史数据维护工具)恢复匹配版本流程，不能套用当前维护步骤。
+代码交付不表示目标环境已切换；人工发布责任仍由发布负责人承担。

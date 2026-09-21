@@ -4,12 +4,28 @@ status: accepted
 
 # 将 Organization Responsibility 建模为任职绑定的非授权事实
 
-Organization Responsibility Type Catalog 由 IAM 代码独占，是只增不减、没有运行时生命周期的封闭枚举；Assignment 以 Employment 为 holder，并可把该任职绑定到组织树中任意位置的 target Organization。Assignment 是需要保留身份与生命周期的档案事实，不是 Employment 属性，也不产生 Role Assignment、Effective Role、Privilege 或授权决定。
+Organization Responsibility Assignment 由 Employment 持有，可指向组织树任意位置的 target Organization。
+它有自己的身份和生命周期，是档案事实，不是任职属性，也不产生 Role、Privilege 或授权决定。
+Type Catalog 由 IAM 代码拥有，采用只增不减、没有运行时生命周期的封闭词汇。
 
-Admin API 拥有 Assignment 命令、管理查询及其与 Employment、Organization、User 生命周期的事务协调；独立的 `@iam/organization-responsibility-resolution` module 拥有跨 runtime 的 Effective 正向解析和 holder 反向解析，使 User Profile invalidation 能同时覆盖 Employment 组织关系与跨树责任目标。User Profile、Subject Facts、Internal DSL、Custom SSO 和 OIDC 只消费同一 canonical Effective snapshot，并通过一次全局 V2 hard cutover 切换，运行时不兼容 V1/V2 混读。
+## 理由与代价
 
-## Consequences
+Admin 拥有 Assignment 命令及其与父生命周期的事务协调；独立解析包拥有 Effective 正向解析和跨树 holder 反向解析。
+这样 Profile 失效能同时覆盖任职组织与责任目标，不让各协议重建不同的责任事实。各消费方使用同一当前发布模型，
+不保留多代在线混读。
 
-- 同一 UnitOfWork 内实际选中的 Assignment、父生命周期变化、审计和 Dirty 登记原子提交；数据库 Open 唯一约束强保证 Type cardinality，并把 constraint race 映射为稳定业务冲突。
-- 写入继续采用低并发 Admin 的顺序预检，不增加锁、更高隔离级别或自动重试。因此跨表 parent-vs-assignment 与 Resume-vs-Pause predicate 只具乐观保证，不宣称 linearizable 或 serializable；竞态形成的不一致属于 Organization Responsibility Integrity Violation，全部读取 fail closed，修复只能经过正式、带审计的业务入口。
-- 当写入规模、外部 Authority 或运行证据使这一并发边界不可接受时，必须重新决策统一的 `SERIALIZABLE` 加有限重试或显式锁协议，不能把现有预检误解为强不变量。
+选中业务行、相应生命周期变化、审计及 Dirty 登记在同一 UnitOfWork 提交。数据库 Open 唯一约束强保证 Type cardinality；
+现存目标按 [ADR-0025](0025-align-admin-mutation-results-with-committed-facts.md) 锁定。这些保证不能扩张到所有跨表
+parent-vs-assignment 或 Resume-vs-Pause predicate：它们仍有乐观并发边界。
+
+读取遇到完整性异常整体失败关闭，修复必须走正式且带审计的业务入口。写入规模、外部 Authority 或运行证据使现有边界
+不可接受时，再决定统一的 SERIALIZABLE 加有限重试或显式锁协议；不由某个调用方自行补锁并宣称全局保证。
+
+## 当前契约与历史
+
+模型词汇见[CONTEXT](../../CONTEXT.md)，解析与写入归属见
+[后端架构](../architecture/backend-architecture.md#organization-responsibility-解析)。
+HR 管理范围由 [ADR-0017](0017-centralize-admin-role-policy-with-request-time-scope.md) 决定，
+功能见[HR 管理契约](../features/organization-responsibility/hr-admin-management-design.md)。
+
+历史来源：[ADR-0014 原文](https://github.com/cyy1998/shgas-iam/blob/73315e4cef6f96dd79b29e18f74d68af30e559ec/docs/adr/0014-model-organization-responsibility-as-employment-bound-fact.md)。原始决定与后续修订按各版本追溯。

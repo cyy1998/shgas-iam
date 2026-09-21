@@ -99,13 +99,13 @@ composition。跨层实例连接统一由 composition 完成。
 
 ## Admin 同对象写入规范
 
-[ADR-0025](../adr/0025-align-admin-mutation-results-with-committed-facts.md) 已实施，现存 Admin PostgreSQL 写入口及全部 Admin 结果契约已迁移；逐命令与协议/页面 census 见[最终契约核对](../features/admin/admin-mutation-contract.md)：后续新增或修改的 Admin PostgreSQL 同对象写入统一在同一 UnitOfWork 内使用 `SELECT ... FOR UPDATE` 读取目标，再检查前提、判断业务变化、写入并登记审计和 Profile dirty，持锁至事务结束。Organization Responsibility Assignment 已移除 Admin expectedStatus CAS，与级联共用责任集合取锁能力，不按领域维持第二套同对象并发方案。
+[ADR-0025](../adr/0025-align-admin-mutation-results-with-committed-facts.md) 已实施，现存 Admin PostgreSQL 写入口及全部 Admin 结果契约已迁移；调用方结果与失败恢复见[Admin 写入契约](../features/admin/admin-mutation-contract.md)：后续新增或修改的 Admin PostgreSQL 同对象写入统一在同一 UnitOfWork 内使用 `SELECT ... FOR UPDATE` 读取目标，再检查前提、判断业务变化、写入并登记审计和 Profile dirty，持锁至事务结束。Organization Responsibility Assignment 已移除 Admin expectedStatus CAS，与级联共用责任集合取锁能力，不按领域维持第二套同对象并发方案。
 
-普通资料编辑本次不增加页面版本校验；只能覆盖请求明确提交的资料字段，生命周期或 Secret 等关联状态使用锁定后的当前事实。锁定命令拟修改的现存目标及级联选中行，只读父对象保留普通预检；多行写入统一安排取锁顺序。创建不存在的目标由既有数据库唯一约束裁决重复并映射已知冲突，不假定已锁住空槽。该规范不替代 Redis Session、Runtime Snapshot、Profile publication 的既有原子机制，也不自动提升跨对象、跨表的完整性保证；实施范围与验收沿 [Spec #95](https://github.com/cyy1998/shgas-iam/issues/95) 跟踪，来源讨论见 [Issue #29](https://github.com/cyy1998/shgas-iam/issues/29)，代码候选与真实部署仍须区分；外部消费者和部署动作见[协调切换清单](../releases/admin-mutation-contract-cutover.md)。
+普通资料编辑本次不增加页面版本校验；只能覆盖请求明确提交的资料字段，生命周期或 Secret 等关联状态使用锁定后的当前事实。锁定命令拟修改的现存目标及级联选中行，只读父对象保留普通预检；多行写入统一安排取锁顺序。创建不存在的目标由既有数据库唯一约束裁决重复并映射已知冲突，不假定已锁住空槽。该规范不替代 Redis Session、Runtime Snapshot、Profile publication 的既有原子机制，也不自动提升跨对象、跨表的完整性保证；实施范围与验收沿 [Spec #95](https://github.com/cyy1998/shgas-iam/issues/95) 跟踪，来源讨论见 [Issue #29](https://github.com/cyy1998/shgas-iam/issues/29)，代码候选与真实部署仍须区分；首次外部消费者切换见[历史协调清单](https://github.com/cyy1998/shgas-iam/blob/73315e4cef6f96dd79b29e18f74d68af30e559ec/docs/releases/admin-mutation-contract-cutover.md)。
 
 Admin 应用层公共模块统一事务、锁定流程与 `{ changed, result }` 业务结果；repository 提供锁定读取和明确的写入结果，领域拥有合法转换、变化比较及审计内容。数据库基础层提取包含 `cause` 的结构化 SQLSTATE/constraint 信息，由领域 repository 映射已知约束，未知约束不伪装成普通业务冲突。
 
-当前 `services/admin-mutation` 复用 UnitOfWork，提供创建事务与现存目标锁定流程；所有 Admin PostgreSQL 命令均直接使用或通过既有 Client/Subject Access wrapper 适配该模块。创建和 Transfer 保留新资源，密码/Secret 保留必要一次性结果，其他无资源命令返回 `result:null`；普通资料无变化不写审计和 dirty，显式提交状态的所有入口（包括资料更新入口）及 Assignment scope 无变化保留 `changed:false` 意图审计。页面编辑不回填未修改的初始状态。锁后写入零行属于不变量失败，不产生成功审计或 dirty；普通缺失目标和重复删除返回 404。岗位、组织和角色编码的既有全表唯一约束继续覆盖非启用及软删除行，Assignment 保留角色与目标组合唯一约束，由 repository 映射真实 Drizzle 包装错误。
+当前 `services/admin-mutation` 复用 UnitOfWork，提供创建事务与现存目标锁定流程；所有 Admin PostgreSQL 命令均直接使用或通过既有 Client/Subject Access wrapper 适配该模块。创建和 Transfer 保留新资源，生成密码保留必要一次性结果；SSO 配置/轮换返回安全 Client，当前 Secret 通过独立授权和审计读取，具体见[Client 配置契约](../features/admin/client-sso-configuration.md)。其他无资源命令返回 `result:null`；普通资料无变化不写审计和 dirty，显式提交状态的所有入口（包括资料更新入口）及 Assignment scope 无变化保留 `changed:false` 意图审计。页面编辑不回填未修改的初始状态。锁后写入零行属于不变量失败，不产生成功审计或 dirty；普通缺失目标和重复删除返回 404。岗位、组织和角色编码的既有全表唯一约束继续覆盖非启用及软删除行，Assignment 保留角色与目标组合唯一约束，由 repository 映射真实 Drizzle 包装错误。
 
 Role 状态变化根据锁定后的当前事实登记 dirty；名称与说明不进入当前 Profile 角色投影，因此这些资料的真实变化只记录审计。Assignment 创建、scope 变化与删除在源事务中登记保存目标的失效，仍由原 resolver 推导受影响用户。Assignment 命令只锁拟修改的 Assignment，Role 与其他只读父对象保持普通预检，不提升跨对象保证。真实 PostgreSQL 测试通过显式事务同步、中间版本的 production Profile publication 和最终 dirty/version 验证角色状态交错，并覆盖 Assignment 删除、创建与重复删除竞争。
 
@@ -131,9 +131,9 @@ Client 基础创建/list/兼容 ID 编辑与 Internal API credential 保留；�
 相关真实 PG/Redis composition 位于 `apps/admin-api/test-integration/composition/client-sso-snapshot.integration.test.ts`。
 岗位、组织、Role、Role Assignment 及上述 User、Employment、Responsibility 命令及 Client 基础、OIDC 与 Custom SSO 命令的 REST、legacy、tRPC 和页面已协调修改；整个集成分支的混合中间态不得部署，外部 REST 调用方核验仍是最终切换前的责任。
 
-成功业务结果通过现有 REST envelope 或直接通过 tRPC 返回，并协调切换调用方。状态/生命周期、主任职、授权、协议、凭据及会话命令的合法 no-op 保留意图审计，普通资料无变化不记变更审计。保留的 Client Runtime invalidation、提交后传播失败的专用错误语义及一次性 Secret 恢复由 ADR-0025 统一约束。
+成功业务结果通过现有 REST envelope 或直接通过 tRPC 返回，并协调切换调用方。状态/生命周期、主任职、授权、协议、凭据及会话命令的合法 no-op 保留意图审计，普通资料无变化不记变更审计。Client Runtime invalidation 与提交后失败沿用 ADR-0025 的结果语义；SSO Secret 的独立授权读取和审计边界见[Client 配置契约](../features/admin/client-sso-configuration.md)。
 
-Internal Privilege Delegation 已在 API 自身的 service、repository 与 UnitOfWork 中实现 [ADR-0026](../adr/0026-serialize-privilege-delegation-writes-by-delegator.md)：创建先锁委托人 User，更新仅预读不可变委托人 ID，取得 User 锁后再锁定、重读完整委托及权限绑定；候选校验、冲突检查、业务事实与成功审计在同一事务完成。该领域的协调锁扩展不自动改变上述 Admin 通用范围。同一委托人的未结束委托仅在权限、闭区间期间及组织覆盖范围都相交时冲突；Pause 占用期间，同组织或祖先与下级范围互斥，不相交范围可并存，不引入覆盖优先级。Disable 后仅纯重复结束合法且不重写业务行；Internal 保留详情/boolean 响应，handler 只传入 actor 与请求上下文，不在提交后另写成功审计。该能力不依赖 Admin mutation 模块、不登记 Profile dirty，也不提升其他引用对象的生命周期保证；现有 resolver 继续 fail closed。
+Internal Privilege Delegation 已在 API 自身的 service、repository 与 UnitOfWork 中实现 [ADR-0020](../adr/0020-provide-fail-closed-privilege-delegation-resolution.md#按委托人协调写入)：创建先锁委托人 User，更新仅预读不可变委托人 ID，取得 User 锁后再锁定、重读完整委托及权限绑定；候选校验、冲突检查、业务事实与成功审计在同一事务完成。该领域的协调锁扩展不自动改变上述 Admin 通用范围。同一委托人的未结束委托仅在权限、闭区间期间及组织覆盖范围都相交时冲突；Pause 占用期间，同组织或祖先与下级范围互斥，不相交范围可并存，不引入覆盖优先级。Disable 后仅纯重复结束合法且不重写业务行；Internal 保留详情/boolean 响应，handler 只传入 actor 与请求上下文，不在提交后另写成功审计。该能力不依赖 Admin mutation 模块、不登记 Profile dirty，也不提升其他引用对象的生命周期保证；现有 resolver 继续 fail closed。
 
 ## 请求、审计与可观测上下文
 
@@ -190,9 +190,10 @@ User Profile 的初代 V1 builder、Facts reader/publisher 与 Subject Projectio
 
 ### 角色分配解析
 
-- `@iam/role-assignment-resolution` 是 Effective Role 与角色变更受影响用户解析的唯一 production seam。Admin、OIDC
-  和 User Profile 的叶子 service/repository 只消费 composition 注入的最窄 resolver 能力，不直接读取
-  `role_assignment` 重建解析规则。
+- `@iam/role-assignment-resolution` 是 Effective Role 与角色变更受影响用户解析的唯一 production seam。Admin 和
+  User Profile 的叶子 service/repository 只消费 composition 注入的最窄 resolver 能力，不直接读取 `role_assignment`
+  重建解析规则。OIDC 消费已发布 Subject Facts，不直接调用角色解析器；决定见
+  [ADR-0002](../adr/0002-centralize-role-assignment-resolution.md)。
 - App composition root 或 `createUserProfileWorkerModule` 使用当前 `DbClient` 为普通消费者创建 resolver，同一
   composition 中的消费者复用该实例。
 - User Profile 失效是模块自有边界：API/Admin transaction composition 不创建或注入 resolver/projection
@@ -286,7 +287,7 @@ User Profile 的初代 V1 builder、Facts reader/publisher 与 Subject Projectio
   session-management 使用中性 inventory/control 返回未过期、未撤销的 Principal Session Record，
   不读取目标 Barrier，不触发账号拒绝清理。User、Client 和 Resignation 经统一 Session Revocation adapter 执行终止。
   prepared 读取失败保持 bestEffort 诊断和 callback 前代 fallback；空集合不扩大撤销，新代不受晚到清理影响。
-  完整入口、故事核对和人工证据边界见[最终契约](../features/sso/subject-access-operation-contract.md)。
+  操作许可与消费方责任见[Subject Access 契约](../features/sso/subject-access-operation-contract.md)，证明范围见[架构验证归属](architecture-verification.md)。
 - `@iam/api-core/subject-access` 是账号实时可访问性的唯一共享 seam。公开 Barrier 只接受严格版本化的
   `enabled`、`blocking`、`disabled` record；缺失、非法内容、Redis 失败和 `blocking` 都 fail closed。
   Redis adapter 独占 record、transition journal、repair ZSET 与 Lua 原子转换；rollback/finalize 只接受同一
@@ -347,7 +348,7 @@ User Profile 的初代 V1 builder、Facts reader/publisher 与 Subject Projectio
 - 管理查询是中性索引观察，不给目标账号发许可，不把 total 当完整在线人数。撤销捕获精确 identity，
   用户/根/应用关系结果与失败、未知、剩余原集合分开。原请求重试不重选新实例，根终止后 Token 在线访问拒绝。
 - 同根与子对象的作用不是一般事务；不承诺第三方本地退出或可靠后台补齐。Code/Token TTL、同步精确补偿、
-  独立维护与 #121/#145 剩余责任见[统一维护手册](../releases/unified-session-maintenance.md)。
+  独立维护和人工/外部责任见[统一维护手册](../releases/unified-session-maintenance.md#放流与人工恢复责任)。
 - `/maintenance` 与 `/testing` 分离；source decoder 只在显式停 writer 后处理固定旧布局，不能在线探测/转换旧关系。
   当前 API/Admin/Worker 同一生产图只消费一代；环境切换仍需人工发布验收。
 ### Temporary Login Restriction
@@ -413,7 +414,7 @@ API env 注入 current/previous RS256 JWK，JWKS 只输出公钥；非法配置�
   Kernel、OIDC、Custom SSO 分别拥有 decoder、索引及终态，不导入 app 私有状态。OIDC 的冻结旧 Provider decoder 仅由
   `/offline-maintenance` 出口消费，在线 factory 不探测旧布局。新 `client-snapshot:repair/verify` 只消费 API Core 新 Snapshot
   维护出口；三个 CLI 默认读取 `apps/worker/.env`，已有进程环境变量优先，使用 Worker 资源变量连接、限制 deadline 并在结束时断开资源。它们没有 HTTP、队列或 PG 连接，
-  也没有可靠后台执行器。完整 owner、旧命令替代和人工边界见[统一维护手册](../releases/unified-session-maintenance.md)。
+  也没有可靠后台执行器。当前 owner 和人工边界见[统一维护手册](../releases/unified-session-maintenance.md)，旧来源操作见[历史工具入口](../development/commands.md#历史数据维护工具)。
 
 - `apps/worker/src/modules/registry.ts` 定义稳定 `WorkerModule` contract：`key`、`queueRegistrations`、
   `startConsumers()` 和 `close()`。具体 queue/processor implementation 由对应 public workspace package 提供。
@@ -431,7 +432,7 @@ API env 注入 current/previous RS256 JWK，JWKS 只输出公钥；非法配置�
   dashboard 或 HTTP server。对应命令仅由运维人员按需显式调用，不进入普通 Worker 启动或请求路径。
 - `audit:actions` 是独立 PostgreSQL-only 一次性命令，入口直接拥有单连接与关闭，不加载 Worker composition barrel。
   固定八映射不依赖 runtime aliases；只读 inventory/verify 与持写锁事务 apply 的门禁见
-  [审计规范化手册](../releases/audit-action-canonicalization.md)。当前代码候选已删除运行时别名，Admin 按精确 action/outcome 查询；目标环境迁移与代码交付分开。
+  [审计规范化手册](https://github.com/cyy1998/shgas-iam/blob/73315e4cef6f96dd79b29e18f74d68af30e559ec/docs/releases/audit-action-canonicalization.md)。当前代码候选已删除运行时别名，Admin 按精确 action/outcome 查询；目标环境迁移与代码交付分开。
 - Worker composition 负责关闭构造出的 modules、HTTP server、Redis 和 DB。业务 package 不拥有 process signal
   handling；`src/index.ts` 只负责启动、记录 runtime 状态和转交 graceful shutdown。
 

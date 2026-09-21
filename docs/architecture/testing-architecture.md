@@ -146,7 +146,7 @@ E2E workspace 的 command runner 输出隔离和取消清理在其 `Integration/
 ## Root 与 package commands
 
 新 OIDC owner 的状态/维护 Redis 测试由 `@iam/oidc` 收集，使用专用 `IAM_OIDC_TEST_REDIS_URL`；
-API 正式根认证与 OIDC HTTP 组合使用 API Redis profile。旧 Provider app 已退役，历史 writer 证明独立固定 SHA，不能当最终候选执行。候选的实际能力和后续验证边界见 [OIDC 授权候选](../features/oidc/authorization-candidate.md)。
+API 正式根认证与 OIDC HTTP 组合使用 API Redis profile。旧 Provider app 已退役，历史 writer 证明独立固定 SHA，不能当最终候选执行。现行协议能力与验证入口见 [OIDC 协议契约](../features/oidc/oidc-integration.md)。
 
 长期 root interface 为：
 
@@ -251,7 +251,7 @@ Agent 可以补齐临时资源后重新运行，但命令不得 skip、自动 re
 它直接观察两协议相对登录、同一 managed Client 按本次落地 origin 回调、固定 business callback、host-only Cookie、授权 `iss`、退出与未知 host/伪造 header。
 E2E 从正式 manifest 发布 API upstream 的受控 Host rewrite，并回读已发布 upstream 后才运行旅程；不改生产 manifest 的部署输入。
 旧状态升级使用显式固定源码目录的独立演练，不在普通 composition 中隐式拉取旧代码；
-suite/RP、三个旧 Worker 进程和非目标保留的证据入口见[双入口验收](../features/sso/dual-entry-acceptance.md)。
+suite/RP、三个旧 Worker 进程和非目标保留的证据入口见[协议套件与演练入口](../development/commands.md#oidc-协议套件与旧来源演练)。
 
 API Browser Integration 的 Playwright 输出固定为 `apps/api/test-results/browser`，不能使用会清理其他通道产物的
 默认 `apps/api/test-results` 根。独立协议套件的持久验收材料放在调用方明确的任务目录，避免被浏览器 runner 清理。

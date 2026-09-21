@@ -2,7 +2,7 @@
 
 Type: runbook
 Status: Current
-Last verified: 2026-09-15
+Last verified: 2026-09-21
 Next review: 2026-10-31
 
 ## 范围
@@ -60,6 +60,8 @@ Loki 默认配置为保留 30 天（`720h`）。如果某个环境需要不同�
 
 ## Trace 发布前置
 
+当前 Alloy 将 APISIX span 送入 debug exporter，没有配置持久化 trace backend；本页 trace 验收证明日志关联。
+
 APISIX 与后端 trace 关联依赖以下条件同时满足：
 
 - APISIX manifest 保留 `opentelemetry` plugin metadata，且设置 `set_ngx_var: true`，使
@@ -84,7 +86,8 @@ APISIX 访问后端且没有 trace header 的请求，应在后端系统日志�
 - 客户端类型：confidential。
 - Redirect URI：`${GRAFANA_ROOT_URL}/login/generic_oauth`。
 - Scopes：`openid profile`。
-- 只保存一次生成的 client secret，并通过 `GRAFANA_OIDC_CLIENT_SECRET` 提供；不要提交到仓库。
+- 经授权且审计读取当前 SSO Secret，通过 `GRAFANA_OIDC_CLIENT_SECRET` 注入；普通详情不返回 Secret，响应丢失可重新读取。
+  具体权限与轮换边界见[Client 配置契约](../features/admin/client-sso-configuration.md)，不要提交 Secret 到仓库。
 - 从 IAM OIDC issuer 配置 `GRAFANA_OIDC_AUTH_URL`、`GRAFANA_OIDC_TOKEN_URL` 和 `GRAFANA_OIDC_USERINFO_URL`。
 - 除非 IAM 开始签发 `email` claim，否则 Grafana 的 login/name/email attribute path 保持为 `preferred_username`、`name` 和 `preferred_username`。
 
@@ -102,7 +105,13 @@ GRAFANA_OIDC_CLIENT_SECRET=<secret>
 docker compose -f docker/docker-compose-dev.yml --profile observability up -d --force-recreate grafana
 ```
 
-面向浏览器的授权 URL 使用 `http://localhost:30080/oidc/auth`；Grafana 服务端 token 和 userinfo 调用使用 `http://host.docker.internal:30080`，这样容器内部可以访问 APISIX。
+显式设置 `GRAFANA_OIDC_AUTH_URL`、`GRAFANA_OIDC_TOKEN_URL`、`GRAFANA_OIDC_USERINFO_URL`，
+分别使用同一已配置 issuer 的 `/auth`、`/token`、`/me`。该入口必须同时对浏览器和 Grafana 容器可达；
+容器 DNS/网络可以使用不同解析，但请求 authority 必须命中同一受控 Gateway 入口，不能把同一次授权分到不同 issuer。
+
+开发 compose 的默认 URL 仍分别使用 localhost 和 host.docker.internal；当前 Gateway 按配置的 host/authority 选择入口，
+这些默认值不保证可直接用于双入口 OIDC。先按实际部署覆盖三项 URL、配置容器解析，再核对 Discovery、完整登录及 UserInfo；
+不要以容器能连通某个端口代替 issuer 一致性检查。入口设置见[OIDC 发布手册](oidc-release-runbook.md)。
 
 Grafana 自己负责最终的 dashboard 和 datasource 授权。管理端前端只链接到 Grafana，绝不通过 iframe 嵌入。`admin-api` 不代理 Loki 查询。
 

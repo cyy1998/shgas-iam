@@ -47,17 +47,20 @@ Admin/SSO 前端、`api-core`、`domain`、`contracts`、`db`、`jobs`、Gateway
 | 离线维护 | [Worker Redis CLI](../../apps/worker/test-integration/redis/online-state-command.integration.test.ts) | 新进程 inventory/apply/verify、全部来源模型/索引、特殊 Client、非目标、ACL、部分失败重跑；历史真实 Provider writer 证据在统一维护手册固定 SHA。 |
 | b648 无人值守迁移 | [Worker composition](../../apps/worker/test-integration/composition/b648-upgrade.integration.test.ts) | 正式单入口、精确旧 migrations、真实 PG/Redis、写入前拒绝歧义、数据库与 Redis 部分失败恢复、原凭据/非目标保留、成功后不再清理；不证明真实环境停流或发布。 |
 | 代表系统旅程 | 根 `pnpm test:e2e`：[Admin](../../e2e/system/admin-custom-sso.spec.ts)、[HR](../../e2e/system/hr-admin-user-management.spec.ts)、[OIDC](../../e2e/system/oidc-pkce.spec.ts) | 同一临时 PG/Redis/APISIX 与全部正式 runtime；不证明真实外部集成或目标环境切换。 |
-| 双入口联合验收 | [双hostname浏览器](../../e2e/system/dual-entry.spec.ts)、[独立RP](../../apps/api/test-integration/composition/oidc-rp.integration.test.ts)、[旧来源演练](../../apps/api/test-integration/composition/dual-entry-upgrade.fixture.ts) | 正式APISIX与独立same-origin场景、两issuer协议、固定旧HTTP writer→三Worker全清→新拒绝及非目标保留；suite逐模块、实际命令与发布边界见[完整账本](../features/sso/dual-entry-acceptance.md)。 |
+| 双入口联合验收 | [双hostname浏览器](../../e2e/system/dual-entry.spec.ts)、[独立RP](../../apps/api/test-integration/composition/oidc-rp.integration.test.ts)、[旧来源演练](../../apps/api/test-integration/composition/dual-entry-upgrade.fixture.ts) | 正式APISIX与独立same-origin场景、两issuer协议、固定旧HTTP writer→三Worker全清→新拒绝及非目标保留；复现命令与资源见[协议套件与演练入口](../development/commands.md#oidc-协议套件与旧来源演练)。 |
 
 旧 Kernel 四对象、Provider、配置版本和旧 Snapshot/Gate 测试随被替代模型删除；其仍成立的行为分别由上表
 会话/协议/配置/账号/维护最高入口承接。历史 schema/旧 writer 证明不能冒称在最终候选重跑。
 
+两个 loopback 端口的套件/RP 只证明两 issuer 协议；不同 hostname 的真实 APISIX/browser 才证明 Cookie 域隔离，
+HTTP cookie jar 不能替代浏览器证据。
+
 ## 聚合 Gate 与人工证据
 
 每票交接执行 `pnpm verify:static`、完整受影响 typecheck 和行为通道，固定最终候选记录实际结果。
-`pnpm verify` 最终聚合由 #196 执行；#195 官方固定 OIDC 套件独立，当前组合/E2E 不能替代其验收。
+最终聚合按[开发工作流](../agents/workflow.md#验证节奏)执行；官方固定 OIDC 套件单独验证，组合/E2E 不能替代其证据。
 发布负责人仍须按[统一维护](../releases/unified-session-maintenance.md)、[Gateway](../releases/apisix-gateway-release.md)、
-[OIDC 发布](../releases/oidc-release-runbook.md)、[观测](../releases/observability-system-logs.md)核验停流、drain、数据、
+[Profile 恢复](../releases/user-profile-maintenance.md)、[OIDC 发布](../releases/oidc-release-runbook.md)、[观测](../releases/observability-system-logs.md)核验停流、drain、数据、
 新登录、真实代理信任和放流。代码接线及临时测试均不表示已执行目标环境切换。
 
 ## 变更时如何维护

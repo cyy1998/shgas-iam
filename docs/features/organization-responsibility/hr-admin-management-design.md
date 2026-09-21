@@ -1,10 +1,10 @@
-# HR Organization Responsibility Administration 设计
+# HR 组织责任管理契约
 
-## 状态与目标
+## 适用范围
 
-本设计已经实现并由 Full-system E2E 验证。部署中的所有有效 `iam:hr-admin` 通过既有 `admin.organizationResponsibility.*` operations 获得当前 HR Administration Scope 内的组织责任管理能力；该能力不使用 feature flag，不创建 HR 专用角色，也不改变数据库 schema。
+具备有效范围的 `iam:hr-admin` 通过既有 `admin.organizationResponsibility.*` operations 获得当前 HR Administration Scope 内的组织责任管理能力；沿用现有角色、接口与数据模型。
 
-领域语义以根目录 `CONTEXT.md` 的 **HR Organization Responsibility Administration** 为准；架构决策见 [ADR-0018](../../adr/0018-authorize-hr-organization-responsibility-by-both-endpoints.md)。Assignment 模型与请求时授权边界继续分别遵守 [ADR-0014](../../adr/0014-model-organization-responsibility-as-employment-bound-fact.md) 和 [ADR-0017](../../adr/0017-centralize-admin-role-policy-with-request-time-scope.md)。
+领域语义以根目录 `CONTEXT.md` 的 **HR Organization Responsibility Administration** 为准；请求时授权与双端范围见 [ADR-0017](../../adr/0017-centralize-admin-role-policy-with-request-time-scope.md)，Assignment 模型见 [ADR-0014](../../adr/0014-model-organization-responsibility-as-employment-bound-fact.md)。
 
 ## 授权契约
 
@@ -32,11 +32,11 @@
 
 既有业务规则全部保持：Type Catalog 只增不减且不可管理；创建只接受 Enable holder Employment 与 Enable target Organization；Assignment 三项绑定不可编辑或删除；Pause 仍占 cardinality 槽位；End 不可恢复；Resume 重新检查父对象和 cardinality；Employment、Organization、User 级联及 User Profile invalidation、审计写入继续原子执行。
 
-## Deep module 与 seam
+## 授权接口
 
 外部 Interface 继续使用现有 `admin.organizationResponsibility.*` REST/tRPC operations，不新增 `/hr` route、HR router 或调用方声明的 scope。Admin adapter 只负责输入适配、operation classification 和取得请求上下文。
 
-在现有 Admin Authorization Policy seam 增加 `AdminOrganizationResponsibilityAuthorization`。它是一个 full/scoped 联合，向应用层只公开三个概念：
+Admin Authorization Policy 提供 `AdminOrganizationResponsibilityAuthorization`。它是一个 full/scoped 联合，向应用层只公开三个概念：
 
 ```ts
 interface AdminOrganizationResponsibilityAuthorization {
@@ -49,7 +49,7 @@ interface AdminOrganizationResponsibilityAuthorization {
 }
 ```
 
-`OrganizationResponsibilityReadScope` 是 repository adapter 消费的内部 seam；scoped adapter 必须把同一个 `organizationIds` 集合分别应用到 holder Organization 与 target Organization，并以 `AND` 组合。Route、React 页面和调用方不得读取数组后自行重建 predicate。删除这个 module 时，full/scoped 分支、双端量词、denial logging 和 concealment 会重新散落到所有查询与命令，因此该 Interface 有足够 Depth。
+`OrganizationResponsibilityReadScope` 是 repository adapter 消费的内部 seam；scoped adapter 必须把同一个 `organizationIds` 集合分别应用到 holder Organization 与 target Organization，并以 `AND` 组合。Route、React 页面和调用方不得读取数组后自行重建 predicate。
 
 `getAllowedActions` 同时观察 scope facts、Assignment lifecycle 与现有 parent integrity facts。`denyMutation` 统一记录 actor、operation、resource type、有限 resource identifier 和稳定 reason，不记录 scope/root 集合；越界时抛出 not-found error，其他状态拒绝沿用现有领域错误。Full 与 scoped 共用相同 Interface 和测试 surface。
 
@@ -64,7 +64,7 @@ REST / tRPC operation
   -> existing domain transition, audit, dirty registration and commit
 ```
 
-Generic operation gate 把全部 `admin.organizationResponsibility.*` IDs 加入 HR operation 集合，但只证明 actor 具有有效 HR scope；它不证明具体 Assignment、target 或 holder 可访问。资源授权必须留在后续 deep module 中。
+Generic operation gate 覆盖 `admin.organizationResponsibility.*` 的 HR operation 集合，但只证明 actor 具有有效 HR scope；它不证明具体 Assignment、target 或 holder 可访问。资源授权必须留在后续 deep module 中。
 
 ### 查询
 
@@ -85,21 +85,21 @@ Create use case 接收 authorization，在既有 UnitOfWork 内读取 holder Emp
 
 Pause、Resume、End use case 在事务内复用级联的集合取锁能力，先按 Assignment ID 锁行，再普通读取父对象组成 lifecycle context，并扩充 holder 与 target 的 Organization IDs。scope guard 必须发生在 transition/no-op 判断之前，因此当前 scope 已丢失时，即使重复已完成命令也返回 404。通过 guard 后根据锁定状态判断转换；合法重复命令返回 `changed:false` 并保留意图审计，不新建 dirty 或改写结束时间；非法转换返回 409。只读父对象保持普通预检，不因直接命令增加父行锁，也不防止新 Assignment phantom。
 
-HR scope 仍在事务外按请求时 PostgreSQL 事实解析，再传入事务；授权通过后发生的并发撤权不会中止当前事务，后续请求才观察新范围。本设计不声称 commit-time linearizable 或 serializable。
+HR scope 仍在事务外按请求时 PostgreSQL 事实解析，再传入事务；授权通过后发生的并发撤权不会中止当前事务，后续请求才观察新范围。该请求时授权不保证 commit-time linearizable 或 serializable。
 
 ## 响应与前端
 
 通用 service、路由与权限 UI 规则见 [前端架构](../../architecture/frontend-architecture.md#管理路由与权限)。
 
-`AdminCapabilitySummary` 作以下扩展：
+`AdminCapabilitySummary` 表达：
 
-- 有效 HR 的 `visibleModules` 增加 `organizationResponsibility`；
-- `collectionActions` 增加 `organizationResponsibility.create`；
+- 有效 HR 的 `visibleModules` 包含 `organizationResponsibility`；
+- `collectionActions` 包含 `organizationResponsibility.create`；
 - 无有效 scope 继续 fail closed；mixed `iam:admin` + `iam:hr-admin` 继续得到 full capability。
 
 创建成功返回 `{changed:true,result:{id}}`，Pause、Resume、End 返回 `{changed,result:null}`；REST 保留 envelope，tRPC 直接返回业务结果。列表和各嵌入入口统一区分已修改与无需修改，并刷新事实。
 
-Admin Assignment view/detail 增加服务端计算的 `allowedActions.pause/resume/end`。React module 不再只根据 status 推断按钮；按钮使用 `allowedActions`，mutation 后重新加载列表和详情。服务端每次 mutation 仍重新授权，响应 capability 不是凭据。
+Admin Assignment view/detail 返回服务端计算的 `allowedActions.pause/resume/end`。React module 不再只根据 status 推断按钮；按钮使用 `allowedActions`，mutation 后重新加载列表和详情。服务端每次 mutation 仍重新授权，响应 capability 不是凭据。
 
 HR 可访问独立 Organization Responsibility Assignment 页面，也可在 Organization、Employment、User 详情中看到责任入口。
 所有入口复用同一 scoped service；holder 与 target selector 只展示当前 scope 候选，允许从不同 Scope Roots 选择两端。
@@ -119,59 +119,16 @@ holder 在 scope 但 target 越界，或 target 在 scope 但 holder 越界的 A
 
 详情和 mutation 的范围拒绝统一使用内部 `RESOURCE_OUT_OF_SCOPE` reason、外部 404 与结构化 denial log。列表和搜索以过滤后的结果表达范围，不逐条记录 denial。
 
-## 当前实现落点
+## 验证入口
 
-- `packages/contracts/src/admin-authorization.ts`：Organization Responsibility collection/row actions 与稳定 reason contract。
-- `apps/admin-api/src/services/admin-authorization/`：operation grant、capability summary、authorization Interface 与双端 decision。
-- `apps/admin-api/src/services/organization-responsibility/`：scoped list/search/detail、action facts、SQL 前置过滤。
-- `apps/admin-api/src/use-cases/organization-responsibility/`：Create 与 lifecycle 的事务内双端 guard。
-- `apps/admin-api/src/routes/admin/organization-responsibility/`：取得 authorization 并向 service/use case 传递，不实现 predicate。
-- `apps/admin-api/src/composition/`：连接新增依赖；不创建第二套 repository 或 HR adapter。
-- `apps/admin/src/access.ts`、route registry 与 Organization Responsibility UI：模块可见性、collection action、row actions、嵌入面板与 Audit Tab 条件。
-- `e2e/system/hr-admin-user-management.spec.ts` 与相应 component/PostgreSQL tests：把“菜单隐藏、直达 403”改为正向管理 journey 和双端 denial matrix。
-
-## 验证矩阵
-
-### Policy 与 adapter component tests
-
-- HR capability summary 包含 Organization Responsibility，其他既有模块能力不变。
-- 全部现有 Organization Responsibility REST/tRPC operations 对有效 HR 通过 module gate；无 scope、错误 client 绑定和 ordinary role 仍拒绝。
-- full/scoped authorization 对双端 in/in、in/out、out/in、out/out 四种 facts 给出稳定决定；不同 Scope Root 的 in/in 允许。
-- Assignment `allowedActions` 同时覆盖 Enable、Pause、Disable、parent unavailable 和完整管理员回归。
-- REST 与 tRPC 使用同一 operation classification 和 authorization Interface。
-
-### Service/use-case tests
-
-- list/search/detail 在 repository seam 接收 scoped read scope，显式 filters 只能收窄。
-- Create 对四种双端组合、自 holder、跨 roots、Enable/Pause/Disable holder、target 状态及 `head`/`supervising` cardinality 全覆盖。
-- Pause、Resume、End 在事务内先授权再 transition；越界、scope 丢失验证无 audit、dirty 或状态写入；合法幂等重试保留 `changed:false` 意图审计，不增加 dirty 或状态写入。
-- 范围外 blocker 只返回安全原因，不包含 Assignment、holder、Organization 或 scope 身份。
-
-### PostgreSQL integration tests
-
-- 双端 `AND` predicate 在 pagination/cursor 前生效，没有空洞页、错误 cursor 或越界详情。
-- Ended 历史按当前 scope 变化立即出现或消失。
-- full admin 创建的单端越界 Assignment 仍占用 cardinality、阻止 Organization 生命周期，并向 HR 返回安全 blocker。
-- 既有 unique indexes、并发 create/resume、rollback、audit 与 invalidation contract 不回归。
-
-### Frontend 与 Full-system E2E
-
-- HR 菜单、独立页面及 User/Employment/Organization 嵌入面板可见，Audit 菜单和 Assignment Audit Tab 不可见。
-- 两个 selector 只返回 scope 内候选，但允许从管理员不同 Scope Roots 各选一端。
-- HR 可创建、暂停、恢复、结束并查看 Ended 历史；按钮由 server-owned `allowedActions` 控制。
-- 直接 URL、猜测 Assignment ID 和手工 API 请求不能绕过双端 guard。
-- scope 变更后的下一请求立即收敛；full admin 与 mixed-role journey 保持全局行为。
-
-以上矩阵已由 policy/adapter、service/use-case、PostgreSQL/component 测试与 `@iam/e2e-system` 的真实
-`hr-admin:journey` 覆盖。Full-system seed 固定建立两个 HR Scope Roots、双端四组合、隐藏 blocker、mixed-role
-Full Admin、ordinary actor 与无有效 scope 的 HR actor；浏览器 journey 通过真实 Gateway/SSO/Admin API/Admin UI
-验证创建、Pause、Resume、End、Ended 历史、嵌入面板、direct URL、REST/tRPC 四组合、scope 撤销后的读取与 mutation
-拒绝和安全 blocker。同一 full actor 在移除 HR Role Assignment 前后分别以 mixed/full 身份完成全局隐藏 Assignment 的
-读取和 lifecycle mutation。随后由 production Drizzle verifier 与有界 Admin API 日志核验 audit、User Profile 收敛、
-无越界写入和所有 HR denial log 均不泄露。
+验证须覆盖双端 in/in、in/out、out/in、out/out 与跨 roots，自 holder、生命周期、Ended 历史、
+scope 撤销后拒绝、隐藏 blocker 不泄露，以及 full/mixed 管理员全局能力。
+SQL 过滤在分页前生效、事务审计/dirty、API 授权与 UI 能力分别由相关资源通道证明，
+入口及限制见[架构验证归属](../../architecture/architecture-verification.md)，
+通用前端约定见[前端架构](../../architecture/frontend-architecture.md)。
 
 ## 发布与回滚
 
-本变更没有数据迁移、backfill 或 role provisioning。Admin API 与 Admin 前端按一次协调发布交付：统一 mutation 结果按 [ADR-0025](../../adr/0025-align-admin-mutation-results-with-committed-facts.md) 与全部消费者协调切换，不部署混合结果契约；切换前核验外部 REST 调用方，并运行 Full-system HR journey。部署后所有有效 `iam:hr-admin` 立即获得能力。
+Admin API 与 Admin 前端按协调发布交付：统一 mutation 结果按 [ADR-0025](../../adr/0025-align-admin-mutation-results-with-committed-facts.md) 与全部消费者协调切换，不部署混合结果契约；切换前核验外部 REST 调用方，并运行 Full-system HR journey。该能力由有效 HR scope 决定，不依赖额外开关。
 
 若必须回滚权限，先从 Admin API 的 HR operation/capability policy 撤销服务端授权，再回滚前端入口；只隐藏 UI 不能构成安全回滚。数据库、Assignment 数据、审计和 User Profile 投影不需要回滚。

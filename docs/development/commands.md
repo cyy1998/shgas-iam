@@ -41,40 +41,11 @@ pnpm test:integration:<component|process|redis|postgres|composition|browser>
 
 ## Workspace 命令
 
-b648 默认范围无人值守离线迁移：`pnpm --filter @iam/worker b648-upgrade`。
-调用者预先备份、停流并排空；命令读取 Worker 连接配置，自动完成数据库、认证状态、Snapshot 和保留核验，
-恢复文件默认保存在 `apps/worker/.b648-upgrade/`，中断后原命令续跑，成功后重跑只读。
-支持 `--state-dir <持久目录>`、`--migrations-schema <schema>`；完整边界见
-[无人值守手册](../releases/b648-unattended-upgrade.md)。
-验证入口为 `pnpm --filter @iam/worker test:integration:composition`，显式提供独占
-`IAM_WORKER_TEST_DATABASE_URL`、`IAM_WORKER_TEST_REDIS_URL`，不得指向运行环境。
-
-当前单协议 Client 的 managed 地址准备（#203）使用 Worker 命令：
-
-```powershell
-# IAM_WORKER_DATABASE_URL 与 DB migrate 的 DATABASE_URL 由调用方指向同一已备份、停流停写并排空旧实例的目标库。
-pnpm --filter @iam/worker client-managed-callback:upgrade inventory --writers-stopped
-pnpm --filter @iam/worker client-managed-callback:upgrade apply --writers-stopped
-pnpm --filter @iam/db db:migrate
-pnpm --filter @iam/worker client-managed-callback:upgrade verify --writers-stopped
-```
-
-Worker 在 inventory/apply/verify 全量使用 Domain `ValidatedClientSsoConfigSchema` 校验 URL、pattern 与 claims，
-包括无需转换的 managed/business/OIDC；不规范化写回非目标配置。DB 窄维护出口只拥有锁、journal 与减键事务，避免数据库反向依赖 Domain。
-默认 journal schema 为 `drizzle`，自定义部署需显式传 `--migrations-schema <schema>`。
-命令要求当前单协议 schema，且截至 `20260916050609_explicit_callback_type` 的历史 migrations 名称与时间戳已登记；不比较历史 SQL 字节 hash。
-不能跳过早期 Client 转换/收缩阶段。inventory 报告稳定排序的 `managedClients` 及本轮待转换 `changes`；发布负责人须保存
-首次 inventory 的 Client 集合，供后续定向 Code/续接清理使用。apply 在单个独占锁事务中全量规划后只删除 managed
-地址键并安装最终约束，异常整笔回滚；不写 journal，随后正式 migrate 登记新增 migration。重复执行不轮换凭据、不改业务事实。
-verify 独立解析全部配置并拒绝旧地址残留。新装空库直接执行 `db:migrate`。这些命令只完成配置阶段，不能据此放流；
-在线状态、Snapshot 和完整来源升级步骤已交付于[同代保留手册](../releases/managed-callback-origin-preserving-upgrade.md)
-与[b648 跨代手册](../releases/b648-managed-callback-upgrade.md)，目标环境尚未执行。
-
-Spec #178 的维护入口为 Worker `online-auth:state`、`client-snapshot:repair`、`client-snapshot:verify`。
-它们均通过 `bun run` 默认读取 `apps/worker/.env`，已有进程环境变量优先。
-资源变量、source/unified 布局、namespace、停流/排空、退出码和完整命令见
-[统一维护手册](../releases/unified-session-maintenance.md)。旧 `client-runtime`/Provider 命令的去向也在该页逐项登记；
-代码候选通过不授权目标环境维护。
+当前会话和 Snapshot 维护入口为 Worker `online-auth:state`、`client-snapshot:repair`、`client-snapshot:verify`。
+同名 scripts 通过 `bun run` 默认读取 `apps/worker/.env`，已有进程环境变量优先。
+资源、当前布局、namespace、停流/排空与失败处理见[统一维护手册](../releases/unified-session-maintenance.md)。
+Profile 重建及 Subject Access 恢复见[Profile 维护手册](../releases/user-profile-maintenance.md)；
+一次性升级工具集中在[历史数据维护工具](#历史数据维护工具)，不用于当前代日常恢复。
 
 - `pnpm dev`
 - `pnpm build`
@@ -121,21 +92,11 @@ pnpm test:integration:composition
 pnpm test:integration:browser
 ```
 
-`test:unit` 通过 Turbo 运行 package Unit，并精确加入四个 root tooling tests。各 profile command 只运行同名 package task。
-Integration 资源由调用方负责：维护者可以提供现有 URL，agent 也可以先启动临时 Docker 容器。聚合
-`test:integration` 本身不启动 Docker，而是在任何 profile 启动前一次性列出全部缺失的 PostgreSQL/Redis 环境变量；
-任何专用 URL 都不得回退 runtime 或其他 test URL。资源 tasks 在 Turbo
-strict env 下显式透传对应 owner URL 并保持 `cache:false`。
-`pnpm test` 永久代理 `pnpm test:unit`；有 Unit collection 的 package 使用同一代理，没有 Unit collection 的 package
-不发布空 `test`。旧 `test:smoke`、`test:external`、package-local `test:postgres`/`test:redis` 与 frontend `e2e`
-collection aliases 已删除。
+各 profile command 只运行同名 package task；`pnpm test` 代理 Unit。命名、唯一收集、缓存与并发预算统一见
+[测试编排架构](../architecture/testing-architecture.md#root-与-package-commands)。
 
-`pnpm check:test-collection` 通过 Vitest/Playwright 机器 list、Bun 窄目录与 Turbo dry-run 验证每个当前候选的唯一收集、
-路径/命名归属和 root task 可达性。它与 production Architecture Guard 分离，不分析测试断言、资源调用或 AST/data flow。
-
-`pnpm test:unit` 以 Turbo concurrency 2 运行可缓存的 Unit。Admin 与 SSO 的 package-local Vitest Unit 固定使用 4 个
-workers，其他 Vitest Unit 使用 25% workers，Bun Unit 使用 `--max-concurrency=2`。Architecture Guard 不进入 package
-`test`，由根级 `pnpm check:architecture` 单独执行。
+Integration 所需的 owner-specific URL 由调用方提供；agent 可先创建任务独占临时资源。
+聚合 `test:integration` 在启动任何 profile 前检查全部 URL，缺失即失败，不启动 Docker，也不回退 runtime 或其他 test URL。
 
 真实进程/端口行为由 `test:integration:process` 以 Turbo concurrency 1 运行，并禁用任务缓存：
 
@@ -240,40 +201,15 @@ pnpm --filter @iam/sso test:integration:browser
 
 Browser Integration 保留原 API mocks、package-local `webServer`、base URL 与单 Chromium project，不是 Full-system E2E。
 
-`@iam/e2e-system` 通过 root `pnpm test:e2e` 发布完整 Full-system collection：受独立 60 秒 deadline 约束的 preflight 通过后才创建唯一 Compose
-project，以动态 Gateway host port 等待 PostgreSQL、Redis、etcd 与 APISIX healthy，在空 volumes 上执行真实 Drizzle migrations，
-再启动 API、Admin API、Worker、Admin 与 SSO。Runtime healthy 后命令校验 rendered Compose 的 canonical origin 合同，
-通过 production owner 建立固定 synthetic scenario 并写安全 seed receipt，依次运行 production Worker 的
-`user-profile:verify-postgres` 与 `user-profile:verify-redis`；两道 gate 均通过后才渲染 repo-owned Gateway routes，并从
-canonical origin 完成 protocol readiness；OIDC
-discovery 会精确核对 issuer、authorization endpoint、token endpoint 与 JWKS URI，而不是只接受 HTTP 200。
-它还核对 UserInfo `/oidc/me` 与 RP-initiated logout `/oidc/session/end`。普通 lifecycle command 不回显 child stdout/stderr；
-Descriptor 落盘后、diagnostic tool build 与资源创建前先原子写入安全的 `not-attempted` migration receipt；初始化失败不会创建资源。
-真正 migration 前更新为 `attempted`，随后写 `applied` 或不含命令、环境及原始错误的 `failed`。Compose/runtime 只使用 feature
-固定或 run-generated synthetic data/credentials，不接受 production endpoint、production credential 或真实 PII。
-服务日志只保留有界完整行，超长单行整行标记为 `[TRUNCATED]`；diagnostics 原样保留有界 source 内容，不做 JSON/YAML/JWK/PEM/
-credential 分类或脱敏。Run-scoped Playwright staging 的 raw trace/PNG/WebM 安全移动到 artifact directory 并保留；metadata 只辅助枚举。
-Intake 受独立 source deadline 约束，最多接受 128 个文件、单文件 16 MiB、合计 64 MiB，并拒绝路径越界与 symlink。任一 required
-diagnostic source 失败时，已取得的 artifacts、unavailable placeholder 与 index 仍先写完，然后 run 在 cleanup 尝试后非零退出。
-Preflight 发生在 descriptor/resource 之前；其失败直接非零退出，不运行不存在 project 的 diagnostics/cleanup。Descriptor
-落盘后的 runtime setup/readiness/seed failure、timeout 与可捕获 signal 都先尽量保存有界原始诊断再尝试 best-effort cleanup；cleanup failure
-保持非零。`admin:journey` 复用同一 lifecycle，在 protocol readiness 后用真实 Chromium 登录 Admin，通过真实 Admin UI 创建跨树
-Organization Responsibility，轮询 Internal Detail/DSL 与 Custom SSO UserInfo 验证 Profile/Facts 发布，并证明 Gateway/authorization
-裁剪责任；随后通过真实状态 mutation 将独立目标 client 切入 Maintenance，在维护中配置并启用 Gateway Custom SSO。公开
-authorize/user-info 验证维护阻断，恢复正常后复用未变更的 Local Session，再以维护中的真实 disable/enable mutation 验证旧 Session
-经显式捕获会话撤销后永久失效，并由同一有效 UserSession 重新授权。该命令固定
-单 project、单 worker、零 retry；浏览器启动 preflight 失败时在资源创建前退出，journey 失败时则保留 raw trace/PNG/WebM 并进入统一
-diagnostics 与 exact-project cleanup。`hr-admin:journey` 使用真实 `iam-admin` Client、普通 `iam:hr-admin` Role、Role Assignment、
-两棵一级根组织及跨根普通任职，通过真实 Worker 发布后经 SSO 登录 Admin；它证明四模块 UI、全局只读 Position、User/Employment
-范围导航、一个范围内 User 编辑，以及范围外 Organization REST mutation 的 `404`。Playwright 后、cleanup 前的 production Drizzle
-verifier 同时证明 User、成功 audit、`user-updated` invalidation/Profile 收敛与范围外无写入；有界 Admin API 日志 capture 证明
-denial security log 不包含 scope/root 集合，并写入安全的 `hr-admin-outcome-receipt.json`。`oidc:journey` 以相同的单 project、单 worker、零 retry 与 evidence/cleanup 边界运行独立
-OIDC browser slice；真实 Admin UI 在 Maintenance 中完成 OIDC disable/enable，test-owned RP helper 只生成 S256 verifier/challenge 并接收
-registered callback，真实 repo-owned authorize、登录、resume、token 与 `/oidc/me` 负责协议行为。该 slice 从 canonical origin 验证
-暂态阻断与恢复、interaction Cookie、PKCE mismatch、成功兑换、code replay、`iam:employments` responsibility snapshot、Employment
-Pause cascade 后的 authorization-time replay、ID Token 排除、discovery/JWKS/health 及维护中 logout 永久失效。Root command 在同一个
-exact-project lifecycle 中固定按 Admin → HR Admin → OIDC 运行，任一失败都进入统一
-diagnostics 与 cleanup；cleanup failure 传播为 root command 非零。Workspace-local 单 journey 命令只用于聚焦调试：
+### Full-system E2E
+
+`pnpm test:e2e` 由 `@iam/e2e-system` 管理完整临时系统：Docker 与浏览器 preflight、迁移、seed、
+readiness、同 origin 旅程及独立双 hostname 阶段。完整行为和诊断契约见
+[测试编排架构](../architecture/testing-architecture.md#root-与-package-commands)与
+[双入口验收](../architecture/testing-architecture.md#双入口验收与产物隔离)。
+
+只使用测试生成的数据与凭据，不接入生产端点、生产凭据或真实 PII。产物位于 `e2e/system/test-results/`；
+workspace-local 单 journey 命令用于聚焦调试：
 
 ```bash
 pnpm test:e2e
@@ -287,11 +223,11 @@ pnpm --filter @iam/e2e-system runtime:cleanup -- --descriptor e2e/system/test-re
 pnpm --filter @iam/e2e-system runtime:cleanup -- --project iam-e2e-<run-id>
 ```
 
-Explicit recovery 的 cleanup 有独立 120 秒 deadline，对 exact project 执行一次
-`compose down -v --remove-orphans --rmi local`，不使用 prefix、glob 或 prune，也不查询/删除额外 image IDs 或把四类 inventory=0
-作为成功硬门禁。SIGINT/SIGTERM 与 timeout 对当前 child/tree 做一次 best-effort 终止并短暂有界等待；Windows 最多调用一次
-`taskkill /T /F`，不记录 PID CreationDate、不使用 CIM fallback 或 typed termination gate。Cleanup failure 非零并保留 descriptor，
-允许残留，由显式 recovery 重试同一 exact target。
+显式恢复有独立 120 秒 cleanup deadline，只清理给定 descriptor 或 exact project；不接受 glob、prefix 或 prune。
+Cleanup 失败会非零退出并保留 descriptor，可使用同一目标重试。生命周期和进程终止规则见
+[测试编排架构](../architecture/testing-architecture.md#root-与-package-commands)。
+
+### 聚合验证
 
 `pnpm verify` 通过 `scripts/verify.mjs` 按以下顺序 fail-fast：
 
@@ -309,7 +245,7 @@ diagnostics 或 cleanup。命令名不表示已经接入 CI provider，也不授
 E2E lifecycle 的详细契约分别由本页后续专用资源说明和 [测试编排架构](../architecture/testing-architecture.md) 持有。
 
 统一 Snapshot 通过 Core Redis、Admin composition 和 Worker CLI 验证；最终 schema/数据门禁分别使用 DB/Worker PostgreSQL。
-维护命令与固定旧工具迁移顺序见[统一维护手册](../releases/unified-session-maintenance.md)，测试不提供目标环境操作授权。
+当前维护步骤见[统一维护手册](../releases/unified-session-maintenance.md)，旧工具操作见[历史数据维护工具](#历史数据维护工具)；测试不提供目标环境操作授权。
 
 当前 Windows 本地聚合 evidence 与平台 adoption 状态见
 [测试编排架构的“默认验证与交付”](../architecture/testing-architecture.md#默认验证与交付)；Linux/真实 CI 尚未验收。
@@ -389,16 +325,102 @@ API Core full restore contract 使用现有 `IAM_API_CORE_TEST_REDIS_URL`，写 
 User Profile maintenance、API/OIDC external entry、hermetic process smoke；不得把 URL credential、
 Token、Subject、完整 Redis key 或 Secret 写入验收记录。
 
+## OIDC 协议套件与旧来源演练
+
+正式 fixture 位于 [oidc-suite.fixture.ts](../../apps/api/test-integration/composition/oidc-suite.fixture.ts)，
+独立 RP 位于 [oidc-rp.integration.test.ts](../../apps/api/test-integration/composition/oidc-rp.integration.test.ts)。
+它们不是普通浏览器旅程，也不由基础 verify 自动运行。
+
+### 固定套件与运行配置
+
+复现使用 OpenID conformance-suite release-v5.2.4，固定提交
+`ab35a8df4864da35b49eff11483e204e01aa7961`。在对应源码目录应用
+[S256 补丁](../features/oidc/conformance-suite-s256.patch)，以 Java 21.0.4、Maven 3.9.11 构建：
+
+```bash
+git apply --unidiff-zero <iam-checkout>/docs/features/oidc/conformance-suite-s256.patch
+mvn -B -Dmaven.test.skip -Dpmd.skip clean package
+```
+
+这些参数跳过套件自身构建测试/PMD，不表示已执行 IAM 协议验证。
+补丁仅在 Code Flow 且 iam_s256_required=true 时增加 S256 sequence/verifier，默认关闭；
+仓库 suite runner 为本用途显式启用，专用 PKCE 正负用例仍保持原构造，不修改官方断言。
+
+调用方准备任务独占的 IAM_API_TEST_DATABASE_URL、IAM_API_TEST_REDIS_URL，
+固定套件及其 MongoDB 6.0.13、Java 原生 HTTPS 与合成 PKCS12、loopback 端口和
+fintechlabs.devmode=true。Node/tsx/Playwright 使用仓库锁定依赖。
+API 候选由 fixture 启动，TLS 代理不改协议参数，NODE_EXTRA_CA_CERTS 只传给任务 Node 子进程，
+不修改机器 trust store。
+
+config.json 示例（填写本次真实路径与候选 SHA）：
+
+```json
+{
+  "suiteOrigin": "https://localhost:<suite-port>",
+  "outputDirectory": "<absolute-task-evidence-directory>",
+  "candidate": "<candidate-sha>",
+  "issuerMode": "dual",
+  "tls": { "keyPath": "<key.pem>", "certPath": "<cert.pem>" }
+}
+```
+
+issuerMode 默认 dual；需要指定主机时使用 fixture 的 hostnames 配置。
+可选 plans/modules 仅用于聚焦重跑，未选择项必须作为未执行记录。
+outputDirectory 使用独立任务目录，不放在会被 API Browser 清理的默认产物根。
+
+```bash
+pnpm --filter @iam/api exec bun run test-integration/composition/oidc-suite.fixture.ts <config.json>
+pnpm --filter @iam/api test:integration:composition
+pnpm --filter @iam/api test:integration:redis
+```
+
+fixture 负责候选 API、TLS 代理、随机 PG schema、Redis owner 和 Node 进程树，
+driver 负责浏览器与官方模块；信号/失败仍逐项尝试清理，超时不冒称清理完成。
+官方 REVIEW 使自动 driver 非零，必须独立完成图像判读并保留官方结果，不把它改写为套件 PASSED。
+不同 loopback 端口只证明两 issuer 协议；hostname/Cookie 隔离须由真实 APISIX/browser 验证，
+见[验证归属](../architecture/architecture-verification.md#行为资源与系统验证)。
+
+### 旧无 issuer 来源演练
+
+固定旧 workspace 为 `5c6707efbf2069649f2c3ea4396bffbd28dcab96`，使用其完整源码与冻结 lockfile，
+由调用方准备独占 API PostgreSQL/Redis。它是无 issuer unified 来源，不与精确 b648 的来源工具混用：
+
+```bash
+pnpm --filter @iam/api exec bun run test-integration/composition/dual-entry-upgrade.fixture.ts --source-directory <fixed-old-workspace>
+```
+
+演练运行固定旧 HTTP writer、全部相关 Worker owner 清理及新服务拒绝/非目标保留检查。
+此命令用于历史来源演练；目标环境的一次性切换须核对[固定旧版 OIDC 流程](https://github.com/cyy1998/shgas-iam/blob/73315e4cef6f96dd79b29e18f74d68af30e559ec/docs/releases/oidc-release-runbook.md)。
+历史候选矩阵与本机结果仅通过[固定文档快照](https://github.com/cyy1998/shgas-iam/tree/73315e4cef6f96dd79b29e18f74d68af30e559ec/docs/features)追溯。
+
+## 历史数据维护工具
+
+以下工具仍在仓库中，面向特定旧数据/备份的一次性操作；当前维护文档的删减不表示工具或兼容能力退役。
+先确定实际来源、固定工具及原流程，再按匹配版本执行，不能把表中的入口拼成当前发布步骤。
+原 manifest、receipt、恢复文件及失败重跑约束均以链接的固定历史手册为准。
+
+| 历史用途 | 保留入口 | 操作规程 |
+|---|---|---|
+| b648 默认范围无人值守离线迁移 | `pnpm --filter @iam/worker b648-upgrade`；支持 `--state-dir`、`--migrations-schema` | [无人值守](https://github.com/cyy1998/shgas-iam/blob/73315e4cef6f96dd79b29e18f74d68af30e559ec/docs/releases/b648-unattended-upgrade.md)；自动路径的默认 namespace、单 Redis DB 和无双协议歧义限制不能省略。 |
+| b648 分阶段 Client 数据库迁移 | `bun --no-env-file run apps/worker/scripts/b648-upgrade/index.ts <mode> --writers-stopped`；模式及其余参数按原流程选择 | [数据库步骤](https://github.com/cyy1998/shgas-iam/blob/73315e4cef6f96dd79b29e18f74d68af30e559ec/docs/releases/b648-client-database-upgrade.md)、[整链升级](https://github.com/cyy1998/shgas-iam/blob/73315e4cef6f96dd79b29e18f74d68af30e559ec/docs/releases/b648-managed-callback-upgrade.md)；连接用 `DATABASE_URL`。 |
+| managed 固定地址转 origin 推导 | `pnpm --filter @iam/worker client-managed-callback:upgrade <inventory\|apply\|verify> --writers-stopped` | [同代保留升级](https://github.com/cyy1998/shgas-iam/blob/73315e4cef6f96dd79b29e18f74d68af30e559ec/docs/releases/managed-callback-origin-preserving-upgrade.md)；配置命令不完成状态/Snapshot/正式迁移与放流。 |
+| 旧审计 action 或旧备份规范化 | `pnpm --filter @iam/worker audit:actions -- <inventory\|apply\|verify>`；显式 `IAM_WORKER_DATABASE_URL`，apply 要求 `--writers-stopped` | [审计规范化](https://github.com/cyy1998/shgas-iam/blob/73315e4cef6f96dd79b29e18f74d68af30e559ec/docs/releases/audit-action-canonicalization.md)；保留冲突拒绝、事务锁、独立 verify 与未知提交恢复。 |
+| 旧在线状态 source 布局 | `pnpm --filter @iam/worker online-auth:state` 的 `--layout source` | [历史维护](https://github.com/cyy1998/shgas-iam/blob/73315e4cef6f96dd79b29e18f74d68af30e559ec/docs/releases/unified-session-maintenance.md)；不同旧 schema 的 decoder/namespace 不混用。 |
+
+固定旧 Provider writer 的隔离依赖、资源变量与复现入口见[历史证据说明](https://github.com/cyy1998/shgas-iam/blob/73315e4cef6f96dd79b29e18f74d68af30e559ec/docs/releases/unified-session-maintenance.md#自动化与人工证据)。
+这些历史结果不构成当前候选通过声明。现存 b648 composition 验证入口为 Worker
+`test:integration:composition`，显式提供独占 `IAM_WORKER_TEST_DATABASE_URL` 和 `IAM_WORKER_TEST_REDIS_URL`。
+
 ## 工具链强制执行
 
 #200 后 `pnpm test:e2e` 在原同 origin 全系统基线之后，再启动独立 exact project 执行两个不同 hostname 的
 `dual-entry.spec.ts`；不需要另设环境变量选择第二阶段。workspace-local journey 仍只服务聚焦调试。
-双入口协议/固定旧状态演练的显式命令、资源和证据见[验收账本](../features/sso/dual-entry-acceptance.md)。
+双入口协议和固定旧状态演练的命令与资源见[OIDC 协议套件与旧来源演练](#oidc-协议套件与旧来源演练)。
 
 #206 的精确 b648 直升演练由调用方提供空的任务独占 Redis DB、PostgreSQL 及冻结依赖的旧源码目录，
 显式执行 `bun --no-env-file run apps/api/test-integration/composition/b648-upgrade.fixture.ts <fixed-source-dir> [evidence-dir]`。
 不在普通 collection 中隐式安装旧版本。真实 writer、正式 CLI 顺序及不同来源的证据见
-[托管回调验收账本](../features/sso/managed-callback-origin-acceptance.md)和[跨代手册](../releases/b648-managed-callback-upgrade.md)。
+[跨代手册](https://github.com/cyy1998/shgas-iam/blob/73315e4cef6f96dd79b29e18f74d68af30e559ec/docs/releases/b648-managed-callback-upgrade.md)。
 API Browser 的输出固定到 `test-results/browser`；suite 的 outputDirectory 应选择独立任务目录，不能依赖
 其他 runner 的可清理输出根保存跨通道验收材料。
 
@@ -450,34 +472,21 @@ Hook 不运行 lint、typecheck、test、build 或 tracker checker。按改动�
 - Worker：`pnpm --filter @iam/worker <dev|serve|lint|test|test:unit|test:integration:component|test:integration:process|test:integration:postgres|test:integration:redis|typecheck|employment:verify|user-profile:backfill|user-profile:repair|user-profile:verify-postgres|user-profile:verify-redis|client-snapshot:repair|client-snapshot:verify|online-auth:state>`
 - Employment 全库只读诊断：
   `IAM_WORKER_DATABASE_URL=<target-url> pnpm --filter @iam/worker employment:verify`
-- 历史审计 action 一次性规范化：显式 `IAM_WORKER_DATABASE_URL` 下运行
-  `pnpm --filter @iam/worker audit:actions -- inventory`、
-  `pnpm --filter @iam/worker audit:actions -- apply --writers-stopped` 和独立
-  `pnpm --filter @iam/worker audit:actions -- verify`。固定映射、退出码、事务锁及发布/恢复门禁见
-  [操作手册](../releases/audit-action-canonicalization.md)；当前代码候选已移除运行时别名，工具继续独立保留；代码交付不证明目标环境已迁移。
-- Client 单协议一次性升级：旧通用 CLI 已退役。固定 b648 数据库使用一次性 `bun --cwd apps/worker --no-env-file scripts/b648-upgrade/index.ts` 的完整分阶段链，不使用历史扩展期流程；执行前完整读取
-  [b648 数据库手册](../releases/b648-client-database-upgrade.md)。新入口所有 apply/verify 都要求全量清单，
-  `contract` 在锁内启动独立 verify 后执行原历史收缩，receipt 为最终保留核验服务。阶段截止与最终转换均封装在一次性脚本中；
-  普通 `db:migrate` 使用 `drizzle-kit migrate`，不承担 b648 专用门禁；不提供 Secret 输出、Snapshot repair 或线上迁移。
 - Subject Access 恢复：
   `pnpm --filter @iam/worker run user-profile:repair -- --subject-access-only --limit <positive-integer>`。
   该模式依次执行 PostgreSQL stale pending transition intent 回收、Redis transition recovery 与 authority repair，
   不执行 User Profile maintenance。它会更新 PostgreSQL transition intent，不局限于 Redis indexed backlog；所需权限、
-  stale threshold 与调度责任见[Subject Access Barrier](../architecture/backend-architecture.md#subject-access-barrier)。
+  stale threshold、调度与失败恢复见[Profile 维护手册](../releases/user-profile-maintenance.md#subject-access-恢复与外部调度)。
 - User Profile 全量重建与版本无关 readiness：先运行
   `pnpm --filter @iam/worker user-profile:backfill` 派发既有 versioned rebuild jobs；批量大小通过
   `IAM_WORKER_USER_PROFILE_BACKFILL_BATCH_SIZE=<positive-integer>` 配置。
   等待 Worker 收敛并按需运行 `user-profile:repair` 后，依次运行
   `pnpm --filter @iam/worker user-profile:verify-postgres -- [--batch-size <positive-integer>]` 和
   `pnpm --filter @iam/worker user-profile:verify-redis -- [--batch-size <positive-integer>]`。Backfill 的 `enqueued`
-  只表示已派发，不表示 readiness 已通过；两个 gate 任一失败都必须修复并重跑。
-- 统一 Snapshot repair/verify 与 source/unified 状态维护：使用 Worker `client-snapshot:repair`、`client-snapshot:verify`、
+  只表示已派发，不表示 readiness 已通过；窗口、两 gate 和放流见[Profile 维护手册](../releases/user-profile-maintenance.md#全量重建与恢复)。
+- 当前 Snapshot repair/verify 与 unified 状态维护：使用 Worker `client-snapshot:repair`、`client-snapshot:verify`、
   `online-auth:state`，完整停流/资源/参数/失败重跑边界见[统一维护手册](../releases/unified-session-maintenance.md)。
   旧 `client-runtime:*`、Provider 维护、epoch 和扩展期 Client 升级命令已退役。
-- Custom 托管 origin 同代升级：Worker `client-managed-callback:upgrade <inventory|apply|verify> --writers-stopped`，
-  配置通过后使用 `online-auth:state --artifacts authorization` 限定原 managed Client 的 Code/续接。
-  完整来源、固定清单、停流/drain、正式迁移、Snapshot 和失败重跑顺序见
-  [同代保留升级手册](../releases/managed-callback-origin-preserving-upgrade.md)，不得用全 Client 清理替代。
 - Admin frontend：`pnpm --filter @iam/admin <dev|build|lint|test|test:unit|test:integration:component|test:integration:browser|typecheck|format>`
 - SSO frontend：`pnpm --filter @iam/sso <dev|build|lint|test|test:unit|test:integration:component|test:integration:browser|typecheck|format>`
 - Database：`pnpm --filter @iam/db <lint|test|test:unit|test:integration:postgres|typecheck|db:push|db:generate|db:migrate|db:check>`

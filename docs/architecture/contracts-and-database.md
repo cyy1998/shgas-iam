@@ -67,7 +67,7 @@ Kernel 的在线根出口只公开 UserSession/ClientSession 生命周期与观�
 Client 数据库只有统一 `ssoEnabled`、可空单协议 `ssoConfig` 与独立当前 SSO Secret/id/updatedAt；Internal API secret 独立。
 普通管理与 Runtime DTO 使用显式安全字段，不能默认选择 SSO Secret；认证与超级管理员 Secret 重读各用窄能力。
 最终 migration 先锁 Client 表并拒绝未完成旧配置选择/凭据迁移的记录，再删除旧双协议列与约束。
-必须在固定旧候选上完成 #192 apply 与全量 verify 后执行最终 DDL，见[统一维护手册](../releases/unified-session-maintenance.md)。
+旧扩展期 Client 来源须按[固定版本收缩流程](https://github.com/cyy1998/shgas-iam/blob/73315e4cef6f96dd79b29e18f74d68af30e559ec/docs/releases/unified-session-maintenance.md#首次升级的数据库收缩顺序)完成 apply/全量 verify 后执行最终 DDL；不能套用于其他来源或新装空库。
 
 #202 将离线 Client 配置契约与在线 schema 分离：`@iam/contracts/offline-client-sso` 只供离线中间格式，
 由 managed 配置准备和 b648 独立迁移/核验使用。中间格式冻结于本功能实施前的 `546fecb3`；
@@ -83,13 +83,13 @@ Admin 表单仅在 business 回填、展示和提交地址；隐藏控件的旧�
 DB `@iam/db/managed-callback-upgrade` 窄维护能力：所有模式在锁内全量校验来源（含合法 URL/pattern/claims）与历史 journal 身份，
 只减去 managed JSON 的地址键，保留其他行、字段及凭据；完成后仍须正式 `db:migrate` 登记新增约束迁移。
 新装空库直接执行正式 migrations。冻结离线中间格式保持独立，不能交给在线 reader；维护窗口、在线状态和 Snapshot
-处理分别遵循[同代保留手册](../releases/managed-callback-origin-preserving-upgrade.md)与
-[b648 跨代手册](../releases/b648-managed-callback-upgrade.md)，环境尚未迁移。
+处理属于一次性升级，分别按固定历史的[同代保留手册](https://github.com/cyy1998/shgas-iam/blob/73315e4cef6f96dd79b29e18f74d68af30e559ec/docs/releases/managed-callback-origin-preserving-upgrade.md)与
+[b648 跨代手册](https://github.com/cyy1998/shgas-iam/blob/73315e4cef6f96dd79b29e18f74d68af30e559ec/docs/releases/b648-managed-callback-upgrade.md)；这些工具说明不证明实际环境已迁移。
 
 ## DTO 字段与兼容演进
 
 固定 b648 Client 来源的离线直升由 `apps/worker/scripts/b648-upgrade/index.ts` 一次性脚本承担，完整顺序见
-[数据库升级手册](../releases/b648-client-database-upgrade.md)。来源校验、catalog 和阶段 runner 均私有于该脚本目录，
+[数据库升级手册](https://github.com/cyy1998/shgas-iam/blob/73315e4cef6f96dd79b29e18f74d68af30e559ec/docs/releases/b648-client-database-upgrade.md)。来源校验、catalog 和阶段 runner 均私有于该脚本目录，
 不进入 DB 公开出口或普通迁移命令；`db:migrate` 使用 `drizzle-kit migrate`。脚本保留原 migration SQL/hash/journal，
 非空旧库收缩前在锁内调用独立脚本进程全量 verify。Gateway 的 `.invalid` 中间地址仅用于历史 CHECK，最终删除并严格核验，
 不属于在线兼容契约。来源 catalog 证据固定 PostgreSQL 18.4 和 b648，漂移拒绝；receipt 只保存本次目标事实摘要。

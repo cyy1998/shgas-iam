@@ -16,7 +16,7 @@
 ├── apps/             # 可部署的后端、前端和 worker
 ├── packages/         # 跨 app 复用的 workspace packages
 ├── gateway/          # APISIX manifests 与发布工具
-├── e2e/system/       # root-owned Full-system E2E workspace；当前交付 runtime、三条 production journey 与精确恢复入口
+├── e2e/system/       # root-owned Full-system E2E workspace
 ├── docker/           # 本地依赖栈及 dev/prod Compose
 ├── observability/    # Alloy、Loki 与 Grafana 配置
 ├── scripts/          # 仓库级检查、canonical test collection/Integration 编排和辅助脚本
@@ -40,75 +40,59 @@
 
 ### 后端分层速查
 
-`apps/api` 与 `apps/admin-api` 使用以下边界：
-
-| 层 | 位置 | 职责 |
-|---|---|---|
-| Protocol entry | `src/routes/` | 解析 HTTP/tRPC 输入、调用 use case 或 service、映射响应 |
-| Application use case | `src/use-cases/` | 表达调用方目标和跨领域 workflow；实例在 `src/composition/use-cases/` 创建 |
-| Application service | `src/services/` | 提供 domain-aligned、app-local command/query facade |
-| Pure domain logic | `packages/domain/src/` | 保存不依赖 repository、network、Hono 或 composition 的业务规则 |
-| Composition | `src/composition/` | 连接 routes、use cases、services、repositories 和 runtime dependencies |
-
-完整的依赖方向、命名和 wiring 规则见 [后端架构](backend-architecture.md)。前端边界见
-[前端架构](frontend-architecture.md)。
+Apps 表用于定位入口；依赖方向、分层职责、命名和 wiring 统一见[后端架构](backend-architecture.md#核心依赖方向)，
+页面与请求边界见[前端架构](frontend-architecture.md)。
 
 ## 共享 Packages
 
-`packages/oidc` 拥有完整授权、Code、Token、续接、退出确认、UserInfo 和密钥能力，由 API 默认 HTTP 消费；
-root、`/wire`、`/maintenance`、`/testing` 按能力分出口，不依赖 Custom SSO 或旧 Provider。
-Worker `online-auth:state` 组合各 owner 的显式 source/unified 维护；旧 Provider decoder 只供离线来源，旧 app 已移除。
-API Core `client-snapshot` 拥有当前 Snapshot 与敏感 Credential 布局，Worker `client-snapshot:repair/verify` 负责恢复。
-旧 Runtime/Gate 和 epoch CLI 已退役，首次升级工具顺序见[统一维护手册](../releases/unified-session-maintenance.md)。
-| 路径 | 职责与边界 |
+| 路径 | 定位用途 |
 |---|---|
-| `packages/api-core/src` | 共享后端基础设施：`createApp`、route/OpenAPI/response helpers、errors、middleware、Redis、logging、observability、LoginRestriction、Subject Access Barrier、UnitOfWork 和 tRPC utilities。共享 process-smoke harness 位于 `src/testing/`，只通过独立 testing export 暴露；它不实现 Redis 协议或 persistence seed。 |
-| `packages/session-kernel/src` | 协议中性的 UserSession/ClientSession 生命周期、Redis 原子状态与管理观察；旧四对象仅保留离线 decoder。根入口、`/maintenance`、`/testing` 按能力分离，API Core 的 Subject Access 与 Custom SSO Grant 单向消费该包。 |
-| `packages/custom-sso/src` | 完整 Custom SSO 应用与 Code/Token/续接状态的唯一 owner；root、maintenance、testing 按能力分离，`/wire` 独占支持浏览器的 V2 schema、mapper 与 preview。连接及具体 provider 由 app 注入。 |
-| `packages/client-subject-projection/src` | 协议中性的 Client Subject Projection deep Module；默认入口只公开 active V2 `resolve` Interface、Catalog 与 canonical responsibility Employment Profile；Custom SSO wire 由独立协议包拥有。V1 投影与演练源码已移除。 |
-| `packages/contracts/src` | 跨端或跨 app/package 的稳定枚举、常量、runtime schemas、派生类型与相关协议 helper（包括 SSO 导航和登录 credential）；具体运行环境约束见共享契约文档。 |
-| `packages/domain/src` | 后端复用的 DTO schemas/types/mappers、pure domain rules、audit helpers 和业务错误；DTO 可依赖数据库 schema，纯规则文件保持独立，不将整个包视为浏览器运行时依赖。 |
-| `packages/db/src` | Drizzle schemas、relations、migrations、singleton client 和 query helpers。Schema/relations domain 为 `core` 与 `log`；共享 column helpers 位于 `schema/_shard/`。 |
-| `packages/eslint-config` | 全仓唯一 ESLint 配置所有者，公开 root/backend/frontend preset factories。 |
-| `packages/jobs/src` | 共享 BullMQ connection、queue、worker、job ID 和 default option helpers。 |
-| `packages/organization-responsibility-resolution/src` | 通过 `createOrganizationResponsibilityResolver(db)` 暴露 Organization Responsibility 的批量 Effective 正向解析与跨树 holder 反向解析；完整性、时间、cardinality、去重和排序规则留在 package 内。 |
-| `packages/role-assignment-resolution/src` | 通过 `createRoleAssignmentResolver(db)` 暴露正向 Effective Role 与反向受影响用户解析的唯一 public seam；assignment 来源、组织闭包、有效性、去重和排序规则留在 package 内。 |
-| `packages/user-profile-read-model/src` | API/admin-api/worker 消费的 strict v3 User Profile Read Model，包括 transaction-bound `UserProfileInvalidation`、dirty/rebuild workflow、带 responsibility 的 Detail/Search/Subject Facts builder、PostgreSQL atomic publication、提交后的 Redis monotonic publisher、strict v3 read-through reader、canonical Filter query、repositories 和 worker module。默认入口、`subject-facts`、`query` 与 `worker` 子路径共享同一 v3 version gate；版本无关 maintenance/readiness 复用现有 dirty/job/publication。 |
+| `packages/api-core/src` | 后端基础设施、UnitOfWork、LoginRestriction、Subject Access 与 `client-snapshot/`；`testing/` 通过独立出口提供 process harness。 |
+| `packages/session-kernel/src` | 协议中性的 UserSession / ClientSession 生命周期、Redis 原子状态与管理观察。 |
+| `packages/custom-sso/src` | Custom SSO 授权、Code / Token、续接与交付；`/wire` 提供浏览器可加载契约。 |
+| `packages/oidc/src` | OIDC 授权、Code / Token、续接、退出、UserInfo 与密钥；由 API HTTP adapter 消费。 |
+| `packages/client-subject-projection/src` | 中性主体裁剪、Catalog 与责任任职投影。 |
+| `packages/contracts/src` | 跨端或跨 app/package 的稳定枚举、常量、schemas、类型与协议 helper。 |
+| `packages/domain/src` | 后端 DTO、mapper、纯业务规则、audit helper 与业务错误。 |
+| `packages/db/src` | Drizzle schema、relations、migrations、client 与 query helpers；领域为 `core`、`log`，列 helper 在 `schema/_shard/`。 |
+| `packages/eslint-config` | 全仓 ESLint 配置 owner，提供 root/backend/frontend presets。 |
+| `packages/jobs/src` | BullMQ connection、queue、worker、job ID 与默认选项。 |
+| `packages/organization-responsibility-resolution/src` | Organization Responsibility 的正向有效解析与跨树 holder 反向解析。 |
+| `packages/role-assignment-resolution/src` | Effective Role 正向解析与受影响用户反向解析。 |
+| `packages/user-profile-read-model/src` | User Profile、Search / Subject Facts 的失效、构建、发布、查询与维护。 |
 
-更详细的 package ownership、公开 exports、数据库和 transaction 规则见
-[共享契约与数据库](contracts-and-database.md)。
+使用或新增共享代码前，按[共享契约与数据库](contracts-and-database.md)核对运行环境、公开出口、DTO 与事务边界；
+模块语义见[后端所有权](backend-architecture.md#关键模块所有权)。当前维护见
+[统一维护手册](../releases/unified-session-maintenance.md)；旧数据操作见[历史命令入口](../development/commands.md#历史数据维护工具)。
 
 ### 密集模块的内部目录
 
-下列目录按已有职责归组，公开 package exports 与命令名称保持稳定；定位内部实现时沿入口进入对应目录，
-不跨 package 直接引用内部文件。
+定位内部实现时沿公开入口进入对应目录；跨 package 消费仍使用公开 exports。
 
 | 模块 | 内部职责目录 |
 |---|---|
-| `packages/user-profile-read-model/src` | `invalidation/`：影响分析与 dirty/job；`build/`：加载与文档构建；`publication/`：行转换与原子发布；`query/`：查询与 Filter；`schema/`：文档契约；`subject-facts/`：缓存、读写与观测；`subject-access/`：authority 与 transition repositories；`worker/`：重建与维护装配；`readiness/`：版本无关 gate 与 Profile inventory 校验规则；`employment/`：全库只读 Employment verifier/repository。根层保留六个公开入口文件。 |
-| `packages/client-subject-projection/src` | `internal/`：当前 V2 Catalog、contract 与 projection。公开入口与共享错误留在根层；测试 fixture 由测试文件本地持有。 |
-| `packages/session-kernel/src` | `unified/`：UserSession/ClientSession 模型、可信观察、Redis/Lua、固定身份撤销与库存；根 `index.ts`、`maintenance.ts`、`testing.ts` 分别提供在线、维护与测试出口。`state/model.ts` 仍提供中性 SessionOrigin 规范化；`state/`、`storage/` 的旧四对象格式与 `testing/` 来源 fixture 只用于明确离线库存/清理，不恢复旧在线工厂。 |
-| `packages/api-core/src/subject-access` | `storage/`：store 与 Redis adapter；`adapters/`：HTTP 错误映射；`recovery/`：bootstrap、repair 与 transition recovery。在线 barrier/lifecycle、操作许可/context/撤销编排、模型、错误与公开入口留在根层。 |
-| `packages/custom-sso/src` | `unified/` 拥有当前授权、Code/Token 消费与存储、业务和托管交付；`internal/` 提供协议校验、Subject 交付与流量 gate 等内部能力。`grant/` 只保留旧 Grant 离线库存 decoder、精确 cleanup 与维护 fixture；当前在线 Code/Token 由 Custom owner 管理，Kernel 只管理 UserSession/ClientSession。根公开出口分离在线、maintenance、testing 与浏览器可加载的 wire。 |
-| `apps/api/src/services/sso` | `subject-delivery/`：请求 capability 桥接；`transport/`：Cookie、请求/schema、安全和 OpenAPI helper。门户登录守卫通过 `routes/sso/unified-authorization.handlers.ts` 消费 Custom SSO 的续接决定。 |
-| `apps/api/src/use-cases/authentication` | 密码、手机、OA、微信统一认证用例；由 `composition/use-cases/authentication.ts` 装配，通过 `composition/root-authentication.ts` 使用 Kernel 创建根会话。OA/微信 HTTP 路径仍在 SSO route。 |
-| `apps/worker/src/commands` | `user-profile/`、`client-sso/`、`online-state/`、`client-snapshot/`：对应命令族与其 helper/repository。Employment verifier 留在根层。 |
+| `packages/user-profile-read-model/src` | `invalidation/`、`build/`、`publication/`：失效与发布；`query/`、`schema/`、`subject-facts/`：查询与事实；`subject-access/`：authority / transition；`worker/`、`readiness/`、`employment/`：重建、就绪与全库 verifier。 |
+| `packages/client-subject-projection/src` | `internal/`：当前 Catalog、contract 与 projection。 |
+| `packages/session-kernel/src` | `unified/`：当前两类会话；`state/`、`storage/` 和 `testing/` 中旧四对象布局仅供离线维护；`state/model.ts` 还提供中性 SessionOrigin。 |
+| `packages/api-core/src/subject-access` | `storage/`：store / Redis adapter；`adapters/`：HTTP 映射；`recovery/`：bootstrap、repair 与 transition recovery。 |
+| `packages/custom-sso/src` | `unified/`：当前协议流程与状态；`internal/`：校验和交付 helper；`grant/`：旧 Grant 离线 decoder、cleanup 与 fixture。 |
+| `apps/api/src/services/sso` | `subject-delivery/`：请求 capability；`transport/`：Cookie、请求/schema、安全与 OpenAPI。门户续接入口在 `routes/sso/unified-authorization.handlers.ts`。 |
+| `apps/api/src/use-cases/authentication` | 密码、手机、OA、微信统一认证；装配在 `composition/use-cases/authentication.ts` 与 `composition/root-authentication.ts`。OA/微信 HTTP 入口仍在 SSO route。 |
+| `apps/worker/src/commands` | `user-profile/`、`client-sso/`、`online-state/`、`client-snapshot/` 命令族；Employment verifier 留在根层。 |
 
 ## Root-owned Full-system E2E Workspace
 
-| 路径 | 当前职责与边界 |
-|---|---|
-| `e2e/system` | `@iam/e2e-system` 拥有 root `pnpm test:e2e` 的完整 owner task：preflight 在任何 descriptor/resource 前验证 Docker、browser 与固定配置，再以动态 Gateway host port 启动 PostgreSQL、Redis、etcd、APISIX、API、Admin API、Worker、Admin 与 SSO，在空 volumes 执行真实 Drizzle migrations、User Profile v2 cutover fixture、production-owner strict v3 backfill 与 Client Protocol V2 readiness，并在同一 exact-project lifecycle 中固定按 Admin → HR Admin → OIDC 运行三条零 retry journey。Gateway Profile routes 在 backfill 期间保持未发布；Seed 驱动真实 Worker 等待 Enable/Pause/Disable User 的 v3 Profile/Facts 收敛并 bootstrap 对应 Barrier，随后实际运行 production `user-profile:verify-postgres` 与 `user-profile:verify-redis`，两道 v3 全量 gate 均通过后才统一发布 routes。三条 journey 共同覆盖 schema-driven Filter 的代表行为、Organization Responsibility、Employment invalidation、Custom SSO/Gateway 裁剪、普通 `iam:hr-admin` 的 PostgreSQL 请求时双端责任范围、完整责任 UI 生命周期与 scope 撤销，以及 OIDC 当前 UserInfo 披露、PKCE 失败消费与 ID Token 排除。HR journey 后置 production Drizzle verifier 与有界 Admin API log capture 证明范围内 lifecycle/audit/invalidation 收敛、隐藏 blocker 保持、范围外无写入且 denial log 不泄露 Assignment、holder、Organization path 或 scope/root 集合。失败时保存有界 raw diagnostics、Playwright evidence 与安全 receipt，再尝试本 project 的 best-effort cleanup；cleanup failure 非零。`admin:journey`、`hr-admin:journey`、`oidc:journey` 保留为 workspace-local 调试入口，`runtime:cleanup` 只接受明确 descriptor 或 exact project。Windows 本地已验收，Linux/CI 尚未验收。 |
+`e2e/system`（`@iam/e2e-system`）拥有根 `pnpm test:e2e` 的完整系统测试，包括 Compose、migration / Gateway
+镜像、seed、旅程、诊断与精确恢复。workspace-local journey 命令用于聚焦调试。
 
-该 workspace 的 Compose、one-shot migration/Gateway sync images、lifecycle/recovery commands 与 contract tests 都保留在
-`e2e/system/`；生成的 run descriptor、migration/seed receipts、Compose/Gateway diagnostics 与后续 Playwright artifacts 位于其
-`test-results/`，属于可再生成的测试 artifact，不提交到仓库。
+生命周期、资源与旅程契约见[测试编排](testing-architecture.md#root-与-package-commands)，双 hostname 阶段见
+[双入口验收](testing-architecture.md#双入口验收与产物隔离)，可执行入口见[命令页](../development/commands.md#full-system-e2e)，
+证明范围见[验证归属](architecture-verification.md#行为资源与系统验证)。
+
+Run descriptor、receipts、diagnostics 与 Playwright 产物写入 `e2e/system/test-results/`，可重新生成，不提交。
+平台验收状态见[默认验证与交付](testing-architecture.md#默认验证与交付)。
 
 ## 基础设施与仓库工具
-
-#200 的 root Full-system owner另在同 origin 基线之后启动双 hostname 的 exact project，复用上述全部资源和
-生命周期，仅运行 `dual-entry.spec.ts` 的入口、协议与 Cookie 场景。API 的固定 suite/RP与旧源码升级演练仍归
-API composition测试支持，不将旧 writer 加回生产图；入口和证据见[双入口账本](../features/sso/dual-entry-acceptance.md)。
 
 | 路径 | 职责 |
 |---|---|

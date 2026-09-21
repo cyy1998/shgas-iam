@@ -11,29 +11,18 @@ pnpm --filter @iam/worker employment:verify
 pnpm --filter @iam/worker user-profile:backfill
 pnpm --filter @iam/worker user-profile:repair
 pnpm --filter @iam/worker run user-profile:repair -- --subject-access-only --limit 500
-pnpm --filter @iam/worker client-runtime:repair -- --client-code <clientCode>
-pnpm --filter @iam/worker client-runtime:repair -- --all --protocol-traffic-stopped
-pnpm --filter @iam/worker client-runtime:verify -- --all --protocol-traffic-stopped
+pnpm --filter @iam/worker client-snapshot:repair -- --client-code <clientCode>
+pnpm --filter @iam/worker client-snapshot:repair -- --all --writers-stopped --drained
+pnpm --filter @iam/worker client-snapshot:verify -- --all --writers-stopped --drained
 ```
 
-Client Runtime targeted repair 与 restore full repair 使用 repair-only Redis command composition，不创建数据库、queue、consumer、
-HTTP server 或 Bull Board。Targeted repair 只接受一个 canonical `clientCode`；full repair 与 targeted 参数互斥，并且只有
-显式提供 `--protocol-traffic-stopped` 才会连接 Redis。Full repair 使用 `SCAN` 和分批 `UNLINK` 清理 Module-owned
-当前 Snapshot namespace；中断或部分失败后保持停流并从头重跑。当前存储版本中的 `v1` 继续有效；七条旧 OIDC、
-Custom SSO 与 Traffic Gate pattern 已退出 repair/verify inventory，旧 key 不会被清理，也不阻断 verify。
+当前 Snapshot repair/verify 使用独立 Redis composition，不创建数据库、queue、consumer 或 HTTP。
+定向 repair 同时失效普通/敏感 payload；全量恢复须停流、冻结 mutation、排空 reader/source load，
+再分别运行 repair 与 scan-only verify。资源、deadline、未知作用与放流见
+[当前维护手册](../../docs/releases/unified-session-maintenance.md#新-snapshot-的定向修复与全量恢复)。
 
-`client-runtime:verify` 是另一次 Worker process 中以 scan-only composition 执行的独立只读全扫描，不持有 eval、unlink 或
-repair capability，同样要求 `--all` 与
-`--protocol-traffic-stopped`。只有完整扫描成功且 owner inventory 为零时报告 `completed` 并退出 0；计数只用于诊断，
-不证明协议停流、实例 drain、业务可用或旧 namespace 已清空。两类命令的 JSON report 都不输出 Redis URL、key、control、
-payload、credential 或原始错误，也不读取 PostgreSQL、重放业务 mutation、推进协议版本或撤销 Session/artifact。
-Full repair 与 verify 默认各有 5 分钟 deadline；受控演练可用正整数
-`IAM_WORKER_CLIENT_RUNTIME_MAINTENANCE_TIMEOUT_MS` 收紧，超时会安全失败并执行 command resource shutdown。
-
-Redis restore 的停流、repair、verify、smoke 与放流顺序见
-[当前恢复手册](../../docs/releases/client-runtime-snapshot-restore.md)。旧部署或旧备份的升级迁移必须另行固定适用候选与操作边界，
-不得混跑旧 reader/writer，也不能未经评估将旧版工具用于新环境；
-[首次 hard-cutover 手册](../../docs/releases/client-runtime-snapshot-hard-cutover.md)仅保留历史版本参考。
+Profile 重建、Subject Access 恢复、外部调度与告警见[Profile 维护手册](../../docs/releases/user-profile-maintenance.md)。
+旧数据升级工具及匹配版本流程见[历史命令入口](../../docs/development/commands.md#历史数据维护工具)。
 
 `employment:verify` 是 Employment 全库显式只读诊断。命令只要求
 `IAM_WORKER_DATABASE_URL`，不会启动 Worker consumer、HTTP server、Bull Board 或 Redis，也不会随普通 Worker 启动和请求

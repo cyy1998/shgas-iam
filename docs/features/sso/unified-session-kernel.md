@@ -1,11 +1,21 @@
 # 两类会话的 Kernel 能力
 
-本文记录统一 Kernel 能力；#194 已将全部生产消费者迁入正式根出口，旧四对象在线工厂与候选出口已删除。
-这不是部署完成记录，也不能把新旧 factory 装配到同一在线流程中。
+Kernel 只拥有 UserSession / ClientSession 的中性生命周期与可信观察；Code、Token 和续接由协议 owner 拥有。
+账号许可见[Subject Access](subject-access-operation-contract.md)，管理页面与结果见[会话管理](../admin/session-management.md)。
+
+## 最小模型与权威来源
+
+| 对象 | 字段与约束 |
+|---|---|
+| UserSession | 独立 ID/bearer、subjectIdentifier、authTime、amr、opaque subjectContext、可选 origin、创建/到期时间及生命周期状态。主体、认证事实、代际和原始期限创建后固定。 |
+| ClientSession | 独立 ID、userSessionId、clientId、继承的主体/context、最近 protocol、授权/到期时间及状态。原根、Client 和不可变 instance 不改绑。 |
+
+UserSession 是 authTime/amr 的唯一认证权威，子记录的复制只服务中性归属检查。
+这些是逻辑字段，不要求各边界复制完整存储 DTO；管理 identity 不作为 bearer 或在线许可。
 
 ## 公开入口与操作边界
 
-新代从 `@iam/session-kernel` 导入 `createUnifiedSessionKernel`。工厂需要 Redis `eval`、根与 ClientSession
+从 `@iam/session-kernel` 导入 `createUnifiedSessionKernel`。工厂需要 Redis `eval`、根与 ClientSession
 各自的秒数 TTL，以及消费方拥有的 `assertOperationActive`。API Core 现有 `requireSubjectAccessOperation` 可以直接满足
 活跃性 port；Kernel 不导入 API Core，也不获取 Subject Access Permission。
 
@@ -33,7 +43,7 @@ await subjectAccessOperations.run(async (operation) => {
 });
 ```
 
-示例仅说明公开能力的调用顺序。旧 Subject Access 撤销 adapter 仍需由对应消费方票迁移，不能据此宣称其新代撤销已装配。
+示例说明公开能力的调用顺序；账号代际撤销由 API Core 的 `createUnifiedSubjectAccessSessionRevocation` 适配。
 统一认证先取得自己的认证结果和 Subject Access Permission，再以 `createUserSession` 提交主体、opaque subjectContext、
 amr 与可选 origin。authTime、createdAt、expiresAt 和响应剩余秒数由 Redis 时间确定，单位为毫秒；剩余秒数向下取整。
 服务端 runtime 将独立的 `IAM_API_USER_SESSION_TTL_SECONDS` / `IAM_API_CLIENT_SESSION_TTL_SECONDS` 注入工厂；
@@ -55,7 +65,7 @@ clientId，原子观察原根与原实例，不读取当前关系槽替换目标
 ## 原子生命周期与隔离
 
 默认新代 namespace 为 `iam:session:unified:v1:`。自定义 namespace 后仍追加固定 `:unified:v1:`，不探测 bearer 格式、
-不读取旧模型、不转换旧会话。工厂只装配这一代；旧 factory 及其现存行为测试继续保留。
+不读取旧模型、不转换旧会话。线上只装配这一代；旧布局仅用于明确的离线维护。
 
 同根同 Client 的授权通过一次 Redis 执行新建或复用 ClientSession。有效关系保持 ID 和原始身份，在同一原子操作更新
 protocol 与授权时间，并使用 `min(root.expiresAt, max(old.expiresAt, redisNow + clientTtl))` 更新期限。失效后创建新 ID。
@@ -63,16 +73,16 @@ protocol 与授权时间，并使用 `min(root.expiresAt, max(old.expiresAt, red
 
 根期限、身份、认证事实与 subjectContext 创建后固定。子记录复制根的主体/代际，仅用于中性归属检查，不成为独立认证权威。
 根成功终止后，新组合读取直接拒绝，子索引缺失不影响该保证；已观察根的在途授权可以落入旧根，但下一次在线使用仍拒绝。
-本票的精确根终止只报告根的实际作用；外层若需尽力处理子实例，先通过公开捕获取得子集合，再精确执行，不能以索引完整性
+精确根终止只报告根的实际作用；外层若需尽力处理子实例，先通过公开捕获取得子集合，再精确执行，不能以索引完整性
 作为根退出成功的前置条件。
 
 ## 中性撤销与固定集合
 
-#191 增加 `listSessions({kind, subjectIdentifier?, offset, limit})`，在一次有界 Redis 操作中返回所选索引页和总数，
-不获取目标账号许可。每页最多 1000 条；安全 Admin 映射及实际 HTTP 页上限见[管理候选](../admin/session-management.md#191-统一会话候选)。
+管理入口提供 `listSessions({kind, subjectIdentifier?, offset, limit})`，在一次有界 Redis 操作中返回所选索引页和总数，
+不获取目标账号许可。每页最多 1000 条；安全 Admin 映射及实际 HTTP 页上限见[管理契约](../admin/session-management.md#列表与安全视图)。
 `inventory:userSession`、`inventory:clientSession` 与 `subject-clients:<subjectIdentifier>` 属于相同 unified namespace，
 随原子生命周期维护并保留期限；它们只负责记录查询，不构成在线访问或完整库存权威。缺索引不恢复已终止根，
-页内坏记录失败关闭。#193 的新代库存需要纳入这三类索引；旧数据不在在线路径补读或重建。
+页内坏记录失败关闭。维护库存覆盖这三类索引；旧数据不在在线路径补读或重建。
 
 `observeUserSessionForRevocation` / `observeClientSessionForRevocation` 核对原目标并生成本操作私有撤销观察，接受仍存在的
 终态记录，不要求根或账号许可有效。在线观察也可交给同类型 `revokeObserved…Session`。精确撤销比较稳定实例身份，
@@ -93,7 +103,7 @@ already_terminated，不把旧作用重新计数。没有自动补齐或持久�
 
 ## 验证边界
 
-`@iam/session-kernel/testing` 提供独立真实 Redis scope、操作生命周期、窄故障注入和 owner 状态观察。新 contract 位于
-`packages/session-kernel/test-integration/redis/unified-session-lifecycle.integration.test.ts`，沿用
-`IAM_SESSION_KERNEL_TEST_REDIS_URL` 和 canonical Redis collection。它验证并发、时间、防伪、精确作用、未知结果和 TTL，
-不替代后续完整协议/HTTP、Admin/Subject Access 装配或环境切换证据。
+`@iam/session-kernel/testing` 仅用于独立 Redis scope、操作生命周期、窄故障注入和 owner 状态观察。
+[Redis 生命周期测试](../../../packages/session-kernel/test-integration/redis/unified-session-lifecycle.integration.test.ts)
+覆盖并发、时间、防伪、精确作用、未知结果与 TTL；协议交付和系统部署的证明范围见
+[架构验证归属](../../architecture/architecture-verification.md)。

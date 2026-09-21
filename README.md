@@ -489,10 +489,10 @@ Playwright Chromium 系统依赖时，preflight 会提示运行 `pnpm e2e:instal
 `IAM_API_SSO_INTERNAL_ORIGIN`、`IAM_API_SSO_EXTERNAL_ORIGIN` 与 `IAM_API_OIDC_CURRENT_JWK_JSON` 必填；previous JWK 可选。
 两项 HTTP(S) origin 分别加 `/oidc` 得到固定 issuer，相同 origin 合并为同一身份。Gateway 按受控 host 覆盖
 `X-IAM-Entry-Network`，API 拒绝缺失/非法标记；单 issuer/public-origin 输入已退役。两入口共用 Client、密钥及会话关系。
-本次双 issuer 切换须先以固定旧维护工具清除全部会话与协议状态，见[OIDC 发布手册](docs/releases/oidc-release-runbook.md)。
+当前双入口配置与密钥维护见[OIDC 发布手册](docs/releases/oidc-release-runbook.md)；首次切换按[固定历史流程](https://github.com/cyy1998/shgas-iam/blob/73315e4cef6f96dd79b29e18f74d68af30e559ec/docs/releases/oidc-release-runbook.md)核对来源。
 完整 TTL、namespace、secure Cookie 与登录路径见 [API env](apps/api/.env.example)。旧 Provider env/镜像/Cookie keys 已退役。
 API/Admin 共用 Kernel namespace 和固定根期限；旧 idle/absolute/tombstone 配置已移除。
-首次升级按[统一维护手册](docs/releases/unified-session-maintenance.md)，环境尚未切换。
+当前会话与 Snapshot 恢复按[统一维护手册](docs/releases/unified-session-maintenance.md)；旧数据操作见[历史命令入口](docs/development/commands.md#历史数据维护工具)。
 ### Worker（`apps/worker/.env`）
 
 以 `apps/worker/.env.example` 和 `apps/worker/src/env.ts` 为准。关键变量包括：

@@ -1,83 +1,48 @@
-# SM 加密密码登录发布手册
+# 登录凭证配置与部署
 
 Type: runbook
 Status: Current
-Last verified: 2026-07-16
+Last verified: 2026-09-21
 Next review: 2026-10-31
 
-## 适用范围
+本页用于当前 SM2/SM4 密码登录的配置、配对密钥发布与恢复。
+请求结构、凭证拒绝和防重放规则见[登录认证契约](../features/sso/authentication-and-recovery.md#密码登录凭证)；
+不包含首次从明文协议切换或回退旧协议的步骤。
 
-本手册用于发布 `/auth/login/password` 的 SM2 + SM4 加密凭证登录契约。事实来源包括
-`packages/contracts/src/auth/login-credential.ts` 及其测试、
-`apps/api/src/services/authentication/login-credential.parser.ts` 及其测试、`apps/api/src/env.ts`、
-`apps/sso/src/lib/login-credential.ts` 及其测试，以及 `apps/sso/src/constants/config.ts`。
+## 配置核对
 
-该变更是请求契约变更：密码登录请求体只接受 `credential` 和可选 `capToken`，不再接受 legacy
-`{ username, password }` 明文请求。
-
-## 必需配置
-
-后端 `apps/api`：
-
-- `IAM_API_LOGIN_CREDENTIAL_ACTIVE_KID` 必须存在于 `IAM_API_LOGIN_CREDENTIAL_PRIVATE_KEYS_JSON`。
-- `IAM_API_LOGIN_CREDENTIAL_PRIVATE_KEYS_JSON` 必须包含当前启用 `kid` 对应的 SM2 私钥。
-- `IAM_API_LOGIN_CREDENTIAL_MAX_SKEW_MS` 定义凭证 `ts` 与服务端时钟的最大偏移窗口。
-- `IAM_API_LOGIN_CREDENTIAL_NONCE_TTL_SECONDS` 不得短于时间戳偏移窗口，以覆盖防重放检查。
-- Redis 必须可用；nonce 防重放 key 形如 `login-credential-nonce:<digest>`。
-
-前端 `apps/sso` 构建：
-
-- `UMI_APP_SSO_LOGIN_CREDENTIAL_KID` 必须等于后端 active `kid`。
-- `UMI_APP_SSO_LOGIN_CREDENTIAL_PUBLIC_KEY` 必须是后端 active SM2 私钥配对的公钥。
-- Cap 相关配置保持有效：`UMI_APP_SSO_CAP_ENDPOINT`、`UMI_APP_SSO_CAP_SITE_KEY`、
-  `UMI_APP_SSO_CAP_WASM_URL` 和 `UMI_APP_SSO_CAP_PAKO_URL`。
-
-协议常量必须保持原样：`LOGIN_CREDENTIAL_PREFIX = "iam-login-v1"`、
-`LOGIN_CREDENTIAL_ALG = "SM2-SM4-CBC"`、`LOGIN_CREDENTIAL_TYPE = "password-login"`。
-
-## 同步发布顺序
-
-1. 从同一变更集构建 `@iam/api` 和 `@iam/sso`；不要把只接受 `credential` 的 API 与旧 SSO 前端拆开发布。
-2. 在 API 运行环境中注入 SM2 私钥映射、active `kid`、时钟偏移窗口和 nonce TTL。
-3. 部署 `@iam/api`，确认 env validation 通过；如果 active `kid` 不在私钥映射中，应用应启动失败。
-4. 部署使用匹配公钥与 `kid` 构建的 `@iam/sso`。
-5. 清理浏览器缓存或 CDN 缓存中可能残留的旧登录 bundle。
-6. 执行 smoke 后再恢复全量登录流量。
-
-## Smoke 验收
-
-- 成功登录：通过 SSO 页面发起密码登录，确认 `/auth/login/password` 返回成功并写入 `global_session`。
-- 密码错误：使用错误密码，确认仍进入原有失败计数和提示路径。
-- Cap 重试：触发 `passwordLogin` 风险策略，确认后端返回需要人机校验的业务码，SSO 前端求解 cap.js 后携带
-  `capToken` 重试一次。
-- 凭证过期：构造超出 `IAM_API_LOGIN_CREDENTIAL_MAX_SKEW_MS` 的凭证，确认返回
-  `LOGIN.INVALID_CREDENTIAL`，错误信息指向凭证过期或设备时间不正确。
-- nonce 重放：重复提交同一 `credential`，确认第二次返回 `LOGIN.INVALID_CREDENTIAL`，且不创建新 session。
-- legacy 明文拒绝：直接提交 `{ "username": "...", "password": "..." }`，确认请求被 schema 或凭证校验拒绝。
-- 敏感日志检查：API、SSO、APISIX、Loki/Grafana 中不得出现 password、SM2 私钥、SM4 key material、nonce 明文、
-  `credential` 原文、Cap token 或 challenge solution。
-
-## 错误码与日志检查
-
-| 场景 | 期望结果 |
+| Runtime | 配置与约束 |
 |---|---|
-| `kid` 不存在、算法不支持、SM2/SM4 解密失败、tag 校验失败、payload 结构错误 | 返回 `LOGIN.INVALID_CREDENTIAL`。 |
-| `ts` 过期或明显晚于服务端时间 | 返回 `LOGIN.INVALID_CREDENTIAL`，提示凭证过期或设备时间不正确。 |
-| nonce 已使用 | 返回 `LOGIN.INVALID_CREDENTIAL`，不得继续校验密码。 |
-| Cap token 缺失或无效 | 返回前端可识别的人机校验业务码，并输出脱敏 `human_verification.*` 日志。 |
-| 用户名或密码错误 | 保持既有登录失败计数、临时黑名单和审计语义。 |
+| API | `IAM_API_LOGIN_CREDENTIAL_ACTIVE_KID` 必须存在于 `IAM_API_LOGIN_CREDENTIAL_PRIVATE_KEYS_JSON`，对应值是 SM2 私钥。 |
+| SSO 构建 | `UMI_APP_SSO_LOGIN_CREDENTIAL_KID` 与 API active kid 一致；`UMI_APP_SSO_LOGIN_CREDENTIAL_PUBLIC_KEY` 是该私钥配对公钥。 |
+| 时间与防重放 | `IAM_API_LOGIN_CREDENTIAL_MAX_SKEW_MS` 定义 ts 偏移窗口；`IAM_API_LOGIN_CREDENTIAL_NONCE_TTL_SECONDS` 不短于该窗口。保持系统时钟同步、Redis 可用。 |
+| Cap | 核对 `UMI_APP_SSO_CAP_ENDPOINT`、`UMI_APP_SSO_CAP_SITE_KEY`、`UMI_APP_SSO_CAP_WASM_URL`、`UMI_APP_SSO_CAP_PAKO_URL`。 |
 
-日志只允许记录 `kid`、requestId、traceId、错误分类和脱敏 subject；不得记录密钥材料、密码、credential 原文或
-Cap token。
+私钥通过受控配置注入，不写入前端 bundle、仓库或日志。
+nonce key 为 `login-credential-nonce:<digest>`，不是可随意清空的缓存。
 
-## 回滚矩阵
+## 配对发布与恢复
 
-| 回滚场景 | 是否允许单独回滚 | 处理方式 |
-|---|---|---|
-| 只有 SM2 key material 配错 | 可以只修复配置 | 修正 `IAM_API_LOGIN_CREDENTIAL_PRIVATE_KEYS_JSON`、`IAM_API_LOGIN_CREDENTIAL_ACTIVE_KID` 或 SSO 公钥后重启/重新部署。 |
-| SSO 已发布加密凭证，API 仍是旧契约 | 不允许长期停留 | 立即发布匹配 API；短时故障期间关闭密码登录入口或回滚 SSO bundle。 |
-| API 已只接受 `credential`，SSO 仍提交明文 | 不允许长期停留 | 立即发布匹配 SSO；否则密码登录不可用。 |
-| 需要回滚到旧明文契约 | 必须同时回滚 API 和 SSO | 清理新版前端缓存；确认 `/auth/login/password` 明文路径恢复前不要开放登录流量。 |
-| nonce Redis 状态异常 | 不回滚代码优先 | 修复 Redis 连接或清理明确识别的 `login-credential-nonce:<digest>` 测试 key；不要批量删除无关 Redis key。 |
+1. 固定兼容的 API/SSO 构建、密钥配置及回退候选；密钥/kid 变化时安排受控登录窗口。
+2. 在 API 注入私钥映射、active kid、偏移窗口与 nonce TTL，确认 env validation；
+   active kid 缺少配对私钥时应启动失败。
+3. 部署使用匹配公钥/kid 构建的 SSO，更新 CDN 与浏览器旧 bundle，验证实际加载版本。
+4. 在受控入口完成下述 smoke，确认配置和页面一致后再恢复全量密码登录。
 
-回滚后必须重跑成功登录、错误密码、Cap 重试、legacy 请求契约和敏感日志 smoke。
+配置错误只需修复错误的 key/kid 或匹配 SSO 构建，不必修改协议或轮换其他凭据。
+API/SSO 不匹配时保持密码登录关闭，恢复兼容构建与配对配置、刷新缓存后重验。
+Redis 异常先修复依赖，不批量清 nonce；仅可清理明确识别的演练测试 key，不能使真实凭证可重放。
+回退保持当前加密凭证协议，不恢复明文请求入口。
+
+## Smoke 与安全观察
+
+- 从有效授权目标进入 SSO，完成密码登录，确认成功创建根并写入 `global_session`。
+- 错误密码仍进入失败计数和提示路径；触发 Cap 时完成求解并携带 capToken 重试。
+- 过期凭证及重复提交同一凭证返回 `LOGIN.INVALID_CREDENTIAL`，重放不创建新 session。
+- 未知 kid、解密/完整性失败按认证契约拒绝；legacy 明文请求拒绝。
+- 检查 API、SSO、APISIX、Loki/Grafana，不得记录 password、SM2 私钥、SM4 key material、nonce 原文、
+  credential 原文、Cap token 或 challenge solution。
+
+只保存配置身份、kid、候选、requestId/traceId、错误分类和脱敏结果。
+smoke 失败维持受控入口关闭，修复后重跑成功、错误密码、Cap、过期、重放及日志检查；
+日志关联和采集规则见[观测手册](observability-system-logs.md)。

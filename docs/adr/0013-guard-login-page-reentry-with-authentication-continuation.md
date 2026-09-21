@@ -2,17 +2,26 @@
 status: accepted
 ---
 
-# 以认证续接守卫统一登录页重入
+# 以认证续接守卫登录页重入
 
-统一登录页只承接有效的 Authentication Continuation，不是允许用户随时重新认证的通用入口。登录页确认浏览器持有 Valid Principal Session 后，必须跳过登录表单并继续原 Custom SSO 或 OIDC 授权；普通 query 参数不能绕过该行为。OIDC Client 在已有 Valid Principal Session 时提出 `prompt=login` 或未满足的 `max_age`，IAM 不创建第二个 Principal Session，而以 `login_required` 终止本次授权；没有有效会话时仍允许完成首次登录。
+统一登录页只承接有效 Authentication Continuation。浏览器已有有效 UserSession 时跳过表单并继续原授权，普通 query
+不能强制换号或重复认证。OIDC 的 `prompt=login` 或不满足的 `max_age` 在已有有效根时以 `login_required` 结束；
+没有有效根时允许首次登录。
 
-守卫状态按协议所有权解析：API 拥有 Custom SSO client、redirect 与 Principal Session 检查，OIDC Provider 拥有 opaque return handle、browser binding、OIDC 请求和 Principal Session 检查，SSO 前端只消费统一的页面决策。检查只读取 Session Kernel 的实时状态，不续期会话、不加载主体投影或用户资料；无法确认状态时 fail closed，保留 Cookie 并显示系统暂时不可用。
+## 理由与代价
 
-## Consequences
+普通页面参数不是协议重认证授权。服务端按 Custom SSO/OIDC 的各自上下文判断续接，SSO 页面只消费统一页面决定；
+检查不续期根、不读取主体投影。明确无有效会话才显示表单，未知或暂态故障失败关闭并保留 Cookie。
 
-- 登录页加载期间先显示全页检查状态，只有服务端明确确认没有有效会话时才显示登录表单；有效会话使用 history replacement 继续协议流程。
-- 明确失效的 `global_session` Cookie 可以清除；暂态故障和状态未知不得清除 Cookie，也不得降级为登录表单。
-- OIDC 首次登录使用短期 HttpOnly 登录完成证明区分“守卫后刚完成认证”和“守卫时已存在会话”，避免后者绕过协议重认证要求。
-- 本决策只建立页面加载守卫，不修改密码或短信登录提交接口；多标签页在检查后产生的竞态仍可能创建多个 Principal Session。
-- `/reset-password`、可跳过的手机号绑定和用户身份展示不进入守卫职责，也不提供 `forceLogin` 或换号快捷参数。
-- API、OIDC Provider 与 SSO 前端通过暂停新认证和授权流量的维护窗口协调切换；既有 Valid Principal Session 不清空，失败时整体回滚。
+OIDC 首次登录的短期 HttpOnly 完成证明区分“守卫后刚完成认证”与“守卫时已经登录”，避免已有根借首次登录通道绕过
+新鲜认证约束。有效根通过 history replacement 继续，避免浏览器历史反复回到表单。
+
+这是页面加载守卫，不是跨标签页原子仲裁；检查后发生的并发登录仍可能建立多个根。不增加 forceLogin 参数，
+账号恢复、可跳过的手机号绑定和身份展示也不进入此守卫。
+
+## 当前契约与历史
+
+现行 owner、请求、Cookie 与首次登录证明见[认证契约](../features/sso/authentication-and-recovery.md#登录页重入)。
+旧独立 Provider 与旧根模型的实现安排只作历史追溯。
+
+历史来源：[ADR-0013 原文](https://github.com/cyy1998/shgas-iam/blob/73315e4cef6f96dd79b29e18f74d68af30e559ec/docs/adr/0013-guard-login-page-reentry-with-authentication-continuation.md)。原始决定与后续修订按各版本追溯。

@@ -2,7 +2,7 @@
 
 Type: runbook
 Status: Current
-Last verified: 2026-07-16
+Last verified: 2026-09-21
 Next review: 2026-10-31
 
 ## 适用范围
@@ -56,7 +56,7 @@ pnpm gateway:apisix:apply -- --env prod:iam --env-file .env.prod --dry-run --pru
 pnpm gateway:apisix:apply -- --env prod:iam --env-file .env.prod
 ```
 
-首次 dot id 迁移或确认要删除旧对象时使用：
+确认要删除当前 scope 内多余的 repo-manifest 对象时使用：
 
 ```bash
 pnpm gateway:apisix:apply -- --env prod:iam --env-file .env.prod --prune
@@ -72,11 +72,9 @@ pnpm gateway:apisix:apply -- --env prod:iam --env-file .env.prod --prune
 
 ## OpenTelemetry / Alloy 交接
 
-- `gateway/manifests/*/iam.yaml` 应保留 `opentelemetry` plugin metadata，且 `set_ngx_var: true`。
-- APISIX 容器通过 `APISIX_OTEL_COLLECTOR_ENDPOINT` 指向 Alloy OTLP receiver，开发 compose 默认是 `alloy:4318`。
-- Alloy 暴露 OTLP HTTP receiver，并将 APISIX span 送入配置的 tracing/debug pipeline。
-- APISIX JSON access log 必须包含 `traceId`、`spanId` 和 `traceparent`，且不得包含 request body、response body、
-  `authorization`、`cookie`、`set_cookie` 或原始 query args。
+APISIX OpenTelemetry metadata、Alloy OTLP receiver、日志安全字段与关联验收统一遵守
+[Trace 发布前置](observability-system-logs.md#trace-发布前置)和[Trace Smoke](observability-system-logs.md#trace-smoke)。
+Gateway/Alloy 配置须匹配，不能把 debug exporter 当成持久化 trace backend。
 
 ## Smoke 验收
 
@@ -84,9 +82,7 @@ pnpm gateway:apisix:apply -- --env prod:iam --env-file .env.prod --prune
   `out_of_scope` 或 `unmanaged`。
 - 通过 gateway 访问 IAM public、admin、rpc、SSO 和前端 routes，确认 `proxy-rewrite`、`forward-auth`、CORS 和 host
   约束没有被误改。
-- 带合法 `traceparent` 发起一次请求，确认 APISIX access log、后端 request log 和 `audit_log` 中使用同一 `traceId`。
-- 不带 `traceparent` 发起一次请求，确认 APISIX OpenTelemetry 创建 trace context，并把 trace 字段写入 access log。
-- Grafana `IAM Request Drilldown` 能用 `requestId` 或 `traceId` 过滤到 gateway 与 backend 日志。
+- 按观测手册执行完整 Trace Smoke，核对 gateway/backend/audit 的关联与 Grafana 查询。
 
 ## 回滚
 

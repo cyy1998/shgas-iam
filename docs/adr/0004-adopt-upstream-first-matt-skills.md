@@ -2,37 +2,28 @@
 status: accepted
 ---
 
-# 采用上游优先的 Matt skills 与仓库薄适配
+# 采用上游工作流与仓库薄适配
 
-> 本 ADR 中关于 Markdown tracker、跨会话 `delivery.md` 和 tracker handoff commit 的局部内容已不再适用；新工作使用
-> [GitHub Issues](../agents/issue-tracker.md) 的正文、评论、assignee、labels 与 open/closed 状态。上游 skills 所有权、
-> 仓库薄适配、聚焦验证和双轴评审等其余决定保持有效。
+仓库以 `mattpocock/skills` 拥有澄清、spec、tickets、实现和双轴评审等通用方法，GitHub Issues 保存跨会话需求与协作状态。
+本页合并原 OpenSpec 退役与上游优先决定，并纳入已经接受的 GitHub tracker 调整。
 
-## 背景
+## 理由与代价
 
-仓库在采用 Matt skills 后，又增加了 delivery ledger schema、Gate、claim/candidate/resolution checkpoint、SHA
-新鲜度和 workflow checker。通用方法因此同时存在于上游 skill 与仓库状态机中：更新上游需要反复调和两套流程，
-agent 也需要为证明流程状态重复维护元数据和运行检查。
+同时维护上游 skills、累计 capability specs 和本地证据状态机会造成多套事实来源与重复元数据。仓库只记录上游无法知道的
+领域、分支、验证、授权和收尾约束，不复制通用流程，不再以专用 checker 强制 tracker 内部结构。
 
-ADR 0001 关于停止使用 OpenSpec 驱动新工作的决策保持不变；本决策进一步明确 Matt 工作流与仓库适配层的所有权边界。
+当前行为以实现、生效配置和可执行证据为准；spec/ticket 表达修改目标，不证明已经交付。领域语言和已接受决策约束设计，
+但不能覆盖已观察到的实现差异。目标冲突仍须澄清。
 
-## 决策
+`openspec/` 与退役的 `.scratch/` 保持原路径、只读追溯；不批量转换、补证或重新解释历史。仍有价值的历史内容只在相关
+区域被触及时，经核验提升到当前文档。新工作不继续写这两套 tracker。
 
-`mattpocock/skills` 是澄清、spec、tickets、TDD、实现和双轴评审等通用开发方法的唯一来源。仓库不再改写这些 core
-skills，也不维护平行的可执行证据状态机。
+代价是放弃累计 capability-spec 视图与机器证明的交付状态链，依赖清晰的 issue、普通 Git 提交、执行者和独立评审。
+聚焦验证服务日常反馈，最终验证与人工收尾仍按仓库工作流执行；采用上游不取消本地授权边界。
 
-仓库文档只描述上游无法知道的本地约束：Markdown tracker 布局、功能分支、验证节奏、跨会话 journal、授权边界、
-显式归档和本地合入顺序。多会话工作用 `delivery.md` 传递当前状态与过程摘要；正式需求、设计和测试范围仍分别由
-spec、ticket、`CONTEXT.md` 与 ADR 承担。
+## 当前契约与历史
 
-Ticket 状态保留为协作提示。实现和评审通过普通 focused commits 与轻量 tracker handoff commit 交接，不记录 SHA
-证据链。专用 workflow checker、hook 接线和记录 schema 退役；完整 `pnpm verify` 只在准备 merge、release 或用户明确
-要求时运行一次。
+操作规则见[开发工作流](../agents/workflow.md)、[议题跟踪](../agents/issue-tracker.md)及
+[事实与目标](../index.md#当前事实与修改目标)。
 
-## 后果
-
-- 上游 skills 可以直接更新，仓库只需维护少量稳定的本地差异。
-- 跨会话恢复依赖清晰的正式文档、普通 Git 历史和轻量 journal，而不是机器证明的 gate。
-- 日常反馈环只运行聚焦检查；最终合入仍保留一次完整验证和 Standards/Spec 双轴评审。
-- 既有 `.scratch/` 与冻结的 `openspec/` 历史不迁移、不补证，仍可按原路径追溯。
-- 流程一致性主要由维护者、执行 agent 和代码评审判断；仓库接受不再以专用 checker 强制 Markdown 内部结构的取舍。
+历史来源：[ADR-0001 原文](https://github.com/cyy1998/shgas-iam/blob/73315e4cef6f96dd79b29e18f74d68af30e559ec/docs/adr/0001-replace-openspec-workflow.md)、[ADR-0004 原文](https://github.com/cyy1998/shgas-iam/blob/73315e4cef6f96dd79b29e18f74d68af30e559ec/docs/adr/0004-adopt-upstream-first-matt-skills.md)。原始决定与后续修订按各版本追溯。

@@ -1,6 +1,6 @@
 # User Profile Filter DSL 规则
 
-本文定义当前已激活的 User Profile Search v3 过滤契约。它采用 [ADR-0015](../../adr/0015-adopt-schema-driven-user-profile-filter-dsl.md)，Internal Filter DSL 响应采用 [ADR-0019](../../adr/0019-return-user-profile-base-from-internal-filter-dsl.md)；领域术语以根目录 [CONTEXT.md](../../../CONTEXT.md) 为准。全部搜索入口只使用 canonical Filter engine；旧的 Organization Responsibility DSL、别名解释和版本回退均已撤销。
+本文定义 User Profile Search v3 的过滤契约。查询与固定 Base 响应的决定见 [ADR-0015](../../adr/0015-adopt-schema-driven-user-profile-filter-dsl.md)；领域术语以根目录 [CONTEXT.md](../../../CONTEXT.md) 为准。全部搜索入口使用同一 canonical Filter engine。
 
 ## 1. 能力边界
 
@@ -221,8 +221,8 @@ HTTP 结果统一如下：
 
 ## 11. 版本切换
 
-本契约把全局 `profileSchemaVersion` 从 v2 提升到 v3，不增加独立 `searchDocVersion`，也不增加 v2/v3 并行代际。现有 JSONB 与版本列能够保存 v3 文档；本契约不因版本切换本身要求数据库 schema migration 或预选新索引。
-
-切换必须在维护窗口内完成：停止相关 User Profile 业务读取、源事实写入和旧 v2 Worker，只启动固定的 v3 Worker；运行既有 `user-profile:backfill` 为全部 User 登记 dirty 并投递 rebuild job，再等待队列与 dirty 状态全部收敛。`user-profile:backfill` 返回的 `enqueued` 只表示投递完成，不是数据切换完成。
-
-恢复流量前必须全量验证 PostgreSQL Profile 都是最新 builder 产生的 v3 文档，并验证 Redis Subject Facts、版本、完整性和 freshness。门禁失败时所有依赖 v3 Profile 的入口保持关闭，不允许用部分结果恢复服务；门禁通过后 Internal DSL、Internal legacy adapter、Public adapter、Internal Detail、Subject Facts 及其他 Profile reader 一次恢复并只接受 v3。调用方不能请求 v2 或 v3，也不能在新 DSL 中继续使用 `all`/`any`；运行时不双读、不逐用户回退。Detail 和 Subject Facts 即使外形不变，也随整个 User Profile 的这次硬切换一起前进。
+Filter 随全局 profileSchemaVersion=v3 发布，不维护独立 searchDocVersion。
+调用方不能选择版本，不接受旧 all/any，也不双读或逐用户回退。
+当前 Profile、Detail、Search 与 Subject Facts 的重建、恢复窗口和双数据门禁，
+统一由[Profile 维护手册](../../releases/user-profile-maintenance.md)拥有。
+backfill 的 enqueued 仅表示投递，不证明发布完成；门禁失败不能用部分结果放流。

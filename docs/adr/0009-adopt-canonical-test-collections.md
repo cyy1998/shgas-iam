@@ -1,34 +1,27 @@
 ---
 status: accepted
-supersedes: 0003-adopt-layered-test-lanes-and-resource-budgets
 ---
 
-# 采用 Canonical Test Collections 与默认验证切换
+# 采用 Canonical Test Collections
 
-仓库采用 Unit、Integration、E2E 三层公开测试语言。Integration 下设六个平级 profile：`component`、`process`、
-`redis`、`postgres`、`composition` 与 `browser`。profile 表达资源模型与 harness owner，不是新的测试层级、速度标签或
-发布 Gate。
+仓库以 Unit、Integration、E2E 作为公开测试语言，Integration profile 表达资源模型与 harness owner，不作为额外测试层级、
+速度标签或发布 Gate。每个候选测试由唯一 collection 收集，root 命令可达所属 workspace。
 
-Unit 保留 owner-local 路径，通常是 `src/**/*.test.ts[x]`；Integration 使用
-`test-integration/<profile>/**/*.integration.test.ts[x]`，browser 使用
-`test-integration/browser/**/*.spec.ts`；Full-system E2E 独占 `e2e/system/**/*.spec.ts`。当前 Admin Custom SSO、HR Admin User Management 与 OIDC PKCE
-journeys 由 root `pnpm test:e2e` 通过 `@iam/e2e-system#test:e2e` 唯一收集，并在同一个 exact-project lifecycle 中固定按
-Admin → HR Admin → OIDC 运行；workspace-local `admin:journey`、`hr-admin:journey`、`oidc:journey` 只保留为聚焦调试入口。
+## 理由与代价
 
-Root 长期接口是 `test:unit`、`test:integration`、六个 `test:integration:<profile>` 与 `test:e2e`。`test` 永久代理
-`test:unit`；有 Unit collection 的 package 采用相同代理，无 Unit collection 的 package 不发布空 `test`。旧
-`test:smoke`、`test:external`、`test:postgres`、`test:redis` 与 frontend `e2e` collection aliases 均删除。
-Subject Projection rehearsal 继续作为 `subject-projection:rehearsal` 操作命令，不属于测试 collection。
+旧普通/smoke/external 划分混淆测试意图、资源和执行入口。统一命名与入口后，package 保留 runner 所有权，Turbo 负责
+跨包编排，不把 package 依赖图自动当作测试执行拓扑。
 
-基础 `verify` 固定按 `static -> typecheck -> test:unit -> build` fail fast。它不读取调用方 PostgreSQL/Redis，
-不启动 browser 或 Full-system stack。资源测试由 canonical Integration profile 显式运行；聚合
-`test:integration` 在启动任何 profile 前一次性列出所有缺失的 caller-owned resources。
+基础 verify 依次执行 static、typecheck、Unit、build 并快速失败；Integration 和 Full-system E2E 显式追加。
+外部资源由调用方提供，聚合 Integration 在启动前报告全部缺失资源，不回退到开发或运行资源。代价是基础通过不能代替
+真实数据库、进程、浏览器和完整系统证据。
 
-`pnpm check:test-collection` 是永久 Collection Guard。它只观察路径与命名、package canonical task、runner list 和
-Turbo dry-run，证明候选文件被唯一收集且 root command 可达 owner task；它不分析断言、资源使用、AST、type 或 data flow。
-迁移完成后，旧 baseline、逐文件 mapping、临时 exceptions 与 live equality verifiers 全部退役，永久 Guard 不吸收这些
-迁移资产。
+永久 Collection Guard 只证明路径、命名、唯一收集和命令可达，不分析断言、资源使用或业务正确性。迁移清单、临时例外、
+逐文件映射与验证次数不进入永久 Guard，也不作为当前通过声明。
 
-本决策取代 [ADR-0003](0003-adopt-layered-test-lanes-and-resource-budgets.md) 的旧普通/smoke/external 通道模型。
-ADR-0003 保留为 Historical，记录当时的资源预算与渐进迁移事实；当前可执行契约见
-[测试编排架构](../architecture/testing-architecture.md)和[构建、测试与开发命令](../development/commands.md)。
+## 当前契约与历史
+
+完整分类、资源预算与生命周期见[测试编排架构](../architecture/testing-architecture.md)，执行入口见
+[命令页](../development/commands.md#测试与验证通道)。旧通道决定仅保留在 Git 历史。
+
+历史来源：[ADR-0003 原文](https://github.com/cyy1998/shgas-iam/blob/73315e4cef6f96dd79b29e18f74d68af30e559ec/docs/adr/0003-adopt-layered-test-lanes-and-resource-budgets.md)、[ADR-0009 原文](https://github.com/cyy1998/shgas-iam/blob/73315e4cef6f96dd79b29e18f74d68af30e559ec/docs/adr/0009-adopt-canonical-test-collections.md)。原始决定与后续修订按各版本追溯。
