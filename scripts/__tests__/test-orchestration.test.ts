@@ -12,6 +12,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
 import { describe, expect, test } from "bun:test";
+import { runPnpmCommand } from "../run-pnpm-command.mjs";
 import { analyzeTestCollections } from "../test-collection-guard";
 
 const repoRoot = join(import.meta.dirname, "..", "..");
@@ -138,7 +139,7 @@ function createTransitFixture() {
   writeJson(join(root, "package.json"), {
     name: "test-orchestration-fixture",
     private: true,
-    packageManager: "pnpm@11.14.0",
+    packageManager: "pnpm@12.5.1",
   });
   writeFileSync(join(root, "pnpm-workspace.yaml"), "packages:\n  - packages/*\n", "utf8");
   writeFileSync(
@@ -179,7 +180,7 @@ function createCollectionGuardFixture(options: {
   mkdirSync(join(root, "scripts", "__tests__"), { recursive: true });
   writeJson(join(root, "package.json"), {
     name: "fixture-root",
-    packageManager: "pnpm@11.14.0",
+    packageManager: "pnpm@12.5.1",
     private: true,
     scripts: {
       ...(options.omitRootE2eTask
@@ -1106,6 +1107,12 @@ describe("test orchestration", () => {
       expect(playwrightConfig.webServer.command).toBe(owner.command);
       expect(playwrightConfig.use.baseURL).toBe(owner.baseURL);
     }
+  });
+
+  test("launches a native package-manager entry directly and preserves its exit code", () => {
+    const result = runPnpmCommand(process.execPath, ["-e", "process.exit(37)"]);
+    expect(result.error).toBeUndefined();
+    expect(result.status).toBe(37);
   });
 
   test("runs verify stages in the declared order", () => {

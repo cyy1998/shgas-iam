@@ -14,7 +14,7 @@ ENV NODE_USE_ENV_PROXY=1
 ENV COREPACK_NPM_REGISTRY="https://registry.npmmirror.com"
 ENV NPM_CONFIG_REGISTRY="https://registry.npmmirror.com"
 ENV npm_config_registry="https://registry.npmmirror.com"
-RUN corepack enable && corepack prepare pnpm@11.14.0 --activate
+RUN corepack enable && corepack prepare pnpm@12.5.1 --activate
 
 FROM base AS deps
 WORKDIR /app
@@ -39,7 +39,7 @@ ARG NO_PROXY
 ARG http_proxy
 ARG https_proxy
 ARG no_proxy
-RUN --mount=type=cache,id=iam-pnpm-v11,target=/pnpm/store \
+RUN --mount=type=cache,id=iam-pnpm-v12,target=/pnpm/store \
     pnpm install --frozen-lockfile --prod
 
 FROM deps AS builder
@@ -55,10 +55,10 @@ COPY packages/organization-responsibility-resolution/ ./packages/organization-re
 COPY packages/role-assignment-resolution/ ./packages/role-assignment-resolution/
 COPY packages/user-profile-read-model/ ./packages/user-profile-read-model/
 COPY apps/admin-api/ ./apps/admin-api/
-RUN --mount=type=cache,id=iam-pnpm-v11,target=/pnpm/store \
+RUN --mount=type=cache,id=iam-pnpm-v12,target=/pnpm/store \
     pnpm --config.inject-workspace-packages=true --filter @iam/admin-api deploy --prod /deploy/admin-api
 
-FROM docker.xuanyuan.run/oven/bun:1.3.14-alpine AS runner
+FROM docker.xuanyuan.run/oven/bun:1.4.2-alpine AS runner
 ENV NODE_ENV=production
 WORKDIR /app
 COPY --from=builder /deploy/admin-api ./

@@ -1,6 +1,6 @@
 #!/usr/bin/env node
-import { spawnSync } from "node:child_process";
 import process from "node:process";
+import { runPnpmCommand } from "./run-pnpm-command.mjs";
 
 const args = process.argv.slice(2);
 if (args.length > 1 || (args.length === 1 && args[0] !== "--static")) {
@@ -28,11 +28,7 @@ const selectedStages = args[0] === "--static" ? stages.slice(0, 1) : stages;
 for (const stage of selectedStages) {
   console.log(`\n[verify] ${stage.name}`);
   for (const args of stage.commands) {
-    const result = spawnSync(process.execPath, [pnpmCli, ...args], {
-      cwd: process.cwd(),
-      env: process.env,
-      stdio: "inherit",
-    });
+    const result = runPnpmCommand(pnpmCli, args);
     if (result.error) {
       console.error(`[verify] failed to launch pnpm ${args.join(" ")}: ${result.error.message}`);
       process.exit(1);

@@ -1,6 +1,6 @@
 #!/usr/bin/env node
-import { spawnSync } from "node:child_process";
 import process from "node:process";
+import { runPnpmCommand } from "./run-pnpm-command.mjs";
 
 const resourceEnvNames = [
   "IAM_API_CORE_TEST_REDIS_URL",
@@ -45,11 +45,7 @@ if (!pnpmCli) {
 
 for (const profile of profiles) {
   const command = `test:integration:${profile}`;
-  const result = spawnSync(process.execPath, [pnpmCli, command], {
-    cwd: process.cwd(),
-    env: process.env,
-    stdio: "inherit",
-  });
+  const result = runPnpmCommand(pnpmCli, [command]);
   if (result.error) {
     console.error(`Failed to launch pnpm ${command}: ${result.error.message}`);
     process.exit(1);

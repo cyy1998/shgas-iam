@@ -368,7 +368,8 @@ describe("process smoke harness", () => {
     expect(failure).toBeInstanceOf(ProcessSmokeError);
     expect(failure).not.toBeInstanceOf(AggregateError);
     expect(failure.message).toContain("child error before readiness");
-    expect(failure.message).toContain("ENOENT");
+    expect(failure.cause).toMatchObject({ code: "ENOENT" });
+    expect(failure.message).toContain("iam-process-smoke-command-that-does-not-exist");
   });
 
   it("waits for bounded cleanup when a pidless child never closes its output", async () => {

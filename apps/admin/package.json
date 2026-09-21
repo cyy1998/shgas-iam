@@ -26,7 +26,7 @@
     "typecheck": "pnpm exec tsc --noEmit"
   },
   "dependencies": {
-    "@ant-design/icons": "^6.3.2",
+    "@ant-design/icons": "^6.3.4",
     "@ant-design/pro-components": "3.1.14-2",
     "@iam/client-subject-projection": "workspace:*",
     "@iam/contracts": "workspace:*",
@@ -43,7 +43,7 @@
     "@iam/eslint-config": "workspace:*",
     "@playwright/test": "^1.61.1",
     "@testing-library/jest-dom": "^6.9.1",
-    "@testing-library/react": "^16.3.2",
+    "@testing-library/react": "^16.3.3",
     "@testing-library/user-event": "^14.6.1",
     "@types/jsdom": "^28.0.3",
     "@types/react": "^19.2.17",
@@ -55,7 +55,7 @@
     "jsdom": "^29.1.1",
     "msw": "^2.15.0",
     "postcss-less": "^6.0.0",
-    "prettier": "^3.9.5",
+    "prettier": "^3.9.8",
     "prettier-plugin-organize-imports": "^4.3.0",
     "prettier-plugin-packagejson": "^3.0.2",
     "stylelint": "^17.14.0",

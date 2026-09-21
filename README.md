@@ -144,7 +144,7 @@ OIDC 由 API composition 装配 `@iam/oidc`，HTTP adapter 保持外部 `/oidc` 
 
 ### 工程
 
-- **包管理**：pnpm workspace（根 `packageManager` 为 `pnpm@11.14.0`）
+- **包管理**：pnpm workspace（根 `packageManager` 为 `pnpm@12.5.1`）
 - **任务编排**：Turborepo
 - **语言**：TypeScript 7.0.2 稳定 CLI + TypeScript 6.0.2 compiler API compatibility package
 
@@ -154,7 +154,7 @@ OIDC 由 API composition 装配 `@iam/oidc`，HTTP adapter 保持外部 `/oidc` 
 
 - Bun 1.x
 - Node.js 24.x（前端构建镜像和部分工具链使用）
-- pnpm 11.x（根 `packageManager` 当前为 `pnpm@11.14.0`）
+- pnpm 12.x（根 `packageManager` 当前为 `pnpm@12.5.1`）
 - PostgreSQL（本地 compose 使用 `postgres:18`）
 - Redis
 

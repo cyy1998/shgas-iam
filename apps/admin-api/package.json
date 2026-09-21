@@ -12,7 +12,7 @@
   "devEngines": {
     "runtime": {
       "name": "bun",
-      "version": "1.3.14"
+      "version": "1.4.2"
     }
   },
   "scripts": {
@@ -42,7 +42,7 @@
     "@iam/user-profile-read-model": "workspace:*",
     "@scalar/hono-api-reference": "^0.11.11",
     "@trpc/server": "^11.18.0",
-    "bcrypt-ts": "^9.0.1",
+    "bcrypt-ts": "^9.0.2",
     "drizzle-orm": "1.0.0-rc.2",
     "hono": "^4.12.30",
     "hono-pino": "^0.10.3",

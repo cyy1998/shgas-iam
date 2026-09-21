@@ -311,9 +311,9 @@ Timeout 只保护测试不永久挂起，不承担性能 SLA。Process harness �
 
 ### Bun 异步断言
 
-当前固定的 Bun 1.3.14 中，`bun:test` 的 async matcher 可能在 matcher 内同步重入 event loop；数据库、Redis、HTTP、
+Bun 1.3.14 中曾发现 `bun:test` 的 async matcher 可能在 matcher 内同步重入 event loop；数据库、Redis、HTTP、
 subprocess、readiness 或其他依赖 I/O callback 完成的 Promise 因此可能悬挂。仓库解除此兼容约束前，新增或修改的 Bun 测试
-必须先用普通 `await` 完成异步操作，再对结果做同步断言：
+必须先用普通 `await` 完成异步操作，再对结果做同步断言。运行时升级到 Bun 1.4.2 后仍保留此约束：
 
 ```ts
 const report = await databaseOperation();

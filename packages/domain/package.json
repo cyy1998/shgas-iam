@@ -36,7 +36,7 @@
     "@iam/contracts": "workspace:*",
     "@iam/db": "workspace:*",
     "drizzle-orm": "1.0.0-rc.2",
-    "tldts": "^7.4.4",
+    "tldts": "^7.4.13",
     "zod": "^4.4.3"
   },
   "devDependencies": {

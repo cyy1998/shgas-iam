@@ -1,6 +1,6 @@
 #!/usr/bin/env node
-import { spawnSync } from "node:child_process";
 import process from "node:process";
+import { runPnpmCommand } from "./run-pnpm-command.mjs";
 
 const gate = process.argv[2];
 const commands = gate === "ci"
@@ -20,11 +20,7 @@ if (!pnpmCli) {
 }
 
 for (const command of commands) {
-  const result = spawnSync(process.execPath, [pnpmCli, command], {
-    cwd: process.cwd(),
-    env: process.env,
-    stdio: "inherit",
-  });
+  const result = runPnpmCommand(pnpmCli, [command]);
   if (result.error) {
     console.error(`Failed to launch pnpm ${command}: ${result.error.message}`);
     process.exit(1);

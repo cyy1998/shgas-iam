@@ -14,7 +14,7 @@ ENV NODE_USE_ENV_PROXY=1
 ENV COREPACK_NPM_REGISTRY="https://registry.npmmirror.com"
 ENV NPM_CONFIG_REGISTRY="https://registry.npmmirror.com"
 ENV npm_config_registry="https://registry.npmmirror.com"
-RUN corepack enable && corepack prepare pnpm@11.14.0 --activate
+RUN corepack enable && corepack prepare pnpm@12.5.1 --activate
 
 FROM base AS deps
 WORKDIR /app
@@ -40,7 +40,7 @@ ARG NO_PROXY
 ARG http_proxy
 ARG https_proxy
 ARG no_proxy
-RUN --mount=type=cache,id=iam-pnpm-v11,target=/pnpm/store \
+RUN --mount=type=cache,id=iam-pnpm-v12,target=/pnpm/store \
     pnpm install --frozen-lockfile --ignore-scripts
 
 FROM deps AS builder

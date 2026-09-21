@@ -7,7 +7,7 @@ ENV COREPACK_NPM_REGISTRY="https://registry.npmmirror.com"
 ENV NPM_CONFIG_REGISTRY="https://registry.npmmirror.com"
 ENV npm_config_registry="https://registry.npmmirror.com"
 
-RUN corepack enable && corepack prepare pnpm@11.14.0 --activate
+RUN corepack enable && corepack prepare pnpm@12.5.1 --activate
 
 FROM base AS deps
 WORKDIR /workspace
@@ -25,7 +25,7 @@ COPY packages/jobs/package.json ./packages/jobs/package.json
 COPY packages/organization-responsibility-resolution/package.json ./packages/organization-responsibility-resolution/package.json
 COPY packages/role-assignment-resolution/package.json ./packages/role-assignment-resolution/package.json
 COPY packages/user-profile-read-model/package.json ./packages/user-profile-read-model/package.json
-RUN --mount=type=cache,id=iam-e2e-pnpm-v11,target=/pnpm/store \
+RUN --mount=type=cache,id=iam-e2e-pnpm-v12,target=/pnpm/store \
     pnpm install --filter @iam/e2e-system... --frozen-lockfile --prod --ignore-scripts
 
 FROM deps AS builder
@@ -40,10 +40,10 @@ COPY packages/jobs ./packages/jobs
 COPY packages/organization-responsibility-resolution ./packages/organization-responsibility-resolution
 COPY packages/role-assignment-resolution ./packages/role-assignment-resolution
 COPY packages/user-profile-read-model ./packages/user-profile-read-model
-RUN --mount=type=cache,id=iam-e2e-pnpm-v11,target=/pnpm/store \
+RUN --mount=type=cache,id=iam-e2e-pnpm-v12,target=/pnpm/store \
     pnpm --config.inject-workspace-packages=true --filter @iam/e2e-system deploy --prod /deploy/e2e-system
 
-FROM docker.xuanyuan.run/oven/bun:1.3.14-alpine AS runner
+FROM docker.xuanyuan.run/oven/bun:1.4.2-alpine AS runner
 ENV NODE_ENV=production
 WORKDIR /app
 COPY --from=builder /deploy/e2e-system ./
