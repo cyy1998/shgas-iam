@@ -69,7 +69,7 @@ SHA-256 适用于此类随机 bearer，不是密码哈希方案，也不承诺�
 对象、期限及观察见[Kernel 契约](../features/sso/unified-session-kernel.md)，固定批次和作用报告见
 [会话管理](../features/admin/session-management.md)，完整失败矩阵见
 [Custom SSO](../features/sso/custom-sso-contract.md)与[OIDC](../features/oidc/oidc-integration.md)。
-复现入口见[命令页](../development/commands.md#oidc-协议套件与旧来源演练)，维护责任见
+复现入口见[命令页](../development/commands.md#oidc-协议套件)，维护责任见
 [统一维护手册](../releases/unified-session-maintenance.md)。
 
 历史来源：[ADR-0007 原文](https://github.com/cyy1998/shgas-iam/blob/73315e4cef6f96dd79b29e18f74d68af30e559ec/docs/adr/0007-separate-versioned-custom-sso-client-configuration.md)、[ADR-0010 原文](https://github.com/cyy1998/shgas-iam/blob/73315e4cef6f96dd79b29e18f74d68af30e559ec/docs/adr/0010-narrow-client-binding-to-oidc-lifecycle.md)、[ADR-0030 原文](https://github.com/cyy1998/shgas-iam/blob/73315e4cef6f96dd79b29e18f74d68af30e559ec/docs/adr/0030-separate-protocol-validation-from-kernel-lifecycle.md)、[ADR-0031 原文](https://github.com/cyy1998/shgas-iam/blob/73315e4cef6f96dd79b29e18f74d68af30e559ec/docs/adr/0031-consume-custom-sso-grants-before-issuance.md)、[ADR-0033 原文](https://github.com/cyy1998/shgas-iam/blob/73315e4cef6f96dd79b29e18f74d68af30e559ec/docs/adr/0033-trust-issued-credentials-without-principal-session-revalidation.md)、[ADR-0034 原文](https://github.com/cyy1998/shgas-iam/blob/73315e4cef6f96dd79b29e18f74d68af30e559ec/docs/adr/0034-locate-token-state-records-directly.md)、[ADR-0035 原文](https://github.com/cyy1998/shgas-iam/blob/73315e4cef6f96dd79b29e18f74d68af30e559ec/docs/adr/0035-unify-user-and-client-session-lifecycles.md)。原始决定与后续修订按各版本追溯。

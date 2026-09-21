@@ -65,7 +65,7 @@ clientId，原子观察原根与原实例，不读取当前关系槽替换目标
 ## 原子生命周期与隔离
 
 默认新代 namespace 为 `iam:session:unified:v1:`。自定义 namespace 后仍追加固定 `:unified:v1:`，不探测 bearer 格式、
-不读取旧模型、不转换旧会话。线上只装配这一代；旧布局仅用于明确的离线维护。
+不读取旧模型、不转换旧会话。线上与离线维护只装配这一代；旧布局维护已退役。
 
 同根同 Client 的授权通过一次 Redis 执行新建或复用 ClientSession。有效关系保持 ID 和原始身份，在同一原子操作更新
 protocol 与授权时间，并使用 `min(root.expiresAt, max(old.expiresAt, redisNow + clientTtl))` 更新期限。失效后创建新 ID。

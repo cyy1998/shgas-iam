@@ -73,12 +73,12 @@ Apps 表用于定位入口；依赖方向、分层职责、命名和 wiring 统�
 |---|---|
 | `packages/user-profile-read-model/src` | `invalidation/`、`build/`、`publication/`：失效与发布；`query/`、`schema/`、`subject-facts/`：查询与事实；`subject-access/`：authority / transition；`worker/`、`readiness/`、`employment/`：重建、就绪与全库 verifier。 |
 | `packages/client-subject-projection/src` | `internal/`：当前 Catalog、contract 与 projection。 |
-| `packages/session-kernel/src` | `unified/`：当前两类会话；`state/`、`storage/` 和 `testing/` 中旧四对象布局仅供离线维护；`state/model.ts` 还提供中性 SessionOrigin。 |
+| `packages/session-kernel/src` | `unified/`：当前两类会话；`storage/` 提供维护扫描；`testing/` 提供当前布局测试支持；`state/model.ts` 提供中性 SessionOrigin。 |
 | `packages/api-core/src/subject-access` | `storage/`：store / Redis adapter；`adapters/`：HTTP 映射；`recovery/`：bootstrap、repair 与 transition recovery。 |
-| `packages/custom-sso/src` | `unified/`：当前协议流程与状态；`internal/`：校验和交付 helper；`grant/`：旧 Grant 离线 decoder、cleanup 与 fixture。 |
+| `packages/custom-sso/src` | `unified/`：当前协议流程与状态；`internal/`：校验和交付 helper；`grant/`：当前维护共用的扫描核验与测试 fixture。 |
 | `apps/api/src/services/sso` | `subject-delivery/`：请求 capability；`transport/`：Cookie、请求/schema、安全与 OpenAPI。门户续接入口在 `routes/sso/unified-authorization.handlers.ts`。 |
 | `apps/api/src/use-cases/authentication` | 密码、手机、OA、微信统一认证；装配在 `composition/use-cases/authentication.ts` 与 `composition/root-authentication.ts`。OA/微信 HTTP 入口仍在 SSO route。 |
-| `apps/worker/src/commands` | `user-profile/`、`client-sso/`、`online-state/`、`client-snapshot/` 命令族；Employment verifier 留在根层。 |
+| `apps/worker/src/commands` | `user-profile/`、`online-state/`、`client-runtime/` 命令族；Employment verifier 留在根层。 |
 
 ## Root-owned Full-system E2E Workspace
 

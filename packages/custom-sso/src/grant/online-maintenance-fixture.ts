@@ -1,43 +1,7 @@
 import type Redis from "ioredis";
 import { randomUUID } from "node:crypto";
-import { codeRecordSchema, continuationSchema, createCustomSsoState, randomHandle } from "../unified/state";
-import { createCustomSsoTokenState, tokenDigest, tokenRecordSchema } from "../unified/token-state";
-import { AUTHORIZATION_GRANT_REDEMPTION_KEY_PREFIX } from "./redis-store";
-import { createLegacyAuthorizationGrantFixture } from "./testing";
-
-/** Read-only test observation, independent of maintenance selection/CAS. Never supplies mutation instructions. */
-export async function observeCustomSsoAuthorizationUpgrade(
-  redis: Pick<Redis, "keys" | "get">,
-  namespace: string,
-  clientCode: string,
-) {
-  const prefix = `${namespace}:custom-sso:v1:`;
-  const authorizationKeys: string[] = [];
-  const tokenKeys: string[] = [];
-  const tokenIndexKeys: string[] = [];
-  for (const key of await redis.keys(`${prefix}*`)) {
-    if (key.startsWith(`${prefix}token-id:`)) {
-      // An orphan has no trustworthy Client attribution. Observe every reverse index for preservation.
-      tokenIndexKeys.push(key);
-      continue;
-    }
-    const schema = key.startsWith(`${prefix}code:`)
-      ? codeRecordSchema
-      : key.startsWith(`${prefix}continuation:`)
-        ? continuationSchema
-        : key.startsWith(`${prefix}token:`) ? tokenRecordSchema : undefined;
-    if (!schema)
-      continue;
-    const raw = await redis.get(key);
-    if (raw === null)
-      continue;
-    if (schema.parse(JSON.parse(raw)).clientCode !== clientCode)
-      continue;
-    (schema === tokenRecordSchema ? tokenKeys : authorizationKeys).push(key);
-  }
-  return { authorizationKeys, tokenKeys, tokenIndexKeys };
-}
-
+import { createCustomSsoState, randomHandle } from "../unified/state";
+import { createCustomSsoTokenState, tokenDigest } from "../unified/token-state";
 /** Public test-support owns protocol serialization, keys and explicit offline fault variants. */
 export function createCustomSsoMaintenanceTestFixture(
   redis: Redis,
@@ -47,7 +11,6 @@ export function createCustomSsoMaintenanceTestFixture(
   const prefix = `${namespace}:custom-sso:v1:`;
   const state = createCustomSsoState(redis, namespace);
   const tokens = createCustomSsoTokenState(redis, namespace);
-  const legacy = createLegacyAuthorizationGrantFixture({ redis, trackKey });
   function owned(key: string) {
     trackKey(key);
     return key;
@@ -146,27 +109,6 @@ export function createCustomSsoMaintenanceTestFixture(
     async seedUnknownUnifiedFamily() {
       const key = owned(`${prefix}unknown:${randomUUID()}`);
       await redis.set(key, "unknown owner record", "PX", 120000);
-      return key;
-    },
-    async seedSource() {
-      const keys: string[] = [];
-      for (const state of ["issued", "redeeming", "consumed"] as const) {
-        const grantId = randomUUID();
-        const common = { version: 1 as const, grantId, expiresAt: Date.now() + 120000 };
-        await legacy.initialize(
-          state === "redeeming"
-            ? { ...common, state, attemptId: randomUUID(), leaseExpiresAt: Date.now() + 5000 }
-            : { ...common, state },
-        );
-        const key = `${AUTHORIZATION_GRANT_REDEMPTION_KEY_PREFIX}${grantId}`;
-        await redis.persist(key);
-        keys.push(key);
-      }
-      return keys;
-    },
-    async seedCorruptSource() {
-      const key = owned(`${AUTHORIZATION_GRANT_REDEMPTION_KEY_PREFIX}${randomUUID()}`);
-      await redis.set(key, "sensitive-fixture");
       return key;
     },
   };

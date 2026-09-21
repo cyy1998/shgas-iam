@@ -187,4 +187,4 @@ Redis、坏状态、配置故障或撤销 failed/unknown 返回 503 并保留 Co
 
 `/wire` 供浏览器消费，`/testing` 仅提供状态观察和故障注入。HTTP/Redis、真实浏览器、独立 RP 和
 官方套件分别证明不同事实，见[验证归属](../../architecture/architecture-verification.md)、
-[协议套件命令](../../development/commands.md#oidc-协议套件与旧来源演练)。
+[协议套件命令](../../development/commands.md#oidc-协议套件)。

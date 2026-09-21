@@ -325,7 +325,7 @@ API Core full restore contract 使用现有 `IAM_API_CORE_TEST_REDIS_URL`，写 
 User Profile maintenance、API/OIDC external entry、hermetic process smoke；不得把 URL credential、
 Token、Subject、完整 Redis key 或 Secret 写入验收记录。
 
-## OIDC 协议套件与旧来源演练
+## OIDC 协议套件
 
 正式 fixture 位于 [oidc-suite.fixture.ts](../../apps/api/test-integration/composition/oidc-suite.fixture.ts)，
 独立 RP 位于 [oidc-rp.integration.test.ts](../../apps/api/test-integration/composition/oidc-rp.integration.test.ts)。
@@ -380,47 +380,27 @@ driver 负责浏览器与官方模块；信号/失败仍逐项尝试清理，超
 不同 loopback 端口只证明两 issuer 协议；hostname/Cookie 隔离须由真实 APISIX/browser 验证，
 见[验证归属](../architecture/architecture-verification.md#行为资源与系统验证)。
 
-### 旧无 issuer 来源演练
-
-固定旧 workspace 为 `5c6707efbf2069649f2c3ea4396bffbd28dcab96`，使用其完整源码与冻结 lockfile，
-由调用方准备独占 API PostgreSQL/Redis。它是无 issuer unified 来源，不与精确 b648 的来源工具混用：
-
-```bash
-pnpm --filter @iam/api exec bun run test-integration/composition/dual-entry-upgrade.fixture.ts --source-directory <fixed-old-workspace>
-```
-
-演练运行固定旧 HTTP writer、全部相关 Worker owner 清理及新服务拒绝/非目标保留检查。
-此命令用于历史来源演练；目标环境的一次性切换须核对[固定旧版 OIDC 流程](https://github.com/cyy1998/shgas-iam/blob/73315e4cef6f96dd79b29e18f74d68af30e559ec/docs/releases/oidc-release-runbook.md)。
-历史候选矩阵与本机结果仅通过[固定文档快照](https://github.com/cyy1998/shgas-iam/tree/73315e4cef6f96dd79b29e18f74d68af30e559ec/docs/features)追溯。
-
 ## 历史数据维护工具
 
-以下工具仍在仓库中，面向特定旧数据/备份的一次性操作；当前维护文档的删减不表示工具或兼容能力退役。
-先确定实际来源、固定工具及原流程，再按匹配版本执行，不能把表中的入口拼成当前发布步骤。
-原 manifest、receipt、恢复文件及失败重跑约束均以链接的固定历史手册为准。
+`audit:actions` 仍用于旧审计 action 或旧备份规范化，显式提供 `IAM_WORKER_DATABASE_URL`：
 
-| 历史用途 | 保留入口 | 操作规程 |
-|---|---|---|
-| b648 默认范围无人值守离线迁移 | `pnpm --filter @iam/worker b648-upgrade`；支持 `--state-dir`、`--migrations-schema` | [无人值守](https://github.com/cyy1998/shgas-iam/blob/73315e4cef6f96dd79b29e18f74d68af30e559ec/docs/releases/b648-unattended-upgrade.md)；自动路径的默认 namespace、单 Redis DB 和无双协议歧义限制不能省略。 |
-| b648 分阶段 Client 数据库迁移 | `bun --no-env-file run apps/worker/scripts/b648-upgrade/index.ts <mode> --writers-stopped`；模式及其余参数按原流程选择 | [数据库步骤](https://github.com/cyy1998/shgas-iam/blob/73315e4cef6f96dd79b29e18f74d68af30e559ec/docs/releases/b648-client-database-upgrade.md)、[整链升级](https://github.com/cyy1998/shgas-iam/blob/73315e4cef6f96dd79b29e18f74d68af30e559ec/docs/releases/b648-managed-callback-upgrade.md)；连接用 `DATABASE_URL`。 |
-| managed 固定地址转 origin 推导 | `pnpm --filter @iam/worker client-managed-callback:upgrade <inventory\|apply\|verify> --writers-stopped` | [同代保留升级](https://github.com/cyy1998/shgas-iam/blob/73315e4cef6f96dd79b29e18f74d68af30e559ec/docs/releases/managed-callback-origin-preserving-upgrade.md)；配置命令不完成状态/Snapshot/正式迁移与放流。 |
-| 旧审计 action 或旧备份规范化 | `pnpm --filter @iam/worker audit:actions -- <inventory\|apply\|verify>`；显式 `IAM_WORKER_DATABASE_URL`，apply 要求 `--writers-stopped` | [审计规范化](https://github.com/cyy1998/shgas-iam/blob/73315e4cef6f96dd79b29e18f74d68af30e559ec/docs/releases/audit-action-canonicalization.md)；保留冲突拒绝、事务锁、独立 verify 与未知提交恢复。 |
-| 旧在线状态 source 布局 | `pnpm --filter @iam/worker online-auth:state` 的 `--layout source` | [历史维护](https://github.com/cyy1998/shgas-iam/blob/73315e4cef6f96dd79b29e18f74d68af30e559ec/docs/releases/unified-session-maintenance.md)；不同旧 schema 的 decoder/namespace 不混用。 |
+```bash
+pnpm --filter @iam/worker audit:actions -- <inventory|apply|verify>
+```
 
-固定旧 Provider writer 的隔离依赖、资源变量与复现入口见[历史证据说明](https://github.com/cyy1998/shgas-iam/blob/73315e4cef6f96dd79b29e18f74d68af30e559ec/docs/releases/unified-session-maintenance.md#自动化与人工证据)。
-这些历史结果不构成当前候选通过声明。现存 b648 composition 验证入口为 Worker
-`test:integration:composition`，显式提供独占 `IAM_WORKER_TEST_DATABASE_URL` 和 `IAM_WORKER_TEST_REDIS_URL`。
+apply 要求 `--writers-stopped`；冲突拒绝、事务锁、独立 verify 与未知提交恢复按
+[审计规范化手册](https://github.com/cyy1998/shgas-iam/blob/73315e4cef6f96dd79b29e18f74d68af30e559ec/docs/releases/audit-action-canonicalization.md)执行。
+
+b648、managed-callback 配置升级、`online-auth:state --layout source` 及配套旧版本演练已退役。
+历史来源升级须恢复[固定历史版本的工具与流程](https://github.com/cyy1998/shgas-iam/tree/73315e4cef6f96dd79b29e18f74d68af30e559ec/docs/releases)，
+不能在当前 checkout 调用这些入口。当前状态维护只接受显式 `--layout unified`，历史结果不构成当前候选通过声明。
 
 ## 工具链强制执行
 
 #200 后 `pnpm test:e2e` 在原同 origin 全系统基线之后，再启动独立 exact project 执行两个不同 hostname 的
 `dual-entry.spec.ts`；不需要另设环境变量选择第二阶段。workspace-local journey 仍只服务聚焦调试。
-双入口协议和固定旧状态演练的命令与资源见[OIDC 协议套件与旧来源演练](#oidc-协议套件与旧来源演练)。
+双入口协议的命令与资源见[OIDC 协议套件](#oidc-协议套件)。
 
-#206 的精确 b648 直升演练由调用方提供空的任务独占 Redis DB、PostgreSQL 及冻结依赖的旧源码目录，
-显式执行 `bun --no-env-file run apps/api/test-integration/composition/b648-upgrade.fixture.ts <fixed-source-dir> [evidence-dir]`。
-不在普通 collection 中隐式安装旧版本。真实 writer、正式 CLI 顺序及不同来源的证据见
-[跨代手册](https://github.com/cyy1998/shgas-iam/blob/73315e4cef6f96dd79b29e18f74d68af30e559ec/docs/releases/b648-managed-callback-upgrade.md)。
 API Browser 的输出固定到 `test-results/browser`；suite 的 outputDirectory 应选择独立任务目录，不能依赖
 其他 runner 的可清理输出根保存跨通道验收材料。
 

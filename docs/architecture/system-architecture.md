@@ -78,7 +78,7 @@ TTL 或逐 Client 访问自然收敛。当前 full repair/verify 只拥有当前
 
 - **会话与协议状态**：Kernel 只拥有 UserSession/ClientSession。UserSession 使用固定期限；应用关系固定根与 Client，open 可复用有效实例、更新协议标记并单调延长期限，但不超过原根。
   Custom SSO 与 OIDC 各自拥有 Code、Token、续接及协议状态。访问验证自身、根、应用关系与当前 Client/Subject Access；
-  不依赖异步枚举 Token 清理来阻止已终止关系的访问。离线旧布局只供显式维护，不进入线上探测。
+  不依赖异步枚举 Token 清理来阻止已终止关系的访问。旧布局离线维护已退役，不进入线上探测。
 - **账号访问**：API、Admin、Custom SSO 与 OIDC 在每个受影响接口的首次可信主体解析后取得一次许可；成功、拒绝和暂态失败固定。已许可在途调用不复查账号状态，下一调用重新检查；Kernel 只管对象生命周期，Projection 复用许可。旧代不因重新启用恢复，恢复步骤见[Profile 与 Subject Access 维护](../releases/user-profile-maintenance.md)。
 
 

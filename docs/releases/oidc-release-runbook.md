@@ -61,7 +61,7 @@ Public 使用 PKCE S256；Confidential 使用 Basic 与 PKCE。普通详情不�
   同主机不同端口可能共享 Cookie，双端口协议测试不能证明浏览器域名隔离；不承诺跨域免登录。
 
 按[验证归属](../architecture/architecture-verification.md)选择 API、RP 与浏览器证据；
-固定官方套件的入口及配置在[命令页](../development/commands.md#oidc-协议套件与旧来源演练)。
+固定官方套件的入口及配置在[命令页](../development/commands.md#oidc-协议套件)。
 本地 smoke、套件和真实环境验收各自记录，不相互冒充。
 
 ## 故障、恢复与留证

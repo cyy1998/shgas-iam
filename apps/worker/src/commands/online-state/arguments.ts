@@ -20,7 +20,7 @@ export function parseOnlineStateArgs(argv: string[]) {
   if (new Set(flags).size !== flags.length || positionals.length !== 1 || !values["writers-stopped"] || !values.drained)
     throw new Error("Explicit stopped and drained scope required");
   const mode = z.enum(["inventory", "apply", "verify"]).parse(positionals[0]);
-  const layout = z.enum(["source", "unified"]).parse(values.layout);
+  const layout = z.literal("unified").parse(values.layout);
   const owner = z.enum(["all", "kernel", "custom-sso", "oidc"]).parse(values.owner ?? "all");
   const namespace = z.string().regex(/^[\w:-]{1,128}$/u);
   const kernelNamespace = values["kernel-namespace"] === undefined ? undefined : namespace.parse(values["kernel-namespace"]);
@@ -28,12 +28,11 @@ export function parseOnlineStateArgs(argv: string[]) {
   const oidcNamespace = values["oidc-namespace"] === undefined ? undefined : namespace.parse(values["oidc-namespace"]);
   const clientCode = values["client-code"] === undefined ? undefined : ClientCodeSchema.parse(values["client-code"]);
   const artifacts = z.enum(["all", "authorization"]).parse(values.artifacts ?? "all");
-  if (artifacts === "authorization" && (layout !== "unified" || owner !== "custom-sso" || !clientCode))
+  if (artifacts === "authorization" && (owner !== "custom-sso" || !clientCode))
     throw new Error("Authorization cleanup requires an explicit unified Custom Client scope");
   if (((owner === "all" || owner === "kernel") && !kernelNamespace)
-    || (layout === "unified" && ((owner === "all" || owner === "custom-sso") && !customNamespace))
-    || (layout === "unified" && ((owner === "all" || owner === "oidc") && !oidcNamespace))
-    || (layout === "source" && (customNamespace !== undefined || oidcNamespace !== undefined || clientCode !== undefined))
+    || ((owner === "all" || owner === "custom-sso") && !customNamespace)
+    || ((owner === "all" || owner === "oidc") && !oidcNamespace)
     || (clientCode !== undefined && owner !== "custom-sso" && owner !== "oidc")) {
     throw new Error("Maintenance scope is incomplete");
   }

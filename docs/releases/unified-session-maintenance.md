@@ -7,13 +7,13 @@ Next review: 2026-10-31
 
 本页用于当前统一会话布局的离线定向清理和 Client Snapshot 修复。日常会话查询、撤销优先使用
 [会话管理](../features/admin/session-management.md)；主体访问与事实恢复见[Profile 维护](user-profile-maintenance.md)。
-旧来源升级按[固定历史手册](https://github.com/cyy1998/shgas-iam/tree/73315e4cef6f96dd79b29e18f74d68af30e559ec/docs/releases)
+旧来源升级工具已退役；需要升级时恢复匹配版本工具并按[固定历史手册](https://github.com/cyy1998/shgas-iam/tree/73315e4cef6f96dd79b29e18f74d68af30e559ec/docs/releases)
 核对实际版本，不套用本页流程。维护命令不负责部署、停流或放流。
 
 ## 所有权与明确范围
 
 Worker `online-auth:state` 组合三个 owner 的 inventory、apply 和独立 verify，不启动 HTTP、队列或 PostgreSQL。
-本页只使用 `--layout unified`，每次操作固定 Redis 实例、DB、namespace、owner 和可选 Client 集合。
+命令只接受显式 `--layout unified`，每次操作固定 Redis 实例、DB、namespace、owner 和可选 Client 集合。
 
 | Owner | 当前库存 | 范围边界 |
 |---|---|---|

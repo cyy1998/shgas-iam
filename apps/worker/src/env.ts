@@ -285,13 +285,6 @@ export function parseAuditActionMaintenanceCommandEnv(source: NodeJS.ProcessEnv)
   return { databaseUrl };
 }
 
-export function parseClientSsoUpgradeCommandEnv(source: NodeJS.ProcessEnv) {
-  const databaseUrl = z.string().min(1).parse(source.IAM_WORKER_DATABASE_URL);
-  if (!["postgres:", "postgresql:"].includes(new URL(databaseUrl).protocol))
-    throw new Error("invalid database configuration");
-  return { databaseUrl };
-}
-
 export function parseUserProfilePostgresReadinessCommandEnv(
   source: NodeJS.ProcessEnv,
 ): UserProfilePostgresReadinessCommandEnv {

@@ -7,7 +7,6 @@
     ".": "./src/index.ts",
     "./wire": "./src/wire.ts",
     "./maintenance": "./src/maintenance.ts",
-    "./offline-maintenance": "./src/offline-maintenance.ts",
     "./testing": "./src/testing.ts"
   },
   "scripts": {

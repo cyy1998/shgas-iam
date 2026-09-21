@@ -1,23 +1,12 @@
 import type { OnlineStateInput } from "@worker/commands/online-state/arguments";
 import type { Redis } from "ioredis";
 import {
-  createLegacyGrantMaintenance,
-  createLegacyGrantVerifier,
-  createOfflineGrantVerifier,
   createUnifiedCustomSsoInventory,
   createUnifiedCustomSsoMaintenance,
   createUnifiedCustomSsoVerifier,
 } from "@iam/custom-sso/maintenance";
 import { createOidcInventory, createOidcMaintenance, createOidcVerifier } from "@iam/oidc/maintenance";
 import {
-  createOfflineOidcInventory,
-  createOfflineOidcMaintenance,
-  createOfflineOidcVerifier,
-} from "@iam/oidc/offline-maintenance";
-import {
-  createOfflineSessionInventory,
-  createOfflineSessionMaintenance,
-  createOfflineSessionVerifier,
   createUnifiedSessionInventory,
   createUnifiedSessionMaintenance,
   createUnifiedSessionVerifier,
@@ -93,95 +82,38 @@ export function createOnlineStateMaintenance(
       },
     });
   }
-  if (input.layout === "source") {
-    if (selected("kernel")) {
-      const inventory = createOfflineSessionInventory(reader, input.kernelNamespace!);
-      const maintenance = createOfflineSessionMaintenance(writer, input.kernelNamespace!);
-      const verifier = createOfflineSessionVerifier(scan, input.kernelNamespace!);
-      add(
-        "source-kernel",
-        cursor => inventory.inventory({ cursor }),
-        cursor => maintenance.apply({ cursor }),
-        () => verifier.verify(signal),
-      );
-    }
-    if (selected("custom-sso")) {
-      const legacyReader = {
-        scan: async (cursor: string, match: "MATCH", pattern: string, count: "COUNT", limit: number) =>
-          await redis.scan(cursor, match, pattern, count, limit),
-        get: reader.get,
-      };
-      const inventory = createLegacyGrantVerifier({ redis: legacyReader, writersStopped: true, signal });
-      const maintenance = createLegacyGrantMaintenance({
-        redis: {
-          ...legacyReader,
-          eval: async (script, count, ...args) => await redis.eval(script, count, ...args),
-        },
-        writersStopped: true,
-        signal,
-      });
-      const verifier = createOfflineGrantVerifier(scan);
-      owners.push({
-        name: "source-custom-grants",
-        async run() {
-          if (input.mode === "verify")
-            return { ...(await verifier.verify(signal)), removed: 0, changed: 0, unknown: 0 };
-          const result = await (input.mode === "apply" ? maintenance.apply() : inventory.inventory());
-          return {
-            matching: result.targets,
-            removed: result.removed,
-            changed: 0,
-            unknown: result.failed + result.unverified + (result.scanComplete ? 0 : 1),
-          };
-        },
-      });
-    }
-    if (selected("oidc")) {
-      const inventory = createOfflineOidcInventory(reader);
-      const maintenance = createOfflineOidcMaintenance(writer);
-      const verifier = createOfflineOidcVerifier(scan);
-      add(
-        "source-provider",
-        cursor => inventory.inventory({ cursor }),
-        cursor => maintenance.apply({ cursor }),
-        () => verifier.verify(signal),
-      );
-    }
+  if (selected("kernel")) {
+    const inventory = createUnifiedSessionInventory(reader, input.kernelNamespace!);
+    const maintenance = createUnifiedSessionMaintenance(writer, input.kernelNamespace!);
+    const verifier = createUnifiedSessionVerifier(scan, input.kernelNamespace!);
+    add(
+      "unified-kernel",
+      cursor => inventory.inventory({ cursor }),
+      cursor => maintenance.apply({ cursor }),
+      () => verifier.verify(signal),
+    );
   }
-  else {
-    if (selected("kernel")) {
-      const inventory = createUnifiedSessionInventory(reader, input.kernelNamespace!);
-      const maintenance = createUnifiedSessionMaintenance(writer, input.kernelNamespace!);
-      const verifier = createUnifiedSessionVerifier(scan, input.kernelNamespace!);
-      add(
-        "unified-kernel",
-        cursor => inventory.inventory({ cursor }),
-        cursor => maintenance.apply({ cursor }),
-        () => verifier.verify(signal),
-      );
-    }
-    if (selected("custom-sso")) {
-      const inventory = createUnifiedCustomSsoInventory(reader, input.customNamespace!);
-      const maintenance = createUnifiedCustomSsoMaintenance(writer, input.customNamespace!);
-      const verifier = createUnifiedCustomSsoVerifier(scan, input.customNamespace!);
-      add(
-        "unified-custom-sso",
-        cursor => inventory.inventory({ cursor, clientCode: input.clientCode, artifacts: input.artifacts }),
-        cursor => maintenance.apply({ cursor, clientCode: input.clientCode, artifacts: input.artifacts }),
-        () => verifier.verify(signal),
-      );
-    }
-    if (selected("oidc")) {
-      const inventory = createOidcInventory(reader, input.oidcNamespace!);
-      const maintenance = createOidcMaintenance(writer, input.oidcNamespace!);
-      const verifier = createOidcVerifier(scan, input.oidcNamespace!);
-      add(
-        "unified-oidc",
-        cursor => inventory.inventory({ cursor, clientId: input.clientCode }),
-        cursor => maintenance.apply({ cursor, clientId: input.clientCode }),
-        () => verifier.verify(signal),
-      );
-    }
+  if (selected("custom-sso")) {
+    const inventory = createUnifiedCustomSsoInventory(reader, input.customNamespace!);
+    const maintenance = createUnifiedCustomSsoMaintenance(writer, input.customNamespace!);
+    const verifier = createUnifiedCustomSsoVerifier(scan, input.customNamespace!);
+    add(
+      "unified-custom-sso",
+      cursor => inventory.inventory({ cursor, clientCode: input.clientCode, artifacts: input.artifacts }),
+      cursor => maintenance.apply({ cursor, clientCode: input.clientCode, artifacts: input.artifacts }),
+      () => verifier.verify(signal),
+    );
+  }
+  if (selected("oidc")) {
+    const inventory = createOidcInventory(reader, input.oidcNamespace!);
+    const maintenance = createOidcMaintenance(writer, input.oidcNamespace!);
+    const verifier = createOidcVerifier(scan, input.oidcNamespace!);
+    add(
+      "unified-oidc",
+      cursor => inventory.inventory({ cursor, clientId: input.clientCode }),
+      cursor => maintenance.apply({ cursor, clientId: input.clientCode }),
+      () => verifier.verify(signal),
+    );
   }
   return owners;
 }

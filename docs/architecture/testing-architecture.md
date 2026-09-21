@@ -250,8 +250,8 @@ Agent 可以补齐临时资源后重新运行，但命令不得 skip、自动 re
 双入口阶段只运行该文件，复用完整 migrations、seed、readiness、正式 APISIX 与诊断/清理 owner。
 它直接观察两协议相对登录、同一 managed Client 按本次落地 origin 回调、固定 business callback、host-only Cookie、授权 `iss`、退出与未知 host/伪造 header。
 E2E 从正式 manifest 发布 API upstream 的受控 Host rewrite，并回读已发布 upstream 后才运行旅程；不改生产 manifest 的部署输入。
-旧状态升级使用显式固定源码目录的独立演练，不在普通 composition 中隐式拉取旧代码；
-suite/RP、三个旧 Worker 进程和非目标保留的证据入口见[协议套件与演练入口](../development/commands.md#oidc-协议套件与旧来源演练)。
+旧状态升级演练已退役，历史证据通过固定 Git 版本追溯；
+当前 suite/RP 证据入口见[协议套件入口](../development/commands.md#oidc-协议套件)。
 
 API Browser Integration 的 Playwright 输出固定为 `apps/api/test-results/browser`，不能使用会清理其他通道产物的
 默认 `apps/api/test-results` 根。独立协议套件的持久验收材料放在调用方明确的任务目录，避免被浏览器 runner 清理。

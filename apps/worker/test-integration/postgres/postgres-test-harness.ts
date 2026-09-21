@@ -1,8 +1,5 @@
 import type { DbClient } from "@iam/db";
 import { randomUUID } from "node:crypto";
-import { mkdtemp, rm } from "node:fs/promises";
-import { tmpdir } from "node:os";
-import { basename, dirname, join, resolve } from "node:path";
 import process from "node:process";
 import { fileURLToPath } from "node:url";
 import { relations } from "@iam/db/relations";
@@ -22,9 +19,7 @@ export interface WorkerPostgresTestHarness {
   readonly close: () => Promise<void>;
 }
 
-export async function createWorkerPostgresTestHarness(
-  options: { b648ClientSource?: boolean } = {},
-): Promise<WorkerPostgresTestHarness> {
+export async function createWorkerPostgresTestHarness(): Promise<WorkerPostgresTestHarness> {
   const databaseUrl = requireDedicatedTestDatabaseUrl();
   const schemaName = `iam_worker_${randomUUID().replaceAll("-", "")}`;
   const adminSql = postgres(databaseUrl, { max: 1 });
@@ -43,29 +38,7 @@ export async function createWorkerPostgresTestHarness(
     const migrationsFolder = fileURLToPath(
       new URL("../../../../packages/db/src/migrations", import.meta.url),
     );
-    if (options.b648ClientSource) {
-      const prefix = "iam205-b648-source-";
-      const directory = await mkdtemp(join(tmpdir(), prefix));
-      try {
-        const repoRoot = fileURLToPath(new URL("../../../../", import.meta.url));
-        const archive = join(directory, "source.tar");
-        for (const command of [
-          ["git", "archive", "--format=tar", `--output=${archive}`, "b6481f2de5c2930fc381d99e70520e0783091e9d", "packages/db/src/migrations"],
-          ["tar", "-xf", archive, "-C", directory],
-        ]) {
-          const child = Bun.spawn(command, { cwd: repoRoot, stdout: "ignore", stderr: "ignore" });
-          if (await child.exited !== 0)
-            throw new Error("Cannot materialize exact b648 migrations");
-        }
-        await migrate(db, { migrationsFolder: join(directory, "packages/db/src/migrations"), migrationsSchema: schemaName });
-      }
-      finally {
-        await removeMigrationFixture(directory, prefix);
-      }
-    }
-    else {
-      await migrate(db, { migrationsFolder, migrationsSchema: schemaName });
-    }
+    await migrate(db, { migrationsFolder, migrationsSchema: schemaName });
 
     return {
       db,
@@ -136,10 +109,4 @@ function quoteIdentifier(identifier: string) {
   if (!/^[a-z0-9_]+$/u.test(identifier))
     throw new Error("test schema name contains unsafe characters");
   return `"${identifier}"`;
-}
-
-async function removeMigrationFixture(path: string, prefix: string) {
-  if (dirname(resolve(path)) !== resolve(tmpdir()) || !basename(path).startsWith(prefix))
-    throw new Error("Unexpected migration fixture directory");
-  await rm(path, { recursive: true });
 }

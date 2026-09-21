@@ -11,9 +11,8 @@ import {
   withOwnedTemporaryDirectory,
 } from "@iam/api-core/testing/process-smoke-harness";
 import { ClientStatus } from "@iam/contracts";
-import { createOfflineGrantVerifier, createUnifiedCustomSsoMaintenance } from "@iam/custom-sso/maintenance";
+import { createUnifiedCustomSsoMaintenance } from "@iam/custom-sso/maintenance";
 import { createCustomSsoMaintenanceTestFixture } from "@iam/custom-sso/testing";
-import { createOfflineOidcVerifier } from "@iam/oidc/offline-maintenance";
 import { createOidcMaintenanceTestFixture } from "@iam/oidc/testing";
 import { createSessionMaintenanceTestFixture } from "@iam/session-kernel/testing";
 import { afterEach, beforeEach, expect, test } from "bun:test";
@@ -24,13 +23,9 @@ let harness: Awaited<ReturnType<typeof createWorkerRedisTestHarness>>;
 const cleanups: Array<() => Promise<void>> = [];
 beforeEach(async () => {
   harness = await createWorkerRedisTestHarness();
-  const oidc = await createOfflineOidcVerifier(harness.observer).verify();
-  const grants = await createOfflineGrantVerifier(harness.observer).verify();
   const snapshots = await createClientSnapshotVerifier(harness.observer).verifyAllAfterRedisRestore({
     protocolTrafficStopped: true,
   });
-  expect(oidc.matching).toBe(0);
-  expect(grants.matching).toBe(0);
   expect(snapshots.matchingKeys).toBe(0);
 });
 afterEach(async () => {
@@ -87,7 +82,6 @@ const stopped = ["--writers-stopped", "--drained"];
 function authorizationScope(ns: string) {
   return ["--layout", "unified", "--owner", "custom-sso", "--custom-namespace", ns, "--client-code", "alpha", "--artifacts", "authorization", ...stopped];
 }
-const source = (ns: string, mode: string) => [mode, "--layout", "source", "--kernel-namespace", ns, ...stopped];
 function target(ns: string, mode: string) {
   return [
     mode,
@@ -268,44 +262,6 @@ test("authorization owner paginates and reports CAS replacement without touching
   expect(after).toEqual(before);
 }, 30_000);
 
-test.each(["app.web", "业务系统"])(
-  "source CLI decodes frozen Kernel pending, Grant and all five Provider models for Client %s while retaining unified targets",
-  async (clientId) => {
-    const ns = `iam193:${randomUUID()}:`;
-    const owners = fixtures(ns);
-    const sourceKeys = [
-      ...(await owners.kernel.seedSource()),
-      ...(await owners.custom.seedSource()),
-      ...(await owners.oidc.seedSource(clientId)),
-    ];
-    const targetNs = ns;
-    const retained = (await seedUnified(targetNs)).allKeys;
-    const before = await observation(retained);
-    await command("online-auth:state", source(ns, "inventory"));
-    await command("online-auth:state", source(ns, "apply"));
-    await command("online-auth:state", source(ns, "verify"));
-    expect(await harness.observer.exists(...sourceKeys)).toBe(0);
-    expect(await observation(retained)).toEqual(before);
-  },
-  45_000,
-);
-
-test("source malformed records are retained; valid source orphans are independently cleaned", async () => {
-  const ns = `iam193:${randomUUID()}:`;
-  const owners = fixtures(ns);
-  const bad = [
-    await owners.kernel.seedCorruptSource(),
-    await owners.oidc.seedCorruptSource(),
-    await owners.custom.seedCorruptSource(),
-  ];
-  const orphan = await owners.kernel.seedOrphanSourceIdentity();
-  const before = await observation(bad);
-  await command("online-auth:state", source(ns, "apply"), 1);
-  await command("online-auth:state", source(ns, "verify"), 1);
-  expect(await observation(bad)).toEqual(before);
-  expect(await harness.observer.exists(orphan)).toBe(0);
-}, 30_000);
-
 test("large Kernel indexes make bounded progress and require a complete independent rerun", async () => {
   const ns = `iam193:${randomUUID()}`;
   const owners = fixtures(ns);
@@ -317,16 +273,6 @@ test("large Kernel indexes make bounded progress and require a complete independ
   await command("online-auth:state", target(ns, "verify"), 1);
   await command("online-auth:state", target(ns, "apply"));
   await command("online-auth:state", target(ns, "verify"));
-  const provider = await owners.oidc.seedLargeSourceIndexes(1001);
-  const scope = ["--layout", "source", "--owner", "oidc", ...stopped];
-  await command("online-auth:state", ["apply", ...scope], 1);
-  const remainingIndex = await provider.indexCount();
-  const remainingMembers = await provider.membershipCount();
-  expect(remainingIndex).toBe(1);
-  expect(remainingMembers).toBe(1);
-  await command("online-auth:state", ["verify", ...scope], 1);
-  await command("online-auth:state", ["apply", ...scope]);
-  await command("online-auth:state", ["verify", ...scope]);
 }, 40_000);
 
 test("independent full verify runs with scan-only ACL and cannot repair dirty state", async () => {
@@ -350,7 +296,6 @@ test("independent full verify runs with scan-only ACL and cannot repair dirty st
   });
   const env = { IAM_WORKER_REDIS_USERNAME: user, IAM_WORKER_REDIS_PASSWORD: "scan-password" };
   await command("online-auth:state", target(ns, "verify"), 0, env);
-  await command("online-auth:state", source(`${ns}:`, "verify"), 0, env);
   const dirty = await fixtures(ns).oidc.seedMalformedToken();
   await command("online-auth:state", target(ns, "verify"), 1, env);
   expect(await harness.observer.get(dirty)).toBe("sensitive-fixture");
@@ -421,6 +366,7 @@ test("Snapshot CLI shares control across ordinary and sensitive readers without 
 test("invalid input is rejected before connecting and nonresponding Redis is bounded", async () => {
   const ns = `iam193:${randomUUID()}`;
   await command("online-auth:state", ["apply", "--layout", "unified"], 2);
+  await command("online-auth:state", ["apply", "--layout", "source", "--kernel-namespace", ns, ...stopped], 2, { IAM_WORKER_REDIS_HOST: "" });
   await command("online-auth:state", ["apply", ...target(ns, "inventory").slice(1), "--artifacts", "authorization"], 2);
   await command("online-auth:state", ["apply", "--layout", "unified", "--owner", "custom-sso", "--custom-namespace", ns, "--artifacts", "authorization", ...stopped], 2);
   await command("online-auth:state", target(ns, "inventory"), 1, { IAM_WORKER_REDIS_HOST: "" });

@@ -43,11 +43,10 @@ Admin/SSO 前端、`api-core`、`domain`、`contracts`、`db`、`jobs`、Gateway
 | 完整认证和协议 | [API HTTP Redis](../../apps/api/test-integration/redis/root-authentication.integration.test.ts) | 默认操作 factory 下 Custom/OIDC、认证、回调、一次消费、替换与失败作用、ORCAS 替身、当前披露、取消/确认退出；第三方真实作用仍由接入方证明。 |
 | OIDC 模块 | [OIDC Redis](../../packages/oidc/test-integration/redis) 与 API HTTP | 协议 Code/Token/索引/续接/退出确认/密钥；正式进程/env/JWK/故障由 API process/composition 补足。 |
 | 进程生命周期 | [API process](../../apps/api/test-integration/process/entry.integration.test.ts)、[composition](../../apps/api/test-integration/composition/entry.integration.test.ts) | 默认接线、issuer/path、真实 PG/Redis、健康与关闭；不能据启动成功替代协议行为。 |
-| 最终 DB 收缩 | [DB gate](../../packages/db/test-integration/postgres/client-sso-contraction.integration.test.ts)、[b648 独立脚本](../../apps/worker/test-integration/postgres/b648-client-upgrade-command.integration.test.ts) | 拒绝未迁移旧记录、独立脚本 apply/verify 后允许 DDL、安全投影及非目标业务保留；旧扩展期 CLI 已退役。 |
-| 离线维护 | [Worker Redis CLI](../../apps/worker/test-integration/redis/online-state-command.integration.test.ts) | 新进程 inventory/apply/verify、全部来源模型/索引、特殊 Client、非目标、ACL、部分失败重跑；历史真实 Provider writer 证据在统一维护手册固定 SHA。 |
-| b648 无人值守迁移 | [Worker composition](../../apps/worker/test-integration/composition/b648-upgrade.integration.test.ts) | 正式单入口、精确旧 migrations、真实 PG/Redis、写入前拒绝歧义、数据库与 Redis 部分失败恢复、原凭据/非目标保留、成功后不再清理；不证明真实环境停流或发布。 |
+| 最终 DB 收缩 | [DB gate](../../packages/db/test-integration/postgres/client-sso-contraction.integration.test.ts)、[managed callback 约束](../../packages/db/test-integration/postgres/managed-callback-origin-migration.integration.test.ts) | 拒绝未迁移旧记录、新装最终 schema、严格配置约束及重复迁移；一次性配置升级工具已退役。 |
+| 离线维护 | [Worker Redis CLI](../../apps/worker/test-integration/redis/online-state-command.integration.test.ts) | 新进程 inventory/apply/verify、当前 unified 模型/索引、Client 定向、非目标、ACL、部分失败重跑及无效布局连接前拒绝；旧来源演练已退役。 |
 | 代表系统旅程 | 根 `pnpm test:e2e`：[Admin](../../e2e/system/admin-custom-sso.spec.ts)、[HR](../../e2e/system/hr-admin-user-management.spec.ts)、[OIDC](../../e2e/system/oidc-pkce.spec.ts) | 同一临时 PG/Redis/APISIX 与全部正式 runtime；不证明真实外部集成或目标环境切换。 |
-| 双入口联合验收 | [双hostname浏览器](../../e2e/system/dual-entry.spec.ts)、[独立RP](../../apps/api/test-integration/composition/oidc-rp.integration.test.ts)、[旧来源演练](../../apps/api/test-integration/composition/dual-entry-upgrade.fixture.ts) | 正式APISIX与独立same-origin场景、两issuer协议、固定旧HTTP writer→三Worker全清→新拒绝及非目标保留；复现命令与资源见[协议套件与演练入口](../development/commands.md#oidc-协议套件与旧来源演练)。 |
+| 双入口联合验收 | [双 hostname 浏览器](../../e2e/system/dual-entry.spec.ts)、[独立 RP](../../apps/api/test-integration/composition/oidc-rp.integration.test.ts) | 正式 APISIX、独立 same-origin 场景及两 issuer 协议；复现命令与资源见[协议套件入口](../development/commands.md#oidc-协议套件)。旧来源升级演练已退役。 |
 
 旧 Kernel 四对象、Provider、配置版本和旧 Snapshot/Gate 测试随被替代模型删除；其仍成立的行为分别由上表
 会话/协议/配置/账号/维护最高入口承接。历史 schema/旧 writer 证明不能冒称在最终候选重跑。

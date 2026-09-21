@@ -16,12 +16,6 @@ import { createApiPostgresTestHarness } from "../postgres/postgres-test-harness"
 import { createEntryEnvironment } from "../process/api-env.fixture";
 import { runConformanceCleanup } from "./oidc-conformance-lifecycle.fixture";
 
-export interface OidcCandidateSource {
-  /** Full workspace root; code is only loaded by a separate API process. */
-  sourceDirectory: string;
-  sourceRevision: string;
-}
-
 /** Caller supplies dedicated PG/Redis; this fixture never starts Docker or reads runtime env files. */
 export async function createOidcConformanceCandidate(options: {
   redirectUris: string[];
@@ -32,9 +26,6 @@ export async function createOidcConformanceCandidate(options: {
   issuerMode?: "same-origin" | "dual";
   /** Caller owns loopback DNS mapping and, for TLS, matching certificate SANs. */
   hostnames?: { internal: string; external: string };
-  source?: OidcCandidateSource;
-  /** Explicit source rehearsal only; ordinary candidates always use current migrations. */
-  migrationsFolder?: string;
 }) {
   const checkpoint = async (phase: string) => options.lifecycle?.checkpoint(phase);
   await checkpoint("setup");
@@ -56,9 +47,7 @@ export async function createOidcConformanceCandidate(options: {
     options.lifecycle?.own(once);
   }
   registerCleanup(() => rm(temporaryDirectory, { recursive: true, force: true }));
-  let closed = false;
   async function close() {
-    closed = true;
     const failures: unknown[] = [];
     for (const cleanup of cleanups.splice(0).reverse()) {
       try {
@@ -74,7 +63,7 @@ export async function createOidcConformanceCandidate(options: {
   try {
     await writeFile(`${options.logPath}.owner.json`, JSON.stringify({ temporaryDirectory }));
     await checkpoint("temporary-directory-ready");
-    const pg = await createApiPostgresTestHarness({ migrationsFolder: options.migrationsFolder });
+    const pg = await createApiPostgresTestHarness();
     registerCleanup(() => pg.close());
     await checkpoint("postgres-ready");
     const redis = new Redis(redisUrl, { maxRetriesPerRequest: 1 });
@@ -130,8 +119,6 @@ export async function createOidcConformanceCandidate(options: {
           const incoming = new URL(request.url);
           const forwarded = new Request(`${apiOrigin}${incoming.pathname}${incoming.search}`, request);
           forwarded.headers.set("X-IAM-Entry-Network", network);
-          // Rehearsals stop and replace the backend on this port; do not reuse a socket owned by the old process.
-          forwarded.headers.set("Connection", "close");
           return await fetch(forwarded, { redirect: "manual" });
         },
       });
@@ -178,21 +165,13 @@ export async function createOidcConformanceCandidate(options: {
       }
     }
     registerCleanup(stopCandidate);
-    async function restartCandidate(source?: OidcCandidateSource) {
-      if (closed)
-        throw new Error("Cannot restart a closed OIDC candidate");
-      await stopCandidate();
+    async function startCandidate() {
       await checkpoint("before-api-start");
       const env = { ...resourceEnvironment };
-      // Fixed pre-dual-issuer writer: explicit env adapter, never an in-process source import.
-      if (source?.sourceRevision.startsWith("5c6707ef")) {
-        env.IAM_API_OIDC_ISSUER = `${externalOrigin}/oidc`;
-        env.IAM_API_OIDC_PUBLIC_ORIGIN = externalOrigin;
-      }
       child = spawnOwnedProcessTree({
         executable: process.execPath,
         args: ["--no-env-file", "run", "src/index.ts"],
-        cwd: source ? join(source.sourceDirectory, "apps/api") : fileURLToPath(new URL("../../", import.meta.url)),
+        cwd: fileURLToPath(new URL("../../", import.meta.url)),
         env,
       });
       let spawnError: unknown;
@@ -212,7 +191,6 @@ export async function createOidcConformanceCandidate(options: {
         namespace,
         temporaryDirectory,
         schema: new URL(pg.databaseUrl).searchParams.get("search_path"),
-        sourceRevision: source?.sourceRevision ?? "working-tree",
       }));
       const deadline = Date.now() + 30000;
       while (true) {
@@ -234,19 +212,13 @@ export async function createOidcConformanceCandidate(options: {
       }
       await checkpoint("api-ready");
     }
-    await restartCandidate(options.source);
+    await startCandidate();
     return {
       origin,
       origins,
       internalOrigin,
       externalOrigin,
-      stopCandidate,
-      restartCandidate,
-      resourceEnvironment,
-      postgresHarness: pg,
-      redis,
       namespace,
-      oidcNamespace: `${namespace}:oidc`,
       clientId,
       publicClientId,
       secondClientId,

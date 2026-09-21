@@ -349,7 +349,7 @@ User Profile 的初代 V1 builder、Facts reader/publisher 与 Subject Projectio
   用户/根/应用关系结果与失败、未知、剩余原集合分开。原请求重试不重选新实例，根终止后 Token 在线访问拒绝。
 - 同根与子对象的作用不是一般事务；不承诺第三方本地退出或可靠后台补齐。Code/Token TTL、同步精确补偿、
   独立维护和人工/外部责任见[统一维护手册](../releases/unified-session-maintenance.md#放流与人工恢复责任)。
-- `/maintenance` 与 `/testing` 分离；source decoder 只在显式停 writer 后处理固定旧布局，不能在线探测/转换旧关系。
+- `/maintenance` 与 `/testing` 分离；仅维护当前 unified 布局；旧 source decoder 已退役，不探测或转换旧关系。
   当前 API/Admin/Worker 同一生产图只消费一代；环境切换仍需人工发布验收。
 ### Temporary Login Restriction
 
@@ -392,7 +392,7 @@ User Profile 的初代 V1 builder、Facts reader/publisher 与 Subject Projectio
 - 取得 Client Snapshot 和 access 后交付 capability 复用同一观察，Mapper 不重新读 Client；根 UserInfo 独立 Client 校验保持。
   真实 I/O、唯一消费、替换保护和 Token 补偿不能作为重复内存判断删除，#155 清单在统一维护手册。
 - API route 只负责 HTTP、Cookie、错误/redirect，完整操作处理内部顺序。协议 `/wire` 是浏览器可用纯出口，
-  `/maintenance` 负责离线库存；当前 Code/Token 与旧 Grant decoder 各有明确布局，不混读或复制旧状态。
+  `/maintenance` 负责离线库存；只处理当前 Code/Token 布局，旧 Grant decoder 已退役。
 ## Runtime-specific Composition
 
 ### API OIDC
@@ -410,9 +410,9 @@ API env 注入 current/previous RS256 JWK，JWKS 只输出公钥；非法配置�
 具体配置、密钥轮换、当前协议接口和人工边界见[OIDC 接入](../features/oidc/oidc-integration.md)与[发布手册](../releases/oidc-release-runbook.md)。
 ### Worker
 
-- Spec #178 的新维护由 Worker `online-auth:state` 只通过公开 owner 组合 source/unified inventory、CAS apply 和只读 verify；
-  Kernel、OIDC、Custom SSO 分别拥有 decoder、索引及终态，不导入 app 私有状态。OIDC 的冻结旧 Provider decoder 仅由
-  `/offline-maintenance` 出口消费，在线 factory 不探测旧布局。新 `client-snapshot:repair/verify` 只消费 API Core 新 Snapshot
+- Spec #178 的新维护由 Worker `online-auth:state` 只通过公开 owner 组合 unified inventory、CAS apply 和只读 verify；
+  Kernel、OIDC、Custom SSO 分别拥有 decoder、索引及终态，不导入 app 私有状态。旧 Provider decoder 和
+  `/offline-maintenance` 出口已退役。 `client-snapshot:repair/verify` 只消费 API Core 新 Snapshot
   维护出口；三个 CLI 默认读取 `apps/worker/.env`，已有进程环境变量优先，使用 Worker 资源变量连接、限制 deadline 并在结束时断开资源。它们没有 HTTP、队列或 PG 连接，
   也没有可靠后台执行器。当前 owner 和人工边界见[统一维护手册](../releases/unified-session-maintenance.md)，旧来源操作见[历史工具入口](../development/commands.md#历史数据维护工具)。
 
@@ -425,8 +425,7 @@ API env 注入 current/previous RS256 JWK，JWKS 只输出公钥；非法配置�
 - `createWorkerCommandComposition` 使用 `commandOnly` 模式复用 DB/Redis/module wiring，但不启动 consumers、不注册
   dashboard queues，也不启动 HTTP server；`src/commands/` 的 backfill/repair entrypoints 使用该入口。
 - 当前 Snapshot repair/verify 使用独立 Redis-only composition，普通/敏感 payload 共享控制，targeted 与 full 分开，
-  full 必须停流，另起进程 scan-only verify；旧三类 Runtime command 已删除。b648 Client 业务升级由独立
-  `scripts/b648-upgrade/` 脚本承担，旧扩展期 CLI 已退役。
+  full 必须停流，另起进程 scan-only verify；旧三类 Runtime command、b648 与 managed-callback 升级工具已退役。
 - `createEmploymentCommandComposition` 是更窄的 PostgreSQL-only composition：只从
   `@iam/user-profile-read-model/worker` 组装 Employment Verifier 与只读 repository，不构造 Redis、queue、consumer、
   dashboard 或 HTTP server。对应命令仅由运维人员按需显式调用，不进入普通 Worker 启动或请求路径。
