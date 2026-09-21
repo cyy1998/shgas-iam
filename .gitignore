@@ -12,6 +12,7 @@ coverage
 
 # test artifacts
 test-results/
+.vitest/
 
 # logs
 logs

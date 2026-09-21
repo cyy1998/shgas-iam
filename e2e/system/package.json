@@ -11,7 +11,7 @@
     "@iam/role-assignment-resolution": "workspace:*",
     "@iam/user-profile-read-model": "workspace:*",
     "drizzle-orm": "1.0.0-rc.2",
-    "ioredis": "^5.11.1"
+    "ioredis": "^6.0.0"
   },
   "scripts": {
     "admin:journey": "bun src/cli.ts admin",

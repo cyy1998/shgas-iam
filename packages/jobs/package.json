@@ -14,8 +14,8 @@
     "typecheck": "pnpm exec tsc --noEmit"
   },
   "dependencies": {
-    "bullmq": "^5.80.6",
-    "ioredis": "^5.11.1"
+    "bullmq": "^6.3.8",
+    "ioredis": "^6.0.0"
   },
   "devDependencies": {
     "@iam/eslint-config": "workspace:*",

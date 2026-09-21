@@ -895,10 +895,12 @@ for (const fault of ["login", "configuration-and-cleanup"] as const) {
       throw new Error("Missing proxy port");
     url.port = String(address.port);
     let initialized: Awaited<ReturnType<typeof fixture>> | undefined;
+    let redisEnded: Promise<void> | undefined;
     let failure: unknown;
     try {
       await setup(fault === "configuration-and-cleanup", 30, url.toString(), 45, (f) => {
         initialized = f;
+        redisEnded = new Promise<void>(resolve => f.oidcState.redis.once("end", resolve));
         if (fault === "login")
           f.state.loginFailure = true;
         else f.oidcState.redis.disconnect();
@@ -915,6 +917,8 @@ for (const fault of ["login", "configuration-and-cleanup"] as const) {
     }
     expect(acceptedConnections).toBeGreaterThanOrEqual(2);
     expect(failure).toBeDefined();
+    // The proxy's close callback can precede the client's local socket close event.
+    await redisEnded;
     expect(initialized?.oidcState.redis.status).toBe("end");
     expect(proxy.listening).toBe(false);
     let httpFailure: unknown;

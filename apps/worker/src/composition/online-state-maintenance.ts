@@ -39,7 +39,7 @@ export function createOnlineStateMaintenance(
     get: async (key: string) => await redis.get(key),
     type: async (key: string) => await redis.type(key),
     zrange: async (key: string, start: number, end: number, scores: "WITHSCORES") =>
-      await redis.zrange(key, start, end, scores),
+      await redis.zrange(key, start, String(end), scores),
     smembers: async (key: string) => await redis.smembers(key),
     scard: async (key: string) => await redis.scard(key),
     srandmember: async (key: string, count: number) => await redis.srandmember(key, count),

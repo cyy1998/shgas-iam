@@ -36,8 +36,8 @@
     "typecheck": "pnpm exec tsc --noEmit"
   },
   "dependencies": {
-    "@bull-board/api": "^8.1.2",
-    "@bull-board/hono": "^8.1.2",
+    "@bull-board/api": "^9.10.1",
+    "@bull-board/hono": "^9.10.1",
     "@iam/api-core": "workspace:*",
     "@iam/contracts": "workspace:*",
     "@iam/db": "workspace:*",
@@ -48,7 +48,7 @@
     "@iam/user-profile-read-model": "workspace:*",
     "drizzle-orm": "1.0.0-rc.2",
     "hono": "^4.12.30",
-    "ioredis": "^5.11.1",
+    "ioredis": "^6.0.0",
     "pino": "^10.3.1",
     "postgres": "^3.4.9",
     "zod": "^4.4.3"
