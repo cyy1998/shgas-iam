@@ -1,0 +1,17 @@
+diff --git a/dist/chunk-VOG34SRF.js b/dist/chunk-VOG34SRF.js
+index 93f24d139b795c284915a10c34d82f2fa769eab0..08968bc58df80cee3960075936c876f61f526675 100644
+--- a/dist/chunk-VOG34SRF.js
++++ b/dist/chunk-VOG34SRF.js
+@@ -26985,8 +26985,10 @@ var attachListeners = () => {
+   if (listenersInstalled) return;
+   listenersInstalled = true;
+   process.on("exit", handleExit);
+-  process.on("SIGINT", handleSignal);
+-  process.on("SIGTERM", handleSignal);
++  if (process.env.SANDCASTLE_HOST_HANDLES_SIGNALS !== "1") {
++    process.on("SIGINT", handleSignal);
++    process.on("SIGTERM", handleSignal);
++  }
+ };
+ var detachListeners = () => {
+   if (!listenersInstalled) return;

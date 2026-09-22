@@ -19,7 +19,7 @@
 - 添加或移除标签：
   `gh issue edit <number> --repo cyy1998/shgas-iam --add-label "..."` /
   `gh issue edit <number> --repo cyy1998/shgas-iam --remove-label "..."`。
-- 认领：`gh issue edit <number> --repo cyy1998/shgas-iam --add-assignee @me`。
+- 认领：`gh issue edit <number> --repo cyy1998/shgas-iam --add-assignee '@me'`。
 - 关闭：`gh issue close <number> --repo cyy1998/shgas-iam --comment "..."`。
 
 实际标签名称由 [triage-labels.md](triage-labels.md) 定义，不得因远端暂时缺少标签而静默改用其他名称。
@@ -57,6 +57,19 @@ GitHub Issues 与 PR 共用编号空间。遇到裸 `#42` 时，先运行
 
 父 Spec 与 implementation ticket 的完成、关闭时机以[完成与本地合入](workflow.md#完成与本地合入)为准。
 
+## Sandcastle AFK 交接
+
+AFK 从全仓 open `ready-for-agent` backlog 选票，沿用现有 labels、assignee、依赖和父子关系，不另建 tracker schema。
+父 issue 的子票承担实施；Planner 读取 assignee 和最新评论区分可恢复的工作与他人正在实施的工作。
+手动路径写入的功能分支记录仍保留，AFK 评论另记录本次调用分支、ticket 分支、基线与候选提交，避免把两条路径混为一谈。
+
+Planner 的实施者选择及理由进入交接；Implementer 记录固定 review base、最终候选及 Standards/Spec 两轴评审结果，
+评审与修复在该实施者会话内完成，issue 保持 open。Merger 在本地合入并完成必需验证后评论并关闭成功 tickets，
+再核对已完成父 Spec 的完整验收并关闭；评论明确是本地合入，不能描述成已 push 或部署。
+失败交接记录实际候选、已完成动作、未执行检查及下一安全动作；重启前先核对 issue 与本地 Git 状态，不能仅因已有
+assignee 跳过自己的未完成工作，也不能把进程成功退出解释为 ticket 完成。执行边界见
+[AFK 批量实施](workflow.md#sandcastle-afk-批量实施)。
+
 ## 当 skill 要求“fetch the relevant ticket”
 
 运行 `gh issue view <number> --repo cyy1998/shgas-iam --comments`，并读取该 ticket 引用的 spec、blocker issues 及相关标签。
@@ -76,7 +89,7 @@ GitHub Issues 与 PR 共用编号空间。遇到裸 `#42` 时，先运行
   `gh api repos/cyy1998/shgas-iam/issues/<number> --jq .id` 返回的数据库 ID，而不是 issue number 或 `node_id`。若原生
   dependencies 不可用，在 child 正文首部写 `Blocked by: #<n>, #<n>`。全部 blocker 关闭后才视为解阻。
 - **Frontier**：按 map 顺序查看 open children，排除仍有 open blocker 或已有 assignee 的 issue，第一个候选即为前沿。
-- **Claim**：用 `gh issue edit <number> --repo cyy1998/shgas-iam --add-assignee @me` 认领；这是会话的第一次写操作。
+- **Claim**：用 `gh issue edit <number> --repo cyy1998/shgas-iam --add-assignee '@me'` 认领；这是会话的第一次写操作。
 - **Resolve**：先评论答案，再关闭 child，最后在 map 的 Decisions so far 中追加摘要和上下文链接。
 
 ## 历史兼容

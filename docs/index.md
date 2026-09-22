@@ -80,7 +80,7 @@ releases 只保留当前代发布与维护；一次性升级和旧验收见[固�
 | Document | Type | Status | Last verified | Next review | Notes |
 |---|---|---|---|---|---|
 | [ADR-0002](adr/0002-centralize-role-assignment-resolution.md) | decision | Current | 2026-09-21 | 2026-10-31 | 独立角色解析与正反向有效性边界。 |
-| [ADR-0004](adr/0004-adopt-upstream-first-matt-skills.md) | decision | Current | 2026-09-21 | 2026-10-31 | 上游工作流、GitHub Issues 与仓库薄适配。 |
+| [ADR-0004](adr/0004-adopt-upstream-first-matt-skills.md) | decision | Current | 2026-09-22 | 2026-10-31 | 上游 skills、GitHub Issues 与 Sandcastle AFK 的仓库适配。 |
 | [ADR-0005](adr/0005-keep-live-login-state-in-redis.md) | decision | Current | 2026-09-21 | 2026-10-31 | Redis 实时状态与生命周期时间权威。 |
 | [ADR-0006](adr/0006-elevate-user-subject-identifier.md) | decision | Current | 2026-09-21 | 2026-10-31 | 跨协议稳定 Subject Identifier 归属 IAM 身份域。 |
 | [ADR-0009](adr/0009-adopt-canonical-test-collections.md) | decision | Current | 2026-09-21 | 2026-10-31 | Canonical collections、默认验证与 Guard 证明边界。 |
@@ -112,9 +112,9 @@ releases 只保留当前代发布与维护；一次性升级和旧验收见[固�
 |---|---|---|---|---|---|
 | [代码调查子代理](agents/code-investigation.md) | agent-config | Current | 2026-09-05 | 2026-10-31 | 只读调查路由、子代理返回契约与跨会话记忆。 |
 | [Domain Docs](agents/domain.md) | agent-config | Current | 2026-07-16 | 2026-10-31 | 工程 skills 的领域文档消费规则。 |
-| [GitHub 议题跟踪](agents/issue-tracker.md) | agent-config | Current | 2026-09-10 | 2026-10-31 | GitHub spec、ticket 与跨会话交接约定。 |
+| [GitHub 议题跟踪](agents/issue-tracker.md) | agent-config | Current | 2026-09-22 | 2026-10-31 | GitHub spec、ticket 与手动/AFK 交接约定。 |
 | [Triage Labels](agents/triage-labels.md) | agent-config | Current | 2026-07-16 | 2026-10-31 | 默认 canonical labels 与 triage 映射。 |
-| [AI 开发工作流](agents/workflow.md) | agent-config | Current | 2026-09-10 | 2026-10-31 | 分支、设计提交、实施评审、验证与人工授权收尾。 |
+| [AI 开发工作流](agents/workflow.md) | agent-config | Current | 2026-09-22 | 2026-10-31 | 手动实施与 Sandcastle AFK 的分支、评审、验证及收尾边界。 |
 
 </details>
 
@@ -130,7 +130,7 @@ releases 只保留当前代发布与维护；一次性升级和旧验收见[固�
 | [后端架构](architecture/backend-architecture.md) | architecture | Current | 2026-09-21 | 2026-10-31 | 后端分层、事务、模块所有权与一致性契约。 |
 | [共享契约与数据库](architecture/contracts-and-database.md) | architecture | Current | 2026-09-16 | 2026-10-31 | 共享代码选址、公开出口、DTO、数据库与事务边界。 |
 | [前端架构](architecture/frontend-architecture.md) | architecture | Current | 2026-09-15 | 2026-10-31 | Admin / SSO service、页面状态、路由与权限规则。 |
-| [仓库地图](architecture/repository-map.md) | architecture | Current | 2026-09-15 | 2026-10-31 | Apps、packages、基础设施、测试与生成目录定位。 |
+| [仓库地图](architecture/repository-map.md) | architecture | Current | 2026-09-22 | 2026-10-31 | Apps、packages、基础设施、AFK、测试与生成目录定位。 |
 | [系统架构视图](architecture/system-architecture.md) | architecture | Current | 2026-09-21 | 2026-10-31 | 运行时拓扑、信任边界、数据权威与恢复责任。 |
 | [测试编排架构](architecture/testing-architecture.md) | architecture | Current | 2026-09-15 | 2026-10-31 | 测试层级、质量、收集、资源预算与生命周期。 |
 
@@ -145,7 +145,7 @@ releases 只保留当前代发布与维护；一次性升级和旧验收见[固�
 |---|---|---|---|---|---|
 | [后端实现约定](development/backend-implementation.md) | development | Current | 2026-07-26 | 2026-10-31 | 响应封装、OpenAPI、logger 与 audit 实现约定。 |
 | [编码风格与命名约定](development/coding-style.md) | development | Current | 2026-08-07 | 2026-10-31 | TypeScript、formatter、文件命名与 import 风格。 |
-| [构建、测试与开发命令](development/commands.md) | development | Current | 2026-09-16 | 2026-10-31 | 开发、构建、验证与维护的命令和资源入口。 |
+| [构建、测试与开发命令](development/commands.md) | development | Current | 2026-09-22 | 2026-10-31 | 开发、构建、验证、AFK 与维护的命令和资源入口。 |
 
 </details>
 

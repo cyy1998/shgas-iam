@@ -34,7 +34,7 @@ describe("tooling contracts", () => {
   test("reads the current workspace task graph", () => {
     const graph = readToolingGraph(repoRoot);
 
-    expect(graph.rootScripts.typecheck).toBe("turbo typecheck --concurrency=3");
+    expect(graph.rootScripts.typecheck).toBe("turbo typecheck typecheck:root --concurrency=3");
     expect(graph.globalTurboConcurrency).toBeUndefined();
     expect(graph.globalTestTimeoutOverrides).toEqual([
       "apps/admin/vitest.shared.ts: testTimeout:",

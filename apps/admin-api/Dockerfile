@@ -20,6 +20,8 @@ FROM base AS deps
 WORKDIR /app
 ENV HUSKY=0
 COPY .npmrc pnpm-workspace.yaml package.json pnpm-lock.yaml ./
+# pnpm reads patchedDependencies before --prod; this is build metadata, not a runtime dependency.
+COPY patches/ ./patches/
 COPY .husky/install.mjs ./.husky/install.mjs
 COPY packages/client-subject-projection/package.json ./packages/client-subject-projection/
 COPY packages/contracts/package.json ./packages/contracts/

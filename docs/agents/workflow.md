@@ -1,6 +1,6 @@
 # AI 开发工作流
 
-`mattpocock/skills` 负责澄清、spec、tracer-bullet tickets、TDD、实现和双轴评审等通用方法。本文件只补充
+`mattpocock/skills` 负责澄清、spec、tracer-bullet tickets、TDD、实现和评审等通用方法。本文件只补充
 上游无法知道的仓库约束；不要把 Matt 主流程、tracker schema 或证据状态机复制到这里。
 
 `openspec/` 已冻结为只读历史材料，不是新工作的入口或当前规格来源。
@@ -17,6 +17,9 @@
   询问是否进入 `/implement`；只有用户在发布后手动确认，才构成实现授权。用户直接要求实现或继续某张 ticket，
   构成相应范围的实现授权。先前的合并指令、tracker 状态或历史事件不能越过此确认点；范围扩大、行为改变或架构
   决策不明确时也必须停止并请求确认。
+- 手动 `/implement` 实施当前获授权的一张 ticket 或小型改动；无人值守批量实施使用下文的 Sandcastle AFK 路径。
+  维护者运行 `pnpm sandcastle` 或明确要求启动该路径，即授权本次运行处理全仓 `ready-for-agent` backlog、
+  在调用分支本地合入、评论及关闭已验收 tickets 和完成的父 Spec；配置执行器本身不等于启动它。
 
 GitHub 仓库、命令约定和读取顺序见 [GitHub 议题跟踪](issue-tracker.md)。
 
@@ -32,6 +35,11 @@ GitHub 仓库、命令约定和读取顺序见 [GitHub 议题跟踪](issue-track
 - 不相关的未跟踪文件不自动阻断工作。未知改动必须原样保留；只有当前工作会重叠、覆盖或无法安全提交时才停止。
 - 目标分支在获得本地交付授权前保持只读。不要因 implementation 授权自动 merge、push、部署或清理分支。
 
+以上功能分支复用约定适用于手动路径。AFK 在启动时固定调用分支，每张 ticket 使用由 issue 编号派生的独立分支和
+worktree；同批分支从该批调用分支基线开始，批后以普通 `git merge` 合回调用分支。已有 ticket 分支先核对并恢复，
+不能覆盖未完成工作。运行期间调用分支由该 runner 独占写入；启动 AFK 的授权已包含这些本地合入，不包含 push、
+PR 或部署。
+
 ## 设计文档提交与交接
 
 讨论中形成的术语和决策继续随讨论写入功能分支。维护者确认设计、准备发布 Spec 时，先核对本次讨论文档与
@@ -45,52 +53,52 @@ Spec 中记录目标分支、功能分支及设计提交 SHA；没有设计提�
 讨论文档。实施中因某张 ticket 产生的设计修订随该 ticket 提交。
 
 设计确认与文档提交不代表实施授权，发布 Spec 和拆票仍遵守各自授权边界。独立设计提交保留在功能分支历史中；
-最终按下文 squash 合入时，目标分支仍只新增一个聚合提交。
+手动路径最终按下文 squash 合入时，目标分支仍只新增一个聚合提交；AFK 保留普通提交与合并历史。
 
 ## 双轴评审子代理生命周期
 
+本节适用于手动 `/implement`、显式 `/code-review` 和 AFK 实施者会话内的评审。
+
 - 每轮双轴评审都新建相互独立、只读的 Standards 与 Spec 子代理；不得复用上一轮、其他 ticket 或其他改动的评审
-  子代理。没有可用 spec 时，按 `/code-review` 规则跳过 Spec 轴并明确报告，不创建没有输入依据的 Spec 子代理。
+  子代理。手动路径没有可用 spec 时，按 `/code-review` 规则跳过 Spec 轴并明确报告；AFK 以 ticket 本身及其来源
+  Spec 为验收依据，Spec 轴不可跳过，无法取得验收依据时报告失败。
 - 一轮评审固定使用同一个不可变 review base SHA 和 candidate HEAD SHA。修复 finding 或因其他原因需要重新评审时，
   都开始新一轮，并重新创建本轮适用的全部评审子代理。
 - 每轮都向新子代理提供完整 diff、提交列表和本轴依据。第二轮及后续轮次还要提供上一轮 findings 及其处理结果作为
   复查清单，但仍重新审查完整范围，不能只验证旧 findings。
-- 原 implementation 子代理在各轮之间保持不变，负责接收和修复 findings；评审子代理只服务当前一轮，不修改文件、
+- 原实施会话在各轮之间保持不变，负责接收和修复 findings；评审子代理只服务当前一轮，不修改文件、
   stage 或 commit。
 
-## 多 Ticket 批量实施的协调与交接
+## Sandcastle AFK 批量实施
 
-`/implement` 默认由当前会话直接实施；无 ticket 的小型改动或本次只获授权实施一张 ticket 时，不启动专用
-implementation 子代理。即使同一 tracker 中还存在其他 tickets，也不能仅凭这一事实触发 dispatch。只有本次
-`/implement` 获得一次性实施两张及以上 tickets 的明确授权时，才进入下述批量模式，并为每张 ticket 启动一个全新的
-implementation 子代理。这里的限制只针对实施子代理；评审子代理按上一节的生命周期管理。
+批量路径参考作者自用的
+[Sandcastle runner](https://github.com/mattpocock/sandcastle/blob/e99f832f26dc9d245c019a9ddd19fa5dee792427/.sandcastle/run.ts)，
+由本机 runner 调用 Docker 中的 Codex CLI，无需聊天主会话持续协调。选票和批后合入沿用作者的运行模型，
+实施者选择与会话内双轴评审采用本仓库适配。三个阶段如下：
 
-批量模式下，子代理 dispatch 是强制的上下文边界，不是可选的并行优化。Ticket 的协作状态由 `ready-for-agent` label、
-assignee 和 GitHub open/closed 状态表达：
+1. **Planner**：每轮读取全仓 open `ready-for-agent` issues、来源 Spec、依赖与交接，选择适合并行的一批切片。
+   有子票的父 issue 留给合入阶段核对，不作为实施切片；assignee 用于识别已有工作，不抢占他人正在实施的 ticket。
+   优先选择已解阻项；全部候选受阻时，允许按作者策略选择一张受阻 ticket 尝试推进并说明 blocker，未满足依赖或
+   验收时仍保持 open。Planner 为每票从仓库定义的 `implementer_light`、`implementer_standard`、
+   `implementer_deep` 中选择实施者并说明理由：范围明确的小修改可选 light，常规功能或信息不足选 standard，
+   涉及安全边界、并发、一致性或复杂重构选 deep。Runner 校验角色名称并加载对应配置。
+2. **Implementer**：每票在独立分支、worktree 和全新会话中读取 `AGENTS.md`、ticket、Spec 与相关评论，恢复
+   验收和验证要求，认领后按 skills 的方法实施、运行聚焦验证并创建正常提交。在同一实施者会话内调用
+   `/code-review`，按上一节并行启动 Standards 与 Spec 两个只读子代理；实施者接收 findings、修复并验证，
+   然后开始新一轮双轴评审。每票每次实施者会话最多十轮，review base 全程固定，每轮固定本轮 candidate SHA 并审查累计完整差异。
+   两轴都通过且候选未变化才可交付；子代理不可用、评审缺失、轮数耗尽或必需验证未通过时报告失败并保留 ticket
+   为 open。交接包含实施者选择、review base、候选 SHA、两轴结果、实际命令及结果、未执行项和剩余问题。
+   不另设顶层 Reviewer；评审模型与只读职责由各自角色文件定义，CLI 的权限限制见命令页。
+3. **Merger**：等待本批所有 Implementer 结束后，再处理通过双轴评审与验收的分支，以普通 `git merge` 合回
+   调用分支，解决合并冲突并在最终合并内容上运行 `pnpm verify` 及适用的额外检查。验证通过后记录合入 SHA、
+   验收和评审摘要，关闭成功 tickets；父 Spec 的全部切片及最终验收均完成时一并关闭。随后进入下一轮。
+   Planner 没有实施票可派发时，再由 Merger 核对一次待收尾父 Spec，恢复子票已关闭、父 Spec 更新失败的情况。
 
-1. 主会话按 blockers 顺序选择依赖前沿，只调度 blockers 已关闭、带 `ready-for-agent` label 且没有 assignee 的 open
-   ticket。每张 ticket 都必须由主会话显式调用一个全新的 implementation 子代理；不得把主会话压缩、清空或总结后
-   继续执行视为“全新上下文”。
-2. 从首张 ticket 开始到最后一张已授权 ticket 关闭为止，主会话只负责分支与目标检查、只读调查、子代理调度与监控、
-   评审组织和最终验证。主会话不得直接创建、修改、移动或删除任何受版本控制文件，也不得 stage 或 commit；claim、
-   production/test/docs 改动、finding 修复和 issue 完成更新全部由对应子代理执行。
-3. 若子代理工具支持控制历史继承，implementation 子代理必须禁用主会话历史继承，并从仓库事实来源恢复上下文。
-   子代理读取功能分支、`AGENTS.md`、来源 spec issue、当前 ticket issue、blocker issues 及其相关评论，把 ticket 开始前
-   的提交固定为 review fixed point，列出验收行为、相关验证命令与资源需求，并在其他写操作前通过
-   `gh issue edit --add-assignee '@me'` 认领；不为 claim 创建独立 checkpoint。
-4. 同一功能分支默认顺序执行 tickets，除非维护者明确要求并行分支或 worktree。当前 ticket 按下节完成交接前验证后，
-   implementation 子代理创建正常的 focused implementation commit，并提交交接摘要：候选 SHA、实际执行的命令及结果、
-   未执行项及原因、验收结果和评审轮次。
-5. 主会话先检查必需验证与交接摘要是否齐全；缺少验证时退回原 implementation 子代理补齐，不计为评审失败。
-   工具覆盖某条规则不等于工具已执行，通过交接检查后才按上述生命周期开始一轮 `/code-review`，对 review fixed point 到候选 `HEAD` 的完整范围执行 Standards
-   与 Spec 评审。Finding 交回原 implementation 子代理，用额外 focused fix commit 修复，再由全新的两轴评审子代理
-   重新审查完整范围；不自动 amend 或 rebase。
-6. 验收满足、必需检查通过且两轴 findings 清零后，原 implementation 子代理在 ticket issue 评论中写入聚焦验证与评审摘要，确认验收项后关闭
-   issue。Issue 评论保存验收结果，普通 focused commits 保存实现历史。
-7. Ticket issue 关闭后，主会话才能为下一张已解阻 ticket 显式调用另一个全新的 implementation 子代理。
-8. 同一 ticket 连续第 11 轮评审仍未通过时，停止批量实施并汇报每轮 findings、反复失败原因和当前恢复点。
-   工具失败不计入评审轮数。
-9. 如果批量模式下当前运行环境没有可用的子代理能力，主会话必须停止并向维护者报告；不得静默退回主会话直接实施。
+GitHub Issues 保存需求、协作状态与恢复说明，Git 提交保存实现历史；日志和本地分支辅助恢复，不替代 issue 事实。
+合并、必需验证或 issue 更新失败时停止后续动作并报告实际状态，保留分支和工作区现场，不自动 reset 或重复合入。
+未完成或缺少必需检查的 ticket 保持 open；正常进程退出、存在提交或 Implementer 宣称完成都不能替代验收结果。
+
+运行环境、命令和当前资源限制见 [Sandcastle AFK 命令](../development/commands.md#sandcastle-afk)。
 
 ## 验证节奏
 
@@ -100,12 +108,12 @@ assignee 和 GitHub open/closed 状态表达：
 - 上游 `/implement` 所说的结束时完整测试，在本仓库映射为当前 ticket 的完整受影响范围，不是每票运行全仓
   `pnpm verify`。
 - `pnpm verify` 只在准备 merge、release 或用户明确要求时，在最终实现内容上运行一次。它不替代需要显式环境的
-  PostgreSQL、浏览器 E2E 或 Gateway 检查。
+  PostgreSQL、浏览器 E2E 或 Gateway 检查。AFK 每批本地合入属于这个时机，由 Merger 在合并后的最终内容上执行。
 - 最终验证的证明范围见[最终候选验证](../architecture/testing-architecture.md#默认验证与交付)。Collection Guard 只证明
   测试收集与命令可达，不证明测试断言已执行或通过。
 - Integration 测试所需的 PostgreSQL 和 Redis 由调用方负责。没有专用测试 URL 时，agent 应在 Docker 可用的情况下
   启动本地临时容器，等待服务 ready，再把生成的 URL 传给测试命令；测试命令和 harness 本身不启动 Docker。
-- 临时容器必须使用仓库声明的镜像版本、动态宿主端口和本次任务唯一的 name/label。Agent 创建容器后立即记录准确的
+- 临时容器必须使用仓库声明的镜像版本和本次任务唯一的 name/label；宿主访问使用动态端口，AFK sandbox 通过独占网络访问时不发布宿主端口。Agent 创建容器后立即记录准确的
   container ID，并在测试成功、失败或中断后只按该 ID 清理，不使用 glob、prefix scan 或 prune。不得使用 development、
   runtime 或 production 资源。
 - Docker 不可用或临时资源无法安全创建时，agent 必须明确报告未执行的测试及原因，不得把该测试记录为通过。
@@ -118,6 +126,9 @@ assignee 和 GitHub open/closed 状态表达：
 可执行入口见 [构建、测试与开发命令](../development/commands.md)。
 
 ## 完成与本地合入
+
+以下人工授权收尾适用于手动路径。AFK 的合并、关票和父 Spec 验收按上一节执行，启动时已授权，无需每批再次询问；
+必需验证和实际合入结果仍是完成条件。
 
 全部 tickets 完成后，父 spec issue 保持 open，报告“切片完成，最终验证待完成”。协调者确认候选与目标分支，
 处理已发现的漂移并完成必要复审，再在固定最终候选上运行一次 `pnpm verify` 及 spec 要求的额外 Integration、E2E

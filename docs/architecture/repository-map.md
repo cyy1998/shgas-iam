@@ -22,6 +22,7 @@
 ├── scripts/          # 仓库级检查、canonical test collection/Integration 编排和辅助脚本
 ├── docs/             # 当前架构、功能、runbook、ADR 与历史记录
 ├── CONTEXT.md        # 稳定领域语言
+├── .sandcastle/      # AFK prompts、Docker 镜像与本地运行配置
 ├── .scratch/         # 已退役本地 tracker 的只读历史归档
 └── openspec/         # 冻结的历史需求与设计记录
 ```
@@ -100,7 +101,11 @@ Run descriptor、receipts、diagnostics 与 Playwright 产物写入 `e2e/system/
 | `docker/` | 本地依赖栈，以及 dev/prod application、gateway、observability Compose files。 |
 | `observability/` | Alloy 日志/OTLP pipeline、Loki 配置、Grafana datasource/dashboard/alert provisioning，以及版本化 dashboards。 |
 | `scripts/` | 文档和架构守卫、测试编排、验证入口及 tooling performance helpers。 |
+| `scripts/sandcastle/` | AFK runner、宿主预检与临时测试资源编排。 |
+| `.sandcastle/` | Sandcastle Planner、Implementer、Merger prompts、Dockerfile 和 `.env.example`；运行命令见[命令入口](../development/commands.md#sandcastle-afk)。 |
+| `.codex/agents/` | Codex 调查角色、AFK 三档实施者与 Standards/Spec 只读评审角色配置；由 runner 为容器配置实施者内的子代理评审。 |
 | `.husky/` | Git hooks 与安装脚本。 |
+| `patches/` | pnpm 管理的固定依赖补丁；Sandcastle signal 适配允许宿主 runner 等待中断清理。 |
 
 ## 文档与 Agent 工作流
 

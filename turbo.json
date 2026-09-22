@@ -39,6 +39,9 @@
       "dependsOn": ["transit"]
     },
     "//#test:unit:root": {},
+    "//#typecheck:root": {
+      "inputs": ["$TURBO_ROOT$/scripts/sandcastle/**", "$TURBO_ROOT$/scripts/__tests__/sandcastle*.test.ts", "$TURBO_ROOT$/package.json", "$TURBO_ROOT$/pnpm-lock.yaml"]
+    },
     "test:integration:component": {
       "dependsOn": ["transit"]
     },

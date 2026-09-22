@@ -53,6 +53,7 @@
 ## 开发方法与 Issue 路由
 
 - 通用开发方法以 `mattpocock/skills` 为准。小型明确改动可以直接进入 `/implement`，单会话直接实现无需创建 issue。
-- 跨会话 feature 使用 `cyy1998/shgas-iam` GitHub Issues 保存 spec、tickets 和状态，并执行双轴评审。
+- 跨会话 feature 使用 `cyy1998/shgas-iam` GitHub Issues 保存 spec、tickets 和状态，评审方式按
+  [开发工作流](docs/agents/workflow.md)区分手动与 Sandcastle AFK 路径。
   创建、读取、更新 issue 或恢复跨会话工作前，先读[议题跟踪规则](docs/agents/issue-tracker.md)。
 - 执行 triage 或设置 issue 标签前，先读[标签约定](docs/agents/triage-labels.md)，沿用默认 canonical labels。

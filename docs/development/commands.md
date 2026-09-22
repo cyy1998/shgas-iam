@@ -39,6 +39,58 @@ pnpm test:integration:<component|process|redis|postgres|composition|browser>
 完整 root Gate 只在准备 merge、release 或用户明确要求时运行；ticket 实现内循环不重复运行。按需要选择基础
 `pnpm verify`、全资源 `pnpm verify:ci` 或包含 Full-system E2E 的 `pnpm verify:release`。
 
+## Sandcastle AFK
+
+本机 Docker + Codex CLI 执行全仓 `ready-for-agent` backlog；选票、评审、合并和关票权限见
+[AFK 工作流](../agents/workflow.md#sandcastle-afk-批量实施)。`pnpm sandcastle` 会调用模型、修改代码和 GitHub issues，
+并把通过验收的 ticket 分支普通合并到启动时的调用分支；运行前选定该分支。
+
+首次使用时，按 `.sandcastle/.env.example` 创建未跟踪的 `.sandcastle/.env`，填写 `GH_TOKEN`。
+默认认证为 ChatGPT/Codex 账号：先执行 `codex login`，并确保 Codex 使用文件凭据存储；runner 会把本次运行的
+`auth.json` 复制到临时目录后挂载进 Docker。退出前把 CLI 刷新后的凭据写回来源文件，再删除暂存目录；
+检测到来源登录状态已变化或保存失败时，不覆盖该状态，报错并保留启动时打印的恢复目录。
+此同步不提供跨进程登录锁，运行期间避免在宿主同时刷新或重新登录同一份凭据；强制结束进程后也应核对该恢复目录。
+需要 API 计费时显式设置 `CODEX_AUTH=api-key` 并填写
+`CODEX_API_KEY`；`CODEX_AUTH_FILE` 可指定登录凭据文件。GitHub 固定为 `cyy1998/shgas-iam`。
+宿主需要仓库工具链、Git、GitHub CLI 和运行中的 Docker；镜像内版本与依赖以 `.sandcastle/Dockerfile` 为准。
+
+```bash
+pnpm sandcastle:build
+pnpm sandcastle:check
+pnpm sandcastle:smoke
+pnpm sandcastle
+pnpm sandcastle --iterations 2 --parallel 2 --model <model>
+```
+
+`sandcastle:build` 构建执行镜像；`sandcastle:check` 只预检工具、镜像和认证配置。
+`sandcastle:smoke` 创建可销毁的 sandbox 与 PostgreSQL/Redis，验证工具链、Merger 依赖挂载和连接，并用本地桩程序
+让 Planner、Implementer、Merger 三份真实 prompt 经过 SDK 的参数校验与展开，检查 Codex 生效角色配置及评审事件接线；不调用模型或访问 GitHub，
+也不证明真实 Codex 模型已执行双轴子代理评审。
+运行参数默认 10 批、最多 2 张 ticket 并行；`--iterations`、`--parallel` 只调整本次运行。
+`--model`（优先）或 `SANDCASTLE_MODEL` 只覆盖 Planner/Merger 的模型，两者默认 `gpt-6-astra`、思考程度 `high`。
+
+Planner 从仓库 `.codex/agents/implementer-{light,standard,deep}.toml` 定义的实施者中选择，
+实施者的模型、思考程度与职责以这些角色文件为准。当前 light 为 `gpt-5.6-luna` / `medium`，
+standard 为 `gpt-5.6-sol` / `high`，deep 为 `gpt-6-astra` / `xhigh`。
+双轴评审使用 `.codex/agents/standards-reviewer.toml` 与 `.codex/agents/spec-reviewer.toml`，
+两轴均为 `gpt-6-astra` / `high`，不随实施者档位降低。Runner 为容器内 CLI 提供子代理配置，
+不修改用户宿主 Codex 配置；会话内评审和十轮上限见[双轴评审流程](../agents/workflow.md#sandcastle-afk-批量实施)。
+
+Codex CLI 0.154 的角色 override 忽略 `sandbox_mode`，因此评审角色的只读要求属于职责约束，不能保证子代理在
+操作系统层面只能读取。Runner 检查原始事件中的实际 spawn、新子代理 ID，以及绑定 review base/candidate 的两轴
+completed 结果；事件不提供 `agent_type`，这些检查不能机器证明角色身份或评审质量。
+
+普通失败和 Ctrl+C 会清理本次测试资源；若宿主被强制终止，按 `.sandcastle/resources/` 中对应记录的准确
+container/network ID 恢复清理。`run.lock` 记录进程与目标分支，确认旧进程已结束后才移除该文件。
+已有 ticket 分支可重新进入评审和合入交接，包括代码已合入、GitHub 关票尚未完成的情况。
+队列耗尽前还有一次父 Spec 收尾核对。锁定的 Sandcastle 0.12.0 使用 `patches/` 中的 signal 补丁，允许此 runner
+通过 AbortSignal 等待清理，避免 SDK 提前 `process.exit`；升级依赖时须重新验证普通与 provisioning 中断路径。
+
+宿主 runner 为每个执行器提供独占 PostgreSQL、Redis 与网络，等待 ready 后注入 owner-specific test URLs，
+结束时按记录的准确资源 ID 清理。Linux sandbox 内独立安装 workspace 依赖，不复用 Windows `node_modules`。
+当前 sandbox 不提供 Docker-in-Docker，Full-system E2E 等额外环境要求可能无法满足；这些检查属于 ticket 或 Spec 的
+必需验收时，应保留 open 并记录缺失条件，不能以 `pnpm verify` 通过代替。
+
 ## Workspace 命令
 
 当前会话和 Snapshot 维护入口为 Worker `online-auth:state`、`client-snapshot:repair`、`client-snapshot:verify`。

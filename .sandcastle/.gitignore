@@ -1,0 +1,9 @@
+.env
+logs/
+locks/
+worktrees/
+patches/
+resources/
+dependencies/
+auth/
+run.lock
