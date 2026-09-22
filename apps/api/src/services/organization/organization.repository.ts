@@ -6,13 +6,32 @@ import type {
 import type { DbClient } from "@iam/db";
 import type { Organization } from "@iam/db/schema";
 import { getChildOrganizationLevel, OrganizationStatus } from "@iam/contracts";
+import { extractPostgresError } from "@iam/db/postgres-error";
 import { compactUpdate, firstRow, inArrayIf } from "@iam/db/query-utils";
 import { organizationClosures, organizations } from "@iam/db/schema";
+import { OrganizationCodeExistsError } from "@iam/domain/organization";
 import { and, eq, exists, inArray, sql } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 
 export function createOrganizationRepository(db: DbClient) {
+  async function write<T>(operation: () => Promise<T>): Promise<T> {
+    try {
+      return await operation();
+    }
+    catch (error) {
+      const detail = extractPostgresError(error);
+      if (detail?.code === "23505"
+        && (detail.constraint === "organization_org_code_unique" || detail.constraint === "organization_org_code_key")) {
+        throw new OrganizationCodeExistsError();
+      }
+      throw error;
+    }
+  }
+
   return {
+    async getAnyOrganizationByCode(orgCode: string) {
+      return firstRow(await db.select().from(organizations).where(eq(organizations.orgCode, orgCode)).limit(1));
+    },
     async getOrganizationByCode(orgCode: string) {
       const rows = await db.select().from(organizations).where(and(
         eq(organizations.orgCode, orgCode),
@@ -59,7 +78,9 @@ export function createOrganizationRepository(db: DbClient) {
     },
     async setOrganization(organizationCreateDto: OrganizationCreateDto, parentOrganization: Organization | null) {
       const { parentCode, ...org } = organizationCreateDto;
-      const newOrganization = firstRow(await db.insert(organizations).values(org).returning())!;
+      const newOrganization = await write(async () => firstRow(await db.insert(organizations).values(org).returning()));
+      if (newOrganization === null)
+        throw new Error("Organization insert returned no row");
       const path = `${parentOrganization ? parentOrganization.path : ""}/${newOrganization.id}`;
       const level = getChildOrganizationLevel(parentOrganization?.level ?? null);
       const updatedOrganization = firstRow(await db
@@ -108,10 +129,12 @@ export function createOrganizationRepository(db: DbClient) {
       return firstRow(await attachOrganizationRelations(rows, db, { activeChildrenOnly: true })) ?? null;
     },
     async updateOrganizationByCode(orgCode: string, data: OrganizationUpdateDto) {
-      return await db
-        .update(organizations)
-        .set(compactUpdate(data))
-        .where(and(eq(organizations.orgCode, orgCode), eq(organizations.isDelete, false)));
+      return await write(async () => {
+        return await db
+          .update(organizations)
+          .set(compactUpdate(data))
+          .where(and(eq(organizations.orgCode, orgCode), eq(organizations.isDelete, false)));
+      });
     },
   };
 }

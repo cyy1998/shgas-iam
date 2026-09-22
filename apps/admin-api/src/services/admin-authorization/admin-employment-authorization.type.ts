@@ -2,11 +2,13 @@ import type {
   AdminAuthorizationReasonCode,
   AdminEmploymentAllowedActions,
   EmploymentStatus,
+  UserStatus,
 } from "@iam/contracts";
 import type { AdminOperationId } from "./admin-operation.registry";
 
 export interface AdminEmploymentActionFacts {
   status: EmploymentStatus;
+  userStatus: UserStatus;
   isPrimary: boolean;
 }
 

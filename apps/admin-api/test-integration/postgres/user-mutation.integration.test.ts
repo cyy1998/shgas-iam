@@ -1,20 +1,33 @@
 import type { AdminUserTransactionPorts } from "@admin-api/services/user/user.port";
 import type { AdminApiPostgresTestHarness } from "./postgres-test-harness";
 import { randomUUID } from "node:crypto";
+import process from "node:process";
+import { fileURLToPath } from "node:url";
 import { createAdminApiRepositories } from "@admin-api/composition/repositories";
 import { createAdminApiUnitOfWork } from "@admin-api/composition/tx";
+import { createUserAdapter } from "@admin-api/routes/admin/user/user.adapter";
+import { createUserRoute } from "@admin-api/routes/admin/user/user.index";
+import { createAdminAuthorizationPolicy } from "@admin-api/services/admin-authorization/admin-authorization.policy";
 import { AdminMutationCommittedError } from "@admin-api/services/admin-mutation/admin-mutation";
 import { createUserService } from "@admin-api/services/user/user.service";
+import { createCreateEmploymentUseCase } from "@admin-api/use-cases/employment/create-employment/create-employment.use-case";
+import { createEndEmploymentUseCase } from "@admin-api/use-cases/employment/end-employment/end-employment.use-case";
 import { BadRequestError } from "@iam/api-core/errors";
+import { createErrorHandler } from "@iam/api-core/middlewares/error-handler";
 import { createSubjectAccessBarrier, createSubjectAccessLifecycle, createSubjectAccessOperations } from "@iam/api-core/subject-access";
 import { createInMemorySubjectAccessStore } from "@iam/api-core/subject-access/testing";
+import { runProcessCommandSmoke, spawnOwnedProcessTree } from "@iam/api-core/testing/process-smoke-harness";
+import { createTRPCContext } from "@iam/api-core/trpc";
 import { mapUnitOfWork } from "@iam/api-core/uow";
-import { EmploymentStatus, OrganizationLevel, OrganizationType, UserStatus, UserType } from "@iam/contracts";
+import { ApiErrorCode, EmploymentStatus, OrganizationLevel, OrganizationType, PrivilegeDelegationStatus, UserStatus, UserType } from "@iam/contracts";
 import { extractPostgresError } from "@iam/db/postgres-error";
-import { auditLogs, employments, organizations, positions, subjectAccessTransitions, userProfileDirty, users } from "@iam/db/schema";
+import { auditLogs, delegationDetails, employments, organizations, positions, privilegeDelegations, privileges, subjectAccessTransitions, userProfileDirty, users } from "@iam/db/schema";
 import { UserHasOpenEmploymentError, UsernameAlreadyExistsError, UserNotFoundError } from "@iam/domain/user";
 import { createSubjectAccessTransitionRepository } from "@iam/user-profile-read-model/subject-access-transition";
+import { fetchRequestHandler } from "@trpc/server/adapters/fetch";
 import { afterAll, beforeAll, beforeEach, describe, expect, mock, test } from "bun:test";
+import { Hono } from "hono";
+import { addTestAdminAuthorizationMiddleware } from "../helpers/admin-authorization";
 import { createAdminApiPostgresTestHarness } from "./postgres-test-harness";
 
 let harness: AdminApiPostgresTestHarness;
@@ -23,6 +36,9 @@ beforeAll(async () => {
 });
 beforeEach(async () => {
   await harness.reset();
+  await harness.db.delete(delegationDetails);
+  await harness.db.delete(privilegeDelegations);
+  await harness.db.delete(privileges);
 });
 afterAll(async () => {
   await harness?.close();
@@ -49,6 +65,21 @@ function createCommand(
     userProfileJobProducer: { enqueueRebuildJobs },
   });
   return {
+    employment: createCreateEmploymentUseCase({ clock, uow: mapUnitOfWork(uow, tx => ({
+      employmentStore: tx.repositories.employment,
+      userReader: tx.repositories.user,
+      organizationReader: tx.repositories.organization,
+      positionReader: tx.repositories.position,
+      auditLogWriter: tx.auditService,
+      userProfileInvalidation: tx.userProfileInvalidation,
+    })) }),
+    endEmployment: createEndEmploymentUseCase({ clock, uow: mapUnitOfWork(uow, tx => ({
+      employmentStore: tx.repositories.employment,
+      organizationReader: tx.repositories.organization,
+      auditLogWriter: tx.auditService,
+      responsibilityParentLifecycle: tx.responsibilityParentLifecycle,
+      userProfileInvalidation: tx.userProfileInvalidation,
+    })) }),
     barrier,
     store,
     enqueueRebuildJobs,
@@ -84,6 +115,36 @@ function createCommand(
   };
 }
 
+type UserWriteProtocol = "REST" | "tRPC";
+const userWriteProtocols: UserWriteProtocol[] = ["REST", "tRPC"];
+
+function createUserWriteApp(command = createCommand()) {
+  const adapter = createUserAdapter({ userService: command.service, random: command.random });
+  const app = new Hono();
+  app.onError(createErrorHandler({ info() {}, warn() {}, error() {} }));
+  addTestAdminAuthorizationMiddleware(app);
+  app.route("/admin", createUserRoute(adapter));
+  app.all("/rpc/*", c => fetchRequestHandler({
+    endpoint: "/rpc",
+    req: c.req.raw,
+    router: adapter.userAdminRouter,
+    createContext: () => createTRPCContext({ honoCtx: c }),
+  }));
+  return { app, command };
+}
+
+async function requestUserCreate(
+  app: Hono,
+  protocol: UserWriteProtocol,
+  input: Record<string, unknown>,
+) {
+  return await app.request(protocol === "REST" ? "/admin/users" : "/rpc/create", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(input),
+  });
+}
+
 async function seedUser(status = UserStatus.Enable, isDelete = false) {
   const [user] = await harness.db.insert(users).values({
     username: "user",
@@ -97,11 +158,53 @@ async function seedUser(status = UserStatus.Enable, isDelete = false) {
   return user!;
 }
 
+async function seedDelegation(
+  userId: number,
+  side: "delegator" | "delegatee",
+  status: PrivilegeDelegationStatus,
+  period: "current" | "future" | "past",
+  isDelete = false,
+) {
+  const [other] = await harness.db.insert(users).values({ username: "other", name: "Other" }).returning();
+  const [organization] = await harness.db.insert(organizations).values({
+    orgCode: "ORG",
+    orgName: "Organization",
+    path: "/ORG",
+    level: OrganizationLevel.One,
+    orgType: OrganizationType.Company,
+  }).returning();
+  const [privilege] = await harness.db.insert(privileges).values({ privilegeCode: "read", privilegeName: "Read" }).returning();
+  const periods = {
+    current: ["2000-01-01", "2099-01-01"],
+    future: ["2099-01-01", "2100-01-01"],
+    past: ["2000-01-01", "2001-01-01"],
+  } as const;
+  const [delegation] = await harness.db.insert(privilegeDelegations).values({
+    delegatorUserId: side === "delegator" ? userId : other!.id,
+    delegateeUserId: side === "delegatee" ? userId : other!.id,
+    organizationScopeId: organization!.id,
+    status,
+    isDelete,
+    startTime: new Date(periods[period][0]),
+    endTime: new Date(periods[period][1]),
+  }).returning();
+  await harness.db.insert(delegationDetails).values({ delegationId: delegation!.id, privilegeId: privilege!.id });
+  return delegation!;
+}
+
 async function facts() {
   return {
     users: await harness.db.select().from(users).orderBy(users.id),
     audits: await harness.db.select().from(auditLogs).orderBy(auditLogs.id),
     dirty: await harness.db.select().from(userProfileDirty).orderBy(userProfileDirty.userId),
+  };
+}
+
+async function deletionFacts() {
+  return {
+    ...await facts(),
+    delegations: await harness.db.select().from(privilegeDelegations).orderBy(privilegeDelegations.id),
+    delegationDetails: await harness.db.select().from(delegationDetails).orderBy(delegationDetails.delegationId),
   };
 }
 
@@ -144,6 +247,74 @@ async function waitForUserLock() {
 }
 
 describe("User lifecycle mutations through production PostgreSQL UnitOfWork", () => {
+  test("Full Admin restores Pause before HR rehires and enables an ended-only User", async () => {
+    const user = await seedUser();
+    const [organization] = await harness.db.insert(organizations).values({
+      orgCode: "IN",
+      orgName: "In scope",
+      path: "/IN",
+      level: OrganizationLevel.One,
+      orgType: OrganizationType.Company,
+    }).returning();
+    const [position] = await harness.db.insert(positions).values({ posCode: "POS", posName: "Position" }).returning();
+    const [tenure] = await harness.db.insert(employments).values({
+      userId: user.id,
+      orgId: organization!.id,
+      posId: position!.id,
+      startTime: new Date("2026-01-01T00:00:00Z"),
+    }).returning();
+    const subject = createCommand(undefined, undefined, stableStore(user.subjectIdentifier));
+    const policy = createAdminAuthorizationPolicy({
+      logger: { warn: mock() },
+      hrAdministrationScopeResolver: {
+        resolveForActor: async () => ({ rootOrganizationIds: [organization!.id], organizationIds: [organization!.id] }),
+      },
+    });
+    const hrActor = { userId: 99, username: "hr", roles: ["iam:hr-admin"] };
+    const hrUser = await policy.getUserAuthorization(hrActor);
+    const hrEmployment = await policy.getEmploymentAuthorization(hrActor);
+    const full = await policy.getUserAuthorization({ userId: 100, username: "full", roles: ["iam:admin"] });
+    await subject.service.updateUserStatus("user", UserStatus.Disable, undefined, full);
+    const afterDisable = await harness.db.select().from(employments);
+    expect(afterDisable).toEqual([tenure!]);
+    await subject.endEmployment.execute({ employmentId: tenure!.id });
+    const historical = await harness.db.select().from(employments);
+    const before = await facts();
+    const intentsBefore = await transitions();
+    for (const status of [UserStatus.Pause, UserStatus.Enable]) {
+      const error = await failure(() => subject.service.updateUserStatus("user", status, undefined, hrUser));
+      expect(error).toMatchObject({ httpStatus: 403 });
+    }
+    const createInput = { username: "user", orgCode: "IN", posCode: "POS" };
+    const deniedCreate = await failure(() => subject.employment.execute(createInput, { authorization: hrEmployment }));
+    expect(deniedCreate).toMatchObject({ code: "EMPLOYMENT.USER_DISABLED", httpStatus: 409 });
+    const afterDenial = await facts();
+    const intentsAfter = await transitions();
+    expect(afterDenial).toEqual(before);
+    expect(intentsAfter).toEqual(intentsBefore);
+
+    const restored = await subject.service.updateUserStatus("user", UserStatus.Pause, undefined, full);
+    expect(restored).toEqual({ changed: true, result: null });
+    const afterRestore = await harness.db.select().from(employments);
+    expect(afterRestore).toEqual(historical);
+    const created = await subject.employment.execute(createInput, { authorization: hrEmployment });
+    expect(created.changed).toBe(true);
+    expect(created.result.id).not.toBe(tenure!.id);
+    const pending = await facts();
+    expect(pending.users[0]!.status).toBe(UserStatus.Pause);
+    const enabled = await subject.service.updateUserStatus("user", UserStatus.Enable, undefined, hrUser);
+    expect(enabled).toEqual({ changed: true, result: null });
+    const after = await facts();
+    expect(after.users[0]!.status).toBe(UserStatus.Enable);
+    const currentTenures = await harness.db.select().from(employments).orderBy(employments.id);
+    expect(currentTenures).toMatchObject([
+      historical[0]!,
+      { id: created.result.id, status: EmploymentStatus.Enable, endTime: null, orgId: organization!.id },
+    ]);
+    const access = await subject.barrier.read(user.subjectIdentifier);
+    expect(access).toMatchObject({ state: "blocking" });
+  });
+
   test("missing status/delete and repeated delete return not found without additional effects", async () => {
     const { service } = createCommand();
     for (const operation of [() => service.updateUserStatus("missing", UserStatus.Disable), () => service.deleteUser("missing")]) {
@@ -200,6 +371,141 @@ describe("User lifecycle mutations through production PostgreSQL UnitOfWork", ()
       expect(revokeUserSessions).not.toHaveBeenCalled();
     });
   }
+
+  test("an open delegation between other Users does not block deletion", async () => {
+    const user = await seedUser();
+    const [unrelated] = await harness.db.insert(users).values({ username: "unrelated", name: "Unrelated" }).returning();
+    await seedDelegation(unrelated!.id, "delegator", PrivilegeDelegationStatus.Enable, "current");
+    const { service } = createCommand(undefined, undefined, stableStore(user.subjectIdentifier));
+    const before = await deletionFacts();
+    const result = await service.deleteUser("user");
+    const after = await deletionFacts();
+    expect(result).toEqual({ changed: true, result: null });
+    expect(after.delegations).toEqual(before.delegations);
+    expect(after.delegationDetails).toEqual(before.delegationDetails);
+  });
+
+  test.each(["REST", "tRPC"])("%s deletion returns the stable delegation conflict without effects", async (protocol) => {
+    const user = await seedUser();
+    await seedDelegation(user.id, "delegatee", PrivilegeDelegationStatus.Enable, "past");
+    const command = createCommand(undefined, undefined, stableStore(user.subjectIdentifier));
+    const adapter = createUserAdapter({ userService: command.service, random: command.random });
+    const app = new Hono();
+    app.onError(createErrorHandler({ info() {}, warn() {}, error() {} }));
+    addTestAdminAuthorizationMiddleware(app);
+    app.route("/admin", createUserRoute(adapter));
+    app.all("/rpc/*", c => fetchRequestHandler({
+      endpoint: "/rpc",
+      req: c.req.raw,
+      router: adapter.userAdminRouter,
+      createContext: () => createTRPCContext({ honoCtx: c }),
+    }));
+    const before = await deletionFacts();
+    const response = protocol === "REST"
+      ? await app.request("/admin/users/user", { method: "DELETE" })
+      : await app.request("/rpc/delete", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ username: "user" }),
+        });
+    const body = await response.json();
+    expect(response.status).toBe(409);
+    const message = "该用户存在未结束的权限委托，无法删除；请先通过 Internal 接口结束相关委托";
+    expect(body).toMatchObject(protocol === "REST"
+      ? { code: "USER.HAS_OPEN_PRIVILEGE_DELEGATION", message }
+      : { error: { message, data: { code: "CONFLICT", serviceCode: "USER.HAS_OPEN_PRIVILEGE_DELEGATION" } } });
+    const after = await deletionFacts();
+    expect(after).toEqual(before);
+    expect(command.enqueueRebuildJobs).not.toHaveBeenCalled();
+    expect(command.revokeUserSessions).not.toHaveBeenCalled();
+  });
+
+  describe.each(["delegator", "delegatee"] as const)("Open Delegation deletion gate for %s", (side) => {
+    test.each([
+      [PrivilegeDelegationStatus.Enable, "current"],
+      [PrivilegeDelegationStatus.Pause, "current"],
+      [PrivilegeDelegationStatus.Enable, "future"],
+      [PrivilegeDelegationStatus.Pause, "future"],
+      [PrivilegeDelegationStatus.Enable, "past"],
+      [PrivilegeDelegationStatus.Pause, "past"],
+    ] as const)("status %s in %s period rejects without deletion effects", async (status, period) => {
+      const user = await seedUser();
+      await seedDelegation(user.id, side, status, period);
+      const { service, store, enqueueRebuildJobs, revokeUserSessions } = createCommand(
+        undefined,
+        undefined,
+        stableStore(user.subjectIdentifier),
+      );
+      const before = await deletionFacts();
+      const barrierBefore = await store.read(user.subjectIdentifier);
+      const error = await failure(() => service.deleteUser("user"));
+      expect(error).toMatchObject({ code: "USER.HAS_OPEN_PRIVILEGE_DELEGATION", httpStatus: 409 });
+      const after = await deletionFacts();
+      const barrierAfter = await store.read(user.subjectIdentifier);
+      const intents = await transitions();
+      expect(after).toEqual(before);
+      expect(barrierAfter).toEqual(barrierBefore);
+      expect(intents).toMatchObject([{ status: "rolled_back", targetState: "rollback" }]);
+      expect(enqueueRebuildJobs).not.toHaveBeenCalled();
+      expect(revokeUserSessions).not.toHaveBeenCalled();
+    });
+
+    test.each([
+      [PrivilegeDelegationStatus.Disable, false],
+      [PrivilegeDelegationStatus.Enable, true],
+      [PrivilegeDelegationStatus.Pause, true],
+    ] as const)("status %s with isDelete=%s permits deletion and preserves delegation history", async (status, isDelete) => {
+      const user = await seedUser();
+      await seedDelegation(user.id, side, status, "current", isDelete);
+      const { service, barrier, revokeUserSessions } = createCommand(
+        undefined,
+        undefined,
+        stableStore(user.subjectIdentifier),
+      );
+      const before = await deletionFacts();
+      const result = await service.deleteUser("user");
+      const after = await deletionFacts();
+      const access = await barrier.read(user.subjectIdentifier);
+      expect(result).toEqual({ changed: true, result: null });
+      expect(after.users[0]).toMatchObject({ id: user.id, isDelete: true });
+      expect(after.delegations).toEqual(before.delegations);
+      expect(after.delegationDetails).toEqual(before.delegationDetails);
+      expect(after.audits).toMatchObject([{ action: "admin.user.delete", details: { changed: true } }]);
+      expect(after.dirty).toMatchObject([{ userId: user.id, dirtyVersion: "1" }]);
+      expect(access.state).toBe("disabled");
+      expect(revokeUserSessions).toHaveBeenCalledTimes(1);
+    });
+
+    test("ending the delegation through the Internal command releases the deletion gate", async () => {
+      const user = await seedUser();
+      const delegation = await seedDelegation(user.id, side, PrivilegeDelegationStatus.Pause, "future");
+      const { service } = createCommand(undefined, undefined, stableStore(user.subjectIdentifier));
+      const error = await failure(() => service.deleteUser("user"));
+      expect(error).toMatchObject({ code: "USER.HAS_OPEN_PRIVILEGE_DELEGATION" });
+      await runProcessCommandSmoke({
+        label: "Internal delegation end before Admin user deletion",
+        start: () => spawnOwnedProcessTree({
+          executable: process.execPath,
+          args: ["--no-env-file", "run", "test-integration/postgres/end-delegation.fixture.ts", String(delegation.id)],
+          cwd: fileURLToPath(new URL("../../../api/", import.meta.url)),
+          env: { ...process.env, IAM_API_TEST_DATABASE_URL: harness.commandDatabaseUrl },
+        }),
+        completionTimeoutMs: 15_000,
+        cleanupTimeoutMs: 5_000,
+        maxOutputBytes: 64 * 1024,
+        expectedExitCode: 0,
+      });
+      const ended = await deletionFacts();
+      expect(ended.delegations).toMatchObject([{ id: delegation.id, status: PrivilegeDelegationStatus.Disable }]);
+      const result = await service.deleteUser("user");
+      const after = await deletionFacts();
+      expect(result).toEqual({ changed: true, result: null });
+      expect(after.users[0]).toMatchObject({ id: user.id, isDelete: true });
+      expect(after.delegations).toEqual(ended.delegations);
+      expect(after.delegationDetails).toEqual(ended.delegationDetails);
+      expect(after.audits.map(audit => audit.action)).toEqual(["internal.delegation.update", "admin.user.delete"]);
+    }, 25_000);
+  });
 
   for (const status of [UserStatus.Enable, UserStatus.Pause, UserStatus.Disable]) {
     test(`same status ${status} records intent audit without dirty or awaiting publication`, async () => {
@@ -420,6 +726,66 @@ describe("User lifecycle mutations through production PostgreSQL UnitOfWork", ()
 });
 
 describe("User mutations through production PostgreSQL UnitOfWork", () => {
+  test.each(userWriteProtocols)("%s normalizes User identity writes before PostgreSQL and preserves no-op semantics", async (protocol) => {
+    const { app } = createUserWriteApp();
+    const suffix = protocol === "REST" ? "Rest" : "TrPc";
+    const username = `Mixed-${suffix}`;
+    const createInput = {
+      username: `  ${username}  `,
+      name: `  ${suffix} Name  `,
+      userType: UserType.Formal,
+    };
+    const created = await requestUserCreate(app, protocol, createInput);
+    expect(created.status).toBe(200);
+
+    const updated = protocol === "REST"
+      ? await app.request(`/admin/users/${username}`, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ name: `  ${suffix} Name  ` }),
+        })
+      : await app.request("/rpc/update", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ username, data: { name: `  ${suffix} Name  ` } }),
+        });
+    expect(updated.status).toBe(200);
+
+    const after = await facts();
+    expect(after.users).toMatchObject([{ username, name: `${suffix} Name` }]);
+    expect(after.audits).toMatchObject([{ action: "admin.user.create" }]);
+    expect(after.dirty).toMatchObject([{ dirtyVersion: "1" }]);
+  });
+
+  test.each([
+    ["REST", "active", false],
+    ["REST", "soft-deleted", true],
+    ["tRPC", "active", false],
+    ["tRPC", "soft-deleted", true],
+  ] as const)("%s maps a normalized %s username conflict without new facts", async (protocol, _, isDelete) => {
+    await seedUser(UserStatus.Enable, isDelete);
+    const { app, command } = createUserWriteApp();
+    const before = await facts();
+    const response = await requestUserCreate(app, protocol, {
+      username: "  user  ",
+      name: "Duplicate",
+      userType: UserType.Formal,
+    });
+    const body = await response.json();
+    expect(response.status).toBe(409);
+    expect(body).toMatchObject(protocol === "REST"
+      ? { code: ApiErrorCode.UsernameAlreadyExists, message: "用户名已存在" }
+      : {
+          error: {
+            message: "用户名已存在",
+            data: { code: "CONFLICT", serviceCode: ApiErrorCode.UsernameAlreadyExists },
+          },
+        });
+    const after = await facts();
+    expect(after).toEqual(before);
+    expect(command.random.password).not.toHaveBeenCalled();
+  });
+
   test("concurrent username creates reach the real unique constraint and only one commits", async () => {
     let arrived = 0;
     const gate = Promise.withResolvers<void>();

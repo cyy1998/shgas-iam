@@ -83,8 +83,8 @@ describe('PositionsPage mutation results through the position service', () => {
     await screen.findByText(adminPositionSearchResult.result[0].posName);
     await user.click(screen.getByRole('button', { name: '+ 新建岗位' }));
     const dialog = within(await screen.findByRole('dialog'));
-    await user.type(dialog.getAllByRole('textbox')[0], 'NEW');
-    await user.type(dialog.getAllByRole('textbox')[1], '新岗位');
+    await user.type(dialog.getAllByRole('textbox')[0], '  NEW  ');
+    await user.type(dialog.getAllByRole('textbox')[1], '  新岗位  ');
     await user.click(dialog.getByRole('button', { name: '确 定' }));
     expect(await screen.findByText('创建成功')).toBeInTheDocument();
     await waitFor(() =>
@@ -95,6 +95,77 @@ describe('PositionsPage mutation results through the position service', () => {
     ]);
     await waitFor(() => expect(searches.mock.calls.length).toBeGreaterThan(1));
   });
+
+  it('validates padded position boundaries after normalization', async () => {
+    const requests = mutationResponse('create', true);
+    const { user } = render(
+      <ConfigProvider theme={{ token: { motion: false } }}>
+        <PositionsPage />
+      </ConfigProvider>,
+    );
+    await user.click(
+      await screen.findByRole('button', { name: '+ 新建岗位' }),
+    );
+    const dialog = within(await screen.findByRole('dialog'));
+    await user.type(
+      dialog.getAllByRole('textbox')[0],
+      `  ${'C'.repeat(64)}  `,
+    );
+    await user.type(
+      dialog.getAllByRole('textbox')[1],
+      `  ${'N'.repeat(128)}  `,
+    );
+    await user.click(dialog.getByRole('button', { name: '确 定' }));
+
+    expect(await screen.findByText('创建成功')).toBeInTheDocument();
+    expect(requests).toEqual([
+      {
+        '0': {
+          posCode: 'C'.repeat(64),
+          posName: 'N'.repeat(128),
+          status: 1,
+        },
+      },
+    ]);
+  });
+
+  it.each([
+    {
+      scenario: 'blank values',
+      posCode: '   ',
+      posName: '   ',
+      codeError: '请输入岗位编码',
+      nameError: '请输入岗位名称',
+    },
+    {
+      scenario: 'overlong values',
+      posCode: 'C'.repeat(65),
+      posName: 'N'.repeat(129),
+      codeError: '岗位编码最多64个字符',
+      nameError: '岗位名称最多128个字符',
+    },
+  ])(
+    'keeps $scenario in the form without sending a request',
+    async ({ posCode, posName, codeError, nameError }) => {
+      const requests = mutationResponse('create', true);
+      const { user } = render(
+        <ConfigProvider theme={{ token: { motion: false } }}>
+          <PositionsPage />
+        </ConfigProvider>,
+      );
+      await user.click(
+        await screen.findByRole('button', { name: '+ 新建岗位' }),
+      );
+      const dialog = within(await screen.findByRole('dialog'));
+      await user.type(dialog.getAllByRole('textbox')[0], posCode);
+      await user.type(dialog.getAllByRole('textbox')[1], posName);
+      await user.click(dialog.getByRole('button', { name: '确 定' }));
+      expect(await dialog.findByText(codeError)).toBeInTheDocument();
+      expect(await dialog.findByText(nameError)).toBeInTheDocument();
+      expect(requests).toHaveLength(0);
+      expect(screen.getByRole('dialog')).toBeInTheDocument();
+    },
+  );
 
   it.each([true, false])(
     'reports edit changed=%s without losing successful form completion',
@@ -146,7 +217,7 @@ describe('PositionsPage mutation results through the position service', () => {
     await user.click((await screen.findAllByText('编辑'))[0]);
     const dialog = within(await screen.findByRole('dialog'));
     await user.clear(dialog.getAllByRole('textbox')[1]);
-    await user.type(dialog.getAllByRole('textbox')[1], '修改后的岗位');
+    await user.type(dialog.getAllByRole('textbox')[1], '  修改后的岗位  ');
     await user.click(dialog.getByRole('button', { name: '确 定' }));
     expect(await screen.findByText('更新成功')).toBeInTheDocument();
     expect(requests).toEqual([

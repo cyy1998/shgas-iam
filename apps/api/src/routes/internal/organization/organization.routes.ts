@@ -1,4 +1,9 @@
-import { OrganizationDtoSchema, OrganizationQueryDtoSchema, OrganizationUpdateDtoSchema } from "@api/services/organization/organization.schema";
+import {
+  OrganizationCreateDtoSchema,
+  OrganizationDtoSchema,
+  OrganizationQueryDtoSchema,
+  OrganizationUpdateDtoSchema,
+} from "@api/services/organization/organization.schema";
 import { createRoute, z } from "@hono/zod-openapi";
 import * as HttpStatusCodes from "@iam/api-core/core/http-status-codes";
 import { commonErrorResponses } from "@iam/api-core/core/openapi/helpers/common-error-responses";
@@ -55,9 +60,10 @@ export const purveyorRegister = createRoute({
   path: "/purveyors",
   tags,
   request: {
-    body: jsonContentRequired(z.object({
-      orgCode: z.string().openapi({ example: "统一社会信用代码" }),
-      orgName: z.string().openapi({ example: "供应商A" }),
+    body: jsonContentRequired(OrganizationCreateDtoSchema.pick({
+      orgCode: true,
+      orgName: true,
+    }).extend({
       parentOrg: z.enum(["GY", "GT"]).default("GY"),
     }), "组织创建参数"),
   },

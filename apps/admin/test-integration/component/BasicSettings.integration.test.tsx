@@ -2,10 +2,10 @@ import BasicSettings from '@admin/pages/clients/components/BasicSettings';
 import { AdminMutationCommittedError } from '@admin/services/admin-mutation';
 import type { ClientDetailVo } from '@admin/services/client';
 import { ClientStatus } from '@iam/contracts';
-import { Modal } from 'antd';
+import { message, Modal } from 'antd';
 import { useState } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { render, screen, waitFor } from '~admin/test/render';
+import { act, render, screen, waitFor } from '~admin/test/render';
 import { adminClientDetail } from '../../test/mocks/fixtures';
 
 const updateClient = vi.hoisted(() => vi.fn());
@@ -32,8 +32,11 @@ describe('BasicSettings client status updates', () => {
     updateClientStatus.mockResolvedValue({ changed: true, result: null });
   });
 
-  afterEach(() => {
-    Modal.destroyAll();
+  afterEach(async () => {
+    await act(async () => {
+      Modal.destroyAll();
+      message.destroy();
+    });
   });
 
   function renderSettings() {

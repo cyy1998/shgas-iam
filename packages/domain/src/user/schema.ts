@@ -19,23 +19,41 @@ export const UserProfileBaseSchema = UserSchema.pick({
   wxId: true,
 }).strict().openapi("UserProfileBase");
 
+export const UsernameWriteSchema = z.string()
+  .trim()
+  .min(1, "用户名不能为空")
+  .max(64, "用户名最多64个字符")
+  .openapi({ description: "用户名" });
+
+export const UserNameWriteSchema = z.string()
+  .trim()
+  .min(1, "姓名不能为空")
+  .max(64, "姓名最多64个字符")
+  .openapi({ description: "姓名" });
+
 export const UserDetailDtoSchema = UserDtoSchema.extend({
   employments: z.array(EmploymentDetailDtoSchema).default([]),
   privileges: z.array(z.string()).default([]).openapi({ example: ["ui:button:tender:create-GYBG"] }),
   roles: z.array(z.string()).default([]).openapi({ example: ["tender:default-user"] }),
 }).openapi("UserDetailDto");
 
-export const UserCreateDtoSchema = UserSchema.partial().required({
+export const UserCreateDtoSchema = UserSchema.pick({
+  username: true,
+  wxId: true,
+  name: true,
+  password: true,
+  mobile: true,
+  userType: true,
+  orderNum: true,
+  status: true,
+}).partial().required({
   username: true,
   name: true,
   userType: true,
   password: true,
-}).omit({
-  id: true,
-  subjectIdentifier: true,
-  isDelete: true,
-  createTime: true,
-  updateTime: true,
+}).extend({
+  username: UsernameWriteSchema,
+  name: UserNameWriteSchema,
 }).openapi("UserCreateDto");
 
 export const OidcAccountDtoSchema = DbUserSchema.pick({

@@ -513,7 +513,7 @@ test('HR admin sees only executable User status actions and submits the selected
   await expect(changeStatus).toBeEnabled();
   await changeStatus.click();
   await expect(page.getByText('切为「暂停」', { exact: true })).toBeVisible();
-  await expect(page.getByText('切为「结束」', { exact: true })).toBeVisible();
+  await expect(page.getByText('切为「停用」', { exact: true })).toBeVisible();
   await expect(page.getByText('切为「启用」', { exact: true })).toHaveCount(0);
   await page.getByText('切为「暂停」', { exact: true }).click();
 
@@ -949,4 +949,86 @@ test('HR admin can browse responsibility pages while other management namespaces
 
   expect(hiddenManagementRequests).toEqual([]);
   expect(mutationRequests).toEqual([]);
+});
+
+test('HR cannot rehire an ended-only disabled User until a restored Pause response arrives', async ({
+  page,
+}) => {
+  await mockHrAdmin(page);
+  let status = UserStatus.Disable;
+  const mutations: unknown[] = [];
+  await page.route('**/rpc/admin.user.detail**', (route) =>
+    fulfillTrpc(route, {
+      ...hrAdminUserDetail,
+      status,
+      employments: [],
+      allowedActions: {
+        ...hrAdminUserDetail.allowedActions,
+        changeStatus: { allowed: false, reason: 'USER_NOT_HR_MANAGED' },
+      },
+    }),
+  );
+  await page.route('**/rpc/admin.employment.create**', (route) => {
+    mutations.push(parseTrpcBatchInput(route));
+    return fulfillTrpc(route, { changed: true, result: { id: 101 } });
+  });
+  await page.goto('/iam-admin/users');
+  await page.locator('td a').filter({ hasText: '查看' }).first().click();
+  let drawer = page.getByRole('dialog');
+  await expect(drawer.getByRole('button', { name: /状\s*态/ })).toBeDisabled();
+  await drawer.getByRole('tab', { name: /雇佣/ }).click();
+  await expect(drawer.getByRole('button', { name: /新增雇佣/ })).toBeDisabled();
+  // The actual Full Admin -> HR state transition is proved by the PostgreSQL command sequence.
+  status = UserStatus.Pause;
+  await drawer.getByRole('button', { name: '关闭' }).click();
+  await page.locator('td a').filter({ hasText: '查看' }).first().click();
+  drawer = page.getByRole('dialog');
+  await drawer.getByRole('tab', { name: /雇佣/ }).click();
+  await drawer.getByRole('button', { name: /新增雇佣/ }).click();
+  const form = page.getByRole('dialog', { name: /新增雇佣/ });
+  await form.getByRole('combobox').nth(1).click();
+  await page.getByText('授权根 A (ROOT-A)', { exact: true }).click();
+  await form.getByRole('combobox').nth(2).click();
+  await page.getByTitle('财务经理 (FIN-001)').click();
+  await form.getByRole('button', { name: /确\s*定/ }).click();
+  await expect(form).toHaveCount(0);
+  expect(mutations).toEqual([
+    {
+      username: 'zhangsan',
+      orgCode: 'ROOT-A',
+      posCode: 'FIN-001',
+      isPrimary: false,
+      description: null,
+    },
+  ]);
+});
+
+test('HR sees disabled Transfer while existing Employment lifecycle actions remain available', async ({
+  page,
+}) => {
+  await mockHrAdmin(page);
+  const mutations = collectMutationRequests(page);
+  await page.route('**/rpc/admin.user.detail**', (route) =>
+    fulfillTrpc(route, {
+      ...hrAdminUserDetail,
+      status: UserStatus.Disable,
+      employments: hrAdminUserDetail.employments.map((employment) => ({
+        ...employment,
+        allowedActions: {
+          ...employment.allowedActions,
+          transfer: { allowed: false, reason: 'USER_DISABLED' },
+        },
+      })),
+    }),
+  );
+  await page.goto('/iam-admin/users');
+  await page.locator('td a').filter({ hasText: '查看' }).first().click();
+  const drawer = page.getByRole('dialog');
+  await drawer.getByRole('tab', { name: /雇佣/ }).click();
+  const row = drawer.getByRole('row').filter({ hasText: '财务部' });
+  await expect(row.getByRole('button', { name: /转\s*岗/ })).toBeDisabled();
+  await expect(row.getByRole('button', { name: /暂\s*停/ })).toBeEnabled();
+  await expect(row.getByRole('button', { name: /结\s*束/ })).toBeEnabled();
+  await expect(row.getByRole('button', { name: '取消主岗' })).toBeEnabled();
+  expect(mutations).toEqual([]);
 });

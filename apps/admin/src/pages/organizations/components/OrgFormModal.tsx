@@ -81,9 +81,10 @@ export default function OrgFormModal({
       }}
       onFinish={async (values) => {
         try {
+          const orgName = values.orgName.trim();
           if (isEdit && initialValues) {
             const outcome = await updateOrganization(initialValues.orgCode, {
-              orgName: values.orgName,
+              orgName,
               orgType: values.orgType,
               ...(canChangeStatus && values.status !== initialValues.status
                 ? { status: values.status }
@@ -92,8 +93,8 @@ export default function OrgFormModal({
             message.success(outcome.changed ? '更新成功' : '无需修改');
           } else {
             const outcome = await createOrganization({
-              orgCode: values.orgCode,
-              orgName: values.orgName,
+              orgCode: values.orgCode.trim(),
+              orgName,
               orgType: values.orgType,
               parentCode: mode === 'create-child' ? (parentCode ?? null) : null,
               status: OrganizationStatus.Enable,
@@ -124,12 +125,27 @@ export default function OrgFormModal({
         name="orgCode"
         label="组织编码"
         disabled={isEdit}
-        rules={[{ required: true, message: '请输入组织编码' }]}
+        rules={[
+          {
+            transform: (value: unknown) =>
+              typeof value === 'string' ? value.trim() : value,
+            required: true,
+            max: 64,
+            message: '请输入不超过64个字符的组织编码',
+          },
+        ]}
       />
       <ProFormText
         name="orgName"
         label="组织名称"
-        rules={[{ required: true, message: '请输入组织名称' }]}
+        rules={[
+          {
+            transform: (value: unknown) =>
+              typeof value === 'string' ? value.trim() : value,
+            required: true,
+            message: '请输入组织名称',
+          },
+        ]}
       />
       <ProFormSelect
         name="orgType"

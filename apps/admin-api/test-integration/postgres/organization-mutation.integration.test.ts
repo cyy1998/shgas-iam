@@ -33,6 +33,7 @@ import {
   OrganizationHasEmploymentError,
   OrganizationHasOpenResponsibilityAssignmentError,
   OrganizationNotFoundError,
+  OrganizationUpdateDtoSchema,
 } from "@iam/domain/organization";
 import { afterAll, beforeAll, beforeEach, describe, expect, mock, test } from "bun:test";
 import { eq } from "drizzle-orm";
@@ -281,6 +282,83 @@ describe("Organization mutations through production PostgreSQL UnitOfWork", () =
       { ancestorId: childRow!.id, descendantId: childRow!.id, depth: 0 },
     ]);
     expect(after.audits).toHaveLength(2);
+  });
+
+  test("persists normalized organization write fields", async () => {
+    const { service } = createCommand();
+    const result = await service.setOrganization(OrganizationCreateDtoSchema.parse({
+      orgCode: "  ORGANIZATION  ",
+      orgName: "  Organization  ",
+      orgType: OrganizationType.Department,
+    }));
+    expect(result).toMatchObject({
+      changed: true,
+      result: { orgCode: "ORGANIZATION", orgName: "Organization" },
+    });
+    const after = await facts();
+    expect(after.organizations).toMatchObject([{ orgCode: "ORGANIZATION", orgName: "Organization" }]);
+    expect(after.audits).toHaveLength(1);
+  });
+
+  test("keeps organization code uniqueness case-sensitive", async () => {
+    const { service } = createCommand();
+    for (const orgCode of ["CASE", "case"]) {
+      await service.setOrganization(OrganizationCreateDtoSchema.parse({
+        orgCode,
+        orgName: `Organization ${orgCode}`,
+        orgType: OrganizationType.Department,
+      }));
+    }
+    const after = await facts();
+    expect(after.organizations.map(row => row.orgCode)).toEqual(["CASE", "case"]);
+  });
+
+  test("does not apply the organization code length limit to names", async () => {
+    const { service } = createCommand();
+    const longName = `Organization-${"N".repeat(80)}`;
+    await service.setOrganization(OrganizationCreateDtoSchema.parse({
+      orgCode: "LONG-NAME",
+      orgName: longName,
+      orgType: OrganizationType.Department,
+    }));
+    const after = await facts();
+    expect(after.organizations).toMatchObject([{ orgCode: "LONG-NAME", orgName: longName }]);
+  });
+
+  test("allows distinct organization codes to share a name", async () => {
+    const { service } = createCommand();
+    for (const orgCode of ["FIRST", "SECOND"]) {
+      await service.setOrganization(OrganizationCreateDtoSchema.parse({
+        orgCode,
+        orgName: "Shared name",
+        orgType: OrganizationType.Department,
+      }));
+    }
+    const after = await facts();
+    expect(after.organizations).toMatchObject([
+      { orgCode: "FIRST", orgName: "Shared name" },
+      { orgCode: "SECOND", orgName: "Shared name" },
+    ]);
+  });
+
+  test("keeps normalized organization updates as no-ops without new audit or dirty facts", async () => {
+    const { service } = createCommand();
+    await service.setOrganization(OrganizationCreateDtoSchema.parse({
+      orgCode: "ORGANIZATION",
+      orgName: "Organization",
+      orgType: OrganizationType.Department,
+    }));
+    const before = await facts();
+    const unchanged = await service.updateOrganization(
+      "ORGANIZATION",
+      OrganizationUpdateDtoSchema.parse({
+        orgCode: "  ORGANIZATION  ",
+        orgName: "  Organization  ",
+      }),
+    );
+    expect(unchanged).toEqual({ changed: false, result: null });
+    const after = await facts();
+    expect(after).toEqual(before);
   });
 
   for (const status of [OrganizationStatus.Pause, OrganizationStatus.Disable]) {

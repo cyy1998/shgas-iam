@@ -48,6 +48,11 @@ readSecret 只读取并记审计，不执行 Snapshot 失效，不作为缓存�
 后续兑换失败及删除 Client 的会话作用是独立契约，分别见[Custom](../sso/custom-sso-contract.md)、
 [OIDC](../oidc/oidc-integration.md)和[会话管理](session-management.md)。
 
+首次删除 Client 在同一事务锁定 Client 后，检查是否存在任何未删除 Role，不区分 Enable、Pause 或 Disable。
+存在依赖时返回 `409 CLIENT.HAS_ROLE`，不改变 Client、不写成功删除审计，也不执行 Snapshot 失效或会话终止。
+管理员须先按既有规则处理 Role Assignment、删除 Role，再删除 Client；软删除的 Role 历史不阻断。
+该检查保持跨对象普通预检边界，不新增锁或并发保证；已删除 Client 的显式重试仍按会话管理契约处理残余会话。
+
 ## 管理权限与 Secret
 
 REST 基础路径为 `/admin/clients-sso/{clientCode}`，详情及 /save、/protocol、/enabled，

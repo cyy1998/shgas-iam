@@ -246,7 +246,11 @@ function employmentAllowedActions(
       ? allowedDecision
       : stateNotActionable,
     end: isOpen ? allowedDecision : stateNotActionable,
-    transfer: isOpen ? allowedDecision : stateNotActionable,
+    transfer: !isOpen
+      ? stateNotActionable
+      : facts.userStatus === UserStatus.Disable
+        ? { allowed: false, reason: "USER_DISABLED" }
+        : allowedDecision,
     setPrimary: isOpen && !facts.isPrimary
       ? allowedDecision
       : stateNotActionable,

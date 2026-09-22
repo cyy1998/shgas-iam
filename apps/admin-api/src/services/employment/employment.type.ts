@@ -1,5 +1,5 @@
 import type { z } from "@hono/zod-openapi";
-import type { EmploymentStatus } from "@iam/contracts";
+import type { EmploymentStatus, UserStatus } from "@iam/contracts";
 import type {
   EmploymentAdminCreateDtoSchema,
   EmploymentAdminPaginationQueryDtoSchema,
@@ -23,6 +23,7 @@ export interface AdminEmploymentRecordCreate {
 }
 
 export interface AdminEmploymentAuthorizationFacts {
+  userStatus: UserStatus;
   organizationId: number;
   status: EmploymentStatus;
   isPrimary: boolean;

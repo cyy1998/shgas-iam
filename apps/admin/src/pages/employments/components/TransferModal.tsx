@@ -1,10 +1,11 @@
 import OrganizationTreeSelector from '@admin/components/OrganizationTreeSelector';
-import { apiClient } from '@admin/lib/api-client';
 import { AdminMutationCommittedError } from '@admin/services/admin-mutation';
+import { getAdminAuthorizationReasonText } from '@admin/services/authorization';
 import {
-  type EmploymentVo,
+  type EmploymentDetailVo,
   transferEmployment,
 } from '@admin/services/employment';
+import { searchPositions } from '@admin/services/position';
 import type { ProFormInstance } from '@ant-design/pro-components';
 import {
   ModalForm,
@@ -13,18 +14,13 @@ import {
   ProFormSelect,
   ProFormTextArea,
 } from '@ant-design/pro-components';
-import type { AppRouter } from '@iam/admin-api/trpc';
 import { PositionStatus } from '@iam/contracts';
-import type { inferRouterOutputs } from '@trpc/server';
 import { Alert, Descriptions, message } from 'antd';
 import { useRef } from 'react';
 
-type PosVo =
-  inferRouterOutputs<AppRouter>['admin']['position']['search']['result'][number];
-
 type EmploymentTransferSource = Pick<
-  EmploymentVo,
-  'id' | 'isPrimary' | 'organization' | 'position' | 'user'
+  EmploymentDetailVo,
+  'id' | 'isPrimary' | 'organization' | 'position' | 'user' | 'allowedActions'
 >;
 
 type Props = {
@@ -60,6 +56,8 @@ export default function TransferModal({
 }: Props) {
   const formRef = useRef<ProFormInstance>(undefined);
 
+  const transferAllowed = employment?.allowedActions.transfer.allowed ?? false;
+
   const handleError = (err: unknown) =>
     message.error(err instanceof Error ? err.message : '转岗失败');
 
@@ -74,8 +72,9 @@ export default function TransferModal({
         mask: { closable: false },
         okText: '确定',
       }}
+      submitter={{ submitButtonProps: { disabled: !transferAllowed } }}
       onFinish={async (values) => {
-        if (!employment) return false;
+        if (!employment || !transferAllowed) return false;
         if (typeof values.isPrimary !== 'boolean') {
           message.warning('请选择新任职是否为主任职');
           return false;
@@ -101,6 +100,15 @@ export default function TransferModal({
         }
       }}
     >
+      {employment && !transferAllowed && (
+        <Alert
+          type="warning"
+          showIcon
+          message={getAdminAuthorizationReasonText(
+            employment.allowedActions.transfer.reason,
+          )}
+        />
+      )}
       <Alert
         type="warning"
         showIcon
@@ -139,7 +147,7 @@ export default function TransferModal({
         showSearch
         rules={[{ required: true }]}
         request={async (params) => {
-          const res = await apiClient.admin.position.search.query({
+          const res = await searchPositions({
             pageNum: 1,
             pageSize: 50,
             conditions: {
@@ -147,7 +155,7 @@ export default function TransferModal({
               exactConditions: { statuses: [PositionStatus.Enable] },
             },
           });
-          return res.result.map((p: PosVo) => ({
+          return res.result.map((p) => ({
             label: `${p.posName} (${p.posCode})`,
             value: p.posCode,
           }));

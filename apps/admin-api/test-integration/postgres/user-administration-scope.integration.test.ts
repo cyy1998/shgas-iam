@@ -179,6 +179,31 @@ describe("User administration PostgreSQL authorization", () => {
     }]);
   });
 
+  test("restoring Pause does not let HR enable a User with an outside Open Employment", async () => {
+    const seed = await seedUserAdministrationGraph(harness.db);
+    const authorization = await scopedAuthorization(seed.inScopeOrganizationId);
+    const fixture = createService(mock(async () => revokeSummary()));
+    await fixture.service.updateUserStatus("mixed-paused", UserStatus.Disable);
+    await fixture.service.updateUserStatus("mixed-paused", UserStatus.Pause);
+    const beforeUsers = await harness.db.select().from(users);
+    const beforeEmployments = await harness.db.select().from(employments);
+    const beforeAudits = await harness.db.select().from(auditLogs);
+    let failure: unknown;
+    try {
+      await fixture.service.updateUserStatus("mixed-paused", UserStatus.Enable, undefined, authorization);
+    }
+    catch (error) {
+      failure = error;
+    }
+    expect(failure).toMatchObject({ httpStatus: 403 });
+    const afterUsers = await harness.db.select().from(users);
+    const afterEmployments = await harness.db.select().from(employments);
+    const afterAudits = await harness.db.select().from(auditLogs);
+    expect(afterUsers).toEqual(beforeUsers);
+    expect(afterEmployments).toEqual(beforeEmployments);
+    expect(afterAudits).toEqual(beforeAudits);
+  });
+
   test("rejects mixed-scope and zero-Open HR User status changes without writes", async () => {
     const seed = await seedUserAdministrationGraph(harness.db);
     const authorization = await scopedAuthorization(seed.inScopeOrganizationId);

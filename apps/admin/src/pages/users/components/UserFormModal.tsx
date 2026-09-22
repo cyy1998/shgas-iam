@@ -28,6 +28,8 @@ type Props = {
   ) => void;
 };
 
+const trimInput = (value: string | undefined) => value?.trim() ?? '';
+
 export default function UserFormModal({
   open,
   mode,
@@ -87,10 +89,12 @@ export default function UserFormModal({
         okText: '确定',
       }}
       onFinish={async (values) => {
+        const normalizedUsername = trimInput(values.username);
+        const normalizedName = trimInput(values.name);
         try {
           if (isEdit) {
             const data: Parameters<typeof updateUser>[1] = {};
-            if (editedFieldsRef.current.has('name')) data.name = values.name;
+            if (editedFieldsRef.current.has('name')) data.name = normalizedName;
             if (editedFieldsRef.current.has('mobile'))
               data.mobile = values.mobile || null;
             if (editedFieldsRef.current.has('wxId'))
@@ -106,8 +110,8 @@ export default function UserFormModal({
             onSuccess?.();
           } else {
             const res = await createUser({
-              username: values.username,
-              name: values.name,
+              username: normalizedUsername,
+              name: normalizedName,
               userType: values.userType,
               password: values.password || undefined,
               mobile: values.mobile || null,
@@ -125,7 +129,7 @@ export default function UserFormModal({
           if (err instanceof AdminMutationCommittedError) {
             onCommitted(
               err,
-              initialValues?.username ?? values.username,
+              initialValues?.username ?? normalizedUsername,
               !isEdit && !values.password,
             );
             return true;
@@ -139,12 +143,36 @@ export default function UserFormModal({
         name="username"
         label="用户名"
         disabled={isEdit}
-        rules={[{ required: true, message: '请输入用户名' }]}
+        rules={[
+          {
+            transform: trimInput,
+            required: true,
+            whitespace: true,
+            message: '请输入用户名',
+          },
+          {
+            transform: trimInput,
+            max: 64,
+            message: '用户名最多64个字符',
+          },
+        ]}
       />
       <ProFormText
         name="name"
         label="姓名"
-        rules={[{ required: true, message: '请输入姓名' }]}
+        rules={[
+          {
+            transform: trimInput,
+            required: true,
+            whitespace: true,
+            message: '请输入姓名',
+          },
+          {
+            transform: trimInput,
+            max: 64,
+            message: '姓名最多64个字符',
+          },
+        ]}
       />
       <ProFormSelect
         name="userType"

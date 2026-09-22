@@ -79,6 +79,104 @@ function surface(roles = ["iam:admin"]) {
 }
 
 describe("Organization mutation public adapters", () => {
+  test("REST normalizes organization code and name before creating", async () => {
+    const { request } = surface();
+    const created = await request("POST", "", {
+      orgCode: "  DEV  ",
+      orgName: "  Developer  ",
+      orgType: OrganizationType.Company,
+    });
+
+    expect(created).toMatchObject({
+      status: 200,
+      body: {
+        data: {
+          changed: true,
+          result: { orgCode: "DEV", orgName: "Developer" },
+        },
+      },
+    });
+  });
+
+  test("REST accepts a 64-character organization code", async () => {
+    const { request } = surface();
+    const accepted = await request("POST", "", {
+      orgCode: "A".repeat(64),
+      orgName: "Accepted",
+      orgType: OrganizationType.Company,
+    });
+    expect(accepted.status).toBe(200);
+  });
+
+  test("REST rejects a 65-character organization code", async () => {
+    const { request } = surface();
+    const rejected = await request("POST", "", {
+      orgCode: "B".repeat(65),
+      orgName: "Rejected",
+      orgType: OrganizationType.Company,
+    });
+    expect(rejected.status).toBe(422);
+  });
+
+  test.each([
+    {
+      field: "organization code",
+      input: { orgCode: "   ", orgName: "Name", orgType: OrganizationType.Company },
+    },
+    {
+      field: "organization name",
+      input: { orgCode: "ORG", orgName: "   ", orgType: OrganizationType.Company },
+    },
+  ])("REST rejects a blank $field after normalization", async ({ input }) => {
+    const { request } = surface();
+    const rejected = await request("POST", "", input);
+    expect(rejected.status).toBe(422);
+  });
+
+  test("tRPC normalizes organization code and name before creating", async () => {
+    const { caller } = surface();
+    const created = await caller.create({
+      orgCode: "  DEV  ",
+      orgName: "  Developer  ",
+      orgType: OrganizationType.Company,
+      status: OrganizationStatus.Enable,
+    });
+    expect(created).toMatchObject({
+      changed: true,
+      result: { orgCode: "DEV", orgName: "Developer" },
+    });
+  });
+
+  test("tRPC normalizes update fields before the no-op decision", async () => {
+    const { caller } = surface();
+    await caller.create({
+      orgCode: "DEV",
+      orgName: "Developer",
+      orgType: OrganizationType.Company,
+      status: OrganizationStatus.Enable,
+    });
+    const unchanged = await caller.update({
+      orgCode: "DEV",
+      data: { orgCode: "  DEV  ", orgName: "  Developer  " },
+    });
+    expect(unchanged).toEqual({ changed: false, result: null });
+  });
+
+  test("tRPC rejects a 65-character organization code on update", async () => {
+    const { caller } = surface();
+    let failure: unknown;
+    try {
+      await caller.update({
+        orgCode: "DEV",
+        data: { orgCode: "X".repeat(65) },
+      });
+    }
+    catch (error) {
+      failure = error;
+    }
+    expect(failure).toMatchObject({ code: "BAD_REQUEST" });
+  });
+
   test("REST preserves the envelope and returns created resource, changed and no-op results", async () => {
     const { request } = surface();
     const created = await request("POST", "", { orgCode: "DEV", orgName: "Developer", orgType: OrganizationType.Company, unexpected: "private" });

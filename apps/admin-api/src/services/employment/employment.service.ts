@@ -56,7 +56,7 @@ export function createEmploymentService(deps: AdminEmploymentServiceDeps) {
     dto.roleNames = Object.fromEntries((await deps.roleRepository.getRoleNamesByIds(roles.map(r => r.id)))
       .map(role => [role.roleCode, role.roleName]));
     dto.privilegeNames = Object.fromEntries(privileges.map(p => [p.privilegeCode, p.privilegeName]));
-    return dto;
+    return { ...dto, userStatus: employment.user.status };
   }
 
   async function searchEmploymentsFuzzyForAdmin(
@@ -160,6 +160,7 @@ export function createEmploymentService(deps: AdminEmploymentServiceDeps) {
     }
     const decision = authorization.getAllowedActions({
       status: facts.status,
+      userStatus: facts.userStatus,
       isPrimary: facts.isPrimary,
     })[GUARDED_EMPLOYMENT_ACTION_BY_OPERATION[operationId]];
     if (!decision.allowed) {

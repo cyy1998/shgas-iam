@@ -136,9 +136,11 @@ export function createEmploymentRepository(db: DbClient) {
         .select({
           organizationId: employments.orgId,
           status: employments.status,
+          userStatus: users.status,
           isPrimary: employments.isPrimary,
         })
         .from(employments)
+        .innerJoin(users, eq(users.id, employments.userId))
         .where(and(eq(employments.id, id), eq(employments.isDelete, false)))
         .limit(1));
       return row ?? null;

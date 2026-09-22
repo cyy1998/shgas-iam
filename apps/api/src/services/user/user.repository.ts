@@ -1,8 +1,10 @@
 import type { UserCreateDto } from "@api/services/user/user.type";
 import type { DbClient } from "@iam/db";
 import { UserStatus } from "@iam/contracts";
+import { extractPostgresError } from "@iam/db/postgres-error";
 import { firstRow } from "@iam/db/query-utils";
 import { users } from "@iam/db/schema";
+import { UsernameAlreadyExistsError } from "@iam/domain/user";
 import { and, eq, sql } from "drizzle-orm";
 
 export function createUserRepository(db: DbClient) {
@@ -106,7 +108,17 @@ export function createUserRepository(db: DbClient) {
         .returning()) ?? null;
     },
     async setUser(userCreateDto: UserCreateDto & { subjectIdentifier: string }) {
-      return firstRow(await db.insert(users).values(userCreateDto).returning())!;
+      try {
+        return firstRow(await db.insert(users).values(userCreateDto).returning())!;
+      }
+      catch (error) {
+        const detail = extractPostgresError(error);
+        if (detail?.code === "23505"
+          && (detail.constraint === "user_username_key" || detail.constraint === "user_username_unique")) {
+          throw new UsernameAlreadyExistsError();
+        }
+        throw error;
+      }
     },
   };
 }

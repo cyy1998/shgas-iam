@@ -67,6 +67,97 @@ function surface(roles = ["iam:admin"]) {
 }
 
 describe("Position mutation public adapters", () => {
+  test("REST normalizes position create inputs", async () => {
+    const { request } = surface();
+    const created = await request("POST", "", {
+      posCode: "  ReSt-Code  ",
+      posName: "  REST Name  ",
+      status: PositionStatus.Enable,
+    });
+    expect(created).toMatchObject({
+      status: 200,
+      body: {
+        data: {
+          result: {
+            posCode: "ReSt-Code",
+            posName: "REST Name",
+          },
+        },
+      },
+    });
+  });
+
+  test("REST treats a normalized equivalent update as a no-op", async () => {
+    const { request } = surface();
+    await request("POST", "", {
+      posCode: "ReSt-Code",
+      posName: "REST Name",
+      status: PositionStatus.Enable,
+    });
+    const equivalent = await request("PUT", "/ReSt-Code", {
+      posName: "  REST Name  ",
+    });
+    expect(equivalent).toMatchObject({
+      status: 200,
+      body: { data: { changed: false, result: null } },
+    });
+  });
+
+  test("REST rejects invalid normalized position input", async () => {
+    const { request } = surface();
+    const rejected = await request("POST", "", {
+      posCode: "OTHER",
+      posName: "   ",
+      status: PositionStatus.Enable,
+    });
+    expect(rejected.status).toBe(422);
+  });
+
+  test("tRPC normalizes position create inputs", async () => {
+    const { caller } = surface();
+    const created = await caller.create({
+      posCode: "  TrPc-Code  ",
+      posName: "  tRPC Name  ",
+      status: PositionStatus.Enable,
+    });
+    expect(created).toMatchObject({
+      result: {
+        posCode: "TrPc-Code",
+        posName: "tRPC Name",
+      },
+    });
+  });
+
+  test("tRPC treats a normalized equivalent update as a no-op", async () => {
+    const { caller } = surface();
+    await caller.create({
+      posCode: "TrPc-Code",
+      posName: "tRPC Name",
+      status: PositionStatus.Enable,
+    });
+    const equivalent = await caller.update({
+      posCode: "TrPc-Code",
+      data: { posName: "  tRPC Name  " },
+    });
+    expect(equivalent).toEqual({ changed: false, result: null });
+  });
+
+  test("tRPC rejects invalid normalized position input", async () => {
+    const { caller } = surface();
+    let rejected: unknown;
+    try {
+      await caller.create({
+        posCode: "   ",
+        posName: "Valid name",
+        status: PositionStatus.Enable,
+      });
+    }
+    catch (error) {
+      rejected = error;
+    }
+    expect(rejected).toMatchObject({ code: "BAD_REQUEST" });
+  });
+
   test("REST preserves the envelope and returns created resource, changed and no-op results", async () => {
     const { request } = surface();
     const created = await request("POST", "", { posCode: "DEV", posName: "Developer", unexpected: "private" });

@@ -74,7 +74,7 @@ releases 只保留当前代发布与维护；一次性升级和旧验收见[固�
 <details>
 <summary>展开架构决策</summary>
 
-以下 21 篇汇总当前仍有效的决定；历史原文、已被取代的决策和合并来源见
+以下 22 篇汇总当前仍有效的决定；历史原文、已被取代的决策和合并来源见
 [固定 ADR 快照](https://github.com/cyy1998/shgas-iam/tree/73315e4cef6f96dd79b29e18f74d68af30e559ec/docs/adr)，各主题文末提供对应原文。
 
 | Document | Type | Status | Last verified | Next review | Notes |
@@ -100,6 +100,7 @@ releases 只保留当前代发布与维护；一次性升级和旧验收见[固�
 | [ADR-0035](adr/0035-unify-user-and-client-session-lifecycles.md) | decision | Current | 2026-09-21 | 2026-10-31 | 两类会话、配置维护、一次消费与精确失败作用。 |
 | [ADR-0036](adr/0036-bind-oidc-to-internal-and-external-issuers.md) | decision | Current | 2026-09-21 | 2026-10-31 | 双 issuer 身份、可信入口与 Cookie 隔离。 |
 | [ADR-0038](adr/0038-derive-managed-sso-callback-from-redirect-origin.md) | decision | Current | 2026-09-21 | 2026-10-31 | 显式回调类型与 managed origin 信任。 |
+| [ADR-0039](adr/0039-tighten-admin-reference-integrity-and-preserve-history.md) | decision | Current | 2026-09-22 | 2026-10-31 | 管理引用完整性、输入规范化与软删除历史。 |
 
 </details>
 

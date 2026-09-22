@@ -66,7 +66,7 @@ const browserDisplay = {
 } as const;
 
 const userRevokeSafetyGuidance =
-  '操作开始时已索引的会话将被处理；操作期间或之后建立的新会话仍可能存在。IAM 不能保证第三方自行建立的本地会话退出。强制下线不会阻止未来重新登录；如怀疑凭据泄露，请同时执行密码重置、账号暂停或结束。';
+  '操作开始时已索引的会话将被处理；操作期间或之后建立的新会话仍可能存在。IAM 不能保证第三方自行建立的本地会话退出。强制下线不会阻止未来重新登录；如怀疑凭据泄露，请同时执行密码重置、账号暂停或停用。';
 
 function renderOrigin(session: SessionListItem) {
   if (!session.origin) return '未知';

@@ -20,7 +20,7 @@ import { UserDetailDtoSchema, UserDtoSchema } from "@admin-api/services/user/use
 import { BadRequestError } from "@iam/api-core/errors";
 import { requireSubjectAccessOperation } from "@iam/api-core/subject-access";
 import { EmploymentStatus, UserStatus } from "@iam/contracts";
-import { UserHasOpenEmploymentError, UsernameAlreadyExistsError, UserNotFoundError } from "@iam/domain/user";
+import { UserHasOpenEmploymentError, UserHasOpenPrivilegeDelegationError, UsernameAlreadyExistsError, UserNotFoundError } from "@iam/domain/user";
 
 export function createUserService(deps: AdminUserServiceDeps) {
   const adminMutation = createAdminMutation(deps.uow);
@@ -361,6 +361,9 @@ export function createUserService(deps: AdminUserServiceDeps) {
                 const openEmployments = await tx.userRepository.countOpenEmploymentsByUsername(username);
                 if (openEmployments > 0) {
                   throw new UserHasOpenEmploymentError();
+                }
+                if (await tx.userRepository.hasOpenPrivilegeDelegationsByUserId(current.id)) {
+                  throw new UserHasOpenPrivilegeDelegationError();
                 }
                 const deletedUser = await tx.userRepository.softDeleteUserByUsername(username);
                 if (deletedUser === null)

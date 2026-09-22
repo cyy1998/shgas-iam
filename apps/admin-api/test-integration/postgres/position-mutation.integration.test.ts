@@ -89,6 +89,87 @@ async function failure(operation: () => Promise<unknown>) {
 }
 
 describe("Position mutations through production PostgreSQL UnitOfWork", () => {
+  test("normalizes position identifiers and names before lookup and persistence", async () => {
+    const { service } = createCommand();
+
+    const created = await service.setPosition({
+      posCode: "  MiXeD-Code  ",
+      posName: "  Platform Engineer  ",
+      status: PositionStatus.Enable,
+    });
+    const differentlyCased = await service.setPosition({
+      posCode: "mixed-code",
+      posName: "Platform Engineer",
+      status: PositionStatus.Enable,
+    });
+
+    expect(created).toMatchObject({
+      changed: true,
+      result: {
+        posCode: "MiXeD-Code",
+        posName: "Platform Engineer",
+      },
+    });
+    expect(differentlyCased).toMatchObject({
+      changed: true,
+      result: {
+        posCode: "mixed-code",
+        posName: "Platform Engineer",
+      },
+    });
+    const after = await facts();
+    expect(after.positions).toMatchObject([
+      {
+        posCode: "MiXeD-Code",
+        posName: "Platform Engineer",
+      },
+      {
+        posCode: "mixed-code",
+        posName: "Platform Engineer",
+      },
+    ]);
+  });
+
+  test("accepts position identifier and name write boundaries", async () => {
+    const { service } = createCommand();
+    const accepted = await service.setPosition({
+      posCode: "C".repeat(64),
+      posName: "N".repeat(128),
+      status: PositionStatus.Enable,
+    });
+    expect(accepted).toMatchObject({ changed: true });
+  });
+
+  test.each([
+    ["blank identifier", { posCode: "   ", posName: "Valid name" }],
+    ["blank name", { posCode: "VALID", posName: "   " }],
+    ["65-character identifier", { posCode: "C".repeat(65), posName: "Valid name" }],
+    ["129-character name", { posCode: "VALID", posName: "N".repeat(129) }],
+  ])("rejects %s without partial facts", async (_scenario, input) => {
+    const { service } = createCommand();
+    const beforeRejected = await facts();
+    const error = await failure(() => service.setPosition({
+      ...input,
+      status: PositionStatus.Enable,
+    }));
+    expect(error).toBeDefined();
+    expect(await facts()).toEqual(beforeRejected);
+  });
+
+  test("treats a normalized equivalent partial update as no business change", async () => {
+    await seedPosition();
+    const { service } = createCommand();
+    const before = await facts();
+
+    const result = await service.updatePosition("POSITION", {
+      posCode: "  POSITION  ",
+      posName: "  POSITION  ",
+    });
+
+    expect(result).toEqual({ changed: false, result: null });
+    expect(await facts()).toEqual(before);
+  });
+
   for (const secondOperation of ["status", "profile"] as const) {
     test(`a competing ${secondOperation} command observes committed locked status and preserves other fields`, async () => {
       await seedPosition();
@@ -306,8 +387,8 @@ describe("Position mutations through production PostgreSQL UnitOfWork", () => {
     await service.deletePosition("OCCUPIED");
     const before = await facts();
     for (const command of [
-      () => service.setPosition({ posCode: "OCCUPIED", posName: "New", status: PositionStatus.Enable }),
-      () => service.updatePosition("POSITION", { posCode: "OCCUPIED" }),
+      () => service.setPosition({ posCode: "  OCCUPIED  ", posName: "New", status: PositionStatus.Enable }),
+      () => service.updatePosition("POSITION", { posCode: "  OCCUPIED  " }),
     ]) {
       const error = await failure(command);
       expect(error).toBeInstanceOf(PositionCodeExistsError);

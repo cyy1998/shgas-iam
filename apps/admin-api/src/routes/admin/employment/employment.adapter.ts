@@ -87,7 +87,11 @@ export function createEmploymentAdapter(deps: CreateEmploymentAdapterDeps) {
       const detail = await deps.employmentService.getEmploymentDetailByIdForAdmin(id, authorization);
       return toEmploymentDetailVo(
         detail,
-        authorization.getAllowedActions({ status: detail.status, isPrimary: detail.isPrimary }),
+        authorization.getAllowedActions({
+          status: detail.status,
+          isPrimary: detail.isPrimary,
+          userStatus: detail.userStatus,
+        }),
       );
     },
   });

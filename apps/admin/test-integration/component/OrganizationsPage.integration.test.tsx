@@ -200,8 +200,8 @@ describe('OrganizationsPage mutation results through the organization service', 
     const initialReads = reads.children.mock.calls.length;
     await user.click(screen.getByRole('button', { name: '+ 新建根组织' }));
     const dialog = within(await screen.findByRole('dialog'));
-    await user.type(dialog.getAllByRole('textbox')[0], 'NEW');
-    await user.type(dialog.getAllByRole('textbox')[1], '新组织');
+    await user.type(dialog.getAllByRole('textbox')[0], '  NEW  ');
+    await user.type(dialog.getAllByRole('textbox')[1], '  新组织  ');
     await user.click(dialog.getAllByRole('combobox')[1]);
     expect(
       screen.queryByText('暂停', {
@@ -217,7 +217,13 @@ describe('OrganizationsPage mutation results through the organization service', 
     await user.click(dialog.getByRole('button', { name: '确 定' }));
     expect(await screen.findByText('创建成功')).toBeInTheDocument();
     expect(requests).toMatchObject([
-      { '0': { orgCode: 'NEW', status: OrganizationStatus.Enable } },
+      {
+        '0': {
+          orgCode: 'NEW',
+          orgName: '新组织',
+          status: OrganizationStatus.Enable,
+        },
+      },
     ]);
     await waitFor(() =>
       expect(reads.children.mock.calls.length).toBeGreaterThan(initialReads),
@@ -247,6 +253,25 @@ describe('OrganizationsPage mutation results through the organization service', 
       );
     },
   );
+  it('normalizes an edited organization name before submitting', async () => {
+    const requests = mutation('update');
+    const { user } = await page();
+    await user.click(screen.getByRole('button', { name: /编\s*辑/ }));
+    const dialog = within(await screen.findByRole('dialog'));
+    const nameInput = dialog.getByRole('textbox', { name: '组织名称' });
+    await user.clear(nameInput);
+    await user.type(nameInput, '  Renamed organization  ');
+    await user.click(dialog.getByRole('button', { name: '确 定' }));
+    expect(await screen.findByText('更新成功')).toBeInTheDocument();
+    expect(requests).toMatchObject([
+      {
+        '0': {
+          orgCode: 'ROOT-A',
+          data: { orgName: 'Renamed organization' },
+        },
+      },
+    ]);
+  });
   it('includes an explicitly changed edit status', async () => {
     const requests = mutation('update');
     const { user } = await page();

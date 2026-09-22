@@ -5,6 +5,7 @@ import { join } from "node:path";
 import { describe, expect, test } from "bun:test";
 import { parseAgentRole } from "../sandcastle/agents";
 import { prepareCodexAuth } from "../sandcastle/auth";
+import { command, deleteMergedTicketBranch } from "../sandcastle/commands";
 import { parsePlan, runWorkflow } from "../sandcastle/workflow";
 
 function ticket(number: number): Ticket {
@@ -30,6 +31,58 @@ function deferred<T>() {
   });
   return { promise, resolve, reject };
 }
+
+describe("Sandcastle merged ticket cleanup", () => {
+  test.each(["merged", "unmerged", "advanced", "checked-out", "other-branch"])("handles %s branches without losing recovery work", async (scenario) => {
+    const directory = await mkdtemp(join(tmpdir(), "iam-afk-branch-test-"));
+    const git = (...args: string[]) => command("git", args, directory);
+    const branch = scenario === "other-branch" ? "codex/feature" : "codex/sandcastle/issue-42";
+    try {
+      await git("init", "--initial-branch=main");
+      await git("config", "user.name", "Sandcastle test");
+      await git("config", "user.email", "sandcastle@example.invalid");
+      await git("config", "commit.gpgsign", "false");
+      await git("config", "core.hooksPath", join(directory, "no-hooks"));
+      await git("commit", "--allow-empty", "-m", "base");
+      await git("switch", "-c", branch);
+      await git("commit", "--allow-empty", "-m", "ticket");
+      const candidate = await git("rev-parse", "HEAD");
+      await git("switch", "main");
+      if (scenario !== "unmerged")
+        await git("merge", "--ff-only", branch);
+      if (scenario === "advanced") {
+        await git("switch", branch);
+        await git("commit", "--allow-empty", "-m", "new recovery work");
+        await git("switch", "main");
+      }
+      if (scenario === "checked-out")
+        await git("worktree", "add", join(directory, "ticket-worktree"), branch);
+      const before = await git("rev-parse", `refs/heads/${branch}`);
+      const target = await git("rev-parse", "HEAD");
+      let caught: unknown;
+      try {
+        await deleteMergedTicketBranch(directory, branch, candidate);
+      }
+      catch (error) {
+        caught = error;
+      }
+      const remaining = await git("for-each-ref", "--format=%(objectname)", `refs/heads/${branch}`);
+      const afterTarget = await git("rev-parse", "HEAD");
+      expect(afterTarget).toBe(target);
+      if (scenario === "merged") {
+        expect(caught).toBeUndefined();
+        expect(remaining).toBe("");
+      }
+      else {
+        expect(caught).toBeInstanceOf(Error);
+        expect(remaining).toBe(before);
+      }
+    }
+    finally {
+      await rm(directory, { recursive: true, force: true });
+    }
+  });
+});
 
 describe("Sandcastle account configuration", () => {
   test("uses CODEX_HOME credentials when the template leaves CODEX_AUTH_FILE blank", async () => {

@@ -73,7 +73,8 @@ Generic operation gate 覆盖 `admin.organizationResponsibility.*` 的 HR operat
 - 禁止先取全局页再在内存删除越界项；那会造成空洞页、错误 cursor 和存在性泄露。
 - target-scoped list 的越界 target 与 global search 的越界 filters 返回空结果；Assignment detail 任一端越界返回 404。
 - Ended Assignment 使用 holder Employment 与 target Organization 当前保留的组织关系判断，不保存授权或路径快照。
-- 读取继续执行现有 Assignment Integrity fail-closed 检查。
+- Ended Assignment 可以读取仍存在但已软删除的关联 User、Position、holder/target Organization 及其保留的组织路径，使用当前名称，不保存任命时快照。真正物理缺失的关联对象或不完整路径仍按完整性错误失败；Open Assignment 继续拒绝软删除引用。
+- 历史可读性不扩大 HR scope。当前 scope resolver 排除软删除 Organization，因此删除任一端组织后，纯 HR 可能失去该历史的读取能力；完整管理员仍可读取保留的历史。
 
 ### 创建
 
@@ -98,6 +99,8 @@ HR scope 仍在事务外按请求时 PostgreSQL 事实解析，再传入事务�
 - 无有效 scope 继续 fail closed；mixed `iam:admin` + `iam:hr-admin` 继续得到 full capability。
 
 创建成功返回 `{changed:true,result:{id}}`，Pause、Resume、End 返回 `{changed,result:null}`；REST 保留 envelope，tRPC 直接返回业务结果。列表和各嵌入入口统一区分已修改与无需修改，并刷新事实。
+
+Admin Assignment view/detail 在 `holder.user`、`holder.position`、`holder.organization`、`targetOrganization` 及 `fullPath` 各节点上显式返回 `isDelete`。列表与详情使用这些字段标注已删除的关联名称；Ended 历史保持只读。
 
 Admin Assignment view/detail 返回服务端计算的 `allowedActions.pause/resume/end`。React module 不再只根据 status 推断按钮；按钮使用 `allowedActions`，mutation 后重新加载列表和详情。服务端每次 mutation 仍重新授权，响应 capability 不是凭据。
 

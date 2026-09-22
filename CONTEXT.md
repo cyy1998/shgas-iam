@@ -55,6 +55,10 @@ _Avoid_: unbounded filter, unbounded result set, caller-controlled query cost
 自身未删除、状态为 Enable 且服务端观察时刻位于闭区间 `[startTime, endTime]` 内的 Privilege Delegation；其引用对象的 Pause 或 Disable 状态以及委托人当时是否拥有该 Privilege 都不参与判定。
 _Avoid_: effective authorization, currently authorized delegation
 
+**Open Privilege Delegation**:
+自身未删除且尚未结束、状态为 Enable 或 Pause 的 Privilege Delegation；是否已到开始时间或超过业务期间不改变其未结束的生命周期事实。它会阻止委托人和受托人的 User Deletion，只有结束委托后才释放这项删除约束。
+_Avoid_: Current Privilege Delegation, enabled-only deletion blocker, automatic delegation expiry
+
 **Privilege Delegation Lifecycle**:
 Privilege Delegation 创建时为 Enable，未结束时允许在 Enable 与 Pause 间切换并修改期间或说明；委托人、受托人、组织范围及权限绑定创建后不可修改。Disable 是不可重开的结束状态，结束后不能修改业务字段，纯重复结束保持原有事实。
 _Avoid_: mutable delegation bindings, delegation reopening, repeated end time rewrite
@@ -144,7 +148,7 @@ Organization Responsibility Assignment 创建时为 Enable，Open 期间可在 E
 _Avoid_: scheduled assignment, arbitrary status update, assignment deletion
 
 **Organization Responsibility Assignment History**:
-普通历史由 Assignment 的创建时间、结束时间及当前或最终状态表达，不保存可按任意历史时刻查询的 Pause/Resume 状态区间。每条直接或级联状态转换都以统一业务时刻、触发原因和目标写入该 Assignment 自身的审计记录；级联仍归因于发起业务事务的 IAM Admin，只有系统自主发起时 actor 才是 system，且只有 IAM Admin 可查看全部 Open 与 Ended 记录及其审计，Internal、User Profile 与协议投影只消费 Effective 事实。
+普通历史由 Assignment 的创建时间、结束时间及当前或最终状态表达，不保存可按任意历史时刻查询的 Pause/Resume 状态区间；Ended 记录继续引用关联对象保留的当前名称，关联 User、Organization 或 Position 软删除后仍可读取并标明删除状态，不保存任命发生时的名称快照。每条直接或级联状态转换都以统一业务时刻、触发原因和目标写入该 Assignment 自身的审计记录；级联仍归因于发起业务事务的 IAM Admin，只有系统自主发起时 actor 才是 system，且只有 IAM Admin 可查看全部 Open 与 Ended 记录及其审计，Internal、User Profile 与协议投影只消费 Effective 事实。
 _Avoid_: bitemporal assignment history, retroactive responsibility reconstruction
 
 **Open Organization Responsibility Assignment**:
@@ -172,7 +176,7 @@ Open Assignment 与其 Employment、目标 Organization 本身或 Type 基数不
 _Avoid_: paused assignment, automatic read repair, effective orphan responsibility
 
 **Employment**:
-用户以某个 Position 在某个 Organization 持有的一次任职期事实；常规 Admin 管理不预约未来任职，也不回溯或改写任职期边界。暂停可在同一 Employment 上恢复，结束后不可重开；返聘、重新任职或转岗产生新 Employment，它只描述组织归属与岗位身份，不表示组织责任或直接授予角色与权限。
+用户以某个 Position 在某个 Organization 持有的一次任职期事实；未删除用户的 Enable、Pause 状态允许新增任职，Disable 状态禁止新增，常规 Admin 管理不预约未来任职，也不回溯或改写任职期边界。暂停可在同一 Employment 上恢复，结束后不可重开；返聘、重新任职或转岗产生新 Employment，它只描述组织归属与岗位身份，不表示组织责任或直接授予角色与权限。
 _Avoid_: reusable employment slot, Organization Responsibility Assignment, Role Assignment
 
 **Open Employment**:
@@ -188,11 +192,11 @@ _Avoid_: employment deletion, reversible disable
 _Avoid_: ended employment, inferred employment history
 
 **Employment Lifecycle**:
-Employment 在 Open 期间只能通过显式命令暂停、恢复或结束；暂停与恢复可逆，结束不可逆，已完成的同一命令重试是不改写时间或审计的幂等操作。
+Employment 在 Open 期间只能通过显式命令暂停、恢复或结束；暂停与恢复可逆，结束不可逆，已完成的同一命令重试是不改写时间或审计的幂等操作。User Disable 不自动结束既有 Employment，也不额外禁止对已有 Open Employment 修改说明、暂停、恢复、结束或管理 Primary Employment。
 _Avoid_: generic status update, arbitrary status transition
 
 **Employment Transfer**:
-在同一时刻结束旧 Employment 并以新组织或岗位创建新 Employment 的原子业务过程；新任职始终启用，即使旧任职曾暂停，且旧任职的组织责任不继承。管理员必须在转岗中明确选择新任职是否为 Primary Employment，不从旧任职默认继承。
+在同一时刻结束旧 Employment 并以新组织或岗位创建新 Employment 的原子业务过程；User 处于 Disable 时禁止转岗，新任职始终启用，即使旧任职曾暂停，且旧任职的组织责任不继承。管理员必须在转岗中明确选择新任职是否为 Primary Employment，不从旧任职默认继承。
 _Avoid_: in-place employment update, pause-preserving transfer
 
 **Primary Employment**:
@@ -252,7 +256,7 @@ HR Administrator 为状态为 Enable 的 HR-Managed User 生成一次性展示�
 _Avoid_: administrator-selected password, Account Recovery, profile edit
 
 **HR User Status Administration**:
-HR Administrator 修改 HR-Managed User 全局状态的账号动作；只有目标 User 的每一条 Open Employment 都位于当前 HR Administration Scope 内时才允许，已结束历史不参与判断。它允许既有 User Status 之间的变更，但不授权 User Deletion。
+HR Administrator 修改 HR-Managed User 全局状态的账号动作；只有目标 User 的每一条 Open Employment 都位于当前 HR Administration Scope 内时才允许，已结束历史不参与判断。它允许既有 User Status 之间的变更，但不授权 User Deletion，也不允许仅凭已结束历史恢复没有 Open Employment 的停用账号；这类账号先由完整管理员恢复状态，再进入 HR 返聘流程。
 _Avoid_: any-employment status authority, historical-employment scope check, User Deletion
 
 **HR User Resignation**:
@@ -280,7 +284,7 @@ HR Administrator 可以为 HR Administration Scope 内的 Open Employment 设置
 _Avoid_: scope-local primary invariant, out-of-scope employment administration
 
 **HR Employment Administration**:
-HR Administrator 可以为任意未删除 User 在 HR Administration Scope 内创建 Employment，并对 HR-Visible Open Employment 修改描述、暂停、恢复或结束；Position 从全局目录选择，已结束 Employment 保持只读。Employment Transfer 的源 Employment 与目标 Organization 都必须位于当前范围并集内，可以跨 HR Administration Scope Root，并继续遵守 HR Employment Responsibility Cascade 与 HR Primary Employment Administration。
+HR Administrator 可以为未删除且状态不为 Disable 的 User 在 HR Administration Scope 内创建 Employment，并对 HR-Visible Open Employment 修改描述、暂停、恢复或结束；Position 从全局目录选择，已结束 Employment 保持只读。Employment Transfer 的源 Employment 与目标 Organization 都必须位于当前范围并集内，可以跨 HR Administration Scope Root，并继续遵守 HR Employment Responsibility Cascade 与 HR Primary Employment Administration。
 _Avoid_: user provisioning, out-of-scope employment mutation, single-root transfer
 
 **ORCAS Session Identity**:
@@ -338,6 +342,10 @@ _Avoid_: configuration freeze, protocol disablement, maintenance bypass
 **Client Disablement**:
 Client 被明确行政停用并拒绝在线协议流量的状态；配置和既有关系保留，恢复不会续期，永久终止由显式撤销表达。
 _Avoid_: Client Maintenance, configuration removal, protocol reset
+
+**Client Deletion**:
+在 Client 已不存在任何未删除 Role 后软删除该 Client 的管理操作；Role 处于 Enable、Pause 或 Disable 都会阻止删除，必须先按各自生命周期处理角色分配和 Role。它不通过删除 Client 隐式级联删除角色或角色分配，也不同于可恢复的 Client Disablement。
+_Avoid_: Client Disablement, implicit role cascade, enabled-only role blocker
 
 **Client Maintenance Unavailable**:
 Client Snapshot 明确表示目标 Client 处于 Client Maintenance 时，IAM 在线协议入口产生的可重试暂态结果。配置进入维护本身不终止会话或协议产物；普通访问遇到维护不清除仍可能恢复有效的 Cookie。兑换若已完成认证并定位原 ClientSession，后续失败仍按该兑换操作的既定补偿规则终止原实例，不能由“维护可恢复”推导豁免；认证前拒绝不消费 Code 或作用于会话。Custom SSO 将维护映射为 HTTP `503`、稳定错误码 `AUTH.MAINTENANCE` 和可选重试提示，OIDC 使用相应 endpoint 的 `temporarily_unavailable` 或 HTTP `503` 语义。无法取得可信 Client Snapshot 属于通用暂态不可用，不得冒充明确的 Client Maintenance。
@@ -411,8 +419,12 @@ _Avoid_: open flow, public password helper
 管理员原子地结束用户全部 Open Employment 并禁用其 IAM 账号，提交后撤销离职前 IAM 活跃 Session 的业务流程；撤销失败不回滚已生效的离职结果。合法重复执行属于无业务变化，仍保留离职意图并尝试完成遗留 Session 撤销，不改写既有结束时间，迟到的撤销不终止恢复启用后新建立的 Session；它不同于普通任职变化、账号禁用或删除用户。
 _Avoid_: account disable, employment deletion, user deletion
 
+**User Disablement**:
+User 账号处于 Disable 的可恢复停用状态；处于该状态时不能新增 Employment 或转岗，恢复为 Enable 或 Pause 后可以按任职规则建立新任职。它不表示 User 的永久终态，不自动结束已有任职，也不赋予重新打开已结束 Employment 的能力。
+_Avoid_: permanent user end, User Deletion, Employment End
+
 **User Deletion**:
-在用户已不存在任何 Open Employment 后软删除其 IAM 账号；暂停任职仍会阻止删除，已结束的 Employment 与 Organization Responsibility Assignment 历史不会阻止并继续保留。它不替代 User Resignation，也不是普通账号禁用；普通账号 Disable 不改变 Organization Responsibility Assignment。
+在用户已不存在任何 Open Employment，且不再作为委托人或受托人被 Open Privilege Delegation 引用后软删除其 IAM 账号；暂停任职和未结束委托仍会阻止删除，已结束的 Employment 与 Organization Responsibility Assignment 历史不会阻止并继续保留。它不替代 User Resignation，也不是普通账号禁用，不隐式结束委托；普通账号 Disable 不改变 Organization Responsibility Assignment。
 _Avoid_: User Resignation, account disable, employment cascade deletion
 
 **OIDC Claims Snapshot**:

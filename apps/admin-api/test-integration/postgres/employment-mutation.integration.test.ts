@@ -4,6 +4,8 @@ import type { AdminApiPostgresTestHarness } from "./postgres-test-harness";
 import { randomUUID } from "node:crypto";
 import { createAdminApiRepositories } from "@admin-api/composition/repositories";
 import { createAdminApiUnitOfWork } from "@admin-api/composition/tx";
+import { createEmploymentAdapter } from "@admin-api/routes/admin/employment/employment.adapter";
+import { createEmploymentRoute } from "@admin-api/routes/admin/employment/employment.index";
 import { createAdminAuthorizationPolicy } from "@admin-api/services/admin-authorization/admin-authorization.policy";
 import { AdminMutationCommittedError } from "@admin-api/services/admin-mutation/admin-mutation";
 import { createEmploymentService } from "@admin-api/services/employment/employment.service";
@@ -15,6 +17,7 @@ import { createResignUserUseCase } from "@admin-api/use-cases/employment/resign-
 import { createTransferEmploymentUseCase } from "@admin-api/use-cases/employment/transfer-employment/transfer-employment.use-case";
 import { createManageOrganizationResponsibilityAssignmentLifecycleUseCase } from "@admin-api/use-cases/organization-responsibility/manage-assignment-lifecycle/manage-assignment-lifecycle.use-case";
 import { BadRequestError } from "@iam/api-core/errors";
+import { createErrorHandler } from "@iam/api-core/middlewares";
 import { createSubjectAccessBarrier, createSubjectAccessLifecycle } from "@iam/api-core/subject-access";
 import { createInMemorySubjectAccessStore } from "@iam/api-core/subject-access/testing";
 import { mapUnitOfWork } from "@iam/api-core/uow";
@@ -41,8 +44,10 @@ import {
 } from "@iam/db/schema";
 import { EmploymentAlreadyExistsError, EmploymentNotEditableError } from "@iam/domain/employment";
 import { createSubjectAccessTransitionRepository } from "@iam/user-profile-read-model/subject-access-transition";
+import { fetchRequestHandler } from "@trpc/server/adapters/fetch";
 import { afterAll, beforeAll, beforeEach, describe, expect, mock, test } from "bun:test";
 import { eq } from "drizzle-orm";
+import { Hono } from "hono";
 import { withTestFullOrganizationResponsibilityAuthorization } from "../helpers/admin-authorization";
 import { createAdminApiPostgresTestHarness } from "./postgres-test-harness";
 
@@ -187,6 +192,22 @@ function commands(
   };
 }
 
+async function employmentAuthorization(organizationId: number, scoped: boolean) {
+  return createAdminAuthorizationPolicy({
+    logger: { warn: mock() },
+    hrAdministrationScopeResolver: {
+      resolveForActor: async () => ({
+        rootOrganizationIds: [organizationId],
+        organizationIds: [organizationId],
+      }),
+    },
+  }).getEmploymentAuthorization({
+    userId: 99,
+    username: "actor",
+    roles: [scoped ? "iam:hr-admin" : "iam:admin"],
+  });
+}
+
 async function seed(withEmployment = true) {
   const [user] = await harness.db
     .insert(users)
@@ -274,6 +295,173 @@ async function waitForLock(table: string, minimum = 1) {
 }
 
 describe("Employment mutations through production PostgreSQL UnitOfWork", () => {
+  for (const scoped of [false, true]) {
+    for (const status of [UserStatus.Enable, UserStatus.Pause, UserStatus.Disable]) {
+      test(`New tenures by ${scoped ? "HR" : "Full"} respect User status ${status}`, async () => {
+        const fixture = await seed(false);
+        await harness.db.update(users).set({ status }).where(eq(users.id, fixture.user.id));
+        const authorization = await employmentAuthorization(fixture.org.id, scoped);
+        const subject = commands();
+        const before = await facts();
+        const operation = () => subject.create.execute(
+          { username: "holder", orgCode: "ORG", posCode: "POS", isPrimary: true },
+          { authorization },
+        );
+        if (status === UserStatus.Disable) {
+          const error = await failure(operation);
+          expect(error).toMatchObject({ httpStatus: 409, message: "用户已停用，不能新增任职或转岗" });
+          const after = await facts();
+          expect(after).toEqual(before);
+          expect(subject.enqueueRebuildJobs).not.toHaveBeenCalled();
+        }
+        else {
+          const result = await operation();
+          expect(result).toEqual({ changed: true, result: { id: expect.any(Number) } });
+          const after = await facts();
+          expect(after.employments).toMatchObject([{
+            id: result.result.id,
+            status: EmploymentStatus.Enable,
+            isPrimary: true,
+            endTime: null,
+          }]);
+          expect(after.users).toEqual(before.users);
+          expect(after.audits).toMatchObject([{ action: "admin.employment.create" }]);
+          expect(after.dirty).toHaveLength(1);
+          await harness.db.insert(positions).values({ posCode: "DEST", posName: "Destination" });
+          const transferred = await subject.transfer.execute({
+            employmentId: result.result.id,
+            newOrgCode: "ORG",
+            newPosCode: "DEST",
+            isPrimary: true,
+          }, { authorization });
+          const afterTransfer = await facts();
+          expect(afterTransfer.users).toEqual(before.users);
+          expect(afterTransfer.employments).toMatchObject([
+            { id: result.result.id, status: EmploymentStatus.Disable, endTime: now, isPrimary: false },
+            { id: transferred.result.id, status: EmploymentStatus.Enable, endTime: null, isPrimary: true },
+          ]);
+        }
+      });
+    }
+    test(`Transfer ${scoped ? "HR" : "Full"} rejects a disabled User without changing any tenure, responsibility, audit or dirty fact`, async () => {
+      const fixture = await seed();
+      const id = fixture.employment!.id;
+      await seedAssignments(id, fixture.org.id);
+      await harness.db.update(employments).set({ isPrimary: true }).where(eq(employments.id, id));
+      await harness.db.update(users).set({ status: UserStatus.Disable }).where(eq(users.id, fixture.user.id));
+      const [otherPosition] = await harness.db.insert(positions).values([
+        { posCode: "OTHER", posName: "Other primary" },
+        { posCode: "DEST", posName: "Destination" },
+      ]).returning();
+      await harness.db.insert(employments).values({ ...fixture.value, posId: otherPosition!.id, isPrimary: true });
+      const authorization = await employmentAuthorization(fixture.org.id, scoped);
+      const subject = commands();
+      const before = await facts();
+      const error = await failure(() => subject.transfer.execute({ employmentId: id, newOrgCode: "ORG", newPosCode: "DEST", isPrimary: true }, { authorization }));
+      expect(error).toMatchObject({ httpStatus: 409, message: "用户已停用，不能新增任职或转岗" });
+      const after = await facts();
+      expect(after).toEqual(before);
+      expect(subject.enqueueRebuildJobs).not.toHaveBeenCalled();
+    });
+  }
+
+  for (const scoped of [false, true]) {
+    test(`${scoped ? "HR" : "Full"} still manages a disabled User's existing Open Employment and cannot reopen it`, async () => {
+      const fixture = await seed();
+      const id = fixture.employment!.id;
+      await seedAssignments(id, fixture.org.id);
+      await harness.db.update(users).set({ status: UserStatus.Disable }).where(eq(users.id, fixture.user.id));
+      const authorization = await employmentAuthorization(fixture.org.id, scoped);
+      const subject = commands();
+      const edit = await subject.profile.updateEmployment(id, { description: "Maintained while disabled" }, undefined, authorization);
+      expect(edit.changed).toBe(true);
+      const pause = await subject.availability.execute({ employmentId: id, command: "pause" }, { authorization });
+      expect(pause.changed).toBe(true);
+      const set = await subject.primary.execute({ employmentId: id, command: "set" }, { authorization });
+      expect(set.changed).toBe(true);
+      const clear = await subject.primary.execute({ employmentId: id, command: "clear" }, { authorization });
+      expect(clear.changed).toBe(true);
+      const resume = await subject.availability.execute({ employmentId: id, command: "resume", expectedAncestorOrgCode: "ORG" }, { authorization });
+      expect(resume.changed).toBe(true);
+      const ended = await subject.end.execute({ employmentId: id }, { authorization });
+      expect(ended.changed).toBe(true);
+      const before = await facts();
+      expect(before.users[0]!.status).toBe(UserStatus.Disable);
+      expect(before.employments[0]).toMatchObject({ description: "Maintained while disabled", status: EmploymentStatus.Disable, endTime: now, isPrimary: false });
+      expect(before.assignments.every(row => row.status === AssignmentStatus.Disable)).toBe(true);
+      const error = await failure(() => subject.availability.execute({ employmentId: id, command: "resume", expectedAncestorOrgCode: "ORG" }, { authorization }));
+      expect(error).toBeInstanceOf(EmploymentNotEditableError);
+      const after = await facts();
+      expect(after).toEqual(before);
+    });
+  }
+
+  for (const protocol of ["REST", "tRPC"] as const) {
+    test(`${protocol} uses the current User status for stale create/transfer requests and returns a stable rejection`, async () => {
+      const fixture = await seed();
+      await seedAssignments(fixture.employment!.id, fixture.org.id);
+      await harness.db.insert(positions).values({ posCode: "DEST", posName: "Destination" });
+      const subject = commands();
+      const adapter = createEmploymentAdapter({
+        employmentService: subject.profile,
+        createEmployment: subject.create,
+        transferEmployment: subject.transfer,
+        changeEmploymentAvailability: subject.availability,
+        endEmployment: subject.end,
+        managePrimaryEmployment: subject.primary,
+        resignUser: subject.resign,
+      });
+      const app = new Hono<{ Variables: {
+        adminAuthorizationPolicy: ReturnType<typeof createAdminAuthorizationPolicy>;
+        userId: number;
+        username: string;
+        userDetailDto: { roles: string[] };
+      }; }>();
+      app.use("*", async (context, next) => {
+        context.set("userId", fixture.user.id);
+        context.set("username", "actor");
+        context.set("userDetailDto", { roles: ["iam:admin"] });
+        context.set("adminAuthorizationPolicy", createAdminAuthorizationPolicy({
+          logger: { warn: mock() },
+          hrAdministrationScopeResolver: { resolveForActor: async () => null },
+        }));
+        await next();
+      });
+      app.onError(createErrorHandler({ error: mock(), warn: mock(), info: mock() }));
+      app.route("/admin", createEmploymentRoute(adapter));
+      app.all("/rpc/*", context => fetchRequestHandler({ endpoint: "/rpc", req: context.req.raw, router: adapter.employmentAdminRouter, createContext: () => ({ hono: context }) }));
+      const visible = await app.request(`/admin/employments/${fixture.employment!.id}`);
+      const visibleBody = await visible.json();
+      expect(visibleBody).toMatchObject({ data: { allowedActions: { transfer: { allowed: true } } } });
+      await harness.db.update(users).set({ status: UserStatus.Disable }).where(eq(users.id, fixture.user.id));
+      const before = await facts();
+      for (const command of ["create", "transfer"] as const) {
+        const body = command === "create"
+          ? { username: "holder", orgCode: "ORG", posCode: "DEST", isPrimary: true }
+          : { newOrgCode: "ORG", newPosCode: "DEST", isPrimary: true };
+        const path = protocol === "REST"
+          ? command === "create" ? "/admin/employments" : `/admin/employments/${fixture.employment!.id}/transfer`
+          : `/rpc/${command}`;
+        const response = await app.request(path, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(protocol === "tRPC" && command === "transfer" ? { id: fixture.employment!.id, data: body } : body) });
+        const result = await response.json();
+        expect(response.status).toBe(409);
+        expect(result).toMatchObject(protocol === "REST"
+          ? { code: "EMPLOYMENT.USER_DISABLED" }
+          : { error: { data: { code: "CONFLICT", serviceCode: "EMPLOYMENT.USER_DISABLED" } } });
+        const after = await facts();
+        expect(after).toEqual(before);
+      }
+      const refreshed = await app.request(`/admin/employments/${fixture.employment!.id}`);
+      const refreshedBody = await refreshed.json();
+      expect(refreshedBody).toMatchObject({ data: { allowedActions: {
+        transfer: { allowed: false, reason: "USER_DISABLED" },
+        pause: { allowed: true },
+        end: { allowed: true },
+        setPrimary: { allowed: true },
+      } } });
+    });
+  }
+
   test("Primary no-ops audit intent without rewriting Employment or registering dirty", async () => {
     const fixture = await seed();
     const subject = commands();

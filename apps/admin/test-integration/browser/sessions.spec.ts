@@ -1092,7 +1092,6 @@ test('single-session action protects the current session and confirms the third-
   await expect(confirm).toContainText('确认强制下线本次会话？');
   await expect(confirm).toContainText('不能保证第三方自行建立的本地会话退出');
   await expect(confirm).toContainText('强制下线不会阻止未来重新登录');
-  await expect(confirm).toContainText('密码重置、账号暂停或结束');
   await expect(confirm).not.toContainText('关联应用');
   await expect(confirm.getByRole('textbox')).toHaveCount(0);
   expect(revokeInputs).toHaveLength(0);
@@ -1152,7 +1151,6 @@ test('another user can be revoked from any row with point-in-time and follow-up 
         '不能保证第三方自行建立的本地会话退出',
       );
       await expect(dialog).toContainText('不会阻止未来重新登录');
-      await expect(dialog).toContainText('密码重置、账号暂停或结束');
       await expect(dialog.getByRole('textbox')).toHaveCount(0);
     },
   });
@@ -1206,7 +1204,6 @@ test('self user revoke keeps the unified action label and explains the current-r
   await expect(confirm).toContainText('开始时已索引');
   await expect(confirm).toContainText('不能保证第三方自行建立的本地会话退出');
   await expect(confirm).toContainText('不会阻止未来重新登录');
-  await expect(confirm).toContainText('密码重置、账号暂停或结束');
   const listRequestCount = listInputs.length;
 
   await confirmSessionRevoke(confirm);

@@ -62,6 +62,7 @@ describe("createOrganizationService", () => {
       recordChanges: mock(async () => undefined),
     };
     const organizationRepository = {
+      getAnyOrganizationByCode: mock(async () => null),
       getOrganizationByCode: mock(async () => null),
       getOrganizationByCodeForAdmin: mock(async () => organization()),
       updateOrganizationByCode: mock(async () => organization()),

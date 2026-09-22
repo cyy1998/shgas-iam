@@ -9,6 +9,7 @@ export interface ClientSsoRepositoryPort {
   getDetail: (clientCode: string) => Promise<z.infer<typeof ClientSsoAdminDtoSchema> | null>;
   get: (clientCode: string) => Promise<ClientSsoRecord | null>;
   lock: (clientCode: string, includeDeleted?: boolean) => Promise<ClientSsoRecord | null>;
+  hasUndeletedRoles: (clientId: number) => Promise<boolean>;
   update: (clientCode: string, patch: ClientSsoStorageUpdate) => Promise<ClientSsoRecord | null>;
 }
 export interface ClientSsoTransactionPorts {

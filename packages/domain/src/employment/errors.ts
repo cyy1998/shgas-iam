@@ -36,3 +36,12 @@ export class EmploymentOrganizationScopeMismatchError extends DomainBusinessErro
     });
   }
 }
+
+export class EmploymentUserDisabledError extends DomainBusinessError {
+  constructor() {
+    super("用户已停用，不能新增任职或转岗", {
+      code: ApiErrorCode.EmploymentUserDisabled,
+      httpStatus: DomainHttpStatus.Conflict,
+    });
+  }
+}

@@ -16,7 +16,7 @@ import {
   type UserDetailVo,
 } from '@admin/services/user';
 import { ProDescriptions } from '@ant-design/pro-components';
-import { getUserStatusOptions, type UserStatus } from '@iam/contracts';
+import { getUserStatusOptions, UserStatus } from '@iam/contracts';
 import { Link, useAccess } from '@umijs/max';
 import {
   Alert,
@@ -184,7 +184,8 @@ function UserDetailDrawerContent({
     if (!detail) return;
     Modal.confirm({
       title: `删除用户 ${detail.name}？`,
-      content: '软删除后用户将不再可见。若用户存在活跃雇佣，将被拒绝。',
+      content:
+        '软删除后用户将不再可见。存在开放任职或未结束的权限委托时无法删除，请先处理相关关系。',
       okType: 'danger',
       onOk: async () => {
         try {
@@ -343,6 +344,7 @@ function UserDetailDrawerContent({
             open={employmentFormOpen}
             presetUsername={detail?.username}
             presetName={detail?.name}
+            presetUserStatus={detail?.status}
             onOpenChange={setEmploymentFormOpen}
             onSuccess={async () => {
               setEmploymentFormOpen(false);
@@ -537,6 +539,12 @@ function UserDetailDrawerContent({
                       <div style={{ marginBottom: 12, textAlign: 'right' }}>
                         <Button
                           type="primary"
+                          disabled={detail.status === UserStatus.Disable}
+                          title={
+                            detail.status === UserStatus.Disable
+                              ? '用户已停用，请由有权限的管理员恢复账号后再新增任职'
+                              : undefined
+                          }
                           onClick={() => setEmploymentFormOpen(true)}
                         >
                           + 新增雇佣

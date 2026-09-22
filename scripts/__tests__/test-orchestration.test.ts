@@ -778,7 +778,7 @@ describe("test orchestration", () => {
     expect(rootPackage.scripts["test:unit"])
       .toBe("turbo test:unit test:unit:root --concurrency=2");
     expect(rootPackage.scripts["test:unit:root"]).toBe(
-      "bun test --max-concurrency=2 scripts/__tests__/architecture-guard.test.ts scripts/__tests__/eslint-config-ownership.test.ts scripts/__tests__/test-orchestration.test.ts scripts/__tests__/tooling-contracts.test.ts scripts/__tests__/sandcastle.test.ts scripts/__tests__/sandcastle-review.test.ts",
+      "bun test --max-concurrency=2 scripts/__tests__/architecture-guard.test.ts scripts/__tests__/eslint-config-ownership.test.ts scripts/__tests__/test-orchestration.test.ts scripts/__tests__/tooling-contracts.test.ts scripts/__tests__/sandcastle.test.ts",
     );
     expect(rootPackage.scripts["test:integration:component"])
       .toBe("turbo test:integration:component --concurrency=2");

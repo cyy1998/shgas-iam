@@ -9,13 +9,13 @@ export enum UserStatus {
 export const userStatusToString: Record<UserStatus, string> = {
   [UserStatus.Enable]: "正常",
   [UserStatus.Pause]: "暂停",
-  [UserStatus.Disable]: "结束",
+  [UserStatus.Disable]: "停用",
 };
 
 export function getUserStatusOptions(): StatusOption[] {
   return [
     { label: "正常", value: UserStatus.Enable, color: "success" },
     { label: "暂停", value: UserStatus.Pause, color: "warning" },
-    { label: "结束", value: UserStatus.Disable, color: "default" },
+    { label: "停用", value: UserStatus.Disable, color: "default" },
   ];
 }

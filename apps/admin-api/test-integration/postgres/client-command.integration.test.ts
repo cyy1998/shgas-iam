@@ -3,14 +3,23 @@ import type { AdminApiPostgresTestHarness } from "./postgres-test-harness";
 import { createAdminApiRepositories } from "@admin-api/composition/repositories";
 import { createClientSsoManagement } from "@admin-api/composition/services/client-sso-management";
 import { createAdminApiUnitOfWork } from "@admin-api/composition/tx";
+import { createClientAdapter } from "@admin-api/routes/admin/client/client.adapter";
+import { createClientRoute } from "@admin-api/routes/admin/client/client.index";
 import { createClientService } from "@admin-api/services/client/client.service";
+import { createRoleService } from "@admin-api/services/role/role.service";
 import { BadRequestError } from "@iam/api-core/errors";
+import { createErrorHandler } from "@iam/api-core/middlewares";
 import { mapUnitOfWork } from "@iam/api-core/uow";
-import { ClientStatus } from "@iam/contracts";
+import { ApiErrorCode, ClientStatus, RoleAssignmentTargetType, RoleStatus } from "@iam/contracts";
 import { extractPostgresError } from "@iam/db/postgres-error";
-import { auditLogs, clients, userProfileDirty } from "@iam/db/schema";
+import { auditLogs, clients, positions, roles, userProfileDirty } from "@iam/db/schema";
+import { roleAssignments } from "@iam/db/schema/role-assignments";
 import { ClientCodeExistsError, ClientCodeImmutableError, ClientNotFoundError } from "@iam/domain/client";
+import { RoleHasAssignmentError } from "@iam/domain/role";
+import { fetchRequestHandler } from "@trpc/server/adapters/fetch";
 import { afterAll, beforeAll, beforeEach, describe, expect, mock, test } from "bun:test";
+import { Hono } from "hono";
+import { addTestAdminAuthorizationMiddleware } from "../helpers/admin-authorization";
 import { createAdminApiPostgresTestHarness } from "./postgres-test-harness";
 
 let harness: AdminApiPostgresTestHarness;
@@ -19,7 +28,7 @@ beforeAll(async () => {
 });
 beforeEach(async () => {
   await harness.reset();
-  await harness.sql`truncate table client restart identity cascade`;
+  await harness.sql`truncate table role_assignment, role, client restart identity cascade`;
 });
 afterAll(async () => {
   await harness?.close();
@@ -44,6 +53,20 @@ function createCommand(
     clock: { nowDate: () => new Date("2026-09-07T00:00:00Z") },
     userProfileJobProducer: { enqueueRebuildJobs },
   });
+  const management = createClientSsoManagement({
+    db: harness.db,
+    logger: { warn, error: mock() },
+    invalidation: { invalidateClient },
+    sessionTermination: { revokeClientSessions: revokeClientAllProtocols },
+  });
+  const roleService = createRoleService({
+    roleRepository: createAdminApiRepositories(harness.db).role,
+    uow: mapUnitOfWork(uow, tx => ({
+      roleRepository: tx.repositories.role,
+      auditService: tx.auditService,
+      userProfileInvalidation: tx.userProfileInvalidation,
+    })),
+  });
   const service = createClientService({
     clientRepository: createAdminApiRepositories(harness.db).client,
     clientCache: {
@@ -52,13 +75,7 @@ function createCommand(
     },
     clientRuntimeInvalidation: { invalidateClient },
     clientMutationLogger: { error: mock(() => undefined) },
-    management: createClientSsoManagement({
-      db: harness.db,
-      logger: { warn, error: mock() },
-      invalidation: { invalidateClient },
-
-      sessionTermination: { revokeClientSessions: revokeClientAllProtocols },
-    }).service,
+    management: management.service,
     passwordHasher: { hashSecret: async secret => `hash-${secret}` },
     random: { customSsoClientSecret: () => "custom-secret", oidcClientSecret: () => "oidc-secret" },
     uow: mapUnitOfWork(uow, tx =>
@@ -67,7 +84,7 @@ function createCommand(
         auditService: tx.auditService,
       })),
   });
-  return { service, invalidateClient, revokeClientAllProtocols, enqueueRebuildJobs, warn };
+  return { service, management, roleService, invalidateClient, revokeClientAllProtocols, enqueueRebuildJobs, warn };
 }
 
 function input(clientCode = "portal") {
@@ -104,6 +121,125 @@ async function failure(operation: () => Promise<unknown>) {
 }
 
 describe("Client commands through production PostgreSQL UnitOfWork", () => {
+  test.each([
+    ["Enable", RoleStatus.Enable],
+    ["Pause", RoleStatus.Pause],
+    ["Disable", RoleStatus.Disable],
+  ])("an undeleted %s Role blocks Client deletion without changing facts or running follow-up effects", async (_name, status) => {
+    const client = await seedClient();
+    const roleRows = await harness.db.insert(roles).values({
+      clientId: client.id,
+      roleCode: "portal:reader",
+      roleName: "Reader",
+      status,
+    }).returning();
+    const { service, invalidateClient, revokeClientAllProtocols, enqueueRebuildJobs } = createCommand();
+    const before = await facts();
+    const error = await failure(() => service.deleteClient(client.clientCode));
+    expect(error).toMatchObject({ code: ApiErrorCode.ClientHasRole, httpStatus: 409 });
+    const after = await facts();
+    const remainingRoles = await harness.db.select().from(roles);
+    expect(after).toEqual(before);
+    expect(remainingRoles).toEqual(roleRows);
+    expect(invalidateClient).not.toHaveBeenCalled();
+    expect(revokeClientAllProtocols).not.toHaveBeenCalled();
+    expect(enqueueRebuildJobs).not.toHaveBeenCalled();
+  });
+
+  test("explicit Assignment and Role removal releases Client deletion while preserving Role history and other Clients' Roles", async () => {
+    await seedClient();
+    const other = await seedClient("other");
+    const [otherRole] = await harness.db.insert(roles).values({
+      clientId: other.id,
+      roleCode: "other:reader",
+      roleName: "Other reader",
+    }).returning();
+    await harness.db.insert(positions).values({ posCode: "READER", posName: "Reader" });
+    const { service, roleService, invalidateClient, revokeClientAllProtocols } = createCommand();
+    await roleService.createRole({ clientCode: "portal", roleCode: "portal:reader", roleName: "Reader", status: RoleStatus.Enable });
+    const assignment = await roleService.createAssignment("portal:reader", {
+      targetType: RoleAssignmentTargetType.Position,
+      posCode: "READER",
+    });
+    const before = await facts();
+    const rolesBefore = await harness.db.select().from(roles).orderBy(roles.id);
+    const assignmentsBefore = await harness.db.select().from(roleAssignments);
+    const clientError = await failure(() => service.deleteClient("portal"));
+    const roleError = await failure(() => roleService.deleteRole("portal:reader"));
+    expect(clientError).toMatchObject({ code: ApiErrorCode.ClientHasRole });
+    expect(roleError).toBeInstanceOf(RoleHasAssignmentError);
+    const afterRejection = await facts();
+    const rolesAfterRejection = await harness.db.select().from(roles).orderBy(roles.id);
+    const assignmentsAfterRejection = await harness.db.select().from(roleAssignments);
+    expect(afterRejection).toEqual(before);
+    expect(rolesAfterRejection).toEqual(rolesBefore);
+    expect(assignmentsAfterRejection).toEqual(assignmentsBefore);
+    expect(invalidateClient).not.toHaveBeenCalled();
+    expect(revokeClientAllProtocols).not.toHaveBeenCalled();
+
+    await roleService.deleteAssignment("portal:reader", assignment.result.id);
+    await roleService.deleteRole("portal:reader");
+    const result = await service.deleteClient("portal");
+    expect(result).toEqual({ changed: true, result: null });
+    const after = await facts();
+    const rolesAfter = await harness.db.select().from(roles).orderBy(roles.id);
+    const assignmentsAfter = await harness.db.select().from(roleAssignments);
+    expect(after.clients).toMatchObject([{ clientCode: "portal", isDelete: true }, { clientCode: "other", isDelete: false }]);
+    expect(rolesAfter).toEqual([otherRole!, { ...rolesBefore[1]!, isDelete: true, updateTime: expect.any(Date) }]);
+    expect(assignmentsAfter).toEqual([]);
+    expect(after.audits.filter(audit => audit.action === "admin.client.delete")).toMatchObject([
+      { targetCode: "portal", details: { changed: true, deleted: true } },
+    ]);
+    expect(invalidateClient.mock.calls).toEqual([["portal"]]);
+    expect(revokeClientAllProtocols).toHaveBeenCalledTimes(1);
+  });
+
+  for (const surface of ["client", "client-sso"] as const) {
+    for (const transport of ["rest", "trpc"] as const) {
+      test(`${surface} ${transport} deletion returns the real Role conflict and succeeds after explicit Role deletion`, async () => {
+        const client = await seedClient();
+        await harness.db.insert(roles).values({ clientId: client.id, roleCode: "portal:reader", roleName: "Reader" });
+        const candidate = createCommand();
+        const adapter = createClientAdapter({ clientService: candidate.service });
+        const app = new Hono();
+        addTestAdminAuthorizationMiddleware(app);
+        app.onError(createErrorHandler({ error: mock(), warn: mock(), info: mock() }));
+        app.route("/admin", surface === "client" ? createClientRoute(adapter) : candidate.management.rest);
+        app.all("/rpc/*", c => fetchRequestHandler({
+          endpoint: "/rpc",
+          req: c.req.raw,
+          router: surface === "client" ? adapter.clientAdminRouter : candidate.management.trpc,
+          createContext: () => ({ hono: c }),
+        }));
+        const request = () => app.request(
+          transport === "rest" ? `/admin/${surface === "client" ? "clients" : "clients-sso"}/portal` : "/rpc/delete",
+          transport === "rest"
+            ? { method: "DELETE" }
+            : {
+                method: "POST",
+                headers: { "content-type": "application/json" },
+                body: JSON.stringify({ clientCode: "portal" }),
+              },
+        );
+        const rejected = await request();
+        const rejection = await rejected.json();
+        expect(rejected.status).toBe(409);
+        expect(rejection).toMatchObject(transport === "rest"
+          ? { code: ApiErrorCode.ClientHasRole, data: null, message: expect.stringContaining("角色") }
+          : { error: { message: expect.stringContaining("角色"), data: { code: "CONFLICT", serviceCode: ApiErrorCode.ClientHasRole } } });
+        expect(rejection).not.toHaveProperty("result");
+        expect(candidate.invalidateClient).not.toHaveBeenCalled();
+        expect(candidate.revokeClientAllProtocols).not.toHaveBeenCalled();
+        await candidate.roleService.deleteRole("portal:reader");
+        const accepted = await request();
+        const body = await accepted.json();
+        expect(accepted.status).toBe(200);
+        const outcome = { changed: true, result: null };
+        expect(body).toMatchObject(transport === "rest" ? { data: outcome } : { result: { data: outcome } });
+      });
+    }
+  }
+
   test("create returns a DTO; profile no-op preserves facts and every successful command invalidates Snapshot", async () => {
     const { service, invalidateClient, enqueueRebuildJobs } = createCommand();
     const created = await service.createClient(input());

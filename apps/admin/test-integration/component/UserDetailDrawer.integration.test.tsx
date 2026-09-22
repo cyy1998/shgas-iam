@@ -108,15 +108,25 @@ vi.mock('@ant-design/pro-components', () => {
     dataSource,
     columns,
   }: {
-    dataSource: { roles: string[]; roleNames: Record<string, string> };
+    dataSource: Record<string, unknown>;
     columns: {
       dataIndex: unknown;
+      title?: string;
       render?: (_: unknown, row: typeof dataSource) => ReactNode;
     }[];
-  }) =>
-    columns
-      .find((column) => column.dataIndex === 'roles')
-      ?.render?.(null, dataSource) ?? null;
+  }) => (
+    <>
+      {columns
+        .filter((column) =>
+          ['roles', 'privileges'].includes(String(column.dataIndex)),
+        )
+        .map((column) => (
+          <div aria-label={column.title} key={String(column.dataIndex)}>
+            {column.render?.(null, dataSource)}
+          </div>
+        ))}
+    </>
+  );
   return {
     default: { ProDescriptions },
     ProDescriptions,
@@ -222,6 +232,30 @@ function detail(
 }
 
 describe('UserDetailDrawer Employment lifecycle actions', () => {
+  it.each([UserStatus.Enable, UserStatus.Pause, UserStatus.Disable])(
+    'gates new Employment by User status %s',
+    async (status) => {
+      __setAccess({ canAccessEmployment: true, canCreateEmployment: true });
+      lifecycle.getUser.mockResolvedValue({
+        ...detail(EmploymentStatus.Enable),
+        status,
+      });
+      const { user } = render(
+        <UserDetailDrawer
+          open
+          username="zhangsan"
+          onClose={vi.fn()}
+          onEdit={vi.fn()}
+          onChanged={vi.fn()}
+        />,
+      );
+      await user.click(await screen.findByRole('tab', { name: /雇佣/ }));
+      const create = screen.getByRole('button', { name: /新增雇佣/ });
+      if (status === UserStatus.Disable) expect(create).toBeDisabled();
+      else expect(create).toBeEnabled();
+    },
+  );
+
   it('displays the role name in the user summary', async () => {
     lifecycle.getUser.mockResolvedValue({
       ...detail(EmploymentStatus.Enable),
@@ -240,6 +274,34 @@ describe('UserDetailDrawer Employment lifecycle actions', () => {
     );
     expect(await screen.findByText('人事管理员')).toBeInTheDocument();
     expect(screen.queryByText('iam:hr-admin')).not.toBeInTheDocument();
+  });
+
+  it('replaces the permission count when the selected user detail changes', async () => {
+    lifecycle.getUser
+      .mockResolvedValueOnce({
+        ...detail(EmploymentStatus.Enable),
+        username: 'first',
+        privileges: ['people:read', 'people:write'],
+      })
+      .mockResolvedValueOnce({
+        ...detail(EmploymentStatus.Enable),
+        username: 'second',
+        privileges: ['people:read'],
+      });
+    const props = {
+      open: true,
+      onClose: vi.fn(),
+      onEdit: vi.fn(),
+      onChanged: vi.fn(),
+    };
+    const view = render(<UserDetailDrawer {...props} username="first" />);
+
+    expect(await screen.findByLabelText('权限数')).toHaveTextContent('2');
+
+    view.rerender(<UserDetailDrawer {...props} username="second" />);
+    await waitFor(() =>
+      expect(screen.getByLabelText('权限数')).toHaveTextContent('1'),
+    );
   });
 
   beforeEach(() => {
@@ -449,6 +511,48 @@ describe('UserDetailDrawer Employment lifecycle actions', () => {
     ).toHaveTextContent('后续处理失败');
     expect(lifecycle.updateUserStatus).toHaveBeenCalledTimes(1);
     expect(lifecycle.getUser).toHaveBeenCalledTimes(2);
+  });
+
+  it('shows the delegation deletion blocker and keeps the detail open without retrying', async () => {
+    lifecycle.getUser.mockResolvedValue(detail(EmploymentStatus.Disable));
+    lifecycle.deleteUser.mockRejectedValue(
+      new Error(
+        '该用户存在未结束的权限委托，无法删除；请先通过 Internal 接口结束相关委托',
+      ),
+    );
+    const onClose = vi.fn();
+    const onChanged = vi.fn();
+    const { user } = render(
+      <UserDetailDrawer
+        open
+        username="zhangsan"
+        onClose={onClose}
+        onEdit={vi.fn()}
+        onChanged={onChanged}
+      />,
+    );
+    await user.click(await screen.findByRole('button', { name: '删除' }));
+    const titles = await screen.findAllByText('删除用户 张三？');
+    const dialog = titles
+      .find((title) => title.classList.contains('ant-modal-confirm-title'))
+      ?.closest('.ant-modal');
+    expect(dialog).not.toBeNull();
+    await user.click(
+      within(dialog as HTMLElement).getByRole('button', { name: /确\s*定/ }),
+    );
+    await waitFor(() => expect(dialog).not.toBeInTheDocument());
+    expect(
+      await screen.findByText(/存在未结束的权限委托，无法删除/),
+    ).toBeInTheDocument();
+    expect(screen.queryByText('已删除')).not.toBeInTheDocument();
+    expect(
+      screen.queryByText(/操作已生效，但后续处理失败/),
+    ).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '删除' })).toBeEnabled();
+    expect(lifecycle.deleteUser).toHaveBeenCalledExactlyOnceWith('zhangsan');
+    expect(lifecycle.getUser).toHaveBeenCalledTimes(1);
+    expect(onClose).not.toHaveBeenCalled();
+    expect(onChanged).not.toHaveBeenCalled();
   });
 
   it('refreshes after a committed delete, removes stale actions and retains the repair warning on missing detail', async () => {

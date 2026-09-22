@@ -12,6 +12,7 @@ export interface OrganizationReaderPort {
 }
 
 export interface OrganizationTransactionStorePort {
+  getAnyOrganizationByCode: (orgCode: string) => Promise<Organization | null>;
   getOrganizationByCode: (orgCode: string) => Promise<Organization | null>;
   getOrganizationByCodeForAdmin: (orgCode: string) => Promise<Organization | null>;
   setOrganization: (input: OrganizationCreateDto, parent: Organization | null) => Promise<unknown>;

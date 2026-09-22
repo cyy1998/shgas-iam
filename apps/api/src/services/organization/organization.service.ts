@@ -36,7 +36,7 @@ export function createOrganizationService(deps: OrganizationServiceDeps) {
 
   async function setOrganization(organizationCreateDto: OrganizationCreateDto) {
     return await deps.uow.transaction(async (tx) => {
-      const newOrg = await tx.organizationRepository.getOrganizationByCode(organizationCreateDto.orgCode);
+      const newOrg = await tx.organizationRepository.getAnyOrganizationByCode(organizationCreateDto.orgCode);
       const parentOrg = organizationCreateDto.parentCode
         ? await tx.organizationRepository.getOrganizationByCode(organizationCreateDto.parentCode)
         : null;
@@ -58,7 +58,7 @@ export function createOrganizationService(deps: OrganizationServiceDeps) {
         throw new OrganizationNotFoundError("组织不存在");
       }
       if (data.orgCode && data.orgCode !== orgCode) {
-        const conflict = await tx.organizationRepository.getOrganizationByCode(data.orgCode);
+        const conflict = await tx.organizationRepository.getAnyOrganizationByCode(data.orgCode);
         if (conflict !== null) {
           throw new OrganizationCodeExistsError(`组织编码已存在: ${data.orgCode}`);
         }

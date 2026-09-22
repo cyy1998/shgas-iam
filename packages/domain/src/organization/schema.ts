@@ -41,6 +41,17 @@ export function toOrganizationDto(input: unknown) {
   });
 }
 
+const OrganizationCodeWriteSchema = z.string()
+  .trim()
+  .min(1, "组织编码不能为空")
+  .max(64, "组织编码最多64个字符")
+  .openapi({ description: "组织编码" });
+
+const OrganizationNameWriteSchema = z.string()
+  .trim()
+  .min(1, "组织名称不能为空")
+  .openapi({ description: "组织名称" });
+
 export const OrganizationCreateDtoSchema = OrganizationSchema.pick({
   orgCode: true,
   orgName: true,
@@ -57,6 +68,8 @@ export const OrganizationCreateDtoSchema = OrganizationSchema.pick({
   orgType: true,
   orgName: true,
 }).extend({
+  orgCode: OrganizationCodeWriteSchema,
+  orgName: OrganizationNameWriteSchema,
   status: z.literal(OrganizationStatus.Enable).default(OrganizationStatus.Enable),
   path: z.string().default(""),
   level: z.enum(OrganizationLevel).default(OrganizationLevel.One),
@@ -64,8 +77,8 @@ export const OrganizationCreateDtoSchema = OrganizationSchema.pick({
 }).openapi("OrganizationCreateDto");
 
 export const OrganizationUpdateDtoSchema = z.object({
-  orgCode: z.string().min(1).optional(),
-  orgName: z.string().min(1).optional(),
+  orgCode: OrganizationCodeWriteSchema.optional(),
+  orgName: OrganizationNameWriteSchema.optional(),
   orgType: z.enum(OrganizationType).optional(),
   status: z.enum(OrganizationStatus).optional(),
 }).strict().openapi("OrganizationUpdateDto");

@@ -1,7 +1,9 @@
 import type { Context } from "hono";
 import { createUserAdapter } from "@admin-api/routes/admin/user/user.adapter";
+import { createUserRoute } from "@admin-api/routes/admin/user/user.index";
 import { createAdminAuthorizationPolicy } from "@admin-api/services/admin-authorization/admin-authorization.policy";
 import { AdminMutationCommittedError } from "@admin-api/services/admin-mutation/admin-mutation";
+import { createErrorHandler } from "@iam/api-core/middlewares";
 import {
   EmploymentStatus,
   OrganizationLevel,
@@ -10,6 +12,8 @@ import {
   UserType,
 } from "@iam/contracts";
 import { describe, expect, mock, test } from "bun:test";
+import { Hono } from "hono";
+import { addTestAdminAuthorizationMiddleware } from "../helpers/admin-authorization";
 
 const createdAt = new Date("2026-01-01T00:00:00.000Z");
 const denied = { allowed: false, reason: "ACTION_NOT_GRANTED" } as const;
@@ -98,7 +102,155 @@ function employment(id: number, orgId: number, status: EmploymentStatus) {
   };
 }
 
+function writeSurface() {
+  const setUserForAdmin = mock(async (input: Record<string, unknown>) => ({
+    changed: true,
+    result: {
+      username: input.username,
+      generatedPassword: null,
+      user: { ...userDetail(), ...input },
+    },
+  }));
+  const updateUser = mock(async () => ({ changed: false, result: null }));
+  const adapter = createUserAdapter({
+    random: { password: mock(() => "unused") },
+    userService: { setUserForAdmin, updateUser },
+  } as never);
+  const app = new Hono();
+  addTestAdminAuthorizationMiddleware(app);
+  app.onError(createErrorHandler({ error: mock(), warn: mock(), info: mock() } as never));
+  app.route("/admin", createUserRoute(adapter));
+  const caller = adapter.userAdminRouter.createCaller({ hono: createContext(["iam:admin"]) });
+
+  async function request(method: string, path: string, body: object) {
+    const response = await app.request(`/admin/users${path}`, {
+      method,
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    return { status: response.status, body: await response.json() };
+  }
+
+  return { caller, request, setUserForAdmin, updateUser };
+}
+
 describe("admin User adapter authorization projection", () => {
+  test("REST normalizes User identity writes without changing passwords", async () => {
+    const surface = writeSurface();
+    const response = await surface.request("POST", "", {
+      username: "  Mixed-Case  ",
+      name: "  Display Name  ",
+      userType: UserType.Formal,
+      password: "  Secret123  ",
+    });
+
+    expect(response.status).toBe(200);
+    expect(surface.setUserForAdmin).toHaveBeenCalledWith({
+      username: "Mixed-Case",
+      name: "Display Name",
+      userType: UserType.Formal,
+      password: "  Secret123  ",
+    }, expect.anything());
+  });
+
+  test("tRPC applies the same User identity normalization to creates", async () => {
+    const surface = writeSurface();
+    await surface.caller.create({
+      username: "  TrPc-User  ",
+      name: "  tRPC Name  ",
+      userType: UserType.Formal,
+    });
+
+    expect(surface.setUserForAdmin).toHaveBeenCalledWith({
+      username: "TrPc-User",
+      name: "tRPC Name",
+      userType: UserType.Formal,
+    }, expect.anything());
+  });
+
+  test("tRPC normalizes an explicitly submitted profile name", async () => {
+    const surface = writeSurface();
+    await surface.caller.update({
+      username: "target",
+      data: { name: "  Target User  " },
+    });
+
+    expect(surface.updateUser).toHaveBeenCalledWith(
+      "target",
+      { name: "Target User" },
+      expect.anything(),
+      expect.anything(),
+    );
+  });
+
+  test.each([
+    ["blank username", { username: "   ", name: "Valid", userType: UserType.Formal }],
+    ["overlong username", { username: "U".repeat(65), name: "Valid", userType: UserType.Formal }],
+    ["blank name", { username: "valid", name: "   ", userType: UserType.Formal }],
+    ["overlong name", { username: "valid", name: "N".repeat(65), userType: UserType.Formal }],
+  ] as const)("REST rejects a normalized %s before the service", async (_, input) => {
+    const surface = writeSurface();
+    const response = await surface.request("POST", "", input);
+    expect(response.status).toBe(422);
+    expect(surface.setUserForAdmin).not.toHaveBeenCalled();
+  });
+
+  test("tRPC accepts 64-character User identity fields", async () => {
+    const surface = writeSurface();
+    await surface.caller.create({
+      username: `  ${"U".repeat(64)}  `,
+      name: `  ${"N".repeat(64)}  `,
+      userType: UserType.Formal,
+    });
+
+    expect(surface.setUserForAdmin).toHaveBeenCalledWith({
+      username: "U".repeat(64),
+      name: "N".repeat(64),
+      userType: UserType.Formal,
+    }, expect.anything());
+  });
+
+  test("tRPC rejects a 65-character username", async () => {
+    const surface = writeSurface();
+    let rejected: unknown;
+    try {
+      await surface.caller.create({
+        username: "U".repeat(65),
+        name: "Valid",
+        userType: UserType.Formal,
+      });
+    }
+    catch (error) {
+      rejected = error;
+    }
+
+    expect(rejected).toMatchObject({ code: "BAD_REQUEST" });
+    expect(surface.setUserForAdmin).not.toHaveBeenCalled();
+  });
+
+  for (const role of ["iam:admin", "iam:hr-admin"]) {
+    test(`${role} receives the disabled User transfer restriction on embedded Employment rows`, async () => {
+      const adapter = createUserAdapter({
+        random: { password: mock(() => "unused") },
+        userService: { getUserDetailByUsernameForAdmin: mock(async () => userDetail([
+          employment(1, 10, EmploymentStatus.Enable),
+          employment(2, 20, EmploymentStatus.Enable),
+        ], UserStatus.Disable)) },
+      } as never);
+      const result = await adapter.userAdminRouter.createCaller({ hono: createContext([role]) }).detail({ username: "target" });
+      expect(result.employments[0]!.allowedActions).toMatchObject({
+        transfer: { allowed: false, reason: "USER_DISABLED" },
+        pause: allowed,
+        end: allowed,
+        setPrimary: allowed,
+      });
+      expect(result.employments[1]!.allowedActions.transfer).toEqual({
+        allowed: false,
+        reason: role === "iam:admin" ? "USER_DISABLED" : "RESOURCE_OUT_OF_SCOPE",
+      });
+    });
+  }
+
   test("returns the same safe create result through REST and tRPC", async () => {
     const adapter = createUserAdapter({
       random: { password: mock(() => "unused") },

@@ -15,6 +15,7 @@ import {
   StandardErrorResponseSchema,
   ValidationFailureResponseSchema,
 } from "@iam/api-core/core/openapi/schemas/error-response-schema";
+import { UserNameWriteSchema, UsernameWriteSchema } from "@iam/domain/user";
 import {
   UserProfileDetailDocumentSchema,
 } from "@iam/user-profile-read-model";
@@ -111,10 +112,10 @@ export const contactRegister = createRoute({
   tags,
   request: {
     body: jsonContentRequired(z.object({
-      username: z.string().openapi({ example: "身份证号" }),
+      username: UsernameWriteSchema.openapi({ example: "身份证号" }),
       orgCode: z.string().openapi({ example: "供应商统一社会信用代码" }),
       mobile: z.string().openapi({ example: "12345678" }),
-      name: z.string().openapi({ example: "1234" }),
+      name: UserNameWriteSchema.openapi({ example: "1234" }),
     }), "用户创建参数"),
   },
   responses: {

@@ -68,6 +68,25 @@ function mutation(procedure: string, data: unknown, committed = false) {
   );
   return requests;
 }
+function mutationFailure(procedure: string, messageText: string) {
+  const requests: unknown[] = [];
+  server.use(
+    http.post(`*/rpc/admin.user.${procedure}`, async ({ request }) => {
+      requests.push(await request.json());
+      return HttpResponse.json(
+        [{
+          error: {
+            message: messageText,
+            code: -32009,
+            data: { code: 'CONFLICT', httpStatus: 409 },
+          },
+        }],
+        { status: 409 },
+      );
+    }),
+  );
+  return requests;
+}
 function renderPage() {
   const details = vi.fn((_info: { request: Request }) =>
     HttpResponse.json([{ result: { data: adminUserDetail } }]),
@@ -117,7 +136,7 @@ describe('UsersPage mutation outcomes', () => {
       await user.clear(form.getByRole('textbox', { name: '姓名' }));
       await user.type(
         form.getByRole('textbox', { name: '姓名' }),
-        changed ? '新姓名' : adminUserDetail.name,
+        changed ? '  新姓名  ' : `  ${adminUserDetail.name}  `,
       );
       await user.click(form.getByRole('button', { name: '确 定' }));
       expect(
@@ -138,6 +157,104 @@ describe('UsersPage mutation outcomes', () => {
       );
     },
   );
+  it('submits normalized User identity fields while preserving the password exactly', async () => {
+    const requests = mutation('create', {
+      changed: true,
+      result: {
+        username: 'Mixed-Case',
+        user: { username: 'Mixed-Case' },
+        generatedPassword: null,
+      },
+    });
+    const { user } = renderPage();
+    await user.click(screen.getByRole('button', { name: '+ 新建用户' }));
+    const form = within(
+      await screen.findByRole('dialog', { name: '新建用户' }),
+    );
+    await user.type(
+      form.getByRole('textbox', { name: '用户名' }),
+      '  Mixed-Case  ',
+    );
+    await user.type(form.getByRole('textbox', { name: '姓名' }), '  新用户  ');
+    await user.type(form.getByLabelText('初始密码'), '  Secret123  ');
+    await user.click(form.getAllByRole('combobox')[0]);
+    await user.click(
+      await screen.findByText('正式员工', {
+        selector: '.ant-select-item-option-content',
+      }),
+    );
+    await user.click(form.getByRole('button', { name: '确 定' }));
+
+    expect(await screen.findByText('创建成功')).toBeInTheDocument();
+    expect(requests).toEqual([{
+      '0': {
+        mobile: null,
+        name: '新用户',
+        password: '  Secret123  ',
+        status: 1,
+        userType: '正式员工',
+        username: 'Mixed-Case',
+        wxId: null,
+      },
+    }]);
+  });
+
+  it.each([
+    ['blank', '   ', '   ', '请输入用户名', '请输入姓名'],
+    [
+      'overlong',
+      'U'.repeat(65),
+      'N'.repeat(65),
+      '用户名最多64个字符',
+      '姓名最多64个字符',
+    ],
+  ])('keeps %s normalized User identities in the form without sending a request', async (
+    _,
+    usernameInput,
+    nameInput,
+    usernameError,
+    nameError,
+  ) => {
+    const requests = mutation('create', null);
+    const { user } = renderPage();
+    await user.click(screen.getByRole('button', { name: '+ 新建用户' }));
+    const form = within(
+      await screen.findByRole('dialog', { name: '新建用户' }),
+    );
+    const username = form.getByRole('textbox', { name: '用户名' });
+    const name = form.getByRole('textbox', { name: '姓名' });
+    await user.type(username, usernameInput);
+    await user.type(name, nameInput);
+    await user.click(form.getByRole('button', { name: '确 定' }));
+    expect(await form.findByText(usernameError)).toBeInTheDocument();
+    expect(await form.findByText(nameError)).toBeInTheDocument();
+    expect(requests).toHaveLength(0);
+    expect(screen.getByRole('dialog', { name: '新建用户' })).toBeInTheDocument();
+  });
+
+  it('keeps a backend conflict in the form without reporting success or replaying', async () => {
+    const requests = mutationFailure('create', '用户名已存在');
+    const { user } = renderPage();
+    await user.click(screen.getByRole('button', { name: '+ 新建用户' }));
+    const form = within(
+      await screen.findByRole('dialog', { name: '新建用户' }),
+    );
+    await user.type(form.getByRole('textbox', { name: '用户名' }), 'occupied');
+    await user.type(form.getByRole('textbox', { name: '姓名' }), '新用户');
+    await user.click(form.getAllByRole('combobox')[0]);
+    await user.click(
+      await screen.findByText('正式员工', {
+        selector: '.ant-select-item-option-content',
+      }),
+    );
+    await user.click(form.getByRole('button', { name: '确 定' }));
+
+    expect(await screen.findByText('用户名已存在')).toBeInTheDocument();
+    expect(screen.queryByText('创建成功')).not.toBeInTheDocument();
+    expect(screen.getByRole('dialog', { name: '新建用户' })).toBeInTheDocument();
+    await waitFor(() => expect(requests).toHaveLength(1));
+  });
+
   it('reads the created resource and displays the returned initial password', async () => {
     const requests = mutation('create', {
       changed: true,

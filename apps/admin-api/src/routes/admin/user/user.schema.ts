@@ -66,6 +66,7 @@ export function toUserDetailVo(
         allowedActions: isInScope
           ? employmentAuthorization.getAllowedActions({
               status: employment.status,
+              userStatus: dto.status,
               isPrimary: employment.isPrimary,
             })
           : outOfScopeEmploymentAllowedActions,

@@ -41,6 +41,7 @@ const OrganizationSummarySchema = z.object({
   id: z.number().int().positive(),
   orgCode: z.string(),
   orgName: z.string(),
+  isDelete: z.boolean(),
 });
 
 const OrganizationWithFullPathSchema = OrganizationSummarySchema.extend({
@@ -59,12 +60,14 @@ export const OrganizationResponsibilityAssignmentViewSchema = z.object({
       id: z.number().int().positive(),
       username: z.string(),
       name: z.string(),
+      isDelete: z.boolean(),
     }),
     organization: OrganizationWithFullPathSchema,
     position: z.object({
       id: z.number().int().positive(),
       posCode: z.string(),
       posName: z.string(),
+      isDelete: z.boolean(),
     }),
   }),
   targetOrganization: OrganizationWithFullPathSchema,

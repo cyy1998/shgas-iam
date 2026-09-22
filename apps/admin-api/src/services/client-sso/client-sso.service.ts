@@ -8,7 +8,7 @@ import { createAdminClientMutation } from "@admin-api/services/client/client-mut
 import { INTERNAL_SERVER_ERROR } from "@iam/api-core/core/http-status-codes";
 import { BadRequestError, CustomError } from "@iam/api-core/errors";
 import { ApiErrorCode, ClientSsoCallbackType, ClientSsoProtocol, OidcClientType } from "@iam/contracts";
-import { ClientNotFoundError, normalizeClientSsoConfig, toClientSsoAdminDto } from "@iam/domain/client";
+import { ClientHasRoleError, ClientNotFoundError, normalizeClientSsoConfig, toClientSsoAdminDto } from "@iam/domain/client";
 import { ClientSsoSaveSchema, ClientSsoSelectSchema } from "./client-sso.schema";
 
 export function createClientSsoService(deps: ClientSsoServiceDeps) {
@@ -28,6 +28,8 @@ export function createClientSsoService(deps: ClientSsoServiceDeps) {
       const client = await tx.client.lock(clientCode, true);
       if (!client)
         throw new ClientNotFoundError();
+      if (!client.isDelete && await tx.client.hasUndeletedRoles(client.id))
+        throw new ClientHasRoleError();
       return await bindTarget(client.clientCode, async () => {
         const changed = !client.isDelete;
         if (changed && !await tx.client.update(client.clientCode, { isDelete: true }))

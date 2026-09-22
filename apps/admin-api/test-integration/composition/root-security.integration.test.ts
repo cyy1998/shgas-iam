@@ -20,6 +20,7 @@ import { createClientSsoRepository } from "@admin-api/services/client-sso/client
 import { createClientSsoService } from "@admin-api/services/client-sso/client-sso.service";
 import { AdminLoginStateAuditFailedAfterEffectError } from "@admin-api/services/session-management/session-management.error";
 import { AdminSessionRevokeResultSchema } from "@admin-api/services/session-management/session-management.schema";
+import { createClientSnapshots } from "@iam/api-core/client-snapshot/composition";
 import { createErrorHandler } from "@iam/api-core/middlewares/error-handler";
 import {
   createRedisSubjectAccessStore,
@@ -31,8 +32,9 @@ import {
 } from "@iam/api-core/subject-access";
 import { createTRPCContext } from "@iam/api-core/trpc";
 import { createUnitOfWork, mapUnitOfWork } from "@iam/api-core/uow";
-import { ClientStatus, UserStatus, UserType } from "@iam/contracts";
-import { auditLogs, clients, users } from "@iam/db/schema";
+import { ApiErrorCode, ClientStatus, PrivilegeDelegationStatus, RoleStatus, UserStatus, UserType } from "@iam/contracts";
+import { createClientSnapshotRepository } from "@iam/db/client-snapshot";
+import { auditLogs, clients, privilegeDelegations, roles, userProfileDirty, users } from "@iam/db/schema";
 import { createUnifiedSessionRedisTestScope } from "@iam/session-kernel/testing";
 import { createSubjectAccessTransitionRepository } from "@iam/user-profile-read-model/subject-access-transition";
 import { fetchRequestHandler } from "@trpc/server/adapters/fetch";
@@ -644,6 +646,62 @@ test("neutral inventory fails on damaged records and a missing inventory never r
   }
 });
 
+test("delegation-blocked User deletion restores real access and preserves both session kinds", async () => {
+  const f = await fixture();
+  try {
+    const original = await f.create();
+    const [other] = await pg.db.insert(users).values({ username: `delegator-${randomUUID()}`, name: "Delegator" }).returning();
+    const [delegation] = await pg.db.insert(privilegeDelegations).values({
+      delegatorUserId: other!.id,
+      delegateeUserId: f.account.id,
+      organizationScopeId: 1,
+      status: PrivilegeDelegationStatus.Pause,
+      startTime: new Date("2099-01-01"),
+      endTime: new Date("2100-01-01"),
+    }).returning();
+    const barrierBefore = await f.barrier.read(f.account.subjectIdentifier);
+    let failure: unknown;
+    try {
+      await f.user.deleteUser(f.account.username);
+    }
+    catch (error) {
+      failure = error;
+    }
+    expect(failure).toMatchObject({ code: "USER.HAS_OPEN_PRIVILEGE_DELEGATION", httpStatus: 409 });
+    const barrierAfter = await f.barrier.read(f.account.subjectIdentifier);
+    const accountAfter = await pg.db.select().from(users).where(eq(users.id, f.account.id));
+    const delegationAfter = await pg.db
+      .select()
+      .from(privilegeDelegations)
+      .where(eq(privilegeDelegations.id, delegation!.id));
+    const audits = await pg.db.select().from(auditLogs).where(eq(auditLogs.targetId, f.account.id));
+    const dirty = await pg.db.select().from(userProfileDirty).where(eq(userProfileDirty.userId, f.account.id));
+    expect(barrierAfter).toEqual(barrierBefore);
+    expect(accountAfter).toEqual([f.account]);
+    expect(delegationAfter).toEqual([delegation!]);
+    expect(audits).toEqual([]);
+    expect(dirty).toEqual([]);
+    const rootStatus = await f.status(original.bearer);
+    const child = await f.operations.run(async (operation) => {
+      await operation.acquireForSession({
+        subjectIdentifier: f.account.subjectIdentifier,
+        subjectContext: original.root.subjectContext,
+        principalSessionId: original.root.userSessionId,
+      });
+      return await f.kernel.forOperation(operation).resolveClientSessionForUse({
+        userSessionId: original.root.userSessionId,
+        clientSessionId: original.child.clientSessionId,
+        clientId: "client",
+      });
+    });
+    expect(rootStatus).toBe("resolved");
+    expect(child.status).toBe("resolved");
+  }
+  finally {
+    await f.scope.close();
+  }
+});
+
 test.each(["disable", "delete", "resign"])(
   "real account %s commits PostgreSQL and terminates only its original generation",
   async (command) => {
@@ -713,6 +771,76 @@ test("real resignation no-op retries original residual sessions after an unconfi
     expect(retried.changed).toBe(false);
     const finalStatus = await f.status(original.bearer);
     expect(finalStatus).toBe("terminated");
+  }
+  finally {
+    await f.scope.close();
+  }
+});
+
+test("Role-blocked Client deletion preserves real sessions and cached Snapshot observations", async () => {
+  const f = await fixture();
+  try {
+    const code = f.clientCode("role-blocked");
+    const [client] = await pg.db.insert(clients).values({
+      clientCode: code,
+      clientName: "Role blocked",
+      clientSecret: "test-internal",
+      extAttributes: {},
+    }).returning();
+    await pg.db.insert(roles).values({
+      clientId: client!.id,
+      roleCode: code,
+      roleName: "Paused reader",
+      status: RoleStatus.Pause,
+    });
+    const original = await f.create(f.account.subjectIdentifier, code);
+    const { management, snapshots } = createClientSsoSnapshotManagement({
+      clientCache: createAdminClientCache({ redis: f.redis }),
+      db: pg.db,
+      redis: f.redis,
+      logger: f.logger,
+      sessionTermination: f.lifecycleRevocation,
+    });
+    const warm = await snapshots.client.acquire(code);
+    const credential = await snapshots.credential.acquire(code);
+    const source = createClientSnapshotRepository(pg.db);
+    const reads = { client: 0, credential: 0 };
+    const probe = createClientSnapshots({
+      redis: f.redis,
+      source: {
+        async loadClient(value) {
+          reads.client++;
+          return source.loadClient(value);
+        },
+        async loadCredential(value) {
+          reads.credential++;
+          return source.loadCredential(value);
+        },
+      },
+    });
+    let failure: unknown;
+    try {
+      await management.service.deleteClient(code);
+    }
+    catch (error) {
+      failure = error;
+    }
+    expect(failure).toMatchObject({ code: ApiErrorCode.ClientHasRole, httpStatus: 409 });
+    const after = await pg.db.select().from(clients).where(eq(clients.clientCode, code));
+    const audits = await pg.db.select().from(auditLogs).where(eq(auditLogs.targetCode, code));
+    expect(after).toEqual([client!]);
+    expect(audits).toEqual([]);
+    const observed = await probe.client.acquire(code);
+    const observedCredential = await probe.credential.acquire(code);
+    expect(observed).toEqual(warm);
+    expect(observedCredential).toEqual(credential);
+    expect(reads).toEqual({ client: 0, credential: 0 });
+    const session = await f.operations.run(operation => f.kernel.forOperation(operation).resolveClientSessionForUse({
+      userSessionId: original.root.userSessionId,
+      clientSessionId: original.child.clientSessionId,
+      clientId: code,
+    }));
+    expect(session.status).toBe("resolved");
   }
   finally {
     await f.scope.close();

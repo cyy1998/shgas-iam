@@ -19,6 +19,15 @@ export class ClientCodeExistsError extends DomainBusinessError {
   }
 }
 
+export class ClientHasRoleError extends DomainBusinessError {
+  constructor(message: string = "应用仍存在未删除的角色，请先处理角色分配并删除角色后再删除应用") {
+    super(message, {
+      code: ApiErrorCode.ClientHasRole,
+      httpStatus: DomainHttpStatus.Conflict,
+    });
+  }
+}
+
 export class ClientCodeImmutableError extends DomainBusinessError {
   constructor(message: string = "客户端编码创建后不可修改") {
     super(message, {

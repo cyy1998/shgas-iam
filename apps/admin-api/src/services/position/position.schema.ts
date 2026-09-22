@@ -15,11 +15,24 @@ export const PositionMemberCountDetailSchema = PositionDtoSchema.extend({
   memberNumber: z.number().int().nonnegative(),
 });
 
+const PositionCodeInputSchema = z.string()
+  .trim()
+  .min(1, "岗位编码不能为空")
+  .max(64, "岗位编码最多64个字符");
+
+const PositionNameInputSchema = z.string()
+  .trim()
+  .min(1, "岗位名称不能为空")
+  .max(128, "岗位名称最多128个字符");
+
 export const PositionCreateDtoSchema = insertPositionSchema.pick({
   posCode: true,
   posName: true,
   description: true,
   status: true,
+}).extend({
+  posCode: PositionCodeInputSchema,
+  posName: PositionNameInputSchema,
 }).openapi("PositionCreateDto");
 
 export const PositionPaginationQueryDtoSchema = createPageQuerySchema(
@@ -40,6 +53,9 @@ export const PositionUpdateDtoSchema = updatePositionSchema.pick({
   posName: true,
   description: true,
   status: true,
+}).extend({
+  posCode: PositionCodeInputSchema.optional(),
+  posName: PositionNameInputSchema.optional(),
 }).openapi("PositionUpdateDto");
 
 export const PositionStatusUpdateDtoSchema = updatePositionSchema.pick({

@@ -462,12 +462,26 @@ describe("Admin Authorization Policy", () => {
     expect(warn).toHaveBeenCalledTimes(6);
   });
 
+  for (const role of ["iam:hr-admin", "iam:admin"]) {
+    test(`${role} only blocks Transfer for a disabled User's Open Employment`, async () => {
+      const authorization = await createPolicy(hrScope).getEmploymentAuthorization(actor([role]));
+      const open = { status: EmploymentStatus.Pause, isPrimary: true };
+      const enabled = authorization.getAllowedActions({ ...open, userStatus: UserStatus.Enable });
+      const paused = authorization.getAllowedActions({ ...open, userStatus: UserStatus.Pause });
+      const disabled = authorization.getAllowedActions({ ...open, userStatus: UserStatus.Disable });
+      expect(enabled.transfer).toEqual({ allowed: true, reason: null });
+      expect(paused).toEqual(enabled);
+      expect(disabled).toEqual({ ...enabled, transfer: { allowed: false, reason: "USER_DISABLED" } });
+    });
+  }
+
   test("projects the complete Employment action map for HR and full administrators", async () => {
     const policy = createPolicy(hrScope);
     const hrAuthorization = await policy.getEmploymentAuthorization(actor(["iam:hr-admin"]));
     const fullAuthorization = await policy.getEmploymentAuthorization(actor(["iam:admin"]));
 
     expect(hrAuthorization.getAllowedActions({
+      userStatus: UserStatus.Enable,
       status: EmploymentStatus.Enable,
       isPrimary: false,
     })).toEqual({
@@ -480,6 +494,7 @@ describe("Admin Authorization Policy", () => {
       clearPrimary: { allowed: false, reason: "RESOURCE_STATE_NOT_ACTIONABLE" },
     });
     expect(hrAuthorization.getAllowedActions({
+      userStatus: UserStatus.Enable,
       status: EmploymentStatus.Pause,
       isPrimary: false,
     })).toEqual({
@@ -492,6 +507,7 @@ describe("Admin Authorization Policy", () => {
       clearPrimary: { allowed: false, reason: "RESOURCE_STATE_NOT_ACTIONABLE" },
     });
     expect(hrAuthorization.getAllowedActions({
+      userStatus: UserStatus.Enable,
       status: EmploymentStatus.Enable,
       isPrimary: true,
     })).toEqual({
@@ -504,6 +520,7 @@ describe("Admin Authorization Policy", () => {
       clearPrimary: { allowed: true, reason: null },
     });
     expect(hrAuthorization.getAllowedActions({
+      userStatus: UserStatus.Enable,
       status: EmploymentStatus.Disable,
       isPrimary: false,
     })).toEqual({
@@ -516,6 +533,7 @@ describe("Admin Authorization Policy", () => {
       clearPrimary: { allowed: false, reason: "RESOURCE_STATE_NOT_ACTIONABLE" },
     });
     expect(fullAuthorization.getAllowedActions({
+      userStatus: UserStatus.Enable,
       status: EmploymentStatus.Pause,
       isPrimary: true,
     })).toEqual({

@@ -1,7 +1,12 @@
 import { z } from "@hono/zod-openapi";
 import { createPageQuerySchema } from "@iam/api-core/core/pagination/schema";
 import { UserStatus, UserType } from "@iam/contracts";
-import { UserDetailDtoSchema as SharedUserDetailDtoSchema, UserSchema as SharedUserSchema } from "@iam/domain/user";
+import {
+  UserDetailDtoSchema as SharedUserDetailDtoSchema,
+  UserSchema as SharedUserSchema,
+  UserNameWriteSchema,
+  UsernameWriteSchema,
+} from "@iam/domain/user";
 import { EmploymentDetailDtoSchema } from "../employment/employment.schema";
 
 export const UserDetailDtoSchema = SharedUserDetailDtoSchema.pick({
@@ -46,18 +51,22 @@ export const UserPaginationQueryDtoSchema = createPageQuerySchema(
   }),
 ).openapi("UserPaginationQueryDto");
 
-export const UserAdminCreateDtoSchema = SharedUserSchema.partial().required({
+export const UserAdminCreateDtoSchema = SharedUserSchema.pick({
+  username: true,
+  wxId: true,
+  name: true,
+  password: true,
+  mobile: true,
+  userType: true,
+  orderNum: true,
+  status: true,
+}).partial().required({
   username: true,
   name: true,
   userType: true,
-}).omit({
-  id: true,
-  subjectIdentifier: true,
-  isDelete: true,
-  createTime: true,
-  updateTime: true,
-  password: true,
 }).extend({
+  username: UsernameWriteSchema,
+  name: UserNameWriteSchema,
   password: z.string().min(8).optional().openapi({
     example: "P@ssw0rd1",
     description: "留空则后端生成随机 8 位密码（需由前端通过单独渠道展示给管理员）",
@@ -72,6 +81,8 @@ export const UserUpdateDtoSchema = SharedUserSchema.partial().pick({
   userType: true,
   status: true,
   orderNum: true,
+}).extend({
+  name: UserNameWriteSchema.optional(),
 }).openapi("UserUpdateDto");
 
 export const UserStatusUpdateDtoSchema = z.object({

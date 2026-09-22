@@ -163,6 +163,7 @@ function createService(options: {
       recordChanges: mock(async () => undefined),
     },
     userRepository: {
+      hasOpenPrivilegeDelegationsByUserId: mock(async (_userId: number) => false),
       countOpenEmploymentsByUsername: mock(async (_username: string) => 0),
       getOpenEmploymentOrganizationIdsByUserId: mock(async (_userId: number) => [10]),
       getUserByUsernameForAdmin,

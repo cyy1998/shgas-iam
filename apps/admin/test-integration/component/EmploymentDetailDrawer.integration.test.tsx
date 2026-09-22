@@ -141,6 +141,45 @@ describe('EmploymentDetailDrawer responsibility wayfinding', () => {
     expect(screen.queryByText('people:read')).not.toBeInTheDocument();
   });
 
+  it('replaces the permission list and count when the selected Employment detail changes', async () => {
+    services.getEmployment
+      .mockResolvedValueOnce({
+        ...employment,
+        id: 42,
+        privileges: ['people:read', 'people:write'],
+        privilegeNames: {
+          'people:read': '查看人员',
+          'people:write': '编辑人员',
+        },
+      })
+      .mockResolvedValueOnce({
+        ...employment,
+        id: 43,
+        privileges: ['people:read'],
+        privilegeNames: {
+          'people:read': '查看人员',
+          'people:write': '编辑人员',
+        },
+      });
+    const props = { open: true, onClose: vi.fn() };
+    const view = render(
+      <EmploymentDetailDrawer {...props} employmentId={42} />,
+    );
+
+    await view.user.click(
+      await screen.findByRole('tab', { name: '角色 / 权限 (0/2)' }),
+    );
+    expect(screen.getByText('查看人员')).toBeInTheDocument();
+    expect(screen.getByText('编辑人员')).toBeInTheDocument();
+
+    view.rerender(<EmploymentDetailDrawer {...props} employmentId={43} />);
+    await view.user.click(
+      await screen.findByRole('tab', { name: '角色 / 权限 (0/1)' }),
+    );
+    expect(screen.getByText('查看人员')).toBeInTheDocument();
+    expect(screen.queryByText('编辑人员')).not.toBeInTheDocument();
+  });
+
   it('edits description and renders only the server-granted lifecycle actions', async () => {
     services.getEmployment.mockResolvedValue(employment);
     services.updateEmployment.mockResolvedValue({

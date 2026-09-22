@@ -34,6 +34,7 @@ export enum ApiErrorCode {
   WeakPassword = "USER.WEAK_PASSWORD",
   InvalidOldPassword = "USER.INVALID_OLD_PASSWORD",
   UserHasActiveEmployment = "USER.HAS_ACTIVE_EMPLOYMENT",
+  UserHasOpenPrivilegeDelegation = "USER.HAS_OPEN_PRIVILEGE_DELEGATION",
   UserSearchResultTooLarge = "USER_SEARCH_RESULT_TOO_LARGE",
   UserSearchUnavailable = "USER_SEARCH_UNAVAILABLE",
 
@@ -49,6 +50,7 @@ export enum ApiErrorCode {
   PositionHasEmployment = "POSITION.HAS_EMPLOYMENT",
 
   EmploymentNotFound = "EMPLOYMENT.NOT_FOUND",
+  EmploymentUserDisabled = "EMPLOYMENT.USER_DISABLED",
   EmploymentNotEditable = "EMPLOYMENT.NOT_EDITABLE",
   EmploymentAlreadyExists = "EMPLOYMENT.ALREADY_EXISTS",
 
@@ -62,6 +64,7 @@ export enum ApiErrorCode {
 
   ClientNotFound = "CLIENT.NOT_FOUND",
   ClientCodeExists = "CLIENT.CODE_EXISTS",
+  ClientHasRole = "CLIENT.HAS_ROLE",
 
   RoleNotFound = "ROLE.NOT_FOUND",
   RoleCodeExists = "ROLE.CODE_EXISTS",

@@ -16,8 +16,7 @@ pnpm check:docs
 git diff --check
 ```
 
-每票每轮交接前统一运行 `pnpm verify:static`，再确认完整受影响范围的 typecheck、行为测试和 `git diff --check`
-通过；具体责任与失败处理见[开发工作流](../agents/workflow.md#验证节奏)。
+实施交接、评审修复后的验证复用与批后检查，按[开发工作流的验证节奏](../agents/workflow.md#验证节奏)执行。
 
 根工具链变化的聚焦 Bun 测试：
 
@@ -64,9 +63,24 @@ pnpm sandcastle --iterations 2 --parallel 2 --model <model>
 
 `sandcastle:build` 构建执行镜像；`sandcastle:check` 只预检工具、镜像和认证配置。
 `sandcastle:smoke` 创建可销毁的 sandbox 与 PostgreSQL/Redis，验证工具链、Merger 依赖挂载和连接，并用本地桩程序
-让 Planner、Implementer、Merger 三份真实 prompt 经过 SDK 的参数校验与展开，检查 Codex 生效角色配置及评审事件接线；不调用模型或访问 GitHub，
+让 Planner、Implementer、Merger 三份真实 prompt 经过 SDK 的参数校验与展开，检查 Codex 生效角色配置；不调用模型或访问 GitHub，
 也不证明真实 Codex 模型已执行双轴子代理评审。
+Smoke 还安装 Linux workspace 依赖，验证 Turbo 缓存写入及再次命中，执行 `pnpm verify:static`，并检查只读缓存会阻止
+agent 命令启动。各阶段统一使用容器独占的 `TURBO_CACHE_DIR=/tmp/iam-sandcastle-turbo/cache`；调用模型前以实际
+执行用户检查目录创建、文件写入和删除，失败则报错并进入既有容器清理流程。缓存随容器清理，不挂载宿主缓存，也无需 root 权限。
+镜像预装与 `.sandcastle/Dockerfile` 中 Playwright 固定版本匹配的 Chromium 和 Linux 系统依赖，浏览器路径为
+`PLAYWRIGHT_BROWSERS_PATH=/opt/ms-playwright`。升级仓库 Playwright 时同步镜像版本并重新运行 `pnpm sandcastle:build`。
+Smoke 以实际非 root 用户执行原浏览器预检，并用 workspace 的 Playwright 启动 headless shell 和完整 Chromium、执行页面脚本后关闭；
+不设置 `PLAYWRIGHT_E2E_SKIP_PREFLIGHT`。版本、路径、权限或依赖不匹配都会使 smoke 失败。
+Implementer 和 Merger 在 Codex CLI 启动前统一执行 `scripts/sandcastle/prepare-workspace.sh`：安装锁定依赖、清理前端生成目录内容、
+显式运行 Admin/SSO `setup`。初始化任一步非零退出即停止；不依赖 SDK ready hook 或 `postinstall` 隐式保证成功。
+每个执行器独立挂载两个前端的 `src/.umi`、`src/.umi-production`、`src/.umi-test`，结束后清理暂存目录，
+保留宿主已有生成文件；Linux 类型不会写回宿主生成目录。Planner 只读选票，不执行这套依赖初始化。
+容器内修改依赖、Umi 配置或路由后，再运行 `sh scripts/sandcastle/prepare-workspace.sh` 更新环境；普通业务改动无需重复初始化。
+Smoke 覆盖旧宿主生成文件隔离、两个前端类型检查，以及安装或 setup 失败时不启动 agent。
 运行参数默认 10 批、最多 2 张 ticket 并行；`--iterations`、`--parallel` 只调整本次运行。
+Merger 每批最多 10 次 SDK 迭代，正常结束但未输出完成标记时继续；这与 `--iterations` 的批次数分别计数，
+也不重试初始化或进程异常。失败修复与继续执行规则见 [AFK 工作流](../agents/workflow.md#sandcastle-afk-批量实施)。
 `--model`（优先）或 `SANDCASTLE_MODEL` 只覆盖 Planner/Merger 的模型，两者默认 `gpt-6-astra`、思考程度 `high`。
 
 Planner 从仓库 `.codex/agents/implementer-{light,standard,deep}.toml` 定义的实施者中选择，
@@ -77,12 +91,13 @@ standard 为 `gpt-5.6-sol` / `high`，deep 为 `gpt-6-astra` / `xhigh`。
 不修改用户宿主 Codex 配置；会话内评审和十轮上限见[双轴评审流程](../agents/workflow.md#sandcastle-afk-批量实施)。
 
 Codex CLI 0.154 的角色 override 忽略 `sandbox_mode`，因此评审角色的只读要求属于职责约束，不能保证子代理在
-操作系统层面只能读取。Runner 检查原始事件中的实际 spawn、新子代理 ID，以及绑定 review base/candidate 的两轴
-completed 结果；事件不提供 `agent_type`，这些检查不能机器证明角色身份或评审质量。
+操作系统层面只能读取。双轴由实施者执行、Merger 阅读报告核对，runner 不解析评审报告或会话文件，
+也不重复实施者的静态和 diff 检查；职责见[工作流](../agents/workflow.md#双轴评审子代理生命周期)。
 
 普通失败和 Ctrl+C 会清理本次测试资源；若宿主被强制终止，按 `.sandcastle/resources/` 中对应记录的准确
 container/network ID 恢复清理。`run.lock` 记录进程与目标分支，确认旧进程已结束后才移除该文件。
 已有 ticket 分支可重新进入评审和合入交接，包括代码已合入、GitHub 关票尚未完成的情况。
+成功批次的本地 ticket 分支由 runner 在合入与关票核对后清理；分支偏移、worktree 占用等清理失败会停止后续批次，按报错恢复。
 队列耗尽前还有一次父 Spec 收尾核对。锁定的 Sandcastle 0.12.0 使用 `patches/` 中的 signal 补丁，允许此 runner
 通过 AbortSignal 等待清理，避免 SDK 提前 `process.exit`；升级依赖时须重新验证普通与 provisioning 中断路径。
 

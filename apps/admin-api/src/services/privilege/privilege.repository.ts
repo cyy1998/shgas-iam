@@ -1,9 +1,10 @@
 import type { DbClient } from "@iam/db";
+import { PrivilegeStatus } from "@iam/contracts";
 import {
   privileges,
   rolePrivileges,
 } from "@iam/db/schema";
-import { eq, inArray } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 
 export function createPrivilegeRepository(db: DbClient) {
   return {
@@ -12,11 +13,17 @@ export function createPrivilegeRepository(db: DbClient) {
         return [];
       }
       return await db
-        .select()
+        .selectDistinct({
+          privilegeCode: privileges.privilegeCode,
+          privilegeName: privileges.privilegeName,
+        })
         .from(privileges)
         .innerJoin(rolePrivileges, eq(rolePrivileges.privilegeId, privileges.id))
-        .where(inArray(rolePrivileges.roleId, roleIds))
-        .then(rows => rows.map(row => row.privilege));
+        .where(and(
+          inArray(rolePrivileges.roleId, roleIds),
+          eq(privileges.status, PrivilegeStatus.Enable),
+          eq(privileges.isDelete, false),
+        ));
     },
   };
 }

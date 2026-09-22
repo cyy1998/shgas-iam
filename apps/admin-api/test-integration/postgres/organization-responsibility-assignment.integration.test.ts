@@ -4,8 +4,12 @@ import { randomUUID } from "node:crypto";
 import { createAdminApiRepositories } from "@admin-api/composition/repositories";
 import { createAdminApiUnitOfWork } from "@admin-api/composition/tx";
 import { createAdminAuthorizationPolicy } from "@admin-api/services/admin-authorization/admin-authorization.policy";
+import { createHrAdministrationScopeResolver } from "@admin-api/services/admin-authorization/hr-administration-scope.resolver";
+import { OrganizationResponsibilityAssignmentViewSchema } from "@admin-api/services/organization-responsibility/organization-responsibility.schema";
 import { createOrganizationResponsibilityService } from "@admin-api/services/organization-responsibility/organization-responsibility.service";
 import { createOrganizationService } from "@admin-api/services/organization/organization.service";
+import { createPositionService } from "@admin-api/services/position/position.service";
+import { createUserService } from "@admin-api/services/user/user.service";
 import { createChangeEmploymentAvailabilityUseCase } from "@admin-api/use-cases/employment/change-employment-availability/change-employment-availability.use-case";
 import { createEndEmploymentUseCase } from "@admin-api/use-cases/employment/end-employment/end-employment.use-case";
 import { createResignUserUseCase } from "@admin-api/use-cases/employment/resign-user/resign-user.use-case";
@@ -26,27 +30,32 @@ import {
   OrganizationStatus,
   OrganizationType,
   PositionStatus,
+  RoleAssignmentTargetType,
   UserProfileDirtyReason,
   UserStatus,
   UserType,
 } from "@iam/contracts";
 import {
   auditLogs,
+  clients,
   employments,
   organizationClosures,
   organizationResponsibilityAssignments,
   organizations,
   positions,
+  roles,
   subjectAccessTransitions,
   userProfileDirty,
   users,
 } from "@iam/db/schema";
+import { roleAssignments } from "@iam/db/schema/role-assignments";
 import {
   OrganizationResponsibilityAssignmentCardinalityConflictError,
   OrganizationResponsibilityAssignmentDuplicateOpenError,
   OrganizationResponsibilityAssignmentNotFoundError,
   OrganizationResponsibilityAssignmentUnmanageableConflictError,
 } from "@iam/domain/organization-responsibility";
+import { createRoleAssignmentResolver } from "@iam/role-assignment-resolution";
 import { createSubjectAccessTransitionRepository } from "@iam/user-profile-read-model/subject-access-transition";
 import {
   afterAll,
@@ -71,6 +80,9 @@ beforeAll(async () => {
 });
 
 beforeEach(async () => {
+  await harness!.db.delete(roleAssignments);
+  await harness!.db.delete(roles);
+  await harness!.db.delete(clients);
   await harness!.reset();
 });
 
@@ -2323,33 +2335,247 @@ describe("Organization Responsibility Assignment PostgreSQL command", () => {
     );
   });
 
-  test("fails closed when an Assignment references a deleted management row", async () => {
+  test("reads Ended target history after formal End and legal target deletion", async () => {
     const fixture = await seedScenario();
     const producer = mock(async () => ({ enqueued: 1, jobIds: ["job-1"] }));
-    await createUseCase(fixture.now, producer).execute({
+    const created = await createUseCase(fixture.now, producer).execute({
       employmentId: fixture.employmentId,
       targetOrganizationCode: "TARGET",
       typeCode: OrganizationResponsibilityTypeCode.Head,
     });
-    await harness!.db
-      .update(users)
-      .set({ isDelete: true })
-      .where(eq(users.id, fixture.userId));
-    const service = createFullAdminOrganizationResponsibilityService({
-      repository: createAdminApiRepositories(harness!.db)
-        .organizationResponsibility,
+    const endedAt = new Date(fixture.now.getTime() + 1_000);
+    await createLifecycleUseCase(endedAt, producer).execute({ id: created.result.id, command: "end" });
+    const repositories = createAdminApiRepositories(harness!.db);
+    const organizationService = createHistoryParentCommands(fixture, endedAt, producer).organization;
+    await organizationService.updateOrganization("TARGET", { orgName: "Renamed Target" });
+    const deleted = await organizationService.deleteOrganization("TARGET");
+    expect(deleted).toEqual({ changed: true, result: null });
+    const service = createFullAdminOrganizationResponsibilityService({ repository: repositories.organizationResponsibility });
+    const detail = await service.detailAssignment({ id: created.result.id });
+    expect(OrganizationResponsibilityAssignmentViewSchema.parse(detail)).toEqual(detail);
+    expect(detail).toMatchObject({
+      id: created.result.id,
+      status: OrganizationResponsibilityAssignmentStatus.Disable,
+      endTime: endedAt.toISOString(),
+      targetOrganization: { orgName: "Renamed Target", isDelete: true },
+      allowedActions: { pause: { allowed: false }, resume: { allowed: false }, end: { allowed: false } },
     });
-
-    let caught: unknown;
-    try {
-      await service.listAssignments({ orgCode: "TARGET", limit: 20 });
+    for (const lifecycle of ["ended", "all"] as const) {
+      const targetPage = await service.listAssignments({ orgCode: "TARGET", lifecycle, limit: 20 });
+      const globalPage = await service.searchAssignments({ lifecycle, pageNum: 1, pageSize: 1, limit: 20 });
+      expect(targetPage.items).toEqual([detail]);
+      expect(globalPage).toMatchObject({ items: [detail], total: 1, nextCursor: null });
     }
-    catch (error) {
-      caught = error;
-    }
-    expect(caught).toBeInstanceOf(Error);
-    expect((caught as Error).message).toContain("has no valid User");
   });
+
+  for (const deletedRelation of ["user", "position", "organization"] as const) {
+    test(`reads Ended history after formal Employment End and legal holder ${deletedRelation} deletion`, async () => {
+      const fixture = await seedScenario();
+      const producer = mock(async () => ({ enqueued: 1, jobIds: ["job-1"] }));
+      const created = await createUseCase(fixture.now, producer).execute({
+        employmentId: fixture.employmentId,
+        targetOrganizationCode: "TARGET",
+        typeCode: OrganizationResponsibilityTypeCode.Head,
+      });
+      const second = await createUseCase(fixture.now, producer).execute({
+        employmentId: fixture.secondEmploymentId,
+        targetOrganizationCode: "TARGET",
+        typeCode: OrganizationResponsibilityTypeCode.Supervising,
+      });
+      const endedAt = new Date(fixture.now.getTime() + 1_000);
+      const commands = createHistoryParentCommands(fixture, endedAt, producer);
+      await commands.endEmployment.execute({ employmentId: fixture.employmentId });
+      await commands.endEmployment.execute({ employmentId: fixture.secondEmploymentId });
+      const deletion = deletedRelation === "user"
+        ? await commands.user.deleteUser("holder")
+        : deletedRelation === "position"
+          ? await commands.position.deletePosition("POSITION")
+          : await commands.organization.deleteOrganization("HOLDER");
+      expect(deletion).toEqual({ changed: true, result: null });
+      const service = createFullAdminOrganizationResponsibilityService({
+        repository: createAdminApiRepositories(harness!.db).organizationResponsibility,
+      });
+      const detail = await service.detailAssignment({ id: created.result.id });
+      expect(detail).toMatchObject({
+        status: OrganizationResponsibilityAssignmentStatus.Disable,
+        endTime: endedAt.toISOString(),
+        holder: {
+          user: { name: "Holder", isDelete: deletedRelation === "user" },
+          position: { posName: "Position", isDelete: deletedRelation === "position" },
+          organization: { orgName: "Holder Organization", isDelete: deletedRelation === "organization" },
+        },
+        allowedActions: { pause: { allowed: false }, resume: { allowed: false }, end: { allowed: false } },
+      });
+      if (deletedRelation !== "organization") {
+        const scopedService = createOrganizationResponsibilityService({
+          repository: createAdminApiRepositories(harness!.db).organizationResponsibility,
+        });
+        for (const organizationIds of [
+          [fixture.holderOrganizationId, fixture.targetOrganizationId],
+          [fixture.holderOrganizationId],
+          [fixture.targetOrganizationId],
+          [fixture.holderRootOrganizationId],
+        ]) {
+          const authorization = await createHrOrganizationResponsibilityAuthorization(organizationIds);
+          const page = await scopedService.searchAssignments({
+            lifecycle: "ended",
+            pageNum: 1,
+            pageSize: 10,
+            limit: 20,
+          }, authorization);
+          if (organizationIds.length === 2) {
+            expect(page.items.map(item => item.id)).toEqual([second.result.id, created.result.id]);
+            const scopedDetail = await scopedService.detailAssignment({ id: created.result.id }, authorization);
+            expect(scopedDetail).toEqual(detail);
+          }
+          else {
+            expect(page).toEqual({ items: [], total: 0, nextCursor: null });
+            const failure = await captureFailure(() => scopedService.detailAssignment({ id: created.result.id }, authorization));
+            expect(failure).toBeInstanceOf(OrganizationResponsibilityAssignmentNotFoundError);
+          }
+        }
+      }
+      const secondDetail = await service.detailAssignment({ id: second.result.id });
+      for (const lifecycle of ["ended", "all"] as const) {
+        const targetPage = await service.listAssignments({ orgCode: "TARGET", lifecycle, limit: 20 });
+        expect(targetPage.items).toEqual([secondDetail, detail]);
+        const firstPage = await service.searchAssignments({ lifecycle, pageNum: 1, pageSize: 1, limit: 20 });
+        const secondPage = await service.searchAssignments({ lifecycle, pageNum: 2, pageSize: 1, limit: 20 });
+        expect(firstPage).toEqual({ items: [secondDetail], total: 2, nextCursor: null });
+        expect(secondPage).toEqual({ items: [detail], total: 2, nextCursor: null });
+      }
+      if (deletedRelation === "organization") {
+        await commands.organization.deleteOrganization("HOLDER_ROOT");
+        const ancestorHistory = await service.detailAssignment({ id: created.result.id });
+        expect(ancestorHistory.holder.organization.fullPath).toEqual([
+          { id: fixture.holderRootOrganizationId, orgCode: "HOLDER_ROOT", orgName: "Holder Root Organization", isDelete: true },
+          { id: fixture.holderOrganizationId, orgCode: "HOLDER", orgName: "Holder Organization", isDelete: true },
+        ]);
+      }
+    });
+  }
+
+  for (const deletedEndpoint of ["holder", "target"] as const) {
+    test(`conceals Ended history from current HR scope after legal ${deletedEndpoint} Organization deletion`, async () => {
+      const fixture = await seedScenario();
+      const producer = mock(async () => ({ enqueued: 1, jobIds: ["job-1"] }));
+      // Both endpoints are children of the actor's scope root; the actor's own Employment remains open.
+      await harness!.db.update(organizations).set({
+        parentId: fixture.holderRootOrganizationId,
+        level: OrganizationLevel.Two,
+        path: `/${fixture.holderRootOrganizationId}/${fixture.targetOrganizationId}`,
+      }).where(eq(organizations.id, fixture.targetOrganizationId));
+      await harness!.db.insert(organizationClosures).values({
+        ancestorId: fixture.holderRootOrganizationId,
+        descendantId: fixture.targetOrganizationId,
+        depth: 1,
+      });
+      const [actor] = await harness!.db.insert(users).values({ username: "hr", name: "HR", userType: UserType.Formal }).returning();
+      const [actorPosition] = await harness!.db.insert(positions).values({ posCode: "HR", posName: "HR" }).returning();
+      const [actorEmployment] = await harness!.db.insert(employments).values({
+        userId: actor!.id,
+        orgId: fixture.holderRootOrganizationId,
+        posId: actorPosition!.id,
+        status: EmploymentStatus.Enable,
+        startTime: new Date("2020-01-01T00:00:00Z"),
+      }).returning();
+      const [client] = await harness!.db.insert(clients).values({
+        clientCode: "iam-admin",
+        clientName: "Admin",
+        clientSecret: "test-secret",
+        extAttributes: {},
+      }).returning();
+      const [role] = await harness!.db.insert(roles).values({
+        clientId: client!.id,
+        roleCode: "iam:hr-admin",
+        roleName: "HR",
+      }).returning();
+      await harness!.db.insert(roleAssignments).values({
+        roleId: role!.id,
+        targetType: RoleAssignmentTargetType.Employment,
+        targetId: actorEmployment!.id,
+      });
+      const policy = createAdminAuthorizationPolicy({
+        logger: { warn: mock() },
+        hrAdministrationScopeResolver: createHrAdministrationScopeResolver({
+          db: harness!.db,
+          roleAssignmentResolver: createRoleAssignmentResolver(harness!.db),
+        }),
+      });
+      const getAuthorization = () => policy.getOrganizationResponsibilityAuthorization({
+        userId: actor!.id,
+        username: "hr",
+        roles: ["iam:hr-admin"],
+      });
+      const service = createOrganizationResponsibilityService({
+        repository: createAdminApiRepositories(harness!.db).organizationResponsibility,
+      });
+      const created = await createUseCase(fixture.now, producer).execute({
+        employmentId: fixture.employmentId,
+        targetOrganizationCode: "TARGET",
+        typeCode: OrganizationResponsibilityTypeCode.Head,
+      });
+      const commands = createHistoryParentCommands(fixture, new Date(fixture.now.getTime() + 1_000), producer);
+      await commands.endEmployment.execute({ employmentId: fixture.employmentId });
+      await commands.endEmployment.execute({ employmentId: fixture.secondEmploymentId });
+      const before = await service.detailAssignment({ id: created.result.id }, await getAuthorization());
+      expect(before.status).toBe(OrganizationResponsibilityAssignmentStatus.Disable);
+      await commands.organization.deleteOrganization(deletedEndpoint === "holder" ? "HOLDER" : "TARGET");
+      const currentAuthorization = await getAuthorization();
+      const page = await service.searchAssignments({
+        lifecycle: "all",
+        pageNum: 1,
+        pageSize: 20,
+        limit: 20,
+      }, currentAuthorization);
+      const targetPage = await service.listAssignments({
+        orgCode: "TARGET",
+        lifecycle: "ended",
+        limit: 20,
+      }, currentAuthorization);
+      const failure = await captureFailure(() => service.detailAssignment({ id: created.result.id }, currentAuthorization));
+      expect(page).toEqual({ items: [], total: 0, nextCursor: null });
+      expect(targetPage.items).toEqual([]);
+      expect(failure).toBeInstanceOf(OrganizationResponsibilityAssignmentNotFoundError);
+      const fullDetail = await service.detailAssignment(
+        { id: created.result.id },
+        testFullOrganizationResponsibilityAuthorization,
+      );
+      expect(fullDetail.id).toBe(created.result.id);
+    });
+  }
+
+  for (const relation of ["User", "Position", "holder Organization", "holder Organization path"] as const) {
+    for (const status of [OrganizationResponsibilityAssignmentStatus.Enable, OrganizationResponsibilityAssignmentStatus.Pause]) {
+      test(`fails Open ${status} list and detail closed for a deleted ${relation}`, async () => {
+        const fixture = await seedScenario();
+        const producer = mock(async () => ({ enqueued: 1, jobIds: ["job-1"] }));
+        const created = await createUseCase(fixture.now, producer).execute({
+          employmentId: fixture.employmentId,
+          targetOrganizationCode: "TARGET",
+          typeCode: OrganizationResponsibilityTypeCode.Head,
+        });
+        if (status === OrganizationResponsibilityAssignmentStatus.Pause)
+          await createLifecycleUseCase(fixture.now, producer).execute({ id: created.result.id, command: "pause" });
+        if (relation === "User") {
+          await harness!.db.update(users).set({ isDelete: true }).where(eq(users.id, fixture.userId));
+        }
+        else if (relation === "Position") {
+          await harness!.db.update(positions).set({ isDelete: true }).where(eq(positions.posCode, "POSITION"));
+        }
+        else {
+          await harness!.db.update(organizations).set({ isDelete: true }).where(eq(
+            organizations.id,
+            relation === "holder Organization" ? fixture.holderOrganizationId : fixture.holderRootOrganizationId,
+          ));
+        }
+        const service = createFullAdminOrganizationResponsibilityService({
+          repository: createAdminApiRepositories(harness!.db).organizationResponsibility,
+        });
+        await expectAssignmentReadsToFailClosed(service, created.result.id, `has no valid ${relation}`);
+      });
+    }
+  }
 
   test("fails list and detail closed when the target Organization is deleted", async () => {
     const fixture = await seedScenario();
@@ -2995,12 +3221,68 @@ async function seedScenario() {
   return {
     now,
     userId: user!.id,
+    subjectIdentifier: user!.subjectIdentifier,
     secondUserId: secondUser!.id,
     employmentId: employment!.id,
     secondEmploymentId: secondEmployment!.id,
     holderRootOrganizationId: holderRootOrganization!.id,
     holderOrganizationId: holderOrganization!.id,
     targetOrganizationId: targetOrganization!.id,
+  };
+}
+
+function createHistoryParentCommands(
+  fixture: { subjectIdentifier: string },
+  now: Date,
+  producer: (payloads: never) => Promise<unknown>,
+) {
+  const repositories = createAdminApiRepositories(harness!.db);
+  const uow = createUnitOfWork(now, producer);
+  return {
+    endEmployment: createEndEmploymentUseCase({
+      clock: { nowDate: () => now },
+      uow: mapUnitOfWork(uow, tx => ({
+        auditLogWriter: tx.auditService,
+        employmentStore: tx.repositories.employment,
+        responsibilityParentLifecycle: tx.responsibilityParentLifecycle,
+        userProfileInvalidation: tx.userProfileInvalidation,
+      })),
+    }),
+    organization: createOrganizationService({
+      organizationRepository: repositories.organization,
+      responsibilityReader: repositories.organizationResponsibility,
+      uow: mapUnitOfWork(uow, tx => ({
+        auditService: tx.auditService,
+        responsibilityParentLifecycle: tx.responsibilityParentLifecycle,
+        userProfileInvalidation: tx.userProfileInvalidation,
+        organizationRepository: tx.repositories.organization,
+      })),
+    }),
+    position: createPositionService({
+      positionRepository: repositories.position,
+      uow: mapUnitOfWork(uow, tx => ({
+        positionRepository: tx.repositories.position,
+        auditService: tx.auditService,
+        userProfileInvalidation: tx.userProfileInvalidation,
+      })),
+    }),
+    user: createUserService({
+      userRepository: repositories.user,
+      employmentRepository: repositories.employment,
+      roleAssignmentResolver: { resolveEffectiveRoles: async () => new Map() },
+      roleRepository: repositories.role,
+      privilegeRepository: repositories.privilege,
+      passwordHasher: { hashPassword: async password => `hash:${password}` },
+      random: { uuid: randomUUID, password: () => "Random123!" },
+      sessionRevocation: { revokeUserSessions: async () => undefined },
+      subjectAccessLifecycle: createPostgresSubjectAccessLifecycle(fixture.subjectIdentifier, now),
+      uow: mapUnitOfWork(uow, tx => ({
+        userRepository: tx.repositories.user,
+        auditService: tx.auditService,
+        subjectAccessMutation: tx.subjectAccessMutation,
+        userProfileInvalidation: tx.userProfileInvalidation,
+      })),
+    }),
   };
 }
 

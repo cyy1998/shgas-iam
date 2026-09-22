@@ -19,6 +19,8 @@ type Props = {
   onSuccess?: () => void;
 };
 
+const trimInput = (value: string | undefined) => value?.trim();
+
 export default function PositionFormModal({
   open,
   initialValues,
@@ -51,7 +53,7 @@ export default function PositionFormModal({
         try {
           if (isEdit) {
             const outcome = await updatePosition(initialValues!.posCode, {
-              posName: values.posName,
+              posName: values.posName.trim(),
               description: values.description || null,
               ...(values.status !== initialValues!.status
                 ? { status: values.status }
@@ -60,8 +62,8 @@ export default function PositionFormModal({
             message.success(outcome.changed ? '更新成功' : '无需修改');
           } else {
             const outcome = await createPosition({
-              posCode: values.posCode,
-              posName: values.posName,
+              posCode: values.posCode.trim(),
+              posName: values.posName.trim(),
               description: values.description || undefined,
               status: values.status,
             });
@@ -79,12 +81,36 @@ export default function PositionFormModal({
         name="posCode"
         label="岗位编码"
         disabled={isEdit}
-        rules={[{ required: true, message: '请输入岗位编码' }]}
+        rules={[
+          {
+            transform: trimInput,
+            required: true,
+            whitespace: true,
+            message: '请输入岗位编码',
+          },
+          {
+            transform: trimInput,
+            max: 64,
+            message: '岗位编码最多64个字符',
+          },
+        ]}
       />
       <ProFormText
         name="posName"
         label="岗位名称"
-        rules={[{ required: true, message: '请输入岗位名称' }]}
+        rules={[
+          {
+            transform: trimInput,
+            required: true,
+            whitespace: true,
+            message: '请输入岗位名称',
+          },
+          {
+            transform: trimInput,
+            max: 128,
+            message: '岗位名称最多128个字符',
+          },
+        ]}
       />
       <ProFormTextArea name="description" label="描述" />
       <ProFormSelect

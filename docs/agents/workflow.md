@@ -69,6 +69,10 @@ Spec 中记录目标分支、功能分支及设计提交 SHA；没有设计提�
 - 原实施会话在各轮之间保持不变，负责接收和修复 findings；评审子代理只服务当前一轮，不修改文件、
   stage 或 commit。
 
+双轴评审由实施者负责执行，AFK runner 不解析评审报告或会话事件来判断是否通过。实施者等待两轴实际完成，
+在交接中保留真实最终报告、固定 review base/candidate SHA 和 findings 的处置结果，供 Merger 阅读核对。
+报告使用自然语言即可；最终候选两轴均无未解决 findings 才可交付，缺失或失败的评审不能用旧候选的通过结果代替。
+
 ## Sandcastle AFK 批量实施
 
 批量路径参考作者自用的
@@ -87,15 +91,21 @@ Spec 中记录目标分支、功能分支及设计提交 SHA；没有设计提�
    `/code-review`，按上一节并行启动 Standards 与 Spec 两个只读子代理；实施者接收 findings、修复并验证，
    然后开始新一轮双轴评审。每票每次实施者会话最多十轮，review base 全程固定，每轮固定本轮 candidate SHA 并审查累计完整差异。
    两轴都通过且候选未变化才可交付；子代理不可用、评审缺失、轮数耗尽或必需验证未通过时报告失败并保留 ticket
-   为 open。交接包含实施者选择、review base、候选 SHA、两轴结果、实际命令及结果、未执行项和剩余问题。
+   为 open。交接包含实施者选择、上一节的评审材料、实际命令及结果、未执行项和剩余问题。
    不另设顶层 Reviewer；评审模型与只读职责由各自角色文件定义，CLI 的权限限制见命令页。
-3. **Merger**：等待本批所有 Implementer 结束后，再处理通过双轴评审与验收的分支，以普通 `git merge` 合回
-   调用分支，解决合并冲突并在最终合并内容上运行 `pnpm verify` 及适用的额外检查。验证通过后记录合入 SHA、
+3. **Merger**：等待本批所有 Implementer 结束后，阅读各票真实评审报告与验收记录，确认满足交付条件后以普通 `git merge` 合回
+   调用分支，解决合并冲突并按下节在最终合并内容上验证。类型检查或测试失败时先诊断，在本批授权范围内自行修复，
+   重跑失效检查后继续。验证通过后记录合入 SHA、
    验收和评审摘要，关闭成功 tickets；父 Spec 的全部切片及最终验收均完成时一并关闭。随后进入下一轮。
+   进入下一轮前，runner 核对本批全部候选已合入、tickets 已关闭，再删除对应本地 ticket 分支；只删除仍指向合入候选的分支，
+   分支已变化或仍被 worktree 使用时停止清理并报告，不强制删除。失败票的分支继续保留供恢复。
    Planner 没有实施票可派发时，再由 Merger 核对一次待收尾父 Spec，恢复子票已关闭、父 Spec 更新失败的情况。
+   Merger 正常结束但未输出完成标记时，SDK 最多执行十次迭代；每次依据 Git 和 issue 恢复记录继续未完成步骤，
+   不重复已完成的合入和关票。迭代上限耗尽仍未完成时终止 runner；初始化或进程异常不由此迭代机制重试。
 
 GitHub Issues 保存需求、协作状态与恢复说明，Git 提交保存实现历史；日志和本地分支辅助恢复，不替代 issue 事实。
-合并、必需验证或 issue 更新失败时停止后续动作并报告实际状态，保留分支和工作区现场，不自动 reset 或重复合入。
+合并、必需验证或 issue 更新尚未完成时，先恢复当前批次再进入下一批；无法自行解决时报告阻碍和恢复点。
+保留分支和工作区现场，不自动 reset 或重复合入。
 未完成或缺少必需检查的 ticket 保持 open；正常进程退出、存在提交或 Implementer 宣称完成都不能替代验收结果。
 
 运行环境、命令和当前资源限制见 [Sandcastle AFK 命令](../development/commands.md#sandcastle-afk)。
@@ -103,12 +113,18 @@ GitHub Issues 保存需求、协作状态与恢复说明，Git 提交保存实�
 ## 验证节奏
 
 - TDD 与实现内循环运行最高层相关测试、单测试文件，以及受影响 workspace 的 lint/typecheck；文档变化运行
-  `pnpm check:docs`。每票、每轮修复在交接评审前必须通过 `pnpm verify:static`、当前 ticket 完整受影响范围的
-  typecheck 与行为测试，以及 `git diff --check`。静态入口已包含 Collection Guard，无需另外重复执行。
+  `pnpm check:docs`。每票首次交接评审前，通过一次 `pnpm verify:static`、当前 ticket 完整受影响范围的
+  typecheck 与行为测试，以及 `git diff --check`。静态入口已包含 Collection Guard，无需另外重复执行；
+  AFK runner 不再重复实施者的静态和 diff 检查。
+- 评审修复后按实际变化重跑失效的检查，补齐新增范围的验证；未受代码、依赖、配置或环境变化影响的通过结果可以复用，
+  在交接中说明复用依据。无法判断影响范围时扩大验证，不能用复用理由掩盖失败或未执行项。每轮评审仍覆盖完整累计差异，
+  但不要求每轮重跑整套测试；最终交付必须具备覆盖当前候选全部受影响范围的有效证据。
 - 上游 `/implement` 所说的结束时完整测试，在本仓库映射为当前 ticket 的完整受影响范围，不是每票运行全仓
   `pnpm verify`。
 - `pnpm verify` 只在准备 merge、release 或用户明确要求时，在最终实现内容上运行一次。它不替代需要显式环境的
-  PostgreSQL、浏览器 E2E 或 Gateway 检查。AFK 每批本地合入属于这个时机，由 Merger 在合并后的最终内容上执行。
+  PostgreSQL、浏览器 E2E 或 Gateway 检查。AFK 由 Merger 在整批合并后的最终内容上运行一次 `pnpm verify`，
+  将本批各票及 Spec 所需的额外 Integration、E2E、Gateway 检查按覆盖范围去重后执行一次，不能用各实施分支的
+  结果代替合并后的验证。最终验证后再有修改时，重跑因此失效的检查。
 - 最终验证的证明范围见[最终候选验证](../architecture/testing-architecture.md#默认验证与交付)。Collection Guard 只证明
   测试收集与命令可达，不证明测试断言已执行或通过。
 - Integration 测试所需的 PostgreSQL 和 Redis 由调用方负责。没有专用测试 URL 时，agent 应在 Docker 可用的情况下

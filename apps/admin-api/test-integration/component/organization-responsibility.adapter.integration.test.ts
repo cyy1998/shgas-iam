@@ -136,20 +136,22 @@ describe("Organization Responsibility Type Catalog admin adapter", () => {
       endTime: null,
       holder: {
         employmentId: 7,
-        user: { id: 3, username: "holder", name: "Holder" },
+        user: { id: 3, username: "holder", name: "Holder", isDelete: false },
         organization: {
           id: 10,
           orgCode: "HOLDER",
           orgName: "Holder Org",
-          fullPath: [{ id: 10, orgCode: "HOLDER", orgName: "Holder Org" }],
+          isDelete: false,
+          fullPath: [{ id: 10, orgCode: "HOLDER", orgName: "Holder Org", isDelete: false }],
         },
-        position: { id: 20, posCode: "LEAD", posName: "Lead" },
+        position: { id: 20, posCode: "LEAD", posName: "Lead", isDelete: false },
       },
       targetOrganization: {
         id: 30,
         orgCode: "TARGET",
         orgName: "Target Org",
-        fullPath: [{ id: 30, orgCode: "TARGET", orgName: "Target Org" }],
+        isDelete: false,
+        fullPath: [{ id: 30, orgCode: "TARGET", orgName: "Target Org", isDelete: false }],
       },
     };
     const allowedActions = {
@@ -294,6 +296,12 @@ describe("Organization Responsibility Type Catalog admin adapter", () => {
         },
       } as unknown as Context,
     });
+    const trpcDetail = await caller.detailAssignment({ id: 41 });
+    const parsedDetail = responsibilityRoutes.organizationResponsibilityAssignmentDetail.responses[200]
+      .content["application/json"]
+      .schema
+      .parse({ code: 200, data: trpcDetail, message: "success" });
+    expect(parsedDetail.data).toEqual(authorizedAssignment);
     const resumeResult = await caller.resumeAssignment({ id: 41 });
     expect(resumeResult).toEqual({ changed: true, result: null });
     const endResult = await caller.endAssignment({ id: 41 });

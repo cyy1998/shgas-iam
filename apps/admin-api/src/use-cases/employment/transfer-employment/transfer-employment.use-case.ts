@@ -11,11 +11,13 @@ import {
   EmploymentStatus,
   OrganizationStatus,
   PositionStatus,
+  UserStatus,
 } from "@iam/contracts";
 import {
   EmploymentAlreadyExistsError,
   EmploymentNotEditableError,
   EmploymentNotFoundError,
+  EmploymentUserDisabledError,
 } from "@iam/domain/employment";
 import { OrganizationNotFoundError } from "@iam/domain/organization";
 import { PositionNotFoundError } from "@iam/domain/position";
@@ -94,6 +96,9 @@ export function createTransferEmploymentUseCase(
         || position.isDelete
       ) {
         throw new PositionNotFoundError("新岗位未启用或不存在");
+      }
+      if (user.status === UserStatus.Disable) {
+        throw new EmploymentUserDisabledError();
       }
       await assertEmploymentOrganizationScope(
         tx.organizationReader,

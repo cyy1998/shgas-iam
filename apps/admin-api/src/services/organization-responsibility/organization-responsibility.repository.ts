@@ -34,6 +34,8 @@ import {
 import { and, asc, desc, eq, inArray, isNull, lt, ne, notInArray, or } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 
+type OrganizationPathNode = OrganizationResponsibilityAssignmentData["targetOrganization"]["fullPath"][number];
+
 const OPEN_ASSIGNMENT_STATUSES = [
   OrganizationResponsibilityAssignmentStatus.Enable,
   OrganizationResponsibilityAssignmentStatus.Pause,
@@ -323,13 +325,16 @@ export function createOrganizationResponsibilityRepository(db: DbClient) {
         userId: users.id,
         username: users.username,
         userName: users.name,
+        userIsDelete: users.isDelete,
         holderOrganizationId: holderOrganization.id,
         holderOrganizationCode: holderOrganization.orgCode,
         holderOrganizationName: holderOrganization.orgName,
+        holderOrganizationIsDelete: holderOrganization.isDelete,
         holderOrganizationPath: holderOrganization.path,
         positionId: positions.id,
         positionCode: positions.posCode,
         positionName: positions.posName,
+        positionIsDelete: positions.isDelete,
         targetOrganizationId: targetOrganization.id,
         targetOrganizationCode: targetOrganization.orgCode,
         targetOrganizationName: targetOrganization.orgName,
@@ -350,18 +355,27 @@ export function createOrganizationResponsibilityRepository(db: DbClient) {
       )
       .leftJoin(
         users,
-        and(eq(employments.userId, users.id), eq(users.isDelete, false)),
+        and(eq(employments.userId, users.id), or(
+          eq(users.isDelete, false),
+          eq(organizationResponsibilityAssignments.status, OrganizationResponsibilityAssignmentStatus.Disable),
+        )),
       )
       .leftJoin(
         holderOrganization,
         and(
           eq(employments.orgId, holderOrganization.id),
-          eq(holderOrganization.isDelete, false),
+          or(
+            eq(holderOrganization.isDelete, false),
+            eq(organizationResponsibilityAssignments.status, OrganizationResponsibilityAssignmentStatus.Disable),
+          ),
         ),
       )
       .leftJoin(
         positions,
-        and(eq(employments.posId, positions.id), eq(positions.isDelete, false)),
+        and(eq(employments.posId, positions.id), or(
+          eq(positions.isDelete, false),
+          eq(organizationResponsibilityAssignments.status, OrganizationResponsibilityAssignmentStatus.Disable),
+        )),
       )
       .leftJoin(
         targetOrganization,
@@ -529,6 +543,7 @@ export function createOrganizationResponsibilityRepository(db: DbClient) {
             id: requireValue(row.userId, row.id, "User"),
             username: requireValue(row.username, row.id, "User username"),
             name: requireValue(row.userName, row.id, "User name"),
+            isDelete: requireValue(row.userIsDelete, row.id, "User"),
           },
           organization: {
             id: requireValue(
@@ -546,18 +561,21 @@ export function createOrganizationResponsibilityRepository(db: DbClient) {
               row.id,
               "holder Organization name",
             ),
+            isDelete: requireValue(row.holderOrganizationIsDelete, row.id, "holder Organization"),
             fullPath: requirePath(
               paths,
               row.holderOrganizationId,
               row.holderOrganizationPath,
               row.id,
               "holder Organization",
+              row.status,
             ),
           },
           position: {
             id: requireValue(row.positionId, row.id, "Position"),
             posCode: requireValue(row.positionCode, row.id, "Position code"),
             posName: requireValue(row.positionName, row.id, "Position name"),
+            isDelete: requireValue(row.positionIsDelete, row.id, "Position"),
           },
         },
         targetOrganization: {
@@ -576,12 +594,14 @@ export function createOrganizationResponsibilityRepository(db: DbClient) {
             row.id,
             "target Organization name",
           ),
+          isDelete: requireValue(row.targetOrganizationIsDelete, row.id, "target Organization"),
           fullPath: requirePath(
             paths,
             row.targetOrganizationId,
             row.targetOrganizationPath,
             row.id,
             "target Organization",
+            row.status,
           ),
         },
       };
@@ -593,7 +613,7 @@ export function createOrganizationResponsibilityRepository(db: DbClient) {
     if (orgIds.length === 0) {
       return new Map<
         number,
-        { id: number; orgCode: string; orgName: string }[]
+        OrganizationPathNode[]
       >();
     }
     const ancestor = alias(organizations, "responsibility_path_ancestor");
@@ -604,19 +624,17 @@ export function createOrganizationResponsibilityRepository(db: DbClient) {
         id: ancestor.id,
         orgCode: ancestor.orgCode,
         orgName: ancestor.orgName,
+        isDelete: ancestor.isDelete,
       })
       .from(organizationClosures)
       .innerJoin(
         ancestor,
-        and(
-          eq(organizationClosures.ancestorId, ancestor.id),
-          eq(ancestor.isDelete, false),
-        ),
+        eq(organizationClosures.ancestorId, ancestor.id),
       )
       .where(inArray(organizationClosures.descendantId, [...new Set(orgIds)]));
     const result = new Map<
       number,
-      { id: number; orgCode: string; orgName: string; depth: number }[]
+      (OrganizationPathNode & { depth: number })[]
     >();
     for (const { descendantId, ...node } of rows) {
       const path = result.get(descendantId) ?? [];
@@ -893,7 +911,8 @@ function assertAssignmentParentLifecycle(input: {
   targetOrganizationStatus: OrganizationStatus | null;
   targetOrganizationIsDelete: boolean | null;
 }) {
-  assertTargetOrganizationAvailable(input.targetOrganizationIsDelete, input.id);
+  if (input.assignmentStatus !== OrganizationResponsibilityAssignmentStatus.Disable)
+    assertTargetOrganizationAvailable(input.targetOrganizationIsDelete, input.id);
   const violation = getOrganizationResponsibilityParentLifecycleViolation({
     assignmentStatus: input.assignmentStatus,
     holderEmploymentStatus:
@@ -910,11 +929,12 @@ function assertAssignmentParentLifecycle(input: {
 }
 
 function requirePath(
-  paths: Map<number, { id: number; orgCode: string; orgName: string }[]>,
+  paths: Map<number, OrganizationPathNode[]>,
   organizationIdValue: number | null,
   organizationPathValue: string | null,
   assignmentId: number,
   relation: string,
+  assignmentStatus: OrganizationResponsibilityAssignmentStatus,
 ) {
   const organizationId = requireValue(
     organizationIdValue,
@@ -934,6 +954,7 @@ function requirePath(
     || expectedIds.some(id => !Number.isSafeInteger(id) || id <= 0)
     || expectedIds.length !== path.length
     || expectedIds.some((id, index) => path[index]?.id !== id)
+    || (assignmentStatus !== OrganizationResponsibilityAssignmentStatus.Disable && path.some(node => node.isDelete))
   ) {
     throw new Error(
       `Organization responsibility assignment ${assignmentId} has no valid ${relation} path`,

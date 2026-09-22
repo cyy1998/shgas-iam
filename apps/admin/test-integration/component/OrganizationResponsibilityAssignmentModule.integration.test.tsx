@@ -1,11 +1,15 @@
-import OrganizationResponsibilityAssignmentModule from '@admin/components/organization-responsibility/OrganizationResponsibilityAssignmentModule';
+import OrganizationResponsibilityAssignmentModule, {
+  type OrganizationResponsibilityAssignmentState,
+} from '@admin/components/organization-responsibility/OrganizationResponsibilityAssignmentModule';
 import OrganizationResponsibilityAssignmentsPage from '@admin/pages/organization-responsibilities/OrganizationResponsibilityAssignmentsPage';
+import type { OrganizationResponsibilityAssignmentView } from '@admin/services/organization-responsibility';
 import {
   OrganizationResponsibilityAssignmentStatus,
   OrganizationResponsibilityTypeCode,
   OrganizationStatus,
 } from '@iam/contracts';
 import { message, Modal } from 'antd';
+import { useState } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { __setAccess } from '~admin/test/mocks/umijs-max';
 import { render, screen, waitFor, within } from '~admin/test/render';
@@ -92,30 +96,37 @@ const assignment = {
     id: 4,
     orgCode: 'FIN',
     orgName: '财务部',
+    isDelete: false,
     fullPath: [
-      { id: 1, orgCode: 'ROOT', orgName: '集团' },
-      { id: 4, orgCode: 'FIN', orgName: '财务部' },
+      { id: 1, orgCode: 'ROOT', orgName: '集团', isDelete: false },
+      { id: 4, orgCode: 'FIN', orgName: '财务部', isDelete: false },
     ],
   },
   holder: {
     employmentId: 42,
-    user: { id: 7, name: '张三', username: 'zhangsan' },
+    user: { id: 7, name: '张三', username: 'zhangsan', isDelete: false },
     organization: {
       id: 3,
       orgCode: 'OPS',
       orgName: '运营部',
+      isDelete: false,
       fullPath: [
-        { id: 1, orgCode: 'ROOT', orgName: '集团' },
-        { id: 3, orgCode: 'OPS', orgName: '运营部' },
+        { id: 1, orgCode: 'ROOT', orgName: '集团', isDelete: false },
+        { id: 3, orgCode: 'OPS', orgName: '运营部', isDelete: false },
       ],
     },
-    position: { id: 8, posCode: 'OPS-LEAD', posName: '运营负责人' },
+    position: {
+      id: 8,
+      posCode: 'OPS-LEAD',
+      posName: '运营负责人',
+      isDelete: false,
+    },
   },
   status: OrganizationResponsibilityAssignmentStatus.Enable,
   startTime: '2026-08-20T00:00:00.000Z',
   endTime: null,
   allowedActions: enabledAllowedActions,
-};
+} satisfies OrganizationResponsibilityAssignmentView;
 
 describe('OrganizationResponsibilityAssignmentModule', () => {
   beforeEach(() => {
@@ -636,6 +647,108 @@ describe('OrganizationResponsibilityAssignmentModule', () => {
       within(endedDialog).queryByRole('button', { name: '结束任命' }),
     ).toBeNull();
   });
+
+  it.each(['none', 'user', 'position', 'organization', 'target'] as const)(
+    'opens Ended history with only %s marked deleted and no lifecycle actions',
+    async (deletedReference) => {
+      const history = {
+        ...assignment,
+        status: OrganizationResponsibilityAssignmentStatus.Disable,
+        endTime: '2026-08-20T08:00:00.000Z',
+        allowedActions: endedAllowedActions,
+        targetOrganization: {
+          ...assignment.targetOrganization,
+          isDelete: deletedReference === 'target',
+          fullPath: assignment.targetOrganization.fullPath.map((node) => ({
+            ...node,
+            isDelete: node.id === 4 && deletedReference === 'target',
+          })),
+        },
+        holder: {
+          ...assignment.holder,
+          user: {
+            ...assignment.holder.user,
+            isDelete: deletedReference === 'user',
+          },
+          organization: {
+            ...assignment.holder.organization,
+            isDelete: deletedReference === 'organization',
+            fullPath: assignment.holder.organization.fullPath.map((node) => ({
+              ...node,
+              isDelete: node.id === 3 && deletedReference === 'organization',
+            })),
+          },
+          position: {
+            ...assignment.holder.position,
+            isDelete: deletedReference === 'position',
+          },
+        },
+      };
+      responsibilityService.searchAssignments.mockResolvedValue({
+        items: [history],
+        total: 1,
+        nextCursor: null,
+      });
+      responsibilityService.detailAssignment.mockResolvedValue(history);
+      function HistoryHarness() {
+        const [state, setState] =
+          useState<OrganizationResponsibilityAssignmentState>({
+            lifecycle: 'ended',
+            assignmentId: null,
+          });
+        return (
+          <OrganizationResponsibilityAssignmentModule
+            host={{ kind: 'global', state, onStateChange: setState }}
+          />
+        );
+      }
+      const { user } = render(<HistoryHarness />);
+      const detailButton = await screen.findByRole('button', { name: '详情' });
+      const row = detailButton.closest('tr');
+      if (!row) throw new Error('History row is missing');
+      const labels = [
+        ['user', '张三（zhangsan）'],
+        ['organization', '集团 / 运营部'],
+        ['target', '集团 / 财务部'],
+        ['position', '运营负责人（OPS-LEAD）'],
+      ] as const;
+      for (const [reference, label] of labels) {
+        expect(
+          within(row).getByText(
+            deletedReference === reference ? `${label}（已删除）` : label,
+          ),
+        ).toBeVisible();
+      }
+      expect(within(row).queryAllByText(/已删除/)).toHaveLength(
+        deletedReference === 'none' ? 0 : 1,
+      );
+      await user.click(detailButton);
+      const dialog = await screen.findByRole('dialog');
+      for (const [reference, label] of labels) {
+        expect(
+          await within(dialog).findByText(
+            deletedReference === reference ? `${label}（已删除）` : label,
+          ),
+        ).toBeVisible();
+      }
+      expect(
+        within(dialog).getByText(
+          deletedReference === 'target'
+            ? '财务部（FIN）（已删除）'
+            : '财务部（FIN）',
+        ),
+      ).toBeVisible();
+      for (const name of ['暂停任命', '恢复任命', '结束任命']) {
+        expect(within(dialog).queryByRole('button', { name })).toBeNull();
+      }
+      expect(responsibilityService.detailAssignment).toHaveBeenCalledWith({
+        id: 101,
+      });
+      expect(responsibilityService.pauseAssignment).not.toHaveBeenCalled();
+      expect(responsibilityService.resumeAssignment).not.toHaveBeenCalled();
+      expect(responsibilityService.endAssignment).not.toHaveBeenCalled();
+    },
+  );
 
   it('requires irreversible End confirmation before issuing one mutation', async () => {
     const { user } = render(

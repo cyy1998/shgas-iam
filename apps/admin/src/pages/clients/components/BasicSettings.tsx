@@ -207,7 +207,8 @@ export default function BasicSettings({
       <Card title="删除应用">
         <Space orientation="vertical">
           <Typography.Text type="secondary">
-            删除是软删除，会终止此应用的会话，但不要求先移除协议配置。
+            请先处理角色分配并删除此应用下的全部角色，暂停或停用的角色也会阻止删除。
+            删除应用是软删除，会终止此应用的会话，但不要求先移除协议配置。
           </Typography.Text>
           <Button
             danger

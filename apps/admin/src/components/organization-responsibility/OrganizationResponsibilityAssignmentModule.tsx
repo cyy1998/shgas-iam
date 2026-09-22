@@ -80,8 +80,18 @@ type AssignmentSearchFormValues = {
   lifecycle?: OrganizationResponsibilityAssignmentLifecycle;
 };
 
-function formatOrganizationPath(path: ReadonlyArray<{ orgName: string }>) {
-  return path.map((organization) => organization.orgName).join(' / ');
+function formatReference(label: string, isDelete: boolean) {
+  return isDelete ? `${label}（已删除）` : label;
+}
+
+function formatOrganizationPath(
+  path: OrganizationResponsibilityAssignmentView['targetOrganization']['fullPath'],
+) {
+  return path
+    .map((organization) =>
+      formatReference(organization.orgName, organization.isDelete),
+    )
+    .join(' / ');
 }
 
 function formatTime(value: string | Date) {
@@ -172,7 +182,10 @@ function assignmentColumns(
     {
       title: '用户',
       render: (_, row) =>
-        `${row.holder.user.name}（${row.holder.user.username}）`,
+        formatReference(
+          `${row.holder.user.name}（${row.holder.user.username}）`,
+          row.holder.user.isDelete,
+        ),
     },
     {
       title: '任职组织路径',
@@ -187,7 +200,10 @@ function assignmentColumns(
     {
       title: '岗位',
       render: (_, row) =>
-        `${row.holder.position.posName}（${row.holder.position.posCode}）`,
+        formatReference(
+          `${row.holder.position.posName}（${row.holder.position.posCode}）`,
+          row.holder.position.isDelete,
+        ),
     },
     {
       title: '操作',
@@ -213,7 +229,10 @@ function detailItems(detail: OrganizationResponsibilityAssignmentView) {
     {
       key: 'target',
       label: '目标组织',
-      children: `${detail.targetOrganization.orgName}（${detail.targetOrganization.orgCode}）`,
+      children: formatReference(
+        `${detail.targetOrganization.orgName}（${detail.targetOrganization.orgCode}）`,
+        detail.targetOrganization.isDelete,
+      ),
     },
     {
       key: 'target-path',
@@ -238,7 +257,10 @@ function detailItems(detail: OrganizationResponsibilityAssignmentView) {
     {
       key: 'user',
       label: '持有人',
-      children: `${detail.holder.user.name}（${detail.holder.user.username}）`,
+      children: formatReference(
+        `${detail.holder.user.name}（${detail.holder.user.username}）`,
+        detail.holder.user.isDelete,
+      ),
     },
     {
       key: 'org-path',
@@ -248,7 +270,10 @@ function detailItems(detail: OrganizationResponsibilityAssignmentView) {
     {
       key: 'position',
       label: '岗位',
-      children: `${detail.holder.position.posName}（${detail.holder.position.posCode}）`,
+      children: formatReference(
+        `${detail.holder.position.posName}（${detail.holder.position.posCode}）`,
+        detail.holder.position.isDelete,
+      ),
     },
     {
       key: 'employment-id',

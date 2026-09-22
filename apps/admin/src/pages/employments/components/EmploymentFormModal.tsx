@@ -1,7 +1,8 @@
 import OrganizationTreeSelector from '@admin/components/OrganizationTreeSelector';
-import { apiClient } from '@admin/lib/api-client';
 import { AdminMutationCommittedError } from '@admin/services/admin-mutation';
 import { createEmployment } from '@admin/services/employment';
+import { searchPositions } from '@admin/services/position';
+import { searchUsers } from '@admin/services/user';
 import type { ProFormInstance } from '@ant-design/pro-components';
 import {
   ModalForm,
@@ -10,21 +11,15 @@ import {
   ProFormSwitch,
   ProFormTextArea,
 } from '@ant-design/pro-components';
-import type { AppRouter } from '@iam/admin-api/trpc';
-import { PositionStatus } from '@iam/contracts';
-import type { inferRouterOutputs } from '@trpc/server';
-import { message } from 'antd';
+import { PositionStatus, UserStatus } from '@iam/contracts';
+import { Alert, message } from 'antd';
 import { useRef } from 'react';
-
-type PosVo =
-  inferRouterOutputs<AppRouter>['admin']['position']['search']['result'][number];
-type UserVo =
-  inferRouterOutputs<AppRouter>['admin']['user']['search']['result'][number];
 
 type Props = {
   open: boolean;
   presetUsername?: string | null;
   presetName?: string | null;
+  presetUserStatus?: UserStatus;
   presetOrgCode?: string | null;
   onOpenChange: (open: boolean) => void;
   onSuccess?: () => void;
@@ -35,12 +30,15 @@ export default function EmploymentFormModal({
   open,
   presetUsername,
   presetName,
+  presetUserStatus,
   presetOrgCode,
   onOpenChange,
   onSuccess,
   onCommitted,
 }: Props) {
   const formRef = useRef<ProFormInstance>(undefined);
+
+  const userDisabled = presetUserStatus === UserStatus.Disable;
 
   const handleError = (err: unknown) =>
     message.error(err instanceof Error ? err.message : '创建失败');
@@ -65,7 +63,9 @@ export default function EmploymentFormModal({
         mask: { closable: false },
         okText: '确定',
       }}
+      submitter={{ submitButtonProps: { disabled: userDisabled } }}
       onFinish={async (values) => {
+        if (userDisabled) return false;
         try {
           const outcome = await createEmployment({
             username: values.username,
@@ -88,6 +88,13 @@ export default function EmploymentFormModal({
         }
       }}
     >
+      {userDisabled && (
+        <Alert
+          type="warning"
+          showIcon
+          message="用户已停用，请由有权限的管理员恢复账号后再新增任职。"
+        />
+      )}
       <ProFormSelect
         name="username"
         label="用户"
@@ -109,7 +116,7 @@ export default function EmploymentFormModal({
           }
           const text = (params.keyWords as string | undefined) || undefined;
           if (!text) return [];
-          const res = await apiClient.admin.user.search.query({
+          const res = await searchUsers({
             pageNum: 1,
             pageSize: 20,
             conditions: {
@@ -117,8 +124,9 @@ export default function EmploymentFormModal({
               exactConditions: {},
             },
           });
-          return res.result.map((u: UserVo) => ({
-            label: `${u.name} (${u.username})`,
+          return res.result.map((u) => ({
+            label: `${u.name} (${u.username})${u.status === UserStatus.Disable ? ' — 已停用' : ''}`,
+            disabled: u.status === UserStatus.Disable,
             value: u.username,
           }));
         }}
@@ -136,7 +144,7 @@ export default function EmploymentFormModal({
         showSearch
         rules={[{ required: true, message: '请选择岗位' }]}
         request={async (params) => {
-          const res = await apiClient.admin.position.search.query({
+          const res = await searchPositions({
             pageNum: 1,
             pageSize: 50,
             conditions: {
@@ -144,7 +152,7 @@ export default function EmploymentFormModal({
               exactConditions: { statuses: [PositionStatus.Enable] },
             },
           });
-          return res.result.map((p: PosVo) => ({
+          return res.result.map((p) => ({
             label: `${p.posName} (${p.posCode})`,
             value: p.posCode,
           }));

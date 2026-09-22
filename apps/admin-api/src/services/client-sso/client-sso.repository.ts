@@ -1,6 +1,6 @@
 import type { DbClient } from "@iam/db";
 import type { ClientSsoStorageUpdate } from "./client-sso.type";
-import { clients } from "@iam/db/schema";
+import { clients, roles } from "@iam/db/schema";
 import { ClientSsoAdminDtoSchema, ClientSsoAdminRecordSchema } from "@iam/domain/client";
 import { and, eq, isNotNull } from "drizzle-orm";
 
@@ -45,6 +45,14 @@ export function createClientSsoRepository(db: DbClient) {
     },
     async lock(clientCode: string, includeDeleted = false) {
       return parse(await db.select(columns).from(clients).where(includeDeleted ? eq(clients.clientCode, clientCode) : where(clientCode)).for("update"));
+    },
+    async hasUndeletedRoles(clientId: number) {
+      const rows = await db
+        .select({ id: roles.id })
+        .from(roles)
+        .where(and(eq(roles.clientId, clientId), eq(roles.isDelete, false)))
+        .limit(1);
+      return rows.length > 0;
     },
     async update(clientCode: string, patch: ClientSsoStorageUpdate) {
       try {

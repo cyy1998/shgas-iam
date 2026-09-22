@@ -8,6 +8,13 @@ RUN npm install -g pnpm@12.5.1 @openai/codex@${CODEX_VERSION}
 RUN curl -fsSL https://bun.sh/install | bash -s "bun-v1.4.2" \
     && install -m 0755 /root/.bun/bin/bun /usr/local/bin/bun
 
+# Keep this version aligned with pnpm-lock.yaml; smoke launches the workspace version.
+ARG PLAYWRIGHT_VERSION=1.61.1
+ENV PLAYWRIGHT_BROWSERS_PATH=/opt/ms-playwright
+RUN npx --yes playwright@${PLAYWRIGHT_VERSION} install --with-deps chromium \
+    && chmod -R a+rX /opt/ms-playwright \
+    && rm -rf /var/lib/apt/lists/*
+
 ARG AGENT_UID=1000
 ARG AGENT_GID=1000
 RUN groupmod -o -g ${AGENT_GID} node \

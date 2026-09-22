@@ -9,7 +9,7 @@ import {
 } from '@iam/contracts';
 import { ConfigProvider, message, Modal } from 'antd';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { render, screen, waitFor, within } from '~admin/test/render';
+import { act, render, screen, waitFor, within } from '~admin/test/render';
 
 const responsibilityService = vi.hoisted(() => ({
   createAssignment: vi.fn(),
@@ -105,9 +105,11 @@ describe('OrganizationResponsibilityAssignmentsPanel', () => {
     });
   });
 
-  afterEach(() => {
-    Modal.destroyAll();
-    message.destroy();
+  afterEach(async () => {
+    await act(async () => {
+      Modal.destroyAll();
+      message.destroy();
+    });
     ConfigProvider.config({ holderRender: undefined });
   });
 

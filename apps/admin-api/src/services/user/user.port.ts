@@ -28,6 +28,7 @@ export interface AdminUserTransactionStorePort {
   getOpenEmploymentOrganizationIdsByUserId: (userId: number) => Promise<number[]>;
   setUserForAdmin: (input: UserCreateDto & { subjectIdentifier: string }) => Promise<User | null>;
   updateUserByUsername: (username: string, input: UserUpdateDto) => Promise<User | null>;
+  hasOpenPrivilegeDelegationsByUserId: (userId: number) => Promise<boolean>;
   countOpenEmploymentsByUsername: (username: string) => Promise<number>;
   softDeleteUserByUsername: (username: string) => Promise<User | null>;
   setPassword: (userId: number, password: string) => Promise<User | null>;
