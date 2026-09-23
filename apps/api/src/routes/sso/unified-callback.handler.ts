@@ -44,7 +44,7 @@ export function createUnifiedCallbackHandler(deps: {
                   if (result.orcasSessionId !== null) {
                     headers.append(
                       "Set-Cookie",
-                      serialize("orcas_sso_sessionid", result.orcasSessionId, cookie),
+                      serialize("orcas_sso_sessionid", result.orcasSessionId, { ...cookie, httpOnly: false }),
                     );
                     url.searchParams.set("orcasToken", result.orcasSessionId);
                   }
