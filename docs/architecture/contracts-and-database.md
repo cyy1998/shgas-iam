@@ -71,7 +71,7 @@ Client 数据库只有统一 `ssoEnabled`、可空单协议 `ssoConfig` 与独�
 
 #203 的在线 Custom 配置按 `callbackType` 严格分支：managed 禁止 `callbackEndpoint`，business 必填完整地址。
 Admin 表单仅在 business 回填、展示和提交地址；隐藏控件的旧值不得进入 managed 请求。Domain、普通 DTO、Snapshot
-和数据库最终约束消费同一形状。ORCAS 仅 managed 可启用，普通类型切换保留已有 SSO Secret。
+和数据库最终约束消费同一形状；该形状不接受 ORCAS 配置。普通类型切换保留已有 SSO Secret。
 新装空库直接执行正式 migrations。b648 与 managed-callback 一次性升级工具及离线中间配置契约已退役；
 原 migration SQL、hash、journal 和快照继续保留。旧库升级必须恢复匹配的历史工具，见
 [历史工具说明](../development/commands.md#历史数据维护工具)，不能把旧配置交给当前在线 reader。

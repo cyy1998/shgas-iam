@@ -75,7 +75,6 @@ const managed = {
   callbackType: ClientSsoCallbackType.Managed,
   validRedirectUrls: ["https://app.example/work/*"],
   subjectClaims: ["subjectIdentifier"],
-  orcas: { enabled: true },
 } satisfies ClientSsoConfig;
 
 async function createManagedRestFixture() {
@@ -132,8 +131,7 @@ test("managed REST save persists and publishes the strict shape without exposing
 test.each([
   ["managed callbackEndpoint string", { ...managed, callbackEndpoint: "https://obsolete.example/cb" }],
   ["managed callbackEndpoint null", { ...managed, callbackEndpoint: null }],
-  ["business without callbackEndpoint", { ...managed, callbackType: ClientSsoCallbackType.Business, orcas: { enabled: false } }],
-  ["business with enabled ORCAS", { ...managed, callbackType: ClientSsoCallbackType.Business, callbackEndpoint: "https://business.example/cb" }],
+  ["business without callbackEndpoint", { ...managed, callbackType: ClientSsoCallbackType.Business }],
 ])("REST rejects %s without changing saved managed configuration", async (_name, invalid) => {
   const { scope, code, save } = await createManagedRestFixture();
   try {
@@ -154,7 +152,7 @@ test("managed to business and back preserves the existing SSO credential", async
     const originalSecret = await candidate.management.service.readSecret(code);
     const saved = await save(managed);
     expect(saved.status).toBe(200);
-    const business = { ...managed, callbackType: ClientSsoCallbackType.Business, callbackEndpoint: "https://business.example/sso/callback", orcas: { enabled: false } };
+    const business = { ...managed, callbackType: ClientSsoCallbackType.Business, callbackEndpoint: "https://business.example/sso/callback" };
     const switched = await save(business);
     expect(switched.status).toBe(200);
     const switchedBack = await save(managed);

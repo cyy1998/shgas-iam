@@ -13,7 +13,6 @@ export type BaseVariables = {
 export type AuthenticatedSubjectVariables = {
   subjectIdentifier: string;
   authenticatedClientCode: string;
-  orcasId?: string;
 };
 
 export type InternalClientVariables<TClient = unknown> = {

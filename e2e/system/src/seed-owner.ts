@@ -98,7 +98,6 @@ export function createProductionE2EScenarioOwner(
               SubjectClaim.ProfileName,
               SubjectClaim.IamAuthorization,
             ],
-            orcas: { enabled: false },
           },
           ssoSecret: null,
         })
@@ -176,7 +175,6 @@ export function createProductionE2EScenarioOwner(
           callbackType: ClientSsoCallbackType.Managed,
           validRedirectUrls: entryOrigins.map(origin => `${origin}/e2e/custom-sso/*`),
           subjectClaims: [SubjectClaim.SubjectIdentifier, SubjectClaim.ProfileUsername],
-          orcas: { enabled: false },
         },
         ssoSecret: null,
       });
@@ -195,7 +193,6 @@ export function createProductionE2EScenarioOwner(
           callbackEndpoint: `${scenario.canonicalOrigin}/e2e/business/callback?registered=1`,
           validRedirectUrls: entryOrigins.map(origin => `${origin}/e2e/business/*`),
           subjectClaims: [SubjectClaim.SubjectIdentifier, SubjectClaim.ProfileUsername],
-          orcas: { enabled: false },
         },
         ssoSecret: "e2e-business-secret-local-only",
         ssoCredentialId: input.random.uuid(),

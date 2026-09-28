@@ -19,7 +19,6 @@ import {
   Alert,
   Button,
   Card,
-  Checkbox,
   Form,
   Input,
   message,
@@ -41,7 +40,6 @@ type FormValues = {
   callbackEndpoint: string;
   validRedirectUrls: string[];
   subjectClaims: string[];
-  orcas: boolean;
 };
 
 export default function ClientSsoPage() {
@@ -108,9 +106,6 @@ export default function ClientSsoPage() {
             config?.protocol === ClientSsoProtocol.CustomSso
               ? config.subjectClaims
               : ['subjectIdentifier'],
-          orcas:
-            config?.protocol === ClientSsoProtocol.CustomSso &&
-            config.orcas?.enabled === true,
         };
         for (const field of dirtyFieldsRef.current) delete refreshed[field];
         form.setFieldsValue(refreshed);
@@ -230,7 +225,6 @@ export default function ClientSsoPage() {
               : {}),
             validRedirectUrls: values.validRedirectUrls,
             subjectClaims: values.subjectClaims,
-            ...(values.orcas ? { orcas: { enabled: true } } : {}),
           },
     );
     if (!parsed.success) {
@@ -249,7 +243,6 @@ export default function ClientSsoPage() {
         'callbackEndpoint',
         'validRedirectUrls',
         'subjectClaims',
-        'orcas',
       ],
     );
   }
@@ -377,9 +370,6 @@ export default function ClientSsoPage() {
                       label: value,
                     }))}
                   />
-                </Form.Item>
-                <Form.Item name="orcas" valuePropName="checked">
-                  <Checkbox>托管交付启用 ORCAS</Checkbox>
                 </Form.Item>
               </>
             )}

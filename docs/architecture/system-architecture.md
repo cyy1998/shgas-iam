@@ -22,7 +22,7 @@ flowchart LR
   api --> redis["Redis：登录状态 / 缓存 / BullMQ"]
   admin --> redis
   worker --> redis
-  api --> integrations["短信 / 企业微信 / ORCAS"]
+  api --> integrations["短信 / 企业微信"]
 ```
 
 箭头表示逻辑依赖，不表示所有操作都访问每个依赖，也不表示物理共机、数据库读写分离或生产网络隔离。
@@ -50,7 +50,7 @@ IAM 自身 routes 不统一使用 `forward-auth`。例如 [Tender manifests](../
 | 协议入口 → 业务模块 | API、Admin API 分别拥有各自协议解析、认证和错误映射；normalized actor 与请求上下文通过显式接口流入业务层，见[后端架构](backend-architecture.md#请求审计与可观测上下文)。 |
 | IAM → 第三方 | Custom SSO 与 OIDC 共享主体投影能力，但各自拥有 wire 与 artifact 生命周期；Independent client 自建的本地会话由第三方负责，IAM 撤销不等于第三方本地退出。见[第三方 SSO 对接](../features/sso/third-party-sso-integration.md)与 [OIDC 对接](../features/oidc/oidc-integration.md)。 |
 
-短信、企业微信和 ORCAS 由 API composition 注入外部 adapter，分别服务于验证码、微信登录与 Custom SSO Session workflow；
+短信和企业微信由 API composition 注入外部 adapter，分别服务于验证码与微信登录；
 失败语义以各调用方契约为准。
 新增外部调用沿[后端事务与 afterCommit 规则](backend-architecture.md#transactions-与-aftercommit)选择执行位置，
 不能把网络调用视为可随 PostgreSQL transaction 一起回滚的操作。

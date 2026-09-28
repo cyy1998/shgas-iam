@@ -6,7 +6,7 @@ status: accepted
 
 Custom SSO 由管理员显式选择 managed 或 business，不按 URL、路径或历史来源猜测类型。
 managed 从首次已接受 redirect URI 的 origin 推导固定 `/sso/callback`，配置中没有独立 callbackEndpoint；
-business 使用显式登记的完整 callbackEndpoint，即使路径也叫 `/sso/callback` 仍是 business，并禁止 ORCAS 托管配置。
+business 使用显式登记的完整 callbackEndpoint，即使路径也叫 `/sso/callback` 仍是 business。
 本页合并显式类型与后续 origin 推导的决定。
 
 ## 理由与代价
@@ -41,5 +41,8 @@ IAM 代理路由的责任。
 同代转换与跨代升级的源识别、原凭据及非目标数据保护、失败恢复和人工发布责任仍按匹配版本历史流程执行，不能把
 任意旧来源套到当前维护。入口见[历史维护命令](../development/commands.md#历史数据维护工具)；
 删除升级正文不表示对应工具退役或环境已经升级。
+
+ORCAS 不再参与 managed/business 配置区分；完整退役决定见
+[ADR-0040](0040-retire-orcas-custom-sso-integration.md)。
 
 历史来源：[ADR-0007 原文](https://github.com/cyy1998/shgas-iam/blob/73315e4cef6f96dd79b29e18f74d68af30e559ec/docs/adr/0007-separate-versioned-custom-sso-client-configuration.md)、[ADR-0037 原文](https://github.com/cyy1998/shgas-iam/blob/73315e4cef6f96dd79b29e18f74d68af30e559ec/docs/adr/0037-classify-managed-sso-callbacks-by-path.md)、[ADR-0038 原文](https://github.com/cyy1998/shgas-iam/blob/73315e4cef6f96dd79b29e18f74d68af30e559ec/docs/adr/0038-derive-managed-sso-callback-from-redirect-origin.md)。原始决定与后续修订按各版本追溯。

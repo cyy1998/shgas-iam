@@ -640,14 +640,14 @@ describe("repository architecture guard", () => {
         "import type { SessionService } from \"@iam/session-kernel\";",
         "import type { CustomSsoSessionKernelAdapter } "
         + "from \"@iam/custom-sso/internal/session.ts\";",
-        "import type { OrcasClient } from \"@api/lib/integrations/orcas\";",
+        "import type { SmsClient } from \"@api/lib/integrations/sms\";",
       ].join("\n"),
       "apps/api/src/composition/services/index.ts": [
         "import { createSessionKernel } from \"@iam/session-kernel\";",
         "import { createCustomSsoSessionKernelAdapter } "
         + "from \"@iam/custom-sso/internal/session\";",
         "import redis from \"@api/lib/infra/redis\";",
-        "import { createOrcasClient } from \"@api/lib/integrations/orcas\";",
+        "import { createSmsClient } from \"@api/lib/integrations/sms\";",
       ].join("\n"),
     });
 
@@ -686,7 +686,7 @@ describe("repository architecture guard", () => {
         file: "apps/api/src/use-cases/sso/exchange-sso-code/exchange-sso-code.use-case.ts",
         line: 3,
         message: "Custom SSO routes and use cases must not import session runtime module "
-          + "\"@api/lib/integrations/orcas\"; depend on their injected application interface.",
+          + "\"@api/lib/integrations/sms\"; depend on their injected application interface.",
       },
     ]);
   });

@@ -30,6 +30,5 @@ export function normalizeClientSsoConfig(input: ClientSsoConfig): ClientSsoConfi
       : { callbackType: config.callbackType }),
     validRedirectUrls: [...config.validRedirectUrls].sort(),
     subjectClaims: [...config.subjectClaims].sort(),
-    ...(config.orcas?.enabled ? { orcas: { enabled: true } } : {}),
   };
 }

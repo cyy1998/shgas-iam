@@ -112,7 +112,7 @@ _Avoid_: ClientSession, protocol Token, renewable login slot
 _Avoid_: Provider Session, protocol Token, per-protocol relationship, per-authorization scope container
 
 **Authenticated Subject Context**:
-共享 HTTP 认证中间件验证 Principal Session 或 Gateway Local Session 后产生的最小请求上下文，只包含 Subject Identifier、已验证的 client code，以及适用时独立保存的 ORCAS session 引用。它不包含 `UserDetailDto`、数据库用户主键、username 或 Client Subject Projection；需要内部账号字段的旧用例必须通过自己的 Account Resolver 按 Subject Identifier 获取。
+共享 HTTP 认证中间件验证 UserSession 或 Gateway Local Session 后产生的最小请求上下文，只包含 Subject Identifier 和适用时已验证的 client code。它不包含外部系统会话引用、`UserDetailDto`、数据库用户主键、username 或 Client Subject Projection；需要内部账号字段的用例必须通过自己的 Account Resolver 按 Subject Identifier 获取。
 _Avoid_: request user detail, shared user DTO, protocol claim payload
 
 **Organization Responsibility Type**:
@@ -288,7 +288,7 @@ HR Administrator 可以为未删除且状态不为 Disable 的 User 在 HR Admin
 _Avoid_: user provisioning, out-of-scope employment mutation, single-root transfer
 
 **ORCAS Session Identity**:
-Gateway Custom SSO 显式启用 ORCAS 集成后，由 ORCAS 返回并绑定到本次 local session 的外部 user/session 引用；它只存在于 ORCAS 专用上下文、Cookie 和端点，不是 IAM 用户档案属性，也不进入 Subject Claim Catalog、Client Subject Projection 或 Gateway Subject Header。
+已退役 ORCAS 集成曾使用的外部用户与会话引用；IAM 不保存或交付该引用，它不属于 IAM 用户档案、主体声明或会话关系。历史外部会话的有效期和注销仍由 ORCAS 负责，见 [ADR-0040](docs/adr/0040-retire-orcas-custom-sso-integration.md)。
 _Avoid_: user detail field, user profile attribute, subject claim, Independent client context
 
 **Custom SSO Authorization Grant**:

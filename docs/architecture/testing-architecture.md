@@ -134,7 +134,7 @@ Kernel 两类会话只发布 Redis collection（`IAM_SESSION_KERNEL_TEST_REDIS_U
 OIDC 模块 Redis 使用 `IAM_OIDC_TEST_REDIS_URL`，API HTTP 使用 `IAM_API_TEST_REDIS_URL`。
 
 旧四对象/Provider/version/Claims Snapshot 测试随旧在线图退役；当前替代必须按行为观察，不能用计数或启动替代。
-并发、损坏、归属、期限与索引归 Kernel；消费与失败结果、补偿、ORCAS、当前披露、取消/确认退出归 API/协议 owner；
+并发、损坏、归属、期限与索引归 Kernel；消费与失败结果、补偿、当前披露、取消/确认退出归 API/协议 owner；
 配置 no-op/COMMIT/Secret隔离归 Admin；source 五模型/特殊 Client/非目标/ACL/部分失败归 Worker 新进程 CLI。
 详细最高入口与证明限制见[验证归属](architecture-verification.md)。所有正常状态由 production owner 建立，破坏变体和离线 schema
 留在 owner `/testing`，消费者不手写协议 key、Lua 或 serialization。历史 writer 的冻结 SHA 证据在统一维护手册单列。

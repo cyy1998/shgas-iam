@@ -12,7 +12,7 @@
 - **类型安全调用**：管理后台通过 `@trpc/client` 消费 `@iam/admin-api/trpc` 暴露的 `AppRouter` 类型
 - **声明式后端装配**：API 后端的 `app.config.ts` 声明 API tier，app-local composition root materialize 路由和 tier 中间件，再交给 `@iam/api-core` 挂载
 - **Drizzle + PostgreSQL**：数据库层集中在 `packages/db`，使用 Drizzle ORM v1 relations 和 PostgreSQL
-- **企业集成能力**：企业微信、短信服务、ORCAS 集成、OIDC Provider、权限委托、用户档案读模型和导入导出
+- **企业集成能力**：企业微信、短信服务、OIDC Provider、权限委托、用户档案读模型和导入导出
 
 ## 📦 仓库结构
 
@@ -448,7 +448,6 @@ Playwright Chromium 系统依赖时，preflight 会提示运行 `pnpm e2e:instal
 | `IAM_API_SESSION_KERNEL_NAMESPACE` | Session Kernel Redis key namespace           | `sess:v2:`         |
 | `IAM_API_WECHAT_CORP_ID` / `IAM_API_WECHAT_CORP_SECRET` | 企业微信配置             | 必填               |
 | `IAM_API_SMS_URL` / `IAM_API_SMS_SIGNATURE_KEY` | 短信服务配置                    | 必填               |
-| `IAM_API_ORCAS_URL`             | ORCAS 服务地址                                   | 必填               |
 | `IAM_API_USER_SESSION_TTL_SECONDS` | UserSession 固定根期限（秒） | `86400` |
 | `IAM_API_CLIENT_SESSION_TTL_SECONDS` | ClientSession 独立期限（秒），两协议共用并受根上限裁剪 | `86400` |
 | `IAM_API_CUSTOM_SSO_TOKEN_TTL_SECONDS` | Custom Token 自身签发期限（秒），不替代两类会话 TTL | `86400` |
@@ -678,4 +677,4 @@ OIDC 接入见 [docs/features/oidc/oidc-integration.md](docs/features/oidc/oidc-
 
 ---
 
-**最后更新**：2026-07-02
+**最后更新**：2026-09-28

@@ -3,7 +3,6 @@ import type { SubjectAccessOperation } from "@iam/api-core/subject-access";
 import { randomUUID } from "node:crypto";
 import process from "node:process";
 import { createRootAuthenticationComposition } from "@api/composition/root-authentication";
-import { createOrcasClient } from "@api/lib/integrations/orcas";
 import { createLoginCredentialParser } from "@api/services/authentication/login-credential.parser";
 import { ClientSnapshotUnavailableError } from "@iam/api-core/client-snapshot";
 import { createClientSnapshots } from "@iam/api-core/client-snapshot/composition";
@@ -81,10 +80,6 @@ export async function fixture(codeTtlSeconds = 30, networkUrl?: string, tokenTtl
     failures: 0,
     clientReads: 0,
     clientUnavailable: false,
-    orcasUrl: "",
-    orcasResponseLost: false,
-    orcasUserMissing: false,
-    orcasUserReads: 0,
     gatewayAuditFails: false,
     businessAuditFails: false,
   };
@@ -220,30 +215,6 @@ export async function fixture(codeTtlSeconds = 30, networkUrl?: string, tokenTtl
         logger,
       },
       managed: {
-        orcas: createOrcasClient({
-          config: { orcasUrl: "https://unused.example/" },
-          fetch: Object.assign(
-            async (_input: Parameters<typeof fetch>[0], init?: RequestInit) => {
-              const response = await fetch(state.orcasUrl, init);
-              if (state.orcasResponseLost) {
-                await response.arrayBuffer();
-                throw new Error("ORCAS completed but its response was lost");
-              }
-              return response;
-            },
-            { preconnect: fetch.preconnect },
-          ),
-        }),
-        users: {
-          async findOrcasUserBySubjectIdentifier(subject) {
-            if (subject !== subjectIdentifier)
-              throw new Error("Unexpected ORCAS subject");
-            state.orcasUserReads++;
-            return state.orcasUserMissing
-              ? null
-              : { id: user.id, username: user.username, name: user.name, mobile: user.mobile };
-          },
-        },
         audit: {
           async recordAuditLog(input) {
             if (state.gatewayAuditFails)

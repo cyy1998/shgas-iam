@@ -19,7 +19,7 @@ test("generic Client runtime exposes only the protocol-neutral storage projectio
     updateTime: new Date("2026-01-01T00:00:00.000Z"),
     extAttributes: {
       managementLevel: "Gateway",
-      requireOrcas: true,
+      externalSessionHint: true,
     },
     ssoEnabled: true,
     ssoConfig: {

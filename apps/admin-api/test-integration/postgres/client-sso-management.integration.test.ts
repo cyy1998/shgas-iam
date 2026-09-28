@@ -296,7 +296,7 @@ test("PostgreSQL rejects invalid enabled, union and partial credential storage",
     { ssoSecret: "only-secret" },
     { ssoConfig: { protocol: "other" } },
     { ssoConfig: { ...custom, mode: "gateway" } },
-    { ssoConfig: { ...custom, orcas: { enabled: true, secret: "bad" } } },
+    { ssoConfig: { ...custom, unexpectedConfiguration: { enabled: true } } },
   ]) {
     const err = await failure(() => harness.db.update(clients).set(patch as never));
     expect(err).toBeDefined();
@@ -597,7 +597,6 @@ test("Public and managed callback do not require initial secret; explicit callba
     validRedirectUrls: custom.validRedirectUrls,
     subjectClaims: custom.subjectClaims,
     callbackType: ClientSsoCallbackType.Managed,
-    orcas: { enabled: true },
   });
   const managedFacts = await facts();
   expect(managedFacts.clients[0]!.ssoSecret).toBeNull();
@@ -611,23 +610,6 @@ test("Public and managed callback do not require initial secret; explicit callba
   await candidate.service.selectProtocol("portal", { protocol: custom.protocol, validRedirectUrls: custom.validRedirectUrls, subjectClaims: custom.subjectClaims, callbackType: ClientSsoCallbackType.Managed });
   const retained = await facts();
   expect(retained.clients[0]!.ssoSecret).toBe(businessFacts.clients[0]!.ssoSecret);
-});
-
-test("business ORCAS configuration is rejected without changing the saved callback or credentials", async () => {
-  await seed();
-  const candidate = system();
-  await candidate.service.selectProtocol("portal", custom);
-  const before = await candidate.service.detail("portal");
-  let failure: unknown;
-  try {
-    await candidate.service.selectProtocol("portal", { ...custom, orcas: { enabled: true } });
-  }
-  catch (error) {
-    failure = error;
-  }
-  expect(failure).toBeDefined();
-  const after = await candidate.service.detail("portal");
-  expect(after).toEqual(before);
 });
 
 test("candidate HTTP detail serializes server capability without sensitive storage", async () => {

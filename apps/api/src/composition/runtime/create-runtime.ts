@@ -3,7 +3,6 @@ import { randomBytes, randomInt, randomUUID } from "node:crypto";
 import env from "@api/env";
 import redis from "@api/lib/infra/redis";
 import { createCapClient } from "@api/lib/integrations/cap";
-import { createOrcasClient } from "@api/lib/integrations/orcas";
 import { createSmsClient } from "@api/lib/integrations/sms";
 import { createWechatClient } from "@api/lib/integrations/wechat";
 import { logger } from "@api/lib/logger";
@@ -81,11 +80,6 @@ export function createApiRuntime(options: CreateApiRuntimeOptions = {}): ApiRunt
       cap: createCapClient({
         redis: runtimeRedis,
         clock: runtimeClock,
-      }),
-      orcas: createOrcasClient({
-        config: {
-          orcasUrl: runtimeEnv.integrations.orcas.url,
-        },
       }),
       sms: createSmsClient({
         clock: runtimeClock,

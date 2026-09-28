@@ -383,12 +383,12 @@ User Profile 的初代 V1 builder、Facts reader/publisher 与 Subject Projectio
 
 ### Custom SSO Authorization Grant
 
-- `@iam/custom-sso` 完整操作拥有授权、续接、Code 唯一消费、Token、交付、ORCAS 和本次 Token 补偿。
+- `@iam/custom-sso` 完整操作拥有授权、续接、Code 唯一消费、Token、交付和本次 Token 补偿。
   单 callback 决定托管/业务路径，不再接受 mode/logoutEndpoint；原 Code purpose 固定，后续配置不能绕过业务 Secret。
 - 业务兑换先认证当前 Client 并精确定位原 ClientSession，再消费 Code。适用门槛后失败在本请求内有界尝试终止原实例，
   不恢复 Code、不重放成功结果；失败与未知保留真实副作用报告。错误 Client/用途不会撤销无关实例。
-- 托管回调保持 #186 已交付的同步外部/签发/补偿语义，不强加业务兑换失败撤销。ORCAS 响应丢失可能已有外部作用，
-  实际幂等与退出由 #145/外部 owner 负责。当前审计保留 historical gateway/independent 标签，不构成配置字段。
+- 托管回调在消费后签发并交付 Token，不强加业务兑换失败撤销。当前审计保留 historical gateway/independent 标签，
+  不构成配置字段。
 - 取得 Client Snapshot 和 access 后交付 capability 复用同一观察，Mapper 不重新读 Client；根 UserInfo 独立 Client 校验保持。
   真实 I/O、唯一消费、替换保护和 Token 补偿不能作为重复内存判断删除，#155 清单在统一维护手册。
 - API route 只负责 HTTP、Cookie、错误/redirect，完整操作处理内部顺序。协议 `/wire` 是浏览器可用纯出口，

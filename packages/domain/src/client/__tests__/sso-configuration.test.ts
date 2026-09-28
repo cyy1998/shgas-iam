@@ -29,15 +29,17 @@ const custom = {
   subjectClaims: ["subjectIdentifier"],
 } satisfies ClientSsoConfig;
 
-const managed = { protocol: custom.protocol, callbackType: ClientSsoCallbackType.Managed, validRedirectUrls: custom.validRedirectUrls, subjectClaims: custom.subjectClaims } satisfies ClientSsoConfig;
+const managed = {
+  protocol: custom.protocol,
+  callbackType: ClientSsoCallbackType.Managed,
+  validRedirectUrls: custom.validRedirectUrls,
+  subjectClaims: custom.subjectClaims,
+} satisfies ClientSsoConfig;
 
 test("strict single protocol configuration derives authentication and rejects mixed/retired fields", () => {
   expect(ClientSsoConfigSchema.parse(oidc)).toEqual(oidc);
   expect(ClientSsoConfigSchema.parse(custom)).toEqual(custom);
-  expect(ClientSsoConfigSchema.parse({ ...managed, orcas: { enabled: true } })).toEqual({
-    ...managed,
-    orcas: { enabled: true },
-  });
+  expect(ClientSsoConfigSchema.parse(managed)).toEqual(managed);
   expect(normalizeClientSsoConfig(managed)).toEqual(managed);
   expect(getClientSsoTokenEndpointAuthMethod(oidc)).toBe(OidcTokenEndpointAuthMethod.None);
   expect(
@@ -61,11 +63,14 @@ test("strict single protocol configuration derives authentication and rejects mi
   ])
     expect(ClientSsoConfigSchema.safeParse(value).success).toBe(false);
   expect(() => normalizeClientSsoConfig({ ...custom, validRedirectUrls: ["*"] } as never)).toThrow();
-  const config = ClientSsoConfigSchema.parse({
-    ...custom,
-    orcas: { enabled: false },
-  });
-  expect(normalizeClientSsoConfig(config)).toEqual(custom);
+  expect(normalizeClientSsoConfig(custom)).toEqual(custom);
+});
+
+test.each([true, false])("configuration normalization rejects ORCAS enabled=%s instead of silently dropping it", (enabled) => {
+  const storedManaged = { ...managed, orcas: { enabled } };
+  const storedBusiness = { ...custom, orcas: { enabled } };
+  expect(() => normalizeClientSsoConfig(storedManaged)).toThrow();
+  expect(() => normalizeClientSsoConfig(storedBusiness)).toThrow();
 });
 
 test("actual ordinary Client mappers remove current plaintext and credential identity", () => {

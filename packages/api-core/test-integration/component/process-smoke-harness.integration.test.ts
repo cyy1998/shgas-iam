@@ -97,7 +97,7 @@ describe("process smoke harness", () => {
         TEMP: "C:\\shared-temp",
         NODE_ENV: "development",
         REDIS_URL: "redis://sentinel-development-service",
-        ORCAS_URL: "https://sentinel-development-service",
+        EXTERNAL_SERVICE_URL: "https://sentinel-development-service",
         IAM_API_DATABASE_URL: "postgresql://sentinel-development-service",
       },
       temporaryDirectory: "C:\\owned-smoke-temp",

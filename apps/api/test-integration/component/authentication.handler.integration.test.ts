@@ -46,7 +46,6 @@ function createApiAuthenticationHandlers(
 
 function resolvedAuthentication(authenticationContext: {
   authenticatedClientCode: string;
-  orcasId?: string;
   subjectIdentifier: string;
 }) {
   return {
@@ -91,7 +90,7 @@ describe("publicAuthenticationHandler", () => {
     const response = await app.request("http://localhost/public/user-info", {
       headers: {
         Client: "gateway",
-        Cookie: "local_gateway_session=session-token; orcas_sso_sessionid=orcas-token",
+        Cookie: "local_gateway_session=session-token; third_party_session=external-token",
       },
     });
 
@@ -120,7 +119,6 @@ describe("publicAuthenticationHandler", () => {
     const app = new Hono<{
       Variables: {
         authenticatedClientCode: string;
-        orcasId?: string;
         subjectIdentifier: string;
       };
     }>();
@@ -190,7 +188,6 @@ describe("publicAuthenticationHandler", () => {
     const app = new Hono<{
       Variables: {
         authenticatedClientCode: string;
-        orcasId?: string;
         subjectIdentifier: string;
       };
     }>();
@@ -198,7 +195,6 @@ describe("publicAuthenticationHandler", () => {
     app.get("/public/context", c => c.json({
       authenticatedClientCode: c.get("authenticatedClientCode"),
       contextKeys: Object.keys(c.var).sort(),
-      orcasId: c.get("orcasId"),
       subjectIdentifier: c.get("subjectIdentifier"),
     }));
     app.onError(createErrorHandler(logger));
@@ -223,7 +219,6 @@ describe("publicAuthenticationHandler", () => {
     const resolvePublicAuthentication = mock(async () =>
       resolvedAuthentication({
         authenticatedClientCode: "gateway",
-        orcasId: "orcas-user",
         subjectIdentifier:
           "00000000-0000-4000-8000-000000001001",
       }));
@@ -239,7 +234,6 @@ describe("publicAuthenticationHandler", () => {
     const app = new Hono<{
       Variables: {
         authenticatedClientCode: string;
-        orcasId?: string;
         subjectIdentifier: string;
       };
     }>();
@@ -247,7 +241,6 @@ describe("publicAuthenticationHandler", () => {
     app.get("/public/context", c => c.json({
       authenticatedClientCode: c.get("authenticatedClientCode"),
       contextKeys: Object.keys(c.var).sort(),
-      orcasId: c.get("orcasId"),
       subjectIdentifier: c.get("subjectIdentifier"),
     }));
     app.onError(createErrorHandler(logger));
@@ -264,10 +257,8 @@ describe("publicAuthenticationHandler", () => {
       authenticatedClientCode: "gateway",
       contextKeys: [
         "authenticatedClientCode",
-        "orcasId",
         "subjectIdentifier",
       ],
-      orcasId: "orcas-user",
       subjectIdentifier: "00000000-0000-4000-8000-000000001001",
     });
     expect(resolvePublicAuthentication).toHaveBeenCalledWith(
@@ -450,7 +441,7 @@ describe("publicAuthenticationHandler", () => {
     const response = await app.request("http://localhost/public/ping", {
       headers: {
         Client: "iam",
-        Cookie: "global_session=session-token; orcas_sso_sessionid=orcas-token",
+        Cookie: "global_session=session-token; third_party_session=external-token",
       },
     });
 
@@ -460,7 +451,7 @@ describe("publicAuthenticationHandler", () => {
       data: null,
       message: "会话已失效",
     });
-    expect(response.headers.getSetCookie()).toHaveLength(2);
+    expect(response.headers.getSetCookie()).toHaveLength(1);
     for (const cookie of response.headers.getSetCookie()) {
       expect(cookie).toContain("Path=/");
       expect(cookie).toContain("Max-Age=0");
@@ -493,7 +484,7 @@ describe("publicAuthenticationHandler", () => {
         headers: {
           Client: "iam",
           Cookie:
-            "global_session=principal-cookie; orcas_sso_sessionid=orcas-token",
+            "global_session=principal-cookie; third_party_session=external-token",
         },
       },
     );
@@ -503,11 +494,10 @@ describe("publicAuthenticationHandler", () => {
       "principal-cookie",
       "iam",
     );
-    expect(response.headers.getSetCookie()).toHaveLength(2);
+    expect(response.headers.getSetCookie()).toHaveLength(1);
     expect(response.headers.getSetCookie()).toEqual(
       expect.arrayContaining([
         expect.stringContaining("global_session="),
-        expect.stringContaining("orcas_sso_sessionid="),
       ]),
     );
   });
@@ -543,7 +533,7 @@ describe("publicAuthenticationHandler", () => {
           Authorization: "principal-header",
           Client: "iam",
           Cookie:
-            "global_session=principal-cookie; orcas_sso_sessionid=orcas-token",
+            "global_session=principal-cookie; third_party_session=external-token",
         },
       },
     );
@@ -577,7 +567,7 @@ describe("publicAuthenticationHandler", () => {
     const response = await app.request("http://localhost/public/ping", {
       headers: {
         Client: "iam",
-        Cookie: "global_session=session-token; orcas_sso_sessionid=orcas-token",
+        Cookie: "global_session=session-token; third_party_session=external-token",
       },
     });
 
@@ -591,7 +581,7 @@ describe("publicAuthenticationHandler", () => {
     expect(response.headers.getSetCookie()).toEqual([]);
   });
 
-  test("does not clear local or ORCAS cookies when the downstream projection is retryable", async () => {
+  test("does not clear local cookie when the downstream projection is retryable", async () => {
     const logger = createMockLogger();
     const handlers = createApiAuthenticationHandlers({
       clientService: {
@@ -620,7 +610,7 @@ describe("publicAuthenticationHandler", () => {
     const response = await app.request("http://localhost/public/user-info", {
       headers: {
         Client: "gateway",
-        Cookie: "local_gateway_session=session-token; orcas_sso_sessionid=orcas-token",
+        Cookie: "local_gateway_session=session-token; third_party_session=external-token",
       },
     });
 
@@ -655,7 +645,7 @@ describe("publicAuthenticationHandler", () => {
     const response = await app.request("http://localhost/public/user-info", {
       headers: {
         Client: "gateway",
-        Cookie: "local_gateway_session=session-token; orcas_sso_sessionid=orcas-token",
+        Cookie: "local_gateway_session=session-token; third_party_session=external-token",
       },
     });
 
@@ -665,7 +655,7 @@ describe("publicAuthenticationHandler", () => {
       data: null,
       message: "会话已失效",
     });
-    expect(response.headers.getSetCookie()).toHaveLength(2);
+    expect(response.headers.getSetCookie()).toHaveLength(1);
   });
 
   test("maps downstream Subject Access uncertainty to retryable 503 without clearing cookies", async () => {
@@ -694,7 +684,7 @@ describe("publicAuthenticationHandler", () => {
     const response = await app.request("http://localhost/public/user-info", {
       headers: {
         Client: "gateway",
-        Cookie: "local_gateway_session=session-token; orcas_sso_sessionid=orcas-token",
+        Cookie: "local_gateway_session=session-token; third_party_session=external-token",
       },
     });
 
@@ -703,7 +693,7 @@ describe("publicAuthenticationHandler", () => {
     expect(response.headers.getSetCookie()).toEqual([]);
   });
 
-  test("clears the local and ORCAS cookies when a downstream config-version race invalidates a cookie session", async () => {
+  test("clears the local cookie when a downstream config-version race invalidates a cookie session", async () => {
     const logger = createMockLogger();
     const handlers = createApiAuthenticationHandlers({
       clientService: {
@@ -732,17 +722,16 @@ describe("publicAuthenticationHandler", () => {
         headers: {
           Client: "gateway",
           Cookie:
-            "local_gateway_session=session-token; orcas_sso_sessionid=orcas-token",
+            "local_gateway_session=session-token; third_party_session=external-token",
         },
       },
     );
 
     expect(response.status).toBe(401);
-    expect(response.headers.getSetCookie()).toHaveLength(2);
+    expect(response.headers.getSetCookie()).toHaveLength(1);
     expect(response.headers.getSetCookie()).toEqual(
       expect.arrayContaining([
         expect.stringContaining("local_gateway_session="),
-        expect.stringContaining("orcas_sso_sessionid="),
       ]),
     );
   });
@@ -776,7 +765,7 @@ describe("publicAuthenticationHandler", () => {
         headers: {
           Authorization: "session-token",
           Client: "gateway",
-          Cookie: "orcas_sso_sessionid=orcas-token",
+          Cookie: "third_party_session=external-token",
         },
       },
     );

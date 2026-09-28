@@ -42,10 +42,6 @@ export function createPublicHandlers(deps: CreatePublicHandlersDeps) {
     return account;
   }
 
-  const orcasId: PublicRouteHandler<"orcasId"> = async (c) => {
-    return c.json(resp.ok({ orcasId: c.get("orcasId") ?? null }), HttpStatusCodes.OK);
-  };
-
   const passwordChange: PublicRouteHandler<"passwordChange"> = async (c) => {
     const { oldPassword, newPassword } = c.req.valid("json");
     const account = await resolveAccount(c.get("subjectIdentifier"));
@@ -78,7 +74,6 @@ export function createPublicHandlers(deps: CreatePublicHandlersDeps) {
 
   return {
     mobileSet,
-    orcasId,
     organizationsSearch,
     passwordChange,
     ...createRootPublicHandlers(deps),

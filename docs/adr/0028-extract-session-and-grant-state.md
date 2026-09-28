@@ -5,7 +5,7 @@ status: accepted
 # 分离会话核心、完整协议能力与应用适配
 
 Session Kernel 只拥有协议中性的 UserSession / ClientSession 生命周期；Custom SSO 与 OIDC 各自拥有完整授权、Code、Token、
-续接和交付能力。API 拥有根认证与 HTTP 适配，composition 显式注入数据库、Redis、短信、ORCAS 等外部能力。
+续接和交付能力。API 拥有根认证与 HTTP 适配，composition 显式注入数据库、Redis、短信等外部能力。
 本页按两类会话模型整理原模块提取决定。
 
 ## 理由与代价
@@ -24,6 +24,7 @@ Worker 只编排各 owner 的维护能力，不由通用清理器猜测所有状
 包位置和公开能力见[仓库地图](../architecture/repository-map.md#共享-packages)，
 依赖与接线见[后端架构](../architecture/backend-architecture.md#核心依赖方向)。
 生命周期选择见 [ADR-0035](0035-unify-user-and-client-session-lifecycles.md)，当前维护见
-[统一维护手册](../releases/unified-session-maintenance.md)。
+[统一维护手册](../releases/unified-session-maintenance.md)。Custom SSO 不再注入 ORCAS 外部能力，退役边界见
+[ADR-0040](0040-retire-orcas-custom-sso-integration.md)。
 
 历史来源：[ADR-0028 原文](https://github.com/cyy1998/shgas-iam/blob/73315e4cef6f96dd79b29e18f74d68af30e559ec/docs/adr/0028-extract-session-and-grant-state.md)、[ADR-0035 原文](https://github.com/cyy1998/shgas-iam/blob/73315e4cef6f96dd79b29e18f74d68af30e559ec/docs/adr/0035-unify-user-and-client-session-lifecycles.md)。原始决定与后续修订按各版本追溯。

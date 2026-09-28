@@ -27,7 +27,6 @@ const managed = {
   callbackEndpoint: "https://old.example/custom?tenant=old",
   validRedirectUrls: ["https://app.example/work/*"],
   subjectClaims: ["subjectIdentifier"],
-  orcas: { enabled: true },
 };
 async function seed(code: string, config: unknown = managed) {
   await h.sql`INSERT INTO client (client_code,client_name,client_secret,ext_attributes,sso_config,sso_enabled,sso_secret,sso_credential_id,sso_secret_updated_at)
@@ -38,11 +37,11 @@ test("formal empty database migration produces the final strict shape", async ()
   const { callbackEndpoint: _old, ...final } = managed;
   await seed("managed", final);
   await expectPostgresErrorCode(seed("old"), "23514");
-  await expectPostgresErrorCode(seed("business", { ...final, callbackType: "business", orcas: { enabled: false } }), "23514");
+  await expectPostgresErrorCode(seed("business", { ...final, callbackType: "business" }), "23514");
   await expectPostgresErrorCode(seed("null", { ...final, callbackEndpoint: null }), "23514");
   const before = await journal();
   await migrateFinal();
   const after = await journal();
   expect(after).toEqual(before);
-  expect(after.at(-1)?.name).toBe(target);
+  expect(after.map(row => row.name)).toContain(target);
 });

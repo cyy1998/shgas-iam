@@ -152,7 +152,6 @@ export const adminClients = [
         SubjectClaim.SubjectIdentifier,
         SubjectClaim.ProfileUsername,
       ],
-      orcas: { enabled: false },
     },
   },
 ];

@@ -664,29 +664,14 @@ async function businessFixture(codeTtlSeconds = 30, networkUrl?: string, tokenTt
   };
 }
 
-async function managedFixture(orcasEnabled = true) {
+async function managedFixture() {
   const f = await businessFixture();
-  const received: unknown[] = [];
-  const external = { reject: false };
-  const server = Bun.serve({
-    hostname: "127.0.0.1",
-    port: 0,
-    async fetch(request) {
-      received.push(await request.json());
-      return Response.json(
-        { code: external.reject ? 500 : 200, data: { id: "external-user-reference" } },
-        { headers: { "Set-Cookie": "orcas_sso_sessionid=external-session; Path=/; HttpOnly" } },
-      );
-    },
-  });
-  f.state.orcasUrl = server.url.href;
   const original = f.getClient();
   const config = {
     protocol: ClientSsoProtocol.CustomSso,
     callbackType: ClientSsoCallbackType.Managed,
     validRedirectUrls: ["https://app.example/callback"],
     subjectClaims: [SubjectClaim.SubjectIdentifier, SubjectClaim.ProfileName],
-    orcas: { enabled: orcasEnabled },
   } satisfies ClientSnapshotValue["ssoConfig"];
   f.setClient({ ...original, ssoConfig: config });
   const callback = (
@@ -701,18 +686,12 @@ async function managedFixture(orcasEnabled = true) {
     );
   return {
     ...f,
-    received,
-    external,
     callback,
     config,
-    async close() {
-      await server.stop(true);
-      await f.close();
-    },
   };
 }
 
-test("managed callback without a configured address controls protocol parameters and delivers ORCAS", async () => {
+test("managed callback without a configured address controls protocol parameters and delivers the managed Token", async () => {
   const f = await managedFixture();
   try {
     const authorized = await f.request("/sso/authorize?client=app&redirectUrl=https://app.example/callback", {
@@ -727,8 +706,7 @@ test("managed callback without a configured address controls protocol parameters
     expect(callback.searchParams.has("state")).toBe(false);
     const delivered = await f.request(`/sso/callback${callback.search}`);
     expect(delivered.status).toBe(302);
-    expect(f.received).toHaveLength(1);
-    expect(delivered.headers.getSetCookie()).toHaveLength(2);
+    expect(delivered.headers.getSetCookie()).toHaveLength(1);
     const destination = new URL(delivered.headers.get("Location")!);
     expect(destination.searchParams.has("state")).toBe(false);
     const use = await f.use(destination.searchParams.get("token")!);
@@ -739,45 +717,14 @@ test("managed callback without a configured address controls protocol parameters
   }
 });
 
-test("managed ORCAS callback preserves the external identity through public authentication", async () => {
+test("managed Token cannot authorize another Client", async () => {
   const f = await managedFixture();
   try {
     const code = await f.authorize();
     const callback = await f.callback(code);
     expect(callback.status).toBe(302);
     const token = new URL(callback.headers.get("Location")!).searchParams.get("token")!;
-    const response = await f.request("/public/orcasId", {
-      headers: { Authorization: token, Client: "app" },
-    });
-    expect(response.status).toBe(200);
-    const body = await response.json();
-    expect(body.data).toEqual({ orcasId: "external-user-reference" });
-    const stored = await f.codes.inspectToken(token);
-    expect(stored?.record).toMatchObject({
-      purpose: "managed",
-      orcas: { userId: "external-user-reference", sessionId: "external-session" },
-    });
-    const userInfo = await f.use(token);
-    const userInfoBody = await userInfo.json();
-    expect(JSON.stringify(userInfoBody)).not.toContain("external-");
-    const gateway = await f.use(token, "app", true);
-    expect(gateway.status).toBe(200);
-    const gatewaySubject = Buffer.from(gateway.headers.get("X-User-Info")!, "base64").toString();
-    expect(gatewaySubject).not.toContain("external-");
-  }
-  finally {
-    await f.close();
-  }
-});
-
-test("managed ORCAS Token cannot disclose its identity to another Client", async () => {
-  const f = await managedFixture();
-  try {
-    const code = await f.authorize();
-    const callback = await f.callback(code);
-    expect(callback.status).toBe(302);
-    const token = new URL(callback.headers.get("Location")!).searchParams.get("token")!;
-    const response = await f.request("/public/orcasId", {
+    const response = await f.request("/public/user-info", {
       headers: { Authorization: token, Client: "other" },
     });
     expect(response.status).toBe(401);
@@ -787,36 +734,7 @@ test("managed ORCAS Token cannot disclose its identity to another Client", async
   }
 });
 
-test.each(["managed", "business"])("%s Token without ORCAS returns no external identity", async (purpose) => {
-  const f = await managedFixture(false);
-  try {
-    if (purpose === "business") {
-      f.setClient({
-        ...f.getClient(),
-        ssoConfig: { ...f.config, callbackType: ClientSsoCallbackType.Business, callbackEndpoint: "https://app.example/callback" },
-      });
-    }
-    const code = await f.authorize();
-    const callback = purpose === "managed" ? await f.callback(code) : await f.exchange(code);
-    const token = purpose === "managed"
-      ? new URL(callback.headers.get("Location")!).searchParams.get("token")!
-      : (await callback.json()).data.sid;
-    const response = await f.request("/public/orcasId", {
-      headers: { Authorization: token, Client: "app" },
-    });
-    expect(response.status).toBe(200);
-    const body = await response.json();
-    expect(body.data).toEqual({ orcasId: null });
-    expect(f.received).toEqual([]);
-    const stored = await f.codes.inspectToken(token);
-    expect(stored?.record.orcas).toBeUndefined();
-  }
-  finally {
-    await f.close();
-  }
-});
-
-test("owner maintenance recognizes and removes a managed ORCAS Token", async () => {
+test("owner maintenance recognizes and removes a managed Token", async () => {
   const f = await managedFixture();
   try {
     const code = await f.authorize();
@@ -837,11 +755,11 @@ test("owner maintenance recognizes and removes a managed ORCAS Token", async () 
 });
 
 test.each([
-  { name: "missing user ID", patch: { orcas: { sessionId: "external-session" } } },
-  { name: "empty session ID", patch: { orcas: { userId: "external-user-reference", sessionId: "" } } },
-  { name: "unknown field", patch: { orcas: { userId: "external-user-reference", sessionId: "external-session", extra: true } } },
-  { name: "business purpose", patch: { purpose: "business" } },
-])("invalid ORCAS Token with $name fails authentication and inventory validation", async ({ patch }) => {
+  { name: "missing Token identity", patch: { tokenId: null } },
+  { name: "empty Client identity", patch: { clientCode: "" } },
+  { name: "unknown field", patch: { unexpected: { sessionId: "external-session" } } },
+  { name: "unknown purpose", patch: { purpose: "external" } },
+])("invalid Token with $name fails authentication and inventory validation", async ({ patch }) => {
   const f = await managedFixture();
   try {
     const code = await f.authorize();
@@ -849,7 +767,7 @@ test.each([
     expect(callback.status).toBe(302);
     const token = new URL(callback.headers.get("Location")!).searchParams.get("token")!;
     await f.codes.replaceToken(token, patch);
-    const response = await f.request("/public/orcasId", {
+    const response = await f.request("/public/user-info", {
       headers: { Authorization: token, Client: "app" },
     });
     expect(response.status).toBe(503);
@@ -862,7 +780,7 @@ test.each([
 });
 
 test.each(["managed", "business"])("%s Token can logout after callback classification changes", async (purpose) => {
-  const f = await managedFixture(false);
+  const f = await managedFixture();
   try {
     const businessConfig = { ...f.config, callbackType: ClientSsoCallbackType.Business, callbackEndpoint: "https://app.example/callback" };
     if (purpose === "business")
@@ -883,7 +801,7 @@ test.each(["managed", "business"])("%s Token can logout after callback classific
   }
 });
 
-test("managed concurrent callbacks have one external delivery and keep the winner usable", async () => {
+test("managed concurrent callbacks have one Token delivery and keep the winner usable", async () => {
   const f = await managedFixture();
   try {
     const code = await f.authorize();
@@ -891,7 +809,6 @@ test("managed concurrent callbacks have one external delivery and keep the winne
     const results = await Promise.all([f.callback(code), f.callback(code)]);
     const winner = results.find(response => response.status === 302);
     expect(results.filter(response => response.status === 302)).toHaveLength(1);
-    expect(f.received).toHaveLength(1);
     const relationship = await f.scope.inspect(target);
     expect(relationship.record?.state).toBe("active");
     const bearer = new URL(winner!.headers.get("location")!).searchParams.get("token")!;
@@ -921,17 +838,15 @@ test("managed unknown Token save with failed compensation leaves explicit residu
     const relationship = await f.scope.inspect(target);
     expect(inventory).toHaveLength(1);
     expect(relationship.record?.state).toBe("active");
-    expect(f.received).toHaveLength(1);
     const replay = await f.callback(code);
     expect(replay.status).not.toBe(302);
-    expect(f.received).toHaveLength(1);
   }
   finally {
     await f.close();
   }
 });
 
-test("managed Gateway consumes real published old Facts without SQL or ORCAS-specific fields", async () => {
+test("managed Gateway consumes real published old Facts without SQL", async () => {
   const f = await businessFixture(30, process.env.IAM_API_TEST_REDIS_URL);
   try {
     f.setClient({
@@ -962,7 +877,6 @@ test("managed Gateway consumes real published old Facts without SQL or ORCAS-spe
       name: "已发布资料",
     });
     expect(f.sourceCounts.factsSql).toBe(0);
-    expect(f.state.orcasUserReads).toBe(0);
   }
   finally {
     await f.close();
@@ -986,13 +900,13 @@ test("managed real HTTP delivery preserves Cookie attributes, Token lifetime, bo
     const location = new URL(response.headers.get("location")!);
     expect(location.origin + location.pathname).toBe("https://app.example/callback");
     expect(location.searchParams.get("state")).toBe("original-state");
-    expect(location.searchParams.get("orcasToken")).toBe("external-session");
+    expect([...location.searchParams.keys()].sort()).toEqual(["state", "token"]);
     const token = location.searchParams.get("token")!;
     const stored = await f.codes.inspectToken(token);
     expect(stored?.record.purpose).toBe("managed");
     expect(token).not.toBe(code.split(".")[2]);
     const cookies = response.headers.getSetCookie();
-    expect(cookies).toHaveLength(2);
+    expect(cookies).toHaveLength(1);
     for (const cookie of cookies) {
       expect(cookie).toContain("HttpOnly");
       expect(cookie).toContain("SameSite=Lax");
@@ -1002,13 +916,10 @@ test("managed real HTTP delivery preserves Cookie attributes, Token lifetime, bo
       expect(ttl).toBeLessThanOrEqual(45);
       expect(ttl).toBeGreaterThanOrEqual(stored!.remainingSeconds);
     }
-    expect(f.received).toEqual([{ id: 1001, username: "138550", name: "测试用户", mobile: "17721462865" }]);
     expect(f.state.factsReads).toBe(0);
-    expect(stored?.record.orcas).toEqual({ userId: "external-user-reference", sessionId: "external-session" });
     expect(f.audits.some(audit => audit.action === "auth.login.local")).toBe(true);
     const replay = await f.callback(code);
     expect(replay.status).not.toBe(302);
-    expect(f.received).toHaveLength(1);
     const used = await f.use(token, "app", true);
     expect(used.status).toBe(200);
   }
@@ -1030,13 +941,13 @@ for (const failure of [
   "permission",
   "snapshot",
 ]) {
-  test(`managed ${failure} rejects without ORCAS, signing or shared-instance revocation`, async () => {
+  test(`managed ${failure} rejects without Token issuance or shared-instance revocation`, async () => {
     const f = await managedFixture();
     try {
       if (failure === "business-edit") {
         f.setClient({
           ...f.getClient(),
-          ssoConfig: { ...f.config, callbackType: ClientSsoCallbackType.Business, callbackEndpoint: "https://app.example/callback", orcas: { enabled: false } },
+          ssoConfig: { ...f.config, callbackType: ClientSsoCallbackType.Business, callbackEndpoint: "https://app.example/callback" },
         });
       }
       const code = await f.authorize();
@@ -1075,8 +986,6 @@ for (const failure of [
               ? "corrupt"
               : "not_attempted",
       );
-      expect(f.received).toEqual([]);
-      expect(f.state.orcasUserReads).toBe(0);
       const inventory = await f.codes.tokenInventory();
       const relationship = await f.scope.inspect(target);
       expect(inventory).toEqual([]);
@@ -1093,27 +1002,20 @@ for (const failure of [
 }
 
 for (const failure of [
-  "user-projection",
-  "orcas-reject",
-  "orcas-response-lost",
   "save-before",
   "save-after",
 ]) {
-  test(`managed consumed ${failure} requires new authorization and never replays external success`, async () => {
+  test(`managed consumed ${failure} requires new authorization and never replays consumed Code`, async () => {
     const f = await managedFixture();
     try {
       const code = await f.authorize();
       const target = await f.target(code);
-      f.state.orcasUserMissing = failure === "user-projection";
-      f.state.orcasResponseLost = failure === "orcas-response-lost";
-      f.external.reject = failure === "orcas-reject";
-      if (failure.startsWith("save-"))
-        f.codes.failAction("saveToken", failure === "save-after");
+      f.codes.failAction("saveToken", failure === "save-after");
       const failed = await f.callback(code);
       expect(failed.status).not.toBe(302);
       expect(failed.headers.get("X-IAM-Code-Consumption")).toBe("consumed");
       expect(failed.headers.get("X-IAM-Token-Compensation")).toBe(
-        failure === "save-after" ? "removed" : failure === "save-before" ? "missing" : "not_attempted",
+        failure === "save-after" ? "removed" : "missing",
       );
       const inventory = await f.codes.tokenInventory();
       const record = await f.codes.inspectCode("app", code);
@@ -1121,19 +1023,13 @@ for (const failure of [
       expect(inventory).toEqual([]);
       expect(record).toBeNull();
       expect(relationship.record?.state).toBe("active");
-      const externalEffects = f.received.length;
       const replay = await f.callback(code);
       expect(replay.status).not.toBe(302);
-      expect(f.received).toHaveLength(externalEffects);
-      f.state.orcasUserMissing = false;
-      f.state.orcasResponseLost = false;
-      f.external.reject = false;
       const fresh = await f.authorize();
       expect(fresh).not.toBe(code);
       expect(fresh.split(".")[2]).toBe(code.split(".")[2]);
       const delivered = await f.callback(fresh);
       expect(delivered.status).toBe(302);
-      expect(f.received).toHaveLength(externalEffects + 1);
     }
     finally {
       await f.close();
@@ -1143,7 +1039,7 @@ for (const failure of [
 
 for (const compensationFails of [false, true]) {
   test(`managed delivery failure keeps shared relationship and reports Token compensation ${compensationFails ? "residual" : "removed"}`, async () => {
-    const f = await managedFixture(false);
+    const f = await managedFixture();
     try {
       const code = await f.authorize();
       const target = await f.target(code);
@@ -1185,8 +1081,6 @@ for (const compensationFails of [false, true]) {
       expect(fresh.split(".")[2]).toBe(code.split(".")[2]);
       const response = await f.callback(fresh);
       expect(response.status).toBe(302);
-      expect(f.received).toEqual([]);
-      expect(f.state.orcasUserReads).toBe(0);
     }
     finally {
       await f.close();
@@ -1195,7 +1089,7 @@ for (const compensationFails of [false, true]) {
 }
 
 test("managed Gateway dynamically trims published facts and preserves temporary Cookies; root, instance and account remain authoritative", async () => {
-  const f = await managedFixture(false);
+  const f = await managedFixture();
   try {
     f.state.gatewayAuditFails = true;
     const code = await f.authorize();
@@ -1999,7 +1893,6 @@ test("every retained Public endpoint uses the same root and Custom authenticatio
     const issued = await f.exchange(await f.authorize());
     const token = (await issued.json()).data.sid;
     const endpoints = [
-      { path: "/orcasId", body: undefined },
       { path: "/password/change", body: { oldPassword: "old", newPassword: "new" } },
       { path: "/mobile/set", body: { phoneNumber: "17721462865", code: "1234" } },
       { path: "/organizations/search", body: {} },
@@ -2173,7 +2066,7 @@ test("application Token logout terminates its root after the callback delivery p
 });
 
 test("managed application Token logout remains available during Client Maintenance and preserves unrelated roots", async () => {
-  const f = await managedFixture(false);
+  const f = await managedFixture();
   try {
     const response = await f.callback(await f.authorize());
     expect(response.status).toBe(302);

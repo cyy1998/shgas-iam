@@ -203,12 +203,12 @@ describe("UserProfileQueryService", () => {
     expect(detail.employments[0]?.updateTime).toBeInstanceOf(Date);
   });
 
-  test("rejects ORCAS Session Context mixed into an otherwise valid Detail", async () => {
+  test("rejects external session context mixed into an otherwise valid Detail", async () => {
     const malformed = profile({
       detail: jsonDocument({
         ...(profile().detail as Record<string, unknown>),
         employments: [employmentDetail()],
-        orcasId: "orcas-session-context",
+        externalSessionId: "external-session-context",
       }) as UserProfile["detail"],
     });
     const service = createUserProfileQueryService({
@@ -223,7 +223,7 @@ describe("UserProfileQueryService", () => {
     const error = await service.getDetailByUserId(1).catch(error => error);
 
     expect(error).toMatchObject({
-      issues: [{ code: "unrecognized_keys", keys: ["orcasId"], path: [] }],
+      issues: [{ code: "unrecognized_keys", keys: ["externalSessionId"], path: [] }],
     });
   });
 

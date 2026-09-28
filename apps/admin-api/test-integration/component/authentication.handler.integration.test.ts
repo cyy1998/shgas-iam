@@ -101,7 +101,7 @@ describe("admin authentication handler", () => {
     expect(await res.text()).toBe("未登录");
     expect(resolvePrincipalSession).toHaveBeenCalledTimes(0);
     expect(getUserDetailBySubjectIdentifierForAdmin).toHaveBeenCalledTimes(0);
-    expect(res.headers.getSetCookie()).toHaveLength(2);
+    expect(res.headers.getSetCookie()).toHaveLength(1);
     for (const cookie of res.headers.getSetCookie()) {
       expect(cookie).toContain("Path=/");
       expect(cookie).toContain("Max-Age=0");
@@ -149,7 +149,7 @@ describe("admin authentication handler", () => {
       await app.request("http://localhost/rpc/admin.user.search", {
         headers: {
           Client: "iam",
-          Cookie: "global_session=legacy-session-id; orcas_sso_sessionid=legacy-orcas",
+          Cookie: "global_session=legacy-session-id; third_party_session=external-token",
         },
       }),
     );
@@ -158,7 +158,7 @@ describe("admin authentication handler", () => {
     expect(await res.text()).toBe("未登录");
     expect(resolvePrincipalSession).toHaveBeenCalledWith("legacy-session-id");
     expect(getUserDetailBySubjectIdentifierForAdmin).toHaveBeenCalledTimes(0);
-    expect(res.headers.getSetCookie()).toHaveLength(2);
+    expect(res.headers.getSetCookie()).toHaveLength(1);
     for (const cookie of res.headers.getSetCookie()) {
       expect(cookie).toContain("Path=/");
       expect(cookie).toContain("Max-Age=0");
@@ -182,7 +182,7 @@ describe("admin authentication handler", () => {
         await app.request("http://localhost/rpc/admin.user.search", {
           headers: {
             Client: "iam",
-            Cookie: "global_session=disabled-session; orcas_sso_sessionid=legacy-orcas",
+            Cookie: "global_session=disabled-session; third_party_session=external-token",
           },
         }),
       );
@@ -190,7 +190,7 @@ describe("admin authentication handler", () => {
       expect(res.status).toBe(401);
       expect(await res.text()).toBe("会话已失效");
       expect(res.headers.get("set-cookie")).toContain("global_session=");
-      expect(res.headers.get("set-cookie")).toContain("orcas_sso_sessionid=");
+      expect(res.headers.getSetCookie()).toHaveLength(1);
     });
   }
 
@@ -206,7 +206,7 @@ describe("admin authentication handler", () => {
       await app.request("http://localhost/rpc/admin.user.search", {
         headers: {
           Client: "iam",
-          Cookie: "global_session=uncertain-session; orcas_sso_sessionid=legacy-orcas",
+          Cookie: "global_session=uncertain-session; third_party_session=external-token",
         },
       }),
     );
@@ -330,7 +330,7 @@ function createPermittedApp(
   app.onError((error, c) => c.text(error.message, ("httpStatus" in error ? error.httpStatus : 500) as never));
   const request = (path: string) =>
     app.request(`http://localhost${path}`, {
-      headers: { Client: "iam", Cookie: "global_session=valid; orcas_sso_sessionid=orcas" },
+      headers: { Client: "iam", Cookie: "global_session=valid; third_party_session=external-token" },
     });
   return { request, readBarrier, loadUser, revokePrincipalSession, revokeUserSessions };
 }
@@ -363,7 +363,7 @@ for (const path of ["/admin/capabilities", "/rpc/capabilitySummary?input=%7B%7D"
       const message = await denied.text();
       expect(denied.status).toBe(401);
       expect(message).toBe("会话已失效");
-      expect(denied.headers.getSetCookie()).toHaveLength(2);
+      expect(denied.headers.getSetCookie()).toHaveLength(1);
       expect(app.readBarrier).toHaveBeenCalledTimes(2);
       expect(app.loadUser).toHaveBeenCalledTimes(1);
       expect(app.revokeUserSessions).toHaveBeenCalledTimes(1);
@@ -387,7 +387,7 @@ for (const path of ["/admin/capabilities", "/rpc/capabilitySummary?input=%7B%7D"
       const message = await response.text();
       expect(response.status).toBe(401);
       expect(message).toBe("未登录");
-      expect(response.headers.getSetCookie()).toHaveLength(2);
+      expect(response.headers.getSetCookie()).toHaveLength(1);
       expect(app.readBarrier).toHaveBeenCalledTimes(1);
     });
 
@@ -425,7 +425,7 @@ for (const path of ["/admin/capabilities", "/rpc/capabilitySummary?input=%7B%7D"
       });
       const response = await app.request(path);
       expect(response.status).toBe(401);
-      expect(response.headers.getSetCookie()).toHaveLength(2);
+      expect(response.headers.getSetCookie()).toHaveLength(1);
       expect(app.readBarrier).toHaveBeenCalledTimes(1);
       expect(app.loadUser).toHaveBeenCalledTimes(0);
       expect(app.revokePrincipalSession).toHaveBeenCalledWith(

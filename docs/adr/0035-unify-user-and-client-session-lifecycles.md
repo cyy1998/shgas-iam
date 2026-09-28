@@ -41,7 +41,8 @@ Secret 不主动保留新旧重叠期，但旧缓存仍可能被接受；两者�
 Code 只消费一次。协议保留各自校验顺序，消费后失败或结果未知须重新授权，不恢复 Code、不重放成功结果。
 Custom SSO 选择这一边界以退出 reservation、lease、heartbeat、release 和持久恢复机制，接受响应丢失、未知外部作用及
 未交付对象；只对本次已知 Token 同步尽力补偿。OIDC 不增加 Token 补偿，失败时按下述规则尝试撤销原 ClientSession。
-这些策略不承诺最终自动回收；ORCAS 外部幂等与回收保证也不能由 IAM 代为承诺。
+这些策略不承诺最终自动回收。原 ORCAS 外部作用已按
+[ADR-0040](0040-retire-orcas-custom-sso-integration.md) 从 Custom SSO 退役。
 
 OIDC 与 Custom 业务兑换在适用 Client 认证通过并可靠定位原 ClientSession 后，后续失败在本请求内有界尝试撤销原实例。
 这包括明确缺失 Code、校验失败和暂态失败；普通在线访问遇 Maintenance 的可恢复拒绝不能豁免该兑换作用。

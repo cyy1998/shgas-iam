@@ -22,10 +22,6 @@ import createSuccessResponseSchema from "@iam/api-core/core/openapi/schemas/crea
 const routePrefix = "";
 const tags = ["Public"];
 
-const OrcasIdDtoSchema = z.object({
-  orcasId: z.string().nullable().openapi({ example: "ada8wf89w83b2" }),
-}).openapi("PublicOrcasIdDto");
-
 export const userInfo = createRoute({
   method: "get",
   path: `${routePrefix}/user-info`,
@@ -47,16 +43,6 @@ export const userInfo = createRoute({
     [HttpStatusCodes.SERVICE_UNAVAILABLE]: createCustomSsoUnavailableResponse(
       "Subject Access 或 Client Subject Projection 暂时不可用",
     ),
-  },
-});
-
-export const orcasId = createRoute({
-  method: "get",
-  path: `${routePrefix}/orcasId`,
-  tags,
-  responses: {
-    ...commonErrorResponses,
-    [HttpStatusCodes.OK]: jsonContent(createSuccessResponseSchema(OrcasIdDtoSchema), "本 Custom SSO Session 的 Orcas ID"),
   },
 });
 

@@ -10,17 +10,14 @@ import { UserNotFoundError } from "@iam/domain/user";
 import { getCookie, setCookie } from "hono/cookie";
 
 const GLOBAL_SESSION_COOKIE = "global_session";
-const ORCAS_SESSION_COOKIE = "orcas_sso_sessionid";
 const subjectAccessHttp = createSubjectAccessHttpAdapter();
 
 function clearGlobalSessionCookies(c: Context) {
-  for (const cookieName of [GLOBAL_SESSION_COOKIE, ORCAS_SESSION_COOKIE]) {
-    setCookie(c, cookieName, "", {
-      expires: new Date(0),
-      maxAge: 0,
-      path: "/",
-    });
-  }
+  setCookie(c, GLOBAL_SESSION_COOKIE, "", {
+    expires: new Date(0),
+    maxAge: 0,
+    path: "/",
+  });
 }
 
 export type AdminAuthenticationHandlers = ReturnType<typeof createAdminRootAuthenticationHandlers>;
@@ -52,7 +49,7 @@ export function createAdminRootAuthenticationHandlers(deps: CreateAdminRootAuthe
     return await subjectAccessHttp.run(c, {
       clearCookiesOnInvalidSession: sessionCookie === undefined
         ? []
-        : [GLOBAL_SESSION_COOKIE, ORCAS_SESSION_COOKIE],
+        : [GLOBAL_SESSION_COOKIE],
     }, async () => await deps.subjectAccess.run(async (operation) => {
       const principal = await deps.resolveRoot(token, operation);
       if (principal === null) {

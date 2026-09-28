@@ -305,7 +305,7 @@ test("UserInfo preserves an observed in-flight request and rejects next request 
   }
 });
 
-test("UserInfo maps published employment wire and isolates two Clients authorization without ORCAS fields", async () => {
+test("UserInfo maps published employment wire and isolates two Clients authorization", async () => {
   const other = `other-${randomUUID()}`;
   let first = "";
   const f = await userInfoFixture({

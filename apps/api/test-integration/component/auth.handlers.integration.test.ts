@@ -166,7 +166,7 @@ describe("authentication HTTP handlers", () => {
     const response = await app.request("/auth/authz", {
       headers: {
         "Client": "portal",
-        "Cookie": "local_portal_session=local-token; orcas_sso_sessionid=orcas-token",
+        "Cookie": "local_portal_session=local-token; third_party_session=external-token",
         "X-Forwarded-Uri": "/app",
       },
     });
@@ -316,7 +316,7 @@ describe("authentication HTTP handlers", () => {
     );
   });
 
-  test("authz expires the client-scoped and ORCAS cookies for a disabled Subject", async () => {
+  test("authz expires the client-scoped cookie for a disabled Subject", async () => {
     const handlers = createHandlers();
     authzService.mockRejectedValue(new SubjectAccessSessionInvalidHttpError());
     const app = new Hono();
@@ -330,7 +330,7 @@ describe("authentication HTTP handlers", () => {
     const response = await app.request("/auth/authz", {
       headers: {
         "Client": "portal",
-        "Cookie": "local_portal_session=local-token; orcas_sso_sessionid=orcas-token",
+        "Cookie": "local_portal_session=local-token; third_party_session=external-token",
         "X-Forwarded-Uri": "/app",
       },
     });
@@ -339,7 +339,7 @@ describe("authentication HTTP handlers", () => {
     await expect(response.json()).resolves.toMatchObject({
       code: ApiErrorCode.SessionInvalid,
     });
-    expect(response.headers.getSetCookie()).toHaveLength(2);
+    expect(response.headers.getSetCookie()).toHaveLength(1);
     for (const cookie of response.headers.getSetCookie()) {
       expect(cookie).toContain("Path=/");
       expect(cookie).toContain("Max-Age=0");
@@ -393,7 +393,7 @@ describe("authentication HTTP handlers", () => {
     const response = await app.request("/auth/authz", {
       headers: {
         "Client": "portal",
-        "Cookie": "local_portal_session=local-token; orcas_sso_sessionid=orcas-token",
+        "Cookie": "local_portal_session=local-token; third_party_session=external-token",
         "X-Forwarded-Uri": "/app",
       },
     });
@@ -406,7 +406,7 @@ describe("authentication HTTP handlers", () => {
     expect(response.headers.getSetCookie()).toEqual([]);
   });
 
-  test("authz clears local and ORCAS cookies for an invalid configured session", async () => {
+  test("authz clears local cookie for an invalid configured session", async () => {
     const handlers = createHandlers();
     authzService.mockRejectedValue(new AuthzUnauthorizedError("未登录"));
     const app = new Hono();
@@ -420,13 +420,13 @@ describe("authentication HTTP handlers", () => {
     const response = await app.request("/auth/authz", {
       headers: {
         "Client": "portal",
-        "Cookie": "local_portal_session=local-token; orcas_sso_sessionid=orcas-token",
+        "Cookie": "local_portal_session=local-token; third_party_session=external-token",
         "X-Forwarded-Uri": "/app",
       },
     });
 
     expect(response.status).toBe(401);
-    expect(response.headers.getSetCookie()).toHaveLength(2);
+    expect(response.headers.getSetCookie()).toHaveLength(1);
     for (const cookie of response.headers.getSetCookie()) {
       expect(cookie).toContain("Path=/");
       expect(cookie).toContain("Max-Age=0");

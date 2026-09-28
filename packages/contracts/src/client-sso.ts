@@ -41,7 +41,6 @@ const customConfigFields = {
   protocol: z.literal(ClientSsoProtocol.CustomSso),
   validRedirectUrls: z.array(z.string().trim().min(1)).min(1).refine(unique, "地址不得重复"),
   subjectClaims: z.array(z.enum(SUBJECT_CLAIMS)).min(1).refine(claims => claims.includes(SubjectClaim.SubjectIdentifier), "必须包含 subjectIdentifier").refine(unique, "claim 不得重复"),
-  orcas: z.object({ enabled: z.boolean() }).strict().optional(),
 };
 
 export const ClientSsoCustomConfigSchema = z.discriminatedUnion("callbackType", [
@@ -51,10 +50,7 @@ export const ClientSsoCustomConfigSchema = z.discriminatedUnion("callbackType", 
     callbackType: z.literal(ClientSsoCallbackType.Business),
     callbackEndpoint: exactHttpUrl,
   }).strict(),
-], { error: "请选择回调类型" }).refine(config => config.callbackType === ClientSsoCallbackType.Managed || !config.orcas?.enabled, {
-  path: ["orcas", "enabled"],
-  message: "业务回调不能启用 ORCAS，请先关闭 ORCAS",
-});
+], { error: "请选择回调类型" });
 
 export const ClientSsoConfigSchema = z.discriminatedUnion("protocol", [
   ClientSsoOidcConfigSchema,

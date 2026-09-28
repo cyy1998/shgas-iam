@@ -20,7 +20,6 @@ type CustomSsoManagedResult = {
   ttl: number;
   redirectUrl: string;
   state?: string;
-  orcasSessionId: string | null;
 };
 
 function fixture() {
@@ -35,7 +34,6 @@ function fixture() {
     ttl: 37,
     redirectUrl: "https://app.example/complete",
     state: "trusted state",
-    orcasSessionId: "orcas-token",
   }));
   const operations = createSubjectAccessOperations({
     barrier: { readCommittedTransitionId: async () => randomUUID() },
@@ -133,11 +131,11 @@ test.each(["legacy:client/中文", "😀".repeat(33)])(
     expect(response.status).toBe(302);
     const location = new URL(response.headers.get("location")!);
     expect(location.searchParams.get("state")).toBe("trusted state");
-    expect(location.searchParams.get("orcasToken")).toBe("orcas-token");
+    expect([...location.searchParams.keys()].sort()).toEqual(["state", "token"]);
     const cookies = response.headers.getSetCookie();
-    expect(cookies).toContainEqual(
+    expect(cookies).toEqual([
       expect.stringContaining(`${customSsoLocalSessionCookieName(client)}=managed-token`),
-    );
+    ]);
     for (const cookie of cookies) {
       expect(cookie).toContain("HttpOnly");
       expect(cookie).toContain("SameSite=Lax");

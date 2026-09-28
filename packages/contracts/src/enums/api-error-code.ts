@@ -85,5 +85,4 @@ export enum ApiErrorCode {
   PrivilegeNotFound = "PRIVILEGE.NOT_FOUND",
   PrivilegeAlreadyDelegated = "PRIVILEGE.ALREADY_DELEGATED",
 
-  OrcasLoginFailed = "INTEGRATION.ORCAS_LOGIN_FAILED",
 }

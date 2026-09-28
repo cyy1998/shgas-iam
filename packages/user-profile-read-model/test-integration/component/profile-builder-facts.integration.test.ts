@@ -98,10 +98,10 @@ function orgPathRow(
 }
 
 describe("UserProfileBuilder", () => {
-  test("does not publish extra ORCAS Session Context from the input user into Detail", async () => {
+  test("does not publish extra external session context from the input user into Detail", async () => {
     const dataset: ProfileBuildDataset = {
       responsibilityRows: [],
-      users: [user(1, { orcasId: "orcas-session-context" })],
+      users: [user(1, { externalSessionId: "external-session-context" })],
       employments: [],
       positions: [],
       orgPathRows: [],

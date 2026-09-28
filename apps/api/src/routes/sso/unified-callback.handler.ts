@@ -25,7 +25,7 @@ export function createUnifiedCallbackHandler(deps: {
     const cookieName = customSsoLocalSessionCookieName(client);
     return await subjectAccessHttp.run(
       c,
-      { clearCookiesOnInvalidSession: ["global_session", cookieName, "orcas_sso_sessionid"] },
+      { clearCookiesOnInvalidSession: ["global_session", cookieName] },
       async () => {
         try {
           const response = await deps.operations.run(operation =>
@@ -41,13 +41,6 @@ export function createUnifiedCallbackHandler(deps: {
                   const headers = new Headers();
                   const cookie = { httpOnly: true, sameSite: "Lax" as const, maxAge: result.ttl, path: "/" };
                   headers.append("Set-Cookie", serialize(cookieName, result.token, cookie));
-                  if (result.orcasSessionId !== null) {
-                    headers.append(
-                      "Set-Cookie",
-                      serialize("orcas_sso_sessionid", result.orcasSessionId, { ...cookie, httpOnly: false }),
-                    );
-                    url.searchParams.set("orcasToken", result.orcasSessionId);
-                  }
                   headers.set("Location", url.href);
                   return new Response(null, { status: HttpStatusCodes.MOVED_TEMPORARILY, headers });
                 },

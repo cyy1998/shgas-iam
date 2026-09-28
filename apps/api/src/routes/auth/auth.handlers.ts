@@ -83,7 +83,7 @@ export function createLocalSessionAuthzHandler(deps: Pick<CreateAuthHandlersDeps
       data = await subjectAccessHttp.run(c, {
         clearCookiesOnInvalidSession: localSessionCookie === undefined
           ? []
-          : [localSessionCookieName, "orcas_sso_sessionid"],
+          : [localSessionCookieName],
       }, async () => {
         try {
           return await deps.localSessionAuthorizer.authorizeLocalSession(
@@ -106,7 +106,6 @@ export function createLocalSessionAuthzHandler(deps: Pick<CreateAuthHandlersDeps
       ) {
         expireCustomSsoCookies(c, [
           localSessionCookieName,
-          "orcas_sso_sessionid",
         ]);
       }
       throw error;

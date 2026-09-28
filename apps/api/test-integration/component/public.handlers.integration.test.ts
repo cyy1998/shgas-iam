@@ -41,11 +41,9 @@ function createHandlers() {
   } as never);
 }
 
-function makeContext(orcasId: string | null | undefined) {
+function makeContext() {
   return {
     get: mock((key: string) => {
-      if (key === "orcasId")
-        return orcasId;
       if (key === "subjectIdentifier")
         return subjectIdentifier;
       if (key === "authenticatedClientCode")
@@ -91,7 +89,7 @@ describe("createPublicHandlers", () => {
 
   test("userInfo returns the live client-scoped projection without resolving a legacy account", async () => {
     const handlers = createHandlers();
-    const context = makeContext(undefined);
+    const context = makeContext();
 
     const result: unknown = await handlers.userInfo(context as never, undefined as never);
 
@@ -116,7 +114,7 @@ describe("createPublicHandlers", () => {
 
   test("userInfo maps Projection Not Ready to a sanitized retryable error", async () => {
     const handlers = createHandlers();
-    const context = makeContext(undefined);
+    const context = makeContext();
     resolveUserInfoForRequest.mockRejectedValueOnce(
       new SubjectProjectionNotReadyError(),
     );
@@ -130,25 +128,5 @@ describe("createPublicHandlers", () => {
     });
     expect(getActiveUserBySubjectIdentifier).not.toHaveBeenCalled();
     expect(getUserDetailById).not.toHaveBeenCalled();
-  });
-
-  test("orcasId returns the Custom SSO session Orcas ID", async () => {
-    const handlers = createHandlers();
-    const context = makeContext("orcas-user-1");
-
-    const result: unknown = await handlers.orcasId(context as never, undefined as never);
-
-    expect(result).toEqual(resp.ok({ orcasId: "orcas-user-1" }));
-    expect(context.json).toHaveBeenCalledWith(resp.ok({ orcasId: "orcas-user-1" }), HttpStatusCodes.OK);
-  });
-
-  test("orcasId returns null when the session has no Orcas ID", async () => {
-    const handlers = createHandlers();
-    const context = makeContext(undefined);
-
-    const result: unknown = await handlers.orcasId(context as never, undefined as never);
-
-    expect(result).toEqual(resp.ok({ orcasId: null }));
-    expect(context.json).toHaveBeenCalledWith(resp.ok({ orcasId: null }), HttpStatusCodes.OK);
   });
 });

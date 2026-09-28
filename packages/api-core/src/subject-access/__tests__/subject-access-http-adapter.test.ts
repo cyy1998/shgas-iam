@@ -30,7 +30,7 @@ describe("Subject Access HTTP Adapter", () => {
     const { logger } = createLoggerCapture();
     const app = new Hono();
     app.get("/session", async context => await adapter.run(context, {
-      clearCookiesOnInvalidSession: ["global_session", "orcas_sso_sessionid"],
+      clearCookiesOnInvalidSession: ["global_session", "local_alpha_session"],
     }, async () => {
       throw new SubjectAccessSessionInvalidHttpError();
     }));
@@ -38,12 +38,13 @@ describe("Subject Access HTTP Adapter", () => {
 
     const response = await app.request("/session", {
       headers: {
-        Cookie: "global_session=principal-token; orcas_sso_sessionid=orcas-token",
+        Cookie: "global_session=principal-token; local_alpha_session=local-token",
       },
     });
 
     expect(response.status).toBe(401);
-    await expect(response.json()).resolves.toMatchObject({
+    const body = await response.json();
+    expect(body).toMatchObject({
       code: ApiErrorCode.SessionInvalid,
     });
     expect(response.headers.getSetCookie()).toHaveLength(2);
@@ -72,7 +73,8 @@ describe("Subject Access HTTP Adapter", () => {
 
     expect(response.status).toBe(503);
     expect(response.headers.get("Retry-After")).toBe("3");
-    await expect(response.json()).resolves.toMatchObject({
+    const body = await response.json();
+    expect(body).toMatchObject({
       code: ApiErrorCode.SubjectAccessUnavailable,
     });
     expect(response.headers.getSetCookie()).toEqual([]);

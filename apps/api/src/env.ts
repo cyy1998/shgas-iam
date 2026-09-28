@@ -51,7 +51,6 @@ const RawEnvSchema = z.object({
   IAM_API_SMS_URL: z.string().min(1),
   IAM_API_CUSTOM_SSO_TOKEN_TTL_SECONDS: z.coerce.number().int().positive().default(86400),
   IAM_API_AUTH_CODE_TTL_SECONDS: z.coerce.number().int().positive(),
-  IAM_API_ORCAS_URL: z.string().min(1),
   IAM_API_PORT: z.coerce.number().int().min(1).max(65535).default(30000),
   IAM_API_WECHAT_CORP_ID: z.string().min(1),
   IAM_API_WECHAT_CORP_SECRET: z.string().min(1),
@@ -166,9 +165,6 @@ export interface Env extends Record<string, unknown> {
     cookieSecure: boolean;
   };
   integrations: {
-    orcas: {
-      url: string;
-    };
     sms: {
       url: string;
       signatureKey: string;
@@ -248,9 +244,6 @@ function toApiEnv(raw: RawEnv): Env {
       cookieSecure: raw.IAM_API_OIDC_COOKIE_SECURE ?? (raw.NODE_ENV === "production"),
     },
     integrations: {
-      orcas: {
-        url: raw.IAM_API_ORCAS_URL,
-      },
       sms: {
         url: raw.IAM_API_SMS_URL,
         signatureKey: raw.IAM_API_SMS_SIGNATURE_KEY,

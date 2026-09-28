@@ -15,7 +15,6 @@ function validEnv(): NodeJS.ProcessEnv {
     IAM_API_SMS_URL: "https://sms.example.com/send",
     IAM_API_CUSTOM_SSO_TOKEN_TTL_SECONDS: "86400",
     IAM_API_AUTH_CODE_TTL_SECONDS: "300",
-    IAM_API_ORCAS_URL: "https://orcas.example.com/login",
     IAM_API_WECHAT_CORP_ID: "corp-id",
     IAM_API_WECHAT_CORP_SECRET: "corp-secret",
     IAM_API_MAGIC_CODE: "1234",

@@ -81,15 +81,6 @@ export interface SmsIntegrationPort {
   sendMessage: (phoneNumber: string, message: string) => Promise<unknown>;
 }
 
-export interface OrcasIntegrationPort {
-  orcasLogin: (input: {
-    id: number;
-    username: string;
-    name: string;
-    mobile?: string | null;
-  }) => Promise<{ orcasSessionId: string; orcasId: string }>;
-}
-
 export interface WechatIntegrationPort {
   getWxUserId: (code: string) => Promise<string>;
 }
@@ -97,7 +88,6 @@ export interface WechatIntegrationPort {
 export interface ApiIntegrationPorts {
   cap: CapIntegrationPort;
   wechat: WechatIntegrationPort;
-  orcas: OrcasIntegrationPort;
   sms: SmsIntegrationPort;
 }
 

@@ -14,4 +14,3 @@ export * from "./InvalidRedirectUriError";
 export * from "./InvalidSsoClientError";
 export * from "./InvalidVerificationCodeError";
 export * from "./LoginFailedError";
-export * from "./OrcasLoginFailedError";

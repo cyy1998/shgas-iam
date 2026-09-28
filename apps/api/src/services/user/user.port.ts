@@ -52,7 +52,6 @@ export interface UserMobileVerificationPort {
 
 export interface UserStorePort {
   findUserIdentityByUsername: (username: string) => Promise<{ id: number } | null>;
-  findUserIdentityBySubjectIdentifier: (subjectIdentifier: string) => Promise<{ id: number } | null>;
   getUserById: (userId: number) => Promise<User | null>;
   getUserBySubjectIdentifier: (subjectIdentifier: string) => Promise<User | null>;
   getUserByUsername: (username: string) => Promise<User | null>;

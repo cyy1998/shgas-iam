@@ -46,9 +46,8 @@ export const clients = snakeCase.table("client", {
         AND jsonb_typeof(${table.ssoConfig}->'allowedScopes') = 'array'
         AND ${table.ssoConfig}->'allowedScopes' @> '["openid"]'::jsonb)
       OR (${table.ssoConfig}->>'protocol' = 'custom-sso'
-        AND (${table.ssoConfig} - ARRAY['protocol','callbackType','callbackEndpoint','validRedirectUrls','subjectClaims','orcas']) = '{}'::jsonb
+        AND (${table.ssoConfig} - ARRAY['protocol','callbackType','callbackEndpoint','validRedirectUrls','subjectClaims']) = '{}'::jsonb
         AND ${table.ssoConfig}->>'callbackType' IN ('managed','business')
-        AND (${table.ssoConfig}->>'callbackType' = 'managed' OR NOT COALESCE((${table.ssoConfig}->'orcas'->>'enabled')::boolean, false))
         AND ((${table.ssoConfig}->>'callbackType' = 'managed' AND NOT (${table.ssoConfig} ? 'callbackEndpoint'))
           OR (${table.ssoConfig}->>'callbackType' = 'business'
             AND jsonb_typeof(${table.ssoConfig}->'callbackEndpoint') = 'string'
@@ -56,11 +55,7 @@ export const clients = snakeCase.table("client", {
         AND jsonb_typeof(${table.ssoConfig}->'validRedirectUrls') = 'array'
         AND jsonb_array_length(${table.ssoConfig}->'validRedirectUrls') > 0
         AND jsonb_typeof(${table.ssoConfig}->'subjectClaims') = 'array'
-        AND ${table.ssoConfig}->'subjectClaims' @> '["subjectIdentifier"]'::jsonb
-        AND (NOT (${table.ssoConfig} ? 'orcas') OR (
-          jsonb_typeof(${table.ssoConfig}->'orcas') = 'object'
-          AND ((${table.ssoConfig}->'orcas') - 'enabled') = '{}'::jsonb
-          AND jsonb_typeof(${table.ssoConfig}->'orcas'->'enabled') = 'boolean')))
+        AND ${table.ssoConfig}->'subjectClaims' @> '["subjectIdentifier"]'::jsonb)
     )
   )) IS TRUE`),
 ]);

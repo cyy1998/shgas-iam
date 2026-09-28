@@ -2,7 +2,6 @@ import type { AuthenticatedSubjectVariables } from "../lib";
 
 type ExpectedVariableKey
   = | "authenticatedClientCode"
-    | "orcasId"
     | "subjectIdentifier";
 
 type UnexpectedVariableKey = Exclude<

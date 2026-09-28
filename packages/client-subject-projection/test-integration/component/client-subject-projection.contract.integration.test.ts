@@ -479,7 +479,7 @@ describe("Client Subject Projection Interface", () => {
           isDelete: false,
           createTime: "must-not-leak",
           updateTime: "must-not-leak",
-          orcasId: "must-not-leak",
+          externalSessionId: "must-not-leak",
         }),
       },
     });

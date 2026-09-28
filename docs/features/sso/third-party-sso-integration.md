@@ -29,7 +29,6 @@ authorizationEndpoint、logoutEndpoint、thirdPartyOAEndpoint；内外入口各�
 | subjectClaims | 获准接收的主体字段，必须包含 Subject Identifier。 |
 | callbackType | managed 或 business，显式决定交付方式。 |
 | callbackEndpoint | managed 禁止；business 必填固定完整回调，允许 query。 |
-| orcas.enabled | 仅 managed 可用；独立外部交付，不进入通用主体投影。 |
 
 目标 Client 必须可通行、启用 SSO 并选择 Custom 协议。
 Secret 的生成/轮换结果不自动交付原文，管理员通过独立授权且审计的读取操作获取当前值，
@@ -103,7 +102,7 @@ code={urlencoded_code}&redirect_uri={urlencoded_original_redirect_url}
 }
 ```
 
-subject 仅包含当前 Client 选择的字段，授权只含该 Client 的角色/权限，不含数据库 ID、ORCAS 或兼容别名。
+subject 仅包含当前 Client 选择的字段，授权只含该 Client 的角色/权限，不含数据库 ID 或兼容别名。
 业务后端自行建立本地会话、关联 sid、设置自己的 HttpOnly Cookie，再跳回原 redirectUrl；
 IAM 不建立或存储第三方自有 session。
 
@@ -112,23 +111,21 @@ IAM 不建立或存储第三方自有 session。
 服务端仍会尝试终止原 ClientSession；旧应用 Token 可能因此失效，仍有效的根通常可直接重新授权。
 三个 X-IAM 消费/撤销/补偿 Header 仅供安全诊断，不改变重新授权策略。
 
-## managed：托管回调与 ORCAS
+## managed：托管回调
 
 管理员为每个允许落地 origin 配置根路径 /sso/callback 到 IAM 的代理。IAM 首次校验完整落地后推导
 `new URL(redirectUrl).origin + "/sso/callback"`，保留协议、主机、非默认端口，不复制业务 path/query。
 请求 Host/Forwarded 不决定目标，代理可以改写 Host。
 
-托管 callback 校验原 Code、用途、地址、会话关系与当前访问条件，一次消费成功后才调用适用 ORCAS、签发 Token、
-写局部 Cookie，并 302 回原落地。局部 Cookie 名为 `local_{transportClientCode}_session`；
+托管 callback 校验原 Code、用途、地址、会话关系与当前访问条件，一次消费成功后才签发 Token、写局部 Cookie，
+并 302 回原落地。局部 Cookie 名为 `local_{transportClientCode}_session`；
 它是实际回调主机的 host-only Cookie，HttpOnly、SameSite=Lax、Path=/，当前实现没有 Secure 属性。
-URL 仍交付 token、适用 orcasToken 和原 state；ORCAS Cookie 同样使用 Token 的固定剩余期限。
+URL 交付 token 和原 state。
 
 失败返回 JSON。返回业务应用重新发起授权，不刷新携带旧 Code 的 callback。
-消费后的 ORCAS/签发/响应构造失败不恢复 Code，只同步尽力补偿本次已知 Token，
+消费后的签发/响应构造失败不恢复 Code，只同步尽力补偿本次已知 Token，
 不因托管交付失败撤销共享 ClientSession；账号明确失效的独立拒绝作用仍保留。
 补偿失败/未知的 Token 可能留存至到期或会话终止。
-ORCAS 已成功但响应丢失时，原请求不重放，新授权可能再次调用外部登录；
-IAM 不提供外部幂等、查询或退出保证。
 
 ## 用户信息与 Gateway 鉴权
 
@@ -162,7 +159,7 @@ Client 和 X-Forwarded-Uri 必填，优先使用局部 Cookie。成功把相同 
 { "version": 1, "subjectIdentifier": "00000000-0000-4000-8000-000000001001", "username": "138550", "name": "张三" }
 ```
 
-subjectIdentifier 必有，username/name 仅在允许时出现。数据库 ID、phone、任职、授权和 ORCAS 不进入该 Header；
+subjectIdentifier 必有，username/name 仅在允许时出现。数据库 ID、phone、任职和授权不进入该 Header；
 仅主体不读 Facts。authz 不做接口级角色/权限判定，业务系统仍负责自己的授权。
 
 | 情况 | 接入方处理 |

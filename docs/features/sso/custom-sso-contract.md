@@ -1,7 +1,7 @@
 # Custom SSO 协议契约
 
 本文供维护协议实现时使用；接入步骤与请求示例见[第三方接入指南](third-party-sso-integration.md)。
-`@iam/custom-sso` 拥有授权、Code、Token、认证续接和交付；API 拥有 HTTP、Cookie 与外部 adapter。
+`@iam/custom-sso` 拥有授权、Code、Token、认证续接和交付；API 拥有 HTTP 与 Cookie 适配。
 会话关系由 [Kernel](unified-session-kernel.md)拥有，账号裁决由 [Subject Access](subject-access-operation-contract.md)拥有。
 决策理由见 [ADR-0035](../../adr/0035-unify-user-and-client-session-lifecycles.md)与
 [ADR-0038](../../adr/0038-derive-managed-sso-callback-from-redirect-origin.md)。
@@ -30,7 +30,7 @@ fragment 内的 `?` 仍是 hash 内容，真正 URL query 仅在原 wildcard 匹
 
 | 类型 | 配置与首次接受事实 | 消费方 |
 |---|---|---|
-| business | 必填固定完整 `callbackEndpoint`，允许 query；禁止 ORCAS。 | 业务后端通过当前 SSO Secret 兑换。 |
+| business | 必填固定完整 `callbackEndpoint`，允许 query。 | 业务后端通过当前 SSO Secret 兑换。 |
 | managed | 配置严格禁止 `callbackEndpoint`；由规范化落地 origin 推导 `/sso/callback`，保留协议、主机和非默认端口。 | IAM 托管 callback；管理员为每个允许的业务 origin 部署代理。 |
 
 managed 基础回调不复制落地 path/query；API 使用授权结果保存的单个 callback，不接受额外 mode/delivery/callback
@@ -70,36 +70,33 @@ HTTP 保持原错误映射，通过 `X-IAM-Code-Consumption`、`X-IAM-Client-Ses
 `X-IAM-Token-Compensation` 表达安全结果，不返回身份定位或凭据。
 unknown/failed 不表示终止成功；Token 补偿成功也不能代替实例撤销结果。HTTP 构造成功不证明对端收到响应。
 
-## 托管消费与外部交付
+## 托管消费与交付
 
 `completeCallback` 接收 code、clientCode、redirectUrl 和可选审计上下文。
 GET `/sso/callback` 不以请求 Host、根 Cookie 或内部读取 Secret 作为托管认证依据。
 一次当前 Snapshot 确认 managed 配置后，读取原范围 Code，核对原用途、回调派生关系、实际地址及原确切会话关系，
 取得本操作许可后原子消费。业务 Code 不能借配置改为 managed 绕过 Secret。
 
-明确 consumed 后才读取适用专用用户、调用 ORCAS、签发 Token 并构造完整 Response。
-ORCAS 只在启用时执行，使用许可内专用 reader，不追加 active-user 过滤，不额外读取通用 Projection；
-ORCAS 的 userId/sessionId 仅保存到 managed Token 的 orcas 专用字段，不进入共享会话、business Token、通用主体投影或 Gateway Header。
+明确 consumed 后才签发 Token 并构造完整 Response；managed 不读取专用外部用户，也不建立外部系统会话。
 登录成功审计 `auth.login.local` 失败只记录安全 warning，不反转成功结果。
 
-所有 Cookie 与 Location 准备成功后才返回 Response。局部及 ORCAS Cookie 使用 Token 的固定剩余秒数，
-HttpOnly、SameSite=Lax、Path=/；当前实现不设置 Secure。最终 URL 保留 token、适用 orcasToken 和原 state。
+所有 Cookie 与 Location 准备成功后才返回 Response。局部 Cookie 使用 Token 的固定剩余秒数，
+HttpOnly、SameSite=Lax、Path=/；当前实现不设置 Secure。最终 URL 保留 token 和原 state。
 Cookie 为实际回调 host 的 host-only Cookie；URL bearer 是现存交付边界。
 
-托管失败与业务兑换不同：消费失败/未知不调用 ORCAS、不签 Token；消费后的任何失败均要求重新授权，
+托管失败与业务兑换不同：消费失败/未知不签 Token；消费后的任何失败均要求重新授权，
 只对本次已知 Token 作上述有界 compare-delete 补偿，**不因托管交付失败撤销共享 ClientSession**。
 `CustomSsoManagedFailure` 及 HTTP 只报告消费与 Token 补偿，不返回业务兑换的实例撤销 header。
 账号明确失效仍由 Subject Access 自己执行拒绝/撤销。
 
 补偿 unknown/failed 的 Token 可能保留至自身到期或原会话终止；不承诺后台回收。
-同根重新授权可以复用原有效 ClientSession。ORCAS 成功但响应丢失时，本请求不重试外部成功；
-新 Code 可能再次触发外部登录，adapter 不提供真实外部幂等、查询或退出保证。
+同根重新授权可以复用原有效 ClientSession。
 
 ## Token 使用与主体交付
 
 Token 的完整随机 bearer 经 SHA-256 直接定位唯一记录，独立随机 ID 的反向键仅用于管理。
-记录保存 managed/business 用途、Client、原确切会话身份与固定 issuedAt/expiresAt；managed Token 还可保存专用 orcas.userId/sessionId。
-它不保存 Subject/Facts/Claims Snapshot，business Token 不携带 ORCAS 引用。
+记录保存 managed/business 用途、Client、原确切会话身份与固定 issuedAt/expiresAt。
+它不保存 Subject/Facts/Claims Snapshot 或外部系统会话引用。
 期限取协议 TTL 与已观察根/ClientSession 上限；兑换、访问及重新授权不延长旧 Token。
 补偿比较本次完整原值；反向键仅在仍指向相同摘要时删除。
 

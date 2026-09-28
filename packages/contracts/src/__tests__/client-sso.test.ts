@@ -21,9 +21,8 @@ describe("explicit Custom SSO callback type", () => {
       expect(ClientSsoConfigSchema.safeParse({ ...config, callbackType: "business", callbackEndpoint }).success).toBe(false);
   });
 
-  it("only allows ORCAS with a managed callback", () => {
-    expect(ClientSsoConfigSchema.safeParse({ ...config, callbackType: "business", callbackEndpoint: "https://app.example.com/cb", orcas: { enabled: true } }).success).toBe(false);
-    expect(ClientSsoConfigSchema.safeParse({ ...config, callbackType: "managed", orcas: { enabled: true } }).success).toBe(true);
-    expect(ClientSsoConfigSchema.safeParse({ ...config, callbackType: "business", callbackEndpoint: "https://app.example.com/cb", orcas: { enabled: false } }).success).toBe(true);
+  it.each([true, false])("rejects retired ORCAS configuration with enabled=%s for either callback type", (enabled) => {
+    expect(ClientSsoConfigSchema.safeParse({ ...config, callbackType: "business", callbackEndpoint: "https://app.example.com/cb", orcas: { enabled } }).success).toBe(false);
+    expect(ClientSsoConfigSchema.safeParse({ ...config, callbackType: "managed", orcas: { enabled } }).success).toBe(false);
   });
 });

@@ -2,7 +2,7 @@
 
 Type: runbook
 Status: Current
-Last verified: 2026-09-21
+Last verified: 2026-09-28
 Next review: 2026-10-31
 
 本页用于当前统一会话布局的离线定向清理和 Client Snapshot 修复。日常会话查询、撤销优先使用
@@ -44,6 +44,28 @@ Client Maintenance、零请求量、等待 TTL 和 CLI 参数都不能代替真�
 时钟异常不能靠修改记录 expiry 或恢复登录态备份补偿。根与 ClientSession TTL、协议 Token TTL 按
 [API 配置](../../apps/api/.env.example)和[Kernel 契约](../features/sso/unified-session-kernel.md)核对，
 API/Admin API 的对应配置须一致；Token 不延长根期限。
+
+## ORCAS 退役的一次切换
+
+ORCAS 退役必须在同一维护窗口按下列顺序执行，不允许新旧 runtime 混跑，也不能用新 reader 将无法解析的旧记录视为已清除：
+
+1. 固定仍能识别 Token `orcas` 字段与旧 Client 配置的应用、维护工具 commit/digest，完成停流，停止全部旧 reader/writer、
+   Client mutation 与 Snapshot acquisition，并排空在途工作。
+2. 使用该旧版维护工具按[库存、清理与独立核验](#库存清理与独立核验)依次执行
+   `--layout unified --owner all` 的 inventory、apply 和另起进程 verify。verify 必须证明 Kernel、Custom SSO 与 OIDC
+   全部目标库存为零；此作用要求所有 IAM 用户重新登录。
+3. 执行正式 migration
+   [`20260928095714_retire_orcas_configuration`](../../packages/db/src/migrations/20260928095714_retire_orcas_configuration/migration.sql)。
+   它在同一事务取得 Client 表 `ACCESS EXCLUSIVE` 锁，移除全部 Custom SSO 配置（包括软删除 Client）中的 `orcas`，
+   并替换约束以严格拒绝该字段；OIDC、空配置、其他 Custom 配置、SSO 启用意图、Client 状态与 SSO Secret 不变。
+   独立查询全表 `sso_config ? 'orcas'` 的计数必须为零，并核对新 `client_sso_config_check` 已生效。历史 migration 不修改或重放。
+4. 在 mutation 与 acquisition 仍冻结、旧 reader/writer 仍停止时，按
+   [新 Snapshot 的定向修复与全量恢复](#新-snapshot-的定向修复与全量恢复)依次执行 `client-snapshot:repair --all`
+   和另起进程 `client-snapshot:verify --all`，证明普通与敏感 Snapshot 三族库存为零。
+5. 仅在以上 gate、非目标保留核验均成功后部署不含 ORCAS 的新代码，执行 readiness 与受控 smoke，再按本页规则放流。
+
+上述全量清理不注销 ORCAS 自己的既有会话；其有效期与注销由 ORCAS 负责。失败恢复保持停流并从兼容当前数据的候选继续，
+不得恢复旧 IAM 登录态，不能用已清理的 Code、Token 或会话备份回退本次切换。
 
 ## 库存、清理与独立核验
 
@@ -132,7 +154,7 @@ smoke 失败时关闭受控入口、排空并重做适用 gate。
 | 协议产物回收 | 由各协议 owner 维护；实例撤销、Token 删除及外部退出是不同结果。请求内失败作用见 [Custom](../features/sso/custom-sso-contract.md) 与 [OIDC](../features/oidc/oidc-integration.md)，没有通用后台自动补齐承诺。 |
 | 账号与主体事实恢复 | 按 [Profile 与 Subject Access 维护](user-profile-maintenance.md)执行；会话清理不能把不确定 Barrier 改为 enabled。 |
 | 作用后的审计失败 | 人工告警与核对，不回滚已生效作用，不为补审计自动重放 mutation，见[写入结果契约](../features/admin/admin-mutation-contract.md)。 |
-| ORCAS/第三方自有会话 | 外部系统负责查询、幂等、期限和精确退出；IAM 清理不代表第三方本地登录或离线 ID Token 立即失效。 |
+| 第三方自有会话 | 外部系统负责查询、期限和精确退出；IAM 清理不代表第三方本地登录或离线 ID Token 立即失效。 |
 
 恢复应用须使用与当前数据兼容的候选；不得从审计重建登录态或通过恢复登录态备份撤销已经发生的安全作用。
 验证入口和证明范围见[命令页](../development/commands.md)及[架构验证归属](../architecture/architecture-verification.md)；

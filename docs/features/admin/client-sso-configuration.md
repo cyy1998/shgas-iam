@@ -8,11 +8,11 @@ Client 在一个严格联合中选择 OIDC 或 Custom SSO，统一 ssoEnabled �
 ## 配置与安全输出
 
 `ClientSsoConfigSchema` 拥有公开配置形状：OIDC 的认证方法由 clientType 派生；
-Custom 使用 callbackType、允许落地、subjectClaims 和可选 ORCAS。
-managed 禁止 callbackEndpoint；business 必填固定完整地址且禁止 ORCAS。
+Custom 使用 callbackType、允许落地和 subjectClaims。
+managed 禁止 callbackEndpoint；business 必填固定完整地址。
 不接受 mode、logoutEndpoint、第二份认证方法或跨协议字段。类型切换时隐藏控件的旧地址不得进入 managed 请求。
 
-Domain 校验 URL/pattern、规范化集合顺序，省略 ORCAS 与显式关闭为同一值。
+Domain 校验 URL/pattern 并规范化集合顺序。
 数据库约束保护协议 shape、无配置不能启用及 Secret/id/updatedAt 同时存在；
 完整字段规则与公开出口见[共享契约](../../architecture/contracts-and-database.md)。
 

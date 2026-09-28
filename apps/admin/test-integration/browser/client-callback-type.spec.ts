@@ -3,7 +3,7 @@ import { ClientSsoProtocol, ClientStatus } from '@iam/contracts';
 import { expect, test } from '@playwright/test';
 import { fulfillTrpc, mockAdminApi, parseTrpcBatchInput } from './fixtures';
 
-test('administrator chooses callback type, corrects ORCAS and reloads the saved explicit choice', async ({
+test('administrator chooses callback type and reloads the saved explicit choice', async ({
   page,
 }) => {
   await mockAdminApi(page);
@@ -51,37 +51,29 @@ test('administrator chooses callback type, corrects ORCAS and reloads the saved 
   expect(writes).toBe(0);
   await page.getByLabel('回调类型', { exact: true }).click();
   await page.getByTitle('托管回调', { exact: true }).click();
-  await page.getByLabel('托管交付启用 ORCAS').check();
   await save.click();
   await expect(page.getByText('已保存').last()).toBeVisible();
-  expect(current.ssoConfig).toMatchObject({
+  expect(current.ssoConfig).toEqual({
     protocol: ClientSsoProtocol.CustomSso,
     callbackType: 'managed',
-    orcas: { enabled: true },
+    validRedirectUrls: ['https://app.test/home'],
+    subjectClaims: ['subjectIdentifier'],
   });
-  expect(current.ssoConfig).not.toHaveProperty('callbackEndpoint');
   await page.reload();
   await expect(page.getByLabel('回调地址', { exact: true })).toHaveCount(0);
-  await expect(page.getByLabel('托管交付启用 ORCAS')).toBeChecked();
   await page.getByLabel('回调类型', { exact: true }).click();
   await page.getByTitle('业务回调', { exact: true }).click();
   await page
     .getByLabel('回调地址', { exact: true })
     .fill('https://app.test/sso/callback');
   await save.click();
-  await expect(
-    page.getByText('业务回调不能启用 ORCAS，请先关闭 ORCAS'),
-  ).toBeVisible();
-  expect(writes).toBe(1);
-  await page.getByLabel('托管交付启用 ORCAS').uncheck();
-  await page
-    .getByLabel('回调地址', { exact: true })
-    .fill('https://app.test/sso/callback');
-  await save.click();
   await expect(page.getByText('已保存').last()).toBeVisible();
-  expect(current.ssoConfig).toMatchObject({
+  expect(current.ssoConfig).toEqual({
+    protocol: ClientSsoProtocol.CustomSso,
     callbackType: 'business',
     callbackEndpoint: 'https://app.test/sso/callback',
+    validRedirectUrls: ['https://app.test/home'],
+    subjectClaims: ['subjectIdentifier'],
   });
   await page.reload();
   await expect(page.getByLabel('回调地址', { exact: true })).toHaveValue(

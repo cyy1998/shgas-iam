@@ -64,7 +64,7 @@ export function createApiAuthenticationHandlers(deps: CreateApiAuthenticationHan
       throw new AuthzUnauthorizedError("未登录");
     }
     const sourceCookies = sessionCredential.source === "cookie"
-      ? [sessionCookieName, "orcas_sso_sessionid"]
+      ? [sessionCookieName]
       : [];
 
     try {
@@ -83,11 +83,6 @@ export function createApiAuthenticationHandlers(deps: CreateApiAuthenticationHan
           "authenticatedClientCode",
           sessionContext.authenticatedClientCode,
         );
-        if ("orcasId" in sessionContext
-          && sessionContext.orcasId !== null
-          && sessionContext.orcasId !== undefined) {
-          c.set("orcasId", sessionContext.orcasId);
-        }
         await deps.subjectDeliveryRequests.runWithCapability(
           c,
           resolved.subjectDeliveryCapability,

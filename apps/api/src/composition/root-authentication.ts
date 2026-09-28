@@ -308,7 +308,6 @@ export function createRootAuthenticationComposition(options: RootAuthenticationC
       subjectDeliveryRequests: delivery,
       config: options.config,
     });
-    publicRouter.openapi(publicRoutes.orcasId, handlers.orcasId);
     publicRouter.openapi(publicRoutes.passwordChange, handlers.passwordChange);
     publicRouter.openapi(publicRoutes.mobileSet, handlers.mobileSet);
     publicRouter.openapi(publicRoutes.organizationsSearch, handlers.organizationsSearch);

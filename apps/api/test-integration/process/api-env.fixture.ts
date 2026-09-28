@@ -22,7 +22,6 @@ export function createEntryEnvironment(context: ProcessSmokeAttemptContext, over
       IAM_API_CUSTOM_SSO_TOKEN_TTL_SECONDS: "3600",
       IAM_API_AUTH_CODE_TTL_SECONDS: "300",
       IAM_API_CUSTOM_SSO_PROJECTION_RETRY_AFTER_SECONDS: "7",
-      IAM_API_ORCAS_URL: "http://127.0.0.1:1/orcas",
       IAM_API_PORT: String(context.port),
       IAM_API_WECHAT_CORP_ID: "unreachable-smoke-corp",
       IAM_API_WECHAT_CORP_SECRET: "unreachable-smoke-secret",

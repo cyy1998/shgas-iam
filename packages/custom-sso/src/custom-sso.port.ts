@@ -21,17 +21,6 @@ export interface CustomSsoAuditPort {
   recordAuditLog: (input: CustomSsoAuditInput) => Promise<void>;
 }
 
-export interface CustomSsoOrcasUser {
-  id: number;
-  username: string;
-  name: string;
-  mobile?: string | null;
-}
-
-export interface CustomSsoOrcasPort {
-  orcasLogin: (input: CustomSsoOrcasUser) => Promise<{ orcasSessionId: string; orcasId: string }>;
-}
-
 export interface CustomSsoProjectionPermission {
   readonly operation: SubjectAccessOperation;
   readonly permission: SubjectAccessPermission;

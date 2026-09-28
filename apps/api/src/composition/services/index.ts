@@ -292,8 +292,6 @@ export function createApiServices(options: CreateApiServicesOptions) {
       tokenTtlSeconds: runtime.config.auth.redisExpireSeconds,
       business: { audit: auditLogWriter, logger: runtime.logger },
       managed: {
-        orcas: runtime.integrations.orcas,
-        users: userService,
         audit: auditLogWriter,
         logger: runtime.logger,
       },
