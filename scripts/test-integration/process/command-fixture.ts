@@ -1,3 +1,5 @@
+import { chmod, copyFile, mkdir } from "node:fs/promises";
+import { join } from "node:path";
 import {
   createBoundedProcessLogCapture,
   createProcessSmokeEnvironment,
@@ -10,6 +12,18 @@ import {
 export const COMMAND_FIXTURE_TEST_TIMEOUT_MS = 30_000;
 const scenarioTimeoutMs = 18_000;
 const cleanupTimeoutMs = 5_000;
+
+export async function copyFixtureToolLaunchers(repoRoot: string, fixtureRoot: string, tools: readonly string[]) {
+  const fixtureBin = join(fixtureRoot, "node_modules", ".bin");
+  await mkdir(fixtureBin, { recursive: true });
+  for (const tool of tools) {
+    for (const suffix of process.platform === "win32" ? [".cmd", ".ps1", ""] : [""]) {
+      const launcher = `${tool}${suffix}`;
+      await copyFile(join(repoRoot, "node_modules", ".bin", launcher), join(fixtureBin, launcher));
+      if (suffix === "") await chmod(join(fixtureBin, launcher), 0o755);
+    }
+  }
+}
 
 export async function runOwnedCommand(command: string[], cwd: string, signal: AbortSignal, timeoutMs = 20_000) {
   signal.throwIfAborted();

@@ -10,12 +10,12 @@
     "./testing": "./src/testing.ts"
   },
   "scripts": {
-    "lint": "node ../../scripts/run-quality.mjs lint --workspace packages/oidc",
-    "lint:fix": "node ../../scripts/run-quality.mjs lint-fix --workspace packages/oidc",
+    "lint": "biome check --formatter-enabled=false . && stylelint \"**/*.less\" --allow-empty-input",
+    "lint:fix": "biome check --formatter-enabled=false --write . && stylelint \"**/*.less\" --allow-empty-input",
     "typecheck": "pnpm exec tsc --noEmit",
     "test:integration:redis": "bun test --max-concurrency=1 test-integration/redis",
-    "format": "node ../../scripts/run-quality.mjs format --workspace packages/oidc",
-    "format:check": "node ../../scripts/run-quality.mjs format-check --workspace packages/oidc"
+    "format": "biome format --write . && prettier \"**/*.{less,md,yaml,yml}\" --ignore-path ../../.gitignore --ignore-path ../../.prettierignore --no-error-on-unmatched-pattern --write",
+    "format:check": "biome format . && prettier \"**/*.{less,md,yaml,yml}\" --ignore-path ../../.gitignore --ignore-path ../../.prettierignore --no-error-on-unmatched-pattern --check"
   },
   "dependencies": {
     "@iam/api-core": "workspace:*",

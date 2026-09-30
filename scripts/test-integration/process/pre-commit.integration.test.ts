@@ -1,7 +1,12 @@
 import { describe, expect, test } from "bun:test";
 import { copyFile, mkdir, readFile, realpath, rename, symlink, unlink, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
-import { COMMAND_FIXTURE_TEST_TIMEOUT_MS, runOwnedCommand, withCommandFixture } from "./command-fixture";
+import {
+  COMMAND_FIXTURE_TEST_TIMEOUT_MS,
+  copyFixtureToolLaunchers,
+  runOwnedCommand,
+  withCommandFixture,
+} from "./command-fixture";
 
 const repoRoot = join(import.meta.dirname, "..", "..", "..");
 
@@ -58,7 +63,6 @@ async function initializePreCommitFixture(root: string, signal: AbortSignal, ini
     "stylelint.config.mjs",
     ".husky/install.mjs",
     ".husky/pre-commit",
-    "scripts/run-quality.mjs",
   ]) {
     const target = join(root, path);
     await mkdir(dirname(target), { recursive: true });
@@ -102,6 +106,7 @@ async function initializePreCommitFixture(root: string, signal: AbortSignal, ini
       process.platform === "win32" ? "junction" : "dir",
     );
   }
+  await copyFixtureToolLaunchers(repoRoot, root, ["biome", "prettier", "stylelint"]);
 
   for (const [path, source] of Object.entries(initialFiles)) await writeFixtureFile(root, path, source);
   await expectGitSuccess(root, signal, ["init", "--quiet"]);
@@ -284,15 +289,27 @@ describe("pre-commit hook", () => {
         const files = {
           "pnpm-lock.yaml": "lockfileVersion:   '9.0'\n",
           "asset.txt": "leave   this alone\n",
+          "generated/ignored.less": ".item{colour:red}\n",
+          ".sandcastle/worktrees/temporary/ignored.less": ".item{colour:red}\n",
+          ".sandcastle/worktrees/temporary/ignored.md": "# Notes\n\n-   one\n",
+          ".sandcastle/worktrees/temporary/ignored.yaml": "enabled:   true\n",
         };
+        const paths = Object.keys(files);
         for (const [path, source] of Object.entries(files)) await writeFixtureFile(root, path, source);
-        await expectGitSuccess(root, signal, ["add", "--", ...Object.keys(files)]);
+        await expectGitSuccess(root, signal, ["add", "--", ...paths]);
 
         const result = await commit(root, signal, "excluded files");
 
         expect(result.exitCode, result.output).toBe(0);
+        const committedPaths = (await gitText(root, signal, ["ls-tree", "-r", "--name-only", "HEAD", "--", ...paths]))
+          .split(/\r?\n/u)
+          .filter(Boolean)
+          .sort();
+        expect(committedPaths).toEqual([...paths].sort());
+        const unchanged = await expectGitSuccess(root, signal, ["diff", "--exit-code", "HEAD", "--", ...paths]);
+        expect(unchanged.output).toBe("(no output captured)");
         for (const [path, source] of Object.entries(files)) {
-          expect(await readGitFile(root, signal, "HEAD", path)).toBe(source);
+          expect(await readFile(join(root, path), "utf8")).toBe(source);
         }
       });
     },

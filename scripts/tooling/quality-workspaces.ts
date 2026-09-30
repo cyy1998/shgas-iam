@@ -1,5 +1,5 @@
 import { access, readdir, readFile } from "node:fs/promises";
-import { dirname, relative, resolve } from "node:path";
+import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 export type QualityWorkspace = {
@@ -56,8 +56,4 @@ async function listWorkspaceDirectories(parent: string) {
     }
   }
   return workspaces.sort();
-}
-
-export function relativeQualityRunner(workspace: string) {
-  return relative(resolve(repoRoot, workspace), resolve(repoRoot, "scripts/run-quality.mjs")).replaceAll("\\", "/");
 }

@@ -13,8 +13,8 @@
     "./postgres-error": "./src/postgres-error.ts"
   },
   "scripts": {
-    "lint": "node ../../scripts/run-quality.mjs lint --workspace packages/db",
-    "lint:fix": "node ../../scripts/run-quality.mjs lint-fix --workspace packages/db",
+    "lint": "biome check --formatter-enabled=false . && stylelint \"**/*.less\" --allow-empty-input",
+    "lint:fix": "biome check --formatter-enabled=false --write . && stylelint \"**/*.less\" --allow-empty-input",
     "test": "pnpm test:unit",
     "test:unit": "bun test --max-concurrency=2 src",
     "test:integration:postgres": "bun test --max-concurrency=1 test-integration/postgres",
@@ -23,8 +23,8 @@
     "db:migrate": "drizzle-kit migrate",
     "db:push": "drizzle-kit push",
     "db:check": "drizzle-kit check",
-    "format": "node ../../scripts/run-quality.mjs format --workspace packages/db",
-    "format:check": "node ../../scripts/run-quality.mjs format-check --workspace packages/db"
+    "format": "biome format --write . && prettier \"**/*.{less,md,yaml,yml}\" --ignore-path ../../.gitignore --ignore-path ../../.prettierignore --no-error-on-unmatched-pattern --write",
+    "format:check": "biome format . && prettier \"**/*.{less,md,yaml,yml}\" --ignore-path ../../.gitignore --ignore-path ../../.prettierignore --no-error-on-unmatched-pattern --check"
   },
   "dependencies": {
     "@iam/contracts": "workspace:*",

@@ -6,13 +6,9 @@ import { readToolingGraph } from "../tooling/repository-contracts.mjs";
 const repoRoot = join(import.meta.dirname, "..", "..");
 
 describe("tooling contracts", () => {
-  test("keeps root format and lint behind the shared quality runner", () => {
+  test("keeps quality checks outside the Turbo task cache", () => {
     const graph = readToolingGraph(repoRoot);
 
-    expect(graph.rootScripts.format).toBe("node scripts/run-quality.mjs format");
-    expect(graph.rootScripts["format:check"]).toBe("node scripts/run-quality.mjs format-check");
-    expect(graph.rootScripts.lint).toBe("node scripts/run-quality.mjs lint");
-    expect(graph.rootScripts["lint:fix"]).toBe("node scripts/run-quality.mjs lint-fix");
     expect(graph.rootScripts["lint:root"]).toBeUndefined();
     expect(graph.rootScripts["lint:fix:root"]).toBeUndefined();
     expect(graph.turboTasks.lint).toBeUndefined();
@@ -35,10 +31,6 @@ describe("tooling contracts", () => {
     }
     expect(graph.workspaces.find((workspace) => workspace.name === "@iam/domain")).toMatchObject({
       scripts: {
-        format: "node ../../scripts/run-quality.mjs format --workspace packages/domain",
-        "format:check": "node ../../scripts/run-quality.mjs format-check --workspace packages/domain",
-        lint: "node ../../scripts/run-quality.mjs lint --workspace packages/domain",
-        "lint:fix": "node ../../scripts/run-quality.mjs lint-fix --workspace packages/domain",
         typecheck: "pnpm exec tsc --noEmit",
       },
     });

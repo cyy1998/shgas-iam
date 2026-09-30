@@ -10,13 +10,13 @@
     "./testing": "./src/testing.ts"
   },
   "scripts": {
-    "lint": "node ../../scripts/run-quality.mjs lint --workspace packages/custom-sso",
-    "lint:fix": "node ../../scripts/run-quality.mjs lint-fix --workspace packages/custom-sso",
+    "lint": "biome check --formatter-enabled=false . && stylelint \"**/*.less\" --allow-empty-input",
+    "lint:fix": "biome check --formatter-enabled=false --write . && stylelint \"**/*.less\" --allow-empty-input",
     "test": "pnpm test:unit",
     "test:unit": "bun test --max-concurrency=2 src",
     "typecheck": "pnpm exec tsc --noEmit",
-    "format": "node ../../scripts/run-quality.mjs format --workspace packages/custom-sso",
-    "format:check": "node ../../scripts/run-quality.mjs format-check --workspace packages/custom-sso"
+    "format": "biome format --write . && prettier \"**/*.{less,md,yaml,yml}\" --ignore-path ../../.gitignore --ignore-path ../../.prettierignore --no-error-on-unmatched-pattern --write",
+    "format:check": "biome format . && prettier \"**/*.{less,md,yaml,yml}\" --ignore-path ../../.gitignore --ignore-path ../../.prettierignore --no-error-on-unmatched-pattern --check"
   },
   "dependencies": {
     "@iam/api-core": "workspace:*",

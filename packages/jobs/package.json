@@ -7,13 +7,13 @@
     ".": "./src/index.ts"
   },
   "scripts": {
-    "lint": "node ../../scripts/run-quality.mjs lint --workspace packages/jobs",
-    "lint:fix": "node ../../scripts/run-quality.mjs lint-fix --workspace packages/jobs",
+    "lint": "biome check --formatter-enabled=false . && stylelint \"**/*.less\" --allow-empty-input",
+    "lint:fix": "biome check --formatter-enabled=false --write . && stylelint \"**/*.less\" --allow-empty-input",
     "test": "pnpm test:unit",
     "test:unit": "bun test --max-concurrency=2 src",
     "typecheck": "pnpm exec tsc --noEmit",
-    "format": "node ../../scripts/run-quality.mjs format --workspace packages/jobs",
-    "format:check": "node ../../scripts/run-quality.mjs format-check --workspace packages/jobs"
+    "format": "biome format --write . && prettier \"**/*.{less,md,yaml,yml}\" --ignore-path ../../.gitignore --ignore-path ../../.prettierignore --no-error-on-unmatched-pattern --write",
+    "format:check": "biome format . && prettier \"**/*.{less,md,yaml,yml}\" --ignore-path ../../.gitignore --ignore-path ../../.prettierignore --no-error-on-unmatched-pattern --check"
   },
   "dependencies": {
     "bullmq": "^6.3.8",

@@ -7,12 +7,12 @@
     ".": "./src/index.ts"
   },
   "scripts": {
-    "lint": "node ../../scripts/run-quality.mjs lint --workspace packages/client-subject-projection",
-    "lint:fix": "node ../../scripts/run-quality.mjs lint-fix --workspace packages/client-subject-projection",
+    "lint": "biome check --formatter-enabled=false . && stylelint \"**/*.less\" --allow-empty-input",
+    "lint:fix": "biome check --formatter-enabled=false --write . && stylelint \"**/*.less\" --allow-empty-input",
     "test:integration:component": "bun test --max-concurrency=2 test-integration/component",
     "typecheck": "pnpm exec tsc --noEmit",
-    "format": "node ../../scripts/run-quality.mjs format --workspace packages/client-subject-projection",
-    "format:check": "node ../../scripts/run-quality.mjs format-check --workspace packages/client-subject-projection"
+    "format": "biome format --write . && prettier \"**/*.{less,md,yaml,yml}\" --ignore-path ../../.gitignore --ignore-path ../../.prettierignore --no-error-on-unmatched-pattern --write",
+    "format:check": "biome format . && prettier \"**/*.{less,md,yaml,yml}\" --ignore-path ../../.gitignore --ignore-path ../../.prettierignore --no-error-on-unmatched-pattern --check"
   },
   "dependencies": {
     "@iam/contracts": "workspace:*",

@@ -102,7 +102,7 @@ releases 只保留当前代发布与维护；一次性升级和旧验收见[固�
 | [ADR-0038](adr/0038-derive-managed-sso-callback-from-redirect-origin.md)                   | decision | Current | 2026-09-28    | 2026-10-31  | 显式回调类型与 managed origin 信任。                                                          |
 | [ADR-0039](adr/0039-tighten-admin-reference-integrity-and-preserve-history.md)             | decision | Current | 2026-09-22    | 2026-10-31  | 管理引用完整性、输入规范化与软删除历史。                                                      |
 | [ADR-0040](adr/0040-retire-orcas-custom-sso-integration.md)                                | decision | Current | 2026-09-28    | 2026-10-31  | ORCAS 完整退役决定；全量清理登录态、维护窗口切换及外部会话责任。                              |
-| [ADR-0041](adr/0041-unify-format-and-lint-with-biome.md)                                   | decision | Current | 2026-09-29    | 2026-10-31  | 已接受：Biome 与提交时修复；YAML 仅排版并保留专属验证，最终只读检查；实施与验收见 Spec #217。 |
+| [ADR-0041](adr/0041-unify-format-and-lint-with-biome.md)                                   | decision | Current | 2026-09-30    | 2026-10-31  | 已接受：Biome 与提交时修复；YAML 仅排版并保留专属验证，最终只读检查；实施与验收见 Spec #217。 |
 
 </details>
 
@@ -148,7 +148,7 @@ releases 只保留当前代发布与维护；一次性升级和旧验收见[固�
 | ----------------------------------------------------- | ----------- | ------- | ------------- | ----------- | ----------------------------------------------- |
 | [后端实现约定](development/backend-implementation.md) | development | Current | 2026-07-26    | 2026-10-31  | 响应封装、OpenAPI、logger 与 audit 实现约定。   |
 | [编码风格与命名约定](development/coding-style.md)     | development | Current | 2026-08-07    | 2026-10-31  | TypeScript、formatter、文件命名与 import 风格。 |
-| [构建、测试与开发命令](development/commands.md)       | development | Current | 2026-09-29    | 2026-10-31  | 开发、构建、验证、AFK 与维护的命令和资源入口。  |
+| [构建、测试与开发命令](development/commands.md)       | development | Current | 2026-09-30    | 2026-10-31  | 开发、构建、验证、AFK 与维护的命令和资源入口。  |
 
 </details>
 

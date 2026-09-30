@@ -162,7 +162,10 @@ Profile 重建及 Subject Access 恢复见[Profile 维护手册](../releases/use
 | `lint`         | 只读检查代码规则及 import 整理要求。                  |
 | `lint:fix`     | 应用 Biome 安全修复及 import 整理；剩余错误非零退出。 |
 
-根命令覆盖全仓纳入范围的文件，workspace 命令只覆盖该 workspace，均使用同一配置和文件选择规则。
+根命令从仓库根目录检查，workspace 命令从自身目录检查，直接调用工具 CLI 并共用根配置。
+文件由工具的目录遍历、扩展名 glob 与 ignore 配置选择，包含范围内尚未提交的文件。
+公开命令不提供额外的文件筛选参数；聚焦单文件时可使用 `pnpm exec biome`、`pnpm exec prettier` 或
+`pnpm exec stylelint` 的原生参数，并遵守上述文件分工。
 这些命令直接运行工具，不复用 Turbo 检查缓存，因此配置或依赖变化后不会复用旧通过结果。
 在声明的 pnpm 版本与仓库锁文件就绪的环境中，`verifyDepsBeforeRun: error` 使项目依赖未就绪时直接失败，
 需先显式执行 `pnpm install`，检查入口不隐式安装项目依赖或运行安装生命周期。
@@ -171,7 +174,8 @@ Stylelint 只检查 Less，不自动修复。YAML 不执行通用 lint，也不�
 其他类型（如 SQL、Shell、TOML、HTML 和二进制资产）不由这组命令验证，继续使用各自消费工具与专属检查。
 
 生成目录、依赖锁文件、数据库 migration 快照、vendored API 文档资源、`openspec/`、`.scratch/`、历史审查和
-外来 skill 副本不参与格式及规则改写。完整选择边界由统一 runner 维护；支持文件的解析失败不会视为无匹配跳过。
+外来 skill 副本不参与格式及规则改写。排除范围由 `biome.jsonc`、`.prettierignore` 和
+`stylelint.config.mjs` 维护；支持文件的解析失败不会视为无匹配跳过。
 `lint:fix` 保留裸副作用 import 的顺序，不启用 unsafe 修复；格式细节见[编码风格](coding-style.md)。
 
 ## 测试与验证通道
@@ -524,7 +528,7 @@ node -e "const wrapper=require('typescript/package.json'); const api=require('ty
 安全 lint 修复与 import 整理 → 自动排版 → git diff --cached --check
 ```
 
-Hook 复用统一命令的工具分工、配置与排除范围；即使配置或依赖变化也不扩大到全仓。Biome 只做安全修复，
+lint-staged 按扩展名直接调用各工具，并复用公开命令的配置与排除范围；即使配置或依赖变化也不扩大到全仓。Biome 只做安全修复，
 Less 规则只检查，剩余错误、解析失败、工具失败及暂存 diff 空白错误都会阻止提交。无适用文件正常跳过工具检查。
 typecheck、test、build 与配置专属验证保持各自入口，不加入 pre-commit；不增加 pre-push 或 pre-merge-commit。
 

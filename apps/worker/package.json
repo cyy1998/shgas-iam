@@ -25,8 +25,8 @@
     "user-profile:repair": "bun run src/commands/user-profile/user-profile-repair.ts",
     "user-profile:verify-postgres": "bun run src/commands/user-profile/user-profile-readiness.ts verify-postgres",
     "user-profile:verify-redis": "bun run src/commands/user-profile/user-profile-readiness.ts verify-redis",
-    "lint": "node ../../scripts/run-quality.mjs lint --workspace apps/worker",
-    "lint:fix": "node ../../scripts/run-quality.mjs lint-fix --workspace apps/worker",
+    "lint": "biome check --formatter-enabled=false . && stylelint \"**/*.less\" --allow-empty-input",
+    "lint:fix": "biome check --formatter-enabled=false --write . && stylelint \"**/*.less\" --allow-empty-input",
     "test": "pnpm test:unit",
     "test:integration:component": "bun test --max-concurrency=2 test-integration/component",
     "test:integration:postgres": "bun test --max-concurrency=1 test-integration/postgres",
@@ -34,8 +34,8 @@
     "test:integration:redis": "bun test --max-concurrency=1 test-integration/redis",
     "test:unit": "bun test --max-concurrency=2 src",
     "typecheck": "pnpm exec tsc --noEmit",
-    "format": "node ../../scripts/run-quality.mjs format --workspace apps/worker",
-    "format:check": "node ../../scripts/run-quality.mjs format-check --workspace apps/worker"
+    "format": "biome format --write . && prettier \"**/*.{less,md,yaml,yml}\" --ignore-path ../../.gitignore --ignore-path ../../.prettierignore --no-error-on-unmatched-pattern --write",
+    "format:check": "biome format . && prettier \"**/*.{less,md,yaml,yml}\" --ignore-path ../../.gitignore --ignore-path ../../.prettierignore --no-error-on-unmatched-pattern --check"
   },
   "dependencies": {
     "@bull-board/api": "^9.10.1",

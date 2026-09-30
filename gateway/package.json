@@ -8,14 +8,14 @@
     "validate": "bun src/cli.ts validate",
     "diff": "bun src/cli.ts diff",
     "apply": "bun src/cli.ts apply",
-    "lint": "node ../scripts/run-quality.mjs lint --workspace gateway",
-    "lint:fix": "node ../scripts/run-quality.mjs lint-fix --workspace gateway",
+    "lint": "biome check --formatter-enabled=false . && stylelint \"**/*.less\" --allow-empty-input",
+    "lint:fix": "biome check --formatter-enabled=false --write . && stylelint \"**/*.less\" --allow-empty-input",
     "test": "pnpm test:unit",
     "test:unit": "bun test --max-concurrency=2 src",
     "test:integration:component": "bun test --max-concurrency=2 test-integration/component",
     "typecheck": "pnpm exec tsc --noEmit",
-    "format": "node ../scripts/run-quality.mjs format --workspace gateway",
-    "format:check": "node ../scripts/run-quality.mjs format-check --workspace gateway"
+    "format": "biome format --write . && prettier \"**/*.{less,md,yaml,yml}\" --ignore-path ../.gitignore --ignore-path ../.prettierignore --no-error-on-unmatched-pattern --write",
+    "format:check": "biome format . && prettier \"**/*.{less,md,yaml,yml}\" --ignore-path ../.gitignore --ignore-path ../.prettierignore --no-error-on-unmatched-pattern --check"
   },
   "dependencies": {
     "commander": "^15.0.0",

@@ -9,12 +9,12 @@
     "./testing": "./src/testing.ts"
   },
   "scripts": {
-    "lint": "node ../../scripts/run-quality.mjs lint --workspace packages/session-kernel",
-    "lint:fix": "node ../../scripts/run-quality.mjs lint-fix --workspace packages/session-kernel",
+    "lint": "biome check --formatter-enabled=false . && stylelint \"**/*.less\" --allow-empty-input",
+    "lint:fix": "biome check --formatter-enabled=false --write . && stylelint \"**/*.less\" --allow-empty-input",
     "test:integration:redis": "bun test --max-concurrency=1 test-integration/redis",
     "typecheck": "pnpm exec tsc --noEmit",
-    "format": "node ../../scripts/run-quality.mjs format --workspace packages/session-kernel",
-    "format:check": "node ../../scripts/run-quality.mjs format-check --workspace packages/session-kernel"
+    "format": "biome format --write . && prettier \"**/*.{less,md,yaml,yml}\" --ignore-path ../../.gitignore --ignore-path ../../.prettierignore --no-error-on-unmatched-pattern --write",
+    "format:check": "biome format . && prettier \"**/*.{less,md,yaml,yml}\" --ignore-path ../../.gitignore --ignore-path ../../.prettierignore --no-error-on-unmatched-pattern --check"
   },
   "dependencies": {
     "zod": "^4.4.3"

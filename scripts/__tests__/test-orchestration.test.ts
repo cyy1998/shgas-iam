@@ -776,8 +776,6 @@ describe("test orchestration", () => {
 
     expect(rootPackage.scripts.verify).toBe("node scripts/verify.mjs");
     expect(rootPackage.scripts["check:architecture"]).toBe("bun scripts/check-architecture.ts");
-    expect(rootPackage.scripts["format:check"]).toBe("node scripts/run-quality.mjs format-check");
-    expect(rootPackage.scripts.lint).toBe("node scripts/run-quality.mjs lint");
     expect(turbo.tasks.transit).toEqual({
       dependsOn: ["^transit"],
     });

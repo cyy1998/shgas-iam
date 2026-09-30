@@ -1,7 +1,12 @@
 import { describe, expect, test } from "bun:test";
 import { access, chmod, copyFile, mkdir, readFile, realpath, symlink, writeFile } from "node:fs/promises";
-import { dirname, join, relative } from "node:path";
-import { COMMAND_FIXTURE_TEST_TIMEOUT_MS, runOwnedCommand, withCommandFixture } from "./command-fixture";
+import { dirname, join } from "node:path";
+import {
+  COMMAND_FIXTURE_TEST_TIMEOUT_MS,
+  copyFixtureToolLaunchers,
+  runOwnedCommand,
+  withCommandFixture,
+} from "./command-fixture";
 
 const repoRoot = join(import.meta.dirname, "..", "..", "..");
 const pnpmCli = Reflect.get(Bun.env, "npm_execpath") as string | undefined;
@@ -12,21 +17,11 @@ function pnpmCommand(args: string[]) {
 }
 
 async function runPublicCommand(
-  fixtureRoot: string,
   cwd: string,
   signal: AbortSignal,
   script: "format" | "format:check" | "lint" | "lint:fix" | "verify" | "verify:static",
-  files?: string[],
 ) {
-  return runOwnedCommand(
-    pnpmCommand([
-      "run",
-      script,
-      ...(files === undefined ? [] : ["--files", ...files.map((file) => relative(cwd, join(fixtureRoot, file)))]),
-    ]),
-    cwd,
-    signal,
-  );
+  return runOwnedCommand(pnpmCommand(["run", script]), cwd, signal);
 }
 
 async function writeFixtureFile(root: string, path: string, source: string) {
@@ -89,7 +84,6 @@ async function initializeQualityFixture(root: string, signal: AbortSignal) {
     ".prettierignore",
     ".prettierrc.json",
     "stylelint.config.mjs",
-    "scripts/run-quality.mjs",
     "scripts/run-pnpm-command.mjs",
     "scripts/verify.mjs",
   ]) {
@@ -106,6 +100,7 @@ async function initializeQualityFixture(root: string, signal: AbortSignal) {
       process.platform === "win32" ? "junction" : "dir",
     );
   }
+  await copyFixtureToolLaunchers(repoRoot, root, ["biome", "prettier", "stylelint"]);
   const initialized = await runOwnedCommand(["git", "init", "--quiet", "--initial-branch=main"], root, signal);
   expect(initialized.exitCode, initialized.output).toBe(0);
   const isolatedLineEndings = await runOwnedCommand(["git", "config", "core.autocrlf", "false"], root, signal);
@@ -155,7 +150,7 @@ async function expectReadonlyGitFailure(
   expect(beforeStatus.exitCode, beforeStatus.output).toBe(0);
   expect(beforeStatus.output).toBe("(no output captured)");
 
-  const result = await runPublicCommand(root, root, signal, script);
+  const result = await runPublicCommand(root, signal, script);
   expect(result.exitCode).not.toBe(0);
   expect(result.output).toContain(diagnostic);
   expect(await readFile(join(root, path), "utf8")).toBe(candidate);
@@ -201,20 +196,19 @@ describe("quality CLI", () => {
         const lockPath = join(root, "pnpm-lock.yaml");
         const candidateLock = await readFile(join(repoRoot, "pnpm-lock.yaml"), "utf8");
         await writeFile(lockPath, candidateLock, "utf8");
-        for (const entry of ["scripts/run-quality.mjs", "scripts/verify.mjs"]) {
-          await writeFixtureFile(
-            root,
-            entry,
-            'import { writeFileSync } from "node:fs"; writeFileSync("tool-started", "started");\n',
-          );
+        for (const entry of ["format", "format:check", "lint", "lint:fix", "verify", "verify:static"]) {
+          manifest.scripts[entry] =
+            "node -e \"require('node:fs').writeFileSync('tool-started', 'started'); process.exit(91)\"";
         }
+        const guardedManifest = `${JSON.stringify(manifest, null, 2)}\n`;
+        await writeFile(manifestPath, guardedManifest, "utf8");
 
-        const result = await runPublicCommand(root, root, signal, script);
+        const result = await runPublicCommand(root, signal, script);
         expect(result.exitCode).not.toBe(0);
         expect(result.output).toContain("ERR_PNPM_VERIFY_DEPS_BEFORE_RUN");
         const remainingManifest = await readFile(manifestPath, "utf8");
         const remainingLock = await readFile(lockPath, "utf8");
-        expect(remainingManifest).toBe(candidateManifest);
+        expect(remainingManifest).toBe(guardedManifest);
         expect(remainingLock).toBe(candidateLock);
         const started = await access(join(root, "tool-started")).then(
           () => undefined,
@@ -236,7 +230,7 @@ describe("quality CLI", () => {
         const fixtureMetadata = "fixture_metadata: keep\n";
         await writeFile(fixtureMetadataPath, fixtureMetadata, "utf8");
         await writeFixtureFile(root, "value.ts", "export const value=1\n");
-        const result = await runPublicCommand(root, root, signal, "format", ["value.ts"]);
+        const result = await runPublicCommand(root, signal, "format");
         expect(result.exitCode, result.output).toBe(0);
         const remainingFixtureMetadata = await readFile(fixtureMetadataPath, "utf8");
         expect(remainingFixtureMetadata).toBe(fixtureMetadata);
@@ -264,12 +258,12 @@ describe("quality CLI", () => {
     async ({ expected, path, source }) => {
       await withQualityFixture(async (root, signal) => {
         await writeFixtureFile(root, path, source);
-        const rootFormat = await runPublicCommand(root, root, signal, "format", [path]);
+        const rootFormat = await runPublicCommand(root, signal, "format");
         expect(rootFormat.exitCode, rootFormat.output).toBe(0);
         const onceFormatted = await readFile(join(root, path), "utf8");
         expect(onceFormatted).toContain(expected);
         if (path.endsWith(".ts")) expect(onceFormatted.indexOf("zebra")).toBeLessThan(onceFormatted.indexOf("alpha"));
-        const secondFormat = await runPublicCommand(root, root, signal, "format", [path]);
+        const secondFormat = await runPublicCommand(root, signal, "format");
         expect(secondFormat.exitCode, secondFormat.output).toBe(0);
         expect(await readFile(join(root, path), "utf8")).toBe(onceFormatted);
       });
@@ -284,15 +278,71 @@ describe("quality CLI", () => {
         const source = "export const value={ enabled:true }\n";
         await writeFixtureFile(root, "root.ts", source);
         await writeFixtureFile(root, "packages/domain/src/workspace.ts", source);
-        const workspaceFormat = await runPublicCommand(root, join(root, "packages", "domain"), signal, "format");
+        const prettierSources = {
+          "style.less": ".item{color:red}\n",
+          "notes.md": "# Notes\n\n-   one\n",
+          "config.yaml": "enabled:   true\n",
+        };
+        for (const [path, prettierSource] of Object.entries(prettierSources)) {
+          await writeFixtureFile(root, `root-${path}`, prettierSource);
+          await writeFixtureFile(root, `packages/domain/src/${path}`, prettierSource);
+          await writeFixtureFile(root, `packages/domain/generated/${path}`, prettierSource);
+        }
+        const workspaceFormat = await runPublicCommand(join(root, "packages", "domain"), signal, "format");
         expect(workspaceFormat.exitCode, workspaceFormat.output).toBe(0);
         expect(await readFile(join(root, "root.ts"), "utf8")).toBe(source);
         const workspaceFormatted = await readFile(join(root, "packages", "domain", "src", "workspace.ts"), "utf8");
         expect(workspaceFormatted).not.toBe(source);
+        for (const [path, prettierSource] of Object.entries(prettierSources)) {
+          expect(await readFile(join(root, `root-${path}`), "utf8")).toBe(prettierSource);
+          expect(await readFile(join(root, "packages", "domain", "src", path), "utf8")).not.toBe(prettierSource);
+          expect(await readFile(join(root, "packages", "domain", "generated", path), "utf8")).toBe(prettierSource);
+        }
 
-        const rootFormat = await runPublicCommand(root, root, signal, "format");
+        const rootFormat = await runPublicCommand(root, signal, "format");
         expect(rootFormat.exitCode, rootFormat.output).toBe(0);
         expect(await readFile(join(root, "root.ts"), "utf8")).toBe(workspaceFormatted);
+        for (const [path, prettierSource] of Object.entries(prettierSources)) {
+          expect(await readFile(join(root, `root-${path}`), "utf8")).toBe(
+            await readFile(join(root, "packages", "domain", "src", path), "utf8"),
+          );
+          expect(await readFile(join(root, "packages", "domain", "generated", path), "utf8")).toBe(prettierSource);
+        }
+      });
+    },
+    COMMAND_FIXTURE_TEST_TIMEOUT_MS,
+  );
+
+  test(
+    "root and workspace commands skip ignored Sandcastle worktrees",
+    async () => {
+      await withQualityFixture(async (root, signal) => {
+        await writeFixtureFile(root, ".sandcastle/.gitignore", "worktrees/\n");
+        const candidates = {
+          ".sandcastle/worktrees/temporary/style.less": ".item { colour: red; }\n",
+          ".sandcastle/worktrees/temporary/notes.md": "# Notes\n\n-   one\n",
+          ".sandcastle/worktrees/temporary/config.yaml": "enabled:   true\n",
+          ".sandcastle/worktrees/temporary/generated.ts": "export const generated={ value:1 }\n",
+        };
+        for (const [path, source] of Object.entries(candidates)) await writeFixtureFile(root, path, source);
+
+        const ignored = await runGit(root, signal, "check-ignore", "--", ...Object.keys(candidates));
+        expect(ignored.exitCode, ignored.output).toBe(0);
+        for (const path of Object.keys(candidates)) expect(ignored.output).toContain(path);
+
+        const rootLint = await runPublicCommand(root, signal, "lint");
+        expect(rootLint.exitCode, rootLint.output).toBe(0);
+        const rootFormat = await runPublicCommand(root, signal, "format");
+        expect(rootFormat.exitCode, rootFormat.output).toBe(0);
+        const workspaceRoot = join(root, "packages", "domain");
+        const workspaceLint = await runPublicCommand(workspaceRoot, signal, "lint");
+        expect(workspaceLint.exitCode, workspaceLint.output).toBe(0);
+        const workspaceFormat = await runPublicCommand(workspaceRoot, signal, "format");
+        expect(workspaceFormat.exitCode, workspaceFormat.output).toBe(0);
+
+        for (const [path, source] of Object.entries(candidates)) {
+          expect(await readFile(join(root, path), "utf8")).toBe(source);
+        }
       });
     },
     COMMAND_FIXTURE_TEST_TIMEOUT_MS,
@@ -309,33 +359,33 @@ describe("quality CLI", () => {
           "import './setup-z.js'\nimport './setup-a.js'\nimport { zebra } from './zebra.js'\nimport { alpha } from './alpha.js'\nexport const value={zebra,alpha}\n",
         );
         const unformatted = await readFile(join(root, path), "utf8");
-        const formatCheck = await runPublicCommand(root, root, signal, "format:check", [path]);
+        const formatCheck = await runPublicCommand(root, signal, "format:check");
         expect(formatCheck.exitCode).not.toBe(0);
         expect(await readFile(join(root, path), "utf8")).toBe(unformatted);
 
-        const formatted = await runPublicCommand(root, root, signal, "format", [path]);
+        const formatted = await runPublicCommand(root, signal, "format");
         expect(formatted.exitCode, formatted.output).toBe(0);
         const beforeLint = await readFile(join(root, path), "utf8");
-        const lint = await runPublicCommand(root, root, signal, "lint", [path]);
+        const lint = await runPublicCommand(root, signal, "lint");
         expect(lint.exitCode).not.toBe(0);
         expect(await readFile(join(root, path), "utf8")).toBe(beforeLint);
 
-        const fixed = await runPublicCommand(root, root, signal, "lint:fix", [path]);
+        const fixed = await runPublicCommand(root, signal, "lint:fix");
         expect(fixed.exitCode, fixed.output).toBe(0);
         const onceFixed = await readFile(join(root, path), "utf8");
         expect(onceFixed.indexOf("setup-z")).toBeLessThan(onceFixed.indexOf("setup-a"));
         expect(onceFixed.indexOf("alpha")).toBeLessThan(
           onceFixed.indexOf("zebra", onceFixed.indexOf("import { alpha")),
         );
-        const fixedAgain = await runPublicCommand(root, root, signal, "lint:fix", [path]);
+        const fixedAgain = await runPublicCommand(root, signal, "lint:fix");
         expect(fixedAgain.exitCode, fixedAgain.output).toBe(0);
         expect(await readFile(join(root, path), "utf8")).toBe(onceFixed);
-        const cleanLint = await runPublicCommand(root, root, signal, "lint", [path]);
+        const cleanLint = await runPublicCommand(root, signal, "lint");
         expect(cleanLint.exitCode, cleanLint.output).toBe(0);
 
         await writeFixtureFile(root, "broken.ts", "export const broken = ;\n");
         const brokenBefore = await readFile(join(root, "broken.ts"), "utf8");
-        const broken = await runPublicCommand(root, root, signal, "lint:fix", ["broken.ts"]);
+        const broken = await runPublicCommand(root, signal, "lint:fix");
         expect(broken.exitCode).not.toBe(0);
         expect(await readFile(join(root, "broken.ts"), "utf8")).toBe(brokenBefore);
       });
@@ -349,10 +399,10 @@ describe("quality CLI", () => {
       await withQualityFixture(async (root, signal) => {
         const path = "equality.ts";
         await writeFixtureFile(root, path, "export function matches(value: number) { return value == 1 }\n");
-        const formatted = await runPublicCommand(root, root, signal, "format", [path]);
+        const formatted = await runPublicCommand(root, signal, "format");
         expect(formatted.exitCode, formatted.output).toBe(0);
         const beforeFix = await readFile(join(root, path), "utf8");
-        const fix = await runPublicCommand(root, root, signal, "lint:fix", [path]);
+        const fix = await runPublicCommand(root, signal, "lint:fix");
         expect(fix.exitCode).not.toBe(0);
         expect(await readFile(join(root, path), "utf8")).toBe(beforeFix);
       });
@@ -371,17 +421,19 @@ describe("quality CLI", () => {
           accepted,
           "type Props = { label: string }; export function Widget(props: Props) { return <div>{props.label}</div>; }\n",
         );
+        const formatted = await runPublicCommand(root, signal, "format");
+        expect(formatted.exitCode, formatted.output).toBe(0);
+        const acceptedLint = await runPublicCommand(root, signal, "lint");
+        expect(acceptedLint.exitCode, acceptedLint.output).toBe(0);
         await writeFixtureFile(
           root,
           rejected,
           "interface Props { label: string } export function Widget(props: Props) { return <div>{props.label}</div>; }\n",
         );
-        const formatted = await runPublicCommand(root, root, signal, "format", [accepted, rejected]);
-        expect(formatted.exitCode, formatted.output).toBe(0);
-        const acceptedLint = await runPublicCommand(root, root, signal, "lint", [accepted]);
-        expect(acceptedLint.exitCode, acceptedLint.output).toBe(0);
+        const rejectedFormat = await runPublicCommand(root, signal, "format");
+        expect(rejectedFormat.exitCode, rejectedFormat.output).toBe(0);
         const rejectedBefore = await readFile(join(root, rejected), "utf8");
-        const rejectedLint = await runPublicCommand(root, root, signal, "lint", [rejected]);
+        const rejectedLint = await runPublicCommand(root, signal, "lint");
         expect(rejectedLint.exitCode).not.toBe(0);
         expect(await readFile(join(root, rejected), "utf8")).toBe(rejectedBefore);
       });
@@ -395,26 +447,26 @@ describe("quality CLI", () => {
       await withQualityFixture(async (root, signal) => {
         const path = "candidate.ts";
         await writeFixtureFile(root, path, "export const candidate = { enabled: true };\n");
-        const cleanBaseline = await runPublicCommand(root, root, signal, script);
+        const cleanBaseline = await runPublicCommand(root, signal, script);
         expect(cleanBaseline.exitCode, cleanBaseline.output).toBe(0);
         expect(cleanBaseline.output).toContain("[verify] static");
         if (script === "verify") expect(cleanBaseline.output).toContain("[verify] build");
 
         await writeFixtureFile(root, path, "export const candidate={ enabled:true }\n");
         const unformatted = await readFile(join(root, path), "utf8");
-        const formatFailure = await runPublicCommand(root, root, signal, script);
+        const formatFailure = await runPublicCommand(root, signal, script);
         expect(formatFailure.exitCode).not.toBe(0);
         expect(formatFailure.output).toContain("candidate.ts");
         expect(await readFile(join(root, path), "utf8")).toBe(unformatted);
 
         await writeFixtureFile(root, path, "export function matches(value: number) {\n  return value == 1;\n}\n");
-        const formatCheck = await runPublicCommand(root, root, signal, "format:check", [path]);
+        const formatCheck = await runPublicCommand(root, signal, "format:check");
         expect(formatCheck.exitCode, formatCheck.output).toBe(0);
-        const directLint = await runPublicCommand(root, root, signal, "lint", [path]);
+        const directLint = await runPublicCommand(root, signal, "lint");
         expect(directLint.exitCode).not.toBe(0);
         expect(directLint.output).toContain("noDoubleEquals");
         const lintFailureBefore = await readFile(join(root, path), "utf8");
-        const lintFailure = await runPublicCommand(root, root, signal, script);
+        const lintFailure = await runPublicCommand(root, signal, script);
         expect(lintFailure.exitCode).not.toBe(0);
         expect(lintFailure.output).toContain("noDoubleEquals");
         expect(await readFile(join(root, path), "utf8")).toBe(lintFailureBefore);
@@ -453,9 +505,9 @@ describe("quality CLI", () => {
     async ({ config, diagnostic, mutate, path, source, targetCheck }) => {
       await withQualityFixture(async (root, signal) => {
         await writeFixtureFile(root, path, source);
-        const formatted = await runPublicCommand(root, root, signal, "format", [path]);
+        const formatted = await runPublicCommand(root, signal, "format");
         expect(formatted.exitCode, formatted.output).toBe(0);
-        const cleanBaseline = await runPublicCommand(root, root, signal, "verify:static");
+        const cleanBaseline = await runPublicCommand(root, signal, "verify:static");
         expect(cleanBaseline.exitCode, cleanBaseline.output).toBe(0);
 
         const configPath = join(root, config);
@@ -464,12 +516,10 @@ describe("quality CLI", () => {
         expect(changedConfig).not.toBe(originalConfig);
         await writeFile(configPath, changedConfig, "utf8");
         const candidateBeforeCheck = await readFile(join(root, path), "utf8");
-        const configFormat = await runPublicCommand(root, root, signal, "format:check", [config]);
-        expect(configFormat.exitCode, configFormat.output).toBe(0);
-        const targetFailure = await runPublicCommand(root, root, signal, targetCheck, [path]);
+        const targetFailure = await runPublicCommand(root, signal, targetCheck);
         expect(targetFailure.exitCode).not.toBe(0);
         expect(targetFailure.output).toContain(diagnostic);
-        const changedResult = await runPublicCommand(root, root, signal, "verify:static");
+        const changedResult = await runPublicCommand(root, signal, "verify:static");
         expect(changedResult.exitCode).not.toBe(0);
         expect(changedResult.output).toContain(diagnostic);
         expect(await readFile(join(root, path), "utf8")).toBe(candidateBeforeCheck);
@@ -484,7 +534,7 @@ describe("quality CLI", () => {
     async () => {
       await withQualityFixture(async (root, signal) => {
         await writeFixtureFile(root, "baseline.ts", "export const baseline = true;\n");
-        const baseline = await runPublicCommand(root, root, signal, "verify");
+        const baseline = await runPublicCommand(root, signal, "verify");
         expect(baseline.exitCode, baseline.output).toBe(0);
         await commitAll(root, signal, "baseline");
 
@@ -525,9 +575,9 @@ describe("quality CLI", () => {
         const featureBranch = await runGit(root, signal, "switch", "-c", "feature");
         expect(featureBranch.exitCode, featureBranch.output).toBe(0);
         await writeFixtureFile(root, path, `${base}export const collision = "feature";\n`);
-        const featureFormat = await runPublicCommand(root, root, signal, "format:check", [path]);
+        const featureFormat = await runPublicCommand(root, signal, "format:check");
         expect(featureFormat.exitCode, featureFormat.output).toBe(0);
-        const featureLint = await runPublicCommand(root, root, signal, "lint", [path]);
+        const featureLint = await runPublicCommand(root, signal, "lint");
         expect(featureLint.exitCode, featureLint.output).toBe(0);
         await commitAll(root, signal, "feature side");
 
@@ -541,9 +591,9 @@ describe("quality CLI", () => {
             'export const collision = "main";\n\nexport const left = "left";',
           ),
         );
-        const mainFormat = await runPublicCommand(root, root, signal, "format:check", [path]);
+        const mainFormat = await runPublicCommand(root, signal, "format:check");
         expect(mainFormat.exitCode, mainFormat.output).toBe(0);
-        const mainLint = await runPublicCommand(root, root, signal, "lint", [path]);
+        const mainLint = await runPublicCommand(root, signal, "lint");
         expect(mainLint.exitCode, mainLint.output).toBe(0);
         await commitAll(root, signal, "main side");
 
@@ -591,26 +641,22 @@ describe("quality CLI", () => {
       await withQualityFixture(async (root, signal) => {
         await writeFixtureFile(root, "config.yaml", "unknown_application_key: true\n");
         await writeFixtureFile(root, "notes.md", "Words without a prose policy.\n");
-        await writeFixtureFile(root, "invalid.less", ".item { colour: red; }\n");
         await writeFixtureFile(root, "pnpm-lock.yaml", "lockfileVersion:   '9.0'\n");
         await writeFixtureFile(root, "asset.txt", "leave   this alone\n");
         await writeFixtureFile(root, "generated/output.ts", "export const generated={ value:1 }\n");
 
-        const skippedLint = await runPublicCommand(root, root, signal, "lint", ["config.yaml", "notes.md"]);
+        const skippedLint = await runPublicCommand(root, signal, "lint");
         expect(skippedLint.exitCode, skippedLint.output).toBe(0);
-        const lessLint = await runPublicCommand(root, root, signal, "lint", ["invalid.less"]);
+        await writeFixtureFile(root, "invalid.less", ".item { colour: red; }\n");
+        const lessLint = await runPublicCommand(root, signal, "lint");
         expect(lessLint.exitCode).not.toBe(0);
-        const lessFix = await runPublicCommand(root, root, signal, "lint:fix", ["invalid.less"]);
+        const lessFix = await runPublicCommand(root, signal, "lint:fix");
         expect(lessFix.exitCode).not.toBe(0);
 
         const lockfileBefore = await readFile(join(root, "pnpm-lock.yaml"), "utf8");
         const assetBefore = await readFile(join(root, "asset.txt"), "utf8");
         const generatedBefore = await readFile(join(root, "generated", "output.ts"), "utf8");
-        const excludedFormat = await runPublicCommand(root, root, signal, "format", [
-          "pnpm-lock.yaml",
-          "asset.txt",
-          "generated/output.ts",
-        ]);
+        const excludedFormat = await runPublicCommand(root, signal, "format");
         expect(excludedFormat.exitCode, excludedFormat.output).toBe(0);
         expect(await readFile(join(root, "pnpm-lock.yaml"), "utf8")).toBe(lockfileBefore);
         expect(await readFile(join(root, "asset.txt"), "utf8")).toBe(assetBefore);

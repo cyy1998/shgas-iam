@@ -14,6 +14,13 @@ src/.umi-production/
 .agents/skills/
 .codex/skills/
 .scratch/
+.sandcastle/auth/
+.sandcastle/dependencies/
+.sandcastle/locks/
+.sandcastle/logs/
+.sandcastle/patches/
+.sandcastle/resources/
+.sandcastle/worktrees/
 openspec/
 docs/reviews/
 packages/db/src/migrations/

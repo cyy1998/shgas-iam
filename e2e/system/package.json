@@ -20,14 +20,14 @@
     "runtime:cleanup": "bun src/cli.ts cleanup",
     "runtime:lifecycle": "bun src/cli.ts run",
     "test:e2e": "bun src/cli.ts e2e",
-    "lint": "node ../../scripts/run-quality.mjs lint --workspace e2e/system",
-    "lint:fix": "node ../../scripts/run-quality.mjs lint-fix --workspace e2e/system",
+    "lint": "biome check --formatter-enabled=false . && stylelint \"**/*.less\" --allow-empty-input",
+    "lint:fix": "biome check --formatter-enabled=false --write . && stylelint \"**/*.less\" --allow-empty-input",
     "test": "pnpm test:unit",
     "test:unit": "bun test --max-concurrency=1 src",
     "typecheck": "pnpm exec tsc --noEmit",
     "test:integration:process": "bun test --max-concurrency=1 test-integration/process",
-    "format": "node ../../scripts/run-quality.mjs format --workspace e2e/system",
-    "format:check": "node ../../scripts/run-quality.mjs format-check --workspace e2e/system"
+    "format": "biome format --write . && prettier \"**/*.{less,md,yaml,yml}\" --ignore-path ../../.gitignore --ignore-path ../../.prettierignore --no-error-on-unmatched-pattern --write",
+    "format:check": "biome format . && prettier \"**/*.{less,md,yaml,yml}\" --ignore-path ../../.gitignore --ignore-path ../../.prettierignore --no-error-on-unmatched-pattern --check"
   },
   "devDependencies": {
     "@playwright/test": "^1.61.1",

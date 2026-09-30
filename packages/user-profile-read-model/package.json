@@ -14,16 +14,16 @@
     "./worker": "./src/worker.ts"
   },
   "scripts": {
-    "lint": "node ../../scripts/run-quality.mjs lint --workspace packages/user-profile-read-model",
-    "lint:fix": "node ../../scripts/run-quality.mjs lint-fix --workspace packages/user-profile-read-model",
+    "lint": "biome check --formatter-enabled=false . && stylelint \"**/*.less\" --allow-empty-input",
+    "lint:fix": "biome check --formatter-enabled=false --write . && stylelint \"**/*.less\" --allow-empty-input",
     "test": "pnpm test:unit",
     "test:unit": "bun test --max-concurrency=2 src",
     "test:integration:component": "bun test --max-concurrency=2 test-integration/component",
     "test:integration:postgres": "bun test --max-concurrency=1 test-integration/postgres",
     "test:integration:redis": "bun test --max-concurrency=1 test-integration/redis",
     "typecheck": "pnpm exec tsc --noEmit",
-    "format": "node ../../scripts/run-quality.mjs format --workspace packages/user-profile-read-model",
-    "format:check": "node ../../scripts/run-quality.mjs format-check --workspace packages/user-profile-read-model"
+    "format": "biome format --write . && prettier \"**/*.{less,md,yaml,yml}\" --ignore-path ../../.gitignore --ignore-path ../../.prettierignore --no-error-on-unmatched-pattern --write",
+    "format:check": "biome format . && prettier \"**/*.{less,md,yaml,yml}\" --ignore-path ../../.gitignore --ignore-path ../../.prettierignore --no-error-on-unmatched-pattern --check"
   },
   "dependencies": {
     "@hono/zod-openapi": "^1.5.1",
