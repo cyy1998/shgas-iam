@@ -71,7 +71,7 @@ DTO/wire 的完整结果由正式 mapper/serializer owner 验证，包括必要�
 测试清理不授权改变生产行为或新增 seam。替代测试暴露生产缺陷时，保留最小失败证据并单独报告，不降低断言换取通过。
 交付摘要区分已执行、仅保留和未执行的通道；测试数减少、关键词零命中或 coverage 百分比不能替代契约验收。
 这些分类由实现与评审核对，不新增断言语义扫描器、永久历史词典、baseline 或逐文件 mapping Guard；Architecture Guard
-与 Collection Guard 继续遵守各自既有观察模型。
+继续遵守既有观察模型。
 
 ## 禁止纯展示测试
 
@@ -100,7 +100,7 @@ DTO/wire 的完整结果由正式 mapper/serializer owner 验证，包括必要�
 其他 collection 的方式保留它。
 
 本规则由测试编写者与评审者按保护目标执行。不通过 matcher 黑名单、断言文本扫描器或快照文件计数判断行为价值；
-Architecture Guard 与 Collection Guard 的既有观察边界保持不变。
+Architecture Guard 的既有观察边界保持不变。
 
 ## 路径、命名与 collection
 
@@ -162,7 +162,6 @@ pnpm test:integration:postgres
 pnpm test:integration:composition
 pnpm test:integration:browser
 pnpm test:e2e
-pnpm check:test-collection
 ```
 
 `pnpm test` 永久代理 `pnpm test:unit`。有 Unit collection 的 package 也令 `test` 代理 `test:unit`；没有 Unit
@@ -258,19 +257,14 @@ E2E 从正式 manifest 发布 API upstream 的受控 Host rewrite，并回读已
 API Browser Integration 的 Playwright 输出固定为 `apps/api/test-results/browser`，不能使用会清理其他通道产物的
 默认 `apps/api/test-results` 根。独立协议套件的持久验收材料放在调用方明确的任务目录，避免被浏览器 runner 清理。
 
-## Collection Guard
+## 测试收集维护
 
-`pnpm check:test-collection` 是永久 Guard，只验证：
+测试由所属 runner 在 owner-local 窄目录自动发现；root Unit 使用 `scripts/__tests__/`，root Process Integration
+使用 `scripts/test-integration/process/`。新增测试放入所属目录，保留当前路径、命名与唯一 collection 归属约定。
 
-1. canonical 路径与命名下的每个候选都被收集；
-2. 每个候选只属于一个 collection；
-3. 文件路径、命名与 profile 归属一致；
-4. root command 经 Turbo dry-run 可达 owner package task。
-
-Vitest 与 Playwright 使用机器可读 list；Bun adapter 观察 package command 声明的窄目录。漏收、重收、归属不一致、
-task 不可达、adapter 失败或输出不可解析都给出可定位诊断并非零退出。Guard 不读取测试断言，不推断资源使用，也不分析
-AST、type 或 data flow。迁移 baseline、逐文件 mapping、临时 exceptions 与 live equality verifiers 已退役，永久 Guard
-不保存历史兼容映射。
+修改 runner 的 include/exclude、Vitest projects 或 workspace scripts 时，评审者核对归属与 root Turbo task 接入，
+并运行受影响 owner 的测试命令。命令成功只证明实际收集的测试执行结果，不自动证明磁盘候选全部被收集或没有重复；
+收集检查的取舍见 [ADR-0009](../adr/0009-adopt-canonical-test-collections.md)。
 
 ## Turbo task graph 与缓存
 
@@ -367,7 +361,7 @@ flowchart LR
 ```
 
 `pnpm verify:static` 通过同一 runner 的 `--static` 参数只运行静态阶段：只读 format/lint、文档索引、环境变量命名 Guard、
-Architecture Guard 与 Collection Guard。`verify` 不读取真实 PostgreSQL/Redis，
+Architecture Guard。`verify` 不读取真实 PostgreSQL/Redis，
 不启动 browser 或 Full-system stack，也不隐式执行 Integration。开发者按改动风险显式追加相关 profiles；完整
 `test:integration` 只在调用方准备好全部专用资源时运行。
 
@@ -383,8 +377,7 @@ cleanup，也不把命令名解释为 provider adoption。各 owner command 的�
 [构建、测试与开发命令](../development/commands.md)。
 
 实施交接、修复后的结果复用及 AFK 批后验证统一按[开发工作流的验证节奏](../agents/workflow.md#验证节奏)执行。
-`verify:static` 和 `verify` 已包含 Collection Guard，无需另外重复运行 `pnpm check:test-collection`；独立命令保留用于
-聚焦排查。收集检查通过不表示测试断言已执行或通过；必需检查执行或解析失败同样阻断交接与交付。
+必需检查执行或解析失败阻断交接与交付；静态检查通过不表示测试断言已执行或通过。
 
 统一 Snapshot 使用 Core Redis、Admin PG/Redis composition 与 Worker 新进程 CLI，测试不能代替停流/drain/独立核验。
 当前操作流程见[统一维护手册](../releases/unified-session-maintenance.md)，旧三类 Snapshot 恢复仅为历史。

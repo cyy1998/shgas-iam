@@ -30,7 +30,6 @@ bun test scripts/__tests__/quality-tooling-ownership.test.ts
 Canonical collection 与编排变化还应运行：
 
 ```bash
-pnpm check:test-collection
 pnpm test:unit
 pnpm test:integration:<component|process|redis|postgres|composition|browser>
 ```
@@ -149,7 +148,6 @@ Profile 重建及 Subject Access 恢复见[Profile 维护手册](../releases/use
 - 后端 Architecture Guard（唯一静态架构入口）：`pnpm check:architecture`
 - 文档索引与 freshness guard：`pnpm check:docs`
 - Env naming guard：`pnpm check:env-names`
-- Test Collection Guard：`pnpm check:test-collection`
 
 统一格式与规则命令适用于根目录和所有 workspace，例如 `pnpm --filter @iam/admin format:check`：
 
@@ -331,13 +329,13 @@ Cleanup 失败会非零退出并保留 descriptor，可使用同一目标重试�
 
 `pnpm verify` 通过 `scripts/verify.mjs` 按以下顺序 fail-fast：
 
-1. static：`pnpm format:check`、`pnpm lint`、`pnpm check:docs`、`pnpm check:env-names`、`pnpm check:architecture`、`pnpm check:test-collection`；
+1. static：`pnpm format:check`、`pnpm lint`、`pnpm check:docs`、`pnpm check:env-names`、`pnpm check:architecture`；
 2. typecheck：`pnpm typecheck`；
 3. test:unit：`pnpm test:unit`；
 4. build：`pnpm build`。
 
 `pnpm verify:static` 使用同一 runner 的 `--static` 参数，仅运行上述 static 阶段；默认 `verify` 复用该阶段，
-不重复运行 Collection Guard。未知参数、启动失败和子进程异常均非零退出。各单项检查命令保留用于排查。
+未知参数、启动失败和子进程异常均非零退出。各单项检查命令保留用于排查。
 
 `pnpm verify:ci` 固定顺序执行 `verify -> test:integration`；`pnpm verify:release` 固定顺序执行
 `verify:ci -> test:e2e`。两者都是 provider-neutral 的浅组合：任一 owner command 非零即停止并透传失败，不另行解释资源、

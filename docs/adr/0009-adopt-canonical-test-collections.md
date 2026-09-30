@@ -16,8 +16,16 @@ status: accepted
 外部资源由调用方提供，聚合 Integration 在启动前报告全部缺失资源，不回退到开发或运行资源。代价是基础通过不能代替
 真实数据库、进程、浏览器和完整系统证据。
 
-永久 Collection Guard 只证明路径、命名、唯一收集和命令可达，不分析断言、资源使用或业务正确性。迁移清单、临时例外、
-逐文件映射与验证次数不进入永久 Guard，也不作为当前通过声明。
+测试由 owner-local 窄目录自动收集；root Unit 使用 `scripts/__tests__/`，保留 Turbo task 与并发预算。
+不再维护独立 Collection Guard：其 runner list 与 Turbo dry-run 子进程增加检查耗时，专属 adapter、fixtures 和文档增加
+维护成本，而检查通过仍不能证明测试断言实际执行或通过。
+
+唯一 collection 归属、路径与命名、root task 可达仍是工程约定，由配置评审和实际测试运行核对。代价是 include/exclude
+错配、新 workspace 缺少测试命令或前端 project 重复收集可能未被自动发现；目录收集不保证消除这些风险。
+接受这项代价，不以新的收集扫描器、逐文件清单或覆盖率门禁替代 Guard，也不把其他测试入口重构作为删除前置条件。
+
+保留 Guard 或优化其子进程启动可以继续自动检查收集，但仍需维护独立观察模型；仅从默认 static 阶段跳过会保留专属实现
+与文档成本，因此采用完整删除。
 
 ## 当前契约与历史
 

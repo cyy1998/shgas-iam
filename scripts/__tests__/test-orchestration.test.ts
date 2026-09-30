@@ -5,8 +5,6 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
 import { runPnpmCommand } from "../run-pnpm-command.mjs";
-import type { TestCollectionCommandRunner } from "../test-collection-guard";
-import { analyzeTestCollections } from "../test-collection-guard";
 
 const repoRoot = join(import.meta.dirname, "..", "..");
 const adminRoot = join(repoRoot, "apps", "admin");
@@ -147,167 +145,6 @@ function createTransitFixture() {
   writeFileSync(join(dependencyRoot, "src", "value.ts"), "export const value = 1;\n", "utf8");
   writeFileSync(join(consumerRoot, "src", "consumer.ts"), "export const consumer = true;\n", "utf8");
   return { root, dependencySource: join(dependencyRoot, "src", "value.ts") };
-}
-
-function createCollectionGuardFixture(
-  options: {
-    brokenRootCommand?: boolean;
-    omitRootE2eTask?: boolean;
-    publishWorkspaceE2e?: boolean;
-    violating?: boolean;
-    vitestProjects?: boolean;
-    workspaceLocalJourneys?: Array<{ file: string; name: string }>;
-  } = {},
-) {
-  const root = mkdtempSync(join(tmpdir(), "iam-test-collection-"));
-  const ownerRoot = join(root, "packages", "owner");
-  const frontendRoot = join(root, "apps", "frontend");
-  mkdirSync(join(ownerRoot, "src"), { recursive: true });
-  mkdirSync(join(ownerRoot, "scripts", "__tests__"), { recursive: true });
-  mkdirSync(join(ownerRoot, "test-integration", "component"), { recursive: true });
-  mkdirSync(join(root, "e2e", "system"), { recursive: true });
-  mkdirSync(join(root, "scripts", "__tests__"), { recursive: true });
-  mkdirSync(join(root, "scripts", "test-integration", "process"), { recursive: true });
-  writeJson(join(root, "package.json"), {
-    name: "fixture-root",
-    packageManager: "pnpm@12.5.1",
-    private: true,
-    scripts: {
-      ...(options.omitRootE2eTask || (options.workspaceLocalJourneys?.length && !options.publishWorkspaceE2e)
-        ? {}
-        : options.publishWorkspaceE2e
-          ? { "test:e2e": "turbo test:e2e --concurrency=1" }
-          : {
-              "test:e2e": "turbo test:e2e:root --concurrency=1",
-              "test:e2e:root": "bun test e2e/system/journey.spec.ts",
-            }),
-      "test:integration:component": options.brokenRootCommand
-        ? "turbo test:unit --concurrency=2"
-        : "turbo test:integration:component --concurrency=2",
-      "test:integration:process": "turbo test:integration:process test:integration:process:root --concurrency=1",
-      "test:integration:process:root": "bun test --max-concurrency=1 scripts/test-integration/process",
-      "test:unit": "turbo test:unit test:unit:root --concurrency=2",
-      "test:unit:root":
-        "bun test scripts/__tests__/architecture-guard.test.ts scripts/__tests__/quality-tooling-ownership.test.ts scripts/__tests__/test-orchestration.test.ts scripts/__tests__/tooling-contracts.test.ts",
-    },
-  });
-  writeFileSync(join(root, "pnpm-workspace.yaml"), "packages:\n  - packages/*\n", "utf8");
-  writeJson(join(root, "turbo.json"), {
-    tasks: {
-      "//#test:e2e:root": { cache: false },
-      "test:e2e": { cache: false, dependsOn: ["transit"] },
-      "//#test:unit:root": {},
-      "test:integration:component": { dependsOn: ["transit"] },
-      "//#test:integration:process:root": { cache: false },
-      "test:integration:process": { cache: false, dependsOn: ["transit"] },
-      "test:unit": { dependsOn: ["transit"] },
-      transit: { dependsOn: ["^transit"] },
-    },
-  });
-  writeJson(join(ownerRoot, "package.json"), {
-    name: "@fixture/owner",
-    scripts: {
-      "test:integration:component": "bun test --max-concurrency=2 test-integration/component",
-      "test:unit": options.violating
-        ? "bun test --max-concurrency=2 src test-integration/component"
-        : "bun test --max-concurrency=2 src scripts/__tests__",
-    },
-  });
-  if (options.vitestProjects) {
-    mkdirSync(join(frontendRoot, "src"), { recursive: true });
-    writeJson(join(frontendRoot, "package.json"), {
-      name: "@fixture/frontend",
-      scripts: {
-        "test:unit": "vitest run --config vitest.unit.config.ts",
-      },
-    });
-    writeFileSync(join(frontendRoot, "src", "logic.test.ts"), "export {};\n", "utf8");
-    writeFileSync(join(frontendRoot, "src", "render.dom.test.tsx"), "export {};\n", "utf8");
-  }
-  writeFileSync(join(ownerRoot, "src", "example.test.ts"), "export {};\n", "utf8");
-  writeFileSync(join(ownerRoot, "scripts", "__tests__", "tooling.test.ts"), "export {};\n", "utf8");
-  writeFileSync(
-    join(ownerRoot, "test-integration", "component", "example.integration.test.ts"),
-    "export {};\n",
-    "utf8",
-  );
-  for (const file of [
-    "architecture-guard.test.ts",
-    "quality-tooling-ownership.test.ts",
-    "test-orchestration.test.ts",
-    "tooling-contracts.test.ts",
-  ])
-    writeFileSync(join(root, "scripts", "__tests__", file), "export {};\n", "utf8");
-  writeFileSync(
-    join(root, "scripts", "test-integration", "process", "tooling.integration.test.ts"),
-    "export {};\n",
-    "utf8",
-  );
-  if (options.workspaceLocalJourneys?.length) {
-    writeJson(join(root, "e2e", "system", "package.json"), {
-      name: "@fixture/e2e-system",
-      scripts: {
-        ...(options.publishWorkspaceE2e ? { "test:e2e": "bun src/cli.ts e2e" } : {}),
-        ...Object.fromEntries(
-          options.workspaceLocalJourneys.map((journey) => [
-            `${journey.name}:journey`,
-            `bun src/cli.ts ${journey.name}`,
-          ]),
-        ),
-      },
-    });
-    for (const journey of options.workspaceLocalJourneys) {
-      writeFileSync(join(root, "e2e", "system", journey.file), "export {};\n", "utf8");
-    }
-  } else {
-    writeFileSync(join(root, "e2e", "system", "journey.spec.ts"), "export {};\n", "utf8");
-  }
-
-  if (options.violating) {
-    mkdirSync(join(ownerRoot, "test-integration", "redis"), { recursive: true });
-    writeFileSync(join(ownerRoot, "src", "misplaced.integration.test.ts"), "export {};\n", "utf8");
-    writeFileSync(join(ownerRoot, "test-integration", "redis", "orphan.integration.test.ts"), "export {};\n", "utf8");
-  }
-
-  return root;
-}
-
-function createCollectionGuardRunner(
-  options: { duplicateVitestProject?: boolean; fail?: boolean; omitComponent?: boolean } = {},
-) {
-  const runner: TestCollectionCommandRunner = {
-    run: async (command, cwd) => {
-      if (options.fail) return { exitCode: 12, stderr: "synthetic turbo failure", stdout: "" };
-      if (command.some((argument) => argument.endsWith("vitest.mjs"))) {
-        const logicTest = join(cwd, "src", "logic.test.ts");
-        return {
-          exitCode: 0,
-          stderr: "",
-          stdout: JSON.stringify([
-            { file: logicTest, projectName: "project-alpha" },
-            { file: join(cwd, "src", "render.dom.test.tsx"), projectName: "project-beta" },
-            ...(options.duplicateVitestProject ? [{ file: logicTest, projectName: "project-beta" }] : []),
-          ]),
-        };
-      }
-      return {
-        exitCode: 0,
-        stderr: "",
-        stdout: JSON.stringify({
-          tasks: [
-            { taskId: "//#test:e2e:root" },
-            { taskId: "@fixture/e2e-system#test:e2e" },
-            { taskId: "//#test:unit:root" },
-            { taskId: "//#test:integration:process:root" },
-            { taskId: "@fixture/frontend#test:unit" },
-            { taskId: "@fixture/owner#test:unit" },
-            ...(options.omitComponent ? [] : [{ taskId: "@fixture/owner#test:integration:component" }]),
-          ],
-        }),
-      };
-    },
-  };
-  return runner;
 }
 
 function runConsumerTestDryRun(root: string) {
@@ -482,237 +319,12 @@ describe("test orchestration", () => {
     });
   });
 
-  test("Collection Guard accepts a complete uniquely-owned fixture", async () => {
-    const root = createCollectionGuardFixture();
-    try {
-      expect(await analyzeTestCollections(root, createCollectionGuardRunner())).toEqual([]);
-    } finally {
-      rmSync(root, { recursive: true, force: true });
-    }
-  });
-
-  test("Collection Guard uses Vitest machine lists for multi-project Unit ownership", async () => {
-    const root = createCollectionGuardFixture({ vitestProjects: true });
-    try {
-      expect(await analyzeTestCollections(root, createCollectionGuardRunner())).toEqual([]);
-    } finally {
-      rmSync(root, { recursive: true, force: true });
-    }
-  });
-
-  test("Collection Guard rejects a Unit file listed by multiple Vitest projects", async () => {
-    const root = createCollectionGuardFixture({ vitestProjects: true });
-    try {
-      expect(
-        await analyzeTestCollections(root, createCollectionGuardRunner({ duplicateVitestProject: true })),
-      ).toContainEqual({
-        code: "duplicate-collection",
-        message: expect.stringContaining("apps/frontend/src/logic.test.ts"),
-      });
-    } finally {
-      rmSync(root, { recursive: true, force: true });
-    }
-  });
-
-  test("Collection Guard rejects a public root command that cannot reach its owner task", async () => {
-    const root = createCollectionGuardFixture({ brokenRootCommand: true });
-    try {
-      const issues = await analyzeTestCollections(root, createCollectionGuardRunner());
-      expect(issues).toContainEqual(
-        expect.objectContaining({
-          code: "task-unreachable",
-          message: expect.stringContaining("test:integration:component"),
-        }),
-      );
-    } finally {
-      rmSync(root, { recursive: true, force: true });
-    }
-  });
-
-  test("Collection Guard reports an unowned root e2e/system candidate", async () => {
-    const root = createCollectionGuardFixture({ omitRootE2eTask: true });
-    try {
-      const issues = await analyzeTestCollections(root, createCollectionGuardRunner());
-      expect(issues).toContainEqual(
-        expect.objectContaining({
-          code: "missing-collection",
-          message: expect.stringContaining("e2e/system/journey.spec.ts"),
-        }),
-      );
-    } finally {
-      rmSync(root, { recursive: true, force: true });
-    }
-  });
-
-  test("Collection Guard lists the fixed Admin, HR Admin, and OIDC owners without per-spec mappings", async () => {
-    const journeys = [
-      { file: "admin-custom-sso.spec.ts", name: "admin" },
-      { file: "hr-admin-user-management.spec.ts", name: "hr-admin" },
-      { file: "oidc-pkce.spec.ts", name: "oidc" },
-    ];
-    const root = createCollectionGuardFixture({ workspaceLocalJourneys: journeys });
-    const baseRunner = createCollectionGuardRunner();
-    const runner: TestCollectionCommandRunner = {
-      async run(command, cwd, options) {
-        if (command.some((token) => token.endsWith("cli.js"))) {
-          const journey = journeys.find((candidate) => candidate.name === options?.env?.IAM_E2E_JOURNEY);
-          return {
-            exitCode: 0,
-            stderr: "",
-            stdout: JSON.stringify({
-              config: { rootDir: join(root, "e2e", "system") },
-              suites: journey ? [{ file: journey.file }] : [],
-            }),
-          };
-        }
-        return baseRunner.run(command, cwd, options);
-      },
-    };
-    try {
-      expect(await analyzeTestCollections(root, runner)).toEqual([]);
-    } finally {
-      rmSync(root, { recursive: true, force: true });
-    }
-  });
-
-  test("Collection Guard assigns all journeys to the published workspace E2E owner", async () => {
-    const journeys = [
-      { file: "admin-custom-sso.spec.ts", name: "admin" },
-      { file: "hr-admin-user-management.spec.ts", name: "hr-admin" },
-      { file: "oidc-pkce.spec.ts", name: "oidc" },
-    ];
-    const root = createCollectionGuardFixture({
-      publishWorkspaceE2e: true,
-      workspaceLocalJourneys: journeys,
-    });
-    const baseRunner = createCollectionGuardRunner();
-    const listedSelectors: string[] = [];
-    const runner: TestCollectionCommandRunner = {
-      async run(command, cwd, options) {
-        if (command.some((token) => token.endsWith("cli.js"))) {
-          const selector = options?.env?.IAM_E2E_JOURNEY ?? "";
-          listedSelectors.push(selector);
-          const journey = journeys.find((candidate) => candidate.name === selector);
-          return {
-            exitCode: 0,
-            stderr: "",
-            stdout: JSON.stringify({
-              config: { rootDir: join(root, "e2e", "system") },
-              suites: journey ? [{ file: journey.file }] : [],
-            }),
-          };
-        }
-        return baseRunner.run(command, cwd, options);
-      },
-    };
-    try {
-      expect(await analyzeTestCollections(root, runner)).toEqual([]);
-      expect(listedSelectors).toEqual(["admin", "hr-admin", "oidc"]);
-    } finally {
-      rmSync(root, { recursive: true, force: true });
-    }
-  });
-
-  test("Collection Guard rejects a spec collected by two discovered journey owners", async () => {
-    const root = createCollectionGuardFixture({
-      workspaceLocalJourneys: [
-        { file: "admin-custom-sso.spec.ts", name: "admin" },
-        { file: "admin-custom-sso.spec.ts", name: "oidc" },
-      ],
-    });
-    const baseRunner = createCollectionGuardRunner();
-    const runner: TestCollectionCommandRunner = {
-      async run(command, cwd, options) {
-        if (command.some((token) => token.endsWith("cli.js"))) {
-          return {
-            exitCode: 0,
-            stderr: "",
-            stdout: JSON.stringify({
-              config: { rootDir: join(root, "e2e", "system") },
-              suites: [{ file: "admin-custom-sso.spec.ts" }],
-            }),
-          };
-        }
-        return baseRunner.run(command, cwd, options);
-      },
-    };
-    try {
-      expect(await analyzeTestCollections(root, runner)).toContainEqual({
-        code: "duplicate-collection",
-        message: expect.stringContaining("admin-custom-sso.spec.ts"),
-      });
-    } finally {
-      rmSync(root, { recursive: true, force: true });
-    }
-  });
-
-  test("Collection Guard rejects an unknown workspace-local journey owner", async () => {
-    const root = createCollectionGuardFixture({
-      workspaceLocalJourneys: [{ file: "unknown.spec.ts", name: "unknown" }],
-    });
-    const baseRunner = createCollectionGuardRunner();
-    const runner: TestCollectionCommandRunner = {
-      async run(command, cwd, options) {
-        if (command.some((token) => token.endsWith("cli.js"))) {
-          return {
-            exitCode: 0,
-            stderr: "",
-            stdout: JSON.stringify({
-              config: { rootDir: join(root, "e2e", "system") },
-              suites: [{ file: "unknown.spec.ts" }],
-            }),
-          };
-        }
-        return baseRunner.run(command, cwd, options);
-      },
-    };
-    try {
-      expect(await analyzeTestCollections(root, runner)).toContainEqual({
-        code: "unsupported-owner",
-        message: expect.stringContaining("unknown:journey"),
-      });
-    } finally {
-      rmSync(root, { recursive: true, force: true });
-    }
-  });
-
-  test("Collection Guard reports path, duplicate, missing, and unreachable violations", async () => {
-    const root = createCollectionGuardFixture({ violating: true });
-    try {
-      const issues = await analyzeTestCollections(root, createCollectionGuardRunner({ omitComponent: true }));
-      expect(issues.map((issue) => issue.code)).toContain("duplicate-collection");
-      expect(issues.map((issue) => issue.code)).toContain("path-naming-mismatch");
-      expect(issues.map((issue) => issue.code)).toContain("missing-collection");
-      expect(issues.map((issue) => issue.code)).toContain("task-unreachable");
-      expect(issues.some((issue) => issue.message.includes("packages/owner/"))).toBe(true);
-      expect(issues.some((issue) => issue.message.includes("scripts/__tests__/tooling.test.ts"))).toBe(true);
-    } finally {
-      rmSync(root, { recursive: true, force: true });
-    }
-  });
-
-  test("Collection Guard fails closed when a runner adapter fails", async () => {
-    const root = createCollectionGuardFixture();
-    try {
-      expect(await analyzeTestCollections(root, createCollectionGuardRunner({ fail: true }))).toEqual([
-        expect.objectContaining({
-          code: "adapter-failure",
-          message: expect.stringContaining("synthetic turbo failure"),
-        }),
-      ]);
-    } finally {
-      rmSync(root, { recursive: true, force: true });
-    }
-  });
-
   test("publishes complete canonical root collections", () => {
     const rootPackage = readJson(join(repoRoot, "package.json"));
     const turbo = readJson(join(repoRoot, "turbo.json"));
 
     expect(rootPackage.scripts["test:unit"]).toBe("turbo test:unit test:unit:root --concurrency=2");
-    expect(rootPackage.scripts["test:unit:root"]).toBe(
-      "bun test --max-concurrency=2 scripts/__tests__/architecture-guard.test.ts scripts/__tests__/quality-tooling-ownership.test.ts scripts/__tests__/test-orchestration.test.ts scripts/__tests__/tooling-contracts.test.ts scripts/__tests__/sandcastle.test.ts",
-    );
+    expect(rootPackage.scripts["test:unit:root"]).toBe("bun test --max-concurrency=2 scripts/__tests__");
     expect(rootPackage.scripts["test:integration:component"]).toBe("turbo test:integration:component --concurrency=2");
     expect(rootPackage.scripts["test:integration:process"]).toBe(
       "turbo test:integration:process test:integration:process:root --concurrency=1",
@@ -1043,7 +655,6 @@ describe("test orchestration", () => {
         "check:docs",
         "check:env-names",
         "check:architecture",
-        "check:test-collection",
         "typecheck",
         "test:unit",
         "build",
@@ -1052,18 +663,11 @@ describe("test orchestration", () => {
     });
   }, 15_000);
 
-  test("runs only the six static checks through the public static entry", () => {
+  test("runs only the five static checks through the public static entry", () => {
     const rootPackage = readJson(join(repoRoot, "package.json"));
     expect(rootPackage.scripts["verify:static"]).toBe("node scripts/verify.mjs --static");
     expect(runVerifyWithRecorder(undefined, ["--static"])).toEqual({
-      commands: [
-        "format:check",
-        "lint",
-        "check:docs",
-        "check:env-names",
-        "check:architecture",
-        "check:test-collection",
-      ],
+      commands: ["format:check", "lint", "check:docs", "check:env-names", "check:architecture"],
       exitCode: 0,
     });
   }, 15_000);
@@ -1079,15 +683,8 @@ describe("test orchestration", () => {
         commands: ["format:check", "lint", "check:docs", "check:env-names"],
         exitCode: 37,
       });
-      expect(runVerifyWithRecorder("check:test-collection", args)).toEqual({
-        commands: [
-          "format:check",
-          "lint",
-          "check:docs",
-          "check:env-names",
-          "check:architecture",
-          "check:test-collection",
-        ],
+      expect(runVerifyWithRecorder("check:architecture", args)).toEqual({
+        commands: ["format:check", "lint", "check:docs", "check:env-names", "check:architecture"],
         exitCode: 37,
       });
     },
@@ -1258,7 +855,6 @@ describe("test orchestration", () => {
         "check:docs",
         "check:env-names",
         "check:architecture",
-        "check:test-collection",
         "typecheck",
         "test:unit",
       ],

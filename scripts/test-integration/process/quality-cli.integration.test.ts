@@ -49,7 +49,6 @@ async function initializeQualityFixture(root: string, signal: AbortSignal) {
           "check:architecture": 'node -e "process.exit(0)"',
           "check:docs": 'node -e "process.exit(0)"',
           "check:env-names": 'node -e "process.exit(0)"',
-          "check:test-collection": 'node -e "process.exit(0)"',
           build: 'node -e "process.exit(0)"',
           "test:unit": 'node -e "process.exit(0)"',
           typecheck: 'node -e "process.exit(0)"',

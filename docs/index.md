@@ -83,7 +83,7 @@ releases 只保留当前代发布与维护；一次性升级和旧验收见[固�
 | [ADR-0004](adr/0004-adopt-upstream-first-matt-skills.md)                                   | decision | Current | 2026-09-22    | 2026-10-31  | 上游 skills、GitHub Issues 与 Sandcastle AFK 的仓库适配。                                     |
 | [ADR-0005](adr/0005-keep-live-login-state-in-redis.md)                                     | decision | Current | 2026-09-21    | 2026-10-31  | Redis 实时状态与生命周期时间权威。                                                            |
 | [ADR-0006](adr/0006-elevate-user-subject-identifier.md)                                    | decision | Current | 2026-09-21    | 2026-10-31  | 跨协议稳定 Subject Identifier 归属 IAM 身份域。                                               |
-| [ADR-0009](adr/0009-adopt-canonical-test-collections.md)                                   | decision | Current | 2026-09-21    | 2026-10-31  | Canonical collections、默认验证与 Guard 证明边界。                                            |
+| [ADR-0009](adr/0009-adopt-canonical-test-collections.md)                                   | decision | Current | 2026-09-30    | 2026-10-31  | Canonical collections、目录收集与验证证明边界。                                               |
 | [ADR-0011](adr/0011-model-employment-as-an-immutable-tenure-lifecycle.md)                  | decision | Current | 2026-09-21    | 2026-10-31  | 不可重开的任职期、父完整性与全库诊断。                                                        |
 | [ADR-0012](adr/0012-model-client-maintenance-as-reversible-protocol-traffic-suspension.md) | decision | Current | 2026-09-21    | 2026-10-31  | Client 通行状态与永久撤销分离。                                                               |
 | [ADR-0013](adr/0013-guard-login-page-reentry-with-authentication-continuation.md)          | decision | Current | 2026-09-21    | 2026-10-31  | 认证续接、已有根复用与新鲜认证边界。                                                          |
@@ -117,7 +117,7 @@ releases 只保留当前代发布与维护；一次性升级和旧验收见[固�
 | [Domain Docs](agents/domain.md)                | agent-config | Current | 2026-07-16    | 2026-10-31  | 工程 skills 的领域文档消费规则。                         |
 | [GitHub 议题跟踪](agents/issue-tracker.md)     | agent-config | Current | 2026-09-22    | 2026-10-31  | GitHub spec、ticket 与手动/AFK 交接约定。                |
 | [Triage Labels](agents/triage-labels.md)       | agent-config | Current | 2026-07-16    | 2026-10-31  | 默认 canonical labels 与 triage 映射。                   |
-| [AI 开发工作流](agents/workflow.md)            | agent-config | Current | 2026-09-29    | 2026-10-31  | 手动实施与 Sandcastle AFK 的分支、评审、验证及收尾边界。 |
+| [AI 开发工作流](agents/workflow.md)            | agent-config | Current | 2026-09-30    | 2026-10-31  | 手动实施与 Sandcastle AFK 的分支、评审、验证及收尾边界。 |
 
 </details>
 
@@ -129,13 +129,13 @@ releases 只保留当前代发布与维护；一次性升级和旧验收见[固�
 | Document                                                   | Type         | Status  | Last verified | Next review | Notes                                               |
 | ---------------------------------------------------------- | ------------ | ------- | ------------- | ----------- | --------------------------------------------------- |
 | [架构守卫规范](architecture/architecture-guard.md)         | architecture | Current | 2026-09-15    | 2026-10-31  | 静态守卫的观察模型、准入与复杂度边界。              |
-| [架构验证归属](architecture/architecture-verification.md)  | architecture | Current | 2026-09-28    | 2026-10-31  | 系统约束的验证 owner、证据入口与证明限制。          |
+| [架构验证归属](architecture/architecture-verification.md)  | architecture | Current | 2026-09-30    | 2026-10-31  | 系统约束的验证 owner、证据入口与证明限制。          |
 | [后端架构](architecture/backend-architecture.md)           | architecture | Current | 2026-09-28    | 2026-10-31  | 后端分层、事务、模块所有权与一致性契约。            |
 | [共享契约与数据库](architecture/contracts-and-database.md) | architecture | Current | 2026-09-28    | 2026-10-31  | 共享代码选址、公开出口、DTO、数据库与事务边界。     |
 | [前端架构](architecture/frontend-architecture.md)          | architecture | Current | 2026-09-15    | 2026-10-31  | Admin / SSO service、页面状态、路由与权限规则。     |
 | [仓库地图](architecture/repository-map.md)                 | architecture | Current | 2026-09-22    | 2026-10-31  | Apps、packages、基础设施、AFK、测试与生成目录定位。 |
 | [系统架构视图](architecture/system-architecture.md)        | architecture | Current | 2026-09-28    | 2026-10-31  | 运行时拓扑、信任边界、数据权威与恢复责任。          |
-| [测试编排架构](architecture/testing-architecture.md)       | architecture | Current | 2026-09-29    | 2026-10-31  | 测试层级、质量、收集、资源预算与生命周期。          |
+| [测试编排架构](architecture/testing-architecture.md)       | architecture | Current | 2026-09-30    | 2026-10-31  | 测试层级、质量、收集、资源预算与生命周期。          |
 
 </details>
 

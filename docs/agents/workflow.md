@@ -117,7 +117,7 @@ GitHub Issues 保存需求、协作状态与恢复说明，Git 提交保存实�
   先通过普通提交取得 Hook 处理后的候选，再完成交接检查；核对自动修复 diff，并按实际变化重跑失效的类型或行为验证。
 - TDD 与实现内循环运行最高层相关测试、单测试文件，以及受影响 workspace 的 typecheck；文档变化运行
   `pnpm check:docs`。每票首次交接评审前，通过一次 `pnpm verify:static`、当前 ticket 完整受影响范围的
-  typecheck 与行为测试，以及 `git diff --check`。静态入口已包含 Collection Guard，无需另外重复执行；
+  typecheck 与行为测试，以及 `git diff --check`；
   AFK runner 不再重复实施者的静态和 diff 检查。
 - 评审修复后按实际变化重跑失效的检查，补齐新增范围的验证；未受代码、依赖、配置或环境变化影响的通过结果可以复用，
   在交接中说明复用依据。无法判断影响范围时扩大验证，不能用复用理由掩盖失败或未执行项。每轮评审仍覆盖完整累计差异，
@@ -128,8 +128,8 @@ GitHub Issues 保存需求、协作状态与恢复说明，Git 提交保存实�
   PostgreSQL、浏览器 E2E 或 Gateway 检查。AFK 由 Merger 在整批合并后的最终内容上运行一次 `pnpm verify`，
   将本批各票及 Spec 所需的额外 Integration、E2E、Gateway 检查按覆盖范围去重后执行一次，不能用各实施分支的
   结果代替合并后的验证。最终验证后再有修改时，重跑因此失效的检查。
-- 最终验证的证明范围见[最终候选验证](../architecture/testing-architecture.md#默认验证与交付)。Collection Guard 只证明
-  测试收集与命令可达，不证明测试断言已执行或通过。
+- 最终验证的证明范围见[最终候选验证](../architecture/testing-architecture.md#默认验证与交付)，收集配置的维护见
+  [测试收集维护](../architecture/testing-architecture.md#测试收集维护)。
 - Integration 测试所需的 PostgreSQL 和 Redis 由调用方负责。没有专用测试 URL 时，agent 应在 Docker 可用的情况下
   启动本地临时容器，等待服务 ready，再把生成的 URL 传给测试命令；测试命令和 harness 本身不启动 Docker。
 - 临时容器必须使用仓库声明的镜像版本和本次任务唯一的 name/label；宿主访问使用动态端口，AFK sandbox 通过独占网络访问时不发布宿主端口。Agent 创建容器后立即记录准确的

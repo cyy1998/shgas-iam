@@ -266,7 +266,6 @@ pnpm test:integration:redis
 pnpm test:integration:postgres
 pnpm test:integration:composition
 pnpm test:integration:browser
-pnpm check:test-collection
 pnpm typecheck
 ```
 

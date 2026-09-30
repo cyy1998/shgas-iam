@@ -11,14 +11,7 @@ if (args.length > 1 || (args.length === 1 && args[0] !== "--static")) {
 const stages = [
   {
     name: "static",
-    commands: [
-      ["format:check"],
-      ["lint"],
-      ["check:docs"],
-      ["check:env-names"],
-      ["check:architecture"],
-      ["check:test-collection"],
-    ],
+    commands: [["format:check"], ["lint"], ["check:docs"], ["check:env-names"], ["check:architecture"]],
   },
   { name: "typecheck", commands: [["typecheck"]] },
   { name: "test:unit", commands: [["test:unit"]] },
