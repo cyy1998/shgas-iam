@@ -11,14 +11,14 @@
 
 仓库只使用 Unit、Integration、E2E 三层。Integration 的六个 sibling profiles 表达资源模型与 harness owner：
 
-| Profile | 观察目标 | 外部资源 |
-|---|---|---|
-| `component` | 进程内多个 module 协作，出站 seam 使用 fake 或 in-memory adapter | 无 |
-| `process` | 真实子进程、端口、readiness、退出与进程树清理 | 本机进程与端口 |
-| `redis` | production Redis adapter 行为 | 调用方负责；agent 可临时启动 Docker 容器 |
-| `postgres` | schema、transaction 与 repository 行为 | 调用方负责；agent 可临时启动 Docker 容器 |
-| `composition` | production composition 与多个真实 adapter 协作 | profile 声明的全部资源 |
-| `browser` | 真实浏览器 harness，允许替代 journey 不经过的系统 seam | 浏览器与 package-local web server |
+| Profile       | 观察目标                                                         | 外部资源                                 |
+| ------------- | ---------------------------------------------------------------- | ---------------------------------------- |
+| `component`   | 进程内多个 module 协作，出站 seam 使用 fake 或 in-memory adapter | 无                                       |
+| `process`     | 真实子进程、端口、readiness、退出与进程树清理                    | 本机进程与端口                           |
+| `redis`       | production Redis adapter 行为                                    | 调用方负责；agent 可临时启动 Docker 容器 |
+| `postgres`    | schema、transaction 与 repository 行为                           | 调用方负责；agent 可临时启动 Docker 容器 |
+| `composition` | production composition 与多个真实 adapter 协作                   | profile 声明的全部资源                   |
+| `browser`     | 真实浏览器 harness，允许替代 journey 不经过的系统 seam           | 浏览器与 package-local web server        |
 
 profile 不是新的测试层级、速度标签或 Gate。多资源测试按测试重点与 harness owner 唯一归属。
 
@@ -51,13 +51,13 @@ profile 不是新的测试层级、速度标签或 Gate。多资源测试按测�
 永久测试应证明去掉迁移背景后仍成立的当前可观察要求。评审候选时按保护目标分类，不按 `legacy`、`V1` 或
 `removed` 等关键词批量删除：
 
-| 分类 | 处置依据 |
-|---|---|
-| 纯墓碑 | 历史名称、字段、命令或目录缺席本身没有独立当前要求，删除该检查及仅供其使用的 helper。 |
-| 冗余检查 | 当前完整结果相等已覆盖的字段否定可以删除；冻结、敏感输入裁剪等独立语义仍须保留。 |
-| 当前边界的历史表达 | 要求仍有效，改用当前完整结果、公开解析、消费方结构兼容或实际行为证明。 |
+| 分类                     | 处置依据                                                                                                     |
+| ------------------------ | ------------------------------------------------------------------------------------------------------------ |
+| 纯墓碑                   | 历史名称、字段、命令或目录缺席本身没有独立当前要求，删除该检查及仅供其使用的 helper。                        |
+| 冗余检查                 | 当前完整结果相等已覆盖的字段否定可以删除；冻结、敏感输入裁剪等独立语义仍须保留。                             |
+| 当前边界的历史表达       | 要求仍有效，改用当前完整结果、公开解析、消费方结构兼容或实际行为证明。                                       |
 | 现行迁移、兼容或恢复能力 | 有当前生产 owner 且执行实际行为，继续保留；历史输入、无 fallback 和 non-owner namespace 保护不能按名称退役。 |
-| 临时迁移检查 | 按 feature 记录 owner、reason、removal date，到期核对并移除，不进入永久架构规则集合。 |
+| 临时迁移检查             | 按 feature 记录 owner、reason、removal date，到期核对并移除，不进入永久架构规则集合。                        |
 
 删除前在交付或评审摘要说明原保护目标、当前是否成立、替代测试或冗余原因。仍成立但缺少直接证据的要求，必须在
 同一提交补齐替代证明，或先验证替代测试通过再删除旧检查；同时核对专用 fixture、故障开关和清理登记是否仍可达。
@@ -83,13 +83,13 @@ DTO/wire 的完整结果由正式 mapper/serializer owner 验证，包括必要�
 前端行为测试应能说明：给定什么输入、权限、状态或用户操作，产品必须产生什么可观察的功能结果。没有用户点击不代表
 没有行为；权限控制、数据转换、条件展示和异步状态变化都可以具有独立的功能契约。
 
-| 观察目标 | 处置 |
-|---|---|
-| 固定页面标题、帮助文字、按钮配色或布局；导出的静态字典逐项等于硬编码文案 | 删除独立用例；混合用例只删除这些断言。 |
-| 权限未加载时不开放操作、只读目录不提供写入口、登录检查中不展示表单 | 保留对应权限或状态条件与可见、隐藏、禁用等功能结果。 |
-| 提交后的错误反馈、重试恢复、跳转、刷新、表单校验及提交参数 | 保留触发条件与结果；纯样式和无关固定说明不附带进入断言。 |
+| 观察目标                                                                 | 处置                                                                       |
+| ------------------------------------------------------------------------ | -------------------------------------------------------------------------- |
+| 固定页面标题、帮助文字、按钮配色或布局；导出的静态字典逐项等于硬编码文案 | 删除独立用例；混合用例只删除这些断言。                                     |
+| 权限未加载时不开放操作、只读目录不提供写入口、登录检查中不展示表单       | 保留对应权限或状态条件与可见、隐藏、禁用等功能结果。                       |
+| 提交后的错误反馈、重试恢复、跳转、刷新、表单校验及提交参数               | 保留触发条件与结果；纯样式和无关固定说明不附带进入断言。                   |
 | 数据排序或格式化、嵌套数据转换、缺失值回退、状态或错误类型映射到相应提示 | 保留真实输入到输出的规则；不把固定样例回显或复制静态标签表包装成映射测试。 |
-| 协议响应、序列化、转义或敏感信息不泄露 | 按相应协议或安全契约保留，不能因输出是文本或 HTML 而归为纯展示。 |
+| 协议响应、序列化、转义或敏感信息不泄露                                   | 按相应协议或安全契约保留，不能因输出是文本或 HTML 而归为纯展示。           |
 
 `getByText`、`getByRole`、`toBeVisible`、`toHaveTextContent` 等 API 本身不是删除依据。使用文案定位操作目标、
 等待页面就绪或观察功能状态可以保留；精确文案只有在措辞本身属于当前功能契约时才需要锁定。行为测试中的整页快照
@@ -117,6 +117,7 @@ API 的 OIDC 退出 Browser Integration 使用真实候选 API、动态 loopback
 不 mock IAM 协议请求。该通道单 Chromium、单 worker、零重试；fixture 子进程经 readiness 后交付浏览器种子，父进程关闭
 stdin 后清理本次 HTTP server 与随机 Redis namespace，启动失败也进入同一收尾。其取消/确认、Cookie、state 与安全错误
 证据不替代全系统 E2E、真实第三方 RP 或部署；后者继续使用独立通道。
+
 - Full-system E2E 独占 `e2e/system/**/*.spec.ts`。Root `pnpm test:e2e` 是唯一完整 collection owner；workspace-local
   `admin:journey`、`hr-admin:journey` 与 `oidc:journey` 只保留为单 journey 调试入口。
 - 版本无关的 User Profile backfill、repair 与 readiness 是操作命令，不采用测试命名，也不属于任何 collection；
@@ -230,8 +231,9 @@ RP-initiated logout 在维护中终止当前根下的访问。Local HTTP 配置�
 `page.route` 替代 repo-owned core。完整命令在同一个 exact-project lifecycle 中固定按 Admin → HR Admin → OIDC 运行；任一 journey
 失败都先收集 diagnostics 再尝试 cleanup，cleanup failure 始终使 root command 非零。
 
-Root `test:unit` 通过 Turbo fan out package Unit tasks，并由 `test:unit:root` 精确收集四个 root tooling tests。
-六个 profile commands 只 fan out 同名 package tasks。Integration 资源由调用方负责：可以直接提供专用 URL，也可以由
+Root `test:unit` 通过 Turbo fan out package Unit tasks，并由 `test:unit:root` 精确收集 root tooling tests。
+六个 profile commands fan out 同名 package tasks；process 额外运行 `test:integration:process:root`，收集
+`scripts/test-integration/process/` 下真实工具 CLI 的隔离进程测试。Integration 资源由调用方负责：可以直接提供专用 URL，也可以由
 agent 先启动临时 Docker 容器。`test:integration` 本身不创建资源；它在启动任何 profile 前一次性检查所有资源 URL，
 再按以下顺序串行运行并传播第一个失败：
 
@@ -297,13 +299,13 @@ browser、Full-system E2E 与其他外部验证均 `cache:false`。资源 tasks 
 
 ## 并发、timeout 与清理
 
-| Collection | Turbo package concurrency | Runner 预算 |
-|---|---:|---|
-| Unit | 2 | Admin/SSO Vitest `maxWorkers: 4`；其他 Vitest `maxWorkers: 25%`；Bun `--max-concurrency=2` |
-| component | 2 | Vitest `maxWorkers: 25%`；Bun `--max-concurrency=2` |
-| process / redis / postgres / composition | 1 | 单 package；资源 owner 独占 |
-| browser | 1 | Playwright 管理单 Chromium project |
-| Full-system E2E | 1 | 三次 Playwright journey 均为单 Chromium project、单 worker、零 retry |
+| Collection                               | Turbo package concurrency | Runner 预算                                                                                |
+| ---------------------------------------- | ------------------------: | ------------------------------------------------------------------------------------------ |
+| Unit                                     |                         2 | Admin/SSO Vitest `maxWorkers: 4`；其他 Vitest `maxWorkers: 25%`；Bun `--max-concurrency=2` |
+| component                                |                         2 | Vitest `maxWorkers: 25%`；Bun `--max-concurrency=2`                                        |
+| process / redis / postgres / composition |                         1 | 单 package；资源 owner 独占                                                                |
+| browser                                  |                         1 | Playwright 管理单 Chromium project                                                         |
+| Full-system E2E                          |                         1 | 三次 Playwright journey 均为单 Chromium project、单 worker、零 retry                       |
 
 Timeout 只保护测试不永久挂起，不承担性能 SLA。Process harness 必须使用真实 readiness 信号、同时观察 child exit/error、
 限制 stdout/stderr 缓冲，并在成功、失败、timeout 与中断路径清理完整进程树、端口与临时目录。不得通过放宽全局 timeout、
@@ -364,7 +366,7 @@ flowchart LR
   C --> D["build"]
 ```
 
-`pnpm verify:static` 通过同一 runner 的 `--static` 参数只运行静态阶段：lint、文档索引、环境变量命名 Guard、
+`pnpm verify:static` 通过同一 runner 的 `--static` 参数只运行静态阶段：只读 format/lint、文档索引、环境变量命名 Guard、
 Architecture Guard 与 Collection Guard。`verify` 不读取真实 PostgreSQL/Redis，
 不启动 browser 或 Full-system stack，也不隐式执行 Integration。开发者按改动风险显式追加相关 profiles；完整
 `test:integration` 只在调用方准备好全部专用资源时运行。

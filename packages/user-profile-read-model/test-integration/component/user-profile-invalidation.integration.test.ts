@@ -1,10 +1,7 @@
-import {
-  OrganizationResponsibilityTypeCode,
-  RoleAssignmentTargetType,
-} from "@iam/contracts";
+import { describe, expect, mock, test } from "bun:test";
+import { OrganizationResponsibilityTypeCode, RoleAssignmentTargetType } from "@iam/contracts";
 import { employments, organizationClosures } from "@iam/db/schema";
 import { roleAssignments } from "@iam/db/schema/role-assignments";
-import { describe, expect, mock, test } from "bun:test";
 import { createUserProfileInvalidationInternal } from "../../src/invalidation/user-profile-invalidation";
 import { createUserProfileJobProducer } from "../../src/producer";
 
@@ -24,11 +21,13 @@ interface FixtureOptions {
 }
 
 function createFixture(options: FixtureOptions = {}) {
-  const persistedBatches: Array<Array<{
-    userId: number;
-    reasonCodes: string[];
-    dirtyAt: Date;
-  }>> = [];
+  const persistedBatches: Array<
+    Array<{
+      userId: number;
+      reasonCodes: string[];
+      dirtyAt: Date;
+    }>
+  > = [];
   const dirtyVersions = new Map<number, number>();
   const db = {
     select: mock(() => {
@@ -44,10 +43,9 @@ function createFixture(options: FixtureOptions = {}) {
         }),
         where: mock(async (condition: unknown) => {
           const affectedUserQuery = classifyAffectedUserQuery(queriedTables, condition);
-          if (options.affectedUserError === affectedUserQuery)
-            throw new Error("affected-user resolution failed");
+          if (options.affectedUserError === affectedUserQuery) throw new Error("affected-user resolution failed");
 
-          return (options.affectedUsers?.[affectedUserQuery] ?? []).map(userId => ({ userId }));
+          return (options.affectedUsers?.[affectedUserQuery] ?? []).map((userId) => ({ userId }));
         }),
       };
       return query;
@@ -56,8 +54,7 @@ function createFixture(options: FixtureOptions = {}) {
       values: (values: Array<{ userId: number; reasonCodes: string[]; dirtyAt: Date }>) => ({
         onConflictDoUpdate: () => ({
           returning: async () => {
-            if (options.persistError !== undefined)
-              throw options.persistError;
+            if (options.persistError !== undefined) throw options.persistError;
 
             persistedBatches.push(values);
             return values.map((value) => {
@@ -77,10 +74,9 @@ function createFixture(options: FixtureOptions = {}) {
   const queue = {
     addBulk: mock(async (jobs: Array<{ opts: { jobId: string } }>) => {
       queuedBatches.push(jobs);
-      if (options.enqueueError !== undefined)
-        throw options.enqueueError;
+      if (options.enqueueError !== undefined) throw options.enqueueError;
 
-      return jobs.map(job => ({ id: job.opts.jobId }));
+      return jobs.map((job) => ({ id: job.opts.jobId }));
     }),
   };
   const afterCommitTasks: Array<() => Promise<void> | void> = [];
@@ -106,10 +102,8 @@ function createFixture(options: FixtureOptions = {}) {
       },
     },
     {
-      resolveHolderEmploymentIds: mock(async () =>
-        options.responsibilityEmploymentIds?.organization ?? []),
-      resolveHolderEmploymentIdsByTypes: mock(async () =>
-        options.responsibilityEmploymentIds?.catalog ?? []),
+      resolveHolderEmploymentIds: mock(async () => options.responsibilityEmploymentIds?.organization ?? []),
+      resolveHolderEmploymentIdsByTypes: mock(async () => options.responsibilityEmploymentIds?.catalog ?? []),
     },
   );
 
@@ -122,103 +116,108 @@ function createFixture(options: FixtureOptions = {}) {
 }
 
 function classifyAffectedUserQuery(queriedTables: ReadonlySet<unknown>, condition: unknown): AffectedUserQuery {
-  if (queriedTables.has(roleAssignments))
-    return "role";
-  if (queriedTables.has(organizationClosures))
-    return "organization";
-  if (queriedTables.has(employments) && sqlReferencesColumn(condition, employments.posId))
-    return "position";
-  if (queriedTables.has(employments) && sqlReferencesColumn(condition, employments.id))
-    return "employment";
+  if (queriedTables.has(roleAssignments)) return "role";
+  if (queriedTables.has(organizationClosures)) return "organization";
+  if (queriedTables.has(employments) && sqlReferencesColumn(condition, employments.posId)) return "position";
+  if (queriedTables.has(employments) && sqlReferencesColumn(condition, employments.id)) return "employment";
   throw new Error("Unexpected affected-user query");
 }
 
 function sqlReferencesColumn(expression: unknown, column: unknown): boolean {
-  if (expression === column)
-    return true;
-  if (Array.isArray(expression))
-    return expression.some(item => sqlReferencesColumn(item, column));
-  if (expression === null || typeof expression !== "object")
-    return false;
+  if (expression === column) return true;
+  if (Array.isArray(expression)) return expression.some((item) => sqlReferencesColumn(item, column));
+  if (expression === null || typeof expression !== "object") return false;
 
   const queryChunks = (expression as { queryChunks?: readonly unknown[] }).queryChunks;
-  return queryChunks?.some(chunk => sqlReferencesColumn(chunk, column)) ?? false;
+  return queryChunks?.some((chunk) => sqlReferencesColumn(chunk, column)) ?? false;
 }
 
 describe("UserProfileInvalidation", () => {
   test("records a user change and wakes its versioned rebuild after commit", async () => {
     const fixture = createFixture();
 
-    await expect(fixture.invalidation.recordChanges([
-      { kind: "user", userId: 7 },
-    ])).resolves.toBeUndefined();
+    await expect(fixture.invalidation.recordChanges([{ kind: "user", userId: 7 }])).resolves.toBeUndefined();
 
-    expect(fixture.persistedBatches.map(batch => batch.map(row => ({
-      userId: row.userId,
-      reasonCodes: row.reasonCodes,
-      dirtyAt: row.dirtyAt,
-    })))).toEqual([[
-      {
-        userId: 7,
-        reasonCodes: ["user-updated"],
-        dirtyAt: now,
-      },
-    ]]);
+    expect(
+      fixture.persistedBatches.map((batch) =>
+        batch.map((row) => ({
+          userId: row.userId,
+          reasonCodes: row.reasonCodes,
+          dirtyAt: row.dirtyAt,
+        })),
+      ),
+    ).toEqual([
+      [
+        {
+          userId: 7,
+          reasonCodes: ["user-updated"],
+          dirtyAt: now,
+        },
+      ],
+    ]);
     expect(fixture.queuedBatches).toEqual([]);
 
     await fixture.afterCommitTasks[0]!();
 
-    expect(fixture.queuedBatches).toEqual([[
-      {
-        name: "rebuild-user-profile",
-        data: {
-          userId: 7,
-          dirtyVersion: "1",
-          reason: "user-updated",
-          requestedAt: "2026-07-25T08:00:00.000Z",
-          requestId: "req-7",
-          traceId: "trace-7",
+    expect(fixture.queuedBatches).toEqual([
+      [
+        {
+          name: "rebuild-user-profile",
+          data: {
+            userId: 7,
+            dirtyVersion: "1",
+            reason: "user-updated",
+            requestedAt: "2026-07-25T08:00:00.000Z",
+            requestId: "req-7",
+            traceId: "trace-7",
+          },
+          opts: {
+            jobId: "rebuild-user-profile|7|1",
+          },
         },
-        opts: {
-          jobId: "rebuild-user-profile|7|1",
-        },
-      },
-    ]]);
+      ],
+    ]);
   });
 
   test("records an employment change with its canonical reason", async () => {
     const fixture = createFixture();
 
-    await fixture.invalidation.recordChanges([
-      { kind: "employment", userId: 12 },
-    ]);
+    await fixture.invalidation.recordChanges([{ kind: "employment", userId: 12 }]);
     await fixture.afterCommitTasks[0]!();
 
-    expect(fixture.persistedBatches.map(batch => batch.map(row => ({
-      userId: row.userId,
-      reasonCodes: row.reasonCodes,
-    })))).toEqual([[
-      {
-        userId: 12,
-        reasonCodes: ["employment-updated"],
-      },
-    ]]);
-    expect(fixture.queuedBatches).toEqual([[
-      {
-        name: "rebuild-user-profile",
-        data: {
+    expect(
+      fixture.persistedBatches.map((batch) =>
+        batch.map((row) => ({
+          userId: row.userId,
+          reasonCodes: row.reasonCodes,
+        })),
+      ),
+    ).toEqual([
+      [
+        {
           userId: 12,
-          dirtyVersion: "1",
-          reason: "employment-updated",
-          requestedAt: "2026-07-25T08:00:00.000Z",
-          requestId: "req-7",
-          traceId: "trace-7",
+          reasonCodes: ["employment-updated"],
         },
-        opts: {
-          jobId: "rebuild-user-profile|12|1",
+      ],
+    ]);
+    expect(fixture.queuedBatches).toEqual([
+      [
+        {
+          name: "rebuild-user-profile",
+          data: {
+            userId: 12,
+            dirtyVersion: "1",
+            reason: "employment-updated",
+            requestedAt: "2026-07-25T08:00:00.000Z",
+            requestId: "req-7",
+            traceId: "trace-7",
+          },
+          opts: {
+            jobId: "rebuild-user-profile|12|1",
+          },
         },
-      },
-    ]]);
+      ],
+    ]);
   });
 
   test("records an organization change for every affected user in stable order", async () => {
@@ -228,23 +227,27 @@ describe("UserProfileInvalidation", () => {
       },
     });
 
-    await fixture.invalidation.recordChanges([
-      { kind: "organization", organizationId: 40 },
-    ]);
+    await fixture.invalidation.recordChanges([{ kind: "organization", organizationId: 40 }]);
 
-    expect(fixture.persistedBatches.map(batch => batch.map(row => ({
-      userId: row.userId,
-      reasonCodes: row.reasonCodes,
-    })))).toEqual([[
-      {
-        userId: 3,
-        reasonCodes: ["organization-updated"],
-      },
-      {
-        userId: 9,
-        reasonCodes: ["organization-updated"],
-      },
-    ]]);
+    expect(
+      fixture.persistedBatches.map((batch) =>
+        batch.map((row) => ({
+          userId: row.userId,
+          reasonCodes: row.reasonCodes,
+        })),
+      ),
+    ).toEqual([
+      [
+        {
+          userId: 3,
+          reasonCodes: ["organization-updated"],
+        },
+        {
+          userId: 9,
+          reasonCodes: ["organization-updated"],
+        },
+      ],
+    ]);
   });
 
   test("unions organization subtree users with cross-tree responsibility holders", async () => {
@@ -258,18 +261,22 @@ describe("UserProfileInvalidation", () => {
       },
     });
 
-    await fixture.invalidation.recordChanges([
-      { kind: "organization", organizationId: 40 },
-    ]);
+    await fixture.invalidation.recordChanges([{ kind: "organization", organizationId: 40 }]);
 
-    expect(fixture.persistedBatches.map(batch => batch.map(row => ({
-      userId: row.userId,
-      reasonCodes: row.reasonCodes,
-    })))).toEqual([[
-      { userId: 3, reasonCodes: ["organization-updated"] },
-      { userId: 8, reasonCodes: ["organization-updated"] },
-      { userId: 9, reasonCodes: ["organization-updated"] },
-    ]]);
+    expect(
+      fixture.persistedBatches.map((batch) =>
+        batch.map((row) => ({
+          userId: row.userId,
+          reasonCodes: row.reasonCodes,
+        })),
+      ),
+    ).toEqual([
+      [
+        { userId: 3, reasonCodes: ["organization-updated"] },
+        { userId: 8, reasonCodes: ["organization-updated"] },
+        { userId: 9, reasonCodes: ["organization-updated"] },
+      ],
+    ]);
   });
 
   test("invalidates current holders when published Catalog fields change", async () => {
@@ -278,18 +285,26 @@ describe("UserProfileInvalidation", () => {
       responsibilityEmploymentIds: { catalog: [91, 92] },
     });
 
-    await fixture.invalidation.recordChanges([{
-      kind: "organization-responsibility-type",
-      typeCodes: [OrganizationResponsibilityTypeCode.Head],
-    }]);
+    await fixture.invalidation.recordChanges([
+      {
+        kind: "organization-responsibility-type",
+        typeCodes: [OrganizationResponsibilityTypeCode.Head],
+      },
+    ]);
 
-    expect(fixture.persistedBatches.map(batch => batch.map(row => ({
-      userId: row.userId,
-      reasonCodes: row.reasonCodes,
-    })))).toEqual([[
-      { userId: 3, reasonCodes: ["organization-responsibility-assignment-updated"] },
-      { userId: 8, reasonCodes: ["organization-responsibility-assignment-updated"] },
-    ]]);
+    expect(
+      fixture.persistedBatches.map((batch) =>
+        batch.map((row) => ({
+          userId: row.userId,
+          reasonCodes: row.reasonCodes,
+        })),
+      ),
+    ).toEqual([
+      [
+        { userId: 3, reasonCodes: ["organization-responsibility-assignment-updated"] },
+        { userId: 8, reasonCodes: ["organization-responsibility-assignment-updated"] },
+      ],
+    ]);
   });
 
   test("records a position change with its canonical reason", async () => {
@@ -299,23 +314,27 @@ describe("UserProfileInvalidation", () => {
       },
     });
 
-    await fixture.invalidation.recordChanges([
-      { kind: "position", positionId: 50 },
-    ]);
+    await fixture.invalidation.recordChanges([{ kind: "position", positionId: 50 }]);
 
-    expect(fixture.persistedBatches.map(batch => batch.map(row => ({
-      userId: row.userId,
-      reasonCodes: row.reasonCodes,
-    })))).toEqual([[
-      {
-        userId: 4,
-        reasonCodes: ["position-updated"],
-      },
-      {
-        userId: 12,
-        reasonCodes: ["position-updated"],
-      },
-    ]]);
+    expect(
+      fixture.persistedBatches.map((batch) =>
+        batch.map((row) => ({
+          userId: row.userId,
+          reasonCodes: row.reasonCodes,
+        })),
+      ),
+    ).toEqual([
+      [
+        {
+          userId: 4,
+          reasonCodes: ["position-updated"],
+        },
+        {
+          userId: 12,
+          reasonCodes: ["position-updated"],
+        },
+      ],
+    ]);
   });
 
   test("records a role change for the resolver's conservative affected users", async () => {
@@ -325,31 +344,35 @@ describe("UserProfileInvalidation", () => {
       },
     });
 
-    await fixture.invalidation.recordChanges([
-      { kind: "role", roleId: 60 },
-    ]);
+    await fixture.invalidation.recordChanges([{ kind: "role", roleId: 60 }]);
 
-    expect(fixture.persistedBatches.map(batch => batch.map(row => ({
-      userId: row.userId,
-      reasonCodes: row.reasonCodes,
-    })))).toEqual([[
-      {
-        userId: 2,
-        reasonCodes: ["role-updated"],
-      },
-      {
-        userId: 3,
-        reasonCodes: ["role-updated"],
-      },
-      {
-        userId: 5,
-        reasonCodes: ["role-updated"],
-      },
-      {
-        userId: 8,
-        reasonCodes: ["role-updated"],
-      },
-    ]]);
+    expect(
+      fixture.persistedBatches.map((batch) =>
+        batch.map((row) => ({
+          userId: row.userId,
+          reasonCodes: row.reasonCodes,
+        })),
+      ),
+    ).toEqual([
+      [
+        {
+          userId: 2,
+          reasonCodes: ["role-updated"],
+        },
+        {
+          userId: 3,
+          reasonCodes: ["role-updated"],
+        },
+        {
+          userId: 5,
+          reasonCodes: ["role-updated"],
+        },
+        {
+          userId: 8,
+          reasonCodes: ["role-updated"],
+        },
+      ],
+    ]);
   });
 
   test("records an organization-target role-assignment change with the Role reason", async () => {
@@ -367,19 +390,25 @@ describe("UserProfileInvalidation", () => {
       },
     ]);
 
-    expect(fixture.persistedBatches.map(batch => batch.map(row => ({
-      userId: row.userId,
-      reasonCodes: row.reasonCodes,
-    })))).toEqual([[
-      {
-        userId: 6,
-        reasonCodes: ["role-updated"],
-      },
-      {
-        userId: 14,
-        reasonCodes: ["role-updated"],
-      },
-    ]]);
+    expect(
+      fixture.persistedBatches.map((batch) =>
+        batch.map((row) => ({
+          userId: row.userId,
+          reasonCodes: row.reasonCodes,
+        })),
+      ),
+    ).toEqual([
+      [
+        {
+          userId: 6,
+          reasonCodes: ["role-updated"],
+        },
+        {
+          userId: 14,
+          reasonCodes: ["role-updated"],
+        },
+      ],
+    ]);
   });
 
   test("records a position-target role-assignment change with the Role reason", async () => {
@@ -397,19 +426,25 @@ describe("UserProfileInvalidation", () => {
       },
     ]);
 
-    expect(fixture.persistedBatches.map(batch => batch.map(row => ({
-      userId: row.userId,
-      reasonCodes: row.reasonCodes,
-    })))).toEqual([[
-      {
-        userId: 7,
-        reasonCodes: ["role-updated"],
-      },
-      {
-        userId: 15,
-        reasonCodes: ["role-updated"],
-      },
-    ]]);
+    expect(
+      fixture.persistedBatches.map((batch) =>
+        batch.map((row) => ({
+          userId: row.userId,
+          reasonCodes: row.reasonCodes,
+        })),
+      ),
+    ).toEqual([
+      [
+        {
+          userId: 7,
+          reasonCodes: ["role-updated"],
+        },
+        {
+          userId: 15,
+          reasonCodes: ["role-updated"],
+        },
+      ],
+    ]);
   });
 
   test("records an employment-target role-assignment change with the Role reason", async () => {
@@ -427,15 +462,21 @@ describe("UserProfileInvalidation", () => {
       },
     ]);
 
-    expect(fixture.persistedBatches.map(batch => batch.map(row => ({
-      userId: row.userId,
-      reasonCodes: row.reasonCodes,
-    })))).toEqual([[
-      {
-        userId: 16,
-        reasonCodes: ["role-updated"],
-      },
-    ]]);
+    expect(
+      fixture.persistedBatches.map((batch) =>
+        batch.map((row) => ({
+          userId: row.userId,
+          reasonCodes: row.reasonCodes,
+        })),
+      ),
+    ).toEqual([
+      [
+        {
+          userId: 16,
+          reasonCodes: ["role-updated"],
+        },
+      ],
+    ]);
   });
 
   test("merges duplicate changes for one user into one canonical dirty fact", async () => {
@@ -448,31 +489,39 @@ describe("UserProfileInvalidation", () => {
     ]);
     await fixture.afterCommitTasks[0]!();
 
-    expect(fixture.persistedBatches.map(batch => batch.map(row => ({
-      userId: row.userId,
-      reasonCodes: row.reasonCodes,
-    })))).toEqual([[
-      {
-        userId: 9,
-        reasonCodes: ["user-updated", "employment-updated"],
-      },
-    ]]);
-    expect(fixture.queuedBatches).toEqual([[
-      {
-        name: "rebuild-user-profile",
-        data: {
+    expect(
+      fixture.persistedBatches.map((batch) =>
+        batch.map((row) => ({
+          userId: row.userId,
+          reasonCodes: row.reasonCodes,
+        })),
+      ),
+    ).toEqual([
+      [
+        {
           userId: 9,
-          dirtyVersion: "1",
-          reason: "user-updated",
-          requestedAt: "2026-07-25T08:00:00.000Z",
-          requestId: "req-7",
-          traceId: "trace-7",
+          reasonCodes: ["user-updated", "employment-updated"],
         },
-        opts: {
-          jobId: "rebuild-user-profile|9|1",
+      ],
+    ]);
+    expect(fixture.queuedBatches).toEqual([
+      [
+        {
+          name: "rebuild-user-profile",
+          data: {
+            userId: 9,
+            dirtyVersion: "1",
+            reason: "user-updated",
+            requestedAt: "2026-07-25T08:00:00.000Z",
+            requestId: "req-7",
+            traceId: "trace-7",
+          },
+          opts: {
+            jobId: "rebuild-user-profile|9|1",
+          },
         },
-      },
-    ]]);
+      ],
+    ]);
   });
 
   test("merges overlapping direct, scope, and assignment changes by user and canonical reason", async () => {
@@ -507,39 +556,51 @@ describe("UserProfileInvalidation", () => {
       },
     ]);
 
-    expect(fixture.persistedBatches.map(batch => batch.map(row => ({
-      userId: row.userId,
-      reasonCodes: row.reasonCodes,
-    })))).toEqual([[
-      {
-        userId: 2,
-        reasonCodes: ["organization-updated", "role-updated"],
-      },
-      {
-        userId: 4,
-        reasonCodes: ["position-updated", "role-updated"],
-      },
-      {
-        userId: 5,
-        reasonCodes: ["role-updated"],
-      },
-      {
-        userId: 9,
-        reasonCodes: ["user-updated", "organization-updated", "position-updated", "role-updated"],
-      },
-    ]]);
+    expect(
+      fixture.persistedBatches.map((batch) =>
+        batch.map((row) => ({
+          userId: row.userId,
+          reasonCodes: row.reasonCodes,
+        })),
+      ),
+    ).toEqual([
+      [
+        {
+          userId: 2,
+          reasonCodes: ["organization-updated", "role-updated"],
+        },
+        {
+          userId: 4,
+          reasonCodes: ["position-updated", "role-updated"],
+        },
+        {
+          userId: 5,
+          reasonCodes: ["role-updated"],
+        },
+        {
+          userId: 9,
+          reasonCodes: ["user-updated", "organization-updated", "position-updated", "role-updated"],
+        },
+      ],
+    ]);
 
     await fixture.afterCommitTasks[0]!();
 
-    expect(fixture.queuedBatches.map(batch => batch.map((job: any) => ({
-      userId: job.data.userId,
-      reason: job.data.reason,
-    })))).toEqual([[
-      { userId: 2, reason: "organization-updated" },
-      { userId: 4, reason: "position-updated" },
-      { userId: 5, reason: "role-updated" },
-      { userId: 9, reason: "user-updated" },
-    ]]);
+    expect(
+      fixture.queuedBatches.map((batch) =>
+        batch.map((job: any) => ({
+          userId: job.data.userId,
+          reason: job.data.reason,
+        })),
+      ),
+    ).toEqual([
+      [
+        { userId: 2, reason: "organization-updated" },
+        { userId: 4, reason: "position-updated" },
+        { userId: 5, reason: "role-updated" },
+        { userId: 9, reason: "user-updated" },
+      ],
+    ]);
   });
 
   test("ignores empty changes and invalid direct user IDs", async () => {
@@ -562,9 +623,7 @@ describe("UserProfileInvalidation", () => {
   test("ignores positive integers that cannot identify a user safely", async () => {
     const fixture = createFixture();
 
-    await fixture.invalidation.recordChanges([
-      { kind: "user", userId: Number.MAX_SAFE_INTEGER + 1 },
-    ]);
+    await fixture.invalidation.recordChanges([{ kind: "user", userId: Number.MAX_SAFE_INTEGER + 1 }]);
 
     expect({
       persistedBatches: fixture.persistedBatches,
@@ -582,9 +641,7 @@ describe("UserProfileInvalidation", () => {
       },
     });
 
-    await fixture.invalidation.recordChanges([
-      { kind: "organization", organizationId: 40 },
-    ]);
+    await fixture.invalidation.recordChanges([{ kind: "organization", organizationId: 40 }]);
 
     expect({
       persistedBatches: fixture.persistedBatches,
@@ -610,103 +667,111 @@ describe("UserProfileInvalidation", () => {
     await fixture.afterCommitTasks[0]!();
 
     expect({
-      persisted: fixture.persistedBatches.map(batch => batch.map(row => ({
-        userId: row.userId,
-        reasonCodes: row.reasonCodes,
-      }))),
-      queued: fixture.queuedBatches.map(batch => batch.map((job: any) => ({
-        userId: job.data.userId,
-        dirtyVersion: job.data.dirtyVersion,
-        jobId: job.opts.jobId,
-      }))),
+      persisted: fixture.persistedBatches.map((batch) =>
+        batch.map((row) => ({
+          userId: row.userId,
+          reasonCodes: row.reasonCodes,
+        })),
+      ),
+      queued: fixture.queuedBatches.map((batch) =>
+        batch.map((job: any) => ({
+          userId: job.data.userId,
+          dirtyVersion: job.data.dirtyVersion,
+          jobId: job.opts.jobId,
+        })),
+      ),
     }).toEqual({
-      persisted: [[
-        {
-          userId: 3,
-          reasonCodes: ["user-updated", "employment-updated"],
-        },
-        {
-          userId: 11,
-          reasonCodes: ["user-updated"],
-        },
-        {
-          userId: 20,
-          reasonCodes: ["user-updated", "employment-updated"],
-        },
-      ]],
-      queued: [[
-        {
-          userId: 3,
-          dirtyVersion: "1",
-          jobId: "rebuild-user-profile|3|1",
-        },
-        {
-          userId: 11,
-          dirtyVersion: "1",
-          jobId: "rebuild-user-profile|11|1",
-        },
-        {
-          userId: 20,
-          dirtyVersion: "1",
-          jobId: "rebuild-user-profile|20|1",
-        },
-      ]],
+      persisted: [
+        [
+          {
+            userId: 3,
+            reasonCodes: ["user-updated", "employment-updated"],
+          },
+          {
+            userId: 11,
+            reasonCodes: ["user-updated"],
+          },
+          {
+            userId: 20,
+            reasonCodes: ["user-updated", "employment-updated"],
+          },
+        ],
+      ],
+      queued: [
+        [
+          {
+            userId: 3,
+            dirtyVersion: "1",
+            jobId: "rebuild-user-profile|3|1",
+          },
+          {
+            userId: 11,
+            dirtyVersion: "1",
+            jobId: "rebuild-user-profile|11|1",
+          },
+          {
+            userId: 20,
+            dirtyVersion: "1",
+            jobId: "rebuild-user-profile|20|1",
+          },
+        ],
+      ],
     });
   });
 
   test("batches multiple calls into one callback with only each user's latest version", async () => {
     const fixture = createFixture();
 
-    await fixture.invalidation.recordChanges([
-      { kind: "user", userId: 20 },
-    ]);
+    await fixture.invalidation.recordChanges([{ kind: "user", userId: 20 }]);
     await fixture.invalidation.recordChanges([
       { kind: "employment", userId: 20 },
       { kind: "user", userId: 3 },
     ]);
-    await fixture.invalidation.recordChanges([
-      { kind: "user", userId: 11 },
-    ]);
+    await fixture.invalidation.recordChanges([{ kind: "user", userId: 11 }]);
 
     expect(fixture.afterCommitTasks).toHaveLength(1);
     expect(fixture.queuedBatches).toEqual([]);
 
     await fixture.afterCommitTasks[0]!();
 
-    expect(fixture.queuedBatches.map(batch => batch.map((job: any) => ({
-      userId: job.data.userId,
-      dirtyVersion: job.data.dirtyVersion,
-      reason: job.data.reason,
-      jobId: job.opts.jobId,
-    })))).toEqual([[
-      {
-        userId: 3,
-        dirtyVersion: "1",
-        reason: "user-updated",
-        jobId: "rebuild-user-profile|3|1",
-      },
-      {
-        userId: 11,
-        dirtyVersion: "1",
-        reason: "user-updated",
-        jobId: "rebuild-user-profile|11|1",
-      },
-      {
-        userId: 20,
-        dirtyVersion: "2",
-        reason: "employment-updated",
-        jobId: "rebuild-user-profile|20|2",
-      },
-    ]]);
+    expect(
+      fixture.queuedBatches.map((batch) =>
+        batch.map((job: any) => ({
+          userId: job.data.userId,
+          dirtyVersion: job.data.dirtyVersion,
+          reason: job.data.reason,
+          jobId: job.opts.jobId,
+        })),
+      ),
+    ).toEqual([
+      [
+        {
+          userId: 3,
+          dirtyVersion: "1",
+          reason: "user-updated",
+          jobId: "rebuild-user-profile|3|1",
+        },
+        {
+          userId: 11,
+          dirtyVersion: "1",
+          reason: "user-updated",
+          jobId: "rebuild-user-profile|11|1",
+        },
+        {
+          userId: 20,
+          dirtyVersion: "2",
+          reason: "employment-updated",
+          jobId: "rebuild-user-profile|20|2",
+        },
+      ],
+    ]);
   });
 
   test("propagates dirty persistence failures before registering delivery", async () => {
     const persistError = new Error("dirty write failed");
     const fixture = createFixture({ persistError });
 
-    await expect(fixture.invalidation.recordChanges([
-      { kind: "user", userId: 7 },
-    ])).rejects.toBe(persistError);
+    await expect(fixture.invalidation.recordChanges([{ kind: "user", userId: 7 }])).rejects.toBe(persistError);
 
     expect({
       persistedBatches: fixture.persistedBatches,
@@ -727,10 +792,12 @@ describe("UserProfileInvalidation", () => {
       affectedUserError: "organization",
     });
 
-    await expect(fixture.invalidation.recordChanges([
-      { kind: "user", userId: 3 },
-      { kind: "organization", organizationId: 40 },
-    ])).rejects.toThrow("affected-user resolution failed");
+    await expect(
+      fixture.invalidation.recordChanges([
+        { kind: "user", userId: 3 },
+        { kind: "organization", organizationId: 40 },
+      ]),
+    ).rejects.toThrow("affected-user resolution failed");
 
     expect({
       persistedBatches: fixture.persistedBatches,
@@ -747,19 +814,23 @@ describe("UserProfileInvalidation", () => {
     const enqueueError = new Error("queue unavailable");
     const fixture = createFixture({ enqueueError });
 
-    await expect(fixture.invalidation.recordChanges([
-      { kind: "employment", userId: 7 },
-    ])).resolves.toBeUndefined();
+    await expect(fixture.invalidation.recordChanges([{ kind: "employment", userId: 7 }])).resolves.toBeUndefined();
 
     await expect(fixture.afterCommitTasks[0]!()).rejects.toBe(enqueueError);
-    expect(fixture.persistedBatches.map(batch => batch.map(row => ({
-      userId: row.userId,
-      reasonCodes: row.reasonCodes,
-    })))).toEqual([[
-      {
-        userId: 7,
-        reasonCodes: ["employment-updated"],
-      },
-    ]]);
+    expect(
+      fixture.persistedBatches.map((batch) =>
+        batch.map((row) => ({
+          userId: row.userId,
+          reasonCodes: row.reasonCodes,
+        })),
+      ),
+    ).toEqual([
+      [
+        {
+          userId: 7,
+          reasonCodes: ["employment-updated"],
+        },
+      ],
+    ]);
   });
 });

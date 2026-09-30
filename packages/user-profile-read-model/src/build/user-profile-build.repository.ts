@@ -1,7 +1,6 @@
+import { PrivilegeStatus } from "@iam/contracts";
 import type { DbClient } from "@iam/db";
 import type { Employment, Organization, User } from "@iam/db/schema";
-import type { EffectiveRole } from "@iam/role-assignment-resolution";
-import { PrivilegeStatus } from "@iam/contracts";
 import {
   clients,
   employments,
@@ -14,21 +13,13 @@ import {
   users,
 } from "@iam/db/schema";
 import { OPEN_EMPLOYMENT_STATUSES } from "@iam/domain/employment";
+import type { EffectiveRole } from "@iam/role-assignment-resolution";
 import { and, eq, inArray } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 
 export type UserProfileBuildOrgPathRow = Pick<
   Organization,
-  | "id"
-  | "orgCode"
-  | "orgName"
-  | "orgType"
-  | "level"
-  | "parentId"
-  | "isVirtual"
-  | "isEntity"
-  | "status"
-  | "isDelete"
+  "id" | "orgCode" | "orgName" | "orgType" | "level" | "parentId" | "isVirtual" | "isEntity" | "status" | "isDelete"
 > & {
   descendantId: number;
   depth: number;
@@ -72,33 +63,37 @@ export function createUserProfileBuildRepository(
   return {
     async loadByUserIds(userIds: number[]): Promise<UserProfileBuildDataset> {
       const uniqueUserIds = [...new Set(userIds)];
-      if (uniqueUserIds.length === 0)
-        return emptyDataset();
+      if (uniqueUserIds.length === 0) return emptyDataset();
 
       const [userRows, employmentRows] = await Promise.all([
         db.select().from(users).where(inArray(users.id, uniqueUserIds)),
-        db.select().from(employments).where(and(
-          inArray(employments.userId, uniqueUserIds),
-          inArray(employments.status, [...OPEN_EMPLOYMENT_STATUSES]),
-          eq(employments.isDelete, false),
-        )),
+        db
+          .select()
+          .from(employments)
+          .where(
+            and(
+              inArray(employments.userId, uniqueUserIds),
+              inArray(employments.status, [...OPEN_EMPLOYMENT_STATUSES]),
+              eq(employments.isDelete, false),
+            ),
+          ),
       ]);
 
-      const positionIds = [...new Set(employmentRows.map(row => row.posId))];
-      const organizationIds = [...new Set(employmentRows.map(row => row.orgId))];
-      const employmentIds = employmentRows.map(row => row.id);
+      const positionIds = [...new Set(employmentRows.map((row) => row.posId))];
+      const organizationIds = [...new Set(employmentRows.map((row) => row.orgId))];
+      const employmentIds = employmentRows.map((row) => row.id);
 
       const [positionRows, orgPathRows, roleRows] = await Promise.all([
         loadPositions(db, positionIds),
         loadOrganizationPaths(db, organizationIds),
         loadEmploymentRoles(roleAssignmentResolver, employmentIds),
       ]);
-      const roleIds = [...new Set(roleRows.map(row => row.roleId))];
+      const roleIds = [...new Set(roleRows.map((row) => row.roleId))];
       const [roleClientRows, privilegeRows] = await Promise.all([
         loadRoleClients(db, roleIds),
         loadRolePrivileges(db, roleIds),
       ]);
-      const clientCodeByRoleId = new Map(roleClientRows.map(row => [row.roleId, row.clientCode]));
+      const clientCodeByRoleId = new Map(roleClientRows.map((row) => [row.roleId, row.clientCode]));
 
       return {
         users: userRows,
@@ -107,8 +102,7 @@ export function createUserProfileBuildRepository(
         orgPathRows,
         roleRows: roleRows.map((row) => {
           const clientCode = clientCodeByRoleId.get(row.roleId);
-          if (clientCode === undefined)
-            throw new Error(`Effective Role ${row.roleId} has no client code`);
+          if (clientCode === undefined) throw new Error(`Effective Role ${row.roleId} has no client code`);
           return { ...row, clientCode };
         }),
         privilegeRows,
@@ -131,15 +125,13 @@ function emptyDataset(): UserProfileBuildDataset {
 }
 
 async function loadPositions(db: DbClient, positionIds: number[]) {
-  if (positionIds.length === 0)
-    return [];
+  if (positionIds.length === 0) return [];
 
   return await db.select().from(positions).where(inArray(positions.id, positionIds));
 }
 
 async function loadOrganizationPaths(db: DbClient, organizationIds: number[]) {
-  if (organizationIds.length === 0)
-    return [];
+  if (organizationIds.length === 0) return [];
 
   const ancestor = alias(organizations, "user_profile_org_ancestor");
   return await db
@@ -166,12 +158,11 @@ async function loadEmploymentRoles(
   roleAssignmentResolver: UserProfileEffectiveRoleResolverPort,
   employmentIds: number[],
 ): Promise<ResolvedUserProfileBuildRoleRow[]> {
-  if (employmentIds.length === 0)
-    return [];
+  if (employmentIds.length === 0) return [];
 
   const effectiveRolesByEmploymentId = await roleAssignmentResolver.resolveEffectiveRoles({ employmentIds });
-  return employmentIds.flatMap(employmentId =>
-    (effectiveRolesByEmploymentId.get(employmentId) ?? []).map(role => ({
+  return employmentIds.flatMap((employmentId) =>
+    (effectiveRolesByEmploymentId.get(employmentId) ?? []).map((role) => ({
       employmentId,
       roleId: role.id,
       roleCode: role.roleCode,
@@ -180,8 +171,7 @@ async function loadEmploymentRoles(
 }
 
 async function loadRolePrivileges(db: DbClient, roleIds: number[]) {
-  if (roleIds.length === 0)
-    return [];
+  if (roleIds.length === 0) return [];
 
   return await db
     .select({
@@ -190,16 +180,17 @@ async function loadRolePrivileges(db: DbClient, roleIds: number[]) {
     })
     .from(rolePrivileges)
     .innerJoin(privileges, eq(rolePrivileges.privilegeId, privileges.id))
-    .where(and(
-      inArray(rolePrivileges.roleId, roleIds),
-      eq(privileges.status, PrivilegeStatus.Enable),
-      eq(privileges.isDelete, false),
-    ));
+    .where(
+      and(
+        inArray(rolePrivileges.roleId, roleIds),
+        eq(privileges.status, PrivilegeStatus.Enable),
+        eq(privileges.isDelete, false),
+      ),
+    );
 }
 
 async function loadRoleClients(db: DbClient, roleIds: number[]) {
-  if (roleIds.length === 0)
-    return [];
+  if (roleIds.length === 0) return [];
 
   return await db
     .select({

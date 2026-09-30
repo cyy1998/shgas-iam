@@ -15,11 +15,11 @@ Session Origin、任意 metadata、Redis key、lookup/HMAC、context、captured 
 
 `principal_session` 是保留的审计分类字符串，当前操作对象为 UserSession，不表示旧 Kernel 模型。
 
-| 操作 | action | target |
-|---|---|---|
-| 单根撤销 | admin.session.revoke | targetType=principal_session，targetCode=principalSessionId。 |
-| 固定 UserSession/ClientSession 集合 | admin.session.revoke | targetType=session_batch，无 targetCode/targetId。 |
-| 用户级撤销 | admin.session.revoke_user | targetType=user，targetId 为 numeric user ID。 |
+| 操作                                | action                    | target                                                        |
+| ----------------------------------- | ------------------------- | ------------------------------------------------------------- |
+| 单根撤销                            | admin.session.revoke      | targetType=principal_session，targetCode=principalSessionId。 |
+| 固定 UserSession/ClientSession 集合 | admin.session.revoke      | targetType=session_batch，无 targetCode/targetId。            |
+| 用户级撤销                          | admin.session.revoke_user | targetType=user，targetId 为 numeric user ID。                |
 
 通用 details 只包含：
 

@@ -2,9 +2,9 @@ import { randomUUID } from "node:crypto";
 import db, { closeDb } from "@iam/db";
 import Redis from "ioredis";
 import { requireEnvironment } from "./environment.ts";
+import { seedE2EScenario } from "./seed.ts";
 import { createProductionE2EScenarioOwner } from "./seed-owner.ts";
 import { persistSeedReceipt } from "./seed-receipt.ts";
-import { seedE2EScenario } from "./seed.ts";
 
 async function runSeed() {
   const runId = requireEnvironment("IAM_E2E_RUN_ID");
@@ -55,8 +55,7 @@ async function runSeed() {
       completedAt: new Date().toISOString(),
       scenario: references,
     });
-  }
-  catch (error) {
+  } catch (error) {
     await persistSeedReceipt(receiptPath, {
       version: 1,
       stage: "seed",
@@ -66,8 +65,7 @@ async function runSeed() {
       failureCategory: error instanceof Error ? error.name : "UnknownError",
     });
     throw error;
-  }
-  finally {
+  } finally {
     redis.disconnect(false);
     await closeDb({ timeoutSeconds: 5 });
   }
@@ -75,8 +73,7 @@ async function runSeed() {
 
 function requireIntegerEnvironment(name: string) {
   const value = Number(requireEnvironment(name));
-  if (!Number.isSafeInteger(value) || value < 0)
-    throw new Error(`${name} must be a non-negative integer`);
+  if (!Number.isSafeInteger(value) || value < 0) throw new Error(`${name} must be a non-negative integer`);
   return value;
 }
 

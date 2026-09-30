@@ -1,3 +1,4 @@
+import { expect, mock, test } from "bun:test";
 import {
   createInternalDelegationQueryResource,
   INTERNAL_DELEGATION_STATEMENT_TIMEOUT_MS,
@@ -17,7 +18,6 @@ import { createV3UserProfileSearchAdapter } from "@api/services/user-profile-sea
 import createApp from "@iam/api-core/core/create-app";
 import { createRouter } from "@iam/api-core/core/create-router";
 import { UserStatus, UserType } from "@iam/contracts";
-import { expect, mock, test } from "bun:test";
 import pino from "pino";
 import appConfig from "~api/app.config";
 
@@ -167,13 +167,9 @@ test("wires canonical Filter through every production search entry and rejects t
     },
   });
 
-  expect([
-    internalLegacy.status,
-    publicLegacy.status,
-    delegation.status,
-    dsl.status,
-    legacyDsl.status,
-  ]).toEqual([200, 200, 200, 200, 422]);
+  expect([internalLegacy.status, publicLegacy.status, delegation.status, dsl.status, legacyDsl.status]).toEqual([
+    200, 200, 200, 200, 422,
+  ]);
   expect(searchLegacyUsers).toHaveBeenCalledTimes(3);
   expect(searchDsl).toHaveBeenCalledTimes(1);
   expect(getDelegationsByUserAndOrganizationScopeAndPrivilege).toHaveBeenCalledWith([], "ORG", "privilege:a");

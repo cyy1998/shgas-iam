@@ -1,4 +1,4 @@
-import type { ProfileBuildDataset } from "../../src/build/profile-build.repository";
+import { describe, expect, mock, test } from "bun:test";
 import {
   EmploymentStatus,
   OrganizationLevel,
@@ -8,7 +8,7 @@ import {
   UserStatus,
   UserType,
 } from "@iam/contracts";
-import { describe, expect, mock, test } from "bun:test";
+import type { ProfileBuildDataset } from "../../src/build/profile-build.repository";
 import { createProfileBuilder } from "../../src/build/profile-builder.service";
 import { UserProfileEmploymentIntegrityError } from "../../src/build/profile-document-builder.core";
 import { USER_PROFILE_SCHEMA_VERSION } from "../../src/schema/profile.schema";
@@ -181,14 +181,7 @@ describe("UserProfileBuilder", () => {
         employment(14, 1, 140, 1400, false, { status: EmploymentStatus.Disable }),
         employment(15, 1, 150, 1500, false, { isDelete: true }),
       ],
-      positions: [
-        position(1000),
-        position(1100),
-        position(1200),
-        position(1300),
-        position(1400),
-        position(1500),
-      ],
+      positions: [position(1000), position(1100), position(1200), position(1300), position(1400), position(1500)],
       orgPathRows: [
         orgPathRow(100, 100, "VALID", 0),
         orgPathRow(110, 110, "FUTURE", 0),
@@ -211,21 +204,23 @@ describe("UserProfileBuilder", () => {
     const profile = await builder.buildOne({ userId: 1, sourceDirtyVersion: "7" });
 
     expect(profile?.subjectFacts).toEqual({
-      employments: [{
-        isPrimary: true,
-        organization: {
-          code: "VALID",
-          name: "VALID name",
-          type: "部门",
-          path: [{ code: "VALID", name: "VALID name", type: "部门" }],
+      employments: [
+        {
+          isPrimary: true,
+          organization: {
+            code: "VALID",
+            name: "VALID name",
+            type: "部门",
+            path: [{ code: "VALID", name: "VALID name", type: "部门" }],
+          },
+          position: { code: "POS1000", name: "Position 1000" },
+          responsibilities: [],
+          clientAuthorizations: [],
         },
-        position: { code: "POS1000", name: "Position 1000" },
-        responsibilities: [],
-        clientAuthorizations: [],
-      }],
+      ],
     });
-    expect(profile?.detail.employments.map(item => item.id)).toEqual([10, 11, 12]);
-    expect(profile?.searchDoc.employments.map(item => item.organization.code)).toEqual(["VALID"]);
+    expect(profile?.detail.employments.map((item) => item.id)).toEqual([10, 11, 12]);
+    expect(profile?.searchDoc.employments.map((item) => item.organization.code)).toEqual(["VALID"]);
   });
 
   test.each([
@@ -240,29 +235,34 @@ describe("UserProfileBuilder", () => {
       name: "Pause Employment references an inactive Organization",
       employment: employment(11, 1, 110, 1100, false, { status: EmploymentStatus.Pause }),
       positions: [position(1100)],
-      orgPathRows: [orgPathRow(110, 110, "ORG", 0, OrganizationType.Department, {
-        status: OrganizationStatus.Disable,
-      })],
+      orgPathRows: [
+        orgPathRow(110, 110, "ORG", 0, OrganizationType.Department, {
+          status: OrganizationStatus.Disable,
+        }),
+      ],
       reason: "organization-not-effective",
     },
   ])("fails the whole build when $name", async ({ employment: employmentRow, positions, orgPathRows, reason }) => {
     const builder = createProfileBuilder({
       buildRepository: {
-        loadByUserIds: mock(async () => ({
-          responsibilityRows: [],
-          users: [user(1)],
-          employments: [employmentRow],
-          positions,
-          orgPathRows,
-          roleRows: [],
-          privilegeRows: [],
-        } as unknown as ProfileBuildDataset)),
+        loadByUserIds: mock(
+          async () =>
+            ({
+              responsibilityRows: [],
+              users: [user(1)],
+              employments: [employmentRow],
+              positions,
+              orgPathRows,
+              roleRows: [],
+              privilegeRows: [],
+            }) as unknown as ProfileBuildDataset,
+        ),
       },
       clock: { nowDate: () => now },
       config: { batchSize: 100 },
     });
 
-    const buildError = await builder.buildOne({ userId: 1, sourceDirtyVersion: "7" }).catch(error => error);
+    const buildError = await builder.buildOne({ userId: 1, sourceDirtyVersion: "7" }).catch((error) => error);
 
     expect(buildError).toBeInstanceOf(UserProfileEmploymentIntegrityError);
     expect(buildError).toMatchObject({
@@ -278,14 +278,8 @@ describe("UserProfileBuilder", () => {
     const dataset = {
       responsibilityRows: [],
       users: [user(1)],
-      employments: [
-        employment(11, 1, 200, 2000),
-        employment(10, 1, 100, 1000, true),
-      ],
-      positions: [
-        position(2000),
-        position(1000),
-      ],
+      employments: [employment(11, 1, 200, 2000), employment(10, 1, 100, 1000, true)],
+      positions: [position(2000), position(1000)],
       orgPathRows: [
         orgPathRow(200, 200, "TEAM", 0),
         orgPathRow(100, 100, "DEPT", 0),
@@ -343,9 +337,7 @@ describe("UserProfileBuilder", () => {
             },
             {
               clientCode: "client-b",
-              roles: [
-                { code: "role-z", privileges: ["export"] },
-              ],
+              roles: [{ code: "role-z", privileges: ["export"] }],
             },
           ],
         },
@@ -374,19 +366,13 @@ describe("UserProfileBuilder", () => {
   test("builds detail and search documents from the batch dataset", async () => {
     const dataset: ProfileBuildDataset = {
       responsibilityRows: [],
-      users: [
-        user(1),
-        user(2, { status: UserStatus.Pause, isDelete: true }),
-      ] as ProfileBuildDataset["users"],
+      users: [user(1), user(2, { status: UserStatus.Pause, isDelete: true })] as ProfileBuildDataset["users"],
       employments: [
         employment(10, 1, 100, 1000, true),
         employment(11, 1, 200, 2000),
         employment(12, 1, 300, 3000, false, { status: EmploymentStatus.Disable, endTime: now }),
       ] as ProfileBuildDataset["employments"],
-      positions: [
-        position(1000),
-        position(2000),
-      ] as ProfileBuildDataset["positions"],
+      positions: [position(1000), position(2000)] as ProfileBuildDataset["positions"],
       orgPathRows: [
         orgPathRow(100, 1, "COMP", 2, OrganizationType.Company),
         orgPathRow(100, 100, "DEPT", 0),
@@ -418,8 +404,8 @@ describe("UserProfileBuilder", () => {
       { userId: 1, sourceDirtyVersion: "7" },
       { userId: 2, sourceDirtyVersion: "7" },
     ]);
-    const activeProfile = profiles.find(item => item.userId === 1)!;
-    const hiddenProfile = profiles.find(item => item.userId === 2)!;
+    const activeProfile = profiles.find((item) => item.userId === 1)!;
+    const hiddenProfile = profiles.find((item) => item.userId === 2)!;
 
     expect(activeProfile.profileSchemaVersion).toBe(USER_PROFILE_SCHEMA_VERSION);
     expect(activeProfile.rebuiltAt).toBe(now);

@@ -1,12 +1,7 @@
-import type { PublishedProfile } from "../../src/schema/profile.schema";
-import {
-  UserProfileDirtyReason,
-  UserProfileDirtyStatus,
-  UserStatus,
-  UserType,
-} from "@iam/contracts";
 import { afterAll, beforeAll, beforeEach, describe, expect, test } from "bun:test";
+import { UserProfileDirtyReason, UserProfileDirtyStatus, UserStatus, UserType } from "@iam/contracts";
 import { createProfileBuilder } from "../../src/build/profile-builder.service";
+import type { PublishedProfile } from "../../src/schema/profile.schema";
 import { createCurrentUserProfileProjectionBundle } from "../../src/worker";
 import { createPostgresTestHarness } from "./postgres-test-harness";
 
@@ -36,8 +31,7 @@ describe("User Profile PostgreSQL publication", () => {
   });
 
   afterAll(async () => {
-    if (harness)
-      await harness.close();
+    if (harness) await harness.close();
   });
 
   test("atomically deletes the current profile and processes the same Dirty version", async () => {
@@ -95,10 +89,8 @@ describe("User Profile PostgreSQL publication", () => {
         dirtyStatus: UserProfileDirtyStatus.Processing,
         profile: null,
       });
-    }
-    finally {
-      if (!released)
-        await heldLock.commit();
+    } finally {
+      if (!released) await heldLock.commit();
       await pendingPublication.catch(() => undefined);
     }
   });
@@ -131,10 +123,8 @@ describe("User Profile PostgreSQL publication", () => {
         dirtyStatus: UserProfileDirtyStatus.Pending,
         profile: null,
       });
-    }
-    finally {
-      if (!released)
-        await heldLock.commit();
+    } finally {
+      if (!released) await heldLock.commit();
       await pendingPublication.catch(() => undefined);
     }
   });
@@ -192,12 +182,14 @@ describe("User Profile PostgreSQL publication", () => {
     `);
 
     try {
-      const failure = await captureRejection(publication.publishCandidate({
-        userId: 1,
-        dirtyVersion: "4",
-        profile: null,
-        processedAt: NOW,
-      }));
+      const failure = await captureRejection(
+        publication.publishCandidate({
+          userId: 1,
+          dirtyVersion: "4",
+          profile: null,
+          processedAt: NOW,
+        }),
+      );
       expect(errorCause(failure)).toContain("forced missing dirty failure");
 
       const state = await readPublishedState(harness, 1);
@@ -211,11 +203,8 @@ describe("User Profile PostgreSQL publication", () => {
           username: "user1",
         },
       });
-    }
-    finally {
-      await harness.sql.unsafe(
-        "DROP TRIGGER reject_missing_processed_dirty_trigger ON user_profile_dirty",
-      );
+    } finally {
+      await harness.sql.unsafe("DROP TRIGGER reject_missing_processed_dirty_trigger ON user_profile_dirty");
       await harness.sql.unsafe("DROP FUNCTION reject_missing_processed_dirty()");
     }
   });
@@ -242,7 +231,7 @@ describe("User Profile PostgreSQL publication", () => {
       userId: 1,
       dirtyVersion: "4",
       profile: {
-        ...await buildProfile(1, "4"),
+        ...(await buildProfile(1, "4")),
         username: "older-user",
       },
       processedAt: NOW,
@@ -339,20 +328,24 @@ async function readPublishedState(
   harness: Awaited<ReturnType<typeof createPostgresTestHarness>>,
   userId: number,
 ): Promise<PublishedState> {
-  const [dirty] = await harness.sql<{
-    dirtyVersion: string;
-    status: UserProfileDirtyStatus;
-  }[]>`
+  const [dirty] = await harness.sql<
+    {
+      dirtyVersion: string;
+      status: UserProfileDirtyStatus;
+    }[]
+  >`
     SELECT dirty_version::text AS "dirtyVersion", status
     FROM user_profile_dirty
     WHERE user_id = ${userId}
   `;
-  const [profile] = await harness.sql<{
-    sourceDirtyVersion: string;
-    subjectIdentifier: string;
-    subjectFacts: unknown;
-    username: string;
-  }[]>`
+  const [profile] = await harness.sql<
+    {
+      sourceDirtyVersion: string;
+      subjectIdentifier: string;
+      subjectFacts: unknown;
+      username: string;
+    }[]
+  >`
     SELECT
       source_dirty_version::text AS "sourceDirtyVersion",
       subject_identifier::text AS "subjectIdentifier",
@@ -369,30 +362,29 @@ async function readPublishedState(
   };
 }
 
-async function buildProfile(
-  userId: number,
-  sourceDirtyVersion: string,
-): Promise<PublishedProfile> {
+async function buildProfile(userId: number, sourceDirtyVersion: string): Promise<PublishedProfile> {
   const builder = createProfileBuilder({
     buildRepository: {
       async loadByUserIds() {
         return {
           responsibilityRows: [],
-          users: [{
-            id: userId,
-            subjectIdentifier: SUBJECT_IDENTIFIER,
-            username: `user${userId}`,
-            name: `User ${userId}`,
-            password: null,
-            mobile: null,
-            wxId: null,
-            userType: UserType.Formal,
-            orderNum: userId,
-            status: UserStatus.Enable,
-            isDelete: false,
-            createTime: NOW,
-            updateTime: NOW,
-          }],
+          users: [
+            {
+              id: userId,
+              subjectIdentifier: SUBJECT_IDENTIFIER,
+              username: `user${userId}`,
+              name: `User ${userId}`,
+              password: null,
+              mobile: null,
+              wxId: null,
+              userType: UserType.Formal,
+              orderNum: userId,
+              status: UserStatus.Enable,
+              isDelete: false,
+              createTime: NOW,
+              updateTime: NOW,
+            },
+          ],
           employments: [],
           positions: [],
           orgPathRows: [],
@@ -405,23 +397,19 @@ async function buildProfile(
     config: { batchSize: 1 },
   });
   const profile = await builder.buildOne({ userId, sourceDirtyVersion });
-  if (profile === null)
-    throw new Error("expected the fixture profile to be built");
+  if (profile === null) throw new Error("expected the fixture profile to be built");
   return profile;
 }
 
 async function captureRejection(promise: Promise<unknown>) {
   try {
     await promise;
-  }
-  catch (error) {
+  } catch (error) {
     return error;
   }
   throw new Error("Expected PostgreSQL operation to reject");
 }
 
 function errorCause(error: unknown) {
-  return typeof error === "object" && error !== null && "cause" in error
-    ? String(error.cause)
-    : "";
+  return typeof error === "object" && error !== null && "cause" in error ? String(error.cause) : "";
 }

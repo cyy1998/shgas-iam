@@ -1,7 +1,4 @@
-import type {
-  LoginRestrictionAtomicState,
-  LoginRestrictionAtomicStorePort,
-} from "../../src/login-restriction";
+import type { LoginRestrictionAtomicState, LoginRestrictionAtomicStorePort } from "../../src/login-restriction";
 import {
   LOGIN_FAILURE_THRESHOLD,
   LOGIN_FAILURE_WINDOW_SECONDS,
@@ -33,12 +30,8 @@ export function createLoginRestrictionStoreFake(now: () => number = Date.now) {
     return restriction;
   }
 
-  function toAtomicState(
-    userId: number,
-    restriction: StoredRestriction | null,
-  ): LoginRestrictionAtomicState | null {
-    if (restriction === null)
-      return null;
+  function toAtomicState(userId: number, restriction: StoredRestriction | null): LoginRestrictionAtomicState | null {
+    if (restriction === null) return null;
     return {
       userId,
       triggerMethod: restriction.triggerMethod,
@@ -52,8 +45,8 @@ export function createLoginRestrictionStoreFake(now: () => number = Date.now) {
       const operationNow = now();
       const windowStart = operationNow - LOGIN_FAILURE_WINDOW_SECONDS * 1000;
       const currentFailures = (failures.get(input.userId) ?? [])
-        .filter(failure => failure.occurredAt > windowStart)
-        .filter(failure => failure.member !== input.failureMember);
+        .filter((failure) => failure.occurredAt > windowStart)
+        .filter((failure) => failure.member !== input.failureMember);
       currentFailures.push({
         member: input.failureMember,
         occurredAt: operationNow,
@@ -98,17 +91,15 @@ export function createLoginRestrictionStoreFake(now: () => number = Date.now) {
     },
 
     async listRestrictions(input) {
-      const indexed = [...restrictionIndex.entries()]
-        .sort((left, right) =>
-          right[1] - left[1]
-          || String(right[0]).localeCompare(String(left[0])));
+      const indexed = [...restrictionIndex.entries()].sort(
+        (left, right) => right[1] - left[1] || String(right[0]).localeCompare(String(left[0])),
+      );
       const valid: LoginRestrictionAtomicState[] = [];
 
       for (const [userId] of indexed) {
         const restriction = readRestriction(userId);
         const state = toAtomicState(userId, restriction);
-        if (state !== null)
-          valid.push(state);
+        if (state !== null) valid.push(state);
       }
 
       return {
@@ -121,25 +112,16 @@ export function createLoginRestrictionStoreFake(now: () => number = Date.now) {
   return {
     ...store,
 
-    seedIndexMember(input: {
-      userId: number;
-      restrictedUntil: number;
-    }) {
+    seedIndexMember(input: { userId: number; restrictedUntil: number }) {
       restrictionIndex.set(input.userId, input.restrictedUntil);
     },
 
-    seedRestriction(input: {
-      userId: number;
-      triggerMethod: string;
-      expiresAt: number;
-      indexed?: boolean;
-    }) {
+    seedRestriction(input: { userId: number; triggerMethod: string; expiresAt: number; indexed?: boolean }) {
       restrictions.set(input.userId, {
         restrictedUntil: input.expiresAt,
         triggerMethod: input.triggerMethod,
       });
-      if (input.indexed !== false)
-        restrictionIndex.set(input.userId, input.expiresAt);
+      if (input.indexed !== false) restrictionIndex.set(input.userId, input.expiresAt);
     },
   };
 }

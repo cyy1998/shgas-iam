@@ -1,5 +1,3 @@
-import type { LoginWithOaDeps } from "./login-with-oa.port";
-import type { LoginWithOaInput, LoginWithOaOptions, LoginWithOaResult } from "./login-with-oa.type";
 import { buildOaLoginSuccessAudit } from "@api/services/audit/events/auth.audit";
 import { toSessionOrigin } from "@api/services/session/session-origin";
 import { AuthzUnauthorizedError } from "@iam/api-core/errors/AuthzUnauthorizedError";
@@ -7,6 +5,8 @@ import { InvalidSsoClientError } from "@iam/api-core/errors/InvalidSsoClientErro
 import { LoginFailedError } from "@iam/api-core/errors/LoginFailedError";
 import { UserType } from "@iam/contracts";
 import { sm3 } from "sm-crypto";
+import type { LoginWithOaDeps } from "./login-with-oa.port";
+import type { LoginWithOaInput, LoginWithOaOptions, LoginWithOaResult } from "./login-with-oa.type";
 
 export function createLoginWithOaUseCase(deps: LoginWithOaDeps) {
   async function execute(input: LoginWithOaInput, options: LoginWithOaOptions = {}): Promise<LoginWithOaResult> {
@@ -16,8 +16,8 @@ export function createLoginWithOaUseCase(deps: LoginWithOaDeps) {
     }
     const currentTimestamp = deps.clock.now();
     if (
-      deps.config.nodeEnv === "production"
-      && Math.abs(currentTimestamp - Number.parseInt(input.timestamp)) >= 1000 * 300
+      deps.config.nodeEnv === "production" &&
+      Math.abs(currentTimestamp - Number.parseInt(input.timestamp)) >= 1000 * 300
     ) {
       throw new AuthzUnauthorizedError("token过期");
     }
@@ -44,8 +44,7 @@ export function createLoginWithOaUseCase(deps: LoginWithOaDeps) {
           remainingSeconds: current.remainingSeconds,
         };
       }
-      if (current !== null)
-        await deps.currentSessions.logout(input.currentSessionToken);
+      if (current !== null) await deps.currentSessions.logout(input.currentSessionToken);
     }
     const userDetail = await deps.users.getUserDetailById(liveUser.id);
     const { token: sessionId, remainingSeconds } = await deps.principalSessions.createPrincipalSession(

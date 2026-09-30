@@ -1,5 +1,5 @@
-import type { EmploymentStatus } from "@iam/contracts";
 import { mock } from "bun:test";
+import type { EmploymentStatus } from "@iam/contracts";
 import { sql } from "drizzle-orm";
 
 const postgresDialect = {
@@ -52,10 +52,13 @@ export function createQueryCaptureDb(options: QueryCaptureOptions = {}) {
       getSQL() {
         return sql`select 1 from ${state.table} where ${state.where}`;
       },
+      // biome-ignore lint/suspicious/noThenProperty: This query-builder fixture intentionally models Drizzle's thenable contract.
       then(resolve: (value: unknown[]) => void) {
-        return Promise.resolve(selection?.value === undefined
-          ? []
-          : [{ value: options.resolveCount?.(state.where) ?? options.countValue ?? 0 }]).then(resolve);
+        return Promise.resolve(
+          selection?.value === undefined
+            ? []
+            : [{ value: options.resolveCount?.(state.where) ?? options.countValue ?? 0 }],
+        ).then(resolve);
       },
     };
     return builder;
@@ -73,32 +76,22 @@ export function createOpenEmploymentFixtureDb(records: readonly EmploymentFixtur
   return createQueryCaptureDb({
     resolveCount(condition) {
       const query = renderQuery(condition);
-      const targetCode = query.params.find(value => typeof value === "string");
-      const employmentIsDelete = query.params.find(value => typeof value === "boolean");
-      const employmentStatuses = query.params.filter(
-        (value): value is number => typeof value === "number",
-      );
+      const targetCode = query.params.find((value) => typeof value === "string");
+      const employmentIsDelete = query.params.find((value) => typeof value === "boolean");
+      const employmentStatuses = query.params.filter((value): value is number => typeof value === "number");
 
       return records.filter((record) => {
-        if (
-          query.sql.includes("\"employment\".\"is_delete\" =")
-          && record.isDelete !== employmentIsDelete
-        ) {
+        if (query.sql.includes('"employment"."is_delete" =') && record.isDelete !== employmentIsDelete) {
           return false;
         }
-        if (
-          query.sql.includes("\"employment\".\"status\" in")
-          && !employmentStatuses.includes(record.status)
-        ) {
+        if (query.sql.includes('"employment"."status" in') && !employmentStatuses.includes(record.status)) {
           return false;
         }
-        if (query.sql.includes("\"position\".\"post_code\" =") && record.posCode !== targetCode)
-          return false;
-        if (query.sql.includes("\"user\".\"username\" =") && record.username !== targetCode)
-          return false;
+        if (query.sql.includes('"position"."post_code" =') && record.posCode !== targetCode) return false;
+        if (query.sql.includes('"user"."username" =') && record.username !== targetCode) return false;
         if (
-          query.sql.includes("\"employment_org_count_ancestor\".\"org_code\" =")
-          && !record.ancestorOrgCodes?.includes(String(targetCode))
+          query.sql.includes('"employment_org_count_ancestor"."org_code" =') &&
+          !record.ancestorOrgCodes?.includes(String(targetCode))
         ) {
           return false;
         }
@@ -109,9 +102,11 @@ export function createOpenEmploymentFixtureDb(records: readonly EmploymentFixtur
 }
 
 export function renderQuery(value: unknown) {
-  return (value as {
-    toQuery: (dialect: typeof postgresDialect) => { sql: string; params: unknown[] };
-  }).toQuery(postgresDialect);
+  return (
+    value as {
+      toQuery: (dialect: typeof postgresDialect) => { sql: string; params: unknown[] };
+    }
+  ).toQuery(postgresDialect);
 }
 
 export function renderSql(value: unknown) {

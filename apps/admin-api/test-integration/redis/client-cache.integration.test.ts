@@ -1,8 +1,13 @@
-import type { DedicatedRedisTestConfig } from "@iam/api-core/testing/external-test-resources";
+import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import process from "node:process";
 import { fileURLToPath } from "node:url";
-import { createProcessSmokeEnvironment, runProcessCommandSmoke, spawnOwnedProcessTree, withOwnedTemporaryDirectory } from "@iam/api-core/testing/process-smoke-harness";
-import { afterAll, beforeAll, describe, expect, test } from "bun:test";
+import type { DedicatedRedisTestConfig } from "@iam/api-core/testing/external-test-resources";
+import {
+  createProcessSmokeEnvironment,
+  runProcessCommandSmoke,
+  spawnOwnedProcessTree,
+  withOwnedTemporaryDirectory,
+} from "@iam/api-core/testing/process-smoke-harness";
 import { createAdminApiRedisTestHarness } from "./redis-test-harness";
 
 const adminApiRoot = fileURLToPath(new URL("../../", import.meta.url));
@@ -14,8 +19,7 @@ describe("Admin client cache Redis contract", () => {
   });
 
   afterAll(async () => {
-    if (harness)
-      await harness.close();
+    if (harness) await harness.close();
   });
 
   test("restores the caller-owned Redis inventory after invalidation", async () => {
@@ -23,18 +27,14 @@ describe("Admin client cache Redis contract", () => {
     const before = await harness.inventoryKeys();
     try {
       const clientCode = scope.clientCode("inventory");
-      await runCacheRuntimeEntry(
-        ["invalidate", clientCode, `secret-${clientCode}`],
-        harness.redisConfig,
-      );
-    }
-    finally {
+      await runCacheRuntimeEntry(["invalidate", clientCode, `secret-${clientCode}`], harness.redisConfig);
+    } finally {
       await scope.close();
     }
 
     const after = await harness.inventoryKeys();
-    expect([...after].filter(key => !before.has(key))).toEqual([]);
-    expect([...before].filter(key => !after.has(key))).toEqual([]);
+    expect([...after].filter((key) => !before.has(key))).toEqual([]);
+    expect([...before].filter((key) => !after.has(key))).toEqual([]);
   });
 
   test("deletes exactly the four generic cache identities through the production update entry", async () => {
@@ -64,42 +64,31 @@ describe("Admin client cache Redis contract", () => {
         "unrelated",
       );
 
-      await runCacheRuntimeEntry(
-        ["update", oldClientCode, oldSecret, newClientCode, newSecret],
-        harness.redisConfig,
-      );
+      await runCacheRuntimeEntry(["update", oldClientCode, oldSecret, newClientCode, newSecret], harness.redisConfig);
 
       const deletedValues = await scope.observer.mget(...expectedDeletedKeys);
       const unrelatedValue = await scope.observer.get(unrelatedKey);
       expect(deletedValues).toEqual([null, null, null, null]);
       expect(unrelatedValue).toBe("unrelated");
-    }
-    finally {
+    } finally {
       await scope.close();
     }
   });
 });
-async function runCacheRuntimeEntry(
-  args: string[],
-  redisConfig: DedicatedRedisTestConfig,
-) {
+async function runCacheRuntimeEntry(args: string[], redisConfig: DedicatedRedisTestConfig) {
   await withOwnedTemporaryDirectory({
     prefix: "iam-admin-api-cache-entry-",
     cleanupTimeoutMs: 5_000,
     async run(temporaryDirectory) {
       const result = await runProcessCommandSmoke({
         label: "Admin API real Redis client cache runtime",
-        start: () => spawnOwnedProcessTree({
-          executable: process.execPath,
-          args: [
-            "--no-env-file",
-            "run",
-            "test-smoke/client-cache-invalidation.runtime-smoke.ts",
-            ...args,
-          ],
-          cwd: adminApiRoot,
-          env: createCacheRuntimeEnvironment(temporaryDirectory, redisConfig),
-        }),
+        start: () =>
+          spawnOwnedProcessTree({
+            executable: process.execPath,
+            args: ["--no-env-file", "run", "test-smoke/client-cache-invalidation.runtime-smoke.ts", ...args],
+            cwd: adminApiRoot,
+            env: createCacheRuntimeEnvironment(temporaryDirectory, redisConfig),
+          }),
         completionTimeoutMs: 20_000,
         cleanupTimeoutMs: 5_000,
       });
@@ -108,10 +97,7 @@ async function runCacheRuntimeEntry(
   });
 }
 
-function createCacheRuntimeEnvironment(
-  temporaryDirectory: string,
-  redisConfig: DedicatedRedisTestConfig,
-) {
+function createCacheRuntimeEnvironment(temporaryDirectory: string, redisConfig: DedicatedRedisTestConfig) {
   return createProcessSmokeEnvironment({
     source: process.env,
     temporaryDirectory,

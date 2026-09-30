@@ -1,10 +1,7 @@
+import { describe, expect, mock, test } from "bun:test";
 import { createRoleService } from "@admin-api/services/role/role.service";
 import { createImmediateUnitOfWork } from "@admin-api/test/fakes";
-import {
-  RoleAssignmentTargetType,
-  RoleStatus,
-} from "@iam/contracts";
-import { describe, expect, mock, test } from "bun:test";
+import { RoleAssignmentTargetType, RoleStatus } from "@iam/contracts";
 
 const now = new Date("2026-01-01T00:00:00Z");
 
@@ -109,18 +106,18 @@ describe("createRoleService", () => {
       result: null,
     });
 
-    expect(tx.userProfileInvalidation.recordChanges).toHaveBeenCalledWith([
-      { kind: "role", roleId: 1 },
-    ]);
+    expect(tx.userProfileInvalidation.recordChanges).toHaveBeenCalledWith([{ kind: "role", roleId: 1 }]);
   });
 
   test("creates an organization assignment and records its current domain target", async () => {
     const { service, tx } = createService();
 
-    await expect(service.createAssignment("portal-admin", {
-      targetType: RoleAssignmentTargetType.Organization,
-      orgCode: "ORG",
-    })).resolves.toMatchObject({
+    await expect(
+      service.createAssignment("portal-admin", {
+        targetType: RoleAssignmentTargetType.Organization,
+        orgCode: "ORG",
+      }),
+    ).resolves.toMatchObject({
       changed: true,
       result: { targetType: RoleAssignmentTargetType.Organization, includeDescendants: true },
     });
@@ -131,11 +128,13 @@ describe("createRoleService", () => {
       targetId: 20,
       includeDescendants: true,
     });
-    expect(tx.auditService.recordAuditLog).toHaveBeenCalledWith(expect.objectContaining({
-      action: "admin.role.assignment.create",
-      targetType: "role",
-      targetCode: "portal-admin",
-    }));
+    expect(tx.auditService.recordAuditLog).toHaveBeenCalledWith(
+      expect.objectContaining({
+        action: "admin.role.assignment.create",
+        targetType: "role",
+        targetCode: "portal-admin",
+      }),
+    );
     expect(tx.userProfileInvalidation.recordChanges).toHaveBeenCalledWith([
       {
         kind: "role-assignment",
@@ -149,10 +148,12 @@ describe("createRoleService", () => {
     const { service, tx } = createService();
     (tx.roleRepository.findAssignmentByRoleTarget as any).mockResolvedValue(assignment());
 
-    await expect(service.createAssignment("portal-admin", {
-      targetType: RoleAssignmentTargetType.Organization,
-      orgCode: "ORG",
-    })).rejects.toThrow("角色分配已存在");
+    await expect(
+      service.createAssignment("portal-admin", {
+        targetType: RoleAssignmentTargetType.Organization,
+        orgCode: "ORG",
+      }),
+    ).rejects.toThrow("角色分配已存在");
 
     expect(tx.roleRepository.createAssignment).not.toHaveBeenCalled();
   });
@@ -160,29 +161,35 @@ describe("createRoleService", () => {
   test("rejects descendant scope on non-organization assignment", async () => {
     const { service } = createService();
 
-    await expect(service.createAssignment("portal-admin", {
-      targetType: RoleAssignmentTargetType.Position,
-      posCode: "POS",
-      includeDescendants: true,
-    })).rejects.toThrow("includeDescendants 仅适用于组织分配");
+    await expect(
+      service.createAssignment("portal-admin", {
+        targetType: RoleAssignmentTargetType.Position,
+        posCode: "POS",
+        includeDescendants: true,
+      }),
+    ).rejects.toThrow("includeDescendants 仅适用于组织分配");
   });
 
   test("rejects scope updates on non-organization assignments", async () => {
     const { service, tx } = createService();
-    tx.roleRepository.lockAssignmentByIdForRole.mockResolvedValue(assignment({
-      targetType: RoleAssignmentTargetType.Position,
-      targetId: 30,
-      includeDescendants: false,
-      target: {
-        id: 30,
-        code: "POS",
-        name: "Position",
-        status: 1,
-        description: null,
-      },
-    }));
+    tx.roleRepository.lockAssignmentByIdForRole.mockResolvedValue(
+      assignment({
+        targetType: RoleAssignmentTargetType.Position,
+        targetId: 30,
+        includeDescendants: false,
+        target: {
+          id: 30,
+          code: "POS",
+          name: "Position",
+          status: 1,
+          description: null,
+        },
+      }),
+    );
 
-    await expect(service.updateAssignmentScope("portal-admin", 100, true)).rejects.toThrow("仅组织角色分配允许修改作用范围");
+    await expect(service.updateAssignmentScope("portal-admin", 100, true)).rejects.toThrow(
+      "仅组织角色分配允许修改作用范围",
+    );
 
     expect(tx.roleRepository.updateAssignmentScope).not.toHaveBeenCalled();
   });
@@ -206,18 +213,20 @@ describe("createRoleService", () => {
 
   test("records the saved assignment target after deleting the assignment", async () => {
     const { service, tx } = createService();
-    tx.roleRepository.lockAssignmentByIdForRole.mockResolvedValueOnce(assignment({
-      targetType: RoleAssignmentTargetType.Position,
-      targetId: 30,
-      includeDescendants: false,
-      target: {
-        id: 30,
-        code: "POS",
-        name: "Position",
-        status: 1,
-        description: null,
-      },
-    }));
+    tx.roleRepository.lockAssignmentByIdForRole.mockResolvedValueOnce(
+      assignment({
+        targetType: RoleAssignmentTargetType.Position,
+        targetId: 30,
+        includeDescendants: false,
+        target: {
+          id: 30,
+          code: "POS",
+          name: "Position",
+          status: 1,
+          description: null,
+        },
+      }),
+    );
 
     await expect(service.deleteAssignment("portal-admin", 100)).resolves.toEqual({ changed: true, result: null });
 
@@ -247,8 +256,9 @@ describe("Role mutation outcomes", () => {
     let failure: unknown;
     try {
       await service.updateRole("portal-admin", {});
+    } catch (error) {
+      failure = error;
     }
-    catch (error) { failure = error; }
     expect(failure).toMatchObject({ httpStatus: 400 });
     const unchanged = await service.updateRole("portal-admin", { roleName: "Portal Admin", description: null });
     expect(unchanged).toEqual({ changed: false, result: null });
@@ -261,8 +271,7 @@ describe("Role mutation outcomes", () => {
     const ordinaryStatus = await service.updateRole("portal-admin", { status: RoleStatus.Enable });
     const status = await service.updateRoleStatus("portal-admin", RoleStatus.Enable);
     const scope = await service.updateAssignmentScope("portal-admin", 100, true);
-    for (const outcome of [ordinaryStatus, status, scope])
-      expect(outcome).toEqual({ changed: false, result: null });
+    for (const outcome of [ordinaryStatus, status, scope]) expect(outcome).toEqual({ changed: false, result: null });
     expect(tx.auditService.recordAuditLog).toHaveBeenCalledTimes(3);
     for (const [audit] of tx.auditService.recordAuditLog.mock.calls as unknown[][])
       expect(audit).toMatchObject({ details: { changed: false } });
@@ -282,8 +291,9 @@ describe("Role mutation outcomes", () => {
       let failure: unknown;
       try {
         await operation();
+      } catch (error) {
+        failure = error;
       }
-      catch (error) { failure = error; }
       expect(failure).toMatchObject({ httpStatus: 404 });
     }
     expect(tx.auditService.recordAuditLog).not.toHaveBeenCalled();
@@ -292,7 +302,12 @@ describe("Role mutation outcomes", () => {
 
   test("zero-row results fail closed before success audit and dirty", async () => {
     const { service, tx } = createService();
-    for (const method of ["updateRoleByCode", "softDeleteRoleByCode", "updateAssignmentScope", "deleteAssignment"] as const)
+    for (const method of [
+      "updateRoleByCode",
+      "softDeleteRoleByCode",
+      "updateAssignmentScope",
+      "deleteAssignment",
+    ] as const)
       (tx.roleRepository[method] as any).mockResolvedValue(null);
     for (const operation of [
       () => service.updateRoleStatus("portal-admin", RoleStatus.Disable),
@@ -303,8 +318,9 @@ describe("Role mutation outcomes", () => {
       let failure: unknown;
       try {
         await operation();
+      } catch (error) {
+        failure = error;
       }
-      catch (error) { failure = error; }
       expect(failure).toBeInstanceOf(Error);
       expect((failure as Error).message).toContain("returned no row");
     }

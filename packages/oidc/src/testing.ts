@@ -15,8 +15,7 @@ export async function createOidcRedisTestScope(url: string) {
   const tokens = createOidcTokenState(redis, namespace);
   type Action = "takeCode" | "saveToken" | "logout";
   let fault: { action: Action; after: boolean } | undefined;
-  let interception:
-    { action: "takeCode" | "saveToken"; callback: () => Promise<void>; before?: boolean } | undefined;
+  let interception: { action: "takeCode" | "saveToken"; callback: () => Promise<void>; before?: boolean } | undefined;
   const adapter = {
     async eval(script: string, count: number, ...args: string[]) {
       const action = args[0]?.startsWith(`${prefix}logout:`)
@@ -27,10 +26,8 @@ export async function createOidcRedisTestScope(url: string) {
             ? "saveToken"
             : undefined;
       const current = action && fault?.action === action ? fault : undefined;
-      if (current)
-        fault = undefined;
-      if (current && !current.after)
-        throw new Error("Injected OIDC request failure");
+      if (current) fault = undefined;
+      if (current && !current.after) throw new Error("Injected OIDC request failure");
       if (action && interception?.action === action && interception.before) {
         const callback = interception.callback;
         interception = undefined;
@@ -42,8 +39,7 @@ export async function createOidcRedisTestScope(url: string) {
         interception = undefined;
         await callback();
       }
-      if (current?.after)
-        throw new Error("Injected OIDC response loss");
+      if (current?.after) throw new Error("Injected OIDC response loss");
       return result;
     },
   };
@@ -59,8 +55,7 @@ export async function createOidcRedisTestScope(url: string) {
   }
   function codeKey(clientId: string, code: string) {
     const identity = parseOidcCode(code);
-    if (!identity)
-      throw new Error("Invalid code fixture");
+    if (!identity) throw new Error("Invalid code fixture");
     return `${prefix}code:${codeDigest(clientId, identity)}`;
   }
   return {
@@ -81,14 +76,12 @@ export async function createOidcRedisTestScope(url: string) {
     async patchCode(clientId: string, code: string, patch: Record<string, unknown>) {
       const key = codeKey(clientId, code);
       const raw = await redis.get(key);
-      if (!raw)
-        throw new Error("Missing Code fixture");
+      if (!raw) throw new Error("Missing Code fixture");
       await redis.set(key, JSON.stringify({ ...JSON.parse(raw), ...patch }), "KEEPTTL");
     },
     async forgetTokenIndex(bearer: string) {
       const record = await tokens.read(bearer);
-      if (record)
-        await redis.del(`${prefix}token-id:${record.id}`);
+      if (record) await redis.del(`${prefix}token-id:${record.id}`);
     },
     async removeTokenTtl(bearer: string) {
       const record = await tokens.read(bearer);
@@ -101,8 +94,8 @@ export async function createOidcRedisTestScope(url: string) {
       await redis.set(`${prefix}token:${digest(bearer)}`, "corrupt", "KEEPTTL");
     },
     async tokens() {
-      const keys = (await ownedKeys()).filter(key => key.startsWith(`${prefix}token:`));
-      return await Promise.all(keys.map(async key => JSON.parse((await redis.get(key))!)));
+      const keys = (await ownedKeys()).filter((key) => key.startsWith(`${prefix}token:`));
+      return await Promise.all(keys.map(async (key) => JSON.parse((await redis.get(key))!)));
     },
     async codeExpiry(clientId: string, code: string) {
       return await redis.pexpiretime(codeKey(clientId, code));
@@ -125,8 +118,7 @@ export async function createOidcRedisTestScope(url: string) {
     async patchLogout(handle: string, patch: Record<string, unknown>) {
       const key = `${prefix}logout:${digest(handle)}`;
       const raw = await redis.get(key);
-      if (!raw)
-        throw new Error("Missing logout fixture");
+      if (!raw) throw new Error("Missing logout fixture");
       await redis.set(key, JSON.stringify({ ...JSON.parse(raw), ...patch }), "KEEPTTL");
     },
     async addUnknown() {
@@ -134,22 +126,18 @@ export async function createOidcRedisTestScope(url: string) {
     },
     async snapshot() {
       return await Promise.all(
-        (await ownedKeys())
-          .sort()
-          .map(async key => ({
-            key,
-            value: await redis.get(key),
-            expiresAt: await redis.pexpiretime(key),
-          })),
+        (await ownedKeys()).sort().map(async (key) => ({
+          key,
+          value: await redis.get(key),
+          expiresAt: await redis.pexpiretime(key),
+        })),
       );
     },
     async close() {
       try {
         const keys = await ownedKeys();
-        if (keys.length)
-          await redis.del(...keys);
-      }
-      finally {
+        if (keys.length) await redis.del(...keys);
+      } finally {
         redis.disconnect();
       }
     },

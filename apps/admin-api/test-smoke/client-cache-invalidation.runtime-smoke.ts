@@ -9,18 +9,15 @@ async function run() {
   try {
     if (mode === "invalidate") {
       await runtime.integrations.clientCache.invalidateClient({ clientCode: code, clientSecret: secret });
-    }
-    else {
-      if (!nextCode || !nextSecret)
-        throw new Error("Invalid update arguments");
+    } else {
+      if (!nextCode || !nextSecret) throw new Error("Invalid update arguments");
       await runtime.integrations.clientCache.invalidateUpdatedClient(
         { clientCode: code, clientSecret: secret },
         { clientCode: nextCode, clientSecret: nextSecret },
       );
     }
     process.stdout.write("CLIENT_CACHE_INVALIDATION_OK\n");
-  }
-  finally {
+  } finally {
     runtime.redis.disconnect();
   }
 }

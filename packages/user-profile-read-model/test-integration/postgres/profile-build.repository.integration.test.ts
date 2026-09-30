@@ -1,3 +1,4 @@
+import { afterAll, beforeAll, describe, expect, mock, test } from "bun:test";
 import {
   EmploymentStatus,
   OrganizationLevel,
@@ -16,7 +17,6 @@ import {
   users,
 } from "@iam/db/schema";
 import { createOrganizationResponsibilityResolver } from "@iam/organization-responsibility-resolution";
-import { afterAll, beforeAll, describe, expect, mock, test } from "bun:test";
 import { createProfileBuildRepository } from "../../src/build/profile-build.repository";
 import { createPostgresTestHarness } from "./postgres-test-harness";
 
@@ -41,11 +41,13 @@ describe("User Profile v3 build repository", () => {
       posName: "Holder Position",
       status: PositionStatus.Enable,
     });
-    await harness.db.insert(organizations).values([
-      organization({ id: 20, code: "HOLDER", path: "20", level: OrganizationLevel.One }),
-      organization({ id: 30, code: "TARGET-ROOT", path: "30", level: OrganizationLevel.One }),
-      organization({ id: 31, code: "TARGET", path: "30/31", level: OrganizationLevel.Two }),
-    ]);
+    await harness.db
+      .insert(organizations)
+      .values([
+        organization({ id: 20, code: "HOLDER", path: "20", level: OrganizationLevel.One }),
+        organization({ id: 30, code: "TARGET-ROOT", path: "30", level: OrganizationLevel.One }),
+        organization({ id: 31, code: "TARGET", path: "30/31", level: OrganizationLevel.Two }),
+      ]);
     await harness.db.insert(organizationClosures).values([
       { ancestorId: 20, descendantId: 20, depth: 0 },
       { ancestorId: 30, descendantId: 30, depth: 0 },
@@ -76,28 +78,25 @@ describe("User Profile v3 build repository", () => {
 
     const dataset = await repository.loadByUserIds([1], at);
 
-    expect(dataset.responsibilityRows).toEqual([{
-      employmentId: 100,
-      typeCode: OrganizationResponsibilityTypeCode.Head,
-      targetOrganization: {
-        code: "TARGET",
-        name: "TARGET",
-        type: OrganizationType.Department,
-        path: [
-          { code: "TARGET-ROOT", name: "TARGET-ROOT", type: OrganizationType.Department },
-          { code: "TARGET", name: "TARGET", type: OrganizationType.Department },
-        ],
+    expect(dataset.responsibilityRows).toEqual([
+      {
+        employmentId: 100,
+        typeCode: OrganizationResponsibilityTypeCode.Head,
+        targetOrganization: {
+          code: "TARGET",
+          name: "TARGET",
+          type: OrganizationType.Department,
+          path: [
+            { code: "TARGET-ROOT", name: "TARGET-ROOT", type: OrganizationType.Department },
+            { code: "TARGET", name: "TARGET", type: OrganizationType.Department },
+          ],
+        },
       },
-    }]);
+    ]);
   });
 });
 
-function organization(input: {
-  id: number;
-  code: string;
-  path: string;
-  level: OrganizationLevel;
-}) {
+function organization(input: { id: number; code: string; path: string; level: OrganizationLevel }) {
   return {
     id: input.id,
     orgCode: input.code,

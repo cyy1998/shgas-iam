@@ -25,8 +25,6 @@
     "verbatimModuleSyntax": true,
     "skipLibCheck": true
   },
-  "include": ["src/**/*.ts", "test-integration/**/*.ts", "test-smoke/**/*.ts", "app.config.ts", "eslint.config.js"],
-  "exclude": [
-    "scripts"
-  ]
+  "include": ["src/**/*.ts", "test-integration/**/*.ts", "test-smoke/**/*.ts", "app.config.ts"],
+  "exclude": ["scripts"]
 }

@@ -1,11 +1,3 @@
-import type {
-  SubjectAccessBeginReceipt,
-  SubjectAccessTransition,
-} from "./model";
-import type {
-  SubjectAccessAtomicStore,
-  SubjectAccessRepairLease,
-} from "./storage/store";
 import {
   SubjectAccessBeginPendingError,
   SubjectAccessDisabledError,
@@ -13,10 +5,9 @@ import {
   SubjectAccessUnavailableError,
   SubjectAccessWriteUnavailableError,
 } from "./errors";
-import {
-  parseSubjectAccessRecord,
-  serializeSubjectAccessRecord,
-} from "./model";
+import type { SubjectAccessBeginReceipt, SubjectAccessTransition } from "./model";
+import { parseSubjectAccessRecord, serializeSubjectAccessRecord } from "./model";
+import type { SubjectAccessAtomicStore, SubjectAccessRepairLease } from "./storage/store";
 
 export interface CreateSubjectAccessBarrierOptions {
   readonly store: SubjectAccessAtomicStore;
@@ -30,15 +21,13 @@ export interface CreateSubjectAccessBarrierOptions {
 
 export function createSubjectAccessBarrier(options: CreateSubjectAccessBarrierOptions) {
   async function readSnapshot(subjectIdentifier: string) {
-    let serialized;
+    let serialized: Awaited<ReturnType<typeof options.store.read>>;
     try {
       serialized = await options.store.read(subjectIdentifier);
-    }
-    catch (cause) {
+    } catch (cause) {
       throw new SubjectAccessUnavailableError(cause);
     }
-    if (serialized === null)
-      throw new SubjectAccessUnavailableError();
+    if (serialized === null) throw new SubjectAccessUnavailableError();
 
     const parsed = parseSubjectAccessRecord(serialized);
     if (!parsed.success || parsed.data.subjectIdentifier !== subjectIdentifier)
@@ -55,37 +44,24 @@ export function createSubjectAccessBarrier(options: CreateSubjectAccessBarrierOp
 
   async function assertAccessible(subjectIdentifier: string) {
     const { committedTransitionId, record } = await readSnapshot(subjectIdentifier);
-    if (record.state === "enabled" && committedTransitionId !== undefined)
-      return;
-    if (record.state === "disabled")
-      throw new SubjectAccessDisabledError();
+    if (record.state === "enabled" && committedTransitionId !== undefined) return;
+    if (record.state === "disabled") throw new SubjectAccessDisabledError();
     throw new SubjectAccessUnavailableError();
   }
 
   async function readCommittedTransitionId(subjectIdentifier: string) {
     const snapshot = await readSnapshot(subjectIdentifier);
-    if (
-      snapshot.record.state === "enabled"
-      && snapshot.committedTransitionId !== undefined
-    ) {
+    if (snapshot.record.state === "enabled" && snapshot.committedTransitionId !== undefined) {
       return snapshot.committedTransitionId;
     }
-    if (snapshot.record.state === "disabled")
-      throw new SubjectAccessDisabledError();
+    if (snapshot.record.state === "disabled") throw new SubjectAccessDisabledError();
     throw new SubjectAccessUnavailableError();
   }
 
-  async function isCommittedTransitionCurrent(
-    subjectIdentifier: string,
-    committedTransitionId: string,
-  ) {
+  async function isCommittedTransitionCurrent(subjectIdentifier: string, committedTransitionId: string) {
     const snapshot = await readSnapshot(subjectIdentifier);
-    if (snapshot.record.state === "disabled")
-      throw new SubjectAccessDisabledError();
-    if (
-      snapshot.record.state !== "enabled"
-      || snapshot.committedTransitionId === undefined
-    ) {
+    if (snapshot.record.state === "disabled") throw new SubjectAccessDisabledError();
+    if (snapshot.record.state !== "enabled" || snapshot.committedTransitionId === undefined) {
       throw new SubjectAccessUnavailableError();
     }
     return snapshot.committedTransitionId === committedTransitionId;
@@ -97,7 +73,7 @@ export function createSubjectAccessBarrier(options: CreateSubjectAccessBarrierOp
   ): Promise<SubjectAccessTransition> {
     const transitionId = input.transitionId ?? options.random.uuid();
     const updatedAt = options.clock.nowDate();
-    let result;
+    let result: Awaited<ReturnType<typeof options.store.beginBlocking>>;
     try {
       result = await options.store.beginBlocking({
         subjectIdentifier,
@@ -110,15 +86,13 @@ export function createSubjectAccessBarrier(options: CreateSubjectAccessBarrierOp
           updatedAt: updatedAt.toISOString(),
         }),
       });
-    }
-    catch {
+    } catch {
       throw new SubjectAccessBeginPendingError({
         subjectIdentifier,
         transitionId,
       });
     }
-    if (result === "conflict" || result === "invalid")
-      throw new SubjectAccessTransitionRejectedError();
+    if (result === "conflict" || result === "invalid") throw new SubjectAccessTransitionRejectedError();
     return {
       subjectIdentifier,
       transitionId,
@@ -127,27 +101,19 @@ export function createSubjectAccessBarrier(options: CreateSubjectAccessBarrierOp
   }
 
   async function abortBegin(receipt: SubjectAccessBeginReceipt) {
-    let result;
+    let result: Awaited<ReturnType<typeof options.store.abortBegin>>;
     try {
       result = await options.store.abortBegin(receipt);
-    }
-    catch {
+    } catch {
       throw new SubjectAccessWriteUnavailableError();
     }
-    if (
-      result !== "aborted"
-      && result !== "already_aborted"
-      && result !== "not_started"
-    ) {
+    if (result !== "aborted" && result !== "already_aborted" && result !== "not_started") {
       throw new SubjectAccessTransitionRejectedError();
     }
   }
 
-  async function finalize(
-    transition: SubjectAccessTransition,
-    targetState: "enabled" | "disabled",
-  ) {
-    let result;
+  async function finalize(transition: SubjectAccessTransition, targetState: "enabled" | "disabled") {
+    let result: Awaited<ReturnType<typeof options.store.finalize>>;
     try {
       result = await options.store.finalize({
         ...transition,
@@ -160,48 +126,37 @@ export function createSubjectAccessBarrier(options: CreateSubjectAccessBarrierOp
           updatedAt: options.clock.nowDate().toISOString(),
         }),
       });
-    }
-    catch {
+    } catch {
       throw new SubjectAccessWriteUnavailableError();
     }
-    if (result !== "finalized" && result !== "already_finalized")
-      throw new SubjectAccessTransitionRejectedError();
+    if (result !== "finalized" && result !== "already_finalized") throw new SubjectAccessTransitionRejectedError();
   }
 
-  async function prepareRepair(
-    transition: SubjectAccessTransition,
-    targetState: "enabled" | "disabled",
-  ) {
-    let result;
+  async function prepareRepair(transition: SubjectAccessTransition, targetState: "enabled" | "disabled") {
+    let result: Awaited<ReturnType<typeof options.store.prepareRepair>>;
     try {
       result = await options.store.prepareRepair({
         ...transition,
         targetState,
       });
-    }
-    catch {
+    } catch {
       throw new SubjectAccessWriteUnavailableError();
     }
-    if (result !== "prepared" && result !== "already_prepared")
-      throw new SubjectAccessTransitionRejectedError();
+    if (result !== "prepared" && result !== "already_prepared") throw new SubjectAccessTransitionRejectedError();
   }
 
   async function rollback(transition: SubjectAccessTransition) {
-    let result;
+    let result: Awaited<ReturnType<typeof options.store.rollback>>;
     try {
       result = await options.store.rollback(transition);
-    }
-    catch {
+    } catch {
       throw new SubjectAccessWriteUnavailableError();
     }
-    if (result !== "rolled_back" && result !== "already_rolled_back")
-      throw new SubjectAccessTransitionRejectedError();
+    if (result !== "rolled_back" && result !== "already_rolled_back") throw new SubjectAccessTransitionRejectedError();
   }
 
-  async function finalizeRepair(
-    lease: SubjectAccessRepairLease,
-  ): Promise<"finalized" | "stale"> {
-    let result;
+  async function finalizeRepair(lease: SubjectAccessRepairLease): Promise<"finalized" | "stale"> {
+    let result: Awaited<ReturnType<typeof options.store.finalizeRepairSubject>>;
     try {
       result = await options.store.finalizeRepairSubject({
         lease,
@@ -213,14 +168,11 @@ export function createSubjectAccessBarrier(options: CreateSubjectAccessBarrierOp
           updatedAt: options.clock.nowDate().toISOString(),
         }),
       });
-    }
-    catch {
+    } catch {
       throw new SubjectAccessWriteUnavailableError();
     }
-    if (result === "finalized")
-      return "finalized";
-    if (result === "stale_lease" || result === "lease_expired")
-      return "stale";
+    if (result === "finalized") return "finalized";
+    if (result === "stale_lease" || result === "lease_expired") return "stale";
     throw new SubjectAccessTransitionRejectedError();
   }
 

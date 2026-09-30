@@ -1,27 +1,13 @@
+import { AuditActions } from "@iam/contracts";
 import type { AuditRequestContext } from "@iam/domain/audit";
 import type { CustomSsoAuditInput as AuditLogInput } from "../custom-sso.port";
-import { AuditActions } from "@iam/contracts";
 
-export function buildIndependentLoginSuccessAudit(
-  subjectIdentifier: string,
-  clientCode: string,
-): AuditLogInput {
-  return buildSubjectLoginSuccessAudit(
-    subjectIdentifier,
-    clientCode,
-    "independent",
-  );
+export function buildIndependentLoginSuccessAudit(subjectIdentifier: string, clientCode: string): AuditLogInput {
+  return buildSubjectLoginSuccessAudit(subjectIdentifier, clientCode, "independent");
 }
 
-export function buildGatewayLoginSuccessAudit(
-  subjectIdentifier: string,
-  clientCode: string,
-): AuditLogInput {
-  return buildSubjectLoginSuccessAudit(
-    subjectIdentifier,
-    clientCode,
-    "gateway",
-  );
+export function buildGatewayLoginSuccessAudit(subjectIdentifier: string, clientCode: string): AuditLogInput {
+  return buildSubjectLoginSuccessAudit(subjectIdentifier, clientCode, "gateway");
 }
 
 function buildSubjectLoginSuccessAudit(

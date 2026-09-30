@@ -1,26 +1,17 @@
-import OrganizationTreeSelector from '@admin/components/OrganizationTreeSelector';
-import { AdminMutationCommittedError } from '@admin/services/admin-mutation';
-import { getAdminAuthorizationReasonText } from '@admin/services/authorization';
-import {
-  type EmploymentDetailVo,
-  transferEmployment,
-} from '@admin/services/employment';
-import { searchPositions } from '@admin/services/position';
-import type { ProFormInstance } from '@ant-design/pro-components';
-import {
-  ModalForm,
-  ProForm,
-  ProFormRadio,
-  ProFormSelect,
-  ProFormTextArea,
-} from '@ant-design/pro-components';
-import { PositionStatus } from '@iam/contracts';
-import { Alert, Descriptions, message } from 'antd';
-import { useRef } from 'react';
+import OrganizationTreeSelector from "@admin/components/OrganizationTreeSelector";
+import { AdminMutationCommittedError } from "@admin/services/admin-mutation";
+import { getAdminAuthorizationReasonText } from "@admin/services/authorization";
+import { type EmploymentDetailVo, transferEmployment } from "@admin/services/employment";
+import { searchPositions } from "@admin/services/position";
+import type { ProFormInstance } from "@ant-design/pro-components";
+import { ModalForm, ProForm, ProFormRadio, ProFormSelect, ProFormTextArea } from "@ant-design/pro-components";
+import { PositionStatus } from "@iam/contracts";
+import { Alert, Descriptions, message } from "antd";
+import { useRef } from "react";
 
 type EmploymentTransferSource = Pick<
   EmploymentDetailVo,
-  'id' | 'isPrimary' | 'organization' | 'position' | 'user' | 'allowedActions'
+  "id" | "isPrimary" | "organization" | "position" | "user" | "allowedActions"
 >;
 
 type Props = {
@@ -33,9 +24,8 @@ type Props = {
 
 function formatOrgPath(employment: EmploymentTransferSource) {
   return (
-    employment.organization?.fullOrgPath
-      ?.map((node) => node.orgName)
-      .join(' / ') || employment.organization.assignedOrg.orgName
+    employment.organization?.fullOrgPath?.map((node) => node.orgName).join(" / ") ||
+    employment.organization.assignedOrg.orgName
   );
 }
 
@@ -47,36 +37,29 @@ function formatPosition(employment: EmploymentTransferSource) {
   return `${employment.position.posName} (${employment.position.posCode})`;
 }
 
-export default function TransferModal({
-  open,
-  employment,
-  onOpenChange,
-  onSuccess,
-  onCommitted,
-}: Props) {
+export default function TransferModal({ open, employment, onOpenChange, onSuccess, onCommitted }: Props) {
   const formRef = useRef<ProFormInstance>(undefined);
 
   const transferAllowed = employment?.allowedActions.transfer.allowed ?? false;
 
-  const handleError = (err: unknown) =>
-    message.error(err instanceof Error ? err.message : '转岗失败');
+  const handleError = (err: unknown) => message.error(err instanceof Error ? err.message : "转岗失败");
 
   return (
     <ModalForm
-      title={employment ? `转岗 — ${formatUser(employment)}` : '转岗'}
+      title={employment ? `转岗 — ${formatUser(employment)}` : "转岗"}
       open={open}
       onOpenChange={onOpenChange}
       formRef={formRef}
       modalProps={{
         destroyOnHidden: true,
         mask: { closable: false },
-        okText: '确定',
+        okText: "确定",
       }}
       submitter={{ submitButtonProps: { disabled: !transferAllowed } }}
       onFinish={async (values) => {
         if (!employment || !transferAllowed) return false;
-        if (typeof values.isPrimary !== 'boolean') {
-          message.warning('请选择新任职是否为主任职');
+        if (typeof values.isPrimary !== "boolean") {
+          message.warning("请选择新任职是否为主任职");
           return false;
         }
         try {
@@ -86,8 +69,8 @@ export default function TransferModal({
             isPrimary: values.isPrimary,
             description: values.description || null,
           });
-          if (outcome.changed) message.success('转岗成功');
-          else message.info('无需修改');
+          if (outcome.changed) message.success("转岗成功");
+          else message.info("无需修改");
           await onSuccess?.(outcome.result.id);
           return true;
         } catch (err) {
@@ -104,9 +87,7 @@ export default function TransferModal({
         <Alert
           type="warning"
           showIcon
-          message={getAdminAuthorizationReasonText(
-            employment.allowedActions.transfer.reason,
-          )}
+          message={getAdminAuthorizationReasonText(employment.allowedActions.transfer.reason)}
         />
       )}
       <Alert
@@ -123,22 +104,18 @@ export default function TransferModal({
           style={{ marginBottom: 16 }}
           items={[
             {
-              label: '原组织路径',
+              label: "原组织路径",
               children: formatOrgPath(employment),
             },
             {
-              label: '原岗位',
+              label: "原岗位",
               children: formatPosition(employment),
             },
-            { label: '原主岗', children: employment.isPrimary ? '是' : '否' },
+            { label: "原主岗", children: employment.isPrimary ? "是" : "否" },
           ]}
         />
       )}
-      <ProForm.Item
-        name="newOrgCode"
-        label="新任职组织"
-        rules={[{ required: true, message: '请选择新任职组织' }]}
-      >
+      <ProForm.Item name="newOrgCode" label="新任职组织" rules={[{ required: true, message: "请选择新任职组织" }]}>
         <OrganizationTreeSelector placeholder="请选择新的实际任职组织" />
       </ProForm.Item>
       <ProFormSelect
@@ -164,10 +141,10 @@ export default function TransferModal({
       <ProFormRadio.Group
         name="isPrimary"
         label="新任职主任职"
-        rules={[{ required: true, message: '请选择新任职是否为主任职' }]}
+        rules={[{ required: true, message: "请选择新任职是否为主任职" }]}
         options={[
-          { label: '主任职', value: true },
-          { label: '非主任职', value: false },
+          { label: "主任职", value: true },
+          { label: "非主任职", value: false },
         ]}
       />
       <ProFormTextArea name="description" label="备注" />

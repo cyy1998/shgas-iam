@@ -1,6 +1,6 @@
+import { mock } from "bun:test";
 import type { AfterCommitLoggerPort } from "@iam/api-core/uow";
 import { createImmediateUnitOfWork as createImmediateUnitOfWorkBase } from "@iam/api-core/uow";
-import { mock } from "bun:test";
 
 type RedisResult = [Error | null, unknown];
 type RedisOperation = () => Promise<unknown> | unknown;
@@ -28,10 +28,8 @@ function toError(error: unknown) {
 }
 
 function numericBoundary(value: number | string) {
-  if (value === "-inf")
-    return Number.NEGATIVE_INFINITY;
-  if (value === "+inf" || value === "inf")
-    return Number.POSITIVE_INFINITY;
+  if (value === "-inf") return Number.NEGATIVE_INFINITY;
+  if (value === "+inf" || value === "inf") return Number.POSITIVE_INFINITY;
   return Number(value);
 }
 
@@ -55,8 +53,7 @@ export function createMemoryRedis(now: () => number = Date.now) {
 
   function cleanupExpired(key: string) {
     const expiresAt = expires.get(key);
-    if (expiresAt === undefined || expiresAt > now())
-      return;
+    if (expiresAt === undefined || expiresAt > now()) return;
 
     values.delete(key);
     sets.delete(key);
@@ -87,18 +84,15 @@ export function createMemoryRedis(now: () => number = Date.now) {
     },
 
     async set(key: string, value: unknown, ...args: Array<number | string>) {
-      if (args.includes("NX") && hasKey(key))
-        return null;
+      if (args.includes("NX") && hasKey(key)) return null;
 
       values.set(key, String(value));
       sets.delete(key);
       sortedSets.delete(key);
 
       const expiresAt = readExpirationMs(args, now());
-      if (expiresAt === null)
-        expires.delete(key);
-      else
-        expires.set(key, expiresAt);
+      if (expiresAt === null) expires.delete(key);
+      else expires.set(key, expiresAt);
 
       return "OK";
     },
@@ -111,8 +105,7 @@ export function createMemoryRedis(now: () => number = Date.now) {
         sets.delete(key);
         sortedSets.delete(key);
         expires.delete(key);
-        if (existed)
-          deleted += 1;
+        if (existed) deleted += 1;
       }
       return deleted;
     },
@@ -122,23 +115,20 @@ export function createMemoryRedis(now: () => number = Date.now) {
     },
 
     async ttl(key: string) {
-      if (!hasKey(key))
-        return -2;
+      if (!hasKey(key)) return -2;
       const expiresAt = expires.get(key);
-      if (expiresAt === undefined)
-        return -1;
+      if (expiresAt === undefined) return -1;
       return Math.max(0, Math.ceil((expiresAt - now()) / 1000));
     },
 
     async expire(key: string, seconds: number) {
-      if (!hasKey(key))
-        return 0;
+      if (!hasKey(key)) return 0;
       expires.set(key, now() + seconds * 1000);
       return 1;
     },
 
     async incr(key: string) {
-      const value = Number(await redis.get(key) ?? 0) + 1;
+      const value = Number((await redis.get(key)) ?? 0) + 1;
       values.set(key, String(value));
       return value;
     },
@@ -148,8 +138,7 @@ export function createMemoryRedis(now: () => number = Date.now) {
       const set = sets.get(key) ?? new Set<string>();
       let added = 0;
       for (const member of members) {
-        if (!set.has(member))
-          added += 1;
+        if (!set.has(member)) added += 1;
         set.add(member);
       }
       sets.set(key, set);
@@ -164,15 +153,13 @@ export function createMemoryRedis(now: () => number = Date.now) {
     },
 
     async eval(script: string, keyCount: number, ...args: string[]) {
-      if (keyCount !== 1 && keyCount !== 2)
-        throw new Error("memory redis eval supports one or two keys only");
+      if (keyCount !== 1 && keyCount !== 2) throw new Error("memory redis eval supports one or two keys only");
 
       if (keyCount === 2) {
         const [codeKey, reservationKey] = args;
         const savedValue = await redis.get(codeKey!);
         const reservedValue = await redis.get(reservationKey!);
-        if (savedValue === null || reservedValue === null || savedValue !== reservedValue)
-          return 0;
+        if (savedValue === null || reservedValue === null || savedValue !== reservedValue) return 0;
 
         await redis.del(codeKey!, reservationKey!);
         return 1;
@@ -181,8 +168,7 @@ export function createMemoryRedis(now: () => number = Date.now) {
       const [key, expectedValue] = args;
 
       const savedValue = await redis.get(key!);
-      if (savedValue === null || savedValue !== expectedValue)
-        return 0;
+      if (savedValue === null || savedValue !== expectedValue) return 0;
 
       await redis.del(key!);
       return 1;
@@ -227,7 +213,7 @@ export function createMemoryRedis(now: () => number = Date.now) {
             const minScore = numericBoundary(min);
             const maxScore = numericBoundary(max);
             const existing = sortedSets.get(key) ?? [];
-            const next = existing.filter(item => item.score < minScore || item.score > maxScore);
+            const next = existing.filter((item) => item.score < minScore || item.score > maxScore);
             sortedSets.set(key, next);
             return existing.length - next.length;
           });
@@ -238,10 +224,7 @@ export function createMemoryRedis(now: () => number = Date.now) {
           operations.push(() => {
             cleanupExpired(key);
             const existing = sortedSets.get(key) ?? [];
-            sortedSets.set(key, [
-              ...existing.filter(item => item.member !== member),
-              { member, score },
-            ]);
+            sortedSets.set(key, [...existing.filter((item) => item.member !== member), { member, score }]);
             values.delete(key);
             sets.delete(key);
             return 1;
@@ -262,8 +245,7 @@ export function createMemoryRedis(now: () => number = Date.now) {
           for (const operation of operations) {
             try {
               results.push([null, await operation()]);
-            }
-            catch (error) {
+            } catch (error) {
               results.push([toError(error), null]);
             }
           }

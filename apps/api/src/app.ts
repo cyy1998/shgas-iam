@@ -1,4 +1,3 @@
-/* eslint-disable antfu/no-top-level-await */
 import createApp from "@iam/api-core/core/create-app";
 import appConfig from "~api/app.config";
 import { createApiComposition } from "./composition";
@@ -19,9 +18,15 @@ const app = createApp(appConfig, {
 });
 
 export const appLifecycle = {
-  started(port: number) { composition.logger.info({ event: "api_started", port }, `server: http://localhost:${port}`); },
-  stopped() { composition.logger.info({ event: "api_stopped" }, "API stopped"); },
-  shutdownFailed() { composition.logger.error({ event: "api_shutdown_failed" }, "API shutdown failed"); },
+  started(port: number) {
+    composition.logger.info({ event: "api_started", port }, `server: http://localhost:${port}`);
+  },
+  stopped() {
+    composition.logger.info({ event: "api_stopped" }, "API stopped");
+  },
+  shutdownFailed() {
+    composition.logger.error({ event: "api_shutdown_failed" }, "API shutdown failed");
+  },
 };
 
 export type AppType = typeof app;

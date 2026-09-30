@@ -1,9 +1,6 @@
-import type { RunDescriptor } from "./lifecycle.ts";
 import { describe, expect, test } from "bun:test";
-import {
-  assertHrAdminDenialLog,
-  createHrAdminJourneyOperations,
-} from "./hr-admin-journey.ts";
+import { assertHrAdminDenialLog, createHrAdminJourneyOperations } from "./hr-admin-journey.ts";
+import type { RunDescriptor } from "./lifecycle.ts";
 import { playwrightStagingDirectory } from "./playwright-evidence.ts";
 import { createE2EScenarioIdentity } from "./seed.ts";
 
@@ -82,34 +79,23 @@ describe("HR Admin User Management journey operations", () => {
         IAM_E2E_ADMIN_PASSWORD: expect.any(String),
         IAM_E2E_ADMIN_USERNAME: "e2e-admin-r-admin-journey-01",
         IAM_E2E_ADMIN_MIXED_ROLE_ASSIGNMENT_ID: "40",
-        IAM_E2E_DELEGATEE_USERNAME:
-          "e2e-delegatee-r-admin-journey-01",
+        IAM_E2E_DELEGATEE_USERNAME: "e2e-delegatee-r-admin-journey-01",
         IAM_E2E_HIDDEN_RESPONSIBILITY_ASSIGNMENT_ID: "41",
-        IAM_E2E_HR_ADMIN_UPDATED_NAME:
-          "E2E HR Admin Updated r-admin-journey-01",
-        IAM_E2E_HR_ADMIN_USERNAME:
-          "e2e-hr-admin-r-admin-journey-01",
-        IAM_E2E_HR_RESPONSIBILITY_TARGET_ORGANIZATION_CODE:
-          "e2e-hr-target-r-admin-journey-01",
+        IAM_E2E_HR_ADMIN_UPDATED_NAME: "E2E HR Admin Updated r-admin-journey-01",
+        IAM_E2E_HR_ADMIN_USERNAME: "e2e-hr-admin-r-admin-journey-01",
+        IAM_E2E_HR_RESPONSIBILITY_TARGET_ORGANIZATION_CODE: "e2e-hr-target-r-admin-journey-01",
         IAM_E2E_HR_SECOND_SCOPE_ROLE_ASSIGNMENT_ID: "42",
-        IAM_E2E_HR_SECOND_SCOPE_ROOT_ORGANIZATION_CODE:
-          "e2e-hr-root-r-admin-journey-01",
-        IAM_E2E_GLOBAL_POSITION_CODE:
-          "e2e-global-pos-r-admin-journey-01",
+        IAM_E2E_HR_SECOND_SCOPE_ROOT_ORGANIZATION_CODE: "e2e-hr-root-r-admin-journey-01",
+        IAM_E2E_GLOBAL_POSITION_CODE: "e2e-global-pos-r-admin-journey-01",
         IAM_E2E_JOURNEY: "hr-admin",
-        IAM_E2E_NO_SCOPE_HR_ADMIN_USERNAME:
-          "e2e-no-scope-hr-r-admin-journey-01",
+        IAM_E2E_NO_SCOPE_HR_ADMIN_USERNAME: "e2e-no-scope-hr-r-admin-journey-01",
         IAM_E2E_ORIGIN: descriptor.origin,
         IAM_E2E_OUTSIDE_RESPONSIBILITY_HOLDER_EMPLOYMENT_ID: "43",
-        IAM_E2E_OUTSIDE_RESPONSIBILITY_HOLDER_POSITION_CODE:
-          "e2e-outside-resp-pos-r-admin-journey-01",
-        IAM_E2E_OUTSIDE_ORGANIZATION_CODE:
-          "e2e-resp-target-r-admin-journey-01",
-        IAM_E2E_PLAYWRIGHT_OUTPUT_DIR:
-          playwrightStagingDirectory(descriptor),
+        IAM_E2E_OUTSIDE_RESPONSIBILITY_HOLDER_POSITION_CODE: "e2e-outside-resp-pos-r-admin-journey-01",
+        IAM_E2E_OUTSIDE_ORGANIZATION_CODE: "e2e-resp-target-r-admin-journey-01",
+        IAM_E2E_PLAYWRIGHT_OUTPUT_DIR: playwrightStagingDirectory(descriptor),
         IAM_E2E_RESPONSIBILITY_HOLDER_EMPLOYMENT_ID: "44",
-        IAM_E2E_RESPONSIBILITY_HOLDER_POSITION_CODE:
-          "e2e-resp-pos-r-admin-journey-01",
+        IAM_E2E_RESPONSIBILITY_HOLDER_POSITION_CODE: "e2e-resp-pos-r-admin-journey-01",
       },
     });
     expect(calls[2]).toMatchObject({
@@ -129,26 +115,30 @@ describe("HR Admin User Management journey operations", () => {
         "src/hr-admin-outcome-cli.ts",
       ],
     });
-    expect(captured).toEqual([{
-      command: "docker",
-      args: [
-        "compose",
-        "--file",
-        "D:/repo/e2e/system/compose.yaml",
-        "--project-name",
-        descriptor.project,
-        "logs",
-        "--no-color",
-        "--no-log-prefix",
-        "admin-api",
-      ],
-    }]);
-    expect(receipts).toEqual([{
-      version: 1,
-      stage: "hr-admin-outcome",
-      status: "passed",
-      project: descriptor.project,
-    }]);
+    expect(captured).toEqual([
+      {
+        command: "docker",
+        args: [
+          "compose",
+          "--file",
+          "D:/repo/e2e/system/compose.yaml",
+          "--project-name",
+          descriptor.project,
+          "logs",
+          "--no-color",
+          "--no-log-prefix",
+          "admin-api",
+        ],
+      },
+    ]);
+    expect(receipts).toEqual([
+      {
+        version: 1,
+        stage: "hr-admin-outcome",
+        status: "passed",
+        project: descriptor.project,
+      },
+    ]);
   });
 
   test("rejects scope keys and hidden fixture values in every HR denial log", () => {
@@ -169,29 +159,38 @@ describe("HR Admin User Management journey operations", () => {
       reasonCode: "RESOURCE_OUT_OF_SCOPE",
     };
 
-    expect(() => assertHrAdminDenialLog([
-      JSON.stringify(safeDenial),
-      JSON.stringify({ ...safeDenial, scope: [1] }),
-    ].join("\n"), scenario, references)).toThrow(
-      "leaked authorization scope",
-    );
-    expect(() => assertHrAdminDenialLog([
-      JSON.stringify(safeDenial),
-      JSON.stringify({
-        ...safeDenial,
-        detail: scenario.outsideResponsibilityHolderPositionCode,
-      }),
-    ].join("\n"), scenario, references)).toThrow(
-      "leaked concealed fixture value",
-    );
-    expect(() => assertHrAdminDenialLog([
-      JSON.stringify(safeDenial),
-      JSON.stringify({
-        ...safeDenial,
-        resourceIdentifier: references.hiddenResponsibilityAssignmentId,
-      }),
-    ].join("\n"), scenario, references)).toThrow(
-      "leaked concealed fixture value",
-    );
+    expect(() =>
+      assertHrAdminDenialLog(
+        [JSON.stringify(safeDenial), JSON.stringify({ ...safeDenial, scope: [1] })].join("\n"),
+        scenario,
+        references,
+      ),
+    ).toThrow("leaked authorization scope");
+    expect(() =>
+      assertHrAdminDenialLog(
+        [
+          JSON.stringify(safeDenial),
+          JSON.stringify({
+            ...safeDenial,
+            detail: scenario.outsideResponsibilityHolderPositionCode,
+          }),
+        ].join("\n"),
+        scenario,
+        references,
+      ),
+    ).toThrow("leaked concealed fixture value");
+    expect(() =>
+      assertHrAdminDenialLog(
+        [
+          JSON.stringify(safeDenial),
+          JSON.stringify({
+            ...safeDenial,
+            resourceIdentifier: references.hiddenResponsibilityAssignmentId,
+          }),
+        ].join("\n"),
+        scenario,
+        references,
+      ),
+    ).toThrow("leaked concealed fixture value");
   });
 });

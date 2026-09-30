@@ -17,10 +17,7 @@ export interface CreateBullMqConnectionOptions {
   maxRetriesPerRequest?: RedisOptions["maxRetriesPerRequest"];
 }
 
-export function createBullMqConnection(
-  config: BullMqRedisConfig,
-  options: CreateBullMqConnectionOptions = {},
-): Redis {
+export function createBullMqConnection(config: BullMqRedisConfig, options: CreateBullMqConnectionOptions = {}): Redis {
   return new Redis(resolveRedisOptions(config, options));
 }
 

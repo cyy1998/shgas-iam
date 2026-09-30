@@ -4,25 +4,27 @@ import { createInsertSchema, createSelectSchema, createUpdateSchema } from "driz
 import { z } from "zod";
 import { baseColumns } from "../_shard/base-columns";
 
-export const organizations = snakeCase.table("organization", {
-  id: baseColumns.id,
-  orgCode: text().notNull().unique(),
-  orgName: text().notNull(),
-  parentId: integer().notNull().default(-1),
-  businessParentId: integer().notNull().default(-1),
-  path: text().notNull(),
-  level: integer().$type<OrganizationLevel>().notNull(),
-  orgType: text().$type<OrganizationType>().notNull(),
-  orderNum: integer().notNull().default(0),
-  isVirtual: boolean().notNull().default(false),
-  isEntity: boolean().notNull().default(false),
-  status: integer().$type<OrganizationStatus>().notNull().default(OrganizationStatus.Enable),
-  isDelete: baseColumns.isDelete,
-  createTime: baseColumns.createTime,
-  updateTime: baseColumns.updateTime,
-}, table => [
-  index("idx_parentId").on(table.parentId),
-]);
+export const organizations = snakeCase.table(
+  "organization",
+  {
+    id: baseColumns.id,
+    orgCode: text().notNull().unique(),
+    orgName: text().notNull(),
+    parentId: integer().notNull().default(-1),
+    businessParentId: integer().notNull().default(-1),
+    path: text().notNull(),
+    level: integer().$type<OrganizationLevel>().notNull(),
+    orgType: text().$type<OrganizationType>().notNull(),
+    orderNum: integer().notNull().default(0),
+    isVirtual: boolean().notNull().default(false),
+    isEntity: boolean().notNull().default(false),
+    status: integer().$type<OrganizationStatus>().notNull().default(OrganizationStatus.Enable),
+    isDelete: baseColumns.isDelete,
+    createTime: baseColumns.createTime,
+    updateTime: baseColumns.updateTime,
+  },
+  (table) => [index("idx_parentId").on(table.parentId)],
+);
 
 export const selectOrganizationSchema = createSelectSchema(organizations, {
   level: () => z.enum(OrganizationLevel),

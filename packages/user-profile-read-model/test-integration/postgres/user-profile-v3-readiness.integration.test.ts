@@ -1,9 +1,7 @@
-import type { db as database } from "@iam/db";
-import { UserProfileDirtyReason, UserProfileDirtyStatus, UserStatus } from "@iam/contracts";
 import { afterAll, beforeAll, beforeEach, describe, expect, test } from "bun:test";
-import {
-  V3_USER_PROFILE_SCHEMA_VERSION,
-} from "../../src/v3";
+import { UserProfileDirtyReason, UserProfileDirtyStatus, UserStatus } from "@iam/contracts";
+import type { db as database } from "@iam/db";
+import { V3_USER_PROFILE_SCHEMA_VERSION } from "../../src/v3";
 import {
   createCurrentUserProfileProjectionBundle,
   createUserProfilePostgresGate,
@@ -77,13 +75,10 @@ describe("User Profile v3 PostgreSQL readiness", () => {
     `;
     await projection.createRowRepository(harness.db as typeof database).upsert(candidate!);
 
-    const repository = createUserProfileReadinessRepository(
-      harness.db as typeof database,
-      {
-        projection,
-        buildBatchSize: 10,
-      },
-    );
+    const repository = createUserProfileReadinessRepository(harness.db as typeof database, {
+      projection,
+      buildBatchSize: 10,
+    });
     const gate = createUserProfilePostgresGate({
       schemaVersion: projection.schemaVersion,
       repository,

@@ -1,5 +1,5 @@
-import process from "node:process";
 import { expect, test } from "bun:test";
+import process from "node:process";
 import { createWorkerPostgresTestHarness } from "../postgres/postgres-test-harness";
 import { createWorkerRedisTestHarness } from "../redis/redis-test-harness";
 
@@ -19,32 +19,27 @@ test.each([
     [`${runtimePrefix}_REDIS_PORT`]: "1",
     [`${runtimePrefix}_REDIS_DB`]: "0",
   };
-  const previous = Object.fromEntries(Object.keys(overrides).map(key => [key, process.env[key]]));
+  const previous = Object.fromEntries(Object.keys(overrides).map((key) => [key, process.env[key]]));
   let harness: Awaited<ReturnType<typeof create>> | undefined;
   try {
     for (const [key, value] of Object.entries(overrides)) {
-      if (value === undefined)
-        delete process.env[key];
+      if (value === undefined) delete process.env[key];
       else process.env[key] = value;
     }
     let error: unknown;
     try {
       harness = await create();
-    }
-    catch (failure) {
+    } catch (failure) {
       error = failure;
     }
     expect(error).toBeInstanceOf(Error);
     expect((error as Error).message).toContain(name);
-  }
-  finally {
+  } finally {
     try {
       await harness?.close();
-    }
-    finally {
+    } finally {
       for (const [key, value] of Object.entries(previous)) {
-        if (value === undefined)
-          delete process.env[key];
+        if (value === undefined) delete process.env[key];
         else process.env[key] = value;
       }
     }

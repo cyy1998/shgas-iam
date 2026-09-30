@@ -1,6 +1,6 @@
-import type { OidcStateRedis } from "./state";
 import { z } from "zod";
 import { OidcStateUnavailableError } from "./errors";
+import type { OidcStateRedis } from "./state";
 import { digest, randomHandle, statePrefix } from "./state";
 import { OidcReturnHandleSchema } from "./wire";
 
@@ -27,8 +27,7 @@ export function createOidcLogoutState(redis: OidcStateRedis, namespace: string) 
   async function execute(script: string, handle: string, ...args: string[]) {
     try {
       return await redis.eval(script, 1, `${prefix}${digest(handle)}`, ...args);
-    }
-    catch {
+    } catch {
       throw new OidcStateUnavailableError();
     }
   }
@@ -47,15 +46,14 @@ export function createOidcLogoutState(redis: OidcStateRedis, namespace: string) 
         JSON.stringify(value),
         String(ttl * 1000),
       );
-      if (result !== "OK")
-        throw new OidcStateUnavailableError();
+      if (result !== "OK") throw new OidcStateUnavailableError();
       return { handle, xsrf };
     },
     async read(handle: string, binding: string, xsrf: string) {
       if (
-        !OidcReturnHandleSchema.safeParse(handle).success
-        || !OidcReturnHandleSchema.safeParse(binding).success
-        || !OidcReturnHandleSchema.safeParse(xsrf).success
+        !OidcReturnHandleSchema.safeParse(handle).success ||
+        !OidcReturnHandleSchema.safeParse(binding).success ||
+        !OidcReturnHandleSchema.safeParse(xsrf).success
       ) {
         return null;
       }
@@ -63,21 +61,15 @@ export function createOidcLogoutState(redis: OidcStateRedis, namespace: string) 
         "local v=redis.call('GET',KEYS[1]); if not v then return nil end; local t=redis.call('TIME'); return {v,t[1]*1000+math.floor(t[2]/1000)}",
         handle,
       );
-      if (raw === null)
-        return null;
+      if (raw === null) return null;
       try {
         const [text, now] = z.tuple([z.string(), z.number()]).parse(raw);
         const value = logoutRecordSchema.parse(JSON.parse(text));
-        if (
-          value.browserDigest !== digest(binding)
-          || value.csrfDigest !== digest(xsrf)
-          || value.expiresAt <= now
-        ) {
+        if (value.browserDigest !== digest(binding) || value.csrfDigest !== digest(xsrf) || value.expiresAt <= now) {
           return null;
         }
         return { value, raw: text };
-      }
-      catch {
+      } catch {
         throw new OidcStateUnavailableError("corrupt");
       }
     },
@@ -87,8 +79,7 @@ export function createOidcLogoutState(redis: OidcStateRedis, namespace: string) 
         handle,
         raw,
       );
-      if (result !== 0 && result !== 1)
-        throw new OidcStateUnavailableError();
+      if (result !== 0 && result !== 1) throw new OidcStateUnavailableError();
       return result === 1;
     },
   };

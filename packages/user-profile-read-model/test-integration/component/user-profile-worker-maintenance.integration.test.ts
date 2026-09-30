@@ -1,7 +1,7 @@
-import type { UserProfileMaintenanceRepairRow } from "../../src/worker";
-import { UserProfileDirtyReason, UserProfileDirtyStatus, UserProfileJobName } from "@iam/contracts";
 import { describe, expect, mock, test } from "bun:test";
+import { UserProfileDirtyReason, UserProfileDirtyStatus, UserProfileJobName } from "@iam/contracts";
 import { createUserProfileJobProducer } from "../../src/producer";
+import type { UserProfileMaintenanceRepairRow } from "../../src/worker";
 import { createUserProfileWorkerMaintenance } from "../../src/worker";
 
 const now = new Date("2026-07-25T09:00:00.000Z");
@@ -13,32 +13,38 @@ function createFixture(pages: number[][] = [[]]) {
     scanInputs.push(input);
     return pages[pageIndex++] ?? [];
   });
-  const persistedBatches: Array<Array<{
-    userId: number;
-    reasonCodes: UserProfileDirtyReason[];
-    dirtyAt: Date;
-  }>> = [];
+  const persistedBatches: Array<
+    Array<{
+      userId: number;
+      reasonCodes: UserProfileDirtyReason[];
+      dirtyAt: Date;
+    }>
+  > = [];
   const versions = new Map<number, number>();
-  const markManyDirty = mock(async (inputs: Array<{
-    userId: number;
-    reasonCodes: UserProfileDirtyReason[];
-    dirtyAt: Date;
-  }>) => {
-    persistedBatches.push(inputs);
-    return inputs.map((input) => {
-      const version = (versions.get(input.userId) ?? 0) + 1;
-      versions.set(input.userId, version);
-      return {
-        ...input,
-        dirtyVersion: String(version),
-      };
-    });
-  });
+  const markManyDirty = mock(
+    async (
+      inputs: Array<{
+        userId: number;
+        reasonCodes: UserProfileDirtyReason[];
+        dirtyAt: Date;
+      }>,
+    ) => {
+      persistedBatches.push(inputs);
+      return inputs.map((input) => {
+        const version = (versions.get(input.userId) ?? 0) + 1;
+        versions.set(input.userId, version);
+        return {
+          ...input,
+          dirtyVersion: String(version),
+        };
+      });
+    },
+  );
   const queuedBatches: unknown[][] = [];
   const queue = {
     addBulk: mock(async (jobs: Array<{ opts: { jobId: string } }>) => {
       queuedBatches.push(jobs);
-      return jobs.map(job => ({ id: job.opts.jobId }));
+      return jobs.map((job) => ({ id: job.opts.jobId }));
     }),
   };
   const maintenance = createUserProfileWorkerMaintenance({
@@ -92,7 +98,7 @@ function createRepairFixture(
   const queue = {
     addBulk: mock(async (jobs: Array<{ opts: { jobId: string } }>) => {
       queuedBatches.push(jobs);
-      return jobs.map(job => ({ id: job.opts.jobId }));
+      return jobs.map((job) => ({ id: job.opts.jobId }));
     }),
   };
   const maintenance = createUserProfileWorkerMaintenance({
@@ -148,9 +154,7 @@ describe("UserProfileWorkerMaintenance", () => {
         { userId: 1, reasonCodes: [UserProfileDirtyReason.Backfill], dirtyAt: now },
         { userId: 2, reasonCodes: [UserProfileDirtyReason.Backfill], dirtyAt: now },
       ],
-      [
-        { userId: 3, reasonCodes: [UserProfileDirtyReason.Backfill], dirtyAt: now },
-      ],
+      [{ userId: 3, reasonCodes: [UserProfileDirtyReason.Backfill], dirtyAt: now }],
     ]);
     expect(fixture.queuedBatches).toEqual([
       [
@@ -200,22 +204,21 @@ describe("UserProfileWorkerMaintenance", () => {
       { afterUserId: 2, limit: 2 },
       { afterUserId: 3, limit: 2 },
     ]);
-    expect(fixture.persistedBatches.map(batch => batch.map(row => row.userId))).toEqual([
-      [1, 2],
-      [3],
-    ]);
-    expect(fixture.queuedBatches.map(batch => batch.map((job: any) => ({
-      userId: job.data.userId,
-      dirtyVersion: job.data.dirtyVersion,
-      jobId: job.opts.jobId,
-    })))).toEqual([
+    expect(fixture.persistedBatches.map((batch) => batch.map((row) => row.userId))).toEqual([[1, 2], [3]]);
+    expect(
+      fixture.queuedBatches.map((batch) =>
+        batch.map((job: any) => ({
+          userId: job.data.userId,
+          dirtyVersion: job.data.dirtyVersion,
+          jobId: job.opts.jobId,
+        })),
+      ),
+    ).toEqual([
       [
         { userId: 1, dirtyVersion: "1", jobId: "rebuild-user-profile|1|1" },
         { userId: 2, dirtyVersion: "1", jobId: "rebuild-user-profile|2|1" },
       ],
-      [
-        { userId: 3, dirtyVersion: "1", jobId: "rebuild-user-profile|3|1" },
-      ],
+      [{ userId: 3, dirtyVersion: "1", jobId: "rebuild-user-profile|3|1" }],
     ]);
   });
 
@@ -225,14 +228,19 @@ describe("UserProfileWorkerMaintenance", () => {
         scanUserIds: mock(async () => [1, 2]),
       },
       dirtyRepository: {
-        markManyDirty: mock(async (inputs: Array<{
-          userId: number;
-          reasonCodes: UserProfileDirtyReason[];
-          dirtyAt: Date;
-        }>) => inputs.map((input, index) => ({
-          ...input,
-          dirtyVersion: String(index + 1),
-        }))),
+        markManyDirty: mock(
+          async (
+            inputs: Array<{
+              userId: number;
+              reasonCodes: UserProfileDirtyReason[];
+              dirtyAt: Date;
+            }>,
+          ) =>
+            inputs.map((input, index) => ({
+              ...input,
+              dirtyVersion: String(index + 1),
+            })),
+        ),
         scanFailedOrStale: mock(async () => []),
         resetStaleProcessing: mock(async () => null),
       },
@@ -282,28 +290,30 @@ describe("UserProfileWorkerMaintenance", () => {
     expect(fixture.scanInputs).toEqual([{ staleBefore, limit: 2 }]);
     expect(fixture.markManyDirty).not.toHaveBeenCalled();
     expect(fixture.resetStaleProcessing).not.toHaveBeenCalled();
-    expect(fixture.queuedBatches).toEqual([[
-      {
-        name: UserProfileJobName.RebuildUserProfile,
-        data: {
-          userId: 5,
-          dirtyVersion: "7",
-          reason: "user-updated",
-          requestedAt: "2026-07-25T09:00:00.000Z",
+    expect(fixture.queuedBatches).toEqual([
+      [
+        {
+          name: UserProfileJobName.RebuildUserProfile,
+          data: {
+            userId: 5,
+            dirtyVersion: "7",
+            reason: "user-updated",
+            requestedAt: "2026-07-25T09:00:00.000Z",
+          },
+          opts: { jobId: "rebuild-user-profile|5|7" },
         },
-        opts: { jobId: "rebuild-user-profile|5|7" },
-      },
-      {
-        name: UserProfileJobName.RebuildUserProfile,
-        data: {
-          userId: 6,
-          dirtyVersion: "11",
-          reason: "employment-updated",
-          requestedAt: "2026-07-25T09:00:00.000Z",
+        {
+          name: UserProfileJobName.RebuildUserProfile,
+          data: {
+            userId: 6,
+            dirtyVersion: "11",
+            reason: "employment-updated",
+            requestedAt: "2026-07-25T09:00:00.000Z",
+          },
+          opts: { jobId: "rebuild-user-profile|6|11" },
         },
-        opts: { jobId: "rebuild-user-profile|6|11" },
-      },
-    ]]);
+      ],
+    ]);
   });
 
   test("re-enqueues only stale processing rows that win the reset CAS", async () => {
@@ -335,8 +345,7 @@ describe("UserProfileWorkerMaintenance", () => {
       },
     ];
     const fixture = createRepairFixture(rows, async (input) => {
-      if (input.userId !== 7)
-        return null;
+      if (input.userId !== 7) return null;
       return {
         ...rows[0]!,
         status: UserProfileDirtyStatus.Pending,
@@ -349,22 +358,24 @@ describe("UserProfileWorkerMaintenance", () => {
       userIds: [7],
     });
 
-    expect(fixture.resetStaleProcessing.mock.calls.map(call => call[0])).toEqual([
+    expect(fixture.resetStaleProcessing.mock.calls.map((call) => call[0])).toEqual([
       { userId: 7, dirtyVersion: "4", staleBefore, now },
       { userId: 8, dirtyVersion: "5", staleBefore, now },
     ]);
     expect(fixture.markManyDirty).not.toHaveBeenCalled();
-    expect(fixture.queuedBatches).toEqual([[
-      {
-        name: UserProfileJobName.RebuildUserProfile,
-        data: {
-          userId: 7,
-          dirtyVersion: "4",
-          reason: "role-updated",
-          requestedAt: "2026-07-25T09:00:00.000Z",
+    expect(fixture.queuedBatches).toEqual([
+      [
+        {
+          name: UserProfileJobName.RebuildUserProfile,
+          data: {
+            userId: 7,
+            dirtyVersion: "4",
+            reason: "role-updated",
+            requestedAt: "2026-07-25T09:00:00.000Z",
+          },
+          opts: { jobId: "rebuild-user-profile|7|4" },
         },
-        opts: { jobId: "rebuild-user-profile|7|4" },
-      },
-    ]]);
+      ],
+    ]);
   });
 });

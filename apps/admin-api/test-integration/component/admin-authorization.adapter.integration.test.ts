@@ -1,28 +1,23 @@
-import type { Context } from "hono";
+import { expect, mock, test } from "bun:test";
 import { createAdminAuthorizationAdapter } from "@admin-api/routes/admin/authorization/authorization.adapter";
 import { createAdminAuthorizationPolicy } from "@admin-api/services/admin-authorization/admin-authorization.policy";
 import { ADMIN_MODULE_CODES } from "@iam/contracts";
-import { expect, mock, test } from "bun:test";
+import type { Context } from "hono";
 
 function createContext(roles: string[]) {
   const policy = createAdminAuthorizationPolicy({
     hrAdministrationScopeResolver: {
-      resolveForActor: async () => roles.includes("iam:hr-admin")
-        ? { rootOrganizationIds: [10], organizationIds: [10] }
-        : null,
+      resolveForActor: async () =>
+        roles.includes("iam:hr-admin") ? { rootOrganizationIds: [10], organizationIds: [10] } : null,
     },
     logger: { warn: mock() },
   });
   return {
     get(key: string) {
-      if (key === "adminAuthorizationPolicy")
-        return policy;
-      if (key === "userId")
-        return 7;
-      if (key === "username")
-        return "operator";
-      if (key === "userDetailDto")
-        return { roles };
+      if (key === "adminAuthorizationPolicy") return policy;
+      if (key === "userId") return 7;
+      if (key === "username") return "operator";
+      if (key === "userDetailDto") return { roles };
       return undefined;
     },
     req: { valid: () => ({}) },
@@ -34,13 +29,8 @@ test("publishes the same Admin Capability Summary through REST and tRPC", async 
   const adapter = createAdminAuthorizationAdapter();
   const restContext = createContext(["iam:admin"]);
 
-  const restResult = await adapter.capabilitySummary(
-    restContext as never,
-    async () => {},
-  );
-  const trpcResult = await adapter.authorizationAdminRouter
-    .createCaller({ hono: restContext })
-    .capabilitySummary({});
+  const restResult = await adapter.capabilitySummary(restContext as never, async () => {});
+  const trpcResult = await adapter.authorizationAdminRouter.createCaller({ hono: restContext }).capabilitySummary({});
 
   expect(restResult).toMatchObject({
     code: 200,
@@ -55,11 +45,8 @@ test("denies the capability contract to a role with no Admin capability", async 
 
   let failure: unknown;
   try {
-    await adapter.authorizationAdminRouter
-      .createCaller({ hono: context })
-      .capabilitySummary({});
-  }
-  catch (error) {
+    await adapter.authorizationAdminRouter.createCaller({ hono: context }).capabilitySummary({});
+  } catch (error) {
     failure = error;
   }
 
@@ -70,24 +57,13 @@ test("publishes the HR scoped Capability Summary through REST and tRPC", async (
   const adapter = createAdminAuthorizationAdapter();
   const context = createContext(["iam:hr-admin"]);
 
-  const restResult = await adapter.capabilitySummary(
-    context as never,
-    async () => {},
-  );
-  const trpcResult = await adapter.authorizationAdminRouter
-    .createCaller({ hono: context })
-    .capabilitySummary({});
+  const restResult = await adapter.capabilitySummary(context as never, async () => {});
+  const trpcResult = await adapter.authorizationAdminRouter.createCaller({ hono: context }).capabilitySummary({});
 
   expect(restResult).toMatchObject({
     code: 200,
     data: {
-      visibleModules: [
-        "user",
-        "organization",
-        "organizationResponsibility",
-        "position",
-        "employment",
-      ],
+      visibleModules: ["user", "organization", "organizationResponsibility", "position", "employment"],
     },
   });
   expect(trpcResult.visibleModules).toEqual([

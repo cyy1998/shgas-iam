@@ -1,14 +1,11 @@
+import jsonContent from "./json-content.js";
 import type { ZodSchema } from "./types";
 
-import jsonContent from "./json-content.js";
-
-function jsonContentRequired<
-  T extends ZodSchema,
->(schema: T, description: string) {
+function jsonContentRequired<T extends ZodSchema>(schema: T, description: string) {
   return {
     ...jsonContent(schema, description),
     required: true,
   };
-};
+}
 
 export default jsonContentRequired;

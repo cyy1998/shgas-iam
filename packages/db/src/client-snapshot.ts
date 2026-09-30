@@ -1,10 +1,9 @@
-import type { DbClient } from "./index";
 import { and, eq } from "drizzle-orm";
+import type { DbClient } from "./index";
 import { clients } from "./schema/core/clients";
 
 export function createClientSnapshotRepository(db: DbClient) {
-  const where = (code: string) =>
-    and(eq(clients.clientCode, code), eq(clients.isDelete, false));
+  const where = (code: string) => and(eq(clients.clientCode, code), eq(clients.isDelete, false));
   return {
     async loadClient(code: string) {
       const rows = await db
@@ -30,13 +29,11 @@ export function createClientSnapshotRepository(db: DbClient) {
         .where(where(code))
         .limit(1);
       const row = rows[0];
-      if (!row || row.secret === null)
-        return null;
+      if (!row || row.secret === null) return null;
       return {
         secret: row.secret,
         credentialId: row.credentialId,
-        updatedAt:
-          row.updatedAt === null ? null : new Date(row.updatedAt).toISOString(),
+        updatedAt: row.updatedAt === null ? null : new Date(row.updatedAt).toISOString(),
       };
     },
   };

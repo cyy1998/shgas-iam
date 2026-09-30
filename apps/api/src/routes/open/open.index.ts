@@ -1,5 +1,5 @@
-import type { OpenHandlers } from "./open.handlers";
 import { createRouter } from "@iam/api-core/core/create-router";
+import type { OpenHandlers } from "./open.handlers";
 import * as routes from "./open.routes";
 
 export function createOpenRoute(handlers: OpenHandlers) {

@@ -1,18 +1,15 @@
 import type { LoggerPort } from "@api/composition/runtime";
+import { mapCustomSsoRetryableError } from "@api/middlewares/custom-sso-retryable.error";
+import { getApiAuditRequestContext } from "@api/services/audit/audit.context";
 import type { LoginCredentialParser } from "@api/services/authentication/login-credential.parser";
 import type { ClientService } from "@api/services/client/client.service";
-import type { LoginWithMobileUseCase } from "@api/use-cases/authentication/login-with-mobile/login-with-mobile.use-case";
-import type { LoginWithPasswordUseCase } from "@api/use-cases/authentication/login-with-password/login-with-password.use-case";
-import type { AuthRouteHandler } from "./auth.type";
-import {
-  mapCustomSsoRetryableError,
-} from "@api/middlewares/custom-sso-retryable.error";
-import { getApiAuditRequestContext } from "@api/services/audit/audit.context";
 import {
   customSsoLocalSessionCookieName,
   decodeCustomSsoClientCode,
 } from "@api/services/sso/transport/custom-sso-client-code.transport";
 import { expireCustomSsoCookies } from "@api/services/sso/transport/custom-sso-cookie";
+import type { LoginWithMobileUseCase } from "@api/use-cases/authentication/login-with-mobile/login-with-mobile.use-case";
+import type { LoginWithPasswordUseCase } from "@api/use-cases/authentication/login-with-password/login-with-password.use-case";
 import * as HttpStatusCodes from "@iam/api-core/core/http-status-codes";
 import { AuthzUnauthorizedError } from "@iam/api-core/errors/AuthzUnauthorizedError";
 import * as resp from "@iam/api-core/http";
@@ -22,6 +19,7 @@ import { createSubjectAccessHttpAdapter } from "@iam/api-core/subject-access";
 import { ClientCodeSchema } from "@iam/contracts";
 import { CustomSsoRequestMismatchError } from "@iam/custom-sso";
 import { getCookie, setCookie } from "hono/cookie";
+import type { AuthRouteHandler } from "./auth.type";
 
 const subjectAccessHttp = createSubjectAccessHttpAdapter();
 
@@ -32,10 +30,7 @@ export interface CreateAuthHandlersDeps {
   };
   clientService: Pick<ClientService, "getClientBySecret">;
   localSessionAuthorizer: {
-    authorizeLocalSession: (
-      sessionId: string,
-      clientCode: string,
-    ) => Promise<string>;
+    authorizeLocalSession: (sessionId: string, clientCode: string) => Promise<string>;
   };
   loginCredentialParser: Pick<LoginCredentialParser, "parseLoginPasswordCredential">;
   logger: Pick<LoggerPort, "info">;
@@ -49,64 +44,63 @@ export function createInternalAuthzHandler(deps: Pick<CreateAuthHandlersDeps, "c
   const internalAuthz: AuthRouteHandler<"internalAuthz"> = async (c) => {
     const clientSecret = c.req.header("apikey");
     const sourceIp = c.req.header("IP-Chain");
-    deps.logger.info({ event: SystemLogEvent.InternalAuthzChecked, requestId: c.get("requestId"), sourceIp, hasClientSecret: clientSecret !== undefined }, "internal authorization checked");
+    deps.logger.info(
+      {
+        event: SystemLogEvent.InternalAuthzChecked,
+        requestId: c.get("requestId"),
+        sourceIp,
+        hasClientSecret: clientSecret !== undefined,
+      },
+      "internal authorization checked",
+    );
     await verifyInternalClient(c, { getClientBySecret: deps.clientService.getClientBySecret });
     return c.json(resp.ok(true), HttpStatusCodes.OK);
   };
   return internalAuthz;
 }
 
-export function createLocalSessionAuthzHandler(deps: Pick<CreateAuthHandlersDeps, "localSessionAuthorizer" | "config">) {
+export function createLocalSessionAuthzHandler(
+  deps: Pick<CreateAuthHandlersDeps, "localSessionAuthorizer" | "config">,
+) {
   const authz: AuthRouteHandler<"authz"> = async (c) => {
     const encodedClientCode = c.req.header("Client");
     const clientCodeResult = ClientCodeSchema.safeParse(
-      encodedClientCode === undefined
-        ? null
-        : decodeCustomSsoClientCode(encodedClientCode),
+      encodedClientCode === undefined ? null : decodeCustomSsoClientCode(encodedClientCode),
     );
-    if (
-      !c.req.header("X-Forwarded-Uri")
-      || !clientCodeResult.success
-    ) {
+    if (!c.req.header("X-Forwarded-Uri") || !clientCodeResult.success) {
       throw new AuthzUnauthorizedError("非法访问");
     }
     const clientCode = clientCodeResult.data;
-    const localSessionCookieName
-      = customSsoLocalSessionCookieName(clientCode);
+    const localSessionCookieName = customSsoLocalSessionCookieName(clientCode);
     const localSessionCookie = getCookie(c, localSessionCookieName);
     const sessionId = localSessionCookie ?? c.req.header("Authorization");
     if (!sessionId) {
       throw new AuthzUnauthorizedError("未登录");
     }
-    let data;
+    let data: Awaited<ReturnType<typeof deps.localSessionAuthorizer.authorizeLocalSession>>;
     try {
-      data = await subjectAccessHttp.run(c, {
-        clearCookiesOnInvalidSession: localSessionCookie === undefined
-          ? []
-          : [localSessionCookieName],
-      }, async () => {
-        try {
-          return await deps.localSessionAuthorizer.authorizeLocalSession(
-            sessionId,
-            clientCode,
-          );
-        }
-        catch (error) {
-          throw mapCustomSsoRetryableError(error, {
-            retryAfterSeconds: deps.config.projectionRetryAfterSeconds,
-          });
-        }
-      });
-    }
-    catch (error) {
+      data = await subjectAccessHttp.run(
+        c,
+        {
+          clearCookiesOnInvalidSession: localSessionCookie === undefined ? [] : [localSessionCookieName],
+        },
+        async () => {
+          try {
+            return await deps.localSessionAuthorizer.authorizeLocalSession(sessionId, clientCode);
+          } catch (error) {
+            throw mapCustomSsoRetryableError(error, {
+              retryAfterSeconds: deps.config.projectionRetryAfterSeconds,
+            });
+          }
+        },
+      );
+    } catch (error) {
       if (
-        error instanceof AuthzUnauthorizedError
-        && !(error instanceof CustomSsoRequestMismatchError)
-        && localSessionCookie !== undefined
+        error instanceof AuthzUnauthorizedError &&
+        !(error instanceof CustomSsoRequestMismatchError) &&
+        localSessionCookie !== undefined
       ) {
-        expireCustomSsoCookies(c, [
-          localSessionCookieName,
-        ]);
+        expireCustomSsoCookies(c, [localSessionCookieName]);
       }
       throw error;
     }
@@ -117,9 +111,11 @@ export function createLocalSessionAuthzHandler(deps: Pick<CreateAuthHandlersDeps
   return authz;
 }
 
-export function createRootAuthHandlers(deps: Pick<CreateAuthHandlersDeps, "authentication" | "loginCredentialParser"> & {
-  config: Pick<CreateAuthHandlersDeps["config"], "redisExpireSeconds">;
-}) {
+export function createRootAuthHandlers(
+  deps: Pick<CreateAuthHandlersDeps, "authentication" | "loginCredentialParser"> & {
+    config: Pick<CreateAuthHandlersDeps["config"], "redisExpireSeconds">;
+  },
+) {
   const loginPassword: AuthRouteHandler<"loginPassword"> = async (c) => {
     const { credential, capToken } = c.req.valid("json");
     const { username, password } = await deps.loginCredentialParser.parseLoginPasswordCredential(credential);
@@ -140,10 +136,7 @@ export function createRootAuthHandlers(deps: Pick<CreateAuthHandlersDeps, "authe
   const loginMobile: AuthRouteHandler<"loginMobile"> = async (c) => {
     const { code, phoneNumber, capToken } = c.req.valid("json");
     const requestContext = getApiAuditRequestContext(c);
-    const data = await deps.authentication.loginWithMobile.execute(
-      { capToken, code, phoneNumber },
-      { requestContext },
-    );
+    const data = await deps.authentication.loginWithMobile.execute({ capToken, code, phoneNumber }, { requestContext });
     setCookie(c, "global_session", data.token, {
       httpOnly: true,
       sameSite: "Lax",

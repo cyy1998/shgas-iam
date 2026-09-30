@@ -7,9 +7,6 @@ export const SubjectClaim = {
   IamAuthorization: "iam:authorization",
 } as const;
 
-export type SubjectClaimName = typeof SubjectClaim[keyof typeof SubjectClaim];
+export type SubjectClaimName = (typeof SubjectClaim)[keyof typeof SubjectClaim];
 
-export const SUBJECT_CLAIMS = Object.values(SubjectClaim) as [
-  SubjectClaimName,
-  ...SubjectClaimName[],
-];
+export const SUBJECT_CLAIMS = Object.values(SubjectClaim) as [SubjectClaimName, ...SubjectClaimName[]];

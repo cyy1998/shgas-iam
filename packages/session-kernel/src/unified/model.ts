@@ -19,10 +19,8 @@ export const userSessionSchema = z
     userSessionId: id,
     authTime: time,
     amr: z.preprocess(
-      value =>
-        value && typeof value === "object" && !Array.isArray(value) && Object.keys(value).length === 0
-          ? []
-          : value,
+      (value) =>
+        value && typeof value === "object" && !Array.isArray(value) && Object.keys(value).length === 0 ? [] : value,
       z.array(z.string().min(1)),
     ),
     origin: z
@@ -85,15 +83,7 @@ export type SessionFailure = { status: "missing" | "terminated" | "expired" | "m
 export type SessionResolution<T> = SessionFailure | { status: "resolved"; value: T };
 export type RevocationResult = {
   target: CapturedSession;
-  status:
-    | "terminated"
-    | "already_terminated"
-    | "missing"
-    | "expired"
-    | "excluded"
-    | "replaced"
-    | "failed"
-    | "unknown";
+  status: "terminated" | "already_terminated" | "missing" | "expired" | "excluded" | "replaced" | "failed" | "unknown";
 };
 
 export class SessionStorageError extends Error {

@@ -4,24 +4,15 @@
   min-height: 100vh;
   overflow: hidden;
   color: #14213d;
-  background: #eef3f7 url('~@/assets/bg.jpg') center / cover no-repeat;
+  background: #eef3f7 url("~@/assets/bg.jpg") center / cover no-repeat;
 
   &::before {
     position: absolute;
     inset: 0;
-    content: '';
+    content: "";
     background:
-      linear-gradient(
-        105deg,
-        rgba(8, 25, 49, 90%) 0%,
-        rgba(15, 43, 78, 78%) 48%,
-        rgba(238, 243, 247, 66%) 100%
-      ),
-      radial-gradient(
-        circle at 78% 18%,
-        rgba(40, 116, 240, 20%),
-        transparent 28%
-      );
+      linear-gradient(105deg, rgba(8, 25, 49, 90%) 0%, rgba(15, 43, 78, 78%) 48%, rgba(238, 243, 247, 66%) 100%),
+      radial-gradient(circle at 78% 18%, rgba(40, 116, 240, 20%), transparent 28%);
   }
 
   &::after {
@@ -30,7 +21,7 @@
     bottom: -90px;
     width: 340px;
     height: 340px;
-    content: '';
+    content: "";
     border: 1px solid rgba(255, 255, 255, 18%);
     border-radius: 50%;
   }

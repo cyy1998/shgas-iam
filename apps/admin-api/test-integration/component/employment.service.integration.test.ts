@@ -1,10 +1,18 @@
+import { describe, expect, mock, test } from "bun:test";
 import type { AdminEmploymentAuthorization } from "@admin-api/services/admin-authorization/admin-employment-authorization.type";
 import { createEmploymentService } from "@admin-api/services/employment/employment.service";
 import { createFakeClock, createImmediateUnitOfWork } from "@admin-api/test/fakes";
 import { BadRequestError } from "@iam/api-core/errors";
-import { EmploymentStatus, OrganizationLevel, OrganizationStatus, OrganizationType, PositionStatus, UserStatus, UserType } from "@iam/contracts";
+import {
+  EmploymentStatus,
+  OrganizationLevel,
+  OrganizationStatus,
+  OrganizationType,
+  PositionStatus,
+  UserStatus,
+  UserType,
+} from "@iam/contracts";
 import { EmploymentNotEditableError } from "@iam/domain/employment";
-import { describe, expect, mock, test } from "bun:test";
 import { createTestHrEmploymentAuthorization } from "../helpers/hr-employment-authorization";
 
 const now = new Date("2026-01-01T00:00:00Z");
@@ -139,9 +147,7 @@ function createService() {
   return { service: createEmploymentService(deps), tx, deps };
 }
 
-function scopedAuthorization(
-  organizationIds: readonly number[] = [2],
-): Promise<AdminEmploymentAuthorization> {
+function scopedAuthorization(organizationIds: readonly number[] = [2]): Promise<AdminEmploymentAuthorization> {
   return createTestHrEmploymentAuthorization({
     organizationIds,
     rootOrganizationIds: [2],
@@ -160,21 +166,15 @@ describe("createEmploymentService", () => {
   ])("allows scoped %s from current Employment facts", async (operationId, isPrimary) => {
     const { service, deps } = createService();
     const authorization = await scopedAuthorization([2]);
-    deps.employmentRepository.getEmploymentAuthorizationFactsByIdForAdmin
-      .mockResolvedValueOnce({
-        organizationId: 2,
-        status: EmploymentStatus.Enable,
-        isPrimary,
-      });
+    deps.employmentRepository.getEmploymentAuthorizationFactsByIdForAdmin.mockResolvedValueOnce({
+      organizationId: 2,
+      status: EmploymentStatus.Enable,
+      isPrimary,
+    });
 
-    await service.guardEmploymentMutationForAdmin(
-      4,
-      operationId,
-      authorization,
-    );
+    await service.guardEmploymentMutationForAdmin(4, operationId, authorization);
 
-    expect(deps.employmentRepository.getEmploymentAuthorizationFactsByIdForAdmin)
-      .toHaveBeenCalledWith(4);
+    expect(deps.employmentRepository.getEmploymentAuthorizationFactsByIdForAdmin).toHaveBeenCalledWith(4);
     expect(deps.employmentRepository.getEmploymentByIdForAdmin).not.toHaveBeenCalled();
     expect(authorization.denyMutation).not.toHaveBeenCalled();
   });
@@ -182,22 +182,16 @@ describe("createEmploymentService", () => {
   test("rejects lifecycle actions that are not actionable from current Employment facts", async () => {
     const { service, deps } = createService();
     const authorization = await scopedAuthorization([2]);
-    deps.employmentRepository.getEmploymentAuthorizationFactsByIdForAdmin
-      .mockResolvedValueOnce({
-        organizationId: 2,
-        status: EmploymentStatus.Pause,
-        isPrimary: false,
-      });
+    deps.employmentRepository.getEmploymentAuthorizationFactsByIdForAdmin.mockResolvedValueOnce({
+      organizationId: 2,
+      status: EmploymentStatus.Pause,
+      isPrimary: false,
+    });
 
     let failure: unknown;
     try {
-      await service.guardEmploymentMutationForAdmin(
-        4,
-        "admin.employment.pause",
-        authorization,
-      );
-    }
-    catch (error) {
+      await service.guardEmploymentMutationForAdmin(4, "admin.employment.pause", authorization);
+    } catch (error) {
       failure = error;
     }
 
@@ -223,13 +217,8 @@ describe("createEmploymentService", () => {
     for (const id of [4, 404]) {
       let failure: unknown;
       try {
-        await service.guardEmploymentMutationForAdmin(
-          id,
-          "admin.employment.end",
-          authorization,
-        );
-      }
-      catch (error) {
+        await service.guardEmploymentMutationForAdmin(id, "admin.employment.end", authorization);
+      } catch (error) {
         failure = error;
       }
       expect(failure).toEqual(new Error("denied:RESOURCE_OUT_OF_SCOPE"));
@@ -261,8 +250,8 @@ describe("createEmploymentService", () => {
     await service.searchEmploymentsFuzzyForAdmin(query, authorization);
     await service.getEmploymentDetailByIdForAdmin(4, authorization);
 
-    expect(deps.employmentRepository.searchEmploymentsFuzzyForAdminPaged)
-      .toHaveBeenCalledWith({
+    expect(deps.employmentRepository.searchEmploymentsFuzzyForAdminPaged).toHaveBeenCalledWith(
+      {
         ...query,
         conditions: {
           ...query.conditions,
@@ -270,9 +259,10 @@ describe("createEmploymentService", () => {
             statuses: [EmploymentStatus.Enable, EmploymentStatus.Pause],
           },
         },
-      }, { organizationIds: [2] });
-    expect(deps.employmentRepository.getEmploymentByIdForAdmin)
-      .toHaveBeenCalledWith(4, { organizationIds: [2] });
+      },
+      { organizationIds: [2] },
+    );
+    expect(deps.employmentRepository.getEmploymentByIdForAdmin).toHaveBeenCalledWith(4, { organizationIds: [2] });
   });
 
   test("conceals an out-of-scope Employment before description update writes", async () => {
@@ -281,14 +271,8 @@ describe("createEmploymentService", () => {
 
     let failure: unknown;
     try {
-      await service.updateEmployment(
-        4,
-        { description: "forbidden" },
-        undefined,
-        authorization,
-      );
-    }
-    catch (error) {
+      await service.updateEmployment(4, { description: "forbidden" }, undefined, authorization);
+    } catch (error) {
       failure = error;
     }
 
@@ -305,12 +289,17 @@ describe("createEmploymentService", () => {
 
   test("resolves Effective Roles for an employment detail through the batch interface", async () => {
     const { service, deps } = createService();
-    deps.roleAssignmentResolver.resolveEffectiveRoles.mockResolvedValueOnce(new Map([
-      [4, [
-        { id: 11, roleCode: "admin" },
-        { id: 12, roleCode: "reviewer" },
-      ]],
-    ]));
+    deps.roleAssignmentResolver.resolveEffectiveRoles.mockResolvedValueOnce(
+      new Map([
+        [
+          4,
+          [
+            { id: 11, roleCode: "admin" },
+            { id: 12, roleCode: "reviewer" },
+          ],
+        ],
+      ]),
+    );
     deps.privilegeRepository.getPrivilegesByRoleIds.mockResolvedValueOnce([
       { privilegeCode: "user:read", privilegeName: "查看用户" },
       { privilegeCode: "user:write", privilegeName: "编辑用户" },
@@ -342,14 +331,15 @@ describe("createEmploymentService", () => {
   test("updates an employment and marks its existing user dirty", async () => {
     const { service, tx } = createService();
 
-    await expect(service.updateEmployment(4, { description: "updated" })).resolves.toEqual({ changed: true, result: null });
+    await expect(service.updateEmployment(4, { description: "updated" })).resolves.toEqual({
+      changed: true,
+      result: null,
+    });
 
     expect(tx.employmentRepository.updateEmploymentRecord).toHaveBeenCalledWith(4, {
       description: "updated",
     });
-    expect(tx.userProfileInvalidation.recordChanges).toHaveBeenCalledWith([
-      { kind: "employment", userId: 1 },
-    ]);
+    expect(tx.userProfileInvalidation.recordChanges).toHaveBeenCalledWith([{ kind: "employment", userId: 1 }]);
   });
 
   test("rejects description edits for an Ended Employment", async () => {
@@ -358,9 +348,9 @@ describe("createEmploymentService", () => {
       employment({ status: EmploymentStatus.Disable, endTime: now, isPrimary: false }),
     );
 
-    await expect(
-      service.updateEmployment(4, { description: "rewritten" }),
-    ).rejects.toBeInstanceOf(EmploymentNotEditableError);
+    await expect(service.updateEmployment(4, { description: "rewritten" })).rejects.toBeInstanceOf(
+      EmploymentNotEditableError,
+    );
 
     expect(tx.employmentRepository.updateEmploymentRecord).not.toHaveBeenCalled();
     expect(tx.auditService.recordAuditLog).not.toHaveBeenCalled();
@@ -371,8 +361,7 @@ describe("createEmploymentService", () => {
     let failure: unknown;
     try {
       await service.updateEmployment(4, {});
-    }
-    catch (error) {
+    } catch (error) {
       failure = error;
     }
     expect(failure).toBeInstanceOf(BadRequestError);
@@ -395,8 +384,7 @@ describe("createEmploymentService", () => {
     let failure: unknown;
     try {
       await service.updateEmployment(4, { description: "changed" });
-    }
-    catch (error) {
+    } catch (error) {
       failure = error;
     }
     expect(failure).toBeInstanceOf(Error);

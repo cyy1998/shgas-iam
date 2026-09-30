@@ -1,8 +1,8 @@
-import { createV3UserProfileSearchAdapter } from "@api/services/user-profile-search/user-profile-search-v3.adapter";
+import { expect, mock, test } from "bun:test";
 import { createUserProfileSearchService } from "@api/services/user-profile-search/user-profile-search.service";
+import { createV3UserProfileSearchAdapter } from "@api/services/user-profile-search/user-profile-search-v3.adapter";
 import { UserStatus, UserType } from "@iam/contracts";
 import { createV3UserProfileQueryService } from "@iam/user-profile-read-model/v3";
-import { expect, mock, test } from "bun:test";
 
 test("exposes the active DSL and legacy search providers through one service", async () => {
   const dslInput = {
@@ -96,19 +96,21 @@ test("maps legacy user search to one canonical Filter and preserves the UserDto 
       ],
     },
   });
-  expect(result).toEqual([{
-    id: 101,
-    username: "zhangsan",
-    wxId: "wx-zhangsan",
-    name: "张三",
-    mobile: "13800000000",
-    userType: UserType.Formal,
-    orderNum: 1,
-    status: UserStatus.Pause,
-    isDelete: false,
-    createTime: new Date("2026-08-22T00:00:00.000Z"),
-    updateTime: new Date("2026-08-22T01:00:00.000Z"),
-  }]);
+  expect(result).toEqual([
+    {
+      id: 101,
+      username: "zhangsan",
+      wxId: "wx-zhangsan",
+      name: "张三",
+      mobile: "13800000000",
+      userType: UserType.Formal,
+      orderNum: 1,
+      status: UserStatus.Pause,
+      isDelete: false,
+      createTime: new Date("2026-08-22T00:00:00.000Z"),
+      updateTime: new Date("2026-08-22T01:00:00.000Z"),
+    },
+  ]);
 });
 
 test("rejects legacy requests without real conditions before querying profiles", async () => {
@@ -121,11 +123,7 @@ test("rejects legacy requests without real conditions before querying profiles",
   });
   const adapter = createV3UserProfileSearchAdapter(query);
 
-  for (const input of [
-    {},
-    { usernames: [] },
-    { usernames: [], names: ["张三"] },
-  ]) {
+  for (const input of [{}, { usernames: [] }, { usernames: [], names: ["张三"] }]) {
     const error = await adapter.searchLegacyUsers(input).catch((error: unknown) => error);
     expect(error).toMatchObject({
       code: "COMMON.VALIDATION_FAILED",

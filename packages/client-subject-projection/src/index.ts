@@ -3,7 +3,6 @@ export {
   parseSubjectClaimSelection,
   SUBJECT_CLAIM_CATALOG,
 } from "./internal/catalog";
-export { EmploymentResponsibilitySnapshotSchema } from "./internal/contract";
 export type {
   ClientAuthorization,
   ClientAuthorizationEmployment,
@@ -17,17 +16,16 @@ export type {
   SubjectFactsEmployment,
   SubjectFactsSnapshot,
 } from "./internal/contract";
-export {
-  createPermittedClientSubjectProjectionService,
-} from "./internal/projection";
+export { EmploymentResponsibilitySnapshotSchema } from "./internal/contract";
+export { createPermittedClientSubjectProjectionService } from "./internal/projection";
 export { InvalidSubjectClaimSelectionError } from "./subject-claim-selection.error";
 
-export type OptionalSubjectClaim
-  = | "profile:username"
-    | "profile:name"
-    | "profile:phone"
-    | "profile:employments"
-    | "iam:authorization";
+export type OptionalSubjectClaim =
+  | "profile:username"
+  | "profile:name"
+  | "profile:phone"
+  | "profile:employments"
+  | "iam:authorization";
 
 export interface SubjectOrganization {
   readonly code: string;

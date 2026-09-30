@@ -24,14 +24,14 @@ Domain 校验 URL/pattern 并规范化集合顺序。
 
 `createClientSsoManagement` 组合 repository、service、事务审计与同一 REST/tRPC adapter。
 
-| 操作 | 作用 |
-|---|---|
-| save | 仅修改 clientName、url、description、status 普通资料；页面未编辑的 status 不回填旧值。协议配置使用 selectProtocol。 |
-| selectProtocol | 在同一事务选择协议及其完整配置；保留已有启用意图和当前凭据。 |
-| setEnabled | 单独表达 SSO 启停；停用保留配置。 |
-| 删除配置 | 清配置并关闭 SSO，不等同于删除 Client 业务对象。 |
-| rotateSecret | 显式生成当前原文、随机凭据 ID 和更新时间。 |
-| readSecret | 主动读取观察到的当前凭据，提交独立审计后才交付。 |
+| 操作           | 作用                                                                                                                |
+| -------------- | ------------------------------------------------------------------------------------------------------------------- |
+| save           | 仅修改 clientName、url、description、status 普通资料；页面未编辑的 status 不回填旧值。协议配置使用 selectProtocol。 |
+| selectProtocol | 在同一事务选择协议及其完整配置；保留已有启用意图和当前凭据。                                                        |
+| setEnabled     | 单独表达 SSO 启停；停用保留配置。                                                                                   |
+| 删除配置       | 清配置并关闭 SSO，不等同于删除 Client 业务对象。                                                                    |
+| rotateSecret   | 显式生成当前原文、随机凭据 ID 和更新时间。                                                                          |
+| readSecret     | 主动读取观察到的当前凭据，提交独立审计后才交付。                                                                    |
 
 首次选择需要 Secret 的接入且尚无凭据时，在同事务创建；普通保存/切换不轮换或清除既有凭据。
 Public 和 managed 不增加外部提交 Secret 的要求。

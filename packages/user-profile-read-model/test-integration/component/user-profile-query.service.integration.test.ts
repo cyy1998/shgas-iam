@@ -1,18 +1,10 @@
-import type { UserProfile } from "@iam/db/schema";
-import type { UserProfileQueryRepositoryPort } from "../../src/query";
-import type { UserProfileQueryRepository } from "../../src/query/user-profile-query.repository";
-import {
-  EmploymentStatus,
-  OrganizationLevel,
-  OrganizationType,
-  UserStatus,
-  UserType,
-} from "@iam/contracts";
-import { UserNotFoundError } from "@iam/domain/user";
 import { describe, expect, mock, test } from "bun:test";
-import {
-  createUserProfileQueryService,
-} from "../../src/query";
+import { EmploymentStatus, OrganizationLevel, OrganizationType, UserStatus, UserType } from "@iam/contracts";
+import type { UserProfile } from "@iam/db/schema";
+import { UserNotFoundError } from "@iam/domain/user";
+import type { UserProfileQueryRepositoryPort } from "../../src/query";
+import { createUserProfileQueryService } from "../../src/query";
+import type { UserProfileQueryRepository } from "../../src/query/user-profile-query.repository";
 import { createUserProfileQueryRepository } from "../../src/query/user-profile-query.repository";
 import { USER_PROFILE_SCHEMA_VERSION } from "../../src/schema/profile.schema";
 
@@ -220,7 +212,7 @@ describe("UserProfileQueryService", () => {
       },
     });
 
-    const error = await service.getDetailByUserId(1).catch(error => error);
+    const error = await service.getDetailByUserId(1).catch((error) => error);
 
     expect(error).toMatchObject({
       issues: [{ code: "unrecognized_keys", keys: ["externalSessionId"], path: [] }],
@@ -241,7 +233,7 @@ describe("UserProfileQueryService", () => {
       } as any,
     });
 
-    const error = await service.getDetailByUserId(1).catch(error => error);
+    const error = await service.getDetailByUserId(1).catch((error) => error);
     expect(error).toBeInstanceOf(Error);
   });
 });

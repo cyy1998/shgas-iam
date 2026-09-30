@@ -1,9 +1,5 @@
 import type { SessionOrigin } from "@api/services/session/session-origin";
-import type {
-  AuditActorType,
-  AuditDetails,
-  AuditOutcome,
-} from "@iam/domain/audit";
+import type { AuditActorType, AuditDetails, AuditOutcome } from "@iam/domain/audit";
 import type { UserDetailDto } from "@iam/domain/user";
 import type { WechatLoginUser } from "./login-with-wechat.type";
 

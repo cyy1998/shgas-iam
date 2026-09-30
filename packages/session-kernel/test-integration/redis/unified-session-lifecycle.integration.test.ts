@@ -1,13 +1,12 @@
+import { afterEach, beforeEach, expect, spyOn, test } from "bun:test";
 import type { ClientSessionObservation, UserSessionObservation } from "@iam/session-kernel";
 import { SessionObservationRequiredError, SessionStorageError } from "@iam/session-kernel";
 import { createUnifiedSessionRedisTestScope } from "@iam/session-kernel/testing";
-import { afterEach, beforeEach, expect, spyOn, test } from "bun:test";
 
 let scope: Awaited<ReturnType<typeof createUnifiedSessionRedisTestScope>>;
 beforeEach(async () => {
   const url = process.env.IAM_SESSION_KERNEL_TEST_REDIS_URL;
-  if (!url)
-    throw new Error("IAM_SESSION_KERNEL_TEST_REDIS_URL must point to a dedicated Redis instance");
+  if (!url) throw new Error("IAM_SESSION_KERNEL_TEST_REDIS_URL must point to a dedicated Redis instance");
   scope = await createUnifiedSessionRedisTestScope(url);
 });
 afterEach(async () => {
@@ -38,8 +37,7 @@ async function open(
   protocol: "oidc" | "custom_sso" = "oidc",
 ) {
   const result = await api.openClientSession(root, { clientId, protocol });
-  if (!("value" in result))
-    throw new Error(`Fixture open failed: ${result.status}`);
+  if (!("value" in result)) throw new Error(`Fixture open failed: ${result.status}`);
   return result.value;
 }
 function target(child: ClientSessionObservation) {
@@ -53,8 +51,7 @@ async function rejection(action: () => unknown | Promise<unknown>) {
   let error: unknown;
   try {
     await action();
-  }
-  catch (cause) {
+  } catch (cause) {
     error = cause;
   }
   return error;
@@ -67,8 +64,7 @@ test("root identity, authentication, subject context and Redis deadline are fixe
   const byBearer = await api.resolveUserSession(root.bearer);
   const idAsBearer = await api.resolveUserSession(root.observation.userSession.userSessionId);
   const byId = await api.resolveUserSessionById(root.observation.userSession.userSessionId);
-  if (byBearer.status !== "resolved" || byId.status !== "resolved")
-    throw new Error("Root lookup failed");
+  if (byBearer.status !== "resolved" || byId.status !== "resolved") throw new Error("Root lookup failed");
   expect(byBearer.value.userSession).toEqual(byId.value.userSession);
   expect(idAsBearer.status).toBe("missing");
   const stored = await scope.bearerStored(root.bearer);
@@ -120,10 +116,9 @@ test("application inventory paginates within one root and excludes other logins 
   const second = await api.listSessions({ ...query, offset: 1 });
   expect(first.total).toBe(2);
   expect(second.total).toBe(2);
-  expect([...first.records, ...second.records]).toEqual(expect.arrayContaining([
-    child.clientSession,
-    sibling.clientSession,
-  ]));
+  expect([...first.records, ...second.records]).toEqual(
+    expect.arrayContaining([child.clientSession, sibling.clientSession]),
+  );
   await api.revokeObservedClientSession(child);
   const remaining = await api.listSessions({ ...query, offset: 0 });
   expect(remaining.total).toBe(1);
@@ -136,10 +131,9 @@ test("parallel authorization has one live instance and protocol changes reuse it
   const { api, root, child } = await fixture();
   const oldLifetime = await api.getIssuanceLifetime(child, 600);
   const parallel = await Promise.all(
-    Array.from({ length: 20 }, (_, i) =>
-      open(api, root.observation, "client-a", i % 2 ? "oidc" : "custom_sso")),
+    Array.from({ length: 20 }, (_, i) => open(api, root.observation, "client-a", i % 2 ? "oidc" : "custom_sso")),
   );
-  expect(new Set(parallel.map(value => value.clientSession.clientSessionId)).size).toBe(1);
+  expect(new Set(parallel.map((value) => value.clientSession.clientSessionId)).size).toBe(1);
   const switched = await open(api, root.observation, "client-a", "custom_sso");
   expect(switched.clientSession.clientSessionId).toBe(child.clientSession.clientSessionId);
   expect(switched.clientSession.protocol).toBe("custom_sso");
@@ -149,8 +143,7 @@ test("parallel authorization has one live instance and protocol changes reuse it
   expect(oldLifetime.expiresAt - oldLifetime.issuedAt).toBe(600000);
   expect(api.useObservation(child).clientSession?.expiresAt).toBe(child.clientSession.expiresAt);
   const rootAgain = await api.resolveUserSession(root.bearer);
-  if (rootAgain.status !== "resolved")
-    throw new Error("Root missing");
+  if (rootAgain.status !== "resolved") throw new Error("Root missing");
   expect(rootAgain.value.userSession).toEqual(root.observation.userSession);
   const snapshot = await api.captureSessions({
     scope: { userSessionId: root.observation.userSession.userSessionId },
@@ -168,15 +161,13 @@ test("root ceiling and monotonic child lifetime survive different process TTLs a
       clock.mockReturnValue(root.observation.observedAt + offset);
       const op = operation(scope.createFactory({ clientSessionTtlSeconds: 7200 }));
       const resolved = await op.api.resolveUserSession(root.bearer);
-      if (resolved.status !== "resolved")
-        throw new Error("Clock skew invalidated root");
+      if (resolved.status !== "resolved") throw new Error("Clock skew invalidated root");
       const renewed = await open(op.api, resolved.value);
       expect(renewed.clientSession.expiresAt).toBe(root.observation.userSession.expiresAt);
       expect(renewed.observedAt - root.observation.observedAt).toBeLessThan(10000);
       const short = operation(scope.createFactory({ clientSessionTtlSeconds: 1 }));
       const shortRoot = await short.api.resolveUserSession(root.bearer);
-      if (shortRoot.status !== "resolved")
-        throw new Error("Root missing");
+      if (shortRoot.status !== "resolved") throw new Error("Root missing");
       const preserved = await open(short.api, shortRoot.value);
       expect(preserved.clientSession.expiresAt).toBe(renewed.clientSession.expiresAt);
       expect(preserved.clientSession.clientSessionId).toBe(child.clientSession.clientSessionId);
@@ -184,16 +175,13 @@ test("root ceiling and monotonic child lifetime survive different process TTLs a
       expect(lifetime.expiresAt).toBe(root.observation.userSession.expiresAt);
       expect(lifetime.remainingSeconds).toBeLessThanOrEqual(3600);
     }
-  }
-  finally {
+  } finally {
     clock.mockRestore();
   }
 });
 
 test("independent root and client TTLs preserve 24h versus 1h and clip issuance and short-root relationships", async () => {
-  const longRoot = operation(
-    scope.createFactory({ userSessionTtlSeconds: 86400, clientSessionTtlSeconds: 3600 }),
-  );
+  const longRoot = operation(scope.createFactory({ userSessionTtlSeconds: 86400, clientSessionTtlSeconds: 3600 }));
   const root = await longRoot.api.createUserSession(authentication);
   const child = await open(longRoot.api, root.observation);
   expect(root.observation.userSession.expiresAt - root.observation.userSession.createdAt).toBe(86400000);
@@ -202,9 +190,7 @@ test("independent root and client TTLs preserve 24h versus 1h and clip issuance 
   const lifetime = await longRoot.api.getIssuanceLifetime(child, 7200);
   expect(lifetime.expiresAt).toBe(child.clientSession.expiresAt);
 
-  const shortRoot = operation(
-    scope.createFactory({ userSessionTtlSeconds: 30, clientSessionTtlSeconds: 3600 }),
-  );
+  const shortRoot = operation(scope.createFactory({ userSessionTtlSeconds: 30, clientSessionTtlSeconds: 3600 }));
   const short = await shortRoot.api.createUserSession(authentication);
   const clipped = await open(shortRoot.api, short.observation);
   expect(clipped.clientSession.expiresAt).toBe(short.observation.userSession.expiresAt);
@@ -233,15 +219,13 @@ test("observations reject copies, serialization, cross operation/factory, manage
       }),
     ),
   ]);
-  expect(errors.every(error => error instanceof SessionObservationRequiredError)).toBe(true);
+  expect(errors.every((error) => error instanceof SessionObservationRequiredError)).toBe(true);
   expect(Reflect.set(root.observation.userSession, "subjectContext", "changed")).toBe(false);
   expect(Reflect.set(root.observation.userSession.amr, "0", "fake")).toBe(false);
   expect(Reflect.set(root.observation.userSession.origin!, "ip", "fake")).toBe(false);
   expect(api.useObservation(root.observation).userSession).toMatchObject(authentication);
   const inventory = await api.captureSessions({ scope: { subjectIdentifier } });
-  const dtoError = await rejection(() =>
-    open(api, inventory.records[0] as unknown as UserSessionObservation),
-  );
+  const dtoError = await rejection(() => open(api, inventory.records[0] as unknown as UserSessionObservation));
   expect(dtoError).toBeInstanceOf(SessionObservationRequiredError);
   const count = await scope.countRecords();
   expect(count).toBe(2);
@@ -276,8 +260,7 @@ test("root termination denies new online combinations even with missing child in
   const lateDenied = await newRequest.api.resolveClientSessionForUse(target(late));
   expect(lateDenied.status).toBe("terminated");
   const neutral = await newRequest.api.observeClientSessionForRevocation(target(child));
-  if (neutral.status !== "resolved")
-    throw new Error("Neutral revocation required live parent");
+  if (neutral.status !== "resolved") throw new Error("Neutral revocation required live parent");
   const revoked = await newRequest.api.revokeObservedClientSession(neutral.value);
   expect(revoked.status).toBe("terminated");
 });
@@ -340,7 +323,7 @@ test("fixed batch excludes only the current root and returns only failed/unknown
     targets: [...roots.targets, ...children.targets],
     excludeUserSessionId: root.observation.userSession.userSessionId,
   });
-  expect(first.results.map(r => r.status)).toEqual(["excluded", "unknown"]);
+  expect(first.results.map((r) => r.status)).toEqual(["excluded", "unknown"]);
   expect(first.clientSessionsTerminated).toBe(0);
   expect(first.unfinished).toEqual(children.targets);
   const retry = await operation().api.executeCapturedSessions({ targets: structuredClone(first.unfinished) });
@@ -373,24 +356,17 @@ for (const outcome of ["success", "failed", "unknown-before", "unknown-after"] a
     const captured = await api.captureSessions({
       scope: { userSessionId: root.observation.userSession.userSessionId },
     });
-    const originalTarget = captured.targets.find(
-      value => value.id === child.clientSession.clientSessionId,
-    )!;
-    const secondTarget = captured.targets.find(value => value.id === second.clientSession.clientSessionId)!;
+    const originalTarget = captured.targets.find((value) => value.id === child.clientSession.clientSessionId)!;
+    const secondTarget = captured.targets.find((value) => value.id === second.clientSession.clientSessionId)!;
     const neutral = await api.observeClientSessionForRevocation(target(child));
-    if (neutral.status !== "resolved")
-      throw new Error("Neutral observation missing");
+    if (neutral.status !== "resolved") throw new Error("Neutral observation missing");
     const restore = outcome === "failed" ? await scope.corruptRecord(originalTarget) : undefined;
-    if (outcome.startsWith("unknown"))
-      scope.failNext("revoke", outcome === "unknown-after");
+    if (outcome.startsWith("unknown")) scope.failNext("revoke", outcome === "unknown-after");
     const first = await api.revokeObservedClientSession(neutral.value);
-    expect(first.status).toBe(
-      outcome === "success" ? "terminated" : outcome === "failed" ? "failed" : "unknown",
-    );
+    expect(first.status).toBe(outcome === "success" ? "terminated" : outcome === "failed" ? "failed" : "unknown");
     // A frozen result may reject mutation; either way the original observation must remain authoritative.
     await rejection(() => Object.assign(first.target, secondTarget));
-    if (restore)
-      await restore();
+    if (restore) await restore();
     const retry = await api.revokeObservedClientSession(neutral.value);
     const originalState = await scope.inspect(originalTarget);
     const retainedState = await scope.inspect(secondTarget);
@@ -412,13 +388,13 @@ test("missing, already terminated, corrupt and unknown targets remain distinct a
   const page = await api.captureSessions({
     scope: { userSessionId: root.observation.userSession.userSessionId },
   });
-  const childTarget = page.targets.find(t => t.id === child.clientSession.clientSessionId)!;
-  const secondTarget = page.targets.find(t => t.id === second.clientSession.clientSessionId)!;
+  const childTarget = page.targets.find((t) => t.id === child.clientSession.clientSessionId)!;
+  const secondTarget = page.targets.find((t) => t.id === second.clientSession.clientSessionId)!;
   await scope.removeRecord(childTarget);
   await scope.corruptRecord(secondTarget);
   await api.revokeObservedClientSession(third);
   const result = await api.executeCapturedSessions({ targets: page.targets });
-  expect(result.results.map(r => r.status).sort()).toEqual(["already_terminated", "failed", "missing"]);
+  expect(result.results.map((r) => r.status).sort()).toEqual(["already_terminated", "failed", "missing"]);
   expect(result.unfinished).toEqual([secondTarget]);
   expect(result.userSessionsTerminated + result.clientSessionsTerminated).toBe(0);
 });
@@ -466,8 +442,7 @@ test("read transport failures remain unavailable rather than missing, and neutra
   const error = await rejection(() => api.resolveClientSessionForUse(target(child)));
   expect(error).toBeInstanceOf(SessionStorageError);
   const neutral = await api.observeUserSessionForRevocation(root.observation.userSession.userSessionId);
-  if (neutral.status !== "resolved")
-    throw new Error("Neutral observation missing");
+  if (neutral.status !== "resolved") throw new Error("Neutral observation missing");
   const misuse = await rejection(() => open(api, neutral.value as unknown as UserSessionObservation));
   expect(misuse).toBeInstanceOf(SessionObservationRequiredError);
   const wrong = await api.observeClientSessionForRevocation({ ...target(child), clientId: "other" });

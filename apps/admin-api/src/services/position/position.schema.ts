@@ -15,25 +15,22 @@ export const PositionMemberCountDetailSchema = PositionDtoSchema.extend({
   memberNumber: z.number().int().nonnegative(),
 });
 
-const PositionCodeInputSchema = z.string()
-  .trim()
-  .min(1, "岗位编码不能为空")
-  .max(64, "岗位编码最多64个字符");
+const PositionCodeInputSchema = z.string().trim().min(1, "岗位编码不能为空").max(64, "岗位编码最多64个字符");
 
-const PositionNameInputSchema = z.string()
-  .trim()
-  .min(1, "岗位名称不能为空")
-  .max(128, "岗位名称最多128个字符");
+const PositionNameInputSchema = z.string().trim().min(1, "岗位名称不能为空").max(128, "岗位名称最多128个字符");
 
-export const PositionCreateDtoSchema = insertPositionSchema.pick({
-  posCode: true,
-  posName: true,
-  description: true,
-  status: true,
-}).extend({
-  posCode: PositionCodeInputSchema,
-  posName: PositionNameInputSchema,
-}).openapi("PositionCreateDto");
+export const PositionCreateDtoSchema = insertPositionSchema
+  .pick({
+    posCode: true,
+    posName: true,
+    description: true,
+    status: true,
+  })
+  .extend({
+    posCode: PositionCodeInputSchema,
+    posName: PositionNameInputSchema,
+  })
+  .openapi("PositionCreateDto");
 
 export const PositionPaginationQueryDtoSchema = createPageQuerySchema(
   z.object({
@@ -41,23 +38,32 @@ export const PositionPaginationQueryDtoSchema = createPageQuerySchema(
       text: z.string().optional().openapi({ example: "138550" }),
     }),
     exactConditions: z.object({
-      statuses: z.array(z.enum(PositionStatus)).optional().openapi({
-        example: [PositionStatus.Enable],
-      }),
+      statuses: z
+        .array(z.enum(PositionStatus))
+        .optional()
+        .openapi({
+          example: [PositionStatus.Enable],
+        }),
     }),
   }),
 ).openapi("PositionPaginationQueryDto");
 
-export const PositionUpdateDtoSchema = updatePositionSchema.pick({
-  posCode: true,
-  posName: true,
-  description: true,
-  status: true,
-}).extend({
-  posCode: PositionCodeInputSchema.optional(),
-  posName: PositionNameInputSchema.optional(),
-}).openapi("PositionUpdateDto");
+export const PositionUpdateDtoSchema = updatePositionSchema
+  .pick({
+    posCode: true,
+    posName: true,
+    description: true,
+    status: true,
+  })
+  .extend({
+    posCode: PositionCodeInputSchema.optional(),
+    posName: PositionNameInputSchema.optional(),
+  })
+  .openapi("PositionUpdateDto");
 
-export const PositionStatusUpdateDtoSchema = updatePositionSchema.pick({
-  status: true,
-}).required().openapi("PositionStatusUpdateDto");
+export const PositionStatusUpdateDtoSchema = updatePositionSchema
+  .pick({
+    status: true,
+  })
+  .required()
+  .openapi("PositionStatusUpdateDto");

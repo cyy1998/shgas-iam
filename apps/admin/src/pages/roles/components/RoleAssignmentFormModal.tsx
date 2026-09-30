@@ -1,23 +1,23 @@
-import OrganizationTreeSelector from '@admin/components/OrganizationTreeSelector';
+import OrganizationTreeSelector from "@admin/components/OrganizationTreeSelector";
 import {
   normalizeAssignmentCreateInput,
   requestEmploymentOptions,
   requestPositionOptions,
   roleAssignmentTargetTypeOptions,
-} from '@admin/pages/roles/role-selectors';
-import { AdminMutationCommittedError } from '@admin/services/admin-mutation';
-import { createRoleAssignment } from '@admin/services/role';
+} from "@admin/pages/roles/role-selectors";
+import { AdminMutationCommittedError } from "@admin/services/admin-mutation";
+import { createRoleAssignment } from "@admin/services/role";
 import {
   ModalForm,
   ProForm,
   ProFormDependency,
+  type ProFormInstance,
   ProFormSelect,
   ProFormSwitch,
-  type ProFormInstance,
-} from '@ant-design/pro-components';
-import { RoleAssignmentTargetType } from '@iam/contracts';
-import { message } from 'antd';
-import { useRef } from 'react';
+} from "@ant-design/pro-components";
+import { RoleAssignmentTargetType } from "@iam/contracts";
+import { message } from "antd";
+import { useRef } from "react";
 
 type Props = {
   open: boolean;
@@ -38,10 +38,7 @@ export default function RoleAssignmentFormModal({
 }: Props) {
   const formRef = useRef<ProFormInstance>(undefined);
   const [messageApi, messageContextHolder] = message.useMessage();
-  const handleError =
-    onError ??
-    ((err: unknown) =>
-      messageApi.error(err instanceof Error ? err.message : '操作失败'));
+  const handleError = onError ?? ((err: unknown) => messageApi.error(err instanceof Error ? err.message : "操作失败"));
 
   return (
     <>
@@ -54,7 +51,7 @@ export default function RoleAssignmentFormModal({
         modalProps={{
           destroyOnHidden: true,
           mask: { closable: false },
-          okText: '确定',
+          okText: "确定",
         }}
         initialValues={{
           targetType: RoleAssignmentTargetType.Organization,
@@ -64,11 +61,8 @@ export default function RoleAssignmentFormModal({
         onFinish={async (values) => {
           if (!roleCode) return false;
           try {
-            const outcome = await createRoleAssignment(
-              roleCode,
-              normalizeAssignmentCreateInput(values),
-            );
-            messageApi.success(outcome.changed ? '分配已创建' : '无需修改');
+            const outcome = await createRoleAssignment(roleCode, normalizeAssignmentCreateInput(values));
+            messageApi.success(outcome.changed ? "分配已创建" : "无需修改");
             onOpenChange(false);
             onSuccess();
             return true;
@@ -94,15 +88,12 @@ export default function RoleAssignmentFormModal({
                 orgCode: undefined,
                 posCode: undefined,
                 employmentId: undefined,
-                includeDescendants:
-                  targetType === RoleAssignmentTargetType.Organization
-                    ? true
-                    : undefined,
+                includeDescendants: targetType === RoleAssignmentTargetType.Organization ? true : undefined,
               });
             },
           }}
         />
-        <ProFormDependency name={['targetType']}>
+        <ProFormDependency name={["targetType"]}>
           {({ targetType }) => {
             if (targetType === RoleAssignmentTargetType.Position) {
               return (
@@ -110,10 +101,10 @@ export default function RoleAssignmentFormModal({
                   name="posCode"
                   label="岗位"
                   showSearch
-                  rules={[{ required: true, message: '请选择岗位' }]}
+                  rules={[{ required: true, message: "请选择岗位" }]}
                   fieldProps={{
                     filterOption: false,
-                    placeholder: '输入岗位名称或编码搜索',
+                    placeholder: "输入岗位名称或编码搜索",
                     showSearch: true,
                   }}
                   request={requestPositionOptions}
@@ -126,10 +117,10 @@ export default function RoleAssignmentFormModal({
                   name="employmentId"
                   label="任职"
                   showSearch
-                  rules={[{ required: true, message: '请选择任职' }]}
+                  rules={[{ required: true, message: "请选择任职" }]}
                   fieldProps={{
                     filterOption: false,
-                    placeholder: '输入任职 ID、用户、组织或岗位搜索',
+                    placeholder: "输入任职 ID、用户、组织或岗位搜索",
                     showSearch: true,
                   }}
                   request={requestEmploymentOptions}
@@ -138,11 +129,7 @@ export default function RoleAssignmentFormModal({
             }
             return (
               <>
-                <ProForm.Item
-                  name="orgCode"
-                  label="组织"
-                  rules={[{ required: true, message: '请选择组织' }]}
-                >
+                <ProForm.Item name="orgCode" label="组织" rules={[{ required: true, message: "请选择组织" }]}>
                   <OrganizationTreeSelector placeholder="请选择组织" />
                 </ProForm.Item>
                 <ProFormSwitch name="includeDescendants" label="包含下级组织" />

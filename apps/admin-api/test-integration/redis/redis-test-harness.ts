@@ -1,8 +1,6 @@
-import type {
-  DedicatedRedisTestConfig,
-} from "@iam/api-core/testing/external-test-resources";
 import { randomUUID } from "node:crypto";
 import process from "node:process";
+import type { DedicatedRedisTestConfig } from "@iam/api-core/testing/external-test-resources";
 import {
   cleanupRedisKeysMatchingOwnerMarkers,
   createRedisKeyInventoryPort,
@@ -13,9 +11,7 @@ import {
 import Redis from "ioredis";
 
 const DEFAULT_TEST_REDIS_URL_ENV = "IAM_ADMIN_API_TEST_REDIS_URL";
-type AdminApiRedisTestResourceEnvName
-  = | "IAM_ADMIN_API_TEST_REDIS_URL"
-    | "IAM_API_CORE_TEST_REDIS_URL";
+type AdminApiRedisTestResourceEnvName = "IAM_ADMIN_API_TEST_REDIS_URL" | "IAM_API_CORE_TEST_REDIS_URL";
 
 export interface AdminApiRedisTestScope {
   readonly redis: Redis;
@@ -34,8 +30,7 @@ export interface AdminApiRedisTestHarness {
 
 export async function createAdminApiRedisTestHarness(options?: {
   readonly resourceEnvName?: AdminApiRedisTestResourceEnvName;
-}):
-Promise<AdminApiRedisTestHarness> {
+}): Promise<AdminApiRedisTestHarness> {
   const resourceEnvName = options?.resourceEnvName ?? DEFAULT_TEST_REDIS_URL_ENV;
   const redisUrl = requireDedicatedRedisTestUrl(resourceEnvName);
   const redisConfig = parseDedicatedRedisTestUrl({
@@ -45,8 +40,7 @@ Promise<AdminApiRedisTestHarness> {
   const cleanupRedis = createRedisClient(redisUrl);
   try {
     await connectRedis(cleanupRedis);
-  }
-  catch (error) {
+  } catch (error) {
     cleanupRedis.disconnect();
     throw error;
   }
@@ -54,25 +48,18 @@ Promise<AdminApiRedisTestHarness> {
   return {
     redisConfig,
     async inventoryKeys() {
-      return await inventoryRedisKeys(
-        createRedisKeyInventoryPort(cleanupRedis),
-      );
+      return await inventoryRedisKeys(createRedisKeyInventoryPort(cleanupRedis));
     },
     async removeKeys(keys) {
-      if (keys.length > 0)
-        await cleanupRedis.unlink(...keys);
+      if (keys.length > 0) await cleanupRedis.unlink(...keys);
     },
     async createScope() {
       const ownerMarker = `admin-api-${randomUUID().replaceAll("-", "")}`;
       const redis = createRedisClient(redisUrl);
       const observer = createRedisClient(redisUrl);
       try {
-        await Promise.all([
-          connectRedis(redis),
-          connectRedis(observer),
-        ]);
-      }
-      catch (error) {
+        await Promise.all([connectRedis(redis), connectRedis(observer)]);
+      } catch (error) {
         redis.disconnect();
         observer.disconnect();
         throw error;
@@ -88,8 +75,7 @@ Promise<AdminApiRedisTestHarness> {
           return `${ownerMarker}-${label}-${sequence}`;
         },
         async close() {
-          if (closed)
-            return;
+          if (closed) return;
           closed = true;
           const errors: unknown[] = [];
           try {
@@ -98,23 +84,15 @@ Promise<AdminApiRedisTestHarness> {
               ownerMarkers: new Set([ownerMarker]),
               redis: createRedisKeyInventoryPort(cleanupRedis),
             });
-          }
-          catch (error) {
+          } catch (error) {
             errors.push(error);
           }
-          const closeResults = await Promise.allSettled([
-            redis.quit(),
-            observer.quit(),
-          ]);
+          const closeResults = await Promise.allSettled([redis.quit(), observer.quit()]);
           for (const result of closeResults) {
-            if (result.status === "rejected")
-              errors.push(result.reason);
+            if (result.status === "rejected") errors.push(result.reason);
           }
           if (errors.length > 0) {
-            throw new AggregateError(
-              errors,
-              "Failed to close Admin API Redis test scope",
-            );
+            throw new AggregateError(errors, "Failed to close Admin API Redis test scope");
           }
         },
       };
@@ -139,9 +117,7 @@ async function connectRedis(redis: Redis) {
   await redis.ping();
 }
 
-function requireDedicatedRedisTestUrl(
-  resourceEnvName: AdminApiRedisTestResourceEnvName,
-) {
+function requireDedicatedRedisTestUrl(resourceEnvName: AdminApiRedisTestResourceEnvName) {
   const redisUrl = requireExternalTestUrl({
     environment: process.env,
     lane: "Admin API Redis Integration",

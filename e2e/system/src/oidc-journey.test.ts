@@ -1,5 +1,5 @@
-import type { RunDescriptor } from "./lifecycle.ts";
 import { describe, expect, test } from "bun:test";
+import type { RunDescriptor } from "./lifecycle.ts";
 import { createOidcJourneyOperations } from "./oidc-journey.ts";
 import { playwrightStagingDirectory } from "./playwright-evidence.ts";
 
@@ -27,7 +27,7 @@ describe("OIDC PKCE journey operations", () => {
     const operations = createOidcJourneyOperations({
       repositoryRoot: "D:/repo",
       workspaceRoot: "D:/repo/e2e/system",
-      accessPath: async path => checkedPaths.push(path),
+      accessPath: async (path) => checkedPaths.push(path),
       playwrightCliPath: "D:/repo/e2e/system/node_modules/playwright/cli.js",
       runCommand: async (command, args, options) => {
         calls.push({ command, args, env: options.env });
@@ -37,7 +37,7 @@ describe("OIDC PKCE journey operations", () => {
     await operations.preflight();
     await operations.runJourney(descriptor);
 
-    expect(checkedPaths.map(path => path.replaceAll("\\", "/"))).toEqual([
+    expect(checkedPaths.map((path) => path.replaceAll("\\", "/"))).toEqual([
       "D:/repo/e2e/system/oidc-pkce.spec.ts",
       "D:/repo/e2e/system/playwright.config.ts",
       "D:/repo/e2e/system/src/playwright-browser-preflight.ts",
@@ -64,14 +64,10 @@ describe("OIDC PKCE journey operations", () => {
       IAM_E2E_RUN_ID: descriptor.runId,
       IAM_E2E_ADMIN_USERNAME: "e2e-admin-oidc-journey-01",
       IAM_E2E_OIDC_CLIENT_CODE: "e2e-oidc-oidc-journey-01",
-      IAM_E2E_OIDC_REDIRECT_URI:
-        "http://127.0.0.1:43123/e2e/oidc/callback",
-      IAM_E2E_INTERNAL_API_KEY:
-        "iam-e2e-internal-api-key-oidc-journey-01",
-      IAM_E2E_RESPONSIBILITY_TARGET_ORGANIZATION_CODE:
-        "e2e-resp-target-oidc-journey-01",
-      IAM_E2E_RESPONSIBILITY_HOLDER_POSITION_CODE:
-        "e2e-resp-pos-oidc-journey-01",
+      IAM_E2E_OIDC_REDIRECT_URI: "http://127.0.0.1:43123/e2e/oidc/callback",
+      IAM_E2E_INTERNAL_API_KEY: "iam-e2e-internal-api-key-oidc-journey-01",
+      IAM_E2E_RESPONSIBILITY_TARGET_ORGANIZATION_CODE: "e2e-resp-target-oidc-journey-01",
+      IAM_E2E_RESPONSIBILITY_HOLDER_POSITION_CODE: "e2e-resp-pos-oidc-journey-01",
       IAM_E2E_PLAYWRIGHT_OUTPUT_DIR: playwrightStagingDirectory(descriptor),
     });
     expect(calls[1]?.env?.IAM_E2E_ADMIN_PASSWORD).toBeTruthy();

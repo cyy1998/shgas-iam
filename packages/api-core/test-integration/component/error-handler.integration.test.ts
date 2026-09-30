@@ -1,5 +1,5 @@
-import { ApiErrorCode } from "@iam/contracts";
 import { describe, expect, mock, spyOn, test } from "bun:test";
+import { ApiErrorCode } from "@iam/contracts";
 import { Hono } from "hono";
 import { HTTPException } from "hono/http-exception";
 import { BAD_REQUEST, INTERNAL_SERVER_ERROR, NOT_FOUND } from "../../src/core/http-status-codes";
@@ -219,8 +219,7 @@ describe("errorHandler", () => {
         data: { requestId: "req-app" },
         message: "服务器内部错误，请联系管理员并提供 requestId",
       });
-    }
-    finally {
+    } finally {
       consoleError.mockRestore();
     }
   });

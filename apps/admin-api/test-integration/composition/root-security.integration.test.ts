@@ -1,5 +1,4 @@
-import type { SubjectAccessOperation } from "@iam/api-core/subject-access";
-import type { CapturedSession } from "@iam/session-kernel";
+import { afterAll, beforeAll, expect, test } from "bun:test";
 import { randomUUID } from "node:crypto";
 import process from "node:process";
 import { createAdminApiRepositories } from "@admin-api/composition/repositories";
@@ -22,6 +21,7 @@ import { AdminLoginStateAuditFailedAfterEffectError } from "@admin-api/services/
 import { AdminSessionRevokeResultSchema } from "@admin-api/services/session-management/session-management.schema";
 import { createClientSnapshots } from "@iam/api-core/client-snapshot/composition";
 import { createErrorHandler } from "@iam/api-core/middlewares/error-handler";
+import type { SubjectAccessOperation } from "@iam/api-core/subject-access";
 import {
   createRedisSubjectAccessStore,
   createSubjectAccessBarrier,
@@ -32,13 +32,20 @@ import {
 } from "@iam/api-core/subject-access";
 import { createTRPCContext } from "@iam/api-core/trpc";
 import { createUnitOfWork, mapUnitOfWork } from "@iam/api-core/uow";
-import { ApiErrorCode, ClientStatus, PrivilegeDelegationStatus, RoleStatus, UserStatus, UserType } from "@iam/contracts";
+import {
+  ApiErrorCode,
+  ClientStatus,
+  PrivilegeDelegationStatus,
+  RoleStatus,
+  UserStatus,
+  UserType,
+} from "@iam/contracts";
 import { createClientSnapshotRepository } from "@iam/db/client-snapshot";
 import { auditLogs, clients, privilegeDelegations, roles, userProfileDirty, users } from "@iam/db/schema";
+import type { CapturedSession } from "@iam/session-kernel";
 import { createUnifiedSessionRedisTestScope } from "@iam/session-kernel/testing";
 import { createSubjectAccessTransitionRepository } from "@iam/user-profile-read-model/subject-access-transition";
 import { fetchRequestHandler } from "@trpc/server/adapters/fetch";
-import { afterAll, beforeAll, expect, test } from "bun:test";
 import { eq } from "drizzle-orm";
 import { Hono } from "hono";
 import { z } from "zod";
@@ -59,8 +66,7 @@ afterAll(async () => {
 
 async function fixture() {
   const url = process.env.IAM_ADMIN_API_TEST_REDIS_URL;
-  if (!url)
-    throw new Error("IAM_ADMIN_API_TEST_REDIS_URL is required");
+  if (!url) throw new Error("IAM_ADMIN_API_TEST_REDIS_URL is required");
   const scope = await createUnifiedSessionRedisTestScope(url);
   const kernel = scope.createFactoryForOperations<SubjectAccessOperation>(requireSubjectAccessOperation);
   const [user] = await pg.db
@@ -73,8 +79,7 @@ async function fixture() {
       password: "old-hash",
     })
     .returning();
-  if (!user)
-    throw new Error("User fixture missing");
+  if (!user) throw new Error("User fixture missing");
   const account = user;
   const repositories = createAdminApiRepositories(pg.db);
   const auditService = createAdminAuditService({ auditRepository: repositories.audit });
@@ -115,8 +120,7 @@ async function fixture() {
     kernel,
     barrier: {
       async readCommittedTransitionId(subjectIdentifier) {
-        if (unavailable)
-          throw new SubjectAccessUnavailableError();
+        if (unavailable) throw new SubjectAccessUnavailableError();
         return await barrier.readCommittedTransitionId(subjectIdentifier);
       },
     },
@@ -127,10 +131,10 @@ async function fixture() {
       roleRepository: repositories.role,
       privilegeRepository: repositories.privilege,
       roleAssignmentResolver: { resolveEffectiveRoles: async () => new Map() },
-      passwordHasher: { hashPassword: async value => `hash:${value}` },
+      passwordHasher: { hashPassword: async (value) => `hash:${value}` },
       random: { uuid: randomUUID, password: () => "New-Password-183" },
       subjectAccessLifecycle,
-      uow: mapUnitOfWork(unitOfWork, tx => ({
+      uow: mapUnitOfWork(unitOfWork, (tx) => ({
         userRepository: tx.repositories.user,
         auditService: tx.auditService,
         subjectAccessMutation: tx.subjectAccessMutation,
@@ -150,8 +154,7 @@ async function fixture() {
       },
       audit: {
         async recordAuditLog(input) {
-          if (failAudit)
-            throw new Error("Audit unavailable");
+          if (failAudit) throw new Error("Audit unavailable");
           await auditService.recordAuditLog(input);
         },
       },
@@ -161,24 +164,21 @@ async function fixture() {
     await bootstrap.seedMany([{ subjectIdentifier, state: "enabled" }], clock.nowDate());
     return await candidate.operations.run(async (operation) => {
       const permission = await operation.acquireForAuthentication(subjectIdentifier);
-      const root = await kernel
-        .forOperation(operation)
-        .createUserSession({
-          subjectIdentifier,
-          subjectContext: operation.getSubjectContext(permission),
-          amr: ["pwd"],
-        });
+      const root = await kernel.forOperation(operation).createUserSession({
+        subjectIdentifier,
+        subjectContext: operation.getSubjectContext(permission),
+        amr: ["pwd"],
+      });
       const child = await kernel
         .forOperation(operation)
         .openClientSession(root.observation, { clientId, protocol: "oidc" });
-      if (child.status !== "created" && child.status !== "reused")
-        throw new Error("Missing child");
+      if (child.status !== "created" && child.status !== "reused") throw new Error("Missing child");
       return { root: root.observation.userSession, child: child.value.clientSession, bearer: root.bearer };
     });
   }
   async function status(token: string) {
     return await candidate.operations.run(
-      async operation => (await kernel.forOperation(operation).resolveUserSession(token)).status,
+      async (operation) => (await kernel.forOperation(operation).resolveUserSession(token)).status,
     );
   }
   const useCases = createAdminApiUseCases({
@@ -266,10 +266,9 @@ test("formal self revoke and password reset preserve current root, terminate its
     const [updated] = await pg.db.select().from(users).where(eq(users.id, f.account.id));
     expect(updated?.password).toBe("hash:New-Password-183");
     const audits = await pg.db.select().from(auditLogs).where(eq(auditLogs.targetId, f.account.id));
-    expect(audits.map(row => row.action)).toContain("admin.user.reset_password");
-    expect(audits.filter(row => row.action === "admin.session.revoke_user")).toHaveLength(2);
-  }
-  finally {
+    expect(audits.map((row) => row.action)).toContain("admin.user.reset_password");
+    expect(audits.filter((row) => row.action === "admin.session.revoke_user")).toHaveLength(2);
+  } finally {
     await f.scope.close();
   }
 });
@@ -295,12 +294,10 @@ test.each(["revoke", "password"])(
             { actorUserId: f.account.id, principalSessionId: current.root.userSessionId },
             audit,
           );
-        }
-        else {
+        } else {
           await f.user.resetPasswordByUsername(f.account.username, audit);
         }
-      }
-      catch (error) {
+      } catch (error) {
         failure = error;
       }
       expect(failure).toBeInstanceOf(
@@ -322,20 +319,17 @@ test.each(["revoke", "password"])(
       const rootStatus = await f.status(current.bearer);
       expect(rootStatus).toBe("resolved");
       const child = await f.operations.run(
-        async operation =>
-          await f.kernel
-            .forOperation(operation)
-            .resolveClientSessionForUse({
-              userSessionId: current.root.userSessionId,
-              clientSessionId: current.child.clientSessionId,
-              clientId: current.child.clientId,
-            }),
+        async (operation) =>
+          await f.kernel.forOperation(operation).resolveClientSessionForUse({
+            userSessionId: current.root.userSessionId,
+            clientSessionId: current.child.clientSessionId,
+            clientId: current.child.clientId,
+          }),
       );
       expect(child.status).toBe("terminated");
       const [account] = await pg.db.select().from(users).where(eq(users.id, f.account.id));
       expect(account?.password).toBe(command === "password" ? "hash:New-Password-183" : "old-hash");
-    }
-    finally {
+    } finally {
       await f.scope.close();
     }
   },
@@ -354,8 +348,7 @@ test("formal password reset reports committed failure when session after-effect 
         actorUserId: f.account.id,
         principalSessionId: current.root.userSessionId,
       });
-    }
-    catch (error) {
+    } catch (error) {
       failure = error;
     }
     expect(failure).toBeInstanceOf(AdminMutationCommittedError);
@@ -363,8 +356,7 @@ test("formal password reset reports committed failure when session after-effect 
     expect(updated?.password).toBe("hash:New-Password-183");
     const statuses = [await f.status(current.bearer), await f.status(other.bearer)];
     expect(statuses).toEqual(["resolved", "terminated"]);
-  }
-  finally {
+  } finally {
     await f.scope.close();
   }
 });
@@ -376,7 +368,7 @@ test("formal Admin authentication accepts candidate roots and preserves Cookie o
     const app = new Hono();
     app.onError(createErrorHandler(f.logger));
     app.use("/protected", f.authentication.adminAuthenticationHandler);
-    app.get("/protected", c => c.json({ allowed: true }));
+    app.get("/protected", (c) => c.json({ allowed: true }));
     const headers = { Client: "iam-admin", Cookie: `global_session=${root.bearer}` };
     const ok = await app.request("/protected", { headers });
     expect(ok.status).toBe(200);
@@ -384,8 +376,7 @@ test("formal Admin authentication accepts candidate roots and preserves Cookie o
     const unknown = await app.request("/protected", { headers });
     expect(unknown.status).toBe(503);
     expect(unknown.headers.get("set-cookie")).toBeNull();
-  }
-  finally {
+  } finally {
     await f.scope.close();
   }
 });
@@ -402,8 +393,8 @@ test("candidate formal REST serializes only unified counts after real root authe
     app.route("/admin", createSessionManagementRoute(f.sessionManagementAdapter));
     app.route("/admin", createUserRoute(f.userAdapter));
     const headers = {
-      "Client": "iam-admin",
-      "Cookie": `global_session=${root.bearer}`,
+      Client: "iam-admin",
+      Cookie: `global_session=${root.bearer}`,
       "Content-Type": "application/json",
     };
     const revoke = await app.request("/admin/session-management/sessions/revoke", {
@@ -434,8 +425,7 @@ test("candidate formal REST serializes only unified counts after real root authe
     expect(resetBody).toMatchObject({
       data: { changed: true, result: "New-Password-183", sessions: { excluded: 1 } },
     });
-  }
-  finally {
+  } finally {
     await f.scope.close();
   }
 });
@@ -449,8 +439,7 @@ test("self password reset without the current root rejects before changing Postg
         actorType: "admin",
         actorUserId: f.account.id,
       });
-    }
-    catch (error) {
+    } catch (error) {
       failure = error;
     }
     expect(failure).toBeInstanceOf(Error);
@@ -458,8 +447,7 @@ test("self password reset without the current root rejects before changing Postg
     expect(account?.password).toBe("old-hash");
     const audits = await pg.db.select().from(auditLogs).where(eq(auditLogs.targetId, f.account.id));
     expect(audits).toEqual([]);
-  }
-  finally {
+  } finally {
     await f.scope.close();
   }
 });
@@ -479,8 +467,7 @@ test.each(["rest", "trpc"])(
           status: UserStatus.Enable,
         })
         .returning();
-      if (!targetUser)
-        throw new Error("Target missing");
+      if (!targetUser) throw new Error("Target missing");
       const original = await f.create(targetUser.subjectIdentifier);
       await pg.db.update(users).set({ status: UserStatus.Disable }).where(eq(users.id, targetUser.id));
       const app = new Hono();
@@ -488,22 +475,23 @@ test.each(["rest", "trpc"])(
       app.use("*", f.authentication.adminAuthenticationHandler);
       addTestAdminAuthorizationMiddleware(app);
       app.route("/admin", createSessionManagementRoute(f.sessionManagementAdapter));
-      app.all("/rpc/*", c =>
+      app.all("/rpc/*", (c) =>
         fetchRequestHandler({
           endpoint: "/rpc",
           req: c.req.raw,
           router: f.sessionManagementAdapter.sessionManagementAdminRouter,
           createContext: () => createTRPCContext({ honoCtx: c }),
-        }));
+        }),
+      );
       const headers = {
-        "Client": "iam-admin",
-        "Cookie": `global_session=${current.bearer}`,
+        Client: "iam-admin",
+        Cookie: `global_session=${current.bearer}`,
         "Content-Type": "application/json",
       };
       async function list(kind: "userSession" | "clientSession") {
         const input = { conditions: { userId: targetUser!.id, kind }, pageNum: 1, pageSize: 1 };
-        const response
-          = transport === "rest"
+        const response =
+          transport === "rest"
             ? await app.request("/admin/session-management/sessions/search", {
                 method: "POST",
                 headers,
@@ -543,9 +531,7 @@ test.each(["rest", "trpc"])(
         const payload = z
           .object({ data: z.unknown().optional(), result: z.object({ data: z.unknown() }).optional() })
           .parse(await response.json());
-        return AdminSessionRevokeResultSchema.parse(
-          transport === "rest" ? payload.data : payload.result?.data,
-        );
+        return AdminSessionRevokeResultSchema.parse(transport === "rest" ? payload.data : payload.result?.data);
       }
       f.scope.failNext("revoke", true);
       const first = await revoke({ type: "captured", targets: [children.result[0]!.record!.identity] });
@@ -557,17 +543,14 @@ test.each(["rest", "trpc"])(
           artifactCleanup: { attempted: 0, succeeded: 0, failed: 0 },
         },
       });
-      if (!("sessions" in first.result) || !first.result.batch)
-        throw new Error("Missing batch");
+      if (!("sessions" in first.result) || !first.result.batch) throw new Error("Missing batch");
       expect(first.result.batch.unfinished).toHaveLength(1);
       const later = await f.operations.run(async (operation) => {
         const sessions = f.kernel.forOperation(operation);
         const root = await sessions.resolveUserSession(original.bearer);
-        if (root.status !== "resolved")
-          throw new Error("Original root missing");
+        if (root.status !== "resolved") throw new Error("Original root missing");
         const child = await sessions.openClientSession(root.value, { clientId: "client", protocol: "oidc" });
-        if (child.status !== "created")
-          throw new Error("Expected replacement relationship");
+        if (child.status !== "created") throw new Error("Expected replacement relationship");
         return child.value.clientSession;
       });
       expect(later.clientSessionId).not.toBe(original.child.clientSessionId);
@@ -580,31 +563,23 @@ test.each(["rest", "trpc"])(
         },
       });
       const laterState = await f.operations.run(
-        async operation =>
-          await f.kernel
-            .forOperation(operation)
-            .resolveClientSessionForUse({
-              userSessionId: later.userSessionId,
-              clientSessionId: later.clientSessionId,
-              clientId: "client",
-            }),
+        async (operation) =>
+          await f.kernel.forOperation(operation).resolveClientSessionForUse({
+            userSessionId: later.userSessionId,
+            clientSessionId: later.clientSessionId,
+            clientId: "client",
+          }),
       );
       expect(laterState.status).toBe("resolved");
-      const auditRows = await pg.db
-        .select()
-        .from(auditLogs)
-        .where(eq(auditLogs.action, "admin.session.revoke"));
+      const auditRows = await pg.db.select().from(auditLogs).where(eq(auditLogs.action, "admin.session.revoke"));
       expect(auditRows.length).toBeGreaterThanOrEqual(2);
-      expect(auditRows.some(row => row.targetType === "session_batch" && row.targetCode === null)).toBe(
-        true,
-      );
+      expect(auditRows.some((row) => row.targetType === "session_batch" && row.targetCode === null)).toBe(true);
       const storedDetails = JSON.stringify(
-        auditRows.filter(row => row.targetType === "session_batch").map(row => row.details),
+        auditRows.filter((row) => row.targetType === "session_batch").map((row) => row.details),
       );
       expect(storedDetails).not.toContain(original.child.clientSessionId);
       expect(storedDetails).not.toContain(current.root.userSessionId);
-    }
-    finally {
+    } finally {
       await f.scope.close();
     }
   },
@@ -624,8 +599,7 @@ test("neutral inventory fails on damaged records and a missing inventory never r
     let failed: unknown;
     try {
       await f.sessionManagement.listSessions({ pageNum: 1, pageSize: 1 }, actor);
-    }
-    catch (error) {
+    } catch (error) {
       failed = error;
     }
     expect(failed).toBeInstanceOf(Error);
@@ -640,8 +614,7 @@ test("neutral inventory fails on damaged records and a missing inventory never r
     );
     const status = await f.status(other.bearer);
     expect(status).toBe("terminated");
-  }
-  finally {
+  } finally {
     await f.scope.close();
   }
 });
@@ -650,21 +623,26 @@ test("delegation-blocked User deletion restores real access and preserves both s
   const f = await fixture();
   try {
     const original = await f.create();
-    const [other] = await pg.db.insert(users).values({ username: `delegator-${randomUUID()}`, name: "Delegator" }).returning();
-    const [delegation] = await pg.db.insert(privilegeDelegations).values({
-      delegatorUserId: other!.id,
-      delegateeUserId: f.account.id,
-      organizationScopeId: 1,
-      status: PrivilegeDelegationStatus.Pause,
-      startTime: new Date("2099-01-01"),
-      endTime: new Date("2100-01-01"),
-    }).returning();
+    const [other] = await pg.db
+      .insert(users)
+      .values({ username: `delegator-${randomUUID()}`, name: "Delegator" })
+      .returning();
+    const [delegation] = await pg.db
+      .insert(privilegeDelegations)
+      .values({
+        delegatorUserId: other!.id,
+        delegateeUserId: f.account.id,
+        organizationScopeId: 1,
+        status: PrivilegeDelegationStatus.Pause,
+        startTime: new Date("2099-01-01"),
+        endTime: new Date("2100-01-01"),
+      })
+      .returning();
     const barrierBefore = await f.barrier.read(f.account.subjectIdentifier);
     let failure: unknown;
     try {
       await f.user.deleteUser(f.account.username);
-    }
-    catch (error) {
+    } catch (error) {
       failure = error;
     }
     expect(failure).toMatchObject({ code: "USER.HAS_OPEN_PRIVILEGE_DELEGATION", httpStatus: 409 });
@@ -696,8 +674,7 @@ test("delegation-blocked User deletion restores real access and preserves both s
     });
     expect(rootStatus).toBe("resolved");
     expect(child.status).toBe("resolved");
-  }
-  finally {
+  } finally {
     await f.scope.close();
   }
 });
@@ -716,29 +693,19 @@ test.each(["disable", "delete", "resign"])(
       });
       if (command === "disable") {
         await f.user.updateUserStatus(f.account.username, UserStatus.Disable, audit);
-      }
-      else if (command === "delete") {
+      } else if (command === "delete") {
         await f.user.deleteUser(f.account.username, audit);
-      }
-      else {
-        await f.useCases.employment.resignUser.execute(
-          { username: f.account.username },
-          { auditContext: audit },
-        );
+      } else {
+        await f.useCases.employment.resignUser.execute({ username: f.account.username }, { auditContext: audit });
       }
       const [committed] = await pg.db.select().from(users).where(eq(users.id, f.account.id));
-      expect(command === "delete" ? committed?.isDelete : committed?.status === UserStatus.Disable).toBe(
-        true,
-      );
+      expect(command === "delete" ? committed?.isDelete : committed?.status === UserStatus.Disable).toBe(true);
       const rootStatus = await f.status(original.bearer);
       expect(rootStatus).toBe("terminated");
       const auditRows = await pg.db.select().from(auditLogs).where(eq(auditLogs.targetId, f.account.id));
       expect(auditRows.length).toBeGreaterThan(0);
       // Test-owned source restoration creates a fresh access generation; it is not a production restore workflow.
-      await pg.db
-        .update(users)
-        .set({ status: UserStatus.Enable, isDelete: false })
-        .where(eq(users.id, f.account.id));
+      await pg.db.update(users).set({ status: UserStatus.Enable, isDelete: false }).where(eq(users.id, f.account.id));
       const transition = await f.barrier.beginBlocking(f.account.subjectIdentifier);
       await f.barrier.prepareRepair(transition, "enabled");
       await f.barrier.finalize(transition, "enabled");
@@ -746,8 +713,7 @@ test.each(["disable", "delete", "resign"])(
       await prepared.revoke({});
       const newerStatus = await f.status(newer.bearer);
       expect(newerStatus).toBe("resolved");
-    }
-    finally {
+    } finally {
       await f.scope.close();
     }
   },
@@ -771,8 +737,7 @@ test("real resignation no-op retries original residual sessions after an unconfi
     expect(retried.changed).toBe(false);
     const finalStatus = await f.status(original.bearer);
     expect(finalStatus).toBe("terminated");
-  }
-  finally {
+  } finally {
     await f.scope.close();
   }
 });
@@ -781,12 +746,15 @@ test("Role-blocked Client deletion preserves real sessions and cached Snapshot o
   const f = await fixture();
   try {
     const code = f.clientCode("role-blocked");
-    const [client] = await pg.db.insert(clients).values({
-      clientCode: code,
-      clientName: "Role blocked",
-      clientSecret: "test-internal",
-      extAttributes: {},
-    }).returning();
+    const [client] = await pg.db
+      .insert(clients)
+      .values({
+        clientCode: code,
+        clientName: "Role blocked",
+        clientSecret: "test-internal",
+        extAttributes: {},
+      })
+      .returning();
     await pg.db.insert(roles).values({
       clientId: client!.id,
       roleCode: code,
@@ -821,8 +789,7 @@ test("Role-blocked Client deletion preserves real sessions and cached Snapshot o
     let failure: unknown;
     try {
       await management.service.deleteClient(code);
-    }
-    catch (error) {
+    } catch (error) {
       failure = error;
     }
     expect(failure).toMatchObject({ code: ApiErrorCode.ClientHasRole, httpStatus: 409 });
@@ -835,14 +802,15 @@ test("Role-blocked Client deletion preserves real sessions and cached Snapshot o
     expect(observed).toEqual(warm);
     expect(observedCredential).toEqual(credential);
     expect(reads).toEqual({ client: 0, credential: 0 });
-    const session = await f.operations.run(operation => f.kernel.forOperation(operation).resolveClientSessionForUse({
-      userSessionId: original.root.userSessionId,
-      clientSessionId: original.child.clientSessionId,
-      clientId: code,
-    }));
+    const session = await f.operations.run((operation) =>
+      f.kernel.forOperation(operation).resolveClientSessionForUse({
+        userSessionId: original.root.userSessionId,
+        clientSessionId: original.child.clientSessionId,
+        clientId: code,
+      }),
+    );
     expect(session.status).toBe("resolved");
-  }
-  finally {
+  } finally {
     await f.scope.close();
   }
 });
@@ -851,15 +819,13 @@ test("Client ordinary edits preserve real sessions; formal deletion and explicit
   const f = await fixture();
   try {
     const code = f.clientCode("lifecycle");
-    await pg.db
-      .insert(clients)
-      .values({
-        clientCode: code,
-        clientName: "Lifecycle",
-        clientSecret: "test-internal",
-        status: ClientStatus.Enable,
-        extAttributes: {},
-      });
+    await pg.db.insert(clients).values({
+      clientCode: code,
+      clientName: "Lifecycle",
+      clientSecret: "test-internal",
+      status: ClientStatus.Enable,
+      extAttributes: {},
+    });
     const original = await f.create(f.account.subjectIdentifier, code);
     const other = await f.create();
     const { management } = createClientSsoSnapshotManagement({
@@ -878,14 +844,12 @@ test("Client ordinary edits preserve real sessions; formal deletion and explicit
     ]) {
       await management.service.save(code, patch);
       const before = await f.operations.run(
-        async operation =>
-          await f.kernel
-            .forOperation(operation)
-            .resolveClientSessionForUse({
-              userSessionId: original.root.userSessionId,
-              clientSessionId: original.child.clientSessionId,
-              clientId: code,
-            }),
+        async (operation) =>
+          await f.kernel.forOperation(operation).resolveClientSessionForUse({
+            userSessionId: original.root.userSessionId,
+            clientSessionId: original.child.clientSessionId,
+            clientId: code,
+          }),
       );
       expect(before.status).toBe("resolved");
     }
@@ -905,31 +869,26 @@ test("Client ordinary edits preserve real sessions; formal deletion and explicit
     const retryBody = await retry.json();
     expect(retryBody).toMatchObject({ data: { changed: false, result: null } });
     const after = await f.operations.run(
-      async operation =>
-        await f.kernel
-          .forOperation(operation)
-          .resolveClientSessionForUse({
-            userSessionId: original.root.userSessionId,
-            clientSessionId: original.child.clientSessionId,
-            clientId: code,
-          }),
+      async (operation) =>
+        await f.kernel.forOperation(operation).resolveClientSessionForUse({
+          userSessionId: original.root.userSessionId,
+          clientSessionId: original.child.clientSessionId,
+          clientId: code,
+        }),
     );
     const otherAfter = await f.operations.run(
-      async operation =>
-        await f.kernel
-          .forOperation(operation)
-          .resolveClientSessionForUse({
-            userSessionId: other.root.userSessionId,
-            clientSessionId: other.child.clientSessionId,
-            clientId: "client",
-          }),
+      async (operation) =>
+        await f.kernel.forOperation(operation).resolveClientSessionForUse({
+          userSessionId: other.root.userSessionId,
+          clientSessionId: other.child.clientSessionId,
+          clientId: "client",
+        }),
     );
     expect(after.status).toBe("terminated");
     expect(otherAfter.status).toBe("resolved");
     const rootAfter = await f.status(original.bearer);
     expect(rootAfter).toBe("resolved");
-  }
-  finally {
+  } finally {
     await f.scope.close();
   }
 });
@@ -943,16 +902,17 @@ test("candidate REST and tRPC keep HR outside session management without changin
     app.use("*", f.authentication.adminAuthenticationHandler);
     addTestAdminAuthorizationMiddleware(app, ["iam:hr-admin"]);
     app.route("/admin", createSessionManagementRoute(f.sessionManagementAdapter));
-    app.all("/rpc/*", c =>
+    app.all("/rpc/*", (c) =>
       fetchRequestHandler({
         endpoint: "/rpc",
         req: c.req.raw,
         router: f.sessionManagementAdapter.sessionManagementAdminRouter,
         createContext: () => createTRPCContext({ honoCtx: c }),
-      }));
+      }),
+    );
     const headers = {
-      "Client": "iam-admin",
-      "Cookie": `global_session=${root.bearer}`,
+      Client: "iam-admin",
+      Cookie: `global_session=${root.bearer}`,
       "Content-Type": "application/json",
     };
     for (const path of ["/admin/session-management/sessions/revoke", "/rpc/revokeSessions"]) {
@@ -964,20 +924,17 @@ test("candidate REST and tRPC keep HR outside session management without changin
       expect(response.status).toBe(403);
     }
     const status = await f.operations.run(
-      async operation =>
-        await f.kernel
-          .forOperation(operation)
-          .resolveClientSessionForUse({
-            userSessionId: root.root.userSessionId,
-            clientSessionId: root.child.clientSessionId,
-            clientId: "client",
-          }),
+      async (operation) =>
+        await f.kernel.forOperation(operation).resolveClientSessionForUse({
+          userSessionId: root.root.userSessionId,
+          clientSessionId: root.child.clientSessionId,
+          clientId: "client",
+        }),
     );
     expect(status.status).toBe("resolved");
     const rows = await pg.db.select().from(auditLogs).where(eq(auditLogs.targetId, f.account.id));
     expect(rows).toEqual([]);
-  }
-  finally {
+  } finally {
     await f.scope.close();
   }
 });
@@ -990,20 +947,11 @@ test("captured batches distinguish missing, replaced, failed, terminated and cur
     const replaced = await f.create();
     const broken = await f.create();
     const actor = { actorUserId: f.account.id, principalSessionId: current.root.userSessionId };
-    const children = await f.sessionManagement.listSessions(
-      { pageNum: 1, pageSize: 20, kind: "clientSession" },
-      actor,
-    );
-    const roots = await f.sessionManagement.listSessions(
-      { pageNum: 1, pageSize: 20, kind: "userSession" },
-      actor,
-    );
+    const children = await f.sessionManagement.listSessions({ pageNum: 1, pageSize: 20, kind: "clientSession" }, actor);
+    const roots = await f.sessionManagement.listSessions({ pageNum: 1, pageSize: 20, kind: "userSession" }, actor);
     const identity = (id: string) => {
-      const record = [...children.result, ...roots.result].find(
-        row => row.record?.identity.id === id,
-      )?.record;
-      if (!record)
-        throw new Error("Identity missing");
+      const record = [...children.result, ...roots.result].find((row) => row.record?.identity.id === id)?.record;
+      if (!record) throw new Error("Identity missing");
       return record.identity;
     };
     const missingIdentity = identity(missing.child.clientSessionId);
@@ -1054,8 +1002,7 @@ test("captured batches distinguish missing, replaced, failed, terminated and cur
     await restore();
     const rootStatus = await f.status(current.bearer);
     expect(rootStatus).toBe("resolved");
-  }
-  finally {
+  } finally {
     await f.scope.close();
   }
 });
@@ -1064,15 +1011,13 @@ test("Client deletion audit rollback and unknown COMMIT preserve their true Post
   const f = await fixture();
   try {
     const code = f.clientCode("commit");
-    await pg.db
-      .insert(clients)
-      .values({
-        clientCode: code,
-        clientName: "Commit",
-        clientSecret: "test-internal",
-        status: ClientStatus.Enable,
-        extAttributes: {},
-      });
+    await pg.db.insert(clients).values({
+      clientCode: code,
+      clientName: "Commit",
+      clientSecret: "test-internal",
+      status: ClientStatus.Enable,
+      extAttributes: {},
+    });
     const original = await f.create(f.account.subjectIdentifier, code);
     const { snapshots } = createClientSsoSnapshotManagement({
       clientCache: createAdminClientCache({ redis: f.redis }),
@@ -1090,7 +1035,7 @@ test("Client deletion audit rollback and unknown COMMIT preserve their true Post
       uow: createUnitOfWork({
         db: pg.db,
         logger: f.logger,
-        createTxPorts: tx => ({
+        createTxPorts: (tx) => ({
           client: createClientSsoRepository(tx),
           audit: {
             async recordAuditLog() {
@@ -1112,22 +1057,19 @@ test("Client deletion audit rollback and unknown COMMIT preserve their true Post
     let failed: unknown;
     try {
       await auditRejected.deleteClient(code);
-    }
-    catch (error) {
+    } catch (error) {
       failed = error;
     }
     expect(failed).toBe(auditFailure);
     const [rolledBack] = await pg.db.select().from(clients).where(eq(clients.clientCode, code));
     expect(rolledBack?.isDelete).toBe(false);
     const rollbackState = await f.operations.run(
-      async operation =>
-        await f.kernel
-          .forOperation(operation)
-          .resolveClientSessionForUse({
-            userSessionId: original.root.userSessionId,
-            clientSessionId: original.child.clientSessionId,
-            clientId: code,
-          }),
+      async (operation) =>
+        await f.kernel.forOperation(operation).resolveClientSessionForUse({
+          userSessionId: original.root.userSessionId,
+          clientSessionId: original.child.clientSessionId,
+          clientId: code,
+        }),
     );
     expect(rollbackState.status).toBe("resolved");
     const unknownCommit = new Error("Injected response loss after real PostgreSQL commit");
@@ -1156,8 +1098,7 @@ test("Client deletion audit rollback and unknown COMMIT preserve their true Post
     let outcome: unknown;
     try {
       await uncertain.management.service.deleteClient(code);
-    }
-    catch (error) {
+    } catch (error) {
       outcome = error;
     }
     expect(outcome).toBe(unknownCommit);
@@ -1167,18 +1108,15 @@ test("Client deletion audit rollback and unknown COMMIT preserve their true Post
     const invalidated = await snapshots.client.acquire(code);
     expect(invalidated.kind).toBe("absent");
     const state = await f.operations.run(
-      async operation =>
-        await f.kernel
-          .forOperation(operation)
-          .resolveClientSessionForUse({
-            userSessionId: original.root.userSessionId,
-            clientSessionId: original.child.clientSessionId,
-            clientId: code,
-          }),
+      async (operation) =>
+        await f.kernel.forOperation(operation).resolveClientSessionForUse({
+          userSessionId: original.root.userSessionId,
+          clientSessionId: original.child.clientSessionId,
+          clientId: code,
+        }),
     );
     expect(state.status).toBe("resolved");
-  }
-  finally {
+  } finally {
     await f.scope.close();
   }
 });
@@ -1193,8 +1131,7 @@ test("single-root aggregate rejects 10001 before effects and its 10000-item unfi
     await f.operations.run(async (operation) => {
       const sessions = f.kernel.forOperation(operation);
       const root = await sessions.resolveUserSession(target.bearer);
-      if (root.status !== "resolved")
-        throw new Error("Missing root");
+      if (root.status !== "resolved") throw new Error("Missing root");
       for (let start = 0; start < 9999; start += 100) {
         await Promise.all(
           Array.from({ length: Math.min(100, 9999 - start) }, async (_, index) => {
@@ -1202,8 +1139,7 @@ test("single-root aggregate rejects 10001 before effects and its 10000-item unfi
               clientId: `budget-${start + index}`,
               protocol: "oidc",
             });
-            if (created.status !== "created")
-              throw new Error("Missing child");
+            if (created.status !== "created") throw new Error("Missing child");
           }),
         );
       }
@@ -1218,7 +1154,7 @@ test("single-root aggregate rejects 10001 before effects and its 10000-item unfi
             .forOperation(operation)
             .captureSessions({ scope: { userSessionId: target.root.userSessionId }, offset, limit: 1000 });
           targets.push(...page.targets);
-          states.push(...page.records.map(record => record.state));
+          states.push(...page.records.map((record) => record.state));
           offset = page.nextOffset;
         } while (offset !== null);
         return { targets, states };
@@ -1231,8 +1167,7 @@ test("single-root aggregate rejects 10001 before effects and its 10000-item unfi
         actor,
         audit,
       );
-    }
-    catch (error) {
+    } catch (error) {
       failure = error;
     }
     expect(failure).toBeInstanceOf(Error);
@@ -1240,7 +1175,7 @@ test("single-root aggregate rejects 10001 before effects and its 10000-item unfi
     const before = await inventory();
     expect(rootStatus).toBe("resolved");
     expect(before.targets).toHaveLength(10000);
-    expect(before.states.every(state => state === "active")).toBe(true);
+    expect(before.states.every((state) => state === "active")).toBe(true);
     // Direct captured callers use the same pre-effect aggregate check.
     let directFailure: unknown;
     try {
@@ -1254,13 +1189,12 @@ test("single-root aggregate rejects 10001 before effects and its 10000-item unfi
           subjectIdentifier: target.root.subjectIdentifier,
         },
       ]);
-    }
-    catch (error) {
+    } catch (error) {
       directFailure = error;
     }
     expect(directFailure).toBeInstanceOf(Error);
     const stillPresent = await inventory();
-    expect(stillPresent.states.every(state => state === "active")).toBe(true);
+    expect(stillPresent.states.every((state) => state === "active")).toBe(true);
     await f.revocation.executeCapturedSessions([before.targets[0]!]);
     f.scope.failNext("revoke", false, 10000);
     const uncertain = await f.sessionManagement.revokeSessions(
@@ -1268,8 +1202,7 @@ test("single-root aggregate rejects 10001 before effects and its 10000-item unfi
       actor,
       audit,
     );
-    if (!("sessions" in uncertain.result) || !uncertain.result.batch)
-      throw new Error("Missing batch");
+    if (!("sessions" in uncertain.result) || !uncertain.result.batch) throw new Error("Missing batch");
     expect(uncertain).toMatchObject({
       changed: false,
       result: { sessions: { userSessionsTerminated: 0, clientSessionsTerminated: 0, unknown: 10000 } },
@@ -1294,14 +1227,9 @@ test("single-root aggregate rejects 10001 before effects and its 10000-item unfi
         batch: { unfinished: [] },
       },
     });
-    const statuses = [
-      await f.status(target.bearer),
-      await f.status(newer.bearer),
-      await f.status(current.bearer),
-    ];
+    const statuses = [await f.status(target.bearer), await f.status(newer.bearer), await f.status(current.bearer)];
     expect(statuses).toEqual(["terminated", "resolved", "resolved"]);
-  }
-  finally {
+  } finally {
     await f.scope.close();
   }
 }, 120000);

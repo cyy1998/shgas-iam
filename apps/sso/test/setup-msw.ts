@@ -1,9 +1,9 @@
-import { afterAll, afterEach, beforeAll } from 'vitest';
-import { server } from './mocks/server';
+import { afterAll, afterEach, beforeAll } from "vitest";
+import { server } from "./mocks/server";
 
 export function registerMswLifecycle() {
   beforeAll(() => {
-    server.listen({ onUnhandledRequest: 'error' });
+    server.listen({ onUnhandledRequest: "error" });
   });
 
   afterEach(() => {

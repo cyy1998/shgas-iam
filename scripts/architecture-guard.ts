@@ -27,16 +27,15 @@ type StaticModulePattern = Readonly<
   | { kind: "prefix-suffix"; prefix: string; suffix: string }
 >;
 
-type StaticSourcePattern = string | Readonly<{
-  prefix: string;
-  suffix: string;
-}>;
+type StaticSourcePattern =
+  | string
+  | Readonly<{
+      prefix: string;
+      suffix: string;
+    }>;
 
 type StaticModuleOwnershipRule = Readonly<{
-  ruleId:
-    | "client-subject-projection-owner"
-    | "session-runtime-owner"
-    | "worker-ownership";
+  ruleId: "client-subject-projection-owner" | "session-runtime-owner" | "worker-ownership";
   sourceScopes: readonly StaticSourcePattern[];
   targets: readonly StaticModulePattern[];
   allowedTargets?: readonly StaticModulePattern[];
@@ -82,11 +81,7 @@ const architectureWorkspaceRoots = new Map([
   ["@iam/role-assignment-resolution", "packages/role-assignment-resolution"],
   ["@iam/user-profile-read-model", "packages/user-profile-read-model"],
 ]);
-const workspaceBuildDependencySections = [
-  "dependencies",
-  "devDependencies",
-  "optionalDependencies",
-] as const;
+const workspaceBuildDependencySections = ["dependencies", "devDependencies", "optionalDependencies"] as const;
 
 interface WorkspacePackageManifest {
   name?: string;
@@ -147,7 +142,8 @@ const staticModuleOwnershipRules: readonly StaticModuleOwnershipRule[] = [
     ],
     allowedSources: [],
     dependencyKind: "all",
-    message: moduleSpecifier => `OIDC must not import another protocol, app or HTTP owner "${moduleSpecifier}"; inject its external capabilities.`,
+    message: (moduleSpecifier) =>
+      `OIDC must not import another protocol, app or HTTP owner "${moduleSpecifier}"; inject its external capabilities.`,
   },
   {
     ruleId: "session-runtime-owner",
@@ -161,36 +157,30 @@ const staticModuleOwnershipRules: readonly StaticModuleOwnershipRule[] = [
     ],
     allowedSources: [],
     dependencyKind: "all",
-    message: moduleSpecifier =>
+    message: (moduleSpecifier) =>
       `Session Kernel must not import runtime or protocol owner "${moduleSpecifier}"; inject its external capabilities.`,
   },
   {
     ruleId: "client-subject-projection-owner",
     sourceScopes: ["packages/client-subject-projection/src"],
-    targets: [
-      ...clientSubjectProjectionExternalOwnerTargets,
-      { kind: "prefix", module: "packages/custom-sso/src" },
-    ],
+    targets: [...clientSubjectProjectionExternalOwnerTargets, { kind: "prefix", module: "packages/custom-sso/src" }],
     allowedSources: [],
     dependencyKind: "all",
-    message: moduleSpecifier =>
-      `Client Subject Projection implementation must not import runtime or protocol module "${moduleSpecifier}"; `
-      + "depend on its injected facts and safety ports.",
+    message: (moduleSpecifier) =>
+      `Client Subject Projection implementation must not import runtime or protocol module "${moduleSpecifier}"; ` +
+      "depend on its injected facts and safety ports.",
   },
   {
     ruleId: "client-subject-projection-owner",
     sourceScopes: ["packages/custom-sso/src/wire.ts"],
-    targets: [
-      ...clientSubjectProjectionExternalOwnerTargets,
-      { kind: "prefix", module: "packages/custom-sso/src" },
-    ],
+    targets: [...clientSubjectProjectionExternalOwnerTargets, { kind: "prefix", module: "packages/custom-sso/src" }],
     allowedTargets: [{ kind: "exact", module: "packages/custom-sso/src/wire" }],
     allowedSources: [],
     dependencyKind: "all",
-    message: moduleSpecifier =>
-      `Custom SSO wire adapter must not import facts persistence, configuration, runtime, `
-      + `or transport module "${moduleSpecifier}"; `
-      + "depend only on the root public Client Subject Projection interface.",
+    message: (moduleSpecifier) =>
+      `Custom SSO wire adapter must not import facts persistence, configuration, runtime, ` +
+      `or transport module "${moduleSpecifier}"; ` +
+      "depend only on the root public Client Subject Projection interface.",
   },
   {
     ruleId: "client-subject-projection-owner",
@@ -199,17 +189,13 @@ const staticModuleOwnershipRules: readonly StaticModuleOwnershipRule[] = [
     allowedTargets: [{ kind: "exact", module: "packages/client-subject-projection/src" }],
     allowedSources: [],
     dependencyKind: "all",
-    message: moduleSpecifier =>
-      `Custom SSO wire adapter must not import non-root Projection module "${moduleSpecifier}"; `
-      + "depend only on the root public Client Subject Projection interface.",
+    message: (moduleSpecifier) =>
+      `Custom SSO wire adapter must not import non-root Projection module "${moduleSpecifier}"; ` +
+      "depend only on the root public Client Subject Projection interface.",
   },
   {
     ruleId: "session-runtime-owner",
-    sourceScopes: [
-      "apps/api/src/routes/sso",
-      "apps/api/src/use-cases/sso",
-      "apps/api/src/composition",
-    ],
+    sourceScopes: ["apps/api/src/routes/sso", "apps/api/src/use-cases/sso", "apps/api/src/composition"],
     targets: [
       { kind: "prefix", module: "@iam/session-kernel" },
       { kind: "prefix", module: "packages/custom-sso/src/internal" },
@@ -218,9 +204,9 @@ const staticModuleOwnershipRules: readonly StaticModuleOwnershipRule[] = [
     ],
     allowedSources: ["apps/api/src/composition"],
     dependencyKind: "all",
-    message: moduleSpecifier =>
-      `Custom SSO routes and use cases must not import session runtime module "${moduleSpecifier}"; `
-      + "depend on their injected application interface.",
+    message: (moduleSpecifier) =>
+      `Custom SSO routes and use cases must not import session runtime module "${moduleSpecifier}"; ` +
+      "depend on their injected application interface.",
   },
   {
     ruleId: "session-runtime-owner",
@@ -233,9 +219,9 @@ const staticModuleOwnershipRules: readonly StaticModuleOwnershipRule[] = [
     allowedTargets: [],
     allowedSources: ["packages/custom-sso/src/wire.ts"],
     dependencyKind: "all",
-    message: moduleSpecifier =>
-      `Custom SSO application must not import app provider or HTTP module "${moduleSpecifier}"; `
-      + "declare its outbound capability locally and inject it from composition.",
+    message: (moduleSpecifier) =>
+      `Custom SSO application must not import app provider or HTTP module "${moduleSpecifier}"; ` +
+      "declare its outbound capability locally and inject it from composition.",
   },
   {
     ruleId: "session-runtime-owner",
@@ -251,14 +237,11 @@ const staticModuleOwnershipRules: readonly StaticModuleOwnershipRule[] = [
       { kind: "suffix", module: "oidc-session-kernel.adapter" },
       { kind: "exact", module: "apps/admin-api/src/lib/infra/redis" },
     ],
-    allowedSources: [
-      "apps/admin-api/src/services/session-revocation",
-      "apps/admin-api/src/composition",
-    ],
+    allowedSources: ["apps/admin-api/src/services/session-revocation", "apps/admin-api/src/composition"],
     dependencyKind: "all",
-    message: moduleSpecifier =>
-      `Admin user and client services must not import session runtime module "${moduleSpecifier}"; `
-      + "depend on the consumer-owned Session Revocation port.",
+    message: (moduleSpecifier) =>
+      `Admin user and client services must not import session runtime module "${moduleSpecifier}"; ` +
+      "depend on the consumer-owned Session Revocation port.",
   },
   {
     ruleId: "worker-ownership",
@@ -267,8 +250,8 @@ const staticModuleOwnershipRules: readonly StaticModuleOwnershipRule[] = [
     allowedSources: [],
     dependencyKind: "all",
     message: (moduleSpecifier, declaration) =>
-      `Worker production sources must not ${dependencyOperation(declaration)} `
-      + `API-private module "${moduleSpecifier}"; depend on a public workspace package.`,
+      `Worker production sources must not ${dependencyOperation(declaration)} ` +
+      `API-private module "${moduleSpecifier}"; depend on a public workspace package.`,
   },
 ];
 
@@ -286,7 +269,7 @@ export function analyzeRepositoryArchitecture(repoRoot: string): readonly Archit
 
 function loadSourceSnapshot(repoRoot: string): readonly IndexedSourceFile[] {
   const sourceFiles = protectedSourceRoots
-    .flatMap(sourceRoot => collectProductionTypeScriptFiles(join(repoRoot, ...sourceRoot.split("/"))))
+    .flatMap((sourceRoot) => collectProductionTypeScriptFiles(join(repoRoot, ...sourceRoot.split("/"))))
     .sort(compareText);
 
   return sourceFiles.map((absoluteFile) => {
@@ -304,33 +287,30 @@ function loadSourceSnapshot(repoRoot: string): readonly IndexedSourceFile[] {
 }
 
 function collectProductionTypeScriptFiles(root: string): string[] {
-  if (!existsSync(root))
-    return [];
+  if (!existsSync(root)) return [];
 
   const files: string[] = [];
   visit(root);
   return files;
 
   function visit(directory: string) {
-    const entries = readdirSync(directory, { withFileTypes: true })
-      .sort((left, right) => compareText(left.name, right.name));
+    const entries = readdirSync(directory, { withFileTypes: true }).sort((left, right) =>
+      compareText(left.name, right.name),
+    );
 
     for (const entry of entries) {
       const absolutePath = join(directory, entry.name);
       if (entry.isDirectory()) {
-        if (!excludedSourceDirectories.has(entry.name))
-          visit(absolutePath);
+        if (!excludedSourceDirectories.has(entry.name)) visit(absolutePath);
         continue;
       }
-      if (entry.isFile() && isProductionTypeScriptFile(entry.name))
-        files.push(absolutePath);
+      if (entry.isFile() && isProductionTypeScriptFile(entry.name)) files.push(absolutePath);
     }
   }
 }
 
 function isProductionTypeScriptFile(file: string) {
-  return /\.(?:ts|tsx)$/u.test(file)
-    && !/\.(?:spec|test)\.(?:ts|tsx)$/u.test(file);
+  return /\.(?:ts|tsx)$/u.test(file) && !/\.(?:spec|test)\.(?:ts|tsx)$/u.test(file);
 }
 
 function indexSourceFile(file: string, sourceFile: ts.SourceFile): IndexedSourceFile {
@@ -348,287 +328,311 @@ function indexSourceFile(file: string, sourceFile: ts.SourceFile): IndexedSource
   };
 
   function visit(node: ts.Node) {
-    if (ts.isImportDeclaration(node))
-      imports.push(node);
-    if (ts.isExportDeclaration(node) && node.moduleSpecifier)
-      reExports.push(node);
-    if (ts.isTypeReferenceNode(node))
-      typeReferences.push(node);
+    if (ts.isImportDeclaration(node)) imports.push(node);
+    if (ts.isExportDeclaration(node) && node.moduleSpecifier) reExports.push(node);
+    if (ts.isTypeReferenceNode(node)) typeReferences.push(node);
     ts.forEachChild(node, visit);
   }
 }
 
-function collectConsumerOwnedPortViolations(
-  sources: readonly IndexedSourceFile[],
-): ArchitectureViolation[] {
+function collectConsumerOwnedPortViolations(sources: readonly IndexedSourceFile[]): ArchitectureViolation[] {
   return sources
-    .filter(source => source.file.endsWith(".port.ts"))
+    .filter((source) => source.file.endsWith(".port.ts"))
     .flatMap((source) => {
       const importViolations = source.imports.flatMap((declaration): ArchitectureViolation[] => {
-        if (!ts.isStringLiteral(declaration.moduleSpecifier))
-          return [];
+        if (!ts.isStringLiteral(declaration.moduleSpecifier)) return [];
         const moduleSpecifier = declaration.moduleSpecifier.text;
-        if (!isConcreteRepositoryModule(moduleSpecifier))
-          return [];
-        return [{
-          ruleId: "consumer-owned-port",
-          file: source.file,
-          line: lineOf(source.sourceFile, declaration),
-          message: `Consumer-owned ports must not import concrete repository module "${moduleSpecifier}"; `
-            + "declare the required protocol locally.",
-        }];
+        if (!isConcreteRepositoryModule(moduleSpecifier)) return [];
+        return [
+          {
+            ruleId: "consumer-owned-port",
+            file: source.file,
+            line: lineOf(source.sourceFile, declaration),
+            message:
+              `Consumer-owned ports must not import concrete repository module "${moduleSpecifier}"; ` +
+              "declare the required protocol locally.",
+          },
+        ];
       });
       const pickViolations = source.typeReferences.flatMap((reference): ArchitectureViolation[] => {
-        if (reference.typeName.getText(source.sourceFile) !== "Pick")
-          return [];
+        if (reference.typeName.getText(source.sourceFile) !== "Pick") return [];
         const providerType = reference.typeArguments?.[0];
-        if (!providerType)
-          return [];
+        if (!providerType) return [];
         const providerTypeName = referencedTypeName(providerType, source.sourceFile);
-        if (!/(?:Repository|Service)$/u.test(providerTypeName))
-          return [];
-        return [{
-          ruleId: "consumer-owned-port",
-          file: source.file,
-          line: lineOf(source.sourceFile, reference),
-          message: `Consumer-owned ports must not derive their interface from provider type "${providerTypeName}" with Pick; `
-            + "declare the required members directly.",
-        }];
+        if (!/(?:Repository|Service)$/u.test(providerTypeName)) return [];
+        return [
+          {
+            ruleId: "consumer-owned-port",
+            file: source.file,
+            line: lineOf(source.sourceFile, reference),
+            message:
+              `Consumer-owned ports must not derive their interface from provider type "${providerTypeName}" with Pick; ` +
+              "declare the required members directly.",
+          },
+        ];
       });
 
       return [...importViolations, ...pickViolations];
     });
 }
 
-function collectRoleResolutionOwnerViolations(
-  sources: readonly IndexedSourceFile[],
-): ArchitectureViolation[] {
+function collectRoleResolutionOwnerViolations(sources: readonly IndexedSourceFile[]): ArchitectureViolation[] {
   return sources.flatMap((source) => {
     const dependencies = [...source.imports, ...source.reExports];
     const schemaViolations = isRoleAssignmentSchemaOwner(source.file)
       ? []
       : dependencies.flatMap((declaration): ArchitectureViolation[] => {
-          if (!ts.isStringLiteral(declaration.moduleSpecifier))
-            return [];
+          if (!ts.isStringLiteral(declaration.moduleSpecifier)) return [];
           const moduleSpecifier = declaration.moduleSpecifier.text;
-          if (normalizeStaticModulePath(moduleSpecifier) !== "@iam/db/schema/role-assignments")
-            return [];
-          return [{
-            ruleId: "role-resolution-owner",
-            file: source.file,
-            line: lineOf(source.sourceFile, declaration),
-            message: "Only Role Assignment Resolver implementation and the Admin Role Management repository "
-              + `may ${dependencyOperation(declaration)} dedicated Role Assignment schema entry `
-              + `"${moduleSpecifier}".`,
-          }];
+          if (normalizeStaticModulePath(moduleSpecifier) !== "@iam/db/schema/role-assignments") return [];
+          return [
+            {
+              ruleId: "role-resolution-owner",
+              file: source.file,
+              line: lineOf(source.sourceFile, declaration),
+              message:
+                "Only Role Assignment Resolver implementation and the Admin Role Management repository " +
+                `may ${dependencyOperation(declaration)} dedicated Role Assignment schema entry ` +
+                `"${moduleSpecifier}".`,
+            },
+          ];
         });
     const resolverValueViolations = isRoleAssignmentResolverValueOwner(source.file)
       ? []
       : dependencies.flatMap((declaration): ArchitectureViolation[] => {
-          if (!ts.isStringLiteral(declaration.moduleSpecifier))
-            return [];
+          if (!ts.isStringLiteral(declaration.moduleSpecifier)) return [];
           const moduleSpecifier = declaration.moduleSpecifier.text;
-          if (normalizeStaticModulePath(moduleSpecifier) !== "@iam/role-assignment-resolution"
-            || !hasValueDependency(declaration)) {
+          if (
+            normalizeStaticModulePath(moduleSpecifier) !== "@iam/role-assignment-resolution" ||
+            !hasValueDependency(declaration)
+          ) {
             return [];
           }
-          return [{
-            ruleId: "role-resolution-owner",
-            file: source.file,
-            line: lineOf(source.sourceFile, declaration),
-            message: `Only declared composition and User Profile module owners may `
-              + `${valueDependencyOperation(declaration)} Role Assignment Resolver package `
-              + `"${moduleSpecifier}".`,
-          }];
+          return [
+            {
+              ruleId: "role-resolution-owner",
+              file: source.file,
+              line: lineOf(source.sourceFile, declaration),
+              message:
+                `Only declared composition and User Profile module owners may ` +
+                `${valueDependencyOperation(declaration)} Role Assignment Resolver package ` +
+                `"${moduleSpecifier}".`,
+            },
+          ];
         });
 
     return [...schemaViolations, ...resolverValueViolations];
   });
 }
 
-function collectUserProfileOwnerViolations(
-  sources: readonly IndexedSourceFile[],
-): ArchitectureViolation[] {
-  return sources.flatMap(source =>
+function collectUserProfileOwnerViolations(sources: readonly IndexedSourceFile[]): ArchitectureViolation[] {
+  return sources.flatMap((source) =>
     [...source.imports, ...source.reExports].flatMap((declaration): ArchitectureViolation[] => {
-      if (!ts.isStringLiteral(declaration.moduleSpecifier))
-        return [];
+      if (!ts.isStringLiteral(declaration.moduleSpecifier)) return [];
       const moduleSpecifier = declaration.moduleSpecifier.text;
       const normalizedModule = normalizeStaticModulePath(moduleSpecifier);
-      if (normalizedModule === "@iam/user-profile-read-model/producer"
-        && !isUserProfileProducerOwner(source.file)) {
-        return [{
-          ruleId: "user-profile-owner",
-          file: source.file,
-          line: lineOf(source.sourceFile, declaration),
-          message: `Only API and Admin API composition owners may ${dependencyOperation(declaration)} `
-            + `User Profile producer entry "${moduleSpecifier}".`,
-        }];
+      if (normalizedModule === "@iam/user-profile-read-model/producer" && !isUserProfileProducerOwner(source.file)) {
+        return [
+          {
+            ruleId: "user-profile-owner",
+            file: source.file,
+            line: lineOf(source.sourceFile, declaration),
+            message:
+              `Only API and Admin API composition owners may ${dependencyOperation(declaration)} ` +
+              `User Profile producer entry "${moduleSpecifier}".`,
+          },
+        ];
       }
-      if (normalizedModule === "@iam/user-profile-read-model/worker"
-        && !isUserProfileWorkerOwner(source.file)) {
-        return [{
-          ruleId: "user-profile-owner",
-          file: source.file,
-          line: lineOf(source.sourceFile, declaration),
-          message: `Only Worker composition may ${dependencyOperation(declaration)} `
-            + `User Profile worker entry "${moduleSpecifier}".`,
-        }];
+      if (normalizedModule === "@iam/user-profile-read-model/worker" && !isUserProfileWorkerOwner(source.file)) {
+        return [
+          {
+            ruleId: "user-profile-owner",
+            file: source.file,
+            line: lineOf(source.sourceFile, declaration),
+            message:
+              `Only Worker composition may ${dependencyOperation(declaration)} ` +
+              `User Profile worker entry "${moduleSpecifier}".`,
+          },
+        ];
       }
-      if (normalizedModule === "@iam/user-profile-read-model/query/repository"
-        && !isUserProfileQueryRepositoryOwner(source.file)) {
-        return [{
-          ruleId: "user-profile-owner",
-          file: source.file,
-          line: lineOf(source.sourceFile, declaration),
-          message: `Only API composition may ${dependencyOperation(declaration)} `
-            + `User Profile query repository entry "${moduleSpecifier}".`,
-        }];
+      if (
+        normalizedModule === "@iam/user-profile-read-model/query/repository" &&
+        !isUserProfileQueryRepositoryOwner(source.file)
+      ) {
+        return [
+          {
+            ruleId: "user-profile-owner",
+            file: source.file,
+            line: lineOf(source.sourceFile, declaration),
+            message:
+              `Only API composition may ${dependencyOperation(declaration)} ` +
+              `User Profile query repository entry "${moduleSpecifier}".`,
+          },
+        ];
       }
       return [];
     }),
   );
 }
 
-function collectDependencyDirectionViolations(
-  sources: readonly IndexedSourceFile[],
-): ArchitectureViolation[] {
+function collectDependencyDirectionViolations(sources: readonly IndexedSourceFile[]): ArchitectureViolation[] {
   return sources
-    .filter(source =>
-      source.file.startsWith("apps/api/src/")
-      || source.file.startsWith("apps/admin-api/src/"))
+    .filter((source) => source.file.startsWith("apps/api/src/") || source.file.startsWith("apps/admin-api/src/"))
     .flatMap(collectSourceDependencyDirectionViolations);
 }
 
-function collectStaticModuleOwnershipViolations(
-  sources: readonly IndexedSourceFile[],
-): ArchitectureViolation[] {
-  return sources.flatMap(source =>
+function collectStaticModuleOwnershipViolations(sources: readonly IndexedSourceFile[]): ArchitectureViolation[] {
+  return sources.flatMap((source) =>
     staticModuleOwnershipRules
-      .filter(rule => rule.sourceScopes.some(scope => matchesStaticSourcePattern(source.file, scope)))
-      .filter(rule => !rule.allowedSources.some(owner => matchesStaticSourcePattern(source.file, owner)))
-      .flatMap(rule =>
+      .filter((rule) => rule.sourceScopes.some((scope) => matchesStaticSourcePattern(source.file, scope)))
+      .filter((rule) => !rule.allowedSources.some((owner) => matchesStaticSourcePattern(source.file, owner)))
+      .flatMap((rule) =>
         [...source.imports, ...source.reExports].flatMap((declaration): ArchitectureViolation[] => {
-          if (!ts.isStringLiteral(declaration.moduleSpecifier))
-            return [];
-          if (rule.dependencyKind === "value" && !hasValueDependency(declaration))
-            return [];
+          if (!ts.isStringLiteral(declaration.moduleSpecifier)) return [];
+          if (rule.dependencyKind === "value" && !hasValueDependency(declaration)) return [];
           const moduleSpecifier = declaration.moduleSpecifier.text;
           const normalizedTargets = normalizeStaticModuleEdges(source.file, moduleSpecifier);
-          if (!rule.targets.some(pattern =>
-            normalizedTargets.some(target => matchesStaticModulePattern(target, pattern)))) {
+          if (
+            !rule.targets.some((pattern) =>
+              normalizedTargets.some((target) => matchesStaticModulePattern(target, pattern)),
+            )
+          ) {
             return [];
           }
-          if (rule.allowedTargets?.some(pattern =>
-            normalizedTargets.some(target => matchesStaticModulePattern(target, pattern)))) {
+          if (
+            rule.allowedTargets?.some((pattern) =>
+              normalizedTargets.some((target) => matchesStaticModulePattern(target, pattern)),
+            )
+          ) {
             return [];
           }
-          return [{
-            ruleId: rule.ruleId,
-            file: source.file,
-            line: lineOf(source.sourceFile, declaration),
-            message: rule.message(moduleSpecifier, declaration),
-          }];
-        })),
+          return [
+            {
+              ruleId: rule.ruleId,
+              file: source.file,
+              line: lineOf(source.sourceFile, declaration),
+              message: rule.message(moduleSpecifier, declaration),
+            },
+          ];
+        }),
+      ),
   );
 }
 
-function collectSourceDependencyDirectionViolations(
-  source: IndexedSourceFile,
-): ArchitectureViolation[] {
-  return [...source.imports, ...source.reExports]
-    .flatMap((declaration): ArchitectureViolation[] => {
-      if (!ts.isStringLiteral(declaration.moduleSpecifier))
-        return [];
-      const moduleSpecifier = declaration.moduleSpecifier.text;
-      if (moduleSpecifier === "@iam/db"
-        && hasValueDependency(declaration)
-        && !isCompositionOwner(source.file)
-        && !isRepositoryImplementation(source.file)) {
-        return [{
+function collectSourceDependencyDirectionViolations(source: IndexedSourceFile): ArchitectureViolation[] {
+  return [...source.imports, ...source.reExports].flatMap((declaration): ArchitectureViolation[] => {
+    if (!ts.isStringLiteral(declaration.moduleSpecifier)) return [];
+    const moduleSpecifier = declaration.moduleSpecifier.text;
+    if (
+      moduleSpecifier === "@iam/db" &&
+      hasValueDependency(declaration) &&
+      !isCompositionOwner(source.file) &&
+      !isRepositoryImplementation(source.file)
+    ) {
+      return [
+        {
           ruleId: "dependency-direction",
           file: source.file,
           line: lineOf(source.sourceFile, declaration),
-          message: `Production modules must not ${valueDependencyOperation(declaration)} `
-            + `database singleton "${moduleSpecifier}"; `
-            + "only composition and repository implementations own database wiring.",
-        }];
-      }
-      if (source.file.includes("/src/services/") && isApplicationUseCaseModule(moduleSpecifier)) {
-        return [{
+          message:
+            `Production modules must not ${valueDependencyOperation(declaration)} ` +
+            `database singleton "${moduleSpecifier}"; ` +
+            "only composition and repository implementations own database wiring.",
+        },
+      ];
+    }
+    if (source.file.includes("/src/services/") && isApplicationUseCaseModule(moduleSpecifier)) {
+      return [
+        {
           ruleId: "dependency-direction",
           file: source.file,
           line: lineOf(source.sourceFile, declaration),
-          message: `Service modules must not ${dependencyOperation(declaration)} `
-            + `application use case "${moduleSpecifier}"; `
-            + "use cases may depend on services, not the reverse.",
-        }];
-      }
-      if (source.file.includes("/src/routes/")) {
-        if (moduleSpecifier === "@iam/api-core/uow") {
-          return [{
+          message:
+            `Service modules must not ${dependencyOperation(declaration)} ` +
+            `application use case "${moduleSpecifier}"; ` +
+            "use cases may depend on services, not the reverse.",
+        },
+      ];
+    }
+    if (source.file.includes("/src/routes/")) {
+      if (moduleSpecifier === "@iam/api-core/uow") {
+        return [
+          {
             ruleId: "dependency-direction",
             file: source.file,
             line: lineOf(source.sourceFile, declaration),
-            message: `Route modules must not ${dependencyOperation(declaration)} `
-              + `UnitOfWork from "${moduleSpecifier}"; `
-              + "delegate transaction workflows to an injected use case or service facade.",
-          }];
-        }
-        if (isAppLocalRepositoryModule(moduleSpecifier)) {
-          return [{
+            message:
+              `Route modules must not ${dependencyOperation(declaration)} ` +
+              `UnitOfWork from "${moduleSpecifier}"; ` +
+              "delegate transaction workflows to an injected use case or service facade.",
+          },
+        ];
+      }
+      if (isAppLocalRepositoryModule(moduleSpecifier)) {
+        return [
+          {
             ruleId: "dependency-direction",
             file: source.file,
             line: lineOf(source.sourceFile, declaration),
-            message: `Route modules must not ${dependencyOperation(declaration)} `
-              + `app-local repository "${moduleSpecifier}"; `
-              + "depend on an injected use case or service facade.",
-          }];
-        }
+            message:
+              `Route modules must not ${dependencyOperation(declaration)} ` +
+              `app-local repository "${moduleSpecifier}"; ` +
+              "depend on an injected use case or service facade.",
+          },
+        ];
       }
-      if (!hasValueDependency(declaration))
+    }
+    if (!hasValueDependency(declaration)) return [];
+    if (isAppRedisSingleton(source.file, moduleSpecifier)) {
+      if (isCompositionOwner(source.file) || isRedisInfrastructureOwner(source.file)) return [];
+      return [
+        {
+          ruleId: "dependency-direction",
+          file: source.file,
+          line: lineOf(source.sourceFile, declaration),
+          message:
+            `Production modules must not ${valueDependencyOperation(declaration)} ` +
+            `app Redis singleton "${moduleSpecifier}"; ` +
+            "only composition and Redis infrastructure owners may wire it.",
+        },
+      ];
+    }
+    if (isAppLoggerSingleton(source.file, moduleSpecifier)) {
+      if (
+        isCompositionOwner(source.file) ||
+        isAppAssemblyOwner(source.file) ||
+        isLoggerInfrastructureOwner(source.file)
+      ) {
         return [];
-      if (isAppRedisSingleton(source.file, moduleSpecifier)) {
-        if (isCompositionOwner(source.file) || isRedisInfrastructureOwner(source.file))
-          return [];
-        return [{
+      }
+      return [
+        {
           ruleId: "dependency-direction",
           file: source.file,
           line: lineOf(source.sourceFile, declaration),
-          message: `Production modules must not ${valueDependencyOperation(declaration)} `
-            + `app Redis singleton "${moduleSpecifier}"; `
-            + "only composition and Redis infrastructure owners may wire it.",
-        }];
-      }
-      if (isAppLoggerSingleton(source.file, moduleSpecifier)) {
-        if (isCompositionOwner(source.file)
-          || isAppAssemblyOwner(source.file)
-          || isLoggerInfrastructureOwner(source.file)) {
-          return [];
-        }
-        return [{
+          message:
+            `Production modules must not ${valueDependencyOperation(declaration)} ` +
+            `app logger singleton "${moduleSpecifier}"; ` +
+            "only composition, app assembly, and infrastructure owners may wire it.",
+        },
+      ];
+    }
+    if (isConcreteProviderModule(source.file, moduleSpecifier)) {
+      if (isCompositionOwner(source.file)) return [];
+      return [
+        {
           ruleId: "dependency-direction",
           file: source.file,
           line: lineOf(source.sourceFile, declaration),
-          message: `Production modules must not ${valueDependencyOperation(declaration)} `
-            + `app logger singleton "${moduleSpecifier}"; `
-            + "only composition, app assembly, and infrastructure owners may wire it.",
-        }];
-      }
-      if (isConcreteProviderModule(source.file, moduleSpecifier)) {
-        if (isCompositionOwner(source.file))
-          return [];
-        return [{
-          ruleId: "dependency-direction",
-          file: source.file,
-          line: lineOf(source.sourceFile, declaration),
-          message: `Production modules must not ${valueDependencyOperation(declaration)} `
-            + `concrete provider "${moduleSpecifier}"; `
-            + "only composition owners may wire concrete providers.",
-        }];
-      }
-      return [];
-    });
+          message:
+            `Production modules must not ${valueDependencyOperation(declaration)} ` +
+            `concrete provider "${moduleSpecifier}"; ` +
+            "only composition owners may wire concrete providers.",
+        },
+      ];
+    }
+    return [];
+  });
 }
 
 function collectDockerBuildClosureViolations(repoRoot: string): ArchitectureViolation[] {
@@ -636,66 +640,69 @@ function collectDockerBuildClosureViolations(repoRoot: string): ArchitectureViol
   return collectDockerApps(repoRoot).flatMap((app) => {
     const packageFile = join(repoRoot, "apps", app, "package.json");
     const dockerFile = join(repoRoot, "apps", app, "Dockerfile");
-    if (!existsSync(packageFile) || !existsSync(dockerFile))
-      return [];
+    if (!existsSync(packageFile) || !existsSync(dockerFile)) return [];
 
     const packageManifest = JSON.parse(readFileSync(packageFile, "utf8")) as WorkspacePackageManifest;
     const copySources = collectDockerCopySources(readFileSync(dockerFile, "utf8"));
     const closureRoots = {
       ...collectWorkspaceBuildDependencies(packageManifest),
       ...Object.fromEntries(
-        collectCopiedWorkspacePackageNames(repoRoot, copySources, workspaceDependencies)
-          .map(packageName => [packageName, "workspace:*"]),
+        collectCopiedWorkspacePackageNames(repoRoot, copySources, workspaceDependencies).map((packageName) => [
+          packageName,
+          "workspace:*",
+        ]),
       ),
     };
-    const consumedWorkspaces = collectWorkspaceDependencyClosure(
-      closureRoots,
-      workspaceDependencies,
-    );
+    const consumedWorkspaces = collectWorkspaceDependencyClosure(closureRoots, workspaceDependencies);
     const intermediateManifestViolations = [...consumedWorkspaces]
-      .filter(packageName => !architectureWorkspaceRoots.has(packageName))
-      .filter(packageName => reachesProtectedArchitectureWorkspace(packageName, workspaceDependencies))
+      .filter((packageName) => !architectureWorkspaceRoots.has(packageName))
+      .filter((packageName) => reachesProtectedArchitectureWorkspace(packageName, workspaceDependencies))
       .sort(compareText)
       .flatMap((packageName): ArchitectureViolation[] => {
         const packageRoot = workspaceDependencies.get(packageName)?.packageRoot;
         const requiredSource = packageRoot === undefined ? undefined : `${packageRoot}/package.json`;
-        if (requiredSource === undefined || copySources.has(requiredSource))
-          return [];
-        return [{
-          ruleId: "docker-build-closure",
-          file: `apps/${app}/Dockerfile`,
-          line: 1,
-          message: `Docker image ${packageManifest.name ?? `@iam/${app}`} reaches protected architecture workspaces `
-            + `through ${packageName} but does not COPY "${requiredSource}" from the workspace.`,
-        }];
+        if (requiredSource === undefined || copySources.has(requiredSource)) return [];
+        return [
+          {
+            ruleId: "docker-build-closure",
+            file: `apps/${app}/Dockerfile`,
+            line: 1,
+            message:
+              `Docker image ${packageManifest.name ?? `@iam/${app}`} reaches protected architecture workspaces ` +
+              `through ${packageName} but does not COPY "${requiredSource}" from the workspace.`,
+          },
+        ];
       });
     const protectedWorkspaceViolations = [...architectureWorkspaceRoots]
       .filter(([packageName]) => consumedWorkspaces.has(packageName))
       .flatMap(([packageName, packageRoot]): ArchitectureViolation[] =>
         [`${packageRoot}/package.json`, `${packageRoot}/`]
-          .filter(requiredSource => !copySources.has(requiredSource))
-          .map(requiredSource => ({
+          .filter((requiredSource) => !copySources.has(requiredSource))
+          .map((requiredSource) => ({
             ruleId: "docker-build-closure",
             file: `apps/${app}/Dockerfile`,
             line: 1,
-            message: `Docker image ${packageManifest.name ?? `@iam/${app}`} consumes ${packageName} but does not COPY `
-              + `"${requiredSource}" from the workspace.`,
-          })));
+            message:
+              `Docker image ${packageManifest.name ?? `@iam/${app}`} consumes ${packageName} but does not COPY ` +
+              `"${requiredSource}" from the workspace.`,
+          })),
+      );
     return [...intermediateManifestViolations, ...protectedWorkspaceViolations];
   });
 }
 
 function collectDockerApps(repoRoot: string) {
   const appsRoot = join(repoRoot, "apps");
-  if (!existsSync(appsRoot))
-    return [];
+  if (!existsSync(appsRoot)) return [];
 
   return readdirSync(appsRoot, { withFileTypes: true })
-    .filter(entry =>
-      entry.isDirectory()
-      && existsSync(join(appsRoot, entry.name, "package.json"))
-      && existsSync(join(appsRoot, entry.name, "Dockerfile")))
-    .map(entry => entry.name)
+    .filter(
+      (entry) =>
+        entry.isDirectory() &&
+        existsSync(join(appsRoot, entry.name, "package.json")) &&
+        existsSync(join(appsRoot, entry.name, "Dockerfile")),
+    )
+    .map((entry) => entry.name)
     .sort(compareText);
 }
 
@@ -705,35 +712,29 @@ function collectCopiedWorkspacePackageNames(
   workspaceDependencies: ReadonlyMap<string, WorkspaceDependencyNode>,
 ) {
   return [...copySources]
-    .filter(source => source.endsWith("/package.json"))
+    .filter((source) => source.endsWith("/package.json"))
     .flatMap((source) => {
       const packageFile = join(repoRoot, ...source.split("/"));
-      if (!existsSync(packageFile))
-        return [];
+      if (!existsSync(packageFile)) return [];
       const packageManifest = JSON.parse(readFileSync(packageFile, "utf8")) as { name?: string };
-      return packageManifest.name && workspaceDependencies.has(packageManifest.name)
-        ? [packageManifest.name]
-        : [];
+      return packageManifest.name && workspaceDependencies.has(packageManifest.name) ? [packageManifest.name] : [];
     });
 }
 
 function collectWorkspaceDependencyGraph(repoRoot: string) {
   const workspaceRoots = ["apps", "packages"].flatMap((parent) => {
     const parentPath = join(repoRoot, parent);
-    if (!existsSync(parentPath))
-      return [];
+    if (!existsSync(parentPath)) return [];
     return readdirSync(parentPath, { withFileTypes: true })
-      .filter(entry => entry.isDirectory())
-      .map(entry => `${parent}/${entry.name}`);
+      .filter((entry) => entry.isDirectory())
+      .map((entry) => `${parent}/${entry.name}`);
   });
-  if (existsSync(join(repoRoot, "gateway", "package.json")))
-    workspaceRoots.push("gateway");
+  if (existsSync(join(repoRoot, "gateway", "package.json"))) workspaceRoots.push("gateway");
 
   const graph = new Map<string, WorkspaceDependencyNode>();
   for (const workspaceRoot of workspaceRoots.sort(compareText)) {
     const packageFile = join(repoRoot, ...workspaceRoot.split("/"), "package.json");
-    if (!existsSync(packageFile))
-      continue;
+    if (!existsSync(packageFile)) continue;
     const packageManifest = JSON.parse(readFileSync(packageFile, "utf8")) as WorkspacePackageManifest;
     if (packageManifest.name) {
       graph.set(packageManifest.name, {
@@ -750,16 +751,13 @@ function collectWorkspaceDependencyClosure(
   workspaceDependencies: ReadonlyMap<string, WorkspaceDependencyNode>,
 ) {
   const consumedWorkspaces = new Set<string>();
-  const pending = Object.keys(dependencies)
-    .filter(packageName => workspaceDependencies.has(packageName));
+  const pending = Object.keys(dependencies).filter((packageName) => workspaceDependencies.has(packageName));
   while (pending.length > 0) {
     const packageName = pending.shift()!;
-    if (consumedWorkspaces.has(packageName))
-      continue;
+    if (consumedWorkspaces.has(packageName)) continue;
     consumedWorkspaces.add(packageName);
     for (const dependencyName of Object.keys(workspaceDependencies.get(packageName)?.dependencies ?? {})) {
-      if (workspaceDependencies.has(dependencyName))
-        pending.push(dependencyName);
+      if (workspaceDependencies.has(dependencyName)) pending.push(dependencyName);
     }
   }
   return consumedWorkspaces;
@@ -767,9 +765,9 @@ function collectWorkspaceDependencyClosure(
 
 function collectWorkspaceBuildDependencies(packageManifest: WorkspacePackageManifest) {
   return Object.fromEntries(
-    workspaceBuildDependencySections.flatMap(section =>
-      Object.entries(packageManifest[section] ?? {})
-        .filter(([, version]) => version.startsWith("workspace:"))),
+    workspaceBuildDependencySections.flatMap((section) =>
+      Object.entries(packageManifest[section] ?? {}).filter(([, version]) => version.startsWith("workspace:")),
+    ),
   );
 }
 
@@ -777,42 +775,33 @@ function reachesProtectedArchitectureWorkspace(
   packageName: string,
   workspaceDependencies: ReadonlyMap<string, WorkspaceDependencyNode>,
 ) {
-  const closure = collectWorkspaceDependencyClosure(
-    { [packageName]: "workspace:*" },
-    workspaceDependencies,
-  );
-  return [...architectureWorkspaceRoots.keys()].some(protectedPackageName =>
-    closure.has(protectedPackageName));
+  const closure = collectWorkspaceDependencyClosure({ [packageName]: "workspace:*" }, workspaceDependencies);
+  return [...architectureWorkspaceRoots.keys()].some((protectedPackageName) => closure.has(protectedPackageName));
 }
 
 function collectDockerCopySources(content: string) {
-  return new Set(content.split(/\r?\n/u).flatMap((line) => {
-    const match = /^\s*COPY\s+(\S+)\s+\S+\s*$/u.exec(line);
-    const source = match?.[1]?.replace(/^\.\//u, "");
-    return source ? [source] : [];
-  }));
+  return new Set(
+    content.split(/\r?\n/u).flatMap((line) => {
+      const match = /^\s*COPY\s+(\S+)\s+\S+\s*$/u.exec(line);
+      const source = match?.[1]?.replace(/^\.\//u, "");
+      return source ? [source] : [];
+    }),
+  );
 }
 
 function hasValueDependency(declaration: StaticDependencyDeclaration) {
   if (ts.isExportDeclaration(declaration)) {
-    if (declaration.isTypeOnly)
-      return false;
-    if (!declaration.exportClause || !ts.isNamedExports(declaration.exportClause))
-      return true;
-    return declaration.exportClause.elements.some(element => !element.isTypeOnly);
+    if (declaration.isTypeOnly) return false;
+    if (!declaration.exportClause || !ts.isNamedExports(declaration.exportClause)) return true;
+    return declaration.exportClause.elements.some((element) => !element.isTypeOnly);
   }
   const clause = declaration.importClause;
-  if (!clause)
-    return true;
-  if (clause.isTypeOnly)
-    return false;
-  if (clause.name)
-    return true;
-  if (!clause.namedBindings)
-    return false;
-  if (ts.isNamespaceImport(clause.namedBindings))
-    return true;
-  return clause.namedBindings.elements.some(element => !element.isTypeOnly);
+  if (!clause) return true;
+  if (clause.isTypeOnly) return false;
+  if (clause.name) return true;
+  if (!clause.namedBindings) return false;
+  if (ts.isNamespaceImport(clause.namedBindings)) return true;
+  return clause.namedBindings.elements.some((element) => !element.isTypeOnly);
 }
 
 function dependencyOperation(declaration: StaticDependencyDeclaration) {
@@ -828,24 +817,31 @@ function isCompositionOwner(file: string) {
 }
 
 function isRoleAssignmentSchemaOwner(file: string) {
-  return file === "packages/role-assignment-resolution/src/internal/resolver.ts"
-    || file === "apps/admin-api/src/services/role/role.repository.ts";
+  return (
+    file === "packages/role-assignment-resolution/src/internal/resolver.ts" ||
+    file === "apps/admin-api/src/services/role/role.repository.ts"
+  );
 }
 
 function isRoleAssignmentResolverValueOwner(file: string) {
-  return /^apps\/(?:api|admin-api|worker)\/src\/composition(?:\/|$)/u.test(file)
-    || file === "packages/user-profile-read-model/src/invalidation/user-profile-invalidation.ts"
-    || file === "packages/user-profile-read-model/src/worker/user-profile-worker.module.ts";
+  return (
+    /^apps\/(?:api|admin-api|worker)\/src\/composition(?:\/|$)/u.test(file) ||
+    file === "packages/user-profile-read-model/src/invalidation/user-profile-invalidation.ts" ||
+    file === "packages/user-profile-read-model/src/worker/user-profile-worker.module.ts"
+  );
 }
 
 function isUserProfileProducerOwner(file: string) {
-  return file.startsWith("packages/user-profile-read-model/src/")
-    || /^apps\/(?:api|admin-api)\/src\/composition(?:\/|$)/u.test(file);
+  return (
+    file.startsWith("packages/user-profile-read-model/src/") ||
+    /^apps\/(?:api|admin-api)\/src\/composition(?:\/|$)/u.test(file)
+  );
 }
 
 function isUserProfileWorkerOwner(file: string) {
-  return file.startsWith("packages/user-profile-read-model/src/")
-    || /^apps\/worker\/src\/composition(?:\/|$)/u.test(file);
+  return (
+    file.startsWith("packages/user-profile-read-model/src/") || /^apps\/worker\/src\/composition(?:\/|$)/u.test(file)
+  );
 }
 
 function isUserProfileQueryRepositoryOwner(file: string) {
@@ -853,8 +849,7 @@ function isUserProfileQueryRepositoryOwner(file: string) {
 }
 
 function isRepositoryImplementation(file: string) {
-  return /^apps\/(?:api|admin-api)\/src\/services\//u.test(file)
-    && file.endsWith(".repository.ts");
+  return /^apps\/(?:api|admin-api)\/src\/services\//u.test(file) && file.endsWith(".repository.ts");
 }
 
 function isAppAssemblyOwner(file: string) {
@@ -880,41 +875,36 @@ function isAppLoggerSingleton(sourceFile: string, moduleSpecifier: string) {
 function isConcreteProviderModule(sourceFile: string, moduleSpecifier: string) {
   const appLocalModule = resolveAppLocalModule(sourceFile, moduleSpecifier);
   const aliasedModule = resolveAliasedAppModule(moduleSpecifier);
-  return /^(?:routes|services)\/.+\.(?:repository|service)$/u.test(appLocalModule ?? "")
-    || /^(?:routes|services)\/.+\.(?:repository|service)$/u.test(aliasedModule?.path ?? "");
+  return (
+    /^(?:routes|services)\/.+\.(?:repository|service)$/u.test(appLocalModule ?? "") ||
+    /^(?:routes|services)\/.+\.(?:repository|service)$/u.test(aliasedModule?.path ?? "")
+  );
 }
 
 function isApplicationUseCaseModule(moduleSpecifier: string) {
   const normalizedModule = normalizeStaticModulePath(moduleSpecifier);
   const aliasedModule = resolveAliasedAppModule(moduleSpecifier);
-  return aliasedModule?.path === "use-cases"
-    || aliasedModule?.path.startsWith("use-cases/") === true
-    || (normalizedModule.startsWith(".") && normalizedModule.split("/").includes("use-cases"));
+  return (
+    aliasedModule?.path === "use-cases" ||
+    aliasedModule?.path.startsWith("use-cases/") === true ||
+    (normalizedModule.startsWith(".") && normalizedModule.split("/").includes("use-cases"))
+  );
 }
 
 function resolveAppLocalModule(sourceFile: string, moduleSpecifier: string) {
   const sourceMatch = /^apps\/(api|admin-api)\/src\/(.+)$/u.exec(sourceFile);
-  if (!sourceMatch)
-    return undefined;
+  if (!sourceMatch) return undefined;
   const [, app, appRelativeFile] = sourceMatch;
   const aliasedModule = resolveAliasedAppModule(moduleSpecifier);
-  if (aliasedModule?.app === app)
-    return aliasedModule.path;
-  if (!moduleSpecifier.startsWith("."))
-    return undefined;
-  return normalizeStaticModulePath(
-    posix.normalize(posix.join(posix.dirname(appRelativeFile), moduleSpecifier)),
-  );
+  if (aliasedModule?.app === app) return aliasedModule.path;
+  if (!moduleSpecifier.startsWith(".")) return undefined;
+  return normalizeStaticModulePath(posix.normalize(posix.join(posix.dirname(appRelativeFile), moduleSpecifier)));
 }
 
 function isAppLocalRepositoryModule(moduleSpecifier: string) {
   const normalizedModule = normalizeStaticModulePath(moduleSpecifier);
   const aliasedModule = resolveAliasedAppModule(moduleSpecifier);
-  return normalizedModule.endsWith(".repository")
-    && (
-      normalizedModule.startsWith(".")
-      || aliasedModule !== undefined
-    );
+  return normalizedModule.endsWith(".repository") && (normalizedModule.startsWith(".") || aliasedModule !== undefined);
 }
 
 function resolveAliasedAppModule(moduleSpecifier: string) {
@@ -926,8 +916,7 @@ function resolveAliasedAppModule(moduleSpecifier: string) {
     { prefix: "~admin-api/src", app: "admin-api" },
   ] as const;
   for (const alias of aliases) {
-    if (normalizedModule === alias.prefix)
-      return { app: alias.app, path: "" };
+    if (normalizedModule === alias.prefix) return { app: alias.app, path: "" };
     if (normalizedModule.startsWith(`${alias.prefix}/`)) {
       return {
         app: alias.app,
@@ -949,26 +938,21 @@ function normalizeStaticModuleEdges(sourceFile: string, moduleSpecifier: string)
   const normalizedModule = normalizeStaticModulePath(moduleSpecifier);
   const normalizedTargets = new Set([normalizedModule]);
   const canonicalSourceModule = resolveCanonicalStaticSourceModule(normalizedModule);
-  if (canonicalSourceModule)
-    normalizedTargets.add(canonicalSourceModule);
+  if (canonicalSourceModule) normalizedTargets.add(canonicalSourceModule);
   const aliasedModule = resolveAliasedAppModule(moduleSpecifier);
   if (aliasedModule) {
-    normalizedTargets.add(normalizeStaticModulePath(
-      posix.join("apps", aliasedModule.app, "src", aliasedModule.path),
-    ));
-  }
-  else if (normalizedModule.startsWith(".")) {
-    normalizedTargets.add(normalizeStaticModulePath(
-      posix.normalize(posix.join(posix.dirname(sourceFile), normalizedModule)),
-    ));
+    normalizedTargets.add(normalizeStaticModulePath(posix.join("apps", aliasedModule.app, "src", aliasedModule.path)));
+  } else if (normalizedModule.startsWith(".")) {
+    normalizedTargets.add(
+      normalizeStaticModulePath(posix.normalize(posix.join(posix.dirname(sourceFile), normalizedModule))),
+    );
   }
   return [...normalizedTargets];
 }
 
 function resolveCanonicalStaticSourceModule(modulePath: string) {
   for (const [packageName, sourceRoot] of canonicalStaticSourceRoots) {
-    if (modulePath === packageName)
-      return sourceRoot;
+    if (modulePath === packageName) return sourceRoot;
     if (modulePath.startsWith(`${packageName}/`))
       return posix.join(sourceRoot, modulePath.slice(packageName.length + 1));
   }
@@ -976,20 +960,15 @@ function resolveCanonicalStaticSourceModule(modulePath: string) {
 }
 
 function matchesStaticModulePattern(modulePath: string, pattern: StaticModulePattern) {
-  if (pattern.kind === "exact")
-    return modulePath === pattern.module;
-  if (pattern.kind === "package")
-    return isPackageRootOrSubpath(modulePath, pattern.module);
-  if (pattern.kind === "prefix")
-    return isPathAtOrBelow(modulePath, pattern.module);
-  if (pattern.kind === "suffix")
-    return modulePath === pattern.module || modulePath.endsWith(`/${pattern.module}`);
+  if (pattern.kind === "exact") return modulePath === pattern.module;
+  if (pattern.kind === "package") return isPackageRootOrSubpath(modulePath, pattern.module);
+  if (pattern.kind === "prefix") return isPathAtOrBelow(modulePath, pattern.module);
+  if (pattern.kind === "suffix") return modulePath === pattern.module || modulePath.endsWith(`/${pattern.module}`);
   return isPathAtOrBelow(modulePath, pattern.prefix) && modulePath.endsWith(pattern.suffix);
 }
 
 function matchesStaticSourcePattern(sourceFile: string, pattern: StaticSourcePattern) {
-  if (typeof pattern === "string")
-    return isPathAtOrBelow(sourceFile, pattern);
+  if (typeof pattern === "string") return isPathAtOrBelow(sourceFile, pattern);
   return isPathAtOrBelow(sourceFile, pattern.prefix) && sourceFile.endsWith(pattern.suffix);
 }
 
@@ -1002,15 +981,16 @@ function isPackageRootOrSubpath(modulePath: string, packageRoot: string) {
 }
 
 function referencedTypeName(type: ts.TypeNode, sourceFile: ts.SourceFile) {
-  if (ts.isTypeReferenceNode(type))
-    return type.typeName.getText(sourceFile);
+  if (ts.isTypeReferenceNode(type)) return type.typeName.getText(sourceFile);
   return type.getText(sourceFile);
 }
 
 function isConcreteRepositoryModule(moduleSpecifier: string) {
-  return moduleSpecifier.endsWith(".repository")
-    || moduleSpecifier.endsWith(".repository.ts")
-    || moduleSpecifier.split("/").includes("repositories");
+  return (
+    moduleSpecifier.endsWith(".repository") ||
+    moduleSpecifier.endsWith(".repository.ts") ||
+    moduleSpecifier.split("/").includes("repositories")
+  );
 }
 
 function lineOf(sourceFile: ts.SourceFile, node: ts.Node) {
@@ -1018,17 +998,17 @@ function lineOf(sourceFile: ts.SourceFile, node: ts.Node) {
 }
 
 function compareViolations(left: ArchitectureViolation, right: ArchitectureViolation) {
-  return compareText(left.ruleId, right.ruleId)
-    || compareText(left.file, right.file)
-    || left.line - right.line
-    || compareText(left.message, right.message);
+  return (
+    compareText(left.ruleId, right.ruleId) ||
+    compareText(left.file, right.file) ||
+    left.line - right.line ||
+    compareText(left.message, right.message)
+  );
 }
 
 function compareText(left: string, right: string) {
-  if (left < right)
-    return -1;
-  if (left > right)
-    return 1;
+  if (left < right) return -1;
+  if (left > right) return 1;
   return 0;
 }
 

@@ -1,8 +1,5 @@
-import type { ApiErrorCode, ClientStatus } from '@iam/contracts';
-import type {
-  CustomSsoEmployment,
-  CustomSsoSubjectProjection,
-} from '@iam/custom-sso/wire';
+import type { ApiErrorCode, ClientStatus } from "@iam/contracts";
+import type { CustomSsoEmployment, CustomSsoSubjectProjection } from "@iam/custom-sso/wire";
 
 export type ApiEnvelope<T> = {
   code: ApiErrorCode | number | string;
@@ -23,10 +20,9 @@ export type MaskedMobile = {
   mobile: string | null;
 };
 
-export type SmsUsage = 'login' | 'resetPassword' | 'bindPhone';
+export type SmsUsage = "login" | "resetPassword" | "bindPhone";
 
-export type HumanVerificationAction =
-  'sendSmsCode' | 'passwordLogin' | 'mobileLogin' | 'openUserInfoLookup';
+export type HumanVerificationAction = "sendSmsCode" | "passwordLogin" | "mobileLogin" | "openUserInfoLookup";
 
 export type LoginPasswordResult = {
   isMobileSet: boolean;

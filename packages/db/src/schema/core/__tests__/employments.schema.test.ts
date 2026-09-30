@@ -1,5 +1,5 @@
-import { EmploymentStatus } from "@iam/contracts";
 import { describe, expect, test } from "bun:test";
+import { EmploymentStatus } from "@iam/contracts";
 import { getTableConfig } from "drizzle-orm/pg-core";
 import { employments } from "../employments";
 
@@ -19,11 +19,14 @@ describe("employment schema", () => {
       method: "btree",
     });
     expect(index.columns.map((column: any) => column.name)).toEqual(["user_id", "dept_id", "pos_id"]);
-    expect(whereChunks.filter((chunk: any) => typeof chunk === "object" && "name" in chunk).map((chunk: any) => chunk.name))
-      .toEqual(["is_delete", "status"]);
-    expect(whereChunks.some((chunk: any) =>
-      typeof chunk === "object" && "value" in chunk && chunk.value.join("").includes("= false"),
-    )).toBe(true);
+    expect(
+      whereChunks.filter((chunk: any) => typeof chunk === "object" && "name" in chunk).map((chunk: any) => chunk.name),
+    ).toEqual(["is_delete", "status"]);
+    expect(
+      whereChunks.some(
+        (chunk: any) => typeof chunk === "object" && "value" in chunk && chunk.value.join("").includes("= false"),
+      ),
+    ).toBe(true);
     expect(whereChunks).toContain(EmploymentStatus.Enable);
   });
 });

@@ -1,9 +1,9 @@
+import { ApiErrorCode } from "@iam/contracts";
 import type { Context } from "hono";
+import { HTTPException } from "hono/http-exception";
 import type { HTTPResponseError } from "hono/types";
 import type { ContentfulStatusCode } from "hono/utils/http-status";
 import type { Logger } from "pino";
-import { ApiErrorCode } from "@iam/contracts";
-import { HTTPException } from "hono/http-exception";
 import { INTERNAL_SERVER_ERROR } from "../core/http-status-codes";
 import { getRequestId } from "../core/request-context";
 import { isApiRuntimeError } from "../errors/api-runtime-error";
@@ -25,7 +25,7 @@ function getErrorSourceLocation(err: Error): string {
   const stackLine = err.stack
     ?.split("\n")
     .slice(1)
-    .find(line => line.trim().startsWith("at "));
+    .find((line) => line.trim().startsWith("at "));
   const location = stackLine?.match(/\(?((?:file:\/\/)?(?:\/|[A-Z]:[\\/]).*?:\d+:\d+)\)?$/i)?.[1];
 
   return location?.replace(/^file:\/\//, "") ?? "unknown source";
@@ -34,8 +34,7 @@ function getErrorSourceLocation(err: Error): string {
 function getRequestLogger(c: Context): ErrorLogger | undefined {
   try {
     return c.get("logger" as never) as ErrorLogger | undefined;
-  }
-  catch {
+  } catch {
     return undefined;
   }
 }
@@ -54,7 +53,7 @@ function buildRestErrorContext(c: Context, logger: ErrorLogger) {
     surface: "rest" as const,
     sourceApp: getLoggerSourceApp(logger),
     requestId: getRequestId(c),
-    traceId: getTraceIdFromHeaders(name => getHeader(c, name)),
+    traceId: getTraceIdFromHeaders((name) => getHeader(c, name)),
     method: c.req.method,
     path: c.req.path,
     route: getRoutePath(c),
@@ -78,43 +77,53 @@ export function createErrorHandler(appLogger: ErrorLogger) {
   return function errorHandler(err: Error | HTTPResponseError, c: Context) {
     const logger = getRequestLogger(c) ?? appLogger;
     if (isApiRuntimeError(err)) {
-      logApiError(logger, {
-        ...buildRestErrorContext(c, logger),
-        event: SystemLogEvent.ApiErrorHandled,
-        statusCode: err.httpStatus,
-        errorCode: err.code,
-        errorName: err.name,
-        errorMessage: err.message,
-        err,
-      }, "handled request error");
+      logApiError(
+        logger,
+        {
+          ...buildRestErrorContext(c, logger),
+          event: SystemLogEvent.ApiErrorHandled,
+          statusCode: err.httpStatus,
+          errorCode: err.code,
+          errorName: err.name,
+          errorMessage: err.message,
+          err,
+        },
+        "handled request error",
+      );
       setRetryAfterHeader(err, c);
       return c.json(resp.fail(err.code, err.message), err.httpStatus as ContentfulStatusCode);
-    }
-    else if (err instanceof HTTPException) {
+    } else if (err instanceof HTTPException) {
       const requestId = getRequestId(c);
-      logApiError(logger, {
-        ...buildRestErrorContext(c, logger),
-        event: SystemLogEvent.ApiErrorHandled,
-        statusCode: err.status,
-        errorCode: ApiErrorCode.InternalError,
-        errorName: err.name === "Error" ? "HTTPException" : err.name,
-        errorMessage: err.message,
-        err,
-      }, "handled request error");
+      logApiError(
+        logger,
+        {
+          ...buildRestErrorContext(c, logger),
+          event: SystemLogEvent.ApiErrorHandled,
+          statusCode: err.status,
+          errorCode: ApiErrorCode.InternalError,
+          errorName: err.name === "Error" ? "HTTPException" : err.name,
+          errorMessage: err.message,
+          err,
+        },
+        "handled request error",
+      );
       return c.json(resp.fail(ApiErrorCode.InternalError, err.message, createRequestIdData(requestId)), err.status);
-    }
-    else {
+    } else {
       const requestId = getRequestId(c);
-      logApiError(logger, {
-        ...buildRestErrorContext(c, logger),
-        event: SystemLogEvent.ApiErrorUnhandled,
-        statusCode: INTERNAL_SERVER_ERROR,
-        errorCode: ApiErrorCode.InternalError,
-        source: getErrorSourceLocation(err),
-        errorName: err.name,
-        errorMessage: err.message,
-        err,
-      }, "unhandled request error");
+      logApiError(
+        logger,
+        {
+          ...buildRestErrorContext(c, logger),
+          event: SystemLogEvent.ApiErrorUnhandled,
+          statusCode: INTERNAL_SERVER_ERROR,
+          errorCode: ApiErrorCode.InternalError,
+          source: getErrorSourceLocation(err),
+          errorName: err.name,
+          errorMessage: err.message,
+          err,
+        },
+        "unhandled request error",
+      );
       return c.json(
         resp.fail(ApiErrorCode.InternalError, getInternalErrorMessage(requestId), createRequestIdData(requestId)),
         INTERNAL_SERVER_ERROR,

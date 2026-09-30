@@ -1,7 +1,7 @@
-import type { GenericClientRecord } from "@iam/domain/client";
+import { expect, test } from "bun:test";
 import { createClientRepository } from "@api/services/client/client.repository";
 import { ClientStatus } from "@iam/contracts";
-import { expect, test } from "bun:test";
+import type { GenericClientRecord } from "@iam/domain/client";
 
 const genericClientRecord = {
   id: 1,
@@ -28,12 +28,11 @@ function createSelectDb(row: GenericClientRecord) {
             return {
               where() {
                 return {
-                  limit: async () => [Object.fromEntries(
-                    selectedColumns.map(column => [
-                      column,
-                      row[column as keyof GenericClientRecord],
-                    ]),
-                  )],
+                  limit: async () => [
+                    Object.fromEntries(
+                      selectedColumns.map((column) => [column, row[column as keyof GenericClientRecord]]),
+                    ),
+                  ],
                 };
               },
             };

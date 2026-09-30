@@ -1,13 +1,13 @@
 import type { ClientSnapshotReader } from "@iam/api-core/client-snapshot";
 import type { SubjectAccessOperation } from "@iam/api-core/subject-access";
-import type { RevocationResult, UnifiedSessionKernel } from "@iam/session-kernel";
-import type { OidcHintVerificationPort } from "./signing";
-import type { OidcStateRedis } from "./state";
 import { requireSubjectAccessOperation } from "@iam/api-core/subject-access";
 import { ClientCodeSchema, ClientSsoProtocol } from "@iam/contracts";
+import type { RevocationResult, UnifiedSessionKernel } from "@iam/session-kernel";
 import { z } from "zod";
 import { OidcProtocolError } from "./errors";
 import { createOidcLogoutState } from "./logout-state";
+import type { OidcHintVerificationPort } from "./signing";
+import type { OidcStateRedis } from "./state";
 import { digest, randomHandle } from "./state";
 
 export interface OidcLogoutOptions {
@@ -44,8 +44,7 @@ export function createOidcLogout(options: OidcLogoutOptions) {
       requireSubjectAccessOperation(operation);
       const sessions = options.kernel.forOperation(operation);
       async function client(clientId: string) {
-        if (!ClientCodeSchema.safeParse(clientId).success)
-          invalid("Invalid client_id");
+        if (!ClientCodeSchema.safeParse(clientId).success) invalid("Invalid client_id");
         const result = await options.clients.acquire(clientId);
         if (result.kind !== "present" || result.value.clientCode !== clientId)
           throw new OidcProtocolError("invalid_client", "Unknown client");
@@ -55,8 +54,7 @@ export function createOidcLogout(options: OidcLogoutOptions) {
         return result.value.ssoConfig;
       }
       async function root(token?: string) {
-        if (!token)
-          return null;
+        if (!token) return null;
         const result = await sessions.resolveUserSession(token);
         if (result.status === "corrupt")
           throw new OidcProtocolError("temporarily_unavailable", "Session state unavailable", 503);
@@ -72,25 +70,21 @@ export function createOidcLogout(options: OidcLogoutOptions) {
             "ui_locales",
             "logout_hint",
           ]) {
-            if (parameters.getAll(key).length > 1)
-              invalid(`Duplicate parameter: ${key}`);
+            if (parameters.getAll(key).length > 1) invalid(`Duplicate parameter: ${key}`);
           }
           const token = parameters.get("id_token_hint");
           const redirectUri = parameters.get("post_logout_redirect_uri");
-          if (redirectUri !== null && !token)
-            invalid("id_token_hint is required for post_logout_redirect_uri");
+          if (redirectUri !== null && !token) invalid("id_token_hint is required for post_logout_redirect_uri");
           let clientId = parameters.get("client_id");
           let hint = null;
           if (token) {
-            let claims;
+            let claims: Awaited<ReturnType<typeof options.verification.verifyLogoutHint>>;
             try {
               claims = await options.verification.verifyLogoutHint(token, issuer);
-            }
-            catch {
+            } catch {
               invalid("Invalid id_token_hint");
             }
-            if (clientId !== null && clientId !== claims.clientId)
-              invalid("client_id does not match id_token_hint");
+            if (clientId !== null && clientId !== claims.clientId) invalid("client_id does not match id_token_hint");
             clientId = claims.clientId;
             hint = { digest: digest(token), subjectIdentifier: claims.subjectIdentifier };
           }
@@ -115,28 +109,17 @@ export function createOidcLogout(options: OidcLogoutOptions) {
         },
         async confirm(parameters: URLSearchParams, browser: OidcLogoutBrowser) {
           for (const key of ["xsrf", "logout"]) {
-            if (parameters.getAll(key).length > 1)
-              invalid(`Duplicate parameter: ${key}`);
+            if (parameters.getAll(key).length > 1) invalid(`Duplicate parameter: ${key}`);
           }
-          const saved = await store.read(
-            browser.handle ?? "",
-            browser.binding ?? "",
-            parameters.get("xsrf") ?? "",
-          );
-          if (!saved || saved.value.issuer !== issuer)
-            invalid("Logout request is invalid or expired");
+          const saved = await store.read(browser.handle ?? "", browser.binding ?? "", parameters.get("xsrf") ?? "");
+          if (!saved || saved.value.issuer !== issuer) invalid("Logout request is invalid or expired");
           const confirmed = Boolean(parameters.get("logout"));
-          if (confirmed && saved.value.clientId)
-            await client(saved.value.clientId);
+          if (confirmed && saved.value.clientId) await client(saved.value.clientId);
           // The request's current root is the target; confirmation never fixes a previous root.
           const observed = confirmed ? await root(browser.globalSessionToken) : null;
-          if (!(await store.consume(browser.handle!, saved.raw)))
-            invalid("Logout request has already been used");
+          if (!(await store.consume(browser.handle!, saved.raw))) invalid("Logout request has already been used");
           const revocation = observed ? await sessions.revokeObservedUserSession(observed) : null;
-          if (
-            revocation
-            && !["terminated", "already_terminated", "missing", "expired"].includes(revocation.status)
-          ) {
+          if (revocation && !["terminated", "already_terminated", "missing", "expired"].includes(revocation.status)) {
             throw new OidcLogoutFailure(revocation);
           }
           const effect: OidcLogoutEffect = { choice: confirmed ? "confirm" : "cancel", revocation };

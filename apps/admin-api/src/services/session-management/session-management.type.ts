@@ -1,6 +1,9 @@
 import type { CapturedSession } from "@iam/session-kernel";
 import type { z } from "zod";
-import type { AdminLoginRestrictionReleaseResultSchema, AdminSessionRevokeResultSchema } from "./session-management.schema";
+import type {
+  AdminLoginRestrictionReleaseResultSchema,
+  AdminSessionRevokeResultSchema,
+} from "./session-management.schema";
 
 export const AdminSessionAccountStatus = {
   Deleted: "deleted",
@@ -10,8 +13,7 @@ export const AdminSessionAccountStatus = {
   Unknown: "unknown",
 } as const;
 
-export type AdminSessionAccountStatusValue
-  = typeof AdminSessionAccountStatus[keyof typeof AdminSessionAccountStatus];
+export type AdminSessionAccountStatusValue = (typeof AdminSessionAccountStatus)[keyof typeof AdminSessionAccountStatus];
 
 export const AdminSessionAuthMethod = {
   Mobile: "mobile",
@@ -21,8 +23,7 @@ export const AdminSessionAuthMethod = {
   Wechat: "wechat",
 } as const;
 
-export type AdminSessionAuthMethodValue
-  = typeof AdminSessionAuthMethod[keyof typeof AdminSessionAuthMethod];
+export type AdminSessionAuthMethodValue = (typeof AdminSessionAuthMethod)[keyof typeof AdminSessionAuthMethod];
 
 export const AdminSessionDeviceType = {
   Desktop: "desktop",
@@ -31,8 +32,7 @@ export const AdminSessionDeviceType = {
   Unknown: "unknown",
 } as const;
 
-export type AdminSessionDeviceTypeValue
-  = typeof AdminSessionDeviceType[keyof typeof AdminSessionDeviceType];
+export type AdminSessionDeviceTypeValue = (typeof AdminSessionDeviceType)[keyof typeof AdminSessionDeviceType];
 
 export const AdminSessionOperatingSystem = {
   Android: "android",
@@ -43,8 +43,8 @@ export const AdminSessionOperatingSystem = {
   Windows: "windows",
 } as const;
 
-export type AdminSessionOperatingSystemValue
-  = typeof AdminSessionOperatingSystem[keyof typeof AdminSessionOperatingSystem];
+export type AdminSessionOperatingSystemValue =
+  (typeof AdminSessionOperatingSystem)[keyof typeof AdminSessionOperatingSystem];
 
 export const AdminSessionBrowser = {
   Chrome: "chrome",
@@ -55,8 +55,7 @@ export const AdminSessionBrowser = {
   Wechat: "wechat",
 } as const;
 
-export type AdminSessionBrowserValue
-  = typeof AdminSessionBrowser[keyof typeof AdminSessionBrowser];
+export type AdminSessionBrowserValue = (typeof AdminSessionBrowser)[keyof typeof AdminSessionBrowser];
 
 export interface AdminSessionListInput {
   pageNum: number;
@@ -75,13 +74,13 @@ export interface AdminSessionRevokeInput {
   target:
     | { type: "captured"; targets: CapturedSession[] }
     | {
-      type: "session";
-      principalSessionId: string;
-    }
+        type: "session";
+        principalSessionId: string;
+      }
     | {
-      type: "user";
-      userId: number;
-    };
+        type: "user";
+        userId: number;
+      };
 }
 
 export type AdminSessionRevokeResult = z.infer<typeof AdminSessionRevokeResultSchema>;
@@ -128,8 +127,8 @@ export const AdminLoginRestrictionCause = {
   TooManyLoginFailures: "too_many_login_failures",
 } as const;
 
-export type AdminLoginRestrictionCauseValue
-  = typeof AdminLoginRestrictionCause[keyof typeof AdminLoginRestrictionCause];
+export type AdminLoginRestrictionCauseValue =
+  (typeof AdminLoginRestrictionCause)[keyof typeof AdminLoginRestrictionCause];
 
 export const AdminLoginRestrictionTriggerMethod = {
   Mobile: "mobile",
@@ -137,8 +136,8 @@ export const AdminLoginRestrictionTriggerMethod = {
   Unknown: "unknown",
 } as const;
 
-export type AdminLoginRestrictionTriggerMethodValue
-  = typeof AdminLoginRestrictionTriggerMethod[keyof typeof AdminLoginRestrictionTriggerMethod];
+export type AdminLoginRestrictionTriggerMethodValue =
+  (typeof AdminLoginRestrictionTriggerMethod)[keyof typeof AdminLoginRestrictionTriggerMethod];
 
 export interface AdminLoginRestrictionListInput {
   pageNum: number;

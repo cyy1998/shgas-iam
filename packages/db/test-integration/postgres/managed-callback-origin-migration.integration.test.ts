@@ -1,8 +1,8 @@
-import type { PostgresTestHarness } from "./postgres-harness";
-import { fileURLToPath } from "node:url";
 import { afterEach, beforeEach, expect, test } from "bun:test";
+import { fileURLToPath } from "node:url";
 import { drizzle } from "drizzle-orm/postgres-js";
 import { migrate } from "drizzle-orm/postgres-js/migrator";
+import type { PostgresTestHarness } from "./postgres-harness";
 import { createPostgresTestHarness, expectPostgresErrorCode } from "./postgres-harness";
 
 const folder = fileURLToPath(new URL("../../src/migrations", import.meta.url));
@@ -43,5 +43,5 @@ test("formal empty database migration produces the final strict shape", async ()
   await migrateFinal();
   const after = await journal();
   expect(after).toEqual(before);
-  expect(after.map(row => row.name)).toContain(target);
+  expect(after.map((row) => row.name)).toContain(target);
 });

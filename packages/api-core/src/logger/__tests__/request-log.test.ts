@@ -1,5 +1,5 @@
-import { ApiErrorCode } from "@iam/contracts";
 import { describe, expect, test } from "bun:test";
+import { ApiErrorCode } from "@iam/contracts";
 import {
   buildApiErrorLogFields,
   buildHttpRequestLogFields,
@@ -10,8 +10,8 @@ import {
   getTraceIdFromHeaders,
   getUserAgentFromHeaders,
   LoggerSourceApp,
-  summarizeValidationIssues,
   SystemLogEvent,
+  summarizeValidationIssues,
 } from "../index";
 
 function headerReader(headers: Record<string, string | string[] | undefined>) {
@@ -29,28 +29,40 @@ describe("request log helpers", () => {
 
   test("extracts trace id by stable priority", () => {
     const readHeader = headerReader({
-      "traceparent": "00-11111111111111111111111111111111-2222222222222222-01",
+      traceparent: "00-11111111111111111111111111111111-2222222222222222-01",
       "x-b3-traceid": "33333333333333333333333333333333",
       "x-trace-id": "44444444444444444444444444444444",
     });
 
     expect(getTraceIdFromHeaders(readHeader)).toBe("11111111111111111111111111111111");
-    expect(getTraceIdFromHeaders(headerReader({
-      "x-b3-traceid": "33333333333333333333333333333333",
-      "x-trace-id": "44444444444444444444444444444444",
-    }))).toBe("33333333333333333333333333333333");
-    expect(getTraceIdFromHeaders(headerReader({
-      "x-trace-id": "44444444444444444444444444444444",
-    }))).toBe("44444444444444444444444444444444");
+    expect(
+      getTraceIdFromHeaders(
+        headerReader({
+          "x-b3-traceid": "33333333333333333333333333333333",
+          "x-trace-id": "44444444444444444444444444444444",
+        }),
+      ),
+    ).toBe("33333333333333333333333333333333");
+    expect(
+      getTraceIdFromHeaders(
+        headerReader({
+          "x-trace-id": "44444444444444444444444444444444",
+        }),
+      ),
+    ).toBe("44444444444444444444444444444444");
   });
 
   test("extracts request id, client ip, and user agent with fallbacks", () => {
     expect(getRequestIdFromHeaders(headerReader({ "x-request-id": "req-1" }), () => "fallback")).toBe("req-1");
     expect(getRequestIdFromHeaders(headerReader({}), () => "fallback")).toBe("fallback");
-    expect(getClientIpFromHeaders(headerReader({
-      "x-forwarded-for": "203.0.113.10, 10.0.0.1",
-      "x-real-ip": "198.51.100.20",
-    }))).toBe("203.0.113.10");
+    expect(
+      getClientIpFromHeaders(
+        headerReader({
+          "x-forwarded-for": "203.0.113.10, 10.0.0.1",
+          "x-real-ip": "198.51.100.20",
+        }),
+      ),
+    ).toBe("203.0.113.10");
     expect(getClientIpFromHeaders(headerReader({ "x-real-ip": "198.51.100.20" }))).toBe("198.51.100.20");
     expect(getUserAgentFromHeaders(headerReader({ "user-agent": "api-core-test" }))).toBe("api-core-test");
   });
@@ -81,36 +93,48 @@ describe("request log helpers", () => {
   });
 
   test("selects actionable API error log levels", () => {
-    expect(getApiErrorLogLevel({
-      event: SystemLogEvent.ApiErrorUnhandled,
-      statusCode: 500,
-      path: "/public/boom",
-    })).toBe("error");
-    expect(getApiErrorLogLevel({
-      event: SystemLogEvent.ApiErrorHandled,
-      statusCode: 500,
-      path: "/public/boom",
-    })).toBe("error");
-    expect(getApiErrorLogLevel({
-      event: SystemLogEvent.ApiErrorHandled,
-      statusCode: 403,
-      path: "/public/forbidden",
-    })).toBe("warn");
-    expect(getApiErrorLogLevel({
-      event: SystemLogEvent.ApiErrorHandled,
-      statusCode: 401,
-      path: "/internal/sync",
-    })).toBe("warn");
-    expect(getApiErrorLogLevel({
-      event: SystemLogEvent.ApiErrorHandled,
-      statusCode: 401,
-      path: "/auth/session",
-    })).toBe("info");
-    expect(getApiErrorLogLevel({
-      event: SystemLogEvent.ApiErrorHandled,
-      statusCode: 422,
-      path: "/public/items",
-    })).toBe("info");
+    expect(
+      getApiErrorLogLevel({
+        event: SystemLogEvent.ApiErrorUnhandled,
+        statusCode: 500,
+        path: "/public/boom",
+      }),
+    ).toBe("error");
+    expect(
+      getApiErrorLogLevel({
+        event: SystemLogEvent.ApiErrorHandled,
+        statusCode: 500,
+        path: "/public/boom",
+      }),
+    ).toBe("error");
+    expect(
+      getApiErrorLogLevel({
+        event: SystemLogEvent.ApiErrorHandled,
+        statusCode: 403,
+        path: "/public/forbidden",
+      }),
+    ).toBe("warn");
+    expect(
+      getApiErrorLogLevel({
+        event: SystemLogEvent.ApiErrorHandled,
+        statusCode: 401,
+        path: "/internal/sync",
+      }),
+    ).toBe("warn");
+    expect(
+      getApiErrorLogLevel({
+        event: SystemLogEvent.ApiErrorHandled,
+        statusCode: 401,
+        path: "/auth/session",
+      }),
+    ).toBe("info");
+    expect(
+      getApiErrorLogLevel({
+        event: SystemLogEvent.ApiErrorHandled,
+        statusCode: 422,
+        path: "/public/items",
+      }),
+    ).toBe("info");
   });
 
   test("builds API error log fields with diagnostic err rules", () => {
@@ -139,30 +163,30 @@ describe("request log helpers", () => {
     });
     expect(known4xx).not.toHaveProperty("err");
 
-    expect(buildApiErrorLogFields({
-      event: SystemLogEvent.ApiErrorHandled,
-      surface: "rest",
-      statusCode: 500,
-      errorName: "CustomError",
-      errorMessage: "boom",
-      err: error,
-    })).toMatchObject({ err: error });
-    expect(buildApiErrorLogFields({
-      event: SystemLogEvent.ApiErrorUnhandled,
-      surface: "trpc",
-      statusCode: 500,
-      errorName: "Error",
-      errorMessage: "boom",
-      err: error,
-    })).toMatchObject({ err: error });
+    expect(
+      buildApiErrorLogFields({
+        event: SystemLogEvent.ApiErrorHandled,
+        surface: "rest",
+        statusCode: 500,
+        errorName: "CustomError",
+        errorMessage: "boom",
+        err: error,
+      }),
+    ).toMatchObject({ err: error });
+    expect(
+      buildApiErrorLogFields({
+        event: SystemLogEvent.ApiErrorUnhandled,
+        surface: "trpc",
+        statusCode: 500,
+        errorName: "Error",
+        errorMessage: "boom",
+        err: error,
+      }),
+    ).toMatchObject({ err: error });
   });
 
   test("summarizes validation issues without values", () => {
-    expect(summarizeValidationIssues([
-      { path: ["body", "name"] },
-      { path: [] },
-      { path: "query.page" },
-    ])).toEqual({
+    expect(summarizeValidationIssues([{ path: ["body", "name"] }, { path: [] }, { path: "query.page" }])).toEqual({
       issueCount: 3,
       issuePaths: ["body.name", "<root>", "query.page"],
     });

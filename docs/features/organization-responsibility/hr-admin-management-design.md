@@ -18,17 +18,17 @@
 
 纯 HR 的可管理条件固定为 `H ∈ S AND T ∈ S`。`H` 与 `T` 可以位于不同 Scope Root；不要求同根。该条件同时用于列表、搜索、详情、创建、Pause、Resume、End 和 Ended 历史读取，不按 action 改变量词。
 
-| 能力 | `iam:admin` | 纯 `iam:hr-admin` |
-|---|---|---|
-| Type Catalog | 全局只读 | 有有效 HR scope 时全局只读 |
-| Assignment 列表、搜索、详情 | 全局 | 仅双端均在当前 scope |
-| 创建 Assignment | 现有全局行为 | 所选 holder 与 target 均在当前 scope |
-| Pause、Resume、End | 现有全局行为 | 当前 Assignment 双端均在 scope |
-| Ended 历史 | 全局 | 按请求时当前双端 scope |
-| 跨 Scope Root 任命 | 允许 | 两端分别在 scope 即允许 |
-| 自己作为 holder | 允许 | 不特殊处理，满足相同规则即允许 |
-| Assignment 操作日志 | 允许 | 不授予；隐藏操作日志 Tab |
-| 全局 Audit 模块 | 允许 | 不授予 |
+| 能力                        | `iam:admin`  | 纯 `iam:hr-admin`                    |
+| --------------------------- | ------------ | ------------------------------------ |
+| Type Catalog                | 全局只读     | 有有效 HR scope 时全局只读           |
+| Assignment 列表、搜索、详情 | 全局         | 仅双端均在当前 scope                 |
+| 创建 Assignment             | 现有全局行为 | 所选 holder 与 target 均在当前 scope |
+| Pause、Resume、End          | 现有全局行为 | 当前 Assignment 双端均在 scope       |
+| Ended 历史                  | 全局         | 按请求时当前双端 scope               |
+| 跨 Scope Root 任命          | 允许         | 两端分别在 scope 即允许              |
+| 自己作为 holder             | 允许         | 不特殊处理，满足相同规则即允许       |
+| Assignment 操作日志         | 允许         | 不授予；隐藏操作日志 Tab             |
+| 全局 Audit 模块             | 允许         | 不授予                               |
 
 既有业务规则全部保持：Type Catalog 只增不减且不可管理；创建只接受 Enable holder Employment 与 Enable target Organization；Assignment 三项绑定不可编辑或删除；Pause 仍占 cardinality 槽位；End 不可恢复；Resume 重新检查父对象和 cardinality；Employment、Organization、User 级联及 User Profile invalidation、审计写入继续原子执行。
 
@@ -42,9 +42,7 @@ Admin Authorization Policy 提供 `AdminOrganizationResponsibilityAuthorization`
 interface AdminOrganizationResponsibilityAuthorization {
   readonly kind: "full" | "scoped";
   readonly readScope: OrganizationResponsibilityReadScope;
-  getAllowedActions(
-    facts: AdminOrganizationResponsibilityActionFacts,
-  ): AdminOrganizationResponsibilityAllowedActions;
+  getAllowedActions(facts: AdminOrganizationResponsibilityActionFacts): AdminOrganizationResponsibilityAllowedActions;
   denyMutation(input: AdminOrganizationResponsibilityMutationDenial): never;
 }
 ```

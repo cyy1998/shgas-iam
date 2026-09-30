@@ -1,12 +1,7 @@
 import type { AdminAuditContext } from "@admin-api/services/audit/audit.context";
 import type { AuditLogWriterPort } from "@admin-api/services/audit/audit.service";
 import type { UnitOfWorkPort } from "@iam/api-core/uow";
-import type {
-  AdminClientRecord,
-  ClientCreateDto,
-  ClientPaginationQueryDto,
-  ClientUpdateDto,
-} from "./client.type";
+import type { AdminClientRecord, ClientCreateDto, ClientPaginationQueryDto, ClientUpdateDto } from "./client.type";
 
 export interface AdminClientReaderPort {
   searchClientsPaged: (query: ClientPaginationQueryDto) => Promise<{
@@ -24,7 +19,6 @@ export interface AdminClientTransactionStorePort {
   lockClientById: (id: number) => Promise<AdminClientRecord | null>;
   createClient: (input: ClientCreateDto) => Promise<AdminClientRecord | null>;
   updateClientByCode: (clientCode: string, input: ClientUpdateDto) => Promise<AdminClientRecord | null>;
-
 }
 
 export interface AdminClientTransactionPorts {
@@ -48,9 +42,7 @@ export interface AdminClientMutationLoggerPort {
 }
 
 export interface AdminClientCachePort {
-  invalidateClient: (
-    client: AdminClientCacheInvalidationTarget,
-  ) => Promise<unknown>;
+  invalidateClient: (client: AdminClientCacheInvalidationTarget) => Promise<unknown>;
   invalidateUpdatedClient: (
     oldClient: AdminClientCacheInvalidationTarget,
     newClient: AdminClientCacheInvalidationTarget,
@@ -72,7 +64,11 @@ export interface AdminClientServiceDeps {
   clientRuntimeInvalidation: AdminClientRuntimeInvalidationPort;
   clientMutationLogger: AdminClientMutationLoggerPort;
   management: {
-    save: (clientCode: string, data: Pick<ClientUpdateDto, "clientName" | "url" | "status" | "description">, auditContext?: AdminAuditContext) => Promise<{ changed: boolean }>;
+    save: (
+      clientCode: string,
+      data: Pick<ClientUpdateDto, "clientName" | "url" | "status" | "description">,
+      auditContext?: AdminAuditContext,
+    ) => Promise<{ changed: boolean }>;
     deleteClient: (clientCode: string, auditContext?: AdminAuditContext) => Promise<{ changed: boolean; result: null }>;
   };
   passwordHasher: AdminClientSecretHasherPort;

@@ -1,7 +1,7 @@
+import { describe, expect, mock, test } from "bun:test";
 import { createUserHandlers } from "@api/routes/internal/user/user.handlers";
 import { usersSearchDsl } from "@api/routes/internal/user/user.routes";
 import { OrganizationResponsibilityTypeCode } from "@iam/contracts";
-import { describe, expect, mock, test } from "bun:test";
 
 function createHandlers() {
   const deps = {
@@ -38,7 +38,7 @@ describe("createUserHandlers", () => {
       get: mock(() => undefined),
       req: {
         valid: mock(() => input),
-        header: mock((name: string) => name === "Client" ? "portal" : undefined),
+        header: mock((name: string) => (name === "Client" ? "portal" : undefined)),
         method: "POST",
         path: "/internal/users/purveyor/contacts",
       },
@@ -90,10 +90,7 @@ describe("createUserHandlers", () => {
       json: mock((payload: unknown) => payload),
     };
 
-    const result = await handlers.usersSearchWithPrivilegeDelegation(
-      context as never,
-      undefined as never,
-    );
+    const result = await handlers.usersSearchWithPrivilegeDelegation(context as never, undefined as never);
 
     expect(result).toMatchObject({
       code: 200,
@@ -145,8 +142,7 @@ describe("createUserHandlers", () => {
     globalThis.clearTimeout = (() => {}) as typeof clearTimeout;
     try {
       const { deps } = createHandlers();
-      deps.internalUserProfileQuery.getDetailByUsername
-        = mock(async () => await new Promise<never>(() => {}));
+      deps.internalUserProfileQuery.getDetailByUsername = mock(async () => await new Promise<never>(() => {}));
       const handlers = createUserHandlers(deps as never);
       const context = {
         req: { valid: mock(() => ({ username: "user-1" })) },
@@ -155,17 +151,15 @@ describe("createUserHandlers", () => {
         }),
       };
 
-      const error = await Promise.resolve(handlers.userInfo(
-        context as never,
-        undefined as never,
-      )).catch((error: unknown) => error);
+      const error = await Promise.resolve(handlers.userInfo(context as never, undefined as never)).catch(
+        (error: unknown) => error,
+      );
 
       expect(error).toMatchObject({
         code: "USER_SEARCH_UNAVAILABLE",
         httpStatus: 503,
       });
-    }
-    finally {
+    } finally {
       globalThis.setTimeout = originalSetTimeout;
       globalThis.clearTimeout = originalClearTimeout;
     }
@@ -176,23 +170,27 @@ describe("active usersSearchDsl route", () => {
   test("accepts canonical conditions and rejects old aliases or caller-controlled execution", () => {
     const schema = usersSearchDsl.request.body.content["application/json"].schema;
 
-    expect(schema.safeParse({
-      filter: { field: "user.username", op: "eq", value: "zhangsan" },
-    }).success).toBe(true);
-    expect(schema.safeParse({
-      filter: {
-        nested: "employments",
-        where: {
-          nested: "responsibilities",
+    expect(
+      schema.safeParse({
+        filter: { field: "user.username", op: "eq", value: "zhangsan" },
+      }).success,
+    ).toBe(true);
+    expect(
+      schema.safeParse({
+        filter: {
+          nested: "employments",
           where: {
-            field: "responsibility.type.code",
-            op: "eq",
-            value: OrganizationResponsibilityTypeCode.Head,
+            nested: "responsibilities",
+            where: {
+              field: "responsibility.type.code",
+              op: "eq",
+              value: OrganizationResponsibilityTypeCode.Head,
+            },
           },
         },
-      },
-      limit: 1,
-    }).success).toBe(false);
+        limit: 1,
+      }).success,
+    ).toBe(false);
     expect(schema.safeParse({ filter: {}, version: 2 }).success).toBe(false);
   });
 });

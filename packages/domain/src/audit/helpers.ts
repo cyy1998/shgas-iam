@@ -1,5 +1,5 @@
-import type { AuditActor, AuditDetails } from "./type";
 import { AuditActorSchema, AuditDetailsSchema } from "./schema";
+import type { AuditActor, AuditDetails } from "./type";
 
 const REDACTED = "[REDACTED]";
 
@@ -33,25 +33,24 @@ function normalizeKey(key: string) {
 
 function shouldRedactKey(key: string) {
   const normalized = normalizeKey(key);
-  return SENSITIVE_KEYS.has(normalized)
-    || normalized.endsWith("token")
-    || normalized.endsWith("_token")
-    || normalized.endsWith("-token");
+  return (
+    SENSITIVE_KEYS.has(normalized) ||
+    normalized.endsWith("token") ||
+    normalized.endsWith("_token") ||
+    normalized.endsWith("-token")
+  );
 }
 
 function redactValue(value: unknown): unknown {
   if (Array.isArray(value)) {
-    return value.map(item => redactValue(item));
+    return value.map((item) => redactValue(item));
   }
   if (value instanceof Date) {
     return value.toISOString();
   }
   if (value !== null && typeof value === "object") {
     return Object.fromEntries(
-      Object.entries(value).map(([key, item]) => [
-        key,
-        shouldRedactKey(key) ? REDACTED : redactValue(item),
-      ]),
+      Object.entries(value).map(([key, item]) => [key, shouldRedactKey(key) ? REDACTED : redactValue(item)]),
     );
   }
   return value;

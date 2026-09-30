@@ -1,9 +1,9 @@
-import { SafetyCertificateOutlined } from '@ant-design/icons';
-import logoColorfulTextWhite from '@sso/assets/logo-colorful-text-white.png';
-import { useMemo } from 'react';
+import { SafetyCertificateOutlined } from "@ant-design/icons";
+import logoColorfulTextWhite from "@sso/assets/logo-colorful-text-white.png";
+import { useMemo } from "react";
 
 function getTipBlock(origin: string) {
-  if (origin === 'http://176.169.99.150') {
+  if (origin === "http://176.169.99.150") {
     return (
       <>
         <div>上海燃气采招平台：</div>
@@ -11,7 +11,7 @@ function getTipBlock(origin: string) {
       </>
     );
   }
-  if (origin === 'http://app.shgas.com') {
+  if (origin === "http://app.shgas.com") {
     return (
       <>
         <div>上海燃气数据服务平台：</div>
@@ -21,7 +21,7 @@ function getTipBlock(origin: string) {
       </>
     );
   }
-  if (origin === 'https://tender.shgas.com.cn') {
+  if (origin === "https://tender.shgas.com.cn") {
     return (
       <>
         <div>上海燃气采招平台：</div>
@@ -34,7 +34,7 @@ function getTipBlock(origin: string) {
 
 export function UnsafeEntryNotice() {
   const tipBlock = useMemo(() => {
-    if (typeof window === 'undefined') return null;
+    if (typeof window === "undefined") return null;
     return getTipBlock(window.location.origin);
   }, []);
 
@@ -58,9 +58,7 @@ export function UnsafeEntryNotice() {
             <SafetyCertificateOutlined />
           </div>
           <div className="tip-title">登录地址校验未通过</div>
-          <div className="tip-desc">
-            您使用的登录地址存在安全风险，请在浏览器中重新输入应用系统地址进行登录。
-          </div>
+          <div className="tip-desc">您使用的登录地址存在安全风险，请在浏览器中重新输入应用系统地址进行登录。</div>
           {tipBlock && (
             <>
               <div className="tip-link-label">例如</div>

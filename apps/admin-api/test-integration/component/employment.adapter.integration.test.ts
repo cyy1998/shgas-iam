@@ -1,17 +1,21 @@
+import { describe, expect, mock, test } from "bun:test";
 import type { AdminApiRestContext } from "@admin-api/lib/admin-api-adapter";
-import type { AdminEmploymentAuthorization } from "@admin-api/services/admin-authorization/admin-employment-authorization.type";
-import type { Context } from "hono";
 import { createEmploymentAdapter } from "@admin-api/routes/admin/employment/employment.adapter";
 import { createEmploymentRoute } from "@admin-api/routes/admin/employment/employment.index";
 import { createAdminAuthorizationPolicy } from "@admin-api/services/admin-authorization/admin-authorization.policy";
+import type { AdminEmploymentAuthorization } from "@admin-api/services/admin-authorization/admin-employment-authorization.type";
 import { AdminMutationCommittedError } from "@admin-api/services/admin-mutation/admin-mutation";
 import { createErrorHandler } from "@iam/api-core/middlewares";
 import { ApiErrorCode, EmploymentStatus, OrganizationLevel, OrganizationType } from "@iam/contracts";
-import { EmploymentAlreadyExistsError, EmploymentNotEditableError, EmploymentNotFoundError } from "@iam/domain/employment";
+import {
+  EmploymentAlreadyExistsError,
+  EmploymentNotEditableError,
+  EmploymentNotFoundError,
+} from "@iam/domain/employment";
 import { UserNotFoundError } from "@iam/domain/user";
 import { TRPCError } from "@trpc/server";
 import { fetchRequestHandler } from "@trpc/server/adapters/fetch";
-import { describe, expect, mock, test } from "bun:test";
+import type { Context } from "hono";
 import { Hono } from "hono";
 import { addTestAdminAuthorizationMiddleware, getTestAdminAuthorizationValue } from "../helpers/admin-authorization";
 
@@ -19,20 +23,15 @@ function createRestContext(username: string) {
   return {
     get: mock((key: string) => {
       const authorizationValue = getTestAdminAuthorizationValue(key);
-      if (authorizationValue !== undefined)
-        return authorizationValue;
-      if (key === "userId")
-        return 1001;
-      if (key === "username")
-        return "admin";
-      if (key === "requestId")
-        return "req-1";
-      if (key === "traceId")
-        return "trace-1";
+      if (authorizationValue !== undefined) return authorizationValue;
+      if (key === "userId") return 1001;
+      if (key === "username") return "admin";
+      if (key === "requestId") return "req-1";
+      if (key === "traceId") return "trace-1";
       return undefined;
     }),
     req: {
-      header: mock((name: string) => name === "x-trace-id" ? "trace-1" : undefined),
+      header: mock((name: string) => (name === "x-trace-id" ? "trace-1" : undefined)),
       method: "POST",
       path: `/admin/employments/${username}/resign`,
       valid: mock(() => ({ username })),
@@ -59,14 +58,10 @@ function createHrContext(
   return {
     req: { header: () => undefined },
     get(key: string) {
-      if (key === "adminAuthorizationPolicy")
-        return policy;
-      if (key === "userId")
-        return 7;
-      if (key === "username")
-        return "hradmin";
-      if (key === "userDetailDto")
-        return { roles: ["iam:hr-admin"] };
+      if (key === "adminAuthorizationPolicy") return policy;
+      if (key === "userId") return 7;
+      if (key === "username") return "hradmin";
+      if (key === "userDetailDto") return { roles: ["iam:hr-admin"] };
       return undefined;
     },
   } as unknown as Context;
@@ -119,15 +114,19 @@ describe("admin employment adapter", () => {
     });
     const createEmployment = mock(async () => ({ changed: true, result: { id: 5 } }));
     const updateEmployment = mock(async () => ({ changed: true, result: null }));
-    const changeEmploymentAvailability = mock(async (
-      input: { employmentId: number },
-      options: { authorization: AdminEmploymentAuthorization },
-    ) => {
-      if (input.employmentId === 404) {
-        options.authorization.denyMutation({ operationId: "admin.employment.pause", resourceIdentifier: 404, reason: "RESOURCE_OUT_OF_SCOPE", concealExistence: true });
-      }
-      return { changed: true, result: null };
-    });
+    const changeEmploymentAvailability = mock(
+      async (input: { employmentId: number }, options: { authorization: AdminEmploymentAuthorization }) => {
+        if (input.employmentId === 404) {
+          options.authorization.denyMutation({
+            operationId: "admin.employment.pause",
+            resourceIdentifier: 404,
+            reason: "RESOURCE_OUT_OF_SCOPE",
+            concealExistence: true,
+          });
+        }
+        return { changed: true, result: null };
+      },
+    );
     const endEmployment = mock(async () => ({ changed: true, result: null }));
     const managePrimaryEmployment = mock(async () => ({ changed: true, result: null }));
     const transferEmployment = mock(async () => ({ changed: true, result: { id: 6 } }));
@@ -136,26 +135,28 @@ describe("admin employment adapter", () => {
       rootOrganizationIds: [10],
       organizationIds: [10, 11],
     }));
-    const guardEmploymentMutationForAdmin = mock(async (
-      id: number,
-      operationId:
-        | "admin.employment.pause"
-        | "admin.employment.resume"
-        | "admin.employment.end"
-        | "admin.employment.transfer"
-        | "admin.employment.setPrimary"
-        | "admin.employment.clearPrimary",
-      authorization: AdminEmploymentAuthorization,
-    ) => {
-      if (id === 404) {
-        authorization.denyMutation({
-          operationId,
-          resourceIdentifier: id,
-          reason: "RESOURCE_OUT_OF_SCOPE",
-          concealExistence: true,
-        });
-      }
-    });
+    const guardEmploymentMutationForAdmin = mock(
+      async (
+        id: number,
+        operationId:
+          | "admin.employment.pause"
+          | "admin.employment.resume"
+          | "admin.employment.end"
+          | "admin.employment.transfer"
+          | "admin.employment.setPrimary"
+          | "admin.employment.clearPrimary",
+        authorization: AdminEmploymentAuthorization,
+      ) => {
+        if (id === 404) {
+          authorization.denyMutation({
+            operationId,
+            resourceIdentifier: id,
+            reason: "RESOURCE_OUT_OF_SCOPE",
+            concealExistence: true,
+          });
+        }
+      },
+    );
     const adapter = createEmploymentAdapter({
       changeEmploymentAvailability: { execute: changeEmploymentAvailability },
       createEmployment: { execute: createEmployment },
@@ -200,8 +201,7 @@ describe("admin employment adapter", () => {
     let concealedLifecycle: unknown;
     try {
       await caller.pause({ id: 404 });
-    }
-    catch (error) {
+    } catch (error) {
       concealedLifecycle = error;
     }
 
@@ -216,12 +216,7 @@ describe("admin employment adapter", () => {
       expect.objectContaining({ username: "user", orgCode: "CHILD", posCode: "DEV" }),
       expect.objectContaining({ authorization: scoped }),
     );
-    expect(updateEmployment).toHaveBeenCalledWith(
-      4,
-      { description: "updated" },
-      expect.anything(),
-      scoped,
-    );
+    expect(updateEmployment).toHaveBeenCalledWith(4, { description: "updated" }, expect.anything(), scoped);
     expect(detail.allowedActions).toEqual({
       editDescription: { allowed: true, reason: null },
       pause: { allowed: true, reason: null },
@@ -233,35 +228,54 @@ describe("admin employment adapter", () => {
     });
     expect(concealedLifecycle).toBeInstanceOf(TRPCError);
     expect((concealedLifecycle as TRPCError).code).toBe("NOT_FOUND");
-    expect(changeEmploymentAvailability).toHaveBeenNthCalledWith(1, {
-      command: "pause",
-      employmentId: 4,
-    }, expect.anything());
-    expect(changeEmploymentAvailability).toHaveBeenNthCalledWith(2, {
-      command: "resume",
-      employmentId: 4,
-      expectedAncestorOrgCode: "ROOT",
-    }, expect.anything());
+    expect(changeEmploymentAvailability).toHaveBeenNthCalledWith(
+      1,
+      {
+        command: "pause",
+        employmentId: 4,
+      },
+      expect.anything(),
+    );
+    expect(changeEmploymentAvailability).toHaveBeenNthCalledWith(
+      2,
+      {
+        command: "resume",
+        employmentId: 4,
+        expectedAncestorOrgCode: "ROOT",
+      },
+      expect.anything(),
+    );
     expect(endEmployment).toHaveBeenCalledWith({ employmentId: 4 }, expect.anything());
-    expect(transferEmployment).toHaveBeenCalledWith({
-      employmentId: 4,
-      newOrgCode: "ROOT_TWO",
-      expectedAncestorOrgCode: "ROOT_TWO",
-      newPosCode: "DEV",
-      isPrimary: false,
-      description: undefined,
-    }, expect.objectContaining({
-      authorization: scoped,
-      auditContext: expect.anything(),
-    }));
-    expect(managePrimaryEmployment).toHaveBeenNthCalledWith(1, {
-      command: "set",
-      employmentId: 4,
-    }, expect.anything());
-    expect(managePrimaryEmployment).toHaveBeenNthCalledWith(2, {
-      command: "clear",
-      employmentId: 4,
-    }, expect.anything());
+    expect(transferEmployment).toHaveBeenCalledWith(
+      {
+        employmentId: 4,
+        newOrgCode: "ROOT_TWO",
+        expectedAncestorOrgCode: "ROOT_TWO",
+        newPosCode: "DEV",
+        isPrimary: false,
+        description: undefined,
+      },
+      expect.objectContaining({
+        authorization: scoped,
+        auditContext: expect.anything(),
+      }),
+    );
+    expect(managePrimaryEmployment).toHaveBeenNthCalledWith(
+      1,
+      {
+        command: "set",
+        employmentId: 4,
+      },
+      expect.anything(),
+    );
+    expect(managePrimaryEmployment).toHaveBeenNthCalledWith(
+      2,
+      {
+        command: "clear",
+        employmentId: 4,
+      },
+      expect.anything(),
+    );
     expect(guardEmploymentMutationForAdmin).not.toHaveBeenCalled();
     expect(resolveForActor).toHaveBeenCalledTimes(10);
     expect(authorizationLogger.warn).toHaveBeenCalledWith(
@@ -290,10 +304,13 @@ describe("admin employment adapter", () => {
 
     await expect(caller.end({ id: 4 })).resolves.toEqual({ changed: true, result: null });
 
-    expect(execute).toHaveBeenCalledWith({ employmentId: 4 }, {
-      authorization: expect.objectContaining({ kind: "full" }),
-      auditContext: expect.objectContaining({ actorType: "admin", actorUserId: 1001 }),
-    });
+    expect(execute).toHaveBeenCalledWith(
+      { employmentId: 4 },
+      {
+        authorization: expect.objectContaining({ kind: "full" }),
+        auditContext: expect.objectContaining({ actorType: "admin", actorUserId: 1001 }),
+      },
+    );
   });
 
   test("exposes explicit Pause and Resume lifecycle commands", async () => {
@@ -310,26 +327,36 @@ describe("admin employment adapter", () => {
     });
 
     await expect(caller.pause({ id: 4 })).resolves.toEqual({ changed: true, result: null });
-    await expect(caller.resume({
-      id: 4,
-      expectedAncestorOrgCode: "COMPANY",
-    })).resolves.toEqual({ changed: true, result: null });
+    await expect(
+      caller.resume({
+        id: 4,
+        expectedAncestorOrgCode: "COMPANY",
+      }),
+    ).resolves.toEqual({ changed: true, result: null });
 
-    expect(execute).toHaveBeenNthCalledWith(1, {
-      command: "pause",
-      employmentId: 4,
-    }, {
-      authorization: expect.objectContaining({ kind: "full" }),
-      auditContext: expect.objectContaining({ actorType: "admin", actorUserId: 1001 }),
-    });
-    expect(execute).toHaveBeenNthCalledWith(2, {
-      command: "resume",
-      employmentId: 4,
-      expectedAncestorOrgCode: "COMPANY",
-    }, {
-      authorization: expect.objectContaining({ kind: "full" }),
-      auditContext: expect.objectContaining({ actorType: "admin", actorUserId: 1001 }),
-    });
+    expect(execute).toHaveBeenNthCalledWith(
+      1,
+      {
+        command: "pause",
+        employmentId: 4,
+      },
+      {
+        authorization: expect.objectContaining({ kind: "full" }),
+        auditContext: expect.objectContaining({ actorType: "admin", actorUserId: 1001 }),
+      },
+    );
+    expect(execute).toHaveBeenNthCalledWith(
+      2,
+      {
+        command: "resume",
+        employmentId: 4,
+        expectedAncestorOrgCode: "COMPANY",
+      },
+      {
+        authorization: expect.objectContaining({ kind: "full" }),
+        auditContext: expect.objectContaining({ actorType: "admin", actorUserId: 1001 }),
+      },
+    );
   });
 
   test("rejects lifecycle fields from the generic Employment edit contract", async () => {
@@ -345,14 +372,18 @@ describe("admin employment adapter", () => {
       hono: createRestContext("unused") as unknown as Context,
     });
 
-    await expect(caller.update({
-      id: 4,
-      data: { startTime: new Date("2020-01-01T00:00:00.000Z") },
-    } as any)).rejects.toBeInstanceOf(TRPCError);
-    await expect(caller.update({
-      id: 4,
-      data: { isPrimary: true },
-    } as any)).rejects.toBeInstanceOf(TRPCError);
+    await expect(
+      caller.update({
+        id: 4,
+        data: { startTime: new Date("2020-01-01T00:00:00.000Z") },
+      } as any),
+    ).rejects.toBeInstanceOf(TRPCError);
+    await expect(
+      caller.update({
+        id: 4,
+        data: { isPrimary: true },
+      } as any),
+    ).rejects.toBeInstanceOf(TRPCError);
 
     expect(updateEmployment).not.toHaveBeenCalled();
   });
@@ -369,29 +400,34 @@ describe("admin employment adapter", () => {
       hono: context as unknown as Context,
     });
 
-    await expect(caller.create({
-      username: "zhangsan",
-      orgCode: "ORG",
-      posCode: "DEV",
-      isPrimary: false,
-      startTime: new Date("2020-01-01T00:00:00.000Z"),
-      endTime: new Date("2020-02-01T00:00:00.000Z"),
-      status: 3,
-    } as any)).resolves.toEqual({ changed: true, result: { id: 10 } });
+    await expect(
+      caller.create({
+        username: "zhangsan",
+        orgCode: "ORG",
+        posCode: "DEV",
+        isPrimary: false,
+        startTime: new Date("2020-01-01T00:00:00.000Z"),
+        endTime: new Date("2020-02-01T00:00:00.000Z"),
+        status: 3,
+      } as any),
+    ).resolves.toEqual({ changed: true, result: { id: 10 } });
 
-    expect(execute).toHaveBeenCalledWith({
-      username: "zhangsan",
-      orgCode: "ORG",
-      posCode: "DEV",
-      isPrimary: false,
-      description: undefined,
-      expectedAncestorOrgCode: undefined,
-    }, expect.objectContaining({
-      auditContext: expect.objectContaining({
-        actorType: "admin",
-        actorUserId: 1001,
+    expect(execute).toHaveBeenCalledWith(
+      {
+        username: "zhangsan",
+        orgCode: "ORG",
+        posCode: "DEV",
+        isPrimary: false,
+        description: undefined,
+        expectedAncestorOrgCode: undefined,
+      },
+      expect.objectContaining({
+        auditContext: expect.objectContaining({
+          actorType: "admin",
+          actorUserId: 1001,
+        }),
       }),
-    }));
+    );
   });
 
   test("REST preserves its envelope around the unified create and lifecycle result", async () => {
@@ -405,18 +441,24 @@ describe("admin employment adapter", () => {
       context as unknown as Parameters<typeof adapter.employmentsCreate>[0],
       async () => {},
     );
-    expect(context.json).toHaveBeenLastCalledWith({
-      code: 200,
-      data: { changed: true, result: { id: 10 } },
-      message: "success",
-    }, 200);
+    expect(context.json).toHaveBeenLastCalledWith(
+      {
+        code: 200,
+        data: { changed: true, result: { id: 10 } },
+        message: "success",
+      },
+      200,
+    );
     context.req.valid.mockImplementation(() => ({ id: 10 }));
     await adapter.employmentsEnd(context as unknown as Parameters<typeof adapter.employmentsEnd>[0], async () => {});
-    expect(context.json).toHaveBeenLastCalledWith({
-      code: 200,
-      data: { changed: false, result: null },
-      message: "success",
-    }, 200);
+    expect(context.json).toHaveBeenLastCalledWith(
+      {
+        code: 200,
+        data: { changed: false, result: null },
+        message: "success",
+      },
+      200,
+    );
   });
 
   test("rejects empty description input at the tRPC boundary", async () => {
@@ -428,8 +470,7 @@ describe("admin employment adapter", () => {
     let failure: unknown;
     try {
       await caller.update({ id: 4, data: {} });
-    }
-    catch (error) {
+    } catch (error) {
       failure = error;
     }
     expect(failure).toBeInstanceOf(TRPCError);
@@ -445,29 +486,37 @@ describe("admin employment adapter", () => {
     } as any);
     const context = createRestContext("zhangsan");
 
-    await expect(adapter.employmentsResignUser(
-      context as unknown as Parameters<typeof adapter.employmentsResignUser>[0],
-      async () => {},
-    )).resolves.toMatchObject({ code: 200 });
+    await expect(
+      adapter.employmentsResignUser(
+        context as unknown as Parameters<typeof adapter.employmentsResignUser>[0],
+        async () => {},
+      ),
+    ).resolves.toMatchObject({ code: 200 });
 
     expect(execute).toHaveBeenCalledWith(
       { username: "zhangsan" },
-      { auditContext: expect.objectContaining({
-        actorType: "admin",
-        actorUserId: 1001,
-        actorUsername: "admin",
-        requestId: "req-1",
-        traceId: "trace-1",
-      }), authorization: expect.objectContaining({
-        kind: "full",
-        organizationIds: null,
-      }) },
+      {
+        auditContext: expect.objectContaining({
+          actorType: "admin",
+          actorUserId: 1001,
+          actorUsername: "admin",
+          requestId: "req-1",
+          traceId: "trace-1",
+        }),
+        authorization: expect.objectContaining({
+          kind: "full",
+          organizationIds: null,
+        }),
+      },
     );
-    expect(context.json).toHaveBeenCalledWith({
-      code: 200,
-      data: { changed: true, result: null },
-      message: "success",
-    }, 200);
+    expect(context.json).toHaveBeenCalledWith(
+      {
+        code: 200,
+        data: { changed: true, result: null },
+        message: "success",
+      },
+      200,
+    );
   });
 
   test("keeps the tRPC resignUser key, input, result, and normalized audit context", async () => {
@@ -485,15 +534,18 @@ describe("admin employment adapter", () => {
     expect(result).toEqual({ changed: true, result: null });
     expect(execute).toHaveBeenCalledWith(
       { username: "zhangsan" },
-      { auditContext: expect.objectContaining({
-        actorType: "admin",
-        actorUserId: 1001,
-        requestId: "req-1",
-        traceId: "trace-1",
-      }), authorization: expect.objectContaining({
-        kind: "full",
-        organizationIds: null,
-      }) },
+      {
+        auditContext: expect.objectContaining({
+          actorType: "admin",
+          actorUserId: 1001,
+          requestId: "req-1",
+          traceId: "trace-1",
+        }),
+        authorization: expect.objectContaining({
+          kind: "full",
+          organizationIds: null,
+        }),
+      },
     );
   });
 
@@ -528,11 +580,15 @@ describe("admin employment adapter", () => {
       });
       const trpc = await trpcResponse.json();
       expect(trpcResponse.status).toBe(500);
-      expect(trpc).toMatchObject({ error: { data: {
-        code: "INTERNAL_SERVER_ERROR",
-        httpStatus: 500,
-        serviceCode,
-      } } });
+      expect(trpc).toMatchObject({
+        error: {
+          data: {
+            code: "INTERNAL_SERVER_ERROR",
+            httpStatus: 500,
+            serviceCode,
+          },
+        },
+      });
       expect(trpc).not.toHaveProperty("result");
       expect(JSON.stringify(trpc)).not.toContain("private transaction failure");
       expect(execute).toHaveBeenCalledTimes(2);
@@ -590,10 +646,12 @@ describe("admin employment adapter", () => {
     } as any);
     const restContext = createRestContext("missing");
 
-    await expect(adapter.employmentsResignUser(
-      restContext as unknown as Parameters<typeof adapter.employmentsResignUser>[0],
-      async () => {},
-    )).rejects.toBe(error);
+    await expect(
+      adapter.employmentsResignUser(
+        restContext as unknown as Parameters<typeof adapter.employmentsResignUser>[0],
+        async () => {},
+      ),
+    ).rejects.toBe(error);
 
     const caller = adapter.employmentAdminRouter.createCaller({
       hono: createRestContext("missing") as unknown as Context,
@@ -601,33 +659,35 @@ describe("admin employment adapter", () => {
     try {
       await caller.resignUser({ username: "missing" });
       throw new Error("expected tRPC resignation to fail");
-    }
-    catch (err) {
+    } catch (err) {
       expect(err).toBeInstanceOf(TRPCError);
       expect((err as TRPCError).code).toBe("NOT_FOUND");
       expect((err as TRPCError).message).toBe("用户不存在");
     }
   });
 
-  test.each([true, false])("exposes Set and Clear Primary outcomes through both protocols: changed=%s", async (changed) => {
-    const outcome = { changed, result: null };
-    const execute = mock(async () => outcome);
-    const adapter = createEmploymentAdapter({
-      employmentService: {},
-      managePrimaryEmployment: { execute },
-    } as any);
-    const context = createRestContext("unused");
-    context.req.valid.mockImplementation(() => ({ id: 4 }));
-    const caller = adapter.employmentAdminRouter.createCaller({ hono: context as unknown as Context });
-    for (const handler of [adapter.employmentsSetPrimary, adapter.employmentsClearPrimary]) {
-      const response = await handler(context as unknown as Parameters<typeof handler>[0], async () => {});
-      expect(response).toMatchObject({ code: 200, data: outcome });
-    }
-    const set = await caller.setPrimary({ id: 4 });
-    const clear = await caller.clearPrimary({ id: 4 });
-    expect(set).toEqual(outcome);
-    expect(clear).toEqual(outcome);
-  });
+  test.each([true, false])(
+    "exposes Set and Clear Primary outcomes through both protocols: changed=%s",
+    async (changed) => {
+      const outcome = { changed, result: null };
+      const execute = mock(async () => outcome);
+      const adapter = createEmploymentAdapter({
+        employmentService: {},
+        managePrimaryEmployment: { execute },
+      } as any);
+      const context = createRestContext("unused");
+      context.req.valid.mockImplementation(() => ({ id: 4 }));
+      const caller = adapter.employmentAdminRouter.createCaller({ hono: context as unknown as Context });
+      for (const handler of [adapter.employmentsSetPrimary, adapter.employmentsClearPrimary]) {
+        const response = await handler(context as unknown as Parameters<typeof handler>[0], async () => {});
+        expect(response).toMatchObject({ code: 200, data: outcome });
+      }
+      const set = await caller.setPrimary({ id: 4 });
+      const clear = await caller.clearPrimary({ id: 4 });
+      expect(set).toEqual(outcome);
+      expect(clear).toEqual(outcome);
+    },
+  );
 
   test("delegates Transfer with an explicit Primary choice to the lifecycle interface", async () => {
     const execute = mock(async () => ({ changed: true, result: { id: 10 } }));
@@ -652,27 +712,32 @@ describe("admin employment adapter", () => {
       },
     });
     expect(outcome).toEqual({ changed: true, result: { id: 10 } });
-    context.req.valid.mockImplementation((target: string) => target === "param" ? { id: 4 } : { newOrgCode: "TARGET_ORG", newPosCode: "TARGET_POS", isPrimary: false });
+    context.req.valid.mockImplementation((target: string) =>
+      target === "param" ? { id: 4 } : { newOrgCode: "TARGET_ORG", newPosCode: "TARGET_POS", isPrimary: false },
+    );
     const rest = await adapter.employmentsTransfer(
       context as unknown as Parameters<typeof adapter.employmentsTransfer>[0],
       async () => {},
     );
     expect(rest).toMatchObject({ code: 200, data: outcome });
 
-    expect(execute).toHaveBeenCalledWith({
-      employmentId: 4,
-      newOrgCode: "TARGET_ORG",
-      expectedAncestorOrgCode: "COMPANY",
-      newPosCode: "TARGET_POS",
-      isPrimary: false,
-      description: null,
-    }, expect.objectContaining({
-      authorization: expect.objectContaining({
-        kind: "full",
-        organizationIds: null,
+    expect(execute).toHaveBeenCalledWith(
+      {
+        employmentId: 4,
+        newOrgCode: "TARGET_ORG",
+        expectedAncestorOrgCode: "COMPANY",
+        newPosCode: "TARGET_POS",
+        isPrimary: false,
+        description: null,
+      },
+      expect.objectContaining({
+        authorization: expect.objectContaining({
+          kind: "full",
+          organizationIds: null,
+        }),
+        auditContext: expect.objectContaining({ actorType: "admin", actorUserId: 1001 }),
       }),
-      auditContext: expect.objectContaining({ actorType: "admin", actorUserId: 1001 }),
-    }));
+    );
   });
 
   test.each([
@@ -689,9 +754,9 @@ describe("admin employment adapter", () => {
       transferEmployment: { execute },
     } as any);
     const context = createRestContext("unused");
-    context.req.valid.mockImplementation((target: string) => target === "param"
-      ? { id: 4 }
-      : { newOrgCode: "ORG", newPosCode: "POS", isPrimary: false });
+    context.req.valid.mockImplementation((target: string) =>
+      target === "param" ? { id: 4 } : { newOrgCode: "ORG", newPosCode: "POS", isPrimary: false },
+    );
     const caller = adapter.employmentAdminRouter.createCaller({ hono: context as unknown as Context });
     for (const run of [
       () => caller.setPrimary({ id: 4 }),
@@ -709,12 +774,8 @@ describe("admin employment adapter", () => {
     ]) {
       let failure: unknown;
       try {
-        await handler(
-          context as unknown as Parameters<typeof handler>[0],
-          async () => {},
-        );
-      }
-      catch (cause) {
+        await handler(context as unknown as Parameters<typeof handler>[0], async () => {});
+      } catch (cause) {
         failure = cause;
       }
       expect(failure).toBe(error);
@@ -732,25 +793,29 @@ describe("admin employment adapter", () => {
       hono: createRestContext("unused") as unknown as Context,
     });
 
-    await expect(caller.transfer({
-      id: 4,
-      data: {
-        newOrgCode: "TARGET_ORG",
-        newPosCode: "TARGET_POS",
-      },
-    } as any)).rejects.toBeInstanceOf(TRPCError);
-    await expect(caller.transfer({
-      id: 4,
-      data: {
-        newOrgCode: "TARGET_ORG",
-        newPosCode: "TARGET_POS",
-        isPrimary: false,
-        inheritPrimary: true,
-        startTime: new Date("2020-01-01T00:00:00.000Z"),
-        endTime: null,
-        status: 1,
-      },
-    } as any)).rejects.toBeInstanceOf(TRPCError);
+    await expect(
+      caller.transfer({
+        id: 4,
+        data: {
+          newOrgCode: "TARGET_ORG",
+          newPosCode: "TARGET_POS",
+        },
+      } as any),
+    ).rejects.toBeInstanceOf(TRPCError);
+    await expect(
+      caller.transfer({
+        id: 4,
+        data: {
+          newOrgCode: "TARGET_ORG",
+          newPosCode: "TARGET_POS",
+          isPrimary: false,
+          inheritPrimary: true,
+          startTime: new Date("2020-01-01T00:00:00.000Z"),
+          endTime: null,
+          status: 1,
+        },
+      } as any),
+    ).rejects.toBeInstanceOf(TRPCError);
 
     expect(execute).not.toHaveBeenCalled();
   });

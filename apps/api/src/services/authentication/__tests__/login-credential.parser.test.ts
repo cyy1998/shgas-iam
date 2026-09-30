@@ -1,12 +1,13 @@
+import { describe, expect, test } from "bun:test";
 import { createMemoryRedis } from "@api/testing/fakes";
 import { InvalidLoginCredentialError } from "@iam/api-core/errors/InvalidLoginCredentialError";
 import { createLoginCredential } from "@iam/contracts";
-import { describe, expect, test } from "bun:test";
 import { createLoginCredentialParser } from "../login-credential.parser";
 
 const KEY_PAIR = {
   privateKey: "319b4e59ca80d7b4cc35955b63da4edf1ed51772ec8f33c0a4f769dda7b9fc65",
-  publicKey: "04112ddd8854e8262db2520bba112535844884c03348a45fcf4ee0f9a967979be52bd46caf43be697ae557ed2e4fa5b4dca8d2dbfa08c0f2f710c0f61591bb17dc",
+  publicKey:
+    "04112ddd8854e8262db2520bba112535844884c03348a45fcf4ee0f9a967979be52bd46caf43be697ae557ed2e4fa5b4dca8d2dbfa08c0f2f710c0f61591bb17dc",
 };
 
 const input = {
@@ -78,8 +79,8 @@ describe("createLoginCredentialParser", () => {
   test("maps malformed encrypted input to the public login credential error", async () => {
     const parser = createParser();
 
-    await expect(parser.parseLoginPasswordCredential("not-an-iam-credential"))
-      .rejects
-      .toBeInstanceOf(InvalidLoginCredentialError);
+    await expect(parser.parseLoginPasswordCredential("not-an-iam-credential")).rejects.toBeInstanceOf(
+      InvalidLoginCredentialError,
+    );
   });
 });

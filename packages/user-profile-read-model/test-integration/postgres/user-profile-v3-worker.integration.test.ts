@@ -1,10 +1,8 @@
-import type { RebuildUserProfileJobPayload, UserProfileJobName } from "@iam/contracts";
-import type { db as database } from "@iam/db";
-import { UserProfileDirtyStatus, UserStatus } from "@iam/contracts";
 import { afterAll, beforeAll, beforeEach, describe, expect, mock, test } from "bun:test";
-import {
-  V3_USER_PROFILE_SCHEMA_VERSION,
-} from "../../src/v3";
+import type { RebuildUserProfileJobPayload, UserProfileJobName } from "@iam/contracts";
+import { UserProfileDirtyStatus, UserStatus } from "@iam/contracts";
+import type { db as database } from "@iam/db";
+import { V3_USER_PROFILE_SCHEMA_VERSION } from "../../src/v3";
 import {
   createCurrentUserProfileProjectionBundle,
   createUserProfilePostgresGate,
@@ -54,19 +52,17 @@ describe("production User Profile v3 Worker", () => {
       name: UserProfileJobName;
       data: RebuildUserProfileJobPayload;
     }> = [];
-    let processJob: ((job: {
-      id: string;
-      name: string;
-      data: unknown;
-    }) => Promise<unknown>) | undefined;
+    let processJob: ((job: { id: string; name: string; data: unknown }) => Promise<unknown>) | undefined;
     const queue = {
       name: "user-profile",
-      async addBulk(batch: Array<{
-        name: UserProfileJobName;
-        data: RebuildUserProfileJobPayload;
-        opts: { jobId: string };
-      }>) {
-        const added = batch.map(job => ({
+      async addBulk(
+        batch: Array<{
+          name: UserProfileJobName;
+          data: RebuildUserProfileJobPayload;
+          opts: { jobId: string };
+        }>,
+      ) {
+        const added = batch.map((job) => ({
           id: job.opts.jobId,
           name: job.name,
           data: job.data,
@@ -114,8 +110,7 @@ describe("production User Profile v3 Worker", () => {
     let firstFailure: unknown;
     try {
       await processJob!(jobs[0]!);
-    }
-    catch (error) {
+    } catch (error) {
       firstFailure = error;
     }
     expect(firstFailure).toBeInstanceOf(Error);
@@ -143,13 +138,10 @@ describe("production User Profile v3 Worker", () => {
     const projection = createCurrentUserProfileProjectionBundle();
     const gate = createUserProfilePostgresGate({
       schemaVersion: projection.schemaVersion,
-      repository: createUserProfileReadinessRepository(
-        harness.db as typeof database,
-        {
-          projection,
-          buildBatchSize: 10,
-        },
-      ),
+      repository: createUserProfileReadinessRepository(harness.db as typeof database, {
+        projection,
+        buildBatchSize: 10,
+      }),
       clock: { nowDate: () => OBSERVED_AT },
     });
     const report = await gate.verify({ batchSize: 10 });
@@ -163,9 +155,7 @@ describe("production User Profile v3 Worker", () => {
   }, 15_000);
 });
 
-async function readDirtyStatus(
-  harness: Awaited<ReturnType<typeof createPostgresTestHarness>>,
-) {
+async function readDirtyStatus(harness: Awaited<ReturnType<typeof createPostgresTestHarness>>) {
   const rows = await harness.sql<{ status: UserProfileDirtyStatus }[]>`
     SELECT status
     FROM user_profile_dirty

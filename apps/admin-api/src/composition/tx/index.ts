@@ -1,26 +1,21 @@
 import type { AdminAuditService } from "@admin-api/services/audit/audit.service";
-import type { UnitOfWorkPort } from "@iam/api-core/uow";
-import type { DbClient } from "@iam/db";
-import type {
-  CreateUserProfileInvalidationDeps,
-  UserProfileInvalidation,
-} from "@iam/user-profile-read-model/producer";
-import type { SubjectAccessTransitionRepository } from "@iam/user-profile-read-model/subject-access-transition";
-import type { AdminApiRepositories } from "../repositories";
-import type { AfterCommitLoggerPort, ClockPort } from "../runtime";
 import { createAdminAuditService } from "@admin-api/services/audit/audit.service";
 import { createOrganizationResponsibilityParentLifecycleParticipant } from "@admin-api/services/organization-responsibility/organization-responsibility-parent-lifecycle.participant";
+import type { UnitOfWorkPort } from "@iam/api-core/uow";
 import { createUnitOfWork } from "@iam/api-core/uow";
+import type { DbClient } from "@iam/db";
+import type { CreateUserProfileInvalidationDeps, UserProfileInvalidation } from "@iam/user-profile-read-model/producer";
 import { createUserProfileInvalidation } from "@iam/user-profile-read-model/producer";
+import type { SubjectAccessTransitionRepository } from "@iam/user-profile-read-model/subject-access-transition";
 import { createSubjectAccessTransitionRepository } from "@iam/user-profile-read-model/subject-access-transition";
+import type { AdminApiRepositories } from "../repositories";
 import { createAdminApiRepositories } from "../repositories";
+import type { AfterCommitLoggerPort, ClockPort } from "../runtime";
 
 export interface AdminApiTxPorts {
   repositories: AdminApiRepositories;
   auditService: AdminAuditService;
-  responsibilityParentLifecycle: ReturnType<
-    typeof createOrganizationResponsibilityParentLifecycleParticipant
-  >;
+  responsibilityParentLifecycle: ReturnType<typeof createOrganizationResponsibilityParentLifecycleParticipant>;
   subjectAccessMutation: Pick<SubjectAccessTransitionRepository, "runMutation">;
   userProfileInvalidation: UserProfileInvalidation;
 }
@@ -32,20 +27,17 @@ export interface CreateAdminApiUnitOfWorkOptions {
   clock: Pick<ClockPort, "nowDate">;
 }
 
-export function createAdminApiUnitOfWork(
-  options: CreateAdminApiUnitOfWorkOptions,
-): UnitOfWorkPort<AdminApiTxPorts> {
+export function createAdminApiUnitOfWork(options: CreateAdminApiUnitOfWorkOptions): UnitOfWorkPort<AdminApiTxPorts> {
   return createUnitOfWork<DbClient, AdminApiTxPorts>({
     db: options.db,
     logger: options.logger,
     createTxPorts: (tx, lifecycle) => {
       const repositories = createAdminApiRepositories(tx);
       const auditService = createAdminAuditService({ auditRepository: repositories.audit });
-      const responsibilityParentLifecycle
-        = createOrganizationResponsibilityParentLifecycleParticipant({
-          assignmentStore: repositories.organizationResponsibility,
-          auditLogWriter: auditService,
-        });
+      const responsibilityParentLifecycle = createOrganizationResponsibilityParentLifecycleParticipant({
+        assignmentStore: repositories.organizationResponsibility,
+        auditLogWriter: auditService,
+      });
       const subjectAccessMutation = createSubjectAccessTransitionRepository(tx);
       const userProfileInvalidation = createUserProfileInvalidation({
         db: tx,

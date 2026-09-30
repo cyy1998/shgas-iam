@@ -13,7 +13,7 @@ import {
   SubjectClaim,
   UserStatus,
   UserType,
-} from '@iam/contracts';
+} from "@iam/contracts";
 
 export const adminCapabilitySummary = {
   visibleModules: [...ADMIN_MODULE_CODES],
@@ -35,23 +35,17 @@ export const adminCapabilitySummary = {
 
 const deniedAction = {
   allowed: false,
-  reason: 'ACTION_NOT_GRANTED',
+  reason: "ACTION_NOT_GRANTED",
 } as const;
 
 const allowedAction = { allowed: true, reason: null } as const;
 const stateNotActionableAction = {
   allowed: false,
-  reason: 'RESOURCE_STATE_NOT_ACTIONABLE',
+  reason: "RESOURCE_STATE_NOT_ACTIONABLE",
 } as const;
 
 export const hrAdminCapabilitySummary = {
-  visibleModules: [
-    'user',
-    'organization',
-    'organizationResponsibility',
-    'position',
-    'employment',
-  ],
+  visibleModules: ["user", "organization", "organizationResponsibility", "position", "employment"],
   collectionActions: {
     user: { create: deniedAction },
     employment: { create: allowedAction },
@@ -68,28 +62,28 @@ export const hrAdminCapabilitySummary = {
 
 export const currentAdminUser = {
   version: 1,
-  subjectIdentifier: '00000000-0000-4000-8000-000000000001',
+  subjectIdentifier: "00000000-0000-4000-8000-000000000001",
   profile: {
-    username: 'admin',
-    name: '管理员',
+    username: "admin",
+    name: "管理员",
   },
   authorization: {
     employments: [],
-    roles: ['iam:admin'],
+    roles: ["iam:admin"],
     privileges: [],
   },
 };
 
 export const currentHrAdminUser = {
   version: 1,
-  subjectIdentifier: '00000000-0000-4000-8000-000000000002',
+  subjectIdentifier: "00000000-0000-4000-8000-000000000002",
   profile: {
-    username: 'hradmin',
-    name: '人事管理员',
+    username: "hradmin",
+    name: "人事管理员",
   },
   authorization: {
     employments: [],
-    roles: ['iam:hr-admin'],
+    roles: ["iam:hr-admin"],
     privileges: [],
   },
 };
@@ -97,30 +91,30 @@ export const currentHrAdminUser = {
 export const adminUsers = [
   {
     id: 42,
-    username: 'zhangsan',
-    name: '张三',
-    mobile: '13800000000',
+    username: "zhangsan",
+    name: "张三",
+    mobile: "13800000000",
     userType: UserType.Formal,
     status: UserStatus.Enable,
-    createTime: '2026-01-01T08:00:00.000Z',
+    createTime: "2026-01-01T08:00:00.000Z",
   },
   {
     id: 43,
-    username: 'lisi',
-    name: '李四',
-    mobile: '13900000000',
+    username: "lisi",
+    name: "李四",
+    mobile: "13900000000",
     userType: UserType.External,
     status: UserStatus.Pause,
-    createTime: '2026-01-02T08:00:00.000Z',
+    createTime: "2026-01-02T08:00:00.000Z",
   },
   {
     id: 44,
-    username: 'wangwu',
-    name: '王五',
-    mobile: '13700000000',
+    username: "wangwu",
+    name: "王五",
+    mobile: "13700000000",
     userType: UserType.Formal,
     status: UserStatus.Disable,
-    createTime: '2026-01-03T08:00:00.000Z',
+    createTime: "2026-01-03T08:00:00.000Z",
   },
 ];
 
@@ -131,27 +125,24 @@ export const adminUserSearchResult = {
 
 export const adminClients = [
   {
-    clientCode: 'iam-admin',
-    clientName: 'IAM 管理后台',
-    clientSecret: 'secret',
-    url: 'http://localhost:8001/iam-admin',
+    clientCode: "iam-admin",
+    clientName: "IAM 管理后台",
+    clientSecret: "secret",
+    url: "http://localhost:8001/iam-admin",
     status: ClientStatus.Enable,
-    description: '管理后台',
-    createTime: '2026-01-03T08:00:00.000Z',
+    description: "管理后台",
+    createTime: "2026-01-03T08:00:00.000Z",
     extAttributes: {},
     id: 1,
     isDelete: false,
-    updateTime: '2026-01-03T08:00:00.000Z',
+    updateTime: "2026-01-03T08:00:00.000Z",
     hasSsoSecret: false,
     ssoEnabled: false,
     ssoConfig: {
       protocol: ClientSsoProtocol.CustomSso,
       callbackType: ClientSsoCallbackType.Managed,
-      validRedirectUrls: ['http://localhost:8001/iam-admin/*'],
-      subjectClaims: [
-        SubjectClaim.SubjectIdentifier,
-        SubjectClaim.ProfileUsername,
-      ],
+      validRedirectUrls: ["http://localhost:8001/iam-admin/*"],
+      subjectClaims: [SubjectClaim.SubjectIdentifier, SubjectClaim.ProfileUsername],
     },
   },
 ];
@@ -166,13 +157,13 @@ export const adminClientDetail = adminClients[0];
 export const adminPositions = [
   {
     id: 1,
-    posCode: 'FIN-001',
-    posName: '财务经理',
+    posCode: "FIN-001",
+    posName: "财务经理",
     status: PositionStatus.Enable,
-    description: '财务岗位',
+    description: "财务岗位",
     memberNumber: 2,
-    createTime: '2026-01-04T08:00:00.000Z',
-    updateTime: '2026-01-04T08:00:00.000Z',
+    createTime: "2026-01-04T08:00:00.000Z",
+    updateTime: "2026-01-04T08:00:00.000Z",
   },
 ];
 
@@ -183,8 +174,8 @@ export const adminPositionSearchResult = {
 
 const adminOrganization = {
   id: 1,
-  orgCode: 'FIN',
-  orgName: '财务部',
+  orgCode: "FIN",
+  orgName: "财务部",
   orgType: OrganizationType.Department,
   status: OrganizationStatus.Enable,
   level: OrganizationLevel.One,
@@ -205,16 +196,16 @@ export const adminEmployments = [
     },
     isPrimary: true,
     status: EmploymentStatus.Enable,
-    startTime: '2026-01-05T08:00:00.000Z',
+    startTime: "2026-01-05T08:00:00.000Z",
     endTime: null,
     description: null,
-    createTime: '2026-01-05T08:00:00.000Z',
-    updateTime: '2026-01-05T08:00:00.000Z',
-    roles: ['iam:hr-admin'],
-    privileges: ['people:read'],
-    roleNames: { 'iam:hr-admin': '人事管理员' },
-    privilegeNames: { 'people:read': '查看人员' },
-    managementPath: '/employments?employmentId=42',
+    createTime: "2026-01-05T08:00:00.000Z",
+    updateTime: "2026-01-05T08:00:00.000Z",
+    roles: ["iam:hr-admin"],
+    privileges: ["people:read"],
+    roleNames: { "iam:hr-admin": "人事管理员" },
+    privilegeNames: { "people:read": "查看人员" },
+    managementPath: "/employments?employmentId=42",
   },
 ];
 
@@ -224,46 +215,30 @@ export function createHrEmploymentAllowedActions(
 ): AdminEmploymentAllowedActions {
   const isOpen = status !== EmploymentStatus.Disable;
   return {
-    editDescription:
-      status === EmploymentStatus.Disable
-        ? stateNotActionableAction
-        : allowedAction,
-    pause:
-      status === EmploymentStatus.Enable
-        ? allowedAction
-        : stateNotActionableAction,
-    resume:
-      status === EmploymentStatus.Pause
-        ? allowedAction
-        : stateNotActionableAction,
-    end:
-      status === EmploymentStatus.Disable
-        ? stateNotActionableAction
-        : allowedAction,
+    editDescription: status === EmploymentStatus.Disable ? stateNotActionableAction : allowedAction,
+    pause: status === EmploymentStatus.Enable ? allowedAction : stateNotActionableAction,
+    resume: status === EmploymentStatus.Pause ? allowedAction : stateNotActionableAction,
+    end: status === EmploymentStatus.Disable ? stateNotActionableAction : allowedAction,
     transfer: isOpen ? allowedAction : stateNotActionableAction,
     setPrimary: isOpen && !isPrimary ? allowedAction : stateNotActionableAction,
-    clearPrimary:
-      isOpen && isPrimary ? allowedAction : stateNotActionableAction,
+    clearPrimary: isOpen && isPrimary ? allowedAction : stateNotActionableAction,
   };
 }
 
-export const hrEmploymentAllowedActions = createHrEmploymentAllowedActions(
-  EmploymentStatus.Enable,
-  true,
-);
+export const hrEmploymentAllowedActions = createHrEmploymentAllowedActions(EmploymentStatus.Enable, true);
 
 export const adminEmploymentAllowedActions = {
   editDescription: allowedAction,
   pause: allowedAction,
   resume: {
     allowed: false,
-    reason: 'RESOURCE_STATE_NOT_ACTIONABLE',
+    reason: "RESOURCE_STATE_NOT_ACTIONABLE",
   },
   end: allowedAction,
   transfer: allowedAction,
   setPrimary: {
     allowed: false,
-    reason: 'RESOURCE_STATE_NOT_ACTIONABLE',
+    reason: "RESOURCE_STATE_NOT_ACTIONABLE",
   },
   clearPrimary: allowedAction,
 } as const;
@@ -278,17 +253,14 @@ export const adminUserDetail = {
   wxId: null,
   orderNum: 0,
   isDelete: false,
-  updateTime: '2026-01-05T08:00:00.000Z',
-  roles: ['iam:admin'],
+  updateTime: "2026-01-05T08:00:00.000Z",
+  roles: ["iam:admin"],
   privileges: [],
-  roleNames: { 'iam:admin': '系统管理员' },
+  roleNames: { "iam:admin": "系统管理员" },
   privilegeNames: {},
   employments: adminEmployments.map((employment) => ({
     ...employment,
-    allowedActions: createHrEmploymentAllowedActions(
-      employment.status,
-      employment.isPrimary,
-    ),
+    allowedActions: createHrEmploymentAllowedActions(employment.status, employment.isPrimary),
   })),
   allowedActions: {
     editProfile: allowedAction,
@@ -301,21 +273,21 @@ export const adminUserDetail = {
 
 export const hrAdminUserDetail = {
   ...adminUserDetail,
-  roles: ['iam:hr-admin'],
-  privileges: ['people:read'],
-  roleNames: { 'iam:hr-admin': '人事管理员' },
-  privilegeNames: { 'people:read': '查看人员' },
+  roles: ["iam:hr-admin"],
+  privileges: ["people:read"],
+  roleNames: { "iam:hr-admin": "人事管理员" },
+  privilegeNames: { "people:read": "查看人员" },
   allowedActions: {
     editProfile: allowedAction,
     resetPassword: allowedAction,
     changeStatus: {
       allowed: false,
-      reason: 'USER_HAS_OUT_OF_SCOPE_OPEN_EMPLOYMENT',
+      reason: "USER_HAS_OUT_OF_SCOPE_OPEN_EMPLOYMENT",
     },
     delete: deniedAction,
     resign: {
       allowed: false,
-      reason: 'USER_HAS_OUT_OF_SCOPE_OPEN_EMPLOYMENT',
+      reason: "USER_HAS_OUT_OF_SCOPE_OPEN_EMPLOYMENT",
     },
   },
 };

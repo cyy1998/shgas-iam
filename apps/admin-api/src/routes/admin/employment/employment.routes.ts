@@ -76,7 +76,10 @@ export const employmentsUpdate = createRoute({
   },
   responses: {
     ...commonErrorResponses,
-    [HttpStatusCodes.OK]: jsonContent(createSuccessResponseSchema(createAdminMutationResultSchema(z.null())), "更新成功"),
+    [HttpStatusCodes.OK]: jsonContent(
+      createSuccessResponseSchema(createAdminMutationResultSchema(z.null())),
+      "更新成功",
+    ),
   },
 });
 
@@ -89,7 +92,10 @@ export const employmentsPause = createRoute({
   },
   responses: {
     ...commonErrorResponses,
-    [HttpStatusCodes.OK]: jsonContent(createSuccessResponseSchema(createAdminMutationResultSchema(z.null())), "任职暂停成功"),
+    [HttpStatusCodes.OK]: jsonContent(
+      createSuccessResponseSchema(createAdminMutationResultSchema(z.null())),
+      "任职暂停成功",
+    ),
   },
 });
 
@@ -103,7 +109,10 @@ export const employmentsResume = createRoute({
   },
   responses: {
     ...commonErrorResponses,
-    [HttpStatusCodes.OK]: jsonContent(createSuccessResponseSchema(createAdminMutationResultSchema(z.null())), "任职恢复成功"),
+    [HttpStatusCodes.OK]: jsonContent(
+      createSuccessResponseSchema(createAdminMutationResultSchema(z.null())),
+      "任职恢复成功",
+    ),
   },
 });
 
@@ -116,7 +125,10 @@ export const employmentsEnd = createRoute({
   },
   responses: {
     ...commonErrorResponses,
-    [HttpStatusCodes.OK]: jsonContent(createSuccessResponseSchema(createAdminMutationResultSchema(z.null())), "任职结束成功"),
+    [HttpStatusCodes.OK]: jsonContent(
+      createSuccessResponseSchema(createAdminMutationResultSchema(z.null())),
+      "任职结束成功",
+    ),
   },
 });
 
@@ -146,7 +158,10 @@ export const employmentsSetPrimary = createRoute({
   },
   responses: {
     ...commonErrorResponses,
-    [HttpStatusCodes.OK]: jsonContent(createSuccessResponseSchema(createAdminMutationResultSchema(z.null())), "已设为主岗"),
+    [HttpStatusCodes.OK]: jsonContent(
+      createSuccessResponseSchema(createAdminMutationResultSchema(z.null())),
+      "已设为主岗",
+    ),
   },
 });
 
@@ -159,7 +174,10 @@ export const employmentsClearPrimary = createRoute({
   },
   responses: {
     ...commonErrorResponses,
-    [HttpStatusCodes.OK]: jsonContent(createSuccessResponseSchema(createAdminMutationResultSchema(z.null())), "已取消主任职"),
+    [HttpStatusCodes.OK]: jsonContent(
+      createSuccessResponseSchema(createAdminMutationResultSchema(z.null())),
+      "已取消主任职",
+    ),
   },
 });
 

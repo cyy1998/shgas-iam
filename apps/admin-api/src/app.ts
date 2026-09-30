@@ -1,4 +1,3 @@
-/* eslint-disable antfu/no-top-level-await */
 import createApp from "@iam/api-core/core/create-app";
 import appConfig from "~admin-api/app.config";
 import { createAdminApiComposition } from "./composition";

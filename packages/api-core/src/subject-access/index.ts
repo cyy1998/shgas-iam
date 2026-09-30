@@ -1,19 +1,17 @@
+export type { SubjectAccessHttpRunOptions } from "./adapters/http-adapter";
 export {
   createSubjectAccessHttpAdapter,
   SubjectAccessSessionInvalidHttpError,
   SubjectAccessUnavailableHttpError,
 } from "./adapters/http-adapter";
-export type {
-  SubjectAccessHttpRunOptions,
-} from "./adapters/http-adapter";
 export { createSubjectAccessSessionContext } from "./adapters/session-context";
-export { createUnifiedSubjectAccessSessionRevocation } from "./adapters/unified-session";
 export type { UnifiedSessionRevocationSummary } from "./adapters/unified-session";
-export { createSubjectAccessBarrier } from "./barrier";
+export { createUnifiedSubjectAccessSessionRevocation } from "./adapters/unified-session";
 export type {
   CreateSubjectAccessBarrierOptions,
   SubjectAccessBarrier,
 } from "./barrier";
+export { createSubjectAccessBarrier } from "./barrier";
 export {
   SubjectAccessBeginPendingError,
   SubjectAccessCommitPendingError,
@@ -23,7 +21,6 @@ export {
   SubjectAccessUnavailableError,
   SubjectAccessWriteUnavailableError,
 } from "./errors";
-export { createSubjectAccessLifecycle } from "./lifecycle";
 export type {
   CreateSubjectAccessLifecycleOptions,
   SubjectAccessLifecycle,
@@ -31,11 +28,7 @@ export type {
   SubjectAccessLifecycleLogger,
   SubjectAccessLifecycleRunInput,
 } from "./lifecycle";
-export {
-  SUBJECT_ACCESS_RECORD_VERSION,
-  SubjectAccessRecordV1Schema,
-  SubjectAccessStateSchema,
-} from "./model";
+export { createSubjectAccessLifecycle } from "./lifecycle";
 export type {
   SubjectAccessBeginReceipt,
   SubjectAccessMutationReceipt,
@@ -45,28 +38,32 @@ export type {
   SubjectAccessTransitionTarget,
 } from "./model";
 export {
-  createSubjectAccessOperations,
-  requireSubjectAccessOperation,
-  SubjectAccessOperationDeniedError,
-  SubjectAccessPermissionRequiredError,
-} from "./operation";
+  SUBJECT_ACCESS_RECORD_VERSION,
+  SubjectAccessRecordV1Schema,
+  SubjectAccessStateSchema,
+} from "./model";
 export type {
   CreateSubjectAccessOperationsOptions,
   SubjectAccessOperation,
   SubjectAccessPermission,
   SubjectAccessSessionTarget,
 } from "./operation";
+export {
+  createSubjectAccessOperations,
+  requireSubjectAccessOperation,
+  SubjectAccessOperationDeniedError,
+  SubjectAccessPermissionRequiredError,
+} from "./operation";
 export type {
   SubjectAccessOperationBarrierPort,
   SubjectAccessOperationRevocationPort,
 } from "./operation.port";
-export { createSubjectAccessBootstrap } from "./recovery/bootstrap";
 export type {
   CreateSubjectAccessBootstrapOptions,
   SubjectAccessBootstrap,
   SubjectAccessBootstrapRedis,
 } from "./recovery/bootstrap";
-export { createSubjectAccessRepair } from "./recovery/repair";
+export { createSubjectAccessBootstrap } from "./recovery/bootstrap";
 export type {
   CreateSubjectAccessRepairOptions,
   SubjectAccessAuthorityPort,
@@ -75,7 +72,7 @@ export type {
   SubjectAccessRepairLogger,
   SubjectAccessRepairStatus,
 } from "./recovery/repair";
-export { createSubjectAccessTransitionRecovery } from "./recovery/transition-recovery";
+export { createSubjectAccessRepair } from "./recovery/repair";
 export type {
   CreateSubjectAccessTransitionRecoveryOptions,
   SubjectAccessTransitionRecoveryAuthority,
@@ -85,13 +82,14 @@ export type {
   SubjectAccessTransitionRecoveryRescheduleResult,
   SubjectAccessTransitionResolution,
 } from "./recovery/transition-recovery";
-export {
-  createRedisSubjectAccessStore,
-  SUBJECT_ACCESS_REDIS_KEY_PREFIX,
-} from "./storage/redis-store";
+export { createSubjectAccessTransitionRecovery } from "./recovery/transition-recovery";
 export type {
   CreateRedisSubjectAccessStoreOptions,
   SubjectAccessRedis,
 } from "./storage/redis-store";
-export { encodeSubjectAccessContext, parseSubjectAccessContext } from "./subject-context";
+export {
+  createRedisSubjectAccessStore,
+  SUBJECT_ACCESS_REDIS_KEY_PREFIX,
+} from "./storage/redis-store";
 export type { SubjectAccessContext } from "./subject-context";
+export { encodeSubjectAccessContext, parseSubjectAccessContext } from "./subject-context";

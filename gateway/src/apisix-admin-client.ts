@@ -1,6 +1,6 @@
-import type { FetchLike, ManifestObject, ResourceDefinition, ResourceKind } from "./types";
 import { isRecord } from "./manifest";
 import { createEmptyResourceMap, getDefinition, getResourceId, resourceDefinitions } from "./resources";
+import type { FetchLike, ManifestObject, ResourceDefinition, ResourceKind } from "./types";
 
 export class ApisixAdminClient {
   private readonly baseUrl: string;

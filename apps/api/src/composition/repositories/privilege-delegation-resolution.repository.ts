@@ -4,8 +4,8 @@ import type {
   PrivilegeDelegationResolutionQuery,
   PrivilegeDelegationResolutionResult,
 } from "@api/use-cases/internal/resolve-privilege-delegations/resolve-privilege-delegations.type";
-import type { DbClient } from "@iam/db";
 import { PrivilegeDelegationStatus } from "@iam/contracts";
+import type { DbClient } from "@iam/db";
 import {
   delegationDetails,
   organizationClosures,
@@ -16,8 +16,7 @@ import {
 } from "@iam/db/schema";
 import { sql } from "drizzle-orm";
 
-interface PrivilegeDelegationResolutionRow
-  extends PrivilegeDelegationResolutionResult, Record<string, unknown> {
+interface PrivilegeDelegationResolutionRow extends PrivilegeDelegationResolutionResult, Record<string, unknown> {
   delegationId: number | null;
   delegatorUserId: number | null;
   delegateeUserId: number | null;
@@ -30,15 +29,11 @@ interface PrivilegeDelegationResolutionRow
   privilegeRecognized: boolean;
 }
 
-export function createPrivilegeDelegationResolutionRepository(
-  db: DbClient,
-) {
+export function createPrivilegeDelegationResolutionRepository(db: DbClient) {
   return {
-    async resolveCurrent(
-      query: PrivilegeDelegationResolutionQuery,
-    ): Promise<PrivilegeDelegationResolutionObservation> {
+    async resolveCurrent(query: PrivilegeDelegationResolutionQuery): Promise<PrivilegeDelegationResolutionObservation> {
       const requestedUsernames = sql.join(
-        query.usernames.map(username => sql`${username}`),
+        query.usernames.map((username) => sql`${username}`),
         sql`, `,
       );
       const observedAt = query.observedAt.toISOString();
@@ -121,23 +116,20 @@ export function createPrivilegeDelegationResolutionRepository(
       const context = rows[0];
       const delegationIdsByUsername = new Map<string, number[]>();
       for (const row of rows) {
-        if (row.delegationId === null)
-          continue;
+        if (row.delegationId === null) continue;
         const delegationIds = delegationIdsByUsername.get(row.username) ?? [];
         delegationIds.push(row.delegationId);
         delegationIdsByUsername.set(row.username, delegationIds);
       }
-      const integrityViolations: PrivilegeDelegationResolutionIntegrityViolation[]
-        = [...delegationIdsByUsername]
-          .filter(([, delegationIds]) => delegationIds.length > 1)
-          .map(([username, delegationIds]) => ({
-            category: "ambiguous-delegation",
-            username,
-            delegationIds,
-          }));
+      const integrityViolations: PrivilegeDelegationResolutionIntegrityViolation[] = [...delegationIdsByUsername]
+        .filter(([, delegationIds]) => delegationIds.length > 1)
+        .map(([username, delegationIds]) => ({
+          category: "ambiguous-delegation",
+          username,
+          delegationIds,
+        }));
       for (const row of rows) {
-        if (row.delegationId === null)
-          continue;
+        if (row.delegationId === null) continue;
         if (row.delegatorUserId === row.delegateeUserId) {
           integrityViolations.push({
             category: "self-delegation",
@@ -175,19 +167,15 @@ export function createPrivilegeDelegationResolutionRepository(
       }
       return {
         results: rows
-          .filter(row => row.userRecognized)
-          .map(row => ({
+          .filter((row) => row.userRecognized)
+          .map((row) => ({
             username: row.username,
             delegateeUsername: row.delegateeUsername,
           })),
         missingInputs: {
-          usernames: rows
-            .filter(row => !row.userRecognized)
-            .map(row => row.username),
+          usernames: rows.filter((row) => !row.userRecognized).map((row) => row.username),
           orgCodes: context?.organizationRecognized ? [] : [query.orgCode],
-          privilegeCodes: context?.privilegeRecognized
-            ? []
-            : [query.privilegeCode],
+          privilegeCodes: context?.privilegeRecognized ? [] : [query.privilegeCode],
         },
         integrityViolations,
       };
@@ -195,6 +183,4 @@ export function createPrivilegeDelegationResolutionRepository(
   };
 }
 
-export type PrivilegeDelegationResolutionRepository = ReturnType<
-  typeof createPrivilegeDelegationResolutionRepository
->;
+export type PrivilegeDelegationResolutionRepository = ReturnType<typeof createPrivilegeDelegationResolutionRepository>;

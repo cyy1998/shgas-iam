@@ -1,31 +1,16 @@
-import AuditLogTable from '@admin/components/audit/AuditLogTable';
-import AuthorizationActionButton from '@admin/components/AuthorizationActionButton';
-import EmploymentLifecycleActions from '@admin/components/EmploymentLifecycleActions';
-import EmploymentPrimaryActions from '@admin/components/EmploymentPrimaryActions';
-import EmploymentResponsibilitySummary from '@admin/components/organization-responsibility/EmploymentResponsibilitySummary';
-import StatusTag from '@admin/components/StatusTag';
-import { AdminMutationCommittedError } from '@admin/services/admin-mutation';
-import {
-  type EmploymentDetailVo,
-  getEmployment,
-  updateEmployment,
-} from '@admin/services/employment';
-import { ProDescriptions } from '@ant-design/pro-components';
-import { useAccess } from '@umijs/max';
-import {
-  Alert,
-  Drawer,
-  Empty,
-  Input,
-  message,
-  Modal,
-  Skeleton,
-  Space,
-  Tabs,
-  Tag,
-} from 'antd';
-import { useEffect, useState } from 'react';
-import TransferModal from './TransferModal';
+import AuthorizationActionButton from "@admin/components/AuthorizationActionButton";
+import AuditLogTable from "@admin/components/audit/AuditLogTable";
+import EmploymentLifecycleActions from "@admin/components/EmploymentLifecycleActions";
+import EmploymentPrimaryActions from "@admin/components/EmploymentPrimaryActions";
+import EmploymentResponsibilitySummary from "@admin/components/organization-responsibility/EmploymentResponsibilitySummary";
+import StatusTag from "@admin/components/StatusTag";
+import { AdminMutationCommittedError } from "@admin/services/admin-mutation";
+import { type EmploymentDetailVo, getEmployment, updateEmployment } from "@admin/services/employment";
+import { ProDescriptions } from "@ant-design/pro-components";
+import { useAccess } from "@umijs/max";
+import { Alert, Drawer, Empty, Input, Modal, message, Skeleton, Space, Tabs, Tag } from "antd";
+import { useEffect, useState } from "react";
+import TransferModal from "./TransferModal";
 
 type Props = {
   open: boolean;
@@ -36,15 +21,14 @@ type Props = {
 
 function formatOrgPath(detail: EmploymentDetailVo) {
   return (
-    detail.organization?.fullOrgPath?.map((node) => node.orgName).join(' / ') ||
-    detail.organization.assignedOrg.orgName
+    detail.organization?.fullOrgPath?.map((node) => node.orgName).join(" / ") || detail.organization.assignedOrg.orgName
   );
 }
 
 function formatCompany(detail: EmploymentDetailVo) {
   const companyNodes = detail.organization.companyNodes;
   const company = companyNodes[companyNodes.length - 1];
-  return company ? `${company.orgName} (${company.orgCode})` : '—';
+  return company ? `${company.orgName} (${company.orgCode})` : "—";
 }
 
 function formatUser(detail: EmploymentDetailVo) {
@@ -55,15 +39,10 @@ function formatPosition(detail: EmploymentDetailVo) {
   return `${detail.position.posName} (${detail.position.posCode})`;
 }
 
-export default function EmploymentDetailDrawer({
-  open,
-  employmentId,
-  onClose,
-  onChanged,
-}: Props) {
+export default function EmploymentDetailDrawer({ open, employmentId, onClose, onChanged }: Props) {
   return (
     <EmploymentDetailDrawerContent
-      key={open ? employmentId : 'closed'}
+      key={open ? employmentId : "closed"}
       open={open}
       employmentId={employmentId}
       onClose={onClose}
@@ -72,17 +51,12 @@ export default function EmploymentDetailDrawer({
   );
 }
 
-function EmploymentDetailDrawerContent({
-  open,
-  employmentId,
-  onClose,
-  onChanged,
-}: Props) {
+function EmploymentDetailDrawerContent({ open, employmentId, onClose, onChanged }: Props) {
   const access = useAccess();
   const [committedWarning, setCommittedWarning] = useState<string>();
   const [detail, setDetail] = useState<EmploymentDetailVo | null>(null);
   const [loading, setLoading] = useState(open && employmentId !== null);
-  const [description, setDescription] = useState('');
+  const [description, setDescription] = useState("");
   const [editOpen, setEditOpen] = useState(false);
   const [transferOpen, setTransferOpen] = useState(false);
 
@@ -102,7 +76,7 @@ function EmploymentDetailDrawerContent({
       })
       .catch((err: unknown) => {
         if (!cancelled) {
-          message.error(err instanceof Error ? err.message : '加载详情失败');
+          message.error(err instanceof Error ? err.message : "加载详情失败");
         }
       })
       .finally(() => {
@@ -126,9 +100,7 @@ function EmploymentDetailDrawerContent({
     try {
       await refresh();
     } catch (refreshError) {
-      message.error(
-        refreshError instanceof Error ? refreshError.message : '刷新失败',
-      );
+      message.error(refreshError instanceof Error ? refreshError.message : "刷新失败");
     }
   };
 
@@ -142,20 +114,16 @@ function EmploymentDetailDrawerContent({
         detail ? (
           <Space>
             <span>{detail.user.name}</span>
-            <span style={{ color: '#999', fontSize: 12 }}>
-              {detail.user.username}
-            </span>
+            <span style={{ color: "#999", fontSize: 12 }}>{detail.user.username}</span>
             {detail.isPrimary ? <Tag color="blue">主岗</Tag> : null}
             <StatusTag domain="employment" status={detail.status} />
           </Space>
         ) : (
-          '雇佣详情'
+          "雇佣详情"
         )
       }
     >
-      {committedWarning && (
-        <Alert type="warning" showIcon title={committedWarning} />
-      )}
+      {committedWarning && <Alert type="warning" showIcon title={committedWarning} />}
       {loading && !detail ? <Skeleton active /> : null}
       {!loading && !detail ? <Empty /> : null}
       {detail && (
@@ -164,25 +132,18 @@ function EmploymentDetailDrawerContent({
             <AuthorizationActionButton
               decision={detail.allowedActions.editDescription}
               onClick={() => {
-                setDescription(detail.description ?? '');
+                setDescription(detail.description ?? "");
                 setEditOpen(true);
               }}
             >
               编辑备注
             </AuthorizationActionButton>
-            <AuthorizationActionButton
-              decision={detail.allowedActions.transfer}
-              onClick={() => setTransferOpen(true)}
-            >
+            <AuthorizationActionButton decision={detail.allowedActions.transfer} onClick={() => setTransferOpen(true)}>
               转岗
             </AuthorizationActionButton>
             <EmploymentPrimaryActions
               onCommitted={onCommitted}
-              decision={
-                detail.isPrimary
-                  ? detail.allowedActions.clearPrimary
-                  : detail.allowedActions.setPrimary
-              }
+              decision={detail.isPrimary ? detail.allowedActions.clearPrimary : detail.allowedActions.setPrimary}
               employment={detail}
               onSuccess={refresh}
             />
@@ -196,96 +157,84 @@ function EmploymentDetailDrawerContent({
           <Tabs
             items={[
               {
-                key: 'basic',
-                label: '基本信息',
+                key: "basic",
+                label: "基本信息",
                 children: (
                   <ProDescriptions<EmploymentDetailVo>
                     column={2}
                     dataSource={detail}
                     columns={[
                       {
-                        title: '用户',
-                        dataIndex: ['user', 'name'],
+                        title: "用户",
+                        dataIndex: ["user", "name"],
                         render: (_, r) => formatUser(r),
                       },
                       {
-                        title: '状态',
-                        dataIndex: 'status',
-                        render: (_, r) => (
-                          <StatusTag domain="employment" status={r.status} />
-                        ),
+                        title: "状态",
+                        dataIndex: "status",
+                        render: (_, r) => <StatusTag domain="employment" status={r.status} />,
                       },
                       {
-                        title: '公司',
-                        dataIndex: ['organization', 'companyNodes'],
+                        title: "公司",
+                        dataIndex: ["organization", "companyNodes"],
                         render: (_, r) => formatCompany(r),
                       },
                       {
-                        title: '组织路径',
-                        dataIndex: ['organization', 'assignedOrg', 'orgName'],
+                        title: "组织路径",
+                        dataIndex: ["organization", "assignedOrg", "orgName"],
                         span: 2,
                         render: (_, r) => formatOrgPath(r),
                       },
                       {
-                        title: '岗位',
-                        dataIndex: ['position', 'posName'],
+                        title: "岗位",
+                        dataIndex: ["position", "posName"],
                         render: (_, r) => formatPosition(r),
                       },
                       {
-                        title: '主岗',
-                        dataIndex: 'isPrimary',
-                        render: (_, r) => (r.isPrimary ? '是' : '否'),
+                        title: "主岗",
+                        dataIndex: "isPrimary",
+                        render: (_, r) => (r.isPrimary ? "是" : "否"),
                       },
                       {
-                        title: '开始',
-                        dataIndex: 'startTime',
-                        render: (_, r) =>
-                          new Date(r.startTime).toLocaleString(),
+                        title: "开始",
+                        dataIndex: "startTime",
+                        render: (_, r) => new Date(r.startTime).toLocaleString(),
                       },
                       {
-                        title: '结束',
-                        dataIndex: 'endTime',
-                        render: (_, r) =>
-                          r.endTime
-                            ? new Date(r.endTime).toLocaleString()
-                            : '—',
+                        title: "结束",
+                        dataIndex: "endTime",
+                        render: (_, r) => (r.endTime ? new Date(r.endTime).toLocaleString() : "—"),
                       },
                       {
-                        title: '备注',
-                        dataIndex: 'description',
+                        title: "备注",
+                        dataIndex: "description",
                         span: 2,
-                        render: (_, r) => r.description ?? '—',
+                        render: (_, r) => r.description ?? "—",
                       },
                     ]}
                   />
                 ),
               },
               {
-                key: 'roles',
+                key: "roles",
                 label: `角色 / 权限 (${detail.roles.length}/${detail.privileges.length})`,
                 children: (
                   <div>
                     <div style={{ marginBottom: 12 }}>
                       <strong>角色：</strong>
                       {detail.roles.length === 0 ? (
-                        <span style={{ color: '#999' }}>无</span>
+                        <span style={{ color: "#999" }}>无</span>
                       ) : (
-                        detail.roles.map((r: string) => (
-                          <Tag key={r}>
-                            {detail.roleNames[r] || '未命名角色'}
-                          </Tag>
-                        ))
+                        detail.roles.map((r: string) => <Tag key={r}>{detail.roleNames[r] || "未命名角色"}</Tag>)
                       )}
                     </div>
                     <div>
                       <strong>权限：</strong>
                       {detail.privileges.length === 0 ? (
-                        <span style={{ color: '#999' }}>无</span>
+                        <span style={{ color: "#999" }}>无</span>
                       ) : (
                         detail.privileges.map((p: string) => (
-                          <Tag key={p}>
-                            {detail.privilegeNames[p] || '未命名权限'}
-                          </Tag>
+                          <Tag key={p}>{detail.privilegeNames[p] || "未命名权限"}</Tag>
                         ))
                       )}
                     </div>
@@ -295,25 +244,21 @@ function EmploymentDetailDrawerContent({
               ...(access.canAccessOrganizationResponsibility
                 ? [
                     {
-                      key: 'responsibilities',
-                      label: '组织责任',
-                      children: (
-                        <EmploymentResponsibilitySummary
-                          employmentId={detail.id}
-                        />
-                      ),
+                      key: "responsibilities",
+                      label: "组织责任",
+                      children: <EmploymentResponsibilitySummary employmentId={detail.id} />,
                     },
                   ]
                 : []),
               ...(access.canAccessAudit
                 ? [
                     {
-                      key: 'logs',
-                      label: '操作日志',
+                      key: "logs",
+                      label: "操作日志",
                       children: (
                         <AuditLogTable
                           fixedConditions={{
-                            targetType: 'employment',
+                            targetType: "employment",
                             targetId: detail.id,
                           }}
                           pageSize={10}
@@ -336,8 +281,8 @@ function EmploymentDetailDrawerContent({
                 const outcome = await updateEmployment(detail.id, {
                   description: description || null,
                 });
-                if (outcome.changed) message.success('备注已更新');
-                else message.info('无需修改');
+                if (outcome.changed) message.success("备注已更新");
+                else message.info("无需修改");
                 setEditOpen(false);
                 await refresh();
               } catch (error) {
@@ -345,13 +290,11 @@ function EmploymentDetailDrawerContent({
                   await onCommitted(error);
                   return;
                 }
-                message.error(
-                  error instanceof Error ? error.message : '操作失败',
-                );
+                message.error(error instanceof Error ? error.message : "操作失败");
               }
             }}
           >
-            <label>
+            <div>
               <span>备注</span>
               <Input.TextArea
                 aria-label="备注"
@@ -359,7 +302,7 @@ function EmploymentDetailDrawerContent({
                 maxLength={500}
                 onChange={(event) => setDescription(event.target.value)}
               />
-            </label>
+            </div>
           </Modal>
           <TransferModal
             onCommitted={onCommitted}

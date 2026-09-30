@@ -21,11 +21,14 @@ export default defineConfig({
   reporter: "list",
   retries: 0,
   testDir: ".",
-  testMatch: journey === "oidc"
-    ? process.env.IAM_E2E_DUAL_ONLY === "1" ? "dual-entry.spec.ts" : ["oidc-pkce.spec.ts", "dual-entry.spec.ts"]
-    : journey === "hr-admin"
-      ? "hr-admin-user-management.spec.ts"
-      : "admin-custom-sso.spec.ts",
+  testMatch:
+    journey === "oidc"
+      ? process.env.IAM_E2E_DUAL_ONLY === "1"
+        ? "dual-entry.spec.ts"
+        : ["oidc-pkce.spec.ts", "dual-entry.spec.ts"]
+      : journey === "hr-admin"
+        ? "hr-admin-user-management.spec.ts"
+        : "admin-custom-sso.spec.ts",
   timeout: 120_000,
   use: {
     baseURL: origin,

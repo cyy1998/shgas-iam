@@ -1,8 +1,5 @@
 import type { AppRouter } from "@admin-api/trpc/trpc.router";
 import type { AnyRouter } from "@iam/api-core/core/create-app";
-import type { TRPCError } from "@trpc/server";
-import type { Context } from "hono";
-import type { Logger } from "pino";
 import { createRouter } from "@iam/api-core/core/create-router";
 import {
   BAD_REQUEST,
@@ -24,7 +21,10 @@ import {
 } from "@iam/api-core/logger";
 import { createTRPCContext } from "@iam/api-core/trpc";
 import { ApiErrorCode } from "@iam/contracts";
+import type { TRPCError } from "@trpc/server";
 import { fetchRequestHandler } from "@trpc/server/adapters/fetch";
+import type { Context } from "hono";
+import type { Logger } from "pino";
 
 type TrpcErrorLogger = Pick<Logger, "info" | "warn" | "error"> & {
   bindings?: () => Record<string, unknown>;
@@ -33,8 +33,7 @@ type TrpcErrorLogger = Pick<Logger, "info" | "warn" | "error"> & {
 function getRequestLogger(c: Context): TrpcErrorLogger | undefined {
   try {
     return c.get("logger" as never) as TrpcErrorLogger | undefined;
-  }
-  catch {
+  } catch {
     return undefined;
   }
 }
@@ -49,16 +48,11 @@ function getRoutePath(c: Context) {
 }
 
 function mapTRPCErrorCodeToStatus(code: TRPCError["code"]) {
-  if (code === "BAD_REQUEST")
-    return BAD_REQUEST;
-  if (code === "UNAUTHORIZED")
-    return UNAUTHORIZED;
-  if (code === "FORBIDDEN")
-    return FORBIDDEN;
-  if (code === "NOT_FOUND")
-    return NOT_FOUND;
-  if (code === "CONFLICT")
-    return CONFLICT;
+  if (code === "BAD_REQUEST") return BAD_REQUEST;
+  if (code === "UNAUTHORIZED") return UNAUTHORIZED;
+  if (code === "FORBIDDEN") return FORBIDDEN;
+  if (code === "NOT_FOUND") return NOT_FOUND;
+  if (code === "CONFLICT") return CONFLICT;
   return INTERNAL_SERVER_ERROR;
 }
 
@@ -71,8 +65,7 @@ export function createTrpcRoute(appRouter: AppRouter): AnyRouter {
       createContext: () => createTRPCContext({ honoCtx: c }),
       onError({ error, path, type }) {
         const logger = getRequestLogger(c);
-        if (!logger)
-          return;
+        if (!logger) return;
 
         const apiRuntimeCause = isApiRuntimeError(error.cause) ? error.cause : null;
         const event = apiRuntimeCause ? SystemLogEvent.ApiErrorHandled : SystemLogEvent.ApiErrorUnhandled;
@@ -82,7 +75,7 @@ export function createTrpcRoute(appRouter: AppRouter): AnyRouter {
           surface: "trpc",
           sourceApp: getLoggerSourceApp(logger, LoggerSourceApp.AdminApi),
           requestId: getRequestId(c),
-          traceId: getTraceIdFromHeaders(name => getHeader(c, name)),
+          traceId: getTraceIdFromHeaders((name) => getHeader(c, name)),
           method: c.req.method,
           path: c.req.path,
           route: getRoutePath(c),

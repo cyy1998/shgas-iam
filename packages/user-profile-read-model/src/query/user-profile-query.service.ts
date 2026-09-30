@@ -1,7 +1,7 @@
 import type { UserDetailDto } from "@iam/domain/user";
-import type { UserProfileQueryRecord, UserProfileQueryRepositoryPort } from "./user-profile-query.port";
 import { UserNotFoundError } from "@iam/domain/user";
 import { parseUserProfileDetailDocument } from "../schema/profile.schema";
+import type { UserProfileQueryRecord, UserProfileQueryRepositoryPort } from "./user-profile-query.port";
 
 export interface UserProfileQueryServiceDeps {
   profileRepository: UserProfileQueryRepositoryPort;

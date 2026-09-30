@@ -1,6 +1,6 @@
 import type { User } from "@iam/db/schema";
-import type { UserPasswordHelperDeps } from "./user.port";
 import { WeakPasswordError } from "@iam/domain/user";
+import type { UserPasswordHelperDeps } from "./user.port";
 
 const LETTER_CHECK_REGEX = /[a-z]/i;
 const DIGIT_CHECK_REGEX = /\d/;
@@ -23,13 +23,8 @@ export function createUserPasswordHelper(deps: UserPasswordHelperDeps) {
     return await deps.passwordHasher.hashPassword(password);
   }
 
-  async function verifyUserPassword(
-    user: Pick<User, "password">,
-    inputPassword: string,
-  ) {
-    return user.password
-      ? await deps.passwordHasher.verifyPassword(inputPassword, user.password)
-      : false;
+  async function verifyUserPassword(user: Pick<User, "password">, inputPassword: string) {
+    return user.password ? await deps.passwordHasher.verifyPassword(inputPassword, user.password) : false;
   }
 
   return {

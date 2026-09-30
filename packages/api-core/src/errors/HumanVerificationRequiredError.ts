@@ -13,7 +13,8 @@ export class HumanVerificationRequiredError extends CustomError {
 }
 
 export function isHumanVerificationRequiredError(error: unknown): boolean {
-  return error instanceof HumanVerificationRequiredError
-    || (error instanceof CustomError
-      && error.code === ApiErrorCode.HumanVerificationRequired);
+  return (
+    error instanceof HumanVerificationRequiredError ||
+    (error instanceof CustomError && error.code === ApiErrorCode.HumanVerificationRequired)
+  );
 }

@@ -23,10 +23,7 @@ export interface UserProfileRepairCommandDeps {
     }>;
   };
   subjectAccessTransitionReaper: {
-    reapStalePending: (input: {
-      staleAfterSeconds: number;
-      limit: number;
-    }) => Promise<{ rolledBack: number }>;
+    reapStalePending: (input: { staleAfterSeconds: number; limit: number }) => Promise<{ rolledBack: number }>;
   };
   subjectAccessTransitionRecovery: {
     recoverPending: (input: { limit: number }) => Promise<{
@@ -58,10 +55,7 @@ export interface SubjectAccessRepairCommandDeps {
   subjectAccessRepair: UserProfileRepairCommandDeps["subjectAccessRepair"];
   subjectAccessRepairBacklog: UserProfileRepairCommandDeps["subjectAccessRepairBacklog"];
   subjectAccessTransitionReaper: {
-    reapStalePending: (input: {
-      staleAfterSeconds: number;
-      limit: number;
-    }) => Promise<{ rolledBack: number }>;
+    reapStalePending: (input: { staleAfterSeconds: number; limit: number }) => Promise<{ rolledBack: number }>;
   };
   subjectAccessTransitionRecovery: UserProfileRepairCommandDeps["subjectAccessTransitionRecovery"];
   logger: UserProfileRepairCommandDeps["logger"];
@@ -75,27 +69,34 @@ export async function runSubjectAccessRepairCommand(
   options: Pick<UserProfileRepairCommandOptions, "limit"> = {},
 ) {
   const limit = options.limit ?? deps.config.limit;
-  deps.logger.info({
-    limit,
-    staleAfterSeconds: deps.config.transitionStaleSeconds,
-  }, "Subject Access stale transition intent reap started");
-  const transitionReap = await deps.subjectAccessTransitionReaper
-    .reapStalePending({
-      staleAfterSeconds: deps.config.transitionStaleSeconds,
+  deps.logger.info(
+    {
       limit,
-    });
-  deps.logger.info({
-    ...transitionReap,
-    limit,
+      staleAfterSeconds: deps.config.transitionStaleSeconds,
+    },
+    "Subject Access stale transition intent reap started",
+  );
+  const transitionReap = await deps.subjectAccessTransitionReaper.reapStalePending({
     staleAfterSeconds: deps.config.transitionStaleSeconds,
-  }, "Subject Access stale transition intents reaped");
-  await observeRepairBacklog(deps, "before-processing");
-  const transitionRecovery
-    = await deps.subjectAccessTransitionRecovery.recoverPending({ limit });
-  deps.logger.info({
-    ...transitionRecovery,
     limit,
-  }, "Subject Access transition recovery backlog processed");
+  });
+  deps.logger.info(
+    {
+      ...transitionReap,
+      limit,
+      staleAfterSeconds: deps.config.transitionStaleSeconds,
+    },
+    "Subject Access stale transition intents reaped",
+  );
+  await observeRepairBacklog(deps, "before-processing");
+  const transitionRecovery = await deps.subjectAccessTransitionRecovery.recoverPending({ limit });
+  deps.logger.info(
+    {
+      ...transitionRecovery,
+      limit,
+    },
+    "Subject Access transition recovery backlog processed",
+  );
   const subjectAccess = await deps.subjectAccessRepair.repairPending({ limit });
   await observeRepairBacklog(deps, "after-processing", {
     ...subjectAccess,
@@ -108,41 +109,50 @@ export async function runUserProfileRepairCommand(
   deps: UserProfileRepairCommandDeps,
   options: UserProfileRepairCommandOptions = {},
 ) {
-  const staleBefore = options.staleBefore ?? new Date(
-    deps.clock.nowDate().getTime() - deps.config.repairStaleSeconds * 1000,
-  );
+  const staleBefore =
+    options.staleBefore ?? new Date(deps.clock.nowDate().getTime() - deps.config.repairStaleSeconds * 1000);
   const limit = options.limit ?? deps.config.limit;
-  deps.logger.info({
-    limit,
-    staleAfterSeconds: deps.config.transitionStaleSeconds,
-  }, "Subject Access stale transition intent reap started");
-  const transitionReap = await deps.subjectAccessTransitionReaper
-    .reapStalePending({
-      staleAfterSeconds: deps.config.transitionStaleSeconds,
+  deps.logger.info(
+    {
       limit,
-    });
-  deps.logger.info({
-    ...transitionReap,
-    limit,
+      staleAfterSeconds: deps.config.transitionStaleSeconds,
+    },
+    "Subject Access stale transition intent reap started",
+  );
+  const transitionReap = await deps.subjectAccessTransitionReaper.reapStalePending({
     staleAfterSeconds: deps.config.transitionStaleSeconds,
-  }, "Subject Access stale transition intents reaped");
+    limit,
+  });
+  deps.logger.info(
+    {
+      ...transitionReap,
+      limit,
+      staleAfterSeconds: deps.config.transitionStaleSeconds,
+    },
+    "Subject Access stale transition intents reaped",
+  );
   await observeRepairBacklog(deps, "before-processing");
-  const transitionRecovery
-    = await deps.subjectAccessTransitionRecovery.recoverPending({ limit });
+  const transitionRecovery = await deps.subjectAccessTransitionRecovery.recoverPending({ limit });
   const [result, subjectAccess] = await Promise.all([
     deps.maintenance.repairFailedOrStale({ staleBefore, limit }),
     deps.subjectAccessRepair.repairPending({ limit }),
   ]);
-  deps.logger.info({
-    enqueued: result.enqueued,
-    userIds: result.userIds,
-    staleBefore: staleBefore.toISOString(),
-    limit,
-  }, "user profile repair jobs enqueued");
-  deps.logger.info({
-    ...transitionRecovery,
-    limit,
-  }, "Subject Access transition recovery backlog processed");
+  deps.logger.info(
+    {
+      enqueued: result.enqueued,
+      userIds: result.userIds,
+      staleBefore: staleBefore.toISOString(),
+      limit,
+    },
+    "user profile repair jobs enqueued",
+  );
+  deps.logger.info(
+    {
+      ...transitionRecovery,
+      limit,
+    },
+    "Subject Access transition recovery backlog processed",
+  );
   await observeRepairBacklog(deps, "after-processing", {
     ...subjectAccess,
     limit,
@@ -155,10 +165,7 @@ export async function runUserProfileRepairCommand(
   };
 }
 
-type RepairBacklogObservationDeps = Pick<
-  SubjectAccessRepairCommandDeps,
-  "logger" | "subjectAccessRepairBacklog"
->;
+type RepairBacklogObservationDeps = Pick<SubjectAccessRepairCommandDeps, "logger" | "subjectAccessRepairBacklog">;
 
 async function observeRepairBacklog(
   deps: RepairBacklogObservationDeps,
@@ -167,20 +174,25 @@ async function observeRepairBacklog(
 ) {
   try {
     const backlog = await deps.subjectAccessRepairBacklog.inspectRepairBacklog();
-    deps.logger.info({
-      ...data,
-      repairBacklogCount: backlog.count,
-      repairBacklogOldestAgeMs: backlog.oldestAgeMs,
-    }, phase === "before-processing"
-      ? "Subject Access repair backlog observed before processing"
-      : "Subject Access repair backlog processed");
-  }
-  catch {
-    deps.logger.info({
-      ...data,
-      repairBacklogMetricsAvailable: false,
-      repairBacklogPhase: phase,
-    }, "Subject Access repair backlog observation unavailable");
+    deps.logger.info(
+      {
+        ...data,
+        repairBacklogCount: backlog.count,
+        repairBacklogOldestAgeMs: backlog.oldestAgeMs,
+      },
+      phase === "before-processing"
+        ? "Subject Access repair backlog observed before processing"
+        : "Subject Access repair backlog processed",
+    );
+  } catch {
+    deps.logger.info(
+      {
+        ...data,
+        repairBacklogMetricsAvailable: false,
+        repairBacklogPhase: phase,
+      },
+      "Subject Access repair backlog observation unavailable",
+    );
   }
 }
 
@@ -193,7 +205,7 @@ function parseRepairArgs(argv: string[]): UserProfileRepairCliOptions {
     args: argv,
     options: {
       "stale-before": { type: "string" },
-      "limit": { type: "string" },
+      limit: { type: "string" },
       "subject-access-only": { type: "boolean" },
     },
     strict: true,
@@ -211,31 +223,30 @@ async function main() {
   const env = parseWorkerEnv(process.env);
   const { logger } = await import("@worker/lib/logger");
   const commandOptions = parseRepairArgs(process.argv.slice(2));
-  const {
-    createWorkerCommandComposition,
-    createWorkerSubjectAccessRepairComposition,
-  } = await import("@worker/composition");
+  const { createWorkerCommandComposition, createWorkerSubjectAccessRepairComposition } = await import(
+    "@worker/composition"
+  );
   if (commandOptions.subjectAccessOnly) {
     const composition = await createWorkerSubjectAccessRepairComposition({
       env,
       logger,
     });
     try {
-      await runSubjectAccessRepairCommand({
-        subjectAccessRepairBacklog: composition.subjectAccess.repairBacklog,
-        subjectAccessRepair: composition.subjectAccess.repair,
-        subjectAccessTransitionReaper:
-          composition.subjectAccess.transitionReaper,
-        subjectAccessTransitionRecovery:
-          composition.subjectAccess.transitionRecovery,
-        logger: composition.logger,
-        config: {
-          limit: env.userProfile.backfillBatchSize,
-          transitionStaleSeconds: env.userProfile.repairStaleSeconds,
+      await runSubjectAccessRepairCommand(
+        {
+          subjectAccessRepairBacklog: composition.subjectAccess.repairBacklog,
+          subjectAccessRepair: composition.subjectAccess.repair,
+          subjectAccessTransitionReaper: composition.subjectAccess.transitionReaper,
+          subjectAccessTransitionRecovery: composition.subjectAccess.transitionRecovery,
+          logger: composition.logger,
+          config: {
+            limit: env.userProfile.backfillBatchSize,
+            transitionStaleSeconds: env.userProfile.repairStaleSeconds,
+          },
         },
-      }, commandOptions);
-    }
-    finally {
+        commandOptions,
+      );
+    } finally {
       await composition.shutdown("command:user-profile:repair");
     }
     return;
@@ -247,10 +258,8 @@ async function main() {
         maintenance: composition.userProfile.maintenance,
         subjectAccessRepairBacklog: composition.subjectAccess.repairBacklog,
         subjectAccessRepair: composition.subjectAccess.repair,
-        subjectAccessTransitionReaper:
-          composition.subjectAccess.transitionReaper,
-        subjectAccessTransitionRecovery:
-          composition.subjectAccess.transitionRecovery,
+        subjectAccessTransitionReaper: composition.subjectAccess.transitionReaper,
+        subjectAccessTransitionRecovery: composition.subjectAccess.transitionRecovery,
         clock: composition.runtime.clock,
         logger: composition.logger,
         config: {
@@ -264,8 +273,7 @@ async function main() {
         limit: commandOptions.limit,
       },
     );
-  }
-  finally {
+  } finally {
     await composition.shutdown("command:user-profile:repair");
   }
 }

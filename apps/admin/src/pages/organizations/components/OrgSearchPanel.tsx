@@ -1,17 +1,14 @@
-import StatusTag from '@admin/components/StatusTag';
-import {
-  type OrganizationVo,
-  searchOrganizations,
-} from '@admin/services/organization';
-import { Empty, Input, List, Spin } from 'antd';
-import { useEffect, useState } from 'react';
+import StatusTag from "@admin/components/StatusTag";
+import { type OrganizationVo, searchOrganizations } from "@admin/services/organization";
+import { Empty, Input, List, Spin } from "antd";
+import { useEffect, useState } from "react";
 
 type Props = {
   onSelect: (orgCode: string) => void;
 };
 
 export default function OrgSearchPanel({ onSelect }: Props) {
-  const [keyword, setKeyword] = useState('');
+  const [keyword, setKeyword] = useState("");
   const text = keyword.trim();
 
   return (
@@ -28,7 +25,7 @@ export default function OrgSearchPanel({ onSelect }: Props) {
           text={text}
           onSelect={(orgCode) => {
             onSelect(orgCode);
-            setKeyword('');
+            setKeyword("");
           }}
         />
       ) : null}
@@ -74,42 +71,33 @@ function OrgSearchResults({ text, onSelect }: ResultsProps) {
       style={{
         marginTop: 8,
         maxHeight: 240,
-        overflowY: 'auto',
-        border: '1px solid #f0f0f0',
+        overflowY: "auto",
+        border: "1px solid #f0f0f0",
       }}
     >
       {loading ? (
-        <div style={{ padding: 12, textAlign: 'center' }}>
+        <div style={{ padding: 12, textAlign: "center" }}>
           <Spin size="small" />
         </div>
       ) : results.length === 0 ? (
-        <Empty
-          style={{ padding: 12 }}
-          image={Empty.PRESENTED_IMAGE_SIMPLE}
-          description="无匹配结果"
-        />
+        <Empty style={{ padding: 12 }} image={Empty.PRESENTED_IMAGE_SIMPLE} description="无匹配结果" />
       ) : (
         <List<OrganizationVo>
           size="small"
           dataSource={results}
           renderItem={(r) => (
-            <List.Item
-              style={{ cursor: 'pointer', padding: '6px 12px' }}
-              onClick={() => onSelect(r.orgCode)}
-            >
+            <List.Item style={{ cursor: "pointer", padding: "6px 12px" }} onClick={() => onSelect(r.orgCode)}>
               <div
                 style={{
-                  display: 'flex',
-                  justifyContent: 'space-between',
-                  width: '100%',
-                  alignItems: 'center',
+                  display: "flex",
+                  justifyContent: "space-between",
+                  width: "100%",
+                  alignItems: "center",
                 }}
               >
                 <span>
                   {r.orgName}
-                  <span style={{ color: '#999', marginLeft: 6 }}>
-                    ({r.orgCode})
-                  </span>
+                  <span style={{ color: "#999", marginLeft: 6 }}>({r.orgCode})</span>
                 </span>
                 <StatusTag domain="org" status={r.status} />
               </div>

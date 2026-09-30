@@ -1,6 +1,6 @@
-import { createElement, type ReactNode } from 'react';
-import { vi } from 'vitest';
-import { authenticationConfig } from './fixtures';
+import { createElement, type ReactNode } from "react";
+import { vi } from "vitest";
+import { authenticationConfig } from "./fixtures";
 
 type LinkProps = {
   to?: string | { pathname?: string };
@@ -57,8 +57,8 @@ export function __resetUmiMaxMocks() {
 }
 
 export function Link({ to, href, children, ...rest }: LinkProps) {
-  const resolvedHref = href ?? (typeof to === 'string' ? to : to?.pathname);
-  return createElement('a', { ...rest, href: resolvedHref ?? '#' }, children);
+  const resolvedHref = href ?? (typeof to === "string" ? to : to?.pathname);
+  return createElement("a", { ...rest, href: resolvedHref ?? "#" }, children);
 }
 
 export function Outlet() {

@@ -1,9 +1,9 @@
-import type { UserMobileBindingDeps, UserRequestOptions } from "./user.port";
 import { VerificationCodeUsage } from "@api/enums/verificationCode.usage";
 import { withApiRequestContext } from "@api/services/audit/audit.context";
 import { buildMobileBindInvalidCodeAudit } from "@api/services/audit/events/self-user.audit";
 import { InvalidVerificationCodeError } from "@iam/api-core/errors/InvalidVerificationCodeError";
 import { InvalidMobileError, MobileAlreadyExistsError } from "@iam/domain/user";
+import type { UserMobileBindingDeps, UserRequestOptions } from "./user.port";
 
 export function createUserMobileBinding(deps: UserMobileBindingDeps) {
   async function assertCanBindMobile(
@@ -24,10 +24,9 @@ export function createUserMobileBinding(deps: UserMobileBindingDeps) {
       code,
     );
     if (reservation === null) {
-      await deps.auditLogWriter.recordAuditLog(withApiRequestContext(
-        options.requestContext,
-        buildMobileBindInvalidCodeAudit(userId, phoneNumber),
-      ));
+      await deps.auditLogWriter.recordAuditLog(
+        withApiRequestContext(options.requestContext, buildMobileBindInvalidCodeAudit(userId, phoneNumber)),
+      );
       throw new InvalidVerificationCodeError("验证码错误");
     }
     return reservation;

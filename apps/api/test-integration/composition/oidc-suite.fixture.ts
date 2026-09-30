@@ -2,8 +2,8 @@ import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { spawnOwnedProcessTree, terminateProcessTree } from "@iam/api-core/testing/process-smoke-harness";
-import { withOidcConformanceLifecycle } from "./oidc-conformance-lifecycle.fixture";
 import { createOidcConformanceCandidate } from "./oidc-conformance.fixture";
+import { withOidcConformanceLifecycle } from "./oidc-conformance-lifecycle.fixture";
 
 async function main() {
   await withOidcConformanceLifecycle(async (lifecycle) => {
@@ -12,10 +12,7 @@ async function main() {
     const suite = String(options.suiteOrigin);
     await mkdir(output, { recursive: true });
     const candidate = await createOidcConformanceCandidate({
-      redirectUris: [
-        `${suite}/test/a/iam195/callback`,
-        `${suite}/test/a/iam195/callback?dummy1=lorem&dummy2=ipsum`,
-      ],
+      redirectUris: [`${suite}/test/a/iam195/callback`, `${suite}/test/a/iam195/callback?dummy1=lorem&dummy2=ipsum`],
       postLogoutRedirectUris: [`${suite}/test/a/iam195/post_logout_redirect`],
       tls: options.tls,
       issuerMode: options.issuerMode ?? "dual",
@@ -47,12 +44,11 @@ async function main() {
       cwd: fileURLToPath(new URL("../../", import.meta.url)),
       env: { ...process.env, NODE_EXTRA_CA_CERTS: options.tls.certPath },
     });
-    child.stdout?.on("data", chunk => process.stdout.write(String(chunk)));
-    child.stderr?.on("data", chunk => process.stderr.write(String(chunk)));
+    child.stdout?.on("data", (chunk) => process.stdout.write(String(chunk)));
+    child.stderr?.on("data", (chunk) => process.stderr.write(String(chunk)));
     const interruptDriver = () => child.kill("SIGTERM");
     lifecycle.signal.addEventListener("abort", interruptDriver);
-    if (lifecycle.signal.aborted)
-      interruptDriver();
+    if (lifecycle.signal.aborted) interruptDriver();
     lifecycle.own(async () => {
       lifecycle.signal.removeEventListener("abort", interruptDriver);
       await terminateProcessTree(child, { timeoutMs: 5000 });
@@ -69,8 +65,7 @@ async function main() {
       child.once("error", reject);
       child.once("exit", resolve);
     });
-    if (exitCode !== 0)
-      throw new Error(`OIDC suite driver exited ${exitCode}`);
+    if (exitCode !== 0) throw new Error(`OIDC suite driver exited ${exitCode}`);
   });
 }
 

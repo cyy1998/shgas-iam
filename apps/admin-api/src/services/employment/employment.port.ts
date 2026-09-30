@@ -23,13 +23,8 @@ export interface AdminEmploymentReadScope {
 }
 
 export interface AdminEmploymentReaderPort {
-  getEmploymentAuthorizationFactsByIdForAdmin: (
-    id: number,
-  ) => Promise<AdminEmploymentAuthorizationFacts | null>;
-  getEmploymentByIdForAdmin: (
-    id: number,
-    scope?: AdminEmploymentReadScope,
-  ) => Promise<EmploymentDetail | null>;
+  getEmploymentAuthorizationFactsByIdForAdmin: (id: number) => Promise<AdminEmploymentAuthorizationFacts | null>;
+  getEmploymentByIdForAdmin: (id: number, scope?: AdminEmploymentReadScope) => Promise<EmploymentDetail | null>;
   searchEmploymentsFuzzyForAdminPaged: (
     query: EmploymentAdminPaginationQueryDto,
     scope?: AdminEmploymentReadScope,
@@ -40,12 +35,15 @@ export interface AdminEmploymentReaderPort {
 }
 
 export interface AdminEmploymentEffectiveRoleResolverPort {
-  resolveEffectiveRoles: (input: {
-    employmentIds: readonly number[];
-  }) => Promise<ReadonlyMap<number, readonly {
-    id: number;
-    roleCode: string;
-  }[]>>;
+  resolveEffectiveRoles: (input: { employmentIds: readonly number[] }) => Promise<
+    ReadonlyMap<
+      number,
+      readonly {
+        id: number;
+        roleCode: string;
+      }[]
+    >
+  >;
 }
 
 export interface AdminEmploymentPrivilegeReaderPort {

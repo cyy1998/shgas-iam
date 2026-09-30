@@ -16,19 +16,13 @@ interface AdminMutationOperationClassification {
 const maximumResourceIdentifierLength = 128;
 
 function normalizePrimitiveIdentifier(value: string | number) {
-  if (typeof value === "number" || value.length <= maximumResourceIdentifierLength)
-    return value;
+  if (typeof value === "number" || value.length <= maximumResourceIdentifierLength) return value;
   return `${value.slice(0, maximumResourceIdentifierLength - 3)}...`;
 }
 
-type AdminOperationClassification
-  = | AdminQueryOperationClassification
-    | AdminMutationOperationClassification;
+type AdminOperationClassification = AdminQueryOperationClassification | AdminMutationOperationClassification;
 
-function findPrimitiveIdentifier(
-  input: unknown,
-  keys: readonly string[],
-): string | number | undefined {
+function findPrimitiveIdentifier(input: unknown, keys: readonly string[]): string | number | undefined {
   const pending = [input];
   const visited = new Set<object>();
   const maximumInspectedObjects = 1_024;
@@ -38,44 +32,34 @@ function findPrimitiveIdentifier(
   let pendingIndex = 0;
 
   try {
-    while (
-      pendingIndex < pending.length
-      && inspectedObjects < maximumInspectedObjects
-    ) {
+    while (pendingIndex < pending.length && inspectedObjects < maximumInspectedObjects) {
       const current = pending[pendingIndex];
       pendingIndex += 1;
-      if (!current || typeof current !== "object" || visited.has(current))
-        continue;
+      if (!current || typeof current !== "object" || visited.has(current)) continue;
       visited.add(current);
       inspectedObjects += 1;
 
       const record = current as Record<string, unknown>;
       for (const key of keys) {
         const value = record[key];
-        if (typeof value === "string" || typeof value === "number")
-          return normalizePrimitiveIdentifier(value);
+        if (typeof value === "string" || typeof value === "number") return normalizePrimitiveIdentifier(value);
       }
       for (const property in record) {
-        if (!Object.hasOwn(record, property))
-          continue;
+        if (!Object.hasOwn(record, property)) continue;
         inspectedProperties += 1;
-        if (inspectedProperties > maximumInspectedProperties)
-          return undefined;
+        if (inspectedProperties > maximumInspectedProperties) return undefined;
         const value = record[property];
-        if (value && typeof value === "object")
-          pending.push(value);
+        if (value && typeof value === "object") pending.push(value);
       }
     }
-  }
-  catch {
+  } catch {
     return undefined;
   }
   return undefined;
 }
 
 function identify(...keys: string[]) {
-  return (input: unknown) =>
-    findPrimitiveIdentifier(input, keys) ?? "collection";
+  return (input: unknown) => findPrimitiveIdentifier(input, keys) ?? "collection";
 }
 
 function userMutation(keys: string[]) {
@@ -183,11 +167,31 @@ export const ADMIN_OPERATION_REGISTRY = {
   "admin.organization.updateStatus": organizationMutation(["orgCode"]),
   "admin.organization.delete": organizationMutation(["orgCode"]),
 
-  "admin.organizationResponsibility.listTypes": { module: "organizationResponsibility", type: "query", resourceType: "organizationResponsibilityType" },
-  "admin.organizationResponsibility.listAssignments": { module: "organizationResponsibility", type: "query", resourceType: "organizationResponsibilityAssignment" },
-  "admin.organizationResponsibility.searchAssignments": { module: "organizationResponsibility", type: "query", resourceType: "organizationResponsibilityAssignment" },
-  "admin.organizationResponsibility.detailAssignment": { module: "organizationResponsibility", type: "query", resourceType: "organizationResponsibilityAssignment" },
-  "admin.organizationResponsibility.scopedDetailAssignment": { module: "organizationResponsibility", type: "query", resourceType: "organizationResponsibilityAssignment" },
+  "admin.organizationResponsibility.listTypes": {
+    module: "organizationResponsibility",
+    type: "query",
+    resourceType: "organizationResponsibilityType",
+  },
+  "admin.organizationResponsibility.listAssignments": {
+    module: "organizationResponsibility",
+    type: "query",
+    resourceType: "organizationResponsibilityAssignment",
+  },
+  "admin.organizationResponsibility.searchAssignments": {
+    module: "organizationResponsibility",
+    type: "query",
+    resourceType: "organizationResponsibilityAssignment",
+  },
+  "admin.organizationResponsibility.detailAssignment": {
+    module: "organizationResponsibility",
+    type: "query",
+    resourceType: "organizationResponsibilityAssignment",
+  },
+  "admin.organizationResponsibility.scopedDetailAssignment": {
+    module: "organizationResponsibility",
+    type: "query",
+    resourceType: "organizationResponsibilityAssignment",
+  },
   "admin.organizationResponsibility.createAssignment": {
     module: "organizationResponsibility",
     type: "mutation",
@@ -216,7 +220,11 @@ export const ADMIN_OPERATION_REGISTRY = {
   "admin.role.assignments.updateScope": roleAssignmentMutation(["assignmentId", "roleCode"]),
   "admin.role.assignments.delete": roleAssignmentMutation(["assignmentId", "roleCode"]),
 
-  "admin.sessionManagement.listLoginRestrictions": { module: "sessionManagement", type: "query", resourceType: "loginRestriction" },
+  "admin.sessionManagement.listLoginRestrictions": {
+    module: "sessionManagement",
+    type: "query",
+    resourceType: "loginRestriction",
+  },
   "admin.sessionManagement.listSessions": { module: "sessionManagement", type: "query", resourceType: "session" },
   "admin.sessionManagement.releaseLoginRestriction": {
     module: "sessionManagement",

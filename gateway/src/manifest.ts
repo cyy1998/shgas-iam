@@ -1,10 +1,10 @@
-import type { EnvMap, LoadedManifest, ManifestObject, ManifestScope, ResourceKind } from "./types";
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { parse as parseYaml } from "yaml";
 import { renderEnvValue } from "./env";
 import { createEmptyResourceMap } from "./resources";
+import type { EnvMap, LoadedManifest, ManifestObject, ManifestScope, ResourceKind } from "./types";
 
 export const packageRoot = path.resolve(fileURLToPath(new URL("../", import.meta.url)));
 export const repoRoot = path.resolve(packageRoot, "..");
@@ -40,7 +40,7 @@ export function resolveManifestScope(explicitEnv?: string): string {
 
 export function parseManifestScope(env: string): ManifestScope {
   const parts = env.split(":");
-  if (parts.length !== 2 || parts.some(part => part.length === 0)) {
+  if (parts.length !== 2 || parts.some((part) => part.length === 0)) {
     throw new Error(`Invalid manifest scope: ${env}. Scope must use <env>:<app> format.`);
   }
 
@@ -51,9 +51,7 @@ export function parseManifestScope(env: string): ManifestScope {
   }
 
   if (!scopeSegmentPattern.test(stage) || !scopeSegmentPattern.test(app)) {
-    throw new Error(
-      `Invalid manifest scope: ${env}. env and app may only use lowercase letters, digits, and hyphens.`,
-    );
+    throw new Error(`Invalid manifest scope: ${env}. env and app may only use lowercase letters, digits, and hyphens.`);
   }
 
   return { env: stage, app };
@@ -77,20 +75,26 @@ function materializeSourceManifest(
 
   if (service) {
     resources.services = [materializeService(service, scope)];
-    resources.plugin_configs = readObjectList(service.plugin_configs, "service.plugin_configs", manifest)
-      .map((item, index) => materializeKeyedResource(item, scope, index, "plugin_configs"));
+    resources.plugin_configs = readObjectList(service.plugin_configs, "service.plugin_configs", manifest).map(
+      (item, index) => materializeKeyedResource(item, scope, index, "plugin_configs"),
+    );
   }
 
-  resources.upstreams = readObjectList(source.upstreams, "upstreams", manifest)
-    .map((item, index) => materializeKeyedResource(item, scope, index, "upstreams"));
-  resources.plugin_metadata = readObjectList(source.plugin_metadata, "plugin_metadata", manifest)
-    .map((item, index) => materializeKeyedResource(item, scope, index, "plugin_metadata"));
-  resources.routes = readObjectList(source.routes, "routes", manifest)
-    .map((item, index) => materializeRoute(item, scope, index));
-  resources.consumers = readObjectList(source.consumers, "consumers", manifest)
-    .map((item, index) => materializeKeyedResource(item, scope, index, "consumers"));
-  resources.ssls = readObjectList(source.ssls, "ssls", manifest)
-    .map((item, index) => materializeKeyedResource(item, scope, index, "ssls"));
+  resources.upstreams = readObjectList(source.upstreams, "upstreams", manifest).map((item, index) =>
+    materializeKeyedResource(item, scope, index, "upstreams"),
+  );
+  resources.plugin_metadata = readObjectList(source.plugin_metadata, "plugin_metadata", manifest).map((item, index) =>
+    materializeKeyedResource(item, scope, index, "plugin_metadata"),
+  );
+  resources.routes = readObjectList(source.routes, "routes", manifest).map((item, index) =>
+    materializeRoute(item, scope, index),
+  );
+  resources.consumers = readObjectList(source.consumers, "consumers", manifest).map((item, index) =>
+    materializeKeyedResource(item, scope, index, "consumers"),
+  );
+  resources.ssls = readObjectList(source.ssls, "ssls", manifest).map((item, index) =>
+    materializeKeyedResource(item, scope, index, "ssls"),
+  );
 
   return resources;
 }
@@ -180,9 +184,7 @@ function getSourceKey(source: ManifestObject, index: number): string {
 }
 
 function formatGeneratedId(scope: ManifestScope, key?: string): string {
-  return key === undefined
-    ? `${scope.app}.${scope.env}`
-    : `${scope.app}.${key}.${scope.env}`;
+  return key === undefined ? `${scope.app}.${scope.env}` : `${scope.app}.${key}.${scope.env}`;
 }
 
 function materializeLabels(source: ManifestObject, scope: ManifestScope): Record<string, unknown> {

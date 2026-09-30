@@ -1,4 +1,9 @@
-import { PrivilegeDelegationCreateDtoSchema, PrivilegeDelegationDetailDtoSchema, PrivilegeDelegationQueryDtoSchema, PrivilegeDelegationUpdateDtoSchema } from "@api/services/privilege/privilegeDelegation.schema";
+import {
+  PrivilegeDelegationCreateDtoSchema,
+  PrivilegeDelegationDetailDtoSchema,
+  PrivilegeDelegationQueryDtoSchema,
+  PrivilegeDelegationUpdateDtoSchema,
+} from "@api/services/privilege/privilegeDelegation.schema";
 import {
   PRIVILEGE_DELEGATION_RESOLUTION_INPUT_NOT_FOUND_MESSAGE,
   PRIVILEGE_DELEGATION_RESOLUTION_UNAVAILABLE_MESSAGE,
@@ -14,55 +19,67 @@ import { UserSchema } from "@iam/domain/user";
 
 const tags = ["Internal/Delegation"];
 
-const PrivilegeDelegationResolutionRequestSchema = z.object({
-  usernames: z.array(UserSchema.shape.username.min(1))
-    .min(1)
-    .max(100)
-    .refine(usernames => new Set(usernames).size === usernames.length, {
-      message: "usernames must not contain exact duplicates",
-    })
-    .openapi({
-      example: ["alice", "bob"],
-      uniqueItems: true,
+const PrivilegeDelegationResolutionRequestSchema = z
+  .object({
+    usernames: z
+      .array(UserSchema.shape.username.min(1))
+      .min(1)
+      .max(100)
+      .refine((usernames) => new Set(usernames).size === usernames.length, {
+        message: "usernames must not contain exact duplicates",
+      })
+      .openapi({
+        example: ["alice", "bob"],
+        uniqueItems: true,
+      }),
+    orgCode: z.string().min(1).openapi({ example: "ORG" }),
+    privilegeCode: z.string().min(1).openapi({ example: "document:read" }),
+  })
+  .strict()
+  .openapi("PrivilegeDelegationResolutionRequest");
+
+const PrivilegeDelegationResolutionResultSchema = z
+  .object({
+    username: z.string().openapi({ example: "alice" }),
+    delegateeUsername: z.string().nullable().openapi({ example: "bob" }),
+  })
+  .strict()
+  .openapi("PrivilegeDelegationResolutionResult");
+
+const PrivilegeDelegationResolutionInputNotFoundResponseSchema = z
+  .object({
+    code: z.literal(ApiErrorCode.PrivilegeDelegationResolutionInputNotFound),
+    data: z
+      .object({
+        usernames: z.array(z.string()),
+        orgCodes: z.array(z.string()),
+        privilegeCodes: z.array(z.string()),
+      })
+      .strict(),
+    message: z.string().openapi({
+      example: PRIVILEGE_DELEGATION_RESOLUTION_INPUT_NOT_FOUND_MESSAGE,
     }),
-  orgCode: z.string().min(1).openapi({ example: "ORG" }),
-  privilegeCode: z.string().min(1).openapi({ example: "document:read" }),
-}).strict().openapi("PrivilegeDelegationResolutionRequest");
+  })
+  .strict()
+  .openapi("PrivilegeDelegationResolutionInputNotFoundResponse");
 
-const PrivilegeDelegationResolutionResultSchema = z.object({
-  username: z.string().openapi({ example: "alice" }),
-  delegateeUsername: z.string().nullable().openapi({ example: "bob" }),
-}).strict().openapi("PrivilegeDelegationResolutionResult");
-
-const PrivilegeDelegationResolutionInputNotFoundResponseSchema = z.object({
-  code: z.literal(ApiErrorCode.PrivilegeDelegationResolutionInputNotFound),
-  data: z.object({
-    usernames: z.array(z.string()),
-    orgCodes: z.array(z.string()),
-    privilegeCodes: z.array(z.string()),
-  }).strict(),
-  message: z.string().openapi({
-    example: PRIVILEGE_DELEGATION_RESOLUTION_INPUT_NOT_FOUND_MESSAGE,
-  }),
-}).strict().openapi("PrivilegeDelegationResolutionInputNotFoundResponse");
-
-const PrivilegeDelegationResolutionUnavailableResponseSchema = z.object({
-  code: z.literal(ApiErrorCode.PrivilegeDelegationResolutionUnavailable),
-  data: z.null(),
-  message: z.string().openapi({
-    example: PRIVILEGE_DELEGATION_RESOLUTION_UNAVAILABLE_MESSAGE,
-  }),
-}).strict().openapi("PrivilegeDelegationResolutionUnavailableResponse");
+const PrivilegeDelegationResolutionUnavailableResponseSchema = z
+  .object({
+    code: z.literal(ApiErrorCode.PrivilegeDelegationResolutionUnavailable),
+    data: z.null(),
+    message: z.string().openapi({
+      example: PRIVILEGE_DELEGATION_RESOLUTION_UNAVAILABLE_MESSAGE,
+    }),
+  })
+  .strict()
+  .openapi("PrivilegeDelegationResolutionUnavailableResponse");
 
 export const privilegeDelegationsResolve = createRoute({
   method: "post",
   path: "/resolve",
   tags,
   request: {
-    body: jsonContentRequired(
-      PrivilegeDelegationResolutionRequestSchema,
-      "当前直接权限委托解析参数",
-    ),
+    body: jsonContentRequired(PrivilegeDelegationResolutionRequestSchema, "当前直接权限委托解析参数"),
   },
   responses: {
     ...commonErrorResponses,
@@ -90,7 +107,10 @@ export const privilegeDelegationsQuery = createRoute({
   },
   responses: {
     ...commonErrorResponses,
-    [HttpStatusCodes.OK]: jsonContent(createSuccessResponseSchema(z.array(PrivilegeDelegationDetailDtoSchema)), "权限Delegation列表"),
+    [HttpStatusCodes.OK]: jsonContent(
+      createSuccessResponseSchema(z.array(PrivilegeDelegationDetailDtoSchema)),
+      "权限Delegation列表",
+    ),
   },
 });
 
@@ -119,6 +139,9 @@ export const privilegeDelegationSet = createRoute({
   },
   responses: {
     ...commonErrorResponses,
-    [HttpStatusCodes.OK]: jsonContent(createSuccessResponseSchema(PrivilegeDelegationDetailDtoSchema), "权限Delegation设置结果"),
+    [HttpStatusCodes.OK]: jsonContent(
+      createSuccessResponseSchema(PrivilegeDelegationDetailDtoSchema),
+      "权限Delegation设置结果",
+    ),
   },
 });

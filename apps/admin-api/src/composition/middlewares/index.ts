@@ -1,16 +1,16 @@
 import type { AdminAuthenticationHandlers } from "@admin-api/middlewares/authentication.handler";
-import type { AdminAuthorizationPolicy } from "@admin-api/services/admin-authorization/admin-authorization.policy";
-import type { AdminRestOperationSurface } from "@admin-api/services/admin-authorization/admin-rest-operation.surface";
-import type { CreateAppOptions } from "@iam/api-core/core/create-app";
-import type { createSubjectAccessOperations } from "@iam/api-core/subject-access";
-import type { AdminApiRuntimePorts } from "../runtime";
-import type { AdminApiServices } from "../services";
 import { createAdminMiddlewares } from "@admin-api/routes/admin/_middleware";
 import { createTrpcMiddlewares } from "@admin-api/routes/trpc/_middleware";
 import {
   createAdminAuthorizationContextHandler,
   createAdminRestAuthorizationHandler,
 } from "@admin-api/services/admin-authorization/admin-authorization.context";
+import type { AdminAuthorizationPolicy } from "@admin-api/services/admin-authorization/admin-authorization.policy";
+import type { AdminRestOperationSurface } from "@admin-api/services/admin-authorization/admin-rest-operation.surface";
+import type { CreateAppOptions } from "@iam/api-core/core/create-app";
+import type { createSubjectAccessOperations } from "@iam/api-core/subject-access";
+import type { AdminApiRuntimePorts } from "../runtime";
+import type { AdminApiServices } from "../services";
 
 export interface CreateAdminApiMiddlewaresOptions {
   runtime: AdminApiRuntimePorts;
@@ -30,26 +30,15 @@ function assembleAdminMiddlewares(
   options: Pick<CreateAdminApiMiddlewaresOptions, "authorizationPolicy" | "restOperationSurface">,
   authenticationHandlers: AdminAuthenticationHandlers,
 ): CreateAppOptions["middlewares"] {
-  const authorizationContextHandler = createAdminAuthorizationContextHandler(
-    options.authorizationPolicy,
-  );
-  const restAuthorizationHandler = createAdminRestAuthorizationHandler(
-    options.restOperationSurface,
-  );
+  const authorizationContextHandler = createAdminAuthorizationContextHandler(options.authorizationPolicy);
+  const restAuthorizationHandler = createAdminRestAuthorizationHandler(options.restOperationSurface);
 
   return {
     "./src/routes/admin/_middleware.ts": {
-      default: createAdminMiddlewares(
-        authenticationHandlers,
-        authorizationContextHandler,
-        restAuthorizationHandler,
-      ),
+      default: createAdminMiddlewares(authenticationHandlers, authorizationContextHandler, restAuthorizationHandler),
     },
     "./src/routes/trpc/_middleware.ts": {
-      default: createTrpcMiddlewares(
-        authenticationHandlers,
-        authorizationContextHandler,
-      ),
+      default: createTrpcMiddlewares(authenticationHandlers, authorizationContextHandler),
     },
   };
 }

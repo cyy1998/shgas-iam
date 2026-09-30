@@ -1,5 +1,5 @@
-import type { OrganizationSelectorNode } from '@admin/services/organization';
-import type { OrganizationStatus } from '@iam/contracts';
+import type { OrganizationSelectorNode } from "@admin/services/organization";
+import type { OrganizationStatus } from "@iam/contracts";
 
 export function filterOrganizationSelectorNodesByStatus(
   nodes: OrganizationSelectorNode[],

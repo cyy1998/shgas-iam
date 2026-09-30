@@ -1,5 +1,4 @@
-import type { GenericClientRuntimeDto } from "@iam/domain/client";
-import type { ApiPostgresTestHarness } from "./postgres-test-harness";
+import { afterAll, beforeAll, beforeEach, describe, expect, test } from "bun:test";
 import { createApiRepositories } from "@api/composition/repositories";
 import { createApiUnitOfWork } from "@api/composition/tx";
 import { createInternalMiddlewares } from "@api/routes/internal/_middleware";
@@ -10,17 +9,13 @@ import { createOrganizationService } from "@api/services/organization/organizati
 import createApp from "@iam/api-core/core/create-app";
 import { createInternalAuthenticationHandler } from "@iam/api-core/middlewares";
 import { mapUnitOfWork } from "@iam/api-core/uow";
-import {
-  ClientStatus,
-  OrganizationLevel,
-  OrganizationStatus,
-  OrganizationType,
-} from "@iam/contracts";
+import { ClientStatus, OrganizationLevel, OrganizationStatus, OrganizationType } from "@iam/contracts";
 import { auditLogs, organizationClosures, organizations } from "@iam/db/schema";
-import { afterAll, beforeAll, beforeEach, describe, expect, test } from "bun:test";
+import type { GenericClientRuntimeDto } from "@iam/domain/client";
 import { eq } from "drizzle-orm";
 import pino from "pino";
 import appConfig from "~api/app.config";
+import type { ApiPostgresTestHarness } from "./postgres-test-harness";
 import { createApiPostgresTestHarness } from "./postgres-test-harness";
 
 const now = new Date("2026-09-22T00:00:00.000Z");
@@ -46,13 +41,16 @@ beforeAll(async () => {
 
 beforeEach(async () => {
   await harness.reset();
-  const [parent] = await harness.db.insert(organizations).values({
-    orgCode: "GY",
-    orgName: "供应商根组织",
-    path: "",
-    level: OrganizationLevel.One,
-    orgType: OrganizationType.Company,
-  }).returning();
+  const [parent] = await harness.db
+    .insert(organizations)
+    .values({
+      orgCode: "GY",
+      orgName: "供应商根组织",
+      path: "",
+      level: OrganizationLevel.One,
+      orgType: OrganizationType.Company,
+    })
+    .returning();
   await harness.db.insert(organizationClosures).values({
     ancestorId: parent!.id,
     descendantId: parent!.id,
@@ -79,7 +77,7 @@ function createOrganizationApp(options: { hideOccupiedCodeInTransaction?: string
   });
   const organizationService = createOrganizationService({
     organizationRepository: repositories.organization,
-    uow: mapUnitOfWork(uow, tx => ({
+    uow: mapUnitOfWork(uow, (tx) => ({
       organizationRepository: options.hideOccupiedCodeInTransaction
         ? {
             ...tx.repositories.organization,
@@ -105,9 +103,7 @@ function createOrganizationApp(options: { hideOccupiedCodeInTransaction?: string
       "./src/routes/internal/_middleware.ts": {
         default: createInternalMiddlewares({
           internalAuthenticationHandler: createInternalAuthenticationHandler({
-            getClientBySecret: async secret => secret === internalClient.clientSecret
-              ? internalClient
-              : null,
+            getClientBySecret: async (secret) => (secret === internalClient.clientSecret ? internalClient : null),
           }),
         }),
       },
@@ -124,8 +120,8 @@ async function request(
   const response = await createOrganizationApp(options).request(`http://localhost/internal/organizations${path}`, {
     method,
     headers: {
-      "apikey": internalClient.clientSecret,
-      "Client": internalClient.clientCode,
+      apikey: internalClient.clientSecret,
+      Client: internalClient.clientCode,
       "content-type": "application/json",
     },
     body: JSON.stringify(body),
@@ -143,26 +139,27 @@ describe("Internal Organization HTTP writes with production PostgreSQL", () => {
     expect(repeated).toMatchObject({ status: 200, body: { data: true } });
 
     const persisted = await harness.db.select().from(organizations);
-    expect(persisted.filter(row => row.orgCode === "SUPPLIER")).toMatchObject([
+    expect(persisted.filter((row) => row.orgCode === "SUPPLIER")).toMatchObject([
       { orgCode: "SUPPLIER", orgName: "供应商" },
     ]);
     const audits = await harness.db.select().from(auditLogs);
-    expect(audits).toMatchObject([
-      { action: "internal.purveyor.register", targetCode: "SUPPLIER" },
-    ]);
+    expect(audits).toMatchObject([{ action: "internal.purveyor.register", targetCode: "SUPPLIER" }]);
   });
 
   for (const occupiedBy of ["disabled", "soft-deleted"] as const) {
     test(`returns a stable conflict when a ${occupiedBy} organization occupies the normalized code`, async () => {
-      const [occupied] = await harness.db.insert(organizations).values({
-        orgCode: "SUPPLIER",
-        orgName: "Existing supplier",
-        path: "",
-        level: OrganizationLevel.One,
-        orgType: OrganizationType.External,
-        status: occupiedBy === "disabled" ? OrganizationStatus.Disable : OrganizationStatus.Enable,
-        isDelete: occupiedBy === "soft-deleted",
-      }).returning();
+      const [occupied] = await harness.db
+        .insert(organizations)
+        .values({
+          orgCode: "SUPPLIER",
+          orgName: "Existing supplier",
+          path: "",
+          level: OrganizationLevel.One,
+          orgType: OrganizationType.External,
+          status: occupiedBy === "disabled" ? OrganizationStatus.Disable : OrganizationStatus.Enable,
+          isDelete: occupiedBy === "soft-deleted",
+        })
+        .returning();
       await harness.db.insert(organizationClosures).values({
         ancestorId: occupied!.id,
         descendantId: occupied!.id,
@@ -257,7 +254,7 @@ describe("Internal Organization HTTP writes with production PostgreSQL", () => {
     expect(accepted.status).toBe(200);
 
     const persisted = await harness.db.select().from(organizations);
-    expect(persisted.map(row => row.orgCode).sort()).toEqual(["GY", maxCode].sort());
+    expect(persisted.map((row) => row.orgCode).sort()).toEqual(["GY", maxCode].sort());
   });
 
   test.each([
@@ -269,7 +266,7 @@ describe("Internal Organization HTTP writes with production PostgreSQL", () => {
     expect(rejected.status).toBe(422);
 
     const persisted = await harness.db.select().from(organizations);
-    expect(persisted.map(row => row.orgCode)).toEqual(["GY"]);
+    expect(persisted.map((row) => row.orgCode)).toEqual(["GY"]);
   });
 
   test("keeps organization codes case-sensitive", async () => {
@@ -278,10 +275,12 @@ describe("Internal Organization HTTP writes with production PostgreSQL", () => {
       expect(created.status).toBe(200);
     }
     const persisted = await harness.db.select().from(organizations);
-    expect(persisted.filter(row => row.orgCode !== "GY").map(row => row.orgCode).sort()).toEqual([
-      "SUPPLIER",
-      "Supplier",
-    ]);
+    expect(
+      persisted
+        .filter((row) => row.orgCode !== "GY")
+        .map((row) => row.orgCode)
+        .sort(),
+    ).toEqual(["SUPPLIER", "Supplier"]);
   });
 
   test("does not impose the organization code limit on names", async () => {
@@ -298,7 +297,7 @@ describe("Internal Organization HTTP writes with production PostgreSQL", () => {
       expect(created.status).toBe(200);
     }
     const persisted = await harness.db.select().from(organizations).orderBy(organizations.id);
-    expect(persisted.filter(row => row.orgCode !== "GY")).toMatchObject([
+    expect(persisted.filter((row) => row.orgCode !== "GY")).toMatchObject([
       { orgCode: "FIRST", orgName: "Shared name" },
       { orgCode: "SECOND", orgName: "Shared name" },
     ]);

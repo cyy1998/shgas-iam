@@ -18,17 +18,14 @@ export function createUnifiedSessionStorage(redis: UnifiedSessionRedis, namespac
     let raw: unknown;
     try {
       raw = await redis.eval(SESSION_SCRIPT, 0, prefix, JSON.stringify(request));
-    }
-    catch (cause) {
+    } catch (cause) {
       // A transport rejection does not prove whether Redis executed a mutation.
       throw new SessionStorageError("unknown", { cause });
     }
     try {
-      if (typeof raw !== "string")
-        throw new Error("Invalid Redis session reply");
+      if (typeof raw !== "string") throw new Error("Invalid Redis session reply");
       return replySchema.parse(JSON.parse(raw));
-    }
-    catch (cause) {
+    } catch (cause) {
       throw new SessionStorageError("unknown", { cause });
     }
   }

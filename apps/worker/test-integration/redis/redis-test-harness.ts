@@ -1,8 +1,8 @@
-import type { Redis as RedisType } from "ioredis";
 import { randomUUID } from "node:crypto";
 import process from "node:process";
 import { createClientSnapshotVerifier } from "@iam/api-core/client-snapshot/maintenance";
 import { createProcessSmokeEnvironment } from "@iam/api-core/testing/process-smoke-harness";
+import type { Redis as RedisType } from "ioredis";
 import Redis from "ioredis";
 
 const TEST_REDIS_URL_ENV = "IAM_WORKER_TEST_REDIS_URL";
@@ -30,8 +30,7 @@ export async function createWorkerRedisTestHarness(
 
   try {
     await Promise.all([connectRedis(writer), connectRedis(observer), connectRedis(cleanup)]);
-  }
-  catch (error) {
+  } catch (error) {
     writer.disconnect();
     observer.disconnect();
     cleanup.disconnect();
@@ -68,27 +67,21 @@ export async function createWorkerRedisTestHarness(
       const errors: unknown[] = [];
       const ownedKeys = [...ownedRestoreFixtureKeys, ...ownedSentinelKeys];
       try {
-        if (ownedKeys.length > 0)
-          await cleanup.unlink(...ownedKeys);
-        const remainingOwnerInventory = await createClientSnapshotVerifier(
-          observer,
-        ).verifyAllAfterRedisRestore({ protocolTrafficStopped: true });
+        if (ownedKeys.length > 0) await cleanup.unlink(...ownedKeys);
+        const remainingOwnerInventory = await createClientSnapshotVerifier(observer).verifyAllAfterRedisRestore({
+          protocolTrafficStopped: true,
+        });
         if (remainingOwnerInventory.matchingKeys > 0) {
-          throw new Error(
-            `Worker Redis test left ${remainingOwnerInventory.matchingKeys} Client Runtime owner key(s)`,
-          );
+          throw new Error(`Worker Redis test left ${remainingOwnerInventory.matchingKeys} Client Runtime owner key(s)`);
         }
-      }
-      catch (error) {
+      } catch (error) {
         errors.push(error);
       }
       const closeResults = await Promise.allSettled([writer.quit(), observer.quit(), cleanup.quit()]);
       for (const result of closeResults) {
-        if (result.status === "rejected")
-          errors.push(result.reason);
+        if (result.status === "rejected") errors.push(result.reason);
       }
-      if (errors.length > 0)
-        throw new AggregateError(errors, "Failed to close Worker Redis test harness");
+      if (errors.length > 0) throw new AggregateError(errors, "Failed to close Worker Redis test harness");
     },
   };
 }
@@ -123,8 +116,7 @@ export function resolveWorkerRedisTestUrl(source: NodeJS.ProcessEnv) {
   const parsed = new URL(redisUrl);
   if (parsed.protocol !== "redis:")
     throw new Error(`${TEST_REDIS_URL_ENV} must use the redis protocol supported by the Worker runtime`);
-  if (parsed.search)
-    throw new Error(`${TEST_REDIS_URL_ENV} must not use query parameters`);
+  if (parsed.search) throw new Error(`${TEST_REDIS_URL_ENV} must not use query parameters`);
   if (parsed.username && decodeURIComponent(parsed.username) !== "default") {
     throw new Error(
       `${TEST_REDIS_URL_ENV} cannot use a Redis ACL username unsupported by the Worker runtime configuration`,
@@ -135,10 +127,10 @@ export function resolveWorkerRedisTestUrl(source: NodeJS.ProcessEnv) {
   const runtimeDb = source.IAM_WORKER_REDIS_DB || "0";
   const testDb = parsed.pathname.length > 1 ? decodeURIComponent(parsed.pathname.slice(1)) : "0";
   if (
-    runtimeHost
-    && parsed.hostname.toLowerCase() === runtimeHost.toLowerCase()
-    && (parsed.port || "6379") === runtimePort
-    && testDb === runtimeDb
+    runtimeHost &&
+    parsed.hostname.toLowerCase() === runtimeHost.toLowerCase() &&
+    (parsed.port || "6379") === runtimePort &&
+    testDb === runtimeDb
   ) {
     throw new Error(`${TEST_REDIS_URL_ENV} must not identify the Worker runtime Redis resource`);
   }

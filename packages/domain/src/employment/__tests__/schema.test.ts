@@ -1,3 +1,4 @@
+import { describe, expect, test } from "bun:test";
 import {
   EmploymentStatus,
   OrganizationLevel,
@@ -6,7 +7,6 @@ import {
   UserStatus,
   UserType,
 } from "@iam/contracts";
-import { describe, expect, test } from "bun:test";
 import { toEmploymentDto } from "../schema";
 
 const now = new Date("2026-01-01T00:00:00.000Z");
@@ -42,10 +42,12 @@ function orgNode(
   };
 }
 
-function employmentInput(companyNodes = [
-  orgNode(1, "ROOT", "集团", OrganizationType.Company, 0, 2),
-  orgNode(2, "COMP", "公司", OrganizationType.Company, 1, 1),
-]) {
+function employmentInput(
+  companyNodes = [
+    orgNode(1, "ROOT", "集团", OrganizationType.Company, 0, 2),
+    orgNode(2, "COMP", "公司", OrganizationType.Company, 1, 1),
+  ],
+) {
   const assignedOrg = orgNode(3, "DEPT", "部门", OrganizationType.Department, 2, 0);
   const fullOrgPath = [...companyNodes, assignedOrg].map((node, pathIndex) => ({ ...node, pathIndex }));
   return {
@@ -96,8 +98,11 @@ describe("toEmploymentDto", () => {
         ...input.organization,
         internalNote: "private organization context",
         assignedOrg: { ...input.organization.assignedOrg, internalNote: "private node context" },
-        fullOrgPath: input.organization.fullOrgPath.map(node => ({ ...node, internalNote: "private path context" })),
-        companyNodes: input.organization.companyNodes.map(node => ({ ...node, internalNote: "private company context" })),
+        fullOrgPath: input.organization.fullOrgPath.map((node) => ({ ...node, internalNote: "private path context" })),
+        companyNodes: input.organization.companyNodes.map((node) => ({
+          ...node,
+          internalNote: "private company context",
+        })),
       },
     });
 

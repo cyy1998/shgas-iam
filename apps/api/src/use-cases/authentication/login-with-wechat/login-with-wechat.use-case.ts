@@ -1,15 +1,15 @@
-import type { LoginWithWechatDeps } from "./login-with-wechat.port";
-import type { LoginWithWechatInput, LoginWithWechatOptions } from "./login-with-wechat.type";
 import { buildWechatLoginSuccessAudit } from "@api/services/audit/events/auth.audit";
 import { toSessionOrigin } from "@api/services/session/session-origin";
 import { LoginFailedError } from "@iam/api-core/errors/LoginFailedError";
 import { reviveIsoDates } from "@iam/api-core/utils";
 import { UserDetailDtoSchema } from "@iam/domain/user";
 import { z } from "zod";
+import type { LoginWithWechatDeps } from "./login-with-wechat.port";
+import type { LoginWithWechatInput, LoginWithWechatOptions } from "./login-with-wechat.type";
 
 const CachedWechatLoginUserSchema = z.union([
   z.object({ userId: z.number().int().positive() }),
-  UserDetailDtoSchema.pick({ id: true }).transform(value => ({ userId: value.id })),
+  UserDetailDtoSchema.pick({ id: true }).transform((value) => ({ userId: value.id })),
 ]);
 
 export function createLoginWithWechatUseCase(deps: LoginWithWechatDeps) {

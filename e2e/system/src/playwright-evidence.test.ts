@@ -1,8 +1,8 @@
-import type { RunDescriptor } from "./lifecycle.ts";
+import { afterEach, describe, expect, test } from "bun:test";
 import { mkdir, mkdtemp, open, readFile, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
-import { afterEach, describe, expect, test } from "bun:test";
+import type { RunDescriptor } from "./lifecycle.ts";
 import {
   collectPlaywrightEvidence,
   playwrightEvidenceLimits,
@@ -12,8 +12,7 @@ import {
 let temporaryDirectory: string | undefined;
 
 afterEach(async () => {
-  if (temporaryDirectory !== undefined)
-    await rm(temporaryDirectory, { force: true, recursive: true });
+  if (temporaryDirectory !== undefined) await rm(temporaryDirectory, { force: true, recursive: true });
   temporaryDirectory = undefined;
 });
 
@@ -30,18 +29,13 @@ describe("Playwright raw evidence intake", () => {
 
     const result = await collectPlaywrightEvidence({ descriptor });
 
-    expect(await readFile(
-      join(descriptor.artifactDirectory, "playwright", "trace.zip"),
-      "utf8",
-    )).toBe("RAW-TRACE");
-    expect(await readFile(
-      join(descriptor.artifactDirectory, "playwright", "failure.png"),
-      "utf8",
-    )).toBe("RAW-SCREENSHOT");
-    expect(await readFile(
-      join(descriptor.artifactDirectory, "playwright", "nested", "recording.webm"),
-      "utf8",
-    )).toBe("RAW-VIDEO");
+    expect(await readFile(join(descriptor.artifactDirectory, "playwright", "trace.zip"), "utf8")).toBe("RAW-TRACE");
+    expect(await readFile(join(descriptor.artifactDirectory, "playwright", "failure.png"), "utf8")).toBe(
+      "RAW-SCREENSHOT",
+    );
+    expect(await readFile(join(descriptor.artifactDirectory, "playwright", "nested", "recording.webm"), "utf8")).toBe(
+      "RAW-VIDEO",
+    );
     const metadata = await readFile(result.metadataPath, "utf8");
     expect(metadata).toContain("playwright/trace.zip");
     expect(metadata).toContain("playwright/failure.png");
@@ -58,11 +52,8 @@ describe("Playwright raw evidence intake", () => {
     await writeFile(join(outside, "outside.png"), "OUTSIDE-RAW");
     await symlink(outside, join(staging, "linked"), "junction");
 
-    await expect(collectPlaywrightEvidence({ descriptor })).rejects.toThrow(
-      "symbolic links are forbidden",
-    );
-    expect(await readFile(join(outside, "outside.png"), "utf8"))
-      .toBe("OUTSIDE-RAW");
+    await expect(collectPlaywrightEvidence({ descriptor })).rejects.toThrow("symbolic links are forbidden");
+    expect(await readFile(join(outside, "outside.png"), "utf8")).toBe("OUTSIDE-RAW");
   });
 
   test("keeps an oversized staged file for recovery", async () => {
@@ -75,9 +66,7 @@ describe("Playwright raw evidence intake", () => {
     await file.truncate(playwrightEvidenceLimits.maxBytesPerFile + 1);
     await file.close();
 
-    await expect(collectPlaywrightEvidence({ descriptor })).rejects.toThrow(
-      "byte limit",
-    );
+    await expect(collectPlaywrightEvidence({ descriptor })).rejects.toThrow("byte limit");
     expect(await Bun.file(trace).exists()).toBe(true);
   });
 });

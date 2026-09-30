@@ -1,13 +1,13 @@
-import type { CreateOrganizationResponsibilityAdapterDeps } from "@admin-api/routes/admin/organization-responsibility/organization-responsibility.adapter";
-import type { OrganizationResponsibilityAssignmentSearchPage } from "@admin-api/services/organization-responsibility/organization-responsibility.schema";
-import type { CreateOrganizationResponsibilityServiceDeps } from "@admin-api/services/organization-responsibility/organization-responsibility.service";
-import type { Context } from "hono";
+import { describe, expect, mock, test } from "bun:test";
 import { createAdminRootAuthenticationHandlers } from "@admin-api/middlewares/authentication.handler";
+import type { CreateOrganizationResponsibilityAdapterDeps } from "@admin-api/routes/admin/organization-responsibility/organization-responsibility.adapter";
 import { createOrganizationResponsibilityAdapter } from "@admin-api/routes/admin/organization-responsibility/organization-responsibility.adapter";
 import { createOrganizationResponsibilityRoute } from "@admin-api/routes/admin/organization-responsibility/organization-responsibility.index";
 import * as responsibilityRoutes from "@admin-api/routes/admin/organization-responsibility/organization-responsibility.routes";
 import { createAdminAuthorizationPolicy } from "@admin-api/services/admin-authorization/admin-authorization.policy";
 import { AdminMutationCommittedError } from "@admin-api/services/admin-mutation/admin-mutation";
+import type { OrganizationResponsibilityAssignmentSearchPage } from "@admin-api/services/organization-responsibility/organization-responsibility.schema";
+import type { CreateOrganizationResponsibilityServiceDeps } from "@admin-api/services/organization-responsibility/organization-responsibility.service";
 import { createOrganizationResponsibilityService } from "@admin-api/services/organization-responsibility/organization-responsibility.service";
 import { createSubjectAccessOperations, encodeSubjectAccessContext } from "@iam/api-core/subject-access";
 import {
@@ -18,23 +18,33 @@ import {
   UserStatus,
 } from "@iam/contracts";
 import { OrganizationResponsibilityAssignmentNotOpenError } from "@iam/domain/organization-responsibility";
-import { describe, expect, mock, test } from "bun:test";
+import type { Context } from "hono";
 import { Hono } from "hono";
-import {
-  addTestAdminAuthorizationMiddleware,
-  getTestAdminAuthorizationValue,
-} from "../helpers/admin-authorization";
+import { addTestAdminAuthorizationMiddleware, getTestAdminAuthorizationValue } from "../helpers/admin-authorization";
 
-const principalSession = { userSessionId: "30000000-0000-4000-8000-000000000001", subjectIdentifier: "00000000-0000-4000-8000-000000000001", subjectContext: encodeSubjectAccessContext({ version: 1, subjectIdentifier: "00000000-0000-4000-8000-000000000001", transitionId: "20000000-0000-4000-8000-000000000001" }) };
+const principalSession = {
+  userSessionId: "30000000-0000-4000-8000-000000000001",
+  subjectIdentifier: "00000000-0000-4000-8000-000000000001",
+  subjectContext: encodeSubjectAccessContext({
+    version: 1,
+    subjectIdentifier: "00000000-0000-4000-8000-000000000001",
+    transitionId: "20000000-0000-4000-8000-000000000001",
+  }),
+};
 
 function createProtectedCatalogApp(roles: string[]) {
   const authentication = createAdminRootAuthenticationHandlers({
     resolveRoot: async () => principalSession,
     subjectAccess: createSubjectAccessOperations({
       barrier: { readCommittedTransitionId: async () => "20000000-0000-4000-8000-000000000001" },
-      revocation: { revokePrincipalSession: async () => {
-        throw new Error("unexpected cleanup");
-      }, revokeUserSessions: async () => { throw new Error("unexpected cleanup"); } },
+      revocation: {
+        revokePrincipalSession: async () => {
+          throw new Error("unexpected cleanup");
+        },
+        revokeUserSessions: async () => {
+          throw new Error("unexpected cleanup");
+        },
+      },
     }),
     userService: {
       getUserDetailForPermittedAdmin: async () => ({
@@ -51,15 +61,9 @@ function createProtectedCatalogApp(roles: string[]) {
   const app = new Hono();
   app.use("*", authentication.adminAuthenticationHandler);
   addTestAdminAuthorizationMiddleware(app, roles);
-  app.route(
-    "/admin",
-    createOrganizationResponsibilityRoute(createCatalogAdapter()),
-  );
+  app.route("/admin", createOrganizationResponsibilityRoute(createCatalogAdapter()));
   app.onError((error, c) => {
-    const status
-      = "httpStatus" in error && typeof error.httpStatus === "number"
-        ? error.httpStatus
-        : 500;
+    const status = "httpStatus" in error && typeof error.httpStatus === "number" ? error.httpStatus : 500;
     return c.text(error.message, status as never);
   });
   return app;
@@ -73,9 +77,7 @@ describe("Organization Responsibility Type Catalog admin adapter", () => {
     addTestAdminAuthorizationMiddleware(restApp);
     restApp.route("/admin", route);
 
-    const restResponse = await restApp.request(
-      "http://localhost/admin/organization-responsibilities/types",
-    );
+    const restResponse = await restApp.request("http://localhost/admin/organization-responsibilities/types");
     expect(restResponse.status).toBe(200);
     expect(await restResponse.json()).toEqual({
       code: 200,
@@ -87,12 +89,9 @@ describe("Organization Responsibility Type Catalog admin adapter", () => {
       hono: {
         get: (key: string) => {
           const authorizationValue = getTestAdminAuthorizationValue(key);
-          if (authorizationValue !== undefined)
-            return authorizationValue;
-          if (key === "userId")
-            return 3;
-          if (key === "username")
-            return "holder";
+          if (authorizationValue !== undefined) return authorizationValue;
+          if (key === "userId") return 3;
+          if (key === "username") return "holder";
           return undefined;
         },
         req: {
@@ -103,14 +102,10 @@ describe("Organization Responsibility Type Catalog admin adapter", () => {
       } as unknown as Context,
     });
     await expect(caller.listTypes({})).resolves.toEqual(
-      ORGANIZATION_RESPONSIBILITY_TYPE_CATALOG.map(entry => ({ ...entry })),
+      ORGANIZATION_RESPONSIBILITY_TYPE_CATALOG.map((entry) => ({ ...entry })),
     );
 
-    expect(
-      Object.keys(
-        adapter.organizationResponsibilityAdminRouter._def.procedures,
-      ),
-    ).toEqual([
+    expect(Object.keys(adapter.organizationResponsibilityAdminRouter._def.procedures)).toEqual([
       "listTypes",
       "listAssignments",
       "searchAssignments",
@@ -120,10 +115,9 @@ describe("Organization Responsibility Type Catalog admin adapter", () => {
       "resumeAssignment",
       "endAssignment",
     ]);
-    const postResponse = await restApp.request(
-      "http://localhost/admin/organization-responsibilities/types",
-      { method: "POST" },
-    );
+    const postResponse = await restApp.request("http://localhost/admin/organization-responsibilities/types", {
+      method: "POST",
+    });
     expect(postResponse.status).toBe(404);
   });
 
@@ -208,31 +202,23 @@ describe("Organization Responsibility Type Catalog admin adapter", () => {
       "http://localhost/admin/organizations/TARGET/responsibility-assignments/41",
     );
     expect(detailResponse.status).toBe(200);
-    expect(((await detailResponse.json()) as { data: unknown }).data).toEqual(
-      authorizedAssignment,
-    );
-    expect(getAssignmentDetailForAdmin).toHaveBeenCalledWith(
-      { orgCode: "TARGET", id: 41 },
-      { kind: "full" },
-    );
+    expect(((await detailResponse.json()) as { data: unknown }).data).toEqual(authorizedAssignment);
+    expect(getAssignmentDetailForAdmin).toHaveBeenCalledWith({ orgCode: "TARGET", id: 41 }, { kind: "full" });
 
-    const createResponse = await app.request(
-      "http://localhost/admin/organizations/TARGET/responsibility-assignments",
-      {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({
-          employmentId: 7,
-          typeCode: OrganizationResponsibilityTypeCode.Head,
-        }),
-      },
-    );
+    const createResponse = await app.request("http://localhost/admin/organizations/TARGET/responsibility-assignments", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        employmentId: 7,
+        typeCode: OrganizationResponsibilityTypeCode.Head,
+      }),
+    });
     expect(createResponse.status).toBe(200);
     const createBody = await createResponse.json();
-    const parsedCreate = responsibilityRoutes.organizationResponsibilityAssignmentCreate.responses[200]
-      .content["application/json"]
-      .schema
-      .parse(createBody);
+    const parsedCreate =
+      responsibilityRoutes.organizationResponsibilityAssignmentCreate.responses[200].content[
+        "application/json"
+      ].schema.parse(createBody);
     expect(parsedCreate.data).toEqual({ changed: true, result: { id: 41 } });
     expect(execute).toHaveBeenCalledWith(
       {
@@ -258,10 +244,10 @@ describe("Organization Responsibility Type Catalog admin adapter", () => {
     );
     expect(pauseResponse.status).toBe(200);
     const pauseBody = await pauseResponse.json();
-    const parsedPause = responsibilityRoutes.organizationResponsibilityAssignmentPause.responses[200]
-      .content["application/json"]
-      .schema
-      .parse(pauseBody);
+    const parsedPause =
+      responsibilityRoutes.organizationResponsibilityAssignmentPause.responses[200].content[
+        "application/json"
+      ].schema.parse(pauseBody);
     expect(parsedPause.data).toEqual({ changed: true, result: null });
     expect(manageLifecycle).toHaveBeenCalledWith(
       { id: 41, command: "pause" },
@@ -281,12 +267,9 @@ describe("Organization Responsibility Type Catalog admin adapter", () => {
       hono: {
         get: (key: string) => {
           const authorizationValue = getTestAdminAuthorizationValue(key);
-          if (authorizationValue !== undefined)
-            return authorizationValue;
-          if (key === "userId")
-            return 3;
-          if (key === "username")
-            return "holder";
+          if (authorizationValue !== undefined) return authorizationValue;
+          if (key === "userId") return 3;
+          if (key === "username") return "holder";
           return undefined;
         },
         req: {
@@ -297,51 +280,45 @@ describe("Organization Responsibility Type Catalog admin adapter", () => {
       } as unknown as Context,
     });
     const trpcDetail = await caller.detailAssignment({ id: 41 });
-    const parsedDetail = responsibilityRoutes.organizationResponsibilityAssignmentDetail.responses[200]
-      .content["application/json"]
-      .schema
-      .parse({ code: 200, data: trpcDetail, message: "success" });
+    const parsedDetail = responsibilityRoutes.organizationResponsibilityAssignmentDetail.responses[200].content[
+      "application/json"
+    ].schema.parse({ code: 200, data: trpcDetail, message: "success" });
     expect(parsedDetail.data).toEqual(authorizedAssignment);
     const resumeResult = await caller.resumeAssignment({ id: 41 });
     expect(resumeResult).toEqual({ changed: true, result: null });
     const endResult = await caller.endAssignment({ id: 41 });
     expect(endResult).toEqual({ changed: true, result: null });
-    expect(manageLifecycle).toHaveBeenCalledWith(
-      { id: 41, command: "resume" },
-      expect.any(Object),
-    );
-    expect(manageLifecycle).toHaveBeenCalledWith(
-      { id: 41, command: "end" },
-      expect.any(Object),
-    );
+    expect(manageLifecycle).toHaveBeenCalledWith({ id: 41, command: "resume" }, expect.any(Object));
+    expect(manageLifecycle).toHaveBeenCalledWith({ id: 41, command: "end" }, expect.any(Object));
     manageLifecycle.mockResolvedValue({ changed: false, result: null });
-    const retried = await app.request(
-      "http://localhost/admin/organization-responsibilities/assignments/41/end",
-      { method: "POST" },
-    );
+    const retried = await app.request("http://localhost/admin/organization-responsibilities/assignments/41/end", {
+      method: "POST",
+    });
     expect(retried.status).toBe(200);
     const retryBody = await retried.json();
-    const parsedRetry = responsibilityRoutes.organizationResponsibilityAssignmentEnd.responses[200]
-      .content["application/json"]
-      .schema
-      .parse(retryBody);
+    const parsedRetry =
+      responsibilityRoutes.organizationResponsibilityAssignmentEnd.responses[200].content[
+        "application/json"
+      ].schema.parse(retryBody);
     expect(parsedRetry.data).toEqual({ changed: false, result: null });
     const trpcRetry = await caller.endAssignment({ id: 41 });
     expect(trpcRetry).toEqual({ changed: false, result: null });
 
     manageLifecycle.mockRejectedValueOnce(new OrganizationResponsibilityAssignmentNotOpenError());
-    const illegal = await caller.resumeAssignment({ id: 41 }).catch(error => error);
+    const illegal = await caller.resumeAssignment({ id: 41 }).catch((error) => error);
     expect(illegal).toMatchObject({ code: "CONFLICT" });
     manageLifecycle.mockRejectedValueOnce(new AdminMutationCommittedError());
-    const committed = await caller.pauseAssignment({ id: 41 }).catch(error => error);
+    const committed = await caller.pauseAssignment({ id: 41 }).catch((error) => error);
     expect(committed).toMatchObject({ cause: { code: ApiErrorCode.AdminMutationCommitted } });
   });
 
   test("exposes global Assignment discovery with recoverable cursor filters", async () => {
-    const searchAssignments = mock(async (): Promise<OrganizationResponsibilityAssignmentSearchPage> => ({
-      items: [],
-      nextCursor: "40",
-    }));
+    const searchAssignments = mock(
+      async (): Promise<OrganizationResponsibilityAssignmentSearchPage> => ({
+        items: [],
+        nextCursor: "40",
+      }),
+    );
     const detailAssignment = mock(async ({ id }: { id: number }) => ({ id }));
     const adapter = createOrganizationResponsibilityAdapter({
       createAssignment: {
@@ -363,9 +340,9 @@ describe("Organization Responsibility Type Catalog admin adapter", () => {
     app.route("/admin", createOrganizationResponsibilityRoute(adapter));
 
     const response = await app.request(
-      "http://localhost/admin/organization-responsibilities/assignments"
-      + "?targetOrganizationCode=TARGET&employmentId=7&typeCode=head"
-      + "&lifecycle=all&cursor=41&limit=10",
+      "http://localhost/admin/organization-responsibilities/assignments" +
+        "?targetOrganizationCode=TARGET&employmentId=7&typeCode=head" +
+        "&lifecycle=all&cursor=41&limit=10",
     );
 
     expect(response.status).toBe(200);
@@ -392,15 +369,16 @@ describe("Organization Responsibility Type Catalog admin adapter", () => {
       hono: {
         get: (key: string) => {
           const authorizationValue = getTestAdminAuthorizationValue(key);
-          if (authorizationValue !== undefined)
-            return authorizationValue;
-          if (key === "userId")
-            return 3;
-          if (key === "username")
-            return "holder";
+          if (authorizationValue !== undefined) return authorizationValue;
+          if (key === "userId") return 3;
+          if (key === "username") return "holder";
           return undefined;
         },
-        req: { header: () => undefined, method: "POST", path: "/rpc/admin.organizationResponsibility.searchAssignments" },
+        req: {
+          header: () => undefined,
+          method: "POST",
+          path: "/rpc/admin.organizationResponsibility.searchAssignments",
+        },
       } as unknown as Context,
     });
     const cursorResult = await caller.searchAssignments({
@@ -414,7 +392,7 @@ describe("Organization Responsibility Type Catalog admin adapter", () => {
     const pageResponse = await app.request(
       "http://localhost/admin/organization-responsibilities/assignments?pageNum=3&pageSize=20&lifecycle=all",
     );
-    const pageBody = await pageResponse.json() as { data: unknown };
+    const pageBody = (await pageResponse.json()) as { data: unknown };
     expect(pageResponse.status).toBe(200);
     expect(pageBody.data).toEqual({ items: [], nextCursor: null, total: 42 });
     expect(searchAssignments).toHaveBeenLastCalledWith(
@@ -433,14 +411,9 @@ describe("Organization Responsibility Type Catalog admin adapter", () => {
       expect(invalidResponse.status).toBe(422);
     }
 
-    const detailResponse = await app.request(
-      "http://localhost/admin/organization-responsibilities/assignments/41",
-    );
+    const detailResponse = await app.request("http://localhost/admin/organization-responsibilities/assignments/41");
     expect(detailResponse.status).toBe(200);
-    expect(detailAssignment).toHaveBeenCalledWith(
-      { id: 41 },
-      expect.objectContaining({ kind: "full" }),
-    );
+    expect(detailAssignment).toHaveBeenCalledWith({ id: 41 }, expect.objectContaining({ kind: "full" }));
     expect((await caller.detailAssignment({ id: 42 })).id).toBe(42);
   });
 
@@ -459,16 +432,17 @@ describe("Organization Responsibility Type Catalog admin adapter", () => {
       nextCursor: null,
     }));
     const detailAssignment = mock(async () => ({ changed: true, result: { id: 41 } }));
-    const createAssignment = mock(async (
-      ..._args: Parameters<
-        CreateOrganizationResponsibilityAdapterDeps["createAssignment"]["execute"]
-      >
-    ) => ({ changed: true, result: { id: 41 } }));
-    const manageAssignmentLifecycle = mock(async (
-      ..._args: Parameters<
-        CreateOrganizationResponsibilityAdapterDeps["manageAssignmentLifecycle"]["execute"]
-      >
-    ) => ({ changed: true, result: null }));
+    const createAssignment = mock(
+      async (..._args: Parameters<CreateOrganizationResponsibilityAdapterDeps["createAssignment"]["execute"]>) => ({
+        changed: true,
+        result: { id: 41 },
+      }),
+    );
+    const manageAssignmentLifecycle = mock(
+      async (
+        ..._args: Parameters<CreateOrganizationResponsibilityAdapterDeps["manageAssignmentLifecycle"]["execute"]>
+      ) => ({ changed: true, result: null }),
+    );
     const adapter = createOrganizationResponsibilityAdapter({
       createAssignment: { execute: createAssignment } as never,
       manageAssignmentLifecycle: {
@@ -493,10 +467,7 @@ describe("Organization Responsibility Type Catalog admin adapter", () => {
     });
     app.route("/admin", createOrganizationResponsibilityRoute(adapter));
     app.onError((error, c) => {
-      const status
-        = "httpStatus" in error && typeof error.httpStatus === "number"
-          ? error.httpStatus
-          : 500;
+      const status = "httpStatus" in error && typeof error.httpStatus === "number" ? error.httpStatus : 500;
       return c.text(error.message, status as never);
     });
 
@@ -512,14 +483,10 @@ describe("Organization Responsibility Type Catalog admin adapter", () => {
 
     const callerContext = {
       get: (key: string) => {
-        if (key === "adminAuthorizationPolicy")
-          return policy;
-        if (key === "userId")
-          return 7;
-        if (key === "username")
-          return "hr-reader";
-        if (key === "userDetailDto")
-          return { roles: ["iam:hr-admin"] };
+        if (key === "adminAuthorizationPolicy") return policy;
+        if (key === "userId") return 7;
+        if (key === "username") return "hr-reader";
+        if (key === "userDetailDto") return { roles: ["iam:hr-admin"] };
         return undefined;
       },
       req: {
@@ -532,9 +499,7 @@ describe("Organization Responsibility Type Catalog admin adapter", () => {
       hono: callerContext,
     });
     const catalog = await caller.listTypes({});
-    expect(catalog).toEqual(
-      ORGANIZATION_RESPONSIBILITY_TYPE_CATALOG.map(entry => ({ ...entry })),
-    );
+    expect(catalog).toEqual(ORGANIZATION_RESPONSIBILITY_TYPE_CATALOG.map((entry) => ({ ...entry })));
     await caller.listAssignments({
       orgCode: "TARGET",
       lifecycle: "open",
@@ -557,17 +522,14 @@ describe("Organization Responsibility Type Catalog admin adapter", () => {
       });
     }
 
-    const createResponse = await app.request(
-      "http://localhost/admin/organizations/TARGET/responsibility-assignments",
-      {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({
-          employmentId: 7,
-          typeCode: OrganizationResponsibilityTypeCode.Head,
-        }),
-      },
-    );
+    const createResponse = await app.request("http://localhost/admin/organizations/TARGET/responsibility-assignments", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        employmentId: 7,
+        typeCode: OrganizationResponsibilityTypeCode.Head,
+      }),
+    });
     expect(createResponse.status).toBe(200);
     const trpcCreated = await caller.createAssignment({
       orgCode: "OTHER",
@@ -607,7 +569,7 @@ describe("Organization Responsibility Type Catalog admin adapter", () => {
     const endResult = await caller.endAssignment({ id: 43 });
     expect(endResult).toEqual({ changed: true, result: null });
     expect(manageAssignmentLifecycle).toHaveBeenCalledTimes(3);
-    expect(manageAssignmentLifecycle.mock.calls.map(call => call[0])).toEqual([
+    expect(manageAssignmentLifecycle.mock.calls.map((call) => call[0])).toEqual([
       { id: 41, command: "pause" },
       { id: 42, command: "resume" },
       { id: 43, command: "end" },
@@ -639,9 +601,7 @@ describe("Organization Responsibility Type Catalog admin adapter", () => {
     expect(response.status).toBe(403);
     expect(await response.text()).toBe("无管理端操作权限");
 
-    const discoveryResponse = await createProtectedCatalogApp([
-      "iam:user",
-    ]).request(
+    const discoveryResponse = await createProtectedCatalogApp(["iam:user"]).request(
       "http://localhost/admin/organization-responsibilities/assignments",
       {
         headers: {
@@ -652,9 +612,7 @@ describe("Organization Responsibility Type Catalog admin adapter", () => {
     );
     expect(discoveryResponse.status).toBe(403);
 
-    const missingScopeResponse = await createProtectedCatalogApp([
-      "iam:hr-admin",
-    ]).request(
+    const missingScopeResponse = await createProtectedCatalogApp(["iam:hr-admin"]).request(
       "http://localhost/admin/organization-responsibilities/assignments/41/pause",
       {
         method: "POST",
@@ -667,9 +625,7 @@ describe("Organization Responsibility Type Catalog admin adapter", () => {
     expect(missingScopeResponse.status).toBe(403);
     expect(await missingScopeResponse.text()).toBe("无管理端操作权限");
 
-    const wrongClientResponse = await createProtectedCatalogApp([
-      "iam:hr-admin",
-    ]).request(
+    const wrongClientResponse = await createProtectedCatalogApp(["iam:hr-admin"]).request(
       "http://localhost/admin/organization-responsibilities/assignments/41/pause",
       {
         method: "POST",

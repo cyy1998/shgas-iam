@@ -1,18 +1,13 @@
 import { Buffer } from "node:buffer";
 
-export function createBoundedByteCapture(
-  mode: "prefix" | "tail",
-  maxBytes: number,
-) {
-  if (!Number.isInteger(maxBytes) || maxBytes <= 0)
-    throw new Error("capture byte limit must be a positive integer");
+export function createBoundedByteCapture(mode: "prefix" | "tail", maxBytes: number) {
+  if (!Number.isInteger(maxBytes) || maxBytes <= 0) throw new Error("capture byte limit must be a positive integer");
   let chunks: Buffer[] = [];
   let byteLength = 0;
   return {
     append(chunk: Buffer) {
       if (mode === "prefix") {
-        if (byteLength >= maxBytes)
-          return;
+        if (byteLength >= maxBytes) return;
         const bounded = Buffer.from(chunk.subarray(0, maxBytes - byteLength));
         chunks.push(bounded);
         byteLength += bounded.length;
@@ -27,14 +22,12 @@ export function createBoundedByteCapture(
       byteLength += chunk.length;
       while (byteLength > maxBytes) {
         const first = chunks[0];
-        if (first === undefined)
-          break;
+        if (first === undefined) break;
         const overflow = byteLength - maxBytes;
         if (first.length <= overflow) {
           chunks.shift();
           byteLength -= first.length;
-        }
-        else {
+        } else {
           chunks[0] = Buffer.from(first.subarray(overflow));
           byteLength -= overflow;
         }
@@ -42,8 +35,7 @@ export function createBoundedByteCapture(
     },
     toString() {
       let value = Buffer.concat(chunks, byteLength).toString("utf8");
-      while (Buffer.byteLength(value, "utf8") > maxBytes)
-        value = value.slice(1);
+      while (Buffer.byteLength(value, "utf8") > maxBytes) value = value.slice(1);
       return value;
     },
   };
@@ -63,14 +55,12 @@ export function createBoundedLineCapture(maxBytes: number) {
     entriesBytes += entry.length;
     while (entriesBytes > maxBytes) {
       const removed = entries.shift();
-      if (removed === undefined)
-        break;
+      if (removed === undefined) break;
       entriesBytes -= removed.length;
     }
   };
   const appendLineSegment = (segment: Buffer) => {
-    if (oversized || segment.length === 0)
-      return;
+    if (oversized || segment.length === 0) return;
     if (pendingBytes + segment.length > maxBytes) {
       pending = [];
       pendingBytes = 0;
@@ -83,21 +73,13 @@ export function createBoundedLineCapture(maxBytes: number) {
   const finishLine = (withNewline: boolean) => {
     let entry: Buffer;
     if (oversized) {
-      entry = withNewline
-        ? Buffer.concat([truncated, Buffer.from("\n")])
-        : truncated;
-    }
-    else {
+      entry = withNewline ? Buffer.concat([truncated, Buffer.from("\n")]) : truncated;
+    } else {
       let content = Buffer.concat(pending, pendingBytes);
-      if (content.at(-1) === 0x0D)
-        content = content.subarray(0, -1);
-      entry = withNewline
-        ? Buffer.concat([content, Buffer.from("\n")])
-        : content;
+      if (content.at(-1) === 0x0d) content = content.subarray(0, -1);
+      entry = withNewline ? Buffer.concat([content, Buffer.from("\n")]) : content;
       if (entry.length > maxBytes) {
-        entry = withNewline
-          ? Buffer.concat([truncated, Buffer.from("\n")])
-          : truncated;
+        entry = withNewline ? Buffer.concat([truncated, Buffer.from("\n")]) : truncated;
       }
     }
     retain(entry);
@@ -109,7 +91,7 @@ export function createBoundedLineCapture(maxBytes: number) {
     append(chunk: Buffer) {
       let cursor = 0;
       for (;;) {
-        const newline = chunk.indexOf(0x0A, cursor);
+        const newline = chunk.indexOf(0x0a, cursor);
         if (newline < 0) {
           appendLineSegment(chunk.subarray(cursor));
           return;
@@ -123,15 +105,12 @@ export function createBoundedLineCapture(maxBytes: number) {
       const tail = [...entries];
       let tailBytes = entriesBytes;
       if (oversized || pendingBytes > 0) {
-        const finalEntry = oversized
-          ? truncated
-          : Buffer.concat(pending, pendingBytes);
+        const finalEntry = oversized ? truncated : Buffer.concat(pending, pendingBytes);
         tail.push(finalEntry);
         tailBytes += finalEntry.length;
         while (tailBytes > maxBytes) {
           const removed = tail.shift();
-          if (removed === undefined)
-            break;
+          if (removed === undefined) break;
           tailBytes -= removed.length;
         }
       }

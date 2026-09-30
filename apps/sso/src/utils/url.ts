@@ -1,11 +1,9 @@
-import { restoreFirstPartySsoBrowserNavigation } from '@iam/contracts';
+import { restoreFirstPartySsoBrowserNavigation } from "@iam/contracts";
 
-type NavigationHistory = Pick<History, 'state' | 'replaceState'>;
-type NavigationEventTarget = Pick<Window, 'dispatchEvent'>;
+type NavigationHistory = Pick<History, "state" | "replaceState">;
+type NavigationEventTarget = Pick<Window, "dispatchEvent">;
 
-export function toQueryString(
-  params: Record<string, string | number | undefined | null>,
-): string {
+export function toQueryString(params: Record<string, string | number | undefined | null>): string {
   const usp = new URLSearchParams();
   Object.entries(params).forEach(([k, v]) => {
     if (v === undefined || v === null) return;
@@ -27,10 +25,5 @@ export function restoreLoginRedirectState(
   browserHistory: NavigationHistory = window.history,
   eventTarget: NavigationEventTarget = window,
 ) {
-  return restoreFirstPartySsoBrowserNavigation(
-    callbackUrl,
-    browserHistory,
-    eventTarget,
-    PopStateEvent,
-  );
+  return restoreFirstPartySsoBrowserNavigation(callbackUrl, browserHistory, eventTarget, PopStateEvent);
 }

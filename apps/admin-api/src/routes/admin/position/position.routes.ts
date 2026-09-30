@@ -55,7 +55,10 @@ export const positionCreate = createRoute({
   },
   responses: {
     ...commonErrorResponses,
-    [HttpStatusCodes.OK]: jsonContent(createSuccessResponseSchema(createAdminMutationResultSchema(PositionDtoSchema)), "岗位创建成功"),
+    [HttpStatusCodes.OK]: jsonContent(
+      createSuccessResponseSchema(createAdminMutationResultSchema(PositionDtoSchema)),
+      "岗位创建成功",
+    ),
   },
 });
 
@@ -69,7 +72,10 @@ export const positionUpdate = createRoute({
   },
   responses: {
     ...commonErrorResponses,
-    [HttpStatusCodes.OK]: jsonContent(createSuccessResponseSchema(createAdminMutationResultSchema(z.null())), "岗位更新成功"),
+    [HttpStatusCodes.OK]: jsonContent(
+      createSuccessResponseSchema(createAdminMutationResultSchema(z.null())),
+      "岗位更新成功",
+    ),
   },
 });
 
@@ -83,7 +89,10 @@ export const positionStatusUpdate = createRoute({
   },
   responses: {
     ...commonErrorResponses,
-    [HttpStatusCodes.OK]: jsonContent(createSuccessResponseSchema(createAdminMutationResultSchema(z.null())), "状态更新成功"),
+    [HttpStatusCodes.OK]: jsonContent(
+      createSuccessResponseSchema(createAdminMutationResultSchema(z.null())),
+      "状态更新成功",
+    ),
   },
 });
 
@@ -96,6 +105,9 @@ export const positionDelete = createRoute({
   },
   responses: {
     ...commonErrorResponses,
-    [HttpStatusCodes.OK]: jsonContent(createSuccessResponseSchema(createAdminMutationResultSchema(z.null())), "岗位删除成功"),
+    [HttpStatusCodes.OK]: jsonContent(
+      createSuccessResponseSchema(createAdminMutationResultSchema(z.null())),
+      "岗位删除成功",
+    ),
   },
 });

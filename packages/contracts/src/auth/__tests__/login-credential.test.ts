@@ -1,5 +1,5 @@
-import { Buffer } from "node:buffer";
 import { describe, expect, test } from "bun:test";
+import { Buffer } from "node:buffer";
 import {
   createLoginCredential,
   decryptLoginCredential,
@@ -10,7 +10,8 @@ import {
 
 const KEY_PAIR = {
   privateKey: "319b4e59ca80d7b4cc35955b63da4edf1ed51772ec8f33c0a4f769dda7b9fc65",
-  publicKey: "04112ddd8854e8262db2520bba112535844884c03348a45fcf4ee0f9a967979be52bd46caf43be697ae557ed2e4fa5b4dca8d2dbfa08c0f2f710c0f61591bb17dc",
+  publicKey:
+    "04112ddd8854e8262db2520bba112535844884c03348a45fcf4ee0f9a967979be52bd46caf43be697ae557ed2e4fa5b4dca8d2dbfa08c0f2f710c0f61591bb17dc",
 };
 
 const FIXED_INPUT = {
@@ -39,9 +40,11 @@ describe("login credential protocol", () => {
       expect(credential).not.toContain(plaintext);
       expect(envelope).not.toContain(plaintext);
     }
-    expect(decryptLoginCredential(credential, {
-      [input.kid]: KEY_PAIR.privateKey,
-    }).payload).toMatchObject({ username: input.username, password: input.password });
+    expect(
+      decryptLoginCredential(credential, {
+        [input.kid]: KEY_PAIR.privateKey,
+      }).payload,
+    ).toMatchObject({ username: input.username, password: input.password });
   });
 
   test("creates a SM login credential that decrypts to password login payload", () => {
@@ -77,17 +80,21 @@ describe("login credential protocol", () => {
     const credential = createLoginCredential(FIXED_INPUT);
     const [prefix, encodedEnvelope] = credential.split(".");
     const envelope = JSON.parse(Buffer.from(encodedEnvelope, "base64url").toString("utf8")) as { tag: string };
-    envelope.tag = envelope.tag.replace(/.$/u, char => (char === "A" ? "B" : "A"));
+    envelope.tag = envelope.tag.replace(/.$/u, (char) => (char === "A" ? "B" : "A"));
     const tampered = `${prefix}.${Buffer.from(JSON.stringify(envelope), "utf8").toString("base64url")}`;
 
-    expect(() => decryptLoginCredential(tampered, {
-      [FIXED_INPUT.kid]: KEY_PAIR.privateKey,
-    })).toThrow(LoginCredentialError);
+    expect(() =>
+      decryptLoginCredential(tampered, {
+        [FIXED_INPUT.kid]: KEY_PAIR.privateKey,
+      }),
+    ).toThrow(LoginCredentialError);
   });
 
   test("rejects malformed credential text", () => {
-    expect(() => decryptLoginCredential("not-a-credential", {
-      [FIXED_INPUT.kid]: KEY_PAIR.privateKey,
-    })).toThrow(LoginCredentialError);
+    expect(() =>
+      decryptLoginCredential("not-a-credential", {
+        [FIXED_INPUT.kid]: KEY_PAIR.privateKey,
+      }),
+    ).toThrow(LoginCredentialError);
   });
 });

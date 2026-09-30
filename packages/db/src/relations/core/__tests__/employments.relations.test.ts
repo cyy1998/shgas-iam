@@ -1,5 +1,5 @@
-import type { RelationsHelper } from "../../types";
 import { describe, expect, test } from "bun:test";
+import type { RelationsHelper } from "../../types";
 import { employmentsRelations } from "../employments";
 
 function relationStub(kind: "one" | "many", tableName: string) {
@@ -7,12 +7,18 @@ function relationStub(kind: "one" | "many", tableName: string) {
 }
 
 const r = {
-  one: new Proxy({}, {
-    get: (_target, property) => relationStub("one", String(property)),
-  }),
-  many: new Proxy({}, {
-    get: (_target, property) => relationStub("many", String(property)),
-  }),
+  one: new Proxy(
+    {},
+    {
+      get: (_target, property) => relationStub("one", String(property)),
+    },
+  ),
+  many: new Proxy(
+    {},
+    {
+      get: (_target, property) => relationStub("many", String(property)),
+    },
+  ),
   employments: {
     id: "employments.id",
     userId: "employments.userId",

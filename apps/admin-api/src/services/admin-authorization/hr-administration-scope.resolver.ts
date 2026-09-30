@@ -1,11 +1,7 @@
-import type { DbClient } from "@iam/db";
-import type { RoleAssignmentResolver } from "@iam/role-assignment-resolution";
 import { EmploymentStatus, OrganizationLevel } from "@iam/contracts";
-import {
-  employments,
-  organizationClosures,
-  organizations,
-} from "@iam/db/schema";
+import type { DbClient } from "@iam/db";
+import { employments, organizationClosures, organizations } from "@iam/db/schema";
+import type { RoleAssignmentResolver } from "@iam/role-assignment-resolution";
 import { and, eq, inArray } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 
@@ -39,30 +35,32 @@ export function createHrAdministrationScopeResolver(
           isDelete: false,
         },
       });
-      if (!client)
-        return null;
+      if (!client) return null;
 
       const employmentRows = await deps.db
         .select({ id: employments.id, organizationId: employments.orgId })
         .from(employments)
-        .where(and(
-          eq(employments.userId, userId),
-          eq(employments.status, EmploymentStatus.Enable),
-          eq(employments.isDelete, false),
-        ));
-      if (employmentRows.length === 0)
-        return null;
+        .where(
+          and(
+            eq(employments.userId, userId),
+            eq(employments.status, EmploymentStatus.Enable),
+            eq(employments.isDelete, false),
+          ),
+        );
+      if (employmentRows.length === 0) return null;
 
       const rolesByEmployment = await deps.roleAssignmentResolver.resolveEffectiveRoles({
-        employmentIds: employmentRows.map(employment => employment.id),
+        employmentIds: employmentRows.map((employment) => employment.id),
         clientId: client.id,
       });
-      const carrierOrganizationIds = uniqueSorted(employmentRows
-        .filter(employment => rolesByEmployment.get(employment.id)
-          ?.some(role => role.roleCode === HR_ADMIN_ROLE_CODE))
-        .map(employment => employment.organizationId));
-      if (carrierOrganizationIds.length === 0)
-        return null;
+      const carrierOrganizationIds = uniqueSorted(
+        employmentRows
+          .filter((employment) =>
+            rolesByEmployment.get(employment.id)?.some((role) => role.roleCode === HR_ADMIN_ROLE_CODE),
+          )
+          .map((employment) => employment.organizationId),
+      );
+      if (carrierOrganizationIds.length === 0) return null;
 
       const rootRows = await deps.db
         .select({
@@ -71,11 +69,13 @@ export function createHrAdministrationScopeResolver(
         })
         .from(organizationClosures)
         .innerJoin(organizations, eq(organizationClosures.ancestorId, organizations.id))
-        .where(and(
-          inArray(organizationClosures.descendantId, carrierOrganizationIds),
-          eq(organizations.level, OrganizationLevel.One),
-          eq(organizations.isDelete, false),
-        ));
+        .where(
+          and(
+            inArray(organizationClosures.descendantId, carrierOrganizationIds),
+            eq(organizations.level, OrganizationLevel.One),
+            eq(organizations.isDelete, false),
+          ),
+        );
 
       const rootsByCarrier = new Map<number, Set<number>>();
       for (const row of rootRows) {
@@ -83,27 +83,22 @@ export function createHrAdministrationScopeResolver(
         roots.add(row.rootOrganizationId);
         rootsByCarrier.set(row.carrierOrganizationId, roots);
       }
-      if (carrierOrganizationIds.some(id => rootsByCarrier.get(id)?.size !== 1))
-        return null;
+      if (carrierOrganizationIds.some((id) => rootsByCarrier.get(id)?.size !== 1)) return null;
 
-      const rootOrganizationIds = uniqueSorted(carrierOrganizationIds.flatMap(
-        id => [...(rootsByCarrier.get(id) ?? [])],
-      ));
+      const rootOrganizationIds = uniqueSorted(
+        carrierOrganizationIds.flatMap((id) => [...(rootsByCarrier.get(id) ?? [])]),
+      );
       const scopeRows = await deps.db
         .select({ organizationId: scopedOrganization.id })
         .from(organizationClosures)
-        .innerJoin(
-          scopedOrganization,
-          eq(organizationClosures.descendantId, scopedOrganization.id),
-        )
-        .where(and(
-          inArray(organizationClosures.ancestorId, rootOrganizationIds),
-          eq(scopedOrganization.isDelete, false),
-        ));
-      const organizationIds = uniqueSorted(scopeRows.map(row => row.organizationId));
+        .innerJoin(scopedOrganization, eq(organizationClosures.descendantId, scopedOrganization.id))
+        .where(
+          and(inArray(organizationClosures.ancestorId, rootOrganizationIds), eq(scopedOrganization.isDelete, false)),
+        );
+      const organizationIds = uniqueSorted(scopeRows.map((row) => row.organizationId));
       if (
-        rootOrganizationIds.some(id => !organizationIds.includes(id))
-        || carrierOrganizationIds.some(id => !organizationIds.includes(id))
+        rootOrganizationIds.some((id) => !organizationIds.includes(id)) ||
+        carrierOrganizationIds.some((id) => !organizationIds.includes(id))
       ) {
         return null;
       }

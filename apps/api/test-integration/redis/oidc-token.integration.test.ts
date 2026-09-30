@@ -1,4 +1,4 @@
-import type { OidcTokenResponse } from "@iam/oidc/wire";
+import { expect, test } from "bun:test";
 import { Buffer } from "node:buffer";
 import { createPublicKey, randomBytes, randomUUID, verify } from "node:crypto";
 import { connect, createServer } from "node:net";
@@ -6,7 +6,7 @@ import process from "node:process";
 import { ClientSsoCallbackType, ClientSsoProtocol, ClientStatus, OidcClientType } from "@iam/contracts";
 import { createOidcClientAuthRateLimiter, createOidcSigningKeys, OidcExchangeFailure } from "@iam/oidc";
 import { createOidcInventory, createOidcMaintenance, createOidcVerifier } from "@iam/oidc/maintenance";
-import { expect, test } from "bun:test";
+import type { OidcTokenResponse } from "@iam/oidc/wire";
 import Redis from "ioredis";
 import { cleanupAfterFixtureFailure, closeFixtureResources, fixture, signingKeys } from "./oidc.fixture";
 
@@ -32,7 +32,7 @@ async function setup(
   try {
     beforeInitialize?.(f);
     if (confidential) {
-      await f.setClient(value => ({
+      await f.setClient((value) => ({
         ...value,
         ssoConfig:
           value.ssoConfig?.protocol === ClientSsoProtocol.Oidc
@@ -48,8 +48,7 @@ async function setup(
       expect(response.status).toBe(303);
       const code = new URL(response.headers.get("Location")!).searchParams.get("code")!;
       const record = await f.oidcState.readCode(f.clientId, code);
-      if (!record)
-        throw new Error("Expected issued Code");
+      if (!record) throw new Error("Expected issued Code");
       return {
         code,
         record,
@@ -63,11 +62,7 @@ async function setup(
         },
       };
     }
-    async function exchange(
-      code: string,
-      extra: Record<string, string> = {},
-      headers: Record<string, string> = {},
-    ) {
+    async function exchange(code: string, extra: Record<string, string> = {}, headers: Record<string, string> = {}) {
       return await f.request("/oidc/token", {
         method: "POST",
         headers: {
@@ -86,13 +81,12 @@ async function setup(
       });
     }
     async function resolve(bearer: string) {
-      return await f.operations.run(operation =>
+      return await f.operations.run((operation) =>
         f.oidcTokens!.forOperation(operation, f.issuers.external).resolveAccessToken(bearer),
       );
     }
     return { ...f, authorizeCode: authorize, exchange, resolve, basic };
-  }
-  catch (failure) {
+  } catch (failure) {
     return await cleanupAfterFixtureFailure(failure, f.close);
   }
 }
@@ -166,8 +160,7 @@ for (const confidential of [false, true]) {
         token_endpoint_auth_methods_supported: ["none", "client_secret_basic"],
         id_token_signing_alg_values_supported: ["RS256"],
       });
-    }
-    finally {
+    } finally {
       await f.close();
     }
   });
@@ -184,8 +177,7 @@ test("OIDC pure sub including IAM-only scopes needs no Facts and optional nonce 
     expect(f.state.factReads).toBe(0);
     const claims = JSON.parse(Buffer.from(value.id_token.split(".")[1]!, "base64url").toString());
     expect(Object.keys(claims).sort()).toEqual(["aud", "auth_time", "exp", "iat", "iss", "sub"]);
-  }
-  finally {
+  } finally {
     await f.close();
   }
 });
@@ -207,26 +199,20 @@ for (const failure of [
       let code = issued.code;
       const headers: Record<string, string> = {};
       const extra: Record<string, string> = {};
-      if (failure === "wrong-secret")
-        headers.Authorization = f.basic("wrong");
-      if (failure === "unknown-secret")
-        f.state.secretFailure = true;
-      if (failure === "malformed")
-        code = "broken";
+      if (failure === "wrong-secret") headers.Authorization = f.basic("wrong");
+      if (failure === "unknown-secret") f.state.secretFailure = true;
+      if (failure === "malformed") code = "broken";
       if (failure === "missing-root" || failure === "wrong-root")
         code = `${code.split(".")[0]}.${randomUUID()}.${issued.record.clientSessionId}`;
-      if (failure === "missing-session")
-        code = `${code.split(".")[0]}.${issued.record.userSessionId}.${randomUUID()}`;
-      if (failure === "wrong-client")
-        extra.client_id = "another-client";
+      if (failure === "missing-session") code = `${code.split(".")[0]}.${issued.record.userSessionId}.${randomUUID()}`;
+      if (failure === "wrong-client") extra.client_id = "another-client";
       const response = await f.exchange(code, extra, headers);
       expect(response.status).toBeGreaterThanOrEqual(400);
       expect(await f.oidcState.readCode(f.clientId, issued.code)).toEqual(issued.record);
       expect(await f.scope.inspect(issued.target)).toEqual(before);
       expect(await f.oidcState.tokens()).toEqual([]);
       expect(f.reports).toEqual([]);
-    }
-    finally {
+    } finally {
       await f.close();
     }
   });
@@ -260,20 +246,15 @@ for (const failure of failures) {
       const issued = await f.authorizeCode();
       const extra: Record<string, string> = {};
       let code = issued.code;
-      if (failure === "pkce")
-        extra.code_verifier = "x".repeat(43);
-      if (failure === "redirect")
-        extra.redirect_uri = "https://rp.example/wrong";
+      if (failure === "pkce") extra.code_verifier = "x".repeat(43);
+      if (failure === "redirect") extra.redirect_uri = "https://rp.example/wrong";
       if (failure === "missing")
         code = `${randomBytes(32).toString("base64url")}.${issued.record.userSessionId}.${issued.record.clientSessionId}`;
-      if (failure === "expired")
-        await Bun.sleep(1100);
-      if (failure === "maintenance")
-        await f.setClient(value => ({ ...value, status: ClientStatus.Maintenance }));
-      if (failure === "disabled")
-        await f.setClient(value => ({ ...value, ssoEnabled: false }));
+      if (failure === "expired") await Bun.sleep(1100);
+      if (failure === "maintenance") await f.setClient((value) => ({ ...value, status: ClientStatus.Maintenance }));
+      if (failure === "disabled") await f.setClient((value) => ({ ...value, ssoEnabled: false }));
       if (failure === "protocol") {
-        await f.setClient(value => ({
+        await f.setClient((value) => ({
           ...value,
           ssoConfig: {
             protocol: ClientSsoProtocol.CustomSso,
@@ -284,26 +265,19 @@ for (const failure of failures) {
           },
         }));
       }
-      if (failure === "grant")
-        extra.grant_type = "refresh_token";
-      if (failure === "corrupt")
-        await f.oidcState.corruptCode(f.clientId, code);
+      if (failure === "grant") extra.grant_type = "refresh_token";
+      if (failure === "corrupt") await f.oidcState.corruptCode(f.clientId, code);
       if (failure === "payload-owner")
         await f.oidcState.patchCode(f.clientId, code, { userSessionInstance: randomUUID() });
-      if (failure === "payload-expiry")
-        await f.oidcState.patchCode(f.clientId, code, { expiresAt: 1 });
+      if (failure === "payload-expiry") await f.oidcState.patchCode(f.clientId, code, { expiresAt: 1 });
       if (failure === "consume-before" || failure === "consume-after")
         f.oidcState.failNext("takeCode", failure === "consume-after");
-      if (failure === "facts")
-        f.state.factFailure = true;
-      if (failure === "sign")
-        f.state.signFailure = true;
+      if (failure === "facts") f.state.factFailure = true;
+      if (failure === "sign") f.state.signFailure = true;
       if (failure === "save-before" || failure === "save-after")
         f.oidcState.failNext("saveToken", failure === "save-after");
-      if (failure === "permission")
-        f.state.permission = "disabled";
-      if (failure === "permission-unknown")
-        f.state.permission = "unknown";
+      if (failure === "permission") f.state.permission = "disabled";
+      if (failure === "permission-unknown") f.state.permission = "unknown";
       const response = await f.exchange(code, extra);
       expect(response.status).toBeGreaterThanOrEqual(400);
       const pre = ["maintenance", "disabled", "protocol", "grant"].includes(failure);
@@ -312,8 +286,8 @@ for (const failure of failures) {
         : failure.startsWith("consume-")
           ? "unknown"
           : ["missing", "expired"].includes(failure)
-              ? "missing"
-              : "consumed";
+            ? "missing"
+            : "consumed";
       expect(f.reports.at(-1)).toMatchObject({
         event: "oidc_exchange_failed",
         consumption,
@@ -328,14 +302,12 @@ for (const failure of failures) {
       expect(originalCode !== null).toBe(pre || failure === "consume-before" || failure === "missing");
       const tokens = await f.oidcState.tokens();
       expect(tokens).toHaveLength(failure === "save-after" ? 1 : 0);
-      if (failure.startsWith("consume-"))
-        expect(f.state.signatures).toBe(0);
-      const root = await f.operations.run(operation =>
+      if (failure.startsWith("consume-")) expect(f.state.signatures).toBe(0);
+      const root = await f.operations.run((operation) =>
         f.kernel.forOperation(operation).resolveUserSessionById(issued.record.userSessionId),
       );
       expect(root.status).toBe(failure === "permission" ? "terminated" : "resolved");
-    }
-    finally {
+    } finally {
       await f.close();
     }
   });
@@ -352,8 +324,7 @@ test("Public fabricated missing Code without verifier revokes known original rel
     expect(f.state.credentialReads).toBe(0);
     expect((await f.scope.inspect(issued.target)).record?.state).toBe("terminated");
     expect(await f.oidcState.readCode(f.clientId, issued.code)).toEqual(issued.record);
-  }
-  finally {
+  } finally {
     await f.close();
   }
 });
@@ -364,7 +335,7 @@ test("OIDC HTTP Basic/form errors and Public Origin rejection retain standard bo
     const issued = await f.authorizeCode();
     for (const [headers, body] of [
       [{ "Content-Type": "application/json" }, "{}"],
-      [{ "Content-Type": "application/x-www-form-urlencoded", "Authorization": "Basic broken" }, ""],
+      [{ "Content-Type": "application/x-www-form-urlencoded", Authorization: "Basic broken" }, ""],
       [{ "Content-Type": "application/x-www-form-urlencoded" }, "grant_type=authorization_code"],
     ] as const) {
       const response = await f.request("/oidc/token", { method: "POST", headers, body });
@@ -375,7 +346,7 @@ test("OIDC HTTP Basic/form errors and Public Origin rejection retain standard bo
     const preflight = await f.request("/oidc/token", {
       method: "OPTIONS",
       headers: {
-        "Origin": "https://rp.example",
+        Origin: "https://rp.example",
         "Access-Control-Request-Method": "POST",
         "Access-Control-Request-Headers": "content-type",
       },
@@ -392,8 +363,7 @@ test("OIDC HTTP Basic/form errors and Public Origin rejection retain standard bo
     expect(allowed.headers.get("Access-Control-Allow-Origin")).toBe("https://rp.example");
     expect(allowed.headers.get("Access-Control-Allow-Credentials")).toBeNull();
     expect(allowed.headers.get("Cache-Control")).toBe("no-store");
-  }
-  finally {
+  } finally {
     await f.close();
   }
 });
@@ -431,14 +401,12 @@ test("OIDC duplicate consumer revokes original while unique winner can write a l
     let failure: unknown;
     try {
       await f.resolve(value.access_token);
-    }
-    catch (error) {
+    } catch (error) {
       failure = error;
     }
     expect(failure).toBeDefined();
     expect((await f.scope.inspect(newer.target)).record?.state).toBe("active");
-  }
-  finally {
+  } finally {
     await f.close();
   }
 });
@@ -453,8 +421,7 @@ for (const after of [false, true]) {
       expect(f.reports.at(-1)).toMatchObject({ consumption: "consumed", revocation: { status: "unknown" } });
       expect((await f.scope.inspect(issued.target)).record?.state).toBe(after ? "terminated" : "active");
       expect(await f.oidcState.tokens()).toEqual([]);
-    }
-    finally {
+    } finally {
       await f.close();
     }
   });
@@ -467,35 +434,30 @@ test("OIDC delivery failure reports saved residual Token and original exact revo
     let bearer = "";
     let failure: unknown;
     try {
-      await f.operations.run(operation =>
-        f
-          .oidcTokens!
-          .forOperation(operation, f.issuers.external)
-          .exchange(
-            {
-              clientId: f.clientId,
-              authentication: "none",
-              code: issued.code,
-              grantType: "authorization_code",
-              redirectUri: issued.record.redirectUri,
-              codeVerifier: "v".repeat(43),
-            },
-            (value) => {
-              bearer = value.access_token;
-              throw new Error("Delivery response lost");
-            },
-          ),
+      await f.operations.run((operation) =>
+        f.oidcTokens!.forOperation(operation, f.issuers.external).exchange(
+          {
+            clientId: f.clientId,
+            authentication: "none",
+            code: issued.code,
+            grantType: "authorization_code",
+            redirectUri: issued.record.redirectUri,
+            codeVerifier: "v".repeat(43),
+          },
+          (value) => {
+            bearer = value.access_token;
+            throw new Error("Delivery response lost");
+          },
+        ),
       );
-    }
-    catch (error) {
+    } catch (error) {
       failure = error;
     }
     expect(failure).toBeInstanceOf(OidcExchangeFailure);
     expect(failure).toMatchObject({ consumption: "consumed", revocation: { status: "terminated" } });
     expect(await f.oidcState.readToken(bearer)).not.toBeNull();
     expect((await f.scope.inspect(issued.target)).record?.state).toBe("terminated");
-  }
-  finally {
+  } finally {
     await f.close();
   }
 });
@@ -509,41 +471,36 @@ test("OIDC Token ignores mutable protocol marker, uses current config and denies
     await f.operations.run(async (operation) => {
       const sessions = f.kernel.forOperation(operation);
       const root = await sessions.resolveUserSessionById(issued.record.userSessionId);
-      if (root.status !== "resolved")
-        throw new Error("Root missing");
+      if (root.status !== "resolved") throw new Error("Root missing");
       await sessions.openClientSession(root.value, { clientId: f.clientId, protocol: "custom_sso" });
     });
     expect((await f.resolve(value.access_token)).observation.clientSession.protocol).toBe("custom_sso");
-    await f.setClient(client => ({ ...client, ssoEnabled: false }));
+    await f.setClient((client) => ({ ...client, ssoEnabled: false }));
     let paused: unknown;
     try {
       await f.resolve(value.access_token);
-    }
-    catch (error) {
+    } catch (error) {
       paused = error;
     }
     expect(paused).toBeDefined();
-    await f.setClient(client => ({ ...client, ssoEnabled: true }));
+    await f.setClient((client) => ({ ...client, ssoEnabled: true }));
     await f.resolve(value.access_token);
     await f.scope.forgetChildIndex(issued.record.userSessionId);
     await f.operations.run(async (operation) => {
       const sessions = f.kernel.forOperation(operation);
       const root = await sessions.observeUserSessionForRevocation(issued.record.userSessionId);
-      if (root.status !== "resolved")
-        throw new Error("Root missing");
+      if (root.status !== "resolved") throw new Error("Root missing");
       await sessions.revokeObservedUserSession(root.value);
     });
     expect((await f.scope.inspect(issued.target)).record?.state).toBe("active");
     let revoked: unknown;
     try {
       await f.resolve(value.access_token);
-    }
-    catch (error) {
+    } catch (error) {
       revoked = error;
     }
     expect(revoked).toBeDefined();
-  }
-  finally {
+  } finally {
     await f.close();
   }
 });
@@ -565,8 +522,7 @@ test("OIDC Token maintenance finds no-TTL/index state and independently verifies
     expect(report).toMatchObject({ removed: 1, unknown: 1 });
     expect(await verifier.inventory({ clientId: f.clientId })).toMatchObject({ matching: 0, unknown: 1 });
     expect(await f.scope.inspect(issued.target)).toEqual(rootBefore);
-  }
-  finally {
+  } finally {
     independent.disconnect();
     await f.close();
   }
@@ -620,8 +576,7 @@ test("OIDC failed and bounded unknown revocation preserve later instances on exp
     });
     expect((await f.scope.inspect(newer.target)).record?.state).toBe("active");
     expect(await f.oidcState.tokens()).toEqual([]);
-  }
-  finally {
+  } finally {
     await f.close();
   }
 });
@@ -630,7 +585,7 @@ test("OIDC scoped Code lookup never consumes another root/ClientSession Code ID"
   const f = await setup();
   try {
     const first = await f.authorizeCode();
-    const rootBefore = await f.operations.run(operation =>
+    const rootBefore = await f.operations.run((operation) =>
       f.kernel.forOperation(operation).resolveUserSessionById(first.record.userSessionId),
     );
     f.cookies.clear();
@@ -642,14 +597,13 @@ test("OIDC scoped Code lookup never consumes another root/ClientSession Code ID"
     expect(await f.oidcState.readCode(f.clientId, second.code)).toEqual(second.record);
     expect((await f.scope.inspect(second.target)).record?.state).toBe("active");
     expect((await f.scope.inspect(first.target)).record?.state).toBe("terminated");
-    const rootAfter = await f.operations.run(operation =>
+    const rootAfter = await f.operations.run((operation) =>
       f.kernel.forOperation(operation).resolveUserSessionById(first.record.userSessionId),
     );
     if (rootBefore.status !== "resolved" || rootAfter.status !== "resolved")
       throw new Error("Root unexpectedly invalid");
     expect(rootAfter.value.userSession).toEqual(rootBefore.value.userSession);
-  }
-  finally {
+  } finally {
     await f.close();
   }
 });
@@ -677,10 +631,9 @@ test("OIDC complete HTTP warm samples reuse Snapshot Secret Barrier Facts and re
     downstream.on("close", () => upstream.destroy());
     upstream.on("error", () => downstream.destroy());
   });
-  await new Promise<void>(resolve => proxy.listen(0, "127.0.0.1", resolve));
+  await new Promise<void>((resolve) => proxy.listen(0, "127.0.0.1", resolve));
   const address = proxy.address();
-  if (!address || typeof address === "string")
-    throw new Error("Missing proxy port");
+  if (!address || typeof address === "string") throw new Error("Missing proxy port");
   url.hostname = "127.0.0.1";
   url.port = String(address.port);
   let f: Awaited<ReturnType<typeof setup>> | undefined;
@@ -728,22 +681,17 @@ test("OIDC complete HTTP warm samples reuse Snapshot Secret Barrier Facts and re
     expect(f.state.factsSql).toBe(0);
     const report = JSON.stringify({ samples, sourceDuringSamples: { client: 0, credential: 0, factsSql: 0 } });
     process.stdout.write(`OIDC candidate actual HTTP network samples ${report}\n`);
-  }
-  catch (failure) {
+  } catch (failure) {
     bodyFailed = true;
     bodyFailure = failure;
-  }
-  finally {
+  } finally {
     const close = () =>
       closeFixtureResources([
         async () => await f?.close(),
         async () =>
-          await new Promise<void>((resolve, reject) =>
-            proxy.close(error => (error ? reject(error) : resolve())),
-          ),
+          await new Promise<void>((resolve, reject) => proxy.close((error) => (error ? reject(error) : resolve()))),
       ]);
-    if (bodyFailed)
-      await cleanupAfterFixtureFailure(bodyFailure, close);
+    if (bodyFailed) await cleanupAfterFixtureFailure(bodyFailure, close);
     else await close();
   }
 });
@@ -771,8 +719,7 @@ test("OIDC same-root Client isolation preserves the other client Code and Token"
     expect(access.token.clientId).toBe(otherClient);
     expect(access.observation.userSession.userSessionId).toBe(first.record.userSessionId);
     expect((await f.scope.inspect(first.target)).record?.state).toBe("terminated");
-  }
-  finally {
+  } finally {
     await f.close();
   }
 });
@@ -784,25 +731,20 @@ for (const fault of ["expired", "corrupt", "missing-index"] as const) {
       const issued = await f.authorizeCode();
       const value: OidcTokenResponse = await (await f.exchange(issued.code)).json();
       const before = await f.scope.inspect(issued.target);
-      if (fault === "expired")
-        await Bun.sleep(1100);
-      if (fault === "corrupt")
-        await f.oidcState.corruptToken(value.access_token);
-      if (fault === "missing-index")
-        await f.oidcState.forgetTokenIndex(value.access_token);
+      if (fault === "expired") await Bun.sleep(1100);
+      if (fault === "corrupt") await f.oidcState.corruptToken(value.access_token);
+      if (fault === "missing-index") await f.oidcState.forgetTokenIndex(value.access_token);
       let failure: unknown;
       let resolved: unknown;
       try {
         resolved = await f.resolve(value.access_token);
-      }
-      catch (error) {
+      } catch (error) {
         failure = error;
       }
       expect(Boolean(resolved)).toBe(fault === "missing-index");
       expect(Boolean(failure)).toBe(fault !== "missing-index");
       expect(await f.scope.inspect(issued.target)).toEqual(before);
-    }
-    finally {
+    } finally {
       await f.close();
     }
   });
@@ -837,8 +779,7 @@ test("OIDC Token maintenance partial failure is explicit and exact rerun preserv
     const verifier = createOidcInventory(independent, f.oidcState.namespace);
     expect(await verifier.inventory({ clientId: f.clientId })).toMatchObject({ matching: 0, unknown: 0 });
     expect(await f.oidcState.readCode(otherClient, otherCode)).toEqual(nonTarget);
-  }
-  finally {
+  } finally {
     independent.disconnect();
     await f.close();
   }
@@ -848,18 +789,14 @@ test("OIDC required token parameters retain standard errors and Secret takes pre
   const f = await setup(true);
   try {
     const issued = await f.authorizeCode();
-    await f.setClient(value => ({ ...value, status: ClientStatus.Maintenance }));
-    const rejected = await f.exchange(
-      issued.code,
-      { code_verifier: "" },
-      { Authorization: f.basic("wrong") },
-    );
+    await f.setClient((value) => ({ ...value, status: ClientStatus.Maintenance }));
+    const rejected = await f.exchange(issued.code, { code_verifier: "" }, { Authorization: f.basic("wrong") });
     expect(rejected.status).toBe(401);
     expect(await rejected.json()).toMatchObject({ error: "invalid_client" });
     expect(f.reports).toEqual([]);
     expect(await f.oidcState.readCode(f.clientId, issued.code)).toEqual(issued.record);
     expect((await f.scope.inspect(issued.target)).record?.state).toBe("active");
-    await f.setClient(value => ({ ...value, status: ClientStatus.Enable }));
+    await f.setClient((value) => ({ ...value, status: ClientStatus.Enable }));
     for (const parameter of ["code", "grant_type", "redirect_uri", "code_verifier"]) {
       const next = await f.authorizeCode();
       const response = await f.exchange(next.code, { [parameter]: "" });
@@ -868,8 +805,7 @@ test("OIDC required token parameters retain standard errors and Secret takes pre
       const remains = await f.oidcState.readCode(f.clientId, next.code);
       expect(remains !== null).toBe(parameter === "code" || parameter === "grant_type");
     }
-  }
-  finally {
+  } finally {
     await f.close();
   }
 });
@@ -889,10 +825,9 @@ for (const fault of ["login", "configuration-and-cleanup"] as const) {
       downstream.on("error", () => upstream.destroy());
       upstream.on("error", () => downstream.destroy());
     });
-    await new Promise<void>(resolve => proxy.listen(0, "127.0.0.1", resolve));
+    await new Promise<void>((resolve) => proxy.listen(0, "127.0.0.1", resolve));
     const address = proxy.address();
-    if (!address || typeof address === "string")
-      throw new Error("Missing proxy port");
+    if (!address || typeof address === "string") throw new Error("Missing proxy port");
     url.port = String(address.port);
     let initialized: Awaited<ReturnType<typeof fixture>> | undefined;
     let redisEnded: Promise<void> | undefined;
@@ -900,20 +835,15 @@ for (const fault of ["login", "configuration-and-cleanup"] as const) {
     try {
       await setup(fault === "configuration-and-cleanup", 30, url.toString(), 45, (f) => {
         initialized = f;
-        redisEnded = new Promise<void>(resolve => f.oidcState.redis.once("end", resolve));
-        if (fault === "login")
-          f.state.loginFailure = true;
+        redisEnded = new Promise<void>((resolve) => f.oidcState.redis.once("end", resolve));
+        if (fault === "login") f.state.loginFailure = true;
         else f.oidcState.redis.disconnect();
       });
-    }
-    catch (error) {
+    } catch (error) {
       failure = error;
-    }
-    finally {
+    } finally {
       // close waits for the actual accepted Redis sockets; leaked setup resources would prevent completion.
-      await new Promise<void>((resolve, reject) =>
-        proxy.close(error => (error ? reject(error) : resolve())),
-      );
+      await new Promise<void>((resolve, reject) => proxy.close((error) => (error ? reject(error) : resolve())));
     }
     expect(acceptedConnections).toBeGreaterThanOrEqual(2);
     expect(failure).toBeDefined();
@@ -924,21 +854,18 @@ for (const fault of ["login", "configuration-and-cleanup"] as const) {
     let httpFailure: unknown;
     try {
       await fetch(`${initialized!.httpOrigin}/oidc/jwks`);
-    }
-    catch (error) {
+    } catch (error) {
       httpFailure = error;
     }
     expect(httpFailure).toBeDefined();
     if (fault === "configuration-and-cleanup") {
       expect(failure).toBeInstanceOf(AggregateError);
-      if (!(failure instanceof AggregateError))
-        throw new Error("Expected combined initialization and cleanup failure");
+      if (!(failure instanceof AggregateError)) throw new Error("Expected combined initialization and cleanup failure");
       expect(failure.errors).toHaveLength(2);
       expect(failure.cause).toBe(failure.errors[0]);
       expect(failure.errors[0].message).toBe("Client Snapshot invalidation failed");
       expect(failure.errors[1]).toBeInstanceOf(AggregateError);
-    }
-    else {
+    } else {
       expect(failure).not.toBeInstanceOf(AggregateError);
     }
   });
@@ -979,8 +906,7 @@ test("Confidential HTTP blocks Client plus IP after five failures without consum
     await Bun.sleep(2100);
     const recovered = await f.exchange(issued.code, {}, ip);
     expect(recovered.status).toBe(200);
-  }
-  finally {
+  } finally {
     await f.close();
   }
 });
@@ -998,8 +924,7 @@ test("Confidential successful HTTP exchange clears the accumulated failures", as
       const accepted = await f.exchange(issued.code, {}, ip);
       expect(accepted.status).toBe(200);
     }
-  }
-  finally {
+  } finally {
     await f.close();
   }
 });
@@ -1012,7 +937,7 @@ test("OIDC HTTP associates safe protocol and revocation reports with request and
     const response = await f.exchange(
       issued.code,
       { code_verifier: "wrong" },
-      { "X-Request-Id": "oidc-exchange-failure", "traceparent": `00-${traceId}-1234567890abcdef-01` },
+      { "X-Request-Id": "oidc-exchange-failure", traceparent: `00-${traceId}-1234567890abcdef-01` },
     );
     expect(response.status).toBe(400);
     expect(response.headers.get("X-Request-Id")).toBe("oidc-exchange-failure");
@@ -1034,8 +959,7 @@ test("OIDC HTTP associates safe protocol and revocation reports with request and
     ]);
     expect(JSON.stringify([...f.reports, ...f.protocolReports])).not.toContain(issued.code);
     expect(JSON.stringify([...f.reports, ...f.protocolReports])).not.toContain("current secret");
-  }
-  finally {
+  } finally {
     await f.close();
   }
 });
@@ -1065,8 +989,7 @@ test("live Client authentication failures are outside the OIDC artifact inventor
     expect(verified).toEqual({ matching: 0 });
     const stillBlocked = await limiter.isBlocked(f.clientId, "192.0.2.30");
     expect(stillBlocked).toBe(true);
-  }
-  finally {
+  } finally {
     await limiter.clear(f.clientId, "192.0.2.30");
     await f.close();
   }
@@ -1082,7 +1005,7 @@ for (const trustProxy of [true, false]) {
           issued.code,
           {},
           {
-            "Authorization": f.basic("wrong"),
+            Authorization: f.basic("wrong"),
             "X-Real-IP": `192.0.2.${attempt + 1}`,
             "CF-Connecting-IP": `198.51.100.${attempt + 1}`,
             ...(trustProxy ? {} : { "X-Forwarded-For": `203.0.113.${attempt + 1}` }),
@@ -1102,8 +1025,7 @@ for (const trustProxy of [true, false]) {
       expect(denied.status).toBe(401);
       const remaining = await f.oidcState.readCode(f.clientId, issued.code);
       expect(remaining).toEqual(issued.record);
-    }
-    finally {
+    } finally {
       await f.close();
     }
   });
@@ -1130,7 +1052,7 @@ test("Confidential HTTP clear failure revokes the original ClientSession after C
     const failed = await f.exchange(
       pending.code,
       {},
-      { "X-Request-Id": "clear-failed-request", "traceparent": `00-${traceId}-1234567890abcdef-01` },
+      { "X-Request-Id": "clear-failed-request", traceparent: `00-${traceId}-1234567890abcdef-01` },
     );
     expect(failed.status).toBe(503);
     expect(failed.headers.get("X-Request-Id")).toBe("clear-failed-request");
@@ -1138,8 +1060,7 @@ test("Confidential HTTP clear failure revokes the original ClientSession after C
     expect(failureBody.error).toBe("temporarily_unavailable");
     expect(failureBody).not.toHaveProperty("access_token");
     const prepared = f.preparedAccessTokens.at(-1);
-    if (!prepared)
-      throw new Error("Expected prepared Access Token");
+    if (!prepared) throw new Error("Expected prepared Access Token");
     expect(prepared).not.toBe(firstToken.access_token);
     expect(prepared).not.toBe(otherToken.access_token);
     const stored = await f.oidcState.readToken(prepared);
@@ -1163,9 +1084,7 @@ test("Confidential HTTP clear failure revokes the original ClientSession after C
       headers: { Authorization: `Bearer ${otherToken.access_token}` },
     });
     expect(unrelated.status).toBe(200);
-    const root = await f.operations.run(operation =>
-      f.kernel.forOperation(operation).resolveUserSession(otherRoot),
-    );
+    const root = await f.operations.run((operation) => f.kernel.forOperation(operation).resolveUserSession(otherRoot));
     expect(root.status).toBe("resolved");
     expect(f.reports).toContainEqual(
       expect.objectContaining({
@@ -1186,8 +1105,7 @@ test("Confidential HTTP clear failure revokes the original ClientSession after C
       }),
     );
     expect(JSON.stringify(f.reports)).not.toContain(prepared);
-  }
-  finally {
+  } finally {
     await f.close();
   }
 });

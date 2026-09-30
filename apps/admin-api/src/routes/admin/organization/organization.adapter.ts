@@ -1,5 +1,3 @@
-import type { OrganizationService } from "@admin-api/services/organization/organization.service";
-import type { OrganizationRouteHandler } from "./organization.type";
 import { defineAdminApiMutationOperation, defineAdminApiQueryOperation } from "@admin-api/lib/admin-api-adapter";
 import { getAdminAuthorizationContext } from "@admin-api/services/admin-authorization/admin-authorization.context";
 import { resolveAdminAuditContext } from "@admin-api/services/audit/audit.context";
@@ -10,9 +8,11 @@ import {
   OrganizationSelectorQueryDtoSchema,
   OrganizationUpdateDtoSchema,
 } from "@admin-api/services/organization/organization.schema";
+import type { OrganizationService } from "@admin-api/services/organization/organization.service";
 import { router } from "@iam/api-core/trpc";
 import { OrganizationStatus } from "@iam/contracts";
 import { z } from "zod";
+import type { OrganizationRouteHandler } from "./organization.type";
 
 export interface CreateOrganizationAdapterDeps {
   organizationService: Pick<
@@ -29,9 +29,7 @@ export interface CreateOrganizationAdapterDeps {
 }
 
 export function createOrganizationAdapter(deps: CreateOrganizationAdapterDeps) {
-  async function resolveOrganizationAuthorization(
-    hono: Parameters<typeof getAdminAuthorizationContext>[0],
-  ) {
+  async function resolveOrganizationAuthorization(hono: Parameters<typeof getAdminAuthorizationContext>[0]) {
     const { actor, policy } = getAdminAuthorizationContext(hono);
     return await policy.getOrganizationAuthorization(actor);
   }
@@ -39,7 +37,7 @@ export function createOrganizationAdapter(deps: CreateOrganizationAdapterDeps) {
   const searchOrganization = defineAdminApiQueryOperation({
     operationId: "admin.organization.search",
     input: OrganizationPaginationQueryDtoSchema,
-    restInput: c => c.req.valid("json") as z.infer<typeof OrganizationPaginationQueryDtoSchema>,
+    restInput: (c) => c.req.valid("json") as z.infer<typeof OrganizationPaginationQueryDtoSchema>,
     handler: async (input, context) => {
       return await deps.organizationService.searchOrganizationsForAdmin(
         input,
@@ -51,7 +49,7 @@ export function createOrganizationAdapter(deps: CreateOrganizationAdapterDeps) {
   const getOrganizationChildren = defineAdminApiQueryOperation({
     operationId: "admin.organization.children",
     input: OrganizationChildrenQueryDtoSchema,
-    restInput: c => c.req.valid("query") as z.infer<typeof OrganizationChildrenQueryDtoSchema>,
+    restInput: (c) => c.req.valid("query") as z.infer<typeof OrganizationChildrenQueryDtoSchema>,
     handler: async ({ parentOrgCode, pageNum, pageSize }, context) => {
       return await deps.organizationService.getOrganizationChildrenForAdmin(
         parentOrgCode ?? null,
@@ -65,7 +63,7 @@ export function createOrganizationAdapter(deps: CreateOrganizationAdapterDeps) {
   const getOrganizationSelector = defineAdminApiQueryOperation({
     operationId: "admin.organization.selector",
     input: OrganizationSelectorQueryDtoSchema,
-    restInput: c => c.req.valid("json") as z.infer<typeof OrganizationSelectorQueryDtoSchema>,
+    restInput: (c) => c.req.valid("json") as z.infer<typeof OrganizationSelectorQueryDtoSchema>,
     handler: async (input, context) => {
       return await deps.organizationService.getOrganizationSelectorNodesForAdmin(
         input,
@@ -77,11 +75,13 @@ export function createOrganizationAdapter(deps: CreateOrganizationAdapterDeps) {
   const getOrganization = defineAdminApiQueryOperation({
     operationId: "admin.organization.detail",
     input: z.object({ orgCode: z.string() }),
-    restInput: c => c.req.valid("param") as { orgCode: string },
+    restInput: (c) => c.req.valid("param") as { orgCode: string },
     handler: async ({ orgCode }, context) => {
       const authorization = await resolveOrganizationAuthorization(context.hono);
-      const { authorizationFacts, ...detail } = await deps.organizationService
-        .getOrganizationDetailByCodeForAdmin(orgCode, authorization);
+      const { authorizationFacts, ...detail } = await deps.organizationService.getOrganizationDetailByCodeForAdmin(
+        orgCode,
+        authorization,
+      );
       return {
         ...detail,
         allowedActions: authorization.getAllowedActions(authorizationFacts),
@@ -92,7 +92,7 @@ export function createOrganizationAdapter(deps: CreateOrganizationAdapterDeps) {
   const createOrganization = defineAdminApiMutationOperation({
     operationId: "admin.organization.create",
     input: OrganizationCreateDtoSchema,
-    restInput: c => c.req.valid("json") as z.infer<typeof OrganizationCreateDtoSchema>,
+    restInput: (c) => c.req.valid("json") as z.infer<typeof OrganizationCreateDtoSchema>,
     handler: async (input, context) => {
       return await deps.organizationService.setOrganization(
         input,
@@ -108,7 +108,7 @@ export function createOrganizationAdapter(deps: CreateOrganizationAdapterDeps) {
       orgCode: z.string(),
       data: OrganizationUpdateDtoSchema,
     }),
-    restInput: c => ({
+    restInput: (c) => ({
       orgCode: (c.req.valid("param") as { orgCode: string }).orgCode,
       data: c.req.valid("json") as z.infer<typeof OrganizationUpdateDtoSchema>,
     }),
@@ -128,7 +128,7 @@ export function createOrganizationAdapter(deps: CreateOrganizationAdapterDeps) {
       orgCode: z.string(),
       status: z.enum(OrganizationStatus),
     }),
-    restInput: c => ({
+    restInput: (c) => ({
       orgCode: (c.req.valid("param") as { orgCode: string }).orgCode,
       status: (c.req.valid("json") as { status: OrganizationStatus }).status,
     }),
@@ -145,7 +145,7 @@ export function createOrganizationAdapter(deps: CreateOrganizationAdapterDeps) {
   const deleteOrganization = defineAdminApiMutationOperation({
     operationId: "admin.organization.delete",
     input: z.object({ orgCode: z.string() }),
-    restInput: c => c.req.valid("param") as { orgCode: string },
+    restInput: (c) => c.req.valid("param") as { orgCode: string },
     handler: async ({ orgCode }, context) => {
       return await deps.organizationService.deleteOrganization(
         orgCode,
@@ -174,7 +174,8 @@ export function createOrganizationAdapter(deps: CreateOrganizationAdapterDeps) {
     organizationsChildren: getOrganizationChildren.toHandler<OrganizationRouteHandler<"organizationsChildren">>(),
     organizationsSearch: searchOrganization.toHandler<OrganizationRouteHandler<"organizationsSearch">>(),
     organizationsSelector: getOrganizationSelector.toHandler<OrganizationRouteHandler<"organizationsSelector">>(),
-    organizationStatusUpdate: updateOrganizationStatus.toHandler<OrganizationRouteHandler<"organizationStatusUpdate">>(),
+    organizationStatusUpdate:
+      updateOrganizationStatus.toHandler<OrganizationRouteHandler<"organizationStatusUpdate">>(),
     organizationUpdate: updateOrganization.toHandler<OrganizationRouteHandler<"organizationUpdate">>(),
   };
 }

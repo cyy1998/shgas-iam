@@ -14,9 +14,9 @@ Issuer 是以 `/oidc` 结尾的完整 URL，例如 `https://iam.example.com/oidc
 JSON UserInfo 和 RP-Initiated Logout。不提供 refresh token、consent、pairwise subject、动态注册或在线签名密钥管理。
 Client 使用现有 IAM Client 记录，`client_id` 为不可变 clientCode。
 
-| Client 类型 | Token 认证 |
-|---|---|
-| Public | `token_endpoint_auth_method=none`，强制 S256。 |
+| Client 类型  | Token 认证                                                                     |
+| ------------ | ------------------------------------------------------------------------------ |
+| Public       | `token_endpoint_auth_method=none`，强制 S256。                                 |
 | Confidential | `client_secret_basic` 与 S256；SSO Secret 通过授权读取能力交付，保存在服务端。 |
 
 授权 GET/form POST 要求 `response_type=code`、含 openid 的允许 scope、非空 state、code_challenge 和
@@ -54,15 +54,15 @@ Portal 对发现的完整端点先验证属于当前入口，再构造相对导�
 两个 issuer 共享 Client、当前凭据、scope/redirect、Subject Identifier、current/previous signing keys 与中性会话关系。
 RP 必须验证预期 issuer，共享公钥和 sub 不使两个 `(iss, sub)` 自动等价；发现缓存按完整 issuer 区分。
 
-| 对象 | 绑定与比较顺序 |
-|---|---|
+| 对象                | 绑定与比较顺序                                                                                                    |
+| ------------------- | ----------------------------------------------------------------------------------------------------------------- |
 | Discovery、授权响应 | 按本次 issuer 返回完整端点；授权成功及安全回调错误带 iss，并声明 authorization_response_iss_parameter_supported。 |
-| 认证续接 | 保存原 issuer；guard/resume 在读取根、允许完成、消费或清 Cookie 前比较。 |
-| Code | 服务端记录保存原 issuer；沿认证、实例定位和一次取删顺序，在取出后比较。错 issuer 不签 Token，进入原实例失败撤销。 |
-| ID Token | iss 来自已匹配的原授权事实，不改签为另一入口。 |
-| Access Token | 保存 issuer；UserInfo 在读取根、ClientSession 和主体之前拒绝错入口。 |
-| hint、退出确认/取消 | 按本次 issuer 验证；状态消费、根作用和 Cookie 修改前拒绝不匹配。 |
-| JWKS | 两个 issuer 发布共享 current/previous 公钥。 |
+| 认证续接            | 保存原 issuer；guard/resume 在读取根、允许完成、消费或清 Cookie 前比较。                                          |
+| Code                | 服务端记录保存原 issuer；沿认证、实例定位和一次取删顺序，在取出后比较。错 issuer 不签 Token，进入原实例失败撤销。 |
+| ID Token            | iss 来自已匹配的原授权事实，不改签为另一入口。                                                                    |
+| Access Token        | 保存 issuer；UserInfo 在读取根、ClientSession 和主体之前拒绝错入口。                                              |
+| hint、退出确认/取消 | 按本次 issuer 验证；状态消费、根作用和 Cookie 修改前拒绝不匹配。                                                  |
+| JWKS                | 两个 issuer 发布共享 current/previous 公钥。                                                                      |
 
 Continuation、UserInfo 和退出错误不套用 Code 兑换撤销。两个 issuer 的 Token 可引用同一 ClientSession，
 因此错误入口兑换所触发的原实例终止，也会使正确入口的相关在线 Token 失效；这不是 issuer 独立会话。
@@ -98,12 +98,12 @@ Code 为 `Code ID.UserSession ID.ClientSession ID`，摘要定位绑定 Client�
    原 scope/redirect 不按后续允许列表重审。
 5. 先准备并签名 ID Token，再保存 Access Token，最后交付。
 
-| 失败位置 | 消费与撤销 |
-|---|---|
-| Client 认证未通过、格式不明或无法定位原实例 | 不消费，不猜测撤销目标。 |
-| 已认证并定位，Gate/Maintenance、协议、参数或 Origin 拒绝 | consumption=not_attempted，仍有界尝试终止原 ClientSession。 |
-| GETDEL 缺失、竞争失败、消费未知，或取得后期限/issuer/PKCE/许可等失败 | 不恢复 Code，仍按原身份尝试终止；不签发替代结果。 |
-| 签名、Token 保存或交付失败 | 不重放签名、不恢复 Code、不增加 OIDC Token 补偿；原实例撤销仍尝试。 |
+| 失败位置                                                             | 消费与撤销                                                          |
+| -------------------------------------------------------------------- | ------------------------------------------------------------------- |
+| Client 认证未通过、格式不明或无法定位原实例                          | 不消费，不猜测撤销目标。                                            |
+| 已认证并定位，Gate/Maintenance、协议、参数或 Origin 拒绝             | consumption=not_attempted，仍有界尝试终止原 ClientSession。         |
+| GETDEL 缺失、竞争失败、消费未知，或取得后期限/issuer/PKCE/许可等失败 | 不恢复 Code，仍按原身份尝试终止；不签发替代结果。                   |
+| 签名、Token 保存或交付失败                                           | 不重放签名、不恢复 Code、不增加 OIDC Token 补偿；原实例撤销仍尝试。 |
 
 Public 不要求消费前 PKCE 成功；知道同 Client 的合法根/实例定位者可构造缺码触发该实例撤销。
 正确与错误入口并发兑换时，失败方也可能终止共享实例，使正确方晚到 Token 无法在线使用。
@@ -121,12 +121,12 @@ Token 摘要记录是唯一权威，独立 UUID 反向键仅用于管理且不�
 在线解析验证 oidc_access 用途、issuer、期限、当前 Client、原根/实例和本操作账号许可，
 不比较可变 ClientSession.protocol。已观察的在途请求不在交付前复查，原根终止后新使用不依赖子索引。
 
-| Scope | 披露 |
-|---|---|
-| openid | 稳定 Subject Identifier 作为 opaque sub。 |
-| profile | name、preferred_username，不隐含任职。 |
-| phone | 存在时返回 phone_number。 |
-| iam:employments | 仅 UserInfo 的有效任职与 responsibility；不进入 ID Token。 |
+| Scope             | 披露                                                                                                  |
+| ----------------- | ----------------------------------------------------------------------------------------------------- |
+| openid            | 稳定 Subject Identifier 作为 opaque sub。                                                             |
+| profile           | name、preferred_username，不隐含任职。                                                                |
+| phone             | 存在时返回 phone_number。                                                                             |
+| iam:employments   | 仅 UserInfo 的有效任职与 responsibility；不进入 ID Token。                                            |
 | iam:authorization | 仅 UserInfo 中当前 Client 的已发布角色/权限，不含其他 Client 授权或 responsibility；不进入 ID Token。 |
 
 IAM 任职 wire 保持 isPrimary、orgCode/orgName/orgType/fullOrgPath、posCode/posName，角色/权限去重并稳定排序。

@@ -11,17 +11,17 @@ program
 
 addCommonOptions(program.command("validate"))
   .description("Validate APISIX manifests")
-  .action(async options => runValidate(options));
+  .action(async (options) => runValidate(options));
 
 addRemoteOptions(addCommonOptions(program.command("diff")))
   .description("Diff APISIX manifests against the Admin API")
-  .action(async options => runDiff(options));
+  .action(async (options) => runDiff(options));
 
 addRemoteOptions(addCommonOptions(program.command("apply")))
   .description("Apply APISIX manifests through the Admin API")
   .option("--dry-run", "Plan apply without writes")
   .option("--prune", "Delete repo-managed remote objects removed from manifest")
-  .action(async options => runApply(options));
+  .action(async (options) => runApply(options));
 
 function addCommonOptions(command: Command): Command {
   return command

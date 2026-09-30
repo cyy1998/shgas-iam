@@ -1,5 +1,10 @@
 import type { z } from "@hono/zod-openapi";
-import type { ClientAdminDetailDtoSchema, ClientAdminListDtoSchema, GenericClientRecordSchema, GenericClientRuntimeDtoSchema } from "./schema";
+import type {
+  ClientAdminDetailDtoSchema,
+  ClientAdminListDtoSchema,
+  GenericClientRecordSchema,
+  GenericClientRuntimeDtoSchema,
+} from "./schema";
 
 export type GenericClientRecord = z.infer<typeof GenericClientRecordSchema>;
 export type GenericClientRuntimeDto = z.infer<typeof GenericClientRuntimeDtoSchema>;

@@ -1,9 +1,9 @@
+import { describe, expect, mock, test } from "bun:test";
 import { VerificationCodeUsage } from "@api/enums/verificationCode.usage";
 import { createMobileService } from "@api/services/mobile/mobile.service";
 import { createMemoryRedis } from "@api/testing/fakes";
 import { INTERNAL_SERVER_ERROR } from "@iam/api-core/core/http-status-codes";
 import { ApiErrorCode, UserStatus, UserType } from "@iam/contracts";
-import { describe, expect, mock, test } from "bun:test";
 
 function createService() {
   const redis = createMemoryRedis();
@@ -12,12 +12,12 @@ function createService() {
   const cooldown = {
     acquire: mock(async (phone: string) => {
       const remaining = Math.max(0, Math.ceil(((deadlines.get(phone.trim()) ?? 0) - now) / 1000));
-      if (remaining === 0)
-        deadlines.set(phone.trim(), now + 60_000);
+      if (remaining === 0) deadlines.set(phone.trim(), now + 60_000);
       return remaining;
     }),
     remainingSeconds: mock(async (phone: string) =>
-      Math.max(0, Math.ceil(((deadlines.get(phone.trim()) ?? 0) - now) / 1000))),
+      Math.max(0, Math.ceil(((deadlines.get(phone.trim()) ?? 0) - now) / 1000)),
+    ),
   };
   const smsSender = {
     sendMessage: mock(async () => true),
@@ -67,9 +67,15 @@ describe("createMobileService", () => {
       throw new DOMException("Timed out", "TimeoutError");
     });
     const result = await Promise.allSettled([service.sendCode("13800000000", VerificationCodeUsage.Login)]);
-    expect(result[0]).toMatchObject({ status: "rejected", reason: { code: ApiErrorCode.SmsSendFailed, retryAfterSeconds: 50 } });
+    expect(result[0]).toMatchObject({
+      status: "rejected",
+      reason: { code: ApiErrorCode.SmsSendFailed, retryAfterSeconds: 50 },
+    });
     const rejected = await Promise.allSettled([service.sendCode("13800000000", VerificationCodeUsage.BindPhone)]);
-    expect(rejected[0]).toMatchObject({ status: "rejected", reason: { code: ApiErrorCode.SmsCooldown, retryAfterSeconds: 50 } });
+    expect(rejected[0]).toMatchObject({
+      status: "rejected",
+      reason: { code: ApiErrorCode.SmsCooldown, retryAfterSeconds: 50 },
+    });
     const codeExists = await service.checkVerificationCode("login", "13800000000", "1234");
     expect(codeExists).toBe(false);
     expect(smsSender.sendVerificationCode).toHaveBeenCalledTimes(1);
@@ -79,7 +85,10 @@ describe("createMobileService", () => {
     const { service, smsSender, cooldown } = createService();
     cooldown.acquire.mockRejectedValueOnce(new Error("redis down"));
     const result = await Promise.allSettled([service.sendCode("13800000000", VerificationCodeUsage.Login)]);
-    expect(result[0]).toMatchObject({ status: "rejected", reason: { code: ApiErrorCode.SmsUnavailable, httpStatus: 503 } });
+    expect(result[0]).toMatchObject({
+      status: "rejected",
+      reason: { code: ApiErrorCode.SmsUnavailable, httpStatus: 503 },
+    });
     expect(smsSender.sendVerificationCode).not.toHaveBeenCalled();
   });
 
@@ -89,8 +98,7 @@ describe("createMobileService", () => {
     cooldown.remainingSeconds.mockRejectedValueOnce(new Error("redis down"));
     const result = await Promise.allSettled([service.sendCode("13800000000", VerificationCodeUsage.Login)]);
     expect(result[0]).toMatchObject({ status: "rejected", reason: { code: ApiErrorCode.SmsUnavailable } });
-    if (result[0]?.status === "rejected")
-      expect(result[0].reason.retryAfterSeconds).toBeUndefined();
+    if (result[0]?.status === "rejected") expect(result[0].reason.retryAfterSeconds).toBeUndefined();
   });
 
   test("invalid phone validation does not take a sending slot", async () => {
@@ -115,8 +123,7 @@ describe("createMobileService", () => {
     let failure: unknown;
     try {
       await service.sendCode("13800000000", VerificationCodeUsage.BindPhone);
-    }
-    catch (error) {
+    } catch (error) {
       failure = error;
     }
     expect(failure).toMatchObject({ httpStatus: 429, retryAfterSeconds: 60 });
@@ -128,11 +135,14 @@ describe("createMobileService", () => {
     smsSender.sendVerificationCode.mockResolvedValueOnce({ success: false, code: "" });
 
     const result = await Promise.allSettled([service.sendCode("13800000000", VerificationCodeUsage.Login)]);
-    expect(result[0]).toMatchObject({ status: "rejected", reason: {
-      code: ApiErrorCode.SmsSendFailed,
-      httpStatus: INTERNAL_SERVER_ERROR,
-      retryAfterSeconds: 60,
-    } });
+    expect(result[0]).toMatchObject({
+      status: "rejected",
+      reason: {
+        code: ApiErrorCode.SmsSendFailed,
+        httpStatus: INTERNAL_SERVER_ERROR,
+        retryAfterSeconds: 60,
+      },
+    });
   });
 
   test("consumes matching verification code once", async () => {

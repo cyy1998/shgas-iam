@@ -3,7 +3,5 @@ export interface InternalUserProfileQueryRecord {
 }
 
 export interface InternalUserProfileQueryRepositoryPort {
-  readonly getCurrentByUsername: (
-    username: string,
-  ) => Promise<InternalUserProfileQueryRecord | null>;
+  readonly getCurrentByUsername: (username: string) => Promise<InternalUserProfileQueryRecord | null>;
 }

@@ -1,16 +1,12 @@
-import { Buffer } from "node:buffer";
 import { describe, expect, test } from "bun:test";
-import {
-  createPkceS256Pair,
-  deriveS256CodeChallenge,
-  receiveOidcAuthorizationCallback,
-} from "./oidc-rp.ts";
+import { Buffer } from "node:buffer";
+import { createPkceS256Pair, deriveS256CodeChallenge, receiveOidcAuthorizationCallback } from "./oidc-rp.ts";
 
 describe("test-owned OIDC RP helper", () => {
   test("derives the RFC 7636 S256 challenge", () => {
-    expect(deriveS256CodeChallenge(
-      "dBjftJeZ4CVP-mB92K27uhbUJU1p1r_wW1gFWFOEjXk",
-    )).toBe("E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM");
+    expect(deriveS256CodeChallenge("dBjftJeZ4CVP-mB92K27uhbUJU1p1r_wW1gFWFOEjXk")).toBe(
+      "E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM",
+    );
   });
 
   test("generates an unpadded base64url verifier and its S256 challenge", () => {
@@ -30,19 +26,17 @@ describe("test-owned OIDC RP helper", () => {
     );
 
     expect(callback).toEqual({ code: "issued-code" });
-    expect(() => receiveOidcAuthorizationCallback(
-      "http://127.0.0.1:43123/e2e/oidc/other?code=issued-code&state=expected-state",
-      {
+    expect(() =>
+      receiveOidcAuthorizationCallback("http://127.0.0.1:43123/e2e/oidc/other?code=issued-code&state=expected-state", {
         redirectUri: "http://127.0.0.1:43123/e2e/oidc/callback",
         state: "expected-state",
-      },
-    )).toThrow("registered OIDC callback");
-    expect(() => receiveOidcAuthorizationCallback(
-      "http://127.0.0.1:43123/e2e/oidc/callback?code=issued-code&state=wrong-state",
-      {
+      }),
+    ).toThrow("registered OIDC callback");
+    expect(() =>
+      receiveOidcAuthorizationCallback("http://127.0.0.1:43123/e2e/oidc/callback?code=issued-code&state=wrong-state", {
         redirectUri: "http://127.0.0.1:43123/e2e/oidc/callback",
         state: "expected-state",
-      },
-    )).toThrow("OIDC callback state");
+      }),
+    ).toThrow("OIDC callback state");
   });
 });

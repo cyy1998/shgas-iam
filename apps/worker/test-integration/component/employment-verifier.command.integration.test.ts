@@ -1,6 +1,6 @@
+import { describe, expect, mock, test } from "bun:test";
 import type { EmploymentVerifyCommandReport } from "@worker/commands/employment-verifier";
 import { runEmploymentVerifyCommand } from "@worker/commands/employment-verifier";
-import { describe, expect, mock, test } from "bun:test";
 
 describe("Employment verifier command", () => {
   test("returns and logs the complete read-only verification report", async () => {
@@ -13,28 +13,24 @@ describe("Employment verifier command", () => {
         legacyTombstones: 1,
         blockingEmployments: 1,
       },
-      failures: [{
-        code: "unknown-employment-status",
-        count: 1,
-        employmentIds: [41],
-      }],
+      failures: [
+        {
+          code: "unknown-employment-status",
+          count: 1,
+          employmentIds: [41],
+        },
+      ],
     } satisfies EmploymentVerifyCommandReport;
     const verify = mock(async () => report);
     const info = mock(() => {});
 
-    expect(await runEmploymentVerifyCommand({
-      verifier: { verify },
-      logger: { info },
-    })).toEqual(report);
-    expect(info).toHaveBeenNthCalledWith(
-      1,
-      {},
-      "Employment verification started",
-    );
-    expect(info).toHaveBeenNthCalledWith(
-      2,
-      report,
-      "Employment verification completed",
-    );
+    expect(
+      await runEmploymentVerifyCommand({
+        verifier: { verify },
+        logger: { info },
+      }),
+    ).toEqual(report);
+    expect(info).toHaveBeenNthCalledWith(1, {}, "Employment verification started");
+    expect(info).toHaveBeenNthCalledWith(2, report, "Employment verification completed");
   });
 });

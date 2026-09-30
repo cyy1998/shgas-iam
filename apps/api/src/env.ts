@@ -2,12 +2,15 @@ import { z } from "@hono/zod-openapi";
 import { isRootRelativeNavigation } from "@iam/contracts";
 
 function booleanString(defaultValue: boolean) {
-  return z.string().optional().transform((value) => {
-    if (value === undefined || value.trim() === "") {
-      return defaultValue;
-    }
-    return ["1", "true", "yes", "on"].includes(value.trim().toLowerCase());
-  });
+  return z
+    .string()
+    .optional()
+    .transform((value) => {
+      if (value === undefined || value.trim() === "") {
+        return defaultValue;
+      }
+      return ["1", "true", "yes", "on"].includes(value.trim().toLowerCase());
+    });
 }
 
 function jsonRecordString(description: string) {
@@ -15,17 +18,16 @@ function jsonRecordString(description: string) {
     try {
       const parsed = JSON.parse(value) as unknown;
       if (
-        typeof parsed !== "object"
-        || parsed === null
-        || Array.isArray(parsed)
-        || !Object.values(parsed).every(item => typeof item === "string" && item.trim() !== "")
+        typeof parsed !== "object" ||
+        parsed === null ||
+        Array.isArray(parsed) ||
+        !Object.values(parsed).every((item) => typeof item === "string" && item.trim() !== "")
       ) {
         ctx.addIssue({ code: "custom", message: `${description} must be a JSON object of strings` });
         return z.NEVER;
       }
       return parsed as Record<string, string>;
-    }
-    catch {
+    } catch {
       ctx.addIssue({ code: "custom", message: `${description} must be valid JSON` });
       return z.NEVER;
     }
@@ -33,80 +35,130 @@ function jsonRecordString(description: string) {
 }
 
 function optionalNonEmptyString() {
-  return z.string().optional().transform(value => value?.trim() || undefined);
+  return z
+    .string()
+    .optional()
+    .transform((value) => value?.trim() || undefined);
 }
 
 function originString() {
-  return z.string().regex(/^[^\\\s]+$/u).pipe(z.url()).refine((value) => {
-    const url = new URL(value);
-    return ["http:", "https:"].includes(url.protocol) && url.pathname === "/"
-      && !url.search && !url.hash && !url.username && !url.password;
-  }, { message: "SSO entry must be an HTTP(S) origin without credentials, path, query or fragment" }).transform(value => new URL(value).origin);
+  return z
+    .string()
+    .regex(/^[^\\\s]+$/u)
+    .pipe(z.url())
+    .refine(
+      (value) => {
+        const url = new URL(value);
+        return (
+          ["http:", "https:"].includes(url.protocol) &&
+          url.pathname === "/" &&
+          !url.search &&
+          !url.hash &&
+          !url.username &&
+          !url.password
+        );
+      },
+      { message: "SSO entry must be an HTTP(S) origin without credentials, path, query or fragment" },
+    )
+    .transform((value) => new URL(value).origin);
 }
 
-const RawEnvSchema = z.object({
-  IAM_API_DATABASE_URL: z.string().min(1),
-  IAM_API_PASSWORD_HASH_ROUNDS: z.coerce.number().int().positive().default(10),
-  IAM_API_SMS_SIGNATURE_KEY: z.string().min(1),
-  IAM_API_SMS_URL: z.string().min(1),
-  IAM_API_CUSTOM_SSO_TOKEN_TTL_SECONDS: z.coerce.number().int().positive().default(86400),
-  IAM_API_AUTH_CODE_TTL_SECONDS: z.coerce.number().int().positive(),
-  IAM_API_PORT: z.coerce.number().int().min(1).max(65535).default(30000),
-  IAM_API_WECHAT_CORP_ID: z.string().min(1),
-  IAM_API_WECHAT_CORP_SECRET: z.string().min(1),
-  IAM_API_MAGIC_CODE: z.string().min(1),
-  NODE_ENV: z.string().default("development"),
-  IAM_API_REDIS_HOST: z.string().min(1),
-  IAM_API_REDIS_PORT: z.coerce.number().int().min(1).max(65535),
-  IAM_API_REDIS_PASSWORD: optionalNonEmptyString(),
-  IAM_API_REDIS_DB: z.coerce.number().int().min(0),
-  IAM_API_LOGIN_ENDPOINT: z.string().refine(isRootRelativeNavigation, {
-    message: "IAM_API_LOGIN_ENDPOINT must be a safe root-relative path",
-  }),
-  IAM_API_SSO_INTERNAL_ORIGIN: originString(),
-  IAM_API_SSO_EXTERNAL_ORIGIN: originString(),
-  IAM_API_AUTHORIZATION_ENDPOINT: z.string().min(1),
-  IAM_API_LOGOUT_ENDPOINT: z.string().min(1),
-  IAM_API_THIRDPARTY_OA_ENDPOINT: z.string().min(1),
-  IAM_API_CUSTOM_SSO_PROJECTION_RETRY_AFTER_SECONDS:
-    z.coerce.number().int().positive().default(3),
-  IAM_API_LOG_LEVEL: z.string().default("info"),
-  IAM_API_LOG_FORMAT: z.enum(["auto", "json", "pretty"]).default("auto"),
-  IAM_API_CAP_ENABLED: booleanString(false),
-  IAM_API_CAP_SITE_KEY: z.string().default("iam-sso"),
-  IAM_API_CAP_SECRET: z.string().default("dev-cap-secret-change-me"),
-  IAM_API_CAP_CHALLENGE_TTL_MS: z.coerce.number().int().positive().default(10 * 60 * 1000),
-  IAM_API_CAP_TOKEN_TTL_SECONDS: z.coerce.number().int().positive().default(10 * 60),
-  IAM_API_HUMAN_VERIFICATION_WINDOW_SECONDS: z.coerce.number().int().positive().default(10 * 60),
-  IAM_API_HUMAN_VERIFICATION_LOGIN_FAILURE_THRESHOLD: z.coerce.number().int().positive().default(3),
-  IAM_API_HUMAN_VERIFICATION_LOOKUP_THRESHOLD: z.coerce.number().int().positive().default(20),
-  IAM_API_LOGIN_CREDENTIAL_ACTIVE_KID: z.string().min(1),
-  IAM_API_LOGIN_CREDENTIAL_PRIVATE_KEYS_JSON: jsonRecordString("IAM_API_LOGIN_CREDENTIAL_PRIVATE_KEYS_JSON"),
-  IAM_API_LOGIN_CREDENTIAL_MAX_SKEW_MS: z.coerce.number().int().positive().default(5 * 60 * 1000),
-  IAM_API_LOGIN_CREDENTIAL_NONCE_TTL_SECONDS: z.coerce.number().int().positive().default(6 * 60),
-  IAM_API_SESSION_KERNEL_NAMESPACE: z.string().regex(/^[\w:-]+$/u).default("iam:session"),
-  IAM_API_USER_SESSION_TTL_SECONDS: z.coerce.number().int().positive().default(86400),
-  IAM_API_CLIENT_SESSION_TTL_SECONDS: z.coerce.number().int().positive().default(86400),
-  IAM_API_OIDC_CURRENT_JWK_JSON: z.string().min(1),
-  IAM_API_OIDC_PREVIOUS_JWK_JSON: optionalNonEmptyString(),
-  IAM_API_OIDC_NAMESPACE: z.string().regex(/^[\w:-]+$/u).default("iam:oidc"),
-  IAM_API_OIDC_TRUST_PROXY: booleanString(true),
-  IAM_API_OIDC_AUTHORIZATION_CODE_TTL_SECONDS: z.coerce.number().int().positive().default(300),
-  IAM_API_OIDC_CONTINUATION_TTL_SECONDS: z.coerce.number().int().positive().default(600),
-  IAM_API_OIDC_TOKEN_TTL_SECONDS: z.coerce.number().int().positive().default(3600),
-  IAM_API_OIDC_LOGOUT_CONFIRMATION_TTL_SECONDS: z.coerce.number().int().positive().default(600),
-  IAM_API_OIDC_COOKIE_SECURE: z.string().optional().transform(value =>
-    value === undefined || value.trim() === "" ? undefined : ["1", "true", "yes", "on"].includes(value.trim().toLowerCase())),
-  IAM_API_USER_PROFILE_DSL_MAX_LIMIT: z.coerce.number().int().positive().max(500).default(100),
-}).superRefine((raw, ctx) => {
-  if (raw.IAM_API_LOGIN_CREDENTIAL_PRIVATE_KEYS_JSON[raw.IAM_API_LOGIN_CREDENTIAL_ACTIVE_KID] === undefined) {
-    ctx.addIssue({
-      code: "custom",
-      path: ["IAM_API_LOGIN_CREDENTIAL_ACTIVE_KID"],
-      message: "IAM_API_LOGIN_CREDENTIAL_ACTIVE_KID must exist in IAM_API_LOGIN_CREDENTIAL_PRIVATE_KEYS_JSON",
-    });
-  }
-});
+const RawEnvSchema = z
+  .object({
+    IAM_API_DATABASE_URL: z.string().min(1),
+    IAM_API_PASSWORD_HASH_ROUNDS: z.coerce.number().int().positive().default(10),
+    IAM_API_SMS_SIGNATURE_KEY: z.string().min(1),
+    IAM_API_SMS_URL: z.string().min(1),
+    IAM_API_CUSTOM_SSO_TOKEN_TTL_SECONDS: z.coerce.number().int().positive().default(86400),
+    IAM_API_AUTH_CODE_TTL_SECONDS: z.coerce.number().int().positive(),
+    IAM_API_PORT: z.coerce.number().int().min(1).max(65535).default(30000),
+    IAM_API_WECHAT_CORP_ID: z.string().min(1),
+    IAM_API_WECHAT_CORP_SECRET: z.string().min(1),
+    IAM_API_MAGIC_CODE: z.string().min(1),
+    NODE_ENV: z.string().default("development"),
+    IAM_API_REDIS_HOST: z.string().min(1),
+    IAM_API_REDIS_PORT: z.coerce.number().int().min(1).max(65535),
+    IAM_API_REDIS_PASSWORD: optionalNonEmptyString(),
+    IAM_API_REDIS_DB: z.coerce.number().int().min(0),
+    IAM_API_LOGIN_ENDPOINT: z.string().refine(isRootRelativeNavigation, {
+      message: "IAM_API_LOGIN_ENDPOINT must be a safe root-relative path",
+    }),
+    IAM_API_SSO_INTERNAL_ORIGIN: originString(),
+    IAM_API_SSO_EXTERNAL_ORIGIN: originString(),
+    IAM_API_AUTHORIZATION_ENDPOINT: z.string().min(1),
+    IAM_API_LOGOUT_ENDPOINT: z.string().min(1),
+    IAM_API_THIRDPARTY_OA_ENDPOINT: z.string().min(1),
+    IAM_API_CUSTOM_SSO_PROJECTION_RETRY_AFTER_SECONDS: z.coerce.number().int().positive().default(3),
+    IAM_API_LOG_LEVEL: z.string().default("info"),
+    IAM_API_LOG_FORMAT: z.enum(["auto", "json", "pretty"]).default("auto"),
+    IAM_API_CAP_ENABLED: booleanString(false),
+    IAM_API_CAP_SITE_KEY: z.string().default("iam-sso"),
+    IAM_API_CAP_SECRET: z.string().default("dev-cap-secret-change-me"),
+    IAM_API_CAP_CHALLENGE_TTL_MS: z.coerce
+      .number()
+      .int()
+      .positive()
+      .default(10 * 60 * 1000),
+    IAM_API_CAP_TOKEN_TTL_SECONDS: z.coerce
+      .number()
+      .int()
+      .positive()
+      .default(10 * 60),
+    IAM_API_HUMAN_VERIFICATION_WINDOW_SECONDS: z.coerce
+      .number()
+      .int()
+      .positive()
+      .default(10 * 60),
+    IAM_API_HUMAN_VERIFICATION_LOGIN_FAILURE_THRESHOLD: z.coerce.number().int().positive().default(3),
+    IAM_API_HUMAN_VERIFICATION_LOOKUP_THRESHOLD: z.coerce.number().int().positive().default(20),
+    IAM_API_LOGIN_CREDENTIAL_ACTIVE_KID: z.string().min(1),
+    IAM_API_LOGIN_CREDENTIAL_PRIVATE_KEYS_JSON: jsonRecordString("IAM_API_LOGIN_CREDENTIAL_PRIVATE_KEYS_JSON"),
+    IAM_API_LOGIN_CREDENTIAL_MAX_SKEW_MS: z.coerce
+      .number()
+      .int()
+      .positive()
+      .default(5 * 60 * 1000),
+    IAM_API_LOGIN_CREDENTIAL_NONCE_TTL_SECONDS: z.coerce
+      .number()
+      .int()
+      .positive()
+      .default(6 * 60),
+    IAM_API_SESSION_KERNEL_NAMESPACE: z
+      .string()
+      .regex(/^[\w:-]+$/u)
+      .default("iam:session"),
+    IAM_API_USER_SESSION_TTL_SECONDS: z.coerce.number().int().positive().default(86400),
+    IAM_API_CLIENT_SESSION_TTL_SECONDS: z.coerce.number().int().positive().default(86400),
+    IAM_API_OIDC_CURRENT_JWK_JSON: z.string().min(1),
+    IAM_API_OIDC_PREVIOUS_JWK_JSON: optionalNonEmptyString(),
+    IAM_API_OIDC_NAMESPACE: z
+      .string()
+      .regex(/^[\w:-]+$/u)
+      .default("iam:oidc"),
+    IAM_API_OIDC_TRUST_PROXY: booleanString(true),
+    IAM_API_OIDC_AUTHORIZATION_CODE_TTL_SECONDS: z.coerce.number().int().positive().default(300),
+    IAM_API_OIDC_CONTINUATION_TTL_SECONDS: z.coerce.number().int().positive().default(600),
+    IAM_API_OIDC_TOKEN_TTL_SECONDS: z.coerce.number().int().positive().default(3600),
+    IAM_API_OIDC_LOGOUT_CONFIRMATION_TTL_SECONDS: z.coerce.number().int().positive().default(600),
+    IAM_API_OIDC_COOKIE_SECURE: z
+      .string()
+      .optional()
+      .transform((value) =>
+        value === undefined || value.trim() === ""
+          ? undefined
+          : ["1", "true", "yes", "on"].includes(value.trim().toLowerCase()),
+      ),
+    IAM_API_USER_PROFILE_DSL_MAX_LIMIT: z.coerce.number().int().positive().max(500).default(100),
+  })
+  .superRefine((raw, ctx) => {
+    if (raw.IAM_API_LOGIN_CREDENTIAL_PRIVATE_KEYS_JSON[raw.IAM_API_LOGIN_CREDENTIAL_ACTIVE_KID] === undefined) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["IAM_API_LOGIN_CREDENTIAL_ACTIVE_KID"],
+        message: "IAM_API_LOGIN_CREDENTIAL_ACTIVE_KID must exist in IAM_API_LOGIN_CREDENTIAL_PRIVATE_KEYS_JSON",
+      });
+    }
+  });
 
 type RawEnv = z.infer<typeof RawEnvSchema>;
 
@@ -241,7 +293,7 @@ function toApiEnv(raw: RawEnv): Env {
       continuationTtlSeconds: raw.IAM_API_OIDC_CONTINUATION_TTL_SECONDS,
       tokenTtlSeconds: raw.IAM_API_OIDC_TOKEN_TTL_SECONDS,
       logoutConfirmationTtlSeconds: raw.IAM_API_OIDC_LOGOUT_CONFIRMATION_TTL_SECONDS,
-      cookieSecure: raw.IAM_API_OIDC_COOKIE_SECURE ?? (raw.NODE_ENV === "production"),
+      cookieSecure: raw.IAM_API_OIDC_COOKIE_SECURE ?? raw.NODE_ENV === "production",
     },
     integrations: {
       sms: {
@@ -260,8 +312,7 @@ function toApiEnv(raw: RawEnv): Env {
       authorizationEndpoint: raw.IAM_API_AUTHORIZATION_ENDPOINT,
       logoutEndpoint: raw.IAM_API_LOGOUT_ENDPOINT,
       thirdPartyOAEndpoint: raw.IAM_API_THIRDPARTY_OA_ENDPOINT,
-      projectionRetryAfterSeconds:
-        raw.IAM_API_CUSTOM_SSO_PROJECTION_RETRY_AFTER_SECONDS,
+      projectionRetryAfterSeconds: raw.IAM_API_CUSTOM_SSO_PROJECTION_RETRY_AFTER_SECONDS,
     },
     userProfile: {
       dslMaxLimit: raw.IAM_API_USER_PROFILE_DSL_MAX_LIMIT,

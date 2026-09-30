@@ -1,12 +1,12 @@
-import type { PostgresTestHarness } from "./postgres-harness";
+import { afterEach, beforeEach, expect, test } from "bun:test";
 import { cp, mkdtemp, readdir, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import { ClientSsoConfigSchema } from "@iam/contracts";
-import { afterEach, beforeEach, expect, test } from "bun:test";
 import { drizzle } from "drizzle-orm/postgres-js";
 import { migrate } from "drizzle-orm/postgres-js/migrator";
+import type { PostgresTestHarness } from "./postgres-harness";
 import { createPostgresTestHarness, expectPostgresErrorCode } from "./postgres-harness";
 
 const folder = fileURLToPath(new URL("../../src/migrations", import.meta.url));
@@ -49,8 +49,7 @@ async function migrateBeforeRetirement() {
         await cp(join(folder, entry.name), join(staged, entry.name), { recursive: true });
     }
     await migrate(drizzle({ client: h.sql }), { migrationsFolder: staged, migrationsSchema: h.schemaName });
-  }
-  finally {
+  } finally {
     await rm(staged, { recursive: true });
   }
 }
@@ -80,14 +79,14 @@ test("formal migration removes only ORCAS configuration and preserves every othe
   await migrateFinal();
 
   const after = await clients();
-  expect([...after]).toEqual(before.map(({ config, retained }) => {
-    if (config?.protocol !== "custom-sso")
-      return { config, retained };
-    const { orcas: _retired, ...remaining } = config;
-    return { config: remaining, retained };
-  }));
-  for (const row of after)
-    expect(ClientSsoConfigSchema.nullable().safeParse(row.config).success).toBe(true);
+  expect([...after]).toEqual(
+    before.map(({ config, retained }) => {
+      if (config?.protocol !== "custom-sso") return { config, retained };
+      const { orcas: _retired, ...remaining } = config;
+      return { config: remaining, retained };
+    }),
+  );
+  for (const row of after) expect(ClientSsoConfigSchema.nullable().safeParse(row.config).success).toBe(true);
   const journal = await h.sql`SELECT * FROM __drizzle_migrations ORDER BY id`;
   expect(journal.at(-1)?.name).toBe(retirement);
   await migrateFinal();
@@ -102,15 +101,21 @@ test.each([
   { callback: "managed", config: managed, enabled: false },
   { callback: "business", config: business, enabled: true },
   { callback: "business", config: business, enabled: false },
-])("new installation accepts $callback but rejects ORCAS enabled=$enabled on insert and update", async ({ config, enabled }) => {
-  await migrateFinal();
-  await seed("current", config);
-  await expectPostgresErrorCode(seed("retired", { ...config, orcas: { enabled } }), "23514");
-  await expectPostgresErrorCode(h.sql`UPDATE client SET sso_config=${JSON.stringify({ ...config, orcas: { enabled } })}::jsonb WHERE client_code='current'`, "23514");
-  const rows = await clients();
-  expect(rows).toHaveLength(1);
-  expect(rows[0]?.config).toEqual(config);
-});
+])(
+  "new installation accepts $callback but rejects ORCAS enabled=$enabled on insert and update",
+  async ({ config, enabled }) => {
+    await migrateFinal();
+    await seed("current", config);
+    await expectPostgresErrorCode(seed("retired", { ...config, orcas: { enabled } }), "23514");
+    await expectPostgresErrorCode(
+      h.sql`UPDATE client SET sso_config=${JSON.stringify({ ...config, orcas: { enabled } })}::jsonb WHERE client_code='current'`,
+      "23514",
+    );
+    const rows = await clients();
+    expect(rows).toHaveLength(1);
+    expect(rows[0]?.config).toEqual(config);
+  },
+);
 
 test("transaction rollback restores configuration and its prior constraint together", async () => {
   await migrateBeforeRetirement();
@@ -124,8 +129,7 @@ test("transaction rollback restores configuration and its prior constraint toget
       await tx.file(join(folder, retirement, "migration.sql"), { cache: false });
       throw failure;
     });
-  }
-  catch (error) {
+  } catch (error) {
     caught = error;
   }
   expect(caught).toBe(failure);

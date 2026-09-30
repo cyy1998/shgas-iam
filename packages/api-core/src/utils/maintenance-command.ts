@@ -31,23 +31,16 @@ export async function runJsonMaintenanceCommand<
   };
 }) {
   try {
-    const options = await readMaintenanceOptions(
-      input.argv,
-      input.commandName,
-      input.parseManifest,
-    );
+    const options = await readMaintenanceOptions(input.argv, input.commandName, input.parseManifest);
     const composition = await input.createComposition();
     try {
       const report = await input.execute(composition, options);
-      if (report.status === "failed")
-        input.process.setFailed();
+      if (report.status === "failed") input.process.setFailed();
       return report;
-    }
-    finally {
+    } finally {
       await composition.shutdown();
     }
-  }
-  catch {
+  } catch {
     input.process.setFailed();
     input.process.writeError(input.failureMessage);
     return undefined;
@@ -68,10 +61,8 @@ async function readMaintenanceOptions<TManifest>(
   const operationInput = positionals[0];
   if (operationInput !== "dry-run" && operationInput !== "apply" && operationInput !== "verify")
     throw new Error(`${commandName} operation must be dry-run, apply, or verify`);
-  if (positionals.length !== 1)
-    throw new Error(`${commandName} accepts exactly one operation`);
-  if (values.manifest === undefined)
-    throw new Error("--manifest is required");
+  if (positionals.length !== 1) throw new Error(`${commandName} accepts exactly one operation`);
+  if (values.manifest === undefined) throw new Error("--manifest is required");
   const manifest = parseManifest(JSON.parse(await readFile(values.manifest, "utf8")));
   const operation: MaintenanceOperation = operationInput;
   return { operation, manifest };

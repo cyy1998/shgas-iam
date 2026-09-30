@@ -95,7 +95,10 @@ export const organizationCreate = createRoute({
   },
   responses: {
     ...commonErrorResponses,
-    [HttpStatusCodes.OK]: jsonContent(createSuccessResponseSchema(createAdminMutationResultSchema(OrganizationDtoSchema)), "组织创建成功"),
+    [HttpStatusCodes.OK]: jsonContent(
+      createSuccessResponseSchema(createAdminMutationResultSchema(OrganizationDtoSchema)),
+      "组织创建成功",
+    ),
   },
 });
 
@@ -109,7 +112,10 @@ export const organizationUpdate = createRoute({
   },
   responses: {
     ...commonErrorResponses,
-    [HttpStatusCodes.OK]: jsonContent(createSuccessResponseSchema(createAdminMutationResultSchema(z.null())), "组织更新成功"),
+    [HttpStatusCodes.OK]: jsonContent(
+      createSuccessResponseSchema(createAdminMutationResultSchema(z.null())),
+      "组织更新成功",
+    ),
   },
 });
 
@@ -123,7 +129,10 @@ export const organizationStatusUpdate = createRoute({
   },
   responses: {
     ...commonErrorResponses,
-    [HttpStatusCodes.OK]: jsonContent(createSuccessResponseSchema(createAdminMutationResultSchema(z.null())), "状态更新成功"),
+    [HttpStatusCodes.OK]: jsonContent(
+      createSuccessResponseSchema(createAdminMutationResultSchema(z.null())),
+      "状态更新成功",
+    ),
   },
 });
 
@@ -136,6 +145,9 @@ export const organizationDelete = createRoute({
   },
   responses: {
     ...commonErrorResponses,
-    [HttpStatusCodes.OK]: jsonContent(createSuccessResponseSchema(createAdminMutationResultSchema(z.null())), "组织删除成功"),
+    [HttpStatusCodes.OK]: jsonContent(
+      createSuccessResponseSchema(createAdminMutationResultSchema(z.null())),
+      "组织删除成功",
+    ),
   },
 });

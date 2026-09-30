@@ -1,21 +1,18 @@
-import type { ClientSsoConfig } from "@iam/contracts";
-import { Buffer } from "node:buffer";
-import { ApiErrorCode, ClientSsoCallbackType, ClientSsoProtocol, OidcClientType, OidcScope, SubjectClaim } from "@iam/contracts";
 import { expect, test } from "bun:test";
+import { Buffer } from "node:buffer";
+import type { ClientSsoConfig } from "@iam/contracts";
+import {
+  ApiErrorCode,
+  ClientSsoCallbackType,
+  ClientSsoProtocol,
+  OidcClientType,
+  OidcScope,
+  SubjectClaim,
+} from "@iam/contracts";
 import { fixture } from "./oidc.fixture";
 
 test("joint HTTP original relationship rejects both protocols after a late Token race and missing-index root termination", async () => {
-  const f = await fixture(
-    { code: 30, continuation: 60 },
-    true,
-    undefined,
-    45,
-    undefined,
-    true,
-    undefined,
-    true,
-    true,
-  );
+  const f = await fixture({ code: 30, continuation: 60 }, true, undefined, 45, undefined, true, undefined, true, true);
   let release: (() => void) | undefined;
   let winner: Promise<Response> | undefined;
   try {
@@ -35,14 +32,13 @@ test("joint HTTP original relationship rejects both protocols after a late Token
       subjectClaims: [SubjectClaim.SubjectIdentifier, SubjectClaim.ProfileName],
     };
     const select = (custom: boolean) =>
-      f.setClient(value => ({ ...value, ssoConfig: custom ? customConfig : oidcConfig }));
+      f.setClient((value) => ({ ...value, ssoConfig: custom ? customConfig : oidcConfig }));
     async function oidcCode(clientId = f.clientId) {
       const response = await f.authorize({ client_id: clientId });
       expect(response.status).toBe(303);
       const code = new URL(response.headers.get("location")!).searchParams.get("code")!;
       const record = await f.oidcState.readCode(clientId, code);
-      if (!record)
-        throw new Error("Expected owner-persisted OIDC Code");
+      if (!record) throw new Error("Expected owner-persisted OIDC Code");
       return { code, record };
     }
     const exchangeOidc = (code: string, clientId = f.clientId) =>
@@ -74,7 +70,7 @@ test("joint HTTP original relationship rejects both protocols after a late Token
       const tokenResponse = await f.request("/sso/token", {
         method: "POST",
         headers: {
-          "Authorization": `Basic ${Buffer.from(`${f.clientId}:current secret:+`).toString("base64")}`,
+          Authorization: `Basic ${Buffer.from(`${f.clientId}:current secret:+`).toString("base64")}`,
           "Content-Type": "application/x-www-form-urlencoded",
         },
         body: new URLSearchParams({ code, redirect_uri: "https://rp.example/callback" }),
@@ -119,8 +115,7 @@ test("joint HTTP original relationship rejects both protocols after a late Token
           timer = setTimeout(() => reject(new Error("OIDC winner did not reach Token persistence")), 4000);
         }),
       ]);
-    }
-    finally {
+    } finally {
       clearTimeout(timer);
     }
     expect((await exchangeOidc(raced.code)).status).toBe(400);
@@ -143,7 +138,7 @@ test("joint HTTP original relationship rejects both protocols after a late Token
     const lateCustom = await f.request("/sso/token", {
       method: "POST",
       headers: {
-        "Authorization": `Basic ${Buffer.from(`${f.clientId}:current secret:+`).toString("base64")}`,
+        Authorization: `Basic ${Buffer.from(`${f.clientId}:current secret:+`).toString("base64")}`,
         "Content-Type": "application/x-www-form-urlencoded",
       },
       body: new URLSearchParams({ code: custom.code, redirect_uri: "https://rp.example/callback" }),
@@ -162,8 +157,7 @@ test("joint HTTP original relationship rejects both protocols after a late Token
     await f.operations.run(async (operation) => {
       const sessions = f.kernel.forOperation(operation);
       const observed = await sessions.resolveUserSession(root);
-      if (observed.status !== "resolved")
-        throw new Error("Expected original root");
+      if (observed.status !== "resolved") throw new Error("Expected original root");
       const result = await sessions.revokeObservedUserSession(observed.value);
       expect(result.status).toBe("terminated");
     });
@@ -171,11 +165,9 @@ test("joint HTTP original relationship rejects both protocols after a late Token
     expect((await useOidc(otherRoot.token)).status).toBe(200);
     await select(true);
     expect((await useCustom(newCustom.token)).status).toBe(401);
-  }
-  finally {
+  } finally {
     release?.();
-    if (winner)
-      await winner.catch(() => {});
+    if (winner) await winner.catch(() => {});
     await f.close();
   }
 }, 15000);

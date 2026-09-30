@@ -1,5 +1,5 @@
-import { logout } from '@admin/utils/auth';
-import { Button, Result } from 'antd';
+import { logout } from "@admin/utils/auth";
+import { Button, Result } from "antd";
 
 export default function NoPermission() {
   return (

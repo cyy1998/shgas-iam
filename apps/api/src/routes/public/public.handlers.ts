@@ -1,31 +1,22 @@
-import type { OrganizationService } from "@api/services/organization/organization.service";
-import type {
-  CustomSsoSubjectProjectionV2Dto,
-} from "@api/services/sso/transport/custom-sso-subject.schema";
-import type { UserProfileSearchPort } from "@api/services/user-profile-search/user-profile-search.port";
-import type { UserService } from "@api/services/user/user.service";
-import type { PublicRouteHandler } from "./public.type";
-import {
-  mapCustomSsoRetryableError,
-} from "@api/middlewares/custom-sso-retryable.error";
+import { mapCustomSsoRetryableError } from "@api/middlewares/custom-sso-retryable.error";
 import { getApiAuditRequestContext } from "@api/services/audit/audit.context";
+import type { OrganizationService } from "@api/services/organization/organization.service";
+import type { CustomSsoSubjectProjectionV2Dto } from "@api/services/sso/transport/custom-sso-subject.schema";
+import type { UserService } from "@api/services/user/user.service";
+import type { UserProfileSearchPort } from "@api/services/user-profile-search/user-profile-search.port";
 import * as HttpStatusCodes from "@iam/api-core/core/http-status-codes";
 import { AuthzUnauthorizedError } from "@iam/api-core/errors/AuthzUnauthorizedError";
 import * as resp from "@iam/api-core/http";
+import type { PublicRouteHandler } from "./public.type";
 
 export interface CreatePublicHandlersDeps {
   organizationService: Pick<OrganizationService, "searchOrganizations">;
   subjectDeliveryRequests: {
-    resolveUserInfoForRequest: (
-      request: object,
-    ) => Promise<CustomSsoSubjectProjectionV2Dto>;
+    resolveUserInfoForRequest: (request: object) => Promise<CustomSsoSubjectProjectionV2Dto>;
   };
   userService: Pick<
     UserService,
-    | "getActiveUserBySubjectIdentifier"
-    | "getUserDetailById"
-    | "setMobile"
-    | "setPassword"
+    "getActiveUserBySubjectIdentifier" | "getUserDetailById" | "setMobile" | "setPassword"
   >;
   userProfileSearch: Pick<UserProfileSearchPort, "searchLegacyUsers">;
   config: {
@@ -84,11 +75,9 @@ export function createPublicHandlers(deps: CreatePublicHandlersDeps) {
 export function createRootPublicHandlers(deps: Pick<CreatePublicHandlersDeps, "subjectDeliveryRequests" | "config">) {
   const userInfo: PublicRouteHandler<"userInfo"> = async (c) => {
     try {
-      const data
-        = await deps.subjectDeliveryRequests.resolveUserInfoForRequest(c);
+      const data = await deps.subjectDeliveryRequests.resolveUserInfoForRequest(c);
       return c.json(resp.ok(data), HttpStatusCodes.OK);
-    }
-    catch (error) {
+    } catch (error) {
       throw mapCustomSsoRetryableError(error, {
         retryAfterSeconds: deps.config.projectionRetryAfterSeconds,
       });

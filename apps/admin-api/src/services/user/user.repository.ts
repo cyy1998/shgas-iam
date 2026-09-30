@@ -1,13 +1,9 @@
 import type { UserCreateDto, UserPaginationQueryDto, UserUpdateDto } from "@admin-api/services/user/user.type";
-import type { DbClient } from "@iam/db";
 import { EmploymentStatus, PrivilegeDelegationStatus, UserStatus } from "@iam/contracts";
+import type { DbClient } from "@iam/db";
 import { extractPostgresError } from "@iam/db/postgres-error";
 import { compactUpdate, firstRow, ilikeContainsIf, inArrayIf } from "@iam/db/query-utils";
-import {
-  employments,
-  privilegeDelegations,
-  users,
-} from "@iam/db/schema";
+import { employments, privilegeDelegations, users } from "@iam/db/schema";
 import { OPEN_EMPLOYMENT_STATUSES } from "@iam/domain/employment";
 import { UsernameAlreadyExistsError } from "@iam/domain/user";
 import { and, count, eq, inArray, or } from "drizzle-orm";
@@ -15,17 +11,19 @@ import { and, count, eq, inArray, or } from "drizzle-orm";
 export function createUserRepository(db: DbClient) {
   return {
     async getAnyUserByUsername(username: string) {
-      return await db.query.users.findFirst({ where: { username } }) ?? null;
+      return (await db.query.users.findFirst({ where: { username } })) ?? null;
     },
     async lockUserByUsername(username: string, includeDeleted = false) {
-      return firstRow(await db.select().from(users).where(and(
-        eq(users.username, username),
-        includeDeleted ? undefined : eq(users.isDelete, false),
-      )).for("update"));
+      return firstRow(
+        await db
+          .select()
+          .from(users)
+          .where(and(eq(users.username, username), includeDeleted ? undefined : eq(users.isDelete, false)))
+          .for("update"),
+      );
     },
     async getSessionManagementUserSummaries(userIds: readonly number[]) {
-      if (userIds.length === 0)
-        return [];
+      if (userIds.length === 0) return [];
       return await db
         .select({
           id: users.id,
@@ -38,11 +36,8 @@ export function createUserRepository(db: DbClient) {
         .from(users)
         .where(inArray(users.id, [...userIds]));
     },
-    async getSessionManagementUserSummariesBySubjectIdentifiers(
-      subjectIdentifiers: readonly string[],
-    ) {
-      if (subjectIdentifiers.length === 0)
-        return [];
+    async getSessionManagementUserSummariesBySubjectIdentifiers(subjectIdentifiers: readonly string[]) {
+      if (subjectIdentifiers.length === 0) return [];
       return await db
         .select({
           id: users.id,
@@ -56,59 +51,71 @@ export function createUserRepository(db: DbClient) {
         .where(inArray(users.subjectIdentifier, [...subjectIdentifiers]));
     },
     async setPassword(userId: number, password: string) {
-      return firstRow(await db
-        .update(users)
-        .set({ password })
-        .where(and(eq(users.id, userId), eq(users.status, UserStatus.Enable), eq(users.isDelete, false)))
-        .returning());
+      return firstRow(
+        await db
+          .update(users)
+          .set({ password })
+          .where(and(eq(users.id, userId), eq(users.status, UserStatus.Enable), eq(users.isDelete, false)))
+          .returning(),
+      );
     },
     async getUserByUsernameForAdmin(username: string) {
-      return await db.query.users.findFirst({
-        where: {
-          username,
-          isDelete: false,
-        },
-      }) ?? null;
+      return (
+        (await db.query.users.findFirst({
+          where: {
+            username,
+            isDelete: false,
+          },
+        })) ?? null
+      );
     },
     async getUserByUsernameIncludingDeletedForAuthorization(username: string) {
-      return await db.query.users.findFirst({
-        where: { username },
-      }) ?? null;
+      return (
+        (await db.query.users.findFirst({
+          where: { username },
+        })) ?? null
+      );
     },
     async getOpenEmploymentOrganizationIdsByUserId(userId: number) {
       const rows = await db
         .selectDistinct({ organizationId: employments.orgId })
         .from(employments)
-        .where(and(
-          eq(employments.userId, userId),
-          eq(employments.isDelete, false),
-          inArray(employments.status, OPEN_EMPLOYMENT_STATUSES),
-        ))
+        .where(
+          and(
+            eq(employments.userId, userId),
+            eq(employments.isDelete, false),
+            inArray(employments.status, OPEN_EMPLOYMENT_STATUSES),
+          ),
+        )
         .orderBy(employments.orgId);
-      return rows.map(row => row.organizationId);
+      return rows.map((row) => row.organizationId);
     },
     async getEndedEmploymentOrganizationIdsByUserId(userId: number) {
       const rows = await db
         .selectDistinct({ organizationId: employments.orgId })
         .from(employments)
-        .where(and(
-          eq(employments.userId, userId),
-          eq(employments.isDelete, false),
-          eq(employments.status, EmploymentStatus.Disable),
-        ))
+        .where(
+          and(
+            eq(employments.userId, userId),
+            eq(employments.isDelete, false),
+            eq(employments.status, EmploymentStatus.Disable),
+          ),
+        )
         .orderBy(employments.orgId);
-      return rows.map(row => row.organizationId);
+      return rows.map((row) => row.organizationId);
     },
     async getUserByIdForAdmin(id: number) {
-      return await db.query.users.findFirst({
-        where: {
-          id,
-          isDelete: false,
-        },
-      }) ?? null;
+      return (
+        (await db.query.users.findFirst({
+          where: {
+            id,
+            isDelete: false,
+          },
+        })) ?? null
+      );
     },
     async getUserBySubjectIdentifierForPermittedAdmin(subjectIdentifier: string) {
-      return await db.query.users.findFirst({ where: { subjectIdentifier } }) ?? null;
+      return (await db.query.users.findFirst({ where: { subjectIdentifier } })) ?? null;
     },
     async searchUsersFuzzyPaged(userPaginationQueryDto: UserPaginationQueryDto) {
       const { pageNum, pageSize } = userPaginationQueryDto;
@@ -126,25 +133,35 @@ export function createUserRepository(db: DbClient) {
       return { rows, total: firstRow(totalRows)?.value ?? 0 };
     },
     async updateUserByUsername(username: string, data: UserUpdateDto) {
-      return firstRow(await db
-        .update(users)
-        .set(compactUpdate(data))
-        .where(and(eq(users.username, username), eq(users.isDelete, false)))
-        .returning());
+      return firstRow(
+        await db
+          .update(users)
+          .set(compactUpdate(data))
+          .where(and(eq(users.username, username), eq(users.isDelete, false)))
+          .returning(),
+      );
     },
     async softDeleteUserByUsername(username: string) {
-      return firstRow(await db
-        .update(users)
-        .set({ isDelete: true })
-        .where(and(eq(users.username, username), eq(users.isDelete, false)))
-        .returning());
+      return firstRow(
+        await db
+          .update(users)
+          .set({ isDelete: true })
+          .where(and(eq(users.username, username), eq(users.isDelete, false)))
+          .returning(),
+      );
     },
     async hasOpenPrivilegeDelegationsByUserId(userId: number) {
-      const rows = await db.select({ id: privilegeDelegations.id }).from(privilegeDelegations).where(and(
-        eq(privilegeDelegations.isDelete, false),
-        inArray(privilegeDelegations.status, [PrivilegeDelegationStatus.Enable, PrivilegeDelegationStatus.Pause]),
-        or(eq(privilegeDelegations.delegatorUserId, userId), eq(privilegeDelegations.delegateeUserId, userId)),
-      )).limit(1);
+      const rows = await db
+        .select({ id: privilegeDelegations.id })
+        .from(privilegeDelegations)
+        .where(
+          and(
+            eq(privilegeDelegations.isDelete, false),
+            inArray(privilegeDelegations.status, [PrivilegeDelegationStatus.Enable, PrivilegeDelegationStatus.Pause]),
+            or(eq(privilegeDelegations.delegatorUserId, userId), eq(privilegeDelegations.delegateeUserId, userId)),
+          ),
+        )
+        .limit(1);
       return rows.length > 0;
     },
     async countOpenEmploymentsByUsername(username: string) {
@@ -152,22 +169,25 @@ export function createUserRepository(db: DbClient) {
         .select({ value: count() })
         .from(employments)
         .innerJoin(users, eq(employments.userId, users.id))
-        .where(and(
-          eq(employments.isDelete, false),
-          inArray(employments.status, OPEN_EMPLOYMENT_STATUSES),
-          eq(users.username, username),
-          eq(users.isDelete, false),
-        ));
+        .where(
+          and(
+            eq(employments.isDelete, false),
+            inArray(employments.status, OPEN_EMPLOYMENT_STATUSES),
+            eq(users.username, username),
+            eq(users.isDelete, false),
+          ),
+        );
       return firstRow(rows)?.value ?? 0;
     },
     async setUserForAdmin(userCreateDto: UserCreateDto & { subjectIdentifier: string }) {
       try {
         return firstRow(await db.insert(users).values(userCreateDto).returning());
-      }
-      catch (error) {
+      } catch (error) {
         const detail = extractPostgresError(error);
-        if (detail?.code === "23505"
-          && (detail.constraint === "user_username_key" || detail.constraint === "user_username_unique")) {
+        if (
+          detail?.code === "23505" &&
+          (detail.constraint === "user_username_key" || detail.constraint === "user_username_unique")
+        ) {
           throw new UsernameAlreadyExistsError();
         }
         throw error;

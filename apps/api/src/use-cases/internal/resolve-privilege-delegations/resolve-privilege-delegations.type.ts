@@ -4,8 +4,7 @@ export interface ResolvePrivilegeDelegationsInput {
   privilegeCode: string;
 }
 
-export interface PrivilegeDelegationResolutionQuery
-  extends ResolvePrivilegeDelegationsInput {
+export interface PrivilegeDelegationResolutionQuery extends ResolvePrivilegeDelegationsInput {
   observedAt: Date;
 }
 
@@ -20,24 +19,24 @@ export interface PrivilegeDelegationResolutionMissingInputs {
   privilegeCodes: string[];
 }
 
-export type PrivilegeDelegationResolutionIntegrityViolation
-  = | {
-    category: "ambiguous-delegation";
-    username: string;
-    delegationIds: number[];
-  }
+export type PrivilegeDelegationResolutionIntegrityViolation =
   | {
-    category: "self-delegation";
-    username: string;
-    delegationId: number;
-  }
+      category: "ambiguous-delegation";
+      username: string;
+      delegationIds: number[];
+    }
   | {
-    category: "invalid-reference";
-    username: string;
-    delegationId: number;
-    relation: "delegatee-user" | "scope-organization" | "privilege";
-    referencedIds: number[];
-  };
+      category: "self-delegation";
+      username: string;
+      delegationId: number;
+    }
+  | {
+      category: "invalid-reference";
+      username: string;
+      delegationId: number;
+      relation: "delegatee-user" | "scope-organization" | "privilege";
+      referencedIds: number[];
+    };
 
 export interface PrivilegeDelegationResolutionObservation {
   results: PrivilegeDelegationResolutionResult[];

@@ -1,24 +1,19 @@
+import { authorizeAdminOperationForContext } from "@admin-api/services/admin-authorization/admin-authorization.context";
 import type { AdminOperationId } from "@admin-api/services/admin-authorization/admin-operation.registry";
 import type { ApiEnvelope } from "@iam/api-core/http";
+import * as resp from "@iam/api-core/http";
+import { mapCustomErrorToTRPCError, publicProcedure } from "@iam/api-core/trpc";
 import type { Context, Env, TypedResponse } from "hono";
 import type { JSONParsed } from "hono/utils/types";
 import type { z } from "zod";
-import { authorizeAdminOperationForContext } from "@admin-api/services/admin-authorization/admin-authorization.context";
-import * as resp from "@iam/api-core/http";
-import { mapCustomErrorToTRPCError, publicProcedure } from "@iam/api-core/trpc";
 
 export type AdminApiOperationType = "query" | "mutation";
 
-const ADMIN_OPERATION_ID = Symbol.for(
-  "@iam/admin-api/admin-operation-id",
-);
+const ADMIN_OPERATION_ID = Symbol.for("@iam/admin-api/admin-operation-id");
 
 export function getAdminOperationId(value: unknown): AdminOperationId | null {
-  if (!value || (typeof value !== "object" && typeof value !== "function"))
-    return null;
-  return (value as { [ADMIN_OPERATION_ID]?: AdminOperationId })[
-    ADMIN_OPERATION_ID
-  ] ?? null;
+  if (!value || (typeof value !== "object" && typeof value !== "function")) return null;
+  return (value as { [ADMIN_OPERATION_ID]?: AdminOperationId })[ADMIN_OPERATION_ID] ?? null;
 }
 
 function tagAdminOperation<T>(value: T, operationId: AdminOperationId): T {
@@ -35,27 +30,31 @@ export type AdminApiOperationContext = {
   hono: Context;
 };
 
-export type AdminApiRestContext = Context<Env, string, {
-  out: {
-    json: unknown;
-    param: Record<string, unknown>;
-    query: Record<string, unknown>;
-  };
-}>;
+export type AdminApiRestContext = Context<
+  Env,
+  string,
+  {
+    out: {
+      json: unknown;
+      param: Record<string, unknown>;
+      query: Record<string, unknown>;
+    };
+  }
+>;
 
 type MaybePromise<T> = T | Promise<T>;
 
 type HandlerReturn<THandler> = THandler extends (...args: infer _Args) => infer TReturn ? TReturn : never;
 
-type AdminApiGeneratedRestResponse<TOutput>
-  = Response & TypedResponse<JSONParsed<ApiEnvelope<Awaited<TOutput>, 200>>, 200, "json">;
+type AdminApiGeneratedRestResponse<TOutput> = Response &
+  TypedResponse<JSONParsed<ApiEnvelope<Awaited<TOutput>, 200>>, 200, "json">;
 
-type AdminApiGeneratedRestHandler<TOutput> = (c: AdminApiRestContext) => Promise<
-  AdminApiGeneratedRestResponse<TOutput>
->;
+type AdminApiGeneratedRestHandler<TOutput> = (
+  c: AdminApiRestContext,
+) => Promise<AdminApiGeneratedRestResponse<TOutput>>;
 
-type AdminApiRestHandlerCompatibility<THandler, TOutput>
-  = AdminApiGeneratedRestResponse<TOutput> extends Awaited<HandlerReturn<THandler>>
+type AdminApiRestHandlerCompatibility<THandler, TOutput> =
+  AdminApiGeneratedRestResponse<TOutput> extends Awaited<HandlerReturn<THandler>>
     ? []
     : ["Admin REST handler response is not assignable to route response schema"];
 
@@ -84,10 +83,7 @@ type AdminApiOperationDefinition<TSchema extends z.ZodTypeAny, TOutput> = Omit<
 function createAdminApiOperationBase<TSchema extends z.ZodTypeAny, TOutput>(
   config: AdminApiOperationDefinition<TSchema, TOutput>,
 ) {
-  async function authorize(
-    operationInput: unknown,
-    context: AdminApiOperationContext,
-  ) {
+  async function authorize(operationInput: unknown, context: AdminApiOperationContext) {
     await authorizeAdminOperationForContext(context.hono, {
       operationId: config.operationId,
       operationInput,
@@ -113,8 +109,7 @@ function createAdminApiOperationBase<TSchema extends z.ZodTypeAny, TOutput>(
   const resolver = async (opts: { input: unknown; ctx: AdminApiOperationContext }) => {
     try {
       return await run(opts.input as z.infer<TSchema>, opts.ctx);
-    }
-    catch (err) {
+    } catch (err) {
       mapCustomErrorToTRPCError(err);
     }
   };
@@ -122,8 +117,7 @@ function createAdminApiOperationBase<TSchema extends z.ZodTypeAny, TOutput>(
   const authorizedProcedure = publicProcedure.use(async (opts) => {
     try {
       await authorize(await opts.getRawInput(), opts.ctx);
-    }
-    catch (err) {
+    } catch (err) {
       mapCustomErrorToTRPCError(err);
     }
     return opts.next();
@@ -146,10 +140,11 @@ export function defineAdminApiQueryOperation<TSchema extends z.ZodTypeAny, TOutp
   const operation = createAdminApiOperationBase(config);
   return {
     ...operation,
-    toTRPC: () => tagAdminOperation(
-      operation.authorizedProcedure.input(config.input).query(operation.resolver),
-      config.operationId,
-    ),
+    toTRPC: () =>
+      tagAdminOperation(
+        operation.authorizedProcedure.input(config.input).query(operation.resolver),
+        config.operationId,
+      ),
     type: "query" as const,
   };
 }
@@ -160,10 +155,11 @@ export function defineAdminApiMutationOperation<TSchema extends z.ZodTypeAny, TO
   const operation = createAdminApiOperationBase(config);
   return {
     ...operation,
-    toTRPC: () => tagAdminOperation(
-      operation.authorizedProcedure.input(config.input).mutation(operation.resolver),
-      config.operationId,
-    ),
+    toTRPC: () =>
+      tagAdminOperation(
+        operation.authorizedProcedure.input(config.input).mutation(operation.resolver),
+        config.operationId,
+      ),
     type: "mutation" as const,
   };
 }

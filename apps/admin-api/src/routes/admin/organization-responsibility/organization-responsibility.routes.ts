@@ -1,4 +1,3 @@
-import type { OrganizationResponsibilityAssignmentLifecycleCommand as OrganizationResponsibilityAssignmentLifecycleCommandType } from "@iam/contracts";
 import {
   OrganizationResponsibilityAssignmentCreateDtoSchema,
   OrganizationResponsibilityAssignmentCursorPageSchema,
@@ -13,10 +12,10 @@ import { commonErrorResponses } from "@iam/api-core/core/openapi/helpers/common-
 import jsonContent from "@iam/api-core/core/openapi/helpers/json-content";
 import jsonContentRequired from "@iam/api-core/core/openapi/helpers/json-content-required";
 import createSuccessResponseSchema from "@iam/api-core/core/openapi/schemas/create-success-schema";
+import type { OrganizationResponsibilityAssignmentLifecycleCommand as OrganizationResponsibilityAssignmentLifecycleCommandType } from "@iam/contracts";
 import {
   createAdminMutationResultSchema,
   ORGANIZATION_RESPONSIBILITY_ASSIGNMENT_LIFECYCLE_COMMANDS,
-
 } from "@iam/contracts";
 import { OrganizationResponsibilityTypeViewSchema } from "@iam/domain/organization-responsibility";
 
@@ -36,9 +35,7 @@ export const organizationResponsibilityTypesList = createRoute({
   responses: {
     ...commonErrorResponses,
     [HttpStatusCodes.OK]: jsonContent(
-      createSuccessResponseSchema(
-        z.array(OrganizationResponsibilityTypeViewSchema),
-      ),
+      createSuccessResponseSchema(z.array(OrganizationResponsibilityTypeViewSchema)),
       "组织责任类型目录",
     ),
   },
@@ -55,9 +52,7 @@ export const organizationResponsibilityAssignmentsList = createRoute({
   responses: {
     ...commonErrorResponses,
     [HttpStatusCodes.OK]: jsonContent(
-      createSuccessResponseSchema(
-        OrganizationResponsibilityAssignmentCursorPageSchema,
-      ),
+      createSuccessResponseSchema(OrganizationResponsibilityAssignmentCursorPageSchema),
       "组织的 Open 责任任命游标列表",
     ),
   },
@@ -73,9 +68,7 @@ export const organizationResponsibilityAssignmentsSearch = createRoute({
   responses: {
     ...commonErrorResponses,
     [HttpStatusCodes.OK]: jsonContent(
-      createSuccessResponseSchema(
-        OrganizationResponsibilityAssignmentSearchPageSchema,
-      ),
+      createSuccessResponseSchema(OrganizationResponsibilityAssignmentSearchPageSchema),
       "全局组织责任任命搜索（支持页码或游标分页）",
     ),
   },
@@ -89,9 +82,7 @@ export const organizationResponsibilityAssignmentDetail = createRoute({
   responses: {
     ...commonErrorResponses,
     [HttpStatusCodes.OK]: jsonContent(
-      createSuccessResponseSchema(
-        OrganizationResponsibilityAssignmentViewSchema,
-      ),
+      createSuccessResponseSchema(OrganizationResponsibilityAssignmentViewSchema),
       "组织责任任命详情",
     ),
   },
@@ -105,9 +96,7 @@ export const organizationResponsibilityGlobalAssignmentDetail = createRoute({
   responses: {
     ...commonErrorResponses,
     [HttpStatusCodes.OK]: jsonContent(
-      createSuccessResponseSchema(
-        OrganizationResponsibilityAssignmentViewSchema,
-      ),
+      createSuccessResponseSchema(OrganizationResponsibilityAssignmentViewSchema),
       "全局组织责任任命详情",
     ),
   },
@@ -119,17 +108,12 @@ export const organizationResponsibilityAssignmentCreate = createRoute({
   tags,
   request: {
     params: organizationParam,
-    body: jsonContentRequired(
-      OrganizationResponsibilityAssignmentCreateDtoSchema,
-      "组织责任任命创建参数",
-    ),
+    body: jsonContentRequired(OrganizationResponsibilityAssignmentCreateDtoSchema, "组织责任任命创建参数"),
   },
   responses: {
     ...commonErrorResponses,
     [HttpStatusCodes.OK]: jsonContent(
-      createSuccessResponseSchema(
-        createAdminMutationResultSchema(z.object({ id: z.number().int().positive() })),
-      ),
+      createSuccessResponseSchema(createAdminMutationResultSchema(z.object({ id: z.number().int().positive() }))),
       "组织责任任命创建成功",
     ),
   },
@@ -154,20 +138,17 @@ function createOrganizationResponsibilityLifecycleRoute(
   });
 }
 
-export const organizationResponsibilityAssignmentPause
-  = createOrganizationResponsibilityLifecycleRoute(
-    ORGANIZATION_RESPONSIBILITY_ASSIGNMENT_LIFECYCLE_COMMANDS.Pause,
-    "组织责任任命暂停成功",
-  );
+export const organizationResponsibilityAssignmentPause = createOrganizationResponsibilityLifecycleRoute(
+  ORGANIZATION_RESPONSIBILITY_ASSIGNMENT_LIFECYCLE_COMMANDS.Pause,
+  "组织责任任命暂停成功",
+);
 
-export const organizationResponsibilityAssignmentResume
-  = createOrganizationResponsibilityLifecycleRoute(
-    ORGANIZATION_RESPONSIBILITY_ASSIGNMENT_LIFECYCLE_COMMANDS.Resume,
-    "组织责任任命恢复成功",
-  );
+export const organizationResponsibilityAssignmentResume = createOrganizationResponsibilityLifecycleRoute(
+  ORGANIZATION_RESPONSIBILITY_ASSIGNMENT_LIFECYCLE_COMMANDS.Resume,
+  "组织责任任命恢复成功",
+);
 
-export const organizationResponsibilityAssignmentEnd
-  = createOrganizationResponsibilityLifecycleRoute(
-    ORGANIZATION_RESPONSIBILITY_ASSIGNMENT_LIFECYCLE_COMMANDS.End,
-    "组织责任任命结束成功",
-  );
+export const organizationResponsibilityAssignmentEnd = createOrganizationResponsibilityLifecycleRoute(
+  ORGANIZATION_RESPONSIBILITY_ASSIGNMENT_LIFECYCLE_COMMANDS.End,
+  "组织责任任命结束成功",
+);

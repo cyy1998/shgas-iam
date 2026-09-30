@@ -1,15 +1,11 @@
-import type { z } from "zod";
-import type { ClientSnapshotAtomicStore } from "./atomic-store";
-import type { ClientSnapshot, ClientSnapshotRedis, ClientSnapshotSource } from "./contract";
-import type { ClientCredentialSource } from "./credentials";
 import { randomUUID } from "node:crypto";
 import { ClientCodeSchema } from "@iam/contracts";
+import type { z } from "zod";
 import { z as schemaBuilder } from "zod";
-import {
-  ClientSnapshotInvalidationError,
-  ClientSnapshotUnavailableError,
-  ClientSnapshotValueSchema,
-} from "./contract";
+import type { ClientSnapshotAtomicStore } from "./atomic-store";
+import type { ClientSnapshot, ClientSnapshotRedis, ClientSnapshotSource } from "./contract";
+import { ClientSnapshotInvalidationError, ClientSnapshotUnavailableError, ClientSnapshotValueSchema } from "./contract";
+import type { ClientCredentialSource } from "./credentials";
 import { ClientCredentialValueSchema } from "./credentials";
 
 import { createClientSnapshotRedisStore } from "./redis-store";
@@ -29,8 +25,7 @@ function createClientSnapshotsWithStore(options: ClientSnapshotsOptions, store: 
   const presentTtlMs = options.presentTtlMs ?? 30_000;
   const absentTtlMs = options.absentTtlMs ?? 3_000;
   for (const ttl of [presentTtlMs, absentTtlMs]) {
-    if (!Number.isSafeInteger(ttl) || ttl <= 0)
-      throw new RangeError("Snapshot TTL must be a positive safe integer");
+    if (!Number.isSafeInteger(ttl) || ttl <= 0) throw new RangeError("Snapshot TTL must be a positive safe integer");
   }
   function reader<T>(
     kind: "client" | "credential",
@@ -49,12 +44,12 @@ function createClientSnapshotsWithStore(options: ClientSnapshotsOptions, store: 
           const state = await store.readOrBootstrap(code, kind, randomUUID());
           const cached = decode(state.payload, envelopeSchema);
           if (
-            cached
-            && cached.clientCode === code
-            && cached.reader === kind
-            && cached.epoch === state.control.epoch
-            && cached.generation === state.control.generation
-            && (cached.snapshot.kind === "absent" || matches(cached.snapshot.value, code))
+            cached &&
+            cached.clientCode === code &&
+            cached.reader === kind &&
+            cached.epoch === state.control.epoch &&
+            cached.generation === state.control.generation &&
+            (cached.snapshot.kind === "absent" || matches(cached.snapshot.value, code))
           ) {
             return cached.snapshot;
           }
@@ -63,8 +58,8 @@ function createClientSnapshotsWithStore(options: ClientSnapshotsOptions, store: 
           if (!operation) {
             operation = (async () => {
               const row = await load(code);
-              const snapshot: ClientSnapshot<T>
-                = row === null ? { kind: "absent" } : { kind: "present", value: schema.parse(row) };
+              const snapshot: ClientSnapshot<T> =
+                row === null ? { kind: "absent" } : { kind: "present", value: schema.parse(row) };
               if (snapshot.kind === "present" && !matches(snapshot.value, code))
                 throw new ClientSnapshotUnavailableError();
               const payload = JSON.stringify({
@@ -87,16 +82,12 @@ function createClientSnapshotsWithStore(options: ClientSnapshotsOptions, store: 
           }
           try {
             const result = await operation;
-            if (result.published)
-              return result.snapshot;
-          }
-          finally {
-            if (inFlight.get(key) === operation)
-              inFlight.delete(key);
+            if (result.published) return result.snapshot;
+          } finally {
+            if (inFlight.get(key) === operation) inFlight.delete(key);
           }
         }
-      }
-      catch {
+      } catch {
         throw new ClientSnapshotUnavailableError();
       }
       throw new ClientSnapshotUnavailableError();
@@ -106,11 +97,10 @@ function createClientSnapshotsWithStore(options: ClientSnapshotsOptions, store: 
   const client = reader(
     "client",
     ClientSnapshotValueSchema,
-    code => options.source.loadClient(code),
+    (code) => options.source.loadClient(code),
     (value, code) => value.clientCode === code,
   );
-  const credential = reader("credential", ClientCredentialValueSchema, code =>
-    options.source.loadCredential(code));
+  const credential = reader("credential", ClientCredentialValueSchema, (code) => options.source.loadCredential(code));
   return {
     client,
     credential,
@@ -132,8 +122,7 @@ function createClientSnapshotsWithStore(options: ClientSnapshotsOptions, store: 
       ClientCodeSchema.parse(code);
       try {
         await store.invalidateClient(code, randomUUID());
-      }
-      catch {
+      } catch {
         throw new ClientSnapshotInvalidationError();
       }
     },
@@ -157,12 +146,10 @@ function zEnvelope<T>(schema: z.ZodType<T>) {
   });
 }
 function decode<T>(raw: string | null, schema: z.ZodType<T>): T | null {
-  if (raw === null)
-    return null;
+  if (raw === null) return null;
   try {
     return schema.parse(JSON.parse(raw));
-  }
-  catch {
+  } catch {
     return null;
   }
 }

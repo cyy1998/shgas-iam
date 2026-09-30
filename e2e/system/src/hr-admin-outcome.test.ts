@@ -1,11 +1,11 @@
-import type { HrAdminOutcomeScenario } from "./hr-admin-outcome.ts";
+import { describe, expect, test } from "bun:test";
 import {
   OrganizationResponsibilityAssignmentStatus,
   OrganizationResponsibilityTypeCode,
   UserProfileDirtyReason,
   UserProfileDirtyStatus,
 } from "@iam/contracts";
-import { describe, expect, test } from "bun:test";
+import type { HrAdminOutcomeScenario } from "./hr-admin-outcome.ts";
 import { verifyHrAdminOutcome } from "./hr-admin-outcome.ts";
 
 const scenario = {
@@ -14,8 +14,7 @@ const scenario = {
   hrAdminUsername: "e2e-hr-admin-outcome-01",
   hrAdminRoleCode: "iam:hr-admin",
   responsibilityHolderPositionCode: "e2e-resp-pos-outcome-01",
-  outsideResponsibilityHolderPositionCode:
-    "e2e-outside-resp-pos-outcome-01",
+  outsideResponsibilityHolderPositionCode: "e2e-outside-resp-pos-outcome-01",
   responsibilityTargetOrganizationCode: "e2e-resp-target-outcome-01",
   hrSecondScopeRootOrganizationCode: "e2e-hr-root-outcome-01",
   hrResponsibilityTargetOrganizationCode: "e2e-hr-target-outcome-01",
@@ -41,9 +40,7 @@ describe("HR Admin responsibility journey outcome", () => {
         ...completeReadBack(),
         dirty: {
           dirtyVersion: "6",
-          reasonCodes: [
-            UserProfileDirtyReason.OrganizationResponsibilityAssignmentUpdated,
-          ],
+          reasonCodes: [UserProfileDirtyReason.OrganizationResponsibilityAssignmentUpdated],
           status: UserProfileDirtyStatus.Pending,
         },
         profile: {
@@ -80,8 +77,7 @@ describe("HR Admin responsibility journey outcome", () => {
         sleep: async () => undefined,
         timeoutMs: 0,
       });
-    }
-    catch (error) {
+    } catch (error) {
       rejection = error;
     }
 
@@ -106,16 +102,14 @@ function completeReadBack() {
       "admin.organization_responsibility_assignment.end",
       "admin.organization_responsibility_assignment.end",
       "admin.organization_responsibility_assignment.end",
-    ].map(action => ({
+    ].map((action) => ({
       action,
       actorUsername: scenario.hrAdminUsername,
       outcome: "success",
     })),
     dirty: {
       dirtyVersion: "6",
-      reasonCodes: [
-        UserProfileDirtyReason.OrganizationResponsibilityAssignmentUpdated,
-      ],
+      reasonCodes: [UserProfileDirtyReason.OrganizationResponsibilityAssignmentUpdated],
       status: UserProfileDirtyStatus.Processed,
     },
     profile: {

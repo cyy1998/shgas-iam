@@ -1,8 +1,8 @@
-import type { WorkerEnv } from "@worker/env";
-import type { WorkerQueueRegistration } from "@worker/modules/registry";
 import { createBullBoard } from "@bull-board/api";
 import { BullMQAdapter } from "@bull-board/api/bullMQAdapter";
 import { HonoAdapter } from "@bull-board/hono";
+import type { WorkerEnv } from "@worker/env";
+import type { WorkerQueueRegistration } from "@worker/modules/registry";
 import { serveStatic } from "hono/bun";
 
 export interface CreateDashboardPluginInput {
@@ -11,12 +11,13 @@ export interface CreateDashboardPluginInput {
 }
 
 export function createDashboardQueueAdapters(input: CreateDashboardPluginInput) {
-  return input.queues.map(registration =>
-    new BullMQAdapter(registration.queue as never, {
-      readOnlyMode: input.env.dashboard.readOnly,
-      displayName: registration.queueName,
-      description: `${registration.moduleKey} queue`,
-    }),
+  return input.queues.map(
+    (registration) =>
+      new BullMQAdapter(registration.queue as never, {
+        readOnlyMode: input.env.dashboard.readOnly,
+        displayName: registration.queueName,
+        description: `${registration.moduleKey} queue`,
+      }),
   );
 }
 

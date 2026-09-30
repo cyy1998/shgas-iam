@@ -1,24 +1,10 @@
-import { AdminMutationCommittedError } from '@admin/services/admin-mutation';
-import {
-  deleteClient,
-  updateClient,
-  updateClientStatus,
-  type ClientDetailVo,
-} from '@admin/services/client';
-import { ClientStatus, getClientStatusOptions } from '@iam/contracts';
-import {
-  Button,
-  Card,
-  Form,
-  Input,
-  message,
-  Select,
-  Space,
-  Typography,
-} from 'antd';
-import { useEffect, useState } from 'react';
-import type { ClientCommittedFailureKind } from './settingsHelpers';
-import { confirmClientSettingAction } from './settingsHelpers';
+import { AdminMutationCommittedError } from "@admin/services/admin-mutation";
+import { type ClientDetailVo, deleteClient, updateClient, updateClientStatus } from "@admin/services/client";
+import { ClientStatus, getClientStatusOptions } from "@iam/contracts";
+import { Button, Card, Form, Input, message, Select, Space, Typography } from "antd";
+import { useEffect, useState } from "react";
+import type { ClientCommittedFailureKind } from "./settingsHelpers";
+import { confirmClientSettingAction } from "./settingsHelpers";
 
 type Props = {
   client: ClientDetailVo;
@@ -34,13 +20,7 @@ type BasicFormValues = {
   description?: string;
 };
 
-export default function BasicSettings({
-  client,
-  onDirtyChange,
-  onMutated,
-  onCommitted,
-  onDeleted,
-}: Props) {
+export default function BasicSettings({ client, onDirtyChange, onMutated, onCommitted, onDeleted }: Props) {
   const [form] = Form.useForm<BasicFormValues>();
   const [secretForm] = Form.useForm<{ clientSecret: string }>();
   const [secretDirty, setSecretDirty] = useState(false);
@@ -57,8 +37,7 @@ export default function BasicSettings({
         url: client.url ?? undefined,
         description: client.description ?? undefined,
       });
-    if (!secretDirty)
-      secretForm.setFieldsValue({ clientSecret: client.clientSecret });
+    if (!secretDirty) secretForm.setFieldsValue({ clientSecret: client.clientSecret });
   }, [client, form, secretForm, formDirty, secretDirty]);
 
   useEffect(() => {
@@ -67,21 +46,21 @@ export default function BasicSettings({
 
   const handleError = async (
     err: unknown,
-    section: 'profile' | 'secret' | 'status' | 'delete',
-    kind: ClientCommittedFailureKind = 'mutation',
+    section: "profile" | "secret" | "status" | "delete",
+    kind: ClientCommittedFailureKind = "mutation",
   ) => {
     if (err instanceof AdminMutationCommittedError) {
-      if (section === 'profile') setFormDirty(false);
-      if (section === 'secret') setSecretDirty(false);
-      if (section === 'status') setPendingStatus(null);
+      if (section === "profile") setFormDirty(false);
+      if (section === "secret") setSecretDirty(false);
+      if (section === "status") setPendingStatus(null);
       await onCommitted(kind);
       return;
     }
-    message.error(err instanceof Error ? err.message : '操作失败');
+    message.error(err instanceof Error ? err.message : "操作失败");
   };
 
   return (
-    <Space orientation="vertical" size="large" style={{ width: '100%' }}>
+    <Space orientation="vertical" size="large" style={{ width: "100%" }}>
       <Card title="基础信息">
         <Form<BasicFormValues>
           form={form}
@@ -97,21 +76,17 @@ export default function BasicSettings({
                 extAttributes: {},
               });
               setFormDirty(false);
-              if (outcome.changed) message.success('基础信息已保存');
-              else message.info('无需修改');
+              if (outcome.changed) message.success("基础信息已保存");
+              else message.info("无需修改");
               await onMutated();
             } catch (err) {
-              await handleError(err, 'profile');
+              await handleError(err, "profile");
             } finally {
               setSaving(false);
             }
           }}
         >
-          <Form.Item
-            name="clientName"
-            label="应用名称"
-            rules={[{ required: true, message: '请输入应用名称' }]}
-          >
+          <Form.Item name="clientName" label="应用名称" rules={[{ required: true, message: "请输入应用名称" }]}>
             <Input />
           </Form.Item>
           <Form.Item name="url" label="访问地址">
@@ -138,11 +113,11 @@ export default function BasicSettings({
                 clientSecret,
               });
               setSecretDirty(false);
-              if (outcome.changed) message.success('内部 API 凭据已保存');
-              else message.info('无需修改');
+              if (outcome.changed) message.success("内部 API 凭据已保存");
+              else message.info("无需修改");
               await onMutated();
             } catch (error) {
-              await handleError(error, 'secret');
+              await handleError(error, "secret");
             } finally {
               setSaving(false);
             }
@@ -152,7 +127,7 @@ export default function BasicSettings({
             name="clientSecret"
             label="通用应用密钥"
             extra="用于内部 API 访问，独立保存。"
-            rules={[{ required: true, message: '请输入应用密钥' }]}
+            rules={[{ required: true, message: "请输入应用密钥" }]}
           >
             <Input.Password />
           </Form.Item>
@@ -179,23 +154,20 @@ export default function BasicSettings({
               if (
                 status === ClientStatus.Disable &&
                 !(await confirmClientSettingAction(
-                  '更新应用全局状态？',
-                  '协议配置与启用意图会保留，已有会话不会因此终止。',
+                  "更新应用全局状态？",
+                  "协议配置与启用意图会保留，已有会话不会因此终止。",
                 ))
               ) {
                 return;
               }
               try {
-                const outcome = await updateClientStatus(
-                  client.clientCode,
-                  status,
-                );
+                const outcome = await updateClientStatus(client.clientCode, status);
                 setPendingStatus(null);
-                if (outcome.changed) message.success('全局状态已更新');
-                else message.info('无需修改');
+                if (outcome.changed) message.success("全局状态已更新");
+                else message.info("无需修改");
                 await onMutated();
               } catch (err) {
-                await handleError(err, 'status');
+                await handleError(err, "status");
               }
             }}
           >
@@ -216,17 +188,17 @@ export default function BasicSettings({
               if (
                 !(await confirmClientSettingAction(
                   `删除应用 ${client.clientName}？`,
-                  '删除后将返回应用列表，该操作不会物理删除历史记录。',
+                  "删除后将返回应用列表，该操作不会物理删除历史记录。",
                 ))
               ) {
                 return;
               }
               try {
                 await deleteClient(client.clientCode);
-                message.success('已删除');
+                message.success("已删除");
                 onDeleted();
               } catch (err) {
-                await handleError(err, 'delete');
+                await handleError(err, "delete");
               }
             }}
           >

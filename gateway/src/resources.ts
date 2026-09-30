@@ -46,9 +46,7 @@ export const resourceDefinitions = [
     endpoint: "services",
     idFields: ["id"],
     syncOrder: 30,
-    references: [
-      { field: "upstream_id", targetKind: "upstreams", targetName: "upstream" },
-    ],
+    references: [{ field: "upstream_id", targetKind: "upstreams", targetName: "upstream" }],
     compare: commonCompare,
   },
   {
@@ -92,12 +90,12 @@ export const resourceDefinitions = [
 
 export const writeOrder = [...resourceDefinitions]
   .sort((left, right) => left.syncOrder - right.syncOrder)
-  .map(definition => definition.kind);
+  .map((definition) => definition.kind);
 
 export const deleteOrder = [...writeOrder].reverse();
 
 export function getDefinition(kind: ResourceKind): ResourceDefinition {
-  const definition = resourceDefinitions.find(item => item.kind === kind);
+  const definition = resourceDefinitions.find((item) => item.kind === kind);
   if (!definition) {
     throw new Error(`Unknown resource kind: ${kind}`);
   }
@@ -115,13 +113,14 @@ export function getResourceId(definition: ResourceDefinition, resource: Manifest
 }
 
 export function createEmptyResourceMap(): Record<ResourceKind, ManifestObject[]> {
-  return Object.fromEntries(
-    resourceDefinitions.map(definition => [definition.kind, []]),
-  ) as unknown as Record<ResourceKind, ManifestObject[]>;
+  return Object.fromEntries(resourceDefinitions.map((definition) => [definition.kind, []])) as unknown as Record<
+    ResourceKind,
+    ManifestObject[]
+  >;
 }
 
 export function countResources(resources: Record<ResourceKind, ManifestObject[]>): Record<ResourceKind, number> {
   return Object.fromEntries(
-    resourceDefinitions.map(definition => [definition.kind, resources[definition.kind].length]),
+    resourceDefinitions.map((definition) => [definition.kind, resources[definition.kind].length]),
   ) as Record<ResourceKind, number>;
 }

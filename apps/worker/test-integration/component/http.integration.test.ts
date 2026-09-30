@@ -1,7 +1,7 @@
+import { describe, expect, test } from "bun:test";
 import type { WorkerEnv } from "@worker/env";
 import { createDashboardQueueAdapters } from "@worker/http/dashboard";
 import { createWorkerHttpApp } from "@worker/http/server";
-import { describe, expect, test } from "bun:test";
 
 function fakeBullMqQueue() {
   return {

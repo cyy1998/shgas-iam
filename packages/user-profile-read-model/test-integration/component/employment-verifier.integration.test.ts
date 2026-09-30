@@ -1,7 +1,7 @@
-import type { EmploymentInventoryRow } from "@iam/user-profile-read-model/worker";
-import { EmploymentStatus, OrganizationStatus, PositionStatus } from "@iam/contracts";
-import { createEmploymentVerifier } from "@iam/user-profile-read-model/worker";
 import { describe, expect, test } from "bun:test";
+import { EmploymentStatus, OrganizationStatus, PositionStatus } from "@iam/contracts";
+import type { EmploymentInventoryRow } from "@iam/user-profile-read-model/worker";
+import { createEmploymentVerifier } from "@iam/user-profile-read-model/worker";
 
 const NOW = new Date("2026-08-11T12:00:00.000Z");
 
@@ -23,11 +23,13 @@ describe("Employment verifier", () => {
         legacyTombstones: 0,
         blockingEmployments: 1,
       },
-      failures: [{
-        code: "unknown-employment-status",
-        count: 1,
-        employmentIds: [41],
-      }],
+      failures: [
+        {
+          code: "unknown-employment-status",
+          count: 1,
+          employmentIds: [41],
+        },
+      ],
     });
   });
 
@@ -44,15 +46,18 @@ describe("Employment verifier", () => {
       clock: { nowDate: () => NOW },
     });
 
-    expect((await verifier.verify()).failures).toEqual([{
-      code: "position-not-effective",
-      count: 2,
-      employmentIds: [42, 43],
-    }, {
-      code: "organization-not-effective",
-      count: 2,
-      employmentIds: [44, 45],
-    }]);
+    expect((await verifier.verify()).failures).toEqual([
+      {
+        code: "position-not-effective",
+        count: 2,
+        employmentIds: [42, 43],
+      },
+      {
+        code: "organization-not-effective",
+        count: 2,
+        employmentIds: [44, 45],
+      },
+    ]);
   });
 
   test("classifies invalid, contradictory, and unsupported Employment periods", async () => {
@@ -77,23 +82,28 @@ describe("Employment verifier", () => {
       clock: { nowDate: () => NOW },
     });
 
-    expect((await verifier.verify()).failures).toEqual([{
-      code: "invalid-employment-period",
-      count: 1,
-      employmentIds: [52],
-    }, {
-      code: "open-employment-has-end-time",
-      count: 1,
-      employmentIds: [50],
-    }, {
-      code: "ended-employment-missing-end-time",
-      count: 1,
-      employmentIds: [51],
-    }, {
-      code: "future-open-start-time",
-      count: 1,
-      employmentIds: [53],
-    }]);
+    expect((await verifier.verify()).failures).toEqual([
+      {
+        code: "invalid-employment-period",
+        count: 1,
+        employmentIds: [52],
+      },
+      {
+        code: "open-employment-has-end-time",
+        count: 1,
+        employmentIds: [50],
+      },
+      {
+        code: "ended-employment-missing-end-time",
+        count: 1,
+        employmentIds: [51],
+      },
+      {
+        code: "future-open-start-time",
+        count: 1,
+        employmentIds: [53],
+      },
+    ]);
   });
 
   test("aggregates duplicate Open relationships and multiple Open Primary records", async () => {
@@ -116,40 +126,48 @@ describe("Employment verifier", () => {
       clock: { nowDate: () => NOW },
     });
 
-    expect((await verifier.verify()).failures).toEqual([{
-      code: "duplicate-open-employment",
-      count: 2,
-      employmentIds: [60, 61],
-    }, {
-      code: "multiple-open-primary-employments",
-      count: 2,
-      employmentIds: [62, 63],
-    }]);
+    expect((await verifier.verify()).failures).toEqual([
+      {
+        code: "duplicate-open-employment",
+        count: 2,
+        employmentIds: [60, 61],
+      },
+      {
+        code: "multiple-open-primary-employments",
+        count: 2,
+        employmentIds: [62, 63],
+      },
+    ]);
   });
 
   test("reports multiple independently knowable anomalies on the same Employment", async () => {
     const verifier = createEmploymentVerifier({
       inventory: {
-        readAll: async () => [employment({
-          id: 70,
-          status: 99,
-          endTime: new Date("2026-08-01T00:00:00.000Z"),
-        })],
+        readAll: async () => [
+          employment({
+            id: 70,
+            status: 99,
+            endTime: new Date("2026-08-01T00:00:00.000Z"),
+          }),
+        ],
       },
       clock: { nowDate: () => NOW },
     });
 
     const report = await verifier.verify();
     expect(report.counts.blockingEmployments).toBe(1);
-    expect(report.failures).toEqual([{
-      code: "unknown-employment-status",
-      count: 1,
-      employmentIds: [70],
-    }, {
-      code: "invalid-employment-period",
-      count: 1,
-      employmentIds: [70],
-    }]);
+    expect(report.failures).toEqual([
+      {
+        code: "unknown-employment-status",
+        count: 1,
+        employmentIds: [70],
+      },
+      {
+        code: "invalid-employment-period",
+        count: 1,
+        employmentIds: [70],
+      },
+    ]);
   });
 
   test("accepts the start boundary, ended history and tombstones without guessing an end time", async () => {
@@ -172,9 +190,7 @@ describe("Employment verifier", () => {
   });
 });
 
-function employment(
-  overrides: Partial<EmploymentInventoryRow> = {},
-): EmploymentInventoryRow {
+function employment(overrides: Partial<EmploymentInventoryRow> = {}): EmploymentInventoryRow {
   return {
     id: 1,
     userId: 10,

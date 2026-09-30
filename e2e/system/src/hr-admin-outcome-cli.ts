@@ -1,7 +1,7 @@
 import db, { closeDb } from "@iam/db";
 import { requireEnvironment } from "./environment.ts";
-import { createProductionHrAdminOutcomeOwner } from "./hr-admin-outcome-owner.ts";
 import { verifyHrAdminOutcome } from "./hr-admin-outcome.ts";
+import { createProductionHrAdminOutcomeOwner } from "./hr-admin-outcome-owner.ts";
 import { createE2EScenarioIdentity } from "./seed.ts";
 
 async function run() {
@@ -13,8 +13,7 @@ async function run() {
       scenario: { runId, ...scenario },
     });
     console.log(JSON.stringify(result));
-  }
-  finally {
+  } finally {
     await closeDb({ timeoutSeconds: 5 });
   }
 }

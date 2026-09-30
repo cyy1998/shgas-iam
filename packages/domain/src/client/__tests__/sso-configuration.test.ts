@@ -1,3 +1,4 @@
+import { expect, test } from "bun:test";
 import type { ClientSsoConfig } from "@iam/contracts";
 import {
   ClientSsoCallbackType,
@@ -9,7 +10,6 @@ import {
   OidcScope,
   OidcTokenEndpointAuthMethod,
 } from "@iam/contracts";
-import { expect, test } from "bun:test";
 import { toClientAdminDetailDto, toClientAdminListDto, toGenericClientRuntimeDto } from "../schema";
 import { normalizeClientSsoConfig } from "../sso-configuration";
 import { toClientSsoAdminDto, toClientSsoRuntimeDto } from "../sso-schema";
@@ -66,12 +66,15 @@ test("strict single protocol configuration derives authentication and rejects mi
   expect(normalizeClientSsoConfig(custom)).toEqual(custom);
 });
 
-test.each([true, false])("configuration normalization rejects ORCAS enabled=%s instead of silently dropping it", (enabled) => {
-  const storedManaged = { ...managed, orcas: { enabled } };
-  const storedBusiness = { ...custom, orcas: { enabled } };
-  expect(() => normalizeClientSsoConfig(storedManaged)).toThrow();
-  expect(() => normalizeClientSsoConfig(storedBusiness)).toThrow();
-});
+test.each([true, false])(
+  "configuration normalization rejects ORCAS enabled=%s instead of silently dropping it",
+  (enabled) => {
+    const storedManaged = { ...managed, orcas: { enabled } };
+    const storedBusiness = { ...custom, orcas: { enabled } };
+    expect(() => normalizeClientSsoConfig(storedManaged)).toThrow();
+    expect(() => normalizeClientSsoConfig(storedBusiness)).toThrow();
+  },
+);
 
 test("actual ordinary Client mappers remove current plaintext and credential identity", () => {
   const row = {

@@ -1,5 +1,5 @@
-import UserDetailDrawer from '@admin/pages/users/components/UserDetailDrawer';
-import { AdminMutationCommittedError } from '@admin/services/admin-mutation';
+import UserDetailDrawer from "@admin/pages/users/components/UserDetailDrawer";
+import { AdminMutationCommittedError } from "@admin/services/admin-mutation";
 import {
   type AdminAuthorizationDecision,
   type AdminUserAllowedActions,
@@ -8,13 +8,13 @@ import {
   OrganizationType,
   UserStatus,
   UserType,
-} from '@iam/contracts';
-import { ConfigProvider, message, Modal } from 'antd';
-import type { CSSProperties, ReactNode } from 'react';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { __setAccess } from '~admin/test/mocks/umijs-max';
-import { act, render, screen, waitFor, within } from '~admin/test/render';
-import { createHrEmploymentAllowedActions } from '../../test/mocks/fixtures';
+} from "@iam/contracts";
+import { ConfigProvider, Modal, message } from "antd";
+import type { CSSProperties, ReactNode } from "react";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { __setAccess } from "~admin/test/mocks/umijs-max";
+import { act, render, screen, waitFor, within } from "~admin/test/render";
+import { createHrEmploymentAllowedActions } from "../../test/mocks/fixtures";
 
 const lifecycle = vi.hoisted(() => ({
   clearPrimaryEmployment: vi.fn(),
@@ -29,10 +29,10 @@ const lifecycle = vi.hoisted(() => ({
   setPrimaryEmployment: vi.fn(),
 }));
 
-vi.mock('@admin/components/StatusTag', () => ({
+vi.mock("@admin/components/StatusTag", () => ({
   default: ({ status }: { status: number }) => <span>{status}</span>,
 }));
-vi.mock('@admin/components/AuthorizationActionButton', () => ({
+vi.mock("@admin/components/AuthorizationActionButton", () => ({
   default: ({
     children,
     decision,
@@ -51,42 +51,32 @@ vi.mock('@admin/components/AuthorizationActionButton', () => ({
       disabled={!decision.allowed}
       onClick={onClick}
       style={style}
-      title={
-        decision.reason === 'ACTION_NOT_GRANTED'
-          ? '当前管理员角色未授予此操作'
-          : undefined
-      }
+      title={decision.reason === "ACTION_NOT_GRANTED" ? "当前管理员角色未授予此操作" : undefined}
       type="button"
     >
       {children}
     </button>
   ),
 }));
-vi.mock('@admin/components/audit/AuditLogTable', () => ({
+vi.mock("@admin/components/audit/AuditLogTable", () => ({
   default: () => null,
 }));
-vi.mock('@admin/pages/employments/components/EmploymentFormModal', () => ({
+vi.mock("@admin/pages/employments/components/EmploymentFormModal", () => ({
   default: () => null,
 }));
-vi.mock('@admin/pages/employments/components/TransferModal', () => ({
-  default: ({
-    employment,
-    open,
-  }: {
-    employment: { id: number } | null;
-    open: boolean;
-  }) =>
+vi.mock("@admin/pages/employments/components/TransferModal", () => ({
+  default: ({ employment, open }: { employment: { id: number } | null; open: boolean }) =>
     open ? (
       <div aria-label="转岗任职" role="dialog">
         {employment?.id}
       </div>
     ) : null,
 }));
-vi.mock('@admin/pages/users/components/ResetPasswordModal', () => ({
+vi.mock("@admin/pages/users/components/ResetPasswordModal", () => ({
   confirmResetPassword: vi.fn(),
 }));
 
-vi.mock('@admin/services/employment', () => ({
+vi.mock("@admin/services/employment", () => ({
   clearPrimaryEmployment: lifecycle.clearPrimaryEmployment,
   endEmployment: lifecycle.endEmployment,
   pauseEmployment: lifecycle.pauseEmployment,
@@ -94,16 +84,16 @@ vi.mock('@admin/services/employment', () => ({
   resumeEmployment: lifecycle.resumeEmployment,
   setPrimaryEmployment: lifecycle.setPrimaryEmployment,
 }));
-vi.mock('@admin/services/user', () => ({
+vi.mock("@admin/services/user", () => ({
   deleteUser: lifecycle.deleteUser,
   getUser: lifecycle.getUser,
   updateUserStatus: lifecycle.updateUserStatus,
 }));
-vi.mock('@admin/services/organization-responsibility', () => ({
+vi.mock("@admin/services/organization-responsibility", () => ({
   searchOrganizationResponsibilityAssignments: lifecycle.searchAssignments,
 }));
 
-vi.mock('@ant-design/pro-components', () => {
+vi.mock("@ant-design/pro-components", () => {
   const ProDescriptions = ({
     dataSource,
     columns,
@@ -117,13 +107,11 @@ vi.mock('@ant-design/pro-components', () => {
   }) => (
     <>
       {columns
-        .filter((column) =>
-          ['roles', 'privileges'].includes(String(column.dataIndex)),
-        )
+        .filter((column) => ["roles", "privileges"].includes(String(column.dataIndex)))
         .map((column) => (
-          <div aria-label={column.title} key={String(column.dataIndex)}>
+          <section aria-label={column.title} key={String(column.dataIndex)}>
             {column.render?.(null, dataSource)}
-          </div>
+          </section>
         ))}
     </>
   );
@@ -133,9 +121,9 @@ vi.mock('@ant-design/pro-components', () => {
   };
 });
 
-const now = new Date('2026-01-01T00:00:00.000Z');
+const now = new Date("2026-01-01T00:00:00.000Z");
 const allowed = { allowed: true, reason: null } as const;
-const denied = { allowed: false, reason: 'ACTION_NOT_GRANTED' } as const;
+const denied = { allowed: false, reason: "ACTION_NOT_GRANTED" } as const;
 const fullAdminActions = {
   editProfile: allowed,
   resetPassword: allowed,
@@ -146,8 +134,8 @@ const fullAdminActions = {
 const organization = {
   assignedOrg: {
     id: 2,
-    orgCode: 'ORG',
-    orgName: 'Organization',
+    orgCode: "ORG",
+    orgName: "Organization",
     orgType: OrganizationType.Department,
     level: OrganizationLevel.Two,
     parentId: -1,
@@ -160,8 +148,8 @@ const organization = {
   companyNodes: [
     {
       id: 20,
-      orgCode: 'COMPANY',
-      orgName: 'Company',
+      orgCode: "COMPANY",
+      orgName: "Company",
       orgType: OrganizationType.Company,
       level: OrganizationLevel.One,
       parentId: -1,
@@ -180,8 +168,8 @@ function detail(
 ) {
   return {
     id: 1,
-    username: 'zhangsan',
-    name: '张三',
+    username: "zhangsan",
+    name: "张三",
     mobile: null,
     wxId: null,
     userType: UserType.Formal,
@@ -209,31 +197,25 @@ function detail(
         updateTime: now,
         user: {
           id: 1,
-          username: 'zhangsan',
-          name: '张三',
+          username: "zhangsan",
+          name: "张三",
           mobile: null,
           wxId: null,
         },
-        position: { id: 3, posCode: 'DEV', posName: 'Developer' },
+        position: { id: 3, posCode: "DEV", posName: "Developer" },
         organization,
-        roles: ['iam:hr-admin'],
-        privileges: ['people:read'],
-        allowedActions: createHrEmploymentAllowedActions(
-          employmentStatus,
-          isPrimary,
-        ),
-        managementPath:
-          employmentStatus === EmploymentStatus.Disable
-            ? null
-            : '/employments?employmentId=4',
+        roles: ["iam:hr-admin"],
+        privileges: ["people:read"],
+        allowedActions: createHrEmploymentAllowedActions(employmentStatus, isPrimary),
+        managementPath: employmentStatus === EmploymentStatus.Disable ? null : "/employments?employmentId=4",
       },
     ],
   };
 }
 
-describe('UserDetailDrawer Employment lifecycle actions', () => {
+describe("UserDetailDrawer Employment lifecycle actions", () => {
   it.each([UserStatus.Enable, UserStatus.Pause, UserStatus.Disable])(
-    'gates new Employment by User status %s',
+    "gates new Employment by User status %s",
     async (status) => {
       __setAccess({ canAccessEmployment: true, canCreateEmployment: true });
       lifecycle.getUser.mockResolvedValue({
@@ -241,52 +223,38 @@ describe('UserDetailDrawer Employment lifecycle actions', () => {
         status,
       });
       const { user } = render(
-        <UserDetailDrawer
-          open
-          username="zhangsan"
-          onClose={vi.fn()}
-          onEdit={vi.fn()}
-          onChanged={vi.fn()}
-        />,
+        <UserDetailDrawer open username="zhangsan" onClose={vi.fn()} onEdit={vi.fn()} onChanged={vi.fn()} />,
       );
-      await user.click(await screen.findByRole('tab', { name: /雇佣/ }));
-      const create = screen.getByRole('button', { name: /新增雇佣/ });
+      await user.click(await screen.findByRole("tab", { name: /雇佣/ }));
+      const create = screen.getByRole("button", { name: /新增雇佣/ });
       if (status === UserStatus.Disable) expect(create).toBeDisabled();
       else expect(create).toBeEnabled();
     },
   );
 
-  it('displays the role name in the user summary', async () => {
+  it("displays the role name in the user summary", async () => {
     lifecycle.getUser.mockResolvedValue({
       ...detail(EmploymentStatus.Enable),
-      roles: ['iam:hr-admin'],
-      roleNames: { 'iam:hr-admin': '人事管理员' },
+      roles: ["iam:hr-admin"],
+      roleNames: { "iam:hr-admin": "人事管理员" },
       privilegeNames: {},
     });
-    render(
-      <UserDetailDrawer
-        open
-        username="zhangsan"
-        onClose={vi.fn()}
-        onEdit={vi.fn()}
-        onChanged={vi.fn()}
-      />,
-    );
-    expect(await screen.findByText('人事管理员')).toBeInTheDocument();
-    expect(screen.queryByText('iam:hr-admin')).not.toBeInTheDocument();
+    render(<UserDetailDrawer open username="zhangsan" onClose={vi.fn()} onEdit={vi.fn()} onChanged={vi.fn()} />);
+    expect(await screen.findByText("人事管理员")).toBeInTheDocument();
+    expect(screen.queryByText("iam:hr-admin")).not.toBeInTheDocument();
   });
 
-  it('replaces the permission count when the selected user detail changes', async () => {
+  it("replaces the permission count when the selected user detail changes", async () => {
     lifecycle.getUser
       .mockResolvedValueOnce({
         ...detail(EmploymentStatus.Enable),
-        username: 'first',
-        privileges: ['people:read', 'people:write'],
+        username: "first",
+        privileges: ["people:read", "people:write"],
       })
       .mockResolvedValueOnce({
         ...detail(EmploymentStatus.Enable),
-        username: 'second',
-        privileges: ['people:read'],
+        username: "second",
+        privileges: ["people:read"],
       });
     const props = {
       open: true,
@@ -296,21 +264,15 @@ describe('UserDetailDrawer Employment lifecycle actions', () => {
     };
     const view = render(<UserDetailDrawer {...props} username="first" />);
 
-    expect(await screen.findByLabelText('权限数')).toHaveTextContent('2');
+    expect(await screen.findByLabelText("权限数")).toHaveTextContent("2");
 
     view.rerender(<UserDetailDrawer {...props} username="second" />);
-    await waitFor(() =>
-      expect(screen.getByLabelText('权限数')).toHaveTextContent('1'),
-    );
+    await waitFor(() => expect(screen.getByLabelText("权限数")).toHaveTextContent("1"));
   });
 
   beforeEach(() => {
     ConfigProvider.config({
-      holderRender: (children) => (
-        <ConfigProvider theme={{ token: { motion: false } }}>
-          {children}
-        </ConfigProvider>
-      ),
+      holderRender: (children) => <ConfigProvider theme={{ token: { motion: false } }}>{children}</ConfigProvider>,
     });
   });
 
@@ -322,9 +284,9 @@ describe('UserDetailDrawer Employment lifecycle actions', () => {
     ConfigProvider.config({ holderRender: undefined });
   });
 
-  describe.each(['Full Admin', 'HR'])('%s resignation', (role) => {
+  describe.each(["Full Admin", "HR"])("%s resignation", (role) => {
     const actions =
-      role === 'Full Admin'
+      role === "Full Admin"
         ? fullAdminActions
         : {
             editProfile: denied,
@@ -339,265 +301,164 @@ describe('UserDetailDrawer Employment lifecycle actions', () => {
         canAccessUser: true,
         canAccessEmployment: true,
         canAccessOrganizationResponsibility: false,
-        canAccessAudit: role === 'Full Admin',
-        canCreateEmployment: role === 'Full Admin',
+        canAccessAudit: role === "Full Admin",
+        canCreateEmployment: role === "Full Admin",
       });
       const onChanged = vi.fn();
       const { user } = render(
-        <UserDetailDrawer
-          open
-          username="zhangsan"
-          onClose={vi.fn()}
-          onEdit={vi.fn()}
-          onChanged={onChanged}
-        />,
+        <UserDetailDrawer open username="zhangsan" onClose={vi.fn()} onEdit={vi.fn()} onChanged={onChanged} />,
       );
-      await user.click(await screen.findByRole('button', { name: '离职' }));
-      const titles = await screen.findAllByText('办理用户 张三 离职？');
-      const dialog = titles
-        .find((title) => title.classList.contains('ant-modal-confirm-title'))
-        ?.closest('.ant-modal');
+      await user.click(await screen.findByRole("button", { name: "离职" }));
+      const titles = await screen.findAllByText("办理用户 张三 离职？");
+      const dialog = titles.find((title) => title.classList.contains("ant-modal-confirm-title"))?.closest(".ant-modal");
       expect(dialog).not.toBeNull();
-      await user.click(
-        within(dialog as HTMLElement).getByRole('button', { name: /确\s*定/ }),
-      );
+      await user.click(within(dialog as HTMLElement).getByRole("button", { name: /确\s*定/ }));
       await waitFor(() => expect(dialog).not.toBeInTheDocument());
       return onChanged;
     }
 
-    it.each([true, false])(
-      'reports changed=%s and refreshes facts',
-      async (changed) => {
-        lifecycle.getUser.mockResolvedValue(
-          detail(EmploymentStatus.Enable, true, actions),
-        );
-        lifecycle.resignUser.mockResolvedValue({ changed, result: null });
-        const onChanged = await submitResignation();
-        expect(
-          await screen.findByText(
-            changed ? '离职已完成' : '已处于离职状态，无需修改',
-          ),
-        ).toBeInTheDocument();
-        await waitFor(() => expect(onChanged).toHaveBeenCalledTimes(1));
-        expect(lifecycle.getUser).toHaveBeenCalledTimes(2);
-        expect(lifecycle.resignUser).toHaveBeenCalledExactlyOnceWith(
-          'zhangsan',
-        );
-      },
-    );
-
-    it('does not classify an ordinary rejection as a committed result', async () => {
-      lifecycle.getUser.mockResolvedValue(
-        detail(EmploymentStatus.Enable, true, actions),
-      );
-      lifecycle.resignUser.mockRejectedValue(new Error('离职资格已变化'));
+    it.each([true, false])("reports changed=%s and refreshes facts", async (changed) => {
+      lifecycle.getUser.mockResolvedValue(detail(EmploymentStatus.Enable, true, actions));
+      lifecycle.resignUser.mockResolvedValue({ changed, result: null });
       const onChanged = await submitResignation();
-      expect(await screen.findByText('离职资格已变化')).toBeInTheDocument();
-      expect(
-        screen.queryByText(/操作已生效，但后续处理失败/),
-      ).not.toBeInTheDocument();
-      expect(screen.queryByText('离职已完成')).not.toBeInTheDocument();
+      expect(await screen.findByText(changed ? "离职已完成" : "已处于离职状态，无需修改")).toBeInTheDocument();
+      await waitFor(() => expect(onChanged).toHaveBeenCalledTimes(1));
+      expect(lifecycle.getUser).toHaveBeenCalledTimes(2);
+      expect(lifecycle.resignUser).toHaveBeenCalledExactlyOnceWith("zhangsan");
+    });
+
+    it("does not classify an ordinary rejection as a committed result", async () => {
+      lifecycle.getUser.mockResolvedValue(detail(EmploymentStatus.Enable, true, actions));
+      lifecycle.resignUser.mockRejectedValue(new Error("离职资格已变化"));
+      const onChanged = await submitResignation();
+      expect(await screen.findByText("离职资格已变化")).toBeInTheDocument();
+      expect(screen.queryByText(/操作已生效，但后续处理失败/)).not.toBeInTheDocument();
+      expect(screen.queryByText("离职已完成")).not.toBeInTheDocument();
       expect(lifecycle.getUser).toHaveBeenCalledTimes(1);
       expect(onChanged).not.toHaveBeenCalled();
       expect(lifecycle.resignUser).toHaveBeenCalledTimes(1);
     });
 
     it.each([false, true])(
-      'retains the committed warning when refresh fails=%s without replay',
+      "retains the committed warning when refresh fails=%s without replay",
       async (refreshFails) => {
-        lifecycle.getUser.mockResolvedValueOnce(
-          detail(EmploymentStatus.Enable, true, actions),
-        );
-        if (refreshFails)
-          lifecycle.getUser.mockRejectedValue(new Error('详情暂不可用'));
+        lifecycle.getUser.mockResolvedValueOnce(detail(EmploymentStatus.Enable, true, actions));
+        if (refreshFails) lifecycle.getUser.mockRejectedValue(new Error("详情暂不可用"));
         else
           lifecycle.getUser.mockResolvedValue({
             ...detail(EmploymentStatus.Disable, false, actions),
-            name: '已刷新用户',
+            name: "已刷新用户",
             status: UserStatus.Disable,
           });
-        lifecycle.resignUser.mockRejectedValue(
-          new AdminMutationCommittedError(null),
-        );
+        lifecycle.resignUser.mockRejectedValue(new AdminMutationCommittedError(null));
         await submitResignation();
-        expect(
-          await screen.findByText(refreshFails ? '详情暂不可用' : '已刷新用户'),
-        ).toBeInTheDocument();
-        expect(
-          screen
-            .getByText(/操作已生效，但后续处理失败/)
-            .closest('[role=alert]'),
-        ).toHaveTextContent('联系管理员修复');
-        expect(screen.queryByText('离职已完成')).not.toBeInTheDocument();
+        expect(await screen.findByText(refreshFails ? "详情暂不可用" : "已刷新用户")).toBeInTheDocument();
+        expect(screen.getByText(/操作已生效，但后续处理失败/).closest("[role=alert]")).toHaveTextContent(
+          "联系管理员修复",
+        );
+        expect(screen.queryByText("离职已完成")).not.toBeInTheDocument();
         expect(lifecycle.getUser).toHaveBeenCalledTimes(2);
         expect(lifecycle.resignUser).toHaveBeenCalledTimes(1);
       },
     );
   });
 
-  it('keeps ordinary status rejection separate from committed recovery', async () => {
+  it("keeps ordinary status rejection separate from committed recovery", async () => {
     lifecycle.getUser.mockResolvedValue(detail(EmploymentStatus.Enable));
-    lifecycle.updateUserStatus.mockRejectedValue(
-      new Error('无权修改该用户状态'),
-    );
+    lifecycle.updateUserStatus.mockRejectedValue(new Error("无权修改该用户状态"));
     const { user } = render(
-      <UserDetailDrawer
-        open
-        username="zhangsan"
-        onClose={vi.fn()}
-        onEdit={vi.fn()}
-        onChanged={vi.fn()}
-      />,
+      <UserDetailDrawer open username="zhangsan" onClose={vi.fn()} onEdit={vi.fn()} onChanged={vi.fn()} />,
     );
-    await user.click(await screen.findByRole('button', { name: /状\s*态/ }));
-    await user.click(await screen.findByText('切为「暂停」'));
-    expect(await screen.findByText('无权修改该用户状态')).toBeInTheDocument();
-    expect(
-      screen.queryByText(/操作已生效，但后续处理失败/),
-    ).not.toBeInTheDocument();
+    await user.click(await screen.findByRole("button", { name: /状\s*态/ }));
+    await user.click(await screen.findByText("切为「暂停」"));
+    expect(await screen.findByText("无权修改该用户状态")).toBeInTheDocument();
+    expect(screen.queryByText(/操作已生效，但后续处理失败/)).not.toBeInTheDocument();
     expect(lifecycle.getUser).toHaveBeenCalledTimes(1);
     expect(lifecycle.updateUserStatus).toHaveBeenCalledTimes(1);
   });
 
-  it.each([true, false])(
-    'shows the actual status outcome (changed=%s)',
-    async (changed) => {
-      lifecycle.getUser.mockResolvedValue(detail(EmploymentStatus.Enable));
-      lifecycle.updateUserStatus.mockResolvedValue({ changed, result: null });
-      const { user } = render(
-        <UserDetailDrawer
-          open
-          username="zhangsan"
-          onClose={vi.fn()}
-          onEdit={vi.fn()}
-          onChanged={vi.fn()}
-        />,
-      );
-      await user.click(await screen.findByRole('button', { name: /状\s*态/ }));
-      await user.click(await screen.findByText('切为「暂停」'));
-      expect(
-        await screen.findByText(changed ? '状态已更新' : '状态无需修改'),
-      ).toBeInTheDocument();
-      expect(lifecycle.updateUserStatus).toHaveBeenCalledTimes(1);
-      await waitFor(() => expect(lifecycle.getUser).toHaveBeenCalledTimes(2));
-    },
-  );
-
-  it('refreshes committed status facts while keeping the repair warning and never replaying', async () => {
-    lifecycle.getUser
-      .mockResolvedValueOnce(detail(EmploymentStatus.Enable))
-      .mockResolvedValue({
-        ...detail(EmploymentStatus.Enable),
-        name: '已刷新用户',
-        status: UserStatus.Pause,
-      });
-    lifecycle.updateUserStatus.mockRejectedValue(
-      new AdminMutationCommittedError(null),
-    );
+  it.each([true, false])("shows the actual status outcome (changed=%s)", async (changed) => {
+    lifecycle.getUser.mockResolvedValue(detail(EmploymentStatus.Enable));
+    lifecycle.updateUserStatus.mockResolvedValue({ changed, result: null });
     const { user } = render(
-      <UserDetailDrawer
-        open
-        username="zhangsan"
-        onClose={vi.fn()}
-        onEdit={vi.fn()}
-        onChanged={vi.fn()}
-      />,
+      <UserDetailDrawer open username="zhangsan" onClose={vi.fn()} onEdit={vi.fn()} onChanged={vi.fn()} />,
     );
-    await user.click(await screen.findByRole('button', { name: /状\s*态/ }));
-    await user.click(await screen.findByText('切为「暂停」'));
-    expect(await screen.findByText('已刷新用户')).toBeInTheDocument();
-    expect(
-      screen.getByText(/操作已生效，但后续处理失败/).closest('[role=alert]'),
-    ).toHaveTextContent('后续处理失败');
+    await user.click(await screen.findByRole("button", { name: /状\s*态/ }));
+    await user.click(await screen.findByText("切为「暂停」"));
+    expect(await screen.findByText(changed ? "状态已更新" : "状态无需修改")).toBeInTheDocument();
+    expect(lifecycle.updateUserStatus).toHaveBeenCalledTimes(1);
+    await waitFor(() => expect(lifecycle.getUser).toHaveBeenCalledTimes(2));
+  });
+
+  it("refreshes committed status facts while keeping the repair warning and never replaying", async () => {
+    lifecycle.getUser.mockResolvedValueOnce(detail(EmploymentStatus.Enable)).mockResolvedValue({
+      ...detail(EmploymentStatus.Enable),
+      name: "已刷新用户",
+      status: UserStatus.Pause,
+    });
+    lifecycle.updateUserStatus.mockRejectedValue(new AdminMutationCommittedError(null));
+    const { user } = render(
+      <UserDetailDrawer open username="zhangsan" onClose={vi.fn()} onEdit={vi.fn()} onChanged={vi.fn()} />,
+    );
+    await user.click(await screen.findByRole("button", { name: /状\s*态/ }));
+    await user.click(await screen.findByText("切为「暂停」"));
+    expect(await screen.findByText("已刷新用户")).toBeInTheDocument();
+    expect(screen.getByText(/操作已生效，但后续处理失败/).closest("[role=alert]")).toHaveTextContent("后续处理失败");
     expect(lifecycle.updateUserStatus).toHaveBeenCalledTimes(1);
     expect(lifecycle.getUser).toHaveBeenCalledTimes(2);
   });
 
-  it('shows the delegation deletion blocker and keeps the detail open without retrying', async () => {
+  it("shows the delegation deletion blocker and keeps the detail open without retrying", async () => {
     lifecycle.getUser.mockResolvedValue(detail(EmploymentStatus.Disable));
     lifecycle.deleteUser.mockRejectedValue(
-      new Error(
-        '该用户存在未结束的权限委托，无法删除；请先通过 Internal 接口结束相关委托',
-      ),
+      new Error("该用户存在未结束的权限委托，无法删除；请先通过 Internal 接口结束相关委托"),
     );
     const onClose = vi.fn();
     const onChanged = vi.fn();
     const { user } = render(
-      <UserDetailDrawer
-        open
-        username="zhangsan"
-        onClose={onClose}
-        onEdit={vi.fn()}
-        onChanged={onChanged}
-      />,
+      <UserDetailDrawer open username="zhangsan" onClose={onClose} onEdit={vi.fn()} onChanged={onChanged} />,
     );
-    await user.click(await screen.findByRole('button', { name: '删除' }));
-    const titles = await screen.findAllByText('删除用户 张三？');
-    const dialog = titles
-      .find((title) => title.classList.contains('ant-modal-confirm-title'))
-      ?.closest('.ant-modal');
+    await user.click(await screen.findByRole("button", { name: "删除" }));
+    const titles = await screen.findAllByText("删除用户 张三？");
+    const dialog = titles.find((title) => title.classList.contains("ant-modal-confirm-title"))?.closest(".ant-modal");
     expect(dialog).not.toBeNull();
-    await user.click(
-      within(dialog as HTMLElement).getByRole('button', { name: /确\s*定/ }),
-    );
+    await user.click(within(dialog as HTMLElement).getByRole("button", { name: /确\s*定/ }));
     await waitFor(() => expect(dialog).not.toBeInTheDocument());
-    expect(
-      await screen.findByText(/存在未结束的权限委托，无法删除/),
-    ).toBeInTheDocument();
-    expect(screen.queryByText('已删除')).not.toBeInTheDocument();
-    expect(
-      screen.queryByText(/操作已生效，但后续处理失败/),
-    ).not.toBeInTheDocument();
-    expect(screen.getByRole('button', { name: '删除' })).toBeEnabled();
-    expect(lifecycle.deleteUser).toHaveBeenCalledExactlyOnceWith('zhangsan');
+    expect(await screen.findByText(/存在未结束的权限委托，无法删除/)).toBeInTheDocument();
+    expect(screen.queryByText("已删除")).not.toBeInTheDocument();
+    expect(screen.queryByText(/操作已生效，但后续处理失败/)).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "删除" })).toBeEnabled();
+    expect(lifecycle.deleteUser).toHaveBeenCalledExactlyOnceWith("zhangsan");
     expect(lifecycle.getUser).toHaveBeenCalledTimes(1);
     expect(onClose).not.toHaveBeenCalled();
     expect(onChanged).not.toHaveBeenCalled();
   });
 
-  it('refreshes after a committed delete, removes stale actions and retains the repair warning on missing detail', async () => {
+  it("refreshes after a committed delete, removes stale actions and retains the repair warning on missing detail", async () => {
     lifecycle.getUser
       .mockResolvedValueOnce(detail(EmploymentStatus.Disable))
-      .mockRejectedValue(new Error('用户不存在'));
-    lifecycle.deleteUser.mockRejectedValue(
-      new AdminMutationCommittedError(null),
-    );
+      .mockRejectedValue(new Error("用户不存在"));
+    lifecycle.deleteUser.mockRejectedValue(new AdminMutationCommittedError(null));
     const onClose = vi.fn();
     const onChanged = vi.fn();
     const { user } = render(
-      <UserDetailDrawer
-        open
-        username="zhangsan"
-        onClose={onClose}
-        onEdit={vi.fn()}
-        onChanged={onChanged}
-      />,
+      <UserDetailDrawer open username="zhangsan" onClose={onClose} onEdit={vi.fn()} onChanged={onChanged} />,
     );
-    await user.click(await screen.findByRole('button', { name: '删除' }));
-    const titles = await screen.findAllByText('删除用户 张三？');
-    const dialog = titles
-      .find((title) => title.classList.contains('ant-modal-confirm-title'))
-      ?.closest('.ant-modal');
+    await user.click(await screen.findByRole("button", { name: "删除" }));
+    const titles = await screen.findAllByText("删除用户 张三？");
+    const dialog = titles.find((title) => title.classList.contains("ant-modal-confirm-title"))?.closest(".ant-modal");
     expect(dialog).not.toBeNull();
-    await user.click(
-      within(dialog as HTMLElement).getByRole('button', { name: /确\s*定/ }),
-    );
+    await user.click(within(dialog as HTMLElement).getByRole("button", { name: /确\s*定/ }));
     await waitFor(() => expect(lifecycle.getUser).toHaveBeenCalledTimes(2));
-    expect(
-      screen.getByText(/操作已生效，但后续处理失败/).closest('[role=alert]'),
-    ).toHaveTextContent('删除已生效');
-    expect(
-      screen.getByText(/操作已生效，但后续处理失败/).closest('[role=alert]'),
-    ).toHaveTextContent('联系管理员修复');
-    expect(
-      screen.queryByRole('button', { name: '删除' }),
-    ).not.toBeInTheDocument();
+    expect(screen.getByText(/操作已生效，但后续处理失败/).closest("[role=alert]")).toHaveTextContent("删除已生效");
+    expect(screen.getByText(/操作已生效，但后续处理失败/).closest("[role=alert]")).toHaveTextContent("联系管理员修复");
+    expect(screen.queryByRole("button", { name: "删除" })).not.toBeInTheDocument();
     expect(lifecycle.deleteUser).toHaveBeenCalledTimes(1);
     expect(onChanged).toHaveBeenCalledTimes(1);
     expect(onClose).not.toHaveBeenCalled();
   });
 
-  it('keeps an HR User detail informative while every unavailable action stays inert', async () => {
+  it("keeps an HR User detail informative while every unavailable action stays inert", async () => {
     __setAccess({
       canAccessUser: true,
       canAccessPosition: true,
@@ -617,41 +478,25 @@ describe('UserDetailDrawer Employment lifecycle actions', () => {
     );
     const onEdit = vi.fn();
     const { user } = render(
-      <UserDetailDrawer
-        open
-        username="zhangsan"
-        onClose={vi.fn()}
-        onEdit={onEdit}
-        onChanged={vi.fn()}
-      />,
+      <UserDetailDrawer open username="zhangsan" onClose={vi.fn()} onEdit={onEdit} onChanged={vi.fn()} />,
     );
 
-    const deniedButtons =
-      await screen.findAllByTitle('当前管理员角色未授予此操作');
+    const deniedButtons = await screen.findAllByTitle("当前管理员角色未授予此操作");
     expect(deniedButtons).toHaveLength(5);
     for (const button of deniedButtons) expect(button).toBeDisabled();
-    await user.click(await screen.findByRole('tab', { name: '雇佣（1）' }));
-    expect(
-      screen.queryByRole('columnheader', { name: '角色' }),
-    ).not.toBeInTheDocument();
-    expect(
-      screen.queryByRole('columnheader', { name: '权限' }),
-    ).not.toBeInTheDocument();
-    expect(screen.queryByText('iam:hr-admin')).not.toBeInTheDocument();
-    expect(screen.queryByText('people:read')).not.toBeInTheDocument();
-    expect(screen.queryByText('+ 新增雇佣')).not.toBeInTheDocument();
-    expect(screen.getByRole('link', { name: '查看任职' })).toHaveAttribute(
-      'href',
-      '/employments?employmentId=4',
-    );
-    expect(
-      screen.queryByRole('tab', { name: '操作日志' }),
-    ).not.toBeInTheDocument();
+    await user.click(await screen.findByRole("tab", { name: "雇佣（1）" }));
+    expect(screen.queryByRole("columnheader", { name: "角色" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("columnheader", { name: "权限" })).not.toBeInTheDocument();
+    expect(screen.queryByText("iam:hr-admin")).not.toBeInTheDocument();
+    expect(screen.queryByText("people:read")).not.toBeInTheDocument();
+    expect(screen.queryByText("+ 新增雇佣")).not.toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "查看任职" })).toHaveAttribute("href", "/employments?employmentId=4");
+    expect(screen.queryByRole("tab", { name: "操作日志" })).not.toBeInTheDocument();
     expect(lifecycle.searchAssignments).not.toHaveBeenCalled();
     expect(onEdit).not.toHaveBeenCalled();
   });
 
-  it('runs Employment actions directly from the User detail row', async () => {
+  it("runs Employment actions directly from the User detail row", async () => {
     __setAccess({
       canAccessUser: true,
       canAccessPosition: true,
@@ -670,99 +515,84 @@ describe('UserDetailDrawer Employment lifecycle actions', () => {
       result: null,
     });
     const { user } = render(
-      <UserDetailDrawer
-        open
-        username="zhangsan"
-        onClose={vi.fn()}
-        onEdit={vi.fn()}
-        onChanged={vi.fn()}
-      />,
+      <UserDetailDrawer open username="zhangsan" onClose={vi.fn()} onEdit={vi.fn()} onChanged={vi.fn()} />,
     );
 
-    const employmentTab = await screen.findByRole('tab', {
-      name: '雇佣（1）',
+    const employmentTab = await screen.findByRole("tab", {
+      name: "雇佣（1）",
     });
     await user.click(employmentTab);
-    const employmentRow = await screen.findByRole('row', { name: /Developer/ });
+    const employmentRow = await screen.findByRole("row", { name: /Developer/ });
 
-    for (const action of [/转\s*岗/, '取消主岗', /暂\s*停/, /结\s*束/]) {
-      const actionButton = within(employmentRow).getByRole('button', {
+    for (const action of [/转\s*岗/, "取消主岗", /暂\s*停/, /结\s*束/]) {
+      const actionButton = within(employmentRow).getByRole("button", {
         name: action,
       });
       expect(actionButton).toBeEnabled();
-      expect(actionButton).toHaveAttribute('data-variant', 'link');
-      expect(actionButton.style.fontWeight).toBe('inherit');
-      expect(actionButton.style.paddingInline).toBe('0px');
+      expect(actionButton).toHaveAttribute("data-variant", "link");
+      expect(actionButton.style.fontWeight).toBe("inherit");
+      expect(actionButton.style.paddingInline).toBe("0px");
     }
 
-    await user.click(
-      within(employmentRow).getByRole('button', { name: '取消主岗' }),
-    );
-    const clearPrimaryTitles =
-      await screen.findAllByText('取消 张三 的主任职？');
+    await user.click(within(employmentRow).getByRole("button", { name: "取消主岗" }));
+    const clearPrimaryTitles = await screen.findAllByText("取消 张三 的主任职？");
     const clearPrimaryDialog = clearPrimaryTitles
-      .find((title) => title.classList.contains('ant-modal-confirm-title'))
-      ?.closest('.ant-modal');
+      .find((title) => title.classList.contains("ant-modal-confirm-title"))
+      ?.closest(".ant-modal");
     expect(clearPrimaryDialog).not.toBeNull();
     await user.click(
-      within(clearPrimaryDialog as HTMLElement).getByRole('button', {
-        name: '取消主岗',
+      within(clearPrimaryDialog as HTMLElement).getByRole("button", {
+        name: "取消主岗",
       }),
     );
     expect(lifecycle.clearPrimaryEmployment).toHaveBeenCalledWith(4);
 
-    const refreshedEmploymentRow = await screen.findByRole('row', {
+    const refreshedEmploymentRow = await screen.findByRole("row", {
       name: /Developer/,
     });
-    await user.click(
-      within(refreshedEmploymentRow).getByRole('button', { name: /暂\s*停/ }),
-    );
-    const pauseTitles = await screen.findAllByText('确认暂停该任职？');
+    await user.click(within(refreshedEmploymentRow).getByRole("button", { name: /暂\s*停/ }));
+    const pauseTitles = await screen.findAllByText("确认暂停该任职？");
     const pauseDialog = pauseTitles
-      .find((title) => title.classList.contains('ant-modal-confirm-title'))
-      ?.closest('.ant-modal');
+      .find((title) => title.classList.contains("ant-modal-confirm-title"))
+      ?.closest(".ant-modal");
     expect(pauseDialog).not.toBeNull();
     await user.click(
-      within(pauseDialog as HTMLElement).getByRole('button', {
-        name: '暂停任职',
+      within(pauseDialog as HTMLElement).getByRole("button", {
+        name: "暂停任职",
       }),
     );
     expect(lifecycle.pauseEmployment).toHaveBeenCalledWith(4);
 
-    const latestEmploymentRow = await screen.findByRole('row', {
+    const latestEmploymentRow = await screen.findByRole("row", {
       name: /Developer/,
     });
-    await user.click(
-      within(latestEmploymentRow).getByRole('button', { name: /转\s*岗/ }),
-    );
-    expect(
-      await screen.findByRole('dialog', { name: '转岗任职' }),
-    ).toHaveTextContent('4');
+    await user.click(within(latestEmploymentRow).getByRole("button", { name: /转\s*岗/ }));
+    expect(await screen.findByRole("dialog", { name: "转岗任职" })).toHaveTextContent("4");
   });
 
-  it('keeps responsibility summaries grouped under their Employment row', async () => {
+  it("keeps responsibility summaries grouped under their Employment row", async () => {
     lifecycle.getUser.mockResolvedValue(detail(EmploymentStatus.Enable));
     lifecycle.searchAssignments.mockResolvedValue({
       items: [
         {
           id: 101,
-          typeCode: 'head',
+          typeCode: "head",
           targetOrganization: {
             id: 2,
-            orgCode: 'ORG',
-            orgName: 'Organization',
-            fullPath: [{ id: 2, orgCode: 'ORG', orgName: 'Organization' }],
+            orgCode: "ORG",
+            orgName: "Organization",
+            fullPath: [{ id: 2, orgCode: "ORG", orgName: "Organization" }],
           },
           holder: {
             employmentId: 4,
-            user: { id: 1, username: 'zhangsan', name: '张三' },
+            user: { id: 1, username: "zhangsan", name: "张三" },
             organization: {
               id: 2,
-              orgCode: 'ORG',
-              orgName: 'Organization',
+              orgCode: "ORG",
+              orgName: "Organization",
               fullPath: [],
             },
-            position: { id: 3, posCode: 'DEV', posName: 'Developer' },
+            position: { id: 3, posCode: "DEV", posName: "Developer" },
           },
           status: 1,
           startTime: now,
@@ -772,49 +602,33 @@ describe('UserDetailDrawer Employment lifecycle actions', () => {
       nextCursor: null,
     });
     const { user } = render(
-      <UserDetailDrawer
-        open
-        username="zhangsan"
-        onClose={vi.fn()}
-        onEdit={vi.fn()}
-        onChanged={vi.fn()}
-      />,
+      <UserDetailDrawer open username="zhangsan" onClose={vi.fn()} onEdit={vi.fn()} onChanged={vi.fn()} />,
     );
 
-    await user.click(await screen.findByRole('tab', { name: '雇佣（1）' }));
-    const employmentRow = await screen.findByRole('row', { name: /Developer/ });
+    await user.click(await screen.findByRole("tab", { name: "雇佣（1）" }));
+    const employmentRow = await screen.findByRole("row", { name: /Developer/ });
 
     expect(lifecycle.searchAssignments).toHaveBeenCalledWith({
       employmentId: 4,
-      lifecycle: 'open',
+      lifecycle: "open",
       limit: 20,
     });
-    expect(within(employmentRow).getByText('负责人（head）')).toBeVisible();
-    expect(
-      within(employmentRow).getByRole('link', { name: '查看全部组织责任' }),
-    ).toHaveAttribute(
-      'href',
-      '/organization-responsibilities/assignments?employment=4&lifecycle=open',
+    expect(within(employmentRow).getByText("负责人（head）")).toBeVisible();
+    expect(within(employmentRow).getByRole("link", { name: "查看全部组织责任" })).toHaveAttribute(
+      "href",
+      "/organization-responsibilities/assignments?employment=4&lifecycle=open",
     );
   });
 
-  it('keeps ended Employment history read-only and non-navigable', async () => {
+  it("keeps ended Employment history read-only and non-navigable", async () => {
     lifecycle.getUser.mockResolvedValue(detail(EmploymentStatus.Disable));
     const { user } = render(
-      <UserDetailDrawer
-        open
-        username="zhangsan"
-        onClose={vi.fn()}
-        onEdit={vi.fn()}
-        onChanged={vi.fn()}
-      />,
+      <UserDetailDrawer open username="zhangsan" onClose={vi.fn()} onEdit={vi.fn()} onChanged={vi.fn()} />,
     );
 
-    await user.click(await screen.findByRole('tab', { name: '雇佣（1）' }));
-    const employmentRow = await screen.findByRole('row', { name: /Developer/ });
-    expect(
-      within(employmentRow).queryByText('查看任职'),
-    ).not.toBeInTheDocument();
+    await user.click(await screen.findByRole("tab", { name: "雇佣（1）" }));
+    const employmentRow = await screen.findByRole("row", { name: /Developer/ });
+    expect(within(employmentRow).queryByText("查看任职")).not.toBeInTheDocument();
     expect(lifecycle.pauseEmployment).not.toHaveBeenCalled();
     expect(lifecycle.endEmployment).not.toHaveBeenCalled();
     expect(lifecycle.clearPrimaryEmployment).not.toHaveBeenCalled();

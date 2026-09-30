@@ -1,4 +1,8 @@
+import { EmploymentStatus, OrganizationStatus, OrganizationType, PositionStatus, UserStatus } from "@iam/contracts";
 import type { Employment, Organization } from "@iam/db/schema";
+import { EmploymentDetailDtoSchema, OPEN_EMPLOYMENT_STATUSES, toEmploymentDto } from "@iam/domain/employment";
+import { UserDetailDtoSchema } from "@iam/domain/user";
+import { compareCodes, groupItemsBy } from "./user-profile-build.helpers";
 import type {
   UserProfileBuildDataset,
   UserProfileBuildOrgPathRow,
@@ -6,27 +10,8 @@ import type {
   UserProfileBuildPrivilegeRow,
   UserProfileBuildRoleRow,
 } from "./user-profile-build.repository";
-import {
-  EmploymentStatus,
-  OrganizationStatus,
-  OrganizationType,
-  PositionStatus,
-  UserStatus,
-} from "@iam/contracts";
-import {
-  EmploymentDetailDtoSchema,
-  OPEN_EMPLOYMENT_STATUSES,
-  toEmploymentDto,
-} from "@iam/domain/employment";
-import { UserDetailDtoSchema } from "@iam/domain/user";
-import {
-  compareCodes,
-  groupItemsBy,
-} from "./user-profile-build.helpers";
 
-export type UserProfileEmploymentIntegrityFailureReason
-  = | "organization-not-effective"
-    | "position-not-effective";
+export type UserProfileEmploymentIntegrityFailureReason = "organization-not-effective" | "position-not-effective";
 
 export class UserProfileEmploymentIntegrityError extends Error {
   readonly code = "USER_PROFILE_EMPLOYMENT_INTEGRITY_FAILED";
@@ -43,16 +28,7 @@ export class UserProfileEmploymentIntegrityError extends Error {
 
 type EmploymentOrgNode = Pick<
   Organization,
-  | "id"
-  | "orgCode"
-  | "orgName"
-  | "orgType"
-  | "level"
-  | "parentId"
-  | "isVirtual"
-  | "isEntity"
-  | "status"
-  | "isDelete"
+  "id" | "orgCode" | "orgName" | "orgType" | "level" | "parentId" | "isVirtual" | "isEntity" | "status" | "isDelete"
 > & {
   pathIndex: number;
   distanceToAssignedOrg: number;
@@ -65,16 +41,15 @@ export function buildProfileDocumentsFromDataset(
   rebuiltAt: Date,
   targetsByUserId: ReadonlyMap<number, string>,
 ) {
-  const employmentRowsByUserId = groupItemsBy(dataset.employments, row => row.userId);
-  const positionById = new Map(dataset.positions.map(position => [position.id, position]));
+  const employmentRowsByUserId = groupItemsBy(dataset.employments, (row) => row.userId);
+  const positionById = new Map(dataset.positions.map((position) => [position.id, position]));
   const orgPathByOrgId = buildOrgPathMap(dataset.orgPathRows);
-  const roleRowsByEmploymentId = groupItemsBy(dataset.roleRows, row => row.employmentId);
-  const privilegesByRoleId = groupItemsBy(dataset.privilegeRows, row => row.roleId);
+  const roleRowsByEmploymentId = groupItemsBy(dataset.roleRows, (row) => row.employmentId);
+  const privilegesByRoleId = groupItemsBy(dataset.privilegeRows, (row) => row.roleId);
 
   return dataset.users.map((user) => {
     const sourceDirtyVersion = targetsByUserId.get(user.id);
-    if (sourceDirtyVersion === undefined)
-      throw new Error(`User Profile build returned unexpected user ${user.id}`);
+    if (sourceDirtyVersion === undefined) throw new Error(`User Profile build returned unexpected user ${user.id}`);
     const employmentRows = employmentRowsByUserId.get(user.id) ?? [];
     assertOpenEmploymentIntegrity({
       userId: user.id,
@@ -83,24 +58,23 @@ export function buildProfileDocumentsFromDataset(
       orgPathByOrgId,
     });
     const employmentDetails = employmentRows
-      .filter(employment => employment.status === EmploymentStatus.Enable && !employment.isDelete)
+      .filter((employment) => employment.status === EmploymentStatus.Enable && !employment.isDelete)
       .map((employment) => {
         const position = positionById.get(employment.posId);
         const fullOrgPath = orgPathByOrgId.get(employment.orgId) ?? [];
-        const assignedOrg = fullOrgPath.find(node => node.id === employment.orgId);
-        if (position === undefined || assignedOrg === undefined)
-          return null;
+        const assignedOrg = fullOrgPath.find((node) => node.id === employment.orgId);
+        if (position === undefined || assignedOrg === undefined) return null;
 
         const roleRows = roleRowsByEmploymentId.get(employment.id) ?? [];
-        const roles = unique(roleRows.map(row => row.roleCode));
-        const roleIds = roleRows.map(row => row.roleId);
-        const privileges = unique(roleIds.flatMap(roleId =>
-          (privilegesByRoleId.get(roleId) ?? []).map(row => row.privilegeCode),
-        ));
+        const roles = unique(roleRows.map((row) => row.roleCode));
+        const roleIds = roleRows.map((row) => row.roleId);
+        const privileges = unique(
+          roleIds.flatMap((roleId) => (privilegesByRoleId.get(roleId) ?? []).map((row) => row.privilegeCode)),
+        );
         const organization = {
           assignedOrg,
           fullOrgPath,
-          companyNodes: fullOrgPath.filter(node => node.orgType === OrganizationType.Company),
+          companyNodes: fullOrgPath.filter((node) => node.orgType === OrganizationType.Company),
         };
 
         return {
@@ -126,9 +100,9 @@ export function buildProfileDocumentsFromDataset(
 
     const detail = UserDetailDtoSchema.parse({
       ...user,
-      employments: employmentDetails.map(item => item.dto),
-      roles: unique(employmentDetails.flatMap(item => item.roles)),
-      privileges: unique(employmentDetails.flatMap(item => item.privileges)),
+      employments: employmentDetails.map((item) => item.dto),
+      roles: unique(employmentDetails.flatMap((item) => item.roles)),
+      privileges: unique(employmentDetails.flatMap((item) => item.privileges)),
     });
     const searchDoc = {
       user: {
@@ -140,11 +114,11 @@ export function buildProfileDocumentsFromDataset(
         userType: user.userType,
         status: user.status,
       },
-      employments: employmentDetails.map(item => toSearchEmploymentDoc(item)),
+      employments: employmentDetails.map((item) => toSearchEmploymentDoc(item)),
     };
     const subjectFactsEmploymentItems = employmentDetails
-      .filter(item => isEffectiveEmployment(item.employment, rebuiltAt))
-      .map(item => ({
+      .filter((item) => isEffectiveEmployment(item.employment, rebuiltAt))
+      .map((item) => ({
         employmentId: item.employment.id,
         facts: toSubjectFactsEmployment(item, privilegesByRoleId),
       }))
@@ -165,18 +139,16 @@ export function buildProfileDocumentsFromDataset(
         detail,
         searchDoc,
         subjectFacts: {
-          employments: subjectFactsEmploymentItems.map(item => item.facts),
+          employments: subjectFactsEmploymentItems.map((item) => item.facts),
         },
         rebuiltAt,
       },
-      subjectFactsEmploymentIds: subjectFactsEmploymentItems.map(item => item.employmentId),
+      subjectFactsEmploymentIds: subjectFactsEmploymentItems.map((item) => item.employmentId),
     };
   });
 }
 
-export type BuiltProfileDocuments = ReturnType<
-  typeof buildProfileDocumentsFromDataset
->[number];
+export type BuiltProfileDocuments = ReturnType<typeof buildProfileDocumentsFromDataset>[number];
 
 function assertOpenEmploymentIntegrity(input: {
   userId: number;
@@ -185,45 +157,37 @@ function assertOpenEmploymentIntegrity(input: {
   orgPathByOrgId: ReadonlyMap<number, EmploymentOrgNode[]>;
 }) {
   for (const employment of input.employments) {
-    if (!isOpenEmployment(employment))
-      continue;
+    if (!isOpenEmployment(employment)) continue;
 
     const position = input.positionById.get(employment.posId);
     if (position === undefined || position.status !== PositionStatus.Enable || position.isDelete) {
-      throw new UserProfileEmploymentIntegrityError(
-        input.userId,
-        employment.id,
-        "position-not-effective",
-      );
+      throw new UserProfileEmploymentIntegrityError(input.userId, employment.id, "position-not-effective");
     }
 
     const assignedOrganization = input.orgPathByOrgId
       .get(employment.orgId)
-      ?.find(node => node.id === employment.orgId);
+      ?.find((node) => node.id === employment.orgId);
     if (
-      assignedOrganization === undefined
-      || assignedOrganization.status !== OrganizationStatus.Enable
-      || assignedOrganization.isDelete
+      assignedOrganization === undefined ||
+      assignedOrganization.status !== OrganizationStatus.Enable ||
+      assignedOrganization.isDelete
     ) {
-      throw new UserProfileEmploymentIntegrityError(
-        input.userId,
-        employment.id,
-        "organization-not-effective",
-      );
+      throw new UserProfileEmploymentIntegrityError(input.userId, employment.id, "organization-not-effective");
     }
   }
 }
 
 function isOpenEmployment(employment: Employment) {
-  return !employment.isDelete
-    && OPEN_EMPLOYMENT_STATUS_SET.has(employment.status);
+  return !employment.isDelete && OPEN_EMPLOYMENT_STATUS_SET.has(employment.status);
 }
 
 function isEffectiveEmployment(employment: Employment, now: Date) {
-  return employment.status === EmploymentStatus.Enable
-    && !employment.isDelete
-    && employment.startTime.getTime() <= now.getTime()
-    && (employment.endTime === null || now.getTime() < employment.endTime.getTime());
+  return (
+    employment.status === EmploymentStatus.Enable &&
+    !employment.isDelete &&
+    employment.startTime.getTime() <= now.getTime() &&
+    (employment.endTime === null || now.getTime() < employment.endTime.getTime())
+  );
 }
 
 function toSubjectFactsEmployment(
@@ -244,7 +208,7 @@ function toSubjectFactsEmployment(
       code: input.organization.assignedOrg.orgCode,
       name: input.organization.assignedOrg.orgName,
       type: input.organization.assignedOrg.orgType,
-      path: input.organization.fullOrgPath.map(node => ({
+      path: input.organization.fullOrgPath.map((node) => ({
         code: node.orgCode,
         name: node.orgName,
         type: node.orgType,
@@ -254,17 +218,17 @@ function toSubjectFactsEmployment(
       code: input.position.posCode,
       name: input.position.posName,
     },
-    clientAuthorizations: [...groupItemsBy(input.roleRows, role => role.clientCode)]
+    clientAuthorizations: [...groupItemsBy(input.roleRows, (role) => role.clientCode)]
       .sort(([left], [right]) => compareCodes(left, right))
       .map(([clientCode, roles]) => ({
         clientCode,
-        roles: [...new Map(roles.map(role => [role.roleCode, role])).values()]
+        roles: [...new Map(roles.map((role) => [role.roleCode, role])).values()]
           .sort((left, right) => compareCodes(left.roleCode, right.roleCode))
-          .map(role => ({
+          .map((role) => ({
             code: role.roleCode,
-            privileges: unique(
-              (privilegesByRoleId.get(role.roleId) ?? []).map(row => row.privilegeCode),
-            ).sort(compareCodes),
+            privileges: unique((privilegesByRoleId.get(role.roleId) ?? []).map((row) => row.privilegeCode)).sort(
+              compareCodes,
+            ),
           })),
       })),
   };
@@ -274,10 +238,11 @@ function compareSubjectFactsEmployments(
   left: ReturnType<typeof toSubjectFactsEmployment>,
   right: ReturnType<typeof toSubjectFactsEmployment>,
 ) {
-  if (left.isPrimary !== right.isPrimary)
-    return left.isPrimary ? -1 : 1;
-  return compareCodes(left.organization.code, right.organization.code)
-    || compareCodes(left.position.code, right.position.code);
+  if (left.isPrimary !== right.isPrimary) return left.isPrimary ? -1 : 1;
+  return (
+    compareCodes(left.organization.code, right.organization.code) ||
+    compareCodes(left.position.code, right.position.code)
+  );
 }
 
 function toSearchEmploymentDoc(input: {
@@ -291,9 +256,9 @@ function toSearchEmploymentDoc(input: {
   roles: string[];
   privileges: string[];
 }) {
-  const ancestorCodes = input.organization.fullOrgPath.map(node => node.orgCode);
-  const ancestorDepths = input.organization.fullOrgPath.map(node => node.distanceToAssignedOrg);
-  const ancestorKeys = input.organization.fullOrgPath.map(node =>
+  const ancestorCodes = input.organization.fullOrgPath.map((node) => node.orgCode);
+  const ancestorDepths = input.organization.fullOrgPath.map((node) => node.distanceToAssignedOrg);
+  const ancestorKeys = input.organization.fullOrgPath.map((node) =>
     buildAncestorKey(node.orgCode, node.distanceToAssignedOrg),
   );
 
@@ -305,7 +270,7 @@ function toSearchEmploymentDoc(input: {
       ancestorCodes,
       ancestorDepths,
       ancestorKeys,
-      companyCodes: input.organization.companyNodes.map(node => node.orgCode),
+      companyCodes: input.organization.companyNodes.map((node) => node.orgCode),
     },
     position: {
       id: input.position.id,
@@ -318,7 +283,7 @@ function toSearchEmploymentDoc(input: {
 }
 
 function buildOrgPathMap(rows: UserProfileBuildOrgPathRow[]) {
-  const map = groupItemsBy(rows, row => row.descendantId);
+  const map = groupItemsBy(rows, (row) => row.descendantId);
   const output = new Map<number, EmploymentOrgNode[]>();
   for (const [orgId, path] of map) {
     output.set(

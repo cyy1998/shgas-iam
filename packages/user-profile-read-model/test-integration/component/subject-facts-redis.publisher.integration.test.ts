@@ -1,8 +1,5 @@
 import { describe, expect, mock, test } from "bun:test";
-import {
-  createSubjectFactsRedisInspector,
-  createSubjectFactsRedisPublisher,
-} from "../../src/subject-facts";
+import { createSubjectFactsRedisInspector, createSubjectFactsRedisPublisher } from "../../src/subject-facts";
 
 describe("Subject Facts Redis batch publisher", () => {
   test("reports every published and retained-newer record without serializing the batch", async () => {
@@ -11,8 +8,7 @@ describe("Subject Facts Redis batch publisher", () => {
       release = resolve;
     });
     const evalScript = mock(async (...args: unknown[]) => {
-      if (evalScript.mock.calls.length === 1)
-        await blocked;
+      if (evalScript.mock.calls.length === 1) await blocked;
       return args[3] === "2" ? 0 : 1;
     });
     const publisher = createSubjectFactsRedisPublisher({ eval: evalScript });
@@ -36,10 +32,14 @@ describe("Subject Facts Redis batch publisher", () => {
       "00000000-0000-4000-8000-000000000002",
       "00000000-0000-4000-8000-000000000003",
     ]);
-    expect(inspected).toEqual([{
-      status: "valid",
-      record: valid,
-    }, { status: "missing" }, { status: "invalid" }]);
+    expect(inspected).toEqual([
+      {
+        status: "valid",
+        record: valid,
+      },
+      { status: "missing" },
+      { status: "invalid" },
+    ]);
   });
 });
 

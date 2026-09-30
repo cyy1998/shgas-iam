@@ -1,7 +1,7 @@
-import type { db } from "@iam/db";
 import { UserProfileDirtyStatus } from "@iam/contracts";
-import { formatDirtyVersion } from "../invalidation/dirty-version";
+import type { db } from "@iam/db";
 import { createUserProfileDirtyRepository } from "../invalidation/dirty.repository";
+import { formatDirtyVersion } from "../invalidation/dirty-version";
 import { createProfilePublicationStateRepository } from "./profile-publication-state.repository";
 
 export type UserProfilePublicationDb = Pick<typeof db, "transaction">;
@@ -11,13 +11,9 @@ interface VersionedUserProfileProjection {
   sourceDirtyVersion: string;
 }
 
-type PublicationTransaction = Parameters<
-  Parameters<UserProfilePublicationDb["transaction"]>[0]
->[0];
+type PublicationTransaction = Parameters<Parameters<UserProfilePublicationDb["transaction"]>[0]>[0];
 
-export function createVersionedUserProfilePublicationRepository<
-  TProfile extends VersionedUserProfileProjection,
->(
+export function createVersionedUserProfilePublicationRepository<TProfile extends VersionedUserProfileProjection>(
   db: UserProfilePublicationDb,
   candidate: {
     parse: (input: TProfile) => TProfile;
@@ -39,9 +35,9 @@ export function createVersionedUserProfilePublicationRepository<
         const profileRepository = createProfilePublicationStateRepository(tx);
         const dirty = await dirtyRepository.lockByUserId(input.userId);
         if (
-          dirty === null
-          || dirty.dirtyVersion !== dirtyVersion
-          || dirty.status !== UserProfileDirtyStatus.Processing
+          dirty === null ||
+          dirty.dirtyVersion !== dirtyVersion ||
+          dirty.status !== UserProfileDirtyStatus.Processing
         ) {
           return { status: "stale" as const };
         }
@@ -54,18 +50,16 @@ export function createVersionedUserProfilePublicationRepository<
           if (deleted === null) {
             const current = await profileRepository.findVersionByUserId(input.userId);
             if (
-              current?.sourceDirtyVersion !== null
-              && current?.sourceDirtyVersion !== undefined
-              && BigInt(current.sourceDirtyVersion) > BigInt(dirtyVersion)
+              current?.sourceDirtyVersion !== null &&
+              current?.sourceDirtyVersion !== undefined &&
+              BigInt(current.sourceDirtyVersion) > BigInt(dirtyVersion)
             ) {
               return { status: "stale" as const };
             }
           }
-        }
-        else {
+        } else {
           const published = await candidate.upsert(tx, profile);
-          if (published === null)
-            return { status: "stale" as const };
+          if (published === null) return { status: "stale" as const };
         }
 
         const processed = await dirtyRepository.markProcessed({
@@ -73,10 +67,9 @@ export function createVersionedUserProfilePublicationRepository<
           dirtyVersion,
           processedAt: input.processedAt,
         });
-        if (processed === null)
-          throw new Error("User Profile Dirty row changed while locked for publication");
+        if (processed === null) throw new Error("User Profile Dirty row changed while locked for publication");
 
-        return { status: profile === null ? "missing" as const : "published" as const };
+        return { status: profile === null ? ("missing" as const) : ("published" as const) };
       });
     },
   };
@@ -88,12 +81,10 @@ function parseCandidate<TProfile extends VersionedUserProfileProjection>(
   profile: TProfile | null,
   parse: (input: TProfile) => TProfile,
 ) {
-  if (profile === null)
-    return null;
+  if (profile === null) return null;
 
   const parsed = parse(profile);
-  if (parsed.userId !== userId)
-    throw new Error("User Profile candidate user does not match the publication target");
+  if (parsed.userId !== userId) throw new Error("User Profile candidate user does not match the publication target");
   if (parsed.sourceDirtyVersion !== dirtyVersion)
     throw new Error("User Profile candidate version does not match the publication target");
   return parsed;

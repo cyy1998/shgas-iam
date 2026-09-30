@@ -4,9 +4,7 @@ import type {
 } from "./resolve-privilege-delegations.type";
 
 export interface PrivilegeDelegationResolutionPort {
-  resolveCurrent: (
-    query: PrivilegeDelegationResolutionQuery,
-  ) => Promise<PrivilegeDelegationResolutionObservation>;
+  resolveCurrent: (query: PrivilegeDelegationResolutionQuery) => Promise<PrivilegeDelegationResolutionObservation>;
 }
 
 export interface ResolvePrivilegeDelegationsUseCaseDeps {

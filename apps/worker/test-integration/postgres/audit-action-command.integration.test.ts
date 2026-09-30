@@ -1,7 +1,7 @@
+import { afterAll, beforeAll, beforeEach, describe, expect, test } from "bun:test";
 import process from "node:process";
 import { fileURLToPath } from "node:url";
 import { runProcessCommandSmoke, spawnOwnedProcessTree } from "@iam/api-core/testing/process-smoke-harness";
-import { afterAll, beforeAll, beforeEach, describe, expect, test } from "bun:test";
 import { createWorkerPostgresTestHarness } from "./postgres-test-harness";
 
 const workerRoot = fileURLToPath(new URL("../../", import.meta.url));
@@ -12,8 +12,7 @@ describe("historical audit action maintenance command", () => {
     harness = await createWorkerPostgresTestHarness();
   });
   afterAll(async () => {
-    if (harness)
-      await harness.close();
+    if (harness) await harness.close();
   });
   beforeEach(async () => {
     await harness.sql`TRUNCATE audit_log RESTART IDENTITY`;
@@ -34,12 +33,13 @@ describe("historical audit action maintenance command", () => {
   async function run(args: string[], expectedExitCode = 0, url = harness.commandDatabaseUrl) {
     return await runProcessCommandSmoke({
       label: "audit action command",
-      start: () => spawnOwnedProcessTree({
-        executable: process.execPath,
-        args: ["--no-env-file", "run", "audit:actions", ...args],
-        cwd: workerRoot,
-        env: { ...process.env, IAM_WORKER_DATABASE_URL: url, NO_COLOR: "1" },
-      }),
+      start: () =>
+        spawnOwnedProcessTree({
+          executable: process.execPath,
+          args: ["--no-env-file", "run", "audit:actions", ...args],
+          cwd: workerRoot,
+          env: { ...process.env, IAM_WORKER_DATABASE_URL: url, NO_COLOR: "1" },
+        }),
       completionTimeoutMs: 15_000,
       cleanupTimeoutMs: 5_000,
       maxOutputBytes: 64 * 1024,
@@ -63,16 +63,16 @@ describe("historical audit action maintenance command", () => {
     for (const [action, outcome] of fixtures) await seed(action!, outcome!);
     const before = await rows();
     const inventory = await run(["inventory"]);
-    expect(inventory.output).toContain("\"legacyRows\":\"8\"");
+    expect(inventory.output).toContain('"legacyRows":"8"');
     const afterInventory = await rows();
     expect(afterInventory).toEqual(before);
     await run(["verify"], 1);
     const applied = await run(["apply", "--writers-stopped"]);
-    expect(applied.output).toContain("\"updatedRows\":\"8\"");
+    expect(applied.output).toContain('"updatedRows":"8"');
     const after = await rows();
     expect(after).toEqual(before.map((row, index) => ({ ...row, action: fixtures[index]![2] })));
     const again = await run(["apply", "--writers-stopped"]);
-    expect(again.output).toContain("\"updatedRows\":\"0\"");
+    expect(again.output).toContain('"updatedRows":"0"');
     await run(["verify"]);
     const verified = await rows();
     expect(verified).toEqual(after);
@@ -83,10 +83,10 @@ describe("historical audit action maintenance command", () => {
     for (let index = 0; index < 25; index++) await seed("auth.login.mobile.failure", "private-invalid");
     const before = await rows();
     const inventory = await run(["inventory"], 1);
-    expect(inventory.output).toContain("\"conflictRows\":\"25\"");
+    expect(inventory.output).toContain('"conflictRows":"25"');
     const failed = await run(["apply", "--writers-stopped"], 1);
-    expect(failed.output).toContain("\"updatedRows\":\"0\"");
-    expect(failed.output).toContain("\"conflictIds\":[2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21]");
+    expect(failed.output).toContain('"updatedRows":"0"');
+    expect(failed.output).toContain('"conflictIds":[2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21]');
     expect(failed.output).not.toContain("private-invalid");
     const after = await rows();
     expect(after).toEqual(before);
@@ -103,12 +103,11 @@ describe("historical audit action maintenance command", () => {
       FOR EACH ROW EXECUTE FUNCTION reject_audit_update()`);
     try {
       const failed = await run(["apply", "--writers-stopped"], 1);
-      expect(failed.output).toContain("\"reason\":\"operation-failed\"");
+      expect(failed.output).toContain('"reason":"operation-failed"');
       expect(failed.output).not.toContain("private database error");
       const after = await rows();
       expect(after).toEqual(before);
-    }
-    finally {
+    } finally {
       await harness.sql.unsafe("DROP TRIGGER reject_audit_update ON audit_log");
       await harness.sql.unsafe("DROP FUNCTION reject_audit_update()");
     }
@@ -131,46 +130,48 @@ describe("historical audit action maintenance command", () => {
         const active = await harness.sql`SELECT 1 FROM pg_stat_activity
           WHERE application_name = 'iam-audit-action-maintenance-v1' AND wait_event_type = 'Lock'`;
         waiting = active.length > 0;
-        if (!waiting)
-          await Bun.sleep(20);
+        if (!waiting) await Bun.sleep(20);
       }
       expect(waiting).toBe(true);
       await writer`COMMIT`;
       const failed = await command;
-      expect(failed.output).toContain("\"conflictRows\":\"1\"");
-      expect(failed.output).toContain("\"updatedRows\":\"0\"");
+      expect(failed.output).toContain('"conflictRows":"1"');
+      expect(failed.output).toContain('"updatedRows":"0"');
       const after = await rows();
-      expect(after.map(row => row.action)).toEqual(["auth.login.success", "auth.login.mobile.failure"]);
-    }
-    finally {
+      expect(after.map((row) => row.action)).toEqual(["auth.login.success", "auth.login.mobile.failure"]);
+    } finally {
       await writer`ROLLBACK`;
       writer.release();
-      if (command)
-        await command;
+      if (command) await command;
     }
   }, 30_000);
 
   test("arguments fail before connecting and connection or incomplete verify failures remain safe", async () => {
-    for (const args of [[], ["apply"], ["verify", "--writers-stopped"], ["inventory", "extra"], ["apply", "--writers-stopped", "extra"]]) {
+    for (const args of [
+      [],
+      ["apply"],
+      ["verify", "--writers-stopped"],
+      ["inventory", "extra"],
+      ["apply", "--writers-stopped", "extra"],
+    ]) {
       const invalid = await run(args, 2, "not-a-url-private");
-      expect(invalid.output).toContain("\"reason\":\"invalid-arguments\"");
+      expect(invalid.output).toContain('"reason":"invalid-arguments"');
       expect(invalid.output).not.toContain("not-a-url-private");
     }
     const unavailable = new URL(harness.commandDatabaseUrl);
     for (const invalidUrl of ["", "private-invalid-url", "https://private-invalid-host/iam"]) {
       const invalid = await run(["verify"], 1, invalidUrl);
-      expect(invalid.output).toContain("\"reason\":\"operation-failed\"");
+      expect(invalid.output).toContain('"reason":"operation-failed"');
       expect(invalid.output).not.toContain("private-invalid");
     }
     unavailable.password = "wrong-private-password";
     const failed = await run(["verify"], 1, unavailable.toString());
-    expect(failed.output).toContain("\"reason\":\"operation-failed\"");
+    expect(failed.output).toContain('"reason":"operation-failed"');
     expect(failed.output).not.toContain("wrong-private-password");
     await harness.sql`ALTER TABLE audit_log RENAME TO unavailable_audit_log`;
     try {
       await run(["verify"], 1);
-    }
-    finally {
+    } finally {
       await harness.sql`ALTER TABLE unavailable_audit_log RENAME TO audit_log`;
     }
     await run(["verify"]);

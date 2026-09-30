@@ -97,13 +97,13 @@ employments[]                    Effective Employment
 
 ## 5. 通用操作符
 
-| 路径类型 | 操作符 | 规则 |
-| --- | --- | --- |
-| string、enum、number、boolean 标量 | `eq` | 字段值精确等于一个同类型值。 |
-| string、enum、number、boolean 标量 | `in` | 字段值精确等于非空候选数组中的任一值，相当于多个 `eq` 用 `or` 组合。 |
-| 标量数组 | `containsAny` | 文档数组至少包含一个非空查询数组中的值。 |
-| 标量数组 | `containsAll` | 文档数组包含非空查询数组中的全部值。 |
-| Organization reference | `withinSubtreeOf` | Organization 自身或其当前完整路径中存在给定 Organization code。 |
+| 路径类型                           | 操作符            | 规则                                                                 |
+| ---------------------------------- | ----------------- | -------------------------------------------------------------------- |
+| string、enum、number、boolean 标量 | `eq`              | 字段值精确等于一个同类型值。                                         |
+| string、enum、number、boolean 标量 | `in`              | 字段值精确等于非空候选数组中的任一值，相当于多个 `eq` 用 `or` 组合。 |
+| 标量数组                           | `containsAny`     | 文档数组至少包含一个非空查询数组中的值。                             |
+| 标量数组                           | `containsAll`     | 文档数组包含非空查询数组中的全部值。                                 |
+| Organization reference             | `withinSubtreeOf` | Organization 自身或其当前完整路径中存在给定 Organization code。      |
 
 `in` 只用于单值字段；`roles`、`privileges` 等数组字段使用 `containsAny` 或 `containsAll`。所有查询数组先去重，再应用数量限制。
 
@@ -144,12 +144,12 @@ DSL 使用二值匹配语义。nullable 字段为 null 时，任何原子比较�
 
 HTTP 结果统一如下：
 
-| 情况 | 结果 |
-| --- | --- |
-| 合法且有不超过上限的匹配 | `200` + User Profile Base 数组 |
-| 合法但无匹配 | `200` + `[]` |
-| 空过滤器、未知路径、类型或操作符错误、结构超预算、结果超过 500 | `422` |
-| Profile 不可用、Search Document 损坏、版本门禁失败或查询超时 | `503` |
+| 情况                                                           | 结果                           |
+| -------------------------------------------------------------- | ------------------------------ |
+| 合法且有不超过上限的匹配                                       | `200` + User Profile Base 数组 |
+| 合法但无匹配                                                   | `200` + `[]`                   |
+| 空过滤器、未知路径、类型或操作符错误、结构超预算、结果超过 500 | `422`                          |
+| Profile 不可用、Search Document 损坏、版本门禁失败或查询超时   | `503`                          |
 
 任何失败都不返回部分结果。
 

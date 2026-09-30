@@ -1,5 +1,3 @@
-import type { PositionService } from "@admin-api/services/position/position.service";
-import type { PositionRouteHandler } from "./position.type";
 import { defineAdminApiMutationOperation, defineAdminApiQueryOperation } from "@admin-api/lib/admin-api-adapter";
 import { resolveAdminAuditContext } from "@admin-api/services/audit/audit.context";
 import {
@@ -7,11 +5,13 @@ import {
   PositionPaginationQueryDtoSchema,
   PositionUpdateDtoSchema,
 } from "@admin-api/services/position/position.schema";
+import type { PositionService } from "@admin-api/services/position/position.service";
 import { router } from "@iam/api-core/trpc";
 import { paginate } from "@iam/api-core/utils";
 import { PositionStatus } from "@iam/contracts";
 import { z } from "zod";
 import { toPositionMemberCountVo, toPositionVo } from "./position.schema";
+import type { PositionRouteHandler } from "./position.type";
 
 export interface CreatePositionAdapterDeps {
   positionService: Pick<
@@ -29,10 +29,10 @@ export function createPositionAdapter(deps: CreatePositionAdapterDeps) {
   const searchPosition = defineAdminApiQueryOperation({
     operationId: "admin.position.search",
     input: PositionPaginationQueryDtoSchema,
-    restInput: c => c.req.valid("json") as z.infer<typeof PositionPaginationQueryDtoSchema>,
+    restInput: (c) => c.req.valid("json") as z.infer<typeof PositionPaginationQueryDtoSchema>,
     handler: async (input) => {
       const positions = await deps.positionService.searchPositionsFuzzy(input);
-      const vos = positions.map(p => toPositionVo(p));
+      const vos = positions.map((p) => toPositionVo(p));
       return paginate(vos, input);
     },
   });
@@ -40,16 +40,15 @@ export function createPositionAdapter(deps: CreatePositionAdapterDeps) {
   const getPosition = defineAdminApiQueryOperation({
     operationId: "admin.position.detail",
     input: z.object({ posCode: z.string() }),
-    restInput: c => c.req.valid("param") as { posCode: string },
-    handler: async ({ posCode }) => toPositionMemberCountVo(
-      await deps.positionService.getPositionDetailByCode(posCode),
-    ),
+    restInput: (c) => c.req.valid("param") as { posCode: string },
+    handler: async ({ posCode }) =>
+      toPositionMemberCountVo(await deps.positionService.getPositionDetailByCode(posCode)),
   });
 
   const createPosition = defineAdminApiMutationOperation({
     operationId: "admin.position.create",
     input: PositionCreateDtoSchema,
-    restInput: c => c.req.valid("json") as z.infer<typeof PositionCreateDtoSchema>,
+    restInput: (c) => c.req.valid("json") as z.infer<typeof PositionCreateDtoSchema>,
     handler: (input, context) => deps.positionService.setPosition(input, resolveAdminAuditContext(context)),
   });
 
@@ -59,7 +58,7 @@ export function createPositionAdapter(deps: CreatePositionAdapterDeps) {
       posCode: z.string(),
       data: PositionUpdateDtoSchema,
     }),
-    restInput: c => ({
+    restInput: (c) => ({
       posCode: (c.req.valid("param") as { posCode: string }).posCode,
       data: c.req.valid("json") as z.infer<typeof PositionUpdateDtoSchema>,
     }),
@@ -73,7 +72,7 @@ export function createPositionAdapter(deps: CreatePositionAdapterDeps) {
       posCode: z.string(),
       status: z.enum(PositionStatus),
     }),
-    restInput: c => ({
+    restInput: (c) => ({
       posCode: (c.req.valid("param") as { posCode: string }).posCode,
       status: (c.req.valid("json") as { status: PositionStatus }).status,
     }),
@@ -84,9 +83,8 @@ export function createPositionAdapter(deps: CreatePositionAdapterDeps) {
   const deletePosition = defineAdminApiMutationOperation({
     operationId: "admin.position.delete",
     input: z.object({ posCode: z.string() }),
-    restInput: c => c.req.valid("param") as { posCode: string },
-    handler: ({ posCode }, context) =>
-      deps.positionService.deletePosition(posCode, resolveAdminAuditContext(context)),
+    restInput: (c) => c.req.valid("param") as { posCode: string },
+    handler: ({ posCode }, context) => deps.positionService.deletePosition(posCode, resolveAdminAuditContext(context)),
   });
 
   const positionAdminRouter = router({

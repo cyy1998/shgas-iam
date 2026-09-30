@@ -1,5 +1,5 @@
-import { ApiErrorCode } from "@iam/contracts";
 import { describe, expect, test } from "bun:test";
+import { ApiErrorCode } from "@iam/contracts";
 import { BAD_REQUEST } from "../../core/http-status-codes";
 import { getProtocolAndHost } from "../common";
 

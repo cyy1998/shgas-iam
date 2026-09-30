@@ -1,6 +1,6 @@
+import { describe, expect, mock, test } from "bun:test";
 import { createOrganizationHandlers } from "@api/routes/internal/organization/organization.handlers";
 import { OrganizationType } from "@iam/contracts";
-import { describe, expect, mock, test } from "bun:test";
 
 function createContext() {
   return {
@@ -13,7 +13,7 @@ function createContext() {
           parentOrg: "GY",
         };
       }),
-      header: mock((name: string) => name === "Client" ? "portal" : undefined),
+      header: mock((name: string) => (name === "Client" ? "portal" : undefined)),
     },
     json: mock((payload: unknown) => payload),
   };
@@ -56,13 +56,15 @@ describe("createOrganizationHandlers", () => {
 
     expect(deps.organizationService.findOrganizationByCode).toHaveBeenCalledWith("SUP");
     expect(deps.organizationService.getOrganizationByCode).not.toHaveBeenCalled();
-    expect(deps.organizationService.setOrganization).toHaveBeenCalledWith(expect.objectContaining({
-      isVirtual: true,
-      orgCode: "SUP",
-      orgName: "Supplier",
-      orgType: OrganizationType.External,
-      parentCode: "GY",
-    }));
+    expect(deps.organizationService.setOrganization).toHaveBeenCalledWith(
+      expect.objectContaining({
+        isVirtual: true,
+        orgCode: "SUP",
+        orgName: "Supplier",
+        orgType: OrganizationType.External,
+        parentCode: "GY",
+      }),
+    );
     expect(deps.auditLogWriter.recordAuditLogFromContext).toHaveBeenCalled();
   });
 });

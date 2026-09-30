@@ -1,14 +1,8 @@
-import type { Context as HonoContext } from "hono";
 import { ApiErrorCode } from "@iam/contracts";
 import { initTRPC, TRPCError } from "@trpc/server";
+import type { Context as HonoContext } from "hono";
 import { ZodError } from "zod";
-import {
-  BAD_REQUEST,
-  CONFLICT,
-  FORBIDDEN,
-  NOT_FOUND,
-  UNAUTHORIZED,
-} from "../core/http-status-codes";
+import { BAD_REQUEST, CONFLICT, FORBIDDEN, NOT_FOUND, UNAUTHORIZED } from "../core/http-status-codes";
 import { getRequestId } from "../core/request-context";
 import { isApiRuntimeError } from "../errors/api-runtime-error";
 import { getInternalErrorMessage } from "../errors/internal-error-presentation";
@@ -94,22 +88,16 @@ function createSafeErrorShape(input: {
 }
 
 function mapHttpStatusToTRPCCode(status: number): TRPCError["code"] {
-  if (status === BAD_REQUEST)
-    return "BAD_REQUEST";
-  if (status === NOT_FOUND)
-    return "NOT_FOUND";
-  if (status === CONFLICT)
-    return "CONFLICT";
-  if (status === FORBIDDEN)
-    return "FORBIDDEN";
-  if (status === UNAUTHORIZED)
-    return "UNAUTHORIZED";
+  if (status === BAD_REQUEST) return "BAD_REQUEST";
+  if (status === NOT_FOUND) return "NOT_FOUND";
+  if (status === CONFLICT) return "CONFLICT";
+  if (status === FORBIDDEN) return "FORBIDDEN";
+  if (status === UNAUTHORIZED) return "UNAUTHORIZED";
   return "INTERNAL_SERVER_ERROR";
 }
 
 export function getApiRuntimeErrorFormatterData(err: unknown) {
-  if (!isApiRuntimeError(err))
-    return null;
+  if (!isApiRuntimeError(err)) return null;
 
   return {
     serviceCode: err.code,

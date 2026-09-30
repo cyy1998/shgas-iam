@@ -28,7 +28,7 @@ export function createMobileCodeCooldown(redis: Pick<RedisPort, "eval">) {
       return seconds(await redis.eval(acquireScript, 1, key(phone), String(COOLDOWN_MILLISECONDS)));
     },
     async remainingSeconds(phone: string): Promise<number> {
-      const remaining = await redis.eval("return redis.call(\"PTTL\", KEYS[1])", 1, key(phone));
+      const remaining = await redis.eval('return redis.call("PTTL", KEYS[1])', 1, key(phone));
       return remaining === -2 ? 0 : seconds(remaining);
     },
   };

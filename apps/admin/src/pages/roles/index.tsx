@@ -1,8 +1,8 @@
-import StatusTag from '@admin/components/StatusTag';
-import RoleDetailDrawer from '@admin/pages/roles/components/RoleDetailDrawer';
-import RoleFormModal from '@admin/pages/roles/components/RoleFormModal';
-import { requestClientOptions } from '@admin/pages/roles/role-selectors';
-import { AdminMutationCommittedError } from '@admin/services/admin-mutation';
+import StatusTag from "@admin/components/StatusTag";
+import RoleDetailDrawer from "@admin/pages/roles/components/RoleDetailDrawer";
+import RoleFormModal from "@admin/pages/roles/components/RoleFormModal";
+import { requestClientOptions } from "@admin/pages/roles/role-selectors";
+import { AdminMutationCommittedError } from "@admin/services/admin-mutation";
 import {
   deleteRole,
   getRole,
@@ -10,17 +10,12 @@ import {
   type RoleVo,
   searchRoles,
   updateRoleStatus,
-} from '@admin/services/role';
-import { PlusOutlined } from '@ant-design/icons';
-import {
-  type ActionType,
-  PageContainer,
-  type ProColumns,
-  ProTable,
-} from '@ant-design/pro-components';
-import { getRoleStatusOptions, type RoleStatus } from '@iam/contracts';
-import { Alert, Button, Dropdown, message, Modal } from 'antd';
-import { useRef, useState } from 'react';
+} from "@admin/services/role";
+import { PlusOutlined } from "@ant-design/icons";
+import { type ActionType, PageContainer, type ProColumns, ProTable } from "@ant-design/pro-components";
+import { getRoleStatusOptions, type RoleStatus } from "@iam/contracts";
+import { Alert, Button, Dropdown, Modal, message } from "antd";
+import { useRef, useState } from "react";
 
 export default function RolesPage() {
   const actionRef = useRef<ActionType>(undefined);
@@ -31,10 +26,7 @@ export default function RolesPage() {
   const [committedWarning, setCommittedWarning] = useState<string>();
   const [detailReloadSeq, setDetailReloadSeq] = useState(0);
 
-  const onCommitted = (
-    error: AdminMutationCommittedError,
-    roleCode?: string,
-  ) => {
+  const onCommitted = (error: AdminMutationCommittedError, roleCode?: string) => {
     setCommittedWarning(error.message);
     setFormOpen(false);
     if (roleCode) setDrawerRoleCode(roleCode);
@@ -42,8 +34,7 @@ export default function RolesPage() {
     void actionRef.current?.reload();
   };
 
-  const handleError = (err: unknown) =>
-    message.error(err instanceof Error ? err.message : '操作失败');
+  const handleError = (err: unknown) => message.error(err instanceof Error ? err.message : "操作失败");
 
   const reload = () => actionRef.current?.reload();
 
@@ -64,12 +55,12 @@ export default function RolesPage() {
   const onDelete = (row: RoleVo) => {
     Modal.confirm({
       title: `删除角色 ${row.roleName}？`,
-      content: '仅无分配对象的角色可以删除，删除后不会再出现在角色列表中。',
-      okType: 'danger',
+      content: "仅无分配对象的角色可以删除，删除后不会再出现在角色列表中。",
+      okType: "danger",
       onOk: async () => {
         try {
           const outcome = await deleteRole(row.roleCode);
-          message.success(outcome.changed ? '角色已删除' : '无需修改');
+          message.success(outcome.changed ? "角色已删除" : "无需修改");
           reload();
         } catch (err) {
           if (err instanceof AdminMutationCommittedError) {
@@ -85,7 +76,7 @@ export default function RolesPage() {
   const onStatusChange = async (row: RoleVo, status: RoleStatus) => {
     try {
       const outcome = await updateRoleStatus(row.roleCode, status);
-      message.success(outcome.changed ? '状态已更新' : '无需修改');
+      message.success(outcome.changed ? "状态已更新" : "无需修改");
       reload();
     } catch (err) {
       if (err instanceof AdminMutationCommittedError) {
@@ -98,62 +89,65 @@ export default function RolesPage() {
 
   const columns: ProColumns<RoleVo>[] = [
     {
-      title: '角色',
-      dataIndex: 'text',
+      title: "角色",
+      dataIndex: "text",
       hideInTable: true,
-      fieldProps: { placeholder: '角色编码或名称' },
+      fieldProps: { placeholder: "角色编码或名称" },
     },
-    { title: '角色编码', dataIndex: 'roleCode', width: 170, search: false },
-    { title: '角色名称', dataIndex: 'roleName', width: 180, search: false },
+    { title: "角色编码", dataIndex: "roleCode", width: 170, search: false },
+    { title: "角色名称", dataIndex: "roleName", width: 180, search: false },
     {
-      title: '所属应用',
-      dataIndex: 'clientCode',
+      title: "所属应用",
+      dataIndex: "clientCode",
       width: 180,
-      valueType: 'select',
+      valueType: "select",
       request: requestClientOptions,
       fieldProps: {
         filterOption: false,
-        placeholder: '输入应用名称或编码搜索',
+        placeholder: "输入应用名称或编码搜索",
         showSearch: true,
       },
-      render: (_, row) =>
-        `${row.client.clientName}（${row.client.clientCode}）`,
+      render: (_, row) => `${row.client.clientName}（${row.client.clientCode}）`,
     },
     {
-      title: '状态',
-      dataIndex: 'status',
+      title: "状态",
+      dataIndex: "status",
       width: 110,
-      valueType: 'select',
-      valueEnum: Object.fromEntries(
-        getRoleStatusOptions().map((o) => [o.value, { text: o.label }]),
-      ),
+      valueType: "select",
+      valueEnum: Object.fromEntries(getRoleStatusOptions().map((o) => [o.value, { text: o.label }])),
       render: (_, row) => <StatusTag domain="role" status={row.status} />,
     },
     {
-      title: '分配数',
-      dataIndex: 'assignmentCount',
+      title: "分配数",
+      dataIndex: "assignmentCount",
       width: 100,
       search: false,
     },
     {
-      title: '创建时间',
-      dataIndex: 'createTime',
+      title: "创建时间",
+      dataIndex: "createTime",
       width: 170,
       search: false,
       render: (_, row) => new Date(row.createTime).toLocaleString(),
     },
     {
-      title: '操作',
-      fixed: 'right',
-      valueType: 'option',
+      title: "操作",
+      fixed: "right",
+      valueType: "option",
       width: 260,
       render: (_, row) => [
-        <a key="detail" onClick={() => setDrawerRoleCode(row.roleCode)}>
+        <Button
+          key="detail"
+          type="link"
+          size="small"
+          style={{ paddingInline: 0 }}
+          onClick={() => setDrawerRoleCode(row.roleCode)}
+        >
           详情
-        </a>,
-        <a key="edit" onClick={() => onEdit(row)}>
+        </Button>,
+        <Button key="edit" type="link" size="small" style={{ paddingInline: 0 }} onClick={() => onEdit(row)}>
           编辑
-        </a>,
+        </Button>,
         <Dropdown
           key="status"
           menu={{
@@ -166,29 +160,25 @@ export default function RolesPage() {
               })),
           }}
         >
-          <a>状态</a>
+          <Button type="link" size="small" style={{ paddingInline: 0 }}>
+            状态
+          </Button>
         </Dropdown>,
-        <a
-          key="delete"
-          style={{ color: '#d4380d' }}
-          onClick={() => onDelete(row)}
-        >
+        <Button key="delete" type="link" size="small" danger style={{ paddingInline: 0 }} onClick={() => onDelete(row)}>
           删除
-        </a>,
+        </Button>,
       ],
     },
   ];
 
   return (
     <PageContainer title="角色管理">
-      {committedWarning && (
-        <Alert type="warning" showIcon message={committedWarning} />
-      )}
+      {committedWarning && <Alert type="warning" showIcon message={committedWarning} />}
       <ProTable<RoleVo>
         actionRef={actionRef}
         rowKey="roleCode"
         columns={columns}
-        search={{ labelWidth: 'auto' }}
+        search={{ labelWidth: "auto" }}
         scroll={{ x: 1170 }}
         request={async (params) => {
           try {
@@ -205,8 +195,7 @@ export default function RolesPage() {
               clientCode?: string;
               status?: string | number;
             };
-            const statusValue =
-              status === undefined ? undefined : (Number(status) as RoleStatus);
+            const statusValue = status === undefined ? undefined : (Number(status) as RoleStatus);
             const data = await searchRoles({
               pageNum: current,
               pageSize,
@@ -229,12 +218,7 @@ export default function RolesPage() {
           }
         }}
         toolBarRender={() => [
-          <Button
-            key="create"
-            type="primary"
-            icon={<PlusOutlined />}
-            onClick={onCreate}
-          >
+          <Button key="create" type="primary" icon={<PlusOutlined />} onClick={onCreate}>
             新建角色
           </Button>,
         ]}

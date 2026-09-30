@@ -1,3 +1,4 @@
+import { describe, expect, mock, test } from "bun:test";
 import { createAdminAuthorizationPolicy } from "@admin-api/services/admin-authorization/admin-authorization.policy";
 import { ADMIN_OPERATION_REGISTRY } from "@admin-api/services/admin-authorization/admin-operation.registry";
 import { SystemLogEvent } from "@iam/api-core/logger";
@@ -10,7 +11,6 @@ import {
   UserStatus,
 } from "@iam/contracts";
 import { OrganizationResponsibilityAssignmentNotFoundError } from "@iam/domain/organization-responsibility";
-import { describe, expect, mock, test } from "bun:test";
 
 function actor(roles: string[]) {
   return {
@@ -38,9 +38,7 @@ describe("Admin Authorization Policy", () => {
   test("unions role capabilities and maps only canonical iam:admin to the complete summary", async () => {
     const policy = createPolicy();
 
-    const summary = await policy.getCapabilitySummary(
-      actor(["iam:user", "iam:admin"]),
-    );
+    const summary = await policy.getCapabilitySummary(actor(["iam:user", "iam:admin"]));
 
     expect(summary.visibleModules).toEqual([...ADMIN_MODULE_CODES]);
     expect(summary.collectionActions).toEqual({
@@ -57,23 +55,23 @@ describe("Admin Authorization Policy", () => {
         delete: { allowed: true, reason: null },
       },
     });
-    expect((await policy.getCapabilitySummary(actor(["configured:admin"]))).visibleModules)
-      .toEqual([]);
+    expect((await policy.getCapabilitySummary(actor(["configured:admin"]))).visibleModules).toEqual([]);
   });
 
   test("projects lifecycle Assignment actions for full and scoped administrators", async () => {
     const policy = createPolicy(hrScope);
 
     for (const roles of [["iam:admin"], ["iam:admin", "iam:hr-admin"]]) {
-      const authorization
-        = await policy.getOrganizationResponsibilityAuthorization(actor(roles));
+      const authorization = await policy.getOrganizationResponsibilityAuthorization(actor(roles));
       expect(authorization).toMatchObject({
         kind: "full",
         readScope: { kind: "full" },
       });
-      expect(authorization.getAllowedActions({
-        status: OrganizationResponsibilityAssignmentStatus.Enable,
-      })).toEqual({
+      expect(
+        authorization.getAllowedActions({
+          status: OrganizationResponsibilityAssignmentStatus.Enable,
+        }),
+      ).toEqual({
         pause: { allowed: true, reason: null },
         resume: {
           allowed: false,
@@ -81,9 +79,11 @@ describe("Admin Authorization Policy", () => {
         },
         end: { allowed: true, reason: null },
       });
-      expect(authorization.getAllowedActions({
-        status: OrganizationResponsibilityAssignmentStatus.Pause,
-      })).toEqual({
+      expect(
+        authorization.getAllowedActions({
+          status: OrganizationResponsibilityAssignmentStatus.Pause,
+        }),
+      ).toEqual({
         pause: {
           allowed: false,
           reason: "RESOURCE_STATE_NOT_ACTIONABLE",
@@ -91,9 +91,11 @@ describe("Admin Authorization Policy", () => {
         resume: { allowed: true, reason: null },
         end: { allowed: true, reason: null },
       });
-      expect(authorization.getAllowedActions({
-        status: OrganizationResponsibilityAssignmentStatus.Disable,
-      })).toEqual({
+      expect(
+        authorization.getAllowedActions({
+          status: OrganizationResponsibilityAssignmentStatus.Disable,
+        }),
+      ).toEqual({
         pause: {
           allowed: false,
           reason: "RESOURCE_STATE_NOT_ACTIONABLE",
@@ -109,10 +111,7 @@ describe("Admin Authorization Policy", () => {
       });
     }
 
-    const scopedAuthorization
-      = await policy.getOrganizationResponsibilityAuthorization(
-        actor(["iam:hr-admin"]),
-      );
+    const scopedAuthorization = await policy.getOrganizationResponsibilityAuthorization(actor(["iam:hr-admin"]));
     expect(scopedAuthorization).toMatchObject({
       kind: "scoped",
       readScope: {
@@ -120,9 +119,11 @@ describe("Admin Authorization Policy", () => {
         organizationIds: hrScope.organizationIds,
       },
     });
-    expect(scopedAuthorization.getAllowedActions({
-      status: OrganizationResponsibilityAssignmentStatus.Enable,
-    })).toEqual({
+    expect(
+      scopedAuthorization.getAllowedActions({
+        status: OrganizationResponsibilityAssignmentStatus.Enable,
+      }),
+    ).toEqual({
       pause: { allowed: true, reason: null },
       resume: {
         allowed: false,
@@ -143,30 +144,31 @@ describe("Admin Authorization Policy", () => {
         }),
       },
     });
-    const authorization = await policy.getOrganizationResponsibilityAuthorization(
-      actor(["iam:hr-admin"]),
+    const authorization = await policy.getOrganizationResponsibilityAuthorization(actor(["iam:hr-admin"]));
+    expect(() =>
+      authorization.denyMutation({
+        operationId: "admin.organizationResponsibility.createAssignment",
+        resourceIdentifier: "create-request",
+        reason: "RESOURCE_OUT_OF_SCOPE",
+      }),
+    ).toThrow(OrganizationResponsibilityAssignmentNotFoundError);
+    expect(logger.warn).toHaveBeenCalledWith(
+      {
+        event: SystemLogEvent.AdminAuthorizationDenied,
+        actor: { userId: 7, username: "operator" },
+        action: "admin.organizationResponsibility.createAssignment",
+        resourceType: "organizationResponsibilityAssignment",
+        resourceIdentifier: "create-request",
+        reasonCode: "RESOURCE_OUT_OF_SCOPE",
+      },
+      "admin mutation authorization denied",
     );
-    expect(() => authorization.denyMutation({
-      operationId: "admin.organizationResponsibility.createAssignment",
-      resourceIdentifier: "create-request",
-      reason: "RESOURCE_OUT_OF_SCOPE",
-    })).toThrow(OrganizationResponsibilityAssignmentNotFoundError);
-    expect(logger.warn).toHaveBeenCalledWith({
-      event: SystemLogEvent.AdminAuthorizationDenied,
-      actor: { userId: 7, username: "operator" },
-      action: "admin.organizationResponsibility.createAssignment",
-      resourceType: "organizationResponsibilityAssignment",
-      resourceIdentifier: "create-request",
-      reasonCode: "RESOURCE_OUT_OF_SCOPE",
-    }, "admin mutation authorization denied");
   });
 
   test("grants User, Organization, Position, and the approved Employment slice to HR", async () => {
     const policy = createPolicy(hrScope);
 
-    const summary = await policy.getCapabilitySummary(
-      actor(["iam:user", "iam:hr-admin"]),
-    );
+    const summary = await policy.getCapabilitySummary(actor(["iam:user", "iam:hr-admin"]));
 
     expect(summary.visibleModules).toEqual([
       "user",
@@ -230,31 +232,35 @@ describe("Admin Authorization Policy", () => {
       "admin.employment.resignUser",
     ] as const;
     for (const operationId of allowedOperationIds) {
-      expect(await policy.decideOperation({
-        actor: actor(["iam:hr-admin"]),
-        operationId,
-      })).toEqual({ allowed: true, reason: null });
+      expect(
+        await policy.decideOperation({
+          actor: actor(["iam:hr-admin"]),
+          operationId,
+        }),
+      ).toEqual({ allowed: true, reason: null });
     }
     for (const operationId of Object.keys(ADMIN_OPERATION_REGISTRY)) {
-      if (allowedOperationIds.includes(operationId as typeof allowedOperationIds[number]))
-        continue;
-      expect(await policy.decideOperation({
-        actor: actor(["iam:hr-admin"]),
-        operationId,
-      })).toEqual({ allowed: false, reason: "ACTION_NOT_GRANTED" });
+      if (allowedOperationIds.includes(operationId as (typeof allowedOperationIds)[number])) continue;
+      expect(
+        await policy.decideOperation({
+          actor: actor(["iam:hr-admin"]),
+          operationId,
+        }),
+      ).toEqual({ allowed: false, reason: "ACTION_NOT_GRANTED" });
     }
   });
 
   test("projects HR User profile and password actions from any in-scope Open Employment", async () => {
-    const authorization = await createPolicy(hrScope)
-      .getUserAuthorization(actor(["iam:hr-admin"]));
+    const authorization = await createPolicy(hrScope).getUserAuthorization(actor(["iam:hr-admin"]));
 
-    expect(authorization.getAllowedActions({
-      status: UserStatus.Enable,
-      isDelete: false,
-      openEmploymentOrganizationIds: [20, 10],
-      endedEmploymentOrganizationIds: [],
-    })).toEqual({
+    expect(
+      authorization.getAllowedActions({
+        status: UserStatus.Enable,
+        isDelete: false,
+        openEmploymentOrganizationIds: [20, 10],
+        endedEmploymentOrganizationIds: [],
+      }),
+    ).toEqual({
       editProfile: { allowed: true, reason: null },
       resetPassword: { allowed: true, reason: null },
       changeStatus: {
@@ -267,38 +273,43 @@ describe("Admin Authorization Policy", () => {
         reason: "USER_HAS_OUT_OF_SCOPE_OPEN_EMPLOYMENT",
       },
     });
-    expect(authorization.getAllowedActions({
-      status: UserStatus.Pause,
-      isDelete: false,
-      openEmploymentOrganizationIds: [10],
-      endedEmploymentOrganizationIds: [],
-    })).toMatchObject({
+    expect(
+      authorization.getAllowedActions({
+        status: UserStatus.Pause,
+        isDelete: false,
+        openEmploymentOrganizationIds: [10],
+        endedEmploymentOrganizationIds: [],
+      }),
+    ).toMatchObject({
       editProfile: { allowed: true, reason: null },
       resetPassword: { allowed: false, reason: "USER_NOT_ENABLED" },
     });
-    expect(authorization.getAllowedActions({
-      status: UserStatus.Enable,
-      isDelete: false,
-      openEmploymentOrganizationIds: [20],
-      endedEmploymentOrganizationIds: [],
-    })).toMatchObject({
+    expect(
+      authorization.getAllowedActions({
+        status: UserStatus.Enable,
+        isDelete: false,
+        openEmploymentOrganizationIds: [20],
+        endedEmploymentOrganizationIds: [],
+      }),
+    ).toMatchObject({
       editProfile: { allowed: false, reason: "USER_NOT_HR_MANAGED" },
       resetPassword: { allowed: false, reason: "USER_NOT_HR_MANAGED" },
     });
-    expect(authorization.getAllowedActions({
-      status: UserStatus.Enable,
-      isDelete: false,
-      openEmploymentOrganizationIds: [],
-      endedEmploymentOrganizationIds: [],
-    })).toMatchObject({
+    expect(
+      authorization.getAllowedActions({
+        status: UserStatus.Enable,
+        isDelete: false,
+        openEmploymentOrganizationIds: [],
+        endedEmploymentOrganizationIds: [],
+      }),
+    ).toMatchObject({
       editProfile: { allowed: false, reason: "USER_NOT_HR_MANAGED" },
       resetPassword: { allowed: false, reason: "USER_NOT_HR_MANAGED" },
     });
   });
 
   test("allows HR resignation only for an all-in-scope first execution or a completed retry", async () => {
-    const authorization = await createPolicy(hrScope)
-      .getUserAuthorization(actor(["iam:hr-admin"]));
+    const authorization = await createPolicy(hrScope).getUserAuthorization(actor(["iam:hr-admin"]));
 
     const cases = [
       {
@@ -369,40 +380,40 @@ describe("Admin Authorization Policy", () => {
       },
     ] as const;
 
-    for (const { facts, expected } of cases)
-      expect(authorization.getAllowedActions(facts).resign).toEqual(expected);
+    for (const { facts, expected } of cases) expect(authorization.getAllowedActions(facts).resign).toEqual(expected);
   });
 
   test("allows HR User status changes only when every Open Employment is in scope", async () => {
-    const authorization = await createPolicy(hrScope)
-      .getUserAuthorization(actor(["iam:hr-admin"]));
+    const authorization = await createPolicy(hrScope).getUserAuthorization(actor(["iam:hr-admin"]));
 
-    for (const status of [
-      UserStatus.Enable,
-      UserStatus.Pause,
-      UserStatus.Disable,
-    ]) {
-      expect(authorization.getAllowedActions({
-        status,
-        isDelete: false,
-        openEmploymentOrganizationIds: [10, 11],
-        endedEmploymentOrganizationIds: [],
-      }).changeStatus).toEqual({ allowed: true, reason: null });
-      expect(authorization.getAllowedActions({
-        status,
-        isDelete: false,
-        openEmploymentOrganizationIds: [10, 20],
-        endedEmploymentOrganizationIds: [],
-      }).changeStatus).toEqual({
+    for (const status of [UserStatus.Enable, UserStatus.Pause, UserStatus.Disable]) {
+      expect(
+        authorization.getAllowedActions({
+          status,
+          isDelete: false,
+          openEmploymentOrganizationIds: [10, 11],
+          endedEmploymentOrganizationIds: [],
+        }).changeStatus,
+      ).toEqual({ allowed: true, reason: null });
+      expect(
+        authorization.getAllowedActions({
+          status,
+          isDelete: false,
+          openEmploymentOrganizationIds: [10, 20],
+          endedEmploymentOrganizationIds: [],
+        }).changeStatus,
+      ).toEqual({
         allowed: false,
         reason: "USER_HAS_OUT_OF_SCOPE_OPEN_EMPLOYMENT",
       });
-      expect(authorization.getAllowedActions({
-        status,
-        isDelete: false,
-        openEmploymentOrganizationIds: [],
-        endedEmploymentOrganizationIds: [],
-      }).changeStatus).toEqual({
+      expect(
+        authorization.getAllowedActions({
+          status,
+          isDelete: false,
+          openEmploymentOrganizationIds: [],
+          endedEmploymentOrganizationIds: [],
+        }).changeStatus,
+      ).toEqual({
         allowed: false,
         reason: "USER_NOT_HR_MANAGED",
       });
@@ -453,8 +464,7 @@ describe("Admin Authorization Policy", () => {
           operationId: "admin.user.update",
           operationInput,
         });
-      }
-      catch (error) {
+      } catch (error) {
         failure = error;
       }
       expect(failure).toMatchObject({ httpStatus: 403 });
@@ -480,11 +490,13 @@ describe("Admin Authorization Policy", () => {
     const hrAuthorization = await policy.getEmploymentAuthorization(actor(["iam:hr-admin"]));
     const fullAuthorization = await policy.getEmploymentAuthorization(actor(["iam:admin"]));
 
-    expect(hrAuthorization.getAllowedActions({
-      userStatus: UserStatus.Enable,
-      status: EmploymentStatus.Enable,
-      isPrimary: false,
-    })).toEqual({
+    expect(
+      hrAuthorization.getAllowedActions({
+        userStatus: UserStatus.Enable,
+        status: EmploymentStatus.Enable,
+        isPrimary: false,
+      }),
+    ).toEqual({
       editDescription: { allowed: true, reason: null },
       pause: { allowed: true, reason: null },
       resume: { allowed: false, reason: "RESOURCE_STATE_NOT_ACTIONABLE" },
@@ -493,11 +505,13 @@ describe("Admin Authorization Policy", () => {
       setPrimary: { allowed: true, reason: null },
       clearPrimary: { allowed: false, reason: "RESOURCE_STATE_NOT_ACTIONABLE" },
     });
-    expect(hrAuthorization.getAllowedActions({
-      userStatus: UserStatus.Enable,
-      status: EmploymentStatus.Pause,
-      isPrimary: false,
-    })).toEqual({
+    expect(
+      hrAuthorization.getAllowedActions({
+        userStatus: UserStatus.Enable,
+        status: EmploymentStatus.Pause,
+        isPrimary: false,
+      }),
+    ).toEqual({
       editDescription: { allowed: true, reason: null },
       pause: { allowed: false, reason: "RESOURCE_STATE_NOT_ACTIONABLE" },
       resume: { allowed: true, reason: null },
@@ -506,11 +520,13 @@ describe("Admin Authorization Policy", () => {
       setPrimary: { allowed: true, reason: null },
       clearPrimary: { allowed: false, reason: "RESOURCE_STATE_NOT_ACTIONABLE" },
     });
-    expect(hrAuthorization.getAllowedActions({
-      userStatus: UserStatus.Enable,
-      status: EmploymentStatus.Enable,
-      isPrimary: true,
-    })).toEqual({
+    expect(
+      hrAuthorization.getAllowedActions({
+        userStatus: UserStatus.Enable,
+        status: EmploymentStatus.Enable,
+        isPrimary: true,
+      }),
+    ).toEqual({
       editDescription: { allowed: true, reason: null },
       pause: { allowed: true, reason: null },
       resume: { allowed: false, reason: "RESOURCE_STATE_NOT_ACTIONABLE" },
@@ -519,11 +535,13 @@ describe("Admin Authorization Policy", () => {
       setPrimary: { allowed: false, reason: "RESOURCE_STATE_NOT_ACTIONABLE" },
       clearPrimary: { allowed: true, reason: null },
     });
-    expect(hrAuthorization.getAllowedActions({
-      userStatus: UserStatus.Enable,
-      status: EmploymentStatus.Disable,
-      isPrimary: false,
-    })).toEqual({
+    expect(
+      hrAuthorization.getAllowedActions({
+        userStatus: UserStatus.Enable,
+        status: EmploymentStatus.Disable,
+        isPrimary: false,
+      }),
+    ).toEqual({
       editDescription: { allowed: false, reason: "RESOURCE_STATE_NOT_ACTIONABLE" },
       pause: { allowed: false, reason: "RESOURCE_STATE_NOT_ACTIONABLE" },
       resume: { allowed: false, reason: "RESOURCE_STATE_NOT_ACTIONABLE" },
@@ -532,11 +550,13 @@ describe("Admin Authorization Policy", () => {
       setPrimary: { allowed: false, reason: "RESOURCE_STATE_NOT_ACTIONABLE" },
       clearPrimary: { allowed: false, reason: "RESOURCE_STATE_NOT_ACTIONABLE" },
     });
-    expect(fullAuthorization.getAllowedActions({
-      userStatus: UserStatus.Enable,
-      status: EmploymentStatus.Pause,
-      isPrimary: true,
-    })).toEqual({
+    expect(
+      fullAuthorization.getAllowedActions({
+        userStatus: UserStatus.Enable,
+        status: EmploymentStatus.Pause,
+        isPrimary: true,
+      }),
+    ).toEqual({
       editDescription: { allowed: true, reason: null },
       pause: { allowed: false, reason: "RESOURCE_STATE_NOT_ACTIONABLE" },
       resume: { allowed: true, reason: null },
@@ -580,10 +600,12 @@ describe("Admin Authorization Policy", () => {
       visibleModules: [],
     });
     for (const roles of [["iam:hr-admin"], ["ordinary-role"]]) {
-      expect(await policy.decideOperation({
-        actor: actor(roles),
-        operationId: "admin.user.updateStatus",
-      })).toEqual({ allowed: false, reason: "ACTION_NOT_GRANTED" });
+      expect(
+        await policy.decideOperation({
+          actor: actor(roles),
+          operationId: "admin.user.updateStatus",
+        }),
+      ).toEqual({ allowed: false, reason: "ACTION_NOT_GRANTED" });
     }
   });
 
@@ -591,21 +613,18 @@ describe("Admin Authorization Policy", () => {
     const policy = createPolicy(null);
     const mixedActor = actor(["iam:admin", "iam:hr-admin"]);
 
-    expect((await policy.getCapabilitySummary(mixedActor)).visibleModules)
-      .toEqual([...ADMIN_MODULE_CODES]);
+    expect((await policy.getCapabilitySummary(mixedActor)).visibleModules).toEqual([...ADMIN_MODULE_CODES]);
     for (const roles of [["iam:admin"], ["iam:admin", "iam:hr-admin"]]) {
       const authorization = await policy.getUserAuthorization(actor(roles));
-      for (const status of [
-        UserStatus.Enable,
-        UserStatus.Pause,
-        UserStatus.Disable,
-      ]) {
-        expect(authorization.getAllowedActions({
-          status,
-          isDelete: true,
-          openEmploymentOrganizationIds: [],
-          endedEmploymentOrganizationIds: [],
-        })).toEqual({
+      for (const status of [UserStatus.Enable, UserStatus.Pause, UserStatus.Disable]) {
+        expect(
+          authorization.getAllowedActions({
+            status,
+            isDelete: true,
+            openEmploymentOrganizationIds: [],
+            endedEmploymentOrganizationIds: [],
+          }),
+        ).toEqual({
           editProfile: { allowed: true, reason: null },
           resetPassword: { allowed: true, reason: null },
           changeStatus: { allowed: true, reason: null },
@@ -624,10 +643,12 @@ describe("Admin Authorization Policy", () => {
   test("denies an unregistered operation even to the canonical full administrator", async () => {
     const policy = createPolicy();
 
-    expect(await policy.decideOperation({
-      actor: actor(["iam:admin"]),
-      operationId: "admin.future.unregistered",
-    })).toEqual({ allowed: false, reason: "ACTION_NOT_GRANTED" });
+    expect(
+      await policy.decideOperation({
+        actor: actor(["iam:admin"]),
+        operationId: "admin.future.unregistered",
+      }),
+    ).toEqual({ allowed: false, reason: "ACTION_NOT_GRANTED" });
   });
 
   test("logs a structured mutation denial without resolved scope", async () => {
@@ -646,8 +667,7 @@ describe("Admin Authorization Policy", () => {
         operationId: "admin.user.delete",
         operationInput: { username: "zhangsan" },
       });
-    }
-    catch (error) {
+    } catch (error) {
       failure = error;
     }
     expect(failure).toMatchObject({
@@ -655,14 +675,17 @@ describe("Admin Authorization Policy", () => {
       message: "无管理端操作权限",
     });
 
-    expect(warn).toHaveBeenCalledWith({
-      event: SystemLogEvent.AdminAuthorizationDenied,
-      actor: { userId: 7, username: "operator" },
-      action: "admin.user.delete",
-      resourceType: "user",
-      resourceIdentifier: "zhangsan",
-      reasonCode: "ACTION_NOT_GRANTED",
-    }, "admin mutation authorization denied");
+    expect(warn).toHaveBeenCalledWith(
+      {
+        event: SystemLogEvent.AdminAuthorizationDenied,
+        actor: { userId: 7, username: "operator" },
+        action: "admin.user.delete",
+        resourceType: "user",
+        resourceIdentifier: "zhangsan",
+        reasonCode: "ACTION_NOT_GRANTED",
+      },
+      "admin mutation authorization denied",
+    );
     expect(JSON.stringify(warn.mock.calls)).not.toContain("scope");
   });
 
@@ -673,71 +696,81 @@ describe("Admin Authorization Policy", () => {
       hrAdministrationScopeResolver: { resolveForActor: async () => null },
     });
 
-    const failure = await policy.assertOperationAllowed({
-      actor: actor(["iam:hr-admin"]),
-      operationId: "admin.organizationResponsibility.createAssignment",
-      operationInput: {
-        employmentId: 999,
-        orgCode: "OUTSIDE_SECRET",
-      },
-    }).catch(error => error);
+    const failure = await policy
+      .assertOperationAllowed({
+        actor: actor(["iam:hr-admin"]),
+        operationId: "admin.organizationResponsibility.createAssignment",
+        operationInput: {
+          employmentId: 999,
+          orgCode: "OUTSIDE_SECRET",
+        },
+      })
+      .catch((error) => error);
 
     expect(failure).toMatchObject({ httpStatus: 403 });
-    expect(warn).toHaveBeenCalledWith({
-      event: SystemLogEvent.AdminAuthorizationDenied,
-      actor: { userId: 7, username: "operator" },
-      action: "admin.organizationResponsibility.createAssignment",
-      resourceType: "organizationResponsibilityAssignment",
-      resourceIdentifier: "create-request",
-      reasonCode: "ACTION_NOT_GRANTED",
-    }, "admin mutation authorization denied");
+    expect(warn).toHaveBeenCalledWith(
+      {
+        event: SystemLogEvent.AdminAuthorizationDenied,
+        actor: { userId: 7, username: "operator" },
+        action: "admin.organizationResponsibility.createAssignment",
+        resourceType: "organizationResponsibilityAssignment",
+        resourceIdentifier: "create-request",
+        reasonCode: "ACTION_NOT_GRANTED",
+      },
+      "admin mutation authorization denied",
+    );
     expect(JSON.stringify(warn.mock.calls)).not.toContain("999");
     expect(JSON.stringify(warn.mock.calls)).not.toContain("OUTSIDE_SECRET");
   });
 
   test("projects the complete Organization action map from server-side state and integrity facts", async () => {
-    const authorization = await createPolicy(hrScope)
-      .getOrganizationAuthorization(actor(["iam:hr-admin"]));
+    const authorization = await createPolicy(hrScope).getOrganizationAuthorization(actor(["iam:hr-admin"]));
 
     expect(authorization).toMatchObject({
       kind: "scoped",
       rootOrganizationIds: [10],
       organizationIds: [10, 11],
     });
-    expect(authorization.getAllowedActions({
-      status: OrganizationStatus.Enable,
-      level: OrganizationLevel.One,
-      childrenCount: 1,
-      employmentCount: 0,
-      hasOpenResponsibilityAssignment: false,
-      hasUnmanageableOpenResponsibilityAssignment: false,
-    })).toEqual({
+    expect(
+      authorization.getAllowedActions({
+        status: OrganizationStatus.Enable,
+        level: OrganizationLevel.One,
+        childrenCount: 1,
+        employmentCount: 0,
+        hasOpenResponsibilityAssignment: false,
+        hasUnmanageableOpenResponsibilityAssignment: false,
+      }),
+    ).toEqual({
       createChild: { allowed: true, reason: null },
       edit: { allowed: true, reason: null },
       changeStatus: { allowed: true, reason: null },
       delete: { allowed: false, reason: "INTEGRITY_GUARD_BLOCKED" },
     });
-    expect(authorization.getAllowedActions({
-      status: OrganizationStatus.Enable,
-      level: OrganizationLevel.Five,
-      childrenCount: 0,
-      employmentCount: 1,
-      hasOpenResponsibilityAssignment: true,
-      hasUnmanageableOpenResponsibilityAssignment: false,
-    })).toEqual({
+    expect(
+      authorization.getAllowedActions({
+        status: OrganizationStatus.Enable,
+        level: OrganizationLevel.Five,
+        childrenCount: 0,
+        employmentCount: 1,
+        hasOpenResponsibilityAssignment: true,
+        hasUnmanageableOpenResponsibilityAssignment: false,
+      }),
+    ).toEqual({
       createChild: { allowed: false, reason: "RESOURCE_STATE_NOT_ACTIONABLE" },
       edit: { allowed: true, reason: null },
       changeStatus: { allowed: false, reason: "INTEGRITY_GUARD_BLOCKED" },
       delete: { allowed: false, reason: "INTEGRITY_GUARD_BLOCKED" },
     });
-    expect(authorization.getAllowedActions({
-      status: OrganizationStatus.Enable,
-      level: OrganizationLevel.Three,
-      childrenCount: 0,
-      employmentCount: 0,
-      hasOpenResponsibilityAssignment: true,
-      hasUnmanageableOpenResponsibilityAssignment: true,
-    })).toMatchObject({
+    expect(
+      authorization.getAllowedActions({
+        status: OrganizationStatus.Enable,
+        level: OrganizationLevel.Three,
+        childrenCount: 0,
+        employmentCount: 0,
+        hasOpenResponsibilityAssignment: true,
+        hasUnmanageableOpenResponsibilityAssignment: true,
+      }),
+    ).toMatchObject({
       changeStatus: {
         allowed: false,
         reason: "UNMANAGEABLE_RESPONSIBILITY_BLOCKED",
@@ -757,9 +790,7 @@ describe("Admin Authorization Policy", () => {
         resolveForActor: async () => hrScope,
       },
     });
-    const authorization = await policy.getOrganizationAuthorization(
-      actor(["iam:hr-admin"]),
-    );
+    const authorization = await policy.getOrganizationAuthorization(actor(["iam:hr-admin"]));
 
     let failure: unknown;
     try {
@@ -769,29 +800,28 @@ describe("Admin Authorization Policy", () => {
         reason: "RESOURCE_OUT_OF_SCOPE",
         concealExistence: true,
       });
-    }
-    catch (error) {
+    } catch (error) {
       failure = error;
     }
 
     expect(failure).toMatchObject({ httpStatus: 404 });
-    expect(warn).toHaveBeenCalledWith({
-      event: SystemLogEvent.AdminAuthorizationDenied,
-      actor: { userId: 7, username: "operator" },
-      action: "admin.organization.delete",
-      resourceType: "organization",
-      resourceIdentifier: "OTHER",
-      reasonCode: "RESOURCE_OUT_OF_SCOPE",
-    }, "admin mutation authorization denied");
+    expect(warn).toHaveBeenCalledWith(
+      {
+        event: SystemLogEvent.AdminAuthorizationDenied,
+        actor: { userId: 7, username: "operator" },
+        action: "admin.organization.delete",
+        resourceType: "organization",
+        resourceIdentifier: "OTHER",
+        reasonCode: "RESOURCE_OUT_OF_SCOPE",
+      },
+      "admin mutation authorization denied",
+    );
     expect(JSON.stringify(warn.mock.calls)).not.toContain("organizationIds");
   });
 
   test("classifies Role Assignment denials as assignment resources", () => {
-    expect(ADMIN_OPERATION_REGISTRY["admin.role.assignments.create"].resourceType)
-      .toBe("roleAssignment");
-    expect(ADMIN_OPERATION_REGISTRY["admin.role.assignments.updateScope"].resourceType)
-      .toBe("roleAssignment");
-    expect(ADMIN_OPERATION_REGISTRY["admin.role.assignments.delete"].resourceType)
-      .toBe("roleAssignment");
+    expect(ADMIN_OPERATION_REGISTRY["admin.role.assignments.create"].resourceType).toBe("roleAssignment");
+    expect(ADMIN_OPERATION_REGISTRY["admin.role.assignments.updateScope"].resourceType).toBe("roleAssignment");
+    expect(ADMIN_OPERATION_REGISTRY["admin.role.assignments.delete"].resourceType).toBe("roleAssignment");
   });
 });

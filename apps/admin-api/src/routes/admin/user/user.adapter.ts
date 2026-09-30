@@ -1,27 +1,24 @@
 import type { RandomPort } from "@admin-api/composition/runtime";
-import type { UserService } from "@admin-api/services/user/user.service";
-import type { Context } from "hono";
-import type { UserRouteHandler } from "./user.type";
 import { defineAdminApiMutationOperation, defineAdminApiQueryOperation } from "@admin-api/lib/admin-api-adapter";
 import {
   authorizeAdminOperationForContext,
   getAdminAuthorizationContext,
   resolveAdminUserAuthorizationForContext,
 } from "@admin-api/services/admin-authorization/admin-authorization.context";
-import {
-  getAdminAuditActor,
-  getAdminAuditRequestContext,
-} from "@admin-api/services/audit/audit.context";
+import { getAdminAuditActor, getAdminAuditRequestContext } from "@admin-api/services/audit/audit.context";
 import {
   UserAdminCreateDtoSchema,
   UserPaginationQueryDtoSchema,
   UserUpdateDtoSchema,
 } from "@admin-api/services/user/user.schema";
+import type { UserService } from "@admin-api/services/user/user.service";
 import { router } from "@iam/api-core/trpc";
 import { EmploymentStatus, UserStatus } from "@iam/contracts";
 import { OPEN_EMPLOYMENT_STATUSES } from "@iam/domain/employment";
+import type { Context } from "hono";
 import { z } from "zod";
 import { toUserDetailVo, toUserVo } from "./user.schema";
+import type { UserRouteHandler } from "./user.type";
 
 const openEmploymentStatuses: readonly EmploymentStatus[] = OPEN_EMPLOYMENT_STATUSES;
 
@@ -54,11 +51,11 @@ export function createUserAdapter(deps: CreateUserAdapterDeps) {
   const searchUser = defineAdminApiQueryOperation({
     operationId: "admin.user.search",
     input: UserPaginationQueryDtoSchema,
-    restInput: c => c.req.valid("json") as z.infer<typeof UserPaginationQueryDtoSchema>,
+    restInput: (c) => c.req.valid("json") as z.infer<typeof UserPaginationQueryDtoSchema>,
     handler: async (input) => {
       const { result, ...rest } = await deps.userService.searchUsersFuzzyForAdmin(input);
       return {
-        result: result.map(u => toUserVo(u)),
+        result: result.map((u) => toUserVo(u)),
         ...rest,
       };
     },
@@ -67,38 +64,27 @@ export function createUserAdapter(deps: CreateUserAdapterDeps) {
   const getUser = defineAdminApiQueryOperation({
     operationId: "admin.user.detail",
     input: z.object({ username: z.string() }),
-    restInput: c => c.req.valid("param") as { username: string },
+    restInput: (c) => c.req.valid("param") as { username: string },
     handler: async ({ username }, context) => {
       const detail = await deps.userService.getUserDetailByUsernameForAdmin(username);
       const { actor, policy } = getAdminAuthorizationContext(context.hono);
-      const operationAuthorization = await authorizeAdminOperationForContext(
-        context.hono,
-        {
-          operationId: "admin.user.detail",
-          operationInput: { username },
-        },
-      );
+      const operationAuthorization = await authorizeAdminOperationForContext(context.hono, {
+        operationId: "admin.user.detail",
+        operationInput: { username },
+      });
       const [userAuthorization, employmentAuthorization] = await Promise.all([
-        policy.getUserAuthorization(
-          actor,
-          operationAuthorization.hrAdministrationScope,
-        ),
-        policy.getEmploymentAuthorization(
-          actor,
-          operationAuthorization.hrAdministrationScope,
-        ),
+        policy.getUserAuthorization(actor, operationAuthorization.hrAdministrationScope),
+        policy.getEmploymentAuthorization(actor, operationAuthorization.hrAdministrationScope),
       ]);
       const allowedActions = userAuthorization.getAllowedActions({
         status: detail.status,
         isDelete: detail.isDelete,
         openEmploymentOrganizationIds: detail.employments
-          .filter(employment => !employment.isDelete
-            && openEmploymentStatuses.includes(employment.status))
-          .map(employment => employment.orgId),
+          .filter((employment) => !employment.isDelete && openEmploymentStatuses.includes(employment.status))
+          .map((employment) => employment.orgId),
         endedEmploymentOrganizationIds: detail.employments
-          .filter(employment => !employment.isDelete
-            && employment.status === EmploymentStatus.Disable)
-          .map(employment => employment.orgId),
+          .filter((employment) => !employment.isDelete && employment.status === EmploymentStatus.Disable)
+          .map((employment) => employment.orgId),
       });
       return toUserDetailVo(detail, allowedActions, employmentAuthorization);
     },
@@ -107,7 +93,7 @@ export function createUserAdapter(deps: CreateUserAdapterDeps) {
   const createUser = defineAdminApiMutationOperation({
     operationId: "admin.user.create",
     input: UserAdminCreateDtoSchema,
-    restInput: c => c.req.valid("json") as z.infer<typeof UserAdminCreateDtoSchema>,
+    restInput: (c) => c.req.valid("json") as z.infer<typeof UserAdminCreateDtoSchema>,
     handler: async (input, context) => {
       const mutation = await deps.userService.setUserForAdmin(input, resolveAuditContext(context));
       return {
@@ -123,19 +109,17 @@ export function createUserAdapter(deps: CreateUserAdapterDeps) {
       username: z.string(),
       data: UserUpdateDtoSchema,
     }),
-    restInput: c => ({
+    restInput: (c) => ({
       username: (c.req.valid("param") as { username: string }).username,
       data: c.req.valid("json") as z.infer<typeof UserUpdateDtoSchema>,
     }),
-    handler: async ({ username, data }, context) => deps.userService.updateUser(
-      username,
-      data,
-      resolveAuditContext(context),
-      await resolveAdminUserAuthorizationForContext(
-        context.hono,
-        "admin.user.update",
+    handler: async ({ username, data }, context) =>
+      deps.userService.updateUser(
+        username,
+        data,
+        resolveAuditContext(context),
+        await resolveAdminUserAuthorizationForContext(context.hono, "admin.user.update"),
       ),
-    ),
   });
 
   const updateUserStatus = defineAdminApiMutationOperation({
@@ -144,7 +128,7 @@ export function createUserAdapter(deps: CreateUserAdapterDeps) {
       username: z.string(),
       status: z.enum(UserStatus),
     }),
-    restInput: c => ({
+    restInput: (c) => ({
       username: (c.req.valid("param") as { username: string }).username,
       status: (c.req.valid("json") as { status: UserStatus }).status,
     }),
@@ -153,32 +137,27 @@ export function createUserAdapter(deps: CreateUserAdapterDeps) {
         username,
         status,
         resolveAuditContext(context),
-        await resolveAdminUserAuthorizationForContext(
-          context.hono,
-          "admin.user.updateStatus",
-        ),
+        await resolveAdminUserAuthorizationForContext(context.hono, "admin.user.updateStatus"),
       ),
   });
 
   const deleteUser = defineAdminApiMutationOperation({
     operationId: "admin.user.delete",
     input: z.object({ username: z.string() }),
-    restInput: c => c.req.valid("param") as { username: string },
+    restInput: (c) => c.req.valid("param") as { username: string },
     handler: ({ username }, context) => deps.userService.deleteUser(username, resolveAuditContext(context)),
   });
 
   const resetPassword = defineAdminApiMutationOperation({
     operationId: "admin.user.resetPassword",
     input: z.object({ username: z.string() }),
-    restInput: c => c.req.valid("param") as { username: string },
-    handler: async ({ username }, context) => deps.userService.resetPasswordByUsername(
-      username,
-      resolveAuditContext(context),
-      await resolveAdminUserAuthorizationForContext(
-        context.hono,
-        "admin.user.resetPassword",
+    restInput: (c) => c.req.valid("param") as { username: string },
+    handler: async ({ username }, context) =>
+      deps.userService.resetPasswordByUsername(
+        username,
+        resolveAuditContext(context),
+        await resolveAdminUserAuthorizationForContext(context.hono, "admin.user.resetPassword"),
       ),
-    ),
   });
 
   const generatePassword = defineAdminApiQueryOperation({

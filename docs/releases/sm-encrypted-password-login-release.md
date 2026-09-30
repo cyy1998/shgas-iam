@@ -11,12 +11,12 @@ Next review: 2026-10-31
 
 ## 配置核对
 
-| Runtime | 配置与约束 |
-|---|---|
-| API | `IAM_API_LOGIN_CREDENTIAL_ACTIVE_KID` 必须存在于 `IAM_API_LOGIN_CREDENTIAL_PRIVATE_KEYS_JSON`，对应值是 SM2 私钥。 |
-| SSO 构建 | `UMI_APP_SSO_LOGIN_CREDENTIAL_KID` 与 API active kid 一致；`UMI_APP_SSO_LOGIN_CREDENTIAL_PUBLIC_KEY` 是该私钥配对公钥。 |
+| Runtime      | 配置与约束                                                                                                                                         |
+| ------------ | -------------------------------------------------------------------------------------------------------------------------------------------------- |
+| API          | `IAM_API_LOGIN_CREDENTIAL_ACTIVE_KID` 必须存在于 `IAM_API_LOGIN_CREDENTIAL_PRIVATE_KEYS_JSON`，对应值是 SM2 私钥。                                 |
+| SSO 构建     | `UMI_APP_SSO_LOGIN_CREDENTIAL_KID` 与 API active kid 一致；`UMI_APP_SSO_LOGIN_CREDENTIAL_PUBLIC_KEY` 是该私钥配对公钥。                            |
 | 时间与防重放 | `IAM_API_LOGIN_CREDENTIAL_MAX_SKEW_MS` 定义 ts 偏移窗口；`IAM_API_LOGIN_CREDENTIAL_NONCE_TTL_SECONDS` 不短于该窗口。保持系统时钟同步、Redis 可用。 |
-| Cap | 核对 `UMI_APP_SSO_CAP_ENDPOINT`、`UMI_APP_SSO_CAP_SITE_KEY`、`UMI_APP_SSO_CAP_WASM_URL`、`UMI_APP_SSO_CAP_PAKO_URL`。 |
+| Cap          | 核对 `UMI_APP_SSO_CAP_ENDPOINT`、`UMI_APP_SSO_CAP_SITE_KEY`、`UMI_APP_SSO_CAP_WASM_URL`、`UMI_APP_SSO_CAP_PAKO_URL`。                              |
 
 私钥通过受控配置注入，不写入前端 bundle、仓库或日志。
 nonce key 为 `login-credential-nonce:<digest>`，不是可随意清空的缓存。

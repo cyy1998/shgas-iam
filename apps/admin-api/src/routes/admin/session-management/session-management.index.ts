@@ -1,6 +1,6 @@
 import type { AdminBindings } from "@admin-api/types/lib";
-import type { SessionManagementAdapter } from "./session-management.adapter";
 import { createRouter } from "@iam/api-core/core/create-router";
+import type { SessionManagementAdapter } from "./session-management.adapter";
 import * as routes from "./session-management.routes";
 
 export function createSessionManagementRoute(adapter: SessionManagementAdapter) {

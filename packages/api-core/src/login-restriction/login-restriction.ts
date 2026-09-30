@@ -73,10 +73,7 @@ export interface LoginRestrictionAtomicStorePort {
   }) => Promise<RecordLoginFailureAtomicResult>;
   getRestriction: (userId: number) => Promise<LoginRestrictionAtomicState | null>;
   clearLoginState: (userId: number) => Promise<ClearLoginStateAtomicResult>;
-  listRestrictions: (input: {
-    offset: number;
-    limit: number;
-  }) => Promise<ListLoginRestrictionsAtomicResult>;
+  listRestrictions: (input: { offset: number; limit: number }) => Promise<ListLoginRestrictionsAtomicResult>;
 }
 
 export interface CreateLoginRestrictionOptions {
@@ -102,22 +99,17 @@ function normalizeTriggerMethod(value: unknown): LoginRestrictionTriggerMethod {
 
 function requireFiniteNumber(value: unknown, operation: string) {
   const parsed = Number(value);
-  if (!Number.isFinite(parsed))
-    throw new TypeError(`Login restriction ${operation} returned an invalid number`);
+  if (!Number.isFinite(parsed)) throw new TypeError(`Login restriction ${operation} returned an invalid number`);
   return parsed;
 }
 
-function toRestriction(
-  state: LoginRestrictionAtomicState | null,
-): TemporaryLoginRestriction | null {
-  if (state === null)
-    return null;
+function toRestriction(state: LoginRestrictionAtomicState | null): TemporaryLoginRestriction | null {
+  if (state === null) return null;
 
   const userId = requireFiniteNumber(state.userId, "state");
   const restrictedUntil = requireFiniteNumber(state.restrictedUntil, "state");
   const remainingMilliseconds = requireFiniteNumber(state.remainingMilliseconds, "state");
-  if (remainingMilliseconds <= 0)
-    return null;
+  if (remainingMilliseconds <= 0) return null;
 
   return {
     userId,
@@ -132,10 +124,8 @@ export function createLoginRestriction(options: CreateLoginRestrictionOptions) {
   async function run<T>(operation: () => Promise<T>): Promise<T> {
     try {
       return await operation();
-    }
-    catch (error) {
-      if (error instanceof LoginRestrictionUnavailableError)
-        throw error;
+    } catch (error) {
+      if (error instanceof LoginRestrictionUnavailableError) throw error;
       throw new LoginRestrictionUnavailableError({ cause: error });
     }
   }
@@ -161,9 +151,7 @@ export function createLoginRestriction(options: CreateLoginRestrictionOptions) {
   }
 
   async function getRestriction(userId: number): Promise<TemporaryLoginRestriction | null> {
-    return await run(async () => toRestriction(
-      await options.store.getRestriction(userId),
-    ));
+    return await run(async () => toRestriction(await options.store.getRestriction(userId)));
   }
 
   async function clearLoginState(userId: number): Promise<ClearLoginRestrictionStateResult> {
@@ -198,8 +186,7 @@ export function createLoginRestriction(options: CreateLoginRestrictionOptions) {
       });
       const items = result.items.map((state) => {
         const restriction = toRestriction(state);
-        if (restriction === null)
-          throw new TypeError("Login restriction inventory returned expired state");
+        if (restriction === null) throw new TypeError("Login restriction inventory returned expired state");
         return restriction;
       });
 

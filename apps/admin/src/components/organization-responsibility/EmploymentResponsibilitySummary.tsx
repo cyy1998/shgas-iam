@@ -1,18 +1,18 @@
-import { searchOrganizationResponsibilityAssignments } from '@admin/services/organization-responsibility';
-import { Link } from '@umijs/max';
-import { List, Skeleton, Space, Tag, Typography } from 'antd';
-import { useEffect, useState } from 'react';
+import { searchOrganizationResponsibilityAssignments } from "@admin/services/organization-responsibility";
+import { Link } from "@umijs/max";
+import { List, Skeleton, Space, Tag, Typography } from "antd";
+import { useEffect, useState } from "react";
 import {
   formatOrganizationResponsibilityStatus,
   formatOrganizationResponsibilityType,
-} from './organizationResponsibilityPresentation';
+} from "./organizationResponsibilityPresentation";
 
 function assignmentPath(employmentId: number, assignmentId?: number) {
   const params = new URLSearchParams({
     employment: String(employmentId),
-    lifecycle: 'open',
+    lifecycle: "open",
   });
-  if (assignmentId) params.set('assignment', String(assignmentId));
+  if (assignmentId) params.set("assignment", String(assignmentId));
   return `/organization-responsibilities/assignments?${params.toString()}`;
 }
 
@@ -23,16 +23,16 @@ export default function EmploymentResponsibilitySummary({
   employmentId: number;
   compact?: boolean;
 }) {
-  const [result, setResult] = useState<Awaited<
-    ReturnType<typeof searchOrganizationResponsibilityAssignments>
-  > | null>(null);
+  const [result, setResult] = useState<Awaited<ReturnType<typeof searchOrganizationResponsibilityAssignments>> | null>(
+    null,
+  );
   const [failed, setFailed] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
     searchOrganizationResponsibilityAssignments({
       employmentId,
-      lifecycle: 'open',
+      lifecycle: "open",
       limit: 20,
     })
       .then((nextResult) => {
@@ -46,14 +46,13 @@ export default function EmploymentResponsibilitySummary({
     };
   }, [employmentId]);
 
-  if (!result && !failed)
-    return <Skeleton active title={false} paragraph={{ rows: 1 }} />;
+  if (!result && !failed) return <Skeleton active title={false} paragraph={{ rows: 1 }} />;
 
   const items = result?.items ?? [];
   const hasMore = result?.nextCursor || (compact && items.length > 2);
 
   return (
-    <Space direction="vertical" size={8} style={{ width: '100%' }}>
+    <Space direction="vertical" size={8} style={{ width: "100%" }}>
       {failed ? (
         <Typography.Text type="danger">组织责任加载失败</Typography.Text>
       ) : result?.items.length === 0 ? (
@@ -64,19 +63,12 @@ export default function EmploymentResponsibilitySummary({
           split={!compact}
           dataSource={compact ? items.slice(0, 2) : items}
           renderItem={(assignment) => (
-            <List.Item style={compact ? { padding: '2px 0' } : undefined}>
+            <List.Item style={compact ? { padding: "2px 0" } : undefined}>
               <Space wrap>
-                <span>
-                  {formatOrganizationResponsibilityType(assignment.typeCode)}
-                </span>
+                <span>{formatOrganizationResponsibilityType(assignment.typeCode)}</span>
                 <span>{assignment.targetOrganization.orgName}</span>
-                <Tag>
-                  {formatOrganizationResponsibilityStatus(assignment.status)}
-                </Tag>
-                <Link
-                  to={assignmentPath(employmentId, assignment.id)}
-                  aria-label={`查看任命 #${assignment.id}`}
-                >
+                <Tag>{formatOrganizationResponsibilityStatus(assignment.status)}</Tag>
+                <Link to={assignmentPath(employmentId, assignment.id)} aria-label={`查看任命 #${assignment.id}`}>
                   #{assignment.id}
                 </Link>
               </Space>
@@ -85,7 +77,7 @@ export default function EmploymentResponsibilitySummary({
         />
       )}
       <Link to={assignmentPath(employmentId)} aria-label="查看全部组织责任">
-        查看全部组织责任{hasMore ? '（还有更多）' : ''}
+        查看全部组织责任{hasMore ? "（还有更多）" : ""}
       </Link>
     </Space>
   );

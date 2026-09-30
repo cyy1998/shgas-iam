@@ -54,8 +54,7 @@ export async function runAfterCommitTasks(
   for (const task of tasks) {
     try {
       await task.callback();
-    }
-    catch (err) {
+    } catch (err) {
       const logFields = {
         afterCommit: task.name,
         mode: task.mode,
@@ -65,8 +64,7 @@ export async function runAfterCommitTasks(
       if (task.mode === "required") {
         logger.error(logFields, "required afterCommit task failed");
         requiredFailures.push({ name: task.name, mode: task.mode, error: err });
-      }
-      else {
+      } else {
         logger.warn(logFields, "best-effort afterCommit task failed");
       }
     }

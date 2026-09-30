@@ -1,5 +1,5 @@
-import { defineConfig } from 'vitest/config';
-import baseConfig, { domTestOptions } from './vitest.shared';
+import { defineConfig } from "vitest/config";
+import baseConfig, { domTestOptions } from "./vitest.shared";
 
 const sharedExclude = baseConfig.test?.exclude ?? [];
 
@@ -12,20 +12,20 @@ export default defineConfig({
       {
         resolve: baseConfig.resolve,
         test: {
-          name: 'node',
-          environment: 'node',
-          include: ['src/**/*.test.{ts,tsx}'],
-          exclude: [...sharedExclude, 'src/**/*.dom.test.{ts,tsx}'],
+          name: "node",
+          environment: "node",
+          include: ["src/**/*.test.{ts,tsx}"],
+          exclude: [...sharedExclude, "src/**/*.dom.test.{ts,tsx}"],
         },
       },
       {
         resolve: baseConfig.resolve,
         test: {
-          name: 'dom',
+          name: "dom",
           ...domTestOptions,
-          include: ['src/**/*.dom.test.{ts,tsx}'],
+          include: ["src/**/*.dom.test.{ts,tsx}"],
           exclude: sharedExclude,
-          setupFiles: ['./test/setup-dom.ts'],
+          setupFiles: ["./test/setup-dom.ts"],
         },
       },
     ],

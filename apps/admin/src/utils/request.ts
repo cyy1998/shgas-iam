@@ -1,14 +1,11 @@
-import type { ApiErrorCode } from '@iam/contracts';
-import { message } from 'antd';
+import type { ApiErrorCode } from "@iam/contracts";
+import { message } from "antd";
 
 export class ServiceError extends Error {
   public code: ApiErrorCode | number | string;
-  constructor(
-    msg: string,
-    code: ApiErrorCode | number | string,
-  ) {
+  constructor(msg: string, code: ApiErrorCode | number | string) {
     super(msg);
-    this.name = 'ServiceError';
+    this.name = "ServiceError";
     this.code = code;
   }
 }
@@ -19,23 +16,18 @@ type ApiEnvelope<T> = {
   data: T;
 };
 
-export async function unwrap<T>(
-  response: Response | Promise<Response>,
-): Promise<T> {
+export async function unwrap<T>(response: Response | Promise<Response>): Promise<T> {
   const res = await response;
   if (!res.ok) {
-    const body = await res
+    const body = (await res
       .clone()
       .json()
-      .catch(() => null) as ApiEnvelope<T> | null;
-    throw new ServiceError(
-      body?.message || `HTTP ${res.status}`,
-      body?.code ?? res.status,
-    );
+      .catch(() => null)) as ApiEnvelope<T> | null;
+    throw new ServiceError(body?.message || `HTTP ${res.status}`, body?.code ?? res.status);
   }
   const body = (await res.json()) as ApiEnvelope<T>;
   if (body.code !== 200) {
-    throw new ServiceError(body.message || '请求失败', body.code);
+    throw new ServiceError(body.message || "请求失败", body.code);
   }
   return body.data;
 }
@@ -49,5 +41,5 @@ export function handleError(err: unknown) {
     message.error(err.message);
     return;
   }
-  message.error('未知错误');
+  message.error("未知错误");
 }

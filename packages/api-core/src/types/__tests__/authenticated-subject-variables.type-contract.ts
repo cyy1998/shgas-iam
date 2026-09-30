@@ -1,21 +1,10 @@
 import type { AuthenticatedSubjectVariables } from "../lib";
 
-type ExpectedVariableKey
-  = | "authenticatedClientCode"
-    | "subjectIdentifier";
+type ExpectedVariableKey = "authenticatedClientCode" | "subjectIdentifier";
 
-type UnexpectedVariableKey = Exclude<
-  keyof AuthenticatedSubjectVariables,
-  ExpectedVariableKey
->;
-type MissingVariableKey = Exclude<
-  ExpectedVariableKey,
-  keyof AuthenticatedSubjectVariables
->;
-type HasOnlyExpectedKeys
-  = UnexpectedVariableKey | MissingVariableKey extends never
-    ? true
-    : never;
+type UnexpectedVariableKey = Exclude<keyof AuthenticatedSubjectVariables, ExpectedVariableKey>;
+type MissingVariableKey = Exclude<ExpectedVariableKey, keyof AuthenticatedSubjectVariables>;
+type HasOnlyExpectedKeys = UnexpectedVariableKey | MissingVariableKey extends never ? true : never;
 
 const hasOnlyExpectedKeys: HasOnlyExpectedKeys = true;
 void hasOnlyExpectedKeys;

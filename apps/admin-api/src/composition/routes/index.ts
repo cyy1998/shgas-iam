@@ -1,27 +1,22 @@
-import type { AdminAuditService } from "@admin-api/services/audit/audit.service";
-import type { CreateAppOptions } from "@iam/api-core/core/create-app";
-import type { AdminApiRuntimePorts } from "../runtime";
-import type { AdminApiServices } from "../services";
-import type { AdminApiUseCases } from "../use-cases";
 import { createAuditAdapter } from "@admin-api/routes/admin/audit/audit.adapter";
 import { createAuditRoute } from "@admin-api/routes/admin/audit/audit.index";
 import { createAuditAdminRouter } from "@admin-api/routes/admin/audit/audit.trpc";
 import { createAdminAuthorizationAdapter } from "@admin-api/routes/admin/authorization/authorization.adapter";
 import { createAdminAuthorizationRoute } from "@admin-api/routes/admin/authorization/authorization.index";
 import { createAdminAuthorizationAdminRouter } from "@admin-api/routes/admin/authorization/authorization.trpc";
-import { createClientSsoAdapter } from "@admin-api/routes/admin/client-sso/client-sso.adapter";
 import { createClientAdapter } from "@admin-api/routes/admin/client/client.adapter";
 import { createClientRoute } from "@admin-api/routes/admin/client/client.index";
 import { createClientAdminRouter } from "@admin-api/routes/admin/client/client.trpc";
+import { createClientSsoAdapter } from "@admin-api/routes/admin/client-sso/client-sso.adapter";
 import { createEmploymentAdapter } from "@admin-api/routes/admin/employment/employment.adapter";
 import { createEmploymentRoute } from "@admin-api/routes/admin/employment/employment.index";
 import { createEmploymentAdminRouter } from "@admin-api/routes/admin/employment/employment.trpc";
-import { createOrganizationResponsibilityAdapter } from "@admin-api/routes/admin/organization-responsibility/organization-responsibility.adapter";
-import { createOrganizationResponsibilityRoute } from "@admin-api/routes/admin/organization-responsibility/organization-responsibility.index";
-import { createOrganizationResponsibilityAdminRouter } from "@admin-api/routes/admin/organization-responsibility/organization-responsibility.trpc";
 import { createOrganizationAdapter } from "@admin-api/routes/admin/organization/organization.adapter";
 import { createOrganizationRoute } from "@admin-api/routes/admin/organization/organization.index";
 import { createOrganizationAdminRouter } from "@admin-api/routes/admin/organization/organization.trpc";
+import { createOrganizationResponsibilityAdapter } from "@admin-api/routes/admin/organization-responsibility/organization-responsibility.adapter";
+import { createOrganizationResponsibilityRoute } from "@admin-api/routes/admin/organization-responsibility/organization-responsibility.index";
+import { createOrganizationResponsibilityAdminRouter } from "@admin-api/routes/admin/organization-responsibility/organization-responsibility.trpc";
 import { createPositionAdapter } from "@admin-api/routes/admin/position/position.adapter";
 import { createPositionRoute } from "@admin-api/routes/admin/position/position.index";
 import { createPositionAdminRouter } from "@admin-api/routes/admin/position/position.trpc";
@@ -37,9 +32,14 @@ import { createUserAdminRouter } from "@admin-api/routes/admin/user/user.trpc";
 import { createTrpcRoute } from "@admin-api/routes/trpc/trpc.index";
 import { createAdminRestOperationSurface } from "@admin-api/services/admin-authorization/admin-rest-operation.surface";
 import { createAdminTrpcOperationSurface } from "@admin-api/services/admin-authorization/admin-trpc-operation.surface";
+import type { AdminAuditService } from "@admin-api/services/audit/audit.service";
 import { createAdminRouter } from "@admin-api/trpc/routers/admin";
 import { createAppRouter } from "@admin-api/trpc/trpc.router";
+import type { CreateAppOptions } from "@iam/api-core/core/create-app";
 import appConfig from "~admin-api/app.config";
+import type { AdminApiRuntimePorts } from "../runtime";
+import type { AdminApiServices } from "../services";
+import type { AdminApiUseCases } from "../use-cases";
 
 export interface CreateAdminApiRoutesOptions {
   auditService: AdminAuditService;
@@ -48,17 +48,14 @@ export interface CreateAdminApiRoutesOptions {
   useCases: AdminApiUseCases;
 }
 
-export function createAdminApiRouteComposition(
-  options: CreateAdminApiRoutesOptions,
-) {
+export function createAdminApiRouteComposition(options: CreateAdminApiRoutesOptions) {
   const { auditService, runtime, services, useCases } = options;
 
   const authorizationAdapter = createAdminAuthorizationAdapter();
   const auditAdapter = createAuditAdapter({ auditService });
   const clientAdapter = createClientAdapter({ clientService: services.client });
   const employmentAdapter = createEmploymentAdapter({
-    changeEmploymentAvailability:
-      useCases.employment.changeEmploymentAvailability,
+    changeEmploymentAvailability: useCases.employment.changeEmploymentAvailability,
     createEmployment: useCases.employment.createEmployment,
     endEmployment: useCases.employment.endEmployment,
     employmentService: services.employment,
@@ -69,13 +66,11 @@ export function createAdminApiRouteComposition(
   const organizationAdapter = createOrganizationAdapter({
     organizationService: services.organization,
   });
-  const organizationResponsibilityAdapter
-    = createOrganizationResponsibilityAdapter({
-      createAssignment: useCases.organizationResponsibility.createAssignment,
-      manageAssignmentLifecycle:
-        useCases.organizationResponsibility.manageAssignmentLifecycle,
-      service: services.organizationResponsibility,
-    });
+  const organizationResponsibilityAdapter = createOrganizationResponsibilityAdapter({
+    createAssignment: useCases.organizationResponsibility.createAssignment,
+    manageAssignmentLifecycle: useCases.organizationResponsibility.manageAssignmentLifecycle,
+    service: services.organizationResponsibility,
+  });
   const positionAdapter = createPositionAdapter({
     positionService: services.position,
   });
@@ -91,27 +86,20 @@ export function createAdminApiRouteComposition(
   const clientSsoAdapter = createClientSsoAdapter(services.clientSso.service);
   const adminRouter = createAdminRouter({
     clientSso: clientSsoAdapter.trpc,
-    authorization: createAdminAuthorizationAdminRouter(
-      authorizationAdapter,
-    ),
+    authorization: createAdminAuthorizationAdminRouter(authorizationAdapter),
     audit: createAuditAdminRouter(auditAdapter),
     client: createClientAdminRouter(clientAdapter),
     employment: createEmploymentAdminRouter(employmentAdapter),
     organization: createOrganizationAdminRouter(organizationAdapter),
-    organizationResponsibility: createOrganizationResponsibilityAdminRouter(
-      organizationResponsibilityAdapter,
-    ),
+    organizationResponsibility: createOrganizationResponsibilityAdminRouter(organizationResponsibilityAdapter),
     position: createPositionAdminRouter(positionAdapter),
     role: createRoleAdminRouter(roleAdapter),
-    sessionManagement: createSessionManagementAdminRouter(
-      sessionManagementAdapter,
-    ),
+    sessionManagement: createSessionManagementAdminRouter(sessionManagementAdapter),
     user: createUserAdminRouter(userAdapter),
   });
   const appRouter = createAppRouter(adminRouter);
-  const adminTier = appConfig.tiers.find(tier => tier.name === "admin");
-  if (!adminTier)
-    throw new Error("Admin API config must declare the admin tier");
+  const adminTier = appConfig.tiers.find((tier) => tier.name === "admin");
+  if (!adminTier) throw new Error("Admin API config must declare the admin tier");
 
   const routes: CreateAppOptions["routes"] = {
     "./src/routes/admin/client-sso/client-sso.index.ts": { default: clientSsoAdapter.rest },
@@ -130,12 +118,9 @@ export function createAdminApiRouteComposition(
     "./src/routes/admin/organization/organization.index.ts": {
       default: createOrganizationRoute(organizationAdapter),
     },
-    "./src/routes/admin/organization-responsibility/organization-responsibility.index.ts":
-      {
-        default: createOrganizationResponsibilityRoute(
-          organizationResponsibilityAdapter,
-        ),
-      },
+    "./src/routes/admin/organization-responsibility/organization-responsibility.index.ts": {
+      default: createOrganizationResponsibilityRoute(organizationResponsibilityAdapter),
+    },
     "./src/routes/admin/position/position.index.ts": {
       default: createPositionRoute(positionAdapter),
     },

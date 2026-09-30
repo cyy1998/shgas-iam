@@ -1,8 +1,8 @@
-import type { SubjectAccessMutationReceipt } from "@iam/api-core/subject-access";
+import { describe, expect, mock, test } from "bun:test";
 import { createRegisterPurveyorContactUseCase } from "@api/use-cases/internal/register-purveyor-contact/register-purveyor-contact.use-case";
 import { CustomError } from "@iam/api-core/errors/CustomError";
+import type { SubjectAccessMutationReceipt } from "@iam/api-core/subject-access";
 import { OrganizationNotFoundError } from "@iam/domain/organization";
-import { describe, expect, mock, test } from "bun:test";
 
 const input = {
   username: "zhangsan",
@@ -39,10 +39,7 @@ const subjectAccessMutationReceipt: SubjectAccessMutationReceipt = {
 
 function createSubjectAccessMutation() {
   return {
-    runMutation: async <T>(
-      _receipt: SubjectAccessMutationReceipt,
-      mutation: () => Promise<T>,
-    ) => await mutation(),
+    runMutation: async <T>(_receipt: SubjectAccessMutationReceipt, mutation: () => Promise<T>) => await mutation(),
   };
 }
 
@@ -52,12 +49,13 @@ function createSubjectAccessDeps(existingUserId: number | null = 7) {
       uuid: mock(() => NEW_SUBJECT_IDENTIFIER),
     },
     subjectAccessLifecycle: {
-      run: mock(async (transition: {
-        mutate: (receipt: SubjectAccessMutationReceipt) => Promise<unknown>;
-      }) => await transition.mutate(subjectAccessMutationReceipt)),
+      run: mock(
+        async (transition: { mutate: (receipt: SubjectAccessMutationReceipt) => Promise<unknown> }) =>
+          await transition.mutate(subjectAccessMutationReceipt),
+      ),
     },
     userReader: {
-      getActiveUserByMobile: mock(async () => existingUserId === null ? null : { id: existingUserId }),
+      getActiveUserByMobile: mock(async () => (existingUserId === null ? null : { id: existingUserId })),
     },
   };
 }
@@ -81,41 +79,42 @@ describe("RegisterPurveyorContactUseCase", () => {
         sendMessage: mock(async () => true),
       },
       uow: {
-        transaction: mock(async (callback: any) => await callback({
-          subjectAccessMutation: createSubjectAccessMutation(),
-          employmentRepository: {
-            getEmploymentByUserOrgPosId: mock(async () => null),
-            setEmployment,
-          },
-          organizationRepository: {
-            getOrganizationByCode: mock(async () => ({ id: 2 })),
-          },
-          positionRepository: {
-            getPositionByCode: mock(async () => ({ id: 3 })),
-          },
-          userProfileInvalidation,
-          userRepository: {
-            getUserByMobile: mock(async () => {
-              userLookupOrder.push("lookup");
-              return { id: 7 };
+        transaction: mock(
+          async (callback: any) =>
+            await callback({
+              subjectAccessMutation: createSubjectAccessMutation(),
+              employmentRepository: {
+                getEmploymentByUserOrgPosId: mock(async () => null),
+                setEmployment,
+              },
+              organizationRepository: {
+                getOrganizationByCode: mock(async () => ({ id: 2 })),
+              },
+              positionRepository: {
+                getPositionByCode: mock(async () => ({ id: 3 })),
+              },
+              userProfileInvalidation,
+              userRepository: {
+                getUserByMobile: mock(async () => {
+                  userLookupOrder.push("lookup");
+                  return { id: 7 };
+                }),
+                lockPurveyorContactMobile: mock(async () => {
+                  userLookupOrder.push("lock");
+                }),
+                setUser: mock(async () => {
+                  throw new Error("setUser should not be called");
+                }),
+              },
             }),
-            lockPurveyorContactMobile: mock(async () => {
-              userLookupOrder.push("lock");
-            }),
-            setUser: mock(async () => {
-              throw new Error("setUser should not be called");
-            }),
-          },
-        })),
+        ),
       },
     } as never);
 
     await expect(useCase.execute(input, options)).resolves.toBe(true);
 
     expect(setEmployment).toHaveBeenCalledWith(7, 3, 2);
-    expect(userProfileInvalidation.recordChanges).toHaveBeenCalledWith([
-      { kind: "employment", userId: 7 },
-    ]);
+    expect(userProfileInvalidation.recordChanges).toHaveBeenCalledWith([{ kind: "employment", userId: 7 }]);
     expect(subjectAccess.subjectAccessLifecycle.run).not.toHaveBeenCalled();
     expect(userLookupOrder).toEqual(["lock", "lookup"]);
   });
@@ -139,30 +138,33 @@ describe("RegisterPurveyorContactUseCase", () => {
         sendMessage: mock(async () => true),
       },
       uow: {
-        transaction: mock(async (callback: any) => await callback({
-          subjectAccessMutation: createSubjectAccessMutation(),
-          employmentRepository: {
-            getEmploymentByUserOrgPosId: mock(async () => null),
-            setEmployment,
-          },
-          organizationRepository: {
-            getOrganizationByCode: mock(async () => ({ id: 2 })),
-          },
-          positionRepository: {
-            getPositionByCode: mock(async () => ({ id: 3 })),
-          },
-          userProfileInvalidation,
-          userRepository: {
-            getUserByMobile: mock(async () => {
-              userLookupOrder.push("lookup");
-              return null;
+        transaction: mock(
+          async (callback: any) =>
+            await callback({
+              subjectAccessMutation: createSubjectAccessMutation(),
+              employmentRepository: {
+                getEmploymentByUserOrgPosId: mock(async () => null),
+                setEmployment,
+              },
+              organizationRepository: {
+                getOrganizationByCode: mock(async () => ({ id: 2 })),
+              },
+              positionRepository: {
+                getPositionByCode: mock(async () => ({ id: 3 })),
+              },
+              userProfileInvalidation,
+              userRepository: {
+                getUserByMobile: mock(async () => {
+                  userLookupOrder.push("lookup");
+                  return null;
+                }),
+                lockPurveyorContactMobile: mock(async () => {
+                  userLookupOrder.push("lock");
+                }),
+                setUser,
+              },
             }),
-            lockPurveyorContactMobile: mock(async () => {
-              userLookupOrder.push("lock");
-            }),
-            setUser,
-          },
-        })),
+        ),
       },
     } as never);
 
@@ -181,10 +183,12 @@ describe("RegisterPurveyorContactUseCase", () => {
       { kind: "user", userId: 9 },
       { kind: "employment", userId: 9 },
     ]);
-    expect(subjectAccess.subjectAccessLifecycle.run).toHaveBeenCalledWith(expect.objectContaining({
-      subjectIdentifier: NEW_SUBJECT_IDENTIFIER,
-      disposition: "awaiting_publication",
-    }));
+    expect(subjectAccess.subjectAccessLifecycle.run).toHaveBeenCalledWith(
+      expect.objectContaining({
+        subjectIdentifier: NEW_SUBJECT_IDENTIFIER,
+        disposition: "awaiting_publication",
+      }),
+    );
     expect(userLookupOrder).toEqual(["lock", "lookup"]);
   });
 
@@ -213,27 +217,30 @@ describe("RegisterPurveyorContactUseCase", () => {
     const subjectAccess = createSubjectAccessDeps(null);
     const setUser = mock(async () => ({ id: 9 }));
     const setEmployment = mock(async () => ({}));
-    const transaction = mock(async (callback: any) => await callback({
-      subjectAccessMutation: createSubjectAccessMutation(),
-      employmentRepository: {
-        getEmploymentByUserOrgPosId: mock(async () => null),
-        setEmployment,
-      },
-      organizationRepository: {
-        getOrganizationByCode: mock(async () => ({ id: 2 })),
-      },
-      positionRepository: {
-        getPositionByCode: mock(async () => ({ id: 3 })),
-      },
-      userProfileInvalidation: {
-        recordChanges: mock(async () => undefined),
-      },
-      userRepository: {
-        getUserByMobile: mock(async () => ({ id: 7 })),
-        lockPurveyorContactMobile: mock(async () => undefined),
-        setUser,
-      },
-    }));
+    const transaction = mock(
+      async (callback: any) =>
+        await callback({
+          subjectAccessMutation: createSubjectAccessMutation(),
+          employmentRepository: {
+            getEmploymentByUserOrgPosId: mock(async () => null),
+            setEmployment,
+          },
+          organizationRepository: {
+            getOrganizationByCode: mock(async () => ({ id: 2 })),
+          },
+          positionRepository: {
+            getPositionByCode: mock(async () => ({ id: 3 })),
+          },
+          userProfileInvalidation: {
+            recordChanges: mock(async () => undefined),
+          },
+          userRepository: {
+            getUserByMobile: mock(async () => ({ id: 7 })),
+            lockPurveyorContactMobile: mock(async () => undefined),
+            setUser,
+          },
+        }),
+    );
     const useCase = createRegisterPurveyorContactUseCase({
       ...subjectAccess,
       auditLogWriter: { recordAuditLog: mock(async () => undefined) },
@@ -286,7 +293,7 @@ describe("RegisterPurveyorContactUseCase", () => {
                 recordChanges: mock(async () => undefined),
               },
               userRepository: {
-                getUserByMobile: mock(async () => existingUserId === null ? null : { id: existingUserId }),
+                getUserByMobile: mock(async () => (existingUserId === null ? null : { id: existingUserId })),
                 lockPurveyorContactMobile: mock(async () => undefined),
                 setUser: mock(async () => ({ id: 9 })),
               },
@@ -315,27 +322,30 @@ describe("RegisterPurveyorContactUseCase", () => {
         sendMessage: mock(async () => true),
       },
       uow: {
-        transaction: mock(async (callback: any) => await callback({
-          subjectAccessMutation: createSubjectAccessMutation(),
-          employmentRepository: {
-            getEmploymentByUserOrgPosId: mock(async () => ({ id: 10 })),
-            setEmployment: mock(async () => ({})),
-          },
-          organizationRepository: {
-            getOrganizationByCode: mock(async () => ({ id: 2 })),
-          },
-          positionRepository: {
-            getPositionByCode: mock(async () => ({ id: 3 })),
-          },
-          userProfileInvalidation: {
-            recordChanges: mock(async () => undefined),
-          },
-          userRepository: {
-            getUserByMobile: mock(async () => ({ id: 7 })),
-            lockPurveyorContactMobile: mock(async () => undefined),
-            setUser: mock(async () => ({ id: 9 })),
-          },
-        })),
+        transaction: mock(
+          async (callback: any) =>
+            await callback({
+              subjectAccessMutation: createSubjectAccessMutation(),
+              employmentRepository: {
+                getEmploymentByUserOrgPosId: mock(async () => ({ id: 10 })),
+                setEmployment: mock(async () => ({})),
+              },
+              organizationRepository: {
+                getOrganizationByCode: mock(async () => ({ id: 2 })),
+              },
+              positionRepository: {
+                getPositionByCode: mock(async () => ({ id: 3 })),
+              },
+              userProfileInvalidation: {
+                recordChanges: mock(async () => undefined),
+              },
+              userRepository: {
+                getUserByMobile: mock(async () => ({ id: 7 })),
+                lockPurveyorContactMobile: mock(async () => undefined),
+                setUser: mock(async () => ({ id: 9 })),
+              },
+            }),
+        ),
       },
     } as never);
 
@@ -432,27 +442,30 @@ describe("RegisterPurveyorContactUseCase", () => {
         sendMessage: mock(async () => true),
       },
       uow: {
-        transaction: mock(async (callback: any) => await callback({
-          subjectAccessMutation: createSubjectAccessMutation(),
-          employmentRepository: {
-            getEmploymentByUserOrgPosId: mock(async () => null),
-            setEmployment: mock(async () => ({})),
-          },
-          organizationRepository: {
-            getOrganizationByCode: mock(async () => null),
-          },
-          positionRepository: {
-            getPositionByCode: mock(async () => ({ id: 3 })),
-          },
-          userProfileInvalidation: {
-            recordChanges: mock(async () => undefined),
-          },
-          userRepository: {
-            getUserByMobile: mock(async () => null),
-            lockPurveyorContactMobile: mock(async () => undefined),
-            setUser: mock(async () => ({ id: 9 })),
-          },
-        })),
+        transaction: mock(
+          async (callback: any) =>
+            await callback({
+              subjectAccessMutation: createSubjectAccessMutation(),
+              employmentRepository: {
+                getEmploymentByUserOrgPosId: mock(async () => null),
+                setEmployment: mock(async () => ({})),
+              },
+              organizationRepository: {
+                getOrganizationByCode: mock(async () => null),
+              },
+              positionRepository: {
+                getPositionByCode: mock(async () => ({ id: 3 })),
+              },
+              userProfileInvalidation: {
+                recordChanges: mock(async () => undefined),
+              },
+              userRepository: {
+                getUserByMobile: mock(async () => null),
+                lockPurveyorContactMobile: mock(async () => undefined),
+                setUser: mock(async () => ({ id: 9 })),
+              },
+            }),
+        ),
       },
     } as never);
 
@@ -469,27 +482,30 @@ describe("RegisterPurveyorContactUseCase", () => {
         sendMessage: mock(async () => true),
       },
       uow: {
-        transaction: mock(async (callback: any) => await callback({
-          subjectAccessMutation: createSubjectAccessMutation(),
-          employmentRepository: {
-            getEmploymentByUserOrgPosId: mock(async () => null),
-            setEmployment: mock(async () => ({})),
-          },
-          organizationRepository: {
-            getOrganizationByCode: mock(async () => ({ id: 2 })),
-          },
-          positionRepository: {
-            getPositionByCode: mock(async () => null),
-          },
-          userProfileInvalidation: {
-            recordChanges: mock(async () => undefined),
-          },
-          userRepository: {
-            getUserByMobile: mock(async () => null),
-            lockPurveyorContactMobile: mock(async () => undefined),
-            setUser: mock(async () => ({ id: 9 })),
-          },
-        })),
+        transaction: mock(
+          async (callback: any) =>
+            await callback({
+              subjectAccessMutation: createSubjectAccessMutation(),
+              employmentRepository: {
+                getEmploymentByUserOrgPosId: mock(async () => null),
+                setEmployment: mock(async () => ({})),
+              },
+              organizationRepository: {
+                getOrganizationByCode: mock(async () => ({ id: 2 })),
+              },
+              positionRepository: {
+                getPositionByCode: mock(async () => null),
+              },
+              userProfileInvalidation: {
+                recordChanges: mock(async () => undefined),
+              },
+              userRepository: {
+                getUserByMobile: mock(async () => null),
+                lockPurveyorContactMobile: mock(async () => undefined),
+                setUser: mock(async () => ({ id: 9 })),
+              },
+            }),
+        ),
       },
     } as never);
 
@@ -508,25 +524,28 @@ describe("RegisterPurveyorContactUseCase", () => {
         sendMessage: mock(async () => true),
       },
       uow: {
-        transaction: mock(async (callback: any) => await callback({
-          subjectAccessMutation: createSubjectAccessMutation(),
-          employmentRepository: {
-            getEmploymentByUserOrgPosId: mock(async () => ({ id: 10 })),
-            setEmployment,
-          },
-          organizationRepository: {
-            getOrganizationByCode: mock(async () => ({ id: 2 })),
-          },
-          positionRepository: {
-            getPositionByCode: mock(async () => ({ id: 3 })),
-          },
-          userProfileInvalidation: { recordChanges },
-          userRepository: {
-            getUserByMobile: mock(async () => ({ id: 7 })),
-            lockPurveyorContactMobile: mock(async () => undefined),
-            setUser: mock(async () => ({ id: 9 })),
-          },
-        })),
+        transaction: mock(
+          async (callback: any) =>
+            await callback({
+              subjectAccessMutation: createSubjectAccessMutation(),
+              employmentRepository: {
+                getEmploymentByUserOrgPosId: mock(async () => ({ id: 10 })),
+                setEmployment,
+              },
+              organizationRepository: {
+                getOrganizationByCode: mock(async () => ({ id: 2 })),
+              },
+              positionRepository: {
+                getPositionByCode: mock(async () => ({ id: 3 })),
+              },
+              userProfileInvalidation: { recordChanges },
+              userRepository: {
+                getUserByMobile: mock(async () => ({ id: 7 })),
+                lockPurveyorContactMobile: mock(async () => undefined),
+                setUser: mock(async () => ({ id: 9 })),
+              },
+            }),
+        ),
       },
     } as never);
 
@@ -547,27 +566,30 @@ describe("RegisterPurveyorContactUseCase", () => {
         sendMessage,
       },
       uow: {
-        transaction: mock(async (callback: any) => await callback({
-          subjectAccessMutation: createSubjectAccessMutation(),
-          employmentRepository: {
-            getEmploymentByUserOrgPosId: mock(async () => ({ id: 10 })),
-            setEmployment: mock(async () => ({})),
-          },
-          organizationRepository: {
-            getOrganizationByCode: mock(async () => ({ id: 2 })),
-          },
-          positionRepository: {
-            getPositionByCode: mock(async () => ({ id: 3 })),
-          },
-          userProfileInvalidation: {
-            recordChanges: mock(async () => undefined),
-          },
-          userRepository: {
-            getUserByMobile: mock(async () => ({ id: 7 })),
-            lockPurveyorContactMobile: mock(async () => undefined),
-            setUser: mock(async () => ({ id: 9 })),
-          },
-        })),
+        transaction: mock(
+          async (callback: any) =>
+            await callback({
+              subjectAccessMutation: createSubjectAccessMutation(),
+              employmentRepository: {
+                getEmploymentByUserOrgPosId: mock(async () => ({ id: 10 })),
+                setEmployment: mock(async () => ({})),
+              },
+              organizationRepository: {
+                getOrganizationByCode: mock(async () => ({ id: 2 })),
+              },
+              positionRepository: {
+                getPositionByCode: mock(async () => ({ id: 3 })),
+              },
+              userProfileInvalidation: {
+                recordChanges: mock(async () => undefined),
+              },
+              userRepository: {
+                getUserByMobile: mock(async () => ({ id: 7 })),
+                lockPurveyorContactMobile: mock(async () => undefined),
+                setUser: mock(async () => ({ id: 9 })),
+              },
+            }),
+        ),
       },
     } as never);
 
@@ -581,34 +603,41 @@ describe("RegisterPurveyorContactUseCase", () => {
     const sendMessage = mock(async () => true);
     const useCase = createRegisterPurveyorContactUseCase({
       ...createSubjectAccessDeps(),
-      auditLogWriter: { recordAuditLog: mock(async () => { throw auditError; }) },
+      auditLogWriter: {
+        recordAuditLog: mock(async () => {
+          throw auditError;
+        }),
+      },
       config: { nodeEnv: "production" },
       mobileService: {
         getPurveyorWelcomeMessage: mock(() => "welcome"),
         sendMessage,
       },
       uow: {
-        transaction: mock(async (callback: any) => await callback({
-          subjectAccessMutation: createSubjectAccessMutation(),
-          employmentRepository: {
-            getEmploymentByUserOrgPosId: mock(async () => ({ id: 10 })),
-            setEmployment: mock(async () => ({})),
-          },
-          organizationRepository: {
-            getOrganizationByCode: mock(async () => ({ id: 2 })),
-          },
-          positionRepository: {
-            getPositionByCode: mock(async () => ({ id: 3 })),
-          },
-          userProfileInvalidation: {
-            recordChanges: mock(async () => undefined),
-          },
-          userRepository: {
-            getUserByMobile: mock(async () => ({ id: 7 })),
-            lockPurveyorContactMobile: mock(async () => undefined),
-            setUser: mock(async () => ({ id: 9 })),
-          },
-        })),
+        transaction: mock(
+          async (callback: any) =>
+            await callback({
+              subjectAccessMutation: createSubjectAccessMutation(),
+              employmentRepository: {
+                getEmploymentByUserOrgPosId: mock(async () => ({ id: 10 })),
+                setEmployment: mock(async () => ({})),
+              },
+              organizationRepository: {
+                getOrganizationByCode: mock(async () => ({ id: 2 })),
+              },
+              positionRepository: {
+                getPositionByCode: mock(async () => ({ id: 3 })),
+              },
+              userProfileInvalidation: {
+                recordChanges: mock(async () => undefined),
+              },
+              userRepository: {
+                getUserByMobile: mock(async () => ({ id: 7 })),
+                lockPurveyorContactMobile: mock(async () => undefined),
+                setUser: mock(async () => ({ id: 9 })),
+              },
+            }),
+        ),
       },
     } as never);
 
@@ -626,30 +655,35 @@ describe("RegisterPurveyorContactUseCase", () => {
       config: { nodeEnv: "production" },
       mobileService: {
         getPurveyorWelcomeMessage: mock(() => "welcome"),
-        sendMessage: mock(async () => { throw smsError; }),
+        sendMessage: mock(async () => {
+          throw smsError;
+        }),
       },
       uow: {
-        transaction: mock(async (callback: any) => await callback({
-          subjectAccessMutation: createSubjectAccessMutation(),
-          employmentRepository: {
-            getEmploymentByUserOrgPosId: mock(async () => ({ id: 10 })),
-            setEmployment: mock(async () => ({})),
-          },
-          organizationRepository: {
-            getOrganizationByCode: mock(async () => ({ id: 2 })),
-          },
-          positionRepository: {
-            getPositionByCode: mock(async () => ({ id: 3 })),
-          },
-          userProfileInvalidation: {
-            recordChanges: mock(async () => undefined),
-          },
-          userRepository: {
-            getUserByMobile: mock(async () => ({ id: 7 })),
-            lockPurveyorContactMobile: mock(async () => undefined),
-            setUser: mock(async () => ({ id: 9 })),
-          },
-        })),
+        transaction: mock(
+          async (callback: any) =>
+            await callback({
+              subjectAccessMutation: createSubjectAccessMutation(),
+              employmentRepository: {
+                getEmploymentByUserOrgPosId: mock(async () => ({ id: 10 })),
+                setEmployment: mock(async () => ({})),
+              },
+              organizationRepository: {
+                getOrganizationByCode: mock(async () => ({ id: 2 })),
+              },
+              positionRepository: {
+                getPositionByCode: mock(async () => ({ id: 3 })),
+              },
+              userProfileInvalidation: {
+                recordChanges: mock(async () => undefined),
+              },
+              userRepository: {
+                getUserByMobile: mock(async () => ({ id: 7 })),
+                lockPurveyorContactMobile: mock(async () => undefined),
+                setUser: mock(async () => ({ id: 9 })),
+              },
+            }),
+        ),
       },
     } as never);
 

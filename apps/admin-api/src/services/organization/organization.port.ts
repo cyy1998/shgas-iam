@@ -16,10 +16,7 @@ export interface AdminOrganizationTransactionStorePort {
   getAnyOrganizationByCode: (orgCode: string) => Promise<Organization | null>;
   getOrganizationByCode: (orgCode: string) => Promise<AdminOrganizationRecord | null>;
   getOrganizationByCodeForAdmin: (orgCode: string) => Promise<AdminOrganizationRecord | null>;
-  setOrganization: (
-    input: OrganizationCreateDto,
-    parent: Organization | null,
-  ) => Promise<AdminOrganizationRecord>;
+  setOrganization: (input: OrganizationCreateDto, parent: Organization | null) => Promise<AdminOrganizationRecord>;
   updateOrganizationByCode: (orgCode: string, input: OrganizationUpdateDto) => Promise<Organization | null>;
   countActiveChildrenByOrgCode: (orgCode: string) => Promise<number>;
   countOpenEmploymentsByOrgCode: (orgCode: string) => Promise<number>;
@@ -63,9 +60,7 @@ export interface AdminOrganizationTransactionPorts {
   organizationRepository: AdminOrganizationTransactionStorePort;
   auditService: AuditLogWriterPort;
   responsibilityParentLifecycle: {
-    assertNoOpenAssignmentsTargetingOrganizationSubtree: (input: {
-      organizationId: number;
-    }) => Promise<void>;
+    assertNoOpenAssignmentsTargetingOrganizationSubtree: (input: { organizationId: number }) => Promise<void>;
   };
   userProfileInvalidation: {
     recordChanges: (changes: readonly AdminOrganizationProfileChange[]) => Promise<void>;
@@ -77,9 +72,7 @@ export type AdminOrganizationUnitOfWorkPort = UnitOfWorkPort<AdminOrganizationTr
 export interface AdminOrganizationServiceDeps {
   organizationRepository: AdminOrganizationReaderPort;
   responsibilityReader: {
-    hasOpenAssignmentTargetingOrganizationSubtree: (
-      organizationId: number,
-    ) => Promise<boolean>;
+    hasOpenAssignmentTargetingOrganizationSubtree: (organizationId: number) => Promise<boolean>;
     hasOpenAssignmentTargetingOrganizationSubtreeOutsideScope: (
       organizationId: number,
       organizationIds: readonly number[],

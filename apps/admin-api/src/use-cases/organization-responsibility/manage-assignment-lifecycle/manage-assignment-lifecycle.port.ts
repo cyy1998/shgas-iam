@@ -1,6 +1,9 @@
 import type { OrganizationResponsibilityReadScope } from "@admin-api/services/admin-authorization/admin-organization-responsibility-authorization.type";
 import type { AuditLogInput } from "@admin-api/services/audit/audit.context";
-import type { OrganizationResponsibilityAssignmentLifecycleChange, OrganizationResponsibilityAssignmentWriteTarget } from "@admin-api/services/organization-responsibility/organization-responsibility-parent-lifecycle.type";
+import type {
+  OrganizationResponsibilityAssignmentLifecycleChange,
+  OrganizationResponsibilityAssignmentWriteTarget,
+} from "@admin-api/services/organization-responsibility/organization-responsibility-parent-lifecycle.type";
 import type { UnitOfWorkPort } from "@iam/api-core/uow";
 import type {
   EmploymentStatus,

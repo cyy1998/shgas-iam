@@ -1,21 +1,10 @@
-import type {
-  RedisTestHarness,
-  SubjectAccessRedisTestScope,
-} from "./redis-test-harness";
-import {
-  afterAll,
-  afterEach,
-  beforeAll,
-  beforeEach,
-  describe,
-  expect,
-  test,
-} from "bun:test";
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, test } from "bun:test";
 import {
   createSubjectAccessRepair,
   SubjectAccessDisabledError,
   SubjectAccessTransitionRejectedError,
 } from "../../src/subject-access";
+import type { RedisTestHarness, SubjectAccessRedisTestScope } from "./redis-test-harness";
 import { createRedisTestHarness } from "./redis-test-harness";
 
 const subjectIdentifier = "00000000-0000-4000-8000-000000000001";
@@ -44,8 +33,7 @@ let scope: SubjectAccessRedisTestScope | undefined;
 async function captureRejection(promise: Promise<unknown>): Promise<unknown> {
   try {
     await promise;
-  }
-  catch (error) {
+  } catch (error) {
     return error;
   }
   throw new Error("expected the Redis operation to reject");
@@ -104,8 +92,7 @@ describe("Subject Access real Redis contract", () => {
       failed: 0,
       stable: 0,
     });
-    expect(await scope!.observer.assertAccessible(secondSubjectIdentifier))
-      .toBeUndefined();
+    expect(await scope!.observer.assertAccessible(secondSubjectIdentifier)).toBeUndefined();
     expect(await scope!.observerBacklog.inspectRepairBacklog()).toEqual({
       count: 0,
       oldestAgeMs: null,
@@ -156,17 +143,14 @@ describe("Subject Access real Redis contract", () => {
       leaseDurationMs: 1_000,
       leaseToken: "metrics-owner",
     });
-    if (lease === null)
-      throw new Error("expected repair lease");
+    if (lease === null) throw new Error("expected repair lease");
     await scope!.writerBacklog.rescheduleRepairSubject({
       lease,
       retryDelayMs: 60_000,
     });
     const afterBackoff = await scope!.observerBacklog.inspectRepairBacklog();
     expect(afterBackoff.count).toBe(1);
-    expect(afterBackoff.oldestAgeMs).toBeGreaterThanOrEqual(
-      beforeClaim.oldestAgeMs ?? 0,
-    );
+    expect(afterBackoff.oldestAgeMs).toBeGreaterThanOrEqual(beforeClaim.oldestAgeMs ?? 0);
 
     await scope!.writer.finalize(transition, "enabled");
     const afterConvergence = await scope!.observerBacklog.inspectRepairBacklog();
@@ -174,45 +158,46 @@ describe("Subject Access real Redis contract", () => {
       count: 0,
       oldestAgeMs: null,
     });
-    process.stdout.write(`${JSON.stringify({
-      event: "subject_access.repair_backlog.rehearsal",
-      beforeClaim,
-      afterBackoff,
-      afterConvergence,
-    })}\n`);
+    process.stdout.write(
+      `${JSON.stringify({
+        event: "subject_access.repair_backlog.rehearsal",
+        beforeClaim,
+        afterBackoff,
+        afterConvergence,
+      })}\n`,
+    );
   });
 
   test("fails closed when repair backlog metric indexes diverge", async () => {
     await scope!.seedRepairIndex([secondSubjectIdentifier]);
     await scope!.seedRepairAgeIndex([thirdSubjectIdentifier]);
 
-    const error = await captureRejection(
-      scope!.observerBacklog.inspectRepairBacklog(),
-    );
+    const error = await captureRejection(scope!.observerBacklog.inspectRepairBacklog());
     expect(error).toBeInstanceOf(TypeError);
-    expect((error as Error).message).toBe(
-      "Redis Subject Access repair backlog indexes are inconsistent",
-    );
+    expect((error as Error).message).toBe("Redis Subject Access repair backlog indexes are inconsistent");
     expect((error as Error).message).not.toContain(secondSubjectIdentifier);
   });
 
   test("bootstrap seeds every missing subject without overwriting a newer stable state", async () => {
-    const seeded = await scope!.bootstrap.seedMany([{
-      subjectIdentifier,
-      state: "disabled",
-    }, {
-      subjectIdentifier: secondSubjectIdentifier,
-      state: "disabled",
-    }], new Date("2026-08-01T06:00:00.000Z"));
+    const seeded = await scope!.bootstrap.seedMany(
+      [
+        {
+          subjectIdentifier,
+          state: "disabled",
+        },
+        {
+          subjectIdentifier: secondSubjectIdentifier,
+          state: "disabled",
+        },
+      ],
+      new Date("2026-08-01T06:00:00.000Z"),
+    );
     expect(seeded).toEqual({
       seeded: 1,
       retainedExisting: 1,
     });
 
-    const inspected = await scope!.bootstrap.inspectMany([
-      subjectIdentifier,
-      secondSubjectIdentifier,
-    ]);
+    const inspected = await scope!.bootstrap.inspectMany([subjectIdentifier, secondSubjectIdentifier]);
     expect(inspected[0]).toMatchObject({
       status: "valid",
       record: { subjectIdentifier, state: "enabled", version: 1 },
@@ -232,22 +217,25 @@ describe("Subject Access real Redis contract", () => {
       scope!.writer.beginBlocking(subjectIdentifier),
       scope!.observer.beginBlocking(subjectIdentifier),
     ]);
-    const winner = attempts.find(result => result.status === "fulfilled");
-    const loser = attempts.find(result => result.status === "rejected");
+    const winner = attempts.find((result) => result.status === "fulfilled");
+    const loser = attempts.find((result) => result.status === "rejected");
     expect(winner?.status).toBe("fulfilled");
     expect(loser?.status).toBe("rejected");
-    expect((loser as PromiseRejectedResult).reason)
-      .toBeInstanceOf(SubjectAccessTransitionRejectedError);
-    expect(await scope!.writerBacklog.claimRepairSubject({
-      leaseDurationMs: 1_000,
-      leaseToken: "before-commit",
-    })).toBeNull();
+    expect((loser as PromiseRejectedResult).reason).toBeInstanceOf(SubjectAccessTransitionRejectedError);
+    expect(
+      await scope!.writerBacklog.claimRepairSubject({
+        leaseDurationMs: 1_000,
+        leaseToken: "before-commit",
+      }),
+    ).toBeNull();
 
-    const winningTransition = (winner as PromiseFulfilledResult<{
-      previousCommittedTransitionId: string | null;
-      subjectIdentifier: string;
-      transitionId: string;
-    }>).value;
+    const winningTransition = (
+      winner as PromiseFulfilledResult<{
+        previousCommittedTransitionId: string | null;
+        subjectIdentifier: string;
+        transitionId: string;
+      }>
+    ).value;
     await scope!.writer.prepareRepair(winningTransition, "enabled");
     const repairLease = await scope!.observerBacklog.claimRepairSubject({
       leaseDurationMs: 1_000,
@@ -271,14 +259,14 @@ describe("Subject Access real Redis contract", () => {
       scope!.observer.finalize(transition, "disabled"),
     ]);
 
-    const disabledError = await captureRejection(
-      scope!.observer.assertAccessible(subjectIdentifier),
-    );
+    const disabledError = await captureRejection(scope!.observer.assertAccessible(subjectIdentifier));
     expect(disabledError).toBeInstanceOf(SubjectAccessDisabledError);
-    expect(await scope!.observerBacklog.claimRepairSubject({
-      leaseDurationMs: 1_000,
-      leaseToken: "after-finalize",
-    })).toBeNull();
+    expect(
+      await scope!.observerBacklog.claimRepairSubject({
+        leaseDurationMs: 1_000,
+        leaseToken: "after-finalize",
+      }),
+    ).toBeNull();
   });
 
   test("treats same-target prepare as confirmed after repair already finalized it", async () => {
@@ -303,9 +291,7 @@ describe("Subject Access real Redis contract", () => {
 
     const committed = await scope!.writer.beginBlocking(subjectIdentifier);
     await scope!.writer.prepareRepair(committed, "disabled");
-    const rollbackError = await captureRejection(
-      scope!.observer.rollback(committed),
-    );
+    const rollbackError = await captureRejection(scope!.observer.rollback(committed));
     expect(rollbackError).toBeInstanceOf(SubjectAccessTransitionRejectedError);
   });
 
@@ -330,8 +316,10 @@ describe("Subject Access real Redis contract", () => {
   test("does not let more than one stale cleanup page hide valid repair work", async () => {
     const transition = await scope!.writer.beginBlocking(subjectIdentifier);
     await scope!.writer.prepareRepair(transition, "enabled");
-    const staleSubjects = Array.from({ length: 65 }, (_, index) =>
-      `00000000-0000-4000-8001-${String(index).padStart(12, "0")}`);
+    const staleSubjects = Array.from(
+      { length: 65 },
+      (_, index) => `00000000-0000-4000-8001-${String(index).padStart(12, "0")}`,
+    );
     await scope!.seedRepairIndex(staleSubjects);
 
     const repairLease = await scope!.writerBacklog.claimRepairSubject({
@@ -352,8 +340,7 @@ describe("Subject Access real Redis contract", () => {
       leaseToken: "active-owner",
       subjectIdentifier,
     });
-    if (activeLease === null)
-      throw new Error("expected active repair lease");
+    if (activeLease === null) throw new Error("expected active repair lease");
 
     const prematureClaim = await scope!.observerBacklog.claimRepairSubject({
       leaseDurationMs: 1_000,
@@ -377,26 +364,25 @@ describe("Subject Access real Redis contract", () => {
   });
 
   test("rejects stable wire records with unknown fields instead of overwriting them", async () => {
-    await scope!.seedRecord(secondSubjectIdentifier, JSON.stringify({
-      version: 1,
-      subjectIdentifier: secondSubjectIdentifier,
-      state: "enabled",
-      updatedAt: "2026-07-31T08:00:00.000Z",
-      unknownField: "must fail closed",
-    }));
-
-    const error = await captureRejection(
-      scope!.writer.beginBlocking(secondSubjectIdentifier),
+    await scope!.seedRecord(
+      secondSubjectIdentifier,
+      JSON.stringify({
+        version: 1,
+        subjectIdentifier: secondSubjectIdentifier,
+        state: "enabled",
+        updatedAt: "2026-07-31T08:00:00.000Z",
+        unknownField: "must fail closed",
+      }),
     );
+
+    const error = await captureRejection(scope!.writer.beginBlocking(secondSubjectIdentifier));
     expect(error).toBeInstanceOf(SubjectAccessTransitionRejectedError);
   });
 
   test("committed target cannot be reversed by a contrary repair", async () => {
     const transition = await scope!.writer.beginBlocking(subjectIdentifier);
     await scope!.writer.prepareRepair(transition, "enabled");
-    const error = await captureRejection(
-      scope!.observer.finalize(transition, "disabled"),
-    );
+    const error = await captureRejection(scope!.observer.finalize(transition, "disabled"));
     expect(error).toBeInstanceOf(SubjectAccessTransitionRejectedError);
     await scope!.writer.finalize(transition, "enabled");
   });
@@ -423,8 +409,7 @@ describe("Subject Access real Redis contract", () => {
       leaseToken: "mismatched-target",
       subjectIdentifier,
     });
-    if (lease === null)
-      throw new Error("expected repair lease");
+    if (lease === null) throw new Error("expected repair lease");
     const repairFinalization = await scope!.writerBacklog.finalizeRepairSubject({
       lease,
       targetRecord: JSON.stringify({
@@ -458,24 +443,19 @@ describe("Subject Access real Redis contract", () => {
         leaseToken: "observer-clock-behind",
       }),
     ]);
-    expect(new Set([
-      firstClaim?.subjectIdentifier,
-      secondClaim?.subjectIdentifier,
-    ])).toEqual(new Set([subjectIdentifier, secondSubjectIdentifier]));
+    expect(new Set([firstClaim?.subjectIdentifier, secondClaim?.subjectIdentifier])).toEqual(
+      new Set([subjectIdentifier, secondSubjectIdentifier]),
+    );
 
-    const oldLease = firstClaim?.subjectIdentifier === subjectIdentifier
-      ? firstClaim
-      : secondClaim;
-    if (oldLease === null || oldLease === undefined)
-      throw new Error("expected old lease");
+    const oldLease = firstClaim?.subjectIdentifier === subjectIdentifier ? firstClaim : secondClaim;
+    if (oldLease === null || oldLease === undefined) throw new Error("expected old lease");
     await Bun.sleep(100);
     const currentLease = await scope!.observerBacklog.claimRepairSubject({
       leaseDurationMs: 1_000,
       leaseToken: "current-owner",
       subjectIdentifier,
     });
-    if (currentLease === null)
-      throw new Error("expected current lease");
+    if (currentLease === null) throw new Error("expected current lease");
 
     const oldReschedule = await scope!.writerBacklog.rescheduleRepairSubject({
       lease: oldLease,

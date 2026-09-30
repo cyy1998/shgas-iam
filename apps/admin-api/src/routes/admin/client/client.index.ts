@@ -1,6 +1,6 @@
 import type { AdminBindings } from "@admin-api/types/lib";
-import type { ClientAdapter } from "./client.adapter";
 import { createRouter } from "@iam/api-core/core/create-router";
+import type { ClientAdapter } from "./client.adapter";
 import * as routes from "./client.routes";
 
 export function createClientRoute(adapter: ClientAdapter) {

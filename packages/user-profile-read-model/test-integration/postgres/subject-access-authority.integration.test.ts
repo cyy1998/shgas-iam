@@ -1,9 +1,5 @@
-import {
-  UserProfileDirtyReason,
-  UserProfileDirtyStatus,
-  UserStatus,
-} from "@iam/contracts";
 import { afterAll, beforeAll, beforeEach, describe, expect, mock, test } from "bun:test";
+import { UserProfileDirtyReason, UserProfileDirtyStatus, UserStatus } from "@iam/contracts";
 import { V3_USER_PROFILE_SCHEMA_VERSION } from "../../src/v3";
 import { createSubjectAccessAuthorityRepository } from "../../src/worker";
 import { createPostgresTestHarness } from "./postgres-test-harness";
@@ -23,8 +19,7 @@ describe("Subject Access PostgreSQL authority", () => {
   });
 
   afterAll(async () => {
-    if (harness)
-      await harness.close();
+    if (harness) await harness.close();
   });
 
   test("reports enabled/current only after publishing the matching processed Facts version", async () => {
@@ -159,9 +154,7 @@ async function seedProfileAndDirty(
       ${dirtyStatus},
       ${JSON.stringify([UserProfileDirtyReason.UserUpdated])}::jsonb,
       ${REBUILT_AT.toISOString()},
-      ${dirtyStatus === UserProfileDirtyStatus.Processed
-        ? REBUILT_AT.toISOString()
-        : null}
+      ${dirtyStatus === UserProfileDirtyStatus.Processed ? REBUILT_AT.toISOString() : null}
     )
   `;
 }

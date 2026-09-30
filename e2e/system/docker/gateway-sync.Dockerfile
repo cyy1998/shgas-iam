@@ -12,6 +12,9 @@ RUN corepack enable && corepack prepare pnpm@12.5.1 --activate
 
 WORKDIR /workspace
 COPY .npmrc pnpm-workspace.yaml package.json pnpm-lock.yaml ./
+COPY packages/api-core/package.json ./packages/api-core/package.json
+COPY packages/session-kernel/package.json ./packages/session-kernel/package.json
+COPY packages/contracts/package.json ./packages/contracts/package.json
 COPY gateway/package.json ./gateway/package.json
 RUN --mount=type=cache,id=iam-e2e-pnpm-v12,target=/pnpm/store \
     pnpm install --filter @iam/gateway-apisix... --prod --frozen-lockfile --ignore-scripts

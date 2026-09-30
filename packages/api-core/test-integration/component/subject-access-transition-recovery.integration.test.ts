@@ -1,8 +1,5 @@
-import type {
-  SubjectAccessTransitionRecoveryLease,
-  SubjectAccessTransitionResolution,
-} from "../../src/subject-access";
 import { describe, expect, mock, test } from "bun:test";
+import type { SubjectAccessTransitionRecoveryLease, SubjectAccessTransitionResolution } from "../../src/subject-access";
 import { createSubjectAccessTransitionRecovery } from "../../src/subject-access";
 
 const lease: SubjectAccessTransitionRecoveryLease = {
@@ -79,12 +76,15 @@ describe("Subject Access transition recovery", () => {
       lease,
       retryDelayMs: 5_000,
     });
-    expect(warn).toHaveBeenCalledWith({
-      errorType: "Error",
-      operation: "resolve",
-      subjectIdentifier: lease.subjectIdentifier,
-      transitionId: lease.transitionId,
-    }, "Subject Access transition recovery failed");
+    expect(warn).toHaveBeenCalledWith(
+      {
+        errorType: "Error",
+        operation: "resolve",
+        subjectIdentifier: lease.subjectIdentifier,
+        transitionId: lease.transitionId,
+      },
+      "Subject Access transition recovery failed",
+    );
     expect(JSON.stringify(warn.mock.calls)).not.toContain("postgresql://");
   });
 });

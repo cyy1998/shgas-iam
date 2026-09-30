@@ -1,22 +1,10 @@
+import { UserProfileDirtyReason, UserProfileDirtyStatus, UserStatus } from "@iam/contracts";
 import type { DbClient } from "@iam/db";
+import { userProfileDirty, userProfiles, users } from "@iam/db/schema";
+import { asc, eq, gt, sql } from "drizzle-orm";
 import type { PublishedProfileRowInput } from "../schema/profile-storage.schema";
 import type { UserProfileProjectionBundle } from "../worker/user-profile-projection";
-import type {
-  UserProfileReadinessPageRow,
-  UserProfileReadinessProjection,
-} from "./user-profile-readiness";
-import {
-  UserProfileDirtyReason,
-  UserProfileDirtyStatus,
-  UserStatus,
-} from "@iam/contracts";
-import { userProfileDirty, userProfiles, users } from "@iam/db/schema";
-import {
-  asc,
-  eq,
-  gt,
-  sql,
-} from "drizzle-orm";
+import type { UserProfileReadinessPageRow, UserProfileReadinessProjection } from "./user-profile-readiness";
 
 export function createUserProfileReadinessRepository<
   TProfile extends PublishedProfileRowInput & UserProfileReadinessProjection,
@@ -39,7 +27,7 @@ export function createUserProfileReadinessRepository<
       .where(gt(users.id, input.afterUserId))
       .orderBy(asc(users.id))
       .limit(input.limit);
-    return rows.map(row => toPageRow(row, options.projection));
+    return rows.map((row) => toPageRow(row, options.projection));
   }
 
   async function readVerificationSummary() {
@@ -69,26 +57,23 @@ export function createUserProfileReadinessRepository<
         ) AS "orphanProfileCount"
     `);
     const summary = summaries[0];
-    if (summary === undefined)
-      throw new Error("User Profile readiness summary is incomplete");
+    if (summary === undefined) throw new Error("User Profile readiness summary is incomplete");
     return summary;
   }
 
-  async function rebuildExpected(
-    profiles: TProfile[],
-    observedAt: Date,
-  ) {
-    if (profiles.length === 0)
-      return [];
+  async function rebuildExpected(profiles: TProfile[], observedAt: Date) {
+    if (profiles.length === 0) return [];
     const builder = options.projection.createBuilder({
       db,
       clock: { nowDate: () => observedAt },
       batchSize: options.buildBatchSize,
     });
-    return await builder.buildMany(profiles.map(profile => ({
-      userId: profile.userId,
-      sourceDirtyVersion: profile.sourceDirtyVersion,
-    })));
+    return await builder.buildMany(
+      profiles.map((profile) => ({
+        userId: profile.userId,
+        sourceDirtyVersion: profile.sourceDirtyVersion,
+      })),
+    );
   }
 
   return {
@@ -142,13 +127,12 @@ function toPageRow<
   projection: UserProfileProjectionBundle<TProfile, TFactsRecord>,
 ): UserProfileReadinessPageRow<TProfile> {
   const accountAvailable = row.userStatus === UserStatus.Enable && !row.userDeleted;
-  if (row.profileUserId === null)
-    return issueRow(row, accountAvailable, "profile-missing");
+  if (row.profileUserId === null) return issueRow(row, accountAvailable, "profile-missing");
   if (
-    row.profileUserId !== row.userId
-    || row.profileSubjectIdentifier !== row.userSubjectIdentifier
-    || row.profileStatus !== row.userStatus
-    || row.profileDeleted !== row.userDeleted
+    row.profileUserId !== row.userId ||
+    row.profileSubjectIdentifier !== row.userSubjectIdentifier ||
+    row.profileStatus !== row.userStatus ||
+    row.profileDeleted !== row.userDeleted
   ) {
     return issueRow(row, accountAvailable, "profile-identity-mismatch");
   }
@@ -158,18 +142,13 @@ function toPageRow<
   let currentProfile: TProfile;
   try {
     currentProfile = projection.parseProfileRow(toProfileRowInput(row));
-  }
-  catch {
+  } catch {
     return issueRow(row, accountAvailable, "profile-invalid");
   }
-  if (
-    row.dirtyStatus !== UserProfileDirtyStatus.Processed
-    || row.dirtyVersion !== currentProfile.sourceDirtyVersion
-  ) {
+  if (row.dirtyStatus !== UserProfileDirtyStatus.Processed || row.dirtyVersion !== currentProfile.sourceDirtyVersion) {
     return issueRow(row, accountAvailable, "profile-not-current");
   }
-  const backfillCompleted
-    = row.dirtyReasonCodes?.includes(UserProfileDirtyReason.Backfill) ?? false;
+  const backfillCompleted = row.dirtyReasonCodes?.includes(UserProfileDirtyReason.Backfill) ?? false;
   return {
     userId: row.userId,
     subjectIdentifier: row.userSubjectIdentifier,
@@ -182,16 +161,16 @@ function toPageRow<
 
 function toProfileRowInput(row: ProfileRow): PublishedProfileRowInput {
   if (
-    row.profileUserId === null
-    || row.profileSubjectIdentifier === null
-    || row.username === null
-    || row.name === null
-    || row.profileStatus === null
-    || row.profileDeleted === null
-    || row.searchVisible === null
-    || row.profileSchemaVersion === null
-    || row.sourceDirtyVersion === null
-    || row.rebuiltAt === null
+    row.profileUserId === null ||
+    row.profileSubjectIdentifier === null ||
+    row.username === null ||
+    row.name === null ||
+    row.profileStatus === null ||
+    row.profileDeleted === null ||
+    row.searchVisible === null ||
+    row.profileSchemaVersion === null ||
+    row.sourceDirtyVersion === null ||
+    row.rebuiltAt === null
   ) {
     throw new Error("User Profile row is incomplete");
   }

@@ -1,11 +1,14 @@
-import { createClientRoute } from "@admin-api/routes/admin/client/client.index";
 import { describe, expect, test } from "bun:test";
+import { createClientRoute } from "@admin-api/routes/admin/client/client.index";
 
 function createAdapterStub() {
   const handler = () => new Response();
-  return new Proxy({}, {
-    get: () => handler,
-  });
+  return new Proxy(
+    {},
+    {
+      get: () => handler,
+    },
+  );
 }
 
 describe("Client base mutation OpenAPI contract", () => {

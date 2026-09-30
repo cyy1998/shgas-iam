@@ -1,34 +1,21 @@
-import type {
-  AuthenticationLoginFailureStatus,
-  AuthenticationLoginRestrictionStatus,
-} from "../login-restriction.type";
-import type { LoginWithPasswordDeps } from "./login-with-password.port";
-import type { LoginWithPasswordInput, LoginWithPasswordOptions } from "./login-with-password.type";
 import { HumanVerificationAction } from "@api/enums/humanVerification.action";
-import {
-  buildPasswordLoginFailureAudit,
-  buildPasswordLoginSuccessAudit,
-} from "@api/services/audit/events/auth.audit";
+import { buildPasswordLoginFailureAudit, buildPasswordLoginSuccessAudit } from "@api/services/audit/events/auth.audit";
 import { isHumanVerificationRequiredError } from "@api/services/human-verification/human-verification.error";
 import { createHumanVerificationContext } from "@api/services/human-verification/human-verification.type";
 import { toSessionOrigin } from "@api/services/session/session-origin";
 import { LoginFailedError } from "@iam/api-core/errors/LoginFailedError";
 import { UserNotFoundError } from "@iam/domain/user";
 import { runLoginProtectionOperation } from "../login-protection.helper";
-import {
-  formatLoginFailureMessage,
-  formatTemporaryLoginRestrictionMessage,
-} from "../login-restriction-message";
+import type { AuthenticationLoginFailureStatus, AuthenticationLoginRestrictionStatus } from "../login-restriction.type";
+import { formatLoginFailureMessage, formatTemporaryLoginRestrictionMessage } from "../login-restriction-message";
+import type { LoginWithPasswordDeps } from "./login-with-password.port";
+import type { LoginWithPasswordInput, LoginWithPasswordOptions } from "./login-with-password.type";
 
 export function createLoginWithPasswordUseCase(deps: LoginWithPasswordDeps) {
   async function execute(input: LoginWithPasswordInput, options: LoginWithPasswordOptions = {}) {
     const requestContext = options.requestContext;
     const context = createHumanVerificationContext(requestContext, input.username);
-    await deps.humanVerification.ensureActionAllowed(
-      HumanVerificationAction.PasswordLogin,
-      input.capToken,
-      context,
-    );
+    await deps.humanVerification.ensureActionAllowed(HumanVerificationAction.PasswordLogin, input.capToken, context);
 
     let activeUser = null;
     try {
@@ -36,8 +23,7 @@ export function createLoginWithPasswordUseCase(deps: LoginWithPasswordDeps) {
       if (activeUser === null) {
         throw new UserNotFoundError("用户不存在");
       }
-    }
-    catch (error) {
+    } catch (error) {
       if (!isHumanVerificationRequiredError(error)) {
         await deps.humanRisk.recordLoginFailure(HumanVerificationAction.PasswordLogin, context);
         await deps.auditLogWriter.recordAuditLog({

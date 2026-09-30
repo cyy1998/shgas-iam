@@ -1,16 +1,13 @@
-import type { PostgresTestHarness } from "./postgres-harness";
 import { afterAll, beforeAll, beforeEach, describe, expect, test } from "bun:test";
 import postgres from "postgres";
+import type { PostgresTestHarness } from "./postgres-harness";
 import { createPostgresTestHarness, expectPostgresErrorCode } from "./postgres-harness";
 
 const TIGHTENING_MIGRATION = new URL(
   "../../src/migrations/20260801144944_sturdy_landau/migration.sql",
   import.meta.url,
 );
-const EXPLICIT_ROLLBACK = new URL(
-  "../../src/migrations/20260801144944_sturdy_landau/rollback.sql",
-  import.meta.url,
-);
+const EXPLICIT_ROLLBACK = new URL("../../src/migrations/20260801144944_sturdy_landau/rollback.sql", import.meta.url);
 
 let harness: PostgresTestHarness | undefined;
 
@@ -50,10 +47,7 @@ describe("Subject Projection cutover tightening migration", () => {
       VALUES (1, ${null}, 'User 1', 1, 1, ${sql.json({ employments: [] })})
     `;
 
-    await expectPostgresErrorCode(
-      sql.file(TIGHTENING_MIGRATION, { cache: false }),
-      "23514",
-    );
+    await expectPostgresErrorCode(sql.file(TIGHTENING_MIGRATION, { cache: false }), "23514");
 
     const [column] = await sql<{ isNullable: string }[]>`
       SELECT is_nullable AS "isNullable"
@@ -92,7 +86,8 @@ describe("Subject Projection cutover tightening migration", () => {
       { columnName: "subject_identifier", isNullable: "NO" },
     ]);
     expect(await indexExists(sql)).toBe(true);
-    await expectPostgresErrorCode(sql`
+    await expectPostgresErrorCode(
+      sql`
       INSERT INTO user_profile (
         user_id,
         subject_identifier,
@@ -109,15 +104,20 @@ describe("Subject Projection cutover tightening migration", () => {
         1,
         ${sql.json({ employments: [] })}
       )
-    `, "23505");
-    await expectPostgresErrorCode(sql`
+    `,
+      "23505",
+    );
+    await expectPostgresErrorCode(
+      sql`
       INSERT INTO client (
         client_code,
         custom_sso_config,
         custom_sso_config_version
       )
       VALUES ('invalid-gateway', ${sql.json({ mode: "gateway" })}, 1)
-    `, "23514");
+    `,
+      "23514",
+    );
     await sql`
       INSERT INTO client (
         client_code,
@@ -188,12 +188,14 @@ describe("Subject Projection cutover tightening migration", () => {
     await lockReady;
     try {
       await sql`SET lock_timeout = '100ms'`;
-      await expectPostgresErrorCode(sql`
+      await expectPostgresErrorCode(
+        sql`
         CREATE UNIQUE INDEX user_profile_subject_identifier_idx
         ON user_profile (subject_identifier)
-      `, "55P03");
-    }
-    finally {
+      `,
+        "55P03",
+      );
+    } finally {
       await sql`RESET lock_timeout`;
       release();
       await heldLock;
@@ -274,10 +276,7 @@ async function insertVerifiedProjection(sql: ReturnType<typeof postgres>) {
   await sql`INSERT INTO client (client_code) VALUES ('unconfigured')`;
 }
 
-async function insertApproximateProjection(
-  sql: ReturnType<typeof postgres>,
-  count: number,
-) {
+async function insertApproximateProjection(sql: ReturnType<typeof postgres>, count: number) {
   await sql`
     INSERT INTO "user" (id, subject_identifier)
     SELECT
@@ -311,11 +310,7 @@ async function insertApproximateProjection(
   `;
 }
 
-async function insertUser(
-  sql: ReturnType<typeof postgres>,
-  id: number,
-  subjectIdentifier: string,
-) {
+async function insertUser(sql: ReturnType<typeof postgres>, id: number, subjectIdentifier: string) {
   await sql`
     INSERT INTO "user" (id, subject_identifier)
     VALUES (${id}, ${subjectIdentifier})
@@ -335,7 +330,6 @@ async function indexExists(sql: ReturnType<typeof postgres>) {
 }
 
 function requireHarness(): PostgresTestHarness {
-  if (!harness)
-    throw new Error("PostgreSQL test harness was not initialized");
+  if (!harness) throw new Error("PostgreSQL test harness was not initialized");
   return harness;
 }

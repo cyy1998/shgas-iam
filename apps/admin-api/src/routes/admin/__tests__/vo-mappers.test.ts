@@ -1,3 +1,4 @@
+import { describe, expect, test } from "bun:test";
 import {
   EmploymentStatus,
   employmentStatusToString,
@@ -5,10 +6,9 @@ import {
   PositionStatus,
   positionStatusToString,
   UserStatus,
-  userStatusToString,
   UserType,
+  userStatusToString,
 } from "@iam/contracts";
-import { describe, expect, test } from "bun:test";
 
 const createdAt = new Date("2026-01-01T00:00:00.000Z");
 const updatedAt = new Date("2026-01-02T00:00:00.000Z");
@@ -109,7 +109,7 @@ function positionDetail() {
 
 describe("admin route VO mappers", () => {
   test("maps user DTOs to VOs with status text", async () => {
-    const schemaModule = await import("../user/user.schema") as any;
+    const schemaModule = (await import("../user/user.schema")) as any;
 
     expect(typeof schemaModule.toUserVo).toBe("function");
     expect(typeof schemaModule.toUserDetailVo).toBe("function");
@@ -117,20 +117,25 @@ describe("admin route VO mappers", () => {
       username: "user1",
       statusText: userStatusToString[UserStatus.Enable],
     });
-    expect(schemaModule.toUserDetailVo({
-      ...userDto(),
-      employments: [],
-      privileges: ["priv:1"],
-      roles: ["role:1"],
-      roleNames: { "role:1": "管理员" },
-      privilegeNames: { "priv:1": "查看用户" },
-    }, {
-      editProfile: { allowed: true, reason: null },
-      resetPassword: { allowed: true, reason: null },
-      changeStatus: { allowed: true, reason: null },
-      delete: { allowed: true, reason: null },
-      resign: { allowed: true, reason: null },
-    })).toMatchObject({
+    expect(
+      schemaModule.toUserDetailVo(
+        {
+          ...userDto(),
+          employments: [],
+          privileges: ["priv:1"],
+          roles: ["role:1"],
+          roleNames: { "role:1": "管理员" },
+          privilegeNames: { "priv:1": "查看用户" },
+        },
+        {
+          editProfile: { allowed: true, reason: null },
+          resetPassword: { allowed: true, reason: null },
+          changeStatus: { allowed: true, reason: null },
+          delete: { allowed: true, reason: null },
+          resign: { allowed: true, reason: null },
+        },
+      ),
+    ).toMatchObject({
       allowedActions: {
         editProfile: { allowed: true, reason: null },
       },
@@ -144,7 +149,7 @@ describe("admin route VO mappers", () => {
   });
 
   test("maps employment DTOs to VOs with defaults and status text", async () => {
-    const schemaModule = await import("../employment/employment.schema") as any;
+    const schemaModule = (await import("../employment/employment.schema")) as any;
 
     expect(typeof schemaModule.toEmploymentVo).toBe("function");
     expect(typeof schemaModule.toEmploymentDetailVo).toBe("function");
@@ -153,19 +158,24 @@ describe("admin route VO mappers", () => {
       user: { username: "user1" },
       statusText: employmentStatusToString[EmploymentStatus.Enable],
     });
-    expect(schemaModule.toEmploymentDetailVo({
-      ...employmentDto(),
-      roleNames: { "role:1": "管理员" },
-      privilegeNames: { "priv:1": "查看用户" },
-    }, {
-      editDescription: { allowed: true, reason: null },
-      pause: { allowed: true, reason: null },
-      resume: { allowed: false, reason: "RESOURCE_STATE_NOT_ACTIONABLE" },
-      end: { allowed: true, reason: null },
-      transfer: { allowed: true, reason: null },
-      setPrimary: { allowed: true, reason: null },
-      clearPrimary: { allowed: false, reason: "RESOURCE_STATE_NOT_ACTIONABLE" },
-    })).toMatchObject({
+    expect(
+      schemaModule.toEmploymentDetailVo(
+        {
+          ...employmentDto(),
+          roleNames: { "role:1": "管理员" },
+          privilegeNames: { "priv:1": "查看用户" },
+        },
+        {
+          editDescription: { allowed: true, reason: null },
+          pause: { allowed: true, reason: null },
+          resume: { allowed: false, reason: "RESOURCE_STATE_NOT_ACTIONABLE" },
+          end: { allowed: true, reason: null },
+          transfer: { allowed: true, reason: null },
+          setPrimary: { allowed: true, reason: null },
+          clearPrimary: { allowed: false, reason: "RESOURCE_STATE_NOT_ACTIONABLE" },
+        },
+      ),
+    ).toMatchObject({
       privileges: [],
       roles: [],
       roleNames: { "role:1": "管理员" },
@@ -175,7 +185,7 @@ describe("admin route VO mappers", () => {
   });
 
   test("maps position details to VOs with member count", async () => {
-    const schemaModule = await import("../position/position.schema") as any;
+    const schemaModule = (await import("../position/position.schema")) as any;
 
     expect(typeof schemaModule.toPositionVo).toBe("function");
     expect(schemaModule.toPositionVo(positionDetail())).toMatchObject({

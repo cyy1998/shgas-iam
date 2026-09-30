@@ -1,4 +1,3 @@
-import type { AdminApiRuntimePorts } from "./types";
 import { randomBytes, randomInt, randomUUID } from "node:crypto";
 import env from "@admin-api/env";
 import redis from "@admin-api/lib/infra/redis";
@@ -7,6 +6,7 @@ import { hashSecret } from "@iam/api-core/security";
 import { generateRandomPassword } from "@iam/api-core/utils";
 import { hash } from "bcrypt-ts";
 import { createAdminClientCache } from "./client-cache";
+import type { AdminApiRuntimePorts } from "./types";
 
 export interface CreateAdminApiRuntimeOptions {
   env?: typeof env;

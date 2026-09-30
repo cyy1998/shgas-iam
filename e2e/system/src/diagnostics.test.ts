@@ -1,16 +1,15 @@
-import type { RunDescriptor } from "./lifecycle.ts";
+import { afterEach, describe, expect, test } from "bun:test";
 import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { afterEach, describe, expect, test } from "bun:test";
 import { collectRunDiagnostics } from "./diagnostics.ts";
+import type { RunDescriptor } from "./lifecycle.ts";
 import { playwrightStagingDirectory } from "./playwright-evidence.ts";
 
 let temporaryDirectory: string | undefined;
 
 afterEach(async () => {
-  if (temporaryDirectory !== undefined)
-    await rm(temporaryDirectory, { force: true, recursive: true });
+  if (temporaryDirectory !== undefined) await rm(temporaryDirectory, { force: true, recursive: true });
   temporaryDirectory = undefined;
 });
 
@@ -21,39 +20,25 @@ describe("run diagnostics", () => {
     await mkdir(staging, { recursive: true });
     await writeFile(join(staging, "trace.zip"), "SYNTHETIC-RAW-TRACE");
     await writeFile(join(staging, "failure.png"), "SYNTHETIC-RAW-PNG");
-    await writeFile(
-      join(descriptor.artifactDirectory, "migration-receipt.json"),
-      "{\"status\":\"applied\"}\n",
-    );
+    await writeFile(join(descriptor.artifactDirectory, "migration-receipt.json"), '{"status":"applied"}\n');
 
     const result = await collectRunDiagnostics({
       descriptor,
       maxBytesPerArtifact: 96,
       readComposePs: async () => "SYNTHETIC_PASSWORD=compose-password",
       readRecentLogs: async () => `Authorization: Bearer synthetic-token\n${"x".repeat(200)}`,
-      readGatewayState: async () => "{\"privateKey\":\"synthetic-key\"}",
+      readGatewayState: async () => '{"privateKey":"synthetic-key"}',
     });
 
-    expect(await readFile(
-      join(descriptor.artifactDirectory, "compose-ps.json"),
-      "utf8",
-    )).toContain("compose-password");
-    expect(await readFile(
-      join(descriptor.artifactDirectory, "compose-logs.txt"),
-      "utf8",
-    )).toContain("synthetic-token");
-    expect(await readFile(
-      join(descriptor.artifactDirectory, "gateway-state.json"),
-      "utf8",
-    )).toContain("synthetic-key");
-    expect(await readFile(
-      join(descriptor.artifactDirectory, "playwright", "trace.zip"),
-      "utf8",
-    )).toBe("SYNTHETIC-RAW-TRACE");
-    expect(await readFile(
-      join(descriptor.artifactDirectory, "playwright", "failure.png"),
-      "utf8",
-    )).toBe("SYNTHETIC-RAW-PNG");
+    expect(await readFile(join(descriptor.artifactDirectory, "compose-ps.json"), "utf8")).toContain("compose-password");
+    expect(await readFile(join(descriptor.artifactDirectory, "compose-logs.txt"), "utf8")).toContain("synthetic-token");
+    expect(await readFile(join(descriptor.artifactDirectory, "gateway-state.json"), "utf8")).toContain("synthetic-key");
+    expect(await readFile(join(descriptor.artifactDirectory, "playwright", "trace.zip"), "utf8")).toBe(
+      "SYNTHETIC-RAW-TRACE",
+    );
+    expect(await readFile(join(descriptor.artifactDirectory, "playwright", "failure.png"), "utf8")).toBe(
+      "SYNTHETIC-RAW-PNG",
+    );
     const index = JSON.parse(await readFile(result.indexPath, "utf8")) as {
       existingArtifacts: string[];
       unavailableSources: string[];
@@ -78,22 +63,13 @@ describe("run diagnostics", () => {
     });
 
     await expect(collection).rejects.toThrow("required diagnostic source failed");
-    expect(await readFile(
-      join(descriptor.artifactDirectory, "compose-logs.txt"),
-      "utf8",
-    )).toBe("available logs");
-    expect(JSON.parse(await readFile(
-      join(descriptor.artifactDirectory, "playwright-evidence.json"),
-      "utf8",
-    ))).toEqual({
+    expect(await readFile(join(descriptor.artifactDirectory, "compose-logs.txt"), "utf8")).toBe("available logs");
+    expect(JSON.parse(await readFile(join(descriptor.artifactDirectory, "playwright-evidence.json"), "utf8"))).toEqual({
       version: 1,
       status: "unavailable",
       artifacts: [],
     });
-    const index = await readFile(
-      join(descriptor.artifactDirectory, "diagnostics-index.json"),
-      "utf8",
-    );
+    const index = await readFile(join(descriptor.artifactDirectory, "diagnostics-index.json"), "utf8");
     expect(index).toContain("compose-ps.json");
     expect(index).toContain("playwright-evidence");
   });
@@ -117,10 +93,7 @@ describe("run diagnostics", () => {
 
     await expect(collection).rejects.toThrow("required diagnostic source failed");
     expect(sourceSignal?.aborted).toBe(true);
-    expect(await readFile(
-      join(descriptor.artifactDirectory, "compose-logs.txt"),
-      "utf8",
-    )).toBe("available logs");
+    expect(await readFile(join(descriptor.artifactDirectory, "compose-logs.txt"), "utf8")).toBe("available logs");
   });
 });
 

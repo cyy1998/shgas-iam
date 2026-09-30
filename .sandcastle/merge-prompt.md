@@ -25,7 +25,9 @@ GitHub 仓库 `{{REPO}}`，当前合入分支必须是 `{{INVOCATION_BRANCH}}`�
    只合并本列表中的固定候选 SHA。
 2. 按依赖顺序逐个执行 `git merge <candidate-sha> --no-edit`。沿用普通 merge，不 squash/rebase。
    遇到冲突，读取 `.agents/skills/resolving-merge-conflicts/SKILL.md`，追溯双方需求并修复。
-3. 必要时追加集成修复提交。若合入改变依赖、Umi 配置或路由，先在容器运行 `sh scripts/sandcastle/prepare-workspace.sh`，
+3. 必要时追加普通集成修复提交，由提交 Hook 自动处理暂存文件的 format/lint，并核对修复后的候选。
+   自动 merge commit 的全仓格式与规则检查由最终 `pnpm verify` 只读执行。
+   若合入改变依赖、Umi 配置或路由，先在容器运行 `sh scripts/sandcastle/prepare-workspace.sh`，
    确认成功后再验证。所有本批分支合入后，按工作流“验证节奏”在最终树上运行一次 `pnpm verify`，
    并将本批 tickets/Spec 所需的额外 Integration、E2E 或 Gateway 检查去重后执行；分支测试结果不能替代合并后的验证。
    专用 PostgreSQL/Redis URL 已注入。类型检查或测试失败时先诊断，在本批授权范围内自行修复并继续验证；

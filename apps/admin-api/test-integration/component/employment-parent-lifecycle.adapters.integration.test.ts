@@ -1,4 +1,4 @@
-import type { Context } from "hono";
+import { describe, expect, mock, test } from "bun:test";
 import { createOrganizationAdapter } from "@admin-api/routes/admin/organization/organization.adapter";
 import { createPositionAdapter } from "@admin-api/routes/admin/position/position.adapter";
 import { createUserAdapter } from "@admin-api/routes/admin/user/user.adapter";
@@ -6,19 +6,16 @@ import { OrganizationStatus, PositionStatus } from "@iam/contracts";
 import { OrganizationHasEmploymentError } from "@iam/domain/organization";
 import { PositionHasEmploymentError } from "@iam/domain/position";
 import { UserHasOpenEmploymentError } from "@iam/domain/user";
-import { describe, expect, mock, test } from "bun:test";
+import type { Context } from "hono";
 import { getTestAdminAuthorizationValue } from "../helpers/admin-authorization";
 
 function createCallerContext() {
   const hono = {
     get: mock((key: string) => {
       const authorizationValue = getTestAdminAuthorizationValue(key);
-      if (authorizationValue !== undefined)
-        return authorizationValue;
-      if (key === "userId")
-        return 1001;
-      if (key === "username")
-        return "admin";
+      if (authorizationValue !== undefined) return authorizationValue;
+      if (key === "userId") return 1001;
+      if (key === "username") return "admin";
       return undefined;
     }),
     req: {
@@ -41,10 +38,12 @@ describe("Open Employment parent lifecycle adapter conflicts", () => {
     } as any);
     const caller = adapter.positionAdminRouter.createCaller(createCallerContext());
 
-    await expect(caller.updateStatus({
-      posCode: "DEV",
-      status: PositionStatus.Disable,
-    })).rejects.toMatchObject({
+    await expect(
+      caller.updateStatus({
+        posCode: "DEV",
+        status: PositionStatus.Disable,
+      }),
+    ).rejects.toMatchObject({
       code: "CONFLICT",
       message: "该岗位存在开放任职，无法停用或删除",
     });
@@ -60,10 +59,12 @@ describe("Open Employment parent lifecycle adapter conflicts", () => {
     } as any);
     const caller = adapter.organizationAdminRouter.createCaller(createCallerContext());
 
-    await expect(caller.updateStatus({
-      orgCode: "ORG",
-      status: OrganizationStatus.Disable,
-    })).rejects.toMatchObject({
+    await expect(
+      caller.updateStatus({
+        orgCode: "ORG",
+        status: OrganizationStatus.Disable,
+      }),
+    ).rejects.toMatchObject({
       code: "CONFLICT",
       message: "该组织层级内存在开放任职，无法停用或删除",
     });

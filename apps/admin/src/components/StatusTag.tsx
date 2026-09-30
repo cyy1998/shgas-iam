@@ -5,10 +5,10 @@ import {
   getPositionStatusOptions,
   getRoleStatusOptions,
   getUserStatusOptions,
-} from '@iam/contracts';
-import { Tag } from 'antd';
+} from "@iam/contracts";
+import { Tag } from "antd";
 
-type Domain = 'user' | 'org' | 'position' | 'employment' | 'client' | 'role';
+type Domain = "user" | "org" | "position" | "employment" | "client" | "role";
 
 const optionsByDomain = {
   user: getUserStatusOptions,

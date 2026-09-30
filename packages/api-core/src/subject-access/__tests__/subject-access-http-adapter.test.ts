@@ -1,5 +1,5 @@
-import { ApiErrorCode } from "@iam/contracts";
 import { describe, expect, test } from "bun:test";
+import { ApiErrorCode } from "@iam/contracts";
 import { Hono } from "hono";
 import { createErrorHandler } from "../../middlewares";
 import {
@@ -29,11 +29,19 @@ describe("Subject Access HTTP Adapter", () => {
     const adapter = createSubjectAccessHttpAdapter();
     const { logger } = createLoggerCapture();
     const app = new Hono();
-    app.get("/session", async context => await adapter.run(context, {
-      clearCookiesOnInvalidSession: ["global_session", "local_alpha_session"],
-    }, async () => {
-      throw new SubjectAccessSessionInvalidHttpError();
-    }));
+    app.get(
+      "/session",
+      async (context) =>
+        await adapter.run(
+          context,
+          {
+            clearCookiesOnInvalidSession: ["global_session", "local_alpha_session"],
+          },
+          async () => {
+            throw new SubjectAccessSessionInvalidHttpError();
+          },
+        ),
+    );
     app.onError(createErrorHandler(logger as never));
 
     const response = await app.request("/session", {
@@ -59,12 +67,20 @@ describe("Subject Access HTTP Adapter", () => {
     const adapter = createSubjectAccessHttpAdapter();
     const { logger, entries } = createLoggerCapture();
     const app = new Hono();
-    app.get("/session", async context => await adapter.run(context, {
-      clearCookiesOnInvalidSession: ["global_session"],
-      retryAfterSeconds: 3,
-    }, async () => {
-      throw new SubjectAccessUnavailableError(new Error("redis://secret@internal"));
-    }));
+    app.get(
+      "/session",
+      async (context) =>
+        await adapter.run(
+          context,
+          {
+            clearCookiesOnInvalidSession: ["global_session"],
+            retryAfterSeconds: 3,
+          },
+          async () => {
+            throw new SubjectAccessUnavailableError(new Error("redis://secret@internal"));
+          },
+        ),
+    );
     app.onError(createErrorHandler(logger as never));
 
     const response = await app.request("/session", {

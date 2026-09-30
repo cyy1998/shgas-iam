@@ -1,5 +1,4 @@
-import type { ClientSsoConfig } from "@iam/contracts";
-import type { DbClient } from "@iam/db";
+import { afterAll, beforeAll, expect, test } from "bun:test";
 import { randomUUID } from "node:crypto";
 import { createAdminClientCache } from "@admin-api/composition/runtime/client-cache";
 import { createClientSsoSnapshotManagement } from "@admin-api/composition/services/client-sso-snapshots";
@@ -12,11 +11,19 @@ import { createClientSecretAuthenticator } from "@iam/api-core/client-snapshot/c
 import { createClientSnapshotMaintenance } from "@iam/api-core/client-snapshot/maintenance";
 import { createErrorHandler } from "@iam/api-core/middlewares";
 import { createUnitOfWork } from "@iam/api-core/uow";
-import { ApiErrorCode, ClientSsoCallbackType, ClientSsoProtocol, ClientStatus, OidcClientType, OidcScope } from "@iam/contracts";
+import type { ClientSsoConfig } from "@iam/contracts";
+import {
+  ApiErrorCode,
+  ClientSsoCallbackType,
+  ClientSsoProtocol,
+  ClientStatus,
+  OidcClientType,
+  OidcScope,
+} from "@iam/contracts";
+import type { DbClient } from "@iam/db";
 import { createClientSnapshotRepository } from "@iam/db/client-snapshot";
 import { auditLogs, clients } from "@iam/db/schema";
 import { createUnifiedSessionKernel } from "@iam/session-kernel";
-import { afterAll, beforeAll, expect, test } from "bun:test";
 import { eq } from "drizzle-orm";
 import { Hono } from "hono";
 import { addTestAdminAuthorizationMiddleware } from "../helpers/admin-authorization";
@@ -56,8 +63,7 @@ async function seed(code: string) {
 async function failure(work: () => Promise<unknown>) {
   try {
     await work();
-  }
-  catch (error) {
+  } catch (error) {
     return error;
   }
   throw new Error("Expected failure");
@@ -93,14 +99,14 @@ async function createManagedRestFixture() {
     app.onError(createErrorHandler({ ...logger, info() {} }));
     app.route("/admin", candidate.management.rest);
     const endpoint = `/admin/clients-sso/${encodeURIComponent(code)}`;
-    const save = (config: unknown) => app.request(`${endpoint}/protocol`, {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ config }),
-    });
+    const save = (config: unknown) =>
+      app.request(`${endpoint}/protocol`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ config }),
+      });
     return { scope, code, candidate, app, endpoint, save };
-  }
-  catch (error) {
+  } catch (error) {
     await scope.close();
     throw error;
   }
@@ -124,8 +130,9 @@ test("managed REST save persists and publishes the strict shape without exposing
     expect(published).toMatchObject({ kind: "present", value: { ssoConfig: managed } });
     const audits = await pg.db.select().from(auditLogs).where(eq(auditLogs.targetCode, code));
     expect(JSON.stringify(audits)).not.toContain("SENTINEL");
+  } finally {
+    await scope.close();
   }
-  finally { await scope.close(); }
 });
 
 test.each([
@@ -142,8 +149,9 @@ test.each([
     expect(rejected.status).toBe(422);
     const after = await pg.db.select().from(clients).where(eq(clients.clientCode, code));
     expect(after).toEqual(before);
+  } finally {
+    await scope.close();
   }
-  finally { await scope.close(); }
 });
 
 test("managed to business and back preserves the existing SSO credential", async () => {
@@ -152,7 +160,11 @@ test("managed to business and back preserves the existing SSO credential", async
     const originalSecret = await candidate.management.service.readSecret(code);
     const saved = await save(managed);
     expect(saved.status).toBe(200);
-    const business = { ...managed, callbackType: ClientSsoCallbackType.Business, callbackEndpoint: "https://business.example/sso/callback" };
+    const business = {
+      ...managed,
+      callbackType: ClientSsoCallbackType.Business,
+      callbackEndpoint: "https://business.example/sso/callback",
+    };
     const switched = await save(business);
     expect(switched.status).toBe(200);
     const switchedBack = await save(managed);
@@ -161,8 +173,9 @@ test("managed to business and back preserves the existing SSO credential", async
     expect(secret).toEqual(originalSecret);
     const persisted = await pg.db.select().from(clients).where(eq(clients.clientCode, code));
     expect(persisted[0]!.ssoConfig).toEqual(managed);
+  } finally {
+    await scope.close();
   }
-  finally { await scope.close(); }
 });
 
 test("managed Snapshot repair makes a fresh reader load the strict persisted shape", async () => {
@@ -174,20 +187,24 @@ test("managed Snapshot repair makes a fresh reader load the strict persisted sha
     await createClientSnapshotMaintenance(scope.redis).repairClient(code);
     const source = createClientSnapshotRepository(pg.db);
     let loads = 0;
-    const fresh = createClientSnapshots({ redis: scope.observer, source: {
-      ...source,
-      async loadClient(value) {
-        loads++;
-        return source.loadClient(value);
+    const fresh = createClientSnapshots({
+      redis: scope.observer,
+      source: {
+        ...source,
+        async loadClient(value) {
+          loads++;
+          return source.loadClient(value);
+        },
       },
-    } });
+    });
     const acquired = await fresh.client.acquire(code);
     expect(loads).toBe(1);
     expect(acquired).toMatchObject({ kind: "present", value: { ssoConfig: managed } });
     const audits = await pg.db.select().from(auditLogs).where(eq(auditLogs.targetCode, code));
     expect(JSON.stringify(audits)).not.toContain("SENTINEL");
+  } finally {
+    await scope.close();
   }
-  finally { await scope.close(); }
 });
 
 test("rotation authentication uses cached current credentials, retains accepted in-flight authentication and failed propagation until repair", async () => {
@@ -208,8 +225,7 @@ test("rotation authentication uses cached current credentials, retains accepted 
       amr: ["pwd"],
     });
     const child = await sessions.openClientSession(root.observation, { clientId: code, protocol: "oidc" });
-    if (!("value" in child))
-      throw new Error("Expected ClientSession");
+    if (!("value" in child)) throw new Error("Expected ClientSession");
     let unavailable = false;
     const candidate = createClientSsoSnapshotManagement({
       clientCache: createAdminClientCache({ redis: scope.redis }),
@@ -218,8 +234,7 @@ test("rotation authentication uses cached current credentials, retains accepted 
 
       redis: {
         async eval(script, count, ...args) {
-          if (unavailable)
-            throw new Error("invalidation unavailable");
+          if (unavailable) throw new Error("invalidation unavailable");
           return scope.redis.eval(script, count, ...args);
         },
       },
@@ -282,12 +297,9 @@ test("rotation authentication uses cached current credentials, retains accepted 
     });
     expect(rootAfter.status).toBe("resolved");
     expect(childAfter.status).toBe("resolved");
-    if (rootAfter.status === "resolved")
-      expect(rootAfter.value.userSession).toEqual(root.observation.userSession);
-    if (childAfter.status === "resolved")
-      expect(childAfter.value.clientSession).toEqual(child.value.clientSession);
-  }
-  finally {
+    if (rootAfter.status === "resolved") expect(rootAfter.value.userSession).toEqual(root.observation.userSession);
+    if (childAfter.status === "resolved") expect(childAfter.value.clientSession).toEqual(child.value.clientSession);
+  } finally {
     await scope.close();
   }
 });
@@ -302,7 +314,6 @@ test("actual PG projection and candidate Admin mutation invalidate ordinary and 
       db: pg.db,
       redis: scope.redis,
       logger,
-
     });
     const cold = await candidate.snapshots.client.acquire(code);
     const warm = await candidate.snapshots.client.acquire(code);
@@ -378,8 +389,7 @@ test("actual PG projection and candidate Admin mutation invalidate ordinary and 
     });
     const detail = await candidate.management.service.detail(code);
     expect(JSON.stringify(detail)).not.toContain("SENTINEL");
-  }
-  finally {
+  } finally {
     await scope.close();
   }
 });
@@ -397,8 +407,7 @@ test("actual committed mutation with failed Redis propagation retains old value 
 
       redis: {
         async eval(script, count, ...args) {
-          if (failInvalidation)
-            throw new Error("Redis unavailable");
+          if (failInvalidation) throw new Error("Redis unavailable");
           return scope.redis.eval(script, count, ...args);
         },
       },
@@ -417,10 +426,7 @@ test("actual committed mutation with failed Redis propagation retains old value 
       }),
     );
     expect(error).toMatchObject({ code: ApiErrorCode.AdminMutationCommitted });
-    const committed = await pg.db
-      .select({ status: clients.status })
-      .from(clients)
-      .where(eq(clients.clientCode, code));
+    const committed = await pg.db.select({ status: clients.status }).from(clients).where(eq(clients.clientCode, code));
     expect(committed[0]!.status).toBe(ClientStatus.Maintenance);
     const stillOld = await observer.client.acquire(code);
     expect(stillOld).toMatchObject({
@@ -435,8 +441,7 @@ test("actual committed mutation with failed Redis propagation retains old value 
       kind: "present",
       value: { status: ClientStatus.Maintenance },
     });
-  }
-  finally {
+  } finally {
     await scope.close();
   }
 });
@@ -482,7 +487,7 @@ for (const operation of ["save", "rotateSecret"] as const) {
             },
           },
           logger,
-          createTxPorts: tx => ({
+          createTxPorts: (tx) => ({
             client: createClientSsoRepository(tx),
             audit: createAdminAuditService({
               auditRepository: createAuditRepository(tx),
@@ -491,9 +496,7 @@ for (const operation of ["save", "rotateSecret"] as const) {
         }),
       });
       const error = await failure(() =>
-        operation === "save"
-          ? service.save(code, { status: ClientStatus.Disable })
-          : service.rotateSecret(code),
+        operation === "save" ? service.save(code, { status: ClientStatus.Disable }) : service.rotateSecret(code),
       );
       expect(error).toBe(original);
       expect(transactions).toBe(1);
@@ -512,8 +515,7 @@ for (const operation of ["save", "rotateSecret"] as const) {
       });
       const audits = await pg.db.select().from(auditLogs).where(eq(auditLogs.targetCode, code));
       expect(audits).toHaveLength(1);
-    }
-    finally {
+    } finally {
       await scope.close();
     }
   });
@@ -554,10 +556,8 @@ for (const kind of ["client", "credential"] as const) {
         db: pg.db,
         redis: scope.observer,
         logger,
-
       });
-      if (kind === "credential")
-        await admin.management.service.rotateSecret(code);
+      if (kind === "credential") await admin.management.service.rotateSecret(code);
       else await admin.management.service.save(code, { status: ClientStatus.Maintenance });
       resume.release();
       const observed = await pending;
@@ -571,12 +571,10 @@ for (const kind of ["client", "credential"] as const) {
       if (kind === "credential") {
         const credential = await snapshots.credential.acquire(code);
         expect(credential.kind).toBe("present");
-        if (credential.kind === "present")
-          expect(credential.value.secret).not.toBe("SSO-SENTINEL");
+        if (credential.kind === "present") expect(credential.value.secret).not.toBe("SSO-SENTINEL");
       }
       expect(once).toBe(false);
-    }
-    finally {
+    } finally {
       resume.release();
       await scope.close();
     }

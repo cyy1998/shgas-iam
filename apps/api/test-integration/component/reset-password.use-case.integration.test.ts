@@ -1,7 +1,7 @@
+import { expect, mock, test } from "bun:test";
 import type { AuditLogInput } from "@api/services/audit/audit.context";
 import { createImmediateUnitOfWork } from "@api/testing/fakes";
 import { createResetPasswordUseCase } from "@api/use-cases/account-recovery/reset-password/reset-password.use-case";
-import { expect, mock, test } from "bun:test";
 
 function createDeps() {
   const user = { id: 1, username: "zhangsan", name: "张三", mobile: "17721462865" };
@@ -94,17 +94,21 @@ test("audits a live mobile mismatch before rejecting Account Recovery", async ()
   });
   const useCase = createResetPasswordUseCase(context.deps);
 
-  await expect(useCase.execute({
-    code: "123456",
-    newPassword: "newPass123",
-    username: "zhangsan",
-  })).rejects.toThrow("用户名与手机号不匹配");
+  await expect(
+    useCase.execute({
+      code: "123456",
+      newPassword: "newPass123",
+      username: "zhangsan",
+    }),
+  ).rejects.toThrow("用户名与手机号不匹配");
 
-  expect(context.auditLogWriter.recordAuditLog).toHaveBeenCalledWith(expect.objectContaining({
-    action: "auth.password.reset",
-    outcome: "failure",
-    details: expect.objectContaining({ reason: "mobile_mismatch" }),
-  }));
+  expect(context.auditLogWriter.recordAuditLog).toHaveBeenCalledWith(
+    expect.objectContaining({
+      action: "auth.password.reset",
+      outcome: "failure",
+      details: expect.objectContaining({ reason: "mobile_mismatch" }),
+    }),
+  );
   expect(context.deps.verificationCodes.reserveVerificationCode).not.toHaveBeenCalled();
 });
 
@@ -113,17 +117,21 @@ test("audits an invalid password-reset code before rejecting Account Recovery", 
   context.deps.verificationCodes.reserveVerificationCode.mockResolvedValue(null as never);
   const useCase = createResetPasswordUseCase(context.deps);
 
-  await expect(useCase.execute({
-    code: "000000",
-    newPassword: "newPass123",
-    username: "zhangsan",
-  })).rejects.toThrow("验证码错误");
+  await expect(
+    useCase.execute({
+      code: "000000",
+      newPassword: "newPass123",
+      username: "zhangsan",
+    }),
+  ).rejects.toThrow("验证码错误");
 
-  expect(context.auditLogWriter.recordAuditLog).toHaveBeenCalledWith(expect.objectContaining({
-    action: "auth.password.reset",
-    outcome: "failure",
-    details: expect.objectContaining({ reason: "invalid_verification_code" }),
-  }));
+  expect(context.auditLogWriter.recordAuditLog).toHaveBeenCalledWith(
+    expect.objectContaining({
+      action: "auth.password.reset",
+      outcome: "failure",
+      details: expect.objectContaining({ reason: "invalid_verification_code" }),
+    }),
+  );
   expect(context.userWriter.setPassword).not.toHaveBeenCalled();
 });
 
@@ -132,14 +140,15 @@ test("releases the reserved code when the password transaction fails", async () 
   context.userWriter.setPassword.mockRejectedValue(new Error("db failed"));
   const useCase = createResetPasswordUseCase(context.deps);
 
-  await expect(useCase.execute({
-    code: "123456",
-    newPassword: "newPass123",
-    username: "zhangsan",
-  })).rejects.toThrow("db failed");
+  await expect(
+    useCase.execute({
+      code: "123456",
+      newPassword: "newPass123",
+      username: "zhangsan",
+    }),
+  ).rejects.toThrow("db failed");
 
-  expect(context.deps.verificationCodes.releaseReservedVerificationCode)
-    .toHaveBeenCalledWith(context.reservation);
+  expect(context.deps.verificationCodes.releaseReservedVerificationCode).toHaveBeenCalledWith(context.reservation);
   expect(context.deps.verificationCodes.confirmReservedVerificationCode).not.toHaveBeenCalled();
 });
 
@@ -148,11 +157,13 @@ test("does not release the code when confirmation fails after password commit", 
   context.deps.verificationCodes.confirmReservedVerificationCode.mockRejectedValue(new Error("confirm failed"));
   const useCase = createResetPasswordUseCase(context.deps);
 
-  await expect(useCase.execute({
-    code: "123456",
-    newPassword: "newPass123",
-    username: "zhangsan",
-  })).rejects.toThrow("confirm failed");
+  await expect(
+    useCase.execute({
+      code: "123456",
+      newPassword: "newPass123",
+      username: "zhangsan",
+    }),
+  ).rejects.toThrow("confirm failed");
 
   expect(context.deps.verificationCodes.releaseReservedVerificationCode).not.toHaveBeenCalled();
 });
@@ -161,31 +172,36 @@ test("records the existing password-reset success audit inside the transaction",
   const context = createDeps();
   const useCase = createResetPasswordUseCase(context.deps);
 
-  await useCase.execute({
-    code: "123456",
-    newPassword: "newPass123",
-    username: "zhangsan",
-  }, {
-    requestContext: {
-      sourceApp: "iam",
-      requestId: "req-1",
-      traceId: null,
-      ip: null,
-      userAgent: null,
-      route: null,
-      method: null,
+  await useCase.execute(
+    {
+      code: "123456",
+      newPassword: "newPass123",
+      username: "zhangsan",
     },
-  });
+    {
+      requestContext: {
+        sourceApp: "iam",
+        requestId: "req-1",
+        traceId: null,
+        ip: null,
+        userAgent: null,
+        route: null,
+        method: null,
+      },
+    },
+  );
 
-  expect(context.txAuditLogWriter.recordAuditLog).toHaveBeenCalledWith(expect.objectContaining({
-    action: "auth.password.reset",
-    outcome: "success",
-    requestId: "req-1",
-    details: {
-      passwordReset: true,
-      phoneNumber: "177****2865",
-    },
-  }));
+  expect(context.txAuditLogWriter.recordAuditLog).toHaveBeenCalledWith(
+    expect.objectContaining({
+      action: "auth.password.reset",
+      outcome: "success",
+      requestId: "req-1",
+      details: {
+        passwordReset: true,
+        phoneNumber: "177****2865",
+      },
+    }),
+  );
 });
 
 test("rejects when the active user disappears before password reset", async () => {
@@ -193,11 +209,13 @@ test("rejects when the active user disappears before password reset", async () =
   context.deps.userLookup.getActiveUserByUsername.mockResolvedValue(null as never);
   const useCase = createResetPasswordUseCase(context.deps);
 
-  await expect(useCase.execute({
-    code: "123456",
-    newPassword: "newPass123",
-    username: "zhangsan",
-  })).rejects.toThrow("用户不存在");
+  await expect(
+    useCase.execute({
+      code: "123456",
+      newPassword: "newPass123",
+      username: "zhangsan",
+    }),
+  ).rejects.toThrow("用户不存在");
 
   expect(context.deps.verificationCodes.reserveVerificationCode).not.toHaveBeenCalled();
 });

@@ -1,26 +1,24 @@
-import {
-  LoadingOutlined,
-  SafetyCertificateOutlined,
-} from '@ant-design/icons';
-import logoColorfulTextWhite from '@sso/assets/logo-colorful-text-white.png';
-import { Button } from 'antd';
-import type { LoginPageGuardStatus } from '../_hooks/useLoginPageGuard';
+import { LoadingOutlined, SafetyCertificateOutlined } from "@ant-design/icons";
+import logoColorfulTextWhite from "@sso/assets/logo-colorful-text-white.png";
+import { Button } from "antd";
+import type { LoginPageGuardStatus } from "../_hooks/useLoginPageGuard";
 
 export function LoginGuardNotice({
   status,
   onRetry,
 }: {
-  status: Exclude<LoginPageGuardStatus, 'login' | 'unsafe'>;
+  status: Exclude<LoginPageGuardStatus, "login" | "unsafe">;
   onRetry: () => void;
 }) {
-  const pending = status === 'checking' || status === 'continuing';
-  const description = status === 'invalid_request'
-    ? '登录请求已失效，请返回应用重新发起登录'
-    : status === 'unavailable'
-      ? '统一身份认证服务暂时不可用，请稍后重试'
-      : status === 'continuing'
-        ? '登录状态有效，正在继续访问应用…'
-        : '正在检查登录状态…';
+  const pending = status === "checking" || status === "continuing";
+  const description =
+    status === "invalid_request"
+      ? "登录请求已失效，请返回应用重新发起登录"
+      : status === "unavailable"
+        ? "统一身份认证服务暂时不可用，请稍后重试"
+        : status === "continuing"
+          ? "登录状态有效，正在继续访问应用…"
+          : "正在检查登录状态…";
 
   return (
     <div className="login-page">
@@ -37,15 +35,13 @@ export function LoginGuardNotice({
           </div>
         </section>
         <div className="tip-card" aria-live="polite">
-          <div className="tip-icon">
-            {pending ? <LoadingOutlined spin /> : <SafetyCertificateOutlined />}
-          </div>
-          <div className="tip-title">
-            {pending ? '身份状态检查' : '暂时无法继续登录'}
-          </div>
+          <div className="tip-icon">{pending ? <LoadingOutlined spin /> : <SafetyCertificateOutlined />}</div>
+          <div className="tip-title">{pending ? "身份状态检查" : "暂时无法继续登录"}</div>
           <div className="tip-desc">{description}</div>
-          {status === 'unavailable' && (
-            <Button type="primary" onClick={onRetry}>重试</Button>
+          {status === "unavailable" && (
+            <Button type="primary" onClick={onRetry}>
+              重试
+            </Button>
           )}
         </div>
       </div>

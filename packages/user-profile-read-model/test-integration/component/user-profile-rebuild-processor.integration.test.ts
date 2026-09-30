@@ -1,5 +1,5 @@
-import { UserProfileDirtyReason, UserStatus } from "@iam/contracts";
 import { describe, expect, mock, test } from "bun:test";
+import { UserProfileDirtyReason, UserStatus } from "@iam/contracts";
 import { UserProfileEmploymentIntegrityError } from "../../src/build/profile-document-builder.core";
 import { USER_PROFILE_SCHEMA_VERSION } from "../../src/schema/profile.schema";
 import { createSubjectFactsCacheRecord } from "../../src/subject-facts/profile-cache";
@@ -150,9 +150,7 @@ describe("UserProfileRebuildProcessor", () => {
       },
       facts: { employments: [] },
     });
-    expect(fixture.subjectAccessRepair.repairSubject).toHaveBeenCalledWith(
-      "8af9666f-3e20-49ef-bd03-7ca7f5c51ed4",
-    );
+    expect(fixture.subjectAccessRepair.repairSubject).toHaveBeenCalledWith("8af9666f-3e20-49ef-bd03-7ca7f5c51ed4");
   });
 
   test("keeps the committed PostgreSQL publication when the cache write fails", async () => {
@@ -163,11 +161,13 @@ describe("UserProfileRebuildProcessor", () => {
     };
     const fixture = createFixture({ subjectFactsPublisher });
 
-    await expect(fixture.processor.process({
-      userId: 1,
-      dirtyVersion: "4",
-      reason: UserProfileDirtyReason.UserUpdated,
-    })).resolves.toEqual({
+    await expect(
+      fixture.processor.process({
+        userId: 1,
+        dirtyVersion: "4",
+        reason: UserProfileDirtyReason.UserUpdated,
+      }),
+    ).resolves.toEqual({
       status: "rebuilt",
       userId: 1,
       dirtyVersion: "4",
@@ -202,11 +202,13 @@ describe("UserProfileRebuildProcessor", () => {
     };
     const fixture = createFixture({ subjectAccessRepair });
 
-    await expect(fixture.processor.process({
-      userId: 1,
-      dirtyVersion: "4",
-      reason: UserProfileDirtyReason.UserUpdated,
-    })).resolves.toEqual({
+    await expect(
+      fixture.processor.process({
+        userId: 1,
+        dirtyVersion: "4",
+        reason: UserProfileDirtyReason.UserUpdated,
+      }),
+    ).resolves.toEqual({
       status: "rebuilt",
       userId: 1,
       dirtyVersion: "4",
@@ -228,11 +230,16 @@ describe("UserProfileRebuildProcessor", () => {
   test("rebuilds and atomically publishes the current dirty version", async () => {
     const fixture = createFixture();
 
-    await expect(fixture.processor.process({
-      userId: 1,
-      dirtyVersion: "4",
-      reason: UserProfileDirtyReason.UserUpdated,
-    }, { jobId: "job-1" })).resolves.toEqual({
+    await expect(
+      fixture.processor.process(
+        {
+          userId: 1,
+          dirtyVersion: "4",
+          reason: UserProfileDirtyReason.UserUpdated,
+        },
+        { jobId: "job-1" },
+      ),
+    ).resolves.toEqual({
       status: "rebuilt",
       userId: 1,
       dirtyVersion: "4",
@@ -259,11 +266,13 @@ describe("UserProfileRebuildProcessor", () => {
     };
     const fixture = createFixture({ builder, dirtyRepository });
 
-    await expect(fixture.processor.process({
-      userId: 1,
-      dirtyVersion: "4",
-      reason: UserProfileDirtyReason.UserUpdated,
-    })).resolves.toEqual({
+    await expect(
+      fixture.processor.process({
+        userId: 1,
+        dirtyVersion: "4",
+        reason: UserProfileDirtyReason.UserUpdated,
+      }),
+    ).resolves.toEqual({
       status: "skipped",
       userId: 1,
       dirtyVersion: "4",
@@ -283,11 +292,13 @@ describe("UserProfileRebuildProcessor", () => {
     };
     const fixture = createFixture({ builder, publicationRepository });
 
-    await expect(fixture.processor.process({
-      userId: 1,
-      dirtyVersion: "4",
-      reason: UserProfileDirtyReason.UserUpdated,
-    })).resolves.toEqual({
+    await expect(
+      fixture.processor.process({
+        userId: 1,
+        dirtyVersion: "4",
+        reason: UserProfileDirtyReason.UserUpdated,
+      }),
+    ).resolves.toEqual({
       status: "missing",
       userId: 1,
       dirtyVersion: "4",
@@ -307,11 +318,13 @@ describe("UserProfileRebuildProcessor", () => {
     };
     const fixture = createFixture({ publicationRepository });
 
-    await expect(fixture.processor.process({
-      userId: 1,
-      dirtyVersion: "4",
-      reason: UserProfileDirtyReason.UserUpdated,
-    })).resolves.toEqual({
+    await expect(
+      fixture.processor.process({
+        userId: 1,
+        dirtyVersion: "4",
+        reason: UserProfileDirtyReason.UserUpdated,
+      }),
+    ).resolves.toEqual({
       status: "stale",
       userId: 1,
       dirtyVersion: "4",
@@ -327,11 +340,13 @@ describe("UserProfileRebuildProcessor", () => {
     };
     const fixture = createFixture({ builder });
 
-    await expect(fixture.processor.process({
-      userId: 1,
-      dirtyVersion: "4",
-      reason: UserProfileDirtyReason.UserUpdated,
-    })).rejects.toBe(error);
+    await expect(
+      fixture.processor.process({
+        userId: 1,
+        dirtyVersion: "4",
+        reason: UserProfileDirtyReason.UserUpdated,
+      }),
+    ).rejects.toBe(error);
 
     expect(fixture.observed.failed).toEqual({
       userId: 1,
@@ -357,11 +372,13 @@ describe("UserProfileRebuildProcessor", () => {
     };
     const fixture = createFixture({ builder, dirtyRepository });
 
-    await expect(fixture.processor.process({
-      userId: 1,
-      dirtyVersion: "4",
-      reason: UserProfileDirtyReason.UserUpdated,
-    })).resolves.toEqual({
+    await expect(
+      fixture.processor.process({
+        userId: 1,
+        dirtyVersion: "4",
+        reason: UserProfileDirtyReason.UserUpdated,
+      }),
+    ).resolves.toEqual({
       status: "stale",
       userId: 1,
       dirtyVersion: "4",

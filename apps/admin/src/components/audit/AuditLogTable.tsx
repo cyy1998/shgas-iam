@@ -1,13 +1,10 @@
-import type {
-  AuditLogSearchConditions,
-  AuditLogVo,
-} from '@admin/services/audit';
-import { searchAuditLogs } from '@admin/services/audit';
-import type { ProColumns } from '@ant-design/pro-components';
-import { ProTable } from '@ant-design/pro-components';
-import { Checkbox, message, Select, Space, Tag, Typography } from 'antd';
-import { useState } from 'react';
-import AuditLogDetailDrawer from './AuditLogDetailDrawer';
+import type { AuditLogSearchConditions, AuditLogVo } from "@admin/services/audit";
+import { searchAuditLogs } from "@admin/services/audit";
+import type { ProColumns } from "@ant-design/pro-components";
+import { ProTable } from "@ant-design/pro-components";
+import { Button, Checkbox, message, Select, Space, Tag, Typography } from "antd";
+import { useState } from "react";
+import AuditLogDetailDrawer from "./AuditLogDetailDrawer";
 import {
   actorTypeLabels,
   auditActionOptions,
@@ -16,8 +13,8 @@ import {
   getTargetDisplay,
   outcomeLabels,
   targetTypeLabels,
-} from './auditLogDisplay';
-import { buildConditions } from './auditLogTable.helpers';
+} from "./auditLogDisplay";
+import { buildConditions } from "./auditLogTable.helpers";
 
 type AuditLogTableRow = AuditLogVo & {
   actorKeyword?: string;
@@ -35,8 +32,8 @@ const actorTypeValueEnum: Record<string, { text: string }> = {
 };
 
 const outcomeValueEnum: Record<string, { status: string; text: string }> = {
-  success: { text: outcomeLabels.success, status: 'Success' },
-  failure: { text: outcomeLabels.failure, status: 'Error' },
+  success: { text: outcomeLabels.success, status: "Success" },
+  failure: { text: outcomeLabels.failure, status: "Error" },
 };
 
 const targetTypeValueEnum: Record<string, { text: string }> = {
@@ -50,8 +47,8 @@ const targetTypeValueEnum: Record<string, { text: string }> = {
   mobile: { text: targetTypeLabels.mobile },
 };
 
-function formatDate(value: AuditLogVo['eventTime']) {
-  return value ? new Date(value).toLocaleString() : '—';
+function formatDate(value: AuditLogVo["eventTime"]) {
+  return value ? new Date(value).toLocaleString() : "—";
 }
 
 function renderActor(row: AuditLogVo) {
@@ -60,11 +57,9 @@ function renderActor(row: AuditLogVo) {
     <Space size={6} wrap>
       <Tag>{actor.typeLabel}</Tag>
       <Space orientation="vertical" size={0}>
-        <Typography.Text style={{ wordBreak: 'break-all' }}>
-          {actor.name ?? actor.code}
-        </Typography.Text>
+        <Typography.Text style={{ wordBreak: "break-all" }}>{actor.name ?? actor.code}</Typography.Text>
         {actor.name && actor.code !== actor.name ? (
-          <Typography.Text type="secondary" style={{ wordBreak: 'break-all' }}>
+          <Typography.Text type="secondary" style={{ wordBreak: "break-all" }}>
             {actor.code}
           </Typography.Text>
         ) : null}
@@ -79,11 +74,9 @@ function renderTarget(row: AuditLogVo) {
     <Space size={6} wrap>
       <Tag>{target.typeLabel}</Tag>
       <Space orientation="vertical" size={0}>
-        <Typography.Text style={{ wordBreak: 'break-all' }}>
-          {target.name ?? target.code}
-        </Typography.Text>
+        <Typography.Text style={{ wordBreak: "break-all" }}>{target.name ?? target.code}</Typography.Text>
         {target.name && target.code !== target.name ? (
-          <Typography.Text type="secondary" style={{ wordBreak: 'break-all' }}>
+          <Typography.Text type="secondary" style={{ wordBreak: "break-all" }}>
             {target.code}
           </Typography.Text>
         ) : null}
@@ -96,28 +89,23 @@ type Props = {
   fixedConditions?: Partial<AuditLogSearchConditions>;
   pageSize?: number;
   search?: boolean;
-  size?: 'small' | 'middle' | 'large';
+  size?: "small" | "middle" | "large";
 };
 
-export default function AuditLogTable({
-  fixedConditions = {},
-  pageSize = 20,
-  search = true,
-  size,
-}: Props) {
+export default function AuditLogTable({ fixedConditions = {}, pageSize = 20, search = true, size }: Props) {
   const [selectedLog, setSelectedLog] = useState<AuditLogVo | null>(null);
 
   const columns: ProColumns<AuditLogTableRow>[] = [
     {
-      title: '时间范围',
-      dataIndex: 'eventTimeRange',
-      valueType: 'dateTimeRange',
+      title: "时间范围",
+      dataIndex: "eventTimeRange",
+      valueType: "dateTimeRange",
       hideInTable: true,
       search: search ? undefined : false,
     },
     {
-      title: '动作',
-      dataIndex: 'actions',
+      title: "动作",
+      dataIndex: "actions",
       hideInTable: true,
       search: search ? undefined : false,
       formItemRender: () => (
@@ -129,102 +117,96 @@ export default function AuditLogTable({
           placeholder="请选择动作"
           maxTagCount="responsive"
           optionFilterProp="label"
-          menuItemSelectedIcon={({ isSelected }) => (
-            <Checkbox checked={isSelected} style={{ pointerEvents: 'none' }} />
-          )}
+          menuItemSelectedIcon={({ isSelected }) => <Checkbox checked={isSelected} style={{ pointerEvents: "none" }} />}
         />
       ),
     },
     {
-      title: '动作',
-      dataIndex: 'action',
+      title: "动作",
+      dataIndex: "action",
       width: 240,
       search: false,
       render: (_, row) => (
         <Space orientation="vertical" size={0}>
           <Typography.Text>{getActionLabel(row.action)}</Typography.Text>
-          <Typography.Text
-            code
-            type="secondary"
-            style={{ whiteSpace: 'normal' }}
-          >
+          <Typography.Text code type="secondary" style={{ whiteSpace: "normal" }}>
             {row.action}
           </Typography.Text>
         </Space>
       ),
     },
     {
-      title: '结果',
-      dataIndex: 'outcome',
+      title: "结果",
+      dataIndex: "outcome",
       width: 90,
-      valueType: 'select',
+      valueType: "select",
       valueEnum: outcomeValueEnum,
       render: (_, row) => (
-        <Tag color={row.outcome === 'success' ? 'green' : 'red'}>
+        <Tag color={row.outcome === "success" ? "green" : "red"}>
           {outcomeValueEnum[row.outcome]?.text ?? row.outcome}
         </Tag>
       ),
     },
     {
-      title: '操作者',
-      dataIndex: 'actorKeyword',
+      title: "操作者",
+      dataIndex: "actorKeyword",
       hideInTable: true,
       search: search ? undefined : false,
-      fieldProps: { placeholder: '用户名 / client / system' },
+      fieldProps: { placeholder: "用户名 / client / system" },
     },
     {
-      title: 'Actor 类型',
-      dataIndex: 'actorType',
+      title: "Actor 类型",
+      dataIndex: "actorType",
       hideInTable: true,
       search: search ? undefined : false,
-      valueType: 'select',
+      valueType: "select",
       valueEnum: actorTypeValueEnum,
     },
     {
-      title: '操作者',
-      key: 'actor',
+      title: "操作者",
+      key: "actor",
       width: 180,
       search: false,
       render: (_, row) => renderActor(row),
     },
     {
-      title: '目标对象',
-      dataIndex: 'targetKeyword',
+      title: "目标对象",
+      dataIndex: "targetKeyword",
       hideInTable: true,
       search: search ? undefined : false,
-      fieldProps: { placeholder: '目标编码 / ID' },
+      fieldProps: { placeholder: "目标编码 / ID" },
     },
     {
-      title: '目标类型',
-      dataIndex: 'targetType',
+      title: "目标类型",
+      dataIndex: "targetType",
       hideInTable: true,
       search: search ? undefined : false,
-      valueType: 'select',
+      valueType: "select",
       valueEnum: targetTypeValueEnum,
     },
     {
-      title: '目标对象',
-      key: 'target',
+      title: "目标对象",
+      key: "target",
       width: 180,
       search: false,
       render: (_, row) => renderTarget(row),
     },
     {
-      title: '来源',
-      dataIndex: 'sourceApp',
+      title: "来源",
+      dataIndex: "sourceApp",
       width: 110,
       search: false,
     },
     {
-      title: 'IP',
-      dataIndex: 'ip',
+      title: "IP",
+      dataIndex: "ip",
       width: 140,
       search: false,
-      render: (_, row) => row.ip ?? '—',
+      render: (_, row) => row.ip ?? "—",
     },
     {
-      title: 'Request ID',
-      dataIndex: 'requestId',
+      title: "Request ID",
+      dataIndex: "requestId",
       width: 180,
       render: (_, row) =>
         row.requestId ? (
@@ -232,12 +214,12 @@ export default function AuditLogTable({
             {row.requestId}
           </Typography.Text>
         ) : (
-          '—'
+          "—"
         ),
     },
     {
-      title: 'Trace ID',
-      dataIndex: 'traceId',
+      title: "Trace ID",
+      dataIndex: "traceId",
       width: 220,
       render: (_, row) =>
         row.traceId ? (
@@ -245,25 +227,25 @@ export default function AuditLogTable({
             {row.traceId}
           </Typography.Text>
         ) : (
-          '—'
+          "—"
         ),
     },
     {
-      title: '时间',
-      dataIndex: 'eventTime',
+      title: "时间",
+      dataIndex: "eventTime",
       width: 170,
       search: false,
       render: (_, row) => formatDate(row.eventTime),
     },
     {
-      title: '操作',
-      fixed: 'right',
-      valueType: 'option',
+      title: "操作",
+      fixed: "right",
+      valueType: "option",
       width: 80,
       render: (_, row) => [
-        <a key="detail" onClick={() => setSelectedLog(row)}>
+        <Button key="detail" type="link" size="small" style={{ paddingInline: 0 }} onClick={() => setSelectedLog(row)}>
           详情
-        </a>,
+        </Button>,
       ],
     },
   ];
@@ -274,7 +256,7 @@ export default function AuditLogTable({
         rowKey="id"
         size={size}
         columns={columns}
-        search={search ? { labelWidth: 'auto' } : false}
+        search={search ? { labelWidth: "auto" } : false}
         options={search ? undefined : false}
         pagination={{ defaultPageSize: pageSize, showSizeChanger: search }}
         request={async (params) => {
@@ -282,10 +264,7 @@ export default function AuditLogTable({
             const data = await searchAuditLogs({
               pageNum: params.current ?? 1,
               pageSize: params.pageSize ?? pageSize,
-              conditions: buildConditions(
-                params as Record<string, unknown>,
-                fixedConditions,
-              ),
+              conditions: buildConditions(params as Record<string, unknown>, fixedConditions),
             });
             return {
               data: data.result,
@@ -293,19 +272,15 @@ export default function AuditLogTable({
               success: true,
             };
           } catch (err) {
-            message.error(err instanceof Error ? err.message : '加载日志失败');
+            message.error(err instanceof Error ? err.message : "加载日志失败");
             return { data: [], total: 0, success: false };
           }
         }}
         scroll={{ x: 1400 }}
-        locale={{ emptyText: '暂无审计日志' }}
+        locale={{ emptyText: "暂无审计日志" }}
       />
 
-      <AuditLogDetailDrawer
-        open={selectedLog !== null}
-        auditLog={selectedLog}
-        onClose={() => setSelectedLog(null)}
-      />
+      <AuditLogDetailDrawer open={selectedLog !== null} auditLog={selectedLog} onClose={() => setSelectedLog(null)} />
     </>
   );
 }

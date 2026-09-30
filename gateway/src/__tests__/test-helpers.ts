@@ -1,9 +1,9 @@
-import type { LoadedManifest, ManifestObject, ResourceKind } from "../types";
 import { mkdtemp, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { stringify } from "yaml";
 import { createEmptyResourceMap } from "../resources";
+import type { LoadedManifest, ManifestObject, ResourceKind } from "../types";
 
 interface SourceManifestOverrides {
   service?: ManifestObject | false;
@@ -114,7 +114,7 @@ export function sourcePluginConfig(value: Record<string, unknown> = {}): Manifes
         header_name: "X-Request-Id",
         include_in_response: true,
       },
-      "opentelemetry": {
+      opentelemetry: {
         sampler: {
           name: "always_on",
         },

@@ -1,3 +1,4 @@
+import { describe, expect, mock, test } from "bun:test";
 import { mapCustomSsoRetryableError } from "@api/middlewares/custom-sso-retryable.error";
 import { ClientSnapshotUnavailableError } from "@iam/api-core/client-snapshot";
 import { AuthzMaintenanceError } from "@iam/api-core/errors/AuthzMaintenanceError";
@@ -5,7 +6,6 @@ import { createErrorHandler } from "@iam/api-core/middlewares/error-handler";
 import { SubjectProjectionNotReadyError } from "@iam/client-subject-projection";
 import { ApiErrorCode } from "@iam/contracts";
 import { CustomSsoTrafficGateUnavailableError } from "@iam/custom-sso";
-import { describe, expect, mock, test } from "bun:test";
 import { Hono } from "hono";
 
 describe("Custom SSO retryable HTTP error adapter", () => {
@@ -72,11 +72,7 @@ describe("Custom SSO retryable HTTP error adapter", () => {
       data: null,
     });
     expect(error).toHaveBeenCalledTimes(1);
-    const logged = JSON.stringify([
-      info.mock.calls,
-      warn.mock.calls,
-      error.mock.calls,
-    ]);
+    const logged = JSON.stringify([info.mock.calls, warn.mock.calls, error.mock.calls]);
     expect(logged).not.toContain("processing");
     expect(logged).not.toContain("73");
     expect(logged).not.toContain("must-not-leak");
@@ -102,16 +98,15 @@ describe("Custom SSO retryable HTTP error adapter", () => {
   test("does not reinterpret errors outside the known retryable results", () => {
     const oidcProtocolError = new Error("temporarily_unavailable");
 
-    expect(mapCustomSsoRetryableError(oidcProtocolError, {
-      retryAfterSeconds: 3,
-    })).toBe(oidcProtocolError);
+    expect(
+      mapCustomSsoRetryableError(oidcProtocolError, {
+        retryAfterSeconds: 3,
+      }),
+    ).toBe(oidcProtocolError);
   });
 
   test("maps typed client runtime uncertainty to a generic unavailable response without exposing its cause", async () => {
-    const mapped = mapCustomSsoRetryableError(
-      new ClientSnapshotUnavailableError(),
-      { retryAfterSeconds: 3 },
-    );
+    const mapped = mapCustomSsoRetryableError(new ClientSnapshotUnavailableError(), { retryAfterSeconds: 3 });
 
     expect(mapped).toMatchObject({
       code: ApiErrorCode.InternalError,

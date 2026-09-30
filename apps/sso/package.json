@@ -9,12 +9,12 @@
     "e2e:install": "playwright install --with-deps chromium",
     "e2e:install:browsers": "playwright install chromium",
     "e2e:ui": "playwright test --ui",
-    "format": "prettier --cache --write .",
+    "format": "node ../../scripts/run-quality.mjs format --workspace apps/sso",
     "postinstall": "max setup",
-    "lint": "pnpm run lint:eslint && pnpm run lint:style",
-    "lint:eslint": "eslint src test test-integration .umirc.ts playwright.config.ts vitest.shared.ts vitest.unit.config.ts vitest.integration.component.config.ts typings.d.ts eslint.config.mjs stylelint.config.mjs",
-    "lint:fix": "pnpm run lint:eslint -- --fix && pnpm run lint:style -- --fix",
-    "lint:style": "stylelint \"{src,test}/**/*.{less,css}\"",
+    "lint": "node ../../scripts/run-quality.mjs lint --workspace apps/sso",
+    "format:check": "node ../../scripts/run-quality.mjs format-check --workspace apps/sso",
+    "lint:fix": "node ../../scripts/run-quality.mjs lint-fix --workspace apps/sso",
+    "typecheck": "pnpm exec tsc --noEmit",
     "setup": "max setup",
     "start": "npm run dev",
     "test": "pnpm test:unit",
@@ -22,8 +22,7 @@
     "test:integration:browser": "node ../../scripts/playwright-e2e-preflight.mjs && playwright test",
     "test:integration:component": "vitest run --config vitest.integration.component.config.ts",
     "test:unit": "vitest run --config vitest.unit.config.ts",
-    "test:watch": "vitest --config vitest.unit.config.ts",
-    "typecheck": "pnpm exec tsc --noEmit"
+    "test:watch": "vitest --config vitest.unit.config.ts"
   },
   "dependencies": {
     "@ant-design/cssinjs": "^2.1.2",
@@ -37,7 +36,6 @@
     "react-dom": "^19.2.7"
   },
   "devDependencies": {
-    "@iam/eslint-config": "workspace:*",
     "@playwright/test": "^1.61.1",
     "@testing-library/dom": "^10.4.1",
     "@testing-library/jest-dom": "^7.0.1",
@@ -48,15 +46,8 @@
     "@typescript/native": "npm:typescript@7.0.2",
     "@vitest/coverage-v8": "5.0.1",
     "cross-env": "^10.1.0",
-    "eslint": "^10.7.0",
     "jsdom": "^30.1.0",
     "msw": "^2.15.0",
-    "postcss-less": "^6.0.0",
-    "prettier": "^3.9.8",
-    "prettier-plugin-organize-imports": "^4.3.0",
-    "prettier-plugin-packagejson": "^3.0.2",
-    "stylelint": "^17.14.0",
-    "stylelint-config-standard": "^40.0.0",
     "typescript": "npm:@typescript/typescript6@6.0.2",
     "vitest": "5.0.1"
   }

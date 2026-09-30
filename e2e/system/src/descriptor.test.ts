@@ -1,17 +1,13 @@
+import { afterEach, describe, expect, test } from "bun:test";
 import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { afterEach, describe, expect, test } from "bun:test";
-import {
-  createRunDescriptor,
-  persistRunDescriptor,
-} from "./descriptor.ts";
+import { createRunDescriptor, persistRunDescriptor } from "./descriptor.ts";
 
 let temporaryDirectory: string | undefined;
 
 afterEach(async () => {
-  if (temporaryDirectory !== undefined)
-    await rm(temporaryDirectory, { force: true, recursive: true });
+  if (temporaryDirectory !== undefined) await rm(temporaryDirectory, { force: true, recursive: true });
   temporaryDirectory = undefined;
 });
 
@@ -33,10 +29,7 @@ describe("run descriptor", () => {
       project: "iam-e2e-20260805-contract-ab12cd34",
       gatewayPort: 43876,
       origin: "http://127.0.0.1:43876",
-      artifactDirectory: join(
-        temporaryDirectory,
-        "20260805-contract-ab12cd34",
-      ),
+      artifactDirectory: join(temporaryDirectory, "20260805-contract-ab12cd34"),
       labels: {
         "com.docker.compose.project": "iam-e2e-20260805-contract-ab12cd34",
         "com.shgas-iam.e2e.run-id": "20260805-contract-ab12cd34",

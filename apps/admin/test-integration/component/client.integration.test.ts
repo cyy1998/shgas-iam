@@ -1,4 +1,4 @@
-import { AdminMutationCommittedError } from '@admin/services/admin-mutation';
+import { AdminMutationCommittedError } from "@admin/services/admin-mutation";
 import {
   ClientDetailError,
   ClientDetailErrorKind,
@@ -6,15 +6,15 @@ import {
   getClient,
   searchClients,
   updateClientStatus,
-} from '@admin/services/client';
-import { ApiErrorCode, ClientStatus } from '@iam/contracts';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+} from "@admin/services/client";
+import { ApiErrorCode, ClientStatus } from "@iam/contracts";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 const clientSearchQuery = vi.hoisted(() => vi.fn());
 const clientDetailQuery = vi.hoisted(() => vi.fn());
 const clientCreateMutate = vi.hoisted(() => vi.fn());
 const clientUpdateStatusMutate = vi.hoisted(() => vi.fn());
-vi.mock('@admin/lib/api-client', () => ({
+vi.mock("@admin/lib/api-client", () => ({
   apiClient: {
     admin: {
       client: {
@@ -27,49 +27,47 @@ vi.mock('@admin/lib/api-client', () => ({
   },
 }));
 
-describe('client service wrappers', () => {
+describe("client service wrappers", () => {
   afterEach(() => {
     vi.clearAllMocks();
   });
 
-  it('preserves the create result', async () => {
-    const created = { changed: true, result: { clientCode: 'new-client' } };
+  it("preserves the create result", async () => {
+    const created = { changed: true, result: { clientCode: "new-client" } };
     clientCreateMutate.mockResolvedValueOnce(created);
     const result = await createClient({
-      clientCode: 'new-client',
-      clientName: 'New',
-      clientSecret: 'secret',
+      clientCode: "new-client",
+      clientName: "New",
+      clientSecret: "secret",
       status: ClientStatus.Enable,
       extAttributes: {},
     });
     expect(result).toEqual(created);
   });
 
-  it('preserves a no-op status result', async () => {
+  it("preserves a no-op status result", async () => {
     clientUpdateStatusMutate.mockResolvedValueOnce({
       changed: false,
       result: null,
     });
-    expect(await updateClientStatus('new-client', ClientStatus.Enable)).toEqual(
-      { changed: false, result: null },
-    );
+    expect(await updateClientStatus("new-client", ClientStatus.Enable)).toEqual({ changed: false, result: null });
   });
 
-  it('normalizes a committed status failure', async () => {
+  it("normalizes a committed status failure", async () => {
     clientUpdateStatusMutate.mockRejectedValueOnce({
       data: { serviceCode: ApiErrorCode.AdminMutationCommitted },
     });
-    await expect(
-      updateClientStatus('new-client', ClientStatus.Disable),
-    ).rejects.toBeInstanceOf(AdminMutationCommittedError);
+    await expect(updateClientStatus("new-client", ClientStatus.Disable)).rejects.toBeInstanceOf(
+      AdminMutationCommittedError,
+    );
   });
 
-  it('passes search params to admin.client.search query', async () => {
+  it("passes search params to admin.client.search query", async () => {
     const params = {
       pageNum: 1,
       pageSize: 20,
       conditions: {
-        fuzzyConditions: { text: 'iam' },
+        fuzzyConditions: { text: "iam" },
         exactConditions: { statuses: [ClientStatus.Enable] },
       },
     };
@@ -81,28 +79,28 @@ describe('client service wrappers', () => {
 
   it.each([
     {
-      name: 'detail',
-      call: () => getClient('iam-admin'),
+      name: "detail",
+      call: () => getClient("iam-admin"),
       port: clientDetailQuery,
-      input: { clientCode: 'iam-admin' },
+      input: { clientCode: "iam-admin" },
     },
     {
-      name: 'create',
+      name: "create",
       call: () =>
         createClient({
-          clientCode: 'iam-admin',
-          clientName: 'IAM 管理后台',
+          clientCode: "iam-admin",
+          clientName: "IAM 管理后台",
         } as Parameters<typeof createClient>[0]),
       port: clientCreateMutate,
-      input: { clientCode: 'iam-admin', clientName: 'IAM 管理后台' },
+      input: { clientCode: "iam-admin", clientName: "IAM 管理后台" },
     },
     {
-      name: 'status',
-      call: () => updateClientStatus('iam-admin', ClientStatus.Disable),
+      name: "status",
+      call: () => updateClientStatus("iam-admin", ClientStatus.Disable),
       port: clientUpdateStatusMutate,
-      input: { clientCode: 'iam-admin', status: ClientStatus.Disable },
+      input: { clientCode: "iam-admin", status: ClientStatus.Disable },
     },
-  ])('maps $name input to its procedure', async ({ call, port, input }) => {
+  ])("maps $name input to its procedure", async ({ call, port, input }) => {
     await call();
     expect(port).toHaveBeenCalledWith(input);
   });
@@ -121,21 +119,18 @@ describe('client service wrappers', () => {
       expectedKind: ClientDetailErrorKind.NotFound,
     },
     {
-      transportError: new Error('raw transport failure'),
+      transportError: new Error("raw transport failure"),
       expectedKind: ClientDetailErrorKind.RequestFailed,
     },
-  ])(
-    'normalizes client detail transport errors as $expectedKind',
-    async ({ transportError, expectedKind }) => {
-      clientDetailQuery.mockRejectedValueOnce(transportError);
+  ])("normalizes client detail transport errors as $expectedKind", async ({ transportError, expectedKind }) => {
+    clientDetailQuery.mockRejectedValueOnce(transportError);
 
-      const result = getClient('missing-client');
+    const result = getClient("missing-client");
 
-      await expect(result).rejects.toMatchObject({
-        name: ClientDetailError.name,
-        kind: expectedKind,
-      });
-      await expect(result).rejects.not.toThrow('raw transport failure');
-    },
-  );
+    await expect(result).rejects.toMatchObject({
+      name: ClientDetailError.name,
+      kind: expectedKind,
+    });
+    await expect(result).rejects.not.toThrow("raw transport failure");
+  });
 });

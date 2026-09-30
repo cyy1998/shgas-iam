@@ -10,19 +10,19 @@ import type { AuditActorType, AuditDetails, AuditOutcome } from "@iam/domain/aud
 import type { Employment } from "@iam/domain/employment";
 import type { ResignUserOptions } from "./resign-user.type";
 
-export type ResignUserProfileChange
-  = | {
-    readonly kind: "user";
-    readonly userId: number;
-  }
+export type ResignUserProfileChange =
   | {
-    readonly kind: "employment";
-    readonly userId: number;
-  }
+      readonly kind: "user";
+      readonly userId: number;
+    }
   | {
-    readonly kind: "organization-responsibility-assignment";
-    readonly userId: number;
-  };
+      readonly kind: "employment";
+      readonly userId: number;
+    }
+  | {
+      readonly kind: "organization-responsibility-assignment";
+      readonly userId: number;
+    };
 
 export interface ResignUserTarget {
   id: number;
@@ -35,9 +35,7 @@ export interface ResignUserTarget {
 
 export interface ResignUserEligibilityReaderPort {
   getUserByUsernameForAdmin: (username: string) => Promise<ResignUserTarget | null>;
-  getUserByUsernameIncludingDeletedForAuthorization: (
-    username: string,
-  ) => Promise<ResignUserTarget | null>;
+  getUserByUsernameIncludingDeletedForAuthorization: (username: string) => Promise<ResignUserTarget | null>;
   getOpenEmploymentOrganizationIdsByUserId: (userId: number) => Promise<number[]>;
   getEndedEmploymentOrganizationIdsByUserId: (userId: number) => Promise<number[]>;
 }
@@ -73,12 +71,14 @@ export interface ResignUserTransactionPorts {
   employmentStore: {
     getOpenEmploymentIdsByUserId: (userId: number) => Promise<number[]>;
     lockEmploymentsByIds: (ids: readonly number[]) => Promise<Employment[]>;
-    updateEmploymentRecord: (id: number, patch: {
-      status: EmploymentStatus.Disable;
-      endTime: Date;
-      isPrimary: false;
-    }) => Promise<Employment>;
-
+    updateEmploymentRecord: (
+      id: number,
+      patch: {
+        status: EmploymentStatus.Disable;
+        endTime: Date;
+        isPrimary: false;
+      },
+    ) => Promise<Employment>;
   };
   responsibilityParentLifecycle: {
     lockAssignmentsForEmployments: (input: {
@@ -104,10 +104,7 @@ export interface ResignUserTransactionPorts {
   };
   userStore: ResignUserEligibilityReaderPort & {
     lockUserByUsername: (username: string, includeDeleted?: boolean) => Promise<ResignUserTarget | null>;
-    updateUserByUsername: (
-      username: string,
-      patch: { status: UserStatus },
-    ) => Promise<ResignUserTarget | null>;
+    updateUserByUsername: (username: string, patch: { status: UserStatus }) => Promise<ResignUserTarget | null>;
   };
 }
 

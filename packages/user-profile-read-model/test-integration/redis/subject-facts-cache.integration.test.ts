@@ -1,5 +1,5 @@
-import type { SubjectFactsCacheRecord } from "../../src/subject-facts";
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
+import type { SubjectFactsCacheRecord } from "../../src/subject-facts";
 import { createRedisTestHarness } from "./redis-test-harness";
 
 const SUBJECT_IDENTIFIER = "46739d0b-cdda-48f5-af1f-1f90e2d81169";
@@ -12,8 +12,7 @@ describe("Subject Facts Redis publisher", () => {
   });
 
   afterAll(async () => {
-    if (harness)
-      await harness.close();
+    if (harness) await harness.close();
   });
 
   test("compares dirty versions without losing bigint precision", async () => {
@@ -23,13 +22,10 @@ describe("Subject Facts Redis publisher", () => {
       await scope.firstProfilePublisher.publish(cacheRecord(higherVersion));
 
       const retained = await scope.secondProfilePublisher.publish(cacheRecord("9007199254740992"));
-      expect(retained)
-        .toEqual({ status: "retained-newer" });
+      expect(retained).toEqual({ status: "retained-newer" });
       const published = await scope.readPublishedProfileRecord(SUBJECT_IDENTIFIER);
-      expect(published)
-        .toEqual(cacheRecord(higherVersion));
-    }
-    finally {
+      expect(published).toEqual(cacheRecord(higherVersion));
+    } finally {
       await scope.close();
     }
   });
@@ -44,8 +40,7 @@ describe("Subject Facts Redis publisher", () => {
 
       expect(stored).not.toBeNull();
       expect(JSON.parse(stored!)).toEqual(record);
-    }
-    finally {
+    } finally {
       await scope.close();
     }
   });
@@ -62,30 +57,25 @@ describe("Subject Facts Redis publisher", () => {
       ]);
       expect(publication).toEqual({ published: 1, retainedNewer: 1 });
       const published = await scope.readPublishedProfileRecord(SUBJECT_IDENTIFIER);
-      expect(published)
-        .toEqual(cacheRecord("20"));
-      const inspected = await scope.profileInspector.inspectMany([
-        SUBJECT_IDENTIFIER,
-        secondSubject,
+      expect(published).toEqual(cacheRecord("20"));
+      const inspected = await scope.profileInspector.inspectMany([SUBJECT_IDENTIFIER, secondSubject]);
+      expect(inspected).toEqual([
+        {
+          status: "valid",
+          record: cacheRecord("20"),
+        },
+        {
+          status: "valid",
+          record: cacheRecord("1", secondSubject),
+        },
       ]);
-      expect(inspected).toEqual([{
-        status: "valid",
-        record: cacheRecord("20"),
-      }, {
-        status: "valid",
-        record: cacheRecord("1", secondSubject),
-      }]);
-    }
-    finally {
+    } finally {
       await scope.close();
     }
   });
 });
 
-function cacheRecord(
-  sourceDirtyVersion: string,
-  subjectIdentifier = SUBJECT_IDENTIFIER,
-): SubjectFactsCacheRecord {
+function cacheRecord(sourceDirtyVersion: string, subjectIdentifier = SUBJECT_IDENTIFIER): SubjectFactsCacheRecord {
   return {
     schemaVersion: 3,
     sourceDirtyVersion,
@@ -97,35 +87,44 @@ function cacheRecord(
       phone: "13800138000",
     },
     facts: {
-      employments: [{
-        isPrimary: true,
-        organization: {
-          code: "product",
-          name: "Product",
-          type: "department",
-          path: [{
-            code: "company",
-            name: "Example Company",
-            type: "company",
-          }, {
+      employments: [
+        {
+          isPrimary: true,
+          organization: {
             code: "product",
             name: "Product",
             type: "department",
-          }],
+            path: [
+              {
+                code: "company",
+                name: "Example Company",
+                type: "company",
+              },
+              {
+                code: "product",
+                name: "Product",
+                type: "department",
+              },
+            ],
+          },
+          position: {
+            code: "engineer",
+            name: "Engineer",
+          },
+          responsibilities: [],
+          clientAuthorizations: [
+            {
+              clientCode: "console",
+              roles: [
+                {
+                  code: "operator",
+                  privileges: ["subject:read"],
+                },
+              ],
+            },
+          ],
         },
-        position: {
-          code: "engineer",
-          name: "Engineer",
-        },
-        responsibilities: [],
-        clientAuthorizations: [{
-          clientCode: "console",
-          roles: [{
-            code: "operator",
-            privileges: ["subject:read"],
-          }],
-        }],
-      }],
+      ],
     },
   };
 }

@@ -1,7 +1,7 @@
-import type { DbClient } from "@iam/db";
 import { randomUUID } from "node:crypto";
 import process from "node:process";
 import { fileURLToPath } from "node:url";
+import type { DbClient } from "@iam/db";
 import { relations } from "@iam/db/relations";
 import { drizzle } from "drizzle-orm/postgres-js";
 import { migrate } from "drizzle-orm/postgres-js/migrator";
@@ -34,9 +34,7 @@ export async function createApiPostgresTestHarness(): Promise<ApiPostgresTestHar
       max: 6,
     });
     const db = drizzle({ client: scopedSql, relations });
-    const migrationsFolder = fileURLToPath(
-      new URL("../../../../packages/db/src/migrations", import.meta.url),
-    );
+    const migrationsFolder = fileURLToPath(new URL("../../../../packages/db/src/migrations", import.meta.url));
     await migrate(db, { migrationsFolder, migrationsSchema: schemaName });
 
     const scopedUrl = new URL(databaseUrl);
@@ -65,10 +63,8 @@ export async function createApiPostgresTestHarness(): Promise<ApiPostgresTestHar
         await adminSql.end();
       },
     };
-  }
-  catch (error) {
-    if (scopedSql)
-      await scopedSql.end({ timeout: 1 });
+  } catch (error) {
+    if (scopedSql) await scopedSql.end({ timeout: 1 });
     await adminSql.unsafe(`DROP SCHEMA IF EXISTS ${quoteIdentifier(schemaName)} CASCADE`);
     await adminSql.end({ timeout: 1 });
     throw error;
@@ -89,20 +85,13 @@ function requireDedicatedTestDatabaseUrl() {
 
   const databaseName = decodeURIComponent(parsed.pathname.slice(1));
   if (!databaseName || RESERVED_DATABASE_NAMES.has(databaseName.toLowerCase())) {
-    throw new Error(
-      `${TEST_DATABASE_URL_ENV} must name a dedicated, non-system test database`,
-    );
+    throw new Error(`${TEST_DATABASE_URL_ENV} must name a dedicated, non-system test database`);
   }
 
   for (const developmentEnv of ["DATABASE_URL", "IAM_API_DATABASE_URL"] as const) {
     const developmentUrl = process.env[developmentEnv];
-    if (
-      developmentUrl
-      && databaseIdentity(developmentUrl) === databaseIdentity(databaseUrl)
-    ) {
-      throw new Error(
-        `${TEST_DATABASE_URL_ENV} must not identify the same database as ${developmentEnv}`,
-      );
+    if (developmentUrl && databaseIdentity(developmentUrl) === databaseIdentity(databaseUrl)) {
+      throw new Error(`${TEST_DATABASE_URL_ENV} must not identify the same database as ${developmentEnv}`);
     }
   }
 
@@ -118,7 +107,6 @@ function databaseIdentity(databaseUrl: string) {
 }
 
 function quoteIdentifier(identifier: string) {
-  if (!/^[a-z0-9_]+$/u.test(identifier))
-    throw new Error("test schema name contains unsafe characters");
+  if (!/^[a-z0-9_]+$/u.test(identifier)) throw new Error("test schema name contains unsafe characters");
   return `"${identifier}"`;
 }

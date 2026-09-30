@@ -1,11 +1,11 @@
+import { z } from "zod";
+import { SubjectAccessDisabledError, SubjectAccessUnavailableError } from "./errors";
 import type {
   SubjectAccessOperationBarrierPort,
   SubjectAccessOperationRevocationPort,
   SubjectAccessRevocationSummary,
 } from "./operation.port";
 import type { SubjectAccessContext } from "./subject-context";
-import { z } from "zod";
-import { SubjectAccessDisabledError, SubjectAccessUnavailableError } from "./errors";
 import { encodeSubjectAccessContext, parseSubjectAccessContext } from "./subject-context";
 
 const permissionBrand = Symbol("SubjectAccessPermission");
@@ -55,8 +55,7 @@ export function createSubjectAccessOperations(options: CreateSubjectAccessOperat
     let boundGeneration: string | undefined;
 
     function assertOpen() {
-      if (closed)
-        throw new SubjectAccessPermissionRequiredError();
+      if (closed) throw new SubjectAccessPermissionRequiredError();
     }
 
     function assertIdentity(subjectIdentifier: string, expected?: SubjectAccessContext) {
@@ -72,15 +71,15 @@ export function createSubjectAccessOperations(options: CreateSubjectAccessOperat
       const error = new SubjectAccessOperationDeniedError(reason);
       if (target && expected) {
         try {
-          error.revokeSummary = reason === "session_generation_stale"
-            ? await options.revocation.revokePrincipalSession(target.principalSessionId, reason)
-            : await options.revocation.revokeUserSessions(
-                { principalType: "user", subjectId: expected.subjectIdentifier },
-                reason,
-                { onlySubjectAccessTransitionId: expected.transitionId },
-              );
-        }
-        catch (cause) {
+          error.revokeSummary =
+            reason === "session_generation_stale"
+              ? await options.revocation.revokePrincipalSession(target.principalSessionId, reason)
+              : await options.revocation.revokeUserSessions(
+                  { principalType: "user", subjectId: expected.subjectIdentifier },
+                  reason,
+                  { onlySubjectAccessTransitionId: expected.transitionId },
+                );
+        } catch (cause) {
           error.cause = cause;
         }
       }
@@ -88,21 +87,17 @@ export function createSubjectAccessOperations(options: CreateSubjectAccessOperat
     }
 
     async function check(subjectIdentifier: string, target?: SubjectAccessSessionTarget) {
-      if (!z.uuid().safeParse(subjectIdentifier).success)
-        throw new SubjectAccessUnavailableError();
+      if (!z.uuid().safeParse(subjectIdentifier).success) throw new SubjectAccessUnavailableError();
       const expected = target ? parseSubjectAccessContext(target.subjectContext) : undefined;
-      if (target && !z.uuid().safeParse(target.principalSessionId).success)
-        throw new SubjectAccessUnavailableError();
+      if (target && !z.uuid().safeParse(target.principalSessionId).success) throw new SubjectAccessUnavailableError();
       if (expected && expected.subjectIdentifier !== subjectIdentifier)
         throw new SubjectAccessOperationDeniedError("identity_mismatch");
       boundGeneration = expected?.transitionId;
       let transitionId: string;
       try {
         transitionId = await options.barrier.readCommittedTransitionId(subjectIdentifier);
-      }
-      catch (error) {
-        if (error instanceof SubjectAccessDisabledError)
-          return await deny("user_disabled", target, expected);
+      } catch (error) {
+        if (error instanceof SubjectAccessDisabledError) return await deny("user_disabled", target, expected);
         throw error instanceof SubjectAccessUnavailableError ? error : new SubjectAccessUnavailableError(error);
       }
       // Validate even injected providers; malformed generations must never become new context.
@@ -121,8 +116,7 @@ export function createSubjectAccessOperations(options: CreateSubjectAccessOperat
       if (!pending) {
         subject = subjectIdentifier;
         pending = check(subjectIdentifier, target);
-      }
-      else {
+      } else {
         assertIdentity(subjectIdentifier);
         if (target && boundGeneration) {
           const expected = parseSubjectAccessContext(target.subjectContext);
@@ -144,8 +138,7 @@ export function createSubjectAccessOperations(options: CreateSubjectAccessOperat
 
     function requirePermission(subjectIdentifier: string): SubjectAccessPermission {
       assertOpen();
-      if (!permission)
-        throw new SubjectAccessPermissionRequiredError();
+      if (!permission) throw new SubjectAccessPermissionRequiredError();
       assertIdentity(subjectIdentifier);
       return permission;
     }
@@ -156,11 +149,12 @@ export function createSubjectAccessOperations(options: CreateSubjectAccessOperat
       requirePermission,
       getSubjectContext: (value: SubjectAccessPermission): string => {
         assertOpen();
-        if (!permission || value !== permission || !context)
-          throw new SubjectAccessPermissionRequiredError();
+        if (!permission || value !== permission || !context) throw new SubjectAccessPermissionRequiredError();
         return encodeSubjectAccessContext(context);
       },
-      close: () => { closed = true; },
+      close: () => {
+        closed = true;
+      },
     });
     operations.set(operation, assertOpen);
     return operation;
@@ -170,8 +164,7 @@ export function createSubjectAccessOperations(options: CreateSubjectAccessOperat
     const operation = createOperation();
     try {
       return await callback(operation);
-    }
-    finally {
+    } finally {
       operation.close();
     }
   }
@@ -182,8 +175,7 @@ export function createSubjectAccessOperations(options: CreateSubjectAccessOperat
 export type SubjectAccessOperation = ReturnType<ReturnType<typeof createSubjectAccessOperations>["createOperation"]>;
 
 export function requireSubjectAccessOperation(operation: SubjectAccessOperation | undefined): SubjectAccessOperation {
-  if (!operation || !operations.has(operation))
-    throw new SubjectAccessPermissionRequiredError();
+  if (!operation || !operations.has(operation)) throw new SubjectAccessPermissionRequiredError();
   operations.get(operation)!();
   return operation;
 }

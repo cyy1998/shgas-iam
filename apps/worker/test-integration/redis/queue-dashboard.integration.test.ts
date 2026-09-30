@@ -1,9 +1,9 @@
-import type { WorkerEnv } from "@worker/env";
+import { expect, test } from "bun:test";
 import { randomUUID } from "node:crypto";
 import process from "node:process";
 import { createJobQueue, createJobWorker } from "@iam/jobs";
+import type { WorkerEnv } from "@worker/env";
 import { createWorkerHttpApp } from "@worker/http/server";
-import { expect, test } from "bun:test";
 import { resolveWorkerRedisTestUrl } from "./redis-test-harness";
 
 function createFixture() {
@@ -52,8 +52,7 @@ function createFixture() {
       try {
         // This randomly named queue is owned exclusively by this fixture.
         await queue.obliterate({ force: true });
-      }
-      finally {
+      } finally {
         await queue.close();
       }
     },
@@ -72,15 +71,13 @@ test("bulk jobs retry transient failures, complete with results and close the co
       redis: fixture.redis,
       concurrency: 1,
       processor: async (job) => {
-        if (job.data.value === 2 && job.attemptsMade === 0)
-          throw new Error("transient test failure");
+        if (job.data.value === 2 && job.attemptsMade === 0) throw new Error("transient test failure");
         return job.data.value * 2;
       },
     });
     worker.on("completed", (job, result) => {
       results.set(job.data.value, result);
-      if (results.size === 2)
-        completed.resolve();
+      if (results.size === 2) completed.resolve();
     });
     worker.on("error", completed.reject);
     timeout = setTimeout(() => completed.reject(new Error("Queue completion timed out")), 8_000);
@@ -89,21 +86,23 @@ test("bulk jobs retry transient failures, complete with results and close the co
       { name: "double", data: { value: 2 } },
     ]);
     await completed.promise;
-    expect(results).toEqual(new Map([[1, 2], [2, 4]]));
+    expect(results).toEqual(
+      new Map([
+        [1, 2],
+        [2, 4],
+      ]),
+    );
     const retriedId = jobs[1]?.id;
-    if (!retriedId)
-      throw new Error("Bulk enqueue did not return the second job ID");
+    if (!retriedId) throw new Error("Bulk enqueue did not return the second job ID");
     const retried = await fixture.queue.getJob(retriedId);
     expect(retried?.attemptsMade).toBe(2);
     const counts = await fixture.queue.getJobCounts("completed", "failed");
     expect(counts).toMatchObject({ completed: 2, failed: 0 });
-  }
-  finally {
+  } finally {
     clearTimeout(timeout);
     try {
       await worker?.close();
-    }
-    finally {
+    } finally {
       await fixture.close();
     }
   }
@@ -114,8 +113,7 @@ test("dashboard rejects unauthenticated queue reads", async () => {
   try {
     const denied = await fixture.app.request("/admin/queues/api/queues");
     expect(denied.status).toBe(401);
-  }
-  finally {
+  } finally {
     await fixture.close();
   }
 }, 10_000);
@@ -137,8 +135,7 @@ test("dashboard returns real queue state to an authenticated reader", async () =
         }),
       ]),
     });
-  }
-  finally {
+  } finally {
     await fixture.close();
   }
 }, 10_000);
@@ -154,8 +151,7 @@ test("dashboard rejects authenticated writes to a read-only queue", async () => 
     expect(write.status).toBe(405);
     const paused = await fixture.queue.isPaused();
     expect(paused).toBe(false);
-  }
-  finally {
+  } finally {
     await fixture.close();
   }
 }, 10_000);

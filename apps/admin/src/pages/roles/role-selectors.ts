@@ -1,16 +1,14 @@
-import { requestEmploymentOptions } from '@admin/components/employment-select-options';
-import { type ClientVo, searchClients } from '@admin/services/client';
-import { type PositionVo, searchPositions } from '@admin/services/position';
-import type { RoleAssignmentCreateInput } from '@admin/services/role';
-import { PositionStatus, RoleAssignmentTargetType } from '@iam/contracts';
+import { requestEmploymentOptions } from "@admin/components/employment-select-options";
+import { type ClientVo, searchClients } from "@admin/services/client";
+import { type PositionVo, searchPositions } from "@admin/services/position";
+import type { RoleAssignmentCreateInput } from "@admin/services/role";
+import { PositionStatus, RoleAssignmentTargetType } from "@iam/contracts";
 
 type SelectRequestParams = {
   keyWords?: string;
 };
 
-type ClientOptionSource = Partial<
-  Pick<ClientVo, 'clientCode' | 'clientName'>
-> & {
+type ClientOptionSource = Partial<Pick<ClientVo, "clientCode" | "clientName">> & {
   value?: string;
   label?: string;
 };
@@ -20,9 +18,9 @@ type AssignmentFormValues = Partial<RoleAssignmentCreateInput> & {
 };
 
 export const roleAssignmentTargetTypeOptions = [
-  { label: '组织', value: RoleAssignmentTargetType.Organization },
-  { label: '岗位', value: RoleAssignmentTargetType.Position },
-  { label: '任职', value: RoleAssignmentTargetType.Employment },
+  { label: "组织", value: RoleAssignmentTargetType.Organization },
+  { label: "岗位", value: RoleAssignmentTargetType.Position },
+  { label: "任职", value: RoleAssignmentTargetType.Employment },
 ];
 
 function keyword(params: SelectRequestParams) {
@@ -39,11 +37,10 @@ function uniqueOptions<T extends { value: string | number }>(options: T[]) {
 }
 
 export function formatClientOption(client: ClientOptionSource) {
-  const clientCode = client.clientCode ?? client.value ?? '';
+  const clientCode = client.clientCode ?? client.value ?? "";
   const clientName = client.clientName ?? client.label ?? clientCode;
   return {
-    label:
-      clientName === clientCode ? clientCode : `${clientName}（${clientCode}）`,
+    label: clientName === clientCode ? clientCode : `${clientName}（${clientCode}）`,
     value: clientCode,
   };
 }
@@ -55,10 +52,7 @@ export function formatPositionOption(position: PositionVo) {
   };
 }
 
-export async function requestClientOptions(
-  params: SelectRequestParams,
-  selectedClient?: ClientOptionSource,
-) {
+export async function requestClientOptions(params: SelectRequestParams, selectedClient?: ClientOptionSource) {
   const text = keyword(params);
   const res = await searchClients({
     pageNum: 1,
@@ -69,10 +63,9 @@ export async function requestClientOptions(
     },
   });
   return uniqueOptions(
-    [
-      ...(selectedClient ? [formatClientOption(selectedClient)] : []),
-      ...res.result.map(formatClientOption),
-    ].filter((option) => option.value !== ''),
+    [...(selectedClient ? [formatClientOption(selectedClient)] : []), ...res.result.map(formatClientOption)].filter(
+      (option) => option.value !== "",
+    ),
   );
 }
 
@@ -91,9 +84,7 @@ export async function requestPositionOptions(params: SelectRequestParams) {
 
 export { requestEmploymentOptions };
 
-export function normalizeAssignmentCreateInput(
-  values: AssignmentFormValues,
-): RoleAssignmentCreateInput {
+export function normalizeAssignmentCreateInput(values: AssignmentFormValues): RoleAssignmentCreateInput {
   if (values.targetType === RoleAssignmentTargetType.Position) {
     return {
       targetType: RoleAssignmentTargetType.Position,

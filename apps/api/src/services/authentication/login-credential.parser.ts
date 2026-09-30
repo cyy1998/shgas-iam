@@ -1,5 +1,5 @@
-import type { ClockPort } from "@api/composition/runtime";
 import { createHash } from "node:crypto";
+import type { ClockPort } from "@api/composition/runtime";
 import { CustomError } from "@iam/api-core/errors/CustomError";
 import { InvalidLoginCredentialError } from "@iam/api-core/errors/InvalidLoginCredentialError";
 import {
@@ -58,9 +58,7 @@ function invalidCredentialTimestamp(): never {
 }
 
 function nonceKey(kid: string, nonce: string) {
-  const digest = createHash("sha256")
-    .update(`${kid}:${nonce}`)
-    .digest("hex");
+  const digest = createHash("sha256").update(`${kid}:${nonce}`).digest("hex");
 
   return `login-credential-nonce:${digest}`;
 }
@@ -71,12 +69,7 @@ function assertTimestampInWindow(ts: number, now: number, maxSkewMs: number) {
   }
 }
 
-async function recordNonce(
-  kid: string,
-  nonce: string,
-  nonceStore: RedisNonceStore,
-  nonceTtlSeconds: number,
-) {
+async function recordNonce(kid: string, nonce: string, nonceStore: RedisNonceStore, nonceTtlSeconds: number) {
   const result = await nonceStore.set(nonceKey(kid, nonce), "1", "EX", nonceTtlSeconds, "NX");
   if (result !== "OK") {
     invalidCredential();
@@ -89,10 +82,7 @@ export function createLoginCredentialParser(deps: LoginCredentialParserDeps) {
     options: ParseCredentialOptions = {},
   ): Promise<LoginPasswordCredential> {
     try {
-      const parsed = decryptLoginCredential(
-        credential,
-        options.privateKeys ?? deps.config.privateKeysByKid,
-      );
+      const parsed = decryptLoginCredential(credential, options.privateKeys ?? deps.config.privateKeysByKid);
       const now = options.now ?? deps.clock.now();
       const maxSkewMs = options.maxSkewMs ?? deps.config.maxSkewMs;
       const nonceTtlSeconds = options.nonceTtlSeconds ?? deps.config.nonceTtlSeconds;
@@ -106,8 +96,7 @@ export function createLoginCredentialParser(deps: LoginCredentialParserDeps) {
         username: payload.username,
         password: payload.password,
       };
-    }
-    catch (error) {
+    } catch (error) {
       if (error instanceof CustomError) {
         throw error;
       }

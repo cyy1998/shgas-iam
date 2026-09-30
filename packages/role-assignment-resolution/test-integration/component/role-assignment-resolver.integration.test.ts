@@ -1,13 +1,16 @@
-import type { DbClient } from "@iam/db";
 import { describe, expect, test } from "bun:test";
+import type { DbClient } from "@iam/db";
 import { createRoleAssignmentResolver } from "../../src/index.ts";
 
 function createInaccessibleDb(): DbClient {
-  return new Proxy({}, {
-    get() {
-      throw new Error("empty input must not access the database");
+  return new Proxy(
+    {},
+    {
+      get() {
+        throw new Error("empty input must not access the database");
+      },
     },
-  }) as DbClient;
+  ) as DbClient;
 }
 
 describe("role assignment resolver", () => {

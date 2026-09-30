@@ -7,11 +7,13 @@ export const StandardErrorResponseSchema = z.object({
   message: z.string().openapi({ example: "请求失败" }),
 });
 
-export const ValidationIssueSchema = z.object({
-  code: z.string(),
-  path: z.array(z.union([z.string(), z.number()])),
-  message: z.string(),
-}).passthrough();
+export const ValidationIssueSchema = z
+  .object({
+    code: z.string(),
+    path: z.array(z.union([z.string(), z.number()])),
+    message: z.string(),
+  })
+  .passthrough();
 
 export const ValidationFailureResponseSchema = z.object({
   code: z.literal(ApiErrorCode.ValidationFailed),

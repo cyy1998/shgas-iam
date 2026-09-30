@@ -75,10 +75,7 @@ export interface AdminSessionControlPort {
     targets: readonly CapturedSession[],
     excludeUserSessionId: string,
   ) => Promise<AdminSessionControlSummary>;
-  revokePrincipalSession: (
-    principalSessionId: string,
-    reason: "admin_revoke",
-  ) => Promise<AdminSessionControlSummary>;
+  revokePrincipalSession: (principalSessionId: string, reason: "admin_revoke") => Promise<AdminSessionControlSummary>;
 }
 
 export interface AdminSessionUserControlPort {

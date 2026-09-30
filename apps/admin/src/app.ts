@@ -1,26 +1,17 @@
 // 运行时配置
-import shanghaiGasLogo from '@admin/assets/logo.png';
-import AvatarDropdown from '@admin/components/RightContent/AvatarDropdown';
-import {
-  API_PREFIX,
-  SSO_CLIENT_CODE,
-} from '@admin/constants/config';
-import {
-  mapCurrentAdminUser,
-  type CurrentAdminUser,
-} from '@admin/lib/current-admin-user';
-import { getAdminCapabilitySummary } from '@admin/services/authorization';
-import {
-  redirectToLogin,
-  restoreLoginRedirectState,
-} from '@admin/utils/auth';
-import type { CustomSsoSubjectProjection } from '@iam/custom-sso/wire';
-import type { AdminCapabilitySummary } from '@iam/contracts';
-import { history } from '@umijs/max';
-import { ConfigProvider } from 'antd';
-import { createElement, type ReactElement } from 'react';
-import './global.less';
-import { adminTheme } from './theme';
+import shanghaiGasLogo from "@admin/assets/logo.png";
+import AvatarDropdown from "@admin/components/RightContent/AvatarDropdown";
+import { API_PREFIX, SSO_CLIENT_CODE } from "@admin/constants/config";
+import { type CurrentAdminUser, mapCurrentAdminUser } from "@admin/lib/current-admin-user";
+import { getAdminCapabilitySummary } from "@admin/services/authorization";
+import { redirectToLogin, restoreLoginRedirectState } from "@admin/utils/auth";
+import type { AdminCapabilitySummary } from "@iam/contracts";
+import type { CustomSsoSubjectProjection } from "@iam/custom-sso/wire";
+import { history } from "@umijs/max";
+import { ConfigProvider } from "antd";
+import { createElement, type ReactElement } from "react";
+import "./global.less";
+import { adminTheme } from "./theme";
 
 ConfigProvider.config({
   holderRender: (children) => children,
@@ -32,7 +23,7 @@ type InitialState = {
   capabilities?: AdminCapabilitySummary;
 };
 
-if (typeof window !== 'undefined') {
+if (typeof window !== "undefined") {
   restoreLoginRedirectState();
 }
 
@@ -41,7 +32,7 @@ if (typeof window !== 'undefined') {
 export async function getInitialState(): Promise<InitialState> {
   try {
     const res = await fetch(`${API_PREFIX}/public/user-info`, {
-      credentials: 'include',
+      credentials: "include",
       headers: {
         Client: SSO_CLIENT_CODE,
       },
@@ -62,12 +53,12 @@ export async function getInitialState(): Promise<InitialState> {
       try {
         capabilities = await getAdminCapabilitySummary();
       } catch {
-        history.replace('/403');
+        history.replace("/403");
         return { currentUser };
       }
 
       if (capabilities.visibleModules.length === 0) {
-        history.replace('/403');
+        history.replace("/403");
       }
       return { capabilities, currentUser };
     }
@@ -104,42 +95,37 @@ export const request = {
 };
 
 export const layout = ({ initialState }: { initialState?: InitialState }) => {
-  const username = initialState?.currentUser?.username ?? '';
+  const username = initialState?.currentUser?.username ?? "";
   const name = initialState?.currentUser?.name || username;
   const displayName = username && name ? `${name}(${username})` : username;
-  const avatarText = name?.[0] ?? username?.[0] ?? '';
+  const avatarText = name?.[0] ?? username?.[0] ?? "";
 
   return {
-    title: '上海燃气 IAM',
+    title: "上海燃气 IAM",
     logo: false,
     menu: {
       locale: false,
     },
     menuHeaderRender: () =>
-      createElement('div', { className: 'iam-admin-brand' }, [
-        createElement('img', {
-          alt: '上海燃气',
-          className: 'iam-admin-brand-logo',
-          key: 'logo',
+      createElement("div", { className: "iam-admin-brand" }, [
+        createElement("img", {
+          alt: "上海燃气",
+          className: "iam-admin-brand-logo",
+          key: "logo",
           src: shanghaiGasLogo,
         }),
-        createElement(
-          'div',
-          { className: 'iam-admin-brand-title', key: 'title' },
-          [
-            createElement('span', { key: 'iam' }, 'IAM'),
-            createElement('span', { key: 'console' }, '控制台'),
-          ],
-        ),
+        createElement("div", { className: "iam-admin-brand-title", key: "title" }, [
+          createElement("span", { key: "iam" }, "IAM"),
+          createElement("span", { key: "console" }, "控制台"),
+        ]),
       ]),
     avatarProps: {
       size: 32,
       style: { fontSize: 18 },
       title: displayName,
       children: avatarText,
-      className: 'iam-admin-user-avatar',
-      render: (_: unknown, dom: ReactElement) =>
-        createElement(AvatarDropdown, null, dom),
+      className: "iam-admin-user-avatar",
+      render: (_: unknown, dom: ReactElement) => createElement(AvatarDropdown, null, dom),
     },
   };
 };

@@ -1,15 +1,11 @@
-import type Redis from "ioredis";
 import { randomUUID } from "node:crypto";
+import type Redis from "ioredis";
 import { createOidcLogoutState } from "../logout-state";
 import { createOidcState, digest, randomHandle, statePrefix } from "../state";
 import { createOidcTokenState } from "../token-state";
 
 /** Current protocol fixtures stay with their persistence owner. */
-export function createOidcMaintenanceTestFixture(
-  redis: Redis,
-  namespace: string,
-  trackKey: (key: string) => void,
-) {
+export function createOidcMaintenanceTestFixture(redis: Redis, namespace: string, trackKey: (key: string) => void) {
   const prefix = statePrefix(namespace);
   const state = createOidcState(redis, namespace);
   const tokens = createOidcTokenState(redis, namespace);
@@ -64,12 +60,15 @@ export function createOidcMaintenanceTestFixture(
           codeId: randomHandle(),
         });
         await state.saveContinuation({ authorization, completionDigest: null }, "browser", 120);
-        await logout.save({ issuer: "https://iam.example/oidc", clientId, hint: null, redirectUri: null, state: null }, "browser", 120);
+        await logout.save(
+          { issuer: "https://iam.example/oidc", clientId, hint: null, redirectUri: null, state: null },
+          "browser",
+          120,
+        );
         const keys = await redis.keys(`${prefix}*`);
         for (const key of keys) await redis.persist(key);
         return keys;
-      }
-      finally {
+      } finally {
         (await redis.keys(`${prefix}*`)).forEach(owned);
       }
     },

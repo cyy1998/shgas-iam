@@ -1,5 +1,5 @@
-import { ApiErrorCode } from "@iam/contracts";
 import { describe, expect, mock, test } from "bun:test";
+import { ApiErrorCode } from "@iam/contracts";
 import { INTERNAL_SERVER_ERROR } from "../../src/core/http-status-codes";
 import {
   AfterCommitRequiredTaskError,
@@ -33,9 +33,11 @@ describe("createUnitOfWork", () => {
       createTxPorts: () => ({}),
     });
 
-    const caught = await uow.transaction(async () => {
-      throw failure;
-    }).catch(error => error);
+    const caught = await uow
+      .transaction(async () => {
+        throw failure;
+      })
+      .catch((error) => error);
 
     expect(caught).toBe(failure);
     expect(consumeTransactionRollbackConfirmation(caught)).toBe(true);
@@ -50,8 +52,7 @@ describe("createUnitOfWork", () => {
         async transaction<T>(callback: (tx: object) => Promise<T>) {
           try {
             await callback({});
-          }
-          catch {
+          } catch {
             throw rollbackFailure;
           }
           throw new Error("expected callback failure");
@@ -61,9 +62,11 @@ describe("createUnitOfWork", () => {
       createTxPorts: () => ({}),
     });
 
-    const caught = await uow.transaction(async () => {
-      throw callbackFailure;
-    }).catch(error => error);
+    const caught = await uow
+      .transaction(async () => {
+        throw callbackFailure;
+      })
+      .catch((error) => error);
 
     expect(caught).toBe(rollbackFailure);
     expect(consumeTransactionRollbackConfirmation(caught)).toBe(false);
@@ -82,8 +85,7 @@ describe("createUnitOfWork", () => {
       createTxPorts: () => ({}),
     });
 
-    const caught = await uow.transaction(async () => "committed")
-      .catch(error => error);
+    const caught = await uow.transaction(async () => "committed").catch((error) => error);
 
     expect(caught).toBe(commitFailure);
     expect(consumeTransactionRollbackConfirmation(caught)).toBe(false);
@@ -96,12 +98,14 @@ describe("createUnitOfWork", () => {
       createTxPorts: () => ({}),
     });
 
-    const caught = await uow.transaction(async (tx) => {
-      tx.afterCommit.required("required.fail", () => {
-        throw new Error("post-commit failed");
-      });
-      return "committed";
-    }).catch(error => error);
+    const caught = await uow
+      .transaction(async (tx) => {
+        tx.afterCommit.required("required.fail", () => {
+          throw new Error("post-commit failed");
+        });
+        return "committed";
+      })
+      .catch((error) => error);
 
     expect(caught).toBeInstanceOf(AfterCommitRequiredTaskError);
     expect(consumeTransactionRollbackConfirmation(caught)).toBe(false);
@@ -114,7 +118,7 @@ describe("createUnitOfWork", () => {
     const uow = createUnitOfWork({
       db,
       logger,
-      createTxPorts: tx => ({ tx }),
+      createTxPorts: (tx) => ({ tx }),
     });
 
     const result = await uow.transaction(async (tx) => {
@@ -166,15 +170,18 @@ describe("createUnitOfWork", () => {
       },
     });
 
-    const result = await uow.transaction(async (tx) => {
-      events.push(`callback:${tx.tx.id}`);
-      expect(tx.factoryAfterCommit).toBe(tx.afterCommit);
-      expect(tx.factoryObservability).toBe(observability);
-      tx.afterCommit.bestEffort("callback.best-effort", () => {
-        events.push("callback.best-effort");
-      });
-      return "ok";
-    }, { observability });
+    const result = await uow.transaction(
+      async (tx) => {
+        events.push(`callback:${tx.tx.id}`);
+        expect(tx.factoryAfterCommit).toBe(tx.afterCommit);
+        expect(tx.factoryObservability).toBe(observability);
+        tx.afterCommit.bestEffort("callback.best-effort", () => {
+          events.push("callback.best-effort");
+        });
+        return "ok";
+      },
+      { observability },
+    );
 
     expect(result).toBe("ok");
     expect(events).toEqual(["callback:1", "commit", "factory.required", "callback.best-effort"]);
@@ -196,12 +203,14 @@ describe("createUnitOfWork", () => {
     });
     const failure = new Error("rollback");
 
-    await expect(uow.transaction(async (tx) => {
-      tx.afterCommit.required("callback.required", () => {
-        events.push("callback.required");
-      });
-      throw failure;
-    })).rejects.toThrow(failure);
+    await expect(
+      uow.transaction(async (tx) => {
+        tx.afterCommit.required("callback.required", () => {
+          events.push("callback.required");
+        });
+        throw failure;
+      }),
+    ).rejects.toThrow(failure);
 
     expect(events).toEqual([]);
     expect(logger.warn).toHaveBeenCalledTimes(0);
@@ -235,8 +244,7 @@ describe("createUnitOfWork", () => {
         return "ok";
       });
       throw new Error("expected after-commit failure");
-    }
-    catch (err) {
+    } catch (err) {
       expect(err).toBeInstanceOf(AfterCommitRequiredTaskError);
       expect((err as AfterCommitRequiredTaskError).code).toBe(ApiErrorCode.InternalError);
       expect((err as AfterCommitRequiredTaskError).httpStatus).toBe(INTERNAL_SERVER_ERROR);
@@ -267,17 +275,22 @@ describe("createUnitOfWork", () => {
       createTxPorts: () => ({}),
     });
 
-    await expect(uow.transaction(async (tx) => {
-      tx.afterCommit.required("required.fail", () => {
-        throw failure;
-      });
-      return "ok";
-    }, {
-      observability: {
-        requestId: "req-1",
-        traceId: "11111111111111111111111111111111",
-      },
-    })).rejects.toBeInstanceOf(AfterCommitRequiredTaskError);
+    await expect(
+      uow.transaction(
+        async (tx) => {
+          tx.afterCommit.required("required.fail", () => {
+            throw failure;
+          });
+          return "ok";
+        },
+        {
+          observability: {
+            requestId: "req-1",
+            traceId: "11111111111111111111111111111111",
+          },
+        },
+      ),
+    ).rejects.toBeInstanceOf(AfterCommitRequiredTaskError);
 
     expect(logger.error.mock.calls[0]).toEqual([
       {
@@ -300,21 +313,23 @@ describe("createImmediateUnitOfWork", () => {
     const events: string[] = [];
     const uow = createImmediateUnitOfWork({ value: 1 }, { logger });
 
-    await expect(uow.transaction(async (tx) => {
-      events.push(`callback:${tx.value}`);
-      tx.afterCommit.bestEffort("best.fail", () => {
-        events.push("best.fail");
-        throw bestEffortFailure;
-      });
-      tx.afterCommit.required("required.fail", () => {
-        events.push("required.fail");
-        throw requiredFailure;
-      });
-      tx.afterCommit.bestEffort("best.ok", () => {
-        events.push("best.ok");
-      });
-      return "ok";
-    })).rejects.toBeInstanceOf(AfterCommitRequiredTaskError);
+    await expect(
+      uow.transaction(async (tx) => {
+        events.push(`callback:${tx.value}`);
+        tx.afterCommit.bestEffort("best.fail", () => {
+          events.push("best.fail");
+          throw bestEffortFailure;
+        });
+        tx.afterCommit.required("required.fail", () => {
+          events.push("required.fail");
+          throw requiredFailure;
+        });
+        tx.afterCommit.bestEffort("best.ok", () => {
+          events.push("best.ok");
+        });
+        return "ok";
+      }),
+    ).rejects.toBeInstanceOf(AfterCommitRequiredTaskError);
 
     expect(events).toEqual(["callback:1", "best.fail", "required.fail", "best.ok"]);
     expect(logger.warn).toHaveBeenCalledTimes(1);
@@ -326,17 +341,20 @@ describe("createImmediateUnitOfWork", () => {
     const failure = new Error("best failed");
     const uow = createImmediateUnitOfWork({ value: 1 }, { logger });
 
-    await uow.transaction(async (tx) => {
-      tx.afterCommit.bestEffort("best.fail", () => {
-        throw failure;
-      });
-      return "ok";
-    }, {
-      observability: {
-        requestId: "req-test",
-        traceId: "trace-test",
+    await uow.transaction(
+      async (tx) => {
+        tx.afterCommit.bestEffort("best.fail", () => {
+          throw failure;
+        });
+        return "ok";
       },
-    });
+      {
+        observability: {
+          requestId: "req-test",
+          traceId: "trace-test",
+        },
+      },
+    );
 
     expect(logger.warn.mock.calls[0]).toEqual([
       {
@@ -360,7 +378,7 @@ describe("mapUnitOfWork", () => {
       logger,
       createTxPorts: () => ({ repository: { id: 1 }, hidden: true }),
     });
-    const mapped = mapUnitOfWork(source, tx => ({ repository: tx.repository }));
+    const mapped = mapUnitOfWork(source, (tx) => ({ repository: tx.repository }));
 
     const result = await mapped.transaction(async (tx) => {
       events.push(`callback:${tx.repository.id}`);

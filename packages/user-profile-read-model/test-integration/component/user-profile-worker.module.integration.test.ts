@@ -1,5 +1,5 @@
-import { USER_PROFILE_QUEUE_NAME } from "@iam/contracts";
 import { describe, expect, mock, test } from "bun:test";
+import { USER_PROFILE_QUEUE_NAME } from "@iam/contracts";
 import { ZodError } from "zod";
 import {
   createUserProfileJobProcessor,
@@ -19,25 +19,30 @@ describe("createUserProfileJobProcessor", () => {
       },
     });
 
-    await expect(processor({
-      id: "rebuild-user-profile|123|42",
-      name: "rebuild-user-profile",
-      data: {
+    await expect(
+      processor({
+        id: "rebuild-user-profile|123|42",
+        name: "rebuild-user-profile",
+        data: {
+          userId: 123,
+          dirtyVersion: "42",
+          reason: "user-updated",
+          requestId: "request-42",
+          traceId: "trace-42",
+        },
+      }),
+    ).resolves.toEqual({ status: "rebuilt" });
+
+    expect(process).toHaveBeenCalledWith(
+      {
         userId: 123,
         dirtyVersion: "42",
         reason: "user-updated",
         requestId: "request-42",
         traceId: "trace-42",
       },
-    })).resolves.toEqual({ status: "rebuilt" });
-
-    expect(process).toHaveBeenCalledWith({
-      userId: 123,
-      dirtyVersion: "42",
-      reason: "user-updated",
-      requestId: "request-42",
-      traceId: "trace-42",
-    }, { jobId: "rebuild-user-profile|123|42" });
+      { jobId: "rebuild-user-profile|123|42" },
+    );
   });
 
   test("rejects unknown jobs and malformed rebuild payloads before delegation", async () => {
@@ -51,25 +56,29 @@ describe("createUserProfileJobProcessor", () => {
       },
     });
 
-    await expect(processor({
-      id: "unknown|123|42",
-      name: "unknown-job",
-      data: {
-        userId: 123,
-        dirtyVersion: "42",
-        reason: "user-updated",
-      },
-    })).rejects.toThrow("Unsupported user profile job name: unknown-job");
+    await expect(
+      processor({
+        id: "unknown|123|42",
+        name: "unknown-job",
+        data: {
+          userId: 123,
+          dirtyVersion: "42",
+          reason: "user-updated",
+        },
+      }),
+    ).rejects.toThrow("Unsupported user profile job name: unknown-job");
 
-    await expect(processor({
-      id: "rebuild-user-profile|0|invalid",
-      name: "rebuild-user-profile",
-      data: {
-        userId: 0,
-        dirtyVersion: "invalid",
-        reason: "user-updated",
-      },
-    })).rejects.toBeInstanceOf(ZodError);
+    await expect(
+      processor({
+        id: "rebuild-user-profile|0|invalid",
+        name: "rebuild-user-profile",
+        data: {
+          userId: 0,
+          dirtyVersion: "invalid",
+          reason: "user-updated",
+        },
+      }),
+    ).rejects.toBeInstanceOf(ZodError);
 
     expect(process).not.toHaveBeenCalled();
   });
@@ -100,14 +109,17 @@ describe("createUserProfileJobProcessor", () => {
       },
     });
 
-    expect(info).toHaveBeenCalledWith({
-      userId: 123,
-      dirtyVersion: "42",
-      jobId: "rebuild-user-profile|123|42",
-      jobName: "rebuild-user-profile",
-      status: "rebuilt",
-      cacheStatus: "failed",
-    }, "user profile rebuild job processed");
+    expect(info).toHaveBeenCalledWith(
+      {
+        userId: 123,
+        dirtyVersion: "42",
+        jobId: "rebuild-user-profile|123|42",
+        jobName: "rebuild-user-profile",
+        status: "rebuilt",
+        cacheStatus: "failed",
+      },
+      "user profile rebuild job processed",
+    );
   });
 });
 
@@ -152,11 +164,13 @@ describe("createUserProfileWorkerModule", () => {
     });
 
     expect(module.key).toBe(USER_PROFILE_WORKER_MODULE_KEY);
-    expect(module.queueRegistrations).toEqual([{
-      moduleKey: USER_PROFILE_WORKER_MODULE_KEY,
-      queueName: USER_PROFILE_QUEUE_NAME,
-      queue: queue as never,
-    }]);
+    expect(module.queueRegistrations).toEqual([
+      {
+        moduleKey: USER_PROFILE_WORKER_MODULE_KEY,
+        queueName: USER_PROFILE_QUEUE_NAME,
+        queue: queue as never,
+      },
+    ]);
 
     await module.startConsumers();
     await module.startConsumers();
@@ -171,10 +185,9 @@ describe("createUserProfileWorkerModule", () => {
     expect(worker.on).toHaveBeenCalledWith("completed", expect.any(Function));
     expect(worker.on).toHaveBeenCalledWith("failed", expect.any(Function));
 
-    const completedListener = (worker.on.mock.calls as unknown as Array<[
-      string,
-      (job: unknown) => void,
-    ]>).find(([event]) => event === "completed")?.[1];
+    const completedListener = (worker.on.mock.calls as unknown as Array<[string, (job: unknown) => void]>).find(
+      ([event]) => event === "completed",
+    )?.[1];
     completedListener?.({
       id: "rebuild-user-profile|123|42",
       name: "rebuild-user-profile",
@@ -189,14 +202,17 @@ describe("createUserProfileWorkerModule", () => {
       },
     });
 
-    expect(info).toHaveBeenCalledWith({
-      jobId: "rebuild-user-profile|123|42",
-      jobName: "rebuild-user-profile",
-      status: "rebuilt",
-      cacheStatus: "failed",
-      userId: 123,
-      dirtyVersion: "42",
-    }, "user profile job completed");
+    expect(info).toHaveBeenCalledWith(
+      {
+        jobId: "rebuild-user-profile|123|42",
+        jobName: "rebuild-user-profile",
+        status: "rebuilt",
+        cacheStatus: "failed",
+        userId: 123,
+        dirtyVersion: "42",
+      },
+      "user profile job completed",
+    );
 
     await module.close();
 

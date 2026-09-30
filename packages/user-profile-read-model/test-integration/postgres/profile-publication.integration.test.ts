@@ -1,10 +1,5 @@
-import {
-  UserProfileDirtyReason,
-  UserProfileDirtyStatus,
-  UserStatus,
-  UserType,
-} from "@iam/contracts";
 import { afterAll, beforeAll, beforeEach, describe, expect, test } from "bun:test";
+import { UserProfileDirtyReason, UserProfileDirtyStatus, UserStatus, UserType } from "@iam/contracts";
 import { PublishedProfileSchema } from "../../src/schema/profile.schema";
 import { createCurrentUserProfileProjectionBundle } from "../../src/worker";
 import { createPostgresTestHarness } from "./postgres-test-harness";
@@ -39,14 +34,16 @@ describe("User Profile v3 PostgreSQL publication", () => {
     });
     expect(publicationResult).toEqual({ status: "published" });
 
-    const [row] = await harness.sql<{
-      profileSchemaVersion: number;
-      sourceDirtyVersion: string;
-      detail: unknown;
-      searchDoc: unknown;
-      subjectFacts: unknown;
-      dirtyStatus: UserProfileDirtyStatus;
-    }[]>`
+    const [row] = await harness.sql<
+      {
+        profileSchemaVersion: number;
+        sourceDirtyVersion: string;
+        detail: unknown;
+        searchDoc: unknown;
+        subjectFacts: unknown;
+        dirtyStatus: UserProfileDirtyStatus;
+      }[]
+    >`
       SELECT
         p.profile_schema_version AS "profileSchemaVersion",
         p.source_dirty_version::text AS "sourceDirtyVersion",
@@ -107,16 +104,17 @@ describe("User Profile v3 PostgreSQL publication", () => {
           profile: profile("4"),
           processedAt: now,
         });
-      }
-      catch (error) {
+      } catch (error) {
         failure = error;
       }
       expect(failure).toBeDefined();
-      const [preserved] = await harness.sql<{
-        username: string;
-        profileSchemaVersion: number;
-        sourceDirtyVersion: string;
-      }[]>`
+      const [preserved] = await harness.sql<
+        {
+          username: string;
+          profileSchemaVersion: number;
+          sourceDirtyVersion: string;
+        }[]
+      >`
         SELECT username, profile_schema_version AS "profileSchemaVersion",
                source_dirty_version::text AS "sourceDirtyVersion"
         FROM user_profile WHERE user_id = 1
@@ -126,8 +124,7 @@ describe("User Profile v3 PostgreSQL publication", () => {
         profileSchemaVersion: 1,
         sourceDirtyVersion: "3",
       });
-    }
-    finally {
+    } finally {
       await harness.sql.unsafe("DROP TRIGGER reject_v3_processed_dirty_trigger ON user_profile_dirty");
       await harness.sql.unsafe("DROP FUNCTION reject_v3_processed_dirty()");
     }

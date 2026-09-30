@@ -1,6 +1,6 @@
+import { describe, expect, mock, test } from "bun:test";
 import { createRoute, z } from "@hono/zod-openapi";
 import { ApiErrorCode } from "@iam/contracts";
-import { describe, expect, mock, test } from "bun:test";
 import { SystemLogEvent } from "../../../logger";
 import { createRouter } from "../../create-router";
 import { OK, UNPROCESSABLE_ENTITY } from "../../http-status-codes";
@@ -10,9 +10,12 @@ const route = createRoute({
   method: "post",
   path: "/items",
   request: {
-    body: jsonContent(z.object({
-      name: z.string(),
-    }), "item payload"),
+    body: jsonContent(
+      z.object({
+        name: z.string(),
+      }),
+      "item payload",
+    ),
   },
   responses: {
     [OK]: jsonContent(z.object({ ok: z.boolean() }), "ok"),
@@ -34,13 +37,13 @@ describe("defaultHook", () => {
       c.set("logger" as never, requestLogger as never);
       await next();
     });
-    app.openapi(route, c => c.json({ ok: true }));
+    app.openapi(route, (c) => c.json({ ok: true }));
 
     const res = await app.request("http://localhost/items", {
       method: "POST",
       headers: {
         "content-type": "application/json",
-        "traceparent": "00-11111111111111111111111111111111-2222222222222222-01",
+        traceparent: "00-11111111111111111111111111111111-2222222222222222-01",
       },
       body: JSON.stringify({ name: 123 }),
     });

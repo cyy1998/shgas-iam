@@ -1,17 +1,6 @@
-import {
-  OrganizationResponsibilityAssignmentStatus,
-  OrganizationResponsibilityTypeCode,
-} from "@iam/contracts";
+import { OrganizationResponsibilityAssignmentStatus, OrganizationResponsibilityTypeCode } from "@iam/contracts";
 import { sql } from "drizzle-orm";
-import {
-  check,
-  index,
-  integer,
-  snakeCase,
-  text,
-  timestamp,
-  uniqueIndex,
-} from "drizzle-orm/pg-core";
+import { check, index, integer, snakeCase, text, timestamp, uniqueIndex } from "drizzle-orm/pg-core";
 import { createInsertSchema, createSelectSchema } from "drizzle-orm/zod";
 import { z } from "zod";
 
@@ -31,7 +20,7 @@ export const organizationResponsibilityAssignments = snakeCase.table(
       .defaultNow()
       .$onUpdate(() => new Date()),
   },
-  table => [
+  (table) => [
     uniqueIndex("org_resp_assignment_open_head_unique_idx")
       .on(table.targetOrganizationId, table.typeCode)
       .where(sql`
@@ -50,8 +39,7 @@ export const organizationResponsibilityAssignments = snakeCase.table(
           ${OrganizationResponsibilityAssignmentStatus.Pause}
         )
       `),
-    index("organization_responsibility_assignment_employment_id_idx")
-      .on(table.employmentId),
+    index("organization_responsibility_assignment_employment_id_idx").on(table.employmentId),
     check(
       "organization_responsibility_assignment_type_code_check",
       sql`${table.typeCode} IN (
@@ -100,6 +88,4 @@ export const insertOrganizationResponsibilityAssignmentSchema = createInsertSche
   },
 ).omit({ createTime: true, updateTime: true });
 
-export type OrganizationResponsibilityAssignment = z.infer<
-  typeof selectOrganizationResponsibilityAssignmentSchema
->;
+export type OrganizationResponsibilityAssignment = z.infer<typeof selectOrganizationResponsibilityAssignmentSchema>;

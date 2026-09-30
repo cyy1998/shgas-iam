@@ -66,9 +66,7 @@ export interface HrAdminOutcomeScenario {
 }
 
 export interface HrAdminOutcomeOwner {
-  readBack: (
-    scenario: HrAdminOutcomeScenario,
-  ) => Promise<HrAdminOutcomeReadBack>;
+  readBack: (scenario: HrAdminOutcomeScenario) => Promise<HrAdminOutcomeReadBack>;
 }
 
 export async function verifyHrAdminOutcome(input: {
@@ -95,37 +93,34 @@ export async function verifyHrAdminOutcome(input: {
   );
 }
 
-function matchesExpectedOutcome(
-  actual: HrAdminOutcomeReadBack,
-  expected: HrAdminOutcomeScenario,
-) {
-  return actual.assignment !== null
-    && actual.assignment.status === AssignmentStatus.Disable
-    && actual.assignment.ended
-    && actual.assignment.typeCode === ResponsibilityTypeCode.Supervising
-    && actual.assignment.actorVisibleTargetCode
-    === expected.hrResponsibilityTargetOrganizationCode
-    && actual.assignment.holderPositionCode
-    === expected.responsibilityHolderPositionCode
-    && actual.assignmentAudits.length
-    === HR_ADMIN_RESPONSIBILITY_AUDIT_ACTIONS.length
-    && actual.assignmentAudits.every((audit, index) =>
-      audit.action === HR_ADMIN_RESPONSIBILITY_AUDIT_ACTIONS[index]
-      && audit.actorUsername === expected.hrAdminUsername
-      && audit.outcome === "success")
-    && actual.dirty !== null
-    && BigInt(actual.dirty.dirtyVersion) > 1n
-    && actual.dirty.status === DirtyStatus.Processed
-    && actual.dirty.reasonCodes.length === 1
-    && actual.dirty.reasonCodes[0]
-    === DirtyReason.OrganizationResponsibilityAssignmentUpdated
-    && actual.profile !== null
-    && actual.profile.sourceDirtyVersion === actual.dirty.dirtyVersion
-    && !actual.profile.containsEndedTargetResponsibility
-    && actual.hiddenBlocker.count === 1
-    && actual.hiddenBlocker.status === AssignmentStatus.Enable
-    && actual.deniedCombinationAssignments === 0
-    && actual.deniedAssignmentAudits === 0
-    && !actual.adminMixedRoleAssignmentExists
-    && !actual.secondScopeRoleAssignmentExists;
+function matchesExpectedOutcome(actual: HrAdminOutcomeReadBack, expected: HrAdminOutcomeScenario) {
+  return (
+    actual.assignment !== null &&
+    actual.assignment.status === AssignmentStatus.Disable &&
+    actual.assignment.ended &&
+    actual.assignment.typeCode === ResponsibilityTypeCode.Supervising &&
+    actual.assignment.actorVisibleTargetCode === expected.hrResponsibilityTargetOrganizationCode &&
+    actual.assignment.holderPositionCode === expected.responsibilityHolderPositionCode &&
+    actual.assignmentAudits.length === HR_ADMIN_RESPONSIBILITY_AUDIT_ACTIONS.length &&
+    actual.assignmentAudits.every(
+      (audit, index) =>
+        audit.action === HR_ADMIN_RESPONSIBILITY_AUDIT_ACTIONS[index] &&
+        audit.actorUsername === expected.hrAdminUsername &&
+        audit.outcome === "success",
+    ) &&
+    actual.dirty !== null &&
+    BigInt(actual.dirty.dirtyVersion) > 1n &&
+    actual.dirty.status === DirtyStatus.Processed &&
+    actual.dirty.reasonCodes.length === 1 &&
+    actual.dirty.reasonCodes[0] === DirtyReason.OrganizationResponsibilityAssignmentUpdated &&
+    actual.profile !== null &&
+    actual.profile.sourceDirtyVersion === actual.dirty.dirtyVersion &&
+    !actual.profile.containsEndedTargetResponsibility &&
+    actual.hiddenBlocker.count === 1 &&
+    actual.hiddenBlocker.status === AssignmentStatus.Enable &&
+    actual.deniedCombinationAssignments === 0 &&
+    actual.deniedAssignmentAudits === 0 &&
+    !actual.adminMixedRoleAssignmentExists &&
+    !actual.secondScopeRoleAssignmentExists
+  );
 }

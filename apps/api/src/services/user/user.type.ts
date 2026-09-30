@@ -1,8 +1,5 @@
 import type { z } from "@hono/zod-openapi";
-import type {
-  UserQueryDtoSchema,
-  UserQueryWithPrivilegeDelegationDtoSchema,
-} from "./user.schema";
+import type { UserQueryDtoSchema, UserQueryWithPrivilegeDelegationDtoSchema } from "./user.schema";
 
 export type { User, UserCreateDto, UserDetailDto, UserDto } from "@iam/domain/user";
 export interface UserQueryDto extends z.infer<typeof UserQueryDtoSchema> {}

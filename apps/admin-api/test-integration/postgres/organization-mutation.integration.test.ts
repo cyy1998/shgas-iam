@@ -1,8 +1,8 @@
-import type { AdminOrganizationAuthorization } from "@admin-api/services/admin-authorization/admin-organization-authorization.type";
-import type { AdminOrganizationTransactionPorts } from "@admin-api/services/organization/organization.port";
-import type { AdminApiPostgresTestHarness } from "./postgres-test-harness";
+import { afterAll, beforeAll, beforeEach, describe, expect, mock, test } from "bun:test";
 import { createAdminApiRepositories } from "@admin-api/composition/repositories";
 import { createAdminApiUnitOfWork } from "@admin-api/composition/tx";
+import type { AdminOrganizationAuthorization } from "@admin-api/services/admin-authorization/admin-organization-authorization.type";
+import type { AdminOrganizationTransactionPorts } from "@admin-api/services/organization/organization.port";
 import { createOrganizationService } from "@admin-api/services/organization/organization.service";
 import { BadRequestError } from "@iam/api-core/errors";
 import { mapUnitOfWork } from "@iam/api-core/uow";
@@ -35,8 +35,8 @@ import {
   OrganizationNotFoundError,
   OrganizationUpdateDtoSchema,
 } from "@iam/domain/organization";
-import { afterAll, beforeAll, beforeEach, describe, expect, mock, test } from "bun:test";
 import { eq } from "drizzle-orm";
+import type { AdminApiPostgresTestHarness } from "./postgres-test-harness";
 import { createAdminApiPostgresTestHarness } from "./postgres-test-harness";
 
 let harness: AdminApiPostgresTestHarness;
@@ -51,7 +51,7 @@ afterAll(async () => {
 });
 
 function createCommand(
-  decorate: (tx: AdminOrganizationTransactionPorts) => AdminOrganizationTransactionPorts = tx => tx,
+  decorate: (tx: AdminOrganizationTransactionPorts) => AdminOrganizationTransactionPorts = (tx) => tx,
   enqueueRebuildJobs = mock(async () => ({ enqueued: 1, jobIds: ["organization-job"] })),
 ) {
   const warn = mock(() => undefined);
@@ -67,13 +67,14 @@ function createCommand(
     service: createOrganizationService({
       organizationRepository: createAdminApiRepositories(harness.db).organization,
       responsibilityReader: createAdminApiRepositories(harness.db).organizationResponsibility,
-      uow: mapUnitOfWork(uow, tx =>
+      uow: mapUnitOfWork(uow, (tx) =>
         decorate({
           organizationRepository: tx.repositories.organization,
           auditService: tx.auditService,
           responsibilityParentLifecycle: tx.responsibilityParentLifecycle,
           userProfileInvalidation: tx.userProfileInvalidation,
-        })),
+        }),
+      ),
     }),
   };
 }
@@ -110,15 +111,13 @@ async function seedEmployment(organizationId: number, status = EmploymentStatus.
       posName: "Position",
     })
     .returning();
-  await harness.db
-    .insert(employments)
-    .values({
-      userId: user!.id,
-      orgId: organizationId,
-      posId: position!.id,
-      status,
-      startTime: new Date("2026-08-01T00:00:00Z"),
-    });
+  await harness.db.insert(employments).values({
+    userId: user!.id,
+    orgId: organizationId,
+    posId: position!.id,
+    status,
+    startTime: new Date("2026-08-01T00:00:00Z"),
+  });
   return user!;
 }
 
@@ -137,8 +136,7 @@ async function facts() {
 async function failure(operation: () => Promise<unknown>) {
   try {
     await operation();
-  }
-  catch (error) {
+  } catch (error) {
     return error;
   }
   throw new Error("Expected command failure");
@@ -151,7 +149,7 @@ describe("Organization mutations through production PostgreSQL UnitOfWork", () =
       const other = await seedOrganization("OTHER");
       const prechecked = Promise.withResolvers<void>();
       const release = Promise.withResolvers<void>();
-      const service = createCommand(tx => ({
+      const service = createCommand((tx) => ({
         ...tx,
         organizationRepository: {
           ...tx.organizationRepository,
@@ -166,12 +164,11 @@ describe("Organization mutations through production PostgreSQL UnitOfWork", () =
         },
       })).service;
       const denyMutation = mock((input: { concealExistence?: boolean }) => {
-        if (input.concealExistence)
-          throw new OrganizationNotFoundError();
+        if (input.concealExistence) throw new OrganizationNotFoundError();
         throw new Error("Unexpected authorization denial");
       });
-      const authorization: AdminOrganizationAuthorization | undefined
-        = actor === "full-outside"
+      const authorization: AdminOrganizationAuthorization | undefined =
+        actor === "full-outside"
           ? undefined
           : {
               kind: "scoped",
@@ -199,8 +196,7 @@ describe("Organization mutations through production PostgreSQL UnitOfWork", () =
         // A separate production UoW wins after the first transaction observed no occupied code.
         if (actor === "scoped-inside") {
           await createCommand().service.updateOrganization("OTHER", { orgCode: "RACED" });
-        }
-        else {
+        } else {
           await createCommand().service.setOrganization(
             OrganizationCreateDtoSchema.parse({
               orgCode: "RACED",
@@ -210,8 +206,7 @@ describe("Organization mutations through production PostgreSQL UnitOfWork", () =
             }),
           );
         }
-      }
-      finally {
+      } finally {
         release.resolve();
       }
       const error = await pending;
@@ -225,13 +220,12 @@ describe("Organization mutations through production PostgreSQL UnitOfWork", () =
           reason: "RESOURCE_OUT_OF_SCOPE",
           concealExistence: true,
         });
-      }
-      else {
+      } else {
         expect(denyMutation).not.toHaveBeenCalled();
       }
       const after = await facts();
       expect(after.organizations).toHaveLength(actor === "scoped-inside" ? 2 : 3);
-      expect(after.organizations.find(row => row.orgCode === "RACED")).toMatchObject({
+      expect(after.organizations.find((row) => row.orgCode === "RACED")).toMatchObject({
         orgName: actor === "scoped-inside" ? "OTHER" : "Winner",
       });
       expect(after.audits).toMatchObject([
@@ -286,11 +280,13 @@ describe("Organization mutations through production PostgreSQL UnitOfWork", () =
 
   test("persists normalized organization write fields", async () => {
     const { service } = createCommand();
-    const result = await service.setOrganization(OrganizationCreateDtoSchema.parse({
-      orgCode: "  ORGANIZATION  ",
-      orgName: "  Organization  ",
-      orgType: OrganizationType.Department,
-    }));
+    const result = await service.setOrganization(
+      OrganizationCreateDtoSchema.parse({
+        orgCode: "  ORGANIZATION  ",
+        orgName: "  Organization  ",
+        orgType: OrganizationType.Department,
+      }),
+    );
     expect(result).toMatchObject({
       changed: true,
       result: { orgCode: "ORGANIZATION", orgName: "Organization" },
@@ -303,24 +299,28 @@ describe("Organization mutations through production PostgreSQL UnitOfWork", () =
   test("keeps organization code uniqueness case-sensitive", async () => {
     const { service } = createCommand();
     for (const orgCode of ["CASE", "case"]) {
-      await service.setOrganization(OrganizationCreateDtoSchema.parse({
-        orgCode,
-        orgName: `Organization ${orgCode}`,
-        orgType: OrganizationType.Department,
-      }));
+      await service.setOrganization(
+        OrganizationCreateDtoSchema.parse({
+          orgCode,
+          orgName: `Organization ${orgCode}`,
+          orgType: OrganizationType.Department,
+        }),
+      );
     }
     const after = await facts();
-    expect(after.organizations.map(row => row.orgCode)).toEqual(["CASE", "case"]);
+    expect(after.organizations.map((row) => row.orgCode)).toEqual(["CASE", "case"]);
   });
 
   test("does not apply the organization code length limit to names", async () => {
     const { service } = createCommand();
     const longName = `Organization-${"N".repeat(80)}`;
-    await service.setOrganization(OrganizationCreateDtoSchema.parse({
-      orgCode: "LONG-NAME",
-      orgName: longName,
-      orgType: OrganizationType.Department,
-    }));
+    await service.setOrganization(
+      OrganizationCreateDtoSchema.parse({
+        orgCode: "LONG-NAME",
+        orgName: longName,
+        orgType: OrganizationType.Department,
+      }),
+    );
     const after = await facts();
     expect(after.organizations).toMatchObject([{ orgCode: "LONG-NAME", orgName: longName }]);
   });
@@ -328,11 +328,13 @@ describe("Organization mutations through production PostgreSQL UnitOfWork", () =
   test("allows distinct organization codes to share a name", async () => {
     const { service } = createCommand();
     for (const orgCode of ["FIRST", "SECOND"]) {
-      await service.setOrganization(OrganizationCreateDtoSchema.parse({
-        orgCode,
-        orgName: "Shared name",
-        orgType: OrganizationType.Department,
-      }));
+      await service.setOrganization(
+        OrganizationCreateDtoSchema.parse({
+          orgCode,
+          orgName: "Shared name",
+          orgType: OrganizationType.Department,
+        }),
+      );
     }
     const after = await facts();
     expect(after.organizations).toMatchObject([
@@ -343,11 +345,13 @@ describe("Organization mutations through production PostgreSQL UnitOfWork", () =
 
   test("keeps normalized organization updates as no-ops without new audit or dirty facts", async () => {
     const { service } = createCommand();
-    await service.setOrganization(OrganizationCreateDtoSchema.parse({
-      orgCode: "ORGANIZATION",
-      orgName: "Organization",
-      orgType: OrganizationType.Department,
-    }));
+    await service.setOrganization(
+      OrganizationCreateDtoSchema.parse({
+        orgCode: "ORGANIZATION",
+        orgName: "Organization",
+        orgType: OrganizationType.Department,
+      }),
+    );
     const before = await facts();
     const unchanged = await service.updateOrganization(
       "ORGANIZATION",
@@ -409,9 +413,7 @@ describe("Organization mutations through production PostgreSQL UnitOfWork", () =
     const target = await seedOrganization();
     const child = await seedOrganization("CHILD");
     await harness.db.update(organizations).set({ parentId: target.id }).where(eq(organizations.id, child.id));
-    await harness.db
-      .insert(organizationClosures)
-      .values({ ancestorId: target.id, descendantId: child.id, depth: 1 });
+    await harness.db.insert(organizationClosures).values({ ancestorId: target.id, descendantId: child.id, depth: 1 });
     const { service } = createCommand();
     const childrenError = await failure(() => service.deleteOrganization("ORGANIZATION"));
     expect(childrenError).toBeInstanceOf(OrganizationHasChildrenError);
@@ -449,7 +451,7 @@ describe("Organization mutations through production PostgreSQL UnitOfWork", () =
       await seedOrganization();
       const written = Promise.withResolvers<void>();
       const release = Promise.withResolvers<void>();
-      const first = createCommand(tx => ({
+      const first = createCommand((tx) => ({
         ...tx,
         organizationRepository: {
           ...tx.organizationRepository,
@@ -467,8 +469,8 @@ describe("Organization mutations through production PostgreSQL UnitOfWork", () =
           },
         },
       })).service;
-      const firstPending
-        = firstOperation === "rename"
+      const firstPending =
+        firstOperation === "rename"
           ? first.updateOrganization("ORGANIZATION", { orgCode: "RENAMED" })
           : first.deleteOrganization("ORGANIZATION");
       await Promise.race([written.promise, firstPending]);
@@ -491,8 +493,7 @@ describe("Organization mutations through production PostgreSQL UnitOfWork", () =
           blocked = rows[0]!.blocked;
         }
         expect(blocked).toBe(true);
-      }
-      finally {
+      } finally {
         release.resolve();
         await Promise.allSettled([firstPending, secondPending]);
       }
@@ -516,7 +517,7 @@ describe("Organization mutations through production PostgreSQL UnitOfWork", () =
       await seedOrganization();
       const written = Promise.withResolvers<void>();
       const release = Promise.withResolvers<void>();
-      const first = createCommand(tx => ({
+      const first = createCommand((tx) => ({
         ...tx,
         organizationRepository: {
           ...tx.organizationRepository,
@@ -531,8 +532,8 @@ describe("Organization mutations through production PostgreSQL UnitOfWork", () =
       const second = createCommand().service;
       const firstPending = first.updateOrganizationStatus("ORGANIZATION", OrganizationStatus.Pause);
       await Promise.race([written.promise, firstPending]);
-      const secondPending
-        = secondOperation === "status"
+      const secondPending =
+        secondOperation === "status"
           ? second.updateOrganizationStatus("ORGANIZATION", OrganizationStatus.Pause)
           : second.updateOrganization("ORGANIZATION", { orgName: "New name" });
       try {
@@ -550,8 +551,7 @@ describe("Organization mutations through production PostgreSQL UnitOfWork", () =
           blocked = rows[0]!.blocked;
         }
         expect(blocked).toBe(true);
-      }
-      finally {
+      } finally {
         release.resolve();
         await Promise.allSettled([firstPending, secondPending]);
       }
@@ -587,9 +587,7 @@ describe("Organization mutations through production PostgreSQL UnitOfWork", () =
       result: { orgCode: "ORGANIZATION", orgName: "ORGANIZATION" },
     });
     const initial = await facts();
-    expect(initial.audits).toMatchObject([
-      { action: "admin.organization.create", details: { changed: true } },
-    ]);
+    expect(initial.audits).toMatchObject([{ action: "admin.organization.create", details: { changed: true } }]);
     const user = await seedEmployment(initial.organizations[0]!.id);
     let observedAtWakeup: Awaited<ReturnType<typeof facts>> | undefined;
     enqueueRebuildJobs.mockImplementation(async () => {
@@ -599,7 +597,7 @@ describe("Organization mutations through production PostgreSQL UnitOfWork", () =
     const result = await service.updateOrganization("ORGANIZATION", { orgName: "Renamed" });
     expect(result).toEqual({ changed: true, result: null });
     expect(enqueueRebuildJobs).toHaveBeenCalledTimes(1);
-    expect(observedAtWakeup?.organizations[0]!.orgName).toBe("Renamed");
+    expect(observedAtWakeup?.organizations[0]?.orgName).toBe("Renamed");
     expect(observedAtWakeup?.audits).toHaveLength(2);
     expect(observedAtWakeup?.dirty).toMatchObject([{ userId: user.id }]);
   });
@@ -620,9 +618,7 @@ describe("Organization mutations through production PostgreSQL UnitOfWork", () =
     expect(status).toEqual({ changed: false, result: null });
     const after = await facts();
     expect(after.organizations).toEqual(before.organizations);
-    expect(after.audits).toMatchObject([
-      { action: "admin.organization.status_update", details: { changed: false } },
-    ]);
+    expect(after.audits).toMatchObject([{ action: "admin.organization.status_update", details: { changed: false } }]);
     expect(after.dirty).toEqual([]);
     expect(enqueueRebuildJobs).not.toHaveBeenCalled();
     const updateStatus = await service.updateOrganization("ORGANIZATION", {
@@ -687,7 +683,7 @@ describe("Organization mutations through production PostgreSQL UnitOfWork", () =
       const organization = await seedOrganization();
       await seedEmployment(organization.id);
       const sentinel = new Error(`injected ${stage} failure`);
-      const { service, enqueueRebuildJobs } = createCommand(tx => ({
+      const { service, enqueueRebuildJobs } = createCommand((tx) => ({
         ...tx,
         ...(stage === "audit"
           ? {
@@ -709,9 +705,7 @@ describe("Organization mutations through production PostgreSQL UnitOfWork", () =
             }),
       }));
       const before = await facts();
-      const error = await failure(() =>
-        service.updateOrganization("ORGANIZATION", { orgName: "Rolled back" }),
-      );
+      const error = await failure(() => service.updateOrganization("ORGANIZATION", { orgName: "Rolled back" }));
       expect(error).toBe(sentinel);
       const after = await facts();
       expect(after).toEqual(before);
@@ -723,7 +717,7 @@ describe("Organization mutations through production PostgreSQL UnitOfWork", () =
     const organization = await seedOrganization();
     await seedEmployment(organization.id);
     const { service, warn } = createCommand(
-      tx => tx,
+      (tx) => tx,
       mock(async () => {
         throw new Error("queue unavailable");
       }),
@@ -737,15 +731,10 @@ describe("Organization mutations through production PostgreSQL UnitOfWork", () =
     expect(warn).toHaveBeenCalled();
   });
 
-  for (const method of [
-    "setOrganization",
-    "updateOrganizationByCode",
-    "softDeleteOrganizationByCode",
-  ] as const) {
+  for (const method of ["setOrganization", "updateOrganizationByCode", "softDeleteOrganizationByCode"] as const) {
     test(`controlled zero-row ${method} fails closed without audit or dirty`, async () => {
-      if (method !== "setOrganization")
-        await seedOrganization();
-      const { service } = createCommand(tx => ({
+      if (method !== "setOrganization") await seedOrganization();
+      const { service } = createCommand((tx) => ({
         ...tx,
         organizationRepository: { ...tx.organizationRepository, [method]: async () => null },
       }));
@@ -799,15 +788,13 @@ describe("Organization mutations through production PostgreSQL UnitOfWork", () =
   test("extracts real Drizzle cause metadata and preserves unknown unique constraints", async () => {
     await seedOrganization();
     const raw = await failure(() =>
-      harness.db
-        .insert(organizations)
-        .values({
-          orgCode: "ORGANIZATION",
-          orgName: "Other",
-          path: "",
-          level: OrganizationLevel.One,
-          orgType: OrganizationType.Department,
-        }),
+      harness.db.insert(organizations).values({
+        orgCode: "ORGANIZATION",
+        orgName: "Other",
+        path: "",
+        level: OrganizationLevel.One,
+        orgType: OrganizationType.Department,
+      }),
     );
     expect(raw).toHaveProperty("cause");
     expect(extractPostgresError(raw)).toEqual({ code: "23505", constraint: "organization_org_code_key" });
@@ -833,8 +820,7 @@ describe("Organization mutations through production PostgreSQL UnitOfWork", () =
       expect(after.organizations).toHaveLength(1);
       expect(after.audits).toEqual([]);
       expect(after.dirty).toEqual([]);
-    }
-    finally {
+    } finally {
       await harness.sql`drop index organization_test_name_unique`;
     }
   });
@@ -847,7 +833,7 @@ describe("Organization mutations through production PostgreSQL UnitOfWork", () =
       }
       let arrived = 0;
       const gate = Promise.withResolvers<void>();
-      const { service } = createCommand(tx => ({
+      const { service } = createCommand((tx) => ({
         ...tx,
         organizationRepository: {
           ...tx.organizationRepository,
@@ -855,8 +841,7 @@ describe("Organization mutations through production PostgreSQL UnitOfWork", () =
             const current = await tx.organizationRepository.getAnyOrganizationByCode(code);
             if (code === "WINNER") {
               arrived++;
-              if (arrived === 2)
-                gate.resolve();
+              if (arrived === 2) gate.resolve();
               await gate.promise;
             }
             return current;
@@ -865,7 +850,7 @@ describe("Organization mutations through production PostgreSQL UnitOfWork", () =
       }));
       const results = await Promise.allSettled(
         operation === "create"
-          ? ["First", "Second"].map(orgName =>
+          ? ["First", "Second"].map((orgName) =>
               service.setOrganization({
                 path: "",
                 level: OrganizationLevel.One,
@@ -875,14 +860,14 @@ describe("Organization mutations through production PostgreSQL UnitOfWork", () =
                 status: OrganizationStatus.Enable,
               }),
             )
-          : ["FIRST", "SECOND"].map(code => service.updateOrganization(code, { orgCode: "WINNER" })),
+          : ["FIRST", "SECOND"].map((code) => service.updateOrganization(code, { orgCode: "WINNER" })),
       );
       expect(arrived).toBe(2);
-      expect(results.filter(result => result.status === "fulfilled")).toHaveLength(1);
-      const rejected = results.find(result => result.status === "rejected");
+      expect(results.filter((result) => result.status === "fulfilled")).toHaveLength(1);
+      const rejected = results.find((result) => result.status === "rejected");
       expect(rejected?.reason).toBeInstanceOf(OrganizationCodeExistsError);
       const after = await facts();
-      expect(after.organizations.filter(organization => organization.orgCode === "WINNER")).toHaveLength(1);
+      expect(after.organizations.filter((organization) => organization.orgCode === "WINNER")).toHaveLength(1);
       expect(after.organizations).toHaveLength(operation === "create" ? 1 : 2);
       expect(after.audits).toHaveLength(1);
       expect(after.dirty).toEqual([]);

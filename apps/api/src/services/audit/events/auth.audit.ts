@@ -1,8 +1,6 @@
 import type { AuditLogInput } from "@api/services/audit/audit.context";
 import type { UserDetailDto } from "@api/services/user/user.type";
-import {
-  AuditActions,
-} from "@iam/contracts";
+import { AuditActions } from "@iam/contracts";
 import { maskMobileForAudit } from "@iam/domain/audit";
 
 type UserAuditTarget = {
@@ -78,9 +76,7 @@ export function buildWechatLoginSuccessAudit(user: UserDetailDto) {
   });
 }
 
-export function buildSmsCodeSendAudit(
-  input: { phoneNumber: string; usage: string; username?: string },
-): AuditLogInput {
+export function buildSmsCodeSendAudit(input: { phoneNumber: string; usage: string; username?: string }): AuditLogInput {
   return {
     action: "auth.sms_code.send",
     outcome: "success",
@@ -95,9 +91,12 @@ export function buildSmsCodeSendAudit(
   };
 }
 
-export function buildSmsCodeVerifyAudit(
-  input: { phoneNumber: string; usage: string; username?: string; verified: boolean },
-): AuditLogInput {
+export function buildSmsCodeVerifyAudit(input: {
+  phoneNumber: string;
+  usage: string;
+  username?: string;
+  verified: boolean;
+}): AuditLogInput {
   return {
     action: "auth.sms_code.verify",
     outcome: input.verified ? "success" : "failure",

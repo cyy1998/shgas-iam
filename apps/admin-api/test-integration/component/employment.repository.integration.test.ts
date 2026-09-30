@@ -1,7 +1,7 @@
+import { describe, expect, mock, test } from "bun:test";
 import { createEmploymentRepository } from "@admin-api/services/employment/employment.repository";
 import { EmploymentStatus } from "@iam/contracts";
 import { EmploymentAlreadyExistsError } from "@iam/domain/employment";
-import { describe, expect, mock, test } from "bun:test";
 import { createQueryCaptureDb, renderQuery, renderSql } from "../helpers/drizzle-query-capture";
 
 function uniqueViolation() {
@@ -80,10 +80,10 @@ describe("createEmploymentRepository", () => {
 
     expect(ids).toEqual([7, 3]);
     const query = renderQuery(where.mock.calls[0]?.[0]);
-    expect(query.sql).toContain("\"employment\".\"user_id\" = $1");
-    expect(query.sql).toContain("\"employment\".\"is_primary\" = $2");
-    expect(query.sql).toContain("\"employment\".\"is_delete\" = $3");
-    expect(query.sql).toContain("\"employment\".\"status\" in ($4, $5)");
+    expect(query.sql).toContain('"employment"."user_id" = $1');
+    expect(query.sql).toContain('"employment"."is_primary" = $2');
+    expect(query.sql).toContain('"employment"."is_delete" = $3');
+    expect(query.sql).toContain('"employment"."status" in ($4, $5)');
     expect(query.params).toEqual([1, true, false, EmploymentStatus.Enable, EmploymentStatus.Pause]);
   });
 
@@ -95,9 +95,9 @@ describe("createEmploymentRepository", () => {
     const ids = await repository.getOpenEmploymentIdsByUserId(1);
     expect(ids).toEqual([7, 3]);
     const query = renderQuery(where.mock.calls[0]?.[0]);
-    expect(query.sql).toContain("\"employment\".\"user_id\" = $1");
-    expect(query.sql).toContain("\"employment\".\"is_delete\" = $2");
-    expect(query.sql).toContain("\"employment\".\"status\" in ($3, $4)");
+    expect(query.sql).toContain('"employment"."user_id" = $1');
+    expect(query.sql).toContain('"employment"."is_delete" = $2');
+    expect(query.sql).toContain('"employment"."status" in ($3, $4)');
     expect(query.params).toEqual([1, false, EmploymentStatus.Enable, EmploymentStatus.Pause]);
   });
 
@@ -109,16 +109,18 @@ describe("createEmploymentRepository", () => {
     const insert = mock(() => ({ values }));
     const repository = createEmploymentRepository({ insert } as any);
 
-    await expect(repository.createEmploymentRecord({
-      userId: 1,
-      orgId: 2,
-      posId: 3,
-      isPrimary: false,
-      startTime: new Date("2026-01-01T00:00:00.000Z"),
-      endTime: null,
-      description: null,
-      status: EmploymentStatus.Enable,
-    })).rejects.toBeInstanceOf(EmploymentAlreadyExistsError);
+    await expect(
+      repository.createEmploymentRecord({
+        userId: 1,
+        orgId: 2,
+        posId: 3,
+        isPrimary: false,
+        startTime: new Date("2026-01-01T00:00:00.000Z"),
+        endTime: null,
+        description: null,
+        status: EmploymentStatus.Enable,
+      }),
+    ).rejects.toBeInstanceOf(EmploymentAlreadyExistsError);
   });
 
   test("searches fuzzy text across employment id, user, organization, and position fields", async () => {
@@ -135,13 +137,13 @@ describe("createEmploymentRepository", () => {
     });
 
     const whereSql = renderSql(topLevelWhere.at(-1));
-    expect(whereSql).toContain("\"employment\".\"id\"::text ILIKE");
-    expect(whereSql).toContain("\"user\".\"username\" ilike");
-    expect(whereSql).toContain("\"user\".\"name\" ilike");
-    expect(whereSql).toContain("\"organization\".\"org_code\" ilike");
-    expect(whereSql).toContain("\"organization\".\"org_name\" ilike");
-    expect(whereSql).toContain("\"position\".\"post_code\" ilike");
-    expect(whereSql).toContain("\"position\".\"post_name\" ilike");
-    expect(whereSql).toContain("\"employment\".\"is_delete\" = $1");
+    expect(whereSql).toContain('"employment"."id"::text ILIKE');
+    expect(whereSql).toContain('"user"."username" ilike');
+    expect(whereSql).toContain('"user"."name" ilike');
+    expect(whereSql).toContain('"organization"."org_code" ilike');
+    expect(whereSql).toContain('"organization"."org_name" ilike');
+    expect(whereSql).toContain('"position"."post_code" ilike');
+    expect(whereSql).toContain('"position"."post_name" ilike');
+    expect(whereSql).toContain('"employment"."is_delete" = $1');
   });
 });

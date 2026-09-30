@@ -27,10 +27,7 @@ export interface ChangeEmploymentAvailabilityTransactionPorts {
     ) => Promise<Employment>;
   };
   organizationReader: {
-    isOrganizationDescendantOf: (
-      descendantOrgCode: string,
-      ancestorOrgCode: string,
-    ) => Promise<boolean>;
+    isOrganizationDescendantOf: (descendantOrgCode: string, ancestorOrgCode: string) => Promise<boolean>;
   };
   auditLogWriter: {
     recordAuditLog: (input: AuditLogInput) => Promise<void>;
@@ -47,16 +44,18 @@ export interface ChangeEmploymentAvailabilityTransactionPorts {
     }) => Promise<boolean>;
   };
   userProfileInvalidation: {
-    recordChanges: (changes: readonly (
-      | {
-        readonly kind: "employment";
-        readonly userId: number;
-      }
-      | {
-        readonly kind: "organization-responsibility-assignment";
-        readonly userId: number;
-      }
-    )[]) => Promise<void>;
+    recordChanges: (
+      changes: readonly (
+        | {
+            readonly kind: "employment";
+            readonly userId: number;
+          }
+        | {
+            readonly kind: "organization-responsibility-assignment";
+            readonly userId: number;
+          }
+      )[],
+    ) => Promise<void>;
   };
 }
 

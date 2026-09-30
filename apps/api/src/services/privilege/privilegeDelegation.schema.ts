@@ -27,9 +27,11 @@ export const PrivilegeDelegationDetailSchema = PrivilegeDelegationSchema.extend(
     parent: DbOrganizationSchema.nullable(),
     children: z.array(DbOrganizationSchema),
   }),
-  delegationDetails: z.array(DbDelegationDetailSchema.extend({
-    privilege: DbPrivilegeSchema,
-  })),
+  delegationDetails: z.array(
+    DbDelegationDetailSchema.extend({
+      privilege: DbPrivilegeSchema,
+    }),
+  ),
 });
 
 export const PrivilegeDelegationDtoSchema = PrivilegeDelegationSchema.extend({
@@ -37,7 +39,9 @@ export const PrivilegeDelegationDtoSchema = PrivilegeDelegationSchema.extend({
   delegatorName: z.string().openapi({ example: "蔡奕阳" }),
   delegateeUsername: z.string().openapi({ example: "138550" }),
   delegateeName: z.string().openapi({ example: "蔡奕阳" }),
-}).required().openapi("PrivilegeDelegationDto");
+})
+  .required()
+  .openapi("PrivilegeDelegationDto");
 
 export function toPrivilegeDelegationDto(input: unknown) {
   const e = PrivilegeDelegationDetailSchema.parse(input);
@@ -60,9 +64,12 @@ export const PrivilegeDelegationDetailDtoSchema = PrivilegeDelegationDetailSchem
   delegateeUser: UserDtoSchema,
   organizationScope: OrganizationDtoSchema,
   privileges: z.array(PrivilegeDtoSchema),
-}).omit({
-  delegationDetails: true,
-}).required().openapi("PrivilegeDelegationDetailDto");
+})
+  .omit({
+    delegationDetails: true,
+  })
+  .required()
+  .openapi("PrivilegeDelegationDetailDto");
 
 export function toPrivilegeDelegationDetailDto(input: unknown) {
   const e = PrivilegeDelegationDetailSchema.parse(input);
@@ -76,31 +83,57 @@ export function toPrivilegeDelegationDetailDto(input: unknown) {
     delegatorUser: UserDtoSchema.parse(e.delegatorUser),
     delegateeUser: UserDtoSchema.parse(e.delegateeUser),
     organizationScope: toOrganizationDto(e.organizationScope),
-    privileges: e.delegationDetails.map(detail => PrivilegeDtoSchema.parse(detail.privilege)),
+    privileges: e.delegationDetails.map((detail) => PrivilegeDtoSchema.parse(detail.privilege)),
   });
 }
 
-export const PrivilegeDelegationQueryDtoSchema = z.object({
-  delegatorUsernames: z.array(z.string()).optional().describe("授权人用户名列表").openapi({ example: ["138550", "136163"] }),
-  delegateeUsernames: z.array(z.string()).optional().describe("被授权人用户名列表").openapi({ example: ["138550", "136163"] }),
-  orgCodes: z.array(z.string()).optional().describe("组织编码列表").openapi({ example: ["SR", "SB"] }),
-  privCodes: z.array(z.string()).optional().describe("权限编码列表").openapi({ example: ["ui:button:tender:create-GYBG"] }),
-  validTime: z.iso.datetime().optional().describe("有效时间").openapi({ example: "2024-01-01T00:00:00Z" }),
-}).openapi("PrivilegeDelegationQueryDto");
+export const PrivilegeDelegationQueryDtoSchema = z
+  .object({
+    delegatorUsernames: z
+      .array(z.string())
+      .optional()
+      .describe("授权人用户名列表")
+      .openapi({ example: ["138550", "136163"] }),
+    delegateeUsernames: z
+      .array(z.string())
+      .optional()
+      .describe("被授权人用户名列表")
+      .openapi({ example: ["138550", "136163"] }),
+    orgCodes: z
+      .array(z.string())
+      .optional()
+      .describe("组织编码列表")
+      .openapi({ example: ["SR", "SB"] }),
+    privCodes: z
+      .array(z.string())
+      .optional()
+      .describe("权限编码列表")
+      .openapi({ example: ["ui:button:tender:create-GYBG"] }),
+    validTime: z.iso.datetime().optional().describe("有效时间").openapi({ example: "2024-01-01T00:00:00Z" }),
+  })
+  .openapi("PrivilegeDelegationQueryDto");
 
-export const PrivilegeDelegationUpdateDtoSchema = z.object({
-  startTime: z.coerce.date().describe("授权开始时间").optional().openapi({ example: "2024-01-01T00:00:00Z" }),
-  endTime: z.coerce.date().describe("授权结束时间").optional().openapi({ example: "2024-01-31T23:59:59Z" }),
-  status: z.enum(PrivilegeDelegationStatus).describe("状态(正常1、暂停2、结束3)").optional(),
-  description: z.string().describe("描述").nullish(),
-}).strict().openapi("PrivilegeDelegationUpdateDto");
+export const PrivilegeDelegationUpdateDtoSchema = z
+  .object({
+    startTime: z.coerce.date().describe("授权开始时间").optional().openapi({ example: "2024-01-01T00:00:00Z" }),
+    endTime: z.coerce.date().describe("授权结束时间").optional().openapi({ example: "2024-01-31T23:59:59Z" }),
+    status: z.enum(PrivilegeDelegationStatus).describe("状态(正常1、暂停2、结束3)").optional(),
+    description: z.string().describe("描述").nullish(),
+  })
+  .strict()
+  .openapi("PrivilegeDelegationUpdateDto");
 
-export const PrivilegeDelegationCreateDtoSchema = z.object({
-  delegatorUsername: z.string().describe("授权人用户名").openapi({ example: "138550" }),
-  delegateeUsername: z.string().describe("被授权人用户名").openapi({ example: "138550" }),
-  orgCode: z.string().describe("组织编码").openapi({ example: "SR23" }),
-  privilegeCodes: z.array(z.string()).describe("权限编码列表").openapi({ example: ["tender:flow:SR_CZLX"] }),
-  description: z.string().max(500).nullish(),
-  startTime: z.coerce.date().describe("授权开始时间").openapi({ example: "2024-01-01T00:00:00Z" }),
-  endTime: z.coerce.date().describe("授权结束时间").openapi({ example: "2024-01-31T23:59:59Z" }),
-}).openapi("PrivilegeDelegationCreateDto");
+export const PrivilegeDelegationCreateDtoSchema = z
+  .object({
+    delegatorUsername: z.string().describe("授权人用户名").openapi({ example: "138550" }),
+    delegateeUsername: z.string().describe("被授权人用户名").openapi({ example: "138550" }),
+    orgCode: z.string().describe("组织编码").openapi({ example: "SR23" }),
+    privilegeCodes: z
+      .array(z.string())
+      .describe("权限编码列表")
+      .openapi({ example: ["tender:flow:SR_CZLX"] }),
+    description: z.string().max(500).nullish(),
+    startTime: z.coerce.date().describe("授权开始时间").openapi({ example: "2024-01-01T00:00:00Z" }),
+    endTime: z.coerce.date().describe("授权结束时间").openapi({ example: "2024-01-31T23:59:59Z" }),
+  })
+  .openapi("PrivilegeDelegationCreateDto");

@@ -1,6 +1,6 @@
 import type { JobsOptions, Processor, QueueOptions, WorkerOptions } from "bullmq";
-import type { BullMqRedisConfig, CreateBullMqConnectionOptions } from "./connection";
 import { Queue, Worker } from "bullmq";
+import type { BullMqRedisConfig, CreateBullMqConnectionOptions } from "./connection";
 import { createBullMqConnectionOptions } from "./connection";
 import { DEFAULT_QUEUE_PREFIX, resolveDefaultJobOptions } from "./options";
 

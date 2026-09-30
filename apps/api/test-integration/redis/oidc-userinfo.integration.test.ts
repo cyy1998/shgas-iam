@@ -1,8 +1,15 @@
+import { expect, test } from "bun:test";
+import { randomUUID } from "node:crypto";
 import type { ClientSnapshotValue } from "@iam/api-core/client-snapshot";
 import type { SubjectFactsSnapshot } from "@iam/client-subject-projection";
-import { randomUUID } from "node:crypto";
-import { ClientSsoCallbackType, ClientSsoProtocol, ClientStatus, OidcClientType, OidcScope, OrganizationType } from "@iam/contracts";
-import { expect, test } from "bun:test";
+import {
+  ClientSsoCallbackType,
+  ClientSsoProtocol,
+  ClientStatus,
+  OidcClientType,
+  OidcScope,
+  OrganizationType,
+} from "@iam/contracts";
 import { userInfoFixture } from "./oidc-userinfo.fixture";
 
 test("UserInfo real GET/POST and form Bearer transport retain standard errors and registered Client CORS", async () => {
@@ -13,10 +20,10 @@ test("UserInfo real GET/POST and form Bearer transport retain standard errors an
       const result = await f.me(issued.access_token, method, { Origin: "https://rp.example" });
       expect(result.status).toBe(200);
       expect(await result.json()).toEqual({
-        "sub": f.subjectIdentifier,
-        "preferred_username": "test",
-        "name": "测试",
-        "phone_number": "17721462865",
+        sub: f.subjectIdentifier,
+        preferred_username: "test",
+        name: "测试",
+        phone_number: "17721462865",
         "iam:employments": [],
         "iam:authorization": { employments: [], roles: [], privileges: [] },
       });
@@ -30,7 +37,7 @@ test("UserInfo real GET/POST and form Bearer transport retain standard errors an
       body: new URLSearchParams({ access_token: issued.access_token }),
     });
     expect(form.status).toBe(200);
-    await f.setClient(value => ({
+    await f.setClient((value) => ({
       ...value,
       ssoConfig:
         value.ssoConfig?.protocol === ClientSsoProtocol.Oidc
@@ -47,7 +54,7 @@ test("UserInfo real GET/POST and form Bearer transport retain standard errors an
     const preflight = await f.request("/oidc/me", {
       method: "OPTIONS",
       headers: {
-        "Origin": "https://rp.example",
+        Origin: "https://rp.example",
         "Access-Control-Request-Method": "POST",
         "Access-Control-Request-Headers": "authorization",
       },
@@ -81,7 +88,7 @@ test("UserInfo real GET/POST and form Bearer transport retain standard errors an
         options: {
           method: "POST",
           headers: {
-            "Authorization": `Bearer ${issued.access_token}`,
+            Authorization: `Bearer ${issued.access_token}`,
             "Content-Type": "application/x-www-form-urlencoded",
           },
           body: new URLSearchParams({ access_token: issued.access_token }),
@@ -96,8 +103,7 @@ test("UserInfo real GET/POST and form Bearer transport retain standard errors an
       expect(await response.json()).toMatchObject({ error: input.code });
       expect(response.headers.get("WWW-Authenticate")).toStartWith("Bearer ");
     }
-  }
-  finally {
+  } finally {
     await f.close();
   }
 });
@@ -122,9 +128,9 @@ test("UserInfo current added and removed scopes affect old Tokens, preserve ID T
     const before = { reads: f.state.reads, acquisitions: f.state.acquisitions };
     const added = await f.me(issued.access_token);
     expect(await added.json()).toMatchObject({
-      "sub": f.subjectIdentifier,
-      "name": "测试",
-      "phone_number": "17721462865",
+      sub: f.subjectIdentifier,
+      name: "测试",
+      phone_number: "17721462865",
       "iam:employments": [],
       "iam:authorization": { roles: [] },
     });
@@ -139,8 +145,7 @@ test("UserInfo current added and removed scopes affect old Tokens, preserve ID T
     expect(await f.scope.inspect(issued.target)).toEqual(originalSession);
     const idClaims = JSON.parse(Buffer.from(issued.id_token.split(".")[1]!, "base64url").toString());
     expect(Object.keys(idClaims).sort()).toEqual(["aud", "auth_time", "exp", "iat", "iss", "sub"]);
-  }
-  finally {
+  } finally {
     await f.close();
   }
 });
@@ -155,15 +160,13 @@ test("UserInfo checks the original root even when the child index is missing", a
     await f.operations.run(async (operation) => {
       const sessions = f.kernel.forOperation(operation);
       const root = await sessions.observeUserSessionForRevocation(issued.record.userSessionId);
-      if (root.status !== "resolved")
-        throw new Error("Missing root");
+      if (root.status !== "resolved") throw new Error("Missing root");
       const revoked = await sessions.revokeObservedUserSession(root.value);
       expect(revoked.status).toBe("terminated");
     });
     expect((await f.me(issued.access_token)).status).toBe(401);
     expect(await f.oidcState.readToken(issued.access_token)).not.toBeNull();
-  }
-  finally {
+  } finally {
     await f.close();
   }
 });
@@ -178,8 +181,7 @@ test("UserInfo corrupt Token is unavailable without terminating its original ins
     expect(response.status).toBe(503);
     expect(await f.scope.inspect(issued.target)).toEqual(before);
     expect(response.headers.get("Set-Cookie")).toBeNull();
-  }
-  finally {
+  } finally {
     await f.close();
   }
 });
@@ -206,7 +208,7 @@ test("UserInfo protocol/enablement/maintenance changes recover original Token un
         },
       },
     ] satisfies Partial<ClientSnapshotValue>[]) {
-      await f.setClient(value => ({ ...value, ...change }));
+      await f.setClient((value) => ({ ...value, ...change }));
       const denied = await f.me(issued.access_token);
       expect(denied.status).toBe("status" in change ? 503 : 401);
       expect(await denied.json()).toMatchObject({
@@ -218,8 +220,7 @@ test("UserInfo protocol/enablement/maintenance changes recover original Token un
     await f.operations.run(async (operation) => {
       const session = f.kernel.forOperation(operation);
       const root = await session.resolveUserSession(f.cookies.get("global_session")!);
-      if (root.status !== "resolved")
-        throw new Error("Missing root");
+      if (root.status !== "resolved") throw new Error("Missing root");
       await session.openClientSession(root.value, { clientId: f.clientId, protocol: "custom_sso" });
     });
     expect((await f.me(issued.access_token)).status).toBe(200);
@@ -230,16 +231,14 @@ test("UserInfo protocol/enablement/maintenance changes recover original Token un
         clientSessionId: issued.record.clientSessionId,
         clientId: f.clientId,
       });
-      if (observed.status !== "resolved")
-        throw new Error("Missing instance");
+      if (observed.status !== "resolved") throw new Error("Missing instance");
       await session.revokeObservedClientSession(observed.value);
     });
     const replacement = await f.issue();
     expect(replacement.record.clientSessionId).not.toBe(issued.record.clientSessionId);
     expect((await f.me(issued.access_token)).status).toBe(401);
     expect((await f.me(replacement.access_token)).status).toBe(200);
-  }
-  finally {
+  } finally {
     await f.close();
   }
 });
@@ -249,19 +248,16 @@ for (const failure of ["clientFailure", "factFailure", "permission"] as const) {
     const f = await userInfoFixture();
     try {
       const issued = await f.issue();
-      if (failure === "permission")
-        f.state.permission = "unknown";
+      if (failure === "permission") f.state.permission = "unknown";
       else f.state[failure] = true;
       const response = await f.me(issued.access_token);
       expect(response.status).toBe(503);
       expect(await response.json()).toMatchObject({ error: "temporarily_unavailable" });
       expect(response.headers.get("Retry-After")).toBe("3");
-      if (failure === "permission")
-        f.state.permission = "enabled";
+      if (failure === "permission") f.state.permission = "enabled";
       else f.state[failure] = false;
       expect((await f.me(issued.access_token)).status).toBe(200);
-    }
-    finally {
+    } finally {
       await f.close();
     }
   });
@@ -298,8 +294,7 @@ test("UserInfo preserves an observed in-flight request and rejects next request 
     expect((await f.me(issued.access_token)).status).toBe(401);
     f.state.permission = "enabled";
     expect((await f.me(issued.access_token)).status).toBe(401);
-  }
-  finally {
+  } finally {
     release();
     await f.close();
   }
@@ -359,8 +354,7 @@ test("UserInfo maps published employment wire and isolates two Clients authoriza
         },
       ]);
     }
-  }
-  finally {
+  } finally {
     await f.close();
   }
 });

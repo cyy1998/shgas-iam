@@ -46,10 +46,7 @@ services:
         condition: service_completed_successfully
     healthcheck:
       test:
-        [
-          "CMD-SHELL",
-          "etcdctl endpoint health --endpoints=http://127.0.0.1:2379 --user \"root:$${ETCD_ROOT_PASSWORD}\"",
-        ]
+        ["CMD-SHELL", 'etcdctl endpoint health --endpoints=http://127.0.0.1:2379 --user "root:$${ETCD_ROOT_PASSWORD}"']
       interval: 10s
       timeout: 5s
       retries: 10

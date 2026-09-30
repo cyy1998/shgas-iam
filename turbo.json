@@ -10,28 +10,6 @@
       "persistent": true,
       "cache": false
     },
-    "lint": {
-      "dependsOn": ["^lint"]
-    },
-    "//#lint:root": {
-      "inputs": [
-        "$TURBO_ROOT$/scripts/**",
-        "$TURBO_ROOT$/eslint.root.config.mjs",
-        "$TURBO_ROOT$/eslint.frontend.config.mjs",
-        "$TURBO_ROOT$/stylelint.frontend.config.mjs",
-        "$TURBO_ROOT$/package.json",
-        "$TURBO_ROOT$/pnpm-lock.yaml",
-        "$TURBO_ROOT$/packages/eslint-config/package.json",
-        "$TURBO_ROOT$/packages/eslint-config/src/**"
-      ]
-    },
-    "lint:fix": {
-      "dependsOn": ["^lint:fix"],
-      "cache": false
-    },
-    "//#lint:fix:root": {
-      "cache": false
-    },
     "transit": {
       "dependsOn": ["^transit"]
     },
@@ -40,7 +18,12 @@
     },
     "//#test:unit:root": {},
     "//#typecheck:root": {
-      "inputs": ["$TURBO_ROOT$/scripts/sandcastle/**", "$TURBO_ROOT$/scripts/__tests__/sandcastle*.test.ts", "$TURBO_ROOT$/package.json", "$TURBO_ROOT$/pnpm-lock.yaml"]
+      "inputs": [
+        "$TURBO_ROOT$/scripts/sandcastle/**",
+        "$TURBO_ROOT$/scripts/__tests__/sandcastle*.test.ts",
+        "$TURBO_ROOT$/package.json",
+        "$TURBO_ROOT$/pnpm-lock.yaml"
+      ]
     },
     "test:integration:component": {
       "dependsOn": ["transit"]
@@ -52,6 +35,9 @@
     },
     "test:integration:process": {
       "dependsOn": ["transit"],
+      "cache": false
+    },
+    "//#test:integration:process:root": {
       "cache": false
     },
     "test:integration:postgres": {

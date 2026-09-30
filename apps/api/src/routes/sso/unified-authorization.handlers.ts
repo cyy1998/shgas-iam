@@ -1,13 +1,13 @@
-import type { createSubjectAccessOperations } from "@iam/api-core/subject-access";
-import type { UnifiedCustomSsoAuthorization } from "@iam/custom-sso";
-import type { SsoRouteHandler } from "./sso.type";
 import { mapCustomSsoRetryableError } from "@api/middlewares/custom-sso-retryable.error";
 import { expireCustomSsoCookies } from "@api/services/sso/transport/custom-sso-cookie";
 import * as HttpStatusCodes from "@iam/api-core/core/http-status-codes";
 import * as resp from "@iam/api-core/http";
+import type { createSubjectAccessOperations } from "@iam/api-core/subject-access";
 import { createSubjectAccessHttpAdapter } from "@iam/api-core/subject-access";
 import { appendNavigationParameters } from "@iam/contracts";
+import type { UnifiedCustomSsoAuthorization } from "@iam/custom-sso";
 import { getCookie, setCookie } from "hono/cookie";
+import type { SsoRouteHandler } from "./sso.type";
 
 export function createUnifiedAuthorizationHandlers(deps: {
   authorization: UnifiedCustomSsoAuthorization;
@@ -20,14 +20,14 @@ export function createUnifiedAuthorizationHandlers(deps: {
     const { client, redirectUrl, state, token, ssoReturn } = c.req.valid("query");
     const cookie = getCookie(c, "global_session");
     const binding = getCookie(c, "custom_sso_continuation");
-    let data;
+    let data: Awaited<ReturnType<ReturnType<typeof deps.authorization.forOperation>["authorize"]>>;
     try {
       data = await boundary.run(
         c,
         { clearCookiesOnInvalidSession: cookie ? ["global_session"] : [] },
         async () =>
           await deps.operations.run(
-            async operation =>
+            async (operation) =>
               await deps.authorization.forOperation(operation).authorize({
                 clientCode: client,
                 redirectUrl,
@@ -38,13 +38,11 @@ export function createUnifiedAuthorizationHandlers(deps: {
               }),
           ),
       );
-    }
-    catch (error) {
+    } catch (error) {
       throw mapCustomSsoRetryableError(error, { retryAfterSeconds: deps.retryAfterSeconds });
     }
     if (!data.isLogin) {
-      if (data.clearGlobalSessionCookie)
-        expireCustomSsoCookies(c, ["global_session"]);
+      if (data.clearGlobalSessionCookie) expireCustomSsoCookies(c, ["global_session"]);
       setCookie(c, "custom_sso_continuation", data.browserBinding, {
         httpOnly: true,
         sameSite: "Lax",
@@ -56,8 +54,7 @@ export function createUnifiedAuthorizationHandlers(deps: {
         redirectUrl: data.redirectUrl,
         ssoReturn: data.continuation,
       });
-      if (data.state !== undefined)
-        query.set("state", data.state);
+      if (data.state !== undefined) query.set("state", data.state);
       return c.redirect(appendNavigationParameters(deps.loginEndpoint, query));
     }
     const callback = new URL(data.callbackEndpoint);
@@ -65,16 +62,15 @@ export function createUnifiedAuthorizationHandlers(deps: {
     callback.searchParams.set("redirectUrl", data.redirectUrl);
     callback.searchParams.set("code", data.code);
     callback.searchParams.delete("state");
-    if (data.redeemer === "business" && data.state !== undefined)
-      callback.searchParams.set("state", data.state);
+    if (data.redeemer === "business" && data.state !== undefined) callback.searchParams.set("state", data.state);
     return c.redirect(callback.href);
   };
   const loginGuard: SsoRouteHandler<"loginGuard"> = async (c) => {
     const { client, redirectUrl, state, ssoReturn } = c.req.valid("query");
-    let data;
+    let data: Awaited<ReturnType<ReturnType<typeof deps.authorization.forOperation>["checkLoginContinuation"]>>;
     try {
       data = await deps.operations.run(
-        async operation =>
+        async (operation) =>
           await deps.authorization.forOperation(operation).checkLoginContinuation({
             clientCode: client,
             redirectUrl,
@@ -84,12 +80,10 @@ export function createUnifiedAuthorizationHandlers(deps: {
             globalSessionToken: getCookie(c, "global_session"),
           }),
       );
-    }
-    catch (error) {
+    } catch (error) {
       throw mapCustomSsoRetryableError(error, { retryAfterSeconds: deps.retryAfterSeconds });
     }
-    if (data.clearGlobalSessionCookie)
-      expireCustomSsoCookies(c, ["global_session"]);
+    if (data.clearGlobalSessionCookie) expireCustomSsoCookies(c, ["global_session"]);
     return c.json(resp.ok({ decision: data.decision }), HttpStatusCodes.OK);
   };
   return { authorize, loginGuard };

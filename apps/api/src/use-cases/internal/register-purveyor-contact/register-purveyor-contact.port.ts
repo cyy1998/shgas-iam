@@ -1,27 +1,20 @@
 import type { AuditLogWriterPort } from "@api/services/audit/audit.service";
-import type {
-  SubjectAccessMutationReceipt,
-  SubjectAccessTransitionTarget,
-} from "@iam/api-core/subject-access";
+import type { SubjectAccessMutationReceipt, SubjectAccessTransitionTarget } from "@iam/api-core/subject-access";
 import type { UnitOfWorkPort } from "@iam/api-core/uow";
 import type { UserCreateDto } from "@iam/domain/user";
 
-export type RegisterPurveyorContactProfileChange
-  = | {
-    readonly kind: "user";
-    readonly userId: number;
-  }
+export type RegisterPurveyorContactProfileChange =
   | {
-    readonly kind: "employment";
-    readonly userId: number;
-  };
+      readonly kind: "user";
+      readonly userId: number;
+    }
+  | {
+      readonly kind: "employment";
+      readonly userId: number;
+    };
 
 export interface RegisterPurveyorEmploymentStorePort {
-  getEmploymentByUserOrgPosId: (
-    userId: number,
-    orgId: number,
-    posId: number,
-  ) => Promise<unknown | null>;
+  getEmploymentByUserOrgPosId: (userId: number, orgId: number, posId: number) => Promise<unknown | null>;
   setEmployment: (userId: number, posId: number, orgId: number) => Promise<unknown>;
 }
 

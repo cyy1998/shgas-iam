@@ -1,9 +1,8 @@
+import { describe, expect, mock, test } from "bun:test";
 import type {
   CreateSessionManagementAdapterDeps,
   SessionManagementAdapter,
 } from "@admin-api/routes/admin/session-management/session-management.adapter";
-import type { AuditLogInput } from "@admin-api/services/audit/audit.context";
-import type { Context } from "hono";
 import { createSessionManagementAdapter } from "@admin-api/routes/admin/session-management/session-management.adapter";
 import {
   SessionManagementListLoginRestrictionsInputSchema,
@@ -11,6 +10,7 @@ import {
   SessionManagementReleaseLoginRestrictionInputSchema,
   SessionManagementRevokeSessionsInputSchema,
 } from "@admin-api/routes/admin/session-management/session-management.schema";
+import type { AuditLogInput } from "@admin-api/services/audit/audit.context";
 import {
   AdminLoginStateAuditFailedAfterEffectError,
   AdminLoginStateAuditFailedError,
@@ -21,35 +21,37 @@ import { createSessionManagementService } from "@admin-api/services/session-mana
 import { createErrorHandler } from "@iam/api-core/middlewares";
 import { getApiRuntimeErrorFormatterData } from "@iam/api-core/trpc";
 import { TRPCError } from "@trpc/server";
-import { describe, expect, mock, test } from "bun:test";
+import type { Context } from "hono";
 import { Hono } from "hono";
 import { getTestAdminAuthorizationValue } from "../helpers/admin-authorization";
 
 function sessionListResult() {
   return {
-    result: [{
-      principalSessionId: "ps-42",
-      user: {
-        id: 42,
-        subjectId: "00000000-0000-4000-8000-000000000042",
-        username: "alice",
-        name: "Alice",
-        accountStatus: "normal" as const,
+    result: [
+      {
+        principalSessionId: "ps-42",
+        user: {
+          id: 42,
+          subjectId: "00000000-0000-4000-8000-000000000042",
+          username: "alice",
+          name: "Alice",
+          accountStatus: "normal" as const,
+        },
+        authMethods: ["password" as const],
+        authTime: 1_753_689_600_000,
+        expiresAt: 1_753_776_000_000,
+        origin: {
+          ip: "203.0.113.42",
+          deviceType: "desktop" as const,
+          operatingSystem: "windows" as const,
+          browser: "edge" as const,
+        },
+        isCurrentSession: true,
+        isCurrentUser: true,
+        lastActiveAt: 1_753_700_000_000,
+        userAgent: "must-not-leave-adapter",
       },
-      authMethods: ["password" as const],
-      authTime: 1_753_689_600_000,
-      expiresAt: 1_753_776_000_000,
-      origin: {
-        ip: "203.0.113.42",
-        deviceType: "desktop" as const,
-        operatingSystem: "windows" as const,
-        browser: "edge" as const,
-      },
-      isCurrentSession: true,
-      isCurrentUser: true,
-      lastActiveAt: 1_753_700_000_000,
-      userAgent: "must-not-leave-adapter",
-    }],
+    ],
     total: 1,
     pageNum: 1,
     pageSize: 20,
@@ -59,7 +61,14 @@ function sessionListResult() {
 
 const unusedRevokeSessions = mock(async () => ({
   changed: false,
-  result: { scope: "session" as const, generation: "unified" as const, currentPrincipalSessionExcluded: false, sessions: { userSessionsTerminated: 0, clientSessionsTerminated: 0, excluded: 0, failed: 0, unknown: 0 }, batch: { results: [], unfinished: [] }, artifactCleanup: { attempted: 0, succeeded: 0, failed: 0 } },
+  result: {
+    scope: "session" as const,
+    generation: "unified" as const,
+    currentPrincipalSessionExcluded: false,
+    sessions: { userSessionsTerminated: 0, clientSessionsTerminated: 0, excluded: 0, failed: 0, unknown: 0 },
+    batch: { results: [], unfinished: [] },
+    artifactCleanup: { attempted: 0, succeeded: 0, failed: 0 },
+  },
 }));
 
 const unusedListLoginRestrictions = mock(async () => ({
@@ -87,36 +96,26 @@ function createContext(
 ) {
   return {
     get: mock((key: string) => {
-      if (key === "userDetailDto")
-        return { name: "Root Admin", roles: ["iam:admin"] };
+      if (key === "userDetailDto") return { name: "Root Admin", roles: ["iam:admin"] };
       const authorizationValue = getTestAdminAuthorizationValue(key);
-      if (authorizationValue !== undefined)
-        return authorizationValue;
-      if (key === "userId")
-        return 7;
-      if (key === "username")
-        return "root";
-      if (key === "principalSessionId")
-        return "ps-admin";
-      if (key === "requestId")
-        return "req-adapter";
+      if (authorizationValue !== undefined) return authorizationValue;
+      if (key === "userId") return 7;
+      if (key === "username") return "root";
+      if (key === "principalSessionId") return "ps-admin";
+      if (key === "requestId") return "req-adapter";
       return undefined;
     }),
     req: {
       header: mock((name: string) => {
-        if (name.toLowerCase() === "user-agent")
-          return "actor-browser";
-        if (name.toLowerCase() === "x-forwarded-for")
-          return "203.0.113.7";
+        if (name.toLowerCase() === "user-agent") return "actor-browser";
+        if (name.toLowerCase() === "x-forwarded-for") return "203.0.113.7";
         return undefined;
       }),
       method: options.method ?? "POST",
       path: options.path ?? "/admin/session-management/sessions/revoke",
       valid: mock((target: string) => {
-        if (target === "json")
-          return json;
-        if (target === "param")
-          return options.params;
+        if (target === "json") return json;
+        if (target === "param") return options.params;
         return undefined;
       }),
     },
@@ -142,13 +141,10 @@ interface RevokeTransportMappingCase extends MutationTransportMappingCase {
   trpcCode: TRPCError["code"];
 }
 
-type LoginRestrictionReleaseTransportMappingCase
-  = MutationTransportMappingCase;
+type LoginRestrictionReleaseTransportMappingCase = MutationTransportMappingCase;
 
 type SessionManagementTestContext = ReturnType<typeof createContext>;
-type SessionManagementCaller = ReturnType<
-  SessionManagementAdapter["sessionManagementAdminRouter"]["createCaller"]
->;
+type SessionManagementCaller = ReturnType<SessionManagementAdapter["sessionManagementAdminRouter"]["createCaller"]>;
 
 interface MutationTransportOperation<TInput> {
   method: "DELETE" | "POST";
@@ -156,17 +152,9 @@ interface MutationTransportOperation<TInput> {
   input: TInput;
   trpcCode: TRPCError["code"];
   createContext: (input: TInput) => SessionManagementTestContext;
-  createService: (
-    mutation: () => Promise<never>,
-  ) => CreateSessionManagementAdapterDeps["sessionManagementService"];
-  invokeRest: (
-    adapter: SessionManagementAdapter,
-    context: SessionManagementTestContext,
-  ) => unknown;
-  invokeTrpc: (
-    caller: SessionManagementCaller,
-    input: TInput,
-  ) => unknown;
+  createService: (mutation: () => Promise<never>) => CreateSessionManagementAdapterDeps["sessionManagementService"];
+  invokeRest: (adapter: SessionManagementAdapter, context: SessionManagementTestContext) => unknown;
+  invokeTrpc: (caller: SessionManagementCaller, input: TInput) => unknown;
 }
 
 async function assertMutationTransportMapping<TInput>(
@@ -210,8 +198,7 @@ async function assertMutationTransportMapping<TInput>(
       hono: context,
     });
     await operation.invokeTrpc(caller, operation.input);
-  }
-  catch (error) {
+  } catch (error) {
     caught = error;
   }
   expect(caught).toBeInstanceOf(TRPCError);
@@ -226,15 +213,17 @@ async function assertMutationTransportMapping<TInput>(
   expect(mutation).toHaveBeenCalledTimes(2);
 
   if (mapping.forbiddenPublicDetails) {
-    expect(JSON.stringify({
-      restBody,
-      trpc: {
-        code: trpcError.code,
-        message: trpcError.message,
-        stack: trpcError.stack,
-        formatterData,
-      },
-    })).not.toMatch(mapping.forbiddenPublicDetails);
+    expect(
+      JSON.stringify({
+        restBody,
+        trpc: {
+          code: trpcError.code,
+          message: trpcError.message,
+          stack: trpcError.stack,
+          formatterData,
+        },
+      }),
+    ).not.toMatch(mapping.forbiddenPublicDetails);
   }
 }
 
@@ -250,43 +239,39 @@ async function assertRevokeTransportMapping(mapping: RevokeTransportMappingCase)
     path: "/admin/session-management/sessions/revoke",
     input,
     trpcCode: mapping.trpcCode,
-    createContext: value => createContext(value),
-    createService: revokeSessions => ({
+    createContext: (value) => createContext(value),
+    createService: (revokeSessions) => ({
       listLoginRestrictions: unusedListLoginRestrictions,
       listSessions: mock(async () => sessionListResult()),
       releaseLoginRestriction: unusedReleaseLoginRestriction,
       revokeSessions,
     }),
-    invokeRest: (adapter, context) =>
-      adapter.sessionsRevoke(context as never, async () => {}),
+    invokeRest: (adapter, context) => adapter.sessionsRevoke(context as never, async () => {}),
     invokeTrpc: (caller, value) => caller.revokeSessions(value),
   });
 }
 
-async function assertLoginRestrictionReleaseTransportMapping(
-  mapping: LoginRestrictionReleaseTransportMappingCase,
-) {
+async function assertLoginRestrictionReleaseTransportMapping(mapping: LoginRestrictionReleaseTransportMappingCase) {
   const input = { userId: 42 };
   await assertMutationTransportMapping(mapping, {
     method: "DELETE",
     path: "/admin/session-management/login-restrictions/42",
     input,
     trpcCode: "INTERNAL_SERVER_ERROR",
-    createContext: value => createContext(undefined, {
-      method: "DELETE",
-      params: value,
-      path: "/admin/session-management/login-restrictions/42",
-    }),
-    createService: releaseLoginRestriction => ({
+    createContext: (value) =>
+      createContext(undefined, {
+        method: "DELETE",
+        params: value,
+        path: "/admin/session-management/login-restrictions/42",
+      }),
+    createService: (releaseLoginRestriction) => ({
       listLoginRestrictions: unusedListLoginRestrictions,
       listSessions: mock(async () => sessionListResult()),
       releaseLoginRestriction,
       revokeSessions: unusedRevokeSessions,
     }),
-    invokeRest: (adapter, context) =>
-      adapter.loginRestrictionRelease(context as never, async () => {}),
-    invokeTrpc: (caller, value) =>
-      caller.releaseLoginRestriction(value),
+    invokeRest: (adapter, context) => adapter.loginRestrictionRelease(context as never, async () => {}),
+    invokeTrpc: (caller, value) => caller.releaseLoginRestriction(value),
   });
 }
 
@@ -294,7 +279,14 @@ describe("admin session management adapter", () => {
   test("shares the session revoke mutation, server actor, audit context, and safe VO across REST and tRPC", async () => {
     const revokeSessions = mock(async () => ({
       changed: true,
-      result: { scope: "session" as const, generation: "unified" as const, currentPrincipalSessionExcluded: false, sessions: { userSessionsTerminated: 1, clientSessionsTerminated: 2, excluded: 0, failed: 0, unknown: 0 }, batch: { results: [], unfinished: [] }, artifactCleanup: { attempted: 0, succeeded: 0, failed: 0 } },
+      result: {
+        scope: "session" as const,
+        generation: "unified" as const,
+        currentPrincipalSessionExcluded: false,
+        sessions: { userSessionsTerminated: 1, clientSessionsTerminated: 2, excluded: 0, failed: 0, unknown: 0 },
+        batch: { results: [], unfinished: [] },
+        artifactCleanup: { attempted: 0, succeeded: 0, failed: 0 },
+      },
     }));
     const adapter = createSessionManagementAdapter({
       sessionManagementService: {
@@ -313,9 +305,7 @@ describe("admin session management adapter", () => {
     const context = createContext(input);
 
     const restResult = await adapter.sessionsRevoke(context as never, async () => {});
-    const trpcResult = await adapter.sessionManagementAdminRouter
-      .createCaller({ hono: context })
-      .revokeSessions(input);
+    const trpcResult = await adapter.sessionManagementAdminRouter.createCaller({ hono: context }).revokeSessions(input);
 
     const expectedAuditContext = {
       actorType: "admin",
@@ -348,7 +338,14 @@ describe("admin session management adapter", () => {
     expect(restResult).toMatchObject({ code: 200, data: trpcResult });
     expect(trpcResult).toEqual({
       changed: true,
-      result: { scope: "session", generation: "unified" as const, currentPrincipalSessionExcluded: false, sessions: { userSessionsTerminated: 1, clientSessionsTerminated: 2, excluded: 0, failed: 0, unknown: 0 }, batch: { results: [], unfinished: [] }, artifactCleanup: { attempted: 0, succeeded: 0, failed: 0 } },
+      result: {
+        scope: "session",
+        generation: "unified" as const,
+        currentPrincipalSessionExcluded: false,
+        sessions: { userSessionsTerminated: 1, clientSessionsTerminated: 2, excluded: 0, failed: 0, unknown: 0 },
+        batch: { results: [], unfinished: [] },
+        artifactCleanup: { attempted: 0, succeeded: 0, failed: 0 },
+      },
     });
     expect(JSON.stringify(trpcResult)).not.toContain("must-not-leave-adapter");
   });
@@ -356,7 +353,14 @@ describe("admin session management adapter", () => {
   test("shares a strict user revoke target while keeping the self exception server-owned", async () => {
     const revokeSessions = mock(async () => ({
       changed: true,
-      result: { scope: "user" as const, generation: "unified" as const, currentPrincipalSessionExcluded: true, sessions: { userSessionsTerminated: 1, clientSessionsTerminated: 2, excluded: 0, failed: 0, unknown: 0 }, batch: { results: [], unfinished: [] }, artifactCleanup: { attempted: 0, succeeded: 0, failed: 0 } },
+      result: {
+        scope: "user" as const,
+        generation: "unified" as const,
+        currentPrincipalSessionExcluded: true,
+        sessions: { userSessionsTerminated: 1, clientSessionsTerminated: 2, excluded: 0, failed: 0, unknown: 0 },
+        batch: { results: [], unfinished: [] },
+        artifactCleanup: { attempted: 0, succeeded: 0, failed: 0 },
+      },
     }));
     const adapter = createSessionManagementAdapter({
       sessionManagementService: {
@@ -375,9 +379,7 @@ describe("admin session management adapter", () => {
     const context = createContext(input);
 
     const restResult = await adapter.sessionsRevoke(context as never, async () => {});
-    const trpcResult = await adapter.sessionManagementAdminRouter
-      .createCaller({ hono: context })
-      .revokeSessions(input);
+    const trpcResult = await adapter.sessionManagementAdminRouter.createCaller({ hono: context }).revokeSessions(input);
 
     expect(revokeSessions).toHaveBeenNthCalledWith(
       1,
@@ -400,7 +402,14 @@ describe("admin session management adapter", () => {
     expect(restResult).toMatchObject({ code: 200, data: trpcResult });
     expect(trpcResult).toEqual({
       changed: true,
-      result: { scope: "user", generation: "unified" as const, currentPrincipalSessionExcluded: true, sessions: { userSessionsTerminated: 1, clientSessionsTerminated: 2, excluded: 0, failed: 0, unknown: 0 }, batch: { results: [], unfinished: [] }, artifactCleanup: { attempted: 0, succeeded: 0, failed: 0 } },
+      result: {
+        scope: "user",
+        generation: "unified" as const,
+        currentPrincipalSessionExcluded: true,
+        sessions: { userSessionsTerminated: 1, clientSessionsTerminated: 2, excluded: 0, failed: 0, unknown: 0 },
+        batch: { results: [], unfinished: [] },
+        artifactCleanup: { attempted: 0, succeeded: 0, failed: 0 },
+      },
     });
     expect(JSON.stringify(trpcResult)).not.toContain("must-not-leave-adapter");
   });
@@ -423,18 +432,28 @@ describe("admin session management adapter", () => {
     const context = createContext(input);
 
     const restResult = await adapter.sessionsSearch(context as never, async () => {});
-    const trpcResult = await adapter.sessionManagementAdminRouter
-      .createCaller({ hono: context })
-      .listSessions(input);
+    const trpcResult = await adapter.sessionManagementAdminRouter.createCaller({ hono: context }).listSessions(input);
 
     expect(listSessions).toHaveBeenNthCalledWith(
       1,
-      { pageNum: 1, pageSize: 20, userId: 42, kind: "clientSession", userSessionId: "00000000-0000-4000-8000-000000000042" },
+      {
+        pageNum: 1,
+        pageSize: 20,
+        userId: 42,
+        kind: "clientSession",
+        userSessionId: "00000000-0000-4000-8000-000000000042",
+      },
       { actorUserId: 7, principalSessionId: "ps-admin" },
     );
     expect(listSessions).toHaveBeenNthCalledWith(
       2,
-      { pageNum: 1, pageSize: 20, userId: 42, kind: "clientSession", userSessionId: "00000000-0000-4000-8000-000000000042" },
+      {
+        pageNum: 1,
+        pageSize: 20,
+        userId: 42,
+        kind: "clientSession",
+        userSessionId: "00000000-0000-4000-8000-000000000042",
+      },
       { actorUserId: 7, principalSessionId: "ps-admin" },
     );
     expect(restResult).toMatchObject({ code: 200, data: trpcResult });
@@ -465,19 +484,21 @@ describe("admin session management adapter", () => {
 
   test("shares the Temporary Login Restriction list and safe VO across REST and tRPC", async () => {
     const listLoginRestrictions = mock(async () => ({
-      result: [{
-        user: {
-          id: 42,
-          username: "alice",
-          name: "Alice",
-          accountStatus: "normal" as const,
+      result: [
+        {
+          user: {
+            id: 42,
+            username: "alice",
+            name: "Alice",
+            accountStatus: "normal" as const,
+          },
+          cause: "too_many_login_failures" as const,
+          triggerMethod: "password" as const,
+          restrictedUntil: 1_753_776_000_000,
+          remainingSeconds: 1_799,
+          rawRestrictionValue: "must-not-leave-adapter",
         },
-        cause: "too_many_login_failures" as const,
-        triggerMethod: "password" as const,
-        restrictedUntil: 1_753_776_000_000,
-        remainingSeconds: 1_799,
-        rawRestrictionValue: "must-not-leave-adapter",
-      }],
+      ],
       total: 1,
       pageNum: 1,
       pageSize: 20,
@@ -503,10 +524,7 @@ describe("admin session management adapter", () => {
     };
     const context = createContext(input);
 
-    const restResult = await adapter.loginRestrictionsSearch(
-      context as never,
-      async () => {},
-    );
+    const restResult = await adapter.loginRestrictionsSearch(context as never, async () => {});
     const trpcResult = await adapter.sessionManagementAdminRouter
       .createCaller({ hono: context })
       .listLoginRestrictions(input);
@@ -566,10 +584,7 @@ describe("admin session management adapter", () => {
       path: "/admin/session-management/login-restrictions/42",
     });
 
-    const restResult = await adapter.loginRestrictionRelease(
-      context as never,
-      async () => {},
-    );
+    const restResult = await adapter.loginRestrictionRelease(context as never, async () => {});
     const trpcResult = await adapter.sessionManagementAdminRouter
       .createCaller({ hono: context })
       .releaseLoginRestriction(input);
@@ -590,16 +605,8 @@ describe("admin session management adapter", () => {
       method: "DELETE",
       principalSessionId: "ps-admin",
     };
-    expect(releaseLoginRestriction).toHaveBeenNthCalledWith(
-      1,
-      input,
-      expectedAuditContext,
-    );
-    expect(releaseLoginRestriction).toHaveBeenNthCalledWith(
-      2,
-      input,
-      expectedAuditContext,
-    );
+    expect(releaseLoginRestriction).toHaveBeenNthCalledWith(1, input, expectedAuditContext);
+    expect(releaseLoginRestriction).toHaveBeenNthCalledWith(2, input, expectedAuditContext);
     expect(restResult).toMatchObject({ code: 200, data: trpcResult });
     expect(trpcResult).toEqual({
       changed: true,
@@ -616,17 +623,23 @@ describe("admin session management adapter", () => {
       pageNum: 1,
       pageSize: 20,
     });
-    expect(SessionManagementListSessionsInputSchema.safeParse({
-      actorUserId: 999,
-      conditions: {},
-    }).success).toBe(false);
-    expect(SessionManagementListSessionsInputSchema.safeParse({
-      conditions: { userId: "42" },
-    }).success).toBe(false);
-    expect(SessionManagementListSessionsInputSchema.safeParse({
-      conditions: {},
-      pageSize: 101,
-    }).success).toBe(false);
+    expect(
+      SessionManagementListSessionsInputSchema.safeParse({
+        actorUserId: 999,
+        conditions: {},
+      }).success,
+    ).toBe(false);
+    expect(
+      SessionManagementListSessionsInputSchema.safeParse({
+        conditions: { userId: "42" },
+      }).success,
+    ).toBe(false);
+    expect(
+      SessionManagementListSessionsInputSchema.safeParse({
+        conditions: {},
+        pageSize: 101,
+      }).success,
+    ).toBe(false);
   });
 
   test("keeps login restriction pagination and release inputs strict and server-owned", () => {
@@ -635,80 +648,104 @@ describe("admin session management adapter", () => {
       pageNum: 1,
       pageSize: 20,
     });
-    expect(SessionManagementListLoginRestrictionsInputSchema.safeParse({
-      actorUserId: 999,
-      conditions: {},
-    }).success).toBe(false);
-    expect(SessionManagementListLoginRestrictionsInputSchema.safeParse({
-      conditions: { userId: "42" },
-    }).success).toBe(false);
-    expect(SessionManagementListLoginRestrictionsInputSchema.safeParse({
-      conditions: {},
-      pageSize: 101,
-    }).success).toBe(false);
-    expect(SessionManagementReleaseLoginRestrictionInputSchema.parse({
-      userId: 42,
-    })).toEqual({ userId: 42 });
-    expect(SessionManagementReleaseLoginRestrictionInputSchema.safeParse({
-      userId: "42",
-    }).success).toBe(false);
-    expect(SessionManagementReleaseLoginRestrictionInputSchema.safeParse({
-      userId: 42,
-      actorUserId: 999,
-    }).success).toBe(false);
+    expect(
+      SessionManagementListLoginRestrictionsInputSchema.safeParse({
+        actorUserId: 999,
+        conditions: {},
+      }).success,
+    ).toBe(false);
+    expect(
+      SessionManagementListLoginRestrictionsInputSchema.safeParse({
+        conditions: { userId: "42" },
+      }).success,
+    ).toBe(false);
+    expect(
+      SessionManagementListLoginRestrictionsInputSchema.safeParse({
+        conditions: {},
+        pageSize: 101,
+      }).success,
+    ).toBe(false);
+    expect(
+      SessionManagementReleaseLoginRestrictionInputSchema.parse({
+        userId: 42,
+      }),
+    ).toEqual({ userId: 42 });
+    expect(
+      SessionManagementReleaseLoginRestrictionInputSchema.safeParse({
+        userId: "42",
+      }).success,
+    ).toBe(false);
+    expect(
+      SessionManagementReleaseLoginRestrictionInputSchema.safeParse({
+        userId: 42,
+        actorUserId: 999,
+      }).success,
+    ).toBe(false);
   });
 
   test("accepts only strict session or user targets without a client-owned self exception", () => {
-    expect(SessionManagementRevokeSessionsInputSchema.parse({
-      target: {
-        type: "session",
-        principalSessionId: "ps-target",
-      },
-    })).toEqual({
+    expect(
+      SessionManagementRevokeSessionsInputSchema.parse({
+        target: {
+          type: "session",
+          principalSessionId: "ps-target",
+        },
+      }),
+    ).toEqual({
       target: {
         type: "session",
         principalSessionId: "ps-target",
       },
     });
-    expect(SessionManagementRevokeSessionsInputSchema.parse({
-      target: {
-        type: "user",
-        userId: 42,
-      },
-    })).toEqual({
+    expect(
+      SessionManagementRevokeSessionsInputSchema.parse({
+        target: {
+          type: "user",
+          userId: 42,
+        },
+      }),
+    ).toEqual({
       target: {
         type: "user",
         userId: 42,
       },
     });
-    expect(SessionManagementRevokeSessionsInputSchema.safeParse({
-      target: {
-        type: "session",
-        principalSessionId: "ps-target",
-      },
-      actorUserId: 999,
-      principalSessionId: "ps-attacker",
-    }).success).toBe(false);
-    expect(SessionManagementRevokeSessionsInputSchema.safeParse({
-      target: {
-        type: "user",
-        userId: 42,
-        exceptPrincipalSessionId: "ps-attacker",
-      },
-    }).success).toBe(false);
-    expect(SessionManagementRevokeSessionsInputSchema.safeParse({
-      target: {
-        type: "user",
-        userId: "42",
-      },
-    }).success).toBe(false);
-    expect(SessionManagementRevokeSessionsInputSchema.safeParse({
-      target: {
-        type: "user",
-        userId: 42,
+    expect(
+      SessionManagementRevokeSessionsInputSchema.safeParse({
+        target: {
+          type: "session",
+          principalSessionId: "ps-target",
+        },
+        actorUserId: 999,
         principalSessionId: "ps-attacker",
-      },
-    }).success).toBe(false);
+      }).success,
+    ).toBe(false);
+    expect(
+      SessionManagementRevokeSessionsInputSchema.safeParse({
+        target: {
+          type: "user",
+          userId: 42,
+          exceptPrincipalSessionId: "ps-attacker",
+        },
+      }).success,
+    ).toBe(false);
+    expect(
+      SessionManagementRevokeSessionsInputSchema.safeParse({
+        target: {
+          type: "user",
+          userId: "42",
+        },
+      }).success,
+    ).toBe(false);
+    expect(
+      SessionManagementRevokeSessionsInputSchema.safeParse({
+        target: {
+          type: "user",
+          userId: 42,
+          principalSessionId: "ps-attacker",
+        },
+      }).success,
+    ).toBe(false);
   });
 
   test("preserves the unavailable state error for REST and tRPC transport mapping", async () => {
@@ -728,12 +765,9 @@ describe("admin session management adapter", () => {
     await expect(adapter.sessionsSearch(context as never, async () => {})).rejects.toBe(unavailable);
 
     try {
-      await adapter.sessionManagementAdminRouter
-        .createCaller({ hono: context })
-        .listSessions({});
+      await adapter.sessionManagementAdminRouter.createCaller({ hono: context }).listSessions({});
       throw new Error("expected tRPC session list to fail");
-    }
-    catch (error) {
+    } catch (error) {
       expect(error).toBeInstanceOf(TRPCError);
       expect((error as TRPCError).code).toBe("INTERNAL_SERVER_ERROR");
       expect(getApiRuntimeErrorFormatterData((error as TRPCError).cause)).toEqual({
@@ -745,9 +779,7 @@ describe("admin session management adapter", () => {
   });
 
   test("preserves an unavailable restriction inventory error for REST and tRPC", async () => {
-    const unavailable = new AdminLoginStateUnavailableError(
-      new Error("redis restriction inventory unavailable"),
-    );
+    const unavailable = new AdminLoginStateUnavailableError(new Error("redis restriction inventory unavailable"));
     const adapter = createSessionManagementAdapter({
       sessionManagementService: {
         listLoginRestrictions: mock(async () => {
@@ -760,17 +792,12 @@ describe("admin session management adapter", () => {
     });
     const context = createContext({});
 
-    await expect(
-      adapter.loginRestrictionsSearch(context as never, async () => {}),
-    ).rejects.toBe(unavailable);
+    await expect(adapter.loginRestrictionsSearch(context as never, async () => {})).rejects.toBe(unavailable);
 
     try {
-      await adapter.sessionManagementAdminRouter
-        .createCaller({ hono: context })
-        .listLoginRestrictions({});
+      await adapter.sessionManagementAdminRouter.createCaller({ hono: context }).listLoginRestrictions({});
       throw new Error("expected tRPC restriction list to fail");
-    }
-    catch (error) {
+    } catch (error) {
       expect(error).toBeInstanceOf(TRPCError);
       expect((error as TRPCError).code).toBe("INTERNAL_SERVER_ERROR");
       expect(getApiRuntimeErrorFormatterData((error as TRPCError).cause)).toEqual({
@@ -793,9 +820,7 @@ describe("admin session management adapter", () => {
     },
     {
       name: "unavailable session control",
-      error: new AdminLoginStateUnavailableError(
-        new Error("redis://secret-control-provider unavailable"),
-      ),
+      error: new AdminLoginStateUnavailableError(new Error("redis://secret-control-provider unavailable")),
       principalSessionId: "ps-target",
       trpcCode: "INTERNAL_SERVER_ERROR",
       serviceCode: "ADMIN_LOGIN_STATE_UNAVAILABLE",
@@ -817,14 +842,13 @@ describe("admin session management adapter", () => {
     },
     {
       name: "protected-session audit failure before control",
-      error: new AdminLoginStateAuditFailedError(Object.assign(
-        new Error("postgres://protected-audit secret SQL insert failed"),
-        {
+      error: new AdminLoginStateAuditFailedError(
+        Object.assign(new Error("postgres://protected-audit secret SQL insert failed"), {
           serviceCode: "AUDIT_PROVIDER_FAILURE",
           serviceDetails: { table: "audit_log" },
           stack: "protected-provider-stack-secret",
-        },
-      )),
+        }),
+      ),
       principalSessionId: "ps-admin",
       trpcCode: "INTERNAL_SERVER_ERROR",
       serviceCode: "COMMON.INTERNAL_ERROR",
@@ -835,14 +859,13 @@ describe("admin session management adapter", () => {
     },
     {
       name: "no-effect audit failure after control",
-      error: new AdminLoginStateAuditFailedError(Object.assign(
-        new Error("postgres://noop-audit secret SQL insert failed"),
-        {
+      error: new AdminLoginStateAuditFailedError(
+        Object.assign(new Error("postgres://noop-audit secret SQL insert failed"), {
           serviceCode: "AUDIT_PROVIDER_FAILURE",
           serviceDetails: { table: "audit_log" },
           stack: "noop-provider-stack-secret",
-        },
-      )),
+        }),
+      ),
       principalSessionId: "ps-inactive",
       trpcCode: "INTERNAL_SERVER_ERROR",
       serviceCode: "COMMON.INTERNAL_ERROR",
@@ -858,9 +881,7 @@ describe("admin session management adapter", () => {
   test.each<LoginRestrictionReleaseTransportMappingCase>([
     {
       name: "unavailable restriction state",
-      error: new AdminLoginStateUnavailableError(
-        new Error("redis://secret-restriction-provider unavailable"),
-      ),
+      error: new AdminLoginStateUnavailableError(new Error("redis://secret-restriction-provider unavailable")),
       serviceCode: "ADMIN_LOGIN_STATE_UNAVAILABLE",
       serviceMessage: "登录状态服务暂时不可用",
       httpStatus: 503,
@@ -878,9 +899,7 @@ describe("admin session management adapter", () => {
     },
     {
       name: "no-effect restriction release audit failure",
-      error: new AdminLoginStateAuditFailedError(
-        new Error("postgres://secret-noop-release-audit insert failed"),
-      ),
+      error: new AdminLoginStateAuditFailedError(new Error("postgres://secret-noop-release-audit insert failed")),
       serviceCode: "COMMON.INTERNAL_ERROR",
       serviceMessage: "服务器内部错误",
       httpStatus: 500,
@@ -958,16 +977,11 @@ describe("admin session management adapter", () => {
     };
     const context = createContext(input);
     context.get.mockImplementation((key: string) => {
-      if (key === "adminAuthorizationPolicy")
-        return getTestAdminAuthorizationValue(key);
-      if (key === "userId")
-        return 7;
-      if (key === "username")
-        return "root";
-      if (key === "requestId")
-        return "req-adapter";
-      if (key === "userDetailDto")
-        return { name: "Root Admin", roles: ["iam:admin"] };
+      if (key === "adminAuthorizationPolicy") return getTestAdminAuthorizationValue(key);
+      if (key === "userId") return 7;
+      if (key === "username") return "root";
+      if (key === "requestId") return "req-adapter";
+      if (key === "userDetailDto") return { name: "Root Admin", roles: ["iam:admin"] };
       return undefined;
     });
 
@@ -995,11 +1009,8 @@ describe("admin session management adapter", () => {
 
     let trpcFailure: unknown;
     try {
-      await adapter.sessionManagementAdminRouter
-        .createCaller({ hono: context })
-        .revokeSessions(input);
-    }
-    catch (error) {
+      await adapter.sessionManagementAdminRouter.createCaller({ hono: context }).revokeSessions(input);
+    } catch (error) {
       trpcFailure = error;
     }
     expect(trpcFailure).toBeInstanceOf(TRPCError);
@@ -1016,7 +1027,13 @@ describe("admin session management adapter", () => {
       actorUserId: 7,
       targetType: "user",
       targetId: 7,
-      details: { scope: "user", changed: false, currentPrincipalSessionExcluded: false, currentPrincipalSessionProtected: true, sessions: { userSessionsTerminated: 0, clientSessionsTerminated: 0, excluded: 0, failed: 0, unknown: 0 } },
+      details: {
+        scope: "user",
+        changed: false,
+        currentPrincipalSessionExcluded: false,
+        currentPrincipalSessionProtected: true,
+        sessions: { userSessionsTerminated: 0, clientSessionsTerminated: 0, excluded: 0, failed: 0, unknown: 0 },
+      },
     };
     expect(auditWrites).toHaveLength(2);
     expect(auditWrites).toEqual([

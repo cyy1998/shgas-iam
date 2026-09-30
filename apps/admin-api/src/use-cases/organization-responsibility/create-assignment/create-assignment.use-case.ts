@@ -1,14 +1,7 @@
-import type { CreateOrganizationResponsibilityAssignmentUseCaseDeps } from "./create-assignment.port";
-import type {
-  CreateOrganizationResponsibilityAssignmentInput,
-  CreateOrganizationResponsibilityAssignmentOptions,
-} from "./create-assignment.type";
 import { createAdminMutation } from "@admin-api/services/admin-mutation/admin-mutation";
 import { adminAuditTransactionOptions } from "@admin-api/services/audit/audit.context";
 import { buildOrganizationResponsibilityAssignmentCreateAudit } from "@admin-api/services/audit/events/organization-responsibility-assignment.audit";
-import {
-  OrganizationResponsibilityAssignmentStatus,
-} from "@iam/contracts";
+import { OrganizationResponsibilityAssignmentStatus } from "@iam/contracts";
 import { EmploymentNotFoundError } from "@iam/domain/employment";
 import { OrganizationNotFoundError } from "@iam/domain/organization";
 import {
@@ -18,6 +11,11 @@ import {
   OrganizationResponsibilityHolderEmploymentUnavailableError,
   OrganizationResponsibilityTargetOrganizationUnavailableError,
 } from "@iam/domain/organization-responsibility";
+import type { CreateOrganizationResponsibilityAssignmentUseCaseDeps } from "./create-assignment.port";
+import type {
+  CreateOrganizationResponsibilityAssignmentInput,
+  CreateOrganizationResponsibilityAssignmentOptions,
+} from "./create-assignment.type";
 
 export function createCreateOrganizationResponsibilityAssignmentUseCase(
   deps: CreateOrganizationResponsibilityAssignmentUseCaseDeps,
@@ -30,19 +28,16 @@ export function createCreateOrganizationResponsibilityAssignmentUseCase(
     const { auditContext, authorization } = options;
     return await mutation.transaction(async (tx) => {
       const employment = await tx.employmentReader.getEmploymentForResponsibilityById(input.employmentId);
-      if (employment === null)
-        throw new EmploymentNotFoundError();
+      if (employment === null) throw new EmploymentNotFoundError();
       const targetOrganization = await tx.organizationReader.getOrganizationForResponsibilityByCode(
         input.targetOrganizationCode,
       );
-      if (targetOrganization === null)
-        throw new OrganizationNotFoundError();
-      const endpointsWithinScope
-        = tx.assignmentStore.isEndpointPairWithinReadScope({
-          readScope: authorization.readScope,
-          holderOrganizationId: employment.organizationId,
-          targetOrganizationId: targetOrganization.id,
-        });
+      if (targetOrganization === null) throw new OrganizationNotFoundError();
+      const endpointsWithinScope = tx.assignmentStore.isEndpointPairWithinReadScope({
+        readScope: authorization.readScope,
+        holderOrganizationId: employment.organizationId,
+        targetOrganizationId: targetOrganization.id,
+      });
       if (!endpointsWithinScope) {
         authorization.denyMutation({
           operationId: "admin.organizationResponsibility.createAssignment",
@@ -57,8 +52,7 @@ export function createCreateOrganizationResponsibilityAssignmentUseCase(
       });
       if (parentViolation === "open-assignment-without-enabled-target")
         throw new OrganizationResponsibilityTargetOrganizationUnavailableError();
-      if (parentViolation !== null)
-        throw new OrganizationResponsibilityHolderEmploymentUnavailableError();
+      if (parentViolation !== null) throw new OrganizationResponsibilityHolderEmploymentUnavailableError();
 
       const slot = {
         employmentId: employment.id,
@@ -69,10 +63,7 @@ export function createCreateOrganizationResponsibilityAssignmentUseCase(
         ...slot,
         readScope: authorization.readScope,
       });
-      if (
-        existing !== null
-        && !existing.isManageable
-      ) {
+      if (existing !== null && !existing.isManageable) {
         throw new OrganizationResponsibilityAssignmentUnmanageableConflictError();
       }
       assertOrganizationResponsibilityAssignmentSlotAvailable({
@@ -90,15 +81,20 @@ export function createCreateOrganizationResponsibilityAssignmentUseCase(
       } as const;
       const created = await tx.assignmentStore.createAssignmentRecord(record, authorization.readScope);
       await tx.auditLogWriter.recordAuditLog(
-        buildOrganizationResponsibilityAssignmentCreateAudit({
-          id: created.id,
-          ...record,
-        }, auditContext),
+        buildOrganizationResponsibilityAssignmentCreateAudit(
+          {
+            id: created.id,
+            ...record,
+          },
+          auditContext,
+        ),
       );
-      await tx.userProfileInvalidation.recordChanges([{
-        kind: "organization-responsibility-assignment",
-        userId: employment.userId,
-      }]);
+      await tx.userProfileInvalidation.recordChanges([
+        {
+          kind: "organization-responsibility-assignment",
+          userId: employment.userId,
+        },
+      ]);
       return { changed: true, result: { id: created.id } };
     }, adminAuditTransactionOptions(auditContext));
   }

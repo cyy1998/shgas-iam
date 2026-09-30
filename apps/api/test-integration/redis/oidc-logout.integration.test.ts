@@ -1,3 +1,4 @@
+import { afterEach, describe, expect, it } from "bun:test";
 import { Buffer } from "node:buffer";
 import { randomUUID } from "node:crypto";
 import process from "node:process";
@@ -5,20 +6,18 @@ import { ClientSsoProtocol, ClientStatus } from "@iam/contracts";
 import { createOidcSigningKeys } from "@iam/oidc";
 import { createOidcInventory, createOidcMaintenance } from "@iam/oidc/maintenance";
 import { createOidcRedisTestScope } from "@iam/oidc/testing";
-import { afterEach, describe, expect, it } from "bun:test";
 import { fixture, signingKeys } from "./oidc.fixture";
 
 const fixtures: Array<Awaited<ReturnType<typeof fixture>>> = [];
 afterEach(async () => {
-  const results = await Promise.allSettled(fixtures.splice(0).map(f => f.close()));
-  const failures = results.flatMap(r => (r.status === "rejected" ? [r.reason] : []));
-  if (failures.length)
-    throw new AggregateError(failures, "Logout fixture cleanup failed");
+  const results = await Promise.allSettled(fixtures.splice(0).map((f) => f.close()));
+  const failures = results.flatMap((r) => (r.status === "rejected" ? [r.reason] : []));
+  if (failures.length) throw new AggregateError(failures, "Logout fixture cleanup failed");
 });
 async function setup() {
   const f = await fixture(undefined, true);
   fixtures.push(f);
-  await f.setClient(value => ({
+  await f.setClient((value) => ({
     ...value,
     ssoConfig:
       value.ssoConfig?.protocol === ClientSsoProtocol.Oidc
@@ -47,7 +46,7 @@ async function setup() {
       id_token_hint: tokens.id_token,
       client_id: f.clientId,
       post_logout_redirect_uri: "https://rp.example/logout?kept=yes",
-      state: "state&<\"=",
+      state: 'state&<"=',
       ...extra,
     });
   return Object.assign(f, { tokens, rootToken, logoutParameters: parameters });
@@ -56,9 +55,7 @@ type Fixture = Awaited<ReturnType<typeof setup>>;
 async function begin(f: Fixture, parameters = f.logoutParameters(), post = false) {
   const response = await f.request(
     post ? "/oidc/session/end" : `/oidc/session/end?${parameters}`,
-    post
-      ? { method: "POST", headers: { "Content-Type": "application/x-www-form-urlencoded" }, body: parameters }
-      : {},
+    post ? { method: "POST", headers: { "Content-Type": "application/x-www-form-urlencoded" }, body: parameters } : {},
   );
   const html = await response.text();
   return { response, html, xsrf: /name="xsrf" value="([^"]+)"/u.exec(html)?.[1] ?? "" };
@@ -72,7 +69,7 @@ async function confirm(f: Fixture, xsrf: string, yes = true, extra: Record<strin
 }
 async function rootStatus(f: Fixture, token = f.rootToken) {
   return await f.operations.run(
-    async operation => (await f.kernel.forOperation(operation).resolveUserSession(token)).status,
+    async (operation) => (await f.kernel.forOperation(operation).resolveUserSession(token)).status,
   );
 }
 async function use(f: Fixture) {
@@ -84,7 +81,7 @@ describe("OIDC candidate logout HTTP and real Redis", () => {
     const f = await setup();
     const start = await begin(f, new URLSearchParams());
     expect(start.response.status).toBe(200);
-    expect(start.html).toContain("action=\"/oidc/session/end/confirm\"");
+    expect(start.html).toContain('action="/oidc/session/end/confirm"');
     const response = await confirm(f, start.xsrf, yes);
     expect(response.status).toBe(303);
     expect(response.headers.get("Location")).toBe("/oidc/session/end/success");
@@ -107,7 +104,7 @@ describe("OIDC candidate logout HTTP and real Redis", () => {
       expect(start.response.headers.getSetCookie().join(";")).toContain("HttpOnly");
       expect(start.response.headers.getSetCookie().join(";")).toContain("SameSite=Lax");
       expect(start.response.headers.getSetCookie().join(";")).toContain("Path=/oidc/session/end");
-      await f.setClient(value => ({ ...value, status: ClientStatus.Maintenance }));
+      await f.setClient((value) => ({ ...value, status: ClientStatus.Maintenance }));
       f.state.permission = "disabled";
       const before = f.state.reads;
       const response = await confirm(f, start.xsrf);
@@ -115,12 +112,12 @@ describe("OIDC candidate logout HTTP and real Redis", () => {
       const target = new URL(response.headers.get("Location")!);
       expect(target.origin).toBe("https://rp.example");
       expect(target.searchParams.get("kept")).toBe("yes");
-      expect(target.searchParams.get("state")).toBe("state&<\"=");
+      expect(target.searchParams.get("state")).toBe('state&<"=');
       expect(f.state.reads).toBe(before);
       expect(f.cookies.get("global_session")).toBe("");
       expect(await rootStatus(f)).toBe("terminated");
       expect(await rootStatus(f, otherRoot)).toBe("resolved");
-      await f.setClient(value => ({ ...value, status: ClientStatus.Enable }));
+      await f.setClient((value) => ({ ...value, status: ClientStatus.Enable }));
       f.state.permission = "enabled";
       expect((await use(f)).status).toBe(401);
       expect(f.reports).toContainEqual(
@@ -138,13 +135,15 @@ describe("OIDC candidate logout HTTP and real Redis", () => {
     const oldCookies = new Map(f.cookies);
     const response = await confirm(f, start.xsrf, false);
     expect(response.status).toBe(303);
-    expect(response.headers.getSetCookie().some(value => value.startsWith("global_session="))).toBe(false);
+    expect(response.headers.getSetCookie().some((value) => value.startsWith("global_session="))).toBe(false);
     expect(f.cookies.get("global_session")).toBe(f.rootToken);
     expect(await rootStatus(f)).toBe("resolved");
     expect((await use(f)).status).toBe(200);
     expect(await f.oidcState.snapshot()).toEqual(before);
     f.cookies.clear();
-    oldCookies.forEach((value, key) => f.cookies.set(key, value));
+    oldCookies.forEach((value, key) => {
+      f.cookies.set(key, value);
+    });
     expect((await confirm(f, start.xsrf)).status).toBe(400);
     expect(await rootStatus(f)).toBe("resolved");
   });
@@ -181,16 +180,11 @@ describe("OIDC candidate logout HTTP and real Redis", () => {
     async (caseName) => {
       const f = await setup();
       const params = f.logoutParameters();
-      if (caseName === "hint")
-        params.set("id_token_hint", "invalid");
-      if (caseName === "client")
-        params.set("client_id", "other-client");
-      if (caseName === "redirect")
-        params.set("post_logout_redirect_uri", "https://evil.example");
-      if (caseName === "no-hint")
-        params.delete("id_token_hint");
-      if (caseName === "duplicate")
-        params.append("state", "other");
+      if (caseName === "hint") params.set("id_token_hint", "invalid");
+      if (caseName === "client") params.set("client_id", "other-client");
+      if (caseName === "redirect") params.set("post_logout_redirect_uri", "https://evil.example");
+      if (caseName === "no-hint") params.delete("id_token_hint");
+      if (caseName === "duplicate") params.append("state", "other");
       const start = await begin(f, params);
       expect(start.response.status).toBe(400);
       expect(start.response.headers.get("Location")).toBeNull();
@@ -205,18 +199,16 @@ describe("OIDC candidate logout HTTP and real Redis", () => {
       const f = await setup();
       const start = await begin(f);
       const cookies = new Map(f.cookies);
-      if (caseName === "browser")
-        f.cookies.set("oidc_logout_binding", "b".repeat(43));
-      if (caseName === "handle")
-        f.cookies.set("oidc_logout_request", "c".repeat(43));
-      if (caseName === "expiry")
-        await f.oidcState.patchLogout(f.cookies.get("oidc_logout_request")!, { expiresAt: 1 });
+      if (caseName === "browser") f.cookies.set("oidc_logout_binding", "b".repeat(43));
+      if (caseName === "handle") f.cookies.set("oidc_logout_request", "c".repeat(43));
+      if (caseName === "expiry") await f.oidcState.patchLogout(f.cookies.get("oidc_logout_request")!, { expiresAt: 1 });
       const response = await confirm(f, caseName === "xsrf" ? "a".repeat(43) : start.xsrf);
       expect(response.status).toBe(400);
       expect(await rootStatus(f)).toBe("resolved");
-      cookies.forEach((value, key) => f.cookies.set(key, value));
-      if (caseName !== "expiry")
-        expect((await confirm(f, start.xsrf, false)).status).toBe(303);
+      cookies.forEach((value, key) => {
+        f.cookies.set(key, value);
+      });
+      if (caseName !== "expiry") expect((await confirm(f, start.xsrf, false)).status).toBe(303);
     },
   );
   it.each(["root", "configuration", "state", "corrupt"])(
@@ -224,14 +216,10 @@ describe("OIDC candidate logout HTTP and real Redis", () => {
     async (caseName) => {
       const f = await setup();
       const start = await begin(f);
-      if (caseName === "root")
-        f.scope.failNext("resolveUser");
-      if (caseName === "configuration")
-        f.state.clientFailure = true;
-      if (caseName === "state")
-        f.oidcState.failNext("logout");
-      if (caseName === "corrupt")
-        await f.oidcState.patchLogout(f.cookies.get("oidc_logout_request")!, { state: 123 });
+      if (caseName === "root") f.scope.failNext("resolveUser");
+      if (caseName === "configuration") f.state.clientFailure = true;
+      if (caseName === "state") f.oidcState.failNext("logout");
+      if (caseName === "corrupt") await f.oidcState.patchLogout(f.cookies.get("oidc_logout_request")!, { state: 123 });
       const response = await confirm(f, start.xsrf);
       expect(response.status).toBe(503);
       expect(response.headers.get("Retry-After")).toBe("3");
@@ -266,7 +254,7 @@ describe("OIDC candidate logout HTTP and real Redis", () => {
     expect(start.response.status).toBe(200);
     expect(start.html).toContain("document.forms[0].submit()");
     expect(f.cookies.get("global_session")).toBe("");
-    await f.setClient(value => ({
+    await f.setClient((value) => ({
       ...value,
       ssoConfig:
         value.ssoConfig?.protocol === ClientSsoProtocol.Oidc
@@ -286,9 +274,9 @@ describe("OIDC candidate logout HTTP and real Redis", () => {
       exp: 1,
       iat: 0,
     };
-    expect(
-      (await begin(f, f.logoutParameters({ id_token_hint: await f.signing.sign(claims) }))).response.status,
-    ).toBe(200);
+    expect((await begin(f, f.logoutParameters({ id_token_hint: await f.signing.sign(claims) }))).response.status).toBe(
+      200,
+    );
     const other = createOidcSigningKeys({ currentJwkJson: signingKeys("untrusted") });
     for (const hint of [
       await f.signing.sign({ ...claims, iss: "https://evil.example" }),
@@ -328,8 +316,7 @@ describe("OIDC candidate logout HTTP and real Redis", () => {
           })
         ).matching,
       ).toBe(0);
-    }
-    finally {
+    } finally {
       await independent.close();
     }
     expect((await f.oidcState.snapshot()).length).toBe(1);

@@ -1,3 +1,4 @@
+import { afterAll, beforeAll, beforeEach, describe, expect, mock, test } from "bun:test";
 import { createPermittedClientSubjectProjectionService } from "@iam/client-subject-projection";
 import {
   OrganizationResponsibilityTypeCode,
@@ -6,7 +7,6 @@ import {
   UserProfileDirtyStatus,
   UserStatus,
 } from "@iam/contracts";
-import { afterAll, beforeAll, beforeEach, describe, expect, mock, test } from "bun:test";
 import { createSubjectFactsReader } from "../../src/subject-facts";
 import { V3_USER_PROFILE_SCHEMA_VERSION } from "../../src/v3";
 import { createPostgresTestHarness } from "./postgres-test-harness";
@@ -26,8 +26,7 @@ describe("Subject Facts PostgreSQL reader", () => {
   });
 
   afterAll(async () => {
-    if (harness)
-      await harness.close();
+    if (harness) await harness.close();
   });
 
   test("rejects a published V1 row without fallback or cache publication", async () => {
@@ -60,22 +59,26 @@ describe("Subject Facts PostgreSQL reader", () => {
 
     const facts = await reader.read(SUBJECT_IDENTIFIER);
 
-    expect(facts?.employments[0]?.responsibilities).toEqual([{
-      type: {
-        code: OrganizationResponsibilityTypeCode.Head,
-        name: "负责人",
-      },
-      targetOrganization: {
-        code: "target-a",
-        name: "目标甲",
-        type: OrganizationType.Department,
-        path: [{
+    expect(facts?.employments[0]?.responsibilities).toEqual([
+      {
+        type: {
+          code: OrganizationResponsibilityTypeCode.Head,
+          name: "负责人",
+        },
+        targetOrganization: {
           code: "target-a",
           name: "目标甲",
           type: OrganizationType.Department,
-        }],
+          path: [
+            {
+              code: "target-a",
+              name: "目标甲",
+              type: OrganizationType.Department,
+            },
+          ],
+        },
       },
-    }]);
+    ]);
     expect(facts?.sourceDirtyVersion).toBe("22");
     expect(publish).toHaveBeenCalledTimes(1);
   });
@@ -90,8 +93,7 @@ describe("Subject Facts PostgreSQL reader", () => {
     await seedPublishedSubjectV3(harness, "22");
     if (status === null) {
       await harness.sql`DELETE FROM user_profile_dirty WHERE user_id = 1`;
-    }
-    else {
+    } else {
       await harness.sql`UPDATE user_profile_dirty SET dirty_version = 23, status = ${status} WHERE user_id = 1`;
     }
     let cached: string | null = null;
@@ -109,8 +111,7 @@ describe("Subject Facts PostgreSQL reader", () => {
     const projection = createPermittedClientSubjectProjectionService({
       subjectFacts: reader,
       assertPermission(value: object) {
-        if (value !== permission)
-          throw new Error("permission required");
+        if (value !== permission) throw new Error("permission required");
       },
     });
     const input = {
@@ -192,39 +193,47 @@ async function seedPublishedSubjectV3(
   harness: Awaited<ReturnType<typeof createPostgresTestHarness>>,
   dirtyVersion: string,
 ) {
-  const responsibilities = [{
-    type: {
-      code: OrganizationResponsibilityTypeCode.Head,
-      name: "负责人",
-    },
-    targetOrganization: {
-      code: "target-a",
-      name: "目标甲",
-      type: OrganizationType.Department,
-      path: [{
+  const responsibilities = [
+    {
+      type: {
+        code: OrganizationResponsibilityTypeCode.Head,
+        name: "负责人",
+      },
+      targetOrganization: {
         code: "target-a",
         name: "目标甲",
         type: OrganizationType.Department,
-      }],
+        path: [
+          {
+            code: "target-a",
+            name: "目标甲",
+            type: OrganizationType.Department,
+          },
+        ],
+      },
     },
-  }];
+  ];
   const subjectFacts = {
-    employments: [{
-      isPrimary: true,
-      organization: {
-        code: "org-a",
-        name: "甲部门",
-        type: OrganizationType.Department,
-        path: [{
+    employments: [
+      {
+        isPrimary: true,
+        organization: {
           code: "org-a",
           name: "甲部门",
           type: OrganizationType.Department,
-        }],
+          path: [
+            {
+              code: "org-a",
+              name: "甲部门",
+              type: OrganizationType.Department,
+            },
+          ],
+        },
+        position: { code: "position-a", name: "甲岗位" },
+        clientAuthorizations: [{ clientCode: "console", roles: [{ code: "operator", privileges: ["approve"] }] }],
+        responsibilities,
       },
-      position: { code: "position-a", name: "甲岗位" },
-      clientAuthorizations: [{ clientCode: "console", roles: [{ code: "operator", privileges: ["approve"] }] }],
-      responsibilities,
-    }],
+    ],
   };
   await harness.sql`
     INSERT INTO user_profile (

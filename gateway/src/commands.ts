@@ -1,23 +1,11 @@
-import type {
-  ApplyCommandOptions,
-  CommandOptions,
-  FetchLike,
-  RemoteCommandOptions,
-  Reporter,
-} from "./types";
 import { ApisixAdminClient, loadRemoteState } from "./apisix-admin-client";
 import { applyPlan } from "./applier";
 import { loadEnvFile } from "./env";
 import { loadManifest, resolveManifestScope } from "./manifest";
-import {
-  consoleReporter,
-  printApplyResult,
-  printPlan,
-  printResourceCounts,
-  printValidationIssues,
-} from "./output";
+import { consoleReporter, printApplyResult, printPlan, printResourceCounts, printValidationIssues } from "./output";
 import { planChanges } from "./planner";
 import { countResources } from "./resources";
+import type { ApplyCommandOptions, CommandOptions, FetchLike, RemoteCommandOptions, Reporter } from "./types";
 import { validateManifest } from "./validators";
 
 const defaultAdminUrl = "http://127.0.0.1:9180/apisix/admin";
@@ -38,11 +26,17 @@ export async function runValidate(options: CommandOptions = {}, dependencies: Co
   }
 
   if (options.json) {
-    reporter.log(JSON.stringify({
-      ok: true,
-      env: manifest.env,
-      resources: countResources(manifest.resources),
-    }, null, 2));
+    reporter.log(
+      JSON.stringify(
+        {
+          ok: true,
+          env: manifest.env,
+          resources: countResources(manifest.resources),
+        },
+        null,
+        2,
+      ),
+    );
     return;
   }
 

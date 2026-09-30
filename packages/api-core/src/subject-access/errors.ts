@@ -1,9 +1,5 @@
-import type {
-  SubjectAccessBeginReceipt,
-  SubjectAccessTransition,
-  SubjectAccessTransitionTarget,
-} from "./model";
 import { RETRYABLE_SERVICE_UNAVAILABLE } from "@iam/contracts";
+import type { SubjectAccessBeginReceipt, SubjectAccessTransition, SubjectAccessTransitionTarget } from "./model";
 
 export class SubjectAccessDisabledError extends Error {
   constructor() {
@@ -60,10 +56,7 @@ export class SubjectAccessCommitPendingError extends Error {
   readonly receipt: SubjectAccessTransition;
   readonly targetState: SubjectAccessTransitionTarget;
 
-  constructor(
-    receipt: SubjectAccessTransition,
-    targetState: SubjectAccessTransitionTarget,
-  ) {
+  constructor(receipt: SubjectAccessTransition, targetState: SubjectAccessTransitionTarget) {
     super("Subject access commit confirmation is pending");
     this.name = "SubjectAccessCommitPendingError";
     this.receipt = receipt;

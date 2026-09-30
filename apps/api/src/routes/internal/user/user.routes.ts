@@ -16,12 +16,8 @@ import {
   ValidationFailureResponseSchema,
 } from "@iam/api-core/core/openapi/schemas/error-response-schema";
 import { UserNameWriteSchema, UsernameWriteSchema } from "@iam/domain/user";
-import {
-  UserProfileDetailDocumentSchema,
-} from "@iam/user-profile-read-model";
-import {
-  V3UserProfileSearchTransportRequestSchema,
-} from "@iam/user-profile-read-model/v3";
+import { UserProfileDetailDocumentSchema } from "@iam/user-profile-read-model";
+import { V3UserProfileSearchTransportRequestSchema } from "@iam/user-profile-read-model/v3";
 
 const tags = ["Internal/User"];
 
@@ -36,14 +32,8 @@ export const userInfo = createRoute({
   },
   responses: {
     ...commonErrorResponses,
-    [HttpStatusCodes.SERVICE_UNAVAILABLE]: jsonContent(
-      StandardErrorResponseSchema,
-      "用户详情暂时不可用",
-    ),
-    [HttpStatusCodes.OK]: jsonContent(
-      createSuccessResponseSchema(UserProfileDetailDocumentSchema),
-      "用户详细信息",
-    ),
+    [HttpStatusCodes.SERVICE_UNAVAILABLE]: jsonContent(StandardErrorResponseSchema, "用户详情暂时不可用"),
+    [HttpStatusCodes.OK]: jsonContent(createSuccessResponseSchema(UserProfileDetailDocumentSchema), "用户详细信息"),
   },
 });
 
@@ -70,12 +60,15 @@ export const usersSearchWithPrivilegeDelegation = createRoute({
   },
   responses: {
     ...commonErrorResponses,
-    [HttpStatusCodes.OK]: jsonContent(createSuccessResponseSchema(
-      z.object({
-        users: z.array(UserDtoSchema),
-        delegations: z.array(PrivilegeDelegationDtoSchema),
-      }),
-    ), "用户搜索结果"),
+    [HttpStatusCodes.OK]: jsonContent(
+      createSuccessResponseSchema(
+        z.object({
+          users: z.array(UserDtoSchema),
+          delegations: z.array(PrivilegeDelegationDtoSchema),
+        }),
+      ),
+      "用户搜索结果",
+    ),
   },
 });
 
@@ -84,10 +77,7 @@ export const usersSearchDsl = createRoute({
   path: "/search-dsl",
   tags,
   request: {
-    body: jsonContentRequired(
-      V3UserProfileSearchTransportRequestSchema,
-      "User Profile v3 Filter DSL 搜索条件",
-    ),
+    body: jsonContentRequired(V3UserProfileSearchTransportRequestSchema, "User Profile v3 Filter DSL 搜索条件"),
   },
   responses: {
     ...commonErrorResponses,
@@ -95,10 +85,7 @@ export const usersSearchDsl = createRoute({
       z.union([ValidationFailureResponseSchema, StandardErrorResponseSchema]),
       "Filter 校验失败或搜索结果超过固定上限",
     ),
-    [HttpStatusCodes.SERVICE_UNAVAILABLE]: jsonContent(
-      StandardErrorResponseSchema,
-      "用户搜索暂时不可用",
-    ),
+    [HttpStatusCodes.SERVICE_UNAVAILABLE]: jsonContent(StandardErrorResponseSchema, "用户搜索暂时不可用"),
     [HttpStatusCodes.OK]: jsonContent(
       createSuccessResponseSchema(z.array(UserProfileBaseSchema)),
       "User Profile v3 Filter DSL 搜索结果",
@@ -111,12 +98,15 @@ export const contactRegister = createRoute({
   path: "/purveyor/contacts",
   tags,
   request: {
-    body: jsonContentRequired(z.object({
-      username: UsernameWriteSchema.openapi({ example: "身份证号" }),
-      orgCode: z.string().openapi({ example: "供应商统一社会信用代码" }),
-      mobile: z.string().openapi({ example: "12345678" }),
-      name: UserNameWriteSchema.openapi({ example: "1234" }),
-    }), "用户创建参数"),
+    body: jsonContentRequired(
+      z.object({
+        username: UsernameWriteSchema.openapi({ example: "身份证号" }),
+        orgCode: z.string().openapi({ example: "供应商统一社会信用代码" }),
+        mobile: z.string().openapi({ example: "12345678" }),
+        name: UserNameWriteSchema.openapi({ example: "1234" }),
+      }),
+      "用户创建参数",
+    ),
   },
   responses: {
     ...commonErrorResponses,

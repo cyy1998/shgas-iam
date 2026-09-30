@@ -8,15 +8,15 @@
 先查已有能力 owner，再按消费方与运行环境选择落点。下面的规则约束新增代码与受影响的修改；既有实现的收敛范围见
 [现存差距与验证](#现存差距与验证)。共享不等于集中到 `contracts`，文件名含 DTO 也不构成提升为共享代码的理由。
 
-| 位置 | 职责与允许依赖 |
-|---|---|
-| `packages/contracts` | 跨端或跨应用的稳定枚举、常量、runtime schema、派生类型及紧贴这些契约的协议 helper；不依赖数据库、app 或服务端基础设施。 |
-| `packages/domain` 的纯规则文件 | 根据显式输入计算结果或抛出业务错误；依赖共享常量、纯 helper 和业务错误，不依赖数据库、OpenAPI、网络、运行时实例或 composition。 |
-| `packages/domain` 的 DTO/schema/mapper | 后端复用的领域输入输出；允许依赖数据库字段 schema、Drizzle schema 派生工具和既有 OpenAPI 工具，不执行数据库访问。 |
-| `packages/domain` 的 error/audit helper | 可复用业务错误和纯审计 payload 构造；实际审计写入由后端注入的能力负责。 |
-| 专用能力包 | 拥有完整业务能力及其公开 schema、类型和行为；已有 owner 的协议 schema 继续留在该 owner，例如 Custom SSO wire 由 `custom-sso` 包拥有。 |
-| `packages/db`、`packages/api-core`、`packages/jobs` | 分别拥有持久化定义与查询基础能力、后端基础设施、BullMQ 基础能力；业务事实的解析规则由业务 owner 持有。 |
-| app 内部 | 单 app 的 enum、schema、error、流程类型和页面模型；有实际共享消费者后再评估提升位置。 |
+| 位置                                                | 职责与允许依赖                                                                                                                        |
+| --------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
+| `packages/contracts`                                | 跨端或跨应用的稳定枚举、常量、runtime schema、派生类型及紧贴这些契约的协议 helper；不依赖数据库、app 或服务端基础设施。               |
+| `packages/domain` 的纯规则文件                      | 根据显式输入计算结果或抛出业务错误；依赖共享常量、纯 helper 和业务错误，不依赖数据库、OpenAPI、网络、运行时实例或 composition。       |
+| `packages/domain` 的 DTO/schema/mapper              | 后端复用的领域输入输出；允许依赖数据库字段 schema、Drizzle schema 派生工具和既有 OpenAPI 工具，不执行数据库访问。                     |
+| `packages/domain` 的 error/audit helper             | 可复用业务错误和纯审计 payload 构造；实际审计写入由后端注入的能力负责。                                                               |
+| 专用能力包                                          | 拥有完整业务能力及其公开 schema、类型和行为；已有 owner 的协议 schema 继续留在该 owner，例如 Custom SSO wire 由 `custom-sso` 包拥有。 |
+| `packages/db`、`packages/api-core`、`packages/jobs` | 分别拥有持久化定义与查询基础能力、后端基础设施、BullMQ 基础能力；业务事实的解析规则由业务 owner 持有。                                |
+| app 内部                                            | 单 app 的 enum、schema、error、流程类型和页面模型；有实际共享消费者后再评估提升位置。                                                 |
 
 `domain` 当前同时包含纯规则和数据库派生 DTO；“纯”约束适用于规则文件，不代表整个 package 无数据库依赖。
 新增纯规则放在所属领域中按职责命名的文件，DTO/mapper 依赖规则，规则不反向依赖 DTO 或其聚合出口。
@@ -48,13 +48,13 @@
 
 当前专用能力包的分工如下；本约定不改变它们的物理布局：
 
-| 包 | 当前职责与消费关系 |
-|---|---|
-| `custom-sso` | root 拥有完整协议操作与 Code/Token；API 注入出站能力，Worker 消费 maintenance，Admin/SSO 消费支持浏览器的 `/wire`；测试构造与检查只走 `/testing`。 |
-| `session-kernel` | 协议中性的 UserSession/ClientSession 生命周期，由 API、Admin API、两协议与 API Core Subject Access 适配方消费；不反向依赖这些消费者。 |
-| `role-assignment-resolution` | 统一有效角色与角色变化影响用户的解析；管理后端授权和 User Profile 构建/失效使用同一规则。 |
-| `organization-responsibility-resolution` | 统一有效责任与 holder 反向解析；当前生产直接消费者是 User Profile Read Model，用于构建和变更影响分析。 |
-| `user-profile-read-model` | 拥有派生档案的失效、重建、PostgreSQL 发布、Redis 缓存、查询与恢复；由 API、Admin API、Worker 按职责消费。Read Model 为读取整理数据，也负责写入和维护这些派生数据。 |
+| 包                                       | 当前职责与消费关系                                                                                                                                                 |
+| ---------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `custom-sso`                             | root 拥有完整协议操作与 Code/Token；API 注入出站能力，Worker 消费 maintenance，Admin/SSO 消费支持浏览器的 `/wire`；测试构造与检查只走 `/testing`。                 |
+| `session-kernel`                         | 协议中性的 UserSession/ClientSession 生命周期，由 API、Admin API、两协议与 API Core Subject Access 适配方消费；不反向依赖这些消费者。                              |
+| `role-assignment-resolution`             | 统一有效角色与角色变化影响用户的解析；管理后端授权和 User Profile 构建/失效使用同一规则。                                                                          |
+| `organization-responsibility-resolution` | 统一有效责任与 holder 反向解析；当前生产直接消费者是 User Profile Read Model，用于构建和变更影响分析。                                                             |
+| `user-profile-read-model`                | 拥有派生档案的失效、重建、PostgreSQL 发布、Redis 缓存、查询与恢复；由 API、Admin API、Worker 按职责消费。Read Model 为读取整理数据，也负责写入和维护这些派生数据。 |
 
 Kernel 根出口只托管不透明 `subjectContext`，`/maintenance` 和 `/testing` 分离。Subject Access operation/context/拒绝编排
 由 API Core 单向消费 Kernel；不公开旧 fence、validator 或专用 Kernel 代际字段。Custom SSO root 要求显式操作容器，
@@ -131,13 +131,13 @@ Admin 表单仅在 business 回填、展示和提交地址；隐藏控件的旧�
 形状或其来源数据库字段时按上述规则收敛；不因无关改动批量迁移。既有 crypto root 出口按前述运行环境约定维护，
 新增 subpath 或搬迁实现应作为明确的结构变更处理。
 
-| 要证明的事实 | 验证方式 |
-|---|---|
-| 公开出口可用、类型结构兼容 | package exports 与消费方 typecheck；类型正确不等于浏览器运行时可加载。 |
-| DTO 输入与输出字段受控 | 公开解析/mapper 的行为测试，覆盖允许字段、额外存储字段不外溢、敏感字段裁剪及协议要求的未知字段处理。 |
-| 共享出口支持目标浏览器 | 相关前端构建；涉及平台能力时补对应运行环境的执行验证。 |
-| 业务解析、发布与恢复行为 | 最高相关公开接口的行为测试，以及涉及 PostgreSQL/Redis 等资源的 Integration 通道。 |
-| 稳定依赖方向与 owner 路径 | 仅在既有 Architecture Guard 覆盖范围内由其检查；新增规则须通过准入流程。 |
+| 要证明的事实               | 验证方式                                                                                             |
+| -------------------------- | ---------------------------------------------------------------------------------------------------- |
+| 公开出口可用、类型结构兼容 | package exports 与消费方 typecheck；类型正确不等于浏览器运行时可加载。                               |
+| DTO 输入与输出字段受控     | 公开解析/mapper 的行为测试，覆盖允许字段、额外存储字段不外溢、敏感字段裁剪及协议要求的未知字段处理。 |
+| 共享出口支持目标浏览器     | 相关前端构建；涉及平台能力时补对应运行环境的执行验证。                                               |
+| 业务解析、发布与恢复行为   | 最高相关公开接口的行为测试，以及涉及 PostgreSQL/Redis 等资源的 Integration 通道。                    |
+| 稳定依赖方向与 owner 路径  | 仅在既有 Architecture Guard 覆盖范围内由其检查；新增规则须通过准入流程。                             |
 
 当前 Architecture Guard 不覆盖这里全部通用共享包分层、浏览器运行环境或 DTO 字段规则；这些约束仍需实现时审查并选择
 对应验证。不要用源码字符串检查推断 Zod 链、运行时字段裁剪或 bundle 行为。验证层与准入条件见

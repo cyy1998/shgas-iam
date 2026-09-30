@@ -1,48 +1,48 @@
-import OrganizationTreeSelector from '@admin/components/OrganizationTreeSelector';
-import AuditLogTable from '@admin/components/audit/AuditLogTable';
-import { requestEmploymentOptionsWithoutId } from '@admin/components/employment-select-options';
+import AuditLogTable from "@admin/components/audit/AuditLogTable";
+import { requestEmploymentOptionsWithoutId } from "@admin/components/employment-select-options";
+import OrganizationTreeSelector from "@admin/components/OrganizationTreeSelector";
 import {
   endOrganizationResponsibilityAssignment,
   getOrganizationResponsibilityAssignment,
+  type OrganizationResponsibilityAssignmentLifecycle,
+  type OrganizationResponsibilityAssignmentView,
   pauseOrganizationResponsibilityAssignment,
   resumeOrganizationResponsibilityAssignment,
   searchOrganizationResponsibilityAssignments,
-  type OrganizationResponsibilityAssignmentLifecycle,
-  type OrganizationResponsibilityAssignmentView,
-} from '@admin/services/organization-responsibility';
-import { ProTable, type ProColumns } from '@ant-design/pro-components';
+} from "@admin/services/organization-responsibility";
+import { type ProColumns, ProTable } from "@ant-design/pro-components";
 import {
   ORGANIZATION_RESPONSIBILITY_ASSIGNMENT_LIFECYCLE_COMMANDS,
   ORGANIZATION_RESPONSIBILITY_TYPE_CATALOG,
-  OrganizationResponsibilityAssignmentStatus,
-  OrganizationStatus,
   type OrganizationResponsibilityAssignmentLifecycleCommand as OrganizationResponsibilityAssignmentLifecycleCommandType,
+  OrganizationResponsibilityAssignmentStatus,
   type OrganizationResponsibilityTypeCode,
-} from '@iam/contracts';
-import { useAccess } from '@umijs/max';
-import { Alert, Button, Descriptions, Drawer, message, Tabs, Tag } from 'antd';
-import { useCallback, useEffect, useRef, useState } from 'react';
-import OrganizationResponsibilityAssignmentFormModal from './OrganizationResponsibilityAssignmentFormModal';
-import OrganizationResponsibilityAssignmentLifecycleActions from './OrganizationResponsibilityAssignmentLifecycleActions';
+  OrganizationStatus,
+} from "@iam/contracts";
+import { useAccess } from "@umijs/max";
+import { Alert, Button, Descriptions, Drawer, message, Tabs, Tag } from "antd";
+import { useCallback, useEffect, useRef, useState } from "react";
+import OrganizationResponsibilityAssignmentFormModal from "./OrganizationResponsibilityAssignmentFormModal";
+import OrganizationResponsibilityAssignmentLifecycleActions from "./OrganizationResponsibilityAssignmentLifecycleActions";
 import {
   formatOrganizationResponsibilityStatus,
   formatOrganizationResponsibilityType,
-} from './organizationResponsibilityPresentation';
+} from "./organizationResponsibilityPresentation";
 
 const PAGE_SIZE = 20;
 
 const lifecycleCommandHandlers = {
   [ORGANIZATION_RESPONSIBILITY_ASSIGNMENT_LIFECYCLE_COMMANDS.Pause]: {
     mutate: pauseOrganizationResponsibilityAssignment,
-    successMessage: '责任任命已暂停',
+    successMessage: "责任任命已暂停",
   },
   [ORGANIZATION_RESPONSIBILITY_ASSIGNMENT_LIFECYCLE_COMMANDS.Resume]: {
     mutate: resumeOrganizationResponsibilityAssignment,
-    successMessage: '责任任命已恢复',
+    successMessage: "责任任命已恢复",
   },
   [ORGANIZATION_RESPONSIBILITY_ASSIGNMENT_LIFECYCLE_COMMANDS.End]: {
     mutate: endOrganizationResponsibilityAssignment,
-    successMessage: '责任任命已结束',
+    successMessage: "责任任命已结束",
   },
 } satisfies Record<
   OrganizationResponsibilityAssignmentLifecycleCommandType,
@@ -64,11 +64,11 @@ export type OrganizationResponsibilityAssignmentState = {
 
 type Host =
   | {
-      kind: 'organization';
+      kind: "organization";
       targetOrganizationCode: string;
     }
   | {
-      kind: 'global';
+      kind: "global";
       state: OrganizationResponsibilityAssignmentState;
       onStateChange: (state: OrganizationResponsibilityAssignmentState) => void;
     };
@@ -84,20 +84,12 @@ function formatReference(label: string, isDelete: boolean) {
   return isDelete ? `${label}（已删除）` : label;
 }
 
-function formatOrganizationPath(
-  path: OrganizationResponsibilityAssignmentView['targetOrganization']['fullPath'],
-) {
-  return path
-    .map((organization) =>
-      formatReference(organization.orgName, organization.isDelete),
-    )
-    .join(' / ');
+function formatOrganizationPath(path: OrganizationResponsibilityAssignmentView["targetOrganization"]["fullPath"]) {
+  return path.map((organization) => formatReference(organization.orgName, organization.isDelete)).join(" / ");
 }
 
 function formatTime(value: string | Date) {
-  return new Date(
-    value instanceof Date ? value.getTime() : value,
-  ).toLocaleString();
+  return new Date(value instanceof Date ? value.getTime() : value).toLocaleString();
 }
 
 function assignmentColumns(
@@ -106,62 +98,51 @@ function assignmentColumns(
 ): ProColumns<OrganizationResponsibilityAssignmentView>[] {
   return [
     {
-      title: '目标组织',
-      dataIndex: 'targetOrganizationCode',
+      title: "目标组织",
+      dataIndex: "targetOrganizationCode",
       hideInTable: true,
       search: fixedTarget ? false : undefined,
       formItemRender: () => (
         <OrganizationTreeSelector
-          visibleStatuses={[
-            OrganizationStatus.Enable,
-            OrganizationStatus.Pause,
-            OrganizationStatus.Disable,
-          ]}
-          selectableStatuses={[
-            OrganizationStatus.Enable,
-            OrganizationStatus.Pause,
-            OrganizationStatus.Disable,
-          ]}
+          visibleStatuses={[OrganizationStatus.Enable, OrganizationStatus.Pause, OrganizationStatus.Disable]}
+          selectableStatuses={[OrganizationStatus.Enable, OrganizationStatus.Pause, OrganizationStatus.Disable]}
           placeholder="全部目标组织"
         />
       ),
     },
     {
-      title: '任职',
-      dataIndex: 'employmentId',
+      title: "任职",
+      dataIndex: "employmentId",
       hideInTable: true,
-      valueType: 'select',
+      valueType: "select",
       request: requestEmploymentOptionsWithoutId,
       fieldProps: {
         filterOption: false,
         labelInValue: true,
-        placeholder: '搜索用户、账号、组织或岗位',
+        placeholder: "搜索用户、账号、组织或岗位",
         showSearch: true,
       },
     },
     {
-      title: '责任类型',
-      dataIndex: 'typeCode',
-      valueType: 'select',
+      title: "责任类型",
+      dataIndex: "typeCode",
+      valueType: "select",
       valueEnum: Object.fromEntries(
-        ORGANIZATION_RESPONSIBILITY_TYPE_CATALOG.map((type) => [
-          type.code,
-          { text: `${type.name}（${type.code}）` },
-        ]),
+        ORGANIZATION_RESPONSIBILITY_TYPE_CATALOG.map((type) => [type.code, { text: `${type.name}（${type.code}）` }]),
       ),
       render: (_, row) => formatOrganizationResponsibilityType(row.typeCode),
     },
     {
-      title: '状态',
-      dataIndex: 'status',
+      title: "状态",
+      dataIndex: "status",
       render: (_, row) => (
         <Tag
           color={
             row.status === OrganizationResponsibilityAssignmentStatus.Enable
-              ? 'green'
+              ? "green"
               : row.status === OrganizationResponsibilityAssignmentStatus.Pause
-                ? 'gold'
-                : 'default'
+                ? "gold"
+                : "default"
           }
         >
           {formatOrganizationResponsibilityStatus(row.status)}
@@ -169,36 +150,31 @@ function assignmentColumns(
       ),
     },
     {
-      title: '生命周期',
-      dataIndex: 'lifecycle',
+      title: "生命周期",
+      dataIndex: "lifecycle",
       hideInTable: true,
-      valueType: 'select',
+      valueType: "select",
       valueEnum: {
-        open: { text: '进行中' },
-        ended: { text: '已结束' },
-        all: { text: '全部' },
+        open: { text: "进行中" },
+        ended: { text: "已结束" },
+        all: { text: "全部" },
       },
     },
     {
-      title: '用户',
+      title: "用户",
       render: (_, row) =>
-        formatReference(
-          `${row.holder.user.name}（${row.holder.user.username}）`,
-          row.holder.user.isDelete,
-        ),
+        formatReference(`${row.holder.user.name}（${row.holder.user.username}）`, row.holder.user.isDelete),
     },
     {
-      title: '任职组织路径',
-      render: (_, row) =>
-        formatOrganizationPath(row.holder.organization.fullPath),
+      title: "任职组织路径",
+      render: (_, row) => formatOrganizationPath(row.holder.organization.fullPath),
     },
     {
-      title: '目标组织路径',
-      render: (_, row) =>
-        formatOrganizationPath(row.targetOrganization.fullPath),
+      title: "目标组织路径",
+      render: (_, row) => formatOrganizationPath(row.targetOrganization.fullPath),
     },
     {
-      title: '岗位',
+      title: "岗位",
       render: (_, row) =>
         formatReference(
           `${row.holder.position.posName}（${row.holder.position.posCode}）`,
@@ -206,9 +182,9 @@ function assignmentColumns(
         ),
     },
     {
-      title: '操作',
-      key: 'actions',
-      fixed: 'right',
+      title: "操作",
+      key: "actions",
+      fixed: "right",
       width: 88,
       render: (_, row) => (
         <Button type="link" onClick={() => onOpenDetail(row.id)}>
@@ -222,62 +198,62 @@ function assignmentColumns(
 function detailItems(detail: OrganizationResponsibilityAssignmentView) {
   return [
     {
-      key: 'type',
-      label: '责任类型',
+      key: "type",
+      label: "责任类型",
       children: formatOrganizationResponsibilityType(detail.typeCode),
     },
     {
-      key: 'target',
-      label: '目标组织',
+      key: "target",
+      label: "目标组织",
       children: formatReference(
         `${detail.targetOrganization.orgName}（${detail.targetOrganization.orgCode}）`,
         detail.targetOrganization.isDelete,
       ),
     },
     {
-      key: 'target-path',
-      label: '目标组织路径',
+      key: "target-path",
+      label: "目标组织路径",
       children: formatOrganizationPath(detail.targetOrganization.fullPath),
     },
     {
-      key: 'status',
-      label: '状态',
+      key: "status",
+      label: "状态",
       children: formatOrganizationResponsibilityStatus(detail.status),
     },
     {
-      key: 'start-time',
-      label: '生效时间',
+      key: "start-time",
+      label: "生效时间",
       children: formatTime(detail.startTime),
     },
     {
-      key: 'end-time',
-      label: '结束时间',
-      children: detail.endTime === null ? '—' : formatTime(detail.endTime),
+      key: "end-time",
+      label: "结束时间",
+      children: detail.endTime === null ? "—" : formatTime(detail.endTime),
     },
     {
-      key: 'user',
-      label: '持有人',
+      key: "user",
+      label: "持有人",
       children: formatReference(
         `${detail.holder.user.name}（${detail.holder.user.username}）`,
         detail.holder.user.isDelete,
       ),
     },
     {
-      key: 'org-path',
-      label: '任职组织路径',
+      key: "org-path",
+      label: "任职组织路径",
       children: formatOrganizationPath(detail.holder.organization.fullPath),
     },
     {
-      key: 'position',
-      label: '岗位',
+      key: "position",
+      label: "岗位",
       children: formatReference(
         `${detail.holder.position.posName}（${detail.holder.position.posCode}）`,
         detail.holder.position.isDelete,
       ),
     },
     {
-      key: 'employment-id',
-      label: '任职 ID',
+      key: "employment-id",
+      label: "任职 ID",
       children: `#${detail.holder.employmentId}`,
     },
   ];
@@ -287,48 +263,33 @@ function assignmentMatchesFilters(
   assignment: OrganizationResponsibilityAssignmentView,
   filters: OrganizationResponsibilityAssignmentState,
 ) {
-  if (
-    filters.targetOrganizationCode &&
-    assignment.targetOrganization.orgCode !== filters.targetOrganizationCode
-  ) {
+  if (filters.targetOrganizationCode && assignment.targetOrganization.orgCode !== filters.targetOrganizationCode) {
     return false;
   }
-  if (
-    filters.employmentId &&
-    assignment.holder.employmentId !== filters.employmentId
-  ) {
+  if (filters.employmentId && assignment.holder.employmentId !== filters.employmentId) {
     return false;
   }
-  if (filters.typeCode && assignment.typeCode !== filters.typeCode)
-    return false;
-  if (filters.lifecycle === 'all') return true;
+  if (filters.typeCode && assignment.typeCode !== filters.typeCode) return false;
+  if (filters.lifecycle === "all") return true;
   const isOpen =
     assignment.status === OrganizationResponsibilityAssignmentStatus.Enable ||
     assignment.status === OrganizationResponsibilityAssignmentStatus.Pause;
-  return filters.lifecycle === 'open' ? isOpen : !isOpen;
+  return filters.lifecycle === "open" ? isOpen : !isOpen;
 }
 
-export default function OrganizationResponsibilityAssignmentModule({
-  host,
-}: {
-  host: Host;
-}) {
+export default function OrganizationResponsibilityAssignmentModule({ host }: { host: Host }) {
   const access = useAccess();
-  const fixedTarget =
-    host.kind === 'organization' ? host.targetOrganizationCode : undefined;
+  const fixedTarget = host.kind === "organization" ? host.targetOrganizationCode : undefined;
   const initialState: OrganizationResponsibilityAssignmentState =
-    host.kind === 'global'
+    host.kind === "global"
       ? host.state
       : {
           targetOrganizationCode: fixedTarget,
-          lifecycle: 'open' as const,
+          lifecycle: "open" as const,
           assignmentId: null,
         };
-  const [filters, setFilters] =
-    useState<OrganizationResponsibilityAssignmentState>(initialState);
-  const [items, setItems] = useState<
-    OrganizationResponsibilityAssignmentView[]
-  >([]);
+  const [filters, setFilters] = useState<OrganizationResponsibilityAssignmentState>(initialState);
+  const [items, setItems] = useState<OrganizationResponsibilityAssignmentView[]>([]);
   const [pagination, setPagination] = useState({
     current: initialState.pageNum ?? 1,
     pageSize: initialState.pageSize ?? PAGE_SIZE,
@@ -340,8 +301,7 @@ export default function OrganizationResponsibilityAssignmentModule({
   const [detailOpen, setDetailOpen] = useState(false);
   const [detailLoading, setDetailLoading] = useState(false);
   const [detailError, setDetailError] = useState<string | null>(null);
-  const [detail, setDetail] =
-    useState<OrganizationResponsibilityAssignmentView | null>(null);
+  const [detail, setDetail] = useState<OrganizationResponsibilityAssignmentView | null>(null);
   const [lifecycleLoading, setLifecycleLoading] = useState(false);
   const [auditRevision, setAuditRevision] = useState(0);
   const listRequestIdRef = useRef(0);
@@ -362,9 +322,7 @@ export default function OrganizationResponsibilityAssignmentModule({
                 targetOrganizationCode: filters.targetOrganizationCode,
               }
             : {}),
-          ...(filters.employmentId
-            ? { employmentId: filters.employmentId }
-            : {}),
+          ...(filters.employmentId ? { employmentId: filters.employmentId } : {}),
           ...(filters.typeCode ? { typeCode: filters.typeCode } : {}),
           lifecycle: filters.lifecycle,
           pageSize,
@@ -397,19 +355,12 @@ export default function OrganizationResponsibilityAssignmentModule({
           paginationRef.current = { current: pageNum, pageSize, total: 0 };
           setPagination(paginationRef.current);
         }
-        message.error(
-          error instanceof Error ? error.message : '加载责任任命失败',
-        );
+        message.error(error instanceof Error ? error.message : "加载责任任命失败");
       } finally {
         if (requestId === listRequestIdRef.current) setLoading(false);
       }
     },
-    [
-      filters.employmentId,
-      filters.lifecycle,
-      filters.targetOrganizationCode,
-      filters.typeCode,
-    ],
+    [filters.employmentId, filters.lifecycle, filters.targetOrganizationCode, filters.typeCode],
   );
 
   const loadDetail = useCallback(
@@ -431,18 +382,14 @@ export default function OrganizationResponsibilityAssignmentModule({
           id,
         });
         if (requestId !== detailRequestIdRef.current) return;
-        if (
-          !options.allowOutOfScope &&
-          !assignmentMatchesFilters(nextDetail, filters)
-        ) {
-          throw new Error('任命不属于当前链接筛选范围');
+        if (!options.allowOutOfScope && !assignmentMatchesFilters(nextDetail, filters)) {
+          throw new Error("任命不属于当前链接筛选范围");
         }
         setDetail(nextDetail);
       } catch (error) {
         if (requestId !== detailRequestIdRef.current) return;
         setDetail(null);
-        const errorMessage =
-          error instanceof Error ? error.message : '加载责任任命详情失败';
+        const errorMessage = error instanceof Error ? error.message : "加载责任任命详情失败";
         setDetailError(errorMessage);
         message.error(errorMessage);
       } finally {
@@ -456,10 +403,7 @@ export default function OrganizationResponsibilityAssignmentModule({
 
   useEffect(() => {
     let cancelled = false;
-    void loadPage(
-      initialState.pageNum ?? 1,
-      initialState.pageSize ?? PAGE_SIZE,
-    ).then(() => {
+    void loadPage(initialState.pageNum ?? 1, initialState.pageSize ?? PAGE_SIZE).then(() => {
       if (!cancelled && initialState.assignmentId) {
         void loadDetail(initialState.assignmentId);
       }
@@ -469,13 +413,7 @@ export default function OrganizationResponsibilityAssignmentModule({
       listRequestIdRef.current += 1;
       detailRequestIdRef.current += 1;
     };
-  }, [
-    initialState.assignmentId,
-    initialState.pageNum,
-    initialState.pageSize,
-    loadDetail,
-    loadPage,
-  ]);
+  }, [initialState.assignmentId, initialState.pageNum, initialState.pageSize, loadDetail, loadPage]);
 
   const applyFilters = (values: AssignmentSearchFormValues) => {
     const nextState: OrganizationResponsibilityAssignmentState = {
@@ -487,32 +425,30 @@ export default function OrganizationResponsibilityAssignmentModule({
       ...(values.employmentId
         ? {
             employmentId: Number(
-              typeof values.employmentId === 'number'
-                ? values.employmentId
-                : values.employmentId.value,
+              typeof values.employmentId === "number" ? values.employmentId : values.employmentId.value,
             ),
           }
         : {}),
       ...(values.typeCode ? { typeCode: values.typeCode } : {}),
-      lifecycle: values.lifecycle ?? 'open',
+      lifecycle: values.lifecycle ?? "open",
       assignmentId: null,
     };
     setFilters(nextState);
-    if (host.kind === 'global') host.onStateChange(nextState);
+    if (host.kind === "global") host.onStateChange(nextState);
   };
 
   const resetFilters = () => {
     const nextState: OrganizationResponsibilityAssignmentState = {
       ...(fixedTarget ? { targetOrganizationCode: fixedTarget } : {}),
-      lifecycle: 'open',
+      lifecycle: "open",
       assignmentId: null,
     };
     setFilters(nextState);
-    if (host.kind === 'global') host.onStateChange(nextState);
+    if (host.kind === "global") host.onStateChange(nextState);
   };
 
   const openDetail = (id: number) => {
-    if (host.kind === 'global') {
+    if (host.kind === "global") {
       host.onStateChange({
         ...filters,
         assignmentId: id,
@@ -530,14 +466,12 @@ export default function OrganizationResponsibilityAssignmentModule({
     setDetailLoading(false);
     setDetail(null);
     setDetailError(null);
-    if (host.kind === 'global' && filters.assignmentId !== null) {
+    if (host.kind === "global" && filters.assignmentId !== null) {
       host.onStateChange({ ...filters, assignmentId: null });
     }
   };
 
-  const runLifecycleCommand = async (
-    command: OrganizationResponsibilityAssignmentLifecycleCommandType,
-  ) => {
+  const runLifecycleCommand = async (command: OrganizationResponsibilityAssignmentLifecycleCommandType) => {
     if (detail === null || lifecycleLoading) return;
     const assignmentId = detail.id;
     const handler = lifecycleCommandHandlers[command];
@@ -545,12 +479,10 @@ export default function OrganizationResponsibilityAssignmentModule({
     try {
       const outcome = await handler.mutate({ id: assignmentId });
       if (outcome.changed) message.success(handler.successMessage);
-      else message.info('无需修改');
+      else message.info("无需修改");
       setAuditRevision((current) => current + 1);
     } catch (error) {
-      message.error(
-        error instanceof Error ? error.message : '责任任命操作失败',
-      );
+      message.error(error instanceof Error ? error.message : "责任任命操作失败");
     } finally {
       await Promise.all([
         loadPage(undefined, undefined, { preserveOnError: true }),
@@ -565,10 +497,7 @@ export default function OrganizationResponsibilityAssignmentModule({
 
   return (
     <>
-      <ProTable<
-        OrganizationResponsibilityAssignmentView,
-        AssignmentSearchFormValues
-      >
+      <ProTable<OrganizationResponsibilityAssignmentView, AssignmentSearchFormValues>
         rowKey="id"
         loading={loading}
         columns={assignmentColumns(openDetail, fixedTarget)}
@@ -579,7 +508,7 @@ export default function OrganizationResponsibilityAssignmentModule({
             employmentId: initialState.employmentId
               ? {
                   value: initialState.employmentId,
-                  label: '已按指定任职筛选',
+                  label: "已按指定任职筛选",
                 }
               : undefined,
             typeCode: initialState.typeCode,
@@ -587,35 +516,27 @@ export default function OrganizationResponsibilityAssignmentModule({
           },
         }}
         headerTitle="责任任命列表"
-        search={{ labelWidth: 'auto' }}
+        search={{ labelWidth: "auto" }}
         scroll={{ x: 1200 }}
         pagination={{
           ...pagination,
           showSizeChanger: true,
           pageSizeOptions: [10, 20, 50, 100],
           onChange: (current, pageSize) =>
-            void loadPage(
-              pageSize === pagination.pageSize ? current : 1,
-              pageSize,
-              { preserveOnError: true },
-            ),
+            void loadPage(pageSize === pagination.pageSize ? current : 1, pageSize, { preserveOnError: true }),
         }}
         onSubmit={applyFilters}
         onReset={resetFilters}
         toolBarRender={() =>
           access.canCreateOrganizationResponsibility
             ? [
-                <Button
-                  key="create"
-                  type="primary"
-                  onClick={() => setCreateOpen(true)}
-                >
+                <Button key="create" type="primary" onClick={() => setCreateOpen(true)}>
                   + 新建责任任命
                 </Button>,
               ]
             : []
         }
-        locale={{ emptyText: '无符合条件的责任任命' }}
+        locale={{ emptyText: "无符合条件的责任任命" }}
       />
 
       {access.canCreateOrganizationResponsibility && (
@@ -623,15 +544,13 @@ export default function OrganizationResponsibilityAssignmentModule({
           open={createOpen}
           orgCode={fixedTarget}
           onOpenChange={setCreateOpen}
-          onFailure={() =>
-            loadPage(undefined, undefined, { preserveOnError: true })
-          }
+          onFailure={() => loadPage(undefined, undefined, { preserveOnError: true })}
           onSuccess={() => void loadPage(1)}
         />
       )}
 
       <Drawer
-        title={detail ? `任命 #${detail.id}` : '责任任命详情'}
+        title={detail ? `任命 #${detail.id}` : "责任任命详情"}
         open={detailOpen}
         loading={detailLoading}
         size="large"
@@ -642,8 +561,8 @@ export default function OrganizationResponsibilityAssignmentModule({
           <Tabs
             items={[
               {
-                key: 'detail',
-                label: '任命详情',
+                key: "detail",
+                label: "任命详情",
                 children: (
                   <>
                     <OrganizationResponsibilityAssignmentLifecycleActions
@@ -658,15 +577,14 @@ export default function OrganizationResponsibilityAssignmentModule({
               ...(access.canAccessAudit
                 ? [
                     {
-                      key: 'audit',
-                      label: '操作日志',
+                      key: "audit",
+                      label: "操作日志",
                       forceRender: true,
                       children: (
                         <AuditLogTable
                           key={`${detail.id}:${auditRevision}`}
                           fixedConditions={{
-                            targetType:
-                              'organization_responsibility_assignment',
+                            targetType: "organization_responsibility_assignment",
                             targetId: detail.id,
                           }}
                         />

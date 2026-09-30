@@ -1,6 +1,6 @@
+import { describe, expect, mock, test } from "bun:test";
 import { createOrganizationService } from "@api/services/organization/organization.service";
 import { OrganizationLevel, OrganizationStatus, OrganizationType } from "@iam/contracts";
-import { describe, expect, mock, test } from "bun:test";
 
 const now = new Date("2026-01-01T00:00:00.000Z");
 
@@ -73,17 +73,18 @@ describe("createOrganizationService", () => {
         searchOrganizations: mock(async () => []),
       },
       uow: {
-        transaction: mock(async (callback: any) => await callback({
-          organizationRepository,
-          userProfileInvalidation,
-        })),
+        transaction: mock(
+          async (callback: any) =>
+            await callback({
+              organizationRepository,
+              userProfileInvalidation,
+            }),
+        ),
       },
     } as never);
 
     await expect(service.updateOrganization("ORG", { orgName: "New Organization" })).resolves.toBe(true);
 
-    expect(userProfileInvalidation.recordChanges).toHaveBeenCalledWith([
-      { kind: "organization", organizationId: 1 },
-    ]);
+    expect(userProfileInvalidation.recordChanges).toHaveBeenCalledWith([{ kind: "organization", organizationId: 1 }]);
   });
 });

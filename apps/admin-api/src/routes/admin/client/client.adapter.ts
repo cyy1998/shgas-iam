@@ -1,11 +1,5 @@
-import type { ClientService } from "@admin-api/services/client/client.service";
-import type { Context } from "hono";
-import type { ClientRouteHandler } from "./client.type";
 import { defineAdminApiMutationOperation, defineAdminApiQueryOperation } from "@admin-api/lib/admin-api-adapter";
-import {
-  getAdminAuditActor,
-  getAdminAuditRequestContext,
-} from "@admin-api/services/audit/audit.context";
+import { getAdminAuditActor, getAdminAuditRequestContext } from "@admin-api/services/audit/audit.context";
 import {
   ClientCreateDtoSchema,
   ClientInputDtoSchema,
@@ -13,8 +7,11 @@ import {
   ClientStatusUpdateDtoSchema,
   ClientUpdateDtoSchema,
 } from "@admin-api/services/client/client.schema";
+import type { ClientService } from "@admin-api/services/client/client.service";
 import { router } from "@iam/api-core/trpc";
+import type { Context } from "hono";
 import { z } from "zod";
+import type { ClientRouteHandler } from "./client.type";
 
 export interface CreateClientAdapterDeps {
   clientService: Pick<
@@ -44,21 +41,21 @@ export function createClientAdapter(deps: CreateClientAdapterDeps) {
   const searchClient = defineAdminApiQueryOperation({
     operationId: "admin.client.search",
     input: ClientPaginationQueryDtoSchema,
-    restInput: c => c.req.valid("json") as z.infer<typeof ClientPaginationQueryDtoSchema>,
-    handler: input => deps.clientService.searchClientsForAdmin(input),
+    restInput: (c) => c.req.valid("json") as z.infer<typeof ClientPaginationQueryDtoSchema>,
+    handler: (input) => deps.clientService.searchClientsForAdmin(input),
   });
 
   const getClient = defineAdminApiQueryOperation({
     operationId: "admin.client.detail",
     input: z.object({ clientCode: z.string() }),
-    restInput: c => c.req.valid("param") as { clientCode: string },
+    restInput: (c) => c.req.valid("param") as { clientCode: string },
     handler: ({ clientCode }) => deps.clientService.getClientDetailByCode(clientCode),
   });
 
   const createClient = defineAdminApiMutationOperation({
     operationId: "admin.client.create",
     input: ClientCreateDtoSchema,
-    restInput: c => c.req.valid("json") as z.infer<typeof ClientCreateDtoSchema>,
+    restInput: (c) => c.req.valid("json") as z.infer<typeof ClientCreateDtoSchema>,
     handler: (input, context) => deps.clientService.createClient(input, resolveAuditContext(context)),
   });
 
@@ -68,7 +65,7 @@ export function createClientAdapter(deps: CreateClientAdapterDeps) {
       clientCode: z.string(),
       data: ClientUpdateDtoSchema,
     }),
-    restInput: c => ({
+    restInput: (c) => ({
       clientCode: (c.req.valid("param") as { clientCode: string }).clientCode,
       data: c.req.valid("json") as z.infer<typeof ClientUpdateDtoSchema>,
     }),
@@ -79,7 +76,7 @@ export function createClientAdapter(deps: CreateClientAdapterDeps) {
   const updateClientById = defineAdminApiMutationOperation({
     operationId: "admin.client.updateLegacy",
     input: ClientInputDtoSchema,
-    restInput: c => c.req.valid("json") as z.infer<typeof ClientInputDtoSchema>,
+    restInput: (c) => c.req.valid("json") as z.infer<typeof ClientInputDtoSchema>,
     handler: (input, context) => deps.clientService.updateClientById(input, resolveAuditContext(context)),
   });
 
@@ -89,7 +86,7 @@ export function createClientAdapter(deps: CreateClientAdapterDeps) {
       clientCode: z.string(),
       status: ClientStatusUpdateDtoSchema.shape.status,
     }),
-    restInput: c => ({
+    restInput: (c) => ({
       clientCode: (c.req.valid("param") as { clientCode: string }).clientCode,
       status: (c.req.valid("json") as z.infer<typeof ClientStatusUpdateDtoSchema>).status,
     }),
@@ -100,7 +97,7 @@ export function createClientAdapter(deps: CreateClientAdapterDeps) {
   const deleteClient = defineAdminApiMutationOperation({
     operationId: "admin.client.delete",
     input: z.object({ clientCode: z.string() }),
-    restInput: c => c.req.valid("param") as { clientCode: string },
+    restInput: (c) => c.req.valid("param") as { clientCode: string },
     handler: ({ clientCode }, context) => deps.clientService.deleteClient(clientCode, resolveAuditContext(context)),
   });
 

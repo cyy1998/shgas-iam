@@ -14,11 +14,7 @@ function getStore() {
   };
 }
 
-export function createSingleton<T>(
-  key: string,
-  factory: () => T,
-  options: { destroy?: Destroy<T> } = {},
-): T {
+export function createSingleton<T>(key: string, factory: () => T, options: { destroy?: Destroy<T> } = {}): T {
   const store = getStore();
   if (!store.values.has(key)) {
     const value = factory();

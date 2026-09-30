@@ -1,3 +1,5 @@
+import { createHash, randomBytes, randomUUID } from "node:crypto";
+import { z } from "zod";
 import type {
   CapturedSession,
   ClientSession,
@@ -7,19 +9,17 @@ import type {
   UserSession,
   UserSessionAuthentication,
 } from "./model";
-import type { UnifiedSessionRedis } from "./storage";
-import { createHash, randomBytes, randomUUID } from "node:crypto";
-import { z } from "zod";
 import {
   authenticationSchema,
   captureIdentity,
   clientSessionSchema,
   SessionObservationRequiredError,
-  sessionRecordSchema,
   SessionStorageError,
+  sessionRecordSchema,
   targetSchema,
   userSessionSchema,
 } from "./model";
+import type { UnifiedSessionRedis } from "./storage";
 import { createUnifiedSessionStorage } from "./storage";
 
 declare const observationBrand: unique symbol;
@@ -99,9 +99,7 @@ function failure(status: string): { status: "missing" | "terminated" | "expired"
 }
 
 /** Transitional new-generation entry; a composition selects this factory or the legacy one. */
-export function createUnifiedSessionKernel<Operation extends object>(
-  options: UnifiedSessionKernelOptions<Operation>,
-) {
+export function createUnifiedSessionKernel<Operation extends object>(options: UnifiedSessionKernelOptions<Operation>) {
   const userTtl = ttlSchema.parse(options.userSessionTtlSeconds) * 1000;
   const clientTtl = ttlSchema.parse(options.clientSessionTtlSeconds) * 1000;
   const namespace = z
@@ -117,8 +115,7 @@ export function createUnifiedSessionKernel<Operation extends object>(
     function requireObservation(value: object) {
       active();
       const state = observations.get(value);
-      if (!state || state.operation !== operation)
-        throw new SessionObservationRequiredError();
+      if (!state || state.operation !== operation) throw new SessionObservationRequiredError();
       return state;
     }
     function observeUser(userSession: UserSession, observedAt: number): UserSessionObservation {
@@ -165,8 +162,7 @@ export function createUnifiedSessionKernel<Operation extends object>(
       active();
       const result = await storage.execute({ action: "resolveUser", ...request });
       active();
-      if (result.status !== "resolved")
-        return failure(result.status);
+      if (result.status !== "resolved") return failure(result.status);
       const parsed = userSessionSchema.safeParse(result.value);
       return parsed.success
         ? { status: "resolved", value: observeUser(parsed.data, result.observedAt) }
@@ -181,8 +177,7 @@ export function createUnifiedSessionKernel<Operation extends object>(
           .enum(["terminated", "already_terminated", "missing", "expired", "replaced", "failed"])
           .parse(result.status);
         return snapshot({ target, status });
-      }
-      catch (error) {
+      } catch (error) {
         return snapshot<RevocationResult>({
           target,
           status: error instanceof SessionStorageError ? error.outcome : "unknown",
@@ -214,16 +209,15 @@ export function createUnifiedSessionKernel<Operation extends object>(
         .min(1)
         .max(1000)
         .parse(input.limit ?? 100);
-      const [index, id]
-        = "subjectIdentifier" in scope
+      const [index, id] =
+        "subjectIdentifier" in scope
           ? ["subject", scope.subjectIdentifier]
           : "userSessionId" in scope
             ? ["children", scope.userSessionId]
             : ["client-index", scope.clientId];
       const result = await storage.execute({ action: "capture", index, id, offset, limit });
       active();
-      if (result.status !== "captured")
-        throw new SessionStorageError("failed");
+      if (result.status !== "captured") throw new SessionStorageError("failed");
       // Redis cjson represents an empty Lua table as {}.
       const page = z
         .object({
@@ -235,11 +229,11 @@ export function createUnifiedSessionKernel<Operation extends object>(
       const records = Array.isArray(page.records) ? page.records : [];
       for (const record of records) {
         if (
-          ("subjectIdentifier" in scope
-            && (record.kind !== "userSession" || record.subjectIdentifier !== scope.subjectIdentifier))
-          || ("userSessionId" in scope
-            && (record.kind !== "clientSession" || record.userSessionId !== scope.userSessionId))
-          || ("clientId" in scope && (record.kind !== "clientSession" || record.clientId !== scope.clientId))
+          ("subjectIdentifier" in scope &&
+            (record.kind !== "userSession" || record.subjectIdentifier !== scope.subjectIdentifier)) ||
+          ("userSessionId" in scope &&
+            (record.kind !== "clientSession" || record.userSessionId !== scope.userSessionId)) ||
+          ("clientId" in scope && (record.kind !== "clientSession" || record.clientId !== scope.clientId))
         ) {
           throw new SessionStorageError("failed");
         }
@@ -262,8 +256,7 @@ export function createUnifiedSessionKernel<Operation extends object>(
       const seen = new Set<string>();
       for (const target of targets) {
         const identity = `${target.kind}:${target.id}:${target.instance}`;
-        if (seen.has(identity))
-          continue;
+        if (seen.has(identity)) continue;
         seen.add(identity);
         results.push(
           target.kind === "userSession" && target.id === exclude
@@ -273,15 +266,11 @@ export function createUnifiedSessionKernel<Operation extends object>(
       }
       return snapshot({
         results,
-        userSessionsTerminated: results.filter(
-          r => r.target.kind === "userSession" && r.status === "terminated",
-        ).length,
-        clientSessionsTerminated: results.filter(
-          r => r.target.kind === "clientSession" && r.status === "terminated",
-        ).length,
-        unfinished: results
-          .filter(r => r.status === "failed" || r.status === "unknown")
-          .map(r => r.target),
+        userSessionsTerminated: results.filter((r) => r.target.kind === "userSession" && r.status === "terminated")
+          .length,
+        clientSessionsTerminated: results.filter((r) => r.target.kind === "clientSession" && r.status === "terminated")
+          .length,
+        unfinished: results.filter((r) => r.status === "failed" || r.status === "unknown").map((r) => r.target),
       });
     }
 
@@ -304,8 +293,7 @@ export function createUnifiedSessionKernel<Operation extends object>(
           digest: digest(bearer),
           ttl: userTtl,
         });
-        if (result.status !== "created")
-          throw new SessionStorageError("failed");
+        if (result.status !== "created") throw new SessionStorageError("failed");
         return { bearer, observation: observeUser(userSessionSchema.parse(result.value), result.observedAt) };
       },
       resolveUserSession: (bearer: string) =>
@@ -332,8 +320,7 @@ export function createUnifiedSessionKernel<Operation extends object>(
         };
         const result = await storage.execute({ action: "open", parent: root, record, ttl: clientTtl });
         active();
-        if (result.status !== "created" && result.status !== "reused")
-          return failure(result.status);
+        if (result.status !== "created" && result.status !== "reused") return failure(result.status);
         return {
           status: result.status,
           value: observeClient(root, clientSessionSchema.parse(result.value), result.observedAt),
@@ -346,8 +333,7 @@ export function createUnifiedSessionKernel<Operation extends object>(
         const { clientSessionId: id, ...target } = clientTargetSchema.parse(input);
         const result = await storage.execute({ action: "resolveClient", id, ...target });
         active();
-        if (result.status !== "resolved")
-          return failure(result.status);
+        if (result.status !== "resolved") return failure(result.status);
         const parsed = z
           .object({ userSession: userSessionSchema, clientSession: clientSessionSchema })
           .safeParse(result.value);
@@ -361,8 +347,7 @@ export function createUnifiedSessionKernel<Operation extends object>(
       /** Reuses an already acquired observation; deliberately performs no new lifecycle read. */
       useObservation(observation: UserSessionObservation | ClientSessionObservation) {
         const state = requireObservation(observation);
-        if (!state.userSession || state.target)
-          throw new SessionObservationRequiredError();
+        if (!state.userSession || state.target) throw new SessionObservationRequiredError();
         return snapshot({
           userSession: state.userSession,
           ...(state.clientSession ? { clientSession: state.clientSession } : {}),
@@ -371,25 +356,18 @@ export function createUnifiedSessionKernel<Operation extends object>(
       /** Protocol owners store this fixed deadline on their own artifacts; this never renews a session. */
       async getIssuanceLifetime(observation: ClientSessionObservation, ttlSeconds: number) {
         const state = requireObservation(observation);
-        if (!state.userSession || !state.clientSession)
-          throw new SessionObservationRequiredError();
+        if (!state.userSession || !state.clientSession) throw new SessionObservationRequiredError();
         const ttl = ttlSchema.parse(ttlSeconds) * 1000;
         const { observedAt } = await storage.execute({ action: "time" });
         active();
-        const expiresAt = Math.min(
-          state.userSession.expiresAt,
-          state.clientSession.expiresAt,
-          observedAt + ttl,
-        );
+        const expiresAt = Math.min(state.userSession.expiresAt, state.clientSession.expiresAt, observedAt + ttl);
         return snapshot({
           issuedAt: observedAt,
           expiresAt,
           remainingSeconds: Math.max(0, Math.floor((expiresAt - observedAt) / 1000)),
         });
       },
-      async observeUserSessionForRevocation(
-        userSessionId: string,
-      ): Promise<SessionResolution<RevocationObservation>> {
+      async observeUserSessionForRevocation(userSessionId: string): Promise<SessionResolution<RevocationObservation>> {
         active();
         const result = await storage.execute({
           action: "resolveUser",
@@ -397,12 +375,9 @@ export function createUnifiedSessionKernel<Operation extends object>(
           neutral: true,
         });
         active();
-        if (result.status !== "record")
-          return failure(result.status);
+        if (result.status !== "record") return failure(result.status);
         const parsed = userSessionSchema.safeParse(result.value);
-        return parsed.success
-          ? { status: "resolved", value: observeRevocation(parsed.data) }
-          : { status: "corrupt" };
+        return parsed.success ? { status: "resolved", value: observeRevocation(parsed.data) } : { status: "corrupt" };
       },
       async observeClientSessionForRevocation(
         input: ClientSessionTarget,
@@ -411,28 +386,21 @@ export function createUnifiedSessionKernel<Operation extends object>(
         const { clientSessionId: id, ...target } = clientTargetSchema.parse(input);
         const result = await storage.execute({ action: "resolveClient", id, ...target, neutral: true });
         active();
-        if (result.status !== "record")
-          return failure(result.status);
+        if (result.status !== "record") return failure(result.status);
         const parsed = clientSessionSchema.safeParse(result.value);
-        return parsed.success
-          ? { status: "resolved", value: observeRevocation(parsed.data) }
-          : { status: "corrupt" };
+        return parsed.success ? { status: "resolved", value: observeRevocation(parsed.data) } : { status: "corrupt" };
       },
       revokeObservedUserSession(observation: UserSessionObservation | RevocationObservation) {
         const state = requireObservation(observation);
-        const target
-          = state.target
-            ?? (state.userSession && !state.clientSession ? captureIdentity(state.userSession) : undefined);
-        if (target?.kind !== "userSession")
-          throw new SessionObservationRequiredError();
+        const target =
+          state.target ?? (state.userSession && !state.clientSession ? captureIdentity(state.userSession) : undefined);
+        if (target?.kind !== "userSession") throw new SessionObservationRequiredError();
         return revokeTarget(target);
       },
       revokeObservedClientSession(observation: ClientSessionObservation | RevocationObservation) {
         const state = requireObservation(observation);
-        const target
-          = state.target ?? (state.clientSession ? captureIdentity(state.clientSession) : undefined);
-        if (target?.kind !== "clientSession")
-          throw new SessionObservationRequiredError();
+        const target = state.target ?? (state.clientSession ? captureIdentity(state.clientSession) : undefined);
+        if (target?.kind !== "clientSession") throw new SessionObservationRequiredError();
         return revokeTarget(target);
       },
       captureSessions,
@@ -453,15 +421,14 @@ export function createUnifiedSessionKernel<Operation extends object>(
             limit: z.int().min(1).max(1000),
           })
           .strict()
-          .refine(query => query.userSessionId === undefined || query.kind === "clientSession", {
+          .refine((query) => query.userSessionId === undefined || query.kind === "clientSession", {
             message: "userSessionId requires clientSession kind",
             path: ["userSessionId"],
           })
           .parse(input);
         const response = await storage.execute({ action: "list", ...query });
         active();
-        if (response.status !== "listed")
-          throw new SessionStorageError("failed");
+        if (response.status !== "listed") throw new SessionStorageError("failed");
         const page = z
           .object({
             records: z.union([z.array(sessionRecordSchema), z.object({}).strict()]),

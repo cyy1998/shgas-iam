@@ -48,9 +48,7 @@ export interface AdminRoleReaderPort {
     roleId: number,
     query: RoleAssignmentPaginationQueryDto,
   ) => Promise<{ rows: RoleAssignmentDto[]; total: number }>;
-  searchRolesPaged: (
-    query: RolePaginationQueryDto,
-  ) => Promise<{ rows: RoleDetailDto[]; total: number }>;
+  searchRolesPaged: (query: RolePaginationQueryDto) => Promise<{ rows: RoleDetailDto[]; total: number }>;
 }
 
 export interface AdminRoleProfileChange {
@@ -68,9 +66,7 @@ export interface AdminRoleTransactionPorts {
   roleRepository: AdminRoleTransactionStorePort;
   auditService: AuditLogWriterPort;
   userProfileInvalidation: {
-    recordChanges: (
-      changes: readonly (AdminRoleProfileChange | AdminRoleAssignmentProfileChange)[],
-    ) => Promise<void>;
+    recordChanges: (changes: readonly (AdminRoleProfileChange | AdminRoleAssignmentProfileChange)[]) => Promise<void>;
   };
 }
 

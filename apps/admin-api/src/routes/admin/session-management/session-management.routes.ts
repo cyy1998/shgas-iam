@@ -30,10 +30,7 @@ export const sessionsSearch = createRoute({
       createSuccessResponseSchema(SessionManagementSessionListResultVoSchema),
       "分页会话记录列表",
     ),
-    [HttpStatusCodes.SERVICE_UNAVAILABLE]: jsonContent(
-      StandardErrorResponseSchema,
-      "登录状态服务不可用",
-    ),
+    [HttpStatusCodes.SERVICE_UNAVAILABLE]: jsonContent(StandardErrorResponseSchema, "登录状态服务不可用"),
   },
 });
 
@@ -50,10 +47,7 @@ export const sessionsRevoke = createRoute({
       createSuccessResponseSchema(SessionManagementRevokeSessionsResultVoSchema),
       "单个或用户全部会话记录撤销结果",
     ),
-    [HttpStatusCodes.SERVICE_UNAVAILABLE]: jsonContent(
-      StandardErrorResponseSchema,
-      "登录状态服务不可用",
-    ),
+    [HttpStatusCodes.SERVICE_UNAVAILABLE]: jsonContent(StandardErrorResponseSchema, "登录状态服务不可用"),
   },
 });
 
@@ -62,10 +56,7 @@ export const loginRestrictionsSearch = createRoute({
   path: "/login-restrictions/search",
   tags,
   request: {
-    body: jsonContentRequired(
-      SessionManagementListLoginRestrictionsInputSchema,
-      "临时登录限制分页查询参数",
-    ),
+    body: jsonContentRequired(SessionManagementListLoginRestrictionsInputSchema, "临时登录限制分页查询参数"),
   },
   responses: {
     ...commonErrorResponses,
@@ -73,10 +64,7 @@ export const loginRestrictionsSearch = createRoute({
       createSuccessResponseSchema(SessionManagementLoginRestrictionListResultVoSchema),
       "分页临时登录限制列表",
     ),
-    [HttpStatusCodes.SERVICE_UNAVAILABLE]: jsonContent(
-      StandardErrorResponseSchema,
-      "登录状态服务不可用",
-    ),
+    [HttpStatusCodes.SERVICE_UNAVAILABLE]: jsonContent(StandardErrorResponseSchema, "登录状态服务不可用"),
   },
 });
 
@@ -95,9 +83,6 @@ export const loginRestrictionRelease = createRoute({
       createSuccessResponseSchema(SessionManagementReleaseLoginRestrictionResultVoSchema),
       "临时登录限制解除结果",
     ),
-    [HttpStatusCodes.SERVICE_UNAVAILABLE]: jsonContent(
-      StandardErrorResponseSchema,
-      "登录状态服务不可用",
-    ),
+    [HttpStatusCodes.SERVICE_UNAVAILABLE]: jsonContent(StandardErrorResponseSchema, "登录状态服务不可用"),
   },
 });

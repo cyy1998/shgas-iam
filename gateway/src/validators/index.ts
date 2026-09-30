@@ -1,7 +1,7 @@
-import type { LoadedManifest, ManifestObject, ResourceKind, ValidationIssue } from "../types";
 import { isRecord } from "../manifest";
 import { getLabel, isRepoManaged, ownershipPolicy, validateResourceScope } from "../ownership-policy";
 import { getResourceId, resourceDefinitions } from "../resources";
+import type { LoadedManifest, ManifestObject, ResourceKind, ValidationIssue } from "../types";
 
 type Validator = (manifest: LoadedManifest) => ValidationIssue[];
 
@@ -31,7 +31,7 @@ const reservedSourceLabels = ["managed_by", "source", "env", "app"];
 const localKeyPattern = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 
 export function validateManifest(manifest: LoadedManifest): ValidationIssue[] {
-  return validators.flatMap(validator => validator(manifest));
+  return validators.flatMap((validator) => validator(manifest));
 }
 
 function validateSourceSchema(manifest: LoadedManifest): ValidationIssue[] {
@@ -75,12 +75,7 @@ function validateSourceSchema(manifest: LoadedManifest): ValidationIssue[] {
   return issues;
 }
 
-function validateLocalKeys(
-  file: string,
-  sourcePath: string,
-  items: ManifestObject[],
-  issues: ValidationIssue[],
-): void {
+function validateLocalKeys(file: string, sourcePath: string, items: ManifestObject[], issues: ValidationIssue[]): void {
   const seen = new Map<string, number>();
 
   for (const [index, item] of items.entries()) {
@@ -159,12 +154,12 @@ function validateReservedLabels(
 function validateRouteSourceReferences(manifest: LoadedManifest, issues: ValidationIssue[]): void {
   const upstreamKeys = new Set(
     getSourceListItems(manifest.source.upstreams)
-      .map(item => item.key)
+      .map((item) => item.key)
       .filter((key): key is string => typeof key === "string"),
   );
   const pluginConfigKeys = new Set(
     getSourceListItems(isRecord(manifest.source.service) ? manifest.source.service.plugin_configs : undefined)
-      .map(item => item.key)
+      .map((item) => item.key)
       .filter((key): key is string => typeof key === "string"),
   );
 
@@ -178,8 +173,7 @@ function validateRouteSourceReferences(manifest: LoadedManifest, issues: Validat
           path: `routes[${index}].upstream`,
           message: `${routeKey} must declare upstream unless terminal is true`,
         });
-      }
-      else if (!upstreamKeys.has(route.upstream)) {
+      } else if (!upstreamKeys.has(route.upstream)) {
         issues.push({
           file: manifest.manifest,
           path: `routes[${index}].upstream`,
@@ -195,8 +189,7 @@ function validateRouteSourceReferences(manifest: LoadedManifest, issues: Validat
           path: `routes[${index}].plugin_config`,
           message: `${routeKey} plugin_config must reference a service.plugin_configs key`,
         });
-      }
-      else if (!pluginConfigKeys.has(route.plugin_config)) {
+      } else if (!pluginConfigKeys.has(route.plugin_config)) {
         issues.push({
           file: manifest.manifest,
           path: `routes[${index}].plugin_config`,
@@ -242,15 +235,13 @@ function validateIds(manifest: LoadedManifest): ValidationIssue[] {
           path: basePath,
           message: `missing required id field (${definition.idFields.join(" or ")})`,
         });
-      }
-      else if (ids.has(id)) {
+      } else if (ids.has(id)) {
         issues.push({
           file,
           path: `${basePath}.${definition.idFields[0]}`,
           message: `duplicate ${definition.kind} id ${id}`,
         });
-      }
-      else {
+      } else {
         ids.add(id);
       }
     }
@@ -310,7 +301,7 @@ function validateReferences(manifest: LoadedManifest): ValidationIssue[] {
       definition.kind,
       new Set(
         manifest.resources[definition.kind]
-          .map(resource => getResourceId(definition, resource))
+          .map((resource) => getResourceId(definition, resource))
           .filter((id): id is string => id !== undefined),
       ),
     );
@@ -374,7 +365,7 @@ function validateIamLoggingPolicy(manifest: LoadedManifest): ValidationIssue[] {
   }
 
   const issues: ValidationIssue[] = [];
-  if (!manifest.resources.plugin_metadata.some(metadata => metadata.id === "opentelemetry")) {
+  if (!manifest.resources.plugin_metadata.some((metadata) => metadata.id === "opentelemetry")) {
     issues.push({
       file: manifest.manifest,
       path: "plugin_metadata",
@@ -384,23 +375,17 @@ function validateIamLoggingPolicy(manifest: LoadedManifest): ValidationIssue[] {
 
   const pluginConfigsById = new Map(
     manifest.resources.plugin_configs
-      .filter(config => typeof config.id === "string")
-      .map(config => [config.id as string, config]),
+      .filter((config) => typeof config.id === "string")
+      .map((config) => [config.id as string, config]),
   );
 
   for (const [index, route] of manifest.resources.routes.entries()) {
     const routeId = typeof route.id === "string" ? route.id : `routes[${index}]`;
     const routePlugins = getPlugins(route);
-    collectForbiddenLoggerPluginIssues(
-      manifest.manifest,
-      `routes[${index}].plugins`,
-      routePlugins,
-      issues,
-    );
+    collectForbiddenLoggerPluginIssues(manifest.manifest, `routes[${index}].plugins`, routePlugins, issues);
 
-    const pluginConfig = typeof route.plugin_config_id === "string"
-      ? pluginConfigsById.get(route.plugin_config_id)
-      : undefined;
+    const pluginConfig =
+      typeof route.plugin_config_id === "string" ? pluginConfigsById.get(route.plugin_config_id) : undefined;
     if (!hasPlugin(routePlugins, "request-id") && !hasPlugin(getPlugins(pluginConfig), "request-id")) {
       issues.push({
         file: manifest.manifest,
@@ -431,8 +416,7 @@ function validateIamLoggingPolicy(manifest: LoadedManifest): ValidationIssue[] {
 }
 
 function getPlugins(resource: unknown): Record<string, unknown> | undefined {
-  if (!isRecord(resource))
-    return undefined;
+  if (!isRecord(resource)) return undefined;
   const plugins = resource.plugins;
   return isRecord(plugins) ? plugins : undefined;
 }
@@ -447,8 +431,7 @@ function collectForbiddenLoggerPluginIssues(
   plugins: Record<string, unknown> | undefined,
   issues: ValidationIssue[],
 ) {
-  if (!plugins)
-    return;
+  if (!plugins) return;
   for (const pluginName of ["loki-logger", "http-logger", "file-logger"]) {
     if (hasPlugin(plugins, pluginName)) {
       issues.push({
@@ -474,10 +457,10 @@ function collectSensitiveIssues(file: string, basePath: string, value: unknown, 
     }
 
     if (
-      typeof currentValue === "string"
-      && isSensitiveKeyName(key)
-      && !isAllowedSensitivePlaceholder(currentValue)
-      && !isKnownNonSecretKeyPath(currentPath)
+      typeof currentValue === "string" &&
+      isSensitiveKeyName(key) &&
+      !isAllowedSensitivePlaceholder(currentValue) &&
+      !isKnownNonSecretKeyPath(currentPath)
     ) {
       issues.push({
         file,
@@ -491,9 +474,9 @@ function collectSensitiveIssues(file: string, basePath: string, value: unknown, 
 function collectTrustedProxyIssues(file: string, basePath: string, value: unknown, issues: ValidationIssue[]): void {
   walkValue(value, basePath, (currentPath, currentValue) => {
     if (
-      typeof currentValue === "string"
-      && /\.plugins\.real-ip\.trusted_addresses\[\d+\]$/.test(currentPath)
-      && isAllAddressesCidr(currentValue)
+      typeof currentValue === "string" &&
+      /\.plugins\.real-ip\.trusted_addresses\[\d+\]$/.test(currentPath) &&
+      isAllAddressesCidr(currentValue)
     ) {
       issues.push({
         file,
@@ -508,7 +491,9 @@ function walkValue(value: unknown, currentPath: string, visitor: (path: string, 
   visitor(currentPath, value);
 
   if (Array.isArray(value)) {
-    value.forEach((item, index) => walkValue(item, `${currentPath}[${index}]`, visitor));
+    value.forEach((item, index) => {
+      walkValue(item, `${currentPath}[${index}]`, visitor);
+    });
     return;
   }
 
@@ -520,8 +505,10 @@ function walkValue(value: unknown, currentPath: string, visitor: (path: string, 
 }
 
 function containsSecretMaterial(value: string): boolean {
-  return /-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----/.test(value)
-    || /(?:password|secret|private[_-]?key|admin[_-]?key|jwt[_-]?secret|signature[_-]?key)\s*[:=]/i.test(value);
+  return (
+    /-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----/.test(value) ||
+    /(?:password|secret|private[_-]?key|admin[_-]?key|jwt[_-]?secret|signature[_-]?key)\s*[:=]/i.test(value)
+  );
 }
 
 function isAllAddressesCidr(value: string): boolean {
@@ -529,7 +516,9 @@ function isAllAddressesCidr(value: string): boolean {
 }
 
 function isSensitiveKeyName(key: string): boolean {
-  return /^(?:password|secret|private[_-]?key|admin[_-]?key|jwt[_-]?secret|signature[_-]?key|apikey|api[_-]?key|key)$/i.test(key);
+  return /^(?:password|secret|private[_-]?key|admin[_-]?key|jwt[_-]?secret|signature[_-]?key|apikey|api[_-]?key|key)$/i.test(
+    key,
+  );
 }
 
 function isAllowedSensitivePlaceholder(value: string): boolean {
@@ -541,5 +530,5 @@ function isSecretReference(value: string): boolean {
 }
 
 function isKnownNonSecretKeyPath(currentPath: string): boolean {
-  return knownNonSecretKeyPaths.some(pathSuffix => currentPath.endsWith(pathSuffix));
+  return knownNonSecretKeyPaths.some((pathSuffix) => currentPath.endsWith(pathSuffix));
 }

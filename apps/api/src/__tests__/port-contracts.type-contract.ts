@@ -47,9 +47,7 @@ import type {
   RegisterPurveyorPositionReaderPort,
   RegisterPurveyorUserStorePort,
 } from "@api/use-cases/internal/register-purveyor-contact/register-purveyor-contact.port";
-import type {
-  PrivilegeDelegationResolutionPort,
-} from "@api/use-cases/internal/resolve-privilege-delegations/resolve-privilege-delegations.port";
+import type { PrivilegeDelegationResolutionPort } from "@api/use-cases/internal/resolve-privilege-delegations/resolve-privilege-delegations.port";
 
 import type { LoginRestriction } from "@iam/api-core/login-restriction";
 import type { UserProfileQueryService } from "@iam/user-profile-read-model/query";

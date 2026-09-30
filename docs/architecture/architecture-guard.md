@@ -14,15 +14,15 @@ closure，帮助维护者尽早发现跨 module 的所有权回退。
 
 新增或迁移约束前，先选择能直接观察该事实的验证层：
 
-| 要验证的事实 | 负责的验证层 |
-|---|---|
-| 类型或结构兼容 | typecheck 或 type contract |
-| package public surface | package exports 加 consumer typecheck |
-| 业务行为与 transaction 语义 | module interface 的 behavior/contract test |
-| runtime wiring 与 readiness | process smoke |
-| 数据库或其他外部资源行为 | PostgreSQL、浏览器、Gateway 等对应专用通道 |
-| 稳定 import owner 或依赖方向 | Architecture Guard |
-| 迁移墓碑 | feature-scoped 临时检查；必须记录 owner、reason 和 removal date，不进入永久规则集合 |
+| 要验证的事实                 | 负责的验证层                                                                        |
+| ---------------------------- | ----------------------------------------------------------------------------------- |
+| 类型或结构兼容               | typecheck 或 type contract                                                          |
+| package public surface       | package exports 加 consumer typecheck                                               |
+| 业务行为与 transaction 语义  | module interface 的 behavior/contract test                                          |
+| runtime wiring 与 readiness  | process smoke                                                                       |
+| 数据库或其他外部资源行为     | PostgreSQL、浏览器、Gateway 等对应专用通道                                          |
+| 稳定 import owner 或依赖方向 | Architecture Guard                                                                  |
+| 迁移墓碑                     | feature-scoped 临时检查；必须记录 owner、reason 和 removal date，不进入永久规则集合 |
 
 [测试编排架构](testing-architecture.md)负责通道、资源预算与执行顺序；本文只负责 Architecture Guard 的设计、规则准入和
 复杂度边界。

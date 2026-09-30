@@ -1,12 +1,12 @@
 import type { DbClient } from "@iam/db";
+import { createVersionedUserProfilePublicationRepository } from "../publication/user-profile-publication.core";
+import { createUserProfileRowRepository } from "../publication/user-profile-row.repository";
 import type { PublishedProfileRowInput } from "../schema/profile-storage.schema";
 import type {
   CreateSubjectFactsRedisPublisherOptions,
   SubjectFactsRedisClient,
   SubjectFactsRedisInspectionClient,
 } from "../subject-facts/subject-facts-redis-publisher.core";
-import { createVersionedUserProfilePublicationRepository } from "../publication/user-profile-publication.core";
-import { createUserProfileRowRepository } from "../publication/user-profile-row.repository";
 import {
   createMonotonicSubjectFactsRedisPublisher,
   createSubjectFactsRedisInspector,
@@ -21,15 +21,9 @@ export interface UserProfileProjectionBundle<
 > {
   readonly schemaVersion: number;
   readonly parseProfileRow: (input: PublishedProfileRowInput) => TProfile;
-  readonly createBuilder: (input: {
-    db: DbClient;
-    clock: { nowDate: () => Date };
-    batchSize: number;
-  }) => {
+  readonly createBuilder: (input: { db: DbClient; clock: { nowDate: () => Date }; batchSize: number }) => {
     buildOne: (target: { userId: number; sourceDirtyVersion: string }) => Promise<TProfile | null>;
-    buildMany: (
-      targets: Array<{ userId: number; sourceDirtyVersion: string }>,
-    ) => Promise<TProfile[]>;
+    buildMany: (targets: Array<{ userId: number; sourceDirtyVersion: string }>) => Promise<TProfile[]>;
   };
   readonly createRowRepository: typeof createUserProfileRowRepository;
   readonly createPublicationRepository: (
@@ -68,26 +62,17 @@ export function createUserProfileProjectionBundle<
     createRowRepository: createUserProfileRowRepository,
     createPublicationRepository(db) {
       return createVersionedUserProfilePublicationRepository(db, {
-        parse: profile => input.parseProfileRow(profile),
-        upsert: async (tx, profile) =>
-          await createUserProfileRowRepository(tx).upsert(profile),
+        parse: (profile) => input.parseProfileRow(profile),
+        upsert: async (tx, profile) => await createUserProfileRowRepository(tx).upsert(profile),
       });
     },
     subjectFacts: {
       createRecord: input.createFactsRecord,
       createPublisher(redis, options = {}) {
-        return createMonotonicSubjectFactsRedisPublisher(
-          redis,
-          input.parseFactsRecord,
-          options,
-        );
+        return createMonotonicSubjectFactsRedisPublisher(redis, input.parseFactsRecord, options);
       },
       createInspector(redis, options = {}) {
-        return createSubjectFactsRedisInspector(
-          redis,
-          input.parseFactsRecord,
-          options,
-        );
+        return createSubjectFactsRedisInspector(redis, input.parseFactsRecord, options);
       },
     },
   };

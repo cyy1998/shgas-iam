@@ -19,10 +19,12 @@ export interface PrivilegeDelegationOrganizationReaderPort {
 }
 
 export interface PrivilegeDelegationPrivilegeReaderPort {
-  searchPrivileges: (query: PrivilegeQueryDto) => Promise<Array<{
-    id: number;
-    privilegeCode: string;
-  }>>;
+  searchPrivileges: (query: PrivilegeQueryDto) => Promise<
+    Array<{
+      id: number;
+      privilegeCode: string;
+    }>
+  >;
 }
 
 export interface PrivilegeDelegationTransactionStorePort {

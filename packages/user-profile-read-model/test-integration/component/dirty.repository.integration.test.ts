@@ -1,16 +1,21 @@
-import type { SQL } from "drizzle-orm";
-import { UserProfileDirtyReason, UserProfileDirtyStatus } from "@iam/contracts";
 import { describe, expect, mock, test } from "bun:test";
+import { UserProfileDirtyReason, UserProfileDirtyStatus } from "@iam/contracts";
+import type { SQL } from "drizzle-orm";
 import { PgDialect } from "drizzle-orm/pg-core";
+import {
+  createUserProfileDirtyRepository,
+  mergeUserProfileDirtyReasons,
+} from "../../src/invalidation/dirty.repository";
 import { formatDirtyVersion } from "../../src/invalidation/dirty-version";
-import { createUserProfileDirtyRepository, mergeUserProfileDirtyReasons } from "../../src/invalidation/dirty.repository";
 
 describe("user profile dirty repository", () => {
   test("merges reason codes deterministically", () => {
-    expect(mergeUserProfileDirtyReasons(
-      [UserProfileDirtyReason.UserUpdated, UserProfileDirtyReason.EmploymentUpdated],
-      [UserProfileDirtyReason.UserUpdated, UserProfileDirtyReason.PositionUpdated],
-    )).toEqual([
+    expect(
+      mergeUserProfileDirtyReasons(
+        [UserProfileDirtyReason.UserUpdated, UserProfileDirtyReason.EmploymentUpdated],
+        [UserProfileDirtyReason.UserUpdated, UserProfileDirtyReason.PositionUpdated],
+      ),
+    ).toEqual([
       UserProfileDirtyReason.UserUpdated,
       UserProfileDirtyReason.EmploymentUpdated,
       UserProfileDirtyReason.PositionUpdated,
@@ -39,17 +44,19 @@ describe("user profile dirty repository", () => {
       },
     ]);
 
-    expect(values).toHaveBeenCalledWith([{
-      userId: 1,
-      status: UserProfileDirtyStatus.Pending,
-      reasonCodes: [UserProfileDirtyReason.UserUpdated, UserProfileDirtyReason.EmploymentUpdated],
-      dirtyAt: secondDirtyAt,
-      processingStartedAt: null,
-      processedAt: null,
-      attempts: 0,
-      lastError: null,
-      lastJobId: "rebuild-user-profile|1|1",
-    }]);
+    expect(values).toHaveBeenCalledWith([
+      {
+        userId: 1,
+        status: UserProfileDirtyStatus.Pending,
+        reasonCodes: [UserProfileDirtyReason.UserUpdated, UserProfileDirtyReason.EmploymentUpdated],
+        dirtyAt: secondDirtyAt,
+        processingStartedAt: null,
+        processedAt: null,
+        attempts: 0,
+        lastError: null,
+        lastJobId: "rebuild-user-profile|1|1",
+      },
+    ]);
     expect(onConflictDoUpdate).toHaveBeenCalled();
     expect(returning).toHaveBeenCalled();
   });
@@ -61,11 +68,13 @@ describe("user profile dirty repository", () => {
     const insert = mock(() => ({ values }));
     const repository = createUserProfileDirtyRepository({ insert } as never);
 
-    await repository.markManyDirty([{
-      userId: 1,
-      reasonCodes: [UserProfileDirtyReason.Backfill],
-      dirtyAt: new Date("2026-07-01T00:00:00.000Z"),
-    }]);
+    await repository.markManyDirty([
+      {
+        userId: 1,
+        reasonCodes: [UserProfileDirtyReason.Backfill],
+        dirtyAt: new Date("2026-07-01T00:00:00.000Z"),
+      },
+    ]);
 
     const [conflictOptions] = onConflictDoUpdate.mock.calls[0] as unknown as [{ set: { lastJobId: SQL } }];
     const query = new PgDialect().sqlToQuery(conflictOptions.set.lastJobId);

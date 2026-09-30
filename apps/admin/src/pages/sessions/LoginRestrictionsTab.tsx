@@ -1,27 +1,23 @@
-import UserSummary from '@admin/pages/sessions/components/UserSummary';
-import { requestUserOptions } from '@admin/pages/sessions/session-selectors';
+import UserSummary from "@admin/pages/sessions/components/UserSummary";
+import { requestUserOptions } from "@admin/pages/sessions/session-selectors";
 import {
-  listLoginRestrictions,
   LoginRestrictionListError,
   LoginRestrictionListErrorKind,
   type LoginRestrictionListErrorKindValue,
   type LoginRestrictionListItem,
   LoginRestrictionReleaseError,
   LoginRestrictionReleaseErrorKind,
+  listLoginRestrictions,
   releaseLoginRestriction,
-} from '@admin/services/session-management';
-import {
-  type ActionType,
-  type ProColumns,
-  ProTable,
-} from '@ant-design/pro-components';
-import { Alert, Button, message, Modal, Space } from 'antd';
-import { useEffect, useRef, useState } from 'react';
+} from "@admin/services/session-management";
+import { type ActionType, type ProColumns, ProTable } from "@ant-design/pro-components";
+import { Alert, Button, Modal, message, Space } from "antd";
+import { useEffect, useRef, useState } from "react";
 
 const triggerMethodDisplay = {
-  password: '密码',
-  mobile: '手机验证码',
-  unknown: '未知',
+  password: "密码",
+  mobile: "手机验证码",
+  unknown: "未知",
 } as const;
 
 function formatRemainingSeconds(remainingSeconds: number) {
@@ -52,11 +48,8 @@ function RemainingTime(props: { initialSeconds: number }) {
 
 export default function LoginRestrictionsTab() {
   const actionRef = useRef<ActionType>(undefined);
-  const [loadError, setLoadError] =
-    useState<LoginRestrictionListErrorKindValue | null>(null);
-  const [restrictionRows, setRestrictionRows] = useState<
-    LoginRestrictionListItem[]
-  >([]);
+  const [loadError, setLoadError] = useState<LoginRestrictionListErrorKindValue | null>(null);
+  const [restrictionRows, setRestrictionRows] = useState<LoginRestrictionListItem[]>([]);
   const [releasingUserId, setReleasingUserId] = useState<number | null>(null);
   const [auditFailedAfterEffect, setAuditFailedAfterEffect] = useState(false);
 
@@ -71,9 +64,9 @@ export default function LoginRestrictionsTab() {
       const result = await releaseLoginRestriction({ userId });
       refreshAfterOperation = true;
       if (result.changed) {
-        message.success('临时登录限制已解除，当前失败历史已清理');
+        message.success("临时登录限制已解除，当前失败历史已清理");
       } else {
-        message.warning('限制已自然过期或已被处理');
+        message.warning("限制已自然过期或已被处理");
       }
     } catch (error) {
       if (
@@ -86,9 +79,9 @@ export default function LoginRestrictionsTab() {
         error instanceof LoginRestrictionReleaseError &&
         error.kind === LoginRestrictionReleaseErrorKind.LoginStateUnavailable
       ) {
-        message.error('登录状态服务暂时不可用');
+        message.error("登录状态服务暂时不可用");
       } else {
-        message.error('临时登录限制解除失败');
+        message.error("临时登录限制解除失败");
       }
     } finally {
       setReleasingUserId(null);
@@ -100,32 +93,32 @@ export default function LoginRestrictionsTab() {
 
   const confirmRelease = (restriction: LoginRestrictionListItem) => {
     Modal.confirm({
-      title: '确认解除临时登录限制？',
+      title: "确认解除临时登录限制？",
       content:
-        '解除会同时清除临时登录限制和当前失败历史，不会创建白名单或宽限期；之后发生的新失败会立即重新计数。此操作不会撤销、创建、续期或恢复任何已有 Principal Session。',
-      okText: '确认解除',
-      okType: 'danger',
-      cancelText: '取消',
+        "解除会同时清除临时登录限制和当前失败历史，不会创建白名单或宽限期；之后发生的新失败会立即重新计数。此操作不会撤销、创建、续期或恢复任何已有 Principal Session。",
+      okText: "确认解除",
+      okType: "danger",
+      cancelText: "取消",
       onOk: () => executeRelease(restriction.user.id),
     });
   };
 
   const columns: ProColumns<LoginRestrictionListItem>[] = [
     {
-      title: '用户',
-      dataIndex: 'userId',
+      title: "用户",
+      dataIndex: "userId",
       hideInTable: true,
-      valueType: 'select',
+      valueType: "select",
       request: requestUserOptions,
       fieldProps: {
         filterOption: false,
-        placeholder: '输入工号或姓名搜索',
+        placeholder: "输入工号或姓名搜索",
         showSearch: true,
       },
     },
     {
-      title: '用户',
-      key: 'user',
+      title: "用户",
+      key: "user",
       width: 160,
       search: false,
       render: (_, restriction) => (
@@ -137,31 +130,29 @@ export default function LoginRestrictionsTab() {
       ),
     },
     {
-      title: '限制原因',
-      dataIndex: 'cause',
+      title: "限制原因",
+      dataIndex: "cause",
       width: 180,
       search: false,
-      render: () => '登录失败次数过多',
+      render: () => "登录失败次数过多",
     },
     {
-      title: '最后触发方式',
-      dataIndex: 'triggerMethod',
+      title: "最后触发方式",
+      dataIndex: "triggerMethod",
       width: 150,
       search: false,
-      render: (_, restriction) =>
-        triggerMethodDisplay[restriction.triggerMethod],
+      render: (_, restriction) => triggerMethodDisplay[restriction.triggerMethod],
     },
     {
-      title: '自动解除时间',
-      dataIndex: 'restrictedUntil',
+      title: "自动解除时间",
+      dataIndex: "restrictedUntil",
       width: 180,
       search: false,
-      render: (_, restriction) =>
-        new Date(restriction.restrictedUntil).toLocaleString(),
+      render: (_, restriction) => new Date(restriction.restrictedUntil).toLocaleString(),
     },
     {
-      title: '剩余时间',
-      dataIndex: 'remainingSeconds',
+      title: "剩余时间",
+      dataIndex: "remainingSeconds",
       width: 140,
       search: false,
       render: (_, restriction) => (
@@ -172,9 +163,9 @@ export default function LoginRestrictionsTab() {
       ),
     },
     {
-      title: '操作',
-      fixed: 'right',
-      key: 'actions',
+      title: "操作",
+      fixed: "right",
+      key: "actions",
       width: 120,
       search: false,
       render: (_, restriction) => (
@@ -193,12 +184,8 @@ export default function LoginRestrictionsTab() {
   ];
 
   return (
-    <Space orientation="vertical" size="middle" style={{ width: '100%' }}>
-      <Alert
-        showIcon
-        type="info"
-        message="临时登录限制只阻止新的认证，不影响任何已有有效会话。"
-      />
+    <Space orientation="vertical" size="middle" style={{ width: "100%" }}>
+      <Alert showIcon type="info" message="临时登录限制只阻止新的认证，不影响任何已有有效会话。" />
       {auditFailedAfterEffect ? (
         <Alert
           showIcon
@@ -213,8 +200,8 @@ export default function LoginRestrictionsTab() {
           type="error"
           message={
             loadError === LoginRestrictionListErrorKind.LoginStateUnavailable
-              ? '登录状态服务暂时不可用'
-              : '临时登录限制加载失败'
+              ? "登录状态服务暂时不可用"
+              : "临时登录限制加载失败"
           }
           description="请稍后手动刷新。"
         />
@@ -224,10 +211,10 @@ export default function LoginRestrictionsTab() {
         rowKey={(restriction) => restriction.user.id}
         columns={columns}
         dataSource={restrictionRows}
-        search={{ labelWidth: 'auto' }}
+        search={{ labelWidth: "auto" }}
         scroll={{ x: 1050 }}
         options={{ reload: false }}
-        locale={loadError ? { emptyText: '加载失败' } : undefined}
+        locale={loadError ? { emptyText: "加载失败" } : undefined}
         pagination={{
           defaultPageSize: 20,
           pageSizeOptions: [20, 50, 100],
@@ -246,7 +233,7 @@ export default function LoginRestrictionsTab() {
           try {
             const response = await listLoginRestrictions({
               conditions: {
-                userId: typeof userId === 'number' ? userId : undefined,
+                userId: typeof userId === "number" ? userId : undefined,
               },
               pageNum: current,
               pageSize,
@@ -260,9 +247,7 @@ export default function LoginRestrictionsTab() {
             };
           } catch (error) {
             setLoadError(
-              error instanceof LoginRestrictionListError
-                ? error.kind
-                : LoginRestrictionListErrorKind.RequestFailed,
+              error instanceof LoginRestrictionListError ? error.kind : LoginRestrictionListErrorKind.RequestFailed,
             );
             setRestrictionRows([]);
             return {

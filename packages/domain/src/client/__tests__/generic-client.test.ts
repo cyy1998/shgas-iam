@@ -1,8 +1,5 @@
-import {
-  ClientStatus,
-  SubjectClaim,
-} from "@iam/contracts";
 import { expect, test } from "bun:test";
+import { ClientStatus, SubjectClaim } from "@iam/contracts";
 import { toGenericClientRuntimeDto } from "../schema";
 
 test("generic Client runtime exposes only the protocol-neutral storage projection", () => {

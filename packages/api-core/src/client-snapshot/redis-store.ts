@@ -1,8 +1,4 @@
-import type {
-  ClientSnapshotAcquisitionState,
-  ClientSnapshotAtomicStore,
-  ClientSnapshotControl,
-} from "./atomic-store";
+import type { ClientSnapshotAcquisitionState, ClientSnapshotAtomicStore, ClientSnapshotControl } from "./atomic-store";
 
 type ClientSnapshotKind = "client" | "credential";
 const CLIENT_SNAPSHOT_KINDS = ["client", "credential"] as const;
@@ -75,11 +71,7 @@ return 1
 `;
 
 export interface ClientSnapshotRedis {
-  readonly eval: (
-    script: string,
-    keyCount: number,
-    ...args: string[]
-  ) => Promise<unknown>;
+  readonly eval: (script: string, keyCount: number, ...args: string[]) => Promise<unknown>;
 }
 
 export function clientSnapshotKeys(clientCode: string) {
@@ -87,15 +79,11 @@ export function clientSnapshotKeys(clientCode: string) {
   const prefix = `${NAMESPACE}:{${hashTag}}`;
   return {
     control: `${prefix}:control`,
-    payloads: CLIENT_SNAPSHOT_KINDS.map(
-      kind => `${prefix}:payload:${kind}`,
-    ) as [string, string],
+    payloads: CLIENT_SNAPSHOT_KINDS.map((kind) => `${prefix}:payload:${kind}`) as [string, string],
   };
 }
 
-export function createClientSnapshotRedisStore(
-  redis: ClientSnapshotRedis,
-): ClientSnapshotAtomicStore {
+export function createClientSnapshotRedisStore(redis: ClientSnapshotRedis): ClientSnapshotAtomicStore {
   return {
     async readOrBootstrap(
       clientCode: string,
@@ -115,12 +103,12 @@ export function createClientSnapshotRedisStore(
         throw new Error("Invalid Client Runtime Snapshot acquire result");
       const [epoch, generation, payload, bootstrapped] = result;
       if (
-        typeof epoch !== "string"
-        || !epoch
-        || typeof generation !== "string"
-        || !/^\d+$/.test(generation)
-        || (typeof payload !== "string" && payload !== null)
-        || (bootstrapped !== "0" && bootstrapped !== "1")
+        typeof epoch !== "string" ||
+        !epoch ||
+        typeof generation !== "string" ||
+        !/^\d+$/.test(generation) ||
+        (typeof payload !== "string" && payload !== null) ||
+        (bootstrapped !== "0" && bootstrapped !== "1")
       ) {
         throw new Error("Invalid Client Runtime Snapshot acquire result");
       }
@@ -149,24 +137,15 @@ export function createClientSnapshotRedisStore(
         payload,
         String(ttlMs),
       );
-      if (Number(result) === 1)
-        return "published" as const;
-      if (Number(result) === 0)
-        return "conflict" as const;
+      if (Number(result) === 1) return "published" as const;
+      if (Number(result) === 0) return "conflict" as const;
       throw new Error("Invalid Client Runtime Snapshot publish result");
     },
 
     async invalidateClient(clientCode: string, candidateEpoch: string) {
       const keys = clientSnapshotKeys(clientCode);
-      const result = await redis.eval(
-        INVALIDATE_SCRIPT,
-        3,
-        keys.control,
-        ...keys.payloads,
-        candidateEpoch,
-      );
-      if (Number(result) !== 1)
-        throw new Error("Invalid Client Runtime Snapshot invalidation result");
+      const result = await redis.eval(INVALIDATE_SCRIPT, 3, keys.control, ...keys.payloads, candidateEpoch);
+      if (Number(result) !== 1) throw new Error("Invalid Client Runtime Snapshot invalidation result");
     },
   };
 }

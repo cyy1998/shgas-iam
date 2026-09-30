@@ -1,16 +1,9 @@
-import {
-  OrganizationLevel,
-  OrganizationStatus,
-  OrganizationType,
-} from '@iam/contracts';
-import { describe, expect, it } from 'vitest';
-import type { OrganizationSelectorNode } from '../../services/organization';
-import { filterOrganizationSelectorNodesByStatus } from '../organizationTreeSelector.helpers';
+import { OrganizationLevel, OrganizationStatus, OrganizationType } from "@iam/contracts";
+import { describe, expect, it } from "vitest";
+import type { OrganizationSelectorNode } from "../../services/organization";
+import { filterOrganizationSelectorNodesByStatus } from "../organizationTreeSelector.helpers";
 
-function selectorNode(
-  orgCode: string,
-  status: OrganizationStatus,
-): OrganizationSelectorNode {
+function selectorNode(orgCode: string, status: OrganizationStatus): OrganizationSelectorNode {
   return {
     id: orgCode.charCodeAt(0),
     orgCode,
@@ -26,33 +19,30 @@ function selectorNode(
   };
 }
 
-describe('OrganizationTreeSelector filtering', () => {
-  it('keeps only enabled organizations by default', () => {
+describe("OrganizationTreeSelector filtering", () => {
+  it("keeps only enabled organizations by default", () => {
     const nodes = [
-      selectorNode('ACTIVE', OrganizationStatus.Enable),
-      selectorNode('PAUSED', OrganizationStatus.Pause),
-      selectorNode('DISABLED', OrganizationStatus.Disable),
+      selectorNode("ACTIVE", OrganizationStatus.Enable),
+      selectorNode("PAUSED", OrganizationStatus.Pause),
+      selectorNode("DISABLED", OrganizationStatus.Disable),
     ];
 
     expect(
-      filterOrganizationSelectorNodesByStatus(nodes, [
-        OrganizationStatus.Enable,
-      ]).map((node) => node.orgCode),
-    ).toEqual(['ACTIVE']);
+      filterOrganizationSelectorNodesByStatus(nodes, [OrganizationStatus.Enable]).map((node) => node.orgCode),
+    ).toEqual(["ACTIVE"]);
   });
 
-  it('uses the provided visible statuses', () => {
+  it("uses the provided visible statuses", () => {
     const nodes = [
-      selectorNode('ACTIVE', OrganizationStatus.Enable),
-      selectorNode('PAUSED', OrganizationStatus.Pause),
-      selectorNode('DISABLED', OrganizationStatus.Disable),
+      selectorNode("ACTIVE", OrganizationStatus.Enable),
+      selectorNode("PAUSED", OrganizationStatus.Pause),
+      selectorNode("DISABLED", OrganizationStatus.Disable),
     ];
 
     expect(
-      filterOrganizationSelectorNodesByStatus(nodes, [
-        OrganizationStatus.Enable,
-        OrganizationStatus.Pause,
-      ]).map((node) => node.orgCode),
-    ).toEqual(['ACTIVE', 'PAUSED']);
+      filterOrganizationSelectorNodesByStatus(nodes, [OrganizationStatus.Enable, OrganizationStatus.Pause]).map(
+        (node) => node.orgCode,
+      ),
+    ).toEqual(["ACTIVE", "PAUSED"]);
   });
 });

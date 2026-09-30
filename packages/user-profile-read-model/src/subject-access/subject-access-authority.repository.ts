@@ -1,25 +1,16 @@
+import { UserProfileDirtyStatus, UserStatus } from "@iam/contracts";
 import type { DbClient } from "@iam/db";
-import type { SubjectFactsPublisherPort } from "../worker/user-profile-rebuild.processor";
-import {
-  UserProfileDirtyStatus,
-  UserStatus,
-} from "@iam/contracts";
-import {
-  userProfileDirty,
-  userProfiles,
-  users,
-} from "@iam/db/schema";
+import { userProfileDirty, userProfiles, users } from "@iam/db/schema";
 import { eq } from "drizzle-orm";
 import { SubjectFactsCacheRecordSchema } from "../subject-facts/profile-cache";
+import type { SubjectFactsPublisherPort } from "../worker/user-profile-rebuild.processor";
 
 export interface CreateSubjectAccessAuthorityRepositoryOptions {
   readonly db: DbClient;
   readonly subjectFactsPublisher: SubjectFactsPublisherPort;
 }
 
-export function createSubjectAccessAuthorityRepository(
-  options: CreateSubjectAccessAuthorityRepositoryOptions,
-) {
+export function createSubjectAccessAuthorityRepository(options: CreateSubjectAccessAuthorityRepositoryOptions) {
   return {
     async resolve(subjectIdentifier: string) {
       const rows = await options.db
@@ -43,11 +34,7 @@ export function createSubjectAccessAuthorityRepository(
         .where(eq(users.subjectIdentifier, subjectIdentifier))
         .limit(1);
       const row = rows[0];
-      if (
-        row === undefined
-        || row.accountStatus !== UserStatus.Enable
-        || row.accountDeleted
-      ) {
+      if (row === undefined || row.accountStatus !== UserStatus.Enable || row.accountDeleted) {
         return {
           accountState: "disabled" as const,
           factsState: "not_current" as const,
@@ -55,9 +42,9 @@ export function createSubjectAccessAuthorityRepository(
       }
 
       if (
-        row.dirtyStatus !== UserProfileDirtyStatus.Processed
-        || row.dirtyVersion === null
-        || row.sourceDirtyVersion !== row.dirtyVersion
+        row.dirtyStatus !== UserProfileDirtyStatus.Processed ||
+        row.dirtyVersion === null ||
+        row.sourceDirtyVersion !== row.dirtyVersion
       ) {
         return {
           accountState: "enabled" as const,
@@ -93,6 +80,4 @@ export function createSubjectAccessAuthorityRepository(
   };
 }
 
-export type SubjectAccessAuthorityRepository = ReturnType<
-  typeof createSubjectAccessAuthorityRepository
->;
+export type SubjectAccessAuthorityRepository = ReturnType<typeof createSubjectAccessAuthorityRepository>;

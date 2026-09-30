@@ -9,8 +9,7 @@ describe("journey search and delegation response arrays", () => {
   });
 
   test("rejects missing arrays and every malformed item", () => {
-    for (const value of [undefined, null, {}, [null], [{ id: 1 }, null]])
-      expect(() => readRecords(value)).toThrow();
+    for (const value of [undefined, null, {}, [null], [{ id: 1 }, null]]) expect(() => readRecords(value)).toThrow();
     for (const value of [[{}], [{ username: 1 }], [{ username: "admin" }, {}]])
       expect(() => readUsernames(value)).toThrow();
   });

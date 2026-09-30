@@ -1,8 +1,6 @@
-import { UserProfileDirtyReason, UserStatus, UserType } from "@iam/contracts";
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
-import {
-  V3UserProfileSchema,
-} from "../../src/v3";
+import { UserProfileDirtyReason, UserStatus, UserType } from "@iam/contracts";
+import { V3UserProfileSchema } from "../../src/v3";
 import {
   createCurrentUserProfileProjectionBundle,
   createUserProfileRebuildProcessor,
@@ -29,17 +27,13 @@ describe("User Profile v3 Redis readiness", () => {
     try {
       const projection = createCurrentUserProfileProjectionBundle();
       const profiles = [profile(1, "3"), profile(2, "5"), profile(3, "7")];
-      const publisher = projection.subjectFacts.createPublisher(
-        scope.projectionRedis.publisher,
-        { keyPrefix: scope.projectionRedis.keyPrefix },
-      );
-      const inspector = projection.subjectFacts.createInspector(
-        scope.projectionRedis.inspector,
-        { keyPrefix: scope.projectionRedis.keyPrefix },
-      );
-      await publisher.publish(
-        projection.subjectFacts.createRecord(profiles[0]!, OBSERVED_AT),
-      );
+      const publisher = projection.subjectFacts.createPublisher(scope.projectionRedis.publisher, {
+        keyPrefix: scope.projectionRedis.keyPrefix,
+      });
+      const inspector = projection.subjectFacts.createInspector(scope.projectionRedis.inspector, {
+        keyPrefix: scope.projectionRedis.keyPrefix,
+      });
+      await publisher.publish(projection.subjectFacts.createRecord(profiles[0]!, OBSERVED_AT));
       const staleFacts = {
         ...projection.subjectFacts.createRecord(profiles[1]!, OBSERVED_AT),
         schemaVersion: 2,
@@ -51,10 +45,13 @@ describe("User Profile v3 Redis readiness", () => {
         staleFacts.sourceDirtyVersion,
         JSON.stringify(staleFacts),
       );
-      await scope.subjectAccessBootstrap.seedMany(profiles.map(item => ({
-        subjectIdentifier: item.subjectIdentifier,
-        state: "enabled" as const,
-      })), OBSERVED_AT);
+      await scope.subjectAccessBootstrap.seedMany(
+        profiles.map((item) => ({
+          subjectIdentifier: item.subjectIdentifier,
+          state: "enabled" as const,
+        })),
+        OBSERVED_AT,
+      );
 
       const gate = createUserProfileRedisAccessGate({
         schemaVersion: projection.schemaVersion,
@@ -103,8 +100,7 @@ describe("User Profile v3 Redis readiness", () => {
         counts: { users: 3, profiles: 3, verifiedUsers: 3 },
         failures: [],
       });
-    }
-    finally {
+    } finally {
       await scope.close();
     }
   });
@@ -123,9 +119,9 @@ function inventory(profiles: ReturnType<typeof profile>[]) {
     },
     async scanPage({ afterUserId, limit }: { afterUserId: number; limit: number }) {
       return profiles
-        .filter(item => item.userId > afterUserId)
+        .filter((item) => item.userId > afterUserId)
         .slice(0, limit)
-        .map(item => ({
+        .map((item) => ({
           userId: item.userId,
           subjectIdentifier: item.subjectIdentifier,
           accountAvailable: true,
@@ -138,8 +134,7 @@ function inventory(profiles: ReturnType<typeof profile>[]) {
 }
 
 function profile(userId: number, sourceDirtyVersion: string) {
-  const subjectIdentifier
-    = `00000000-0000-4000-8000-${String(userId).padStart(12, "0")}`;
+  const subjectIdentifier = `00000000-0000-4000-8000-${String(userId).padStart(12, "0")}`;
   return V3UserProfileSchema.parse({
     userId,
     subjectIdentifier,

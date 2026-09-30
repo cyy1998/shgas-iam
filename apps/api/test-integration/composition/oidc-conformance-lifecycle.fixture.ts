@@ -15,14 +15,10 @@ export async function runConformanceCleanup(cleanup: () => unknown | Promise<unk
     await Promise.race([
       Promise.resolve().then(cleanup),
       new Promise<never>((_, reject) => {
-        timer = setTimeout(
-          () => reject(new Error("OIDC conformance cleanup exceeded its deadline")),
-          timeoutMs,
-        );
+        timer = setTimeout(() => reject(new Error("OIDC conformance cleanup exceeded its deadline")), timeoutMs);
       }),
     ]);
-  }
-  finally {
+  } finally {
     clearTimeout(timer);
   }
 }
@@ -48,14 +44,13 @@ export async function withOidcConformanceLifecycle<T>(
     try {
       value = await work({
         signal: controller.signal,
-        own: cleanup => cleanups.push(cleanup),
+        own: (cleanup) => cleanups.push(cleanup),
         async checkpoint(phase) {
           options.observePhase?.(phase);
           controller.signal.throwIfAborted();
         },
       });
-    }
-    catch (error) {
+    } catch (error) {
       failures.push(error);
     }
     for (const cleanup of cleanups.reverse()) {
@@ -63,24 +58,20 @@ export async function withOidcConformanceLifecycle<T>(
         await runConformanceCleanup(async () => {
           try {
             options.observePhase?.("cleanup");
-          }
-          finally {
+          } finally {
             await cleanup();
           }
         }, options.cleanupTimeoutMs);
-      }
-      catch (error) {
+      } catch (error) {
         failures.push(error);
       }
     }
     if (controller.signal.aborted && !failures.includes(controller.signal.reason))
       failures.push(controller.signal.reason);
-  }
-  finally {
+  } finally {
     signals.removeListener("SIGINT", interrupt);
     signals.removeListener("SIGTERM", interrupt);
   }
-  if (failures.length)
-    throw new AggregateError(failures, "OIDC conformance execution or cleanup failed");
+  if (failures.length) throw new AggregateError(failures, "OIDC conformance execution or cleanup failed");
   return value!;
 }

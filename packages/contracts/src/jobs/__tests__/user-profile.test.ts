@@ -13,8 +13,7 @@ describe("user-profile job contract", () => {
     const result = UserProfileJobNameSchema.safeParse("rebuild-user-profile");
 
     expect(result.success).toBe(true);
-    if (!result.success)
-      throw result.error;
+    if (!result.success) throw result.error;
     expect(String(result.data)).toBe("rebuild-user-profile");
   });
 
@@ -29,8 +28,7 @@ describe("user-profile job contract", () => {
     });
 
     expect(result.success).toBe(true);
-    if (!result.success)
-      throw result.error;
+    if (!result.success) throw result.error;
     expect({
       ...result.data,
       reason: String(result.data.reason),
@@ -43,35 +41,45 @@ describe("user-profile job contract", () => {
       traceId: "trace-1",
     });
 
-    expect(RebuildUserProfileJobPayloadSchema.safeParse({
-      userId: 0,
-      dirtyVersion: "1",
-      reason: "user-updated",
-    }).success).toBe(false);
+    expect(
+      RebuildUserProfileJobPayloadSchema.safeParse({
+        userId: 0,
+        dirtyVersion: "1",
+        reason: "user-updated",
+      }).success,
+    ).toBe(false);
 
-    expect(RebuildUserProfileJobPayloadSchema.safeParse({
-      userId: 123,
-      dirtyVersion: "not-decimal",
-      reason: "user-updated",
-    }).success).toBe(false);
+    expect(
+      RebuildUserProfileJobPayloadSchema.safeParse({
+        userId: 123,
+        dirtyVersion: "not-decimal",
+        reason: "user-updated",
+      }).success,
+    ).toBe(false);
 
-    expect(RebuildUserProfileJobPayloadSchema.safeParse({
-      userId: 123,
-      dirtyVersion: "0",
-      reason: "user-updated",
-    }).success).toBe(false);
+    expect(
+      RebuildUserProfileJobPayloadSchema.safeParse({
+        userId: 123,
+        dirtyVersion: "0",
+        reason: "user-updated",
+      }).success,
+    ).toBe(false);
 
-    expect(RebuildUserProfileJobPayloadSchema.safeParse({
-      userId: 123,
-    }).success).toBe(false);
+    expect(
+      RebuildUserProfileJobPayloadSchema.safeParse({
+        userId: 123,
+      }).success,
+    ).toBe(false);
 
     for (const version of [1, 2]) {
-      expect(RebuildUserProfileJobPayloadSchema.safeParse({
-        userId: 123,
-        dirtyVersion: "42",
-        reason: "user-updated",
-        version,
-      }).success).toBe(false);
+      expect(
+        RebuildUserProfileJobPayloadSchema.safeParse({
+          userId: 123,
+          dirtyVersion: "42",
+          reason: "user-updated",
+          version,
+        }).success,
+      ).toBe(false);
     }
   });
 
@@ -79,8 +87,7 @@ describe("user-profile job contract", () => {
     const result = UserProfileDirtyReasonSchema.safeParse("privilege-updated");
 
     expect(result.success).toBe(true);
-    if (!result.success)
-      throw result.error;
+    if (!result.success) throw result.error;
     expect(String(result.data)).toBe("privilege-updated");
     expect(String(UserProfileJobName.RebuildUserProfile)).toBe("rebuild-user-profile");
   });

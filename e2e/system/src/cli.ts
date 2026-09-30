@@ -1,4 +1,3 @@
-import type { PlaywrightJourneyRuntimeOptions } from "./playwright-journey.ts";
 import { randomBytes } from "node:crypto";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -7,11 +6,9 @@ import { createRunDescriptor, persistRunDescriptor } from "./descriptor.ts";
 import { createDockerInfraOperations } from "./docker-infra.ts";
 import { createFullSystemJourneyOperations } from "./full-system-journey.ts";
 import { createHrAdminJourneyOperations } from "./hr-admin-journey.ts";
-import {
-  runExactProjectJourneyLifecycle,
-  runExactProjectRuntimeLifecycle,
-} from "./lifecycle.ts";
+import { runExactProjectJourneyLifecycle, runExactProjectRuntimeLifecycle } from "./lifecycle.ts";
 import { createOidcJourneyOperations } from "./oidc-journey.ts";
+import type { PlaywrightJourneyRuntimeOptions } from "./playwright-journey.ts";
 import { recoverExactProject } from "./recovery.ts";
 import {
   allocateAvailablePort,
@@ -37,10 +34,7 @@ type JourneyFactoryOptions = PlaywrightJourneyRuntimeOptions & {
 
 interface JourneyOperations {
   preflight: (signal?: AbortSignal) => Promise<unknown>;
-  runJourney: (
-    descriptor: Awaited<ReturnType<typeof createRunDescriptor>>,
-    signal?: AbortSignal,
-  ) => Promise<unknown>;
+  runJourney: (descriptor: Awaited<ReturnType<typeof createRunDescriptor>>, signal?: AbortSignal) => Promise<unknown>;
 }
 
 function createRunId() {
@@ -77,70 +71,65 @@ function createOperations(signal?: AbortSignal) {
 async function runRuntimeLifecycle() {
   await withCapturableSignals(async (signal) => {
     const operations = createOperations(signal);
-    const descriptor = await runExactProjectRuntimeLifecycle({
-      ...operations,
-      async createDescriptor() {
-        return createRunDescriptor({
-          artifactRoot,
-          gatewayPort: await allocateAvailablePort(),
-          runId: createRunId(),
-        });
+    const descriptor = await runExactProjectRuntimeLifecycle(
+      {
+        ...operations,
+        async createDescriptor() {
+          return createRunDescriptor({
+            artifactRoot,
+            gatewayPort: await allocateAvailablePort(),
+            runId: createRunId(),
+          });
+        },
+        persistDescriptor: persistRunDescriptor,
       },
-      persistDescriptor: persistRunDescriptor,
-    }, {
-      signal,
-      timeoutMs: runtimeTimeoutMs,
-    });
-    console.log(JSON.stringify({
-      status: "runtime-seeded-routes-ready-and-cleaned",
-      project: descriptor.project,
-      origin: descriptor.origin,
-      artifactDirectory: descriptor.artifactDirectory,
-    }));
+      {
+        signal,
+        timeoutMs: runtimeTimeoutMs,
+      },
+    );
+    console.log(
+      JSON.stringify({
+        status: "runtime-seeded-routes-ready-and-cleaned",
+        project: descriptor.project,
+        origin: descriptor.origin,
+        artifactDirectory: descriptor.artifactDirectory,
+      }),
+    );
   });
 }
 
 async function runAdminJourneyLifecycle() {
-  await runJourneyLifecycle(
-    createAdminJourneyOperations,
-    "admin-custom-sso-journey-passed-and-cleaned",
-  );
+  await runJourneyLifecycle(createAdminJourneyOperations, "admin-custom-sso-journey-passed-and-cleaned");
 }
 
 async function runOidcJourneyLifecycle() {
-  await runJourneyLifecycle(
-    createOidcJourneyOperations,
-    "oidc-pkce-journey-passed-and-cleaned",
-  );
+  await runJourneyLifecycle(createOidcJourneyOperations, "oidc-pkce-journey-passed-and-cleaned");
 }
 
 async function runHrAdminJourneyLifecycle() {
-  await runJourneyLifecycle(
-    createHrAdminJourneyOperations,
-    "hr-admin-user-management-journey-passed-and-cleaned",
-  );
+  await runJourneyLifecycle(createHrAdminJourneyOperations, "hr-admin-user-management-journey-passed-and-cleaned");
 }
 
 async function runFullSystemJourneyLifecycle() {
   await runJourneyLifecycle(
-    options => createFullSystemJourneyOperations({
-      admin: createAdminJourneyOperations(options),
-      hrAdmin: createHrAdminJourneyOperations(options),
-      oidc: createOidcJourneyOperations(options),
-    }),
+    (options) =>
+      createFullSystemJourneyOperations({
+        admin: createAdminJourneyOperations(options),
+        hrAdmin: createHrAdminJourneyOperations(options),
+        oidc: createOidcJourneyOperations(options),
+      }),
     "full-system-e2e-passed-and-cleaned",
   );
   await runJourneyLifecycle(
-    options => createOidcJourneyOperations(options),
+    (options) => createOidcJourneyOperations(options),
     "dual-entry-e2e-passed-and-cleaned",
     true,
   );
 }
 
 async function runJourneyLifecycle(
-  createJourney: (
-    options: JourneyFactoryOptions,
-  ) => JourneyOperations,
+  createJourney: (options: JourneyFactoryOptions) => JourneyOperations,
   status: string,
   dualEntry = false,
 ) {
@@ -153,32 +142,37 @@ async function runJourneyLifecycle(
       runCommand,
       workspaceRoot,
     });
-    const descriptor = await runExactProjectJourneyLifecycle({
-      ...operations,
-      ...journey,
-      async preflight(preflightSignal) {
-        await journey.preflight(preflightSignal);
-        await operations.preflight(preflightSignal);
+    const descriptor = await runExactProjectJourneyLifecycle(
+      {
+        ...operations,
+        ...journey,
+        async preflight(preflightSignal) {
+          await journey.preflight(preflightSignal);
+          await operations.preflight(preflightSignal);
+        },
+        async createDescriptor() {
+          return createRunDescriptor({
+            artifactRoot,
+            dualEntry,
+            gatewayPort: await allocateAvailablePort(),
+            runId: createRunId(),
+          });
+        },
+        persistDescriptor: persistRunDescriptor,
       },
-      async createDescriptor() {
-        return createRunDescriptor({
-          artifactRoot,
-          dualEntry,
-          gatewayPort: await allocateAvailablePort(),
-          runId: createRunId(),
-        });
+      {
+        signal,
+        timeoutMs: runtimeTimeoutMs,
       },
-      persistDescriptor: persistRunDescriptor,
-    }, {
-      signal,
-      timeoutMs: runtimeTimeoutMs,
-    });
-    console.log(JSON.stringify({
-      status,
-      project: descriptor.project,
-      origin: descriptor.origin,
-      artifactDirectory: descriptor.artifactDirectory,
-    }));
+    );
+    console.log(
+      JSON.stringify({
+        status,
+        project: descriptor.project,
+        origin: descriptor.origin,
+        artifactDirectory: descriptor.artifactDirectory,
+      }),
+    );
   });
 }
 
@@ -188,20 +182,14 @@ async function runRecovery(args: string[]) {
     const operations = createOperations(signal);
     const project = await recoverExactProject(
       input,
-      async (target, cleanupSignal) => operations.cleanupProject(
-        target,
-        undefined,
-        cleanupSignal,
-      ),
+      async (target, cleanupSignal) => operations.cleanupProject(target, undefined, cleanupSignal),
       { signal },
     );
     console.log(JSON.stringify({ status: "exact-project-cleaned", project }));
   });
 }
 
-async function withCapturableSignals<T>(
-  operation: (signal: AbortSignal) => Promise<T>,
-) {
+async function withCapturableSignals<T>(operation: (signal: AbortSignal) => Promise<T>) {
   const controller = new AbortController();
   const onSigint = () => controller.abort(new Error("received SIGINT"));
   const onSigterm = () => controller.abort(new Error("received SIGTERM"));
@@ -209,8 +197,7 @@ async function withCapturableSignals<T>(
   process.once("SIGTERM", onSigterm);
   try {
     return await operation(controller.signal);
-  }
-  finally {
+  } finally {
     process.removeListener("SIGINT", onSigint);
     process.removeListener("SIGTERM", onSigterm);
   }
@@ -218,36 +205,23 @@ async function withCapturableSignals<T>(
 
 function parseRecoveryArgs(args: string[]) {
   if (args.length !== 2 || !["--descriptor", "--project"].includes(args[0] ?? "")) {
-    throw new Error(
-      "cleanup requires exactly one --descriptor <path> or --project <exact-project>",
-    );
+    throw new Error("cleanup requires exactly one --descriptor <path> or --project <exact-project>");
   }
   const value = args[1];
-  if (value === undefined || value.trim() === "")
-    throw new Error("cleanup target must not be empty");
-  return args[0] === "--descriptor"
-    ? { descriptorPath: value }
-    : { project: value };
+  if (value === undefined || value.trim() === "") throw new Error("cleanup target must not be empty");
+  return args[0] === "--descriptor" ? { descriptorPath: value } : { project: value };
 }
 
 try {
   const command = process.argv[2];
-  if (command === "admin")
-    await runAdminJourneyLifecycle();
-  else if (command === "hr-admin")
-    await runHrAdminJourneyLifecycle();
-  else if (command === "oidc")
-    await runOidcJourneyLifecycle();
-  else if (command === "e2e")
-    await runFullSystemJourneyLifecycle();
-  else if (command === "run")
-    await runRuntimeLifecycle();
-  else if (command === "cleanup")
-    await runRecovery(process.argv.slice(3));
-  else
-    throw new Error("expected command: admin | hr-admin | oidc | e2e | run | cleanup");
-}
-catch (error) {
+  if (command === "admin") await runAdminJourneyLifecycle();
+  else if (command === "hr-admin") await runHrAdminJourneyLifecycle();
+  else if (command === "oidc") await runOidcJourneyLifecycle();
+  else if (command === "e2e") await runFullSystemJourneyLifecycle();
+  else if (command === "run") await runRuntimeLifecycle();
+  else if (command === "cleanup") await runRecovery(process.argv.slice(3));
+  else throw new Error("expected command: admin | hr-admin | oidc | e2e | run | cleanup");
+} catch (error) {
   console.error(formatFailure(error));
   process.exitCode = 1;
 }

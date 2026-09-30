@@ -1,28 +1,35 @@
-import type { ClientSsoTransactionPorts } from "@admin-api/services/client-sso/client-sso.port";
-import type { ClientSsoConfig } from "@iam/contracts";
-import type { DbClient } from "@iam/db";
-import type { AdminApiPostgresTestHarness } from "./postgres-test-harness";
+import { afterAll, beforeAll, beforeEach, expect, mock, test } from "bun:test";
 import { createClientSsoManagement } from "@admin-api/composition/services/client-sso-management";
 import { createClientSsoAdapter } from "@admin-api/routes/admin/client-sso/client-sso.adapter";
 import { createAuditRepository } from "@admin-api/services/audit/audit.repository";
 import { createAdminAuditService } from "@admin-api/services/audit/audit.service";
-import { createClientSsoRepository } from "@admin-api/services/client-sso/client-sso.repository";
-import { createClientSsoService } from "@admin-api/services/client-sso/client-sso.service";
 import {
   ClientCreateDtoSchema,
   ClientInputDtoSchema,
   ClientUpdateDtoSchema,
   toAdminClientRecord,
 } from "@admin-api/services/client/client.schema";
+import type { ClientSsoTransactionPorts } from "@admin-api/services/client-sso/client-sso.port";
+import { createClientSsoRepository } from "@admin-api/services/client-sso/client-sso.repository";
+import { createClientSsoService } from "@admin-api/services/client-sso/client-sso.service";
 import { createErrorHandler } from "@iam/api-core/middlewares";
 import { createUnitOfWork } from "@iam/api-core/uow";
-import { ApiErrorCode, ClientSsoCallbackType, ClientSsoProtocol, ClientStatus, OidcClientType, OidcScope } from "@iam/contracts";
+import type { ClientSsoConfig } from "@iam/contracts";
+import {
+  ApiErrorCode,
+  ClientSsoCallbackType,
+  ClientSsoProtocol,
+  ClientStatus,
+  OidcClientType,
+  OidcScope,
+} from "@iam/contracts";
+import type { DbClient } from "@iam/db";
 import { auditLogs, clients, roles } from "@iam/db/schema";
 import { toClientAdminDetailDto } from "@iam/domain/client";
 import { fetchRequestHandler } from "@trpc/server/adapters/fetch";
-import { afterAll, beforeAll, beforeEach, expect, mock, test } from "bun:test";
 import { Hono } from "hono";
 import { addTestAdminAuthorizationMiddleware } from "../helpers/admin-authorization";
+import type { AdminApiPostgresTestHarness } from "./postgres-test-harness";
 import { createAdminApiPostgresTestHarness } from "./postgres-test-harness";
 
 let harness: AdminApiPostgresTestHarness;
@@ -79,8 +86,7 @@ async function facts() {
 async function failure(fn: () => Promise<unknown>) {
   try {
     await fn();
-  }
-  catch (error) {
+  } catch (error) {
     return error;
   }
   throw new Error("Expected failure");
@@ -102,13 +108,14 @@ function http(candidate: ReturnType<typeof createClientSsoAdapter>, rolesForActo
   addTestAdminAuthorizationMiddleware(app, rolesForActor);
   app.onError(createErrorHandler({ ...logger, info: mock(() => undefined) }));
   app.route("/admin", candidate.rest);
-  app.all("/rpc/client-sso/*", c =>
+  app.all("/rpc/client-sso/*", (c) =>
     fetchRequestHandler({
       endpoint: "/rpc/client-sso",
       req: c.req.raw,
       router: candidate.trpc,
       createContext: () => ({ hono: c }),
-    }));
+    }),
+  );
   return app;
 }
 async function request(
@@ -141,13 +148,13 @@ for (const transport of ["rest", "trpc"] as const) {
     const before = await facts();
     const profile = await request(app, transport, "save", { clientName: "Portal" });
     expect(profile.status).toBe(200);
-    expect(JSON.stringify(profile.body)).toContain("\"changed\":false");
+    expect(JSON.stringify(profile.body)).toContain('"changed":false');
     const afterProfile = await facts();
     expect(afterProfile).toEqual(before);
 
     const status = await request(app, transport, "save", { status: ClientStatus.Enable });
     expect(status.status).toBe(200);
-    expect(JSON.stringify(status.body)).toContain("\"changed\":false");
+    expect(JSON.stringify(status.body)).toContain('"changed":false');
     const afterStatus = await facts();
     expect(afterStatus.clients).toEqual(before.clients);
     expect(afterStatus.audits).toHaveLength(1);
@@ -346,7 +353,7 @@ function decoratedService(
     uow: createUnitOfWork({
       db: harness.db,
       logger,
-      createTxPorts: tx =>
+      createTxPorts: (tx) =>
         decorate({
           client: createClientSsoRepository(tx),
           audit: createAdminAuditService({
@@ -404,7 +411,7 @@ for (const transport of ["rest", "trpc"] as const) {
     expect(read.text).toContain(current.ssoCredentialId!);
     const final = await facts();
     expect(final.clients).toEqual(after.clients);
-    expect(final.audits.filter(row => row.action === "admin.client.sso_secret_read")).toHaveLength(2);
+    expect(final.audits.filter((row) => row.action === "admin.client.sso_secret_read")).toHaveLength(2);
     expect(JSON.stringify(final.audits)).not.toContain(current.ssoSecret!);
     expect(candidate.invalidateClient.mock.calls.length).toBe(invalidations);
   });
@@ -414,7 +421,7 @@ for (const transport of ["rest", "trpc"] as const) {
     await system().service.selectProtocol("portal", oidc);
     const before = await facts();
     const secret = before.clients[0]!.ssoSecret!;
-    const broken = decoratedService(tx => ({
+    const broken = decoratedService((tx) => ({
       ...tx,
       audit: {
         async recordAuditLog() {
@@ -446,7 +453,7 @@ test("Secret rotation and profile save serialize on the same row without overwri
     acquired = resolve;
   });
   let first = true;
-  const service = decoratedService(tx => ({
+  const service = decoratedService((tx) => ({
     ...tx,
     client: {
       ...tx.client,
@@ -473,7 +480,7 @@ test("Secret rotation and profile save serialize on the same row without overwri
     clientSecret: "internal-stable",
   });
   const broken = decoratedService(
-    tx => ({
+    (tx) => ({
       ...tx,
       audit: {
         async recordAuditLog() {
@@ -491,7 +498,7 @@ test("Secret rotation and profile save serialize on the same row without overwri
 test("audit failure rolls configuration and initial secret back in the same transaction", async () => {
   await seed();
   const before = await facts();
-  const service = decoratedService(tx => ({
+  const service = decoratedService((tx) => ({
     ...tx,
     audit: {
       recordAuditLog: async () => {
@@ -515,7 +522,7 @@ test("same-row lock serializes concurrent protocol selection and creates exactly
     locked = resolve;
   });
   let first = true;
-  const service = decoratedService(tx => ({
+  const service = decoratedService((tx) => ({
     ...tx,
     client: {
       ...tx.client,
@@ -535,7 +542,7 @@ test("same-row lock serializes concurrent protocol selection and creates exactly
   const two = service.selectProtocol("portal", custom);
   release();
   const results = await Promise.all([one, two]);
-  expect(results.map(result => result.changed)).toEqual([true, true]);
+  expect(results.map((result) => result.changed)).toEqual([true, true]);
   const after = await facts();
   expect(after.clients[0]!.ssoConfig).toEqual(custom);
   expect(after.clients[0]!.ssoSecret).toBe("new-current-secret");
@@ -566,7 +573,7 @@ test("unknown COMMIT after actual PG commit preserves original error, conservati
         },
       },
       logger,
-      createTxPorts: tx => ({
+      createTxPorts: (tx) => ({
         client: createClientSsoRepository(tx),
         audit: createAdminAuditService({
           auditRepository: createAuditRepository(tx),
@@ -607,7 +614,12 @@ test("Public and managed callback do not require initial secret; explicit callba
   });
   const businessFacts = await facts();
   expect(businessFacts.clients[0]!.ssoSecret).toBeString();
-  await candidate.service.selectProtocol("portal", { protocol: custom.protocol, validRedirectUrls: custom.validRedirectUrls, subjectClaims: custom.subjectClaims, callbackType: ClientSsoCallbackType.Managed });
+  await candidate.service.selectProtocol("portal", {
+    protocol: custom.protocol,
+    validRedirectUrls: custom.validRedirectUrls,
+    subjectClaims: custom.subjectClaims,
+    callbackType: ClientSsoCallbackType.Managed,
+  });
   const retained = await facts();
   expect(retained.clients[0]!.ssoSecret).toBe(businessFacts.clients[0]!.ssoSecret);
 });
@@ -616,12 +628,12 @@ test("candidate HTTP detail serializes server capability without sensitive stora
   await seed();
   const candidate = system();
   await candidate.service.selectProtocol("portal", oidc);
-  for (const path of ["/admin/clients-sso/portal", "/rpc/client-sso/detail?input={\"clientCode\":\"portal\"}"]) {
+  for (const path of ["/admin/clients-sso/portal", '/rpc/client-sso/detail?input={"clientCode":"portal"}']) {
     const response = await http(candidate).request(path);
     const body = await response.json();
     expect(response.status).toBe(200);
     expect(JSON.stringify(body)).toContain(
-      "\"allowedActions\":{\"save\":true,\"selectProtocol\":true,\"setEnabled\":true,\"rotateSecret\":true,\"readSecret\":true}",
+      '"allowedActions":{"save":true,"selectProtocol":true,"setEnabled":true,"rotateSecret":true,"readSecret":true}',
     );
     expect(JSON.stringify(body)).not.toContain("ssoSecret");
     const denied = await http(candidate, ["iam:hr"]).request(path);

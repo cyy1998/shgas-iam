@@ -1,15 +1,13 @@
-import type { Context } from "hono";
+import { beforeEach, describe, expect, mock, test } from "bun:test";
 import { createClientAdapter } from "@admin-api/routes/admin/client/client.adapter";
 import { createClientRoute } from "@admin-api/routes/admin/client/client.index";
 import { AdminMutationCommittedError } from "@admin-api/services/admin-mutation/admin-mutation";
 import { BadRequestError } from "@iam/api-core/errors";
 import { createErrorHandler } from "@iam/api-core/middlewares";
-import {
-  ClientStatus,
-} from "@iam/contracts";
+import { ClientStatus } from "@iam/contracts";
 import { ClientCodeExistsError, ClientCodeImmutableError, ClientNotFoundError } from "@iam/domain/client";
 import { fetchRequestHandler } from "@trpc/server/adapters/fetch";
-import { beforeEach, describe, expect, mock, test } from "bun:test";
+import type { Context } from "hono";
 import { Hono } from "hono";
 import { addTestAdminAuthorizationMiddleware, getTestAdminAuthorizationValue } from "../helpers/admin-authorization";
 
@@ -60,17 +58,12 @@ beforeEach(() => {
 function createContext(valid: Record<string, unknown>, roles = ["iam:admin"]) {
   return {
     get: mock((key: string) => {
-      if (key === "userDetailDto")
-        return { roles };
+      if (key === "userDetailDto") return { roles };
       const authorizationValue = getTestAdminAuthorizationValue(key);
-      if (authorizationValue !== undefined)
-        return authorizationValue;
-      if (key === "userId")
-        return 1001;
-      if (key === "username")
-        return "admin";
-      if (key === "requestId")
-        return "req-1";
+      if (authorizationValue !== undefined) return authorizationValue;
+      if (key === "userId") return 1001;
+      if (key === "username") return "admin";
+      if (key === "requestId") return "req-1";
       return undefined;
     }),
     req: {
@@ -103,11 +96,14 @@ describe("admin client adapter", () => {
     await expect(handlers.clientsSearch(context, async () => {})).resolves.toMatchObject({ code: 200 });
 
     expect(clientService.searchClientsForAdmin).toHaveBeenCalledWith(query);
-    expect(context.json).toHaveBeenCalledWith({
-      code: 200,
-      data: { result: [], total: 0, pageNum: 1, pageSize: 10, pages: 0 },
-      message: "success",
-    }, 200);
+    expect(context.json).toHaveBeenCalledWith(
+      {
+        code: 200,
+        data: { result: [], total: 0, pageNum: 1, pageSize: 10, pages: 0 },
+        message: "success",
+      },
+      200,
+    );
   });
 
   test("delegates update status input to client service", async () => {
@@ -179,9 +175,30 @@ const createInput = {
 };
 
 const baseCommands = [
-  { method: "PUT", path: "/portal", body: { clientName: "Portal" }, service: "updateClient", procedure: "update", input: { clientCode: "portal", data: { clientName: "Portal" } } },
-  { method: "PATCH", path: "/portal/status", body: { status: ClientStatus.Enable }, service: "updateClientStatus", procedure: "updateStatus", input: { clientCode: "portal", status: ClientStatus.Enable } },
-  { method: "DELETE", path: "/portal", body: undefined, service: "deleteClient", procedure: "delete", input: { clientCode: "portal" } },
+  {
+    method: "PUT",
+    path: "/portal",
+    body: { clientName: "Portal" },
+    service: "updateClient",
+    procedure: "update",
+    input: { clientCode: "portal", data: { clientName: "Portal" } },
+  },
+  {
+    method: "PATCH",
+    path: "/portal/status",
+    body: { status: ClientStatus.Enable },
+    service: "updateClientStatus",
+    procedure: "updateStatus",
+    input: { clientCode: "portal", status: ClientStatus.Enable },
+  },
+  {
+    method: "DELETE",
+    path: "/portal",
+    body: undefined,
+    service: "deleteClient",
+    procedure: "delete",
+    input: { clientCode: "portal" },
+  },
 ] as const;
 
 describe("Client base mutation public protocols", () => {
@@ -252,7 +269,10 @@ describe("Client base mutation public protocols", () => {
     }
     clientService.createClient.mockRejectedValue(error);
     clientService.updateClientById.mockRejectedValue(error);
-    for (const [path, input] of [["/create", createInput], ["/update", { id: 1, clientCode: "other", clientName: "Portal" }]] as const) {
+    for (const [path, input] of [
+      ["/create", createInput],
+      ["/update", { id: 1, clientCode: "other", clientName: "Portal" }],
+    ] as const) {
       const legacy = await surface.rest("POST", path, input);
       expect(legacy).toMatchObject({ status, body: { code: error.code } });
     }

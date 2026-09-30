@@ -1,12 +1,15 @@
 import type { AdminAuditContext } from "@admin-api/services/audit/audit.context";
 import type { AuditLogWriterPort } from "@admin-api/services/audit/audit.service";
+import { buildOrganizationResponsibilityAssignmentLifecycleAudit } from "@admin-api/services/audit/events/organization-responsibility-assignment.audit";
+import {
+  ORGANIZATION_RESPONSIBILITY_ASSIGNMENT_AUDIT_ACTIONS,
+  OrganizationResponsibilityAssignmentStatus,
+} from "@iam/contracts";
+import { OrganizationHasOpenResponsibilityAssignmentError } from "@iam/domain/organization";
 import type {
   OrganizationResponsibilityAssignmentLifecycleChange,
   OrganizationResponsibilityAssignmentWriteTarget,
 } from "./organization-responsibility-parent-lifecycle.type";
-import { buildOrganizationResponsibilityAssignmentLifecycleAudit } from "@admin-api/services/audit/events/organization-responsibility-assignment.audit";
-import { ORGANIZATION_RESPONSIBILITY_ASSIGNMENT_AUDIT_ACTIONS, OrganizationResponsibilityAssignmentStatus } from "@iam/contracts";
-import { OrganizationHasOpenResponsibilityAssignmentError } from "@iam/domain/organization";
 
 export interface CreateOrganizationResponsibilityParentLifecycleParticipantDeps {
   assignmentStore: {
@@ -23,9 +26,7 @@ export interface CreateOrganizationResponsibilityParentLifecycleParticipantDeps 
       status: OrganizationResponsibilityAssignmentStatus;
       endTime: Date | null;
     }) => Promise<OrganizationResponsibilityAssignmentLifecycleChange>;
-    hasOpenAssignmentTargetingOrganizationSubtree: (
-      organizationId: number,
-    ) => Promise<boolean>;
+    hasOpenAssignmentTargetingOrganizationSubtree: (organizationId: number) => Promise<boolean>;
   };
   auditLogWriter: Pick<AuditLogWriterPort, "recordAuditLog">;
 }
@@ -66,14 +67,8 @@ export function createOrganizationResponsibilityParentLifecycleParticipant(
     return changes.length > 0;
   }
 
-  async function assertNoOpenAssignmentsTargetingOrganizationSubtree(input: {
-    organizationId: number;
-  }) {
-    if (
-      await deps.assignmentStore.hasOpenAssignmentTargetingOrganizationSubtree(
-        input.organizationId,
-      )
-    ) {
+  async function assertNoOpenAssignmentsTargetingOrganizationSubtree(input: { organizationId: number }) {
+    if (await deps.assignmentStore.hasOpenAssignmentTargetingOrganizationSubtree(input.organizationId)) {
       throw new OrganizationHasOpenResponsibilityAssignmentError();
     }
   }
@@ -121,7 +116,7 @@ export function createOrganizationResponsibilityParentLifecycleParticipant(
   }) {
     const changes: OrganizationResponsibilityAssignmentLifecycleChange[] = [];
     for (const assignment of input.selectedAssignments) {
-      changes.push(...await applySelectedAssignments([assignment], assignment.employmentId, "end", input.endTime));
+      changes.push(...(await applySelectedAssignments([assignment], assignment.employmentId, "end", input.endTime)));
     }
     for (const change of changes) {
       await deps.auditLogWriter.recordAuditLog(
@@ -160,19 +155,22 @@ export function createOrganizationResponsibilityParentLifecycleParticipant(
     for (const assignment of assignments) {
       if (assignment.employmentId !== employmentId)
         throw new Error("Locked Assignment does not belong to the selected Employment");
-      const applicable = command === "pause"
-        ? assignment.status === OrganizationResponsibilityAssignmentStatus.Enable
-        : assignment.status === OrganizationResponsibilityAssignmentStatus.Enable
-          || assignment.status === OrganizationResponsibilityAssignmentStatus.Pause;
-      if (!applicable)
-        continue;
-      changes.push(await deps.assignmentStore.updateLockedAssignmentLifecycle({
-        assignment,
-        status: command === "pause"
-          ? OrganizationResponsibilityAssignmentStatus.Pause
-          : OrganizationResponsibilityAssignmentStatus.Disable,
-        endTime: command === "pause" ? assignment.endTime : endTime,
-      }));
+      const applicable =
+        command === "pause"
+          ? assignment.status === OrganizationResponsibilityAssignmentStatus.Enable
+          : assignment.status === OrganizationResponsibilityAssignmentStatus.Enable ||
+            assignment.status === OrganizationResponsibilityAssignmentStatus.Pause;
+      if (!applicable) continue;
+      changes.push(
+        await deps.assignmentStore.updateLockedAssignmentLifecycle({
+          assignment,
+          status:
+            command === "pause"
+              ? OrganizationResponsibilityAssignmentStatus.Pause
+              : OrganizationResponsibilityAssignmentStatus.Disable,
+          endTime: command === "pause" ? assignment.endTime : endTime,
+        }),
+      );
     }
     return changes;
   }

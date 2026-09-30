@@ -6,9 +6,5 @@ export async function runWithinInternalUserHandlerBudget<T>(
   operation: () => Promise<T>,
   createTimeoutError: () => Error,
 ): Promise<T> {
-  return await runWithinInternalHandlerBudget(
-    operation,
-    INTERNAL_USER_HANDLER_TIMEOUT_MS,
-    createTimeoutError,
-  );
+  return await runWithinInternalHandlerBudget(operation, INTERNAL_USER_HANDLER_TIMEOUT_MS, createTimeoutError);
 }

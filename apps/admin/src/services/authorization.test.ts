@@ -1,14 +1,11 @@
-import { beforeEach, expect, it, vi } from 'vitest';
-import {
-  getAdminAuthorizationReasonText,
-  getAdminCapabilitySummary,
-} from './authorization';
+import { beforeEach, expect, it, vi } from "vitest";
+import { getAdminAuthorizationReasonText, getAdminCapabilitySummary } from "./authorization";
 
 const { capabilitySummaryQuery } = vi.hoisted(() => ({
   capabilitySummaryQuery: vi.fn(),
 }));
 
-vi.mock('@admin/lib/api-client', () => ({
+vi.mock("@admin/lib/api-client", () => ({
   apiClient: {
     admin: {
       authorization: {
@@ -22,7 +19,7 @@ beforeEach(() => {
   capabilitySummaryQuery.mockReset();
 });
 
-it('hides the capability procedure path behind the authorization service', async () => {
+it("hides the capability procedure path behind the authorization service", async () => {
   const summary = { collectionActions: {}, visibleModules: [] };
   capabilitySummaryQuery.mockResolvedValue(summary);
 
@@ -32,6 +29,6 @@ it('hides the capability procedure path behind the authorization service', async
   expect(result).toBe(summary);
 });
 
-it('returns no explanation when no authorization reason is supplied', () => {
+it("returns no explanation when no authorization reason is supplied", () => {
   expect(getAdminAuthorizationReasonText(null)).toBeNull();
 });

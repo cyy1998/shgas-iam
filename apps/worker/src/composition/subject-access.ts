@@ -1,14 +1,12 @@
-import type { WorkerRuntime } from "./runtime";
 import { randomUUID } from "node:crypto";
 import {
   createRedisSubjectAccessStore,
   createSubjectAccessBarrier,
   createSubjectAccessBootstrap,
 } from "@iam/api-core/subject-access";
+import type { WorkerRuntime } from "./runtime";
 
-export function createWorkerSubjectAccess(
-  runtime: Pick<WorkerRuntime, "clock" | "redis">,
-) {
+export function createWorkerSubjectAccess(runtime: Pick<WorkerRuntime, "clock" | "redis">) {
   const store = createRedisSubjectAccessStore({
     redis: runtime.redis,
   });

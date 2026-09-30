@@ -1,9 +1,9 @@
+import { describe, expect, mock, test } from "bun:test";
 import type { LoginWithMobileDeps } from "@api/use-cases/authentication/login-with-mobile/login-with-mobile.port";
 import { createLoginWithMobileUseCase } from "@api/use-cases/authentication/login-with-mobile/login-with-mobile.use-case";
 import { CustomError } from "@iam/api-core/errors/CustomError";
 import { LoginRestrictionUnavailableError } from "@iam/api-core/login-restriction";
 import { ApiErrorCode, UserStatus, UserType } from "@iam/contracts";
-import { describe, expect, mock, test } from "bun:test";
 
 const subjectIdentifier = "00000000-0000-4000-8000-000000001001";
 
@@ -30,23 +30,25 @@ function loginRestrictionUnavailable() {
   });
 }
 
-function temporaryRestriction(
-  triggerMethod: "mobile" | "password" | "unknown" = "mobile",
-) {
+function temporaryRestriction(triggerMethod: "mobile" | "password" | "unknown" = "mobile") {
   return {
     remainingSeconds: 30 * 60,
     triggerMethod,
   };
 }
 
-function createFixture(overrides: {
-  codeValid?: boolean;
-  restriction?: ReturnType<typeof temporaryRestriction> | null;
-  user?: { id: number; subjectIdentifier: string; name: string } | null;
-} = {}) {
+function createFixture(
+  overrides: {
+    codeValid?: boolean;
+    restriction?: ReturnType<typeof temporaryRestriction> | null;
+    user?: { id: number; subjectIdentifier: string; name: string } | null;
+  } = {},
+) {
   const auditLogs: LoginWithMobileDeps["auditLogWriter"] extends {
     recordAuditLog: (input: infer T) => Promise<void>;
-  } ? T[] : never = [];
+  }
+    ? T[]
+    : never = [];
   const humanRiskFailures: unknown[][] = [];
   const ensureActionAllowed = mock(async () => undefined);
   const consumeVerificationCode = mock(async () => overrides.codeValid ?? false);
@@ -77,9 +79,9 @@ function createFixture(overrides: {
     },
     principalSessions: { createPrincipalSession },
     users: {
-      getActiveUserByMobile: mock(async () => overrides.user === undefined
-        ? { id: userDetail.id, name: userDetail.name, subjectIdentifier }
-        : overrides.user),
+      getActiveUserByMobile: mock(async () =>
+        overrides.user === undefined ? { id: userDetail.id, name: userDetail.name, subjectIdentifier } : overrides.user,
+      ),
       getUserDetailById: mock(async () => userDetail),
     },
     verificationCodes: { consumeVerificationCode },
@@ -105,20 +107,25 @@ describe("createLoginWithMobileUseCase", () => {
     const useCase = createLoginWithMobileUseCase(fixture.deps);
     const longUserAgent = `mobile-browser/${"x".repeat(600)}`;
 
-    await expect(useCase.execute({
-      code: "1234",
-      phoneNumber: userDetail.mobile,
-    }, {
-      requestContext: {
-        sourceApp: "iam",
-        requestId: "req-mobile",
-        traceId: null,
-        ip: "203.0.113.12",
-        userAgent: longUserAgent,
-        route: "/auth/login/mobile",
-        method: "POST",
-      },
-    })).resolves.toEqual({
+    await expect(
+      useCase.execute(
+        {
+          code: "1234",
+          phoneNumber: userDetail.mobile,
+        },
+        {
+          requestContext: {
+            sourceApp: "iam",
+            requestId: "req-mobile",
+            traceId: null,
+            ip: "203.0.113.12",
+            userAgent: longUserAgent,
+            route: "/auth/login/mobile",
+            method: "POST",
+          },
+        },
+      ),
+    ).resolves.toEqual({
       isMobileSet: true,
       token: "session-token",
     });
@@ -137,17 +144,14 @@ describe("createLoginWithMobileUseCase", () => {
 
   test("rejects replay after the verification code has been consumed", async () => {
     const fixture = createFixture();
-    fixture.consumeVerificationCode
-      .mockResolvedValueOnce(true)
-      .mockResolvedValueOnce(false);
+    fixture.consumeVerificationCode.mockResolvedValueOnce(true).mockResolvedValueOnce(false);
     const useCase = createLoginWithMobileUseCase(fixture.deps);
 
-    await expect(useCase.execute({ code: "1234", phoneNumber: userDetail.mobile }))
-      .resolves
-      .toEqual({ isMobileSet: true, token: "session-token" });
-    await expect(useCase.execute({ code: "1234", phoneNumber: userDetail.mobile }))
-      .rejects
-      .toThrow("验证码错误");
+    await expect(useCase.execute({ code: "1234", phoneNumber: userDetail.mobile })).resolves.toEqual({
+      isMobileSet: true,
+      token: "session-token",
+    });
+    await expect(useCase.execute({ code: "1234", phoneNumber: userDetail.mobile })).rejects.toThrow("验证码错误");
 
     expect(fixture.consumeVerificationCode).toHaveBeenCalledTimes(2);
   });
@@ -156,17 +160,20 @@ describe("createLoginWithMobileUseCase", () => {
     const fixture = createFixture();
     const useCase = createLoginWithMobileUseCase(fixture.deps);
 
-    await expect(useCase.execute({ code: "0000", phoneNumber: userDetail.mobile }))
-      .rejects
-      .toThrow("最后触发方式：手机验证码");
+    await expect(useCase.execute({ code: "0000", phoneNumber: userDetail.mobile })).rejects.toThrow(
+      "最后触发方式：手机验证码",
+    );
 
     expect(fixture.humanRiskFailures).toEqual([
-      ["mobileLogin", {
-        subject: userDetail.mobile,
-        ip: undefined,
-        requestId: null,
-        traceId: null,
-      }],
+      [
+        "mobileLogin",
+        {
+          subject: userDetail.mobile,
+          ip: undefined,
+          requestId: null,
+          traceId: null,
+        },
+      ],
     ]);
     expect(fixture.recordFailure).toHaveBeenCalledWith({
       triggerMethod: "mobile",
@@ -182,9 +189,7 @@ describe("createLoginWithMobileUseCase", () => {
     const fixture = createFixture({ user: null });
     const useCase = createLoginWithMobileUseCase(fixture.deps);
 
-    await expect(useCase.execute({ code: "0000", phoneNumber: userDetail.mobile }))
-      .rejects
-      .toThrow("验证码错误");
+    await expect(useCase.execute({ code: "0000", phoneNumber: userDetail.mobile })).rejects.toThrow("验证码错误");
 
     expect(fixture.humanRiskFailures).toHaveLength(1);
     expect(fixture.recordFailure).not.toHaveBeenCalled();
@@ -194,9 +199,7 @@ describe("createLoginWithMobileUseCase", () => {
     const fixture = createFixture({ codeValid: true, user: null });
     const useCase = createLoginWithMobileUseCase(fixture.deps);
 
-    await expect(useCase.execute({ code: "1234", phoneNumber: userDetail.mobile }))
-      .rejects
-      .toThrow("用户不存在");
+    await expect(useCase.execute({ code: "1234", phoneNumber: userDetail.mobile })).rejects.toThrow("用户不存在");
 
     expect(fixture.recordFailure).not.toHaveBeenCalled();
   });
@@ -205,9 +208,9 @@ describe("createLoginWithMobileUseCase", () => {
     const fixture = createFixture({ restriction: temporaryRestriction("password") });
     const useCase = createLoginWithMobileUseCase(fixture.deps);
 
-    await expect(useCase.execute({ code: "1234", phoneNumber: userDetail.mobile }))
-      .rejects
-      .toThrow("最后触发方式：密码");
+    await expect(useCase.execute({ code: "1234", phoneNumber: userDetail.mobile })).rejects.toThrow(
+      "最后触发方式：密码",
+    );
 
     expect(fixture.consumeVerificationCode).not.toHaveBeenCalled();
     expect(fixture.auditLogs[0]).toMatchObject({
@@ -221,12 +224,10 @@ describe("createLoginWithMobileUseCase", () => {
     fixture.getRestriction.mockRejectedValue(loginRestrictionUnavailable());
     const useCase = createLoginWithMobileUseCase(fixture.deps);
 
-    await expect(useCase.execute({ code: "1234", phoneNumber: userDetail.mobile }))
-      .rejects
-      .toMatchObject({
-        code: "LOGIN_PROTECTION_UNAVAILABLE",
-        httpStatus: 503,
-      });
+    await expect(useCase.execute({ code: "1234", phoneNumber: userDetail.mobile })).rejects.toMatchObject({
+      code: "LOGIN_PROTECTION_UNAVAILABLE",
+      httpStatus: 503,
+    });
 
     expect(fixture.consumeVerificationCode).not.toHaveBeenCalled();
     expect(fixture.auditLogs).toHaveLength(1);
@@ -242,12 +243,10 @@ describe("createLoginWithMobileUseCase", () => {
     fixture.recordAuditLog.mockRejectedValue(new Error("audit database unavailable"));
     const useCase = createLoginWithMobileUseCase(fixture.deps);
 
-    await expect(useCase.execute({ code: "1234", phoneNumber: userDetail.mobile }))
-      .rejects
-      .toMatchObject({
-        code: "LOGIN_PROTECTION_UNAVAILABLE",
-        httpStatus: 503,
-      });
+    await expect(useCase.execute({ code: "1234", phoneNumber: userDetail.mobile })).rejects.toMatchObject({
+      code: "LOGIN_PROTECTION_UNAVAILABLE",
+      httpStatus: 503,
+    });
 
     expect(fixture.recordAuditLog).toHaveBeenCalledTimes(1);
     expect(fixture.consumeVerificationCode).not.toHaveBeenCalled();
@@ -259,9 +258,7 @@ describe("createLoginWithMobileUseCase", () => {
     fixture.getRestriction.mockRejectedValue(cause);
     const useCase = createLoginWithMobileUseCase(fixture.deps);
 
-    await expect(useCase.execute({ code: "1234", phoneNumber: userDetail.mobile }))
-      .rejects
-      .toBe(cause);
+    await expect(useCase.execute({ code: "1234", phoneNumber: userDetail.mobile })).rejects.toBe(cause);
 
     expect(fixture.auditLogs).toEqual([]);
   });
@@ -271,12 +268,10 @@ describe("createLoginWithMobileUseCase", () => {
     fixture.recordFailure.mockRejectedValue(loginRestrictionUnavailable());
     const useCase = createLoginWithMobileUseCase(fixture.deps);
 
-    await expect(useCase.execute({ code: "0000", phoneNumber: userDetail.mobile }))
-      .rejects
-      .toMatchObject({
-        code: "LOGIN_PROTECTION_UNAVAILABLE",
-        httpStatus: 503,
-      });
+    await expect(useCase.execute({ code: "0000", phoneNumber: userDetail.mobile })).rejects.toMatchObject({
+      code: "LOGIN_PROTECTION_UNAVAILABLE",
+      httpStatus: 503,
+    });
 
     expect(fixture.auditLogs).toHaveLength(1);
     expect(fixture.auditLogs[0]).toMatchObject({
@@ -290,12 +285,10 @@ describe("createLoginWithMobileUseCase", () => {
     fixture.clearLoginState.mockRejectedValue(loginRestrictionUnavailable());
     const useCase = createLoginWithMobileUseCase(fixture.deps);
 
-    await expect(useCase.execute({ code: "1234", phoneNumber: userDetail.mobile }))
-      .rejects
-      .toMatchObject({
-        code: "LOGIN_PROTECTION_UNAVAILABLE",
-        httpStatus: 503,
-      });
+    await expect(useCase.execute({ code: "1234", phoneNumber: userDetail.mobile })).rejects.toMatchObject({
+      code: "LOGIN_PROTECTION_UNAVAILABLE",
+      httpStatus: 503,
+    });
 
     expect(fixture.createPrincipalSession).not.toHaveBeenCalled();
     expect(fixture.auditLogs).toHaveLength(1);
@@ -309,9 +302,10 @@ describe("createLoginWithMobileUseCase", () => {
     const fixture = createFixture();
     const useCase = createLoginWithMobileUseCase(fixture.deps);
 
-    await expect(useCase.execute({ code: "MAGIC", phoneNumber: userDetail.mobile }))
-      .resolves
-      .toEqual({ isMobileSet: true, token: "session-token" });
+    await expect(useCase.execute({ code: "MAGIC", phoneNumber: userDetail.mobile })).resolves.toEqual({
+      isMobileSet: true,
+      token: "session-token",
+    });
 
     expect(fixture.consumeVerificationCode).not.toHaveBeenCalled();
     expect(fixture.recordFailure).not.toHaveBeenCalled();
@@ -320,16 +314,20 @@ describe("createLoginWithMobileUseCase", () => {
 
   test("stops before lookup when human verification is required", async () => {
     const fixture = createFixture();
-    fixture.ensureActionAllowed.mockRejectedValue(new CustomError("需要人机校验", {
-      code: ApiErrorCode.HumanVerificationRequired,
-    }));
+    fixture.ensureActionAllowed.mockRejectedValue(
+      new CustomError("需要人机校验", {
+        code: ApiErrorCode.HumanVerificationRequired,
+      }),
+    );
     const useCase = createLoginWithMobileUseCase(fixture.deps);
 
-    await expect(useCase.execute({
-      capToken: "invalid-cap-token",
-      code: "0000",
-      phoneNumber: userDetail.mobile,
-    })).rejects.toHaveProperty("code", ApiErrorCode.HumanVerificationRequired);
+    await expect(
+      useCase.execute({
+        capToken: "invalid-cap-token",
+        code: "0000",
+        phoneNumber: userDetail.mobile,
+      }),
+    ).rejects.toHaveProperty("code", ApiErrorCode.HumanVerificationRequired);
 
     expect(fixture.deps.users.getActiveUserByMobile).not.toHaveBeenCalled();
     expect(fixture.consumeVerificationCode).not.toHaveBeenCalled();

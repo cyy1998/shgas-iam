@@ -1,15 +1,15 @@
+import { toOrganizationDto } from "@api/services/organization/organization.schema";
 import type {
   OrganizationCreateDto,
   OrganizationQueryDto,
   OrganizationUpdateDto,
 } from "@api/services/organization/organization.type";
-import type { OrganizationServiceDeps } from "./organization.port";
-import { toOrganizationDto } from "@api/services/organization/organization.schema";
 import {
   OrganizationAlreadyExistsError,
   OrganizationCodeExistsError,
   OrganizationNotFoundError,
 } from "@iam/domain/organization";
+import type { OrganizationServiceDeps } from "./organization.port";
 
 export function createOrganizationService(deps: OrganizationServiceDeps) {
   async function findOrganizationByCode(orgCode: string) {
@@ -30,7 +30,7 @@ export function createOrganizationService(deps: OrganizationServiceDeps) {
 
   async function searchOrganizations(organizationQueryDto: OrganizationQueryDto) {
     const organizations = await deps.organizationRepository.searchOrganizations(organizationQueryDto);
-    const orgDtos = organizations.map(o => toOrganizationDto(o));
+    const orgDtos = organizations.map((o) => toOrganizationDto(o));
     return orgDtos;
   }
 
@@ -43,10 +43,7 @@ export function createOrganizationService(deps: OrganizationServiceDeps) {
       if (newOrg !== null) {
         throw new OrganizationAlreadyExistsError("待创建组织已存在");
       }
-      await tx.organizationRepository.setOrganization(
-        organizationCreateDto,
-        parentOrg,
-      );
+      await tx.organizationRepository.setOrganization(organizationCreateDto, parentOrg);
       return true;
     });
   }
@@ -64,9 +61,7 @@ export function createOrganizationService(deps: OrganizationServiceDeps) {
         }
       }
       await tx.organizationRepository.updateOrganizationByCode(orgCode, data);
-      await tx.userProfileInvalidation.recordChanges([
-        { kind: "organization", organizationId: existing.id },
-      ]);
+      await tx.userProfileInvalidation.recordChanges([{ kind: "organization", organizationId: existing.id }]);
       return true;
     });
   }

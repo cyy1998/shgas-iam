@@ -1,20 +1,11 @@
-import type { PostgresTestHarness } from "./postgres-harness";
 import { afterAll, beforeAll, beforeEach, describe, expect, test } from "bun:test";
+import type { PostgresTestHarness } from "./postgres-harness";
 import { createPostgresTestHarness, expectPostgresErrorCode } from "./postgres-harness";
 
-const FEATURE_MIGRATION = new URL(
-  "../../src/migrations/20260730175954_old_peter_quill/migration.sql",
-  import.meta.url,
-);
+const FEATURE_MIGRATION = new URL("../../src/migrations/20260730175954_old_peter_quill/migration.sql", import.meta.url);
 const SUBJECT_IDENTIFIER = "730828fb-d9ed-4e9d-83f7-d58175dd1019";
 
-type JsonValue
-  = | boolean
-    | JsonValue[]
-    | null
-    | number
-    | string
-    | { [key: string]: JsonValue };
+type JsonValue = boolean | JsonValue[] | null | number | string | { [key: string]: JsonValue };
 
 let harness: PostgresTestHarness | undefined;
 
@@ -54,7 +45,7 @@ describe("User Profile Subject Facts migration", () => {
       WHERE table_schema = current_schema()
         AND table_name = 'user_profile'
     `;
-    expect(columns.map(column => column.columnName).sort()).toEqual([
+    expect(columns.map((column) => column.columnName).sort()).toEqual([
       "create_time",
       "detail",
       "is_delete",
@@ -74,12 +65,14 @@ describe("User Profile Subject Facts migration", () => {
       "wx_id",
     ]);
 
-    const [legacy] = await sql<{
-      name: string | null;
-      sourceDirtyVersion: string | null;
-      subjectFacts: unknown;
-      subjectIdentifier: string | null;
-    }[]>`
+    const [legacy] = await sql<
+      {
+        name: string | null;
+        sourceDirtyVersion: string | null;
+        subjectFacts: unknown;
+        subjectIdentifier: string | null;
+      }[]
+    >`
       SELECT
         name,
         source_dirty_version::text AS "sourceDirtyVersion",
@@ -126,26 +119,31 @@ describe("User Profile Subject Facts migration", () => {
     await createLegacyUserProfileTable(sql);
     await sql.file(FEATURE_MIGRATION, { cache: false });
 
-    await expectPostgresErrorCode(insertProfile(sql, {
-      userId: 1,
-      username: "zero-version",
-      subjectIdentifier: SUBJECT_IDENTIFIER,
-      sourceDirtyVersion: "0",
-      subjectFacts: {},
-    }), "23514");
-    await expectPostgresErrorCode(insertProfile(sql, {
-      userId: 2,
-      username: "array-facts",
-      subjectIdentifier: SUBJECT_IDENTIFIER,
-      sourceDirtyVersion: "1",
-      subjectFacts: [],
-    }), "23514");
+    await expectPostgresErrorCode(
+      insertProfile(sql, {
+        userId: 1,
+        username: "zero-version",
+        subjectIdentifier: SUBJECT_IDENTIFIER,
+        sourceDirtyVersion: "0",
+        subjectFacts: {},
+      }),
+      "23514",
+    );
+    await expectPostgresErrorCode(
+      insertProfile(sql, {
+        userId: 2,
+        username: "array-facts",
+        subjectIdentifier: SUBJECT_IDENTIFIER,
+        sourceDirtyVersion: "1",
+        subjectFacts: [],
+      }),
+      "23514",
+    );
   });
 });
 
 function requireHarness(): PostgresTestHarness {
-  if (!harness)
-    throw new Error("PostgreSQL test harness was not initialized");
+  if (!harness) throw new Error("PostgreSQL test harness was not initialized");
   return harness;
 }
 
@@ -179,9 +177,7 @@ async function insertProfile(
     subjectFacts: JsonValue;
   },
 ) {
-  const subjectFacts = input.subjectFacts === null
-    ? null
-    : sql.json(input.subjectFacts);
+  const subjectFacts = input.subjectFacts === null ? null : sql.json(input.subjectFacts);
   return await sql`
     INSERT INTO user_profile (
       user_id,

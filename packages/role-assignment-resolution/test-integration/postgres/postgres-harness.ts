@@ -1,6 +1,6 @@
-import type { DbClient } from "@iam/db";
 import { randomUUID } from "node:crypto";
 import { fileURLToPath } from "node:url";
+import type { DbClient } from "@iam/db";
 import { relations } from "@iam/db/relations";
 import { drizzle } from "drizzle-orm/postgres-js";
 import { migrate } from "drizzle-orm/postgres-js/migrator";
@@ -32,8 +32,7 @@ export async function createPostgresTestHarness(): Promise<PostgresTestHarness> 
     scopedSql = postgres(databaseUrl, {
       connection: { search_path: schemaName },
       debug() {
-        if (isMeasuringQueries)
-          queryCount += 1;
+        if (isMeasuringQueries) queryCount += 1;
       },
       max: 1,
     });
@@ -44,10 +43,12 @@ export async function createPostgresTestHarness(): Promise<PostgresTestHarness> 
     return {
       db,
       async reset() {
-        await scopedSql!.unsafe([
-          "TRUNCATE TABLE role_assignment, organization_closure, employment,",
-          "role, position, organization RESTART IDENTITY CASCADE",
-        ].join(" "));
+        await scopedSql!.unsafe(
+          [
+            "TRUNCATE TABLE role_assignment, organization_closure, employment,",
+            "role, position, organization RESTART IDENTITY CASCADE",
+          ].join(" "),
+        );
       },
       async measureQueries<T>(operation: () => Promise<T>) {
         queryCount = 0;
@@ -55,8 +56,7 @@ export async function createPostgresTestHarness(): Promise<PostgresTestHarness> 
         try {
           const result = await operation();
           return { queryCount, result };
-        }
-        finally {
+        } finally {
           isMeasuringQueries = false;
         }
       },
@@ -66,10 +66,8 @@ export async function createPostgresTestHarness(): Promise<PostgresTestHarness> 
         await adminSql.end();
       },
     };
-  }
-  catch (error) {
-    if (scopedSql)
-      await scopedSql.end({ timeout: 1 });
+  } catch (error) {
+    if (scopedSql) await scopedSql.end({ timeout: 1 });
     await adminSql.unsafe(`DROP SCHEMA IF EXISTS ${quoteIdentifier(schemaName)} CASCADE`);
     await adminSql.end({ timeout: 1 });
     throw error;
@@ -110,7 +108,6 @@ export function databaseIdentity(databaseUrl: string): string {
 }
 
 function quoteIdentifier(identifier: string): string {
-  if (!/^[a-z0-9_]+$/u.test(identifier))
-    throw new Error("test schema name contains unsafe characters");
+  if (!/^[a-z0-9_]+$/u.test(identifier)) throw new Error("test schema name contains unsafe characters");
   return `"${identifier}"`;
 }

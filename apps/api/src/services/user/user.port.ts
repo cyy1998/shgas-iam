@@ -4,16 +4,9 @@ import type { AuditLogWriterPort } from "@api/services/audit/audit.service";
 import type { MobileVerificationCodeReservation } from "@api/services/mobile/mobile.type";
 import type { PrivilegeDelegationDto } from "@api/services/privilege/privilegeDelegation.type";
 import type { UserProfileSearchPort } from "@api/services/user-profile-search/user-profile-search.port";
-import type {
-  SubjectAccessMutationReceipt,
-  SubjectAccessTransitionTarget,
-} from "@iam/api-core/subject-access";
+import type { SubjectAccessMutationReceipt, SubjectAccessTransitionTarget } from "@iam/api-core/subject-access";
 import type { UnitOfWorkPort } from "@iam/api-core/uow";
-import type {
-  User,
-  UserDetailDto,
-  UserDto,
-} from "./user.type";
+import type { User, UserDetailDto, UserDto } from "./user.type";
 
 export interface ApiUserProfileChange {
   readonly kind: "user";
@@ -138,10 +131,7 @@ export interface UserServiceDeps {
   mobileService: UserMobileVerificationPort;
   profileQuery: Pick<
     UserProfileReaderPort,
-    | "getDetailByUserId"
-    | "getDetailByUsername"
-    | "getDetailByMobile"
-    | "getDetailByWxId"
+    "getDetailByUserId" | "getDetailByUsername" | "getDetailByMobile" | "getDetailByWxId"
   >;
   mobileBinding: {
     assertCanBindMobile: (

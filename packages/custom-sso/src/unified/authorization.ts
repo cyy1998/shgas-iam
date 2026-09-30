@@ -1,8 +1,4 @@
 import type { ClientSnapshotReader } from "@iam/api-core/client-snapshot";
-import type { SubjectAccessOperation } from "@iam/api-core/subject-access";
-import type { UnifiedSessionKernel } from "@iam/session-kernel";
-import type { createSsoRedirectUrlValidator } from "../internal/redirect-url.validator";
-import type { AcceptedAuthorization, CustomSsoStateRedis } from "./state";
 import { ClientSnapshotUnavailableError } from "@iam/api-core/client-snapshot";
 import {
   AuthzMaintenanceError,
@@ -11,15 +7,19 @@ import {
   InvalidRedirectUriError,
   InvalidSsoClientError,
 } from "@iam/api-core/errors";
+import type { SubjectAccessOperation } from "@iam/api-core/subject-access";
 import {
   requireSubjectAccessOperation,
   SubjectAccessDisabledError,
   SubjectAccessUnavailableError,
 } from "@iam/api-core/subject-access";
 import { ClientSsoCallbackType, ClientSsoProtocol, ClientStatus, LoginPageGuardDecision } from "@iam/contracts";
+import type { UnifiedSessionKernel } from "@iam/session-kernel";
 import { SessionStorageError } from "@iam/session-kernel";
 import { z } from "zod";
+import type { createSsoRedirectUrlValidator } from "../internal/redirect-url.validator";
 import { CustomSsoTrafficGateUnavailableError } from "../internal/traffic-gate";
+import type { AcceptedAuthorization, CustomSsoStateRedis } from "./state";
 import { createCustomSsoState, randomHandle } from "./state";
 
 export interface UnifiedCustomSsoAuthorizationOptions {
@@ -50,34 +50,32 @@ export function createUnifiedCustomSsoAuthorization(options: UnifiedCustomSsoAut
       requireSubjectAccessOperation(operation);
       const sessions = options.kernel.forOperation(operation);
       async function accept(input: AuthorizationInput): Promise<AcceptedAuthorization> {
-        let snapshot;
+        let snapshot: Awaited<ReturnType<typeof options.clients.acquire>>;
         try {
           snapshot = await options.clients.acquire(input.clientCode);
-        }
-        catch (error) {
-          if (error instanceof ClientSnapshotUnavailableError)
-            throw new CustomSsoTrafficGateUnavailableError();
+        } catch (error) {
+          if (error instanceof ClientSnapshotUnavailableError) throw new CustomSsoTrafficGateUnavailableError();
           throw error;
         }
         if (snapshot.kind === "present" && snapshot.value.status === ClientStatus.Maintenance)
           throw new AuthzMaintenanceError();
         if (
-          snapshot.kind !== "present"
-          || snapshot.value.clientCode !== input.clientCode
-          || snapshot.value.status !== ClientStatus.Enable
-          || !snapshot.value.ssoEnabled
-          || snapshot.value.ssoConfig?.protocol !== ClientSsoProtocol.CustomSso
+          snapshot.kind !== "present" ||
+          snapshot.value.clientCode !== input.clientCode ||
+          snapshot.value.status !== ClientStatus.Enable ||
+          !snapshot.value.ssoEnabled ||
+          snapshot.value.ssoConfig?.protocol !== ClientSsoProtocol.CustomSso
         ) {
           throw new InvalidSsoClientError("非法Client");
         }
         if (input.continuation !== undefined) {
           const accepted = await state.readContinuation(input.continuation, input.browserBinding ?? "");
           if (
-            !accepted
-            || accepted.clientCode !== input.clientCode
-            || accepted.redirectUrl !== input.redirectUrl
-            || accepted.state !== input.state
-            || accepted.redeemer !== snapshot.value.ssoConfig.callbackType
+            !accepted ||
+            accepted.clientCode !== input.clientCode ||
+            accepted.redirectUrl !== input.redirectUrl ||
+            accepted.state !== input.state ||
+            accepted.redeemer !== snapshot.value.ssoConfig.callbackType
           ) {
             throw new BadRequestError("登录请求已失效，请返回应用重新发起登录");
           }
@@ -89,11 +87,11 @@ export function createUnifiedCustomSsoAuthorization(options: UnifiedCustomSsoAut
           input.redirectUrl,
           config.validRedirectUrls,
         );
-        if (redirectUrl === null)
-          throw new InvalidRedirectUriError("非法重定向地址");
-        const callbackEndpoint = config.callbackType === ClientSsoCallbackType.Managed
-          ? `${new URL(redirectUrl).origin}/sso/callback`
-          : new URL(config.callbackEndpoint).href;
+        if (redirectUrl === null) throw new InvalidRedirectUriError("非法重定向地址");
+        const callbackEndpoint =
+          config.callbackType === ClientSsoCallbackType.Managed
+            ? `${new URL(redirectUrl).origin}/sso/callback`
+            : new URL(config.callbackEndpoint).href;
         return {
           clientCode: input.clientCode,
           redirectUrl,
@@ -103,14 +101,11 @@ export function createUnifiedCustomSsoAuthorization(options: UnifiedCustomSsoAut
         };
       }
       async function root(token?: string) {
-        if (!token)
-          return null;
+        if (!token) return null;
         try {
           const result = await sessions.resolveUserSession(token);
-          if (result.status === "corrupt")
-            throw new SubjectAccessUnavailableError();
-          if (result.status !== "resolved")
-            return null;
+          if (result.status === "corrupt") throw new SubjectAccessUnavailableError();
+          if (result.status !== "resolved") return null;
           const user = result.value.userSession;
           await operation.acquireForSession({
             principalSessionId: user.userSessionId,
@@ -118,12 +113,9 @@ export function createUnifiedCustomSsoAuthorization(options: UnifiedCustomSsoAut
             subjectContext: user.subjectContext,
           });
           return result.value;
-        }
-        catch (error) {
-          if (error instanceof SubjectAccessDisabledError || error instanceof AuthzUnauthorizedError)
-            return null;
-          if (error instanceof SessionStorageError)
-            throw new SubjectAccessUnavailableError();
+        } catch (error) {
+          if (error instanceof SubjectAccessDisabledError || error instanceof AuthzUnauthorizedError) return null;
+          if (error instanceof SessionStorageError) throw new SubjectAccessUnavailableError();
           throw error;
         }
       }
@@ -141,8 +133,8 @@ export function createUnifiedCustomSsoAuthorization(options: UnifiedCustomSsoAut
           const observation = await root(input.globalSessionToken);
           if (!observation) {
             const browserBinding = input.browserBinding || randomHandle();
-            const continuation
-              = input.continuation ?? (await state.saveContinuation(accepted, browserBinding, continuationTtl));
+            const continuation =
+              input.continuation ?? (await state.saveContinuation(accepted, browserBinding, continuationTtl));
             return {
               isLogin: false as const,
               ...accepted,
@@ -156,15 +148,12 @@ export function createUnifiedCustomSsoAuthorization(options: UnifiedCustomSsoAut
             clientId: accepted.clientCode,
             protocol: "custom_sso",
           });
-          if (opened.status !== "created" && opened.status !== "reused")
-            throw new AuthzUnauthorizedError("会话已失效");
+          if (opened.status !== "created" && opened.status !== "reused") throw new AuthzUnauthorizedError("会话已失效");
           const lifetime = await sessions.getIssuanceLifetime(opened.value, codeTtl);
-          if (lifetime.remainingSeconds <= 0)
-            throw new AuthzUnauthorizedError("会话已失效");
+          if (lifetime.remainingSeconds <= 0) throw new AuthzUnauthorizedError("会话已失效");
           const codeId = randomHandle();
           const { userSession, clientSession } = sessions.useObservation(opened.value);
-          if (!clientSession)
-            throw new AuthzUnauthorizedError();
+          if (!clientSession) throw new AuthzUnauthorizedError();
           await state.saveCode({
             ...accepted,
             version: 1,

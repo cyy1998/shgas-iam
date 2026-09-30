@@ -1,10 +1,7 @@
-import { RoleAssignmentTargetType } from "@iam/contracts";
 import { describe, expect, test } from "bun:test";
+import { RoleAssignmentTargetType } from "@iam/contracts";
 import { getTableConfig } from "drizzle-orm/pg-core";
-import {
-  insertRoleAssignmentSchema,
-  roleAssignments,
-} from "../role-assignments";
+import { insertRoleAssignmentSchema, roleAssignments } from "../role-assignments";
 
 function columnsByName() {
   const columns = getTableConfig(roleAssignments).columns.map((column: any) => [column.name, column]);
@@ -35,47 +32,52 @@ describe("role assignment schema", () => {
       unique: true,
       method: "btree",
     });
-    expect(indexes.role_assignment_role_id_target_type_target_id_key.columns.map((column: any) => column.name))
-      .toEqual(["role_id", "target_type", "target_id"]);
+    expect(indexes.role_assignment_role_id_target_type_target_id_key.columns.map((column: any) => column.name)).toEqual(
+      ["role_id", "target_type", "target_id"],
+    );
   });
 
   test("validates only supported assignment target types", () => {
-    expect(insertRoleAssignmentSchema.parse({
-      roleId: 1,
-      targetType: RoleAssignmentTargetType.Organization,
-      targetId: 10,
-      includeDescendants: true,
-    })).toMatchObject({
+    expect(
+      insertRoleAssignmentSchema.parse({
+        roleId: 1,
+        targetType: RoleAssignmentTargetType.Organization,
+        targetId: 10,
+        includeDescendants: true,
+      }),
+    ).toMatchObject({
       roleId: 1,
       targetType: RoleAssignmentTargetType.Organization,
       targetId: 10,
       includeDescendants: true,
     });
 
-    expect(() => insertRoleAssignmentSchema.parse({
-      roleId: 1,
-      targetType: "user",
-      targetId: 10,
-      includeDescendants: false,
-    })).toThrow();
+    expect(() =>
+      insertRoleAssignmentSchema.parse({
+        roleId: 1,
+        targetType: "user",
+        targetId: 10,
+        includeDescendants: false,
+      }),
+    ).toThrow();
   });
 });
 
 describe("role assignment migration", () => {
   test("backfills all legacy assignment sources before dropping legacy tables", async () => {
-    const sql = compactSql(await Bun.file(
-      `${import.meta.dir}/../../../migrations/20260702090217_black_praxagora/migration.sql`,
-    ).text());
+    const sql = compactSql(
+      await Bun.file(`${import.meta.dir}/../../../migrations/20260702090217_black_praxagora/migration.sql`).text(),
+    );
 
-    const employmentBackfill
-      = `INSERT INTO "role_assignment" ("role_id", "target_type", "target_id", "include_descendants") `
-        + `SELECT "role_id", 'employment', "employment_id", false FROM "employment_role";`;
-    const organizationBackfill
-      = `INSERT INTO "role_assignment" ("role_id", "target_type", "target_id", "include_descendants") `
-        + `SELECT "role_id", 'organization', "organization_id", "is_all_sub" FROM "organization_role";`;
-    const positionBackfill
-      = `INSERT INTO "role_assignment" ("role_id", "target_type", "target_id", "include_descendants") `
-        + `SELECT "role_id", 'position', "position_id", false FROM "position_role";`;
+    const employmentBackfill =
+      `INSERT INTO "role_assignment" ("role_id", "target_type", "target_id", "include_descendants") ` +
+      `SELECT "role_id", 'employment', "employment_id", false FROM "employment_role";`;
+    const organizationBackfill =
+      `INSERT INTO "role_assignment" ("role_id", "target_type", "target_id", "include_descendants") ` +
+      `SELECT "role_id", 'organization', "organization_id", "is_all_sub" FROM "organization_role";`;
+    const positionBackfill =
+      `INSERT INTO "role_assignment" ("role_id", "target_type", "target_id", "include_descendants") ` +
+      `SELECT "role_id", 'position', "position_id", false FROM "position_role";`;
 
     expect(sql.match(/INSERT INTO "role_assignment"/gu)?.length).toBe(3);
     expect(sql).toContain(employmentBackfill);

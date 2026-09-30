@@ -1,12 +1,10 @@
-import type {
-  ProcessSmokeChild,
-  ProcessTreeOwner,
-} from "@iam/api-core/testing/process-smoke-harness";
+import { describe, expect, it } from "bun:test";
 import { spawn } from "node:child_process";
 import { EventEmitter } from "node:events";
 import { existsSync } from "node:fs";
 import { access, writeFile } from "node:fs/promises";
 import { PassThrough } from "node:stream";
+import type { ProcessSmokeChild, ProcessTreeOwner } from "@iam/api-core/testing/process-smoke-harness";
 import {
   createBoundedProcessLogCapture,
   createProcessSmokeEnvironment,
@@ -21,7 +19,6 @@ import {
   terminateProcessTree,
   withOwnedTemporaryDirectory,
 } from "@iam/api-core/testing/process-smoke-harness";
-import { describe, expect, it } from "bun:test";
 
 class FakeChild extends EventEmitter implements ProcessSmokeChild {
   readonly pid: number | undefined = 321;
@@ -41,16 +38,14 @@ class FakeChild extends EventEmitter implements ProcessSmokeChild {
   }
 
   emitExit(code: number | null, signal: NodeJS.Signals | null = null) {
-    if (this.exitCode !== null || this.signalCode !== null)
-      return;
+    if (this.exitCode !== null || this.signalCode !== null) return;
     this.exitCode = code;
     this.signalCode = signal;
     this.emit("exit", code, signal);
   }
 
   emitClose() {
-    if (this.closed)
-      return;
+    if (this.closed) return;
     this.closed = true;
     this.stdout.end();
     this.stderr.end();
@@ -73,12 +68,10 @@ async function captureFailure(promise: Promise<unknown>) {
   let failure: unknown;
   try {
     await promise;
-  }
-  catch (error) {
+  } catch (error) {
     failure = error;
   }
-  if (!(failure instanceof Error))
-    throw new Error("expected the process smoke operation to fail");
+  if (!(failure instanceof Error)) throw new Error("expected the process smoke operation to fail");
   return failure;
 }
 
@@ -248,16 +241,18 @@ describe("process smoke harness", () => {
   it("times out a command that never exits and still cleans its process tree", async () => {
     const child = new FakeChild();
     let cleaned = false;
-    const failure = await captureFailure(runProcessCommandSmoke({
-      label: "stuck-command",
-      start: () => child,
-      async stop(processChild) {
-        cleaned = true;
-        await stopFakeChild(processChild);
-      },
-      completionTimeoutMs: 5,
-      cleanupTimeoutMs: 50,
-    }));
+    const failure = await captureFailure(
+      runProcessCommandSmoke({
+        label: "stuck-command",
+        start: () => child,
+        async stop(processChild) {
+          cleaned = true;
+          await stopFakeChild(processChild);
+        },
+        completionTimeoutMs: 5,
+        cleanupTimeoutMs: 50,
+      }),
+    );
 
     expect(failure).toBeInstanceOf(ProcessSmokeError);
     expect(failure.message).toContain("completion deadline exceeded after 5ms");
@@ -352,18 +347,16 @@ describe("process smoke harness", () => {
   });
 
   it("reports a real spawn ENOENT without inventing a cleanup failure", async () => {
-    const failure = await captureFailure(runProcessSmoke({
-      label: "missing-command",
-      start: () => spawn(
-        "iam-process-smoke-command-that-does-not-exist",
-        [],
-        { stdio: ["ignore", "pipe", "pipe"] },
-      ),
-      probe: async () => undefined,
-      pollIntervalMs: 1,
-      readinessTimeoutMs: 100,
-      cleanupTimeoutMs: 100,
-    }));
+    const failure = await captureFailure(
+      runProcessSmoke({
+        label: "missing-command",
+        start: () => spawn("iam-process-smoke-command-that-does-not-exist", [], { stdio: ["ignore", "pipe", "pipe"] }),
+        probe: async () => undefined,
+        pollIntervalMs: 1,
+        readinessTimeoutMs: 100,
+        cleanupTimeoutMs: 100,
+      }),
+    );
 
     expect(failure).toBeInstanceOf(ProcessSmokeError);
     expect(failure).not.toBeInstanceOf(AggregateError);
@@ -381,15 +374,13 @@ describe("process smoke harness", () => {
       cleanupSettled = true;
     });
 
-    await new Promise(resolve => setTimeout(resolve, 5));
+    await new Promise((resolve) => setTimeout(resolve, 5));
     expect(cleanupSettled).toBe(false);
 
     const failure = await captureFailure(cleanup);
     child.stdout.destroy();
     child.stderr.destroy();
-    expect(failure.message).toContain(
-      "child without a pid did not close its stdio within 25ms",
-    );
+    expect(failure.message).toContain("child without a pid did not close its stdio within 25ms");
   });
 
   it("accepts a pidless child after its output closes without a child close event", async () => {
@@ -401,7 +392,7 @@ describe("process smoke harness", () => {
       cleanupSettled = true;
     });
 
-    await new Promise(resolve => setTimeout(resolve, 5));
+    await new Promise((resolve) => setTimeout(resolve, 5));
     expect(cleanupSettled).toBe(false);
     child.stdout.destroy();
     child.stderr.destroy();
@@ -414,18 +405,20 @@ describe("process smoke harness", () => {
     const child = new FakeChild();
     let cleaned = false;
 
-    const failure = await captureFailure(runProcessSmoke({
-      label: "never-ready",
-      start: () => child,
-      probe: async () => undefined,
-      stop: async (processChild) => {
-        cleaned = true;
-        await stopFakeChild(processChild);
-      },
-      pollIntervalMs: 1,
-      readinessTimeoutMs: 5,
-      cleanupTimeoutMs: 50,
-    }));
+    const failure = await captureFailure(
+      runProcessSmoke({
+        label: "never-ready",
+        start: () => child,
+        probe: async () => undefined,
+        stop: async (processChild) => {
+          cleaned = true;
+          await stopFakeChild(processChild);
+        },
+        pollIntervalMs: 1,
+        readinessTimeoutMs: 5,
+        cleanupTimeoutMs: 50,
+      }),
+    );
 
     expect(failure).toBeInstanceOf(ProcessSmokeError);
     expect(failure.message).toContain("readiness deadline exceeded after 5ms");
@@ -435,19 +428,21 @@ describe("process smoke harness", () => {
   it("preserves both an assertion failure and a cleanup failure", async () => {
     const child = new FakeChild();
 
-    const failure = await captureFailure(runProcessSmoke({
-      label: "assertion-and-cleanup",
-      start: () => child,
-      probe: async () => {
-        throw new FatalReadinessError("discovery issuer mismatch");
-      },
-      stop: async () => {
-        throw new Error("tree cleanup failed");
-      },
-      pollIntervalMs: 1,
-      readinessTimeoutMs: 100,
-      cleanupTimeoutMs: 50,
-    }));
+    const failure = await captureFailure(
+      runProcessSmoke({
+        label: "assertion-and-cleanup",
+        start: () => child,
+        probe: async () => {
+          throw new FatalReadinessError("discovery issuer mismatch");
+        },
+        stop: async () => {
+          throw new Error("tree cleanup failed");
+        },
+        pollIntervalMs: 1,
+        readinessTimeoutMs: 100,
+        cleanupTimeoutMs: 50,
+      }),
+    );
 
     expect(failure).toBeInstanceOf(AggregateError);
     expect(failure.message).toContain("readiness and cleanup both failed");
@@ -458,17 +453,19 @@ describe("process smoke harness", () => {
   it("fails a successful readiness probe when cleanup fails", async () => {
     const child = new FakeChild();
 
-    const failure = await captureFailure(runProcessSmoke({
-      label: "cleanup-only",
-      start: () => child,
-      probe: async () => ({ issuer: "http://issuer.test/oidc" }),
-      stop: async () => {
-        throw new Error("cleanup deadline exceeded");
-      },
-      pollIntervalMs: 1,
-      readinessTimeoutMs: 100,
-      cleanupTimeoutMs: 50,
-    }));
+    const failure = await captureFailure(
+      runProcessSmoke({
+        label: "cleanup-only",
+        start: () => child,
+        probe: async () => ({ issuer: "http://issuer.test/oidc" }),
+        stop: async () => {
+          throw new Error("cleanup deadline exceeded");
+        },
+        pollIntervalMs: 1,
+        readinessTimeoutMs: 100,
+        cleanupTimeoutMs: 50,
+      }),
+    );
 
     expect(failure).toBeInstanceOf(ProcessSmokeError);
     expect(failure.message).toContain("cleanup failed");
@@ -478,15 +475,17 @@ describe("process smoke harness", () => {
   it("bounds a cleanup operation that never settles", async () => {
     const child = new FakeChild();
 
-    const failure = await captureFailure(runProcessSmoke({
-      label: "cleanup-timeout",
-      start: () => child,
-      probe: async () => "ready",
-      stop: async () => await new Promise<void>(() => {}),
-      pollIntervalMs: 1,
-      readinessTimeoutMs: 100,
-      cleanupTimeoutMs: 5,
-    }));
+    const failure = await captureFailure(
+      runProcessSmoke({
+        label: "cleanup-timeout",
+        start: () => child,
+        probe: async () => "ready",
+        stop: async () => await new Promise<void>(() => {}),
+        pollIntervalMs: 1,
+        readinessTimeoutMs: 100,
+        cleanupTimeoutMs: 5,
+      }),
+    );
 
     expect(failure).toBeInstanceOf(ProcessSmokeError);
     expect(failure.message).toContain("cleanup deadline exceeded after 5ms");
@@ -494,21 +493,28 @@ describe("process smoke harness", () => {
 
   it("retries only explicit port collisions", async () => {
     let attempts = 0;
-    const result = await recoverFromPortCollision(async () => {
-      attempts += 1;
-      if (attempts === 1)
-        throw new PortCollisionError("reserved port was taken");
-      return "ready";
-    }, { maxAttempts: 3 });
+    const result = await recoverFromPortCollision(
+      async () => {
+        attempts += 1;
+        if (attempts === 1) throw new PortCollisionError("reserved port was taken");
+        return "ready";
+      },
+      { maxAttempts: 3 },
+    );
 
     expect(result).toBe("ready");
     expect(attempts).toBe(2);
 
     attempts = 0;
-    const failure = await captureFailure(recoverFromPortCollision(async () => {
-      attempts += 1;
-      throw new Error("configuration failed");
-    }, { maxAttempts: 3 }));
+    const failure = await captureFailure(
+      recoverFromPortCollision(
+        async () => {
+          attempts += 1;
+          throw new Error("configuration failed");
+        },
+        { maxAttempts: 3 },
+      ),
+    );
     expect(failure.message).toContain("configuration failed");
     expect(attempts).toBe(1);
   });
@@ -516,19 +522,19 @@ describe("process smoke harness", () => {
   it("fails cleanup when a directly owned process survives SIGKILL", async () => {
     const signals: Array<{ pid: number; signal: NodeJS.Signals }> = [];
 
-    const failure = await captureFailure(terminateProcessByPid(654, {
-      timeoutMs: 5,
-      pollIntervalMs: 1,
-      isProcessAlive: async () => true,
-      killProcess(pid, signal) {
-        signals.push({ pid, signal });
-      },
-    }));
+    const failure = await captureFailure(
+      terminateProcessByPid(654, {
+        timeoutMs: 5,
+        pollIntervalMs: 1,
+        isProcessAlive: async () => true,
+        killProcess(pid, signal) {
+          signals.push({ pid, signal });
+        },
+      }),
+    );
 
     expect(signals).toEqual([{ pid: 654, signal: "SIGKILL" }]);
-    expect(failure.message).toContain(
-      "process 654 did not exit within 5ms after SIGKILL",
-    );
+    expect(failure.message).toContain("process 654 did not exit within 5ms after SIGKILL");
   });
 
   it("terminates a POSIX process group instead of only its parent", async () => {
@@ -565,8 +571,7 @@ describe("process smoke harness", () => {
       isProcessTreeAlive: async () => treeAlive,
       killProcess(pid, signal) {
         calls.push({ pid, signal });
-        if (signal === "SIGKILL")
-          treeAlive = false;
+        if (signal === "SIGKILL") treeAlive = false;
       },
     });
 
@@ -580,14 +585,16 @@ describe("process smoke harness", () => {
     const child = new FakeChild();
     child.finish(0);
 
-    const failure = await captureFailure(terminateProcessTree(child, {
-      platform: "linux",
-      timeoutMs: 5,
-      forceAfterMs: 1,
-      pollIntervalMs: 1,
-      isProcessTreeAlive: async () => true,
-      killProcess() {},
-    }));
+    const failure = await captureFailure(
+      terminateProcessTree(child, {
+        platform: "linux",
+        timeoutMs: 5,
+        forceAfterMs: 1,
+        pollIntervalMs: 1,
+        isProcessTreeAlive: async () => true,
+        killProcess() {},
+      }),
+    );
 
     expect(failure.message).toContain("process group 321 did not exit");
   });
@@ -628,13 +635,15 @@ describe("process smoke harness", () => {
     const child = new FakeChild();
     child.finish(0);
 
-    const failure = await captureFailure(terminateProcessTree(child, {
-      platform: "win32",
-      timeoutMs: 50,
-      async runWindowsTreeKill() {
-        throw new Error("tree owner no longer addressable");
-      },
-    }));
+    const failure = await captureFailure(
+      terminateProcessTree(child, {
+        platform: "win32",
+        timeoutMs: 50,
+        async runWindowsTreeKill() {
+          throw new Error("tree owner no longer addressable");
+        },
+      }),
+    );
 
     expect(failure.message).toContain("tree owner no longer addressable");
   });
@@ -658,15 +667,17 @@ describe("process smoke harness", () => {
   it("removes its temporary directory when the attempt fails", async () => {
     let ownedDirectory = "";
 
-    const failure = await captureFailure(withOwnedTemporaryDirectory({
-      prefix: "iam-api-core-process-smoke-",
-      cleanupTimeoutMs: 2_000,
-      async run(directory) {
-        ownedDirectory = directory;
-        await writeFile(`${directory}/owned.txt`, "owned", "utf8");
-        throw new Error("attempt assertion failed");
-      },
-    }));
+    const failure = await captureFailure(
+      withOwnedTemporaryDirectory({
+        prefix: "iam-api-core-process-smoke-",
+        cleanupTimeoutMs: 2_000,
+        async run(directory) {
+          ownedDirectory = directory;
+          await writeFile(`${directory}/owned.txt`, "owned", "utf8");
+          throw new Error("attempt assertion failed");
+        },
+      }),
+    );
 
     expect(failure.message).toContain("attempt assertion failed");
     await expect(access(ownedDirectory)).rejects.toMatchObject({ code: "ENOENT" });

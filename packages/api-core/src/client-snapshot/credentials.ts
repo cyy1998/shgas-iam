@@ -1,6 +1,6 @@
-import type { ClientSnapshotReader } from "./contract";
 import { createHash, timingSafeEqual } from "node:crypto";
 import { z } from "zod";
+import type { ClientSnapshotReader } from "./contract";
 
 export const ClientCredentialValueSchema = z.object({
   secret: z.string().min(1),
@@ -8,8 +8,7 @@ export const ClientCredentialValueSchema = z.object({
   updatedAt: z.iso.datetime({ offset: true }),
 });
 export type ClientCredentialValue = z.infer<typeof ClientCredentialValueSchema>;
-export type ClientCredentialReader
-  = ClientSnapshotReader<ClientCredentialValue>;
+export type ClientCredentialReader = ClientSnapshotReader<ClientCredentialValue>;
 export interface ClientCredentialSource {
   readonly loadCredential: (clientCode: string) => Promise<unknown | null>;
 }
@@ -19,11 +18,9 @@ export function createClientSecretAuthenticator(reader: ClientCredentialReader) 
   return {
     async authenticate(clientCode: string, secret: string) {
       const observed = await reader.acquire(clientCode);
-      if (observed.kind === "absent")
-        return null;
+      if (observed.kind === "absent") return null;
       const digest = (value: string) => createHash("sha256").update(value).digest();
-      if (!timingSafeEqual(digest(secret), digest(observed.value.secret)))
-        return null;
+      if (!timingSafeEqual(digest(secret), digest(observed.value.secret))) return null;
       return { clientCode, credentialId: observed.value.credentialId, updatedAt: observed.value.updatedAt };
     },
   };

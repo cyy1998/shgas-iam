@@ -1,24 +1,5 @@
-import type { CreateAuthHandlersDeps } from "@api/routes/auth/auth.handlers";
-import type { CreatePublicHandlersDeps } from "@api/routes/public/public.handlers";
-import type { CreateRootSsoHandlersDeps, SsoEndpointsOptions } from "@api/routes/sso/sso.handlers";
-
-import type { ClientSnapshotReader } from "@iam/api-core/client-snapshot";
-import type { SubjectAccessOperation, SubjectAccessOperationBarrierPort } from "@iam/api-core/subject-access";
-import type { PublicBindings } from "@iam/api-core/types";
-import type {
-  CustomSsoProjectionPermission,
-  UnifiedCustomSsoAuthorizationOptions,
-  UnifiedCustomSsoOperationsOptions,
-} from "@iam/custom-sso";
-
-import type {
-  OidcAuthorizationOptions,
-  OidcClientAuthRateLimiter,
-  OidcHintVerificationPort,
-  OidcTokenOptions,
-} from "@iam/oidc";
-import type { UnifiedSessionKernel } from "@iam/session-kernel";
 import { createApiAuthenticationHandlers } from "@api/middlewares/authentication.handler";
+import type { CreateAuthHandlersDeps } from "@api/routes/auth/auth.handlers";
 import {
   createInternalAuthzHandler,
   createLocalSessionAuthzHandler,
@@ -26,8 +7,10 @@ import {
 } from "@api/routes/auth/auth.handlers";
 import * as authRoutes from "@api/routes/auth/auth.routes";
 import { createOidcHttpRouter } from "@api/routes/oidc/oidc.http";
+import type { CreatePublicHandlersDeps } from "@api/routes/public/public.handlers";
 import { createPublicHandlers, createRootPublicHandlers } from "@api/routes/public/public.handlers";
 import * as publicRoutes from "@api/routes/public/public.routes";
+import type { CreateRootSsoHandlersDeps, SsoEndpointsOptions } from "@api/routes/sso/sso.handlers";
 import { createRootSsoHandlers, createSsoEndpointsHandler } from "@api/routes/sso/sso.handlers";
 import * as ssoRoutes from "@api/routes/sso/sso.routes";
 import { CUSTOM_SSO_BASIC_SECURITY_SCHEME } from "@api/routes/sso/sso.security";
@@ -41,8 +24,10 @@ import {
   CUSTOM_SSO_SESSION_AUTHORIZATION_SECURITY_DEFINITION,
   CUSTOM_SSO_SESSION_AUTHORIZATION_SECURITY_SCHEME,
 } from "@api/services/sso/transport/custom-sso-delivery.security";
+import type { ClientSnapshotReader } from "@iam/api-core/client-snapshot";
 import { createRouter } from "@iam/api-core/core/create-router";
 import { AuthzUnauthorizedError } from "@iam/api-core/errors/AuthzUnauthorizedError";
+import type { SubjectAccessOperation, SubjectAccessOperationBarrierPort } from "@iam/api-core/subject-access";
 import {
   createSubjectAccessOperations,
   createUnifiedSubjectAccessSessionRevocation,
@@ -51,13 +36,24 @@ import {
   SubjectAccessPermissionRequiredError,
   SubjectAccessUnavailableError,
 } from "@iam/api-core/subject-access";
+import type { PublicBindings } from "@iam/api-core/types";
 import { createPermittedClientSubjectProjectionService } from "@iam/client-subject-projection";
+import type {
+  CustomSsoProjectionPermission,
+  UnifiedCustomSsoAuthorizationOptions,
+  UnifiedCustomSsoOperationsOptions,
+} from "@iam/custom-sso";
 import {
   createSsoRedirectUrlValidator,
   createUnifiedCustomSsoAuthorization,
   createUnifiedCustomSsoOperations,
 } from "@iam/custom-sso";
-
+import type {
+  OidcAuthorizationOptions,
+  OidcClientAuthRateLimiter,
+  OidcHintVerificationPort,
+  OidcTokenOptions,
+} from "@iam/oidc";
 import {
   createOidcAuthorization,
   createOidcLogout,
@@ -66,6 +62,7 @@ import {
   OidcProtocolError,
   OidcStateUnavailableError,
 } from "@iam/oidc";
+import type { UnifiedSessionKernel } from "@iam/session-kernel";
 import { createAuthenticationUseCases } from "./use-cases/authentication";
 
 type AuthenticationOptions = Parameters<typeof createAuthenticationUseCases>[0];
@@ -89,18 +86,15 @@ export interface RootAuthenticationCompositionOptions {
   };
   config: CreateRootSsoHandlersDeps["config"];
   endpoints?: SsoEndpointsOptions;
-  publicServices?: Pick<
-    CreatePublicHandlersDeps,
-    "organizationService" | "userService" | "userProfileSearch"
-  >;
+  publicServices?: Pick<CreatePublicHandlersDeps, "organizationService" | "userService" | "userProfileSearch">;
   customSso?: Omit<UnifiedCustomSsoAuthorizationOptions, "kernel" | "clients" | "redirectUrls">;
-  oidc?: Omit<OidcAuthorizationOptions, "kernel" | "clients"> & { issuers: { internal: string; external: string }; secureCookies: boolean };
+  oidc?: Omit<OidcAuthorizationOptions, "kernel" | "clients"> & {
+    issuers: { internal: string; external: string };
+    secureCookies: boolean;
+  };
   oidcClientAuth?: OidcClientAuthRateLimiter;
   oidcTrustProxy?: boolean;
-  oidcTokens?: Pick<
-    OidcTokenOptions,
-    "credentials" | "signing" | "tokenTtlSeconds" | "failureEffectTimeoutMs"
-  >;
+  oidcTokens?: Pick<OidcTokenOptions, "credentials" | "signing" | "tokenTtlSeconds" | "failureEffectTimeoutMs">;
   oidcLogout?: { verification: OidcHintVerificationPort; confirmationTtlSeconds: number };
   customSsoAccess?: Pick<
     UnifiedCustomSsoOperationsOptions,
@@ -114,7 +108,7 @@ export interface RootAuthenticationCompositionOptions {
 export function createRootAuthenticationComposition(options: RootAuthenticationCompositionOptions) {
   let operations: ReturnType<typeof createSubjectAccessOperations>;
   const revocation = createUnifiedSubjectAccessSessionRevocation(options.kernel, {
-    run: callback => operations.run(callback),
+    run: (callback) => operations.run(callback),
   });
   operations = createSubjectAccessOperations({ barrier: options.barrier, revocation });
   const projection = createPermittedClientSubjectProjectionService<CustomSsoProjectionPermission>({
@@ -125,17 +119,17 @@ export function createRootAuthenticationComposition(options: RootAuthenticationC
         throw new SubjectAccessPermissionRequiredError();
     },
   });
-  const customAccess
-    = options.customSso
-      && options.customSsoAccess
-      && createUnifiedCustomSsoOperations({
-        ...options.customSsoAccess,
-        redis: options.customSso.redis,
-        namespace: options.customSso.namespace,
-        kernel: options.kernel,
-        clients: options.clients,
-        projection,
-      });
+  const customAccess =
+    options.customSso &&
+    options.customSsoAccess &&
+    createUnifiedCustomSsoOperations({
+      ...options.customSsoAccess,
+      redis: options.customSso.redis,
+      namespace: options.customSso.namespace,
+      kernel: options.kernel,
+      clients: options.clients,
+      projection,
+    });
   const roots = createRootSessionService({
     logoutApplicationToken: (token, operation) =>
       customAccess ? customAccess.forOperation(operation).logout(token) : Promise.resolve(false),
@@ -149,26 +143,24 @@ export function createRootAuthenticationComposition(options: RootAuthenticationC
       ...options.authentication.services,
       principalSessions: createUserSessionAuthenticationAdapter(options.kernel, operations),
       oaCurrentSessions: {
-        resolve: token => operations.run(async (operation) => {
-          try {
-            const { observation } = await roots.forOperation(operation).resolvePermittedRoot(token);
-            return {
-              subjectIdentifier: observation.userSession.subjectIdentifier,
-              remainingSeconds: observation.remainingSeconds,
-            };
-          }
-          catch (error) {
-            if (error instanceof AuthzUnauthorizedError)
-              return null;
-            if (error instanceof SubjectAccessOperationDeniedError) {
-              if (error.reason === "identity_mismatch")
-                throw new SubjectAccessUnavailableError(error);
-              return null;
+        resolve: (token) =>
+          operations.run(async (operation) => {
+            try {
+              const { observation } = await roots.forOperation(operation).resolvePermittedRoot(token);
+              return {
+                subjectIdentifier: observation.userSession.subjectIdentifier,
+                remainingSeconds: observation.remainingSeconds,
+              };
+            } catch (error) {
+              if (error instanceof AuthzUnauthorizedError) return null;
+              if (error instanceof SubjectAccessOperationDeniedError) {
+                if (error.reason === "identity_mismatch") throw new SubjectAccessUnavailableError(error);
+                return null;
+              }
+              throw error;
             }
-            throw error;
-          }
-        }),
-        logout: token => operations.run(async operation => await roots.forOperation(operation).logout(token)),
+          }),
+        logout: (token) => operations.run(async (operation) => await roots.forOperation(operation).logout(token)),
       },
     },
   });
@@ -182,9 +174,9 @@ export function createRootAuthenticationComposition(options: RootAuthenticationC
     config: options.config,
     sso: {
       logout: {
-        execute: input =>
+        execute: (input) =>
           operations.run(
-            async operation =>
+            async (operation) =>
               await roots.forOperation(operation).logout(input.sessionToken, input.allowApplicationToken),
           ),
       },
@@ -218,20 +210,19 @@ export function createRootAuthenticationComposition(options: RootAuthenticationC
     ssoRouter.openapi(ssoRoutes.endpointsConfiguration, createSsoEndpointsHandler(options.endpoints));
   ssoRouter.openapi(ssoRoutes.loginOA, sso.loginOA);
   ssoRouter.openapi(ssoRoutes.loginWX, sso.loginWX);
-  const customSso
-    = options.customSso
-      && createUnifiedCustomSsoAuthorization({
-        ...options.customSso,
-        kernel: options.kernel,
-        clients: options.clients,
-        redirectUrls: createSsoRedirectUrlValidator({ logger: options.logger }),
-      });
+  const customSso =
+    options.customSso &&
+    createUnifiedCustomSsoAuthorization({
+      ...options.customSso,
+      kernel: options.kernel,
+      clients: options.clients,
+      redirectUrls: createSsoRedirectUrlValidator({ logger: options.logger }),
+    });
   if (customAccess) {
     ssoRouter.openAPIRegistry.registerComponent("securitySchemes", CUSTOM_SSO_BASIC_SECURITY_SCHEME, {
       type: "http",
       scheme: "basic",
-      description:
-        "Basic username is the UTF-8 percent-encoded Client Code; password is the Custom SSO Client Secret.",
+      description: "Basic username is the UTF-8 percent-encoded Client Code; password is the Custom SSO Client Secret.",
     });
     if (options.customSsoAccess?.managed) {
       ssoRouter.openapi(
@@ -259,9 +250,7 @@ export function createRootAuthenticationComposition(options: RootAuthenticationC
         config: options.config,
         localSessionAuthorizer: {
           authorizeLocalSession: (token, client) =>
-            operations.run(operation =>
-              customAccess.forOperation(operation).authorizeLocalSession(token, client),
-            ),
+            operations.run((operation) => customAccess.forOperation(operation).authorizeLocalSession(token, client)),
         },
       }),
     );
@@ -316,28 +305,27 @@ export function createRootAuthenticationComposition(options: RootAuthenticationC
   router.route("/auth", authenticationRouter);
   router.route("/sso", ssoRouter);
   router.route("/public", publicRouter);
-  const oidc
-    = options.oidc
-      && createOidcAuthorization({ ...options.oidc, kernel: options.kernel, clients: options.clients });
-  const oidcTokens
-    = options.oidc
-      && options.oidcTokens
-      && createOidcTokens({
-        ...options.oidc,
-        ...options.oidcTokens,
-        kernel: options.kernel,
-        clients: options.clients,
-        subjectFacts: options.subjectFacts,
-      });
-  const oidcLogout
-    = options.oidc
-      && options.oidcLogout
-      && createOidcLogout({
-        ...options.oidc,
-        ...options.oidcLogout,
-        kernel: options.kernel,
-        clients: options.clients,
-      });
+  const oidc =
+    options.oidc && createOidcAuthorization({ ...options.oidc, kernel: options.kernel, clients: options.clients });
+  const oidcTokens =
+    options.oidc &&
+    options.oidcTokens &&
+    createOidcTokens({
+      ...options.oidc,
+      ...options.oidcTokens,
+      kernel: options.kernel,
+      clients: options.clients,
+      subjectFacts: options.subjectFacts,
+    });
+  const oidcLogout =
+    options.oidc &&
+    options.oidcLogout &&
+    createOidcLogout({
+      ...options.oidc,
+      ...options.oidcLogout,
+      kernel: options.kernel,
+      clients: options.clients,
+    });
   const oidcRouter = createRouter();
   if (oidc && options.oidc) {
     oidcRouter.route(
@@ -345,7 +333,7 @@ export function createRootAuthenticationComposition(options: RootAuthenticationC
       createOidcHttpRouter({
         trustProxy: options.oidcTrustProxy,
         clientAuthRateLimiter: options.oidcClientAuth,
-        reportProtocolFailure: failure =>
+        reportProtocolFailure: (failure) =>
           options.logger[failure.outcome === "unavailable" ? "error" : "warn"](
             {
               event: failure.outcome === "unavailable" ? "oidc_server_error" : "oidc_protocol_error",
@@ -366,8 +354,7 @@ export function createRootAuthenticationComposition(options: RootAuthenticationC
             },
             "OIDC logout effect",
           ),
-        userInfo:
-          oidcTokens && createOidcUserInfo({ tokens: oidcTokens, subjectFacts: options.subjectFacts }),
+        userInfo: oidcTokens && createOidcUserInfo({ tokens: oidcTokens, subjectFacts: options.subjectFacts }),
         operations,
         issuers: options.oidc.issuers,
         secureCookies: options.oidc.secureCookies,

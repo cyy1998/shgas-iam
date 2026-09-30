@@ -1,3 +1,4 @@
+import { afterAll, beforeAll, describe, expect, mock, test } from "bun:test";
 import {
   EmploymentStatus,
   OrganizationLevel,
@@ -5,14 +6,7 @@ import {
   OrganizationType,
   PositionStatus,
 } from "@iam/contracts";
-import {
-  employments,
-  organizationClosures,
-  organizations,
-  positions,
-  users,
-} from "@iam/db/schema";
-import { afterAll, beforeAll, describe, expect, mock, test } from "bun:test";
+import { employments, organizationClosures, organizations, positions, users } from "@iam/db/schema";
 import { createUserProfileBuildRepository } from "../../src/build/user-profile-build.repository";
 import { createPostgresTestHarness } from "./postgres-test-harness";
 
@@ -64,23 +58,25 @@ describe("User Profile build repository", () => {
       { id: 102, userId: 1, posId: 10, orgId: 21, status: EmploymentStatus.Disable },
       { id: 103, userId: 1, posId: 11, orgId: 20, status: EmploymentStatus.Enable, isDelete: true },
     ]);
-    const resolveEffectiveRoles = mock(async (
-      _input: { employmentIds: readonly number[] },
-    ) => new Map());
+    const resolveEffectiveRoles = mock(async (_input: { employmentIds: readonly number[] }) => new Map());
     const repository = createUserProfileBuildRepository(harness.db, { resolveEffectiveRoles });
 
     const dataset = await repository.loadByUserIds([1]);
 
-    expect(dataset.employments.map(row => row.id).sort((left, right) => left - right)).toEqual([100, 101]);
-    expect(dataset.positions
-      .map(row => ({ id: row.id, status: row.status, isDelete: row.isDelete }))
-      .sort((left, right) => left.id - right.id)).toEqual([
+    expect(dataset.employments.map((row) => row.id).sort((left, right) => left - right)).toEqual([100, 101]);
+    expect(
+      dataset.positions
+        .map((row) => ({ id: row.id, status: row.status, isDelete: row.isDelete }))
+        .sort((left, right) => left.id - right.id),
+    ).toEqual([
       { id: 10, status: PositionStatus.Enable, isDelete: false },
       { id: 11, status: PositionStatus.Disable, isDelete: true },
     ]);
-    expect(dataset.orgPathRows
-      .map(row => ({ id: row.id, status: row.status, isDelete: row.isDelete }))
-      .sort((left, right) => left.id - right.id)).toEqual([
+    expect(
+      dataset.orgPathRows
+        .map((row) => ({ id: row.id, status: row.status, isDelete: row.isDelete }))
+        .sort((left, right) => left.id - right.id),
+    ).toEqual([
       { id: 20, status: OrganizationStatus.Enable, isDelete: false },
       { id: 21, status: OrganizationStatus.Disable, isDelete: true },
     ]);

@@ -1,8 +1,8 @@
 import type { DbClient } from "@iam/db";
-import type { ClientSsoStorageUpdate } from "./client-sso.type";
 import { clients, roles } from "@iam/db/schema";
 import { ClientSsoAdminDtoSchema, ClientSsoAdminRecordSchema } from "@iam/domain/client";
 import { and, eq, isNotNull } from "drizzle-orm";
+import type { ClientSsoStorageUpdate } from "./client-sso.type";
 
 const columns = {
   id: clients.id,
@@ -34,7 +34,7 @@ const detailColumns = {
 
 export function createClientSsoRepository(db: DbClient) {
   const where = (clientCode: string) => and(eq(clients.clientCode, clientCode), eq(clients.isDelete, false));
-  const parse = (rows: unknown[]) => rows[0] === undefined ? null : ClientSsoAdminRecordSchema.parse(rows[0]);
+  const parse = (rows: unknown[]) => (rows[0] === undefined ? null : ClientSsoAdminRecordSchema.parse(rows[0]));
   return {
     async getDetail(clientCode: string) {
       const rows = await db.select(detailColumns).from(clients).where(where(clientCode));
@@ -44,7 +44,13 @@ export function createClientSsoRepository(db: DbClient) {
       return parse(await db.select(columns).from(clients).where(where(clientCode)));
     },
     async lock(clientCode: string, includeDeleted = false) {
-      return parse(await db.select(columns).from(clients).where(includeDeleted ? eq(clients.clientCode, clientCode) : where(clientCode)).for("update"));
+      return parse(
+        await db
+          .select(columns)
+          .from(clients)
+          .where(includeDeleted ? eq(clients.clientCode, clientCode) : where(clientCode))
+          .for("update"),
+      );
     },
     async hasUndeletedRoles(clientId: number) {
       const rows = await db
@@ -57,8 +63,7 @@ export function createClientSsoRepository(db: DbClient) {
     async update(clientCode: string, patch: ClientSsoStorageUpdate) {
       try {
         return parse(await db.update(clients).set(patch).where(where(clientCode)).returning(columns));
-      }
-      catch {
+      } catch {
         // Drizzle driver errors may contain SQL parameters, including the new plaintext Secret.
         throw new Error("Client SSO storage update failed");
       }

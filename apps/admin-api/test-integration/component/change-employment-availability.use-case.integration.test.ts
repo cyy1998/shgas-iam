@@ -1,4 +1,4 @@
-import type { Employment } from "@iam/domain/employment";
+import { describe, expect, mock, test } from "bun:test";
 import { createImmediateUnitOfWork } from "@admin-api/test/fakes";
 import { createChangeEmploymentAvailabilityUseCase } from "@admin-api/use-cases/employment/change-employment-availability/change-employment-availability.use-case";
 import {
@@ -8,6 +8,7 @@ import {
   OrganizationType,
   PositionStatus,
 } from "@iam/contracts";
+import type { Employment } from "@iam/domain/employment";
 import {
   EmploymentAlreadyExistsError,
   EmploymentNotEditableError,
@@ -15,7 +16,6 @@ import {
 } from "@iam/domain/employment";
 import { OrganizationNotFoundError } from "@iam/domain/organization";
 import { PositionNotFoundError } from "@iam/domain/position";
-import { describe, expect, mock, test } from "bun:test";
 
 const startTime = new Date("2025-01-01T00:00:00.000Z");
 const now = new Date("2026-01-01T00:00:00.000Z");
@@ -112,21 +112,23 @@ describe("Employment Lifecycle Pause/Resume", () => {
   test("pauses an enabled employment without changing its period or Primary fact", async () => {
     const { tx, useCase } = createLifecycle();
 
-    await expect(useCase.execute({
-      command: "pause",
-      employmentId: 4,
-    })).resolves.toEqual({ changed: true, result: null });
+    await expect(
+      useCase.execute({
+        command: "pause",
+        employmentId: 4,
+      }),
+    ).resolves.toEqual({ changed: true, result: null });
 
     expect(tx.employmentStore.updateEmploymentRecord).toHaveBeenCalledWith(4, {
       status: EmploymentStatus.Pause,
     });
-    expect(tx.auditLogWriter.recordAuditLog).toHaveBeenCalledWith(expect.objectContaining({
-      action: "admin.employment.pause",
-      targetId: 4,
-    }));
-    expect(
-      tx.responsibilityParentLifecycle.pauseEnabledAssignmentsForEmployment,
-    ).toHaveBeenCalledWith({
+    expect(tx.auditLogWriter.recordAuditLog).toHaveBeenCalledWith(
+      expect.objectContaining({
+        action: "admin.employment.pause",
+        targetId: 4,
+      }),
+    );
+    expect(tx.responsibilityParentLifecycle.pauseEnabledAssignmentsForEmployment).toHaveBeenCalledWith({
       auditContext: undefined,
       selectedAssignments: [],
       employmentId: 4,
@@ -146,18 +148,20 @@ describe("Employment Lifecycle Pause/Resume", () => {
       position: position(),
     });
 
-    await expect(useCase.execute({
-      command: "pause",
-      employmentId: 4,
-    })).resolves.toEqual({ changed: false, result: null });
+    await expect(
+      useCase.execute({
+        command: "pause",
+        employmentId: 4,
+      }),
+    ).resolves.toEqual({ changed: false, result: null });
 
     expect(tx.employmentStore.updateEmploymentRecord).not.toHaveBeenCalled();
-    expect(
-      tx.responsibilityParentLifecycle.pauseEnabledAssignmentsForEmployment,
-    ).not.toHaveBeenCalled();
-    expect(tx.auditLogWriter.recordAuditLog).toHaveBeenCalledWith(expect.objectContaining({
-      details: expect.objectContaining({ changed: false }),
-    }));
+    expect(tx.responsibilityParentLifecycle.pauseEnabledAssignmentsForEmployment).not.toHaveBeenCalled();
+    expect(tx.auditLogWriter.recordAuditLog).toHaveBeenCalledWith(
+      expect.objectContaining({
+        details: expect.objectContaining({ changed: false }),
+      }),
+    );
     expect(tx.userProfileInvalidation.recordChanges).not.toHaveBeenCalled();
   });
 
@@ -169,49 +173,47 @@ describe("Employment Lifecycle Pause/Resume", () => {
       position: position(),
     });
 
-    await expect(useCase.execute({
-      command: "resume",
-      employmentId: 4,
-      expectedAncestorOrgCode: "COMPANY",
-    })).resolves.toEqual({ changed: true, result: null });
+    await expect(
+      useCase.execute({
+        command: "resume",
+        employmentId: 4,
+        expectedAncestorOrgCode: "COMPANY",
+      }),
+    ).resolves.toEqual({ changed: true, result: null });
 
-    expect(tx.organizationReader.isOrganizationDescendantOf).toHaveBeenCalledWith(
-      "ORG",
-      "COMPANY",
-    );
-    expect(tx.employmentStore.getOpenEmploymentByUserOrgPosId).toHaveBeenCalledWith(
-      1,
-      2,
-      3,
-      4,
-    );
+    expect(tx.organizationReader.isOrganizationDescendantOf).toHaveBeenCalledWith("ORG", "COMPANY");
+    expect(tx.employmentStore.getOpenEmploymentByUserOrgPosId).toHaveBeenCalledWith(1, 2, 3, 4);
     expect(tx.employmentStore.updateEmploymentRecord).toHaveBeenCalledWith(4, {
       status: EmploymentStatus.Enable,
     });
-    expect(
-      tx.responsibilityParentLifecycle.pauseEnabledAssignmentsForEmployment,
-    ).not.toHaveBeenCalled();
-    expect(tx.auditLogWriter.recordAuditLog).toHaveBeenCalledWith(expect.objectContaining({
-      action: "admin.employment.resume",
-      targetId: 4,
-    }));
+    expect(tx.responsibilityParentLifecycle.pauseEnabledAssignmentsForEmployment).not.toHaveBeenCalled();
+    expect(tx.auditLogWriter.recordAuditLog).toHaveBeenCalledWith(
+      expect.objectContaining({
+        action: "admin.employment.resume",
+        targetId: 4,
+      }),
+    );
   });
 
   test("treats an already enabled employment as an idempotent Resume success", async () => {
     const { tx, useCase } = createLifecycle();
 
-    await expect(useCase.execute({
-      command: "resume",
-      employmentId: 4,
-      expectedAncestorOrgCode: "COMPANY",
-    })).resolves.toEqual({ changed: false, result: null });
+    await expect(
+      useCase.execute({
+        command: "resume",
+        employmentId: 4,
+        expectedAncestorOrgCode: "COMPANY",
+      }),
+    ).resolves.toEqual({ changed: false, result: null });
 
     expect(tx.organizationReader.isOrganizationDescendantOf).not.toHaveBeenCalled();
     expect(tx.employmentStore.getOpenEmploymentByUserOrgPosId).not.toHaveBeenCalled();
     expect(tx.employmentStore.updateEmploymentRecord).not.toHaveBeenCalled();
-    expect(tx.auditLogWriter.recordAuditLog).toHaveBeenCalledWith(expect.objectContaining({
-      details: expect.objectContaining({ changed: false }),
-    }));
+    expect(tx.auditLogWriter.recordAuditLog).toHaveBeenCalledWith(
+      expect.objectContaining({
+        details: expect.objectContaining({ changed: false }),
+      }),
+    );
     expect(tx.userProfileInvalidation.recordChanges).not.toHaveBeenCalled();
   });
 
@@ -229,11 +231,13 @@ describe("Employment Lifecycle Pause/Resume", () => {
       position: position(),
     });
 
-    await expect(useCase.execute(command === "pause"
-      ? { command, employmentId: 4 }
-      : { command, employmentId: 4, expectedAncestorOrgCode: "ORG" })).rejects.toBeInstanceOf(
-      EmploymentNotEditableError,
-    );
+    await expect(
+      useCase.execute(
+        command === "pause"
+          ? { command, employmentId: 4 }
+          : { command, employmentId: 4, expectedAncestorOrgCode: "ORG" },
+      ),
+    ).rejects.toBeInstanceOf(EmploymentNotEditableError);
 
     expect(tx.employmentStore.updateEmploymentRecord).not.toHaveBeenCalled();
     expect(tx.auditLogWriter.recordAuditLog).not.toHaveBeenCalled();
@@ -248,11 +252,13 @@ describe("Employment Lifecycle Pause/Resume", () => {
       position: position(),
     });
 
-    await expect(useCase.execute({
-      command: "resume",
-      employmentId: 4,
-      expectedAncestorOrgCode: "ORG",
-    })).rejects.toBeInstanceOf(OrganizationNotFoundError);
+    await expect(
+      useCase.execute({
+        command: "resume",
+        employmentId: 4,
+        expectedAncestorOrgCode: "ORG",
+      }),
+    ).rejects.toBeInstanceOf(OrganizationNotFoundError);
 
     expect(tx.employmentStore.updateEmploymentRecord).not.toHaveBeenCalled();
   });
@@ -265,11 +271,13 @@ describe("Employment Lifecycle Pause/Resume", () => {
       position: position({ isDelete: true }),
     });
 
-    await expect(useCase.execute({
-      command: "resume",
-      employmentId: 4,
-      expectedAncestorOrgCode: "ORG",
-    })).rejects.toBeInstanceOf(PositionNotFoundError);
+    await expect(
+      useCase.execute({
+        command: "resume",
+        employmentId: 4,
+        expectedAncestorOrgCode: "ORG",
+      }),
+    ).rejects.toBeInstanceOf(PositionNotFoundError);
 
     expect(tx.employmentStore.updateEmploymentRecord).not.toHaveBeenCalled();
   });
@@ -283,11 +291,13 @@ describe("Employment Lifecycle Pause/Resume", () => {
     });
     tx.organizationReader.isOrganizationDescendantOf.mockResolvedValueOnce(false);
 
-    await expect(useCase.execute({
-      command: "resume",
-      employmentId: 4,
-      expectedAncestorOrgCode: "OTHER",
-    })).rejects.toBeInstanceOf(EmploymentOrganizationScopeMismatchError);
+    await expect(
+      useCase.execute({
+        command: "resume",
+        employmentId: 4,
+        expectedAncestorOrgCode: "OTHER",
+      }),
+    ).rejects.toBeInstanceOf(EmploymentOrganizationScopeMismatchError);
 
     expect(tx.employmentStore.getOpenEmploymentByUserOrgPosId).not.toHaveBeenCalled();
     expect(tx.employmentStore.updateEmploymentRecord).not.toHaveBeenCalled();
@@ -304,11 +314,13 @@ describe("Employment Lifecycle Pause/Resume", () => {
       employment({ id: 9, status: EmploymentStatus.Enable }),
     );
 
-    await expect(useCase.execute({
-      command: "resume",
-      employmentId: 4,
-      expectedAncestorOrgCode: "ORG",
-    })).rejects.toBeInstanceOf(EmploymentAlreadyExistsError);
+    await expect(
+      useCase.execute({
+        command: "resume",
+        employmentId: 4,
+        expectedAncestorOrgCode: "ORG",
+      }),
+    ).rejects.toBeInstanceOf(EmploymentAlreadyExistsError);
 
     expect(tx.employmentStore.updateEmploymentRecord).not.toHaveBeenCalled();
   });
@@ -349,7 +361,7 @@ describe("Employment Lifecycle Pause/Resume", () => {
             },
             userProfileInvalidation: {
               async recordChanges(changes: readonly { userId: number }[]) {
-                staged.dirtyUserIds.push(...changes.map(change => change.userId));
+                staged.dirtyUserIds.push(...changes.map((change) => change.userId));
               },
             },
           };
@@ -362,10 +374,12 @@ describe("Employment Lifecycle Pause/Resume", () => {
       },
     });
 
-    await expect(useCase.execute({
-      command: "pause",
-      employmentId: 4,
-    })).rejects.toBe(failure);
+    await expect(
+      useCase.execute({
+        command: "pause",
+        employmentId: 4,
+      }),
+    ).rejects.toBe(failure);
 
     expect(attempted).toEqual({ statusWrites: 1, auditWrites: 1 });
     expect(committed).toEqual({

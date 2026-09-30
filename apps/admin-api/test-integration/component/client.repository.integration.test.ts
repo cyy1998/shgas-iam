@@ -1,8 +1,6 @@
-import { createClientRepository } from "@admin-api/services/client/client.repository";
-import {
-  ClientStatus,
-} from "@iam/contracts";
 import { expect, mock, test } from "bun:test";
+import { createClientRepository } from "@admin-api/services/client/client.repository";
+import { ClientStatus } from "@iam/contracts";
 
 function clientRow(overrides: Record<string, unknown> = {}) {
   return {
@@ -29,7 +27,7 @@ function clientRow(overrides: Record<string, unknown> = {}) {
 
 function createUpdateDb(returnedRow: Record<string, unknown> | null) {
   let updateValues: Record<string, unknown> = {};
-  const returning = mock(async () => returnedRow === null ? [] : [returnedRow]);
+  const returning = mock(async () => (returnedRow === null ? [] : [returnedRow]));
   const where = mock(() => ({ returning }));
   const set = mock((values: Record<string, unknown>) => {
     updateValues = values;

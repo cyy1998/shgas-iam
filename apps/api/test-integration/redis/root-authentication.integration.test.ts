@@ -1,11 +1,10 @@
-import type { ClientSnapshotValue } from "@iam/api-core/client-snapshot";
+import { expect, test } from "bun:test";
 import { randomUUID } from "node:crypto";
 import { connect, createServer } from "node:net";
 import process from "node:process";
+import type { ClientSnapshotValue } from "@iam/api-core/client-snapshot";
 import { clientSnapshotKeys } from "@iam/api-core/client-snapshot/testing";
-import {
-  SubjectAccessUnavailableError,
-} from "@iam/api-core/subject-access";
+import { SubjectAccessUnavailableError } from "@iam/api-core/subject-access";
 import {
   ClientSsoCallbackType,
   ClientSsoProtocol,
@@ -15,8 +14,6 @@ import {
   SubjectClaim,
 } from "@iam/contracts";
 import { CustomSsoManagedFailure } from "@iam/custom-sso";
-
-import { expect, test } from "bun:test";
 import Redis from "ioredis";
 
 import { fixture } from "./root-authentication.fixture";
@@ -29,52 +26,53 @@ test("the protocol fixture requires its dedicated Redis URL before creating stat
     let error: unknown;
     try {
       f = await fixture();
-    }
-    catch (failure) {
+    } catch (failure) {
       error = failure;
     }
     expect(error).toMatchObject({ message: "IAM_API_TEST_REDIS_URL is required" });
-  }
-  finally {
-    if (previous === undefined)
-      delete process.env.IAM_API_TEST_REDIS_URL;
+  } finally {
+    if (previous === undefined) delete process.env.IAM_API_TEST_REDIS_URL;
     else process.env.IAM_API_TEST_REDIS_URL = previous;
     await f?.scope.close();
   }
 });
 
-test.each(["https://internal.example", "https://public.example"])("Custom login stays on entry %s and derives its managed callback from the business origin", async (origin) => {
-  const f = await fixture();
-  try {
-    f.setClient({
-      ...f.getClient(),
-      ssoConfig: {
-        protocol: ClientSsoProtocol.CustomSso,
-        callbackType: ClientSsoCallbackType.Managed,
-        validRedirectUrls: ["https://app.example/callback"],
-        subjectClaims: [SubjectClaim.SubjectIdentifier],
-      },
-    });
-    const response = await f.app.request(`${origin}/sso/authorize?client=iam&redirectUrl=https://app.example/callback`);
-    expect(response.status).toBe(302);
-    const location = response.headers.get("Location")!;
-    expect(location).toStartWith("/portal/login?");
-    const login = new URL(location, origin);
-    expect(login.origin).toBe(origin);
-    const binding = /custom_sso_continuation=([^;]+)/u.exec(response.headers.get("set-cookie")!)![1];
-    const token = await f.login();
-    const resumed = await f.app.request(`${origin}/sso/authorize?${login.searchParams}`, {
-      headers: { Cookie: `global_session=${token}; custom_sso_continuation=${binding}` },
-    });
-    expect(resumed.status).toBe(302);
-    const callback = new URL(resumed.headers.get("Location")!);
-    expect(callback.origin + callback.pathname).toBe("https://app.example/sso/callback");
-    expect(callback.searchParams.get("redirectUrl")).toBe("https://app.example/callback");
-  }
-  finally {
-    await f.scope.close();
-  }
-});
+test.each(["https://internal.example", "https://public.example"])(
+  "Custom login stays on entry %s and derives its managed callback from the business origin",
+  async (origin) => {
+    const f = await fixture();
+    try {
+      f.setClient({
+        ...f.getClient(),
+        ssoConfig: {
+          protocol: ClientSsoProtocol.CustomSso,
+          callbackType: ClientSsoCallbackType.Managed,
+          validRedirectUrls: ["https://app.example/callback"],
+          subjectClaims: [SubjectClaim.SubjectIdentifier],
+        },
+      });
+      const response = await f.app.request(
+        `${origin}/sso/authorize?client=iam&redirectUrl=https://app.example/callback`,
+      );
+      expect(response.status).toBe(302);
+      const location = response.headers.get("Location")!;
+      expect(location).toStartWith("/portal/login?");
+      const login = new URL(location, origin);
+      expect(login.origin).toBe(origin);
+      const binding = /custom_sso_continuation=([^;]+)/u.exec(response.headers.get("set-cookie")!)![1];
+      const token = await f.login();
+      const resumed = await f.app.request(`${origin}/sso/authorize?${login.searchParams}`, {
+        headers: { Cookie: `global_session=${token}; custom_sso_continuation=${binding}` },
+      });
+      expect(resumed.status).toBe(302);
+      const callback = new URL(resumed.headers.get("Location")!);
+      expect(callback.origin + callback.pathname).toBe("https://app.example/sso/callback");
+      expect(callback.searchParams.get("redirectUrl")).toBe("https://app.example/callback");
+    } finally {
+      await f.scope.close();
+    }
+  },
+);
 
 test("Custom candidate accepts browser-bound continuation, preserves original callback and redirect after edits", async () => {
   const f = await fixture();
@@ -153,17 +151,14 @@ test("Custom candidate accepts browser-bound continuation, preserves original ca
     const switched = await f.app.request(`/sso/authorize?${login.searchParams}`, { headers });
     expect(switched.status).not.toBe(302);
     await f.operations.run(async (operation) => {
-      const relation = await f.kernel
-        .forOperation(operation)
-        .resolveClientSessionForUse({
-          clientId: "iam",
-          userSessionId: record!.userSessionId,
-          clientSessionId: record!.clientSessionId,
-        });
+      const relation = await f.kernel.forOperation(operation).resolveClientSessionForUse({
+        clientId: "iam",
+        userSessionId: record!.userSessionId,
+        clientSessionId: record!.clientSessionId,
+      });
       expect(relation.status).toBe("resolved");
     });
-  }
-  finally {
+  } finally {
     await f.scope.close();
   }
 });
@@ -173,10 +168,9 @@ test("Custom candidate concurrent authorization binds exact instances and fixed 
   try {
     const token = await f.login();
     const request = (client: string) =>
-      f.app.request(
-        `/sso/authorize?${new URLSearchParams({ client, redirectUrl: "https://app.example/callback" })}`,
-        { headers: { Cookie: `global_session=${token}` } },
-      );
+      f.app.request(`/sso/authorize?${new URLSearchParams({ client, redirectUrl: "https://app.example/callback" })}`, {
+        headers: { Cookie: `global_session=${token}` },
+      });
     const responses = await Promise.all(Array.from({ length: 8 }, () => request("iam")));
     const records = [];
     for (const response of responses) {
@@ -193,7 +187,7 @@ test("Custom candidate concurrent authorization binds exact instances and fixed 
       );
       expect(wrongRoot).toBeNull();
     }
-    expect(new Set(records.map(record => record.clientSessionId)).size).toBe(1);
+    expect(new Set(records.map((record) => record.clientSessionId)).size).toBe(1);
     const original = records[0]!;
     expect(original.expiresAt - original.issuedAt).toBe(30000);
     const other = await request("other");
@@ -202,12 +196,10 @@ test("Custom candidate concurrent authorization binds exact instances and fixed 
     await f.operations.run(async (operation) => {
       const sessions = f.kernel.forOperation(operation);
       const root = await sessions.resolveUserSession(token);
-      if (root.status !== "resolved")
-        throw new Error("missing root");
+      if (root.status !== "resolved") throw new Error("missing root");
       expect(root.value.userSession.expiresAt - root.value.userSession.createdAt).toBe(120000);
       const switched = await sessions.openClientSession(root.value, { clientId: "iam", protocol: "oidc" });
-      if (switched.status !== "created" && switched.status !== "reused")
-        throw new Error("missing client");
+      if (switched.status !== "created" && switched.status !== "reused") throw new Error("missing client");
       expect(switched.value.clientSession.clientSessionId).toBe(original.clientSessionId);
     });
     const reused = await request("iam");
@@ -223,8 +215,7 @@ test("Custom candidate concurrent authorization binds exact instances and fixed 
         userSessionId: original.userSessionId,
         clientSessionId: original.clientSessionId,
       });
-      if (current.status !== "resolved")
-        throw new Error("missing relation");
+      if (current.status !== "resolved") throw new Error("missing relation");
       expect(current.value.clientSession.protocol).toBe("custom_sso");
       const revoked = await sessions.revokeObservedClientSession(current.value);
       expect(revoked.status).toBe("terminated");
@@ -244,8 +235,7 @@ test("Custom candidate concurrent authorization binds exact instances and fixed 
     const oldCode = new URL(responses[0]!.headers.get("location")!).searchParams.get("code")!;
     const unchanged = await f.codes.inspectCode("iam", oldCode);
     expect(unchanged).toEqual(original);
-  }
-  finally {
+  } finally {
     await f.scope.close();
   }
 });
@@ -272,19 +262,18 @@ test("Custom callback type controls authorization independently of path and host
           subjectClaims: [SubjectClaim.SubjectIdentifier],
         },
       });
-      const response = await f.app.request(
-        "/sso/authorize?client=iam&redirectUrl=https://app.example/callback",
-        {
-          headers: {
-            Cookie: `global_session=${token}`,
-            Host: "iam.example",
-            Forwarded: "host=iam.example;proto=https",
-          },
+      const response = await f.app.request("/sso/authorize?client=iam&redirectUrl=https://app.example/callback", {
+        headers: {
+          Cookie: `global_session=${token}`,
+          Host: "iam.example",
+          Forwarded: "host=iam.example;proto=https",
         },
-      );
+      });
       expect(response.status).toBe(302);
       const callback = new URL(response.headers.get("location")!);
-      expect(callback.origin + callback.pathname).toBe(redeemer === ClientSsoCallbackType.Managed ? "https://app.example/sso/callback" : callbackEndpoint!);
+      expect(callback.origin + callback.pathname).toBe(
+        redeemer === ClientSsoCallbackType.Managed ? "https://app.example/sso/callback" : callbackEndpoint!,
+      );
       const record = await f.codes.inspectCode("iam", callback.searchParams.get("code")!);
       expect(record!.redeemer).toBe(redeemer!);
       expect(record!.state).toBeUndefined();
@@ -292,17 +281,15 @@ test("Custom callback type controls authorization independently of path and host
     f.scope.afterNext("resolveUser", async () => {
       f.setClient({ ...f.getClient(), ssoEnabled: false });
     });
-    const accepted = await f.app.request(
-      "/sso/authorize?client=iam&redirectUrl=https://app.example/callback",
-      { headers: { Cookie: `global_session=${token}` } },
-    );
+    const accepted = await f.app.request("/sso/authorize?client=iam&redirectUrl=https://app.example/callback", {
+      headers: { Cookie: `global_session=${token}` },
+    });
     expect(accepted.status).toBe(302);
     const later = await f.app.request("/sso/authorize?client=iam&redirectUrl=https://app.example/callback", {
       headers: { Cookie: `global_session=${token}` },
     });
     expect(later.status).not.toBe(302);
-  }
-  finally {
+  } finally {
     await f.scope.close();
   }
 });
@@ -312,34 +299,28 @@ test("Custom Code expiry is clipped to original ClientSession and natural expiry
     const f = await fixture(ttl);
     try {
       const token = await f.login();
-      const response = await f.app.request(
-        "/sso/authorize?client=iam&redirectUrl=https://app.example/callback",
-        { headers: { Cookie: `global_session=${token}` } },
-      );
+      const response = await f.app.request("/sso/authorize?client=iam&redirectUrl=https://app.example/callback", {
+        headers: { Cookie: `global_session=${token}` },
+      });
       const code = new URL(response.headers.get("location")!).searchParams.get("code")!;
       const record = await f.codes.inspectCode("iam", code);
       expect(record).not.toBeNull();
       await f.operations.run(async (operation) => {
-        const relation = await f.kernel
-          .forOperation(operation)
-          .resolveClientSessionForUse({
-            clientId: "iam",
-            userSessionId: record!.userSessionId,
-            clientSessionId: record!.clientSessionId,
-          });
-        if (relation.status !== "resolved")
-          throw new Error("Missing relationship");
+        const relation = await f.kernel.forOperation(operation).resolveClientSessionForUse({
+          clientId: "iam",
+          userSessionId: record!.userSessionId,
+          clientSessionId: record!.clientSessionId,
+        });
+        if (relation.status !== "resolved") throw new Error("Missing relationship");
         expect(record!.expiresAt).toBeLessThanOrEqual(relation.value.userSession.expiresAt);
-        if (ttl === 300)
-          expect(record!.expiresAt).toBe(relation.value.clientSession.expiresAt);
+        if (ttl === 300) expect(record!.expiresAt).toBe(relation.value.clientSession.expiresAt);
       });
       if (ttl === 1) {
-        await new Promise(resolve => setTimeout(resolve, 1100));
+        await new Promise((resolve) => setTimeout(resolve, 1100));
         const expired = await f.codes.inspectCode("iam", code);
         expect(expired).toBeNull();
       }
-    }
-    finally {
+    } finally {
       await f.scope.close();
     }
   }
@@ -363,8 +344,7 @@ test("Custom state failure and wrong continuation keep the browser root and neve
     expect(invalid.headers.get("set-cookie")).toBeNull();
     const info = await f.app.request("/public/user-info", { headers: { ...headers, Client: "iam" } });
     expect(info.status).toBe(200);
-  }
-  finally {
+  } finally {
     await f.scope.close();
   }
 });
@@ -396,26 +376,23 @@ test("candidate four authentication handlers validate credentials and create ind
     for (const [index, response] of [password, mobile, oa, wx].entries()) {
       expect(response.headers.get("set-cookie")).toContain("Max-Age=120");
       const token = f.cookie(response);
-      if (!token)
-        throw new Error("Missing root cookie");
+      if (!token) throw new Error("Missing root cookie");
       await f.operations.run(async (operation) => {
         const result = await f.kernel.forOperation(operation).resolveUserSession(token);
-        if (result.status !== "resolved")
-          throw new Error("Missing root");
+        if (result.status !== "resolved") throw new Error("Missing root");
         ids.push(result.value.userSession.userSessionId);
         expect(result.value.userSession.amr).toEqual([["pwd"], ["sms"], ["oa"], ["wechat"]][index]!);
         expect(result.value.userSession.expiresAt - result.value.userSession.createdAt).toBe(120000);
       });
     }
     expect(new Set(ids).size).toBe(4);
-    expect(f.audits.filter(a => a.outcome === "success").map(a => a.action)).toEqual([
+    expect(f.audits.filter((a) => a.outcome === "success").map((a) => a.action)).toEqual([
       "auth.login.password",
       "auth.login.mobile",
       "auth.login.oa",
       "auth.login.wechat",
     ]);
-  }
-  finally {
+  } finally {
     await f.scope.close();
   }
 });
@@ -447,8 +424,7 @@ test("candidate root UserInfo keeps Client delivery, published facts and one per
     });
     expect(disabledClient.status).toBe(401);
     expect(disabledClient.headers.get("set-cookie")).toBeNull();
-  }
-  finally {
+  } finally {
     await f.scope.close();
   }
 });
@@ -478,10 +454,9 @@ test("unified login guard preserves temporary Cookie state and logout terminates
     expect(storageUnknown.status).toBe(503);
     expect(storageUnknown.headers.get("set-cookie")).toBeNull();
     const before = f.state.permissionReads;
-    const invalid = await f.app.request(
-      "/sso/login-guard?client=iam&redirectUrl=https%3A%2F%2Fevil.example",
-      { headers },
-    );
+    const invalid = await f.app.request("/sso/login-guard?client=iam&redirectUrl=https%3A%2F%2Fevil.example", {
+      headers,
+    });
     expect(invalid.status).not.toBe(200);
     expect(f.state.permissionReads).toBe(before);
     const logout = await f.app.request("/sso/logout?redirectUrl=https%3A%2F%2Fiam.example", { headers });
@@ -492,8 +467,7 @@ test("unified login guard preserves temporary Cookie state and logout terminates
     const afterBody = await after.json();
     expect(afterBody).toMatchObject({ data: { decision: "login" } });
     expect(after.headers.getSetCookie()).toEqual([expect.stringMatching(/global_session=;.*Max-Age=0/u)]);
-  }
-  finally {
+  } finally {
     await f.scope.close();
   }
 });
@@ -523,9 +497,8 @@ test("candidate rejects invalid SMS, OA, Wechat and malformed password credentia
     }
     const count = await f.scope.countRecords();
     expect(count).toBe(0);
-    expect(f.audits.some(audit => audit.outcome === "success")).toBe(false);
-  }
-  finally {
+    expect(f.audits.some((audit) => audit.outcome === "success")).toBe(false);
+  } finally {
     await f.scope.close();
   }
 });
@@ -535,8 +508,7 @@ test("candidate sub-only delivery avoids Facts, never falls back from a cookie, 
   try {
     const token = await f.login();
     const client = f.getClient();
-    if (client.ssoConfig?.protocol !== ClientSsoProtocol.CustomSso)
-      throw new Error("Expected Custom configuration");
+    if (client.ssoConfig?.protocol !== ClientSsoProtocol.CustomSso) throw new Error("Expected Custom configuration");
     f.setClient({
       ...client,
       ssoConfig: { ...client.ssoConfig, subjectClaims: [SubjectClaim.SubjectIdentifier] },
@@ -564,20 +536,17 @@ test("candidate sub-only delivery avoids Facts, never falls back from a cookie, 
       expect(legacy.status).toBe(401);
       const legacyExists = await legacyRedis.exists(legacyKey);
       expect(legacyExists).toBe(1);
-    }
-    finally {
+    } finally {
       await legacyRedis.del(legacyKey);
       legacyRedis.disconnect();
     }
     const child = await f.operations.run(async (operation) => {
       const root = await f.kernel.forOperation(operation).resolveUserSession(token);
-      if (root.status !== "resolved")
-        throw new Error("Missing root");
+      if (root.status !== "resolved") throw new Error("Missing root");
       const child = await f.kernel
         .forOperation(operation)
         .openClientSession(root.value, { clientId: "application", protocol: "oidc" });
-      if (child.status !== "created" && child.status !== "reused")
-        throw new Error("Missing child");
+      if (child.status !== "created" && child.status !== "reused") throw new Error("Missing child");
       return child.value.clientSession;
     });
     await f.scope.forgetChildIndex(child.userSessionId);
@@ -586,18 +555,15 @@ test("candidate sub-only delivery avoids Facts, never falls back from a cookie, 
     });
     expect(logout.status).toBe(302);
     const access = await f.operations.run(
-      async operation =>
-        await f.kernel
-          .forOperation(operation)
-          .resolveClientSessionForUse({
-            userSessionId: child.userSessionId,
-            clientSessionId: child.clientSessionId,
-            clientId: child.clientId,
-          }),
+      async (operation) =>
+        await f.kernel.forOperation(operation).resolveClientSessionForUse({
+          userSessionId: child.userSessionId,
+          clientSessionId: child.clientSessionId,
+          clientId: child.clientId,
+        }),
     );
     expect(access.status).toBe("terminated");
-  }
-  finally {
+  } finally {
     await f.scope.close();
   }
 });
@@ -609,10 +575,9 @@ async function businessFixture(codeTtlSeconds = 30, networkUrl?: string, tokenTt
     fetch(new URL(path, server.url), { ...init, redirect: "manual" });
   const root = await f.login();
   async function authorize(client = f.businessClientCode, bearer = root, redirectUrl = "https://app.example/callback") {
-    const response = await request(
-      `/sso/authorize?${new URLSearchParams({ client, redirectUrl })}`,
-      { headers: { Cookie: `global_session=${bearer}` } },
-    );
+    const response = await request(`/sso/authorize?${new URLSearchParams({ client, redirectUrl })}`, {
+      headers: { Cookie: `global_session=${bearer}` },
+    });
     expect(response.status).toBe(302);
     return new URL(response.headers.get("location")!).searchParams.get("code")!;
   }
@@ -626,26 +591,23 @@ async function businessFixture(codeTtlSeconds = 30, networkUrl?: string, tokenTt
     request(`/sso/token${suffix}`, {
       method: "POST",
       headers: {
-        "Authorization": `Basic ${Buffer.from(`${client}:${secret}`).toString("base64")}`,
+        Authorization: `Basic ${Buffer.from(`${client}:${secret}`).toString("base64")}`,
         "Content-Type": "application/x-www-form-urlencoded",
       },
       body: new URLSearchParams({ code, redirect_uri: redirect }),
     });
   const use = (sid: string, client = f.businessClientCode, authz = false) =>
     request(authz ? "/auth/authz" : "/public/user-info", {
-      headers: { "Authorization": sid, "Client": client, "X-Forwarded-Uri": "/home" },
+      headers: { Authorization: sid, Client: client, "X-Forwarded-Uri": "/home" },
     });
   async function target(code: string, client = f.businessClientCode) {
     return await f.operations.run(async (operation) => {
-      const result = await f.kernel
-        .forOperation(operation)
-        .observeClientSessionForRevocation({
-          userSessionId: code.split(".")[1]!,
-          clientSessionId: code.split(".")[2]!,
-          clientId: client,
-        });
-      if (result.status !== "resolved")
-        throw new Error("Test target missing");
+      const result = await f.kernel.forOperation(operation).observeClientSessionForRevocation({
+        userSessionId: code.split(".")[1]!,
+        clientSessionId: code.split(".")[2]!,
+        clientId: client,
+      });
+      if (result.status !== "resolved") throw new Error("Test target missing");
       return result.value.target;
     });
   }
@@ -674,12 +636,7 @@ async function managedFixture() {
     subjectClaims: [SubjectClaim.SubjectIdentifier, SubjectClaim.ProfileName],
   } satisfies ClientSnapshotValue["ssoConfig"];
   f.setClient({ ...original, ssoConfig: config });
-  const callback = (
-    code: string,
-    redirectUrl = "https://app.example/callback",
-    client = "app",
-    cookie?: string,
-  ) =>
+  const callback = (code: string, redirectUrl = "https://app.example/callback", client = "app", cookie?: string) =>
     f.request(
       `/sso/callback?${new URLSearchParams({ code, redirectUrl, client })}`,
       cookie ? { headers: { Cookie: cookie } } : undefined,
@@ -711,8 +668,7 @@ test("managed callback without a configured address controls protocol parameters
     expect(destination.searchParams.has("state")).toBe(false);
     const use = await f.use(destination.searchParams.get("token")!);
     expect(use.status).toBe(200);
-  }
-  finally {
+  } finally {
     await f.close();
   }
 });
@@ -728,8 +684,7 @@ test("managed Token cannot authorize another Client", async () => {
       headers: { Authorization: token, Client: "other" },
     });
     expect(response.status).toBe(401);
-  }
-  finally {
+  } finally {
     await f.close();
   }
 });
@@ -748,8 +703,7 @@ test("owner maintenance recognizes and removes a managed Token", async () => {
     expect(stored).toBeNull();
     const verification = await f.codes.independentInventory();
     expect(verification.matching).toBe(0);
-  }
-  finally {
+  } finally {
     await f.close();
   }
 });
@@ -773,8 +727,7 @@ test.each([
     expect(response.status).toBe(503);
     const report = await f.codes.maintenance.inventory({ clientCode: "app", limit: 1000 });
     expect(report.unknown).toBe(1);
-  }
-  finally {
+  } finally {
     await f.close();
   }
 });
@@ -782,21 +735,26 @@ test.each([
 test.each(["managed", "business"])("%s Token can logout after callback classification changes", async (purpose) => {
   const f = await managedFixture();
   try {
-    const businessConfig = { ...f.config, callbackType: ClientSsoCallbackType.Business, callbackEndpoint: "https://app.example/callback" };
-    if (purpose === "business")
-      f.setClient({ ...f.getClient(), ssoConfig: businessConfig });
+    const businessConfig = {
+      ...f.config,
+      callbackType: ClientSsoCallbackType.Business,
+      callbackEndpoint: "https://app.example/callback",
+    };
+    if (purpose === "business") f.setClient({ ...f.getClient(), ssoConfig: businessConfig });
     const code = await f.authorize();
     const response = purpose === "managed" ? await f.callback(code) : await f.exchange(code);
-    const token = purpose === "managed"
-      ? new URL(response.headers.get("Location")!).searchParams.get("token")!
-      : (await response.json()).data.sid;
+    const token =
+      purpose === "managed"
+        ? new URL(response.headers.get("Location")!).searchParams.get("token")!
+        : (await response.json()).data.sid;
     f.setClient({ ...f.getClient(), ssoConfig: purpose === "managed" ? businessConfig : f.config });
-    const logout = await f.request(`/sso/logout?${new URLSearchParams({ token, redirectUrl: "https://app.example/logout" })}`);
+    const logout = await f.request(
+      `/sso/logout?${new URLSearchParams({ token, redirectUrl: "https://app.example/logout" })}`,
+    );
     expect(logout.status).toBe(302);
     const used = await f.use(token);
     expect(used.status).toBe(401);
-  }
-  finally {
+  } finally {
     await f.close();
   }
 });
@@ -807,15 +765,14 @@ test("managed concurrent callbacks have one Token delivery and keep the winner u
     const code = await f.authorize();
     const target = await f.target(code);
     const results = await Promise.all([f.callback(code), f.callback(code)]);
-    const winner = results.find(response => response.status === 302);
-    expect(results.filter(response => response.status === 302)).toHaveLength(1);
+    const winner = results.find((response) => response.status === 302);
+    expect(results.filter((response) => response.status === 302)).toHaveLength(1);
     const relationship = await f.scope.inspect(target);
     expect(relationship.record?.state).toBe("active");
     const bearer = new URL(winner!.headers.get("location")!).searchParams.get("token")!;
     const use = await f.use(bearer, "app", true);
     expect(use.status).toBe(200);
-  }
-  finally {
+  } finally {
     await f.close();
   }
 });
@@ -840,8 +797,7 @@ test("managed unknown Token save with failed compensation leaves explicit residu
     expect(relationship.record?.state).toBe("active");
     const replay = await f.callback(code);
     expect(replay.status).not.toBe(302);
-  }
-  finally {
+  } finally {
     await f.close();
   }
 });
@@ -855,11 +811,7 @@ test("managed Gateway consumes real published old Facts without SQL", async () =
         protocol: ClientSsoProtocol.CustomSso,
         callbackType: ClientSsoCallbackType.Managed,
         validRedirectUrls: ["https://app.example/callback"],
-        subjectClaims: [
-          SubjectClaim.SubjectIdentifier,
-          SubjectClaim.ProfileName,
-          SubjectClaim.ProfileUsername,
-        ],
+        subjectClaims: [SubjectClaim.SubjectIdentifier, SubjectClaim.ProfileName, SubjectClaim.ProfileUsername],
       },
     });
     const code = await f.authorize();
@@ -877,8 +829,7 @@ test("managed Gateway consumes real published old Facts without SQL", async () =
       name: "已发布资料",
     });
     expect(f.sourceCounts.factsSql).toBe(0);
-  }
-  finally {
+  } finally {
     await f.close();
   }
 });
@@ -917,13 +868,12 @@ test("managed real HTTP delivery preserves Cookie attributes, Token lifetime, bo
       expect(ttl).toBeGreaterThanOrEqual(stored!.remainingSeconds);
     }
     expect(f.state.factsReads).toBe(0);
-    expect(f.audits.some(audit => audit.action === "auth.login.local")).toBe(true);
+    expect(f.audits.some((audit) => audit.action === "auth.login.local")).toBe(true);
     const replay = await f.callback(code);
     expect(replay.status).not.toBe(302);
     const used = await f.use(token, "app", true);
     expect(used.status).toBe(200);
-  }
-  finally {
+  } finally {
     await f.close();
   }
 });
@@ -947,28 +897,25 @@ for (const failure of [
       if (failure === "business-edit") {
         f.setClient({
           ...f.getClient(),
-          ssoConfig: { ...f.config, callbackType: ClientSsoCallbackType.Business, callbackEndpoint: "https://app.example/callback" },
+          ssoConfig: {
+            ...f.config,
+            callbackType: ClientSsoCallbackType.Business,
+            callbackEndpoint: "https://app.example/callback",
+          },
         });
       }
       const code = await f.authorize();
       const target = await f.target(code);
       let submitted = code;
-      if (failure === "business-edit")
-        f.setClient({ ...f.getClient(), ssoConfig: f.config });
+      if (failure === "business-edit") f.setClient({ ...f.getClient(), ssoConfig: f.config });
       if (failure === "callback")
         await f.codes.replaceCode("app", code, { callbackEndpoint: "https://iam.example/other" });
-      if (failure === "purpose")
-        await f.codes.replaceCode("app", code, { redeemer: "business" });
-      if (failure === "missing")
-        submitted = `${"x".repeat(43)}.${code.split(".").slice(1).join(".")}`;
-      if (failure === "corrupt")
-        await f.codes.corruptCode("app", code);
-      if (failure.startsWith("consume-"))
-        f.codes.failAction("consume", failure === "consume-after");
-      if (failure === "permission")
-        f.state.permission = "unknown";
-      if (failure === "snapshot")
-        f.state.clientUnavailable = true;
+      if (failure === "purpose") await f.codes.replaceCode("app", code, { redeemer: "business" });
+      if (failure === "missing") submitted = `${"x".repeat(43)}.${code.split(".").slice(1).join(".")}`;
+      if (failure === "corrupt") await f.codes.corruptCode("app", code);
+      if (failure.startsWith("consume-")) f.codes.failAction("consume", failure === "consume-after");
+      if (failure === "permission") f.state.permission = "unknown";
+      if (failure === "snapshot") f.state.clientUnavailable = true;
       const response = await f.callback(
         submitted,
         failure === "redirect" ? "https://evil.example/" : undefined,
@@ -994,17 +941,13 @@ for (const failure of [
         const record = await f.codes.inspectCode("app", code);
         expect(record === null).toBe(failure === "consume-after");
       }
-    }
-    finally {
+    } finally {
       await f.close();
     }
   });
 }
 
-for (const failure of [
-  "save-before",
-  "save-after",
-]) {
+for (const failure of ["save-before", "save-after"]) {
   test(`managed consumed ${failure} requires new authorization and never replays consumed Code`, async () => {
     const f = await managedFixture();
     try {
@@ -1014,9 +957,7 @@ for (const failure of [
       const failed = await f.callback(code);
       expect(failed.status).not.toBe(302);
       expect(failed.headers.get("X-IAM-Code-Consumption")).toBe("consumed");
-      expect(failed.headers.get("X-IAM-Token-Compensation")).toBe(
-        failure === "save-after" ? "removed" : "missing",
-      );
+      expect(failed.headers.get("X-IAM-Token-Compensation")).toBe(failure === "save-after" ? "removed" : "missing");
       const inventory = await f.codes.tokenInventory();
       const record = await f.codes.inspectCode("app", code);
       const relationship = await f.scope.inspect(target);
@@ -1030,8 +971,7 @@ for (const failure of [
       expect(fresh.split(".")[2]).toBe(code.split(".")[2]);
       const delivered = await f.callback(fresh);
       expect(delivered.status).toBe(302);
-    }
-    finally {
+    } finally {
       await f.close();
     }
   });
@@ -1046,22 +986,16 @@ for (const compensationFails of [false, true]) {
       let issued = "";
       let failure: unknown;
       try {
-        await f.operations.run(operation =>
+        await f.operations.run((operation) =>
           f
-            .customAccess!
-            .forOperation(operation)
-            .completeCallback(
-              { code, clientCode: "app", redirectUrl: "https://app.example/callback" },
-              (result) => {
-                issued = result.token;
-                if (compensationFails)
-                  f.codes.failAction("removeToken");
-                throw new Error("Response serialization failed");
-              },
-            ),
+            .customAccess!.forOperation(operation)
+            .completeCallback({ code, clientCode: "app", redirectUrl: "https://app.example/callback" }, (result) => {
+              issued = result.token;
+              if (compensationFails) f.codes.failAction("removeToken");
+              throw new Error("Response serialization failed");
+            }),
         );
-      }
-      catch (error) {
+      } catch (error) {
         failure = error;
       }
       expect(failure).toBeInstanceOf(CustomSsoManagedFailure);
@@ -1081,8 +1015,7 @@ for (const compensationFails of [false, true]) {
       expect(fresh.split(".")[2]).toBe(code.split(".")[2]);
       const response = await f.callback(fresh);
       expect(response.status).toBe(302);
-    }
-    finally {
+    } finally {
       await f.close();
     }
   });
@@ -1099,7 +1032,7 @@ test("managed Gateway dynamically trims published facts and preserves temporary 
     const token = new URL(delivered.headers.get("location")!).searchParams.get("token")!;
     const cookie = delivered.headers.getSetCookie()[0]!.split(";")[0]!;
     const useCookie = () =>
-      f.request("/auth/authz", { headers: { "Client": "app", "X-Forwarded-Uri": "/home", "Cookie": cookie } });
+      f.request("/auth/authz", { headers: { Client: "app", "X-Forwarded-Uri": "/home", Cookie: cookie } });
     const full = await useCookie();
     expect(JSON.parse(Buffer.from(full.headers.get("X-User-Info")!, "base64").toString())).toEqual({
       version: 1,
@@ -1151,39 +1084,40 @@ test("managed Gateway dynamically trims published facts and preserves temporary 
     const freshDelivery = await f.callback(freshCode);
     const freshToken = new URL(freshDelivery.headers.get("location")!).searchParams.get("token")!;
     await f.scope.forgetChildIndex(freshCode.split(".")[1]!);
-    await f.operations.run(operation => f.roots.forOperation(operation).logout(freshRoot));
+    await f.operations.run((operation) => f.roots.forOperation(operation).logout(freshRoot));
     const afterRoot = await f.use(freshToken, "app", true);
     expect(afterRoot.status).toBe(401);
     const old = await f.use(token, "app", true);
     expect(old.status).not.toBe(200);
-  }
-  finally {
+  } finally {
     await f.close();
   }
 });
 
-test.each(["", "#/djDesk/orgStruct?tab=1"])("business exchange consumes its Code and delivers the fixed-purpose bearer with fragment %s", async (fragment) => {
-  const f = await businessFixture();
-  try {
-    const redirectUrl = `https://app.example/callback${fragment}`;
-    const code = await f.authorize(undefined, undefined, redirectUrl);
-    const response = await f.exchange(code, undefined, undefined, redirectUrl);
-    expect(response.status).toBe(200);
-    const { data } = await response.json();
-    expect(data.sid).toMatch(/^cs_/u);
-    expect(data.sid).not.toBe(code.split(".")[2]);
-    expect(data.ttl).toBeGreaterThan(0);
-    const before = await f.codes.inspectToken(data.sid);
-    expect(before?.record.purpose).toBe("business");
-    expect(await f.codes.inspectCode("app", code)).toBeNull();
-    const info = await f.use(data.sid);
-    expect(info.status).toBe(200);
-    expect((await info.json()).data.profile.name).toBe("已发布资料");
-  }
-  finally {
-    await f.close();
-  }
-});
+test.each(["", "#/djDesk/orgStruct?tab=1"])(
+  "business exchange consumes its Code and delivers the fixed-purpose bearer with fragment %s",
+  async (fragment) => {
+    const f = await businessFixture();
+    try {
+      const redirectUrl = `https://app.example/callback${fragment}`;
+      const code = await f.authorize(undefined, undefined, redirectUrl);
+      const response = await f.exchange(code, undefined, undefined, redirectUrl);
+      expect(response.status).toBe(200);
+      const { data } = await response.json();
+      expect(data.sid).toMatch(/^cs_/u);
+      expect(data.sid).not.toBe(code.split(".")[2]);
+      expect(data.ttl).toBeGreaterThan(0);
+      const before = await f.codes.inspectToken(data.sid);
+      expect(before?.record.purpose).toBe("business");
+      expect(await f.codes.inspectCode("app", code)).toBeNull();
+      const info = await f.use(data.sid);
+      expect(info.status).toBe(200);
+      expect((await info.json()).data.profile.name).toBe("已发布资料");
+    } finally {
+      await f.close();
+    }
+  },
+);
 
 test("SSO disablement pauses Token use and re-enablement restores the same Token", async () => {
   const f = await businessFixture();
@@ -1199,8 +1133,7 @@ test("SSO disablement pauses Token use and re-enablement restores the same Token
     f.setClient(initial);
     const resumed = await f.use(data.sid);
     expect(resumed.status).toBe(200);
-  }
-  finally {
+  } finally {
     await f.close();
   }
 });
@@ -1240,8 +1173,7 @@ test("current sub-only disclosure trims UserInfo and Gateway output without read
       subjectIdentifier: f.subjectIdentifier,
     });
     expect(f.state.factsReads).toBe(reads);
-  }
-  finally {
+  } finally {
     await f.close();
   }
 });
@@ -1256,8 +1188,7 @@ test("another authorization does not extend an existing business Token", async (
     const before = await f.codes.inspectToken(data.sid);
     await f.authorize();
     expect((await f.codes.inspectToken(data.sid))?.record).toEqual(before?.record);
-  }
-  finally {
+  } finally {
     await f.close();
   }
 });
@@ -1272,8 +1203,7 @@ test("a wrong Client cannot use a business Token or invalidate its rightful use"
     const wrong = await f.use(data.sid, "other");
     expect(wrong.status).not.toBe(200);
     expect((await f.use(data.sid)).status).toBe(200);
-  }
-  finally {
+  } finally {
     await f.close();
   }
 });
@@ -1297,8 +1227,7 @@ test("business authentication and location rejection leave Code and exact relati
       expect((await f.scope.inspect(target)).record?.state).toBe("active");
       expect(await f.codes.inspectCode("app", code)).toEqual(original);
     }
-  }
-  finally {
+  } finally {
     await f.close();
   }
 });
@@ -1331,31 +1260,21 @@ for (const failure of [
       const otherTarget = await f.target(other, "other");
       const initial = f.getClient();
       let submitted = code;
-      if (failure === "missing")
-        submitted = `${"x".repeat(43)}.${code.split(".").slice(1).join(".")}`;
-      if (failure === "maintenance")
-        f.setClient({ ...initial, status: ClientStatus.Maintenance });
-      if (failure === "snapshot")
-        f.state.clientUnavailable = true;
-      if (failure === "disabled")
-        f.setClient({ ...initial, ssoEnabled: false });
-      if (failure === "protocol")
-        f.setClient({ ...initial, ssoConfig: null });
+      if (failure === "missing") submitted = `${"x".repeat(43)}.${code.split(".").slice(1).join(".")}`;
+      if (failure === "maintenance") f.setClient({ ...initial, status: ClientStatus.Maintenance });
+      if (failure === "snapshot") f.state.clientUnavailable = true;
+      if (failure === "disabled") f.setClient({ ...initial, ssoEnabled: false });
+      if (failure === "protocol") f.setClient({ ...initial, ssoConfig: null });
       if (failure === "callback" || failure === "purpose") {
         await f.codes.replaceCode(
           "app",
           code,
-          failure === "callback"
-            ? { callbackEndpoint: "https://other.example/callback" }
-            : { redeemer: "managed" },
+          failure === "callback" ? { callbackEndpoint: "https://other.example/callback" } : { redeemer: "managed" },
         );
       }
-      if (failure === "permission")
-        f.state.permission = "unknown";
-      if (failure === "corrupt")
-        await f.codes.corruptCode("app", code);
-      if (failure === "read-unknown")
-        f.codes.failNext();
+      if (failure === "permission") f.state.permission = "unknown";
+      if (failure === "corrupt") await f.codes.corruptCode("app", code);
+      if (failure === "read-unknown") f.codes.failNext();
       if (failure === "consume-before" || failure === "consume-after")
         f.codes.failAction("consume", failure === "consume-after");
       if (failure === "projection") {
@@ -1390,9 +1309,7 @@ for (const failure of [
       expect(await f.codes.tokenInventory()).toEqual([]);
       if (failure !== "corrupt") {
         const stored = await f.codes.inspectCode("app", code);
-        expect(stored === null).toBe(
-          ["consume-after", "projection", "save-before", "save-after"].includes(failure),
-        );
+        expect(stored === null).toBe(["consume-after", "projection", "save-before", "save-after"].includes(failure));
       }
       f.setClient(initial);
       f.state.clientUnavailable = false;
@@ -1400,8 +1317,7 @@ for (const failure of [
       const fresh = await f.authorize();
       expect(fresh.split(".")[2]).not.toBe(code.split(".")[2]);
       expect((await f.scope.inspect(target)).record?.state).toBe("terminated");
-    }
-    finally {
+    } finally {
       await f.close();
     }
   });
@@ -1435,8 +1351,7 @@ test("concurrent business exchange has one consumer; missing loser terminates or
     expect(await f.codes.inspectToken(data.sid)).not.toBeNull();
     expect((await f.use(data.sid)).status).not.toBe(200);
     expect((await f.use(data.sid, "app", true)).status).not.toBe(200);
-  }
-  finally {
+  } finally {
     await f.close();
   }
 });
@@ -1453,15 +1368,13 @@ test("root termination denies Token even with missing child index; other root an
     await f.operations.run(async (operation) => {
       const sessions = f.kernel.forOperation(operation);
       const root = await sessions.resolveUserSession(f.root);
-      if (root.status !== "resolved")
-        throw new Error("root missing");
+      if (root.status !== "resolved") throw new Error("root missing");
       const result = await sessions.revokeObservedUserSession(root.value);
       expect(result.status).toBe("terminated");
     });
     expect((await f.use(data.sid)).status).not.toBe(200);
     expect((await f.use(other.data.sid)).status).toBe(200);
-  }
-  finally {
+  } finally {
     await f.close();
   }
 });
@@ -1478,24 +1391,20 @@ for (const after of [false, true]) {
       });
       let failure: unknown;
       try {
-        await f.operations.run(operation =>
-          f
-            .customAccess!
-            .forOperation(operation)
-            .exchange(
-              {
-                clientCode: "app",
-                clientSecret: "business-secret",
-                code,
-                redirectUri: "https://app.example/callback",
-              },
-              () => {
-                throw new Error("delivery failed");
-              },
-            ),
+        await f.operations.run((operation) =>
+          f.customAccess!.forOperation(operation).exchange(
+            {
+              clientCode: "app",
+              clientSecret: "business-secret",
+              code,
+              redirectUri: "https://app.example/callback",
+            },
+            () => {
+              throw new Error("delivery failed");
+            },
+          ),
         );
-      }
-      catch (error) {
+      } catch (error) {
         failure = error;
       }
       expect(failure).toMatchObject({
@@ -1512,8 +1421,7 @@ for (const after of [false, true]) {
       expect(report.unknown).toBe(0);
       const verification = await f.codes.independentInventory();
       expect(verification.matching).toBe(0);
-    }
-    finally {
+    } finally {
       await f.close();
     }
   });
@@ -1537,8 +1445,7 @@ test("owner maintenance finds unindexed/no-TTL token and preserves another Clien
     expect(report.unknown).toBe(1);
     expect((await f.use(token.data.sid)).status).not.toBe(200);
     expect((await f.use(other.data.sid, "other")).status).toBe(200);
-  }
-  finally {
+  } finally {
     await f.close();
   }
 });
@@ -1568,10 +1475,9 @@ test("candidate complete warm HTTP endpoints reuse cached sources and record soc
     downstream.on("close", () => upstream.destroy());
     upstream.on("error", () => downstream.destroy());
   });
-  await new Promise<void>(resolve => proxy.listen(0, "127.0.0.1", resolve));
+  await new Promise<void>((resolve) => proxy.listen(0, "127.0.0.1", resolve));
   const address = proxy.address();
-  if (!address || typeof address === "string")
-    throw new Error("Missing proxy address");
+  if (!address || typeof address === "string") throw new Error("Missing proxy address");
   upstreamUrl.hostname = "127.0.0.1";
   upstreamUrl.port = String(address.port);
   let f: Awaited<ReturnType<typeof businessFixture>> | undefined;
@@ -1579,11 +1485,10 @@ test("candidate complete warm HTTP endpoints reuse cached sources and record soc
     await observer.ping();
     for (const key of sentinelKeys) {
       const created = await observer.set(key, sentinelValue, "NX");
-      if (created === "OK")
-        ownedSentinels.push(key);
+      if (created === "OK") ownedSentinels.push(key);
     }
     const sentinelBefore = await Promise.all(
-      sentinelKeys.map(async key => ({
+      sentinelKeys.map(async (key) => ({
         value: await observer.dump(key),
         expiry: await observer.pexpiretime(key),
       })),
@@ -1627,14 +1532,13 @@ test("candidate complete warm HTTP endpoints reuse cached sources and record soc
     await f.close();
     f = undefined;
     const sentinelAfter = await Promise.all(
-      sentinelKeys.map(async key => ({
+      sentinelKeys.map(async (key) => ({
         value: await observer.dump(key),
         expiry: await observer.pexpiretime(key),
       })),
     );
     expect(sentinelAfter).toEqual(sentinelBefore);
-  }
-  finally {
+  } finally {
     try {
       await f?.close();
       for (const key of ownedSentinels) {
@@ -1645,12 +1549,9 @@ test("candidate complete warm HTTP endpoints reuse cached sources and record soc
           sentinelValue,
         );
       }
-    }
-    finally {
+    } finally {
       observer.disconnect();
-      await new Promise<void>((resolve, reject) =>
-        proxy.close(error => (error ? reject(error) : resolve())),
-      );
+      await new Promise<void>((resolve, reject) => proxy.close((error) => (error ? reject(error) : resolve())));
     }
   }
 });
@@ -1667,16 +1568,14 @@ test("expired Code and unavailable original root still trigger precise post-loca
     await f.operations.run(async (operation) => {
       const sessions = f.kernel.forOperation(operation);
       const root = await sessions.observeUserSessionForRevocation(next.split(".")[1]!);
-      if (root.status !== "resolved")
-        throw new Error("root missing");
+      if (root.status !== "resolved") throw new Error("root missing");
       await sessions.revokeObservedUserSession(root.value);
     });
     const failed = await f.exchange(next);
     expect(failed.headers.get("X-IAM-Code-Consumption")).toBe("not_attempted");
     expect(failed.headers.get("X-IAM-Client-Session-Revocation")).toBe("terminated");
     expect(await f.codes.inspectCode("app", next)).not.toBeNull();
-  }
-  finally {
+  } finally {
     await f.close();
   }
 });
@@ -1689,25 +1588,21 @@ test("known corrupted revocation reports failed and synchronous Token compensati
     let restore: (() => Promise<void>) | undefined;
     let failure: unknown;
     try {
-      await f.operations.run(operation =>
-        f
-          .customAccess!
-          .forOperation(operation)
-          .exchange(
-            {
-              clientCode: "app",
-              clientSecret: "business-secret",
-              code,
-              redirectUri: "https://app.example/callback",
-            },
-            async () => {
-              restore = await f.scope.corruptRecord(target);
-              throw new Error("delivery failed");
-            },
-          ),
+      await f.operations.run((operation) =>
+        f.customAccess!.forOperation(operation).exchange(
+          {
+            clientCode: "app",
+            clientSecret: "business-secret",
+            code,
+            redirectUri: "https://app.example/callback",
+          },
+          async () => {
+            restore = await f.scope.corruptRecord(target);
+            throw new Error("delivery failed");
+          },
+        ),
       );
-    }
-    catch (error) {
+    } catch (error) {
       failure = error;
     }
     expect(failure).toMatchObject({
@@ -1718,8 +1613,7 @@ test("known corrupted revocation reports failed and synchronous Token compensati
     expect(await f.codes.tokenInventory()).toEqual([]);
     await restore?.();
     expect((await f.scope.inspect(target)).record?.state).toBe("active");
-  }
-  finally {
+  } finally {
     await f.close();
   }
 });
@@ -1732,8 +1626,7 @@ test("new protocol marker does not invalidate old Token, but protocol selection 
     await f.operations.run(async (operation) => {
       const sessions = f.kernel.forOperation(operation);
       const root = await sessions.resolveUserSession(f.root);
-      if (root.status !== "resolved")
-        throw new Error("root missing");
+      if (root.status !== "resolved") throw new Error("root missing");
       const opened = await sessions.openClientSession(root.value, { clientId: "app", protocol: "oidc" });
       expect(opened.status).toBe("reused");
     });
@@ -1761,8 +1654,7 @@ test("new protocol marker does not invalidate old Token, but protocol selection 
     const newCode = await f.authorize("app", newRoot);
     const newToken = await (await f.exchange(newCode)).json();
     expect((await f.use(newToken.data.sid)).status).toBe(200);
-  }
-  finally {
+  } finally {
     await f.close();
   }
 });
@@ -1784,8 +1676,7 @@ test("business failure effect deadline reports unknown without retrying or block
     release();
     const fresh = await f.authorize();
     expect(fresh.split(".")[2]).not.toBe(code.split(".")[2]);
-  }
-  finally {
+  } finally {
     release();
     await f.close();
   }
@@ -1810,8 +1701,7 @@ test("protocol token expiry is not extended by authorization; malformed and unav
     await f.codes.corruptToken(nextToken.data.sid);
     expect((await f.use(nextToken.data.sid)).status).toBe(503);
     expect((await f.scope.inspect(target)).record?.state).toBe("active");
-  }
-  finally {
+  } finally {
     await f.close();
   }
 });
@@ -1828,11 +1718,8 @@ test("splicing another Code ID never consumes the other Client or original insta
     expect(response.headers.get("X-IAM-Client-Session-Revocation")).toBe("terminated");
     expect(await f.codes.inspectCode("other", other)).toEqual(otherRecord);
     expect(await f.codes.inspectCode("app", code)).not.toBeNull();
-    expect(
-      (await f.exchange(other, "business-secret", "", "https://app.example/callback", "other")).status,
-    ).toBe(200);
-  }
-  finally {
+    expect((await f.exchange(other, "business-secret", "", "https://app.example/callback", "other")).status).toBe(200);
+  } finally {
     await f.close();
   }
 });
@@ -1855,8 +1742,7 @@ test("Code replacement after validation is not consumed and failure revokes only
     const repeated = await f.exchange(code);
     expect(repeated.headers.get("X-IAM-Client-Session-Revocation")).toBe("already_terminated");
     expect((await f.scope.inspect(freshTarget)).record?.state).toBe("active");
-  }
-  finally {
+  } finally {
     await f.close();
   }
 });
@@ -1881,8 +1767,7 @@ test("maintenance inventory carries SCAN overflow without exceeding the per-page
       expect(pages).toBeLessThan(30);
     } while (cursor !== "0");
     expect(matching).toBe(3);
-  }
-  finally {
+  } finally {
     await f.close();
   }
 });
@@ -1904,9 +1789,9 @@ test("every retained Public endpoint uses the same root and Custom authenticatio
           method: endpoint.body ? "POST" : "GET",
           body: endpoint.body ? JSON.stringify(endpoint.body) : undefined,
           headers: {
-            "Client": client,
+            Client: client,
             "Content-Type": "application/json",
-            "Authorization": client === "iam" ? f.root : token,
+            Authorization: client === "iam" ? f.root : token,
           },
         };
         const allowed = await f.request(`/public${endpoint.path}`, init);
@@ -1921,8 +1806,7 @@ test("every retained Public endpoint uses the same root and Custom authenticatio
       }
     }
     expect(f.state.publicBusinessReads).toBe(8);
-  }
-  finally {
+  } finally {
     await f.close();
   }
 });
@@ -1937,10 +1821,10 @@ for (const auditFails of [false, true]) {
       const response = await f.request("/sso/token", {
         method: "POST",
         headers: {
-          "Authorization": `Basic ${Buffer.from("app:business-secret").toString("base64")}`,
+          Authorization: `Basic ${Buffer.from("app:business-secret").toString("base64")}`,
           "Content-Type": "application/x-www-form-urlencoded",
           "X-Request-Id": "independent-login",
-          "traceparent": `00-${traceId}-1234567890abcdef-01`,
+          traceparent: `00-${traceId}-1234567890abcdef-01`,
         },
         body: new URLSearchParams({ code, redirect_uri: "https://app.example/callback" }),
       });
@@ -1958,8 +1842,7 @@ for (const auditFails of [false, true]) {
             traceId,
           }),
         );
-      }
-      else {
+      } else {
         expect(f.audits).toContainEqual(
           expect.objectContaining({
             action: "auth.login.local",
@@ -1973,8 +1856,7 @@ for (const auditFails of [false, true]) {
       }
       expect(JSON.stringify(f.warnings)).not.toContain(body.data.sid);
       expect(JSON.stringify(f.audits)).not.toContain(body.data.sid);
-    }
-    finally {
+    } finally {
       await f.close();
     }
   });
@@ -2004,8 +1886,7 @@ for (const permission of ["disabled", "unknown"]) {
       });
       expect(roots.original.status).toBe("terminated");
       expect(roots.other.status).toBe("resolved");
-    }
-    finally {
+    } finally {
       await f.close();
     }
   });
@@ -2024,12 +1905,11 @@ test("root Cookie takes precedence over query application Token during logout", 
     expect(response.status).toBe(302);
     const original = await f.use(body.data.sid);
     expect(original.status).toBe(200);
-    const current = await f.operations.run(operation =>
+    const current = await f.operations.run((operation) =>
       f.kernel.forOperation(operation).resolveUserSession(currentRoot),
     );
     expect(current.status).toBe("terminated");
-  }
-  finally {
+  } finally {
     await f.close();
   }
 });
@@ -2040,8 +1920,7 @@ test("application Token logout terminates its root after the callback delivery p
     const issued = await f.exchange(await f.authorize());
     const body = await issued.json();
     const client = f.getClient();
-    if (client.ssoConfig?.protocol !== ClientSsoProtocol.CustomSso)
-      throw new Error("Expected Custom config");
+    if (client.ssoConfig?.protocol !== ClientSsoProtocol.CustomSso) throw new Error("Expected Custom config");
     f.setClient({
       ...client,
       ssoConfig: {
@@ -2055,12 +1934,9 @@ test("application Token logout terminates its root after the callback delivery p
       `/sso/logout?${new URLSearchParams({ token: body.data.sid, redirectUrl: "https://app.example/logout" })}`,
     );
     expect(response.status).toBe(302);
-    const root = await f.operations.run(operation =>
-      f.kernel.forOperation(operation).resolveUserSession(f.root),
-    );
+    const root = await f.operations.run((operation) => f.kernel.forOperation(operation).resolveUserSession(f.root));
     expect(root.status).toBe("terminated");
-  }
-  finally {
+  } finally {
     await f.close();
   }
 });
@@ -2080,16 +1956,11 @@ test("managed application Token logout remains available during Client Maintenan
     );
     expect(logout.status).toBe(302);
     expect(f.state.permissionReads).toBe(permissionReads);
-    const original = await f.operations.run(operation =>
-      f.kernel.forOperation(operation).resolveUserSession(f.root),
-    );
-    const unrelated = await f.operations.run(operation =>
-      f.kernel.forOperation(operation).resolveUserSession(other),
-    );
+    const original = await f.operations.run((operation) => f.kernel.forOperation(operation).resolveUserSession(f.root));
+    const unrelated = await f.operations.run((operation) => f.kernel.forOperation(operation).resolveUserSession(other));
     expect(original.status).toBe("terminated");
     expect(unrelated.status).toBe("resolved");
-  }
-  finally {
+  } finally {
     await f.close();
   }
 });
@@ -2108,12 +1979,9 @@ for (const gate of ["disabled", "sso-disabled"] as const) {
         `/sso/logout?${new URLSearchParams({ token: body.data.sid, redirectUrl: "https://app.example/logout" })}`,
       );
       expect(logout.status).toBe(401);
-      const root = await f.operations.run(operation =>
-        f.kernel.forOperation(operation).resolveUserSession(f.root),
-      );
+      const root = await f.operations.run((operation) => f.kernel.forOperation(operation).resolveUserSession(f.root));
       expect(root.status).toBe("resolved");
-    }
-    finally {
+    } finally {
       await f.close();
     }
   });
@@ -2127,8 +1995,7 @@ test("application Token logout uses immutable owner and identity despite a later
     const opened = await f.operations.run(async (operation) => {
       const sessions = f.kernel.forOperation(operation);
       const root = await sessions.resolveUserSession(f.root);
-      if (root.status !== "resolved")
-        throw new Error("Expected root");
+      if (root.status !== "resolved") throw new Error("Expected root");
       return await sessions.openClientSession(root.value, { clientId: "app", protocol: "oidc" });
     });
     expect(opened.status).toBe("reused");
@@ -2136,12 +2003,9 @@ test("application Token logout uses immutable owner and identity despite a later
       `/sso/logout?${new URLSearchParams({ token: body.data.sid, redirectUrl: "https://app.example/logout" })}`,
     );
     expect(logout.status).toBe(302);
-    const root = await f.operations.run(operation =>
-      f.kernel.forOperation(operation).resolveUserSession(f.root),
-    );
+    const root = await f.operations.run((operation) => f.kernel.forOperation(operation).resolveUserSession(f.root));
     expect(root.status).toBe("terminated");
-  }
-  finally {
+  } finally {
     await f.close();
   }
 });

@@ -1,8 +1,8 @@
-import { AdminMutationCommittedError } from '@admin/services/admin-mutation';
-import { resignUser } from '@admin/services/employment';
-import { searchUsers } from '@admin/services/user';
-import { message, Modal, Select } from 'antd';
-import { useState } from 'react';
+import { AdminMutationCommittedError } from "@admin/services/admin-mutation";
+import { resignUser } from "@admin/services/employment";
+import { searchUsers } from "@admin/services/user";
+import { Modal, message, Select } from "antd";
+import { useState } from "react";
 
 type UserOption = { label: string; value: string; name: string };
 
@@ -13,12 +13,7 @@ type Props = {
   onCommitted: (error: AdminMutationCommittedError) => Promise<void> | void;
 };
 
-export default function ResignByUserDialog({
-  open,
-  onClose,
-  onSuccess,
-  onCommitted,
-}: Props) {
+export default function ResignByUserDialog({ open, onClose, onSuccess, onCommitted }: Props) {
   const [selected, setSelected] = useState<UserOption | null>(null);
   const [options, setOptions] = useState<UserOption[]>([]);
   const [loading, setLoading] = useState(false);
@@ -47,7 +42,7 @@ export default function ResignByUserDialog({
         })),
       );
     } catch (err) {
-      message.error(err instanceof Error ? err.message : '搜索失败');
+      message.error(err instanceof Error ? err.message : "搜索失败");
     } finally {
       setLoading(false);
     }
@@ -55,14 +50,14 @@ export default function ResignByUserDialog({
 
   const onOk = async () => {
     if (!selected) {
-      message.warning('请先选择用户');
+      message.warning("请先选择用户");
       return;
     }
     setSubmitting(true);
     try {
       const outcome = await resignUser(selected.value);
-      if (outcome.changed) message.success('离职已完成');
-      else message.info('已处于离职状态，无需修改');
+      if (outcome.changed) message.success("离职已完成");
+      else message.info("已处于离职状态，无需修改");
       onSuccess?.();
       onClose();
       setSelected(null);
@@ -75,7 +70,7 @@ export default function ResignByUserDialog({
         await onCommitted(err);
         return;
       }
-      message.error(err instanceof Error ? err.message : '离职失败');
+      message.error(err instanceof Error ? err.message : "离职失败");
     } finally {
       setSubmitting(false);
     }
@@ -103,7 +98,7 @@ export default function ResignByUserDialog({
       <Select
         showSearch
         placeholder="输入工号/姓名搜索"
-        style={{ width: '100%' }}
+        style={{ width: "100%" }}
         filterOption={false}
         loading={loading}
         onSearch={onSearch}

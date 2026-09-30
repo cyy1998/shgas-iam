@@ -1,9 +1,9 @@
-import type { MobileServiceDeps } from "./mobile.port";
-import type { MobileVerificationCodeReservation } from "./mobile.type";
 import { randomUUID } from "node:crypto";
 import { VerificationCodeUsage } from "@api/enums/verificationCode.usage";
 import { InvalidMobileError, UserNotFoundError } from "@iam/domain/user";
 import { SmsCooldownError, SmsSendFailedError, SmsUnavailableError } from "./mobile.error";
+import type { MobileServiceDeps } from "./mobile.port";
+import type { MobileVerificationCodeReservation } from "./mobile.type";
 
 const MOBILE_REGEX = /^1[3-9]\d{9}$/;
 const CONFIRM_RESERVED_VERIFICATION_CODE_KEY_COUNT = 2;
@@ -45,39 +45,33 @@ export function createMobileService(deps: MobileServiceDeps) {
     if (!checkValidPhoneNumber(phoneNumber)) {
       throw new InvalidMobileError("无效手机号");
     }
-    if (!await checkExistingPhoneNumber(phoneNumber) && usage !== VerificationCodeUsage.BindPhone) {
+    if (!(await checkExistingPhoneNumber(phoneNumber)) && usage !== VerificationCodeUsage.BindPhone) {
       throw new UserNotFoundError("手机号不存在");
     }
     let remaining: number;
     try {
       remaining = await deps.cooldown.acquire(phoneNumber);
-    }
-    catch {
+    } catch {
       throw new SmsUnavailableError();
     }
-    if (remaining > 0)
-      throw new SmsCooldownError(remaining);
+    if (remaining > 0) throw new SmsCooldownError(remaining);
 
     let code: number | string;
     try {
       const result = await deps.smsSender.sendVerificationCode(phoneNumber);
-      if (!result.success)
-        throw new Error("SMS provider rejected send");
+      if (!result.success) throw new Error("SMS provider rejected send");
       code = result.code;
-    }
-    catch {
+    } catch {
       try {
         remaining = await deps.cooldown.remainingSeconds(phoneNumber);
-      }
-      catch {
+      } catch {
         throw new SmsUnavailableError();
       }
       throw new SmsSendFailedError(remaining);
     }
     try {
       await deps.redis.set(mobileCodeKey(usage, phoneNumber), code, "EX", deps.config.verificationCodeTtlSeconds);
-    }
-    catch {
+    } catch {
       throw new SmsUnavailableError();
     }
     return true;
@@ -100,7 +94,7 @@ export function createMobileService(deps: MobileServiceDeps) {
   }
 
   async function checkExistingPhoneNumber(phone: string): Promise<boolean> {
-    return await deps.userRepository.getUserByMobile(phone) !== null;
+    return (await deps.userRepository.getUserByMobile(phone)) !== null;
   }
 
   async function checkVerificationCode(usage: string, phone: string, code: string): Promise<boolean> {
@@ -119,12 +113,8 @@ export function createMobileService(deps: MobileServiceDeps) {
     code: string,
   ): Promise<MobileVerificationCodeReservation | null> {
     const codeKey = mobileCodeKey(usage, phone);
-    const [savedCode, ttl] = await Promise.all([
-      deps.redis.get(codeKey),
-      deps.redis.ttl(codeKey),
-    ]);
-    if (savedCode !== code || ttl <= 0)
-      return null;
+    const [savedCode, ttl] = await Promise.all([deps.redis.get(codeKey), deps.redis.ttl(codeKey)]);
+    if (savedCode !== code || ttl <= 0) return null;
 
     const reservation = { usage, phone, token: randomUUID() };
     const reserved = await deps.redis.set(mobileCodeReservationKey(reservation), code, "EX", ttl, "NX");

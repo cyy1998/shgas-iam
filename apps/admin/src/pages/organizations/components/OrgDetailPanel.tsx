@@ -1,23 +1,20 @@
-import AuthorizationActionButton from '@admin/components/AuthorizationActionButton';
-import AuthorizationActionDropdown from '@admin/components/AuthorizationActionDropdown';
-import StatusTag from '@admin/components/StatusTag';
-import { AdminMutationCommittedError } from '@admin/services/admin-mutation';
+import AuthorizationActionButton from "@admin/components/AuthorizationActionButton";
+import AuthorizationActionDropdown from "@admin/components/AuthorizationActionDropdown";
+import StatusTag from "@admin/components/StatusTag";
+import { AdminMutationCommittedError } from "@admin/services/admin-mutation";
 import {
   deleteOrganization,
   type OrganizationChildrenPage,
   type OrganizationDetailVo,
   type OrganizationTreeNode,
   updateOrganizationStatus,
-} from '@admin/services/organization';
-import { ProDescriptions } from '@ant-design/pro-components';
-import {
-  getOrganizationStatusOptions,
-  OrganizationStatus,
-} from '@iam/contracts';
-import { useAccess } from '@umijs/max';
-import { Empty, message, Modal, Space, Table, Tabs } from 'antd';
-import type { ColumnsType } from 'antd/es/table';
-import OrganizationResponsibilityAssignmentsPanel from './OrganizationResponsibilityAssignmentsPanel';
+} from "@admin/services/organization";
+import { ProDescriptions } from "@ant-design/pro-components";
+import { getOrganizationStatusOptions, OrganizationStatus } from "@iam/contracts";
+import { useAccess } from "@umijs/max";
+import { Button, Empty, Modal, message, Space, Table, Tabs } from "antd";
+import type { ColumnsType } from "antd/es/table";
+import OrganizationResponsibilityAssignmentsPanel from "./OrganizationResponsibilityAssignmentsPanel";
 
 type Props = {
   loading: boolean;
@@ -34,19 +31,21 @@ type Props = {
   onCommitted?: (error: AdminMutationCommittedError) => void;
 };
 
-const childColumns = (
-  onSelectChild: (orgCode: string) => void,
-): ColumnsType<OrganizationTreeNode> => [
+const childColumns = (onSelectChild: (orgCode: string) => void): ColumnsType<OrganizationTreeNode> => [
   {
-    title: '编码',
-    dataIndex: 'orgCode',
-    render: (v, row) => <a onClick={() => onSelectChild(row.orgCode)}>{v}</a>,
+    title: "编码",
+    dataIndex: "orgCode",
+    render: (v, row) => (
+      <Button type="link" size="small" style={{ paddingInline: 0 }} onClick={() => onSelectChild(row.orgCode)}>
+        {v}
+      </Button>
+    ),
   },
-  { title: '名称', dataIndex: 'orgName' },
-  { title: '类型', dataIndex: 'orgType' },
+  { title: "名称", dataIndex: "orgName" },
+  { title: "类型", dataIndex: "orgType" },
   {
-    title: '状态',
-    dataIndex: 'status',
+    title: "状态",
+    dataIndex: "status",
     render: (_, row) => <StatusTag domain="org" status={row.status} />,
   },
 ];
@@ -79,14 +78,14 @@ export default function OrgDetailPanel({
       onCommitted?.(err);
       return;
     }
-    message.error(err instanceof Error ? err.message : '操作失败');
+    message.error(err instanceof Error ? err.message : "操作失败");
   };
 
   const onStatusChange = async (status: number) => {
     const mutate = async () => {
       try {
         const outcome = await updateOrganizationStatus(detail.orgCode, status);
-        message.success(outcome.changed ? '状态已更新' : '无需修改');
+        message.success(outcome.changed ? "状态已更新" : "无需修改");
         onChanged();
       } catch (err) {
         handleError(err);
@@ -97,10 +96,9 @@ export default function OrgDetailPanel({
       return;
     }
     Modal.confirm({
-      title: '确认变更组织状态？',
-      content:
-        '服务端将检查该组织及全部下级组织；任一组织仍是开放责任任命目标时，本次变更会被阻止。',
-      okText: '确认变更',
+      title: "确认变更组织状态？",
+      content: "服务端将检查该组织及全部下级组织；任一组织仍是开放责任任命目标时，本次变更会被阻止。",
+      okText: "确认变更",
       onOk: mutate,
     });
   };
@@ -108,13 +106,12 @@ export default function OrgDetailPanel({
   const onDelete = () => {
     Modal.confirm({
       title: `删除组织 ${detail.orgName}？`,
-      content:
-        '服务端将检查该组织及全部下级组织；存在开放责任任命时会拒绝删除。软删除后不会出现在列表中。',
-      okType: 'danger',
+      content: "服务端将检查该组织及全部下级组织；存在开放责任任命时会拒绝删除。软删除后不会出现在列表中。",
+      okType: "danger",
       onOk: async () => {
         try {
           const outcome = await deleteOrganization(detail.orgCode);
-          message.success(outcome.changed ? '已删除' : '无需修改');
+          message.success(outcome.changed ? "已删除" : "无需修改");
           (onDeleted ?? onChanged)();
         } catch (err) {
           handleError(err);
@@ -127,31 +124,23 @@ export default function OrgDetailPanel({
     <div style={{ padding: 16 }}>
       <div
         style={{
-          display: 'flex',
-          justifyContent: 'space-between',
+          display: "flex",
+          justifyContent: "space-between",
           marginBottom: 16,
         }}
       >
         <Space size="middle">
           <h3 style={{ margin: 0 }}>
             {detail.orgName}
-            <span style={{ color: '#999', fontSize: 12, marginLeft: 8 }}>
-              {detail.orgCode}
-            </span>
+            <span style={{ color: "#999", fontSize: 12, marginLeft: 8 }}>{detail.orgCode}</span>
           </h3>
           <StatusTag domain="org" status={detail.status} />
         </Space>
         <Space>
-          <AuthorizationActionButton
-            decision={detail.allowedActions.createChild}
-            onClick={onCreateChild}
-          >
+          <AuthorizationActionButton decision={detail.allowedActions.createChild} onClick={onCreateChild}>
             + 下级组织
           </AuthorizationActionButton>
-          <AuthorizationActionButton
-            decision={detail.allowedActions.edit}
-            onClick={onEdit}
-          >
+          <AuthorizationActionButton decision={detail.allowedActions.edit} onClick={onEdit}>
             编辑
           </AuthorizationActionButton>
           <AuthorizationActionDropdown
@@ -168,11 +157,7 @@ export default function OrgDetailPanel({
           >
             状态
           </AuthorizationActionDropdown>
-          <AuthorizationActionButton
-            danger
-            decision={detail.allowedActions.delete}
-            onClick={onDelete}
-          >
+          <AuthorizationActionButton danger decision={detail.allowedActions.delete} onClick={onDelete}>
             删除
           </AuthorizationActionButton>
         </Space>
@@ -181,8 +166,8 @@ export default function OrgDetailPanel({
       <Tabs
         items={[
           {
-            key: 'organization-detail',
-            label: '组织详情',
+            key: "organization-detail",
+            label: "组织详情",
             children: (
               <>
                 <ProDescriptions<OrganizationDetailVo>
@@ -190,48 +175,37 @@ export default function OrgDetailPanel({
                   dataSource={detail}
                   loading={loading}
                   columns={[
-                    { title: '编码', dataIndex: 'orgCode' },
-                    { title: '名称', dataIndex: 'orgName' },
-                    { title: '类型', dataIndex: 'orgType' },
-                    { title: '层级', dataIndex: 'level' },
+                    { title: "编码", dataIndex: "orgCode" },
+                    { title: "名称", dataIndex: "orgName" },
+                    { title: "类型", dataIndex: "orgType" },
+                    { title: "层级", dataIndex: "level" },
                     {
-                      title: '路径',
-                      dataIndex: 'path',
+                      title: "路径",
+                      dataIndex: "path",
                       span: 2,
-                      render: () => (
-                        <span style={{ overflowWrap: 'anywhere' }}>
-                          {pathLabel || '—'}
-                        </span>
-                      ),
+                      render: () => <span style={{ overflowWrap: "anywhere" }}>{pathLabel || "—"}</span>,
                     },
                     {
-                      title: '上级',
-                      dataIndex: 'parentName',
-                      render: (_, row) =>
-                        row.parentCode
-                          ? `${row.parentName} (${row.parentCode})`
-                          : '—',
+                      title: "上级",
+                      dataIndex: "parentName",
+                      render: (_, row) => (row.parentCode ? `${row.parentName} (${row.parentCode})` : "—"),
                     },
                     {
-                      title: '状态',
-                      dataIndex: 'status',
-                      render: (_, row) => (
-                        <StatusTag domain="org" status={row.status} />
-                      ),
+                      title: "状态",
+                      dataIndex: "status",
+                      render: (_, row) => <StatusTag domain="org" status={row.status} />,
                     },
-                    { title: '下级数', dataIndex: 'childrenCount' },
-                    { title: '在职雇佣', dataIndex: 'employmentCount' },
+                    { title: "下级数", dataIndex: "childrenCount" },
+                    { title: "在职雇佣", dataIndex: "employmentCount" },
                     {
-                      title: '创建时间',
-                      dataIndex: 'createTime',
-                      render: (_, row) =>
-                        new Date(row.createTime).toLocaleString(),
+                      title: "创建时间",
+                      dataIndex: "createTime",
+                      render: (_, row) => new Date(row.createTime).toLocaleString(),
                     },
                     {
-                      title: '更新时间',
-                      dataIndex: 'updateTime',
-                      render: (_, row) =>
-                        new Date(row.updateTime).toLocaleString(),
+                      title: "更新时间",
+                      dataIndex: "updateTime",
+                      render: (_, row) => new Date(row.updateTime).toLocaleString(),
                     },
                   ]}
                 />
@@ -240,11 +214,7 @@ export default function OrgDetailPanel({
                   <h4>
                     下级组织
                     {childrenPage && childrenPage.total > 0 && (
-                      <span
-                        style={{ color: '#999', fontSize: 12, marginLeft: 8 }}
-                      >
-                        共 {childrenPage.total} 条
-                      </span>
+                      <span style={{ color: "#999", fontSize: 12, marginLeft: 8 }}>共 {childrenPage.total} 条</span>
                     )}
                   </h4>
                   <Table<OrganizationTreeNode>
@@ -259,10 +229,9 @@ export default function OrgDetailPanel({
                       total: childrenPage?.total ?? 0,
                       showSizeChanger: true,
                       pageSizeOptions: [10, 20, 50, 100],
-                      onChange: (page, size) =>
-                        onChildrenPageChange(page, size),
+                      onChange: (page, size) => onChildrenPageChange(page, size),
                     }}
-                    locale={{ emptyText: '无下级组织' }}
+                    locale={{ emptyText: "无下级组织" }}
                   />
                 </div>
               </>
@@ -271,13 +240,9 @@ export default function OrgDetailPanel({
           ...(access.canAccessOrganizationResponsibility
             ? [
                 {
-                  key: 'responsibility-assignments',
-                  label: '责任任命',
-                  children: (
-                    <OrganizationResponsibilityAssignmentsPanel
-                      orgCode={detail.orgCode}
-                    />
-                  ),
+                  key: "responsibility-assignments",
+                  label: "责任任命",
+                  children: <OrganizationResponsibilityAssignmentsPanel orgCode={detail.orgCode} />,
                 },
               ]
             : []),

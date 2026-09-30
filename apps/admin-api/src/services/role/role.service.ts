@@ -1,13 +1,11 @@
-import type { AdminAuditContext } from "@admin-api/services/audit/audit.context";
-import type { RoleAssignmentTargetSummaryDto } from "@iam/domain/role";
-import type { AdminRoleServiceDeps, AdminRoleTransactionPorts } from "./role.port";
-import type { RoleAssignmentCreateDto, RoleAssignmentPaginationQueryDto, RoleCreateDto, RolePaginationQueryDto, RoleUpdateDto } from "./role.type";
 import { createAdminMutation } from "@admin-api/services/admin-mutation/admin-mutation";
+import type { AdminAuditContext } from "@admin-api/services/audit/audit.context";
 import { adminAuditTransactionOptions } from "@admin-api/services/audit/audit.context";
 import { buildRoleAssignmentAudit, buildRoleAudit } from "@admin-api/services/audit/events/role.audit";
 import { BadRequestError } from "@iam/api-core/errors";
 import { RoleAssignmentTargetType, RoleStatus } from "@iam/contracts";
 import { ClientNotFoundError } from "@iam/domain/client";
+import type { RoleAssignmentTargetSummaryDto } from "@iam/domain/role";
 import {
   InvalidRoleAssignmentScopeError,
   RoleAssignmentExistsError,
@@ -19,12 +17,24 @@ import {
   toRoleDetailDto,
   toRoleDto,
 } from "@iam/domain/role";
+import type { AdminRoleServiceDeps, AdminRoleTransactionPorts } from "./role.port";
+import type {
+  RoleAssignmentCreateDto,
+  RoleAssignmentPaginationQueryDto,
+  RoleCreateDto,
+  RolePaginationQueryDto,
+  RoleUpdateDto,
+} from "./role.type";
 
 export function createRoleService(deps: AdminRoleServiceDeps) {
   const mutation = createAdminMutation(deps.uow);
   async function searchRolesForAdmin(input: RolePaginationQueryDto) {
     const { rows, total } = await deps.roleRepository.searchRolesPaged(input);
-    return pageResult(rows.map(row => toRoleDto(row)), total, input);
+    return pageResult(
+      rows.map((row) => toRoleDto(row)),
+      total,
+      input,
+    );
   }
 
   async function getRoleDetailByCode(roleCode: string) {
@@ -54,8 +64,7 @@ export function createRoleService(deps: AdminRoleServiceDeps) {
         status: dto.status ?? RoleStatus.Enable,
         description: dto.description ?? null,
       });
-      if (created === null)
-        throw new Error("Role insert returned no row");
+      if (created === null) throw new Error("Role insert returned no row");
       const detail = toRoleDetailDto({
         ...created,
         client: {
@@ -67,10 +76,17 @@ export function createRoleService(deps: AdminRoleServiceDeps) {
         assignmentCount: 0,
       });
 
-      await tx.auditService.recordAuditLog(buildRoleAudit("admin.role.create", detail, {
-        clientCode: client.clientCode,
-        changed: true,
-      }, auditContext));
+      await tx.auditService.recordAuditLog(
+        buildRoleAudit(
+          "admin.role.create",
+          detail,
+          {
+            clientCode: client.clientCode,
+            changed: true,
+          },
+          auditContext,
+        ),
+      );
       return { changed: true, result: detail };
     }, adminAuditTransactionOptions(auditContext));
   }
@@ -81,22 +97,21 @@ export function createRoleService(deps: AdminRoleServiceDeps) {
     auditContext?: AdminAuditContext,
     action = "admin.role.update",
   ) {
-    if (!Object.values(data).some(value => value !== undefined))
+    if (!Object.values(data).some((value) => value !== undefined))
       throw new BadRequestError("至少提交一个角色更新字段");
     return await mutation.locked(
-      tx => tx.roleRepository.lockRoleByCode(roleCode),
+      (tx) => tx.roleRepository.lockRoleByCode(roleCode),
       () => new RoleNotFoundError(),
       async (tx, existing) => {
-        const changed = (data.roleName !== undefined && data.roleName !== existing.roleName)
-          || (data.description !== undefined && data.description !== existing.description)
-          || (data.status !== undefined && data.status !== existing.status);
-        if (!changed && data.status === undefined)
-          return { changed: false, result: null };
+        const changed =
+          (data.roleName !== undefined && data.roleName !== existing.roleName) ||
+          (data.description !== undefined && data.description !== existing.description) ||
+          (data.status !== undefined && data.status !== existing.status);
+        if (!changed && data.status === undefined) return { changed: false, result: null };
         let current = existing;
         if (changed) {
           const updated = await tx.roleRepository.updateRoleByCode(roleCode, data);
-          if (updated === null)
-            throw new Error("Locked Role update returned no row");
+          if (updated === null) throw new Error("Locked Role update returned no row");
           current = { ...updated, client: existing.client, assignmentCount: existing.assignmentCount };
         }
         await tx.auditService.recordAuditLog(buildRoleAudit(action, current, { patch: data, changed }, auditContext));
@@ -115,7 +130,7 @@ export function createRoleService(deps: AdminRoleServiceDeps) {
 
   async function deleteRole(roleCode: string, auditContext?: AdminAuditContext) {
     return await mutation.locked(
-      tx => tx.roleRepository.lockRoleByCode(roleCode),
+      (tx) => tx.roleRepository.lockRoleByCode(roleCode),
       () => new RoleNotFoundError(),
       async (tx, existing) => {
         const assignmentCount = await tx.roleRepository.countAssignmentsByRoleId(existing.id);
@@ -123,12 +138,18 @@ export function createRoleService(deps: AdminRoleServiceDeps) {
           throw new RoleHasAssignmentError();
         }
         const deleted = await tx.roleRepository.softDeleteRoleByCode(roleCode);
-        if (deleted === null)
-          throw new Error("Locked Role delete returned no row");
-        await tx.auditService.recordAuditLog(buildRoleAudit("admin.role.delete", existing, {
-          deleted: true,
-          changed: true,
-        }, auditContext));
+        if (deleted === null) throw new Error("Locked Role delete returned no row");
+        await tx.auditService.recordAuditLog(
+          buildRoleAudit(
+            "admin.role.delete",
+            existing,
+            {
+              deleted: true,
+              changed: true,
+            },
+            auditContext,
+          ),
+        );
         return { changed: true, result: null };
       },
       adminAuditTransactionOptions(auditContext),
@@ -141,7 +162,11 @@ export function createRoleService(deps: AdminRoleServiceDeps) {
       throw new RoleNotFoundError();
     }
     const { rows, total } = await deps.roleRepository.searchAssignmentsPaged(role.id, input);
-    return pageResult(rows.map(row => toRoleAssignmentDto(row)), total, input);
+    return pageResult(
+      rows.map((row) => toRoleAssignmentDto(row)),
+      total,
+      input,
+    );
   }
 
   async function createAssignment(roleCode: string, dto: RoleAssignmentCreateDto, auditContext?: AdminAuditContext) {
@@ -151,11 +176,7 @@ export function createRoleService(deps: AdminRoleServiceDeps) {
         throw new RoleNotFoundError();
       }
       const resolved = await resolveAssignmentTarget(dto, tx);
-      const existing = await tx.roleRepository.findAssignmentByRoleTarget(
-        role.id,
-        dto.targetType,
-        resolved.target.id,
-      );
+      const existing = await tx.roleRepository.findAssignmentByRoleTarget(role.id, dto.targetType, resolved.target.id);
       if (existing !== null) {
         throw new RoleAssignmentExistsError();
       }
@@ -166,19 +187,20 @@ export function createRoleService(deps: AdminRoleServiceDeps) {
         targetId: resolved.target.id,
         includeDescendants: resolved.includeDescendants,
       });
-      if (assignment === null)
-        throw new Error("Role Assignment insert returned no row");
+      if (assignment === null) throw new Error("Role Assignment insert returned no row");
       const detail = toRoleAssignmentDto({
         ...assignment,
         target: resolved.target,
       });
-      await tx.auditService.recordAuditLog(buildRoleAssignmentAudit(
-        "admin.role.assignment.create",
-        role,
-        detail,
-        { created: true, changed: true },
-        auditContext,
-      ));
+      await tx.auditService.recordAuditLog(
+        buildRoleAssignmentAudit(
+          "admin.role.assignment.create",
+          role,
+          detail,
+          { created: true, changed: true },
+          auditContext,
+        ),
+      );
       await tx.userProfileInvalidation.recordChanges([
         {
           kind: "role-assignment",
@@ -197,7 +219,7 @@ export function createRoleService(deps: AdminRoleServiceDeps) {
     auditContext?: AdminAuditContext,
   ) {
     return await mutation.locked(
-      tx => lockAssignment(tx, roleCode, assignmentId),
+      (tx) => lockAssignment(tx, roleCode, assignmentId),
       () => new RoleAssignmentTargetNotFoundError("角色分配不存在"),
       async (tx, { role, assignment: existing }) => {
         if (existing.targetType !== RoleAssignmentTargetType.Organization) {
@@ -206,22 +228,25 @@ export function createRoleService(deps: AdminRoleServiceDeps) {
         const changed = existing.includeDescendants !== includeDescendants;
         if (changed) {
           const updated = await tx.roleRepository.updateAssignmentScope(role.id, assignmentId, includeDescendants);
-          if (updated === null)
-            throw new Error("Locked Role Assignment update returned no row");
+          if (updated === null) throw new Error("Locked Role Assignment update returned no row");
         }
-        await tx.auditService.recordAuditLog(buildRoleAssignmentAudit(
-          "admin.role.assignment.update_scope",
-          role,
-          { ...existing, includeDescendants },
-          { previousIncludeDescendants: existing.includeDescendants, changed },
-          auditContext,
-        ));
+        await tx.auditService.recordAuditLog(
+          buildRoleAssignmentAudit(
+            "admin.role.assignment.update_scope",
+            role,
+            { ...existing, includeDescendants },
+            { previousIncludeDescendants: existing.includeDescendants, changed },
+            auditContext,
+          ),
+        );
         if (changed) {
-          await tx.userProfileInvalidation.recordChanges([{
-            kind: "role-assignment",
-            targetType: existing.targetType,
-            targetId: existing.targetId,
-          }]);
+          await tx.userProfileInvalidation.recordChanges([
+            {
+              kind: "role-assignment",
+              targetType: existing.targetType,
+              targetId: existing.targetId,
+            },
+          ]);
         }
         return { changed, result: null };
       },
@@ -231,19 +256,20 @@ export function createRoleService(deps: AdminRoleServiceDeps) {
 
   async function deleteAssignment(roleCode: string, assignmentId: number, auditContext?: AdminAuditContext) {
     return await mutation.locked(
-      tx => lockAssignment(tx, roleCode, assignmentId),
+      (tx) => lockAssignment(tx, roleCode, assignmentId),
       () => new RoleAssignmentTargetNotFoundError("角色分配不存在"),
       async (tx, { role, assignment: existing }) => {
         const deleted = await tx.roleRepository.deleteAssignment(role.id, assignmentId);
-        if (deleted === null)
-          throw new Error("Locked Role Assignment delete returned no row");
-        await tx.auditService.recordAuditLog(buildRoleAssignmentAudit(
-          "admin.role.assignment.delete",
-          role,
-          existing,
-          { deleted: true, changed: true },
-          auditContext,
-        ));
+        if (deleted === null) throw new Error("Locked Role Assignment delete returned no row");
+        await tx.auditService.recordAuditLog(
+          buildRoleAssignmentAudit(
+            "admin.role.assignment.delete",
+            role,
+            existing,
+            { deleted: true, changed: true },
+            auditContext,
+          ),
+        );
         await tx.userProfileInvalidation.recordChanges([
           {
             kind: "role-assignment",
@@ -259,8 +285,7 @@ export function createRoleService(deps: AdminRoleServiceDeps) {
 
   async function lockAssignment(tx: AdminRoleTransactionPorts, roleCode: string, assignmentId: number) {
     const role = await tx.roleRepository.getRoleByCode(roleCode);
-    if (role === null)
-      throw new RoleNotFoundError();
+    if (role === null) throw new RoleNotFoundError();
     const assignment = await tx.roleRepository.lockAssignmentByIdForRole(role.id, assignmentId);
     return assignment === null ? null : { role, assignment };
   }

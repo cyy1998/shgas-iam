@@ -5,10 +5,10 @@ Kernel 只拥有 UserSession / ClientSession 的中性生命周期与可信观�
 
 ## 最小模型与权威来源
 
-| 对象 | 字段与约束 |
-|---|---|
-| UserSession | 独立 ID/bearer、subjectIdentifier、authTime、amr、opaque subjectContext、可选 origin、创建/到期时间及生命周期状态。主体、认证事实、代际和原始期限创建后固定。 |
-| ClientSession | 独立 ID、userSessionId、clientId、继承的主体/context、最近 protocol、授权/到期时间及状态。原根、Client 和不可变 instance 不改绑。 |
+| 对象          | 字段与约束                                                                                                                                                    |
+| ------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| UserSession   | 独立 ID/bearer、subjectIdentifier、authTime、amr、opaque subjectContext、可选 origin、创建/到期时间及生命周期状态。主体、认证事实、代际和原始期限创建后固定。 |
+| ClientSession | 独立 ID、userSessionId、clientId、继承的主体/context、最近 protocol、授权/到期时间及状态。原根、Client 和不可变 instance 不改绑。                             |
 
 UserSession 是 authTime/amr 的唯一认证权威，子记录的复制只服务中性归属检查。
 这些是逻辑字段，不要求各边界复制完整存储 DTO；管理 identity 不作为 bearer 或在线许可。
@@ -30,8 +30,7 @@ const kernel = createUnifiedSessionKernel({
 await subjectAccessOperations.run(async (operation) => {
   const sessions = kernel.forOperation(operation);
   const resolved = await sessions.resolveUserSession(bearer);
-  if (resolved.status !== "resolved")
-    return resolved;
+  if (resolved.status !== "resolved") return resolved;
   const root = resolved.value.userSession;
   await operation.acquireForSession({
     principalSessionId: root.userSessionId,

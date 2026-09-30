@@ -1,20 +1,11 @@
-import { Button, Input, Space } from 'antd';
-import type { InputProps } from 'antd';
-import type { ReactNode } from 'react';
-import './VerificationCodeInput.less';
+import type { InputProps } from "antd";
+import { Button, Input, Space } from "antd";
+import type { ReactNode } from "react";
+import "./VerificationCodeInput.less";
 
 type VerificationCodeInputProps = Pick<
   InputProps,
-  | 'autoComplete'
-  | 'disabled'
-  | 'id'
-  | 'name'
-  | 'onBlur'
-  | 'onChange'
-  | 'placeholder'
-  | 'prefix'
-  | 'status'
-  | 'value'
+  "autoComplete" | "disabled" | "id" | "name" | "onBlur" | "onChange" | "placeholder" | "prefix" | "status" | "value"
 > & {
   buttonDisabled?: boolean;
   buttonText: ReactNode;

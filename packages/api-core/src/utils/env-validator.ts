@@ -1,6 +1,5 @@
-import type { z } from "zod";
-
 import { env as processEnv } from "bun";
+import type { z } from "zod";
 
 export interface ValidationResult<T> {
   success: boolean;
@@ -29,9 +28,7 @@ export function safeParseEnv<T extends z.ZodType>(
 
   result.error.issues.forEach((issue) => {
     // Ensure path elements are strings (Symbol cannot be used as index type) / 确保路径元素是字符串 (Symbol 不能作为索引类型)
-    const field = issue.path
-      .filter((p): p is string => typeof p === "string")
-      .join("."); // Handle nested paths, although env vars are flat / 处理嵌套路径，尽管环境变量是扁平的
+    const field = issue.path.filter((p): p is string => typeof p === "string").join("."); // Handle nested paths, although env vars are flat / 处理嵌套路径，尽管环境变量是扁平的
 
     if (field) {
       // Add error to corresponding field / 将错误添加到对应字段
@@ -39,8 +36,7 @@ export function safeParseEnv<T extends z.ZodType>(
         fieldErrors[field] = [];
       }
       fieldErrors[field].push(issue.message);
-    }
-    else {
+    } else {
       // Handle errors not associated with a field (e.g., root-level errors) / 处理无字段关联的错误（如根级错误）
       const rootKey = "_";
       if (!fieldErrors[rootKey]) {
@@ -60,10 +56,7 @@ export function safeParseEnv<T extends z.ZodType>(
  * Parse environment variables and exit process on failure
  * 解析环境变量并在失败时退出进程
  */
-export function parseEnvOrExit<T extends z.ZodType>(
-  schema: T,
-  env: Record<string, unknown> = processEnv,
-): z.infer<T> {
+export function parseEnvOrExit<T extends z.ZodType>(schema: T, env: Record<string, unknown> = processEnv): z.infer<T> {
   const result = safeParseEnv(schema, env);
 
   if (!result.success) {

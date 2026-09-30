@@ -10,26 +10,26 @@
     "./testing": "./src/testing.ts"
   },
   "scripts": {
-    "lint": "eslint src eslint.config.js",
-    "lint:fix": "eslint --fix src eslint.config.js",
+    "lint": "node ../../scripts/run-quality.mjs lint --workspace packages/custom-sso",
+    "lint:fix": "node ../../scripts/run-quality.mjs lint-fix --workspace packages/custom-sso",
     "test": "pnpm test:unit",
     "test:unit": "bun test --max-concurrency=2 src",
-    "typecheck": "pnpm exec tsc --noEmit"
+    "typecheck": "pnpm exec tsc --noEmit",
+    "format": "node ../../scripts/run-quality.mjs format --workspace packages/custom-sso",
+    "format:check": "node ../../scripts/run-quality.mjs format-check --workspace packages/custom-sso"
   },
   "dependencies": {
+    "@iam/api-core": "workspace:*",
     "@iam/client-subject-projection": "workspace:*",
     "@iam/contracts": "workspace:*",
-    "zod": "^4.4.3",
-    "@iam/api-core": "workspace:*",
     "@iam/domain": "workspace:*",
-    "@iam/session-kernel": "workspace:*"
+    "@iam/session-kernel": "workspace:*",
+    "zod": "^4.4.3"
   },
   "devDependencies": {
-    "@iam/eslint-config": "workspace:*",
     "@types/bun": "latest",
     "@typescript/native": "npm:typescript@7.0.2",
-    "eslint": "^10.7.0",
-    "typescript": "npm:@typescript/typescript6@6.0.2",
-    "ioredis": "^6.0.0"
+    "ioredis": "^6.0.0",
+    "typescript": "npm:@typescript/typescript6@6.0.2"
   }
 }

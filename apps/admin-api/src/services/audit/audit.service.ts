@@ -1,28 +1,22 @@
 import type { AuditDetails } from "@iam/domain/audit";
+import { AuditLogDtoSchema, AuditLogWriteDtoSchema, normalizeAuditActor, redactAuditDetails } from "@iam/domain/audit";
 import type { Context } from "hono";
 import type { AuditLogInput } from "./audit.context";
+import { getAdminAuditRequestContext } from "./audit.context";
 import type { AuditRepository } from "./audit.repository";
 import type { AuditLogPaginationQueryDto } from "./audit.type";
-import {
-  AuditLogDtoSchema,
-  AuditLogWriteDtoSchema,
-  normalizeAuditActor,
-  redactAuditDetails,
-} from "@iam/domain/audit";
-import { getAdminAuditRequestContext } from "./audit.context";
 
 function enrichAuditDetails(input: AuditLogInput): AuditDetails {
   const details = { ...(input.details ?? {}) };
-  const actorName = input.actorName
-    ?? (
-      input.actorType === "admin"
-      && input.targetType === "user"
-      && input.actorUserId !== undefined
-      && input.actorUserId !== null
-      && input.actorUserId === input.targetId
-        ? input.targetName
-        : null
-    );
+  const actorName =
+    input.actorName ??
+    (input.actorType === "admin" &&
+    input.targetType === "user" &&
+    input.actorUserId !== undefined &&
+    input.actorUserId !== null &&
+    input.actorUserId === input.targetId
+      ? input.targetName
+      : null);
   if (actorName) {
     details.actorName = actorName;
   }
@@ -34,10 +28,7 @@ function enrichAuditDetails(input: AuditLogInput): AuditDetails {
 
 function normalizeAuditLogQueryActions(query: AuditLogPaginationQueryDto): AuditLogPaginationQueryDto {
   const { action, actions, ...conditions } = query.conditions;
-  const requestedActions = [
-    action,
-    ...(actions ?? []),
-  ].filter((value): value is string => value !== undefined);
+  const requestedActions = [action, ...(actions ?? [])].filter((value): value is string => value !== undefined);
 
   if (requestedActions.length === 0) {
     return query;
@@ -92,7 +83,7 @@ export function createAdminAuditService(deps: CreateAdminAuditServiceDeps) {
   async function searchAuditLogsForAdmin(query: AuditLogPaginationQueryDto) {
     const { rows, total } = await deps.auditRepository.searchAuditLogsPaged(normalizeAuditLogQueryActions(query));
     return {
-      result: rows.map(row => AuditLogDtoSchema.parse(row)),
+      result: rows.map((row) => AuditLogDtoSchema.parse(row)),
       total,
       pageNum: query.pageNum,
       pageSize: query.pageSize,

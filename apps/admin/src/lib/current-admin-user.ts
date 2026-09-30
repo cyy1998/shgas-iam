@@ -1,4 +1,4 @@
-import type { CustomSsoSubjectProjection } from '@iam/custom-sso/wire';
+import type { CustomSsoSubjectProjection } from "@iam/custom-sso/wire";
 
 export type CurrentAdminUser = {
   username: string;
@@ -6,12 +6,10 @@ export type CurrentAdminUser = {
   roles: string[];
 };
 
-export function mapCurrentAdminUser(
-  projection: CustomSsoSubjectProjection,
-): CurrentAdminUser {
+export function mapCurrentAdminUser(projection: CustomSsoSubjectProjection): CurrentAdminUser {
   return {
-    username: projection.profile?.username ?? '',
-    name: projection.profile?.name ?? '',
+    username: projection.profile?.username ?? "",
+    name: projection.profile?.name ?? "",
     roles: [...(projection.authorization?.roles ?? [])],
   };
 }

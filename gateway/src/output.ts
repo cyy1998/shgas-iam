@@ -1,3 +1,5 @@
+import { relativePath } from "./manifest";
+import { resourceDefinitions } from "./resources";
 import type {
   AppliedAction,
   AppliedChange,
@@ -9,12 +11,10 @@ import type {
   ResourceKind,
   ValidationIssue,
 } from "./types";
-import { relativePath } from "./manifest";
-import { resourceDefinitions } from "./resources";
 
 export const consoleReporter: Reporter = {
-  log: message => console.log(message),
-  error: message => console.error(message),
+  log: (message) => console.log(message),
+  error: (message) => console.error(message),
 };
 
 export function printResourceCounts(resources: Record<ResourceKind, unknown[]>, reporter: Reporter): void {
@@ -67,7 +67,7 @@ export function serializePlan(plan: ChangePlan): Record<string, unknown> {
     creates: serializeChanges(plan.creates),
     updates: serializeChanges(plan.updates),
     deletes: serializeChanges(plan.deletes),
-    ignored: plan.ignored.map(change => ({
+    ignored: plan.ignored.map((change) => ({
       kind: change.kind,
       id: change.id,
       reason: change.reason,
@@ -80,7 +80,7 @@ export function serializeApplyResult(result: ApplyResult): Record<string, unknow
     ...serializePlan(result.plan),
     dryRun: result.dryRun,
     prune: result.prune,
-    applied: result.applied.map(change => ({
+    applied: result.applied.map((change) => ({
       kind: change.kind,
       id: change.id,
       action: change.action,
@@ -89,7 +89,7 @@ export function serializeApplyResult(result: ApplyResult): Record<string, unknow
 }
 
 export function serializeIssues(issues: ValidationIssue[]): Array<{ file: string; path: string; message: string }> {
-  return issues.map(issue => ({
+  return issues.map((issue) => ({
     file: relativePath(issue.file),
     path: issue.path,
     message: issue.message,
@@ -104,7 +104,11 @@ function printIgnoredGroups(changes: ChangePlan["ignored"], reporter: Reporter):
   };
 
   for (const reason of Object.keys(labels) as IgnoredReason[]) {
-    printChangeGroup(labels[reason], changes.filter(change => change.reason === reason), reporter);
+    printChangeGroup(
+      labels[reason],
+      changes.filter((change) => change.reason === reason),
+      reporter,
+    );
   }
 }
 
@@ -116,7 +120,11 @@ function printAppliedGroups(changes: AppliedChange[], reporter: Reporter): void 
   };
 
   for (const action of Object.keys(labels) as AppliedAction[]) {
-    printChangeGroup(labels[action], changes.filter(change => change.action === action), reporter);
+    printChangeGroup(
+      labels[action],
+      changes.filter((change) => change.action === action),
+      reporter,
+    );
   }
 }
 
@@ -128,5 +136,5 @@ function printChangeGroup(label: string, changes: PlannedChange[], reporter: Rep
 }
 
 function serializeChanges(changes: PlannedChange[]): Array<Pick<PlannedChange, "kind" | "id">> {
-  return changes.map(change => ({ kind: change.kind, id: change.id }));
+  return changes.map((change) => ({ kind: change.kind, id: change.id }));
 }

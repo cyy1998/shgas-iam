@@ -1,6 +1,11 @@
-import type { WorkerModule } from "@worker/modules/registry";
-import { closeWorkerModules, resolveModuleKeys, selectModules, selectQueueRegistrations } from "@worker/modules/registry";
 import { describe, expect, mock, test } from "bun:test";
+import type { WorkerModule } from "@worker/modules/registry";
+import {
+  closeWorkerModules,
+  resolveModuleKeys,
+  selectModules,
+  selectQueueRegistrations,
+} from "@worker/modules/registry";
 
 function module(key: string, closeOrder: string[] = []): WorkerModule {
   return {
@@ -19,7 +24,7 @@ describe("worker module registry", () => {
 
     expect(resolveModuleKeys({ mode: "all", keys: [] }, modules)).toEqual(["user-profile"]);
     expect(resolveModuleKeys({ mode: "none", keys: [] }, modules)).toEqual([]);
-    expect(selectModules({ mode: "list", keys: ["user-profile"] }, modules).map(item => item.key)).toEqual([
+    expect(selectModules({ mode: "list", keys: ["user-profile"] }, modules).map((item) => item.key)).toEqual([
       "user-profile",
     ]);
     expect(selectQueueRegistrations({ mode: "all", keys: [] }, modules)).toEqual([
@@ -28,8 +33,9 @@ describe("worker module registry", () => {
   });
 
   test("rejects unknown module keys", () => {
-    expect(() => resolveModuleKeys({ mode: "list", keys: ["missing"] }, [module("user-profile")]))
-      .toThrow("Unknown worker module key(s): missing");
+    expect(() => resolveModuleKeys({ mode: "list", keys: ["missing"] }, [module("user-profile")])).toThrow(
+      "Unknown worker module key(s): missing",
+    );
   });
 
   test("closes modules in reverse order", async () => {

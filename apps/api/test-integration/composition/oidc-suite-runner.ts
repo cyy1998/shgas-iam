@@ -38,8 +38,7 @@ async function main() {
   };
   const candidate = {
     ...options.candidateRuntime,
-    credential: () =>
-      createLoginCredential({ ...options.loginCredential, now: Date.now(), nonce: randomUUID() }),
+    credential: () => createLoginCredential({ ...options.loginCredential, now: Date.now(), nonce: randomUUID() }),
   };
   const rows: object[] = [];
   const browser = await chromium.launch({ headless: true });
@@ -49,8 +48,7 @@ async function main() {
       ...init,
       headers: { "Content-Type": "application/json", ...init.headers },
     });
-    if (!response.ok)
-      throw new Error(`Suite API ${path}: ${response.status} ${await response.text()}`);
+    if (!response.ok) throw new Error(`Suite API ${path}: ${response.status} ${await response.text()}`);
     const body = await response.text();
     return body ? JSON.parse(body) : undefined;
   }
@@ -89,8 +87,7 @@ async function main() {
       ),
     );
     for (const [entry, origin] of Object.entries(candidate.origins) as [string, string][]) {
-      if (entry === "external" && origin === candidate.origins.internal)
-        continue;
+      if (entry === "external" && origin === candidate.origins.internal) continue;
       candidate.origin = origin;
       const entryConfig = { ...config, server: { discoveryUrl: `${origin}/oidc/.well-known/openid-configuration` } };
       for (const planName of [
@@ -99,8 +96,7 @@ async function main() {
         "oidcc-rp-initiated-logout-certification-test-plan",
         "oidcc-test-plan",
       ]) {
-        if (options.plans && !options.plans.includes(planName))
-          continue;
+        if (options.plans && !options.plans.includes(planName)) continue;
         const isPublic = planName === "oidcc-test-plan";
         const selectedVariant = isPublic
           ? {
@@ -123,21 +119,16 @@ async function main() {
               }
             : {}),
         };
-        const plan = await api(
-          `/plan?${new URLSearchParams({ planName, variant: JSON.stringify(selectedVariant) })}`,
-          {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(selectedConfig),
-          },
-        );
+        const plan = await api(`/plan?${new URLSearchParams({ planName, variant: JSON.stringify(selectedVariant) })}`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(selectedConfig),
+        });
         await writeFile(join(output, `${entry}-${planName}.json`), JSON.stringify(plan, null, 2));
         for (const module of plan.modules) {
-          if (interrupted)
-            throw new Error("Suite driver interrupted");
+          if (interrupted) throw new Error("Suite driver interrupted");
           const name: string = module.testModule;
-          if (isPublic && !publicModules.has(name))
-            continue;
+          if (isPublic && !publicModules.has(name)) continue;
           const row = {
             entry,
             issuer: `${origin}/oidc`,
@@ -167,22 +158,16 @@ async function main() {
           async function collectScreenshots() {
             const images = await api(`/log/${row.id}/images`);
             for (const placeholder of images) {
-              if (!placeholder.upload || placeholder.img || screenshotPlaceholders.has(placeholder._id))
-                continue;
+              if (!placeholder.upload || placeholder.img || screenshotPlaceholders.has(placeholder._id)) continue;
               const current = new URL(page.url());
-              if (current.origin !== candidate.origin || current.pathname === "/login")
-                continue;
+              if (current.origin !== candidate.origin || current.pathname === "/login") continue;
               const source = String(placeholder.src);
               if (source.includes("ExpectSuccessfulLogoutPage")) {
                 const confirm = page.getByRole("button", { name: "Yes, sign me out" });
-                if (await confirm.count())
-                  await confirm.click();
+                if (await confirm.count()) await confirm.click();
                 await page.waitForURL(`${candidate.origin}/oidc/session/end/success`);
-              }
-              else if (!source.includes("ErrorPage")) {
-                throw new Error(
-                  `Unmapped screenshot requirement: ${source}; preserve for manual investigation`,
-                );
+              } else if (!source.includes("ErrorPage")) {
+                throw new Error(`Unmapped screenshot requirement: ${source}; preserve for manual investigation`);
               }
               const imageIndex = screenshotPlaceholders.size + 1;
               const screenshot = await page.screenshot({ path: join(output, `${row.id}-${imageIndex}.png`) });
@@ -210,8 +195,7 @@ async function main() {
             const deadline = Date.now() + 90000;
             let started = false;
             while (true) {
-              if (interrupted)
-                throw new Error("Suite driver interrupted");
+              if (interrupted) throw new Error("Suite driver interrupted");
               await collectScreenshots();
               let info = await api(`/info/${row.id}`);
               row.suiteResult = info.result;
@@ -224,14 +208,14 @@ async function main() {
                 info = await api(`/info/${row.id}`);
                 row.suiteResult = info.result;
                 row.suiteStatus = info.status;
-                row.status
-                  = info.result === "PASSED" || info.result === "WARNING"
+                row.status =
+                  info.result === "PASSED" || info.result === "WARNING"
                     ? "pass"
                     : info.result === "SKIPPED"
                       ? "not_applicable"
                       : "fail";
-                row.reason
-                  = info.result === "REVIEW"
+                row.reason =
+                  info.result === "REVIEW"
                     ? "Official screenshot review pending; inspect saved actual screenshots separately"
                     : "";
                 if (remaining.length) {
@@ -270,8 +254,7 @@ async function main() {
                       { action: `${parsed.origin}${parsed.pathname}`, fields: [...parsed.searchParams] },
                     ),
                   ]);
-                }
-                else {
+                } else {
                   await page.goto(url, { waitUntil: "domcontentloaded" });
                 }
                 if (new URL(page.url()).pathname === "/login") {
@@ -279,21 +262,18 @@ async function main() {
                   const guard = await context.request.get(
                     `${candidate.origin}/oidc/login-guard?oidcReturn=${encodeURIComponent(handle!)}`,
                   );
-                  if (guard.status() !== 200)
-                    throw new Error(`Login guard failed: ${guard.status()}`);
+                  if (guard.status() !== 200) throw new Error(`Login guard failed: ${guard.status()}`);
                   const login = await context.request.post(`${candidate.origin}/auth/login/password`, {
                     data: { credential: candidate.credential() },
                   });
-                  if (login.status() !== 200)
-                    throw new Error(`Password HTTP login failed: ${login.status()}`);
+                  if (login.status() !== 200) throw new Error(`Password HTTP login failed: ${login.status()}`);
                   await page.goto(`${candidate.origin}/oidc/resume?oidcReturn=${encodeURIComponent(handle!)}`, {
                     waitUntil: "domcontentloaded",
                   });
                 }
                 await collectScreenshots();
                 const confirm = page.getByRole("button", { name: "Yes, sign me out" });
-                if (await confirm.count())
-                  await confirm.click();
+                if (await confirm.count()) await confirm.click();
                 await api(`/runner/browser/${row.id}/visit?${new URLSearchParams({ url })}`, {
                   method: "POST",
                 });
@@ -302,28 +282,21 @@ async function main() {
                 throw new Error("Module did not finish within driver deadline; original suite state retained");
               await delay(200);
             }
-          }
-          catch (error) {
+          } catch (error) {
             row.status = "fail";
             row.reason = String(error);
-          }
-          finally {
+          } finally {
             try {
               if (row.id) {
                 try {
-                  await writeFile(
-                    join(output, `${row.id}.json`),
-                    JSON.stringify(await api(`/log/${row.id}`), null, 2),
-                  );
-                }
-                finally {
+                  await writeFile(join(output, `${row.id}.json`), JSON.stringify(await api(`/log/${row.id}`), null, 2));
+                } finally {
                   const finalInfo = await api(`/info/${row.id}`);
                   if (!["FINISHED", "INTERRUPTED"].includes(finalInfo.status))
                     await api(`/runner/${row.id}`, { method: "DELETE" });
                 }
               }
-            }
-            finally {
+            } finally {
               await context.close();
               await writeFile(join(output, "results.json"), JSON.stringify(rows, null, 2));
               process.stdout.write(`${JSON.stringify(row)}\n`);
@@ -332,19 +305,16 @@ async function main() {
         }
       }
     }
-  }
-  finally {
+  } finally {
     try {
       await browser.close();
-    }
-    finally {
+    } finally {
       await writeFile(join(output, "results.json"), JSON.stringify(rows, null, 2));
       process.removeListener("SIGINT", interrupt);
       process.removeListener("SIGTERM", interrupt);
     }
   }
-  if (rows.some(row => "status" in row && row.status === "fail"))
-    process.exitCode = 1;
+  if (rows.some((row) => "status" in row && row.status === "fail")) process.exitCode = 1;
 }
 void main().catch((error) => {
   console.error(error);

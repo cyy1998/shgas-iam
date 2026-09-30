@@ -7,20 +7,14 @@ export async function runLoginProtectionOperation<T>(options: {
 }): Promise<T> {
   try {
     return await options.operation();
-  }
-  catch (error) {
-    if (!(error instanceof LoginRestrictionUnavailableError))
-      throw error;
+  } catch (error) {
+    if (!(error instanceof LoginRestrictionUnavailableError)) throw error;
 
     let cause: unknown = error;
     try {
       await options.auditUnavailable();
-    }
-    catch (auditError) {
-      cause = new AggregateError(
-        [error, auditError],
-        "Login protection state and unavailable audit both failed",
-      );
+    } catch (auditError) {
+      cause = new AggregateError([error, auditError], "Login protection state and unavailable audit both failed");
     }
     throw new LoginProtectionUnavailableError(cause);
   }

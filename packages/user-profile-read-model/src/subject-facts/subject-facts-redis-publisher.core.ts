@@ -56,29 +56,26 @@ export function createSubjectFactsRedisInspector<TRecord>(
     async inspectMany(subjectIdentifiers: string[]) {
       if (new Set(subjectIdentifiers).size !== subjectIdentifiers.length)
         throw new Error("Subject Facts inspection contains duplicate subjects");
-      if (subjectIdentifiers.length === 0)
-        return [];
+      if (subjectIdentifiers.length === 0) return [];
       const values = await redis.mget(
-        ...subjectIdentifiers.map(subjectIdentifier => `${keyPrefix}${subjectIdentifier}`),
+        ...subjectIdentifiers.map((subjectIdentifier) => `${keyPrefix}${subjectIdentifier}`),
       );
       if (values.length !== subjectIdentifiers.length)
         throw new Error("Subject Facts inspection returned an incomplete batch");
       return values.map((value, index) => {
-        if (value === null)
-          return { status: "missing" as const };
+        if (value === null) return { status: "missing" as const };
         try {
           const record = parse(JSON.parse(value));
           if (
-            typeof record !== "object"
-            || record === null
-            || !("subjectIdentifier" in record)
-            || record.subjectIdentifier !== subjectIdentifiers[index]
+            typeof record !== "object" ||
+            record === null ||
+            !("subjectIdentifier" in record) ||
+            record.subjectIdentifier !== subjectIdentifiers[index]
           ) {
             return { status: "invalid" as const };
           }
           return { status: "valid" as const, record };
-        }
-        catch {
+        } catch {
           return { status: "invalid" as const };
         }
       });
@@ -86,10 +83,12 @@ export function createSubjectFactsRedisInspector<TRecord>(
   };
 }
 
-export function createMonotonicSubjectFactsRedisPublisher<TRecord extends {
-  subjectIdentifier: string;
-  sourceDirtyVersion: string;
-}>(
+export function createMonotonicSubjectFactsRedisPublisher<
+  TRecord extends {
+    subjectIdentifier: string;
+    sourceDirtyVersion: string;
+  },
+>(
   redis: SubjectFactsRedisClient,
   parse: (input: TRecord) => TRecord,
   options: CreateSubjectFactsRedisPublisherOptions,
@@ -106,19 +105,20 @@ export function createMonotonicSubjectFactsRedisPublisher<TRecord extends {
       JSON.stringify(record),
     );
     return {
-      status: Number(result) === 1 ? "published" as const : "retained-newer" as const,
+      status: Number(result) === 1 ? ("published" as const) : ("retained-newer" as const),
     };
   }
 
   async function publishMany(records: TRecord[]) {
     const results = await Promise.all(records.map(publish));
-    return results.reduce((summary, result) => {
-      if (result.status === "published")
-        summary.published += 1;
-      else
-        summary.retainedNewer += 1;
-      return summary;
-    }, { published: 0, retainedNewer: 0 });
+    return results.reduce(
+      (summary, result) => {
+        if (result.status === "published") summary.published += 1;
+        else summary.retainedNewer += 1;
+        return summary;
+      },
+      { published: 0, retainedNewer: 0 },
+    );
   }
 
   return { publish, publishMany };

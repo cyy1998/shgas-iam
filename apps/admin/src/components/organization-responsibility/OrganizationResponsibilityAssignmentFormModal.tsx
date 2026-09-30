@@ -1,13 +1,13 @@
-import { requestEmploymentOptionsWithoutId } from '@admin/components/employment-select-options';
-import OrganizationTreeSelector from '@admin/components/OrganizationTreeSelector';
-import { createOrganizationResponsibilityAssignment } from '@admin/services/organization-responsibility';
-import { ModalForm, ProForm, ProFormSelect } from '@ant-design/pro-components';
+import { requestEmploymentOptionsWithoutId } from "@admin/components/employment-select-options";
+import OrganizationTreeSelector from "@admin/components/OrganizationTreeSelector";
+import { createOrganizationResponsibilityAssignment } from "@admin/services/organization-responsibility";
+import { ModalForm, ProForm, ProFormSelect } from "@ant-design/pro-components";
 import {
   ORGANIZATION_RESPONSIBILITY_TYPE_CATALOG,
   OrganizationResponsibilityTypeCode,
   OrganizationStatus,
-} from '@iam/contracts';
-import { Alert, message } from 'antd';
+} from "@iam/contracts";
+import { Alert, message } from "antd";
 
 type Props = {
   open: boolean;
@@ -41,27 +41,24 @@ export default function OrganizationResponsibilityAssignmentFormModal({
       modalProps={{
         destroyOnHidden: true,
         mask: { closable: false },
-        okText: '确定',
+        okText: "确定",
       }}
       onOpenChange={onOpenChange}
       onFinish={async (values) => {
         try {
-          const targetOrganizationCode =
-            orgCode ?? values.targetOrganizationCode;
+          const targetOrganizationCode = orgCode ?? values.targetOrganizationCode;
           if (!targetOrganizationCode) return false;
           const created = await createOrganizationResponsibilityAssignment({
             orgCode: targetOrganizationCode,
             typeCode: values.typeCode,
             employmentId: values.employmentId,
           });
-          messageApi.success('责任任命已创建');
+          messageApi.success("责任任命已创建");
           onOpenChange(false);
           onSuccess(created.result.id);
           return true;
         } catch (error) {
-          messageApi.error(
-            error instanceof Error ? error.message : '创建责任任命失败',
-          );
+          messageApi.error(error instanceof Error ? error.message : "创建责任任命失败");
           await onFailure();
           return false;
         }
@@ -69,17 +66,12 @@ export default function OrganizationResponsibilityAssignmentFormModal({
     >
       {messageContextHolder}
       {orgCode ? (
-        <Alert
-          type="info"
-          showIcon
-          title={`目标组织：${orgCode}`}
-          style={{ marginBottom: 16 }}
-        />
+        <Alert type="info" showIcon title={`目标组织：${orgCode}`} style={{ marginBottom: 16 }} />
       ) : (
         <ProForm.Item
           name="targetOrganizationCode"
           label="目标组织"
-          rules={[{ required: true, message: '请选择目标组织' }]}
+          rules={[{ required: true, message: "请选择目标组织" }]}
         >
           <OrganizationTreeSelector
             visibleStatuses={[OrganizationStatus.Enable]}
@@ -91,7 +83,7 @@ export default function OrganizationResponsibilityAssignmentFormModal({
       <ProFormSelect
         name="typeCode"
         label="责任类型"
-        rules={[{ required: true, message: '请选择责任类型' }]}
+        rules={[{ required: true, message: "请选择责任类型" }]}
         options={ORGANIZATION_RESPONSIBILITY_TYPE_CATALOG.map((type) => ({
           label: type.name,
           value: type.code,
@@ -101,10 +93,10 @@ export default function OrganizationResponsibilityAssignmentFormModal({
         name="employmentId"
         label="任职"
         showSearch
-        rules={[{ required: true, message: '请选择任职' }]}
+        rules={[{ required: true, message: "请选择任职" }]}
         fieldProps={{
           filterOption: false,
-          placeholder: '搜索用户、账号、组织或岗位',
+          placeholder: "搜索用户、账号、组织或岗位",
           showSearch: true,
         }}
         request={requestEmploymentOptionsWithoutId}

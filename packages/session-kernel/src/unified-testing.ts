@@ -1,9 +1,8 @@
-import type { UnifiedSessionKernelOptions } from "./unified/factory";
-import type { CapturedSession, SessionRecord } from "./unified/model";
 import { createHash, randomUUID } from "node:crypto";
 import Redis from "ioredis";
-
+import type { UnifiedSessionKernelOptions } from "./unified/factory";
 import { createUnifiedSessionKernel } from "./unified/factory";
+import type { CapturedSession, SessionRecord } from "./unified/model";
 import { SessionObservationRequiredError, sessionRecordSchema } from "./unified/model";
 
 /** Owner-only real Redis fixture; it never emulates Redis commands or lifecycle transitions. */
@@ -22,24 +21,20 @@ export async function createUnifiedSessionRedisTestScope(
     async eval(script: string, keyCount: number, ...args: Array<string | number>) {
       const request: { action: string } = JSON.parse(String(args[1]));
       const currentFault = fault?.action === request.action ? fault : undefined;
-      if (currentFault && --currentFault.remaining === 0)
-        fault = undefined;
-      if (currentFault && !currentFault.after)
-        throw new Error("Injected Redis transport failure before execution");
+      if (currentFault && --currentFault.remaining === 0) fault = undefined;
+      if (currentFault && !currentFault.after) throw new Error("Injected Redis transport failure before execution");
       const result = await redis.eval(script, keyCount, ...args);
       if (interception?.action === request.action) {
         const callback = interception.callback;
         interception = undefined;
         await callback();
       }
-      if (currentFault?.after)
-        throw new Error("Injected Redis response loss after execution");
+      if (currentFault?.after) throw new Error("Injected Redis response loss after execution");
       return result;
     },
   };
   function assertOperationActive(operation: object) {
-    if (!operations.has(operation))
-      throw new SessionObservationRequiredError();
+    if (!operations.has(operation)) throw new SessionObservationRequiredError();
   }
   function createFactory(
     overrides: Partial<
@@ -56,11 +51,9 @@ export async function createUnifiedSessionRedisTestScope(
     });
   }
   async function recordKey(target: CapturedSession) {
-    if (target.kind === "clientSession")
-      return `${prefix}client:${target.id}`;
+    if (target.kind === "clientSession") return `${prefix}client:${target.id}`;
     const hash = await redis.get(`${prefix}user-id:${target.id}`);
-    if (!hash)
-      throw new Error("Fixture UserSession reverse ID missing");
+    if (!hash) throw new Error("Fixture UserSession reverse ID missing");
     return `${prefix}user:${hash}`;
   }
   async function inspect(target: CapturedSession) {
@@ -68,8 +61,8 @@ export async function createUnifiedSessionRedisTestScope(
     const raw = await redis.get(key);
     const record = raw ? sessionRecordSchema.parse(JSON.parse(raw)) : null;
     const expiresAt = await redis.pexpiretime(key);
-    const relatedKey
-      = target.kind === "userSession"
+    const relatedKey =
+      target.kind === "userSession"
         ? `${prefix}user-id:${target.id}`
         : `${prefix}slot:${target.userSessionId}:${target.clientId}`;
     return {
@@ -117,8 +110,8 @@ export async function createUnifiedSessionRedisTestScope(
       await redis.del(`${prefix}children:${userSessionId}`);
     },
     async corruptReclamationIndex(target: CapturedSession) {
-      const key
-        = target.kind === "userSession"
+      const key =
+        target.kind === "userSession"
           ? `${prefix}subject:${target.subjectIdentifier}`
           : `${prefix}children:${target.userSessionId}`;
       await redis.set(key, "wrong-type", "EX", 3600);
@@ -126,8 +119,7 @@ export async function createUnifiedSessionRedisTestScope(
     async replaceInstance(target: CapturedSession) {
       const key = await recordKey(target);
       const raw = await redis.get(key);
-      if (!raw)
-        throw new Error("Fixture target missing");
+      if (!raw) throw new Error("Fixture target missing");
       const record: SessionRecord = sessionRecordSchema.parse(JSON.parse(raw));
       record.instance = randomUUID();
       await redis.set(key, JSON.stringify(record), "KEEPTTL");
@@ -139,16 +131,14 @@ export async function createUnifiedSessionRedisTestScope(
     async replaceSubjectContext(target: CapturedSession, context: unknown) {
       const key = await recordKey(target);
       const raw = await redis.get(key);
-      if (!raw)
-        throw new Error("Fixture target missing");
+      if (!raw) throw new Error("Fixture target missing");
       await redis.set(key, JSON.stringify({ ...JSON.parse(raw), subjectContext: context }), "KEEPTTL");
     },
     async corruptRecord(target: CapturedSession) {
       const key = await recordKey(target);
       const original = await redis.get(key);
       const expiresAt = await redis.pexpiretime(key);
-      if (!original || expiresAt < 0)
-        throw new Error("Fixture target or expiry missing");
+      if (!original || expiresAt < 0) throw new Error("Fixture target or expiry missing");
       await redis.set(key, "broken", "KEEPTTL");
       return async () => {
         await redis.set(key, original, "PXAT", expiresAt);
@@ -164,10 +154,8 @@ export async function createUnifiedSessionRedisTestScope(
     async close() {
       try {
         const keys = await redis.keys(`${namespace}:*`);
-        if (keys.length)
-          await redis.del(...keys);
-      }
-      finally {
+        if (keys.length) await redis.del(...keys);
+      } finally {
         redis.disconnect();
       }
     },

@@ -1,5 +1,4 @@
-export const CUSTOM_SSO_SESSION_AUTHORIZATION_SECURITY_SCHEME
-  = "CustomSsoSessionAuthorization";
+export const CUSTOM_SSO_SESSION_AUTHORIZATION_SECURITY_SCHEME = "CustomSsoSessionAuthorization";
 
 export const CUSTOM_SSO_SESSION_AUTHORIZATION_SECURITY_DEFINITION = {
   type: "apiKey",

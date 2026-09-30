@@ -23,10 +23,8 @@ export const RedirectUrlPatternFailureReasons = {
   UrlCredentials: "url_credentials_not_allowed",
 } as const;
 
-export type RedirectUrlPatternFailureReason
-  = typeof RedirectUrlPatternFailureReasons[
-    keyof typeof RedirectUrlPatternFailureReasons
-  ];
+export type RedirectUrlPatternFailureReason =
+  (typeof RedirectUrlPatternFailureReasons)[keyof typeof RedirectUrlPatternFailureReasons];
 
 export class RedirectUrlPatternSyntaxError extends Error {
   readonly reason: RedirectUrlPatternFailureReason;
@@ -47,30 +45,21 @@ export interface RedirectUrlPatternValidationResult {
 function parseUrl(value: string) {
   try {
     return new URL(value);
-  }
-  catch {
-    throw new RedirectUrlPatternSyntaxError(
-      RedirectUrlPatternFailureReasons.InvalidUrl,
-    );
+  } catch {
+    throw new RedirectUrlPatternSyntaxError(RedirectUrlPatternFailureReasons.InvalidUrl);
   }
 }
 
 function assertNoRawUserinfo(value: string) {
-  const authority = /^[a-z][a-z\d+.-]*:\/\/([^/?#]*)/iu.exec(
-    value.trim(),
-  )?.[1];
+  const authority = /^[a-z][a-z\d+.-]*:\/\/([^/?#]*)/iu.exec(value.trim())?.[1];
   if (authority?.includes("@")) {
-    throw new RedirectUrlPatternSyntaxError(
-      RedirectUrlPatternFailureReasons.UrlCredentials,
-    );
+    throw new RedirectUrlPatternSyntaxError(RedirectUrlPatternFailureReasons.UrlCredentials);
   }
 }
 
 function assertSupportedProtocol(url: URL) {
   if (url.protocol !== "http:" && url.protocol !== "https:") {
-    throw new RedirectUrlPatternSyntaxError(
-      RedirectUrlPatternFailureReasons.UnsupportedProtocol,
-    );
+    throw new RedirectUrlPatternSyntaxError(RedirectUrlPatternFailureReasons.UnsupportedProtocol);
   }
 }
 
@@ -80,38 +69,30 @@ function parseProtocol(url: URL): RedirectUrlPattern["protocol"] {
 }
 
 function parseHostWildcard(hostname: string) {
-  const wildcardCount = [...hostname].filter(char => char === "*").length;
+  const wildcardCount = [...hostname].filter((char) => char === "*").length;
   if (wildcardCount === 0) {
     return null;
   }
   if (wildcardCount !== 1 || !hostname.startsWith("*.")) {
-    throw new RedirectUrlPatternSyntaxError(
-      RedirectUrlPatternFailureReasons.HostWildcardInvalid,
-    );
+    throw new RedirectUrlPatternSyntaxError(RedirectUrlPatternFailureReasons.HostWildcardInvalid);
   }
 
   const suffix = hostname.slice(2);
   if (!suffix.includes(".") || suffix.includes("*") || suffix.startsWith(".") || suffix.endsWith(".")) {
-    throw new RedirectUrlPatternSyntaxError(
-      RedirectUrlPatternFailureReasons.HostWildcardInvalid,
-    );
+    throw new RedirectUrlPatternSyntaxError(RedirectUrlPatternFailureReasons.HostWildcardInvalid);
   }
   if (suffix.startsWith("[") || /^\d+\.\d+\.\d+\.\d+$/.test(suffix)) {
-    throw new RedirectUrlPatternSyntaxError(
-      RedirectUrlPatternFailureReasons.HostWildcardIp,
-    );
+    throw new RedirectUrlPatternSyntaxError(RedirectUrlPatternFailureReasons.HostWildcardIp);
   }
   if (getPublicSuffix(suffix, { allowPrivateDomains: true }) === suffix) {
-    throw new RedirectUrlPatternSyntaxError(
-      RedirectUrlPatternFailureReasons.HostWildcardPublicSuffix,
-    );
+    throw new RedirectUrlPatternSyntaxError(RedirectUrlPatternFailureReasons.HostWildcardPublicSuffix);
   }
 
   return suffix;
 }
 
 function parsePathMode(pathname: string): Pick<RedirectUrlPattern, "pathMode" | "pathname"> {
-  const wildcardCount = [...pathname].filter(char => char === "*").length;
+  const wildcardCount = [...pathname].filter((char) => char === "*").length;
   if (wildcardCount === 0) {
     return {
       pathMode: "exact",
@@ -124,36 +105,26 @@ function parsePathMode(pathname: string): Pick<RedirectUrlPattern, "pathMode" | 
       pathname: pathname.slice(0, -1),
     };
   }
-  throw new RedirectUrlPatternSyntaxError(
-    RedirectUrlPatternFailureReasons.PathWildcardInvalid,
-  );
+  throw new RedirectUrlPatternSyntaxError(RedirectUrlPatternFailureReasons.PathWildcardInvalid);
 }
 
 export function parseRedirectUrlPattern(pattern: string): RedirectUrlPattern {
   const trimmed = pattern.trim();
   if (trimmed === "" || trimmed === "*") {
-    throw new RedirectUrlPatternSyntaxError(
-      RedirectUrlPatternFailureReasons.EmptyOrBareWildcard,
-    );
+    throw new RedirectUrlPatternSyntaxError(RedirectUrlPatternFailureReasons.EmptyOrBareWildcard);
   }
   if (trimmed.split("#", 1)[0]!.includes("?")) {
-    throw new RedirectUrlPatternSyntaxError(
-      RedirectUrlPatternFailureReasons.DynamicQuery,
-    );
+    throw new RedirectUrlPatternSyntaxError(RedirectUrlPatternFailureReasons.DynamicQuery);
   }
 
   assertNoRawUserinfo(trimmed);
   const url = parseUrl(trimmed);
   const protocol = parseProtocol(url);
   if (url.username !== "" || url.password !== "") {
-    throw new RedirectUrlPatternSyntaxError(
-      RedirectUrlPatternFailureReasons.UrlCredentials,
-    );
+    throw new RedirectUrlPatternSyntaxError(RedirectUrlPatternFailureReasons.UrlCredentials);
   }
   if (url.search !== "") {
-    throw new RedirectUrlPatternSyntaxError(
-      RedirectUrlPatternFailureReasons.DynamicQuery,
-    );
+    throw new RedirectUrlPatternSyntaxError(RedirectUrlPatternFailureReasons.DynamicQuery);
   }
 
   const hostWildcardSuffix = parseHostWildcard(url.hostname);
@@ -174,14 +145,11 @@ export function validateRedirectUrlPattern(pattern: string): RedirectUrlPatternV
   try {
     parseRedirectUrlPattern(pattern);
     return { ok: true };
-  }
-  catch (err) {
+  } catch (err) {
     return {
       ok: false,
       error: err instanceof Error ? err.message : "Invalid redirect URL pattern",
-      reason: err instanceof RedirectUrlPatternSyntaxError
-        ? err.reason
-        : RedirectUrlPatternFailureReasons.InvalidUrl,
+      reason: err instanceof RedirectUrlPatternSyntaxError ? err.reason : RedirectUrlPatternFailureReasons.InvalidUrl,
     };
   }
 }
@@ -191,9 +159,7 @@ export function normalizeRedirectUrl(redirectUrl: string) {
   const url = parseUrl(redirectUrl);
   assertSupportedProtocol(url);
   if (url.username !== "" || url.password !== "") {
-    throw new RedirectUrlPatternSyntaxError(
-      RedirectUrlPatternFailureReasons.UrlCredentials,
-    );
+    throw new RedirectUrlPatternSyntaxError(RedirectUrlPatternFailureReasons.UrlCredentials);
   }
   return url.toString();
 }
@@ -229,15 +195,17 @@ export function matchRedirectUrlPattern(redirectUrl: string, pattern: string | R
   const normalizedRedirectUrl = normalizeRedirectUrl(redirectUrl);
   const url = new URL(normalizedRedirectUrl);
 
-  return url.protocol === parsedPattern.protocol
-    && url.port === parsedPattern.port
-    && matchesHostname(parsedPattern, url.hostname)
-    && matchesPath(parsedPattern, url.pathname)
-    && (parsedPattern.fragment === null
-      || (url.href.includes("#") ? url.href.slice(url.href.indexOf("#")) : null) === parsedPattern.fragment)
-    && (!normalizedRedirectUrl.split("#", 1)[0]!.includes("?") || hasWildcard(parsedPattern));
+  return (
+    url.protocol === parsedPattern.protocol &&
+    url.port === parsedPattern.port &&
+    matchesHostname(parsedPattern, url.hostname) &&
+    matchesPath(parsedPattern, url.pathname) &&
+    (parsedPattern.fragment === null ||
+      (url.href.includes("#") ? url.href.slice(url.href.indexOf("#")) : null) === parsedPattern.fragment) &&
+    (!normalizedRedirectUrl.split("#", 1)[0]!.includes("?") || hasWildcard(parsedPattern))
+  );
 }
 
 export function isRedirectUrlAllowedByPatterns(redirectUrl: string, patterns: string[]) {
-  return patterns.some(pattern => matchRedirectUrlPattern(redirectUrl, pattern));
+  return patterns.some((pattern) => matchRedirectUrlPattern(redirectUrl, pattern));
 }

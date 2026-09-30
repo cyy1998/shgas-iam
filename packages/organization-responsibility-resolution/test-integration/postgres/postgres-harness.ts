@@ -1,6 +1,6 @@
-import type { DbClient } from "@iam/db";
 import { randomUUID } from "node:crypto";
 import { fileURLToPath } from "node:url";
+import type { DbClient } from "@iam/db";
 import { relations } from "@iam/db/relations";
 import { drizzle } from "drizzle-orm/postgres-js";
 import { migrate } from "drizzle-orm/postgres-js/migrator";
@@ -34,10 +34,12 @@ export async function createPostgresTestHarness(): Promise<PostgresTestHarness> 
     return {
       db,
       async reset() {
-        await scopedSql!.unsafe([
-          "TRUNCATE TABLE organization_responsibility_assignment, organization_closure,",
-          "employment, organization RESTART IDENTITY CASCADE",
-        ].join(" "));
+        await scopedSql!.unsafe(
+          [
+            "TRUNCATE TABLE organization_responsibility_assignment, organization_closure,",
+            "employment, organization RESTART IDENTITY CASCADE",
+          ].join(" "),
+        );
       },
       async close() {
         await scopedSql!.end();
@@ -45,10 +47,8 @@ export async function createPostgresTestHarness(): Promise<PostgresTestHarness> 
         await adminSql.end();
       },
     };
-  }
-  catch (error) {
-    if (scopedSql)
-      await scopedSql.end({ timeout: 1 });
+  } catch (error) {
+    if (scopedSql) await scopedSql.end({ timeout: 1 });
     await adminSql.unsafe(`DROP SCHEMA IF EXISTS ${quoteIdentifier(schemaName)} CASCADE`);
     await adminSql.end({ timeout: 1 });
     throw error;
@@ -89,7 +89,6 @@ function databaseIdentity(databaseUrl: string): string {
 }
 
 function quoteIdentifier(identifier: string): string {
-  if (!/^[a-z0-9_]+$/u.test(identifier))
-    throw new Error("test schema name contains unsafe characters");
+  if (!/^[a-z0-9_]+$/u.test(identifier)) throw new Error("test schema name contains unsafe characters");
   return `"${identifier}"`;
 }

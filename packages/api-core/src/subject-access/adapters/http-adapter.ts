@@ -1,12 +1,9 @@
-import type { Context } from "hono";
 import { ApiErrorCode } from "@iam/contracts";
+import type { Context } from "hono";
 import { setCookie } from "hono/cookie";
 import { SERVICE_UNAVAILABLE, UNAUTHORIZED } from "../../core/http-status-codes";
 import { CustomError } from "../../errors";
-import {
-  SubjectAccessDisabledError,
-  SubjectAccessUnavailableError,
-} from "../errors";
+import { SubjectAccessDisabledError, SubjectAccessUnavailableError } from "../errors";
 
 export class SubjectAccessSessionInvalidHttpError extends CustomError {
   constructor() {
@@ -27,13 +24,8 @@ export class SubjectAccessUnavailableHttpError extends CustomError {
       httpStatus: SERVICE_UNAVAILABLE,
     });
     this.name = "SubjectAccessUnavailableHttpError";
-    if (
-      retryAfterSeconds !== undefined
-      && (!Number.isSafeInteger(retryAfterSeconds) || retryAfterSeconds <= 0)
-    ) {
-      throw new RangeError(
-        "Subject Access retryAfterSeconds must be a positive safe integer",
-      );
+    if (retryAfterSeconds !== undefined && (!Number.isSafeInteger(retryAfterSeconds) || retryAfterSeconds <= 0)) {
+      throw new RangeError("Subject Access retryAfterSeconds must be a positive safe integer");
     }
     this.retryAfterSeconds = retryAfterSeconds;
   }
@@ -52,15 +44,10 @@ export function createSubjectAccessHttpAdapter() {
   ): Promise<T> {
     try {
       return await operation();
-    }
-    catch (error) {
-      if (
-        error instanceof SubjectAccessSessionInvalidHttpError
-        || error instanceof SubjectAccessDisabledError
-      ) {
+    } catch (error) {
+      if (error instanceof SubjectAccessSessionInvalidHttpError || error instanceof SubjectAccessDisabledError) {
         for (const cookieName of new Set(options.clearCookiesOnInvalidSession ?? [])) {
-          if (!isCookieName(cookieName))
-            continue;
+          if (!isCookieName(cookieName)) continue;
           setCookie(context, cookieName, "", {
             expires: new Date(0),
             maxAge: 0,
@@ -72,9 +59,7 @@ export function createSubjectAccessHttpAdapter() {
           : new SubjectAccessSessionInvalidHttpError();
       }
       if (error instanceof SubjectAccessUnavailableError) {
-        throw new SubjectAccessUnavailableHttpError(
-          options.retryAfterSeconds,
-        );
+        throw new SubjectAccessUnavailableHttpError(options.retryAfterSeconds);
       }
       throw error;
     }

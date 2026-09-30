@@ -1,5 +1,3 @@
-import type { UserRequestOptions, UserServiceDeps } from "./user.port";
-import type { UserDetailDto } from "./user.type";
 import { withApiRequestContext } from "@api/services/audit/audit.context";
 import {
   buildMobileBindSuccessAudit,
@@ -8,6 +6,8 @@ import {
 } from "@api/services/audit/events/self-user.audit";
 import { UserStatus } from "@iam/contracts";
 import { InvalidOldPasswordError, UserNotFoundError, UserPasswordUnchangedError } from "@iam/domain/user";
+import type { UserRequestOptions, UserServiceDeps } from "./user.port";
+import type { UserDetailDto } from "./user.type";
 
 export function createUserService(deps: UserServiceDeps) {
   async function setPassword(
@@ -16,31 +16,32 @@ export function createUserService(deps: UserServiceDeps) {
     newPassword: string,
     options: UserRequestOptions = {},
   ) {
-    return await deps.uow.transaction(async (tx) => {
-      const user = await tx.userRepository.getUserByUsername(username);
-      if (user === null) {
-        throw new UserNotFoundError("用户名不存在");
-      }
-      if (oldPassword === newPassword) {
-        throw new UserPasswordUnchangedError("旧密码与新密码相同");
-      }
-      const isMatch = await deps.passwordHelper.verifyUserPassword(user, oldPassword);
-      if (!isMatch) {
-        await tx.auditLogWriter.recordAuditLog(withApiRequestContext(
-          options.requestContext,
-          buildSelfPasswordChangeFailureAudit(user),
-        ));
-        throw new InvalidOldPasswordError("旧密码错误");
-      }
-      deps.passwordHelper.assertStrongPassword(newPassword);
-      const newPasswordHash = await deps.passwordHelper.hashUserPassword(newPassword);
-      await tx.userRepository.setPassword(user.id, newPasswordHash);
-      await tx.auditLogWriter.recordAuditLog(withApiRequestContext(
-        options.requestContext,
-        buildSelfPasswordChangeSuccessAudit(user),
-      ));
-      return true;
-    }, { observability: options.requestContext });
+    return await deps.uow.transaction(
+      async (tx) => {
+        const user = await tx.userRepository.getUserByUsername(username);
+        if (user === null) {
+          throw new UserNotFoundError("用户名不存在");
+        }
+        if (oldPassword === newPassword) {
+          throw new UserPasswordUnchangedError("旧密码与新密码相同");
+        }
+        const isMatch = await deps.passwordHelper.verifyUserPassword(user, oldPassword);
+        if (!isMatch) {
+          await tx.auditLogWriter.recordAuditLog(
+            withApiRequestContext(options.requestContext, buildSelfPasswordChangeFailureAudit(user)),
+          );
+          throw new InvalidOldPasswordError("旧密码错误");
+        }
+        deps.passwordHelper.assertStrongPassword(newPassword);
+        const newPasswordHash = await deps.passwordHelper.hashUserPassword(newPassword);
+        await tx.userRepository.setPassword(user.id, newPasswordHash);
+        await tx.auditLogWriter.recordAuditLog(
+          withApiRequestContext(options.requestContext, buildSelfPasswordChangeSuccessAudit(user)),
+        );
+        return true;
+      },
+      { observability: options.requestContext },
+    );
   }
 
   async function checkPassword(username: string, inputPassword: string) {
@@ -73,33 +74,32 @@ export function createUserService(deps: UserServiceDeps) {
 
   async function pauseEnabledUser(userId: number, options: UserRequestOptions = {}) {
     const existing = await deps.userRepository.getUserById(userId);
-    if (existing === null)
-      return null;
+    if (existing === null) return null;
 
     return await deps.subjectAccessLifecycle.run({
       subjectIdentifier: existing.subjectIdentifier,
       disposition: "disabled",
-      mutate: async receipt => await deps.uow.transaction(async tx =>
-        await tx.subjectAccessMutation.runMutation(
-          receipt,
-          async () => {
-            const updatedUser = await tx.userRepository.updateEnabledUserStatus(userId, UserStatus.Pause);
-            if (updatedUser === null)
-              return null;
+      mutate: async (receipt) =>
+        await deps.uow.transaction(
+          async (tx) =>
+            await tx.subjectAccessMutation.runMutation(
+              receipt,
+              async () => {
+                const updatedUser = await tx.userRepository.updateEnabledUserStatus(userId, UserStatus.Pause);
+                if (updatedUser === null) return null;
 
-            await tx.userProfileInvalidation.recordChanges([
-              { kind: "user", userId },
-            ]);
-            return updatedUser;
-          },
-          () => "disabled",
-        ), { observability: options.requestContext }),
+                await tx.userProfileInvalidation.recordChanges([{ kind: "user", userId }]);
+                return updatedUser;
+              },
+              () => "disabled",
+            ),
+          { observability: options.requestContext },
+        ),
       revokeSessions: async (_result, context) => {
         await deps.sessionRevocation.revokeUserSessions({
           subjectIdentifier: existing.subjectIdentifier,
           reason: "user_disabled",
-          onlySubjectAccessTransitionId:
-            context.invalidatedSubjectAccessTransitionId,
+          onlySubjectAccessTransitionId: context.invalidatedSubjectAccessTransitionId,
         });
       },
       observability: {
@@ -113,23 +113,21 @@ export function createUserService(deps: UserServiceDeps) {
     const reservation = await deps.mobileBinding.assertCanBindMobile(userId, phoneNumber, code, options);
     let transactionSucceeded = false;
     try {
-      await deps.uow.transaction(async (tx) => {
-        await tx.userRepository.setMobile(userId, phoneNumber);
-        await tx.auditLogWriter.recordAuditLog(withApiRequestContext(
-          options.requestContext,
-          buildMobileBindSuccessAudit(userId, phoneNumber),
-        ));
-        await tx.userProfileInvalidation.recordChanges([
-          { kind: "user", userId },
-        ]);
-      }, { observability: options.requestContext });
+      await deps.uow.transaction(
+        async (tx) => {
+          await tx.userRepository.setMobile(userId, phoneNumber);
+          await tx.auditLogWriter.recordAuditLog(
+            withApiRequestContext(options.requestContext, buildMobileBindSuccessAudit(userId, phoneNumber)),
+          );
+          await tx.userProfileInvalidation.recordChanges([{ kind: "user", userId }]);
+        },
+        { observability: options.requestContext },
+      );
       transactionSucceeded = true;
       await deps.mobileService.confirmReservedVerificationCode(reservation);
       return true;
-    }
-    catch (error) {
-      if (!transactionSucceeded)
-        await deps.mobileService.releaseReservedVerificationCode(reservation);
+    } catch (error) {
+      if (!transactionSucceeded) await deps.mobileService.releaseReservedVerificationCode(reservation);
       throw error;
     }
   }
@@ -146,10 +144,12 @@ export function createUserService(deps: UserServiceDeps) {
     try {
       const profile = await deps.profileQuery.getDetailByUsername(username);
       return profile.mobile;
-    }
-    catch (error) {
+    } catch (error) {
       // A missing published Profile does not prove the account is absent.
-      if (error instanceof UserNotFoundError && await deps.userRepository.findUserIdentityByUsername(username) === null)
+      if (
+        error instanceof UserNotFoundError &&
+        (await deps.userRepository.findUserIdentityByUsername(username)) === null
+      )
         return null;
       throw error;
     }

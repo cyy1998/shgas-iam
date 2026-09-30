@@ -1,15 +1,11 @@
-import type { SessionManagementService } from "@admin-api/services/session-management/session-management.service";
-import type { Context } from "hono";
-import type { z } from "zod";
-import type { SessionManagementRouteHandler } from "./session-management.type";
-import {
-  defineAdminApiMutationOperation,
-  defineAdminApiQueryOperation,
-} from "@admin-api/lib/admin-api-adapter";
+import { defineAdminApiMutationOperation, defineAdminApiQueryOperation } from "@admin-api/lib/admin-api-adapter";
 import { getAdminAuthorizationContext } from "@admin-api/services/admin-authorization/admin-authorization.context";
 import { resolveAdminAuditContext } from "@admin-api/services/audit/audit.context";
+import type { SessionManagementService } from "@admin-api/services/session-management/session-management.service";
 import { AuthzUnauthorizedError } from "@iam/api-core/errors";
 import { router } from "@iam/api-core/trpc";
+import type { Context } from "hono";
+import type { z } from "zod";
 import {
   SessionManagementListLoginRestrictionsInputSchema,
   SessionManagementListSessionsInputSchema,
@@ -21,6 +17,7 @@ import {
   toSessionManagementRevokeSessionsResultVo,
   toSessionManagementSessionListResultVo,
 } from "./session-management.schema";
+import type { SessionManagementRouteHandler } from "./session-management.type";
 
 export interface CreateSessionManagementAdapterDeps {
   sessionManagementService: Pick<
@@ -33,8 +30,7 @@ export function createSessionManagementAdapter(deps: CreateSessionManagementAdap
   const listLoginRestrictions = defineAdminApiQueryOperation({
     operationId: "admin.sessionManagement.listLoginRestrictions",
     input: SessionManagementListLoginRestrictionsInputSchema,
-    restInput: c =>
-      c.req.valid("json") as z.infer<typeof SessionManagementListLoginRestrictionsInputSchema>,
+    restInput: (c) => c.req.valid("json") as z.infer<typeof SessionManagementListLoginRestrictionsInputSchema>,
     handler: async (input) => {
       const result = await deps.sessionManagementService.listLoginRestrictions({
         pageNum: input.pageNum,
@@ -48,7 +44,7 @@ export function createSessionManagementAdapter(deps: CreateSessionManagementAdap
   const listSessions = defineAdminApiQueryOperation({
     operationId: "admin.sessionManagement.listSessions",
     input: SessionManagementListSessionsInputSchema,
-    restInput: c => c.req.valid("json") as z.infer<typeof SessionManagementListSessionsInputSchema>,
+    restInput: (c) => c.req.valid("json") as z.infer<typeof SessionManagementListSessionsInputSchema>,
     handler: async (input, context) => {
       const result = await deps.sessionManagementService.listSessions(
         {
@@ -75,7 +71,7 @@ export function createSessionManagementAdapter(deps: CreateSessionManagementAdap
   const revokeSessions = defineAdminApiMutationOperation({
     operationId: "admin.sessionManagement.revokeSessions",
     input: SessionManagementRevokeSessionsInputSchema,
-    restInput: c => c.req.valid("json") as z.infer<typeof SessionManagementRevokeSessionsInputSchema>,
+    restInput: (c) => c.req.valid("json") as z.infer<typeof SessionManagementRevokeSessionsInputSchema>,
     handler: async (input, context) => {
       const actor = getServerActor(context?.hono);
       const result = await deps.sessionManagementService.revokeSessions(
@@ -90,8 +86,7 @@ export function createSessionManagementAdapter(deps: CreateSessionManagementAdap
   const releaseLoginRestriction = defineAdminApiMutationOperation({
     operationId: "admin.sessionManagement.releaseLoginRestriction",
     input: SessionManagementReleaseLoginRestrictionInputSchema,
-    restInput: c =>
-      c.req.valid("param") as z.infer<typeof SessionManagementReleaseLoginRestrictionInputSchema>,
+    restInput: (c) => c.req.valid("param") as z.infer<typeof SessionManagementReleaseLoginRestrictionInputSchema>,
     handler: async (input, context) => {
       const result = await deps.sessionManagementService.releaseLoginRestriction(
         input,
@@ -129,7 +124,6 @@ function getServerActor(context: Context | undefined) {
   }
   return {
     actorUserId,
-    principalSessionId:
-      typeof principalSessionId === "string" && principalSessionId.trim() ? principalSessionId : null,
+    principalSessionId: typeof principalSessionId === "string" && principalSessionId.trim() ? principalSessionId : null,
   };
 }

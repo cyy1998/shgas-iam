@@ -1,45 +1,36 @@
-import type { InternalUserProfileQueryRepositoryPort } from "./internal-user-query.port";
 import { UserNotFoundError } from "@iam/domain/user";
-import {
-  parseUserProfileDetailDocument,
-} from "../schema/profile.schema";
+import { parseUserProfileDetailDocument } from "../schema/profile.schema";
 import {
   InternalUserProfileDetailIntegrityError,
   InternalUserProfileSearchUnavailableError,
 } from "./internal-user-query.error";
+import type { InternalUserProfileQueryRepositoryPort } from "./internal-user-query.port";
 
 export interface InternalUserProfileQueryServiceDeps {
   readonly profileRepository: InternalUserProfileQueryRepositoryPort;
 }
 
-export function createInternalUserProfileQueryService(
-  deps: InternalUserProfileQueryServiceDeps,
-) {
+export function createInternalUserProfileQueryService(deps: InternalUserProfileQueryServiceDeps) {
   return {
     async getDetailByUsername(username: string) {
-      let profile;
+      let profile: Awaited<ReturnType<typeof deps.profileRepository.getCurrentByUsername>>;
       try {
         profile = await deps.profileRepository.getCurrentByUsername(username);
-      }
-      catch {
+      } catch {
         throw new InternalUserProfileSearchUnavailableError();
       }
-      if (profile === null)
-        throw new UserNotFoundError("用户画像不存在");
+      if (profile === null) throw new UserNotFoundError("用户画像不存在");
       return parseStrictDetail(profile.detail);
     },
   };
 }
 
-export type InternalUserProfileQueryService = ReturnType<
-  typeof createInternalUserProfileQueryService
->;
+export type InternalUserProfileQueryService = ReturnType<typeof createInternalUserProfileQueryService>;
 
 function parseStrictDetail(input: unknown) {
   try {
     return parseUserProfileDetailDocument(input);
-  }
-  catch {
+  } catch {
     throw new InternalUserProfileDetailIntegrityError();
   }
 }

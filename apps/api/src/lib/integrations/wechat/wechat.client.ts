@@ -1,12 +1,14 @@
 import type { RedisPort } from "@api/composition/runtime";
 import { z } from "@hono/zod-openapi";
 
-const WechatAccessTokenResponseSchema = z.object({
-  errcode: z.number(),
-  errmsg: z.string(),
-  access_token: z.string(),
-  expires_in: z.number(),
-}).openapi("WechatAccessTokenResponseSchema");
+const WechatAccessTokenResponseSchema = z
+  .object({
+    errcode: z.number(),
+    errmsg: z.string(),
+    access_token: z.string(),
+    expires_in: z.number(),
+  })
+  .openapi("WechatAccessTokenResponseSchema");
 
 const WechatUserInfoResponseSchema = z.object({
   errcode: z.number(),

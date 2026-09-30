@@ -1,6 +1,7 @@
-import type { LoginWithOaResult } from "@api/use-cases/authentication/login-with-oa/login-with-oa.type";
+import { beforeEach, describe, expect, mock, test } from "bun:test";
 import { createRootSsoHandlers, createSsoEndpointsHandler } from "@api/routes/sso/sso.handlers";
 import { createUnifiedAuthorizationHandlers } from "@api/routes/sso/unified-authorization.handlers";
+import type { LoginWithOaResult } from "@api/use-cases/authentication/login-with-oa/login-with-oa.type";
 import { ClientSnapshotUnavailableError } from "@iam/api-core/client-snapshot";
 import { createErrorHandler } from "@iam/api-core/middlewares";
 import {
@@ -9,7 +10,6 @@ import {
   SubjectAccessUnavailableError,
 } from "@iam/api-core/subject-access";
 import { ApiErrorCode, LoginPageGuardDecision } from "@iam/contracts";
-import { beforeEach, describe, expect, mock, test } from "bun:test";
 import { Hono } from "hono";
 
 const logger = {
@@ -21,7 +21,9 @@ const errorLogger = {
   warn: mock(() => undefined),
 };
 
-const loginOA = mock(async (): Promise<LoginWithOaResult> => ({ kind: "authenticated", token: "global-session", isMobileSet: true }));
+const loginOA = mock(
+  async (): Promise<LoginWithOaResult> => ({ kind: "authenticated", token: "global-session", isMobileSet: true }),
+);
 const loginWX = mock(async () => ({ token: "global-session", isMobileSet: true }));
 const logout = mock(async () => true as const);
 const checkLoginContinuation = mock(
@@ -181,9 +183,7 @@ function createWechatContext() {
 function createContext(entryNetwork?: string) {
   return {
     req: {
-      header: mock((name: string) =>
-        name.toLowerCase() === "x-iam-entry-network" ? entryNetwork : undefined,
-      ),
+      header: mock((name: string) => (name.toLowerCase() === "x-iam-entry-network" ? entryNetwork : undefined)),
       raw: new Request("https://untrusted.example.test/sso/.well-known/authentication-configuration"),
       url: "https://untrusted.example.test/sso/.well-known/authentication-configuration",
     },
@@ -313,9 +313,7 @@ describe("root SSO HTTP adaptation", () => {
     expect(context.responseHeaders).toEqual([
       [
         "Set-Cookie",
-        expect.stringMatching(
-          /global_session=;.*Max-Age=0;.*Path=\/.*Expires=Thu, 01 Jan 1970 00:00:00 GMT/iu,
-        ),
+        expect.stringMatching(/global_session=;.*Max-Age=0;.*Path=\/.*Expires=Thu, 01 Jan 1970 00:00:00 GMT/iu),
         { append: true },
       ],
     ]);

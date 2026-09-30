@@ -1,7 +1,7 @@
-import type { OidcStateRedis } from "./state";
 import { createHash } from "node:crypto";
 import { z } from "zod";
 import { OidcStateUnavailableError } from "./errors";
+import type { OidcStateRedis } from "./state";
 
 /** The first failed Basic authentication starts a fixed window for this Client and IP. */
 export function createOidcClientAuthRateLimiter(options: {
@@ -31,8 +31,7 @@ export function createOidcClientAuthRateLimiter(options: {
   async function execute(script: string, clientId: string, ip: string, ...args: string[]) {
     try {
       return await options.redis.eval(script, 1, key(clientId, ip), ...args);
-    }
-    catch {
+    } catch {
       throw new OidcStateUnavailableError();
     }
   }

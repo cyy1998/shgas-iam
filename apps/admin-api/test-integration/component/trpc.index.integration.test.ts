@@ -1,10 +1,10 @@
+import { describe, expect, mock, test } from "bun:test";
 import { createTrpcRoute } from "@admin-api/routes/trpc/trpc.index";
 import { NOT_FOUND } from "@iam/api-core/core/http-status-codes";
 import { CustomError } from "@iam/api-core/errors";
 import { SystemLogEvent } from "@iam/api-core/logger";
 import { mapCustomErrorToTRPCError, publicProcedure, router } from "@iam/api-core/trpc";
 import { ApiErrorCode } from "@iam/contracts";
-import { describe, expect, mock, test } from "bun:test";
 import { Hono } from "hono";
 import { z } from "zod";
 
@@ -54,16 +54,14 @@ function createTestApp(logger: ReturnType<typeof createMockLogger>["logger"], un
           code: ApiErrorCode.OrganizationNotFound,
           httpStatus: NOT_FOUND,
         });
-      }
-      catch (err) {
+      } catch (err) {
         mapCustomErrorToTRPCError(err);
       }
     }),
     internal: publicProcedure.query(() => {
       try {
         throw new CustomError();
-      }
-      catch (err) {
+      } catch (err) {
         mapCustomErrorToTRPCError(err);
       }
     }),
@@ -89,12 +87,14 @@ describe("createTrpcRoute error logging", () => {
     const logger = createMockLogger();
     const app = createTestApp(logger.logger);
 
-    const res = asTestResponse(await app.request("http://localhost/rpc/known", {
-      headers: {
-        traceparent: "00-11111111111111111111111111111111-2222222222222222-01",
-      },
-    }));
-    const body = await res.json() as TrpcErrorResponse;
+    const res = asTestResponse(
+      await app.request("http://localhost/rpc/known", {
+        headers: {
+          traceparent: "00-11111111111111111111111111111111-2222222222222222-01",
+        },
+      }),
+    );
+    const body = (await res.json()) as TrpcErrorResponse;
 
     expect(res.status).toBe(NOT_FOUND);
     expect(body.error).toMatchObject({
@@ -132,7 +132,7 @@ describe("createTrpcRoute error logging", () => {
     const app = createTestApp(logger.logger, unknownError);
 
     const res = asTestResponse(await app.request("http://localhost/rpc/unknown"));
-    const body = await res.json() as TrpcErrorResponse;
+    const body = (await res.json()) as TrpcErrorResponse;
 
     expect(res.status).toBe(500);
     expect(body.error).toMatchObject({
@@ -169,7 +169,7 @@ describe("createTrpcRoute error logging", () => {
     const app = createTestApp(logger.logger);
 
     const res = asTestResponse(await app.request("http://localhost/rpc/internal"));
-    const body = await res.json() as TrpcErrorResponse;
+    const body = (await res.json()) as TrpcErrorResponse;
 
     expect(res.status).toBe(500);
     expect(body.error).toMatchObject({
@@ -187,12 +187,14 @@ describe("createTrpcRoute error logging", () => {
     const logger = createMockLogger();
     const app = createTestApp(logger.logger);
 
-    const res = asTestResponse(await app.request("http://localhost/rpc/validated", {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ id: "not-a-number" }),
-    }));
-    const body = await res.json() as TrpcErrorResponse;
+    const res = asTestResponse(
+      await app.request("http://localhost/rpc/validated", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ id: "not-a-number" }),
+      }),
+    );
+    const body = (await res.json()) as TrpcErrorResponse;
 
     expect(res.status).toBe(400);
     expect(body.error).toMatchObject({

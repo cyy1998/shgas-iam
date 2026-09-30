@@ -23,16 +23,15 @@ export async function recoverExactProject(
   const hasDescriptor = input.descriptorPath !== undefined;
   const hasProject = input.project !== undefined;
   if (hasDescriptor === hasProject) {
-    throw new Error(
-      "recovery requires exactly one explicit --descriptor or --project target",
-    );
+    throw new Error("recovery requires exactly one explicit --descriptor or --project target");
   }
 
-  const project = input.project === undefined
-    ? await readProjectFromDescriptor(input.descriptorPath!)
-    : assertExactProject(input.project);
+  const project =
+    input.project === undefined
+      ? await readProjectFromDescriptor(input.descriptorPath!)
+      : assertExactProject(input.project);
   const timeoutMs = options.timeoutMs ?? defaultRecoveryTimeoutMs;
-  await runBoundedOperation(signal => cleanup(project, signal), {
+  await runBoundedOperation((signal) => cleanup(project, signal), {
     abortSettleTimeoutMs: options.abortSettleTimeoutMs,
     parentSignal: options.signal,
     timeoutMessage: `E2E explicit recovery cleanup timed out after ${timeoutMs}ms`,
@@ -42,8 +41,7 @@ export async function recoverExactProject(
 }
 
 export function assertExactProject(project: string) {
-  if (!exactProjectPattern.test(project))
-    throw new Error("recovery project must be one exact E2E project name");
+  if (!exactProjectPattern.test(project)) throw new Error("recovery project must be one exact E2E project name");
   return project;
 }
 
@@ -51,8 +49,7 @@ async function readProjectFromDescriptor(descriptorPath: string) {
   let parsed: unknown;
   try {
     parsed = JSON.parse(await readFile(descriptorPath, "utf8"));
-  }
-  catch (error) {
+  } catch (error) {
     throw new Error("failed to read the explicit E2E run descriptor", {
       cause: error,
     });
@@ -63,12 +60,12 @@ async function readProjectFromDescriptor(descriptorPath: string) {
   const project = parsed.project;
   const labels = parsed.labels;
   if (
-    typeof runId !== "string"
-    || typeof project !== "string"
-    || project !== `iam-e2e-${runId}`
-    || !isRecord(labels)
-    || labels["com.docker.compose.project"] !== project
-    || labels["com.shgas-iam.e2e.run-id"] !== runId
+    typeof runId !== "string" ||
+    typeof project !== "string" ||
+    project !== `iam-e2e-${runId}` ||
+    !isRecord(labels) ||
+    labels["com.docker.compose.project"] !== project ||
+    labels["com.shgas-iam.e2e.run-id"] !== runId
   ) {
     throw new Error("explicit E2E run descriptor does not name one exact project");
   }

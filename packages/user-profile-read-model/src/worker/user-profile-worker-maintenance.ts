@@ -1,8 +1,4 @@
-import type {
-  RebuildUserProfileJobPayload,
-  UserProfileDirtyReason,
-  UserProfileDirtyStatus,
-} from "@iam/contracts";
+import type { RebuildUserProfileJobPayload, UserProfileDirtyReason, UserProfileDirtyStatus } from "@iam/contracts";
 import {
   UserProfileDirtyReason as UserProfileDirtyReasonValue,
   UserProfileDirtyStatus as UserProfileDirtyStatusValue,
@@ -35,13 +31,8 @@ export interface UserProfileMaintenanceMarkDirtyInput {
 }
 
 export interface UserProfileMaintenanceDirtyRepositoryPort {
-  markManyDirty: (
-    inputs: UserProfileMaintenanceMarkDirtyInput[],
-  ) => Promise<UserProfileMaintenanceDirtyRow[]>;
-  scanFailedOrStale: (input: {
-    staleBefore: Date;
-    limit: number;
-  }) => Promise<UserProfileMaintenanceRepairRow[]>;
+  markManyDirty: (inputs: UserProfileMaintenanceMarkDirtyInput[]) => Promise<UserProfileMaintenanceDirtyRow[]>;
+  scanFailedOrStale: (input: { staleBefore: Date; limit: number }) => Promise<UserProfileMaintenanceRepairRow[]>;
   resetStaleProcessing: (input: {
     userId: number;
     dirtyVersion: string;
@@ -51,9 +42,7 @@ export interface UserProfileMaintenanceDirtyRepositoryPort {
 }
 
 export interface UserProfileMaintenanceJobProducerPort {
-  enqueueRebuildJobs: (
-    inputs: RebuildUserProfileJobPayload[],
-  ) => Promise<{ enqueued: number; jobIds: string[] }>;
+  enqueueRebuildJobs: (inputs: RebuildUserProfileJobPayload[]) => Promise<{ enqueued: number; jobIds: string[] }>;
 }
 
 export interface CreateUserProfileWorkerMaintenanceDeps {
@@ -84,25 +73,23 @@ export function createUserProfileWorkerMaintenance(deps: CreateUserProfileWorker
         afterUserId,
         limit: batchSize,
       });
-      if (userIds.length === 0)
-        break;
+      if (userIds.length === 0) break;
 
-      const uniqueUserIds = [...new Set(userIds)]
-        .filter(userId => afterUserId === undefined || userId > afterUserId);
-      const result = await dirtyWorkflow.markDirty(uniqueUserIds.map(userId => ({
-        userId,
-        reasonCodes: [UserProfileDirtyReasonValue.Backfill],
-      })));
+      const uniqueUserIds = [...new Set(userIds)].filter((userId) => afterUserId === undefined || userId > afterUserId);
+      const result = await dirtyWorkflow.markDirty(
+        uniqueUserIds.map((userId) => ({
+          userId,
+          reasonCodes: [UserProfileDirtyReasonValue.Backfill],
+        })),
+      );
       enqueued += result.delivered;
       const nextAfterUserId = userIds.reduce(
         (highestUserId, userId) => Math.max(highestUserId, userId),
         afterUserId ?? 0,
       );
-      if (afterUserId !== undefined && nextAfterUserId <= afterUserId)
-        break;
+      if (afterUserId !== undefined && nextAfterUserId <= afterUserId) break;
       afterUserId = nextAfterUserId;
-      if (userIds.length < batchSize)
-        break;
+      if (userIds.length < batchSize) break;
     }
     return { enqueued };
   }
@@ -116,16 +103,16 @@ export function createUserProfileWorkerMaintenance(deps: CreateUserProfileWorker
     const repairRows: UserProfileMaintenanceRepairRow[] = [];
     for (const row of rows) {
       if (
-        row.status === UserProfileDirtyStatusValue.Failed
-        || (row.status === UserProfileDirtyStatusValue.Pending && row.dirtyAt < input.staleBefore)
+        row.status === UserProfileDirtyStatusValue.Failed ||
+        (row.status === UserProfileDirtyStatusValue.Pending && row.dirtyAt < input.staleBefore)
       ) {
         repairRows.push(row);
         continue;
       }
       if (
-        row.status !== UserProfileDirtyStatusValue.Processing
-        || row.processingStartedAt === null
-        || row.processingStartedAt >= input.staleBefore
+        row.status !== UserProfileDirtyStatusValue.Processing ||
+        row.processingStartedAt === null ||
+        row.processingStartedAt >= input.staleBefore
       ) {
         continue;
       }
@@ -135,8 +122,7 @@ export function createUserProfileWorkerMaintenance(deps: CreateUserProfileWorker
         staleBefore: input.staleBefore,
         now,
       });
-      if (reset !== null)
-        repairRows.push(reset);
+      if (reset !== null) repairRows.push(reset);
     }
     const result = await dirtyWorkflow.deliverRows(repairRows, {
       requestedAt: now.toISOString(),

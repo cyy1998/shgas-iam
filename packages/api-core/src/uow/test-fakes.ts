@@ -1,6 +1,6 @@
 import type { AfterCommitLoggerPort, AfterCommitTask } from "./after-commit";
-import type { UnitOfWorkPort } from "./unit-of-work";
 import { createAfterCommitPort, runAfterCommitTasks } from "./after-commit";
+import type { UnitOfWorkPort } from "./unit-of-work";
 import { markTransactionRollbackConfirmed } from "./unit-of-work";
 
 const noopAfterCommitLogger: AfterCommitLoggerPort = {
@@ -25,8 +25,7 @@ export function createImmediateUnitOfWork<TxPorts extends object>(
           ...txPorts,
           ...createAfterCommitPort(afterCommitTasks),
         });
-      }
-      catch (error) {
+      } catch (error) {
         markTransactionRollbackConfirmed(error);
         throw error;
       }

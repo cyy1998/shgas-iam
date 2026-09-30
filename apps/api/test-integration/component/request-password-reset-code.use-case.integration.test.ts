@@ -1,6 +1,6 @@
+import { expect, test } from "bun:test";
 import type { AuditLogInput } from "@api/services/audit/audit.context";
 import { createRequestPasswordResetCodeUseCase } from "@api/use-cases/account-recovery/request-password-reset-code/request-password-reset-code.use-case";
-import { expect, test } from "bun:test";
 
 test("requests a password-reset code for the bound mobile before auditing", async () => {
   const events: string[] = [];
@@ -45,17 +45,20 @@ test("records the existing masked password-reset code audit", async () => {
     },
   });
 
-  await useCase.execute({ username: "zhangsan", phoneNumber: "177****2865" }, {
-    requestContext: {
-      sourceApp: "iam",
-      requestId: "req-1",
-      traceId: null,
-      ip: null,
-      userAgent: null,
-      route: null,
-      method: null,
+  await useCase.execute(
+    { username: "zhangsan", phoneNumber: "177****2865" },
+    {
+      requestContext: {
+        sourceApp: "iam",
+        requestId: "req-1",
+        traceId: null,
+        ip: null,
+        userAgent: null,
+        route: null,
+        method: null,
+      },
     },
-  });
+  );
 
   expect(audit).toMatchObject({
     action: "auth.sms_code.send",

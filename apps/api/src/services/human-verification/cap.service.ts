@@ -1,10 +1,10 @@
-import type { CapServiceDeps } from "./human-verification.port";
-import type { HumanVerificationContext } from "./human-verification.type";
 import { createHmac } from "node:crypto";
 import { HumanVerificationAction } from "@api/enums/humanVerification.action";
 import { SystemLogEvent } from "@iam/api-core/logger";
 import { observabilityLogFields } from "@iam/api-core/observability";
 import { HumanVerificationRequiredError } from "./human-verification.error";
+import type { CapServiceDeps } from "./human-verification.port";
+import type { HumanVerificationContext } from "./human-verification.type";
 
 type RedeemInput = {
   token?: string;
@@ -18,7 +18,7 @@ function hashToken(secret: string, token: string) {
 }
 
 function verificationLogFields(
-  event: typeof SystemLogEvent[keyof typeof SystemLogEvent],
+  event: (typeof SystemLogEvent)[keyof typeof SystemLogEvent],
   action: HumanVerificationAction,
   context?: HumanVerificationContext,
 ) {
@@ -49,12 +49,7 @@ export function createCapService(deps: CapServiceDeps) {
       solutions: input.solutions,
     });
     if (result.success && result.token && action && isHumanVerificationAction(action)) {
-      await deps.redis.set(
-        tokenActionKey(deps.config.secret, result.token),
-        action,
-        "EX",
-        deps.config.tokenTtlSeconds,
-      );
+      await deps.redis.set(tokenActionKey(deps.config.secret, result.token), action, "EX", deps.config.tokenTtlSeconds);
     }
     return result;
   }
@@ -83,10 +78,13 @@ export function createCapService(deps: CapServiceDeps) {
     const storedAction = await deps.redis.get(actionKey);
     if (storedAction !== action) {
       await deps.redis.del(actionKey);
-      deps.logger.warn({
-        ...verificationLogFields(SystemLogEvent.HumanVerificationMismatch, action, context),
-        storedAction,
-      }, "human verification token action mismatch");
+      deps.logger.warn(
+        {
+          ...verificationLogFields(SystemLogEvent.HumanVerificationMismatch, action, context),
+          storedAction,
+        },
+        "human verification token action mismatch",
+      );
       throw new HumanVerificationRequiredError();
     }
 
@@ -111,10 +109,13 @@ export function createCapService(deps: CapServiceDeps) {
     context: HumanVerificationContext,
   ) {
     if (await deps.riskService.shouldRequireVerification(action, context)) {
-      deps.logger.info({
-        ...verificationLogFields(SystemLogEvent.HumanVerificationRequired, action, context),
-        hasToken: token !== undefined,
-      }, "human verification required for action");
+      deps.logger.info(
+        {
+          ...verificationLogFields(SystemLogEvent.HumanVerificationRequired, action, context),
+          hasToken: token !== undefined,
+        },
+        "human verification required for action",
+      );
       await verifyTokenForAction(action, token, context);
     }
   }

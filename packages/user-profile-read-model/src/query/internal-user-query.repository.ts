@@ -9,13 +9,9 @@ export function createInternalUserProfileQueryRepository(db: DbClient) {
       const profiles = await db
         .select({ detail: userProfiles.detail })
         .from(userProfiles)
-        .where(and(
-          eq(userProfiles.username, username),
-          eq(
-            userProfiles.profileSchemaVersion,
-            USER_PROFILE_SCHEMA_VERSION,
-          ),
-        ))
+        .where(
+          and(eq(userProfiles.username, username), eq(userProfiles.profileSchemaVersion, USER_PROFILE_SCHEMA_VERSION)),
+        )
         .orderBy(asc(userProfiles.userId))
         .limit(1);
       return profiles[0] ?? null;
@@ -23,6 +19,4 @@ export function createInternalUserProfileQueryRepository(db: DbClient) {
   };
 }
 
-export type InternalUserProfileQueryRepository = ReturnType<
-  typeof createInternalUserProfileQueryRepository
->;
+export type InternalUserProfileQueryRepository = ReturnType<typeof createInternalUserProfileQueryRepository>;

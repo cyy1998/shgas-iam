@@ -1,11 +1,11 @@
-import type { SubjectAccessMutationReceipt } from "@iam/api-core/subject-access";
+import { describe, expect, mock, test } from "bun:test";
 import { createApiPasswordHasher } from "@api/composition/runtime/password-hasher";
-import { createUserPasswordHelper } from "@api/services/user/user-password.helper";
 import { createUserService } from "@api/services/user/user.service";
+import { createUserPasswordHelper } from "@api/services/user/user-password.helper";
 import { createImmediateUnitOfWork } from "@api/testing/fakes";
+import type { SubjectAccessMutationReceipt } from "@iam/api-core/subject-access";
 import { UserStatus } from "@iam/contracts";
 import { UserNotFoundError, UserPasswordUnchangedError } from "@iam/domain/user";
-import { describe, expect, mock, test } from "bun:test";
 
 const EXISTING_BCRYPT_TS_8_HASH = "$2b$04$ZwwFh9CSK/owUc7IdLKdFOPiqfxmljguVbVqfGRZq8J9tkkdrcxH2";
 const subjectAccessMutationReceipt: SubjectAccessMutationReceipt = {
@@ -33,10 +33,7 @@ function createDeps(overrides: Record<string, unknown> = {}) {
   };
   const tx = {
     subjectAccessMutation: {
-      runMutation: async <T>(
-        _receipt: SubjectAccessMutationReceipt,
-        mutation: () => Promise<T>,
-      ) => await mutation(),
+      runMutation: async <T>(_receipt: SubjectAccessMutationReceipt, mutation: () => Promise<T>) => await mutation(),
     },
     userRepository: {
       getUserByUsername: mock(async () => user),
@@ -67,22 +64,23 @@ function createDeps(overrides: Record<string, unknown> = {}) {
       revokeUserSessions: mock(async () => undefined),
     },
     subjectAccessLifecycle: {
-      run: mock(async (input: {
-        mutate: (receipt: SubjectAccessMutationReceipt) => Promise<unknown>;
-        revokeSessions?: (
-          result: unknown,
-          context: {
-            invalidatedSubjectAccessTransitionId: string;
-          },
-        ) => Promise<unknown>;
-      }) => {
-        const result = await input.mutate(subjectAccessMutationReceipt);
-        await input.revokeSessions?.(result, {
-          invalidatedSubjectAccessTransitionId:
-            "20000000-0000-4000-8000-000000000001",
-        });
-        return result;
-      }),
+      run: mock(
+        async (input: {
+          mutate: (receipt: SubjectAccessMutationReceipt) => Promise<unknown>;
+          revokeSessions?: (
+            result: unknown,
+            context: {
+              invalidatedSubjectAccessTransitionId: string;
+            },
+          ) => Promise<unknown>;
+        }) => {
+          const result = await input.mutate(subjectAccessMutationReceipt);
+          await input.revokeSessions?.(result, {
+            invalidatedSubjectAccessTransitionId: "20000000-0000-4000-8000-000000000001",
+          });
+          return result;
+        },
+      ),
     },
     uow: createImmediateUnitOfWork(tx),
     tx,
@@ -131,8 +129,7 @@ describe("createUserService", () => {
       let failure: unknown;
       try {
         await createUserService(deps).getUserMobileByUsername("zhangsan");
-      }
-      catch (caught) {
+      } catch (caught) {
         failure = caught;
       }
       expect(failure).toBe(error);
@@ -162,24 +159,28 @@ describe("createUserService", () => {
     const deps = createDeps();
     const service = createUserService(deps);
 
-    await expect(service.setPassword("zhangsan", "oldPass123", "newPass123", {
-      requestContext: {
-        sourceApp: "iam",
+    await expect(
+      service.setPassword("zhangsan", "oldPass123", "newPass123", {
+        requestContext: {
+          sourceApp: "iam",
+          requestId: "req-public",
+          traceId: "11111111111111111111111111111111",
+          ip: "203.0.113.10",
+          userAgent: "user-service-test",
+          route: "/public/password/change",
+          method: "POST",
+        },
+      }),
+    ).resolves.toBe(true);
+    expect(deps.passwordHelper.hashUserPassword).toHaveBeenCalledWith("newPass123");
+    expect(deps.tx.auditLogWriter.recordAuditLog).toHaveBeenCalledWith(
+      expect.objectContaining({
+        action: "self.password.change",
+        outcome: "success",
         requestId: "req-public",
         traceId: "11111111111111111111111111111111",
-        ip: "203.0.113.10",
-        userAgent: "user-service-test",
-        route: "/public/password/change",
-        method: "POST",
-      },
-    })).resolves.toBe(true);
-    expect(deps.passwordHelper.hashUserPassword).toHaveBeenCalledWith("newPass123");
-    expect(deps.tx.auditLogWriter.recordAuditLog).toHaveBeenCalledWith(expect.objectContaining({
-      action: "self.password.change",
-      outcome: "success",
-      requestId: "req-public",
-      traceId: "11111111111111111111111111111111",
-    }));
+      }),
+    );
     expect(deps.tx.userProfileInvalidation.recordChanges).not.toHaveBeenCalled();
   });
 
@@ -187,9 +188,9 @@ describe("createUserService", () => {
     const deps = createDeps();
     const service = createUserService(deps);
 
-    await expect(service.setPassword("zhangsan", "oldPass123", "oldPass123"))
-      .rejects
-      .toBeInstanceOf(UserPasswordUnchangedError);
+    await expect(service.setPassword("zhangsan", "oldPass123", "oldPass123")).rejects.toBeInstanceOf(
+      UserPasswordUnchangedError,
+    );
     expect(deps.tx.userRepository.setPassword).not.toHaveBeenCalled();
   });
 
@@ -202,9 +203,7 @@ describe("createUserService", () => {
     expect(deps.profileQuery.getDetailByUserId).not.toHaveBeenCalled();
     expect(deps.mobileService.confirmReservedVerificationCode).toHaveBeenCalledWith(deps.bindPhoneReservation);
     expect(deps.mobileService.releaseReservedVerificationCode).not.toHaveBeenCalled();
-    expect(deps.tx.userProfileInvalidation.recordChanges).toHaveBeenCalledWith([
-      { kind: "user", userId: 1 },
-    ]);
+    expect(deps.tx.userProfileInvalidation.recordChanges).toHaveBeenCalledWith([{ kind: "user", userId: 1 }]);
   });
 
   test("releases mobile binding verification reservation when transaction fails", async () => {
@@ -225,13 +224,13 @@ describe("createUserService", () => {
     await expect(service.pauseEnabledUser(1)).resolves.toMatchObject({ id: 1 });
 
     expect(deps.tx.userRepository.updateEnabledUserStatus).toHaveBeenCalledWith(1, UserStatus.Pause);
-    expect(deps.tx.userProfileInvalidation.recordChanges).toHaveBeenCalledWith([
-      { kind: "user", userId: 1 },
-    ]);
-    expect(deps.subjectAccessLifecycle.run).toHaveBeenCalledWith(expect.objectContaining({
-      subjectIdentifier: deps.user.subjectIdentifier,
-      disposition: "disabled",
-    }));
+    expect(deps.tx.userProfileInvalidation.recordChanges).toHaveBeenCalledWith([{ kind: "user", userId: 1 }]);
+    expect(deps.subjectAccessLifecycle.run).toHaveBeenCalledWith(
+      expect.objectContaining({
+        subjectIdentifier: deps.user.subjectIdentifier,
+        disposition: "disabled",
+      }),
+    );
     expect(deps.sessionRevocation.revokeUserSessions).toHaveBeenCalledWith({
       subjectIdentifier: deps.user.subjectIdentifier,
       reason: "user_disabled",

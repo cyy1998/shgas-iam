@@ -1,10 +1,10 @@
-import type { AdminClientTransactionPorts } from "@admin-api/services/client/client.port";
-import type { AdminApiPostgresTestHarness } from "./postgres-test-harness";
+import { afterAll, beforeAll, beforeEach, describe, expect, mock, test } from "bun:test";
 import { createAdminApiRepositories } from "@admin-api/composition/repositories";
 import { createClientSsoManagement } from "@admin-api/composition/services/client-sso-management";
 import { createAdminApiUnitOfWork } from "@admin-api/composition/tx";
 import { createClientAdapter } from "@admin-api/routes/admin/client/client.adapter";
 import { createClientRoute } from "@admin-api/routes/admin/client/client.index";
+import type { AdminClientTransactionPorts } from "@admin-api/services/client/client.port";
 import { createClientService } from "@admin-api/services/client/client.service";
 import { createRoleService } from "@admin-api/services/role/role.service";
 import { BadRequestError } from "@iam/api-core/errors";
@@ -17,9 +17,9 @@ import { roleAssignments } from "@iam/db/schema/role-assignments";
 import { ClientCodeExistsError, ClientCodeImmutableError, ClientNotFoundError } from "@iam/domain/client";
 import { RoleHasAssignmentError } from "@iam/domain/role";
 import { fetchRequestHandler } from "@trpc/server/adapters/fetch";
-import { afterAll, beforeAll, beforeEach, describe, expect, mock, test } from "bun:test";
 import { Hono } from "hono";
 import { addTestAdminAuthorizationMiddleware } from "../helpers/admin-authorization";
+import type { AdminApiPostgresTestHarness } from "./postgres-test-harness";
 import { createAdminApiPostgresTestHarness } from "./postgres-test-harness";
 
 let harness: AdminApiPostgresTestHarness;
@@ -34,9 +34,7 @@ afterAll(async () => {
   await harness?.close();
 });
 
-function createCommand(
-  decorate: (tx: AdminClientTransactionPorts) => AdminClientTransactionPorts = tx => tx,
-) {
+function createCommand(decorate: (tx: AdminClientTransactionPorts) => AdminClientTransactionPorts = (tx) => tx) {
   const warn = mock(() => undefined);
   const invalidateClient = mock(async (_clientCode: string) => undefined);
   const revokeClientAllProtocols = mock(async () => ({
@@ -61,7 +59,7 @@ function createCommand(
   });
   const roleService = createRoleService({
     roleRepository: createAdminApiRepositories(harness.db).role,
-    uow: mapUnitOfWork(uow, tx => ({
+    uow: mapUnitOfWork(uow, (tx) => ({
       roleRepository: tx.repositories.role,
       auditService: tx.auditService,
       userProfileInvalidation: tx.userProfileInvalidation,
@@ -76,13 +74,14 @@ function createCommand(
     clientRuntimeInvalidation: { invalidateClient },
     clientMutationLogger: { error: mock(() => undefined) },
     management: management.service,
-    passwordHasher: { hashSecret: async secret => `hash-${secret}` },
+    passwordHasher: { hashSecret: async (secret) => `hash-${secret}` },
     random: { customSsoClientSecret: () => "custom-secret", oidcClientSecret: () => "oidc-secret" },
-    uow: mapUnitOfWork(uow, tx =>
+    uow: mapUnitOfWork(uow, (tx) =>
       decorate({
         clientRepository: tx.repositories.client,
         auditService: tx.auditService,
-      })),
+      }),
+    ),
   });
   return { service, management, roleService, invalidateClient, revokeClientAllProtocols, enqueueRebuildJobs, warn };
 }
@@ -113,8 +112,7 @@ async function facts() {
 async function failure(operation: () => Promise<unknown>) {
   try {
     await operation();
-  }
-  catch (error) {
+  } catch (error) {
     return error;
   }
   throw new Error("Expected command failure");
@@ -125,38 +123,52 @@ describe("Client commands through production PostgreSQL UnitOfWork", () => {
     ["Enable", RoleStatus.Enable],
     ["Pause", RoleStatus.Pause],
     ["Disable", RoleStatus.Disable],
-  ])("an undeleted %s Role blocks Client deletion without changing facts or running follow-up effects", async (_name, status) => {
-    const client = await seedClient();
-    const roleRows = await harness.db.insert(roles).values({
-      clientId: client.id,
-      roleCode: "portal:reader",
-      roleName: "Reader",
-      status,
-    }).returning();
-    const { service, invalidateClient, revokeClientAllProtocols, enqueueRebuildJobs } = createCommand();
-    const before = await facts();
-    const error = await failure(() => service.deleteClient(client.clientCode));
-    expect(error).toMatchObject({ code: ApiErrorCode.ClientHasRole, httpStatus: 409 });
-    const after = await facts();
-    const remainingRoles = await harness.db.select().from(roles);
-    expect(after).toEqual(before);
-    expect(remainingRoles).toEqual(roleRows);
-    expect(invalidateClient).not.toHaveBeenCalled();
-    expect(revokeClientAllProtocols).not.toHaveBeenCalled();
-    expect(enqueueRebuildJobs).not.toHaveBeenCalled();
-  });
+  ])(
+    "an undeleted %s Role blocks Client deletion without changing facts or running follow-up effects",
+    async (_name, status) => {
+      const client = await seedClient();
+      const roleRows = await harness.db
+        .insert(roles)
+        .values({
+          clientId: client.id,
+          roleCode: "portal:reader",
+          roleName: "Reader",
+          status,
+        })
+        .returning();
+      const { service, invalidateClient, revokeClientAllProtocols, enqueueRebuildJobs } = createCommand();
+      const before = await facts();
+      const error = await failure(() => service.deleteClient(client.clientCode));
+      expect(error).toMatchObject({ code: ApiErrorCode.ClientHasRole, httpStatus: 409 });
+      const after = await facts();
+      const remainingRoles = await harness.db.select().from(roles);
+      expect(after).toEqual(before);
+      expect(remainingRoles).toEqual(roleRows);
+      expect(invalidateClient).not.toHaveBeenCalled();
+      expect(revokeClientAllProtocols).not.toHaveBeenCalled();
+      expect(enqueueRebuildJobs).not.toHaveBeenCalled();
+    },
+  );
 
   test("explicit Assignment and Role removal releases Client deletion while preserving Role history and other Clients' Roles", async () => {
     await seedClient();
     const other = await seedClient("other");
-    const [otherRole] = await harness.db.insert(roles).values({
-      clientId: other.id,
-      roleCode: "other:reader",
-      roleName: "Other reader",
-    }).returning();
+    const [otherRole] = await harness.db
+      .insert(roles)
+      .values({
+        clientId: other.id,
+        roleCode: "other:reader",
+        roleName: "Other reader",
+      })
+      .returning();
     await harness.db.insert(positions).values({ posCode: "READER", posName: "Reader" });
     const { service, roleService, invalidateClient, revokeClientAllProtocols } = createCommand();
-    await roleService.createRole({ clientCode: "portal", roleCode: "portal:reader", roleName: "Reader", status: RoleStatus.Enable });
+    await roleService.createRole({
+      clientCode: "portal",
+      roleCode: "portal:reader",
+      roleName: "Reader",
+      status: RoleStatus.Enable,
+    });
     const assignment = await roleService.createAssignment("portal:reader", {
       targetType: RoleAssignmentTargetType.Position,
       posCode: "READER",
@@ -184,10 +196,13 @@ describe("Client commands through production PostgreSQL UnitOfWork", () => {
     const after = await facts();
     const rolesAfter = await harness.db.select().from(roles).orderBy(roles.id);
     const assignmentsAfter = await harness.db.select().from(roleAssignments);
-    expect(after.clients).toMatchObject([{ clientCode: "portal", isDelete: true }, { clientCode: "other", isDelete: false }]);
+    expect(after.clients).toMatchObject([
+      { clientCode: "portal", isDelete: true },
+      { clientCode: "other", isDelete: false },
+    ]);
     expect(rolesAfter).toEqual([otherRole!, { ...rolesBefore[1]!, isDelete: true, updateTime: expect.any(Date) }]);
     expect(assignmentsAfter).toEqual([]);
-    expect(after.audits.filter(audit => audit.action === "admin.client.delete")).toMatchObject([
+    expect(after.audits.filter((audit) => audit.action === "admin.client.delete")).toMatchObject([
       { targetCode: "portal", details: { changed: true, deleted: true } },
     ]);
     expect(invalidateClient.mock.calls).toEqual([["portal"]]);
@@ -205,28 +220,38 @@ describe("Client commands through production PostgreSQL UnitOfWork", () => {
         addTestAdminAuthorizationMiddleware(app);
         app.onError(createErrorHandler({ error: mock(), warn: mock(), info: mock() }));
         app.route("/admin", surface === "client" ? createClientRoute(adapter) : candidate.management.rest);
-        app.all("/rpc/*", c => fetchRequestHandler({
-          endpoint: "/rpc",
-          req: c.req.raw,
-          router: surface === "client" ? adapter.clientAdminRouter : candidate.management.trpc,
-          createContext: () => ({ hono: c }),
-        }));
-        const request = () => app.request(
-          transport === "rest" ? `/admin/${surface === "client" ? "clients" : "clients-sso"}/portal` : "/rpc/delete",
-          transport === "rest"
-            ? { method: "DELETE" }
-            : {
-                method: "POST",
-                headers: { "content-type": "application/json" },
-                body: JSON.stringify({ clientCode: "portal" }),
-              },
+        app.all("/rpc/*", (c) =>
+          fetchRequestHandler({
+            endpoint: "/rpc",
+            req: c.req.raw,
+            router: surface === "client" ? adapter.clientAdminRouter : candidate.management.trpc,
+            createContext: () => ({ hono: c }),
+          }),
         );
+        const request = () =>
+          app.request(
+            transport === "rest" ? `/admin/${surface === "client" ? "clients" : "clients-sso"}/portal` : "/rpc/delete",
+            transport === "rest"
+              ? { method: "DELETE" }
+              : {
+                  method: "POST",
+                  headers: { "content-type": "application/json" },
+                  body: JSON.stringify({ clientCode: "portal" }),
+                },
+          );
         const rejected = await request();
         const rejection = await rejected.json();
         expect(rejected.status).toBe(409);
-        expect(rejection).toMatchObject(transport === "rest"
-          ? { code: ApiErrorCode.ClientHasRole, data: null, message: expect.stringContaining("角色") }
-          : { error: { message: expect.stringContaining("角色"), data: { code: "CONFLICT", serviceCode: ApiErrorCode.ClientHasRole } } });
+        expect(rejection).toMatchObject(
+          transport === "rest"
+            ? { code: ApiErrorCode.ClientHasRole, data: null, message: expect.stringContaining("角色") }
+            : {
+                error: {
+                  message: expect.stringContaining("角色"),
+                  data: { code: "CONFLICT", serviceCode: ApiErrorCode.ClientHasRole },
+                },
+              },
+        );
         expect(rejection).not.toHaveProperty("result");
         expect(candidate.invalidateClient).not.toHaveBeenCalled();
         expect(candidate.revokeClientAllProtocols).not.toHaveBeenCalled();
@@ -272,8 +297,8 @@ describe("Client commands through production PostgreSQL UnitOfWork", () => {
     test(`same-value explicit credential intent via ${path} is audited without changing persisted facts`, async () => {
       const row = await seedClient();
       const { service, invalidateClient, revokeClientAllProtocols, enqueueRebuildJobs } = createCommand();
-      const result
-        = path === "code"
+      const result =
+        path === "code"
           ? await service.updateClient(row.clientCode, { clientSecret: row.clientSecret })
           : await service.updateClientById({ id: row.id, clientSecret: row.clientSecret });
       expect(result).toEqual({ changed: false, result: null });
@@ -316,7 +341,7 @@ describe("Client commands through production PostgreSQL UnitOfWork", () => {
   test("audit failure rolls back the internal credential write without propagation", async () => {
     await seedClient();
     const sentinel = new Error("audit unavailable");
-    const { service, invalidateClient, revokeClientAllProtocols } = createCommand(tx => ({
+    const { service, invalidateClient, revokeClientAllProtocols } = createCommand((tx) => ({
       ...tx,
       auditService: {
         ...tx.auditService,
@@ -327,9 +352,7 @@ describe("Client commands through production PostgreSQL UnitOfWork", () => {
       },
     }));
     const before = await facts();
-    const error = await failure(() =>
-      service.updateClient("portal", { clientSecret: "changed-internal-secret" }),
-    );
+    const error = await failure(() => service.updateClient("portal", { clientSecret: "changed-internal-secret" }));
     expect(error).toBe(sentinel);
     const after = await facts();
     expect(after).toEqual(before);
@@ -390,15 +413,14 @@ describe("Client commands through production PostgreSQL UnitOfWork", () => {
   test("independent create transactions pass prechecks and unique constraint chooses one winner", async () => {
     let arrived = 0;
     const gate = Promise.withResolvers<void>();
-    const { service } = createCommand(tx => ({
+    const { service } = createCommand((tx) => ({
       ...tx,
       clientRepository: {
         ...tx.clientRepository,
         getAnyClientByCode: async (code) => {
           const current = await tx.clientRepository.getAnyClientByCode(code);
           arrived++;
-          if (arrived === 2)
-            gate.resolve();
+          if (arrived === 2) gate.resolve();
           await gate.promise;
           return current;
         },
@@ -406,10 +428,8 @@ describe("Client commands through production PostgreSQL UnitOfWork", () => {
     }));
     const results = await Promise.allSettled([service.createClient(input()), service.createClient(input())]);
     expect(arrived).toBe(2);
-    expect(results.filter(result => result.status === "fulfilled")).toHaveLength(1);
-    expect(results.find(result => result.status === "rejected")?.reason).toBeInstanceOf(
-      ClientCodeExistsError,
-    );
+    expect(results.filter((result) => result.status === "fulfilled")).toHaveLength(1);
+    expect(results.find((result) => result.status === "rejected")?.reason).toBeInstanceOf(ClientCodeExistsError);
     const after = await facts();
     expect(after.clients).toHaveLength(1);
     expect(after.audits).toHaveLength(1);
@@ -427,8 +447,7 @@ describe("Client commands through production PostgreSQL UnitOfWork", () => {
       const after = await facts();
       expect(after.clients).toHaveLength(1);
       expect(after.audits).toEqual([]);
-    }
-    finally {
+    } finally {
       await harness.sql`drop index client_test_name_unique`;
     }
   });
@@ -457,8 +476,7 @@ describe("Client commands through production PostgreSQL UnitOfWork", () => {
         const after = await facts();
         expect(after).toEqual(before);
         expect(invalidateClient).not.toHaveBeenCalled();
-      }
-      finally {
+      } finally {
         await harness.sql`drop trigger client_test_zero_row on client`;
         await harness.sql`drop function client_test_zero_row()`;
       }

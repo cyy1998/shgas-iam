@@ -1,25 +1,13 @@
-import type { AdminOrganizationAuthorization } from "@admin-api/services/admin-authorization/admin-organization-authorization.type";
-import type { DbClient } from "@iam/db";
+import { afterAll, beforeAll, beforeEach, describe, expect, mock, test } from "bun:test";
 import { createAdminApiRepositories } from "@admin-api/composition/repositories";
 import { createAdminApiUnitOfWork } from "@admin-api/composition/tx";
+import type { AdminOrganizationAuthorization } from "@admin-api/services/admin-authorization/admin-organization-authorization.type";
 import { createOrganizationService } from "@admin-api/services/organization/organization.service";
 import { mapUnitOfWork } from "@iam/api-core/uow";
-import {
-  OrganizationLevel,
-  OrganizationStatus,
-  OrganizationType,
-} from "@iam/contracts";
+import { OrganizationLevel, OrganizationStatus, OrganizationType } from "@iam/contracts";
+import type { DbClient } from "@iam/db";
 import { organizationClosures, organizations } from "@iam/db/schema";
 import { OrganizationNotFoundError } from "@iam/domain/organization";
-import {
-  afterAll,
-  beforeAll,
-  beforeEach,
-  describe,
-  expect,
-  mock,
-  test,
-} from "bun:test";
 import { and, eq } from "drizzle-orm";
 import { createAdminApiPostgresTestHarness } from "./postgres-test-harness";
 
@@ -43,30 +31,23 @@ describe("HR Organization administration scope", () => {
     const service = createService();
     const authorization = scopedAuthorization();
 
-    const firstRootPage = await service.getOrganizationChildrenForAdmin(
-      null,
-      1,
-      1,
+    const firstRootPage = await service.getOrganizationChildrenForAdmin(null, 1, 1, authorization);
+    const secondRootPage = await service.getOrganizationChildrenForAdmin(null, 2, 1, authorization);
+    const search = await service.searchOrganizationsForAdmin(
+      {
+        conditions: { fuzzyConditions: {}, exactConditions: {} },
+        pageNum: 2,
+        pageSize: 2,
+      },
       authorization,
     );
-    const secondRootPage = await service.getOrganizationChildrenForAdmin(
-      null,
-      2,
-      1,
+    const selector = await service.getOrganizationSelectorNodesForAdmin(
+      {
+        pageSize: 50,
+      },
       authorization,
     );
-    const search = await service.searchOrganizationsForAdmin({
-      conditions: { fuzzyConditions: {}, exactConditions: {} },
-      pageNum: 2,
-      pageSize: 2,
-    }, authorization);
-    const selector = await service.getOrganizationSelectorNodesForAdmin({
-      pageSize: 50,
-    }, authorization);
-    const detail = await service.getOrganizationDetailByCodeForAdmin(
-      "ROOT-B",
-      authorization,
-    );
+    const detail = await service.getOrganizationDetailByCodeForAdmin("ROOT-B", authorization);
 
     expect(firstRootPage).toMatchObject({
       result: [{ orgCode: "ROOT-A" }],
@@ -84,15 +65,14 @@ describe("HR Organization administration scope", () => {
       pageNum: 2,
       pages: 3,
     });
-    expect(search.result.map(item => item.orgCode)).not.toContain("OUTSIDE");
-    expect(selector.map(item => item.orgCode)).toEqual(["ROOT-A", "ROOT-B"]);
+    expect(search.result.map((item) => item.orgCode)).not.toContain("OUTSIDE");
+    expect(selector.map((item) => item.orgCode)).toEqual(["ROOT-A", "ROOT-B"]);
     expect(detail.orgCode).toBe("ROOT-B");
 
     let failure: unknown;
     try {
       await service.getOrganizationDetailByCodeForAdmin("OUTSIDE", authorization);
-    }
-    catch (error) {
+    } catch (error) {
       failure = error;
     }
     expect(failure).toBeInstanceOf(OrganizationNotFoundError);
@@ -102,15 +82,19 @@ describe("HR Organization administration scope", () => {
     const service = createService();
     const authorization = scopedAuthorization();
 
-    const created = await service.setOrganization({
-      orgCode: "A-NEW",
-      orgName: "A New Child",
-      orgType: OrganizationType.Department,
-      parentCode: "ROOT-A",
-      path: "",
-      level: OrganizationLevel.One,
-      status: OrganizationStatus.Enable,
-    } as never, undefined, authorization);
+    const created = await service.setOrganization(
+      {
+        orgCode: "A-NEW",
+        orgName: "A New Child",
+        orgType: OrganizationType.Department,
+        parentCode: "ROOT-A",
+        path: "",
+        level: OrganizationLevel.One,
+        status: OrganizationStatus.Enable,
+      } as never,
+      undefined,
+      authorization,
+    );
     expect(created).toMatchObject({ changed: true, result: { status: OrganizationStatus.Enable } });
 
     const createdRows = await harness.db
@@ -137,17 +121,20 @@ describe("HR Organization administration scope", () => {
 
     let createProbeFailure: unknown;
     try {
-      await service.setOrganization({
-        orgCode: "OUTSIDE",
-        orgName: "Probe Existing Code",
-        orgType: OrganizationType.Department,
-        parentCode: "ROOT-A",
-        path: "",
-        level: OrganizationLevel.One,
-        status: OrganizationStatus.Enable,
-      } as never, undefined, authorization);
-    }
-    catch (error) {
+      await service.setOrganization(
+        {
+          orgCode: "OUTSIDE",
+          orgName: "Probe Existing Code",
+          orgType: OrganizationType.Department,
+          parentCode: "ROOT-A",
+          path: "",
+          level: OrganizationLevel.One,
+          status: OrganizationStatus.Enable,
+        } as never,
+        undefined,
+        authorization,
+      );
+    } catch (error) {
       createProbeFailure = error;
     }
     expect(createProbeFailure).toBeInstanceOf(OrganizationNotFoundError);
@@ -171,31 +158,24 @@ describe("HR Organization administration scope", () => {
       .select({ orgName: organizations.orgName, orgType: organizations.orgType })
       .from(organizations)
       .where(eq(organizations.orgCode, "A-LEAF"));
-    expect(renamedRows).toEqual([{
-      orgName: "Renamed Leaf",
-      orgType: OrganizationType.TempDepartment,
-    }]);
+    expect(renamedRows).toEqual([
+      {
+        orgName: "Renamed Leaf",
+        orgType: OrganizationType.TempDepartment,
+      },
+    ]);
 
     let failure: unknown;
     try {
-      await service.updateOrganization(
-        "OUTSIDE",
-        { orgName: "Forbidden Rename" },
-        undefined,
-        authorization,
-      );
-    }
-    catch (error) {
+      await service.updateOrganization("OUTSIDE", { orgName: "Forbidden Rename" }, undefined, authorization);
+    } catch (error) {
       failure = error;
     }
     expect(failure).toBeInstanceOf(OrganizationNotFoundError);
     const outsideRows = await harness.db
       .select({ orgName: organizations.orgName })
       .from(organizations)
-      .where(and(
-        eq(organizations.orgCode, "OUTSIDE"),
-        eq(organizations.isDelete, false),
-      ));
+      .where(and(eq(organizations.orgCode, "OUTSIDE"), eq(organizations.isDelete, false)));
     expect(outsideRows).toEqual([{ orgName: "Outside" }]);
   });
 
@@ -208,9 +188,7 @@ describe("HR Organization administration scope", () => {
       pageNum: 1,
       pageSize: 20,
     });
-    const outsideDetail = await service.getOrganizationDetailByCodeForAdmin(
-      "OUTSIDE",
-    );
+    const outsideDetail = await service.getOrganizationDetailByCodeForAdmin("OUTSIDE");
     const created = await service.setOrganization({
       orgCode: "NEW-ROOT",
       orgName: "New Root",
@@ -222,11 +200,7 @@ describe("HR Organization administration scope", () => {
     } as never);
 
     expect(roots).toMatchObject({ total: 3, pages: 1 });
-    expect(roots.result.map(item => item.orgCode)).toEqual([
-      "ROOT-A",
-      "ROOT-B",
-      "OUTSIDE",
-    ]);
+    expect(roots.result.map((item) => item.orgCode)).toEqual(["ROOT-A", "ROOT-B", "OUTSIDE"]);
     expect(search.total).toBe(7);
     expect(outsideDetail.orgCode).toBe("OUTSIDE");
     expect(created).toMatchObject({ changed: true, result: { status: OrganizationStatus.Enable } });
@@ -237,10 +211,12 @@ describe("HR Organization administration scope", () => {
       })
       .from(organizations)
       .where(eq(organizations.orgCode, "NEW-ROOT"));
-    expect(createdRows).toEqual([{
-      parentId: -1,
-      level: OrganizationLevel.One,
-    }]);
+    expect(createdRows).toEqual([
+      {
+        parentId: -1,
+        level: OrganizationLevel.One,
+      },
+    ]);
   });
 });
 
@@ -257,7 +233,7 @@ function createService() {
   return createOrganizationService({
     organizationRepository: repositories.organization,
     responsibilityReader: repositories.organizationResponsibility,
-    uow: mapUnitOfWork(unitOfWork, tx => ({
+    uow: mapUnitOfWork(unitOfWork, (tx) => ({
       organizationRepository: tx.repositories.organization,
       auditService: tx.auditService,
       responsibilityParentLifecycle: tx.responsibilityParentLifecycle,
@@ -273,36 +249,39 @@ function scopedAuthorization(): AdminOrganizationAuthorization {
     organizationIds: [10, 11, 12, 20, 21],
     getAllowedActions: mock() as never,
     denyMutation(input) {
-      if (input.concealExistence)
-        throw new OrganizationNotFoundError();
+      if (input.concealExistence) throw new OrganizationNotFoundError();
       throw new Error(`denied: ${input.reason}`);
     },
   };
 }
 
 async function seedOrganizationForest(db: DbClient) {
-  await db.insert(organizations).values([
-    organization(10, "ROOT-A", "Root A", -1, OrganizationLevel.One, 1),
-    organization(11, "A-BRANCH", "A Branch", 10, OrganizationLevel.Two, 1),
-    organization(12, "A-LEAF", "A Leaf", 10, OrganizationLevel.Two, 2),
-    organization(20, "ROOT-B", "Root B", -1, OrganizationLevel.One, 2),
-    organization(21, "B-LEAF", "B Leaf", 20, OrganizationLevel.Two, 1),
-    organization(30, "OUTSIDE", "Outside", -1, OrganizationLevel.One, 3),
-    organization(31, "OUT-LEAF", "Outside Leaf", 30, OrganizationLevel.Two, 1),
-  ]);
-  await db.insert(organizationClosures).values([
-    closure(10, 10, 0),
-    closure(11, 11, 0),
-    closure(12, 12, 0),
-    closure(10, 11, 1),
-    closure(10, 12, 1),
-    closure(20, 20, 0),
-    closure(21, 21, 0),
-    closure(20, 21, 1),
-    closure(30, 30, 0),
-    closure(31, 31, 0),
-    closure(30, 31, 1),
-  ]);
+  await db
+    .insert(organizations)
+    .values([
+      organization(10, "ROOT-A", "Root A", -1, OrganizationLevel.One, 1),
+      organization(11, "A-BRANCH", "A Branch", 10, OrganizationLevel.Two, 1),
+      organization(12, "A-LEAF", "A Leaf", 10, OrganizationLevel.Two, 2),
+      organization(20, "ROOT-B", "Root B", -1, OrganizationLevel.One, 2),
+      organization(21, "B-LEAF", "B Leaf", 20, OrganizationLevel.Two, 1),
+      organization(30, "OUTSIDE", "Outside", -1, OrganizationLevel.One, 3),
+      organization(31, "OUT-LEAF", "Outside Leaf", 30, OrganizationLevel.Two, 1),
+    ]);
+  await db
+    .insert(organizationClosures)
+    .values([
+      closure(10, 10, 0),
+      closure(11, 11, 0),
+      closure(12, 12, 0),
+      closure(10, 11, 1),
+      closure(10, 12, 1),
+      closure(20, 20, 0),
+      closure(21, 21, 0),
+      closure(20, 21, 1),
+      closure(30, 30, 0),
+      closure(31, 31, 0),
+      closure(30, 31, 1),
+    ]);
 }
 
 function organization(

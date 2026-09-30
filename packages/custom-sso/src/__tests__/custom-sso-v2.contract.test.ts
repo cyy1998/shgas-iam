@@ -1,20 +1,13 @@
-import type {
-  ClientSubjectProjection,
-  EmploymentResponsibilitySnapshot,
-} from "@iam/client-subject-projection";
+import { describe, expect, test } from "bun:test";
+import type { ClientSubjectProjection, EmploymentResponsibilitySnapshot } from "@iam/client-subject-projection";
 import { SubjectProjectionNotReadyError } from "@iam/client-subject-projection";
-import {
-  OrganizationResponsibilityTypeCode,
-  OrganizationType,
-  SubjectClaim,
-} from "@iam/contracts";
+import { OrganizationResponsibilityTypeCode, OrganizationType, SubjectClaim } from "@iam/contracts";
 import {
   buildCustomSsoPlaceholderPreview,
   CustomSsoSubjectProjectionInvariantError,
   CustomSsoSubjectProjectionSchema,
   resolveCustomSsoSubjectProjection,
 } from "@iam/custom-sso/wire";
-import { describe, expect, test } from "bun:test";
 
 const subjectIdentifier = "00000000-0000-4000-8000-000000000001";
 
@@ -33,76 +26,89 @@ describe("Custom SSO V2 subject wire mapping contract", () => {
       },
       position: { code: "position-a", name: "甲岗位" },
     };
-    const responsibilities: EmploymentResponsibilitySnapshot[] = [{
-      type: {
-        code: OrganizationResponsibilityTypeCode.Head,
-        name: "负责人",
+    const responsibilities: EmploymentResponsibilitySnapshot[] = [
+      {
+        type: {
+          code: OrganizationResponsibilityTypeCode.Head,
+          name: "负责人",
+        },
+        targetOrganization: {
+          code: "target-a",
+          name: "目标甲",
+          type: OrganizationType.Department,
+          path: [
+            { code: "root", name: "总部", type: OrganizationType.Company },
+            {
+              code: "target-a",
+              name: "目标甲",
+              type: OrganizationType.Department,
+            },
+          ],
+        },
       },
-      targetOrganization: {
-        code: "target-a",
-        name: "目标甲",
-        type: OrganizationType.Department,
-        path: [
-          { code: "root", name: "总部", type: OrganizationType.Company },
-          {
-            code: "target-a",
-            name: "目标甲",
-            type: OrganizationType.Department,
-          },
-        ],
-      },
-    }];
+    ];
     const projection: ClientSubjectProjection = {
       subjectIdentifier,
-      employments: [{
-        ...employment,
-        responsibilities,
-      }],
-      authorization: {
-        employments: [{
+      employments: [
+        {
           ...employment,
-          roles: ["admin"],
-          privileges: ["read"],
-        }],
+          responsibilities,
+        },
+      ],
+      authorization: {
+        employments: [
+          {
+            ...employment,
+            roles: ["admin"],
+            privileges: ["read"],
+          },
+        ],
         roles: ["admin"],
         privileges: ["read"],
       },
     };
 
-    const wire = await resolveCustomSsoSubjectProjection({
-      resolve: async () => projection,
-    }, {
-      subjectIdentifier,
-      clientCode: "client-a",
-      selection: {
-        catalogVersion: 2,
-        optionalClaims: ["profile:employments", "iam:authorization"],
+    const wire = await resolveCustomSsoSubjectProjection(
+      {
+        resolve: async () => projection,
       },
-    });
+      {
+        subjectIdentifier,
+        clientCode: "client-a",
+        selection: {
+          catalogVersion: 2,
+          optionalClaims: ["profile:employments", "iam:authorization"],
+        },
+      },
+    );
 
     expect(wire).toMatchObject({
       version: 2,
       profile: {
-        employments: [{
-          organization: { code: "org-a" },
-          position: { code: "position-a" },
-          responsibilities: [{
-            type: { code: OrganizationResponsibilityTypeCode.Head },
-            targetOrganization: { code: "target-a" },
-          }],
-        }],
+        employments: [
+          {
+            organization: { code: "org-a" },
+            position: { code: "position-a" },
+            responsibilities: [
+              {
+                type: { code: OrganizationResponsibilityTypeCode.Head },
+                targetOrganization: { code: "target-a" },
+              },
+            ],
+          },
+        ],
       },
       authorization: {
-        employments: [{
-          organization: { code: "org-a" },
-          roles: ["admin"],
-          privileges: ["read"],
-        }],
+        employments: [
+          {
+            organization: { code: "org-a" },
+            roles: ["admin"],
+            privileges: ["read"],
+          },
+        ],
       },
     });
-    expect(wire.authorization?.employments[0])
-      .not
-      .toHaveProperty("responsibilities");
+    expect(wire.authorization?.employments[0]).not.toHaveProperty("responsibilities");
   });
 
   test("fails the whole wire for missing, unknown, or malformed responsibilities", async () => {
@@ -112,11 +118,13 @@ describe("Custom SSO V2 subject wire mapping contract", () => {
         code: "org-a",
         name: "甲部门",
         type: OrganizationType.Department,
-        path: [{
-          code: "org-a",
-          name: "甲部门",
-          type: OrganizationType.Department,
-        }],
+        path: [
+          {
+            code: "org-a",
+            name: "甲部门",
+            type: OrganizationType.Department,
+          },
+        ],
       },
       position: { code: "position-a", name: "甲岗位" },
     };
@@ -130,99 +138,119 @@ describe("Custom SSO V2 subject wire mapping contract", () => {
         version: 2,
         subjectIdentifier,
         profile: {
-          employments: [{
-            ...baseEmployment,
-            responsibilities: [{
-              type: {
-                code: OrganizationResponsibilityTypeCode.Head,
-                name: "WRONG",
-              },
-              targetOrganization: {
-                code: "target-a",
-                name: "目标甲",
-                type: OrganizationType.Department,
-                path: [{
-                  code: "different-target",
-                  name: "另一组织",
-                  type: OrganizationType.Department,
-                }],
-              },
-            }],
-          }],
+          employments: [
+            {
+              ...baseEmployment,
+              responsibilities: [
+                {
+                  type: {
+                    code: OrganizationResponsibilityTypeCode.Head,
+                    name: "WRONG",
+                  },
+                  targetOrganization: {
+                    code: "target-a",
+                    name: "目标甲",
+                    type: OrganizationType.Department,
+                    path: [
+                      {
+                        code: "different-target",
+                        name: "另一组织",
+                        type: OrganizationType.Department,
+                      },
+                    ],
+                  },
+                },
+              ],
+            },
+          ],
         },
       },
       {
         version: 2,
         subjectIdentifier,
         profile: {
-          employments: [{
-            ...baseEmployment,
-            responsibilities: [{
-              type: {
-                code: OrganizationResponsibilityTypeCode.Head,
-                name: "负责人",
-                unknown: true,
-              },
-              targetOrganization: {
-                code: "target-a",
-                name: "目标甲",
-                type: OrganizationType.Department,
-                path: [{
-                  code: "target-a",
-                  name: "目标甲",
-                  type: OrganizationType.Department,
-                }],
-              },
-            }],
-          }],
+          employments: [
+            {
+              ...baseEmployment,
+              responsibilities: [
+                {
+                  type: {
+                    code: OrganizationResponsibilityTypeCode.Head,
+                    name: "负责人",
+                    unknown: true,
+                  },
+                  targetOrganization: {
+                    code: "target-a",
+                    name: "目标甲",
+                    type: OrganizationType.Department,
+                    path: [
+                      {
+                        code: "target-a",
+                        name: "目标甲",
+                        type: OrganizationType.Department,
+                      },
+                    ],
+                  },
+                },
+              ],
+            },
+          ],
         },
       },
       {
         version: 2,
         subjectIdentifier,
         profile: {
-          employments: [{
-            ...baseEmployment,
-            responsibilities: [{
-              type: { code: "owner", name: "负责人" },
-              targetOrganization: {
-                code: "target-a",
-                name: "目标甲",
-                type: OrganizationType.Department,
-                path: [{
-                  code: "target-a",
-                  name: "目标甲",
-                  type: OrganizationType.Department,
-                }],
-              },
-            }],
-          }],
+          employments: [
+            {
+              ...baseEmployment,
+              responsibilities: [
+                {
+                  type: { code: "owner", name: "负责人" },
+                  targetOrganization: {
+                    code: "target-a",
+                    name: "目标甲",
+                    type: OrganizationType.Department,
+                    path: [
+                      {
+                        code: "target-a",
+                        name: "目标甲",
+                        type: OrganizationType.Department,
+                      },
+                    ],
+                  },
+                },
+              ],
+            },
+          ],
         },
       },
     ];
 
-    for (const wire of invalidWires)
-      expect(CustomSsoSubjectProjectionSchema.safeParse(wire).success).toBe(false);
+    for (const wire of invalidWires) expect(CustomSsoSubjectProjectionSchema.safeParse(wire).success).toBe(false);
 
     const invalidProjection = {
       subjectIdentifier,
       employments: [baseEmployment],
     };
-    const result = await captureRejection(resolveCustomSsoSubjectProjection({
-      // @ts-expect-error exercises the runtime boundary beyond static types
-      resolve: async () => invalidProjection,
-    }, {
-      subjectIdentifier,
-      clientCode: "client-a",
-      selection: {
-        catalogVersion: 2,
-        optionalClaims: ["profile:employments"],
-      },
-    }));
-
-    expect(result).toEqual(
-      new CustomSsoSubjectProjectionInvariantError("invalid_wire"),
+    const result = await captureRejection(
+      resolveCustomSsoSubjectProjection(
+        {
+          // @ts-expect-error exercises the runtime boundary beyond static types
+          resolve: async () => invalidProjection,
+        },
+        {
+          subjectIdentifier,
+          clientCode: "client-a",
+          selection: {
+            catalogVersion: 2,
+            optionalClaims: ["profile:employments"],
+          },
+        },
+      ),
     );
+
+    expect(result).toEqual(new CustomSsoSubjectProjectionInvariantError("invalid_wire"));
     expect(result).not.toHaveProperty("cause");
     expect(result).not.toHaveProperty("wire");
   });
@@ -230,17 +258,20 @@ describe("Custom SSO V2 subject wire mapping contract", () => {
   test("rejects a projection for a different valid Subject Identifier without leaking either subject", async () => {
     const projectedSubjectIdentifier = "00000000-0000-4000-8000-000000000002";
 
-    const result = await captureRejection(resolveCustomSsoSubjectProjection({
-      resolve: async () => ({ subjectIdentifier: projectedSubjectIdentifier }),
-    }, {
-      subjectIdentifier,
-      clientCode: "client-a",
-      selection: { catalogVersion: 2, optionalClaims: [] },
-    }));
-
-    expect(result).toEqual(
-      new CustomSsoSubjectProjectionInvariantError("subject_mismatch"),
+    const result = await captureRejection(
+      resolveCustomSsoSubjectProjection(
+        {
+          resolve: async () => ({ subjectIdentifier: projectedSubjectIdentifier }),
+        },
+        {
+          subjectIdentifier,
+          clientCode: "client-a",
+          selection: { catalogVersion: 2, optionalClaims: [] },
+        },
+      ),
     );
+
+    expect(result).toEqual(new CustomSsoSubjectProjectionInvariantError("subject_mismatch"));
     expect(result).not.toHaveProperty("subjectIdentifier");
     expect(result).not.toHaveProperty("projection");
     expect(result).not.toHaveProperty("cause");
@@ -257,17 +288,20 @@ describe("Custom SSO V2 subject wire mapping contract", () => {
       username: 42,
     };
 
-    const result = await captureRejection(resolveCustomSsoSubjectProjection({
-      resolve: async () => invalidProjection,
-    }, {
-      subjectIdentifier,
-      clientCode: "client-a",
-      selection: { catalogVersion: 2, optionalClaims: ["profile:username"] },
-    }));
-
-    expect(result).toEqual(
-      new CustomSsoSubjectProjectionInvariantError("invalid_wire"),
+    const result = await captureRejection(
+      resolveCustomSsoSubjectProjection(
+        {
+          resolve: async () => invalidProjection,
+        },
+        {
+          subjectIdentifier,
+          clientCode: "client-a",
+          selection: { catalogVersion: 2, optionalClaims: ["profile:username"] },
+        },
+      ),
     );
+
+    expect(result).toEqual(new CustomSsoSubjectProjectionInvariantError("invalid_wire"));
     expect(result).not.toHaveProperty("cause");
     expect(result).not.toHaveProperty("issues");
     expect(result).not.toHaveProperty("wire");
@@ -281,24 +315,27 @@ describe("Custom SSO V2 subject wire mapping contract", () => {
     };
 
     const failure = await captureRejection(resolveWire(invalidProjection));
-    expect(failure).toEqual(
-      new CustomSsoSubjectProjectionInvariantError("invalid_wire"),
-    );
+    expect(failure).toEqual(new CustomSsoSubjectProjectionInvariantError("invalid_wire"));
   });
 
   test.each([
     ["Subject Projection Not Ready", new SubjectProjectionNotReadyError()],
     ["an existing sentinel", new Error("existing projection failure")],
   ])("preserves %s errors from the Projection Service", async (_label, error) => {
-    const result = await captureRejection(resolveCustomSsoSubjectProjection({
-      resolve: async () => {
-        throw error;
-      },
-    }, {
-      subjectIdentifier,
-      clientCode: "client-a",
-      selection: { catalogVersion: 2, optionalClaims: [] },
-    }));
+    const result = await captureRejection(
+      resolveCustomSsoSubjectProjection(
+        {
+          resolve: async () => {
+            throw error;
+          },
+        },
+        {
+          subjectIdentifier,
+          clientCode: "client-a",
+          selection: { catalogVersion: 2, optionalClaims: [] },
+        },
+      ),
+    );
 
     expect(result).toBe(error);
   });
@@ -310,10 +347,12 @@ describe("Custom SSO V2 subject wire mapping contract", () => {
     });
 
     expect(CustomSsoSubjectProjectionSchema.safeParse(wire).success).toBe(true);
-    expect(() => CustomSsoSubjectProjectionSchema.parse({
-      ...wire,
-      databaseUserId: 1001,
-    })).toThrow();
+    expect(() =>
+      CustomSsoSubjectProjectionSchema.parse({
+        ...wire,
+        databaseUserId: 1001,
+      }),
+    ).toThrow();
   });
 
   test("accepts an omitted profile parent and rejects an empty profile parent", () => {
@@ -323,10 +362,12 @@ describe("Custom SSO V2 subject wire mapping contract", () => {
     };
 
     expect(CustomSsoSubjectProjectionSchema.safeParse(wire).success).toBe(true);
-    expect(CustomSsoSubjectProjectionSchema.safeParse({
-      ...wire,
-      profile: {},
-    }).success).toBe(false);
+    expect(
+      CustomSsoSubjectProjectionSchema.safeParse({
+        ...wire,
+        profile: {},
+      }).success,
+    ).toBe(false);
   });
 
   test("maps the mandatory Subject Identifier into the versioned wire contract", async () => {
@@ -406,19 +447,23 @@ describe("Custom SSO V2 subject wire mapping contract", () => {
       SubjectClaim.IamAuthorization,
     ]);
 
-    expect(scalarPreview).toEqual(await resolveWire({
-      subjectIdentifier,
-      username: "zhangsan",
-    }));
-    expect(arrayPreview).toEqual(await resolveWire({
-      subjectIdentifier,
-      employments: [],
-      authorization: {
+    expect(scalarPreview).toEqual(
+      await resolveWire({
+        subjectIdentifier,
+        username: "zhangsan",
+      }),
+    );
+    expect(arrayPreview).toEqual(
+      await resolveWire({
+        subjectIdentifier,
         employments: [],
-        roles: [],
-        privileges: [],
-      },
-    }));
+        authorization: {
+          employments: [],
+          roles: [],
+          privileges: [],
+        },
+      }),
+    );
     expect(scalarPreview).not.toHaveProperty("profile.phone");
     expect(arrayPreview).toMatchObject({
       profile: { employments: [] },
@@ -466,12 +511,14 @@ describe("Custom SSO V2 subject wire mapping contract", () => {
       phone: "13800000000",
       employments: [{ ...employment, responsibilities: [] }],
       authorization: {
-        employments: [{
-          ...employment,
-          roles: ["admin"],
-          privileges: ["read"],
-          authorizationDecision: "allow",
-        }],
+        employments: [
+          {
+            ...employment,
+            roles: ["admin"],
+            privileges: ["read"],
+            authorizationDecision: "allow",
+          },
+        ],
         roles: ["admin"],
         privileges: ["read"],
         authorizationDecision: "allow",
@@ -508,11 +555,13 @@ describe("Custom SSO V2 subject wire mapping contract", () => {
         employments: [{ ...wireEmployment, responsibilities: [] }],
       },
       authorization: {
-        employments: [{
-          ...wireEmployment,
-          roles: ["admin"],
-          privileges: ["read"],
-        }],
+        employments: [
+          {
+            ...wireEmployment,
+            roles: ["admin"],
+            privileges: ["read"],
+          },
+        ],
         roles: ["admin"],
         privileges: ["read"],
       },
@@ -521,18 +570,20 @@ describe("Custom SSO V2 subject wire mapping contract", () => {
 });
 
 async function resolveWire(projection: ClientSubjectProjection) {
-  return await resolveCustomSsoSubjectProjection({ resolve: async () => projection }, {
-    subjectIdentifier,
-    clientCode: "client-a",
-    selection: { catalogVersion: 2, optionalClaims: [] },
-  });
+  return await resolveCustomSsoSubjectProjection(
+    { resolve: async () => projection },
+    {
+      subjectIdentifier,
+      clientCode: "client-a",
+      selection: { catalogVersion: 2, optionalClaims: [] },
+    },
+  );
 }
 
 async function captureRejection(promise: Promise<unknown>) {
   try {
     await promise;
-  }
-  catch (error) {
+  } catch (error) {
     return error;
   }
   throw new Error("Expected operation to reject");

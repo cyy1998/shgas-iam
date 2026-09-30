@@ -1,7 +1,7 @@
-import type { AdminPositionTransactionPorts } from "@admin-api/services/position/position.port";
-import type { AdminApiPostgresTestHarness } from "./postgres-test-harness";
+import { afterAll, beforeAll, beforeEach, describe, expect, mock, test } from "bun:test";
 import { createAdminApiRepositories } from "@admin-api/composition/repositories";
 import { createAdminApiUnitOfWork } from "@admin-api/composition/tx";
+import type { AdminPositionTransactionPorts } from "@admin-api/services/position/position.port";
 import { createPositionService } from "@admin-api/services/position/position.service";
 import { BadRequestError } from "@iam/api-core/errors";
 import { mapUnitOfWork } from "@iam/api-core/uow";
@@ -9,7 +9,7 @@ import { EmploymentStatus, OrganizationLevel, OrganizationType, PositionStatus, 
 import { extractPostgresError } from "@iam/db/postgres-error";
 import { auditLogs, employments, organizations, positions, userProfileDirty, users } from "@iam/db/schema";
 import { PositionCodeExistsError, PositionHasEmploymentError, PositionNotFoundError } from "@iam/domain/position";
-import { afterAll, beforeAll, beforeEach, describe, expect, mock, test } from "bun:test";
+import type { AdminApiPostgresTestHarness } from "./postgres-test-harness";
 import { createAdminApiPostgresTestHarness } from "./postgres-test-harness";
 
 let harness: AdminApiPostgresTestHarness;
@@ -24,7 +24,7 @@ afterAll(async () => {
 });
 
 function createCommand(
-  decorate: (tx: AdminPositionTransactionPorts) => AdminPositionTransactionPorts = tx => tx,
+  decorate: (tx: AdminPositionTransactionPorts) => AdminPositionTransactionPorts = (tx) => tx,
   enqueueRebuildJobs = mock(async () => ({ enqueued: 1, jobIds: ["position-job"] })),
 ) {
   const warn = mock(() => undefined);
@@ -39,34 +39,51 @@ function createCommand(
     warn,
     service: createPositionService({
       positionRepository: createAdminApiRepositories(harness.db).position,
-      uow: mapUnitOfWork(uow, tx => decorate({
-        positionRepository: tx.repositories.position,
-        auditService: tx.auditService,
-        userProfileInvalidation: tx.userProfileInvalidation,
-      })),
+      uow: mapUnitOfWork(uow, (tx) =>
+        decorate({
+          positionRepository: tx.repositories.position,
+          auditService: tx.auditService,
+          userProfileInvalidation: tx.userProfileInvalidation,
+        }),
+      ),
     }),
   };
 }
 
 async function seedPosition(posCode = "POSITION") {
-  const [position] = await harness.db.insert(positions).values({
-    posCode,
-    posName: posCode,
-    status: PositionStatus.Enable,
-  }).returning();
+  const [position] = await harness.db
+    .insert(positions)
+    .values({
+      posCode,
+      posName: posCode,
+      status: PositionStatus.Enable,
+    })
+    .returning();
   return position!;
 }
 
 async function seedEmployment(positionId: number, status = EmploymentStatus.Enable) {
-  const [user] = await harness.db.insert(users).values({ username: "holder", name: "Holder", userType: UserType.Formal }).returning();
-  const [organization] = await harness.db.insert(organizations).values({
-    orgCode: "ORG",
-    orgName: "Organization",
-    path: "/1",
-    level: OrganizationLevel.One,
-    orgType: OrganizationType.Department,
-  }).returning();
-  await harness.db.insert(employments).values({ userId: user!.id, orgId: organization!.id, posId: positionId, status, startTime: new Date("2026-08-01T00:00:00Z") });
+  const [user] = await harness.db
+    .insert(users)
+    .values({ username: "holder", name: "Holder", userType: UserType.Formal })
+    .returning();
+  const [organization] = await harness.db
+    .insert(organizations)
+    .values({
+      orgCode: "ORG",
+      orgName: "Organization",
+      path: "/1",
+      level: OrganizationLevel.One,
+      orgType: OrganizationType.Department,
+    })
+    .returning();
+  await harness.db.insert(employments).values({
+    userId: user!.id,
+    orgId: organization!.id,
+    posId: positionId,
+    status,
+    startTime: new Date("2026-08-01T00:00:00Z"),
+  });
   return user!;
 }
 
@@ -81,8 +98,7 @@ async function facts() {
 async function failure(operation: () => Promise<unknown>) {
   try {
     await operation();
-  }
-  catch (error) {
+  } catch (error) {
     return error;
   }
   throw new Error("Expected command failure");
@@ -148,10 +164,12 @@ describe("Position mutations through production PostgreSQL UnitOfWork", () => {
   ])("rejects %s without partial facts", async (_scenario, input) => {
     const { service } = createCommand();
     const beforeRejected = await facts();
-    const error = await failure(() => service.setPosition({
-      ...input,
-      status: PositionStatus.Enable,
-    }));
+    const error = await failure(() =>
+      service.setPosition({
+        ...input,
+        status: PositionStatus.Enable,
+      }),
+    );
     expect(error).toBeDefined();
     expect(await facts()).toEqual(beforeRejected);
   });
@@ -175,7 +193,7 @@ describe("Position mutations through production PostgreSQL UnitOfWork", () => {
       await seedPosition();
       const written = Promise.withResolvers<void>();
       const release = Promise.withResolvers<void>();
-      const first = createCommand(tx => ({
+      const first = createCommand((tx) => ({
         ...tx,
         positionRepository: {
           ...tx.positionRepository,
@@ -190,9 +208,10 @@ describe("Position mutations through production PostgreSQL UnitOfWork", () => {
       const second = createCommand().service;
       const firstPending = first.updatePositionStatus("POSITION", PositionStatus.Pause);
       await Promise.race([written.promise, firstPending]);
-      const secondPending = secondOperation === "status"
-        ? second.updatePositionStatus("POSITION", PositionStatus.Pause)
-        : second.updatePosition("POSITION", { posName: "New name" });
+      const secondPending =
+        secondOperation === "status"
+          ? second.updatePositionStatus("POSITION", PositionStatus.Pause)
+          : second.updatePosition("POSITION", { posName: "New name" });
       try {
         const deadline = Date.now() + 2000;
         let blocked = false;
@@ -208,8 +227,7 @@ describe("Position mutations through production PostgreSQL UnitOfWork", () => {
           blocked = rows[0]!.blocked;
         }
         expect(blocked).toBe(true);
-      }
-      finally {
+      } finally {
         release.resolve();
         await Promise.allSettled([firstPending, secondPending]);
       }
@@ -232,7 +250,11 @@ describe("Position mutations through production PostgreSQL UnitOfWork", () => {
 
   test("creates a DTO and atomically commits an edit, audit and dirty before waking the queue", async () => {
     const { service, enqueueRebuildJobs } = createCommand();
-    const created = await service.setPosition({ posCode: "POSITION", posName: "POSITION", status: PositionStatus.Enable });
+    const created = await service.setPosition({
+      posCode: "POSITION",
+      posName: "POSITION",
+      status: PositionStatus.Enable,
+    });
     expect(created).toMatchObject({ changed: true, result: { posCode: "POSITION", posName: "POSITION" } });
     const initial = await facts();
     expect(initial.audits).toMatchObject([{ action: "admin.position.create", details: { changed: true } }]);
@@ -245,7 +267,7 @@ describe("Position mutations through production PostgreSQL UnitOfWork", () => {
     const result = await service.updatePosition("POSITION", { posName: "Renamed" });
     expect(result).toEqual({ changed: true, result: null });
     expect(enqueueRebuildJobs).toHaveBeenCalledTimes(1);
-    expect(observedAtWakeup?.positions[0]!.posName).toBe("Renamed");
+    expect(observedAtWakeup?.positions[0]?.posName).toBe("Renamed");
     expect(observedAtWakeup?.audits).toHaveLength(2);
     expect(observedAtWakeup?.dirty).toMatchObject([{ userId: user.id }]);
   });
@@ -311,7 +333,10 @@ describe("Position mutations through production PostgreSQL UnitOfWork", () => {
       await seedEmployment(position.id, status);
       const { service } = createCommand();
       const before = await facts();
-      for (const command of [() => service.updatePositionStatus("POSITION", PositionStatus.Pause), () => service.deletePosition("POSITION")]) {
+      for (const command of [
+        () => service.updatePositionStatus("POSITION", PositionStatus.Pause),
+        () => service.deletePosition("POSITION"),
+      ]) {
         const error = await failure(command);
         expect(error).toBeInstanceOf(PositionHasEmploymentError);
       }
@@ -325,17 +350,26 @@ describe("Position mutations through production PostgreSQL UnitOfWork", () => {
       const position = await seedPosition();
       await seedEmployment(position.id);
       const sentinel = new Error(`injected ${stage} failure`);
-      const { service, enqueueRebuildJobs } = createCommand(tx => ({
+      const { service, enqueueRebuildJobs } = createCommand((tx) => ({
         ...tx,
         ...(stage === "audit"
-          ? { auditService: { ...tx.auditService, recordAuditLog: async (input) => {
-              await tx.auditService.recordAuditLog(input);
-              throw sentinel;
-            } } }
-          : { userProfileInvalidation: { recordChanges: async (changes) => {
-              await tx.userProfileInvalidation.recordChanges(changes);
-              throw sentinel;
-            } } }),
+          ? {
+              auditService: {
+                ...tx.auditService,
+                recordAuditLog: async (input) => {
+                  await tx.auditService.recordAuditLog(input);
+                  throw sentinel;
+                },
+              },
+            }
+          : {
+              userProfileInvalidation: {
+                recordChanges: async (changes) => {
+                  await tx.userProfileInvalidation.recordChanges(changes);
+                  throw sentinel;
+                },
+              },
+            }),
       }));
       const before = await facts();
       const error = await failure(() => service.updatePosition("POSITION", { posName: "Rolled back" }));
@@ -349,9 +383,12 @@ describe("Position mutations through production PostgreSQL UnitOfWork", () => {
   test("bestEffort queue failure preserves committed success and dirty recovery", async () => {
     const position = await seedPosition();
     await seedEmployment(position.id);
-    const { service, warn } = createCommand(tx => tx, mock(async () => {
-      throw new Error("queue unavailable");
-    }));
+    const { service, warn } = createCommand(
+      (tx) => tx,
+      mock(async () => {
+        throw new Error("queue unavailable");
+      }),
+    );
     const result = await service.updatePosition("POSITION", { description: "Committed" });
     expect(result).toEqual({ changed: true, result: null });
     const after = await facts();
@@ -363,16 +400,19 @@ describe("Position mutations through production PostgreSQL UnitOfWork", () => {
 
   for (const method of ["setPosition", "updatePositionByCode", "softDeletePositionByCode"] as const) {
     test(`controlled zero-row ${method} fails closed without audit or dirty`, async () => {
-      if (method !== "setPosition")
-        await seedPosition();
-      const { service } = createCommand(tx => ({
+      if (method !== "setPosition") await seedPosition();
+      const { service } = createCommand((tx) => ({
         ...tx,
         positionRepository: { ...tx.positionRepository, [method]: async () => null },
       }));
       const before = await facts();
-      const error = await failure(() => method === "setPosition"
-        ? service.setPosition({ posCode: "NEW", posName: "New", status: PositionStatus.Enable })
-        : method === "updatePositionByCode" ? service.updatePosition("POSITION", { posName: "New" }) : service.deletePosition("POSITION"));
+      const error = await failure(() =>
+        method === "setPosition"
+          ? service.setPosition({ posCode: "NEW", posName: "New", status: PositionStatus.Enable })
+          : method === "updatePositionByCode"
+            ? service.updatePosition("POSITION", { posName: "New" })
+            : service.deletePosition("POSITION"),
+      );
       expect(error).toBeInstanceOf(Error);
       expect(error).not.toBeInstanceOf(PositionCodeExistsError);
       const after = await facts();
@@ -405,15 +445,16 @@ describe("Position mutations through production PostgreSQL UnitOfWork", () => {
     await harness.sql`create unique index position_test_name_unique on position (post_name)`;
     try {
       const { service } = createCommand();
-      const error = await failure(() => service.setPosition({ posCode: "OTHER", posName: "POSITION", status: PositionStatus.Enable }));
+      const error = await failure(() =>
+        service.setPosition({ posCode: "OTHER", posName: "POSITION", status: PositionStatus.Enable }),
+      );
       expect(error).not.toBeInstanceOf(PositionCodeExistsError);
       expect(extractPostgresError(error)).toEqual({ code: "23505", constraint: "position_test_name_unique" });
       const after = await facts();
       expect(after.positions).toHaveLength(1);
       expect(after.audits).toEqual([]);
       expect(after.dirty).toEqual([]);
-    }
-    finally {
+    } finally {
       await harness.sql`drop index position_test_name_unique`;
     }
   });
@@ -426,28 +467,34 @@ describe("Position mutations through production PostgreSQL UnitOfWork", () => {
       }
       let arrived = 0;
       const gate = Promise.withResolvers<void>();
-      const { service } = createCommand(tx => ({ ...tx, positionRepository: {
-        ...tx.positionRepository,
-        getAnyPositionByCode: async (code) => {
-          const current = await tx.positionRepository.getAnyPositionByCode(code);
-          if (code === "WINNER") {
-            arrived++;
-            if (arrived === 2)
-              gate.resolve();
-            await gate.promise;
-          }
-          return current;
+      const { service } = createCommand((tx) => ({
+        ...tx,
+        positionRepository: {
+          ...tx.positionRepository,
+          getAnyPositionByCode: async (code) => {
+            const current = await tx.positionRepository.getAnyPositionByCode(code);
+            if (code === "WINNER") {
+              arrived++;
+              if (arrived === 2) gate.resolve();
+              await gate.promise;
+            }
+            return current;
+          },
         },
-      } }));
-      const results = await Promise.allSettled(operation === "create"
-        ? ["First", "Second"].map(posName => service.setPosition({ posCode: "WINNER", posName, status: PositionStatus.Enable }))
-        : ["FIRST", "SECOND"].map(code => service.updatePosition(code, { posCode: "WINNER" })));
+      }));
+      const results = await Promise.allSettled(
+        operation === "create"
+          ? ["First", "Second"].map((posName) =>
+              service.setPosition({ posCode: "WINNER", posName, status: PositionStatus.Enable }),
+            )
+          : ["FIRST", "SECOND"].map((code) => service.updatePosition(code, { posCode: "WINNER" })),
+      );
       expect(arrived).toBe(2);
-      expect(results.filter(result => result.status === "fulfilled")).toHaveLength(1);
-      const rejected = results.find(result => result.status === "rejected");
+      expect(results.filter((result) => result.status === "fulfilled")).toHaveLength(1);
+      const rejected = results.find((result) => result.status === "rejected");
       expect(rejected?.reason).toBeInstanceOf(PositionCodeExistsError);
       const after = await facts();
-      expect(after.positions.filter(position => position.posCode === "WINNER")).toHaveLength(1);
+      expect(after.positions.filter((position) => position.posCode === "WINNER")).toHaveLength(1);
       expect(after.positions).toHaveLength(operation === "create" ? 1 : 2);
       expect(after.audits).toHaveLength(1);
       expect(after.dirty).toEqual([]);

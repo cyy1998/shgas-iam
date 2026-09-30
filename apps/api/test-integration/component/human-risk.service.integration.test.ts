@@ -1,7 +1,7 @@
+import { describe, expect, test } from "bun:test";
 import { HumanVerificationAction } from "@api/enums/humanVerification.action";
 import { createHumanRiskService } from "@api/services/human-verification/human-risk.service";
 import { createMemoryRedis } from "@api/testing/fakes";
-import { describe, expect, test } from "bun:test";
 
 function createService() {
   return createHumanRiskService({
@@ -19,10 +19,12 @@ describe("createHumanRiskService", () => {
   test("requires verification for SMS code send", async () => {
     const service = createService();
 
-    await expect(service.shouldRequireVerification(
-      HumanVerificationAction.SendSmsCode,
-      { ip: "127.0.0.1", subject: "13800000000" },
-    )).resolves.toBe(true);
+    await expect(
+      service.shouldRequireVerification(HumanVerificationAction.SendSmsCode, {
+        ip: "127.0.0.1",
+        subject: "13800000000",
+      }),
+    ).resolves.toBe(true);
   });
 
   test("tracks login failures by subject and ip", async () => {
@@ -30,14 +32,10 @@ describe("createHumanRiskService", () => {
     const context = { ip: "127.0.0.1", subject: "zhangsan" };
 
     await service.recordLoginFailure(HumanVerificationAction.PasswordLogin, context);
-    await expect(service.shouldRequireVerification(
-      HumanVerificationAction.PasswordLogin,
-      context,
-    )).resolves.toBe(false);
+    await expect(service.shouldRequireVerification(HumanVerificationAction.PasswordLogin, context)).resolves.toBe(
+      false,
+    );
     await service.recordLoginFailure(HumanVerificationAction.PasswordLogin, context);
-    await expect(service.shouldRequireVerification(
-      HumanVerificationAction.PasswordLogin,
-      context,
-    )).resolves.toBe(true);
+    await expect(service.shouldRequireVerification(HumanVerificationAction.PasswordLogin, context)).resolves.toBe(true);
   });
 });

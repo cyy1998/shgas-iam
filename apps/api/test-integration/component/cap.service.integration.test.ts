@@ -1,7 +1,7 @@
+import { describe, expect, mock, test } from "bun:test";
 import { HumanVerificationAction } from "@api/enums/humanVerification.action";
 import { createCapService } from "@api/services/human-verification/cap.service";
 import { createFakeLogger, createMemoryRedis } from "@api/testing/fakes";
-import { describe, expect, mock, test } from "bun:test";
 
 function createService() {
   const redis = createMemoryRedis();
@@ -31,10 +31,15 @@ describe("createCapService", () => {
   test("redeems challenge tokens for an action and verifies them once", async () => {
     const { capClient, service } = createService();
 
-    await expect(service.redeemChallenge({
-      token: "challenge",
-      solutions: [1, 2],
-    }, HumanVerificationAction.PasswordLogin)).resolves.toEqual({ success: true, token: "redeemed" });
+    await expect(
+      service.redeemChallenge(
+        {
+          token: "challenge",
+          solutions: [1, 2],
+        },
+        HumanVerificationAction.PasswordLogin,
+      ),
+    ).resolves.toEqual({ success: true, token: "redeemed" });
 
     await service.verifyTokenForAction(HumanVerificationAction.PasswordLogin, "redeemed");
     expect(capClient.validateToken).toHaveBeenCalledWith("redeemed");
@@ -62,10 +67,13 @@ describe("createCapService", () => {
   test("logs human verification events with observability fields", async () => {
     const { logger, service } = createService();
 
-    await service.redeemChallenge({
-      token: "challenge",
-      solutions: [1, 2],
-    }, HumanVerificationAction.PasswordLogin);
+    await service.redeemChallenge(
+      {
+        token: "challenge",
+        solutions: [1, 2],
+      },
+      HumanVerificationAction.PasswordLogin,
+    );
     await service.ensureActionAllowed(HumanVerificationAction.PasswordLogin, "redeemed", {
       ip: "203.0.113.10",
       requestId: "req-cap",
@@ -73,18 +81,24 @@ describe("createCapService", () => {
       traceId: "11111111111111111111111111111111",
     });
 
-    expect(logger.info).toHaveBeenCalledWith(expect.objectContaining({
-      event: "human_verification.required",
-      action: HumanVerificationAction.PasswordLogin,
-      requestId: "req-cap",
-      traceId: "11111111111111111111111111111111",
-      ip: "203.0.113.10",
-      subject: "zhangsan",
-    }), "human verification required for action");
-    expect(logger.info).toHaveBeenCalledWith(expect.objectContaining({
-      event: "human_verification.token.validated",
-      requestId: "req-cap",
-      traceId: "11111111111111111111111111111111",
-    }), "human verification token validated");
+    expect(logger.info).toHaveBeenCalledWith(
+      expect.objectContaining({
+        event: "human_verification.required",
+        action: HumanVerificationAction.PasswordLogin,
+        requestId: "req-cap",
+        traceId: "11111111111111111111111111111111",
+        ip: "203.0.113.10",
+        subject: "zhangsan",
+      }),
+      "human verification required for action",
+    );
+    expect(logger.info).toHaveBeenCalledWith(
+      expect.objectContaining({
+        event: "human_verification.token.validated",
+        requestId: "req-cap",
+        traceId: "11111111111111111111111111111111",
+      }),
+      "human verification token validated",
+    );
   });
 });

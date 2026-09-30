@@ -1,8 +1,8 @@
-import type { AgentProvider } from "@ai-hero/sandcastle";
-import type { DockerOptions } from "@ai-hero/sandcastle/sandboxes/docker";
 import { mkdir, mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import type { AgentProvider } from "@ai-hero/sandcastle";
+import type { DockerOptions } from "@ai-hero/sandcastle/sandboxes/docker";
 import { docker } from "@ai-hero/sandcastle/sandboxes/docker";
 import { shellQuote } from "./codex-provider.mts";
 
@@ -25,21 +25,25 @@ const cacheProbe = `
 
 export const cachePreflight = `timeout --kill-after=5s 30s node -e ${shellQuote(cacheProbe)}`;
 
-export const frontendGeneratedPaths = ["admin", "sso"].flatMap(app =>
-  [".umi", ".umi-production", ".umi-test"].map(directory => `apps/${app}/src/${directory}`));
+export const frontendGeneratedPaths = ["admin", "sso"].flatMap((app) =>
+  [".umi", ".umi-production", ".umi-test"].map((directory) => `apps/${app}/src/${directory}`),
+);
 
 /** One execution owns these mounts; neither host output nor another ticket is reused. */
-export async function withFrontendMounts<T>(use: (mounts: NonNullable<DockerOptions["mounts"]>) => Promise<T>): Promise<T> {
+export async function withFrontendMounts<T>(
+  use: (mounts: NonNullable<DockerOptions["mounts"]>) => Promise<T>,
+): Promise<T> {
   const directory = await mkdtemp(join(tmpdir(), "iam-sandcastle-generated-"));
   try {
-    const mounts = await Promise.all(frontendGeneratedPaths.map(async (path) => {
-      const hostPath = join(directory, path);
-      await mkdir(hostPath, { recursive: true });
-      return { hostPath, sandboxPath: `/home/agent/workspace/${path}` };
-    }));
+    const mounts = await Promise.all(
+      frontendGeneratedPaths.map(async (path) => {
+        const hostPath = join(directory, path);
+        await mkdir(hostPath, { recursive: true });
+        return { hostPath, sandboxPath: `/home/agent/workspace/${path}` };
+      }),
+    );
     return await use(mounts);
-  }
-  finally {
+  } finally {
     await rm(directory, { recursive: true, force: true });
   }
 }
@@ -57,7 +61,11 @@ export function withCachePreflight(provider: AgentProvider): AgentProvider {
 }
 
 export function withWorkspacePreparation(provider: AgentProvider): AgentProvider {
-  return withPreparation(provider, `timeout --kill-after=10s 1200s sh -c ${shellQuote(workspacePreparation)}`);
+  return withPreparation(
+    provider,
+    `timeout --kill-after=10s 1200s sh -c ${shellQuote(workspacePreparation)}` +
+      " && . scripts/sandcastle/enable-git-hooks.sh",
+  );
 }
 
 function withPreparation(provider: AgentProvider, preparation: string): AgentProvider {
@@ -65,7 +73,7 @@ function withPreparation(provider: AgentProvider, preparation: string): AgentPro
     ...provider,
     buildPrintCommand(options) {
       const result = provider.buildPrintCommand(options);
-      return { ...result, command: `${preparation} && ${result.command}` };
+      return { ...result, command: `${preparation} && ( ${result.command} )` };
     },
   };
 }

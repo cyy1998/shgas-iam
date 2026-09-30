@@ -1,5 +1,10 @@
+import { beforeEach, describe, expect, mock, test } from "bun:test";
 import type { CreateAuthHandlersDeps } from "@api/routes/auth/auth.handlers";
-import { createInternalAuthzHandler, createLocalSessionAuthzHandler, createRootAuthHandlers } from "@api/routes/auth/auth.handlers";
+import {
+  createInternalAuthzHandler,
+  createLocalSessionAuthzHandler,
+  createRootAuthHandlers,
+} from "@api/routes/auth/auth.handlers";
 import {
   customSsoLocalSessionCookieName,
   encodeCustomSsoClientCode,
@@ -9,13 +14,9 @@ import { AuthzMaintenanceError } from "@iam/api-core/errors/AuthzMaintenanceErro
 import { AuthzUnauthorizedError } from "@iam/api-core/errors/AuthzUnauthorizedError";
 import * as resp from "@iam/api-core/http";
 import { createErrorHandler } from "@iam/api-core/middlewares";
-import {
-  SubjectAccessSessionInvalidHttpError,
-  SubjectAccessUnavailableError,
-} from "@iam/api-core/subject-access";
+import { SubjectAccessSessionInvalidHttpError, SubjectAccessUnavailableError } from "@iam/api-core/subject-access";
 import { SubjectProjectionNotReadyError } from "@iam/client-subject-projection";
 import { ApiErrorCode, ClientStatus } from "@iam/contracts";
-import { beforeEach, describe, expect, mock, test } from "bun:test";
 import { Hono } from "hono";
 
 type InternalTestClient = {
@@ -37,12 +38,15 @@ const loginMobileService = mock(async () => ({
   token: "mobile-session-id",
   isMobileSet: true,
 }));
-const encodedGatewaySubject = Buffer.from(JSON.stringify({
-  version: 1,
-  subjectIdentifier: "00000000-0000-4000-8000-000000001001",
-  username: "alice",
-  name: "Alice",
-}), "utf8").toString("base64");
+const encodedGatewaySubject = Buffer.from(
+  JSON.stringify({
+    version: 1,
+    subjectIdentifier: "00000000-0000-4000-8000-000000001001",
+    username: "alice",
+    name: "Alice",
+  }),
+  "utf8",
+).toString("base64");
 const authzService = mock(async () => encodedGatewaySubject);
 const getClientBySecret = mock(async (_secret: string): Promise<InternalTestClient | null> => null);
 const loggerInfo = mock(() => undefined);
@@ -89,8 +93,8 @@ function makeLoginContext() {
       })),
       header: mock((name: string) => {
         const headers: Record<string, string> = {
-          "Client": "iam",
-          "traceparent": "00-11111111111111111111111111111111-2222222222222222-01",
+          Client: "iam",
+          traceparent: "00-11111111111111111111111111111111-2222222222222222-01",
           "user-agent": "api-handler-test",
           "x-forwarded-for": "203.0.113.9",
         };
@@ -103,7 +107,7 @@ function makeLoginContext() {
       responseHeaders.push(args);
     }),
     json: mock((body: unknown) => body),
-    get: mock((key: string) => key === "requestId" ? "req-1" : undefined),
+    get: mock((key: string) => (key === "requestId" ? "req-1" : undefined)),
   };
 }
 
@@ -134,7 +138,7 @@ function makeHeaderContext(headers: Record<string, string>) {
     },
     header: mock(() => undefined),
     json: mock((body: unknown) => body),
-    get: mock((key: string) => key === "requestId" ? "req-1" : undefined),
+    get: mock((key: string) => (key === "requestId" ? "req-1" : undefined)),
   };
 }
 
@@ -157,16 +161,18 @@ describe("authentication HTTP handlers", () => {
     const handlers = createHandlers();
     const app = new Hono();
     app.get("/auth/authz", handlers.authz as never);
-    app.onError(createErrorHandler({
-      error: mock(() => undefined),
-      info: mock(() => undefined),
-      warn: mock(() => undefined),
-    } as never));
+    app.onError(
+      createErrorHandler({
+        error: mock(() => undefined),
+        info: mock(() => undefined),
+        warn: mock(() => undefined),
+      } as never),
+    );
 
     const response = await app.request("/auth/authz", {
       headers: {
-        "Client": "portal",
-        "Cookie": "local_portal_session=local-token; third_party_session=external-token",
+        Client: "portal",
+        Cookie: "local_portal_session=local-token; third_party_session=external-token",
         "X-Forwarded-Uri": "/app",
       },
     });
@@ -185,8 +191,8 @@ describe("authentication HTTP handlers", () => {
     const responseHeaders: unknown[][] = [];
     const context = {
       ...makeHeaderContext({
-        "Authorization": "local-session-token",
-        "Client": "portal",
+        Authorization: "local-session-token",
+        Client: "portal",
         "X-Forwarded-Uri": "/app",
       }),
       header: mock((...args: unknown[]) => {
@@ -199,17 +205,9 @@ describe("authentication HTTP handlers", () => {
     expect(result).toEqual(resp.ok(encodedGatewaySubject));
 
     expect(authzService).toHaveBeenCalledWith("local-session-token", "portal");
-    expect(context.json).toHaveBeenCalledWith(
-      resp.ok(encodedGatewaySubject),
-      HttpStatusCodes.OK,
-    );
-    expect(responseHeaders).toContainEqual([
-      "X-User-Info",
-      encodedGatewaySubject,
-    ]);
-    expect(JSON.parse(
-      Buffer.from(encodedGatewaySubject, "base64").toString("utf8"),
-    )).toEqual({
+    expect(context.json).toHaveBeenCalledWith(resp.ok(encodedGatewaySubject), HttpStatusCodes.OK);
+    expect(responseHeaders).toContainEqual(["X-User-Info", encodedGatewaySubject]);
+    expect(JSON.parse(Buffer.from(encodedGatewaySubject, "base64").toString("utf8"))).toEqual({
       version: 1,
       subjectIdentifier: "00000000-0000-4000-8000-000000001001",
       username: "alice",
@@ -220,14 +218,12 @@ describe("authentication HTTP handlers", () => {
   test("authz rejects out-of-range client codes before deriving a cookie name", async () => {
     const handlers = createHandlers();
     const context = makeHeaderContext({
-      "Authorization": "local-session-token",
-      "Client": "p".repeat(65),
+      Authorization: "local-session-token",
+      Client: "p".repeat(65),
       "X-Forwarded-Uri": "/app",
     });
 
-    await expect(
-      handlers.authz(context as never, undefined as never),
-    ).rejects.toBeInstanceOf(AuthzUnauthorizedError);
+    await expect(handlers.authz(context as never, undefined as never)).rejects.toBeInstanceOf(AuthzUnauthorizedError);
 
     expect(authzService).not.toHaveBeenCalled();
   });
@@ -235,54 +231,42 @@ describe("authentication HTTP handlers", () => {
   test("authz prefers the client-scoped cookie over the Authorization header", async () => {
     const handlers = createHandlers();
     const context = makeHeaderContext({
-      "Authorization": "header-session-token",
-      "Client": "portal",
-      "Cookie": "local_portal_session=cookie-session-token",
+      Authorization: "header-session-token",
+      Client: "portal",
+      Cookie: "local_portal_session=cookie-session-token",
       "X-Forwarded-Uri": "/app",
     });
 
     await handlers.authz(context as never, undefined as never);
 
-    expect(authzService).toHaveBeenCalledWith(
-      "cookie-session-token",
-      "portal",
-    );
+    expect(authzService).toHaveBeenCalledWith("cookie-session-token", "portal");
   });
 
   test("authz resolves an encoded cookie name for an opaque Client Code", async () => {
     const handlers = createHandlers();
     const context = makeHeaderContext({
-      "Client":
-        "legacy%3Aclient%2F%E4%B8%AD%E6%96%87",
-      "Cookie":
-        "local_legacy%3Aclient%2F%E4%B8%AD%E6%96%87_session=cookie-session-token",
+      Client: "legacy%3Aclient%2F%E4%B8%AD%E6%96%87",
+      Cookie: "local_legacy%3Aclient%2F%E4%B8%AD%E6%96%87_session=cookie-session-token",
       "X-Forwarded-Uri": "/app",
     });
 
     await handlers.authz(context as never, undefined as never);
 
-    expect(authzService).toHaveBeenCalledWith(
-      "cookie-session-token",
-      "legacy:client/中文",
-    );
+    expect(authzService).toHaveBeenCalledWith("cookie-session-token", "legacy:client/中文");
   });
 
   test("authz resolves a database-valid non-BMP Client Code from its encoded cookie", async () => {
     const handlers = createHandlers();
     const clientCode = "😀".repeat(33);
     const context = makeHeaderContext({
-      "Client": encodeCustomSsoClientCode(clientCode),
-      "Cookie":
-        `${customSsoLocalSessionCookieName(clientCode)}=cookie-session-token`,
+      Client: encodeCustomSsoClientCode(clientCode),
+      Cookie: `${customSsoLocalSessionCookieName(clientCode)}=cookie-session-token`,
       "X-Forwarded-Uri": "/app",
     });
 
     await handlers.authz(context as never, undefined as never);
 
-    expect(authzService).toHaveBeenCalledWith(
-      "cookie-session-token",
-      clientCode,
-    );
+    expect(authzService).toHaveBeenCalledWith("cookie-session-token", clientCode);
   });
 
   test("authz expires the encoded cookie name for an invalid opaque Client session", async () => {
@@ -290,29 +274,25 @@ describe("authentication HTTP handlers", () => {
     authzService.mockRejectedValue(new AuthzUnauthorizedError("未登录"));
     const app = new Hono();
     app.get("/auth/authz", handlers.authz as never);
-    app.onError(createErrorHandler({
-      error: mock(() => undefined),
-      info: mock(() => undefined),
-      warn: mock(() => undefined),
-    } as never));
+    app.onError(
+      createErrorHandler({
+        error: mock(() => undefined),
+        info: mock(() => undefined),
+        warn: mock(() => undefined),
+      } as never),
+    );
 
     const response = await app.request("/auth/authz", {
       headers: {
-        "Client":
-          "legacy%3Aclient%2F%E4%B8%AD%E6%96%87",
-        "Cookie":
-          "local_legacy%3Aclient%2F%E4%B8%AD%E6%96%87_session=local-token",
+        Client: "legacy%3Aclient%2F%E4%B8%AD%E6%96%87",
+        Cookie: "local_legacy%3Aclient%2F%E4%B8%AD%E6%96%87_session=local-token",
         "X-Forwarded-Uri": "/app",
       },
     });
 
     expect(response.status).toBe(401);
     expect(response.headers.getSetCookie()).toEqual(
-      expect.arrayContaining([
-        expect.stringContaining(
-          "local_legacy%3Aclient%2F%E4%B8%AD%E6%96%87_session=",
-        ),
-      ]),
+      expect.arrayContaining([expect.stringContaining("local_legacy%3Aclient%2F%E4%B8%AD%E6%96%87_session=")]),
     );
   });
 
@@ -321,16 +301,18 @@ describe("authentication HTTP handlers", () => {
     authzService.mockRejectedValue(new SubjectAccessSessionInvalidHttpError());
     const app = new Hono();
     app.get("/auth/authz", handlers.authz as never);
-    app.onError(createErrorHandler({
-      error: mock(() => undefined),
-      info: mock(() => undefined),
-      warn: mock(() => undefined),
-    } as never));
+    app.onError(
+      createErrorHandler({
+        error: mock(() => undefined),
+        info: mock(() => undefined),
+        warn: mock(() => undefined),
+      } as never),
+    );
 
     const response = await app.request("/auth/authz", {
       headers: {
-        "Client": "portal",
-        "Cookie": "local_portal_session=local-token; third_party_session=external-token",
+        Client: "portal",
+        Cookie: "local_portal_session=local-token; third_party_session=external-token",
         "X-Forwarded-Uri": "/app",
       },
     });
@@ -349,23 +331,23 @@ describe("authentication HTTP handlers", () => {
 
   test("authz maps uncertain Subject Access to 503 without deleting local cookies or logging Redis details", async () => {
     const handlers = createHandlers();
-    authzService.mockRejectedValue(
-      new SubjectAccessUnavailableError(new Error("redis://secret@subject-access")),
-    );
+    authzService.mockRejectedValue(new SubjectAccessUnavailableError(new Error("redis://secret@subject-access")));
     const logged: unknown[] = [];
     const write = (fields: unknown) => logged.push(fields);
     const app = new Hono();
     app.get("/auth/authz", handlers.authz as never);
-    app.onError(createErrorHandler({
-      error: write,
-      info: write,
-      warn: write,
-    } as never));
+    app.onError(
+      createErrorHandler({
+        error: write,
+        info: write,
+        warn: write,
+      } as never),
+    );
 
     const response = await app.request("/auth/authz", {
       headers: {
-        "Client": "portal",
-        "Cookie": "local_portal_session=local-token",
+        Client: "portal",
+        Cookie: "local_portal_session=local-token",
         "X-Forwarded-Uri": "/app",
       },
     });
@@ -384,16 +366,18 @@ describe("authentication HTTP handlers", () => {
     authzService.mockRejectedValue(new SubjectProjectionNotReadyError());
     const app = new Hono();
     app.get("/auth/authz", handlers.authz as never);
-    app.onError(createErrorHandler({
-      error: mock(() => undefined),
-      info: mock(() => undefined),
-      warn: mock(() => undefined),
-    } as never));
+    app.onError(
+      createErrorHandler({
+        error: mock(() => undefined),
+        info: mock(() => undefined),
+        warn: mock(() => undefined),
+      } as never),
+    );
 
     const response = await app.request("/auth/authz", {
       headers: {
-        "Client": "portal",
-        "Cookie": "local_portal_session=local-token; third_party_session=external-token",
+        Client: "portal",
+        Cookie: "local_portal_session=local-token; third_party_session=external-token",
         "X-Forwarded-Uri": "/app",
       },
     });
@@ -411,16 +395,18 @@ describe("authentication HTTP handlers", () => {
     authzService.mockRejectedValue(new AuthzUnauthorizedError("未登录"));
     const app = new Hono();
     app.get("/auth/authz", handlers.authz as never);
-    app.onError(createErrorHandler({
-      error: mock(() => undefined),
-      info: mock(() => undefined),
-      warn: mock(() => undefined),
-    } as never));
+    app.onError(
+      createErrorHandler({
+        error: mock(() => undefined),
+        info: mock(() => undefined),
+        warn: mock(() => undefined),
+      } as never),
+    );
 
     const response = await app.request("/auth/authz", {
       headers: {
-        "Client": "portal",
-        "Cookie": "local_portal_session=local-token; third_party_session=external-token",
+        Client: "portal",
+        Cookie: "local_portal_session=local-token; third_party_session=external-token",
         "X-Forwarded-Uri": "/app",
       },
     });
@@ -439,16 +425,18 @@ describe("authentication HTTP handlers", () => {
     authzService.mockRejectedValue(new AuthzUnauthorizedError("未登录"));
     const app = new Hono();
     app.get("/auth/authz", handlers.authz as never);
-    app.onError(createErrorHandler({
-      error: mock(() => undefined),
-      info: mock(() => undefined),
-      warn: mock(() => undefined),
-    } as never));
+    app.onError(
+      createErrorHandler({
+        error: mock(() => undefined),
+        info: mock(() => undefined),
+        warn: mock(() => undefined),
+      } as never),
+    );
 
     const response = await app.request("/auth/authz", {
       headers: {
-        "Authorization": "invalid-local-token",
-        "Client": "portal",
+        Authorization: "invalid-local-token",
+        Client: "portal",
         "X-Forwarded-Uri": "/app",
       },
     });
@@ -463,27 +451,32 @@ describe("authentication HTTP handlers", () => {
 
     const result: unknown = await handlers.loginPassword(context as never, undefined as never);
 
-    expect(result).toEqual(resp.ok({
-      token: "session-id",
-      isMobileSet: true,
-    }));
+    expect(result).toEqual(
+      resp.ok({
+        token: "session-id",
+        isMobileSet: true,
+      }),
+    );
 
     expect(parseLoginPasswordCredential).toHaveBeenCalledWith("iam-login-v1.payload");
-    expect(loginPasswordService).toHaveBeenCalledWith({
-      capToken: "cap-token",
-      password: "1234",
-      username: "138550",
-    }, {
-      requestContext: {
-        sourceApp: "iam",
-        requestId: "req-1",
-        traceId: "11111111111111111111111111111111",
-        ip: "203.0.113.9",
-        userAgent: "api-handler-test",
-        route: "/auth/login/password",
-        method: "POST",
+    expect(loginPasswordService).toHaveBeenCalledWith(
+      {
+        capToken: "cap-token",
+        password: "1234",
+        username: "138550",
       },
-    });
+      {
+        requestContext: {
+          sourceApp: "iam",
+          requestId: "req-1",
+          traceId: "11111111111111111111111111111111",
+          ip: "203.0.113.9",
+          userAgent: "api-handler-test",
+          route: "/auth/login/password",
+          method: "POST",
+        },
+      },
+    );
     expect(context.responseHeaders[0]?.[0]).toBe("Set-Cookie");
     expect(context.responseHeaders[0]?.[1]).toContain("global_session=session-id");
   });
@@ -493,9 +486,7 @@ describe("authentication HTTP handlers", () => {
     const context = makeLoginContext();
     parseLoginPasswordCredential.mockRejectedValueOnce(new Error("登录凭证无效"));
 
-    await expect(handlers.loginPassword(context as never, undefined as never))
-      .rejects
-      .toThrow("登录凭证无效");
+    await expect(handlers.loginPassword(context as never, undefined as never)).rejects.toThrow("登录凭证无效");
 
     expect(loginPasswordService).not.toHaveBeenCalled();
     expect(context.responseHeaders).toHaveLength(0);
@@ -507,20 +498,25 @@ describe("authentication HTTP handlers", () => {
 
     const result: unknown = await handlers.loginMobile(context as never, undefined as never);
 
-    expect(result).toEqual(resp.ok({
-      token: "mobile-session-id",
-      isMobileSet: true,
-    }));
-    expect(loginMobileService).toHaveBeenCalledWith({
-      capToken: "cap-token",
-      code: "123456",
-      phoneNumber: "17721462865",
-    }, {
-      requestContext: expect.objectContaining({
-        requestId: "req-1",
-        route: "/auth/login/mobile",
+    expect(result).toEqual(
+      resp.ok({
+        token: "mobile-session-id",
+        isMobileSet: true,
       }),
-    });
+    );
+    expect(loginMobileService).toHaveBeenCalledWith(
+      {
+        capToken: "cap-token",
+        code: "123456",
+        phoneNumber: "17721462865",
+      },
+      {
+        requestContext: expect.objectContaining({
+          requestId: "req-1",
+          route: "/auth/login/mobile",
+        }),
+      },
+    );
     expect(context.responseHeaders[0]?.[0]).toBe("Set-Cookie");
     expect(context.responseHeaders[0]?.[1]).toContain("global_session=mobile-session-id");
   });
@@ -545,7 +541,7 @@ describe("authentication HTTP handlers", () => {
       status: ClientStatus.Enable,
     }));
     const context = makeHeaderContext({
-      "apikey": "secret-1",
+      apikey: "secret-1",
       "IP-Chain": "10.0.0.1, 192.168.93.10",
     });
 

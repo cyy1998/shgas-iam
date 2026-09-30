@@ -1,9 +1,9 @@
 import {
-  ORGANIZATION_RESPONSIBILITY_ASSIGNMENT_LIFECYCLE_COMMANDS,
   type AdminOrganizationResponsibilityAllowedActions,
+  ORGANIZATION_RESPONSIBILITY_ASSIGNMENT_LIFECYCLE_COMMANDS,
   type OrganizationResponsibilityAssignmentLifecycleCommand as OrganizationResponsibilityAssignmentLifecycleCommandType,
-} from '@iam/contracts';
-import { Button, Modal, Space } from 'antd';
+} from "@iam/contracts";
+import { Button, Modal, Space } from "antd";
 
 export default function OrganizationResponsibilityAssignmentLifecycleActions({
   loading,
@@ -12,28 +12,18 @@ export default function OrganizationResponsibilityAssignmentLifecycleActions({
 }: {
   loading: boolean;
   allowedActions: AdminOrganizationResponsibilityAllowedActions;
-  onCommand: (
-    command: OrganizationResponsibilityAssignmentLifecycleCommandType,
-  ) => Promise<void>;
+  onCommand: (command: OrganizationResponsibilityAssignmentLifecycleCommandType) => Promise<void>;
 }) {
-  if (
-    !allowedActions.pause.allowed &&
-    !allowedActions.resume.allowed &&
-    !allowedActions.end.allowed
-  )
-    return null;
+  if (!allowedActions.pause.allowed && !allowedActions.resume.allowed && !allowedActions.end.allowed) return null;
 
   const confirmEnd = () => {
     Modal.confirm({
-      title: '结束责任任命？',
-      content: '结束后不可恢复；如需重新任命，必须创建新的责任任命。',
-      okText: '确认结束',
+      title: "结束责任任命？",
+      content: "结束后不可恢复；如需重新任命，必须创建新的责任任命。",
+      okText: "确认结束",
       okButtonProps: { danger: true },
-      cancelText: '取消',
-      onOk: () =>
-        onCommand(
-          ORGANIZATION_RESPONSIBILITY_ASSIGNMENT_LIFECYCLE_COMMANDS.End,
-        ),
+      cancelText: "取消",
+      onOk: () => onCommand(ORGANIZATION_RESPONSIBILITY_ASSIGNMENT_LIFECYCLE_COMMANDS.End),
     });
   };
 
@@ -42,11 +32,7 @@ export default function OrganizationResponsibilityAssignmentLifecycleActions({
       {allowedActions.pause.allowed && (
         <Button
           loading={loading}
-          onClick={() =>
-            void onCommand(
-              ORGANIZATION_RESPONSIBILITY_ASSIGNMENT_LIFECYCLE_COMMANDS.Pause,
-            )
-          }
+          onClick={() => void onCommand(ORGANIZATION_RESPONSIBILITY_ASSIGNMENT_LIFECYCLE_COMMANDS.Pause)}
         >
           暂停任命
         </Button>
@@ -55,11 +41,7 @@ export default function OrganizationResponsibilityAssignmentLifecycleActions({
         <Button
           loading={loading}
           type="primary"
-          onClick={() =>
-            void onCommand(
-              ORGANIZATION_RESPONSIBILITY_ASSIGNMENT_LIFECYCLE_COMMANDS.Resume,
-            )
-          }
+          onClick={() => void onCommand(ORGANIZATION_RESPONSIBILITY_ASSIGNMENT_LIFECYCLE_COMMANDS.Resume)}
         >
           恢复任命
         </Button>

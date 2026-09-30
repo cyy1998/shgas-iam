@@ -7,11 +7,11 @@ import type {
   OrganizationSelectorQueryDto,
   OrganizationUpdateDto,
 } from "@admin-api/services/organization/organization.type";
-import type { DbClient } from "@iam/db";
-import type { Organization } from "@iam/db/schema";
 import { getChildOrganizationLevel, OrganizationStatus } from "@iam/contracts";
+import type { DbClient } from "@iam/db";
 import { extractPostgresError } from "@iam/db/postgres-error";
 import { compactUpdate, firstRow, ilikeContainsIf, inArrayIf } from "@iam/db/query-utils";
+import type { Organization } from "@iam/db/schema";
 import { employments, organizationClosures, organizations } from "@iam/db/schema";
 import { OPEN_EMPLOYMENT_STATUSES } from "@iam/domain/employment";
 import { OrganizationCodeExistsError } from "@iam/domain/organization";
@@ -22,11 +22,12 @@ export function createOrganizationRepository(db: DbClient) {
   async function write<T>(operation: () => Promise<T>): Promise<T> {
     try {
       return await operation();
-    }
-    catch (error) {
+    } catch (error) {
       const detail = extractPostgresError(error);
-      if (detail?.code === "23505"
-        && (detail.constraint === "organization_org_code_unique" || detail.constraint === "organization_org_code_key")) {
+      if (
+        detail?.code === "23505" &&
+        (detail.constraint === "organization_org_code_unique" || detail.constraint === "organization_org_code_key")
+      ) {
         throw new OrganizationCodeExistsError();
       }
       throw error;
@@ -34,56 +35,68 @@ export function createOrganizationRepository(db: DbClient) {
   }
   return {
     async lockOrganizationByCode(orgCode: string) {
-      return firstRow(await db.select().from(organizations).where(and(
-        eq(organizations.orgCode, orgCode),
-        eq(organizations.isDelete, false),
-      )).for("update"));
+      return firstRow(
+        await db
+          .select()
+          .from(organizations)
+          .where(and(eq(organizations.orgCode, orgCode), eq(organizations.isDelete, false)))
+          .for("update"),
+      );
     },
     async getAnyOrganizationByCode(orgCode: string) {
       return firstRow(await db.select().from(organizations).where(eq(organizations.orgCode, orgCode)).limit(1));
     },
     async getOrganizationByCode(orgCode: string) {
-      const rows = await db.select().from(organizations).where(and(
-        eq(organizations.orgCode, orgCode),
-        eq(organizations.status, OrganizationStatus.Enable),
-        eq(organizations.isDelete, false),
-      )).limit(1);
+      const rows = await db
+        .select()
+        .from(organizations)
+        .where(
+          and(
+            eq(organizations.orgCode, orgCode),
+            eq(organizations.status, OrganizationStatus.Enable),
+            eq(organizations.isDelete, false),
+          ),
+        )
+        .limit(1);
       return firstRow(await attachOrganizationRelations(rows, db)) ?? null;
     },
     async setOrganization(organizationCreateDto: OrganizationCreateDto, parentOrganization: Organization | null) {
       const { parentCode, ...org } = organizationCreateDto;
       const newOrganization = await write(async () => firstRow(await db.insert(organizations).values(org).returning()));
-      if (newOrganization === null)
-        throw new Error("Organization insert returned no row");
+      if (newOrganization === null) throw new Error("Organization insert returned no row");
       const path = `${parentOrganization ? parentOrganization.path : ""}/${newOrganization.id}`;
       const level = getChildOrganizationLevel(parentOrganization?.level ?? null);
-      const updatedOrganization = firstRow(await db
-        .update(organizations)
-        .set({
-          path,
-          level,
-          parentId: parentOrganization?.id ?? -1,
-        })
-        .where(and(
-          eq(organizations.id, newOrganization.id),
-          eq(organizations.status, OrganizationStatus.Enable),
-          eq(organizations.isDelete, false),
-        ))
-        .returning());
-      if (updatedOrganization === null)
-        throw new Error("Organization initialization returned no row");
+      const updatedOrganization = firstRow(
+        await db
+          .update(organizations)
+          .set({
+            path,
+            level,
+            parentId: parentOrganization?.id ?? -1,
+          })
+          .where(
+            and(
+              eq(organizations.id, newOrganization.id),
+              eq(organizations.status, OrganizationStatus.Enable),
+              eq(organizations.isDelete, false),
+            ),
+          )
+          .returning(),
+      );
+      if (updatedOrganization === null) throw new Error("Organization initialization returned no row");
 
-      const parentAncestors = parentOrganization === null
-        ? []
-        : await db
-            .select({
-              ancestorId: organizationClosures.ancestorId,
-              depth: organizationClosures.depth,
-            })
-            .from(organizationClosures)
-            .where(eq(organizationClosures.descendantId, parentOrganization.id));
+      const parentAncestors =
+        parentOrganization === null
+          ? []
+          : await db
+              .select({
+                ancestorId: organizationClosures.ancestorId,
+                depth: organizationClosures.depth,
+              })
+              .from(organizationClosures)
+              .where(eq(organizationClosures.descendantId, parentOrganization.id));
 
-      const closureRelations = parentAncestors.map(rel => ({
+      const closureRelations = parentAncestors.map((rel) => ({
         ancestorId: rel.ancestorId,
         descendantId: newOrganization.id,
         depth: rel.depth + 1,
@@ -106,17 +119,20 @@ export function createOrganizationRepository(db: DbClient) {
       let parentId: number;
       if (parentOrgCode === null) {
         parentId = -1;
-      }
-      else {
-        const parent = firstRow(await db
-          .select({ id: organizations.id })
-          .from(organizations)
-          .where(and(
-            eq(organizations.orgCode, parentOrgCode),
-            eq(organizations.isDelete, false),
-            scope ? inArray(organizations.id, scope.organizationIds) : undefined,
-          ))
-          .limit(1));
+      } else {
+        const parent = firstRow(
+          await db
+            .select({ id: organizations.id })
+            .from(organizations)
+            .where(
+              and(
+                eq(organizations.orgCode, parentOrgCode),
+                eq(organizations.isDelete, false),
+                scope ? inArray(organizations.id, scope.organizationIds) : undefined,
+              ),
+            )
+            .limit(1),
+        );
         if (parent == null) {
           return { rows: [], total: 0 };
         }
@@ -127,12 +143,7 @@ export function createOrganizationRepository(db: DbClient) {
         eq(organizations.isDelete, false),
         eq(organizations.parentId, parentId),
         scope
-          ? inArray(
-              organizations.id,
-              parentOrgCode === null
-                ? scope.rootOrganizationIds
-                : scope.organizationIds,
-            )
+          ? inArray(organizations.id, parentOrgCode === null ? scope.rootOrganizationIds : scope.organizationIds)
           : undefined,
       );
       const [rows, totalRows] = await Promise.all([
@@ -154,76 +165,96 @@ export function createOrganizationRepository(db: DbClient) {
       const grandchildCounts = await db
         .select({ parentId: organizations.parentId, value: count() })
         .from(organizations)
-        .where(and(
-          eq(organizations.isDelete, false),
-          inArray(organizations.parentId, rows.map(r => r.id)),
-          scope ? inArray(organizations.id, scope.organizationIds) : undefined,
-        ))
+        .where(
+          and(
+            eq(organizations.isDelete, false),
+            inArray(
+              organizations.parentId,
+              rows.map((r) => r.id),
+            ),
+            scope ? inArray(organizations.id, scope.organizationIds) : undefined,
+          ),
+        )
         .groupBy(organizations.parentId);
-      const countMap = new Map(grandchildCounts.map(c => [c.parentId, c.value]));
+      const countMap = new Map(grandchildCounts.map((c) => [c.parentId, c.value]));
 
       return {
-        rows: rows.map(r => ({
+        rows: rows.map((r) => ({
           ...r,
           childCount: countMap.get(r.id) ?? 0,
         })),
         total,
       };
     },
-    async getOrganizationByCodeForAdmin(
-      orgCode: string,
-      scope?: AdminOrganizationReadScope,
-    ) {
-      const rows = await db.select().from(organizations).where(and(
-        eq(organizations.orgCode, orgCode),
-        eq(organizations.isDelete, false),
-        scope ? inArray(organizations.id, scope.organizationIds) : undefined,
-      )).limit(1);
-      return firstRow(await attachOrganizationRelations(rows, db, {
-        activeChildrenOnly: true,
-        organizationIds: scope?.organizationIds,
-      })) ?? null;
+    async getOrganizationByCodeForAdmin(orgCode: string, scope?: AdminOrganizationReadScope) {
+      const rows = await db
+        .select()
+        .from(organizations)
+        .where(
+          and(
+            eq(organizations.orgCode, orgCode),
+            eq(organizations.isDelete, false),
+            scope ? inArray(organizations.id, scope.organizationIds) : undefined,
+          ),
+        )
+        .limit(1);
+      return (
+        firstRow(
+          await attachOrganizationRelations(rows, db, {
+            activeChildrenOnly: true,
+            organizationIds: scope?.organizationIds,
+          }),
+        ) ?? null
+      );
     },
-    async searchOrganizationsForAdmin(
-      query: OrganizationPaginationQueryDto,
-      scope?: AdminOrganizationReadScope,
-    ) {
+    async searchOrganizationsForAdmin(query: OrganizationPaginationQueryDto, scope?: AdminOrganizationReadScope) {
       const { fuzzyConditions, exactConditions } = query.conditions;
       const parent = alias(organizations, "admin_parent");
       const ancestor = alias(organizations, "admin_ancestor");
 
-      const rows = await db.select().from(organizations).where(and(
-        eq(organizations.isDelete, false),
-        scope ? inArray(organizations.id, scope.organizationIds) : undefined,
-        exactConditions.orgType ? eq(organizations.orgType, exactConditions.orgType) : undefined,
-        exactConditions.status !== undefined ? eq(organizations.status, exactConditions.status) : undefined,
-        exactConditions.parentOrgCode
-          ? exists(
-              db.select({ value: sql`1` }).from(parent).where(and(
-                eq(parent.id, organizations.parentId),
-                eq(parent.orgCode, exactConditions.parentOrgCode),
-              )),
-            )
-          : undefined,
-        exactConditions.ancestorOrgCode
-          ? exists(
-              db.select({ value: sql`1` })
-                .from(organizationClosures)
-                .innerJoin(ancestor, eq(organizationClosures.ancestorId, ancestor.id))
-                .where(and(
-                  eq(organizationClosures.descendantId, organizations.id),
-                  gt(organizationClosures.depth, 0),
-                  eq(ancestor.orgCode, exactConditions.ancestorOrgCode),
-                )),
-            )
-          : undefined,
-        fuzzyConditions.text
-          ? or(
-              ilikeContainsIf(organizations.orgCode, fuzzyConditions.text),
-              ilikeContainsIf(organizations.orgName, fuzzyConditions.text),
-            )
-          : undefined,
-      )).orderBy(organizations.level, organizations.orderNum, organizations.id);
+      const rows = await db
+        .select()
+        .from(organizations)
+        .where(
+          and(
+            eq(organizations.isDelete, false),
+            scope ? inArray(organizations.id, scope.organizationIds) : undefined,
+            exactConditions.orgType ? eq(organizations.orgType, exactConditions.orgType) : undefined,
+            exactConditions.status !== undefined ? eq(organizations.status, exactConditions.status) : undefined,
+            exactConditions.parentOrgCode
+              ? exists(
+                  db
+                    .select({ value: sql`1` })
+                    .from(parent)
+                    .where(
+                      and(eq(parent.id, organizations.parentId), eq(parent.orgCode, exactConditions.parentOrgCode)),
+                    ),
+                )
+              : undefined,
+            exactConditions.ancestorOrgCode
+              ? exists(
+                  db
+                    .select({ value: sql`1` })
+                    .from(organizationClosures)
+                    .innerJoin(ancestor, eq(organizationClosures.ancestorId, ancestor.id))
+                    .where(
+                      and(
+                        eq(organizationClosures.descendantId, organizations.id),
+                        gt(organizationClosures.depth, 0),
+                        eq(ancestor.orgCode, exactConditions.ancestorOrgCode),
+                      ),
+                    ),
+                )
+              : undefined,
+            fuzzyConditions.text
+              ? or(
+                  ilikeContainsIf(organizations.orgCode, fuzzyConditions.text),
+                  ilikeContainsIf(organizations.orgName, fuzzyConditions.text),
+                )
+              : undefined,
+          ),
+        )
+        .orderBy(organizations.level, organizations.orderNum, organizations.id);
 
       return await attachOrganizationRelations(rows, db, {
         activeChildrenOnly: true,
@@ -238,15 +269,19 @@ export function createOrganizationRepository(db: DbClient) {
       const visibleStatusCondition = inArrayIf(organizations.status, query.visibleStatuses);
 
       if (query.parentOrgCode !== undefined && query.parentOrgCode !== null) {
-        const parent = firstRow(await db
-          .select({ id: organizations.id })
-          .from(organizations)
-          .where(and(
-            eq(organizations.orgCode, query.parentOrgCode),
-            eq(organizations.isDelete, false),
-            scope ? inArray(organizations.id, scope.organizationIds) : undefined,
-          ))
-          .limit(1));
+        const parent = firstRow(
+          await db
+            .select({ id: organizations.id })
+            .from(organizations)
+            .where(
+              and(
+                eq(organizations.orgCode, query.parentOrgCode),
+                eq(organizations.isDelete, false),
+                scope ? inArray(organizations.id, scope.organizationIds) : undefined,
+              ),
+            )
+            .limit(1),
+        );
         if (parent == null) {
           return [];
         }
@@ -256,25 +291,27 @@ export function createOrganizationRepository(db: DbClient) {
       const rows = await db
         .select()
         .from(organizations)
-        .where(and(
-          eq(organizations.isDelete, false),
-          scope ? inArray(organizations.id, scope.organizationIds) : undefined,
-          parentId !== undefined
-            ? eq(organizations.parentId, parentId)
-            : query.text === undefined && query.orgCode === undefined
-              ? scope
-                ? inArray(organizations.id, scope.rootOrganizationIds)
-                : eq(organizations.parentId, -1)
-              : undefined,
-          query.orgCode === undefined ? undefined : eq(organizations.orgCode, query.orgCode),
-          visibleStatusCondition,
-          query.text === undefined
-            ? undefined
-            : or(
-                ilikeContainsIf(organizations.orgCode, query.text),
-                ilikeContainsIf(organizations.orgName, query.text),
-              ),
-        ))
+        .where(
+          and(
+            eq(organizations.isDelete, false),
+            scope ? inArray(organizations.id, scope.organizationIds) : undefined,
+            parentId !== undefined
+              ? eq(organizations.parentId, parentId)
+              : query.text === undefined && query.orgCode === undefined
+                ? scope
+                  ? inArray(organizations.id, scope.rootOrganizationIds)
+                  : eq(organizations.parentId, -1)
+                : undefined,
+            query.orgCode === undefined ? undefined : eq(organizations.orgCode, query.orgCode),
+            visibleStatusCondition,
+            query.text === undefined
+              ? undefined
+              : or(
+                  ilikeContainsIf(organizations.orgCode, query.text),
+                  ilikeContainsIf(organizations.orgName, query.text),
+                ),
+          ),
+        )
         .orderBy(organizations.level, organizations.orderNum, organizations.id)
         .limit(query.pageSize);
 
@@ -288,28 +325,36 @@ export function createOrganizationRepository(db: DbClient) {
         .from(organizationClosures)
         .innerJoin(descendant, eq(organizationClosures.descendantId, descendant.id))
         .innerJoin(ancestor, eq(organizationClosures.ancestorId, ancestor.id))
-        .where(and(
-          eq(descendant.orgCode, descendantOrgCode),
-          eq(descendant.isDelete, false),
-          eq(ancestor.orgCode, ancestorOrgCode),
-          eq(ancestor.isDelete, false),
-        ))
+        .where(
+          and(
+            eq(descendant.orgCode, descendantOrgCode),
+            eq(descendant.isDelete, false),
+            eq(ancestor.orgCode, ancestorOrgCode),
+            eq(ancestor.isDelete, false),
+          ),
+        )
         .limit(1);
       return rows.length > 0;
     },
     async updateOrganizationByCode(orgCode: string, data: OrganizationUpdateDto) {
-      return write(async () => firstRow(await db
-        .update(organizations)
-        .set(compactUpdate(data))
-        .where(and(eq(organizations.orgCode, orgCode), eq(organizations.isDelete, false)))
-        .returning()));
+      return write(async () =>
+        firstRow(
+          await db
+            .update(organizations)
+            .set(compactUpdate(data))
+            .where(and(eq(organizations.orgCode, orgCode), eq(organizations.isDelete, false)))
+            .returning(),
+        ),
+      );
     },
     async softDeleteOrganizationByCode(orgCode: string) {
-      return firstRow(await db
-        .update(organizations)
-        .set({ isDelete: true })
-        .where(and(eq(organizations.orgCode, orgCode), eq(organizations.isDelete, false)))
-        .returning());
+      return firstRow(
+        await db
+          .update(organizations)
+          .set({ isDelete: true })
+          .where(and(eq(organizations.orgCode, orgCode), eq(organizations.isDelete, false)))
+          .returning(),
+      );
     },
     async countActiveChildrenByOrgCode(orgCode: string) {
       const parent = alias(organizations, "child_count_parent");
@@ -317,11 +362,7 @@ export function createOrganizationRepository(db: DbClient) {
         .select({ value: count() })
         .from(organizations)
         .innerJoin(parent, eq(organizations.parentId, parent.id))
-        .where(and(
-          eq(organizations.isDelete, false),
-          eq(parent.orgCode, orgCode),
-          eq(parent.isDelete, false),
-        ));
+        .where(and(eq(organizations.isDelete, false), eq(parent.orgCode, orgCode), eq(parent.isDelete, false)));
       return firstRow(rows)?.value ?? 0;
     },
     async countOpenEmploymentsByOrgCode(orgCode: string) {
@@ -329,20 +370,25 @@ export function createOrganizationRepository(db: DbClient) {
       const rows = await db
         .select({ value: count() })
         .from(employments)
-        .where(and(
-          eq(employments.isDelete, false),
-          inArray(employments.status, OPEN_EMPLOYMENT_STATUSES),
-          exists(
-            db.select({ value: sql`1` })
-              .from(organizationClosures)
-              .innerJoin(ancestor, eq(organizationClosures.ancestorId, ancestor.id))
-              .where(and(
-                eq(organizationClosures.descendantId, employments.orgId),
-                eq(ancestor.orgCode, orgCode),
-                eq(ancestor.isDelete, false),
-              )),
+        .where(
+          and(
+            eq(employments.isDelete, false),
+            inArray(employments.status, OPEN_EMPLOYMENT_STATUSES),
+            exists(
+              db
+                .select({ value: sql`1` })
+                .from(organizationClosures)
+                .innerJoin(ancestor, eq(organizationClosures.ancestorId, ancestor.id))
+                .where(
+                  and(
+                    eq(organizationClosures.descendantId, employments.orgId),
+                    eq(ancestor.orgCode, orgCode),
+                    eq(ancestor.isDelete, false),
+                  ),
+                ),
+            ),
           ),
-        ));
+        );
       return firstRow(rows)?.value ?? 0;
     },
   };
@@ -367,23 +413,26 @@ async function attachOrganizationRelations(
     return [];
   }
 
-  const parentIds = [...new Set(rows.map(row => row.parentId).filter(id => id > 0))];
-  const rowIds = rows.map(row => row.id);
+  const parentIds = [...new Set(rows.map((row) => row.parentId).filter((id) => id > 0))];
+  const rowIds = rows.map((row) => row.id);
 
   const [parents, children] = await Promise.all([
     parentIds.length === 0
       ? Promise.resolve([])
       : tx.select().from(organizations).where(inArray(organizations.id, parentIds)),
-    tx.select().from(organizations).where(and(
-      inArray(organizations.parentId, rowIds),
-      options.activeChildrenOnly ? eq(organizations.isDelete, false) : undefined,
-      options.organizationIds
-        ? inArray(organizations.id, options.organizationIds)
-        : undefined,
-    )),
+    tx
+      .select()
+      .from(organizations)
+      .where(
+        and(
+          inArray(organizations.parentId, rowIds),
+          options.activeChildrenOnly ? eq(organizations.isDelete, false) : undefined,
+          options.organizationIds ? inArray(organizations.id, options.organizationIds) : undefined,
+        ),
+      ),
   ]);
 
-  const parentMap = new Map(parents.map(parent => [parent.id, parent]));
+  const parentMap = new Map(parents.map((parent) => [parent.id, parent]));
   const childrenMap = new Map<number, Organization[]>();
   for (const child of children) {
     const orgChildren = childrenMap.get(child.parentId) ?? [];
@@ -391,7 +440,7 @@ async function attachOrganizationRelations(
     childrenMap.set(child.parentId, orgChildren);
   }
 
-  return rows.map(row => ({
+  return rows.map((row) => ({
     ...row,
     parent: parentMap.get(row.parentId) ?? null,
     children: childrenMap.get(row.id) ?? [],
@@ -399,7 +448,7 @@ async function attachOrganizationRelations(
 }
 
 function toPathText(fullPath: OrganizationPathNode[]) {
-  return fullPath.map(node => node.orgName).join(" / ");
+  return fullPath.map((node) => node.orgName).join(" / ");
 }
 
 function isSelectable(
@@ -407,9 +456,8 @@ function isSelectable(
   query: Pick<OrganizationSelectorQueryDto, "selectableOrgTypes" | "selectableStatuses">,
 ) {
   return (
-    query.selectableOrgTypes === undefined || query.selectableOrgTypes.includes(row.orgType)
-  ) && (
-    query.selectableStatuses === undefined || query.selectableStatuses.includes(row.status)
+    (query.selectableOrgTypes === undefined || query.selectableOrgTypes.includes(row.orgType)) &&
+    (query.selectableStatuses === undefined || query.selectableStatuses.includes(row.status))
   );
 }
 
@@ -423,19 +471,21 @@ async function attachSelectorNodeContext(
     return [];
   }
 
-  const rowIds = rows.map(row => row.id);
+  const rowIds = rows.map((row) => row.id);
   const ancestor = alias(organizations, "selector_path_ancestor");
   const visibleChildStatusCondition = inArrayIf(organizations.status, query.visibleStatuses);
   const [childrenCounts, pathRows] = await Promise.all([
     tx
       .select({ parentId: organizations.parentId, value: count() })
       .from(organizations)
-      .where(and(
-        eq(organizations.isDelete, false),
-        inArray(organizations.parentId, rowIds),
-        scope ? inArray(organizations.id, scope.organizationIds) : undefined,
-        visibleChildStatusCondition,
-      ))
+      .where(
+        and(
+          eq(organizations.isDelete, false),
+          inArray(organizations.parentId, rowIds),
+          scope ? inArray(organizations.id, scope.organizationIds) : undefined,
+          visibleChildStatusCondition,
+        ),
+      )
       .groupBy(organizations.parentId),
     tx
       .select({
@@ -451,13 +501,10 @@ async function attachSelectorNodeContext(
       })
       .from(organizationClosures)
       .innerJoin(ancestor, eq(organizationClosures.ancestorId, ancestor.id))
-      .where(and(
-        inArray(organizationClosures.descendantId, rowIds),
-        eq(ancestor.isDelete, false),
-      )),
+      .where(and(inArray(organizationClosures.descendantId, rowIds), eq(ancestor.isDelete, false))),
   ]);
 
-  const childrenCountMap = new Map(childrenCounts.map(row => [row.parentId, row.value]));
+  const childrenCountMap = new Map(childrenCounts.map((row) => [row.parentId, row.value]));
   const pathMap = new Map<number, OrganizationPathNode[]>();
   for (const { descendantId, depth: _depth, ...node } of pathRows) {
     const path = pathMap.get(descendantId) ?? [];
@@ -471,7 +518,7 @@ async function attachSelectorNodeContext(
     pathMap.set(row.id, path);
   }
 
-  return rows.map(row => ({
+  return rows.map((row) => ({
     id: row.id,
     orgCode: row.orgCode,
     orgName: row.orgName,

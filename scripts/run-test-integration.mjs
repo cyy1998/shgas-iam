@@ -18,22 +18,14 @@ const resourceEnvNames = [
   "IAM_WORKER_TEST_DATABASE_URL",
   "IAM_WORKER_TEST_REDIS_URL",
 ];
-const profiles = [
-  "component",
-  "process",
-  "redis",
-  "postgres",
-  "composition",
-  "browser",
-];
+const profiles = ["component", "process", "redis", "postgres", "composition", "browser"];
 
-const missing = resourceEnvNames.filter(name => !process.env[name]?.trim());
+const missing = resourceEnvNames.filter((name) => !process.env[name]?.trim());
 if (missing.length > 0) {
   console.error(
     "Missing Integration test resource URLs. Provide dedicated URLs or start disposable Docker resources first:",
   );
-  for (const name of missing)
-    console.error(`- ${name}`);
+  for (const name of missing) console.error(`- ${name}`);
   process.exit(1);
 }
 
@@ -50,6 +42,5 @@ for (const profile of profiles) {
     console.error(`Failed to launch pnpm ${command}: ${result.error.message}`);
     process.exit(1);
   }
-  if (result.status !== 0)
-    process.exit(result.status ?? 1);
+  if (result.status !== 0) process.exit(result.status ?? 1);
 }

@@ -1,5 +1,5 @@
-import { Buffer } from "node:buffer";
 import { describe, expect, test } from "bun:test";
+import { Buffer } from "node:buffer";
 import {
   createBoundedByteCapture,
   createBoundedLineCapture,
@@ -18,17 +18,22 @@ describe("system command boundaries", () => {
       token_endpoint: `${origin}/oidc/token`,
       userinfo_endpoint: `${origin}/oidc/me`,
     };
-    await expect(probeOidcDiscovery(origin, undefined, {
-      maxAttempts: 1,
-      request: async () => Response.json(expected),
-    })).resolves.toBeUndefined();
-    await expect(probeOidcDiscovery(origin, undefined, {
-      maxAttempts: 1,
-      request: async () => Response.json({
-        ...expected,
-        userinfo_endpoint: undefined,
+    await expect(
+      probeOidcDiscovery(origin, undefined, {
+        maxAttempts: 1,
+        request: async () => Response.json(expected),
       }),
-    })).rejects.toThrow("OIDC discovery metadata was not ready");
+    ).resolves.toBeUndefined();
+    await expect(
+      probeOidcDiscovery(origin, undefined, {
+        maxAttempts: 1,
+        request: async () =>
+          Response.json({
+            ...expected,
+            userinfo_endpoint: undefined,
+          }),
+      }),
+    ).rejects.toThrow("OIDC discovery metadata was not ready");
   });
 
   test("accepts only Custom SSO configuration endpoints on the canonical origin", async () => {
@@ -43,21 +48,26 @@ describe("system command boundaries", () => {
       },
       message: "success",
     };
-    await expect(probeSsoConfiguration(origin, undefined, {
-      maxAttempts: 1,
-      request: async (_url, init) => {
-        requests.push(new Headers(init?.headers).get("X-IAM-Entry-Network") ?? "");
-        return Response.json(expected);
-      },
-    })).resolves.toBeUndefined();
-    expect(requests).toEqual(["internal", "external"]);
-    await expect(probeSsoConfiguration(origin, undefined, {
-      maxAttempts: 1,
-      request: async () => Response.json({
-        ...expected,
-        data: { ...expected.data, logoutEndpoint: "http://wrong.test/sso/logout" },
+    await expect(
+      probeSsoConfiguration(origin, undefined, {
+        maxAttempts: 1,
+        request: async (_url, init) => {
+          requests.push(new Headers(init?.headers).get("X-IAM-Entry-Network") ?? "");
+          return Response.json(expected);
+        },
       }),
-    })).rejects.toThrow("Custom SSO configuration was not ready");
+    ).resolves.toBeUndefined();
+    expect(requests).toEqual(["internal", "external"]);
+    await expect(
+      probeSsoConfiguration(origin, undefined, {
+        maxAttempts: 1,
+        request: async () =>
+          Response.json({
+            ...expected,
+            data: { ...expected.data, logoutEndpoint: "http://wrong.test/sso/logout" },
+          }),
+      }),
+    ).rejects.toThrow("Custom SSO configuration was not ready");
   });
 
   test("bounds prefix, tail, and complete-line captures", () => {

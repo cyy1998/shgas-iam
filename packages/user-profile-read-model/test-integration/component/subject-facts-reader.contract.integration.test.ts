@@ -1,15 +1,12 @@
+import { describe, expect, mock, test } from "bun:test";
+import { createSubjectAccessOperations, SubjectAccessPermissionRequiredError } from "@iam/api-core/subject-access";
 import type { ResolveClientSubjectInput } from "@iam/client-subject-projection";
-import type { SubjectFactsCacheRecord } from "../../src/subject-facts";
-import {
-  createSubjectAccessOperations,
-  SubjectAccessPermissionRequiredError,
-} from "@iam/api-core/subject-access";
 import {
   createPermittedClientSubjectProjectionService,
   SubjectProjectionNotReadyError,
 } from "@iam/client-subject-projection";
 import { userProfiles } from "@iam/db/schema";
-import { describe, expect, mock, test } from "bun:test";
+import type { SubjectFactsCacheRecord } from "../../src/subject-facts";
 import { createSubjectFactsReader, createSubjectFactsRedisCache } from "../../src/subject-facts";
 
 const SUBJECT_IDENTIFIER = "46739d0b-cdda-48f5-af1f-1f90e2d81169";
@@ -20,8 +17,7 @@ function createPermittedProjectionFixture(
   const operations = createSubjectAccessOperations({
     barrier: {
       async readCommittedTransitionId(subjectIdentifier) {
-        if (subjectIdentifier !== SUBJECT_IDENTIFIER)
-          throw new Error("unexpected subject in projection fixture");
+        if (subjectIdentifier !== SUBJECT_IDENTIFIER) throw new Error("unexpected subject in projection fixture");
         return "00000000-0000-4000-8000-000000000001";
       },
     },
@@ -108,7 +104,7 @@ describe("Subject Facts Reader", () => {
         now: () => clockValues.shift() ?? 107,
       },
       observability: {
-        record: observation => observations.push(observation),
+        record: (observation) => observations.push(observation),
       },
     });
 
@@ -150,7 +146,7 @@ describe("Subject Facts Reader", () => {
       },
       clock: { now: () => 100 },
       observability: {
-        record: observation => observations.push(observation),
+        record: (observation) => observations.push(observation),
       },
     });
 
@@ -265,7 +261,7 @@ describe("Subject Facts Reader", () => {
       },
       clock: { now: () => 200 },
       observability: {
-        record: observation => observations.push(observation),
+        record: (observation) => observations.push(observation),
       },
     });
 
@@ -404,8 +400,7 @@ describe("Subject Facts Reader", () => {
     let failure: unknown;
     try {
       await reader.read(SUBJECT_IDENTIFIER);
-    }
-    catch (error) {
+    } catch (error) {
       failure = error;
     }
     expect(failure).toBe(cacheError);
@@ -429,13 +424,12 @@ describe("Subject Facts Reader", () => {
       } as never,
       cache: { read: async () => null, publish: async () => ({ status: "published" }) },
       clock: { now: () => 100 },
-      observability: { record: observation => observations.push(observation) },
+      observability: { record: (observation) => observations.push(observation) },
     });
     let failure: unknown;
     try {
       await reader.read(SUBJECT_IDENTIFIER);
-    }
-    catch (error) {
+    } catch (error) {
       failure = error;
     }
     expect(failure).toBe(databaseError);

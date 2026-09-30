@@ -1,13 +1,13 @@
-import type { AuditRequestContext } from "@iam/domain/audit";
-import type { CustomSsoLoggerPort as LoggerPort } from "../custom-sso.port";
 import { SystemLogEvent } from "@iam/api-core/logger";
 import { observabilityLogFields } from "@iam/api-core/observability";
+import type { AuditRequestContext } from "@iam/domain/audit";
 import {
   matchRedirectUrlPattern,
   normalizeRedirectUrl,
   RedirectUrlPatternFailureReasons,
   RedirectUrlPatternSyntaxError,
 } from "@iam/domain/client";
+import type { CustomSsoLoggerPort as LoggerPort } from "../custom-sso.port";
 
 export interface SsoRedirectUrlValidatorDeps {
   logger: Pick<LoggerPort, "warn">;
@@ -27,8 +27,7 @@ export function createSsoRedirectUrlValidator(deps: SsoRedirectUrlValidatorDeps)
     let normalizedRedirectUrl: string;
     try {
       normalizedRedirectUrl = normalizeRedirectUrl(redirectUrl);
-    }
-    catch {
+    } catch {
       return null;
     }
 
@@ -37,17 +36,20 @@ export function createSsoRedirectUrlValidator(deps: SsoRedirectUrlValidatorDeps)
         if (matchRedirectUrlPattern(normalizedRedirectUrl, pattern)) {
           return normalizedRedirectUrl;
         }
-      }
-      catch (error) {
-        deps.logger.warn({
-          event: SystemLogEvent.RedirectPatternInvalid,
-          clientCode,
-          patternIndex,
-          reason: error instanceof RedirectUrlPatternSyntaxError
-            ? error.reason
-            : RedirectUrlPatternFailureReasons.InvalidUrl,
-          ...observabilityLogFields(options.requestContext),
-        }, "invalid client redirect url pattern");
+      } catch (error) {
+        deps.logger.warn(
+          {
+            event: SystemLogEvent.RedirectPatternInvalid,
+            clientCode,
+            patternIndex,
+            reason:
+              error instanceof RedirectUrlPatternSyntaxError
+                ? error.reason
+                : RedirectUrlPatternFailureReasons.InvalidUrl,
+            ...observabilityLogFields(options.requestContext),
+          },
+          "invalid client redirect url pattern",
+        );
       }
     }
 

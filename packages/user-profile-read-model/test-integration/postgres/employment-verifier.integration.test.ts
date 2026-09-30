@@ -1,14 +1,7 @@
-import type { db as database } from "@iam/db";
-import {
-  EmploymentStatus,
-  OrganizationStatus,
-  PositionStatus,
-} from "@iam/contracts";
 import { afterAll, beforeAll, beforeEach, describe, expect, test } from "bun:test";
-import {
-  createEmploymentRepository,
-  createEmploymentVerifier,
-} from "../../src/worker";
+import { EmploymentStatus, OrganizationStatus, PositionStatus } from "@iam/contracts";
+import type { db as database } from "@iam/db";
+import { createEmploymentRepository, createEmploymentVerifier } from "../../src/worker";
 import { createPostgresTestHarness } from "./postgres-test-harness";
 
 const NOW = new Date("2026-08-11T12:00:00.000Z");
@@ -23,15 +16,12 @@ describe("Employment verifier PostgreSQL contract", () => {
 
   beforeEach(async () => {
     await harness.reset();
-    await harness.sql.unsafe(
-      "TRUNCATE TABLE employment, position, organization RESTART IDENTITY CASCADE",
-    );
+    await harness.sql.unsafe("TRUNCATE TABLE employment, position, organization RESTART IDENTITY CASCADE");
     await seedParents();
   });
 
   afterAll(async () => {
-    if (harness)
-      await harness.close();
+    if (harness) await harness.close();
   });
 
   test("returns success for a valid dataset", async () => {
@@ -85,43 +75,53 @@ describe("Employment verifier PostgreSQL contract", () => {
         blockingEmployments: 11,
       },
     });
-    expect(report.failures).toEqual([{
-      code: "unknown-employment-status",
-      count: 1,
-      employmentIds: [3],
-    }, {
-      code: "position-not-effective",
-      count: 1,
-      employmentIds: [4],
-    }, {
-      code: "organization-not-effective",
-      count: 1,
-      employmentIds: [5],
-    }, {
-      code: "invalid-employment-period",
-      count: 1,
-      employmentIds: [8],
-    }, {
-      code: "open-employment-has-end-time",
-      count: 1,
-      employmentIds: [6],
-    }, {
-      code: "ended-employment-missing-end-time",
-      count: 1,
-      employmentIds: [7],
-    }, {
-      code: "future-open-start-time",
-      count: 1,
-      employmentIds: [9],
-    }, {
-      code: "duplicate-open-employment",
-      count: 2,
-      employmentIds: [10, 11],
-    }, {
-      code: "multiple-open-primary-employments",
-      count: 2,
-      employmentIds: [12, 13],
-    }]);
+    expect(report.failures).toEqual([
+      {
+        code: "unknown-employment-status",
+        count: 1,
+        employmentIds: [3],
+      },
+      {
+        code: "position-not-effective",
+        count: 1,
+        employmentIds: [4],
+      },
+      {
+        code: "organization-not-effective",
+        count: 1,
+        employmentIds: [5],
+      },
+      {
+        code: "invalid-employment-period",
+        count: 1,
+        employmentIds: [8],
+      },
+      {
+        code: "open-employment-has-end-time",
+        count: 1,
+        employmentIds: [6],
+      },
+      {
+        code: "ended-employment-missing-end-time",
+        count: 1,
+        employmentIds: [7],
+      },
+      {
+        code: "future-open-start-time",
+        count: 1,
+        employmentIds: [9],
+      },
+      {
+        code: "duplicate-open-employment",
+        count: 2,
+        employmentIds: [10, 11],
+      },
+      {
+        code: "multiple-open-primary-employments",
+        count: 2,
+        employmentIds: [12, 13],
+      },
+    ]);
     const after = await readAllowedTables();
     expect(after).toEqual(before);
   });

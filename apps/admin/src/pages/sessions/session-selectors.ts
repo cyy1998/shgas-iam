@@ -1,4 +1,4 @@
-import { searchUsers, type UserVo } from '@admin/services/user';
+import { searchUsers, type UserVo } from "@admin/services/user";
 
 type SelectRequestParams = {
   keyWords?: string;

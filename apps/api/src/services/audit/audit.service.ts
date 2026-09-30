@@ -1,26 +1,21 @@
 import type { AuditDetails } from "@iam/domain/audit";
+import { AuditLogWriteDtoSchema, normalizeAuditActor, redactAuditDetails } from "@iam/domain/audit";
 import type { Context } from "hono";
 import type { AuditLogInput } from "./audit.context";
-import type { AuditRepository } from "./audit.repository";
-import {
-  AuditLogWriteDtoSchema,
-  normalizeAuditActor,
-  redactAuditDetails,
-} from "@iam/domain/audit";
 import { getApiAuditRequestContext, withApiRequestContext } from "./audit.context";
+import type { AuditRepository } from "./audit.repository";
 
 function enrichAuditDetails(input: AuditLogInput): AuditDetails {
   const details = { ...(input.details ?? {}) };
-  const actorName = input.actorName
-    ?? (
-      input.actorType === "user"
-      && input.targetType === "user"
-      && input.actorUserId !== undefined
-      && input.actorUserId !== null
-      && input.actorUserId === input.targetId
-        ? input.targetName
-        : null
-    );
+  const actorName =
+    input.actorName ??
+    (input.actorType === "user" &&
+    input.targetType === "user" &&
+    input.actorUserId !== undefined &&
+    input.actorUserId !== null &&
+    input.actorUserId === input.targetId
+      ? input.targetName
+      : null);
   if (actorName) {
     details.actorName = actorName;
   }

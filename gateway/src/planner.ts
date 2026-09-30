@@ -1,7 +1,7 @@
-import type { ChangePlan, LoadedManifest, ManifestObject, PlannedChange, ResourceKind } from "./types";
 import { normalizeForCompare, stableStringify } from "./normalize";
 import { isDynamicRegistryManaged, isInManifestScope, isRepoManaged } from "./ownership-policy";
 import { getResourceId, resourceDefinitions } from "./resources";
+import type { ChangePlan, LoadedManifest, ManifestObject, PlannedChange, ResourceKind } from "./types";
 
 export function planChanges(manifest: LoadedManifest, remote: Record<ResourceKind, ManifestObject[]>): ChangePlan {
   const plan: ChangePlan = {
@@ -50,16 +50,13 @@ export function planChanges(manifest: LoadedManifest, remote: Record<ResourceKin
 
       if (isDynamicRegistryManaged(remoteResource)) {
         plan.ignored.push({ kind: definition.kind, id, remote: remoteResource, reason: "dynamic" });
-      }
-      else if (isRepoManaged(remoteResource)) {
+      } else if (isRepoManaged(remoteResource)) {
         if (isInManifestScope(remoteResource, manifest.scope)) {
           plan.deletes.push({ kind: definition.kind, id, remote: remoteResource });
-        }
-        else {
+        } else {
           plan.ignored.push({ kind: definition.kind, id, remote: remoteResource, reason: "out_of_scope" });
         }
-      }
-      else {
+      } else {
         plan.ignored.push({ kind: definition.kind, id, remote: remoteResource, reason: "unmanaged" });
       }
     }

@@ -9,8 +9,7 @@ function normalizeExitCode(code) {
 }
 
 function waitForPendingWrites(stream) {
-  if (stream.destroyed || stream.writableEnded)
-    return Promise.resolve();
+  if (stream.destroyed || stream.writableEnded) return Promise.resolve();
 
   return new Promise((resolve, reject) => {
     const onError = (error) => {
@@ -20,28 +19,23 @@ function waitForPendingWrites(stream) {
     stream.once("error", onError);
     stream.write("", (error) => {
       stream.off("error", onError);
-      if (error === null || error === undefined)
-        resolve();
-      else
-        reject(error);
+      if (error === null || error === undefined) resolve();
+      else reject(error);
     });
   });
 }
 
 function readTargetCommand() {
   const encoded = process.env[commandEnvironmentKey];
-  if (encoded === undefined)
-    throw new Error(`${commandEnvironmentKey} is required`);
-  const command = JSON.parse(
-    Buffer.from(encoded, "base64").toString("utf8"),
-  );
+  if (encoded === undefined) throw new Error(`${commandEnvironmentKey} is required`);
+  const command = JSON.parse(Buffer.from(encoded, "base64").toString("utf8"));
   if (
-    typeof command !== "object"
-    || command === null
-    || typeof command.executable !== "string"
-    || !Array.isArray(command.args)
-    || !command.args.every(argument => typeof argument === "string")
-    || typeof command.cwd !== "string"
+    typeof command !== "object" ||
+    command === null ||
+    typeof command.executable !== "string" ||
+    !Array.isArray(command.args) ||
+    !command.args.every((argument) => typeof argument === "string") ||
+    typeof command.cwd !== "string"
   ) {
     throw new Error("invalid process-smoke target command");
   }
@@ -60,8 +54,7 @@ function waitForJobAssignment() {
     };
     listeners.data = (chunk) => {
       input += chunk;
-      if (!input.includes("\n"))
-        return;
+      if (!input.includes("\n")) return;
       cleanup();
       resolve();
     };
@@ -100,23 +93,17 @@ async function main() {
   let drainTimer;
   let isFinalizing = false;
   const finishLauncher = async (code) => {
-    if (isFinalizing)
-      return;
+    if (isFinalizing) return;
     isFinalizing = true;
-    if (drainTimer !== undefined)
-      clearTimeout(drainTimer);
+    if (drainTimer !== undefined) clearTimeout(drainTimer);
     target.stdout?.unpipe(process.stdout);
     target.stderr?.unpipe(process.stderr);
     target.stdout?.destroy();
     target.stderr?.destroy();
     try {
-      await Promise.all([
-        waitForPendingWrites(process.stdout),
-        waitForPendingWrites(process.stderr),
-      ]);
+      await Promise.all([waitForPendingWrites(process.stdout), waitForPendingWrites(process.stderr)]);
       process.exitCode = normalizeExitCode(code);
-    }
-    catch {
+    } catch {
       process.exitCode = 1;
     }
   };
@@ -128,7 +115,7 @@ async function main() {
     observedExitCode = normalizeExitCode(code);
     drainTimer ??= setTimeout(finishLauncher, 250, observedExitCode);
   });
-  target.once("close", code => void finishLauncher(code ?? observedExitCode));
+  target.once("close", (code) => void finishLauncher(code ?? observedExitCode));
 }
 
 main().catch((error) => {

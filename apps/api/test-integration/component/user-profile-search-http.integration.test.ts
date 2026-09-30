@@ -1,10 +1,10 @@
+import { expect, mock, test } from "bun:test";
 import { createUserHandlers } from "@api/routes/internal/user/user.handlers";
 import { createUserRoute } from "@api/routes/internal/user/user.index";
 import { createV3UserProfileSearchAdapter } from "@api/services/user-profile-search/user-profile-search-v3.adapter";
 import createApp from "@iam/api-core/core/create-app";
 import { UserStatus, UserType } from "@iam/contracts";
 import { createV3UserProfileQueryService } from "@iam/user-profile-read-model/v3";
-import { expect, mock, test } from "bun:test";
 import pino from "pino";
 import appConfig from "~api/app.config";
 
@@ -63,32 +63,36 @@ test("maps the canonical v3 Filter request through the production Internal HTTP 
 });
 
 test("returns UserProfileBase from typed profile columns without depending on Detail", async () => {
-  const searchCurrentProfileBases = mock(async () => [{
-    mobile: null,
-    name: "Typed Bob",
-    searchDocument: {
-      user: {
-        subjectIdentifier: "c7553267-7081-4a69-b2c8-121b208327a6",
-        username: "filtered-alice",
-        name: "Search Alice",
-        mobile: "13800000000",
-        wxId: "search-wx",
-        userType: UserType.Formal,
-        status: UserStatus.Enable,
+  const searchCurrentProfileBases = mock(async () => [
+    {
+      mobile: null,
+      name: "Typed Bob",
+      searchDocument: {
+        user: {
+          subjectIdentifier: "c7553267-7081-4a69-b2c8-121b208327a6",
+          username: "filtered-alice",
+          name: "Search Alice",
+          mobile: "13800000000",
+          wxId: "search-wx",
+          userType: UserType.Formal,
+          status: UserStatus.Enable,
+        },
+        employments: [],
       },
-      employments: [],
+      subjectIdentifier: "87b69425-6d95-4a36-93c8-95327869318e",
+      username: "typed-bob",
+      wxId: null,
     },
-    subjectIdentifier: "87b69425-6d95-4a36-93c8-95327869318e",
-    username: "typed-bob",
-    wxId: null,
-  }]);
+  ]);
   const query = createV3UserProfileQueryService({
     profileRepository: {
       searchCurrentProfileBases,
-      searchCurrentProfiles: mock(async () => [{
-        detail: { malformed: "unused" },
-        searchDocument: {},
-      }]),
+      searchCurrentProfiles: mock(async () => [
+        {
+          detail: { malformed: "unused" },
+          searchDocument: {},
+        },
+      ]),
     },
   });
   const app = createProductionApp(query);
@@ -100,13 +104,15 @@ test("returns UserProfileBase from typed profile columns without depending on De
   expect(response.status).toBe(200);
   expect(await response.json()).toEqual({
     code: 200,
-    data: [{
-      mobile: null,
-      name: "Typed Bob",
-      subjectIdentifier: "87b69425-6d95-4a36-93c8-95327869318e",
-      username: "typed-bob",
-      wxId: null,
-    }],
+    data: [
+      {
+        mobile: null,
+        name: "Typed Bob",
+        subjectIdentifier: "87b69425-6d95-4a36-93c8-95327869318e",
+        username: "typed-bob",
+        wxId: null,
+      },
+    ],
     message: "success",
   });
 });
@@ -121,7 +127,7 @@ test("describes one generic recursive Filter AST without enumerating field and o
   const app = createProductionApp(query);
 
   const response = await app.request("http://localhost/internal/doc");
-  const document = await response.json() as {
+  const document = (await response.json()) as {
     components: {
       schemas: Record<string, unknown>;
     };
@@ -138,17 +144,15 @@ test("describes one generic recursive Filter AST without enumerating field and o
       },
     },
   });
-  const expressionDocument = JSON.stringify(
-    document.components.schemas.V3UserProfileFilterExpression,
-  );
+  const expressionDocument = JSON.stringify(document.components.schemas.V3UserProfileFilterExpression);
   expect(document.components.schemas.V3UserProfileFilterExpression).toMatchObject({
     anyOf: expect.any(Array),
   });
-  expect(expressionDocument).toContain("\"and\"");
-  expect(expressionDocument).toContain("\"or\"");
-  expect(expressionDocument).toContain("\"not\"");
-  expect(expressionDocument).toContain("\"exists\"");
-  expect(expressionDocument).toContain("\"field\"");
+  expect(expressionDocument).toContain('"and"');
+  expect(expressionDocument).toContain('"or"');
+  expect(expressionDocument).toContain('"not"');
+  expect(expressionDocument).toContain('"exists"');
+  expect(expressionDocument).toContain('"field"');
   expect(expressionDocument).not.toContain("user.username");
   expect(expressionDocument).not.toContain("responsibility.type.code");
 
@@ -170,13 +174,9 @@ test("describes one generic recursive Filter AST without enumerating field and o
     "wxId",
   ]);
   expect(userProfileBase.required).toHaveLength(5);
-  expect(userProfileBase.required).toEqual(expect.arrayContaining([
-    "mobile",
-    "name",
-    "subjectIdentifier",
-    "username",
-    "wxId",
-  ]));
+  expect(userProfileBase.required).toEqual(
+    expect.arrayContaining(["mobile", "name", "subjectIdentifier", "username", "wxId"]),
+  );
 });
 
 test("maps the fixed Internal handler deadline to the sanitized v3 unavailable response", async () => {
@@ -193,7 +193,7 @@ test("maps the fixed Internal handler deadline to the sanitized v3 unavailable r
     const app = createProductionApp({
       searchBase: async () => {
         events.push("query-started");
-        await new Promise<void>(resolve => queueMicrotask(resolve));
+        await new Promise<void>((resolve) => queueMicrotask(resolve));
         throw new Error("database detail must not escape");
       },
     } as never);
@@ -208,16 +208,13 @@ test("maps the fixed Internal handler deadline to the sanitized v3 unavailable r
       message: "用户搜索暂时不可用",
     });
     expect(events).toEqual(["deadline-started", "query-started"]);
-  }
-  finally {
+  } finally {
     globalThis.setTimeout = originalSetTimeout;
     globalThis.clearTimeout = originalClearTimeout;
   }
 });
 
-function createProductionApp(
-  query: ReturnType<typeof createV3UserProfileQueryService>,
-) {
+function createProductionApp(query: ReturnType<typeof createV3UserProfileQueryService>) {
   const adapter = createV3UserProfileSearchAdapter(query);
   const handlers = createUserHandlers({
     registerPurveyorContact: { execute: async () => true },
@@ -237,10 +234,7 @@ function createProductionApp(
   });
 }
 
-async function request(
-  app: ReturnType<typeof createProductionApp>,
-  body: unknown,
-) {
+async function request(app: ReturnType<typeof createProductionApp>, body: unknown) {
   return await app.request("http://localhost/internal/users/search-dsl", {
     method: "POST",
     headers: { "content-type": "application/json" },
@@ -248,19 +242,14 @@ async function request(
   });
 }
 
-async function requestWithoutBody(
-  app: ReturnType<typeof createProductionApp>,
-) {
+async function requestWithoutBody(app: ReturnType<typeof createProductionApp>) {
   return await app.request("http://localhost/internal/users/search-dsl", {
     method: "POST",
     headers: { "content-type": "application/json" },
   });
 }
 
-async function requestWithRawBody(
-  app: ReturnType<typeof createProductionApp>,
-  body: string,
-) {
+async function requestWithRawBody(app: ReturnType<typeof createProductionApp>, body: string) {
   return await app.request("http://localhost/internal/users/search-dsl", {
     method: "POST",
     headers: { "content-type": "application/json" },

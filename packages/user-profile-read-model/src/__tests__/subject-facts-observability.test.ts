@@ -1,5 +1,5 @@
-import { SystemLogEvent } from "@iam/api-core/logger";
 import { describe, expect, mock, test } from "bun:test";
+import { SystemLogEvent } from "@iam/api-core/logger";
 import { createSubjectFactsLoggerObservability } from "../subject-facts";
 
 describe("Subject Facts observability", () => {
@@ -17,12 +17,15 @@ describe("Subject Facts observability", () => {
       secret: "custom-sso-secret",
     } as never);
 
-    expect(info).toHaveBeenCalledWith({
-      event: SystemLogEvent.SubjectFactsOperationObserved,
-      operation: "cache-read",
-      outcome: "hit",
-      durationMs: 7,
-    }, "Subject Facts operation observed");
+    expect(info).toHaveBeenCalledWith(
+      {
+        event: SystemLogEvent.SubjectFactsOperationObserved,
+        operation: "cache-read",
+        outcome: "hit",
+        durationMs: 7,
+      },
+      "Subject Facts operation observed",
+    );
     const serialized = JSON.stringify(info.mock.calls);
     expect(serialized).not.toContain("00000000-0000-4000-8000-000000000001");
     expect(serialized).not.toContain("facts-secret");

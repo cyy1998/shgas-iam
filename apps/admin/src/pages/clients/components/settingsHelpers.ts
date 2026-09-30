@@ -1,4 +1,4 @@
-import { Modal } from 'antd';
+import { Modal } from "antd";
 
 export function confirmClientSettingAction(title: string, content: string) {
   return new Promise<boolean>((resolve) => {
@@ -11,5 +11,4 @@ export function confirmClientSettingAction(title: string, content: string) {
   });
 }
 
-export type ClientCommittedFailureKind =
-  'mutation' | 'rotation' | 'configuration';
+export type ClientCommittedFailureKind = "mutation" | "rotation" | "configuration";

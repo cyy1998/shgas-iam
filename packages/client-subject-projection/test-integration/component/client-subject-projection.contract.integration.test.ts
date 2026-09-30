@@ -1,3 +1,4 @@
+import { describe, expect, test } from "bun:test";
 import type { SubjectFactsSnapshot } from "@iam/client-subject-projection";
 import {
   createPermittedClientSubjectProjectionService,
@@ -6,22 +7,19 @@ import {
   SUBJECT_CLAIM_CATALOG,
   SubjectProjectionNotReadyError,
 } from "@iam/client-subject-projection";
-import {
-  OrganizationResponsibilityTypeCode,
-  OrganizationType,
-} from "@iam/contracts";
-import { describe, expect, test } from "bun:test";
+import { OrganizationResponsibilityTypeCode, OrganizationType } from "@iam/contracts";
 
 const subjectIdentifier = "00000000-0000-4000-8000-000000000001";
 
 describe("Client Subject Projection Interface", () => {
-  function createService(options: Omit<Parameters<typeof createPermittedClientSubjectProjectionService>[0], "assertPermission">) {
+  function createService(
+    options: Omit<Parameters<typeof createPermittedClientSubjectProjectionService>[0], "assertPermission">,
+  ) {
     const permission = {};
     const service = createPermittedClientSubjectProjectionService({
       subjectFacts: options.subjectFacts,
       assertPermission: (value: object, subject: string) => {
-        if (value !== permission || subject !== subjectIdentifier)
-          throw new Error("Permission required");
+        if (value !== permission || subject !== subjectIdentifier) throw new Error("Permission required");
       },
     });
     return { resolve: (input: Parameters<typeof service.resolve>[0]) => service.resolve(input, permission) };
@@ -69,30 +67,30 @@ describe("Client Subject Projection Interface", () => {
         },
       ],
       requiredClaims: ["subjectIdentifier"],
-      optionalClaims: [
-        "profile:username",
-        "profile:name",
-        "profile:phone",
-        "profile:employments",
-        "iam:authorization",
-      ],
+      optionalClaims: ["profile:username", "profile:name", "profile:phone", "profile:employments", "iam:authorization"],
     });
 
-    expect(parseSubjectClaimSelection({
-      catalogVersion: 2,
-      claims: ["subjectIdentifier", "profile:employments"],
-    })).toEqual({
+    expect(
+      parseSubjectClaimSelection({
+        catalogVersion: 2,
+        claims: ["subjectIdentifier", "profile:employments"],
+      }),
+    ).toEqual({
       catalogVersion: 2,
       optionalClaims: ["profile:employments"],
     });
-    expect(() => parseSubjectClaimSelection({
-      catalogVersion: 1,
-      claims: ["subjectIdentifier"],
-    })).toThrow();
-    expect(() => parseSubjectClaimSelection({
-      catalogVersion: 2,
-      claims: ["subjectIdentifier", "profile:responsibilities"],
-    })).toThrow();
+    expect(() =>
+      parseSubjectClaimSelection({
+        catalogVersion: 1,
+        claims: ["subjectIdentifier"],
+      }),
+    ).toThrow();
+    expect(() =>
+      parseSubjectClaimSelection({
+        catalogVersion: 2,
+        claims: ["subjectIdentifier", "profile:responsibilities"],
+      }),
+    ).toThrow();
   });
 
   test("projects canonical responsibilities only inside selected profile employments", async () => {
@@ -120,25 +118,29 @@ describe("Client Subject Projection Interface", () => {
                 ],
               },
               position: { code: "position-a", name: "甲岗位" },
-              clientAuthorizations: [{
-                clientCode: "client-a",
-                roles: [{ code: "admin", privileges: ["read"] }],
-              }],
-              responsibilities: [{
-                type: {
-                  code: OrganizationResponsibilityTypeCode.Head,
-                  name: "负责人",
+              clientAuthorizations: [
+                {
+                  clientCode: "client-a",
+                  roles: [{ code: "admin", privileges: ["read"] }],
                 },
-                targetOrganization: {
-                  code: "target-a",
-                  name: "目标甲",
-                  type: OrganizationType.Department,
-                  path: [
-                    { code: "root", name: "总部", type: OrganizationType.Company },
-                    { code: "target-a", name: "目标甲", type: OrganizationType.Department },
-                  ],
+              ],
+              responsibilities: [
+                {
+                  type: {
+                    code: OrganizationResponsibilityTypeCode.Head,
+                    name: "负责人",
+                  },
+                  targetOrganization: {
+                    code: "target-a",
+                    name: "目标甲",
+                    type: OrganizationType.Department,
+                    path: [
+                      { code: "root", name: "总部", type: OrganizationType.Company },
+                      { code: "target-a", name: "目标甲", type: OrganizationType.Department },
+                    ],
+                  },
                 },
-              }],
+              ],
             },
             {
               isPrimary: false,
@@ -169,9 +171,9 @@ describe("Client Subject Projection Interface", () => {
       },
     });
 
-    expect(projection.employments?.map(employment => employment.responsibilities))
-      .toEqual([
-        [{
+    expect(projection.employments?.map((employment) => employment.responsibilities)).toEqual([
+      [
+        {
           type: {
             code: OrganizationResponsibilityTypeCode.Head,
             name: "负责人",
@@ -185,9 +187,10 @@ describe("Client Subject Projection Interface", () => {
               { code: "target-a", name: "目标甲", type: OrganizationType.Department },
             ],
           },
-        }],
-        [],
-      ]);
+        },
+      ],
+      [],
+    ]);
     for (const employment of projection.authorization?.employments ?? [])
       expect(employment).not.toHaveProperty("responsibilities");
   });
@@ -207,13 +210,7 @@ describe("Client Subject Projection Interface", () => {
 
     expect(selection).toEqual({
       catalogVersion: 2,
-      optionalClaims: [
-        "profile:username",
-        "profile:name",
-        "profile:phone",
-        "profile:employments",
-        "iam:authorization",
-      ],
+      optionalClaims: ["profile:username", "profile:name", "profile:phone", "profile:employments", "iam:authorization"],
     });
   });
 
@@ -254,8 +251,7 @@ describe("Client Subject Projection Interface", () => {
     ];
 
     for (const declaration of invalidDeclarations) {
-      expect(() => parseSubjectClaimSelection(declaration))
-        .toThrow(InvalidSubjectClaimSelectionError);
+      expect(() => parseSubjectClaimSelection(declaration)).toThrow(InvalidSubjectClaimSelectionError);
     }
   });
 
@@ -285,11 +281,13 @@ describe("Client Subject Projection Interface", () => {
     ];
 
     for (const selection of invalidSelections) {
-      const result = Reflect.apply(service.resolve, undefined, [{
-        subjectIdentifier,
-        clientCode: "client-a",
-        selection,
-      }]);
+      const result = Reflect.apply(service.resolve, undefined, [
+        {
+          subjectIdentifier,
+          clientCode: "client-a",
+          selection,
+        },
+      ]);
       const failure = await captureRejection(result);
       expect(failure).toBeInstanceOf(InvalidSubjectClaimSelectionError);
     }
@@ -409,11 +407,14 @@ describe("Client Subject Projection Interface", () => {
                 code: "org-b",
                 name: "乙部门",
                 type: "department",
-                path: [rootOrganization, {
-                  code: "org-b",
-                  name: "乙部门",
-                  type: "department",
-                }],
+                path: [
+                  rootOrganization,
+                  {
+                    code: "org-b",
+                    name: "乙部门",
+                    type: "department",
+                  },
+                ],
               },
               position: {
                 code: "position-b",
@@ -433,11 +434,14 @@ describe("Client Subject Projection Interface", () => {
                 code: "org-z",
                 name: "主任职部门",
                 type: "department",
-                path: [rootOrganization, {
-                  code: "org-z",
-                  name: "主任职部门",
-                  type: "department",
-                }],
+                path: [
+                  rootOrganization,
+                  {
+                    code: "org-z",
+                    name: "主任职部门",
+                    type: "department",
+                  },
+                ],
               },
               position: {
                 code: "position-z",
@@ -456,11 +460,14 @@ describe("Client Subject Projection Interface", () => {
                 code: "org-a",
                 name: "甲部门",
                 type: "department",
-                path: [rootOrganization, {
-                  code: "org-a",
-                  name: "甲部门",
-                  type: "department",
-                }],
+                path: [
+                  rootOrganization,
+                  {
+                    code: "org-a",
+                    name: "甲部门",
+                    type: "department",
+                  },
+                ],
               },
               position: {
                 code: "position-a",
@@ -503,10 +510,7 @@ describe("Client Subject Projection Interface", () => {
             code: "org-z",
             name: "主任职部门",
             type: "department",
-            path: [
-              rootOrganization,
-              { code: "org-z", name: "主任职部门", type: "department" },
-            ],
+            path: [rootOrganization, { code: "org-z", name: "主任职部门", type: "department" }],
           },
           position: {
             code: "position-z",
@@ -520,10 +524,7 @@ describe("Client Subject Projection Interface", () => {
             code: "org-a",
             name: "甲部门",
             type: "department",
-            path: [
-              rootOrganization,
-              { code: "org-a", name: "甲部门", type: "department" },
-            ],
+            path: [rootOrganization, { code: "org-a", name: "甲部门", type: "department" }],
           },
           position: {
             code: "position-a",
@@ -537,10 +538,7 @@ describe("Client Subject Projection Interface", () => {
             code: "org-b",
             name: "乙部门",
             type: "department",
-            path: [
-              rootOrganization,
-              { code: "org-b", name: "乙部门", type: "department" },
-            ],
+            path: [rootOrganization, { code: "org-b", name: "乙部门", type: "department" }],
           },
           position: {
             code: "position-b",
@@ -749,14 +747,18 @@ describe("Client Subject Projection Interface", () => {
         name: "旧姓名",
         phone: null,
       },
-      employments: [{
-        ...employment,
-        responsibilities: [],
-        clientAuthorizations: [{
-          clientCode: "client-a",
-          roles: [{ code: "old-role", privileges: ["old-privilege"] }],
-        }],
-      }],
+      employments: [
+        {
+          ...employment,
+          responsibilities: [],
+          clientAuthorizations: [
+            {
+              clientCode: "client-a",
+              roles: [{ code: "old-role", privileges: ["old-privilege"] }],
+            },
+          ],
+        },
+      ],
     } satisfies SubjectFactsSnapshot;
     const refreshedFacts = {
       subjectIdentifier,
@@ -766,14 +768,18 @@ describe("Client Subject Projection Interface", () => {
         name: "新姓名",
         phone: null,
       },
-      employments: [{
-        ...employment,
-        responsibilities: [],
-        clientAuthorizations: [{
-          clientCode: "client-a",
-          roles: [{ code: "new-role", privileges: ["new-privilege"] }],
-        }],
-      }],
+      employments: [
+        {
+          ...employment,
+          responsibilities: [],
+          clientAuthorizations: [
+            {
+              clientCode: "client-a",
+              roles: [{ code: "new-role", privileges: ["new-privilege"] }],
+            },
+          ],
+        },
+      ],
     } satisfies SubjectFactsSnapshot;
     let publishedFacts = observedFacts;
     const service = createService({
@@ -806,11 +812,13 @@ describe("Client Subject Projection Interface", () => {
       subjectIdentifier,
       name: "新姓名",
       authorization: {
-        employments: [{
-          ...employment,
-          roles: ["new-role"],
-          privileges: ["new-privilege"],
-        }],
+        employments: [
+          {
+            ...employment,
+            roles: ["new-role"],
+            privileges: ["new-privilege"],
+          },
+        ],
         roles: ["new-role"],
         privileges: ["new-privilege"],
       },
@@ -832,13 +840,14 @@ describe("Projection access proof", () => {
     const service = createPermittedClientSubjectProjectionService({
       assertPermission: (value: object, subject: string) => {
         calls.push("permission");
-        if (value !== permission || subject !== subjectIdentifier)
-          throw denied;
+        if (value !== permission || subject !== subjectIdentifier) throw denied;
       },
-      subjectFacts: { read: async () => {
-        calls.push("facts");
-        return null;
-      } },
+      subjectFacts: {
+        read: async () => {
+          calls.push("facts");
+          return null;
+        },
+      },
     });
     for (const candidate of [input, { ...input, selection: { catalogVersion: 99, optionalClaims: [] } }]) {
       const failure = await captureRejection(Reflect.apply(service.resolve, undefined, [candidate]));
@@ -858,8 +867,7 @@ describe("Projection access proof", () => {
     const calls: string[] = [];
     const service = createPermittedClientSubjectProjectionService({
       assertPermission: (value: object) => {
-        if (value !== permission)
-          throw new Error("Permission required");
+        if (value !== permission) throw new Error("Permission required");
         calls.push("permission");
       },
       subjectFacts: {
@@ -876,10 +884,15 @@ describe("Projection access proof", () => {
         },
       },
     });
-    const failure = await captureRejection(service.resolve({
-      ...input,
-      selection: { catalogVersion: 2, optionalClaims: ["iam:authorization"] },
-    }, permission));
+    const failure = await captureRejection(
+      service.resolve(
+        {
+          ...input,
+          selection: { catalogVersion: 2, optionalClaims: ["iam:authorization"] },
+        },
+        permission,
+      ),
+    );
     expect(failure).toBeInstanceOf(SubjectProjectionNotReadyError);
     expect(calls).toEqual(["permission", "facts"]);
   });
@@ -888,8 +901,7 @@ describe("Projection access proof", () => {
 async function captureRejection(promise: Promise<unknown>) {
   try {
     await promise;
-  }
-  catch (error) {
+  } catch (error) {
     return error;
   }
   throw new Error("Expected operation to reject");

@@ -1,10 +1,10 @@
+import { OK, SERVICE_UNAVAILABLE } from "@iam/api-core/core/http-status-codes";
 import type { WorkerEnv } from "@worker/env";
 import type { WorkerQueueRegistration } from "@worker/modules/registry";
 import type { Hono } from "hono";
-import type Redis from "ioredis";
-import { OK, SERVICE_UNAVAILABLE } from "@iam/api-core/core/http-status-codes";
 import { Hono as HonoApp } from "hono";
 import { basicAuth } from "hono/basic-auth";
+import type Redis from "ioredis";
 import { createDashboardPlugin } from "./dashboard";
 
 export interface WorkerHealthState {
@@ -37,15 +37,18 @@ export function createWorkerHttpApp(input: CreateWorkerHttpAppInput): Hono {
   app.get(input.env.http.healthPath, async (c) => {
     const health = await checkHealth();
     const ready = health.ready && input.healthState.modulesStarted;
-    return c.json({
-      ok: ready,
-      enabledModules: input.healthState.enabledModules,
-      dashboardOnly: input.healthState.dashboardOnly,
-      dashboardEnabled: input.env.dashboard.enabled,
-      modulesStarted: input.healthState.modulesStarted,
-      dependencies: health.dependencies,
-      error: health.error,
-    }, ready ? OK : SERVICE_UNAVAILABLE);
+    return c.json(
+      {
+        ok: ready,
+        enabledModules: input.healthState.enabledModules,
+        dashboardOnly: input.healthState.dashboardOnly,
+        dashboardEnabled: input.env.dashboard.enabled,
+        modulesStarted: input.healthState.modulesStarted,
+        dependencies: health.dependencies,
+        error: health.error,
+      },
+      ready ? OK : SERVICE_UNAVAILABLE,
+    );
   });
 
   if (input.env.dashboard.enabled) {
@@ -65,10 +68,13 @@ export function createWorkerHttpApp(input: CreateWorkerHttpAppInput): Hono {
         }),
       );
     }
-    app.route(input.env.dashboard.path, createDashboardPlugin({
-      env: input.env,
-      queues: input.dashboardQueues,
-    }));
+    app.route(
+      input.env.dashboard.path,
+      createDashboardPlugin({
+        env: input.env,
+        queues: input.dashboardQueues,
+      }),
+    );
   }
 
   return app;
@@ -93,8 +99,7 @@ async function checkWorkerHealth(redis?: Pick<Redis, "ping">): Promise<WorkerHea
         redis: redis === undefined ? "skipped" : "ok",
       },
     };
-  }
-  catch (error) {
+  } catch (error) {
     return {
       ready: false,
       dependencies: {

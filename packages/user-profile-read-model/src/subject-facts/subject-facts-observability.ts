@@ -1,8 +1,8 @@
+import { SystemLogEvent } from "@iam/api-core/logger";
 import type {
   SubjectFactsReaderObservabilityPort,
   SubjectFactsReaderObservation,
 } from "./subject-facts-observability.contract";
-import { SystemLogEvent } from "@iam/api-core/logger";
 
 export type {
   SubjectFactsReaderObservabilityPort,
@@ -10,10 +10,7 @@ export type {
 } from "./subject-facts-observability.contract";
 
 export interface SubjectFactsObservabilityLogger {
-  readonly info: (
-    fields: Record<string, unknown>,
-    message: string,
-  ) => void;
+  readonly info: (fields: Record<string, unknown>, message: string) => void;
 }
 
 export function createSubjectFactsLoggerObservability(
@@ -21,12 +18,15 @@ export function createSubjectFactsLoggerObservability(
 ): SubjectFactsReaderObservabilityPort {
   return {
     record(observation: SubjectFactsReaderObservation) {
-      logger.info({
-        event: SystemLogEvent.SubjectFactsOperationObserved,
-        operation: observation.operation,
-        outcome: observation.outcome,
-        durationMs: normalizeDuration(observation.durationMs),
-      }, "Subject Facts operation observed");
+      logger.info(
+        {
+          event: SystemLogEvent.SubjectFactsOperationObserved,
+          operation: observation.operation,
+          outcome: observation.outcome,
+          durationMs: normalizeDuration(observation.durationMs),
+        },
+        "Subject Facts operation observed",
+      );
     },
   };
 }

@@ -5,9 +5,7 @@ export interface VersionedUserProfileBuildTarget {
   sourceDirtyVersion: string;
 }
 
-export function normalizeVersionedBuildTargets(
-  targets: readonly VersionedUserProfileBuildTarget[],
-) {
+export function normalizeVersionedBuildTargets(targets: readonly VersionedUserProfileBuildTarget[]) {
   const result = new Map<number, string>();
   for (const target of targets) {
     const sourceDirtyVersion = formatDirtyVersion(target.sourceDirtyVersion);
@@ -33,8 +31,7 @@ export function groupItemsBy<T, K>(items: readonly T[], keyOf: (item: T) => K) {
 
 export function chunkItems<T>(items: readonly T[], size: number) {
   const chunks: T[][] = [];
-  for (let index = 0; index < items.length; index += size)
-    chunks.push(items.slice(index, index + size));
+  for (let index = 0; index < items.length; index += size) chunks.push(items.slice(index, index + size));
   return chunks;
 }
 

@@ -1,7 +1,8 @@
-import type { SubjectAccessOperation } from "@iam/api-core/subject-access";
+import { afterEach, expect, test } from "bun:test";
 import { createHash, createPublicKey, randomInt, randomUUID, verify } from "node:crypto";
 import { fileURLToPath } from "node:url";
 import { createClientSnapshots } from "@iam/api-core/client-snapshot/composition";
+import type { SubjectAccessOperation } from "@iam/api-core/subject-access";
 import {
   createRedisSubjectAccessStore,
   createSubjectAccessBarrier,
@@ -25,10 +26,16 @@ import {
   PROCESS_SMOKE_TEST_TIMEOUT_MS,
   spawnOwnedProcessTree,
 } from "@iam/api-core/testing/process-smoke-harness";
-import { ClientSsoCallbackType, ClientSsoProtocol, ClientStatus, OidcClientType, OidcScope, SubjectClaim } from "@iam/contracts";
+import {
+  ClientSsoCallbackType,
+  ClientSsoProtocol,
+  ClientStatus,
+  OidcClientType,
+  OidcScope,
+  SubjectClaim,
+} from "@iam/contracts";
 import { createUnifiedSessionKernel } from "@iam/session-kernel";
 import { createSubjectFactsRedisCache } from "@iam/user-profile-read-model/subject-facts";
-import { afterEach, expect, test } from "bun:test";
 import Redis from "ioredis";
 import { createApiPostgresTestHarness } from "../postgres/postgres-test-harness";
 import { createEntryEnvironment } from "../process/api-env.fixture";
@@ -138,19 +145,17 @@ test(
       });
       let operations: ReturnType<typeof createSubjectAccessOperations>;
       const revocation = createUnifiedSubjectAccessSessionRevocation(kernel, {
-        run: callback => operations.run(callback),
+        run: (callback) => operations.run(callback),
       });
       operations = createSubjectAccessOperations({ barrier, revocation });
       async function root() {
         return await operations.run(async (operation) => {
           const permission = await operation.acquireForAuthentication(subjectIdentifier);
-          return await kernel
-            .forOperation(operation)
-            .createUserSession({
-              subjectIdentifier,
-              subjectContext: operation.getSubjectContext(permission),
-              amr: ["pwd"],
-            });
+          return await kernel.forOperation(operation).createUserSession({
+            subjectIdentifier,
+            subjectContext: operation.getSubjectContext(permission),
+            amr: ["pwd"],
+          });
         });
       }
       const browser = await root();
@@ -180,14 +185,18 @@ test(
           capture = createBoundedProcessLogCapture(child, { maxBytes: 128 * 1024 });
           return child;
         },
-        childReadinessEvidence: context => `server: http://${context.hostname}:${context.port}`,
+        childReadinessEvidence: (context) => `server: http://${context.hostname}:${context.port}`,
         async probe(context, signal) {
           const origin = `http://${context.hostname}:${context.port}`;
           const readiness = await fetch(`${origin}/ready`, { signal });
-          if (readiness.status !== 200)
-            return undefined;
+          if (readiness.status !== 200) return undefined;
           const request = (path: string, init: RequestInit = {}) =>
-            fetch(`${origin}${path}`, { ...init, headers: { "X-IAM-Entry-Network": "external", ...init.headers }, redirect: "manual", signal });
+            fetch(`${origin}${path}`, {
+              ...init,
+              headers: { "X-IAM-Entry-Network": "external", ...init.headers },
+              redirect: "manual",
+              signal,
+            });
           async function authorize(client = custom, bearer = browser.bearer) {
             const response = await request(
               `/sso/authorize?${new URLSearchParams({ client, redirectUrl: redirectUri, state: "opaque-production-state" })}`,
@@ -200,7 +209,7 @@ test(
             request("/sso/token", {
               method: "POST",
               headers: {
-                "Authorization": `Basic ${Buffer.from(`${custom}:${password}`).toString("base64")}`,
+                Authorization: `Basic ${Buffer.from(`${custom}:${password}`).toString("base64")}`,
                 "Content-Type": "application/x-www-form-urlencoded",
               },
               body: new URLSearchParams({ code, redirect_uri: redirectUri }),
@@ -229,11 +238,11 @@ test(
             expect(keys.keys[0]).toMatchObject({ kid: "api-process", alg: "RS256" });
             expect(keys.keys.map((key: { kid: string }) => key.kid)).toEqual(["api-process", "api-previous"]);
             for (const key of keys.keys) expect(key).not.toHaveProperty("d");
-            const before = await operations.run(operation =>
+            const before = await operations.run((operation) =>
               kernel.forOperation(operation).resolveUserSession(browser.bearer),
             );
             const accepted = await authorize();
-            const sessions = await operations.run(operation =>
+            const sessions = await operations.run((operation) =>
               kernel
                 .forOperation(operation)
                 .listSessions({ kind: "clientSession", subjectIdentifier, offset: 0, limit: 10 }),
@@ -286,7 +295,7 @@ test(
             const managedInfo = await info(managedToken, managed);
             expect(managedInfo.status).toBe(200);
             const authz = await request("/auth/authz", {
-              headers: { "Authorization": managedToken, "Client": managed, "X-Forwarded-Uri": "/home" },
+              headers: { Authorization: managedToken, Client: managed, "X-Forwarded-Uri": "/home" },
             });
             expect(authz.status).toBe(200);
             expect(authz.headers.get("X-User-Info")).not.toBeNull();
@@ -305,7 +314,7 @@ test(
             const token = await request("/oidc/token", {
               method: "POST",
               headers: {
-                "Authorization": `Basic ${Buffer.from(`${oidc}:${secret}`).toString("base64")}`,
+                Authorization: `Basic ${Buffer.from(`${oidc}:${secret}`).toString("base64")}`,
                 "Content-Type": "application/x-www-form-urlencoded",
               },
               body: new URLSearchParams({
@@ -341,7 +350,7 @@ test(
             expect(temporary.status).toBe(503);
             expect(temporary.headers.getSetCookie()).toEqual([]);
             await barrier.rollback(blocking);
-            const after = await operations.run(operation =>
+            const after = await operations.run((operation) =>
               kernel.forOperation(operation).resolveUserSession(browser.bearer),
             );
             if (before.status !== "resolved" || after.status !== "resolved")
@@ -358,13 +367,12 @@ test(
               headers: { Authorization: `Bearer ${oidcTokens.access_token}` },
             });
             expect(deniedOidc.status).toBe(401);
-            const other = await operations.run(operation =>
+            const other = await operations.run((operation) =>
               kernel.forOperation(operation).resolveUserSession(otherBrowser.bearer),
             );
             expect(other.status).toBe("resolved");
             return true;
-          }
-          catch (cause) {
+          } catch (cause) {
             throw new FatalReadinessError("Unified API production behavior failed", { cause });
           }
         },

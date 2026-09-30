@@ -52,16 +52,21 @@ export function buildRoleAssignmentAudit(
   details: Record<string, unknown>,
   auditContext?: AdminAuditContext,
 ): AuditLogInput {
-  return buildRoleAudit(action, role, {
-    assignment: {
-      id: assignment.id ?? null,
-      targetType: assignment.targetType,
-      targetId: assignment.targetId,
-      targetCode: assignment.target.code,
-      targetName: assignment.target.name,
-      targetStatus: assignment.target.status ?? null,
-      includeDescendants: assignment.includeDescendants,
+  return buildRoleAudit(
+    action,
+    role,
+    {
+      assignment: {
+        id: assignment.id ?? null,
+        targetType: assignment.targetType,
+        targetId: assignment.targetId,
+        targetCode: assignment.target.code,
+        targetName: assignment.target.name,
+        targetStatus: assignment.target.status ?? null,
+        includeDescendants: assignment.includeDescendants,
+      },
+      ...details,
     },
-    ...details,
-  }, auditContext);
+    auditContext,
+  );
 }

@@ -6,11 +6,11 @@
 
 ## Runtime 与 App 边界
 
-| App | Runtime 与职责 | Composition 入口 |
-|---|---|---|
-| `apps/api` | Bun + Hono public IAM backend，拥有 `/public`、`/open`、`/internal`、`/sso`、`/auth` | `src/app.ts` → `createApiComposition()` |
-| `apps/admin-api` | Bun + Hono admin backend，拥有 `/admin` 和 `/rpc`；`/rpc` 对应 `src/routes/trpc/` | `src/app.ts` → `createAdminApiComposition()` |
-| `apps/worker` | Bun background runtime，拥有 queue consumer、health/Bull Board HTTP 面和 maintenance commands | `src/index.ts` 或 `src/commands/` → worker composition |
+| App              | Runtime 与职责                                                                                | Composition 入口                                       |
+| ---------------- | --------------------------------------------------------------------------------------------- | ------------------------------------------------------ |
+| `apps/api`       | Bun + Hono public IAM backend，拥有 `/public`、`/open`、`/internal`、`/sso`、`/auth`          | `src/app.ts` → `createApiComposition()`                |
+| `apps/admin-api` | Bun + Hono admin backend，拥有 `/admin` 和 `/rpc`；`/rpc` 对应 `src/routes/trpc/`             | `src/app.ts` → `createAdminApiComposition()`           |
+| `apps/worker`    | Bun background runtime，拥有 queue consumer、health/Bull Board HTTP 面和 maintenance commands | `src/index.ts` 或 `src/commands/` → worker composition |
 
 API tier 分别在 `apps/api/app.config.ts` 和 `apps/admin-api/app.config.ts` 声明。共享 `createApp` 位于
 `packages/api-core`，只挂载 app composition root 提供的已物化 routes 和 middlewares；它保持 app-agnostic，
@@ -29,13 +29,13 @@ use-cases / domain-aligned services -> pure domain logic
 
 后端通过位置和命名区分以下职责：
 
-| 层 | 位置 | 职责 |
-|---|---|---|
-| Protocol entry | `apps/<app>/src/routes/` | 解析 HTTP/tRPC 输入、调用 use case 或 service、映射输出 |
-| Application use case | `apps/<app>/src/use-cases/<scope>/<verb-noun>/` | 表达调用方目标下的跨领域 workflow，以及 transaction 后的副作用编排 |
-| Domain-aligned application service | `apps/<app>/src/services/<domain>/` | 提供围绕一个领域能力的 app-local command/query facade |
-| Pure domain logic | `packages/domain/src/<domain>/` | 保存不依赖 repository、UnitOfWork、audit、network、Hono 或 composition 的业务规则 |
-| Composition | `apps/<app>/src/composition/` | 物化 runtime dependencies，并连接 routes、use cases、services 和 repositories |
+| 层                                 | 位置                                            | 职责                                                                              |
+| ---------------------------------- | ----------------------------------------------- | --------------------------------------------------------------------------------- |
+| Protocol entry                     | `apps/<app>/src/routes/`                        | 解析 HTTP/tRPC 输入、调用 use case 或 service、映射输出                           |
+| Application use case               | `apps/<app>/src/use-cases/<scope>/<verb-noun>/` | 表达调用方目标下的跨领域 workflow，以及 transaction 后的副作用编排                |
+| Domain-aligned application service | `apps/<app>/src/services/<domain>/`             | 提供围绕一个领域能力的 app-local command/query facade                             |
+| Pure domain logic                  | `packages/domain/src/<domain>/`                 | 保存不依赖 repository、UnitOfWork、audit、network、Hono 或 composition 的业务规则 |
+| Composition                        | `apps/<app>/src/composition/`                   | 物化 runtime dependencies，并连接 routes、use cases、services 和 repositories     |
 
 Application use case 的主文件、consumer-owned port 和输入类型分别命名为 `<verb-noun>.use-case.ts`、
 `<verb-noun>.port.ts` 和 `<verb-noun>.type.ts`；factory 与返回类型使用 `create<VerbNoun>UseCase` 和
@@ -184,9 +184,9 @@ Internal Privilege Delegation 已在 API 自身的 service、repository 与 Unit
   ID Token 固定签发内容并排除 IAM 扩展声明，不再持有 Claims Snapshot。OIDC HTTP、Cookie、错误与进程生命周期由 API 拥有。
 - Snapshot `control/payload/credential` 由 API Core `client-snapshot` 独占。成功 invalidation 阻止晚到旧回填；
   传播失败可能继续读到旧已发布事实，required 提示和显式 repair 保持。旧三类 Snapshot/Gate 不进入在线图。
-User Profile 的初代 V1 builder、Facts reader/publisher 与 Subject Projection 切换实现已移除。
-当前 Worker 通过 `createCurrentUserProfileProjectionBundle` 直接组装 V3 builder、原子 publication 与 Facts publisher；
-查询 DTO 由 `query/user-query.schema.ts` 拥有，readiness 继续复用版本无关校验规则。
+  User Profile 的初代 V1 builder、Facts reader/publisher 与 Subject Projection 切换实现已移除。
+  当前 Worker 通过 `createCurrentUserProfileProjectionBundle` 直接组装 V3 builder、原子 publication 与 Facts publisher；
+  查询 DTO 由 `query/user-query.schema.ts` 拥有，readiness 继续复用版本无关校验规则。
 
 ### 角色分配解析
 
@@ -351,6 +351,7 @@ User Profile 的初代 V1 builder、Facts reader/publisher 与 Subject Projectio
   独立维护和人工/外部责任见[统一维护手册](../releases/unified-session-maintenance.md#放流与人工恢复责任)。
 - `/maintenance` 与 `/testing` 分离；仅维护当前 unified 布局；旧 source decoder 已退役，不探测或转换旧关系。
   当前 API/Admin/Worker 同一生产图只消费一代；环境切换仍需人工发布验收。
+
 ### Temporary Login Restriction
 
 - `@iam/api-core/login-restriction` 是 Temporary Login Restriction 实时生命周期的共享 production seam。它统一拥有
@@ -393,6 +394,7 @@ User Profile 的初代 V1 builder、Facts reader/publisher 与 Subject Projectio
   真实 I/O、唯一消费、替换保护和 Token 补偿不能作为重复内存判断删除，#155 清单在统一维护手册。
 - API route 只负责 HTTP、Cookie、错误/redirect，完整操作处理内部顺序。协议 `/wire` 是浏览器可用纯出口，
   `/maintenance` 负责离线库存；只处理当前 Code/Token 布局，旧 Grant decoder 已退役。
+
 ## Runtime-specific Composition
 
 ### API OIDC
@@ -408,6 +410,7 @@ API env 注入 current/previous RS256 JWK，JWKS 只输出公钥；非法配置�
 `/ready` 检查 PG 与 Redis；进程关闭由 composition/lifecycle 释放 server 和连接。依赖失败保留可恢复 Cookie并返回暂态。
 安全 `oidc_protocol_error`/`oidc_server_error` 日志由 API 写出，Gateway `/oidc` 路由只改 upstream 为 API。
 具体配置、密钥轮换、当前协议接口和人工边界见[OIDC 接入](../features/oidc/oidc-integration.md)与[发布手册](../releases/oidc-release-runbook.md)。
+
 ### Worker
 
 - Spec #178 的新维护由 Worker `online-auth:state` 只通过公开 owner 组合 unified inventory、CAS apply 和只读 verify；
@@ -448,8 +451,8 @@ API env 注入 current/previous RS256 JWK，JWKS 只输出公钥；非法配置�
 ## 后端 App 工具配置
 
 - Bun runtime apps（`apps/api`、`apps/admin-api`、`apps/worker`）的 `tsconfig.json` 包含 Bun types。
-- App-local maintenance scripts 属于非生产工具。新增 `scripts/` 时，在 `tsconfig.json` 中排除该目录，并在 ESLint
-  配置中忽略 `scripts/**`。API、Admin API 已预留这些模式；Worker 使用 production
+- App-local maintenance scripts 属于非生产工具。新增 `scripts/` 时，在 production `tsconfig.json` 中排除该目录；
+  仓库自有且受支持的脚本仍纳入统一 format/lint。Worker 使用 production
   `src/commands/`，没有独立 maintenance `scripts/`。
 
 ## 验证责任

@@ -1,7 +1,7 @@
-import { fetchAuthenticationConfig } from '@sso/services/authentication-config';
-import { getCurrentUserInfo } from '@sso/services/public';
-import type { AuthConfig, UserInfo } from '@sso/types/api';
-import { useCallback, useEffect, useState } from 'react';
+import { fetchAuthenticationConfig } from "@sso/services/authentication-config";
+import { getCurrentUserInfo } from "@sso/services/public";
+import type { AuthConfig, UserInfo } from "@sso/types/api";
+import { useCallback, useEffect, useState } from "react";
 
 export default function useSsoModel() {
   const [authConfig, setAuthConfig] = useState<AuthConfig | null>(null);

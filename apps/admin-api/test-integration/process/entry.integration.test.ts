@@ -1,6 +1,7 @@
-import type { ProcessSmokeAttemptContext } from "@iam/api-core/testing/process-smoke-harness";
+import { afterEach, describe, expect, test } from "bun:test";
 import process from "node:process";
 import { fileURLToPath } from "node:url";
+import type { ProcessSmokeAttemptContext } from "@iam/api-core/testing/process-smoke-harness";
 import {
   createProcessSmokeEnvironment,
   createProcessSmokeSuite,
@@ -8,7 +9,6 @@ import {
   PROCESS_SMOKE_TEST_TIMEOUT_MS,
   spawnOwnedProcessTree,
 } from "@iam/api-core/testing/process-smoke-harness";
-import { afterEach, describe, expect, test } from "bun:test";
 
 const adminApiRoot = fileURLToPath(new URL("../../", import.meta.url));
 const entrySmoke = createProcessSmokeSuite({
@@ -56,18 +56,17 @@ async function probeAdminApiDocs(origin: string, signal: AbortSignal) {
 
   let document: Record<string, unknown>;
   try {
-    document = await response.json() as Record<string, unknown>;
-  }
-  catch (error) {
+    document = (await response.json()) as Record<string, unknown>;
+  } catch (error) {
     throw new PortCollisionError("port did not serve the Admin API OpenAPI document", { cause: error });
   }
   const info = document.info;
   if (
-    document.openapi !== "3.1.0"
-    || typeof info !== "object"
-    || info === null
-    || (info as Record<string, unknown>).title !== "管理端API"
-    || (info as Record<string, unknown>).version !== "1.0.0"
+    document.openapi !== "3.1.0" ||
+    typeof info !== "object" ||
+    info === null ||
+    (info as Record<string, unknown>).title !== "管理端API" ||
+    (info as Record<string, unknown>).version !== "1.0.0"
   ) {
     throw new PortCollisionError("port served an unexpected Admin API OpenAPI document");
   }
@@ -75,22 +74,26 @@ async function probeAdminApiDocs(origin: string, signal: AbortSignal) {
 }
 
 describe("Admin API entry", () => {
-  test("starts the production entry and exposes its OpenAPI readiness document", async () => {
-    const document = await entrySmoke.run({
-      start: context => spawnOwnedProcessTree({
-        executable: process.execPath,
-        args: ["--no-env-file", "run", "src/index.ts"],
-        cwd: adminApiRoot,
-        env: createEntryEnvironment(context),
-      }),
-      probe: (context, signal) =>
-        probeAdminApiDocs(entryOrigin(context), signal),
-      childReadinessEvidence: context => `server: ${entryOrigin(context)}`,
-    });
+  test(
+    "starts the production entry and exposes its OpenAPI readiness document",
+    async () => {
+      const document = await entrySmoke.run({
+        start: (context) =>
+          spawnOwnedProcessTree({
+            executable: process.execPath,
+            args: ["--no-env-file", "run", "src/index.ts"],
+            cwd: adminApiRoot,
+            env: createEntryEnvironment(context),
+          }),
+        probe: (context, signal) => probeAdminApiDocs(entryOrigin(context), signal),
+        childReadinessEvidence: (context) => `server: ${entryOrigin(context)}`,
+      });
 
-    expect(document).toMatchObject({
-      openapi: "3.1.0",
-      info: { title: "管理端API", version: "1.0.0" },
-    });
-  }, PROCESS_SMOKE_TEST_TIMEOUT_MS);
+      expect(document).toMatchObject({
+        openapi: "3.1.0",
+        info: { title: "管理端API", version: "1.0.0" },
+      });
+    },
+    PROCESS_SMOKE_TEST_TIMEOUT_MS,
+  );
 });

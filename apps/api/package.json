@@ -16,8 +16,8 @@
   "scripts": {
     "dev": "bun --hot src/index.ts",
     "serve": "bun run src/index.ts",
-    "lint": "eslint src test-integration app.config.ts playwright.config.ts eslint.config.js",
-    "lint:fix": "eslint --fix src test-integration app.config.ts playwright.config.ts eslint.config.js",
+    "lint": "node ../../scripts/run-quality.mjs lint --workspace apps/api",
+    "lint:fix": "node ../../scripts/run-quality.mjs lint-fix --workspace apps/api",
     "db:generate": "pnpm --filter @iam/db db:generate",
     "db:migrate": "pnpm --filter @iam/db db:migrate",
     "db:push": "pnpm --filter @iam/db db:push",
@@ -29,7 +29,9 @@
     "test:integration:redis": "bun test --max-concurrency=1 test-integration/redis",
     "test:integration:browser": "playwright test",
     "test:unit": "bun test --max-concurrency=2 src",
-    "typecheck": "pnpm exec tsc --noEmit"
+    "typecheck": "pnpm exec tsc --noEmit",
+    "format": "node ../../scripts/run-quality.mjs format --workspace apps/api",
+    "format:check": "node ../../scripts/run-quality.mjs format-check --workspace apps/api"
   },
   "dependencies": {
     "@cap.js/server": "^4.0.5",
@@ -61,13 +63,11 @@
     "zod": "^4.4.3"
   },
   "devDependencies": {
-    "@iam/eslint-config": "workspace:*",
     "@playwright/test": "^1.61.1",
     "@types/bun": "latest",
     "@types/sm-crypto": "^0.3.4",
     "@typescript/native": "npm:typescript@7.0.2",
     "drizzle-kit": "1.0.0-rc.2",
-    "eslint": "^10.7.0",
     "openid-client": "6.8.8",
     "tsx": "4.23.15",
     "typescript": "npm:@typescript/typescript6@6.0.2"

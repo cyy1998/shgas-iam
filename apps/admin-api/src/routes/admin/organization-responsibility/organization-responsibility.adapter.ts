@@ -1,15 +1,7 @@
 import type { AdminApiOperationContext } from "@admin-api/lib/admin-api-adapter";
-import type { AdminOperationId } from "@admin-api/services/admin-authorization/admin-operation.registry";
-import type { OrganizationResponsibilityService } from "@admin-api/services/organization-responsibility/organization-responsibility.service";
-import type { CreateOrganizationResponsibilityAssignmentUseCase } from "@admin-api/use-cases/organization-responsibility/create-assignment/create-assignment.use-case";
-import type { ManageOrganizationResponsibilityAssignmentLifecycleUseCase } from "@admin-api/use-cases/organization-responsibility/manage-assignment-lifecycle/manage-assignment-lifecycle.use-case";
-import type { OrganizationResponsibilityAssignmentLifecycleCommand as OrganizationResponsibilityAssignmentLifecycleCommandType } from "@iam/contracts";
-import type { OrganizationResponsibilityRouteHandler } from "./organization-responsibility.type";
-import {
-  defineAdminApiMutationOperation,
-  defineAdminApiQueryOperation,
-} from "@admin-api/lib/admin-api-adapter";
+import { defineAdminApiMutationOperation, defineAdminApiQueryOperation } from "@admin-api/lib/admin-api-adapter";
 import { resolveAdminOrganizationResponsibilityAuthorizationForContext } from "@admin-api/services/admin-authorization/admin-authorization.context";
+import type { AdminOperationId } from "@admin-api/services/admin-authorization/admin-operation.registry";
 import { ADMIN_ORGANIZATION_RESPONSIBILITY_LIFECYCLE_OPERATION_IDS } from "@admin-api/services/admin-authorization/admin-organization-responsibility-authorization.type";
 import { resolveAdminAuditContext } from "@admin-api/services/audit/audit.context";
 import {
@@ -17,13 +9,17 @@ import {
   OrganizationResponsibilityAssignmentListQuerySchema,
   OrganizationResponsibilityAssignmentSearchQuerySchema,
 } from "@admin-api/services/organization-responsibility/organization-responsibility.schema";
+import type { OrganizationResponsibilityService } from "@admin-api/services/organization-responsibility/organization-responsibility.service";
+import type { CreateOrganizationResponsibilityAssignmentUseCase } from "@admin-api/use-cases/organization-responsibility/create-assignment/create-assignment.use-case";
+import type { ManageOrganizationResponsibilityAssignmentLifecycleUseCase } from "@admin-api/use-cases/organization-responsibility/manage-assignment-lifecycle/manage-assignment-lifecycle.use-case";
 import { router } from "@iam/api-core/trpc";
+import type { OrganizationResponsibilityAssignmentLifecycleCommand as OrganizationResponsibilityAssignmentLifecycleCommandType } from "@iam/contracts";
 import {
   ORGANIZATION_RESPONSIBILITY_ASSIGNMENT_LIFECYCLE_COMMANDS,
   ORGANIZATION_RESPONSIBILITY_TYPE_CATALOG,
-
 } from "@iam/contracts";
 import { z } from "zod";
+import type { OrganizationResponsibilityRouteHandler } from "./organization-responsibility.type";
 
 export interface CreateOrganizationResponsibilityAdapterDeps {
   createAssignment: CreateOrganizationResponsibilityAssignmentUseCase;
@@ -31,17 +27,9 @@ export interface CreateOrganizationResponsibilityAdapterDeps {
   service: OrganizationResponsibilityService;
 }
 
-export function createOrganizationResponsibilityAdapter(
-  deps: CreateOrganizationResponsibilityAdapterDeps,
-) {
-  async function resolveAuthorization(
-    context: AdminApiOperationContext,
-    operationId: AdminOperationId,
-  ) {
-    return await resolveAdminOrganizationResponsibilityAuthorizationForContext(
-      context.hono,
-      operationId,
-    );
+export function createOrganizationResponsibilityAdapter(deps: CreateOrganizationResponsibilityAdapterDeps) {
+  async function resolveAuthorization(context: AdminApiOperationContext, operationId: AdminOperationId) {
+    return await resolveAdminOrganizationResponsibilityAuthorizationForContext(context.hono, operationId);
   }
 
   const listTypes = defineAdminApiQueryOperation({
@@ -49,11 +37,8 @@ export function createOrganizationResponsibilityAdapter(
     input: z.strictObject({}),
     restInput: () => ({}),
     handler: async (_input, context) => {
-      await resolveAuthorization(
-        context,
-        "admin.organizationResponsibility.listTypes",
-      );
-      return ORGANIZATION_RESPONSIBILITY_TYPE_CATALOG.map(entry => ({
+      await resolveAuthorization(context, "admin.organizationResponsibility.listTypes");
+      return ORGANIZATION_RESPONSIBILITY_TYPE_CATALOG.map((entry) => ({
         ...entry,
       }));
     },
@@ -65,37 +50,28 @@ export function createOrganizationResponsibilityAdapter(
       orgCode: z.string(),
     }),
     restInput: (c) => {
-      const query = c.req.valid("query") as z.infer<
-        typeof OrganizationResponsibilityAssignmentListQuerySchema
-      >;
+      const query = c.req.valid("query") as z.infer<typeof OrganizationResponsibilityAssignmentListQuerySchema>;
       return {
         orgCode: (c.req.valid("param") as { orgCode: string }).orgCode,
         ...query,
       };
     },
-    handler: async (input, context) => await deps.service.listAssignments(
-      input,
-      await resolveAuthorization(
-        context,
-        "admin.organizationResponsibility.listAssignments",
+    handler: async (input, context) =>
+      await deps.service.listAssignments(
+        input,
+        await resolveAuthorization(context, "admin.organizationResponsibility.listAssignments"),
       ),
-    ),
   });
 
   const searchAssignments = defineAdminApiQueryOperation({
     operationId: "admin.organizationResponsibility.searchAssignments",
     input: OrganizationResponsibilityAssignmentSearchQuerySchema,
-    restInput: c =>
-      c.req.valid("query") as z.infer<
-        typeof OrganizationResponsibilityAssignmentSearchQuerySchema
-      >,
-    handler: async (input, context) => await deps.service.searchAssignments(
-      input,
-      await resolveAuthorization(
-        context,
-        "admin.organizationResponsibility.searchAssignments",
+    restInput: (c) => c.req.valid("query") as z.infer<typeof OrganizationResponsibilityAssignmentSearchQuerySchema>,
+    handler: async (input, context) =>
+      await deps.service.searchAssignments(
+        input,
+        await resolveAuthorization(context, "admin.organizationResponsibility.searchAssignments"),
       ),
-    ),
   });
 
   const scopedDetailAssignment = defineAdminApiQueryOperation({
@@ -104,14 +80,12 @@ export function createOrganizationResponsibilityAdapter(
       orgCode: z.string(),
       id: z.number().int().positive(),
     }),
-    restInput: c => c.req.valid("param") as { orgCode: string; id: number },
-    handler: async (input, context) => await deps.service.detailAssignment(
-      input,
-      await resolveAuthorization(
-        context,
-        "admin.organizationResponsibility.scopedDetailAssignment",
+    restInput: (c) => c.req.valid("param") as { orgCode: string; id: number },
+    handler: async (input, context) =>
+      await deps.service.detailAssignment(
+        input,
+        await resolveAuthorization(context, "admin.organizationResponsibility.scopedDetailAssignment"),
       ),
-    ),
   });
 
   const detailAssignment = defineAdminApiQueryOperation({
@@ -120,14 +94,12 @@ export function createOrganizationResponsibilityAdapter(
       orgCode: z.string().optional(),
       id: z.number().int().positive(),
     }),
-    restInput: c => c.req.valid("param") as { id: number },
-    handler: async (input, context) => await deps.service.detailAssignment(
-      input,
-      await resolveAuthorization(
-        context,
-        "admin.organizationResponsibility.detailAssignment",
+    restInput: (c) => c.req.valid("param") as { id: number },
+    handler: async (input, context) =>
+      await deps.service.detailAssignment(
+        input,
+        await resolveAuthorization(context, "admin.organizationResponsibility.detailAssignment"),
       ),
-    ),
   });
 
   const createAssignment = defineAdminApiMutationOperation({
@@ -135,11 +107,9 @@ export function createOrganizationResponsibilityAdapter(
     input: OrganizationResponsibilityAssignmentCreateDtoSchema.extend({
       orgCode: z.string(),
     }),
-    restInput: c => ({
+    restInput: (c) => ({
       orgCode: (c.req.valid("param") as { orgCode: string }).orgCode,
-      ...(c.req.valid("json") as z.infer<
-        typeof OrganizationResponsibilityAssignmentCreateDtoSchema
-      >),
+      ...(c.req.valid("json") as z.infer<typeof OrganizationResponsibilityAssignmentCreateDtoSchema>),
     }),
     handler: async ({ orgCode, ...input }, context) =>
       deps.createAssignment.execute(
@@ -149,10 +119,7 @@ export function createOrganizationResponsibilityAdapter(
         },
         {
           auditContext: resolveAdminAuditContext(context),
-          authorization: await resolveAuthorization(
-            context,
-            "admin.organizationResponsibility.createAssignment",
-          ),
+          authorization: await resolveAuthorization(context, "admin.organizationResponsibility.createAssignment"),
         },
       ),
   });
@@ -164,7 +131,7 @@ export function createOrganizationResponsibilityAdapter(
     return defineAdminApiMutationOperation({
       operationId,
       input: z.strictObject({ id: z.number().int().positive() }),
-      restInput: c => c.req.valid("param") as { id: number },
+      restInput: (c) => c.req.valid("param") as { id: number },
       handler: async (input, context) =>
         deps.manageAssignmentLifecycle.execute(
           { ...input, command },
@@ -205,17 +172,13 @@ export function createOrganizationResponsibilityAdapter(
         OrganizationResponsibilityRouteHandler<"organizationResponsibilityAssignmentCreate">
       >(),
     organizationResponsibilityAssignmentPause:
-      pauseAssignment.toHandler<
-        OrganizationResponsibilityRouteHandler<"organizationResponsibilityAssignmentPause">
-      >(),
+      pauseAssignment.toHandler<OrganizationResponsibilityRouteHandler<"organizationResponsibilityAssignmentPause">>(),
     organizationResponsibilityAssignmentResume:
       resumeAssignment.toHandler<
         OrganizationResponsibilityRouteHandler<"organizationResponsibilityAssignmentResume">
       >(),
     organizationResponsibilityAssignmentEnd:
-      endAssignment.toHandler<
-        OrganizationResponsibilityRouteHandler<"organizationResponsibilityAssignmentEnd">
-      >(),
+      endAssignment.toHandler<OrganizationResponsibilityRouteHandler<"organizationResponsibilityAssignmentEnd">>(),
     organizationResponsibilityAssignmentDetail:
       scopedDetailAssignment.toHandler<
         OrganizationResponsibilityRouteHandler<"organizationResponsibilityAssignmentDetail">
@@ -225,20 +188,14 @@ export function createOrganizationResponsibilityAdapter(
         OrganizationResponsibilityRouteHandler<"organizationResponsibilityGlobalAssignmentDetail">
       >(),
     organizationResponsibilityAssignmentsList:
-      listAssignments.toHandler<
-        OrganizationResponsibilityRouteHandler<"organizationResponsibilityAssignmentsList">
-      >(),
+      listAssignments.toHandler<OrganizationResponsibilityRouteHandler<"organizationResponsibilityAssignmentsList">>(),
     organizationResponsibilityAssignmentsSearch:
       searchAssignments.toHandler<
         OrganizationResponsibilityRouteHandler<"organizationResponsibilityAssignmentsSearch">
       >(),
     organizationResponsibilityTypesList:
-      listTypes.toHandler<
-        OrganizationResponsibilityRouteHandler<"organizationResponsibilityTypesList">
-      >(),
+      listTypes.toHandler<OrganizationResponsibilityRouteHandler<"organizationResponsibilityTypesList">>(),
   };
 }
 
-export type OrganizationResponsibilityAdapter = ReturnType<
-  typeof createOrganizationResponsibilityAdapter
->;
+export type OrganizationResponsibilityAdapter = ReturnType<typeof createOrganizationResponsibilityAdapter>;

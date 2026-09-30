@@ -1,17 +1,17 @@
 import type { OpenAPIHono } from "@hono/zod-openapi";
 import type { ApiReferenceConfiguration } from "@scalar/hono-api-reference";
-import type { Context, MiddlewareHandler } from "hono";
-import type { Logger } from "pino";
-import type { AppConfig, MiddlewareWithExcept, OpenAPIConfig, TierConfig, TierMiddleware } from "./define-config";
 import { Scalar as ScalarHonoAPIReference } from "@scalar/hono-api-reference";
-import { pinoLogger } from "hono-pino";
+import type { Context, MiddlewareHandler } from "hono";
 import { serveStatic } from "hono/bun";
 import { except } from "hono/combine";
 import { requestId } from "hono/request-id";
+import { pinoLogger } from "hono-pino";
+import type { Logger } from "pino";
 import { buildHttpRequestLogFields, getStatusLogLevel, LoggerSourceApp } from "../logger";
 import { createErrorHandler } from "../middlewares/error-handler";
 import notFound from "../middlewares/not-found-handler";
 import { createRouter } from "./create-router";
+import type { AppConfig, MiddlewareWithExcept, OpenAPIConfig, TierConfig, TierMiddleware } from "./define-config";
 
 export type AnyRouter = OpenAPIHono<any>;
 type TierApps = Array<{ tierApp: AnyRouter; tier: TierConfig; basePath: string }>;
@@ -40,11 +40,9 @@ function isTierRouteModulePath(path: string, dirName: string) {
 }
 
 export function resolveTierRoutes(tier: TierConfig, allRoutes: Record<string, { default: AnyRouter }>) {
-  if (tier.routes)
-    return tier.routes;
+  if (tier.routes) return tier.routes;
   const dirName = tier.routeDir ?? tier.name;
-  return Object.fromEntries(Object.entries(allRoutes).filter(([path]) =>
-    isTierRouteModulePath(path, dirName)));
+  return Object.fromEntries(Object.entries(allRoutes).filter(([path]) => isTierRouteModulePath(path, dirName)));
 }
 
 /** Middleware loading / 中间件加载 */
@@ -56,10 +54,14 @@ function resolveTierMiddlewares(
     return tier.middlewares;
   }
   const dirName = tier.routeDir ?? tier.name;
-  return Object.values(Object.fromEntries(Object.entries(allMiddlewares).filter(([path]) => {
-    const match = path.match(/[/\\]+routes[/\\]+([^/\\]+)[/\\]+/);
-    return match?.[1] === dirName;
-  }))).flatMap(mod => mod.default);
+  return Object.values(
+    Object.fromEntries(
+      Object.entries(allMiddlewares).filter(([path]) => {
+        const match = path.match(/[/\\]+routes[/\\]+([^/\\]+)[/\\]+/);
+        return match?.[1] === dirName;
+      }),
+    ),
+  ).flatMap((mod) => mod.default);
 }
 
 /** Type guard / 类型守卫 */
@@ -69,10 +71,8 @@ function isMiddlewareWithExcept(mw: TierMiddleware): mw is MiddlewareWithExcept 
 
 /** OpenAPI enabled resolution / OpenAPI enabled 解析 */
 function resolveEnabled(enabled: OpenAPIConfig["enabled"], env: Record<string, unknown>): boolean {
-  if (typeof enabled === "function")
-    return enabled(env);
-  if (typeof enabled === "boolean")
-    return enabled;
+  if (typeof enabled === "function") return enabled(env);
+  if (typeof enabled === "boolean") return enabled;
   return env.NODE_ENV !== "production";
 }
 
@@ -103,16 +103,19 @@ function createIamRequestLogger(rootLogger: Logger, sourceApp: string): Middlewa
     const logger = c.get("logger" as never) as Pick<Logger, "info" | "warn" | "error">;
     const level = getStatusLogLevel(statusCode);
 
-    logger[level](buildHttpRequestLogFields({
-      sourceApp,
-      requestId: c.get("requestId" as never),
-      readHeader: name => getHeader(c, name),
-      method: c.req.method,
-      path: c.req.path,
-      route: getRoutePath(c),
-      statusCode,
-      durationMs,
-    }), "HTTP request completed");
+    logger[level](
+      buildHttpRequestLogFields({
+        sourceApp,
+        requestId: c.get("requestId" as never),
+        readHeader: (name) => getHeader(c, name),
+        method: c.req.method,
+        path: c.req.path,
+        route: getRoutePath(c),
+        statusCode,
+        durationMs,
+      }),
+      "HTTP request completed",
+    );
   };
 }
 
@@ -131,8 +134,7 @@ function configureAppDoc(router: AnyRouter, tier: TierConfig, config: AppConfig,
       scheme: "bearer",
     });
     router.doc31(docEndpoint, { ...docConfig, security: [{ [securityName]: [] }] });
-  }
-  else {
+  } else {
     router.doc31(docEndpoint, docConfig);
   }
 }
@@ -140,19 +142,23 @@ function configureAppDoc(router: AnyRouter, tier: TierConfig, config: AppConfig,
 /** Configure Scalar documentation homepage / 配置 Scalar 文档主页 */
 function configureScalarUI(app: AnyRouter, tierApps: TierApps, config: AppConfig, docEndpoint: string) {
   const scalarConfig = config.openapi?.scalar ?? {};
-  app.get("/", ScalarHonoAPIReference({
-    ...scalarConfig as Partial<ApiReferenceConfiguration>,
-    sources: tierApps.map(({ tier, basePath }, i) => ({
-      title: tier.title,
-      slug: tier.name,
-      url: `${basePath}${docEndpoint}`,
-      default: i === 0,
-    })),
-    authentication: {
-      securitySchemes: Object.fromEntries(tierApps.filter(({ tier }) => tier.token)
-        .map(({ tier }) => [`${tier.name}Bearer`, { token: tier.token! }])),
-    },
-  }));
+  app.get(
+    "/",
+    ScalarHonoAPIReference({
+      ...(scalarConfig as Partial<ApiReferenceConfiguration>),
+      sources: tierApps.map(({ tier, basePath }, i) => ({
+        title: tier.title,
+        slug: tier.name,
+        url: `${basePath}${docEndpoint}`,
+        default: i === 0,
+      })),
+      authentication: {
+        securitySchemes: Object.fromEntries(
+          tierApps.filter(({ tier }) => tier.token).map(({ tier }) => [`${tier.name}Bearer`, { token: tier.token! }]),
+        ),
+      },
+    }),
+  );
 }
 
 export default function createApp(config: AppConfig, options: CreateAppOptions) {

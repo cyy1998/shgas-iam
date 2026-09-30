@@ -1,10 +1,10 @@
-import type { UserDetailDto } from "@admin-api/services/user/user.type";
-import type { SubjectAccessOperation } from "@iam/api-core/subject-access";
-import type { UserSession } from "@iam/session-kernel";
+import { describe, expect, mock, test } from "bun:test";
 import { createAdminRootAuthenticationHandlers } from "@admin-api/middlewares/authentication.handler";
 import { createAdminAuthorizationAdapter } from "@admin-api/routes/admin/authorization/authorization.adapter";
 import { createAdminAuthorizationContextHandler } from "@admin-api/services/admin-authorization/admin-authorization.context";
 import { createAdminAuthorizationPolicy } from "@admin-api/services/admin-authorization/admin-authorization.policy";
+import type { UserDetailDto } from "@admin-api/services/user/user.type";
+import type { SubjectAccessOperation } from "@iam/api-core/subject-access";
 import {
   createSubjectAccessOperations,
   encodeSubjectAccessContext,
@@ -14,8 +14,8 @@ import {
 import { createTRPCContext } from "@iam/api-core/trpc";
 import { UserStatus, UserType } from "@iam/contracts";
 import { UserNotFoundError } from "@iam/domain/user";
+import type { UserSession } from "@iam/session-kernel";
 import { fetchRequestHandler } from "@trpc/server/adapters/fetch";
-import { describe, expect, mock, test } from "bun:test";
 import { Hono } from "hono";
 
 type PrincipalSession = Pick<UserSession, "userSessionId" | "subjectIdentifier" | "subjectContext">;
@@ -47,8 +47,7 @@ function createProtectedApp(options: {
     },
     subjectAccess: createSubjectAccessOperations({
       barrier: {
-        readCommittedTransitionId:
-          options.readBarrier ?? (async () => "20000000-0000-4000-8000-000000000001"),
+        readCommittedTransitionId: options.readBarrier ?? (async () => "20000000-0000-4000-8000-000000000001"),
       },
       revocation: {
         revokePrincipalSession: async () => {
@@ -69,7 +68,7 @@ function createProtectedApp(options: {
   });
   const app = new Hono();
   app.use("*", handlers.adminAuthenticationHandler);
-  app.get("/rpc/admin.user.search", c => c.json({ ok: true }));
+  app.get("/rpc/admin.user.search", (c) => c.json({ ok: true }));
   app.onError((error, c) => {
     const status = "httpStatus" in error && typeof error.httpStatus === "number" ? error.httpStatus : 500;
     return c.text(error.message, status as never);
@@ -132,9 +131,7 @@ describe("admin authentication handler", () => {
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual({ ok: true });
     expect(resolvePrincipalSession).toHaveBeenCalledWith("iam_ps_valid");
-    expect(getUserDetailBySubjectIdentifierForAdmin).toHaveBeenCalledWith(
-      "00000000-0000-4000-8000-000000000001",
-    );
+    expect(getUserDetailBySubjectIdentifierForAdmin).toHaveBeenCalledWith("00000000-0000-4000-8000-000000000001");
   });
 
   test("clears invalid Kernel PrincipalSession cookies instead of falling back to legacy session ids", async () => {
@@ -171,8 +168,7 @@ describe("admin authentication handler", () => {
       const app = createProtectedApp({
         resolvePrincipalSession: mock(async () => ({ status: "resolved", value: principalSession() })),
         readBarrier: async () => {
-          if (reason === "session_generation_stale")
-            return "20000000-0000-4000-8000-000000000002";
+          if (reason === "session_generation_stale") return "20000000-0000-4000-8000-000000000002";
           throw new SubjectAccessDisabledError();
         },
         getUserDetailBySubjectIdentifierForAdmin: mock(async () => adminUser()),
@@ -316,10 +312,10 @@ function createPermittedApp(
     ),
   );
   const adapter = createAdminAuthorizationAdapter();
-  app.get("/admin/capabilities", c => adapter.capabilitySummary(c as never, async () => {}));
+  app.get("/admin/capabilities", (c) => adapter.capabilitySummary(c as never, async () => {}));
   app.all(
     "/rpc/*",
-    async c =>
+    async (c) =>
       await fetchRequestHandler({
         endpoint: "/rpc",
         req: c.req.raw,
@@ -342,8 +338,7 @@ for (const path of ["/admin/capabilities", "/rpc/capabilitySummary?input=%7B%7D"
       let capturedOperation: SubjectAccessOperation | undefined;
       const app = createPermittedApp({
         readBarrier: async () => {
-          if (disabled)
-            throw new SubjectAccessDisabledError();
+          if (disabled) throw new SubjectAccessDisabledError();
           return "20000000-0000-4000-8000-000000000001";
         },
         loadUser: async (operation) => {

@@ -1,6 +1,6 @@
+import { describe, expect, it } from "bun:test";
 import { readFile } from "node:fs/promises";
 import path from "node:path";
-import { describe, expect, it } from "bun:test";
 import { parse as parseYaml } from "yaml";
 import { renderEnvPlaceholders } from "../env";
 import { loadManifest, packageRoot } from "../manifest";
@@ -8,11 +8,11 @@ import { validateManifest } from "../validators";
 import { createManifestFile, sourcePluginConfig, sourceRoute, sourceUpstream } from "./test-helpers";
 
 function getSsoRoutes(manifest: Awaited<ReturnType<typeof loadManifest>>) {
-  return manifest.resources.routes.filter(route => route.uri === "/sso/*");
+  return manifest.resources.routes.filter((route) => route.uri === "/sso/*");
 }
 
 function expectRootRedirectToSsoLogin(manifest: Awaited<ReturnType<typeof loadManifest>>) {
-  const route = manifest.resources.routes.find(route => route.id === `iam.root-redirect.${manifest.scope.env}`);
+  const route = manifest.resources.routes.find((route) => route.id === `iam.root-redirect.${manifest.scope.env}`);
   const redirect = (route?.plugins as Record<string, unknown> | undefined)?.redirect;
 
   expect(route).toMatchObject({
@@ -29,8 +29,10 @@ function expectRootRedirectToSsoLogin(manifest: Awaited<ReturnType<typeof loadMa
 }
 
 function getEntryNetwork(route: Record<string, unknown>) {
-  return (((route.plugins as Record<string, unknown> | undefined)?.["proxy-rewrite"] as Record<string, unknown> | undefined)
-    ?.headers as Record<string, unknown> | undefined)?.set as Record<string, unknown> | undefined;
+  return (
+    ((route.plugins as Record<string, unknown> | undefined)?.["proxy-rewrite"] as Record<string, unknown> | undefined)
+      ?.headers as Record<string, unknown> | undefined
+  )?.set as Record<string, unknown> | undefined;
 }
 
 function expectSsoRoutesClassifyEntryNetwork(
@@ -41,26 +43,29 @@ function expectSsoRoutesClassifyEntryNetwork(
 
   expect(routes).toHaveLength(2);
   if ("hosts" in matcher) {
-    expect(routes.map(route => route.hosts).flat().sort())
-      .toEqual([...matcher.hosts].sort());
-    expect(routes.some(route => route.hosts === undefined)).toBe(false);
+    expect(routes.flatMap((route) => route.hosts).sort()).toEqual([...matcher.hosts].sort());
+    expect(routes.some((route) => route.hosts === undefined)).toBe(false);
+  } else {
+    expect(routes.map((route) => route.vars).sort()).toEqual(
+      matcher.authorities.map((authority) => [["http_host", "==", authority]]).sort(),
+    );
+    expect(routes.every((route) => route.hosts === undefined)).toBe(true);
   }
-  else {
-    expect(routes.map(route => route.vars).sort()).toEqual(matcher.authorities
-      .map(authority => [["http_host", "==", authority]])
-      .sort());
-    expect(routes.every(route => route.hosts === undefined)).toBe(true);
-  }
-  expect(routes.every(route => route.service_id === `iam.${manifest.scope.env}`)).toBe(true);
-  expect(routes.every(route => route.upstream_id === `iam.api.${manifest.scope.env}`)).toBe(true);
-  expect(routes.every(route => route.plugin_config_id === `iam.sso-api-plugin.${manifest.scope.env}`)).toBe(true);
-  expect(routes.some(route => route.id === `iam.sso.${manifest.scope.env}`)).toBe(false);
-  expect(routes.map(route => getEntryNetwork(route)?.["X-IAM-Entry-Network"]).sort()).toEqual(["external", "internal"]);
-  expect(routes.every(route => (route.plugins as Record<string, unknown> | undefined)?.cors === undefined)).toBe(true);
+  expect(routes.every((route) => route.service_id === `iam.${manifest.scope.env}`)).toBe(true);
+  expect(routes.every((route) => route.upstream_id === `iam.api.${manifest.scope.env}`)).toBe(true);
+  expect(routes.every((route) => route.plugin_config_id === `iam.sso-api-plugin.${manifest.scope.env}`)).toBe(true);
+  expect(routes.some((route) => route.id === `iam.sso.${manifest.scope.env}`)).toBe(false);
+  expect(routes.map((route) => getEntryNetwork(route)?.["X-IAM-Entry-Network"]).sort()).toEqual([
+    "external",
+    "internal",
+  ]);
+  expect(routes.every((route) => (route.plugins as Record<string, unknown> | undefined)?.cors === undefined)).toBe(
+    true,
+  );
 
-  const oidc = manifest.resources.routes.filter(route => Array.isArray(route.uris) && route.uris.includes("/oidc"));
+  const oidc = manifest.resources.routes.filter((route) => Array.isArray(route.uris) && route.uris.includes("/oidc"));
   expect(oidc).toHaveLength(2);
-  expect(oidc.map(route => getEntryNetwork(route)?.["X-IAM-Entry-Network"]).sort()).toEqual(["external", "internal"]);
+  expect(oidc.map((route) => getEntryNetwork(route)?.["X-IAM-Entry-Network"]).sort()).toEqual(["external", "internal"]);
   for (const route of oidc) {
     expect(route).toMatchObject({ uris: ["/oidc", "/oidc/*"], upstream_id: `iam.api.${manifest.scope.env}` });
     expect(route.plugins).toMatchObject({
@@ -68,52 +73,67 @@ function expectSsoRoutesClassifyEntryNetwork(
     });
     expect(route).not.toHaveProperty("plugins.proxy-rewrite.regex_uri");
   }
-  if ("hosts" in matcher)
-    expect(oidc.map(route => route.hosts).flat().sort()).toEqual([...matcher.hosts].sort());
+  if ("hosts" in matcher) expect(oidc.flatMap((route) => route.hosts).sort()).toEqual([...matcher.hosts].sort());
   else
-    expect(oidc.map(route => route.vars).sort()).toEqual(matcher.authorities.map(authority => [["http_host", "==", authority]]).sort());
+    expect(oidc.map((route) => route.vars).sort()).toEqual(
+      matcher.authorities.map((authority) => [["http_host", "==", authority]]).sort(),
+    );
 
   const ssoPluginConfig = manifest.resources.plugin_configs.find(
-    config => config.id === `iam.sso-api-plugin.${manifest.scope.env}`,
+    (config) => config.id === `iam.sso-api-plugin.${manifest.scope.env}`,
   );
   expect(ssoPluginConfig?.plugins).toMatchObject({
     "request-id": expect.objectContaining({
       header_name: "X-Request-Id",
       include_in_response: true,
     }),
-    "opentelemetry": expect.objectContaining({
+    opentelemetry: expect.objectContaining({
       sampler: expect.objectContaining({
         name: "always_on",
       }),
     }),
     "limit-req": expect.any(Object),
     "real-ip": expect.any(Object),
-    "cors": expect.any(Object),
+    cors: expect.any(Object),
   });
 }
 
 function expectTokenExchangeToExcludeBrowserCors(manifest: Awaited<ReturnType<typeof loadManifest>>) {
-  const tokenRoutes = manifest.resources.routes.filter(route => route.uri === "/sso/token");
+  const tokenRoutes = manifest.resources.routes.filter((route) => route.uri === "/sso/token");
   const browserRoutes = getSsoRoutes(manifest);
 
   expect(tokenRoutes).toHaveLength(2);
-  expect(tokenRoutes.map(route => JSON.stringify({
-    hosts: route.hosts,
-    vars: route.vars,
-  })).sort()).toEqual(browserRoutes.map(route => JSON.stringify({
-    hosts: route.hosts,
-    vars: route.vars,
-  })).sort());
-  expect(tokenRoutes.map(route => getEntryNetwork(route)?.["X-IAM-Entry-Network"]).sort())
-    .toEqual(["external", "internal"]);
+  expect(
+    tokenRoutes
+      .map((route) =>
+        JSON.stringify({
+          hosts: route.hosts,
+          vars: route.vars,
+        }),
+      )
+      .sort(),
+  ).toEqual(
+    browserRoutes
+      .map((route) =>
+        JSON.stringify({
+          hosts: route.hosts,
+          vars: route.vars,
+        }),
+      )
+      .sort(),
+  );
+  expect(tokenRoutes.map((route) => getEntryNetwork(route)?.["X-IAM-Entry-Network"]).sort()).toEqual([
+    "external",
+    "internal",
+  ]);
 
   for (const route of tokenRoutes) {
     const routePlugins = route.plugins as Record<string, unknown> | undefined;
-    const pluginConfig = manifest.resources.plugin_configs.find(config => config.id === route.plugin_config_id);
+    const pluginConfig = manifest.resources.plugin_configs.find((config) => config.id === route.plugin_config_id);
     const configPlugins = pluginConfig?.plugins as Record<string, unknown> | undefined;
 
     expect(route.priority).toBeGreaterThan(
-      Math.max(...browserRoutes.map(browserRoute => Number(browserRoute.priority ?? 0))),
+      Math.max(...browserRoutes.map((browserRoute) => Number(browserRoute.priority ?? 0))),
     );
     expect(route.service_id).toBe(`iam.${manifest.scope.env}`);
     expect(route.upstream_id).toBe(`iam.api.${manifest.scope.env}`);
@@ -124,7 +144,7 @@ function expectTokenExchangeToExcludeBrowserCors(manifest: Awaited<ReturnType<ty
   }
 
   for (const route of browserRoutes) {
-    const pluginConfig = manifest.resources.plugin_configs.find(config => config.id === route.plugin_config_id);
+    const pluginConfig = manifest.resources.plugin_configs.find((config) => config.id === route.plugin_config_id);
     const configPlugins = pluginConfig?.plugins as Record<string, unknown> | undefined;
 
     expect(route.uri).toBe("/sso/*");
@@ -133,7 +153,9 @@ function expectTokenExchangeToExcludeBrowserCors(manifest: Awaited<ReturnType<ty
 }
 
 function getForwardAuthConfig(route: Record<string, unknown>) {
-  return (route.plugins as Record<string, unknown> | undefined)?.["forward-auth"] as Record<string, unknown> | undefined;
+  return (route.plugins as Record<string, unknown> | undefined)?.["forward-auth"] as
+    | Record<string, unknown>
+    | undefined;
 }
 
 function getTenderInternalAuthzRequestHeaders(manifest: Awaited<ReturnType<typeof loadManifest>>) {
@@ -150,42 +172,44 @@ describe("apisix manifest validation", () => {
     const manifest = await loadManifest("dev:iam");
     expect(validateManifest(manifest)).toEqual([]);
     expectRootRedirectToSsoLogin(manifest);
-    expect(manifest.resources.plugin_metadata).toContainEqual(expect.objectContaining({
-      id: "opentelemetry",
-      set_ngx_var: true,
-      collector: expect.objectContaining({
-        address: "${APISIX_OTEL_COLLECTOR_ENDPOINT}",
-        request_timeout: 3,
+    expect(manifest.resources.plugin_metadata).toContainEqual(
+      expect.objectContaining({
+        id: "opentelemetry",
+        set_ngx_var: true,
+        collector: expect.objectContaining({
+          address: "${APISIX_OTEL_COLLECTOR_ENDPOINT}",
+          request_timeout: 3,
+        }),
       }),
-    }));
-    expect(manifest.resources.routes.every((route) => {
-      const routePlugins = route.plugins as Record<string, unknown> | undefined;
-      const pluginConfig = manifest.resources.plugin_configs.find(config => config.id === route.plugin_config_id);
-      const configPlugins = pluginConfig?.plugins as Record<string, unknown> | undefined;
-      return routePlugins?.["request-id"] !== undefined || configPlugins?.["request-id"] !== undefined;
-    })).toBe(true);
-    expect(manifest.resources.routes.every((route) => {
-      const routePlugins = route.plugins as Record<string, unknown> | undefined;
-      const pluginConfig = manifest.resources.plugin_configs.find(config => config.id === route.plugin_config_id);
-      const configPlugins = pluginConfig?.plugins as Record<string, unknown> | undefined;
-      return routePlugins?.opentelemetry !== undefined || configPlugins?.opentelemetry !== undefined;
-    })).toBe(true);
+    );
+    expect(
+      manifest.resources.routes.every((route) => {
+        const routePlugins = route.plugins as Record<string, unknown> | undefined;
+        const pluginConfig = manifest.resources.plugin_configs.find((config) => config.id === route.plugin_config_id);
+        const configPlugins = pluginConfig?.plugins as Record<string, unknown> | undefined;
+        return routePlugins?.["request-id"] !== undefined || configPlugins?.["request-id"] !== undefined;
+      }),
+    ).toBe(true);
+    expect(
+      manifest.resources.routes.every((route) => {
+        const routePlugins = route.plugins as Record<string, unknown> | undefined;
+        const pluginConfig = manifest.resources.plugin_configs.find((config) => config.id === route.plugin_config_id);
+        const configPlugins = pluginConfig?.plugins as Record<string, unknown> | undefined;
+        return routePlugins?.opentelemetry !== undefined || configPlugins?.opentelemetry !== undefined;
+      }),
+    ).toBe(true);
   });
 
   it("splits dev IAM SSO routes by canonical authority and injects entry network", async () => {
     const manifest = await loadManifest("dev:iam");
 
-    expectSsoRoutesClassifyEntryNetwork(manifest, { authorities: [
-      "${IAM_SSO_EXTERNAL_HOST}",
-      "${IAM_SSO_INTERNAL_HOST}",
-    ] });
+    expectSsoRoutesClassifyEntryNetwork(manifest, {
+      authorities: ["${IAM_SSO_EXTERNAL_HOST}", "${IAM_SSO_INTERNAL_HOST}"],
+    });
   });
 
   it("matches a rendered dev canonical authority including its dynamic port", async () => {
-    const manifest = await loadManifest("e2e:iam", path.join(
-      packageRoot,
-      "manifests/dev/iam.yaml",
-    ), {
+    const manifest = await loadManifest("e2e:iam", path.join(packageRoot, "manifests/dev/iam.yaml"), {
       renderEnv: true,
       env: {
         APISIX_OTEL_COLLECTOR_ENDPOINT: "alloy:4318",
@@ -202,13 +226,17 @@ describe("apisix manifest validation", () => {
       },
     });
 
-    const routes = manifest.resources.routes.filter(route =>
-      route.uri === "/sso/*" || route.uri === "/sso/token" || (Array.isArray(route.uris) && route.uris.includes("/oidc")));
+    const routes = manifest.resources.routes.filter(
+      (route) =>
+        route.uri === "/sso/*" ||
+        route.uri === "/sso/token" ||
+        (Array.isArray(route.uris) && route.uris.includes("/oidc")),
+    );
     expect(routes).toHaveLength(6);
-    expect(routes.every(route => route.hosts === undefined)).toBe(true);
-    expect(routes.every(route => JSON.stringify(route.vars) === JSON.stringify([
-      ["http_host", "==", "127.0.0.1:43123"],
-    ]))).toBe(true);
+    expect(routes.every((route) => route.hosts === undefined)).toBe(true);
+    expect(
+      routes.every((route) => JSON.stringify(route.vars) === JSON.stringify([["http_host", "==", "127.0.0.1:43123"]])),
+    ).toBe(true);
   });
 
   it("renders prod IAM SSO hosts and injects entry network enum values", async () => {
@@ -233,17 +261,11 @@ describe("apisix manifest validation", () => {
 
     expect(validateManifest(manifest)).toEqual([]);
     expectRootRedirectToSsoLogin(manifest);
-    expectSsoRoutesClassifyEntryNetwork(manifest, { hosts: [
-      "iam.example.com",
-      "iam.internal.example.com",
-    ] });
+    expectSsoRoutesClassifyEntryNetwork(manifest, { hosts: ["iam.example.com", "iam.internal.example.com"] });
   });
 
   it("keeps token exchange outside browser CORS while authorize and callback retain it", async () => {
-    const manifests = await Promise.all([
-      loadManifest("dev:iam"),
-      loadManifest("prod:iam"),
-    ]);
+    const manifests = await Promise.all([loadManifest("dev:iam"), loadManifest("prod:iam")]);
 
     for (const manifest of manifests) {
       expectTokenExchangeToExcludeBrowserCors(manifest);
@@ -264,55 +286,58 @@ describe("apisix manifest validation", () => {
   });
 
   it("materializes local keys into dot ids, references, labels, and terminal routes", async () => {
-    const manifest = await loadManifest("test:iam", await createManifestFile({
-      service: {
-        labels: {
-          team: "platform",
+    const manifest = await loadManifest(
+      "test:iam",
+      await createManifestFile({
+        service: {
+          labels: {
+            team: "platform",
+          },
         },
-      },
-      upstreams: [
-        sourceUpstream({
-          key: "api",
-          labels: {
-            tier: "backend",
-          },
-        }),
-      ],
-      plugin_configs: [
-        sourcePluginConfig({
-          key: "api-plugin",
-          labels: {
-            template: "api-plugin",
-          },
-        }),
-      ],
-      routes: [
-        sourceRoute({
-          key: "api",
-          plugin_config: "api-plugin",
-        }),
-        sourceRoute({
-          key: "redirect",
-          upstream: undefined,
-          terminal: true,
-          plugins: {
-            "request-id": {
-              header_name: "X-Request-Id",
-              include_in_response: true,
+        upstreams: [
+          sourceUpstream({
+            key: "api",
+            labels: {
+              tier: "backend",
             },
-            "opentelemetry": {
-              sampler: {
-                name: "always_on",
+          }),
+        ],
+        plugin_configs: [
+          sourcePluginConfig({
+            key: "api-plugin",
+            labels: {
+              template: "api-plugin",
+            },
+          }),
+        ],
+        routes: [
+          sourceRoute({
+            key: "api",
+            plugin_config: "api-plugin",
+          }),
+          sourceRoute({
+            key: "redirect",
+            upstream: undefined,
+            terminal: true,
+            plugins: {
+              "request-id": {
+                header_name: "X-Request-Id",
+                include_in_response: true,
+              },
+              opentelemetry: {
+                sampler: {
+                  name: "always_on",
+                },
+              },
+              redirect: {
+                uri: "/login",
+                ret_code: 302,
               },
             },
-            "redirect": {
-              uri: "/login",
-              ret_code: 302,
-            },
-          },
-        }),
-      ],
-    }));
+          }),
+        ],
+      }),
+    );
 
     expect(validateManifest(manifest)).toEqual([]);
     expect(manifest.resources.services.at(0)).toMatchObject({
@@ -357,10 +382,7 @@ describe("apisix manifest validation", () => {
   });
 
   it("forwards only apikey to tender internal authz routes", async () => {
-    const manifests = await Promise.all([
-      loadManifest("dev:tender"),
-      loadManifest("prod:tender"),
-    ]);
+    const manifests = await Promise.all([loadManifest("dev:tender"), loadManifest("prod:tender")]);
 
     for (const manifest of manifests) {
       const requestHeaders = getTenderInternalAuthzRequestHeaders(manifest);
@@ -374,9 +396,9 @@ describe("apisix manifest validation", () => {
 
   it("preserves tender forward-auth and proxy-rewrite behavior after materialization", async () => {
     const manifest = await loadManifest("prod:tender");
-    const apiRoute = manifest.resources.routes.find(route => route.id === "tender.api.prod");
-    const publicRoute = manifest.resources.routes.find(route => route.id === "tender.public.prod");
-    const thirdpartyRoute = manifest.resources.routes.find(route => route.id === "tender.thirdparty.prod");
+    const apiRoute = manifest.resources.routes.find((route) => route.id === "tender.api.prod");
+    const publicRoute = manifest.resources.routes.find((route) => route.id === "tender.public.prod");
+    const thirdpartyRoute = manifest.resources.routes.find((route) => route.id === "tender.thirdparty.prod");
 
     expect(apiRoute).toMatchObject({
       service_id: "tender.prod",
@@ -397,270 +419,282 @@ describe("apisix manifest validation", () => {
   });
 
   it("preserves Tender and GDS special upstream overrides", async () => {
-    const [tender, gds] = await Promise.all([
-      loadManifest("prod:tender"),
-      loadManifest("prod:gds"),
-    ]);
+    const [tender, gds] = await Promise.all([loadManifest("prod:tender"), loadManifest("prod:gds")]);
 
-    expect(tender.resources.routes.find(route => route.id === "tender.frontend-external.prod")).toMatchObject({
+    expect(tender.resources.routes.find((route) => route.id === "tender.frontend-external.prod")).toMatchObject({
       service_id: "tender.prod",
       upstream_id: "tender.frontend-external.prod",
     });
-    expect(tender.resources.routes.find(route => route.id === "tender.minio.prod")).toMatchObject({
+    expect(tender.resources.routes.find((route) => route.id === "tender.minio.prod")).toMatchObject({
       service_id: "tender.prod",
       upstream_id: "tender.minio.prod",
     });
-    expect(gds.resources.routes.find(route => route.id === "gds.external-frontend.prod")).toMatchObject({
+    expect(gds.resources.routes.find((route) => route.id === "gds.external-frontend.prod")).toMatchObject({
       service_id: "gds.prod",
       upstream_id: "gds.external-frontend.prod",
     });
-    expect(gds.resources.routes.find(route => route.id === "gds.dashboard.prod")).toMatchObject({
+    expect(gds.resources.routes.find((route) => route.id === "gds.dashboard.prod")).toMatchObject({
       service_id: "gds.prod",
       upstream_id: "gds.dashboard.prod",
     });
   });
 
   it("rejects broken route references", async () => {
-    const manifest = await loadManifest("test:iam", await createManifestFile({
-      upstreams: [
-        sourceUpstream(),
-      ],
-      routes: [
-        sourceRoute({
-          upstream: "missing-upstream",
-        }),
-      ],
-    }));
+    const manifest = await loadManifest(
+      "test:iam",
+      await createManifestFile({
+        upstreams: [sourceUpstream()],
+        routes: [
+          sourceRoute({
+            upstream: "missing-upstream",
+          }),
+        ],
+      }),
+    );
 
     const issues = validateManifest(manifest);
-    expect(issues.some(issue => issue.message.includes("references missing upstream missing-upstream"))).toBe(true);
+    expect(issues.some((issue) => issue.message.includes("references missing upstream missing-upstream"))).toBe(true);
   });
 
   it("rejects missing service plugin_config references", async () => {
-    const manifest = await loadManifest("test:iam", await createManifestFile({
-      upstreams: [
-        sourceUpstream(),
-      ],
-      routes: [
-        sourceRoute({
-          plugin_config: "missing-plugin",
-        }),
-      ],
-    }));
+    const manifest = await loadManifest(
+      "test:iam",
+      await createManifestFile({
+        upstreams: [sourceUpstream()],
+        routes: [
+          sourceRoute({
+            plugin_config: "missing-plugin",
+          }),
+        ],
+      }),
+    );
 
     const issues = validateManifest(manifest);
-    expect(issues.some(issue => issue.message.includes("missing service plugin_config missing-plugin"))).toBe(true);
+    expect(issues.some((issue) => issue.message.includes("missing service plugin_config missing-plugin"))).toBe(true);
   });
 
   it("rejects duplicate and invalid source keys", async () => {
-    const manifest = await loadManifest("test:iam", await createManifestFile({
-      upstreams: [
-        sourceUpstream({ key: "api" }),
-        sourceUpstream({ key: "api" }),
-      ],
-      routes: [
-        sourceRoute({ key: "Route.A" }),
-      ],
-    }));
+    const manifest = await loadManifest(
+      "test:iam",
+      await createManifestFile({
+        upstreams: [sourceUpstream({ key: "api" }), sourceUpstream({ key: "api" })],
+        routes: [sourceRoute({ key: "Route.A" })],
+      }),
+    );
 
     const issues = validateManifest(manifest);
-    expect(issues.some(issue => issue.message.includes("duplicate upstreams key api"))).toBe(true);
-    expect(issues.some(issue => issue.message.includes("key Route.A must be a kebab-case segment"))).toBe(true);
+    expect(issues.some((issue) => issue.message.includes("duplicate upstreams key api"))).toBe(true);
+    expect(issues.some((issue) => issue.message.includes("key Route.A must be a kebab-case segment"))).toBe(true);
   });
 
   it("rejects generated source fields and reserved label overrides", async () => {
-    const manifest = await loadManifest("test:iam", await createManifestFile({
-      service: {
-        id: "manual-service-id",
-      },
-      upstreams: [
-        sourceUpstream({
-          name: "manual-upstream-name",
-          labels: {
-            managed_by: "someone-else",
-          },
-        }),
-      ],
-      routes: [
-        sourceRoute({
-          service_id: "manual-service",
-        }),
-      ],
-    }));
+    const manifest = await loadManifest(
+      "test:iam",
+      await createManifestFile({
+        service: {
+          id: "manual-service-id",
+        },
+        upstreams: [
+          sourceUpstream({
+            name: "manual-upstream-name",
+            labels: {
+              managed_by: "someone-else",
+            },
+          }),
+        ],
+        routes: [
+          sourceRoute({
+            service_id: "manual-service",
+          }),
+        ],
+      }),
+    );
 
     const issues = validateManifest(manifest);
-    expect(issues.some(issue => issue.path === "service.id")).toBe(true);
-    expect(issues.some(issue => issue.path === "upstreams[0].name")).toBe(true);
-    expect(issues.some(issue => issue.path === "routes[0].service_id")).toBe(true);
-    expect(issues.some(issue => issue.path === "upstreams[0].labels.managed_by")).toBe(true);
+    expect(issues.some((issue) => issue.path === "service.id")).toBe(true);
+    expect(issues.some((issue) => issue.path === "upstreams[0].name")).toBe(true);
+    expect(issues.some((issue) => issue.path === "routes[0].service_id")).toBe(true);
+    expect(issues.some((issue) => issue.path === "upstreams[0].labels.managed_by")).toBe(true);
   });
 
   it("rejects secret-looking fields in manifests", async () => {
-    const manifest = await loadManifest("test:iam", await createManifestFile({
-      consumers: [
-        {
-          key: "internal",
-          credentials: [
-            {
-              type: "key-auth",
-              config: {
-                key: "plain-text-api-key",
+    const manifest = await loadManifest(
+      "test:iam",
+      await createManifestFile({
+        consumers: [
+          {
+            key: "internal",
+            credentials: [
+              {
+                type: "key-auth",
+                config: {
+                  key: "plain-text-api-key",
+                },
               },
-            },
-          ],
-        },
-      ],
-    }));
+            ],
+          },
+        ],
+      }),
+    );
 
     const issues = validateManifest(manifest);
-    expect(issues.some(issue => issue.path.includes(".credentials[0].config.key"))).toBe(true);
+    expect(issues.some((issue) => issue.path.includes(".credentials[0].config.key"))).toBe(true);
   });
 
   it("accepts APISIX limit-req variable key selectors", async () => {
-    const manifest = await loadManifest("test:iam", await createManifestFile({
-      plugin_configs: [
-        sourcePluginConfig({
-          key: "api-limit",
-          plugins: {
-            "limit-req": {
-              rate: 5,
-              burst: 0,
-              rejected_code: 429,
-              key_type: "var",
-              key: "remote_addr",
-              policy: "local",
+    const manifest = await loadManifest(
+      "test:iam",
+      await createManifestFile({
+        plugin_configs: [
+          sourcePluginConfig({
+            key: "api-limit",
+            plugins: {
+              "limit-req": {
+                rate: 5,
+                burst: 0,
+                rejected_code: 429,
+                key_type: "var",
+                key: "remote_addr",
+                policy: "local",
+              },
             },
-          },
-        }),
-      ],
-    }));
+          }),
+        ],
+      }),
+    );
 
     const issues = validateManifest(manifest);
-    expect(issues.some(issue => issue.path.includes(".plugins.limit-req.key"))).toBe(false);
+    expect(issues.some((issue) => issue.path.includes(".plugins.limit-req.key"))).toBe(false);
   });
 
   it("rejects rendered real-ip trusted_addresses that trust every source", async () => {
-    const manifest = await loadManifest("test:iam", await createManifestFile({
-      plugin_configs: [
-        sourcePluginConfig({
-          key: "api-real-ip",
-          plugins: {
-            "real-ip": {
-              source: "http_x_real_ip",
-              trusted_addresses: ["0.0.0.0/0"],
-              recursive: true,
+    const manifest = await loadManifest(
+      "test:iam",
+      await createManifestFile({
+        plugin_configs: [
+          sourcePluginConfig({
+            key: "api-real-ip",
+            plugins: {
+              "real-ip": {
+                source: "http_x_real_ip",
+                trusted_addresses: ["0.0.0.0/0"],
+                recursive: true,
+              },
             },
-          },
-        }),
-      ],
-    }));
+          }),
+        ],
+      }),
+    );
 
     const issues = validateManifest(manifest);
-    expect(issues.some(issue => issue.message.includes("must not trust all source addresses"))).toBe(true);
+    expect(issues.some((issue) => issue.message.includes("must not trust all source addresses"))).toBe(true);
   });
 
   it("allows unresolved real-ip trusted_addresses placeholders", async () => {
-    const manifest = await loadManifest("test:iam", await createManifestFile({
-      plugin_configs: [
-        sourcePluginConfig({
-          key: "api-real-ip",
-          plugins: {
-            "request-id": {
-              header_name: "X-Request-Id",
-              include_in_response: true,
+    const manifest = await loadManifest(
+      "test:iam",
+      await createManifestFile({
+        plugin_configs: [
+          sourcePluginConfig({
+            key: "api-real-ip",
+            plugins: {
+              "request-id": {
+                header_name: "X-Request-Id",
+                include_in_response: true,
+              },
+              "real-ip": {
+                source: "http_x_real_ip",
+                trusted_addresses: ["${TENCENT_NGINX_TRUSTED_CIDR}"],
+                recursive: true,
+              },
             },
-            "real-ip": {
-              source: "http_x_real_ip",
-              trusted_addresses: ["${TENCENT_NGINX_TRUSTED_CIDR}"],
-              recursive: true,
-            },
-          },
-        }),
-      ],
-    }));
+          }),
+        ],
+      }),
+    );
 
     expect(validateManifest(manifest)).toEqual([]);
   });
 
   it("rejects IAM routes without request-id", async () => {
-    const manifest = await loadManifest("test:iam", await createManifestFile({
-      upstreams: [
-        sourceUpstream(),
-      ],
-      routes: [
-        sourceRoute(),
-      ],
-    }));
+    const manifest = await loadManifest(
+      "test:iam",
+      await createManifestFile({
+        upstreams: [sourceUpstream()],
+        routes: [sourceRoute()],
+      }),
+    );
 
     const issues = validateManifest(manifest);
-    expect(issues.some(issue => issue.message.includes("must enable request-id"))).toBe(true);
+    expect(issues.some((issue) => issue.message.includes("must enable request-id"))).toBe(true);
   });
 
   it("rejects IAM routes without opentelemetry", async () => {
-    const manifest = await loadManifest("test:iam", await createManifestFile({
-      upstreams: [
-        sourceUpstream(),
-      ],
-      routes: [
-        sourceRoute({
-          plugins: {
-            "request-id": {
-              header_name: "X-Request-Id",
-              include_in_response: true,
+    const manifest = await loadManifest(
+      "test:iam",
+      await createManifestFile({
+        upstreams: [sourceUpstream()],
+        routes: [
+          sourceRoute({
+            plugins: {
+              "request-id": {
+                header_name: "X-Request-Id",
+                include_in_response: true,
+              },
             },
-          },
-        }),
-      ],
-    }));
+          }),
+        ],
+      }),
+    );
 
     const issues = validateManifest(manifest);
-    expect(issues.some(issue => issue.message.includes("must enable opentelemetry"))).toBe(true);
+    expect(issues.some((issue) => issue.message.includes("must enable opentelemetry"))).toBe(true);
   });
 
   it("rejects IAM manifests without opentelemetry plugin metadata", async () => {
-    const manifest = await loadManifest("test:iam", await createManifestFile({
-      plugin_metadata: [],
-      upstreams: [
-        sourceUpstream(),
-      ],
-      plugin_configs: [
-        sourcePluginConfig(),
-      ],
-      routes: [
-        sourceRoute({
-          plugin_config: "api-plugin",
-        }),
-      ],
-    }));
+    const manifest = await loadManifest(
+      "test:iam",
+      await createManifestFile({
+        plugin_metadata: [],
+        upstreams: [sourceUpstream()],
+        plugin_configs: [sourcePluginConfig()],
+        routes: [
+          sourceRoute({
+            plugin_config: "api-plugin",
+          }),
+        ],
+      }),
+    );
 
     const issues = validateManifest(manifest);
-    expect(issues.some(issue => issue.message.includes("must configure opentelemetry plugin_metadata"))).toBe(true);
+    expect(issues.some((issue) => issue.message.includes("must configure opentelemetry plugin_metadata"))).toBe(true);
   });
 
   it("rejects IAM Loki/http/file logger plugins", async () => {
-    const manifest = await loadManifest("test:iam", await createManifestFile({
-      upstreams: [
-        sourceUpstream(),
-      ],
-      plugin_configs: [
-        sourcePluginConfig({
-          key: "api-logger",
-          plugins: {
-            "request-id": { header_name: "X-Request-Id", include_in_response: true },
-            "opentelemetry": { sampler: { name: "always_on" } },
-            "loki-logger": { endpoint_addr: "http://loki:3100" },
-          },
-        }),
-      ],
-      routes: [
-        sourceRoute({
-          plugin_config: "api-logger",
-        }),
-      ],
-    }));
+    const manifest = await loadManifest(
+      "test:iam",
+      await createManifestFile({
+        upstreams: [sourceUpstream()],
+        plugin_configs: [
+          sourcePluginConfig({
+            key: "api-logger",
+            plugins: {
+              "request-id": { header_name: "X-Request-Id", include_in_response: true },
+              opentelemetry: { sampler: { name: "always_on" } },
+              "loki-logger": { endpoint_addr: "http://loki:3100" },
+            },
+          }),
+        ],
+        routes: [
+          sourceRoute({
+            plugin_config: "api-logger",
+          }),
+        ],
+      }),
+    );
 
     const issues = validateManifest(manifest);
-    expect(issues.some(issue => issue.message.includes("loki-logger must not be used"))).toBe(true);
+    expect(issues.some((issue) => issue.message.includes("loki-logger must not be used"))).toBe(true);
   });
 
   it("configures APISIX JSON stdout access logs without sensitive fields", async () => {
@@ -702,21 +736,25 @@ describe("apisix manifest validation", () => {
   });
 
   it("renders environment placeholders after parsing manifest YAML", async () => {
-    const manifest = await loadManifest("test:iam", await createManifestFile({
-      upstreams: [
-        sourceUpstream({
-          nodes: {
-            "${IAM_API_HOST}:${IAM_API_PORT}": 1,
-          },
-        }),
-      ],
-    }), {
-      renderEnv: true,
-      env: {
-        IAM_API_HOST: "api.internal",
-        IAM_API_PORT: "30000",
+    const manifest = await loadManifest(
+      "test:iam",
+      await createManifestFile({
+        upstreams: [
+          sourceUpstream({
+            nodes: {
+              "${IAM_API_HOST}:${IAM_API_PORT}": 1,
+            },
+          }),
+        ],
+      }),
+      {
+        renderEnv: true,
+        env: {
+          IAM_API_HOST: "api.internal",
+          IAM_API_PORT: "30000",
+        },
       },
-    });
+    );
 
     expect(manifest.resources.upstreams.at(0)?.nodes).toEqual({
       "api.internal:30000": 1,
@@ -724,7 +762,8 @@ describe("apisix manifest validation", () => {
   });
 
   it("rejects missing environment placeholders when rendering is enabled", () => {
-    expect(() => renderEnvPlaceholders("host: ${MISSING_HOST}", {}, "manifest.yaml"))
-      .toThrow("manifest.yaml references missing environment variable MISSING_HOST");
+    expect(() => renderEnvPlaceholders("host: ${MISSING_HOST}", {}, "manifest.yaml")).toThrow(
+      "manifest.yaml references missing environment variable MISSING_HOST",
+    );
   });
 });

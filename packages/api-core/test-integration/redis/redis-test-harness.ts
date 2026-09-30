@@ -1,20 +1,14 @@
-import type { LoginRestriction } from "../../src/login-restriction";
-import type {
-  SubjectAccessBarrier,
-  SubjectAccessBootstrap,
-} from "../../src/subject-access";
-import type { SubjectAccessAtomicStore } from "../../src/subject-access/storage/store";
 import { randomUUID } from "node:crypto";
 import Redis from "ioredis";
-import {
-  createLoginRestriction,
-  createRedisLoginRestrictionStore,
-} from "../../src/login-restriction";
+import type { LoginRestriction } from "../../src/login-restriction";
+import { createLoginRestriction, createRedisLoginRestrictionStore } from "../../src/login-restriction";
+import type { SubjectAccessBarrier, SubjectAccessBootstrap } from "../../src/subject-access";
 import {
   createRedisSubjectAccessStore,
   createSubjectAccessBarrier,
   createSubjectAccessBootstrap,
 } from "../../src/subject-access";
+import type { SubjectAccessAtomicStore } from "../../src/subject-access/storage/store";
 
 const TEST_REDIS_URL_ENV = "IAM_API_CORE_TEST_REDIS_URL";
 const OBSERVER_CLOCK_SKEW_MS = 24 * 60 * 60 * 1000;
@@ -56,21 +50,10 @@ export interface SubjectAccessRedisTestScope {
     | "prepareRepair"
     | "rescheduleRepairSubject"
   >;
-  readonly seedRepairIndex: (
-    subjectIdentifiers: readonly string[],
-    score?: number,
-  ) => Promise<void>;
-  readonly seedRepairAgeIndex: (
-    subjectIdentifiers: readonly string[],
-    score?: number,
-  ) => Promise<void>;
-  readonly removeRepairAgeEntry: (
-    subjectIdentifier: string,
-  ) => Promise<void>;
-  readonly seedRecord: (
-    subjectIdentifier: string,
-    serializedRecord: string,
-  ) => Promise<void>;
+  readonly seedRepairIndex: (subjectIdentifiers: readonly string[], score?: number) => Promise<void>;
+  readonly seedRepairAgeIndex: (subjectIdentifiers: readonly string[], score?: number) => Promise<void>;
+  readonly removeRepairAgeEntry: (subjectIdentifier: string) => Promise<void>;
+  readonly seedRecord: (subjectIdentifier: string, serializedRecord: string) => Promise<void>;
   readonly close: () => Promise<void>;
 }
 
@@ -80,8 +63,7 @@ export async function createRedisTestHarness(): Promise<RedisTestHarness> {
 
   try {
     await connectRedis(cleanupRedis);
-  }
-  catch (error) {
+  } catch (error) {
     cleanupRedis.disconnect();
     throw error;
   }
@@ -93,12 +75,8 @@ export async function createRedisTestHarness(): Promise<RedisTestHarness> {
       const observerRedis = createRedisClient(redisUrl);
 
       try {
-        await Promise.all([
-          connectRedis(writerRedis),
-          connectRedis(observerRedis),
-        ]);
-      }
-      catch (error) {
+        await Promise.all([connectRedis(writerRedis), connectRedis(observerRedis)]);
+      } catch (error) {
         writerRedis.disconnect();
         observerRedis.disconnect();
         throw error;
@@ -133,12 +111,8 @@ export async function createRedisTestHarness(): Promise<RedisTestHarness> {
       const observerRedis = createRedisClient(redisUrl);
 
       try {
-        await Promise.all([
-          connectRedis(writerRedis),
-          connectRedis(observerRedis),
-        ]);
-      }
-      catch (error) {
+        await Promise.all([connectRedis(writerRedis), connectRedis(observerRedis)]);
+      } catch (error) {
         writerRedis.disconnect();
         observerRedis.disconnect();
         throw error;
@@ -171,32 +145,24 @@ export async function createRedisTestHarness(): Promise<RedisTestHarness> {
         observer: observerClient.barrier,
         observerBacklog: observerClient.backlog,
         async seedRepairIndex(subjectIdentifiers, score = 0) {
-          if (subjectIdentifiers.length === 0)
-            return;
+          if (subjectIdentifiers.length === 0) return;
           await writerRedis.zadd(
             `${keyPrefix}idx:repair`,
-            ...subjectIdentifiers.flatMap(subject => [score, subject]),
+            ...subjectIdentifiers.flatMap((subject) => [score, subject]),
           );
         },
         async seedRepairAgeIndex(subjectIdentifiers, score = 0) {
-          if (subjectIdentifiers.length === 0)
-            return;
+          if (subjectIdentifiers.length === 0) return;
           await writerRedis.zadd(
             `${keyPrefix}idx:repair:age`,
-            ...subjectIdentifiers.flatMap(subject => [score, subject]),
+            ...subjectIdentifiers.flatMap((subject) => [score, subject]),
           );
         },
         async removeRepairAgeEntry(subjectIdentifier) {
-          await writerRedis.zrem(
-            `${keyPrefix}idx:repair:age`,
-            subjectIdentifier,
-          );
+          await writerRedis.zrem(`${keyPrefix}idx:repair:age`, subjectIdentifier);
         },
         async seedRecord(subjectIdentifier, serializedRecord) {
-          await writerRedis.set(
-            `${keyPrefix}record:${subjectIdentifier}`,
-            serializedRecord,
-          );
+          await writerRedis.set(`${keyPrefix}record:${subjectIdentifier}`, serializedRecord);
         },
         writer: writerClient.barrier,
         writerBacklog: writerClient.backlog,
@@ -216,36 +182,26 @@ function createRedisTestScopeCloser(input: {
 }) {
   let closed = false;
   return async function close() {
-    if (closed)
-      return;
+    if (closed) return;
     closed = true;
 
     const errors: unknown[] = [];
-    const closeResults = await Promise.allSettled(
-      input.clients.map(client => client.quit()),
-    );
+    const closeResults = await Promise.allSettled(input.clients.map((client) => client.quit()));
     for (const result of closeResults) {
-      if (result.status === "rejected")
-        errors.push(result.reason);
+      if (result.status === "rejected") errors.push(result.reason);
     }
 
     try {
       await deleteOwnedKeys(input.cleanupRedis, input.keyPrefix);
-    }
-    catch (error) {
+    } catch (error) {
       errors.push(error);
     }
 
-    if (errors.length > 0)
-      throw new AggregateError(errors, input.errorMessage);
+    if (errors.length > 0) throw new AggregateError(errors, input.errorMessage);
   };
 }
 
-function createSubjectAccessClient(input: {
-  keyPrefix: string;
-  redis: Redis;
-  transitionIds: readonly string[];
-}) {
+function createSubjectAccessClient(input: { keyPrefix: string; redis: Redis; transitionIds: readonly string[] }) {
   let transitionIdIndex = 0;
   const backlog = createRedisSubjectAccessStore({
     keyPrefix: input.keyPrefix,
@@ -256,8 +212,7 @@ function createSubjectAccessClient(input: {
     random: {
       uuid() {
         const transitionId = input.transitionIds[transitionIdIndex];
-        if (transitionId === undefined)
-          throw new Error("Subject Access Redis test transition ID fixture exhausted");
+        if (transitionId === undefined) throw new Error("Subject Access Redis test transition ID fixture exhausted");
         transitionIdIndex += 1;
         return transitionId;
       },
@@ -316,25 +271,17 @@ function requireDedicatedRedisTestUrl() {
 async function deleteOwnedKeys(redis: Redis, keyPrefix: string) {
   let cursor = "0";
   do {
-    const [nextCursor, keys] = await redis.scan(
-      cursor,
-      "MATCH",
-      `${keyPrefix}*`,
-      "COUNT",
-      100,
-    );
+    const [nextCursor, keys] = await redis.scan(cursor, "MATCH", `${keyPrefix}*`, "COUNT", 100);
     cursor = nextCursor;
-    if (keys.length > 0)
-      await redis.unlink(...keys);
+    if (keys.length > 0) await redis.unlink(...keys);
   } while (cursor !== "0");
 }
 
 export async function waitForRedisCondition(observe: () => Promise<boolean>, message: string) {
   const deadline = performance.now() + 4_000;
   while (performance.now() < deadline) {
-    if (await observe())
-      return;
-    await new Promise(resolve => setTimeout(resolve, 5));
+    if (await observe()) return;
+    await new Promise((resolve) => setTimeout(resolve, 5));
   }
   throw new Error(message);
 }

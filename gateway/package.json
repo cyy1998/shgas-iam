@@ -8,22 +8,22 @@
     "validate": "bun src/cli.ts validate",
     "diff": "bun src/cli.ts diff",
     "apply": "bun src/cli.ts apply",
-    "lint": "eslint src test-integration eslint.config.js config manifests",
-    "lint:fix": "eslint --fix src test-integration eslint.config.js config manifests",
+    "lint": "node ../scripts/run-quality.mjs lint --workspace gateway",
+    "lint:fix": "node ../scripts/run-quality.mjs lint-fix --workspace gateway",
     "test": "pnpm test:unit",
     "test:unit": "bun test --max-concurrency=2 src",
     "test:integration:component": "bun test --max-concurrency=2 test-integration/component",
-    "typecheck": "pnpm exec tsc --noEmit"
+    "typecheck": "pnpm exec tsc --noEmit",
+    "format": "node ../scripts/run-quality.mjs format --workspace gateway",
+    "format:check": "node ../scripts/run-quality.mjs format-check --workspace gateway"
   },
   "dependencies": {
     "commander": "^15.0.0",
     "yaml": "^2.9.1"
   },
   "devDependencies": {
-    "@iam/eslint-config": "workspace:*",
     "@types/bun": "latest",
     "@typescript/native": "npm:typescript@7.0.2",
-    "eslint": "^10.7.0",
     "typescript": "npm:@typescript/typescript6@6.0.2"
   }
 }

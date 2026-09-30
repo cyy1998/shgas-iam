@@ -16,7 +16,9 @@ export const GenericClientRecordSchema = DbClientSchema.pick({
 });
 export const GenericClientRuntimeDtoSchema = GenericClientRecordSchema.extend({
   extAttributes: z.object({}).strict(),
-}).strict().openapi("ClientRuntime");
+})
+  .strict()
+  .openapi("ClientRuntime");
 export function toGenericClientRuntimeDto(input: unknown) {
   return GenericClientRuntimeDtoSchema.parse({ ...GenericClientRecordSchema.parse(input), extAttributes: {} });
 }

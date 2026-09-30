@@ -1,5 +1,5 @@
-import { createLoginWithWechatUseCase } from "@api/use-cases/authentication/login-with-wechat/login-with-wechat.use-case";
 import { expect, mock, test } from "bun:test";
+import { createLoginWithWechatUseCase } from "@api/use-cases/authentication/login-with-wechat/login-with-wechat.use-case";
 
 const subjectIdentifier = "00000000-0000-4000-8000-000000001001";
 
@@ -48,30 +48,24 @@ test("completes a cache miss in Processing exchange session audit and final-cach
     wechat: { getWxUserId },
   } as any);
 
-  await expect(useCase.execute(
-    { code: "wechat-code" },
-    {
-      requestContext: {
-        sourceApp: "iam",
-        requestId: "req-wechat",
-        traceId: null,
-        ip: "203.0.113.14",
-        userAgent: longUserAgent,
-        route: null,
-        method: null,
+  await expect(
+    useCase.execute(
+      { code: "wechat-code" },
+      {
+        requestContext: {
+          sourceApp: "iam",
+          requestId: "req-wechat",
+          traceId: null,
+          ip: "203.0.113.14",
+          userAgent: longUserAgent,
+          route: null,
+          method: null,
+        },
       },
-    },
-  )).resolves.toEqual({ token: "wechat-session", isMobileSet: true });
+    ),
+  ).resolves.toEqual({ token: "wechat-session", isMobileSet: true });
 
-  expect(events).toEqual([
-    "cache-get",
-    "processing",
-    "wechat",
-    "active-user",
-    "session",
-    "audit",
-    "final-cache",
-  ]);
+  expect(events).toEqual(["cache-get", "processing", "wechat", "active-user", "session", "audit", "final-cache"]);
   expect(set).toHaveBeenNthCalledWith(1, "wx-code:wechat-code", "Processing", "EX", 600);
   expect(set).toHaveBeenNthCalledWith(2, "wx-code:wechat-code", JSON.stringify({ userId: 1001 }), "EX", 600);
   expect(createPrincipalSession).toHaveBeenCalledWith(subjectIdentifier, {
@@ -81,11 +75,13 @@ test("completes a cache miss in Processing exchange session audit and final-cach
       userAgent: longUserAgent.slice(0, 512),
     },
   });
-  expect(recordAuditLog).toHaveBeenCalledWith(expect.objectContaining({
-    action: "auth.login.wechat",
-    requestId: "req-wechat",
-    targetId: 1001,
-  }));
+  expect(recordAuditLog).toHaveBeenCalledWith(
+    expect.objectContaining({
+      action: "auth.login.wechat",
+      requestId: "req-wechat",
+      targetId: 1001,
+    }),
+  );
 });
 
 test("reuses a cached user id after one delay without exchange or duplicate audit", async () => {
@@ -112,17 +108,22 @@ test("reuses a cached user id after one delay without exchange or duplicate audi
     wechat: { getWxUserId },
   } as any);
 
-  await expect(useCase.execute({ code: "wechat-code" }, {
-    requestContext: {
-      sourceApp: "iam",
-      requestId: "req-cached-wechat",
-      traceId: null,
-      ip: "203.0.113.15",
-      userAgent: "cached-wechat-browser",
-      route: "/sso/third-party/wx",
-      method: "POST",
-    },
-  })).resolves.toEqual({
+  await expect(
+    useCase.execute(
+      { code: "wechat-code" },
+      {
+        requestContext: {
+          sourceApp: "iam",
+          requestId: "req-cached-wechat",
+          traceId: null,
+          ip: "203.0.113.15",
+          userAgent: "cached-wechat-browser",
+          route: "/sso/third-party/wx",
+          method: "POST",
+        },
+      },
+    ),
+  ).resolves.toEqual({
     token: "cached-session",
     isMobileSet: false,
   });
@@ -203,7 +204,11 @@ test("preserves the Processing sentinel when the first-pass exchange fails", asy
       getActiveUserByWxId: mock(async () => ({ id: 1001 })),
       getUserDetailById: mock(async () => ({ id: 1001, mobile: null })),
     },
-    wechat: { getWxUserId: mock(async () => { throw new Error("WeChat unavailable"); }) },
+    wechat: {
+      getWxUserId: mock(async () => {
+        throw new Error("WeChat unavailable");
+      }),
+    },
   } as any);
 
   await expect(useCase.execute({ code: "failed-code" })).rejects.toThrow("WeChat unavailable");

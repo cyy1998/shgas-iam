@@ -8,9 +8,7 @@ describe("apisix sync JSON output", () => {
       creates: [],
       updates: [],
       deletes: [],
-      ignored: [
-        { kind: "routes", id: "route-a", reason: "dynamic", remote: repoObject({ id: "route-a" }) },
-      ],
+      ignored: [{ kind: "routes", id: "route-a", reason: "dynamic", remote: repoObject({ id: "route-a" }) }],
     });
 
     expect(output).toEqual({
@@ -31,9 +29,7 @@ describe("apisix sync JSON output", () => {
       },
       dryRun: false,
       prune: true,
-      applied: [
-        { kind: "routes", id: "route-a", action: "create", desired: repoObject({ id: "route-a" }) },
-      ],
+      applied: [{ kind: "routes", id: "route-a", action: "create", desired: repoObject({ id: "route-a" }) }],
     });
 
     expect(output.applied).toEqual([{ kind: "routes", id: "route-a", action: "create" }]);

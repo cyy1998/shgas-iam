@@ -1,16 +1,11 @@
 import type { DbClient } from "@iam/db";
-import type {
-  ClientCreateDto,
-  ClientInputDto,
-  ClientPaginationQueryDto,
-  ClientUpdateDto,
-} from "./client.type";
 import { extractPostgresError } from "@iam/db/postgres-error";
 import { compactUpdate, firstRow, ilikeContainsIf, inArrayIf } from "@iam/db/query-utils";
 import { clients } from "@iam/db/schema";
 import { ClientCodeExistsError } from "@iam/domain/client";
 import { and, count, eq, isNotNull, or, sql } from "drizzle-orm";
 import { toAdminClientRecord } from "./client.schema";
+import type { ClientCreateDto, ClientInputDto, ClientPaginationQueryDto, ClientUpdateDto } from "./client.type";
 
 const columns = {
   id: clients.id,
@@ -42,13 +37,11 @@ export function createClientRepository(db: DbClient) {
           .returning(columns);
         const row = firstRow(rows);
         return row === null ? null : toAdminClientRecord(row);
-      }
-      catch (error) {
+      } catch (error) {
         const detail = extractPostgresError(error);
         if (
-          detail?.code === "23505"
-          && (detail.constraint === "client_client_code_unique"
-            || detail.constraint === "client_client_code_key")
+          detail?.code === "23505" &&
+          (detail.constraint === "client_client_code_unique" || detail.constraint === "client_client_code_key")
         ) {
           throw new ClientCodeExistsError();
         }
@@ -146,19 +139,14 @@ function clientsSearchWhere(dto: ClientPaginationQueryDto) {
       ? undefined
       : exactConditions.ssoProtocols.length === 0
         ? sql`false`
-        : or(
-            ...exactConditions.ssoProtocols.map(
-              protocol => sql`${clients.ssoConfig}->>'protocol' = ${protocol}`,
-            ),
-          ),
+        : or(...exactConditions.ssoProtocols.map((protocol) => sql`${clients.ssoConfig}->>'protocol' = ${protocol}`)),
     eq(clients.isDelete, false),
   );
 }
 
 function toClientStorageUpdate(data: ClientUpdateDto | Omit<ClientInputDto, "clientCode" | "id">) {
   const { extAttributes, ...update } = compactUpdate(data);
-  if (extAttributes === undefined)
-    return update;
+  if (extAttributes === undefined) return update;
   return {
     ...update,
     extAttributes: sql`${JSON.stringify(extAttributes)}::jsonb`,

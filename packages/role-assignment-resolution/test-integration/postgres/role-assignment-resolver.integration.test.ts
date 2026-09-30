@@ -1,6 +1,4 @@
-import type { DbClient } from "@iam/db";
-import type { RoleAssignmentResolver } from "../../src/index.ts";
-import type { PostgresTestHarness } from "./postgres-harness.ts";
+import { afterAll, beforeAll, beforeEach, describe, expect, test } from "bun:test";
 import {
   EmploymentStatus,
   OrganizationLevel,
@@ -10,17 +8,13 @@ import {
   RoleAssignmentTargetType,
   RoleStatus,
 } from "@iam/contracts";
-import {
-  employments,
-  organizationClosures,
-  organizations,
-  positions,
-  roles,
-} from "@iam/db/schema";
+import type { DbClient } from "@iam/db";
+import { employments, organizationClosures, organizations, positions, roles } from "@iam/db/schema";
 import { roleAssignments } from "@iam/db/schema/role-assignments";
-import { afterAll, beforeAll, beforeEach, describe, expect, test } from "bun:test";
 import { eq, inArray } from "drizzle-orm";
+import type { RoleAssignmentResolver } from "../../src/index.ts";
 import { createRoleAssignmentResolver } from "../../src/index.ts";
+import type { PostgresTestHarness } from "./postgres-harness.ts";
 import { createPostgresTestHarness } from "./postgres-harness.ts";
 
 let harness: PostgresTestHarness | undefined;
@@ -43,35 +37,42 @@ describe("resolveEffectiveRoles", () => {
   test("merges every assignment source into complete, deduplicated, sorted employment results", async () => {
     await seedActiveEmploymentGraph(harness!.db);
     await seedUnassignedEmployment(harness!.db);
-    await harness!.db.insert(roles).values([
-      activeRole({ id: 200, roleCode: "zeta", clientId: 1 }),
-      activeRole({ id: 201, roleCode: "alpha", clientId: 1 }),
-      activeRole({ id: 202, roleCode: "other-client", clientId: 2 }),
-      activeRole({ id: 203, roleCode: "no-inheritance", clientId: 1 }),
-      activeRole({ id: 204, roleCode: "direct-only", clientId: 1 }),
-      activeRole({ id: 205, roleCode: "inherited-only", clientId: 1 }),
-    ]);
-    await harness!.db.insert(roleAssignments).values([
-      assignment(200, RoleAssignmentTargetType.Employment, 100),
-      assignment(200, RoleAssignmentTargetType.Position, 20),
-      assignment(200, RoleAssignmentTargetType.Organization, 10, true),
-      assignment(201, RoleAssignmentTargetType.Organization, 12),
-      assignment(202, RoleAssignmentTargetType.Position, 20),
-      assignment(203, RoleAssignmentTargetType.Organization, 10),
-      assignment(204, RoleAssignmentTargetType.Employment, 100),
-      assignment(205, RoleAssignmentTargetType.Organization, 10, true),
-    ]);
+    await harness!.db
+      .insert(roles)
+      .values([
+        activeRole({ id: 200, roleCode: "zeta", clientId: 1 }),
+        activeRole({ id: 201, roleCode: "alpha", clientId: 1 }),
+        activeRole({ id: 202, roleCode: "other-client", clientId: 2 }),
+        activeRole({ id: 203, roleCode: "no-inheritance", clientId: 1 }),
+        activeRole({ id: 204, roleCode: "direct-only", clientId: 1 }),
+        activeRole({ id: 205, roleCode: "inherited-only", clientId: 1 }),
+      ]);
+    await harness!.db
+      .insert(roleAssignments)
+      .values([
+        assignment(200, RoleAssignmentTargetType.Employment, 100),
+        assignment(200, RoleAssignmentTargetType.Position, 20),
+        assignment(200, RoleAssignmentTargetType.Organization, 10, true),
+        assignment(201, RoleAssignmentTargetType.Organization, 12),
+        assignment(202, RoleAssignmentTargetType.Position, 20),
+        assignment(203, RoleAssignmentTargetType.Organization, 10),
+        assignment(204, RoleAssignmentTargetType.Employment, 100),
+        assignment(205, RoleAssignmentTargetType.Organization, 10, true),
+      ]);
 
     const result = await resolver.resolveEffectiveRoles({ employmentIds: [100, 100, 105, 999] });
 
     expect([...result.entries()]).toEqual([
-      [100, [
-        { id: 201, roleCode: "alpha" },
-        { id: 204, roleCode: "direct-only" },
-        { id: 205, roleCode: "inherited-only" },
-        { id: 202, roleCode: "other-client" },
-        { id: 200, roleCode: "zeta" },
-      ]],
+      [
+        100,
+        [
+          { id: 201, roleCode: "alpha" },
+          { id: 204, roleCode: "direct-only" },
+          { id: 205, roleCode: "inherited-only" },
+          { id: 202, roleCode: "other-client" },
+          { id: 200, roleCode: "zeta" },
+        ],
+      ],
       [105, []],
       [999, []],
     ]);
@@ -79,27 +80,34 @@ describe("resolveEffectiveRoles", () => {
 
   test("limits Effective Roles to the requested client when clientId is present", async () => {
     await seedActiveEmploymentGraph(harness!.db);
-    await harness!.db.insert(roles).values([
-      activeRole({ id: 200, roleCode: "client-one-zeta", clientId: 1 }),
-      activeRole({ id: 201, roleCode: "client-one-alpha", clientId: 1 }),
-      activeRole({ id: 202, roleCode: "client-two", clientId: 2 }),
-    ]);
-    await harness!.db.insert(roleAssignments).values([
-      assignment(200, RoleAssignmentTargetType.Employment, 100),
-      assignment(201, RoleAssignmentTargetType.Position, 20),
-      assignment(202, RoleAssignmentTargetType.Organization, 10, true),
-    ]);
+    await harness!.db
+      .insert(roles)
+      .values([
+        activeRole({ id: 200, roleCode: "client-one-zeta", clientId: 1 }),
+        activeRole({ id: 201, roleCode: "client-one-alpha", clientId: 1 }),
+        activeRole({ id: 202, roleCode: "client-two", clientId: 2 }),
+      ]);
+    await harness!.db
+      .insert(roleAssignments)
+      .values([
+        assignment(200, RoleAssignmentTargetType.Employment, 100),
+        assignment(201, RoleAssignmentTargetType.Position, 20),
+        assignment(202, RoleAssignmentTargetType.Organization, 10, true),
+      ]);
 
     const clientOne = await resolver.resolveEffectiveRoles({ employmentIds: [100], clientId: 1 });
     const clientTwo = await resolver.resolveEffectiveRoles({ employmentIds: [100], clientId: 2 });
 
-    expect([...clientOne.entries()]).toEqual([[100, [
-      { id: 201, roleCode: "client-one-alpha" },
-      { id: 200, roleCode: "client-one-zeta" },
-    ]]]);
-    expect([...clientTwo.entries()]).toEqual([[100, [
-      { id: 202, roleCode: "client-two" },
-    ]]]);
+    expect([...clientOne.entries()]).toEqual([
+      [
+        100,
+        [
+          { id: 201, roleCode: "client-one-alpha" },
+          { id: 200, roleCode: "client-one-zeta" },
+        ],
+      ],
+    ]);
+    expect([...clientTwo.entries()]).toEqual([[100, [{ id: 202, roleCode: "client-two" }]]]);
   });
 
   for (const source of getForwardAssignmentSources()) {
@@ -134,9 +142,7 @@ describe("resolveEffectiveRoles", () => {
     test(`position assignment excludes roles when ${invalidation.name} as the assignment target`, async () => {
       await seedActiveEmploymentGraph(harness!.db);
       await harness!.db.insert(roles).values(activeRole({ id: 200, roleCode: "effective", clientId: 1 }));
-      await harness!.db.insert(roleAssignments).values(
-        assignment(200, RoleAssignmentTargetType.Position, 20),
-      );
+      await harness!.db.insert(roleAssignments).values(assignment(200, RoleAssignmentTargetType.Position, 20));
       await invalidation.apply(harness!.db);
 
       const result = await resolver.resolveEffectiveRoles({ employmentIds: [100] });
@@ -149,9 +155,9 @@ describe("resolveEffectiveRoles", () => {
     test(`organization assignment excludes roles when ${invalidation.name}`, async () => {
       await seedActiveEmploymentGraph(harness!.db);
       await harness!.db.insert(roles).values(activeRole({ id: 200, roleCode: "effective", clientId: 1 }));
-      await harness!.db.insert(roleAssignments).values(
-        assignment(200, RoleAssignmentTargetType.Organization, 10, true),
-      );
+      await harness!.db
+        .insert(roleAssignments)
+        .values(assignment(200, RoleAssignmentTargetType.Organization, 10, true));
       await invalidation.apply(harness!.db);
 
       const result = await resolver.resolveEffectiveRoles({ employmentIds: [100] });
@@ -165,11 +171,9 @@ describe("resolveEffectiveRoles", () => {
     await harness!.db.insert(roles).values(activeRole({ id: 200, roleCode: "effective", clientId: 1 }));
     await harness!.db.insert(roleAssignments).values(assignment(200, RoleAssignmentTargetType.Employment, 100));
 
-    const single = await harness!.measureQueries(
-      () => resolver.resolveEffectiveRoles({ employmentIds: [100] }),
-    );
-    const batch = await harness!.measureQueries(
-      () => resolver.resolveEffectiveRoles({ employmentIds: [100, 101, 102, 103, 104, 105] }),
+    const single = await harness!.measureQueries(() => resolver.resolveEffectiveRoles({ employmentIds: [100] }));
+    const batch = await harness!.measureQueries(() =>
+      resolver.resolveEffectiveRoles({ employmentIds: [100, 101, 102, 103, 104, 105] }),
     );
 
     expect(batch.queryCount).toBe(single.queryCount);
@@ -235,14 +239,16 @@ describe("resolveAffectedUserIds", () => {
       status: RoleStatus.Disable,
       isDelete: true,
     });
-    await harness!.db.insert(roleAssignments).values([
-      assignment(300, RoleAssignmentTargetType.Employment, 100),
-      assignment(300, RoleAssignmentTargetType.Employment, 103),
-      assignment(300, RoleAssignmentTargetType.Employment, 104),
-      assignment(300, RoleAssignmentTargetType.Position, 21),
-      assignment(300, RoleAssignmentTargetType.Organization, 10, true),
-      assignment(300, RoleAssignmentTargetType.Organization, 11),
-    ]);
+    await harness!.db
+      .insert(roleAssignments)
+      .values([
+        assignment(300, RoleAssignmentTargetType.Employment, 100),
+        assignment(300, RoleAssignmentTargetType.Employment, 103),
+        assignment(300, RoleAssignmentTargetType.Employment, 104),
+        assignment(300, RoleAssignmentTargetType.Position, 21),
+        assignment(300, RoleAssignmentTargetType.Organization, 10, true),
+        assignment(300, RoleAssignmentTargetType.Organization, 11),
+      ]);
     await harness!.db.update(organizations).set({ status: OrganizationStatus.Disable }).where(eq(organizations.id, 12));
     await harness!.db.update(organizations).set({ isDelete: true }).where(eq(organizations.id, 10));
 
@@ -254,15 +260,11 @@ describe("resolveAffectedUserIds", () => {
   test("uses an input-size-independent number of database queries", async () => {
     await seedActiveEmploymentGraph(harness!.db);
     await harness!.db.insert(roles).values(activeRole({ id: 300, roleCode: "role", clientId: 1 }));
-    await harness!.db.insert(roleAssignments).values(
-      assignment(300, RoleAssignmentTargetType.Employment, 100),
-    );
+    await harness!.db.insert(roleAssignments).values(assignment(300, RoleAssignmentTargetType.Employment, 100));
 
-    const single = await harness!.measureQueries(
-      () => resolver.resolveAffectedUserIds({ roleIds: [300] }),
-    );
-    const batch = await harness!.measureQueries(
-      () => resolver.resolveAffectedUserIds({ roleIds: [300, 301, 302, 303, 304, 305] }),
+    const single = await harness!.measureQueries(() => resolver.resolveAffectedUserIds({ roleIds: [300] }));
+    const batch = await harness!.measureQueries(() =>
+      resolver.resolveAffectedUserIds({ roleIds: [300, 301, 302, 303, 304, 305] }),
     );
 
     expect(batch.queryCount).toBe(single.queryCount);
@@ -276,19 +278,19 @@ function getReverseAssignmentSources(): Array<{
   return [
     {
       name: "employment assignment",
-      createAssignment: roleId => assignment(roleId, RoleAssignmentTargetType.Employment, 100),
+      createAssignment: (roleId) => assignment(roleId, RoleAssignmentTargetType.Employment, 100),
     },
     {
       name: "position assignment",
-      createAssignment: roleId => assignment(roleId, RoleAssignmentTargetType.Position, 20),
+      createAssignment: (roleId) => assignment(roleId, RoleAssignmentTargetType.Position, 20),
     },
     {
       name: "exact organization assignment",
-      createAssignment: roleId => assignment(roleId, RoleAssignmentTargetType.Organization, 12),
+      createAssignment: (roleId) => assignment(roleId, RoleAssignmentTargetType.Organization, 12),
     },
     {
       name: "descendant organization assignment",
-      createAssignment: roleId => assignment(roleId, RoleAssignmentTargetType.Organization, 10, true),
+      createAssignment: (roleId) => assignment(roleId, RoleAssignmentTargetType.Organization, 10, true),
     },
   ];
 }
@@ -332,17 +334,17 @@ function getForwardAssignmentSources(): Array<{
   return [
     {
       name: "employment assignment",
-      createAssignment: roleId => assignment(roleId, RoleAssignmentTargetType.Employment, 100),
+      createAssignment: (roleId) => assignment(roleId, RoleAssignmentTargetType.Employment, 100),
       parentInvalidations: getEmploymentParentIntegrityInvalidations,
     },
     {
       name: "position assignment",
-      createAssignment: roleId => assignment(roleId, RoleAssignmentTargetType.Position, 20),
+      createAssignment: (roleId) => assignment(roleId, RoleAssignmentTargetType.Position, 20),
       parentInvalidations: getEmploymentOrganizationIntegrityInvalidations,
     },
     {
       name: "organization assignment",
-      createAssignment: roleId => assignment(roleId, RoleAssignmentTargetType.Organization, 10, true),
+      createAssignment: (roleId) => assignment(roleId, RoleAssignmentTargetType.Organization, 10, true),
       parentInvalidations: getEmploymentParentIntegrityInvalidations,
     },
   ];
@@ -384,10 +386,7 @@ function getEmploymentParentIntegrityInvalidations(): Array<{
   name: string;
   apply: (db: DbClient) => Promise<void>;
 }> {
-  return [
-    ...getEmploymentPositionIntegrityInvalidations(),
-    ...getEmploymentOrganizationIntegrityInvalidations(),
-  ];
+  return [...getEmploymentPositionIntegrityInvalidations(), ...getEmploymentOrganizationIntegrityInvalidations()];
 }
 
 function getEmploymentPositionIntegrityInvalidations(): Array<{
@@ -451,11 +450,13 @@ function getOrganizationTargetInvalidations(): Array<{
 }
 
 async function seedActiveEmploymentGraph(db: DbClient) {
-  await db.insert(organizations).values([
-    activeOrganization({ id: 10, orgCode: "root", path: "10", level: OrganizationLevel.One }),
-    activeOrganization({ id: 11, orgCode: "child", path: "10/11", level: OrganizationLevel.Two }),
-    activeOrganization({ id: 12, orgCode: "leaf", path: "10/11/12", level: OrganizationLevel.Three }),
-  ]);
+  await db
+    .insert(organizations)
+    .values([
+      activeOrganization({ id: 10, orgCode: "root", path: "10", level: OrganizationLevel.One }),
+      activeOrganization({ id: 11, orgCode: "child", path: "10/11", level: OrganizationLevel.Two }),
+      activeOrganization({ id: 12, orgCode: "leaf", path: "10/11/12", level: OrganizationLevel.Three }),
+    ]);
   await db.insert(organizationClosures).values([
     { ancestorId: 10, descendantId: 10, depth: 0 },
     { ancestorId: 11, descendantId: 11, depth: 0 },
@@ -479,9 +480,9 @@ async function seedActiveEmploymentGraph(db: DbClient) {
 }
 
 async function seedUnassignedEmployment(db: DbClient) {
-  await db.insert(organizations).values(
-    activeOrganization({ id: 13, orgCode: "isolated", path: "13", level: OrganizationLevel.One }),
-  );
+  await db
+    .insert(organizations)
+    .values(activeOrganization({ id: 13, orgCode: "isolated", path: "13", level: OrganizationLevel.One }));
   await db.insert(organizationClosures).values({ ancestorId: 13, descendantId: 13, depth: 0 });
   await db.insert(positions).values({
     id: 21,
@@ -492,12 +493,7 @@ async function seedUnassignedEmployment(db: DbClient) {
   await db.insert(employments).values({ id: 105, userId: 905, posId: 21, orgId: 13 });
 }
 
-function activeOrganization(input: {
-  id: number;
-  level: OrganizationLevel;
-  orgCode: string;
-  path: string;
-}) {
+function activeOrganization(input: { id: number; level: OrganizationLevel; orgCode: string; path: string }) {
   return {
     ...input,
     orgName: input.orgCode,

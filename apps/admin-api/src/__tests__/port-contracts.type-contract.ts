@@ -1,8 +1,5 @@
 import type { createUnifiedAdminLifecycleRevocation } from "@admin-api/composition/session/unified-lifecycle";
-import type {
-  AdminClientReaderPort,
-  AdminClientTransactionStorePort,
-} from "@admin-api/services/client/client.port";
+import type { AdminClientReaderPort, AdminClientTransactionStorePort } from "@admin-api/services/client/client.port";
 import type { ClientRepository } from "@admin-api/services/client/client.repository";
 import type {
   AdminEmploymentEffectiveRoleResolverPort,
@@ -11,22 +8,19 @@ import type {
   AdminEmploymentStorePort,
 } from "@admin-api/services/employment/employment.port";
 import type { EmploymentRepository } from "@admin-api/services/employment/employment.repository";
-import type { OrganizationResponsibilityRepository } from "@admin-api/services/organization-responsibility/organization-responsibility.repository";
 import type {
   AdminOrganizationReaderPort,
   AdminOrganizationTransactionStorePort,
 } from "@admin-api/services/organization/organization.port";
 import type { OrganizationRepository } from "@admin-api/services/organization/organization.repository";
+import type { OrganizationResponsibilityRepository } from "@admin-api/services/organization-responsibility/organization-responsibility.repository";
 import type {
   AdminPositionReaderPort,
   AdminPositionTransactionStorePort,
 } from "@admin-api/services/position/position.port";
 import type { PositionRepository } from "@admin-api/services/position/position.repository";
 import type { PrivilegeRepository } from "@admin-api/services/privilege/privilege.repository";
-import type {
-  AdminRoleReaderPort,
-  AdminRoleTransactionStorePort,
-} from "@admin-api/services/role/role.port";
+import type { AdminRoleReaderPort, AdminRoleTransactionStorePort } from "@admin-api/services/role/role.port";
 import type { RoleRepository } from "@admin-api/services/role/role.repository";
 import type {
   AdminLoginRestrictionPort,
@@ -55,9 +49,7 @@ type AdminSessionRevocationPort = ReturnType<typeof createUnifiedAdminLifecycleR
 
 type AssertAssignable<Port, _Provider extends Port> = true;
 
-type RevokeUserInput = Parameters<
-  AdminSessionUserControlPort["revokeUserSessions"]
->[0];
+type RevokeUserInput = Parameters<AdminSessionUserControlPort["revokeUserSessions"]>[0];
 // @ts-expect-error Admin user Session Revocation always requires server audit context.
 const missingAuditContext: RevokeUserInput = {
   userId: 1,
@@ -107,15 +99,9 @@ type _AdminUserTransactionStorePort = AssertAssignable<AdminUserTransactionStore
 type _ResignUserReaderPort = AssertAssignable<ResignUserReaderPort, UserRepository>;
 type _ResignUserTransactionPortsuserStore = AssertAssignable<ResignUserTransactionPorts["userStore"], UserRepository>;
 type _AdminUserEmploymentReaderPort = AssertAssignable<AdminUserEmploymentReaderPort, EmploymentRepository>;
-type _AdminUserEffectiveRoleResolverPort = AssertAssignable<
-  AdminUserEffectiveRoleResolverPort,
-  RoleAssignmentResolver
->;
+type _AdminUserEffectiveRoleResolverPort = AssertAssignable<AdminUserEffectiveRoleResolverPort, RoleAssignmentResolver>;
 type _AdminUserPrivilegeReaderPort = AssertAssignable<AdminUserPrivilegeReaderPort, PrivilegeRepository>;
 
 type _AdminLoginRestrictionPort = AssertAssignable<AdminLoginRestrictionPort, LoginRestriction>;
 type _AdminSessionUserSummaryPort = AssertAssignable<AdminSessionUserSummaryPort, UserRepository>;
-type _ResignUserSessionRevocationPort = AssertAssignable<
-  ResignUserSessionRevocationPort,
-  AdminSessionRevocationPort
->;
+type _ResignUserSessionRevocationPort = AssertAssignable<ResignUserSessionRevocationPort, AdminSessionRevocationPort>;

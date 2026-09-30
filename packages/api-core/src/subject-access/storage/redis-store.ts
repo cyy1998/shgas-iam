@@ -767,11 +767,7 @@ export const SUBJECT_ACCESS_REDIS_KEY_PREFIX = "subject-access:v1:";
 
 export interface SubjectAccessRedis {
   get: (key: string) => Promise<string | null>;
-  eval: (
-    script: string,
-    keyCount: number,
-    ...args: Array<number | string>
-  ) => Promise<unknown>;
+  eval: (script: string, keyCount: number, ...args: Array<number | string>) => Promise<unknown>;
 }
 
 export interface CreateRedisSubjectAccessStoreOptions {
@@ -780,9 +776,7 @@ export interface CreateRedisSubjectAccessStoreOptions {
   readonly transitionRecoveryDelayMs?: number;
 }
 
-export function createRedisSubjectAccessStore(
-  options: CreateRedisSubjectAccessStoreOptions,
-): SubjectAccessAtomicStore {
+export function createRedisSubjectAccessStore(options: CreateRedisSubjectAccessStoreOptions): SubjectAccessAtomicStore {
   const prefix = options.keyPrefix ?? SUBJECT_ACCESS_REDIS_KEY_PREFIX;
   const recordPrefix = `${prefix}record:`;
   const journalPrefix = `${prefix}transition:`;
@@ -820,13 +814,7 @@ export function createRedisSubjectAccessStore(
           input.transitionId,
         ),
         "abort begin",
-        [
-          "aborted",
-          "already_aborted",
-          "not_started",
-          "wrong_transition",
-          "invalid",
-        ],
+        ["aborted", "already_aborted", "not_started", "wrong_transition", "invalid"],
       );
     },
     async beginBlocking(input) {
@@ -900,29 +888,15 @@ export function createRedisSubjectAccessStore(
     },
     async inspectRepairBacklog() {
       return requireRepairBacklogMetrics(
-        await options.redis.eval(
-          INSPECT_REPAIR_BACKLOG_SCRIPT,
-          2,
-          backlogKey,
-          backlogAgeIndexKey,
-        ),
+        await options.redis.eval(INSPECT_REPAIR_BACKLOG_SCRIPT, 2, backlogKey, backlogAgeIndexKey),
       );
     },
     async claimTransitionRecovery(input) {
-      requirePositiveSafeInteger(
-        input.leaseDurationMs,
-        "transition recovery lease duration",
-      );
+      requirePositiveSafeInteger(input.leaseDurationMs, "transition recovery lease duration");
       if (input.leaseToken.length === 0) {
-        throw new RangeError(
-          "Subject Access transition recovery lease token must not be empty",
-        );
+        throw new RangeError("Subject Access transition recovery lease token must not be empty");
       }
-      for (
-        let cleanupRetries = 0;
-        cleanupRetries <= MAX_REPAIR_INDEX_CLEANUP_RETRIES;
-        cleanupRetries += 1
-      ) {
+      for (let cleanupRetries = 0; cleanupRetries <= MAX_REPAIR_INDEX_CLEANUP_RETRIES; cleanupRetries += 1) {
         const value = await options.redis.eval(
           CLAIM_TRANSITION_RECOVERY_SCRIPT,
           1,
@@ -933,37 +907,25 @@ export function createRedisSubjectAccessStore(
           journalPrefix,
         );
         const fields = requireScriptArray(value, "transition recovery claim");
-        if (fields.length === 0)
-          return null;
+        if (fields.length === 0) return null;
         if (fields.length === 1 && fields[0] === "retry_after_cleanup") {
-          if (cleanupRetries < MAX_REPAIR_INDEX_CLEANUP_RETRIES)
-            continue;
-          throw new Error(
-            "Redis Subject Access transition recovery index cleanup remains incomplete",
-          );
+          if (cleanupRetries < MAX_REPAIR_INDEX_CLEANUP_RETRIES) continue;
+          throw new Error("Redis Subject Access transition recovery index cleanup remains incomplete");
         }
         if (fields.length !== 5) {
-          throw new TypeError(
-            "Redis Subject Access transition recovery claim script returned an invalid result",
-          );
+          throw new TypeError("Redis Subject Access transition recovery claim script returned an invalid result");
         }
-        const [
-          subjectIdentifier,
-          transitionId,
-          leaseToken,
-          fenceRaw,
-          leaseUntilRaw,
-        ] = fields as [string, string, string, string, string];
+        const [subjectIdentifier, transitionId, leaseToken, fenceRaw, leaseUntilRaw] = fields as [
+          string,
+          string,
+          string,
+          string,
+          string,
+        ];
         const fence = Number(fenceRaw);
         const leaseUntil = Number(leaseUntilRaw);
-        if (
-          !Number.isSafeInteger(fence)
-          || fence <= 0
-          || !Number.isSafeInteger(leaseUntil)
-        ) {
-          throw new TypeError(
-            "Redis Subject Access transition recovery claim script returned invalid fencing data",
-          );
+        if (!Number.isSafeInteger(fence) || fence <= 0 || !Number.isSafeInteger(leaseUntil)) {
+          throw new TypeError("Redis Subject Access transition recovery claim script returned invalid fencing data");
         }
         return {
           subjectIdentifier,
@@ -973,9 +935,7 @@ export function createRedisSubjectAccessStore(
           leaseUntil,
         };
       }
-      throw new Error(
-        "Redis Subject Access transition recovery claim retry loop ended unexpectedly",
-      );
+      throw new Error("Redis Subject Access transition recovery claim retry loop ended unexpectedly");
     },
     async reconcileTransitionRecovery(input) {
       return requireScriptStatus(
@@ -993,25 +953,14 @@ export function createRedisSubjectAccessStore(
           String(input.lease.fence),
           String(input.lease.leaseUntil),
           input.resolution.status,
-          input.resolution.status === "committed"
-            ? input.resolution.targetState
-            : "",
+          input.resolution.status === "committed" ? input.resolution.targetState : "",
         ),
         "reconcile transition recovery",
-        [
-          "prepared",
-          "rolled_back",
-          "stale_lease",
-          "lease_expired",
-          "invalid",
-        ] as const,
+        ["prepared", "rolled_back", "stale_lease", "lease_expired", "invalid"] as const,
       );
     },
     async rescheduleTransitionRecovery(input) {
-      requirePositiveSafeInteger(
-        input.retryDelayMs,
-        "transition recovery retry delay",
-      );
+      requirePositiveSafeInteger(input.retryDelayMs, "transition recovery retry delay");
       return requireScriptStatus(
         await options.redis.eval(
           RESCHEDULE_TRANSITION_RECOVERY_SCRIPT,
@@ -1031,13 +980,8 @@ export function createRedisSubjectAccessStore(
     },
     async claimRepairSubject(input) {
       requirePositiveSafeInteger(input.leaseDurationMs, "repair lease duration");
-      if (input.leaseToken.length === 0)
-        throw new RangeError("Subject Access repair lease token must not be empty");
-      for (
-        let cleanupRetries = 0;
-        cleanupRetries <= MAX_REPAIR_INDEX_CLEANUP_RETRIES;
-        cleanupRetries += 1
-      ) {
+      if (input.leaseToken.length === 0) throw new RangeError("Subject Access repair lease token must not be empty");
+      for (let cleanupRetries = 0; cleanupRetries <= MAX_REPAIR_INDEX_CLEANUP_RETRIES; cleanupRetries += 1) {
         const value = await options.redis.eval(
           CLAIM_REPAIR_SUBJECT_SCRIPT,
           2,
@@ -1050,23 +994,21 @@ export function createRedisSubjectAccessStore(
           journalPrefix,
         );
         const fields = requireScriptArray(value, "repair claim");
-        if (fields.length === 0)
-          return null;
+        if (fields.length === 0) return null;
         if (fields.length === 1 && fields[0] === "retry_after_cleanup") {
-          if (cleanupRetries < MAX_REPAIR_INDEX_CLEANUP_RETRIES)
-            continue;
+          if (cleanupRetries < MAX_REPAIR_INDEX_CLEANUP_RETRIES) continue;
           throw new Error("Redis Subject Access repair index cleanup remains incomplete");
         }
         if (fields.length !== 6)
           throw new TypeError("Redis Subject Access repair claim script returned an invalid result");
-        const [
-          subjectIdentifier,
-          transitionId,
-          targetState,
-          leaseToken,
-          fenceRaw,
-          leaseUntilRaw,
-        ] = fields as [string, string, string, string, string, string];
+        const [subjectIdentifier, transitionId, targetState, leaseToken, fenceRaw, leaseUntilRaw] = fields as [
+          string,
+          string,
+          string,
+          string,
+          string,
+          string,
+        ];
         if (targetState !== "enabled" && targetState !== "disabled")
           throw new TypeError("Redis Subject Access repair claim script returned an invalid target");
         const fence = Number(fenceRaw);
@@ -1150,74 +1092,46 @@ function requireBeginResult(value: unknown): SubjectAccessBeginResult {
       throw new TypeError("Redis Subject Access begin blocking script returned an invalid result");
     return status;
   }
-  if (
-    (status === "transitioned" || status === "already_transitioning")
-    && fields.length === 2
-  ) {
+  if ((status === "transitioned" || status === "already_transitioning") && fields.length === 2) {
     return {
       status,
-      previousCommittedTransitionId: previousCommittedTransitionId === ""
-        ? null
-        : previousCommittedTransitionId!,
+      previousCommittedTransitionId: previousCommittedTransitionId === "" ? null : previousCommittedTransitionId!,
     };
   }
   throw new TypeError("Redis Subject Access begin blocking script returned an invalid result");
 }
 
-function requireRepairBacklogMetrics(
-  value: unknown,
-): SubjectAccessRepairBacklogMetrics {
+function requireRepairBacklogMetrics(value: unknown): SubjectAccessRepairBacklogMetrics {
   const fields = requireScriptArray(value, "repair backlog inspection");
   if (fields.length !== 2) {
-    throw new TypeError(
-      "Redis Subject Access repair backlog indexes are inconsistent",
-    );
+    throw new TypeError("Redis Subject Access repair backlog indexes are inconsistent");
   }
   const [countRaw, oldestAgeRaw] = fields;
   const count = Number(countRaw);
   if (!Number.isSafeInteger(count) || count < 0) {
-    throw new TypeError(
-      "Redis Subject Access repair backlog inspection returned an invalid count",
-    );
+    throw new TypeError("Redis Subject Access repair backlog inspection returned an invalid count");
   }
   if (count === 0 && oldestAgeRaw === "") {
     return { count, oldestAgeMs: null };
   }
   const oldestAgeMs = Number(oldestAgeRaw);
-  if (
-    count === 0
-    || !Number.isSafeInteger(oldestAgeMs)
-    || oldestAgeMs < 0
-  ) {
-    throw new TypeError(
-      "Redis Subject Access repair backlog inspection returned an invalid age",
-    );
+  if (count === 0 || !Number.isSafeInteger(oldestAgeMs) || oldestAgeMs < 0) {
+    throw new TypeError("Redis Subject Access repair backlog inspection returned an invalid age");
   }
   return { count, oldestAgeMs };
 }
 
 function requireScriptArray(value: unknown, operation: string) {
-  if (!Array.isArray(value))
-    throw new TypeError(`Redis Subject Access ${operation} script returned an invalid result`);
+  if (!Array.isArray(value)) throw new TypeError(`Redis Subject Access ${operation} script returned an invalid result`);
   return value.map((field) => {
-    if (typeof field === "string")
-      return field;
-    if (Buffer.isBuffer(field))
-      return field.toString("utf8");
+    if (typeof field === "string") return field;
+    if (Buffer.isBuffer(field)) return field.toString("utf8");
     throw new TypeError(`Redis Subject Access ${operation} script returned an invalid field`);
   });
 }
 
-function requireScriptStatus<T extends string>(
-  value: unknown,
-  operation: string,
-  allowed: readonly T[],
-): T {
-  const status = typeof value === "string"
-    ? value
-    : Buffer.isBuffer(value)
-      ? value.toString("utf8")
-      : undefined;
+function requireScriptStatus<T extends string>(value: unknown, operation: string, allowed: readonly T[]): T {
+  const status = typeof value === "string" ? value : Buffer.isBuffer(value) ? value.toString("utf8") : undefined;
   if (status === undefined || !allowed.includes(status as T))
     throw new TypeError(`Redis Subject Access ${operation} script returned an invalid result`);
   return status as T;

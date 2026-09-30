@@ -1,16 +1,8 @@
 import { OrganizationDtoSchema, OrganizationQueryDtoSchema } from "@api/services/organization/organization.schema";
-import {
-  CustomSsoDeliveryRequestHeadersSchema,
-} from "@api/services/sso/transport/custom-sso-delivery-request.schema";
-import {
-  CUSTOM_SSO_SESSION_AUTHORIZATION_SECURITY_SCHEME,
-} from "@api/services/sso/transport/custom-sso-delivery.security";
-import {
-  createCustomSsoUnavailableResponse,
-} from "@api/services/sso/transport/custom-sso-retryable.openapi";
-import {
-  CustomSsoSubjectProjectionV2Schema,
-} from "@api/services/sso/transport/custom-sso-subject.schema";
+import { CUSTOM_SSO_SESSION_AUTHORIZATION_SECURITY_SCHEME } from "@api/services/sso/transport/custom-sso-delivery.security";
+import { CustomSsoDeliveryRequestHeadersSchema } from "@api/services/sso/transport/custom-sso-delivery-request.schema";
+import { createCustomSsoUnavailableResponse } from "@api/services/sso/transport/custom-sso-retryable.openapi";
+import { CustomSsoSubjectProjectionV2Schema } from "@api/services/sso/transport/custom-sso-subject.schema";
 import { UserDtoSchema, UserQueryDtoSchema } from "@api/services/user/user.schema";
 import { createRoute, z } from "@hono/zod-openapi";
 import * as HttpStatusCodes from "@iam/api-core/core/http-status-codes";
@@ -28,9 +20,7 @@ export const userInfo = createRoute({
   tags,
   description:
     "Requires the encoded Client header and an authenticated session. OpenAPI clients use the raw session ID through the Authorization security scheme; browser calls may instead use global_session for Client=iam or the IAM-managed local_{encodedClientCode}_session cookie for other clients.",
-  security: [
-    { [CUSTOM_SSO_SESSION_AUTHORIZATION_SECURITY_SCHEME]: [] },
-  ],
+  security: [{ [CUSTOM_SSO_SESSION_AUTHORIZATION_SECURITY_SCHEME]: [] }],
   request: {
     headers: CustomSsoDeliveryRequestHeadersSchema,
   },
@@ -51,10 +41,13 @@ export const passwordChange = createRoute({
   path: `${routePrefix}/password/change`,
   tags,
   request: {
-    body: jsonContentRequired(z.object({
-      oldPassword: z.string().openapi({ example: "1234" }),
-      newPassword: z.string().openapi({ example: "1234" }),
-    }), "更换密码请求参数"),
+    body: jsonContentRequired(
+      z.object({
+        oldPassword: z.string().openapi({ example: "1234" }),
+        newPassword: z.string().openapi({ example: "1234" }),
+      }),
+      "更换密码请求参数",
+    ),
   },
   responses: {
     ...commonErrorResponses,
@@ -67,10 +60,13 @@ export const mobileSet = createRoute({
   path: `${routePrefix}/mobile/set`,
   tags,
   request: {
-    body: jsonContentRequired(z.object({
-      phoneNumber: z.string().openapi({ example: "17721462865" }),
-      code: z.string().openapi({ example: "1234" }),
-    }), "移动电话设置请求参数"),
+    body: jsonContentRequired(
+      z.object({
+        phoneNumber: z.string().openapi({ example: "17721462865" }),
+        code: z.string().openapi({ example: "1234" }),
+      }),
+      "移动电话设置请求参数",
+    ),
   },
   responses: {
     ...commonErrorResponses,

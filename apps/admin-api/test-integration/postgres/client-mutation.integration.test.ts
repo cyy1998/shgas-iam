@@ -1,18 +1,9 @@
+import { afterAll, beforeAll, describe, expect, mock, test } from "bun:test";
 import { createAdminApiUnitOfWork } from "@admin-api/composition/tx";
 import { createAdminClientMutation } from "@admin-api/services/client/client-mutation";
-import {
-  mapUnitOfWork,
-} from "@iam/api-core/uow";
+import { mapUnitOfWork } from "@iam/api-core/uow";
 import { ClientStatus } from "@iam/contracts";
 import { clients } from "@iam/db/schema";
-import {
-  afterAll,
-  beforeAll,
-  describe,
-  expect,
-  mock,
-  test,
-} from "bun:test";
 import { eq } from "drizzle-orm";
 import { createAdminApiPostgresTestHarness } from "./postgres-test-harness";
 
@@ -35,13 +26,14 @@ describe("Admin Client target-bound mutation PostgreSQL contract", () => {
     let rejected: unknown;
 
     try {
-      await mutation.transaction(async (tx, bindTarget) =>
-        await bindTarget(clientCode, async () => {
-          await tx.clientRepository.createClient(clientInput(clientCode));
-          throw rollbackFailure;
-        }));
-    }
-    catch (error) {
+      await mutation.transaction(
+        async (tx, bindTarget) =>
+          await bindTarget(clientCode, async () => {
+            await tx.clientRepository.createClient(clientInput(clientCode));
+            throw rollbackFailure;
+          }),
+      );
+    } catch (error) {
       rejected = error;
     }
 
@@ -64,11 +56,11 @@ describe("Admin Client target-bound mutation PostgreSQL contract", () => {
     let rejected: unknown;
 
     try {
-      await mutation.transaction(async (tx, bindTarget) =>
-        await bindTarget(clientCode, async () =>
-          await tx.clientRepository.createClient(clientInput(clientCode))));
-    }
-    catch (error) {
+      await mutation.transaction(
+        async (tx, bindTarget) =>
+          await bindTarget(clientCode, async () => await tx.clientRepository.createClient(clientInput(clientCode))),
+      );
+    } catch (error) {
       rejected = error;
     }
 
@@ -82,9 +74,7 @@ describe("Admin Client target-bound mutation PostgreSQL contract", () => {
   });
 });
 
-function createMutation(
-  invalidateClient: (clientCode: string) => Promise<unknown>,
-) {
+function createMutation(invalidateClient: (clientCode: string) => Promise<unknown>) {
   const unitOfWork = createAdminApiUnitOfWork({
     db: harness.db,
     logger: {
@@ -98,7 +88,7 @@ function createMutation(
       nowDate: () => new Date("2026-09-03T00:00:00Z"),
     },
   });
-  const clientUnitOfWork = mapUnitOfWork(unitOfWork, tx => ({
+  const clientUnitOfWork = mapUnitOfWork(unitOfWork, (tx) => ({
     auditService: tx.auditService,
     clientRepository: tx.repositories.client,
   }));

@@ -1,18 +1,11 @@
-import type { TestCollectionCommandRunner } from "../test-collection-guard";
+import { describe, expect, test } from "bun:test";
 import { spawnSync } from "node:child_process";
-import {
-  existsSync,
-  mkdirSync,
-  mkdtempSync,
-  readFileSync,
-  rmSync,
-  writeFileSync,
-} from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
-import { describe, expect, test } from "bun:test";
 import { runPnpmCommand } from "../run-pnpm-command.mjs";
+import type { TestCollectionCommandRunner } from "../test-collection-guard";
 import { analyzeTestCollections } from "../test-collection-guard";
 
 const repoRoot = join(import.meta.dirname, "..", "..");
@@ -44,13 +37,7 @@ const redisIntegrationPassThroughEnv = [
   "IAM_USER_PROFILE_TEST_REDIS_URL",
   "IAM_WORKER_TEST_REDIS_URL",
 ];
-const pnpmRecorderScript = join(
-  repoRoot,
-  "scripts",
-  "__tests__",
-  "fixtures",
-  "pnpm-recorder.mjs",
-);
+const pnpmRecorderScript = join(repoRoot, "scripts", "__tests__", "fixtures", "pnpm-recorder.mjs");
 const turboBin = join(repoRoot, "node_modules", "turbo", "bin", "turbo");
 const testIntegrationScript = join(repoRoot, "scripts", "run-test-integration.mjs");
 const verifyScript = join(repoRoot, "scripts", "verify.mjs");
@@ -100,7 +87,7 @@ function readWorkspacePackages() {
     ...new Bun.Glob("packages/*/package.json").scanSync({ cwd: repoRoot }),
     "gateway/package.json",
   ];
-  return manifestPaths.map(manifestPath => ({
+  return manifestPaths.map((manifestPath) => ({
     manifestPath,
     packageJson: readJson(join(repoRoot, manifestPath)),
   }));
@@ -150,11 +137,11 @@ function createTransitFixture() {
   writeFileSync(join(root, "turbo.json"), readFileSync(join(repoRoot, "turbo.json"), "utf8"), "utf8");
   writeJson(join(dependencyRoot, "package.json"), {
     name: "@fixture/dependency",
-    scripts: { "test:unit": "node -e \"\"" },
+    scripts: { "test:unit": 'node -e ""' },
   });
   writeJson(join(consumerRoot, "package.json"), {
     name: "@fixture/consumer",
-    scripts: { "test:unit": "node -e \"\"" },
+    scripts: { "test:unit": 'node -e ""' },
     dependencies: { "@fixture/dependency": "workspace:*" },
   });
   writeFileSync(join(dependencyRoot, "src", "value.ts"), "export const value = 1;\n", "utf8");
@@ -162,14 +149,16 @@ function createTransitFixture() {
   return { root, dependencySource: join(dependencyRoot, "src", "value.ts") };
 }
 
-function createCollectionGuardFixture(options: {
-  brokenRootCommand?: boolean;
-  omitRootE2eTask?: boolean;
-  publishWorkspaceE2e?: boolean;
-  violating?: boolean;
-  vitestProjects?: boolean;
-  workspaceLocalJourneys?: Array<{ file: string; name: string }>;
-} = {}) {
+function createCollectionGuardFixture(
+  options: {
+    brokenRootCommand?: boolean;
+    omitRootE2eTask?: boolean;
+    publishWorkspaceE2e?: boolean;
+    violating?: boolean;
+    vitestProjects?: boolean;
+    workspaceLocalJourneys?: Array<{ file: string; name: string }>;
+  } = {},
+) {
   const root = mkdtempSync(join(tmpdir(), "iam-test-collection-"));
   const ownerRoot = join(root, "packages", "owner");
   const frontendRoot = join(root, "apps", "frontend");
@@ -178,13 +167,13 @@ function createCollectionGuardFixture(options: {
   mkdirSync(join(ownerRoot, "test-integration", "component"), { recursive: true });
   mkdirSync(join(root, "e2e", "system"), { recursive: true });
   mkdirSync(join(root, "scripts", "__tests__"), { recursive: true });
+  mkdirSync(join(root, "scripts", "test-integration", "process"), { recursive: true });
   writeJson(join(root, "package.json"), {
     name: "fixture-root",
     packageManager: "pnpm@12.5.1",
     private: true,
     scripts: {
-      ...(options.omitRootE2eTask
-        || (options.workspaceLocalJourneys?.length && !options.publishWorkspaceE2e)
+      ...(options.omitRootE2eTask || (options.workspaceLocalJourneys?.length && !options.publishWorkspaceE2e)
         ? {}
         : options.publishWorkspaceE2e
           ? { "test:e2e": "turbo test:e2e --concurrency=1" }
@@ -195,8 +184,11 @@ function createCollectionGuardFixture(options: {
       "test:integration:component": options.brokenRootCommand
         ? "turbo test:unit --concurrency=2"
         : "turbo test:integration:component --concurrency=2",
+      "test:integration:process": "turbo test:integration:process test:integration:process:root --concurrency=1",
+      "test:integration:process:root": "bun test --max-concurrency=1 scripts/test-integration/process",
       "test:unit": "turbo test:unit test:unit:root --concurrency=2",
-      "test:unit:root": "bun test scripts/__tests__/architecture-guard.test.ts scripts/__tests__/eslint-config-ownership.test.ts scripts/__tests__/test-orchestration.test.ts scripts/__tests__/tooling-contracts.test.ts",
+      "test:unit:root":
+        "bun test scripts/__tests__/architecture-guard.test.ts scripts/__tests__/quality-tooling-ownership.test.ts scripts/__tests__/test-orchestration.test.ts scripts/__tests__/tooling-contracts.test.ts",
     },
   });
   writeFileSync(join(root, "pnpm-workspace.yaml"), "packages:\n  - packages/*\n", "utf8");
@@ -206,8 +198,10 @@ function createCollectionGuardFixture(options: {
       "test:e2e": { cache: false, dependsOn: ["transit"] },
       "//#test:unit:root": {},
       "test:integration:component": { dependsOn: ["transit"] },
+      "//#test:integration:process:root": { cache: false },
+      "test:integration:process": { cache: false, dependsOn: ["transit"] },
       "test:unit": { dependsOn: ["transit"] },
-      "transit": { dependsOn: ["^transit"] },
+      transit: { dependsOn: ["^transit"] },
     },
   });
   writeJson(join(ownerRoot, "package.json"), {
@@ -239,59 +233,52 @@ function createCollectionGuardFixture(options: {
   );
   for (const file of [
     "architecture-guard.test.ts",
-    "eslint-config-ownership.test.ts",
+    "quality-tooling-ownership.test.ts",
     "test-orchestration.test.ts",
     "tooling-contracts.test.ts",
   ])
     writeFileSync(join(root, "scripts", "__tests__", file), "export {};\n", "utf8");
+  writeFileSync(
+    join(root, "scripts", "test-integration", "process", "tooling.integration.test.ts"),
+    "export {};\n",
+    "utf8",
+  );
   if (options.workspaceLocalJourneys?.length) {
     writeJson(join(root, "e2e", "system", "package.json"), {
       name: "@fixture/e2e-system",
       scripts: {
-        ...(options.publishWorkspaceE2e
-          ? { "test:e2e": "bun src/cli.ts e2e" }
-          : {}),
-        ...Object.fromEntries(options.workspaceLocalJourneys.map(journey => [
-          `${journey.name}:journey`,
-          `bun src/cli.ts ${journey.name}`,
-        ])),
+        ...(options.publishWorkspaceE2e ? { "test:e2e": "bun src/cli.ts e2e" } : {}),
+        ...Object.fromEntries(
+          options.workspaceLocalJourneys.map((journey) => [
+            `${journey.name}:journey`,
+            `bun src/cli.ts ${journey.name}`,
+          ]),
+        ),
       },
     });
     for (const journey of options.workspaceLocalJourneys) {
-      writeFileSync(
-        join(root, "e2e", "system", journey.file),
-        "export {};\n",
-        "utf8",
-      );
+      writeFileSync(join(root, "e2e", "system", journey.file), "export {};\n", "utf8");
     }
-  }
-  else {
+  } else {
     writeFileSync(join(root, "e2e", "system", "journey.spec.ts"), "export {};\n", "utf8");
   }
 
   if (options.violating) {
     mkdirSync(join(ownerRoot, "test-integration", "redis"), { recursive: true });
     writeFileSync(join(ownerRoot, "src", "misplaced.integration.test.ts"), "export {};\n", "utf8");
-    writeFileSync(
-      join(ownerRoot, "test-integration", "redis", "orphan.integration.test.ts"),
-      "export {};\n",
-      "utf8",
-    );
+    writeFileSync(join(ownerRoot, "test-integration", "redis", "orphan.integration.test.ts"), "export {};\n", "utf8");
   }
 
   return root;
 }
 
-function createCollectionGuardRunner(options: {
-  duplicateVitestProject?: boolean;
-  fail?: boolean;
-  omitComponent?: boolean;
-} = {}) {
+function createCollectionGuardRunner(
+  options: { duplicateVitestProject?: boolean; fail?: boolean; omitComponent?: boolean } = {},
+) {
   const runner: TestCollectionCommandRunner = {
     run: async (command, cwd) => {
-      if (options.fail)
-        return { exitCode: 12, stderr: "synthetic turbo failure", stdout: "" };
-      if (command.some(argument => argument.endsWith("vitest.mjs"))) {
+      if (options.fail) return { exitCode: 12, stderr: "synthetic turbo failure", stdout: "" };
+      if (command.some((argument) => argument.endsWith("vitest.mjs"))) {
         const logicTest = join(cwd, "src", "logic.test.ts");
         return {
           exitCode: 0,
@@ -299,9 +286,7 @@ function createCollectionGuardRunner(options: {
           stdout: JSON.stringify([
             { file: logicTest, projectName: "project-alpha" },
             { file: join(cwd, "src", "render.dom.test.tsx"), projectName: "project-beta" },
-            ...(options.duplicateVitestProject
-              ? [{ file: logicTest, projectName: "project-beta" }]
-              : []),
+            ...(options.duplicateVitestProject ? [{ file: logicTest, projectName: "project-beta" }] : []),
           ]),
         };
       }
@@ -313,11 +298,10 @@ function createCollectionGuardRunner(options: {
             { taskId: "//#test:e2e:root" },
             { taskId: "@fixture/e2e-system#test:e2e" },
             { taskId: "//#test:unit:root" },
+            { taskId: "//#test:integration:process:root" },
             { taskId: "@fixture/frontend#test:unit" },
             { taskId: "@fixture/owner#test:unit" },
-            ...(options.omitComponent
-              ? []
-              : [{ taskId: "@fixture/owner#test:integration:component" }]),
+            ...(options.omitComponent ? [] : [{ taskId: "@fixture/owner#test:integration:component" }]),
           ],
         }),
       };
@@ -327,22 +311,17 @@ function createCollectionGuardRunner(options: {
 }
 
 function runConsumerTestDryRun(root: string) {
-  const result = Bun.spawnSync([
-    process.execPath,
-    turboBin,
-    "run",
-    "test:unit",
-    "--filter=@fixture/consumer",
-    "--dry=json",
-    "--no-daemon",
-  ], {
-    cwd: root,
-    env: {
-      ...process.env,
-      FORCE_COLOR: "0",
-      NO_COLOR: "1",
+  const result = Bun.spawnSync(
+    [process.execPath, turboBin, "run", "test:unit", "--filter=@fixture/consumer", "--dry=json", "--no-daemon"],
+    {
+      cwd: root,
+      env: {
+        ...process.env,
+        FORCE_COLOR: "0",
+        NO_COLOR: "1",
+      },
     },
-  });
+  );
   if (result.exitCode !== 0) {
     throw new Error(
       `Turbo dry-run failed with ${result.exitCode}:\n${result.stdout.toString()}${result.stderr.toString()}`,
@@ -352,22 +331,17 @@ function runConsumerTestDryRun(root: string) {
 }
 
 function runPackageTaskDryRun(packageName: string, taskName: string) {
-  const result = Bun.spawnSync([
-    process.execPath,
-    turboBin,
-    "run",
-    taskName,
-    `--filter=${packageName}`,
-    "--dry=json",
-    "--no-daemon",
-  ], {
-    cwd: repoRoot,
-    env: {
-      ...process.env,
-      FORCE_COLOR: "0",
-      NO_COLOR: "1",
+  const result = Bun.spawnSync(
+    [process.execPath, turboBin, "run", taskName, `--filter=${packageName}`, "--dry=json", "--no-daemon"],
+    {
+      cwd: repoRoot,
+      env: {
+        ...process.env,
+        FORCE_COLOR: "0",
+        NO_COLOR: "1",
+      },
     },
-  });
+  );
   if (result.exitCode !== 0) {
     throw new Error(
       `Turbo ${packageName} ${taskName} dry-run failed with ${result.exitCode}:\n${result.stdout.toString()}${result.stderr.toString()}`,
@@ -391,31 +365,25 @@ function runWithPnpmRecorder(options: {
     NO_COLOR: "1",
     npm_execpath: pnpmRecorderScript,
   };
-  for (const name of pnpmRecorderControlEnvNames)
-    delete env[name];
+  for (const name of pnpmRecorderControlEnvNames) delete env[name];
   for (const [name, value] of Object.entries(options.environment ?? {})) {
-    if (value === undefined)
-      delete env[name];
-    else
-      env[name] = value;
+    if (value === undefined) delete env[name];
+    else env[name] = value;
   }
   env[options.commandLogEnvName] = log;
 
   try {
-    const result = spawnSync("node", [options.orchestrationScript, ...options.args ?? []], {
+    const result = spawnSync("node", [options.orchestrationScript, ...(options.args ?? [])], {
       cwd: repoRoot,
       env,
     });
     return {
-      commands: existsSync(log)
-        ? readFileSync(log, "utf8").trim().split("\n").filter(Boolean)
-        : [],
+      commands: existsSync(log) ? readFileSync(log, "utf8").trim().split("\n").filter(Boolean) : [],
       exitCode: result.status,
       output: `${result.stdout?.toString() ?? ""}${result.stderr?.toString() ?? ""}`,
       signal: result.signal,
     };
-  }
-  finally {
+  } finally {
     rmSync(root, { recursive: true, force: true });
   }
 }
@@ -454,9 +422,8 @@ function runVerificationGateWithRecorder(
       IAM_VERIFICATION_GATE_DIAGNOSTIC_COMMAND: options.diagnosticCommand,
       IAM_VERIFICATION_GATE_DIAGNOSTIC_STREAM: options.diagnosticStream,
       IAM_VERIFICATION_GATE_FAIL_COMMAND: options.failCommand,
-      IAM_VERIFICATION_GATE_FAIL_EXIT_CODE: options.failExitCode === undefined
-        ? undefined
-        : String(options.failExitCode),
+      IAM_VERIFICATION_GATE_FAIL_EXIT_CODE:
+        options.failExitCode === undefined ? undefined : String(options.failExitCode),
       IAM_VERIFICATION_GATE_SIGNAL: options.signal,
       IAM_VERIFICATION_GATE_SIGNAL_COMMAND: options.signalCommand,
     },
@@ -465,17 +432,12 @@ function runVerificationGateWithRecorder(
   });
 }
 
-function runTestIntegrationWithRecorder(options: {
-  failCommand?: string;
-  missing?: string[];
-} = {}) {
+function runTestIntegrationWithRecorder(options: { failCommand?: string; missing?: string[] } = {}) {
   const environment: Record<string, string | undefined> = {
     IAM_TEST_INTEGRATION_FAIL_COMMAND: options.failCommand,
   };
-  for (const name of integrationResourceEnvNames)
-    environment[name] = "caller-owned-test-resource";
-  for (const name of options.missing ?? [])
-    environment[name] = undefined;
+  for (const name of integrationResourceEnvNames) environment[name] = "caller-owned-test-resource";
+  for (const name of options.missing ?? []) environment[name] = undefined;
   const result = runWithPnpmRecorder({
     commandLogEnvName: "IAM_TEST_INTEGRATION_COMMAND_LOG",
     environment,
@@ -489,21 +451,15 @@ function runTestIntegrationWithRecorder(options: {
   };
 }
 
-function withCallerEnvironment<T>(
-  overrides: Record<string, string>,
-  run: () => T,
-) {
-  const previous = new Map(Object.keys(overrides).map(name => [name, process.env[name]]));
+function withCallerEnvironment<T>(overrides: Record<string, string>, run: () => T) {
+  const previous = new Map(Object.keys(overrides).map((name) => [name, process.env[name]]));
   Object.assign(process.env, overrides);
   try {
     return run();
-  }
-  finally {
+  } finally {
     for (const [name, value] of previous) {
-      if (value === undefined)
-        delete process.env[name];
-      else
-        process.env[name] = value;
+      if (value === undefined) delete process.env[name];
+      else process.env[name] = value;
     }
   }
 }
@@ -513,13 +469,9 @@ describe("test orchestration", () => {
     const rootPackage = readJson(join(repoRoot, "package.json"));
     const workspacePackage = readJson(join(repoRoot, "e2e", "system", "package.json"));
     const dryRun = runPackageTaskDryRun("@iam/e2e-system", "test:e2e");
-    const task = dryRun.tasks.find(
-      (candidate: { taskId: string }) =>
-        candidate.taskId === "@iam/e2e-system#test:e2e",
-    );
+    const task = dryRun.tasks.find((candidate: { taskId: string }) => candidate.taskId === "@iam/e2e-system#test:e2e");
 
-    expect(rootPackage.scripts["test:e2e"])
-      .toBe("turbo test:e2e --concurrency=1");
+    expect(rootPackage.scripts["test:e2e"]).toBe("turbo test:e2e --concurrency=1");
     expect(workspacePackage.scripts["test:e2e"]).toBe("bun src/cli.ts e2e");
     expect(task).toMatchObject({
       command: "bun src/cli.ts e2e",
@@ -534,8 +486,7 @@ describe("test orchestration", () => {
     const root = createCollectionGuardFixture();
     try {
       expect(await analyzeTestCollections(root, createCollectionGuardRunner())).toEqual([]);
-    }
-    finally {
+    } finally {
       rmSync(root, { recursive: true, force: true });
     }
   });
@@ -544,8 +495,7 @@ describe("test orchestration", () => {
     const root = createCollectionGuardFixture({ vitestProjects: true });
     try {
       expect(await analyzeTestCollections(root, createCollectionGuardRunner())).toEqual([]);
-    }
-    finally {
+    } finally {
       rmSync(root, { recursive: true, force: true });
     }
   });
@@ -553,15 +503,13 @@ describe("test orchestration", () => {
   test("Collection Guard rejects a Unit file listed by multiple Vitest projects", async () => {
     const root = createCollectionGuardFixture({ vitestProjects: true });
     try {
-      expect(await analyzeTestCollections(
-        root,
-        createCollectionGuardRunner({ duplicateVitestProject: true }),
-      )).toContainEqual({
+      expect(
+        await analyzeTestCollections(root, createCollectionGuardRunner({ duplicateVitestProject: true })),
+      ).toContainEqual({
         code: "duplicate-collection",
         message: expect.stringContaining("apps/frontend/src/logic.test.ts"),
       });
-    }
-    finally {
+    } finally {
       rmSync(root, { recursive: true, force: true });
     }
   });
@@ -570,12 +518,13 @@ describe("test orchestration", () => {
     const root = createCollectionGuardFixture({ brokenRootCommand: true });
     try {
       const issues = await analyzeTestCollections(root, createCollectionGuardRunner());
-      expect(issues).toContainEqual(expect.objectContaining({
-        code: "task-unreachable",
-        message: expect.stringContaining("test:integration:component"),
-      }));
-    }
-    finally {
+      expect(issues).toContainEqual(
+        expect.objectContaining({
+          code: "task-unreachable",
+          message: expect.stringContaining("test:integration:component"),
+        }),
+      );
+    } finally {
       rmSync(root, { recursive: true, force: true });
     }
   });
@@ -584,12 +533,13 @@ describe("test orchestration", () => {
     const root = createCollectionGuardFixture({ omitRootE2eTask: true });
     try {
       const issues = await analyzeTestCollections(root, createCollectionGuardRunner());
-      expect(issues).toContainEqual(expect.objectContaining({
-        code: "missing-collection",
-        message: expect.stringContaining("e2e/system/journey.spec.ts"),
-      }));
-    }
-    finally {
+      expect(issues).toContainEqual(
+        expect.objectContaining({
+          code: "missing-collection",
+          message: expect.stringContaining("e2e/system/journey.spec.ts"),
+        }),
+      );
+    } finally {
       rmSync(root, { recursive: true, force: true });
     }
   });
@@ -604,9 +554,8 @@ describe("test orchestration", () => {
     const baseRunner = createCollectionGuardRunner();
     const runner: TestCollectionCommandRunner = {
       async run(command, cwd, options) {
-        if (command.some(token => token.endsWith("cli.js"))) {
-          const journey = journeys.find(candidate =>
-            candidate.name === options?.env?.IAM_E2E_JOURNEY);
+        if (command.some((token) => token.endsWith("cli.js"))) {
+          const journey = journeys.find((candidate) => candidate.name === options?.env?.IAM_E2E_JOURNEY);
           return {
             exitCode: 0,
             stderr: "",
@@ -621,8 +570,7 @@ describe("test orchestration", () => {
     };
     try {
       expect(await analyzeTestCollections(root, runner)).toEqual([]);
-    }
-    finally {
+    } finally {
       rmSync(root, { recursive: true, force: true });
     }
   });
@@ -641,10 +589,10 @@ describe("test orchestration", () => {
     const listedSelectors: string[] = [];
     const runner: TestCollectionCommandRunner = {
       async run(command, cwd, options) {
-        if (command.some(token => token.endsWith("cli.js"))) {
+        if (command.some((token) => token.endsWith("cli.js"))) {
           const selector = options?.env?.IAM_E2E_JOURNEY ?? "";
           listedSelectors.push(selector);
-          const journey = journeys.find(candidate => candidate.name === selector);
+          const journey = journeys.find((candidate) => candidate.name === selector);
           return {
             exitCode: 0,
             stderr: "",
@@ -660,8 +608,7 @@ describe("test orchestration", () => {
     try {
       expect(await analyzeTestCollections(root, runner)).toEqual([]);
       expect(listedSelectors).toEqual(["admin", "hr-admin", "oidc"]);
-    }
-    finally {
+    } finally {
       rmSync(root, { recursive: true, force: true });
     }
   });
@@ -676,7 +623,7 @@ describe("test orchestration", () => {
     const baseRunner = createCollectionGuardRunner();
     const runner: TestCollectionCommandRunner = {
       async run(command, cwd, options) {
-        if (command.some(token => token.endsWith("cli.js"))) {
+        if (command.some((token) => token.endsWith("cli.js"))) {
           return {
             exitCode: 0,
             stderr: "",
@@ -694,22 +641,19 @@ describe("test orchestration", () => {
         code: "duplicate-collection",
         message: expect.stringContaining("admin-custom-sso.spec.ts"),
       });
-    }
-    finally {
+    } finally {
       rmSync(root, { recursive: true, force: true });
     }
   });
 
   test("Collection Guard rejects an unknown workspace-local journey owner", async () => {
     const root = createCollectionGuardFixture({
-      workspaceLocalJourneys: [
-        { file: "unknown.spec.ts", name: "unknown" },
-      ],
+      workspaceLocalJourneys: [{ file: "unknown.spec.ts", name: "unknown" }],
     });
     const baseRunner = createCollectionGuardRunner();
     const runner: TestCollectionCommandRunner = {
       async run(command, cwd, options) {
-        if (command.some(token => token.endsWith("cli.js"))) {
+        if (command.some((token) => token.endsWith("cli.js"))) {
           return {
             exitCode: 0,
             stderr: "",
@@ -727,8 +671,7 @@ describe("test orchestration", () => {
         code: "unsupported-owner",
         message: expect.stringContaining("unknown:journey"),
       });
-    }
-    finally {
+    } finally {
       rmSync(root, { recursive: true, force: true });
     }
   });
@@ -736,19 +679,14 @@ describe("test orchestration", () => {
   test("Collection Guard reports path, duplicate, missing, and unreachable violations", async () => {
     const root = createCollectionGuardFixture({ violating: true });
     try {
-      const issues = await analyzeTestCollections(
-        root,
-        createCollectionGuardRunner({ omitComponent: true }),
-      );
-      expect(issues.map(issue => issue.code)).toContain("duplicate-collection");
-      expect(issues.map(issue => issue.code)).toContain("path-naming-mismatch");
-      expect(issues.map(issue => issue.code)).toContain("missing-collection");
-      expect(issues.map(issue => issue.code)).toContain("task-unreachable");
-      expect(issues.some(issue => issue.message.includes("packages/owner/"))).toBe(true);
-      expect(issues.some(issue => issue.message.includes("scripts/__tests__/tooling.test.ts")))
-        .toBe(true);
-    }
-    finally {
+      const issues = await analyzeTestCollections(root, createCollectionGuardRunner({ omitComponent: true }));
+      expect(issues.map((issue) => issue.code)).toContain("duplicate-collection");
+      expect(issues.map((issue) => issue.code)).toContain("path-naming-mismatch");
+      expect(issues.map((issue) => issue.code)).toContain("missing-collection");
+      expect(issues.map((issue) => issue.code)).toContain("task-unreachable");
+      expect(issues.some((issue) => issue.message.includes("packages/owner/"))).toBe(true);
+      expect(issues.some((issue) => issue.message.includes("scripts/__tests__/tooling.test.ts"))).toBe(true);
+    } finally {
       rmSync(root, { recursive: true, force: true });
     }
   });
@@ -756,17 +694,13 @@ describe("test orchestration", () => {
   test("Collection Guard fails closed when a runner adapter fails", async () => {
     const root = createCollectionGuardFixture();
     try {
-      expect(await analyzeTestCollections(
-        root,
-        createCollectionGuardRunner({ fail: true }),
-      )).toEqual([
+      expect(await analyzeTestCollections(root, createCollectionGuardRunner({ fail: true }))).toEqual([
         expect.objectContaining({
           code: "adapter-failure",
           message: expect.stringContaining("synthetic turbo failure"),
         }),
       ]);
-    }
-    finally {
+    } finally {
       rmSync(root, { recursive: true, force: true });
     }
   });
@@ -775,41 +709,36 @@ describe("test orchestration", () => {
     const rootPackage = readJson(join(repoRoot, "package.json"));
     const turbo = readJson(join(repoRoot, "turbo.json"));
 
-    expect(rootPackage.scripts["test:unit"])
-      .toBe("turbo test:unit test:unit:root --concurrency=2");
+    expect(rootPackage.scripts["test:unit"]).toBe("turbo test:unit test:unit:root --concurrency=2");
     expect(rootPackage.scripts["test:unit:root"]).toBe(
-      "bun test --max-concurrency=2 scripts/__tests__/architecture-guard.test.ts scripts/__tests__/eslint-config-ownership.test.ts scripts/__tests__/test-orchestration.test.ts scripts/__tests__/tooling-contracts.test.ts scripts/__tests__/sandcastle.test.ts",
+      "bun test --max-concurrency=2 scripts/__tests__/architecture-guard.test.ts scripts/__tests__/quality-tooling-ownership.test.ts scripts/__tests__/test-orchestration.test.ts scripts/__tests__/tooling-contracts.test.ts scripts/__tests__/sandcastle.test.ts",
     );
-    expect(rootPackage.scripts["test:integration:component"])
-      .toBe("turbo test:integration:component --concurrency=2");
-    expect(rootPackage.scripts["test:integration:process"])
-      .toBe("turbo test:integration:process --concurrency=1");
-    expect(rootPackage.scripts["test:integration:redis"])
-      .toBe("turbo test:integration:redis --concurrency=1");
-    expect(rootPackage.scripts["test:integration:postgres"])
-      .toBe("turbo test:integration:postgres --concurrency=1");
-    expect(rootPackage.scripts["test:integration:composition"])
-      .toBe("turbo test:integration:composition --concurrency=1");
-    expect(rootPackage.scripts["test:integration:browser"])
-      .toBe("turbo test:integration:browser --concurrency=1");
-    expect(rootPackage.scripts["test:integration"])
-      .toBe("node scripts/run-test-integration.mjs");
+    expect(rootPackage.scripts["test:integration:component"]).toBe("turbo test:integration:component --concurrency=2");
+    expect(rootPackage.scripts["test:integration:process"]).toBe(
+      "turbo test:integration:process test:integration:process:root --concurrency=1",
+    );
+    expect(rootPackage.scripts["test:integration:process:root"]).toBe(
+      "bun test --max-concurrency=1 scripts/test-integration/process",
+    );
+    expect(rootPackage.scripts["test:integration:redis"]).toBe("turbo test:integration:redis --concurrency=1");
+    expect(rootPackage.scripts["test:integration:postgres"]).toBe("turbo test:integration:postgres --concurrency=1");
+    expect(rootPackage.scripts["test:integration:composition"]).toBe(
+      "turbo test:integration:composition --concurrency=1",
+    );
+    expect(rootPackage.scripts["test:integration:browser"]).toBe("turbo test:integration:browser --concurrency=1");
+    expect(rootPackage.scripts["test:integration"]).toBe("node scripts/run-test-integration.mjs");
     expect(turbo.tasks["//#test:unit:root"]).toEqual({});
+    expect(turbo.tasks["//#test:integration:process:root"]).toEqual({ cache: false });
   });
 
   test("preflights every Integration resource before starting a profile", () => {
     const result = runTestIntegrationWithRecorder({
-      missing: [
-        "IAM_DB_TEST_DATABASE_URL",
-        "IAM_USER_PROFILE_TEST_REDIS_URL",
-      ],
+      missing: ["IAM_DB_TEST_DATABASE_URL", "IAM_USER_PROFILE_TEST_REDIS_URL"],
     });
 
     expect(result.exitCode).toBe(1);
     expect(result.commands).toEqual([]);
-    expect(result.output).toContain(
-      "Provide dedicated URLs or start disposable Docker resources first",
-    );
+    expect(result.output).toContain("Provide dedicated URLs or start disposable Docker resources first");
     expect(result.output).toContain("IAM_DB_TEST_DATABASE_URL");
     expect(result.output).toContain("IAM_USER_PROFILE_TEST_REDIS_URL");
   });
@@ -826,9 +755,11 @@ describe("test orchestration", () => {
       ],
       exitCode: 0,
     });
-    expect(runTestIntegrationWithRecorder({
-      failCommand: "test:integration:postgres",
-    })).toMatchObject({
+    expect(
+      runTestIntegrationWithRecorder({
+        failCommand: "test:integration:postgres",
+      }),
+    ).toMatchObject({
       commands: [
         "test:integration:component",
         "test:integration:process",
@@ -845,11 +776,8 @@ describe("test orchestration", () => {
 
     expect(rootPackage.scripts.verify).toBe("node scripts/verify.mjs");
     expect(rootPackage.scripts["check:architecture"]).toBe("bun scripts/check-architecture.ts");
-    expect(rootPackage.scripts["lint:root"]).toBe(
-      "eslint --config eslint.root.config.mjs scripts eslint.root.config.mjs eslint.frontend.config.mjs stylelint.frontend.config.mjs",
-    );
-    expect(readFileSync(join(repoRoot, ".husky", "pre-commit"), "utf8"))
-      .toBe("git diff --cached --check\n");
+    expect(rootPackage.scripts["format:check"]).toBe("node scripts/run-quality.mjs format-check");
+    expect(rootPackage.scripts.lint).toBe("node scripts/run-quality.mjs lint");
     expect(turbo.tasks.transit).toEqual({
       dependsOn: ["^transit"],
     });
@@ -901,16 +829,19 @@ describe("test orchestration", () => {
       writeFileSync(fixture.dependencySource, "export const value = 2;\n", "utf8");
       const after = runConsumerTestDryRun(fixture.root);
 
-      expect(before.tasks.filter((task: { task: string }) => task.task === "test:unit")
-        .map((task: { taskId: string }) => task.taskId))
-        .toEqual(["@fixture/consumer#test:unit"]);
-      const beforeHash = before.tasks.find((task: { taskId: string }) =>
-        task.taskId === "@fixture/consumer#test:unit").hash;
-      const afterHash = after.tasks.find((task: { taskId: string }) =>
-        task.taskId === "@fixture/consumer#test:unit").hash;
+      expect(
+        before.tasks
+          .filter((task: { task: string }) => task.task === "test:unit")
+          .map((task: { taskId: string }) => task.taskId),
+      ).toEqual(["@fixture/consumer#test:unit"]);
+      const beforeHash = before.tasks.find(
+        (task: { taskId: string }) => task.taskId === "@fixture/consumer#test:unit",
+      ).hash;
+      const afterHash = after.tasks.find(
+        (task: { taskId: string }) => task.taskId === "@fixture/consumer#test:unit",
+      ).hash;
       expect(beforeHash).not.toBe(afterHash);
-    }
-    finally {
+    } finally {
       rmSync(fixture.root, { recursive: true, force: true });
     }
   }, 15_000);
@@ -926,20 +857,17 @@ describe("test orchestration", () => {
       expect(config.maxWorkers).toBe(4);
       expect(config.testTimeout).toBe(10_000);
 
-      const componentConfig = await readVitestTestConfig(
-        workspace,
-        "vitest.integration.component.config.ts",
-      );
+      const componentConfig = await readVitestTestConfig(workspace, "vitest.integration.component.config.ts");
       expect(componentConfig.maxWorkers).toBe("25%");
       expect(componentConfig.testTimeout).toBe(10_000);
     }
 
-    const bunWorkspaces = readWorkspacePackages()
-      .filter(({ packageJson }) => packageJson.scripts?.["test:unit"]?.startsWith("bun test"));
+    const bunWorkspaces = readWorkspacePackages().filter(({ packageJson }) =>
+      packageJson.scripts?.["test:unit"]?.startsWith("bun test"),
+    );
     expect(bunWorkspaces.length).toBeGreaterThan(0);
     for (const { packageJson } of bunWorkspaces) {
-      const concurrency = packageJson.scripts["test:unit"]
-        .match(/--max-concurrency(?:=|\s+)(\d+)/u)?.[1];
+      const concurrency = packageJson.scripts["test:unit"].match(/--max-concurrency(?:=|\s+)(\d+)/u)?.[1];
       expect({
         name: packageJson.name,
         concurrency: concurrency === undefined ? undefined : Number(concurrency),
@@ -954,16 +882,12 @@ describe("test orchestration", () => {
     for (const workspace of ["apps/admin", "apps/sso"]) {
       const packageJson = readJson(join(repoRoot, workspace, "package.json"));
       const unitConfig = await readVitestTestConfig(workspace, "vitest.unit.config.ts");
-      const componentConfig = await readVitestTestConfig(
-        workspace,
-        "vitest.integration.component.config.ts",
-      );
-      const projects = unitConfig.projects?.map(project => project.test);
-      const nodeProject = projects?.find(project => project?.environment === "node");
-      const domProject = projects?.find(project => project?.environment === "jsdom");
+      const componentConfig = await readVitestTestConfig(workspace, "vitest.integration.component.config.ts");
+      const projects = unitConfig.projects?.map((project) => project.test);
+      const nodeProject = projects?.find((project) => project?.environment === "node");
+      const domProject = projects?.find((project) => project?.environment === "jsdom");
 
-      expect(packageJson.scripts["test:unit"])
-        .toBe("vitest run --config vitest.unit.config.ts");
+      expect(packageJson.scripts["test:unit"]).toBe("vitest run --config vitest.unit.config.ts");
       expect(nodeProject).toBeDefined();
       expect(domProject).toBeDefined();
       expect(unitConfig.setupFiles).toBeUndefined();
@@ -1097,9 +1021,7 @@ describe("test orchestration", () => {
     ];
 
     for (const owner of owners) {
-      const playwrightConfig = (await import(pathToFileURL(
-        join(owner.root, "playwright.config.ts"),
-      ).href)).default;
+      const playwrightConfig = (await import(pathToFileURL(join(owner.root, "playwright.config.ts")).href)).default;
 
       expect(playwrightConfig.testDir).toBe("./test-integration/browser");
       expect(playwrightConfig.projects).toHaveLength(1);
@@ -1118,6 +1040,7 @@ describe("test orchestration", () => {
   test("runs verify stages in the declared order", () => {
     expect(runVerifyWithRecorder()).toEqual({
       commands: [
+        "format:check",
         "lint",
         "check:docs",
         "check:env-names",
@@ -1131,25 +1054,47 @@ describe("test orchestration", () => {
     });
   }, 15_000);
 
-  test("runs only the five static checks through the public static entry", () => {
+  test("runs only the six static checks through the public static entry", () => {
     const rootPackage = readJson(join(repoRoot, "package.json"));
     expect(rootPackage.scripts["verify:static"]).toBe("node scripts/verify.mjs --static");
     expect(runVerifyWithRecorder(undefined, ["--static"])).toEqual({
-      commands: ["lint", "check:docs", "check:env-names", "check:architecture", "check:test-collection"],
+      commands: [
+        "format:check",
+        "lint",
+        "check:docs",
+        "check:env-names",
+        "check:architecture",
+        "check:test-collection",
+      ],
       exitCode: 0,
     });
   }, 15_000);
 
-  test.each([[[]], [["--static"]]])("blocks downstream commands on static guard failures with args %j", (args) => {
-    expect(runVerifyWithRecorder("check:env-names", args)).toEqual({
-      commands: ["lint", "check:docs", "check:env-names"],
-      exitCode: 37,
-    });
-    expect(runVerifyWithRecorder("check:test-collection", args)).toEqual({
-      commands: ["lint", "check:docs", "check:env-names", "check:architecture", "check:test-collection"],
-      exitCode: 37,
-    });
-  }, 15_000);
+  test.each([[[]], [["--static"]]])(
+    "blocks downstream commands on static guard failures with args %j",
+    (args) => {
+      expect(runVerifyWithRecorder("format:check", args)).toEqual({
+        commands: ["format:check"],
+        exitCode: 37,
+      });
+      expect(runVerifyWithRecorder("check:env-names", args)).toEqual({
+        commands: ["format:check", "lint", "check:docs", "check:env-names"],
+        exitCode: 37,
+      });
+      expect(runVerifyWithRecorder("check:test-collection", args)).toEqual({
+        commands: [
+          "format:check",
+          "lint",
+          "check:docs",
+          "check:env-names",
+          "check:architecture",
+          "check:test-collection",
+        ],
+        exitCode: 37,
+      });
+    },
+    15_000,
+  );
 
   test.each([["--unknown"], ["static"], ["--static", "--static"], ["--static", "extra"]])(
     "rejects invalid verify arguments before launching checks: %j",
@@ -1192,15 +1137,14 @@ describe("test orchestration", () => {
       orchestrationScript: verifyScript,
       temporaryDirectoryPrefix: "iam-verify-signal-",
     });
-    expect(result.commands).toEqual(["lint"]);
+    expect(result.commands).toEqual(["format:check", "lint"]);
     expect(result.exitCode).toBe(1);
   });
 
   test("runs the provider-neutral CI gate in owner-command order", () => {
     const rootPackage = readJson(join(repoRoot, "package.json"));
 
-    expect(rootPackage.scripts["verify:ci"])
-      .toBe("node scripts/run-verification-gate.mjs ci");
+    expect(rootPackage.scripts["verify:ci"]).toBe("node scripts/run-verification-gate.mjs ci");
     expect(runVerificationGateWithRecorder("ci")).toEqual({
       commands: ["verify", "test:integration"],
       exitCode: 0,
@@ -1230,8 +1174,7 @@ describe("test orchestration", () => {
   test("runs the provider-neutral release gate in owner-command order", () => {
     const rootPackage = readJson(join(repoRoot, "package.json"));
 
-    expect(rootPackage.scripts["verify:release"])
-      .toBe("node scripts/run-verification-gate.mjs release");
+    expect(rootPackage.scripts["verify:release"]).toBe("node scripts/run-verification-gate.mjs release");
     expect(runVerificationGateWithRecorder("release")).toEqual({
       commands: ["verify:ci", "test:e2e"],
       exitCode: 0,
@@ -1287,24 +1230,21 @@ describe("test orchestration", () => {
     expect(result.commands).toEqual(["verify"]);
     if (process.platform === "win32") {
       expect(result).toMatchObject({ exitCode: 1, signal: null });
-    }
-    else {
+    } else {
       expect(result).toMatchObject({ exitCode: null, signal: "SIGTERM" });
     }
   }, 15_000);
 
   test("isolates every recorder-backed orchestration seam from caller controls", () => {
-    const verifyResult = withCallerEnvironment(
-      { IAM_VERIFICATION_GATE_FAIL_COMMAND: "lint" },
-      () => runVerifyWithRecorder(),
+    const verifyResult = withCallerEnvironment({ IAM_VERIFICATION_GATE_FAIL_COMMAND: "lint" }, () =>
+      runVerifyWithRecorder(),
     );
     const integrationResult = withCallerEnvironment(
       { IAM_VERIFICATION_GATE_SIGNAL_COMMAND: "test:integration:component" },
       () => runTestIntegrationWithRecorder(),
     );
-    const gateResult = withCallerEnvironment(
-      { IAM_TEST_INTEGRATION_FAIL_COMMAND: "verify" },
-      () => runVerificationGateWithRecorder("ci"),
+    const gateResult = withCallerEnvironment({ IAM_TEST_INTEGRATION_FAIL_COMMAND: "verify" }, () =>
+      runVerificationGateWithRecorder("ci"),
     );
 
     expect(verifyResult.exitCode).toBe(0);
@@ -1315,6 +1255,7 @@ describe("test orchestration", () => {
   test("stops verify after the first failed stage command", () => {
     expect(runVerifyWithRecorder("test:unit")).toEqual({
       commands: [
+        "format:check",
         "lint",
         "check:docs",
         "check:env-names",
@@ -1329,12 +1270,7 @@ describe("test orchestration", () => {
 
   test("stops verify before typecheck when the architecture guard fails", () => {
     expect(runVerifyWithRecorder("check:architecture")).toEqual({
-      commands: [
-        "lint",
-        "check:docs",
-        "check:env-names",
-        "check:architecture",
-      ],
+      commands: ["format:check", "lint", "check:docs", "check:env-names", "check:architecture"],
       exitCode: 37,
     });
   }, 15_000);

@@ -16,18 +16,16 @@ export function parseClientSnapshotMaintenanceArgs(argv: string[]) {
     strict: true,
     allowPositionals: false,
     options: {
-      "all": { type: "boolean" },
+      all: { type: "boolean" },
       "client-code": { type: "string" },
       "writers-stopped": { type: "boolean" },
-      "drained": { type: "boolean" },
+      drained: { type: "boolean" },
       "deadline-ms": { type: "string" },
     },
   });
-  const flags = args.filter(value => value.startsWith("--")).map(value => value.split("=")[0]);
-  if (new Set(flags).size !== flags.length)
-    throw new Error("Repeated maintenance input");
-  const clientCode
-    = values["client-code"] === undefined ? undefined : ClientCodeSchema.parse(values["client-code"]);
+  const flags = args.filter((value) => value.startsWith("--")).map((value) => value.split("=")[0]);
+  if (new Set(flags).size !== flags.length) throw new Error("Repeated maintenance input");
+  const clientCode = values["client-code"] === undefined ? undefined : ClientCodeSchema.parse(values["client-code"]);
   if (
     clientCode
       ? mode !== "repair" || values.all || values["writers-stopped"] || values.drained
@@ -35,8 +33,8 @@ export function parseClientSnapshotMaintenanceArgs(argv: string[]) {
   ) {
     throw new Error("Explicit maintenance scope required");
   }
-  const deadlineMs
-    = values["deadline-ms"] === undefined
+  const deadlineMs =
+    values["deadline-ms"] === undefined
       ? clientCode
         ? 10_000
         : 300_000
@@ -45,11 +43,10 @@ export function parseClientSnapshotMaintenanceArgs(argv: string[]) {
 }
 
 async function main() {
-  let input;
+  let input: ReturnType<typeof parseClientSnapshotMaintenanceArgs>;
   try {
     input = parseClientSnapshotMaintenanceArgs(process.argv.slice(2));
-  }
-  catch {
+  } catch {
     process.stdout.write(`${JSON.stringify({ version: 1, status: "failed", reason: "invalid-input" })}\n`);
     process.exitCode = 2;
     return;
@@ -82,27 +79,21 @@ async function main() {
     const redis = connection.redis;
     if (input.mode === "verify") {
       const verifier = createClientSnapshotVerifier({
-        scan: async (cursor, match, pattern, count, limit) =>
-          await redis.scan(cursor, match, pattern, count, limit),
+        scan: async (cursor, match, pattern, count, limit) => await redis.scan(cursor, match, pattern, count, limit),
       });
       const result = await verifier.verifyAllAfterRedisRestore({ protocolTrafficStopped: true });
       report.matching = result.matchingKeys;
-      if (result.matchingKeys !== 0)
-        throw new Error("Snapshot state remains");
-    }
-    else {
+      if (result.matchingKeys !== 0) throw new Error("Snapshot state remains");
+    } else {
       const owner = createClientSnapshotMaintenance(redis);
-      if (input.clientCode)
-        await owner.repairClient(input.clientCode);
+      if (input.clientCode) await owner.repairClient(input.clientCode);
       else await owner.repairAllAfterRedisRestore({ protocolTrafficStopped: true });
     }
     controller.signal.throwIfAborted();
     report.status = "completed";
     report.reason = "scope-complete";
-  }
-  catch {
-  }
-  finally {
+  } catch {
+  } finally {
     clearTimeout(timer);
     process.off("SIGINT", abort);
     process.off("SIGTERM", abort);
@@ -113,6 +104,5 @@ async function main() {
 }
 
 if (import.meta.main) {
-  // eslint-disable-next-line antfu/no-top-level-await -- CLI owns resources until report and shutdown complete.
   await main();
 }

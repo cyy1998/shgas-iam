@@ -10,25 +10,25 @@ Custom SSO 是自定义协议；标准 OIDC 接入见[OIDC 指南](../oidc/oidc-
 先请求 `GET {IAM_ORIGIN}/sso/.well-known/authentication-configuration`，从响应 envelope 的 data 取得
 authorizationEndpoint、logoutEndpoint、thirdPartyOAEndpoint；内外入口各从自己的 origin 发现。
 
-| 端点 | 方法与用途 |
-|---|---|
-| /sso/authorize | GET，发起授权。 |
-| /sso/callback | GET，IAM 托管回调。 |
-| /sso/token | POST，业务后端用 Code 换取协议 Token 与主体投影。 |
-| /public/user-info | GET，按当前 Client 披露配置读取主体。 |
-| /auth/authz | GET，反向代理鉴权与最小用户 Header。 |
-| /sso/logout | GET，退出 IAM 根及其关联在线访问。 |
+| 端点              | 方法与用途                                        |
+| ----------------- | ------------------------------------------------- |
+| /sso/authorize    | GET，发起授权。                                   |
+| /sso/callback     | GET，IAM 托管回调。                               |
+| /sso/token        | POST，业务后端用 Code 换取协议 Token 与主体投影。 |
+| /public/user-info | GET，按当前 Client 披露配置读取主体。             |
+| /auth/authz       | GET，反向代理鉴权与最小用户 Header。              |
+| /sso/logout       | GET，退出 IAM 根及其关联在线访问。                |
 
 管理员为目标业务 Client 配置：
 
-| 字段 | 接入含义 |
-|---|---|
-| clientCode | 不可变业务编码，授权 query 中使用 client。 |
-| ssoSecret | business 兑换用的 SSO 专用凭据，与第三方可信登录的通用 clientSecret 独立；只保存在服务端。 |
-| validRedirectUrls | 最终落地地址允许列表；支持 origin、一级子域 wildcard 和 path 末尾 /*。 |
-| subjectClaims | 获准接收的主体字段，必须包含 Subject Identifier。 |
-| callbackType | managed 或 business，显式决定交付方式。 |
-| callbackEndpoint | managed 禁止；business 必填固定完整回调，允许 query。 |
+| 字段              | 接入含义                                                                                   |
+| ----------------- | ------------------------------------------------------------------------------------------ |
+| clientCode        | 不可变业务编码，授权 query 中使用 client。                                                 |
+| ssoSecret         | business 兑换用的 SSO 专用凭据，与第三方可信登录的通用 clientSecret 独立；只保存在服务端。 |
+| validRedirectUrls | 最终落地地址允许列表；支持 origin、一级子域 wildcard 和 path 末尾 /*。                     |
+| subjectClaims     | 获准接收的主体字段，必须包含 Subject Identifier。                                          |
+| callbackType      | managed 或 business，显式决定交付方式。                                                    |
+| callbackEndpoint  | managed 禁止；business 必填固定完整回调，允许 query。                                      |
 
 目标 Client 必须可通行、启用 SSO 并选择 Custom 协议。
 Secret 的生成/轮换结果不自动交付原文，管理员通过独立授权且审计的读取操作获取当前值，
@@ -39,12 +39,12 @@ Secret 的生成/轮换结果不自动交付原文，管理员通过独立授权
 Client Code 原值保持业务含义。进入 Basic username、Client Header 或局部 Cookie 名时，
 先按 UTF-8 和 RFC 3986 URI component 规则编码为 transportClientCode：
 
-| 原值 | transportClientCode |
-|---|---|
-| legacy:client | legacy%3Aclient |
-| legacy/client | legacy%2Fclient |
-| 中文客户端 | %E4%B8%AD%E6%96%87%E5%AE%A2%E6%88%B7%E7%AB%AF |
-| legacy%3Aclient | legacy%253Aclient |
+| 原值            | transportClientCode                           |
+| --------------- | --------------------------------------------- |
+| legacy:client   | legacy%3Aclient                               |
+| legacy/client   | legacy%2Fclient                               |
+| 中文客户端      | %E4%B8%AD%E6%96%87%E5%AE%A2%E6%88%B7%E7%AB%AF |
+| legacy%3Aclient | legacy%253Aclient                             |
 
 字母、数字、点、下划线、波浪号、连字符保持不变，其余字节为 %HH。
 64 字符上限按原值 Unicode code point 计数，不按 UTF-16 length 或编码后长度计数。
@@ -162,12 +162,12 @@ Client 和 X-Forwarded-Uri 必填，优先使用局部 Cookie。成功把相同 
 subjectIdentifier 必有，username/name 仅在允许时出现。数据库 ID、phone、任职和授权不进入该 Header；
 仅主体不读 Facts。authz 不做接口级角色/权限判定，业务系统仍负责自己的授权。
 
-| 情况 | 接入方处理 |
-|---|---|
-| Header/Client 编码非法，或当前 Client/SSO/协议配置拒绝 | 当前 InvalidSsoClientError 为 400；修正配置，不把它当 Token 到期。该配置错误不触发 Cookie 清理或实例撤销。 |
-| Token/根/实例明确失效或账号明确拒绝 | 401；重新授权，第三方自行处理本地 session。Cookie 来源的明确失效可清对应 Cookie；Client/用途不匹配不触发这种清理。 |
-| Maintenance | 503、AUTH.MAINTENANCE 与 Retry-After；在线 UserInfo/authz 保留有效 Cookie，可重试原访问。 |
-| Snapshot、账号状态或 Facts 暂时不可确认 | 503；保留仍有效凭据，按 Retry-After 重试访问。Code 兑换仍用前述重新授权策略。 |
+| 情况                                                   | 接入方处理                                                                                                         |
+| ------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------ |
+| Header/Client 编码非法，或当前 Client/SSO/协议配置拒绝 | 当前 InvalidSsoClientError 为 400；修正配置，不把它当 Token 到期。该配置错误不触发 Cookie 清理或实例撤销。         |
+| Token/根/实例明确失效或账号明确拒绝                    | 401；重新授权，第三方自行处理本地 session。Cookie 来源的明确失效可清对应 Cookie；Client/用途不匹配不触发这种清理。 |
+| Maintenance                                            | 503、AUTH.MAINTENANCE 与 Retry-After；在线 UserInfo/authz 保留有效 Cookie，可重试原访问。                          |
+| Snapshot、账号状态或 Facts 暂时不可确认                | 503；保留仍有效凭据，按 Retry-After 重试访问。Code 兑换仍用前述重新授权策略。                                      |
 
 Client 配置拒绝与根/账号拒绝不同；IAM Client 的交付配置不可用也不因此清全局 Cookie。
 根成功终止后，即使子索引漏项或 Token 仍物理存在，后续在线使用仍拒绝。

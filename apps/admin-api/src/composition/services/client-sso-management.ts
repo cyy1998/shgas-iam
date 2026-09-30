@@ -1,13 +1,13 @@
-import type { ClientSsoServiceDeps } from "@admin-api/services/client-sso/client-sso.port";
-import type { AfterCommitLoggerPort } from "@iam/api-core/uow";
-import type { DbClient } from "@iam/db";
 import { randomBytes, randomUUID } from "node:crypto";
 import { createClientSsoAdapter } from "@admin-api/routes/admin/client-sso/client-sso.adapter";
 import { createAuditRepository } from "@admin-api/services/audit/audit.repository";
 import { createAdminAuditService } from "@admin-api/services/audit/audit.service";
+import type { ClientSsoServiceDeps } from "@admin-api/services/client-sso/client-sso.port";
 import { createClientSsoRepository } from "@admin-api/services/client-sso/client-sso.repository";
 import { createClientSsoService } from "@admin-api/services/client-sso/client-sso.service";
+import type { AfterCommitLoggerPort } from "@iam/api-core/uow";
 import { createUnitOfWork } from "@iam/api-core/uow";
+import type { DbClient } from "@iam/db";
 
 export function createClientSsoManagement(options: {
   db: DbClient;
@@ -21,14 +21,20 @@ export function createClientSsoManagement(options: {
     uow: createUnitOfWork({
       db: options.db,
       logger: options.logger,
-      createTxPorts: tx => ({
+      createTxPorts: (tx) => ({
         client: createClientSsoRepository(tx),
         audit: createAdminAuditService({ auditRepository: createAuditRepository(tx) }),
       }),
     }),
     invalidation: options.invalidation,
     logger: options.logger,
-    credentials: { create: () => ({ secret: randomBytes(32).toString("base64url"), id: randomUUID(), updatedAt: new Date().toISOString() }) },
+    credentials: {
+      create: () => ({
+        secret: randomBytes(32).toString("base64url"),
+        id: randomUUID(),
+        updatedAt: new Date().toISOString(),
+      }),
+    },
   });
   return { service, ...createClientSsoAdapter(service) };
 }

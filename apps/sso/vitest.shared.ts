@@ -1,39 +1,28 @@
-import { resolve } from 'node:path';
-import { defineConfig } from 'vitest/config';
+import { resolve } from "node:path";
+import { defineConfig } from "vitest/config";
 
 export const domTestOptions = {
-  environment: 'jsdom' as const,
+  environment: "jsdom" as const,
 };
 
 export default defineConfig({
   resolve: {
     alias: {
-      '@sso': resolve(__dirname, 'src'),
-      '~sso': __dirname,
-      '@umijs/max': resolve(__dirname, 'test/mocks/umijs-max.ts'),
+      "@sso": resolve(__dirname, "src"),
+      "~sso": __dirname,
+      "@umijs/max": resolve(__dirname, "test/mocks/umijs-max.ts"),
     },
   },
   test: {
-    exclude: [
-      'dist/**',
-      'test-integration/browser/**',
-      'node_modules/**',
-      'src/.umi/**',
-      'src/.umi-production/**',
-    ],
-    maxWorkers: '25%',
+    exclude: ["dist/**", "test-integration/browser/**", "node_modules/**", "src/.umi/**", "src/.umi-production/**"],
+    maxWorkers: "25%",
     testTimeout: 10_000,
     coverage: {
-      provider: 'v8',
-      reporter: ['text', 'html', 'lcov'],
-      reportsDirectory: './coverage',
-      include: ['src/**/*.{ts,tsx}'],
-      exclude: [
-        'src/**/*.d.ts',
-        'src/.umi/**',
-        'src/.umi-production/**',
-        'src/assets/**',
-      ],
+      provider: "v8",
+      reporter: ["text", "html", "lcov"],
+      reportsDirectory: "./coverage",
+      include: ["src/**/*.{ts,tsx}"],
+      exclude: ["src/**/*.d.ts", "src/.umi/**", "src/.umi-production/**", "src/assets/**"],
     },
   },
 });

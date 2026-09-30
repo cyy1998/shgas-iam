@@ -1,15 +1,10 @@
-import type { SubjectFactsCacheRecord } from "@iam/user-profile-read-model";
+import { describe, expect, test } from "bun:test";
 import { Writable } from "node:stream";
 import { buildLoggerOptions, LoggerSourceApp } from "@iam/api-core/logger";
 import { UserProfileDirtyReason, UserStatus } from "@iam/contracts";
-import {
-  createSubjectFactsCacheRecord,
-} from "@iam/user-profile-read-model";
-import {
-  createUserProfileJobProcessor,
-  createUserProfileRebuildProcessor,
-} from "@iam/user-profile-read-model/worker";
-import { describe, expect, test } from "bun:test";
+import type { SubjectFactsCacheRecord } from "@iam/user-profile-read-model";
+import { createSubjectFactsCacheRecord } from "@iam/user-profile-read-model";
+import { createUserProfileJobProcessor, createUserProfileRebuildProcessor } from "@iam/user-profile-read-model/worker";
 import pino from "pino";
 
 const SUBJECT_FACTS_CANARY = "SUBJECT_FACTS_MUST_NOT_REACH_LOGS";
@@ -24,11 +19,14 @@ describe("User Profile publication logging", () => {
         callback();
       },
     });
-    const logger = pino(buildLoggerOptions({
-      nodeEnv: "test",
-      logFormat: "json",
-      sourceApp: LoggerSourceApp.Worker,
-    }), stream).child({ sourceApp: LoggerSourceApp.Worker });
+    const logger = pino(
+      buildLoggerOptions({
+        nodeEnv: "test",
+        logFormat: "json",
+        sourceApp: LoggerSourceApp.Worker,
+      }),
+      stream,
+    ).child({ sourceApp: LoggerSourceApp.Worker });
     let rejectedRecord: SubjectFactsCacheRecord | undefined;
     const rebuildProcessor = createUserProfileRebuildProcessor({
       dirtyRepository: {
@@ -53,25 +51,29 @@ describe("User Profile publication logging", () => {
           detail: {} as never,
           searchDoc: {} as never,
           subjectFacts: {
-            employments: [{
-              isPrimary: true,
-              organization: {
-                code: "ORG",
-                name: SUBJECT_FACTS_CANARY,
-                type: "department",
-                path: [{
+            employments: [
+              {
+                isPrimary: true,
+                organization: {
                   code: "ORG",
                   name: SUBJECT_FACTS_CANARY,
                   type: "department",
-                }],
+                  path: [
+                    {
+                      code: "ORG",
+                      name: SUBJECT_FACTS_CANARY,
+                      type: "department",
+                    },
+                  ],
+                },
+                position: {
+                  code: "POSITION",
+                  name: "Position",
+                },
+                clientAuthorizations: [],
+                responsibilities: [],
               },
-              position: {
-                code: "POSITION",
-                name: "Position",
-              },
-              clientAuthorizations: [],
-              responsibilities: [],
-            }],
+            ],
           },
           rebuiltAt: NOW,
         }),
@@ -84,17 +86,14 @@ describe("User Profile publication logging", () => {
         publish: async (record) => {
           rejectedRecord = record;
           const serializedRecord = JSON.stringify(record);
-          throw Object.assign(
-            new Error(`ERR failed to evaluate Subject Facts ${SUBJECT_FACTS_CANARY}`),
-            {
-              name: "ReplyError",
-              code: "ERR",
-              command: {
-                name: "eval",
-                args: ["return redis.call('set', KEYS[1], ARGV[1])", "1", "subject-key", serializedRecord],
-              },
+          throw Object.assign(new Error(`ERR failed to evaluate Subject Facts ${SUBJECT_FACTS_CANARY}`), {
+            name: "ReplyError",
+            code: "ERR",
+            command: {
+              name: "eval",
+              args: ["return redis.call('set', KEYS[1], ARGV[1])", "1", "subject-key", serializedRecord],
             },
-          );
+          });
         },
       },
       subjectAccessRepair: {
@@ -108,15 +107,17 @@ describe("User Profile publication logging", () => {
       logger,
     });
 
-    await expect(processor({
-      id: "rebuild-user-profile|1|4",
-      name: "rebuild-user-profile",
-      data: {
-        userId: 1,
-        dirtyVersion: "4",
-        reason: UserProfileDirtyReason.UserUpdated,
-      },
-    })).resolves.toMatchObject({
+    await expect(
+      processor({
+        id: "rebuild-user-profile|1|4",
+        name: "rebuild-user-profile",
+        data: {
+          userId: 1,
+          dirtyVersion: "4",
+          reason: UserProfileDirtyReason.UserUpdated,
+        },
+      }),
+    ).resolves.toMatchObject({
       status: "rebuilt",
       cacheStatus: "failed",
     });
@@ -124,29 +125,36 @@ describe("User Profile publication logging", () => {
     expect(rejectedRecord).toBeDefined();
     expect(lines).toHaveLength(2);
     const output = lines.join("");
-    const logs = output.trim().split("\n").map(line => JSON.parse(line) as Record<string, unknown>);
-    expect(logs).toContainEqual(expect.objectContaining({
-      sourceApp: LoggerSourceApp.Worker,
-      userId: 1,
-      dirtyVersion: "4",
-      cacheStatus: "failed",
-      errorType: "ReplyError",
-      errorCode: "ERR",
-      msg: "user profile Subject Facts cache publication failed",
-    }));
-    expect(logs).toContainEqual(expect.objectContaining({
-      sourceApp: LoggerSourceApp.Worker,
-      userId: 1,
-      dirtyVersion: "4",
-      jobId: "rebuild-user-profile|1|4",
-      status: "rebuilt",
-      cacheStatus: "failed",
-      msg: "user profile rebuild job processed",
-    }));
-    expect(logs.every(log => log.err === undefined)).toBe(true);
+    const logs = output
+      .trim()
+      .split("\n")
+      .map((line) => JSON.parse(line) as Record<string, unknown>);
+    expect(logs).toContainEqual(
+      expect.objectContaining({
+        sourceApp: LoggerSourceApp.Worker,
+        userId: 1,
+        dirtyVersion: "4",
+        cacheStatus: "failed",
+        errorType: "ReplyError",
+        errorCode: "ERR",
+        msg: "user profile Subject Facts cache publication failed",
+      }),
+    );
+    expect(logs).toContainEqual(
+      expect.objectContaining({
+        sourceApp: LoggerSourceApp.Worker,
+        userId: 1,
+        dirtyVersion: "4",
+        jobId: "rebuild-user-profile|1|4",
+        status: "rebuilt",
+        cacheStatus: "failed",
+        msg: "user profile rebuild job processed",
+      }),
+    );
+    expect(logs.every((log) => log.err === undefined)).toBe(true);
     expect(output).not.toContain(SUBJECT_FACTS_CANARY);
     expect(output).not.toContain(JSON.stringify(rejectedRecord));
-    expect(output).not.toContain("\"command\"");
-    expect(output).not.toContain("\"args\"");
+    expect(output).not.toContain('"command"');
+    expect(output).not.toContain('"args"');
   });
 });

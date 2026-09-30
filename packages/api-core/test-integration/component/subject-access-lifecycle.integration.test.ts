@@ -8,9 +8,7 @@ import {
   SubjectAccessRecordV1Schema,
   SubjectAccessRollbackPendingError,
 } from "../../src/subject-access";
-import {
-  createInMemorySubjectAccessStore,
-} from "../../src/subject-access/testing";
+import { createInMemorySubjectAccessStore } from "../../src/subject-access/testing";
 import { markTransactionRollbackConfirmed } from "../../src/uow";
 
 const subjectIdentifier = "00000000-0000-4000-8000-000000000001";
@@ -25,10 +23,9 @@ const initialRecord = {
 };
 
 function createHarness() {
-  const store = createInMemorySubjectAccessStore(
-    [initialRecord],
-    { clock: { now: () => new Date("2026-07-31T08:05:00.000Z").getTime() } },
-  );
+  const store = createInMemorySubjectAccessStore([initialRecord], {
+    clock: { now: () => new Date("2026-07-31T08:05:00.000Z").getTime() },
+  });
   const barrier = createSubjectAccessBarrier({
     store,
     clock: { nowDate: () => new Date("2026-07-31T08:05:00.000Z") },
@@ -62,9 +59,7 @@ function createHarness() {
 
 async function readRecord(store: ReturnType<typeof createInMemorySubjectAccessStore>) {
   const serialized = await store.read(subjectIdentifier);
-  return serialized === null
-    ? null
-    : SubjectAccessRecordV1Schema.parse(JSON.parse(serialized));
+  return serialized === null ? null : SubjectAccessRecordV1Schema.parse(JSON.parse(serialized));
 }
 
 async function repairBacklog(store: ReturnType<typeof createInMemorySubjectAccessStore>) {
@@ -101,20 +96,13 @@ describe("Subject Access account lifecycle", () => {
       },
     });
 
-    expect(events).toEqual([
-      "postgres:intent",
-      "redis:pre-block",
-      "postgres:domain-mutation",
-    ]);
+    expect(events).toEqual(["postgres:intent", "redis:pre-block", "postgres:domain-mutation"]);
     expect(createIntent).toHaveBeenCalledWith({
       ownerToken,
       subjectIdentifier,
       transitionId,
     });
-    expect(barrier.beginBlocking).toHaveBeenCalledWith(
-      subjectIdentifier,
-      { transitionId },
-    );
+    expect(barrier.beginBlocking).toHaveBeenCalledWith(subjectIdentifier, { transitionId });
   });
 
   test("never pre-blocks or mutates when durable intent creation fails", async () => {
@@ -124,11 +112,13 @@ describe("Subject Access account lifecycle", () => {
     barrier.beginBlocking = mock(barrier.beginBlocking);
     const mutate = mock(async () => undefined);
 
-    await expect(lifecycle.run({
-      subjectIdentifier,
-      disposition: "disabled",
-      mutate,
-    })).rejects.toBe(intentError);
+    await expect(
+      lifecycle.run({
+        subjectIdentifier,
+        disposition: "disabled",
+        mutate,
+      }),
+    ).rejects.toBe(intentError);
 
     expect(barrier.beginBlocking).not.toHaveBeenCalled();
     expect(mutate).not.toHaveBeenCalled();
@@ -174,11 +164,13 @@ describe("Subject Access account lifecycle", () => {
     barrier.abortBegin = mock(async () => undefined);
     const mutate = mock(async () => "must not run");
 
-    await expect(lifecycle.run({
-      subjectIdentifier,
-      disposition: "disabled",
-      mutate,
-    })).rejects.toBe(pending);
+    await expect(
+      lifecycle.run({
+        subjectIdentifier,
+        disposition: "disabled",
+        mutate,
+      }),
+    ).rejects.toBe(pending);
 
     expect(barrier.abortBegin).toHaveBeenCalledWith(receipt);
     expect(mutate).not.toHaveBeenCalled();
@@ -205,15 +197,17 @@ describe("Subject Access account lifecycle", () => {
     markTransactionRollbackConfirmed(mutationError);
     const revokeSessions = mock(async () => undefined);
 
-    await expect(lifecycle.run({
-      subjectIdentifier,
-      disposition: "disabled",
-      mutate: async () => {
-        expect((await readRecord(store))?.state).toBe("blocking");
-        throw mutationError;
-      },
-      revokeSessions,
-    })).rejects.toBe(mutationError);
+    await expect(
+      lifecycle.run({
+        subjectIdentifier,
+        disposition: "disabled",
+        mutate: async () => {
+          expect((await readRecord(store))?.state).toBe("blocking");
+          throw mutationError;
+        },
+        revokeSessions,
+      }),
+    ).rejects.toBe(mutationError);
 
     expect(await readRecord(store)).toEqual(initialRecord);
     expect(await repairBacklog(store)).toEqual([]);
@@ -221,13 +215,7 @@ describe("Subject Access account lifecycle", () => {
   });
 
   test("restores the Barrier when a reaped pre-begin owner resumes too late", async () => {
-    const {
-      barrier,
-      createIntent,
-      lifecycle,
-      markRolledBack,
-      store,
-    } = createHarness();
+    const { barrier, createIntent, lifecycle, markRolledBack, store } = createHarness();
     let intentReaped = false;
     createIntent.mockImplementationOnce(async () => {
       intentReaped = true;
@@ -241,21 +229,19 @@ describe("Subject Access account lifecycle", () => {
     const ownershipError = new Error("transition owner is no longer pending");
     markTransactionRollbackConfirmed(ownershipError);
 
-    await expect(lifecycle.run({
-      subjectIdentifier,
-      disposition: "disabled",
-      mutate: async () => {
-        expect((await readRecord(store))?.state).toBe("blocking");
-        if (!intentReaped)
-          return await domainMutation();
-        throw ownershipError;
-      },
-    })).rejects.toBe(ownershipError);
+    await expect(
+      lifecycle.run({
+        subjectIdentifier,
+        disposition: "disabled",
+        mutate: async () => {
+          expect((await readRecord(store))?.state).toBe("blocking");
+          if (!intentReaped) return await domainMutation();
+          throw ownershipError;
+        },
+      }),
+    ).rejects.toBe(ownershipError);
 
-    expect(barrier.beginBlocking).toHaveBeenCalledWith(
-      subjectIdentifier,
-      { transitionId },
-    );
+    expect(barrier.beginBlocking).toHaveBeenCalledWith(subjectIdentifier, { transitionId });
     expect(domainMutation).not.toHaveBeenCalled();
     expect(markRolledBack).toHaveBeenCalledWith({
       ownerToken,
@@ -270,24 +256,29 @@ describe("Subject Access account lifecycle", () => {
     const { lifecycle, store, warn } = createHarness();
     const unknownOutcome = new Error("connection lost while committing");
 
-    await expect(lifecycle.run({
-      subjectIdentifier,
-      disposition: "disabled",
-      mutate: async () => {
-        throw unknownOutcome;
-      },
-    })).rejects.toBe(unknownOutcome);
+    await expect(
+      lifecycle.run({
+        subjectIdentifier,
+        disposition: "disabled",
+        mutate: async () => {
+          throw unknownOutcome;
+        },
+      }),
+    ).rejects.toBe(unknownOutcome);
 
     expect((await readRecord(store))?.state).toBe("blocking");
     expect(await repairBacklog(store)).toEqual([]);
-    expect(warn).toHaveBeenCalledWith({
-      errorType: "Error",
-      operation: "mutation_outcome_unknown",
-      requestId: undefined,
-      subjectIdentifier,
-      traceId: undefined,
-      transitionId,
-    }, "Subject Access post-commit action failed");
+    expect(warn).toHaveBeenCalledWith(
+      {
+        errorType: "Error",
+        operation: "mutation_outcome_unknown",
+        requestId: undefined,
+        subjectIdentifier,
+        traceId: undefined,
+        transitionId,
+      },
+      "Subject Access post-commit action failed",
+    );
   });
 
   test("exposes the same transition receipt when confirmed rollback restoration fails", async () => {
@@ -299,13 +290,15 @@ describe("Subject Access account lifecycle", () => {
       throw new Error("redis unavailable");
     });
 
-    const pending = await lifecycle.run({
-      subjectIdentifier,
-      disposition: "disabled",
-      mutate: async () => {
-        throw mutationError;
-      },
-    }).catch(error => error);
+    const pending = await lifecycle
+      .run({
+        subjectIdentifier,
+        disposition: "disabled",
+        mutate: async () => {
+          throw mutationError;
+        },
+      })
+      .catch((error) => error);
     expect(pending).toBeInstanceOf(SubjectAccessRollbackPendingError);
     expect(pending.receipt).toEqual({
       subjectIdentifier,
@@ -323,18 +316,20 @@ describe("Subject Access account lifecycle", () => {
     const { lifecycle, store } = createHarness();
     const events: string[] = [];
 
-    await expect(lifecycle.run({
-      subjectIdentifier,
-      disposition: "disabled",
-      mutate: async () => {
-        events.push("database:committed");
-        return "committed";
-      },
-      revokeSessions: async () => {
-        expect((await readRecord(store))?.state).toBe("disabled");
-        events.push("sessions:revoked");
-      },
-    })).resolves.toBe("committed");
+    await expect(
+      lifecycle.run({
+        subjectIdentifier,
+        disposition: "disabled",
+        mutate: async () => {
+          events.push("database:committed");
+          return "committed";
+        },
+        revokeSessions: async () => {
+          expect((await readRecord(store))?.state).toBe("disabled");
+          events.push("sessions:revoked");
+        },
+      }),
+    ).resolves.toBe("committed");
 
     expect((await readRecord(store))?.state).toBe("disabled");
     expect(await repairBacklog(store)).toEqual([]);
@@ -342,10 +337,9 @@ describe("Subject Access account lifecycle", () => {
   });
 
   test("skips eager cleanup when there was no previous session generation to target", async () => {
-    const store = createInMemorySubjectAccessStore(
-      [],
-      { clock: { now: () => new Date("2026-07-31T08:05:00.000Z").getTime() } },
-    );
+    const store = createInMemorySubjectAccessStore([], {
+      clock: { now: () => new Date("2026-07-31T08:05:00.000Z").getTime() },
+    });
     const barrier = createSubjectAccessBarrier({
       store,
       clock: { nowDate: () => new Date("2026-07-31T08:05:00.000Z") },
@@ -387,26 +381,31 @@ describe("Subject Access account lifecycle", () => {
     });
     const revokeSessions = mock(async () => undefined);
 
-    await expect(lifecycle.run({
-      subjectIdentifier,
-      disposition: "disabled",
-      mutate: async () => "committed",
-      revokeSessions,
-      observability: { requestId: "req-1", traceId: "trace-1" },
-    })).resolves.toBe("committed");
+    await expect(
+      lifecycle.run({
+        subjectIdentifier,
+        disposition: "disabled",
+        mutate: async () => "committed",
+        revokeSessions,
+        observability: { requestId: "req-1", traceId: "trace-1" },
+      }),
+    ).resolves.toBe("committed");
 
     expect((await readRecord(store))?.state).toBe("blocking");
     expect(await repairBacklog(store)).toEqual([subjectIdentifier]);
     expect(revokeSessions).toHaveBeenCalledTimes(1);
-    expect(warn).toHaveBeenCalledWith({
-      errorCode: undefined,
-      errorType: "Error",
-      operation: "finalize",
-      requestId: "req-1",
-      subjectIdentifier,
-      traceId: "trace-1",
-      transitionId,
-    }, "Subject Access post-commit action failed");
+    expect(warn).toHaveBeenCalledWith(
+      {
+        errorCode: undefined,
+        errorType: "Error",
+        operation: "finalize",
+        requestId: "req-1",
+        subjectIdentifier,
+        traceId: "trace-1",
+        transitionId,
+      },
+      "Subject Access post-commit action failed",
+    );
     barrier.finalize = finalize;
   });
 
@@ -417,11 +416,13 @@ describe("Subject Access account lifecycle", () => {
       throw new Error("redis unavailable");
     });
 
-    const pending = await lifecycle.run({
-      subjectIdentifier,
-      disposition: "awaiting_publication",
-      mutate: async () => "committed",
-    }).catch(error => error);
+    const pending = await lifecycle
+      .run({
+        subjectIdentifier,
+        disposition: "awaiting_publication",
+        mutate: async () => "committed",
+      })
+      .catch((error) => error);
     expect(pending).toBeInstanceOf(SubjectAccessCommitPendingError);
     expect(pending.receipt).toEqual({
       subjectIdentifier,
@@ -444,11 +445,13 @@ describe("Subject Access account lifecycle", () => {
       throw new Error("prepare response lost");
     });
 
-    const pending = await lifecycle.run({
-      subjectIdentifier,
-      disposition: "awaiting_publication",
-      mutate: async () => "committed",
-    }).catch(error => error);
+    const pending = await lifecycle
+      .run({
+        subjectIdentifier,
+        disposition: "awaiting_publication",
+        mutate: async () => "committed",
+      })
+      .catch((error) => error);
     expect(pending).toBeInstanceOf(SubjectAccessCommitPendingError);
 
     const repair = createSubjectAccessRepair({
@@ -468,10 +471,7 @@ describe("Subject Access account lifecycle", () => {
     });
 
     barrier.prepareRepair = prepareRepair;
-    await expect(lifecycle.confirmCommit(
-      pending.receipt,
-      pending.targetState,
-    )).resolves.toBeUndefined();
+    await expect(lifecycle.confirmCommit(pending.receipt, pending.targetState)).resolves.toBeUndefined();
   });
 
   test("keeps re-enabled accounts blocking until publication repair", async () => {
@@ -494,12 +494,14 @@ describe("Subject Access account lifecycle", () => {
     const { lifecycle, store } = createHarness();
     const revokeSessions = mock(async () => undefined);
 
-    await expect(lifecycle.run({
-      subjectIdentifier,
-      disposition: result => result.changed ? "disabled" : "restore_previous",
-      mutate: async () => ({ changed: false, value: "unchanged" }),
-      revokeSessions,
-    })).resolves.toEqual({ changed: false, value: "unchanged" });
+    await expect(
+      lifecycle.run({
+        subjectIdentifier,
+        disposition: (result) => (result.changed ? "disabled" : "restore_previous"),
+        mutate: async () => ({ changed: false, value: "unchanged" }),
+        revokeSessions,
+      }),
+    ).resolves.toEqual({ changed: false, value: "unchanged" });
 
     expect(await readRecord(store)).toEqual(initialRecord);
     expect(await repairBacklog(store)).toEqual([]);

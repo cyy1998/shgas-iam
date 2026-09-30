@@ -1,8 +1,5 @@
 import type { ClientSnapshotReader } from "@iam/api-core/client-snapshot";
 import type { SubjectAccessOperation } from "@iam/api-core/subject-access";
-import type { UnifiedSessionKernel, UserSessionObservation } from "@iam/session-kernel";
-import type { AcceptedAuthorization, OidcContinuation, OidcStateRedis } from "./state";
-import type { OidcAuthorizationResponse } from "./wire";
 import { requireSubjectAccessOperation, SubjectAccessDisabledError } from "@iam/api-core/subject-access";
 import {
   ClientCodeSchema,
@@ -11,9 +8,12 @@ import {
   getClientSsoTokenEndpointAuthMethod,
   OIDC_SUPPORTED_SCOPES,
 } from "@iam/contracts";
+import type { UnifiedSessionKernel, UserSessionObservation } from "@iam/session-kernel";
 import { z } from "zod";
 import { OidcProtocolError } from "./errors";
+import type { AcceptedAuthorization, OidcContinuation, OidcStateRedis } from "./state";
 import { createOidcState, digest, randomHandle } from "./state";
+import type { OidcAuthorizationResponse } from "./wire";
 import { OidcResponseModeSchema } from "./wire";
 
 export interface OidcAuthorizationOptions {
@@ -29,9 +29,9 @@ export interface OidcBrowserInput {
   browserBinding?: string;
   completion?: string;
 }
-export type OidcAuthorizationResult
-  = | { kind: "response"; response: OidcAuthorizationResponse; clearGlobalSessionCookie?: boolean }
-    | { kind: "login"; handle: string; browserBinding: string; ttl: number; clearGlobalSessionCookie: boolean };
+export type OidcAuthorizationResult =
+  | { kind: "response"; response: OidcAuthorizationResponse; clearGlobalSessionCookie?: boolean }
+  | { kind: "login"; handle: string; browserBinding: string; ttl: number; clearGlobalSessionCookie: boolean };
 
 function invalid(description: string): never {
   throw new OidcProtocolError("invalid_request", description);
@@ -52,9 +52,9 @@ export function createOidcAuthorization(options: OidcAuthorizationOptions) {
         if (snapshot.value.status === ClientStatus.Maintenance)
           throw new OidcProtocolError("temporarily_unavailable", "Client is under maintenance", 503);
         if (
-          snapshot.value.status !== ClientStatus.Enable
-          || !snapshot.value.ssoEnabled
-          || snapshot.value.ssoConfig?.protocol !== ClientSsoProtocol.Oidc
+          snapshot.value.status !== ClientStatus.Enable ||
+          !snapshot.value.ssoEnabled ||
+          snapshot.value.ssoConfig?.protocol !== ClientSsoProtocol.Oidc
         ) {
           throw new OidcProtocolError("unauthorized_client", "Client is not enabled for OIDC");
         }
@@ -79,12 +79,10 @@ export function createOidcAuthorization(options: OidcAuthorizationOptions) {
           "registration",
         ];
         for (const key of known) {
-          if (parameters.getAll(key).length > 1)
-            invalid(`Duplicate parameter: ${key}`);
+          if (parameters.getAll(key).length > 1) invalid(`Duplicate parameter: ${key}`);
         }
         const clientId = parameters.get("client_id");
-        if (!clientId || !ClientCodeSchema.safeParse(clientId).success)
-          invalid("client_id is required");
+        if (!clientId || !ClientCodeSchema.safeParse(clientId).success) invalid("client_id is required");
         const config = await client(clientId);
         const redirectUri = parameters.get("redirect_uri");
         if (!redirectUri || !config.redirectUris.includes(redirectUri))
@@ -103,29 +101,26 @@ export function createOidcAuthorization(options: OidcAuthorizationOptions) {
             },
           });
         }
-        if (!responseMode.success)
-          reject("unsupported_response_mode", "Unsupported response_mode");
+        if (!responseMode.success) reject("unsupported_response_mode", "Unsupported response_mode");
         for (const key of ["request", "request_uri", "registration"]) {
-          if (parameters.has(key))
-            reject(`${key}_not_supported`, `${key} is not supported`);
+          if (parameters.has(key)) reject(`${key}_not_supported`, `${key} is not supported`);
         }
         if (parameters.get("response_type") !== "code")
           reject("unsupported_response_type", "Only response_type=code is supported");
-        if (!stateValue?.trim())
-          reject("invalid_request", "A non-empty state is required");
+        if (!stateValue?.trim()) reject("invalid_request", "A non-empty state is required");
         const scopes = [...new Set((parameters.get("scope") ?? "").split(" ").filter(Boolean))].filter(
-          scope => scope !== "offline_access",
+          (scope) => scope !== "offline_access",
         );
         const allowedScopes = new Set<string>(config.allowedScopes);
-        if (!scopes.includes("openid") || scopes.some(scope => !allowedScopes.has(scope)))
+        if (!scopes.includes("openid") || scopes.some((scope) => !allowedScopes.has(scope)))
           reject("invalid_scope", "Requested scope is not allowed");
         const challenge = parameters.get("code_challenge") ?? "";
         if (parameters.get("code_challenge_method") !== "S256" || !/^[\w.~-]{43,128}$/u.test(challenge))
           reject("invalid_request", "S256 PKCE is required");
         const prompts = [...new Set((parameters.get("prompt") ?? "").split(" ").filter(Boolean))];
         if (
-          prompts.some(prompt => prompt !== "none" && prompt !== "login")
-          || (prompts.includes("none") && prompts.length > 1)
+          prompts.some((prompt) => prompt !== "none" && prompt !== "login") ||
+          (prompts.includes("none") && prompts.length > 1)
         ) {
           reject("invalid_request", "Unsupported prompt combination");
         }
@@ -148,13 +143,11 @@ export function createOidcAuthorization(options: OidcAuthorizationOptions) {
         };
       }
       async function root(token?: string) {
-        if (!token)
-          return null;
+        if (!token) return null;
         const result = await sessions.resolveUserSession(token);
         if (result.status === "corrupt")
           throw new OidcProtocolError("temporarily_unavailable", "Session state unavailable", 503);
-        if (result.status !== "resolved")
-          return null;
+        if (result.status !== "resolved") return null;
         const user = result.value.userSession;
         try {
           await operation.acquireForSession({
@@ -162,20 +155,18 @@ export function createOidcAuthorization(options: OidcAuthorizationOptions) {
             subjectIdentifier: user.subjectIdentifier,
             subjectContext: user.subjectContext,
           });
-        }
-        catch (error) {
-          if (error instanceof SubjectAccessDisabledError)
-            return null;
+        } catch (error) {
+          if (error instanceof SubjectAccessDisabledError) return null;
           throw error;
         }
         return result.value;
       }
       function needsReauthentication(accepted: AcceptedAuthorization, observed: UserSessionObservation) {
         return (
-          accepted.prompt.split(" ").includes("login")
-          || accepted.maxAge === 0
-          || (accepted.maxAge !== undefined
-            && observed.observedAt - observed.userSession.authTime > accepted.maxAge * 1000)
+          accepted.prompt.split(" ").includes("login") ||
+          accepted.maxAge === 0 ||
+          (accepted.maxAge !== undefined &&
+            observed.observedAt - observed.userSession.authTime > accepted.maxAge * 1000)
         );
       }
       function loginRequired(
@@ -217,8 +208,7 @@ export function createOidcAuthorization(options: OidcAuthorizationOptions) {
           });
         }
         const lifetime = await sessions.getIssuanceLifetime(opened.value, codeTtl);
-        if (lifetime.remainingSeconds <= 0)
-          return loginRequired(accepted);
+        if (lifetime.remainingSeconds <= 0) return loginRequired(accepted);
         const { userSession, clientSession } = opened.value;
         const codeId = randomHandle();
         await state.saveCode({
@@ -248,22 +238,16 @@ export function createOidcAuthorization(options: OidcAuthorizationOptions) {
       }
       async function continuation(handle: string, browser: OidcBrowserInput): Promise<OidcContinuation> {
         const saved = await state.readContinuation(handle, browser.browserBinding ?? "");
-        if (!saved || saved.authorization.issuer !== issuer)
-          invalid("Login request is invalid or expired");
+        if (!saved || saved.authorization.issuer !== issuer) invalid("Login request is invalid or expired");
         await client(saved.authorization.clientId);
         return saved;
       }
       return {
-        async authorize(
-          parameters: URLSearchParams,
-          browser: OidcBrowserInput,
-        ): Promise<OidcAuthorizationResult> {
+        async authorize(parameters: URLSearchParams, browser: OidcBrowserInput): Promise<OidcAuthorizationResult> {
           const accepted = await accept(parameters);
           const parent = await root(browser.globalSessionToken);
           if (parent) {
-            return needsReauthentication(accepted, parent)
-              ? loginRequired(accepted)
-              : await issue(accepted, parent);
+            return needsReauthentication(accepted, parent) ? loginRequired(accepted) : await issue(accepted, parent);
           }
           if (accepted.prompt.split(" ").includes("none"))
             return loginRequired(accepted, Boolean(browser.globalSessionToken));
@@ -309,8 +293,8 @@ export function createOidcAuthorization(options: OidcAuthorizationOptions) {
               Boolean(browser.globalSessionToken),
             );
           }
-          const firstCompletion
-            = saved.completionDigest !== null && saved.completionDigest === digest(browser.completion ?? "");
+          const firstCompletion =
+            saved.completionDigest !== null && saved.completionDigest === digest(browser.completion ?? "");
           if (needsReauthentication(saved.authorization, parent) && !firstCompletion)
             return loginRequired(saved.authorization);
           if (!(await state.consumeContinuation(handle, browser.browserBinding!)))

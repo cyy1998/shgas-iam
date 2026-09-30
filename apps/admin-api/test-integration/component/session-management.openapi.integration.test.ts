@@ -1,7 +1,7 @@
+import { expect, mock, test } from "bun:test";
 import { createSessionManagementAdapter } from "@admin-api/routes/admin/session-management/session-management.adapter";
 import { createSessionManagementRoute } from "@admin-api/routes/admin/session-management/session-management.index";
 import { SessionManagementReleaseLoginRestrictionInputSchema } from "@admin-api/routes/admin/session-management/session-management.schema";
-import { expect, mock, test } from "bun:test";
 
 function createDocument() {
   const adapter = createSessionManagementAdapter({
@@ -22,7 +22,14 @@ function createDocument() {
       })),
       revokeSessions: mock(async () => ({
         changed: false,
-        result: { scope: "session" as const, generation: "unified" as const, currentPrincipalSessionExcluded: false, sessions: { userSessionsTerminated: 0, clientSessionsTerminated: 0, excluded: 0, failed: 0, unknown: 0 }, batch: { results: [], unfinished: [] }, artifactCleanup: { attempted: 0, succeeded: 0, failed: 0 } },
+        result: {
+          scope: "session" as const,
+          generation: "unified" as const,
+          currentPrincipalSessionExcluded: false,
+          sessions: { userSessionsTerminated: 0, clientSessionsTerminated: 0, excluded: 0, failed: 0, unknown: 0 },
+          batch: { results: [], unfinished: [] },
+          artifactCleanup: { attempted: 0, succeeded: 0, failed: 0 },
+        },
       })),
       releaseLoginRestriction: mock(async () => ({
         changed: false,
@@ -76,29 +83,35 @@ test("publishes the fixed login restriction REST paths with success and unavaila
 
 test("documents one required positive-integer userId path parameter for restriction release", () => {
   const document = createDocument();
-  const release = document.paths?.[
-    "/session-management/login-restrictions/{userId}"
-  ]?.delete;
+  const release = document.paths?.["/session-management/login-restrictions/{userId}"]?.delete;
 
-  expect(release?.parameters).toEqual([{
-    name: "userId",
-    in: "path",
-    required: true,
-    schema: {
-      type: "integer",
-      exclusiveMinimum: 0,
+  expect(release?.parameters).toEqual([
+    {
+      name: "userId",
+      in: "path",
+      required: true,
+      schema: {
+        type: "integer",
+        exclusiveMinimum: 0,
+      },
     },
-  }]);
-  expect(SessionManagementReleaseLoginRestrictionInputSchema.safeParse({
-    userId: 42,
-    actorUserId: 7,
-  }).success).toBe(false);
-  expect(SessionManagementReleaseLoginRestrictionInputSchema.safeParse({
-    userId: 0,
-  }).success).toBe(false);
-  expect(SessionManagementReleaseLoginRestrictionInputSchema.safeParse({
-    userId: "42",
-  }).success).toBe(false);
+  ]);
+  expect(
+    SessionManagementReleaseLoginRestrictionInputSchema.safeParse({
+      userId: 42,
+      actorUserId: 7,
+    }).success,
+  ).toBe(false);
+  expect(
+    SessionManagementReleaseLoginRestrictionInputSchema.safeParse({
+      userId: 0,
+    }).success,
+  ).toBe(false);
+  expect(
+    SessionManagementReleaseLoginRestrictionInputSchema.safeParse({
+      userId: "42",
+    }).success,
+  ).toBe(false);
 });
 
 test("documents strict client pagination and exact numeric user filtering without actor fields", () => {
@@ -136,11 +149,7 @@ test("documents strict client pagination and exact numeric user filtering withou
       },
     },
   });
-  expect(Object.keys(input.properties ?? {})).toEqual([
-    "conditions",
-    "pageNum",
-    "pageSize",
-  ]);
+  expect(Object.keys(input.properties ?? {})).toEqual(["conditions", "pageNum", "pageSize"]);
   expect(JSON.stringify(input)).not.toContain("actorUserId");
   expect(JSON.stringify(input)).not.toContain("principalSessionId");
 });
@@ -180,11 +189,7 @@ test("documents strict login restriction pagination and exact numeric user filte
       },
     },
   });
-  expect(Object.keys(input.properties ?? {})).toEqual([
-    "conditions",
-    "pageNum",
-    "pageSize",
-  ]);
+  expect(Object.keys(input.properties ?? {})).toEqual(["conditions", "pageNum", "pageSize"]);
   expect(JSON.stringify(input)).not.toContain("actorUserId");
   expect(JSON.stringify(input)).not.toContain("principalSessionId");
 });
@@ -193,9 +198,12 @@ test("documents an exact safe session VO without raw or secret session fields", 
   const document = createDocument();
   const session = document.components?.schemas?.SessionManagementSessionVo as {
     additionalProperties?: boolean;
-    properties?: Record<string, {
-      additionalProperties?: boolean;
-    }>;
+    properties?: Record<
+      string,
+      {
+        additionalProperties?: boolean;
+      }
+    >;
   };
 
   expect(session.additionalProperties).toBe(false);
@@ -232,11 +240,14 @@ test("documents an exact safe login restriction VO and release result", () => {
   const document = createDocument();
   const restriction = document.components?.schemas?.SessionManagementLoginRestrictionVo as {
     additionalProperties?: boolean;
-    properties?: Record<string, {
-      additionalProperties?: boolean;
-      enum?: string[];
-      properties?: Record<string, unknown>;
-    }>;
+    properties?: Record<
+      string,
+      {
+        additionalProperties?: boolean;
+        enum?: string[];
+        properties?: Record<string, unknown>;
+      }
+    >;
   };
   const release = document.components?.schemas?.SessionManagementReleaseLoginRestrictionResultVo as {
     additionalProperties?: boolean;
@@ -258,31 +269,15 @@ test("documents an exact safe login restriction VO and release result", () => {
     "name",
     "accountStatus",
   ]);
-  expect(restriction.properties?.cause?.enum).toEqual([
-    "too_many_login_failures",
-  ]);
-  expect(restriction.properties?.triggerMethod?.enum).toEqual([
-    "mobile",
-    "password",
-    "unknown",
-  ]);
+  expect(restriction.properties?.cause?.enum).toEqual(["too_many_login_failures"]);
+  expect(restriction.properties?.triggerMethod?.enum).toEqual(["mobile", "password", "unknown"]);
   expect(release.additionalProperties).toBe(false);
-  expect(Object.keys(release.properties ?? {})).toEqual([
-    "changed",
-    "result",
-  ]);
+  expect(Object.keys(release.properties ?? {})).toEqual(["changed", "result"]);
   expect(release.properties?.result?.additionalProperties).toBe(false);
   expect(Object.keys(release.properties?.result?.properties ?? {})).toEqual(["failureStateCleared"]);
 
   const serializedSchemas = JSON.stringify({ release, restriction }).toLowerCase();
-  for (const forbiddenField of [
-    "index",
-    "raw",
-    "redis",
-    "session",
-    "token",
-    "error",
-  ]) {
+  for (const forbiddenField of ["index", "raw", "redis", "session", "token", "error"]) {
     expect(serializedSchemas).not.toContain(forbiddenField);
   }
 });
@@ -291,12 +286,15 @@ test("documents strict session and user revoke targets without client-owned acto
   const document = createDocument();
   const input = document.components?.schemas?.SessionManagementRevokeSessionsInput as {
     additionalProperties?: boolean;
-    properties?: Record<string, {
-      oneOf?: Array<{
-        additionalProperties?: boolean;
-        properties?: Record<string, unknown>;
-      }>;
-    }>;
+    properties?: Record<
+      string,
+      {
+        oneOf?: Array<{
+          additionalProperties?: boolean;
+          properties?: Record<string, unknown>;
+        }>;
+      }
+    >;
   };
 
   expect(input.additionalProperties).toBe(false);
@@ -343,18 +341,18 @@ test("documents only unified counts and fixed targets without secret or cleanup 
   const document = createDocument();
   const result = document.components?.schemas?.SessionManagementRevokeSessionsResultVo as {
     additionalProperties?: boolean;
-    properties?: Record<string, {
-      anyOf?: Payload[];
-      additionalProperties?: boolean;
-      properties?: Record<string, { additionalProperties?: boolean; properties?: Record<string, unknown> }>;
-    }>;
+    properties?: Record<
+      string,
+      {
+        anyOf?: Payload[];
+        additionalProperties?: boolean;
+        properties?: Record<string, { additionalProperties?: boolean; properties?: Record<string, unknown> }>;
+      }
+    >;
   };
 
   expect(result.additionalProperties).toBe(false);
-  expect(Object.keys(result.properties ?? {})).toEqual([
-    "changed",
-    "result",
-  ]);
+  expect(Object.keys(result.properties ?? {})).toEqual(["changed", "result"]);
   const unified = result.properties?.result;
   expect(unified?.additionalProperties).toBe(false);
   expect(Object.keys(unified?.properties ?? {})).toEqual([

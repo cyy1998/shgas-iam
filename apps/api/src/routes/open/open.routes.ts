@@ -24,9 +24,7 @@ export const clientStatus = createRoute({
   responses: {
     ...commonErrorResponses,
     [HttpStatusCodes.OK]: jsonContent(
-      createSuccessResponseSchema(
-        GenericClientRuntimeDtoSchema.nullable(),
-      ),
+      createSuccessResponseSchema(GenericClientRuntimeDtoSchema.nullable()),
       "应用信息",
     ),
   },
@@ -38,18 +36,20 @@ export const maskedMobile = createRoute({
   tags,
   request: {
     params: z.object({
-      username: z.string().transform((value, ctx) => {
-        try {
-          // Hono removes the outer URL encoding; decode the opaque username layer.
-          return decodeURIComponent(value);
-        }
-        catch {
-          ctx.addIssue({ code: "custom", message: "Invalid encoded username" });
-          return z.NEVER;
-        }
-      }).openapi({
-        description: "用户名先做百分号编码（包括点），再作为路径段进行 URL 编码，例如 . 使用 %252E",
-      }),
+      username: z
+        .string()
+        .transform((value, ctx) => {
+          try {
+            // Hono removes the outer URL encoding; decode the opaque username layer.
+            return decodeURIComponent(value);
+          } catch {
+            ctx.addIssue({ code: "custom", message: "Invalid encoded username" });
+            return z.NEVER;
+          }
+        })
+        .openapi({
+          description: "用户名先做百分号编码（包括点），再作为路径段进行 URL 编码，例如 . 使用 %252E",
+        }),
     }),
     query: z.object({
       capToken: z.string().optional(),
@@ -66,12 +66,15 @@ export const codeSend = createRoute({
   path: `${routePrefix}/code/send`,
   tags,
   request: {
-    body: jsonContentRequired(z.object({
-      phoneNumber: z.string().optional().openapi({ example: "138****1234" }),
-      username: z.string().optional().openapi({ example: "zhangsan" }),
-      usage: z.enum(Object.values(VerificationCodeUsage)).openapi({ example: "login" }),
-      capToken: z.string().optional(),
-    }), "发送短信验证码参数"),
+    body: jsonContentRequired(
+      z.object({
+        phoneNumber: z.string().optional().openapi({ example: "138****1234" }),
+        username: z.string().optional().openapi({ example: "zhangsan" }),
+        usage: z.enum(Object.values(VerificationCodeUsage)).openapi({ example: "login" }),
+        capToken: z.string().optional(),
+      }),
+      "发送短信验证码参数",
+    ),
   },
   responses: {
     ...commonErrorResponses,
@@ -89,12 +92,15 @@ export const codeVerify = createRoute({
   path: `${routePrefix}/code/verify`,
   tags,
   request: {
-    body: jsonContentRequired(z.object({
-      phoneNumber: z.string().optional().openapi({ example: "138****1234" }),
-      username: z.string().optional().openapi({ example: "zhangsan" }),
-      usage: z.enum(Object.values(VerificationCodeUsage)).openapi({ example: "login" }),
-      code: z.string().openapi({ example: "1234" }),
-    }), "验证短信验证码参数"),
+    body: jsonContentRequired(
+      z.object({
+        phoneNumber: z.string().optional().openapi({ example: "138****1234" }),
+        username: z.string().optional().openapi({ example: "zhangsan" }),
+        usage: z.enum(Object.values(VerificationCodeUsage)).openapi({ example: "login" }),
+        code: z.string().openapi({ example: "1234" }),
+      }),
+      "验证短信验证码参数",
+    ),
   },
   responses: {
     ...commonErrorResponses,
@@ -107,12 +113,15 @@ export const passwordReset = createRoute({
   path: `${routePrefix}/password/reset`,
   tags,
   request: {
-    body: jsonContentRequired(z.object({
-      username: z.string().openapi({ example: "138550" }),
-      phoneNumber: z.string().optional().openapi({ example: "177****2865" }),
-      code: z.string().openapi({ example: "1234" }),
-      newPassword: z.string().openapi({ example: "abcd1234" }),
-    }), "重置密码参数"),
+    body: jsonContentRequired(
+      z.object({
+        username: z.string().openapi({ example: "138550" }),
+        phoneNumber: z.string().optional().openapi({ example: "177****2865" }),
+        code: z.string().openapi({ example: "1234" }),
+        newPassword: z.string().openapi({ example: "abcd1234" }),
+      }),
+      "重置密码参数",
+    ),
   },
   responses: {
     ...commonErrorResponses,
@@ -131,15 +140,18 @@ export const capChallenge = createRoute({
   },
   responses: {
     ...commonErrorResponses,
-    [HttpStatusCodes.OK]: jsonContent(z.object({
-      challenge: z.object({
-        c: z.number(),
-        s: z.number(),
-        d: z.number(),
+    [HttpStatusCodes.OK]: jsonContent(
+      z.object({
+        challenge: z.object({
+          c: z.number(),
+          s: z.number(),
+          d: z.number(),
+        }),
+        token: z.string().optional(),
+        expires: z.number(),
       }),
-      token: z.string().optional(),
-      expires: z.number(),
-    }), "Cap challenge"),
+      "Cap challenge",
+    ),
   },
 });
 
@@ -151,18 +163,24 @@ export const capRedeem = createRoute({
     params: z.object({
       siteKey: z.string(),
     }),
-    body: jsonContentRequired(z.object({
-      token: z.string().optional(),
-      solutions: z.array(z.number()).optional(),
-    }), "Cap challenge solution"),
+    body: jsonContentRequired(
+      z.object({
+        token: z.string().optional(),
+        solutions: z.array(z.number()).optional(),
+      }),
+      "Cap challenge solution",
+    ),
   },
   responses: {
     ...commonErrorResponses,
-    [HttpStatusCodes.OK]: jsonContent(z.object({
-      success: z.boolean(),
-      message: z.string().optional(),
-      token: z.string().optional(),
-      expires: z.number().optional(),
-    }), "Cap token redeem result"),
+    [HttpStatusCodes.OK]: jsonContent(
+      z.object({
+        success: z.boolean(),
+        message: z.string().optional(),
+        token: z.string().optional(),
+        expires: z.number().optional(),
+      }),
+      "Cap token redeem result",
+    ),
   },
 });

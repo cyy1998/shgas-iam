@@ -1,9 +1,6 @@
-import type { SubjectAccessRecordV1 } from "@iam/api-core/subject-access";
 import { isDeepStrictEqual } from "node:util";
-import {
-  assertUserProfileInventoryPage,
-  requirePositiveSafeInteger,
-} from "./user-profile-inventory.guards";
+import type { SubjectAccessRecordV1 } from "@iam/api-core/subject-access";
+import { assertUserProfileInventoryPage, requirePositiveSafeInteger } from "./user-profile-inventory.guards";
 
 export interface UserProfileReadinessProjection {
   userId: number;
@@ -35,10 +32,7 @@ export interface UserProfileReadinessInventoryPort<
   TProfile extends UserProfileReadinessProjection = UserProfileReadinessProjection,
 > {
   readVerificationSummary: () => Promise<UserProfileVerificationSummary>;
-  scanPage: (input: {
-    afterUserId: number;
-    limit: number;
-  }) => Promise<Array<UserProfileReadinessPageRow<TProfile>>>;
+  scanPage: (input: { afterUserId: number; limit: number }) => Promise<Array<UserProfileReadinessPageRow<TProfile>>>;
 }
 
 export interface UserProfileGateFailure {
@@ -47,19 +41,12 @@ export interface UserProfileGateFailure {
   samples: string[];
 }
 
-type InspectionResult<T>
-  = | { status: "invalid" | "missing" }
-    | { status: "valid"; record: T };
+type InspectionResult<T> = { status: "invalid" | "missing" } | { status: "valid"; record: T };
 
-export function createUserProfilePostgresGate<
-  TProfile extends UserProfileReadinessProjection,
->(deps: {
+export function createUserProfilePostgresGate<TProfile extends UserProfileReadinessProjection>(deps: {
   schemaVersion: number;
   repository: UserProfileReadinessInventoryPort<TProfile> & {
-    rebuildExpected: (
-      profiles: TProfile[],
-      observedAt: Date,
-    ) => Promise<TProfile[]>;
+    rebuildExpected: (profiles: TProfile[], observedAt: Date) => Promise<TProfile[]>;
   };
   clock: { nowDate: () => Date };
 }) {
@@ -74,32 +61,21 @@ export function createUserProfilePostgresGate<
         inventory: deps.repository,
         async checkPage(page, failures) {
           for (const row of page) {
-            if (row.currentProfile === null)
-              failures.add(row.profileIssue ?? "profile-invalid", row.userId);
-            else if (!row.backfillCompleted)
-              failures.add("profile-backfill-marker-missing", row.userId);
+            if (row.currentProfile === null) failures.add(row.profileIssue ?? "profile-invalid", row.userId);
+            else if (!row.backfillCompleted) failures.add("profile-backfill-marker-missing", row.userId);
           }
           const currentProfiles = page
-            .map(row => row.currentProfile)
+            .map((row) => row.currentProfile)
             .filter((profile): profile is TProfile => profile !== null);
-          const expectedProfiles = await deps.repository.rebuildExpected(
-            currentProfiles,
-            observedAt,
-          );
+          const expectedProfiles = await deps.repository.rebuildExpected(currentProfiles, observedAt);
           if (
-            expectedProfiles.length !== currentProfiles.length
-            || expectedProfiles.some((profile, index) =>
-              profile.userId !== currentProfiles[index]!.userId)
+            expectedProfiles.length !== currentProfiles.length ||
+            expectedProfiles.some((profile, index) => profile.userId !== currentProfiles[index]!.userId)
           ) {
-            throw new Error(
-              "User Profile PostgreSQL gate authoritative rebuild was incomplete",
-            );
+            throw new Error("User Profile PostgreSQL gate authoritative rebuild was incomplete");
           }
           currentProfiles.forEach((profile, index) => {
-            if (!isDeepStrictEqual(
-              withoutRebuiltAt(profile),
-              withoutRebuiltAt(expectedProfiles[index]!),
-            )) {
+            if (!isDeepStrictEqual(withoutRebuiltAt(profile), withoutRebuiltAt(expectedProfiles[index]!))) {
               failures.add("profile-authoritative-mismatch", profile.userId);
             }
           });
@@ -109,22 +85,15 @@ export function createUserProfilePostgresGate<
   };
 }
 
-export function createUserProfileRedisAccessGate<
-  TProfile extends UserProfileReadinessProjection,
-  TFactsRecord,
->(deps: {
+export function createUserProfileRedisAccessGate<TProfile extends UserProfileReadinessProjection, TFactsRecord>(deps: {
   schemaVersion: number;
   inventory: UserProfileReadinessInventoryPort<TProfile>;
   subjectFacts: {
     createRecord: (profile: TProfile, publishedAt: Date) => TFactsRecord;
-    inspectMany: (
-      subjectIdentifiers: string[],
-    ) => Promise<Array<InspectionResult<TFactsRecord>>>;
+    inspectMany: (subjectIdentifiers: string[]) => Promise<Array<InspectionResult<TFactsRecord>>>;
   };
   subjectAccess: {
-    inspectMany: (
-      subjectIdentifiers: string[],
-    ) => Promise<Array<InspectionResult<SubjectAccessRecordV1>>>;
+    inspectMany: (subjectIdentifiers: string[]) => Promise<Array<InspectionResult<SubjectAccessRecordV1>>>;
   };
   clock: { nowDate: () => Date };
 }) {
@@ -138,13 +107,11 @@ export function createUserProfileRedisAccessGate<
         batchSize: input.batchSize,
         inventory: deps.inventory,
         async checkPage(page, failures) {
-          const subjectIdentifiers = page.map(row => row.subjectIdentifier);
+          const subjectIdentifiers = page.map((row) => row.subjectIdentifier);
           const facts = await deps.subjectFacts.inspectMany(subjectIdentifiers);
           const access = await deps.subjectAccess.inspectMany(subjectIdentifiers);
           if (facts.length !== page.length || access.length !== page.length) {
-            throw new Error(
-              "User Profile Redis gate inspection returned an incomplete batch",
-            );
+            throw new Error("User Profile Redis gate inspection returned an incomplete batch");
           }
           page.forEach((row, index) => {
             if (row.currentProfile !== null && !row.backfillCompleted)
@@ -152,26 +119,19 @@ export function createUserProfileRedisAccessGate<
             const factsResult = facts[index]!;
             if (factsResult.status !== "valid") {
               failures.add(`facts-${factsResult.status}`, row.userId);
-            }
-            else if (row.currentProfile === null) {
+            } else if (row.currentProfile === null) {
               failures.add("facts-without-current-profile", row.userId);
-            }
-            else {
-              const expected = deps.subjectFacts.createRecord(
-                row.currentProfile,
-                row.currentProfile.rebuiltAt,
-              );
-              if (!isDeepStrictEqual(factsResult.record, expected))
-                failures.add("facts-mismatch", row.userId);
+            } else {
+              const expected = deps.subjectFacts.createRecord(row.currentProfile, row.currentProfile.rebuiltAt);
+              if (!isDeepStrictEqual(factsResult.record, expected)) failures.add("facts-mismatch", row.userId);
             }
 
             const accessResult = access[index]!;
             if (accessResult.status !== "valid") {
               failures.add(`barrier-${accessResult.status}`, row.userId);
-            }
-            else if (
-              accessResult.record.subjectIdentifier !== row.subjectIdentifier
-              || accessResult.record.state !== (row.accountAvailable ? "enabled" : "disabled")
+            } else if (
+              accessResult.record.subjectIdentifier !== row.subjectIdentifier ||
+              accessResult.record.state !== (row.accountAvailable ? "enabled" : "disabled")
             ) {
               failures.add("barrier-state-mismatch", row.userId);
             }
@@ -182,9 +142,7 @@ export function createUserProfileRedisAccessGate<
   };
 }
 
-async function runUserProfileInventoryGate<
-  TProfile extends UserProfileReadinessProjection,
->(input: {
+async function runUserProfileInventoryGate<TProfile extends UserProfileReadinessProjection>(input: {
   version: number;
   gate: "postgres" | "redis-access";
   batchSize: number;
@@ -206,28 +164,22 @@ async function runUserProfileInventoryGate<
       afterUserId,
       limit: input.batchSize,
     });
-    if (page.length === 0)
-      break;
+    if (page.length === 0) break;
     assertUserProfileInventoryPage(page, afterUserId, input.batchSize);
     verifiedUsers += page.length;
     await input.checkPage(page, failures);
     afterUserId = page.at(-1)!.userId;
-    if (page.length < input.batchSize)
-      break;
+    if (page.length < input.batchSize) break;
   }
   if (verifiedUsers !== summary.userCount) {
-    failures.add(
-      "verified-user-count-mismatch",
-      undefined,
-      Math.abs(summary.userCount - verifiedUsers),
-    );
+    failures.add("verified-user-count-mismatch", undefined, Math.abs(summary.userCount - verifiedUsers));
   }
   const report = failures.report();
   return {
     version: input.version,
     gate: input.gate,
     verifiedAt: input.observedAt.toISOString(),
-    status: report.length === 0 ? "passed" as const : "failed" as const,
+    status: report.length === 0 ? ("passed" as const) : ("failed" as const),
     counts: {
       users: summary.userCount,
       profiles: summary.profileCount,
@@ -244,11 +196,7 @@ function createUserProfileGateFailureCollector() {
       const failure = failures.get(code) ?? { count: 0, samples: [] };
       failure.count += count;
       const sample = userId === undefined ? undefined : `user:${userId}`;
-      if (
-        sample !== undefined
-        && failure.samples.length < 10
-        && !failure.samples.includes(sample)
-      ) {
+      if (sample !== undefined && failure.samples.length < 10 && !failure.samples.includes(sample)) {
         failure.samples.push(sample);
       }
       failures.set(code, failure);
@@ -264,27 +212,18 @@ function collectUserProfileSummaryFailures(
   add: (code: string, userId?: number, count?: number) => void,
 ) {
   if (summary.profileCount !== summary.userCount) {
-    add("profile-count-mismatch", undefined, Math.abs(
-      summary.userCount - summary.profileCount,
-    ));
+    add("profile-count-mismatch", undefined, Math.abs(summary.userCount - summary.profileCount));
   }
   if (summary.profileSubjectCount !== summary.userCount) {
-    add("profile-subject-count-mismatch", undefined, Math.abs(
-      summary.userCount - summary.profileSubjectCount,
-    ));
+    add("profile-subject-count-mismatch", undefined, Math.abs(summary.userCount - summary.profileSubjectCount));
   }
   if (summary.distinctProfileSubjectCount !== summary.userCount) {
-    add("profile-subject-not-unique", undefined, Math.abs(
-      summary.userCount - summary.distinctProfileSubjectCount,
-    ));
+    add("profile-subject-not-unique", undefined, Math.abs(summary.userCount - summary.distinctProfileSubjectCount));
   }
-  if (summary.orphanProfileCount > 0)
-    add("orphan-profile", undefined, summary.orphanProfileCount);
+  if (summary.orphanProfileCount > 0) add("orphan-profile", undefined, summary.orphanProfileCount);
 }
 
-function withoutRebuiltAt<TProfile extends UserProfileReadinessProjection>(
-  profile: TProfile,
-) {
+function withoutRebuiltAt<TProfile extends UserProfileReadinessProjection>(profile: TProfile) {
   const { rebuiltAt: _rebuiltAt, ...comparable } = profile;
   return comparable;
 }

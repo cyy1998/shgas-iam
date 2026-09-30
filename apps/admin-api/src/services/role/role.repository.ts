@@ -1,6 +1,19 @@
+import {
+  EmploymentStatus,
+  OrganizationStatus,
+  PositionStatus,
+  RoleAssignmentTargetType,
+  RoleStatus,
+} from "@iam/contracts";
 import type { DbClient } from "@iam/db";
+import { extractPostgresError } from "@iam/db/postgres-error";
+import { compactUpdate, firstRow, ilikeContainsIf } from "@iam/db/query-utils";
+import { clients, employments, organizations, positions, roles, users } from "@iam/db/schema";
+import { roleAssignments } from "@iam/db/schema/role-assignments";
 import type { RoleAssignmentTargetSummaryDto } from "@iam/domain/role";
+import { RoleAssignmentExistsError, RoleCodeExistsError } from "@iam/domain/role";
 import type { SQLWrapper } from "drizzle-orm";
+import { and, count, eq, exists, inArray, or, sql } from "drizzle-orm";
 import type {
   AdminRoleAssignmentCreateRecord,
   AdminRoleCreateRecord,
@@ -8,27 +21,12 @@ import type {
   RolePaginationQueryDto,
   RoleUpdateDto,
 } from "./role.type";
-import { EmploymentStatus, OrganizationStatus, PositionStatus, RoleAssignmentTargetType, RoleStatus } from "@iam/contracts";
-import { extractPostgresError } from "@iam/db/postgres-error";
-import { compactUpdate, firstRow, ilikeContainsIf } from "@iam/db/query-utils";
-import {
-  clients,
-  employments,
-  organizations,
-  positions,
-  roles,
-  users,
-} from "@iam/db/schema";
-import { roleAssignments } from "@iam/db/schema/role-assignments";
-import { RoleAssignmentExistsError, RoleCodeExistsError } from "@iam/domain/role";
-import { and, count, eq, exists, inArray, or, sql } from "drizzle-orm";
 
 export function createRoleRepository(db: DbClient) {
   async function write<T>(operation: () => Promise<T>): Promise<T> {
     try {
       return await operation();
-    }
-    catch (error) {
+    } catch (error) {
       const detail = extractPostgresError(error);
       if (detail?.code === "23505") {
         if (detail.constraint === "role_role_code_key" || detail.constraint === "role_role_code_unique")
@@ -41,18 +39,26 @@ export function createRoleRepository(db: DbClient) {
   }
   return {
     async getRoleNamesByIds(ids: number[]) {
-      if (ids.length === 0)
-        return [];
-      return db.select({ roleCode: roles.roleCode, roleName: roles.roleName })
+      if (ids.length === 0) return [];
+      return db
+        .select({ roleCode: roles.roleCode, roleName: roles.roleName })
         .from(roles)
         .where(inArray(roles.id, ids));
     },
     async lockRoleByCode(roleCode: string) {
-      const rows = await db.select().from(roles).where(and(eq(roles.roleCode, roleCode), eq(roles.isDelete, false))).for("update");
+      const rows = await db
+        .select()
+        .from(roles)
+        .where(and(eq(roles.roleCode, roleCode), eq(roles.isDelete, false)))
+        .for("update");
       return firstRow(await attachRoleContext(rows, db));
     },
     async lockAssignmentByIdForRole(roleId: number, assignmentId: number) {
-      const rows = await db.select().from(roleAssignments).where(and(eq(roleAssignments.roleId, roleId), eq(roleAssignments.id, assignmentId))).for("update");
+      const rows = await db
+        .select()
+        .from(roleAssignments)
+        .where(and(eq(roleAssignments.roleId, roleId), eq(roleAssignments.id, assignmentId)))
+        .for("update");
       return firstRow(await attachAssignmentTargets(rows, db));
     },
     async getRoleByCode(roleCode: string) {
@@ -63,9 +69,11 @@ export function createRoleRepository(db: DbClient) {
     },
 
     async getAnyRoleByCode(roleCode: string) {
-      return await db.query.roles.findFirst({
-        where: { roleCode },
-      }) ?? null;
+      return (
+        (await db.query.roles.findFirst({
+          where: { roleCode },
+        })) ?? null
+      );
     },
 
     async searchRolesPaged(input: RolePaginationQueryDto) {
@@ -87,43 +95,57 @@ export function createRoleRepository(db: DbClient) {
     },
 
     async createRole(data: AdminRoleCreateRecord) {
-      return write(async () => firstRow(await db.insert(roles).values({
-        roleCode: data.roleCode,
-        roleName: data.roleName,
-        clientId: data.clientId,
-        status: data.status ?? RoleStatus.Enable,
-        description: data.description ?? null,
-      }).returning()));
+      return write(async () =>
+        firstRow(
+          await db
+            .insert(roles)
+            .values({
+              roleCode: data.roleCode,
+              roleName: data.roleName,
+              clientId: data.clientId,
+              status: data.status ?? RoleStatus.Enable,
+              description: data.description ?? null,
+            })
+            .returning(),
+        ),
+      );
     },
 
     async updateRoleByCode(roleCode: string, data: RoleUpdateDto) {
-      return firstRow(await db
-        .update(roles)
-        .set(compactUpdate(data))
-        .where(and(eq(roles.roleCode, roleCode), eq(roles.isDelete, false)))
-        .returning()) ?? null;
+      return (
+        firstRow(
+          await db
+            .update(roles)
+            .set(compactUpdate(data))
+            .where(and(eq(roles.roleCode, roleCode), eq(roles.isDelete, false)))
+            .returning(),
+        ) ?? null
+      );
     },
 
     async softDeleteRoleByCode(roleCode: string) {
-      return firstRow(await db
-        .update(roles)
-        .set({ isDelete: true })
-        .where(and(eq(roles.roleCode, roleCode), eq(roles.isDelete, false)))
-        .returning()) ?? null;
+      return (
+        firstRow(
+          await db
+            .update(roles)
+            .set({ isDelete: true })
+            .where(and(eq(roles.roleCode, roleCode), eq(roles.isDelete, false)))
+            .returning(),
+        ) ?? null
+      );
     },
 
     async countAssignmentsByRoleId(roleId: number) {
-      const rows = await db
-        .select({ value: count() })
-        .from(roleAssignments)
-        .where(eq(roleAssignments.roleId, roleId));
+      const rows = await db.select({ value: count() }).from(roleAssignments).where(eq(roleAssignments.roleId, roleId));
       return firstRow(rows)?.value ?? 0;
     },
 
     async getClientByCode(clientCode: string) {
-      return await db.query.clients.findFirst({
-        where: { clientCode, isDelete: false },
-      }) ?? null;
+      return (
+        (await db.query.clients.findFirst({
+          where: { clientCode, isDelete: false },
+        })) ?? null
+      );
     },
 
     async getAssignableOrganizationByCode(orgCode: string) {
@@ -132,13 +154,13 @@ export function createRoleRepository(db: DbClient) {
       });
       return row === undefined
         ? null
-        : {
-          id: row.id,
-          code: row.orgCode,
-          name: row.orgName,
-          status: row.status,
-          description: null,
-        } satisfies RoleAssignmentTargetSummaryDto;
+        : ({
+            id: row.id,
+            code: row.orgCode,
+            name: row.orgName,
+            status: row.status,
+            description: null,
+          } satisfies RoleAssignmentTargetSummaryDto);
     },
 
     async getAssignablePositionByCode(posCode: string) {
@@ -147,13 +169,13 @@ export function createRoleRepository(db: DbClient) {
       });
       return row === undefined
         ? null
-        : {
-          id: row.id,
-          code: row.posCode,
-          name: row.posName,
-          status: row.status,
-          description: row.description,
-        } satisfies RoleAssignmentTargetSummaryDto;
+        : ({
+            id: row.id,
+            code: row.posCode,
+            name: row.posName,
+            status: row.status,
+            description: row.description,
+          } satisfies RoleAssignmentTargetSummaryDto);
     },
 
     async getAssignableEmploymentById(employmentId: number) {
@@ -171,22 +193,24 @@ export function createRoleRepository(db: DbClient) {
         .innerJoin(users, eq(users.id, employments.userId))
         .innerJoin(organizations, eq(organizations.id, employments.orgId))
         .innerJoin(positions, eq(positions.id, employments.posId))
-        .where(and(
-          eq(employments.id, employmentId),
-          eq(employments.status, EmploymentStatus.Enable),
-          eq(employments.isDelete, false),
-        ))
+        .where(
+          and(
+            eq(employments.id, employmentId),
+            eq(employments.status, EmploymentStatus.Enable),
+            eq(employments.isDelete, false),
+          ),
+        )
         .limit(1);
       const row = firstRow(rows);
       return row === null
         ? null
-        : {
-          id: row.id,
-          code: String(row.id),
-          name: `${row.userName} / ${row.orgName} / ${row.posName}`,
-          status: row.status,
-          description: row.description ?? row.username,
-        } satisfies RoleAssignmentTargetSummaryDto;
+        : ({
+            id: row.id,
+            code: String(row.id),
+            name: `${row.userName} / ${row.orgName} / ${row.posName}`,
+            status: row.status,
+            description: row.description ?? row.username,
+          } satisfies RoleAssignmentTargetSummaryDto);
     },
 
     async searchAssignmentsPaged(roleId: number, input: RoleAssignmentPaginationQueryDto) {
@@ -208,9 +232,11 @@ export function createRoleRepository(db: DbClient) {
     },
 
     async findAssignmentByRoleTarget(roleId: number, targetType: RoleAssignmentTargetType, targetId: number) {
-      return await db.query.roleAssignments.findFirst({
-        where: { roleId, targetType, targetId },
-      }) ?? null;
+      return (
+        (await db.query.roleAssignments.findFirst({
+          where: { roleId, targetType, targetId },
+        })) ?? null
+      );
     },
 
     async createAssignment(data: AdminRoleAssignmentCreateRecord) {
@@ -218,18 +244,26 @@ export function createRoleRepository(db: DbClient) {
     },
 
     async updateAssignmentScope(roleId: number, assignmentId: number, includeDescendants: boolean) {
-      return firstRow(await db
-        .update(roleAssignments)
-        .set({ includeDescendants })
-        .where(and(eq(roleAssignments.id, assignmentId), eq(roleAssignments.roleId, roleId)))
-        .returning()) ?? null;
+      return (
+        firstRow(
+          await db
+            .update(roleAssignments)
+            .set({ includeDescendants })
+            .where(and(eq(roleAssignments.id, assignmentId), eq(roleAssignments.roleId, roleId)))
+            .returning(),
+        ) ?? null
+      );
     },
 
     async deleteAssignment(roleId: number, assignmentId: number) {
-      return firstRow(await db
-        .delete(roleAssignments)
-        .where(and(eq(roleAssignments.id, assignmentId), eq(roleAssignments.roleId, roleId)))
-        .returning()) ?? null;
+      return (
+        firstRow(
+          await db
+            .delete(roleAssignments)
+            .where(and(eq(roleAssignments.id, assignmentId), eq(roleAssignments.roleId, roleId)))
+            .returning(),
+        ) ?? null
+      );
     },
   };
 }
@@ -253,11 +287,16 @@ function roleAdminWhere(input: RolePaginationQueryDto, tx: DbClient) {
     exactConditions.clientCode === undefined
       ? undefined
       : exists(
-          tx.select({ value: sql`1` }).from(clients).where(and(
-            eq(clients.id, roles.clientId),
-            eq(clients.clientCode, exactConditions.clientCode),
-            eq(clients.isDelete, false),
-          )),
+          tx
+            .select({ value: sql`1` })
+            .from(clients)
+            .where(
+              and(
+                eq(clients.id, roles.clientId),
+                eq(clients.clientCode, exactConditions.clientCode),
+                eq(clients.isDelete, false),
+              ),
+            ),
         ),
   );
 }
@@ -281,32 +320,45 @@ function targetTextWhere(text: string | undefined, tx: DbClient): SQLWrapper | u
   const pattern = `%${text}%`;
   return or(
     exists(
-      tx.select({ value: sql`1` }).from(organizations).where(and(
-        eq(roleAssignments.targetType, RoleAssignmentTargetType.Organization),
-        eq(organizations.id, roleAssignments.targetId),
-        or(ilikeContainsIf(organizations.orgCode, text), ilikeContainsIf(organizations.orgName, text)),
-      )),
+      tx
+        .select({ value: sql`1` })
+        .from(organizations)
+        .where(
+          and(
+            eq(roleAssignments.targetType, RoleAssignmentTargetType.Organization),
+            eq(organizations.id, roleAssignments.targetId),
+            or(ilikeContainsIf(organizations.orgCode, text), ilikeContainsIf(organizations.orgName, text)),
+          ),
+        ),
     ),
     exists(
-      tx.select({ value: sql`1` }).from(positions).where(and(
-        eq(roleAssignments.targetType, RoleAssignmentTargetType.Position),
-        eq(positions.id, roleAssignments.targetId),
-        or(ilikeContainsIf(positions.posCode, text), ilikeContainsIf(positions.posName, text)),
-      )),
+      tx
+        .select({ value: sql`1` })
+        .from(positions)
+        .where(
+          and(
+            eq(roleAssignments.targetType, RoleAssignmentTargetType.Position),
+            eq(positions.id, roleAssignments.targetId),
+            or(ilikeContainsIf(positions.posCode, text), ilikeContainsIf(positions.posName, text)),
+          ),
+        ),
     ),
     exists(
-      tx.select({ value: sql`1` })
+      tx
+        .select({ value: sql`1` })
         .from(employments)
         .innerJoin(users, eq(users.id, employments.userId))
-        .where(and(
-          eq(roleAssignments.targetType, RoleAssignmentTargetType.Employment),
-          eq(employments.id, roleAssignments.targetId),
-          or(
-            sql`${roleAssignments.targetId}::text ILIKE ${pattern}`,
-            ilikeContainsIf(users.username, text),
-            ilikeContainsIf(users.name, text),
+        .where(
+          and(
+            eq(roleAssignments.targetType, RoleAssignmentTargetType.Employment),
+            eq(employments.id, roleAssignments.targetId),
+            or(
+              sql`${roleAssignments.targetId}::text ILIKE ${pattern}`,
+              ilikeContainsIf(users.username, text),
+              ilikeContainsIf(users.name, text),
+            ),
           ),
-        )),
+        ),
     ),
   );
 }
@@ -315,32 +367,43 @@ async function attachRoleContext(rows: RoleRow[], tx: DbClient) {
   if (rows.length === 0) {
     return [];
   }
-  const clientIds = [...new Set(rows.map(row => row.clientId))];
-  const roleIds = rows.map(row => row.id);
+  const clientIds = [...new Set(rows.map((row) => row.clientId))];
+  const roleIds = rows.map((row) => row.id);
   const [clientRows, assignmentCountRows] = await Promise.all([
-    tx.select({
-      id: clients.id,
-      clientCode: clients.clientCode,
-      clientName: clients.clientName,
-      status: clients.status,
-    }).from(clients).where(inArray(clients.id, clientIds)),
-    tx.select({
-      roleId: roleAssignments.roleId,
-      value: count(),
-    }).from(roleAssignments).where(inArray(roleAssignments.roleId, roleIds)).groupBy(roleAssignments.roleId),
+    tx
+      .select({
+        id: clients.id,
+        clientCode: clients.clientCode,
+        clientName: clients.clientName,
+        status: clients.status,
+      })
+      .from(clients)
+      .where(inArray(clients.id, clientIds)),
+    tx
+      .select({
+        roleId: roleAssignments.roleId,
+        value: count(),
+      })
+      .from(roleAssignments)
+      .where(inArray(roleAssignments.roleId, roleIds))
+      .groupBy(roleAssignments.roleId),
   ]);
-  const clientMap = new Map(clientRows.map(client => [client.id, client]));
-  const assignmentCountMap = new Map(assignmentCountRows.map(row => [row.roleId, row.value]));
+  const clientMap = new Map(clientRows.map((client) => [client.id, client]));
+  const assignmentCountMap = new Map(assignmentCountRows.map((row) => [row.roleId, row.value]));
   return rows
-    .map(row => ({
+    .map((row) => ({
       ...row,
       client: clientMap.get(row.clientId),
       assignmentCount: assignmentCountMap.get(row.id) ?? 0,
     }))
-    .filter((row): row is RoleRow & {
-      client: NonNullable<(typeof row)["client"]>;
-      assignmentCount: number;
-    } => row.client !== undefined);
+    .filter(
+      (
+        row,
+      ): row is RoleRow & {
+        client: NonNullable<(typeof row)["client"]>;
+        assignmentCount: number;
+      } => row.client !== undefined,
+    );
 }
 
 async function attachAssignmentTargets(rows: RoleAssignmentRow[], tx: DbClient) {
@@ -404,7 +467,7 @@ async function attachAssignmentTargets(rows: RoleAssignmentRow[], tx: DbClient) 
     });
   }
 
-  return rows.map(row => ({
+  return rows.map((row) => ({
     ...row,
     target: targetMap.get(targetKey(row.targetType, row.targetId)) ?? {
       id: row.targetId,
@@ -417,7 +480,7 @@ async function attachAssignmentTargets(rows: RoleAssignmentRow[], tx: DbClient) 
 }
 
 function idsForTargetType(rows: RoleAssignmentRow[], targetType: RoleAssignmentTargetType) {
-  return [...new Set(rows.filter(row => row.targetType === targetType).map(row => row.targetId))];
+  return [...new Set(rows.filter((row) => row.targetType === targetType).map((row) => row.targetId))];
 }
 
 function targetKey(targetType: RoleAssignmentTargetType, targetId: number) {

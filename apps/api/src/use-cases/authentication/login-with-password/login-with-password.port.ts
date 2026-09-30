@@ -1,15 +1,8 @@
 import type { HumanVerificationAction } from "@api/enums/humanVerification.action";
 import type { SessionOrigin } from "@api/services/session/session-origin";
-import type {
-  AuditActorType,
-  AuditDetails,
-  AuditOutcome,
-} from "@iam/domain/audit";
+import type { AuditActorType, AuditDetails, AuditOutcome } from "@iam/domain/audit";
 import type { UserDetailDto } from "@iam/domain/user";
-import type {
-  AuthenticationLoginFailureStatus,
-  AuthenticationLoginRestrictionStatus,
-} from "../login-restriction.type";
+import type { AuthenticationLoginFailureStatus, AuthenticationLoginRestrictionStatus } from "../login-restriction.type";
 import type { PasswordLoginUser } from "./login-with-password.type";
 
 export interface PasswordLoginAuditInput {
@@ -36,10 +29,7 @@ export interface PasswordLoginAuditInput {
 }
 
 export interface PasswordLoginRestrictionPort {
-  recordFailure: (input: {
-    userId: number;
-    triggerMethod: "password";
-  }) => Promise<AuthenticationLoginFailureStatus>;
+  recordFailure: (input: { userId: number; triggerMethod: "password" }) => Promise<AuthenticationLoginFailureStatus>;
   clearLoginState: (userId: number) => Promise<unknown>;
   getRestriction: (userId: number) => Promise<AuthenticationLoginRestrictionStatus | null>;
 }
@@ -62,20 +52,27 @@ export interface LoginWithPasswordDeps {
     magicCode: string;
   };
   humanRisk: {
-    recordLoginFailure: (action: HumanVerificationAction.PasswordLogin, context: {
-      subject?: string;
-      ip?: string;
-      requestId?: string | null;
-      traceId?: string | null;
-    }) => Promise<void>;
+    recordLoginFailure: (
+      action: HumanVerificationAction.PasswordLogin,
+      context: {
+        subject?: string;
+        ip?: string;
+        requestId?: string | null;
+        traceId?: string | null;
+      },
+    ) => Promise<void>;
   };
   humanVerification: {
-    ensureActionAllowed: (action: HumanVerificationAction.PasswordLogin, token: string | undefined, context: {
-      subject?: string;
-      ip?: string;
-      requestId?: string | null;
-      traceId?: string | null;
-    }) => Promise<void>;
+    ensureActionAllowed: (
+      action: HumanVerificationAction.PasswordLogin,
+      token: string | undefined,
+      context: {
+        subject?: string;
+        ip?: string;
+        requestId?: string | null;
+        traceId?: string | null;
+      },
+    ) => Promise<void>;
   };
   loginRestriction: PasswordLoginRestrictionPort;
   principalSessions: PasswordPrincipalSessionPort;

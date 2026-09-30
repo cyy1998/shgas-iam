@@ -20,26 +20,20 @@ export interface AdminEmploymentMutationDenial {
 }
 
 interface AdminEmploymentAuthorizationBase {
-  getAllowedActions: (
-    facts: AdminEmploymentActionFacts,
-  ) => AdminEmploymentAllowedActions;
+  getAllowedActions: (facts: AdminEmploymentActionFacts) => AdminEmploymentAllowedActions;
   denyMutation: (input: AdminEmploymentMutationDenial) => never;
 }
 
-export interface FullAdminEmploymentAuthorization
-  extends AdminEmploymentAuthorizationBase {
+export interface FullAdminEmploymentAuthorization extends AdminEmploymentAuthorizationBase {
   kind: "full";
   rootOrganizationIds: null;
   organizationIds: null;
 }
 
-export interface ScopedAdminEmploymentAuthorization
-  extends AdminEmploymentAuthorizationBase {
+export interface ScopedAdminEmploymentAuthorization extends AdminEmploymentAuthorizationBase {
   kind: "scoped";
   rootOrganizationIds: readonly number[];
   organizationIds: readonly number[];
 }
 
-export type AdminEmploymentAuthorization
-  = | FullAdminEmploymentAuthorization
-    | ScopedAdminEmploymentAuthorization;
+export type AdminEmploymentAuthorization = FullAdminEmploymentAuthorization | ScopedAdminEmploymentAuthorization;

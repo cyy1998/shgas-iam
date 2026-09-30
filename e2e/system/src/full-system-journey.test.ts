@@ -1,9 +1,6 @@
-import type {
-  ExactProjectJourneyLifecycle,
-  RunDescriptor,
-} from "./lifecycle.ts";
 import { describe, expect, test } from "bun:test";
 import { createFullSystemJourneyOperations } from "./full-system-journey.ts";
+import type { ExactProjectJourneyLifecycle, RunDescriptor } from "./lifecycle.ts";
 import { runExactProjectJourneyLifecycle } from "./lifecycle.ts";
 
 const descriptor: RunDescriptor = {
@@ -97,15 +94,13 @@ describe("complete Full-system E2E journey", () => {
     let failure: unknown;
     try {
       await runExactProjectJourneyLifecycle(lifecycle);
-    }
-    catch (error) {
+    } catch (error) {
       failure = error;
     }
 
     expect(events).toEqual(["journey:admin", "diagnostics", "cleanup"]);
     expect(failure).toBeInstanceOf(AggregateError);
-    if (!(failure instanceof AggregateError))
-      throw new Error("expected AggregateError");
+    if (!(failure instanceof AggregateError)) throw new Error("expected AggregateError");
     expect(failure.errors).toEqual([adminFailure, cleanupFailure]);
   });
 });

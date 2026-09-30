@@ -1,6 +1,6 @@
-import { AdminMutationCommittedError } from '@admin/services/admin-mutation';
-import { resetUserPassword } from '@admin/services/user';
-import { message, Modal, Space, Typography } from 'antd';
+import { AdminMutationCommittedError } from "@admin/services/admin-mutation";
+import { resetUserPassword } from "@admin/services/user";
+import { Modal, message, Space, Typography } from "antd";
 
 type Args = {
   username: string;
@@ -9,42 +9,27 @@ type Args = {
   onCommitted: (error: AdminMutationCommittedError) => Promise<void>;
 };
 
-export function confirmResetPassword({
-  username,
-  name,
-  onSuccess,
-  onCommitted,
-}: Args) {
+export function confirmResetPassword({ username, name, onSuccess, onCommitted }: Args) {
   Modal.confirm({
     title: `重置 ${name ?? username} 的密码？`,
-    content: '确认后将生成新的随机密码，请做好交接准备。',
-    okType: 'danger',
-    okText: '重置',
+    content: "确认后将生成新的随机密码，请做好交接准备。",
+    okType: "danger",
+    okText: "重置",
     onOk: async () => {
       try {
         const outcome = await resetUserPassword(username);
         const newPassword = outcome.result;
         Modal.info({
-          title: '新密码已生成',
+          title: "新密码已生成",
           width: 620,
           content: (
-            <Space orientation="vertical" style={{ width: '100%' }}>
-              <Typography.Text>
-                请将下列密码复制并转交给用户，关闭后不再显示：
-              </Typography.Text>
+            <Space orientation="vertical" style={{ width: "100%" }}>
+              <Typography.Text>请将下列密码复制并转交给用户，关闭后不再显示：</Typography.Text>
               {outcome.sessions && (
-                <Typography.Text
-                  type={
-                    outcome.sessions.failed || outcome.sessions.unknown
-                      ? 'warning'
-                      : undefined
-                  }
-                >
+                <Typography.Text type={outcome.sessions.failed || outcome.sessions.unknown ? "warning" : undefined}>
                   已终止 {outcome.sessions.userSessionsTerminated} 个根会话、
-                  {outcome.sessions.clientSessionsTerminated} 个应用会话；保留{' '}
-                  {outcome.sessions.excluded} 个当前根。
-                  {(outcome.sessions.failed > 0 ||
-                    outcome.sessions.unknown > 0) &&
+                  {outcome.sessions.clientSessionsTerminated} 个应用会话；保留 {outcome.sessions.excluded} 个当前根。
+                  {(outcome.sessions.failed > 0 || outcome.sessions.unknown > 0) &&
                     `失败 ${outcome.sessions.failed} 项，结果未知 ${outcome.sessions.unknown} 项，请刷新确认。`}
                 </Typography.Text>
               )}
@@ -53,17 +38,17 @@ export function confirmResetPassword({
                 copyable={{ text: newPassword }}
                 style={{
                   marginBottom: 0,
-                  padding: '8px 12px',
+                  padding: "8px 12px",
                   fontSize: 16,
                   lineHeight: 1.6,
-                  wordBreak: 'break-all',
+                  wordBreak: "break-all",
                 }}
               >
                 {newPassword}
               </Typography.Paragraph>
             </Space>
           ),
-          okText: '我已复制',
+          okText: "我已复制",
         });
         await onSuccess();
       } catch (err) {
@@ -71,7 +56,7 @@ export function confirmResetPassword({
           await onCommitted(err);
           return;
         }
-        message.error(err instanceof Error ? err.message : '重置失败');
+        message.error(err instanceof Error ? err.message : "重置失败");
       }
     },
   });

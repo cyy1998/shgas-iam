@@ -1,5 +1,5 @@
-import type { RelationsHelper } from "../../types";
 import { describe, expect, test } from "bun:test";
+import type { RelationsHelper } from "../../types";
 import { organizationResponsibilityAssignmentsRelations } from "../organization-responsibility-assignments";
 
 function relationStub(kind: "one" | "many", tableName: string) {
@@ -7,12 +7,18 @@ function relationStub(kind: "one" | "many", tableName: string) {
 }
 
 const r = {
-  one: new Proxy({}, {
-    get: (_target, property) => relationStub("one", String(property)),
-  }),
-  many: new Proxy({}, {
-    get: (_target, property) => relationStub("many", String(property)),
-  }),
+  one: new Proxy(
+    {},
+    {
+      get: (_target, property) => relationStub("one", String(property)),
+    },
+  ),
+  many: new Proxy(
+    {},
+    {
+      get: (_target, property) => relationStub("many", String(property)),
+    },
+  ),
   employments: { id: "employments.id" },
   organizations: { id: "organizations.id" },
   organizationResponsibilityAssignments: {
@@ -23,8 +29,7 @@ const r = {
 
 describe("organizationResponsibilityAssignmentsRelations", () => {
   test("links each assignment to its holder employment and target organization", () => {
-    const assignmentRelations = organizationResponsibilityAssignmentsRelations(r)
-      .organizationResponsibilityAssignments;
+    const assignmentRelations = organizationResponsibilityAssignmentsRelations(r).organizationResponsibilityAssignments;
 
     expect(assignmentRelations.holderEmployment).toMatchObject({
       kind: "one",

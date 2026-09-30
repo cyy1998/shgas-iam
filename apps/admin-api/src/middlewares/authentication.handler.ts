@@ -1,12 +1,10 @@
 import type { UserService } from "@admin-api/services/user/user.service";
-import type { createSubjectAccessOperations, SubjectAccessOperation } from "@iam/api-core/subject-access";
-import type { Context, Next } from "hono";
 import { AuthzForbiddenError } from "@iam/api-core/errors/AuthzForbiddenError";
 import { AuthzUnauthorizedError } from "@iam/api-core/errors/AuthzUnauthorizedError";
-import {
-  createSubjectAccessHttpAdapter,
-} from "@iam/api-core/subject-access";
+import type { createSubjectAccessOperations, SubjectAccessOperation } from "@iam/api-core/subject-access";
+import { createSubjectAccessHttpAdapter } from "@iam/api-core/subject-access";
 import { UserNotFoundError } from "@iam/domain/user";
+import type { Context, Next } from "hono";
 import { getCookie, setCookie } from "hono/cookie";
 
 const GLOBAL_SESSION_COOKIE = "global_session";
@@ -26,7 +24,10 @@ export interface CreateAdminRootAuthenticationHandlersDeps {
   subjectAccess: Pick<ReturnType<typeof createSubjectAccessOperations>, "run">;
   userService: Pick<UserService, "getUserDetailForPermittedAdmin">;
   config: { allowedClientCodes: string[] };
-  resolveRoot: (token: string, operation: SubjectAccessOperation) => Promise<{
+  resolveRoot: (
+    token: string,
+    operation: SubjectAccessOperation,
+  ) => Promise<{
     userSessionId: string;
     subjectIdentifier: string;
     subjectContext: unknown;
@@ -46,40 +47,40 @@ export function createAdminRootAuthenticationHandlers(deps: CreateAdminRootAuthe
       throw new AuthzUnauthorizedError("未登录");
     }
 
-    return await subjectAccessHttp.run(c, {
-      clearCookiesOnInvalidSession: sessionCookie === undefined
-        ? []
-        : [GLOBAL_SESSION_COOKIE],
-    }, async () => await deps.subjectAccess.run(async (operation) => {
-      const principal = await deps.resolveRoot(token, operation);
-      if (principal === null) {
-        if (sessionCookie !== undefined)
-          clearGlobalSessionCookies(c);
-        throw new AuthzUnauthorizedError("未登录");
-      }
-      await operation.acquireForSession({
-        subjectIdentifier: principal.subjectIdentifier,
-        subjectContext: principal.subjectContext,
-        principalSessionId: principal.userSessionId,
-      });
-      const user = await deps.userService.getUserDetailForPermittedAdmin(
-        operation,
-        principal.subjectIdentifier,
-      ).catch((error: unknown) => {
-        if (error instanceof UserNotFoundError) {
-          clearGlobalSessionCookies(c);
-          throw new AuthzUnauthorizedError("未登录");
-        }
-        throw error;
-      });
-      c.set("userId", user.id);
-      c.set("username", user.username);
-      c.set("userDetailDto", user);
-      c.set("principalSessionId", principal.userSessionId);
-      await next();
-      if (c.error !== undefined)
-        throw c.error;
-    }));
+    return await subjectAccessHttp.run(
+      c,
+      {
+        clearCookiesOnInvalidSession: sessionCookie === undefined ? [] : [GLOBAL_SESSION_COOKIE],
+      },
+      async () =>
+        await deps.subjectAccess.run(async (operation) => {
+          const principal = await deps.resolveRoot(token, operation);
+          if (principal === null) {
+            if (sessionCookie !== undefined) clearGlobalSessionCookies(c);
+            throw new AuthzUnauthorizedError("未登录");
+          }
+          await operation.acquireForSession({
+            subjectIdentifier: principal.subjectIdentifier,
+            subjectContext: principal.subjectContext,
+            principalSessionId: principal.userSessionId,
+          });
+          const user = await deps.userService
+            .getUserDetailForPermittedAdmin(operation, principal.subjectIdentifier)
+            .catch((error: unknown) => {
+              if (error instanceof UserNotFoundError) {
+                clearGlobalSessionCookies(c);
+                throw new AuthzUnauthorizedError("未登录");
+              }
+              throw error;
+            });
+          c.set("userId", user.id);
+          c.set("username", user.username);
+          c.set("userDetailDto", user);
+          c.set("principalSessionId", principal.userSessionId);
+          await next();
+          if (c.error !== undefined) throw c.error;
+        }),
+    );
   }
   return { adminAuthenticationHandler };
 }

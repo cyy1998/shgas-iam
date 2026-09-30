@@ -1,4 +1,3 @@
-import type { OidcConformanceLifecycle } from "./oidc-conformance-lifecycle.fixture";
 import { randomUUID } from "node:crypto";
 import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -6,7 +5,11 @@ import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { hashSecret } from "@iam/api-core/security";
 import { createSubjectAccessBootstrap } from "@iam/api-core/subject-access";
-import { cleanupRedisKeysMatchingOwnerMarkers, createRedisKeyInventoryPort, parseDedicatedRedisTestUrl } from "@iam/api-core/testing/external-test-resources";
+import {
+  cleanupRedisKeysMatchingOwnerMarkers,
+  createRedisKeyInventoryPort,
+  parseDedicatedRedisTestUrl,
+} from "@iam/api-core/testing/external-test-resources";
 import { spawnOwnedProcessTree, terminateProcessTree } from "@iam/api-core/testing/process-smoke-harness";
 import { ClientSsoProtocol, createLoginCredential, OidcClientType, OidcScope, UserType } from "@iam/contracts";
 import { UserProfileDetailDocumentSchema } from "@iam/user-profile-read-model";
@@ -14,6 +17,7 @@ import Redis from "ioredis";
 import { sm2 } from "sm-crypto";
 import { createApiPostgresTestHarness } from "../postgres/postgres-test-harness";
 import { createEntryEnvironment } from "../process/api-env.fixture";
+import type { OidcConformanceLifecycle } from "./oidc-conformance-lifecycle.fixture";
 import { runConformanceCleanup } from "./oidc-conformance-lifecycle.fixture";
 
 /** Caller supplies dedicated PG/Redis; this fixture never starts Docker or reads runtime env files. */
@@ -30,16 +34,14 @@ export async function createOidcConformanceCandidate(options: {
   const checkpoint = async (phase: string) => options.lifecycle?.checkpoint(phase);
   await checkpoint("setup");
   const redisUrl = process.env.IAM_API_TEST_REDIS_URL;
-  if (!redisUrl)
-    throw new Error("IAM_API_TEST_REDIS_URL is required");
+  if (!redisUrl) throw new Error("IAM_API_TEST_REDIS_URL is required");
   const redisConfig = parseDedicatedRedisTestUrl({ name: "IAM_API_TEST_REDIS_URL", value: redisUrl });
   const temporaryDirectory = await mkdtemp(join(tmpdir(), "iam195-candidate-"));
   const cleanups: (() => unknown | Promise<unknown>)[] = [];
   function registerCleanup(cleanup: () => unknown | Promise<unknown>) {
     let pending = true;
     const once = async () => {
-      if (!pending)
-        return;
+      if (!pending) return;
       pending = false;
       await cleanup();
     };
@@ -52,13 +54,11 @@ export async function createOidcConformanceCandidate(options: {
     for (const cleanup of cleanups.splice(0).reverse()) {
       try {
         await runConformanceCleanup(cleanup);
-      }
-      catch (error) {
+      } catch (error) {
         failures.push(error);
       }
     }
-    if (failures.length)
-      throw new AggregateError(failures, "OIDC candidate cleanup failed");
+    if (failures.length) throw new AggregateError(failures, "OIDC candidate cleanup failed");
   }
   try {
     await writeFile(`${options.logPath}.owner.json`, JSON.stringify({ temporaryDirectory }));
@@ -74,20 +74,37 @@ export async function createOidcConformanceCandidate(options: {
     const clientId = `oidc-${randomUUID()}`;
     const publicClientId = `oidc-${randomUUID()}`;
     const secondClientId = `oidc-${randomUUID()}`;
-    registerCleanup(() => cleanupRedisKeysMatchingOwnerMarkers({
-      diagnosticLabel: "OIDC conformance candidate",
-      redis: createRedisKeyInventoryPort(redis),
-      ownerMarkers: new Set([namespace, subjectIdentifier, username, clientId, publicClientId, secondClientId]),
-    }));
+    registerCleanup(() =>
+      cleanupRedisKeysMatchingOwnerMarkers({
+        diagnosticLabel: "OIDC conformance candidate",
+        redis: createRedisKeyInventoryPort(redis),
+        ownerMarkers: new Set([namespace, subjectIdentifier, username, clientId, publicClientId, secondClientId]),
+      }),
+    );
     const password = "Conformance195!synthetic";
     const secret = "conformance195-synthetic-secret-for-local-testing";
     const passwordHash = await hashSecret(password, 4);
     await checkpoint("before-seed");
     const sql = pg.sql;
-    const [user] = await sql`INSERT INTO "user" (subject_identifier, username, name, password, mobile_phone) VALUES (${subjectIdentifier}, ${username}, 'Conformance User', ${passwordHash}, '+8613800000195') RETURNING id`;
-    if (!user)
-      throw new Error("Synthetic user insert did not return an id");
-    const detail = UserProfileDetailDocumentSchema.parse({ id: user.id, username, name: "Conformance User", mobile: "+8613800000195", wxId: null, userType: UserType.Formal, orderNum: 999999, status: 1, isDelete: false, createTime: new Date(), updateTime: new Date(), employments: [], roles: [], privileges: [] });
+    const [user] =
+      await sql`INSERT INTO "user" (subject_identifier, username, name, password, mobile_phone) VALUES (${subjectIdentifier}, ${username}, 'Conformance User', ${passwordHash}, '+8613800000195') RETURNING id`;
+    if (!user) throw new Error("Synthetic user insert did not return an id");
+    const detail = UserProfileDetailDocumentSchema.parse({
+      id: user.id,
+      username,
+      name: "Conformance User",
+      mobile: "+8613800000195",
+      wxId: null,
+      userType: UserType.Formal,
+      orderNum: 999999,
+      status: 1,
+      isDelete: false,
+      createTime: new Date(),
+      updateTime: new Date(),
+      employments: [],
+      roles: [],
+      privileges: [],
+    });
     await sql`INSERT INTO user_profile (user_id, subject_identifier, username, name, mobile, status, is_delete, search_visible, profile_schema_version, source_dirty_version, detail, search_doc, subject_facts, rebuilt_at) VALUES (${user.id}, ${subjectIdentifier}, ${username}, 'Conformance User', '+8613800000195', 1, FALSE, TRUE, 3, 1, ${JSON.stringify(detail)}::jsonb, '{}'::jsonb, '{"employments":[]}'::jsonb, NOW())`;
     await sql`INSERT INTO user_profile_dirty (user_id, dirty_version, status, reason_codes, dirty_at, processed_at) VALUES (${user.id}, 1, 'processed', '["user-updated"]'::jsonb, NOW(), NOW())`;
     for (const code of [clientId, secondClientId, publicClientId]) {
@@ -100,7 +117,10 @@ export async function createOidcConformanceCandidate(options: {
       };
       await sql`INSERT INTO client (client_code, client_name, client_secret, status, is_delete, ext_attributes, sso_enabled, sso_config, sso_secret, sso_credential_id, sso_secret_updated_at) VALUES (${code}, 'Conformance synthetic client', ${`internal-${code}`}, 1, FALSE, '{}'::jsonb, TRUE, ${JSON.stringify(config)}::jsonb, ${code === publicClientId ? null : secret}, ${code === publicClientId ? null : randomUUID()}, ${code === publicClientId ? null : new Date().toISOString()})`;
     }
-    await createSubjectAccessBootstrap({ redis, random: { uuid: randomUUID } }).seedMany([{ subjectIdentifier, state: "enabled" }], new Date());
+    await createSubjectAccessBootstrap({ redis, random: { uuid: randomUUID } }).seedMany(
+      [{ subjectIdentifier, state: "enabled" }],
+      new Date(),
+    );
     await checkpoint("redis-seeded");
     const allocation = Bun.serve({ hostname: "127.0.0.1", port: 0, fetch: () => new Response() });
     const port = allocation.port!;
@@ -129,9 +149,10 @@ export async function createOidcConformanceCandidate(options: {
     const internalProxy = options.issuerMode === "dual" ? entryProxy("internal") : externalProxy;
     const scheme = tls ? "https" : "http";
     const externalOrigin = `${scheme}://${options.hostnames?.external ?? "127.0.0.1"}:${externalProxy.port}`;
-    const internalOrigin = options.issuerMode === "dual"
-      ? `${scheme}://${options.hostnames?.internal ?? "127.0.0.1"}:${internalProxy.port}`
-      : externalOrigin;
+    const internalOrigin =
+      options.issuerMode === "dual"
+        ? `${scheme}://${options.hostnames?.internal ?? "127.0.0.1"}:${internalProxy.port}`
+        : externalOrigin;
     const origins = { internal: internalOrigin, external: externalOrigin };
     const origin = externalOrigin;
     const context = { attemptNumber: 1, hostname: "127.0.0.1", port, temporaryDirectory };
@@ -153,14 +174,12 @@ export async function createOidcConformanceCandidate(options: {
     let child: ReturnType<typeof spawnOwnedProcessTree> | undefined;
     let log = "";
     async function stopCandidate() {
-      if (!child)
-        return;
+      if (!child) return;
       const stopping = child;
       try {
         await terminateProcessTree(stopping, { timeoutMs: 5000 });
         child = undefined;
-      }
-      finally {
+      } finally {
         await writeFile(options.logPath, log, "utf8");
       }
     }
@@ -183,31 +202,31 @@ export async function createOidcConformanceCandidate(options: {
       };
       child.stdout?.on("data", capture);
       child.stderr?.on("data", capture);
-      await writeFile(`${options.logPath}.owner.json`, JSON.stringify({
-        pid: child.pid,
-        port,
-        proxyPort: externalProxy.port,
-        internalProxyPort: internalProxy.port,
-        namespace,
-        temporaryDirectory,
-        schema: new URL(pg.databaseUrl).searchParams.get("search_path"),
-      }));
+      await writeFile(
+        `${options.logPath}.owner.json`,
+        JSON.stringify({
+          pid: child.pid,
+          port,
+          proxyPort: externalProxy.port,
+          internalProxyPort: internalProxy.port,
+          namespace,
+          temporaryDirectory,
+          schema: new URL(pg.databaseUrl).searchParams.get("search_path"),
+        }),
+      );
       const deadline = Date.now() + 30000;
       while (true) {
         await checkpoint("api-readiness");
         let ready = false;
         try {
           ready = (await fetch(`${apiOrigin}/ready`, { signal: AbortSignal.timeout(1000) })).status === 200;
-        }
-        catch {
+        } catch {
           /* Readiness only; behavioral requests are never retried. */
         }
         if (spawnError || child.exitCode !== null || child.signalCode !== null)
           throw new Error(`Candidate API exited before readiness: ${String(spawnError ?? log)}`);
-        if (ready)
-          break;
-        if (Date.now() >= deadline)
-          throw new Error(`Candidate API did not become ready: ${log}`);
+        if (ready) break;
+        if (Date.now() >= deadline) throw new Error(`Candidate API did not become ready: ${log}`);
         await Bun.sleep(100);
       }
       await checkpoint("api-ready");
@@ -228,15 +247,20 @@ export async function createOidcConformanceCandidate(options: {
       loginCredential: { username, password, kid: "entry-smoke", publicKey: loginKeys.publicKey },
       close,
       credential() {
-        return createLoginCredential({ username, password, kid: "entry-smoke", publicKey: loginKeys.publicKey, now: Date.now(), nonce: randomUUID() });
+        return createLoginCredential({
+          username,
+          password,
+          kid: "entry-smoke",
+          publicKey: loginKeys.publicKey,
+          now: Date.now(),
+          nonce: randomUUID(),
+        });
       },
     };
-  }
-  catch (error) {
+  } catch (error) {
     try {
       await close();
-    }
-    catch (cleanupError) {
+    } catch (cleanupError) {
       throw new AggregateError([error, cleanupError], "Candidate setup and cleanup failed");
     }
     throw error;

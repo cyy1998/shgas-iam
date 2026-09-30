@@ -1,9 +1,6 @@
-import type { SubjectAccessBarrier } from "../barrier";
-import type {
-  SubjectAccessAtomicStore,
-  SubjectAccessRepairLease,
-} from "../storage/store";
 import { randomUUID } from "node:crypto";
+import type { SubjectAccessBarrier } from "../barrier";
+import type { SubjectAccessAtomicStore, SubjectAccessRepairLease } from "../storage/store";
 
 export interface SubjectAccessAuthorityState {
   readonly accountState: "enabled" | "disabled";
@@ -11,9 +8,7 @@ export interface SubjectAccessAuthorityState {
 }
 
 export interface SubjectAccessAuthorityPort {
-  readonly resolve: (
-    subjectIdentifier: string,
-  ) => Promise<SubjectAccessAuthorityState>;
+  readonly resolve: (subjectIdentifier: string) => Promise<SubjectAccessAuthorityState>;
 }
 
 export interface SubjectAccessRepairLogger {
@@ -22,10 +17,7 @@ export interface SubjectAccessRepairLogger {
 
 export interface CreateSubjectAccessRepairOptions {
   readonly barrier: Pick<SubjectAccessBarrier, "finalizeRepair">;
-  readonly backlog: Pick<
-    SubjectAccessAtomicStore,
-    "claimRepairSubject" | "rescheduleRepairSubject"
-  >;
+  readonly backlog: Pick<SubjectAccessAtomicStore, "claimRepairSubject" | "rescheduleRepairSubject">;
   readonly authority: SubjectAccessAuthorityPort;
   readonly logger: SubjectAccessRepairLogger;
   readonly random?: {
@@ -36,36 +28,21 @@ export interface CreateSubjectAccessRepairOptions {
   readonly retryDelayMs?: number;
 }
 
-export type SubjectAccessRepairStatus
-  = | "enabled"
-    | "disabled"
-    | "deferred"
-    | "failed"
-    | "stable";
+export type SubjectAccessRepairStatus = "enabled" | "disabled" | "deferred" | "failed" | "stable";
 
 export function createSubjectAccessRepair(options: CreateSubjectAccessRepairOptions) {
-  const leaseDurationMs = requirePositiveSafeInteger(
-    options.leaseDurationMs ?? 30_000,
-    "leaseDurationMs",
-  );
-  const retryDelayMs = requirePositiveSafeInteger(
-    options.retryDelayMs ?? 5_000,
-    "retryDelayMs",
-  );
+  const leaseDurationMs = requirePositiveSafeInteger(options.leaseDurationMs ?? 30_000, "leaseDurationMs");
+  const retryDelayMs = requirePositiveSafeInteger(options.retryDelayMs ?? 5_000, "retryDelayMs");
   const authorityTimeoutMs = requirePositiveSafeInteger(
     options.authorityTimeoutMs ?? Math.max(1, Math.floor(leaseDurationMs / 2)),
     "authorityTimeoutMs",
   );
   if (authorityTimeoutMs >= leaseDurationMs) {
-    throw new RangeError(
-      "Subject Access authorityTimeoutMs must be shorter than leaseDurationMs",
-    );
+    throw new RangeError("Subject Access authorityTimeoutMs must be shorter than leaseDurationMs");
   }
   const uuid = options.random?.uuid ?? randomUUID;
 
-  async function repairSubject(
-    subjectIdentifier: string,
-  ): Promise<{ status: SubjectAccessRepairStatus }> {
+  async function repairSubject(subjectIdentifier: string): Promise<{ status: SubjectAccessRepairStatus }> {
     let lease: SubjectAccessRepairLease | null;
     try {
       lease = await options.backlog.claimRepairSubject({
@@ -73,13 +50,11 @@ export function createSubjectAccessRepair(options: CreateSubjectAccessRepairOpti
         leaseToken: uuid(),
         subjectIdentifier,
       });
-    }
-    catch (error) {
+    } catch (error) {
       logFailure("claim", error, subjectIdentifier);
       return { status: "failed" };
     }
-    if (lease === null)
-      return { status: "deferred" };
+    if (lease === null) return { status: "deferred" };
     return {
       status: (await repairLease(lease)).status,
     };
@@ -89,10 +64,7 @@ export function createSubjectAccessRepair(options: CreateSubjectAccessRepairOpti
     lease: SubjectAccessRepairLease,
   ): Promise<{ status: SubjectAccessRepairStatus; leaseLost: boolean }> {
     try {
-      const authority = await withTimeout(
-        options.authority.resolve(lease.subjectIdentifier),
-        authorityTimeoutMs,
-      );
+      const authority = await withTimeout(options.authority.resolve(lease.subjectIdentifier), authorityTimeoutMs);
       if (!authorityMatchesTarget(authority, lease.targetState)) {
         const rescheduled = await rescheduleRepairSubject(lease);
         return {
@@ -102,16 +74,13 @@ export function createSubjectAccessRepair(options: CreateSubjectAccessRepairOpti
       }
 
       const finalized = await options.barrier.finalizeRepair(lease);
-      if (finalized === "stale")
-        return { status: "deferred", leaseLost: true };
+      if (finalized === "stale") return { status: "deferred", leaseLost: true };
       return { status: lease.targetState, leaseLost: false };
-    }
-    catch (error) {
+    } catch (error) {
       let leaseLost = false;
       try {
-        leaseLost = await rescheduleRepairSubject(lease) !== "rescheduled";
-      }
-      catch (rescheduleError) {
+        leaseLost = (await rescheduleRepairSubject(lease)) !== "rescheduled";
+      } catch (rescheduleError) {
         logFailure("reschedule", rescheduleError, lease.subjectIdentifier);
       }
       logFailure("repair", error, lease.subjectIdentifier);
@@ -136,18 +105,15 @@ export function createSubjectAccessRepair(options: CreateSubjectAccessRepairOpti
           leaseDurationMs,
           leaseToken: uuid(),
         });
-      }
-      catch (error) {
+      } catch (error) {
         logFailure("claim", error);
         counts.failed += 1;
         break;
       }
-      if (lease === null)
-        break;
+      if (lease === null) break;
       const result = await repairLease(lease);
       counts[result.status] += 1;
-      if (result.leaseLost)
-        break;
+      if (result.leaseLost) break;
     }
     return counts;
   }
@@ -157,21 +123,19 @@ export function createSubjectAccessRepair(options: CreateSubjectAccessRepairOpti
       lease,
       retryDelayMs,
     });
-    if (result === "invalid")
-      throw new TypeError("Subject Access repair reschedule was invalid");
+    if (result === "invalid") throw new TypeError("Subject Access repair reschedule was invalid");
     return result;
   }
 
-  function logFailure(
-    operation: "claim" | "repair" | "reschedule",
-    error: unknown,
-    subjectIdentifier?: string,
-  ) {
-    options.logger.warn({
-      errorType: safeErrorType(error),
-      operation,
-      ...(subjectIdentifier === undefined ? {} : { subjectIdentifier }),
-    }, `Subject Access repair ${operation === "claim" ? "backlog claim " : ""}failed`);
+  function logFailure(operation: "claim" | "repair" | "reschedule", error: unknown, subjectIdentifier?: string) {
+    options.logger.warn(
+      {
+        errorType: safeErrorType(error),
+        operation,
+        ...(subjectIdentifier === undefined ? {} : { subjectIdentifier }),
+      },
+      `Subject Access repair ${operation === "claim" ? "backlog claim " : ""}failed`,
+    );
   }
 
   return {
@@ -196,21 +160,15 @@ async function withTimeout<T>(promise: Promise<T>, timeoutMs: number): Promise<T
         timeout = setTimeout(() => reject(new SubjectAccessAuthorityTimeoutError()), timeoutMs);
       }),
     ]);
-  }
-  finally {
-    if (timeout !== undefined)
-      clearTimeout(timeout);
+  } finally {
+    if (timeout !== undefined) clearTimeout(timeout);
   }
 }
 
 export type SubjectAccessRepair = ReturnType<typeof createSubjectAccessRepair>;
 
-function authorityMatchesTarget(
-  authority: SubjectAccessAuthorityState,
-  targetState: "enabled" | "disabled",
-) {
-  if (targetState === "disabled")
-    return authority.accountState === "disabled";
+function authorityMatchesTarget(authority: SubjectAccessAuthorityState, targetState: "enabled" | "disabled") {
+  if (targetState === "disabled") return authority.accountState === "disabled";
   return authority.accountState === "enabled" && authority.factsState === "current";
 }
 
@@ -221,15 +179,11 @@ function requirePositiveSafeInteger(value: number, name: string) {
 }
 
 function safeErrorType(error: unknown) {
-  if (typeof error !== "object" || error === null)
-    return "UnknownError";
+  if (typeof error !== "object" || error === null) return "UnknownError";
   try {
     const name = (error as { name?: unknown }).name;
-    return typeof name === "string" && /^[A-Za-z][\w.-]{0,63}$/u.test(name)
-      ? name
-      : "UnknownError";
-  }
-  catch {
+    return typeof name === "string" && /^[A-Za-z][\w.-]{0,63}$/u.test(name) ? name : "UnknownError";
+  } catch {
     return "UnknownError";
   }
 }

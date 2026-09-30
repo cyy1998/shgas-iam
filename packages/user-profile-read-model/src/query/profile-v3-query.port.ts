@@ -17,10 +17,6 @@ export interface V3UserProfileBaseQueryRow {
 }
 
 export interface V3UserProfileQueryRepositoryPort {
-  searchCurrentProfileBases: (
-    filter: V3UserProfileFilter,
-  ) => Promise<readonly V3UserProfileBaseQueryRow[]>;
-  searchCurrentProfiles: (
-    filter: V3UserProfileFilter,
-  ) => Promise<readonly V3UserProfileQueryRow[]>;
+  searchCurrentProfileBases: (filter: V3UserProfileFilter) => Promise<readonly V3UserProfileBaseQueryRow[]>;
+  searchCurrentProfiles: (filter: V3UserProfileFilter) => Promise<readonly V3UserProfileQueryRow[]>;
 }

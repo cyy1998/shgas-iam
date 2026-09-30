@@ -11,7 +11,14 @@ if (args.length > 1 || (args.length === 1 && args[0] !== "--static")) {
 const stages = [
   {
     name: "static",
-    commands: [["lint"], ["check:docs"], ["check:env-names"], ["check:architecture"], ["check:test-collection"]],
+    commands: [
+      ["format:check"],
+      ["lint"],
+      ["check:docs"],
+      ["check:env-names"],
+      ["check:architecture"],
+      ["check:test-collection"],
+    ],
   },
   { name: "typecheck", commands: [["typecheck"]] },
   { name: "test:unit", commands: [["test:unit"]] },
@@ -33,7 +40,6 @@ for (const stage of selectedStages) {
       console.error(`[verify] failed to launch pnpm ${args.join(" ")}: ${result.error.message}`);
       process.exit(1);
     }
-    if (result.status !== 0)
-      process.exit(result.status ?? 1);
+    if (result.status !== 0) process.exit(result.status ?? 1);
   }
 }

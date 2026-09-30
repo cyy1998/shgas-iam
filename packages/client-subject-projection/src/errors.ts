@@ -1,7 +1,4 @@
-import {
-  ApiErrorCode,
-  RETRYABLE_SERVICE_UNAVAILABLE,
-} from "@iam/contracts";
+import { ApiErrorCode, RETRYABLE_SERVICE_UNAVAILABLE } from "@iam/contracts";
 
 export class SubjectProjectionNotReadyError extends Error {
   public readonly code = ApiErrorCode.SubjectProjectionNotReady;

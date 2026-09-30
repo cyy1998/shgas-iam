@@ -145,7 +145,13 @@ services:
       IAM_API_THIRDPARTY_OA_ENDPOINT: /sso/thirdparty/oa
     depends_on: *runtime-dependencies
     healthcheck:
-      test: ["CMD", "bun", "-e", "const r=await fetch('http://127.0.0.1:30000/sso/.well-known/authentication-configuration',{headers:{'X-IAM-Entry-Network':'internal'}});if(!r.ok)process.exit(1)"]
+      test:
+        [
+          "CMD",
+          "bun",
+          "-e",
+          "const r=await fetch('http://127.0.0.1:30000/sso/.well-known/authentication-configuration',{headers:{'X-IAM-Entry-Network':'internal'}});if(!r.ok)process.exit(1)",
+        ]
       interval: 2s
       timeout: 3s
       retries: 60
@@ -172,7 +178,13 @@ services:
       IAM_ADMIN_API_SSO_EXTERNAL_ORIGIN: ${IAM_E2E_ORIGIN:-http://127.0.0.1:49152}
     depends_on: *runtime-dependencies
     healthcheck:
-      test: ["CMD", "bun", "-e", "const r=await fetch('http://127.0.0.1:30001/admin/users/search');if(r.status!==403)process.exit(1)"]
+      test:
+        [
+          "CMD",
+          "bun",
+          "-e",
+          "const r=await fetch('http://127.0.0.1:30001/admin/users/search');if(r.status!==403)process.exit(1)",
+        ]
       interval: 2s
       timeout: 3s
       retries: 60

@@ -1,10 +1,10 @@
-import type { AgentProvider } from "@ai-hero/sandcastle";
-import type { AgentRole, AgentRoles } from "./agents.ts";
 import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { homedir, tmpdir } from "node:os";
 import { join } from "node:path";
+import type { AgentProvider } from "@ai-hero/sandcastle";
 import { codex } from "@ai-hero/sandcastle";
 import { stringify } from "smol-toml";
+import type { AgentRole, AgentRoles } from "./agents.ts";
 import { reviewerNames } from "./agents.ts";
 
 export const shellQuote = (value: string) => `'${value.replaceAll("'", `'"'"'`)}'`;
@@ -15,17 +15,19 @@ export async function prepareAgentConfig(roles: AgentRoles) {
   try {
     for (const name of reviewerNames) {
       const role = roles[name];
-      await writeFile(join(directory, `${name}.toml`), stringify({
-        name,
-        description: role.description,
-        model: role.model,
-        model_reasoning_effort: role.effort,
-        developer_instructions: role.instructions,
-        sandbox_mode: "read-only",
-      }));
+      await writeFile(
+        join(directory, `${name}.toml`),
+        stringify({
+          name,
+          description: role.description,
+          model: role.model,
+          model_reasoning_effort: role.effort,
+          developer_instructions: role.instructions,
+          sandbox_mode: "read-only",
+        }),
+      );
     }
-  }
-  catch (error) {
+  } catch (error) {
     await rm(directory, { recursive: true, force: true });
     throw error;
   }
@@ -47,8 +49,7 @@ export function codexConfigArgs(roles: AgentRoles, implementer?: AgentRole): str
     settings[`agents.${name}.description`] = roles[name].description;
     settings[`agents.${name}.config_file`] = `${sandboxRolesPath}/${name}.toml`;
   }
-  if (implementer)
-    settings.developer_instructions = implementer.instructions;
+  if (implementer) settings.developer_instructions = implementer.instructions;
   return Object.entries(settings).flatMap(([key, value]) => ["-c", `${key}=${JSON.stringify(value)}`]);
 }
 
@@ -61,7 +62,10 @@ export function configuredCodex(model: string, roles: AgentRoles, implementer?: 
     ...provider,
     buildPrintCommand(options) {
       const result = provider.buildPrintCommand(options);
-      return { ...result, command: `${result.command} ${codexConfigArgs(roles, implementer).map(shellQuote).join(" ")}` };
+      return {
+        ...result,
+        command: `${result.command} ${codexConfigArgs(roles, implementer).map(shellQuote).join(" ")}`,
+      };
     },
   };
 }

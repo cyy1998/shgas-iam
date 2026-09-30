@@ -20,10 +20,8 @@ export const ORGANIZATION_RESPONSIBILITY_ASSIGNMENT_LIFECYCLE_COMMANDS = {
   End: "end",
 } as const;
 
-export type OrganizationResponsibilityAssignmentLifecycleCommand
-  = (typeof ORGANIZATION_RESPONSIBILITY_ASSIGNMENT_LIFECYCLE_COMMANDS)[
-    keyof typeof ORGANIZATION_RESPONSIBILITY_ASSIGNMENT_LIFECYCLE_COMMANDS
-  ];
+export type OrganizationResponsibilityAssignmentLifecycleCommand =
+  (typeof ORGANIZATION_RESPONSIBILITY_ASSIGNMENT_LIFECYCLE_COMMANDS)[keyof typeof ORGANIZATION_RESPONSIBILITY_ASSIGNMENT_LIFECYCLE_COMMANDS];
 
 export const ORGANIZATION_RESPONSIBILITY_TYPE_CATALOG = Object.freeze([
   Object.freeze({

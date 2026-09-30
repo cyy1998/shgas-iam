@@ -1,7 +1,7 @@
-import type { AdminEmploymentAuthorization } from "@admin-api/services/admin-authorization/admin-employment-authorization.type";
-import type { DbClient } from "@iam/db";
+import { afterAll, beforeAll, beforeEach, describe, expect, mock, test } from "bun:test";
 import { createAdminApiRepositories } from "@admin-api/composition/repositories";
 import { createAdminApiUnitOfWork } from "@admin-api/composition/tx";
+import type { AdminEmploymentAuthorization } from "@admin-api/services/admin-authorization/admin-employment-authorization.type";
 import { createEmploymentService } from "@admin-api/services/employment/employment.service";
 import { createChangeEmploymentAvailabilityUseCase } from "@admin-api/use-cases/employment/change-employment-availability/change-employment-availability.use-case";
 import { createCreateEmploymentUseCase } from "@admin-api/use-cases/employment/create-employment/create-employment.use-case";
@@ -20,6 +20,7 @@ import {
   UserStatus,
   UserType,
 } from "@iam/contracts";
+import type { DbClient } from "@iam/db";
 import {
   auditLogs,
   employments,
@@ -30,11 +31,7 @@ import {
   userProfileDirty,
   users,
 } from "@iam/db/schema";
-import {
-  EmploymentAlreadyExistsError,
-  EmploymentNotFoundError,
-} from "@iam/domain/employment";
-import { afterAll, beforeAll, beforeEach, describe, expect, mock, test } from "bun:test";
+import { EmploymentAlreadyExistsError, EmploymentNotFoundError } from "@iam/domain/employment";
 import { asc, eq } from "drizzle-orm";
 import { createTestHrEmploymentAuthorization } from "../helpers/hr-employment-authorization";
 import { createAdminApiPostgresTestHarness } from "./postgres-test-harness";
@@ -63,32 +60,16 @@ describe("HR Employment administration scope", () => {
     });
     const authorization = await scopedAuthorization(denyMutation);
 
-    const firstPage = await service.searchEmploymentsFuzzyForAdmin(
-      query(1, 1),
-      authorization,
-    );
-    const secondPage = await service.searchEmploymentsFuzzyForAdmin(
-      query(2, 1),
-      authorization,
-    );
-    const ended = await service.searchEmploymentsFuzzyForAdmin(
-      query(1, 10, [EmploymentStatus.Disable]),
-      authorization,
-    );
-    const detail = await service.getEmploymentDetailByIdForAdmin(
-      seeded.inScopeEnabledId,
-      authorization,
-    );
+    const firstPage = await service.searchEmploymentsFuzzyForAdmin(query(1, 1), authorization);
+    const secondPage = await service.searchEmploymentsFuzzyForAdmin(query(2, 1), authorization);
+    const ended = await service.searchEmploymentsFuzzyForAdmin(query(1, 10, [EmploymentStatus.Disable]), authorization);
+    const detail = await service.getEmploymentDetailByIdForAdmin(seeded.inScopeEnabledId, authorization);
 
     expect(firstPage).toMatchObject({ total: 2, pages: 2, pageNum: 1 });
     expect(secondPage).toMatchObject({ total: 2, pages: 2, pageNum: 2 });
-    expect([
-      firstPage.result[0]?.id,
-      secondPage.result[0]?.id,
-    ].sort()).toEqual([
-      seeded.inScopeEnabledId,
-      seeded.inScopePausedId,
-    ].sort());
+    expect([firstPage.result[0]?.id, secondPage.result[0]?.id].sort()).toEqual(
+      [seeded.inScopeEnabledId, seeded.inScopePausedId].sort(),
+    );
     expect(ended).toMatchObject({
       total: 1,
       result: [{ id: seeded.inScopeEndedId }],
@@ -99,28 +80,18 @@ describe("HR Employment administration scope", () => {
       let failure: unknown;
       try {
         await service.getEmploymentDetailByIdForAdmin(id, authorization);
-      }
-      catch (error) {
+      } catch (error) {
         failure = error;
       }
       expect(failure).toBeInstanceOf(EmploymentNotFoundError);
     }
 
-    await service.guardEmploymentMutationForAdmin(
-      seeded.inScopeEnabledId,
-      "admin.employment.pause",
-      authorization,
-    );
+    await service.guardEmploymentMutationForAdmin(seeded.inScopeEnabledId, "admin.employment.pause", authorization);
     for (const id of [seeded.outOfScopeId, seeded.tombstoneId]) {
       let failure: unknown;
       try {
-        await service.guardEmploymentMutationForAdmin(
-          id,
-          "admin.employment.pause",
-          authorization,
-        );
-      }
-      catch (error) {
+        await service.guardEmploymentMutationForAdmin(id, "admin.employment.pause", authorization);
+      } catch (error) {
         failure = error;
       }
       expect(failure).toBeInstanceOf(EmploymentNotFoundError);
@@ -157,14 +128,8 @@ describe("HR Employment administration scope", () => {
 
     let deniedUpdate: unknown;
     try {
-      await service.updateEmployment(
-        seeded.outOfScopeId,
-        { description: "forbidden" },
-        undefined,
-        authorization,
-      );
-    }
-    catch (error) {
+      await service.updateEmployment(seeded.outOfScopeId, { description: "forbidden" }, undefined, authorization);
+    } catch (error) {
       deniedUpdate = error;
     }
     expect(deniedUpdate).toBeInstanceOf(EmploymentNotFoundError);
@@ -187,10 +152,12 @@ describe("HR Employment administration scope", () => {
       .select({ orgId: employments.orgId, description: employments.description })
       .from(employments)
       .where(eq(employments.id, created.result.id));
-    expect(createdRows).toEqual([{
-      orgId: seeded.inScopeOrgId,
-      description: "created by HR",
-    }]);
+    expect(createdRows).toEqual([
+      {
+        orgId: seeded.inScopeOrgId,
+        description: "created by HR",
+      },
+    ]);
 
     let deniedCreate: unknown;
     try {
@@ -202,8 +169,7 @@ describe("HR Employment administration scope", () => {
         },
         { authorization },
       );
-    }
-    catch (error) {
+    } catch (error) {
       deniedCreate = error;
     }
     expect(deniedCreate).toBeInstanceOf(EmploymentNotFoundError);
@@ -223,8 +189,7 @@ describe("HR Employment administration scope", () => {
         },
         { authorization },
       );
-    }
-    catch (error) {
+    } catch (error) {
       duplicate = error;
     }
     expect(duplicate).toBeInstanceOf(EmploymentAlreadyExistsError);
@@ -264,34 +229,21 @@ describe("HR Employment administration scope", () => {
 
     let outOfScopeFailure: unknown;
     try {
-      await service.guardEmploymentMutationForAdmin(
-        seeded.outOfScopeId,
-        "admin.employment.end",
-        authorization,
-      );
+      await service.guardEmploymentMutationForAdmin(seeded.outOfScopeId, "admin.employment.end", authorization);
       await endEmployment.execute({ employmentId: seeded.outOfScopeId });
-    }
-    catch (error) {
+    } catch (error) {
       outOfScopeFailure = error;
     }
     expect(outOfScopeFailure).toBeInstanceOf(EmploymentNotFoundError);
 
-    await service.guardEmploymentMutationForAdmin(
-      seeded.inScopeEnabledId,
-      "admin.employment.pause",
-      authorization,
-    );
+    await service.guardEmploymentMutationForAdmin(seeded.inScopeEnabledId, "admin.employment.pause", authorization);
     const paused = await changeEmploymentAvailability.execute({
       command: "pause",
       employmentId: seeded.inScopeEnabledId,
     });
     expect(paused).toEqual({ changed: true, result: null });
 
-    await service.guardEmploymentMutationForAdmin(
-      seeded.inScopeEnabledId,
-      "admin.employment.resume",
-      authorization,
-    );
+    await service.guardEmploymentMutationForAdmin(seeded.inScopeEnabledId, "admin.employment.resume", authorization);
     const resumed = await changeEmploymentAvailability.execute({
       command: "resume",
       employmentId: seeded.inScopeEnabledId,
@@ -299,11 +251,7 @@ describe("HR Employment administration scope", () => {
     });
     expect(resumed).toEqual({ changed: true, result: null });
 
-    await service.guardEmploymentMutationForAdmin(
-      seeded.inScopePausedId,
-      "admin.employment.end",
-      authorization,
-    );
+    await service.guardEmploymentMutationForAdmin(seeded.inScopePausedId, "admin.employment.end", authorization);
     const ended = await endEmployment.execute({
       employmentId: seeded.inScopePausedId,
     });
@@ -313,69 +261,69 @@ describe("HR Employment administration scope", () => {
       .select({ id: employments.id, status: employments.status })
       .from(employments)
       .where(eq(employments.orgId, seeded.inScopeOrgId));
-    expect(employmentRows).toEqual(expect.arrayContaining([
-      { id: seeded.inScopeEnabledId, status: EmploymentStatus.Enable },
-      { id: seeded.inScopePausedId, status: EmploymentStatus.Disable },
-    ]));
-    expect(await harness.db
-      .select({ status: employments.status })
-      .from(employments)
-      .where(eq(employments.id, seeded.outOfScopeId)))
-      .toEqual([{ status: EmploymentStatus.Enable }]);
+    expect(employmentRows).toEqual(
+      expect.arrayContaining([
+        { id: seeded.inScopeEnabledId, status: EmploymentStatus.Enable },
+        { id: seeded.inScopePausedId, status: EmploymentStatus.Disable },
+      ]),
+    );
+    expect(
+      await harness.db
+        .select({ status: employments.status })
+        .from(employments)
+        .where(eq(employments.id, seeded.outOfScopeId)),
+    ).toEqual([{ status: EmploymentStatus.Enable }]);
     const assignmentRows = await harness.db
       .select({
         employmentId: organizationResponsibilityAssignments.employmentId,
         status: organizationResponsibilityAssignments.status,
-        targetOrganizationId:
-          organizationResponsibilityAssignments.targetOrganizationId,
+        targetOrganizationId: organizationResponsibilityAssignments.targetOrganizationId,
       })
       .from(organizationResponsibilityAssignments);
-    expect(assignmentRows).toEqual(expect.arrayContaining([
-      {
-        employmentId: seeded.inScopeEnabledId,
-        status: OrganizationResponsibilityAssignmentStatus.Pause,
-        targetOrganizationId: seeded.outOfScopeOrgId,
-      },
-      {
-        employmentId: seeded.inScopePausedId,
-        status: OrganizationResponsibilityAssignmentStatus.Disable,
-        targetOrganizationId: seeded.outOfScopeOrgId,
-      },
-      {
-        employmentId: seeded.outOfScopeId,
-        status: OrganizationResponsibilityAssignmentStatus.Enable,
-        targetOrganizationId: seeded.inScopeOrgId,
-      },
-    ]));
-    expect(await harness.db.select({ action: auditLogs.action }).from(auditLogs))
-      .toEqual(expect.arrayContaining([
+    expect(assignmentRows).toEqual(
+      expect.arrayContaining([
+        {
+          employmentId: seeded.inScopeEnabledId,
+          status: OrganizationResponsibilityAssignmentStatus.Pause,
+          targetOrganizationId: seeded.outOfScopeOrgId,
+        },
+        {
+          employmentId: seeded.inScopePausedId,
+          status: OrganizationResponsibilityAssignmentStatus.Disable,
+          targetOrganizationId: seeded.outOfScopeOrgId,
+        },
+        {
+          employmentId: seeded.outOfScopeId,
+          status: OrganizationResponsibilityAssignmentStatus.Enable,
+          targetOrganizationId: seeded.inScopeOrgId,
+        },
+      ]),
+    );
+    expect(await harness.db.select({ action: auditLogs.action }).from(auditLogs)).toEqual(
+      expect.arrayContaining([
         { action: "admin.organization_responsibility_assignment.pause" },
         { action: "admin.employment.pause" },
         { action: "admin.employment.resume" },
         { action: "admin.organization_responsibility_assignment.end" },
         { action: "admin.employment.end" },
-      ]));
-    expect(await harness.db.select({ userId: userProfileDirty.userId }).from(userProfileDirty))
-      .toEqual(expect.arrayContaining([
-        { userId: seeded.inScopeEnabledUserId },
-        { userId: seeded.inScopePausedUserId },
-      ]));
-    expect(await harness.db
-      .select({ userId: userProfileDirty.userId })
-      .from(userProfileDirty)
-      .where(eq(userProfileDirty.userId, seeded.outOfScopeUserId)))
-      .toEqual([]);
+      ]),
+    );
+    expect(await harness.db.select({ userId: userProfileDirty.userId }).from(userProfileDirty)).toEqual(
+      expect.arrayContaining([{ userId: seeded.inScopeEnabledUserId }, { userId: seeded.inScopePausedUserId }]),
+    );
+    expect(
+      await harness.db
+        .select({ userId: userProfileDirty.userId })
+        .from(userProfileDirty)
+        .where(eq(userProfileDirty.userId, seeded.outOfScopeUserId)),
+    ).toEqual([]);
   });
 
   test("transfers across authorized roots while both out-of-scope directions remain no-write", async () => {
     const { transferEmployment } = createSubject();
     const authorization = await createTestHrEmploymentAuthorization({
       rootOrganizationIds: [seeded.inScopeOrgId, seeded.secondScopeOrgId],
-      organizationIds: [
-        seeded.inScopeOrgId,
-        seeded.inScopeChildOrgId,
-        seeded.secondScopeOrgId,
-      ],
+      organizationIds: [seeded.inScopeOrgId, seeded.inScopeChildOrgId, seeded.secondScopeOrgId],
       denyMutation: () => {
         throw new EmploymentNotFoundError();
       },
@@ -400,30 +348,34 @@ describe("HR Employment administration scope", () => {
 
     let destinationFailure: unknown;
     try {
-      await transferEmployment.execute({
-        employmentId: seeded.inScopeEnabledId,
-        newOrgCode: "OUT",
-        expectedAncestorOrgCode: "OUT",
-        newPosCode: "GLOBAL",
-        isPrimary: false,
-      }, { authorization });
-    }
-    catch (error) {
+      await transferEmployment.execute(
+        {
+          employmentId: seeded.inScopeEnabledId,
+          newOrgCode: "OUT",
+          expectedAncestorOrgCode: "OUT",
+          newPosCode: "GLOBAL",
+          isPrimary: false,
+        },
+        { authorization },
+      );
+    } catch (error) {
       destinationFailure = error;
     }
     expect(destinationFailure).toBeInstanceOf(EmploymentNotFoundError);
 
     let sourceFailure: unknown;
     try {
-      await transferEmployment.execute({
-        employmentId: seeded.outOfScopeId,
-        newOrgCode: "IN_TWO",
-        expectedAncestorOrgCode: "IN_TWO",
-        newPosCode: "GLOBAL",
-        isPrimary: false,
-      }, { authorization });
-    }
-    catch (error) {
+      await transferEmployment.execute(
+        {
+          employmentId: seeded.outOfScopeId,
+          newOrgCode: "IN_TWO",
+          expectedAncestorOrgCode: "IN_TWO",
+          newPosCode: "GLOBAL",
+          isPrimary: false,
+        },
+        { authorization },
+      );
+    } catch (error) {
       sourceFailure = error;
     }
     expect(sourceFailure).toBeInstanceOf(EmploymentNotFoundError);
@@ -439,156 +391,188 @@ describe("HR Employment administration scope", () => {
       .orderBy(asc(employments.id));
     expect(employmentFactsAfterDenials).toEqual(employmentFactsBeforeDenials);
     expect(await harness.db.select({ action: auditLogs.action }).from(auditLogs)).toEqual([]);
-    expect(await harness.db.select({ userId: userProfileDirty.userId }).from(userProfileDirty))
-      .toEqual([]);
-    expect(await harness.db
-      .select({ status: organizationResponsibilityAssignments.status })
-      .from(organizationResponsibilityAssignments)
-      .where(eq(
-        organizationResponsibilityAssignments.employmentId,
-        seeded.inScopeEnabledId,
-      )))
-      .toEqual([{ status: OrganizationResponsibilityAssignmentStatus.Enable }]);
+    expect(await harness.db.select({ userId: userProfileDirty.userId }).from(userProfileDirty)).toEqual([]);
+    expect(
+      await harness.db
+        .select({ status: organizationResponsibilityAssignments.status })
+        .from(organizationResponsibilityAssignments)
+        .where(eq(organizationResponsibilityAssignments.employmentId, seeded.inScopeEnabledId)),
+    ).toEqual([{ status: OrganizationResponsibilityAssignmentStatus.Enable }]);
 
-    const sameRootTransfer = await transferEmployment.execute({
-      employmentId: seeded.inScopePausedId,
-      newOrgCode: "IN_CHILD",
-      expectedAncestorOrgCode: "IN",
-      newPosCode: "GLOBAL",
-      isPrimary: false,
-    }, { authorization });
-    expect(await harness.db
-      .select({
-        id: employments.id,
-        orgId: employments.orgId,
-        status: employments.status,
-      })
-      .from(employments)
-      .where(eq(employments.id, sameRootTransfer.result.id)))
-      .toEqual([{
+    const sameRootTransfer = await transferEmployment.execute(
+      {
+        employmentId: seeded.inScopePausedId,
+        newOrgCode: "IN_CHILD",
+        expectedAncestorOrgCode: "IN",
+        newPosCode: "GLOBAL",
+        isPrimary: false,
+      },
+      { authorization },
+    );
+    expect(
+      await harness.db
+        .select({
+          id: employments.id,
+          orgId: employments.orgId,
+          status: employments.status,
+        })
+        .from(employments)
+        .where(eq(employments.id, sameRootTransfer.result.id)),
+    ).toEqual([
+      {
         id: sameRootTransfer.result.id,
         orgId: seeded.inScopeChildOrgId,
         status: EmploymentStatus.Enable,
-      }]);
+      },
+    ]);
 
-    const transferred = await transferEmployment.execute({
-      employmentId: seeded.inScopeEnabledId,
-      newOrgCode: "IN_TWO",
-      expectedAncestorOrgCode: "IN_TWO",
-      newPosCode: "GLOBAL",
-      isPrimary: true,
-      description: "cross-root transfer",
-    }, { authorization });
+    const transferred = await transferEmployment.execute(
+      {
+        employmentId: seeded.inScopeEnabledId,
+        newOrgCode: "IN_TWO",
+        expectedAncestorOrgCode: "IN_TWO",
+        newPosCode: "GLOBAL",
+        isPrimary: true,
+        description: "cross-root transfer",
+      },
+      { authorization },
+    );
 
-    expect(await harness.db
-      .select({
-        id: employments.id,
-        orgId: employments.orgId,
-        status: employments.status,
-        isPrimary: employments.isPrimary,
-        description: employments.description,
-      })
-      .from(employments)
-      .where(eq(employments.id, seeded.inScopeEnabledId)))
-      .toEqual([{
+    expect(
+      await harness.db
+        .select({
+          id: employments.id,
+          orgId: employments.orgId,
+          status: employments.status,
+          isPrimary: employments.isPrimary,
+          description: employments.description,
+        })
+        .from(employments)
+        .where(eq(employments.id, seeded.inScopeEnabledId)),
+    ).toEqual([
+      {
         id: seeded.inScopeEnabledId,
         orgId: seeded.inScopeOrgId,
         status: EmploymentStatus.Disable,
         isPrimary: false,
         description: null,
-      }]);
-    expect(await harness.db
-      .select({
-        id: employments.id,
-        orgId: employments.orgId,
-        posId: employments.posId,
-        status: employments.status,
-        isPrimary: employments.isPrimary,
-        description: employments.description,
-      })
-      .from(employments)
-      .where(eq(employments.id, transferred.result.id)))
-      .toEqual([{
+      },
+    ]);
+    expect(
+      await harness.db
+        .select({
+          id: employments.id,
+          orgId: employments.orgId,
+          posId: employments.posId,
+          status: employments.status,
+          isPrimary: employments.isPrimary,
+          description: employments.description,
+        })
+        .from(employments)
+        .where(eq(employments.id, transferred.result.id)),
+    ).toEqual([
+      {
         id: transferred.result.id,
         orgId: seeded.secondScopeOrgId,
         posId: seeded.globalPositionId,
         status: EmploymentStatus.Enable,
         isPrimary: true,
         description: "cross-root transfer",
-      }]);
-    expect(await harness.db
-      .select({ status: organizationResponsibilityAssignments.status })
-      .from(organizationResponsibilityAssignments)
-      .where(eq(
-        organizationResponsibilityAssignments.employmentId,
-        seeded.inScopeEnabledId,
-      )))
-      .toEqual([{ status: OrganizationResponsibilityAssignmentStatus.Disable }]);
-    expect(await harness.db.select({ action: auditLogs.action }).from(auditLogs))
-      .toEqual(expect.arrayContaining([
+      },
+    ]);
+    expect(
+      await harness.db
+        .select({ status: organizationResponsibilityAssignments.status })
+        .from(organizationResponsibilityAssignments)
+        .where(eq(organizationResponsibilityAssignments.employmentId, seeded.inScopeEnabledId)),
+    ).toEqual([{ status: OrganizationResponsibilityAssignmentStatus.Disable }]);
+    expect(await harness.db.select({ action: auditLogs.action }).from(auditLogs)).toEqual(
+      expect.arrayContaining([
         { action: "admin.organization_responsibility_assignment.end" },
         { action: "admin.employment.transfer" },
-      ]));
-    expect(await harness.db
-      .select({ userId: userProfileDirty.userId })
-      .from(userProfileDirty)
-      .where(eq(userProfileDirty.userId, seeded.inScopeEnabledUserId)))
-      .toEqual([{ userId: seeded.inScopeEnabledUserId }]);
+      ]),
+    );
+    expect(
+      await harness.db
+        .select({ userId: userProfileDirty.userId })
+        .from(userProfileDirty)
+        .where(eq(userProfileDirty.userId, seeded.inScopeEnabledUserId)),
+    ).toEqual([{ userId: seeded.inScopeEnabledUserId }]);
   });
 
   test("sets and clears an in-scope Primary while keeping an out-of-scope old Primary concealed", async () => {
     const { managePrimaryEmployment } = createSubject();
     const authorization = await scopedAuthorization();
 
-    const set = await managePrimaryEmployment.execute({
-      command: "set",
-      employmentId: seeded.inScopeEnabledId,
-    }, { authorization });
+    const set = await managePrimaryEmployment.execute(
+      {
+        command: "set",
+        employmentId: seeded.inScopeEnabledId,
+      },
+      { authorization },
+    );
     expect(set).toEqual({ changed: true, result: null });
-    const repeatedSet = await managePrimaryEmployment.execute({
-      command: "set",
-      employmentId: seeded.inScopeEnabledId,
-    }, { authorization });
+    const repeatedSet = await managePrimaryEmployment.execute(
+      {
+        command: "set",
+        employmentId: seeded.inScopeEnabledId,
+      },
+      { authorization },
+    );
     expect(repeatedSet).toEqual({ changed: false, result: null });
-    expect(await harness.db
-      .select({ id: employments.id, isPrimary: employments.isPrimary })
-      .from(employments)
-      .where(eq(employments.userId, seeded.inScopeEnabledUserId)))
-      .toEqual(expect.arrayContaining([
+    expect(
+      await harness.db
+        .select({ id: employments.id, isPrimary: employments.isPrimary })
+        .from(employments)
+        .where(eq(employments.userId, seeded.inScopeEnabledUserId)),
+    ).toEqual(
+      expect.arrayContaining([
         { id: seeded.inScopeEnabledId, isPrimary: true },
         { id: seeded.outOfScopeOldPrimaryId, isPrimary: false },
-      ]));
+      ]),
+    );
 
     let oldPrimaryFailure: unknown;
     try {
-      await managePrimaryEmployment.execute({
-        command: "set",
-        employmentId: seeded.outOfScopeOldPrimaryId,
-      }, { authorization });
-    }
-    catch (error) {
+      await managePrimaryEmployment.execute(
+        {
+          command: "set",
+          employmentId: seeded.outOfScopeOldPrimaryId,
+        },
+        { authorization },
+      );
+    } catch (error) {
       oldPrimaryFailure = error;
     }
     expect(oldPrimaryFailure).toBeInstanceOf(EmploymentNotFoundError);
 
-    const cleared = await managePrimaryEmployment.execute({
-      command: "clear",
-      employmentId: seeded.inScopeEnabledId,
-    }, { authorization });
+    const cleared = await managePrimaryEmployment.execute(
+      {
+        command: "clear",
+        employmentId: seeded.inScopeEnabledId,
+      },
+      { authorization },
+    );
     expect(cleared).toEqual({ changed: true, result: null });
-    const repeatedClear = await managePrimaryEmployment.execute({
-      command: "clear",
-      employmentId: seeded.inScopeEnabledId,
-    }, { authorization });
+    const repeatedClear = await managePrimaryEmployment.execute(
+      {
+        command: "clear",
+        employmentId: seeded.inScopeEnabledId,
+      },
+      { authorization },
+    );
     expect(repeatedClear).toEqual({ changed: false, result: null });
-    expect(await harness.db
-      .select({ id: employments.id, isPrimary: employments.isPrimary })
-      .from(employments)
-      .where(eq(employments.userId, seeded.inScopeEnabledUserId)))
-      .toEqual(expect.arrayContaining([
+    expect(
+      await harness.db
+        .select({ id: employments.id, isPrimary: employments.isPrimary })
+        .from(employments)
+        .where(eq(employments.userId, seeded.inScopeEnabledUserId)),
+    ).toEqual(
+      expect.arrayContaining([
         { id: seeded.inScopeEnabledId, isPrimary: false },
         { id: seeded.outOfScopeOldPrimaryId, isPrimary: false },
-      ]));
+      ]),
+    );
   });
 });
 
@@ -610,7 +594,7 @@ function createSubject() {
     },
     roleRepository: repositories.role,
     privilegeRepository: repositories.privilege,
-    uow: mapUnitOfWork(unitOfWork, tx => ({
+    uow: mapUnitOfWork(unitOfWork, (tx) => ({
       employmentRepository: tx.repositories.employment,
       auditService: tx.auditService,
       userProfileInvalidation: tx.userProfileInvalidation,
@@ -618,7 +602,7 @@ function createSubject() {
   });
   const createEmployment = createCreateEmploymentUseCase({
     clock,
-    uow: mapUnitOfWork(unitOfWork, tx => ({
+    uow: mapUnitOfWork(unitOfWork, (tx) => ({
       employmentStore: tx.repositories.employment,
       organizationReader: tx.repositories.organization,
       positionReader: tx.repositories.position,
@@ -628,7 +612,7 @@ function createSubject() {
     })),
   });
   const changeEmploymentAvailability = createChangeEmploymentAvailabilityUseCase({
-    uow: mapUnitOfWork(unitOfWork, tx => ({
+    uow: mapUnitOfWork(unitOfWork, (tx) => ({
       employmentStore: tx.repositories.employment,
       organizationReader: tx.repositories.organization,
       auditLogWriter: tx.auditService,
@@ -638,7 +622,7 @@ function createSubject() {
   });
   const endEmployment = createEndEmploymentUseCase({
     clock,
-    uow: mapUnitOfWork(unitOfWork, tx => ({
+    uow: mapUnitOfWork(unitOfWork, (tx) => ({
       employmentStore: tx.repositories.employment,
       auditLogWriter: tx.auditService,
       responsibilityParentLifecycle: tx.responsibilityParentLifecycle,
@@ -647,7 +631,7 @@ function createSubject() {
   });
   const transferEmployment = createTransferEmploymentUseCase({
     clock,
-    uow: mapUnitOfWork(unitOfWork, tx => ({
+    uow: mapUnitOfWork(unitOfWork, (tx) => ({
       employmentStore: tx.repositories.employment,
       organizationReader: tx.repositories.organization,
       positionReader: tx.repositories.position,
@@ -658,7 +642,7 @@ function createSubject() {
     })),
   });
   const managePrimaryEmployment = createManagePrimaryEmploymentUseCase({
-    uow: mapUnitOfWork(unitOfWork, tx => ({
+    uow: mapUnitOfWork(unitOfWork, (tx) => ({
       employmentStore: tx.repositories.employment,
       auditLogWriter: tx.auditService,
       userProfileInvalidation: tx.userProfileInvalidation,
@@ -674,11 +658,7 @@ function createSubject() {
   };
 }
 
-function query(
-  pageNum: number,
-  pageSize: number,
-  statuses?: EmploymentStatus[],
-) {
+function query(pageNum: number, pageSize: number, statuses?: EmploymentStatus[]) {
   return {
     pageNum,
     pageSize,
@@ -743,29 +723,28 @@ async function seedEmploymentGraph(db: DbClient) {
       user("outside-candidate", UserStatus.Disable),
     ])
     .returning({ id: users.id, username: users.username });
-  const userId = (username: string) =>
-    seededUsers.find(item => item.username === username)!.id;
+  const userId = (username: string) => seededUsers.find((item) => item.username === username)!.id;
   const seededEmployments = await db
     .insert(employments)
     .values([
       employment(userId("enabled"), globalPosition!.id, inScopeOrg!.id, EmploymentStatus.Enable),
       employment(userId("paused"), globalPosition!.id, inScopeOrg!.id, EmploymentStatus.Pause),
       employment(userId("ended"), globalPosition!.id, inScopeOrg!.id, EmploymentStatus.Disable),
-      { ...employment(userId("outside"), globalPosition!.id, outOfScopeOrg!.id, EmploymentStatus.Enable), description: "outside" },
-      { ...employment(userId("tombstone"), globalPosition!.id, inScopeOrg!.id, EmploymentStatus.Enable), isDelete: true },
       {
-        ...employment(
-          userId("enabled"),
-          globalPosition!.id,
-          outOfScopeOrg!.id,
-          EmploymentStatus.Enable,
-        ),
+        ...employment(userId("outside"), globalPosition!.id, outOfScopeOrg!.id, EmploymentStatus.Enable),
+        description: "outside",
+      },
+      {
+        ...employment(userId("tombstone"), globalPosition!.id, inScopeOrg!.id, EmploymentStatus.Enable),
+        isDelete: true,
+      },
+      {
+        ...employment(userId("enabled"), globalPosition!.id, outOfScopeOrg!.id, EmploymentStatus.Enable),
         isPrimary: true,
       },
     ])
     .returning({ id: employments.id, userId: employments.userId });
-  const employmentId = (username: string) =>
-    seededEmployments.find(item => item.userId === userId(username))!.id;
+  const employmentId = (username: string) => seededEmployments.find((item) => item.userId === userId(username))!.id;
   return {
     inScopeOrgId: inScopeOrg!.id,
     inScopeChildOrgId: inScopeChildOrg!.id,
@@ -808,12 +787,7 @@ function user(username: string, status = UserStatus.Enable) {
   };
 }
 
-function employment(
-  userId: number,
-  posId: number,
-  orgId: number,
-  status: EmploymentStatus,
-) {
+function employment(userId: number, posId: number, orgId: number, status: EmploymentStatus) {
   return {
     userId,
     posId,
@@ -821,8 +795,6 @@ function employment(
     status,
     isPrimary: false,
     startTime: new Date("2026-01-01T00:00:00Z"),
-    endTime: status === EmploymentStatus.Disable
-      ? new Date("2026-02-01T00:00:00Z")
-      : null,
+    endTime: status === EmploymentStatus.Disable ? new Date("2026-02-01T00:00:00Z") : null,
   };
 }

@@ -1,12 +1,10 @@
+import { describe, expect, mock, test } from "bun:test";
 import { AdminMutationCommittedError } from "@admin-api/services/admin-mutation/admin-mutation";
 import {
   ClientMutationTargetRequiredError,
   createAdminClientMutation,
 } from "@admin-api/services/client/client-mutation";
-import {
-  createImmediateUnitOfWork,
-} from "@iam/api-core/uow";
-import { describe, expect, mock, test } from "bun:test";
+import { createImmediateUnitOfWork } from "@iam/api-core/uow";
 
 function createLogger() {
   return {
@@ -55,8 +53,7 @@ describe("Admin Client target-bound mutation", () => {
 
     try {
       await mutation.transaction(async () => "unbound");
-    }
-    catch (error) {
+    } catch (error) {
       rejected = error;
     }
 
@@ -75,12 +72,13 @@ describe("Admin Client target-bound mutation", () => {
     let rejected: unknown;
 
     try {
-      await mutation.transaction(async (_tx, bindTarget) =>
-        await bindTarget("portal", async () => {
-          throw mutationFailure;
-        }));
-    }
-    catch (error) {
+      await mutation.transaction(
+        async (_tx, bindTarget) =>
+          await bindTarget("portal", async () => {
+            throw mutationFailure;
+          }),
+      );
+    } catch (error) {
       rejected = error;
     }
 
@@ -110,10 +108,8 @@ describe("Admin Client target-bound mutation", () => {
     let rejected: unknown;
 
     try {
-      await mutation.transaction(async (_tx, bindTarget) =>
-        await bindTarget("portal", async () => "updated"));
-    }
-    catch (error) {
+      await mutation.transaction(async (_tx, bindTarget) => await bindTarget("portal", async () => "updated"));
+    } catch (error) {
       rejected = error;
     }
 
@@ -151,19 +147,20 @@ describe("Admin Client target-bound mutation", () => {
     let rejected: unknown;
 
     try {
-      await mutation.transaction(async (_tx, bindTarget) =>
-        await bindTarget("canary-client", async () => "updated"));
-    }
-    catch (error) {
+      await mutation.transaction(async (_tx, bindTarget) => await bindTarget("canary-client", async () => "updated"));
+    } catch (error) {
       rejected = error;
     }
 
     expect(rejected).toBe(databaseFailure);
-    expect(logger.error).toHaveBeenCalledWith({
-      clientCode: "canary-client",
-      operation: "client_runtime_snapshot_invalidation",
-      outcome: "repair_required",
-    }, "Client Runtime Snapshot requires explicit repair");
+    expect(logger.error).toHaveBeenCalledWith(
+      {
+        clientCode: "canary-client",
+        operation: "client_runtime_snapshot_invalidation",
+        outcome: "repair_required",
+      },
+      "Client Runtime Snapshot requires explicit repair",
+    );
   });
 
   test("reports committed required invalidation failure without retrying it as unknown COMMIT", async () => {
@@ -180,10 +177,8 @@ describe("Admin Client target-bound mutation", () => {
     let rejected: unknown;
 
     try {
-      await mutation.transaction(async (_tx, bindTarget) =>
-        await bindTarget("portal", async () => "updated"));
-    }
-    catch (error) {
+      await mutation.transaction(async (_tx, bindTarget) => await bindTarget("portal", async () => "updated"));
+    } catch (error) {
       rejected = error;
     }
 
@@ -208,12 +203,13 @@ describe("Admin Client target-bound mutation", () => {
     let rejected: unknown;
 
     try {
-      await mutation.transaction(async (_tx, bindTarget) =>
-        await bindTarget("portal", async () => {
-          persistedName = "new-name";
-        }));
-    }
-    catch (error) {
+      await mutation.transaction(
+        async (_tx, bindTarget) =>
+          await bindTarget("portal", async () => {
+            persistedName = "new-name";
+          }),
+      );
+    } catch (error) {
       rejected = error;
     }
 

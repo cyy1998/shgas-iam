@@ -1,13 +1,6 @@
-import type { UserProfileEffectiveRoleResolverPort } from "../../src/build/user-profile-build.repository";
-import {
-  employments,
-  organizationClosures,
-  positions,
-  rolePrivileges,
-  roles,
-  users,
-} from "@iam/db/schema";
 import { describe, expect, mock, test } from "bun:test";
+import { employments, organizationClosures, positions, rolePrivileges, roles, users } from "@iam/db/schema";
+import type { UserProfileEffectiveRoleResolverPort } from "../../src/build/user-profile-build.repository";
 import { createUserProfileBuildRepository } from "../../src/build/user-profile-build.repository";
 
 interface BuildQueryRows {
@@ -25,20 +18,13 @@ function createBuildDb(rows: BuildQueryRows) {
       let selectedRows: readonly unknown[] | undefined;
       const query = {
         from: mock((table: unknown) => {
-          if (table === users)
-            selectedRows = rows.users;
-          else if (table === employments)
-            selectedRows = rows.employments;
-          else if (table === positions)
-            selectedRows = rows.positions;
-          else if (table === organizationClosures)
-            selectedRows = rows.organizationPaths;
-          else if (table === roles)
-            selectedRows = rows.roleClients;
-          else if (table === rolePrivileges)
-            selectedRows = rows.privileges;
-          else
-            throw new Error("Unexpected User Profile build query table");
+          if (table === users) selectedRows = rows.users;
+          else if (table === employments) selectedRows = rows.employments;
+          else if (table === positions) selectedRows = rows.positions;
+          else if (table === organizationClosures) selectedRows = rows.organizationPaths;
+          else if (table === roles) selectedRows = rows.roleClients;
+          else if (table === rolePrivileges) selectedRows = rows.privileges;
+          else throw new Error("Unexpected User Profile build query table");
 
           return query;
         }),
@@ -75,20 +61,23 @@ describe("UserProfileBuildRepository", () => {
         { roleId: 8, privilegeCode: "user:write" },
       ],
     });
-    const resolveEffectiveRoles = mock(async () => new Map([
-      [10, [
-        { id: 7, roleCode: "role-a" },
-        { id: 8, roleCode: "role-b" },
-      ]],
-      [11, [{ id: 7, roleCode: "role-a" }]],
-    ]));
+    const resolveEffectiveRoles = mock(
+      async () =>
+        new Map([
+          [
+            10,
+            [
+              { id: 7, roleCode: "role-a" },
+              { id: 8, roleCode: "role-b" },
+            ],
+          ],
+          [11, [{ id: 7, roleCode: "role-a" }]],
+        ]),
+    );
     const roleAssignmentResolver: UserProfileEffectiveRoleResolverPort = {
       resolveEffectiveRoles,
     };
-    const repository = createUserProfileBuildRepository(
-      db as never,
-      roleAssignmentResolver,
-    );
+    const repository = createUserProfileBuildRepository(db as never, roleAssignmentResolver);
 
     const dataset = await repository.loadByUserIds([1, 1]);
 

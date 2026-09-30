@@ -1,18 +1,18 @@
-import type { SubjectFactsCacheRecord } from "../../src/subject-facts";
-import type {
-  SubjectFactsRedisClient,
-  SubjectFactsRedisInspectionClient,
-} from "../../src/subject-facts/subject-facts-redis-publisher.core";
 import { randomUUID } from "node:crypto";
 import process from "node:process";
 import { createSubjectAccessBootstrap } from "@iam/api-core/subject-access";
 import Redis from "ioredis";
+import type { SubjectFactsCacheRecord } from "../../src/subject-facts";
 import {
   createSubjectFactsRedisCache,
   createSubjectFactsRedisInspector,
   createSubjectFactsRedisPublisher,
   SubjectFactsCacheRecordSchema,
 } from "../../src/subject-facts";
+import type {
+  SubjectFactsRedisClient,
+  SubjectFactsRedisInspectionClient,
+} from "../../src/subject-facts/subject-facts-redis-publisher.core";
 
 const TEST_REDIS_URL_ENV = "IAM_USER_PROFILE_TEST_REDIS_URL";
 
@@ -28,9 +28,7 @@ export interface RedisTestScope {
   readonly secondProfilePublisher: ReturnType<typeof createSubjectFactsRedisPublisher>;
   readonly subjectAccessBootstrap: ReturnType<typeof createSubjectAccessBootstrap>;
   readonly profileInspector: ReturnType<typeof createSubjectFactsRedisInspector>;
-  readonly readPublishedProfileRecord: (
-    subjectIdentifier: string,
-  ) => Promise<SubjectFactsCacheRecord | null>;
+  readonly readPublishedProfileRecord: (subjectIdentifier: string) => Promise<SubjectFactsCacheRecord | null>;
   readonly close: () => Promise<void>;
 }
 
@@ -45,8 +43,7 @@ export async function createRedisTestHarness(): Promise<RedisTestHarness> {
 
   try {
     await connectRedis(cleanupRedis);
-  }
-  catch (error) {
+  } catch (error) {
     cleanupRedis.disconnect();
     throw error;
   }
@@ -60,13 +57,8 @@ export async function createRedisTestHarness(): Promise<RedisTestHarness> {
       const observerRedis = createRedisClient(redisUrl);
 
       try {
-        await Promise.all([
-          connectRedis(firstRedis),
-          connectRedis(secondRedis),
-          connectRedis(observerRedis),
-        ]);
-      }
-      catch (error) {
+        await Promise.all([connectRedis(firstRedis), connectRedis(secondRedis), connectRedis(observerRedis)]);
+      } catch (error) {
         firstRedis.disconnect();
         secondRedis.disconnect();
         observerRedis.disconnect();
@@ -94,36 +86,26 @@ export async function createRedisTestHarness(): Promise<RedisTestHarness> {
         },
         async readPublishedProfileRecord(subjectIdentifier) {
           const stored = await observerRedis.get(`${keyPrefix}${subjectIdentifier}`);
-          return stored === null
-            ? null
-            : SubjectFactsCacheRecordSchema.parse(JSON.parse(stored));
+          return stored === null ? null : SubjectFactsCacheRecordSchema.parse(JSON.parse(stored));
         },
         async close() {
-          if (closed)
-            return;
+          if (closed) return;
           closed = true;
 
           const errors: unknown[] = [];
-          const closeResults = await Promise.allSettled([
-            firstRedis.quit(),
-            secondRedis.quit(),
-            observerRedis.quit(),
-          ]);
+          const closeResults = await Promise.allSettled([firstRedis.quit(), secondRedis.quit(), observerRedis.quit()]);
           for (const result of closeResults) {
-            if (result.status === "rejected")
-              errors.push(result.reason);
+            if (result.status === "rejected") errors.push(result.reason);
           }
 
           try {
             await deleteOwnedKeys(cleanupRedis, keyPrefix);
             await deleteOwnedKeys(cleanupRedis, subjectAccessKeyPrefix);
-          }
-          catch (error) {
+          } catch (error) {
             errors.push(error);
           }
 
-          if (errors.length > 0)
-            throw new AggregateError(errors, "Failed to close Subject Facts Redis test scope");
+          if (errors.length > 0) throw new AggregateError(errors, "Failed to close Subject Facts Redis test scope");
         },
       };
     },
@@ -165,15 +147,8 @@ function requireDedicatedRedisTestUrl() {
 async function deleteOwnedKeys(redis: Redis, keyPrefix: string) {
   let cursor = "0";
   do {
-    const [nextCursor, keys] = await redis.scan(
-      cursor,
-      "MATCH",
-      `${keyPrefix}*`,
-      "COUNT",
-      100,
-    );
+    const [nextCursor, keys] = await redis.scan(cursor, "MATCH", `${keyPrefix}*`, "COUNT", 100);
     cursor = nextCursor;
-    if (keys.length > 0)
-      await redis.unlink(...keys);
+    if (keys.length > 0) await redis.unlink(...keys);
   } while (cursor !== "0");
 }

@@ -1,3 +1,4 @@
+import { afterAll, afterEach, beforeAll, expect, test } from "bun:test";
 import { randomUUID } from "node:crypto";
 import { connect, createServer } from "node:net";
 import { ClientSnapshotUnavailableError } from "@iam/api-core/client-snapshot";
@@ -8,15 +9,13 @@ import {
 } from "@iam/api-core/client-snapshot/maintenance";
 import { clientSnapshotKeys } from "@iam/api-core/client-snapshot/testing";
 import { ClientStatus } from "@iam/contracts";
-import { afterAll, afterEach, beforeAll, expect, test } from "bun:test";
 import Redis from "ioredis";
 
 let redis: Redis;
 const codes: string[] = [];
 beforeAll(async () => {
   const url = process.env.IAM_API_CORE_TEST_REDIS_URL;
-  if (!url)
-    throw new Error("IAM_API_CORE_TEST_REDIS_URL required");
+  if (!url) throw new Error("IAM_API_CORE_TEST_REDIS_URL required");
   redis = new Redis(url, {
     lazyConnect: true,
     maxRetriesPerRequest: 0,
@@ -83,8 +82,7 @@ function latch() {
 async function failure(work: () => Promise<unknown>) {
   try {
     await work();
-  }
-  catch (error) {
+  } catch (error) {
     return error;
   }
   throw new Error("Expected failure");
@@ -141,7 +139,7 @@ test("injected TTL expires and invalidation does not replace an already accepted
     absentTtlMs: 20,
   });
   const original = await snapshots.client.acquire(f.code);
-  await new Promise(resolve => setTimeout(resolve, 65));
+  await new Promise((resolve) => setTimeout(resolve, 65));
   f.setClient(null);
   const current = await snapshots.client.acquire(f.code);
   expect(current.kind).toBe("absent");
@@ -175,10 +173,8 @@ for (const kind of ["client", "gate", "credential"] as const) {
       });
       const original = await snapshots[kind].acquire(f.code);
       const keys = clientSnapshotKeys(f.code);
-      if (cache === "bad-payload")
-        await redis.set(keys.payloads[kind === "credential" ? 1 : 0], "bad");
-      if (cache === "bad-control")
-        await redis.hset(keys.control, "schemaVersion", "bad");
+      if (cache === "bad-payload") await redis.set(keys.payloads[kind === "credential" ? 1 : 0], "bad");
+      if (cache === "bad-control") await redis.hset(keys.control, "schemaVersion", "bad");
       const independent = redis.duplicate({ lazyConnect: true });
       await independent.connect();
       delay = true;
@@ -221,8 +217,7 @@ for (const kind of ["client", "gate", "credential"] as const) {
         resume.release();
         const accepted = await a;
         expect(accepted).toEqual(cache === "warm" || cache === "negative" ? original : current);
-      }
-      finally {
+      } finally {
         resume.release();
         await Promise.allSettled([a, ...(b ? [b] : [])]);
         await independent.quit();
@@ -364,15 +359,12 @@ test("targeted and full repair preserve non-target data, independent scan-only v
       eval: (...args) => redis.eval(...args),
       scan: (...args) => redis.scan(...args),
       async unlink(...keys) {
-        if (unlinked)
-          throw new Error("interrupted repair");
+        if (unlinked) throw new Error("interrupted repair");
         unlinked = true;
         return redis.unlink(...keys);
       },
     });
-    const failedRepair = await failure(() =>
-      interrupted.repairAllAfterRedisRestore({ protocolTrafficStopped: true }),
-    );
+    const failedRepair = await failure(() => interrupted.repairAllAfterRedisRestore({ protocolTrafficStopped: true }));
     expect(failedRepair).toBeInstanceOf(Error);
     await maintenance.repairAllAfterRedisRestore({
       protocolTrafficStopped: true,
@@ -385,8 +377,7 @@ test("targeted and full repair preserve non-target data, independent scan-only v
     expect(retained).toBe("retained");
     const recovered = await snapshots.client.acquire(f.code);
     expect(recovered.kind).toBe("present");
-  }
-  finally {
+  } finally {
     scanOnly.disconnect();
     await redis.acl("DELUSER", username);
     await redis.unlink(sentinel);
@@ -407,18 +398,17 @@ test("warm acquisition uses one real socket request/response exchange; cold uses
     upstream.on("data", () => {
       responses++;
     });
-    downstream.on("data", data => upstream.write(data));
-    upstream.on("data", data => downstream.write(data));
+    downstream.on("data", (data) => upstream.write(data));
+    upstream.on("data", (data) => downstream.write(data));
     upstream.on("end", () => downstream.end());
     downstream.on("end", () => upstream.end());
     downstream.on("close", () => upstream.destroy());
     upstream.on("error", () => downstream.destroy());
   });
-  await new Promise<void>(resolve => server.listen(0, "127.0.0.1", resolve));
+  await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
 
   const address = server.address();
-  if (!address || typeof address === "string")
-    throw new Error("Missing proxy address");
+  if (!address || typeof address === "string") throw new Error("Missing proxy address");
   target.hostname = "127.0.0.1";
   target.port = String(address.port);
   const connection = new Redis(target.toString(), {
@@ -446,11 +436,8 @@ test("warm acquisition uses one real socket request/response exchange; cold uses
     };
     expect(warm).toEqual({ requests: 1, responses: 1, sourceLoads: 0 });
     process.stdout.write(`Client Snapshot socket sample ${JSON.stringify({ cold, warm })}\n`);
-  }
-  finally {
+  } finally {
     await connection.quit();
-    await new Promise<void>((resolve, reject) =>
-      server.close(error => (error ? reject(error) : resolve())),
-    );
+    await new Promise<void>((resolve, reject) => server.close((error) => (error ? reject(error) : resolve())));
   }
 });

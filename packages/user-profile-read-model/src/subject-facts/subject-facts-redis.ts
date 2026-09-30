@@ -1,11 +1,11 @@
 import type { SubjectFactsCacheRecord } from "./profile-cache";
+import { SubjectFactsCacheRecordSchema } from "./profile-cache";
 import type {
   CreateSubjectFactsRedisPublisherOptions,
   SubjectFactsRedisCacheClient,
   SubjectFactsRedisClient,
   SubjectFactsRedisInspectionClient,
 } from "./subject-facts-redis-publisher.core";
-import { SubjectFactsCacheRecordSchema } from "./profile-cache";
 import {
   createMonotonicSubjectFactsRedisPublisher,
   createSubjectFactsRedisInspector as createVersionedSubjectFactsRedisInspector,
@@ -18,7 +18,7 @@ export function createSubjectFactsRedisPublisher(
 ) {
   return createMonotonicSubjectFactsRedisPublisher<SubjectFactsCacheRecord>(
     redis,
-    input => SubjectFactsCacheRecordSchema.parse(input),
+    (input) => SubjectFactsCacheRecordSchema.parse(input),
     options,
   );
 }
@@ -30,10 +30,7 @@ export function createSubjectFactsRedisCache(
   } = {},
 ) {
   const keyPrefix = options.keyPrefix ?? SUBJECT_FACTS_CACHE_KEY_PREFIX;
-  const publisher = createSubjectFactsRedisPublisher(
-    redis,
-    { ...options, keyPrefix },
-  );
+  const publisher = createSubjectFactsRedisPublisher(redis, { ...options, keyPrefix });
 
   return {
     async read(subjectIdentifier: string) {
@@ -49,7 +46,7 @@ export function createSubjectFactsRedisInspector(
 ) {
   return createVersionedSubjectFactsRedisInspector(
     redis,
-    input => SubjectFactsCacheRecordSchema.parse(input),
+    (input) => SubjectFactsCacheRecordSchema.parse(input),
     options,
   );
 }

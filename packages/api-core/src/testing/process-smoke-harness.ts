@@ -1,20 +1,16 @@
-import type { EventEmitter } from "node:events";
-import type { Readable } from "node:stream";
 import { spawn } from "node:child_process";
+import type { EventEmitter } from "node:events";
 import { mkdtemp, rm } from "node:fs/promises";
 import { createServer } from "node:net";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import process from "node:process";
+import type { Readable } from "node:stream";
 import { fileURLToPath } from "node:url";
 
 const windowsCommandEnvironmentKey = "IAM_PROCESS_SMOKE_COMMAND_BASE64";
-const windowsJobLauncherPath = fileURLToPath(
-  new URL("./fixtures/windows-job-launcher.mjs", import.meta.url),
-);
-const windowsJobSupervisorPath = fileURLToPath(
-  new URL("./fixtures/windows-job-supervisor.ps1", import.meta.url),
-);
+const windowsJobLauncherPath = fileURLToPath(new URL("./fixtures/windows-job-launcher.mjs", import.meta.url));
+const windowsJobSupervisorPath = fileURLToPath(new URL("./fixtures/windows-job-supervisor.ps1", import.meta.url));
 const portableRuntimeEnvironmentKeys = new Set([
   "comspec",
   "dyld_fallback_library_path",
@@ -41,16 +37,12 @@ export function createProcessSmokeEnvironment(options: {
 }) {
   const environment: NodeJS.ProcessEnv = {};
   for (const [key, value] of Object.entries(options.source)) {
-    if (
-      value !== undefined
-      && portableRuntimeEnvironmentKeys.has(key.toLowerCase())
-    ) {
+    if (value !== undefined && portableRuntimeEnvironmentKeys.has(key.toLowerCase())) {
       environment[key] = value;
     }
   }
   for (const [key, value] of Object.entries(options.overrides)) {
-    if (value !== undefined)
-      environment[key] = value;
+    if (value !== undefined) environment[key] = value;
   }
   environment.TEMP = options.temporaryDirectory;
   environment.TMP = options.temporaryDirectory;
@@ -76,13 +68,13 @@ export class PortCollisionError extends FatalReadinessError {
   override readonly name: string = "PortCollisionError";
 }
 
-type ProcessSmokeFailureKind
-  = | "child-error"
-    | "child-exit"
-    | "cleanup"
-    | "completion-timeout"
-    | "probe"
-    | "readiness-timeout";
+type ProcessSmokeFailureKind =
+  | "child-error"
+  | "child-exit"
+  | "cleanup"
+  | "completion-timeout"
+  | "probe"
+  | "readiness-timeout";
 
 export class ProcessSmokeError extends Error {
   override readonly name = "ProcessSmokeError";
@@ -115,42 +107,33 @@ class BoundedProcessOutput {
   }
 
   hasChildReadinessEvidence() {
-    return this.childReadinessEvidence === undefined
-      || this.childReadinessEvidenceObserved;
+    return this.childReadinessEvidence === undefined || this.childReadinessEvidenceObserved;
   }
 
   snapshot() {
-    if (this.buffer.length === 0)
-      return "(no output captured)";
+    if (this.buffer.length === 0) return "(no output captured)";
     const output = this.buffer.toString("utf8");
-    return this.truncated
-      ? `[output truncated to last ${this.maxBytes} bytes]\n${output}`
-      : output;
+    return this.truncated ? `[output truncated to last ${this.maxBytes} bytes]\n${output}` : output;
   }
 
   dispose() {
-    for (const { stream, listener } of this.listeners)
-      stream.off("data", listener);
+    for (const { stream, listener } of this.listeners) stream.off("data", listener);
     this.listeners.length = 0;
   }
 
   private observe(stream: Readable | null, source: "stdout" | "stderr") {
-    if (stream === null)
-      return;
+    if (stream === null) return;
     let readinessTail = Buffer.alloc(0);
-    const evidence = this.childReadinessEvidence === undefined
-      ? undefined
-      : Buffer.from(this.childReadinessEvidence);
+    const evidence = this.childReadinessEvidence === undefined ? undefined : Buffer.from(this.childReadinessEvidence);
     const listener = (chunk: Buffer | string) => {
       const payload = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
       if (!this.childReadinessEvidenceObserved && evidence !== undefined) {
         const searchable = Buffer.concat([readinessTail, payload]);
         this.childReadinessEvidenceObserved = searchable.includes(evidence);
-        readinessTail = evidence.length <= 1
-          ? Buffer.alloc(0)
-          : searchable.subarray(
-              Math.max(0, searchable.length - evidence.length + 1),
-            );
+        readinessTail =
+          evidence.length <= 1
+            ? Buffer.alloc(0)
+            : searchable.subarray(Math.max(0, searchable.length - evidence.length + 1));
       }
       this.append(Buffer.concat([Buffer.from(`[${source}] `), payload]));
     };
@@ -162,26 +145,18 @@ class BoundedProcessOutput {
     if (entry.length >= this.maxBytes) {
       this.buffer = entry.subarray(entry.length - this.maxBytes);
       this.truncated = true;
-    }
-    else if (this.buffer.length + entry.length <= this.maxBytes) {
+    } else if (this.buffer.length + entry.length <= this.maxBytes) {
       this.buffer = Buffer.concat([this.buffer, entry]);
-    }
-    else {
+    } else {
       const retainedBytes = this.maxBytes - entry.length;
-      this.buffer = Buffer.concat([
-        this.buffer.subarray(this.buffer.length - retainedBytes),
-        entry,
-      ]);
+      this.buffer = Buffer.concat([this.buffer.subarray(this.buffer.length - retainedBytes), entry]);
       this.truncated = true;
     }
   }
 }
 
 /** Owner-disposable bounded capture for assertions on successful child logs. */
-export function createBoundedProcessLogCapture(
-  child: ProcessSmokeChild,
-  options: { maxBytes: number },
-) {
+export function createBoundedProcessLogCapture(child: ProcessSmokeChild, options: { maxBytes: number }) {
   if (!Number.isSafeInteger(options.maxBytes) || options.maxBytes <= 0)
     throw new RangeError("process log capture maxBytes must be a positive safe integer");
   const output = new BoundedProcessOutput(child, options.maxBytes);
@@ -217,8 +192,7 @@ function processDiagnostic(
 }
 
 function waitForDelay(delayMs: number, signal: AbortSignal) {
-  if (signal.aborted)
-    return Promise.resolve(false);
+  if (signal.aborted) return Promise.resolve(false);
   return new Promise<boolean>((resolve) => {
     let timeout: NodeJS.Timeout;
     const onAbort = () => {
@@ -250,8 +224,7 @@ async function waitForReadiness<T>(
   let lastProbeError: Error | undefined;
   let timeout: NodeJS.Timeout | undefined;
   const cancelReadinessDeadline = () => {
-    if (timeout === undefined)
-      return;
+    if (timeout === undefined) return;
     clearTimeout(timeout);
     timeout = undefined;
   };
@@ -260,63 +233,69 @@ async function waitForReadiness<T>(
     const onError = (error: Error) => {
       childTerminated = true;
       cancelReadinessDeadline();
-      reject(new ProcessSmokeError(
-        "child-error",
-        processDiagnostic(
-          options.label,
-          "child error before readiness",
-          child,
-          output,
-          `child error: ${error.message}`,
+      reject(
+        new ProcessSmokeError(
+          "child-error",
+          processDiagnostic(
+            options.label,
+            "child error before readiness",
+            child,
+            output,
+            `child error: ${error.message}`,
+          ),
+          { cause: error },
         ),
-        { cause: error },
-      ));
+      );
     };
     const onExit = (code: number | null, signal: NodeJS.Signals | null) => {
       childTerminated = true;
       cancelReadinessDeadline();
       void closeWaiter.wait(options.outputDrainTimeoutMs).then(() => {
-        reject(new ProcessSmokeError(
-          "child-exit",
-          processDiagnostic(
-            options.label,
-            "exited before readiness",
-            child,
-            output,
-            `observed exit: code=${code ?? "null"} signal=${signal ?? "null"}`,
+        reject(
+          new ProcessSmokeError(
+            "child-exit",
+            processDiagnostic(
+              options.label,
+              "exited before readiness",
+              child,
+              output,
+              `observed exit: code=${code ?? "null"} signal=${signal ?? "null"}`,
+            ),
           ),
-        ));
+        );
       });
     };
     child.once("error", onError);
     child.once("exit", onExit);
-    controller.signal.addEventListener("abort", () => {
-      child.off("error", onError);
-      child.off("exit", onExit);
-    }, { once: true });
+    controller.signal.addEventListener(
+      "abort",
+      () => {
+        child.off("error", onError);
+        child.off("exit", onExit);
+      },
+      { once: true },
+    );
 
-    if (child.exitCode !== null || child.signalCode !== null)
-      onExit(child.exitCode, child.signalCode);
+    if (child.exitCode !== null || child.signalCode !== null) onExit(child.exitCode, child.signalCode);
   });
 
   const deadline = new Promise<never>((_, reject) => {
-    if (childTerminated)
-      return;
+    if (childTerminated) return;
     timeout = setTimeout(() => {
       timeout = undefined;
-      reject(new ProcessSmokeError(
-        "readiness-timeout",
-        processDiagnostic(
-          options.label,
-          `readiness deadline exceeded after ${options.readinessTimeoutMs}ms`,
-          child,
-          output,
-          lastProbeError === undefined
-            ? undefined
-            : `last probe error: ${lastProbeError.message}`,
+      reject(
+        new ProcessSmokeError(
+          "readiness-timeout",
+          processDiagnostic(
+            options.label,
+            `readiness deadline exceeded after ${options.readinessTimeoutMs}ms`,
+            child,
+            output,
+            lastProbeError === undefined ? undefined : `last probe error: ${lastProbeError.message}`,
+          ),
+          lastProbeError === undefined ? undefined : { cause: lastProbeError },
         ),
-        lastProbeError === undefined ? undefined : { cause: lastProbeError },
-      ));
+      );
     }, options.readinessTimeoutMs);
   });
 
@@ -324,15 +303,10 @@ async function waitForReadiness<T>(
     while (!controller.signal.aborted) {
       try {
         const result = await options.probe(controller.signal);
-        if (
-          !childTerminated
-          && result !== undefined
-          && output.hasChildReadinessEvidence()
-        ) {
+        if (!childTerminated && result !== undefined && output.hasChildReadinessEvidence()) {
           return result;
         }
-      }
-      catch (error) {
+      } catch (error) {
         if (!childTerminated && error instanceof FatalReadinessError) {
           throw new ProcessSmokeError(
             "probe",
@@ -348,7 +322,7 @@ async function waitForReadiness<T>(
         }
         lastProbeError = toError(error);
       }
-      if (!await waitForDelay(options.pollIntervalMs, controller.signal))
+      if (!(await waitForDelay(options.pollIntervalMs, controller.signal)))
         throw new Error(`${options.label}: readiness polling aborted`);
     }
     throw new Error(`${options.label}: readiness polling aborted`);
@@ -356,8 +330,7 @@ async function waitForReadiness<T>(
 
   try {
     return await Promise.race([polling, childFailure, deadline]);
-  }
-  finally {
+  } finally {
     controller.abort();
     closeWaiter.dispose();
     cancelReadinessDeadline();
@@ -370,8 +343,7 @@ function withDeadline<T>(promise: Promise<T>, timeoutMs: number, message: string
     timeout = setTimeout(() => reject(new Error(message)), timeoutMs);
   });
   return Promise.race([promise, deadline]).finally(() => {
-    if (timeout !== undefined)
-      clearTimeout(timeout);
+    if (timeout !== undefined) clearTimeout(timeout);
   });
 }
 
@@ -392,20 +364,14 @@ function createProcessCloseWaiter(child: ProcessSmokeChild) {
   const stdioClosedPromise = new Promise<void>((resolve) => {
     resolveStdioClosed = resolve;
   });
-  const streams = [child.stdout, child.stderr].filter(
-    (stream): stream is Readable => stream !== null,
-  );
+  const streams = [child.stdout, child.stderr].filter((stream): stream is Readable => stream !== null);
   const streamListeners: Array<{
     stream: Readable;
     event: "close" | "end";
   }> = [];
 
   const updateCompletion = () => {
-    if (
-      !stdioClosed
-      && streams.every(stream =>
-        stream.closed || stream.destroyed || stream.readableEnded)
-    ) {
+    if (!stdioClosed && streams.every((stream) => stream.closed || stream.destroyed || stream.readableEnded)) {
       stdioClosed = true;
       resolveStdioClosed();
     }
@@ -438,58 +404,41 @@ function createProcessCloseWaiter(child: ProcessSmokeChild) {
     dispose() {
       child.off("exit", onExit);
       child.off("close", onClose);
-      for (const { stream, event } of streamListeners)
-        stream.off(event, onStreamCompletion);
+      for (const { stream, event } of streamListeners) stream.off(event, onStreamCompletion);
     },
-    async wait(
-      timeoutMs: number,
-      options: { acceptStdioClosure?: boolean } = {},
-    ) {
+    async wait(timeoutMs: number, options: { acceptStdioClosure?: boolean } = {}) {
       updateCompletion();
-      if (processClosed || (options.acceptStdioClosure && stdioClosed))
-        return true;
+      if (processClosed || (options.acceptStdioClosure && stdioClosed)) return true;
       let timeout: NodeJS.Timeout | undefined;
       try {
-        const completionPromises = [
-          processClosedPromise,
-          ...(options.acceptStdioClosure ? [stdioClosedPromise] : []),
-        ];
+        const completionPromises = [processClosedPromise, ...(options.acceptStdioClosure ? [stdioClosedPromise] : [])];
         return await Promise.race([
-          ...completionPromises.map(completion => completion.then(() => true)),
+          ...completionPromises.map((completion) => completion.then(() => true)),
           new Promise<false>((resolve) => {
             timeout = setTimeout(resolve, timeoutMs, false);
           }),
         ]);
-      }
-      finally {
-        if (timeout !== undefined)
-          clearTimeout(timeout);
+      } finally {
+        if (timeout !== undefined) clearTimeout(timeout);
       }
     },
   };
 }
 
 async function runWindowsTreeKill(pid: number) {
-  const taskkill = spawn(
-    "taskkill.exe",
-    ["/PID", String(pid), "/T", "/F"],
-    {
-      stdio: "ignore",
-      windowsHide: true,
-    },
-  );
+  const taskkill = spawn("taskkill.exe", ["/PID", String(pid), "/T", "/F"], {
+    stdio: "ignore",
+    windowsHide: true,
+  });
   await new Promise<void>((resolve, reject) => {
     taskkill.once("error", reject);
-    taskkill.once("exit", code => code === 0
-      ? resolve()
-      : reject(new Error(`taskkill exited with code ${code ?? "null"}`)));
+    taskkill.once("exit", (code) =>
+      code === 0 ? resolve() : reject(new Error(`taskkill exited with code ${code ?? "null"}`)),
+    );
   });
 }
 
-function markProcessTreeOwner(
-  child: ProcessSmokeChild,
-  owner: ProcessTreeOwner,
-) {
+function markProcessTreeOwner(child: ProcessSmokeChild, owner: ProcessTreeOwner) {
   Object.defineProperty(child, "processTreeOwner", {
     configurable: false,
     enumerable: false,
@@ -506,11 +455,13 @@ export function spawnOwnedProcessTree(options: {
   env: NodeJS.ProcessEnv;
 }) {
   if (process.platform === "win32") {
-    const command = Buffer.from(JSON.stringify({
-      executable: options.executable,
-      args: options.args,
-      cwd: options.cwd,
-    })).toString("base64");
+    const command = Buffer.from(
+      JSON.stringify({
+        executable: options.executable,
+        args: options.args,
+        cwd: options.cwd,
+      }),
+    ).toString("base64");
     const child = spawn(
       "powershell.exe",
       [
@@ -551,27 +502,20 @@ export function spawnOwnedProcessTree(options: {
 }
 
 function isMissingProcess(error: unknown) {
-  return error instanceof Error
-    && "code" in error
-    && (error as NodeJS.ErrnoException).code === "ESRCH";
+  return error instanceof Error && "code" in error && (error as NodeJS.ErrnoException).code === "ESRCH";
 }
 
 function isPermissionDenied(error: unknown) {
-  return error instanceof Error
-    && "code" in error
-    && (error as NodeJS.ErrnoException).code === "EPERM";
+  return error instanceof Error && "code" in error && (error as NodeJS.ErrnoException).code === "EPERM";
 }
 
 function isProcessAlive(pid: number) {
   try {
     process.kill(pid, 0);
     return true;
-  }
-  catch (error) {
-    if (isMissingProcess(error))
-      return false;
-    if (isPermissionDenied(error))
-      return true;
+  } catch (error) {
+    if (isMissingProcess(error)) return false;
+    if (isPermissionDenied(error)) return true;
     throw error;
   }
 }
@@ -580,12 +524,9 @@ function isPosixProcessGroupAlive(pid: number) {
   try {
     process.kill(-pid, 0);
     return true;
-  }
-  catch (error) {
-    if (isMissingProcess(error))
-      return false;
-    if (isPermissionDenied(error))
-      return true;
+  } catch (error) {
+    if (isMissingProcess(error)) return false;
+    if (isPermissionDenied(error)) return true;
     throw error;
   }
 }
@@ -598,10 +539,8 @@ async function waitForProcessTreeExit(
   const deadline = Date.now() + timeoutMs;
   while (await isAlive()) {
     const remaining = deadline - Date.now();
-    if (remaining <= 0)
-      return false;
-    await new Promise(resolve =>
-      setTimeout(resolve, Math.min(pollIntervalMs, remaining)));
+    if (remaining <= 0) return false;
+    await new Promise((resolve) => setTimeout(resolve, Math.min(pollIntervalMs, remaining)));
   }
   return true;
 }
@@ -613,32 +552,19 @@ export interface TerminateProcessByPidOptions {
   killProcess?: (pid: number, signal: NodeJS.Signals) => void;
 }
 
-export async function terminateProcessByPid(
-  pid: number,
-  options: TerminateProcessByPidOptions,
-) {
-  const processIsAlive = () =>
-    (options.isProcessAlive ?? isProcessAlive)(pid);
-  if (!await processIsAlive())
-    return;
+export async function terminateProcessByPid(pid: number, options: TerminateProcessByPidOptions) {
+  const processIsAlive = () => (options.isProcessAlive ?? isProcessAlive)(pid);
+  if (!(await processIsAlive())) return;
 
   try {
     (options.killProcess ?? process.kill.bind(process))(pid, "SIGKILL");
-  }
-  catch (error) {
-    if (isMissingProcess(error))
-      return;
+  } catch (error) {
+    if (isMissingProcess(error)) return;
     throw error;
   }
 
-  if (!await waitForProcessTreeExit(
-    processIsAlive,
-    options.timeoutMs,
-    options.pollIntervalMs ?? 25,
-  )) {
-    throw new Error(
-      `process ${pid} did not exit within ${options.timeoutMs}ms after SIGKILL`,
-    );
+  if (!(await waitForProcessTreeExit(processIsAlive, options.timeoutMs, options.pollIntervalMs ?? 25))) {
+    throw new Error(`process ${pid} did not exit within ${options.timeoutMs}ms after SIGKILL`);
   }
 }
 
@@ -652,10 +578,7 @@ export interface TerminateProcessTreeOptions {
   runWindowsTreeKill?: (pid: number) => Promise<void>;
 }
 
-export async function terminateProcessTree(
-  child: ProcessSmokeChild,
-  options: TerminateProcessTreeOptions,
-) {
+export async function terminateProcessTree(child: ProcessSmokeChild, options: TerminateProcessTreeOptions) {
   const startedAt = Date.now();
   const remaining = () => Math.max(1, options.timeoutMs - (Date.now() - startedAt));
   const platform = options.platform ?? process.platform;
@@ -663,20 +586,14 @@ export async function terminateProcessTree(
   try {
     const pid = child.pid;
     if (pid === undefined) {
-      if (!await closeWaiter.wait(remaining(), { acceptStdioClosure: true })) {
-        throw new Error(
-          `child without a pid did not close its stdio within ${options.timeoutMs}ms`,
-        );
+      if (!(await closeWaiter.wait(remaining(), { acceptStdioClosure: true }))) {
+        throw new Error(`child without a pid did not close its stdio within ${options.timeoutMs}ms`);
       }
       return;
     }
 
     if (platform === "win32") {
-      if (
-        child.processTreeOwner === "windows-job"
-        && hasExited(child)
-        && await closeWaiter.wait(remaining())
-      ) {
+      if (child.processTreeOwner === "windows-job" && hasExited(child) && (await closeWaiter.wait(remaining()))) {
         return;
       }
       try {
@@ -685,75 +602,48 @@ export async function terminateProcessTree(
           remaining(),
           `taskkill cleanup deadline exceeded after ${options.timeoutMs}ms`,
         );
-      }
-      catch (error) {
-        if (
-          child.processTreeOwner === "windows-job"
-          && await closeWaiter.wait(remaining())
-        ) {
+      } catch (error) {
+        if (child.processTreeOwner === "windows-job" && (await closeWaiter.wait(remaining()))) {
           return;
         }
         throw error;
       }
-      if (!await closeWaiter.wait(remaining()))
+      if (!(await closeWaiter.wait(remaining())))
         throw new Error(`process tree did not exit within ${options.timeoutMs}ms after taskkill`);
       return;
     }
 
     const killProcess = options.killProcess ?? process.kill.bind(process);
-    const isProcessTreeAlive = options.isProcessTreeAlive
-      ?? isPosixProcessGroupAlive;
+    const isProcessTreeAlive = options.isProcessTreeAlive ?? isPosixProcessGroupAlive;
     const pollIntervalMs = options.pollIntervalMs ?? 25;
-    const forceAfterMs = Math.min(
-      options.forceAfterMs ?? Math.floor(options.timeoutMs / 2),
-      options.timeoutMs,
-    );
+    const forceAfterMs = Math.min(options.forceAfterMs ?? Math.floor(options.timeoutMs / 2), options.timeoutMs);
 
     const treeIsAlive = () => isProcessTreeAlive(pid);
     if (await treeIsAlive()) {
       try {
         killProcess(-pid, "SIGTERM");
-      }
-      catch (error) {
+      } catch (error) {
         if (!isMissingProcess(error)) {
-          throw new Error(
-            `failed to send SIGTERM to process group ${pid}`,
-            { cause: error },
-          );
+          throw new Error(`failed to send SIGTERM to process group ${pid}`, { cause: error });
         }
       }
-      if (!await waitForProcessTreeExit(
-        treeIsAlive,
-        Math.min(forceAfterMs, remaining()),
-        pollIntervalMs,
-      )) {
+      if (!(await waitForProcessTreeExit(treeIsAlive, Math.min(forceAfterMs, remaining()), pollIntervalMs))) {
         try {
           killProcess(-pid, "SIGKILL");
-        }
-        catch (error) {
+        } catch (error) {
           if (!isMissingProcess(error)) {
-            throw new Error(
-              `failed to send SIGKILL to process group ${pid}`,
-              { cause: error },
-            );
+            throw new Error(`failed to send SIGKILL to process group ${pid}`, { cause: error });
           }
         }
-        if (!await waitForProcessTreeExit(
-          treeIsAlive,
-          remaining(),
-          pollIntervalMs,
-        )) {
-          throw new Error(
-            `process group ${pid} did not exit within ${options.timeoutMs}ms`,
-          );
+        if (!(await waitForProcessTreeExit(treeIsAlive, remaining(), pollIntervalMs))) {
+          throw new Error(`process group ${pid} did not exit within ${options.timeoutMs}ms`);
         }
       }
     }
 
-    if (!await closeWaiter.wait(remaining()))
+    if (!(await closeWaiter.wait(remaining())))
       throw new Error(`process group ${pid} exited but its stdio did not close`);
-  }
-  finally {
+  } finally {
     closeWaiter.dispose();
   }
 }
@@ -775,8 +665,7 @@ export async function runProcessSmoke<T>(options: RunProcessSmokeOptions<T>) {
   let child: ProcessSmokeChild;
   try {
     child = options.start();
-  }
-  catch (error) {
+  } catch (error) {
     throw new ProcessSmokeError(
       "child-error",
       `${options.label}: failed to start child process: ${toError(error).message}`,
@@ -784,11 +673,7 @@ export async function runProcessSmoke<T>(options: RunProcessSmokeOptions<T>) {
     );
   }
 
-  const output = new BoundedProcessOutput(
-    child,
-    options.maxOutputBytes ?? 64 * 1024,
-    options.childReadinessEvidence,
-  );
+  const output = new BoundedProcessOutput(child, options.maxOutputBytes ?? 64 * 1024, options.childReadinessEvidence);
   let outcome: { ok: true; value: T } | { ok: false; error: Error };
   try {
     outcome = {
@@ -801,8 +686,7 @@ export async function runProcessSmoke<T>(options: RunProcessSmokeOptions<T>) {
         readinessTimeoutMs: options.readinessTimeoutMs,
       }),
     };
-  }
-  catch (error) {
+  } catch (error) {
     outcome = { ok: false, error: toError(error) };
   }
 
@@ -815,22 +699,14 @@ export async function runProcessSmoke<T>(options: RunProcessSmokeOptions<T>) {
       options.cleanupTimeoutMs,
       `cleanup deadline exceeded after ${options.cleanupTimeoutMs}ms`,
     );
-  }
-  catch (error) {
+  } catch (error) {
     const cause = toError(error);
     cleanupFailure = new ProcessSmokeError(
       "cleanup",
-      processDiagnostic(
-        options.label,
-        "cleanup failed",
-        child,
-        output,
-        `cleanup error: ${cause.message}`,
-      ),
+      processDiagnostic(options.label, "cleanup failed", child, output, `cleanup error: ${cause.message}`),
       { cause },
     );
-  }
-  finally {
+  } finally {
     output.dispose();
   }
 
@@ -843,8 +719,7 @@ export async function runProcessSmoke<T>(options: RunProcessSmokeOptions<T>) {
     }
     throw cleanupFailure;
   }
-  if (!outcome.ok)
-    throw outcome.error;
+  if (!outcome.ok) throw outcome.error;
   return outcome.value;
 }
 
@@ -859,14 +734,11 @@ export interface RunProcessCommandSmokeOptions {
   stop?: (child: ProcessSmokeChild) => Promise<void>;
 }
 
-export async function runProcessCommandSmoke(
-  options: RunProcessCommandSmokeOptions,
-) {
+export async function runProcessCommandSmoke(options: RunProcessCommandSmokeOptions) {
   let child: ProcessSmokeChild;
   try {
     child = options.start();
-  }
-  catch (error) {
+  } catch (error) {
     throw new ProcessSmokeError(
       "child-error",
       `${options.label}: failed to start child process: ${toError(error).message}`,
@@ -874,13 +746,8 @@ export async function runProcessCommandSmoke(
     );
   }
 
-  const output = new BoundedProcessOutput(
-    child,
-    options.maxOutputBytes ?? 64 * 1024,
-  );
-  let outcome:
-    | { ok: true; value: { exitCode: number; output: string } }
-    | { ok: false; error: Error };
+  const output = new BoundedProcessOutput(child, options.maxOutputBytes ?? 64 * 1024);
+  let outcome: { ok: true; value: { exitCode: number; output: string } } | { ok: false; error: Error };
   try {
     const exitCode = await waitForCommandExit(child, output, {
       label: options.label,
@@ -895,8 +762,7 @@ export async function runProcessCommandSmoke(
         output: output.snapshot(),
       },
     };
-  }
-  catch (error) {
+  } catch (error) {
     outcome = { ok: false, error: toError(error) };
   }
 
@@ -909,22 +775,14 @@ export async function runProcessCommandSmoke(
       options.cleanupTimeoutMs,
       `cleanup deadline exceeded after ${options.cleanupTimeoutMs}ms`,
     );
-  }
-  catch (error) {
+  } catch (error) {
     const cause = toError(error);
     cleanupFailure = new ProcessSmokeError(
       "cleanup",
-      processDiagnostic(
-        options.label,
-        "cleanup failed",
-        child,
-        output,
-        `cleanup error: ${cause.message}`,
-      ),
+      processDiagnostic(options.label, "cleanup failed", child, output, `cleanup error: ${cause.message}`),
       { cause },
     );
-  }
-  finally {
+  } finally {
     output.dispose();
   }
 
@@ -937,8 +795,7 @@ export async function runProcessCommandSmoke(
     }
     throw cleanupFailure;
   }
-  if (!outcome.ok)
-    throw outcome.error;
+  if (!outcome.ok) throw outcome.error;
   return outcome.value;
 }
 
@@ -963,17 +820,19 @@ async function waitForCommandExit(
       let dispose = () => {};
       const onError = (error: Error) => {
         dispose();
-        reject(new ProcessSmokeError(
-          "child-error",
-          processDiagnostic(
-            options.label,
-            "child process error before completion",
-            child,
-            output,
-            `child error: ${error.message}`,
+        reject(
+          new ProcessSmokeError(
+            "child-error",
+            processDiagnostic(
+              options.label,
+              "child process error before completion",
+              child,
+              output,
+              `child error: ${error.message}`,
+            ),
+            { cause: error },
           ),
-          { cause: error },
-        ));
+        );
       };
       const onExit = (code: number | null, signal: NodeJS.Signals | null) => {
         dispose();
@@ -993,15 +852,17 @@ async function waitForCommandExit(
     });
     const deadline = new Promise<never>((_, reject) => {
       timeout = setTimeout(() => {
-        reject(new ProcessSmokeError(
-          "completion-timeout",
-          processDiagnostic(
-            options.label,
-            `completion deadline exceeded after ${options.completionTimeoutMs}ms`,
-            child,
-            output,
+        reject(
+          new ProcessSmokeError(
+            "completion-timeout",
+            processDiagnostic(
+              options.label,
+              `completion deadline exceeded after ${options.completionTimeoutMs}ms`,
+              child,
+              output,
+            ),
           ),
-        ));
+        );
       }, options.completionTimeoutMs);
     });
     const result = await Promise.race([completed, deadline]);
@@ -1021,10 +882,8 @@ async function waitForCommandExit(
       );
     }
     return result.code;
-  }
-  finally {
-    if (timeout !== undefined)
-      clearTimeout(timeout);
+  } finally {
+    if (timeout !== undefined) clearTimeout(timeout);
     disposeCompletionListeners();
     closeWaiter.dispose();
   }
@@ -1036,10 +895,10 @@ export async function withOwnedTemporaryDirectory<T>(options: {
   run: (directory: string) => Promise<T>;
 }) {
   if (
-    options.prefix.length === 0
-    || options.prefix === "."
-    || options.prefix === ".."
-    || /[\\/]/u.test(options.prefix)
+    options.prefix.length === 0 ||
+    options.prefix === "." ||
+    options.prefix === ".." ||
+    /[\\/]/u.test(options.prefix)
   ) {
     throw new Error("temporary directory prefix must be a single path segment");
   }
@@ -1047,8 +906,7 @@ export async function withOwnedTemporaryDirectory<T>(options: {
   let outcome: { ok: true; value: T } | { ok: false; error: Error };
   try {
     outcome = { ok: true, value: await options.run(directory) };
-  }
-  catch (error) {
+  } catch (error) {
     outcome = { ok: false, error: toError(error) };
   }
 
@@ -1059,8 +917,7 @@ export async function withOwnedTemporaryDirectory<T>(options: {
       options.cleanupTimeoutMs,
       `temporary directory cleanup deadline exceeded after ${options.cleanupTimeoutMs}ms`,
     );
-  }
-  catch (error) {
+  } catch (error) {
     cleanupError = toError(error);
   }
 
@@ -1077,20 +934,15 @@ export async function withOwnedTemporaryDirectory<T>(options: {
     }
     throw ownedCleanupError;
   }
-  if (!outcome.ok)
-    throw outcome.error;
+  if (!outcome.ok) throw outcome.error;
   return outcome.value;
 }
 
 function isPortCollision(error: unknown): boolean {
-  if (error instanceof AggregateError)
-    return false;
-  if (error instanceof PortCollisionError)
-    return true;
-  if (!(error instanceof Error))
-    return false;
-  if (/EADDRINUSE|address already in use/iu.test(error.message))
-    return true;
+  if (error instanceof AggregateError) return false;
+  if (error instanceof PortCollisionError) return true;
+  if (!(error instanceof Error)) return false;
+  if (/EADDRINUSE|address already in use/iu.test(error.message)) return true;
   return isPortCollision(error.cause);
 }
 
@@ -1104,17 +956,12 @@ export async function recoverFromPortCollision<T>(
   for (let attemptNumber = 1; attemptNumber <= options.maxAttempts; attemptNumber += 1) {
     try {
       return await attempt(attemptNumber);
-    }
-    catch (error) {
-      if (!isPortCollision(error))
-        throw error;
+    } catch (error) {
+      if (!isPortCollision(error)) throw error;
       collisions.push(toError(error));
     }
   }
-  throw new AggregateError(
-    collisions,
-    `port collision persisted across ${options.maxAttempts} allocation attempts`,
-  );
+  throw new AggregateError(collisions, `port collision persisted across ${options.maxAttempts} allocation attempts`);
 }
 
 export interface ProcessSmokeAttemptContext {
@@ -1126,13 +973,8 @@ export interface ProcessSmokeAttemptContext {
 
 export interface ProcessSmokeSuiteAttempt<T> {
   start: (context: ProcessSmokeAttemptContext) => ProcessSmokeChild;
-  probe: (
-    context: ProcessSmokeAttemptContext,
-    signal: AbortSignal,
-  ) => Promise<T | undefined>;
-  childReadinessEvidence?:
-    | string
-    | ((context: ProcessSmokeAttemptContext) => string | undefined);
+  probe: (context: ProcessSmokeAttemptContext, signal: AbortSignal) => Promise<T | undefined>;
+  childReadinessEvidence?: string | ((context: ProcessSmokeAttemptContext) => string | undefined);
   stop?: (child: ProcessSmokeChild) => Promise<void>;
 }
 
@@ -1158,11 +1000,9 @@ async function allocateAvailablePort(hostname: string) {
     if (address === null || typeof address === "string")
       throw new Error(`failed to reserve process smoke port on ${hostname}`);
     return address.port;
-  }
-  finally {
+  } finally {
     if (reservation.listening) {
-      await new Promise<void>((resolve, reject) =>
-        reservation.close(error => error ? reject(error) : resolve()));
+      await new Promise<void>((resolve, reject) => reservation.close((error) => (error ? reject(error) : resolve())));
     }
   }
 }
@@ -1171,21 +1011,22 @@ export function createProcessSmokeSuite(options: CreateProcessSmokeSuiteOptions)
   const hostname = options.hostname ?? "127.0.0.1";
   const readinessTimeoutMs = options.readinessTimeoutMs ?? defaultReadinessTimeoutMs;
   const cleanupTimeoutMs = options.cleanupTimeoutMs ?? defaultCleanupTimeoutMs;
-  const temporaryDirectoryCleanupTimeoutMs = options.temporaryDirectoryCleanupTimeoutMs
-    ?? defaultTemporaryDirectoryCleanupTimeoutMs;
-  const maxPortAllocationAttempts = options.maxPortAllocationAttempts
-    ?? defaultMaxPortAllocationAttempts;
+  const temporaryDirectoryCleanupTimeoutMs =
+    options.temporaryDirectoryCleanupTimeoutMs ?? defaultTemporaryDirectoryCleanupTimeoutMs;
+  const maxPortAllocationAttempts = options.maxPortAllocationAttempts ?? defaultMaxPortAllocationAttempts;
   const allocatePort = options.allocatePort ?? allocateAvailablePort;
   const children = new Set<ProcessSmokeChild>();
 
   async function cleanup() {
-    const cleanupResults = await Promise.allSettled([...children].map(async (child) => {
-      await terminateProcessTree(child, { timeoutMs: cleanupTimeoutMs });
-      children.delete(child);
-    }));
+    const cleanupResults = await Promise.allSettled(
+      [...children].map(async (child) => {
+        await terminateProcessTree(child, { timeoutMs: cleanupTimeoutMs });
+        children.delete(child);
+      }),
+    );
     const cleanupFailures = cleanupResults
-      .filter(result => result.status === "rejected")
-      .map(result => result.reason);
+      .filter((result) => result.status === "rejected")
+      .map((result) => result.reason);
     if (cleanupFailures.length > 0) {
       throw new AggregateError(
         cleanupFailures,
@@ -1208,9 +1049,10 @@ export function createProcessSmokeSuite(options: CreateProcessSmokeSuiteOptions)
               port,
               temporaryDirectory,
             };
-            const childReadinessEvidence = typeof attempt.childReadinessEvidence === "function"
-              ? attempt.childReadinessEvidence(context)
-              : attempt.childReadinessEvidence;
+            const childReadinessEvidence =
+              typeof attempt.childReadinessEvidence === "function"
+                ? attempt.childReadinessEvidence(context)
+                : attempt.childReadinessEvidence;
 
             return await runProcessSmoke({
               label: `${options.label} attempt ${attemptNumber}`,
@@ -1219,15 +1061,13 @@ export function createProcessSmokeSuite(options: CreateProcessSmokeSuiteOptions)
                 children.add(child);
                 return child;
               },
-              probe: signal => attempt.probe(context, signal),
+              probe: (signal) => attempt.probe(context, signal),
               childReadinessEvidence,
               readinessTimeoutMs,
               cleanupTimeoutMs,
               async stop(child) {
-                if (attempt.stop === undefined)
-                  await terminateProcessTree(child, { timeoutMs: cleanupTimeoutMs });
-                else
-                  await attempt.stop(child);
+                if (attempt.stop === undefined) await terminateProcessTree(child, { timeoutMs: cleanupTimeoutMs });
+                else await attempt.stop(child);
                 children.delete(child);
               },
             });

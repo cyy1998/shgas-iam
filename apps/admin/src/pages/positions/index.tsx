@@ -1,21 +1,11 @@
-import StatusTag from '@admin/components/StatusTag';
-import PositionFormModal from '@admin/pages/positions/components/PositionFormModal';
-import {
-  deletePosition,
-  type PositionVo,
-  searchPositions,
-  updatePositionStatus,
-} from '@admin/services/position';
-import {
-  type ActionType,
-  PageContainer,
-  type ProColumns,
-  ProTable,
-} from '@ant-design/pro-components';
-import { getPositionStatusOptions } from '@iam/contracts';
-import { useAccess } from '@umijs/max';
-import { Button, Dropdown, message, Modal } from 'antd';
-import { useRef, useState } from 'react';
+import StatusTag from "@admin/components/StatusTag";
+import PositionFormModal from "@admin/pages/positions/components/PositionFormModal";
+import { deletePosition, type PositionVo, searchPositions, updatePositionStatus } from "@admin/services/position";
+import { type ActionType, PageContainer, type ProColumns, ProTable } from "@ant-design/pro-components";
+import { getPositionStatusOptions } from "@iam/contracts";
+import { useAccess } from "@umijs/max";
+import { Button, Dropdown, Modal, message } from "antd";
+import { useRef, useState } from "react";
 
 export default function PositionsPage() {
   const access = useAccess();
@@ -24,7 +14,7 @@ export default function PositionsPage() {
   const [editing, setEditing] = useState<PositionVo | null>(null);
 
   const handleError = (err: unknown) => {
-    message.error(err instanceof Error ? err.message : '操作失败');
+    message.error(err instanceof Error ? err.message : "操作失败");
   };
 
   const onEdit = (row: PositionVo) => {
@@ -35,12 +25,12 @@ export default function PositionsPage() {
   const onDelete = (row: PositionVo) => {
     Modal.confirm({
       title: `删除岗位 ${row.posName}？`,
-      content: '软删除后不会出现在列表中，如需恢复请联系管理员。',
-      okType: 'danger',
+      content: "软删除后不会出现在列表中，如需恢复请联系管理员。",
+      okType: "danger",
       onOk: async () => {
         try {
           const outcome = await deletePosition(row.posCode);
-          message.success(outcome.changed ? '已删除' : '无需修改');
+          message.success(outcome.changed ? "已删除" : "无需修改");
           actionRef.current?.reload();
         } catch (err) {
           handleError(err);
@@ -52,7 +42,7 @@ export default function PositionsPage() {
   const onStatusChange = async (row: PositionVo, status: number) => {
     try {
       const outcome = await updatePositionStatus(row.posCode, status);
-      message.success(outcome.changed ? '状态已更新' : '无需修改');
+      message.success(outcome.changed ? "状态已更新" : "无需修改");
       actionRef.current?.reload();
     } catch (err) {
       handleError(err);
@@ -61,33 +51,33 @@ export default function PositionsPage() {
 
   const columns: ProColumns<PositionVo>[] = [
     {
-      title: '岗位',
-      dataIndex: 'text',
+      title: "岗位",
+      dataIndex: "text",
       hideInTable: true,
-      fieldProps: { placeholder: '岗位编码或名称' },
+      fieldProps: { placeholder: "岗位编码或名称" },
     },
-    { title: '岗位编码', dataIndex: 'posCode', width: 160, search: false },
-    { title: '岗位名称', dataIndex: 'posName', width: 200, search: false },
-    { title: '描述', dataIndex: 'description', ellipsis: true, search: false },
+    { title: "岗位编码", dataIndex: "posCode", width: 160, search: false },
+    { title: "岗位名称", dataIndex: "posName", width: 200, search: false },
+    { title: "描述", dataIndex: "description", ellipsis: true, search: false },
     {
-      title: '状态',
-      dataIndex: 'status',
+      title: "状态",
+      dataIndex: "status",
       width: 100,
       search: false,
       render: (_, row) => <StatusTag domain="position" status={row.status} />,
     },
-    { title: '雇佣人数', dataIndex: 'memberNumber', width: 100, search: false },
+    { title: "雇佣人数", dataIndex: "memberNumber", width: 100, search: false },
     {
-      title: '操作',
-      fixed: 'right',
-      valueType: 'option',
+      title: "操作",
+      fixed: "right",
+      valueType: "option",
       width: 220,
       render: (_, row) =>
         [
           access.canEditPosition && (
-            <a key="edit" onClick={() => onEdit(row)}>
+            <Button key="edit" type="link" size="small" style={{ paddingInline: 0 }} onClick={() => onEdit(row)}>
               编辑
-            </a>
+            </Button>
           ),
           access.canChangePositionStatus && (
             <Dropdown
@@ -102,17 +92,22 @@ export default function PositionsPage() {
                   })),
               }}
             >
-              <a>状态</a>
+              <Button type="link" size="small" style={{ paddingInline: 0 }}>
+                状态
+              </Button>
             </Dropdown>
           ),
           access.canDeletePosition && (
-            <a
+            <Button
               key="delete"
-              style={{ color: '#d4380d' }}
+              type="link"
+              size="small"
+              danger
+              style={{ paddingInline: 0 }}
               onClick={() => onDelete(row)}
             >
               删除
-            </a>
+            </Button>
           ),
         ].filter(Boolean),
     },
@@ -124,7 +119,7 @@ export default function PositionsPage() {
         actionRef={actionRef}
         rowKey="posCode"
         columns={columns}
-        search={{ labelWidth: 'auto' }}
+        search={{ labelWidth: "auto" }}
         scroll={{ x: 900 }}
         request={async (params) => {
           try {

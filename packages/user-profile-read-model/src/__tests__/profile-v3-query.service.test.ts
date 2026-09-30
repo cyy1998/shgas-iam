@@ -1,5 +1,5 @@
-import { ApiErrorCode, UserStatus } from "@iam/contracts";
 import { expect, mock, test } from "bun:test";
+import { ApiErrorCode, UserStatus } from "@iam/contracts";
 import { V3UserProfileSearchRequestSchema } from "../query/profile-v3-filter";
 import { createV3UserProfileQueryService } from "../query/profile-v3-query.service";
 
@@ -9,8 +9,7 @@ test("rejects an extremely deep filter without overflowing the public schema par
     op: "eq",
     value: UserStatus.Enable,
   };
-  for (let depth = 0; depth < 10_000; depth++)
-    filter = { not: filter };
+  for (let depth = 0; depth < 10_000; depth++) filter = { not: filter };
 
   const result = V3UserProfileSearchRequestSchema.safeParse({ filter });
 
@@ -99,7 +98,7 @@ test("rejects every structural and value budget before calling the repository", 
   ];
 
   for (const request of invalidRequests) {
-    const error = await service.search(request).catch(error => error);
+    const error = await service.search(request).catch((error) => error);
     expect(error).toMatchObject({
       name: "V3UserProfileFilterValidationError",
       httpStatus: 422,
@@ -118,13 +117,15 @@ test("maps repository failures to the stable sanitized unavailable error", async
     },
   });
 
-  const error = await service.search({
-    filter: {
-      field: "user.status",
-      op: "eq",
-      value: UserStatus.Enable,
-    },
-  }).catch(error => error);
+  const error = await service
+    .search({
+      filter: {
+        field: "user.status",
+        op: "eq",
+        value: UserStatus.Enable,
+      },
+    })
+    .catch((error) => error);
 
   expect(error).toMatchObject({
     name: "V3UserProfileSearchUnavailableError",

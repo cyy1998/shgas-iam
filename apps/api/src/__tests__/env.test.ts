@@ -64,21 +64,27 @@ describe("API environment", () => {
   });
 
   test("rejects unsafe user-profile DSL limits", () => {
-    expect(() => parseApiEnv({
-      ...validEnv(),
-      IAM_API_USER_PROFILE_DSL_MAX_LIMIT: "501",
-    })).toThrow();
+    expect(() =>
+      parseApiEnv({
+        ...validEnv(),
+        IAM_API_USER_PROFILE_DSL_MAX_LIMIT: "501",
+      }),
+    ).toThrow();
   });
 
   test("accepts only positive Custom SSO projection retry hints", () => {
-    expect(parseApiEnv({
-      ...validEnv(),
-      IAM_API_CUSTOM_SSO_PROJECTION_RETRY_AFTER_SECONDS: "7",
-    }).sso.projectionRetryAfterSeconds).toBe(7);
-    expect(() => parseApiEnv({
-      ...validEnv(),
-      IAM_API_CUSTOM_SSO_PROJECTION_RETRY_AFTER_SECONDS: "0",
-    })).toThrow();
+    expect(
+      parseApiEnv({
+        ...validEnv(),
+        IAM_API_CUSTOM_SSO_PROJECTION_RETRY_AFTER_SECONDS: "7",
+      }).sso.projectionRetryAfterSeconds,
+    ).toBe(7);
+    expect(() =>
+      parseApiEnv({
+        ...validEnv(),
+        IAM_API_CUSTOM_SSO_PROJECTION_RETRY_AFTER_SECONDS: "0",
+      }),
+    ).toThrow();
   });
 
   test("accepts production configuration without lookup secrets", () => {
@@ -136,7 +142,11 @@ describe("API environment", () => {
       cookieSecure: true,
     });
     expect(parseApiEnv({ ...validEnv(), IAM_API_OIDC_COOKIE_SECURE: "false" }).oidc.cookieSecure).toBe(false);
-    expect(env.sessionKernel).toEqual({ namespace: "iam:session", userSessionTtlSeconds: 86400, clientSessionTtlSeconds: 86400 });
+    expect(env.sessionKernel).toEqual({
+      namespace: "iam:session",
+      userSessionTtlSeconds: 86400,
+      clientSessionTtlSeconds: 86400,
+    });
   });
 
   test("configures each session lifetime independently from protocol tokens and preserves the login endpoint", () => {
@@ -176,10 +186,12 @@ describe("API environment", () => {
   });
 
   test("still requires a configured active login credential key in production", () => {
-    expect(() => parseApiEnv({
-      ...validEnv(),
-      NODE_ENV: "production",
-      IAM_API_LOGIN_CREDENTIAL_ACTIVE_KID: "missing",
-    })).toThrow("IAM_API_LOGIN_CREDENTIAL_ACTIVE_KID must exist");
+    expect(() =>
+      parseApiEnv({
+        ...validEnv(),
+        NODE_ENV: "production",
+        IAM_API_LOGIN_CREDENTIAL_ACTIVE_KID: "missing",
+      }),
+    ).toThrow("IAM_API_LOGIN_CREDENTIAL_ACTIVE_KID must exist");
   });
 });

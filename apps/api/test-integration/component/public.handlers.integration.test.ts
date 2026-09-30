@@ -1,9 +1,9 @@
+import { beforeEach, describe, expect, mock, test } from "bun:test";
 import { createPublicHandlers } from "@api/routes/public/public.handlers";
 import * as HttpStatusCodes from "@iam/api-core/core/http-status-codes";
 import * as resp from "@iam/api-core/http";
 import { SubjectProjectionNotReadyError } from "@iam/client-subject-projection";
 import { ApiErrorCode } from "@iam/contracts";
-import { beforeEach, describe, expect, mock, test } from "bun:test";
 
 const subjectIdentifier = "00000000-0000-4000-8000-000000001001";
 const userDetail = { id: 1001, username: "138550", name: "测试用户" };
@@ -44,10 +44,8 @@ function createHandlers() {
 function makeContext() {
   return {
     get: mock((key: string) => {
-      if (key === "subjectIdentifier")
-        return subjectIdentifier;
-      if (key === "authenticatedClientCode")
-        return "gateway";
+      if (key === "subjectIdentifier") return subjectIdentifier;
+      if (key === "authenticatedClientCode") return "gateway";
       return undefined;
     }),
     json: mock((body: unknown) => body),
@@ -102,10 +100,7 @@ describe("createPublicHandlers", () => {
       },
     };
     expect(result).toEqual(resp.ok(projection));
-    expect(context.json).toHaveBeenCalledWith(
-      resp.ok(projection),
-      HttpStatusCodes.OK,
-    );
+    expect(context.json).toHaveBeenCalledWith(resp.ok(projection), HttpStatusCodes.OK);
     expect(resolveUserInfoForRequest).toHaveBeenCalledWith(context);
     expect(context.get).not.toHaveBeenCalled();
     expect(getActiveUserBySubjectIdentifier).not.toHaveBeenCalled();
@@ -115,13 +110,9 @@ describe("createPublicHandlers", () => {
   test("userInfo maps Projection Not Ready to a sanitized retryable error", async () => {
     const handlers = createHandlers();
     const context = makeContext();
-    resolveUserInfoForRequest.mockRejectedValueOnce(
-      new SubjectProjectionNotReadyError(),
-    );
+    resolveUserInfoForRequest.mockRejectedValueOnce(new SubjectProjectionNotReadyError());
 
-    await expect(
-      handlers.userInfo(context as never, undefined as never),
-    ).rejects.toMatchObject({
+    await expect(handlers.userInfo(context as never, undefined as never)).rejects.toMatchObject({
       code: ApiErrorCode.SubjectProjectionNotReady,
       httpStatus: HttpStatusCodes.SERVICE_UNAVAILABLE,
       retryAfterSeconds: 3,

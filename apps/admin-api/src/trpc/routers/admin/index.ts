@@ -1,10 +1,10 @@
 import type { AuditAdapter } from "@admin-api/routes/admin/audit/audit.adapter";
 import type { AdminAuthorizationAdapter } from "@admin-api/routes/admin/authorization/authorization.adapter";
-import type { ClientSsoRouter } from "@admin-api/routes/admin/client-sso/client-sso.adapter";
 import type { ClientAdapter } from "@admin-api/routes/admin/client/client.adapter";
+import type { ClientSsoRouter } from "@admin-api/routes/admin/client-sso/client-sso.adapter";
 import type { EmploymentAdapter } from "@admin-api/routes/admin/employment/employment.adapter";
-import type { OrganizationResponsibilityAdapter } from "@admin-api/routes/admin/organization-responsibility/organization-responsibility.adapter";
 import type { OrganizationAdapter } from "@admin-api/routes/admin/organization/organization.adapter";
+import type { OrganizationResponsibilityAdapter } from "@admin-api/routes/admin/organization-responsibility/organization-responsibility.adapter";
 import type { PositionAdapter } from "@admin-api/routes/admin/position/position.adapter";
 import type { RoleAdapter } from "@admin-api/routes/admin/role/role.adapter";
 import type { SessionManagementAdapter } from "@admin-api/routes/admin/session-management/session-management.adapter";

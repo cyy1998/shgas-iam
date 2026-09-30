@@ -18,9 +18,7 @@ export interface TransferEmploymentStorePort {
     description: string | null;
     status: EmploymentStatus;
   }) => Promise<Employment>;
-  getEmploymentLifecycleContextById: (
-    id: number,
-  ) => Promise<{
+  getEmploymentLifecycleContextById: (id: number) => Promise<{
     employment: Employment;
     organization: Organization | null;
     position: Position | null;
@@ -47,10 +45,7 @@ export interface TransferEmploymentTransactionPorts {
   employmentStore: TransferEmploymentStorePort;
   organizationReader: {
     getOrganizationByCode: (orgCode: string) => Promise<Organization | null>;
-    isOrganizationDescendantOf: (
-      descendantOrgCode: string,
-      ancestorOrgCode: string,
-    ) => Promise<boolean>;
+    isOrganizationDescendantOf: (descendantOrgCode: string, ancestorOrgCode: string) => Promise<boolean>;
   };
   positionReader: {
     getPositionByCode: (posCode: string) => Promise<Position | null>;
@@ -75,16 +70,18 @@ export interface TransferEmploymentTransactionPorts {
     }) => Promise<boolean>;
   };
   userProfileInvalidation: {
-    recordChanges: (changes: readonly (
-      | {
-        readonly kind: "employment";
-        readonly userId: number;
-      }
-      | {
-        readonly kind: "organization-responsibility-assignment";
-        readonly userId: number;
-      }
-    )[]) => Promise<void>;
+    recordChanges: (
+      changes: readonly (
+        | {
+            readonly kind: "employment";
+            readonly userId: number;
+          }
+        | {
+            readonly kind: "organization-responsibility-assignment";
+            readonly userId: number;
+          }
+      )[],
+    ) => Promise<void>;
   };
 }
 

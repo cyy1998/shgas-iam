@@ -1,9 +1,9 @@
+import { ClientStatus } from "@iam/contracts";
 import type { Context, Next } from "hono";
 import type { Logger } from "pino";
-import type { InternalBindings } from "../types/lib";
-import { ClientStatus } from "@iam/contracts";
 import { getContextValue, getRequestId } from "../core/request-context";
 import { AuthzUnauthorizedError } from "../errors/AuthzUnauthorizedError";
+import type { InternalBindings } from "../types/lib";
 
 export type InternalClientIdentity = {
   clientCode: string;
@@ -27,11 +27,14 @@ function warnInternalAuthFailure(
   reason: string,
   metadata: { clientCode?: string; isDelete?: boolean; status?: ClientStatus } = {},
 ) {
-  getInternalAuthLogger(c)?.warn({
-    reason,
-    requestId: getRequestId(c),
-    ...metadata,
-  }, "internal client authentication failed");
+  getInternalAuthLogger(c)?.warn(
+    {
+      reason,
+      requestId: getRequestId(c),
+      ...metadata,
+    },
+    "internal client authentication failed",
+  );
 }
 
 export async function verifyInternalClient<TClient extends InternalClientIdentity>(

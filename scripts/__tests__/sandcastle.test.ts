@@ -1,15 +1,21 @@
-import type { Ticket, WorkflowRuntime } from "../sandcastle/workflow";
+import { describe, expect, test } from "bun:test";
 import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { describe, expect, test } from "bun:test";
 import { parseAgentRole } from "../sandcastle/agents";
 import { prepareCodexAuth } from "../sandcastle/auth";
 import { command, deleteMergedTicketBranch } from "../sandcastle/commands";
+import type { Ticket, WorkflowRuntime } from "../sandcastle/workflow";
 import { parsePlan, runWorkflow } from "../sandcastle/workflow";
 
 function ticket(number: number): Ticket {
-  return { number, title: `Implement issue ${number}`, branch: `codex/sandcastle/issue-${number}`, implementer: "implementer_standard", reason: "Routine feature" };
+  return {
+    number,
+    title: `Implement issue ${number}`,
+    branch: `codex/sandcastle/issue-${number}`,
+    implementer: "implementer_standard",
+    reason: "Routine feature",
+  };
 }
 
 function runtime(overrides: Partial<WorkflowRuntime> = {}): WorkflowRuntime {
@@ -33,55 +39,53 @@ function deferred<T>() {
 }
 
 describe("Sandcastle merged ticket cleanup", () => {
-  test.each(["merged", "unmerged", "advanced", "checked-out", "other-branch"])("handles %s branches without losing recovery work", async (scenario) => {
-    const directory = await mkdtemp(join(tmpdir(), "iam-afk-branch-test-"));
-    const git = (...args: string[]) => command("git", args, directory);
-    const branch = scenario === "other-branch" ? "codex/feature" : "codex/sandcastle/issue-42";
-    try {
-      await git("init", "--initial-branch=main");
-      await git("config", "user.name", "Sandcastle test");
-      await git("config", "user.email", "sandcastle@example.invalid");
-      await git("config", "commit.gpgsign", "false");
-      await git("config", "core.hooksPath", join(directory, "no-hooks"));
-      await git("commit", "--allow-empty", "-m", "base");
-      await git("switch", "-c", branch);
-      await git("commit", "--allow-empty", "-m", "ticket");
-      const candidate = await git("rev-parse", "HEAD");
-      await git("switch", "main");
-      if (scenario !== "unmerged")
-        await git("merge", "--ff-only", branch);
-      if (scenario === "advanced") {
-        await git("switch", branch);
-        await git("commit", "--allow-empty", "-m", "new recovery work");
-        await git("switch", "main");
-      }
-      if (scenario === "checked-out")
-        await git("worktree", "add", join(directory, "ticket-worktree"), branch);
-      const before = await git("rev-parse", `refs/heads/${branch}`);
-      const target = await git("rev-parse", "HEAD");
-      let caught: unknown;
+  test.each(["merged", "unmerged", "advanced", "checked-out", "other-branch"])(
+    "handles %s branches without losing recovery work",
+    async (scenario) => {
+      const directory = await mkdtemp(join(tmpdir(), "iam-afk-branch-test-"));
+      const git = (...args: string[]) => command("git", args, directory);
+      const branch = scenario === "other-branch" ? "codex/feature" : "codex/sandcastle/issue-42";
       try {
-        await deleteMergedTicketBranch(directory, branch, candidate);
+        await git("init", "--initial-branch=main");
+        await git("config", "user.name", "Sandcastle test");
+        await git("config", "user.email", "sandcastle@example.invalid");
+        await git("config", "commit.gpgsign", "false");
+        await git("config", "core.hooksPath", join(directory, "no-hooks"));
+        await git("commit", "--allow-empty", "-m", "base");
+        await git("switch", "-c", branch);
+        await git("commit", "--allow-empty", "-m", "ticket");
+        const candidate = await git("rev-parse", "HEAD");
+        await git("switch", "main");
+        if (scenario !== "unmerged") await git("merge", "--ff-only", branch);
+        if (scenario === "advanced") {
+          await git("switch", branch);
+          await git("commit", "--allow-empty", "-m", "new recovery work");
+          await git("switch", "main");
+        }
+        if (scenario === "checked-out") await git("worktree", "add", join(directory, "ticket-worktree"), branch);
+        const before = await git("rev-parse", `refs/heads/${branch}`);
+        const target = await git("rev-parse", "HEAD");
+        let caught: unknown;
+        try {
+          await deleteMergedTicketBranch(directory, branch, candidate);
+        } catch (error) {
+          caught = error;
+        }
+        const remaining = await git("for-each-ref", "--format=%(objectname)", `refs/heads/${branch}`);
+        const afterTarget = await git("rev-parse", "HEAD");
+        expect(afterTarget).toBe(target);
+        if (scenario === "merged") {
+          expect(caught).toBeUndefined();
+          expect(remaining).toBe("");
+        } else {
+          expect(caught).toBeInstanceOf(Error);
+          expect(remaining).toBe(before);
+        }
+      } finally {
+        await rm(directory, { recursive: true, force: true });
       }
-      catch (error) {
-        caught = error;
-      }
-      const remaining = await git("for-each-ref", "--format=%(objectname)", `refs/heads/${branch}`);
-      const afterTarget = await git("rev-parse", "HEAD");
-      expect(afterTarget).toBe(target);
-      if (scenario === "merged") {
-        expect(caught).toBeUndefined();
-        expect(remaining).toBe("");
-      }
-      else {
-        expect(caught).toBeInstanceOf(Error);
-        expect(remaining).toBe(before);
-      }
-    }
-    finally {
-      await rm(directory, { recursive: true, force: true });
-    }
-  });
+    },
+  );
 });
 
 describe("Sandcastle account configuration", () => {
@@ -92,8 +96,7 @@ describe("Sandcastle account configuration", () => {
       const auth = await prepareCodexAuth({ CODEX_HOME: directory, CODEX_AUTH: "chatgpt", CODEX_AUTH_FILE: "" });
       await auth.close();
       expect(auth.mode).toBe("chatgpt");
-    }
-    finally {
+    } finally {
       await rm(directory, { recursive: true, force: true });
     }
   });
@@ -108,15 +111,14 @@ describe("Sandcastle account configuration", () => {
     const directory = await mkdtemp(join(tmpdir(), "iam-afk-auth-test-"));
     try {
       const source = join(directory, "auth.json");
-      await writeFile(source, "{\"token\":\"original-test-token\"}");
+      await writeFile(source, '{"token":"original-test-token"}');
       const auth = await prepareCodexAuth({ CODEX_HOME: directory });
-      const updated = "{\"token\":\"refreshed-test-token\"}";
+      const updated = '{"token":"refreshed-test-token"}';
       await writeFile(join(auth.mounts[0]!.hostPath, "auth.json"), updated);
       await auth.close();
       const persisted = await readFile(source, "utf8");
       expect(persisted).toBe(updated);
-    }
-    finally {
+    } finally {
       await rm(directory, { recursive: true, force: true });
     }
   });
@@ -126,27 +128,24 @@ describe("Sandcastle account configuration", () => {
     let staged: string | undefined;
     try {
       const source = join(directory, "auth.json");
-      await writeFile(source, "{\"token\":\"original-test-token\"}");
+      await writeFile(source, '{"token":"original-test-token"}');
       const auth = await prepareCodexAuth({ CODEX_HOME: directory });
       staged = auth.mounts[0]!.hostPath;
-      await writeFile(join(staged, "auth.json"), "{\"token\":\"refreshed-test-token\"}");
-      await writeFile(source, "{\"token\":\"new-host-login\"}");
+      await writeFile(join(staged, "auth.json"), '{"token":"refreshed-test-token"}');
+      await writeFile(source, '{"token":"new-host-login"}');
       let caught: unknown;
       try {
         await auth.close();
-      }
-      catch (error) {
+      } catch (error) {
         caught = error;
       }
       const host = await readFile(source, "utf8");
       const recovery = await readFile(join(staged, "auth.json"), "utf8");
       expect(caught).toBeInstanceOf(Error);
-      expect(host).toBe("{\"token\":\"new-host-login\"}");
-      expect(recovery).toBe("{\"token\":\"refreshed-test-token\"}");
-    }
-    finally {
-      if (staged)
-        await rm(staged, { recursive: true, force: true });
+      expect(host).toBe('{"token":"new-host-login"}');
+      expect(recovery).toBe('{"token":"refreshed-test-token"}');
+    } finally {
+      if (staged) await rm(staged, { recursive: true, force: true });
       await rm(directory, { recursive: true, force: true });
     }
   });
@@ -157,12 +156,15 @@ describe("Sandcastle parent closeout", () => {
     const closeout = deferred<void>();
     let finishing = false;
     let completed = false;
-    const pending = runWorkflow({ maxIterations: 1, maxParallel: 1 }, runtime({
-      finish: async () => {
-        finishing = true;
-        await closeout.promise;
-      },
-    })).then((result) => {
+    const pending = runWorkflow(
+      { maxIterations: 1, maxParallel: 1 },
+      runtime({
+        finish: async () => {
+          finishing = true;
+          await closeout.promise;
+        },
+      }),
+    ).then((result) => {
       completed = true;
       return result;
     });
@@ -178,11 +180,15 @@ describe("Sandcastle parent closeout", () => {
     const failure = new Error("GitHub parent update failed");
     let caught: unknown;
     try {
-      await runWorkflow({ maxIterations: 1, maxParallel: 1 }, runtime({
-        finish: async () => { throw failure; },
-      }));
-    }
-    catch (error) {
+      await runWorkflow(
+        { maxIterations: 1, maxParallel: 1 },
+        runtime({
+          finish: async () => {
+            throw failure;
+          },
+        }),
+      );
+    } catch (error) {
       caught = error;
     }
     expect(caught).toBe(failure);
@@ -190,10 +196,13 @@ describe("Sandcastle parent closeout", () => {
 });
 
 describe("Sandcastle plan", () => {
-  test.each(["implementer_light", "implementer_standard", "implementer_deep"])("keeps Planner selection %s for dispatch", (implementer) => {
-    const issue = { ...ticket(42), implementer, reason: "Risk-based selection" };
-    expect(parsePlan(`<plan>${JSON.stringify({ issues: [issue] })}</plan>`)).toEqual([issue]);
-  });
+  test.each(["implementer_light", "implementer_standard", "implementer_deep"])(
+    "keeps Planner selection %s for dispatch",
+    (implementer) => {
+      const issue = { ...ticket(42), implementer, reason: "Risk-based selection" };
+      expect(parsePlan(`<plan>${JSON.stringify({ issues: [issue] })}</plan>`)).toEqual([issue]);
+    },
+  );
   test("reads one tagged plan from agent output", () => {
     const issues = [ticket(41), ticket(52)];
     const result = parsePlan(`Selected independent issues.\n<plan>${JSON.stringify({ issues })}</plan>\nDone.`);
@@ -201,16 +210,16 @@ describe("Sandcastle plan", () => {
   });
 
   test("accepts an empty backlog", () => {
-    expect(parsePlan("<plan>{\"issues\":[]}</plan>")).toEqual([]);
+    expect(parsePlan('<plan>{"issues":[]}</plan>')).toEqual([]);
   });
 
   test.each([
     ["missing block", "No more work."],
     ["invalid JSON", "<plan>{</plan>"],
     ["missing issues", "<plan>{}</plan>"],
-    ["non-array issues", "<plan>{\"issues\":{}}</plan>"],
+    ["non-array issues", '<plan>{"issues":{}}</plan>'],
     ["null payload", "<plan>null</plan>"],
-    ["multiple blocks", "<plan>{\"issues\":[]}</plan><plan>{\"issues\":[]}</plan>"],
+    ["multiple blocks", '<plan>{"issues":[]}</plan><plan>{"issues":[]}</plan>'],
   ])("rejects %s", (_name, output) => {
     expect(() => parsePlan(output)).toThrow();
   });
@@ -252,9 +261,9 @@ developer_instructions = "Complete the ticket and request review."
   });
   test.each([
     ["wrong name", source.replace("implementer_standard", "unregistered")],
-    ["unsupported effort", source.replace("\"high\"", "\"ultra\"")],
-    ["missing model", source.replace("model = \"custom-model\"", "")],
-    ["missing instructions", source.replace("developer_instructions = \"Complete the ticket and request review.\"", "")],
+    ["unsupported effort", source.replace('"high"', '"ultra"')],
+    ["missing model", source.replace('model = "custom-model"', "")],
+    ["missing instructions", source.replace('developer_instructions = "Complete the ticket and request review."', "")],
   ])("rejects %s before starting an agent", (_name, input) => {
     expect(() => parseAgentRole(input, "implementer_standard")).toThrow();
   });
@@ -272,26 +281,29 @@ describe("Sandcastle workflow", () => {
     const executionBases: number[][] = [];
     const firstMergeStarted = deferred<void>();
     const releaseFirstMerge = deferred<void>();
-    const completion = runWorkflow({ maxIterations: 3, maxParallel: 2 }, runtime({
-      plan: async (iteration) => {
-        planningBases.push([...merged]);
-        if (iteration === 1) {
-          return [ticket(1), ticket(2)];
-        }
-        return merged.includes(3) ? [] : [ticket(3)];
-      },
-      execute: async () => {
-        executionBases.push([...merged]);
-        return true;
-      },
-      merge: async (tickets) => {
-        if (merged.length === 0) {
-          firstMergeStarted.resolve();
-          await releaseFirstMerge.promise;
-        }
-        merged.push(...tickets.map(issue => issue.number));
-      },
-    }));
+    const completion = runWorkflow(
+      { maxIterations: 3, maxParallel: 2 },
+      runtime({
+        plan: async (iteration) => {
+          planningBases.push([...merged]);
+          if (iteration === 1) {
+            return [ticket(1), ticket(2)];
+          }
+          return merged.includes(3) ? [] : [ticket(3)];
+        },
+        execute: async () => {
+          executionBases.push([...merged]);
+          return true;
+        },
+        merge: async (tickets) => {
+          if (merged.length === 0) {
+            firstMergeStarted.resolve();
+            await releaseFirstMerge.promise;
+          }
+          merged.push(...tickets.map((issue) => issue.number));
+        },
+      }),
+    );
 
     await firstMergeStarted.promise;
     expect(planningBases).toEqual([[]]);
@@ -311,26 +323,28 @@ describe("Sandcastle workflow", () => {
     const reports: string[] = [];
     let active = 0;
     let peak = 0;
-    const completion = runWorkflow({ maxIterations: 1, maxParallel: 2 }, runtime({
-      plan: async () => [1, 2, 3, 4].map(ticket),
-      execute: async (issue) => {
-        active++;
-        peak = Math.max(peak, active);
-        started.push(issue.number);
-        starts[issue.number - 1]!.resolve();
-        try {
-          return await executions[issue.number - 1]!.promise;
-        }
-        finally {
-          active--;
-        }
-      },
-      merge: async (tickets) => {
-        expect(active).toBe(0);
-        merged.push(tickets.map(issue => issue.number));
-      },
-      report: message => reports.push(message),
-    }));
+    const completion = runWorkflow(
+      { maxIterations: 1, maxParallel: 2 },
+      runtime({
+        plan: async () => [1, 2, 3, 4].map(ticket),
+        execute: async (issue) => {
+          active++;
+          peak = Math.max(peak, active);
+          started.push(issue.number);
+          starts[issue.number - 1]!.resolve();
+          try {
+            return await executions[issue.number - 1]!.promise;
+          } finally {
+            active--;
+          }
+        },
+        merge: async (tickets) => {
+          expect(active).toBe(0);
+          merged.push(tickets.map((issue) => issue.number));
+        },
+        report: (message) => reports.push(message),
+      }),
+    );
 
     await starts[1]!.promise;
     expect(started).toEqual([1, 2]);
@@ -353,17 +367,22 @@ describe("Sandcastle workflow", () => {
   test("excludes false and rejected executions without invoking an empty merge", async () => {
     const reports: string[] = [];
     let merges = 0;
-    const result = await runWorkflow({ maxIterations: 1, maxParallel: 2 }, runtime({
-      plan: async () => [ticket(1), ticket(2)],
-      execute: async (issue) => {
-        if (issue.number === 1) {
-          return false;
-        }
-        throw new Error("Reviewer failed");
-      },
-      merge: async () => { merges++; },
-      report: message => reports.push(message),
-    }));
+    const result = await runWorkflow(
+      { maxIterations: 1, maxParallel: 2 },
+      runtime({
+        plan: async () => [ticket(1), ticket(2)],
+        execute: async (issue) => {
+          if (issue.number === 1) {
+            return false;
+          }
+          throw new Error("Reviewer failed");
+        },
+        merge: async () => {
+          merges++;
+        },
+        report: (message) => reports.push(message),
+      }),
+    );
 
     expect(result).toEqual({ iterations: 1, merged: [], failed: [1, 2], exhausted: false });
     expect(merges).toBe(0);
@@ -372,12 +391,15 @@ describe("Sandcastle workflow", () => {
 
   test("stops immediately when the planner returns no tickets", async () => {
     let executed = false;
-    const result = await runWorkflow({ maxIterations: 5, maxParallel: 2 }, runtime({
-      execute: async () => {
-        executed = true;
-        return true;
-      },
-    }));
+    const result = await runWorkflow(
+      { maxIterations: 5, maxParallel: 2 },
+      runtime({
+        execute: async () => {
+          executed = true;
+          return true;
+        },
+      }),
+    );
 
     expect(executed).toBe(false);
     expect(result).toEqual({ iterations: 0, merged: [], failed: [], exhausted: true });
@@ -388,15 +410,19 @@ describe("Sandcastle workflow", () => {
     let plans = 0;
     let caught: unknown;
     try {
-      await runWorkflow({ maxIterations: 5, maxParallel: 2 }, runtime({
-        plan: async () => {
-          plans++;
-          return [ticket(1)];
-        },
-        merge: async () => { throw failure; },
-      }));
-    }
-    catch (error) {
+      await runWorkflow(
+        { maxIterations: 5, maxParallel: 2 },
+        runtime({
+          plan: async () => {
+            plans++;
+            return [ticket(1)];
+          },
+          merge: async () => {
+            throw failure;
+          },
+        }),
+      );
+    } catch (error) {
       caught = error;
     }
 
@@ -414,26 +440,30 @@ describe("Sandcastle workflow", () => {
     const cleaned: number[] = [];
     let merges = 0;
     let settled = false;
-    const completion = runWorkflow({ maxIterations: 5, maxParallel: 2 }, runtime({
-      signal: controller.signal,
-      plan: async () => [ticket(1), ticket(2), ticket(3)],
-      execute: async (issue) => {
-        started.push(issue.number);
-        if (issue.number === 2) {
-          secondStarted.resolve();
-        }
-        try {
-          return await releases[issue.number - 1]!.promise;
-        }
-        finally {
-          cleaned.push(issue.number);
-          if (issue.number === 1) {
-            firstReleased.resolve();
+    const completion = runWorkflow(
+      { maxIterations: 5, maxParallel: 2 },
+      runtime({
+        signal: controller.signal,
+        plan: async () => [ticket(1), ticket(2), ticket(3)],
+        execute: async (issue) => {
+          started.push(issue.number);
+          if (issue.number === 2) {
+            secondStarted.resolve();
           }
-        }
-      },
-      merge: async () => { merges++; },
-    })).then(
+          try {
+            return await releases[issue.number - 1]!.promise;
+          } finally {
+            cleaned.push(issue.number);
+            if (issue.number === 1) {
+              firstReleased.resolve();
+            }
+          }
+        },
+        merge: async () => {
+          merges++;
+        },
+      }),
+    ).then(
       () => {
         settled = true;
         return undefined;
@@ -463,19 +493,21 @@ describe("Sandcastle workflow", () => {
     let executed = false;
     let caught: unknown;
     try {
-      await runWorkflow({ maxIterations: 1, maxParallel: 1 }, runtime({
-        signal: controller.signal,
-        plan: async () => {
-          controller.abort();
-          return [ticket(1)];
-        },
-        execute: async () => {
-          executed = true;
-          return true;
-        },
-      }));
-    }
-    catch (error) {
+      await runWorkflow(
+        { maxIterations: 1, maxParallel: 1 },
+        runtime({
+          signal: controller.signal,
+          plan: async () => {
+            controller.abort();
+            return [ticket(1)];
+          },
+          execute: async () => {
+            executed = true;
+            return true;
+          },
+        }),
+      );
+    } catch (error) {
       caught = error;
     }
 
@@ -492,14 +524,16 @@ describe("Sandcastle workflow", () => {
     let planned = false;
     let caught: unknown;
     try {
-      await runWorkflow(options, runtime({
-        plan: async () => {
-          planned = true;
-          return [];
-        },
-      }));
-    }
-    catch (error) {
+      await runWorkflow(
+        options,
+        runtime({
+          plan: async () => {
+            planned = true;
+            return [];
+          },
+        }),
+      );
+    } catch (error) {
       caught = error;
     }
 

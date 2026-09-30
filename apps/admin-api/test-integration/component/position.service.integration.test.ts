@@ -1,9 +1,9 @@
+import { describe, expect, mock, test } from "bun:test";
 import { createPositionRepository } from "@admin-api/services/position/position.repository";
 import { createPositionService } from "@admin-api/services/position/position.service";
 import { createImmediateUnitOfWork } from "@admin-api/test/fakes";
 import { EmploymentStatus, PositionStatus } from "@iam/contracts";
 import { PositionHasEmploymentError } from "@iam/domain/position";
-import { describe, expect, mock, test } from "bun:test";
 import { createOpenEmploymentFixtureDb } from "../helpers/drizzle-query-capture";
 
 function position(overrides: Record<string, unknown> = {}) {
@@ -50,10 +50,14 @@ function useEmploymentFixture(
   tx: ReturnType<typeof createService>["tx"],
   fixture: { status: EmploymentStatus; isDelete: boolean },
 ) {
-  const repository = createPositionRepository(createOpenEmploymentFixtureDb([{
-    ...fixture,
-    posCode: "DEV",
-  }]) as any);
+  const repository = createPositionRepository(
+    createOpenEmploymentFixtureDb([
+      {
+        ...fixture,
+        posCode: "DEV",
+      },
+    ]) as any,
+  );
   tx.positionRepository.countOpenEmploymentsByPosCode = mock(repository.countOpenEmploymentsByPosCode);
 }
 
@@ -61,16 +65,19 @@ describe("createPositionService", () => {
   test("updates a position inside a unit of work and records audit", async () => {
     const { service, tx } = createService();
 
-    await expect(service.updatePosition("DEV", { posName: "Senior Developer" })).resolves.toEqual({ changed: true, result: null });
+    await expect(service.updatePosition("DEV", { posName: "Senior Developer" })).resolves.toEqual({
+      changed: true,
+      result: null,
+    });
 
     expect(tx.positionRepository.updatePositionByCode).toHaveBeenCalledWith("DEV", { posName: "Senior Developer" });
-    expect(tx.auditService.recordAuditLog).toHaveBeenCalledWith(expect.objectContaining({
-      action: "admin.position.update",
-      targetCode: "DEV",
-    }));
-    expect(tx.userProfileInvalidation.recordChanges).toHaveBeenCalledWith([
-      { kind: "position", positionId: 1 },
-    ]);
+    expect(tx.auditService.recordAuditLog).toHaveBeenCalledWith(
+      expect.objectContaining({
+        action: "admin.position.update",
+        targetCode: "DEV",
+      }),
+    );
+    expect(tx.userProfileInvalidation.recordChanges).toHaveBeenCalledWith([{ kind: "position", positionId: 1 }]);
   });
 
   test("rejects renaming to an existing position code", async () => {
@@ -103,9 +110,7 @@ describe("createPositionService", () => {
       const { service, tx } = createService();
       useEmploymentFixture(tx, { status: employmentStatus, isDelete: false });
 
-      await expect(service.updatePositionStatus("DEV", status))
-        .rejects
-        .toBeInstanceOf(PositionHasEmploymentError);
+      await expect(service.updatePositionStatus("DEV", status)).rejects.toBeInstanceOf(PositionHasEmploymentError);
 
       expect(tx.positionRepository.updatePositionByCode).not.toHaveBeenCalled();
     },
@@ -116,7 +121,10 @@ describe("createPositionService", () => {
     tx.positionRepository.lockPositionByCode.mockResolvedValue(position({ status: PositionStatus.Disable }));
     tx.positionRepository.countOpenEmploymentsByPosCode.mockResolvedValue(1);
 
-    await expect(service.updatePositionStatus("DEV", PositionStatus.Enable)).resolves.toEqual({ changed: true, result: null });
+    await expect(service.updatePositionStatus("DEV", PositionStatus.Enable)).resolves.toEqual({
+      changed: true,
+      result: null,
+    });
 
     expect(tx.positionRepository.countOpenEmploymentsByPosCode).not.toHaveBeenCalled();
     expect(tx.positionRepository.updatePositionByCode).toHaveBeenCalledWith("DEV", {
@@ -131,14 +139,15 @@ describe("createPositionService", () => {
     const { service, tx } = createService();
     useEmploymentFixture(tx, { status, isDelete });
 
-    await expect(service.updatePositionStatus("DEV", PositionStatus.Disable)).resolves.toEqual({ changed: true, result: null });
+    await expect(service.updatePositionStatus("DEV", PositionStatus.Disable)).resolves.toEqual({
+      changed: true,
+      result: null,
+    });
 
     expect(tx.positionRepository.updatePositionByCode).toHaveBeenCalledWith("DEV", {
       status: PositionStatus.Disable,
     });
-    expect(tx.userProfileInvalidation.recordChanges).toHaveBeenCalledWith([
-      { kind: "position", positionId: 1 },
-    ]);
+    expect(tx.userProfileInvalidation.recordChanges).toHaveBeenCalledWith([{ kind: "position", positionId: 1 }]);
   });
 
   test.each([
@@ -152,8 +161,6 @@ describe("createPositionService", () => {
 
     expect(tx.positionRepository.countOpenEmploymentsByPosCode).toHaveBeenCalledWith("DEV");
     expect(tx.positionRepository.softDeletePositionByCode).toHaveBeenCalledWith("DEV");
-    expect(tx.userProfileInvalidation.recordChanges).toHaveBeenCalledWith([
-      { kind: "position", positionId: 1 },
-    ]);
+    expect(tx.userProfileInvalidation.recordChanges).toHaveBeenCalledWith([{ kind: "position", positionId: 1 }]);
   });
 });

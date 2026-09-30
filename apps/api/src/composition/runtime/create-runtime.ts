@@ -1,4 +1,3 @@
-import type { ApiRuntimePorts } from "./types";
 import { randomBytes, randomInt, randomUUID } from "node:crypto";
 import env from "@api/env";
 import redis from "@api/lib/infra/redis";
@@ -8,6 +7,7 @@ import { createWechatClient } from "@api/lib/integrations/wechat";
 import { logger } from "@api/lib/logger";
 import { createOidcSigningKeys } from "@iam/oidc";
 import { createApiPasswordHasher } from "./password-hasher";
+import type { ApiRuntimePorts } from "./types";
 
 export interface CreateApiRuntimeOptions {
   env?: typeof env;

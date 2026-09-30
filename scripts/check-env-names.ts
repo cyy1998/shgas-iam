@@ -170,10 +170,9 @@ console.log("Env name guard passed.");
 function checkRawEnvSchema(check: AppEnvSchemaCheck): void {
   const text = read(check.file);
   const block = extractRawEnvSchemaBlock(text, check.file);
-  if (!block)
-    return;
+  if (!block) return;
 
-  for (const match of block.text.matchAll(/^\s{2}([A-Z][A-Z0-9_]*)\s*:/gm)) {
+  for (const match of block.text.matchAll(/^[\t ]+([A-Z][A-Z0-9_]*)\s*:/gm)) {
     const key = match[1];
     if (key !== "NODE_ENV" && !key.startsWith(check.prefix)) {
       add(check.file, lineNumber(text, block.start + match.index!), `${key} must use ${check.prefix} in RawEnvSchema`);
@@ -184,8 +183,7 @@ function checkRawEnvSchema(check: AppEnvSchemaCheck): void {
 function checkBackendProcessEnvBoundary(envFile: string): void {
   const appSrcDir = envFile.replace(/\/env\.ts$/, "");
   for (const file of listFiles(appSrcDir, isTypeScriptFile)) {
-    if (file === envFile || file.includes("/__tests__/"))
-      continue;
+    if (file === envFile || file.includes("/__tests__/")) continue;
     const text = read(file);
     for (const match of text.matchAll(/process\.env(?:\.([A-Z][A-Z0-9_]*)|\[\s*["']([A-Z][A-Z0-9_]*)["']\s*\])/g)) {
       add(file, lineNumber(text, match.index!), "backend process.env reads must stay inside src/env.ts");
@@ -199,12 +197,10 @@ function checkEnvExample(check: EnvExampleCheck): void {
 
   text.split("\n").forEach((line, index) => {
     const match = line.match(/^([A-Z][A-Z0-9_]*)=/);
-    if (!match)
-      return;
+    if (!match) return;
 
     const key = match[1];
-    if (allowedKeys.has(key) || check.allowedPrefixes.some(prefix => key.startsWith(prefix)))
-      return;
+    if (allowedKeys.has(key) || check.allowedPrefixes.some((prefix) => key.startsWith(prefix))) return;
 
     add(check.file, index + 1, `${key} must use one of ${check.allowedPrefixes.join(", ")}`);
   });
@@ -254,18 +250,15 @@ function checkDockerRetiredNames(file: string): void {
 }
 
 function extractRawEnvSchemaBlock(text: string, file: string): { start: number; text: string } | undefined {
-  const schemaStartMatch = text.match(/const Raw[A-Za-z]*EnvSchema = z\.object\(\{/);
+  const schemaStartMatch = text.match(/const\s+Raw[A-Za-z]*EnvSchema\s*=\s*z\s*\.object\s*\(\s*\{/);
   const start = schemaStartMatch?.index;
   if (start === undefined) {
     add(file, 1, "Raw env schema was not found");
     return undefined;
   }
 
-  const endMarkers = [").superRefine", "});"];
-  const end = endMarkers
-    .map(marker => text.indexOf(marker, start))
-    .filter(index => index !== -1)
-    .sort((a, b) => a - b)[0];
+  const endMatch = /\)\s*\.superRefine|\}\s*,?\s*\);/.exec(text.slice(start));
+  const end = endMatch ? start + endMatch.index : undefined;
 
   if (end === undefined) {
     add(file, lineNumber(text, start), "RawEnvSchema end was not found");
@@ -277,13 +270,11 @@ function extractRawEnvSchemaBlock(text: string, file: string): { start: number; 
 
 function listFiles(dir: string, predicate: (file: string) => boolean): string[] {
   const absoluteDir = join(repoRoot, dir);
-  if (!existsSync(absoluteDir))
-    return [];
+  if (!existsSync(absoluteDir)) return [];
 
   const result: string[] = [];
   for (const entry of readdirSync(absoluteDir)) {
-    if (entry === "node_modules" || entry === "dist" || entry === ".umi" || entry === ".umi-production")
-      continue;
+    if (entry === "node_modules" || entry === "dist" || entry === ".umi" || entry === ".umi-production") continue;
 
     const absolutePath = join(absoluteDir, entry);
     const relativePath = relative(repoRoot, absolutePath).replaceAll("\\", "/");
@@ -291,8 +282,7 @@ function listFiles(dir: string, predicate: (file: string) => boolean): string[] 
 
     if (stat.isDirectory()) {
       result.push(...listFiles(relativePath, predicate));
-    }
-    else if (predicate(relativePath)) {
+    } else if (predicate(relativePath)) {
       result.push(relativePath);
     }
   }

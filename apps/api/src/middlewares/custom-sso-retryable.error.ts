@@ -3,13 +3,8 @@ import { SERVICE_UNAVAILABLE } from "@iam/api-core/core/http-status-codes";
 import { AuthzMaintenanceError, CustomError } from "@iam/api-core/errors";
 import { SubjectAccessUnavailableError } from "@iam/api-core/subject-access";
 import { SubjectProjectionNotReadyError } from "@iam/client-subject-projection";
-import {
-  ApiErrorCode,
-  isRetryableServiceUnavailable,
-} from "@iam/contracts";
-import {
-  CustomSsoTrafficGateUnavailableError,
-} from "@iam/custom-sso";
+import { ApiErrorCode, isRetryableServiceUnavailable } from "@iam/contracts";
+import { CustomSsoTrafficGateUnavailableError } from "@iam/custom-sso";
 
 export interface MapCustomSsoRetryableErrorOptions {
   readonly retryAfterSeconds: number;
@@ -19,7 +14,8 @@ class CustomSsoRetryableUnavailableError extends CustomError {
   public readonly retryAfterSeconds: number;
 
   constructor(
-    code: ApiErrorCode.InternalError
+    code:
+      | ApiErrorCode.InternalError
       | ApiErrorCode.Maintenance
       | ApiErrorCode.SubjectAccessUnavailable
       | ApiErrorCode.SubjectProjectionNotReady,
@@ -35,17 +31,10 @@ class CustomSsoRetryableUnavailableError extends CustomError {
   }
 }
 
-export function mapCustomSsoRetryableError(
-  error: unknown,
-  options: MapCustomSsoRetryableErrorOptions,
-): unknown {
+export function mapCustomSsoRetryableError(error: unknown, options: MapCustomSsoRetryableErrorOptions): unknown {
   if (error instanceof AuthzMaintenanceError) {
     assertRetryAfterSeconds(options.retryAfterSeconds);
-    return new CustomSsoRetryableUnavailableError(
-      ApiErrorCode.Maintenance,
-      error.message,
-      options.retryAfterSeconds,
-    );
+    return new CustomSsoRetryableUnavailableError(ApiErrorCode.Maintenance, error.message, options.retryAfterSeconds);
   }
   if (error instanceof CustomSsoTrafficGateUnavailableError || error instanceof ClientSnapshotUnavailableError) {
     assertRetryAfterSeconds(options.retryAfterSeconds);
@@ -55,8 +44,7 @@ export function mapCustomSsoRetryableError(
       options.retryAfterSeconds,
     );
   }
-  if (!isRetryableServiceUnavailable(error))
-    return error;
+  if (!isRetryableServiceUnavailable(error)) return error;
   assertRetryAfterSeconds(options.retryAfterSeconds);
   if (error instanceof SubjectAccessUnavailableError) {
     return new CustomSsoRetryableUnavailableError(

@@ -1,6 +1,7 @@
-import type { ProcessSmokeChild } from "@iam/api-core/testing/process-smoke-harness";
+import { expect, test } from "bun:test";
 import { access } from "node:fs/promises";
 import process from "node:process";
+import type { ProcessSmokeChild } from "@iam/api-core/testing/process-smoke-harness";
 import {
   createProcessSmokeEnvironment,
   spawnOwnedProcessTree,
@@ -8,7 +9,6 @@ import {
   terminateProcessTree,
   withOwnedTemporaryDirectory,
 } from "@iam/api-core/testing/process-smoke-harness";
-import { expect, test } from "bun:test";
 
 const supervisorCloseTimeoutMs = 8_000;
 const descendantExitTimeoutMs = 1_000;
@@ -27,34 +27,27 @@ async function waitForPidExit(pid: number, timeoutMs: number) {
   while (Date.now() < deadline) {
     try {
       process.kill(pid, 0);
-    }
-    catch (error) {
-      if (
-        error instanceof Error
-        && "code" in error
-        && (error as NodeJS.ErrnoException).code === "ESRCH"
-      ) {
+    } catch (error) {
+      if (error instanceof Error && "code" in error && (error as NodeJS.ErrnoException).code === "ESRCH") {
         return true;
       }
       throw error;
     }
-    await new Promise(resolve => setTimeout(resolve, 10));
+    await new Promise((resolve) => setTimeout(resolve, 10));
   }
   return false;
 }
 
-async function waitForSupervisorClose(
-  supervisor: ProcessSmokeChild,
-  getDiagnostic: () => string,
-) {
+async function waitForSupervisorClose(supervisor: ProcessSmokeChild, getDiagnostic: () => string) {
   return await new Promise<{
     code: number | null;
     signal: NodeJS.Signals | null;
   }>((resolve, reject) => {
     const timeout = setTimeout(
-      () => reject(new Error(
-        `Windows Job supervisor did not close within ${supervisorCloseTimeoutMs}ms; ${getDiagnostic()}`,
-      )),
+      () =>
+        reject(
+          new Error(`Windows Job supervisor did not close within ${supervisorCloseTimeoutMs}ms; ${getDiagnostic()}`),
+        ),
       supervisorCloseTimeoutMs,
     );
     supervisor.once("error", (error) => {
@@ -118,24 +111,15 @@ test.skipIf(process.platform !== "win32")(
         });
 
         try {
-          const exit = await waitForSupervisorClose(
-            supervisor,
-            () => `exit=${observedExit}; output=${output}`,
-          );
-          descendantPid = Number(
-            /DESCENDANT_PID=(\d+)/u.exec(output)?.[1],
-          );
+          const exit = await waitForSupervisorClose(supervisor, () => `exit=${observedExit}; output=${output}`);
+          descendantPid = Number(/DESCENDANT_PID=(\d+)/u.exec(output)?.[1]);
           expect(exit).toEqual({ code: 23, signal: null });
           expect(descendantPid).toBeGreaterThan(0);
           expect(output).toContain(`TEMP_DIRECTORY=${temporaryDirectory}`);
           expect(output).toContain(tailMarker);
-          const descendantExited = await waitForPidExit(
-            descendantPid,
-            descendantExitTimeoutMs,
-          );
+          const descendantExited = await waitForPidExit(descendantPid, descendantExitTimeoutMs);
           expect(descendantExited).toBe(true);
-        }
-        catch (error) {
+        } catch (error) {
           testFailure = toError(error);
         }
 
@@ -147,37 +131,28 @@ test.skipIf(process.platform !== "win32")(
             });
           }
           if (
-            descendantPid !== undefined
-            && !await waitForPidExit(
-              descendantPid,
-              descendantCleanupConfirmationTimeoutMs,
-            )
+            descendantPid !== undefined &&
+            !(await waitForPidExit(descendantPid, descendantCleanupConfirmationTimeoutMs))
           ) {
             await terminateProcessByPid(descendantPid, {
               timeoutMs: descendantPostKillExitTimeoutMs,
             });
           }
-        }
-        catch (error) {
+        } catch (error) {
           cleanupFailure = toError(error);
         }
 
         if (testFailure !== undefined && cleanupFailure !== undefined) {
-          throw new AggregateError(
-            [testFailure, cleanupFailure],
-            "Windows Job assertion and cleanup both failed",
-          );
+          throw new AggregateError([testFailure, cleanupFailure], "Windows Job assertion and cleanup both failed");
         }
-        if (testFailure !== undefined)
-          throw testFailure;
-        if (cleanupFailure !== undefined)
-          throw cleanupFailure;
+        if (testFailure !== undefined) throw testFailure;
+        if (cleanupFailure !== undefined) throw cleanupFailure;
       },
     });
 
     const directoryError = await access(ownedTemporaryDirectory).then(
       () => undefined,
-      error => error,
+      (error) => error,
     );
     expect(directoryError).toMatchObject({ code: "ENOENT" });
   },

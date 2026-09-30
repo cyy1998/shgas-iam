@@ -25,7 +25,7 @@ async function main() {
     });
     const service = createPrivilegeDelegationService({
       privilegeDelegationRepository: createApiRepositories(db).privilegeDelegation,
-      uow: mapUnitOfWork(uow, tx => ({
+      uow: mapUnitOfWork(uow, (tx) => ({
         userRepository: tx.repositories.user,
         organizationRepository: tx.repositories.organization,
         privilegeRepository: tx.repositories.privilege,
@@ -33,17 +33,20 @@ async function main() {
         auditLogWriter: tx.auditLogWriter,
       })),
     });
-    await service.updateDelegation(delegationId, { status: PrivilegeDelegationStatus.Disable }, {
-      actor: {
-        actorType: "client",
-        actorUserId: null,
-        actorUsername: null,
-        actorClientCode: "delegation-deletion-contract",
-        actorSystemKey: null,
+    await service.updateDelegation(
+      delegationId,
+      { status: PrivilegeDelegationStatus.Disable },
+      {
+        actor: {
+          actorType: "client",
+          actorUserId: null,
+          actorUsername: null,
+          actorClientCode: "delegation-deletion-contract",
+          actorSystemKey: null,
+        },
       },
-    });
-  }
-  finally {
+    );
+  } finally {
     await sql.end();
   }
 }

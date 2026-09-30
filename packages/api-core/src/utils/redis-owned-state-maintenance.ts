@@ -13,15 +13,14 @@ export async function maintainOwnedRedisState(
   let observed = 0;
   let removed = 0;
   for (const prefix of prefixes) {
-    if (!prefix || !prefix.endsWith(":"))
-      throw new Error("Invalid maintenance owner prefix");
+    if (!prefix || !prefix.endsWith(":")) throw new Error("Invalid maintenance owner prefix");
     const pattern = `${prefix.replaceAll(/[\\*?[\]]/gu, "\\$&")}*`;
     let cursor = "0";
     do {
       signal?.throwIfAborted();
       const [nextCursor, keys] = await redis.scan(cursor, "MATCH", pattern, "COUNT", 100);
       signal?.throwIfAborted();
-      if (!/^\d+$/u.test(nextCursor) || keys.some(key => !key.startsWith(prefix)))
+      if (!/^\d+$/u.test(nextCursor) || keys.some((key) => !key.startsWith(prefix)))
         throw new Error("Invalid maintenance scan result");
       observed += keys.length;
       if (operation === "apply") {

@@ -1,25 +1,13 @@
-import { AdminMutationCommittedError } from '@admin/services/admin-mutation';
-import { getAdminAuthorizationReasonText } from '@admin/services/authorization';
-import {
-  createOrganization,
-  type OrganizationDetailVo,
-  updateOrganization,
-} from '@admin/services/organization';
-import {
-  ModalForm,
-  ProFormSelect,
-  ProFormText,
-} from '@ant-design/pro-components';
-import {
-  getOrganizationStatusOptions,
-  OrganizationStatus,
-  OrganizationType,
-} from '@iam/contracts';
-import { Alert, message } from 'antd';
+import { AdminMutationCommittedError } from "@admin/services/admin-mutation";
+import { getAdminAuthorizationReasonText } from "@admin/services/authorization";
+import { createOrganization, type OrganizationDetailVo, updateOrganization } from "@admin/services/organization";
+import { ModalForm, ProFormSelect, ProFormText } from "@ant-design/pro-components";
+import { getOrganizationStatusOptions, OrganizationStatus, OrganizationType } from "@iam/contracts";
+import { Alert, message } from "antd";
 
 type Props = {
   open: boolean;
-  mode: 'create-root' | 'create-child' | 'edit';
+  mode: "create-root" | "create-child" | "edit";
   initialValues?: OrganizationDetailVo | null;
   parentCode?: string | null;
   onOpenChange: (open: boolean) => void;
@@ -32,10 +20,10 @@ const orgTypeOptions = Object.values(OrganizationType).map((t) => ({
   value: t,
 }));
 
-const titleMap: Record<Props['mode'], string> = {
-  'create-root': '新建根组织',
-  'create-child': '新建下级组织',
-  edit: '编辑组织',
+const titleMap: Record<Props["mode"], string> = {
+  "create-root": "新建根组织",
+  "create-child": "新建下级组织",
+  edit: "编辑组织",
 };
 
 export default function OrgFormModal({
@@ -47,13 +35,10 @@ export default function OrgFormModal({
   onSuccess,
   onCommitted,
 }: Props) {
-  const isEdit = mode === 'edit';
-  const canChangeStatus =
-    !isEdit || initialValues?.allowedActions.changeStatus.allowed !== false;
+  const isEdit = mode === "edit";
+  const canChangeStatus = !isEdit || initialValues?.allowedActions.changeStatus.allowed !== false;
   const changeStatusReason = isEdit
-    ? getAdminAuthorizationReasonText(
-        initialValues?.allowedActions.changeStatus.reason ?? null,
-      )
+    ? getAdminAuthorizationReasonText(initialValues?.allowedActions.changeStatus.reason ?? null)
     : undefined;
 
   return (
@@ -77,7 +62,7 @@ export default function OrgFormModal({
       modalProps={{
         destroyOnHidden: true,
         mask: { closable: false },
-        okText: '确定',
+        okText: "确定",
       }}
       onFinish={async (values) => {
         try {
@@ -86,20 +71,18 @@ export default function OrgFormModal({
             const outcome = await updateOrganization(initialValues.orgCode, {
               orgName,
               orgType: values.orgType,
-              ...(canChangeStatus && values.status !== initialValues.status
-                ? { status: values.status }
-                : {}),
+              ...(canChangeStatus && values.status !== initialValues.status ? { status: values.status } : {}),
             });
-            message.success(outcome.changed ? '更新成功' : '无需修改');
+            message.success(outcome.changed ? "更新成功" : "无需修改");
           } else {
             const outcome = await createOrganization({
               orgCode: values.orgCode.trim(),
               orgName,
               orgType: values.orgType,
-              parentCode: mode === 'create-child' ? (parentCode ?? null) : null,
+              parentCode: mode === "create-child" ? (parentCode ?? null) : null,
               status: OrganizationStatus.Enable,
             });
-            message.success(outcome.changed ? '创建成功' : '无需修改');
+            message.success(outcome.changed ? "创建成功" : "无需修改");
           }
           onSuccess?.();
           return true;
@@ -108,7 +91,7 @@ export default function OrgFormModal({
             onCommitted?.(err);
             return true;
           }
-          message.error(err instanceof Error ? err.message : '操作失败');
+          message.error(err instanceof Error ? err.message : "操作失败");
           return false;
         }
       }}
@@ -127,11 +110,10 @@ export default function OrgFormModal({
         disabled={isEdit}
         rules={[
           {
-            transform: (value: unknown) =>
-              typeof value === 'string' ? value.trim() : value,
+            transform: (value: unknown) => (typeof value === "string" ? value.trim() : value),
             required: true,
             max: 64,
-            message: '请输入不超过64个字符的组织编码',
+            message: "请输入不超过64个字符的组织编码",
           },
         ]}
       />
@@ -140,25 +122,19 @@ export default function OrgFormModal({
         label="组织名称"
         rules={[
           {
-            transform: (value: unknown) =>
-              typeof value === 'string' ? value.trim() : value,
+            transform: (value: unknown) => (typeof value === "string" ? value.trim() : value),
             required: true,
-            message: '请输入组织名称',
+            message: "请输入组织名称",
           },
         ]}
       />
-      <ProFormSelect
-        name="orgType"
-        label="组织类型"
-        options={orgTypeOptions}
-        rules={[{ required: true }]}
-      />
-      {mode === 'create-child' && (
+      <ProFormSelect name="orgType" label="组织类型" options={orgTypeOptions} rules={[{ required: true }]} />
+      {mode === "create-child" && (
         <ProFormText
           label="上级组织"
-          initialValue={parentCode ?? ''}
+          initialValue={parentCode ?? ""}
           disabled
-          fieldProps={{ value: parentCode ?? '' }}
+          fieldProps={{ value: parentCode ?? "" }}
         />
       )}
       <ProFormSelect

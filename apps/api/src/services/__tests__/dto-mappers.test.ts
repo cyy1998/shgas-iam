@@ -1,3 +1,4 @@
+import { describe, expect, test } from "bun:test";
 import {
   OrganizationLevel,
   OrganizationStatus,
@@ -7,7 +8,6 @@ import {
   UserStatus,
   UserType,
 } from "@iam/contracts";
-import { describe, expect, test } from "bun:test";
 
 const createdAt = new Date("2026-01-01T00:00:00.000Z");
 const updatedAt = new Date("2026-01-02T00:00:00.000Z");
@@ -92,14 +92,16 @@ function privilegeDelegationDetail() {
 
 describe("API DTO mappers", () => {
   test("maps organization details to a flat DTO", async () => {
-    const schemaModule = await import("../organization/organization.schema") as any;
+    const schemaModule = (await import("../organization/organization.schema")) as any;
 
     expect(typeof schemaModule.toOrganizationDto).toBe("function");
-    expect(schemaModule.toOrganizationDto({
-      ...organization(2, "CHILD"),
-      parent: organization(1, "PARENT"),
-      children: [],
-    })).toMatchObject({
+    expect(
+      schemaModule.toOrganizationDto({
+        ...organization(2, "CHILD"),
+        parent: organization(1, "PARENT"),
+        children: [],
+      }),
+    ).toMatchObject({
       orgCode: "CHILD",
       isLeaf: true,
       parentCode: "PARENT",
@@ -108,7 +110,7 @@ describe("API DTO mappers", () => {
   });
 
   test("maps privilege delegation details to summary and detail DTOs", async () => {
-    const schemaModule = await import("../privilege/privilegeDelegation.schema") as any;
+    const schemaModule = (await import("../privilege/privilegeDelegation.schema")) as any;
     const detail = privilegeDelegationDetail();
 
     expect(typeof schemaModule.toPrivilegeDelegationDto).toBe("function");

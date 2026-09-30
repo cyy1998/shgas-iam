@@ -21,106 +21,92 @@ export function createSubjectAccessTransitionRepository(db: DbClient) {
   }
 
   async function markRolledBack(receipt: SubjectAccessMutationReceipt) {
-    const updated = firstRow(await db
-      .update(subjectAccessTransitions)
-      .set({
-        status: "rolled_back",
-        targetState: "rollback",
-        updateTime: new Date(),
-      })
-      .where(and(
-        eq(subjectAccessTransitions.id, receipt.transitionId),
-        eq(subjectAccessTransitions.subjectIdentifier, receipt.subjectIdentifier),
-        eq(subjectAccessTransitions.ownerToken, receipt.ownerToken),
-        eq(subjectAccessTransitions.status, "pending"),
-        isNull(subjectAccessTransitions.targetState),
-      ))
-      .returning({ id: subjectAccessTransitions.id }));
-    if (updated !== null)
-      return;
+    const updated = firstRow(
+      await db
+        .update(subjectAccessTransitions)
+        .set({
+          status: "rolled_back",
+          targetState: "rollback",
+          updateTime: new Date(),
+        })
+        .where(
+          and(
+            eq(subjectAccessTransitions.id, receipt.transitionId),
+            eq(subjectAccessTransitions.subjectIdentifier, receipt.subjectIdentifier),
+            eq(subjectAccessTransitions.ownerToken, receipt.ownerToken),
+            eq(subjectAccessTransitions.status, "pending"),
+            isNull(subjectAccessTransitions.targetState),
+          ),
+        )
+        .returning({ id: subjectAccessTransitions.id }),
+    );
+    if (updated !== null) return;
 
     const existing = await readExact(receipt);
-    if (
-      existing?.status === "rolled_back"
-      && existing.targetState === "rollback"
-    ) {
+    if (existing?.status === "rolled_back" && existing.targetState === "rollback") {
       return;
     }
-    throw new SubjectAccessTransitionOwnershipError(
-      "Subject Access transition rollback owner is no longer pending",
-    );
+    throw new SubjectAccessTransitionOwnershipError("Subject Access transition rollback owner is no longer pending");
   }
 
-  async function assertCommitted(
-    receipt: SubjectAccessMutationReceipt,
-    targetState: SubjectAccessTransitionTarget,
-  ) {
+  async function assertCommitted(receipt: SubjectAccessMutationReceipt, targetState: SubjectAccessTransitionTarget) {
     const existing = await readExact(receipt);
-    if (
-      existing?.status === "committed"
-      && existing.targetState === targetState
-    ) {
+    if (existing?.status === "committed" && existing.targetState === targetState) {
       return;
     }
-    throw new SubjectAccessTransitionOwnershipError(
-      "Subject Access transition outcome was not committed",
-    );
+    throw new SubjectAccessTransitionOwnershipError("Subject Access transition outcome was not committed");
   }
 
   async function runMutation<T>(
     receipt: SubjectAccessMutationReceipt,
     mutation: () => Promise<T>,
-    resolveTarget: (
-      result: T,
-    ) => SubjectAccessTransitionTarget,
+    resolveTarget: (result: T) => SubjectAccessTransitionTarget,
   ): Promise<T> {
-    const locked = firstRow(await db
-      .select()
-      .from(subjectAccessTransitions)
-      .where(and(
-        eq(subjectAccessTransitions.id, receipt.transitionId),
-        eq(subjectAccessTransitions.subjectIdentifier, receipt.subjectIdentifier),
-        eq(subjectAccessTransitions.ownerToken, receipt.ownerToken),
-      ))
-      .for("update"));
-    if (
-      locked?.status !== "pending"
-      || locked.targetState !== null
-    ) {
-      throw new SubjectAccessTransitionOwnershipError(
-        "Subject Access transition mutation owner is no longer pending",
-      );
+    const locked = firstRow(
+      await db
+        .select()
+        .from(subjectAccessTransitions)
+        .where(
+          and(
+            eq(subjectAccessTransitions.id, receipt.transitionId),
+            eq(subjectAccessTransitions.subjectIdentifier, receipt.subjectIdentifier),
+            eq(subjectAccessTransitions.ownerToken, receipt.ownerToken),
+          ),
+        )
+        .for("update"),
+    );
+    if (locked?.status !== "pending" || locked.targetState !== null) {
+      throw new SubjectAccessTransitionOwnershipError("Subject Access transition mutation owner is no longer pending");
     }
 
     const result = await mutation();
     const targetState = resolveTarget(result);
-    const committed = firstRow(await db
-      .update(subjectAccessTransitions)
-      .set({
-        status: "committed",
-        targetState,
-        updateTime: new Date(),
-      })
-      .where(and(
-        eq(subjectAccessTransitions.id, receipt.transitionId),
-        eq(subjectAccessTransitions.subjectIdentifier, receipt.subjectIdentifier),
-        eq(subjectAccessTransitions.ownerToken, receipt.ownerToken),
-        eq(subjectAccessTransitions.status, "pending"),
-        isNull(subjectAccessTransitions.targetState),
-      ))
-      .returning({ id: subjectAccessTransitions.id }));
+    const committed = firstRow(
+      await db
+        .update(subjectAccessTransitions)
+        .set({
+          status: "committed",
+          targetState,
+          updateTime: new Date(),
+        })
+        .where(
+          and(
+            eq(subjectAccessTransitions.id, receipt.transitionId),
+            eq(subjectAccessTransitions.subjectIdentifier, receipt.subjectIdentifier),
+            eq(subjectAccessTransitions.ownerToken, receipt.ownerToken),
+            eq(subjectAccessTransitions.status, "pending"),
+            isNull(subjectAccessTransitions.targetState),
+          ),
+        )
+        .returning({ id: subjectAccessTransitions.id }),
+    );
     if (committed === null) {
-      throw new SubjectAccessTransitionOwnershipError(
-        "Subject Access transition mutation owner lost its fence",
-      );
+      throw new SubjectAccessTransitionOwnershipError("Subject Access transition mutation owner lost its fence");
     }
     return result;
   }
 
-  async function reapStalePending(input: {
-    readonly staleAfterSeconds: number;
-    readonly limit: number;
-  }) {
+  async function reapStalePending(input: { readonly staleAfterSeconds: number; readonly limit: number }) {
     const rolledBack = await db.execute<{ id: string }>(sql`
       WITH stale_pending AS (
         SELECT id
@@ -148,25 +134,23 @@ export function createSubjectAccessTransitionRepository(db: DbClient) {
     readonly subjectIdentifier: string;
     readonly transitionId: string;
   }): Promise<SubjectAccessTransitionResolution> {
-    const locked = firstRow(await db
-      .select()
-      .from(subjectAccessTransitions)
-      .where(and(
-        eq(subjectAccessTransitions.id, input.transitionId),
-        eq(subjectAccessTransitions.subjectIdentifier, input.subjectIdentifier),
-      ))
-      .for("update"));
-    if (locked === null)
-      return { status: "unresolved" };
-    if (locked.status === "rolled_back" && locked.targetState === "rollback")
-      return { status: "rolled_back" };
+    const locked = firstRow(
+      await db
+        .select()
+        .from(subjectAccessTransitions)
+        .where(
+          and(
+            eq(subjectAccessTransitions.id, input.transitionId),
+            eq(subjectAccessTransitions.subjectIdentifier, input.subjectIdentifier),
+          ),
+        )
+        .for("update"),
+    );
+    if (locked === null) return { status: "unresolved" };
+    if (locked.status === "rolled_back" && locked.targetState === "rollback") return { status: "rolled_back" };
     if (locked.status === "committed") {
-      if (locked.targetState === "rollback")
-        return { status: "rolled_back" };
-      if (
-        locked.targetState === "enabled"
-        || locked.targetState === "disabled"
-      ) {
+      if (locked.targetState === "rollback") return { status: "rolled_back" };
+      if (locked.targetState === "enabled" || locked.targetState === "disabled") {
         return {
           status: "committed",
           targetState: locked.targetState,
@@ -174,41 +158,46 @@ export function createSubjectAccessTransitionRepository(db: DbClient) {
       }
       return { status: "unresolved" };
     }
-    if (locked.status !== "pending" || locked.targetState !== null)
-      return { status: "unresolved" };
+    if (locked.status !== "pending" || locked.targetState !== null) return { status: "unresolved" };
 
-    const rolledBack = firstRow(await db
-      .update(subjectAccessTransitions)
-      .set({
-        status: "rolled_back",
-        targetState: "rollback",
-        updateTime: new Date(),
-      })
-      .where(and(
-        eq(subjectAccessTransitions.id, input.transitionId),
-        eq(subjectAccessTransitions.subjectIdentifier, input.subjectIdentifier),
-        eq(subjectAccessTransitions.status, "pending"),
-        isNull(subjectAccessTransitions.targetState),
-      ))
-      .returning({ id: subjectAccessTransitions.id }));
+    const rolledBack = firstRow(
+      await db
+        .update(subjectAccessTransitions)
+        .set({
+          status: "rolled_back",
+          targetState: "rollback",
+          updateTime: new Date(),
+        })
+        .where(
+          and(
+            eq(subjectAccessTransitions.id, input.transitionId),
+            eq(subjectAccessTransitions.subjectIdentifier, input.subjectIdentifier),
+            eq(subjectAccessTransitions.status, "pending"),
+            isNull(subjectAccessTransitions.targetState),
+          ),
+        )
+        .returning({ id: subjectAccessTransitions.id }),
+    );
     if (rolledBack === null) {
-      throw new SubjectAccessTransitionOwnershipError(
-        "Subject Access transition recovery lost its PostgreSQL fence",
-      );
+      throw new SubjectAccessTransitionOwnershipError("Subject Access transition recovery lost its PostgreSQL fence");
     }
     return { status: "rolled_back" };
   }
 
   async function readExact(receipt: SubjectAccessMutationReceipt) {
-    return firstRow(await db
-      .select()
-      .from(subjectAccessTransitions)
-      .where(and(
-        eq(subjectAccessTransitions.id, receipt.transitionId),
-        eq(subjectAccessTransitions.subjectIdentifier, receipt.subjectIdentifier),
-        eq(subjectAccessTransitions.ownerToken, receipt.ownerToken),
-      ))
-      .limit(1));
+    return firstRow(
+      await db
+        .select()
+        .from(subjectAccessTransitions)
+        .where(
+          and(
+            eq(subjectAccessTransitions.id, receipt.transitionId),
+            eq(subjectAccessTransitions.subjectIdentifier, receipt.subjectIdentifier),
+            eq(subjectAccessTransitions.ownerToken, receipt.ownerToken),
+          ),
+        )
+        .limit(1),
+    );
   }
 
   return {
@@ -221,20 +210,16 @@ export function createSubjectAccessTransitionRepository(db: DbClient) {
   };
 }
 
-export type SubjectAccessTransitionRepository = ReturnType<
-  typeof createSubjectAccessTransitionRepository
->;
+export type SubjectAccessTransitionRepository = ReturnType<typeof createSubjectAccessTransitionRepository>;
 
 export function createSubjectAccessTransitionRecoveryAuthority(options: {
-  readonly transaction: <T>(
-    callback: (db: DbClient) => Promise<T>,
-  ) => Promise<T>;
+  readonly transaction: <T>(callback: (db: DbClient) => Promise<T>) => Promise<T>;
 }): SubjectAccessTransitionRecoveryAuthority {
   return {
     async resolve(input) {
-      return await options.transaction(async tx =>
-        await createSubjectAccessTransitionRepository(tx)
-          .resolveRecovery(input));
+      return await options.transaction(
+        async (tx) => await createSubjectAccessTransitionRepository(tx).resolveRecovery(input),
+      );
     },
   };
 }

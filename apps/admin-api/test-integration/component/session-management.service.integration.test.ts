@@ -1,3 +1,4 @@
+import { describe, expect, mock, test } from "bun:test";
 import type { AdminAuditContext, AuditLogInput } from "@admin-api/services/audit/audit.context";
 import type {
   AdminLoginRestrictionPort,
@@ -6,14 +7,13 @@ import type {
   AdminSessionUserControlPort,
   AdminSessionUserSummary,
 } from "@admin-api/services/session-management/session-management.port";
+import { createSessionManagementService } from "@admin-api/services/session-management/session-management.service";
 import type {
   AdminLoginRestrictionListInput,
   AdminSessionActorContext,
   AdminSessionRevokeInput,
 } from "@admin-api/services/session-management/session-management.type";
-import { createSessionManagementService } from "@admin-api/services/session-management/session-management.service";
 import { UserStatus } from "@iam/contracts";
-import { describe, expect, mock, test } from "bun:test";
 
 function subjectIdentifierFor(userId: number) {
   return `00000000-0000-4000-8000-${String(userId).padStart(12, "0")}`;
@@ -57,9 +57,7 @@ interface CreateLoginRestrictionHarnessOptions {
   users?: AdminSessionUserSummary[];
 }
 
-function loginRestrictionState(
-  overrides: Partial<AdminLoginRestrictionState> = {},
-): AdminLoginRestrictionState {
+function loginRestrictionState(overrides: Partial<AdminLoginRestrictionState> = {}): AdminLoginRestrictionState {
   return {
     userId: 7,
     cause: "too_many_login_failures",
@@ -77,15 +75,13 @@ function createLoginRestrictionHarness(options: CreateLoginRestrictionHarnessOpt
     async (
       _input: Parameters<AdminLoginRestrictionPort["listRestrictions"]>[0],
     ): Promise<Awaited<ReturnType<AdminLoginRestrictionPort["listRestrictions"]>>> => {
-      if (options.listError !== undefined)
-        throw options.listError;
+      if (options.listError !== undefined) throw options.listError;
       return options.listResult ?? { items: [], total: 0 };
     },
   );
   const clearLoginState = mock(
     async (_userId: number): Promise<Awaited<ReturnType<AdminLoginRestrictionPort["clearLoginState"]>>> => {
-      if (options.clearError !== undefined)
-        throw options.clearError;
+      if (options.clearError !== undefined) throw options.clearError;
       return (
         options.clearResult ?? {
           changed: false,
@@ -122,8 +118,7 @@ function createLoginRestrictionHarness(options: CreateLoginRestrictionHarnessOpt
     audit: {
       recordAuditLog: async (input) => {
         auditWrites.push(input);
-        if (options.auditError !== undefined)
-          throw options.auditError;
+        if (options.auditError !== undefined) throw options.auditError;
       },
     },
     control: { revokePrincipalSession },
@@ -196,8 +191,8 @@ interface CreateRevokeHarnessOptions {
   userSummary?: RevokeSummaryFixture;
 }
 
-type RevokeSummaryFixture
-  = import("@admin-api/services/session-management/session-management.port").AdminSessionControlSummary;
+type RevokeSummaryFixture =
+  import("@admin-api/services/session-management/session-management.port").AdminSessionControlSummary;
 function revokeSummary(overrides: Partial<RevokeSummaryFixture> = {}): RevokeSummaryFixture {
   return {
     sessions: { userSessionsTerminated: 0, clientSessionsTerminated: 0, results: [], unfinished: [] },
@@ -234,7 +229,7 @@ function createRevokeHarness(options: CreateRevokeHarnessOptions = {}) {
     },
     users: {
       getSessionManagementUserSummaries: mock(async (userIds: readonly number[]) =>
-        userIds.map(userId => ({
+        userIds.map((userId) => ({
           id: userId,
           subjectIdentifier: subjectIdentifierFor(userId),
           username: `user-${userId}`,
@@ -256,8 +251,7 @@ function createRevokeHarness(options: CreateRevokeHarnessOptions = {}) {
     audit: {
       recordAuditLog: async (input) => {
         auditWrites.push(input);
-        if (options.auditError !== undefined)
-          throw options.auditError;
+        if (options.auditError !== undefined) throw options.auditError;
       },
     },
     logger: {
@@ -268,8 +262,7 @@ function createRevokeHarness(options: CreateRevokeHarnessOptions = {}) {
     userControl: {
       revokeUserSessions: async (input) => {
         userControlCalls.push(input);
-        if (options.userControlError !== undefined)
-          throw options.userControlError;
+        if (options.userControlError !== undefined) throw options.userControlError;
         if (options.userSummary === undefined) {
           throw new Error("unexpected user Session Revocation in session-target test");
         }
@@ -359,15 +352,7 @@ describe("createSessionManagementService", () => {
       },
     ]);
     const persistedAudit = JSON.stringify(auditWrites);
-    for (const forbiddenValue of [
-      "externalToken",
-      "lookupHash",
-      "hmac",
-      "origin",
-      "metadata",
-      "cleanupRef",
-      "error",
-    ]) {
+    for (const forbiddenValue of ["externalToken", "lookupHash", "hmac", "origin", "metadata", "cleanupRef", "error"]) {
       expect(persistedAudit).not.toContain(forbiddenValue);
     }
   });
@@ -397,8 +382,7 @@ describe("createSessionManagementService", () => {
     let caught: unknown;
     try {
       await revoke();
-    }
-    catch (error) {
+    } catch (error) {
       caught = error;
     }
 
@@ -641,13 +625,10 @@ describe("createSessionManagementService", () => {
   });
 
   test("wraps a no-effect audit failure without exposing provider details", async () => {
-    const auditFailure = Object.assign(
-      new Error("postgres://audit-writer secret SQL insert failed for no-op"),
-      {
-        serviceCode: "AUDIT_PROVIDER_FAILURE",
-        serviceDetails: { table: "audit_log" },
-      },
-    );
+    const auditFailure = Object.assign(new Error("postgres://audit-writer secret SQL insert failed for no-op"), {
+      serviceCode: "AUDIT_PROVIDER_FAILURE",
+      serviceDetails: { table: "audit_log" },
+    });
     auditFailure.stack = "provider-noop-stack-secret";
     const revokePrincipalSession = mock(async () => ({
       sessions: { userSessionsTerminated: 0, clientSessionsTerminated: 0, results: [], unfinished: [] },
@@ -674,8 +655,7 @@ describe("createSessionManagementService", () => {
     let caught: unknown;
     try {
       await revoke();
-    }
-    catch (error) {
+    } catch (error) {
       caught = error;
     }
 
@@ -769,14 +749,13 @@ describe("createSessionManagementService", () => {
       actorUsername: "root",
       requestId: "req-user-revoke",
     };
-    const { auditWrites, controlCalls, listPrincipalSessions, revoke, userControlCalls }
-      = createRevokeHarness({
-        input: userRevokeInput(),
-        audit: auditContext,
-        userSummary: revokeSummary({
-          sessions: { userSessionsTerminated: 2, clientSessionsTerminated: 3, results: [], unfinished: [] },
-        }),
-      });
+    const { auditWrites, controlCalls, listPrincipalSessions, revoke, userControlCalls } = createRevokeHarness({
+      input: userRevokeInput(),
+      audit: auditContext,
+      userSummary: revokeSummary({
+        sessions: { userSessionsTerminated: 2, clientSessionsTerminated: 3, results: [], unfinished: [] },
+      }),
+    });
 
     const result = await revoke();
 
@@ -1084,13 +1063,10 @@ describe("createSessionManagementService", () => {
   });
 
   test("wraps a user no-effect audit failure without exposing provider details", async () => {
-    const auditFailure = Object.assign(
-      new Error("postgres://audit-writer secret SQL insert failed for user no-op"),
-      {
-        serviceCode: "AUDIT_PROVIDER_FAILURE",
-        serviceDetails: { table: "audit_log" },
-      },
-    );
+    const auditFailure = Object.assign(new Error("postgres://audit-writer secret SQL insert failed for user no-op"), {
+      serviceCode: "AUDIT_PROVIDER_FAILURE",
+      serviceDetails: { table: "audit_log" },
+    });
     auditFailure.stack = "provider-user-noop-stack-secret";
     const { errorLogs, revoke, userControlCalls } = createRevokeHarness({
       input: userRevokeInput(),
@@ -1103,8 +1079,7 @@ describe("createSessionManagementService", () => {
     let caught: unknown;
     try {
       await revoke();
-    }
-    catch (error) {
+    } catch (error) {
       caught = error;
     }
 
@@ -1214,9 +1189,7 @@ describe("createSessionManagementService", () => {
       subjectIdentifier: subjectIdentifierFor(7),
     });
     expect(users.getSessionManagementUserSummaries).toHaveBeenCalledWith([7]);
-    expect(users.getSessionManagementUserSummariesBySubjectIdentifiers).toHaveBeenCalledWith([
-      subjectIdentifierFor(7),
-    ]);
+    expect(users.getSessionManagementUserSummariesBySubjectIdentifiers).toHaveBeenCalledWith([subjectIdentifierFor(7)]);
     expect(result).toEqual({
       result: [
         {
@@ -1325,7 +1298,7 @@ describe("createSessionManagementService", () => {
     );
 
     expect(
-      result.result.map(session => ({
+      result.result.map((session) => ({
         principalSessionId: session.principalSessionId,
         expiresAt: session.expiresAt,
       })),
@@ -1349,7 +1322,7 @@ describe("createSessionManagementService", () => {
           subjectId: "00000000-0000-4000-8000-999999999999",
         },
       },
-    ].map(item => ({
+    ].map((item) => ({
       ...item,
       authTime: 1,
       expiresAt: 2,
@@ -1429,7 +1402,7 @@ describe("createSessionManagementService", () => {
       subjectIdentifierFor(4),
       "00000000-0000-4000-8000-999999999999",
     ]);
-    expect(result.result.map(session => session.user)).toEqual([
+    expect(result.result.map((session) => session.user)).toEqual([
       {
         id: 1,
         subjectId: subjectIdentifierFor(1),
@@ -1466,8 +1439,8 @@ describe("createSessionManagementService", () => {
         accountStatus: "unknown",
       },
     ]);
-    expect(result.result.every(session => session.authMethods[0] === "unknown")).toBe(true);
-    expect(result.result.every(session => session.origin === null)).toBe(true);
+    expect(result.result.every((session) => session.authMethods[0] === "unknown")).toBe(true);
+    expect(result.result.every((session) => session.origin === null)).toBe(true);
   });
 
   test("does not disguise a user-summary infrastructure failure as unknown users", async () => {
@@ -1536,7 +1509,7 @@ describe("createSessionManagementService", () => {
       { actorUserId: 99, principalSessionId: "ps-admin" },
     );
 
-    expect(result.result.map(session => session.origin)).toEqual([
+    expect(result.result.map((session) => session.origin)).toEqual([
       { ip: null, deviceType: "desktop", operatingSystem: "windows", browser: "edge" },
       { ip: null, deviceType: "desktop", operatingSystem: "macos", browser: "safari" },
       { ip: null, deviceType: "mobile", operatingSystem: "android", browser: "chrome" },
@@ -1544,7 +1517,7 @@ describe("createSessionManagementService", () => {
       { ip: null, deviceType: "desktop", operatingSystem: "linux", browser: "firefox" },
       { ip: null, deviceType: "unknown", operatingSystem: "unknown", browser: "other" },
     ]);
-    expect(result.result.every(session => session.authMethods.join(",") === "oa,wechat")).toBe(true);
+    expect(result.result.every((session) => session.authMethods.join(",") === "oa,wechat")).toBe(true);
   });
 
   test("lists Temporary Login Restrictions with exact users and canonical restriction facts", async () => {
@@ -1687,7 +1660,7 @@ describe("createSessionManagementService", () => {
       pageSize: 20,
     });
 
-    expect(result.result.map(item => item.user)).toEqual([
+    expect(result.result.map((item) => item.user)).toEqual([
       {
         id: 7,
         username: "deleted-user",
@@ -1702,7 +1675,7 @@ describe("createSessionManagementService", () => {
       },
     ]);
     expect(
-      result.result.map(item => ({
+      result.result.map((item) => ({
         userId: item.user.id,
         restrictedUntil: item.restrictedUntil,
       })),
@@ -1744,8 +1717,7 @@ describe("createSessionManagementService", () => {
   test.each([
     {
       name: "inventory",
-      invoke: (harness: ReturnType<typeof createLoginRestrictionHarness>) =>
-        harness.list({ pageNum: 1, pageSize: 20 }),
+      invoke: (harness: ReturnType<typeof createLoginRestrictionHarness>) => harness.list({ pageNum: 1, pageSize: 20 }),
       listError: new Error("redis inventory unavailable"),
       clearError: undefined,
     },

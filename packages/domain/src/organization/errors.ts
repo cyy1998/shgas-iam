@@ -47,9 +47,7 @@ export class OrganizationHasEmploymentError extends DomainBusinessError {
 }
 
 export class OrganizationHasOpenResponsibilityAssignmentError extends DomainBusinessError {
-  constructor(
-    message: string = "该组织层级内存在开放责任任命，无法暂停、停用或删除",
-  ) {
+  constructor(message: string = "该组织层级内存在开放责任任命，无法暂停、停用或删除") {
     super(message, {
       code: ApiErrorCode.OrganizationHasOpenResponsibilityAssignment,
       httpStatus: DomainHttpStatus.Conflict,

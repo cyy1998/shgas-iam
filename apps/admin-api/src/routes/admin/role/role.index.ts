@@ -1,6 +1,6 @@
 import type { AdminBindings } from "@admin-api/types/lib";
-import type { RoleAdapter } from "./role.adapter";
 import { createRouter } from "@iam/api-core/core/create-router";
+import type { RoleAdapter } from "./role.adapter";
 import * as routes from "./role.routes";
 
 export function createRoleRoute(adapter: RoleAdapter) {

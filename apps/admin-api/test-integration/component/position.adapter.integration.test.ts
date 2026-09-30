@@ -1,9 +1,9 @@
+import { describe, expect, mock, test } from "bun:test";
 import type { AdminApiRestContext } from "@admin-api/lib/admin-api-adapter";
-import type { Context } from "hono";
 import { createPositionAdapter } from "@admin-api/routes/admin/position/position.adapter";
 import { createPositionService } from "@admin-api/services/position/position.service";
 import { EmploymentStatus, PositionStatus } from "@iam/contracts";
-import { describe, expect, mock, test } from "bun:test";
+import type { Context } from "hono";
 import { getTestAdminAuthorizationValue } from "../helpers/admin-authorization";
 
 const now = new Date("2026-01-01T00:00:00Z");
@@ -29,12 +29,9 @@ function createRestContext(query: Record<string, unknown>) {
   return {
     get: mock((key: string) => {
       const authorizationValue = getTestAdminAuthorizationValue(key);
-      if (authorizationValue !== undefined)
-        return authorizationValue;
-      if (key === "userId")
-        return 1001;
-      if (key === "username")
-        return "admin";
+      if (authorizationValue !== undefined) return authorizationValue;
+      if (key === "userId") return 1001;
+      if (key === "username") return "admin";
       return undefined;
     }),
     req: {
@@ -91,18 +88,20 @@ describe("admin position adapter", () => {
     } as any);
     const adapter = createPositionAdapter({ positionService } as any);
     const expected = {
-      result: [{
-        id: 2,
-        posCode: "SRE",
-        posName: "Site Reliability Engineer",
-        status: PositionStatus.Pause,
-        statusText: "暂停",
-        memberNumber: 2,
-        description: "Platform operations",
-        isDelete: false,
-        createTime: now,
-        updateTime: now,
-      }],
+      result: [
+        {
+          id: 2,
+          posCode: "SRE",
+          posName: "Site Reliability Engineer",
+          status: PositionStatus.Pause,
+          statusText: "暂停",
+          memberNumber: 2,
+          description: "Platform operations",
+          isDelete: false,
+          createTime: now,
+          updateTime: now,
+        },
+      ],
       total: 2,
       pageNum: 2,
       pageSize: 1,
@@ -112,11 +111,14 @@ describe("admin position adapter", () => {
     const restContext = createRestContext(query);
     const handlerContext = restContext as unknown as Parameters<typeof adapter.positionsSearch>[0];
     await expect(adapter.positionsSearch(handlerContext, async () => {})).resolves.toMatchObject({ code: 200 });
-    expect(restContext.json).toHaveBeenCalledWith({
-      code: 200,
-      data: expected,
-      message: "success",
-    }, 200);
+    expect(restContext.json).toHaveBeenCalledWith(
+      {
+        code: 200,
+        data: expected,
+        message: "success",
+      },
+      200,
+    );
 
     const caller = adapter.positionAdminRouter.createCaller({ hono: createRestContext(query) as Context });
     await expect(caller.search(query)).resolves.toEqual(expected);

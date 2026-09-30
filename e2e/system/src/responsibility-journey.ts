@@ -1,5 +1,5 @@
-import type { APIRequestContext, Page } from "@playwright/test";
 import { parseUserProfileDetailDocument } from "@iam/user-profile-read-model";
+import type { APIRequestContext, Page } from "@playwright/test";
 import { expect } from "@playwright/test";
 
 const publicationTimeoutMs = 45_000;
@@ -24,14 +24,15 @@ export async function createHeadResponsibility(input: {
   targetOrganizationCode: string;
 }) {
   await input.page.goto(`${input.origin}/iam-admin/organizations`);
-  await input.page.getByText(`(${input.targetOrganizationCode})`, {
-    exact: true,
-  }).click();
+  await input.page
+    .getByText(`(${input.targetOrganizationCode})`, {
+      exact: true,
+    })
+    .click();
   await input.page.getByRole("tab", { name: "责任任命" }).click();
   await input.page.getByRole("button", { name: "新建责任任命" }).click();
   const modal = input.page.getByRole("dialog");
-  await expect(modal.getByText(`目标组织：${input.targetOrganizationCode}`))
-    .toBeVisible();
+  await expect(modal.getByText(`目标组织：${input.targetOrganizationCode}`)).toBeVisible();
   await modal.getByRole("combobox", { name: "任职" }).fill(input.adminUsername);
   await input.page.getByTitle(new RegExp(input.positionCode, "u")).click();
   await modal.getByRole("button", { name: /确\s*定/u }).click();
@@ -45,106 +46,78 @@ export async function createHeadResponsibility(input: {
   await detailDrawer.getByRole("button", { name: "关闭" }).click();
 }
 
-export async function waitForInternalResponsibility(
-  input: ResponsibilityJourneyInput & { expected: boolean },
-) {
-  await expect.poll(
-    async () => await readInternalResponsibility(input),
-    { timeout: publicationTimeoutMs },
-  ).toBe(input.expected);
+export async function waitForInternalResponsibility(input: ResponsibilityJourneyInput & { expected: boolean }) {
+  await expect
+    .poll(async () => await readInternalResponsibility(input), { timeout: publicationTimeoutMs })
+    .toBe(input.expected);
 }
 
-export async function expectInternalResponsibilityDsl(
-  input: ResponsibilityJourneyInput,
-) {
-  const response = await input.request.post(
-    `${input.origin}/api/iam/internal/users/search-dsl`,
-    {
-      headers: { apikey: input.internalApiKey },
-      data: {
-        filter: {
-          exists: {
-            path: "employments",
-            where: {
-              exists: {
-                path: "responsibilities",
-                where: {
-                  and: [
-                    {
-                      field: "type.code",
-                      op: "eq",
-                      value: "head",
-                    },
-                    {
-                      field: "targetOrganization",
-                      op: "withinSubtreeOf",
-                      value: input.targetOrganizationCode,
-                    },
-                  ],
-                },
+export async function expectInternalResponsibilityDsl(input: ResponsibilityJourneyInput) {
+  const response = await input.request.post(`${input.origin}/api/iam/internal/users/search-dsl`, {
+    headers: { apikey: input.internalApiKey },
+    data: {
+      filter: {
+        exists: {
+          path: "employments",
+          where: {
+            exists: {
+              path: "responsibilities",
+              where: {
+                and: [
+                  {
+                    field: "type.code",
+                    op: "eq",
+                    value: "head",
+                  },
+                  {
+                    field: "targetOrganization",
+                    op: "withinSubtreeOf",
+                    value: input.targetOrganizationCode,
+                  },
+                ],
               },
             },
           },
         },
       },
     },
-  );
+  });
   expect(response.status()).toBe(200);
   const body = readRecord(await response.json());
   const profiles = body?.data;
-  if (!Array.isArray(profiles))
-    throw new Error("Internal user search requires a profile array");
-  for (const profile of profiles)
-    expect(typeof readRecord(profile)?.username).toBe("string");
-  expect(profiles.some(profile => readRecord(profile)?.username === input.adminUsername)).toBe(true);
+  if (!Array.isArray(profiles)) throw new Error("Internal user search requires a profile array");
+  for (const profile of profiles) expect(typeof readRecord(profile)?.username).toBe("string");
+  expect(profiles.some((profile) => readRecord(profile)?.username === input.adminUsername)).toBe(true);
 
-  const legacyResponse = await input.request.post(
-    `${input.origin}/api/iam/internal/users/search-dsl`,
-    {
-      headers: { apikey: input.internalApiKey },
-      data: {
-        filter: {
-          nested: "employments",
-          where: { all: [] },
-        },
+  const legacyResponse = await input.request.post(`${input.origin}/api/iam/internal/users/search-dsl`, {
+    headers: { apikey: input.internalApiKey },
+    data: {
+      filter: {
+        nested: "employments",
+        where: { all: [] },
       },
     },
-  );
+  });
   expect(legacyResponse.status()).toBe(422);
 }
 
-export function internalDetailHasResponsibility(
-  value: unknown,
-  expectation: ResponsibilityExpectation,
-) {
+export function internalDetailHasResponsibility(value: unknown, expectation: ResponsibilityExpectation) {
   const body = readRecord(value);
   return profileHasResponsibility(body?.data, expectation, "posCode");
 }
 
-export function customSsoProfileHasResponsibility(
-  value: unknown,
-  expectation: ResponsibilityExpectation,
-) {
+export function customSsoProfileHasResponsibility(value: unknown, expectation: ResponsibilityExpectation) {
   const body = readRecord(value);
   const data = readRecord(body?.data);
   return profileHasResponsibility(data?.profile, expectation, "code");
 }
 
-export function oidcUserInfoHasResponsibility(
-  value: unknown,
-  expectation: ResponsibilityExpectation,
-) {
+export function oidcUserInfoHasResponsibility(value: unknown, expectation: ResponsibilityExpectation) {
   const claims = readRecord(value);
-  return employmentsHaveResponsibility(
-    claims?.["iam:employments"],
-    expectation,
-    "posCode",
-  );
+  return employmentsHaveResponsibility(claims?.["iam:employments"], expectation, "posCode");
 }
 
-export async function readInternalResponsibility(
-  input: ResponsibilityJourneyInput,
-) {
+export async function readInternalResponsibility(input: ResponsibilityJourneyInput) {
   const response = await input.request.get(
     `${input.origin}/api/iam/internal/users/${encodeURIComponent(input.adminUsername)}`,
     { headers: { apikey: input.internalApiKey } },
@@ -170,11 +143,7 @@ function profileHasResponsibility(
   expectation: ResponsibilityExpectation,
   positionCodeField: "code" | "posCode",
 ) {
-  return employmentsHaveResponsibility(
-    readRecord(value)?.employments,
-    expectation,
-    positionCodeField,
-  );
+  return employmentsHaveResponsibility(readRecord(value)?.employments, expectation, positionCodeField);
 }
 
 function employmentsHaveResponsibility(
@@ -182,8 +151,7 @@ function employmentsHaveResponsibility(
   expectation: ResponsibilityExpectation,
   positionCodeField: "code" | "posCode",
 ) {
-  if (!Array.isArray(value))
-    throw new Error("Responsibility disclosure requires an employments array");
+  if (!Array.isArray(value)) throw new Error("Responsibility disclosure requires an employments array");
   const employments = value.map((employment) => {
     const record = readRecord(employment);
     const position = readRecord(record?.position);
@@ -192,15 +160,11 @@ function employmentsHaveResponsibility(
     const matches = responsibilitiesMatch(record?.responsibilities, expectation);
     return { positionCode: position[positionCodeField], matches };
   });
-  return employments.some(employment => employment.positionCode === expectation.positionCode && employment.matches);
+  return employments.some((employment) => employment.positionCode === expectation.positionCode && employment.matches);
 }
 
-function responsibilitiesMatch(
-  value: unknown,
-  expectation: ResponsibilityExpectation,
-) {
-  if (!Array.isArray(value))
-    throw new Error("Responsibility disclosure requires a responsibilities array");
+function responsibilitiesMatch(value: unknown, expectation: ResponsibilityExpectation) {
+  if (!Array.isArray(value)) throw new Error("Responsibility disclosure requires a responsibilities array");
   const responsibilities = value.map((responsibility) => {
     const record = readRecord(responsibility);
     const typeCode = readRecord(record?.type)?.code;
@@ -209,11 +173,14 @@ function responsibilitiesMatch(
       throw new Error("Responsibility disclosure requires type and target codes");
     return { typeCode, targetCode };
   });
-  return responsibilities.some(responsibility => responsibility.typeCode === "head" && responsibility.targetCode === expectation.targetOrganizationCode);
+  return responsibilities.some(
+    (responsibility) =>
+      responsibility.typeCode === "head" && responsibility.targetCode === expectation.targetOrganizationCode,
+  );
 }
 
 function readRecord(value: unknown) {
   return typeof value === "object" && value !== null && !Array.isArray(value)
-    ? value as Record<string, unknown>
+    ? (value as Record<string, unknown>)
     : undefined;
 }

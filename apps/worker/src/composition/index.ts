@@ -1,9 +1,4 @@
-import type { UserProfilePostgresReadinessCommandEnv, WorkerEnv } from "@worker/env";
-import type { WorkerLogger } from "./runtime";
-import {
-  createSubjectAccessRepair,
-  createSubjectAccessTransitionRecovery,
-} from "@iam/api-core/subject-access";
+import { createSubjectAccessRepair, createSubjectAccessTransitionRecovery } from "@iam/api-core/subject-access";
 import db, { closeDb } from "@iam/db";
 import { createSubjectFactsRedisPublisher } from "@iam/user-profile-read-model";
 import {
@@ -18,6 +13,7 @@ import {
   createSubjectAccessAuthorityRepository,
   createUserProfileWorkerModule,
 } from "@iam/user-profile-read-model/worker";
+import type { UserProfilePostgresReadinessCommandEnv, WorkerEnv } from "@worker/env";
 import { createWorkerHttpApp, startWorkerHttpServer } from "@worker/http/server";
 import {
   closeWorkerModules,
@@ -28,6 +24,7 @@ import {
 } from "@worker/modules/registry";
 import { sql } from "drizzle-orm";
 import { closeWorkerCommandResources } from "./command-shutdown";
+import type { WorkerLogger } from "./runtime";
 import { createWorkerRuntime } from "./runtime";
 import { createWorkerSubjectAccess } from "./subject-access";
 
@@ -57,18 +54,13 @@ function createWorkerSubjectAccessRepair(runtime: ReturnType<typeof createWorker
   });
   const subjectAccessTransitionRecovery = createSubjectAccessTransitionRecovery({
     authority: createSubjectAccessTransitionRecoveryAuthority({
-      transaction: async callback =>
-        await db.transaction(async tx => await callback(tx)),
+      transaction: async (callback) => await db.transaction(async (tx) => await callback(tx)),
     }),
     backlog: subjectAccessStore,
     logger: runtime.logger,
   });
-  const subjectAccessTransitionReaper
-    = createSubjectAccessTransitionRepository(db);
-  const repairBacklog: Pick<
-    typeof subjectAccessStore,
-    "inspectRepairBacklog"
-  > = subjectAccessStore;
+  const subjectAccessTransitionReaper = createSubjectAccessTransitionRepository(db);
+  const repairBacklog: Pick<typeof subjectAccessStore, "inspectRepairBacklog"> = subjectAccessStore;
   return {
     barrier: subjectAccessBarrier,
     bootstrap: subjectAccessBootstrap,
@@ -113,10 +105,7 @@ export async function createWorkerComposition(options: CreateWorkerCompositionOp
         dashboardQueues,
         checkHealth: async () => {
           try {
-            await Promise.all([
-              runtime.redis.ping(),
-              db.execute(sql`select 1`),
-            ]);
+            await Promise.all([runtime.redis.ping(), db.execute(sql`select 1`)]);
             return {
               ready: true,
               dependencies: {
@@ -124,8 +113,7 @@ export async function createWorkerComposition(options: CreateWorkerCompositionOp
                 redis: "ok" as const,
               },
             };
-          }
-          catch (error) {
+          } catch (error) {
             return {
               ready: false,
               dependencies: {
@@ -137,9 +125,8 @@ export async function createWorkerComposition(options: CreateWorkerCompositionOp
           }
         },
       });
-  const httpServer = !commandOnly && options.env.http.enabled
-    ? startWorkerHttpServer(httpApp!, options.env.http.port)
-    : undefined;
+  const httpServer =
+    !commandOnly && options.env.http.enabled ? startWorkerHttpServer(httpApp!, options.env.http.port) : undefined;
 
   async function shutdown(signal: string) {
     runtime.logger.info({ signal, enabledModules: enabledModuleKeys }, "worker shutting down");
@@ -147,9 +134,7 @@ export async function createWorkerComposition(options: CreateWorkerCompositionOp
       closeWorkerModules(knownModules),
       Promise.resolve(httpServer?.stop(true)),
       runtime.redis.quit(),
-      closeDb(commandOnly
-        ? { timeoutSeconds: COMMAND_DB_SHUTDOWN_TIMEOUT_SECONDS }
-        : undefined),
+      closeDb(commandOnly ? { timeoutSeconds: COMMAND_DB_SHUTDOWN_TIMEOUT_SECONDS } : undefined),
     ]);
   }
 
@@ -191,10 +176,7 @@ export async function createWorkerSubjectAccessRepairComposition(
 
   async function shutdown(signal: string) {
     runtime.logger.info({ signal }, "worker Subject Access repair shutting down");
-    await Promise.allSettled([
-      runtime.redis.quit(),
-      closeDb(),
-    ]);
+    await Promise.allSettled([runtime.redis.quit(), closeDb()]);
   }
 
   return {
@@ -206,9 +188,7 @@ export async function createWorkerSubjectAccessRepairComposition(
   };
 }
 
-export function createEmploymentCommandComposition(options: {
-  logger: WorkerLogger;
-}) {
+export function createEmploymentCommandComposition(options: { logger: WorkerLogger }) {
   return {
     logger: options.logger,
     employment: {
@@ -223,12 +203,10 @@ export function createEmploymentCommandComposition(options: {
   };
 }
 
-export function createUserProfilePostgresReadinessCommandComposition(
-  options: {
-    env: UserProfilePostgresReadinessCommandEnv;
-    logger: WorkerLogger;
-  },
-) {
+export function createUserProfilePostgresReadinessCommandComposition(options: {
+  env: UserProfilePostgresReadinessCommandEnv;
+  logger: WorkerLogger;
+}) {
   const postgresGate = createCurrentUserProfilePostgresReadiness({
     db,
     clock: { nowDate: () => new Date() },
@@ -239,9 +217,7 @@ export function createUserProfilePostgresReadinessCommandComposition(
 
   async function shutdown(signal: string) {
     options.logger.info({ signal }, "User Profile PostgreSQL readiness command shutting down");
-    await closeWorkerCommandResources([
-      closeDb({ timeoutSeconds: COMMAND_DB_SHUTDOWN_TIMEOUT_SECONDS }),
-    ]);
+    await closeWorkerCommandResources([closeDb({ timeoutSeconds: COMMAND_DB_SHUTDOWN_TIMEOUT_SECONDS })]);
   }
 
   return {

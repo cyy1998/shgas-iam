@@ -1,4 +1,4 @@
-import './setup-dom';
-import { registerMswLifecycle } from './setup-msw';
+import "./setup-dom";
+import { registerMswLifecycle } from "./setup-msw";
 
 registerMswLifecycle();

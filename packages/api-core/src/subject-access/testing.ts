@@ -1,4 +1,5 @@
 import type { SubjectAccessRecordV1 } from "./model";
+import { parseSubjectAccessRecord, serializeSubjectAccessRecord } from "./model";
 import type {
   SubjectAccessAbortBeginResult,
   SubjectAccessAtomicStore,
@@ -10,43 +11,39 @@ import type {
   SubjectAccessRepairRescheduleResult,
   SubjectAccessRollbackResult,
 } from "./storage/store";
-import {
-  parseSubjectAccessRecord,
-  serializeSubjectAccessRecord,
-} from "./model";
 
-type TransitionJournal
-  = | {
-    status: "mutating";
-    transitionId: string;
-    previousRecord: string | null;
-    previousCommittedTransitionId: string | null;
-    recoveryFence: number;
-    recoveryLease?: {
-      token: string;
-      until: number;
+type TransitionJournal =
+  | {
+      status: "mutating";
+      transitionId: string;
+      previousRecord: string | null;
+      previousCommittedTransitionId: string | null;
+      recoveryFence: number;
+      recoveryLease?: {
+        token: string;
+        until: number;
+      };
+    }
+  | {
+      status: "repairable";
+      transitionId: string;
+      previousRecord: string | null;
+      targetState: "enabled" | "disabled";
+      fence: number;
+      lease?: {
+        token: string;
+        until: number;
+      };
+    }
+  | {
+      status: "finalized";
+      transitionId: string;
+      targetState: "enabled" | "disabled";
+    }
+  | {
+      status: "rolled_back";
+      transitionId: string;
     };
-  }
-  | {
-    status: "repairable";
-    transitionId: string;
-    previousRecord: string | null;
-    targetState: "enabled" | "disabled";
-    fence: number;
-    lease?: {
-      token: string;
-      until: number;
-    };
-  }
-  | {
-    status: "finalized";
-    transitionId: string;
-    targetState: "enabled" | "disabled";
-  }
-  | {
-    status: "rolled_back";
-    transitionId: string;
-  };
 
 export interface CreateInMemorySubjectAccessStoreOptions {
   readonly clock?: {
@@ -60,10 +57,7 @@ export function createInMemorySubjectAccessStore(
   options: CreateInMemorySubjectAccessStoreOptions = {},
 ): SubjectAccessAtomicStore {
   const records = new Map(
-    initialRecords.map(record => [
-      record.subjectIdentifier,
-      serializeSubjectAccessRecord(record),
-    ]),
+    initialRecords.map((record) => [record.subjectIdentifier, serializeSubjectAccessRecord(record)]),
   );
   const journals = new Map<string, TransitionJournal>();
   const backlog = new Map<string, number>();
@@ -81,36 +75,26 @@ export function createInMemorySubjectAccessStore(
     },
     async abortBegin(input): Promise<SubjectAccessAbortBeginResult> {
       const journal = journals.get(input.subjectIdentifier);
-      if (journal === undefined)
-        return "not_started";
+      if (journal === undefined) return "not_started";
       if (journal.status === "rolled_back") {
-        return journal.transitionId === input.transitionId
-          ? "already_aborted"
-          : "wrong_transition";
+        return journal.transitionId === input.transitionId ? "already_aborted" : "wrong_transition";
       }
-      if (
-        journal.status !== "mutating"
-        || journal.transitionId !== input.transitionId
-      ) {
+      if (journal.status !== "mutating" || journal.transitionId !== input.transitionId) {
         return "wrong_transition";
       }
       const current = records.get(input.subjectIdentifier);
-      const parsed = current === undefined
-        ? undefined
-        : parseSubjectAccessRecord(current);
+      const parsed = current === undefined ? undefined : parseSubjectAccessRecord(current);
       if (
-        parsed === undefined
-        || !parsed.success
-        || parsed.data.state !== "blocking"
-        || parsed.data.transitionId !== input.transitionId
+        parsed === undefined ||
+        !parsed.success ||
+        parsed.data.state !== "blocking" ||
+        parsed.data.transitionId !== input.transitionId
       ) {
         return "invalid";
       }
 
-      if (journal.previousRecord === null)
-        records.delete(input.subjectIdentifier);
-      else
-        records.set(input.subjectIdentifier, journal.previousRecord);
+      if (journal.previousRecord === null) records.delete(input.subjectIdentifier);
+      else records.set(input.subjectIdentifier, journal.previousRecord);
       journals.set(input.subjectIdentifier, {
         status: "rolled_back",
         transitionId: input.transitionId,
@@ -125,15 +109,14 @@ export function createInMemorySubjectAccessStore(
       let previousCommittedTransitionId: string | null = null;
       if (current !== null) {
         const parsed = parseSubjectAccessRecord(current);
-        if (!parsed.success || parsed.data.subjectIdentifier !== input.subjectIdentifier)
-          return "invalid";
+        if (!parsed.success || parsed.data.subjectIdentifier !== input.subjectIdentifier) return "invalid";
         previousCommittedTransitionId = parsed.data.transitionId ?? null;
         if (parsed.data.state === "blocking") {
           const journal = journals.get(input.subjectIdentifier);
           if (
-            parsed.data.transitionId === input.transitionId
-            && journal?.status === "mutating"
-            && journal.transitionId === input.transitionId
+            parsed.data.transitionId === input.transitionId &&
+            journal?.status === "mutating" &&
+            journal.transitionId === input.transitionId
           ) {
             return {
               status: "already_transitioning",
@@ -146,10 +129,10 @@ export function createInMemorySubjectAccessStore(
 
       const blocking = parseSubjectAccessRecord(input.blockingRecord);
       if (
-        !blocking.success
-        || blocking.data.subjectIdentifier !== input.subjectIdentifier
-        || blocking.data.state !== "blocking"
-        || blocking.data.transitionId !== input.transitionId
+        !blocking.success ||
+        blocking.data.subjectIdentifier !== input.subjectIdentifier ||
+        blocking.data.state !== "blocking" ||
+        blocking.data.transitionId !== input.transitionId
       ) {
         return "invalid";
       }
@@ -161,10 +144,7 @@ export function createInMemorySubjectAccessStore(
         recoveryFence: 0,
       });
       records.set(input.subjectIdentifier, input.blockingRecord);
-      transitionBacklog.set(
-        input.subjectIdentifier,
-        safeAdd(requireSafeTime(now()), transitionRecoveryDelayMs),
-      );
+      transitionBacklog.set(input.subjectIdentifier, safeAdd(requireSafeTime(now()), transitionRecoveryDelayMs));
       return {
         status: "transitioned",
         previousCommittedTransitionId,
@@ -173,38 +153,27 @@ export function createInMemorySubjectAccessStore(
     async prepareRepair(input): Promise<SubjectAccessPrepareRepairResult> {
       const journal = journals.get(input.subjectIdentifier);
       if (journal?.status === "finalized") {
-        if (
-          journal.transitionId === input.transitionId
-          && journal.targetState === input.targetState
-        ) {
+        if (journal.transitionId === input.transitionId && journal.targetState === input.targetState) {
           return "already_prepared";
         }
         return "wrong_transition";
       }
       if (journal?.status === "repairable") {
-        if (
-          journal.transitionId === input.transitionId
-          && journal.targetState === input.targetState
-        ) {
+        if (journal.transitionId === input.transitionId && journal.targetState === input.targetState) {
           return "already_prepared";
         }
         return "wrong_transition";
       }
-      if (
-        journal?.status !== "mutating"
-        || journal.transitionId !== input.transitionId
-      ) {
+      if (journal?.status !== "mutating" || journal.transitionId !== input.transitionId) {
         return "wrong_transition";
       }
       const current = records.get(input.subjectIdentifier);
-      const parsed = current === undefined
-        ? undefined
-        : parseSubjectAccessRecord(current);
+      const parsed = current === undefined ? undefined : parseSubjectAccessRecord(current);
       if (
-        parsed === undefined
-        || !parsed.success
-        || parsed.data.state !== "blocking"
-        || parsed.data.transitionId !== input.transitionId
+        parsed === undefined ||
+        !parsed.success ||
+        parsed.data.state !== "blocking" ||
+        parsed.data.transitionId !== input.transitionId
       ) {
         return "invalid";
       }
@@ -223,34 +192,30 @@ export function createInMemorySubjectAccessStore(
     async finalize(input): Promise<SubjectAccessFinalizeResult> {
       const journal = journals.get(input.subjectIdentifier);
       if (journal?.status === "finalized") {
-        return journal.transitionId === input.transitionId
-          && journal.targetState === input.targetState
+        return journal.transitionId === input.transitionId && journal.targetState === input.targetState
           ? "already_finalized"
           : "wrong_transition";
       }
       if (
-        journal?.status !== "repairable"
-        || journal.transitionId !== input.transitionId
-        || journal.targetState !== input.targetState
+        journal?.status !== "repairable" ||
+        journal.transitionId !== input.transitionId ||
+        journal.targetState !== input.targetState
       ) {
         return "wrong_transition";
       }
-      if (journal.lease !== undefined && requireSafeTime(now()) < journal.lease.until)
-        return "wrong_transition";
+      if (journal.lease !== undefined && requireSafeTime(now()) < journal.lease.until) return "wrong_transition";
       const current = records.get(input.subjectIdentifier);
-      const parsedCurrent = current === undefined
-        ? undefined
-        : parseSubjectAccessRecord(current);
+      const parsedCurrent = current === undefined ? undefined : parseSubjectAccessRecord(current);
       const parsedTarget = parseSubjectAccessRecord(input.targetRecord);
       if (
-        parsedCurrent === undefined
-        || !parsedCurrent.success
-        || parsedCurrent.data.state !== "blocking"
-        || parsedCurrent.data.transitionId !== input.transitionId
-        || !parsedTarget.success
-        || parsedTarget.data.subjectIdentifier !== input.subjectIdentifier
-        || parsedTarget.data.state !== input.targetState
-        || parsedTarget.data.transitionId !== input.transitionId
+        parsedCurrent === undefined ||
+        !parsedCurrent.success ||
+        parsedCurrent.data.state !== "blocking" ||
+        parsedCurrent.data.transitionId !== input.transitionId ||
+        !parsedTarget.success ||
+        parsedTarget.data.subjectIdentifier !== input.subjectIdentifier ||
+        parsedTarget.data.state !== input.targetState ||
+        parsedTarget.data.transitionId !== input.transitionId
       ) {
         return "invalid";
       }
@@ -269,33 +234,24 @@ export function createInMemorySubjectAccessStore(
     async rollback(input): Promise<SubjectAccessRollbackResult> {
       const journal = journals.get(input.subjectIdentifier);
       if (journal?.status === "rolled_back") {
-        return journal.transitionId === input.transitionId
-          ? "already_rolled_back"
-          : "wrong_transition";
+        return journal.transitionId === input.transitionId ? "already_rolled_back" : "wrong_transition";
       }
-      if (
-        journal?.status !== "mutating"
-        || journal.transitionId !== input.transitionId
-      ) {
+      if (journal?.status !== "mutating" || journal.transitionId !== input.transitionId) {
         return "wrong_transition";
       }
       const current = records.get(input.subjectIdentifier);
-      const parsed = current === undefined
-        ? undefined
-        : parseSubjectAccessRecord(current);
+      const parsed = current === undefined ? undefined : parseSubjectAccessRecord(current);
       if (
-        parsed === undefined
-        || !parsed.success
-        || parsed.data.state !== "blocking"
-        || parsed.data.transitionId !== input.transitionId
+        parsed === undefined ||
+        !parsed.success ||
+        parsed.data.state !== "blocking" ||
+        parsed.data.transitionId !== input.transitionId
       ) {
         return "invalid";
       }
 
-      if (journal.previousRecord === null)
-        records.delete(input.subjectIdentifier);
-      else
-        records.set(input.subjectIdentifier, journal.previousRecord);
+      if (journal.previousRecord === null) records.delete(input.subjectIdentifier);
+      else records.set(input.subjectIdentifier, journal.previousRecord);
       journals.set(input.subjectIdentifier, {
         status: "rolled_back",
         transitionId: input.transitionId,
@@ -306,36 +262,30 @@ export function createInMemorySubjectAccessStore(
       return "rolled_back";
     },
     async claimTransitionRecovery(input) {
-      requirePositiveSafeInteger(
-        input.leaseDurationMs,
-        "transition recovery lease duration",
-      );
+      requirePositiveSafeInteger(input.leaseDurationMs, "transition recovery lease duration");
       if (input.leaseToken.length === 0) {
-        throw new RangeError(
-          "Subject Access transition recovery lease token must not be empty",
-        );
+        throw new RangeError("Subject Access transition recovery lease token must not be empty");
       }
       const claimedAt = requireSafeTime(now());
       while (true) {
         const candidate = [...transitionBacklog.entries()]
           .filter(([, dueAt]) => dueAt <= claimedAt)
-          .sort(([leftSubject, leftScore], [rightSubject, rightScore]) =>
-            leftScore - rightScore || leftSubject.localeCompare(rightSubject))
+          .sort(
+            ([leftSubject, leftScore], [rightSubject, rightScore]) =>
+              leftScore - rightScore || leftSubject.localeCompare(rightSubject),
+          )
           .at(0);
-        if (candidate === undefined)
-          return null;
+        if (candidate === undefined) return null;
         const [subjectIdentifier] = candidate;
         const journal = journals.get(subjectIdentifier);
         const current = records.get(subjectIdentifier);
-        const parsed = current === undefined
-          ? undefined
-          : parseSubjectAccessRecord(current);
+        const parsed = current === undefined ? undefined : parseSubjectAccessRecord(current);
         if (
-          journal?.status !== "mutating"
-          || parsed === undefined
-          || !parsed.success
-          || parsed.data.state !== "blocking"
-          || parsed.data.transitionId !== journal.transitionId
+          journal?.status !== "mutating" ||
+          parsed === undefined ||
+          !parsed.success ||
+          parsed.data.state !== "blocking" ||
+          parsed.data.transitionId !== journal.transitionId
         ) {
           transitionBacklog.delete(subjectIdentifier);
           continue;
@@ -363,19 +313,15 @@ export function createInMemorySubjectAccessStore(
     async reconcileTransitionRecovery(input) {
       const currentTime = requireSafeTime(now());
       const journal = journals.get(input.lease.subjectIdentifier);
-      if (!recoveryLeaseMatches(journal, input.lease))
-        return "stale_lease";
-      if (currentTime >= input.lease.leaseUntil)
-        return "lease_expired";
+      if (!recoveryLeaseMatches(journal, input.lease)) return "stale_lease";
+      if (currentTime >= input.lease.leaseUntil) return "lease_expired";
       const current = records.get(input.lease.subjectIdentifier);
-      const parsed = current === undefined
-        ? undefined
-        : parseSubjectAccessRecord(current);
+      const parsed = current === undefined ? undefined : parseSubjectAccessRecord(current);
       if (
-        parsed === undefined
-        || !parsed.success
-        || parsed.data.state !== "blocking"
-        || parsed.data.transitionId !== input.lease.transitionId
+        parsed === undefined ||
+        !parsed.success ||
+        parsed.data.state !== "blocking" ||
+        parsed.data.transitionId !== input.lease.transitionId
       ) {
         return "invalid";
       }
@@ -394,10 +340,8 @@ export function createInMemorySubjectAccessStore(
         return "prepared";
       }
 
-      if (journal.previousRecord === null)
-        records.delete(input.lease.subjectIdentifier);
-      else
-        records.set(input.lease.subjectIdentifier, journal.previousRecord);
+      if (journal.previousRecord === null) records.delete(input.lease.subjectIdentifier);
+      else records.set(input.lease.subjectIdentifier, journal.previousRecord);
       journals.set(input.lease.subjectIdentifier, {
         status: "rolled_back",
         transitionId: input.lease.transitionId,
@@ -408,81 +352,59 @@ export function createInMemorySubjectAccessStore(
       return "rolled_back";
     },
     async rescheduleTransitionRecovery(input) {
-      requirePositiveSafeInteger(
-        input.retryDelayMs,
-        "transition recovery retry delay",
-      );
+      requirePositiveSafeInteger(input.retryDelayMs, "transition recovery retry delay");
       const currentTime = requireSafeTime(now());
       const journal = journals.get(input.lease.subjectIdentifier);
-      if (!recoveryLeaseMatches(journal, input.lease))
-        return "stale_lease";
-      if (currentTime >= input.lease.leaseUntil)
-        return "lease_expired";
+      if (!recoveryLeaseMatches(journal, input.lease)) return "stale_lease";
+      if (currentTime >= input.lease.leaseUntil) return "lease_expired";
       journals.set(input.lease.subjectIdentifier, {
         ...journal,
         recoveryLease: undefined,
       });
-      transitionBacklog.set(
-        input.lease.subjectIdentifier,
-        safeAdd(currentTime, input.retryDelayMs),
-      );
+      transitionBacklog.set(input.lease.subjectIdentifier, safeAdd(currentTime, input.retryDelayMs));
       return "rescheduled";
     },
     async inspectRepairBacklog() {
       const currentTime = requireSafeTime(now());
-      const oldestEnteredAt = [...backlogEnteredAt.values()]
-        .sort((left, right) => left - right)
-        .at(0);
+      const oldestEnteredAt = [...backlogEnteredAt.values()].sort((left, right) => left - right).at(0);
       return {
         count: backlog.size,
-        oldestAgeMs: oldestEnteredAt === undefined
-          ? null
-          : Math.max(0, currentTime - oldestEnteredAt),
+        oldestAgeMs: oldestEnteredAt === undefined ? null : Math.max(0, currentTime - oldestEnteredAt),
       };
     },
     async claimRepairSubject(input) {
       requirePositiveSafeInteger(input.leaseDurationMs, "repair lease duration");
-      if (input.leaseToken.length === 0)
-        throw new RangeError("Subject Access repair lease token must not be empty");
+      if (input.leaseToken.length === 0) throw new RangeError("Subject Access repair lease token must not be empty");
       const claimedAt = requireSafeTime(now());
       while (true) {
         const candidate = [...backlog.entries()]
-          .filter(([subjectIdentifier, dueAt]) =>
-            (
-              dueAt <= claimedAt
-              || input.subjectIdentifier === subjectIdentifier
-            )
-            && (
-              input.subjectIdentifier === undefined
-              || input.subjectIdentifier === subjectIdentifier
-            ))
-          .sort(([leftSubject, leftScore], [rightSubject, rightScore]) =>
-            leftScore - rightScore || leftSubject.localeCompare(rightSubject))
+          .filter(
+            ([subjectIdentifier, dueAt]) =>
+              (dueAt <= claimedAt || input.subjectIdentifier === subjectIdentifier) &&
+              (input.subjectIdentifier === undefined || input.subjectIdentifier === subjectIdentifier),
+          )
+          .sort(
+            ([leftSubject, leftScore], [rightSubject, rightScore]) =>
+              leftScore - rightScore || leftSubject.localeCompare(rightSubject),
+          )
           .at(0);
-        if (candidate === undefined)
-          return null;
+        if (candidate === undefined) return null;
         const [subjectIdentifier] = candidate;
         const journal = journals.get(subjectIdentifier);
         const current = records.get(subjectIdentifier);
-        const parsed = current === undefined
-          ? undefined
-          : parseSubjectAccessRecord(current);
+        const parsed = current === undefined ? undefined : parseSubjectAccessRecord(current);
         if (
-          journal?.status !== "repairable"
-          || parsed === undefined
-          || !parsed.success
-          || parsed.data.state !== "blocking"
-          || parsed.data.transitionId !== journal.transitionId
+          journal?.status !== "repairable" ||
+          parsed === undefined ||
+          !parsed.success ||
+          parsed.data.state !== "blocking" ||
+          parsed.data.transitionId !== journal.transitionId
         ) {
           backlog.delete(subjectIdentifier);
           backlogEnteredAt.delete(subjectIdentifier);
           continue;
         }
-        if (
-          input.subjectIdentifier !== undefined
-          && journal.lease !== undefined
-          && claimedAt < journal.lease.until
-        ) {
+        if (input.subjectIdentifier !== undefined && journal.lease !== undefined && claimedAt < journal.lease.until) {
           return null;
         }
         const leaseUntil = safeAdd(claimedAt, input.leaseDurationMs);
@@ -510,10 +432,8 @@ export function createInMemorySubjectAccessStore(
       requirePositiveSafeInteger(input.retryDelayMs, "repair retry delay");
       const currentTime = requireSafeTime(now());
       const journal = journals.get(input.lease.subjectIdentifier);
-      if (!leaseMatches(journal, input.lease))
-        return "stale_lease";
-      if (currentTime >= input.lease.leaseUntil)
-        return "lease_expired";
+      if (!leaseMatches(journal, input.lease)) return "stale_lease";
+      if (currentTime >= input.lease.leaseUntil) return "lease_expired";
       const nextAttemptAt = safeAdd(currentTime, input.retryDelayMs);
       journals.set(input.lease.subjectIdentifier, {
         ...journal,
@@ -525,24 +445,20 @@ export function createInMemorySubjectAccessStore(
     async finalizeRepairSubject(input): Promise<SubjectAccessRepairFinalizeResult> {
       const currentTime = requireSafeTime(now());
       const journal = journals.get(input.lease.subjectIdentifier);
-      if (!leaseMatches(journal, input.lease))
-        return "stale_lease";
-      if (currentTime >= input.lease.leaseUntil)
-        return "lease_expired";
+      if (!leaseMatches(journal, input.lease)) return "stale_lease";
+      if (currentTime >= input.lease.leaseUntil) return "lease_expired";
       const current = records.get(input.lease.subjectIdentifier);
-      const parsedCurrent = current === undefined
-        ? undefined
-        : parseSubjectAccessRecord(current);
+      const parsedCurrent = current === undefined ? undefined : parseSubjectAccessRecord(current);
       const parsedTarget = parseSubjectAccessRecord(input.targetRecord);
       if (
-        parsedCurrent === undefined
-        || !parsedCurrent.success
-        || parsedCurrent.data.state !== "blocking"
-        || parsedCurrent.data.transitionId !== input.lease.transitionId
-        || !parsedTarget.success
-        || parsedTarget.data.subjectIdentifier !== input.lease.subjectIdentifier
-        || parsedTarget.data.state !== input.lease.targetState
-        || parsedTarget.data.transitionId !== input.lease.transitionId
+        parsedCurrent === undefined ||
+        !parsedCurrent.success ||
+        parsedCurrent.data.state !== "blocking" ||
+        parsedCurrent.data.transitionId !== input.lease.transitionId ||
+        !parsedTarget.success ||
+        parsedTarget.data.subjectIdentifier !== input.lease.subjectIdentifier ||
+        parsedTarget.data.state !== input.lease.targetState ||
+        parsedTarget.data.transitionId !== input.lease.transitionId
       ) {
         return "invalid";
       }
@@ -564,23 +480,27 @@ function leaseMatches(
   journal: TransitionJournal | undefined,
   lease: SubjectAccessRepairLease,
 ): journal is Extract<TransitionJournal, { status: "repairable" }> {
-  return journal?.status === "repairable"
-    && journal.transitionId === lease.transitionId
-    && journal.targetState === lease.targetState
-    && journal.fence === lease.fence
-    && journal.lease?.token === lease.leaseToken
-    && journal.lease.until === lease.leaseUntil;
+  return (
+    journal?.status === "repairable" &&
+    journal.transitionId === lease.transitionId &&
+    journal.targetState === lease.targetState &&
+    journal.fence === lease.fence &&
+    journal.lease?.token === lease.leaseToken &&
+    journal.lease.until === lease.leaseUntil
+  );
 }
 
 function recoveryLeaseMatches(
   journal: TransitionJournal | undefined,
   lease: import("./recovery/transition-recovery").SubjectAccessTransitionRecoveryLease,
 ): journal is Extract<TransitionJournal, { status: "mutating" }> {
-  return journal?.status === "mutating"
-    && journal.transitionId === lease.transitionId
-    && journal.recoveryFence === lease.fence
-    && journal.recoveryLease?.token === lease.leaseToken
-    && journal.recoveryLease.until === lease.leaseUntil;
+  return (
+    journal?.status === "mutating" &&
+    journal.transitionId === lease.transitionId &&
+    journal.recoveryFence === lease.fence &&
+    journal.recoveryLease?.token === lease.leaseToken &&
+    journal.recoveryLease.until === lease.leaseUntil
+  );
 }
 
 function requirePositiveSafeInteger(value: number, name: string) {
@@ -603,7 +523,6 @@ function requireNonNegativeSafeInteger(value: number, name: string) {
 
 function safeAdd(left: number, right: number) {
   const result = left + right;
-  if (!Number.isSafeInteger(result))
-    throw new RangeError("Subject Access store time exceeded the safe integer range");
+  if (!Number.isSafeInteger(result)) throw new RangeError("Subject Access store time exceeded the safe integer range");
   return result;
 }

@@ -1,8 +1,5 @@
 import { z } from "@hono/zod-openapi";
-import {
-  OrganizationResponsibilityAssignmentCardinality,
-  OrganizationResponsibilityTypeCode,
-} from "@iam/contracts";
+import { OrganizationResponsibilityAssignmentCardinality, OrganizationResponsibilityTypeCode } from "@iam/contracts";
 
 export const OrganizationResponsibilityTypeViewSchema = z.strictObject({
   code: z.enum(OrganizationResponsibilityTypeCode),

@@ -1,5 +1,5 @@
-import type Redis from "ioredis";
 import { randomUUID } from "node:crypto";
+import type Redis from "ioredis";
 import { createCustomSsoState, randomHandle } from "../unified/state";
 import { createCustomSsoTokenState, tokenDigest } from "../unified/token-state";
 /** Public test-support owns protocol serialization, keys and explicit offline fault variants. */
@@ -47,12 +47,32 @@ export function createCustomSsoMaintenanceTestFixture(
         await tokens.save(bearer, { ...identity, version: 1, protocol: "custom_sso", purpose, tokenId, clientCode });
         retained.push(owned(`${prefix}token:${tokenDigest(bearer)}`), owned(`${prefix}token-id:${tokenId}`));
         const codeId = randomHandle();
-        await state.saveCode({ ...identity, version: 1, protocol: "custom_sso", codeId, clientCode, callbackEndpoint: "https://client.example/callback", redirectUrl: "https://client.example/", redeemer: purpose });
-        authorization.push(owned(`${prefix}code:${tokenDigest(JSON.stringify([clientCode, identity.userSessionId, identity.clientSessionId, codeId]))}`));
+        await state.saveCode({
+          ...identity,
+          version: 1,
+          protocol: "custom_sso",
+          codeId,
+          clientCode,
+          callbackEndpoint: "https://client.example/callback",
+          redirectUrl: "https://client.example/",
+          redeemer: purpose,
+        });
+        authorization.push(
+          owned(
+            `${prefix}code:${tokenDigest(JSON.stringify([clientCode, identity.userSessionId, identity.clientSessionId, codeId]))}`,
+          ),
+        );
       }
       const orphan = randomUUID();
       const orphanBearer = randomHandle();
-      await tokens.save(orphanBearer, { ...identity, version: 1, protocol: "custom_sso", purpose: "managed", tokenId: orphan, clientCode });
+      await tokens.save(orphanBearer, {
+        ...identity,
+        version: 1,
+        protocol: "custom_sso",
+        purpose: "managed",
+        tokenId: orphan,
+        clientCode,
+      });
       await redis.del(`${prefix}token:${tokenDigest(orphanBearer)}`);
       retained.push(owned(`${prefix}token-id:${orphan}`));
       authorization.push(await seedContinuation(clientCode));
@@ -96,8 +116,7 @@ export function createCustomSsoMaintenanceTestFixture(
         const keys = await redis.keys(`${prefix}*`);
         for (const key of keys) await redis.persist(key);
         return keys;
-      }
-      finally {
+      } finally {
         (await redis.keys(`${prefix}*`)).forEach(owned);
       }
     },

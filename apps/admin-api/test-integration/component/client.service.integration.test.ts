@@ -1,9 +1,8 @@
+import { describe, expect, mock, test } from "bun:test";
 import { AdminMutationCommittedError } from "@admin-api/services/admin-mutation/admin-mutation";
 import { createClientService } from "@admin-api/services/client/client.service";
 import { createFakePasswordHasher, createFakeRandom, createImmediateUnitOfWork } from "@admin-api/test/fakes";
 import { ClientStatus } from "@iam/contracts";
-
-import { describe, expect, mock, test } from "bun:test";
 
 function client(overrides: Record<string, unknown> = {}) {
   const record = {
@@ -114,8 +113,8 @@ function createService(
     passwordHasher: createFakePasswordHasher(),
     random: createFakeRandom(),
     uow:
-      options.uowFactory?.(tx)
-      ?? createImmediateUnitOfWork(tx, {
+      options.uowFactory?.(tx) ??
+      createImmediateUnitOfWork(tx, {
         logger: options.afterCommitLogger,
       }),
   } as any;
@@ -164,9 +163,7 @@ describe("createClientService", () => {
         targetCode: "portal",
       }),
     );
-    expect(deps.clientCache.invalidateClient).toHaveBeenCalledWith(
-      expect.objectContaining({ clientCode: "portal" }),
-    );
+    expect(deps.clientCache.invalidateClient).toHaveBeenCalledWith(expect.objectContaining({ clientCode: "portal" }));
     expect(deps.clientRuntimeInvalidation.invalidateClient).toHaveBeenCalledWith("portal");
     expect(tx.clientRepository.createClient.mock.invocationCallOrder[0]).toBeLessThan(
       deps.clientCache.invalidateClient.mock.invocationCallOrder[0]!,

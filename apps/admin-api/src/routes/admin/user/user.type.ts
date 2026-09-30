@@ -4,7 +4,7 @@ import type * as routes from "./user.routes";
 import type { UserVoSchema } from "./user.schema";
 
 type RouteTypes = {
-  [K in keyof typeof routes]: typeof routes[K];
+  [K in keyof typeof routes]: (typeof routes)[K];
 };
 
 export type UserRouteHandler<T extends keyof RouteTypes> = AdminRouteHandler<RouteTypes[T]>;

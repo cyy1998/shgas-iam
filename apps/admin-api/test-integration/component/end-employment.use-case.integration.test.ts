@@ -1,7 +1,7 @@
+import { describe, expect, mock, test } from "bun:test";
 import { createFakeClock, createImmediateUnitOfWork } from "@admin-api/test/fakes";
 import { createEndEmploymentUseCase } from "@admin-api/use-cases/employment/end-employment/end-employment.use-case";
 import { EmploymentStatus } from "@iam/contracts";
-import { describe, expect, mock, test } from "bun:test";
 
 const startTime = new Date("2025-01-01T00:00:00.000Z");
 const transactionTime = new Date("2026-01-01T00:00:00.000Z");
@@ -63,18 +63,18 @@ describe("Employment Lifecycle End", () => {
       endTime: transactionTime,
       isPrimary: false,
     });
-    expect(tx.auditLogWriter.recordAuditLog).toHaveBeenCalledWith(expect.objectContaining({
-      action: "admin.employment.end",
-      targetId: 4,
-      details: expect.objectContaining({
-        endTime: transactionTime,
-        fromStatus: EmploymentStatus.Enable,
-        toStatus: EmploymentStatus.Disable,
+    expect(tx.auditLogWriter.recordAuditLog).toHaveBeenCalledWith(
+      expect.objectContaining({
+        action: "admin.employment.end",
+        targetId: 4,
+        details: expect.objectContaining({
+          endTime: transactionTime,
+          fromStatus: EmploymentStatus.Enable,
+          toStatus: EmploymentStatus.Disable,
+        }),
       }),
-    }));
-    expect(
-      tx.responsibilityParentLifecycle.endOpenAssignmentsForEmployment,
-    ).toHaveBeenCalledWith({
+    );
+    expect(tx.responsibilityParentLifecycle.endOpenAssignmentsForEmployment).toHaveBeenCalledWith({
       action: "end",
       auditContext: undefined,
       selectedAssignments: [],
@@ -117,12 +117,12 @@ describe("Employment Lifecycle End", () => {
     await expect(useCase.execute({ employmentId: 4 })).resolves.toEqual({ changed: false, result: null });
 
     expect(tx.employmentStore.updateEmploymentRecord).not.toHaveBeenCalled();
-    expect(
-      tx.responsibilityParentLifecycle.endOpenAssignmentsForEmployment,
-    ).not.toHaveBeenCalled();
-    expect(tx.auditLogWriter.recordAuditLog).toHaveBeenCalledWith(expect.objectContaining({
-      details: expect.objectContaining({ changed: false }),
-    }));
+    expect(tx.responsibilityParentLifecycle.endOpenAssignmentsForEmployment).not.toHaveBeenCalled();
+    expect(tx.auditLogWriter.recordAuditLog).toHaveBeenCalledWith(
+      expect.objectContaining({
+        details: expect.objectContaining({ changed: false }),
+      }),
+    );
     expect(tx.userProfileInvalidation.recordChanges).not.toHaveBeenCalled();
   });
 
@@ -170,7 +170,7 @@ describe("Employment Lifecycle End", () => {
             },
             userProfileInvalidation: {
               async recordChanges(changes: readonly { userId: number }[]) {
-                staged.dirtyUserIds.push(...changes.map(change => change.userId));
+                staged.dirtyUserIds.push(...changes.map((change) => change.userId));
                 throw failure;
               },
             },

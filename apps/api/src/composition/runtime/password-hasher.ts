@@ -1,5 +1,5 @@
-import type { PasswordHasherPort } from "./types";
 import { compare, hash } from "bcrypt-ts";
+import type { PasswordHasherPort } from "./types";
 
 export function createApiPasswordHasher(cost: number): PasswordHasherPort {
   return {

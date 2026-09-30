@@ -1,3 +1,4 @@
+import { describe, expect, test } from "bun:test";
 import {
   EmploymentStatus,
   OrganizationResponsibilityAssignmentStatus,
@@ -16,7 +17,6 @@ import {
   OrganizationResponsibilityTargetOrganizationUnavailableError,
   resolveOrganizationResponsibilityAssignmentTransition,
 } from "@iam/domain/organization-responsibility";
-import { describe, expect, test } from "bun:test";
 
 describe("Organization Responsibility Assignment cardinality policy", () => {
   test("classifies an occupied head slot by holder identity", () => {

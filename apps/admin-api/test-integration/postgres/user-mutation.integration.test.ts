@@ -1,5 +1,4 @@
-import type { AdminUserTransactionPorts } from "@admin-api/services/user/user.port";
-import type { AdminApiPostgresTestHarness } from "./postgres-test-harness";
+import { afterAll, beforeAll, beforeEach, describe, expect, mock, test } from "bun:test";
 import { randomUUID } from "node:crypto";
 import process from "node:process";
 import { fileURLToPath } from "node:url";
@@ -9,25 +8,49 @@ import { createUserAdapter } from "@admin-api/routes/admin/user/user.adapter";
 import { createUserRoute } from "@admin-api/routes/admin/user/user.index";
 import { createAdminAuthorizationPolicy } from "@admin-api/services/admin-authorization/admin-authorization.policy";
 import { AdminMutationCommittedError } from "@admin-api/services/admin-mutation/admin-mutation";
+import type { AdminUserTransactionPorts } from "@admin-api/services/user/user.port";
 import { createUserService } from "@admin-api/services/user/user.service";
 import { createCreateEmploymentUseCase } from "@admin-api/use-cases/employment/create-employment/create-employment.use-case";
 import { createEndEmploymentUseCase } from "@admin-api/use-cases/employment/end-employment/end-employment.use-case";
 import { BadRequestError } from "@iam/api-core/errors";
 import { createErrorHandler } from "@iam/api-core/middlewares/error-handler";
-import { createSubjectAccessBarrier, createSubjectAccessLifecycle, createSubjectAccessOperations } from "@iam/api-core/subject-access";
+import {
+  createSubjectAccessBarrier,
+  createSubjectAccessLifecycle,
+  createSubjectAccessOperations,
+} from "@iam/api-core/subject-access";
 import { createInMemorySubjectAccessStore } from "@iam/api-core/subject-access/testing";
 import { runProcessCommandSmoke, spawnOwnedProcessTree } from "@iam/api-core/testing/process-smoke-harness";
 import { createTRPCContext } from "@iam/api-core/trpc";
 import { mapUnitOfWork } from "@iam/api-core/uow";
-import { ApiErrorCode, EmploymentStatus, OrganizationLevel, OrganizationType, PrivilegeDelegationStatus, UserStatus, UserType } from "@iam/contracts";
+import {
+  ApiErrorCode,
+  EmploymentStatus,
+  OrganizationLevel,
+  OrganizationType,
+  PrivilegeDelegationStatus,
+  UserStatus,
+  UserType,
+} from "@iam/contracts";
 import { extractPostgresError } from "@iam/db/postgres-error";
-import { auditLogs, delegationDetails, employments, organizations, positions, privilegeDelegations, privileges, subjectAccessTransitions, userProfileDirty, users } from "@iam/db/schema";
-import { UserHasOpenEmploymentError, UsernameAlreadyExistsError, UserNotFoundError } from "@iam/domain/user";
+import {
+  auditLogs,
+  delegationDetails,
+  employments,
+  organizations,
+  positions,
+  privilegeDelegations,
+  privileges,
+  subjectAccessTransitions,
+  userProfileDirty,
+  users,
+} from "@iam/db/schema";
+import { UserHasOpenEmploymentError, UserNotFoundError, UsernameAlreadyExistsError } from "@iam/domain/user";
 import { createSubjectAccessTransitionRepository } from "@iam/user-profile-read-model/subject-access-transition";
 import { fetchRequestHandler } from "@trpc/server/adapters/fetch";
-import { afterAll, beforeAll, beforeEach, describe, expect, mock, test } from "bun:test";
 import { Hono } from "hono";
 import { addTestAdminAuthorizationMiddleware } from "../helpers/admin-authorization";
+import type { AdminApiPostgresTestHarness } from "./postgres-test-harness";
 import { createAdminApiPostgresTestHarness } from "./postgres-test-harness";
 
 let harness: AdminApiPostgresTestHarness;
@@ -45,7 +68,7 @@ afterAll(async () => {
 });
 
 function createCommand(
-  decorate: (tx: AdminUserTransactionPorts) => AdminUserTransactionPorts = tx => tx,
+  decorate: (tx: AdminUserTransactionPorts) => AdminUserTransactionPorts = (tx) => tx,
   prepareRepairError?: Error,
   store = createInMemorySubjectAccessStore(),
 ) {
@@ -65,21 +88,27 @@ function createCommand(
     userProfileJobProducer: { enqueueRebuildJobs },
   });
   return {
-    employment: createCreateEmploymentUseCase({ clock, uow: mapUnitOfWork(uow, tx => ({
-      employmentStore: tx.repositories.employment,
-      userReader: tx.repositories.user,
-      organizationReader: tx.repositories.organization,
-      positionReader: tx.repositories.position,
-      auditLogWriter: tx.auditService,
-      userProfileInvalidation: tx.userProfileInvalidation,
-    })) }),
-    endEmployment: createEndEmploymentUseCase({ clock, uow: mapUnitOfWork(uow, tx => ({
-      employmentStore: tx.repositories.employment,
-      organizationReader: tx.repositories.organization,
-      auditLogWriter: tx.auditService,
-      responsibilityParentLifecycle: tx.responsibilityParentLifecycle,
-      userProfileInvalidation: tx.userProfileInvalidation,
-    })) }),
+    employment: createCreateEmploymentUseCase({
+      clock,
+      uow: mapUnitOfWork(uow, (tx) => ({
+        employmentStore: tx.repositories.employment,
+        userReader: tx.repositories.user,
+        organizationReader: tx.repositories.organization,
+        positionReader: tx.repositories.position,
+        auditLogWriter: tx.auditService,
+        userProfileInvalidation: tx.userProfileInvalidation,
+      })),
+    }),
+    endEmployment: createEndEmploymentUseCase({
+      clock,
+      uow: mapUnitOfWork(uow, (tx) => ({
+        employmentStore: tx.repositories.employment,
+        organizationReader: tx.repositories.organization,
+        auditLogWriter: tx.auditService,
+        responsibilityParentLifecycle: tx.responsibilityParentLifecycle,
+        userProfileInvalidation: tx.userProfileInvalidation,
+      })),
+    }),
     barrier,
     store,
     enqueueRebuildJobs,
@@ -92,25 +121,30 @@ function createCommand(
       roleAssignmentResolver: { resolveEffectiveRoles: async () => new Map() },
       roleRepository: repositories.role,
       privilegeRepository: { getPrivilegesByRoleIds: async () => [] },
-      passwordHasher: { hashPassword: async password => `hash:${password}` },
+      passwordHasher: { hashPassword: async (password) => `hash:${password}` },
       random,
       sessionRevocation: { revokeUserSessions },
       subjectAccessLifecycle: createSubjectAccessLifecycle({
         barrier: prepareRepairError
-          ? { ...barrier, prepareRepair: async () => {
-              throw prepareRepairError;
-            } }
+          ? {
+              ...barrier,
+              prepareRepair: async () => {
+                throw prepareRepairError;
+              },
+            }
           : barrier,
         logger: { warn },
         random,
         transitionIntent: createSubjectAccessTransitionRepository(harness.db),
       }),
-      uow: mapUnitOfWork(uow, tx => decorate({
-        userRepository: tx.repositories.user,
-        auditService: tx.auditService,
-        subjectAccessMutation: tx.subjectAccessMutation,
-        userProfileInvalidation: tx.userProfileInvalidation,
-      })),
+      uow: mapUnitOfWork(uow, (tx) =>
+        decorate({
+          userRepository: tx.repositories.user,
+          auditService: tx.auditService,
+          subjectAccessMutation: tx.subjectAccessMutation,
+          userProfileInvalidation: tx.userProfileInvalidation,
+        }),
+      ),
     }),
   };
 }
@@ -124,20 +158,18 @@ function createUserWriteApp(command = createCommand()) {
   app.onError(createErrorHandler({ info() {}, warn() {}, error() {} }));
   addTestAdminAuthorizationMiddleware(app);
   app.route("/admin", createUserRoute(adapter));
-  app.all("/rpc/*", c => fetchRequestHandler({
-    endpoint: "/rpc",
-    req: c.req.raw,
-    router: adapter.userAdminRouter,
-    createContext: () => createTRPCContext({ honoCtx: c }),
-  }));
+  app.all("/rpc/*", (c) =>
+    fetchRequestHandler({
+      endpoint: "/rpc",
+      req: c.req.raw,
+      router: adapter.userAdminRouter,
+      createContext: () => createTRPCContext({ honoCtx: c }),
+    }),
+  );
   return { app, command };
 }
 
-async function requestUserCreate(
-  app: Hono,
-  protocol: UserWriteProtocol,
-  input: Record<string, unknown>,
-) {
+async function requestUserCreate(app: Hono, protocol: UserWriteProtocol, input: Record<string, unknown>) {
   return await app.request(protocol === "REST" ? "/admin/users" : "/rpc/create", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -146,15 +178,18 @@ async function requestUserCreate(
 }
 
 async function seedUser(status = UserStatus.Enable, isDelete = false) {
-  const [user] = await harness.db.insert(users).values({
-    username: "user",
-    name: "Original",
-    userType: UserType.Formal,
-    status,
-    isDelete,
-    password: "old-hash",
-    mobile: "13800000000",
-  }).returning();
+  const [user] = await harness.db
+    .insert(users)
+    .values({
+      username: "user",
+      name: "Original",
+      userType: UserType.Formal,
+      status,
+      isDelete,
+      password: "old-hash",
+      mobile: "13800000000",
+    })
+    .returning();
   return user!;
 }
 
@@ -166,28 +201,37 @@ async function seedDelegation(
   isDelete = false,
 ) {
   const [other] = await harness.db.insert(users).values({ username: "other", name: "Other" }).returning();
-  const [organization] = await harness.db.insert(organizations).values({
-    orgCode: "ORG",
-    orgName: "Organization",
-    path: "/ORG",
-    level: OrganizationLevel.One,
-    orgType: OrganizationType.Company,
-  }).returning();
-  const [privilege] = await harness.db.insert(privileges).values({ privilegeCode: "read", privilegeName: "Read" }).returning();
+  const [organization] = await harness.db
+    .insert(organizations)
+    .values({
+      orgCode: "ORG",
+      orgName: "Organization",
+      path: "/ORG",
+      level: OrganizationLevel.One,
+      orgType: OrganizationType.Company,
+    })
+    .returning();
+  const [privilege] = await harness.db
+    .insert(privileges)
+    .values({ privilegeCode: "read", privilegeName: "Read" })
+    .returning();
   const periods = {
     current: ["2000-01-01", "2099-01-01"],
     future: ["2099-01-01", "2100-01-01"],
     past: ["2000-01-01", "2001-01-01"],
   } as const;
-  const [delegation] = await harness.db.insert(privilegeDelegations).values({
-    delegatorUserId: side === "delegator" ? userId : other!.id,
-    delegateeUserId: side === "delegatee" ? userId : other!.id,
-    organizationScopeId: organization!.id,
-    status,
-    isDelete,
-    startTime: new Date(periods[period][0]),
-    endTime: new Date(periods[period][1]),
-  }).returning();
+  const [delegation] = await harness.db
+    .insert(privilegeDelegations)
+    .values({
+      delegatorUserId: side === "delegator" ? userId : other!.id,
+      delegateeUserId: side === "delegatee" ? userId : other!.id,
+      organizationScopeId: organization!.id,
+      status,
+      isDelete,
+      startTime: new Date(periods[period][0]),
+      endTime: new Date(periods[period][1]),
+    })
+    .returning();
   await harness.db.insert(delegationDetails).values({ delegationId: delegation!.id, privilegeId: privilege!.id });
   return delegation!;
 }
@@ -202,7 +246,7 @@ async function facts() {
 
 async function deletionFacts() {
   return {
-    ...await facts(),
+    ...(await facts()),
     delegations: await harness.db.select().from(privilegeDelegations).orderBy(privilegeDelegations.id),
     delegationDetails: await harness.db.select().from(delegationDetails).orderBy(delegationDetails.delegationId),
   };
@@ -211,21 +255,22 @@ async function deletionFacts() {
 async function failure(operation: () => Promise<unknown>) {
   try {
     await operation();
-  }
-  catch (error) {
+  } catch (error) {
     return error;
   }
   throw new Error("Expected command failure");
 }
 
 function stableStore(subjectIdentifier: string, state: "enabled" | "disabled" = "enabled") {
-  return createInMemorySubjectAccessStore([{
-    version: 1,
-    subjectIdentifier,
-    state,
-    transitionId: randomUUID(),
-    updatedAt: "2026-09-07T00:00:00Z",
-  }]);
+  return createInMemorySubjectAccessStore([
+    {
+      version: 1,
+      subjectIdentifier,
+      state,
+      transitionId: randomUUID(),
+      updatedAt: "2026-09-07T00:00:00Z",
+    },
+  ]);
 }
 
 async function transitions() {
@@ -240,8 +285,7 @@ async function waitForUserLock() {
       and query like '%"user"%' and application_name = current_setting('application_name')
       and pid <> pg_backend_pid()
     ) as blocked`;
-    if (rows[0]!.blocked)
-      return;
+    if (rows[0]!.blocked) return;
   }
   throw new Error("Expected an independent transaction waiting for the User row lock");
 }
@@ -249,20 +293,26 @@ async function waitForUserLock() {
 describe("User lifecycle mutations through production PostgreSQL UnitOfWork", () => {
   test("Full Admin restores Pause before HR rehires and enables an ended-only User", async () => {
     const user = await seedUser();
-    const [organization] = await harness.db.insert(organizations).values({
-      orgCode: "IN",
-      orgName: "In scope",
-      path: "/IN",
-      level: OrganizationLevel.One,
-      orgType: OrganizationType.Company,
-    }).returning();
+    const [organization] = await harness.db
+      .insert(organizations)
+      .values({
+        orgCode: "IN",
+        orgName: "In scope",
+        path: "/IN",
+        level: OrganizationLevel.One,
+        orgType: OrganizationType.Company,
+      })
+      .returning();
     const [position] = await harness.db.insert(positions).values({ posCode: "POS", posName: "Position" }).returning();
-    const [tenure] = await harness.db.insert(employments).values({
-      userId: user.id,
-      orgId: organization!.id,
-      posId: position!.id,
-      startTime: new Date("2026-01-01T00:00:00Z"),
-    }).returning();
+    const [tenure] = await harness.db
+      .insert(employments)
+      .values({
+        userId: user.id,
+        orgId: organization!.id,
+        posId: position!.id,
+        startTime: new Date("2026-01-01T00:00:00Z"),
+      })
+      .returning();
     const subject = createCommand(undefined, undefined, stableStore(user.subjectIdentifier));
     const policy = createAdminAuthorizationPolicy({
       logger: { warn: mock() },
@@ -317,7 +367,10 @@ describe("User lifecycle mutations through production PostgreSQL UnitOfWork", ()
 
   test("missing status/delete and repeated delete return not found without additional effects", async () => {
     const { service } = createCommand();
-    for (const operation of [() => service.updateUserStatus("missing", UserStatus.Disable), () => service.deleteUser("missing")]) {
+    for (const operation of [
+      () => service.updateUserStatus("missing", UserStatus.Disable),
+      () => service.deleteUser("missing"),
+    ]) {
       const error = await failure(operation);
       expect(error).toBeInstanceOf(UserNotFoundError);
     }
@@ -339,13 +392,16 @@ describe("User lifecycle mutations through production PostgreSQL UnitOfWork", ()
   for (const status of [EmploymentStatus.Enable, EmploymentStatus.Pause]) {
     test(`Open Employment ${status} blocks deletion and restores the barrier`, async () => {
       const user = await seedUser();
-      const [organization] = await harness.db.insert(organizations).values({
-        orgCode: "ORG",
-        orgName: "Organization",
-        path: "/ORG",
-        level: OrganizationLevel.One,
-        orgType: OrganizationType.Company,
-      }).returning();
+      const [organization] = await harness.db
+        .insert(organizations)
+        .values({
+          orgCode: "ORG",
+          orgName: "Organization",
+          path: "/ORG",
+          level: OrganizationLevel.One,
+          orgType: OrganizationType.Company,
+        })
+        .returning();
       const [position] = await harness.db.insert(positions).values({ posCode: "POS", posName: "Position" }).returning();
       await harness.db.insert(employments).values({
         userId: user.id,
@@ -385,40 +441,48 @@ describe("User lifecycle mutations through production PostgreSQL UnitOfWork", ()
     expect(after.delegationDetails).toEqual(before.delegationDetails);
   });
 
-  test.each(["REST", "tRPC"])("%s deletion returns the stable delegation conflict without effects", async (protocol) => {
-    const user = await seedUser();
-    await seedDelegation(user.id, "delegatee", PrivilegeDelegationStatus.Enable, "past");
-    const command = createCommand(undefined, undefined, stableStore(user.subjectIdentifier));
-    const adapter = createUserAdapter({ userService: command.service, random: command.random });
-    const app = new Hono();
-    app.onError(createErrorHandler({ info() {}, warn() {}, error() {} }));
-    addTestAdminAuthorizationMiddleware(app);
-    app.route("/admin", createUserRoute(adapter));
-    app.all("/rpc/*", c => fetchRequestHandler({
-      endpoint: "/rpc",
-      req: c.req.raw,
-      router: adapter.userAdminRouter,
-      createContext: () => createTRPCContext({ honoCtx: c }),
-    }));
-    const before = await deletionFacts();
-    const response = protocol === "REST"
-      ? await app.request("/admin/users/user", { method: "DELETE" })
-      : await app.request("/rpc/delete", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ username: "user" }),
-        });
-    const body = await response.json();
-    expect(response.status).toBe(409);
-    const message = "该用户存在未结束的权限委托，无法删除；请先通过 Internal 接口结束相关委托";
-    expect(body).toMatchObject(protocol === "REST"
-      ? { code: "USER.HAS_OPEN_PRIVILEGE_DELEGATION", message }
-      : { error: { message, data: { code: "CONFLICT", serviceCode: "USER.HAS_OPEN_PRIVILEGE_DELEGATION" } } });
-    const after = await deletionFacts();
-    expect(after).toEqual(before);
-    expect(command.enqueueRebuildJobs).not.toHaveBeenCalled();
-    expect(command.revokeUserSessions).not.toHaveBeenCalled();
-  });
+  test.each(["REST", "tRPC"])(
+    "%s deletion returns the stable delegation conflict without effects",
+    async (protocol) => {
+      const user = await seedUser();
+      await seedDelegation(user.id, "delegatee", PrivilegeDelegationStatus.Enable, "past");
+      const command = createCommand(undefined, undefined, stableStore(user.subjectIdentifier));
+      const adapter = createUserAdapter({ userService: command.service, random: command.random });
+      const app = new Hono();
+      app.onError(createErrorHandler({ info() {}, warn() {}, error() {} }));
+      addTestAdminAuthorizationMiddleware(app);
+      app.route("/admin", createUserRoute(adapter));
+      app.all("/rpc/*", (c) =>
+        fetchRequestHandler({
+          endpoint: "/rpc",
+          req: c.req.raw,
+          router: adapter.userAdminRouter,
+          createContext: () => createTRPCContext({ honoCtx: c }),
+        }),
+      );
+      const before = await deletionFacts();
+      const response =
+        protocol === "REST"
+          ? await app.request("/admin/users/user", { method: "DELETE" })
+          : await app.request("/rpc/delete", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ username: "user" }),
+            });
+      const body = await response.json();
+      expect(response.status).toBe(409);
+      const message = "该用户存在未结束的权限委托，无法删除；请先通过 Internal 接口结束相关委托";
+      expect(body).toMatchObject(
+        protocol === "REST"
+          ? { code: "USER.HAS_OPEN_PRIVILEGE_DELEGATION", message }
+          : { error: { message, data: { code: "CONFLICT", serviceCode: "USER.HAS_OPEN_PRIVILEGE_DELEGATION" } } },
+      );
+      const after = await deletionFacts();
+      expect(after).toEqual(before);
+      expect(command.enqueueRebuildJobs).not.toHaveBeenCalled();
+      expect(command.revokeUserSessions).not.toHaveBeenCalled();
+    },
+  );
 
   describe.each(["delegator", "delegatee"] as const)("Open Delegation deletion gate for %s", (side) => {
     test.each([
@@ -454,27 +518,30 @@ describe("User lifecycle mutations through production PostgreSQL UnitOfWork", ()
       [PrivilegeDelegationStatus.Disable, false],
       [PrivilegeDelegationStatus.Enable, true],
       [PrivilegeDelegationStatus.Pause, true],
-    ] as const)("status %s with isDelete=%s permits deletion and preserves delegation history", async (status, isDelete) => {
-      const user = await seedUser();
-      await seedDelegation(user.id, side, status, "current", isDelete);
-      const { service, barrier, revokeUserSessions } = createCommand(
-        undefined,
-        undefined,
-        stableStore(user.subjectIdentifier),
-      );
-      const before = await deletionFacts();
-      const result = await service.deleteUser("user");
-      const after = await deletionFacts();
-      const access = await barrier.read(user.subjectIdentifier);
-      expect(result).toEqual({ changed: true, result: null });
-      expect(after.users[0]).toMatchObject({ id: user.id, isDelete: true });
-      expect(after.delegations).toEqual(before.delegations);
-      expect(after.delegationDetails).toEqual(before.delegationDetails);
-      expect(after.audits).toMatchObject([{ action: "admin.user.delete", details: { changed: true } }]);
-      expect(after.dirty).toMatchObject([{ userId: user.id, dirtyVersion: "1" }]);
-      expect(access.state).toBe("disabled");
-      expect(revokeUserSessions).toHaveBeenCalledTimes(1);
-    });
+    ] as const)(
+      "status %s with isDelete=%s permits deletion and preserves delegation history",
+      async (status, isDelete) => {
+        const user = await seedUser();
+        await seedDelegation(user.id, side, status, "current", isDelete);
+        const { service, barrier, revokeUserSessions } = createCommand(
+          undefined,
+          undefined,
+          stableStore(user.subjectIdentifier),
+        );
+        const before = await deletionFacts();
+        const result = await service.deleteUser("user");
+        const after = await deletionFacts();
+        const access = await barrier.read(user.subjectIdentifier);
+        expect(result).toEqual({ changed: true, result: null });
+        expect(after.users[0]).toMatchObject({ id: user.id, isDelete: true });
+        expect(after.delegations).toEqual(before.delegations);
+        expect(after.delegationDetails).toEqual(before.delegationDetails);
+        expect(after.audits).toMatchObject([{ action: "admin.user.delete", details: { changed: true } }]);
+        expect(after.dirty).toMatchObject([{ userId: user.id, dirtyVersion: "1" }]);
+        expect(access.state).toBe("disabled");
+        expect(revokeUserSessions).toHaveBeenCalledTimes(1);
+      },
+    );
 
     test("ending the delegation through the Internal command releases the deletion gate", async () => {
       const user = await seedUser();
@@ -484,12 +551,18 @@ describe("User lifecycle mutations through production PostgreSQL UnitOfWork", ()
       expect(error).toMatchObject({ code: "USER.HAS_OPEN_PRIVILEGE_DELEGATION" });
       await runProcessCommandSmoke({
         label: "Internal delegation end before Admin user deletion",
-        start: () => spawnOwnedProcessTree({
-          executable: process.execPath,
-          args: ["--no-env-file", "run", "test-integration/postgres/end-delegation.fixture.ts", String(delegation.id)],
-          cwd: fileURLToPath(new URL("../../../api/", import.meta.url)),
-          env: { ...process.env, IAM_API_TEST_DATABASE_URL: harness.commandDatabaseUrl },
-        }),
+        start: () =>
+          spawnOwnedProcessTree({
+            executable: process.execPath,
+            args: [
+              "--no-env-file",
+              "run",
+              "test-integration/postgres/end-delegation.fixture.ts",
+              String(delegation.id),
+            ],
+            cwd: fileURLToPath(new URL("../../../api/", import.meta.url)),
+            env: { ...process.env, IAM_API_TEST_DATABASE_URL: harness.commandDatabaseUrl },
+          }),
         completionTimeoutMs: 15_000,
         cleanupTimeoutMs: 5_000,
         maxOutputBytes: 64 * 1024,
@@ -503,7 +576,7 @@ describe("User lifecycle mutations through production PostgreSQL UnitOfWork", ()
       expect(after.users[0]).toMatchObject({ id: user.id, isDelete: true });
       expect(after.delegations).toEqual(ended.delegations);
       expect(after.delegationDetails).toEqual(ended.delegationDetails);
-      expect(after.audits.map(audit => audit.action)).toEqual(["internal.delegation.update", "admin.user.delete"]);
+      expect(after.audits.map((audit) => audit.action)).toEqual(["internal.delegation.update", "admin.user.delete"]);
     }, 25_000);
   });
 
@@ -562,35 +635,45 @@ describe("User lifecycle mutations through production PostgreSQL UnitOfWork", ()
       test(`${operation} rolls back business facts, audit, dirty and intent when ${stage} fails`, async () => {
         const user = await seedUser();
         const sentinel = new Error(`injected ${stage}`);
-        const { service, store, enqueueRebuildJobs, revokeUserSessions } = createCommand(tx => ({
-          ...tx,
-          ...(stage === "audit"
-            ? {
-                auditService: { ...tx.auditService, recordAuditLog: async (input) => {
-                  await tx.auditService.recordAuditLog(input);
-                  throw sentinel;
-                } },
-              }
-            : stage === "dirty"
+        const { service, store, enqueueRebuildJobs, revokeUserSessions } = createCommand(
+          (tx) => ({
+            ...tx,
+            ...(stage === "audit"
               ? {
-                  userProfileInvalidation: { recordChanges: async (changes) => {
-                    await tx.userProfileInvalidation.recordChanges(changes);
-                    throw sentinel;
-                  } },
+                  auditService: {
+                    ...tx.auditService,
+                    recordAuditLog: async (input) => {
+                      await tx.auditService.recordAuditLog(input);
+                      throw sentinel;
+                    },
+                  },
                 }
-              : {
-                  userRepository: { ...tx.userRepository, [operation === "status" ? "updateUserByUsername" : "softDeleteUserByUsername"]: async () => null },
-                }),
-        }), undefined, stableStore(user.subjectIdentifier));
+              : stage === "dirty"
+                ? {
+                    userProfileInvalidation: {
+                      recordChanges: async (changes) => {
+                        await tx.userProfileInvalidation.recordChanges(changes);
+                        throw sentinel;
+                      },
+                    },
+                  }
+                : {
+                    userRepository: {
+                      ...tx.userRepository,
+                      [operation === "status" ? "updateUserByUsername" : "softDeleteUserByUsername"]: async () => null,
+                    },
+                  }),
+          }),
+          undefined,
+          stableStore(user.subjectIdentifier),
+        );
         const before = await facts();
         const barrierBefore = await store.read(user.subjectIdentifier);
-        const error = await failure(() => operation === "status"
-          ? service.updateUserStatus("user", UserStatus.Disable)
-          : service.deleteUser("user"));
-        if (stage === "zero-row")
-          expect(error).toBeInstanceOf(Error);
-        else
-          expect(error).toBe(sentinel);
+        const error = await failure(() =>
+          operation === "status" ? service.updateUserStatus("user", UserStatus.Disable) : service.deleteUser("user"),
+        );
+        if (stage === "zero-row") expect(error).toBeInstanceOf(Error);
+        else expect(error).toBe(sentinel);
         const after = await facts();
         const barrierAfter = await store.read(user.subjectIdentifier);
         const intents = await transitions();
@@ -604,15 +687,21 @@ describe("User lifecycle mutations through production PostgreSQL UnitOfWork", ()
 
     test(`${operation} committed lifecycle failure uses the dedicated error`, async () => {
       const user = await seedUser();
-      const { service, barrier } = createCommand(undefined, new Error("repair unavailable"), stableStore(user.subjectIdentifier));
-      const error = await failure(() => operation === "status"
-        ? service.updateUserStatus("user", UserStatus.Disable)
-        : service.deleteUser("user"));
+      const { service, barrier } = createCommand(
+        undefined,
+        new Error("repair unavailable"),
+        stableStore(user.subjectIdentifier),
+      );
+      const error = await failure(() =>
+        operation === "status" ? service.updateUserStatus("user", UserStatus.Disable) : service.deleteUser("user"),
+      );
       expect(error).toBeInstanceOf(AdminMutationCommittedError);
       const after = await facts();
       const intents = await transitions();
       const record = await barrier.read(user.subjectIdentifier);
-      expect(after.users[0]).toMatchObject(operation === "status" ? { status: UserStatus.Disable } : { isDelete: true });
+      expect(after.users[0]).toMatchObject(
+        operation === "status" ? { status: UserStatus.Disable } : { isDelete: true },
+      );
       expect(after.audits).toMatchObject([{ action, details: { changed: true } }]);
       expect(after.dirty).toMatchObject([{ userId: user.id, dirtyVersion: "1" }]);
       expect(intents).toMatchObject([{ status: "committed", targetState: "disabled" }]);
@@ -646,25 +735,26 @@ describe("User lifecycle mutations through production PostgreSQL UnitOfWork", ()
       const user = await seedUser();
       const written = Promise.withResolvers<void>();
       const release = Promise.withResolvers<void>();
-      const first = createCommand(tx => ({ ...tx, userRepository: {
-        ...tx.userRepository,
-        updateUserByUsername: async (username, patch) => {
-          const row = await tx.userRepository.updateUserByUsername(username, patch);
-          written.resolve();
-          await release.promise;
-          return row;
+      const first = createCommand((tx) => ({
+        ...tx,
+        userRepository: {
+          ...tx.userRepository,
+          updateUserByUsername: async (username, patch) => {
+            const row = await tx.userRepository.updateUserByUsername(username, patch);
+            written.resolve();
+            await release.promise;
+            return row;
+          },
         },
-      } })).service;
+      })).service;
       const firstPending = first.updateUser("user", { name: "Concurrent profile" });
       await Promise.race([written.promise, firstPending]);
       const second = createCommand(undefined, undefined, stableStore(user.subjectIdentifier)).service;
-      const secondPending = operation === "status"
-        ? second.updateUserStatus("user", UserStatus.Disable)
-        : second.deleteUser("user");
+      const secondPending =
+        operation === "status" ? second.updateUserStatus("user", UserStatus.Disable) : second.deleteUser("user");
       try {
         await waitForUserLock();
-      }
-      finally {
+      } finally {
         release.resolve();
         await Promise.allSettled([firstPending, secondPending]);
       }
@@ -673,8 +763,12 @@ describe("User lifecycle mutations through production PostgreSQL UnitOfWork", ()
       const after = await facts();
       expect(firstResult).toEqual({ changed: true, result: null });
       expect(secondResult).toEqual({ changed: true, result: null });
-      expect(after.users[0]).toMatchObject({ name: "Concurrent profile", password: "old-hash", ...(operation === "status" ? { status: UserStatus.Disable } : { isDelete: true }) });
-      expect(after.audits.map(audit => audit.action)).toEqual(["admin.user.update", action]);
+      expect(after.users[0]).toMatchObject({
+        name: "Concurrent profile",
+        password: "old-hash",
+        ...(operation === "status" ? { status: UserStatus.Disable } : { isDelete: true }),
+      });
+      expect(after.audits.map((audit) => audit.action)).toEqual(["admin.user.update", action]);
       expect(after.dirty).toMatchObject([{ dirtyVersion: "2" }]);
     });
 
@@ -682,34 +776,35 @@ describe("User lifecycle mutations through production PostgreSQL UnitOfWork", ()
       const user = await seedUser();
       const locked = Promise.withResolvers<void>();
       const release = Promise.withResolvers<void>();
-      const profile = createCommand(tx => ({ ...tx, userRepository: {
-        ...tx.userRepository,
-        lockUserByUsername: async (...args) => {
-          const row = await tx.userRepository.lockUserByUsername(...args);
-          locked.resolve();
-          await release.promise;
-          return row;
+      const profile = createCommand((tx) => ({
+        ...tx,
+        userRepository: {
+          ...tx.userRepository,
+          lockUserByUsername: async (...args) => {
+            const row = await tx.userRepository.lockUserByUsername(...args);
+            locked.resolve();
+            await release.promise;
+            return row;
+          },
         },
-      } })).service;
+      })).service;
       const profilePending = profile.updateUser("user", { name: "Concurrent profile" });
       await Promise.race([locked.promise, profilePending]);
       const store = stableStore(user.subjectIdentifier);
       const first = createCommand(undefined, undefined, store).service;
       const second = createCommand(undefined, undefined, store).service;
-      const firstPending = operation === "status"
-        ? first.updateUserStatus("user", UserStatus.Disable)
-        : first.deleteUser("user");
+      const firstPending =
+        operation === "status" ? first.updateUserStatus("user", UserStatus.Disable) : first.deleteUser("user");
       try {
         await waitForUserLock();
-        const error = await failure(() => operation === "status"
-          ? second.deleteUser("user")
-          : second.updateUserStatus("user", UserStatus.Disable));
+        const error = await failure(() =>
+          operation === "status" ? second.deleteUser("user") : second.updateUserStatus("user", UserStatus.Disable),
+        );
         expect(extractPostgresError(error)).toEqual({
           code: "23505",
           constraint: "subject_access_transition_pending_subject_idx",
         });
-      }
-      finally {
+      } finally {
         release.resolve();
         await Promise.allSettled([profilePending, firstPending]);
       }
@@ -717,8 +812,12 @@ describe("User lifecycle mutations through production PostgreSQL UnitOfWork", ()
       const after = await facts();
       const intents = await transitions();
       expect(result).toEqual({ changed: true, result: null });
-      expect(after.users[0]).toMatchObject({ name: "Concurrent profile", status: operation === "status" ? UserStatus.Disable : UserStatus.Enable, isDelete: operation === "delete" });
-      expect(after.audits.map(audit => audit.action)).toEqual(["admin.user.update", action]);
+      expect(after.users[0]).toMatchObject({
+        name: "Concurrent profile",
+        status: operation === "status" ? UserStatus.Disable : UserStatus.Enable,
+        isDelete: operation === "delete",
+      });
+      expect(after.audits.map((audit) => audit.action)).toEqual(["admin.user.update", action]);
       expect(after.dirty).toMatchObject([{ dirtyVersion: "2" }]);
       expect(intents).toMatchObject([{ status: "committed", targetState: "disabled" }]);
     });
@@ -726,36 +825,40 @@ describe("User lifecycle mutations through production PostgreSQL UnitOfWork", ()
 });
 
 describe("User mutations through production PostgreSQL UnitOfWork", () => {
-  test.each(userWriteProtocols)("%s normalizes User identity writes before PostgreSQL and preserves no-op semantics", async (protocol) => {
-    const { app } = createUserWriteApp();
-    const suffix = protocol === "REST" ? "Rest" : "TrPc";
-    const username = `Mixed-${suffix}`;
-    const createInput = {
-      username: `  ${username}  `,
-      name: `  ${suffix} Name  `,
-      userType: UserType.Formal,
-    };
-    const created = await requestUserCreate(app, protocol, createInput);
-    expect(created.status).toBe(200);
+  test.each(userWriteProtocols)(
+    "%s normalizes User identity writes before PostgreSQL and preserves no-op semantics",
+    async (protocol) => {
+      const { app } = createUserWriteApp();
+      const suffix = protocol === "REST" ? "Rest" : "TrPc";
+      const username = `Mixed-${suffix}`;
+      const createInput = {
+        username: `  ${username}  `,
+        name: `  ${suffix} Name  `,
+        userType: UserType.Formal,
+      };
+      const created = await requestUserCreate(app, protocol, createInput);
+      expect(created.status).toBe(200);
 
-    const updated = protocol === "REST"
-      ? await app.request(`/admin/users/${username}`, {
-          method: "PUT",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ name: `  ${suffix} Name  ` }),
-        })
-      : await app.request("/rpc/update", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ username, data: { name: `  ${suffix} Name  ` } }),
-        });
-    expect(updated.status).toBe(200);
+      const updated =
+        protocol === "REST"
+          ? await app.request(`/admin/users/${username}`, {
+              method: "PUT",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ name: `  ${suffix} Name  ` }),
+            })
+          : await app.request("/rpc/update", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ username, data: { name: `  ${suffix} Name  ` } }),
+            });
+      expect(updated.status).toBe(200);
 
-    const after = await facts();
-    expect(after.users).toMatchObject([{ username, name: `${suffix} Name` }]);
-    expect(after.audits).toMatchObject([{ action: "admin.user.create" }]);
-    expect(after.dirty).toMatchObject([{ dirtyVersion: "1" }]);
-  });
+      const after = await facts();
+      expect(after.users).toMatchObject([{ username, name: `${suffix} Name` }]);
+      expect(after.audits).toMatchObject([{ action: "admin.user.create" }]);
+      expect(after.dirty).toMatchObject([{ dirtyVersion: "1" }]);
+    },
+  );
 
   test.each([
     ["REST", "active", false],
@@ -773,14 +876,16 @@ describe("User mutations through production PostgreSQL UnitOfWork", () => {
     });
     const body = await response.json();
     expect(response.status).toBe(409);
-    expect(body).toMatchObject(protocol === "REST"
-      ? { code: ApiErrorCode.UsernameAlreadyExists, message: "用户名已存在" }
-      : {
-          error: {
-            message: "用户名已存在",
-            data: { code: "CONFLICT", serviceCode: ApiErrorCode.UsernameAlreadyExists },
+    expect(body).toMatchObject(
+      protocol === "REST"
+        ? { code: ApiErrorCode.UsernameAlreadyExists, message: "用户名已存在" }
+        : {
+            error: {
+              message: "用户名已存在",
+              data: { code: "CONFLICT", serviceCode: ApiErrorCode.UsernameAlreadyExists },
+            },
           },
-        });
+    );
     const after = await facts();
     expect(after).toEqual(before);
     expect(command.random.password).not.toHaveBeenCalled();
@@ -789,19 +894,23 @@ describe("User mutations through production PostgreSQL UnitOfWork", () => {
   test("concurrent username creates reach the real unique constraint and only one commits", async () => {
     let arrived = 0;
     const gate = Promise.withResolvers<void>();
-    const { service } = createCommand(tx => ({ ...tx, userRepository: {
-      ...tx.userRepository,
-      getAnyUserByUsername: async (username) => {
-        const row = await tx.userRepository.getAnyUserByUsername(username);
-        if (++arrived === 2)
-          gate.resolve();
-        await gate.promise;
-        return row;
+    const { service } = createCommand((tx) => ({
+      ...tx,
+      userRepository: {
+        ...tx.userRepository,
+        getAnyUserByUsername: async (username) => {
+          const row = await tx.userRepository.getAnyUserByUsername(username);
+          if (++arrived === 2) gate.resolve();
+          await gate.promise;
+          return row;
+        },
       },
-    } }));
-    const results = await Promise.allSettled(["First", "Second"].map(name => service.setUserForAdmin({ username: "user", name, userType: UserType.Formal })));
-    expect(results.filter(result => result.status === "fulfilled")).toHaveLength(1);
-    expect(results.find(result => result.status === "rejected")?.reason).toBeInstanceOf(UsernameAlreadyExistsError);
+    }));
+    const results = await Promise.allSettled(
+      ["First", "Second"].map((name) => service.setUserForAdmin({ username: "user", name, userType: UserType.Formal })),
+    );
+    expect(results.filter((result) => result.status === "fulfilled")).toHaveLength(1);
+    expect(results.find((result) => result.status === "rejected")?.reason).toBeInstanceOf(UsernameAlreadyExistsError);
     const after = await facts();
     expect(after.users).toHaveLength(1);
     expect(after.audits).toHaveLength(1);
@@ -809,14 +918,19 @@ describe("User mutations through production PostgreSQL UnitOfWork", () => {
   });
 
   test("transaction precheck catches a tombstone appearing after the root precheck", async () => {
-    const { service } = createCommand(tx => ({ ...tx, userRepository: {
-      ...tx.userRepository,
-      getAnyUserByUsername: async (username) => {
-        await seedUser(UserStatus.Enable, true);
-        return await tx.userRepository.getAnyUserByUsername(username);
+    const { service } = createCommand((tx) => ({
+      ...tx,
+      userRepository: {
+        ...tx.userRepository,
+        getAnyUserByUsername: async (username) => {
+          await seedUser(UserStatus.Enable, true);
+          return await tx.userRepository.getAnyUserByUsername(username);
+        },
       },
-    } }));
-    const error = await failure(() => service.setUserForAdmin({ username: "user", name: "Duplicate", userType: UserType.Formal }));
+    }));
+    const error = await failure(() =>
+      service.setUserForAdmin({ username: "user", name: "Duplicate", userType: UserType.Formal }),
+    );
     expect(error).toBeInstanceOf(UsernameAlreadyExistsError);
     const after = await facts();
     expect(after.users).toMatchObject([{ isDelete: true, password: "old-hash" }]);
@@ -826,7 +940,9 @@ describe("User mutations through production PostgreSQL UnitOfWork", () => {
 
   test("create reports committed failure when Subject Access repair preparation fails", async () => {
     const { service } = createCommand(undefined, new Error("repair unavailable"));
-    const error = await failure(() => service.setUserForAdmin({ username: "user", name: "User", userType: UserType.Formal }));
+    const error = await failure(() =>
+      service.setUserForAdmin({ username: "user", name: "User", userType: UserType.Formal }),
+    );
     expect(error).toBeInstanceOf(AdminMutationCommittedError);
     const after = await facts();
     expect(after.users).toHaveLength(1);
@@ -837,14 +953,19 @@ describe("User mutations through production PostgreSQL UnitOfWork", () => {
 
   test("create failure before commit preserves the original failure and rolls back", async () => {
     const sentinel = new Error("audit unavailable");
-    const { service, enqueueRebuildJobs } = createCommand(tx => ({ ...tx, auditService: {
-      ...tx.auditService,
-      recordAuditLog: async (input) => {
-        await tx.auditService.recordAuditLog(input);
-        throw sentinel;
+    const { service, enqueueRebuildJobs } = createCommand((tx) => ({
+      ...tx,
+      auditService: {
+        ...tx.auditService,
+        recordAuditLog: async (input) => {
+          await tx.auditService.recordAuditLog(input);
+          throw sentinel;
+        },
       },
-    } }));
-    const error = await failure(() => service.setUserForAdmin({ username: "user", name: "User", userType: UserType.Formal }));
+    }));
+    const error = await failure(() =>
+      service.setUserForAdmin({ username: "user", name: "User", userType: UserType.Formal }),
+    );
     expect(error).toBe(sentinel);
     const after = await facts();
     expect(after).toEqual({ users: [], audits: [], dirty: [] });
@@ -852,11 +973,13 @@ describe("User mutations through production PostgreSQL UnitOfWork", () => {
   });
 
   test("zero-row create fails closed", async () => {
-    const { service } = createCommand(tx => ({
+    const { service } = createCommand((tx) => ({
       ...tx,
       userRepository: { ...tx.userRepository, setUserForAdmin: async () => null },
     }));
-    const error = await failure(() => service.setUserForAdmin({ username: "user", name: "User", userType: UserType.Formal }));
+    const error = await failure(() =>
+      service.setUserForAdmin({ username: "user", name: "User", userType: UserType.Formal }),
+    );
     expect(error).toBeInstanceOf(Error);
     const after = await facts();
     expect(after).toEqual({ users: [], audits: [], dirty: [] });
@@ -865,15 +988,20 @@ describe("User mutations through production PostgreSQL UnitOfWork", () => {
   test("create returns a safe resource and one-time password with committed audit and dirty", async () => {
     const { service } = createCommand();
     const result = await service.setUserForAdmin({ username: "user", name: "User", userType: UserType.Formal });
-    expect(result).toMatchObject({ changed: true, result: {
-      username: "user",
-      generatedPassword: "Random123!",
-      user: { username: "user", name: "User" },
-    } });
+    expect(result).toMatchObject({
+      changed: true,
+      result: {
+        username: "user",
+        generatedPassword: "Random123!",
+        user: { username: "user", name: "User" },
+      },
+    });
     expect(result.result.user).not.toHaveProperty("password");
     const after = await facts();
     expect(after.users[0]).toMatchObject({ password: "hash:Random123!", subjectIdentifier: expect.any(String) });
-    expect(after.audits).toMatchObject([{ action: "admin.user.create", details: { changed: true, passwordProvided: false } }]);
+    expect(after.audits).toMatchObject([
+      { action: "admin.user.create", details: { changed: true, passwordProvided: false } },
+    ]);
     expect(after.dirty).toMatchObject([{ userId: after.users[0]!.id, dirtyVersion: "1" }]);
     expect(JSON.stringify(after.audits)).not.toContain("Random123!");
     expect(JSON.stringify(result)).not.toContain("hash:");
@@ -883,7 +1011,9 @@ describe("User mutations through production PostgreSQL UnitOfWork", () => {
     await seedUser(UserStatus.Enable, true);
     const { service, random } = createCommand();
     const before = await facts();
-    const error = await failure(() => service.setUserForAdmin({ username: "user", name: "Duplicate", userType: UserType.Formal }));
+    const error = await failure(() =>
+      service.setUserForAdmin({ username: "user", name: "Duplicate", userType: UserType.Formal }),
+    );
     expect(error).toBeInstanceOf(UsernameAlreadyExistsError);
     expect(random.password).not.toHaveBeenCalled();
     const after = await facts();
@@ -892,19 +1022,23 @@ describe("User mutations through production PostgreSQL UnitOfWork", () => {
 
   test("real unique violation retains Drizzle cause and unknown constraints remain internal", async () => {
     await seedUser();
-    const raw = await failure(async () => await harness.db.insert(users).values({ username: "user", name: "Duplicate", userType: UserType.Formal }));
+    const raw = await failure(
+      async () =>
+        await harness.db.insert(users).values({ username: "user", name: "Duplicate", userType: UserType.Formal }),
+    );
     expect(raw).toHaveProperty("cause");
     expect(extractPostgresError(raw)?.code).toBe("23505");
     await harness.sql`create unique index user_test_name_unique on "user"(name)`;
     try {
       const before = await facts();
-      const error = await failure(() => createCommand().service.setUserForAdmin({ username: "other", name: "Original", userType: UserType.Formal }));
+      const error = await failure(() =>
+        createCommand().service.setUserForAdmin({ username: "other", name: "Original", userType: UserType.Formal }),
+      );
       expect(error).not.toBeInstanceOf(UsernameAlreadyExistsError);
       expect(extractPostgresError(error)).toEqual({ code: "23505", constraint: "user_test_name_unique" });
       const after = await facts();
       expect(after).toEqual(before);
-    }
-    finally {
+    } finally {
       await harness.sql`drop index user_test_name_unique`;
     }
   });
@@ -928,20 +1062,25 @@ describe("User mutations through production PostgreSQL UnitOfWork", () => {
     test(`profile edit rolls back source/audit/dirty when ${stage} fails`, async () => {
       await seedUser();
       const sentinel = new Error(`injected ${stage}`);
-      const { service, enqueueRebuildJobs } = createCommand(tx => ({
+      const { service, enqueueRebuildJobs } = createCommand((tx) => ({
         ...tx,
         ...(stage === "audit"
           ? {
-              auditService: { ...tx.auditService, recordAuditLog: async (input) => {
-                await tx.auditService.recordAuditLog(input);
-                throw sentinel;
-              } },
+              auditService: {
+                ...tx.auditService,
+                recordAuditLog: async (input) => {
+                  await tx.auditService.recordAuditLog(input);
+                  throw sentinel;
+                },
+              },
             }
           : {
-              userProfileInvalidation: { recordChanges: async (changes) => {
-                await tx.userProfileInvalidation.recordChanges(changes);
-                throw sentinel;
-              } },
+              userProfileInvalidation: {
+                recordChanges: async (changes) => {
+                  await tx.userProfileInvalidation.recordChanges(changes);
+                  throw sentinel;
+                },
+              },
             }),
       }));
       const before = await facts();
@@ -972,12 +1111,16 @@ describe("User mutations through production PostgreSQL UnitOfWork", () => {
   for (const method of ["updateUserByUsername", "setPassword"] as const) {
     test(`zero-row ${method} does not fabricate audit, dirty or session revocation`, async () => {
       await seedUser();
-      const { service, revokeUserSessions } = createCommand(tx => ({
+      const { service, revokeUserSessions } = createCommand((tx) => ({
         ...tx,
         userRepository: { ...tx.userRepository, [method]: async () => null },
       }));
       const before = await facts();
-      const error = await failure(() => method === "setPassword" ? service.resetPasswordByUsername("user") : service.updateUser("user", { name: "Changed" }));
+      const error = await failure(() =>
+        method === "setPassword"
+          ? service.resetPasswordByUsername("user")
+          : service.updateUser("user", { name: "Changed" }),
+      );
       expect(error).toBeInstanceOf(Error);
       const after = await facts();
       expect(after).toEqual(before);
@@ -1025,20 +1168,24 @@ describe("User mutations through production PostgreSQL UnitOfWork", () => {
       await seedUser();
       const written = Promise.withResolvers<void>();
       const release = Promise.withResolvers<void>();
-      const first = createCommand(tx => ({ ...tx, userRepository: {
-        ...tx.userRepository,
-        updateUserByUsername: async (username, patch) => {
-          const row = await tx.userRepository.updateUserByUsername(username, patch);
-          written.resolve();
-          await release.promise;
-          return row;
+      const first = createCommand((tx) => ({
+        ...tx,
+        userRepository: {
+          ...tx.userRepository,
+          updateUserByUsername: async (username, patch) => {
+            const row = await tx.userRepository.updateUserByUsername(username, patch);
+            written.resolve();
+            await release.promise;
+            return row;
+          },
         },
-      } })).service;
+      })).service;
       const firstPending = first.updateUser("user", { mobile: "13912345678" });
       await Promise.race([written.promise, firstPending]);
-      const secondPending = createCommand().service.updateUser("user", secondOperation === "other-field"
-        ? { name: "Changed" }
-        : { mobile: "13912345678" });
+      const secondPending = createCommand().service.updateUser(
+        "user",
+        secondOperation === "other-field" ? { name: "Changed" } : { mobile: "13912345678" },
+      );
       try {
         const deadline = Date.now() + 2000;
         let blocked = false;
@@ -1051,8 +1198,7 @@ describe("User mutations through production PostgreSQL UnitOfWork", () => {
           blocked = rows[0]!.blocked;
         }
         expect(blocked).toBe(true);
-      }
-      finally {
+      } finally {
         release.resolve();
         await Promise.allSettled([firstPending, secondPending]);
       }

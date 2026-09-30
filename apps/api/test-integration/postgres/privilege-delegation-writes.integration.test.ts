@@ -1,7 +1,4 @@
-import type { PrivilegeDelegationCreateDto } from "@api/services/privilege/privilegeDelegation.type";
-import type { DbClient } from "@iam/db";
-import type { GenericClientRuntimeDto } from "@iam/domain/client";
-import type { ApiPostgresTestHarness } from "./postgres-test-harness";
+import { afterAll, beforeAll, beforeEach, describe, expect, test } from "bun:test";
 import { createApiRepositories } from "@api/composition/repositories";
 import { createPrivilegeDelegationResolutionRepository } from "@api/composition/repositories/privilege-delegation-resolution.repository";
 import { createApiUnitOfWork } from "@api/composition/tx";
@@ -9,11 +6,13 @@ import { createInternalMiddlewares } from "@api/routes/internal/_middleware";
 import { createDelegationHandlers } from "@api/routes/internal/delegation/delegation.handlers";
 import { createDelegationRoute } from "@api/routes/internal/delegation/delegation.index";
 import { createPrivilegeDelegationService } from "@api/services/privilege/privilegeDelegation.service";
+import type { PrivilegeDelegationCreateDto } from "@api/services/privilege/privilegeDelegation.type";
 import { createResolvePrivilegeDelegationsUseCase } from "@api/use-cases/internal/resolve-privilege-delegations/resolve-privilege-delegations.use-case";
 import createApp from "@iam/api-core/core/create-app";
 import { createInternalAuthenticationHandler } from "@iam/api-core/middlewares";
 import { mapUnitOfWork } from "@iam/api-core/uow";
 import { ClientStatus, OrganizationLevel, OrganizationType, PrivilegeDelegationStatus } from "@iam/contracts";
+import type { DbClient } from "@iam/db";
 import {
   auditLogs,
   delegationDetails,
@@ -23,11 +22,12 @@ import {
   privileges,
   users,
 } from "@iam/db/schema";
+import type { GenericClientRuntimeDto } from "@iam/domain/client";
 import { PrivilegeAlreadyDelegatedError, PrivilegeDelegationEndedError } from "@iam/domain/privilege";
-import { afterAll, beforeAll, beforeEach, describe, expect, test } from "bun:test";
 import { eq, sql } from "drizzle-orm";
 import pino from "pino";
 import appConfig from "~api/app.config";
+import type { ApiPostgresTestHarness } from "./postgres-test-harness";
 import { createApiPostgresTestHarness } from "./postgres-test-harness";
 
 const startTime = new Date("2026-09-01T00:00:00Z");
@@ -58,9 +58,7 @@ beforeAll(async () => {
 });
 beforeEach(async () => {
   await harness.reset();
-  await harness.db
-    .insert(users)
-    .values(["alice", "bob", "carol"].map(username => ({ username, name: username })));
+  await harness.db.insert(users).values(["alice", "bob", "carol"].map((username) => ({ username, name: username })));
   const rows = await harness.db
     .insert(organizations)
     .values([
@@ -99,13 +97,13 @@ beforeEach(async () => {
   await harness.db
     .insert(organizationClosures)
     .values([
-      ...rows.map(row => ({ ancestorId: row.id, descendantId: row.id, depth: 0 })),
+      ...rows.map((row) => ({ ancestorId: row.id, descendantId: row.id, depth: 0 })),
       { ancestorId: 1, descendantId: 2, depth: 1 },
       { ancestorId: 1, descendantId: 3, depth: 1 },
     ]);
   await harness.db
     .insert(privileges)
-    .values(["read", "write"].map(code => ({ privilegeCode: code, privilegeName: code })));
+    .values(["read", "write"].map((code) => ({ privilegeCode: code, privilegeName: code })));
 });
 afterAll(async () => {
   await harness?.close();
@@ -136,7 +134,7 @@ function createService(db = harness.db) {
   });
   return createPrivilegeDelegationService({
     privilegeDelegationRepository: createApiRepositories(db).privilegeDelegation,
-    uow: mapUnitOfWork(uow, tx => ({
+    uow: mapUnitOfWork(uow, (tx) => ({
       userRepository: tx.repositories.user,
       organizationRepository: tx.repositories.organization,
       privilegeRepository: tx.repositories.privilege,
@@ -150,8 +148,7 @@ async function failure(operation: Promise<unknown>) {
   try {
     await operation;
     return undefined;
-  }
-  catch (error) {
+  } catch (error) {
     return error;
   }
 }
@@ -189,8 +186,7 @@ function concurrentService() {
       await entered;
       try {
         return await callback(tx);
-      }
-      finally {
+      } finally {
         await lockObservation;
       }
     }, options);
@@ -201,24 +197,23 @@ function concurrentService() {
       const waiting = await harness.sql<{ blocked: boolean }[]>`
           select exists (
             select 1 from pg_stat_activity
-            where pid = any(${identities.map(row => row.pid)})
-              and pg_blocking_pids(pid) && ${identities.map(row => row.pid)}::integer[]
+            where pid = any(${identities.map((row) => row.pid)})
+              and pg_blocking_pids(pid) && ${identities.map((row) => row.pid)}::integer[]
           ) as blocked`;
       if (waiting[0]!.blocked) {
         blocked = true;
         break;
       }
     }
-    if (!blocked)
-      throw new Error("Expected the competing PostgreSQL transaction to wait for the command's row lock");
+    if (!blocked) throw new Error("Expected the competing PostgreSQL transaction to wait for the command's row lock");
   }
   return { service: createService(db), identities };
 }
 
 function expectIndependentTransactions(identities: { pid: number; transactionId: string }[]) {
   expect(identities).toHaveLength(2);
-  expect(new Set(identities.map(row => row.pid)).size).toBe(2);
-  expect(new Set(identities.map(row => row.transactionId)).size).toBe(2);
+  expect(new Set(identities.map((row) => row.pid)).size).toBe(2);
+  expect(new Set(identities.map((row) => row.transactionId)).size).toBe(2);
 }
 
 describe("Privilege Delegation production PostgreSQL writes", () => {
@@ -265,8 +260,8 @@ describe("Privilege Delegation production PostgreSQL writes", () => {
       const response = await app.request(`http://localhost/internal/delegations${path}`, {
         method,
         headers: {
-          "apikey": "contract-secret",
-          "Client": "delegation-contract",
+          apikey: "contract-secret",
+          Client: "delegation-contract",
           "content-type": "application/json",
           "x-request-id": "http-delegation-request",
           "user-agent": "delegation-contract-test",
@@ -321,7 +316,7 @@ describe("Privilege Delegation production PostgreSQL writes", () => {
         outcome: "success",
       });
     }
-    expect(finalState.audits.map(event => event.method)).toEqual(["POST", "PATCH"]);
+    expect(finalState.audits.map((event) => event.method)).toEqual(["POST", "PATCH"]);
     const selfDelegation = await request("POST", "", input({ delegateeUsername: "alice" }));
     const invalidPeriod = await request("PATCH", `/${id}`, { startTime: endTime });
     for (const result of [selfDelegation, invalidPeriod])
@@ -348,10 +343,7 @@ describe("Privilege Delegation production PostgreSQL writes", () => {
     ["sibling organizations", { orgCode: "RIGHT" }],
     ["independent tree", { orgCode: "OTHER" }],
     ["different privileges", { privilegeCodes: ["write"] }],
-    [
-      "disjoint time",
-      { startTime: new Date("2026-09-11T00:00:00Z"), endTime: new Date("2026-09-12T00:00:00Z") },
-    ],
+    ["disjoint time", { startTime: new Date("2026-09-11T00:00:00Z"), endTime: new Date("2026-09-12T00:00:00Z") }],
   ] satisfies [string, Partial<PrivilegeDelegationCreateDto>][])(
     "allows coexistence for %s",
     async (_name, partialInput) => {
@@ -369,12 +361,12 @@ describe("Privilege Delegation production PostgreSQL writes", () => {
       for (const orgCode of ["ROOT", "LEFT", "RIGHT", "OTHER"]) {
         for (const privilegeCode of ["read", "write"]) {
           const result = await resolver.execute({ usernames: ["alice"], orgCode, privilegeCode });
-          const expected
-            = orgCode === "LEFT" && privilegeCode === "read"
+          const expected =
+            orgCode === "LEFT" && privilegeCode === "read"
               ? "bob"
-              : orgCode === (overrides.orgCode ?? "LEFT")
-                && privilegeCode === (overrides.privilegeCodes?.[0] ?? "read")
-                && !overrides.startTime
+              : orgCode === (overrides.orgCode ?? "LEFT") &&
+                  privilegeCode === (overrides.privilegeCodes?.[0] ?? "read") &&
+                  !overrides.startTime
                 ? "carol"
                 : null;
           expect(result).toEqual([{ username: "alice", delegateeUsername: expected }]);
@@ -401,23 +393,13 @@ describe("Privilege Delegation production PostgreSQL writes", () => {
 
   test("partially intersecting privilege sets conflict and Pause can resume without conflicting with itself", async () => {
     const service = createService();
-    const created = await service.createPrivilegeDelegation(
-      input({ privilegeCodes: ["read", "write"] }),
-      context,
-    );
+    const created = await service.createPrivilegeDelegation(input({ privilegeCodes: ["read", "write"] }), context);
     await service.updateDelegation(created.id, { status: PrivilegeDelegationStatus.Pause }, context);
-    const resumed = await service.updateDelegation(
-      created.id,
-      { status: PrivilegeDelegationStatus.Enable },
-      context,
-    );
+    const resumed = await service.updateDelegation(created.id, { status: PrivilegeDelegationStatus.Enable }, context);
     expect(resumed).toBe(true);
     const before = await persisted();
     const error = await failure(
-      service.createPrivilegeDelegation(
-        input({ privilegeCodes: ["write"], delegateeUsername: "carol" }),
-        context,
-      ),
+      service.createPrivilegeDelegation(input({ privilegeCodes: ["write"], delegateeUsername: "carol" }), context),
     );
     expect(error).toBeInstanceOf(PrivilegeAlreadyDelegatedError);
     const after = await persisted();
@@ -429,8 +411,7 @@ describe("Privilege Delegation production PostgreSQL writes", () => {
     const created = await service.createPrivilegeDelegation(input(), context);
     if (kind === "ended") {
       await service.updateDelegation(created.id, { status: PrivilegeDelegationStatus.Disable }, context);
-    }
-    else {
+    } else {
       await harness.db
         .update(privilegeDelegations)
         .set({ isDelete: true })
@@ -477,11 +458,7 @@ describe("Privilege Delegation production PostgreSQL writes", () => {
     const created = await service.createPrivilegeDelegation(input(), context);
     await service.updateDelegation(created.id, { status: PrivilegeDelegationStatus.Disable }, context);
     const ended = await persisted();
-    const repeated = await service.updateDelegation(
-      created.id,
-      { status: PrivilegeDelegationStatus.Disable },
-      context,
-    );
+    const repeated = await service.updateDelegation(created.id, { status: PrivilegeDelegationStatus.Disable }, context);
     expect(repeated).toBe(true);
     const repeatedState = await persisted();
     expect(repeatedState.delegations).toEqual(ended.delegations);
@@ -505,41 +482,34 @@ describe("Privilege Delegation production PostgreSQL writes", () => {
     expect(afterRejectedEdits).toEqual(repeatedState);
   });
 
-  test.each(["create", "update", "end"])(
-    "audit failure rolls back %s with details and history",
-    async (operation) => {
-      const service = createService();
-      const created
-        = operation === "create" ? undefined : await service.createPrivilegeDelegation(input(), context);
-      const before = await persisted();
-      await harness.sql.unsafe(
-        "ALTER TABLE audit_log ADD CONSTRAINT reject_test_audit CHECK (request_id <> 'reject-audit')",
+  test.each(["create", "update", "end"])("audit failure rolls back %s with details and history", async (operation) => {
+    const service = createService();
+    const created = operation === "create" ? undefined : await service.createPrivilegeDelegation(input(), context);
+    const before = await persisted();
+    await harness.sql.unsafe(
+      "ALTER TABLE audit_log ADD CONSTRAINT reject_test_audit CHECK (request_id <> 'reject-audit')",
+    );
+    try {
+      const failingContext = {
+        ...context,
+        requestContext: { ...context.requestContext, requestId: "reject-audit" },
+      };
+      const error = await failure(
+        operation === "create"
+          ? service.createPrivilegeDelegation(input({ privilegeCodes: ["read", "write"] }), failingContext)
+          : service.updateDelegation(
+              created!.id,
+              operation === "end" ? { status: PrivilegeDelegationStatus.Disable } : { description: "must rollback" },
+              failingContext,
+            ),
       );
-      try {
-        const failingContext = {
-          ...context,
-          requestContext: { ...context.requestContext, requestId: "reject-audit" },
-        };
-        const error = await failure(
-          operation === "create"
-            ? service.createPrivilegeDelegation(input({ privilegeCodes: ["read", "write"] }), failingContext)
-            : service.updateDelegation(
-                created!.id,
-                operation === "end"
-                  ? { status: PrivilegeDelegationStatus.Disable }
-                  : { description: "must rollback" },
-                failingContext,
-              ),
-        );
-        expect(error).toBeInstanceOf(Error);
-        const after = await persisted();
-        expect(after).toEqual(before);
-      }
-      finally {
-        await harness.sql.unsafe("ALTER TABLE audit_log DROP CONSTRAINT reject_test_audit");
-      }
-    },
-  );
+      expect(error).toBeInstanceOf(Error);
+      const after = await persisted();
+      expect(after).toEqual(before);
+    } finally {
+      await harness.sql.unsafe("ALTER TABLE audit_log DROP CONSTRAINT reject_test_audit");
+    }
+  });
 
   test("concurrent conflicting creates commit one delegation and one success audit", async () => {
     const { service, identities } = concurrentService();
@@ -548,8 +518,8 @@ describe("Privilege Delegation production PostgreSQL writes", () => {
       service.createPrivilegeDelegation(input({ delegateeUsername: "carol" }), context),
     ]);
     expectIndependentTransactions(identities);
-    expect(results.filter(result => result.status === "fulfilled")).toHaveLength(1);
-    const rejected = results.find(result => result.status === "rejected");
+    expect(results.filter((result) => result.status === "fulfilled")).toHaveLength(1);
+    const rejected = results.find((result) => result.status === "rejected");
     expect(rejected?.reason).toBeInstanceOf(PrivilegeAlreadyDelegatedError);
     const state = await persisted();
     expect(state.delegations).toHaveLength(1);
@@ -570,7 +540,7 @@ describe("Privilege Delegation production PostgreSQL writes", () => {
       service.createPrivilegeDelegation(input({ orgCode: "RIGHT", delegateeUsername: "carol" }), context),
     ]);
     expectIndependentTransactions(identities);
-    expect(results.map(result => result.status)).toEqual(["fulfilled", "fulfilled"]);
+    expect(results.map((result) => result.status)).toEqual(["fulfilled", "fulfilled"]);
     const state = await persisted();
     expect(state.delegations).toHaveLength(2);
     expect(state.details).toHaveLength(2);
@@ -593,8 +563,8 @@ describe("Privilege Delegation production PostgreSQL writes", () => {
       service.updateDelegation(second.id, { startTime: new Date("2026-09-05T00:00:00Z") }, context),
     ]);
     expectIndependentTransactions(identities);
-    expect(results.filter(result => result.status === "fulfilled")).toHaveLength(1);
-    expect(results.find(result => result.status === "rejected")?.reason).toBeInstanceOf(
+    expect(results.filter((result) => result.status === "fulfilled")).toHaveLength(1);
+    expect(results.find((result) => result.status === "rejected")?.reason).toBeInstanceOf(
       PrivilegeAlreadyDelegatedError,
     );
     const state = await persisted();
@@ -613,8 +583,8 @@ describe("Privilege Delegation production PostgreSQL writes", () => {
       service.createPrivilegeDelegation(input({ startTime: new Date("2026-09-05T00:00:00Z") }), context),
     ]);
     expectIndependentTransactions(identities);
-    expect(results.filter(result => result.status === "fulfilled")).toHaveLength(1);
-    expect(results.find(result => result.status === "rejected")?.reason).toBeInstanceOf(
+    expect(results.filter((result) => result.status === "fulfilled")).toHaveLength(1);
+    expect(results.find((result) => result.status === "rejected")?.reason).toBeInstanceOf(
       PrivilegeAlreadyDelegatedError,
     );
     const state = await persisted();
@@ -622,8 +592,7 @@ describe("Privilege Delegation production PostgreSQL writes", () => {
     if (results[0]!.status === "fulfilled") {
       expect(state.delegations).toHaveLength(1);
       expect(state.delegations[0]!.endTime).toEqual(endTime);
-    }
-    else {
+    } else {
       expect(state.delegations).toHaveLength(2);
       expect(state.delegations[0]!.endTime.getTime()).toBeLessThan(state.delegations[1]!.startTime.getTime());
     }
@@ -643,8 +612,7 @@ describe("Privilege Delegation production PostgreSQL writes", () => {
     if (results[1]!.status === "fulfilled") {
       expect(state.delegations).toHaveLength(2);
       expect(state.audits).toHaveLength(3);
-    }
-    else {
+    } else {
       expect(results[1]!.reason).toBeInstanceOf(PrivilegeAlreadyDelegatedError);
       expect(state.delegations).toHaveLength(1);
       expect(state.audits).toHaveLength(2);
@@ -666,8 +634,7 @@ describe("Privilege Delegation production PostgreSQL writes", () => {
       expect(results[1]!.reason).toBeInstanceOf(PrivilegeDelegationEndedError);
       expect(state.delegations[0]!.description).toBeNull();
       expect(state.audits).toHaveLength(2);
-    }
-    else {
+    } else {
       expect(state.delegations[0]!.description).toBe("concurrent edit");
       expect(state.audits).toHaveLength(3);
     }

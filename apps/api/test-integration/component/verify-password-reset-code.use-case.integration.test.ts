@@ -1,6 +1,6 @@
+import { expect, test } from "bun:test";
 import type { AuditLogInput } from "@api/services/audit/audit.context";
 import { createVerifyPasswordResetCodeUseCase } from "@api/use-cases/account-recovery/verify-password-reset-code/verify-password-reset-code.use-case";
-import { expect, test } from "bun:test";
 
 test("checks a password-reset code without consuming it before auditing", async () => {
   const events: string[] = [];

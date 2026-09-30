@@ -1,18 +1,12 @@
-import type {
-  ExactProjectRuntimeLifecycle,
-  RunDescriptor,
-} from "./lifecycle.ts";
+import { describe, expect, test } from "bun:test";
 import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { describe, expect, test } from "bun:test";
 import { persistRunDescriptor } from "./descriptor.ts";
 import { collectRunDiagnostics } from "./diagnostics.ts";
 import { createDockerInfraOperations } from "./docker-infra.ts";
-import {
-  runExactProjectJourneyLifecycle,
-  runExactProjectRuntimeLifecycle,
-} from "./lifecycle.ts";
+import type { ExactProjectRuntimeLifecycle, RunDescriptor } from "./lifecycle.ts";
+import { runExactProjectJourneyLifecycle, runExactProjectRuntimeLifecycle } from "./lifecycle.ts";
 
 const descriptor: RunDescriptor = {
   version: 1,
@@ -27,9 +21,7 @@ const descriptor: RunDescriptor = {
   },
 };
 
-function createRuntimeLifecycle(
-  overrides: Partial<ExactProjectRuntimeLifecycle> = {},
-): ExactProjectRuntimeLifecycle {
+function createRuntimeLifecycle(overrides: Partial<ExactProjectRuntimeLifecycle> = {}): ExactProjectRuntimeLifecycle {
   return {
     awaitGatewayRouteReadiness: async () => undefined,
     cleanup: async () => undefined,
@@ -55,23 +47,26 @@ describe("exact-project runtime lifecycle", () => {
     const events: string[] = [];
     let preflightSignal: AbortSignal | undefined;
 
-    const run = runExactProjectRuntimeLifecycle(createRuntimeLifecycle({
-      preflight: async (signal) => {
-        events.push("preflight");
-        preflightSignal = signal;
-        await new Promise(() => undefined);
+    const run = runExactProjectRuntimeLifecycle(
+      createRuntimeLifecycle({
+        preflight: async (signal) => {
+          events.push("preflight");
+          preflightSignal = signal;
+          await new Promise(() => undefined);
+        },
+        createDescriptor: async () => {
+          events.push("descriptor");
+          return descriptor;
+        },
+        collectDiagnostics: async () => events.push("diagnostics"),
+        cleanup: async () => events.push("cleanup"),
+        startHealthyInfrastructure: async () => events.push("resources"),
+      }),
+      {
+        abortSettleTimeoutMs: 10,
+        preflightTimeoutMs: 5,
       },
-      createDescriptor: async () => {
-        events.push("descriptor");
-        return descriptor;
-      },
-      collectDiagnostics: async () => events.push("diagnostics"),
-      cleanup: async () => events.push("cleanup"),
-      startHealthyInfrastructure: async () => events.push("resources"),
-    }), {
-      abortSettleTimeoutMs: 10,
-      preflightTimeoutMs: 5,
-    });
+    );
 
     await expect(run).rejects.toThrow("E2E preflight timed out after 5ms");
     expect(preflightSignal?.aborted).toBe(true);
@@ -81,17 +76,19 @@ describe("exact-project runtime lifecycle", () => {
   test("stops before resources when the not-attempted receipt cannot be initialized", async () => {
     const events: string[] = [];
     const receiptFailure = new Error("receipt initialization failed");
-    const run = runExactProjectRuntimeLifecycle(createRuntimeLifecycle({
-      persistDescriptor: async () => events.push("descriptor"),
-      initializeMigrationReceipt: async () => {
-        events.push("receipt:not-attempted");
-        throw receiptFailure;
-      },
-      prepareDiagnostics: async () => events.push("prepare"),
-      startHealthyInfrastructure: async () => events.push("resources"),
-      collectDiagnostics: async () => events.push("diagnostics"),
-      cleanup: async () => events.push("cleanup"),
-    }));
+    const run = runExactProjectRuntimeLifecycle(
+      createRuntimeLifecycle({
+        persistDescriptor: async () => events.push("descriptor"),
+        initializeMigrationReceipt: async () => {
+          events.push("receipt:not-attempted");
+          throw receiptFailure;
+        },
+        prepareDiagnostics: async () => events.push("prepare"),
+        startHealthyInfrastructure: async () => events.push("resources"),
+        collectDiagnostics: async () => events.push("diagnostics"),
+        cleanup: async () => events.push("cleanup"),
+      }),
+    );
 
     await expect(run).rejects.toBe(receiptFailure);
     expect(events).toEqual(["descriptor", "receipt:not-attempted"]);
@@ -112,15 +109,10 @@ describe("exact-project runtime lifecycle", () => {
             events.push("prepare-failed");
             throw prepareFailure;
           }
-          if (args.includes("down"))
-            events.push("cleanup");
+          if (args.includes("down")) events.push("cleanup");
         },
         captureCommand: async (_command, args) => ({
-          stdout: ["container", "network", "volume", "image"].includes(
-            args[0] ?? "",
-          )
-            ? ""
-            : "{}",
+          stdout: ["container", "network", "volume", "image"].includes(args[0] ?? "") ? "" : "{}",
           stderr: "",
         }),
         probeGateway: async () => undefined,
@@ -136,22 +128,17 @@ describe("exact-project runtime lifecycle", () => {
       });
 
       await expect(run).rejects.toBe(prepareFailure);
-      const receipt = JSON.parse(await readFile(
-        join(artifactDirectory, "migration-receipt.json"),
-        "utf8",
-      ));
-      const index = JSON.parse(await readFile(
-        join(artifactDirectory, "diagnostics-index.json"),
-        "utf8",
-      ));
-      expect(receipt).toEqual(expect.objectContaining({
-        stage: "migration",
-        status: "not-attempted",
-      }));
+      const receipt = JSON.parse(await readFile(join(artifactDirectory, "migration-receipt.json"), "utf8"));
+      const index = JSON.parse(await readFile(join(artifactDirectory, "diagnostics-index.json"), "utf8"));
+      expect(receipt).toEqual(
+        expect.objectContaining({
+          stage: "migration",
+          status: "not-attempted",
+        }),
+      );
       expect(index.existingArtifacts).toContain("migration-receipt.json");
       expect(events).toEqual(["prepare-failed", "cleanup"]);
-    }
-    finally {
+    } finally {
       await rm(artifactDirectory, { force: true, recursive: true });
     }
   });
@@ -171,22 +158,18 @@ describe("exact-project runtime lifecycle", () => {
           if (args.includes("build") && args.at(-1) === "gateway-sync") {
             gatewayToolPrepared = true;
             events.push("prepare-gateway-tool");
-          }
-          else if (args.includes("run") && args.at(-1) === "migrate") {
+          } else if (args.includes("run") && args.at(-1) === "migrate") {
             events.push("migration-failed");
             throw migrationFailure;
-          }
-          else if (args.includes("down")) {
+          } else if (args.includes("down")) {
             events.push("cleanup");
           }
         },
         captureCommand: async (_command, args) => {
-          if (["container", "network", "volume", "image"].includes(args[0] ?? ""))
-            return { stdout: "", stderr: "" };
+          if (["container", "network", "volume", "image"].includes(args[0] ?? "")) return { stdout: "", stderr: "" };
           if (args.includes("gateway-sync")) {
-            if (!gatewayToolPrepared)
-              throw new Error("gateway diagnostic tool unavailable");
-            return { stdout: "{\"routes\":[]}", stderr: "" };
+            if (!gatewayToolPrepared) throw new Error("gateway diagnostic tool unavailable");
+            return { stdout: '{"routes":[]}', stderr: "" };
           }
           return { stdout: "{}", stderr: "" };
         },
@@ -203,34 +186,20 @@ describe("exact-project runtime lifecycle", () => {
       });
 
       await expect(run).rejects.toBe(migrationFailure);
-      const gatewayState = await readFile(
-        join(artifactDirectory, "gateway-state.json"),
-        "utf8",
-      );
-      const migrationReceipt = JSON.parse(await readFile(
-        join(artifactDirectory, "migration-receipt.json"),
-        "utf8",
-      ));
-      const diagnosticsIndex = JSON.parse(await readFile(
-        join(artifactDirectory, "diagnostics-index.json"),
-        "utf8",
-      ));
-      expect(gatewayState).toContain("\"routes\":[]");
+      const gatewayState = await readFile(join(artifactDirectory, "gateway-state.json"), "utf8");
+      const migrationReceipt = JSON.parse(await readFile(join(artifactDirectory, "migration-receipt.json"), "utf8"));
+      const diagnosticsIndex = JSON.parse(await readFile(join(artifactDirectory, "diagnostics-index.json"), "utf8"));
+      expect(gatewayState).toContain('"routes":[]');
       expect(gatewayState).not.toContain("unavailable");
-      expect(migrationReceipt).toEqual(expect.objectContaining({
-        stage: "migration",
-        status: "failed",
-      }));
-      expect(diagnosticsIndex.existingArtifacts).toContain(
-        "migration-receipt.json",
+      expect(migrationReceipt).toEqual(
+        expect.objectContaining({
+          stage: "migration",
+          status: "failed",
+        }),
       );
-      expect(events).toEqual([
-        "prepare-gateway-tool",
-        "migration-failed",
-        "cleanup",
-      ]);
-    }
-    finally {
+      expect(diagnosticsIndex.existingArtifacts).toContain("migration-receipt.json");
+      expect(events).toEqual(["prepare-gateway-tool", "migration-failed", "cleanup"]);
+    } finally {
       await rm(artifactDirectory, { force: true, recursive: true });
     }
   });
@@ -238,23 +207,25 @@ describe("exact-project runtime lifecycle", () => {
   test("seeds after runtime readiness and before canonical Gateway route probes", async () => {
     const events: string[] = [];
 
-    const result = await runExactProjectRuntimeLifecycle(createRuntimeLifecycle({
-      createDescriptor: async () => descriptor,
-      preflight: async () => events.push("preflight"),
-      persistDescriptor: async () => events.push("descriptor"),
-      initializeMigrationReceipt: async () => events.push("receipt:not-attempted"),
-      prepareDiagnostics: async value => events.push(`prepare:${value.project}`),
-      startHealthyInfrastructure: async value => events.push(`infra:${value.project}`),
-      runMigrations: async value => events.push(`migrate:${value.project}`),
-      startRepoRuntimes: async value => events.push(`runtimes:${value.project}`),
-      verifyCanonicalOriginConfiguration: async value => events.push(`origin:${value.origin}`),
-      seedE2EScenario: async value => events.push(`seed:${value.runId}`),
-      verifyUserProfileReadiness: async value => events.push(`profile-gates:${value.runId}`),
-      renderGatewayRoutes: async value => events.push(`routes:${value.origin}`),
-      awaitGatewayRouteReadiness: async value => events.push(`ready:${value.origin}`),
-      collectDiagnostics: async () => events.push("diagnostics"),
-      cleanup: async value => events.push(`cleanup:${value.project}`),
-    }));
+    const result = await runExactProjectRuntimeLifecycle(
+      createRuntimeLifecycle({
+        createDescriptor: async () => descriptor,
+        preflight: async () => events.push("preflight"),
+        persistDescriptor: async () => events.push("descriptor"),
+        initializeMigrationReceipt: async () => events.push("receipt:not-attempted"),
+        prepareDiagnostics: async (value) => events.push(`prepare:${value.project}`),
+        startHealthyInfrastructure: async (value) => events.push(`infra:${value.project}`),
+        runMigrations: async (value) => events.push(`migrate:${value.project}`),
+        startRepoRuntimes: async (value) => events.push(`runtimes:${value.project}`),
+        verifyCanonicalOriginConfiguration: async (value) => events.push(`origin:${value.origin}`),
+        seedE2EScenario: async (value) => events.push(`seed:${value.runId}`),
+        verifyUserProfileReadiness: async (value) => events.push(`profile-gates:${value.runId}`),
+        renderGatewayRoutes: async (value) => events.push(`routes:${value.origin}`),
+        awaitGatewayRouteReadiness: async (value) => events.push(`ready:${value.origin}`),
+        collectDiagnostics: async () => events.push("diagnostics"),
+        cleanup: async (value) => events.push(`cleanup:${value.project}`),
+      }),
+    );
 
     expect(result).toEqual(descriptor);
     expect(events).toEqual([
@@ -280,11 +251,11 @@ describe("exact-project runtime lifecycle", () => {
 
     const result = await runExactProjectJourneyLifecycle({
       ...createRuntimeLifecycle({
-        awaitGatewayRouteReadiness: async value => events.push(`ready:${value.origin}`),
-        cleanup: async value => events.push(`cleanup:${value.project}`),
+        awaitGatewayRouteReadiness: async (value) => events.push(`ready:${value.origin}`),
+        cleanup: async (value) => events.push(`cleanup:${value.project}`),
         collectDiagnostics: async () => events.push("diagnostics"),
       }),
-      runJourney: async value => events.push(`journey:${value.runId}`),
+      runJourney: async (value) => events.push(`journey:${value.runId}`),
     });
 
     expect(result).toEqual(descriptor);
@@ -305,12 +276,10 @@ describe("exact-project runtime lifecycle", () => {
         repositoryRoot: "D:/repo",
         requiredPaths: [],
         runCommand: async (_command, args) => {
-          if (args.includes("down"))
-            events.push("cleanup");
+          if (args.includes("down")) events.push("cleanup");
         },
         captureCommand: async (_command, args) => {
-          if (["container", "network", "volume", "image"].includes(args[0] ?? ""))
-            return { stdout: "", stderr: "" };
+          if (["container", "network", "volume", "image"].includes(args[0] ?? "")) return { stdout: "", stderr: "" };
           throw new Error("capture failed with CLIENT-ASSERTION-LEAK");
         },
         probeGateway: async () => undefined,
@@ -321,22 +290,23 @@ describe("exact-project runtime lifecycle", () => {
       });
       const run = runExactProjectRuntimeLifecycle({
         ...operations,
-        collectDiagnostics: async (value, signal) => collectRunDiagnostics({
-          descriptor: value,
-          signal,
-          readComposePs: async () => {
-            throw new Error("capture failed with CLIENT-ASSERTION-LEAK");
-          },
-          readPlaywrightEvidence: async () => {
-            throw new Error("Playwright failed with CLIENT-ASSERTION-LEAK");
-          },
-          readRecentLogs: async () => {
-            throw new Error("capture failed with CLIENT-ASSERTION-LEAK");
-          },
-          readGatewayState: async () => {
-            throw new Error("capture failed with CLIENT-ASSERTION-LEAK");
-          },
-        }),
+        collectDiagnostics: async (value, signal) =>
+          collectRunDiagnostics({
+            descriptor: value,
+            signal,
+            readComposePs: async () => {
+              throw new Error("capture failed with CLIENT-ASSERTION-LEAK");
+            },
+            readPlaywrightEvidence: async () => {
+              throw new Error("Playwright failed with CLIENT-ASSERTION-LEAK");
+            },
+            readRecentLogs: async () => {
+              throw new Error("capture failed with CLIENT-ASSERTION-LEAK");
+            },
+            readGatewayState: async () => {
+              throw new Error("capture failed with CLIENT-ASSERTION-LEAK");
+            },
+          }),
         createDescriptor: async () => ({ ...descriptor, artifactDirectory }),
         persistDescriptor: async () => undefined,
         verifyUserProfileReadiness: async () => undefined,
@@ -346,45 +316,34 @@ describe("exact-project runtime lifecycle", () => {
       let failure: unknown;
       try {
         await run;
-      }
-      catch (error) {
+      } catch (error) {
         failure = error;
       }
       expect(failure).toBeInstanceOf(AggregateError);
       expect(String(failure)).toContain("required diagnostic source failed");
       expect(String(failure)).not.toContain("CLIENT-ASSERTION-LEAK");
       expect(events).toEqual(["cleanup"]);
-      expect(await readFile(
-        join(artifactDirectory, "compose-ps.json"),
-        "utf8",
-      )).toContain("diagnostic source unavailable");
-      expect(await readFile(
-        join(artifactDirectory, "compose-logs.txt"),
-        "utf8",
-      )).toContain("diagnostic source unavailable");
-      expect(await readFile(
-        join(artifactDirectory, "gateway-state.json"),
-        "utf8",
-      )).toContain("diagnostic source unavailable");
-      expect(JSON.parse(await readFile(
-        join(artifactDirectory, "playwright-evidence.json"),
-        "utf8",
-      ))).toEqual({
+      expect(await readFile(join(artifactDirectory, "compose-ps.json"), "utf8")).toContain(
+        "diagnostic source unavailable",
+      );
+      expect(await readFile(join(artifactDirectory, "compose-logs.txt"), "utf8")).toContain(
+        "diagnostic source unavailable",
+      );
+      expect(await readFile(join(artifactDirectory, "gateway-state.json"), "utf8")).toContain(
+        "diagnostic source unavailable",
+      );
+      expect(JSON.parse(await readFile(join(artifactDirectory, "playwright-evidence.json"), "utf8"))).toEqual({
         version: 1,
         status: "unavailable",
         artifacts: [],
       });
-      const index = JSON.parse(await readFile(
-        join(artifactDirectory, "diagnostics-index.json"),
-        "utf8",
-      )) as {
+      const index = JSON.parse(await readFile(join(artifactDirectory, "diagnostics-index.json"), "utf8")) as {
         generatedArtifacts: string[];
         unavailableSources: string[];
       };
       expect(index.generatedArtifacts).toContain("playwright-evidence.json");
       expect(index.unavailableSources).toContain("playwright-evidence");
-    }
-    finally {
+    } finally {
       await rm(artifactDirectory, { force: true, recursive: true });
     }
   });
@@ -392,71 +351,62 @@ describe("exact-project runtime lifecycle", () => {
   test("bounds route readiness and still cleans the exact project after timeout", async () => {
     const events: string[] = [];
 
-    const run = runExactProjectRuntimeLifecycle(createRuntimeLifecycle({
-      awaitGatewayRouteReadiness: async () => new Promise(() => undefined),
-      collectDiagnostics: async () => events.push("diagnostics"),
-      cleanup: async value => events.push(`cleanup:${value.project}`),
-    }), { abortSettleTimeoutMs: 10, timeoutMs: 5 });
+    const run = runExactProjectRuntimeLifecycle(
+      createRuntimeLifecycle({
+        awaitGatewayRouteReadiness: async () => new Promise(() => undefined),
+        collectDiagnostics: async () => events.push("diagnostics"),
+        cleanup: async (value) => events.push(`cleanup:${value.project}`),
+      }),
+      { abortSettleTimeoutMs: 10, timeoutMs: 5 },
+    );
 
     await expect(run).rejects.toThrow("timed out");
-    expect(events).toEqual([
-      "diagnostics",
-      "cleanup:iam-e2e-run-contract-01",
-    ]);
+    expect(events).toEqual(["diagnostics", "cleanup:iam-e2e-run-contract-01"]);
   });
 
   test("preserves a Gateway route readiness failure after diagnostics and cleanup", async () => {
     const events: string[] = [];
     const readinessFailure = new Error("Gateway routes unavailable");
 
-    const run = runExactProjectRuntimeLifecycle(createRuntimeLifecycle({
-      startHealthyInfrastructure: async () => events.push("infra"),
-      runMigrations: async () => events.push("migrate"),
-      startRepoRuntimes: async () => events.push("runtimes"),
-      renderGatewayRoutes: async () => events.push("routes"),
-      awaitGatewayRouteReadiness: async () => {
-        events.push("ready");
-        throw readinessFailure;
-      },
-      collectDiagnostics: async () => events.push("diagnostics"),
-      cleanup: async () => events.push("cleanup"),
-    }));
+    const run = runExactProjectRuntimeLifecycle(
+      createRuntimeLifecycle({
+        startHealthyInfrastructure: async () => events.push("infra"),
+        runMigrations: async () => events.push("migrate"),
+        startRepoRuntimes: async () => events.push("runtimes"),
+        renderGatewayRoutes: async () => events.push("routes"),
+        awaitGatewayRouteReadiness: async () => {
+          events.push("ready");
+          throw readinessFailure;
+        },
+        collectDiagnostics: async () => events.push("diagnostics"),
+        cleanup: async () => events.push("cleanup"),
+      }),
+    );
 
     await expect(run).rejects.toBe(readinessFailure);
-    expect(events).toEqual([
-      "infra",
-      "migrate",
-      "runtimes",
-      "routes",
-      "ready",
-      "diagnostics",
-      "cleanup",
-    ]);
+    expect(events).toEqual(["infra", "migrate", "runtimes", "routes", "ready", "diagnostics", "cleanup"]);
   });
 
   test("keeps Gateway routes closed when a User Profile gate fails", async () => {
     const events: string[] = [];
     const gateFailure = new Error("User Profile PostgreSQL gate failed");
 
-    const run = runExactProjectRuntimeLifecycle(createRuntimeLifecycle({
-      seedE2EScenario: async () => events.push("seed"),
-      verifyUserProfileReadiness: async () => {
-        events.push("profile-gates");
-        throw gateFailure;
-      },
-      renderGatewayRoutes: async () => events.push("routes"),
-      awaitGatewayRouteReadiness: async () => events.push("ready"),
-      collectDiagnostics: async () => events.push("diagnostics"),
-      cleanup: async () => events.push("cleanup"),
-    }));
+    const run = runExactProjectRuntimeLifecycle(
+      createRuntimeLifecycle({
+        seedE2EScenario: async () => events.push("seed"),
+        verifyUserProfileReadiness: async () => {
+          events.push("profile-gates");
+          throw gateFailure;
+        },
+        renderGatewayRoutes: async () => events.push("routes"),
+        awaitGatewayRouteReadiness: async () => events.push("ready"),
+        collectDiagnostics: async () => events.push("diagnostics"),
+        cleanup: async () => events.push("cleanup"),
+      }),
+    );
 
     await expect(run).rejects.toBe(gateFailure);
-    expect(events).toEqual([
-      "seed",
-      "profile-gates",
-      "diagnostics",
-      "cleanup",
-    ]);
+    expect(events).toEqual(["seed", "profile-gates", "diagnostics", "cleanup"]);
   });
 
   test("turns a capturable signal into a rejected run and cleans the exact project", async () => {
@@ -468,23 +418,23 @@ describe("exact-project runtime lifecycle", () => {
       markReadinessStarted = resolve;
     });
 
-    const run = runExactProjectRuntimeLifecycle(createRuntimeLifecycle({
-      awaitGatewayRouteReadiness: async () => {
-        markReadinessStarted?.();
-        return new Promise(() => undefined);
-      },
-      collectDiagnostics: async () => events.push("diagnostics"),
-      cleanup: async value => events.push(`cleanup:${value.project}`),
-    }), { abortSettleTimeoutMs: 10, signal: controller.signal });
+    const run = runExactProjectRuntimeLifecycle(
+      createRuntimeLifecycle({
+        awaitGatewayRouteReadiness: async () => {
+          markReadinessStarted?.();
+          return new Promise(() => undefined);
+        },
+        collectDiagnostics: async () => events.push("diagnostics"),
+        cleanup: async (value) => events.push(`cleanup:${value.project}`),
+      }),
+      { abortSettleTimeoutMs: 10, signal: controller.signal },
+    );
 
     await readinessStarted;
     controller.abort(signalFailure);
 
     await expect(run).rejects.toBe(signalFailure);
-    expect(events).toEqual([
-      "diagnostics",
-      "cleanup:iam-e2e-run-contract-01",
-    ]);
+    expect(events).toEqual(["diagnostics", "cleanup:iam-e2e-run-contract-01"]);
   });
 
   test("finishes cleanup but preserves a signal received while cleanup is running", async () => {
@@ -500,44 +450,45 @@ describe("exact-project runtime lifecycle", () => {
       releaseCleanup = resolve;
     });
 
-    const run = runExactProjectRuntimeLifecycle(createRuntimeLifecycle({
-      collectDiagnostics: async () => events.push("diagnostics"),
-      cleanup: async () => {
-        events.push("cleanup:start");
-        markCleanupStarted?.();
-        await cleanupReleased;
-        events.push("cleanup:finish");
-      },
-    }), { signal: controller.signal });
+    const run = runExactProjectRuntimeLifecycle(
+      createRuntimeLifecycle({
+        collectDiagnostics: async () => events.push("diagnostics"),
+        cleanup: async () => {
+          events.push("cleanup:start");
+          markCleanupStarted?.();
+          await cleanupReleased;
+          events.push("cleanup:finish");
+        },
+      }),
+      { signal: controller.signal },
+    );
 
     await cleanupStarted;
     controller.abort(signalFailure);
     releaseCleanup?.();
 
     await expect(run).rejects.toBe(signalFailure);
-    expect(events).toEqual([
-      "diagnostics",
-      "cleanup:start",
-      "cleanup:finish",
-    ]);
+    expect(events).toEqual(["diagnostics", "cleanup:start", "cleanup:finish"]);
   });
 
   test("collects diagnostics before exact-project cleanup when setup fails", async () => {
     const events: string[] = [];
     const startupFailure = new Error("runtime startup failed");
 
-    const run = runExactProjectRuntimeLifecycle(createRuntimeLifecycle({
-      startHealthyInfrastructure: async () => events.push("infra"),
-      runMigrations: async () => events.push("migrate"),
-      startRepoRuntimes: async () => {
-        events.push("runtimes");
-        throw startupFailure;
-      },
-      renderGatewayRoutes: async () => events.push("routes"),
-      awaitGatewayRouteReadiness: async () => events.push("ready"),
-      collectDiagnostics: async value => events.push(`diagnostics:${value.project}`),
-      cleanup: async value => events.push(`cleanup:${value.project}`),
-    }));
+    const run = runExactProjectRuntimeLifecycle(
+      createRuntimeLifecycle({
+        startHealthyInfrastructure: async () => events.push("infra"),
+        runMigrations: async () => events.push("migrate"),
+        startRepoRuntimes: async () => {
+          events.push("runtimes");
+          throw startupFailure;
+        },
+        renderGatewayRoutes: async () => events.push("routes"),
+        awaitGatewayRouteReadiness: async () => events.push("ready"),
+        collectDiagnostics: async (value) => events.push(`diagnostics:${value.project}`),
+        cleanup: async (value) => events.push(`cleanup:${value.project}`),
+      }),
+    );
 
     await expect(run).rejects.toBe(startupFailure);
     expect(events).toEqual([
@@ -552,27 +503,30 @@ describe("exact-project runtime lifecycle", () => {
   test("bounds the diagnostic phase so a hung collector cannot prevent cleanup", async () => {
     const events: string[] = [];
 
-    const run = runExactProjectRuntimeLifecycle(createRuntimeLifecycle({
-      startHealthyInfrastructure: async () => {
-        throw new Error("runtime startup failed");
-      },
-      collectDiagnostics: async () => new Promise(() => undefined),
-      cleanup: async () => events.push("cleanup"),
-    }), { abortSettleTimeoutMs: 10, diagnosticsTimeoutMs: 5 });
+    const run = runExactProjectRuntimeLifecycle(
+      createRuntimeLifecycle({
+        startHealthyInfrastructure: async () => {
+          throw new Error("runtime startup failed");
+        },
+        collectDiagnostics: async () => new Promise(() => undefined),
+        cleanup: async () => events.push("cleanup"),
+      }),
+      { abortSettleTimeoutMs: 10, diagnosticsTimeoutMs: 5 },
+    );
 
     let failure: unknown;
     try {
       await run;
-    }
-    catch (error) {
+    } catch (error) {
       failure = error;
     }
     expect(failure).toBeInstanceOf(AggregateError);
-    if (!(failure instanceof AggregateError))
-      throw new Error("expected AggregateError");
-    expect(failure.errors[1]).toEqual(expect.objectContaining({
-      message: "E2E diagnostic collection timed out after 5ms",
-    }));
+    if (!(failure instanceof AggregateError)) throw new Error("expected AggregateError");
+    expect(failure.errors[1]).toEqual(
+      expect.objectContaining({
+        message: "E2E diagnostic collection timed out after 5ms",
+      }),
+    );
     expect(events).toEqual(["cleanup"]);
   });
 
@@ -580,25 +534,25 @@ describe("exact-project runtime lifecycle", () => {
     const startupFailure = new Error("runtime startup failed");
     const cleanupFailure = new Error("exact-project cleanup failed");
 
-    const run = runExactProjectRuntimeLifecycle(createRuntimeLifecycle({
-      startHealthyInfrastructure: async () => {
-        throw startupFailure;
-      },
-      cleanup: async () => {
-        throw cleanupFailure;
-      },
-    }));
+    const run = runExactProjectRuntimeLifecycle(
+      createRuntimeLifecycle({
+        startHealthyInfrastructure: async () => {
+          throw startupFailure;
+        },
+        cleanup: async () => {
+          throw cleanupFailure;
+        },
+      }),
+    );
 
     let failure: unknown;
     try {
       await run;
-    }
-    catch (error) {
+    } catch (error) {
       failure = error;
     }
     expect(failure).toBeInstanceOf(AggregateError);
-    if (!(failure instanceof AggregateError))
-      throw new Error("expected AggregateError");
+    if (!(failure instanceof AggregateError)) throw new Error("expected AggregateError");
     expect(failure.errors).toEqual([startupFailure, cleanupFailure]);
   });
 
@@ -606,13 +560,15 @@ describe("exact-project runtime lifecycle", () => {
     const events: string[] = [];
     const cleanupFailure = new Error("exact-project cleanup failed");
 
-    const run = runExactProjectRuntimeLifecycle(createRuntimeLifecycle({
-      collectDiagnostics: async () => events.push("diagnostics"),
-      cleanup: async () => {
-        events.push("cleanup");
-        throw cleanupFailure;
-      },
-    }));
+    const run = runExactProjectRuntimeLifecycle(
+      createRuntimeLifecycle({
+        collectDiagnostics: async () => events.push("diagnostics"),
+        cleanup: async () => {
+          events.push("cleanup");
+          throw cleanupFailure;
+        },
+      }),
+    );
 
     await expect(run).rejects.toBe(cleanupFailure);
     expect(events).toEqual(["diagnostics", "cleanup"]);
@@ -627,35 +583,36 @@ describe("exact-project runtime lifecycle", () => {
       markReadinessStarted = resolve;
     });
 
-    const run = runExactProjectRuntimeLifecycle(createRuntimeLifecycle({
-      awaitGatewayRouteReadiness: async () => {
-        markReadinessStarted?.();
-        return new Promise(() => undefined);
+    const run = runExactProjectRuntimeLifecycle(
+      createRuntimeLifecycle({
+        awaitGatewayRouteReadiness: async () => {
+          markReadinessStarted?.();
+          return new Promise(() => undefined);
+        },
+        cleanup: async (_value, signal) => {
+          teardownSignal = signal;
+          return new Promise(() => undefined);
+        },
+      }),
+      {
+        abortSettleTimeoutMs: 10,
+        cleanupTimeoutMs: 5,
+        signal: runtimeController.signal,
       },
-      cleanup: async (_value, signal) => {
-        teardownSignal = signal;
-        return new Promise(() => undefined);
-      },
-    }), {
-      abortSettleTimeoutMs: 10,
-      cleanupTimeoutMs: 5,
-      signal: runtimeController.signal,
-    });
+    );
 
     await readinessStarted;
     runtimeController.abort(runtimeFailure);
     let failure: unknown;
     try {
       await run;
-    }
-    catch (error) {
+    } catch (error) {
       failure = error;
     }
     expect(teardownSignal).not.toBe(runtimeController.signal);
     expect(teardownSignal?.aborted).toBe(true);
     expect(failure).toBeInstanceOf(AggregateError);
-    if (!(failure instanceof AggregateError))
-      throw new Error("expected AggregateError");
+    if (!(failure instanceof AggregateError)) throw new Error("expected AggregateError");
     expect(failure.errors).toEqual([
       runtimeFailure,
       expect.objectContaining({

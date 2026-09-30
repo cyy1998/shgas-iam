@@ -264,8 +264,7 @@ routes:
     desc: IAM server-to-server Custom SSO token exchange through external dev host without browser CORS
     uri: /sso/token
     vars:
-      -
-        - http_host
+      - - http_host
         - ==
         - ${IAM_SSO_EXTERNAL_HOST}
     plugins:
@@ -283,8 +282,7 @@ routes:
     desc: IAM server-to-server Custom SSO token exchange through internal dev host without browser CORS
     uri: /sso/token
     vars:
-      -
-        - http_host
+      - - http_host
         - ==
         - ${IAM_SSO_INTERNAL_HOST}
     plugins:
@@ -302,8 +300,7 @@ routes:
     desc: IAM SSO tier through external dev host
     uri: /sso/*
     vars:
-      -
-        - http_host
+      - - http_host
         - ==
         - ${IAM_SSO_EXTERNAL_HOST}
     plugins:
@@ -320,8 +317,7 @@ routes:
     desc: IAM SSO tier through internal dev host
     uri: /sso/*
     vars:
-      -
-        - http_host
+      - - http_host
         - ==
         - ${IAM_SSO_INTERNAL_HOST}
     plugins:

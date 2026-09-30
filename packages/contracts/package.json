@@ -7,22 +7,22 @@
     ".": "./src/index.ts"
   },
   "scripts": {
-    "lint": "eslint src eslint.config.js",
-    "lint:fix": "eslint --fix src eslint.config.js",
+    "lint": "node ../../scripts/run-quality.mjs lint --workspace packages/contracts",
+    "lint:fix": "node ../../scripts/run-quality.mjs lint-fix --workspace packages/contracts",
     "test": "pnpm test:unit",
     "test:unit": "bun test --max-concurrency=2 src",
-    "typecheck": "pnpm exec tsc --noEmit"
+    "typecheck": "pnpm exec tsc --noEmit",
+    "format": "node ../../scripts/run-quality.mjs format --workspace packages/contracts",
+    "format:check": "node ../../scripts/run-quality.mjs format-check --workspace packages/contracts"
   },
   "dependencies": {
     "sm-crypto": "^0.4.0",
     "zod": "^4.4.3"
   },
   "devDependencies": {
-    "@iam/eslint-config": "workspace:*",
     "@types/bun": "latest",
     "@types/sm-crypto": "^0.3.4",
     "@typescript/native": "npm:typescript@7.0.2",
-    "eslint": "^10.7.0",
     "typescript": "npm:@typescript/typescript6@6.0.2"
   }
 }

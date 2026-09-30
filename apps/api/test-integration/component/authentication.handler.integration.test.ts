@@ -1,12 +1,7 @@
-import {
-  createApiAuthenticationHandlers as createApiAuthenticationHandlersImpl,
-} from "@api/middlewares/authentication.handler";
-import {
-  mapCustomSsoRetryableError,
-} from "@api/middlewares/custom-sso-retryable.error";
-import {
-  createCustomSsoSubjectDeliveryRequestScope,
-} from "@api/services/sso/subject-delivery/custom-sso-subject-delivery-request-scope";
+import { describe, expect, mock, test } from "bun:test";
+import { createApiAuthenticationHandlers as createApiAuthenticationHandlersImpl } from "@api/middlewares/authentication.handler";
+import { mapCustomSsoRetryableError } from "@api/middlewares/custom-sso-retryable.error";
+import { createCustomSsoSubjectDeliveryRequestScope } from "@api/services/sso/subject-delivery/custom-sso-subject-delivery-request-scope";
 import {
   customSsoLocalSessionCookieName,
   encodeCustomSsoClientCode,
@@ -21,33 +16,19 @@ import {
 } from "@iam/api-core/subject-access";
 import { SubjectProjectionNotReadyError } from "@iam/client-subject-projection";
 import { ApiErrorCode } from "@iam/contracts";
-import {
-  CustomSsoClientDeliveryUnauthorizedError,
-} from "@iam/custom-sso";
-import { describe, expect, mock, test } from "bun:test";
+import { CustomSsoClientDeliveryUnauthorizedError } from "@iam/custom-sso";
 import { Hono } from "hono";
 
-type AuthenticationHandlerDeps = Parameters<
-  typeof createApiAuthenticationHandlersImpl
->[0];
+type AuthenticationHandlerDeps = Parameters<typeof createApiAuthenticationHandlersImpl>[0];
 
-function createApiAuthenticationHandlers(
-  deps: Omit<
-    AuthenticationHandlerDeps,
-    "subjectDeliveryRequests"
-  >,
-) {
+function createApiAuthenticationHandlers(deps: Omit<AuthenticationHandlerDeps, "subjectDeliveryRequests">) {
   return createApiAuthenticationHandlersImpl({
     ...deps,
-    subjectDeliveryRequests:
-      createCustomSsoSubjectDeliveryRequestScope(),
+    subjectDeliveryRequests: createCustomSsoSubjectDeliveryRequestScope(),
   });
 }
 
-function resolvedAuthentication(authenticationContext: {
-  authenticatedClientCode: string;
-  subjectIdentifier: string;
-}) {
+function resolvedAuthentication(authenticationContext: { authenticatedClientCode: string; subjectIdentifier: string }) {
   return {
     authenticationContext,
     subjectDeliveryCapability: {
@@ -84,7 +65,7 @@ describe("publicAuthenticationHandler", () => {
     });
     const app = new Hono();
     app.use("*", handlers.publicAuthenticationHandler);
-    app.get("/public/user-info", c => c.json({ ok: true }));
+    app.get("/public/user-info", (c) => c.json({ ok: true }));
     app.onError(createErrorHandler(logger));
 
     const response = await app.request("http://localhost/public/user-info", {
@@ -123,7 +104,7 @@ describe("publicAuthenticationHandler", () => {
       };
     }>();
     app.use("*", handlers.publicAuthenticationHandler);
-    app.get("/public/ping", c => c.json({ ok: true }));
+    app.get("/public/ping", (c) => c.json({ ok: true }));
     app.onError(createErrorHandler(logger));
 
     const response = await app.request("http://localhost/public/ping");
@@ -152,18 +133,15 @@ describe("publicAuthenticationHandler", () => {
     });
     const app = new Hono();
     app.use("*", handlers.publicAuthenticationHandler);
-    app.get("/public/ping", c => c.json({ ok: true }));
+    app.get("/public/ping", (c) => c.json({ ok: true }));
     app.onError(createErrorHandler(logger));
 
-    const response = await app.request(
-      "http://localhost/public/ping",
-      {
-        headers: {
-          Authorization: "local-session",
-          Client: "g".repeat(65),
-        },
+    const response = await app.request("http://localhost/public/ping", {
+      headers: {
+        Authorization: "local-session",
+        Client: "g".repeat(65),
       },
-    );
+    });
 
     expect(response.status).toBe(400);
     expect(resolvePublicAuthentication).not.toHaveBeenCalled();
@@ -179,9 +157,9 @@ describe("publicAuthenticationHandler", () => {
         resolvePublicAuthentication: mock(async () =>
           resolvedAuthentication({
             authenticatedClientCode: "iam",
-            subjectIdentifier:
-              "00000000-0000-4000-8000-000000001001",
-          })),
+            subjectIdentifier: "00000000-0000-4000-8000-000000001001",
+          }),
+        ),
       },
       config: { projectionRetryAfterSeconds: 3 },
     });
@@ -192,11 +170,13 @@ describe("publicAuthenticationHandler", () => {
       };
     }>();
     app.use("*", handlers.publicAuthenticationHandler);
-    app.get("/public/context", c => c.json({
-      authenticatedClientCode: c.get("authenticatedClientCode"),
-      contextKeys: Object.keys(c.var).sort(),
-      subjectIdentifier: c.get("subjectIdentifier"),
-    }));
+    app.get("/public/context", (c) =>
+      c.json({
+        authenticatedClientCode: c.get("authenticatedClientCode"),
+        contextKeys: Object.keys(c.var).sort(),
+        subjectIdentifier: c.get("subjectIdentifier"),
+      }),
+    );
     app.onError(createErrorHandler(logger));
 
     const response = await app.request("http://localhost/public/context", {
@@ -219,9 +199,9 @@ describe("publicAuthenticationHandler", () => {
     const resolvePublicAuthentication = mock(async () =>
       resolvedAuthentication({
         authenticatedClientCode: "gateway",
-        subjectIdentifier:
-          "00000000-0000-4000-8000-000000001001",
-      }));
+        subjectIdentifier: "00000000-0000-4000-8000-000000001001",
+      }),
+    );
     const handlers = createApiAuthenticationHandlers({
       clientService: {
         getClientBySecret: mock(async () => null),
@@ -238,11 +218,13 @@ describe("publicAuthenticationHandler", () => {
       };
     }>();
     app.use("*", handlers.publicAuthenticationHandler);
-    app.get("/public/context", c => c.json({
-      authenticatedClientCode: c.get("authenticatedClientCode"),
-      contextKeys: Object.keys(c.var).sort(),
-      subjectIdentifier: c.get("subjectIdentifier"),
-    }));
+    app.get("/public/context", (c) =>
+      c.json({
+        authenticatedClientCode: c.get("authenticatedClientCode"),
+        contextKeys: Object.keys(c.var).sort(),
+        subjectIdentifier: c.get("subjectIdentifier"),
+      }),
+    );
     app.onError(createErrorHandler(logger));
 
     const response = await app.request("http://localhost/public/context", {
@@ -255,16 +237,10 @@ describe("publicAuthenticationHandler", () => {
     expect(response.status).toBe(200);
     await expect(response.json()).resolves.toEqual({
       authenticatedClientCode: "gateway",
-      contextKeys: [
-        "authenticatedClientCode",
-        "subjectIdentifier",
-      ],
+      contextKeys: ["authenticatedClientCode", "subjectIdentifier"],
       subjectIdentifier: "00000000-0000-4000-8000-000000001001",
     });
-    expect(resolvePublicAuthentication).toHaveBeenCalledWith(
-      "local-session",
-      "gateway",
-    );
+    expect(resolvePublicAuthentication).toHaveBeenCalledWith("local-session", "gateway");
   });
 
   test("resolves an encoded local-session cookie for an opaque Client Code", async () => {
@@ -272,9 +248,9 @@ describe("publicAuthenticationHandler", () => {
     const resolvePublicAuthentication = mock(async () =>
       resolvedAuthentication({
         authenticatedClientCode: "legacy:client/中文",
-        subjectIdentifier:
-          "00000000-0000-4000-8000-000000001001",
-      }));
+        subjectIdentifier: "00000000-0000-4000-8000-000000001001",
+      }),
+    );
     const handlers = createApiAuthenticationHandlers({
       clientService: {
         getClientBySecret: mock(async () => null),
@@ -286,26 +262,18 @@ describe("publicAuthenticationHandler", () => {
     });
     const app = new Hono();
     app.use("*", handlers.publicAuthenticationHandler);
-    app.get("/public/ping", c => c.json({ ok: true }));
+    app.get("/public/ping", (c) => c.json({ ok: true }));
     app.onError(createErrorHandler(logger));
 
-    const response = await app.request(
-      "http://localhost/public/ping",
-      {
-        headers: {
-          Client:
-            "legacy%3Aclient%2F%E4%B8%AD%E6%96%87",
-          Cookie:
-            "local_legacy%3Aclient%2F%E4%B8%AD%E6%96%87_session=local-session",
-        },
+    const response = await app.request("http://localhost/public/ping", {
+      headers: {
+        Client: "legacy%3Aclient%2F%E4%B8%AD%E6%96%87",
+        Cookie: "local_legacy%3Aclient%2F%E4%B8%AD%E6%96%87_session=local-session",
       },
-    );
+    });
 
     expect(response.status).toBe(200);
-    expect(resolvePublicAuthentication).toHaveBeenCalledWith(
-      "local-session",
-      "legacy:client/中文",
-    );
+    expect(resolvePublicAuthentication).toHaveBeenCalledWith("local-session", "legacy:client/中文");
   });
 
   test("resolves a database-valid non-BMP Client Code from its encoded cookie", async () => {
@@ -314,9 +282,9 @@ describe("publicAuthenticationHandler", () => {
     const resolvePublicAuthentication = mock(async () =>
       resolvedAuthentication({
         authenticatedClientCode: clientCode,
-        subjectIdentifier:
-          "00000000-0000-4000-8000-000000001001",
-      }));
+        subjectIdentifier: "00000000-0000-4000-8000-000000001001",
+      }),
+    );
     const handlers = createApiAuthenticationHandlers({
       clientService: {
         getClientBySecret: mock(async () => null),
@@ -328,35 +296,26 @@ describe("publicAuthenticationHandler", () => {
     });
     const app = new Hono();
     app.use("*", handlers.publicAuthenticationHandler);
-    app.get("/public/ping", c => c.json({ ok: true }));
+    app.get("/public/ping", (c) => c.json({ ok: true }));
     app.onError(createErrorHandler(logger));
 
-    const response = await app.request(
-      "http://localhost/public/ping",
-      {
-        headers: {
-          Client: encodeCustomSsoClientCode(clientCode),
-          Cookie:
-            `${customSsoLocalSessionCookieName(clientCode)}=local-session`,
-        },
+    const response = await app.request("http://localhost/public/ping", {
+      headers: {
+        Client: encodeCustomSsoClientCode(clientCode),
+        Cookie: `${customSsoLocalSessionCookieName(clientCode)}=local-session`,
       },
-    );
+    });
 
     expect(response.status).toBe(200);
-    expect(resolvePublicAuthentication).toHaveBeenCalledWith(
-      "local-session",
-      clientCode,
-    );
+    expect(resolvePublicAuthentication).toHaveBeenCalledWith("local-session", clientCode);
   });
 
   test("binds the delivery capability only for the downstream Hono lifecycle", async () => {
     const logger = createMockLogger();
-    const subjectDeliveryRequests
-      = createCustomSsoSubjectDeliveryRequestScope();
+    const subjectDeliveryRequests = createCustomSsoSubjectDeliveryRequestScope();
     const resolveUserInfo = mock(async () => ({
       version: 2 as const,
-      subjectIdentifier:
-        "00000000-0000-4000-8000-000000001001",
+      subjectIdentifier: "00000000-0000-4000-8000-000000001001",
     }));
     const handlers = createApiAuthenticationHandlersImpl({
       clientService: {
@@ -366,8 +325,7 @@ describe("publicAuthenticationHandler", () => {
         resolvePublicAuthentication: mock(async () => ({
           authenticationContext: {
             authenticatedClientCode: "gateway",
-            subjectIdentifier:
-              "00000000-0000-4000-8000-000000001001",
+            subjectIdentifier: "00000000-0000-4000-8000-000000001001",
           },
           subjectDeliveryCapability: { resolveUserInfo },
         })),
@@ -380,8 +338,7 @@ describe("publicAuthenticationHandler", () => {
     app.use("*", handlers.publicAuthenticationHandler);
     app.get("/public/user-info", async (c) => {
       downstreamContext = c;
-      const projection
-        = await subjectDeliveryRequests.resolveUserInfoForRequest(c);
+      const projection = await subjectDeliveryRequests.resolveUserInfoForRequest(c);
       return c.json({
         contextKeys: Object.keys(c.var).sort(),
         projection,
@@ -389,35 +346,25 @@ describe("publicAuthenticationHandler", () => {
     });
     app.onError(createErrorHandler(logger));
 
-    const response = await app.request(
-      "http://localhost/public/user-info",
-      {
-        headers: {
-          Authorization: "local-session",
-          Client: "gateway",
-        },
+    const response = await app.request("http://localhost/public/user-info", {
+      headers: {
+        Authorization: "local-session",
+        Client: "gateway",
       },
-    );
+    });
 
     expect(response.status).toBe(200);
     await expect(response.json()).resolves.toMatchObject({
-      contextKeys: [
-        "authenticatedClientCode",
-        "subjectIdentifier",
-      ],
+      contextKeys: ["authenticatedClientCode", "subjectIdentifier"],
       projection: {
-        subjectIdentifier:
-          "00000000-0000-4000-8000-000000001001",
+        subjectIdentifier: "00000000-0000-4000-8000-000000001001",
       },
     });
     expect(resolveUserInfo).toHaveBeenCalledTimes(1);
-    if (downstreamContext === undefined)
-      throw new Error("expected downstream Hono context");
-    await expect(
-      subjectDeliveryRequests.resolveUserInfoForRequest(
-        downstreamContext,
-      ),
-    ).rejects.toThrow("request-scoped");
+    if (downstreamContext === undefined) throw new Error("expected downstream Hono context");
+    await expect(subjectDeliveryRequests.resolveUserInfoForRequest(downstreamContext)).rejects.toThrow(
+      "request-scoped",
+    );
   });
 
   test("returns SESSION_INVALID and clears cookies for a disabled Subject", async () => {
@@ -435,7 +382,7 @@ describe("publicAuthenticationHandler", () => {
     });
     const app = new Hono();
     app.use("*", handlers.publicAuthenticationHandler);
-    app.get("/public/ping", c => c.json({ ok: true }));
+    app.get("/public/ping", (c) => c.json({ ok: true }));
     app.onError(createErrorHandler(logger));
 
     const response = await app.request("http://localhost/public/ping", {
@@ -475,30 +422,21 @@ describe("publicAuthenticationHandler", () => {
     });
     const app = new Hono();
     app.use("*", handlers.publicAuthenticationHandler);
-    app.get("/public/user-info", c => c.json({ ok: true }));
+    app.get("/public/user-info", (c) => c.json({ ok: true }));
     app.onError(createErrorHandler(logger));
 
-    const response = await app.request(
-      "http://localhost/public/user-info",
-      {
-        headers: {
-          Client: "iam",
-          Cookie:
-            "global_session=principal-cookie; third_party_session=external-token",
-        },
+    const response = await app.request("http://localhost/public/user-info", {
+      headers: {
+        Client: "iam",
+        Cookie: "global_session=principal-cookie; third_party_session=external-token",
       },
-    );
+    });
 
     expect(response.status).toBe(401);
-    expect(resolvePublicAuthentication).toHaveBeenCalledWith(
-      "principal-cookie",
-      "iam",
-    );
+    expect(resolvePublicAuthentication).toHaveBeenCalledWith("principal-cookie", "iam");
     expect(response.headers.getSetCookie()).toHaveLength(1);
     expect(response.headers.getSetCookie()).toEqual(
-      expect.arrayContaining([
-        expect.stringContaining("global_session="),
-      ]),
+      expect.arrayContaining([expect.stringContaining("global_session=")]),
     );
   });
 
@@ -507,9 +445,9 @@ describe("publicAuthenticationHandler", () => {
     const resolvePublicAuthentication = mock(async () =>
       resolvedAuthentication({
         authenticatedClientCode: "iam",
-        subjectIdentifier:
-          "00000000-0000-4000-8000-000000001001",
-      }));
+        subjectIdentifier: "00000000-0000-4000-8000-000000001001",
+      }),
+    );
     const handlers = createApiAuthenticationHandlers({
       clientService: {
         getClientBySecret: mock(async () => null),
@@ -526,23 +464,16 @@ describe("publicAuthenticationHandler", () => {
     });
     app.onError(createErrorHandler(logger));
 
-    const response = await app.request(
-      "http://localhost/public/user-info",
-      {
-        headers: {
-          Authorization: "principal-header",
-          Client: "iam",
-          Cookie:
-            "global_session=principal-cookie; third_party_session=external-token",
-        },
+    const response = await app.request("http://localhost/public/user-info", {
+      headers: {
+        Authorization: "principal-header",
+        Client: "iam",
+        Cookie: "global_session=principal-cookie; third_party_session=external-token",
       },
-    );
+    });
 
     expect(response.status).toBe(401);
-    expect(resolvePublicAuthentication).toHaveBeenCalledWith(
-      "principal-cookie",
-      "iam",
-    );
+    expect(resolvePublicAuthentication).toHaveBeenCalledWith("principal-cookie", "iam");
     expect(response.headers.getSetCookie()).toEqual([]);
   });
 
@@ -561,7 +492,7 @@ describe("publicAuthenticationHandler", () => {
     });
     const app = new Hono();
     app.use("*", handlers.publicAuthenticationHandler);
-    app.get("/public/ping", c => c.json({ ok: true }));
+    app.get("/public/ping", (c) => c.json({ ok: true }));
     app.onError(createErrorHandler(logger));
 
     const response = await app.request("http://localhost/public/ping", {
@@ -591,19 +522,16 @@ describe("publicAuthenticationHandler", () => {
         resolvePublicAuthentication: mock(async () =>
           resolvedAuthentication({
             authenticatedClientCode: "gateway",
-            subjectIdentifier:
-              "00000000-0000-4000-8000-000000001001",
-          })),
+            subjectIdentifier: "00000000-0000-4000-8000-000000001001",
+          }),
+        ),
       },
       config: { projectionRetryAfterSeconds: 3 },
     });
     const app = new Hono();
     app.use("*", handlers.publicAuthenticationHandler);
     app.get("/public/user-info", () => {
-      throw mapCustomSsoRetryableError(
-        new SubjectProjectionNotReadyError(),
-        { retryAfterSeconds: 3 },
-      );
+      throw mapCustomSsoRetryableError(new SubjectProjectionNotReadyError(), { retryAfterSeconds: 3 });
     });
     app.onError(createErrorHandler(logger));
 
@@ -629,9 +557,9 @@ describe("publicAuthenticationHandler", () => {
         resolvePublicAuthentication: mock(async () =>
           resolvedAuthentication({
             authenticatedClientCode: "gateway",
-            subjectIdentifier:
-              "00000000-0000-4000-8000-000000001001",
-          })),
+            subjectIdentifier: "00000000-0000-4000-8000-000000001001",
+          }),
+        ),
       },
       config: { projectionRetryAfterSeconds: 3 },
     });
@@ -668,9 +596,9 @@ describe("publicAuthenticationHandler", () => {
         resolvePublicAuthentication: mock(async () =>
           resolvedAuthentication({
             authenticatedClientCode: "gateway",
-            subjectIdentifier:
-              "00000000-0000-4000-8000-000000001001",
-          })),
+            subjectIdentifier: "00000000-0000-4000-8000-000000001001",
+          }),
+        ),
       },
       config: { projectionRetryAfterSeconds: 3 },
     });
@@ -703,9 +631,9 @@ describe("publicAuthenticationHandler", () => {
         resolvePublicAuthentication: mock(async () =>
           resolvedAuthentication({
             authenticatedClientCode: "gateway",
-            subjectIdentifier:
-              "00000000-0000-4000-8000-000000001001",
-          })),
+            subjectIdentifier: "00000000-0000-4000-8000-000000001001",
+          }),
+        ),
       },
       config: { projectionRetryAfterSeconds: 3 },
     });
@@ -716,23 +644,17 @@ describe("publicAuthenticationHandler", () => {
     });
     app.onError(createErrorHandler(logger));
 
-    const response = await app.request(
-      "http://localhost/public/user-info",
-      {
-        headers: {
-          Client: "gateway",
-          Cookie:
-            "local_gateway_session=session-token; third_party_session=external-token",
-        },
+    const response = await app.request("http://localhost/public/user-info", {
+      headers: {
+        Client: "gateway",
+        Cookie: "local_gateway_session=session-token; third_party_session=external-token",
       },
-    );
+    });
 
     expect(response.status).toBe(401);
     expect(response.headers.getSetCookie()).toHaveLength(1);
     expect(response.headers.getSetCookie()).toEqual(
-      expect.arrayContaining([
-        expect.stringContaining("local_gateway_session="),
-      ]),
+      expect.arrayContaining([expect.stringContaining("local_gateway_session=")]),
     );
   });
 
@@ -746,9 +668,9 @@ describe("publicAuthenticationHandler", () => {
         resolvePublicAuthentication: mock(async () =>
           resolvedAuthentication({
             authenticatedClientCode: "gateway",
-            subjectIdentifier:
-              "00000000-0000-4000-8000-000000001001",
-          })),
+            subjectIdentifier: "00000000-0000-4000-8000-000000001001",
+          }),
+        ),
       },
       config: { projectionRetryAfterSeconds: 3 },
     });
@@ -759,16 +681,13 @@ describe("publicAuthenticationHandler", () => {
     });
     app.onError(createErrorHandler(logger));
 
-    const response = await app.request(
-      "http://localhost/public/user-info",
-      {
-        headers: {
-          Authorization: "session-token",
-          Client: "gateway",
-          Cookie: "third_party_session=external-token",
-        },
+    const response = await app.request("http://localhost/public/user-info", {
+      headers: {
+        Authorization: "session-token",
+        Client: "gateway",
+        Cookie: "third_party_session=external-token",
       },
-    );
+    });
 
     expect(response.status).toBe(401);
     expect(response.headers.getSetCookie()).toEqual([]);

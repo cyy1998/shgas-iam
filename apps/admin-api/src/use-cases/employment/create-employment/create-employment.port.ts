@@ -17,11 +17,7 @@ export interface CreateEmploymentStorePort {
     description: string | null;
     status: EmploymentStatus;
   }) => Promise<Employment>;
-  getOpenEmploymentByUserOrgPosId: (
-    userId: number,
-    orgId: number,
-    posId: number,
-  ) => Promise<Employment | null>;
+  getOpenEmploymentByUserOrgPosId: (userId: number, orgId: number, posId: number) => Promise<Employment | null>;
   getOpenPrimaryEmploymentIdsByUserId: (userId: number) => Promise<number[]>;
   lockEmploymentsByIds: (ids: readonly number[]) => Promise<Employment[]>;
   updateEmploymentRecord: (id: number, input: { isPrimary: false }) => Promise<Employment>;
@@ -31,10 +27,7 @@ export interface CreateEmploymentTransactionPorts {
   employmentStore: CreateEmploymentStorePort;
   organizationReader: {
     getOrganizationByCode: (orgCode: string) => Promise<Organization | null>;
-    isOrganizationDescendantOf: (
-      descendantOrgCode: string,
-      ancestorOrgCode: string,
-    ) => Promise<boolean>;
+    isOrganizationDescendantOf: (descendantOrgCode: string, ancestorOrgCode: string) => Promise<boolean>;
   };
   positionReader: {
     getPositionByCode: (posCode: string) => Promise<Position | null>;
@@ -46,10 +39,12 @@ export interface CreateEmploymentTransactionPorts {
     recordAuditLog: (input: AuditLogInput) => Promise<void>;
   };
   userProfileInvalidation: {
-    recordChanges: (changes: readonly {
-      readonly kind: "employment";
-      readonly userId: number;
-    }[]) => Promise<void>;
+    recordChanges: (
+      changes: readonly {
+        readonly kind: "employment";
+        readonly userId: number;
+      }[],
+    ) => Promise<void>;
   };
 }
 

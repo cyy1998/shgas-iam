@@ -1,6 +1,6 @@
 import type { DbClient } from "@iam/db";
-import type { GenericClientRecord } from "@iam/domain/client";
 import { clients } from "@iam/db/schema";
+import type { GenericClientRecord } from "@iam/domain/client";
 import { GenericClientRecordSchema } from "@iam/domain/client";
 import { eq } from "drizzle-orm";
 
@@ -20,14 +20,16 @@ const genericClientSelection = {
 export function createClientRepository(db: DbClient) {
   return {
     async getClientByCode(clientCode: string): Promise<GenericClientRecord | null> {
-      const [row] = await db.select(genericClientSelection)
+      const [row] = await db
+        .select(genericClientSelection)
         .from(clients)
         .where(eq(clients.clientCode, clientCode))
         .limit(1);
       return row ? GenericClientRecordSchema.parse(row) : null;
     },
     async getClientBySecret(clientSecret: string): Promise<GenericClientRecord | null> {
-      const [row] = await db.select(genericClientSelection)
+      const [row] = await db
+        .select(genericClientSelection)
         .from(clients)
         .where(eq(clients.clientSecret, clientSecret))
         .limit(1);

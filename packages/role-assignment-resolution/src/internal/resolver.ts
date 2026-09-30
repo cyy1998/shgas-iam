@@ -1,8 +1,3 @@
-import type { DbClient } from "@iam/db";
-import type {
-  EffectiveRole,
-  RoleAssignmentResolver,
-} from "../index.ts";
 import {
   EmploymentStatus,
   OrganizationStatus,
@@ -10,16 +5,12 @@ import {
   RoleAssignmentTargetType,
   RoleStatus,
 } from "@iam/contracts";
-import {
-  employments,
-  organizationClosures,
-  organizations,
-  positions,
-  roles,
-} from "@iam/db/schema";
+import type { DbClient } from "@iam/db";
+import { employments, organizationClosures, organizations, positions, roles } from "@iam/db/schema";
 import { roleAssignments } from "@iam/db/schema/role-assignments";
 import { and, eq, gt, inArray, or } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
+import type { EffectiveRole, RoleAssignmentResolver } from "../index.ts";
 
 interface EmploymentRoleRow extends EffectiveRole {
   employmentId: number;
@@ -31,9 +22,8 @@ export function createResolver(db: DbClient): RoleAssignmentResolver {
   return {
     async resolveEffectiveRoles(input) {
       const employmentIds = unique(input.employmentIds);
-      const result = new Map<number, EffectiveRole[]>(employmentIds.map(id => [id, []]));
-      if (employmentIds.length === 0)
-        return result;
+      const result = new Map<number, EffectiveRole[]>(employmentIds.map((id) => [id, []]));
+      if (employmentIds.length === 0) return result;
 
       const [employmentRows, positionRows, organizationRows] = await Promise.all([
         loadEmploymentAssignmentRoles(db, employmentIds, input.clientId),
@@ -45,16 +35,16 @@ export function createResolver(db: DbClient): RoleAssignmentResolver {
     },
     async resolveAffectedUserIds(input) {
       const roleIds = unique(input.roleIds);
-      if (roleIds.length === 0)
-        return [];
+      if (roleIds.length === 0) return [];
 
       const [employmentRows, positionRows, organizationRows] = await Promise.all([
         loadUsersAffectedByEmploymentAssignments(db, roleIds),
         loadUsersAffectedByPositionAssignments(db, roleIds),
         loadUsersAffectedByOrganizationAssignments(db, roleIds),
       ]);
-      return unique([...employmentRows, ...positionRows, ...organizationRows].map(row => row.userId))
-        .sort((left, right) => left - right);
+      return unique([...employmentRows, ...positionRows, ...organizationRows].map((row) => row.userId)).sort(
+        (left, right) => left - right,
+      );
     },
   };
 }
@@ -64,11 +54,13 @@ async function loadUsersAffectedByEmploymentAssignments(db: DbClient, roleIds: n
     .select({ userId: employments.userId })
     .from(roleAssignments)
     .innerJoin(employments, eq(employments.id, roleAssignments.targetId))
-    .where(and(
-      eq(roleAssignments.targetType, RoleAssignmentTargetType.Employment),
-      inArray(roleAssignments.roleId, roleIds),
-      activeEmploymentWhere(),
-    ));
+    .where(
+      and(
+        eq(roleAssignments.targetType, RoleAssignmentTargetType.Employment),
+        inArray(roleAssignments.roleId, roleIds),
+        activeEmploymentWhere(),
+      ),
+    );
 }
 
 async function loadUsersAffectedByPositionAssignments(db: DbClient, roleIds: number[]) {
@@ -76,11 +68,13 @@ async function loadUsersAffectedByPositionAssignments(db: DbClient, roleIds: num
     .select({ userId: employments.userId })
     .from(roleAssignments)
     .innerJoin(employments, eq(employments.posId, roleAssignments.targetId))
-    .where(and(
-      eq(roleAssignments.targetType, RoleAssignmentTargetType.Position),
-      inArray(roleAssignments.roleId, roleIds),
-      activeEmploymentWhere(),
-    ));
+    .where(
+      and(
+        eq(roleAssignments.targetType, RoleAssignmentTargetType.Position),
+        inArray(roleAssignments.roleId, roleIds),
+        activeEmploymentWhere(),
+      ),
+    );
 }
 
 async function loadUsersAffectedByOrganizationAssignments(db: DbClient, roleIds: number[]) {
@@ -89,62 +83,62 @@ async function loadUsersAffectedByOrganizationAssignments(db: DbClient, roleIds:
     .from(roleAssignments)
     .innerJoin(organizationClosures, eq(organizationClosures.ancestorId, roleAssignments.targetId))
     .innerJoin(employments, eq(employments.orgId, organizationClosures.descendantId))
-    .where(and(
-      eq(roleAssignments.targetType, RoleAssignmentTargetType.Organization),
-      inArray(roleAssignments.roleId, roleIds),
-      activeEmploymentWhere(),
-      or(
-        eq(organizationClosures.depth, 0),
-        and(
-          gt(organizationClosures.depth, 0),
-          eq(roleAssignments.includeDescendants, true),
+    .where(
+      and(
+        eq(roleAssignments.targetType, RoleAssignmentTargetType.Organization),
+        inArray(roleAssignments.roleId, roleIds),
+        activeEmploymentWhere(),
+        or(
+          eq(organizationClosures.depth, 0),
+          and(gt(organizationClosures.depth, 0), eq(roleAssignments.includeDescendants, true)),
         ),
       ),
-    ));
+    );
 }
 
 function activeEmploymentWhere() {
-  return and(
-    eq(employments.status, EmploymentStatus.Enable),
-    eq(employments.isDelete, false),
-  );
+  return and(eq(employments.status, EmploymentStatus.Enable), eq(employments.isDelete, false));
 }
 
 async function loadEmploymentAssignmentRoles(db: DbClient, employmentIds: number[], clientId?: number) {
   return await db
     .select(roleSelection())
     .from(employments)
-    .innerJoin(roleAssignments, and(
-      eq(roleAssignments.targetType, RoleAssignmentTargetType.Employment),
-      eq(roleAssignments.targetId, employments.id),
-    ))
+    .innerJoin(
+      roleAssignments,
+      and(
+        eq(roleAssignments.targetType, RoleAssignmentTargetType.Employment),
+        eq(roleAssignments.targetId, employments.id),
+      ),
+    )
     .innerJoin(positions, eq(positions.id, employments.posId))
     .innerJoin(organizations, eq(organizations.id, employments.orgId))
     .innerJoin(roles, eq(roles.id, roleAssignments.roleId))
-    .where(and(
-      inArray(employments.id, employmentIds),
-      activeEmploymentWhere(),
-      activeRoleWhere(clientId),
-    ));
+    .where(and(inArray(employments.id, employmentIds), activeEmploymentWhere(), activeRoleWhere(clientId)));
 }
 
 async function loadPositionAssignmentRoles(db: DbClient, employmentIds: number[], clientId?: number) {
   return await db
     .select(roleSelection())
     .from(employments)
-    .innerJoin(roleAssignments, and(
-      eq(roleAssignments.targetType, RoleAssignmentTargetType.Position),
-      eq(roleAssignments.targetId, employments.posId),
-    ))
+    .innerJoin(
+      roleAssignments,
+      and(
+        eq(roleAssignments.targetType, RoleAssignmentTargetType.Position),
+        eq(roleAssignments.targetId, employments.posId),
+      ),
+    )
     .innerJoin(positions, eq(positions.id, employments.posId))
     .innerJoin(organizations, eq(organizations.id, employments.orgId))
     .innerJoin(roles, eq(roles.id, roleAssignments.roleId))
-    .where(and(
-      inArray(employments.id, employmentIds),
-      activeEmploymentWhere(),
-      activePositionAssignmentTargetWhere(),
-      activeRoleWhere(clientId),
-    ));
+    .where(
+      and(
+        inArray(employments.id, employmentIds),
+        activeEmploymentWhere(),
+        activePositionAssignmentTargetWhere(),
+        activeRoleWhere(clientId),
+      ),
+    );
 }
 
 async function loadOrganizationAssignmentRoles(db: DbClient, employmentIds: number[], clientId?: number) {
@@ -154,26 +148,28 @@ async function loadOrganizationAssignmentRoles(db: DbClient, employmentIds: numb
     .innerJoin(positions, eq(positions.id, employments.posId))
     .innerJoin(organizations, eq(organizations.id, employments.orgId))
     .innerJoin(organizationClosures, eq(organizationClosures.descendantId, employments.orgId))
-    .innerJoin(roleAssignments, and(
-      eq(roleAssignments.targetType, RoleAssignmentTargetType.Organization),
-      eq(roleAssignments.targetId, organizationClosures.ancestorId),
-    ))
+    .innerJoin(
+      roleAssignments,
+      and(
+        eq(roleAssignments.targetType, RoleAssignmentTargetType.Organization),
+        eq(roleAssignments.targetId, organizationClosures.ancestorId),
+      ),
+    )
     .innerJoin(assignmentOrganization, eq(assignmentOrganization.id, roleAssignments.targetId))
     .innerJoin(roles, eq(roles.id, roleAssignments.roleId))
-    .where(and(
-      inArray(employments.id, employmentIds),
-      activeEmploymentWhere(),
-      eq(assignmentOrganization.status, OrganizationStatus.Enable),
-      eq(assignmentOrganization.isDelete, false),
-      activeRoleWhere(clientId),
-      or(
-        eq(organizationClosures.depth, 0),
-        and(
-          gt(organizationClosures.depth, 0),
-          eq(roleAssignments.includeDescendants, true),
+    .where(
+      and(
+        inArray(employments.id, employmentIds),
+        activeEmploymentWhere(),
+        eq(assignmentOrganization.status, OrganizationStatus.Enable),
+        eq(assignmentOrganization.isDelete, false),
+        activeRoleWhere(clientId),
+        or(
+          eq(organizationClosures.depth, 0),
+          and(gt(organizationClosures.depth, 0), eq(roleAssignments.includeDescendants, true)),
         ),
       ),
-    ));
+    );
 }
 
 function activeRoleWhere(clientId: number | undefined) {
@@ -185,10 +181,7 @@ function activeRoleWhere(clientId: number | undefined) {
 }
 
 function activePositionAssignmentTargetWhere() {
-  return and(
-    eq(positions.status, PositionStatus.Enable),
-    eq(positions.isDelete, false),
-  );
+  return and(eq(positions.status, PositionStatus.Enable), eq(positions.isDelete, false));
 }
 
 function roleSelection() {
@@ -210,15 +203,12 @@ function mergeRoleRows(result: Map<number, EffectiveRole[]>, rows: EmploymentRol
     }
   }
 
-  for (const effectiveRoles of result.values())
-    effectiveRoles.sort(compareEffectiveRoles);
+  for (const effectiveRoles of result.values()) effectiveRoles.sort(compareEffectiveRoles);
 }
 
 function compareEffectiveRoles(left: EffectiveRole, right: EffectiveRole) {
-  if (left.roleCode < right.roleCode)
-    return -1;
-  if (left.roleCode > right.roleCode)
-    return 1;
+  if (left.roleCode < right.roleCode) return -1;
+  if (left.roleCode > right.roleCode) return 1;
   return left.id - right.id;
 }
 

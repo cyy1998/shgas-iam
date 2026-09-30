@@ -17,15 +17,11 @@ describe("redirect URL pattern", () => {
   });
 
   test("normalizes an actual redirect URL to the literal value bound into a grant", () => {
-    expect(normalizeRedirectUrl("HTTPS://APP.Example.COM:443/a/../callback")).toBe(
-      "https://app.example.com/callback",
-    );
+    expect(normalizeRedirectUrl("HTTPS://APP.Example.COM:443/a/../callback")).toBe("https://app.example.com/callback");
   });
 
   test("rejects credentials in an actual redirect URL", () => {
-    for (const redirectUrl of [
-      "https://user:password@app.example.com/callback",
-    ]) {
+    for (const redirectUrl of ["https://user:password@app.example.com/callback"]) {
       expect(() => normalizeRedirectUrl(redirectUrl)).toThrow();
     }
   });
@@ -36,23 +32,18 @@ describe("redirect URL pattern", () => {
       "https://:@app.example.com/callback",
       "https://user@app.example.com/callback",
     ]) {
-      expect(() => normalizeRedirectUrl(redirectUrl))
-        .toThrow("url_credentials_not_allowed");
+      expect(() => normalizeRedirectUrl(redirectUrl)).toThrow("url_credentials_not_allowed");
       expect(validateRedirectUrlPattern(redirectUrl)).toMatchObject({
         ok: false,
         reason: "url_credentials_not_allowed",
       });
     }
 
-    expect(normalizeRedirectUrl("https://app.example.com/users/@me")).toBe(
-      "https://app.example.com/users/@me",
-    );
+    expect(normalizeRedirectUrl("https://app.example.com/users/@me")).toBe("https://app.example.com/users/@me");
   });
 
   test("preserves an empty query delimiter", () => {
-    expect(normalizeRedirectUrl("https://app.example.com/callback?")).toBe(
-      "https://app.example.com/callback?",
-    );
+    expect(normalizeRedirectUrl("https://app.example.com/callback?")).toBe("https://app.example.com/callback?");
   });
 
   test("normalization preserves the hash route and its query", () => {
@@ -85,43 +76,48 @@ describe("redirect URL pattern", () => {
 
   test("allows one wildcard label before any legal fixed registrable-domain suffix", () => {
     expect(
-      matchRedirectUrlPattern(
-        "https://tenant.login.example.com/callback",
-        "https://*.login.example.com/callback",
-      ),
+      matchRedirectUrlPattern("https://tenant.login.example.com/callback", "https://*.login.example.com/callback"),
     ).toBe(true);
     expect(
-      matchRedirectUrlPattern(
-        "https://a.b.login.example.com/callback",
-        "https://*.login.example.com/callback",
-      ),
+      matchRedirectUrlPattern("https://a.b.login.example.com/callback", "https://*.login.example.com/callback"),
     ).toBe(false);
     expect(validateRedirectUrlPattern("https://*.github.io/callback").ok).toBe(false);
   });
 
   test("matches wildcard path children but not the base path", () => {
-    expect(matchRedirectUrlPattern("https://app.example.com/callback/", "https://app.example.com/callback/*")).toBe(true);
-    expect(matchRedirectUrlPattern("https://app.example.com/callback/a", "https://app.example.com/callback/*")).toBe(true);
-    expect(matchRedirectUrlPattern("https://app.example.com/callback", "https://app.example.com/callback/*")).toBe(false);
+    expect(matchRedirectUrlPattern("https://app.example.com/callback/", "https://app.example.com/callback/*")).toBe(
+      true,
+    );
+    expect(matchRedirectUrlPattern("https://app.example.com/callback/a", "https://app.example.com/callback/*")).toBe(
+      true,
+    );
+    expect(matchRedirectUrlPattern("https://app.example.com/callback", "https://app.example.com/callback/*")).toBe(
+      false,
+    );
   });
 
   test("allows query parameters only when a wildcard pattern matches", () => {
-    expect(matchRedirectUrlPattern(
-      "https://app.example.com/callback/complete?returnUrl=%2Fdashboard&tab=profile",
-      "https://app.example.com/callback/*",
-    )).toBe(true);
-    expect(matchRedirectUrlPattern(
-      "https://app.example.com/callback/complete?returnUrl=%2Fdashboard",
-      "https://app.example.com/callback/complete",
-    )).toBe(false);
-    expect(matchRedirectUrlPattern(
-      "https://tenant.example.com/callback?returnUrl=%2Fdashboard",
-      "https://*.example.com/callback",
-    )).toBe(true);
-    expect(matchRedirectUrlPattern(
-      "https://app.example.com/callback?",
-      "https://app.example.com/callback",
-    )).toBe(false);
+    expect(
+      matchRedirectUrlPattern(
+        "https://app.example.com/callback/complete?returnUrl=%2Fdashboard&tab=profile",
+        "https://app.example.com/callback/*",
+      ),
+    ).toBe(true);
+    expect(
+      matchRedirectUrlPattern(
+        "https://app.example.com/callback/complete?returnUrl=%2Fdashboard",
+        "https://app.example.com/callback/complete",
+      ),
+    ).toBe(false);
+    expect(
+      matchRedirectUrlPattern(
+        "https://tenant.example.com/callback?returnUrl=%2Fdashboard",
+        "https://*.example.com/callback",
+      ),
+    ).toBe(true);
+    expect(matchRedirectUrlPattern("https://app.example.com/callback?", "https://app.example.com/callback")).toBe(
+      false,
+    );
   });
 
   test("rejects query in patterns", () => {
@@ -129,10 +125,7 @@ describe("redirect URL pattern", () => {
   });
 
   test("rejects empty query delimiters in patterns", () => {
-    for (const pattern of [
-      "https://app.example.com/callback?",
-      "https://app.example.com/callback?#",
-    ]) {
+    for (const pattern of ["https://app.example.com/callback?", "https://app.example.com/callback?#"]) {
       expect(validateRedirectUrlPattern(pattern)).toMatchObject({
         ok: false,
         reason: "query_not_allowed",
@@ -143,8 +136,12 @@ describe("redirect URL pattern", () => {
   test("requires protocol host and port to match after URL normalization", () => {
     expect(matchRedirectUrlPattern("http://app.example.com/callback", "http://app.example.com/callback")).toBe(true);
     expect(matchRedirectUrlPattern("https://app.example.com/callback", "http://app.example.com/callback")).toBe(false);
-    expect(matchRedirectUrlPattern("https://app.example.com:443/callback", "https://app.example.com/callback")).toBe(true);
-    expect(matchRedirectUrlPattern("https://app.example.com:8443/callback", "https://app.example.com/callback")).toBe(false);
+    expect(matchRedirectUrlPattern("https://app.example.com:443/callback", "https://app.example.com/callback")).toBe(
+      true,
+    );
+    expect(matchRedirectUrlPattern("https://app.example.com:8443/callback", "https://app.example.com/callback")).toBe(
+      false,
+    );
   });
 
   test("uses URL parser normalization for IDN and IPv6", () => {
@@ -180,9 +177,11 @@ describe("redirect URL pattern", () => {
       pathMode: "wildcard-subtree",
       pathname: "/app/",
     });
-    expect(isRedirectUrlAllowedByPatterns("https://tenant.example.com/app/home", [
-      "https://app.example.com",
-      "https://*.example.com/app/*",
-    ])).toBe(true);
+    expect(
+      isRedirectUrlAllowedByPatterns("https://tenant.example.com/app/home", [
+        "https://app.example.com",
+        "https://*.example.com/app/*",
+      ]),
+    ).toBe(true);
   });
 });

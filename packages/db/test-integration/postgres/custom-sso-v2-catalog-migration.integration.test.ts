@@ -1,15 +1,12 @@
-import type { PostgresTestHarness } from "./postgres-harness";
 import { afterAll, beforeAll, beforeEach, describe, expect, test } from "bun:test";
+import type { PostgresTestHarness } from "./postgres-harness";
 import { createPostgresTestHarness, expectPostgresErrorCode } from "./postgres-harness";
 
 const FEATURE_MIGRATION = new URL(
   "../../src/migrations/20260821080203_tearful_microchip/migration.sql",
   import.meta.url,
 );
-const FEATURE_ROLLBACK = new URL(
-  "../../src/migrations/20260821080203_tearful_microchip/rollback.sql",
-  import.meta.url,
-);
+const FEATURE_ROLLBACK = new URL("../../src/migrations/20260821080203_tearful_microchip/rollback.sql", import.meta.url);
 
 let harness: PostgresTestHarness | undefined;
 
@@ -98,7 +95,6 @@ async function insertClient(clientCode: string, catalogVersion: 1 | 2) {
 }
 
 function requireHarness(): PostgresTestHarness {
-  if (!harness)
-    throw new Error("PostgreSQL test harness was not initialized");
+  if (!harness) throw new Error("PostgreSQL test harness was not initialized");
   return harness;
 }

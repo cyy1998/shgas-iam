@@ -1,9 +1,9 @@
-import type { PostgresTestHarness } from "./postgres-test-harness";
+import { afterAll, beforeAll, beforeEach, describe, expect, test } from "bun:test";
 import { ApiErrorCode, UserStatus, UserType } from "@iam/contracts";
 import { userProfiles } from "@iam/db/schema";
-import { afterAll, beforeAll, beforeEach, describe, expect, test } from "bun:test";
 import { createInternalUserProfileQueryRepository } from "../../src/query/internal-user-query.repository";
 import { createInternalUserProfileQueryService } from "../../src/query/internal-user-query.service";
+import type { PostgresTestHarness } from "./postgres-test-harness";
 import { createPostgresTestHarness } from "./postgres-test-harness";
 
 const now = new Date("2026-08-22T12:00:00.000Z");
@@ -23,16 +23,13 @@ afterAll(async () => {
 
 describe("Internal User Profile Detail", () => {
   test("reads only the strict v3 Detail by username", async () => {
-    await harness!.db.insert(userProfiles).values([
-      profile(1, 3),
-      profile(2, 2),
-    ]);
+    await harness!.db.insert(userProfiles).values([profile(1, 3), profile(2, 2)]);
     const service = createInternalUserProfileQueryService({
       profileRepository: createInternalUserProfileQueryRepository(harness!.db),
     });
 
     const current = await service.getDetailByUsername("user-1");
-    const staleError = await service.getDetailByUsername("user-2").catch(error => error);
+    const staleError = await service.getDetailByUsername("user-2").catch((error) => error);
 
     expect(current).toMatchObject({ id: 1, username: "user-1", employments: [] });
     expect(staleError).toMatchObject({
@@ -43,8 +40,7 @@ describe("Internal User Profile Detail", () => {
 });
 
 function profile(userId: number, profileSchemaVersion: number) {
-  const subjectIdentifier
-    = `00000000-0000-4000-8000-${String(userId).padStart(12, "0")}`;
+  const subjectIdentifier = `00000000-0000-4000-8000-${String(userId).padStart(12, "0")}`;
   const username = `user-${userId}`;
   return {
     userId,

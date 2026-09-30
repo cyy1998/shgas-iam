@@ -1,15 +1,13 @@
 import {
   listOrganizationResponsibilityTypes,
   type OrganizationResponsibilityTypeView,
-} from '@admin/services/organization-responsibility';
-import { PageContainer } from '@ant-design/pro-components';
-import { Alert, Card, message, Table, Tag, Typography } from 'antd';
-import { useEffect, useState } from 'react';
+} from "@admin/services/organization-responsibility";
+import { PageContainer } from "@ant-design/pro-components";
+import { Alert, Card, message, Table, Tag, Typography } from "antd";
+import { useEffect, useState } from "react";
 
 export default function OrganizationResponsibilityTypeCatalogPage() {
-  const [catalog, setCatalog] = useState<OrganizationResponsibilityTypeView[]>(
-    [],
-  );
+  const [catalog, setCatalog] = useState<OrganizationResponsibilityTypeView[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -20,9 +18,7 @@ export default function OrganizationResponsibilityTypeCatalogPage() {
       })
       .catch((error: unknown) => {
         if (active) {
-          message.error(
-            error instanceof Error ? error.message : '加载责任类型目录失败',
-          );
+          message.error(error instanceof Error ? error.message : "加载责任类型目录失败");
         }
       })
       .finally(() => {
@@ -49,20 +45,20 @@ export default function OrganizationResponsibilityTypeCatalogPage() {
           pagination={false}
           columns={[
             {
-              title: 'Code',
-              dataIndex: 'code',
+              title: "Code",
+              dataIndex: "code",
               render: (code) => <Typography.Text code>{code}</Typography.Text>,
             },
-            { title: '名称', dataIndex: 'name' },
-            { title: '说明', dataIndex: 'description' },
+            { title: "名称", dataIndex: "name" },
+            { title: "说明", dataIndex: "description" },
             {
-              title: '任命基数',
-              dataIndex: 'assignmentCardinality',
-              render: (
-                cardinality: OrganizationResponsibilityTypeView['assignmentCardinality'],
-              ) => <Tag>{cardinality}</Tag>,
+              title: "任命基数",
+              dataIndex: "assignmentCardinality",
+              render: (cardinality: OrganizationResponsibilityTypeView["assignmentCardinality"]) => (
+                <Tag>{cardinality}</Tag>
+              ),
             },
-            { title: '展示顺序', dataIndex: 'displayOrder' },
+            { title: "展示顺序", dataIndex: "displayOrder" },
           ]}
         />
       </Card>

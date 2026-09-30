@@ -1,0 +1,117 @@
+{
+  "$schema": "https://biomejs.dev/schemas/2.5.14/schema.json",
+  "vcs": {
+    "enabled": true,
+    "clientKind": "git",
+    "useIgnoreFile": true
+  },
+  "files": {
+    "ignoreUnknown": true,
+    "includes": [
+      "**",
+      "!!.agents/skills",
+      "!!.codex/skills",
+      "!!.scratch",
+      "!!apps/admin-api/static",
+      "!!apps/api/static",
+      "!!apps/sso/public/cap",
+      "!!docs/reviews",
+      "!!openspec",
+      "!!packages/db/src/migrations",
+      "!!**/.cache",
+      "!!**/.turbo",
+      "!!**/.umi",
+      "!!**/.umi-production",
+      "!!**/.umi-test",
+      "!!**/coverage",
+      "!!**/dist",
+      "!!**/generated",
+      "!!**/out",
+      "!!**/playwright-report",
+      "!!**/test-results",
+      "!pnpm-lock.yaml",
+      "!bun.lock",
+      "!bun.lockb"
+    ]
+  },
+  "formatter": {
+    "enabled": true,
+    "indentStyle": "space",
+    "indentWidth": 2,
+    "lineWidth": 120
+  },
+  "javascript": {
+    "formatter": {
+      "quoteStyle": "double",
+      "jsxQuoteStyle": "double",
+      "semicolons": "always"
+    }
+  },
+  "linter": {
+    "enabled": true,
+    "rules": {
+      "preset": "recommended",
+      "suspicious": {
+        "noConsole": "off"
+      }
+    }
+  },
+  "assist": {
+    "enabled": true,
+    "actions": {
+      "source": {
+        "organizeImports": {
+          "level": "on",
+          "options": {
+            "sortBareImports": false
+          }
+        }
+      }
+    }
+  },
+  "overrides": [
+    {
+      // The old frontend preset required type aliases for production source.
+      "includes": ["apps/admin/**/*.{ts,tsx}", "apps/sso/**/*.{ts,tsx}", "!**/*.d.ts"],
+      "linter": {
+        "rules": {
+          "style": {
+            "useConsistentTypeDefinitions": {
+              "level": "error",
+              "options": {
+                "style": "type"
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      // This is the Biome counterpart of react-refresh/only-export-components.
+      "includes": [
+        "apps/admin/**/*.tsx",
+        "apps/sso/**/*.tsx",
+        "!**/*.{test,spec}.tsx",
+        "!apps/{admin,sso}/{test,test-integration}/**"
+      ],
+      "linter": {
+        "rules": {
+          "style": {
+            "useComponentExportOnlyModules": "warn"
+          }
+        }
+      }
+    },
+    {
+      // The old service preset reported console usage without blocking the command.
+      "includes": ["apps/{admin-api,api,worker}/**", "packages/{api-core,session-kernel}/**"],
+      "linter": {
+        "rules": {
+          "suspicious": {
+            "noConsole": "warn"
+          }
+        }
+      }
+    }
+  ]
+}

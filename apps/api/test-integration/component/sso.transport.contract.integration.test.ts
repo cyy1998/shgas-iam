@@ -1,4 +1,4 @@
-import type { CustomSsoExchangeResult } from "@iam/custom-sso";
+import { expect, mock, test } from "bun:test";
 import { randomUUID } from "node:crypto";
 import * as routes from "@api/routes/sso/sso.routes";
 import { createUnifiedCallbackHandler } from "@api/routes/sso/unified-callback.handler";
@@ -12,7 +12,7 @@ import { BadRequestError } from "@iam/api-core/errors";
 import { createErrorHandler } from "@iam/api-core/middlewares";
 import { createSubjectAccessOperations, SubjectAccessUnavailableError } from "@iam/api-core/subject-access";
 import { SubjectProjectionNotReadyError } from "@iam/client-subject-projection";
-import { expect, mock, test } from "bun:test";
+import type { CustomSsoExchangeResult } from "@iam/custom-sso";
 import pino from "pino";
 
 type CustomSsoManagedResult = {
@@ -24,17 +24,21 @@ type CustomSsoManagedResult = {
 
 function fixture() {
   const calls: unknown[] = [];
-  const exchange = mock(async (): Promise<CustomSsoExchangeResult> => ({
-    sid: "token",
-    ttl: 37,
-    subject: { version: 2, subjectIdentifier: randomUUID() },
-  }));
-  const callback = mock(async (): Promise<CustomSsoManagedResult> => ({
-    token: "managed-token",
-    ttl: 37,
-    redirectUrl: "https://app.example/complete",
-    state: "trusted state",
-  }));
+  const exchange = mock(
+    async (): Promise<CustomSsoExchangeResult> => ({
+      sid: "token",
+      ttl: 37,
+      subject: { version: 2, subjectIdentifier: randomUUID() },
+    }),
+  );
+  const callback = mock(
+    async (): Promise<CustomSsoManagedResult> => ({
+      token: "managed-token",
+      ttl: 37,
+      redirectUrl: "https://app.example/complete",
+      state: "trusted state",
+    }),
+  );
   const operations = createSubjectAccessOperations({
     barrier: { readCommittedTransitionId: async () => randomUUID() },
     revocation: {
@@ -59,8 +63,7 @@ function fixture() {
         deliver?: (value: CustomSsoExchangeResult) => T | Promise<T>,
       ) {
         calls.push(input);
-        if (input.invalidParameters)
-          throw new BadRequestError();
+        if (input.invalidParameters) throw new BadRequestError();
         const value = await exchange();
         return deliver ? await deliver(value) : value;
       },
@@ -90,7 +93,7 @@ function fixture() {
   ) => ({
     method: "POST",
     headers: {
-      "Authorization": `Basic ${Buffer.from(`${encodeCustomSsoClientCode(client)}:secret`).toString("base64")}`,
+      Authorization: `Basic ${Buffer.from(`${encodeCustomSsoClientCode(client)}:secret`).toString("base64")}`,
       "Content-Type": contentType,
     },
     body,
@@ -133,9 +136,7 @@ test.each(["legacy:client/中文", "😀".repeat(33)])(
     expect(location.searchParams.get("state")).toBe("trusted state");
     expect([...location.searchParams.keys()].sort()).toEqual(["state", "token"]);
     const cookies = response.headers.getSetCookie();
-    expect(cookies).toEqual([
-      expect.stringContaining(`${customSsoLocalSessionCookieName(client)}=managed-token`),
-    ]);
+    expect(cookies).toEqual([expect.stringContaining(`${customSsoLocalSessionCookieName(client)}=managed-token`)]);
     for (const cookie of cookies) {
       expect(cookie).toContain("HttpOnly");
       expect(cookie).toContain("SameSite=Lax");
@@ -180,8 +181,6 @@ test("OpenAPI retains POST Basic and form token contract", async () => {
   const document = await response.json();
   expect(document.components.securitySchemes.CustomSsoBasic).toMatchObject({ type: "http", scheme: "basic" });
   expect(document.paths["/token"].post.security).toEqual([{ CustomSsoBasic: [] }]);
-  expect(document.paths["/token"].post.requestBody.content).toHaveProperty(
-    "application/x-www-form-urlencoded",
-  );
+  expect(document.paths["/token"].post.requestBody.content).toHaveProperty("application/x-www-form-urlencoded");
   expect(document.paths["/token"]).not.toHaveProperty("get");
 });

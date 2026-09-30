@@ -12,45 +12,63 @@ export enum ClientSsoCallbackType {
   Business = "business",
 }
 
-const exactHttpUrl = z.string().min(1).refine((value) => {
-  if (value !== value.trim() || /[\s*{}]/u.test(value))
-    return false;
-  try {
-    const url = new URL(value);
-    return ["http:", "https:"].includes(url.protocol)
-      && url.hash === "" && url.username === "" && url.password === "";
-  }
-  catch {
-    return false;
-  }
-}, "必须是无 fragment、通配符或凭据的完整 HTTP/HTTPS 地址");
+const exactHttpUrl = z
+  .string()
+  .min(1)
+  .refine((value) => {
+    if (value !== value.trim() || /[\s*{}]/u.test(value)) return false;
+    try {
+      const url = new URL(value);
+      return (
+        ["http:", "https:"].includes(url.protocol) && url.hash === "" && url.username === "" && url.password === ""
+      );
+    } catch {
+      return false;
+    }
+  }, "必须是无 fragment、通配符或凭据的完整 HTTP/HTTPS 地址");
 
 function unique<T>(values: T[]) {
   return new Set(values).size === values.length;
 }
 
-export const ClientSsoOidcConfigSchema = z.object({
-  protocol: z.literal(ClientSsoProtocol.Oidc),
-  clientType: z.enum(OidcClientType),
-  redirectUris: z.array(exactHttpUrl).min(1).refine(unique, "地址不得重复"),
-  postLogoutRedirectUris: z.array(exactHttpUrl).refine(unique, "地址不得重复"),
-  allowedScopes: z.array(z.enum(OidcScope)).min(1).refine(scopes => scopes.includes(OidcScope.OpenId), "必须包含 openid").refine(unique, "scope 不得重复"),
-}).strict();
+export const ClientSsoOidcConfigSchema = z
+  .object({
+    protocol: z.literal(ClientSsoProtocol.Oidc),
+    clientType: z.enum(OidcClientType),
+    redirectUris: z.array(exactHttpUrl).min(1).refine(unique, "地址不得重复"),
+    postLogoutRedirectUris: z.array(exactHttpUrl).refine(unique, "地址不得重复"),
+    allowedScopes: z
+      .array(z.enum(OidcScope))
+      .min(1)
+      .refine((scopes) => scopes.includes(OidcScope.OpenId), "必须包含 openid")
+      .refine(unique, "scope 不得重复"),
+  })
+  .strict();
 
 const customConfigFields = {
   protocol: z.literal(ClientSsoProtocol.CustomSso),
   validRedirectUrls: z.array(z.string().trim().min(1)).min(1).refine(unique, "地址不得重复"),
-  subjectClaims: z.array(z.enum(SUBJECT_CLAIMS)).min(1).refine(claims => claims.includes(SubjectClaim.SubjectIdentifier), "必须包含 subjectIdentifier").refine(unique, "claim 不得重复"),
+  subjectClaims: z
+    .array(z.enum(SUBJECT_CLAIMS))
+    .min(1)
+    .refine((claims) => claims.includes(SubjectClaim.SubjectIdentifier), "必须包含 subjectIdentifier")
+    .refine(unique, "claim 不得重复"),
 };
 
-export const ClientSsoCustomConfigSchema = z.discriminatedUnion("callbackType", [
-  z.object({ ...customConfigFields, callbackType: z.literal(ClientSsoCallbackType.Managed) }).strict(),
-  z.object({
-    ...customConfigFields,
-    callbackType: z.literal(ClientSsoCallbackType.Business),
-    callbackEndpoint: exactHttpUrl,
-  }).strict(),
-], { error: "请选择回调类型" });
+export const ClientSsoCustomConfigSchema = z.discriminatedUnion(
+  "callbackType",
+  [
+    z.object({ ...customConfigFields, callbackType: z.literal(ClientSsoCallbackType.Managed) }).strict(),
+    z
+      .object({
+        ...customConfigFields,
+        callbackType: z.literal(ClientSsoCallbackType.Business),
+        callbackEndpoint: exactHttpUrl,
+      })
+      .strict(),
+  ],
+  { error: "请选择回调类型" },
+);
 
 export const ClientSsoConfigSchema = z.discriminatedUnion("protocol", [
   ClientSsoOidcConfigSchema,

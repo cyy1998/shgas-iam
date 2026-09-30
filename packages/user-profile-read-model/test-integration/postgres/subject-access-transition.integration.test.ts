@@ -1,5 +1,5 @@
-import type { SubjectAccessMutationReceipt } from "@iam/api-core/subject-access";
 import { afterAll, beforeAll, beforeEach, describe, expect, mock, test } from "bun:test";
+import type { SubjectAccessMutationReceipt } from "@iam/api-core/subject-access";
 import {
   createSubjectAccessTransitionRecoveryAuthority,
   createSubjectAccessTransitionRepository,
@@ -21,8 +21,7 @@ describe("Subject Access transition PostgreSQL contract", () => {
   });
 
   afterAll(async () => {
-    if (harness)
-      await harness.close();
+    if (harness) await harness.close();
   });
 
   test("persists only recovery intent metadata before the domain mutation starts", async () => {
@@ -31,12 +30,14 @@ describe("Subject Access transition PostgreSQL contract", () => {
 
     await repository.create(currentReceipt);
 
-    const transitions = await harness.sql<{
-      owner_token: string;
-      status: string;
-      subject_identifier: string;
-      target_state: string | null;
-    }[]>`
+    const transitions = await harness.sql<
+      {
+        owner_token: string;
+        status: string;
+        subject_identifier: string;
+        target_state: string | null;
+      }[]
+    >`
       SELECT owner_token, status, subject_identifier, target_state
       FROM subject_access_transition
       WHERE id = ${currentReceipt.transitionId}
@@ -45,12 +46,14 @@ describe("Subject Access transition PostgreSQL contract", () => {
       SELECT COUNT(*)::int AS count
       FROM "user"
     `;
-    expect([...transitions]).toEqual([{
-      owner_token: currentReceipt.ownerToken,
-      status: "pending",
-      subject_identifier: currentReceipt.subjectIdentifier,
-      target_state: null,
-    }]);
+    expect([...transitions]).toEqual([
+      {
+        owner_token: currentReceipt.ownerToken,
+        status: "pending",
+        subject_identifier: currentReceipt.subjectIdentifier,
+        target_state: null,
+      },
+    ]);
     expect(users[0]?.count).toBe(0);
   });
 
@@ -69,11 +72,13 @@ describe("Subject Access transition PostgreSQL contract", () => {
 
     expect(await repository.create(secondReceipt)).toBeUndefined();
 
-    const rows = await harness.sql<{
-      id: string;
-      status: string;
-      target_state: string | null;
-    }[]>`
+    const rows = await harness.sql<
+      {
+        id: string;
+        status: string;
+        target_state: string | null;
+      }[]
+    >`
       SELECT id, status, target_state
       FROM subject_access_transition
       ORDER BY create_time, id
@@ -95,16 +100,12 @@ describe("Subject Access transition PostgreSQL contract", () => {
   test("allows only one concurrent pending transition per subject", async () => {
     const repository = createSubjectAccessTransitionRepository(harness.db);
 
-    const outcomes = await Promise.allSettled([
-      repository.create(receipt(1)),
-      repository.create(receipt(2)),
-    ]);
+    const outcomes = await Promise.allSettled([repository.create(receipt(1)), repository.create(receipt(2))]);
 
-    expect(outcomes.filter(outcome => outcome.status === "fulfilled")).toHaveLength(1);
-    const rejected = outcomes.find(outcome => outcome.status === "rejected");
+    expect(outcomes.filter((outcome) => outcome.status === "fulfilled")).toHaveLength(1);
+    const rejected = outcomes.find((outcome) => outcome.status === "rejected");
     expect(rejected?.status).toBe("rejected");
-    if (rejected?.status === "rejected")
-      expect(postgresErrorCode(rejected.reason)).toBe("23505");
+    if (rejected?.status === "rejected") expect(postgresErrorCode(rejected.reason)).toBe("23505");
   });
 
   test("reaps a crashed pre-begin intent and idempotently releases its subject fence", async () => {
@@ -118,21 +119,27 @@ describe("Subject Access transition PostgreSQL contract", () => {
       WHERE id = ${crashedReceipt.transitionId}
     `;
 
-    expect(await repository.reapStalePending({
-      staleAfterSeconds: 300,
-      limit: 10,
-    })).toEqual({ rolledBack: 1 });
-    expect(await repository.reapStalePending({
-      staleAfterSeconds: 300,
-      limit: 10,
-    })).toEqual({ rolledBack: 0 });
+    expect(
+      await repository.reapStalePending({
+        staleAfterSeconds: 300,
+        limit: 10,
+      }),
+    ).toEqual({ rolledBack: 1 });
+    expect(
+      await repository.reapStalePending({
+        staleAfterSeconds: 300,
+        limit: 10,
+      }),
+    ).toEqual({ rolledBack: 0 });
     expect(await repository.create(replacementReceipt)).toBeUndefined();
 
-    const rows = await harness.sql<{
-      id: string;
-      status: string;
-      target_state: string | null;
-    }[]>`
+    const rows = await harness.sql<
+      {
+        id: string;
+        status: string;
+        target_state: string | null;
+      }[]
+    >`
       SELECT id, status, target_state
       FROM subject_access_transition
       ORDER BY create_time, id
@@ -156,10 +163,12 @@ describe("Subject Access transition PostgreSQL contract", () => {
     const repository = createSubjectAccessTransitionRepository(harness.db);
     await repository.create(currentReceipt);
 
-    expect(await repository.reapStalePending({
-      staleAfterSeconds: 300,
-      limit: 10,
-    })).toEqual({ rolledBack: 0 });
+    expect(
+      await repository.reapStalePending({
+        staleAfterSeconds: 300,
+        limit: 10,
+      }),
+    ).toEqual({ rolledBack: 0 });
 
     const rows = await harness.sql<{ status: string }[]>`
       SELECT status
@@ -180,31 +189,31 @@ describe("Subject Access transition PostgreSQL contract", () => {
     `;
     const mutationEntered = deferred<void>();
     const releaseMutation = deferred<void>();
-    const mutation = harness.db.transaction(async tx =>
-      await createSubjectAccessTransitionRepository(tx).runMutation(
-        currentReceipt,
-        async () => {
-          mutationEntered.resolve();
-          await releaseMutation.promise;
-          return true;
-        },
-        () => "disabled",
-      ));
+    const mutation = harness.db.transaction(
+      async (tx) =>
+        await createSubjectAccessTransitionRepository(tx).runMutation(
+          currentReceipt,
+          async () => {
+            mutationEntered.resolve();
+            await releaseMutation.promise;
+            return true;
+          },
+          () => "disabled",
+        ),
+    );
     await mutationEntered.promise;
 
     try {
-      expect(await repository.reapStalePending({
-        staleAfterSeconds: 300,
-        limit: 10,
-      })).toEqual({ rolledBack: 0 });
+      expect(
+        await repository.reapStalePending({
+          staleAfterSeconds: 300,
+          limit: 10,
+        }),
+      ).toEqual({ rolledBack: 0 });
       releaseMutation.resolve();
       expect(await mutation).toBe(true);
-      expect(await repository.assertCommitted(
-        currentReceipt,
-        "disabled",
-      )).toBeUndefined();
-    }
-    finally {
+      expect(await repository.assertCommitted(currentReceipt, "disabled")).toBeUndefined();
+    } finally {
       releaseMutation.resolve();
       await Promise.allSettled([mutation]);
     }
@@ -243,26 +252,30 @@ describe("Subject Access transition PostgreSQL contract", () => {
     await createSubjectAccessTransitionRepository(harness.db).create(currentReceipt);
     const mutationEntered = deferred<void>();
     const releaseMutation = deferred<void>();
-    const mutation = harness.db.transaction(async tx =>
-      await createSubjectAccessTransitionRepository(tx).runMutation(
-        currentReceipt,
-        async () => {
-          mutationEntered.resolve();
-          await releaseMutation.promise;
-          return true;
-        },
-        () => "disabled",
-      ));
+    const mutation = harness.db.transaction(
+      async (tx) =>
+        await createSubjectAccessTransitionRepository(tx).runMutation(
+          currentReceipt,
+          async () => {
+            mutationEntered.resolve();
+            await releaseMutation.promise;
+            return true;
+          },
+          () => "disabled",
+        ),
+    );
     await mutationEntered.promise;
     const authority = createRecoveryAuthority(harness);
     let recoverySettled = false;
-    const recovery = authority.resolve({
-      subjectIdentifier: currentReceipt.subjectIdentifier,
-      transitionId: currentReceipt.transitionId,
-    }).then((resolution) => {
-      recoverySettled = true;
-      return resolution;
-    });
+    const recovery = authority
+      .resolve({
+        subjectIdentifier: currentReceipt.subjectIdentifier,
+        transitionId: currentReceipt.transitionId,
+      })
+      .then((resolution) => {
+        recoverySettled = true;
+        return resolution;
+      });
 
     try {
       await harness.waitForScopedClientLock();
@@ -273,8 +286,7 @@ describe("Subject Access transition PostgreSQL contract", () => {
         status: "committed",
         targetState: "disabled",
       });
-    }
-    finally {
+    } finally {
       releaseMutation.resolve();
       await Promise.allSettled([mutation, recovery]);
     }
@@ -285,18 +297,24 @@ describe("Subject Access transition PostgreSQL contract", () => {
     await createSubjectAccessTransitionRepository(harness.db).create(currentReceipt);
     const authority = createRecoveryAuthority(harness);
 
-    expect(await authority.resolve({
-      subjectIdentifier: currentReceipt.subjectIdentifier,
-      transitionId: currentReceipt.transitionId,
-    })).toEqual({ status: "rolled_back" });
+    expect(
+      await authority.resolve({
+        subjectIdentifier: currentReceipt.subjectIdentifier,
+        transitionId: currentReceipt.transitionId,
+      }),
+    ).toEqual({ status: "rolled_back" });
 
     const domainMutation = mock(async () => true);
-    const error = await captureRejection(harness.db.transaction(async tx =>
-      await createSubjectAccessTransitionRepository(tx).runMutation(
-        currentReceipt,
-        domainMutation,
-        () => "enabled",
-      )));
+    const error = await captureRejection(
+      harness.db.transaction(
+        async (tx) =>
+          await createSubjectAccessTransitionRepository(tx).runMutation(
+            currentReceipt,
+            domainMutation,
+            () => "enabled",
+          ),
+      ),
+    );
     expect(error).toBeInstanceOf(SubjectAccessTransitionOwnershipError);
     expect(domainMutation).not.toHaveBeenCalled();
   });
@@ -304,19 +322,18 @@ describe("Subject Access transition PostgreSQL contract", () => {
   test("defers recovery when the exact durable receipt is absent", async () => {
     const currentReceipt = receipt(1);
 
-    expect(await createRecoveryAuthority(harness).resolve({
-      subjectIdentifier: currentReceipt.subjectIdentifier,
-      transitionId: currentReceipt.transitionId,
-    })).toEqual({ status: "unresolved" });
+    expect(
+      await createRecoveryAuthority(harness).resolve({
+        subjectIdentifier: currentReceipt.subjectIdentifier,
+        transitionId: currentReceipt.transitionId,
+      }),
+    ).toEqual({ status: "unresolved" });
   });
 });
 
-function createRecoveryAuthority(
-  harness: Awaited<ReturnType<typeof createPostgresTestHarness>>,
-) {
+function createRecoveryAuthority(harness: Awaited<ReturnType<typeof createPostgresTestHarness>>) {
   return createSubjectAccessTransitionRecoveryAuthority({
-    transaction: async callback =>
-      await harness.db.transaction(async tx => await callback(tx)),
+    transaction: async (callback) => await harness.db.transaction(async (tx) => await callback(tx)),
   });
 }
 
@@ -330,20 +347,16 @@ function receipt(sequence: number): SubjectAccessMutationReceipt {
 }
 
 function postgresErrorCode(error: unknown): string | undefined {
-  if (typeof error !== "object" || error === null)
-    return undefined;
+  if (typeof error !== "object" || error === null) return undefined;
   if ("code" in error && typeof (error as { code?: unknown }).code === "string")
     return (error as { code: string }).code;
-  return "cause" in error
-    ? postgresErrorCode((error as { cause?: unknown }).cause)
-    : undefined;
+  return "cause" in error ? postgresErrorCode((error as { cause?: unknown }).cause) : undefined;
 }
 
 async function captureRejection(promise: PromiseLike<unknown>): Promise<unknown> {
   try {
     await promise;
-  }
-  catch (error) {
+  } catch (error) {
     return error;
   }
   throw new Error("expected PostgreSQL operation to reject");

@@ -1,14 +1,10 @@
-import type { DbClient } from "@iam/db";
-import type {
-  EffectiveOrganizationResponsibility,
-  OrganizationResponsibilityResolver,
-} from "../index.ts";
 import {
   EmploymentStatus,
   ORGANIZATION_RESPONSIBILITY_TYPE_CATALOG,
   OrganizationResponsibilityAssignmentStatus,
   OrganizationStatus,
 } from "@iam/contracts";
+import type { DbClient } from "@iam/db";
 import {
   employments,
   organizationClosures,
@@ -20,6 +16,7 @@ import {
   getOrganizationResponsibilityParentLifecycleViolation,
 } from "@iam/domain/organization-responsibility";
 import { eq, inArray } from "drizzle-orm";
+import type { EffectiveOrganizationResponsibility, OrganizationResponsibilityResolver } from "../index.ts";
 import { OrganizationResponsibilityIntegrityError } from "../index.ts";
 
 const KNOWN_EMPLOYMENT_STATUSES = new Set<EmploymentStatus>([
@@ -32,7 +29,7 @@ const KNOWN_ORGANIZATION_STATUSES = new Set<OrganizationStatus>([
   OrganizationStatus.Pause,
   OrganizationStatus.Disable,
 ]);
-const KNOWN_TYPE_CODES = new Set(ORGANIZATION_RESPONSIBILITY_TYPE_CATALOG.map(type => type.code));
+const KNOWN_TYPE_CODES = new Set(ORGANIZATION_RESPONSIBILITY_TYPE_CATALOG.map((type) => type.code));
 const KNOWN_ASSIGNMENT_STATUSES = new Set<OrganizationResponsibilityAssignmentStatus>([
   OrganizationResponsibilityAssignmentStatus.Enable,
   OrganizationResponsibilityAssignmentStatus.Pause,
@@ -61,74 +58,64 @@ export function createResolver(db: DbClient): OrganizationResponsibilityResolver
   return {
     async resolveEffectiveResponsibilities(input) {
       const employmentIds = unique(input.employmentIds);
-      const result = new Map<number, EffectiveOrganizationResponsibility[]>(
-        employmentIds.map(id => [id, []]),
-      );
-      if (employmentIds.length === 0)
-        return result;
+      const result = new Map<number, EffectiveOrganizationResponsibility[]>(employmentIds.map((id) => [id, []]));
+      if (employmentIds.length === 0) return result;
 
       const rows = await loadAssignmentsByEmploymentIds(db, employmentIds);
       await assertBatchIntegrity(db, rows, input.at);
       for (const row of rows) {
-        if (!isEffective(row, input.at))
-          continue;
+        if (!isEffective(row, input.at)) continue;
         result.get(row.employmentId)?.push({
           typeCode: row.typeCode,
           targetOrganizationId: row.targetOrganizationId,
         });
       }
-      for (const responsibilities of result.values())
-        responsibilities.sort(compareResponsibilities);
+      for (const responsibilities of result.values()) responsibilities.sort(compareResponsibilities);
       return result;
     },
 
     async resolveHolderEmploymentIds(input) {
       const targetOrganizationIds = unique(input.targetOrganizationIds);
       const typeCodes = input.typeCodes === undefined ? undefined : unique(input.typeCodes);
-      if (targetOrganizationIds.length === 0 || typeCodes?.length === 0)
-        return [];
+      if (targetOrganizationIds.length === 0 || typeCodes?.length === 0) return [];
 
       const targetRows = await db
         .select({ targetOrganizationId: organizationClosures.descendantId })
         .from(organizationClosures)
         .where(inArray(organizationClosures.ancestorId, targetOrganizationIds));
-      const affectedTargetIds = unique(targetRows.map(row => row.targetOrganizationId));
-      if (affectedTargetIds.length === 0)
-        return [];
+      const affectedTargetIds = unique(targetRows.map((row) => row.targetOrganizationId));
+      if (affectedTargetIds.length === 0) return [];
 
       const rows = await loadAssignmentsByTargetIds(db, affectedTargetIds);
       await assertBatchIntegrity(db, rows, input.at);
-      return unique(rows
-        .filter(row => isEffective(row, input.at))
-        .filter(row => typeCodes === undefined || typeCodes.includes(row.typeCode))
-        .map(row => row.employmentId))
-        .sort((left, right) => left - right);
+      return unique(
+        rows
+          .filter((row) => isEffective(row, input.at))
+          .filter((row) => typeCodes === undefined || typeCodes.includes(row.typeCode))
+          .map((row) => row.employmentId),
+      ).sort((left, right) => left - right);
     },
 
     async resolveHolderEmploymentIdsByTypes(input) {
       const typeCodes = unique(input.typeCodes);
-      if (typeCodes.length === 0)
-        return [];
-      const rows = await assignmentQuery(db).where(
-        inArray(organizationResponsibilityAssignments.typeCode, typeCodes),
-      );
+      if (typeCodes.length === 0) return [];
+      const rows = await assignmentQuery(db).where(inArray(organizationResponsibilityAssignments.typeCode, typeCodes));
       await assertBatchIntegrity(db, rows, input.at);
-      return unique(rows
-        .filter(row => isEffective(row, input.at))
-        .map(row => row.employmentId))
-        .sort((left, right) => left - right);
+      return unique(rows.filter((row) => isEffective(row, input.at)).map((row) => row.employmentId)).sort(
+        (left, right) => left - right,
+      );
     },
   };
 }
 
 async function loadAssignmentsByEmploymentIds(db: DbClient, employmentIds: number[]) {
-  return await assignmentQuery(db)
-    .where(inArray(organizationResponsibilityAssignments.employmentId, employmentIds));
+  return await assignmentQuery(db).where(inArray(organizationResponsibilityAssignments.employmentId, employmentIds));
 }
 
 async function loadAssignmentsByTargetIds(db: DbClient, targetOrganizationIds: number[]) {
-  return await assignmentQuery(db)
-    .where(inArray(organizationResponsibilityAssignments.targetOrganizationId, targetOrganizationIds));
+  return await assignmentQuery(db).where(
+    inArray(organizationResponsibilityAssignments.targetOrganizationId, targetOrganizationIds),
+  );
 }
 
 function assignmentQuery(db: DbClient) {
@@ -152,22 +139,16 @@ function assignmentQuery(db: DbClient) {
     })
     .from(organizationResponsibilityAssignments)
     .leftJoin(employments, eq(employments.id, organizationResponsibilityAssignments.employmentId))
-    .leftJoin(organizations, eq(
-      organizations.id,
-      organizationResponsibilityAssignments.targetOrganizationId,
-    ));
+    .leftJoin(organizations, eq(organizations.id, organizationResponsibilityAssignments.targetOrganizationId));
 }
 
 async function assertBatchIntegrity(db: DbClient, rows: AssignmentRow[], at: Date) {
-  for (const row of rows)
-    assertAssignmentIntegrity(row, at);
+  for (const row of rows) assertAssignmentIntegrity(row, at);
 
-  const targetOrganizationIds = unique(rows.map(row => row.targetOrganizationId));
-  if (targetOrganizationIds.length === 0)
-    return;
+  const targetOrganizationIds = unique(rows.map((row) => row.targetOrganizationId));
+  if (targetOrganizationIds.length === 0) return;
   const targetRows = await loadAssignmentsByTargetIds(db, targetOrganizationIds);
-  for (const row of targetRows)
-    assertAssignmentIntegrity(row, at);
+  for (const row of targetRows) assertAssignmentIntegrity(row, at);
   assertCardinality(targetRows.filter(isOpenAssignment));
 }
 
@@ -176,39 +157,27 @@ function assertAssignmentIntegrity(row: AssignmentRow, at: Date) {
     throw new OrganizationResponsibilityIntegrityError("assignment-type-unknown");
   if (!KNOWN_ASSIGNMENT_STATUSES.has(row.assignmentStatus))
     throw new OrganizationResponsibilityIntegrityError("assignment-status-unknown");
-  if (row.holderEmploymentId === null)
-    throw new OrganizationResponsibilityIntegrityError("holder-employment-missing");
-  if (
-    row.holderEmploymentStatus === null
-    || !KNOWN_EMPLOYMENT_STATUSES.has(row.holderEmploymentStatus)
-  ) {
+  if (row.holderEmploymentId === null) throw new OrganizationResponsibilityIntegrityError("holder-employment-missing");
+  if (row.holderEmploymentStatus === null || !KNOWN_EMPLOYMENT_STATUSES.has(row.holderEmploymentStatus)) {
     throw new OrganizationResponsibilityIntegrityError("holder-employment-status-unknown");
   }
   if (row.targetOrganizationRecordId === null)
     throw new OrganizationResponsibilityIntegrityError("target-organization-missing");
-  if (
-    row.targetOrganizationStatus === null
-    || !KNOWN_ORGANIZATION_STATUSES.has(row.targetOrganizationStatus)
-  ) {
+  if (row.targetOrganizationStatus === null || !KNOWN_ORGANIZATION_STATUSES.has(row.targetOrganizationStatus)) {
     throw new OrganizationResponsibilityIntegrityError("target-organization-status-unknown");
   }
   if (!Number.isFinite(row.assignmentStartTime.getTime()))
     throw new OrganizationResponsibilityIntegrityError("open-assignment-period-invalid");
   if (row.assignmentStatus === OrganizationResponsibilityAssignmentStatus.Disable) {
     if (
-      row.assignmentEndTime === null
-      || !Number.isFinite(row.assignmentEndTime.getTime())
-      || row.assignmentEndTime.getTime() < row.assignmentStartTime.getTime()
+      row.assignmentEndTime === null ||
+      !Number.isFinite(row.assignmentEndTime.getTime()) ||
+      row.assignmentEndTime.getTime() < row.assignmentStartTime.getTime()
     ) {
       throw new OrganizationResponsibilityIntegrityError("open-assignment-period-invalid");
     }
-    if (
-      row.assignmentStartTime.getTime() > at.getTime()
-      || row.assignmentEndTime.getTime() > at.getTime()
-    ) {
-      throw new OrganizationResponsibilityIntegrityError(
-        "assignment-period-outside-observation",
-      );
+    if (row.assignmentStartTime.getTime() > at.getTime() || row.assignmentEndTime.getTime() > at.getTime()) {
+      throw new OrganizationResponsibilityIntegrityError("assignment-period-outside-observation");
     }
     return;
   }
@@ -228,38 +197,30 @@ function assertAssignmentIntegrity(row: AssignmentRow, at: Date) {
   if (parentLifecycleViolation === "open-assignment-without-enabled-target")
     throw new OrganizationResponsibilityIntegrityError("target-organization-not-effective");
   if (parentLifecycleViolation === "enabled-assignment-without-enabled-employment") {
-    throw new OrganizationResponsibilityIntegrityError(
-      "enabled-assignment-without-effective-employment",
-    );
+    throw new OrganizationResponsibilityIntegrityError("enabled-assignment-without-effective-employment");
   }
-  if (
-    row.assignmentEndTime !== null
-  ) {
+  if (row.assignmentEndTime !== null) {
     throw new OrganizationResponsibilityIntegrityError("open-assignment-period-invalid");
   }
-  if (
-    row.assignmentStartTime.getTime() > at.getTime()
-  ) {
-    throw new OrganizationResponsibilityIntegrityError(
-      "assignment-period-outside-observation",
-    );
+  if (row.assignmentStartTime.getTime() > at.getTime()) {
+    throw new OrganizationResponsibilityIntegrityError("assignment-period-outside-observation");
   }
   if (
-    row.assignmentStatus === OrganizationResponsibilityAssignmentStatus.Enable
-    && !isHolderEmploymentEffective(row, at)
+    row.assignmentStatus === OrganizationResponsibilityAssignmentStatus.Enable &&
+    !isHolderEmploymentEffective(row, at)
   ) {
-    throw new OrganizationResponsibilityIntegrityError(
-      "enabled-assignment-without-effective-employment",
-    );
+    throw new OrganizationResponsibilityIntegrityError("enabled-assignment-without-effective-employment");
   }
 }
 
-function assertCardinality(rows: Array<{
-  assignmentId: number;
-  employmentId: number;
-  typeCode: EffectiveOrganizationResponsibility["typeCode"];
-  targetOrganizationId: number;
-}>) {
+function assertCardinality(
+  rows: Array<{
+    assignmentId: number;
+    employmentId: number;
+    typeCode: EffectiveOrganizationResponsibility["typeCode"];
+    targetOrganizationId: number;
+  }>,
+) {
   const rowsByTarget = new Map<number, typeof rows>();
   for (const row of rows) {
     if (!KNOWN_TYPE_CODES.has(row.typeCode))
@@ -270,14 +231,13 @@ function assertCardinality(rows: Array<{
   }
   for (const targetRows of rowsByTarget.values()) {
     const violation = getOrganizationResponsibilityOpenCardinalityViolation(
-      targetRows.map(row => ({
+      targetRows.map((row) => ({
         id: row.assignmentId,
         typeCode: row.typeCode,
         employmentId: row.employmentId,
       })),
     );
-    if (violation === "multiple-heads")
-      throw new OrganizationResponsibilityIntegrityError("head-cardinality-violated");
+    if (violation === "multiple-heads") throw new OrganizationResponsibilityIntegrityError("head-cardinality-violated");
     if (violation === "duplicate-supervising-holder")
       throw new OrganizationResponsibilityIntegrityError("supervising-holder-duplicated");
     if (violation === "missing-employment")
@@ -286,35 +246,39 @@ function assertCardinality(rows: Array<{
 }
 
 function isEffective(row: AssignmentRow, at: Date) {
-  return row.assignmentStatus === OrganizationResponsibilityAssignmentStatus.Enable
-    && row.assignmentStartTime.getTime() <= at.getTime()
-    && (row.assignmentEndTime === null || at.getTime() < row.assignmentEndTime.getTime())
-    && isHolderEmploymentEffective(row, at)
-    && row.targetOrganizationStatus === OrganizationStatus.Enable
-    && row.targetOrganizationIsDelete === false;
+  return (
+    row.assignmentStatus === OrganizationResponsibilityAssignmentStatus.Enable &&
+    row.assignmentStartTime.getTime() <= at.getTime() &&
+    (row.assignmentEndTime === null || at.getTime() < row.assignmentEndTime.getTime()) &&
+    isHolderEmploymentEffective(row, at) &&
+    row.targetOrganizationStatus === OrganizationStatus.Enable &&
+    row.targetOrganizationIsDelete === false
+  );
 }
 
 function isOpenAssignment(row: AssignmentRow) {
-  return row.assignmentStatus === OrganizationResponsibilityAssignmentStatus.Enable
-    || row.assignmentStatus === OrganizationResponsibilityAssignmentStatus.Pause;
+  return (
+    row.assignmentStatus === OrganizationResponsibilityAssignmentStatus.Enable ||
+    row.assignmentStatus === OrganizationResponsibilityAssignmentStatus.Pause
+  );
 }
 
 function isHolderEmploymentEffective(row: AssignmentRow, at: Date) {
-  return row.holderEmploymentStatus === EmploymentStatus.Enable
-    && row.holderEmploymentStartTime !== null
-    && row.holderEmploymentStartTime.getTime() <= at.getTime()
-    && (row.holderEmploymentEndTime === null || at.getTime() < row.holderEmploymentEndTime.getTime())
-    && row.holderEmploymentIsDelete === false;
+  return (
+    row.holderEmploymentStatus === EmploymentStatus.Enable &&
+    row.holderEmploymentStartTime !== null &&
+    row.holderEmploymentStartTime.getTime() <= at.getTime() &&
+    (row.holderEmploymentEndTime === null || at.getTime() < row.holderEmploymentEndTime.getTime()) &&
+    row.holderEmploymentIsDelete === false
+  );
 }
 
 function compareResponsibilities(
   left: EffectiveOrganizationResponsibility,
   right: EffectiveOrganizationResponsibility,
 ) {
-  if (left.typeCode < right.typeCode)
-    return -1;
-  if (left.typeCode > right.typeCode)
-    return 1;
+  if (left.typeCode < right.typeCode) return -1;
+  if (left.typeCode > right.typeCode) return 1;
   return left.targetOrganizationId - right.targetOrganizationId;
 }
 

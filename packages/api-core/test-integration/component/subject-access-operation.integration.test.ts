@@ -1,10 +1,31 @@
-import type { SubjectAccessOperationBarrierPort, SubjectAccessOperationRevocationPort } from "../../src/subject-access";
 import { describe, expect, mock, test } from "bun:test";
-import { createSubjectAccessOperations, encodeSubjectAccessContext, parseSubjectAccessContext, requireSubjectAccessOperation, SubjectAccessDisabledError, SubjectAccessOperationDeniedError, SubjectAccessPermissionRequiredError, SubjectAccessUnavailableError } from "../../src/subject-access";
+import type { SubjectAccessOperationBarrierPort, SubjectAccessOperationRevocationPort } from "../../src/subject-access";
+import {
+  createSubjectAccessOperations,
+  encodeSubjectAccessContext,
+  parseSubjectAccessContext,
+  requireSubjectAccessOperation,
+  SubjectAccessDisabledError,
+  SubjectAccessOperationDeniedError,
+  SubjectAccessPermissionRequiredError,
+  SubjectAccessUnavailableError,
+} from "../../src/subject-access";
 
 type Assert<T extends true> = T;
-export type BarrierCompatibility = Assert<ReturnType<typeof import("../../src/subject-access").createSubjectAccessBarrier> extends SubjectAccessOperationBarrierPort ? true : false>;
-export type RevocationCompatibility = Assert<ReturnType<typeof import("../../src/subject-access").createUnifiedSubjectAccessSessionRevocation> extends SubjectAccessOperationRevocationPort ? true : false>;
+export type BarrierCompatibility = Assert<
+  ReturnType<
+    typeof import("../../src/subject-access").createSubjectAccessBarrier
+  > extends SubjectAccessOperationBarrierPort
+    ? true
+    : false
+>;
+export type RevocationCompatibility = Assert<
+  ReturnType<
+    typeof import("../../src/subject-access").createUnifiedSubjectAccessSessionRevocation
+  > extends SubjectAccessOperationRevocationPort
+    ? true
+    : false
+>;
 const subjectIdentifier = "00000000-0000-4000-8000-000000000001";
 const otherSubject = "00000000-0000-4000-8000-000000000002";
 const generation = "10000000-0000-4000-8000-000000000001";
@@ -23,20 +44,25 @@ function setup() {
   const barrier = { readCommittedTransitionId: mock(async (_subject: string) => generation) };
   const revocation = {
     revokePrincipalSession: mock(async (_id: string, _reason: "session_generation_stale") => summary()),
-    revokeUserSessions: mock(async (_principal: {
-      principalType: "user";
-      subjectId: string;
-    }, _reason: "user_disabled", _options: {
-      onlySubjectAccessTransitionId: string;
-    }) => summary()),
+    revokeUserSessions: mock(
+      async (
+        _principal: {
+          principalType: "user";
+          subjectId: string;
+        },
+        _reason: "user_disabled",
+        _options: {
+          onlySubjectAccessTransitionId: string;
+        },
+      ) => summary(),
+    ),
   };
   return { ...createSubjectAccessOperations({ barrier, revocation }), barrier, revocation };
 }
 async function failure(promise: Promise<unknown>) {
   try {
     await promise;
-  }
-  catch (error) {
+  } catch (error) {
     return error;
   }
   throw new Error("Expected operation to reject");
@@ -77,27 +103,33 @@ describe("Subject Access operation permissions", () => {
     expect(operation.getSubjectContext(permission)).toBe(persisted());
     expect(fixture.barrier.readCommittedTransitionId).toHaveBeenCalledTimes(3);
   });
-  test.each(["disabled", "unavailable", "redis failure"])("fixes %s failures including parallel retries", async (kind) => {
-    const fixture = setup();
-    const cause = kind === "disabled"
-      ? new SubjectAccessDisabledError()
-      : kind === "unavailable" ? new SubjectAccessUnavailableError() : new Error("Redis disconnected");
-    const gate = Promise.withResolvers<string>();
-    fixture.barrier.readCommittedTransitionId.mockImplementation(() => gate.promise);
-    const operation = fixture.createOperation();
-    const first = failure(operation.acquireForSession(session()));
-    const second = failure(operation.acquireForSession(session()));
-    gate.reject(cause);
-    const [a, b] = await Promise.all([first, second]);
-    fixture.barrier.readCommittedTransitionId.mockResolvedValue(generation);
-    const retry = await failure(operation.acquireForSession(session()));
-    expect(b).toBe(a);
-    expect(retry).toBe(a);
-    expect(a).toBeInstanceOf(kind === "disabled" ? SubjectAccessDisabledError : SubjectAccessUnavailableError);
-    expect(fixture.barrier.readCommittedTransitionId).toHaveBeenCalledTimes(1);
-    expect(fixture.revocation.revokeUserSessions).toHaveBeenCalledTimes(kind === "disabled" ? 1 : 0);
-    expect(fixture.revocation.revokePrincipalSession).not.toHaveBeenCalled();
-  });
+  test.each(["disabled", "unavailable", "redis failure"])(
+    "fixes %s failures including parallel retries",
+    async (kind) => {
+      const fixture = setup();
+      const cause =
+        kind === "disabled"
+          ? new SubjectAccessDisabledError()
+          : kind === "unavailable"
+            ? new SubjectAccessUnavailableError()
+            : new Error("Redis disconnected");
+      const gate = Promise.withResolvers<string>();
+      fixture.barrier.readCommittedTransitionId.mockImplementation(() => gate.promise);
+      const operation = fixture.createOperation();
+      const first = failure(operation.acquireForSession(session()));
+      const second = failure(operation.acquireForSession(session()));
+      gate.reject(cause);
+      const [a, b] = await Promise.all([first, second]);
+      fixture.barrier.readCommittedTransitionId.mockResolvedValue(generation);
+      const retry = await failure(operation.acquireForSession(session()));
+      expect(b).toBe(a);
+      expect(retry).toBe(a);
+      expect(a).toBeInstanceOf(kind === "disabled" ? SubjectAccessDisabledError : SubjectAccessUnavailableError);
+      expect(fixture.barrier.readCommittedTransitionId).toHaveBeenCalledTimes(1);
+      expect(fixture.revocation.revokeUserSessions).toHaveBeenCalledTimes(kind === "disabled" ? 1 : 0);
+      expect(fixture.revocation.revokePrincipalSession).not.toHaveBeenCalled();
+    },
+  );
   test("rejects a different subject while pending without reading its barrier", async () => {
     const fixture = setup();
     const gate = Promise.withResolvers<string>();
@@ -148,7 +180,15 @@ describe("Subject Access operation permissions", () => {
     await first;
     expect(fixture.barrier.readCommittedTransitionId).toHaveBeenCalledTimes(1);
   });
-  test.each([undefined, null, "not json", "{}", persisted().replace("\"version\":1", "\"version\":2"), persisted().replace(generation, "broken"), persisted().replace("}", ",\"allowed\":true}")])("does not repair malformed context %j from the current barrier", async (context) => {
+  test.each([
+    undefined,
+    null,
+    "not json",
+    "{}",
+    persisted().replace('"version":1', '"version":2'),
+    persisted().replace(generation, "broken"),
+    persisted().replace("}", ',"allowed":true}'),
+  ])("does not repair malformed context %j from the current barrier", async (context) => {
     const fixture = setup();
     const operation = fixture.createOperation();
     const target = { ...session(), subjectContext: context };
@@ -178,7 +218,10 @@ describe("Subject Access operation permissions", () => {
     expect(error).toMatchObject({ reason: "session_generation_stale", cause: cleanupError });
     expect(retry).toBe(error);
     expect(fixture.revocation.revokePrincipalSession).toHaveBeenCalledTimes(1);
-    expect(fixture.revocation.revokePrincipalSession).toHaveBeenCalledWith(principalSessionId, "session_generation_stale");
+    expect(fixture.revocation.revokePrincipalSession).toHaveBeenCalledWith(
+      principalSessionId,
+      "session_generation_stale",
+    );
     expect(fixture.revocation.revokeUserSessions).not.toHaveBeenCalled();
   });
   test("late disabled cleanup targets the credential generation and preserves denial on partial cleanup", async () => {
@@ -193,14 +236,24 @@ describe("Subject Access operation permissions", () => {
     const login = fixture.createOperation();
     const fresh = await login.acquireForAuthentication(subjectIdentifier);
     const partial = summary();
-    const target = { kind: "userSession" as const, id: principalSessionId, instance: principalSessionId, userSessionId: principalSessionId, subjectIdentifier };
+    const target = {
+      kind: "userSession" as const,
+      id: principalSessionId,
+      instance: principalSessionId,
+      userSessionId: principalSessionId,
+      subjectIdentifier,
+    };
     partial.results.push({ target, status: "failed" });
     partial.unfinished.push(target);
     cleanup.resolve(partial);
     const error = await denied;
     expect(error).toMatchObject({ reason: "user_disabled", revokeSummary: partial });
     expect(fixture.revocation.revokeUserSessions).toHaveBeenCalledTimes(1);
-    expect(fixture.revocation.revokeUserSessions).toHaveBeenCalledWith({ principalType: "user", subjectId: subjectIdentifier }, "user_disabled", { onlySubjectAccessTransitionId: generation });
+    expect(fixture.revocation.revokeUserSessions).toHaveBeenCalledWith(
+      { principalType: "user", subjectId: subjectIdentifier },
+      "user_disabled",
+      { onlySubjectAccessTransitionId: generation },
+    );
     expect(login.getSubjectContext(fresh)).toBe(persisted(nextGeneration));
   });
   test("disabled authentication has no existing generation to revoke", async () => {
@@ -242,22 +295,22 @@ describe("Subject Access operation permissions", () => {
     gate.resolve(generation);
     expect(await pending).toBeInstanceOf(SubjectAccessPermissionRequiredError);
   });
-  test.each([false, true])("run closes on completion or failure (failure=%s) and public calls are lazy", async (throws) => {
-    const fixture = setup();
-    let escaped = fixture.createOperation();
-    const work = fixture.run(async (operation) => {
-      escaped = operation;
-      if (throws)
-        throw new Error("business failed");
-      return "public result";
-    });
-    if (throws)
-      expect(await failure(work)).toBeInstanceOf(Error);
-    else
-      expect(await work).toBe("public result");
-    expect(() => requireSubjectAccessOperation(escaped)).toThrow(SubjectAccessPermissionRequiredError);
-    expect(fixture.barrier.readCommittedTransitionId).not.toHaveBeenCalled();
-  });
+  test.each([false, true])(
+    "run closes on completion or failure (failure=%s) and public calls are lazy",
+    async (throws) => {
+      const fixture = setup();
+      let escaped = fixture.createOperation();
+      const work = fixture.run(async (operation) => {
+        escaped = operation;
+        if (throws) throw new Error("business failed");
+        return "public result";
+      });
+      if (throws) expect(await failure(work)).toBeInstanceOf(Error);
+      else expect(await work).toBe("public result");
+      expect(() => requireSubjectAccessOperation(escaped)).toThrow(SubjectAccessPermissionRequiredError);
+      expect(fixture.barrier.readCommittedTransitionId).not.toHaveBeenCalled();
+    },
+  );
   test("codec round-trips persisted identity but refuses malformed provider generations", async () => {
     expect(parseSubjectAccessContext(persisted())).toEqual({ version: 1, subjectIdentifier, transitionId: generation });
     const fixture = setup();

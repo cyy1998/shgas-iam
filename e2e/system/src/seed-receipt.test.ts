@@ -1,7 +1,7 @@
+import { describe, expect, test } from "bun:test";
 import { mkdir, mkdtemp, readdir, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { describe, expect, test } from "bun:test";
 import { persistSeedReceipt } from "./seed-receipt.ts";
 
 describe("seed receipt", () => {
@@ -32,18 +32,14 @@ describe("seed receipt", () => {
           noScopeHrAdminSubjectIdentifier: "8b766c91-1daa-4c09-89e4-ea87ad123456",
           noScopeHrAdminUsername: "e2e-no-scope-hr-run-receipt-01",
           organizationCode: "e2e-org-run-receipt-01",
-          responsibilityHolderOrganizationCode:
-            "e2e-holder-org-run-receipt-01",
-          responsibilityTargetOrganizationCode:
-            "e2e-resp-target-run-receipt-01",
+          responsibilityHolderOrganizationCode: "e2e-holder-org-run-receipt-01",
+          responsibilityTargetOrganizationCode: "e2e-resp-target-run-receipt-01",
           hrSecondScopeRootOrganizationCode: "e2e-hr-root-run-receipt-01",
-          hrResponsibilityTargetOrganizationCode:
-            "e2e-hr-target-run-receipt-01",
+          hrResponsibilityTargetOrganizationCode: "e2e-hr-target-run-receipt-01",
           positionCode: "e2e-pos-run-receipt-01",
           globalPositionCode: "e2e-global-pos-run-receipt-01",
           responsibilityHolderPositionCode: "e2e-resp-pos-run-receipt-01",
-          outsideResponsibilityHolderPositionCode:
-            "e2e-outside-resp-pos-run-receipt-01",
+          outsideResponsibilityHolderPositionCode: "e2e-outside-resp-pos-run-receipt-01",
           responsibilityHolderEmploymentId: 44,
           outsideResponsibilityHolderEmploymentId: 43,
           adminMixedRoleAssignmentId: 40,
@@ -64,13 +60,14 @@ describe("seed receipt", () => {
       });
 
       const content = await readFile(path, "utf8");
-      expect(JSON.parse(content)).toEqual(expect.objectContaining({
-        stage: "seed",
-        status: "applied",
-      }));
+      expect(JSON.parse(content)).toEqual(
+        expect.objectContaining({
+          stage: "seed",
+          status: "applied",
+        }),
+      );
       expect(content).not.toMatch(/password|token|secret/iu);
-    }
-    finally {
+    } finally {
       await rm(directory, { force: true, recursive: true });
     }
   });
@@ -80,16 +77,17 @@ describe("seed receipt", () => {
     const occupiedPath = join(directory, "occupied");
     try {
       await mkdir(occupiedPath);
-      await expect(persistSeedReceipt(occupiedPath, {
-        version: 1,
-        stage: "seed",
-        status: "attempted",
-        attemptedAt: "2026-08-06T12:30:00.000Z",
-      })).rejects.toBeInstanceOf(Error);
+      await expect(
+        persistSeedReceipt(occupiedPath, {
+          version: 1,
+          stage: "seed",
+          status: "attempted",
+          attemptedAt: "2026-08-06T12:30:00.000Z",
+        }),
+      ).rejects.toBeInstanceOf(Error);
 
       expect(await readdir(directory)).toEqual(["occupied"]);
-    }
-    finally {
+    } finally {
       await rm(directory, { force: true, recursive: true });
     }
   });

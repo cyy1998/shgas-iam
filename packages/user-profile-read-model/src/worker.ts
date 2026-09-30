@@ -1,10 +1,10 @@
-export * from "./employment/employment-verifier";
 export * from "./employment/employment.repository";
+export * from "./employment/employment-verifier";
 export * from "./readiness/user-profile-readiness";
 export * from "./readiness/user-profile-readiness.module";
 export * from "./readiness/user-profile-readiness.repository";
 export * from "./subject-access/subject-access-authority.repository";
 export { createSubjectFactsRedisInspector } from "./subject-facts/subject-facts-redis";
 export * from "./worker/user-profile-rebuild.processor";
-export * from "./worker/user-profile-worker-maintenance";
 export * from "./worker/user-profile-worker.module";
+export * from "./worker/user-profile-worker-maintenance";

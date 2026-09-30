@@ -13,9 +13,9 @@ export interface LoginWithOaOptions {
   requestContext?: AuditRequestContext;
 }
 
-export type LoginWithOaResult
-  = | { kind: "reused"; token: string; remainingSeconds: number }
-    | { kind: "authenticated"; token: string; remainingSeconds?: number; isMobileSet: boolean };
+export type LoginWithOaResult =
+  | { kind: "reused"; token: string; remainingSeconds: number }
+  | { kind: "authenticated"; token: string; remainingSeconds?: number; isMobileSet: boolean };
 
 export interface OaLoginUser {
   id: number;

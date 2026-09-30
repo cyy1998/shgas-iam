@@ -1,13 +1,9 @@
-import OrgFormModal from '@admin/pages/organizations/components/OrgFormModal';
-import type { OrganizationDetailVo } from '@admin/services/organization';
-import {
-  OrganizationLevel,
-  OrganizationStatus,
-  OrganizationType,
-} from '@iam/contracts';
-import type { ReactNode } from 'react';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { render, screen, waitFor } from '~admin/test/render';
+import OrgFormModal from "@admin/pages/organizations/components/OrgFormModal";
+import type { OrganizationDetailVo } from "@admin/services/organization";
+import { OrganizationLevel, OrganizationStatus, OrganizationType } from "@iam/contracts";
+import type { ReactNode } from "react";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import { render, screen, waitFor } from "~admin/test/render";
 
 const form = vi.hoisted(() => ({
   values: {} as Record<string, unknown>,
@@ -17,12 +13,12 @@ const mutations = vi.hoisted(() => ({
   updateOrganization: vi.fn(),
 }));
 
-vi.mock('@admin/services/organization', () => ({
+vi.mock("@admin/services/organization", () => ({
   createOrganization: mutations.createOrganization,
   updateOrganization: mutations.updateOrganization,
 }));
 
-vi.mock('@ant-design/pro-components', () => {
+vi.mock("@ant-design/pro-components", () => {
   const ModalForm = ({
     children,
     onFinish,
@@ -41,13 +37,7 @@ vi.mock('@ant-design/pro-components', () => {
       </div>
     ) : null;
   const ProFormText = ({ label }: { label: string }) => <span>{label}</span>;
-  const ProFormSelect = ({
-    disabled,
-    label,
-  }: {
-    disabled?: boolean;
-    label: string;
-  }) => (
+  const ProFormSelect = ({ disabled, label }: { disabled?: boolean; label: string }) => (
     <button type="button" disabled={disabled}>
       {label}
     </button>
@@ -59,17 +49,17 @@ vi.mock('@ant-design/pro-components', () => {
 const allowed = { allowed: true, reason: null } as const;
 const integrityDenied = {
   allowed: false,
-  reason: 'INTEGRITY_GUARD_BLOCKED',
+  reason: "INTEGRITY_GUARD_BLOCKED",
 } as const;
 
 function organizationDetail(): OrganizationDetailVo {
   return {
     id: 10,
-    orgCode: 'ROOT-A',
-    orgName: 'Root A',
+    orgCode: "ROOT-A",
+    orgName: "Root A",
     parentId: -1,
     businessParentId: -1,
-    path: '/10',
+    path: "/10",
     level: OrganizationLevel.One,
     orgType: OrganizationType.Company,
     orderNum: 0,
@@ -77,12 +67,12 @@ function organizationDetail(): OrganizationDetailVo {
     isEntity: true,
     status: OrganizationStatus.Enable,
     isDelete: false,
-    createTime: '2026-01-01T00:00:00Z',
-    updateTime: '2026-01-01T00:00:00Z',
+    createTime: "2026-01-01T00:00:00Z",
+    updateTime: "2026-01-01T00:00:00Z",
     isLeaf: true,
     parentCode: null,
     parentName: null,
-    statusText: '正常',
+    statusText: "正常",
     childrenCount: 0,
     employmentCount: 1,
     allowedActions: {
@@ -94,10 +84,10 @@ function organizationDetail(): OrganizationDetailVo {
   };
 }
 
-describe('OrgFormModal authorization fields', () => {
+describe("OrgFormModal authorization fields", () => {
   beforeEach(() => {
     form.values = {
-      orgName: 'Renamed Root',
+      orgName: "Renamed Root",
       orgType: OrganizationType.Department,
       status: OrganizationStatus.Disable,
     };
@@ -108,22 +98,17 @@ describe('OrgFormModal authorization fields', () => {
     });
   });
 
-  it('omits status from an edit when the server denies changeStatus', async () => {
+  it("omits status from an edit when the server denies changeStatus", async () => {
     const { user } = render(
-      <OrgFormModal
-        open
-        mode="edit"
-        initialValues={organizationDetail()}
-        onOpenChange={vi.fn()}
-      />,
+      <OrgFormModal open mode="edit" initialValues={organizationDetail()} onOpenChange={vi.fn()} />,
     );
 
-    expect(screen.getByRole('button', { name: '状态' })).toBeDisabled();
-    await user.click(screen.getByRole('button', { name: '确定' }));
+    expect(screen.getByRole("button", { name: "状态" })).toBeDisabled();
+    await user.click(screen.getByRole("button", { name: "确定" }));
 
     await waitFor(() => {
-      expect(mutations.updateOrganization).toHaveBeenCalledWith('ROOT-A', {
-        orgName: 'Renamed Root',
+      expect(mutations.updateOrganization).toHaveBeenCalledWith("ROOT-A", {
+        orgName: "Renamed Root",
         orgType: OrganizationType.Department,
       });
     });

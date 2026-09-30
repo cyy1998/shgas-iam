@@ -31,13 +31,13 @@
 
 ## 运行时 Apps
 
-| 路径 | Runtime 与职责 | 主要入口 |
-|---|---|---|
-| `apps/api` | Bun + Hono public IAM backend（`@iam/api`） | `src/routes/`：public/open/internal/sso/auth 协议入口；`src/use-cases/`：跨领域 workflow；`src/services/`：domain-aligned application services；`src/composition/`：production wiring；`src/env.ts`：环境校验 |
+| 路径             | Runtime 与职责                               | 主要入口                                                                                                                                                                                                                                     |
+| ---------------- | -------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `apps/api`       | Bun + Hono public IAM backend（`@iam/api`）  | `src/routes/`：public/open/internal/sso/auth 协议入口；`src/use-cases/`：跨领域 workflow；`src/services/`：domain-aligned application services；`src/composition/`：production wiring；`src/env.ts`：环境校验                                |
 | `apps/admin-api` | Bun + Hono admin backend（`@iam/admin-api`） | `src/routes/admin/`：Admin REST；`src/routes/trpc/`：tRPC entry routes；`src/use-cases/`：跨领域 workflow；`src/services/`：domain-aligned application services；`src/composition/`：production wiring；`src/trpc/`：tRPC router composition |
-| `apps/worker` | Bun background job runtime（`@iam/worker`） | `src/composition/`：runtime wiring；`src/modules/`：worker modules；`src/http/`：health 与 Bull Board；`src/commands/`：backfill/repair 命令；`src/env.ts`：环境校验 |
-| `apps/admin` | Umi Max + React 管理端 | `src/pages/`：页面；`src/components/`：可复用 UI；`src/lib/api-client.ts`：tRPC client；`src/services/`：page-side API wrappers |
-| `apps/sso` | Umi Max + React SSO portal | `src/pages/`：页面；`src/assets/`：静态资源；`src/services/`：API wrappers；`src/lib/`、`src/utils/`：browser helpers |
+| `apps/worker`    | Bun background job runtime（`@iam/worker`）  | `src/composition/`：runtime wiring；`src/modules/`：worker modules；`src/http/`：health 与 Bull Board；`src/commands/`：backfill/repair 命令；`src/env.ts`：环境校验                                                                         |
+| `apps/admin`     | Umi Max + React 管理端                       | `src/pages/`：页面；`src/components/`：可复用 UI；`src/lib/api-client.ts`：tRPC client；`src/services/`：page-side API wrappers                                                                                                              |
+| `apps/sso`       | Umi Max + React SSO portal                   | `src/pages/`：页面；`src/assets/`：静态资源；`src/services/`：API wrappers；`src/lib/`、`src/utils/`：browser helpers                                                                                                                        |
 
 ### 后端分层速查
 
@@ -46,21 +46,20 @@ Apps 表用于定位入口；依赖方向、分层职责、命名和 wiring 统�
 
 ## 共享 Packages
 
-| 路径 | 定位用途 |
-|---|---|
-| `packages/api-core/src` | 后端基础设施、UnitOfWork、LoginRestriction、Subject Access 与 `client-snapshot/`；`testing/` 通过独立出口提供 process harness。 |
-| `packages/session-kernel/src` | 协议中性的 UserSession / ClientSession 生命周期、Redis 原子状态与管理观察。 |
-| `packages/custom-sso/src` | Custom SSO 授权、Code / Token、续接与交付；`/wire` 提供浏览器可加载契约。 |
-| `packages/oidc/src` | OIDC 授权、Code / Token、续接、退出、UserInfo 与密钥；由 API HTTP adapter 消费。 |
-| `packages/client-subject-projection/src` | 中性主体裁剪、Catalog 与责任任职投影。 |
-| `packages/contracts/src` | 跨端或跨 app/package 的稳定枚举、常量、schemas、类型与协议 helper。 |
-| `packages/domain/src` | 后端 DTO、mapper、纯业务规则、audit helper 与业务错误。 |
-| `packages/db/src` | Drizzle schema、relations、migrations、client 与 query helpers；领域为 `core`、`log`，列 helper 在 `schema/_shard/`。 |
-| `packages/eslint-config` | 全仓 ESLint 配置 owner，提供 root/backend/frontend presets。 |
-| `packages/jobs/src` | BullMQ connection、queue、worker、job ID 与默认选项。 |
-| `packages/organization-responsibility-resolution/src` | Organization Responsibility 的正向有效解析与跨树 holder 反向解析。 |
-| `packages/role-assignment-resolution/src` | Effective Role 正向解析与受影响用户反向解析。 |
-| `packages/user-profile-read-model/src` | User Profile、Search / Subject Facts 的失效、构建、发布、查询与维护。 |
+| 路径                                                  | 定位用途                                                                                                                        |
+| ----------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
+| `packages/api-core/src`                               | 后端基础设施、UnitOfWork、LoginRestriction、Subject Access 与 `client-snapshot/`；`testing/` 通过独立出口提供 process harness。 |
+| `packages/session-kernel/src`                         | 协议中性的 UserSession / ClientSession 生命周期、Redis 原子状态与管理观察。                                                     |
+| `packages/custom-sso/src`                             | Custom SSO 授权、Code / Token、续接与交付；`/wire` 提供浏览器可加载契约。                                                       |
+| `packages/oidc/src`                                   | OIDC 授权、Code / Token、续接、退出、UserInfo 与密钥；由 API HTTP adapter 消费。                                                |
+| `packages/client-subject-projection/src`              | 中性主体裁剪、Catalog 与责任任职投影。                                                                                          |
+| `packages/contracts/src`                              | 跨端或跨 app/package 的稳定枚举、常量、schemas、类型与协议 helper。                                                             |
+| `packages/domain/src`                                 | 后端 DTO、mapper、纯业务规则、audit helper 与业务错误。                                                                         |
+| `packages/db/src`                                     | Drizzle schema、relations、migrations、client 与 query helpers；领域为 `core`、`log`，列 helper 在 `schema/_shard/`。           |
+| `packages/jobs/src`                                   | BullMQ connection、queue、worker、job ID 与默认选项。                                                                           |
+| `packages/organization-responsibility-resolution/src` | Organization Responsibility 的正向有效解析与跨树 holder 反向解析。                                                              |
+| `packages/role-assignment-resolution/src`             | Effective Role 正向解析与受影响用户反向解析。                                                                                   |
+| `packages/user-profile-read-model/src`                | User Profile、Search / Subject Facts 的失效、构建、发布、查询与维护。                                                           |
 
 使用或新增共享代码前，按[共享契约与数据库](contracts-and-database.md)核对运行环境、公开出口、DTO 与事务边界；
 模块语义见[后端所有权](backend-architecture.md#关键模块所有权)。当前维护见
@@ -70,16 +69,16 @@ Apps 表用于定位入口；依赖方向、分层职责、命名和 wiring 统�
 
 定位内部实现时沿公开入口进入对应目录；跨 package 消费仍使用公开 exports。
 
-| 模块 | 内部职责目录 |
-|---|---|
-| `packages/user-profile-read-model/src` | `invalidation/`、`build/`、`publication/`：失效与发布；`query/`、`schema/`、`subject-facts/`：查询与事实；`subject-access/`：authority / transition；`worker/`、`readiness/`、`employment/`：重建、就绪与全库 verifier。 |
-| `packages/client-subject-projection/src` | `internal/`：当前 Catalog、contract 与 projection。 |
-| `packages/session-kernel/src` | `unified/`：当前两类会话；`storage/` 提供维护扫描；`testing/` 提供当前布局测试支持；`state/model.ts` 提供中性 SessionOrigin。 |
-| `packages/api-core/src/subject-access` | `storage/`：store / Redis adapter；`adapters/`：HTTP 映射；`recovery/`：bootstrap、repair 与 transition recovery。 |
-| `packages/custom-sso/src` | `unified/`：当前协议流程与状态；`internal/`：校验和交付 helper；`grant/`：当前维护共用的扫描核验与测试 fixture。 |
-| `apps/api/src/services/sso` | `subject-delivery/`：请求 capability；`transport/`：Cookie、请求/schema、安全与 OpenAPI。门户续接入口在 `routes/sso/unified-authorization.handlers.ts`。 |
-| `apps/api/src/use-cases/authentication` | 密码、手机、OA、微信统一认证；装配在 `composition/use-cases/authentication.ts` 与 `composition/root-authentication.ts`。OA/微信 HTTP 入口仍在 SSO route。 |
-| `apps/worker/src/commands` | `user-profile/`、`online-state/`、`client-runtime/` 命令族；Employment verifier 留在根层。 |
+| 模块                                     | 内部职责目录                                                                                                                                                                                                             |
+| ---------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `packages/user-profile-read-model/src`   | `invalidation/`、`build/`、`publication/`：失效与发布；`query/`、`schema/`、`subject-facts/`：查询与事实；`subject-access/`：authority / transition；`worker/`、`readiness/`、`employment/`：重建、就绪与全库 verifier。 |
+| `packages/client-subject-projection/src` | `internal/`：当前 Catalog、contract 与 projection。                                                                                                                                                                      |
+| `packages/session-kernel/src`            | `unified/`：当前两类会话；`storage/` 提供维护扫描；`testing/` 提供当前布局测试支持；`state/model.ts` 提供中性 SessionOrigin。                                                                                            |
+| `packages/api-core/src/subject-access`   | `storage/`：store / Redis adapter；`adapters/`：HTTP 映射；`recovery/`：bootstrap、repair 与 transition recovery。                                                                                                       |
+| `packages/custom-sso/src`                | `unified/`：当前协议流程与状态；`internal/`：校验和交付 helper；`grant/`：当前维护共用的扫描核验与测试 fixture。                                                                                                         |
+| `apps/api/src/services/sso`              | `subject-delivery/`：请求 capability；`transport/`：Cookie、请求/schema、安全与 OpenAPI。门户续接入口在 `routes/sso/unified-authorization.handlers.ts`。                                                                 |
+| `apps/api/src/use-cases/authentication`  | 密码、手机、OA、微信统一认证；装配在 `composition/use-cases/authentication.ts` 与 `composition/root-authentication.ts`。OA/微信 HTTP 入口仍在 SSO route。                                                                |
+| `apps/worker/src/commands`               | `user-profile/`、`online-state/`、`client-runtime/` 命令族；Employment verifier 留在根层。                                                                                                                               |
 
 ## Root-owned Full-system E2E Workspace
 
@@ -95,17 +94,17 @@ Run descriptor、receipts、diagnostics 与 Playwright 产物写入 `e2e/system/
 
 ## 基础设施与仓库工具
 
-| 路径 | 职责 |
-|---|---|
-| `gateway/` | APISIX manifest package（`@iam/gateway-apisix`），包含 dev/prod manifests、config template，以及 sync/validate/diff/apply scripts。 |
-| `docker/` | 本地依赖栈，以及 dev/prod application、gateway、observability Compose files。 |
-| `observability/` | Alloy 日志/OTLP pipeline、Loki 配置、Grafana datasource/dashboard/alert provisioning，以及版本化 dashboards。 |
-| `scripts/` | 文档和架构守卫、测试编排、验证入口及 tooling performance helpers。 |
-| `scripts/sandcastle/` | AFK runner、宿主预检与临时测试资源编排。 |
-| `.sandcastle/` | Sandcastle Planner、Implementer、Merger prompts、Dockerfile 和 `.env.example`；运行命令见[命令入口](../development/commands.md#sandcastle-afk)。 |
-| `.codex/agents/` | Codex 调查角色、AFK 三档实施者与 Standards/Spec 只读评审角色配置；由 runner 为容器配置实施者内的子代理评审。 |
-| `.husky/` | Git hooks 与安装脚本。 |
-| `patches/` | pnpm 管理的固定依赖补丁；Sandcastle signal 适配允许宿主 runner 等待中断清理。 |
+| 路径                  | 职责                                                                                                                                             |
+| --------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `gateway/`            | APISIX manifest package（`@iam/gateway-apisix`），包含 dev/prod manifests、config template，以及 sync/validate/diff/apply scripts。              |
+| `docker/`             | 本地依赖栈，以及 dev/prod application、gateway、observability Compose files。                                                                    |
+| `observability/`      | Alloy 日志/OTLP pipeline、Loki 配置、Grafana datasource/dashboard/alert provisioning，以及版本化 dashboards。                                    |
+| `scripts/`            | 文档和架构守卫、测试编排、验证入口及 tooling performance helpers。                                                                               |
+| `scripts/sandcastle/` | AFK runner、宿主预检与临时测试资源编排。                                                                                                         |
+| `.sandcastle/`        | Sandcastle Planner、Implementer、Merger prompts、Dockerfile 和 `.env.example`；运行命令见[命令入口](../development/commands.md#sandcastle-afk)。 |
+| `.codex/agents/`      | Codex 调查角色、AFK 三档实施者与 Standards/Spec 只读评审角色配置；由 runner 为容器配置实施者内的子代理评审。                                     |
+| `.husky/`             | Git hooks 与安装脚本。                                                                                                                           |
+| `patches/`            | pnpm 管理的固定依赖补丁；Sandcastle signal 适配允许宿主 runner 等待中断清理。                                                                    |
 
 ## 文档与 Agent 工作流
 

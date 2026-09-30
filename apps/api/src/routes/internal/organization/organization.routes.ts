@@ -60,12 +60,15 @@ export const purveyorRegister = createRoute({
   path: "/purveyors",
   tags,
   request: {
-    body: jsonContentRequired(OrganizationCreateDtoSchema.pick({
-      orgCode: true,
-      orgName: true,
-    }).extend({
-      parentOrg: z.enum(["GY", "GT"]).default("GY"),
-    }), "组织创建参数"),
+    body: jsonContentRequired(
+      OrganizationCreateDtoSchema.pick({
+        orgCode: true,
+        orgName: true,
+      }).extend({
+        parentOrg: z.enum(["GY", "GT"]).default("GY"),
+      }),
+      "组织创建参数",
+    ),
   },
   responses: {
     ...commonErrorResponses,

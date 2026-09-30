@@ -1,7 +1,7 @@
 import type { ApisixAdminClient } from "./apisix-admin-client";
-import type { AppliedChange, ApplyResult, ChangePlan } from "./types";
 import { sortChanges } from "./planner";
 import { deleteOrder, writeOrder } from "./resources";
+import type { AppliedChange, ApplyResult, ChangePlan } from "./types";
 
 export async function applyPlan(
   client: Pick<ApisixAdminClient, "upsert" | "delete">,

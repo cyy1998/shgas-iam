@@ -1,18 +1,10 @@
-import type { AdminOperationId } from "@admin-api/services/admin-authorization/admin-operation.registry";
-import type { EmploymentService } from "@admin-api/services/employment/employment.service";
-import type { ChangeEmploymentAvailabilityUseCase } from "@admin-api/use-cases/employment/change-employment-availability/change-employment-availability.use-case";
-import type { CreateEmploymentUseCase } from "@admin-api/use-cases/employment/create-employment/create-employment.use-case";
-import type { EndEmploymentUseCase } from "@admin-api/use-cases/employment/end-employment/end-employment.use-case";
-import type { ManagePrimaryEmploymentUseCase } from "@admin-api/use-cases/employment/manage-primary-employment/manage-primary-employment.use-case";
-import type { ResignUserUseCase } from "@admin-api/use-cases/employment/resign-user/resign-user.use-case";
-import type { TransferEmploymentUseCase } from "@admin-api/use-cases/employment/transfer-employment/transfer-employment.use-case";
-import type { EmploymentRouteHandler } from "./employment.type";
 import { defineAdminApiMutationOperation, defineAdminApiQueryOperation } from "@admin-api/lib/admin-api-adapter";
 import {
   authorizeAdminOperationForContext,
   getAdminAuthorizationContext,
   resolveAdminUserAuthorizationForContext,
 } from "@admin-api/services/admin-authorization/admin-authorization.context";
+import type { AdminOperationId } from "@admin-api/services/admin-authorization/admin-operation.registry";
 import { resolveAdminAuditContext } from "@admin-api/services/audit/audit.context";
 import {
   EmploymentAdminCreateDtoSchema,
@@ -21,9 +13,17 @@ import {
   EmploymentTransferDtoSchema,
   EmploymentUpdateDtoSchema,
 } from "@admin-api/services/employment/employment.schema";
+import type { EmploymentService } from "@admin-api/services/employment/employment.service";
+import type { ChangeEmploymentAvailabilityUseCase } from "@admin-api/use-cases/employment/change-employment-availability/change-employment-availability.use-case";
+import type { CreateEmploymentUseCase } from "@admin-api/use-cases/employment/create-employment/create-employment.use-case";
+import type { EndEmploymentUseCase } from "@admin-api/use-cases/employment/end-employment/end-employment.use-case";
+import type { ManagePrimaryEmploymentUseCase } from "@admin-api/use-cases/employment/manage-primary-employment/manage-primary-employment.use-case";
+import type { ResignUserUseCase } from "@admin-api/use-cases/employment/resign-user/resign-user.use-case";
+import type { TransferEmploymentUseCase } from "@admin-api/use-cases/employment/transfer-employment/transfer-employment.use-case";
 import { router } from "@iam/api-core/trpc";
 import { z } from "zod";
 import { toEmploymentDetailVo, toEmploymentVo } from "./employment.schema";
+import type { EmploymentRouteHandler } from "./employment.type";
 
 const idInput = z.object({ id: z.coerce.number().int().positive() });
 
@@ -53,23 +53,20 @@ export function createEmploymentAdapter(deps: CreateEmploymentAdapterDeps) {
       operationId,
       operationInput: undefined,
     });
-    return await policy.getEmploymentAuthorization(
-      actor,
-      operationAuthorization.hrAdministrationScope,
-    );
+    return await policy.getEmploymentAuthorization(actor, operationAuthorization.hrAdministrationScope);
   }
 
   const searchEmployment = defineAdminApiQueryOperation({
     operationId: "admin.employment.search",
     input: EmploymentAdminPaginationQueryDtoSchema,
-    restInput: c => c.req.valid("json") as z.infer<typeof EmploymentAdminPaginationQueryDtoSchema>,
+    restInput: (c) => c.req.valid("json") as z.infer<typeof EmploymentAdminPaginationQueryDtoSchema>,
     handler: async (input, context) => {
       const { result, ...rest } = await deps.employmentService.searchEmploymentsFuzzyForAdmin(
         input,
         await resolveEmploymentAuthorization(context.hono, "admin.employment.search"),
       );
       return {
-        result: result.map(e => toEmploymentVo(e)),
+        result: result.map((e) => toEmploymentVo(e)),
         ...rest,
       };
     },
@@ -78,12 +75,9 @@ export function createEmploymentAdapter(deps: CreateEmploymentAdapterDeps) {
   const getEmployment = defineAdminApiQueryOperation({
     operationId: "admin.employment.detail",
     input: idInput,
-    restInput: c => c.req.valid("param") as z.infer<typeof idInput>,
+    restInput: (c) => c.req.valid("param") as z.infer<typeof idInput>,
     handler: async ({ id }, context) => {
-      const authorization = await resolveEmploymentAuthorization(
-        context.hono,
-        "admin.employment.detail",
-      );
+      const authorization = await resolveEmploymentAuthorization(context.hono, "admin.employment.detail");
       const detail = await deps.employmentService.getEmploymentDetailByIdForAdmin(id, authorization);
       return toEmploymentDetailVo(
         detail,
@@ -99,21 +93,22 @@ export function createEmploymentAdapter(deps: CreateEmploymentAdapterDeps) {
   const createEmployment = defineAdminApiMutationOperation({
     operationId: "admin.employment.create",
     input: EmploymentAdminCreateDtoSchema,
-    restInput: c => c.req.valid("json") as z.infer<typeof EmploymentAdminCreateDtoSchema>,
-    handler: async (input, context) => deps.createEmployment.execute({
-      username: input.username,
-      orgCode: input.orgCode ?? input.deptOrgCode!,
-      expectedAncestorOrgCode: input.expectedAncestorOrgCode ?? input.companyOrgCode,
-      posCode: input.posCode,
-      isPrimary: input.isPrimary,
-      description: input.description,
-    }, {
-      authorization: await resolveEmploymentAuthorization(
-        context.hono,
-        "admin.employment.create",
+    restInput: (c) => c.req.valid("json") as z.infer<typeof EmploymentAdminCreateDtoSchema>,
+    handler: async (input, context) =>
+      deps.createEmployment.execute(
+        {
+          username: input.username,
+          orgCode: input.orgCode ?? input.deptOrgCode!,
+          expectedAncestorOrgCode: input.expectedAncestorOrgCode ?? input.companyOrgCode,
+          posCode: input.posCode,
+          isPrimary: input.isPrimary,
+          description: input.description,
+        },
+        {
+          authorization: await resolveEmploymentAuthorization(context.hono, "admin.employment.create"),
+          auditContext: resolveAdminAuditContext(context),
+        },
       ),
-      auditContext: resolveAdminAuditContext(context),
-    }),
   });
 
   const updateEmployment = defineAdminApiMutationOperation({
@@ -122,7 +117,7 @@ export function createEmploymentAdapter(deps: CreateEmploymentAdapterDeps) {
       id: z.coerce.number().int().positive(),
       data: EmploymentUpdateDtoSchema,
     }),
-    restInput: c => ({
+    restInput: (c) => ({
       id: (c.req.valid("param") as { id: number }).id,
       data: c.req.valid("json") as z.infer<typeof EmploymentUpdateDtoSchema>,
     }),
@@ -138,16 +133,19 @@ export function createEmploymentAdapter(deps: CreateEmploymentAdapterDeps) {
   const pauseEmployment = defineAdminApiMutationOperation({
     operationId: "admin.employment.pause",
     input: idInput,
-    restInput: c => c.req.valid("param") as z.infer<typeof idInput>,
+    restInput: (c) => c.req.valid("param") as z.infer<typeof idInput>,
     handler: async ({ id }, context) => {
       const authorization = await resolveEmploymentAuthorization(context.hono, "admin.employment.pause");
-      return deps.changeEmploymentAvailability.execute({
-        command: "pause",
-        employmentId: id,
-      }, {
-        authorization,
-        auditContext: resolveAdminAuditContext(context),
-      });
+      return deps.changeEmploymentAvailability.execute(
+        {
+          command: "pause",
+          employmentId: id,
+        },
+        {
+          authorization,
+          auditContext: resolveAdminAuditContext(context),
+        },
+      );
     },
   });
 
@@ -157,36 +155,42 @@ export function createEmploymentAdapter(deps: CreateEmploymentAdapterDeps) {
       id: z.coerce.number().int().positive(),
       expectedAncestorOrgCode: EmploymentResumeDtoSchema.shape.expectedAncestorOrgCode,
     }),
-    restInput: c => ({
+    restInput: (c) => ({
       id: (c.req.valid("param") as { id: number }).id,
       expectedAncestorOrgCode: (c.req.valid("json") as z.infer<typeof EmploymentResumeDtoSchema>)
         .expectedAncestorOrgCode,
     }),
     handler: async ({ id, expectedAncestorOrgCode }, context) => {
       const authorization = await resolveEmploymentAuthorization(context.hono, "admin.employment.resume");
-      return deps.changeEmploymentAvailability.execute({
-        command: "resume",
-        employmentId: id,
-        expectedAncestorOrgCode,
-      }, {
-        authorization,
-        auditContext: resolveAdminAuditContext(context),
-      });
+      return deps.changeEmploymentAvailability.execute(
+        {
+          command: "resume",
+          employmentId: id,
+          expectedAncestorOrgCode,
+        },
+        {
+          authorization,
+          auditContext: resolveAdminAuditContext(context),
+        },
+      );
     },
   });
 
   const endEmployment = defineAdminApiMutationOperation({
     operationId: "admin.employment.end",
     input: idInput,
-    restInput: c => c.req.valid("param") as z.infer<typeof idInput>,
+    restInput: (c) => c.req.valid("param") as z.infer<typeof idInput>,
     handler: async ({ id }, context) => {
       const authorization = await resolveEmploymentAuthorization(context.hono, "admin.employment.end");
-      return deps.endEmployment.execute({
-        employmentId: id,
-      }, {
-        authorization,
-        auditContext: resolveAdminAuditContext(context),
-      });
+      return deps.endEmployment.execute(
+        {
+          employmentId: id,
+        },
+        {
+          authorization,
+          auditContext: resolveAdminAuditContext(context),
+        },
+      );
     },
   });
 
@@ -196,74 +200,77 @@ export function createEmploymentAdapter(deps: CreateEmploymentAdapterDeps) {
       id: z.coerce.number().int().positive(),
       data: EmploymentTransferDtoSchema,
     }),
-    restInput: c => ({
+    restInput: (c) => ({
       id: (c.req.valid("param") as { id: number }).id,
       data: c.req.valid("json") as z.infer<typeof EmploymentTransferDtoSchema>,
     }),
     handler: async ({ id, data }, context) => {
-      const authorization = await resolveEmploymentAuthorization(
-        context.hono,
-        "admin.employment.transfer",
+      const authorization = await resolveEmploymentAuthorization(context.hono, "admin.employment.transfer");
+      return deps.transferEmployment.execute(
+        {
+          employmentId: id,
+          newOrgCode: data.newOrgCode,
+          expectedAncestorOrgCode: data.expectedAncestorOrgCode,
+          newPosCode: data.newPosCode,
+          isPrimary: data.isPrimary,
+          description: data.description,
+        },
+        {
+          authorization,
+          auditContext: resolveAdminAuditContext(context),
+        },
       );
-      return deps.transferEmployment.execute({
-        employmentId: id,
-        newOrgCode: data.newOrgCode,
-        expectedAncestorOrgCode: data.expectedAncestorOrgCode,
-        newPosCode: data.newPosCode,
-        isPrimary: data.isPrimary,
-        description: data.description,
-      }, {
-        authorization,
-        auditContext: resolveAdminAuditContext(context),
-      });
     },
   });
 
   const setPrimaryEmployment = defineAdminApiMutationOperation({
     operationId: "admin.employment.setPrimary",
     input: idInput,
-    restInput: c => c.req.valid("param") as z.infer<typeof idInput>,
+    restInput: (c) => c.req.valid("param") as z.infer<typeof idInput>,
     handler: async ({ id }, context) => {
       const authorization = await resolveEmploymentAuthorization(context.hono, "admin.employment.setPrimary");
-      return deps.managePrimaryEmployment.execute({
-        command: "set",
-        employmentId: id,
-      }, {
-        authorization,
-        auditContext: resolveAdminAuditContext(context),
-      });
+      return deps.managePrimaryEmployment.execute(
+        {
+          command: "set",
+          employmentId: id,
+        },
+        {
+          authorization,
+          auditContext: resolveAdminAuditContext(context),
+        },
+      );
     },
   });
 
   const clearPrimaryEmployment = defineAdminApiMutationOperation({
     operationId: "admin.employment.clearPrimary",
     input: idInput,
-    restInput: c => c.req.valid("param") as z.infer<typeof idInput>,
+    restInput: (c) => c.req.valid("param") as z.infer<typeof idInput>,
     handler: async ({ id }, context) => {
       const authorization = await resolveEmploymentAuthorization(context.hono, "admin.employment.clearPrimary");
-      return deps.managePrimaryEmployment.execute({
-        command: "clear",
-        employmentId: id,
-      }, {
-        authorization,
-        auditContext: resolveAdminAuditContext(context),
-      });
+      return deps.managePrimaryEmployment.execute(
+        {
+          command: "clear",
+          employmentId: id,
+        },
+        {
+          authorization,
+          auditContext: resolveAdminAuditContext(context),
+        },
+      );
     },
   });
 
   const resignUser = defineAdminApiMutationOperation({
     operationId: "admin.employment.resignUser",
     input: z.object({ username: z.string() }),
-    restInput: c => c.req.valid("param") as { username: string },
+    restInput: (c) => c.req.valid("param") as { username: string },
     handler: async ({ username }, context) =>
       deps.resignUser.execute(
         { username },
         {
           auditContext: resolveAdminAuditContext(context),
-          authorization: await resolveAdminUserAuthorizationForContext(
-            context.hono,
-            "admin.employment.resignUser",
-          ),
+          authorization: await resolveAdminUserAuthorizationForContext(context.hono, "admin.employment.resignUser"),
         },
       ),
   });

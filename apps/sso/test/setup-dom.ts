@@ -1,9 +1,9 @@
 /// <reference types="vitest/jsdom" />
 
-import '@testing-library/jest-dom/vitest';
-import { cleanup } from '@testing-library/react';
-import { afterEach, vi } from 'vitest';
-import { __resetUmiMaxMocks } from './mocks/umijs-max';
+import "@testing-library/jest-dom/vitest";
+import { cleanup } from "@testing-library/react";
+import { afterEach, vi } from "vitest";
+import { __resetUmiMaxMocks } from "./mocks/umijs-max";
 
 class ResizeObserverMock {
   observe = vi.fn();
@@ -13,7 +13,7 @@ class ResizeObserverMock {
 
 class IntersectionObserverMock {
   readonly root = null;
-  readonly rootMargin = '';
+  readonly rootMargin = "";
   readonly thresholds = [];
 
   observe = vi.fn();
@@ -22,7 +22,7 @@ class IntersectionObserverMock {
   takeRecords = vi.fn(() => []);
 }
 
-Object.defineProperty(window, 'matchMedia', {
+Object.defineProperty(window, "matchMedia", {
   writable: true,
   value: vi.fn().mockImplementation((query: string) => ({
     matches: false,
@@ -37,27 +37,27 @@ Object.defineProperty(window, 'matchMedia', {
 });
 
 const nativeGetComputedStyle = window.getComputedStyle.bind(window);
-Object.defineProperty(window, 'getComputedStyle', {
+Object.defineProperty(window, "getComputedStyle", {
   writable: true,
   value: (element: Element) => nativeGetComputedStyle(element),
 });
 
-Object.defineProperty(window, 'ResizeObserver', {
+Object.defineProperty(window, "ResizeObserver", {
   writable: true,
   value: ResizeObserverMock,
 });
 
-Object.defineProperty(window, 'IntersectionObserver', {
+Object.defineProperty(window, "IntersectionObserver", {
   writable: true,
   value: IntersectionObserverMock,
 });
 
-Object.defineProperty(window, 'scrollTo', {
+Object.defineProperty(window, "scrollTo", {
   writable: true,
   value: vi.fn(),
 });
 
-Object.defineProperty(HTMLElement.prototype, 'scrollIntoView', {
+Object.defineProperty(HTMLElement.prototype, "scrollIntoView", {
   writable: true,
   value: vi.fn(),
 });

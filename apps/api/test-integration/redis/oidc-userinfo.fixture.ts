@@ -1,8 +1,8 @@
+import { expect } from "bun:test";
 import type { SubjectFactsSnapshot } from "@iam/client-subject-projection";
 import type { OidcScope } from "@iam/contracts";
-import type { OidcTokenResponse } from "@iam/oidc/wire";
 import { ClientSsoProtocol } from "@iam/contracts";
-import { expect } from "bun:test";
+import type { OidcTokenResponse } from "@iam/oidc/wire";
 import { cleanupAfterFixtureFailure, fixture } from "./oidc.fixture";
 
 export async function userInfoFixture(subjectFacts?: {
@@ -43,12 +43,10 @@ export async function userInfoFixture(subjectFacts?: {
       };
     }
     async function scopes(values: OidcScope[]) {
-      await f.setClient(value => ({
+      await f.setClient((value) => ({
         ...value,
         ssoConfig:
-          value.ssoConfig?.protocol === ClientSsoProtocol.Oidc
-            ? { ...value.ssoConfig, allowedScopes: values }
-            : null,
+          value.ssoConfig?.protocol === ClientSsoProtocol.Oidc ? { ...value.ssoConfig, allowedScopes: values } : null,
       }));
     }
     async function me(bearer: string, method = "GET", headers: Record<string, string> = {}) {
@@ -58,8 +56,7 @@ export async function userInfoFixture(subjectFacts?: {
       });
     }
     return { ...f, issue, scopes, me };
-  }
-  catch (failure) {
+  } catch (failure) {
     return await cleanupAfterFixtureFailure(failure, f.close);
   }
 }

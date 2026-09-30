@@ -10,9 +10,7 @@ export interface EndEmploymentClockPort {
 
 export interface EndEmploymentTransactionPorts {
   employmentStore: {
-    lockEmploymentLifecycleContextById: (
-      id: number,
-    ) => Promise<{ employment: Employment } | null>;
+    lockEmploymentLifecycleContextById: (id: number) => Promise<{ employment: Employment } | null>;
     updateEmploymentRecord: (
       id: number,
       patch: {
@@ -39,16 +37,18 @@ export interface EndEmploymentTransactionPorts {
     }) => Promise<boolean>;
   };
   userProfileInvalidation: {
-    recordChanges: (changes: readonly (
-      | {
-        readonly kind: "employment";
-        readonly userId: number;
-      }
-      | {
-        readonly kind: "organization-responsibility-assignment";
-        readonly userId: number;
-      }
-    )[]) => Promise<void>;
+    recordChanges: (
+      changes: readonly (
+        | {
+            readonly kind: "employment";
+            readonly userId: number;
+          }
+        | {
+            readonly kind: "organization-responsibility-assignment";
+            readonly userId: number;
+          }
+      )[],
+    ) => Promise<void>;
   };
 }
 

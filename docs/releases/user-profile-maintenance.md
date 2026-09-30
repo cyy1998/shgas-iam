@@ -12,12 +12,12 @@ Next review: 2026-10-31
 
 ## 选择操作与准备资源
 
-| 需要处理的问题 | 入口与作用 |
-|---|---|
-| enqueue 失败、唤醒丢失、dirty 工作未完成 | `user-profile:repair` 按 dirty row 当前版本重投，不为重投推进版本；还执行 Subject Access 恢复。 |
+| 需要处理的问题                               | 入口与作用                                                                                                                           |
+| -------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
+| enqueue 失败、唤醒丢失、dirty 工作未完成     | `user-profile:repair` 按 dirty row 当前版本重投，不为重投推进版本；还执行 Subject Access 恢复。                                      |
 | 仅 Subject Access Barrier/transition backlog | `user-profile:repair -- --subject-access-only --limit <n>`；不创建 BullMQ Queue或重投 Profile，但会写 PostgreSQL transition intent。 |
-| 主动全量重建当前 Profile | `user-profile:backfill` 新增 Backfill dirty fact、推进 dirtyVersion 并投递 rebuild job，需要容量和恢复窗口。 |
-| 确认全量数据可用 | 先 `user-profile:verify-postgres`，再 `user-profile:verify-redis`；不以队列为空、enqueued 或样本成功替代。 |
+| 主动全量重建当前 Profile                     | `user-profile:backfill` 新增 Backfill dirty fact、推进 dirtyVersion 并投递 rebuild job，需要容量和恢复窗口。                         |
+| 确认全量数据可用                             | 先 `user-profile:verify-postgres`，再 `user-profile:verify-redis`；不以队列为空、enqueued 或样本成功替代。                           |
 
 使用 Worker 的显式 `IAM_WORKER_DATABASE_URL`、`IAM_WORKER_REDIS_*` 和当前配置，
 核对目标 PostgreSQL、Redis DB/queue/prefix、候选与权限。command-only 入口不启动 consumer、HTTP 或 Bull Board，
@@ -78,11 +78,11 @@ Redis 领取使用 lease/fence，不能手工去重或让旧 worker 覆盖新转
 仓库没有 scheduler。部署负责人须安排外部周期触发、频率、单轮限额、重复排空、告警与恢复 SLO；
 最坏耗时应覆盖 stale threshold、等待下一次调度和有界排空三段。监控以下结构化事件：
 
-| 事件 | 关键观察 |
-|---|---|
+| 事件                                                                                                     | 关键观察                                                                     |
+| -------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------- |
 | `Subject Access stale transition intent reap started` / `Subject Access stale transition intents reaped` | limit、staleAfterSeconds、rolledBack；started 后无对应完成、异常突增需告警。 |
-| `Subject Access transition recovery backlog processed` | prepared、rolledBack、deferred、failed、limit。 |
-| `Subject Access repair backlog processed` | disabled、enabled、deferred、failed、stable、limit。 |
+| `Subject Access transition recovery backlog processed`                                                   | prepared、rolledBack、deferred、failed、limit。                              |
+| `Subject Access repair backlog processed`                                                                | disabled、enabled、deferred、failed、stable、limit。                         |
 
 命令非零退出、failed/deferred 持续非零时，先处理依赖和 publication 原因，再等待 retry 到期或重跑。
 不得通过手工写 Redis、cache warmer、read-through 或请求路径把 missing/blocking Barrier 改为 enabled。

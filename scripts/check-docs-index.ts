@@ -28,8 +28,14 @@ const todayUtc = Date.UTC(currentDate.getUTCFullYear(), currentDate.getUTCMonth(
 
 const staleReferencePatterns = [
   { pattern: /\bPrisma\b|schema\.prisma|src\/db\/schema\.prisma/i, label: "Prisma-era database reference" },
-  { pattern: /Route Handler\s*->\s*Service\s*->\s*Repository\s*->\s*Prisma/i, label: "old layered architecture summary" },
-  { pattern: /src\/routes\/auth\/auth\.service\.ts|src\/lib\/core\/create-app\.ts/i, label: "pre-composition app path" },
+  {
+    pattern: /Route Handler\s*->\s*Service\s*->\s*Repository\s*->\s*Prisma/i,
+    label: "old layered architecture summary",
+  },
+  {
+    pattern: /src\/routes\/auth\/auth\.service\.ts|src\/lib\/core\/create-app\.ts/i,
+    label: "pre-composition app path",
+  },
 ];
 
 const findings: Finding[] = [];
@@ -37,13 +43,13 @@ const warnings: Finding[] = [];
 
 const indexedDocs = parseIndex();
 const docs = listMarkdownFiles(docsRoot)
-  .map(file => toRepoPath(file))
-  .filter(file => file !== "docs/index.md")
+  .map((file) => toRepoPath(file))
+  .filter((file) => file !== "docs/index.md")
   .sort();
 
 checkIndexCoverage(indexedDocs, docs);
 checkIndexFreshness(indexedDocs);
-checkMarkdownLinks(listMarkdownFiles(docsRoot).map(file => toRepoPath(file)));
+checkMarkdownLinks(listMarkdownFiles(docsRoot).map((file) => toRepoPath(file)));
 checkStaleReferences(indexedDocs);
 
 for (const warning of warnings) {
@@ -71,13 +77,12 @@ function parseIndex(): Map<string, IndexedDoc> {
 
   for (const line of text.split("\n")) {
     const trimmed = line.trim();
-    if (!trimmed.startsWith("| ["))
-      continue;
+    if (!trimmed.startsWith("| [")) continue;
 
     const cells = trimmed
       .slice(1, trimmed.endsWith("|") ? -1 : undefined)
       .split("|")
-      .map(cell => cell.trim());
+      .map((cell) => cell.trim());
 
     if (cells.length < 6) {
       fail("docs/index.md", `invalid index row: ${trimmed}`);
@@ -154,8 +159,7 @@ function checkIndexFreshness(rows: Map<string, IndexedDoc>): void {
     if (doc.status === "Current") {
       if (!isDate(doc.nextReview)) {
         fail("docs/index.md", `${doc.path} must use YYYY-MM-DD next review date`);
-      }
-      else if (dateToUtc(doc.nextReview) < todayUtc) {
+      } else if (dateToUtc(doc.nextReview) < todayUtc) {
         fail("docs/index.md", `${doc.path} next review date is in the past`);
       }
     }
@@ -182,8 +186,7 @@ function checkMarkdownLinks(files: string[]): void {
     for (const match of text.matchAll(linkPattern)) {
       const rawTarget = match[1].trim();
       const target = rawTarget.split(/\s+/)[0].split("#")[0];
-      if (!target || shouldSkipLink(target))
-        continue;
+      if (!target || shouldSkipLink(target)) continue;
 
       const targetPath = resolve(dirname(join(repoRoot, file)), target);
       if (!existsSync(targetPath)) {
@@ -197,8 +200,7 @@ function checkStaleReferences(rows: Map<string, IndexedDoc>): void {
   for (const doc of rows.values()) {
     const text = read(doc.path);
     const stalePattern = staleReferencePatterns.find(({ pattern }) => pattern.test(text));
-    if (!stalePattern)
-      continue;
+    if (!stalePattern) continue;
 
     if (doc.status === "Current" || doc.status === "Needs Review") {
       fail(doc.path, `contains ${stalePattern.label}; mark as Historical/Stale or update the content`);
@@ -215,8 +217,7 @@ function listMarkdownFiles(dir: string): string[] {
 
     if (stat.isDirectory()) {
       result.push(...listMarkdownFiles(absolutePath));
-    }
-    else if (entry.endsWith(".md")) {
+    } else if (entry.endsWith(".md")) {
       result.push(absolutePath);
     }
   }

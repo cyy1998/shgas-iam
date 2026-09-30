@@ -1,6 +1,6 @@
+import { expect, mock, test } from "bun:test";
 import { createLoginWithOaUseCase } from "@api/use-cases/authentication/login-with-oa/login-with-oa.use-case";
 import { UserType } from "@iam/contracts";
-import { expect, mock, test } from "bun:test";
 
 const subjectIdentifier = "00000000-0000-4000-8000-000000001001";
 
@@ -36,22 +36,27 @@ test("creates an OA PrincipalSession and audits the active Formal user", async (
     },
   } as any);
 
-  await expect(useCase.execute({
-    clientCode: "oa",
-    loginId: "138550",
-    timestamp: "1700000000000",
-    token: "X92+9YTwAMkI9lrYcUlrlrO829Q5lNQOSq3IBzEuHjc=",
-  }, {
-    requestContext: {
-      sourceApp: "iam",
-      requestId: "req-oa",
-      traceId: null,
-      ip: "203.0.113.13",
-      userAgent: longUserAgent,
-      route: null,
-      method: null,
-    },
-  })).resolves.toEqual({
+  await expect(
+    useCase.execute(
+      {
+        clientCode: "oa",
+        loginId: "138550",
+        timestamp: "1700000000000",
+        token: "X92+9YTwAMkI9lrYcUlrlrO829Q5lNQOSq3IBzEuHjc=",
+      },
+      {
+        requestContext: {
+          sourceApp: "iam",
+          requestId: "req-oa",
+          traceId: null,
+          ip: "203.0.113.13",
+          userAgent: longUserAgent,
+          route: null,
+          method: null,
+        },
+      },
+    ),
+  ).resolves.toEqual({
     kind: "authenticated",
     token: "oa-session",
     isMobileSet: true,
@@ -65,11 +70,13 @@ test("creates an OA PrincipalSession and audits the active Formal user", async (
       userAgent: longUserAgent.slice(0, 512),
     },
   });
-  expect(recordAuditLog).toHaveBeenCalledWith(expect.objectContaining({
-    action: "auth.login.oa",
-    requestId: "req-oa",
-    targetId: 1001,
-  }));
+  expect(recordAuditLog).toHaveBeenCalledWith(
+    expect.objectContaining({
+      action: "auth.login.oa",
+      requestId: "req-oa",
+      targetId: 1001,
+    }),
+  );
 });
 
 test("rejects a timestamp exactly five minutes old in production before user lookup", async () => {
@@ -86,12 +93,14 @@ test("rejects a timestamp exactly five minutes old in production before user loo
     },
   } as any);
 
-  await expect(useCase.execute({
-    clientCode: "oa",
-    loginId: "138550",
-    timestamp: "1700000000000",
-    token: "irrelevant",
-  })).rejects.toThrow("token过期");
+  await expect(
+    useCase.execute({
+      clientCode: "oa",
+      loginId: "138550",
+      timestamp: "1700000000000",
+      token: "irrelevant",
+    }),
+  ).rejects.toThrow("token过期");
 
   expect(getActiveUserByUsername).not.toHaveBeenCalled();
 });
@@ -110,12 +119,14 @@ test("rejects an invalid OA signature before user lookup", async () => {
     },
   } as any);
 
-  await expect(useCase.execute({
-    clientCode: "oa",
-    loginId: "138550",
-    timestamp: "1700000000000",
-    token: "invalid-signature",
-  })).rejects.toThrow("token校验失败");
+  await expect(
+    useCase.execute({
+      clientCode: "oa",
+      loginId: "138550",
+      timestamp: "1700000000000",
+      token: "invalid-signature",
+    }),
+  ).rejects.toThrow("token校验失败");
 
   expect(getActiveUserByUsername).not.toHaveBeenCalled();
 });
@@ -135,12 +146,14 @@ test("rejects a non-Formal user before detail and session work", async () => {
     },
   } as any);
 
-  await expect(useCase.execute({
-    clientCode: "oa",
-    loginId: "138550",
-    timestamp: "1700000000000",
-    token: "X92+9YTwAMkI9lrYcUlrlrO829Q5lNQOSq3IBzEuHjc=",
-  })).rejects.toThrow("用户类别不支持OA登录");
+  await expect(
+    useCase.execute({
+      clientCode: "oa",
+      loginId: "138550",
+      timestamp: "1700000000000",
+      token: "X92+9YTwAMkI9lrYcUlrlrO829Q5lNQOSq3IBzEuHjc=",
+    }),
+  ).rejects.toThrow("用户类别不支持OA登录");
 
   expect(getUserDetailById).not.toHaveBeenCalled();
   expect(createPrincipalSession).not.toHaveBeenCalled();

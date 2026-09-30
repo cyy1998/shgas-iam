@@ -1,4 +1,4 @@
-import type { ProfileBuildDataset } from "../../src/build/profile-build.repository";
+import { describe, expect, mock, test } from "bun:test";
 import {
   EmploymentStatus,
   OrganizationLevel,
@@ -9,11 +9,9 @@ import {
   UserStatus,
   UserType,
 } from "@iam/contracts";
-import { describe, expect, mock, test } from "bun:test";
+import type { ProfileBuildDataset } from "../../src/build/profile-build.repository";
 import { createProfileBuilder } from "../../src/build/profile-builder.service";
-import {
-  parseUserProfileDetailDocument,
-} from "../../src/schema/profile.schema";
+import { parseUserProfileDetailDocument } from "../../src/schema/profile.schema";
 
 const now = new Date("2026-08-20T12:00:00.000Z");
 
@@ -69,12 +67,9 @@ describe("User Profile v3 builder", () => {
     ];
     expect(profile).not.toBeNull();
     expect(profile?.profileSchemaVersion).toBe(3);
-    expect(profile?.detail.employments.map(item => item.responsibilities)).toEqual([
-      expectedResponsibilities,
-      [],
-    ]);
-    expect(profile?.searchDoc.employments.map(item => item.responsibilities)).toEqual([
-      expectedResponsibilities.map(responsibility => ({
+    expect(profile?.detail.employments.map((item) => item.responsibilities)).toEqual([expectedResponsibilities, []]);
+    expect(profile?.searchDoc.employments.map((item) => item.responsibilities)).toEqual([
+      expectedResponsibilities.map((responsibility) => ({
         ...responsibility,
         targetOrganization: {
           ...responsibility.targetOrganization,
@@ -86,7 +81,7 @@ describe("User Profile v3 builder", () => {
       })),
       [],
     ]);
-    expect(profile?.subjectFacts.employments.map(item => item.responsibilities)).toEqual([
+    expect(profile?.subjectFacts.employments.map((item) => item.responsibilities)).toEqual([
       expectedResponsibilities,
       [],
     ]);
@@ -105,8 +100,7 @@ describe("User Profile v3 builder", () => {
     let failure: unknown;
     try {
       await builder.buildOne({ userId: 1, sourceDirtyVersion: "7" });
-    }
-    catch (error) {
+    } catch (error) {
       failure = error;
     }
 
@@ -115,8 +109,7 @@ describe("User Profile v3 builder", () => {
 
   test("rejects mismatched responsibility target paths", async () => {
     const wrongTarget = createDataset();
-    wrongTarget.responsibilityRows[0]!.targetOrganization.path.at(-1)!.code
-      = "different-target";
+    wrongTarget.responsibilityRows[0]!.targetOrganization.path.at(-1)!.code = "different-target";
 
     const builder = createProfileBuilder({
       buildRepository: { loadByUserIds: async () => wrongTarget },
@@ -124,9 +117,7 @@ describe("User Profile v3 builder", () => {
       config: { batchSize: 100 },
     });
 
-    await expect(builder.buildOne({ userId: 1, sourceDirtyVersion: "7" }))
-      .rejects
-      .toBeInstanceOf(Error);
+    await expect(builder.buildOne({ userId: 1, sourceDirtyVersion: "7" })).rejects.toBeInstanceOf(Error);
   });
 
   test("strictly parses a persisted v3 Detail without losing responsibilities", async () => {
@@ -142,19 +133,18 @@ describe("User Profile v3 builder", () => {
 
     expect(detail.createTime).toBeInstanceOf(Date);
     expect(detail.employments[0]?.startTime).toBeInstanceOf(Date);
-    expect(detail.employments[0]?.responsibilities[0]?.type.code).toBe(
-      OrganizationResponsibilityTypeCode.Head,
-    );
-    expect(() => parseUserProfileDetailDocument({
-      ...persistedDetail,
-      unexpected: true,
-    })).toThrow();
+    expect(detail.employments[0]?.responsibilities[0]?.type.code).toBe(OrganizationResponsibilityTypeCode.Head);
+    expect(() =>
+      parseUserProfileDetailDocument({
+        ...persistedDetail,
+        unexpected: true,
+      }),
+    ).toThrow();
     const wrongName = structuredClone(persistedDetail);
     wrongName.employments[0].responsibilities[0].type.name = "WRONG";
     expect(() => parseUserProfileDetailDocument(wrongName)).toThrow();
     const wrongTarget = structuredClone(persistedDetail);
-    wrongTarget.employments[0].responsibilities[0].targetOrganization.path.at(-1).code
-      = "different-target";
+    wrongTarget.employments[0].responsibilities[0].targetOrganization.path.at(-1).code = "different-target";
     expect(() => parseUserProfileDetailDocument(wrongTarget)).toThrow();
   });
 });
@@ -167,18 +157,20 @@ function createDataset(): ProfileBuildDataset {
     updateTime: now,
   });
   return {
-    users: [{
-      ...base(1),
-      subjectIdentifier: "5ee46272-9123-4ec3-9d8d-8a7a6ac7f888",
-      username: "user1",
-      wxId: "wx-1",
-      name: "User 1",
-      password: null,
-      mobile: "13800000001",
-      userType: UserType.Formal,
-      orderNum: 1,
-      status: UserStatus.Enable,
-    }],
+    users: [
+      {
+        ...base(1),
+        subjectIdentifier: "5ee46272-9123-4ec3-9d8d-8a7a6ac7f888",
+        username: "user1",
+        wxId: "wx-1",
+        name: "User 1",
+        password: null,
+        mobile: "13800000001",
+        userType: UserType.Formal,
+        orderNum: 1,
+        status: UserStatus.Enable,
+      },
+    ],
     employments: [
       {
         ...base(10),
@@ -207,10 +199,7 @@ function createDataset(): ProfileBuildDataset {
       { ...base(1000), posCode: "POS-A", posName: "Position A", status: PositionStatus.Enable, description: null },
       { ...base(1100), posCode: "POS-B", posName: "Position B", status: PositionStatus.Enable, description: null },
     ],
-    orgPathRows: [
-      orgPathRow(100, 100, "HOLDER-A", 0),
-      orgPathRow(110, 110, "HOLDER-B", 0),
-    ],
+    orgPathRows: [orgPathRow(100, 100, "HOLDER-A", 0), orgPathRow(110, 110, "HOLDER-B", 0)],
     roleRows: [],
     privilegeRows: [],
     responsibilityRows: [
@@ -238,11 +227,7 @@ function orgPathRow(descendantId: number, id: number, orgCode: string, depth: nu
   };
 }
 
-function responsibilityRow(
-  employmentId: number,
-  typeCode: OrganizationResponsibilityTypeCode,
-  targetCode: string,
-) {
+function responsibilityRow(employmentId: number, typeCode: OrganizationResponsibilityTypeCode, targetCode: string) {
   return {
     employmentId,
     typeCode,

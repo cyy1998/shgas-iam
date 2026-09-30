@@ -1,3 +1,5 @@
+import { AuthzForbiddenError } from "@iam/api-core/errors/AuthzForbiddenError";
+import { SystemLogEvent } from "@iam/api-core/logger";
 import type {
   AdminAuthorizationDecision,
   AdminAuthorizationReasonCode,
@@ -7,12 +9,24 @@ import type {
   AdminOrganizationResponsibilityAllowedActions,
   AdminUserAllowedActions,
 } from "@iam/contracts";
+import {
+  ADMIN_MODULE_CODES,
+  EmploymentStatus,
+  OrganizationLevel as OrganizationLevelValue,
+  OrganizationResponsibilityAssignmentStatus,
+  OrganizationStatus as OrganizationStatusValue,
+  UserStatus,
+} from "@iam/contracts";
+import { EmploymentNotFoundError } from "@iam/domain/employment";
+import { OrganizationNotFoundError } from "@iam/domain/organization";
+import { OrganizationResponsibilityAssignmentNotFoundError } from "@iam/domain/organization-responsibility";
 import type {
   AdminEmploymentActionFacts,
   AdminEmploymentAuthorization,
   AdminEmploymentMutationDenial,
 } from "./admin-employment-authorization.type";
 import type { AdminOperationId } from "./admin-operation.registry";
+import { ADMIN_AUTHORIZATION_OPERATION_REGISTRY } from "./admin-operation.registry";
 import type {
   AdminOrganizationActionFacts,
   AdminOrganizationAuthorization,
@@ -28,17 +42,7 @@ import type {
   AdminUserAuthorization,
   AdminUserMutationDenial,
 } from "./admin-user-authorization.type";
-import type {
-  HrAdministrationScope,
-  HrAdministrationScopeResolver,
-} from "./hr-administration-scope.resolver";
-import { AuthzForbiddenError } from "@iam/api-core/errors/AuthzForbiddenError";
-import { SystemLogEvent } from "@iam/api-core/logger";
-import { ADMIN_MODULE_CODES, EmploymentStatus, OrganizationLevel as OrganizationLevelValue, OrganizationResponsibilityAssignmentStatus, OrganizationStatus as OrganizationStatusValue, UserStatus } from "@iam/contracts";
-import { EmploymentNotFoundError } from "@iam/domain/employment";
-import { OrganizationNotFoundError } from "@iam/domain/organization";
-import { OrganizationResponsibilityAssignmentNotFoundError } from "@iam/domain/organization-responsibility";
-import { ADMIN_AUTHORIZATION_OPERATION_REGISTRY } from "./admin-operation.registry";
+import type { HrAdministrationScope, HrAdministrationScopeResolver } from "./hr-administration-scope.resolver";
 
 export interface AdminAuthorizationActor {
   userId: number;
@@ -60,12 +64,7 @@ export interface CreateAdminAuthorizationPolicyDeps {
 }
 
 const FULL_ADMIN_ROLE_CODE = "iam:admin";
-const HR_USER_PROFILE_UPDATE_FIELDS = new Set([
-  "name",
-  "mobile",
-  "wxId",
-  "userType",
-]);
+const HR_USER_PROFILE_UPDATE_FIELDS = new Set(["name", "mobile", "wxId", "userType"]);
 const HR_ADMIN_OPERATION_IDS = new Set<string>([
   "admin.authorization.capabilitySummary",
   "admin.employment.search",
@@ -116,22 +115,14 @@ const actionNotGrantedDecision = {
 } as const satisfies AdminAuthorizationDecision;
 
 function hasForbiddenHrUserProfileField(operationInput: unknown) {
-  if (operationInput === null || typeof operationInput !== "object" || Array.isArray(operationInput))
-    return false;
+  if (operationInput === null || typeof operationInput !== "object" || Array.isArray(operationInput)) return false;
   const input = operationInput as Record<string, unknown>;
-  const patch = Object.hasOwn(input, "data")
-    ? input.data
-    : Object.hasOwn(input, "body")
-      ? input.body
-      : undefined;
-  if (patch === null || typeof patch !== "object" || Array.isArray(patch))
-    return false;
-  return Object.keys(patch).some(key => !HR_USER_PROFILE_UPDATE_FIELDS.has(key));
+  const patch = Object.hasOwn(input, "data") ? input.data : Object.hasOwn(input, "body") ? input.body : undefined;
+  if (patch === null || typeof patch !== "object" || Array.isArray(patch)) return false;
+  return Object.keys(patch).some((key) => !HR_USER_PROFILE_UPDATE_FIELDS.has(key));
 }
 
-function userAllowedActions(
-  decision: AdminAuthorizationDecision,
-): AdminUserAllowedActions {
+function userAllowedActions(decision: AdminAuthorizationDecision): AdminUserAllowedActions {
   return {
     editProfile: decision,
     resetPassword: decision,
@@ -157,8 +148,7 @@ function scopedUserAllowedActions(
     allowed: false,
     reason: "USER_HAS_OUT_OF_SCOPE_OPEN_EMPLOYMENT",
   } as const satisfies AdminAuthorizationDecision;
-  const isHrManaged = !facts.isDelete
-    && facts.openEmploymentOrganizationIds.some(id => organizationIds.includes(id));
+  const isHrManaged = !facts.isDelete && facts.openEmploymentOrganizationIds.some((id) => organizationIds.includes(id));
   const editProfile = isHrManaged ? allowedDecision : userNotHrManagedDecision;
   const resetPassword = !isHrManaged
     ? userNotHrManagedDecision
@@ -167,20 +157,21 @@ function scopedUserAllowedActions(
       : userNotEnabledDecision;
   const changeStatus = !isHrManaged
     ? userNotHrManagedDecision
-    : facts.openEmploymentOrganizationIds.every(id => organizationIds.includes(id))
+    : facts.openEmploymentOrganizationIds.every((id) => organizationIds.includes(id))
       ? allowedDecision
       : userHasOutOfScopeOpenEmploymentDecision;
-  const isCompletedResignation = !facts.isDelete
-    && facts.status === UserStatus.Disable
-    && facts.openEmploymentOrganizationIds.length === 0
-    && facts.endedEmploymentOrganizationIds.some(id => organizationIds.includes(id));
+  const isCompletedResignation =
+    !facts.isDelete &&
+    facts.status === UserStatus.Disable &&
+    facts.openEmploymentOrganizationIds.length === 0 &&
+    facts.endedEmploymentOrganizationIds.some((id) => organizationIds.includes(id));
   const resign = isCompletedResignation
     ? allowedDecision
     : !isHrManaged
-        ? userNotHrManagedDecision
-        : facts.openEmploymentOrganizationIds.every(id => organizationIds.includes(id))
-          ? allowedDecision
-          : userHasOutOfScopeOpenEmploymentDecision;
+      ? userNotHrManagedDecision
+      : facts.openEmploymentOrganizationIds.every((id) => organizationIds.includes(id))
+        ? allowedDecision
+        : userHasOutOfScopeOpenEmploymentDecision;
   return {
     editProfile,
     resetPassword,
@@ -190,9 +181,7 @@ function scopedUserAllowedActions(
   };
 }
 
-function organizationAllowedActions(
-  facts: AdminOrganizationActionFacts,
-): AdminOrganizationAllowedActions {
+function organizationAllowedActions(facts: AdminOrganizationActionFacts): AdminOrganizationAllowedActions {
   const stateNotActionableDecision = {
     allowed: false,
     reason: "RESOURCE_STATE_NOT_ACTIONABLE",
@@ -205,22 +194,21 @@ function organizationAllowedActions(
     allowed: false,
     reason: "UNMANAGEABLE_RESPONSIBILITY_BLOCKED",
   } as const satisfies AdminAuthorizationDecision;
-  const integrityBlocked = facts.childrenCount > 0
-    || facts.employmentCount > 0
-    || facts.hasOpenResponsibilityAssignment;
-  const lifecycleBlocked = facts.employmentCount > 0
-    || facts.hasOpenResponsibilityAssignment;
+  const integrityBlocked =
+    facts.childrenCount > 0 || facts.employmentCount > 0 || facts.hasOpenResponsibilityAssignment;
+  const lifecycleBlocked = facts.employmentCount > 0 || facts.hasOpenResponsibilityAssignment;
   return {
-    createChild: facts.status === OrganizationStatusValue.Enable
-      && facts.level !== OrganizationLevelValue.Five
-      ? allowedDecision
-      : stateNotActionableDecision,
+    createChild:
+      facts.status === OrganizationStatusValue.Enable && facts.level !== OrganizationLevelValue.Five
+        ? allowedDecision
+        : stateNotActionableDecision,
     edit: allowedDecision,
-    changeStatus: facts.status === OrganizationStatusValue.Enable && lifecycleBlocked
-      ? facts.hasUnmanageableOpenResponsibilityAssignment
-        ? unmanageableResponsibilityBlockedDecision
-        : integrityGuardBlockedDecision
-      : allowedDecision,
+    changeStatus:
+      facts.status === OrganizationStatusValue.Enable && lifecycleBlocked
+        ? facts.hasUnmanageableOpenResponsibilityAssignment
+          ? unmanageableResponsibilityBlockedDecision
+          : integrityGuardBlockedDecision
+        : allowedDecision,
     delete: integrityBlocked
       ? facts.hasUnmanageableOpenResponsibilityAssignment
         ? unmanageableResponsibilityBlockedDecision
@@ -229,9 +217,7 @@ function organizationAllowedActions(
   };
 }
 
-function employmentAllowedActions(
-  facts: AdminEmploymentActionFacts,
-): AdminEmploymentAllowedActions {
+function employmentAllowedActions(facts: AdminEmploymentActionFacts): AdminEmploymentAllowedActions {
   const stateNotActionable = {
     allowed: false,
     reason: "RESOURCE_STATE_NOT_ACTIONABLE",
@@ -239,24 +225,16 @@ function employmentAllowedActions(
   const isOpen = facts.status !== EmploymentStatus.Disable;
   return {
     editDescription: isOpen ? allowedDecision : stateNotActionable,
-    pause: facts.status === EmploymentStatus.Enable
-      ? allowedDecision
-      : stateNotActionable,
-    resume: facts.status === EmploymentStatus.Pause
-      ? allowedDecision
-      : stateNotActionable,
+    pause: facts.status === EmploymentStatus.Enable ? allowedDecision : stateNotActionable,
+    resume: facts.status === EmploymentStatus.Pause ? allowedDecision : stateNotActionable,
     end: isOpen ? allowedDecision : stateNotActionable,
     transfer: !isOpen
       ? stateNotActionable
       : facts.userStatus === UserStatus.Disable
         ? { allowed: false, reason: "USER_DISABLED" }
         : allowedDecision,
-    setPrimary: isOpen && !facts.isPrimary
-      ? allowedDecision
-      : stateNotActionable,
-    clearPrimary: isOpen && facts.isPrimary
-      ? allowedDecision
-      : stateNotActionable,
+    setPrimary: isOpen && !facts.isPrimary ? allowedDecision : stateNotActionable,
+    clearPrimary: isOpen && facts.isPrimary ? allowedDecision : stateNotActionable,
   };
 }
 
@@ -267,22 +245,15 @@ export function getOrganizationResponsibilityAllowedActions(
     allowed: false,
     reason: "RESOURCE_STATE_NOT_ACTIONABLE",
   } as const satisfies AdminAuthorizationDecision;
-  const isOpen
-    = facts.status !== OrganizationResponsibilityAssignmentStatus.Disable;
+  const isOpen = facts.status !== OrganizationResponsibilityAssignmentStatus.Disable;
   return {
-    pause: facts.status === OrganizationResponsibilityAssignmentStatus.Enable
-      ? allowedDecision
-      : stateNotActionable,
-    resume: facts.status === OrganizationResponsibilityAssignmentStatus.Pause
-      ? allowedDecision
-      : stateNotActionable,
+    pause: facts.status === OrganizationResponsibilityAssignmentStatus.Enable ? allowedDecision : stateNotActionable,
+    resume: facts.status === OrganizationResponsibilityAssignmentStatus.Pause ? allowedDecision : stateNotActionable,
     end: isOpen ? allowedDecision : stateNotActionable,
   };
 }
 
-export function createAdminAuthorizationPolicy(
-  deps: CreateAdminAuthorizationPolicyDeps,
-) {
+export function createAdminAuthorizationPolicy(deps: CreateAdminAuthorizationPolicyDeps) {
   function hasFullAdminCapability(actor: AdminAuthorizationActor) {
     return actor.roles.includes(FULL_ADMIN_ROLE_CODE);
   }
@@ -296,17 +267,20 @@ export function createAdminAuthorizationPolicy(
       reason: AdminAuthorizationReasonCode;
     },
   ) {
-    deps.logger.warn({
-      event: SystemLogEvent.AdminAuthorizationDenied,
-      actor: {
-        userId: actor.userId,
-        username: actor.username,
+    deps.logger.warn(
+      {
+        event: SystemLogEvent.AdminAuthorizationDenied,
+        actor: {
+          userId: actor.userId,
+          username: actor.username,
+        },
+        action: input.operationId,
+        resourceType: input.resourceType,
+        resourceIdentifier: input.resourceIdentifier,
+        reasonCode: input.reason,
       },
-      action: input.operationId,
-      resourceType: input.resourceType,
-      resourceIdentifier: input.resourceIdentifier,
-      reasonCode: input.reason,
-    }, "admin mutation authorization denied");
+      "admin mutation authorization denied",
+    );
   }
 
   function createUserAuthorization(
@@ -327,10 +301,7 @@ export function createAdminAuthorizationPolicy(
       : {
           kind: "scoped",
           organizationIds: scope.organizationIds,
-          getAllowedActions: facts => scopedUserAllowedActions(
-            facts,
-            scope.organizationIds,
-          ),
+          getAllowedActions: (facts) => scopedUserAllowedActions(facts, scope.organizationIds),
           denyMutation,
         };
   }
@@ -339,13 +310,12 @@ export function createAdminAuthorizationPolicy(
     actor: AdminAuthorizationActor,
     resolvedScope?: HrAdministrationScope | null,
   ): Promise<AdminUserAuthorization> {
-    if (hasFullAdminCapability(actor))
-      return createUserAuthorization(actor, null);
-    const scope = resolvedScope === undefined
-      ? await deps.hrAdministrationScopeResolver.resolveForActor(actor.userId)
-      : resolvedScope;
-    if (scope === null)
-      throw new AuthzForbiddenError("无管理端操作权限");
+    if (hasFullAdminCapability(actor)) return createUserAuthorization(actor, null);
+    const scope =
+      resolvedScope === undefined
+        ? await deps.hrAdministrationScopeResolver.resolveForActor(actor.userId)
+        : resolvedScope;
+    if (scope === null) throw new AuthzForbiddenError("无管理端操作权限");
     return createUserAuthorization(actor, scope);
   }
 
@@ -356,8 +326,7 @@ export function createAdminAuthorizationPolicy(
     const full = scope === null;
     const denyMutation = (input: AdminEmploymentMutationDenial): never => {
       logMutationDenial(actor, { ...input, resourceType: "employment" });
-      if (input.concealExistence)
-        throw new EmploymentNotFoundError();
+      if (input.concealExistence) throw new EmploymentNotFoundError();
       throw new AuthzForbiddenError("无管理端操作权限");
     };
     return full
@@ -381,13 +350,12 @@ export function createAdminAuthorizationPolicy(
     actor: AdminAuthorizationActor,
     resolvedScope?: HrAdministrationScope | null,
   ): Promise<AdminEmploymentAuthorization> {
-    if (hasFullAdminCapability(actor))
-      return createEmploymentAuthorization(actor, null);
-    const scope = resolvedScope === undefined
-      ? await deps.hrAdministrationScopeResolver.resolveForActor(actor.userId)
-      : resolvedScope;
-    if (scope === null)
-      throw new AuthzForbiddenError("无管理端操作权限");
+    if (hasFullAdminCapability(actor)) return createEmploymentAuthorization(actor, null);
+    const scope =
+      resolvedScope === undefined
+        ? await deps.hrAdministrationScopeResolver.resolveForActor(actor.userId)
+        : resolvedScope;
+    if (scope === null) throw new AuthzForbiddenError("无管理端操作权限");
     return createEmploymentAuthorization(actor, scope);
   }
 
@@ -397,8 +365,7 @@ export function createAdminAuthorizationPolicy(
   ): AdminOrganizationAuthorization {
     const denyMutation = (input: AdminOrganizationMutationDenial): never => {
       logMutationDenial(actor, { ...input, resourceType: "organization" });
-      if (input.concealExistence)
-        throw new OrganizationNotFoundError();
+      if (input.concealExistence) throw new OrganizationNotFoundError();
       throw new AuthzForbiddenError("无管理端操作权限");
     };
     return scope === null
@@ -418,16 +385,10 @@ export function createAdminAuthorizationPolicy(
         };
   }
 
-  async function getOrganizationAuthorization(
-    actor: AdminAuthorizationActor,
-  ): Promise<AdminOrganizationAuthorization> {
-    if (hasFullAdminCapability(actor))
-      return createOrganizationAuthorization(actor, null);
-    const scope = await deps.hrAdministrationScopeResolver.resolveForActor(
-      actor.userId,
-    );
-    if (scope === null)
-      throw new AuthzForbiddenError("无管理端操作权限");
+  async function getOrganizationAuthorization(actor: AdminAuthorizationActor): Promise<AdminOrganizationAuthorization> {
+    if (hasFullAdminCapability(actor)) return createOrganizationAuthorization(actor, null);
+    const scope = await deps.hrAdministrationScopeResolver.resolveForActor(actor.userId);
+    if (scope === null) throw new AuthzForbiddenError("无管理端操作权限");
     return createOrganizationAuthorization(actor, scope);
   }
 
@@ -435,15 +396,12 @@ export function createAdminAuthorizationPolicy(
     actor: AdminAuthorizationActor,
     resolvedScope?: HrAdministrationScope | null,
   ): Promise<AdminOrganizationResponsibilityAuthorization> {
-    const denyMutation = (
-      input: AdminOrganizationResponsibilityMutationDenial,
-    ): never => {
+    const denyMutation = (input: AdminOrganizationResponsibilityMutationDenial): never => {
       logMutationDenial(actor, {
         ...input,
         resourceType: "organizationResponsibilityAssignment",
       });
-      if (input.reason === "RESOURCE_OUT_OF_SCOPE")
-        throw new OrganizationResponsibilityAssignmentNotFoundError();
+      if (input.reason === "RESOURCE_OUT_OF_SCOPE") throw new OrganizationResponsibilityAssignmentNotFoundError();
       throw new AuthzForbiddenError("无管理端操作权限");
     };
     if (hasFullAdminCapability(actor)) {
@@ -454,11 +412,11 @@ export function createAdminAuthorizationPolicy(
         denyMutation,
       };
     }
-    const scope = resolvedScope === undefined
-      ? await deps.hrAdministrationScopeResolver.resolveForActor(actor.userId)
-      : resolvedScope;
-    if (scope === null)
-      throw new AuthzForbiddenError("无管理端操作权限");
+    const scope =
+      resolvedScope === undefined
+        ? await deps.hrAdministrationScopeResolver.resolveForActor(actor.userId)
+        : resolvedScope;
+    if (scope === null) throw new AuthzForbiddenError("无管理端操作权限");
     return {
       kind: "scoped",
       readScope: {
@@ -475,13 +433,13 @@ export function createAdminAuthorizationPolicy(
     operationId: AdminOperationId | string;
   }): Promise<
     | {
-      decision: typeof allowedDecision;
-      authorization: AdminOperationAuthorization;
-    }
+        decision: typeof allowedDecision;
+        authorization: AdminOperationAuthorization;
+      }
     | {
-      decision: typeof actionNotGrantedDecision;
-      authorization: null;
-    }
+        decision: typeof actionNotGrantedDecision;
+        authorization: null;
+      }
   > {
     if (!Object.hasOwn(ADMIN_AUTHORIZATION_OPERATION_REGISTRY, input.operationId))
       return { decision: actionNotGrantedDecision, authorization: null };
@@ -493,9 +451,7 @@ export function createAdminAuthorizationPolicy(
     }
     if (!HR_ADMIN_OPERATION_IDS.has(input.operationId))
       return { decision: actionNotGrantedDecision, authorization: null };
-    const scope = await deps.hrAdministrationScopeResolver.resolveForActor(
-      input.actor.userId,
-    );
+    const scope = await deps.hrAdministrationScopeResolver.resolveForActor(input.actor.userId);
     return scope === null
       ? { decision: actionNotGrantedDecision, authorization: null }
       : {
@@ -511,9 +467,7 @@ export function createAdminAuthorizationPolicy(
     return (await evaluateOperation(input)).decision;
   }
 
-  async function getCapabilitySummary(
-    actor: AdminAuthorizationActor,
-  ): Promise<AdminCapabilitySummary> {
+  async function getCapabilitySummary(actor: AdminAuthorizationActor): Promise<AdminCapabilitySummary> {
     if (hasFullAdminCapability(actor)) {
       return {
         visibleModules: [...ADMIN_MODULE_CODES],
@@ -531,9 +485,7 @@ export function createAdminAuthorizationPolicy(
         },
       };
     }
-    const scope = await deps.hrAdministrationScopeResolver.resolveForActor(
-      actor.userId,
-    );
+    const scope = await deps.hrAdministrationScopeResolver.resolveForActor(actor.userId);
     const hasHrCapability = scope !== null;
     return {
       visibleModules: hasHrCapability
@@ -563,8 +515,7 @@ export function createAdminAuthorizationPolicy(
   }) {
     assertOperationInputAllowed(input);
     const evaluation = await evaluateOperation(input);
-    if (evaluation.authorization !== null)
-      return evaluation.authorization;
+    if (evaluation.authorization !== null) return evaluation.authorization;
 
     const operation = Object.hasOwn(ADMIN_AUTHORIZATION_OPERATION_REGISTRY, input.operationId)
       ? ADMIN_AUTHORIZATION_OPERATION_REGISTRY[input.operationId as AdminOperationId]
@@ -586,9 +537,9 @@ export function createAdminAuthorizationPolicy(
     operationInput: unknown;
   }) {
     if (
-      hasFullAdminCapability(input.actor)
-      || input.operationId !== "admin.user.update"
-      || !hasForbiddenHrUserProfileField(input.operationInput)
+      hasFullAdminCapability(input.actor) ||
+      input.operationId !== "admin.user.update" ||
+      !hasForbiddenHrUserProfileField(input.operationInput)
     ) {
       return;
     }
@@ -614,6 +565,4 @@ export function createAdminAuthorizationPolicy(
   };
 }
 
-export type AdminAuthorizationPolicy = ReturnType<
-  typeof createAdminAuthorizationPolicy
->;
+export type AdminAuthorizationPolicy = ReturnType<typeof createAdminAuthorizationPolicy>;

@@ -1,7 +1,7 @@
 import type { DbClient } from "@iam/db";
+import { auditLogs } from "@iam/db/schema";
 import type { AuditLogWriteDto } from "@iam/domain/audit";
 import type { Json } from "drizzle-orm";
-import { auditLogs } from "@iam/db/schema";
 
 export function createAuditRepository(db: DbClient) {
   return {

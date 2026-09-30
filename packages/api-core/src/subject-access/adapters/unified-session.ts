@@ -1,9 +1,4 @@
-import type {
-  CapturedSession,
-  RevocationResult,
-  SessionRecord,
-  UnifiedSessionKernel,
-} from "@iam/session-kernel";
+import type { CapturedSession, RevocationResult, SessionRecord, UnifiedSessionKernel } from "@iam/session-kernel";
 import type { SubjectAccessOperation } from "../operation";
 import { encodeSubjectAccessContext, parseSubjectAccessContext } from "../subject-context";
 
@@ -31,8 +26,7 @@ export function createUnifiedSubjectAccessSessionRevocation(
     const targets: CapturedSession[] = [];
     let offset: number | null = 0;
     do {
-      if (offset >= 10000)
-        throw new Error("Session capture exceeds the request budget");
+      if (offset >= 10000) throw new Error("Session capture exceeds the request budget");
       const page = await kernel.forOperation(operation).captureSessions({ scope, offset, limit: 1000 });
       records.push(...page.records);
       targets.push(...page.targets);
@@ -47,12 +41,9 @@ export function createUnifiedSubjectAccessSessionRevocation(
     excludeUserSessionId?: string,
   ) {
     const uniqueTargets = [
-      ...new Map(
-        targets.map(target => [`${target.kind}:${target.id}:${target.instance}`, target]),
-      ).values(),
+      ...new Map(targets.map((target) => [`${target.kind}:${target.id}:${target.instance}`, target])).values(),
     ];
-    if (uniqueTargets.length > 10000)
-      throw new Error("Session capture exceeds the request budget");
+    if (uniqueTargets.length > 10000) throw new Error("Session capture exceeds the request budget");
     const summary: UnifiedSessionRevocationSummary = {
       userSessionsTerminated: 0,
       clientSessionsTerminated: 0,
@@ -72,25 +63,16 @@ export function createUnifiedSubjectAccessSessionRevocation(
     return summary;
   }
 
-  async function revokeRoots(
-    subjectIdentifier: string,
-    contexts?: ReadonlySet<string>,
-    excludeUserSessionId?: string,
-  ) {
+  async function revokeRoots(subjectIdentifier: string, contexts?: ReadonlySet<string>, excludeUserSessionId?: string) {
     return await operations.run(async (operation) => {
       const roots = await capture(operation, { subjectIdentifier });
-      const selected = roots.records.filter(
-        record => contexts === undefined || contexts.has(record.subjectContext),
-      );
-      const ids = new Set(
-        selected.map(record => (record.kind === "userSession" ? record.userSessionId : "")),
-      );
-      const targets = roots.targets.filter(target => ids.has(target.id));
+      const selected = roots.records.filter((record) => contexts === undefined || contexts.has(record.subjectContext));
+      const ids = new Set(selected.map((record) => (record.kind === "userSession" ? record.userSessionId : "")));
+      const targets = roots.targets.filter((target) => ids.has(target.id));
       for (const id of ids) {
         const children = await capture(operation, { userSessionId: id });
         targets.push(...children.targets);
-        if (targets.length > 10000)
-          throw new Error("Session capture exceeds the request budget");
+        if (targets.length > 10000) throw new Error("Session capture exceeds the request budget");
       }
       return await execute(operation, targets, excludeUserSessionId);
     });
@@ -98,9 +80,7 @@ export function createUnifiedSubjectAccessSessionRevocation(
 
   return {
     async executeCapturedSessions(targets: readonly CapturedSession[], excludeUserSessionId?: string) {
-      return await operations.run(
-        async operation => await execute(operation, targets, excludeUserSessionId),
-      );
+      return await operations.run(async (operation) => await execute(operation, targets, excludeUserSessionId));
     },
     async revokeClientSessions(clientId: string) {
       return await operations.run(async (operation) => {
@@ -112,8 +92,7 @@ export function createUnifiedSubjectAccessSessionRevocation(
       return await operations.run(async (operation) => {
         const sessions = kernel.forOperation(operation);
         const observed = await sessions.observeUserSessionForRevocation(userSessionId);
-        if (observed.status === "corrupt")
-          throw new Error("Session state could not be confirmed");
+        if (observed.status === "corrupt") throw new Error("Session state could not be confirmed");
         const children = await capture(operation, { userSessionId });
         return await execute(operation, [
           ...(observed.status === "resolved" ? [observed.value.target] : []),
@@ -126,8 +105,8 @@ export function createUnifiedSubjectAccessSessionRevocation(
       _reason: string,
       options: { onlySubjectAccessTransitionId?: string; exceptPrincipalSessionId?: string } = {},
     ) {
-      const contexts
-        = options.onlySubjectAccessTransitionId === undefined
+      const contexts =
+        options.onlySubjectAccessTransitionId === undefined
           ? undefined
           : new Set([
               encodeSubjectAccessContext({

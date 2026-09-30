@@ -1,14 +1,11 @@
-import type { ClientSnapshotRedis } from "./contract";
 import { randomUUID } from "node:crypto";
 import { ClientCodeSchema } from "@iam/contracts";
+import type { ClientSnapshotRedis } from "./contract";
 import { ClientSnapshotInvalidationError, ClientSnapshotUnavailableError } from "./contract";
 import { createClientSnapshotRedisStore } from "./redis-store";
 
 interface ClientRuntimeRestoreScanRedis {
-  scan: (cursor: string, match: "MATCH", pattern: string, count: "COUNT", limit: string) => Promise<[
-    string,
-    string[],
-  ]>;
+  scan: (cursor: string, match: "MATCH", pattern: string, count: "COUNT", limit: string) => Promise<[string, string[]]>;
 }
 interface ClientRuntimeRestoreRepairRedis extends ClientRuntimeRestoreScanRedis {
   unlink: (...keys: string[]) => Promise<number>;
@@ -17,13 +14,11 @@ interface Confirmation {
   protocolTrafficStopped: true;
 }
 function requireStopped(confirmation: Confirmation) {
-  if (confirmation?.protocolTrafficStopped !== true)
-    throw new Error("Protocol traffic stop confirmation is required");
+  if (confirmation?.protocolTrafficStopped !== true) throw new Error("Protocol traffic stop confirmation is required");
 }
 function add(current: number, increment: number) {
   const next = current + increment;
-  if (!Number.isSafeInteger(next))
-    throw new Error("Snapshot maintenance count exceeded budget");
+  if (!Number.isSafeInteger(next)) throw new Error("Snapshot maintenance count exceeded budget");
   return next;
 }
 export const CLIENT_SNAPSHOT_INVENTORY = [
@@ -38,11 +33,13 @@ function inventory(redis: ClientRuntimeRestoreScanRedis) {
         let cursor = "0";
         do {
           const result = await redis.scan(cursor, "MATCH", pattern, "COUNT", "100");
-          if (!Array.isArray(result)
-            || result.length !== 2
-            || !/^\d+$/u.test(result[0])
-            || !Array.isArray(result[1])
-            || result[1].some(key => typeof key !== "string")) {
+          if (
+            !Array.isArray(result) ||
+            result.length !== 2 ||
+            !/^\d+$/u.test(result[0]) ||
+            !Array.isArray(result[1]) ||
+            result[1].some((key) => typeof key !== "string")
+          ) {
             throw new Error("Invalid Snapshot inventory");
           }
           cursor = result[0];
@@ -53,19 +50,20 @@ function inventory(redis: ClientRuntimeRestoreScanRedis) {
   };
 }
 export function createClientSnapshotVerifier(redis: ClientRuntimeRestoreScanRedis) {
-  return { async verifyAllAfterRedisRestore(confirmation: Confirmation) {
-    try {
-      requireStopped(confirmation);
-      let matchingKeys = 0;
-      await inventory(redis).forEachOwnedBatch((keys) => {
-        matchingKeys = add(matchingKeys, keys.length);
-      });
-      return { matchingKeys };
-    }
-    catch {
-      throw new ClientSnapshotUnavailableError();
-    }
-  } };
+  return {
+    async verifyAllAfterRedisRestore(confirmation: Confirmation) {
+      try {
+        requireStopped(confirmation);
+        let matchingKeys = 0;
+        await inventory(redis).forEachOwnedBatch((keys) => {
+          matchingKeys = add(matchingKeys, keys.length);
+        });
+        return { matchingKeys };
+      } catch {
+        throw new ClientSnapshotUnavailableError();
+      }
+    },
+  };
 }
 export function createClientSnapshotMaintenance(redis: ClientSnapshotRedis & ClientRuntimeRestoreRepairRedis) {
   const store = createClientSnapshotRedisStore(redis);
@@ -74,8 +72,7 @@ export function createClientSnapshotMaintenance(redis: ClientSnapshotRedis & Cli
       ClientCodeSchema.parse(code);
       try {
         await store.invalidateClient(code, randomUUID());
-      }
-      catch {
+      } catch {
         throw new ClientSnapshotInvalidationError();
       }
     },
@@ -101,14 +98,11 @@ export function createClientSnapshotMaintenance(redis: ClientSnapshotRedis & Cli
               unlinkBatches = add(unlinkBatches, 1);
             }
           });
-          if (passScanned === 0)
-            return { scannedKeys, unlinkedKeys, unlinkBatches };
-          if (passUnlinked === 0)
-            throw new Error("Snapshot repair made no progress");
+          if (passScanned === 0) return { scannedKeys, unlinkedKeys, unlinkBatches };
+          if (passUnlinked === 0) throw new Error("Snapshot repair made no progress");
         }
         throw new Error("Snapshot repair did not converge");
-      }
-      catch {
+      } catch {
         throw new ClientSnapshotInvalidationError();
       }
     },

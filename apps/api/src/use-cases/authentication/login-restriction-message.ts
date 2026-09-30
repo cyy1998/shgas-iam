@@ -1,7 +1,4 @@
-import type {
-  AuthenticationLoginFailureStatus,
-  AuthenticationLoginRestrictionStatus,
-} from "./login-restriction.type";
+import type { AuthenticationLoginFailureStatus, AuthenticationLoginRestrictionStatus } from "./login-restriction.type";
 
 export function formatLoginFailureMessage(prefix: string, result: AuthenticationLoginFailureStatus) {
   const failureMessage = [
@@ -15,11 +12,8 @@ export function formatLoginFailureMessage(prefix: string, result: Authentication
 }
 
 export function formatTemporaryLoginRestrictionMessage(restriction: AuthenticationLoginRestrictionStatus) {
-  const triggerMethod = restriction.triggerMethod === "password"
-    ? "密码"
-    : restriction.triggerMethod === "mobile"
-      ? "手机验证码"
-      : "未知";
+  const triggerMethod =
+    restriction.triggerMethod === "password" ? "密码" : restriction.triggerMethod === "mobile" ? "手机验证码" : "未知";
   const remainingMinutes = Math.max(1, Math.ceil(restriction.remainingSeconds / 60));
   return [
     "账号已被临时限制",

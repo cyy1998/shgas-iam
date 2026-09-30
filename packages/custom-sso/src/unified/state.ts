@@ -30,9 +30,7 @@ export const codeRecordSchema = acceptedSchema
   })
   .strict();
 export type CustomSsoCodeRecord = z.infer<typeof codeRecordSchema>;
-export const continuationSchema = acceptedSchema
-  .extend({ browserDigest: z.string(), expiresAt: z.number() })
-  .strict();
+export const continuationSchema = acceptedSchema.extend({ browserDigest: z.string(), expiresAt: z.number() }).strict();
 const handleSchema = z.string().regex(/^[\w-]{43}$/u);
 export const randomHandle = () => randomBytes(32).toString("base64url");
 const digest = (value: string) => createHash("sha256").update(value).digest("hex");
@@ -45,14 +43,13 @@ export class CustomSsoStateUnavailableError extends Error {
 }
 
 export function parseBusinessCode(code: string) {
-  if (code.length > 200)
-    return null;
+  if (code.length > 200) return null;
   const parts = code.split(".");
   if (
-    parts.length !== 3
-    || !handleSchema.safeParse(parts[0]).success
-    || !z.uuid().safeParse(parts[1]).success
-    || !z.uuid().safeParse(parts[2]).success
+    parts.length !== 3 ||
+    !handleSchema.safeParse(parts[0]).success ||
+    !z.uuid().safeParse(parts[1]).success ||
+    !z.uuid().safeParse(parts[2]).success
   ) {
     return null;
   }
@@ -68,8 +65,7 @@ export function createCustomSsoState(redis: CustomSsoStateRedis, namespace: stri
   async function execute(script: string, key: string, ...args: string[]) {
     try {
       return await redis.eval(script, 1, key, ...args);
-    }
-    catch {
+    } catch {
       throw new CustomSsoStateUnavailableError();
     }
   }
@@ -96,18 +92,16 @@ export function createCustomSsoState(redis: CustomSsoStateRedis, namespace: stri
         JSON.stringify(value),
         String(value.expiresAt),
       );
-      if (result !== "OK")
-        throw new CustomSsoStateUnavailableError();
+      if (result !== "OK") throw new CustomSsoStateUnavailableError();
     },
     async readCode(clientCode: string, code: string) {
-      if (code.length > 200)
-        return null;
+      if (code.length > 200) return null;
       const parts = code.split(".");
       if (
-        parts.length !== 3
-        || !handleSchema.safeParse(parts[0]).success
-        || !z.uuid().safeParse(parts[1]).success
-        || !z.uuid().safeParse(parts[2]).success
+        parts.length !== 3 ||
+        !handleSchema.safeParse(parts[0]).success ||
+        !z.uuid().safeParse(parts[1]).success ||
+        !z.uuid().safeParse(parts[2]).success
       ) {
         return null;
       }
@@ -116,21 +110,19 @@ export function createCustomSsoState(redis: CustomSsoStateRedis, namespace: stri
         "return redis.call('GET', KEYS[1])",
         codeKey(clientCode, userSessionId, clientSessionId, codeId),
       );
-      if (raw === null)
-        return null;
+      if (raw === null) return null;
       try {
         const record = codeRecordSchema.parse(JSON.parse(String(raw)));
         if (
-          record.clientCode !== clientCode
-          || record.codeId !== codeId
-          || record.userSessionId !== userSessionId
-          || record.clientSessionId !== clientSessionId
+          record.clientCode !== clientCode ||
+          record.codeId !== codeId ||
+          record.userSessionId !== userSessionId ||
+          record.clientSessionId !== clientSessionId
         ) {
           throw new Error("Code identity mismatch");
         }
         return record;
-      }
-      catch {
+      } catch {
         throw new CustomSsoStateUnavailableError("corrupt");
       }
     },
@@ -142,23 +134,16 @@ export function createCustomSsoState(redis: CustomSsoStateRedis, namespace: stri
         JSON.stringify({ ...acceptedSchema.parse(accepted), browserDigest: digest(browserBinding) }),
         String(ttlSeconds * 1000),
       );
-      if (result !== "OK")
-        throw new CustomSsoStateUnavailableError();
+      if (result !== "OK") throw new CustomSsoStateUnavailableError();
       return handle;
     },
     async readContinuation(handle: string, browserBinding: string) {
-      if (!handleSchema.safeParse(handle).success || !browserBinding)
-        return null;
-      const raw = await execute(
-        "return redis.call('GET',KEYS[1])",
-        `${prefix}continuation:${digest(handle)}`,
-      );
-      if (raw === null)
-        return null;
+      if (!handleSchema.safeParse(handle).success || !browserBinding) return null;
+      const raw = await execute("return redis.call('GET',KEYS[1])", `${prefix}continuation:${digest(handle)}`);
+      if (raw === null) return null;
       try {
         const value = continuationSchema.parse(JSON.parse(String(raw)));
-        if (value.browserDigest !== digest(browserBinding))
-          return null;
+        if (value.browserDigest !== digest(browserBinding)) return null;
         return {
           clientCode: value.clientCode,
           redirectUrl: value.redirectUrl,
@@ -166,8 +151,7 @@ export function createCustomSsoState(redis: CustomSsoStateRedis, namespace: stri
           redeemer: value.redeemer,
           ...(value.state === undefined ? {} : { state: value.state }),
         };
-      }
-      catch {
+      } catch {
         throw new CustomSsoStateUnavailableError();
       }
     },

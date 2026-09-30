@@ -1,11 +1,11 @@
-import { AdminMutationCommittedError } from '@admin/services/admin-mutation';
+import { AdminMutationCommittedError } from "@admin/services/admin-mutation";
 import {
+  type ClientSsoDetail,
   ClientSsoMutationRejectedError,
+  type ClientSsoSecret,
   ClientSsoSecretReadError,
   clientSsoService,
-  type ClientSsoDetail,
-  type ClientSsoSecret,
-} from '@admin/services/client-sso';
+} from "@admin/services/client-sso";
 import {
   ClientSsoCallbackType,
   ClientSsoConfigSchema,
@@ -13,22 +13,10 @@ import {
   OidcClientType,
   OidcScope,
   SUBJECT_CLAIMS,
-} from '@iam/contracts';
-import { history, useParams } from '@umijs/max';
-import {
-  Alert,
-  Button,
-  Card,
-  Form,
-  Input,
-  message,
-  Modal,
-  Select,
-  Space,
-  Spin,
-  Typography,
-} from 'antd';
-import { useCallback, useEffect, useRef, useState } from 'react';
+} from "@iam/contracts";
+import { history, useParams } from "@umijs/max";
+import { Alert, Button, Card, Form, Input, Modal, message, Select, Space, Spin, Typography } from "antd";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 type FormValues = {
   protocol: ClientSsoProtocol;
@@ -43,7 +31,7 @@ type FormValues = {
 };
 
 export default function ClientSsoPage() {
-  const { clientCode = '' } = useParams<{ clientCode: string }>();
+  const { clientCode = "" } = useParams<{ clientCode: string }>();
   const [client, setClient] = useState<ClientSsoDetail>();
   const [error, setError] = useState(false);
   const noticeKey = `client-sso-repair:${clientCode}`;
@@ -57,8 +45,8 @@ export default function ClientSsoPage() {
   const [secret, setSecret] = useState<ClientSsoSecret>();
   const secretRequestRef = useRef(0);
   const [form] = Form.useForm<FormValues>();
-  const protocol = Form.useWatch('protocol', form);
-  const callbackType = Form.useWatch('callbackType', form);
+  const protocol = Form.useWatch("protocol", form);
+  const callbackType = Form.useWatch("callbackType", form);
 
   const refresh = useCallback(
     async (savedFields: (keyof FormValues)[] = []) => {
@@ -73,39 +61,18 @@ export default function ClientSsoPage() {
         const config = value.ssoConfig;
         const refreshed: Partial<FormValues> = {
           protocol: config?.protocol,
-          clientType:
-            config?.protocol === ClientSsoProtocol.Oidc
-              ? config.clientType
-              : OidcClientType.Public,
-          redirectUris:
-            config?.protocol === ClientSsoProtocol.Oidc
-              ? config.redirectUris
-              : [],
-          postLogoutRedirectUris:
-            config?.protocol === ClientSsoProtocol.Oidc
-              ? config.postLogoutRedirectUris
-              : [],
-          allowedScopes:
-            config?.protocol === ClientSsoProtocol.Oidc
-              ? config.allowedScopes
-              : [OidcScope.OpenId],
-          callbackType:
-            config?.protocol === ClientSsoProtocol.CustomSso
-              ? config.callbackType
-              : undefined,
+          clientType: config?.protocol === ClientSsoProtocol.Oidc ? config.clientType : OidcClientType.Public,
+          redirectUris: config?.protocol === ClientSsoProtocol.Oidc ? config.redirectUris : [],
+          postLogoutRedirectUris: config?.protocol === ClientSsoProtocol.Oidc ? config.postLogoutRedirectUris : [],
+          allowedScopes: config?.protocol === ClientSsoProtocol.Oidc ? config.allowedScopes : [OidcScope.OpenId],
+          callbackType: config?.protocol === ClientSsoProtocol.CustomSso ? config.callbackType : undefined,
           callbackEndpoint:
-            config?.protocol === ClientSsoProtocol.CustomSso &&
-            config.callbackType === ClientSsoCallbackType.Business
+            config?.protocol === ClientSsoProtocol.CustomSso && config.callbackType === ClientSsoCallbackType.Business
               ? config.callbackEndpoint
-              : '',
-          validRedirectUrls:
-            config?.protocol === ClientSsoProtocol.CustomSso
-              ? config.validRedirectUrls
-              : [],
+              : "",
+          validRedirectUrls: config?.protocol === ClientSsoProtocol.CustomSso ? config.validRedirectUrls : [],
           subjectClaims:
-            config?.protocol === ClientSsoProtocol.CustomSso
-              ? config.subjectClaims
-              : ['subjectIdentifier'],
+            config?.protocol === ClientSsoProtocol.CustomSso ? config.subjectClaims : ["subjectIdentifier"],
         };
         for (const field of dirtyFieldsRef.current) delete refreshed[field];
         form.setFieldsValue(refreshed);
@@ -129,10 +96,10 @@ export default function ClientSsoPage() {
       if (confirmationOpen) return;
       confirmationOpen = true;
       Modal.confirm({
-        title: '放弃未保存的修改？',
-        content: '当前分区的修改不会自动保存或保留草稿。',
-        okText: '放弃修改',
-        okType: 'danger',
+        title: "放弃未保存的修改？",
+        content: "当前分区的修改不会自动保存或保留草稿。",
+        okText: "放弃修改",
+        okType: "danger",
         onOk: () => {
           unblock();
           dirtyFieldsRef.current.clear();
@@ -157,19 +124,19 @@ export default function ClientSsoPage() {
     setOperationNotice(undefined);
     try {
       const result = await operation();
-      message.success(result.changed ? '已保存' : '无需修改');
+      message.success(result.changed ? "已保存" : "无需修改");
       await refresh(savedFields);
     } catch (failure) {
       if (failure instanceof AdminMutationCommittedError) {
         const nextNotice =
-          '操作已提交，但缓存同步失败或未确认。旧配置或旧 Secret 可能仍生效；请联系管理员修复传播。刷新或读取 Secret 成功不代表传播已修复。';
+          "操作已提交，但缓存同步失败或未确认。旧配置或旧 Secret 可能仍生效；请联系管理员修复传播。刷新或读取 Secret 成功不代表传播已修复。";
         setRepairNotice(nextNotice);
         sessionStorage.setItem(noticeKey, nextNotice);
       } else {
         setOperationNotice(
           failure instanceof ClientSsoMutationRejectedError
             ? failure.message
-            : '操作未确认成功，可能已经生效。请刷新核对后再明确发起操作，不要自动重试。',
+            : "操作未确认成功，可能已经生效。请刷新核对后再明确发起操作，不要自动重试。",
         );
       }
       await refresh();
@@ -187,15 +154,11 @@ export default function ClientSsoPage() {
       const current = await clientSsoService.readSecret(clientCode);
       if (requestId !== secretRequestRef.current) return;
       setSecret(current);
-      message.success(
-        current ? '已审计并读取当前 Secret' : '当前没有 SSO Secret',
-      );
+      message.success(current ? "已审计并读取当前 Secret" : "当前没有 SSO Secret");
     } catch (failure) {
       if (requestId !== secretRequestRef.current) return;
       setOperationNotice(
-        failure instanceof ClientSsoSecretReadError
-          ? failure.message
-          : '当前 Secret 未取得，请主动重新读取。',
+        failure instanceof ClientSsoSecretReadError ? failure.message : "当前 Secret 未取得，请主动重新读取。",
       );
     } finally {
       setBusy(false);
@@ -205,7 +168,7 @@ export default function ClientSsoPage() {
   function saveConfig() {
     const values = form.getFieldsValue();
     if (!values.protocol) {
-      message.error('请选择 SSO 协议');
+      message.error("请选择 SSO 协议");
       return;
     }
     const parsed = ClientSsoConfigSchema.safeParse(
@@ -228,21 +191,21 @@ export default function ClientSsoPage() {
           },
     );
     if (!parsed.success) {
-      message.error(parsed.error.issues[0]?.message ?? '配置无效');
+      message.error(parsed.error.issues[0]?.message ?? "配置无效");
       return;
     }
     void run(
       () => clientSsoService.selectProtocol(clientCode, parsed.data),
       [
-        'protocol',
-        'clientType',
-        'redirectUris',
-        'postLogoutRedirectUris',
-        'allowedScopes',
-        'callbackType',
-        'callbackEndpoint',
-        'validRedirectUrls',
-        'subjectClaims',
+        "protocol",
+        "clientType",
+        "redirectUris",
+        "postLogoutRedirectUris",
+        "allowedScopes",
+        "callbackType",
+        "callbackEndpoint",
+        "validRedirectUrls",
+        "subjectClaims",
       ],
     );
   }
@@ -253,22 +216,16 @@ export default function ClientSsoPage() {
       orientation="vertical"
       size={16}
       style={{
-        width: '100%',
+        width: "100%",
         maxWidth: 960,
-        display: 'flex',
-        margin: '0 auto',
+        display: "flex",
+        margin: "0 auto",
       }}
     >
       {repairNotice && <Alert type="warning" showIcon title={repairNotice} />}
-      {operationNotice && (
-        <Alert type="error" showIcon title={operationNotice} />
-      )}
+      {operationNotice && <Alert type="error" showIcon title={operationNotice} />}
       {error && (
-        <Alert
-          type="error"
-          title="应用详情加载失败"
-          action={<Button onClick={() => void refresh()}>刷新</Button>}
-        />
+        <Alert type="error" title="应用详情加载失败" action={<Button onClick={() => void refresh()}>刷新</Button>} />
       )}
       {client && (
         <Card
@@ -284,8 +241,7 @@ export default function ClientSsoPage() {
             layout="vertical"
             disabled={busy || error}
             onValuesChange={(changed: Partial<FormValues>) => {
-              for (const field of Object.keys(changed) as (keyof FormValues)[])
-                dirtyFieldsRef.current.add(field);
+              for (const field of Object.keys(changed) as (keyof FormValues)[]) dirtyFieldsRef.current.add(field);
               setDirty(true);
             }}
           >
@@ -293,10 +249,10 @@ export default function ClientSsoPage() {
               <Select
                 placeholder="请选择 SSO 协议"
                 options={[
-                  { value: ClientSsoProtocol.Oidc, label: 'OIDC' },
+                  { value: ClientSsoProtocol.Oidc, label: "OIDC" },
                   {
                     value: ClientSsoProtocol.CustomSso,
-                    label: 'Custom SSO',
+                    label: "Custom SSO",
                   },
                 ]}
               />
@@ -308,11 +264,11 @@ export default function ClientSsoPage() {
                     options={[
                       {
                         value: OidcClientType.Public,
-                        label: 'Public（none + S256）',
+                        label: "Public（none + S256）",
                       },
                       {
                         value: OidcClientType.Confidential,
-                        label: 'Confidential（client_secret_basic + S256）',
+                        label: "Confidential（client_secret_basic + S256）",
                       },
                     ]}
                   />
@@ -320,10 +276,7 @@ export default function ClientSsoPage() {
                 <Form.Item name="redirectUris" label="登录Redirect URIs">
                   <Select mode="tags" open={false} suffixIcon={null} />
                 </Form.Item>
-                <Form.Item
-                  name="postLogoutRedirectUris"
-                  label="登出Redirect URIs"
-                >
+                <Form.Item name="postLogoutRedirectUris" label="登出Redirect URIs">
                   <Select mode="tags" open={false} suffixIcon={null} />
                 </Form.Item>
                 <Form.Item name="allowedScopes" label="披露 scope">
@@ -345,11 +298,11 @@ export default function ClientSsoPage() {
                     options={[
                       {
                         value: ClientSsoCallbackType.Managed,
-                        label: '托管回调',
+                        label: "托管回调",
                       },
                       {
                         value: ClientSsoCallbackType.Business,
-                        label: '业务回调',
+                        label: "业务回调",
                       },
                     ]}
                   />
@@ -376,59 +329,38 @@ export default function ClientSsoPage() {
             <Space
               wrap
               style={{
-                width: '100%',
-                borderTop:
-                  '1px solid var(--ant-color-border-secondary, #f0f0f0)',
+                width: "100%",
+                borderTop: "1px solid var(--ant-color-border-secondary, #f0f0f0)",
                 paddingTop: 20,
               }}
             >
               <Button
                 type="primary"
-                disabled={
-                  busy || error || !client.allowedActions.selectProtocol
-                }
+                disabled={busy || error || !client.allowedActions.selectProtocol}
                 onClick={saveConfig}
               >
                 保存协议及配置
               </Button>
               <Button
-                disabled={
-                  busy ||
-                  error ||
-                  dirty ||
-                  !client.allowedActions.setEnabled ||
-                  client.ssoConfig === null
-                }
-                onClick={() =>
-                  void run(() =>
-                    clientSsoService.setEnabled(clientCode, !client.ssoEnabled),
-                  )
-                }
+                disabled={busy || error || dirty || !client.allowedActions.setEnabled || client.ssoConfig === null}
+                onClick={() => void run(() => clientSsoService.setEnabled(clientCode, !client.ssoEnabled))}
               >
-                {client.ssoEnabled ? '停用 SSO' : '启用 SSO'}
+                {client.ssoEnabled ? "停用 SSO" : "启用 SSO"}
               </Button>
               <Button
                 danger
-                disabled={
-                  busy ||
-                  error ||
-                  !client.allowedActions.selectProtocol ||
-                  client.ssoConfig === null
-                }
+                disabled={busy || error || !client.allowedActions.selectProtocol || client.ssoConfig === null}
                 onClick={() => {
                   Modal.confirm({
-                    title: '移除 SSO 配置？',
-                    content:
-                      '将删除已保存的协议配置并关闭 SSO，当前未保存的修改也会丢弃。再次使用时需要重新配置。',
-                    okText: '移除配置',
-                    cancelText: '取消',
-                    okType: 'danger',
+                    title: "移除 SSO 配置？",
+                    content: "将删除已保存的协议配置并关闭 SSO，当前未保存的修改也会丢弃。再次使用时需要重新配置。",
+                    okText: "移除配置",
+                    cancelText: "取消",
+                    okType: "danger",
                     onOk: () =>
                       run(
                         () => clientSsoService.selectProtocol(clientCode, null),
-                        Object.keys(
-                          form.getFieldsValue(true),
-                        ) as (keyof FormValues)[],
+                        Object.keys(form.getFieldsValue(true)) as (keyof FormValues)[],
                       ),
                   });
                 }}
@@ -441,29 +373,19 @@ export default function ClientSsoPage() {
             style={{
               marginTop: 24,
               paddingTop: 20,
-              borderTop: '1px solid var(--ant-color-border-secondary, #f0f0f0)',
+              borderTop: "1px solid var(--ant-color-border-secondary, #f0f0f0)",
             }}
           >
-            <Space orientation="vertical" size={16} style={{ width: '100%' }}>
+            <Space orientation="vertical" size={16} style={{ width: "100%" }}>
               <Typography.Text strong>SSO Secret</Typography.Text>
               <Space wrap>
                 <Button
-                  disabled={
-                    busy ||
-                    dirty ||
-                    error ||
-                    !client.allowedActions.rotateSecret
-                  }
-                  onClick={() =>
-                    void run(() => clientSsoService.rotateSecret(clientCode))
-                  }
+                  disabled={busy || dirty || error || !client.allowedActions.rotateSecret}
+                  onClick={() => void run(() => clientSsoService.rotateSecret(clientCode))}
                 >
                   轮换 SSO Secret
                 </Button>
-                <Button
-                  disabled={busy || error || !client.allowedActions.readSecret}
-                  onClick={() => void readSecret()}
-                >
+                <Button disabled={busy || error || !client.allowedActions.readSecret} onClick={() => void readSecret()}>
                   读取当前 Secret
                 </Button>
               </Space>
@@ -478,9 +400,7 @@ export default function ClientSsoPage() {
                         凭据身份：{secret.credentialId}；更新时间：
                         {secret.updatedAt}
                       </Typography.Text>
-                      <Button onClick={() => setSecret(undefined)}>
-                        隐藏 Secret
-                      </Button>
+                      <Button onClick={() => setSecret(undefined)}>隐藏 Secret</Button>
                     </Space>
                   }
                 />

@@ -1,18 +1,18 @@
-import { LogoutOutlined } from '@ant-design/icons';
-import logo from '@sso/assets/logo.png';
-import { buildLogoutUrl } from '@sso/lib/sso';
-import { getQuery } from '@sso/utils/url';
-import { useModel } from '@umijs/max';
-import { Avatar, Dropdown, message } from 'antd';
+import { LogoutOutlined } from "@ant-design/icons";
+import logo from "@sso/assets/logo.png";
+import { buildLogoutUrl } from "@sso/lib/sso";
+import { getQuery } from "@sso/utils/url";
+import { useModel } from "@umijs/max";
+import { Avatar, Dropdown, message } from "antd";
 
 export default function TopBar() {
-  const { authConfig, userInfo } = useModel('sso');
+  const { authConfig, userInfo } = useModel("sso");
 
   const handleLogout = () => {
-    const client = getQuery('client') ?? '';
-    const redirectUrl = getQuery('redirectUrl') ?? '';
+    const client = getQuery("client") ?? "";
+    const redirectUrl = getQuery("redirectUrl") ?? "";
     if (!authConfig) {
-      message.error('SSO 配置未就绪，请刷新重试');
+      message.error("SSO 配置未就绪，请刷新重试");
       return;
     }
     window.location.href = buildLogoutUrl(authConfig, redirectUrl, client);
@@ -32,7 +32,7 @@ export default function TopBar() {
           menu={{
             items: [
               {
-                key: 'logout',
+                key: "logout",
                 label: (
                   <span className="logout-text">
                     <LogoutOutlined />
@@ -42,7 +42,7 @@ export default function TopBar() {
               },
             ],
             onClick: ({ key }) => {
-              if (key === 'logout') handleLogout();
+              if (key === "logout") handleLogout();
             },
           }}
           placement="bottomRight"
@@ -51,16 +51,14 @@ export default function TopBar() {
             <Avatar
               size={32}
               style={{
-                backgroundColor: '#1560d1',
+                backgroundColor: "#1560d1",
                 fontSize: 18,
                 flexShrink: 0,
               }}
             >
-              {userInfo.profile?.name?.[0] ?? ''}
+              {userInfo.profile?.name?.[0] ?? ""}
             </Avatar>
-            <span className="topbar-user-name">
-              {userInfo.profile?.name ?? ''}
-            </span>
+            <span className="topbar-user-name">{userInfo.profile?.name ?? ""}</span>
           </div>
         </Dropdown>
       )}

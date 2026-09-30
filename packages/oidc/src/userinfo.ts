@@ -1,14 +1,10 @@
 import type { SubjectAccessOperation } from "@iam/api-core/subject-access";
-import type {
-  EmploymentProfileBase,
-  OptionalSubjectClaim,
-  SubjectFactsSnapshot,
-} from "@iam/client-subject-projection";
-import type { OidcTokens } from "./tokens";
 import { requireSubjectAccessOperation } from "@iam/api-core/subject-access";
+import type { EmploymentProfileBase, OptionalSubjectClaim, SubjectFactsSnapshot } from "@iam/client-subject-projection";
 import { createPermittedClientSubjectProjectionService } from "@iam/client-subject-projection";
 import { OidcScope, SubjectClaim } from "@iam/contracts";
 import { OidcProtocolError } from "./errors";
+import type { OidcTokens } from "./tokens";
 
 function employmentBase(employment: EmploymentProfileBase) {
   return {
@@ -17,7 +13,7 @@ function employmentBase(employment: EmploymentProfileBase) {
       orgCode: employment.organization.code,
       orgName: employment.organization.name,
       orgType: employment.organization.type,
-      fullOrgPath: employment.organization.path.map(node => ({
+      fullOrgPath: employment.organization.path.map((node) => ({
         orgCode: node.code,
         orgName: node.name,
         orgType: node.type,
@@ -34,39 +30,33 @@ export function createOidcUserInfo(options: {
 }) {
   const projection = createPermittedClientSubjectProjectionService<SubjectAccessOperation>({
     subjectFacts: options.subjectFacts,
-    assertPermission: (operation, subject) =>
-      requireSubjectAccessOperation(operation).requirePermission(subject),
+    assertPermission: (operation, subject) => requireSubjectAccessOperation(operation).requirePermission(subject),
   });
   return {
     forOperation(operation: SubjectAccessOperation, issuer: string) {
       requireSubjectAccessOperation(operation);
       return {
         async read(bearer: string, origin?: string, allowOrigin?: () => void) {
-          let resolved;
+          let resolved: Awaited<ReturnType<ReturnType<typeof options.tokens.forOperation>["resolveAccessToken"]>>;
           try {
             resolved = await options.tokens.forOperation(operation, issuer).resolveAccessToken(bearer);
-          }
-          catch (error) {
+          } catch (error) {
             if (error instanceof OidcProtocolError && error.status !== 503)
               throw new OidcProtocolError("invalid_token", "Access Token is invalid", 401);
             throw error;
           }
           const { config, token, observation } = resolved;
           if (origin) {
-            if (!config.redirectUris.some(uri => new URL(uri).origin === origin))
+            if (!config.redirectUris.some((uri) => new URL(uri).origin === origin))
               throw new OidcProtocolError("invalid_request", "Origin is not allowed");
             allowOrigin?.();
           }
           const claims: OptionalSubjectClaim[] = [];
           const scopes = new Set(config.allowedScopes);
-          if (scopes.has(OidcScope.Profile))
-            claims.push(SubjectClaim.ProfileUsername, SubjectClaim.ProfileName);
-          if (scopes.has(OidcScope.Phone))
-            claims.push(SubjectClaim.ProfilePhone);
-          if (scopes.has(OidcScope.IamEmployments))
-            claims.push(SubjectClaim.ProfileEmployments);
-          if (scopes.has(OidcScope.IamAuthorization))
-            claims.push(SubjectClaim.IamAuthorization);
+          if (scopes.has(OidcScope.Profile)) claims.push(SubjectClaim.ProfileUsername, SubjectClaim.ProfileName);
+          if (scopes.has(OidcScope.Phone)) claims.push(SubjectClaim.ProfilePhone);
+          if (scopes.has(OidcScope.IamEmployments)) claims.push(SubjectClaim.ProfileEmployments);
+          if (scopes.has(OidcScope.IamAuthorization)) claims.push(SubjectClaim.IamAuthorization);
           const subject = await projection.resolve(
             {
               subjectIdentifier: observation.userSession.subjectIdentifier,
@@ -83,7 +73,7 @@ export function createOidcUserInfo(options: {
             ...(subject.employments === undefined
               ? {}
               : {
-                  "iam:employments": subject.employments.map(employment => ({
+                  "iam:employments": subject.employments.map((employment) => ({
                     ...employmentBase(employment),
                     responsibilities: employment.responsibilities,
                   })),
@@ -92,7 +82,7 @@ export function createOidcUserInfo(options: {
               ? {}
               : {
                   "iam:authorization": {
-                    employments: subject.authorization.employments.map(employment => ({
+                    employments: subject.authorization.employments.map((employment) => ({
                       ...employmentBase(employment),
                       roles: employment.roles,
                       privileges: employment.privileges,

@@ -3,7 +3,7 @@ import { chromium } from "@playwright/test";
 async function main() {
   const browser = await chromium.launch({ headless: true });
   await browser.close();
-  await new Promise(resolve => setTimeout(resolve, 1_000));
+  await new Promise((resolve) => setTimeout(resolve, 1_000));
 }
 
 main().catch((error) => {

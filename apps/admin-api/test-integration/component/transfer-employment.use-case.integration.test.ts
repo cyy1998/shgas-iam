@@ -1,3 +1,4 @@
+import { describe, expect, mock, test } from "bun:test";
 import type { AdminEmploymentRecordCreate } from "@admin-api/services/employment/employment.type";
 import { createFakeClock, createImmediateUnitOfWork } from "@admin-api/test/fakes";
 import { createTransferEmploymentUseCase } from "@admin-api/use-cases/employment/transfer-employment/transfer-employment.use-case";
@@ -19,7 +20,6 @@ import {
 import { OrganizationNotFoundError } from "@iam/domain/organization";
 import { PositionNotFoundError } from "@iam/domain/position";
 import { UserNotFoundError } from "@iam/domain/user";
-import { describe, expect, mock, test } from "bun:test";
 import { createTestHrEmploymentAuthorization } from "../helpers/hr-employment-authorization";
 
 const startTime = new Date("2025-01-01T00:00:00.000Z");
@@ -152,13 +152,15 @@ describe("Employment Lifecycle Transfer", () => {
   test("ends the source and creates an enabled non-primary Employment at one transaction time", async () => {
     const { clock, tx, useCase } = createLifecycle();
 
-    await expect(useCase.execute({
-      employmentId: 4,
-      newOrgCode: "TARGET_ORG",
-      newPosCode: "TARGET_POS",
-      isPrimary: false,
-      description: "transferred",
-    })).resolves.toEqual({ changed: true, result: { id: 10 } });
+    await expect(
+      useCase.execute({
+        employmentId: 4,
+        newOrgCode: "TARGET_ORG",
+        newPosCode: "TARGET_POS",
+        isPrimary: false,
+        description: "transferred",
+      }),
+    ).resolves.toEqual({ changed: true, result: { id: 10 } });
 
     expect(clock.nowDate).toHaveBeenCalledTimes(1);
     expect(tx.employmentStore.updateEmploymentRecord).toHaveBeenCalledWith(4, {
@@ -177,23 +179,23 @@ describe("Employment Lifecycle Transfer", () => {
       status: EmploymentStatus.Enable,
     });
     expect(tx.employmentStore.updateEmploymentRecord).toHaveBeenCalledTimes(1);
-    expect(tx.auditLogWriter.recordAuditLog).toHaveBeenCalledWith(expect.objectContaining({
-      action: "admin.employment.transfer",
-      targetId: 4,
-      details: expect.objectContaining({
-        changed: true,
-        newEmploymentId: 10,
-        endTime: transactionTime,
-        startTime: transactionTime,
-        newIsPrimary: false,
-        username: "zhangsan",
-        orgCode: "SOURCE_ORG",
-        posCode: "SOURCE_POS",
+    expect(tx.auditLogWriter.recordAuditLog).toHaveBeenCalledWith(
+      expect.objectContaining({
+        action: "admin.employment.transfer",
+        targetId: 4,
+        details: expect.objectContaining({
+          changed: true,
+          newEmploymentId: 10,
+          endTime: transactionTime,
+          startTime: transactionTime,
+          newIsPrimary: false,
+          username: "zhangsan",
+          orgCode: "SOURCE_ORG",
+          posCode: "SOURCE_POS",
+        }),
       }),
-    }));
-    expect(
-      tx.responsibilityParentLifecycle.endOpenAssignmentsForEmployment,
-    ).toHaveBeenCalledWith({
+    );
+    expect(tx.responsibilityParentLifecycle.endOpenAssignmentsForEmployment).toHaveBeenCalledWith({
       action: "transfer",
       auditContext: undefined,
       employmentId: 4,
@@ -209,17 +211,22 @@ describe("Employment Lifecycle Transfer", () => {
 
   test("transfers a paused source into an enabled Primary without inheriting its lifecycle state", async () => {
     const { tx, useCase } = createLifecycle();
-    tx.employmentStore.lockEmploymentsByIds.mockResolvedValueOnce([employment({
-      status: EmploymentStatus.Pause,
-      isPrimary: false,
-    }), employment({ id: 9 })]);
+    tx.employmentStore.lockEmploymentsByIds.mockResolvedValueOnce([
+      employment({
+        status: EmploymentStatus.Pause,
+        isPrimary: false,
+      }),
+      employment({ id: 9 }),
+    ]);
 
-    await expect(useCase.execute({
-      employmentId: 4,
-      newOrgCode: "TARGET_ORG",
-      newPosCode: "TARGET_POS",
-      isPrimary: true,
-    })).resolves.toEqual({ changed: true, result: { id: 10 } });
+    await expect(
+      useCase.execute({
+        employmentId: 4,
+        newOrgCode: "TARGET_ORG",
+        newPosCode: "TARGET_POS",
+        isPrimary: true,
+      }),
+    ).resolves.toEqual({ changed: true, result: { id: 10 } });
 
     expect(tx.employmentStore.updateEmploymentRecord).toHaveBeenCalledWith(9, { isPrimary: false });
     expect(tx.employmentStore.createEmploymentRecord).toHaveBeenCalledWith(
@@ -233,24 +240,27 @@ describe("Employment Lifecycle Transfer", () => {
 
   test("rejects an Ended Employment before writing either side of the transfer", async () => {
     const { tx, useCase } = createLifecycle();
-    tx.employmentStore.lockEmploymentsByIds.mockResolvedValueOnce([employment({
-      status: EmploymentStatus.Disable,
-      endTime: transactionTime,
-      isPrimary: false,
-    }), employment({ id: 9 })]);
+    tx.employmentStore.lockEmploymentsByIds.mockResolvedValueOnce([
+      employment({
+        status: EmploymentStatus.Disable,
+        endTime: transactionTime,
+        isPrimary: false,
+      }),
+      employment({ id: 9 }),
+    ]);
 
-    await expect(useCase.execute({
-      employmentId: 4,
-      newOrgCode: "TARGET_ORG",
-      newPosCode: "TARGET_POS",
-      isPrimary: false,
-    })).rejects.toBeInstanceOf(EmploymentNotEditableError);
+    await expect(
+      useCase.execute({
+        employmentId: 4,
+        newOrgCode: "TARGET_ORG",
+        newPosCode: "TARGET_POS",
+        isPrimary: false,
+      }),
+    ).rejects.toBeInstanceOf(EmploymentNotEditableError);
 
     expect(tx.employmentStore.updateEmploymentRecord).not.toHaveBeenCalled();
     expect(tx.employmentStore.createEmploymentRecord).not.toHaveBeenCalled();
-    expect(
-      tx.responsibilityParentLifecycle.endOpenAssignmentsForEmployment,
-    ).not.toHaveBeenCalled();
+    expect(tx.responsibilityParentLifecycle.endOpenAssignmentsForEmployment).not.toHaveBeenCalled();
   });
 
   test("rejects a disabled target Organization before ending the source", async () => {
@@ -261,12 +271,14 @@ describe("Employment Lifecycle Transfer", () => {
       status: OrganizationStatus.Disable,
     });
 
-    await expect(useCase.execute({
-      employmentId: 4,
-      newOrgCode: "TARGET_ORG",
-      newPosCode: "TARGET_POS",
-      isPrimary: false,
-    })).rejects.toBeInstanceOf(OrganizationNotFoundError);
+    await expect(
+      useCase.execute({
+        employmentId: 4,
+        newOrgCode: "TARGET_ORG",
+        newPosCode: "TARGET_POS",
+        isPrimary: false,
+      }),
+    ).rejects.toBeInstanceOf(OrganizationNotFoundError);
 
     expect(tx.employmentStore.updateEmploymentRecord).not.toHaveBeenCalled();
   });
@@ -279,12 +291,14 @@ describe("Employment Lifecycle Transfer", () => {
       isDelete: true,
     });
 
-    await expect(useCase.execute({
-      employmentId: 4,
-      newOrgCode: "TARGET_ORG",
-      newPosCode: "TARGET_POS",
-      isPrimary: false,
-    })).rejects.toBeInstanceOf(OrganizationNotFoundError);
+    await expect(
+      useCase.execute({
+        employmentId: 4,
+        newOrgCode: "TARGET_ORG",
+        newPosCode: "TARGET_POS",
+        isPrimary: false,
+      }),
+    ).rejects.toBeInstanceOf(OrganizationNotFoundError);
 
     expect(tx.employmentStore.updateEmploymentRecord).not.toHaveBeenCalled();
   });
@@ -297,12 +311,14 @@ describe("Employment Lifecycle Transfer", () => {
       status: PositionStatus.Disable,
     });
 
-    await expect(useCase.execute({
-      employmentId: 4,
-      newOrgCode: "TARGET_ORG",
-      newPosCode: "TARGET_POS",
-      isPrimary: false,
-    })).rejects.toBeInstanceOf(PositionNotFoundError);
+    await expect(
+      useCase.execute({
+        employmentId: 4,
+        newOrgCode: "TARGET_ORG",
+        newPosCode: "TARGET_POS",
+        isPrimary: false,
+      }),
+    ).rejects.toBeInstanceOf(PositionNotFoundError);
 
     expect(tx.employmentStore.updateEmploymentRecord).not.toHaveBeenCalled();
   });
@@ -315,12 +331,14 @@ describe("Employment Lifecycle Transfer", () => {
       isDelete: true,
     });
 
-    await expect(useCase.execute({
-      employmentId: 4,
-      newOrgCode: "TARGET_ORG",
-      newPosCode: "TARGET_POS",
-      isPrimary: false,
-    })).rejects.toBeInstanceOf(PositionNotFoundError);
+    await expect(
+      useCase.execute({
+        employmentId: 4,
+        newOrgCode: "TARGET_ORG",
+        newPosCode: "TARGET_POS",
+        isPrimary: false,
+      }),
+    ).rejects.toBeInstanceOf(PositionNotFoundError);
 
     expect(tx.employmentStore.updateEmploymentRecord).not.toHaveBeenCalled();
   });
@@ -329,12 +347,14 @@ describe("Employment Lifecycle Transfer", () => {
     const { tx, useCase } = createLifecycle();
     (tx.userReader.getUserByIdForAdmin as any).mockResolvedValueOnce(null);
 
-    await expect(useCase.execute({
-      employmentId: 4,
-      newOrgCode: "TARGET_ORG",
-      newPosCode: "TARGET_POS",
-      isPrimary: false,
-    })).rejects.toBeInstanceOf(UserNotFoundError);
+    await expect(
+      useCase.execute({
+        employmentId: 4,
+        newOrgCode: "TARGET_ORG",
+        newPosCode: "TARGET_POS",
+        isPrimary: false,
+      }),
+    ).rejects.toBeInstanceOf(UserNotFoundError);
 
     expect(tx.employmentStore.updateEmploymentRecord).not.toHaveBeenCalled();
   });
@@ -343,13 +363,15 @@ describe("Employment Lifecycle Transfer", () => {
     const { tx, useCase } = createLifecycle();
     tx.organizationReader.isOrganizationDescendantOf.mockResolvedValueOnce(false);
 
-    await expect(useCase.execute({
-      employmentId: 4,
-      newOrgCode: "TARGET_ORG",
-      expectedAncestorOrgCode: "COMPANY",
-      newPosCode: "TARGET_POS",
-      isPrimary: false,
-    })).rejects.toBeInstanceOf(EmploymentOrganizationScopeMismatchError);
+    await expect(
+      useCase.execute({
+        employmentId: 4,
+        newOrgCode: "TARGET_ORG",
+        expectedAncestorOrgCode: "COMPANY",
+        newPosCode: "TARGET_POS",
+        isPrimary: false,
+      }),
+    ).rejects.toBeInstanceOf(EmploymentOrganizationScopeMismatchError);
 
     expect(tx.employmentStore.updateEmploymentRecord).not.toHaveBeenCalled();
   });
@@ -358,10 +380,7 @@ describe("Employment Lifecycle Transfer", () => {
     ["enabled", {}],
     ["disabled", { status: OrganizationStatus.Disable }],
     ["soft-deleted", { isDelete: true }],
-  ])("conceals an out-of-scope %s destination before integrity checks or writes", async (
-    _state,
-    overrides,
-  ) => {
+  ])("conceals an out-of-scope %s destination before integrity checks or writes", async (_state, overrides) => {
     const { tx, useCase } = createLifecycle();
     const target = await tx.organizationReader.getOrganizationByCode();
     tx.organizationReader.getOrganizationByCode.mockResolvedValueOnce({
@@ -378,15 +397,17 @@ describe("Employment Lifecycle Transfer", () => {
 
     let failure: unknown;
     try {
-      await useCase.execute({
-        employmentId: 4,
-        newOrgCode: "TARGET_ORG",
-        expectedAncestorOrgCode: "TARGET_ORG",
-        newPosCode: "TARGET_POS",
-        isPrimary: false,
-      }, { authorization });
-    }
-    catch (error) {
+      await useCase.execute(
+        {
+          employmentId: 4,
+          newOrgCode: "TARGET_ORG",
+          expectedAncestorOrgCode: "TARGET_ORG",
+          newPosCode: "TARGET_POS",
+          isPrimary: false,
+        },
+        { authorization },
+      );
+    } catch (error) {
       failure = error;
     }
 
@@ -414,19 +435,16 @@ describe("Employment Lifecycle Transfer", () => {
       }) as any,
     );
 
-    await expect(useCase.execute({
-      employmentId: 4,
-      newOrgCode: "TARGET_ORG",
-      newPosCode: "TARGET_POS",
-      isPrimary: false,
-    })).rejects.toBeInstanceOf(EmploymentAlreadyExistsError);
+    await expect(
+      useCase.execute({
+        employmentId: 4,
+        newOrgCode: "TARGET_ORG",
+        newPosCode: "TARGET_POS",
+        isPrimary: false,
+      }),
+    ).rejects.toBeInstanceOf(EmploymentAlreadyExistsError);
 
-    expect(tx.employmentStore.getOpenEmploymentByUserOrgPosId).toHaveBeenCalledWith(
-      1,
-      20,
-      30,
-      4,
-    );
+    expect(tx.employmentStore.getOpenEmploymentByUserOrgPosId).toHaveBeenCalledWith(1, 20, 30, 4);
     expect(tx.employmentStore.updateEmploymentRecord).not.toHaveBeenCalled();
   });
 
@@ -434,12 +452,14 @@ describe("Employment Lifecycle Transfer", () => {
     const { tx, useCase } = createLifecycle();
     (tx.employmentStore.getEmploymentLifecycleContextById as any).mockResolvedValueOnce(null);
 
-    await expect(useCase.execute({
-      employmentId: 404,
-      newOrgCode: "TARGET_ORG",
-      newPosCode: "TARGET_POS",
-      isPrimary: false,
-    })).rejects.toBeInstanceOf(EmploymentNotFoundError);
+    await expect(
+      useCase.execute({
+        employmentId: 404,
+        newOrgCode: "TARGET_ORG",
+        newPosCode: "TARGET_POS",
+        isPrimary: false,
+      }),
+    ).rejects.toBeInstanceOf(EmploymentNotFoundError);
 
     expect(tx.employmentStore.updateEmploymentRecord).not.toHaveBeenCalled();
     expect(tx.employmentStore.createEmploymentRecord).not.toHaveBeenCalled();
@@ -454,7 +474,12 @@ describe("Employment Lifecycle Transfer", () => {
       employment({ id: 9, isPrimary: true, status: EmploymentStatus.Disable, endTime: transactionTime }),
     ]);
 
-    const result = await useCase.execute({ employmentId: 4, newOrgCode: "TARGET_ORG", newPosCode: "TARGET_POS", isPrimary: true });
+    const result = await useCase.execute({
+      employmentId: 4,
+      newOrgCode: "TARGET_ORG",
+      newPosCode: "TARGET_POS",
+      isPrimary: true,
+    });
 
     expect(result).toEqual({ changed: true, result: { id: 10 } });
     expect(tx.employmentStore.updateEmploymentRecord).toHaveBeenCalledTimes(1);
@@ -466,8 +491,7 @@ describe("Employment Lifecycle Transfer", () => {
     let failure: unknown;
     try {
       await useCase.execute({ employmentId: 4, newOrgCode: "TARGET_ORG", newPosCode: "TARGET_POS", isPrimary: true });
-    }
-    catch (error) {
+    } catch (error) {
       failure = error;
     }
 
@@ -480,15 +504,13 @@ describe("Employment Lifecycle Transfer", () => {
   test.each([4, 9])("rejects a zero-row update for protected Employment %s without success effects", async (id) => {
     const { tx, useCase } = createLifecycle();
     tx.employmentStore.updateEmploymentRecord.mockImplementation(async (targetId, patch) => {
-      if (targetId === id)
-        return undefined as any;
+      if (targetId === id) return undefined as any;
       return employment({ id: targetId, ...patch });
     });
     let failure: unknown;
     try {
       await useCase.execute({ employmentId: 4, newOrgCode: "TARGET_ORG", newPosCode: "TARGET_POS", isPrimary: true });
-    }
-    catch (error) {
+    } catch (error) {
       failure = error;
     }
 
@@ -557,7 +579,7 @@ describe("Employment Lifecycle Transfer", () => {
             },
             userProfileInvalidation: {
               async recordChanges(changes: readonly { userId: number }[]) {
-                staged.dirtyUserIds.push(...changes.map(change => change.userId));
+                staged.dirtyUserIds.push(...changes.map((change) => change.userId));
                 throw failure;
               },
             },
@@ -569,12 +591,14 @@ describe("Employment Lifecycle Transfer", () => {
       },
     });
 
-    await expect(useCase.execute({
-      employmentId: 4,
-      newOrgCode: "TARGET_ORG",
-      newPosCode: "TARGET_POS",
-      isPrimary: false,
-    })).rejects.toBe(failure);
+    await expect(
+      useCase.execute({
+        employmentId: 4,
+        newOrgCode: "TARGET_ORG",
+        newPosCode: "TARGET_POS",
+        isPrimary: false,
+      }),
+    ).rejects.toBe(failure);
 
     expect(attempted).toEqual({ sourceWrites: 1, targetWrites: 1, auditWrites: 1 });
     expect(committed).toEqual({

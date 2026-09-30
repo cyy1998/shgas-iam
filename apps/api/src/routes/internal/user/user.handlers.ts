@@ -1,13 +1,13 @@
-import type { UserProfileSearchPort } from "@api/services/user-profile-search/user-profile-search.port";
-import type { UserDelegationQuery } from "@api/services/user/user-delegation-query.helper";
-import type { RegisterPurveyorContactUseCase } from "@api/use-cases/internal/register-purveyor-contact/register-purveyor-contact.use-case";
-import type { InternalUserProfileQueryService } from "@iam/user-profile-read-model";
-import type { UserRouteHandler } from "./user.type";
 import { getApiAuditRequestContext, getInternalAuditActor } from "@api/services/audit/audit.context";
+import type { UserDelegationQuery } from "@api/services/user/user-delegation-query.helper";
+import type { UserProfileSearchPort } from "@api/services/user-profile-search/user-profile-search.port";
+import type { RegisterPurveyorContactUseCase } from "@api/use-cases/internal/register-purveyor-contact/register-purveyor-contact.use-case";
 import * as HttpStatusCodes from "@iam/api-core/core/http-status-codes";
 import * as resp from "@iam/api-core/http";
+import type { InternalUserProfileQueryService } from "@iam/user-profile-read-model";
 import { InternalUserProfileSearchUnavailableError } from "@iam/user-profile-read-model";
 import { V3UserProfileSearchUnavailableError } from "@iam/user-profile-read-model/v3";
+import type { UserRouteHandler } from "./user.type";
 import { runWithinInternalUserHandlerBudget } from "./user-handler-budget";
 
 export { INTERNAL_USER_HANDLER_TIMEOUT_MS } from "./user-handler-budget";
@@ -16,10 +16,7 @@ export interface CreateUserHandlersDeps {
   registerPurveyorContact: Pick<RegisterPurveyorContactUseCase, "execute">;
   userDelegationQuery: Pick<UserDelegationQuery, "searchUsersWithDelegations">;
   userProfileSearch: UserProfileSearchPort;
-  internalUserProfileQuery: Pick<
-    InternalUserProfileQueryService,
-    "getDetailByUsername"
-  >;
+  internalUserProfileQuery: Pick<InternalUserProfileQueryService, "getDetailByUsername">;
 }
 
 export function createUserHandlers(deps: CreateUserHandlersDeps) {

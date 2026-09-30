@@ -1,7 +1,4 @@
-import {
-  SERVICE_UNAVAILABLE,
-  UNPROCESSABLE_ENTITY,
-} from "@iam/api-core/core/http-status-codes";
+import { SERVICE_UNAVAILABLE, UNPROCESSABLE_ENTITY } from "@iam/api-core/core/http-status-codes";
 import { ApiErrorCode } from "@iam/contracts";
 
 export class V3UserProfileFilterValidationError extends Error {

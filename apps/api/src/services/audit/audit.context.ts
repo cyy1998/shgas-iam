@@ -1,7 +1,7 @@
-import type { AuditActorType, AuditDetails, AuditOutcome, AuditRequestContext } from "@iam/domain/audit";
-import type { Context } from "hono";
 import { getRequestId, getRequestIp, getTraceId } from "@iam/api-core/core/request-context";
+import type { AuditActorType, AuditDetails, AuditOutcome, AuditRequestContext } from "@iam/domain/audit";
 import { normalizeAuditActor } from "@iam/domain/audit";
+import type { Context } from "hono";
 
 export type ApiRequestContext = AuditRequestContext;
 
@@ -60,19 +60,21 @@ export function withApiRequestContext(
 
 export function getInternalAuditActor(c: Context) {
   const clientCode = c.req.header("Client");
-  return normalizeAuditActor(clientCode
-    ? {
-        actorType: "client",
-        actorUserId: null,
-        actorUsername: null,
-        actorClientCode: clientCode,
-        actorSystemKey: null,
-      }
-    : {
-        actorType: "system",
-        actorUserId: null,
-        actorUsername: null,
-        actorClientCode: null,
-        actorSystemKey: "api:internal",
-      });
+  return normalizeAuditActor(
+    clientCode
+      ? {
+          actorType: "client",
+          actorUserId: null,
+          actorUsername: null,
+          actorClientCode: clientCode,
+          actorSystemKey: null,
+        }
+      : {
+          actorType: "system",
+          actorUserId: null,
+          actorUsername: null,
+          actorClientCode: null,
+          actorSystemKey: "api:internal",
+        },
+  );
 }

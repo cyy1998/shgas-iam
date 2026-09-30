@@ -1,5 +1,8 @@
 import { describe, expect, test } from "bun:test";
-import { SessionManagementListSessionsInputSchema, SessionManagementSessionVoSchema } from "../session-management.schema";
+import {
+  SessionManagementListSessionsInputSchema,
+  SessionManagementSessionVoSchema,
+} from "../session-management.schema";
 
 function sessionVo(subjectId: string) {
   return {
@@ -36,8 +39,7 @@ describe("Session Management response contract", () => {
     const result = SessionManagementSessionVoSchema.safeParse(sessionVo("42"));
 
     expect(result.success).toBe(false);
-    if (result.success)
-      return;
+    if (result.success) return;
     expect(result.error.issues).toEqual([
       expect.objectContaining({
         code: "invalid_format",

@@ -1,102 +1,113 @@
+import { afterEach, describe, expect, test } from "bun:test";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { afterEach, describe, expect, test } from "bun:test";
 import { analyzeRepositoryArchitecture } from "../architecture-guard";
 
 const fixtureRoots: string[] = [];
 const architectureGuardCli = join(import.meta.dirname, "..", "check-architecture.ts");
 
 afterEach(() => {
-  for (const root of fixtureRoots.splice(0))
-    rmSync(root, { recursive: true, force: true });
+  for (const root of fixtureRoots.splice(0)) rmSync(root, { recursive: true, force: true });
 });
 
 describe("repository architecture guard", () => {
   test("keeps new OIDC independent of protocol, transport, app and database owners while allowing composition", () => {
     const repoRoot = createFixtureRepository({
       "packages/oidc/src/authorization.ts": [
-        "import type { Kernel } from \"@iam/session-kernel\";",
-        "import type { Reader } from \"@iam/api-core/client-snapshot\";",
-        "import { custom } from \"@iam/custom-sso\";",
-        "import { Provider } from \"oidc-provider\";",
-        "import { Hono } from \"hono\";",
-        "import { provider } from \"../../../apps/api/src/provider\";",
-        "import { db } from \"@iam/db\";",
+        'import type { Kernel } from "@iam/session-kernel";',
+        'import type { Reader } from "@iam/api-core/client-snapshot";',
+        'import { custom } from "@iam/custom-sso";',
+        'import { Provider } from "oidc-provider";',
+        'import { Hono } from "hono";',
+        'import { provider } from "../../../apps/api/src/provider";',
+        'import { db } from "@iam/db";',
       ].join("\n"),
       "apps/api/src/composition/oidc.ts": [
-        "import { createOidcAuthorization } from \"@iam/oidc\";",
-        "import type { DbClient } from \"@iam/db\";",
+        'import { createOidcAuthorization } from "@iam/oidc";',
+        'import type { DbClient } from "@iam/db";',
       ].join("\n"),
     });
-    expect(analyzeRepositoryArchitecture(repoRoot)).toEqual(["@iam/custom-sso", "oidc-provider", "hono", "../../../apps/api/src/provider", "@iam/db"].map((module, index) => ({
-      ruleId: "session-runtime-owner",
-      file: "packages/oidc/src/authorization.ts",
-      line: index + 3,
-      message: `OIDC must not import another protocol, app or HTTP owner "${module}"; inject its external capabilities.`,
-    })));
+    expect(analyzeRepositoryArchitecture(repoRoot)).toEqual(
+      ["@iam/custom-sso", "oidc-provider", "hono", "../../../apps/api/src/provider", "@iam/db"].map(
+        (module, index) => ({
+          ruleId: "session-runtime-owner",
+          file: "packages/oidc/src/authorization.ts",
+          line: index + 3,
+          message: `OIDC must not import another protocol, app or HTTP owner "${module}"; inject its external capabilities.`,
+        }),
+      ),
+    );
   });
   test("keeps Session Kernel independent of protocol and runtime owners", () => {
     const repoRoot = createFixtureRepository({
       "packages/session-kernel/src/facade.ts": [
-        "import { z } from \"zod\";",
-        "import { randomUUID } from \"node:crypto\";",
-        "import type { CleanupAdapter } from \"./cleanup/cleanup\";",
-        "import { SystemLogEvent } from \"@iam/api-core/logger\";",
-        "import type { CustomSso } from \"@iam/custom-sso\";",
-        "import { provider } from \"../../../apps/api/src/provider\";",
-        "import type { OidcAuthorization } from \"@iam/oidc\";",
+        'import { z } from "zod";',
+        'import { randomUUID } from "node:crypto";',
+        'import type { CleanupAdapter } from "./cleanup/cleanup";',
+        'import { SystemLogEvent } from "@iam/api-core/logger";',
+        'import type { CustomSso } from "@iam/custom-sso";',
+        'import { provider } from "../../../apps/api/src/provider";',
+        'import type { OidcAuthorization } from "@iam/oidc";',
       ].join("\n"),
     });
     expect(analyzeRepositoryArchitecture(repoRoot)).toEqual([
-      ...["@iam/api-core/logger", "@iam/custom-sso", "../../../apps/api/src/provider", "@iam/oidc"].map((module, index) => ({
-        ruleId: "session-runtime-owner",
-        file: "packages/session-kernel/src/facade.ts",
-        line: index + 4,
-        message: `Session Kernel must not import runtime or protocol owner "${module}"; inject its external capabilities.`,
-      })),
+      ...["@iam/api-core/logger", "@iam/custom-sso", "../../../apps/api/src/provider", "@iam/oidc"].map(
+        (module, index) => ({
+          ruleId: "session-runtime-owner",
+          file: "packages/session-kernel/src/facade.ts",
+          line: index + 4,
+          message: `Session Kernel must not import runtime or protocol owner "${module}"; inject its external capabilities.`,
+        }),
+      ),
     ]);
   });
 
   test("keeps Projection independent of the Session Kernel runtime", () => {
     const repoRoot = createFixtureRepository({
-      "packages/client-subject-projection/src/internal/projection.ts": "import type { SessionKernel } from \"@iam/session-kernel\";",
-      "packages/custom-sso/src/wire.ts": "import type { Projection } from \"@iam/client-subject-projection\";",
+      "packages/client-subject-projection/src/internal/projection.ts":
+        'import type { SessionKernel } from "@iam/session-kernel";',
+      "packages/custom-sso/src/wire.ts": 'import type { Projection } from "@iam/client-subject-projection";',
     });
-    expect(analyzeRepositoryArchitecture(repoRoot)).toEqual([{
-      ruleId: "client-subject-projection-owner",
-      file: "packages/client-subject-projection/src/internal/projection.ts",
-      line: 1,
-      message: "Client Subject Projection implementation must not import runtime or protocol module \"@iam/session-kernel\"; "
-        + "depend on its injected facts and safety ports.",
-    }]);
+    expect(analyzeRepositoryArchitecture(repoRoot)).toEqual([
+      {
+        ruleId: "client-subject-projection-owner",
+        file: "packages/client-subject-projection/src/internal/projection.ts",
+        line: 1,
+        message:
+          'Client Subject Projection implementation must not import runtime or protocol module "@iam/session-kernel"; ' +
+          "depend on its injected facts and safety ports.",
+      },
+    ]);
   });
 
   test("keeps Custom SSO application independent of app providers and HTTP", () => {
     const repoRoot = createFixtureRepository({
       "packages/custom-sso/src/internal/application.ts": [
-        "import type { UserService } from \"@api/services/user/user.service\";",
-        "import type { Context } from \"hono\";",
-        "import type { CustomSsoDeps } from \"../custom-sso.port\";",
-        "import type { SessionKernel } from \"@iam/session-kernel\";",
-        "import type { CustomSsoClientRuntimeDto } from \"@iam/domain/client\";",
+        'import type { UserService } from "@api/services/user/user.service";',
+        'import type { Context } from "hono";',
+        'import type { CustomSsoDeps } from "../custom-sso.port";',
+        'import type { SessionKernel } from "@iam/session-kernel";',
+        'import type { CustomSsoClientRuntimeDto } from "@iam/domain/client";',
       ].join("\n"),
-      "apps/api/src/composition/services/index.ts": "import { createCustomSso } from \"@iam/custom-sso\";",
+      "apps/api/src/composition/services/index.ts": 'import { createCustomSso } from "@iam/custom-sso";',
     });
     expect(analyzeRepositoryArchitecture(repoRoot)).toEqual([
       {
         ruleId: "session-runtime-owner",
         file: "packages/custom-sso/src/internal/application.ts",
         line: 1,
-        message: "Custom SSO application must not import app provider or HTTP module \"@api/services/user/user.service\"; "
-          + "declare its outbound capability locally and inject it from composition.",
+        message:
+          'Custom SSO application must not import app provider or HTTP module "@api/services/user/user.service"; ' +
+          "declare its outbound capability locally and inject it from composition.",
       },
       {
         ruleId: "session-runtime-owner",
         file: "packages/custom-sso/src/internal/application.ts",
         line: 2,
-        message: "Custom SSO application must not import app provider or HTTP module \"hono\"; "
-          + "declare its outbound capability locally and inject it from composition.",
+        message:
+          'Custom SSO application must not import app provider or HTTP module "hono"; ' +
+          "declare its outbound capability locally and inject it from composition.",
       },
     ]);
   });
@@ -104,7 +115,7 @@ describe("repository architecture guard", () => {
     const repoRoot = createFixtureRepository({
       "apps/api/src/services/user/user.port.ts": [
         "// Consumer contract.",
-        "import type { UserRepository } from \"./user.repository\";",
+        'import type { UserRepository } from "./user.repository";',
       ].join("\n"),
     });
 
@@ -113,8 +124,9 @@ describe("repository architecture guard", () => {
         ruleId: "consumer-owned-port",
         file: "apps/api/src/services/user/user.port.ts",
         line: 2,
-        message: "Consumer-owned ports must not import concrete repository module \"./user.repository\"; "
-          + "declare the required protocol locally.",
+        message:
+          'Consumer-owned ports must not import concrete repository module "./user.repository"; ' +
+          "declare the required protocol locally.",
       },
     ]);
   });
@@ -122,10 +134,10 @@ describe("repository architecture guard", () => {
   test("reports provider ownership inherited through repository directories and Pick", () => {
     const repoRoot = createFixtureRepository({
       "apps/admin-api/src/use-cases/find-user/find-user.port.ts": [
-        "import type { UserRepository } from \"../../repositories/user\";",
+        'import type { UserRepository } from "../../repositories/user";',
         "interface UserService { findUser: () => Promise<unknown> }",
-        "type UserReader = Pick<UserRepository, \"findUser\">;",
-        "type UserLookup = Pick<UserService, \"findUser\">;",
+        'type UserReader = Pick<UserRepository, "findUser">;',
+        'type UserLookup = Pick<UserService, "findUser">;',
       ].join("\n"),
     });
 
@@ -134,35 +146,38 @@ describe("repository architecture guard", () => {
         ruleId: "consumer-owned-port",
         file: "apps/admin-api/src/use-cases/find-user/find-user.port.ts",
         line: 1,
-        message: "Consumer-owned ports must not import concrete repository module \"../../repositories/user\"; "
-          + "declare the required protocol locally.",
+        message:
+          'Consumer-owned ports must not import concrete repository module "../../repositories/user"; ' +
+          "declare the required protocol locally.",
       },
       {
         ruleId: "consumer-owned-port",
         file: "apps/admin-api/src/use-cases/find-user/find-user.port.ts",
         line: 3,
-        message: "Consumer-owned ports must not derive their interface from provider type \"UserRepository\" with Pick; "
-          + "declare the required members directly.",
+        message:
+          'Consumer-owned ports must not derive their interface from provider type "UserRepository" with Pick; ' +
+          "declare the required members directly.",
       },
       {
         ruleId: "consumer-owned-port",
         file: "apps/admin-api/src/use-cases/find-user/find-user.port.ts",
         line: 4,
-        message: "Consumer-owned ports must not derive their interface from provider type \"UserService\" with Pick; "
-          + "declare the required members directly.",
+        message:
+          'Consumer-owned ports must not derive their interface from provider type "UserService" with Pick; ' +
+          "declare the required members directly.",
       },
     ]);
   });
 
   test("allows consumer and platform narrowing while excluding non-production sources", () => {
     const allowedPort = [
-      "import type { IncomingMessage } from \"node:http\";",
-      "import type { UserProfile } from \"@iam/domain/user\";",
+      'import type { IncomingMessage } from "node:http";',
+      'import type { UserProfile } from "@iam/domain/user";',
       "interface UserProfilePort { find: (id: string) => Promise<UserProfile> }",
-      "type HeaderRequest = Pick<IncomingMessage, \"headers\">;",
-      "type UserProfileReader = Pick<UserProfilePort, \"find\">;",
+      'type HeaderRequest = Pick<IncomingMessage, "headers">;',
+      'type UserProfileReader = Pick<UserProfilePort, "find">;',
     ].join("\n");
-    const forbiddenPort = "import type { UserRepository } from \"./user.repository\";";
+    const forbiddenPort = 'import type { UserRepository } from "./user.repository";';
     const repoRoot = createFixtureRepository({
       "apps/worker/src/modules/user-profile/user-profile.port.ts": allowedPort,
       "apps/worker/src/modules/__tests__/test.port.ts": forbiddenPort,
@@ -177,7 +192,7 @@ describe("repository architecture guard", () => {
   test("rejects dedicated Role Assignment schema dependencies outside its owners", () => {
     const repoRoot = createFixtureRepository({
       "apps/api/src/services/employment/employment.repository.ts":
-        "import { roleAssignments } from \"@iam/db/schema/role-assignments\";",
+        'import { roleAssignments } from "@iam/db/schema/role-assignments";',
     });
 
     expect(analyzeRepositoryArchitecture(repoRoot)).toEqual([
@@ -185,8 +200,9 @@ describe("repository architecture guard", () => {
         ruleId: "role-resolution-owner",
         file: "apps/api/src/services/employment/employment.repository.ts",
         line: 1,
-        message: "Only Role Assignment Resolver implementation and the Admin Role Management repository "
-          + "may import dedicated Role Assignment schema entry \"@iam/db/schema/role-assignments\".",
+        message:
+          "Only Role Assignment Resolver implementation and the Admin Role Management repository " +
+          'may import dedicated Role Assignment schema entry "@iam/db/schema/role-assignments".',
       },
     ]);
   });
@@ -194,13 +210,11 @@ describe("repository architecture guard", () => {
   test("allows dedicated schema owners and leaves broad shared surfaces unrestricted", () => {
     const repoRoot = createFixtureRepository({
       "packages/role-assignment-resolution/src/internal/resolver.ts":
-        "import { roleAssignments } from \"@iam/db/schema/role-assignments\";",
-      "apps/admin-api/src/services/role/role.repository.ts":
-        "export * from \"@iam/db/schema/role-assignments\";",
-      "apps/api/src/services/user/user.repository.ts": [
-        "import \"@iam/db/schema\";",
-        "import \"@iam/contracts\";",
-      ].join("\n"),
+        'import { roleAssignments } from "@iam/db/schema/role-assignments";',
+      "apps/admin-api/src/services/role/role.repository.ts": 'export * from "@iam/db/schema/role-assignments";',
+      "apps/api/src/services/user/user.repository.ts": ['import "@iam/db/schema";', 'import "@iam/contracts";'].join(
+        "\n",
+      ),
     });
 
     expect(analyzeRepositoryArchitecture(repoRoot)).toEqual([]);
@@ -208,8 +222,7 @@ describe("repository architecture guard", () => {
 
   test("rejects Role Assignment Resolver value dependencies outside composition and module owners", () => {
     const repoRoot = createFixtureRepository({
-      "apps/api/src/services/user/user.service.ts":
-        "import \"@iam/role-assignment-resolution\";",
+      "apps/api/src/services/user/user.service.ts": 'import "@iam/role-assignment-resolution";',
     });
 
     expect(analyzeRepositoryArchitecture(repoRoot)).toEqual([
@@ -217,18 +230,18 @@ describe("repository architecture guard", () => {
         ruleId: "role-resolution-owner",
         file: "apps/api/src/services/user/user.service.ts",
         line: 1,
-        message: "Only declared composition and User Profile module owners may value-import "
-          + "Role Assignment Resolver package \"@iam/role-assignment-resolution\".",
+        message:
+          "Only declared composition and User Profile module owners may value-import " +
+          'Role Assignment Resolver package "@iam/role-assignment-resolution".',
       },
     ]);
   });
 
   test("allows resolver type contracts and value dependencies in declared owners", () => {
-    const valueImport
-      = "import { createRoleAssignmentResolver } from \"@iam/role-assignment-resolution\";";
+    const valueImport = 'import { createRoleAssignmentResolver } from "@iam/role-assignment-resolution";';
     const repoRoot = createFixtureRepository({
       "apps/api/src/services/user/user.port.ts":
-        "import type { RoleAssignmentResolver } from \"@iam/role-assignment-resolution\";",
+        'import type { RoleAssignmentResolver } from "@iam/role-assignment-resolution";',
       "apps/admin-api/src/composition/index.ts": valueImport,
       "packages/user-profile-read-model/src/invalidation/user-profile-invalidation.ts": valueImport,
       "packages/user-profile-read-model/src/worker/user-profile-worker.module.ts": valueImport,
@@ -240,9 +253,9 @@ describe("repository architecture guard", () => {
   test("rejects User Profile producer and worker dependencies outside their corresponding owners", () => {
     const repoRoot = createFixtureRepository({
       "apps/api/src/services/user/user.service.ts":
-        "export type { UserProfileInvalidation } from \"@iam/user-profile-read-model/producer\";",
+        'export type { UserProfileInvalidation } from "@iam/user-profile-read-model/producer";',
       "apps/admin-api/src/services/user/user.service.ts":
-        "import { createUserProfileWorkerModule } from \"@iam/user-profile-read-model/worker\";",
+        'import { createUserProfileWorkerModule } from "@iam/user-profile-read-model/worker";',
     });
 
     expect(analyzeRepositoryArchitecture(repoRoot)).toEqual([
@@ -250,15 +263,16 @@ describe("repository architecture guard", () => {
         ruleId: "user-profile-owner",
         file: "apps/admin-api/src/services/user/user.service.ts",
         line: 1,
-        message: "Only Worker composition may import "
-          + "User Profile worker entry \"@iam/user-profile-read-model/worker\".",
+        message:
+          "Only Worker composition may import " + 'User Profile worker entry "@iam/user-profile-read-model/worker".',
       },
       {
         ruleId: "user-profile-owner",
         file: "apps/api/src/services/user/user.service.ts",
         line: 1,
-        message: "Only API and Admin API composition owners may re-export "
-          + "User Profile producer entry \"@iam/user-profile-read-model/producer\".",
+        message:
+          "Only API and Admin API composition owners may re-export " +
+          'User Profile producer entry "@iam/user-profile-read-model/producer".',
       },
     ]);
   });
@@ -266,7 +280,7 @@ describe("repository architecture guard", () => {
   test("rejects User Profile query repository dependencies outside API composition", () => {
     const repoRoot = createFixtureRepository({
       "apps/api/src/services/user/user.service.ts":
-        "import type { UserProfileRepository } from \"@iam/user-profile-read-model/query/repository\";",
+        'import type { UserProfileRepository } from "@iam/user-profile-read-model/query/repository";',
     });
 
     expect(analyzeRepositoryArchitecture(repoRoot)).toEqual([
@@ -274,8 +288,9 @@ describe("repository architecture guard", () => {
         ruleId: "user-profile-owner",
         file: "apps/api/src/services/user/user.service.ts",
         line: 1,
-        message: "Only API composition may import "
-          + "User Profile query repository entry \"@iam/user-profile-read-model/query/repository\".",
+        message:
+          "Only API composition may import " +
+          'User Profile query repository entry "@iam/user-profile-read-model/query/repository".',
       },
     ]);
   });
@@ -283,11 +298,11 @@ describe("repository architecture guard", () => {
   test("rejects complementary User Profile owner dependency kinds", () => {
     const repoRoot = createFixtureRepository({
       "apps/api/src/services/user/user.service.ts":
-        "import { createUserProfileJobProducer } from \"@iam/user-profile-read-model/producer\";",
+        'import { createUserProfileJobProducer } from "@iam/user-profile-read-model/producer";',
       "apps/admin-api/src/services/user/user.type.ts":
-        "import type { UserProfileJobProcessor } from \"@iam/user-profile-read-model/worker\";",
+        'import type { UserProfileJobProcessor } from "@iam/user-profile-read-model/worker";',
       "apps/admin-api/src/services/user/user.service.ts":
-        "import { createUserProfileRepository } from \"@iam/user-profile-read-model/query/repository\";",
+        'import { createUserProfileRepository } from "@iam/user-profile-read-model/query/repository";',
     });
 
     expect(analyzeRepositoryArchitecture(repoRoot)).toEqual([
@@ -295,42 +310,42 @@ describe("repository architecture guard", () => {
         ruleId: "user-profile-owner",
         file: "apps/admin-api/src/services/user/user.service.ts",
         line: 1,
-        message: "Only API composition may import "
-          + "User Profile query repository entry \"@iam/user-profile-read-model/query/repository\".",
+        message:
+          "Only API composition may import " +
+          'User Profile query repository entry "@iam/user-profile-read-model/query/repository".',
       },
       {
         ruleId: "user-profile-owner",
         file: "apps/admin-api/src/services/user/user.type.ts",
         line: 1,
-        message: "Only Worker composition may import "
-          + "User Profile worker entry \"@iam/user-profile-read-model/worker\".",
+        message:
+          "Only Worker composition may import " + 'User Profile worker entry "@iam/user-profile-read-model/worker".',
       },
       {
         ruleId: "user-profile-owner",
         file: "apps/api/src/services/user/user.service.ts",
         line: 1,
-        message: "Only API and Admin API composition owners may import "
-          + "User Profile producer entry \"@iam/user-profile-read-model/producer\".",
+        message:
+          "Only API and Admin API composition owners may import " +
+          'User Profile producer entry "@iam/user-profile-read-model/producer".',
       },
     ]);
   });
 
   test("allows User Profile owners plus root and query consumers", () => {
     const repoRoot = createFixtureRepository({
-      "apps/api/src/composition/index.ts":
-        "import \"@iam/user-profile-read-model/producer\";",
+      "apps/api/src/composition/index.ts": 'import "@iam/user-profile-read-model/producer";',
       "apps/api/src/composition/repositories/index.ts":
-        "import { createUserProfileRepository } from \"@iam/user-profile-read-model/query/repository\";",
+        'import { createUserProfileRepository } from "@iam/user-profile-read-model/query/repository";',
       "apps/admin-api/src/composition/index.ts":
-        "import type { UserProfileInvalidation } from \"@iam/user-profile-read-model/producer\";",
+        'import type { UserProfileInvalidation } from "@iam/user-profile-read-model/producer";',
       "apps/worker/src/composition/index.ts":
-        "import { createUserProfileWorkerModule } from \"@iam/user-profile-read-model/worker\";",
+        'import { createUserProfileWorkerModule } from "@iam/user-profile-read-model/worker";',
       "apps/api/src/services/user/user.service.ts":
-        "import type { UserProfileQueryService } from \"@iam/user-profile-read-model\";",
+        'import type { UserProfileQueryService } from "@iam/user-profile-read-model";',
       "apps/admin-api/src/services/user/user.type.ts":
-        "export type { UserProfileQueryService } from \"@iam/user-profile-read-model/query\";",
-      "apps/api/src/composition/repositories/profile.ts":
-        "import \"@iam/user-profile-read-model\";",
+        'export type { UserProfileQueryService } from "@iam/user-profile-read-model/query";',
+      "apps/api/src/composition/repositories/profile.ts": 'import "@iam/user-profile-read-model";',
     });
 
     expect(analyzeRepositoryArchitecture(repoRoot)).toEqual([]);
@@ -339,10 +354,10 @@ describe("repository architecture guard", () => {
   test("allows Projection implementation ports and Custom SSO public interface consumption", () => {
     const repoRoot = createFixtureRepository({
       "packages/client-subject-projection/src/internal/projection.ts":
-        "import type { SubjectFactsPort } from \"../index.ts\";",
+        'import type { SubjectFactsPort } from "../index.ts";',
       "packages/custom-sso/src/wire.ts": [
-        "import type { ClientSubjectProjection } from \"@iam/client-subject-projection\";",
-        "export type { ClientSubjectProjectionService } from \"@iam/client-subject-projection\";",
+        'import type { ClientSubjectProjection } from "@iam/client-subject-projection";',
+        'export type { ClientSubjectProjectionService } from "@iam/client-subject-projection";',
       ].join("\n"),
     });
 
@@ -352,8 +367,8 @@ describe("repository architecture guard", () => {
   test("keeps every Projection core source independent of client protocol configuration", () => {
     const repoRoot = createFixtureRepository({
       "packages/client-subject-projection/src/internal/catalog.ts": [
-        "import type { ClientDto } from \"@iam/domain/client\";",
-        "import type { RelativeClientDto } from \"../../../domain/src/client/index.ts\";",
+        'import type { ClientDto } from "@iam/domain/client";',
+        'import type { RelativeClientDto } from "../../../domain/src/client/index.ts";',
       ].join("\n"),
     });
 
@@ -362,53 +377,57 @@ describe("repository architecture guard", () => {
         ruleId: "client-subject-projection-owner",
         file: "packages/client-subject-projection/src/internal/catalog.ts",
         line: 1,
-        message: "Client Subject Projection implementation must not import runtime or protocol module "
-          + "\"@iam/domain/client\"; depend on its injected facts and safety ports.",
+        message:
+          "Client Subject Projection implementation must not import runtime or protocol module " +
+          '"@iam/domain/client"; depend on its injected facts and safety ports.',
       },
       {
         ruleId: "client-subject-projection-owner",
         file: "packages/client-subject-projection/src/internal/catalog.ts",
         line: 2,
-        message: "Client Subject Projection implementation must not import runtime or protocol module "
-          + "\"../../../domain/src/client/index.ts\"; depend on its injected facts and safety ports.",
+        message:
+          "Client Subject Projection implementation must not import runtime or protocol module " +
+          '"../../../domain/src/client/index.ts"; depend on its injected facts and safety ports.',
       },
     ]);
   });
 
   test("rejects Hono package subpaths from both Projection core and wire sources", () => {
     const repoRoot = createFixtureRepository({
-      "packages/client-subject-projection/src/internal/catalog.ts":
-        "import type { CookieOptions } from \"hono/cookie\";",
-      "packages/custom-sso/src/wire.ts":
-        "import type { Context } from \"hono/types\";",
+      "packages/client-subject-projection/src/internal/catalog.ts": 'import type { CookieOptions } from "hono/cookie";',
+      "packages/custom-sso/src/wire.ts": 'import type { Context } from "hono/types";',
     });
 
-    expect(analyzeRepositoryArchitecture(repoRoot)).toEqual([
-      {
-        ruleId: "client-subject-projection-owner",
-        file: "packages/custom-sso/src/wire.ts",
-        line: 1,
-        message: "Custom SSO wire adapter must not import facts persistence, configuration, runtime, "
-          + "or transport module \"hono/types\"; "
-          + "depend only on the root public Client Subject Projection interface.",
-      },
-      {
-        ruleId: "client-subject-projection-owner",
-        file: "packages/client-subject-projection/src/internal/catalog.ts",
-        line: 1,
-        message: "Client Subject Projection implementation must not import runtime or protocol module "
-          + "\"hono/cookie\"; depend on its injected facts and safety ports.",
-      },
-    ].sort((a, b) => a.file.localeCompare(b.file) || a.line - b.line));
+    expect(analyzeRepositoryArchitecture(repoRoot)).toEqual(
+      [
+        {
+          ruleId: "client-subject-projection-owner",
+          file: "packages/custom-sso/src/wire.ts",
+          line: 1,
+          message:
+            "Custom SSO wire adapter must not import facts persistence, configuration, runtime, " +
+            'or transport module "hono/types"; ' +
+            "depend only on the root public Client Subject Projection interface.",
+        },
+        {
+          ruleId: "client-subject-projection-owner",
+          file: "packages/client-subject-projection/src/internal/catalog.ts",
+          line: 1,
+          message:
+            "Client Subject Projection implementation must not import runtime or protocol module " +
+            '"hono/cookie"; depend on its injected facts and safety ports.',
+        },
+      ].sort((a, b) => a.file.localeCompare(b.file) || a.line - b.line),
+    );
   });
 
   test("matches blocked external package roots only at exact or slash-subpath boundaries", () => {
     const repoRoot = createFixtureRepository({
       "packages/client-subject-projection/src/internal/catalog.ts": [
-        "import type { Redis } from \"ioredis/built/Redis\";",
-        "import type { RedisClient } from \"redis/client\";",
-        "import type { ProviderHelper } from \"oidc-provider/lib/helpers\";",
-        "import type { Honorable } from \"honorable\";",
+        'import type { Redis } from "ioredis/built/Redis";',
+        'import type { RedisClient } from "redis/client";',
+        'import type { ProviderHelper } from "oidc-provider/lib/helpers";',
+        'import type { Honorable } from "honorable";',
       ].join("\n"),
     });
 
@@ -417,22 +436,25 @@ describe("repository architecture guard", () => {
         ruleId: "client-subject-projection-owner",
         file: "packages/client-subject-projection/src/internal/catalog.ts",
         line: 1,
-        message: "Client Subject Projection implementation must not import runtime or protocol module "
-          + "\"ioredis/built/Redis\"; depend on its injected facts and safety ports.",
+        message:
+          "Client Subject Projection implementation must not import runtime or protocol module " +
+          '"ioredis/built/Redis"; depend on its injected facts and safety ports.',
       },
       {
         ruleId: "client-subject-projection-owner",
         file: "packages/client-subject-projection/src/internal/catalog.ts",
         line: 2,
-        message: "Client Subject Projection implementation must not import runtime or protocol module "
-          + "\"redis/client\"; depend on its injected facts and safety ports.",
+        message:
+          "Client Subject Projection implementation must not import runtime or protocol module " +
+          '"redis/client"; depend on its injected facts and safety ports.',
       },
       {
         ruleId: "client-subject-projection-owner",
         file: "packages/client-subject-projection/src/internal/catalog.ts",
         line: 3,
-        message: "Client Subject Projection implementation must not import runtime or protocol module "
-          + "\"oidc-provider/lib/helpers\"; depend on its injected facts and safety ports.",
+        message:
+          "Client Subject Projection implementation must not import runtime or protocol module " +
+          '"oidc-provider/lib/helpers"; depend on its injected facts and safety ports.',
       },
     ]);
   });
@@ -440,76 +462,84 @@ describe("repository architecture guard", () => {
   test("maps every app and Gateway workspace package to its production owner", () => {
     const repoRoot = createFixtureRepository({
       "packages/client-subject-projection/src/internal/catalog.ts": [
-        "import \"@iam/admin/routes/client\";",
-        "import \"@iam/admin-api/routes/client\";",
-        "import \"@iam/api\";",
-        "import \"@iam/api/session\";",
-        "import \"@iam/sso/pages/login\";",
-        "import \"@iam/worker/queues\";",
+        'import "@iam/admin/routes/client";',
+        'import "@iam/admin-api/routes/client";',
+        'import "@iam/api";',
+        'import "@iam/api/session";',
+        'import "@iam/sso/pages/login";',
+        'import "@iam/worker/queues";',
       ].join("\n"),
-      "packages/custom-sso/src/wire.ts":
-        "import \"@iam/gateway-apisix/planner\";",
+      "packages/custom-sso/src/wire.ts": 'import "@iam/gateway-apisix/planner";',
     });
 
-    expect(analyzeRepositoryArchitecture(repoRoot)).toEqual([
-      {
-        ruleId: "client-subject-projection-owner",
-        file: "packages/custom-sso/src/wire.ts",
-        line: 1,
-        message: "Custom SSO wire adapter must not import facts persistence, configuration, runtime, "
-          + "or transport module \"@iam/gateway-apisix/planner\"; "
-          + "depend only on the root public Client Subject Projection interface.",
-      },
-      {
-        ruleId: "client-subject-projection-owner",
-        file: "packages/client-subject-projection/src/internal/catalog.ts",
-        line: 1,
-        message: "Client Subject Projection implementation must not import runtime or protocol module "
-          + "\"@iam/admin/routes/client\"; depend on its injected facts and safety ports.",
-      },
-      {
-        ruleId: "client-subject-projection-owner",
-        file: "packages/client-subject-projection/src/internal/catalog.ts",
-        line: 2,
-        message: "Client Subject Projection implementation must not import runtime or protocol module "
-          + "\"@iam/admin-api/routes/client\"; depend on its injected facts and safety ports.",
-      },
-      {
-        ruleId: "client-subject-projection-owner",
-        file: "packages/client-subject-projection/src/internal/catalog.ts",
-        line: 3,
-        message: "Client Subject Projection implementation must not import runtime or protocol module "
-          + "\"@iam/api\"; depend on its injected facts and safety ports.",
-      },
-      {
-        ruleId: "client-subject-projection-owner",
-        file: "packages/client-subject-projection/src/internal/catalog.ts",
-        line: 4,
-        message: "Client Subject Projection implementation must not import runtime or protocol module "
-          + "\"@iam/api/session\"; depend on its injected facts and safety ports.",
-      },
-      {
-        ruleId: "client-subject-projection-owner",
-        file: "packages/client-subject-projection/src/internal/catalog.ts",
-        line: 5,
-        message: "Client Subject Projection implementation must not import runtime or protocol module "
-          + "\"@iam/sso/pages/login\"; depend on its injected facts and safety ports.",
-      },
-      {
-        ruleId: "client-subject-projection-owner",
-        file: "packages/client-subject-projection/src/internal/catalog.ts",
-        line: 6,
-        message: "Client Subject Projection implementation must not import runtime or protocol module "
-          + "\"@iam/worker/queues\"; depend on its injected facts and safety ports.",
-      },
-    ].sort((a, b) => a.file.localeCompare(b.file) || a.line - b.line));
+    expect(analyzeRepositoryArchitecture(repoRoot)).toEqual(
+      [
+        {
+          ruleId: "client-subject-projection-owner",
+          file: "packages/custom-sso/src/wire.ts",
+          line: 1,
+          message:
+            "Custom SSO wire adapter must not import facts persistence, configuration, runtime, " +
+            'or transport module "@iam/gateway-apisix/planner"; ' +
+            "depend only on the root public Client Subject Projection interface.",
+        },
+        {
+          ruleId: "client-subject-projection-owner",
+          file: "packages/client-subject-projection/src/internal/catalog.ts",
+          line: 1,
+          message:
+            "Client Subject Projection implementation must not import runtime or protocol module " +
+            '"@iam/admin/routes/client"; depend on its injected facts and safety ports.',
+        },
+        {
+          ruleId: "client-subject-projection-owner",
+          file: "packages/client-subject-projection/src/internal/catalog.ts",
+          line: 2,
+          message:
+            "Client Subject Projection implementation must not import runtime or protocol module " +
+            '"@iam/admin-api/routes/client"; depend on its injected facts and safety ports.',
+        },
+        {
+          ruleId: "client-subject-projection-owner",
+          file: "packages/client-subject-projection/src/internal/catalog.ts",
+          line: 3,
+          message:
+            "Client Subject Projection implementation must not import runtime or protocol module " +
+            '"@iam/api"; depend on its injected facts and safety ports.',
+        },
+        {
+          ruleId: "client-subject-projection-owner",
+          file: "packages/client-subject-projection/src/internal/catalog.ts",
+          line: 4,
+          message:
+            "Client Subject Projection implementation must not import runtime or protocol module " +
+            '"@iam/api/session"; depend on its injected facts and safety ports.',
+        },
+        {
+          ruleId: "client-subject-projection-owner",
+          file: "packages/client-subject-projection/src/internal/catalog.ts",
+          line: 5,
+          message:
+            "Client Subject Projection implementation must not import runtime or protocol module " +
+            '"@iam/sso/pages/login"; depend on its injected facts and safety ports.',
+        },
+        {
+          ruleId: "client-subject-projection-owner",
+          file: "packages/client-subject-projection/src/internal/catalog.ts",
+          line: 6,
+          message:
+            "Client Subject Projection implementation must not import runtime or protocol module " +
+            '"@iam/worker/queues"; depend on its injected facts and safety ports.',
+        },
+      ].sort((a, b) => a.file.localeCompare(b.file) || a.line - b.line),
+    );
   });
 
   test("keeps the Custom SSO wire mapper independent of facts and runtime owners", () => {
     const repoRoot = createFixtureRepository({
       "packages/custom-sso/src/wire.ts": [
-        "import type { SubjectFactsReader } from \"@iam/user-profile-read-model/query\";",
-        "import type { Context } from \"hono\";",
+        'import type { SubjectFactsReader } from "@iam/user-profile-read-model/query";',
+        'import type { Context } from "hono";',
       ].join("\n"),
     });
 
@@ -518,17 +548,19 @@ describe("repository architecture guard", () => {
         ruleId: "client-subject-projection-owner",
         file: "packages/custom-sso/src/wire.ts",
         line: 1,
-        message: "Custom SSO wire adapter must not import facts persistence, configuration, runtime, "
-          + "or transport module \"@iam/user-profile-read-model/query\"; "
-          + "depend only on the root public Client Subject Projection interface.",
+        message:
+          "Custom SSO wire adapter must not import facts persistence, configuration, runtime, " +
+          'or transport module "@iam/user-profile-read-model/query"; ' +
+          "depend only on the root public Client Subject Projection interface.",
       },
       {
         ruleId: "client-subject-projection-owner",
         file: "packages/custom-sso/src/wire.ts",
         line: 2,
-        message: "Custom SSO wire adapter must not import facts persistence, configuration, runtime, "
-          + "or transport module \"hono\"; "
-          + "depend only on the root public Client Subject Projection interface.",
+        message:
+          "Custom SSO wire adapter must not import facts persistence, configuration, runtime, " +
+          'or transport module "hono"; ' +
+          "depend only on the root public Client Subject Projection interface.",
       },
     ]);
   });
@@ -539,22 +571,24 @@ describe("repository architecture guard", () => {
         "packages/custom-sso/src/wire.ts": `import "${module}";`,
       });
 
-      expect(analyzeRepositoryArchitecture(repoRoot)).toEqual([{
-        ruleId: "client-subject-projection-owner",
-        file: "packages/custom-sso/src/wire.ts",
-        line: 1,
-        message: "Custom SSO wire adapter must not import facts persistence, configuration, runtime, "
-          + `or transport module "${module}"; `
-          + "depend only on the root public Client Subject Projection interface.",
-      }]);
+      expect(analyzeRepositoryArchitecture(repoRoot)).toEqual([
+        {
+          ruleId: "client-subject-projection-owner",
+          file: "packages/custom-sso/src/wire.ts",
+          line: 1,
+          message:
+            "Custom SSO wire adapter must not import facts persistence, configuration, runtime, " +
+            `or transport module "${module}"; ` +
+            "depend only on the root public Client Subject Projection interface.",
+        },
+      ]);
     }
   });
 
   test("normalizes canonical imports before enforcing the Projection protocol edge", () => {
     const repoRoot = createFixtureRepository({
       "packages/client-subject-projection/src/internal/projection.ts":
-        "import type { CustomSsoSubjectProjection } "
-        + "from \"@iam/custom-sso/wire\";",
+        "import type { CustomSsoSubjectProjection } " + 'from "@iam/custom-sso/wire";',
     });
 
     expect(analyzeRepositoryArchitecture(repoRoot)).toEqual([
@@ -562,9 +596,10 @@ describe("repository architecture guard", () => {
         ruleId: "client-subject-projection-owner",
         file: "packages/client-subject-projection/src/internal/projection.ts",
         line: 1,
-        message: "Client Subject Projection implementation must not import runtime or protocol module "
-          + "\"@iam/custom-sso/wire\"; "
-          + "depend on its injected facts and safety ports.",
+        message:
+          "Client Subject Projection implementation must not import runtime or protocol module " +
+          '"@iam/custom-sso/wire"; ' +
+          "depend on its injected facts and safety ports.",
       },
     ]);
   });
@@ -572,7 +607,7 @@ describe("repository architecture guard", () => {
   test("keeps the Custom SSO wire mapper on the root public Projection interface", () => {
     const repoRoot = createFixtureRepository({
       "packages/custom-sso/src/wire.ts":
-        "import { SUBJECT_CLAIM_CATALOG } from \"@iam/client-subject-projection/internal/catalog\";",
+        'import { SUBJECT_CLAIM_CATALOG } from "@iam/client-subject-projection/internal/catalog";',
     });
 
     expect(analyzeRepositoryArchitecture(repoRoot)).toEqual([
@@ -580,8 +615,9 @@ describe("repository architecture guard", () => {
         ruleId: "client-subject-projection-owner",
         file: "packages/custom-sso/src/wire.ts",
         line: 1,
-        message: "Custom SSO wire adapter must not import non-root Projection module \"@iam/client-subject-projection/internal/catalog\"; "
-          + "depend only on the root public Client Subject Projection interface.",
+        message:
+          'Custom SSO wire adapter must not import non-root Projection module "@iam/client-subject-projection/internal/catalog"; ' +
+          "depend only on the root public Client Subject Projection interface.",
       },
     ]);
   });
@@ -589,65 +625,69 @@ describe("repository architecture guard", () => {
   test("keeps Projection implementation protocol-neutral and its wire adapter behind the public interface", () => {
     const repoRoot = createFixtureRepository({
       "packages/client-subject-projection/src/internal/projection.ts": [
-        "import type { Context } from \"hono\";",
-        "import type { UserProfileQuery } from \"@iam/user-profile-read-model/query\";",
-        "import type { CustomSsoSubjectProjection } from \"../../../custom-sso/src/wire.ts\";",
+        'import type { Context } from "hono";',
+        'import type { UserProfileQuery } from "@iam/user-profile-read-model/query";',
+        'import type { CustomSsoSubjectProjection } from "../../../custom-sso/src/wire.ts";',
       ].join("\n"),
       "packages/custom-sso/src/wire.ts":
-        "import { createClientSubjectProjectionService } from \"../../client-subject-projection/src/internal/projection.ts\";",
+        'import { createClientSubjectProjectionService } from "../../client-subject-projection/src/internal/projection.ts";',
     });
 
-    expect(analyzeRepositoryArchitecture(repoRoot)).toEqual([
-      {
-        ruleId: "client-subject-projection-owner",
-        file: "packages/custom-sso/src/wire.ts",
-        line: 1,
-        message: "Custom SSO wire adapter must not import non-root Projection module "
-          + "\"../../client-subject-projection/src/internal/projection.ts\"; "
-          + "depend only on the root public Client Subject Projection interface.",
-      },
-      {
-        ruleId: "client-subject-projection-owner",
-        file: "packages/client-subject-projection/src/internal/projection.ts",
-        line: 1,
-        message: "Client Subject Projection implementation must not import runtime or protocol module \"hono\"; "
-          + "depend on its injected facts and safety ports.",
-      },
-      {
-        ruleId: "client-subject-projection-owner",
-        file: "packages/client-subject-projection/src/internal/projection.ts",
-        line: 2,
-        message: "Client Subject Projection implementation must not import runtime or protocol module "
-          + "\"@iam/user-profile-read-model/query\"; depend on its injected facts and safety ports.",
-      },
-      {
-        ruleId: "client-subject-projection-owner",
-        file: "packages/client-subject-projection/src/internal/projection.ts",
-        line: 3,
-        message: "Client Subject Projection implementation must not import runtime or protocol module "
-          + "\"../../../custom-sso/src/wire.ts\"; depend on its injected facts and safety ports.",
-      },
-    ].sort((a, b) => a.file.localeCompare(b.file) || a.line - b.line));
+    expect(analyzeRepositoryArchitecture(repoRoot)).toEqual(
+      [
+        {
+          ruleId: "client-subject-projection-owner",
+          file: "packages/custom-sso/src/wire.ts",
+          line: 1,
+          message:
+            "Custom SSO wire adapter must not import non-root Projection module " +
+            '"../../client-subject-projection/src/internal/projection.ts"; ' +
+            "depend only on the root public Client Subject Projection interface.",
+        },
+        {
+          ruleId: "client-subject-projection-owner",
+          file: "packages/client-subject-projection/src/internal/projection.ts",
+          line: 1,
+          message:
+            'Client Subject Projection implementation must not import runtime or protocol module "hono"; ' +
+            "depend on its injected facts and safety ports.",
+        },
+        {
+          ruleId: "client-subject-projection-owner",
+          file: "packages/client-subject-projection/src/internal/projection.ts",
+          line: 2,
+          message:
+            "Client Subject Projection implementation must not import runtime or protocol module " +
+            '"@iam/user-profile-read-model/query"; depend on its injected facts and safety ports.',
+        },
+        {
+          ruleId: "client-subject-projection-owner",
+          file: "packages/client-subject-projection/src/internal/projection.ts",
+          line: 3,
+          message:
+            "Client Subject Projection implementation must not import runtime or protocol module " +
+            '"../../../custom-sso/src/wire.ts"; depend on its injected facts and safety ports.',
+        },
+      ].sort((a, b) => a.file.localeCompare(b.file) || a.line - b.line),
+    );
   });
 
   test("keeps Custom SSO routes and use cases behind session runtime interfaces", () => {
     const repoRoot = createFixtureRepository({
       "apps/api/src/routes/sso/sso.handlers.ts": [
-        "import type { SessionKernel } from \"@iam/session-kernel.ts\";",
-        "import type { RedisPort } from \"@api/lib/infra/redis\";",
+        'import type { SessionKernel } from "@iam/session-kernel.ts";',
+        'import type { RedisPort } from "@api/lib/infra/redis";',
       ].join("\n"),
       "apps/api/src/use-cases/sso/exchange-sso-code/exchange-sso-code.use-case.ts": [
-        "import type { SessionService } from \"@iam/session-kernel\";",
-        "import type { CustomSsoSessionKernelAdapter } "
-        + "from \"@iam/custom-sso/internal/session.ts\";",
-        "import type { SmsClient } from \"@api/lib/integrations/sms\";",
+        'import type { SessionService } from "@iam/session-kernel";',
+        "import type { CustomSsoSessionKernelAdapter } " + 'from "@iam/custom-sso/internal/session.ts";',
+        'import type { SmsClient } from "@api/lib/integrations/sms";',
       ].join("\n"),
       "apps/api/src/composition/services/index.ts": [
-        "import { createSessionKernel } from \"@iam/session-kernel\";",
-        "import { createCustomSsoSessionKernelAdapter } "
-        + "from \"@iam/custom-sso/internal/session\";",
-        "import redis from \"@api/lib/infra/redis\";",
-        "import { createSmsClient } from \"@api/lib/integrations/sms\";",
+        'import { createSessionKernel } from "@iam/session-kernel";',
+        "import { createCustomSsoSessionKernelAdapter } " + 'from "@iam/custom-sso/internal/session";',
+        'import redis from "@api/lib/infra/redis";',
+        'import { createSmsClient } from "@api/lib/integrations/sms";',
       ].join("\n"),
     });
 
@@ -656,37 +696,42 @@ describe("repository architecture guard", () => {
         ruleId: "session-runtime-owner",
         file: "apps/api/src/routes/sso/sso.handlers.ts",
         line: 1,
-        message: "Custom SSO routes and use cases must not import session runtime module "
-          + "\"@iam/session-kernel.ts\"; depend on their injected application interface.",
+        message:
+          "Custom SSO routes and use cases must not import session runtime module " +
+          '"@iam/session-kernel.ts"; depend on their injected application interface.',
       },
       {
         ruleId: "session-runtime-owner",
         file: "apps/api/src/routes/sso/sso.handlers.ts",
         line: 2,
-        message: "Custom SSO routes and use cases must not import session runtime module "
-          + "\"@api/lib/infra/redis\"; depend on their injected application interface.",
+        message:
+          "Custom SSO routes and use cases must not import session runtime module " +
+          '"@api/lib/infra/redis"; depend on their injected application interface.',
       },
       {
         ruleId: "session-runtime-owner",
         file: "apps/api/src/use-cases/sso/exchange-sso-code/exchange-sso-code.use-case.ts",
         line: 1,
-        message: "Custom SSO routes and use cases must not import session runtime module "
-          + "\"@iam/session-kernel\"; depend on their injected application interface.",
+        message:
+          "Custom SSO routes and use cases must not import session runtime module " +
+          '"@iam/session-kernel"; depend on their injected application interface.',
       },
       {
         ruleId: "session-runtime-owner",
         file: "apps/api/src/use-cases/sso/exchange-sso-code/exchange-sso-code.use-case.ts",
         line: 2,
-        message: "Custom SSO routes and use cases must not import session runtime module "
-          + "\"@iam/custom-sso/internal/session.ts\"; "
-          + "depend on their injected application interface.",
+        message:
+          "Custom SSO routes and use cases must not import session runtime module " +
+          '"@iam/custom-sso/internal/session.ts"; ' +
+          "depend on their injected application interface.",
       },
       {
         ruleId: "session-runtime-owner",
         file: "apps/api/src/use-cases/sso/exchange-sso-code/exchange-sso-code.use-case.ts",
         line: 3,
-        message: "Custom SSO routes and use cases must not import session runtime module "
-          + "\"@api/lib/integrations/sms\"; depend on their injected application interface.",
+        message:
+          "Custom SSO routes and use cases must not import session runtime module " +
+          '"@api/lib/integrations/sms"; depend on their injected application interface.',
       },
     ]);
   });
@@ -694,21 +739,20 @@ describe("repository architecture guard", () => {
   test("keeps Admin user and client services behind the Session Revocation port", () => {
     const repoRoot = createFixtureRepository({
       "apps/admin-api/src/services/client/client.service.ts": [
-        "import type { OidcSessionAdapter } "
-        + "from \"@admin-api/services/session/oidc-session-kernel.adapter.ts\";",
-        "import type { Redis } from \"@admin-api/lib/infra/redis\";",
+        "import type { OidcSessionAdapter } " + 'from "@admin-api/services/session/oidc-session-kernel.adapter.ts";',
+        'import type { Redis } from "@admin-api/lib/infra/redis";',
       ].join("\n"),
       "apps/admin-api/src/services/user/user.service.ts": [
-        "import type { SessionKernel } from \"@iam/session-kernel\";",
-        "import type { SessionKernelKey } from \"@iam/session-kernel/keys.ts\";",
-        "import type { CustomSsoSessionAdapter } "
-        + "from \"@admin-api/services/session/custom-sso-session-kernel.adapter\";",
+        'import type { SessionKernel } from "@iam/session-kernel";',
+        'import type { SessionKernelKey } from "@iam/session-kernel/keys.ts";',
+        "import type { CustomSsoSessionAdapter } " +
+          'from "@admin-api/services/session/custom-sso-session-kernel.adapter";',
       ].join("\n"),
       "apps/admin-api/src/services/session-revocation/session-revocation.port.ts":
-        "import type { SessionKernel } from \"@iam/session-kernel\";",
+        'import type { SessionKernel } from "@iam/session-kernel";',
       "apps/admin-api/src/composition/session/index.ts": [
-        "import { createSessionKernel } from \"@iam/session-kernel\";",
-        "import redis from \"@admin-api/lib/infra/redis\";",
+        'import { createSessionKernel } from "@iam/session-kernel";',
+        'import redis from "@admin-api/lib/infra/redis";',
       ].join("\n"),
     });
 
@@ -717,38 +761,43 @@ describe("repository architecture guard", () => {
         ruleId: "session-runtime-owner",
         file: "apps/admin-api/src/services/client/client.service.ts",
         line: 1,
-        message: "Admin user and client services must not import session runtime module "
-          + "\"@admin-api/services/session/oidc-session-kernel.adapter.ts\"; "
-          + "depend on the consumer-owned Session Revocation port.",
+        message:
+          "Admin user and client services must not import session runtime module " +
+          '"@admin-api/services/session/oidc-session-kernel.adapter.ts"; ' +
+          "depend on the consumer-owned Session Revocation port.",
       },
       {
         ruleId: "session-runtime-owner",
         file: "apps/admin-api/src/services/client/client.service.ts",
         line: 2,
-        message: "Admin user and client services must not import session runtime module "
-          + "\"@admin-api/lib/infra/redis\"; depend on the consumer-owned Session Revocation port.",
+        message:
+          "Admin user and client services must not import session runtime module " +
+          '"@admin-api/lib/infra/redis"; depend on the consumer-owned Session Revocation port.',
       },
       {
         ruleId: "session-runtime-owner",
         file: "apps/admin-api/src/services/user/user.service.ts",
         line: 1,
-        message: "Admin user and client services must not import session runtime module "
-          + "\"@iam/session-kernel\"; depend on the consumer-owned Session Revocation port.",
+        message:
+          "Admin user and client services must not import session runtime module " +
+          '"@iam/session-kernel"; depend on the consumer-owned Session Revocation port.',
       },
       {
         ruleId: "session-runtime-owner",
         file: "apps/admin-api/src/services/user/user.service.ts",
         line: 2,
-        message: "Admin user and client services must not import session runtime module "
-          + "\"@iam/session-kernel/keys.ts\"; depend on the consumer-owned Session Revocation port.",
+        message:
+          "Admin user and client services must not import session runtime module " +
+          '"@iam/session-kernel/keys.ts"; depend on the consumer-owned Session Revocation port.',
       },
       {
         ruleId: "session-runtime-owner",
         file: "apps/admin-api/src/services/user/user.service.ts",
         line: 3,
-        message: "Admin user and client services must not import session runtime module "
-          + "\"@admin-api/services/session/custom-sso-session-kernel.adapter\"; "
-          + "depend on the consumer-owned Session Revocation port.",
+        message:
+          "Admin user and client services must not import session runtime module " +
+          '"@admin-api/services/session/custom-sso-session-kernel.adapter"; ' +
+          "depend on the consumer-owned Session Revocation port.",
       },
     ]);
   });
@@ -756,16 +805,16 @@ describe("repository architecture guard", () => {
   test("keeps Worker production sources off API-private aliases", () => {
     const repoRoot = createFixtureRepository({
       "apps/worker/src/modules/profile.ts": [
-        "import type { ApiComposition } from \"@api\";",
-        "import type { ApiUserService } from \"@api/services/user/user.service.ts\";",
+        'import type { ApiComposition } from "@api";',
+        'import type { ApiUserService } from "@api/services/user/user.service.ts";',
       ].join("\n"),
       "apps/worker/src/composition/runtime.ts": [
-        "import type { ApiRuntime } from \"~api/src\";",
-        "import { createApiRuntime } from \"~api/src/composition/runtime/index.ts\";",
+        'import type { ApiRuntime } from "~api/src";',
+        'import { createApiRuntime } from "~api/src/composition/runtime/index.ts";',
       ].join("\n"),
       "apps/worker/src/http/server.ts": [
-        "import { createApp } from \"@iam/api-core\";",
-        "import type { UserProfileQueryService } from \"@iam/user-profile-read-model\";",
+        'import { createApp } from "@iam/api-core";',
+        'import type { UserProfileQueryService } from "@iam/user-profile-read-model";',
       ].join("\n"),
     });
 
@@ -774,29 +823,33 @@ describe("repository architecture guard", () => {
         ruleId: "worker-ownership",
         file: "apps/worker/src/composition/runtime.ts",
         line: 1,
-        message: "Worker production sources must not import API-private module \"~api/src\"; "
-          + "depend on a public workspace package.",
+        message:
+          'Worker production sources must not import API-private module "~api/src"; ' +
+          "depend on a public workspace package.",
       },
       {
         ruleId: "worker-ownership",
         file: "apps/worker/src/composition/runtime.ts",
         line: 2,
-        message: "Worker production sources must not import API-private module "
-          + "\"~api/src/composition/runtime/index.ts\"; depend on a public workspace package.",
+        message:
+          "Worker production sources must not import API-private module " +
+          '"~api/src/composition/runtime/index.ts"; depend on a public workspace package.',
       },
       {
         ruleId: "worker-ownership",
         file: "apps/worker/src/modules/profile.ts",
         line: 1,
-        message: "Worker production sources must not import API-private module \"@api\"; "
-          + "depend on a public workspace package.",
+        message:
+          'Worker production sources must not import API-private module "@api"; ' +
+          "depend on a public workspace package.",
       },
       {
         ruleId: "worker-ownership",
         file: "apps/worker/src/modules/profile.ts",
         line: 2,
-        message: "Worker production sources must not import API-private module "
-          + "\"@api/services/user/user.service.ts\"; depend on a public workspace package.",
+        message:
+          "Worker production sources must not import API-private module " +
+          '"@api/services/user/user.service.ts"; depend on a public workspace package.',
       },
     ]);
   });
@@ -828,15 +881,17 @@ describe("repository architecture guard", () => {
         ruleId: "docker-build-closure",
         file: "apps/api/Dockerfile",
         line: 1,
-        message: "Docker image @iam/api consumes @iam/role-assignment-resolution but does not COPY "
-          + "\"packages/role-assignment-resolution/\" from the workspace.",
+        message:
+          "Docker image @iam/api consumes @iam/role-assignment-resolution but does not COPY " +
+          '"packages/role-assignment-resolution/" from the workspace.',
       },
       {
         ruleId: "docker-build-closure",
         file: "apps/api/Dockerfile",
         line: 1,
-        message: "Docker image @iam/api consumes @iam/user-profile-read-model but does not COPY "
-          + "\"packages/user-profile-read-model/package.json\" from the workspace.",
+        message:
+          "Docker image @iam/api consumes @iam/user-profile-read-model but does not COPY " +
+          '"packages/user-profile-read-model/package.json" from the workspace.',
       },
     ]);
   });
@@ -870,15 +925,17 @@ describe("repository architecture guard", () => {
         ruleId: "docker-build-closure",
         file: "apps/worker/Dockerfile",
         line: 1,
-        message: "Docker image @iam/worker consumes @iam/role-assignment-resolution but does not COPY "
-          + "\"packages/role-assignment-resolution/\" from the workspace.",
+        message:
+          "Docker image @iam/worker consumes @iam/role-assignment-resolution but does not COPY " +
+          '"packages/role-assignment-resolution/" from the workspace.',
       },
       {
         ruleId: "docker-build-closure",
         file: "apps/worker/Dockerfile",
         line: 1,
-        message: "Docker image @iam/worker consumes @iam/role-assignment-resolution but does not COPY "
-          + "\"packages/role-assignment-resolution/package.json\" from the workspace.",
+        message:
+          "Docker image @iam/worker consumes @iam/role-assignment-resolution but does not COPY " +
+          '"packages/role-assignment-resolution/package.json" from the workspace.',
       },
     ]);
   });
@@ -912,8 +969,9 @@ describe("repository architecture guard", () => {
         ruleId: "docker-build-closure",
         file: "apps/api/Dockerfile",
         line: 1,
-        message: "Docker image @iam/api consumes @iam/user-profile-read-model but does not COPY "
-          + "\"packages/user-profile-read-model/\" from the workspace.",
+        message:
+          "Docker image @iam/api consumes @iam/user-profile-read-model but does not COPY " +
+          '"packages/user-profile-read-model/" from the workspace.',
       },
     ]);
   });
@@ -948,8 +1006,9 @@ describe("repository architecture guard", () => {
         ruleId: "docker-build-closure",
         file: "apps/admin/Dockerfile",
         line: 1,
-        message: "Docker image @iam/admin reaches protected architecture workspaces through @iam/admin-api "
-          + "but does not COPY \"apps/admin-api/package.json\" from the workspace.",
+        message:
+          "Docker image @iam/admin reaches protected architecture workspaces through @iam/admin-api " +
+          'but does not COPY "apps/admin-api/package.json" from the workspace.',
       },
     ]);
   });
@@ -1013,9 +1072,10 @@ describe("repository architecture guard", () => {
         ruleId: "docker-build-closure",
         file: "apps/worker/Dockerfile",
         line: 1,
-        message: "Docker image @iam/worker reaches protected architecture workspaces "
-          + "through @iam/optional-profile-bridge but does not COPY "
-          + "\"packages/optional-profile-bridge/package.json\" from the workspace.",
+        message:
+          "Docker image @iam/worker reaches protected architecture workspaces " +
+          "through @iam/optional-profile-bridge but does not COPY " +
+          '"packages/optional-profile-bridge/package.json" from the workspace.',
       },
     ]);
   });
@@ -1106,15 +1166,17 @@ describe("repository architecture guard", () => {
         ruleId: "docker-build-closure",
         file: "apps/admin/Dockerfile",
         line: 1,
-        message: "Docker image @iam/admin consumes @iam/client-subject-projection but does not COPY "
-          + "\"packages/client-subject-projection/\" from the workspace.",
+        message:
+          "Docker image @iam/admin consumes @iam/client-subject-projection but does not COPY " +
+          '"packages/client-subject-projection/" from the workspace.',
       },
       {
         ruleId: "docker-build-closure",
         file: "apps/admin/Dockerfile",
         line: 1,
-        message: "Docker image @iam/admin consumes @iam/client-subject-projection but does not COPY "
-          + "\"packages/client-subject-projection/package.json\" from the workspace.",
+        message:
+          "Docker image @iam/admin consumes @iam/client-subject-projection but does not COPY " +
+          '"packages/client-subject-projection/package.json" from the workspace.',
       },
     ]);
   });
@@ -1185,7 +1247,7 @@ describe("repository architecture guard", () => {
   test("rejects API route dependencies on app-local repositories", () => {
     const repoRoot = createFixtureRepository({
       "apps/api/src/routes/public/user.handlers.ts":
-        "import type { UserRepository } from \"../../services/user/user.repository\";",
+        'import type { UserRepository } from "../../services/user/user.repository";',
     });
 
     expect(analyzeRepositoryArchitecture(repoRoot)).toEqual([
@@ -1193,8 +1255,9 @@ describe("repository architecture guard", () => {
         ruleId: "dependency-direction",
         file: "apps/api/src/routes/public/user.handlers.ts",
         line: 1,
-        message: "Route modules must not import app-local repository "
-          + "\"../../services/user/user.repository\"; depend on an injected use case or service facade.",
+        message:
+          "Route modules must not import app-local repository " +
+          '"../../services/user/user.repository"; depend on an injected use case or service facade.',
       },
     ]);
   });
@@ -1202,7 +1265,7 @@ describe("repository architecture guard", () => {
   test("rejects Admin API route dependencies on app-local repositories", () => {
     const repoRoot = createFixtureRepository({
       "apps/admin-api/src/routes/admin/user/user.adapter.ts":
-        "import { createUserRepository } from \"@admin-api/services/user/user.repository\";",
+        'import { createUserRepository } from "@admin-api/services/user/user.repository";',
     });
 
     expect(analyzeRepositoryArchitecture(repoRoot)).toEqual([
@@ -1210,8 +1273,9 @@ describe("repository architecture guard", () => {
         ruleId: "dependency-direction",
         file: "apps/admin-api/src/routes/admin/user/user.adapter.ts",
         line: 1,
-        message: "Route modules must not import app-local repository "
-          + "\"@admin-api/services/user/user.repository\"; depend on an injected use case or service facade.",
+        message:
+          "Route modules must not import app-local repository " +
+          '"@admin-api/services/user/user.repository"; depend on an injected use case or service facade.',
       },
     ]);
   });
@@ -1219,9 +1283,9 @@ describe("repository architecture guard", () => {
   test("rejects type and value route repository aliases with explicit TypeScript extensions", () => {
     const repoRoot = createFixtureRepository({
       "apps/api/src/routes/public/user.handlers.ts":
-        "import type { UserRepository } from \"@api/services/user/user.repository.ts\";",
+        'import type { UserRepository } from "@api/services/user/user.repository.ts";',
       "apps/admin-api/src/routes/admin/user/user.adapter.ts":
-        "import { createUserRepository } from \"@admin-api/services/user/user.repository.ts\";",
+        'import { createUserRepository } from "@admin-api/services/user/user.repository.ts";',
     });
 
     expect(analyzeRepositoryArchitecture(repoRoot)).toEqual([
@@ -1229,23 +1293,24 @@ describe("repository architecture guard", () => {
         ruleId: "dependency-direction",
         file: "apps/admin-api/src/routes/admin/user/user.adapter.ts",
         line: 1,
-        message: "Route modules must not import app-local repository "
-          + "\"@admin-api/services/user/user.repository.ts\"; depend on an injected use case or service facade.",
+        message:
+          "Route modules must not import app-local repository " +
+          '"@admin-api/services/user/user.repository.ts"; depend on an injected use case or service facade.',
       },
       {
         ruleId: "dependency-direction",
         file: "apps/api/src/routes/public/user.handlers.ts",
         line: 1,
-        message: "Route modules must not import app-local repository "
-          + "\"@api/services/user/user.repository.ts\"; depend on an injected use case or service facade.",
+        message:
+          "Route modules must not import app-local repository " +
+          '"@api/services/user/user.repository.ts"; depend on an injected use case or service facade.',
       },
     ]);
   });
 
   test("rejects route dependencies on UnitOfWork even when imported as a type", () => {
     const repoRoot = createFixtureRepository({
-      "apps/api/src/routes/auth/auth.handlers.ts":
-        "import type { UnitOfWork } from \"@iam/api-core/uow\";",
+      "apps/api/src/routes/auth/auth.handlers.ts": 'import type { UnitOfWork } from "@iam/api-core/uow";',
     });
 
     expect(analyzeRepositoryArchitecture(repoRoot)).toEqual([
@@ -1253,8 +1318,9 @@ describe("repository architecture guard", () => {
         ruleId: "dependency-direction",
         file: "apps/api/src/routes/auth/auth.handlers.ts",
         line: 1,
-        message: "Route modules must not import UnitOfWork from \"@iam/api-core/uow\"; "
-          + "delegate transaction workflows to an injected use case or service facade.",
+        message:
+          'Route modules must not import UnitOfWork from "@iam/api-core/uow"; ' +
+          "delegate transaction workflows to an injected use case or service facade.",
       },
     ]);
   });
@@ -1262,9 +1328,9 @@ describe("repository architecture guard", () => {
   test("rejects API and Admin API services that reverse-depend on application use cases", () => {
     const repoRoot = createFixtureRepository({
       "apps/api/src/services/user/user.service.ts":
-        "import { resetPassword } from \"@api/use-cases/account-recovery/reset-password\";",
+        'import { resetPassword } from "@api/use-cases/account-recovery/reset-password";',
       "apps/admin-api/src/services/employment/employment.service.ts":
-        "import type { ResignUserUseCase } from \"../../use-cases/employment/resign-user/resign-user.use-case\";",
+        'import type { ResignUserUseCase } from "../../use-cases/employment/resign-user/resign-user.use-case";',
     });
 
     expect(analyzeRepositoryArchitecture(repoRoot)).toEqual([
@@ -1272,27 +1338,28 @@ describe("repository architecture guard", () => {
         ruleId: "dependency-direction",
         file: "apps/admin-api/src/services/employment/employment.service.ts",
         line: 1,
-        message: "Service modules must not import application use case "
-          + "\"../../use-cases/employment/resign-user/resign-user.use-case\"; "
-          + "use cases may depend on services, not the reverse.",
+        message:
+          "Service modules must not import application use case " +
+          '"../../use-cases/employment/resign-user/resign-user.use-case"; ' +
+          "use cases may depend on services, not the reverse.",
       },
       {
         ruleId: "dependency-direction",
         file: "apps/api/src/services/user/user.service.ts",
         line: 1,
-        message: "Service modules must not import application use case "
-          + "\"@api/use-cases/account-recovery/reset-password\"; "
-          + "use cases may depend on services, not the reverse.",
+        message:
+          "Service modules must not import application use case " +
+          '"@api/use-cases/account-recovery/reset-password"; ' +
+          "use cases may depend on services, not the reverse.",
       },
     ]);
   });
 
   test("rejects API and Admin API services that import application use-case barrels", () => {
     const repoRoot = createFixtureRepository({
-      "apps/api/src/services/user/user.service.ts":
-        "import type { UseCases } from \"@api/use-cases\";",
+      "apps/api/src/services/user/user.service.ts": 'import type { UseCases } from "@api/use-cases";',
       "apps/admin-api/src/services/employment/employment.service.ts":
-        "import { createAdminApiUseCases } from \"@admin-api/use-cases\";",
+        'import { createAdminApiUseCases } from "@admin-api/use-cases";',
     });
 
     expect(analyzeRepositoryArchitecture(repoRoot)).toEqual([
@@ -1300,23 +1367,24 @@ describe("repository architecture guard", () => {
         ruleId: "dependency-direction",
         file: "apps/admin-api/src/services/employment/employment.service.ts",
         line: 1,
-        message: "Service modules must not import application use case "
-          + "\"@admin-api/use-cases\"; use cases may depend on services, not the reverse.",
+        message:
+          "Service modules must not import application use case " +
+          '"@admin-api/use-cases"; use cases may depend on services, not the reverse.',
       },
       {
         ruleId: "dependency-direction",
         file: "apps/api/src/services/user/user.service.ts",
         line: 1,
-        message: "Service modules must not import application use case "
-          + "\"@api/use-cases\"; use cases may depend on services, not the reverse.",
+        message:
+          "Service modules must not import application use case " +
+          '"@api/use-cases"; use cases may depend on services, not the reverse.',
       },
     ]);
   });
 
   test("rejects ordinary production modules that value-import the database singleton", () => {
     const repoRoot = createFixtureRepository({
-      "apps/api/src/use-cases/authentication/login/login.use-case.ts":
-        "import db from \"@iam/db\";",
+      "apps/api/src/use-cases/authentication/login/login.use-case.ts": 'import db from "@iam/db";',
     });
 
     expect(analyzeRepositoryArchitecture(repoRoot)).toEqual([
@@ -1324,18 +1392,18 @@ describe("repository architecture guard", () => {
         ruleId: "dependency-direction",
         file: "apps/api/src/use-cases/authentication/login/login.use-case.ts",
         line: 1,
-        message: "Production modules must not value-import database singleton \"@iam/db\"; "
-          + "only composition and repository implementations own database wiring.",
+        message:
+          'Production modules must not value-import database singleton "@iam/db"; ' +
+          "only composition and repository implementations own database wiring.",
       },
     ]);
   });
 
   test("allows database ownership in composition and repository implementations plus type-only protocols", () => {
     const repoRoot = createFixtureRepository({
-      "apps/api/src/composition/index.ts": "import db from \"@iam/db\";",
-      "apps/admin-api/src/services/user/user.repository.ts": "import db from \"@iam/db\";",
-      "apps/api/src/use-cases/authentication/login/login.port.ts":
-        "import type { DbClient } from \"@iam/db\";",
+      "apps/api/src/composition/index.ts": 'import db from "@iam/db";',
+      "apps/admin-api/src/services/user/user.repository.ts": 'import db from "@iam/db";',
+      "apps/api/src/use-cases/authentication/login/login.port.ts": 'import type { DbClient } from "@iam/db";',
     });
 
     expect(analyzeRepositoryArchitecture(repoRoot)).toEqual([]);
@@ -1344,11 +1412,9 @@ describe("repository architecture guard", () => {
   test("rejects ordinary modules that value-import app singletons or concrete providers", () => {
     const repoRoot = createFixtureRepository({
       "apps/api/src/routes/public/public.handlers.ts":
-        "import { createUserService } from \"@api/services/user/user.service\";",
-      "apps/api/src/use-cases/authentication/login/login.use-case.ts":
-        "import redis from \"@api/lib/infra/redis\";",
-      "apps/admin-api/src/services/user/user.service.ts":
-        "import { logger } from \"@admin-api/lib/logger\";",
+        'import { createUserService } from "@api/services/user/user.service";',
+      "apps/api/src/use-cases/authentication/login/login.use-case.ts": 'import redis from "@api/lib/infra/redis";',
+      "apps/admin-api/src/services/user/user.service.ts": 'import { logger } from "@admin-api/lib/logger";',
     });
 
     expect(analyzeRepositoryArchitecture(repoRoot)).toEqual([
@@ -1356,44 +1422,42 @@ describe("repository architecture guard", () => {
         ruleId: "dependency-direction",
         file: "apps/admin-api/src/services/user/user.service.ts",
         line: 1,
-        message: "Production modules must not value-import app logger singleton "
-          + "\"@admin-api/lib/logger\"; only composition, app assembly, and infrastructure owners may wire it.",
+        message:
+          "Production modules must not value-import app logger singleton " +
+          '"@admin-api/lib/logger"; only composition, app assembly, and infrastructure owners may wire it.',
       },
       {
         ruleId: "dependency-direction",
         file: "apps/api/src/routes/public/public.handlers.ts",
         line: 1,
-        message: "Production modules must not value-import concrete provider "
-          + "\"@api/services/user/user.service\"; "
-          + "only composition owners may wire concrete providers.",
+        message:
+          "Production modules must not value-import concrete provider " +
+          '"@api/services/user/user.service"; ' +
+          "only composition owners may wire concrete providers.",
       },
       {
         ruleId: "dependency-direction",
         file: "apps/api/src/use-cases/authentication/login/login.use-case.ts",
         line: 1,
-        message: "Production modules must not value-import app Redis singleton "
-          + "\"@api/lib/infra/redis\"; only composition and Redis infrastructure owners may wire it.",
+        message:
+          "Production modules must not value-import app Redis singleton " +
+          '"@api/lib/infra/redis"; only composition and Redis infrastructure owners may wire it.',
       },
     ]);
   });
 
   test("allows singleton and provider wiring in declared owners plus type-only imports elsewhere", () => {
     const repoRoot = createFixtureRepository({
-      "apps/api/src/composition/runtime/create-runtime.ts":
-        "import redis from \"@api/lib/infra/redis\";",
-      "apps/admin-api/src/composition/index.ts":
-        "import { logger } from \"@admin-api/lib/logger\";",
+      "apps/api/src/composition/runtime/create-runtime.ts": 'import redis from "@api/lib/infra/redis";',
+      "apps/admin-api/src/composition/index.ts": 'import { logger } from "@admin-api/lib/logger";',
       "apps/api/src/composition/services/index.ts":
-        "import { createUserService } from \"@api/services/user/user.service\";",
-      "apps/api/src/app.ts":
-        "import { logger } from \"@api/lib/logger\";",
-      "apps/admin-api/src/lib/infra/cache.ts":
-        "import redis from \"@admin-api/lib/infra/redis\";",
-      "apps/api/src/lib/logger/request.ts":
-        "import { logger } from \"@api/lib/logger\";",
+        'import { createUserService } from "@api/services/user/user.service";',
+      "apps/api/src/app.ts": 'import { logger } from "@api/lib/logger";',
+      "apps/admin-api/src/lib/infra/cache.ts": 'import redis from "@admin-api/lib/infra/redis";',
+      "apps/api/src/lib/logger/request.ts": 'import { logger } from "@api/lib/logger";',
       "apps/api/src/routes/public/public.handlers.ts": [
-        "import type { UserService } from \"@api/services/user/user.service.ts\";",
-        "import type { IncomingMessage } from \"node:http\";",
+        'import type { UserService } from "@api/services/user/user.service.ts";',
+        'import type { IncomingMessage } from "node:http";',
       ].join("\n"),
     });
 
@@ -1402,10 +1466,9 @@ describe("repository architecture guard", () => {
 
   test("rejects concrete provider wiring from app assembly and infrastructure modules", () => {
     const repoRoot = createFixtureRepository({
-      "apps/api/src/app.ts":
-        "import { createUserService } from \"@api/services/user/user.service\";",
+      "apps/api/src/app.ts": 'import { createUserService } from "@api/services/user/user.service";',
       "apps/admin-api/src/lib/infra/user-store.ts":
-        "import { createUserRepository } from \"@admin-api/services/user/user.repository\";",
+        'import { createUserRepository } from "@admin-api/services/user/user.repository";',
     });
 
     expect(analyzeRepositoryArchitecture(repoRoot)).toEqual([
@@ -1413,17 +1476,19 @@ describe("repository architecture guard", () => {
         ruleId: "dependency-direction",
         file: "apps/admin-api/src/lib/infra/user-store.ts",
         line: 1,
-        message: "Production modules must not value-import concrete provider "
-          + "\"@admin-api/services/user/user.repository\"; "
-          + "only composition owners may wire concrete providers.",
+        message:
+          "Production modules must not value-import concrete provider " +
+          '"@admin-api/services/user/user.repository"; ' +
+          "only composition owners may wire concrete providers.",
       },
       {
         ruleId: "dependency-direction",
         file: "apps/api/src/app.ts",
         line: 1,
-        message: "Production modules must not value-import concrete provider "
-          + "\"@api/services/user/user.service\"; "
-          + "only composition owners may wire concrete providers.",
+        message:
+          "Production modules must not value-import concrete provider " +
+          '"@api/services/user/user.service"; ' +
+          "only composition owners may wire concrete providers.",
       },
     ]);
   });
@@ -1431,16 +1496,15 @@ describe("repository architecture guard", () => {
   test("allows app-local audit context helper modules outside wiring owners", () => {
     const repoRoot = createFixtureRepository({
       "apps/api/src/routes/public/public.handlers.ts":
-        "import { getApiAuditRequestContext, getApiUserAuditActor } "
-        + "from \"../../services/audit/audit.context\";",
+        "import { getApiAuditRequestContext, getApiUserAuditActor } " + 'from "../../services/audit/audit.context";',
       "apps/admin-api/src/services/user/user.service.ts":
-        "import { adminAuditTransactionOptions } from \"@admin-api/services/audit/audit.context\";",
+        'import { adminAuditTransactionOptions } from "@admin-api/services/audit/audit.context";',
       "apps/admin-api/src/routes/admin/role/audit.ts":
-        "export { resolveAdminAuditContext } from \"@admin-api/services/audit/audit.context\";",
+        'export { resolveAdminAuditContext } from "@admin-api/services/audit/audit.context";',
       "apps/api/src/composition/index.ts":
-        "import { createApiAuditLogWriter } from \"@api/services/audit/audit.service\";",
+        'import { createApiAuditLogWriter } from "@api/services/audit/audit.service";',
       "apps/admin-api/src/composition/index.ts":
-        "export { createAdminAuditService } from \"@admin-api/services/audit/audit.service\";",
+        'export { createAdminAuditService } from "@admin-api/services/audit/audit.service";',
     });
 
     expect(analyzeRepositoryArchitecture(repoRoot)).toEqual([]);
@@ -1449,9 +1513,9 @@ describe("repository architecture guard", () => {
   test("rejects audit service value bindings outside composition owners", () => {
     const repoRoot = createFixtureRepository({
       "apps/api/src/use-cases/account-recovery/reset-password/reset-password.use-case.ts":
-        "import { withApiRequestContext } from \"@api/services/audit/audit.service\";",
+        'import { withApiRequestContext } from "@api/services/audit/audit.service";',
       "apps/admin-api/src/routes/admin/audit/audit.ts":
-        "export { createAdminAuditService } from \"@admin-api/services/audit/audit.service\";",
+        'export { createAdminAuditService } from "@admin-api/services/audit/audit.service";',
     });
 
     expect(analyzeRepositoryArchitecture(repoRoot)).toEqual([
@@ -1459,27 +1523,27 @@ describe("repository architecture guard", () => {
         ruleId: "dependency-direction",
         file: "apps/admin-api/src/routes/admin/audit/audit.ts",
         line: 1,
-        message: "Production modules must not value-re-export concrete provider "
-          + "\"@admin-api/services/audit/audit.service\"; "
-          + "only composition owners may wire concrete providers.",
+        message:
+          "Production modules must not value-re-export concrete provider " +
+          '"@admin-api/services/audit/audit.service"; ' +
+          "only composition owners may wire concrete providers.",
       },
       {
         ruleId: "dependency-direction",
         file: "apps/api/src/use-cases/account-recovery/reset-password/reset-password.use-case.ts",
         line: 1,
-        message: "Production modules must not value-import concrete provider "
-          + "\"@api/services/audit/audit.service\"; "
-          + "only composition owners may wire concrete providers.",
+        message:
+          "Production modules must not value-import concrete provider " +
+          '"@api/services/audit/audit.service"; ' +
+          "only composition owners may wire concrete providers.",
       },
     ]);
   });
 
   test("rejects relative imports of app Redis and logger singletons from ordinary modules", () => {
     const repoRoot = createFixtureRepository({
-      "apps/api/src/services/user/user.service.ts":
-        "import { logger } from \"../../lib/logger\";",
-      "apps/admin-api/src/use-cases/session/revoke/revoke.use-case.ts":
-        "import redis from \"../../../lib/infra/redis\";",
+      "apps/api/src/services/user/user.service.ts": 'import { logger } from "../../lib/logger";',
+      "apps/admin-api/src/use-cases/session/revoke/revoke.use-case.ts": 'import redis from "../../../lib/infra/redis";',
     });
 
     expect(analyzeRepositoryArchitecture(repoRoot)).toEqual([
@@ -1487,29 +1551,28 @@ describe("repository architecture guard", () => {
         ruleId: "dependency-direction",
         file: "apps/admin-api/src/use-cases/session/revoke/revoke.use-case.ts",
         line: 1,
-        message: "Production modules must not value-import app Redis singleton "
-          + "\"../../../lib/infra/redis\"; only composition and Redis infrastructure owners may wire it.",
+        message:
+          "Production modules must not value-import app Redis singleton " +
+          '"../../../lib/infra/redis"; only composition and Redis infrastructure owners may wire it.',
       },
       {
         ruleId: "dependency-direction",
         file: "apps/api/src/services/user/user.service.ts",
         line: 1,
-        message: "Production modules must not value-import app logger singleton "
-          + "\"../../lib/logger\"; only composition, app assembly, and infrastructure owners may wire it.",
+        message:
+          "Production modules must not value-import app logger singleton " +
+          '"../../lib/logger"; only composition, app assembly, and infrastructure owners may wire it.',
       },
     ]);
   });
 
   test("rejects extended and index-shaped aliases for app singletons and concrete providers", () => {
     const repoRoot = createFixtureRepository({
-      "apps/admin-api/src/services/user/user.service.ts":
-        "import { logger } from \"@admin-api/lib/logger.ts\";",
+      "apps/admin-api/src/services/user/user.service.ts": 'import { logger } from "@admin-api/lib/logger.ts";',
       "apps/admin-api/src/use-cases/employment/resign-user/resign-user.use-case.ts":
-        "import { createUserService } from \"@admin-api/services/user/user.service.ts\";",
-      "apps/api/src/services/client/client.service.ts":
-        "import { logger } from \"@api/lib/logger/index.ts\";",
-      "apps/api/src/use-cases/authentication/login/login.use-case.ts":
-        "import redis from \"@api/lib/infra/redis.ts\";",
+        'import { createUserService } from "@admin-api/services/user/user.service.ts";',
+      "apps/api/src/services/client/client.service.ts": 'import { logger } from "@api/lib/logger/index.ts";',
+      "apps/api/src/use-cases/authentication/login/login.use-case.ts": 'import redis from "@api/lib/infra/redis.ts";',
     });
 
     expect(analyzeRepositoryArchitecture(repoRoot)).toEqual([
@@ -1517,32 +1580,36 @@ describe("repository architecture guard", () => {
         ruleId: "dependency-direction",
         file: "apps/admin-api/src/services/user/user.service.ts",
         line: 1,
-        message: "Production modules must not value-import app logger singleton "
-          + "\"@admin-api/lib/logger.ts\"; "
-          + "only composition, app assembly, and infrastructure owners may wire it.",
+        message:
+          "Production modules must not value-import app logger singleton " +
+          '"@admin-api/lib/logger.ts"; ' +
+          "only composition, app assembly, and infrastructure owners may wire it.",
       },
       {
         ruleId: "dependency-direction",
         file: "apps/admin-api/src/use-cases/employment/resign-user/resign-user.use-case.ts",
         line: 1,
-        message: "Production modules must not value-import concrete provider "
-          + "\"@admin-api/services/user/user.service.ts\"; "
-          + "only composition owners may wire concrete providers.",
+        message:
+          "Production modules must not value-import concrete provider " +
+          '"@admin-api/services/user/user.service.ts"; ' +
+          "only composition owners may wire concrete providers.",
       },
       {
         ruleId: "dependency-direction",
         file: "apps/api/src/services/client/client.service.ts",
         line: 1,
-        message: "Production modules must not value-import app logger singleton "
-          + "\"@api/lib/logger/index.ts\"; "
-          + "only composition, app assembly, and infrastructure owners may wire it.",
+        message:
+          "Production modules must not value-import app logger singleton " +
+          '"@api/lib/logger/index.ts"; ' +
+          "only composition, app assembly, and infrastructure owners may wire it.",
       },
       {
         ruleId: "dependency-direction",
         file: "apps/api/src/use-cases/authentication/login/login.use-case.ts",
         line: 1,
-        message: "Production modules must not value-import app Redis singleton "
-          + "\"@api/lib/infra/redis.ts\"; only composition and Redis infrastructure owners may wire it.",
+        message:
+          "Production modules must not value-import app Redis singleton " +
+          '"@api/lib/infra/redis.ts"; only composition and Redis infrastructure owners may wire it.',
       },
     ]);
   });
@@ -1550,21 +1617,20 @@ describe("repository architecture guard", () => {
   test("normalizes tsconfig root aliases across dependency-direction rules", () => {
     const repoRoot = createFixtureRepository({
       "apps/api/src/routes/public/user.index.ts": [
-        "import type { UserRepository } from \"~api/src/services/user/user.repository.ts\";",
-        "export type { UnitOfWork } from \"@iam/api-core/uow\";",
+        'import type { UserRepository } from "~api/src/services/user/user.repository.ts";',
+        'export type { UnitOfWork } from "@iam/api-core/uow";',
       ].join("\n"),
       "apps/admin-api/src/routes/admin/user/user.index.ts":
-        "export { createUserRepository } from \"~admin-api/src/services/user/user.repository/index.ts\";",
-      "apps/api/src/services/user/user.service.ts":
-        "import type { UseCases } from \"~api/src/use-cases/index.ts\";",
+        'export { createUserRepository } from "~admin-api/src/services/user/user.repository/index.ts";',
+      "apps/api/src/services/user/user.service.ts": 'import type { UseCases } from "~api/src/use-cases/index.ts";',
       "apps/admin-api/src/services/employment/employment.service.ts":
-        "export { resignUser } from \"~admin-api/src/use-cases/employment/resign-user/index.ts\";",
+        'export { resignUser } from "~admin-api/src/use-cases/employment/resign-user/index.ts";',
       "apps/api/src/use-cases/authentication/login/login.use-case.ts":
-        "import redis from \"~api/src/lib/infra/redis.ts\";",
+        'import redis from "~api/src/lib/infra/redis.ts";',
       "apps/admin-api/src/services/user/user.service.ts":
-        "import { logger } from \"~admin-api/src/lib/logger/index.ts\";",
+        'import { logger } from "~admin-api/src/lib/logger/index.ts";',
       "apps/api/src/use-cases/account-recovery/reset-password/reset-password.use-case.ts":
-        "import { createUserService } from \"~api/src/services/user/user.service.ts\";",
+        'import { createUserService } from "~api/src/services/user/user.service.ts";',
     });
 
     expect(analyzeRepositoryArchitecture(repoRoot)).toEqual([
@@ -1572,78 +1638,83 @@ describe("repository architecture guard", () => {
         ruleId: "dependency-direction",
         file: "apps/admin-api/src/routes/admin/user/user.index.ts",
         line: 1,
-        message: "Route modules must not re-export app-local repository "
-          + "\"~admin-api/src/services/user/user.repository/index.ts\"; "
-          + "depend on an injected use case or service facade.",
+        message:
+          "Route modules must not re-export app-local repository " +
+          '"~admin-api/src/services/user/user.repository/index.ts"; ' +
+          "depend on an injected use case or service facade.",
       },
       {
         ruleId: "dependency-direction",
         file: "apps/admin-api/src/services/employment/employment.service.ts",
         line: 1,
-        message: "Service modules must not re-export application use case "
-          + "\"~admin-api/src/use-cases/employment/resign-user/index.ts\"; "
-          + "use cases may depend on services, not the reverse.",
+        message:
+          "Service modules must not re-export application use case " +
+          '"~admin-api/src/use-cases/employment/resign-user/index.ts"; ' +
+          "use cases may depend on services, not the reverse.",
       },
       {
         ruleId: "dependency-direction",
         file: "apps/admin-api/src/services/user/user.service.ts",
         line: 1,
-        message: "Production modules must not value-import app logger singleton "
-          + "\"~admin-api/src/lib/logger/index.ts\"; "
-          + "only composition, app assembly, and infrastructure owners may wire it.",
+        message:
+          "Production modules must not value-import app logger singleton " +
+          '"~admin-api/src/lib/logger/index.ts"; ' +
+          "only composition, app assembly, and infrastructure owners may wire it.",
       },
       {
         ruleId: "dependency-direction",
         file: "apps/api/src/routes/public/user.index.ts",
         line: 1,
-        message: "Route modules must not import app-local repository "
-          + "\"~api/src/services/user/user.repository.ts\"; "
-          + "depend on an injected use case or service facade.",
+        message:
+          "Route modules must not import app-local repository " +
+          '"~api/src/services/user/user.repository.ts"; ' +
+          "depend on an injected use case or service facade.",
       },
       {
         ruleId: "dependency-direction",
         file: "apps/api/src/routes/public/user.index.ts",
         line: 2,
-        message: "Route modules must not re-export UnitOfWork from \"@iam/api-core/uow\"; "
-          + "delegate transaction workflows to an injected use case or service facade.",
+        message:
+          'Route modules must not re-export UnitOfWork from "@iam/api-core/uow"; ' +
+          "delegate transaction workflows to an injected use case or service facade.",
       },
       {
         ruleId: "dependency-direction",
         file: "apps/api/src/services/user/user.service.ts",
         line: 1,
-        message: "Service modules must not import application use case "
-          + "\"~api/src/use-cases/index.ts\"; use cases may depend on services, not the reverse.",
+        message:
+          "Service modules must not import application use case " +
+          '"~api/src/use-cases/index.ts"; use cases may depend on services, not the reverse.',
       },
       {
         ruleId: "dependency-direction",
         file: "apps/api/src/use-cases/account-recovery/reset-password/reset-password.use-case.ts",
         line: 1,
-        message: "Production modules must not value-import concrete provider "
-          + "\"~api/src/services/user/user.service.ts\"; "
-          + "only composition owners may wire concrete providers.",
+        message:
+          "Production modules must not value-import concrete provider " +
+          '"~api/src/services/user/user.service.ts"; ' +
+          "only composition owners may wire concrete providers.",
       },
       {
         ruleId: "dependency-direction",
         file: "apps/api/src/use-cases/authentication/login/login.use-case.ts",
         line: 1,
-        message: "Production modules must not value-import app Redis singleton "
-          + "\"~api/src/lib/infra/redis.ts\"; only composition and Redis infrastructure owners may wire it.",
+        message:
+          "Production modules must not value-import app Redis singleton " +
+          '"~api/src/lib/infra/redis.ts"; only composition and Redis infrastructure owners may wire it.',
       },
     ]);
   });
 
   test("allows tsconfig root aliases in declared owners and type-only provider protocols", () => {
     const repoRoot = createFixtureRepository({
-      "apps/api/src/composition/runtime/create-runtime.ts":
-        "import redis from \"~api/src/lib/infra/redis.ts\";",
+      "apps/api/src/composition/runtime/create-runtime.ts": 'import redis from "~api/src/lib/infra/redis.ts";',
       "apps/admin-api/src/composition/index.ts":
-        "export { createUserService } from \"~admin-api/src/services/user/user.service/index.ts\";",
-      "apps/api/src/app.ts":
-        "import { logger } from \"~api/src/lib/logger/index.ts\";",
-      "apps/admin-api/src/lib/infra/cache.ts":
-        "import redis from \"~admin-api/src/lib/infra/redis/index.ts\";",
+        'export { createUserService } from "~admin-api/src/services/user/user.service/index.ts";',
+      "apps/api/src/app.ts": 'import { logger } from "~api/src/lib/logger/index.ts";',
+      "apps/admin-api/src/lib/infra/cache.ts": 'import redis from "~admin-api/src/lib/infra/redis/index.ts";',
       "apps/api/src/routes/public/public.handlers.ts":
-        "import type { UserService } from \"~api/src/services/user/user.service.ts\";",
+        'import type { UserService } from "~api/src/services/user/user.service.ts";',
     });
 
     expect(analyzeRepositoryArchitecture(repoRoot)).toEqual([]);
@@ -1652,17 +1723,17 @@ describe("repository architecture guard", () => {
   test("applies dependency direction to static re-exports while allowing type-only provider protocols", () => {
     const repoRoot = createFixtureRepository({
       "apps/api/src/routes/public/user.index.ts": [
-        "export type { UserRepository } from \"@api/services/user/user.repository.ts\";",
-        "export type { UnitOfWork } from \"@iam/api-core/uow\";",
+        'export type { UserRepository } from "@api/services/user/user.repository.ts";',
+        'export type { UnitOfWork } from "@iam/api-core/uow";',
       ].join("\n"),
       "apps/admin-api/src/routes/admin/user/user.index.ts":
-        "export { createUserRepository } from \"@admin-api/services/user/user.repository\";",
+        'export { createUserRepository } from "@admin-api/services/user/user.repository";',
       "apps/admin-api/src/services/employment/employment.service.ts":
-        "export type { UseCases } from \"@admin-api/use-cases\";",
+        'export type { UseCases } from "@admin-api/use-cases";',
       "apps/admin-api/src/use-cases/employment/resign-user/resign-user.use-case.ts":
-        "export { createUserService } from \"@admin-api/services/user/user.service\";",
+        'export { createUserService } from "@admin-api/services/user/user.service";',
       "apps/api/src/use-cases/authentication/login/login.port.ts":
-        "export type { UserService } from \"@api/services/user/user.service.ts\";",
+        'export type { UserService } from "@api/services/user/user.service.ts";',
     });
 
     expect(analyzeRepositoryArchitecture(repoRoot)).toEqual([
@@ -1670,37 +1741,42 @@ describe("repository architecture guard", () => {
         ruleId: "dependency-direction",
         file: "apps/admin-api/src/routes/admin/user/user.index.ts",
         line: 1,
-        message: "Route modules must not re-export app-local repository "
-          + "\"@admin-api/services/user/user.repository\"; depend on an injected use case or service facade.",
+        message:
+          "Route modules must not re-export app-local repository " +
+          '"@admin-api/services/user/user.repository"; depend on an injected use case or service facade.',
       },
       {
         ruleId: "dependency-direction",
         file: "apps/admin-api/src/services/employment/employment.service.ts",
         line: 1,
-        message: "Service modules must not re-export application use case "
-          + "\"@admin-api/use-cases\"; use cases may depend on services, not the reverse.",
+        message:
+          "Service modules must not re-export application use case " +
+          '"@admin-api/use-cases"; use cases may depend on services, not the reverse.',
       },
       {
         ruleId: "dependency-direction",
         file: "apps/admin-api/src/use-cases/employment/resign-user/resign-user.use-case.ts",
         line: 1,
-        message: "Production modules must not value-re-export concrete provider "
-          + "\"@admin-api/services/user/user.service\"; "
-          + "only composition owners may wire concrete providers.",
+        message:
+          "Production modules must not value-re-export concrete provider " +
+          '"@admin-api/services/user/user.service"; ' +
+          "only composition owners may wire concrete providers.",
       },
       {
         ruleId: "dependency-direction",
         file: "apps/api/src/routes/public/user.index.ts",
         line: 1,
-        message: "Route modules must not re-export app-local repository "
-          + "\"@api/services/user/user.repository.ts\"; depend on an injected use case or service facade.",
+        message:
+          "Route modules must not re-export app-local repository " +
+          '"@api/services/user/user.repository.ts"; depend on an injected use case or service facade.',
       },
       {
         ruleId: "dependency-direction",
         file: "apps/api/src/routes/public/user.index.ts",
         line: 2,
-        message: "Route modules must not re-export UnitOfWork from \"@iam/api-core/uow\"; "
-          + "delegate transaction workflows to an injected use case or service facade.",
+        message:
+          'Route modules must not re-export UnitOfWork from "@iam/api-core/uow"; ' +
+          "delegate transaction workflows to an injected use case or service facade.",
       },
     ]);
   });
@@ -1709,7 +1785,7 @@ describe("repository architecture guard", () => {
     const repoRoot = createFixtureRepository({
       "apps/api/src/services/session/session.port.ts": [
         "interface SessionService { find: () => Promise<unknown> }",
-        "type SessionReader = Pick<SessionService, \"find\">;",
+        'type SessionReader = Pick<SessionService, "find">;',
       ].join("\n"),
     });
 
@@ -1730,9 +1806,9 @@ describe("repository architecture guard", () => {
       exitCode: 1,
       stderr: [
         "Architecture guard failed with 1 violation:",
-        "- [consumer-owned-port] apps/api/src/services/session/session.port.ts:2 "
-        + "Consumer-owned ports must not derive their interface from provider type \"SessionService\" with Pick; "
-        + "declare the required members directly.",
+        "- [consumer-owned-port] apps/api/src/services/session/session.port.ts:2 " +
+          'Consumer-owned ports must not derive their interface from provider type "SessionService" with Pick; ' +
+          "declare the required members directly.",
         "",
       ].join("\n"),
       stdout: "",

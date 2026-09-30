@@ -1,12 +1,3 @@
-import type {
-  ManageOrganizationResponsibilityAssignmentLifecycleTransactionPorts,
-  ManageOrganizationResponsibilityAssignmentLifecycleUseCaseDeps,
-  OrganizationResponsibilityAssignmentLifecycleContext,
-} from "./manage-assignment-lifecycle.port";
-import type {
-  ManageOrganizationResponsibilityAssignmentLifecycleInput,
-  ManageOrganizationResponsibilityAssignmentLifecycleOptions,
-} from "./manage-assignment-lifecycle.type";
 import { ADMIN_ORGANIZATION_RESPONSIBILITY_LIFECYCLE_OPERATION_IDS } from "@admin-api/services/admin-authorization/admin-organization-responsibility-authorization.type";
 import { createAdminMutation } from "@admin-api/services/admin-mutation/admin-mutation";
 import { adminAuditTransactionOptions } from "@admin-api/services/audit/audit.context";
@@ -23,6 +14,15 @@ import {
   OrganizationResponsibilityHolderEmploymentUnavailableError,
   resolveOrganizationResponsibilityAssignmentTransition,
 } from "@iam/domain/organization-responsibility";
+import type {
+  ManageOrganizationResponsibilityAssignmentLifecycleTransactionPorts,
+  ManageOrganizationResponsibilityAssignmentLifecycleUseCaseDeps,
+  OrganizationResponsibilityAssignmentLifecycleContext,
+} from "./manage-assignment-lifecycle.port";
+import type {
+  ManageOrganizationResponsibilityAssignmentLifecycleInput,
+  ManageOrganizationResponsibilityAssignmentLifecycleOptions,
+} from "./manage-assignment-lifecycle.type";
 
 export function createManageOrganizationResponsibilityAssignmentLifecycleUseCase(
   deps: ManageOrganizationResponsibilityAssignmentLifecycleUseCaseDeps,
@@ -34,23 +34,21 @@ export function createManageOrganizationResponsibilityAssignmentLifecycleUseCase
   ) {
     const { auditContext, authorization } = options;
     return await mutation.locked(
-      tx => tx.assignmentStore.lockAssignmentLifecycleContextById(input.id),
+      (tx) => tx.assignmentStore.lockAssignmentLifecycleContextById(input.id),
       () => new OrganizationResponsibilityAssignmentNotFoundError(),
       async (tx, context) => {
         const employment = context.employment;
-        const endpointsWithinScope = authorization.kind === "full"
-          || (employment !== null
-            && tx.assignmentStore.isEndpointPairWithinReadScope({
+        const endpointsWithinScope =
+          authorization.kind === "full" ||
+          (employment !== null &&
+            tx.assignmentStore.isEndpointPairWithinReadScope({
               readScope: authorization.readScope,
               holderOrganizationId: employment.organizationId,
               targetOrganizationId: context.assignment.targetOrganizationId,
             }));
         if (!endpointsWithinScope) {
           authorization.denyMutation({
-            operationId:
-            ADMIN_ORGANIZATION_RESPONSIBILITY_LIFECYCLE_OPERATION_IDS[
-              input.command
-            ],
+            operationId: ADMIN_ORGANIZATION_RESPONSIBILITY_LIFECYCLE_OPERATION_IDS[input.command],
             resourceIdentifier: "assignment-request",
             reason: "RESOURCE_OUT_OF_SCOPE",
           });
@@ -79,19 +77,13 @@ export function createManageOrganizationResponsibilityAssignmentLifecycleUseCase
           return { changed: false, result: null };
         }
 
-        if (employment === null)
-          throw new OrganizationResponsibilityHolderEmploymentUnavailableError();
-        if (
-          input.command
-          === ORGANIZATION_RESPONSIBILITY_ASSIGNMENT_LIFECYCLE_COMMANDS.Resume
-        ) {
+        if (employment === null) throw new OrganizationResponsibilityHolderEmploymentUnavailableError();
+        if (input.command === ORGANIZATION_RESPONSIBILITY_ASSIGNMENT_LIFECYCLE_COMMANDS.Resume) {
           await assertResumeAvailable(tx, context, authorization);
         }
 
-        const endTime
-          = input.command === ORGANIZATION_RESPONSIBILITY_ASSIGNMENT_LIFECYCLE_COMMANDS.End
-            ? deps.clock.nowDate()
-            : null;
+        const endTime =
+          input.command === ORGANIZATION_RESPONSIBILITY_ASSIGNMENT_LIFECYCLE_COMMANDS.End ? deps.clock.nowDate() : null;
         await tx.assignmentStore.updateLockedAssignmentLifecycle({
           assignment: context.assignment,
           status: transition.toStatus,
@@ -100,8 +92,7 @@ export function createManageOrganizationResponsibilityAssignmentLifecycleUseCase
 
         await tx.auditLogWriter.recordAuditLog(
           buildOrganizationResponsibilityAssignmentLifecycleAudit({
-            action:
-            ORGANIZATION_RESPONSIBILITY_ASSIGNMENT_AUDIT_ACTIONS[input.command],
+            action: ORGANIZATION_RESPONSIBILITY_ASSIGNMENT_AUDIT_ACTIONS[input.command],
             assignment: context.assignment,
             before: {
               status: transition.fromStatus,
@@ -157,7 +148,6 @@ async function assertResumeAvailable(
   });
 }
 
-export type ManageOrganizationResponsibilityAssignmentLifecycleUseCase
-  = ReturnType<
-    typeof createManageOrganizationResponsibilityAssignmentLifecycleUseCase
-  >;
+export type ManageOrganizationResponsibilityAssignmentLifecycleUseCase = ReturnType<
+  typeof createManageOrganizationResponsibilityAssignmentLifecycleUseCase
+>;

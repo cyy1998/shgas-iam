@@ -1,5 +1,4 @@
-import type { DbClient } from "@iam/db";
-import type { PostgresTestHarness } from "./postgres-harness.ts";
+import { afterAll, beforeAll, beforeEach, describe, expect, test } from "bun:test";
 import {
   EmploymentStatus,
   OrganizationLevel,
@@ -8,15 +7,16 @@ import {
   OrganizationStatus,
   OrganizationType,
 } from "@iam/contracts";
+import type { DbClient } from "@iam/db";
 import {
   employments,
   organizationClosures,
   organizationResponsibilityAssignments,
   organizations,
 } from "@iam/db/schema";
-import { afterAll, beforeAll, beforeEach, describe, expect, test } from "bun:test";
 import { eq, sql } from "drizzle-orm";
 import { createOrganizationResponsibilityResolver } from "../../src/index.ts";
+import type { PostgresTestHarness } from "./postgres-harness.ts";
 import { createPostgresTestHarness } from "./postgres-harness.ts";
 
 const at = new Date("2026-08-20T12:00:00.000Z");
@@ -37,10 +37,9 @@ afterAll(async () => {
 describe("OrganizationResponsibilityResolver", () => {
   test("resolves stable Effective responsibilities and cross-tree reverse holders", async () => {
     await seedOrganizationTree(harness!.db);
-    await harness!.db.insert(employments).values([
-      employment({ id: 100, userId: 900, orgId: 12 }),
-      employment({ id: 101, userId: 901, orgId: 11 }),
-    ]);
+    await harness!.db
+      .insert(employments)
+      .values([employment({ id: 100, userId: 900, orgId: 12 }), employment({ id: 101, userId: 901, orgId: 11 })]);
     await harness!.db.insert(organizationResponsibilityAssignments).values([
       assignment({
         employmentId: 100,
@@ -59,10 +58,7 @@ describe("OrganizationResponsibilityResolver", () => {
         status: OrganizationResponsibilityAssignmentStatus.Pause,
       }),
     ]);
-    await harness!.db
-      .update(organizations)
-      .set({ status: OrganizationStatus.Disable })
-      .where(eq(organizations.id, 11));
+    await harness!.db.update(organizations).set({ status: OrganizationStatus.Disable }).where(eq(organizations.id, 11));
 
     const resolver = createOrganizationResponsibilityResolver(harness!.db);
     const forward = await resolver.resolveEffectiveResponsibilities({
@@ -80,10 +76,13 @@ describe("OrganizationResponsibilityResolver", () => {
     });
 
     expect([...forward.entries()]).toEqual([
-      [100, [
-        { typeCode: OrganizationResponsibilityTypeCode.Head, targetOrganizationId: 20 },
-        { typeCode: OrganizationResponsibilityTypeCode.Supervising, targetOrganizationId: 21 },
-      ]],
+      [
+        100,
+        [
+          { typeCode: OrganizationResponsibilityTypeCode.Head, targetOrganizationId: 20 },
+          { typeCode: OrganizationResponsibilityTypeCode.Supervising, targetOrganizationId: 21 },
+        ],
+      ],
       [101, []],
       [999, []],
     ]);
@@ -94,17 +93,17 @@ describe("OrganizationResponsibilityResolver", () => {
   test("fails the whole batch when an enabled assignment has an invalid target reference", async () => {
     await seedOrganizationTree(harness!.db);
     await harness!.db.insert(employments).values(employment({ id: 100, userId: 900, orgId: 12 }));
-    await harness!.db.insert(organizationResponsibilityAssignments).values(assignment({
-      employmentId: 100,
-      typeCode: OrganizationResponsibilityTypeCode.Head,
-      targetOrganizationId: 999,
-    }));
+    await harness!.db.insert(organizationResponsibilityAssignments).values(
+      assignment({
+        employmentId: 100,
+        typeCode: OrganizationResponsibilityTypeCode.Head,
+        targetOrganizationId: 999,
+      }),
+    );
 
     const resolver = createOrganizationResponsibilityResolver(harness!.db);
 
-    const failure = await captureFailure(
-      resolver.resolveEffectiveResponsibilities({ employmentIds: [100], at }),
-    );
+    const failure = await captureFailure(resolver.resolveEffectiveResponsibilities({ employmentIds: [100], at }));
 
     expect(failure).toMatchObject({
       name: "OrganizationResponsibilityIntegrityError",
@@ -115,18 +114,18 @@ describe("OrganizationResponsibilityResolver", () => {
   test("fails the whole batch when an open assignment is scheduled after observation time", async () => {
     await seedOrganizationTree(harness!.db);
     await harness!.db.insert(employments).values(employment({ id: 100, userId: 900, orgId: 12 }));
-    await harness!.db.insert(organizationResponsibilityAssignments).values(assignment({
-      employmentId: 100,
-      typeCode: OrganizationResponsibilityTypeCode.Supervising,
-      targetOrganizationId: 20,
-      status: OrganizationResponsibilityAssignmentStatus.Pause,
-      startTime: new Date("2026-08-21T00:00:00.000Z"),
-    }));
+    await harness!.db.insert(organizationResponsibilityAssignments).values(
+      assignment({
+        employmentId: 100,
+        typeCode: OrganizationResponsibilityTypeCode.Supervising,
+        targetOrganizationId: 20,
+        status: OrganizationResponsibilityAssignmentStatus.Pause,
+        startTime: new Date("2026-08-21T00:00:00.000Z"),
+      }),
+    );
 
     const resolver = createOrganizationResponsibilityResolver(harness!.db);
-    const failure = await captureFailure(
-      resolver.resolveEffectiveResponsibilities({ employmentIds: [100], at }),
-    );
+    const failure = await captureFailure(resolver.resolveEffectiveResponsibilities({ employmentIds: [100], at }));
 
     expect(failure).toMatchObject({
       name: "OrganizationResponsibilityIntegrityError",
@@ -143,24 +142,23 @@ describe("OrganizationResponsibilityResolver", () => {
     `);
 
     try {
-      await harness!.db.insert(organizationResponsibilityAssignments).values(assignment({
-        employmentId: 100,
-        typeCode: OrganizationResponsibilityTypeCode.Head,
-        targetOrganizationId: 20,
-        status: OrganizationResponsibilityAssignmentStatus.Disable,
-      }));
+      await harness!.db.insert(organizationResponsibilityAssignments).values(
+        assignment({
+          employmentId: 100,
+          typeCode: OrganizationResponsibilityTypeCode.Head,
+          targetOrganizationId: 20,
+          status: OrganizationResponsibilityAssignmentStatus.Disable,
+        }),
+      );
 
       const resolver = createOrganizationResponsibilityResolver(harness!.db);
-      const failure = await captureFailure(
-        resolver.resolveEffectiveResponsibilities({ employmentIds: [100], at }),
-      );
+      const failure = await captureFailure(resolver.resolveEffectiveResponsibilities({ employmentIds: [100], at }));
 
       expect(failure).toMatchObject({
         name: "OrganizationResponsibilityIntegrityError",
         reason: "open-assignment-period-invalid",
       });
-    }
-    finally {
+    } finally {
       await harness!.db.delete(organizationResponsibilityAssignments);
       await harness!.db.execute(sql`
         ALTER TABLE organization_responsibility_assignment
@@ -175,19 +173,19 @@ describe("OrganizationResponsibilityResolver", () => {
   test("fails the whole batch when a disabled Period is after observation time", async () => {
     await seedOrganizationTree(harness!.db);
     await harness!.db.insert(employments).values(employment({ id: 100, userId: 900, orgId: 12 }));
-    await harness!.db.insert(organizationResponsibilityAssignments).values(assignment({
-      employmentId: 100,
-      typeCode: OrganizationResponsibilityTypeCode.Head,
-      targetOrganizationId: 20,
-      status: OrganizationResponsibilityAssignmentStatus.Disable,
-      startTime: new Date("2026-08-21T00:00:00.000Z"),
-      endTime: new Date("2026-08-21T01:00:00.000Z"),
-    }));
+    await harness!.db.insert(organizationResponsibilityAssignments).values(
+      assignment({
+        employmentId: 100,
+        typeCode: OrganizationResponsibilityTypeCode.Head,
+        targetOrganizationId: 20,
+        status: OrganizationResponsibilityAssignmentStatus.Disable,
+        startTime: new Date("2026-08-21T00:00:00.000Z"),
+        endTime: new Date("2026-08-21T01:00:00.000Z"),
+      }),
+    );
 
     const resolver = createOrganizationResponsibilityResolver(harness!.db);
-    const failure = await captureFailure(
-      resolver.resolveEffectiveResponsibilities({ employmentIds: [100], at }),
-    );
+    const failure = await captureFailure(resolver.resolveEffectiveResponsibilities({ employmentIds: [100], at }));
 
     expect(failure).toMatchObject({
       name: "OrganizationResponsibilityIntegrityError",
@@ -202,18 +200,18 @@ describe("OrganizationResponsibilityResolver", () => {
       .update(employments)
       .set({ status: 99 as EmploymentStatus })
       .where(eq(employments.id, 100));
-    await harness!.db.insert(organizationResponsibilityAssignments).values(assignment({
-      employmentId: 100,
-      typeCode: OrganizationResponsibilityTypeCode.Head,
-      targetOrganizationId: 20,
-      status: OrganizationResponsibilityAssignmentStatus.Disable,
-      endTime: new Date("2026-08-20T01:00:00.000Z"),
-    }));
+    await harness!.db.insert(organizationResponsibilityAssignments).values(
+      assignment({
+        employmentId: 100,
+        typeCode: OrganizationResponsibilityTypeCode.Head,
+        targetOrganizationId: 20,
+        status: OrganizationResponsibilityAssignmentStatus.Disable,
+        endTime: new Date("2026-08-20T01:00:00.000Z"),
+      }),
+    );
 
     const resolver = createOrganizationResponsibilityResolver(harness!.db);
-    const failure = await captureFailure(
-      resolver.resolveEffectiveResponsibilities({ employmentIds: [100], at }),
-    );
+    const failure = await captureFailure(resolver.resolveEffectiveResponsibilities({ employmentIds: [100], at }));
 
     expect(failure).toMatchObject({
       name: "OrganizationResponsibilityIntegrityError",
@@ -228,18 +226,18 @@ describe("OrganizationResponsibilityResolver", () => {
       .update(organizations)
       .set({ status: 99 as OrganizationStatus })
       .where(eq(organizations.id, 20));
-    await harness!.db.insert(organizationResponsibilityAssignments).values(assignment({
-      employmentId: 100,
-      typeCode: OrganizationResponsibilityTypeCode.Head,
-      targetOrganizationId: 20,
-      status: OrganizationResponsibilityAssignmentStatus.Disable,
-      endTime: new Date("2026-08-20T01:00:00.000Z"),
-    }));
+    await harness!.db.insert(organizationResponsibilityAssignments).values(
+      assignment({
+        employmentId: 100,
+        typeCode: OrganizationResponsibilityTypeCode.Head,
+        targetOrganizationId: 20,
+        status: OrganizationResponsibilityAssignmentStatus.Disable,
+        endTime: new Date("2026-08-20T01:00:00.000Z"),
+      }),
+    );
 
     const resolver = createOrganizationResponsibilityResolver(harness!.db);
-    const failure = await captureFailure(
-      resolver.resolveEffectiveResponsibilities({ employmentIds: [100], at }),
-    );
+    const failure = await captureFailure(resolver.resolveEffectiveResponsibilities({ employmentIds: [100], at }));
 
     expect(failure).toMatchObject({
       name: "OrganizationResponsibilityIntegrityError",
@@ -260,24 +258,23 @@ describe("OrganizationResponsibilityResolver", () => {
     `);
 
     try {
-      await harness!.db.insert(organizationResponsibilityAssignments).values(assignment({
-        employmentId: 100,
-        typeCode: OrganizationResponsibilityTypeCode.Head,
-        targetOrganizationId: 20,
-        status: 99 as OrganizationResponsibilityAssignmentStatus,
-      }));
+      await harness!.db.insert(organizationResponsibilityAssignments).values(
+        assignment({
+          employmentId: 100,
+          typeCode: OrganizationResponsibilityTypeCode.Head,
+          targetOrganizationId: 20,
+          status: 99 as OrganizationResponsibilityAssignmentStatus,
+        }),
+      );
 
       const resolver = createOrganizationResponsibilityResolver(harness!.db);
-      const failure = await captureFailure(
-        resolver.resolveEffectiveResponsibilities({ employmentIds: [100], at }),
-      );
+      const failure = await captureFailure(resolver.resolveEffectiveResponsibilities({ employmentIds: [100], at }));
 
       expect(failure).toMatchObject({
         name: "OrganizationResponsibilityIntegrityError",
         reason: "assignment-status-unknown",
       });
-    }
-    finally {
+    } finally {
       await harness!.db.delete(organizationResponsibilityAssignments);
       await harness!.db.execute(sql`
         ALTER TABLE organization_responsibility_assignment
@@ -296,10 +293,9 @@ describe("OrganizationResponsibilityResolver", () => {
 
   test("fails the whole batch when target-wide head cardinality is corrupted", async () => {
     await seedOrganizationTree(harness!.db);
-    await harness!.db.insert(employments).values([
-      employment({ id: 100, userId: 900, orgId: 12 }),
-      employment({ id: 101, userId: 901, orgId: 12 }),
-    ]);
+    await harness!.db
+      .insert(employments)
+      .values([employment({ id: 100, userId: 900, orgId: 12 }), employment({ id: 101, userId: 901, orgId: 12 })]);
     await harness!.db.execute(sql`DROP INDEX org_resp_assignment_open_head_unique_idx`);
 
     try {
@@ -317,16 +313,13 @@ describe("OrganizationResponsibilityResolver", () => {
       ]);
 
       const resolver = createOrganizationResponsibilityResolver(harness!.db);
-      const failure = await captureFailure(
-        resolver.resolveEffectiveResponsibilities({ employmentIds: [100], at }),
-      );
+      const failure = await captureFailure(resolver.resolveEffectiveResponsibilities({ employmentIds: [100], at }));
 
       expect(failure).toMatchObject({
         name: "OrganizationResponsibilityIntegrityError",
         reason: "head-cardinality-violated",
       });
-    }
-    finally {
+    } finally {
       await harness!.db.delete(organizationResponsibilityAssignments);
       await harness!.db.execute(sql`
         CREATE UNIQUE INDEX org_resp_assignment_open_head_unique_idx
@@ -338,13 +331,15 @@ describe("OrganizationResponsibilityResolver", () => {
 });
 
 async function seedOrganizationTree(db: DbClient) {
-  await db.insert(organizations).values([
-    organization({ id: 10, orgCode: "holder-root", path: "10", level: OrganizationLevel.One }),
-    organization({ id: 11, orgCode: "holder-child", path: "10/11", level: OrganizationLevel.Two }),
-    organization({ id: 12, orgCode: "holder-leaf", path: "10/11/12", level: OrganizationLevel.Three }),
-    organization({ id: 20, orgCode: "target-root", path: "20", level: OrganizationLevel.One }),
-    organization({ id: 21, orgCode: "target-child", path: "20/21", level: OrganizationLevel.Two }),
-  ]);
+  await db
+    .insert(organizations)
+    .values([
+      organization({ id: 10, orgCode: "holder-root", path: "10", level: OrganizationLevel.One }),
+      organization({ id: 11, orgCode: "holder-child", path: "10/11", level: OrganizationLevel.Two }),
+      organization({ id: 12, orgCode: "holder-leaf", path: "10/11/12", level: OrganizationLevel.Three }),
+      organization({ id: 20, orgCode: "target-root", path: "20", level: OrganizationLevel.One }),
+      organization({ id: 21, orgCode: "target-child", path: "20/21", level: OrganizationLevel.Two }),
+    ]);
   await db.insert(organizationClosures).values([
     { ancestorId: 10, descendantId: 10, depth: 0 },
     { ancestorId: 11, descendantId: 11, depth: 0 },
@@ -358,12 +353,7 @@ async function seedOrganizationTree(db: DbClient) {
   ]);
 }
 
-function organization(input: {
-  id: number;
-  orgCode: string;
-  path: string;
-  level: OrganizationLevel;
-}) {
+function organization(input: { id: number; orgCode: string; path: string; level: OrganizationLevel }) {
   return {
     ...input,
     orgName: input.orgCode,
@@ -401,8 +391,7 @@ function assignment(input: {
 async function captureFailure(promise: Promise<unknown>) {
   try {
     await promise;
-  }
-  catch (error) {
+  } catch (error) {
     return error;
   }
   return undefined;

@@ -1,10 +1,10 @@
-import type { ResourceKind } from "./types";
 import { isRecord } from "./manifest";
 import { getDefinition } from "./resources";
+import type { ResourceKind } from "./types";
 
 export function normalizeForCompare(kind: ResourceKind, value: unknown): unknown {
   if (Array.isArray(value)) {
-    return value.map(item => normalizeForCompare(kind, item));
+    return value.map((item) => normalizeForCompare(kind, item));
   }
 
   if (!isRecord(value)) {
@@ -32,7 +32,7 @@ export function stableStringify(value: unknown): string {
 
 export function sortKeys(value: unknown): unknown {
   if (Array.isArray(value)) {
-    return value.map(item => sortKeys(item));
+    return value.map((item) => sortKeys(item));
   }
 
   if (!isRecord(value)) {
@@ -42,6 +42,6 @@ export function sortKeys(value: unknown): unknown {
   return Object.fromEntries(
     Object.keys(value)
       .sort()
-      .map(key => [key, sortKeys(value[key])]),
+      .map((key) => [key, sortKeys(value[key])]),
   );
 }

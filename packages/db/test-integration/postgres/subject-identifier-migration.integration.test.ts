@@ -1,6 +1,6 @@
-import type { PostgresTestHarness } from "./postgres-harness";
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { z } from "zod";
+import type { PostgresTestHarness } from "./postgres-harness";
 import { createPostgresTestHarness, expectPostgresErrorCode } from "./postgres-harness";
 
 const KNOWN_SUBJECT_IDENTIFIER = "57b0e34d-bf33-4671-87ea-4ed2f1b0e420";
@@ -43,8 +43,8 @@ describe("Subject Identifier migration", () => {
       WHERE table_schema = current_schema()
         AND table_name = 'user'
     `;
-    expect(columns.map(column => column.columnName)).toContain("subject_identifier");
-    expect(columns.map(column => column.columnName)).not.toContain("oidc_subject");
+    expect(columns.map((column) => column.columnName)).toContain("subject_identifier");
+    expect(columns.map((column) => column.columnName)).not.toContain("oidc_subject");
 
     const [existing] = await sql<{ subjectIdentifier: string }[]>`
       SELECT subject_identifier::text AS "subjectIdentifier"
@@ -60,19 +60,24 @@ describe("Subject Identifier migration", () => {
     `;
     expect(z.uuid().safeParse(generated?.subjectIdentifier).success).toBe(true);
 
-    await expectPostgresErrorCode(sql`
+    await expectPostgresErrorCode(
+      sql`
       INSERT INTO "user" ("username", "subject_identifier")
       VALUES ('null-subject', ${null})
-    `, "23502");
-    await expectPostgresErrorCode(sql`
+    `,
+      "23502",
+    );
+    await expectPostgresErrorCode(
+      sql`
       INSERT INTO "user" ("username", "subject_identifier")
       VALUES ('duplicate-subject', ${KNOWN_SUBJECT_IDENTIFIER})
-    `, "23505");
+    `,
+      "23505",
+    );
   });
 });
 
 function requireHarness(): PostgresTestHarness {
-  if (!harness)
-    throw new Error("PostgreSQL test harness was not initialized");
+  if (!harness) throw new Error("PostgreSQL test harness was not initialized");
   return harness;
 }

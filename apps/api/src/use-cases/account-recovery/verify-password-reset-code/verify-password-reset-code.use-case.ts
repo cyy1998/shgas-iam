@@ -1,11 +1,8 @@
-import type { VerifyPasswordResetCodeUseCaseDeps } from "./verify-password-reset-code.port";
-import type {
-  VerifyPasswordResetCodeInput,
-  VerifyPasswordResetCodeOptions,
-} from "./verify-password-reset-code.type";
 import { VerificationCodeUsage } from "@api/enums/verificationCode.usage";
 import { withApiRequestContext } from "@api/services/audit/audit.context";
 import { buildSmsCodeVerifyAudit } from "@api/services/audit/events/auth.audit";
+import type { VerifyPasswordResetCodeUseCaseDeps } from "./verify-password-reset-code.port";
+import type { VerifyPasswordResetCodeInput, VerifyPasswordResetCodeOptions } from "./verify-password-reset-code.type";
 
 export function createVerifyPasswordResetCodeUseCase(deps: VerifyPasswordResetCodeUseCaseDeps) {
   async function execute(
@@ -18,12 +15,17 @@ export function createVerifyPasswordResetCodeUseCase(deps: VerifyPasswordResetCo
       phoneNumber,
       input.code,
     );
-    await deps.auditLogWriter.recordAuditLog(withApiRequestContext(options.requestContext, buildSmsCodeVerifyAudit({
-      phoneNumber,
-      usage: VerificationCodeUsage.ResetPassword,
-      username: input.username,
-      verified,
-    })));
+    await deps.auditLogWriter.recordAuditLog(
+      withApiRequestContext(
+        options.requestContext,
+        buildSmsCodeVerifyAudit({
+          phoneNumber,
+          usage: VerificationCodeUsage.ResetPassword,
+          username: input.username,
+          verified,
+        }),
+      ),
+    );
     return verified;
   }
 

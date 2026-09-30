@@ -17,9 +17,12 @@ describe("apisix admin client", () => {
 
     await client.upsert("routes", "route-a", { id: "route-a" });
 
-    expect(calls.at(0)?.url).toBe("http://127.0.0.1:9180/apisix/admin/routes/route-a");
-    expect(calls.at(0)?.init.method).toBe("PUT");
-    expect((calls.at(0)?.init.headers as Record<string, string>)["X-API-KEY"]).toBe("secret-key");
+    const firstCall = calls.at(0);
+    expect(firstCall).toBeDefined();
+    if (!firstCall) throw new Error("expected APISIX request");
+    expect(firstCall.url).toBe("http://127.0.0.1:9180/apisix/admin/routes/route-a");
+    expect(firstCall.init.method).toBe("PUT");
+    expect((firstCall.init.headers as Record<string, string>)["X-API-KEY"]).toBe("secret-key");
   });
 
   it("throws on non-2xx responses", async () => {
@@ -36,16 +39,20 @@ describe("apisix admin client", () => {
     const client = new ApisixAdminClient({
       adminUrl: "http://127.0.0.1:9180/apisix/admin",
       adminKey: "secret-key",
-      fetch: (async () => new Response(JSON.stringify({
-        list: [
-          {
-            key: "/apisix/routes/route-a",
-            value: {
-              uri: "/a/*",
-            },
-          },
-        ],
-      }), { status: 200 })) as any,
+      fetch: (async () =>
+        new Response(
+          JSON.stringify({
+            list: [
+              {
+                key: "/apisix/routes/route-a",
+                value: {
+                  uri: "/a/*",
+                },
+              },
+            ],
+          }),
+          { status: 200 },
+        )) as any,
     });
 
     await expect(client.list(getDefinition("routes"))).resolves.toEqual([

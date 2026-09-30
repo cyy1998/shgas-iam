@@ -1,14 +1,17 @@
-import type { LoginPasswordResult } from '@sso/types/api';
-import { createPasswordLoginCredential } from '@sso/lib/login-credential';
-import { request } from '@sso/utils/request';
+import { createPasswordLoginCredential } from "@sso/lib/login-credential";
+import type { LoginPasswordResult } from "@sso/types/api";
+import { request } from "@sso/utils/request";
 
-export function login(body: {
-  username: string;
-  password: string;
-  capToken?: string;
-}, options: { suppressErrorMessage?: boolean } = {}) {
-  return request<LoginPasswordResult>('/auth/login/password', {
-    method: 'POST',
+export function login(
+  body: {
+    username: string;
+    password: string;
+    capToken?: string;
+  },
+  options: { suppressErrorMessage?: boolean } = {},
+) {
+  return request<LoginPasswordResult>("/auth/login/password", {
+    method: "POST",
     suppressErrorMessage: options.suppressErrorMessage,
     body: JSON.stringify({
       credential: createPasswordLoginCredential({
@@ -20,18 +23,21 @@ export function login(body: {
   });
 }
 
-export function mobileLogin(body: {
-  phoneNumber: string;
-  code: string;
-  capToken?: string;
-}, options: { suppressErrorMessage?: boolean } = {}) {
-  return request<LoginPasswordResult>('/auth/login/mobile', {
-    method: 'POST',
+export function mobileLogin(
+  body: {
+    phoneNumber: string;
+    code: string;
+    capToken?: string;
+  },
+  options: { suppressErrorMessage?: boolean } = {},
+) {
+  return request<LoginPasswordResult>("/auth/login/mobile", {
+    method: "POST",
     suppressErrorMessage: options.suppressErrorMessage,
     body: JSON.stringify(body),
   });
 }
 
 export function logout() {
-  return request<void>('/auth/logout', { method: 'POST' });
+  return request<void>("/auth/logout", { method: "POST" });
 }

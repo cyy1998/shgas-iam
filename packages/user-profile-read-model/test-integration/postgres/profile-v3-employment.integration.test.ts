@@ -1,4 +1,4 @@
-import type { PostgresTestHarness } from "./postgres-test-harness";
+import { afterAll, beforeAll, beforeEach, describe, expect, test } from "bun:test";
 import {
   ApiErrorCode,
   EmploymentStatus,
@@ -27,7 +27,6 @@ import {
 import { roleAssignments } from "@iam/db/schema/role-assignments";
 import { createOrganizationResponsibilityResolver } from "@iam/organization-responsibility-resolution";
 import { createRoleAssignmentResolver } from "@iam/role-assignment-resolution";
-import { afterAll, beforeAll, beforeEach, describe, expect, test } from "bun:test";
 import { eq } from "drizzle-orm";
 import { createUserProfileRowRepository } from "../../src/publication/user-profile-row.repository";
 import {
@@ -36,6 +35,7 @@ import {
   createV3UserProfileQueryService,
   V3UserProfileSearchRequestSchema,
 } from "../../src/v3";
+import type { PostgresTestHarness } from "./postgres-test-harness";
 import { createPostgresTestHarness } from "./postgres-test-harness";
 
 const now = new Date("2026-08-22T12:00:00.000Z");
@@ -47,9 +47,9 @@ beforeAll(async () => {
 
 beforeEach(async () => {
   await harness!.sql.unsafe(
-    "TRUNCATE TABLE organization_responsibility_assignment, role_assignment, role_privilege, "
-    + "privilege, role, client, employment, "
-    + "organization_closure, organization, position, user_profile, \"user\" RESTART IDENTITY CASCADE",
+    "TRUNCATE TABLE organization_responsibility_assignment, role_assignment, role_privilege, " +
+      "privilege, role, client, employment, " +
+      'organization_closure, organization, position, user_profile, "user" RESTART IDENTITY CASCADE',
   );
 });
 
@@ -74,35 +74,37 @@ describe("User Profile v3 Employment tracer", () => {
         userType: UserType.Formal,
         status: UserStatus.Enable,
       },
-      employments: [{
-        isPrimary: true,
-        organization: {
-          code: "org-effective",
-          name: "Organization effective",
-          type: OrganizationType.Department,
-          path: [
-            {
-              code: "org-root",
-              name: "Organization root",
-              type: OrganizationType.Department,
-              distanceToTarget: 1,
-            },
-            {
-              code: "org-effective",
-              name: "Organization effective",
-              type: OrganizationType.Department,
-              distanceToTarget: 0,
-            },
-          ],
+      employments: [
+        {
+          isPrimary: true,
+          organization: {
+            code: "org-effective",
+            name: "Organization effective",
+            type: OrganizationType.Department,
+            path: [
+              {
+                code: "org-root",
+                name: "Organization root",
+                type: OrganizationType.Department,
+                distanceToTarget: 1,
+              },
+              {
+                code: "org-effective",
+                name: "Organization effective",
+                type: OrganizationType.Department,
+                distanceToTarget: 0,
+              },
+            ],
+          },
+          position: {
+            code: "position-effective",
+            name: "Position effective",
+          },
+          roles: ["role-effective"],
+          privileges: ["profile:read", "profile:write"],
+          responsibilities: [],
         },
-        position: {
-          code: "position-effective",
-          name: "Position effective",
-        },
-        roles: ["role-effective"],
-        privileges: ["profile:read", "profile:write"],
-        responsibilities: [],
-      }],
+      ],
     });
   });
 
@@ -326,10 +328,7 @@ describe("User Profile v3 Employment tracer", () => {
 
   test("keeps conditions in one Employment scope while independent scopes can match different Employments", async () => {
     await seedEmploymentProjectionGraph();
-    await harness!.db
-      .update(employments)
-      .set({ status: EmploymentStatus.Enable })
-      .where(eq(employments.id, 101));
+    await harness!.db.update(employments).set({ status: EmploymentStatus.Enable }).where(eq(employments.id, 101));
     await harness!.db.insert(roles).values({
       id: 201,
       roleCode: "role-second",
@@ -474,17 +473,58 @@ describe("User Profile v3 Employment tracer", () => {
       { filter: { exists: { path: "employments", where: { field: "isPrimary", op: "containsAny", value: [true] } } } },
       { filter: { exists: { path: "employments", where: { field: "user.username", op: "eq", value: "alice" } } } },
       { filter: { exists: { path: "employments", where: { field: "organization.id", op: "eq", value: 20 } } } },
-      { filter: { exists: { path: "employments", where: { field: "organization.ancestorCodes", op: "containsAny", value: ["org-root"] } } } },
-      { filter: { exists: { path: "employments", where: { field: "organization.ancestorDepths", op: "containsAny", value: [1] } } } },
-      { filter: { exists: { path: "employments", where: { field: "organization.ancestorKeys", op: "containsAny", value: ["org-root#1"] } } } },
-      { filter: { exists: { path: "employments", where: { field: "organization.companyCodes", op: "containsAny", value: ["org-root"] } } } },
-      { filter: { exists: { path: "employments", where: { field: "position", op: "withinSubtreeOf", value: "position-effective" } } } },
+      {
+        filter: {
+          exists: {
+            path: "employments",
+            where: { field: "organization.ancestorCodes", op: "containsAny", value: ["org-root"] },
+          },
+        },
+      },
+      {
+        filter: {
+          exists: {
+            path: "employments",
+            where: { field: "organization.ancestorDepths", op: "containsAny", value: [1] },
+          },
+        },
+      },
+      {
+        filter: {
+          exists: {
+            path: "employments",
+            where: { field: "organization.ancestorKeys", op: "containsAny", value: ["org-root#1"] },
+          },
+        },
+      },
+      {
+        filter: {
+          exists: {
+            path: "employments",
+            where: { field: "organization.companyCodes", op: "containsAny", value: ["org-root"] },
+          },
+        },
+      },
+      {
+        filter: {
+          exists: {
+            path: "employments",
+            where: { field: "position", op: "withinSubtreeOf", value: "position-effective" },
+          },
+        },
+      },
       { filter: employmentResponsibilities({ field: "id", op: "eq", value: 1 }) },
       { filter: employmentResponsibilities({ field: "targetOrganization.id", op: "eq", value: 31 }) },
-      { filter: employmentResponsibilities({ field: "targetOrganization.ancestorCodes", op: "containsAny", value: ["target-root"] }) },
+      {
+        filter: employmentResponsibilities({
+          field: "targetOrganization.ancestorCodes",
+          op: "containsAny",
+          value: ["target-root"],
+        }),
+      },
     ];
     for (const request of invalidRequests) {
-      const error = await query.search(request).catch(error => error);
+      const error = await query.search(request).catch((error) => error);
       expect(error).toMatchObject({
         code: ApiErrorCode.ValidationFailed,
         httpStatus: 422,
@@ -521,12 +561,14 @@ async function seedEmploymentProjectionGraph() {
     userType: UserType.Formal,
     status: UserStatus.Enable,
   });
-  await harness!.db.insert(positions).values(Array.from({ length: 7 }, (_, index) => ({
-    id: 10 + index,
-    posCode: index === 0 ? "position-effective" : `position-${index}`,
-    posName: index === 0 ? "Position effective" : `Position ${index}`,
-    status: PositionStatus.Enable,
-  })));
+  await harness!.db.insert(positions).values(
+    Array.from({ length: 7 }, (_, index) => ({
+      id: 10 + index,
+      posCode: index === 0 ? "position-effective" : `position-${index}`,
+      posName: index === 0 ? "Position effective" : `Position ${index}`,
+      status: PositionStatus.Enable,
+    })),
+  );
   await harness!.db.insert(organizations).values([
     {
       id: 19,
@@ -555,15 +597,17 @@ async function seedEmploymentProjectionGraph() {
       depth: 0,
     })),
   ]);
-  await harness!.db.insert(employments).values([
-    employment({ id: 100, offset: 0, isPrimary: true }),
-    employment({ id: 101, offset: 1, status: EmploymentStatus.Pause }),
-    employment({ id: 102, offset: 2, status: EmploymentStatus.Disable }),
-    employment({ id: 103, offset: 3, startTime: new Date("2026-08-23T00:00:00.000Z") }),
-    employment({ id: 104, offset: 4, endTime: new Date("2026-08-21T00:00:00.000Z") }),
-    employment({ id: 105, offset: 5, endTime: new Date("2026-08-23T00:00:00.000Z") }),
-    employment({ id: 106, offset: 6, isDelete: true }),
-  ]);
+  await harness!.db
+    .insert(employments)
+    .values([
+      employment({ id: 100, offset: 0, isPrimary: true }),
+      employment({ id: 101, offset: 1, status: EmploymentStatus.Pause }),
+      employment({ id: 102, offset: 2, status: EmploymentStatus.Disable }),
+      employment({ id: 103, offset: 3, startTime: new Date("2026-08-23T00:00:00.000Z") }),
+      employment({ id: 104, offset: 4, endTime: new Date("2026-08-21T00:00:00.000Z") }),
+      employment({ id: 105, offset: 5, endTime: new Date("2026-08-23T00:00:00.000Z") }),
+      employment({ id: 106, offset: 6, isDelete: true }),
+    ]);
   await harness!.db.insert(clients).values({
     id: 1,
     clientCode: "profile-client",

@@ -1,7 +1,7 @@
-import type { AdminRoleTransactionPorts } from "@admin-api/services/role/role.port";
-import type { AdminApiPostgresTestHarness } from "./postgres-test-harness";
+import { afterAll, beforeAll, beforeEach, describe, expect, mock, test } from "bun:test";
 import { createAdminApiRepositories } from "@admin-api/composition/repositories";
 import { createAdminApiUnitOfWork } from "@admin-api/composition/tx";
+import type { AdminRoleTransactionPorts } from "@admin-api/services/role/role.port";
 import { createRoleService } from "@admin-api/services/role/role.service";
 import { BadRequestError } from "@iam/api-core/errors";
 import { mapUnitOfWork } from "@iam/api-core/uow";
@@ -37,16 +37,8 @@ import {
 } from "@iam/domain/role";
 import { createRoleAssignmentResolver } from "@iam/role-assignment-resolution";
 import { createCurrentUserProfileProjectionBundle } from "@iam/user-profile-read-model/worker";
-import {
-  afterAll,
-  beforeAll,
-  beforeEach,
-  describe,
-  expect,
-  mock,
-  test,
-} from "bun:test";
 import { eq } from "drizzle-orm";
+import type { AdminApiPostgresTestHarness } from "./postgres-test-harness";
 import { createAdminApiPostgresTestHarness } from "./postgres-test-harness";
 
 let harness: AdminApiPostgresTestHarness;
@@ -62,9 +54,7 @@ afterAll(async () => {
   await harness?.close();
 });
 
-function createCommand(
-  decorate: (tx: AdminRoleTransactionPorts) => AdminRoleTransactionPorts = tx => tx,
-) {
+function createCommand(decorate: (tx: AdminRoleTransactionPorts) => AdminRoleTransactionPorts = (tx) => tx) {
   const enqueueRebuildJobs = mock(async () => ({
     enqueued: 1,
     jobIds: ["role-job"],
@@ -79,12 +69,13 @@ function createCommand(
     enqueueRebuildJobs,
     service: createRoleService({
       roleRepository: createAdminApiRepositories(harness.db).role,
-      uow: mapUnitOfWork(uow, tx =>
+      uow: mapUnitOfWork(uow, (tx) =>
         decorate({
           roleRepository: tx.repositories.role,
           auditService: tx.auditService,
           userProfileInvalidation: tx.userProfileInvalidation,
-        })),
+        }),
+      ),
     }),
   };
 }
@@ -127,10 +118,7 @@ test("loads names only for the requested role identities, including duplicate na
   expect(empty).toEqual([]);
 });
 
-async function seedHolder(
-  roleId: number,
-  targetType = RoleAssignmentTargetType.Employment,
-) {
+async function seedHolder(roleId: number, targetType = RoleAssignmentTargetType.Employment) {
   const [user] = await harness.db
     .insert(users)
     .values({ username: "holder", name: "Holder", userType: UserType.Formal })
@@ -145,13 +133,11 @@ async function seedHolder(
       orgType: OrganizationType.Department,
     })
     .returning();
-  await harness.db
-    .insert(organizationClosures)
-    .values({
-      ancestorId: organization!.id,
-      descendantId: organization!.id,
-      depth: 0,
-    });
+  await harness.db.insert(organizationClosures).values({
+    ancestorId: organization!.id,
+    descendantId: organization!.id,
+    depth: 0,
+  });
   const [position] = await harness.db
     .insert(positions)
     .values({ posCode: "POSITION", posName: "Position" })
@@ -171,10 +157,7 @@ async function seedHolder(
     .values({
       roleId,
       targetType,
-      targetId:
-        targetType === RoleAssignmentTargetType.Organization
-          ? organization!.id
-          : employment!.id,
+      targetId: targetType === RoleAssignmentTargetType.Organization ? organization!.id : employment!.id,
       includeDescendants: false,
     })
     .returning();
@@ -189,10 +172,7 @@ async function seedHolder(
 async function facts() {
   return {
     roles: await harness.db.select().from(roles).orderBy(roles.id),
-    assignments: await harness.db
-      .select()
-      .from(roleAssignments)
-      .orderBy(roleAssignments.id),
+    assignments: await harness.db.select().from(roleAssignments).orderBy(roleAssignments.id),
     audits: await harness.db.select().from(auditLogs).orderBy(auditLogs.id),
     dirty: await harness.db.select().from(userProfileDirty),
   };
@@ -201,8 +181,7 @@ async function facts() {
 async function failure(operation: () => Promise<unknown>) {
   try {
     await operation();
-  }
-  catch (error) {
+  } catch (error) {
     return error;
   }
   throw new Error("Expected command failure");
@@ -216,8 +195,7 @@ async function waitForBlocked(table: "role" | "role_assignment", count = 1) {
         where wait_event_type = 'Lock' and query like ${`%"${table}"%`}
         and application_name = current_setting('application_name') and pid <> pg_backend_pid()) >= ${count} as blocked
     `;
-    if (row!.blocked)
-      return;
+    if (row!.blocked) return;
   }
   throw new Error(`Expected independent transaction waiting on ${table}`);
 }
@@ -236,14 +214,12 @@ async function publish(userId: number, version: string) {
     })
     .buildOne({ userId, sourceDirtyVersion: version });
   expect(profile).not.toBeNull();
-  const result = await bundle
-    .createPublicationRepository(harness.db)
-    .publishCandidate({
-      userId,
-      dirtyVersion: version,
-      profile: profile!,
-      processedAt: now,
-    });
+  const result = await bundle.createPublicationRepository(harness.db).publishCandidate({
+    userId,
+    dirtyVersion: version,
+    profile: profile!,
+    processedAt: now,
+  });
   expect(result).toEqual({ status: "published" });
   return profile!;
 }
@@ -255,7 +231,7 @@ describe("Role mutations through production PostgreSQL UnitOfWork", () => {
       const { user } = await seedHolder(role.id);
       const written = Promise.withResolvers<void>();
       const release = Promise.withResolvers<void>();
-      const first = createCommand(tx => ({
+      const first = createCommand((tx) => ({
         ...tx,
         roleRepository: {
           ...tx.roleRepository,
@@ -270,14 +246,13 @@ describe("Role mutations through production PostgreSQL UnitOfWork", () => {
       const pending = first.updateRoleStatus("ROLE", RoleStatus.Pause);
       await Promise.race([written.promise, pending]);
       const second = createCommand().service;
-      const competing
-        = entry === "status"
+      const competing =
+        entry === "status"
           ? second.updateRoleStatus("ROLE", RoleStatus.Pause)
           : second.updateRole("ROLE", { roleName: "New name" });
       try {
         await waitForBlocked("role");
-      }
-      finally {
+      } finally {
         release.resolve();
         await Promise.allSettled([pending, competing]);
       }
@@ -292,9 +267,7 @@ describe("Role mutations through production PostgreSQL UnitOfWork", () => {
         { details: { changed: true } },
         { details: { changed: entry === "profile" } },
       ]);
-      expect(after.dirty).toMatchObject([
-        { userId: user.id, dirtyVersion: "1" },
-      ]);
+      expect(after.dirty).toMatchObject([{ userId: user.id, dirtyVersion: "1" }]);
     });
   }
 
@@ -319,8 +292,7 @@ describe("Role mutations through production PostgreSQL UnitOfWork", () => {
       });
       const after = await facts();
       expect(after).toEqual(before);
-    }
-    finally {
+    } finally {
       await harness.sql`drop index assignment_test_target_unique`;
     }
   });
@@ -339,7 +311,7 @@ describe("Role mutations through production PostgreSQL UnitOfWork", () => {
       const releaseFirst = Promise.withResolvers<void>();
       const secondReady = Promise.withResolvers<void>();
       const releaseSecond = Promise.withResolvers<void>();
-      const first = createCommand(tx => ({
+      const first = createCommand((tx) => ({
         ...tx,
         roleRepository: {
           ...tx.roleRepository,
@@ -351,7 +323,7 @@ describe("Role mutations through production PostgreSQL UnitOfWork", () => {
           },
         },
       })).service;
-      const second = createCommand(tx => ({
+      const second = createCommand((tx) => ({
         ...tx,
         roleRepository: {
           ...tx.roleRepository,
@@ -364,8 +336,8 @@ describe("Role mutations through production PostgreSQL UnitOfWork", () => {
       })).service;
       const firstPending = first.updateRoleStatus("ROLE", RoleStatus.Pause);
       await Promise.race([firstWritten.promise, firstPending]);
-      const secondPending
-        = entry === "status"
+      const secondPending =
+        entry === "status"
           ? second.updateRoleStatus("ROLE", RoleStatus.Enable)
           : second.updateRole("ROLE", { status: RoleStatus.Enable });
       try {
@@ -375,11 +347,8 @@ describe("Role mutations through production PostgreSQL UnitOfWork", () => {
         expect(firstResult).toEqual({ changed: true, result: null });
         await Promise.race([secondReady.promise, secondPending]);
         const paused = await publish(user.id, "2");
-        expect(
-          paused.subjectFacts.employments[0]!.clientAuthorizations,
-        ).toEqual([]);
-      }
-      finally {
+        expect(paused.subjectFacts.employments[0]!.clientAuthorizations).toEqual([]);
+      } finally {
         releaseFirst.resolve();
         releaseSecond.resolve();
         await Promise.allSettled([firstPending, secondPending]);
@@ -406,18 +375,14 @@ describe("Role mutations through production PostgreSQL UnitOfWork", () => {
         employmentIds: [employment.id],
         clientId: role.clientId,
       });
-      expect(effective.get(employment.id)).toEqual([
-        { id: role.id, roleCode: "ROLE" },
-      ]);
+      expect(effective.get(employment.id)).toEqual([{ id: role.id, roleCode: "ROLE" }]);
       const otherClient = await resolver.resolveEffectiveRoles({
         employmentIds: [employment.id],
         clientId: role.clientId + 1,
       });
       expect(otherClient.get(employment.id)).toEqual([]);
       const rebuilt = await publish(user.id, "3");
-      expect(
-        rebuilt.subjectFacts.employments[0]!.clientAuthorizations,
-      ).toMatchObject([
+      expect(rebuilt.subjectFacts.employments[0]!.clientAuthorizations).toMatchObject([
         { clientCode: "test-client", roles: [{ code: "ROLE" }] },
       ]);
     });
@@ -443,18 +408,13 @@ describe("Role mutations through production PostgreSQL UnitOfWork", () => {
     const after = await facts();
     expect(after.roles).toEqual(before.roles);
     expect(after.dirty).toEqual([]);
-    expect(after.audits).toMatchObject([
-      { details: { changed: false } },
-      { details: { changed: false } },
-    ]);
+    expect(after.audits).toMatchObject([{ details: { changed: false } }, { details: { changed: false } }]);
     expect(enqueueRebuildJobs).not.toHaveBeenCalled();
   });
 
   test("missing, empty, assignment blocker and repeated deletes never fabricate changes", async () => {
     const { service } = createCommand();
-    expect(
-      await failure(() => service.updateRole("MISSING", {})),
-    ).toBeInstanceOf(BadRequestError);
+    expect(await failure(() => service.updateRole("MISSING", {}))).toBeInstanceOf(BadRequestError);
     for (const command of [
       () => service.deleteRole("MISSING"),
       () => service.updateRole("MISSING", { roleName: "Name" }),
@@ -464,43 +424,32 @@ describe("Role mutations through production PostgreSQL UnitOfWork", () => {
     }
     const role = await seedRole();
     const { assignment } = await seedHolder(role.id);
-    expect(await failure(() => service.deleteRole("ROLE"))).toBeInstanceOf(
-      RoleHasAssignmentError,
-    );
+    expect(await failure(() => service.deleteRole("ROLE"))).toBeInstanceOf(RoleHasAssignmentError);
     const deleted = await service.deleteAssignment("ROLE", assignment.id);
     expect(deleted).toEqual({ changed: true, result: null });
     const before = await facts();
-    expect(
-      await failure(() => service.deleteAssignment("ROLE", assignment.id)),
-    ).toBeInstanceOf(RoleAssignmentTargetNotFoundError);
+    expect(await failure(() => service.deleteAssignment("ROLE", assignment.id))).toBeInstanceOf(
+      RoleAssignmentTargetNotFoundError,
+    );
     expect(await facts()).toEqual(before);
     expect(await service.deleteRole("ROLE")).toEqual({
       changed: true,
       result: null,
     });
     const afterDelete = await facts();
-    expect(await failure(() => service.deleteRole("ROLE"))).toBeInstanceOf(
-      RoleNotFoundError,
-    );
+    expect(await failure(() => service.deleteRole("ROLE"))).toBeInstanceOf(RoleNotFoundError);
     expect(await facts()).toEqual(afterDelete);
   });
 
   test("organization assignment scope no-op audits intent, change and delete each increment dirty once", async () => {
     const role = await seedRole();
-    const { assignment, user } = await seedHolder(
-      role.id,
-      RoleAssignmentTargetType.Organization,
-    );
+    const { assignment, user } = await seedHolder(role.id, RoleAssignmentTargetType.Organization);
     const { service } = createCommand();
-    expect(
-      await service.updateAssignmentScope("ROLE", assignment.id, false),
-    ).toEqual({ changed: false, result: null });
+    expect(await service.updateAssignmentScope("ROLE", assignment.id, false)).toEqual({ changed: false, result: null });
     const noOp = await facts();
     expect(noOp.dirty).toEqual([]);
     expect(noOp.audits).toMatchObject([{ details: { changed: false } }]);
-    expect(
-      await service.updateAssignmentScope("ROLE", assignment.id, true),
-    ).toEqual({ changed: true, result: null });
+    expect(await service.updateAssignmentScope("ROLE", assignment.id, true)).toEqual({ changed: true, result: null });
     expect(await service.deleteAssignment("ROLE", assignment.id)).toEqual({
       changed: true,
       result: null,
@@ -516,22 +465,13 @@ describe("Role mutations through production PostgreSQL UnitOfWork", () => {
   });
 
   for (const stage of ["audit", "dirty"] as const) {
-    for (const operation of [
-      "status",
-      "assignment-scope",
-      "assignment-delete",
-      "assignment-create",
-    ] as const) {
+    for (const operation of ["status", "assignment-scope", "assignment-delete", "assignment-create"] as const) {
       test(`${operation} rolls back source/audit/dirty when ${stage} fails`, async () => {
         const role = await seedRole();
-        const { assignment } = await seedHolder(
-          role.id,
-          RoleAssignmentTargetType.Organization,
-        );
-        if (operation === "assignment-create")
-          await harness.db.delete(roleAssignments);
+        const { assignment } = await seedHolder(role.id, RoleAssignmentTargetType.Organization);
+        if (operation === "assignment-create") await harness.db.delete(roleAssignments);
         const sentinel = new Error(`injected ${stage}`);
-        const { service, enqueueRebuildJobs } = createCommand(tx => ({
+        const { service, enqueueRebuildJobs } = createCommand((tx) => ({
           ...tx,
           ...(stage === "audit"
             ? {
@@ -583,13 +523,9 @@ describe("Role mutations through production PostgreSQL UnitOfWork", () => {
   ] as const) {
     test(`zero-row ${method} fails closed without audit or dirty`, async () => {
       const role = await seedRole();
-      const { assignment } = await seedHolder(
-        role.id,
-        RoleAssignmentTargetType.Organization,
-      );
-      if (method === "softDeleteRoleByCode" || method === "createAssignment")
-        await harness.db.delete(roleAssignments);
-      const { service } = createCommand(tx => ({
+      const { assignment } = await seedHolder(role.id, RoleAssignmentTargetType.Organization);
+      if (method === "softDeleteRoleByCode" || method === "createAssignment") await harness.db.delete(roleAssignments);
+      const { service } = createCommand((tx) => ({
         ...tx,
         roleRepository: { ...tx.roleRepository, [method]: async () => null },
       }));
@@ -624,9 +560,7 @@ describe("Role mutations through production PostgreSQL UnitOfWork", () => {
     await seedRole();
     const { service } = createCommand();
     const raw = await failure(() =>
-      harness.db
-        .insert(roles)
-        .values({ roleCode: "ROLE", roleName: "Duplicate", clientId: 1 }),
+      harness.db.insert(roles).values({ roleCode: "ROLE", roleName: "Duplicate", clientId: 1 }),
     );
     expect(raw).toHaveProperty("cause");
     expect(extractPostgresError(raw)?.code).toBe("23505");
@@ -658,8 +592,7 @@ describe("Role mutations through production PostgreSQL UnitOfWork", () => {
         constraint: "role_test_name_unique",
       });
       expect(await facts()).toEqual(before);
-    }
-    finally {
+    } finally {
       await harness.sql`drop index role_test_name_unique`;
     }
   });
@@ -668,21 +601,20 @@ describe("Role mutations through production PostgreSQL UnitOfWork", () => {
     await seedRole();
     let arrived = 0;
     const gate = Promise.withResolvers<void>();
-    const { service } = createCommand(tx => ({
+    const { service } = createCommand((tx) => ({
       ...tx,
       roleRepository: {
         ...tx.roleRepository,
         getAnyRoleByCode: async (code) => {
           const row = await tx.roleRepository.getAnyRoleByCode(code);
-          if (++arrived === 2)
-            gate.resolve();
+          if (++arrived === 2) gate.resolve();
           await gate.promise;
           return row;
         },
       },
     }));
     const results = await Promise.allSettled(
-      ["First", "Second"].map(roleName =>
+      ["First", "Second"].map((roleName) =>
         service.createRole({
           roleCode: "WINNER",
           roleName,
@@ -691,16 +623,10 @@ describe("Role mutations through production PostgreSQL UnitOfWork", () => {
         }),
       ),
     );
-    expect(
-      results.filter(result => result.status === "fulfilled"),
-    ).toHaveLength(1);
-    expect(
-      results.find(result => result.status === "rejected")?.reason,
-    ).toBeInstanceOf(RoleCodeExistsError);
+    expect(results.filter((result) => result.status === "fulfilled")).toHaveLength(1);
+    expect(results.find((result) => result.status === "rejected")?.reason).toBeInstanceOf(RoleCodeExistsError);
     const after = await facts();
-    expect(
-      after.roles.filter(role => role.roleCode === "WINNER"),
-    ).toHaveLength(1);
+    expect(after.roles.filter((role) => role.roleCode === "WINNER")).toHaveLength(1);
     expect(after.audits).toHaveLength(1);
   });
 
@@ -710,16 +636,13 @@ describe("Role mutations through production PostgreSQL UnitOfWork", () => {
     await harness.db.delete(roleAssignments);
     let arrived = 0;
     const gate = Promise.withResolvers<void>();
-    const { service } = createCommand(tx => ({
+    const { service } = createCommand((tx) => ({
       ...tx,
       roleRepository: {
         ...tx.roleRepository,
         findAssignmentByRoleTarget: async (...args) => {
-          const row = await tx.roleRepository.findAssignmentByRoleTarget(
-            ...args,
-          );
-          if (++arrived === 2)
-            gate.resolve();
+          const row = await tx.roleRepository.findAssignmentByRoleTarget(...args);
+          if (++arrived === 2) gate.resolve();
           await gate.promise;
           return row;
         },
@@ -733,12 +656,8 @@ describe("Role mutations through production PostgreSQL UnitOfWork", () => {
         }),
       ),
     );
-    expect(
-      results.filter(result => result.status === "fulfilled"),
-    ).toHaveLength(1);
-    expect(
-      results.find(result => result.status === "rejected")?.reason,
-    ).toBeInstanceOf(RoleAssignmentExistsError);
+    expect(results.filter((result) => result.status === "fulfilled")).toHaveLength(1);
+    expect(results.find((result) => result.status === "rejected")?.reason).toBeInstanceOf(RoleAssignmentExistsError);
     const after = await facts();
     expect(after.assignments).toHaveLength(1);
     expect(after.audits).toHaveLength(1);
@@ -754,14 +673,12 @@ describe("Role mutations through production PostgreSQL UnitOfWork", () => {
     const allowDeleteCommit = Promise.withResolvers<void>();
     // The create transaction takes an empty-slot snapshot before another transaction establishes the old assignment.
     await harness.db.delete(roleAssignments);
-    const creating = createCommand(tx => ({
+    const creating = createCommand((tx) => ({
       ...tx,
       roleRepository: {
         ...tx.roleRepository,
         findAssignmentByRoleTarget: async (...args) => {
-          const row = await tx.roleRepository.findAssignmentByRoleTarget(
-            ...args,
-          );
+          const row = await tx.roleRepository.findAssignmentByRoleTarget(...args);
           prechecked.resolve();
           await allowCreate.promise;
           return row;
@@ -779,7 +696,7 @@ describe("Role mutations through production PostgreSQL UnitOfWork", () => {
       targetType: assignment.targetType,
       targetId: assignment.targetId,
     });
-    const deleting = createCommand(tx => ({
+    const deleting = createCommand((tx) => ({
       ...tx,
       roleRepository: {
         ...tx.roleRepository,
@@ -793,16 +710,12 @@ describe("Role mutations through production PostgreSQL UnitOfWork", () => {
     })).service;
     const deletePending = deleting.deleteAssignment("ROLE", assignment.id);
     await Promise.race([removed.promise, deletePending]);
-    const repeatedPending = createCommand().service.deleteAssignment(
-      "ROLE",
-      assignment.id,
-    );
+    const repeatedPending = createCommand().service.deleteAssignment("ROLE", assignment.id);
     try {
       await waitForBlocked("role_assignment");
       allowCreate.resolve();
       await waitForBlocked("role_assignment", 2);
-    }
-    finally {
+    } finally {
       allowDeleteCommit.resolve();
       allowCreate.resolve();
       await Promise.allSettled([createPending, deletePending, repeatedPending]);
@@ -814,9 +727,7 @@ describe("Role mutations through production PostgreSQL UnitOfWork", () => {
       result: { targetId: employment.id },
     });
     expect(created.result.id).not.toBe(assignment.id);
-    expect(await failure(() => repeatedPending)).toBeInstanceOf(
-      RoleAssignmentTargetNotFoundError,
-    );
+    expect(await failure(() => repeatedPending)).toBeInstanceOf(RoleAssignmentTargetNotFoundError);
     const after = await facts();
     expect(after.assignments).toHaveLength(1);
     expect(after.assignments[0]!.id).toBe(created.result.id);

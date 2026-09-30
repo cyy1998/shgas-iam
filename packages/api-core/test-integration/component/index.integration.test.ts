@@ -1,6 +1,6 @@
+import { describe, expect, test } from "bun:test";
 import { ApiErrorCode } from "@iam/contracts";
 import { TRPCError } from "@trpc/server";
-import { describe, expect, test } from "bun:test";
 import { BAD_REQUEST, NOT_FOUND } from "../../src/core/http-status-codes";
 import { BadRequestError } from "../../src/errors/BadRequestError";
 import { CustomError } from "../../src/errors/CustomError";
@@ -26,8 +26,7 @@ describe("mapCustomErrorToTRPCError", () => {
     try {
       mapCustomErrorToTRPCError(err);
       throw new Error("expected TRPCError");
-    }
-    catch (error) {
+    } catch (error) {
       expect(error).toBeInstanceOf(TRPCError);
       expect((error as TRPCError).code).toBe("NOT_FOUND");
       expect((error as TRPCError).cause).toBe(err);
@@ -40,8 +39,7 @@ describe("mapCustomErrorToTRPCError", () => {
     try {
       mapCustomErrorToTRPCError(err);
       throw new Error("expected TRPCError");
-    }
-    catch (error) {
+    } catch (error) {
       expect(error).toBeInstanceOf(TRPCError);
       expect((error as TRPCError).code).toBe("NOT_FOUND");
       expect((error as TRPCError).cause).toBe(err);
@@ -60,8 +58,7 @@ describe("mapCustomErrorToTRPCError", () => {
     try {
       mapCustomErrorToTRPCError(err);
       throw new Error("expected TRPCError");
-    }
-    catch (error) {
+    } catch (error) {
       expect(error).toBeInstanceOf(TRPCError);
       expect((error as TRPCError).code).toBe("BAD_REQUEST");
       expect((error as TRPCError).cause).toBe(err);
@@ -74,8 +71,7 @@ describe("mapCustomErrorToTRPCError", () => {
     try {
       mapCustomErrorToTRPCError(err);
       throw new Error("expected TRPCError");
-    }
-    catch (error) {
+    } catch (error) {
       expect(error).toBeInstanceOf(TRPCError);
       expect((error as TRPCError).code).toBe("BAD_REQUEST");
       expect((error as TRPCError).cause).toBe(err);

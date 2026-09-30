@@ -1,11 +1,8 @@
+import { describe, expect, mock, test } from "bun:test";
 import { createImmediateUnitOfWork } from "@admin-api/test/fakes";
 import { createManagePrimaryEmploymentUseCase } from "@admin-api/use-cases/employment/manage-primary-employment/manage-primary-employment.use-case";
 import { EmploymentStatus } from "@iam/contracts";
-import {
-  EmploymentNotEditableError,
-  EmploymentNotFoundError,
-} from "@iam/domain/employment";
-import { describe, expect, mock, test } from "bun:test";
+import { EmploymentNotEditableError, EmploymentNotFoundError } from "@iam/domain/employment";
 
 const now = new Date("2026-01-01T00:00:00.000Z");
 
@@ -57,23 +54,25 @@ describe("Employment Lifecycle Primary", () => {
   test("sets an enabled Employment as the only Open Primary", async () => {
     const { tx, useCase } = createLifecycle();
 
-    await expect(useCase.execute({
-      command: "set",
-      employmentId: 4,
-    })).resolves.toEqual({ changed: true, result: null });
+    await expect(
+      useCase.execute({
+        command: "set",
+        employmentId: 4,
+      }),
+    ).resolves.toEqual({ changed: true, result: null });
 
     expect(tx.employmentStore.updateEmploymentRecord).toHaveBeenCalledWith(9, { isPrimary: false });
     expect(tx.employmentStore.updateEmploymentRecord).toHaveBeenCalledWith(4, {
       isPrimary: true,
     });
-    expect(tx.auditLogWriter.recordAuditLog).toHaveBeenCalledWith(expect.objectContaining({
-      action: "admin.employment.set_primary",
-      targetId: 4,
-      details: expect.objectContaining({ changed: true, primary: true }),
-    }));
-    expect(tx.userProfileInvalidation.recordChanges).toHaveBeenCalledWith([
-      { kind: "employment", userId: 1 },
-    ]);
+    expect(tx.auditLogWriter.recordAuditLog).toHaveBeenCalledWith(
+      expect.objectContaining({
+        action: "admin.employment.set_primary",
+        targetId: 4,
+        details: expect.objectContaining({ changed: true, primary: true }),
+      }),
+    );
+    expect(tx.userProfileInvalidation.recordChanges).toHaveBeenCalledWith([{ kind: "employment", userId: 1 }]);
     expect(tx.sessionRevocation.revokeAllForUser).not.toHaveBeenCalled();
   });
 
@@ -81,10 +80,12 @@ describe("Employment Lifecycle Primary", () => {
     const { tx, useCase } = createLifecycle();
     tx.employmentStore.lockEmploymentsByIds.mockResolvedValueOnce([employment({ status: EmploymentStatus.Pause })]);
 
-    await expect(useCase.execute({
-      command: "set",
-      employmentId: 4,
-    })).resolves.toEqual({ changed: true, result: null });
+    await expect(
+      useCase.execute({
+        command: "set",
+        employmentId: 4,
+      }),
+    ).resolves.toEqual({ changed: true, result: null });
 
     expect(tx.employmentStore.updateEmploymentRecord).toHaveBeenCalledWith(4, {
       isPrimary: true,
@@ -95,18 +96,22 @@ describe("Employment Lifecycle Primary", () => {
     const { tx, useCase } = createLifecycle();
     tx.employmentStore.lockEmploymentsByIds.mockResolvedValueOnce([employment({ isPrimary: true })]);
 
-    await expect(useCase.execute({
-      command: "clear",
-      employmentId: 4,
-    })).resolves.toEqual({ changed: true, result: null });
+    await expect(
+      useCase.execute({
+        command: "clear",
+        employmentId: 4,
+      }),
+    ).resolves.toEqual({ changed: true, result: null });
 
     expect(tx.employmentStore.updateEmploymentRecord).toHaveBeenCalledWith(4, {
       isPrimary: false,
     });
-    expect(tx.auditLogWriter.recordAuditLog).toHaveBeenCalledWith(expect.objectContaining({
-      action: "admin.employment.clear_primary",
-      details: expect.objectContaining({ changed: true, primary: false }),
-    }));
+    expect(tx.auditLogWriter.recordAuditLog).toHaveBeenCalledWith(
+      expect.objectContaining({
+        action: "admin.employment.clear_primary",
+        details: expect.objectContaining({ changed: true, primary: false }),
+      }),
+    );
   });
 
   test.each([
@@ -119,39 +124,40 @@ describe("Employment Lifecycle Primary", () => {
     await expect(useCase.execute({ command, employmentId: 4 })).resolves.toEqual({ changed: false, result: null });
 
     expect(tx.employmentStore.updateEmploymentRecord).not.toHaveBeenCalled();
-    expect(tx.auditLogWriter.recordAuditLog).toHaveBeenCalledWith(expect.objectContaining({
-      details: expect.objectContaining({ changed: false }),
-    }));
+    expect(tx.auditLogWriter.recordAuditLog).toHaveBeenCalledWith(
+      expect.objectContaining({
+        details: expect.objectContaining({ changed: false }),
+      }),
+    );
     expect(tx.userProfileInvalidation.recordChanges).not.toHaveBeenCalled();
   });
 
-  test.each(["set" as const, "clear" as const])(
-    "rejects %s for an Ended Employment",
-    async (command) => {
-      const { tx, useCase } = createLifecycle();
-      tx.employmentStore.lockEmploymentsByIds.mockResolvedValueOnce([employment({
+  test.each(["set" as const, "clear" as const])("rejects %s for an Ended Employment", async (command) => {
+    const { tx, useCase } = createLifecycle();
+    tx.employmentStore.lockEmploymentsByIds.mockResolvedValueOnce([
+      employment({
         status: EmploymentStatus.Disable,
         endTime: now,
-      })]);
+      }),
+    ]);
 
-      await expect(useCase.execute({ command, employmentId: 4 })).rejects.toBeInstanceOf(
-        EmploymentNotEditableError,
-      );
+    await expect(useCase.execute({ command, employmentId: 4 })).rejects.toBeInstanceOf(EmploymentNotEditableError);
 
-      expect(tx.employmentStore.updateEmploymentRecord).not.toHaveBeenCalled();
-      expect(tx.auditLogWriter.recordAuditLog).not.toHaveBeenCalled();
-      expect(tx.userProfileInvalidation.recordChanges).not.toHaveBeenCalled();
-    },
-  );
+    expect(tx.employmentStore.updateEmploymentRecord).not.toHaveBeenCalled();
+    expect(tx.auditLogWriter.recordAuditLog).not.toHaveBeenCalled();
+    expect(tx.userProfileInvalidation.recordChanges).not.toHaveBeenCalled();
+  });
 
   test("rejects a Legacy Employment Tombstone without rewriting its Primary field", async () => {
     const { tx, useCase } = createLifecycle();
     (tx.employmentStore.getEmploymentLifecycleContextById as any).mockResolvedValueOnce(null);
 
-    await expect(useCase.execute({
-      command: "set",
-      employmentId: 4,
-    })).rejects.toBeInstanceOf(EmploymentNotFoundError);
+    await expect(
+      useCase.execute({
+        command: "set",
+        employmentId: 4,
+      }),
+    ).rejects.toBeInstanceOf(EmploymentNotFoundError);
 
     expect(tx.employmentStore.updateEmploymentRecord).not.toHaveBeenCalled();
   });
@@ -175,8 +181,7 @@ describe("Employment Lifecycle Primary", () => {
     let failure: unknown;
     try {
       await useCase.execute({ command: "set", employmentId: 4 });
-    }
-    catch (error) {
+    } catch (error) {
       failure = error;
     }
 
@@ -189,15 +194,13 @@ describe("Employment Lifecycle Primary", () => {
   test.each([4, 9])("rejects a zero-row update for protected Employment %s without success effects", async (id) => {
     const { tx, useCase } = createLifecycle();
     tx.employmentStore.updateEmploymentRecord.mockImplementation(async (targetId, patch) => {
-      if (targetId === id)
-        return undefined as any;
+      if (targetId === id) return undefined as any;
       return employment({ id: targetId, ...patch });
     });
     let failure: unknown;
     try {
       await useCase.execute({ command: "set", employmentId: 4 });
-    }
-    catch (error) {
+    } catch (error) {
       failure = error;
     }
 
@@ -227,10 +230,8 @@ describe("Employment Lifecycle Primary", () => {
             employmentStore: {
               ...tx.employmentStore,
               async updateEmploymentRecord(id: number, patch: { isPrimary: boolean }) {
-                if (patch.isPrimary)
-                  staged.primaries.push(id);
-                else
-                  staged.primaries = staged.primaries.filter(primaryId => primaryId !== id);
+                if (patch.isPrimary) staged.primaries.push(id);
+                else staged.primaries = staged.primaries.filter((primaryId) => primaryId !== id);
                 return employment({ id, ...patch });
               },
             },
@@ -241,7 +242,7 @@ describe("Employment Lifecycle Primary", () => {
             },
             userProfileInvalidation: {
               async recordChanges(changes: readonly { userId: number }[]) {
-                staged.dirtyUserIds.push(...changes.map(change => change.userId));
+                staged.dirtyUserIds.push(...changes.map((change) => change.userId));
                 throw failure;
               },
             },
@@ -255,10 +256,12 @@ describe("Employment Lifecycle Primary", () => {
       },
     });
 
-    await expect(useCase.execute({
-      command: "set",
-      employmentId: 4,
-    })).rejects.toBe(failure);
+    await expect(
+      useCase.execute({
+        command: "set",
+        employmentId: 4,
+      }),
+    ).rejects.toBe(failure);
 
     expect(committed).toEqual({
       primaries: [9],

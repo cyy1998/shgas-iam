@@ -1,25 +1,15 @@
-import type {
-  RebuildUserProfileJobPayload,
-  UserProfileJobName,
-} from "@iam/contracts";
-import type { db as database } from "@iam/db";
-import type { BullMqRedisConfig, CreateJobQueueInput, CreateJobWorkerInput, JobQueue } from "@iam/jobs";
-import type {
-  V3SubjectFactsCacheRecord,
-  V3UserProfile,
-} from "../build/profile-v3";
-import type { SubjectFactsRedisClient } from "../subject-facts/subject-facts-redis-publisher.core";
-import type { UserProfileProjectionBundle } from "./user-profile-projection";
-import type { SubjectAccessRepairPort, UserProfileRebuildProjection } from "./user-profile-rebuild.processor";
-import type { UserProfileWorkerMaintenance } from "./user-profile-worker-maintenance";
+import type { RebuildUserProfileJobPayload, UserProfileJobName } from "@iam/contracts";
 import {
   RebuildUserProfileJobPayloadSchema,
   USER_PROFILE_QUEUE_NAME,
   UserProfileJobName as UserProfileJobNameValue,
 } from "@iam/contracts";
+import type { db as database } from "@iam/db";
+import type { BullMqRedisConfig, CreateJobQueueInput, CreateJobWorkerInput, JobQueue } from "@iam/jobs";
 import { createJobQueue, createJobWorker } from "@iam/jobs";
 import { createOrganizationResponsibilityResolver } from "@iam/organization-responsibility-resolution";
 import { createRoleAssignmentResolver } from "@iam/role-assignment-resolution";
+import type { V3SubjectFactsCacheRecord, V3UserProfile } from "../build/profile-v3";
 import {
   createV3UserProfileBuilder,
   parseV3UserProfileRow,
@@ -29,9 +19,13 @@ import {
 import { createUserProfileDirtyRepository } from "../invalidation/dirty.repository";
 import { createUserProfileJobProducer } from "../invalidation/user-profile-job.producer";
 import { createSubjectFactsCacheRecordInput } from "../subject-facts/subject-facts-cache.core";
+import type { SubjectFactsRedisClient } from "../subject-facts/subject-facts-redis-publisher.core";
 import { createUserProfileMaintenanceRepository } from "./user-profile-maintenance.repository";
+import type { UserProfileProjectionBundle } from "./user-profile-projection";
 import { createUserProfileProjectionBundle } from "./user-profile-projection";
+import type { SubjectAccessRepairPort, UserProfileRebuildProjection } from "./user-profile-rebuild.processor";
 import { createUserProfileRebuildProcessor } from "./user-profile-rebuild.processor";
+import type { UserProfileWorkerMaintenance } from "./user-profile-worker-maintenance";
 import { createUserProfileWorkerMaintenance } from "./user-profile-worker-maintenance";
 
 export const USER_PROFILE_WORKER_MODULE_KEY = "user-profile";
@@ -71,25 +65,30 @@ export function createUserProfileJobProcessor(deps: CreateUserProfileJobProcesso
     const payload = RebuildUserProfileJobPayloadSchema.parse(job.data);
     try {
       const result = await deps.rebuildProcessor.process(payload, { jobId: job.id });
-      deps.logger.info({
-        userId: payload.userId,
-        dirtyVersion: payload.dirtyVersion,
-        jobId: job.id,
-        jobName: job.name,
-        status: result.status,
-        cacheStatus: result.cacheStatus,
-      }, "user profile rebuild job processed");
+      deps.logger.info(
+        {
+          userId: payload.userId,
+          dirtyVersion: payload.dirtyVersion,
+          jobId: job.id,
+          jobName: job.name,
+          status: result.status,
+          cacheStatus: result.cacheStatus,
+        },
+        "user profile rebuild job processed",
+      );
       return result;
-    }
-    catch (error) {
-      deps.logger.error({
-        err: error,
-        userId: payload.userId,
-        dirtyVersion: payload.dirtyVersion,
-        jobId: job.id,
-        jobName: job.name,
-        status: "failed",
-      }, "user profile rebuild job failed");
+    } catch (error) {
+      deps.logger.error(
+        {
+          err: error,
+          userId: payload.userId,
+          dirtyVersion: payload.dirtyVersion,
+          jobId: job.id,
+          jobName: job.name,
+          status: "failed",
+        },
+        "user profile rebuild job failed",
+      );
       throw error;
     }
   };
@@ -121,17 +120,14 @@ export interface CreateUserProfileWorkerModuleInput {
 
 export interface UserProfileWorkerHandle {
   close: () => Promise<void>;
-  on: (
-    (
-      event: "completed",
-      listener: (job: { id?: string; name: string; data?: unknown; returnvalue?: unknown }) => void,
-    ) => unknown
-  ) & (
-    (
+  on: ((
+    event: "completed",
+    listener: (job: { id?: string; name: string; data?: unknown; returnvalue?: unknown }) => void,
+  ) => unknown) &
+    ((
       event: "failed",
       listener: (job: { id?: string; name: string; data?: unknown } | undefined, error: Error) => void,
-    ) => unknown
-  );
+    ) => unknown);
 }
 
 export interface UserProfileWorkerModule {
@@ -148,10 +144,7 @@ export interface UserProfileWorkerModule {
 }
 
 export function createCurrentUserProfileProjectionBundle() {
-  return createUserProfileProjectionBundle<
-    V3UserProfile,
-    V3SubjectFactsCacheRecord
-  >({
+  return createUserProfileProjectionBundle<V3UserProfile, V3SubjectFactsCacheRecord>({
     schemaVersion: V3_USER_PROFILE_SCHEMA_VERSION,
     parseProfileRow: parseV3UserProfileRow,
     createBuilder(input) {
@@ -165,22 +158,15 @@ export function createCurrentUserProfileProjectionBundle() {
     },
     createFactsRecord(profile, publishedAt) {
       return V3SubjectFactsCacheRecordSchema.parse(
-        createSubjectFactsCacheRecordInput(
-          profile,
-          publishedAt,
-          V3_USER_PROFILE_SCHEMA_VERSION,
-        ),
+        createSubjectFactsCacheRecordInput(profile, publishedAt, V3_USER_PROFILE_SCHEMA_VERSION),
       );
     },
-    parseFactsRecord: input => V3SubjectFactsCacheRecordSchema.parse(input),
+    parseFactsRecord: (input) => V3SubjectFactsCacheRecordSchema.parse(input),
   });
 }
 
 export function createUserProfileWorkerModule(input: CreateUserProfileWorkerModuleInput): UserProfileWorkerModule {
-  return createUserProfileWorkerModuleWithProjection(
-    input,
-    createCurrentUserProfileProjectionBundle(),
-  );
+  return createUserProfileWorkerModuleWithProjection(input, createCurrentUserProfileProjectionBundle());
 }
 
 function createUserProfileWorkerModuleWithProjection<
@@ -197,12 +183,12 @@ function createUserProfileWorkerModuleWithProjection<
   const publicationRepository = projection.createPublicationRepository(input.db);
   const subjectFactsPublisher = projection.subjectFacts.createPublisher(input.subjectFactsRedis);
   const maintenanceRepository = createUserProfileMaintenanceRepository(input.db);
-  const queue
-    = (input.factories?.createQueue
-      ?? createJobQueue<RebuildUserProfileJobPayload, unknown, UserProfileJobName>)({
-      name: USER_PROFILE_QUEUE_NAME,
-      redis: input.redis,
-    });
+  const queue = (
+    input.factories?.createQueue ?? createJobQueue<RebuildUserProfileJobPayload, unknown, UserProfileJobName>
+  )({
+    name: USER_PROFILE_QUEUE_NAME,
+    redis: input.redis,
+  });
   const jobProducer = createUserProfileJobProducer(queue);
   const builder = projection.createBuilder({
     db: input.db,
@@ -235,35 +221,40 @@ function createUserProfileWorkerModuleWithProjection<
   let worker: UserProfileWorkerHandle | undefined;
 
   async function startConsumers() {
-    if (worker !== undefined)
-      return;
+    if (worker !== undefined) return;
 
-    worker
-      = (input.factories?.createWorker
-        ?? createJobWorker<RebuildUserProfileJobPayload, unknown, UserProfileJobName>)({
-        name: USER_PROFILE_QUEUE_NAME,
-        redis: input.redis,
-        concurrency: input.config.concurrency,
-        processor: jobProcessor,
-      });
+    worker = (
+      input.factories?.createWorker ?? createJobWorker<RebuildUserProfileJobPayload, unknown, UserProfileJobName>
+    )({
+      name: USER_PROFILE_QUEUE_NAME,
+      redis: input.redis,
+      concurrency: input.config.concurrency,
+      processor: jobProcessor,
+    });
 
     worker.on("completed", (job) => {
-      input.logger.info({
-        jobId: job.id,
-        jobName: job.name,
-        status: extractReturnStatus(job.returnvalue),
-        cacheStatus: extractReturnCacheStatus(job.returnvalue),
-        ...extractRebuildJobLogFields(job),
-      }, "user profile job completed");
+      input.logger.info(
+        {
+          jobId: job.id,
+          jobName: job.name,
+          status: extractReturnStatus(job.returnvalue),
+          cacheStatus: extractReturnCacheStatus(job.returnvalue),
+          ...extractRebuildJobLogFields(job),
+        },
+        "user profile job completed",
+      );
     });
     worker.on("failed", (job, error) => {
-      input.logger.error({
-        err: error,
-        jobId: job?.id,
-        jobName: job?.name,
-        status: "failed",
-        ...extractRebuildJobLogFields(job),
-      }, "user profile job failed");
+      input.logger.error(
+        {
+          err: error,
+          jobId: job?.id,
+          jobName: job?.name,
+          status: "failed",
+          ...extractRebuildJobLogFields(job),
+        },
+        "user profile job failed",
+      );
     });
   }
 
@@ -279,23 +270,23 @@ function createUserProfileWorkerModuleWithProjection<
     key: USER_PROFILE_WORKER_MODULE_KEY,
     queue,
     maintenance,
-    queueRegistrations: [{
-      moduleKey: USER_PROFILE_WORKER_MODULE_KEY,
-      queueName: USER_PROFILE_QUEUE_NAME,
-      queue,
-    }],
+    queueRegistrations: [
+      {
+        moduleKey: USER_PROFILE_WORKER_MODULE_KEY,
+        queueName: USER_PROFILE_QUEUE_NAME,
+        queue,
+      },
+    ],
     startConsumers,
     close,
   };
 }
 
 function extractRebuildJobLogFields(job: { name?: string; data?: unknown } | undefined) {
-  if (job?.name !== UserProfileJobNameValue.RebuildUserProfile)
-    return {};
+  if (job?.name !== UserProfileJobNameValue.RebuildUserProfile) return {};
 
   const payload = RebuildUserProfileJobPayloadSchema.safeParse(job.data);
-  if (!payload.success)
-    return {};
+  if (!payload.success) return {};
 
   return {
     userId: payload.data.userId,
@@ -304,16 +295,14 @@ function extractRebuildJobLogFields(job: { name?: string; data?: unknown } | und
 }
 
 function extractReturnStatus(returnvalue: unknown) {
-  if (typeof returnvalue !== "object" || returnvalue === null || !("status" in returnvalue))
-    return undefined;
+  if (typeof returnvalue !== "object" || returnvalue === null || !("status" in returnvalue)) return undefined;
 
   const status = (returnvalue as { status?: unknown }).status;
   return typeof status === "string" ? status : undefined;
 }
 
 function extractReturnCacheStatus(returnvalue: unknown) {
-  if (typeof returnvalue !== "object" || returnvalue === null || !("cacheStatus" in returnvalue))
-    return undefined;
+  if (typeof returnvalue !== "object" || returnvalue === null || !("cacheStatus" in returnvalue)) return undefined;
 
   const cacheStatus = (returnvalue as { cacheStatus?: unknown }).cacheStatus;
   return typeof cacheStatus === "string" ? cacheStatus : undefined;

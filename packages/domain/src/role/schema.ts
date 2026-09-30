@@ -21,13 +21,15 @@ export const RoleDtoSchema = RoleSchema.extend({
 
 export const RoleDetailDtoSchema = RoleDtoSchema.openapi("RoleDetailDto");
 
-export const RoleAssignmentTargetSummaryDtoSchema = z.object({
-  id: z.number().int().positive(),
-  code: z.string().min(1),
-  name: z.string().min(1),
-  status: z.number().int().nullable().default(null),
-  description: z.string().nullable().default(null),
-}).openapi("RoleAssignmentTargetSummaryDto");
+export const RoleAssignmentTargetSummaryDtoSchema = z
+  .object({
+    id: z.number().int().positive(),
+    code: z.string().min(1),
+    name: z.string().min(1),
+    status: z.number().int().nullable().default(null),
+    description: z.string().nullable().default(null),
+  })
+  .openapi("RoleAssignmentTargetSummaryDto");
 
 export const RoleAssignmentDtoSchema = DbRoleAssignmentSchema.extend({
   target: RoleAssignmentTargetSummaryDtoSchema,

@@ -1,10 +1,6 @@
-import type { RoleStatus } from "@iam/contracts";
-import {
-  RoleAssignmentDtoSchema,
-  RoleDetailDtoSchema,
-  RoleDtoSchema,
-} from "@admin-api/services/role/role.schema";
+import { RoleAssignmentDtoSchema, RoleDetailDtoSchema, RoleDtoSchema } from "@admin-api/services/role/role.schema";
 import { z } from "@hono/zod-openapi";
+import type { RoleStatus } from "@iam/contracts";
 import { RoleAssignmentTargetType, roleStatusToString } from "@iam/contracts";
 
 export const RoleVoSchema = RoleDtoSchema.extend({
@@ -47,8 +43,11 @@ export function toRoleAssignmentVo(input: unknown) {
   return RoleAssignmentVoSchema.parse({
     ...dto,
     targetTypeText: targetTypeText[dto.targetType as RoleAssignmentTargetType],
-    scopeText: dto.targetType === RoleAssignmentTargetType.Organization
-      ? dto.includeDescendants ? "含下级组织" : "仅本组织"
-      : "仅当前对象",
+    scopeText:
+      dto.targetType === RoleAssignmentTargetType.Organization
+        ? dto.includeDescendants
+          ? "含下级组织"
+          : "仅本组织"
+        : "仅当前对象",
   });
 }

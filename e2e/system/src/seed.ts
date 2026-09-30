@@ -54,10 +54,7 @@ export type E2EScenarioGeneratedReferences = Pick<
   | "responsibilityHolderEmploymentId"
 >;
 
-export type E2EScenarioSeedReferences = Omit<
-  E2EScenarioReferences,
-  keyof E2EScenarioGeneratedReferences
->;
+export type E2EScenarioSeedReferences = Omit<E2EScenarioReferences, keyof E2EScenarioGeneratedReferences>;
 
 export type E2EScenarioIdentity = Pick<
   E2EScenarioReferences,
@@ -195,9 +192,7 @@ export interface E2EScenarioOwner {
       internalApiKey: string;
     },
   ) => Promise<E2EScenarioGeneratedReferences>;
-  readBack: (
-    references: E2EScenarioReferences,
-  ) => Promise<E2EScenarioReadBack>;
+  readBack: (references: E2EScenarioReferences) => Promise<E2EScenarioReadBack>;
 }
 
 export interface SeedE2EScenarioInput {
@@ -209,13 +204,10 @@ export interface SeedE2EScenarioInput {
   runId: string;
 }
 
-export async function seedE2EScenario(
-  input: SeedE2EScenarioInput,
-): Promise<E2EScenarioReferences> {
+export async function seedE2EScenario(input: SeedE2EScenarioInput): Promise<E2EScenarioReferences> {
   const origin = requireEntryOrigin(input.canonicalOrigin, "external");
   const identity = createE2EScenarioIdentity(input.runId);
-  if (input.adminPassword.length < 12)
-    throw new Error("E2E synthetic admin credential is too short");
+  if (input.adminPassword.length < 12) throw new Error("E2E synthetic admin credential is too short");
 
   const fixedReferences = {
     version: 1,
@@ -284,12 +276,12 @@ export function createE2EScenarioInternalApiKey(runId: string) {
 function requireEntryOrigin(value: string, entry: "internal" | "external") {
   const url = new URL(value);
   if (
-    url.origin !== value
-    || url.protocol !== "http:"
-    || !["127.0.0.1", `${entry}.iam.localhost`].includes(url.hostname)
-    || url.port === ""
-    || url.username !== ""
-    || url.password !== ""
+    url.origin !== value ||
+    url.protocol !== "http:" ||
+    !["127.0.0.1", `${entry}.iam.localhost`].includes(url.hostname) ||
+    url.port === "" ||
+    url.username !== "" ||
+    url.password !== ""
   ) {
     throw new Error(`E2E ${entry} origin must use its loopback hostname and an explicit HTTP port`);
   }
@@ -302,129 +294,112 @@ function requireRunKey(runId: string) {
   return runId.slice(-18);
 }
 
-function assertScenarioReadBack(
-  expected: E2EScenarioReferences,
-  actual: E2EScenarioReadBack,
-) {
-  const matches = actual.admin.active
-    && actual.admin.passwordConfigured
-    && actual.admin.subjectIdentifier === expected.adminSubjectIdentifier
-    && actual.admin.username === expected.adminUsername
-    && actual.hrAdmin.active
-    && actual.hrAdmin.passwordConfigured
-    && actual.hrAdmin.subjectIdentifier === expected.hrAdminSubjectIdentifier
-    && actual.hrAdmin.username === expected.hrAdminUsername
-    && actual.delegatee.active
-    && actual.delegatee.passwordConfigured
-    && actual.delegatee.subjectIdentifier === expected.delegateeSubjectIdentifier
-    && actual.delegatee.username === expected.delegateeUsername
-    && actual.noScopeHrAdmin.active
-    && actual.noScopeHrAdmin.passwordConfigured
-    && actual.noScopeHrAdmin.subjectIdentifier
-    === expected.noScopeHrAdminSubjectIdentifier
-    && actual.noScopeHrAdmin.username === expected.noScopeHrAdminUsername
-    && actual.organization.active
-    && actual.organization.code === expected.organizationCode
-    && actual.responsibilityHolderOrganization.active
-    && actual.responsibilityHolderOrganization.code
-    === expected.responsibilityHolderOrganizationCode
-    && actual.responsibilityTargetOrganization.active
-    && actual.responsibilityTargetOrganization.code
-    === expected.responsibilityTargetOrganizationCode
-    && actual.hrSecondScopeRootOrganization.active
-    && actual.hrSecondScopeRootOrganization.code
-    === expected.hrSecondScopeRootOrganizationCode
-    && actual.hrResponsibilityTargetOrganization.active
-    && actual.hrResponsibilityTargetOrganization.code
-    === expected.hrResponsibilityTargetOrganizationCode
-    && actual.position.active
-    && actual.position.code === expected.positionCode
-    && actual.globalPosition.active
-    && actual.globalPosition.code === expected.globalPositionCode
-    && actual.outsideResponsibilityHolderPosition.active
-    && actual.outsideResponsibilityHolderPosition.code
-    === expected.outsideResponsibilityHolderPositionCode
-    && actual.employment.active
-    && actual.responsibilityHolderEmployment.active
-    && actual.outsideResponsibilityHolderEmployment.active
-    && actual.outsideResponsibilityHolderEmployment.id
-    === expected.outsideResponsibilityHolderEmploymentId
-    && actual.role.active
-    && actual.role.assigned
-    && actual.role.code === expected.adminRoleCode
-    && actual.hrRole.active
-    && actual.hrRole.assigned
-    && actual.hrRole.code === expected.hrAdminRoleCode
-    && actual.hrRoleBearingEmployment.active
-    && actual.hrSecondScopeRoleBearingEmployment.active
-    && actual.hrOrdinaryEmployment.active
-    && actual.adminHasMixedRole
-    && actual.noScopeHrRoleIsIneffective
-    && actual.hiddenResponsibilityAssignment.active
-    && actual.hiddenResponsibilityAssignment.id
-    === expected.hiddenResponsibilityAssignmentId
-    && actual.hiddenResponsibilityAssignment.holderEmploymentId
-    === expected.outsideResponsibilityHolderEmploymentId
-    && actual.hiddenResponsibilityAssignment.targetOrganizationCode
-    === expected.hrResponsibilityTargetOrganizationCode
-    && actual.adminClient.active
-    && actual.adminClient.ssoEnabled
-    && actual.adminClient.clientCode === expected.adminClientCode
-    && actual.adminClient.callbackEndpoint === null
-    && actual.adminClient.redirectUris.length === 1
-    && actual.adminClient.redirectUris[0] === expected.adminRedirectUri
-    && actual.customSsoClient.active
-    && !actual.customSsoClient.ssoEnabled
-    && actual.customSsoClient.clientCode === expected.customSsoClientCode
-    && actual.customSsoClient.callbackEndpoint === null
-    && actual.customSsoClient.redirectUris.length === 0
-    && actual.internalClient.active
-    && actual.internalClient.clientCode === expected.internalClientCode
-    && actual.oidcClient.active
-    && actual.oidcClient.clientCode === expected.oidcClientCode
-    && actual.oidcClient.clientType === OidcClientType.Public
-    && actual.oidcClient.redirectUris.length === 1
-    && actual.oidcClient.redirectUris[0] === expected.oidcRedirectUri
-    && actual.subjectAccess === "enabled"
-    && actual.subjectFacts.ready
-    && actual.subjectFacts.subjectIdentifier === expected.adminSubjectIdentifier
-    && actual.subjectFacts.sourceDirtyVersion === actual.subjectProfileVersion
-    && actual.subjectProfileSchemaVersion === 3
-    && actual.subjectFacts.profileUsername === expected.adminUsername
-    && exactlyAll(actual.subjectFacts.organizationCodes, [
+function assertScenarioReadBack(expected: E2EScenarioReferences, actual: E2EScenarioReadBack) {
+  const matches =
+    actual.admin.active &&
+    actual.admin.passwordConfigured &&
+    actual.admin.subjectIdentifier === expected.adminSubjectIdentifier &&
+    actual.admin.username === expected.adminUsername &&
+    actual.hrAdmin.active &&
+    actual.hrAdmin.passwordConfigured &&
+    actual.hrAdmin.subjectIdentifier === expected.hrAdminSubjectIdentifier &&
+    actual.hrAdmin.username === expected.hrAdminUsername &&
+    actual.delegatee.active &&
+    actual.delegatee.passwordConfigured &&
+    actual.delegatee.subjectIdentifier === expected.delegateeSubjectIdentifier &&
+    actual.delegatee.username === expected.delegateeUsername &&
+    actual.noScopeHrAdmin.active &&
+    actual.noScopeHrAdmin.passwordConfigured &&
+    actual.noScopeHrAdmin.subjectIdentifier === expected.noScopeHrAdminSubjectIdentifier &&
+    actual.noScopeHrAdmin.username === expected.noScopeHrAdminUsername &&
+    actual.organization.active &&
+    actual.organization.code === expected.organizationCode &&
+    actual.responsibilityHolderOrganization.active &&
+    actual.responsibilityHolderOrganization.code === expected.responsibilityHolderOrganizationCode &&
+    actual.responsibilityTargetOrganization.active &&
+    actual.responsibilityTargetOrganization.code === expected.responsibilityTargetOrganizationCode &&
+    actual.hrSecondScopeRootOrganization.active &&
+    actual.hrSecondScopeRootOrganization.code === expected.hrSecondScopeRootOrganizationCode &&
+    actual.hrResponsibilityTargetOrganization.active &&
+    actual.hrResponsibilityTargetOrganization.code === expected.hrResponsibilityTargetOrganizationCode &&
+    actual.position.active &&
+    actual.position.code === expected.positionCode &&
+    actual.globalPosition.active &&
+    actual.globalPosition.code === expected.globalPositionCode &&
+    actual.outsideResponsibilityHolderPosition.active &&
+    actual.outsideResponsibilityHolderPosition.code === expected.outsideResponsibilityHolderPositionCode &&
+    actual.employment.active &&
+    actual.responsibilityHolderEmployment.active &&
+    actual.outsideResponsibilityHolderEmployment.active &&
+    actual.outsideResponsibilityHolderEmployment.id === expected.outsideResponsibilityHolderEmploymentId &&
+    actual.role.active &&
+    actual.role.assigned &&
+    actual.role.code === expected.adminRoleCode &&
+    actual.hrRole.active &&
+    actual.hrRole.assigned &&
+    actual.hrRole.code === expected.hrAdminRoleCode &&
+    actual.hrRoleBearingEmployment.active &&
+    actual.hrSecondScopeRoleBearingEmployment.active &&
+    actual.hrOrdinaryEmployment.active &&
+    actual.adminHasMixedRole &&
+    actual.noScopeHrRoleIsIneffective &&
+    actual.hiddenResponsibilityAssignment.active &&
+    actual.hiddenResponsibilityAssignment.id === expected.hiddenResponsibilityAssignmentId &&
+    actual.hiddenResponsibilityAssignment.holderEmploymentId === expected.outsideResponsibilityHolderEmploymentId &&
+    actual.hiddenResponsibilityAssignment.targetOrganizationCode === expected.hrResponsibilityTargetOrganizationCode &&
+    actual.adminClient.active &&
+    actual.adminClient.ssoEnabled &&
+    actual.adminClient.clientCode === expected.adminClientCode &&
+    actual.adminClient.callbackEndpoint === null &&
+    actual.adminClient.redirectUris.length === 1 &&
+    actual.adminClient.redirectUris[0] === expected.adminRedirectUri &&
+    actual.customSsoClient.active &&
+    !actual.customSsoClient.ssoEnabled &&
+    actual.customSsoClient.clientCode === expected.customSsoClientCode &&
+    actual.customSsoClient.callbackEndpoint === null &&
+    actual.customSsoClient.redirectUris.length === 0 &&
+    actual.internalClient.active &&
+    actual.internalClient.clientCode === expected.internalClientCode &&
+    actual.oidcClient.active &&
+    actual.oidcClient.clientCode === expected.oidcClientCode &&
+    actual.oidcClient.clientType === OidcClientType.Public &&
+    actual.oidcClient.redirectUris.length === 1 &&
+    actual.oidcClient.redirectUris[0] === expected.oidcRedirectUri &&
+    actual.subjectAccess === "enabled" &&
+    actual.subjectFacts.ready &&
+    actual.subjectFacts.subjectIdentifier === expected.adminSubjectIdentifier &&
+    actual.subjectFacts.sourceDirtyVersion === actual.subjectProfileVersion &&
+    actual.subjectProfileSchemaVersion === 3 &&
+    actual.subjectFacts.profileUsername === expected.adminUsername &&
+    exactlyAll(actual.subjectFacts.organizationCodes, [
       expected.organizationCode,
       expected.responsibilityHolderOrganizationCode,
-    ])
-    && exactlyAll(actual.subjectFacts.positionCodes, [
-      expected.positionCode,
-      expected.responsibilityHolderPositionCode,
-    ])
-    && exactly(actual.subjectFacts.clientCodes, expected.adminClientCode)
-    && exactlyAll(actual.subjectFacts.roleCodes, [
-      expected.adminRoleCode,
-      expected.hrAdminRoleCode,
-    ])
-    && actual.subjectFacts.responsibilityTypeCodes.length === 0
-    && actual.subjectFacts.responsibilityTargetOrganizationCodes.length === 0
-    && actual.subjectProfileReady;
-  const hrMatches = actual.hrSubjectAccess === "enabled"
-    && actual.hrSubjectFacts.ready
-    && actual.hrSubjectFacts.subjectIdentifier === expected.hrAdminSubjectIdentifier
-    && actual.hrSubjectFacts.sourceDirtyVersion === actual.hrSubjectProfileVersion
-    && actual.hrSubjectFacts.profileUsername === expected.hrAdminUsername
-    && exactlyAll(actual.hrSubjectFacts.organizationCodes, [
+    ]) &&
+    exactlyAll(actual.subjectFacts.positionCodes, [expected.positionCode, expected.responsibilityHolderPositionCode]) &&
+    exactly(actual.subjectFacts.clientCodes, expected.adminClientCode) &&
+    exactlyAll(actual.subjectFacts.roleCodes, [expected.adminRoleCode, expected.hrAdminRoleCode]) &&
+    actual.subjectFacts.responsibilityTypeCodes.length === 0 &&
+    actual.subjectFacts.responsibilityTargetOrganizationCodes.length === 0 &&
+    actual.subjectProfileReady;
+  const hrMatches =
+    actual.hrSubjectAccess === "enabled" &&
+    actual.hrSubjectFacts.ready &&
+    actual.hrSubjectFacts.subjectIdentifier === expected.hrAdminSubjectIdentifier &&
+    actual.hrSubjectFacts.sourceDirtyVersion === actual.hrSubjectProfileVersion &&
+    actual.hrSubjectFacts.profileUsername === expected.hrAdminUsername &&
+    exactlyAll(actual.hrSubjectFacts.organizationCodes, [
       expected.responsibilityHolderOrganizationCode,
       expected.responsibilityTargetOrganizationCode,
       expected.hrSecondScopeRootOrganizationCode,
-    ])
-    && exactlyAll(actual.hrSubjectFacts.positionCodes, [
+    ]) &&
+    exactlyAll(actual.hrSubjectFacts.positionCodes, [
       expected.positionCode,
       expected.outsideResponsibilityHolderPositionCode,
-    ])
-    && exactly(actual.hrSubjectFacts.clientCodes, expected.adminClientCode)
-    && exactly(actual.hrSubjectFacts.roleCodes, expected.hrAdminRoleCode)
-    && actual.hrSubjectProfileReady
-    && actual.hrSubjectProfileSchemaVersion === 3;
+    ]) &&
+    exactly(actual.hrSubjectFacts.clientCodes, expected.adminClientCode) &&
+    exactly(actual.hrSubjectFacts.roleCodes, expected.hrAdminRoleCode) &&
+    actual.hrSubjectProfileReady &&
+    actual.hrSubjectProfileSchemaVersion === 3;
   if (!matches || !hrMatches)
     throw new Error("E2E scenario owner read-back did not confirm the complete fixed scenario");
 }
@@ -435,7 +410,8 @@ function exactly(values: string[], expected: string) {
 
 function exactlyAll(values: string[], expected: string[]) {
   const sortedExpected = [...expected].sort();
-  return values.length === sortedExpected.length
-    && [...values].sort().every((value, index) =>
-      value === sortedExpected[index]);
+  return (
+    values.length === sortedExpected.length &&
+    [...values].sort().every((value, index) => value === sortedExpected[index])
+  );
 }

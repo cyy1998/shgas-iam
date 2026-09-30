@@ -4,52 +4,52 @@ import type {
   RoleAssignmentTargetType,
   UserProfileDirtyReason,
 } from "@iam/contracts";
-import type { DbClient } from "@iam/db";
-import type { UserProfileResponsibilityAffectedUserResolverPort } from "./affected-user.repository";
 import {
   RoleAssignmentTargetType as RoleAssignmentTargetTypeValue,
   UserProfileDirtyReason as UserProfileDirtyReasonValue,
 } from "@iam/contracts";
+import type { DbClient } from "@iam/db";
 import { createOrganizationResponsibilityResolver } from "@iam/organization-responsibility-resolution";
 import { createRoleAssignmentResolver } from "@iam/role-assignment-resolution";
+import type { UserProfileResponsibilityAffectedUserResolverPort } from "./affected-user.repository";
 import { createUserProfileAffectedUserRepository } from "./affected-user.repository";
-import { createUserProfileDirtyWorkflow } from "./dirty-workflow";
 import { createUserProfileDirtyRepository } from "./dirty.repository";
+import { createUserProfileDirtyWorkflow } from "./dirty-workflow";
 
-export type UserProfileSourceChange
-  = | {
-    readonly kind: "user";
-    readonly userId: number;
-  }
+export type UserProfileSourceChange =
   | {
-    readonly kind: "employment";
-    readonly userId: number;
-  }
+      readonly kind: "user";
+      readonly userId: number;
+    }
   | {
-    readonly kind: "organization-responsibility-assignment";
-    readonly userId: number;
-  }
+      readonly kind: "employment";
+      readonly userId: number;
+    }
   | {
-    readonly kind: "organization-responsibility-type";
-    readonly typeCodes: readonly OrganizationResponsibilityTypeCode[];
-  }
+      readonly kind: "organization-responsibility-assignment";
+      readonly userId: number;
+    }
   | {
-    readonly kind: "organization";
-    readonly organizationId: number;
-  }
+      readonly kind: "organization-responsibility-type";
+      readonly typeCodes: readonly OrganizationResponsibilityTypeCode[];
+    }
   | {
-    readonly kind: "position";
-    readonly positionId: number;
-  }
+      readonly kind: "organization";
+      readonly organizationId: number;
+    }
   | {
-    readonly kind: "role";
-    readonly roleId: number;
-  }
+      readonly kind: "position";
+      readonly positionId: number;
+    }
   | {
-    readonly kind: "role-assignment";
-    readonly targetType: RoleAssignmentTargetType;
-    readonly targetId: number;
-  };
+      readonly kind: "role";
+      readonly roleId: number;
+    }
+  | {
+      readonly kind: "role-assignment";
+      readonly targetType: RoleAssignmentTargetType;
+      readonly targetId: number;
+    };
 
 const CANONICAL_DIRTY_REASON_ORDER: readonly UserProfileDirtyReason[] = [
   UserProfileDirtyReasonValue.UserUpdated,
@@ -66,9 +66,7 @@ const CANONICAL_DIRTY_REASON_ORDER: readonly UserProfileDirtyReason[] = [
 export interface CreateUserProfileInvalidationDeps {
   db: DbClient;
   jobProducer: {
-    enqueueRebuildJobs: (
-      inputs: RebuildUserProfileJobPayload[],
-    ) => Promise<{ enqueued: number; jobIds: string[] }>;
+    enqueueRebuildJobs: (inputs: RebuildUserProfileJobPayload[]) => Promise<{ enqueued: number; jobIds: string[] }>;
   };
   lifecycle: {
     afterCommit: {
@@ -85,10 +83,7 @@ export interface CreateUserProfileInvalidationDeps {
 }
 
 export function createUserProfileInvalidation(deps: CreateUserProfileInvalidationDeps) {
-  return createUserProfileInvalidationInternal(
-    deps,
-    createOrganizationResponsibilityResolver(deps.db),
-  );
+  return createUserProfileInvalidationInternal(deps, createOrganizationResponsibilityResolver(deps.db));
 }
 
 /** @internal */
@@ -125,24 +120,19 @@ export function createUserProfileInvalidationInternal(
           case "user":
           case "employment":
           case "organization-responsibility-assignment":
-            if (isValidId(change.userId))
-              addReason(reasonsByUserId, change.userId, reasonForChangeKind(change.kind));
+            if (isValidId(change.userId)) addReason(reasonsByUserId, change.userId, reasonForChangeKind(change.kind));
             break;
           case "organization-responsibility-type":
-            for (const typeCode of change.typeCodes)
-              responsibilityTypeCodes.add(typeCode);
+            for (const typeCode of change.typeCodes) responsibilityTypeCodes.add(typeCode);
             break;
           case "organization":
-            if (isValidId(change.organizationId))
-              organizationIds.add(change.organizationId);
+            if (isValidId(change.organizationId)) organizationIds.add(change.organizationId);
             break;
           case "position":
-            if (isValidId(change.positionId))
-              positionIds.add(change.positionId);
+            if (isValidId(change.positionId)) positionIds.add(change.positionId);
             break;
           case "role":
-            if (isValidId(change.roleId))
-              roleIds.add(change.roleId);
+            if (isValidId(change.roleId)) roleIds.add(change.roleId);
             break;
           case "role-assignment":
             if (isValidId(change.targetId)) {
@@ -163,46 +153,37 @@ export function createUserProfileInvalidationInternal(
       }
 
       const organizationUserIds = await affectedUserRepository.findByOrganizationIds([...organizationIds]);
-      for (const userId of organizationUserIds)
-        addReason(reasonsByUserId, userId, reasonForChangeKind("organization"));
-      const responsibilityOrganizationUserIds
-        = await affectedUserRepository.findResponsibilityHoldersByOrganizationIds(
-          [...organizationIds],
-          observationTime,
-        );
+      for (const userId of organizationUserIds) addReason(reasonsByUserId, userId, reasonForChangeKind("organization"));
+      const responsibilityOrganizationUserIds = await affectedUserRepository.findResponsibilityHoldersByOrganizationIds(
+        [...organizationIds],
+        observationTime,
+      );
       for (const userId of responsibilityOrganizationUserIds)
         addReason(reasonsByUserId, userId, reasonForChangeKind("organization"));
-      const responsibilityTypeUserIds
-        = await affectedUserRepository.findResponsibilityHoldersByTypeCodes(
-          [...responsibilityTypeCodes],
-          observationTime,
-        );
+      const responsibilityTypeUserIds = await affectedUserRepository.findResponsibilityHoldersByTypeCodes(
+        [...responsibilityTypeCodes],
+        observationTime,
+      );
       for (const userId of responsibilityTypeUserIds) {
-        addReason(
-          reasonsByUserId,
-          userId,
-          reasonForChangeKind("organization-responsibility-type"),
-        );
+        addReason(reasonsByUserId, userId, reasonForChangeKind("organization-responsibility-type"));
       }
       const positionUserIds = await affectedUserRepository.findByPositionIds([...positionIds]);
-      for (const userId of positionUserIds)
-        addReason(reasonsByUserId, userId, reasonForChangeKind("position"));
+      for (const userId of positionUserIds) addReason(reasonsByUserId, userId, reasonForChangeKind("position"));
       const roleUserIds = await affectedUserRepository.findByRoleIds([...roleIds]);
-      for (const userId of roleUserIds)
-        addReason(reasonsByUserId, userId, reasonForChangeKind("role"));
-      const roleAssignmentOrganizationUserIds = await affectedUserRepository.findByOrganizationIds(
-        [...roleAssignmentOrganizationIds],
-      );
+      for (const userId of roleUserIds) addReason(reasonsByUserId, userId, reasonForChangeKind("role"));
+      const roleAssignmentOrganizationUserIds = await affectedUserRepository.findByOrganizationIds([
+        ...roleAssignmentOrganizationIds,
+      ]);
       for (const userId of roleAssignmentOrganizationUserIds)
         addReason(reasonsByUserId, userId, reasonForChangeKind("role-assignment"));
-      const roleAssignmentPositionUserIds = await affectedUserRepository.findByPositionIds(
-        [...roleAssignmentPositionIds],
-      );
+      const roleAssignmentPositionUserIds = await affectedUserRepository.findByPositionIds([
+        ...roleAssignmentPositionIds,
+      ]);
       for (const userId of roleAssignmentPositionUserIds)
         addReason(reasonsByUserId, userId, reasonForChangeKind("role-assignment"));
-      const roleAssignmentEmploymentUserIds = await affectedUserRepository.findByEmploymentIds(
-        [...roleAssignmentEmploymentIds],
-      );
+      const roleAssignmentEmploymentUserIds = await affectedUserRepository.findByEmploymentIds([
+        ...roleAssignmentEmploymentIds,
+      ]);
       for (const userId of roleAssignmentEmploymentUserIds)
         addReason(reasonsByUserId, userId, reasonForChangeKind("role-assignment"));
 
@@ -211,7 +192,7 @@ export function createUserProfileInvalidationInternal(
           .sort(([leftUserId], [rightUserId]) => leftUserId - rightUserId)
           .map(([userId, reasons]) => ({
             userId,
-            reasonCodes: CANONICAL_DIRTY_REASON_ORDER.filter(reason => reasons.has(reason)),
+            reasonCodes: CANONICAL_DIRTY_REASON_ORDER.filter((reason) => reasons.has(reason)),
           })),
         {
           requestId: deps.lifecycle.observability?.requestId ?? undefined,
@@ -263,17 +244,13 @@ function createAfterCommitDelivery(deps: CreateUserProfileInvalidationDeps) {
 
   return {
     deliver(payloads: RebuildUserProfileJobPayload[]) {
-      for (const payload of payloads)
-        pendingByUserId.set(payload.userId, payload);
+      for (const payload of payloads) pendingByUserId.set(payload.userId, payload);
 
-      if (registered)
-        return;
+      if (registered) return;
 
       deps.lifecycle.afterCommit.bestEffort("user_profile.rebuild.wake_up", async () => {
         await deps.jobProducer.enqueueRebuildJobs(
-          [...pendingByUserId.values()]
-            .sort((left, right) => left.userId - right.userId)
-            .map(payload => payload),
+          [...pendingByUserId.values()].sort((left, right) => left.userId - right.userId).map((payload) => payload),
         );
       });
       registered = true;

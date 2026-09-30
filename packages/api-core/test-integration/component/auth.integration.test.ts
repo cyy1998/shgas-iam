@@ -1,9 +1,9 @@
-import type { InternalBindings } from "../../src/types/lib";
-import { ClientStatus } from "@iam/contracts";
 import { describe, expect, mock, test } from "bun:test";
+import { ClientStatus } from "@iam/contracts";
 import { Hono } from "hono";
 import { createInternalAuthenticationHandler } from "../../src/middlewares/auth";
 import { createErrorHandler } from "../../src/middlewares/error-handler";
+import type { InternalBindings } from "../../src/types/lib";
 
 type TestClient = {
   clientCode: string;
@@ -45,10 +45,12 @@ function createInternalAuthTestApp(clientBySecret: Record<string, TestClient | n
     await next();
   });
   app.use("*", createInternalAuthenticationHandler({ getClientBySecret }));
-  app.get("/internal/ping", c => c.json({
-    clientCode: c.get("clientCode"),
-    clientDto: c.get("clientDto"),
-  }));
+  app.get("/internal/ping", (c) =>
+    c.json({
+      clientCode: c.get("clientCode"),
+      clientDto: c.get("clientDto"),
+    }),
+  );
   app.onError(createErrorHandler(logger));
 
   return { app, getClientBySecret, logger };

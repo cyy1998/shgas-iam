@@ -1,10 +1,10 @@
-import type { ClientSsoServiceDeps } from "@admin-api/services/client-sso/client-sso.port";
 import type { AdminClientCachePort } from "@admin-api/services/client/client.port";
+import { createClientRepository } from "@admin-api/services/client/client.repository";
+import type { ClientSsoServiceDeps } from "@admin-api/services/client-sso/client-sso.port";
 import type { ClientSnapshotsOptions } from "@iam/api-core/client-snapshot/composition";
+import { createClientSnapshots } from "@iam/api-core/client-snapshot/composition";
 import type { AfterCommitLoggerPort } from "@iam/api-core/uow";
 import type { DbClient } from "@iam/db";
-import { createClientRepository } from "@admin-api/services/client/client.repository";
-import { createClientSnapshots } from "@iam/api-core/client-snapshot/composition";
 import { createClientSnapshotRepository } from "@iam/db/client-snapshot";
 import { createClientSsoManagement } from "./client-sso-management";
 
@@ -26,13 +26,11 @@ export function createClientSsoSnapshotManagement(options: {
         snapshots.invalidateClient(clientCode),
         (async () => {
           const client = await genericClients.getAnyClientByCode(clientCode);
-          if (client)
-            await options.clientCache.invalidateClient(client);
+          if (client) await options.clientCache.invalidateClient(client);
         })(),
       ]);
-      const failure = results.find(result => result.status === "rejected");
-      if (failure?.status === "rejected")
-        throw failure.reason;
+      const failure = results.find((result) => result.status === "rejected");
+      if (failure?.status === "rejected") throw failure.reason;
     },
   };
   return {

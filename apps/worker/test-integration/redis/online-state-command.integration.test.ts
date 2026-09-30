@@ -1,5 +1,6 @@
-import type { Socket } from "node:net";
+import { afterEach, beforeEach, expect, test } from "bun:test";
 import { randomUUID } from "node:crypto";
+import type { Socket } from "node:net";
 import { createConnection, createServer } from "node:net";
 import { fileURLToPath } from "node:url";
 import { createClientSnapshots } from "@iam/api-core/client-snapshot/composition";
@@ -15,7 +16,6 @@ import { createUnifiedCustomSsoMaintenance } from "@iam/custom-sso/maintenance";
 import { createCustomSsoMaintenanceTestFixture } from "@iam/custom-sso/testing";
 import { createOidcMaintenanceTestFixture } from "@iam/oidc/testing";
 import { createSessionMaintenanceTestFixture } from "@iam/session-kernel/testing";
-import { afterEach, beforeEach, expect, test } from "bun:test";
 import { createWorkerRedisTestHarness, resolveWorkerRedisTestUrl } from "./redis-test-harness";
 
 const workerRoot = fileURLToPath(new URL("../../", import.meta.url));
@@ -29,28 +29,22 @@ beforeEach(async () => {
   expect(snapshots.matchingKeys).toBe(0);
 });
 afterEach(async () => {
-  const results = await Promise.allSettled(cleanups.splice(0).map(close => close()));
+  const results = await Promise.allSettled(cleanups.splice(0).map((close) => close()));
   await harness.close();
-  const errors = results.filter(result => result.status === "rejected").map(result => result.reason);
-  if (errors.length)
-    throw new AggregateError(errors, "Maintenance test resource cleanup failed");
+  const errors = results.filter((result) => result.status === "rejected").map((result) => result.reason);
+  if (errors.length) throw new AggregateError(errors, "Maintenance test resource cleanup failed");
 });
 
 const owned = (key: string) => harness.ownedRestoreFixtureKey(key);
 async function observation(keys: string[]) {
   return await Promise.all(
-    keys.map(async key => ({
+    keys.map(async (key) => ({
       value: await harness.observer.dump(key),
       expiry: await harness.observer.pexpiretime(key),
     })),
   );
 }
-async function command(
-  script: string,
-  args: string[],
-  expectedExitCode = 0,
-  overrides: NodeJS.ProcessEnv = {},
-) {
+async function command(script: string, args: string[], expectedExitCode = 0, overrides: NodeJS.ProcessEnv = {}) {
   const result = await withOwnedTemporaryDirectory({
     prefix: "iam193-command-",
     cleanupTimeoutMs: 5000,
@@ -70,17 +64,28 @@ async function command(
       });
     },
   });
-  const line = result.output.split(/\r?\n/u).find(line => line.includes("{\"version\":1,"));
-  if (!line)
-    throw new Error(`Safe report missing for ${script}`);
-  const report = JSON.parse(line.slice(line.indexOf("{\"version\":1,")));
+  const line = result.output.split(/\r?\n/u).find((line) => line.includes('{"version":1,'));
+  if (!line) throw new Error(`Safe report missing for ${script}`);
+  const report = JSON.parse(line.slice(line.indexOf('{"version":1,')));
   expect(result.output).not.toContain(resolveWorkerRedisTestUrl(process.env));
   expect(result.output).not.toContain("sensitive-fixture");
   return { ...result, report };
 }
 const stopped = ["--writers-stopped", "--drained"];
 function authorizationScope(ns: string) {
-  return ["--layout", "unified", "--owner", "custom-sso", "--custom-namespace", ns, "--client-code", "alpha", "--artifacts", "authorization", ...stopped];
+  return [
+    "--layout",
+    "unified",
+    "--owner",
+    "custom-sso",
+    "--custom-namespace",
+    ns,
+    "--client-code",
+    "alpha",
+    "--artifacts",
+    "authorization",
+    ...stopped,
+  ];
 }
 function target(ns: string, mode: string) {
   return [
@@ -194,7 +199,16 @@ test("authorization CLI clears every target purpose while preserving same-Client
   const target = await custom.seedAuthorizationPreservation();
   const other = await custom.seedAuthorizationPreservation("business");
   const later = await custom.seedAuthorizationPreservation("later-managed");
-  const retained = [...target.retained, ...other.retained, ...other.authorization, ...later.retained, ...later.authorization, ...(await fixtures(ns).kernel.seedUnified()), ...(await fixtures(ns).oidc.seedUnified()), ...(await fixtures(`other:${ns}`).custom.seedUnified())];
+  const retained = [
+    ...target.retained,
+    ...other.retained,
+    ...other.authorization,
+    ...later.retained,
+    ...later.authorization,
+    ...(await fixtures(ns).kernel.seedUnified()),
+    ...(await fixtures(ns).oidc.seedUnified()),
+    ...(await fixtures(`other:${ns}`).custom.seedUnified()),
+  ];
   const before = await observation(retained);
   const scope = authorizationScope(ns);
   const inventory = await command("online-auth:state", ["inventory", ...scope]);
@@ -231,18 +245,21 @@ test("authorization owner paginates and reports CAS replacement without touching
   const target = await fixtures(ns).custom.seedAuthorizationPreservation();
   const before = await observation(target.retained);
   let replaced = false;
-  const owner = createUnifiedCustomSsoMaintenance({
-    scan: async (...args) => await harness.writer.scan(...args),
-    get: async key => await harness.writer.get(key),
-    async eval(script, count, ...args) {
-      if (!replaced) {
-        // Generic transport-side race: the observed string changes before the production CAS.
-        await harness.writer.append(args[0]!, " ");
-        replaced = true;
-      }
-      return await harness.writer.eval(script, count, ...args);
+  const owner = createUnifiedCustomSsoMaintenance(
+    {
+      scan: async (...args) => await harness.writer.scan(...args),
+      get: async (key) => await harness.writer.get(key),
+      async eval(script, count, ...args) {
+        if (!replaced) {
+          // Generic transport-side race: the observed string changes before the production CAS.
+          await harness.writer.append(args[0]!, " ");
+          replaced = true;
+        }
+        return await harness.writer.eval(script, count, ...args);
+      },
     },
-  }, ns);
+    ns,
+  );
   let cursor = "0";
   let changed = 0;
   let removed = 0;
@@ -302,10 +319,9 @@ test("independent full verify runs with scan-only ACL and cannot repair dirty st
   await command("online-auth:state", target(ns, "apply"), 1, env);
   expect(await harness.observer.get(dirty)).toBe("sensitive-fixture");
   await command("client-snapshot:verify", ["--all", ...stopped], 0, env);
-  const cache = await createClientSnapshotMaintenanceTestFixture(
-    harness.writer,
-    owned,
-  ).seedInvalidClientPayload(`iam193-${randomUUID()}`);
+  const cache = await createClientSnapshotMaintenanceTestFixture(harness.writer, owned).seedInvalidClientPayload(
+    `iam193-${randomUUID()}`,
+  );
   await command("client-snapshot:verify", ["--all", ...stopped], 1, env);
   await command("client-snapshot:repair", ["--all", ...stopped], 1, env);
   expect(await harness.observer.get(cache)).toBe("sensitive-fixture");
@@ -366,25 +382,41 @@ test("Snapshot CLI shares control across ordinary and sensitive readers without 
 test("invalid input is rejected before connecting and nonresponding Redis is bounded", async () => {
   const ns = `iam193:${randomUUID()}`;
   await command("online-auth:state", ["apply", "--layout", "unified"], 2);
-  await command("online-auth:state", ["apply", "--layout", "source", "--kernel-namespace", ns, ...stopped], 2, { IAM_WORKER_REDIS_HOST: "" });
+  await command("online-auth:state", ["apply", "--layout", "source", "--kernel-namespace", ns, ...stopped], 2, {
+    IAM_WORKER_REDIS_HOST: "",
+  });
   await command("online-auth:state", ["apply", ...target(ns, "inventory").slice(1), "--artifacts", "authorization"], 2);
-  await command("online-auth:state", ["apply", "--layout", "unified", "--owner", "custom-sso", "--custom-namespace", ns, "--artifacts", "authorization", ...stopped], 2);
+  await command(
+    "online-auth:state",
+    [
+      "apply",
+      "--layout",
+      "unified",
+      "--owner",
+      "custom-sso",
+      "--custom-namespace",
+      ns,
+      "--artifacts",
+      "authorization",
+      ...stopped,
+    ],
+    2,
+  );
   await command("online-auth:state", target(ns, "inventory"), 1, { IAM_WORKER_REDIS_HOST: "" });
   const sockets = new Set<Socket>();
   const server = createServer((socket) => {
     sockets.add(socket);
     socket.on("close", () => sockets.delete(socket));
   });
-  await new Promise<void>(resolve => server.listen(0, "127.0.0.1", resolve));
+  await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
   cleanups.push(async () => {
-    sockets.forEach(socket => socket.destroy());
-    await new Promise<void>((resolve, reject) =>
-      server.close(error => (error ? reject(error) : resolve())),
-    );
+    sockets.forEach((socket) => {
+      socket.destroy();
+    });
+    await new Promise<void>((resolve, reject) => server.close((error) => (error ? reject(error) : resolve())));
   });
   const address = server.address();
-  if (!address || typeof address === "string")
-    throw new Error("Missing loopback listener");
+  if (!address || typeof address === "string") throw new Error("Missing loopback listener");
   const started = Date.now();
   await command("online-auth:state", [...target(ns, "inventory"), "--deadline-ms", "200"], 1, {
     IAM_WORKER_REDIS_PORT: String(address.port),
@@ -392,67 +424,68 @@ test("invalid input is rejected before connecting and nonresponding Redis is bou
   expect(Date.now() - started).toBeLessThan(10_000);
 }, 30_000);
 
-test.each([false, true])("actual CLI reports committed deletion with lost response and safely reruns (authorization only: %s)", async (authorizationOnly) => {
-  const ns = `iam193:${randomUUID()}`;
-  const selected = authorizationOnly ? await fixtures(ns).custom.seedAuthorizationPreservation() : undefined;
-  const fixture = selected ? { allKeys: selected.authorization } : await seedUnified(ns);
-  const retainedBefore = selected ? await observation(selected.retained) : [];
-  const args = (mode: string) => authorizationOnly ? [mode, ...authorizationScope(ns)] : target(ns, mode);
-  const url = new URL(resolveWorkerRedisTestUrl(process.env));
-  const sockets = new Set<Socket>();
-  let drop = false;
-  let committed = false;
-  const server = createServer((client) => {
-    const upstream = createConnection({ host: url.hostname, port: Number(url.port) });
-    sockets.add(client);
-    sockets.add(upstream);
-    client.on("error", () => {});
-    upstream.on("error", () => client.destroy());
-    client.on("close", () => {
-      sockets.delete(client);
-      upstream.destroy();
-    });
-    upstream.on("close", () => {
-      sockets.delete(upstream);
-      client.destroy();
-    });
-    client.on("data", (chunk) => {
-      // The proxy forwards bytes to real Redis. It only drops the actual EVAL reply.
-      if (chunk.toString().toLowerCase().includes("\r\neval\r\n"))
-        drop = true;
-      upstream.write(chunk);
-    });
-    upstream.on("data", (chunk) => {
-      if (drop && !committed && chunk.toString().startsWith(":1\r\n")) {
-        committed = true;
-        client.destroy();
+test.each([false, true])(
+  "actual CLI reports committed deletion with lost response and safely reruns (authorization only: %s)",
+  async (authorizationOnly) => {
+    const ns = `iam193:${randomUUID()}`;
+    const selected = authorizationOnly ? await fixtures(ns).custom.seedAuthorizationPreservation() : undefined;
+    const fixture = selected ? { allKeys: selected.authorization } : await seedUnified(ns);
+    const retainedBefore = selected ? await observation(selected.retained) : [];
+    const args = (mode: string) => (authorizationOnly ? [mode, ...authorizationScope(ns)] : target(ns, mode));
+    const url = new URL(resolveWorkerRedisTestUrl(process.env));
+    const sockets = new Set<Socket>();
+    let drop = false;
+    let committed = false;
+    const server = createServer((client) => {
+      const upstream = createConnection({ host: url.hostname, port: Number(url.port) });
+      sockets.add(client);
+      sockets.add(upstream);
+      client.on("error", () => {});
+      upstream.on("error", () => client.destroy());
+      client.on("close", () => {
+        sockets.delete(client);
         upstream.destroy();
-      }
-      else {
-        client.write(chunk);
-      }
+      });
+      upstream.on("close", () => {
+        sockets.delete(upstream);
+        client.destroy();
+      });
+      client.on("data", (chunk) => {
+        // The proxy forwards bytes to real Redis. It only drops the actual EVAL reply.
+        if (chunk.toString().toLowerCase().includes("\r\neval\r\n")) drop = true;
+        upstream.write(chunk);
+      });
+      upstream.on("data", (chunk) => {
+        if (drop && !committed && chunk.toString().startsWith(":1\r\n")) {
+          committed = true;
+          client.destroy();
+          upstream.destroy();
+        } else {
+          client.write(chunk);
+        }
+      });
     });
-  });
-  await new Promise<void>(resolve => server.listen(0, "127.0.0.1", resolve));
-  cleanups.push(async () => {
-    sockets.forEach(socket => socket.destroy());
-    await new Promise<void>((resolve, reject) =>
-      server.close(error => (error ? reject(error) : resolve())),
-    );
-  });
-  const address = server.address();
-  if (!address || typeof address === "string")
-    throw new Error("Missing loopback proxy");
-  await command("online-auth:state", args("apply"), 1, { IAM_WORKER_REDIS_PORT: String(address.port) });
-  expect(committed).toBe(true);
-  const remaining = await harness.observer.exists(...fixture.allKeys);
-  expect(remaining).toBeGreaterThan(0);
-  expect(remaining).toBeLessThan(fixture.allKeys.length);
-  await command("online-auth:state", args("verify"), 1);
-  await command("online-auth:state", args("apply"));
-  await command("online-auth:state", args("verify"));
-  if (selected) {
-    const retainedAfter = await observation(selected.retained);
-    expect(retainedAfter).toEqual(retainedBefore);
-  }
-}, 45_000);
+    await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
+    cleanups.push(async () => {
+      sockets.forEach((socket) => {
+        socket.destroy();
+      });
+      await new Promise<void>((resolve, reject) => server.close((error) => (error ? reject(error) : resolve())));
+    });
+    const address = server.address();
+    if (!address || typeof address === "string") throw new Error("Missing loopback proxy");
+    await command("online-auth:state", args("apply"), 1, { IAM_WORKER_REDIS_PORT: String(address.port) });
+    expect(committed).toBe(true);
+    const remaining = await harness.observer.exists(...fixture.allKeys);
+    expect(remaining).toBeGreaterThan(0);
+    expect(remaining).toBeLessThan(fixture.allKeys.length);
+    await command("online-auth:state", args("verify"), 1);
+    await command("online-auth:state", args("apply"));
+    await command("online-auth:state", args("verify"));
+    if (selected) {
+      const retainedAfter = await observation(selected.retained);
+      expect(retainedAfter).toEqual(retainedBefore);
+    }
+  },
+  45_000,
+);

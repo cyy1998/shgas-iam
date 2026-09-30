@@ -1,14 +1,11 @@
-import type { createUnifiedAdminLifecycleRevocation } from "@admin-api/composition/session/unified-lifecycle";
-import type { AdminUserAuthorization } from "@admin-api/services/admin-authorization/admin-user-authorization.type";
-import type {
-  SubjectAccessMutationReceipt,
-  SubjectAccessTransitionTarget,
-} from "@iam/api-core/subject-access";
-import type { DbClient } from "@iam/db";
+import { afterAll, beforeAll, beforeEach, describe, expect, mock, test } from "bun:test";
 import { createAdminApiRepositories } from "@admin-api/composition/repositories";
+import type { createUnifiedAdminLifecycleRevocation } from "@admin-api/composition/session/unified-lifecycle";
 import { createAdminApiUnitOfWork } from "@admin-api/composition/tx";
 import { createAdminAuthorizationPolicy } from "@admin-api/services/admin-authorization/admin-authorization.policy";
+import type { AdminUserAuthorization } from "@admin-api/services/admin-authorization/admin-user-authorization.type";
 import { createUserService } from "@admin-api/services/user/user.service";
+import type { SubjectAccessMutationReceipt, SubjectAccessTransitionTarget } from "@iam/api-core/subject-access";
 import { mapUnitOfWork } from "@iam/api-core/uow";
 import {
   EmploymentStatus,
@@ -19,14 +16,8 @@ import {
   UserStatus,
   UserType,
 } from "@iam/contracts";
-import {
-  auditLogs,
-  employments,
-  organizations,
-  positions,
-  users,
-} from "@iam/db/schema";
-import { afterAll, beforeAll, beforeEach, describe, expect, mock, test } from "bun:test";
+import type { DbClient } from "@iam/db";
+import { auditLogs, employments, organizations, positions, users } from "@iam/db/schema";
 import { asc, eq, inArray } from "drizzle-orm";
 import { createAdminApiPostgresTestHarness } from "./postgres-test-harness";
 
@@ -56,18 +47,12 @@ describe("User administration PostgreSQL authorization", () => {
     }> = [];
     const sessionRevocation = mock(async () => {
       const [persistedUser, persistedAudits] = await Promise.all([
-        harness.db
-          .select({ password: users.password })
-          .from(users)
-          .where(eq(users.username, "managed")),
-        harness.db
-          .select({ action: auditLogs.action })
-          .from(auditLogs)
-          .orderBy(asc(auditLogs.id)),
+        harness.db.select({ password: users.password }).from(users).where(eq(users.username, "managed")),
+        harness.db.select({ action: auditLogs.action }).from(auditLogs).orderBy(asc(auditLogs.id)),
       ]);
       revocationObservations.push({
         password: persistedUser[0]?.password ?? null,
-        auditActions: persistedAudits.map(row => row.action),
+        auditActions: persistedAudits.map((row) => row.action),
       });
       return revokeSummary();
     });
@@ -84,11 +69,7 @@ describe("User administration PostgreSQL authorization", () => {
       undefined,
       authorization,
     );
-    const newPassword = await fixture.service.resetPasswordByUsername(
-      "managed",
-      undefined,
-      authorization,
-    );
+    const newPassword = await fixture.service.resetPasswordByUsername("managed", undefined, authorization);
     const [persistedUser] = await harness.db
       .select({
         name: users.name,
@@ -113,14 +94,13 @@ describe("User administration PostgreSQL authorization", () => {
       userType: UserType.Informal,
       password: "hashed:Rand1234",
     });
-    expect(persistedAudits.map(row => row.action)).toEqual([
-      "admin.user.update",
-      "admin.user.reset_password",
+    expect(persistedAudits.map((row) => row.action)).toEqual(["admin.user.update", "admin.user.reset_password"]);
+    expect(revocationObservations).toEqual([
+      {
+        password: "hashed:Rand1234",
+        auditActions: ["admin.user.update", "admin.user.reset_password"],
+      },
     ]);
-    expect(revocationObservations).toEqual([{
-      password: "hashed:Rand1234",
-      auditActions: ["admin.user.update", "admin.user.reset_password"],
-    }]);
     expect(sessionRevocation).toHaveBeenCalledTimes(1);
   });
 
@@ -133,18 +113,12 @@ describe("User administration PostgreSQL authorization", () => {
     }> = [];
     const sessionRevocation = mock(async () => {
       const [persistedUser, persistedAudits] = await Promise.all([
-        harness.db
-          .select({ status: users.status })
-          .from(users)
-          .where(eq(users.username, "status-history")),
-        harness.db
-          .select({ action: auditLogs.action })
-          .from(auditLogs)
-          .orderBy(asc(auditLogs.id)),
+        harness.db.select({ status: users.status }).from(users).where(eq(users.username, "status-history")),
+        harness.db.select({ action: auditLogs.action }).from(auditLogs).orderBy(asc(auditLogs.id)),
       ]);
       revocationObservations.push({
         status: persistedUser[0]?.status ?? null,
-        auditActions: persistedAudits.map(row => row.action),
+        auditActions: persistedAudits.map((row) => row.action),
       });
       return revokeSummary();
     });
@@ -170,13 +144,13 @@ describe("User administration PostgreSQL authorization", () => {
 
     expect(updated).toEqual({ changed: true, result: null });
     expect(persistedUser).toEqual({ status: UserStatus.Disable });
-    expect(persistedAudits.map(row => row.action)).toEqual([
-      "admin.user.status_update",
+    expect(persistedAudits.map((row) => row.action)).toEqual(["admin.user.status_update"]);
+    expect(revocationObservations).toEqual([
+      {
+        status: UserStatus.Disable,
+        auditActions: ["admin.user.status_update"],
+      },
     ]);
-    expect(revocationObservations).toEqual([{
-      status: UserStatus.Disable,
-      auditActions: ["admin.user.status_update"],
-    }]);
   });
 
   test("restoring Pause does not let HR enable a User with an outside Open Employment", async () => {
@@ -191,8 +165,7 @@ describe("User administration PostgreSQL authorization", () => {
     let failure: unknown;
     try {
       await fixture.service.updateUserStatus("mixed-paused", UserStatus.Enable, undefined, authorization);
-    }
-    catch (error) {
+    } catch (error) {
       failure = error;
     }
     expect(failure).toMatchObject({ httpStatus: 403 });
@@ -213,14 +186,8 @@ describe("User administration PostgreSQL authorization", () => {
 
     for (const username of ["managed", "mixed-paused", "ended"]) {
       try {
-        await fixture.service.updateUserStatus(
-          username,
-          UserStatus.Disable,
-          undefined,
-          authorization,
-        );
-      }
-      catch (error) {
+        await fixture.service.updateUserStatus(username, UserStatus.Disable, undefined, authorization);
+      } catch (error) {
         failures.push(error);
       }
     }
@@ -232,8 +199,7 @@ describe("User administration PostgreSQL authorization", () => {
     const persistedAudits = await harness.db.select().from(auditLogs);
 
     expect(failures).toHaveLength(3);
-    for (const failure of failures)
-      expect(failure).toMatchObject({ httpStatus: 403 });
+    for (const failure of failures) expect(failure).toMatchObject({ httpStatus: 403 });
     expect(persistedUsers).toEqual([
       { username: "ended", status: UserStatus.Enable },
       { username: "managed", status: UserStatus.Enable },
@@ -253,25 +219,14 @@ describe("User administration PostgreSQL authorization", () => {
     const failures: unknown[] = [];
     for (const username of ["ended", "outside", "deleted"]) {
       try {
-        await fixture.service.updateUser(
-          username,
-          { name: "Forbidden Update" },
-          undefined,
-          authorization,
-        );
-      }
-      catch (error) {
+        await fixture.service.updateUser(username, { name: "Forbidden Update" }, undefined, authorization);
+      } catch (error) {
         failures.push(error);
       }
     }
     try {
-      await fixture.service.resetPasswordByUsername(
-        "paused-user",
-        undefined,
-        authorization,
-      );
-    }
-    catch (error) {
+      await fixture.service.resetPasswordByUsername("paused-user", undefined, authorization);
+    } catch (error) {
       failures.push(error);
     }
     const persistedUsers = await harness.db
@@ -281,8 +236,7 @@ describe("User administration PostgreSQL authorization", () => {
     const persistedAudits = await harness.db.select().from(auditLogs);
 
     expect(failures).toHaveLength(4);
-    for (const failure of failures)
-      expect(failure).toMatchObject({ httpStatus: 403 });
+    for (const failure of failures) expect(failure).toMatchObject({ httpStatus: 403 });
     expect(persistedUsers).toEqual([
       { username: "deleted", name: "deleted", password: "old:deleted" },
       { username: "ended", name: "ended", password: "old:ended" },
@@ -313,8 +267,7 @@ describe("User administration PostgreSQL authorization", () => {
     let failure: unknown;
     try {
       await fixture.service.resetPasswordByUsername("paused-user");
-    }
-    catch (error) {
+    } catch (error) {
       failure = error;
     }
     const [persistedUser] = await harness.db
@@ -330,9 +283,7 @@ describe("User administration PostgreSQL authorization", () => {
   });
 });
 
-function createService(
-  revokeUserSessions: AdminSessionRevocationPort["revokeUserSessions"],
-) {
+function createService(revokeUserSessions: AdminSessionRevocationPort["revokeUserSessions"]) {
   const repositories = createAdminApiRepositories(harness.db);
   const unitOfWork = createAdminApiUnitOfWork({
     db: harness.db,
@@ -347,20 +298,21 @@ function createService(
     uuid: mock(() => "10000000-0000-4000-8000-000000000001"),
   };
   const subjectAccessLifecycle = {
-    run: mock(async (input: {
-      mutate: (receipt: never) => Promise<unknown>;
-      revokeSessions?: (
-        result: unknown,
-        context: { invalidatedSubjectAccessTransitionId: string },
-      ) => Promise<unknown>;
-    }) => {
-      const result = await input.mutate({} as never);
-      await input.revokeSessions?.(result, {
-        invalidatedSubjectAccessTransitionId:
-          "20000000-0000-4000-8000-000000000001",
-      });
-      return result;
-    }),
+    run: mock(
+      async (input: {
+        mutate: (receipt: never) => Promise<unknown>;
+        revokeSessions?: (
+          result: unknown,
+          context: { invalidatedSubjectAccessTransitionId: string },
+        ) => Promise<unknown>;
+      }) => {
+        const result = await input.mutate({} as never);
+        await input.revokeSessions?.(result, {
+          invalidatedSubjectAccessTransitionId: "20000000-0000-4000-8000-000000000001",
+        });
+        return result;
+      },
+    ),
   };
   const service = createUserService({
     userRepository: repositories.user,
@@ -378,7 +330,7 @@ function createService(
     random,
     sessionRevocation: { revokeUserSessions },
     subjectAccessLifecycle: subjectAccessLifecycle as never,
-    uow: mapUnitOfWork(unitOfWork, tx => ({
+    uow: mapUnitOfWork(unitOfWork, (tx) => ({
       userRepository: tx.repositories.user,
       auditService: tx.auditService,
       subjectAccessMutation: {
@@ -400,9 +352,7 @@ function revokeSummary() {
   return { userSessionsTerminated: 0, clientSessionsTerminated: 0, results: [], unfinished: [] };
 }
 
-async function scopedAuthorization(
-  inScopeOrganizationId: number,
-): Promise<AdminUserAuthorization> {
+async function scopedAuthorization(inScopeOrganizationId: number): Promise<AdminUserAuthorization> {
   const policy = createAdminAuthorizationPolicy({
     logger: { warn: mock(() => undefined) },
     hrAdministrationScopeResolver: {
@@ -422,10 +372,7 @@ async function scopedAuthorization(
 async function seedUserAdministrationGraph(db: DbClient) {
   const [inScopeOrganization, outsideOrganization] = await db
     .insert(organizations)
-    .values([
-      organization("IN", "In Scope"),
-      organization("OUT", "Outside"),
-    ])
+    .values([organization("IN", "In Scope"), organization("OUT", "Outside")])
     .returning({ id: organizations.id });
   const [position] = await db
     .insert(positions)
@@ -447,70 +394,21 @@ async function seedUserAdministrationGraph(db: DbClient) {
       user("status-history", UserStatus.Enable),
     ])
     .returning({ id: users.id, username: users.username });
-  const userId = (username: string) =>
-    seededUsers.find(item => item.username === username)!.id;
-  await db.insert(employments).values([
-    employment(
-      userId("managed"),
-      position!.id,
-      inScopeOrganization!.id,
-      EmploymentStatus.Pause,
-    ),
-    employment(
-      userId("managed"),
-      position!.id,
-      outsideOrganization!.id,
-      EmploymentStatus.Enable,
-    ),
-    employment(
-      userId("mixed-paused"),
-      position!.id,
-      inScopeOrganization!.id,
-      EmploymentStatus.Enable,
-    ),
-    employment(
-      userId("mixed-paused"),
-      position!.id,
-      outsideOrganization!.id,
-      EmploymentStatus.Pause,
-    ),
-    employment(
-      userId("ended"),
-      position!.id,
-      inScopeOrganization!.id,
-      EmploymentStatus.Disable,
-    ),
-    employment(
-      userId("outside"),
-      position!.id,
-      outsideOrganization!.id,
-      EmploymentStatus.Enable,
-    ),
-    employment(
-      userId("paused-user"),
-      position!.id,
-      inScopeOrganization!.id,
-      EmploymentStatus.Enable,
-    ),
-    employment(
-      userId("deleted"),
-      position!.id,
-      inScopeOrganization!.id,
-      EmploymentStatus.Enable,
-    ),
-    employment(
-      userId("status-history"),
-      position!.id,
-      inScopeOrganization!.id,
-      EmploymentStatus.Enable,
-    ),
-    employment(
-      userId("status-history"),
-      position!.id,
-      outsideOrganization!.id,
-      EmploymentStatus.Disable,
-    ),
-  ]);
+  const userId = (username: string) => seededUsers.find((item) => item.username === username)!.id;
+  await db
+    .insert(employments)
+    .values([
+      employment(userId("managed"), position!.id, inScopeOrganization!.id, EmploymentStatus.Pause),
+      employment(userId("managed"), position!.id, outsideOrganization!.id, EmploymentStatus.Enable),
+      employment(userId("mixed-paused"), position!.id, inScopeOrganization!.id, EmploymentStatus.Enable),
+      employment(userId("mixed-paused"), position!.id, outsideOrganization!.id, EmploymentStatus.Pause),
+      employment(userId("ended"), position!.id, inScopeOrganization!.id, EmploymentStatus.Disable),
+      employment(userId("outside"), position!.id, outsideOrganization!.id, EmploymentStatus.Enable),
+      employment(userId("paused-user"), position!.id, inScopeOrganization!.id, EmploymentStatus.Enable),
+      employment(userId("deleted"), position!.id, inScopeOrganization!.id, EmploymentStatus.Enable),
+      employment(userId("status-history"), position!.id, inScopeOrganization!.id, EmploymentStatus.Enable),
+      employment(userId("status-history"), position!.id, outsideOrganization!.id, EmploymentStatus.Disable),
+    ]);
   return {
     inScopeOrganizationId: inScopeOrganization!.id,
     statusHistoryUserId: userId("status-history"),
@@ -541,12 +439,7 @@ function user(username: string, status: UserStatus, isDelete = false) {
   };
 }
 
-function employment(
-  userId: number,
-  posId: number,
-  orgId: number,
-  status: EmploymentStatus,
-) {
+function employment(userId: number, posId: number, orgId: number, status: EmploymentStatus) {
   return {
     userId,
     posId,
@@ -554,8 +447,6 @@ function employment(
     status,
     isPrimary: false,
     startTime: new Date("2026-01-01T00:00:00Z"),
-    endTime: status === EmploymentStatus.Disable
-      ? new Date("2026-02-01T00:00:00Z")
-      : null,
+    endTime: status === EmploymentStatus.Disable ? new Date("2026-02-01T00:00:00Z") : null,
   };
 }

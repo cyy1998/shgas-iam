@@ -1,3 +1,4 @@
+import { describe, expect, test } from "bun:test";
 import { ApiErrorCode } from "@iam/contracts";
 import * as Domain from "@iam/domain";
 import * as ClientErrors from "@iam/domain/client";
@@ -8,7 +9,6 @@ import * as PositionErrors from "@iam/domain/position";
 import * as PrivilegeErrors from "@iam/domain/privilege";
 import * as RoleErrors from "@iam/domain/role";
 import * as UserErrors from "@iam/domain/user";
-import { describe, expect, test } from "bun:test";
 import { DomainBusinessError } from "../errors";
 
 interface ExpectedError {
@@ -302,32 +302,24 @@ const cases: ExpectedError[] = [
   },
 ];
 
-function getErrorClass(
-  exports: object,
-  className: string,
-): new () => DomainBusinessError {
+function getErrorClass(exports: object, className: string): new () => DomainBusinessError {
   const ErrorClass = (exports as Record<string, unknown>)[className];
 
-  expect(ErrorClass).toBe(
-    (Domain as unknown as Record<string, unknown>)[className],
-  );
+  expect(ErrorClass).toBe((Domain as unknown as Record<string, unknown>)[className]);
   expect(typeof ErrorClass).toBe("function");
 
   return ErrorClass as new () => DomainBusinessError;
 }
 
 describe("domain business errors", () => {
-  test.each(cases)(
-    "$className preserves API runtime shape and exports",
-    (expected) => {
-      const ErrorClass = getErrorClass(expected.exports, expected.className);
-      const error = new ErrorClass();
+  test.each(cases)("$className preserves API runtime shape and exports", (expected) => {
+    const ErrorClass = getErrorClass(expected.exports, expected.className);
+    const error = new ErrorClass();
 
-      expect(error).toBeInstanceOf(DomainBusinessError);
-      expect(error.name).toBe(expected.className);
-      expect(error.message).toBe(expected.message);
-      expect(error.code).toBe(expected.code);
-      expect(error.httpStatus).toBe(expected.httpStatus);
-    },
-  );
+    expect(error).toBeInstanceOf(DomainBusinessError);
+    expect(error.name).toBe(expected.className);
+    expect(error.message).toBe(expected.message);
+    expect(error.code).toBe(expected.code);
+    expect(error.httpStatus).toBe(expected.httpStatus);
+  });
 });

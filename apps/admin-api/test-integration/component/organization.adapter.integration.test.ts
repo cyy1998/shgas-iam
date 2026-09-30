@@ -1,12 +1,8 @@
-import type { Context } from "hono";
+import { describe, expect, mock, test } from "bun:test";
 import { createOrganizationAdapter } from "@admin-api/routes/admin/organization/organization.adapter";
 import { createAdminAuthorizationPolicy } from "@admin-api/services/admin-authorization/admin-authorization.policy";
-import {
-  OrganizationLevel,
-  OrganizationStatus,
-  OrganizationType,
-} from "@iam/contracts";
-import { describe, expect, mock, test } from "bun:test";
+import { OrganizationLevel, OrganizationStatus, OrganizationType } from "@iam/contracts";
+import type { Context } from "hono";
 
 const now = new Date("2026-01-01T00:00:00Z");
 
@@ -25,14 +21,10 @@ function createContext(roles: string[] = ["iam:hr-admin"]) {
       header: () => undefined,
     },
     get(key: string) {
-      if (key === "adminAuthorizationPolicy")
-        return policy;
-      if (key === "userId")
-        return 7;
-      if (key === "username")
-        return "operator";
-      if (key === "userDetailDto")
-        return { roles };
+      if (key === "adminAuthorizationPolicy") return policy;
+      if (key === "userId") return 7;
+      if (key === "username") return "operator";
+      if (key === "userDetailDto") return { roles };
       return undefined;
     },
   } as unknown as Context;
@@ -158,10 +150,7 @@ describe("admin Organization adapter", () => {
     });
     expect(service.searchOrganizationsForAdmin).toHaveBeenCalledWith(searchInput, scoped);
     expect(service.getOrganizationChildrenForAdmin).toHaveBeenCalledWith(null, 1, 20, scoped);
-    expect(service.getOrganizationSelectorNodesForAdmin).toHaveBeenCalledWith(
-      { pageSize: 50 },
-      scoped,
-    );
+    expect(service.getOrganizationSelectorNodesForAdmin).toHaveBeenCalledWith({ pageSize: 50 }, scoped);
     expect(service.setOrganization).toHaveBeenCalledWith(
       expect.objectContaining({ parentCode: "ROOT-A" }),
       expect.anything(),
@@ -179,11 +168,7 @@ describe("admin Organization adapter", () => {
       expect.anything(),
       scoped,
     );
-    expect(service.deleteOrganization).toHaveBeenCalledWith(
-      "ROOT-A",
-      expect.anything(),
-      scoped,
-    );
+    expect(service.deleteOrganization).toHaveBeenCalledWith("ROOT-A", expect.anything(), scoped);
   });
 
   test("rejects a direct reparent payload before invoking the Organization service", async () => {
@@ -199,8 +184,7 @@ describe("admin Organization adapter", () => {
         orgCode: "ROOT-A",
         data: { parentCode: "ROOT-B" },
       } as never);
-    }
-    catch (error) {
+    } catch (error) {
       failure = error;
     }
 

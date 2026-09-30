@@ -12,10 +12,8 @@ import { runWorkflow } from "./workflow.ts";
 const cwd = resolve(fileURLToPath(new URL("../..", import.meta.url)));
 try {
   process.loadEnvFile(join(cwd, ".sandcastle", ".env"));
-}
-catch (error) {
-  if (!(error instanceof Error) || !("code" in error) || error.code !== "ENOENT")
-    throw error;
+} catch (error) {
+  if (!(error instanceof Error) || !("code" in error) || error.code !== "ENOENT") throw error;
 }
 
 const { values } = parseArgs({
@@ -42,16 +40,14 @@ async function main() {
     return;
   }
   const actions = [values.check, values.build, values.smoke].filter(Boolean);
-  if (actions.length > 1)
-    throw new Error("--check、--build、--smoke 每次只选择一个。");
+  if (actions.length > 1) throw new Error("--check、--build、--smoke 每次只选择一个。");
   const model = values.model ?? process.env.SANDCASTLE_MODEL ?? "gpt-6-astra";
   const image = process.env.SANDCASTLE_IMAGE ?? "iam-sandcastle:local";
   const maxIterations = Number(values.iterations ?? process.env.SANDCASTLE_ITERATIONS ?? "10");
   const maxParallel = Number(values.parallel ?? process.env.SANDCASTLE_PARALLEL ?? "2");
-  if (![maxIterations, maxParallel].every(value => Number.isSafeInteger(value) && value > 0))
+  if (![maxIterations, maxParallel].every((value) => Number.isSafeInteger(value) && value > 0))
     throw new Error("iterations 与 parallel 必须为正整数。");
-  if (Number(process.versions.node.split(".")[0]) !== 24)
-    throw new Error("宿主 runner 需要 Node.js 24。");
+  if (Number(process.versions.node.split(".")[0]) !== 24) throw new Error("宿主 runner 需要 Node.js 24。");
   await command("docker", ["info", "--format", "{{.ServerVersion}}"], cwd);
   if (values.build) {
     console.log(`正在构建 ${image}，Docker 构建输出保存在 .sandcastle/logs/build.log。`);
@@ -70,17 +66,14 @@ async function main() {
       child.once("error", reject);
       child.once("close", resolveCode);
     }).finally(() => log.end());
-    if (code !== 0)
-      throw new Error(`镜像构建失败 (${code})；查看 .sandcastle/logs/build.log。`);
+    if (code !== 0) throw new Error(`镜像构建失败 (${code})；查看 .sandcastle/logs/build.log。`);
     console.log(`镜像 ${image} 已构建。`);
     return;
   }
   await command("docker", ["image", "inspect", image, "--format", "{{.Id}}"], cwd);
   const branch = await command("git", ["branch", "--show-current"], cwd);
-  if (!branch)
-    throw new Error("需要一个已检出的命名分支。");
-  if (!/^[\w./-]+$/.test(branch))
-    throw new Error("AFK 目标分支名只接受字母、数字、下划线、点、斜杠和连字符。");
+  if (!branch) throw new Error("需要一个已检出的命名分支。");
+  if (!/^[\w./-]+$/.test(branch)) throw new Error("AFK 目标分支名只接受字母、数字、下划线、点、斜杠和连字符。");
   let authMode = "未检查";
   if (!values.smoke) {
     await command("gh", ["--version"], cwd);
@@ -92,16 +85,17 @@ async function main() {
   }
   if (values.check) {
     await loadAgentRoles(cwd);
-    console.log(`本机预检通过：分支 ${branch}，镜像 ${image}，模型 ${model}，Codex 认证 ${authMode}。联网认证待实际调用验证。`);
+    console.log(
+      `本机预检通过：分支 ${branch}，镜像 ${image}，模型 ${model}，Codex 认证 ${authMode}。联网认证待实际调用验证。`,
+    );
     return;
   }
 
   const lockPath = join(cwd, ".sandcastle", "run.lock");
-  let lock;
+  let lock: Awaited<ReturnType<typeof open>>;
   try {
     lock = await open(lockPath, "wx");
-  }
-  catch {
+  } catch {
     const owner = await readFile(lockPath, "utf8").catch(() => "无法读取持有者");
     throw new Error(`已有 runner 锁：${owner}。确认旧进程已结束后，仅移除 ${lockPath} 再重试。`);
   }
@@ -110,12 +104,14 @@ async function main() {
   const releaseLockOnExit = () => {
     try {
       closeSync(lock.fd);
+    } catch {
+      /* The normal finalizer may already have closed the handle. */
     }
-    catch { /* The normal finalizer may already have closed the handle. */ }
     try {
       unlinkSync(lockPath);
+    } catch {
+      /* Keep the original process exit status. */
     }
-    catch { /* Keep the original process exit status. */ }
   };
   process.once("exit", releaseLockOnExit);
   const abort = () => controller.abort(new Error("用户中断 Sandcastle；正在等待已启动任务清理。"));
@@ -127,22 +123,18 @@ async function main() {
     if (values.smoke) {
       await smoke(options);
       console.log("Sandbox、skills 与独占 PostgreSQL/Redis 连接 smoke 通过；未调用模型或修改 issues。");
-    }
-    else {
+    } else {
       console.log(`Sandcastle：${branch}，最多 ${maxIterations} 批，并发 ${maxParallel}，${model}。`);
       const runtime = await createRuntime(options);
       try {
         const result = await runWorkflow({ maxIterations, maxParallel }, runtime);
         console.log(JSON.stringify(result, null, 2));
-        if (!result.exhausted || result.failed.length > 0)
-          process.exitCode = 1;
-      }
-      finally {
+        if (!result.exhausted || result.failed.length > 0) process.exitCode = 1;
+      } finally {
         await runtime.close?.();
       }
     }
-  }
-  finally {
+  } finally {
     process.removeListener("SIGINT", abort);
     process.removeListener("SIGTERM", abort);
     await lock.close();

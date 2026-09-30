@@ -13,7 +13,7 @@ function createQueryClient() {
 }
 
 const queryClient = createSingleton("postgres:drizzle", createQueryClient, {
-  destroy: client => client.end(),
+  destroy: (client) => client.end(),
 });
 
 export const db = drizzle({

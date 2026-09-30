@@ -1,7 +1,5 @@
 import type { Env } from "@admin-api/env";
-import type {
-  AdminClientCachePort,
-} from "@admin-api/services/client/client.port";
+import type { AdminClientCachePort } from "@admin-api/services/client/client.port";
 import type Redis from "ioredis";
 import type { Logger } from "pino";
 

@@ -1,7 +1,4 @@
-import type {
-  OrganizationResponsibilityAssignmentStatus,
-  OrganizationResponsibilityTypeCode,
-} from "@iam/contracts";
+import type { OrganizationResponsibilityAssignmentStatus, OrganizationResponsibilityTypeCode } from "@iam/contracts";
 
 /** Current rows returned only after the complete selected Assignment set is locked. */
 export interface OrganizationResponsibilityAssignmentWriteTarget {

@@ -10,8 +10,7 @@ function firstHeaderValue(value: string | undefined): string | null {
 export function getContextValue<T>(c: Context, key: string): T | undefined {
   try {
     return c.get(key as never) as T | undefined;
-  }
-  catch {
+  } catch {
     return undefined;
   }
 }
@@ -21,11 +20,13 @@ export function getRequestId(c: Context): string | undefined {
 }
 
 export function getRequestIp(c: Context): string | null {
-  return firstHeaderValue(c.req.header("x-forwarded-for"))
-    ?? firstHeaderValue(c.req.header("x-real-ip"))
-    ?? firstHeaderValue(c.req.header("cf-connecting-ip"));
+  return (
+    firstHeaderValue(c.req.header("x-forwarded-for")) ??
+    firstHeaderValue(c.req.header("x-real-ip")) ??
+    firstHeaderValue(c.req.header("cf-connecting-ip"))
+  );
 }
 
 export function getTraceId(c: Context): string | null {
-  return getTraceIdFromHeaders(name => c.req.header(name)) ?? null;
+  return getTraceIdFromHeaders((name) => c.req.header(name)) ?? null;
 }

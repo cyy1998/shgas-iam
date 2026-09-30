@@ -1,5 +1,5 @@
-import type { AdminRouter } from "./routers/admin";
 import { router } from "@iam/api-core/trpc";
+import type { AdminRouter } from "./routers/admin";
 
 export function createAppRouter(adminRouter: AdminRouter) {
   return router({

@@ -42,18 +42,16 @@ export interface ScopedOrganizationResponsibilityReadScope {
   organizationIds: readonly number[];
 }
 
-export type OrganizationResponsibilityReadScope
-  = | FullOrganizationResponsibilityReadScope
-    | ScopedOrganizationResponsibilityReadScope;
+export type OrganizationResponsibilityReadScope =
+  | FullOrganizationResponsibilityReadScope
+  | ScopedOrganizationResponsibilityReadScope;
 
 interface AdminOrganizationResponsibilityAuthorizationBase {
   readScope: OrganizationResponsibilityReadScope;
   getAllowedActions: (
     facts: AdminOrganizationResponsibilityActionFacts,
   ) => AdminOrganizationResponsibilityAllowedActions;
-  denyMutation: (
-    input: AdminOrganizationResponsibilityMutationDenial,
-  ) => never;
+  denyMutation: (input: AdminOrganizationResponsibilityMutationDenial) => never;
 }
 
 export interface FullAdminOrganizationResponsibilityAuthorization
@@ -68,6 +66,6 @@ export interface ScopedAdminOrganizationResponsibilityAuthorization
   readScope: ScopedOrganizationResponsibilityReadScope;
 }
 
-export type AdminOrganizationResponsibilityAuthorization
-  = | FullAdminOrganizationResponsibilityAuthorization
-    | ScopedAdminOrganizationResponsibilityAuthorization;
+export type AdminOrganizationResponsibilityAuthorization =
+  | FullAdminOrganizationResponsibilityAuthorization
+  | ScopedAdminOrganizationResponsibilityAuthorization;

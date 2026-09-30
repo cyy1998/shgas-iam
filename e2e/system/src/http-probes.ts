@@ -2,18 +2,16 @@ export async function probeGateway(origin: string, signal?: AbortSignal) {
   const deadline = Date.now() + 30_000;
   let lastError: unknown;
   while (Date.now() < deadline) {
-    if (signal?.aborted)
-      throw signal.reason ?? new Error("Gateway probe aborted");
+    if (signal?.aborted) throw signal.reason ?? new Error("Gateway probe aborted");
     try {
       await requestGateway(new URL("/", origin), {
         redirect: "manual",
         signal: probeSignal(signal),
       });
       return;
-    }
-    catch (error) {
+    } catch (error) {
       lastError = error;
-      await new Promise(resolve => setTimeout(resolve, 250));
+      await new Promise((resolve) => setTimeout(resolve, 250));
     }
   }
   throw new Error(`Gateway did not accept HTTP requests at ${origin}`, {
@@ -21,30 +19,22 @@ export async function probeGateway(origin: string, signal?: AbortSignal) {
   });
 }
 
-export async function probeHttpRoute(
-  origin: string,
-  path: string,
-  expectedStatuses: number[],
-  signal?: AbortSignal,
-) {
+export async function probeHttpRoute(origin: string, path: string, expectedStatuses: number[], signal?: AbortSignal) {
   const deadline = Date.now() + 60_000;
   let lastError: unknown;
   while (Date.now() < deadline) {
-    if (signal?.aborted)
-      throw signal.reason ?? new Error("Gateway route probe aborted");
+    if (signal?.aborted) throw signal.reason ?? new Error("Gateway route probe aborted");
     try {
       const response = await requestGateway(new URL(path, origin), {
         redirect: "manual",
         signal: probeSignal(signal),
       });
-      if (expectedStatuses.includes(response.status))
-        return;
+      if (expectedStatuses.includes(response.status)) return;
       lastError = new Error(`received HTTP ${response.status}`);
-    }
-    catch (error) {
+    } catch (error) {
       lastError = error;
     }
-    await new Promise(resolve => setTimeout(resolve, 250));
+    await new Promise((resolve) => setTimeout(resolve, 250));
   }
   throw new Error(`Gateway route ${path} was not ready at ${origin}`, {
     cause: lastError,
@@ -53,10 +43,7 @@ export async function probeHttpRoute(
 
 export interface OidcDiscoveryProbeOptions {
   maxAttempts?: number;
-  request?: (
-    input: string | URL | Request,
-    init?: RequestInit,
-  ) => Promise<Response>;
+  request?: (input: string | URL | Request, init?: RequestInit) => Promise<Response>;
   retryDelayMs?: number;
 }
 
@@ -83,16 +70,12 @@ export async function probeSsoConfiguration(
     signal,
     attempt: async () => {
       for (const entryNetwork of ["internal", "external"] as const) {
-        const response = await request(
-          new URL("/sso/.well-known/authentication-configuration", origin),
-          {
-            headers: { "X-IAM-Entry-Network": entryNetwork },
-            redirect: "manual",
-            signal: probeSignal(signal),
-          },
-        );
-        if (!response.ok)
-          throw new Error(`received HTTP ${response.status}`);
+        const response = await request(new URL("/sso/.well-known/authentication-configuration", origin), {
+          headers: { "X-IAM-Entry-Network": entryNetwork },
+          redirect: "manual",
+          signal: probeSignal(signal),
+        });
+        if (!response.ok) throw new Error(`received HTTP ${response.status}`);
         const body: unknown = await response.json();
         if (!isExpectedSsoConfiguration(body, expectedData))
           throw new Error(`received unexpected ${entryNetwork} configuration`);
@@ -109,17 +92,13 @@ export async function probeOidcDiscovery(
   const maxAttempts = options.maxAttempts ?? Number.POSITIVE_INFINITY;
   const request = options.request ?? requestGateway;
   const retryDelayMs = options.retryDelayMs ?? 250;
-  if (maxAttempts !== Number.POSITIVE_INFINITY
-    && (!Number.isInteger(maxAttempts) || maxAttempts <= 0)) {
+  if (maxAttempts !== Number.POSITIVE_INFINITY && (!Number.isInteger(maxAttempts) || maxAttempts <= 0)) {
     throw new Error("OIDC discovery probe attempts must be a positive integer");
   }
   if (!Number.isInteger(retryDelayMs) || retryDelayMs < 0)
     throw new Error("OIDC discovery retry delay must be a non-negative integer");
 
-  const discoveryUrl = new URL(
-    "/oidc/.well-known/openid-configuration",
-    origin,
-  );
+  const discoveryUrl = new URL("/oidc/.well-known/openid-configuration", origin);
   const expectedMetadata = {
     authorization_endpoint: new URL("/oidc/auth", origin).href,
     end_session_endpoint: new URL("/oidc/session/end", origin).href,
@@ -139,8 +118,7 @@ export async function probeOidcDiscovery(
         redirect: "manual",
         signal: probeSignal(signal),
       });
-      if (!response.ok)
-        throw new Error(`received HTTP ${response.status}`);
+      if (!response.ok) throw new Error(`received HTTP ${response.status}`);
       const metadata: unknown = await response.json();
       if (!isExpectedOidcDiscoveryMetadata(metadata, expectedMetadata))
         throw new Error("received unexpected OIDC discovery metadata");
@@ -157,9 +135,7 @@ interface RetryingProtocolProbeOptions {
   signal?: AbortSignal;
 }
 
-async function runRetryingProtocolProbe(
-  options: RetryingProtocolProbeOptions,
-) {
+async function runRetryingProtocolProbe(options: RetryingProtocolProbeOptions) {
   const deadline = Date.now() + 60_000;
   let attempt = 0;
   let lastError: unknown;
@@ -171,55 +147,33 @@ async function runRetryingProtocolProbe(
     try {
       await options.attempt();
       return;
-    }
-    catch (error) {
+    } catch (error) {
       lastError = error;
     }
     if (attempt < options.maxAttempts && Date.now() < deadline) {
-      await waitForProbeRetry(
-        options.retryDelayMs,
-        options.signal,
-        options.abortMessage,
-      );
+      await waitForProbeRetry(options.retryDelayMs, options.signal, options.abortMessage);
     }
   }
   throw new Error(options.failureMessage, { cause: lastError });
 }
 
-function isExpectedOidcDiscoveryMetadata(
-  metadata: unknown,
-  expected: Record<string, string>,
-) {
-  if (typeof metadata !== "object" || metadata === null || Array.isArray(metadata))
-    return false;
+function isExpectedOidcDiscoveryMetadata(metadata: unknown, expected: Record<string, string>) {
+  if (typeof metadata !== "object" || metadata === null || Array.isArray(metadata)) return false;
   const record = metadata as Record<string, unknown>;
-  return Object.entries(expected).every(
-    ([field, value]) => record[field] === value,
-  );
+  return Object.entries(expected).every(([field, value]) => record[field] === value);
 }
 
-function isExpectedSsoConfiguration(
-  body: unknown,
-  expected: Record<string, string>,
-) {
-  if (typeof body !== "object" || body === null || Array.isArray(body))
-    return false;
+function isExpectedSsoConfiguration(body: unknown, expected: Record<string, string>) {
+  if (typeof body !== "object" || body === null || Array.isArray(body)) return false;
   const envelope = body as Record<string, unknown>;
-  if (envelope.code !== 200 || envelope.message !== "success")
-    return false;
-  if (typeof envelope.data !== "object" || envelope.data === null || Array.isArray(envelope.data))
-    return false;
+  if (envelope.code !== 200 || envelope.message !== "success") return false;
+  if (typeof envelope.data !== "object" || envelope.data === null || Array.isArray(envelope.data)) return false;
   const data = envelope.data as Record<string, unknown>;
   return Object.entries(expected).every(([field, value]) => data[field] === value);
 }
 
-function waitForProbeRetry(
-  delayMs: number,
-  signal: AbortSignal | undefined,
-  abortMessage: string,
-) {
-  if (signal === undefined)
-    return new Promise<void>(resolve => setTimeout(resolve, delayMs));
+function waitForProbeRetry(delayMs: number, signal: AbortSignal | undefined, abortMessage: string) {
+  if (signal === undefined) return new Promise<void>((resolve) => setTimeout(resolve, delayMs));
   return new Promise<void>((resolve, reject) => {
     let timer: ReturnType<typeof setTimeout>;
     const onAbort = () => {
@@ -232,8 +186,7 @@ function waitForProbeRetry(
       resolve();
     }, delayMs);
     signal.addEventListener("abort", onAbort, { once: true });
-    if (signal.aborted)
-      onAbort();
+    if (signal.aborted) onAbort();
   });
 }
 
@@ -246,8 +199,7 @@ function probeSignal(signal?: AbortSignal) {
 // reaches the real APISIX routes and determines their configured entry.
 async function requestGateway(input: string | URL | Request, init?: RequestInit) {
   const url = new URL(input instanceof Request ? input.url : input);
-  if (!["internal.iam.localhost", "external.iam.localhost"].includes(url.hostname))
-    return fetch(input, init);
+  if (!["internal.iam.localhost", "external.iam.localhost"].includes(url.hostname)) return fetch(input, init);
   const headers = new Headers(init?.headers);
   headers.set("Host", url.host);
   url.hostname = "127.0.0.1";

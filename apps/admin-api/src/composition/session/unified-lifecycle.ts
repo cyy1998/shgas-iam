@@ -1,9 +1,9 @@
 import type { AdminAuditContext } from "@admin-api/services/audit/audit.context";
+import { AdminLoginStateUnavailableError } from "@admin-api/services/session-management/session-management.error";
 import type {
   createUnifiedSubjectAccessSessionRevocation,
   UnifiedSessionRevocationSummary,
 } from "@iam/api-core/subject-access";
-import { AdminLoginStateUnavailableError } from "@admin-api/services/session-management/session-management.error";
 
 /** Lifecycle callbacks must not mistake a fulfilled batch with unknown effects for completion. */
 export function createUnifiedAdminLifecycleRevocation(
@@ -16,8 +16,8 @@ export function createUnifiedAdminLifecycleRevocation(
         {
           userSessionsTerminated: summary.userSessionsTerminated,
           clientSessionsTerminated: summary.clientSessionsTerminated,
-          failed: summary.results.filter(result => result.status === "failed").length,
-          unknown: summary.results.filter(result => result.status === "unknown").length,
+          failed: summary.results.filter((result) => result.status === "failed").length,
+          unknown: summary.results.filter((result) => result.status === "unknown").length,
         },
         "Session termination requires an explicit retry",
       );
@@ -40,33 +40,26 @@ export function createUnifiedAdminLifecycleRevocation(
       );
     },
     async prepareUserSessionRevocation(input: UserInput) {
-      let prepared;
+      let prepared: Awaited<ReturnType<typeof revocation.prepareUserSessionRevocation>> | undefined;
       try {
         prepared = await revocation.prepareUserSessionRevocation({ subjectId: input.subjectIdentifier });
-      }
-      catch (error) {
+      } catch (error) {
         try {
           logger.error(
             { errorName: error instanceof Error ? error.name : "Error" },
             "Session revocation preparation failed; only the callback generation can be selected",
           );
-        }
-        catch {
+        } catch {
           /* Diagnostics cannot prevent the authoritative account mutation. */
         }
       }
       const plan = prepared;
       return {
         async revoke(options: { onlySubjectAccessTransitionId?: string }) {
-          if (plan)
-            return confirmed(await plan.revoke(input.reason, options));
+          if (plan) return confirmed(await plan.revoke(input.reason, options));
           if (options.onlySubjectAccessTransitionId !== undefined) {
             return confirmed(
-              await revocation.revokeUserSessions(
-                { subjectId: input.subjectIdentifier },
-                input.reason,
-                options,
-              ),
+              await revocation.revokeUserSessions({ subjectId: input.subjectIdentifier }, input.reason, options),
             );
           }
           return confirmed(await revocation.executeCapturedSessions([]));

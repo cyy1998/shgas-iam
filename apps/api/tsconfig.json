@@ -3,10 +3,7 @@
     "target": "ESNext",
     "jsx": "react-jsx",
     // Environment setup & latest features
-    "lib": [
-      "ESNext",
-      "DOM"
-    ],
+    "lib": ["ESNext", "DOM"],
     "types": ["bun"],
     "moduleDetection": "force",
     "module": "Preserve",
@@ -31,8 +28,6 @@
     "verbatimModuleSyntax": true,
     "skipLibCheck": true
   },
-  "include": ["src/**/*.ts", "test-integration/**/*.ts", "app.config.ts", "playwright.config.ts", "eslint.config.js"],
-  "exclude": [
-    "scripts"
-  ]
+  "include": ["src/**/*.ts", "test-integration/**/*.ts", "app.config.ts", "playwright.config.ts"],
+  "exclude": ["scripts"]
 }

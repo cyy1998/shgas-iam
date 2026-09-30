@@ -1,9 +1,6 @@
-import type {
-  E2EScenarioOwner,
-  E2EScenarioReferences,
-} from "./seed.ts";
-import { OidcClientType } from "@iam/contracts";
 import { describe, expect, test } from "bun:test";
+import { OidcClientType } from "@iam/contracts";
+import type { E2EScenarioOwner, E2EScenarioReferences } from "./seed.ts";
 import { seedE2EScenario } from "./seed.ts";
 
 describe("E2E scenario seed", () => {
@@ -51,24 +48,16 @@ describe("E2E scenario seed", () => {
       disabledSubjectIdentifier: "3b766c91-1daa-4c09-89e4-ea87ad123456",
       disabledUsername: "e2e-disabled-123000000-a1b2c3d4",
       organizationCode: "e2e-org-123000000-a1b2c3d4",
-      responsibilityHolderOrganizationCode:
-        "e2e-holder-org-123000000-a1b2c3d4",
-      responsibilityTargetOrganizationCode:
-        "e2e-resp-target-123000000-a1b2c3d4",
-      hrSecondScopeRootOrganizationCode:
-        "e2e-hr-root-123000000-a1b2c3d4",
-      hrResponsibilityTargetOrganizationCode:
-        "e2e-hr-target-123000000-a1b2c3d4",
+      responsibilityHolderOrganizationCode: "e2e-holder-org-123000000-a1b2c3d4",
+      responsibilityTargetOrganizationCode: "e2e-resp-target-123000000-a1b2c3d4",
+      hrSecondScopeRootOrganizationCode: "e2e-hr-root-123000000-a1b2c3d4",
+      hrResponsibilityTargetOrganizationCode: "e2e-hr-target-123000000-a1b2c3d4",
       positionCode: "e2e-pos-123000000-a1b2c3d4",
       globalPositionCode: "e2e-global-pos-123000000-a1b2c3d4",
-      responsibilityHolderPositionCode:
-        "e2e-resp-pos-123000000-a1b2c3d4",
-      outsideResponsibilityHolderPositionCode:
-        "e2e-outside-resp-pos-123000000-a1b2c3d4",
-      noScopeHrAdminSubjectIdentifier:
-        "3b766c91-1daa-4c09-89e4-ea87ad123456",
-      noScopeHrAdminUsername:
-        "e2e-no-scope-hr-123000000-a1b2c3d4",
+      responsibilityHolderPositionCode: "e2e-resp-pos-123000000-a1b2c3d4",
+      outsideResponsibilityHolderPositionCode: "e2e-outside-resp-pos-123000000-a1b2c3d4",
+      noScopeHrAdminSubjectIdentifier: "3b766c91-1daa-4c09-89e4-ea87ad123456",
+      noScopeHrAdminUsername: "e2e-no-scope-hr-123000000-a1b2c3d4",
       adminMixedRoleAssignmentId: 45,
       hiddenResponsibilityAssignmentId: 41,
       hrSecondScopeRoleAssignmentId: 42,
@@ -117,15 +106,15 @@ describe("E2E scenario seed", () => {
       },
     };
 
-    await expect(seedE2EScenario({
-      adminPassword: "SYNTHETIC-PASSWORD-ONLY-FOR-E2E",
-      canonicalOrigin: "http://127.0.0.1:43123",
-      owner,
-      random: { uuid: () => "3b766c91-1daa-4c09-89e4-ea87ad123456" },
-      runId: "20260806123000000-a1b2c3d4",
-    })).rejects.toThrow(
-      "E2E scenario owner read-back did not confirm the complete fixed scenario",
-    );
+    await expect(
+      seedE2EScenario({
+        adminPassword: "SYNTHETIC-PASSWORD-ONLY-FOR-E2E",
+        canonicalOrigin: "http://127.0.0.1:43123",
+        owner,
+        random: { uuid: () => "3b766c91-1daa-4c09-89e4-ea87ad123456" },
+        runId: "20260806123000000-a1b2c3d4",
+      }),
+    ).rejects.toThrow("E2E scenario owner read-back did not confirm the complete fixed scenario");
   });
 
   test("rejects Subject Facts published for a different Dirty Version", async () => {
@@ -143,15 +132,15 @@ describe("E2E scenario seed", () => {
       },
     };
 
-    await expect(seedE2EScenario({
-      adminPassword: "SYNTHETIC-PASSWORD-ONLY-FOR-E2E",
-      canonicalOrigin: "http://127.0.0.1:43123",
-      owner,
-      random: { uuid: () => "3b766c91-1daa-4c09-89e4-ea87ad123456" },
-      runId: "20260806123000000-a1b2c3d4",
-    })).rejects.toThrow(
-      "E2E scenario owner read-back did not confirm the complete fixed scenario",
-    );
+    await expect(
+      seedE2EScenario({
+        adminPassword: "SYNTHETIC-PASSWORD-ONLY-FOR-E2E",
+        canonicalOrigin: "http://127.0.0.1:43123",
+        owner,
+        random: { uuid: () => "3b766c91-1daa-4c09-89e4-ea87ad123456" },
+        runId: "20260806123000000-a1b2c3d4",
+      }),
+    ).rejects.toThrow("E2E scenario owner read-back did not confirm the complete fixed scenario");
   });
 });
 
@@ -266,10 +255,7 @@ function completeReadBack(references: E2EScenarioReferences) {
         references.responsibilityTargetOrganizationCode,
         references.hrSecondScopeRootOrganizationCode,
       ],
-      positionCodes: [
-        references.positionCode,
-        references.outsideResponsibilityHolderPositionCode,
-      ],
+      positionCodes: [references.positionCode, references.outsideResponsibilityHolderPositionCode],
       clientCodes: [references.adminClientCode],
       roleCodes: [references.hrAdminRoleCode],
     },
@@ -282,14 +268,8 @@ function completeReadBack(references: E2EScenarioReferences) {
       subjectIdentifier: references.adminSubjectIdentifier,
       sourceDirtyVersion: "1",
       profileUsername: references.adminUsername,
-      organizationCodes: [
-        references.organizationCode,
-        references.responsibilityHolderOrganizationCode,
-      ],
-      positionCodes: [
-        references.positionCode,
-        "e2e-resp-pos-123000000-a1b2c3d4",
-      ],
+      organizationCodes: [references.organizationCode, references.responsibilityHolderOrganizationCode],
+      positionCodes: [references.positionCode, "e2e-resp-pos-123000000-a1b2c3d4"],
       clientCodes: [references.adminClientCode],
       roleCodes: [references.adminRoleCode, references.hrAdminRoleCode],
       responsibilityTypeCodes: [],

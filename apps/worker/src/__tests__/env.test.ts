@@ -29,29 +29,37 @@ describe("worker environment", () => {
 
   test("audit maintenance accepts only its PostgreSQL configuration without changing global database configuration", () => {
     const previousDatabaseUrl = process.env.DATABASE_URL;
-    expect(parseAuditActionMaintenanceEnv({
-      IAM_WORKER_DATABASE_URL: "postgresql://iam:password@localhost/iam?options=-csearch_path%3Daudit",
-      IAM_WORKER_REDIS_PORT: "invalid-unused",
-      IAM_WORKER_LOG_FORMAT: "invalid-unused",
-    })).toEqual({ databaseUrl: "postgresql://iam:password@localhost/iam?options=-csearch_path%3Daudit" });
+    expect(
+      parseAuditActionMaintenanceEnv({
+        IAM_WORKER_DATABASE_URL: "postgresql://iam:password@localhost/iam?options=-csearch_path%3Daudit",
+        IAM_WORKER_REDIS_PORT: "invalid-unused",
+        IAM_WORKER_LOG_FORMAT: "invalid-unused",
+      }),
+    ).toEqual({ databaseUrl: "postgresql://iam:password@localhost/iam?options=-csearch_path%3Daudit" });
     expect(process.env.DATABASE_URL).toBe(previousDatabaseUrl);
     for (const databaseUrl of [undefined, "", "not-a-url", "https://localhost/iam"]) {
-      expect(() => parseAuditActionMaintenanceEnv({
-        IAM_WORKER_DATABASE_URL: databaseUrl,
-        DATABASE_URL: "postgresql://unused-fallback/iam",
-      })).toThrow();
+      expect(() =>
+        parseAuditActionMaintenanceEnv({
+          IAM_WORKER_DATABASE_URL: databaseUrl,
+          DATABASE_URL: "postgresql://unused-fallback/iam",
+        }),
+      ).toThrow();
     }
-    expect(parseAuditActionMaintenanceEnv({
-      IAM_WORKER_DATABASE_URL: "postgres://iam:password@localhost/iam",
-    })).toEqual({ databaseUrl: "postgres://iam:password@localhost/iam" });
+    expect(
+      parseAuditActionMaintenanceEnv({
+        IAM_WORKER_DATABASE_URL: "postgres://iam:password@localhost/iam",
+      }),
+    ).toEqual({ databaseUrl: "postgres://iam:password@localhost/iam" });
   });
 
   test("parses PostgreSQL readiness without Redis or Worker runtime configuration", () => {
-    expect(parsePostgresReadinessEnv({
-      IAM_WORKER_DATABASE_URL: "postgresql://iam:password@localhost/iam",
-      IAM_WORKER_USER_PROFILE_REBUILD_BATCH_SIZE: "25",
-      IAM_WORKER_USER_PROFILE_BACKFILL_BATCH_SIZE: "200",
-    })).toEqual({
+    expect(
+      parsePostgresReadinessEnv({
+        IAM_WORKER_DATABASE_URL: "postgresql://iam:password@localhost/iam",
+        IAM_WORKER_USER_PROFILE_REBUILD_BATCH_SIZE: "25",
+        IAM_WORKER_USER_PROFILE_BACKFILL_BATCH_SIZE: "200",
+      }),
+    ).toEqual({
       databaseUrl: "postgresql://iam:password@localhost/iam",
       nodeEnv: "development",
       log: { level: "info", format: "auto" },
@@ -89,19 +97,23 @@ describe("worker environment", () => {
   });
 
   test("requires dashboard credentials in production", () => {
-    expect(() => parseWorkerEnv({
-      ...validEnv(),
-      NODE_ENV: "production",
-      IAM_WORKER_BULL_BOARD_ENABLED: "true",
-    })).toThrow("IAM_WORKER_BULL_BOARD_USERNAME and IAM_WORKER_BULL_BOARD_PASSWORD are required in production");
+    expect(() =>
+      parseWorkerEnv({
+        ...validEnv(),
+        NODE_ENV: "production",
+        IAM_WORKER_BULL_BOARD_ENABLED: "true",
+      }),
+    ).toThrow("IAM_WORKER_BULL_BOARD_USERNAME and IAM_WORKER_BULL_BOARD_PASSWORD are required in production");
 
-    expect(parseWorkerEnv({
-      ...validEnv(),
-      NODE_ENV: "production",
-      IAM_WORKER_BULL_BOARD_ENABLED: "true",
-      IAM_WORKER_BULL_BOARD_USERNAME: "ops",
-      IAM_WORKER_BULL_BOARD_PASSWORD: "secret",
-    }).dashboard).toMatchObject({
+    expect(
+      parseWorkerEnv({
+        ...validEnv(),
+        NODE_ENV: "production",
+        IAM_WORKER_BULL_BOARD_ENABLED: "true",
+        IAM_WORKER_BULL_BOARD_USERNAME: "ops",
+        IAM_WORKER_BULL_BOARD_PASSWORD: "secret",
+      }).dashboard,
+    ).toMatchObject({
       username: "ops",
       password: "secret",
     });

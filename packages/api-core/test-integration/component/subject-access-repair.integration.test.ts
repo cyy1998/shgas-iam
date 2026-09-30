@@ -1,5 +1,5 @@
-import type { SubjectAccessAuthorityState } from "../../src/subject-access";
 import { describe, expect, mock, test } from "bun:test";
+import type { SubjectAccessAuthorityState } from "../../src/subject-access";
 import {
   createSubjectAccessBarrier,
   createSubjectAccessRepair,
@@ -13,22 +13,29 @@ const now = new Date("2026-07-31T08:05:00.000Z").getTime();
 
 function createHarness(initialState: "enabled" | "disabled" = "enabled") {
   let redisNow = now;
-  const store = createInMemorySubjectAccessStore([{
-    version: 1,
-    subjectIdentifier,
-    state: initialState,
-    transitionId: "20000000-0000-4000-8000-000000000001",
-    updatedAt: "2026-07-31T08:00:00.000Z",
-  }], { clock: { now: () => redisNow } });
+  const store = createInMemorySubjectAccessStore(
+    [
+      {
+        version: 1,
+        subjectIdentifier,
+        state: initialState,
+        transitionId: "20000000-0000-4000-8000-000000000001",
+        updatedAt: "2026-07-31T08:00:00.000Z",
+      },
+    ],
+    { clock: { now: () => redisNow } },
+  );
   const barrier = createSubjectAccessBarrier({
     store,
     clock: { nowDate: () => new Date(redisNow) },
     random: { uuid: () => transitionId },
   });
-  const resolve = mock(async (): Promise<SubjectAccessAuthorityState> => ({
-    accountState: "enabled" as const,
-    factsState: "current" as const,
-  }));
+  const resolve = mock(
+    async (): Promise<SubjectAccessAuthorityState> => ({
+      accountState: "enabled" as const,
+      factsState: "current" as const,
+    }),
+  );
   const warn = mock((_fields: Record<string, unknown>, _message: string) => undefined);
   let leaseSequence = 0;
   const repair = createSubjectAccessRepair({
@@ -36,7 +43,12 @@ function createHarness(initialState: "enabled" | "disabled" = "enabled") {
     backlog: store,
     authority: { resolve },
     logger: { warn },
-    random: { uuid: () => `lease-${leaseSequence += 1}` },
+    random: {
+      uuid: () => {
+        leaseSequence += 1;
+        return `lease-${leaseSequence}`;
+      },
+    },
   });
   return {
     advanceRedis(milliseconds: number) {
@@ -52,8 +64,7 @@ function createHarness(initialState: "enabled" | "disabled" = "enabled") {
 
 async function state(store: ReturnType<typeof createInMemorySubjectAccessStore>) {
   const serialized = await store.read(subjectIdentifier);
-  if (serialized === null)
-    return null;
+  if (serialized === null) return null;
   return SubjectAccessRecordV1Schema.parse(JSON.parse(serialized)).state;
 }
 
@@ -174,31 +185,25 @@ describe("Subject Access repair", () => {
     await expect(repair.repairSubject(subjectIdentifier)).resolves.toEqual({
       status: "enabled",
     });
-    expect(warn).toHaveBeenCalledWith({
-      errorType: "Error",
-      operation: "repair",
-      subjectIdentifier,
-    }, "Subject Access repair failed");
+    expect(warn).toHaveBeenCalledWith(
+      {
+        errorType: "Error",
+        operation: "repair",
+        subjectIdentifier,
+      },
+      "Subject Access repair failed",
+    );
     expect(JSON.stringify(warn.mock.calls)).not.toContain("postgresql://");
   });
 
   test("claims one item immediately before work so slow items do not pre-lease later pages", async () => {
-    const pageSubjects = [
-      "00000000-0000-4000-8000-000000000011",
-      "00000000-0000-4000-8000-000000000012",
-    ];
-    const transitions = [
-      "10000000-0000-4000-8000-000000000011",
-      "10000000-0000-4000-8000-000000000012",
-    ];
+    const pageSubjects = ["00000000-0000-4000-8000-000000000011", "00000000-0000-4000-8000-000000000012"];
+    const transitions = ["10000000-0000-4000-8000-000000000011", "10000000-0000-4000-8000-000000000012"];
     const store = createInMemorySubjectAccessStore(
-      pageSubjects.map(currentSubject => ({
+      pageSubjects.map((currentSubject) => ({
         version: 1 as const,
         subjectIdentifier: currentSubject,
-        transitionId: currentSubject.replace(
-          "00000000-0000",
-          "20000000-0000",
-        ),
+        transitionId: currentSubject.replace("00000000-0000", "20000000-0000"),
         state: "enabled" as const,
         updatedAt: "2026-07-31T08:00:00.000Z",
       })),
@@ -232,13 +237,19 @@ describe("Subject Access repair", () => {
       }),
     };
     let leaseSequence = 0;
-    const createRepair = () => createSubjectAccessRepair({
-      authority,
-      backlog: store,
-      barrier,
-      logger: { warn: mock(() => undefined) },
-      random: { uuid: () => `concurrent-${leaseSequence += 1}` },
-    });
+    const createRepair = () =>
+      createSubjectAccessRepair({
+        authority,
+        backlog: store,
+        barrier,
+        logger: { warn: mock(() => undefined) },
+        random: {
+          uuid: () => {
+            leaseSequence += 1;
+            return `concurrent-${leaseSequence}`;
+          },
+        },
+      });
     const slowWorker = createRepair().repairPending({ limit: 2 });
     await firstStarted.promise;
 

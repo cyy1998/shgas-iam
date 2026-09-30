@@ -1,10 +1,5 @@
 import { afterEach, describe, expect, it } from "bun:test";
-import {
-  createManifestFile,
-  createReporter,
-  sourceRoute,
-  sourceUpstream,
-} from "../../src/__tests__/test-helpers";
+import { createManifestFile, createReporter, sourceRoute, sourceUpstream } from "../../src/__tests__/test-helpers";
 import { runValidate } from "../../src/commands";
 
 const originalManifestEnv = process.env.APISIX_MANIFEST_ENV;
@@ -12,8 +7,7 @@ const originalManifestEnv = process.env.APISIX_MANIFEST_ENV;
 afterEach(() => {
   if (originalManifestEnv === undefined) {
     delete process.env.APISIX_MANIFEST_ENV;
-  }
-  else {
+  } else {
     process.env.APISIX_MANIFEST_ENV = originalManifestEnv;
   }
 });
@@ -38,9 +32,7 @@ describe("apisix sync commands", () => {
   it("uses APISIX_MANIFEST_ENV fallback", async () => {
     process.env.APISIX_MANIFEST_ENV = "test:iam";
     const manifest = await createManifestFile({
-      upstreams: [
-        sourceUpstream(),
-      ],
+      upstreams: [sourceUpstream()],
       routes: [
         sourceRoute({
           plugins: {
@@ -48,7 +40,7 @@ describe("apisix sync commands", () => {
               header_name: "X-Request-Id",
               include_in_response: true,
             },
-            "opentelemetry": {
+            opentelemetry: {
               sampler: {
                 name: "always_on",
               },

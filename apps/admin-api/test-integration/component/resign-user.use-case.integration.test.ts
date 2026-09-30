@@ -1,16 +1,13 @@
+import { describe, expect, mock, test } from "bun:test";
+import { createAdminAuthorizationPolicy } from "@admin-api/services/admin-authorization/admin-authorization.policy";
+import { createFakeClock, createImmediateUnitOfWork } from "@admin-api/testing/fakes";
 import type {
   ResignUserTransactionPorts,
   ResignUserUseCaseDeps,
 } from "@admin-api/use-cases/employment/resign-user/resign-user.port";
-import type {
-  SubjectAccessLifecycleRunInput,
-  SubjectAccessMutationReceipt,
-} from "@iam/api-core/subject-access";
-import { createAdminAuthorizationPolicy } from "@admin-api/services/admin-authorization/admin-authorization.policy";
-import { createFakeClock, createImmediateUnitOfWork } from "@admin-api/testing/fakes";
 import { createResignUserUseCase } from "@admin-api/use-cases/employment/resign-user/resign-user.use-case";
+import type { SubjectAccessLifecycleRunInput, SubjectAccessMutationReceipt } from "@iam/api-core/subject-access";
 import { UserStatus } from "@iam/contracts";
-import { describe, expect, mock, test } from "bun:test";
 
 const subjectIdentifier = "00000000-0000-4000-8000-000000000001";
 const previousSubjectAccessTransitionId = "20000000-0000-4000-8000-000000000001";
@@ -30,8 +27,7 @@ const defaultTarget = {
 
 function createSubjectAccessMutation(): ResignUserTransactionPorts["subjectAccessMutation"] {
   return {
-    runMutation: async <T>(_receipt: SubjectAccessMutationReceipt, mutation: () => Promise<T>) =>
-      await mutation(),
+    runMutation: async <T>(_receipt: SubjectAccessMutationReceipt, mutation: () => Promise<T>) => await mutation(),
   };
 }
 
@@ -54,15 +50,13 @@ function createSubjectAccessLifecycle(preBlockError?: Error) {
   const runSpy = mock(() => undefined);
   async function run<Result>(input: SubjectAccessLifecycleRunInput<Result>): Promise<Result> {
     runSpy();
-    if (preBlockError)
-      throw preBlockError;
+    if (preBlockError) throw preBlockError;
     const result = await input.mutate(subjectAccessMutationReceipt);
     try {
       await input.revokeSessions?.(result, {
         invalidatedSubjectAccessTransitionId: previousSubjectAccessTransitionId,
       });
-    }
-    catch {
+    } catch {
       // Session revocation remains best-effort after the account mutation commits.
     }
     return result;
@@ -151,8 +145,7 @@ describe("createResignUserUseCase", () => {
     let failure: unknown;
     try {
       await useCase.execute({ username: "zhangsan" });
-    }
-    catch (error) {
+    } catch (error) {
       failure = error;
     }
     expect(failure).toBe(sentinel);
@@ -172,8 +165,7 @@ describe("createResignUserUseCase", () => {
     let failure: unknown;
     try {
       await useCase.execute({ username: "zhangsan" });
-    }
-    catch (error) {
+    } catch (error) {
       failure = error;
     }
     expect(failure).toBe(sentinel);
@@ -194,8 +186,7 @@ describe("createResignUserUseCase", () => {
     let failure: unknown;
     try {
       await useCase.execute({ username: "missing" });
-    }
-    catch (error) {
+    } catch (error) {
       failure = error;
     }
     expect(failure).toMatchObject({ httpStatus: 404 });
@@ -257,8 +248,7 @@ describe("createResignUserUseCase", () => {
           },
         },
       );
-    }
-    catch (error) {
+    } catch (error) {
       failure = error;
     }
 
@@ -304,9 +294,7 @@ describe("createResignUserUseCase", () => {
         getUserByUsernameForAdmin: mock(async () => target),
         getUserByUsernameIncludingDeletedForAuthorization: mock(async () => target),
         getOpenEmploymentOrganizationIdsByUserId: mock(async () => []),
-        getEndedEmploymentOrganizationIdsByUserId: mock(async () => [
-          ...facts.endedEmploymentOrganizationIds,
-        ]),
+        getEndedEmploymentOrganizationIdsByUserId: mock(async () => [...facts.endedEmploymentOrganizationIds]),
       };
       const useCase = createResignUserUseCase({
         clock: createFakeClock(),
@@ -332,8 +320,7 @@ describe("createResignUserUseCase", () => {
       let failure: unknown;
       try {
         await useCase.execute({ username: "zhangsan" }, { authorization: await createScopedAuthorization() });
-      }
-      catch (error) {
+      } catch (error) {
         failure = error;
       }
 
@@ -390,8 +377,7 @@ describe("createResignUserUseCase", () => {
     let failure: unknown;
     try {
       await useCase.execute({ username: "zhangsan" }, { authorization: await createScopedAuthorization() });
-    }
-    catch (error) {
+    } catch (error) {
       failure = error;
     }
 
@@ -425,8 +411,7 @@ describe("createResignUserUseCase", () => {
     let failure: unknown;
     try {
       await useCase.execute({ username: "zhangsan" }, { authorization: await createScopedAuthorization() });
-    }
-    catch (error) {
+    } catch (error) {
       failure = error;
     }
     expect(locked).toBe(true);

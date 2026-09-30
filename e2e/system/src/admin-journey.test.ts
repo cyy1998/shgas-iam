@@ -1,6 +1,6 @@
-import type { RunDescriptor } from "./lifecycle.ts";
 import { describe, expect, test } from "bun:test";
 import { createAdminJourneyOperations } from "./admin-journey.ts";
+import type { RunDescriptor } from "./lifecycle.ts";
 import { playwrightStagingDirectory } from "./playwright-evidence.ts";
 
 const descriptor: RunDescriptor = {
@@ -59,25 +59,16 @@ describe("Admin Custom SSO journey operations", () => {
       IAM_E2E_DELEGATEE_USERNAME: "e2e-delegatee-admin-journey-01",
       IAM_E2E_HR_ADMIN_USERNAME: "e2e-hr-admin-admin-journey-01",
       IAM_E2E_HR_ADMIN_ROLE_CODE: "iam:hr-admin",
-      IAM_E2E_NO_SCOPE_HR_ADMIN_USERNAME:
-        "e2e-no-scope-hr-admin-journey-01",
+      IAM_E2E_NO_SCOPE_HR_ADMIN_USERNAME: "e2e-no-scope-hr-admin-journey-01",
       IAM_E2E_CUSTOM_SSO_CLIENT_CODE: "e2e-custom-admin-journey-01",
-      IAM_E2E_CUSTOM_SSO_REDIRECT_URI:
-        "http://127.0.0.1:43123/e2e/custom-sso/*",
-      IAM_E2E_INTERNAL_API_KEY:
-        "iam-e2e-internal-api-key-admin-journey-01",
-      IAM_E2E_RESPONSIBILITY_TARGET_ORGANIZATION_CODE:
-        "e2e-resp-target-admin-journey-01",
-      IAM_E2E_RESPONSIBILITY_HOLDER_POSITION_CODE:
-        "e2e-resp-pos-admin-journey-01",
+      IAM_E2E_CUSTOM_SSO_REDIRECT_URI: "http://127.0.0.1:43123/e2e/custom-sso/*",
+      IAM_E2E_INTERNAL_API_KEY: "iam-e2e-internal-api-key-admin-journey-01",
+      IAM_E2E_RESPONSIBILITY_TARGET_ORGANIZATION_CODE: "e2e-resp-target-admin-journey-01",
+      IAM_E2E_RESPONSIBILITY_HOLDER_POSITION_CODE: "e2e-resp-pos-admin-journey-01",
       IAM_E2E_PLAYWRIGHT_OUTPUT_DIR: playwrightStagingDirectory(descriptor),
     });
     expect(calls[1]?.env?.IAM_E2E_ADMIN_PASSWORD).toBeTruthy();
-    expect(calls[1]?.env?.IAM_E2E_ADMIN_CLIENT_CODE).not.toBe(
-      calls[1]?.env?.IAM_E2E_CUSTOM_SSO_CLIENT_CODE,
-    );
-    expect(calls[1]?.env?.IAM_E2E_INTERNAL_API_KEY).not.toBe(
-      calls[1]?.env?.IAM_E2E_ADMIN_PASSWORD,
-    );
+    expect(calls[1]?.env?.IAM_E2E_ADMIN_CLIENT_CODE).not.toBe(calls[1]?.env?.IAM_E2E_CUSTOM_SSO_CLIENT_CODE);
+    expect(calls[1]?.env?.IAM_E2E_INTERNAL_API_KEY).not.toBe(calls[1]?.env?.IAM_E2E_ADMIN_PASSWORD);
   });
 });

@@ -18,8 +18,8 @@
   "scripts": {
     "dev": "bun --hot src/index.ts",
     "serve": "bun run src/index.ts",
-    "lint": "eslint src test-integration test-smoke app.config.ts eslint.config.js",
-    "lint:fix": "eslint --fix src test-integration test-smoke app.config.ts eslint.config.js",
+    "lint": "node ../../scripts/run-quality.mjs lint --workspace apps/admin-api",
+    "lint:fix": "node ../../scripts/run-quality.mjs lint-fix --workspace apps/admin-api",
     "test": "pnpm test:unit",
     "test:integration:component": "bun test --max-concurrency=2 test-integration/component",
     "test:integration:composition": "bun test --max-concurrency=1 test-integration/composition",
@@ -27,18 +27,20 @@
     "test:integration:postgres": "bun test --max-concurrency=1 test-integration/postgres",
     "test:integration:redis": "bun test --max-concurrency=1 test-integration/redis",
     "test:unit": "bun test --max-concurrency=2 src",
-    "typecheck": "pnpm exec tsc --noEmit"
+    "typecheck": "pnpm exec tsc --noEmit",
+    "format": "node ../../scripts/run-quality.mjs format --workspace apps/admin-api",
+    "format:check": "node ../../scripts/run-quality.mjs format-check --workspace apps/admin-api"
   },
   "dependencies": {
     "@hono/zod-openapi": "^1.5.1",
     "@iam/api-core": "workspace:*",
     "@iam/contracts": "workspace:*",
+    "@iam/custom-sso": "workspace:*",
     "@iam/db": "workspace:*",
     "@iam/domain": "workspace:*",
     "@iam/jobs": "workspace:*",
     "@iam/role-assignment-resolution": "workspace:*",
     "@iam/session-kernel": "workspace:*",
-    "@iam/custom-sso": "workspace:*",
     "@iam/user-profile-read-model": "workspace:*",
     "@scalar/hono-api-reference": "^0.11.11",
     "@trpc/server": "^11.18.0",
@@ -52,10 +54,8 @@
     "zod": "^4.4.3"
   },
   "devDependencies": {
-    "@iam/eslint-config": "workspace:*",
     "@types/bun": "latest",
     "@typescript/native": "npm:typescript@7.0.2",
-    "eslint": "^10.7.0",
     "typescript": "npm:@typescript/typescript6@6.0.2"
   }
 }

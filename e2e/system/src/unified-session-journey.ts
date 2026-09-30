@@ -1,7 +1,13 @@
-import type { APIRequestContext, Page } from "@playwright/test";
 import { Buffer } from "node:buffer";
-import { ApiErrorCode, ClientSsoCallbackType, ClientSsoConfigSchema, ClientSsoProtocol, SubjectClaim } from "@iam/contracts";
+import {
+  ApiErrorCode,
+  ClientSsoCallbackType,
+  ClientSsoConfigSchema,
+  ClientSsoProtocol,
+  SubjectClaim,
+} from "@iam/contracts";
 import { normalizeClientSsoConfig } from "@iam/domain/client";
+import type { APIRequestContext, Page } from "@playwright/test";
 import { expect } from "@playwright/test";
 import { createPkceS256Pair, receiveOidcAuthorizationCallback } from "./oidc-rp.ts";
 
@@ -26,8 +32,7 @@ export async function exerciseUnifiedSession(input: {
   expect(detail.code).toBe(200);
   expect(detail.data.ssoConfig.protocol).toBe(ClientSsoProtocol.Oidc);
   const originalConfig = ClientSsoConfigSchema.parse(detail.data.ssoConfig);
-  if (originalConfig.protocol !== ClientSsoProtocol.Oidc)
-    throw new Error("Expected the seeded OIDC Client");
+  if (originalConfig.protocol !== ClientSsoProtocol.Oidc) throw new Error("Expected the seeded OIDC Client");
   // A seeded row can predate the first Admin normalization; submit its canonical full value.
   const oidcConfig = normalizeClientSsoConfig(originalConfig);
   const customConfig = normalizeClientSsoConfig({
@@ -38,7 +43,10 @@ export async function exerciseUnifiedSession(input: {
     subjectClaims: [SubjectClaim.ProfileName, SubjectClaim.SubjectIdentifier],
   });
   async function mutate(action: string, data?: unknown) {
-    const response = await admin.post(`${endpoint}/${action}`, { headers: adminHeaders, ...(data === undefined ? {} : { data }) });
+    const response = await admin.post(`${endpoint}/${action}`, {
+      headers: adminHeaders,
+      ...(data === undefined ? {} : { data }),
+    });
     expect(response.status(), `Admin ${action}`).toBe(200);
     const result = await response.json();
     expect(result.code).toBe(200);
@@ -46,8 +54,7 @@ export async function exerciseUnifiedSession(input: {
       expect(result.data.changed).toEqual(expect.any(Boolean));
       expect(result.data.result.clientCode).toBe(clientId);
     }
-    if (action === "secret/rotate")
-      expect(result.data.changed).toBe(true);
+    if (action === "secret/rotate") expect(result.data.changed).toBe(true);
     return result;
   }
   async function select(config: unknown) {
@@ -66,7 +73,10 @@ export async function exerciseUnifiedSession(input: {
   };
   const originalIdentity = identity(input.originalCode);
   async function authorizeCustom() {
-    const response = await browser.get(`${origin}/sso/authorize?${new URLSearchParams({ client: clientId, redirectUrl: redirectUri, state: "joint196" })}`, { maxRedirects: 0 });
+    const response = await browser.get(
+      `${origin}/sso/authorize?${new URLSearchParams({ client: clientId, redirectUrl: redirectUri, state: "joint196" })}`,
+      { maxRedirects: 0 },
+    );
     expect(response.status()).toBe(302);
     const location = new URL(response.headers().location!);
     expect(location.origin + location.pathname).toBe(new URL(redirectUri).origin + new URL(redirectUri).pathname);
@@ -75,17 +85,20 @@ export async function exerciseUnifiedSession(input: {
     expect(code).toEqual(expect.any(String));
     return String(code);
   }
-  const exchangeCustom = (code: string, secret: string) => browser.post(`${origin}/sso/token`, {
-    headers: { Authorization: `Basic ${Buffer.from(`${clientId}:${secret}`).toString("base64")}` },
-    form: { code, redirect_uri: redirectUri },
-  });
-  const useCustom = (request: APIRequestContext, sid: string) => request.get(`${origin}/api/iam/public/user-info`, {
-    headers: { Authorization: sid, Client: clientId },
-  });
+  const exchangeCustom = (code: string, secret: string) =>
+    browser.post(`${origin}/sso/token`, {
+      headers: { Authorization: `Basic ${Buffer.from(`${clientId}:${secret}`).toString("base64")}` },
+      form: { code, redirect_uri: redirectUri },
+    });
+  const useCustom = (request: APIRequestContext, sid: string) =>
+    request.get(`${origin}/api/iam/public/user-info`, {
+      headers: { Authorization: sid, Client: clientId },
+    });
   // Cookie-free reads exercise the protocol Token, not the browser root fallback.
   const tokenReader = await input.page.context().browser()!.newContext();
   try {
-    const useOidc = (token: string) => tokenReader.request.get(`${origin}/oidc/me`, { headers: { Authorization: `Bearer ${token}` } });
+    const useOidc = (token: string) =>
+      tokenReader.request.get(`${origin}/oidc/me`, { headers: { Authorization: `Bearer ${token}` } });
     await select(customConfig);
     await mutate("secret/rotate");
     const secretRead = await mutate("secret/read");
@@ -107,7 +120,10 @@ export async function exerciseUnifiedSession(input: {
     const pkce = createPkceS256Pair();
     async function authorizeOidc() {
       const state = "joint196-oidc";
-      const response = await browser.get(`${origin}/oidc/auth?${new URLSearchParams({ client_id: clientId, redirect_uri: redirectUri, response_type: "code", scope: "openid profile", state, code_challenge: pkce.challenge, code_challenge_method: "S256" })}`, { maxRedirects: 0 });
+      const response = await browser.get(
+        `${origin}/oidc/auth?${new URLSearchParams({ client_id: clientId, redirect_uri: redirectUri, response_type: "code", scope: "openid profile", state, code_challenge: pkce.challenge, code_challenge_method: "S256" })}`,
+        { maxRedirects: 0 },
+      );
       expect(response.status()).toBe(303);
       return receiveOidcAuthorizationCallback(response.headers().location!, { redirectUri, state }).code;
     }
@@ -142,16 +158,23 @@ export async function exerciseUnifiedSession(input: {
     expect(late.status()).toBe(400);
     expect(await late.json()).toMatchObject({ code: ApiErrorCode.InvalidSsoClient, data: null });
     expect(late.headers()["x-iam-client-session-revocation"]).toBe("already_terminated");
-    const fresh = await browser.post(`${origin}/oidc/token`, { form: { client_id: clientId, code: newCode, code_verifier: pkce.verifier, grant_type: "authorization_code", redirect_uri: redirectUri } });
+    const fresh = await browser.post(`${origin}/oidc/token`, {
+      form: {
+        client_id: clientId,
+        code: newCode,
+        code_verifier: pkce.verifier,
+        grant_type: "authorization_code",
+        redirect_uri: redirectUri,
+      },
+    });
     expect(fresh.status()).toBe(200);
-    const tokens = await fresh.json() as Record<string, unknown>;
+    const tokens = (await fresh.json()) as Record<string, unknown>;
     expect(tokens.access_token).toEqual(expect.any(String));
     expect((await useOidc(String(tokens.access_token))).status()).toBe(200);
     // The separate management root and its Client remain usable throughout.
     expect((await admin.get(endpoint, { headers: adminHeaders })).status()).toBe(200);
     return tokens;
-  }
-  finally {
+  } finally {
     await tokenReader.close();
   }
 }

@@ -8,11 +8,7 @@ export interface ApiEnvelope<TData = null, TCode extends ResponseCode = Response
 
 export function makeResponse(): ApiEnvelope<null, 200>;
 export function makeResponse<TCode extends ResponseCode>(code: TCode): ApiEnvelope<null, TCode>;
-export function makeResponse(
-  code: ResponseCode,
-  data: undefined,
-  message?: string,
-): ApiEnvelope<null, ResponseCode>;
+export function makeResponse(code: ResponseCode, data: undefined, message?: string): ApiEnvelope<null, ResponseCode>;
 export function makeResponse<TData, TCode extends ResponseCode>(
   code: TCode,
   data: TData,

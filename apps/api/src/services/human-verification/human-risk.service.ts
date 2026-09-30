@@ -1,6 +1,6 @@
+import { HumanVerificationAction } from "@api/enums/humanVerification.action";
 import type { HumanRiskServiceDeps } from "./human-verification.port";
 import type { HumanVerificationContext } from "./human-verification.type";
-import { HumanVerificationAction } from "@api/enums/humanVerification.action";
 
 type Dimension = "subject" | "ip";
 
@@ -35,10 +35,7 @@ export function createHumanRiskService(deps: HumanRiskServiceDeps) {
 
   async function incrementCount(action: HumanVerificationAction, dimension: Dimension, value: string) {
     const key = countKey(action, dimension, value);
-    await deps.redis.multi()
-      .incr(key)
-      .expire(key, deps.config.windowSeconds)
-      .exec();
+    await deps.redis.multi().incr(key).expire(key, deps.config.windowSeconds).exec();
   }
 
   async function shouldRequireVerification(
@@ -53,15 +50,15 @@ export function createHumanRiskService(deps: HumanRiskServiceDeps) {
     }
     if (action === HumanVerificationAction.OpenUserInfoLookup) {
       const entries = contextEntries(context, LOOKUP_USERNAMES_DIMENSIONS);
-      const counts = await Promise.all(entries.map(async entry => deps.redis.scard(
-        lookupUsernamesKey(entry.dimension, entry.value),
-      )));
-      return counts.some(count => count >= deps.config.lookupThreshold);
+      const counts = await Promise.all(
+        entries.map(async (entry) => deps.redis.scard(lookupUsernamesKey(entry.dimension, entry.value))),
+      );
+      return counts.some((count) => count >= deps.config.lookupThreshold);
     }
 
     const entries = contextEntries(context, LOGIN_FAILURE_DIMENSIONS);
-    const counts = await Promise.all(entries.map(async entry => getCount(action, entry.dimension, entry.value)));
-    return counts.some(count => count >= deps.config.loginFailureThreshold);
+    const counts = await Promise.all(entries.map(async (entry) => getCount(action, entry.dimension, entry.value)));
+    return counts.some((count) => count >= deps.config.loginFailureThreshold);
   }
 
   async function recordLoginFailure(
@@ -69,7 +66,7 @@ export function createHumanRiskService(deps: HumanRiskServiceDeps) {
     context: HumanVerificationContext,
   ) {
     const entries = contextEntries(context, LOGIN_FAILURE_DIMENSIONS);
-    await Promise.all(entries.map(entry => incrementCount(action, entry.dimension, entry.value)));
+    await Promise.all(entries.map((entry) => incrementCount(action, entry.dimension, entry.value)));
   }
 
   async function recordOpenUserInfoLookup(username: string, context: HumanVerificationContext) {
@@ -78,13 +75,12 @@ export function createHumanRiskService(deps: HumanRiskServiceDeps) {
       return;
     }
     const entries = contextEntries(context, LOOKUP_USERNAMES_DIMENSIONS);
-    await Promise.all(entries.map(async (entry) => {
-      const key = lookupUsernamesKey(entry.dimension, entry.value);
-      await deps.redis.multi()
-        .sadd(key, normalizedUsername)
-        .expire(key, deps.config.windowSeconds)
-        .exec();
-    }));
+    await Promise.all(
+      entries.map(async (entry) => {
+        const key = lookupUsernamesKey(entry.dimension, entry.value);
+        await deps.redis.multi().sadd(key, normalizedUsername).expire(key, deps.config.windowSeconds).exec();
+      }),
+    );
   }
 
   return {

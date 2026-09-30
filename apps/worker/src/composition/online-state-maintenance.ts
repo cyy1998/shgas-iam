@@ -1,5 +1,3 @@
-import type { OnlineStateInput } from "@worker/commands/online-state/arguments";
-import type { Redis } from "ioredis";
 import {
   createUnifiedCustomSsoInventory,
   createUnifiedCustomSsoMaintenance,
@@ -11,6 +9,8 @@ import {
   createUnifiedSessionMaintenance,
   createUnifiedSessionVerifier,
 } from "@iam/session-kernel/maintenance";
+import type { OnlineStateInput } from "@worker/commands/online-state/arguments";
+import type { Redis } from "ioredis";
 
 interface Page {
   nextCursor: string;
@@ -24,11 +24,7 @@ interface Owner {
   run: () => Promise<{ matching: number; removed: number; changed: number; unknown: number }>;
 }
 
-export function createOnlineStateMaintenance(
-  redis: Redis,
-  input: OnlineStateInput,
-  signal: AbortSignal,
-): Owner[] {
+export function createOnlineStateMaintenance(redis: Redis, input: OnlineStateInput, signal: AbortSignal): Owner[] {
   // Verification receives a capability with no eval, delete, acquisition or runtime factory.
   const scan = {
     scan: async (cursor: string, match: "MATCH", pattern: string, count: "COUNT", limit: string) =>
@@ -46,8 +42,7 @@ export function createOnlineStateMaintenance(
   };
   const writer = {
     ...reader,
-    eval: async (script: string, count: number, ...args: string[]) =>
-      await redis.eval(script, count, ...args),
+    eval: async (script: string, count: number, ...args: string[]) => await redis.eval(script, count, ...args),
   };
   const owners: Owner[] = [];
   function selected(name: OnlineStateInput["owner"]) {
@@ -69,8 +64,7 @@ export function createOnlineStateMaintenance(
         let pages = 0;
         do {
           signal.throwIfAborted();
-          if (++pages > 100_000)
-            throw new Error("Inventory page budget exhausted");
+          if (++pages > 100_000) throw new Error("Inventory page budget exhausted");
           const page = await (input.mode === "apply" ? apply(cursor) : inventory(cursor));
           cursor = page.nextCursor;
           report.matching += page.matching ?? 0;
@@ -88,8 +82,8 @@ export function createOnlineStateMaintenance(
     const verifier = createUnifiedSessionVerifier(scan, input.kernelNamespace!);
     add(
       "unified-kernel",
-      cursor => inventory.inventory({ cursor }),
-      cursor => maintenance.apply({ cursor }),
+      (cursor) => inventory.inventory({ cursor }),
+      (cursor) => maintenance.apply({ cursor }),
       () => verifier.verify(signal),
     );
   }
@@ -99,8 +93,8 @@ export function createOnlineStateMaintenance(
     const verifier = createUnifiedCustomSsoVerifier(scan, input.customNamespace!);
     add(
       "unified-custom-sso",
-      cursor => inventory.inventory({ cursor, clientCode: input.clientCode, artifacts: input.artifacts }),
-      cursor => maintenance.apply({ cursor, clientCode: input.clientCode, artifacts: input.artifacts }),
+      (cursor) => inventory.inventory({ cursor, clientCode: input.clientCode, artifacts: input.artifacts }),
+      (cursor) => maintenance.apply({ cursor, clientCode: input.clientCode, artifacts: input.artifacts }),
       () => verifier.verify(signal),
     );
   }
@@ -110,8 +104,8 @@ export function createOnlineStateMaintenance(
     const verifier = createOidcVerifier(scan, input.oidcNamespace!);
     add(
       "unified-oidc",
-      cursor => inventory.inventory({ cursor, clientId: input.clientCode }),
-      cursor => maintenance.apply({ cursor, clientId: input.clientCode }),
+      (cursor) => inventory.inventory({ cursor, clientId: input.clientCode }),
+      (cursor) => maintenance.apply({ cursor, clientId: input.clientCode }),
       () => verifier.verify(signal),
     );
   }

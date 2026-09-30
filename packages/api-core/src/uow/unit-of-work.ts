@@ -38,11 +38,7 @@ export interface CreateUnitOfWorkOptions<Tx, TxPorts extends object> {
 }
 
 export function consumeTransactionRollbackConfirmation(error: unknown) {
-  if (
-    typeof error !== "object"
-    || error === null
-    || !rollbackConfirmedErrors.has(error)
-  ) {
+  if (typeof error !== "object" || error === null || !rollbackConfirmedErrors.has(error)) {
     return false;
   }
   rollbackConfirmedErrors.delete(error);
@@ -50,8 +46,7 @@ export function consumeTransactionRollbackConfirmation(error: unknown) {
 }
 
 export function markTransactionRollbackConfirmed(error: unknown) {
-  if (typeof error === "object" && error !== null)
-    rollbackConfirmedErrors.add(error);
+  if (typeof error === "object" && error !== null) rollbackConfirmedErrors.add(error);
 }
 
 /**
@@ -78,17 +73,14 @@ export function createUnitOfWork<Tx, TxPorts extends object>(
               ...txPorts,
               afterCommit,
             });
-          }
-          catch (error) {
+          } catch (error) {
             callbackRejected = true;
             callbackFailure = error;
             throw error;
           }
         });
-      }
-      catch (error) {
-        if (callbackRejected && error === callbackFailure)
-          markTransactionRollbackConfirmed(error);
+      } catch (error) {
+        if (callbackRejected && error === callbackFailure) markTransactionRollbackConfirmed(error);
         throw error;
       }
 

@@ -1,9 +1,9 @@
-import type { SubjectAccessLifecycleRunInput } from "@iam/api-core/subject-access";
-import type { TransactionContext, UnitOfWorkPort, UnitOfWorkTransactionOptions } from "@iam/api-core/uow";
-import type { AdminMutationResult } from "@iam/contracts";
 import { INTERNAL_SERVER_ERROR } from "@iam/api-core/core/http-status-codes";
 import { CustomError } from "@iam/api-core/errors";
+import type { SubjectAccessLifecycleRunInput } from "@iam/api-core/subject-access";
+import type { TransactionContext, UnitOfWorkPort, UnitOfWorkTransactionOptions } from "@iam/api-core/uow";
 import { AfterCommitRequiredTaskError } from "@iam/api-core/uow";
+import type { AdminMutationResult } from "@iam/contracts";
 import { ApiErrorCode } from "@iam/contracts";
 
 export class AdminMutationCommittedError extends CustomError {
@@ -29,10 +29,8 @@ export function createAdminMutation<Ports extends object>(uow: UnitOfWorkPort<Po
         commandCompleted = true;
         return result;
       }, options);
-    }
-    catch (error) {
-      if (commandCompleted && error instanceof AfterCommitRequiredTaskError)
-        throw new AdminMutationCommittedError();
+    } catch (error) {
+      if (commandCompleted && error instanceof AfterCommitRequiredTaskError) throw new AdminMutationCommittedError();
       throw error;
     }
   }
@@ -47,8 +45,7 @@ export function createAdminMutation<Ports extends object>(uow: UnitOfWorkPort<Po
     ) {
       return transaction(async (tx) => {
         const target = await lock(tx);
-        if (target === null)
-          throw notFound();
+        if (target === null) throw notFound();
         return command(tx, target);
       }, options);
     },
@@ -70,10 +67,8 @@ export async function runAdminSubjectAccessMutation<T>(
         return result;
       },
     });
-  }
-  catch (error) {
-    if (committed)
-      throw new AdminMutationCommittedError();
+  } catch (error) {
+    if (committed) throw new AdminMutationCommittedError();
     throw error;
   }
 }

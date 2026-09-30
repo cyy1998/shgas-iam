@@ -39,10 +39,12 @@ describe("default queue options", () => {
   });
 
   test("allows callers to override default job options narrowly", () => {
-    expect(resolveDefaultJobOptions({
-      attempts: 5,
-      removeOnFail: 100,
-    })).toEqual({
+    expect(
+      resolveDefaultJobOptions({
+        attempts: 5,
+        removeOnFail: 100,
+      }),
+    ).toEqual({
       attempts: 5,
       backoff: {
         type: "exponential",

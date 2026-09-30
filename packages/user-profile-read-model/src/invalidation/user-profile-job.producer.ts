@@ -1,10 +1,5 @@
-import type {
-  RebuildUserProfileJobPayload,
-} from "@iam/contracts";
-import {
-  RebuildUserProfileJobPayloadSchema,
-  UserProfileJobName,
-} from "@iam/contracts";
+import type { RebuildUserProfileJobPayload } from "@iam/contracts";
+import { RebuildUserProfileJobPayloadSchema, UserProfileJobName } from "@iam/contracts";
 import { buildUserVersionJobId } from "@iam/jobs";
 
 export interface UserProfileRebuildJobQueuePort {
@@ -21,8 +16,8 @@ const REBUILD_ADD_BULK_CHUNK_SIZE = 500;
 
 export function createUserProfileJobProducer(queue: UserProfileRebuildJobQueuePort) {
   async function enqueueRebuildJobs(inputs: RebuildUserProfileJobPayload[]) {
-    const payloads = inputs.map(input => RebuildUserProfileJobPayloadSchema.parse(input));
-    const jobs = payloads.map(payload => ({
+    const payloads = inputs.map((input) => RebuildUserProfileJobPayloadSchema.parse(input));
+    const jobs = payloads.map((payload) => ({
       name: UserProfileJobName.RebuildUserProfile,
       data: payload,
       opts: { jobId: buildRebuildJobId(payload.userId, payload.dirtyVersion) },
@@ -30,7 +25,7 @@ export function createUserProfileJobProducer(queue: UserProfileRebuildJobQueuePo
     const addedJobs = [];
 
     for (let index = 0; index < jobs.length; index += REBUILD_ADD_BULK_CHUNK_SIZE) {
-      addedJobs.push(...await queue.addBulk(jobs.slice(index, index + REBUILD_ADD_BULK_CHUNK_SIZE)));
+      addedJobs.push(...(await queue.addBulk(jobs.slice(index, index + REBUILD_ADD_BULK_CHUNK_SIZE))));
     }
 
     return {

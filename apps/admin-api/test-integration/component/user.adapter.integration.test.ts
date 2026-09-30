@@ -1,17 +1,11 @@
-import type { Context } from "hono";
+import { describe, expect, mock, test } from "bun:test";
 import { createUserAdapter } from "@admin-api/routes/admin/user/user.adapter";
 import { createUserRoute } from "@admin-api/routes/admin/user/user.index";
 import { createAdminAuthorizationPolicy } from "@admin-api/services/admin-authorization/admin-authorization.policy";
 import { AdminMutationCommittedError } from "@admin-api/services/admin-mutation/admin-mutation";
 import { createErrorHandler } from "@iam/api-core/middlewares";
-import {
-  EmploymentStatus,
-  OrganizationLevel,
-  OrganizationType,
-  UserStatus,
-  UserType,
-} from "@iam/contracts";
-import { describe, expect, mock, test } from "bun:test";
+import { EmploymentStatus, OrganizationLevel, OrganizationType, UserStatus, UserType } from "@iam/contracts";
+import type { Context } from "hono";
 import { Hono } from "hono";
 import { addTestAdminAuthorizationMiddleware } from "../helpers/admin-authorization";
 
@@ -21,9 +15,9 @@ const allowed = { allowed: true, reason: null } as const;
 
 function createContext(
   roles: string[],
-  resolveForActor = mock(async () => roles.includes("iam:hr-admin")
-    ? { rootOrganizationIds: [10], organizationIds: [10] }
-    : null),
+  resolveForActor = mock(async () =>
+    roles.includes("iam:hr-admin") ? { rootOrganizationIds: [10], organizationIds: [10] } : null,
+  ),
   warn = mock(),
 ) {
   const policy = createAdminAuthorizationPolicy({
@@ -33,23 +27,16 @@ function createContext(
   return {
     req: { header: () => undefined },
     get(key: string) {
-      if (key === "adminAuthorizationPolicy")
-        return policy;
-      if (key === "userId")
-        return 7;
-      if (key === "username")
-        return "operator";
-      if (key === "userDetailDto")
-        return { roles };
+      if (key === "adminAuthorizationPolicy") return policy;
+      if (key === "userId") return 7;
+      if (key === "username") return "operator";
+      if (key === "userDetailDto") return { roles };
       return undefined;
     },
   } as unknown as Context;
 }
 
-function userDetail(
-  employments: unknown[] = [],
-  status: UserStatus = UserStatus.Enable,
-) {
+function userDetail(employments: unknown[] = [], status: UserStatus = UserStatus.Enable) {
   return {
     id: 42,
     username: "target",
@@ -145,12 +132,15 @@ describe("admin User adapter authorization projection", () => {
     });
 
     expect(response.status).toBe(200);
-    expect(surface.setUserForAdmin).toHaveBeenCalledWith({
-      username: "Mixed-Case",
-      name: "Display Name",
-      userType: UserType.Formal,
-      password: "  Secret123  ",
-    }, expect.anything());
+    expect(surface.setUserForAdmin).toHaveBeenCalledWith(
+      {
+        username: "Mixed-Case",
+        name: "Display Name",
+        userType: UserType.Formal,
+        password: "  Secret123  ",
+      },
+      expect.anything(),
+    );
   });
 
   test("tRPC applies the same User identity normalization to creates", async () => {
@@ -161,11 +151,14 @@ describe("admin User adapter authorization projection", () => {
       userType: UserType.Formal,
     });
 
-    expect(surface.setUserForAdmin).toHaveBeenCalledWith({
-      username: "TrPc-User",
-      name: "tRPC Name",
-      userType: UserType.Formal,
-    }, expect.anything());
+    expect(surface.setUserForAdmin).toHaveBeenCalledWith(
+      {
+        username: "TrPc-User",
+        name: "tRPC Name",
+        userType: UserType.Formal,
+      },
+      expect.anything(),
+    );
   });
 
   test("tRPC normalizes an explicitly submitted profile name", async () => {
@@ -203,11 +196,14 @@ describe("admin User adapter authorization projection", () => {
       userType: UserType.Formal,
     });
 
-    expect(surface.setUserForAdmin).toHaveBeenCalledWith({
-      username: "U".repeat(64),
-      name: "N".repeat(64),
-      userType: UserType.Formal,
-    }, expect.anything());
+    expect(surface.setUserForAdmin).toHaveBeenCalledWith(
+      {
+        username: "U".repeat(64),
+        name: "N".repeat(64),
+        userType: UserType.Formal,
+      },
+      expect.anything(),
+    );
   });
 
   test("tRPC rejects a 65-character username", async () => {
@@ -219,8 +215,7 @@ describe("admin User adapter authorization projection", () => {
         name: "Valid",
         userType: UserType.Formal,
       });
-    }
-    catch (error) {
+    } catch (error) {
       rejected = error;
     }
 
@@ -232,12 +227,18 @@ describe("admin User adapter authorization projection", () => {
     test(`${role} receives the disabled User transfer restriction on embedded Employment rows`, async () => {
       const adapter = createUserAdapter({
         random: { password: mock(() => "unused") },
-        userService: { getUserDetailByUsernameForAdmin: mock(async () => userDetail([
-          employment(1, 10, EmploymentStatus.Enable),
-          employment(2, 20, EmploymentStatus.Enable),
-        ], UserStatus.Disable)) },
+        userService: {
+          getUserDetailByUsernameForAdmin: mock(async () =>
+            userDetail(
+              [employment(1, 10, EmploymentStatus.Enable), employment(2, 20, EmploymentStatus.Enable)],
+              UserStatus.Disable,
+            ),
+          ),
+        },
       } as never);
-      const result = await adapter.userAdminRouter.createCaller({ hono: createContext([role]) }).detail({ username: "target" });
+      const result = await adapter.userAdminRouter
+        .createCaller({ hono: createContext([role]) })
+        .detail({ username: "target" });
       expect(result.employments[0]!.allowedActions).toMatchObject({
         transfer: { allowed: false, reason: "USER_DISABLED" },
         pause: allowed,
@@ -290,7 +291,9 @@ describe("admin User adapter authorization projection", () => {
       random: { password: mock(() => "unused") },
       userService: {
         updateUser: mock(async () => ({ changed: false, result: null })),
-        resetPasswordByUsername: mock(async () => { throw new AdminMutationCommittedError(); }),
+        resetPasswordByUsername: mock(async () => {
+          throw new AdminMutationCommittedError();
+        }),
       },
     } as never);
     const caller = adapter.userAdminRouter.createCaller({ hono: createContext(["iam:admin"]) });
@@ -299,8 +302,7 @@ describe("admin User adapter authorization projection", () => {
     let failure: unknown;
     try {
       await caller.resetPassword({ username: "target" });
-    }
-    catch (error) {
+    } catch (error) {
       failure = error;
     }
     expect(failure).toMatchObject({
@@ -314,10 +316,9 @@ describe("admin User adapter authorization projection", () => {
     const adapter = createUserAdapter({
       random: { password: mock(() => "unused") },
       userService: {
-        getUserDetailByUsernameForAdmin: mock(async () => userDetail([
-          employment(1, 20, EmploymentStatus.Enable),
-          employment(2, 10, EmploymentStatus.Pause),
-        ])),
+        getUserDetailByUsernameForAdmin: mock(async () =>
+          userDetail([employment(1, 20, EmploymentStatus.Enable), employment(2, 10, EmploymentStatus.Pause)]),
+        ),
       },
     } as never);
 
@@ -341,15 +342,16 @@ describe("admin User adapter authorization projection", () => {
   });
 
   test("distinguishes ended-only targets from HR-managed Users that are not enabled", async () => {
-    const getUserDetailByUsernameForAdmin = mock(async (username: string) => username === "ended"
-      ? userDetail([employment(1, 10, EmploymentStatus.Disable)])
-      : userDetail([employment(2, 10, EmploymentStatus.Enable)], UserStatus.Pause));
+    const getUserDetailByUsernameForAdmin = mock(async (username: string) =>
+      username === "ended"
+        ? userDetail([employment(1, 10, EmploymentStatus.Disable)])
+        : userDetail([employment(2, 10, EmploymentStatus.Enable)], UserStatus.Pause),
+    );
     const adapter = createUserAdapter({
       random: { password: mock(() => "unused") },
       userService: { getUserDetailByUsernameForAdmin },
     } as never);
-    const caller = adapter.userAdminRouter
-      .createCaller({ hono: createContext(["iam:hr-admin"]) });
+    const caller = adapter.userAdminRouter.createCaller({ hono: createContext(["iam:hr-admin"]) });
 
     const ended = await caller.detail({ username: "ended" });
     const paused = await caller.detail({ username: "paused" });
@@ -371,16 +373,14 @@ describe("admin User adapter authorization projection", () => {
   });
 
   test("allows completed resignation retry only for a disabled User with in-scope ended history", async () => {
-    const getUserDetailByUsernameForAdmin = mock(async (username: string) => userDetail(
-      [employment(1, username === "inside" ? 10 : 20, EmploymentStatus.Disable)],
-      UserStatus.Disable,
-    ));
+    const getUserDetailByUsernameForAdmin = mock(async (username: string) =>
+      userDetail([employment(1, username === "inside" ? 10 : 20, EmploymentStatus.Disable)], UserStatus.Disable),
+    );
     const adapter = createUserAdapter({
       random: { password: mock(() => "unused") },
       userService: { getUserDetailByUsernameForAdmin },
     } as never);
-    const caller = adapter.userAdminRouter
-      .createCaller({ hono: createContext(["iam:hr-admin"]) });
+    const caller = adapter.userAdminRouter.createCaller({ hono: createContext(["iam:hr-admin"]) });
 
     const inside = await caller.detail({ username: "inside" });
     const outside = await caller.detail({ username: "outside" });
@@ -396,10 +396,9 @@ describe("admin User adapter authorization projection", () => {
     const adapter = createUserAdapter({
       random: { password: mock(() => "unused") },
       userService: {
-        getUserDetailByUsernameForAdmin: mock(async () => userDetail([
-          employment(1, 10, EmploymentStatus.Enable),
-          employment(2, 20, EmploymentStatus.Disable),
-        ])),
+        getUserDetailByUsernameForAdmin: mock(async () =>
+          userDetail([employment(1, 10, EmploymentStatus.Enable), employment(2, 20, EmploymentStatus.Disable)]),
+        ),
       },
     } as never);
 
@@ -418,11 +417,13 @@ describe("admin User adapter authorization projection", () => {
     const adapter = createUserAdapter({
       random: { password: mock(() => "unused") },
       userService: {
-        getUserDetailByUsernameForAdmin: mock(async () => userDetail([
-          employment(1, 10, EmploymentStatus.Enable),
-          employment(2, 20, EmploymentStatus.Pause),
-          employment(3, 10, EmploymentStatus.Disable),
-        ])),
+        getUserDetailByUsernameForAdmin: mock(async () =>
+          userDetail([
+            employment(1, 10, EmploymentStatus.Enable),
+            employment(2, 20, EmploymentStatus.Pause),
+            employment(3, 10, EmploymentStatus.Disable),
+          ]),
+        ),
       },
     } as never);
 
@@ -430,11 +431,7 @@ describe("admin User adapter authorization projection", () => {
       .createCaller({ hono: createContext(["iam:hr-admin"], resolveForActor) })
       .detail({ username: "target" });
 
-    expect(result.employments.map(item => item.managementPath)).toEqual([
-      "/employments?employmentId=1",
-      null,
-      null,
-    ]);
+    expect(result.employments.map((item) => item.managementPath)).toEqual(["/employments?employmentId=1", null, null]);
     expect(result.employments[0]?.allowedActions).toMatchObject({
       pause: allowed,
       end: allowed,
@@ -535,14 +532,17 @@ describe("admin User adapter authorization projection", () => {
       expect(deleted).toEqual(outcome);
       for (const handler of [adapter.usersStatusUpdate, adapter.usersDelete]) {
         const json = mock((body: unknown) => body);
-        await handler({
-          ...createContext(["iam:admin"]),
-          req: {
-            header: () => undefined,
-            valid: (kind: string) => kind === "param" ? { username: "target" } : { status: UserStatus.Pause },
-          },
-          json,
-        } as never, async () => {});
+        await handler(
+          {
+            ...createContext(["iam:admin"]),
+            req: {
+              header: () => undefined,
+              valid: (kind: string) => (kind === "param" ? { username: "target" } : { status: UserStatus.Pause }),
+            },
+            json,
+          } as never,
+          async () => {},
+        );
         expect(json).toHaveBeenCalledWith({ code: 200, data: outcome, message: "success" }, 200);
       }
     }
@@ -552,8 +552,12 @@ describe("admin User adapter authorization projection", () => {
     const adapter = createUserAdapter({
       random: { password: mock(() => "unused") },
       userService: {
-        updateUserStatus: mock(async () => { throw new AdminMutationCommittedError(); }),
-        deleteUser: mock(async () => { throw new AdminMutationCommittedError(); }),
+        updateUserStatus: mock(async () => {
+          throw new AdminMutationCommittedError();
+        }),
+        deleteUser: mock(async () => {
+          throw new AdminMutationCommittedError();
+        }),
       },
     } as never);
     const caller = adapter.userAdminRouter.createCaller({ hono: createContext(["iam:admin"]) });
@@ -568,22 +572,25 @@ describe("admin User adapter authorization projection", () => {
 
   test("returns 403 and logs a direct HR status denial through the adapter", async () => {
     const warn = mock();
-    const updateUserStatus = mock(async (
-      username: string,
-      _status: UserStatus,
-      _auditContext: unknown,
-      authorization: {
-        denyMutation: (input: {
-          operationId: "admin.user.updateStatus";
-          resourceIdentifier: string;
-          reason: "USER_HAS_OUT_OF_SCOPE_OPEN_EMPLOYMENT";
-        }) => never;
-      },
-    ) => authorization.denyMutation({
-      operationId: "admin.user.updateStatus",
-      resourceIdentifier: username,
-      reason: "USER_HAS_OUT_OF_SCOPE_OPEN_EMPLOYMENT",
-    }));
+    const updateUserStatus = mock(
+      async (
+        username: string,
+        _status: UserStatus,
+        _auditContext: unknown,
+        authorization: {
+          denyMutation: (input: {
+            operationId: "admin.user.updateStatus";
+            resourceIdentifier: string;
+            reason: "USER_HAS_OUT_OF_SCOPE_OPEN_EMPLOYMENT";
+          }) => never;
+        },
+      ) =>
+        authorization.denyMutation({
+          operationId: "admin.user.updateStatus",
+          resourceIdentifier: username,
+          reason: "USER_HAS_OUT_OF_SCOPE_OPEN_EMPLOYMENT",
+        }),
+    );
     const adapter = createUserAdapter({
       random: { password: mock(() => "unused") },
       userService: { updateUserStatus },
@@ -594,8 +601,7 @@ describe("admin User adapter authorization projection", () => {
       await adapter.userAdminRouter
         .createCaller({ hono: createContext(["iam:hr-admin"], undefined, warn) })
         .updateStatus({ username: "target", status: UserStatus.Disable });
-    }
-    catch (error) {
+    } catch (error) {
       failure = error;
     }
 
@@ -618,18 +624,13 @@ describe("admin User adapter authorization projection", () => {
       userService: { updateUser },
     } as never);
 
-    for (const data of [
-      { status: UserStatus.Pause },
-      { orderNum: 3 },
-      { unexpected: true },
-    ]) {
+    for (const data of [{ status: UserStatus.Pause }, { orderNum: 3 }, { unexpected: true }]) {
       let failure: unknown;
       try {
         await adapter.userAdminRouter
           .createCaller({ hono: createContext(["iam:hr-admin"]) })
           .update({ username: "target", data } as never);
-      }
-      catch (error) {
+      } catch (error) {
         failure = error;
       }
       expect(failure).toMatchObject({ code: "FORBIDDEN" });
@@ -643,8 +644,7 @@ describe("admin User adapter authorization projection", () => {
       random: { password: mock(() => "unused") },
       userService: { updateUser },
     } as never);
-    const caller = adapter.userAdminRouter
-      .createCaller({ hono: createContext(["iam:hr-admin"]) });
+    const caller = adapter.userAdminRouter.createCaller({ hono: createContext(["iam:hr-admin"]) });
 
     await caller.update({ username: "target", data: { name: "Allowed" } });
     let failure: unknown;
@@ -653,8 +653,7 @@ describe("admin User adapter authorization projection", () => {
         username: "target",
         data: { status: UserStatus.Pause },
       } as never);
-    }
-    catch (error) {
+    } catch (error) {
       failure = error;
     }
 

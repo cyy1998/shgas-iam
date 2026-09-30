@@ -1,3 +1,4 @@
+import { describe, expect, test } from "bun:test";
 import {
   ClientSsoOidcConfigSchema,
   ClientSsoProtocol,
@@ -6,7 +7,6 @@ import {
   OidcScope,
   OidcTokenEndpointAuthMethod,
 } from "@iam/contracts";
-import { describe, expect, test } from "bun:test";
 import { OidcAccountDtoSchema, UserDtoSchema } from "../../user";
 
 const publicConfig = {
@@ -42,9 +42,7 @@ describe("OIDC configured redirect URI", () => {
       clientType: OidcClientType.Confidential,
     });
     expect(getClientSsoTokenEndpointAuthMethod(publicClient)).toBe(OidcTokenEndpointAuthMethod.None);
-    expect(getClientSsoTokenEndpointAuthMethod(confidential)).toBe(
-      OidcTokenEndpointAuthMethod.ClientSecretBasic,
-    );
+    expect(getClientSsoTokenEndpointAuthMethod(confidential)).toBe(OidcTokenEndpointAuthMethod.ClientSecretBasic);
   });
   test("rejects missing openid, duplicate redirects and duplicate scopes", () => {
     for (const config of [

@@ -7,12 +7,8 @@ export interface ClientCachePort {
 }
 
 export interface ClientReaderPort {
-  getClientByCode: (
-    clientCode: string,
-  ) => Promise<GenericClientRecord | null>;
-  getClientBySecret: (
-    clientSecret: string,
-  ) => Promise<GenericClientRecord | null>;
+  getClientByCode: (clientCode: string) => Promise<GenericClientRecord | null>;
+  getClientBySecret: (clientSecret: string) => Promise<GenericClientRecord | null>;
 }
 
 export interface ClientServiceDeps {

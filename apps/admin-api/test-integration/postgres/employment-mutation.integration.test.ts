@@ -1,8 +1,7 @@
-import type { AdminApiTxPorts } from "@admin-api/composition/tx";
-import type { TransactionContext } from "@iam/api-core/uow";
-import type { AdminApiPostgresTestHarness } from "./postgres-test-harness";
+import { afterAll, beforeAll, beforeEach, describe, expect, mock, test } from "bun:test";
 import { randomUUID } from "node:crypto";
 import { createAdminApiRepositories } from "@admin-api/composition/repositories";
+import type { AdminApiTxPorts } from "@admin-api/composition/tx";
 import { createAdminApiUnitOfWork } from "@admin-api/composition/tx";
 import { createEmploymentAdapter } from "@admin-api/routes/admin/employment/employment.adapter";
 import { createEmploymentRoute } from "@admin-api/routes/admin/employment/employment.index";
@@ -20,6 +19,7 @@ import { BadRequestError } from "@iam/api-core/errors";
 import { createErrorHandler } from "@iam/api-core/middlewares";
 import { createSubjectAccessBarrier, createSubjectAccessLifecycle } from "@iam/api-core/subject-access";
 import { createInMemorySubjectAccessStore } from "@iam/api-core/subject-access/testing";
+import type { TransactionContext } from "@iam/api-core/uow";
 import { mapUnitOfWork } from "@iam/api-core/uow";
 import {
   OrganizationResponsibilityAssignmentStatus as AssignmentStatus,
@@ -45,10 +45,10 @@ import {
 import { EmploymentAlreadyExistsError, EmploymentNotEditableError } from "@iam/domain/employment";
 import { createSubjectAccessTransitionRepository } from "@iam/user-profile-read-model/subject-access-transition";
 import { fetchRequestHandler } from "@trpc/server/adapters/fetch";
-import { afterAll, beforeAll, beforeEach, describe, expect, mock, test } from "bun:test";
 import { eq } from "drizzle-orm";
 import { Hono } from "hono";
 import { withTestFullOrganizationResponsibilityAuthorization } from "../helpers/admin-authorization";
+import type { AdminApiPostgresTestHarness } from "./postgres-test-harness";
 import { createAdminApiPostgresTestHarness } from "./postgres-test-harness";
 
 let harness: AdminApiPostgresTestHarness;
@@ -64,7 +64,7 @@ afterAll(async () => {
 });
 
 function commands(
-  decorate: (tx: TransactionContext<AdminApiTxPorts>) => AdminApiTxPorts = tx => tx,
+  decorate: (tx: TransactionContext<AdminApiTxPorts>) => AdminApiTxPorts = (tx) => tx,
   prepareRepairError?: Error,
   revocationError?: Error,
   initialSubjectIdentifier?: string,
@@ -80,7 +80,7 @@ function commands(
     }),
     decorate,
   );
-  const lifecycle = mapUnitOfWork(uow, tx => ({
+  const lifecycle = mapUnitOfWork(uow, (tx) => ({
     employmentStore: tx.repositories.employment,
     organizationReader: tx.repositories.organization,
     auditLogWriter: tx.auditService,
@@ -104,8 +104,7 @@ function commands(
   const random = { uuid: randomUUID };
   const barrier = createSubjectAccessBarrier({ clock, random, store });
   const revokeUserSessions = mock(async () => {
-    if (revocationError)
-      throw revocationError;
+    if (revocationError) throw revocationError;
   });
   return {
     revokeUserSessions,
@@ -126,7 +125,7 @@ function commands(
         random,
         transitionIntent: createSubjectAccessTransitionRepository(harness.db),
       }),
-      uow: mapUnitOfWork(uow, tx => ({
+      uow: mapUnitOfWork(uow, (tx) => ({
         employmentStore: tx.repositories.employment,
         userStore: tx.repositories.user,
         subjectAccessMutation: tx.subjectAccessMutation,
@@ -137,7 +136,7 @@ function commands(
     }),
     enqueueRebuildJobs,
     primary: createManagePrimaryEmploymentUseCase({
-      uow: mapUnitOfWork(uow, tx => ({
+      uow: mapUnitOfWork(uow, (tx) => ({
         employmentStore: tx.repositories.employment,
         auditLogWriter: tx.auditService,
         userProfileInvalidation: tx.userProfileInvalidation,
@@ -145,7 +144,7 @@ function commands(
     }),
     transfer: createTransferEmploymentUseCase({
       clock,
-      uow: mapUnitOfWork(uow, tx => ({
+      uow: mapUnitOfWork(uow, (tx) => ({
         employmentStore: tx.repositories.employment,
         organizationReader: tx.repositories.organization,
         positionReader: tx.repositories.position,
@@ -159,7 +158,7 @@ function commands(
     end: createEndEmploymentUseCase({ clock, uow: lifecycle }),
     create: createCreateEmploymentUseCase({
       clock,
-      uow: mapUnitOfWork(uow, tx => ({
+      uow: mapUnitOfWork(uow, (tx) => ({
         employmentStore: tx.repositories.employment,
         organizationReader: tx.repositories.organization,
         positionReader: tx.repositories.position,
@@ -173,7 +172,7 @@ function commands(
       roleRepository: repositories.role,
       privilegeRepository: repositories.privilege,
       roleAssignmentResolver: { resolveEffectiveRoles: async () => new Map() },
-      uow: mapUnitOfWork(uow, tx => ({
+      uow: mapUnitOfWork(uow, (tx) => ({
         employmentRepository: tx.repositories.employment,
         auditService: tx.auditService,
         userProfileInvalidation: tx.userProfileInvalidation,
@@ -182,7 +181,7 @@ function commands(
     assignment: withTestFullOrganizationResponsibilityAuthorization(
       createManageOrganizationResponsibilityAssignmentLifecycleUseCase({
         clock,
-        uow: mapUnitOfWork(uow, tx => ({
+        uow: mapUnitOfWork(uow, (tx) => ({
           assignmentStore: tx.repositories.organizationResponsibility,
           auditLogWriter: tx.auditService,
           userProfileInvalidation: tx.userProfileInvalidation,
@@ -223,13 +222,8 @@ async function seed(withEmployment = true) {
       orgType: OrganizationType.Department,
     })
     .returning();
-  await harness.db
-    .insert(organizationClosures)
-    .values({ ancestorId: org!.id, descendantId: org!.id, depth: 0 });
-  const [position] = await harness.db
-    .insert(positions)
-    .values({ posCode: "POS", posName: "Position" })
-    .returning();
+  await harness.db.insert(organizationClosures).values({ ancestorId: org!.id, descendantId: org!.id, depth: 0 });
+  const [position] = await harness.db.insert(positions).values({ posCode: "POS", posName: "Position" }).returning();
   const value = {
     userId: user!.id,
     orgId: org!.id,
@@ -237,9 +231,7 @@ async function seed(withEmployment = true) {
     startTime: new Date("2026-01-01T00:00:00Z"),
     status: EmploymentStatus.Enable,
   };
-  const employment = withEmployment
-    ? (await harness.db.insert(employments).values(value).returning())[0]!
-    : undefined;
+  const employment = withEmployment ? (await harness.db.insert(employments).values(value).returning())[0]! : undefined;
   return { user: user!, org: org!, position: position!, employment, value };
 }
 async function seedAssignments(employmentId: number, targetOrganizationId: number) {
@@ -275,8 +267,7 @@ async function facts() {
 async function failure(operation: () => Promise<unknown>) {
   try {
     await operation();
-  }
-  catch (error) {
+  } catch (error) {
     return error;
   }
   throw new Error("Expected command failure");
@@ -288,8 +279,7 @@ async function waitForLock(table: string, minimum = 1) {
       from pg_stat_activity where wait_event_type = 'Lock'
       and application_name = current_setting('application_name') and pid <> pg_backend_pid()
       and query like ${`%${table}%`}`;
-    if (rows[0]!.blocked)
-      return;
+    if (rows[0]!.blocked) return;
   }
   throw new Error(`No blocked PostgreSQL query for ${table}`);
 }
@@ -303,37 +293,42 @@ describe("Employment mutations through production PostgreSQL UnitOfWork", () => 
         const authorization = await employmentAuthorization(fixture.org.id, scoped);
         const subject = commands();
         const before = await facts();
-        const operation = () => subject.create.execute(
-          { username: "holder", orgCode: "ORG", posCode: "POS", isPrimary: true },
-          { authorization },
-        );
+        const operation = () =>
+          subject.create.execute(
+            { username: "holder", orgCode: "ORG", posCode: "POS", isPrimary: true },
+            { authorization },
+          );
         if (status === UserStatus.Disable) {
           const error = await failure(operation);
           expect(error).toMatchObject({ httpStatus: 409, message: "用户已停用，不能新增任职或转岗" });
           const after = await facts();
           expect(after).toEqual(before);
           expect(subject.enqueueRebuildJobs).not.toHaveBeenCalled();
-        }
-        else {
+        } else {
           const result = await operation();
           expect(result).toEqual({ changed: true, result: { id: expect.any(Number) } });
           const after = await facts();
-          expect(after.employments).toMatchObject([{
-            id: result.result.id,
-            status: EmploymentStatus.Enable,
-            isPrimary: true,
-            endTime: null,
-          }]);
+          expect(after.employments).toMatchObject([
+            {
+              id: result.result.id,
+              status: EmploymentStatus.Enable,
+              isPrimary: true,
+              endTime: null,
+            },
+          ]);
           expect(after.users).toEqual(before.users);
           expect(after.audits).toMatchObject([{ action: "admin.employment.create" }]);
           expect(after.dirty).toHaveLength(1);
           await harness.db.insert(positions).values({ posCode: "DEST", posName: "Destination" });
-          const transferred = await subject.transfer.execute({
-            employmentId: result.result.id,
-            newOrgCode: "ORG",
-            newPosCode: "DEST",
-            isPrimary: true,
-          }, { authorization });
+          const transferred = await subject.transfer.execute(
+            {
+              employmentId: result.result.id,
+              newOrgCode: "ORG",
+              newPosCode: "DEST",
+              isPrimary: true,
+            },
+            { authorization },
+          );
           const afterTransfer = await facts();
           expect(afterTransfer.users).toEqual(before.users);
           expect(afterTransfer.employments).toMatchObject([
@@ -349,15 +344,23 @@ describe("Employment mutations through production PostgreSQL UnitOfWork", () => 
       await seedAssignments(id, fixture.org.id);
       await harness.db.update(employments).set({ isPrimary: true }).where(eq(employments.id, id));
       await harness.db.update(users).set({ status: UserStatus.Disable }).where(eq(users.id, fixture.user.id));
-      const [otherPosition] = await harness.db.insert(positions).values([
-        { posCode: "OTHER", posName: "Other primary" },
-        { posCode: "DEST", posName: "Destination" },
-      ]).returning();
+      const [otherPosition] = await harness.db
+        .insert(positions)
+        .values([
+          { posCode: "OTHER", posName: "Other primary" },
+          { posCode: "DEST", posName: "Destination" },
+        ])
+        .returning();
       await harness.db.insert(employments).values({ ...fixture.value, posId: otherPosition!.id, isPrimary: true });
       const authorization = await employmentAuthorization(fixture.org.id, scoped);
       const subject = commands();
       const before = await facts();
-      const error = await failure(() => subject.transfer.execute({ employmentId: id, newOrgCode: "ORG", newPosCode: "DEST", isPrimary: true }, { authorization }));
+      const error = await failure(() =>
+        subject.transfer.execute(
+          { employmentId: id, newOrgCode: "ORG", newPosCode: "DEST", isPrimary: true },
+          { authorization },
+        ),
+      );
       expect(error).toMatchObject({ httpStatus: 409, message: "用户已停用，不能新增任职或转岗" });
       const after = await facts();
       expect(after).toEqual(before);
@@ -373,7 +376,12 @@ describe("Employment mutations through production PostgreSQL UnitOfWork", () => 
       await harness.db.update(users).set({ status: UserStatus.Disable }).where(eq(users.id, fixture.user.id));
       const authorization = await employmentAuthorization(fixture.org.id, scoped);
       const subject = commands();
-      const edit = await subject.profile.updateEmployment(id, { description: "Maintained while disabled" }, undefined, authorization);
+      const edit = await subject.profile.updateEmployment(
+        id,
+        { description: "Maintained while disabled" },
+        undefined,
+        authorization,
+      );
       expect(edit.changed).toBe(true);
       const pause = await subject.availability.execute({ employmentId: id, command: "pause" }, { authorization });
       expect(pause.changed).toBe(true);
@@ -381,15 +389,28 @@ describe("Employment mutations through production PostgreSQL UnitOfWork", () => 
       expect(set.changed).toBe(true);
       const clear = await subject.primary.execute({ employmentId: id, command: "clear" }, { authorization });
       expect(clear.changed).toBe(true);
-      const resume = await subject.availability.execute({ employmentId: id, command: "resume", expectedAncestorOrgCode: "ORG" }, { authorization });
+      const resume = await subject.availability.execute(
+        { employmentId: id, command: "resume", expectedAncestorOrgCode: "ORG" },
+        { authorization },
+      );
       expect(resume.changed).toBe(true);
       const ended = await subject.end.execute({ employmentId: id }, { authorization });
       expect(ended.changed).toBe(true);
       const before = await facts();
       expect(before.users[0]!.status).toBe(UserStatus.Disable);
-      expect(before.employments[0]).toMatchObject({ description: "Maintained while disabled", status: EmploymentStatus.Disable, endTime: now, isPrimary: false });
-      expect(before.assignments.every(row => row.status === AssignmentStatus.Disable)).toBe(true);
-      const error = await failure(() => subject.availability.execute({ employmentId: id, command: "resume", expectedAncestorOrgCode: "ORG" }, { authorization }));
+      expect(before.employments[0]).toMatchObject({
+        description: "Maintained while disabled",
+        status: EmploymentStatus.Disable,
+        endTime: now,
+        isPrimary: false,
+      });
+      expect(before.assignments.every((row) => row.status === AssignmentStatus.Disable)).toBe(true);
+      const error = await failure(() =>
+        subject.availability.execute(
+          { employmentId: id, command: "resume", expectedAncestorOrgCode: "ORG" },
+          { authorization },
+        ),
+      );
       expect(error).toBeInstanceOf(EmploymentNotEditableError);
       const after = await facts();
       expect(after).toEqual(before);
@@ -411,54 +432,82 @@ describe("Employment mutations through production PostgreSQL UnitOfWork", () => 
         managePrimaryEmployment: subject.primary,
         resignUser: subject.resign,
       });
-      const app = new Hono<{ Variables: {
-        adminAuthorizationPolicy: ReturnType<typeof createAdminAuthorizationPolicy>;
-        userId: number;
-        username: string;
-        userDetailDto: { roles: string[] };
-      }; }>();
+      const app = new Hono<{
+        Variables: {
+          adminAuthorizationPolicy: ReturnType<typeof createAdminAuthorizationPolicy>;
+          userId: number;
+          username: string;
+          userDetailDto: { roles: string[] };
+        };
+      }>();
       app.use("*", async (context, next) => {
         context.set("userId", fixture.user.id);
         context.set("username", "actor");
         context.set("userDetailDto", { roles: ["iam:admin"] });
-        context.set("adminAuthorizationPolicy", createAdminAuthorizationPolicy({
-          logger: { warn: mock() },
-          hrAdministrationScopeResolver: { resolveForActor: async () => null },
-        }));
+        context.set(
+          "adminAuthorizationPolicy",
+          createAdminAuthorizationPolicy({
+            logger: { warn: mock() },
+            hrAdministrationScopeResolver: { resolveForActor: async () => null },
+          }),
+        );
         await next();
       });
       app.onError(createErrorHandler({ error: mock(), warn: mock(), info: mock() }));
       app.route("/admin", createEmploymentRoute(adapter));
-      app.all("/rpc/*", context => fetchRequestHandler({ endpoint: "/rpc", req: context.req.raw, router: adapter.employmentAdminRouter, createContext: () => ({ hono: context }) }));
+      app.all("/rpc/*", (context) =>
+        fetchRequestHandler({
+          endpoint: "/rpc",
+          req: context.req.raw,
+          router: adapter.employmentAdminRouter,
+          createContext: () => ({ hono: context }),
+        }),
+      );
       const visible = await app.request(`/admin/employments/${fixture.employment!.id}`);
       const visibleBody = await visible.json();
       expect(visibleBody).toMatchObject({ data: { allowedActions: { transfer: { allowed: true } } } });
       await harness.db.update(users).set({ status: UserStatus.Disable }).where(eq(users.id, fixture.user.id));
       const before = await facts();
       for (const command of ["create", "transfer"] as const) {
-        const body = command === "create"
-          ? { username: "holder", orgCode: "ORG", posCode: "DEST", isPrimary: true }
-          : { newOrgCode: "ORG", newPosCode: "DEST", isPrimary: true };
-        const path = protocol === "REST"
-          ? command === "create" ? "/admin/employments" : `/admin/employments/${fixture.employment!.id}/transfer`
-          : `/rpc/${command}`;
-        const response = await app.request(path, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(protocol === "tRPC" && command === "transfer" ? { id: fixture.employment!.id, data: body } : body) });
+        const body =
+          command === "create"
+            ? { username: "holder", orgCode: "ORG", posCode: "DEST", isPrimary: true }
+            : { newOrgCode: "ORG", newPosCode: "DEST", isPrimary: true };
+        const path =
+          protocol === "REST"
+            ? command === "create"
+              ? "/admin/employments"
+              : `/admin/employments/${fixture.employment!.id}/transfer`
+            : `/rpc/${command}`;
+        const response = await app.request(path, {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify(
+            protocol === "tRPC" && command === "transfer" ? { id: fixture.employment!.id, data: body } : body,
+          ),
+        });
         const result = await response.json();
         expect(response.status).toBe(409);
-        expect(result).toMatchObject(protocol === "REST"
-          ? { code: "EMPLOYMENT.USER_DISABLED" }
-          : { error: { data: { code: "CONFLICT", serviceCode: "EMPLOYMENT.USER_DISABLED" } } });
+        expect(result).toMatchObject(
+          protocol === "REST"
+            ? { code: "EMPLOYMENT.USER_DISABLED" }
+            : { error: { data: { code: "CONFLICT", serviceCode: "EMPLOYMENT.USER_DISABLED" } } },
+        );
         const after = await facts();
         expect(after).toEqual(before);
       }
       const refreshed = await app.request(`/admin/employments/${fixture.employment!.id}`);
       const refreshedBody = await refreshed.json();
-      expect(refreshedBody).toMatchObject({ data: { allowedActions: {
-        transfer: { allowed: false, reason: "USER_DISABLED" },
-        pause: { allowed: true },
-        end: { allowed: true },
-        setPrimary: { allowed: true },
-      } } });
+      expect(refreshedBody).toMatchObject({
+        data: {
+          allowedActions: {
+            transfer: { allowed: false, reason: "USER_DISABLED" },
+            pause: { allowed: true },
+            end: { allowed: true },
+            setPrimary: { allowed: true },
+          },
+        },
+      });
     });
   }
 
@@ -510,8 +559,8 @@ describe("Employment mutations through production PostgreSQL UnitOfWork", () => 
       });
       await Promise.race([entered.promise, blocker]);
       const subject = commands();
-      const pending
-        = command === "primary"
+      const pending =
+        command === "primary"
           ? subject.primary.execute({ command: "set", employmentId: higher!.id })
           : subject.transfer.execute({
               employmentId: higher!.id,
@@ -531,8 +580,7 @@ describe("Employment mutations through production PostgreSQL UnitOfWork", () => 
         });
         opposite = commands().primary.execute({ command: "clear", employmentId: lowId });
         await waitForLock("employment", 2);
-      }
-      finally {
+      } finally {
         release.resolve();
         await Promise.allSettled([blocker, pending, ...(opposite ? [opposite] : [])]);
       }
@@ -540,9 +588,9 @@ describe("Employment mutations through production PostgreSQL UnitOfWork", () => 
       await opposite;
       expect(result.changed).toBe(true);
       const after = await facts();
-      expect(after.employments.find(row => row.id === lowId)!.isPrimary).toBe(false);
-      expect(after.employments.filter(row => row.isPrimary)).toHaveLength(1);
-      expect(after.audits.filter(row => row.targetType === "employment")).toHaveLength(2);
+      expect(after.employments.find((row) => row.id === lowId)!.isPrimary).toBe(false);
+      expect(after.employments.filter((row) => row.isPrimary)).toHaveLength(1);
+      expect(after.audits.filter((row) => row.targetType === "employment")).toHaveLength(2);
     });
   }
 
@@ -598,8 +646,7 @@ describe("Employment mutations through production PostgreSQL UnitOfWork", () => 
         await tx`select id from organization where id = ${fixture.org.id} for update nowait`;
         await tx`select id from position where id = ${higherPosition!.id} for update nowait`;
       });
-    }
-    finally {
+    } finally {
       release.resolve();
       await Promise.allSettled([blocker, createPending, ...(transferPending ? [transferPending] : [])]);
     }
@@ -608,19 +655,19 @@ describe("Employment mutations through production PostgreSQL UnitOfWork", () => 
     expect(created).toEqual({ changed: true, result: { id: expect.any(Number) } });
     expect(transferred).toEqual({ changed: true, result: { id: expect.any(Number) } });
     const after = await facts();
-    expect(after.employments.find(row => row.id === lowId)).toMatchObject({
+    expect(after.employments.find((row) => row.id === lowId)).toMatchObject({
       isPrimary: false,
       status: EmploymentStatus.Enable,
       endTime: null,
     });
-    expect(after.employments.find(row => row.id === higher!.id)).toMatchObject({
+    expect(after.employments.find((row) => row.id === higher!.id)).toMatchObject({
       isPrimary: false,
       status: EmploymentStatus.Disable,
       endTime: now,
     });
     // Newly inserted rows were absent from both selected write sets; no phantom protection is claimed.
     for (const id of [created.result.id, transferred!.result.id]) {
-      expect(after.employments.find(row => row.id === id)).toMatchObject({
+      expect(after.employments.find((row) => row.id === id)).toMatchObject({
         isPrimary: true,
         status: EmploymentStatus.Enable,
         startTime: now,
@@ -628,11 +675,11 @@ describe("Employment mutations through production PostgreSQL UnitOfWork", () => 
       });
     }
     expect(after.employments).toHaveLength(4);
-    expect(after.audits.map(row => row.action).sort()).toEqual([
+    expect(after.audits.map((row) => row.action).sort()).toEqual([
       "admin.employment.create",
       "admin.employment.transfer",
     ]);
-    expect(after.audits.map(row => row.details)).toMatchObject([{ changed: true }, { changed: true }]);
+    expect(after.audits.map((row) => row.details)).toMatchObject([{ changed: true }, { changed: true }]);
     expect(after.dirty[0]!.dirtyVersion).toBe("2");
     expect(subject.enqueueRebuildJobs).toHaveBeenCalledTimes(2);
   });
@@ -641,7 +688,7 @@ describe("Employment mutations through production PostgreSQL UnitOfWork", () => 
     test(`Primary ${command} audit failure leaves no committed business, audit or dirty changes`, async () => {
       const fixture = await seed();
       const sentinel = new Error("primary audit failure");
-      const subject = commands(tx => ({
+      const subject = commands((tx) => ({
         ...tx,
         auditService: {
           ...tx.auditService,
@@ -652,9 +699,7 @@ describe("Employment mutations through production PostgreSQL UnitOfWork", () => 
         },
       }));
       const before = await facts();
-      const error = await failure(() =>
-        subject.primary.execute({ command, employmentId: fixture.employment!.id }),
-      );
+      const error = await failure(() => subject.primary.execute({ command, employmentId: fixture.employment!.id }));
       expect(error).toBe(sentinel);
       const after = await facts();
       expect(after).toEqual(before);
@@ -673,12 +718,10 @@ describe("Employment mutations through production PostgreSQL UnitOfWork", () => 
           { posCode: "DEST", posName: "Destination" },
         ])
         .returning();
-      await harness.db
-        .insert(employments)
-        .values({ ...fixture.value, posId: primaryPosition!.id, isPrimary: true });
+      await harness.db.insert(employments).values({ ...fixture.value, posId: primaryPosition!.id, isPrimary: true });
       const sentinel = new Error(`transfer ${stage}`);
       let contenderId: number | undefined;
-      const subject = commands(tx => ({
+      const subject = commands((tx) => ({
         ...tx,
         ...(stage === "audit"
           ? {
@@ -686,8 +729,7 @@ describe("Employment mutations through production PostgreSQL UnitOfWork", () => 
                 ...tx.auditService,
                 recordAuditLog: async (input) => {
                   await tx.auditService.recordAuditLog(input);
-                  if (input.action === "admin.employment.transfer")
-                    throw sentinel;
+                  if (input.action === "admin.employment.transfer") throw sentinel;
                 },
               },
             }
@@ -731,13 +773,10 @@ describe("Employment mutations through production PostgreSQL UnitOfWork", () => 
           isPrimary: true,
         }),
       );
-      if (stage === "unique")
-        expect(error).toBeInstanceOf(EmploymentAlreadyExistsError);
+      if (stage === "unique") expect(error).toBeInstanceOf(EmploymentAlreadyExistsError);
       else expect(error).toBe(sentinel);
       const after = await facts();
-      expect({ ...after, employments: after.employments.filter(row => row.id !== contenderId) }).toEqual(
-        before,
-      );
+      expect({ ...after, employments: after.employments.filter((row) => row.id !== contenderId) }).toEqual(before);
       expect(subject.enqueueRebuildJobs).not.toHaveBeenCalled();
     });
   }
@@ -761,18 +800,18 @@ describe("Employment mutations through production PostgreSQL UnitOfWork", () => 
     const result = await subject.transfer.execute(input);
     expect(result).toEqual({ changed: true, result: { id: expect.any(Number) } });
     const after = await facts();
-    expect(after.employments.find(row => row.id === input.employmentId)).toMatchObject({
+    expect(after.employments.find((row) => row.id === input.employmentId)).toMatchObject({
       status: EmploymentStatus.Disable,
       isPrimary: false,
       endTime: now,
     });
-    expect(after.employments.find(row => row.id === result.result.id)).toMatchObject({
+    expect(after.employments.find((row) => row.id === result.result.id)).toMatchObject({
       status: EmploymentStatus.Enable,
       isPrimary: true,
       startTime: now,
       endTime: null,
     });
-    expect(after.assignments.map(row => row.endTime)).toEqual([historicalEnd, now]);
+    expect(after.assignments.map((row) => row.endTime)).toEqual([historicalEnd, now]);
     expect(after.audits).toHaveLength(2);
     expect(after.dirty[0]!.dirtyVersion).toBe("1");
     const retry = await failure(() => subject.transfer.execute(input));
@@ -787,7 +826,7 @@ describe("Employment mutations through production PostgreSQL UnitOfWork", () => 
       const id = fixture.employment!.id;
       const entered = Promise.withResolvers<void>();
       const release = Promise.withResolvers<void>();
-      const first = commands(tx => ({
+      const first = commands((tx) => ({
         ...tx,
         auditService: {
           ...tx.auditService,
@@ -801,8 +840,8 @@ describe("Employment mutations through production PostgreSQL UnitOfWork", () => 
       const firstPending = first.availability.execute({ employmentId: id, command: "pause" });
       await Promise.race([entered.promise, firstPending]);
       const second = commands();
-      const secondPending
-        = secondCommand === "profile"
+      const secondPending =
+        secondCommand === "profile"
           ? second.profile.updateEmployment(id, { description: "Saved" })
           : secondCommand === "end"
             ? second.end.execute({ employmentId: id })
@@ -814,8 +853,7 @@ describe("Employment mutations through production PostgreSQL UnitOfWork", () => 
           await tx`select id from organization where id = ${fixture.org.id} for update nowait`;
           await tx`select id from position where id = ${fixture.position.id} for update nowait`;
         });
-      }
-      finally {
+      } finally {
         release.resolve();
         await Promise.allSettled([firstPending, secondPending]);
       }
@@ -878,7 +916,7 @@ describe("Employment mutations through production PostgreSQL UnitOfWork", () => 
       const fixture = await seed();
       await seedAssignments(fixture.employment!.id, fixture.org.id);
       const sentinel = new Error(`injected ${stage}`);
-      const subject = commands(tx => ({
+      const subject = commands((tx) => ({
         ...tx,
         ...(stage === "audit"
           ? {
@@ -930,7 +968,7 @@ describe("Employment mutations through production PostgreSQL UnitOfWork", () => 
       }
       const entered = Promise.withResolvers<void>();
       const release = Promise.withResolvers<void>();
-      const direct = commands(tx => ({
+      const direct = commands((tx) => ({
         ...tx,
         auditService: {
           ...tx.auditService,
@@ -944,7 +982,7 @@ describe("Employment mutations through production PostgreSQL UnitOfWork", () => 
       const directPending = direct.assignment.execute({ command: "end", id: children[1]!.id });
       await Promise.race([entered.promise, directPending]);
       let parentWriteEntered = false;
-      const parent = commands(tx => ({
+      const parent = commands((tx) => ({
         ...tx,
         repositories: {
           ...tx.repositories,
@@ -958,8 +996,8 @@ describe("Employment mutations through production PostgreSQL UnitOfWork", () => 
         },
       }));
       await harness.db.insert(positions).values({ posCode: "DEST", posName: "Destination" });
-      const parentPending
-        = parentCommand === "resign"
+      const parentPending =
+        parentCommand === "resign"
           ? parent.resign.execute({ username: "holder" })
           : parentCommand === "end"
             ? parent.end.execute({ employmentId: fixture.employment!.id })
@@ -995,12 +1033,11 @@ describe("Employment mutations through production PostgreSQL UnitOfWork", () => 
         expect(parentWriteEntered).toBe(false);
         const visible = await facts();
         expect(visible.employments[0]!.status).toBe(EmploymentStatus.Enable);
-        expect(visible.assignments.map(row => row.status)).toEqual([
+        expect(visible.assignments.map((row) => row.status)).toEqual([
           AssignmentStatus.Enable,
           AssignmentStatus.Enable,
         ]);
-      }
-      finally {
+      } finally {
         release.resolve();
         await Promise.allSettled([directPending, parentPending]);
       }
@@ -1011,16 +1048,16 @@ describe("Employment mutations through production PostgreSQL UnitOfWork", () => 
         result: parentCommand === "transfer" ? { id: expect.any(Number) } : null,
       });
       const after = await facts();
-      expect(after.assignments.map(row => ({ status: row.status, endTime: row.endTime }))).toEqual([
+      expect(after.assignments.map((row) => ({ status: row.status, endTime: row.endTime }))).toEqual([
         { status: AssignmentStatus.Disable, endTime: now },
         { status: AssignmentStatus.Disable, endTime: now },
       ]);
       expect(
         after.audits
-          .filter(row => row.targetType === "organization_responsibility_assignment")
-          .map(row => row.targetId)
+          .filter((row) => row.targetType === "organization_responsibility_assignment")
+          .map((row) => row.targetId)
           .sort(),
-      ).toEqual(children.map(row => row.id));
+      ).toEqual(children.map((row) => row.id));
       expect(after.audits).toHaveLength(3);
       expect(after.dirty[0]!.dirtyVersion).toBe("2");
     });
@@ -1041,12 +1078,7 @@ describe("Employment mutations through production PostgreSQL UnitOfWork", () => 
             },
           }).getUserAuthorization({ userId: 99, username: "hr", roles: ["iam:hr-admin"] })
         : undefined;
-      const subject = commands(
-        undefined,
-        undefined,
-        new Error("session failure"),
-        fixture.user.subjectIdentifier,
-      );
+      const subject = commands(undefined, undefined, new Error("session failure"), fixture.user.subjectIdentifier);
       const first = await subject.resign.execute({ username: "holder" }, { authorization });
       expect(first).toEqual({ changed: true, result: null });
       const committed = await facts();
@@ -1074,7 +1106,7 @@ describe("Employment mutations through production PostgreSQL UnitOfWork", () => 
       const fixture = await seed();
       await seedAssignments(fixture.employment!.id, fixture.org.id);
       const sentinel = new Error(stage);
-      const subject = commands(tx => ({
+      const subject = commands((tx) => ({
         ...tx,
         ...(stage === "audit"
           ? {
@@ -1082,8 +1114,7 @@ describe("Employment mutations through production PostgreSQL UnitOfWork", () => 
                 ...tx.auditService,
                 recordAuditLog: async (input) => {
                   await tx.auditService.recordAuditLog(input);
-                  if (input.action === "admin.employment.resign_user")
-                    throw sentinel;
+                  if (input.action === "admin.employment.resign_user") throw sentinel;
                 },
               },
             }
@@ -1119,9 +1150,7 @@ describe("Employment mutations through production PostgreSQL UnitOfWork", () => 
     const after = await facts();
     expect(after.users[0]!.status).toBe(UserStatus.Disable);
     expect(after.employments[0]!.endTime).toEqual(now);
-    expect(after.audits).toMatchObject([
-      { action: "admin.employment.resign_user", details: { changed: true } },
-    ]);
+    expect(after.audits).toMatchObject([{ action: "admin.employment.resign_user", details: { changed: true } }]);
     expect(after.dirty[0]!.dirtyVersion).toBe("1");
   });
 
@@ -1132,9 +1161,7 @@ describe("Employment mutations through production PostgreSQL UnitOfWork", () => 
     expect(error).toBeInstanceOf(AdminMutationCommittedError);
     const after = await facts();
     expect(after.users[0]!.status).toBe(UserStatus.Disable);
-    expect(after.audits).toMatchObject([
-      { action: "admin.employment.resign_user", details: { changed: true } },
-    ]);
+    expect(after.audits).toMatchObject([{ action: "admin.employment.resign_user", details: { changed: true } }]);
     expect(after.dirty[0]!.dirtyVersion).toBe("1");
   });
 
@@ -1151,7 +1178,7 @@ describe("Employment mutations through production PostgreSQL UnitOfWork", () => 
     const subject = commands();
     const pending = subject.resign.execute({ username: "holder" });
     try {
-      await waitForLock("\"user\"");
+      await waitForLock('"user"');
       await harness.sql.begin(async (tx) => {
         await tx`select id from employment where id = ${fixture.employment!.id} for update nowait`;
       });
@@ -1160,8 +1187,7 @@ describe("Employment mutations through production PostgreSQL UnitOfWork", () => 
       await harness.sql.begin(async (tx) => {
         await tx`select id from subject_access_transition where id = ${intents[0]!.id} for update nowait`;
       });
-    }
-    finally {
+    } finally {
       release.resolve();
       await Promise.allSettled([blocker, pending]);
     }
@@ -1171,10 +1197,7 @@ describe("Employment mutations through production PostgreSQL UnitOfWork", () => 
 
   test("Resignation locks User then all Employments in ascending order before writing", async () => {
     const fixture = await seed();
-    const [position] = await harness.db
-      .insert(positions)
-      .values({ posCode: "SECOND", posName: "Second" })
-      .returning();
+    const [position] = await harness.db.insert(positions).values({ posCode: "SECOND", posName: "Second" }).returning();
     const [higher] = await harness.db
       .insert(employments)
       .values({ ...fixture.value, posId: position!.id, status: EmploymentStatus.Pause })
@@ -1202,16 +1225,15 @@ describe("Employment mutations through production PostgreSQL UnitOfWork", () => 
       });
       const visible = await facts();
       expect(visible.users[0]!.status).toBe(UserStatus.Enable);
-      expect(visible.employments.map(row => row.endTime)).toEqual([null, null]);
-    }
-    finally {
+      expect(visible.employments.map((row) => row.endTime)).toEqual([null, null]);
+    } finally {
       release.resolve();
       await Promise.allSettled([blocker, pending]);
     }
     const result = await pending;
     expect(result).toEqual({ changed: true, result: null });
     const after = await facts();
-    expect(after.employments.map(row => ({ status: row.status, endTime: row.endTime }))).toEqual([
+    expect(after.employments.map((row) => ({ status: row.status, endTime: row.endTime }))).toEqual([
       { status: EmploymentStatus.Disable, endTime: now },
       { status: EmploymentStatus.Disable, endTime: now },
     ]);
@@ -1221,7 +1243,7 @@ describe("Employment mutations through production PostgreSQL UnitOfWork", () => 
     const fixture = await seed(false);
     let arrived = 0;
     const gate = Promise.withResolvers<void>();
-    const subject = commands(tx => ({
+    const subject = commands((tx) => ({
       ...tx,
       repositories: {
         ...tx.repositories,
@@ -1229,8 +1251,7 @@ describe("Employment mutations through production PostgreSQL UnitOfWork", () => 
           ...tx.repositories.employment,
           getOpenEmploymentByUserOrgPosId: async (...args) => {
             const found = await tx.repositories.employment.getOpenEmploymentByUserOrgPosId(...args);
-            if (++arrived === 2)
-              gate.resolve();
+            if (++arrived === 2) gate.resolve();
             await gate.promise;
             return found;
           },
@@ -1239,8 +1260,8 @@ describe("Employment mutations through production PostgreSQL UnitOfWork", () => 
     }));
     const input = { username: "holder", orgCode: "ORG", posCode: "POS" };
     const results = await Promise.allSettled([subject.create.execute(input), subject.create.execute(input)]);
-    expect(results.filter(row => row.status === "fulfilled")).toHaveLength(1);
-    const rejected = results.find(row => row.status === "rejected");
+    expect(results.filter((row) => row.status === "fulfilled")).toHaveLength(1);
+    const rejected = results.find((row) => row.status === "rejected");
     expect(rejected?.reason).toBeInstanceOf(EmploymentAlreadyExistsError);
     const after = await facts();
     expect(after.employments).toHaveLength(1);

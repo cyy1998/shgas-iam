@@ -39,8 +39,7 @@ export function parsePlan(stdout: string): Ticket[] {
   let plan: unknown;
   try {
     plan = JSON.parse(blocks[0]![1]!);
-  }
-  catch {
+  } catch {
     throw new Error("Planner returned invalid JSON in <plan>.");
   }
   if (!isRecord(plan) || !Array.isArray(plan.issues)) {
@@ -49,15 +48,18 @@ export function parsePlan(stdout: string): Ticket[] {
 
   const seen = new Set<number>();
   return plan.issues.map((issue: unknown) => {
-    if (!isRecord(issue)
-      || typeof issue.number !== "number"
-      || !Number.isSafeInteger(issue.number)
-      || issue.number <= 0
-      || typeof issue.title !== "string"
-      || issue.title.trim().length === 0
-      || issue.branch !== `codex/sandcastle/issue-${issue.number}`
-      || !isImplementer(issue.implementer)
-      || typeof issue.reason !== "string" || !issue.reason.trim()) {
+    if (
+      !isRecord(issue) ||
+      typeof issue.number !== "number" ||
+      !Number.isSafeInteger(issue.number) ||
+      issue.number <= 0 ||
+      typeof issue.title !== "string" ||
+      issue.title.trim().length === 0 ||
+      issue.branch !== `codex/sandcastle/issue-${issue.number}` ||
+      !isImplementer(issue.implementer) ||
+      typeof issue.reason !== "string" ||
+      !issue.reason.trim()
+    ) {
       throw new Error("Planner returned an invalid ticket, implementer, or selection reason.");
     }
     if (seen.has(issue.number)) {
@@ -107,8 +109,7 @@ export async function runWorkflow(
         }
         try {
           outcomes.set(ticket, { status: "fulfilled", value: await runtime.execute(ticket) });
-        }
-        catch (reason) {
+        } catch (reason) {
           outcomes.set(ticket, { status: "rejected", reason });
         }
       }
@@ -123,8 +124,7 @@ export async function runWorkflow(
       const outcome = outcomes.get(ticket);
       if (outcome?.status === "fulfilled" && outcome.value === true) {
         successful.push(ticket);
-      }
-      else {
+      } else {
         result.failed.push(ticket.number);
         const detail = outcome?.status === "rejected" ? `: ${String(outcome.reason)}` : "";
         runtime.report(`Issue #${ticket.number} failed${detail}`);
@@ -134,7 +134,7 @@ export async function runWorkflow(
     runtime.signal?.throwIfAborted();
     if (successful.length > 0) {
       await runtime.merge(successful);
-      result.merged.push(...successful.map(ticket => ticket.number));
+      result.merged.push(...successful.map((ticket) => ticket.number));
     }
   }
 

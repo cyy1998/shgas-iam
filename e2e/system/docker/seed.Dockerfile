@@ -20,7 +20,6 @@ COPY packages/client-subject-projection/package.json ./packages/client-subject-p
 COPY packages/contracts/package.json ./packages/contracts/package.json
 COPY packages/db/package.json ./packages/db/package.json
 COPY packages/domain/package.json ./packages/domain/package.json
-COPY packages/eslint-config/package.json ./packages/eslint-config/package.json
 COPY packages/jobs/package.json ./packages/jobs/package.json
 COPY packages/organization-responsibility-resolution/package.json ./packages/organization-responsibility-resolution/package.json
 COPY packages/role-assignment-resolution/package.json ./packages/role-assignment-resolution/package.json

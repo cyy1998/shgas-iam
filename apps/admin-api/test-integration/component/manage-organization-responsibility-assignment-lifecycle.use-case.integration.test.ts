@@ -1,9 +1,7 @@
+import { beforeEach, describe, expect, mock, test } from "bun:test";
 import type { AdminOrganizationResponsibilityAuthorization } from "@admin-api/services/admin-authorization/admin-organization-responsibility-authorization.type";
+import { createFakeClock, createImmediateUnitOfWork } from "@admin-api/test/fakes";
 import type { OrganizationResponsibilityAssignmentLifecycleContext } from "@admin-api/use-cases/organization-responsibility/manage-assignment-lifecycle/manage-assignment-lifecycle.port";
-import {
-  createFakeClock,
-  createImmediateUnitOfWork,
-} from "@admin-api/test/fakes";
 import { createManageOrganizationResponsibilityAssignmentLifecycleUseCase } from "@admin-api/use-cases/organization-responsibility/manage-assignment-lifecycle/manage-assignment-lifecycle.use-case";
 import {
   EmploymentStatus,
@@ -18,7 +16,6 @@ import {
   OrganizationResponsibilityHolderEmploymentUnavailableError,
   OrganizationResponsibilityTargetOrganizationUnavailableError,
 } from "@iam/domain/organization-responsibility";
-import { beforeEach, describe, expect, mock, test } from "bun:test";
 import {
   testFullOrganizationResponsibilityAuthorization,
   withTestFullOrganizationResponsibilityAuthorization,
@@ -40,9 +37,7 @@ function createLifecycle(
       status,
       startTime: assignmentStartTime,
       endTime:
-        status === OrganizationResponsibilityAssignmentStatus.Disable
-          ? new Date("2026-08-20T06:00:00.000Z")
-          : null,
+        status === OrganizationResponsibilityAssignmentStatus.Disable ? new Date("2026-08-20T06:00:00.000Z") : null,
     },
     employment: {
       userId: 7,
@@ -57,14 +52,16 @@ function createLifecycle(
   };
   const tx = {
     assignmentStore: {
-      isEndpointPairWithinReadScope: mock((input: {
-        readScope: AdminOrganizationResponsibilityAuthorization["readScope"];
-        holderOrganizationId: number;
-        targetOrganizationId: number;
-      }) => input.readScope.kind === "full" || (
-        input.readScope.organizationIds.includes(input.holderOrganizationId)
-        && input.readScope.organizationIds.includes(input.targetOrganizationId)
-      )),
+      isEndpointPairWithinReadScope: mock(
+        (input: {
+          readScope: AdminOrganizationResponsibilityAuthorization["readScope"];
+          holderOrganizationId: number;
+          targetOrganizationId: number;
+        }) =>
+          input.readScope.kind === "full" ||
+          (input.readScope.organizationIds.includes(input.holderOrganizationId) &&
+            input.readScope.organizationIds.includes(input.targetOrganizationId)),
+      ),
       findOpenAssignmentForSlot: mock(
         async (): Promise<{
           id: number;
@@ -73,8 +70,7 @@ function createLifecycle(
         } | null> => null,
       ),
       lockAssignmentLifecycleContextById: mock(
-        async (): Promise<OrganizationResponsibilityAssignmentLifecycleContext | null> =>
-          context,
+        async (): Promise<OrganizationResponsibilityAssignmentLifecycleContext | null> => context,
       ),
       updateLockedAssignmentLifecycle: mock(async () => ({
         ...context.assignment,
@@ -87,19 +83,16 @@ function createLifecycle(
     auditLogWriter: { recordAuditLog: mock(async () => undefined) },
     userProfileInvalidation: { recordChanges: mock(async () => undefined) },
   };
-  const rawUseCase
-    = createManageOrganizationResponsibilityAssignmentLifecycleUseCase({
-      clock,
-      uow: createImmediateUnitOfWork(tx),
-    });
+  const rawUseCase = createManageOrganizationResponsibilityAssignmentLifecycleUseCase({
+    clock,
+    uow: createImmediateUnitOfWork(tx),
+  });
   return {
     clock,
     context,
     tx,
     rawUseCase,
-    useCase: withTestFullOrganizationResponsibilityAuthorization(
-      rawUseCase,
-    ),
+    useCase: withTestFullOrganizationResponsibilityAuthorization(rawUseCase),
   };
 }
 
@@ -114,20 +107,14 @@ describe("Manage Organization Responsibility Assignment lifecycle", () => {
     const authorization = {
       kind: "scoped",
       readScope: { kind: "scoped", organizationIds: [21, 22] },
-      getAllowedActions:
-        testFullOrganizationResponsibilityAuthorization.getAllowedActions,
+      getAllowedActions: testFullOrganizationResponsibilityAuthorization.getAllowedActions,
       denyMutation,
     } satisfies AdminOrganizationResponsibilityAuthorization;
 
-    const changed = await rawUseCase.execute(
-      { id: 31, command: "pause" },
-      { authorization },
-    );
+    const changed = await rawUseCase.execute({ id: 31, command: "pause" }, { authorization });
 
     expect(changed).toEqual({ changed: true, result: null });
-    expect(
-      tx.assignmentStore.isEndpointPairWithinReadScope,
-    ).toHaveBeenCalledWith({
+    expect(tx.assignmentStore.isEndpointPairWithinReadScope).toHaveBeenCalledWith({
       readScope: authorization.readScope,
       holderOrganizationId: 21,
       targetOrganizationId: 22,
@@ -144,11 +131,8 @@ describe("Manage Organization Responsibility Assignment lifecycle", () => {
     ] as const;
 
     for (const { holderOrganizationId, targetOrganizationId } of cases) {
-      const { context, rawUseCase, tx } = createLifecycle(
-        OrganizationResponsibilityAssignmentStatus.Pause,
-      );
-      if (context.employment === null)
-        throw new Error("test fixture requires holder Employment");
+      const { context, rawUseCase, tx } = createLifecycle(OrganizationResponsibilityAssignmentStatus.Pause);
+      if (context.employment === null) throw new Error("test fixture requires holder Employment");
       context.employment.organizationId = holderOrganizationId;
       context.assignment.targetOrganizationId = targetOrganizationId;
       const concealed = new OrganizationResponsibilityAssignmentNotFoundError();
@@ -158,15 +142,11 @@ describe("Manage Organization Responsibility Assignment lifecycle", () => {
       const authorization = {
         kind: "scoped",
         readScope: { kind: "scoped", organizationIds: [21, 22] },
-        getAllowedActions:
-          testFullOrganizationResponsibilityAuthorization.getAllowedActions,
+        getAllowedActions: testFullOrganizationResponsibilityAuthorization.getAllowedActions,
         denyMutation,
       } satisfies AdminOrganizationResponsibilityAuthorization;
 
-      const caught = await rawUseCase.execute(
-        { id: 31, command: "pause" },
-        { authorization },
-      ).catch(error => error);
+      const caught = await rawUseCase.execute({ id: 31, command: "pause" }, { authorization }).catch((error) => error);
 
       expect(caught).toBe(concealed);
       expect(denyMutation).toHaveBeenCalledWith({
@@ -174,9 +154,7 @@ describe("Manage Organization Responsibility Assignment lifecycle", () => {
         resourceIdentifier: "assignment-request",
         reason: "RESOURCE_OUT_OF_SCOPE",
       });
-      expect(
-        tx.assignmentStore.updateLockedAssignmentLifecycle,
-      ).not.toHaveBeenCalled();
+      expect(tx.assignmentStore.updateLockedAssignmentLifecycle).not.toHaveBeenCalled();
       expect(tx.auditLogWriter.recordAuditLog).not.toHaveBeenCalled();
       expect(tx.userProfileInvalidation.recordChanges).not.toHaveBeenCalled();
     }
@@ -228,9 +206,7 @@ describe("Manage Organization Responsibility Assignment lifecycle", () => {
   });
 
   test("revalidates holder, target, and the excluding Open slot before Resume", async () => {
-    const { tx, useCase } = createLifecycle(
-      OrganizationResponsibilityAssignmentStatus.Pause,
-    );
+    const { tx, useCase } = createLifecycle(OrganizationResponsibilityAssignmentStatus.Pause);
 
     await expect(useCase.execute({ id: 31, command: "resume" })).resolves.toEqual({ changed: true, result: null });
 
@@ -249,55 +225,39 @@ describe("Manage Organization Responsibility Assignment lifecycle", () => {
   });
 
   test("rejects Resume when its holder, target, or Open slot is unavailable", async () => {
-    const unavailableHolder = createLifecycle(
-      OrganizationResponsibilityAssignmentStatus.Pause,
-    );
-    if (unavailableHolder.context.employment === null)
-      throw new Error("test fixture requires holder Employment");
+    const unavailableHolder = createLifecycle(OrganizationResponsibilityAssignmentStatus.Pause);
+    if (unavailableHolder.context.employment === null) throw new Error("test fixture requires holder Employment");
     unavailableHolder.context.employment.status = EmploymentStatus.Pause;
     await expect(
       unavailableHolder.useCase.execute({
         id: 31,
         command: "resume",
       }),
-    ).rejects.toBeInstanceOf(
-      OrganizationResponsibilityHolderEmploymentUnavailableError,
-    );
+    ).rejects.toBeInstanceOf(OrganizationResponsibilityHolderEmploymentUnavailableError);
 
-    const unavailableTarget = createLifecycle(
-      OrganizationResponsibilityAssignmentStatus.Pause,
-    );
+    const unavailableTarget = createLifecycle(OrganizationResponsibilityAssignmentStatus.Pause);
     if (unavailableTarget.context.targetOrganization === null)
       throw new Error("test fixture requires target Organization");
-    unavailableTarget.context.targetOrganization.status
-      = OrganizationStatus.Pause;
+    unavailableTarget.context.targetOrganization.status = OrganizationStatus.Pause;
     await expect(
       unavailableTarget.useCase.execute({
         id: 31,
         command: "resume",
       }),
-    ).rejects.toBeInstanceOf(
-      OrganizationResponsibilityTargetOrganizationUnavailableError,
-    );
+    ).rejects.toBeInstanceOf(OrganizationResponsibilityTargetOrganizationUnavailableError);
 
-    const occupiedSlot = createLifecycle(
-      OrganizationResponsibilityAssignmentStatus.Pause,
-    );
-    occupiedSlot.tx.assignmentStore.findOpenAssignmentForSlot.mockResolvedValueOnce(
-      {
-        id: 32,
-        employmentId: 99,
-        isManageable: true,
-      },
-    );
+    const occupiedSlot = createLifecycle(OrganizationResponsibilityAssignmentStatus.Pause);
+    occupiedSlot.tx.assignmentStore.findOpenAssignmentForSlot.mockResolvedValueOnce({
+      id: 32,
+      employmentId: 99,
+      isManageable: true,
+    });
     await expect(
       occupiedSlot.useCase.execute({
         id: 31,
         command: "resume",
       }),
-    ).rejects.toBeInstanceOf(
-      OrganizationResponsibilityAssignmentCardinalityConflictError,
-    );
+    ).rejects.toBeInstanceOf(OrganizationResponsibilityAssignmentCardinalityConflictError);
   });
 
   test("hides an unmanageable Resume slot blocker without audit or dirty", async () => {
@@ -307,7 +267,7 @@ describe("Manage Organization Responsibility Assignment lifecycle", () => {
       employmentId: 888,
       isManageable: false,
     });
-    const caught = await useCase.execute({ id: 31, command: "resume" }).catch(error => error);
+    const caught = await useCase.execute({ id: 31, command: "resume" }).catch((error) => error);
     expect(caught).toBeInstanceOf(OrganizationResponsibilityAssignmentUnmanageableConflictError);
     expect(caught.message).not.toContain("999");
     expect(caught.message).not.toContain("888");
@@ -316,9 +276,7 @@ describe("Manage Organization Responsibility Assignment lifecycle", () => {
   });
 
   test("ends either Open state once with the injected transaction time", async () => {
-    const { clock, tx, useCase } = createLifecycle(
-      OrganizationResponsibilityAssignmentStatus.Pause,
-    );
+    const { clock, tx, useCase } = createLifecycle(OrganizationResponsibilityAssignmentStatus.Pause);
 
     await expect(useCase.execute({ id: 31, command: "end" })).resolves.toEqual({ changed: true, result: null });
 
@@ -353,25 +311,23 @@ describe("Manage Organization Responsibility Assignment lifecycle", () => {
       const { clock, tx, useCase } = createLifecycle(status);
       await expect(useCase.execute({ id: 31, command })).resolves.toEqual({ changed: false, result: null });
       expect(clock.nowDate).not.toHaveBeenCalled();
-      expect(
-        tx.assignmentStore.updateLockedAssignmentLifecycle,
-      ).not.toHaveBeenCalled();
-      expect(tx.auditLogWriter.recordAuditLog).toHaveBeenCalledWith(expect.objectContaining({
-        details: expect.objectContaining({ changed: false }),
-      }));
+      expect(tx.assignmentStore.updateLockedAssignmentLifecycle).not.toHaveBeenCalled();
+      expect(tx.auditLogWriter.recordAuditLog).toHaveBeenCalledWith(
+        expect.objectContaining({
+          details: expect.objectContaining({ changed: false }),
+        }),
+      );
       expect(tx.userProfileInvalidation.recordChanges).not.toHaveBeenCalled();
     }
   });
 
   test("returns the stable not-found error before any mutation", async () => {
     const { tx, useCase } = createLifecycle();
-    tx.assignmentStore.lockAssignmentLifecycleContextById.mockResolvedValueOnce(
-      null,
-    );
+    tx.assignmentStore.lockAssignmentLifecycleContextById.mockResolvedValueOnce(null);
 
-    await expect(
-      useCase.execute({ id: 404, command: "pause" }),
-    ).rejects.toBeInstanceOf(OrganizationResponsibilityAssignmentNotFoundError);
+    await expect(useCase.execute({ id: 404, command: "pause" })).rejects.toBeInstanceOf(
+      OrganizationResponsibilityAssignmentNotFoundError,
+    );
     expect(tx.assignmentStore.updateLockedAssignmentLifecycle).not.toHaveBeenCalled();
   });
 
@@ -379,7 +335,7 @@ describe("Manage Organization Responsibility Assignment lifecycle", () => {
     const { tx, useCase } = createLifecycle();
     const failure = new Error("Locked assignment update affected no row");
     tx.assignmentStore.updateLockedAssignmentLifecycle.mockRejectedValueOnce(failure);
-    const caught = await useCase.execute({ id: 31, command: "pause" }).catch(error => error);
+    const caught = await useCase.execute({ id: 31, command: "pause" }).catch((error) => error);
     expect(caught).toBe(failure);
     expect(tx.auditLogWriter.recordAuditLog).not.toHaveBeenCalled();
     expect(tx.userProfileInvalidation.recordChanges).not.toHaveBeenCalled();

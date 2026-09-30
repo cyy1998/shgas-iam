@@ -28,12 +28,8 @@ test("Admin prepares Custom SSO in Maintenance and existing access resumes after
   const origin = requireEnvironment("IAM_E2E_ORIGIN");
   const adminUsername = requireEnvironment("IAM_E2E_ADMIN_USERNAME");
   const adminPassword = requireEnvironment("IAM_E2E_ADMIN_PASSWORD");
-  const customSsoClientCode = requireEnvironment(
-    "IAM_E2E_CUSTOM_SSO_CLIENT_CODE",
-  );
-  const customSsoRedirectUri = requireEnvironment(
-    "IAM_E2E_CUSTOM_SSO_REDIRECT_URI",
-  );
+  const customSsoClientCode = requireEnvironment("IAM_E2E_CUSTOM_SSO_CLIENT_CODE");
+  const customSsoRedirectUri = requireEnvironment("IAM_E2E_CUSTOM_SSO_REDIRECT_URI");
   const internalApiKey = requireEnvironment("IAM_E2E_INTERNAL_API_KEY");
   const adminPrivilegeCode = requireEnvironment("IAM_E2E_ADMIN_PRIVILEGE_CODE");
   const adminRoleCode = requireEnvironment("IAM_E2E_ADMIN_ROLE_CODE");
@@ -41,18 +37,12 @@ test("Admin prepares Custom SSO in Maintenance and existing access resumes after
   const delegateeUsername = requireEnvironment("IAM_E2E_DELEGATEE_USERNAME");
   const disabledUsername = requireEnvironment("IAM_E2E_DISABLED_USERNAME");
   const hrAdminUsername = requireEnvironment("IAM_E2E_HR_ADMIN_USERNAME");
-  const noScopeHrAdminUsername = requireEnvironment(
-    "IAM_E2E_NO_SCOPE_HR_ADMIN_USERNAME",
-  );
+  const noScopeHrAdminUsername = requireEnvironment("IAM_E2E_NO_SCOPE_HR_ADMIN_USERNAME");
   const organizationCode = requireEnvironment("IAM_E2E_ORGANIZATION_CODE");
   const pausedUsername = requireEnvironment("IAM_E2E_PAUSED_USERNAME");
   const positionCode = requireEnvironment("IAM_E2E_POSITION_CODE");
-  const responsibilityTargetOrganizationCode = requireEnvironment(
-    "IAM_E2E_RESPONSIBILITY_TARGET_ORGANIZATION_CODE",
-  );
-  const responsibilityHolderPositionCode = requireEnvironment(
-    "IAM_E2E_RESPONSIBILITY_HOLDER_POSITION_CODE",
-  );
+  const responsibilityTargetOrganizationCode = requireEnvironment("IAM_E2E_RESPONSIBILITY_TARGET_ORGANIZATION_CODE");
+  const responsibilityHolderPositionCode = requireEnvironment("IAM_E2E_RESPONSIBILITY_HOLDER_POSITION_CODE");
   const actualRedirectUri = customSsoRedirectUri.replace(/\/\*$/u, "/callback");
   await loginToAdmin({ adminPassword, adminUsername, origin, page });
   await expect(page.getByText("应用管理", { exact: true })).toBeVisible();
@@ -113,11 +103,18 @@ test("Admin prepares Custom SSO in Maintenance and existing access resumes after
     await page.locator(".ant-select-dropdown:visible").getByTitle(claim, { exact: true }).click();
   }
   await page.getByLabel("主体披露字段", { exact: true }).press("Escape");
-  const configureResponse = page.waitForResponse(response => isSuccessfulRpcResponse(response, "admin.clientSso.selectProtocol"));
+  const configureResponse = page.waitForResponse((response) =>
+    isSuccessfulRpcResponse(response, "admin.clientSso.selectProtocol"),
+  );
   await page.getByRole("button", { name: "保存协议及配置", exact: true }).click();
-  await expectRpcMutationResult(await configureResponse, "admin.clientSso.selectProtocol", true, expect.objectContaining({
-    ssoConfig: expect.objectContaining({ callbackType: "managed" }),
-  }));
+  await expectRpcMutationResult(
+    await configureResponse,
+    "admin.clientSso.selectProtocol",
+    true,
+    expect.objectContaining({
+      ssoConfig: expect.objectContaining({ callbackType: "managed" }),
+    }),
+  );
   await saveUnchangedClientProtocolConfiguration(page, customSsoClientCode, "custom-sso", false);
   await runClientProtocolLifecycleAction(page, "启用");
   const authorize = new URL("/sso/authorize", origin);
@@ -135,10 +132,9 @@ test("Admin prepares Custom SSO in Maintenance and existing access resumes after
   });
   expect(maintenanceAuthorize.headers()["set-cookie"] ?? "").not.toContain("Max-Age=0");
 
-  const configuration = await context.request.get(
-    `${origin}/sso/.well-known/authentication-configuration`,
-    { headers: { "X-IAM-Entry-Network": "external" } },
-  );
+  const configuration = await context.request.get(`${origin}/sso/.well-known/authentication-configuration`, {
+    headers: { "X-IAM-Entry-Network": "external" },
+  });
   expect(configuration.status()).toBe(200);
 
   await updateClientStatus(page, customSsoClientCode, "正常");
@@ -148,15 +144,13 @@ test("Admin prepares Custom SSO in Maintenance and existing access resumes after
   const localSession = callback.searchParams.get("token");
   expect(localSession).toEqual(expect.any(String));
 
-  const userInfoRequest = () => context.request.get(
-    `${origin}/api/iam/public/user-info`,
-    {
+  const userInfoRequest = () =>
+    context.request.get(`${origin}/api/iam/public/user-info`, {
       headers: {
         Authorization: String(localSession),
         Client: encodeURIComponent(customSsoClientCode),
       },
-    },
-  );
+    });
   const initialUserInfo = await userInfoRequest();
   expect(initialUserInfo.status()).toBe(200);
   const initialUserInfoBody = await initialUserInfo.json();
@@ -169,13 +163,12 @@ test("Admin prepares Custom SSO in Maintenance and existing access resumes after
       subjectIdentifier: expect.any(String),
     },
   });
-  expect(customSsoProfileHasResponsibility(
-    initialUserInfoBody,
-    {
+  expect(
+    customSsoProfileHasResponsibility(initialUserInfoBody, {
       positionCode: responsibilityHolderPositionCode,
       targetOrganizationCode: responsibilityTargetOrganizationCode,
-    },
-  )).toBe(true);
+    }),
+  ).toBe(true);
   await expectLegacyUserSearchEquivalence({
     adminPrivilegeCode,
     adminUsername,
@@ -189,22 +182,17 @@ test("Admin prepares Custom SSO in Maintenance and existing access resumes after
     pausedUsername,
     request: context.request,
   });
-  expect(JSON.stringify(initialUserInfoBody.data.authorization)).not.toContain(
-    "responsibilit",
-  );
+  expect(JSON.stringify(initialUserInfoBody.data.authorization)).not.toContain("responsibilit");
 
-  const authzResponse = await context.request.get(
-    `${origin}/api/iam/auth/authz`,
-    {
-      headers: {
-        "Authorization": String(localSession),
-        "Client": encodeURIComponent(customSsoClientCode),
-        "X-Forwarded-Uri": "/e2e/responsibility-acceptance",
-      },
+  const authzResponse = await context.request.get(`${origin}/api/iam/auth/authz`, {
+    headers: {
+      Authorization: String(localSession),
+      Client: encodeURIComponent(customSsoClientCode),
+      "X-Forwarded-Uri": "/e2e/responsibility-acceptance",
     },
-  );
+  });
   expect(authzResponse.status()).toBe(200);
-  const authzBody = await authzResponse.json() as { data: string };
+  const authzBody = (await authzResponse.json()) as { data: string };
   expect(authzResponse.headers()["x-user-info"]).toBe(authzBody.data);
   const gatewaySubject = Buffer.from(authzBody.data, "base64").toString("utf8");
   expect(gatewaySubject).not.toMatch(/responsibilit|employment|authorization/iu);
@@ -243,23 +231,31 @@ test("Admin prepares Custom SSO in Maintenance and existing access resumes after
   expect(inventoryResponse.status()).toBe(200);
   const inventory = await inventoryResponse.json();
   expect(inventory.data.total).toBeLessThanOrEqual(100);
-  const targets = inventory.data.result.flatMap((item: {
-    record?: { kind: string; clientId?: string; identity: unknown };
-  }) => item.record?.kind === "clientSession" && item.record.clientId === customSsoClientCode
-    ? [item.record.identity]
-    : []);
+  const targets = inventory.data.result.flatMap(
+    (item: { record?: { kind: string; clientId?: string; identity: unknown } }) =>
+      item.record?.kind === "clientSession" && item.record.clientId === customSsoClientCode
+        ? [item.record.identity]
+        : [],
+  );
   expect(targets.length).toBeGreaterThan(0);
   const revokeResponse = await context.request.post(`${origin}/api/iam/admin/session-management/sessions/revoke`, {
     headers: adminHeaders,
     data: { target: { type: "captured", targets } },
   });
   expect(revokeResponse.status()).toBe(200);
-  expect(await revokeResponse.json()).toMatchObject({ data: { changed: true, result: { sessions: {
-    userSessionsTerminated: 0,
-    clientSessionsTerminated: targets.length,
-    failed: 0,
-    unknown: 0,
-  } } } });
+  expect(await revokeResponse.json()).toMatchObject({
+    data: {
+      changed: true,
+      result: {
+        sessions: {
+          userSessionsTerminated: 0,
+          clientSessionsTerminated: targets.length,
+          failed: 0,
+          unknown: 0,
+        },
+      },
+    },
+  });
   const revokedUserInfo = await userInfoRequest();
   expect(revokedUserInfo.status()).toBe(401);
 
@@ -269,23 +265,19 @@ test("Admin prepares Custom SSO in Maintenance and existing access resumes after
   const renewedLocalSession = renewedCallback.searchParams.get("token");
   expect(renewedLocalSession).toEqual(expect.any(String));
   expect(renewedLocalSession).not.toBe(localSession);
-  const renewedUserInfo = await context.request.get(
-    `${origin}/api/iam/public/user-info`,
-    {
-      headers: {
-        Authorization: String(renewedLocalSession),
-        Client: encodeURIComponent(customSsoClientCode),
-      },
+  const renewedUserInfo = await context.request.get(`${origin}/api/iam/public/user-info`, {
+    headers: {
+      Authorization: String(renewedLocalSession),
+      Client: encodeURIComponent(customSsoClientCode),
     },
-  );
+  });
   expect(renewedUserInfo.status()).toBe(200);
-  expect(customSsoProfileHasResponsibility(
-    await renewedUserInfo.json(),
-    {
+  expect(
+    customSsoProfileHasResponsibility(await renewedUserInfo.json(), {
       positionCode: responsibilityHolderPositionCode,
       targetOrganizationCode: responsibilityTargetOrganizationCode,
-    },
-  )).toBe(true);
+    }),
+  ).toBe(true);
 
   await openClientSection(page, customSsoClientCode, "custom-sso");
   await expect(page.getByRole("button", { name: "停用 SSO", exact: true })).toBeVisible();

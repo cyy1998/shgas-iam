@@ -1,12 +1,6 @@
-import {
-  GatewayAuthzRequestHeadersSchema,
-} from "@api/services/sso/transport/custom-sso-delivery-request.schema";
-import {
-  CUSTOM_SSO_SESSION_AUTHORIZATION_SECURITY_SCHEME,
-} from "@api/services/sso/transport/custom-sso-delivery.security";
-import {
-  createCustomSsoUnavailableResponse,
-} from "@api/services/sso/transport/custom-sso-retryable.openapi";
+import { CUSTOM_SSO_SESSION_AUTHORIZATION_SECURITY_SCHEME } from "@api/services/sso/transport/custom-sso-delivery.security";
+import { GatewayAuthzRequestHeadersSchema } from "@api/services/sso/transport/custom-sso-delivery-request.schema";
+import { createCustomSsoUnavailableResponse } from "@api/services/sso/transport/custom-sso-retryable.openapi";
 import { createRoute, z } from "@hono/zod-openapi";
 import * as HttpStatusCodes from "@iam/api-core/core/http-status-codes";
 import { commonErrorResponses } from "@iam/api-core/core/openapi/helpers/common-error-responses";
@@ -22,12 +16,15 @@ export const loginPassword = createRoute({
   path: `${routePrefix}/login/password`,
   tags,
   request: {
-    body: jsonContentRequired(z.object({
-      credential: z.string().openapi({
-        example: "iam-login-v1.eyJ2IjoxLCJhbGciOiJT...",
+    body: jsonContentRequired(
+      z.object({
+        credential: z.string().openapi({
+          example: "iam-login-v1.eyJ2IjoxLCJhbGciOiJT...",
+        }),
+        capToken: z.string().optional(),
       }),
-      capToken: z.string().optional(),
-    }), "用户名密码登录参数"),
+      "用户名密码登录参数",
+    ),
   },
   responses: {
     ...commonErrorResponses,
@@ -48,11 +45,14 @@ export const loginMobile = createRoute({
   path: `${routePrefix}/login/mobile`,
   tags,
   request: {
-    body: jsonContentRequired(z.object({
-      phoneNumber: z.string().openapi({ example: "17721462865" }),
-      code: z.string().openapi({ example: "1234" }),
-      capToken: z.string().optional(),
-    }), "手机登录参数"),
+    body: jsonContentRequired(
+      z.object({
+        phoneNumber: z.string().openapi({ example: "17721462865" }),
+        code: z.string().openapi({ example: "1234" }),
+        capToken: z.string().optional(),
+      }),
+      "手机登录参数",
+    ),
   },
   responses: {
     ...commonErrorResponses,
@@ -74,9 +74,7 @@ export const authz = createRoute({
   tags,
   description:
     "Requires encoded Client and trusted X-Forwarded-Uri headers plus an authenticated Local Session. OpenAPI clients use the raw Local Session ID through the Authorization security scheme; browser calls may instead use the IAM-managed local_{encodedClientCode}_session cookie.",
-  security: [
-    { [CUSTOM_SSO_SESSION_AUTHORIZATION_SECURITY_SCHEME]: [] },
-  ],
+  security: [{ [CUSTOM_SSO_SESSION_AUTHORIZATION_SECURITY_SCHEME]: [] }],
   request: {
     headers: GatewayAuthzRequestHeadersSchema,
   },

@@ -4,44 +4,38 @@ import {
   LoginOutlined,
   MobileOutlined,
   SafetyCertificateOutlined,
-} from '@ant-design/icons';
-import { ApiErrorCode } from '@iam/contracts';
-import logoColorfulTextWhite from '@sso/assets/logo-colorful-text-white.png';
-import logo from '@sso/assets/logo.png';
-import { useSmsCodeCountdown } from '@sso/hooks/useSmsCodeCountdown';
-import { withHumanVerification } from '@sso/lib/human-verification';
-import { login, mobileLogin } from '@sso/services/auth';
-import { sendMessage } from '@sso/services/open';
-import { mobileSet } from '@sso/services/public';
-import { ServiceError } from '@sso/utils/request';
-import { history } from '@umijs/max';
-import { Button, Form, Modal, Tabs, message } from 'antd';
-import { useState } from 'react';
-import { LoginGuardNotice } from './_components/LoginGuardNotice';
-import {
-  PasswordLoginForm,
-  type PasswordLoginValues,
-} from './_components/PasswordLoginForm';
-import { SmsLoginForm, type SmsLoginValues } from './_components/SmsLoginForm';
-import { UnsafeEntryNotice } from './_components/UnsafeEntryNotice';
-import { useLoginPageGuard } from './_hooks/useLoginPageGuard';
-import { useLoginRedirect } from './_hooks/useLoginRedirect';
-import './index.less';
+} from "@ant-design/icons";
+import { ApiErrorCode } from "@iam/contracts";
+import logo from "@sso/assets/logo.png";
+import logoColorfulTextWhite from "@sso/assets/logo-colorful-text-white.png";
+import { useSmsCodeCountdown } from "@sso/hooks/useSmsCodeCountdown";
+import { withHumanVerification } from "@sso/lib/human-verification";
+import { login, mobileLogin } from "@sso/services/auth";
+import { sendMessage } from "@sso/services/open";
+import { mobileSet } from "@sso/services/public";
+import { ServiceError } from "@sso/utils/request";
+import { history } from "@umijs/max";
+import { Button, Form, Modal, message, Tabs } from "antd";
+import { useState } from "react";
+import { LoginGuardNotice } from "./_components/LoginGuardNotice";
+import { PasswordLoginForm, type PasswordLoginValues } from "./_components/PasswordLoginForm";
+import { SmsLoginForm, type SmsLoginValues } from "./_components/SmsLoginForm";
+import { UnsafeEntryNotice } from "./_components/UnsafeEntryNotice";
+import { useLoginPageGuard } from "./_hooks/useLoginPageGuard";
+import { useLoginRedirect } from "./_hooks/useLoginRedirect";
+import "./index.less";
 
-type LoginMode = 'PWD' | 'SMS' | 'BMN';
+type LoginMode = "PWD" | "SMS" | "BMN";
 
 export default function LoginPage() {
   const [mode, setMode] = useState<LoginMode>(() => {
-    const loginType = new URLSearchParams(window.location.search).get(
-      'loginType',
-    );
-    return loginType === 'SMS' || loginType === 'PWD' ? loginType : 'PWD';
+    const loginType = new URLSearchParams(window.location.search).get("loginType");
+    return loginType === "SMS" || loginType === "PWD" ? loginType : "PWD";
   });
   const [submitting, setSubmitting] = useState(false);
   const [smsSending, setSmsSending] = useState(false);
   const [pwdForm] = Form.useForm<PasswordLoginValues>();
-  const { countdown, isCounting, startCountdown, restoreCountdown } =
-    useSmsCodeCountdown();
+  const { countdown, isCounting, startCountdown, restoreCountdown } = useSmsCodeCountdown();
   const loginRedirect = useLoginRedirect();
   const {
     client,
@@ -55,7 +49,7 @@ export default function LoginPage() {
     ssoReturn,
   } = loginRedirect;
   const loginGuard = useLoginPageGuard({
-    client: client ?? '',
+    client: client ?? "",
     isContinuationReady,
     isUnsafeEntry,
     oidcReturn,
@@ -68,16 +62,16 @@ export default function LoginPage() {
   const showLoginFailureModal = (msg: string) => {
     Modal.error({
       centered: true,
-      title: '登录失败',
+      title: "登录失败",
       content: msg,
-      okText: '确定',
+      okText: "确定",
     });
   };
 
   const handleForgotPassword = () => {
     const params = new URLSearchParams(window.location.search);
-    const username = pwdForm.getFieldValue('username');
-    if (username) params.set('username', username);
+    const username = pwdForm.getFieldValue("username");
+    if (username) params.set("username", username);
     history.push(`/reset-password?${params.toString()}`);
   };
 
@@ -90,22 +84,18 @@ export default function LoginPage() {
         password: values.password.trim(),
       };
       const data = await withHumanVerification(
-        'passwordLogin',
+        "passwordLogin",
         () => login(body, { suppressErrorMessage: true }),
-        (capToken) =>
-          login({ ...body, capToken }, { suppressErrorMessage: true }),
+        (capToken) => login({ ...body, capToken }, { suppressErrorMessage: true }),
       );
       if (!data.isMobileSet) {
-        setMode('BMN');
+        setMode("BMN");
         return;
       }
       redirectAfterLogin();
     } catch (e) {
       if (!(e instanceof ServiceError)) throw e;
-      if (
-        e.code === ApiErrorCode.LoginFailed ||
-        e.code === ApiErrorCode.InvalidLoginCredential
-      ) {
+      if (e.code === ApiErrorCode.LoginFailed || e.code === ApiErrorCode.InvalidLoginCredential) {
         showLoginFailureModal(e.message);
       } else {
         message.error(e.message);
@@ -124,10 +114,9 @@ export default function LoginPage() {
         code: values.code.trim(),
       };
       await withHumanVerification(
-        'mobileLogin',
+        "mobileLogin",
         () => mobileLogin(body, { suppressErrorMessage: true }),
-        (capToken) =>
-          mobileLogin({ ...body, capToken }, { suppressErrorMessage: true }),
+        (capToken) => mobileLogin({ ...body, capToken }, { suppressErrorMessage: true }),
       );
       redirectAfterLogin();
     } catch (e) {
@@ -163,24 +152,24 @@ export default function LoginPage() {
   };
 
   const handleSmsSubmit = (values: SmsLoginValues) => {
-    if (mode === 'SMS') return handleSmsLogin(values);
+    if (mode === "SMS") return handleSmsLogin(values);
     return handleBindMobile(values);
   };
 
   const sendSms = async (phoneNumber?: string) => {
     if (isCounting) return;
     if (!phoneNumber || !/^1\d{10}$/.test(phoneNumber)) {
-      message.error('请填写正确的手机号');
+      message.error("请填写正确的手机号");
       return;
     }
     try {
       setSmsSending(true);
       const body = {
         phoneNumber: phoneNumber.trim(),
-        usage: mode === 'BMN' ? 'bindPhone' : 'login',
+        usage: mode === "BMN" ? "bindPhone" : "login",
       } as const;
       await withHumanVerification(
-        'sendSmsCode',
+        "sendSmsCode",
         () => sendMessage(body),
         (capToken) => sendMessage({ ...body, capToken }),
       );
@@ -197,15 +186,10 @@ export default function LoginPage() {
     return <UnsafeEntryNotice />;
   }
 
-  if (loginGuard.status !== 'login') {
+  if (loginGuard.status !== "login") {
     return (
       <LoginGuardNotice
-        status={
-          loginGuard.status as Exclude<
-            typeof loginGuard.status,
-            'login' | 'unsafe'
-          >
-        }
+        status={loginGuard.status as Exclude<typeof loginGuard.status, "login" | "unsafe">}
         onRetry={loginGuard.retry}
       />
     );
@@ -256,25 +240,23 @@ export default function LoginPage() {
             </div>
           </div>
 
-          {mode === 'BMN' && (
-            <div className="bmn-tip">
-              您的账号尚未绑定手机号，为保障账户安全并及时接收重要通知，建议先完成绑定。
-            </div>
+          {mode === "BMN" && (
+            <div className="bmn-tip">您的账号尚未绑定手机号，为保障账户安全并及时接收重要通知，建议先完成绑定。</div>
           )}
 
-          {mode !== 'BMN' && (
+          {mode !== "BMN" && (
             <Tabs
               activeKey={mode}
               onChange={(key) => setMode(key as LoginMode)}
               centered
               items={[
-                { key: 'PWD', label: '密码登录' },
-                { key: 'SMS', label: '手机登录' },
+                { key: "PWD", label: "密码登录" },
+                { key: "SMS", label: "手机登录" },
               ]}
             />
           )}
 
-          {mode === 'PWD' && (
+          {mode === "PWD" && (
             <PasswordLoginForm
               form={pwdForm}
               submitting={submitting}
@@ -283,28 +265,22 @@ export default function LoginPage() {
             />
           )}
 
-          {(mode === 'SMS' || mode === 'BMN') && (
+          {(mode === "SMS" || mode === "BMN") && (
             <SmsLoginForm
               key={mode}
               countdown={countdown}
               isCounting={isCounting}
               smsSending={smsSending}
               submitting={submitting}
-              submitIcon={
-                mode === 'BMN' ? <MobileOutlined /> : <LoginOutlined />
-              }
-              submitText={mode === 'BMN' ? '绑定手机号' : '安全登录'}
+              submitIcon={mode === "BMN" ? <MobileOutlined /> : <LoginOutlined />}
+              submitText={mode === "BMN" ? "绑定手机号" : "安全登录"}
               onSendCode={sendSms}
               onSubmit={handleSmsSubmit}
             />
           )}
 
-          {mode === 'BMN' && (
-            <Button
-              className="skip-btn"
-              type="link"
-              onClick={redirectAfterLogin}
-            >
+          {mode === "BMN" && (
+            <Button className="skip-btn" type="link" onClick={redirectAfterLogin}>
               跳过
             </Button>
           )}

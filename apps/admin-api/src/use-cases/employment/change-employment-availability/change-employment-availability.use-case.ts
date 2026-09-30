@@ -1,3 +1,15 @@
+import { createAdminMutation } from "@admin-api/services/admin-mutation/admin-mutation";
+import { adminAuditTransactionOptions } from "@admin-api/services/audit/audit.context";
+import { buildEmploymentAudit } from "@admin-api/services/audit/events/employment.audit";
+import { assertEmploymentOrganizationScope } from "@admin-api/services/employment/employment-organization-scope";
+import { EmploymentStatus, OrganizationStatus, PositionStatus } from "@iam/contracts";
+import {
+  EmploymentAlreadyExistsError,
+  EmploymentNotEditableError,
+  EmploymentNotFoundError,
+} from "@iam/domain/employment";
+import { OrganizationNotFoundError } from "@iam/domain/organization";
+import { PositionNotFoundError } from "@iam/domain/position";
 import type {
   ChangeEmploymentAvailabilityTransactionPorts,
   ChangeEmploymentAvailabilityUseCaseDeps,
@@ -7,43 +19,22 @@ import type {
   ChangeEmploymentAvailabilityInput,
   ChangeEmploymentAvailabilityOptions,
 } from "./change-employment-availability.type";
-import { createAdminMutation } from "@admin-api/services/admin-mutation/admin-mutation";
-import { adminAuditTransactionOptions } from "@admin-api/services/audit/audit.context";
-import { buildEmploymentAudit } from "@admin-api/services/audit/events/employment.audit";
-import { assertEmploymentOrganizationScope } from "@admin-api/services/employment/employment-organization-scope";
-import {
-  EmploymentStatus,
-  OrganizationStatus,
-  PositionStatus,
-} from "@iam/contracts";
-import {
-  EmploymentAlreadyExistsError,
-  EmploymentNotEditableError,
-  EmploymentNotFoundError,
-} from "@iam/domain/employment";
-import { OrganizationNotFoundError } from "@iam/domain/organization";
-import { PositionNotFoundError } from "@iam/domain/position";
 
-export function createChangeEmploymentAvailabilityUseCase(
-  deps: ChangeEmploymentAvailabilityUseCaseDeps,
-) {
+export function createChangeEmploymentAvailabilityUseCase(deps: ChangeEmploymentAvailabilityUseCaseDeps) {
   const mutation = createAdminMutation(deps.uow);
-  async function execute(
-    input: ChangeEmploymentAvailabilityInput,
-    options: ChangeEmploymentAvailabilityOptions = {},
-  ) {
+  async function execute(input: ChangeEmploymentAvailabilityInput, options: ChangeEmploymentAvailabilityOptions = {}) {
     const { auditContext, authorization } = options;
     return await mutation.locked(
       async (tx) => {
         const context = await tx.employmentStore.lockEmploymentLifecycleContextById(input.employmentId);
-        if (context === null)
-          return null;
-        const selectedAssignments = input.command === "pause"
-          ? await tx.responsibilityParentLifecycle.lockAssignmentsForEmployment({
-              employmentId: input.employmentId,
-              command: "pause",
-            })
-          : [];
+        if (context === null) return null;
+        const selectedAssignments =
+          input.command === "pause"
+            ? await tx.responsibilityParentLifecycle.lockAssignmentsForEmployment({
+                employmentId: input.employmentId,
+                command: "pause",
+              })
+            : [];
         return { ...context, selectedAssignments };
       },
       () => {
@@ -69,12 +60,14 @@ export function createChangeEmploymentAvailabilityUseCase(
         }
         const targetStatus = input.command === "pause" ? EmploymentStatus.Pause : EmploymentStatus.Enable;
         if (employment.status === targetStatus) {
-          await tx.auditLogWriter.recordAuditLog(buildEmploymentAudit(
-            input.command === "pause" ? "admin.employment.pause" : "admin.employment.resume",
-            employment,
-            { changed: false, fromStatus: employment.status, toStatus: targetStatus },
-            auditContext,
-          ));
+          await tx.auditLogWriter.recordAuditLog(
+            buildEmploymentAudit(
+              input.command === "pause" ? "admin.employment.pause" : "admin.employment.resume",
+              employment,
+              { changed: false, fromStatus: employment.status, toStatus: targetStatus },
+              auditContext,
+            ),
+          );
           return { changed: false, result: null };
         }
         if (input.command === "pause") {
@@ -96,16 +89,16 @@ export function createChangeEmploymentAvailabilityUseCase(
           throw new EmploymentNotEditableError("当前任职状态不允许恢复");
         }
         if (
-          context.organization === null
-          || context.organization.status !== OrganizationStatus.Enable
-          || context.organization.isDelete
+          context.organization === null ||
+          context.organization.status !== OrganizationStatus.Enable ||
+          context.organization.isDelete
         ) {
           throw new OrganizationNotFoundError("组织未启用或不存在");
         }
         if (
-          context.position === null
-          || context.position.status !== PositionStatus.Enable
-          || context.position.isDelete
+          context.position === null ||
+          context.position.status !== PositionStatus.Enable ||
+          context.position.isDelete
         ) {
           throw new PositionNotFoundError("岗位未启用或不存在");
         }
@@ -144,9 +137,7 @@ export function createChangeEmploymentAvailabilityUseCase(
   return { execute };
 }
 
-export type ChangeEmploymentAvailabilityUseCase = ReturnType<
-  typeof createChangeEmploymentAvailabilityUseCase
->;
+export type ChangeEmploymentAvailabilityUseCase = ReturnType<typeof createChangeEmploymentAvailabilityUseCase>;
 
 async function persistAvailabilityChange(
   tx: ChangeEmploymentAvailabilityTransactionPorts,
@@ -155,31 +146,34 @@ async function persistAvailabilityChange(
   toStatus: EmploymentStatus.Enable | EmploymentStatus.Pause,
   action: "admin.employment.pause" | "admin.employment.resume",
   auditContext: ChangeEmploymentAvailabilityOptions["auditContext"],
-  selectedAssignments: Awaited<ReturnType<ChangeEmploymentAvailabilityTransactionPorts["responsibilityParentLifecycle"]["lockAssignmentsForEmployment"]>>,
+  selectedAssignments: Awaited<
+    ReturnType<
+      ChangeEmploymentAvailabilityTransactionPorts["responsibilityParentLifecycle"]["lockAssignmentsForEmployment"]
+    >
+  >,
 ) {
   const updated = await tx.employmentStore.updateEmploymentRecord(employment.id, { status: toStatus });
-  if (updated == null)
-    throw new Error("Locked Employment status update returned no row");
-  const assignmentChanged = action === "admin.employment.pause"
-    ? await tx.responsibilityParentLifecycle.pauseEnabledAssignmentsForEmployment({
-        auditContext,
-        employmentId: employment.id,
-        selectedAssignments,
-      })
-    : false;
-  await tx.auditLogWriter.recordAuditLog(buildEmploymentAudit(
-    action,
-    employment,
-    { changed: true, fromStatus, toStatus },
-    auditContext,
-  ));
+  if (updated == null) throw new Error("Locked Employment status update returned no row");
+  const assignmentChanged =
+    action === "admin.employment.pause"
+      ? await tx.responsibilityParentLifecycle.pauseEnabledAssignmentsForEmployment({
+          auditContext,
+          employmentId: employment.id,
+          selectedAssignments,
+        })
+      : false;
+  await tx.auditLogWriter.recordAuditLog(
+    buildEmploymentAudit(action, employment, { changed: true, fromStatus, toStatus }, auditContext),
+  );
   await tx.userProfileInvalidation.recordChanges([
     { kind: "employment", userId: employment.userId },
     ...(assignmentChanged
-      ? [{
-          kind: "organization-responsibility-assignment" as const,
-          userId: employment.userId,
-        }]
+      ? [
+          {
+            kind: "organization-responsibility-assignment" as const,
+            userId: employment.userId,
+          },
+        ]
       : []),
   ]);
 }

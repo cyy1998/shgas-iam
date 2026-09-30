@@ -8,9 +8,12 @@ async function main() {
   let proxy: ReturnType<typeof Bun.serve> | undefined;
   async function close() {
     const results = await Promise.allSettled([proxy?.stop(true), iam?.stop(true), f.scope.close()]);
-    const failures = results.filter(result => result.status === "rejected");
+    const failures = results.filter((result) => result.status === "rejected");
     if (failures.length > 0)
-      throw new AggregateError(failures.map(result => result.reason), "Custom browser fixture cleanup failed");
+      throw new AggregateError(
+        failures.map((result) => result.reason),
+        "Custom browser fixture cleanup failed",
+      );
   }
   try {
     iam = Bun.serve({ hostname: "127.0.0.1", port: 0, fetch: f.app.fetch });
@@ -30,13 +33,13 @@ async function main() {
       },
     });
     const businessOrigins = [`http://internal.localhost:${proxy.port}`, `http://external.localhost:${proxy.port}`];
-    const redirectUrls = businessOrigins.map(origin => `${origin}/work/done?order=123`);
+    const redirectUrls = businessOrigins.map((origin) => `${origin}/work/done?order=123`);
     f.setClient({
       ...f.getClient(),
       ssoConfig: {
         protocol: ClientSsoProtocol.CustomSso,
         callbackType: ClientSsoCallbackType.Managed,
-        validRedirectUrls: businessOrigins.map(origin => `${origin}/work/*`),
+        validRedirectUrls: businessOrigins.map((origin) => `${origin}/work/*`),
         subjectClaims: [SubjectClaim.SubjectIdentifier],
       },
     });
@@ -45,8 +48,7 @@ async function main() {
     for await (const _chunk of process.stdin) {
       // EOF is the parent's ownership signal.
     }
-  }
-  finally {
+  } finally {
     await close();
   }
 }

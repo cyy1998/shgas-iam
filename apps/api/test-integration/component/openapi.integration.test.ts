@@ -1,5 +1,5 @@
-import createApp from "@iam/api-core/core/create-app";
 import { describe, expect, test } from "bun:test";
+import createApp from "@iam/api-core/core/create-app";
 import pino from "pino";
 import appConfig from "~api/app.config";
 

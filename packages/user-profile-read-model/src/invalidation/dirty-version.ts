@@ -3,8 +3,7 @@ const DIRTY_VERSION_PATTERN = /^[1-9]\d*$/u;
 export function formatDirtyVersion(value: string | number | bigint): string {
   if (typeof value === "string") {
     const text = value.trim();
-    if (!DIRTY_VERSION_PATTERN.test(text))
-      throw new Error("dirtyVersion must be a positive decimal string");
+    if (!DIRTY_VERSION_PATTERN.test(text)) throw new Error("dirtyVersion must be a positive decimal string");
     return text;
   }
 
@@ -14,8 +13,7 @@ export function formatDirtyVersion(value: string | number | bigint): string {
     return String(value);
   }
 
-  if (value <= 0n)
-    throw new Error("dirtyVersion bigint must be positive");
+  if (value <= 0n) throw new Error("dirtyVersion bigint must be positive");
   return value.toString();
 }
 

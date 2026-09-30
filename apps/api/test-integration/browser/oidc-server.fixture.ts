@@ -17,12 +17,9 @@ async function main() {
   }
   try {
     running = await fixture(undefined, true, undefined, 45, undefined, false);
-    process.stderr.write(
-      `fixture-created:${JSON.stringify({ origin: running.httpOrigin, rp: rp.url.origin })}\n`,
-    );
-    if (process.argv.includes("--fail-token"))
-      running.state.signFailure = true;
-    await running.setClient(value => ({
+    process.stderr.write(`fixture-created:${JSON.stringify({ origin: running.httpOrigin, rp: rp.url.origin })}\n`);
+    if (process.argv.includes("--fail-token")) running.state.signFailure = true;
+    await running.setClient((value) => ({
       ...value,
       ssoConfig:
         value.ssoConfig?.protocol === ClientSsoProtocol.Oidc
@@ -43,8 +40,7 @@ async function main() {
         code_verifier: "v".repeat(43),
       }),
     });
-    if (response.status !== 200)
-      throw new Error("Browser fixture Token request failed");
+    if (response.status !== 200) throw new Error("Browser fixture Token request failed");
     const tokens = await response.json();
     process.stdout.write(
       `${JSON.stringify({ origin: running.httpOrigin, logoutUri, token, clientId: running.clientId, ...tokens })}\n`,
@@ -53,8 +49,7 @@ async function main() {
     for await (const _chunk of process.stdin) {
       // Drain until the parent closes its ownership channel.
     }
-  }
-  catch (failure) {
+  } catch (failure) {
     await cleanupAfterFixtureFailure(failure, close);
   }
   await close();

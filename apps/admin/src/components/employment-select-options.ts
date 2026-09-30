@@ -1,8 +1,5 @@
-import {
-  type EmploymentVo,
-  searchEmployments,
-} from '@admin/services/employment';
-import { EmploymentStatus } from '@iam/contracts';
+import { type EmploymentVo, searchEmployments } from "@admin/services/employment";
+import { EmploymentStatus } from "@iam/contracts";
 
 type SelectRequestParams = {
   keyWords?: string;
@@ -17,9 +14,8 @@ type EmploymentOptionFormatter = (employment: EmploymentVo) => EmploymentOption;
 
 function formatEmploymentOrgPath(employment: EmploymentVo) {
   return (
-    employment.organization.fullOrgPath
-      ?.map((node) => node.orgName)
-      .join(' / ') || employment.organization.assignedOrg.orgName
+    employment.organization.fullOrgPath?.map((node) => node.orgName).join(" / ") ||
+    employment.organization.assignedOrg.orgName
   );
 }
 
@@ -27,9 +23,7 @@ export function formatEmploymentOption(employment: EmploymentVo) {
   return {
     label: `${employment.user.name}（${employment.user.username}） / ${formatEmploymentOrgPath(
       employment,
-    )} / ${employment.position.posName}（${
-      employment.position.posCode
-    }） / #${employment.id}`,
+    )} / ${employment.position.posName}（${employment.position.posCode}） / #${employment.id}`,
     value: employment.id,
   };
 }
@@ -65,8 +59,5 @@ export function requestEmploymentOptions(params: SelectRequestParams) {
 }
 
 export function requestEmploymentOptionsWithoutId(params: SelectRequestParams) {
-  return requestEmploymentOptionsWithFormatter(
-    params,
-    formatEmploymentOptionWithoutId,
-  );
+  return requestEmploymentOptionsWithFormatter(params, formatEmploymentOptionWithoutId);
 }

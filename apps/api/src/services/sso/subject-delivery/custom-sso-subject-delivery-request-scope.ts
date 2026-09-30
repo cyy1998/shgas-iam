@@ -1,12 +1,7 @@
-import type {
-  CustomSsoSubjectDeliveryCapability,
-} from "@iam/custom-sso";
+import type { CustomSsoSubjectDeliveryCapability } from "@iam/custom-sso";
 
 export function createCustomSsoSubjectDeliveryRequestScope() {
-  const capabilities = new WeakMap<
-    object,
-    CustomSsoSubjectDeliveryCapability
-  >();
+  const capabilities = new WeakMap<object, CustomSsoSubjectDeliveryCapability>();
 
   async function runWithCapability<T>(
     request: object,
@@ -14,15 +9,12 @@ export function createCustomSsoSubjectDeliveryRequestScope() {
     action: () => Promise<T>,
   ): Promise<T> {
     if (capabilities.has(request)) {
-      throw new TypeError(
-        "Custom SSO subject delivery capability is already bound",
-      );
+      throw new TypeError("Custom SSO subject delivery capability is already bound");
     }
     capabilities.set(request, capability);
     try {
       return await action();
-    }
-    finally {
+    } finally {
       capabilities.delete(request);
     }
   }
@@ -30,9 +22,7 @@ export function createCustomSsoSubjectDeliveryRequestScope() {
   async function resolveUserInfoForRequest(request: object) {
     const capability = capabilities.get(request);
     if (capability === undefined) {
-      throw new TypeError(
-        "Custom SSO subject delivery capability is not request-scoped",
-      );
+      throw new TypeError("Custom SSO subject delivery capability is not request-scoped");
     }
     return await capability.resolveUserInfo();
   }
@@ -43,6 +33,4 @@ export function createCustomSsoSubjectDeliveryRequestScope() {
   };
 }
 
-export type CustomSsoSubjectDeliveryRequestScope = ReturnType<
-  typeof createCustomSsoSubjectDeliveryRequestScope
->;
+export type CustomSsoSubjectDeliveryRequestScope = ReturnType<typeof createCustomSsoSubjectDeliveryRequestScope>;

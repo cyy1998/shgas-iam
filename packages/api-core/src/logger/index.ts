@@ -1,5 +1,5 @@
-import type { LoggerOptions, TransportTargetOptions } from "pino";
 import { randomUUID } from "node:crypto";
+import type { LoggerOptions, TransportTargetOptions } from "pino";
 import pino from "pino";
 
 export type LogLevel = "info" | "warn" | "error";
@@ -11,7 +11,7 @@ export const LoggerSourceApp = {
   Worker: "iam-worker",
 } as const;
 
-export type LoggerSourceAppValue = typeof LoggerSourceApp[keyof typeof LoggerSourceApp];
+export type LoggerSourceAppValue = (typeof LoggerSourceApp)[keyof typeof LoggerSourceApp];
 
 export type LogFormat = "auto" | "json" | "pretty";
 
@@ -88,8 +88,7 @@ export const SystemLogEvent = {
 } as const;
 
 export function resolveLogFormat(logFormat: LogFormat = "auto", nodeEnv: string): ResolvedLogFormat {
-  if (logFormat !== "auto")
-    return logFormat;
+  if (logFormat !== "auto") return logFormat;
   return nodeEnv === "development" ? "pretty" : "json";
 }
 
@@ -139,8 +138,7 @@ export type RequestHeaderValue = string | string[] | undefined | null;
 export type RequestHeaderReader = (name: string) => RequestHeaderValue;
 
 function firstHeaderValue(value: RequestHeaderValue) {
-  if (Array.isArray(value))
-    return value.find(item => item.trim() !== "");
+  if (Array.isArray(value)) return value.find((item) => item.trim() !== "");
   return value?.trim() || undefined;
 }
 
@@ -154,10 +152,7 @@ export function getTraceIdFromHeaders(readHeader: RequestHeaderReader) {
   return traceId ?? getHeaderValue(readHeader, "x-b3-traceid") ?? getHeaderValue(readHeader, "x-trace-id");
 }
 
-export function getRequestIdFromHeaders(
-  readHeader: RequestHeaderReader,
-  generateId: () => string = randomUUID,
-) {
+export function getRequestIdFromHeaders(readHeader: RequestHeaderReader, generateId: () => string = randomUUID) {
   return getHeaderValue(readHeader, "x-request-id") ?? generateId();
 }
 
@@ -221,14 +216,10 @@ function isInternalRoute(value: string | undefined) {
 }
 
 export function getApiErrorLogLevel(input: ApiErrorLogLevelInput): LogLevel {
-  if (input.event === SystemLogEvent.ApiErrorUnhandled)
-    return "error";
-  if ((input.statusCode ?? 0) >= 500)
-    return "error";
-  if (input.statusCode === 403)
-    return "warn";
-  if (input.statusCode === 401 && (isInternalRoute(input.path) || isInternalRoute(input.route)))
-    return "warn";
+  if (input.event === SystemLogEvent.ApiErrorUnhandled) return "error";
+  if ((input.statusCode ?? 0) >= 500) return "error";
+  if (input.statusCode === 403) return "warn";
+  if (input.statusCode === 401 && (isInternalRoute(input.path) || isInternalRoute(input.route))) return "warn";
   return "info";
 }
 
@@ -254,8 +245,7 @@ export type ApiErrorLogFieldInput = {
 };
 
 function shouldIncludeErrorObject(input: ApiErrorLogFieldInput) {
-  return input.err !== undefined
-    && (input.event === SystemLogEvent.ApiErrorUnhandled || input.statusCode >= 500);
+  return input.err !== undefined && (input.event === SystemLogEvent.ApiErrorUnhandled || input.statusCode >= 500);
 }
 
 export function buildApiErrorLogFields(input: ApiErrorLogFieldInput) {
@@ -287,16 +277,14 @@ export type ValidationIssueLike = {
 };
 
 function formatValidationIssuePath(path: ValidationIssueLike["path"]) {
-  if (Array.isArray(path))
-    return path.length > 0 ? path.map(segment => String(segment)).join(".") : "<root>";
-  if (typeof path === "string" && path.trim() !== "")
-    return path;
+  if (Array.isArray(path)) return path.length > 0 ? path.map((segment) => String(segment)).join(".") : "<root>";
+  if (typeof path === "string" && path.trim() !== "") return path;
   return "<unknown>";
 }
 
 export function summarizeValidationIssues(issues: readonly ValidationIssueLike[]) {
   return {
     issueCount: issues.length,
-    issuePaths: issues.map(issue => formatValidationIssuePath(issue.path)),
+    issuePaths: issues.map((issue) => formatValidationIssuePath(issue.path)),
   };
 }

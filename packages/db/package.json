@@ -13,8 +13,8 @@
     "./postgres-error": "./src/postgres-error.ts"
   },
   "scripts": {
-    "lint": "eslint src test-integration drizzle.config.ts eslint.config.js",
-    "lint:fix": "eslint --fix src test-integration drizzle.config.ts eslint.config.js",
+    "lint": "node ../../scripts/run-quality.mjs lint --workspace packages/db",
+    "lint:fix": "node ../../scripts/run-quality.mjs lint-fix --workspace packages/db",
     "test": "pnpm test:unit",
     "test:unit": "bun test --max-concurrency=2 src",
     "test:integration:postgres": "bun test --max-concurrency=1 test-integration/postgres",
@@ -22,7 +22,9 @@
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate",
     "db:push": "drizzle-kit push",
-    "db:check": "drizzle-kit check"
+    "db:check": "drizzle-kit check",
+    "format": "node ../../scripts/run-quality.mjs format --workspace packages/db",
+    "format:check": "node ../../scripts/run-quality.mjs format-check --workspace packages/db"
   },
   "dependencies": {
     "@iam/contracts": "workspace:*",
@@ -31,11 +33,9 @@
     "zod": "^4.4.3"
   },
   "devDependencies": {
-    "@iam/eslint-config": "workspace:*",
     "@types/bun": "latest",
     "@typescript/native": "npm:typescript@7.0.2",
     "drizzle-kit": "1.0.0-rc.2",
-    "eslint": "^10.7.0",
     "typescript": "npm:@typescript/typescript6@6.0.2"
   }
 }

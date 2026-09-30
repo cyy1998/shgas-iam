@@ -1,18 +1,18 @@
 import type { AdminAuditService } from "@admin-api/services/audit/audit.service";
-import type { DbClient } from "@iam/db";
-import type { RoleAssignmentResolver } from "@iam/role-assignment-resolution";
-import type { AdminApiRepositories } from "../repositories";
-import type { AdminApiRuntimePorts } from "../runtime";
-import type { AdminApiSession } from "../session";
-import type { createAdminApiUnitOfWork } from "../tx";
 import { createClientService } from "@admin-api/services/client/client.service";
 import { createEmploymentService } from "@admin-api/services/employment/employment.service";
-import { createOrganizationResponsibilityService } from "@admin-api/services/organization-responsibility/organization-responsibility.service";
 import { createOrganizationService } from "@admin-api/services/organization/organization.service";
+import { createOrganizationResponsibilityService } from "@admin-api/services/organization-responsibility/organization-responsibility.service";
 import { createPositionService } from "@admin-api/services/position/position.service";
 import { createRoleService } from "@admin-api/services/role/role.service";
 import { mapUnitOfWork } from "@iam/api-core/uow";
+import type { DbClient } from "@iam/db";
+import type { RoleAssignmentResolver } from "@iam/role-assignment-resolution";
+import type { AdminApiRepositories } from "../repositories";
 import { createRootSecurityComposition } from "../root-security";
+import type { AdminApiRuntimePorts } from "../runtime";
+import type { AdminApiSession } from "../session";
+import type { createAdminApiUnitOfWork } from "../tx";
 import { createClientSsoSnapshotManagement } from "./client-sso-snapshots";
 
 type AdminApiUnitOfWork = ReturnType<typeof createAdminApiUnitOfWork>;
@@ -51,7 +51,7 @@ export function createAdminApiServices(options: CreateAdminApiServicesOptions) {
       passwordHasher: runtime.passwordHasher,
       random: runtime.random,
       subjectAccessLifecycle: session.subjectAccessLifecycle,
-      uow: mapUnitOfWork(unitOfWork, tx => ({
+      uow: mapUnitOfWork(unitOfWork, (tx) => ({
         userRepository: tx.repositories.user,
         auditService: tx.auditService,
         subjectAccessMutation: tx.subjectAccessMutation,
@@ -68,8 +68,7 @@ export function createAdminApiServices(options: CreateAdminApiServicesOptions) {
     sessionTermination: {
       async revokeClientSessions(clientCode) {
         const result = await rootSecurity.revocation.revokeClientSessions(clientCode);
-        if (result.unfinished.length > 0)
-          throw new Error("Client session termination was not confirmed");
+        if (result.unfinished.length > 0) throw new Error("Client session termination was not confirmed");
         return result;
       },
     },
@@ -82,7 +81,7 @@ export function createAdminApiServices(options: CreateAdminApiServicesOptions) {
     management: clientSso.management.service,
     passwordHasher: runtime.passwordHasher,
     random: runtime.random,
-    uow: mapUnitOfWork(unitOfWork, tx => ({
+    uow: mapUnitOfWork(unitOfWork, (tx) => ({
       clientRepository: tx.repositories.client,
       auditService: tx.auditService,
     })),
@@ -91,7 +90,7 @@ export function createAdminApiServices(options: CreateAdminApiServicesOptions) {
   const organizationService = createOrganizationService({
     organizationRepository: repositories.organization,
     responsibilityReader: repositories.organizationResponsibility,
-    uow: mapUnitOfWork(unitOfWork, tx => ({
+    uow: mapUnitOfWork(unitOfWork, (tx) => ({
       organizationRepository: tx.repositories.organization,
       auditService: tx.auditService,
       responsibilityParentLifecycle: tx.responsibilityParentLifecycle,
@@ -104,7 +103,7 @@ export function createAdminApiServices(options: CreateAdminApiServicesOptions) {
 
   const positionService = createPositionService({
     positionRepository: repositories.position,
-    uow: mapUnitOfWork(unitOfWork, tx => ({
+    uow: mapUnitOfWork(unitOfWork, (tx) => ({
       positionRepository: tx.repositories.position,
       auditService: tx.auditService,
       userProfileInvalidation: tx.userProfileInvalidation,
@@ -113,7 +112,7 @@ export function createAdminApiServices(options: CreateAdminApiServicesOptions) {
 
   const roleService = createRoleService({
     roleRepository: repositories.role,
-    uow: mapUnitOfWork(unitOfWork, tx => ({
+    uow: mapUnitOfWork(unitOfWork, (tx) => ({
       roleRepository: tx.repositories.role,
       auditService: tx.auditService,
       userProfileInvalidation: tx.userProfileInvalidation,
@@ -125,7 +124,7 @@ export function createAdminApiServices(options: CreateAdminApiServicesOptions) {
     roleAssignmentResolver,
     roleRepository: repositories.role,
     privilegeRepository: repositories.privilege,
-    uow: mapUnitOfWork(unitOfWork, tx => ({
+    uow: mapUnitOfWork(unitOfWork, (tx) => ({
       employmentRepository: tx.repositories.employment,
       auditService: tx.auditService,
       userProfileInvalidation: tx.userProfileInvalidation,

@@ -1,11 +1,22 @@
 import { z } from "@hono/zod-openapi";
 
 function optionalNonEmptyString() {
-  return z.string().optional().transform(value => value?.trim() || undefined);
+  return z
+    .string()
+    .optional()
+    .transform((value) => value?.trim() || undefined);
 }
 
 function listString(defaultValue: string) {
-  return z.string().default(defaultValue).transform(value => value.split(",").map(item => item.trim()).filter(Boolean));
+  return z
+    .string()
+    .default(defaultValue)
+    .transform((value) =>
+      value
+        .split(",")
+        .map((item) => item.trim())
+        .filter(Boolean),
+    );
 }
 
 const RawEnvSchema = z.object({
@@ -20,7 +31,10 @@ const RawEnvSchema = z.object({
   IAM_ADMIN_API_LOG_LEVEL: z.string().default("info"),
   IAM_ADMIN_API_LOG_FORMAT: z.enum(["auto", "json", "pretty"]).default("auto"),
   IAM_ADMIN_API_ADMIN_CLIENT_CODES: listString("iam-admin"),
-  IAM_ADMIN_API_SESSION_KERNEL_NAMESPACE: z.string().regex(/^[\w:-]+$/u).default("iam:session"),
+  IAM_ADMIN_API_SESSION_KERNEL_NAMESPACE: z
+    .string()
+    .regex(/^[\w:-]+$/u)
+    .default("iam:session"),
   IAM_ADMIN_API_USER_SESSION_TTL_SECONDS: z.coerce.number().int().positive().default(86400),
   IAM_ADMIN_API_CLIENT_SESSION_TTL_SECONDS: z.coerce.number().int().positive().default(86400),
   IAM_ADMIN_API_SSO_INTERNAL_ORIGIN: z.url().default("http://iam-sso.internal.localhost:30080"),

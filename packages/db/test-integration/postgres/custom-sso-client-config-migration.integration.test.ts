@@ -1,5 +1,5 @@
-import type { PostgresTestHarness } from "./postgres-harness";
 import { afterAll, beforeAll, beforeEach, describe, expect, test } from "bun:test";
+import type { PostgresTestHarness } from "./postgres-harness";
 import { createPostgresTestHarness, expectPostgresErrorCode } from "./postgres-harness";
 
 const FEATURE_MIGRATION = new URL(
@@ -34,12 +34,14 @@ describe("Custom SSO client configuration migration", () => {
 
     await sql.file(FEATURE_MIGRATION, { cache: false });
 
-    const [legacy] = await sql<{
-      customSsoConfig: unknown;
-      customSsoConfigVersion: number;
-      customSsoEnabled: boolean;
-      customSsoSecretHash: string | null;
-    }[]>`
+    const [legacy] = await sql<
+      {
+        customSsoConfig: unknown;
+        customSsoConfigVersion: number;
+        customSsoEnabled: boolean;
+        customSsoSecretHash: string | null;
+      }[]
+    >`
       SELECT
         custom_sso_enabled AS "customSsoEnabled",
         custom_sso_config AS "customSsoConfig",
@@ -55,28 +57,37 @@ describe("Custom SSO client configuration migration", () => {
       customSsoConfigVersion: 0,
     });
 
-    await expectPostgresErrorCode(sql`
+    await expectPostgresErrorCode(
+      sql`
       INSERT INTO client (
         client_code,
         custom_sso_enabled,
         custom_sso_config
       )
       VALUES ('enabled-without-config', true, ${null})
-    `, "23514");
+    `,
+      "23514",
+    );
 
-    await expectPostgresErrorCode(sql`
+    await expectPostgresErrorCode(
+      sql`
       INSERT INTO client (
         client_code,
         custom_sso_config,
         custom_sso_secret_hash
       )
       VALUES ('gateway-with-secret', ${sql.json({ mode: "gateway" })}, 'hash')
-    `, "23514");
+    `,
+      "23514",
+    );
 
-    await expectPostgresErrorCode(sql`
+    await expectPostgresErrorCode(
+      sql`
       INSERT INTO client (client_code, custom_sso_config)
       VALUES ('independent-without-secret', ${sql.json({ mode: "independent" })})
-    `, "23514");
+    `,
+      "23514",
+    );
 
     const inserted = await sql`
       INSERT INTO client (
@@ -94,7 +105,6 @@ describe("Custom SSO client configuration migration", () => {
 });
 
 function requireHarness(): PostgresTestHarness {
-  if (!harness)
-    throw new Error("PostgreSQL test harness was not initialized");
+  if (!harness) throw new Error("PostgreSQL test harness was not initialized");
   return harness;
 }

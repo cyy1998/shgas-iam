@@ -1,5 +1,5 @@
-import type { SubjectFactsCacheRecord } from "../../src/subject-facts";
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
+import type { SubjectFactsCacheRecord } from "../../src/subject-facts";
 import { createRedisTestHarness } from "./redis-test-harness";
 
 const subjectIdentifier = "46739d0b-cdda-48f5-af1f-1f90e2d81169";
@@ -27,8 +27,7 @@ describe("Subject Facts v3 Redis publisher", () => {
       expect(await scope.readPublishedProfileRecord(subjectIdentifier)).toEqual(record("12"));
       const retained = await scope.secondProfilePublisher.publish(record("10"));
       expect(retained).toEqual({ status: "retained-newer" });
-    }
-    finally {
+    } finally {
       await scope.close();
     }
   });
@@ -42,12 +41,8 @@ describe("Subject Facts v3 Redis publisher", () => {
         subjectIdentifier,
         "46739d0b-cdda-48f5-af1f-1f90e2d81170",
       ]);
-      expect(inspected).toEqual([
-        { status: "valid", record: record("4") },
-        { status: "missing" },
-      ]);
-    }
-    finally {
+      expect(inspected).toEqual([{ status: "valid", record: record("4") }, { status: "missing" }]);
+    } finally {
       await scope.close();
     }
   });

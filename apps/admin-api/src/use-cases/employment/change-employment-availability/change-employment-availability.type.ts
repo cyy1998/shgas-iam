@@ -1,16 +1,16 @@
 import type { AdminEmploymentAuthorization } from "@admin-api/services/admin-authorization/admin-employment-authorization.type";
 import type { AdminAuditContext } from "@admin-api/services/audit/audit.context";
 
-export type ChangeEmploymentAvailabilityInput
-  = | {
-    command: "pause";
-    employmentId: number;
-  }
+export type ChangeEmploymentAvailabilityInput =
   | {
-    command: "resume";
-    employmentId: number;
-    expectedAncestorOrgCode: string;
-  };
+      command: "pause";
+      employmentId: number;
+    }
+  | {
+      command: "resume";
+      employmentId: number;
+      expectedAncestorOrgCode: string;
+    };
 
 export interface ChangeEmploymentAvailabilityOptions {
   auditContext?: AdminAuditContext;

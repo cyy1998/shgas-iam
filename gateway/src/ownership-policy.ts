@@ -1,5 +1,5 @@
-import type { ManifestObject, ManifestScope } from "./types";
 import { formatScope } from "./manifest";
+import type { ManifestObject, ManifestScope } from "./types";
 
 export const ownershipPolicy = {
   managedBy: "shgas-iam",
@@ -24,18 +24,24 @@ export function getLabel(resource: ManifestObject, name: string): string | undef
 }
 
 export function isRepoManaged(resource: ManifestObject): boolean {
-  return getLabel(resource, ownershipPolicy.labelKeys.managedBy) === ownershipPolicy.managedBy
-    && getLabel(resource, ownershipPolicy.labelKeys.source) === ownershipPolicy.repoSource;
+  return (
+    getLabel(resource, ownershipPolicy.labelKeys.managedBy) === ownershipPolicy.managedBy &&
+    getLabel(resource, ownershipPolicy.labelKeys.source) === ownershipPolicy.repoSource
+  );
 }
 
 export function isDynamicRegistryManaged(resource: ManifestObject): boolean {
-  return getLabel(resource, ownershipPolicy.labelKeys.managedBy) === ownershipPolicy.managedBy
-    && getLabel(resource, ownershipPolicy.labelKeys.source) === ownershipPolicy.dynamicSource;
+  return (
+    getLabel(resource, ownershipPolicy.labelKeys.managedBy) === ownershipPolicy.managedBy &&
+    getLabel(resource, ownershipPolicy.labelKeys.source) === ownershipPolicy.dynamicSource
+  );
 }
 
 export function isInManifestScope(resource: ManifestObject, scope: ManifestScope): boolean {
-  return getLabel(resource, ownershipPolicy.labelKeys.env) === scope.env
-    && getLabel(resource, ownershipPolicy.labelKeys.app) === scope.app;
+  return (
+    getLabel(resource, ownershipPolicy.labelKeys.env) === scope.env &&
+    getLabel(resource, ownershipPolicy.labelKeys.app) === scope.app
+  );
 }
 
 export function validateResourceScope(

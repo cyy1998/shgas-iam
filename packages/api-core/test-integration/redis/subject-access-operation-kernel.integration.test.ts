@@ -1,8 +1,7 @@
-import type { SubjectAccessOperation } from "../../src/subject-access";
-import type { RedisTestHarness, SubjectAccessRedisTestScope } from "./redis-test-harness";
+import { afterAll, afterEach, beforeAll, beforeEach, expect, test } from "bun:test";
 import { randomUUID } from "node:crypto";
 import { createUnifiedSessionRedisTestScope } from "@iam/session-kernel/testing";
-import { afterAll, afterEach, beforeAll, beforeEach, expect, test } from "bun:test";
+import type { SubjectAccessOperation } from "../../src/subject-access";
 import {
   createSubjectAccessOperations,
   createSubjectAccessSessionContext,
@@ -12,6 +11,7 @@ import {
   SubjectAccessOperationDeniedError,
   SubjectAccessUnavailableError,
 } from "../../src/subject-access";
+import type { RedisTestHarness, SubjectAccessRedisTestScope } from "./redis-test-harness";
 import { createRedisTestHarness } from "./redis-test-harness";
 
 const subject = "00000000-0000-4000-8000-000000000001";
@@ -35,7 +35,7 @@ beforeEach(async () => {
   scope = await createUnifiedSessionRedisTestScope(process.env.IAM_API_CORE_TEST_REDIS_URL!);
   kernel = scope.createFactoryForOperations<SubjectAccessOperation>(requireSubjectAccessOperation);
   revocation = createUnifiedSubjectAccessSessionRevocation(kernel, {
-    run: callback => operations.run(callback),
+    run: (callback) => operations.run(callback),
   });
   operations = createSubjectAccessOperations({
     barrier: {
@@ -83,14 +83,13 @@ async function login() {
 async function rejected(promise: Promise<unknown>) {
   try {
     await promise;
-  }
-  catch (error) {
+  } catch (error) {
     return error;
   }
   throw new Error("Expected rejection");
 }
 async function readRoot(bearer: string) {
-  return await operations.run(operation => kernel.forOperation(operation).resolveUserSession(bearer));
+  return await operations.run((operation) => kernel.forOperation(operation).resolveUserSession(bearer));
 }
 function access(root: Awaited<ReturnType<typeof login>>) {
   return {
@@ -108,15 +107,14 @@ test("accepted permission survives blocking through root creation and child auth
   const root = await sessions.createUserSession({ subjectIdentifier: subject, ...context, amr: ["pwd"] });
   const child = await sessions.openClientSession(root.observation, { clientId: "client", protocol: "oidc" });
   expect(child.status).toBe("created");
-  if (child.status !== "created")
-    throw new Error("Expected child");
+  if (child.status !== "created") throw new Error("Expected child");
   expect(child.value.clientSession.subjectContext).toBe(context.subjectContext);
   const lifetime = await sessions.getIssuanceLifetime(child.value, 60);
   expect(lifetime.expiresAt).toBeLessThanOrEqual(root.observation.userSession.expiresAt);
   expect(reads).toBe(1);
   operation.close();
   const error = await rejected(
-    operations.run(op =>
+    operations.run((op) =>
       op.acquireForSession({
         subjectIdentifier: subject,
         subjectContext: context.subjectContext,
@@ -137,12 +135,11 @@ test("late old-generation creation is rejected and terminates its exact descenda
   const sessions = kernel.forOperation(operation);
   const late = await sessions.createUserSession({ subjectIdentifier: subject, ...context, amr: [] });
   const child = await sessions.openClientSession(late.observation, { clientId: "client", protocol: "oidc" });
-  if (child.status !== "created")
-    throw new Error("Expected child");
+  if (child.status !== "created") throw new Error("Expected child");
   operation.close();
   const fresh = await login();
   const error = await rejected(
-    operations.run(op =>
+    operations.run((op) =>
       op.acquireForSession({
         subjectIdentifier: subject,
         subjectContext: context.subjectContext,
@@ -151,7 +148,7 @@ test("late old-generation creation is rejected and terminates its exact descenda
     ),
   );
   expect(error).toBeInstanceOf(SubjectAccessOperationDeniedError);
-  const result = await operations.run(op =>
+  const result = await operations.run((op) =>
     kernel.forOperation(op).resolveClientSessionForUse({
       userSessionId: late.observation.userSession.userSessionId,
       clientSessionId: child.value.clientSession.clientSessionId,
@@ -168,7 +165,7 @@ test("prepared generation revocation and exact-context retries retain newly enab
   await transition("disabled");
   await transition("enabled");
   const fresh = await login();
-  await operations.run(op =>
+  await operations.run((op) =>
     kernel.forOperation(op).createUserSession({ subjectIdentifier: subject, ...old.context, amr: [] }),
   );
   const summary = await prepared.revoke("user_disabled");
@@ -180,21 +177,18 @@ test("prepared generation revocation and exact-context retries retain newly enab
   const retained = await readRoot(fresh.bearer);
   expect(retained.status).toBe("resolved");
 });
-test.each(["broken", "{\"version\":2}"])(
+test.each(["broken", '{"version":2}'])(
   "unusable opaque context %s fails at its owner without record mutation or a barrier read",
   async (subjectContext) => {
     const root = await login();
     await scope.replaceSubjectContext(root.target, subjectContext);
     const before = reads;
-    const error = await rejected(
-      operations.run(op => op.acquireForSession({ ...access(root), subjectContext })),
-    );
+    const error = await rejected(operations.run((op) => op.acquireForSession({ ...access(root), subjectContext })));
     expect(error).toBeInstanceOf(SubjectAccessUnavailableError);
     expect(reads).toBe(before);
     const retained = await readRoot(root.bearer);
     expect(retained.status).toBe("resolved");
-    if (retained.status === "resolved")
-      expect(retained.value.userSession.subjectContext).toBe(subjectContext);
+    if (retained.status === "resolved") expect(retained.value.userSession.subjectContext).toBe(subjectContext);
   },
 );
 test("missing required context is corrupt in the current Kernel record and remains retained", async () => {
@@ -208,14 +202,14 @@ test("disabled denial survives a real revocation failure; re-enable cannot react
   const root = await login();
   await transition("disabled");
   scope.failNext("revoke");
-  const error = await rejected(operations.run(op => op.acquireForSession(access(root))));
+  const error = await rejected(operations.run((op) => op.acquireForSession(access(root))));
   expect(error).toBeInstanceOf(SubjectAccessOperationDeniedError);
   expect(error).toHaveProperty("reason", "user_disabled");
   const stillStored = await readRoot(root.bearer);
   expect(stillStored.status).toBe("resolved");
   await transition("enabled");
   const fresh = await login();
-  const retry = await rejected(operations.run(op => op.acquireForSession(access(root))));
+  const retry = await rejected(operations.run((op) => op.acquireForSession(access(root))));
   expect(retry).toBeInstanceOf(SubjectAccessOperationDeniedError);
   const oldResult = await readRoot(root.bearer);
   const newResult = await readRoot(fresh.bearer);

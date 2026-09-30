@@ -2,11 +2,7 @@ import { BadRequestError } from "../errors/BadRequestError";
 
 const ISO_DATE_REGEX = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,3})?(?:Z|[+-]\d{2}:\d{2})$/;
 
-export function mergeAndDedupe<T extends Record<string, any>>(
-  arr1: T[],
-  arr2: T[],
-  key: keyof T,
-): T[] {
+export function mergeAndDedupe<T extends Record<string, any>>(arr1: T[], arr2: T[], key: keyof T): T[] {
   const seen = new Set<T[keyof T]>();
   const result: T[] = [];
 
@@ -21,11 +17,7 @@ export function mergeAndDedupe<T extends Record<string, any>>(
   return result;
 }
 
-export function mergeAndDedupeOverride<T extends Record<string, any>>(
-  arr1: T[],
-  arr2: T[],
-  key: keyof T,
-): T[] {
+export function mergeAndDedupeOverride<T extends Record<string, any>>(arr1: T[], arr2: T[], key: keyof T): T[] {
   const map = new Map<T[keyof T], T>();
 
   // 先放 arr1
@@ -56,16 +48,14 @@ export function getTimestampDifference(targetTimestamp: number): number {
 }
 
 export function sleep(ms: number): Promise<void> {
-  return new Promise(resolve => setTimeout(resolve, ms));
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 export function getProtocolAndHost(url: string): string {
   try {
     const parsedUrl = new URL(url);
     return `${parsedUrl.protocol}//${parsedUrl.host}`;
-  }
-  // eslint-disable-next-line unused-imports/no-unused-vars
-  catch (e) {
+  } catch {
     throw new BadRequestError(`Invalid URL: ${url}`);
   }
 }

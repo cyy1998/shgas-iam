@@ -1,5 +1,5 @@
-import { RoleAssignmentTargetType } from "@iam/contracts";
 import { describe, expect, test } from "bun:test";
+import { RoleAssignmentTargetType } from "@iam/contracts";
 import * as clientAudit from "../events/client.audit";
 import * as employmentAudit from "../events/employment.audit";
 import * as roleAudit from "../events/role.audit";
@@ -8,12 +8,14 @@ import * as userAudit from "../events/user.audit";
 
 describe("admin audit event builders", () => {
   test("builds user mutation payload with masked target mobile and patch mobile", () => {
-    expect(userAudit.buildAdminUserAudit(
-      "admin.user.update",
-      { id: 1001, username: "zhangsan", name: "张三", mobile: "17721462865" },
-      { patch: { mobile: "17700001111" } },
-      { actorType: "admin", actorUsername: "admin" },
-    )).toMatchObject({
+    expect(
+      userAudit.buildAdminUserAudit(
+        "admin.user.update",
+        { id: 1001, username: "zhangsan", name: "张三", mobile: "17721462865" },
+        { patch: { mobile: "17700001111" } },
+        { actorType: "admin", actorUsername: "admin" },
+      ),
+    ).toMatchObject({
       action: "admin.user.update",
       actorType: "admin",
       actorUsername: "admin",
@@ -27,11 +29,13 @@ describe("admin audit event builders", () => {
   });
 
   test("builds client mutation payload without leaking client secret patch values", () => {
-    expect(clientAudit.buildAdminClientAudit(
-      "admin.client.rotate_secret",
-      { id: 2001, clientCode: "portal", clientName: "门户", clientSecret: "secret", status: 1 } as never,
-      { patch: { clientSecretRotated: true } },
-    )).toMatchObject({
+    expect(
+      clientAudit.buildAdminClientAudit(
+        "admin.client.rotate_secret",
+        { id: 2001, clientCode: "portal", clientName: "门户", clientSecret: "secret", status: 1 } as never,
+        { patch: { clientSecretRotated: true } },
+      ),
+    ).toMatchObject({
       action: "admin.client.rotate_secret",
       targetType: "client",
       targetCode: "portal",
@@ -43,11 +47,13 @@ describe("admin audit event builders", () => {
   });
 
   test("builds employment resignation as a user target", () => {
-    expect(employmentAudit.buildEmploymentResignUserAudit(
-      { id: 1001, username: "zhangsan", name: "张三" },
-      { actorType: "system", actorSystemKey: "admin-api" },
-      true,
-    )).toMatchObject({
+    expect(
+      employmentAudit.buildEmploymentResignUserAudit(
+        { id: 1001, username: "zhangsan", name: "张三" },
+        { actorType: "system", actorSystemKey: "admin-api" },
+        true,
+      ),
+    ).toMatchObject({
       action: "admin.employment.resign_user",
       targetType: "user",
       targetId: 1001,
@@ -67,7 +73,14 @@ describe("admin audit event builders", () => {
         outcome: "success",
         result: {
           changed: true,
-          result: { scope: "session", generation: "unified" as const, currentPrincipalSessionExcluded: false, sessions: { userSessionsTerminated: 1, clientSessionsTerminated: 2, excluded: 0, failed: 0, unknown: 0 }, batch: { results: [], unfinished: [] }, artifactCleanup: { attempted: 0, succeeded: 0, failed: 0 } },
+          result: {
+            scope: "session",
+            generation: "unified" as const,
+            currentPrincipalSessionExcluded: false,
+            sessions: { userSessionsTerminated: 1, clientSessionsTerminated: 2, excluded: 0, failed: 0, unknown: 0 },
+            batch: { results: [], unfinished: [] },
+            artifactCleanup: { attempted: 0, succeeded: 0, failed: 0 },
+          },
         },
       },
       {
@@ -87,7 +100,12 @@ describe("admin audit event builders", () => {
       requestId: "req-1",
       targetType: "principal_session",
       targetCode: "ps-target",
-      details: { scope: "session", changed: true, currentPrincipalSessionExcluded: false, sessions: { userSessionsTerminated: 1, clientSessionsTerminated: 2, excluded: 0, failed: 0, unknown: 0 } },
+      details: {
+        scope: "session",
+        changed: true,
+        currentPrincipalSessionExcluded: false,
+        sessions: { userSessionsTerminated: 1, clientSessionsTerminated: 2, excluded: 0, failed: 0, unknown: 0 },
+      },
     });
     expect(JSON.stringify(audit)).not.toContain("ps-actor-must-not-be-persisted");
   });
@@ -99,7 +117,14 @@ describe("admin audit event builders", () => {
         outcome: "success",
         result: {
           changed: true,
-          result: { scope: "user", generation: "unified" as const, currentPrincipalSessionExcluded: true, sessions: { userSessionsTerminated: 1, clientSessionsTerminated: 2, excluded: 0, failed: 0, unknown: 0 }, batch: { results: [], unfinished: [] }, artifactCleanup: { attempted: 0, succeeded: 0, failed: 0 } },
+          result: {
+            scope: "user",
+            generation: "unified" as const,
+            currentPrincipalSessionExcluded: true,
+            sessions: { userSessionsTerminated: 1, clientSessionsTerminated: 2, excluded: 0, failed: 0, unknown: 0 },
+            batch: { results: [], unfinished: [] },
+            artifactCleanup: { attempted: 0, succeeded: 0, failed: 0 },
+          },
         },
       },
       {
@@ -119,7 +144,12 @@ describe("admin audit event builders", () => {
       requestId: "req-user-revoke",
       targetType: "user",
       targetId: 42,
-      details: { scope: "user", changed: true, currentPrincipalSessionExcluded: true, sessions: { userSessionsTerminated: 1, clientSessionsTerminated: 2, excluded: 0, failed: 0, unknown: 0 } },
+      details: {
+        scope: "user",
+        changed: true,
+        currentPrincipalSessionExcluded: true,
+        sessions: { userSessionsTerminated: 1, clientSessionsTerminated: 2, excluded: 0, failed: 0, unknown: 0 },
+      },
     });
     const persistedAudit = JSON.stringify(audit);
     expect(persistedAudit).not.toContain("ps-actor-must-not-be-persisted");
@@ -128,19 +158,21 @@ describe("admin audit event builders", () => {
   });
 
   test("builds role assignment payload with role target and assignment summary", () => {
-    expect(roleAudit.buildRoleAssignmentAudit(
-      "admin.role.assignment.create",
-      { id: 1, roleCode: "portal-admin", roleName: "Portal Admin", status: 1 },
-      {
-        id: 100,
-        targetType: RoleAssignmentTargetType.Organization,
-        targetId: 20,
-        includeDescendants: true,
-        target: { code: "ORG", name: "Org", status: 1 },
-      },
-      { created: true },
-      { actorType: "admin", actorUsername: "admin" },
-    )).toMatchObject({
+    expect(
+      roleAudit.buildRoleAssignmentAudit(
+        "admin.role.assignment.create",
+        { id: 1, roleCode: "portal-admin", roleName: "Portal Admin", status: 1 },
+        {
+          id: 100,
+          targetType: RoleAssignmentTargetType.Organization,
+          targetId: 20,
+          includeDescendants: true,
+          target: { code: "ORG", name: "Org", status: 1 },
+        },
+        { created: true },
+        { actorType: "admin", actorUsername: "admin" },
+      ),
+    ).toMatchObject({
       action: "admin.role.assignment.create",
       targetType: "role",
       targetCode: "portal-admin",

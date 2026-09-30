@@ -1,14 +1,14 @@
-import type { ClientSnapshotValue } from "@iam/api-core/client-snapshot";
-import type { SubjectAccessOperation } from "@iam/api-core/subject-access";
 import { randomUUID } from "node:crypto";
 import process from "node:process";
 import { createRootAuthenticationComposition } from "@api/composition/root-authentication";
 import { createLoginCredentialParser } from "@api/services/authentication/login-credential.parser";
+import type { ClientSnapshotValue } from "@iam/api-core/client-snapshot";
 import { ClientSnapshotUnavailableError } from "@iam/api-core/client-snapshot";
 import { createClientSnapshots } from "@iam/api-core/client-snapshot/composition";
 import { createClientSecretAuthenticator } from "@iam/api-core/client-snapshot/credentials";
 import { clientSnapshotKeys } from "@iam/api-core/client-snapshot/testing";
 import { createErrorHandler } from "@iam/api-core/middlewares/error-handler";
+import type { SubjectAccessOperation } from "@iam/api-core/subject-access";
 import {
   createRedisSubjectAccessStore,
   createSubjectAccessBarrier,
@@ -29,20 +29,21 @@ import {
 import { createUnifiedCustomSsoRedisTestScope } from "@iam/custom-sso/testing";
 import { relations } from "@iam/db/relations";
 import { createUnifiedSessionRedisTestScope } from "@iam/session-kernel/testing";
-import {
-  createSubjectFactsReader,
-  createSubjectFactsRedisCache,
-} from "@iam/user-profile-read-model/subject-facts";
+import { createSubjectFactsReader, createSubjectFactsRedisCache } from "@iam/user-profile-read-model/subject-facts";
 import { drizzle } from "drizzle-orm/postgres-js";
 import { Hono } from "hono";
 import Redis from "ioredis";
 import postgres from "postgres";
 import { sm2, sm3 } from "sm-crypto";
 
-export async function fixture(codeTtlSeconds = 30, networkUrl?: string, tokenTtlSeconds = 45, continuationTtlSeconds = 60) {
+export async function fixture(
+  codeTtlSeconds = 30,
+  networkUrl?: string,
+  tokenTtlSeconds = 45,
+  continuationTtlSeconds = 60,
+) {
   const url = networkUrl ?? process.env.IAM_API_TEST_REDIS_URL;
-  if (!url)
-    throw new Error("IAM_API_TEST_REDIS_URL is required");
+  if (!url) throw new Error("IAM_API_TEST_REDIS_URL is required");
   const scope = await createUnifiedSessionRedisTestScope(url, { user: 120, client: 60 });
   const codes = await createUnifiedCustomSsoRedisTestScope(url);
   const closeKernel = scope.close;
@@ -114,52 +115,47 @@ export async function fixture(codeTtlSeconds = 30, networkUrl?: string, tokenTtl
     : undefined;
   const networkPrefix = `${codes.namespace}:network:`;
   const sourceCounts = { client: 0, credential: 0, factsSql: 0 };
-  const sql
-    = network
-      && postgres({
-        host: "127.0.0.1",
-        port: 1,
-        connect_timeout: 1,
-        debug() {
-          sourceCounts.factsSql++;
+  const sql =
+    network &&
+    postgres({
+      host: "127.0.0.1",
+      port: 1,
+      connect_timeout: 1,
+      debug() {
+        sourceCounts.factsSql++;
+      },
+    });
+  const snapshots =
+    network &&
+    createClientSnapshots({
+      redis: network,
+      source: {
+        async loadClient(code) {
+          sourceCounts.client++;
+          if (code !== businessClientCode) throw new Error("Network fixture Client is outside its owned scope");
+          return { ...client, clientCode: code };
         },
-      });
-  const snapshots
-    = network
-      && createClientSnapshots({
-        redis: network,
-        source: {
-          async loadClient(code) {
-            sourceCounts.client++;
-            if (code !== businessClientCode)
-              throw new Error("Network fixture Client is outside its owned scope");
-            return { ...client, clientCode: code };
-          },
-          async loadCredential(code) {
-            sourceCounts.credential++;
-            if (code !== businessClientCode)
-              throw new Error("Network fixture credential is outside its owned scope");
-            return {
-              secret: "business-secret",
-              credentialId: randomUUID(),
-              updatedAt: new Date().toISOString(),
-            };
-          },
+        async loadCredential(code) {
+          sourceCounts.credential++;
+          if (code !== businessClientCode) throw new Error("Network fixture credential is outside its owned scope");
+          return {
+            secret: "business-secret",
+            credentialId: randomUUID(),
+            updatedAt: new Date().toISOString(),
+          };
         },
-      });
-  const realBarrier
-    = network
-      && createSubjectAccessBarrier({
-        store: createRedisSubjectAccessStore({ redis: network, keyPrefix: networkPrefix }),
-        clock: { nowDate: () => new Date() },
-        random: { uuid: randomUUID },
-      });
-  const factsCache
-    = network && createSubjectFactsRedisCache(network, { keyPrefix: `${networkPrefix}facts:` });
-  const realFacts
-    = sql
-      && factsCache
-      && createSubjectFactsReader({ db: drizzle({ client: sql, relations }), cache: factsCache });
+      },
+    });
+  const realBarrier =
+    network &&
+    createSubjectAccessBarrier({
+      store: createRedisSubjectAccessStore({ redis: network, keyPrefix: networkPrefix }),
+      clock: { nowDate: () => new Date() },
+      random: { uuid: randomUUID },
+    });
+  const factsCache = network && createSubjectFactsRedisCache(network, { keyPrefix: `${networkPrefix}facts:` });
+  const realFacts =
+    sql && factsCache && createSubjectFactsReader({ db: drizzle({ client: sql, relations }), cache: factsCache });
   if (network && factsCache) {
     await network.ping();
     await createSubjectAccessBootstrap({
@@ -180,13 +176,9 @@ export async function fixture(codeTtlSeconds = 30, networkUrl?: string, tokenTtl
       try {
         const value = clientSnapshotKeys(businessClientCode);
         const keys = [value.control, ...value.payloads];
-        keys.push(
-          `${networkPrefix}record:${subjectIdentifier}`,
-          `${networkPrefix}facts:${subjectIdentifier}`,
-        );
+        keys.push(`${networkPrefix}record:${subjectIdentifier}`, `${networkPrefix}facts:${subjectIdentifier}`);
         await network.del(...keys);
-      }
-      finally {
+      } finally {
         network.disconnect();
         await sql?.end();
         await oldClose();
@@ -207,8 +199,7 @@ export async function fixture(codeTtlSeconds = 30, networkUrl?: string, tokenTtl
       business: {
         audit: {
           async recordAuditLog(input) {
-            if (state.businessAuditFails)
-              throw new Error("Business audit unavailable");
+            if (state.businessAuditFails) throw new Error("Business audit unavailable");
             audits.push(input);
           },
         },
@@ -217,8 +208,7 @@ export async function fixture(codeTtlSeconds = 30, networkUrl?: string, tokenTtl
       managed: {
         audit: {
           async recordAuditLog(input) {
-            if (state.gatewayAuditFails)
-              throw new Error("Gateway audit unavailable");
+            if (state.gatewayAuditFails) throw new Error("Gateway audit unavailable");
             audits.push(input);
           },
         },
@@ -229,13 +219,9 @@ export async function fixture(codeTtlSeconds = 30, networkUrl?: string, tokenTtl
           if (snapshots && clientCode !== businessClientCode)
             throw new Error("Network fixture refuses unowned Client authentication");
           if (snapshots) {
-            return await createClientSecretAuthenticator(snapshots.credential).authenticate(
-              clientCode,
-              secret,
-            );
+            return await createClientSecretAuthenticator(snapshots.credential).authenticate(clientCode, secret);
           }
-          if (secret === "unknown")
-            throw new SubjectAccessUnavailableError();
+          if (secret === "unknown") throw new SubjectAccessUnavailableError();
           return secret === "business-secret" ? { clientCode } : null;
         },
       },
@@ -243,32 +229,26 @@ export async function fixture(codeTtlSeconds = 30, networkUrl?: string, tokenTtl
     barrier: {
       async readCommittedTransitionId() {
         state.permissionReads++;
-        if (realBarrier)
-          return await realBarrier.readCommittedTransitionId(subjectIdentifier);
-        if (state.permission === "disabled")
-          throw new SubjectAccessDisabledError();
-        if (state.permission === "unknown")
-          throw new SubjectAccessUnavailableError();
+        if (realBarrier) return await realBarrier.readCommittedTransitionId(subjectIdentifier);
+        if (state.permission === "disabled") throw new SubjectAccessDisabledError();
+        if (state.permission === "unknown") throw new SubjectAccessUnavailableError();
         return state.generation;
       },
     },
     clients: {
       async acquire(code) {
         state.clientReads++;
-        if (state.clientUnavailable)
-          throw new ClientSnapshotUnavailableError();
+        if (state.clientUnavailable) throw new ClientSnapshotUnavailableError();
         if (snapshots && code !== businessClientCode)
           throw new Error("Network fixture refuses unowned Client acquisition");
-        if (snapshots)
-          return await snapshots.client.acquire(code);
+        if (snapshots) return await snapshots.client.acquire(code);
         return { kind: "present", value: { ...client, clientCode: code } };
       },
     },
     subjectFacts: {
       async read() {
         state.factsReads++;
-        if (realFacts)
-          return await realFacts.read(subjectIdentifier);
+        if (realFacts) return await realFacts.read(subjectIdentifier);
         await duringFacts?.();
         return {
           subjectIdentifier,
@@ -282,8 +262,7 @@ export async function fixture(codeTtlSeconds = 30, networkUrl?: string, tokenTtl
       clock: { now: () => now },
       nonceStore: {
         async set(key) {
-          if (cache.has(key))
-            return null;
+          if (cache.has(key)) return null;
           cache.set(key, "used");
           return "OK";
         },
@@ -333,15 +312,14 @@ export async function fixture(codeTtlSeconds = 30, networkUrl?: string, tokenTtl
         clock: { now: () => now },
         config: { auth: { magicCode: "magic-test" }, env: { nodeEnv: "production" } },
         redis: {
-          get: async key => cache.get(key) ?? null,
-          del: async key => cache.delete(key),
+          get: async (key) => cache.get(key) ?? null,
+          del: async (key) => cache.delete(key),
           set: async (key, value) => cache.set(key, value),
         },
         integrations: {
           wechat: {
             async getWxUserId(code) {
-              if (code !== "wx-code")
-                throw new Error("invalid wx code");
+              if (code !== "wx-code") throw new Error("invalid wx code");
               return "wx-test";
             },
           },
@@ -352,8 +330,7 @@ export async function fixture(codeTtlSeconds = 30, networkUrl?: string, tokenTtl
         client: { getClientByCode: async () => ({ clientSecret: "secret" }) },
         humanRisk: { recordLoginFailure: async () => {} },
         loginRestriction: {
-          getRestriction: async () =>
-            state.restriction ? { triggerMethod: "password", remainingSeconds: 60 } : null,
+          getRestriction: async () => (state.restriction ? { triggerMethod: "password", remainingSeconds: 60 } : null),
           clearLoginState: async () => {},
           async recordFailure() {
             state.failures++;
@@ -392,13 +369,11 @@ export async function fixture(codeTtlSeconds = 30, networkUrl?: string, tokenTtl
   }
   async function login() {
     const response = await password();
-    if (response.status !== 200)
-      throw new Error("Fixture login failed");
+    if (response.status !== 200) throw new Error("Fixture login failed");
     const body = await response.json();
     return body.data.token as string;
   }
-  const cookie = (response: Response) =>
-    /global_session=([^;]+)/u.exec(response.headers.get("set-cookie") ?? "")?.[1];
+  const cookie = (response: Response) => /global_session=([^;]+)/u.exec(response.headers.get("set-cookie") ?? "")?.[1];
   return {
     ...composition,
     app,

@@ -15,10 +15,12 @@ test("the fifth mixed login failure creates one temporary restriction at the sha
   });
 
   for (let attempt = 1; attempt <= 4; attempt += 1) {
-    await expect(loginRestriction.recordFailure({
-      userId: 1001,
-      triggerMethod: "password",
-    })).resolves.toEqual({
+    await expect(
+      loginRestriction.recordFailure({
+        userId: 1001,
+        triggerMethod: "password",
+      }),
+    ).resolves.toEqual({
       failureCount: attempt,
       newlyRestricted: false,
       remainingAttempts: 5 - attempt,
@@ -27,10 +29,12 @@ test("the fifth mixed login failure creates one temporary restriction at the sha
     now += 1;
   }
 
-  await expect(loginRestriction.recordFailure({
-    userId: 1001,
-    triggerMethod: "mobile",
-  })).resolves.toEqual({
+  await expect(
+    loginRestriction.recordFailure({
+      userId: 1001,
+      triggerMethod: "mobile",
+    }),
+  ).resolves.toEqual({
     failureCount: 5,
     newlyRestricted: true,
     remainingAttempts: 0,
@@ -79,10 +83,12 @@ test("clearing login restriction state removes the restriction, failure history,
     },
   });
   await expect(loginRestriction.getRestriction(1001)).resolves.toBeNull();
-  await expect(loginRestriction.recordFailure({
-    userId: 1001,
-    triggerMethod: "mobile",
-  })).resolves.toEqual({
+  await expect(
+    loginRestriction.recordFailure({
+      userId: 1001,
+      triggerMethod: "mobile",
+    }),
+  ).resolves.toEqual({
     failureCount: 1,
     newlyRestricted: false,
     remainingAttempts: 4,
@@ -108,10 +114,12 @@ test("naturally expired restrictions stop blocking login and are removed from th
   now += 30 * 60 * 1000 + 1;
 
   await expect(loginRestriction.getRestriction(1001)).resolves.toBeNull();
-  await expect(loginRestriction.listRestrictions({
-    limit: 20,
-    offset: 0,
-  })).resolves.toEqual({
+  await expect(
+    loginRestriction.listRestrictions({
+      limit: 20,
+      offset: 0,
+    }),
+  ).resolves.toEqual({
     items: [],
     total: 0,
   });
@@ -135,23 +143,29 @@ test("restriction inventory maps legacy trigger values to unknown and repairs da
     store,
   });
 
-  await expect(loginRestriction.listRestrictions({
-    limit: 20,
-    offset: 0,
-  })).resolves.toEqual({
-    items: [{
-      cause: "too_many_login_failures",
-      remainingSeconds: 10 * 60,
-      restrictedUntil: now + 10 * 60 * 1000,
-      triggerMethod: "unknown",
-      userId: 1001,
-    }],
+  await expect(
+    loginRestriction.listRestrictions({
+      limit: 20,
+      offset: 0,
+    }),
+  ).resolves.toEqual({
+    items: [
+      {
+        cause: "too_many_login_failures",
+        remainingSeconds: 10 * 60,
+        restrictedUntil: now + 10 * 60 * 1000,
+        triggerMethod: "unknown",
+        userId: 1001,
+      },
+    ],
     total: 1,
   });
-  await expect(loginRestriction.listRestrictions({
-    limit: 20,
-    offset: 0,
-  })).resolves.toHaveProperty("total", 1);
+  await expect(
+    loginRestriction.listRestrictions({
+      limit: 20,
+      offset: 0,
+    }),
+  ).resolves.toHaveProperty("total", 1);
 });
 
 test("reading a pre-existing unindexed restriction does not backfill the global inventory", async () => {
@@ -173,10 +187,12 @@ test("reading a pre-existing unindexed restriction does not backfill the global 
     triggerMethod: "password",
     userId: 1001,
   });
-  await expect(loginRestriction.listRestrictions({
-    limit: 20,
-    offset: 0,
-  })).resolves.toEqual({
+  await expect(
+    loginRestriction.listRestrictions({
+      limit: 20,
+      offset: 0,
+    }),
+  ).resolves.toEqual({
     items: [],
     total: 0,
   });
@@ -191,19 +207,25 @@ test("concurrent failures have one observable sequence and one threshold transit
     store: createLoginRestrictionStoreFake(() => now),
   });
 
-  const results = await Promise.all(Array.from({ length: 10 }, (_, index) =>
-    loginRestriction.recordFailure({
-      userId: 1001,
-      triggerMethod: index % 2 === 0 ? "password" : "mobile",
-    })));
+  const results = await Promise.all(
+    Array.from({ length: 10 }, (_, index) =>
+      loginRestriction.recordFailure({
+        userId: 1001,
+        triggerMethod: index % 2 === 0 ? "password" : "mobile",
+      }),
+    ),
+  );
 
-  expect(results.map(result => result.failureCount).sort((left, right) => left - right))
-    .toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10]);
-  expect(results.filter(result => result.newlyRestricted)).toHaveLength(1);
-  await expect(loginRestriction.listRestrictions({
-    limit: 20,
-    offset: 0,
-  })).resolves.toHaveProperty("total", 1);
+  expect(results.map((result) => result.failureCount).sort((left, right) => left - right)).toEqual([
+    1, 2, 3, 4, 5, 6, 7, 8, 9, 10,
+  ]);
+  expect(results.filter((result) => result.newlyRestricted)).toHaveLength(1);
+  await expect(
+    loginRestriction.listRestrictions({
+      limit: 20,
+      offset: 0,
+    }),
+  ).resolves.toHaveProperty("total", 1);
 });
 
 test("failures outside the rolling window do not contribute to a new restriction", async () => {
@@ -223,10 +245,12 @@ test("failures outside the rolling window do not contribute to a new restriction
   }
   now += 30 * 60 * 1000 + 1;
 
-  await expect(loginRestriction.recordFailure({
-    userId: 1001,
-    triggerMethod: "mobile",
-  })).resolves.toEqual({
+  await expect(
+    loginRestriction.recordFailure({
+      userId: 1001,
+      triggerMethod: "mobile",
+    }),
+  ).resolves.toEqual({
     failureCount: 1,
     newlyRestricted: false,
     remainingAttempts: 4,
@@ -257,18 +281,22 @@ test("restriction inventory is ordered by expiry and supports an exact user filt
     });
   }
 
-  await expect(loginRestriction.listRestrictions({
-    limit: 1,
-    offset: 0,
-  })).resolves.toMatchObject({
+  await expect(
+    loginRestriction.listRestrictions({
+      limit: 1,
+      offset: 0,
+    }),
+  ).resolves.toMatchObject({
     items: [{ userId: 2002 }],
     total: 2,
   });
-  await expect(loginRestriction.listRestrictions({
-    limit: 20,
-    offset: 0,
-    userId: 1001,
-  })).resolves.toMatchObject({
+  await expect(
+    loginRestriction.listRestrictions({
+      limit: 20,
+      offset: 0,
+      userId: 1001,
+    }),
+  ).resolves.toMatchObject({
     items: [{ userId: 1001 }],
     total: 1,
   });
@@ -304,8 +332,8 @@ test("one inventory page neither duplicates nor omits near-simultaneous expirati
     offset: 0,
   });
 
-  expect(result.items.map(item => item.userId)).toEqual([1001, 2002, 3003]);
-  expect(new Set(result.items.map(item => item.userId)).size).toBe(3);
+  expect(result.items.map((item) => item.userId)).toEqual([1001, 2002, 3003]);
+  expect(new Set(result.items.map((item) => item.userId)).size).toBe(3);
   expect(result.total).toBe(3);
 });
 
@@ -333,8 +361,7 @@ test("Redis failures are exposed as the shared unavailable error", async () => {
   try {
     await loginRestriction.getRestriction(1001);
     throw new Error("expected getRestriction to fail");
-  }
-  catch (error) {
+  } catch (error) {
     expect(error).toBeInstanceOf(LoginRestrictionUnavailableError);
     expect(error).toHaveProperty("cause", cause);
   }

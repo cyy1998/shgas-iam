@@ -1,17 +1,11 @@
-import type { PrivilegeDelegationResolutionPort } from "@api/use-cases/internal/resolve-privilege-delegations/resolve-privilege-delegations.port";
-import type { ResolvePrivilegeDelegationsInput } from "@api/use-cases/internal/resolve-privilege-delegations/resolve-privilege-delegations.type";
-import type { GenericClientRuntimeDto } from "@iam/domain/client";
-import type { Logger } from "pino";
-import type { ApiPostgresTestHarness } from "./postgres-test-harness";
-import {
-  createPrivilegeDelegationResolutionRepository,
-} from "@api/composition/repositories/privilege-delegation-resolution.repository";
+import { afterAll, beforeAll, beforeEach, describe, expect, test } from "bun:test";
+import { createPrivilegeDelegationResolutionRepository } from "@api/composition/repositories/privilege-delegation-resolution.repository";
 import { createInternalMiddlewares } from "@api/routes/internal/_middleware";
 import { createDelegationHandlers } from "@api/routes/internal/delegation/delegation.handlers";
 import { createDelegationRoute } from "@api/routes/internal/delegation/delegation.index";
-import {
-  createResolvePrivilegeDelegationsUseCase,
-} from "@api/use-cases/internal/resolve-privilege-delegations/resolve-privilege-delegations.use-case";
+import type { PrivilegeDelegationResolutionPort } from "@api/use-cases/internal/resolve-privilege-delegations/resolve-privilege-delegations.port";
+import type { ResolvePrivilegeDelegationsInput } from "@api/use-cases/internal/resolve-privilege-delegations/resolve-privilege-delegations.type";
+import { createResolvePrivilegeDelegationsUseCase } from "@api/use-cases/internal/resolve-privilege-delegations/resolve-privilege-delegations.use-case";
 import createApp from "@iam/api-core/core/create-app";
 import { createInternalAuthenticationHandler } from "@iam/api-core/middlewares";
 import {
@@ -31,10 +25,12 @@ import {
   privileges,
   users,
 } from "@iam/db/schema";
-import { afterAll, beforeAll, beforeEach, describe, expect, test } from "bun:test";
+import type { GenericClientRuntimeDto } from "@iam/domain/client";
 import { eq } from "drizzle-orm";
+import type { Logger } from "pino";
 import pino from "pino";
 import appConfig from "~api/app.config";
+import type { ApiPostgresTestHarness } from "./postgres-test-harness";
 import { createApiPostgresTestHarness } from "./postgres-test-harness";
 
 const observedAt = new Date("2026-08-25T08:00:00.000Z");
@@ -75,15 +71,12 @@ afterAll(async () => {
   harness = undefined;
 });
 
-function createResolutionApp(options: {
-  clock?: { nowDate: () => Date };
-  logger?: Logger;
-  resolution?: PrivilegeDelegationResolutionPort;
-} = {}) {
+function createResolutionApp(
+  options: { clock?: { nowDate: () => Date }; logger?: Logger; resolution?: PrivilegeDelegationResolutionPort } = {},
+) {
   const resolver = createResolvePrivilegeDelegationsUseCase({
     clock: options.clock ?? { nowDate: () => observedAt },
-    resolution: options.resolution
-      ?? createPrivilegeDelegationResolutionRepository(harness!.db),
+    resolution: options.resolution ?? createPrivilegeDelegationResolutionRepository(harness!.db),
   });
   const logger = options.logger ?? pino({ enabled: false });
   const handlers = createDelegationHandlers({
@@ -91,9 +84,7 @@ function createResolutionApp(options: {
     resolvePrivilegeDelegations: resolver,
   });
   const internalAuthenticationHandler = createInternalAuthenticationHandler({
-    getClientBySecret: async secret => secret === enabledClient.clientSecret
-      ? enabledClient
-      : null,
+    getClientBySecret: async (secret) => (secret === enabledClient.clientSecret ? enabledClient : null),
   });
   return createApp(appConfig, {
     env: { NODE_ENV: "test" },
@@ -112,28 +103,25 @@ function createResolutionApp(options: {
 }
 
 function createMemoryLogger(lines: Record<string, unknown>[]) {
-  return pino({ level: "info" }, {
-    write(line: string) {
-      lines.push(JSON.parse(line));
+  return pino(
+    { level: "info" },
+    {
+      write(line: string) {
+        lines.push(JSON.parse(line));
+      },
     },
-  }).child({ sourceApp: "iam-api-test" });
+  ).child({ sourceApp: "iam-api-test" });
 }
 
-async function requestResolution(
-  app: ReturnType<typeof createResolutionApp>,
-  input: unknown,
-) {
-  const response = await app.request(
-    "http://localhost/internal/delegations/resolve",
-    {
-      method: "POST",
-      headers: {
-        "apikey": enabledClient.clientSecret,
-        "content-type": "application/json",
-      },
-      body: JSON.stringify(input),
+async function requestResolution(app: ReturnType<typeof createResolutionApp>, input: unknown) {
+  const response = await app.request("http://localhost/internal/delegations/resolve", {
+    method: "POST",
+    headers: {
+      apikey: enabledClient.clientSecret,
+      "content-type": "application/json",
     },
-  );
+    body: JSON.stringify(input),
+  });
   return {
     status: response.status,
     body: await response.json(),
@@ -141,11 +129,14 @@ async function requestResolution(
 }
 
 async function insertUser(username: string, status = UserStatus.Enable) {
-  const [user] = await harness!.db.insert(users).values({
-    username,
-    name: username,
-    status,
-  }).returning({ id: users.id });
+  const [user] = await harness!.db
+    .insert(users)
+    .values({
+      username,
+      name: username,
+      status,
+    })
+    .returning({ id: users.id });
   return user!.id;
 }
 
@@ -155,15 +146,18 @@ async function insertOrganization(input: {
   parentId?: number;
   status?: OrganizationStatus;
 }) {
-  const [organization] = await harness!.db.insert(organizations).values({
-    orgCode: input.code,
-    orgName: input.code,
-    parentId: input.parentId,
-    path: input.code,
-    level: input.level ?? OrganizationLevel.One,
-    orgType: OrganizationType.Company,
-    status: input.status,
-  }).returning({ id: organizations.id });
+  const [organization] = await harness!.db
+    .insert(organizations)
+    .values({
+      orgCode: input.code,
+      orgName: input.code,
+      parentId: input.parentId,
+      path: input.code,
+      level: input.level ?? OrganizationLevel.One,
+      orgType: OrganizationType.Company,
+      status: input.status,
+    })
+    .returning({ id: organizations.id });
   await harness!.db.insert(organizationClosures).values({
     ancestorId: organization!.id,
     descendantId: organization!.id,
@@ -172,15 +166,15 @@ async function insertOrganization(input: {
   return organization!.id;
 }
 
-async function insertPrivilege(
-  code: string,
-  status = PrivilegeStatus.Enable,
-) {
-  const [privilege] = await harness!.db.insert(privileges).values({
-    privilegeCode: code,
-    privilegeName: code,
-    status,
-  }).returning({ id: privileges.id });
+async function insertPrivilege(code: string, status = PrivilegeStatus.Enable) {
+  const [privilege] = await harness!.db
+    .insert(privileges)
+    .values({
+      privilegeCode: code,
+      privilegeName: code,
+      status,
+    })
+    .returning({ id: privileges.id });
   return privilege!.id;
 }
 
@@ -194,17 +188,20 @@ async function insertDelegation(input: {
   status?: PrivilegeDelegationStatus;
   isDelete?: boolean;
 }) {
-  const [delegation] = await harness!.db.insert(privilegeDelegations).values({
-    delegatorUserId: input.delegatorUserId,
-    delegateeUserId: input.delegateeUserId,
-    organizationScopeId: input.organizationScopeId,
-    startTime: input.startTime ?? new Date("2026-08-24T08:00:00.000Z"),
-    endTime: input.endTime ?? new Date("2026-08-26T08:00:00.000Z"),
-    status: input.status ?? PrivilegeDelegationStatus.Enable,
-    isDelete: input.isDelete,
-  }).returning({ id: privilegeDelegations.id });
+  const [delegation] = await harness!.db
+    .insert(privilegeDelegations)
+    .values({
+      delegatorUserId: input.delegatorUserId,
+      delegateeUserId: input.delegateeUserId,
+      organizationScopeId: input.organizationScopeId,
+      startTime: input.startTime ?? new Date("2026-08-24T08:00:00.000Z"),
+      endTime: input.endTime ?? new Date("2026-08-26T08:00:00.000Z"),
+      status: input.status ?? PrivilegeDelegationStatus.Enable,
+      isDelete: input.isDelete,
+    })
+    .returning({ id: privilegeDelegations.id });
   await harness!.db.insert(delegationDetails).values(
-    input.privilegeIds.map(privilegeId => ({
+    input.privilegeIds.map((privilegeId) => ({
       delegationId: delegation!.id,
       privilegeId,
     })),
@@ -253,15 +250,9 @@ describe("POST /internal/delegations/resolve", () => {
     const deletedUser = await insertUser("deleted-user");
     const deletedOrganization = await insertOrganization({ code: "deleted-org" });
     const deletedPrivilege = await insertPrivilege("deleted:privilege");
-    await harness!.db.update(users)
-      .set({ isDelete: true })
-      .where(eq(users.id, deletedUser));
-    await harness!.db.update(organizations)
-      .set({ isDelete: true })
-      .where(eq(organizations.id, deletedOrganization));
-    await harness!.db.update(privileges)
-      .set({ isDelete: true })
-      .where(eq(privileges.id, deletedPrivilege));
+    await harness!.db.update(users).set({ isDelete: true }).where(eq(users.id, deletedUser));
+    await harness!.db.update(organizations).set({ isDelete: true }).where(eq(organizations.id, deletedOrganization));
+    await harness!.db.update(privileges).set({ isDelete: true }).where(eq(privileges.id, deletedPrivilege));
 
     const result = await requestResolution(createResolutionApp(), {
       usernames: ["missing-user", "alice", "deleted-user"],
@@ -332,35 +323,47 @@ describe("POST /internal/delegations/resolve", () => {
   });
 
   test("preserves input order while returning a direct delegatee or null", async () => {
-    const [alice, bob] = await harness!.db.insert(users).values([
-      { username: "alice", name: "Alice" },
-      { username: "bob", name: "Bob" },
-      { username: "carol", name: "Carol" },
-    ]).returning({ id: users.id, username: users.username });
-    const [organization] = await harness!.db.insert(organizations).values({
-      orgCode: "ORG",
-      orgName: "Organization",
-      path: "ORG",
-      level: OrganizationLevel.One,
-      orgType: OrganizationType.Company,
-    }).returning({ id: organizations.id });
+    const [alice, bob] = await harness!.db
+      .insert(users)
+      .values([
+        { username: "alice", name: "Alice" },
+        { username: "bob", name: "Bob" },
+        { username: "carol", name: "Carol" },
+      ])
+      .returning({ id: users.id, username: users.username });
+    const [organization] = await harness!.db
+      .insert(organizations)
+      .values({
+        orgCode: "ORG",
+        orgName: "Organization",
+        path: "ORG",
+        level: OrganizationLevel.One,
+        orgType: OrganizationType.Company,
+      })
+      .returning({ id: organizations.id });
     await harness!.db.insert(organizationClosures).values({
       ancestorId: organization!.id,
       descendantId: organization!.id,
       depth: 0,
     });
-    const [privilege] = await harness!.db.insert(privileges).values({
-      privilegeCode: "document:read",
-      privilegeName: "Read documents",
-    }).returning({ id: privileges.id });
-    const [delegation] = await harness!.db.insert(privilegeDelegations).values({
-      delegatorUserId: alice!.id,
-      delegateeUserId: bob!.id,
-      organizationScopeId: organization!.id,
-      startTime: new Date("2026-08-24T08:00:00.000Z"),
-      endTime: new Date("2026-08-26T08:00:00.000Z"),
-      status: PrivilegeDelegationStatus.Enable,
-    }).returning({ id: privilegeDelegations.id });
+    const [privilege] = await harness!.db
+      .insert(privileges)
+      .values({
+        privilegeCode: "document:read",
+        privilegeName: "Read documents",
+      })
+      .returning({ id: privileges.id });
+    const [delegation] = await harness!.db
+      .insert(privilegeDelegations)
+      .values({
+        delegatorUserId: alice!.id,
+        delegateeUserId: bob!.id,
+        organizationScopeId: organization!.id,
+        startTime: new Date("2026-08-24T08:00:00.000Z"),
+        endTime: new Date("2026-08-26T08:00:00.000Z"),
+        status: PrivilegeDelegationStatus.Enable,
+      })
+      .returning({ id: privilegeDelegations.id });
     await harness!.db.insert(delegationDetails).values({
       delegationId: delegation!.id,
       privilegeId: privilege!.id,
@@ -458,9 +461,7 @@ describe("POST /internal/delegations/resolve", () => {
         status: 200,
         body: {
           code: 200,
-          data: [
-            { username: "descendant-scoped", delegateeUsername: null },
-          ],
+          data: [{ username: "descendant-scoped", delegateeUsername: null }],
           message: "success",
         },
       },
@@ -468,18 +469,9 @@ describe("POST /internal/delegations/resolve", () => {
   });
 
   test("uses a closed validity interval and excludes inactive or deleted delegations", async () => {
-    const usernames = [
-      "at-start",
-      "at-end",
-      "before-start",
-      "after-end",
-      "paused",
-      "disabled",
-      "deleted",
-    ];
+    const usernames = ["at-start", "at-end", "before-start", "after-end", "paused", "disabled", "deleted"];
     const userIds = new Map<string, number>();
-    for (const username of usernames)
-      userIds.set(username, await insertUser(username));
+    for (const username of usernames) userIds.set(username, await insertUser(username));
     const delegatee = await insertUser("delegatee");
     const organization = await insertOrganization({ code: "ORG" });
     const privilege = await insertPrivilege("document:read");
@@ -550,19 +542,13 @@ describe("POST /internal/delegations/resolve", () => {
 
   test("recognizes paused or disabled references without recomputing authorization", async () => {
     const delegator = await insertUser("paused-delegator", UserStatus.Pause);
-    await insertUser(
-      "disabled-without-delegation",
-      UserStatus.Disable,
-    );
+    await insertUser("disabled-without-delegation", UserStatus.Disable);
     const delegatee = await insertUser("disabled-delegatee", UserStatus.Disable);
     const organization = await insertOrganization({
       code: "PAUSED-ORG",
       status: OrganizationStatus.Pause,
     });
-    const requestedPrivilege = await insertPrivilege(
-      "document:read",
-      PrivilegeStatus.Disable,
-    );
+    const requestedPrivilege = await insertPrivilege("document:read", PrivilegeStatus.Disable);
     const otherPrivilege = await insertPrivilege("document:write");
     await insertDelegation({
       delegatorUserId: delegator,
@@ -676,37 +662,36 @@ describe("POST /internal/delegations/resolve", () => {
       delegatorUserId: ambiguous,
       delegateeUserId: secondDelegatee,
     });
-    const result = await requestResolution(createResolutionApp({
-      logger: createMemoryLogger(logs),
-    }), {
-      usernames: ["valid", "ambiguous"],
-      orgCode: "ORG",
-      privilegeCode: "document:read",
-    });
+    const result = await requestResolution(
+      createResolutionApp({
+        logger: createMemoryLogger(logs),
+      }),
+      {
+        usernames: ["valid", "ambiguous"],
+        orgCode: "ORG",
+        privilegeCode: "document:read",
+      },
+    );
 
     expect(result).toEqual(unavailableResolutionResponse);
     expect(JSON.stringify(result.body)).not.toContain("first-delegatee");
     expect(JSON.stringify(result.body)).not.toContain("second-delegatee");
     expect(JSON.stringify(result.body)).not.toContain("ambiguous-delegation");
     expect(JSON.stringify(result.body)).not.toContain("delegationIds");
-    expect(logs.find(log => log.event === "api.error.handled"))
-      .toMatchObject({
-        err: {
-          diagnostic: {
-            failureCategory: "integrity-violation",
-            violations: expect.arrayContaining([
-              {
-                category: "ambiguous-delegation",
-                username: "ambiguous",
-                delegationIds: [
-                  firstAmbiguousDelegation,
-                  secondAmbiguousDelegation,
-                ],
-              },
-            ]),
-          },
+    expect(logs.find((log) => log.event === "api.error.handled")).toMatchObject({
+      err: {
+        diagnostic: {
+          failureCategory: "integrity-violation",
+          violations: expect.arrayContaining([
+            {
+              category: "ambiguous-delegation",
+              username: "ambiguous",
+              delegationIds: [firstAmbiguousDelegation, secondAmbiguousDelegation],
+            },
+          ]),
         },
-      });
+      },
+    });
   });
 
   test("fails closed when duplicate matching delegations identify the same delegatee", async () => {
@@ -759,15 +744,9 @@ describe("POST /internal/delegations/resolve", () => {
     const deletedDelegatee = await insertUser("deleted-delegatee");
     const deletedScope = await insertOrganization({ code: "DELETED-SCOPE" });
     const deletedPrivilege = await insertPrivilege("deleted:privilege");
-    await harness!.db.update(users)
-      .set({ isDelete: true })
-      .where(eq(users.id, deletedDelegatee));
-    await harness!.db.update(organizations)
-      .set({ isDelete: true })
-      .where(eq(organizations.id, deletedScope));
-    await harness!.db.update(privileges)
-      .set({ isDelete: true })
-      .where(eq(privileges.id, deletedPrivilege));
+    await harness!.db.update(users).set({ isDelete: true }).where(eq(users.id, deletedDelegatee));
+    await harness!.db.update(organizations).set({ isDelete: true }).where(eq(organizations.id, deletedScope));
+    await harness!.db.update(privileges).set({ isDelete: true }).where(eq(privileges.id, deletedPrivilege));
 
     const missingDelegatee = await insertUser("missing-delegatee-reference");
     const deletedDelegateeReference = await insertUser("deleted-delegatee-reference");
@@ -854,67 +833,38 @@ describe("POST /internal/delegations/resolve", () => {
       },
       {
         failureCategory: "statement-timeout",
-        error: Object.assign(
-          new Error("canceling statement due to statement timeout: SELECT secret"),
-          { code: "57014" },
-        ),
+        error: Object.assign(new Error("canceling statement due to statement timeout: SELECT secret"), {
+          code: "57014",
+        }),
       },
     ] as const;
 
     for (const failure of failures) {
       const logs: Record<string, unknown>[] = [];
-      const result = await requestResolution(createResolutionApp({
-        logger: createMemoryLogger(logs),
-        resolution: {
-          async resolveCurrent() {
-            throw failure.error;
+      const result = await requestResolution(
+        createResolutionApp({
+          logger: createMemoryLogger(logs),
+          resolution: {
+            async resolveCurrent() {
+              throw failure.error;
+            },
           },
+        }),
+        {
+          usernames: ["alice"],
+          orgCode: "ORG",
+          privilegeCode: "document:read",
         },
-      }), {
-        usernames: ["alice"],
-        orgCode: "ORG",
-        privilegeCode: "document:read",
-      });
+      );
 
       expect(result).toEqual(unavailableResolutionResponse);
       expect(JSON.stringify(result.body)).not.toContain(failure.error.message);
-      expect(logs.find(log => log.event === "api.error.handled"))
-        .toMatchObject({
-          statusCode: 503,
-          errorCode: "PRIVILEGE.DELEGATION_RESOLUTION_UNAVAILABLE",
-          err: {
-            diagnostic: {
-              failureCategory: failure.failureCategory,
-              context: {
-                orgCode: "ORG",
-                privilegeCode: "document:read",
-                usernameCount: 1,
-              },
-            },
-          },
-        });
-    }
-
-    const handlerLogs: Record<string, unknown>[] = [];
-    const handlerTimeoutResult = await requestResolution(createResolutionApp({
-      logger: createMemoryLogger(handlerLogs),
-      resolution: {
-        resolveCurrent: () => new Promise(() => {}),
-      },
-    }), {
-      usernames: ["alice"],
-      orgCode: "ORG",
-      privilegeCode: "document:read",
-    });
-
-    expect(handlerTimeoutResult).toEqual(unavailableResolutionResponse);
-    expect(handlerLogs.find(log => log.event === "api.error.handled"))
-      .toMatchObject({
+      expect(logs.find((log) => log.event === "api.error.handled")).toMatchObject({
         statusCode: 503,
         errorCode: "PRIVILEGE.DELEGATION_RESOLUTION_UNAVAILABLE",
         err: {
           diagnostic: {
-            failureCategory: "handler-timeout",
+            failureCategory: failure.failureCategory,
             context: {
               orgCode: "ORG",
               privilegeCode: "document:read",
@@ -923,6 +873,38 @@ describe("POST /internal/delegations/resolve", () => {
           },
         },
       });
+    }
+
+    const handlerLogs: Record<string, unknown>[] = [];
+    const handlerTimeoutResult = await requestResolution(
+      createResolutionApp({
+        logger: createMemoryLogger(handlerLogs),
+        resolution: {
+          resolveCurrent: () => new Promise(() => {}),
+        },
+      }),
+      {
+        usernames: ["alice"],
+        orgCode: "ORG",
+        privilegeCode: "document:read",
+      },
+    );
+
+    expect(handlerTimeoutResult).toEqual(unavailableResolutionResponse);
+    expect(handlerLogs.find((log) => log.event === "api.error.handled")).toMatchObject({
+      statusCode: 503,
+      errorCode: "PRIVILEGE.DELEGATION_RESOLUTION_UNAVAILABLE",
+      err: {
+        diagnostic: {
+          failureCategory: "handler-timeout",
+          context: {
+            orgCode: "ORG",
+            privilegeCode: "document:read",
+            usernameCount: 1,
+          },
+        },
+      },
+    });
   }, 10_000);
 
   test("observes the entire batch at one server-owned instant", async () => {
@@ -948,14 +930,10 @@ describe("POST /internal/delegations/resolve", () => {
       startTime: new Date("2026-08-25T09:30:00.000Z"),
       endTime: new Date("2026-08-25T10:30:00.000Z"),
     });
-    const observationTimes = [
-      new Date("2026-08-25T08:00:00.000Z"),
-      new Date("2026-08-25T10:00:00.000Z"),
-    ];
+    const observationTimes = [new Date("2026-08-25T08:00:00.000Z"), new Date("2026-08-25T10:00:00.000Z")];
     const app = createResolutionApp({
       clock: {
-        nowDate: () => observationTimes.shift()
-          ?? new Date("2026-08-25T10:00:00.000Z"),
+        nowDate: () => observationTimes.shift() ?? new Date("2026-08-25T10:00:00.000Z"),
       },
     });
 
@@ -979,58 +957,59 @@ describe("POST /internal/delegations/resolve", () => {
   });
 
   test("publishes the strict success contract in the Internal OpenAPI document", async () => {
-    const response = await createResolutionApp().request(
-      "http://localhost/internal/doc",
-    );
-    const document = await response.json() as {
+    const response = await createResolutionApp().request("http://localhost/internal/doc");
+    const document = (await response.json()) as {
       components: {
-        schemas: Record<string, {
-          additionalProperties?: boolean;
-          properties?: Record<string, unknown>;
-          required?: string[];
-          type?: string;
-        }>;
+        schemas: Record<
+          string,
+          {
+            additionalProperties?: boolean;
+            properties?: Record<string, unknown>;
+            required?: string[];
+            type?: string;
+          }
+        >;
       };
-      paths: Record<string, {
-        post?: {
-          requestBody?: {
-            content?: Record<string, { schema?: Record<string, unknown> }>;
+      paths: Record<
+        string,
+        {
+          post?: {
+            requestBody?: {
+              content?: Record<string, { schema?: Record<string, unknown> }>;
+            };
+            responses?: Record<
+              string,
+              {
+                content?: Record<string, { schema?: Record<string, unknown> }>;
+              }
+            >;
           };
-          responses?: Record<string, {
-            content?: Record<string, { schema?: Record<string, unknown> }>;
-          }>;
-        };
-      }>;
+        }
+      >;
     };
 
     expect(response.status).toBe(200);
-    expect(document.paths["/internal/delegations/resolve"]?.post?.responses)
-      .toHaveProperty("200");
-    expect(document.paths["/internal/delegations/resolve"]?.post?.responses)
-      .toHaveProperty("404");
-    expect(document.paths["/internal/delegations/resolve"]?.post?.responses)
-      .toHaveProperty("422");
-    expect(document.paths["/internal/delegations/resolve"]?.post?.responses)
-      .toHaveProperty("503");
-    expect(document.components.schemas.PrivilegeDelegationResolutionRequest)
-      .toMatchObject({
-        type: "object",
-        required: ["usernames", "orgCode", "privilegeCode"],
-        additionalProperties: false,
-        properties: {
-          usernames: {
-            type: "array",
-            minItems: 1,
-            maxItems: 100,
-            uniqueItems: true,
-            items: { type: "string", minLength: 1, maxLength: 64 },
-          },
-          orgCode: { type: "string", minLength: 1 },
-          privilegeCode: { type: "string", minLength: 1 },
+    expect(document.paths["/internal/delegations/resolve"]?.post?.responses).toHaveProperty("200");
+    expect(document.paths["/internal/delegations/resolve"]?.post?.responses).toHaveProperty("404");
+    expect(document.paths["/internal/delegations/resolve"]?.post?.responses).toHaveProperty("422");
+    expect(document.paths["/internal/delegations/resolve"]?.post?.responses).toHaveProperty("503");
+    expect(document.components.schemas.PrivilegeDelegationResolutionRequest).toMatchObject({
+      type: "object",
+      required: ["usernames", "orgCode", "privilegeCode"],
+      additionalProperties: false,
+      properties: {
+        usernames: {
+          type: "array",
+          minItems: 1,
+          maxItems: 100,
+          uniqueItems: true,
+          items: { type: "string", minLength: 1, maxLength: 64 },
         },
-      });
-    expect(document.components.schemas
-      .PrivilegeDelegationResolutionInputNotFoundResponse).toMatchObject({
+        orgCode: { type: "string", minLength: 1 },
+        privilegeCode: { type: "string", minLength: 1 },
+      },
+    });
+    expect(document.components.schemas.PrivilegeDelegationResolutionInputNotFoundResponse).toMatchObject({
       type: "object",
       required: ["code", "data", "message"],
       additionalProperties: false,
@@ -1046,21 +1025,19 @@ describe("POST /internal/delegations/resolve", () => {
         },
       },
     });
-    expect(document.components.schemas.PrivilegeDelegationResolutionResult)
-      .toEqual({
-        type: "object",
-        properties: {
-          username: { type: "string", example: "alice" },
-          delegateeUsername: {
-            type: ["string", "null"],
-            example: "bob",
-          },
+    expect(document.components.schemas.PrivilegeDelegationResolutionResult).toEqual({
+      type: "object",
+      properties: {
+        username: { type: "string", example: "alice" },
+        delegateeUsername: {
+          type: ["string", "null"],
+          example: "bob",
         },
-        required: ["username", "delegateeUsername"],
-        additionalProperties: false,
-      });
-    expect(document.components.schemas
-      .PrivilegeDelegationResolutionUnavailableResponse).toMatchObject({
+      },
+      required: ["username", "delegateeUsername"],
+      additionalProperties: false,
+    });
+    expect(document.components.schemas.PrivilegeDelegationResolutionUnavailableResponse).toMatchObject({
       type: "object",
       required: ["code", "data", "message"],
       additionalProperties: false,

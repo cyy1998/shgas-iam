@@ -1,12 +1,9 @@
-import type { CreateOrganizationResponsibilityParentLifecycleParticipantDeps } from "@admin-api/services/organization-responsibility/organization-responsibility-parent-lifecycle.participant";
-import type { OrganizationResponsibilityAssignmentWriteTarget } from "@admin-api/services/organization-responsibility/organization-responsibility-parent-lifecycle.type";
-import { createOrganizationResponsibilityParentLifecycleParticipant } from "@admin-api/services/organization-responsibility/organization-responsibility-parent-lifecycle.participant";
-import {
-  OrganizationResponsibilityAssignmentStatus,
-  OrganizationResponsibilityTypeCode,
-} from "@iam/contracts";
-import { OrganizationHasOpenResponsibilityAssignmentError } from "@iam/domain/organization";
 import { describe, expect, mock, test } from "bun:test";
+import type { CreateOrganizationResponsibilityParentLifecycleParticipantDeps } from "@admin-api/services/organization-responsibility/organization-responsibility-parent-lifecycle.participant";
+import { createOrganizationResponsibilityParentLifecycleParticipant } from "@admin-api/services/organization-responsibility/organization-responsibility-parent-lifecycle.participant";
+import type { OrganizationResponsibilityAssignmentWriteTarget } from "@admin-api/services/organization-responsibility/organization-responsibility-parent-lifecycle.type";
+import { OrganizationResponsibilityAssignmentStatus, OrganizationResponsibilityTypeCode } from "@iam/contracts";
+import { OrganizationHasOpenResponsibilityAssignmentError } from "@iam/domain/organization";
 
 const assignmentStartTime = new Date("2026-01-01T00:00:00.000Z");
 const transactionTime = new Date("2026-02-01T00:00:00.000Z");
@@ -74,18 +71,20 @@ describe("Organization Responsibility parent lifecycle participant", () => {
       action: "end",
       employmentId: 11,
       endTime: new Date("2026-03-01"),
-      selectedAssignments: [{
-        ...changedAssignment(1),
-        status: OrganizationResponsibilityAssignmentStatus.Disable,
-        endTime: transactionTime,
-      }],
+      selectedAssignments: [
+        {
+          ...changedAssignment(1),
+          status: OrganizationResponsibilityAssignmentStatus.Disable,
+          endTime: transactionTime,
+        },
+      ],
     });
     expect(result).toBe(false);
     expect(deps.assignmentStore.updateLockedAssignmentLifecycle).not.toHaveBeenCalled();
     expect(deps.auditLogWriter.recordAuditLog).not.toHaveBeenCalled();
   });
   test("pauses every selected Assignment and writes one allowlisted cascade audit per change", async () => {
-    const selectedAssignments = [31, 32].map(id => ({
+    const selectedAssignments = [31, 32].map((id) => ({
       ...changedAssignment(id),
       status: OrganizationResponsibilityAssignmentStatus.Enable,
       endTime: null,
@@ -93,9 +92,10 @@ describe("Organization Responsibility parent lifecycle participant", () => {
     const assignmentStore = {
       lockAssignmentsForEmployments: mock(async () => []),
       lockAssignmentsForEmployment: mock(async () => []),
-      updateLockedAssignmentLifecycle: mock(async (
-        { assignment }: { assignment: OrganizationResponsibilityAssignmentWriteTarget },
-      ) => changedAssignment(assignment.id)),
+      updateLockedAssignmentLifecycle: mock(
+        async ({ assignment }: { assignment: OrganizationResponsibilityAssignmentWriteTarget }) =>
+          changedAssignment(assignment.id),
+      ),
       hasOpenAssignmentTargetingOrganizationSubtree: mock(async () => false),
     };
     const auditLogWriter = {
@@ -221,16 +221,20 @@ describe("Organization Responsibility parent lifecycle participant", () => {
       traceId: "trace-resign",
     };
 
-    await expect(participant.endOpenAssignmentsForUserResignation({
-      auditContext,
-      endTime: transactionTime,
-      userId: 9,
-      selectedAssignments: [{
-        ...changedAssignment(51),
-        status: OrganizationResponsibilityAssignmentStatus.Enable,
-        endTime: null,
-      }],
-    })).resolves.toBe(true);
+    await expect(
+      participant.endOpenAssignmentsForUserResignation({
+        auditContext,
+        endTime: transactionTime,
+        userId: 9,
+        selectedAssignments: [
+          {
+            ...changedAssignment(51),
+            status: OrganizationResponsibilityAssignmentStatus.Enable,
+            endTime: null,
+          },
+        ],
+      }),
+    ).resolves.toBe(true);
 
     expect(assignmentStore.updateLockedAssignmentLifecycle).toHaveBeenCalledTimes(1);
     expect(auditLogWriter.recordAuditLog).toHaveBeenCalledWith(

@@ -10,7 +10,13 @@ export function createScanVerifier(redis: ScanRedis, prefix: string) {
       do {
         signal?.throwIfAborted();
         const page = await redis.scan(cursor, "MATCH", `${prefix}*`, "COUNT", "100");
-        if (!Array.isArray(page) || page.length !== 2 || !/^\d+$/u.test(page[0]) || !Array.isArray(page[1]) || page[1].some(key => !key.startsWith(prefix)))
+        if (
+          !Array.isArray(page) ||
+          page.length !== 2 ||
+          !/^\d+$/u.test(page[0]) ||
+          !Array.isArray(page[1]) ||
+          page[1].some((key) => !key.startsWith(prefix))
+        )
           throw new Error("Custom SSO verification unavailable");
         cursor = page[0];
         matching += page[1].length;

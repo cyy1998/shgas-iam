@@ -1,5 +1,5 @@
-import { randomUUID } from "node:crypto";
 import { expect } from "bun:test";
+import { randomUUID } from "node:crypto";
 import postgres from "postgres";
 
 const TEST_DATABASE_URL_ENV = "IAM_DB_TEST_DATABASE_URL";
@@ -11,14 +11,10 @@ export interface PostgresTestHarness {
   readonly close: () => Promise<void>;
 }
 
-export async function expectPostgresErrorCode(
-  operation: PromiseLike<unknown>,
-  expectedCode: string,
-): Promise<void> {
+export async function expectPostgresErrorCode(operation: PromiseLike<unknown>, expectedCode: string): Promise<void> {
   try {
     await operation;
-  }
-  catch (error) {
+  } catch (error) {
     expect(error).toMatchObject({ code: expectedCode });
     return;
   }
@@ -50,12 +46,9 @@ export async function createPostgresTestHarness(): Promise<PostgresTestHarness> 
         await adminSql.end();
       },
     };
-  }
-  catch (error) {
-    if (scopedSql)
-      await scopedSql.end({ timeout: 1 });
-    if (schemaCreated)
-      await adminSql.unsafe(`DROP SCHEMA ${quoteIdentifier(schemaName)} CASCADE`);
+  } catch (error) {
+    if (scopedSql) await scopedSql.end({ timeout: 1 });
+    if (schemaCreated) await adminSql.unsafe(`DROP SCHEMA ${quoteIdentifier(schemaName)} CASCADE`);
     await adminSql.end({ timeout: 1 });
     throw error;
   }
@@ -72,8 +65,7 @@ function requireDedicatedTestDatabaseUrl(): string {
   let parsed: URL;
   try {
     parsed = new URL(databaseUrl);
-  }
-  catch {
+  } catch {
     throw new Error(`${TEST_DATABASE_URL_ENV} must be a valid PostgreSQL URL`);
   }
   if (parsed.protocol !== "postgres:" && parsed.protocol !== "postgresql:")
@@ -88,7 +80,6 @@ function requireDedicatedTestDatabaseUrl(): string {
 }
 
 function quoteIdentifier(identifier: string): string {
-  if (!/^[a-z0-9_]+$/u.test(identifier))
-    throw new Error("test schema name contains unsafe characters");
+  if (!/^[a-z0-9_]+$/u.test(identifier)) throw new Error("test schema name contains unsafe characters");
   return `"${identifier}"`;
 }

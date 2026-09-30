@@ -5,9 +5,7 @@ export interface UserProfileSearchServiceDeps {
   readonly legacySearch: Pick<UserProfileSearchPort, "searchLegacyUsers">;
 }
 
-export function createUserProfileSearchService(
-  deps: UserProfileSearchServiceDeps,
-) {
+export function createUserProfileSearchService(deps: UserProfileSearchServiceDeps) {
   return {
     searchDsl: async (input: Parameters<UserProfileSearchPort["searchDsl"]>[0]) =>
       await deps.dslSearch.searchDsl(input),
@@ -16,6 +14,4 @@ export function createUserProfileSearchService(
   } satisfies UserProfileSearchPort;
 }
 
-export type UserProfileSearchService = ReturnType<
-  typeof createUserProfileSearchService
->;
+export type UserProfileSearchService = ReturnType<typeof createUserProfileSearchService>;

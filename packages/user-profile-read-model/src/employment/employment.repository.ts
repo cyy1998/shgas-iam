@@ -1,7 +1,7 @@
 import type { db as database } from "@iam/db";
-import type { EmploymentInventoryRow } from "./employment-verifier";
 import { employments, organizations, positions } from "@iam/db/schema";
 import { asc, eq, sql } from "drizzle-orm";
+import type { EmploymentInventoryRow } from "./employment-verifier";
 
 export function createEmploymentRepository(db: typeof database) {
   async function readAll(): Promise<EmploymentInventoryRow[]> {

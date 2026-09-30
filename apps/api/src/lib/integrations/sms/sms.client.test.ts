@@ -25,8 +25,7 @@ test("verification send aborts after its 10 second deadline and rejects a late r
     expect(requestSignal).toBe(controller.signal);
     expect(result[0]).toMatchObject({ status: "rejected", reason: { name: "TimeoutError" } });
     expect(fetchFn).toHaveBeenCalledTimes(1);
-  }
-  finally {
+  } finally {
     timeout.mockRestore();
   }
 });

@@ -11,7 +11,7 @@ export function createUserProfileMaintenanceRepository(db: DbClient) {
         .where(input.afterUserId === undefined ? undefined : gt(users.id, input.afterUserId))
         .orderBy(asc(users.id))
         .limit(input.limit);
-      return rows.map(row => row.userId);
+      return rows.map((row) => row.userId);
     },
   };
 }

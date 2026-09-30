@@ -1,8 +1,4 @@
-import type {
-  EmploymentStatus,
-  OrganizationStatus,
-  PositionStatus,
-} from "@iam/contracts";
+import type { EmploymentStatus, OrganizationStatus, PositionStatus } from "@iam/contracts";
 import {
   EmploymentStatus as EmploymentStatusValue,
   OrganizationStatus as OrganizationStatusValue,
@@ -21,8 +17,7 @@ const EMPLOYMENT_FAILURE_CODES = [
   "multiple-open-primary-employments",
 ] as const;
 
-export type EmploymentFailureCode
-  = typeof EMPLOYMENT_FAILURE_CODES[number];
+export type EmploymentFailureCode = (typeof EMPLOYMENT_FAILURE_CODES)[number];
 
 export interface EmploymentInventoryRow {
   id: number;
@@ -67,31 +62,21 @@ export interface EmploymentVerificationReport {
   failures: EmploymentVerificationFailure[];
 }
 
-export function createEmploymentVerifier(
-  deps: CreateEmploymentVerifierDeps,
-) {
+export function createEmploymentVerifier(deps: CreateEmploymentVerifierDeps) {
   async function verify(): Promise<EmploymentVerificationReport> {
     const verifiedAt = deps.clock.nowDate();
     const rows = await deps.inventory.readAll();
     const failures = createFailureAccumulator();
 
     for (const row of rows) {
-      if (row.isDelete)
-        continue;
+      if (row.isDelete) continue;
       if (!isKnownEmploymentStatus(row.status)) {
         failures.add("unknown-employment-status", row.id);
-      }
-      else if (isOpenEmploymentStatus(row.status)) {
-        if (
-          row.positionStatus !== PositionStatusValue.Enable
-          || row.positionDeleted !== false
-        ) {
+      } else if (isOpenEmploymentStatus(row.status)) {
+        if (row.positionStatus !== PositionStatusValue.Enable || row.positionDeleted !== false) {
           failures.add("position-not-effective", row.id);
         }
-        if (
-          row.organizationStatus !== OrganizationStatusValue.Enable
-          || row.organizationDeleted !== false
-        ) {
+        if (row.organizationStatus !== OrganizationStatusValue.Enable || row.organizationDeleted !== false) {
           failures.add("organization-not-effective", row.id);
         }
         if (row.endTime !== null) {
@@ -100,43 +85,38 @@ export function createEmploymentVerifier(
         if (row.startTime.getTime() > verifiedAt.getTime()) {
           failures.add("future-open-start-time", row.id);
         }
-      }
-      else if (row.endTime === null) {
+      } else if (row.endTime === null) {
         failures.add("ended-employment-missing-end-time", row.id);
       }
-      if (
-        row.endTime !== null
-        && row.endTime.getTime() <= row.startTime.getTime()
-      ) {
+      if (row.endTime !== null && row.endTime.getTime() <= row.startTime.getTime()) {
         failures.add("invalid-employment-period", row.id);
       }
     }
 
-    const openRows = rows.filter(row =>
-      !row.isDelete
-      && isKnownEmploymentStatus(row.status)
-      && isOpenEmploymentStatus(row.status));
+    const openRows = rows.filter(
+      (row) => !row.isDelete && isKnownEmploymentStatus(row.status) && isOpenEmploymentStatus(row.status),
+    );
     collectGroupConflict(
       openRows,
       failures,
       "duplicate-open-employment",
-      row => `${row.userId}:${row.organizationId}:${row.positionId}`,
+      (row) => `${row.userId}:${row.organizationId}:${row.positionId}`,
     );
     collectGroupConflict(
-      openRows.filter(row => row.isPrimary),
+      openRows.filter((row) => row.isPrimary),
       failures,
       "multiple-open-primary-employments",
-      row => row.userId,
+      (row) => row.userId,
     );
     const failureReport = failures.report();
 
     return {
       version: 1 as const,
       verifiedAt: verifiedAt.toISOString(),
-      status: failureReport.length === 0 ? "passed" as const : "failed" as const,
+      status: failureReport.length === 0 ? ("passed" as const) : ("failed" as const),
       counts: {
         employments: rows.length,
-        legacyTombstones: rows.filter(row => row.isDelete).length,
+        legacyTombstones: rows.filter((row) => row.isDelete).length,
         blockingEmployments: failures.blockingEmploymentCount(),
       },
       failures: failureReport,
@@ -147,14 +127,15 @@ export function createEmploymentVerifier(
 }
 
 function isOpenEmploymentStatus(status: EmploymentStatus) {
-  return status === EmploymentStatusValue.Enable
-    || status === EmploymentStatusValue.Pause;
+  return status === EmploymentStatusValue.Enable || status === EmploymentStatusValue.Pause;
 }
 
 function isKnownEmploymentStatus(status: number): status is EmploymentStatus {
-  return status === EmploymentStatusValue.Enable
-    || status === EmploymentStatusValue.Pause
-    || status === EmploymentStatusValue.Disable;
+  return (
+    status === EmploymentStatusValue.Enable ||
+    status === EmploymentStatusValue.Pause ||
+    status === EmploymentStatusValue.Disable
+  );
 }
 
 function collectGroupConflict<TKey>(
@@ -171,10 +152,8 @@ function collectGroupConflict<TKey>(
     groups.set(key, group);
   }
   for (const group of groups.values()) {
-    if (group.length < 2)
-      continue;
-    for (const row of group)
-      failures.add(code, row.id);
+    if (group.length < 2) continue;
+    for (const row of group) failures.add(code, row.id);
   }
 }
 

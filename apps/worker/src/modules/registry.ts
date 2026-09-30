@@ -13,18 +13,13 @@ export interface WorkerModule {
   close: () => Promise<void>;
 }
 
-export function resolveModuleKeys(
-  selection: WorkerModuleSelection,
-  knownModules: readonly WorkerModule[],
-): string[] {
-  const knownKeys = knownModules.map(module => module.key);
+export function resolveModuleKeys(selection: WorkerModuleSelection, knownModules: readonly WorkerModule[]): string[] {
+  const knownKeys = knownModules.map((module) => module.key);
 
-  if (selection.mode === "all")
-    return knownKeys;
-  if (selection.mode === "none")
-    return [];
+  if (selection.mode === "all") return knownKeys;
+  if (selection.mode === "none") return [];
 
-  const unknownKeys = selection.keys.filter(key => !knownKeys.includes(key));
+  const unknownKeys = selection.keys.filter((key) => !knownKeys.includes(key));
   if (unknownKeys.length > 0) {
     throw new Error(`Unknown worker module key(s): ${unknownKeys.join(", ")}`);
   }
@@ -32,19 +27,16 @@ export function resolveModuleKeys(
   return selection.keys;
 }
 
-export function selectModules(
-  selection: WorkerModuleSelection,
-  knownModules: readonly WorkerModule[],
-): WorkerModule[] {
+export function selectModules(selection: WorkerModuleSelection, knownModules: readonly WorkerModule[]): WorkerModule[] {
   const keys = new Set(resolveModuleKeys(selection, knownModules));
-  return knownModules.filter(module => keys.has(module.key));
+  return knownModules.filter((module) => keys.has(module.key));
 }
 
 export function selectQueueRegistrations(
   selection: WorkerModuleSelection,
   knownModules: readonly WorkerModule[],
 ): WorkerQueueRegistration[] {
-  return selectModules(selection, knownModules).flatMap(module => module.queueRegistrations);
+  return selectModules(selection, knownModules).flatMap((module) => module.queueRegistrations);
 }
 
 export async function startWorkerModules(modules: readonly WorkerModule[]) {

@@ -1,7 +1,5 @@
-import type { DbClient } from "@iam/db";
-import {
-  createHrAdministrationScopeResolver,
-} from "@admin-api/services/admin-authorization/hr-administration-scope.resolver";
+import { afterAll, beforeAll, beforeEach, describe, expect, test } from "bun:test";
+import { createHrAdministrationScopeResolver } from "@admin-api/services/admin-authorization/hr-administration-scope.resolver";
 import {
   ClientStatus,
   EmploymentStatus,
@@ -12,21 +10,12 @@ import {
   RoleAssignmentTargetType,
   RoleStatus,
 } from "@iam/contracts";
-import {
-  clients,
-  employments,
-  organizationClosures,
-  organizations,
-  positions,
-  roles,
-} from "@iam/db/schema";
+import type { DbClient } from "@iam/db";
+import { clients, employments, organizationClosures, organizations, positions, roles } from "@iam/db/schema";
 import { roleAssignments } from "@iam/db/schema/role-assignments";
 import { createRoleAssignmentResolver } from "@iam/role-assignment-resolution";
-import { afterAll, beforeAll, beforeEach, describe, expect, test } from "bun:test";
 import { eq } from "drizzle-orm";
-import {
-  createAdminApiPostgresTestHarness,
-} from "./postgres-test-harness";
+import { createAdminApiPostgresTestHarness } from "./postgres-test-harness";
 
 let harness: Awaited<ReturnType<typeof createAdminApiPostgresTestHarness>>;
 
@@ -74,9 +63,7 @@ describe("HR Administration Scope resolver", () => {
 
     await resetScopeData();
     await seedScopeGraph(harness.db);
-    await harness.db.insert(roleAssignments).values(
-      assignment(500, RoleAssignmentTargetType.Employment, 1002),
-    );
+    await harness.db.insert(roleAssignments).values(assignment(500, RoleAssignmentTargetType.Employment, 1002));
     await harness.db.delete(organizationClosures).where(eq(organizationClosures.descendantId, 31));
     const missingRoot = await resolver.resolveForActor(900);
     expect(missingRoot).toBeNull();
@@ -103,56 +90,63 @@ async function resetScopeData() {
 }
 
 async function seedScopeGraph(db: DbClient) {
-  await db.insert(clients).values([
-    client(1, "iam-admin"),
-    client(2, "other-client"),
-  ]);
-  await db.insert(organizations).values([
-    organization(10, "root-a", OrganizationLevel.One),
-    organization(11, "branch-a", OrganizationLevel.Two),
-    organization(12, "leaf-a", OrganizationLevel.Three),
-    organization(20, "root-b", OrganizationLevel.One),
-    organization(21, "leaf-b", OrganizationLevel.Two),
-    organization(30, "root-c", OrganizationLevel.One),
-    organization(31, "leaf-c", OrganizationLevel.Two),
-    organization(40, "ordinary-root", OrganizationLevel.One),
-    organization(41, "ordinary-leaf", OrganizationLevel.Two),
-  ]);
-  await db.insert(organizationClosures).values([
-    closure(10, 10, 0),
-    closure(11, 11, 0),
-    closure(12, 12, 0),
-    closure(10, 11, 1),
-    closure(11, 12, 1),
-    closure(10, 12, 2),
-    closure(20, 20, 0),
-    closure(21, 21, 0),
-    closure(20, 21, 1),
-    closure(30, 30, 0),
-    closure(31, 31, 0),
-    closure(30, 31, 1),
-    closure(40, 40, 0),
-    closure(41, 41, 0),
-    closure(40, 41, 1),
-  ]);
-  await db.insert(positions).values([
-    position(100, "position-a"),
-    position(200, "position-b"),
-    position(300, "position-c"),
-    position(400, "ordinary-position"),
-  ]);
-  await db.insert(employments).values([
-    employment(1000, 900, 100, 12),
-    employment(1001, 900, 200, 21),
-    employment(1002, 900, 300, 31),
-    employment(1003, 900, 400, 41),
-  ]);
+  await db.insert(clients).values([client(1, "iam-admin"), client(2, "other-client")]);
+  await db
+    .insert(organizations)
+    .values([
+      organization(10, "root-a", OrganizationLevel.One),
+      organization(11, "branch-a", OrganizationLevel.Two),
+      organization(12, "leaf-a", OrganizationLevel.Three),
+      organization(20, "root-b", OrganizationLevel.One),
+      organization(21, "leaf-b", OrganizationLevel.Two),
+      organization(30, "root-c", OrganizationLevel.One),
+      organization(31, "leaf-c", OrganizationLevel.Two),
+      organization(40, "ordinary-root", OrganizationLevel.One),
+      organization(41, "ordinary-leaf", OrganizationLevel.Two),
+    ]);
+  await db
+    .insert(organizationClosures)
+    .values([
+      closure(10, 10, 0),
+      closure(11, 11, 0),
+      closure(12, 12, 0),
+      closure(10, 11, 1),
+      closure(11, 12, 1),
+      closure(10, 12, 2),
+      closure(20, 20, 0),
+      closure(21, 21, 0),
+      closure(20, 21, 1),
+      closure(30, 30, 0),
+      closure(31, 31, 0),
+      closure(30, 31, 1),
+      closure(40, 40, 0),
+      closure(41, 41, 0),
+      closure(40, 41, 1),
+    ]);
+  await db
+    .insert(positions)
+    .values([
+      position(100, "position-a"),
+      position(200, "position-b"),
+      position(300, "position-c"),
+      position(400, "ordinary-position"),
+    ]);
+  await db
+    .insert(employments)
+    .values([
+      employment(1000, 900, 100, 12),
+      employment(1001, 900, 200, 21),
+      employment(1002, 900, 300, 31),
+      employment(1003, 900, 400, 41),
+    ]);
   await db.insert(roles).values(role(500, 1, "iam:hr-admin"));
-  await db.insert(roleAssignments).values([
-    assignment(500, RoleAssignmentTargetType.Employment, 1000),
-    assignment(500, RoleAssignmentTargetType.Position, 200),
-    assignment(500, RoleAssignmentTargetType.Organization, 30, true),
-  ]);
+  await db
+    .insert(roleAssignments)
+    .values([
+      assignment(500, RoleAssignmentTargetType.Employment, 1000),
+      assignment(500, RoleAssignmentTargetType.Position, 200),
+      assignment(500, RoleAssignmentTargetType.Organization, 30, true),
+    ]);
 }
 
 function client(id: number, clientCode: string) {

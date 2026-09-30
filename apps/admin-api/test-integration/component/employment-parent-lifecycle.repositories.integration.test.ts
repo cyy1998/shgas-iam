@@ -1,7 +1,7 @@
+import { describe, expect, test } from "bun:test";
 import { createOrganizationRepository } from "@admin-api/services/organization/organization.repository";
 import { createPositionRepository } from "@admin-api/services/position/position.repository";
 import { createUserRepository } from "@admin-api/services/user/user.repository";
-import { describe, expect, test } from "bun:test";
 import { createQueryCaptureDb, renderQuery } from "../helpers/drizzle-query-capture";
 
 describe("Open Employment parent lifecycle repository guards", () => {
@@ -12,7 +12,7 @@ describe("Open Employment parent lifecycle repository guards", () => {
     await repository.countOpenEmploymentsByPosCode("DEV");
 
     const query = renderQuery(topLevelWhere.at(-1));
-    expect(query.sql).toContain("\"employment\".\"status\" in ($2, $3)");
+    expect(query.sql).toContain('"employment"."status" in ($2, $3)');
     expect(query.params).toEqual([false, 1, 2, "DEV", false]);
   });
 
@@ -23,8 +23,8 @@ describe("Open Employment parent lifecycle repository guards", () => {
     await repository.countOpenEmploymentsByOrgCode("ORG");
 
     const query = renderQuery(topLevelWhere.at(-1));
-    expect(query.sql).toContain("\"employment\".\"status\" in ($2, $3)");
-    expect(query.sql).toContain("\"organization_closure\".\"descendant_id\" = \"employment\".\"dept_id\"");
+    expect(query.sql).toContain('"employment"."status" in ($2, $3)');
+    expect(query.sql).toContain('"organization_closure"."descendant_id" = "employment"."dept_id"');
     expect(query.params).toEqual([false, 1, 2, "ORG", false]);
   });
 
@@ -35,7 +35,7 @@ describe("Open Employment parent lifecycle repository guards", () => {
     await repository.countOpenEmploymentsByUsername("zhangsan");
 
     const query = renderQuery(topLevelWhere.at(-1));
-    expect(query.sql).toContain("\"employment\".\"status\" in ($2, $3)");
+    expect(query.sql).toContain('"employment"."status" in ($2, $3)');
     expect(query.params).toEqual([false, 1, 2, "zhangsan", false]);
   });
 });

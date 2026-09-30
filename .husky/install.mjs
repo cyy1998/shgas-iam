@@ -1,8 +1,4 @@
-if (
-  process.env.HUSKY === "0"
-  || process.env.NODE_ENV === "production"
-  || process.env.CI === "true"
-) {
+if (process.env.HUSKY === "0" || process.env.NODE_ENV === "production" || process.env.CI === "true") {
   process.exit(0);
 }
 

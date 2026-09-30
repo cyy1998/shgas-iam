@@ -1,6 +1,6 @@
-import { LockOutlined, LoginOutlined, UserOutlined } from '@ant-design/icons';
-import type { FormInstance } from 'antd';
-import { Button, Form, Input } from 'antd';
+import { LockOutlined, LoginOutlined, UserOutlined } from "@ant-design/icons";
+import type { FormInstance } from "antd";
+import { Button, Form, Input } from "antd";
 
 export type PasswordLoginValues = {
   username: string;
@@ -14,45 +14,20 @@ type PasswordLoginFormProps = {
   onSubmit: (values: PasswordLoginValues) => void | Promise<void>;
 };
 
-export function PasswordLoginForm({
-  form,
-  submitting,
-  onForgotPassword,
-  onSubmit,
-}: PasswordLoginFormProps) {
+export function PasswordLoginForm({ form, submitting, onForgotPassword, onSubmit }: PasswordLoginFormProps) {
   return (
-    <Form
-      form={form}
-      layout="vertical"
-      onFinish={onSubmit}
-      requiredMark={false}
-    >
-      <Form.Item
-        label="工号 / 账号"
-        name="username"
-        rules={[{ required: true, message: '请输入您的工号' }]}
-      >
-        <Input
-          size="large"
-          placeholder="请输入您的工号"
-          prefix={<UserOutlined />}
-        />
+    <Form form={form} layout="vertical" onFinish={onSubmit} requiredMark={false}>
+      <Form.Item label="工号 / 账号" name="username" rules={[{ required: true, message: "请输入您的工号" }]}>
+        <Input size="large" placeholder="请输入您的工号" prefix={<UserOutlined />} />
       </Form.Item>
       <div className="login-actions">
         <span className="login-actions-label">登录密码</span>
-        <span className="forgot-link" onClick={onForgotPassword}>
+        <Button className="forgot-link" type="link" style={{ height: "auto", padding: 0 }} onClick={onForgotPassword}>
           忘记密码？
-        </span>
+        </Button>
       </div>
-      <Form.Item
-        name="password"
-        rules={[{ required: true, message: '请输入登录密码' }]}
-      >
-        <Input.Password
-          size="large"
-          placeholder="请输入登录密码"
-          prefix={<LockOutlined />}
-        />
+      <Form.Item name="password" rules={[{ required: true, message: "请输入登录密码" }]}>
+        <Input.Password size="large" placeholder="请输入登录密码" prefix={<LockOutlined />} />
       </Form.Item>
       <Button
         className="login-submit"

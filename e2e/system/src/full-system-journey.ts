@@ -2,10 +2,7 @@ import type { RunDescriptor } from "./lifecycle.ts";
 
 interface JourneyOperations {
   preflight: (signal?: AbortSignal) => Promise<unknown>;
-  runJourney: (
-    descriptor: RunDescriptor,
-    signal?: AbortSignal,
-  ) => Promise<unknown>;
+  runJourney: (descriptor: RunDescriptor, signal?: AbortSignal) => Promise<unknown>;
 }
 
 interface FullSystemJourneyOperationsOptions {
@@ -14,9 +11,7 @@ interface FullSystemJourneyOperationsOptions {
   oidc: JourneyOperations;
 }
 
-export function createFullSystemJourneyOperations(
-  options: FullSystemJourneyOperationsOptions,
-) {
+export function createFullSystemJourneyOperations(options: FullSystemJourneyOperationsOptions) {
   return {
     async preflight(signal?: AbortSignal) {
       await options.admin.preflight(signal);

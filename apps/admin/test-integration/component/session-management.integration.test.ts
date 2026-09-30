@@ -1,11 +1,11 @@
 import {
-  listLoginRestrictions,
-  listSessions,
   LoginRestrictionListError,
   LoginRestrictionListErrorKind,
   LoginRestrictionReleaseError,
   LoginRestrictionReleaseErrorKind,
   type LoginRestrictionReleaseResult,
+  listLoginRestrictions,
+  listSessions,
   releaseLoginRestriction,
   revokeSessions,
   SessionListError,
@@ -13,16 +13,16 @@ import {
   SessionRevokeError,
   SessionRevokeErrorKind,
   type SessionRevokeResult,
-} from '@admin/services/session-management';
-import { ApiErrorCode } from '@iam/contracts';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+} from "@admin/services/session-management";
+import { ApiErrorCode } from "@iam/contracts";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 const sessionListQuery = vi.hoisted(() => vi.fn());
 const sessionRevokeMutation = vi.hoisted(() => vi.fn());
 const loginRestrictionListQuery = vi.hoisted(() => vi.fn());
 const loginRestrictionReleaseMutation = vi.hoisted(() => vi.fn());
 
-vi.mock('@admin/lib/api-client', () => ({
+vi.mock("@admin/lib/api-client", () => ({
   apiClient: {
     admin: {
       sessionManagement: {
@@ -35,14 +35,14 @@ vi.mock('@admin/lib/api-client', () => ({
   },
 }));
 
-describe('session management service wrapper', () => {
+describe("session management service wrapper", () => {
   afterEach(() => {
     vi.clearAllMocks();
   });
 
-  it('normalizes the shared unavailable service code for the page', async () => {
+  it("normalizes the shared unavailable service code for the page", async () => {
     sessionListQuery.mockRejectedValueOnce(
-      Object.assign(new Error('internal transport message'), {
+      Object.assign(new Error("internal transport message"), {
         data: {
           httpStatus: 500,
           serviceCode: ApiErrorCode.AdminLoginStateUnavailable,
@@ -59,13 +59,13 @@ describe('session management service wrapper', () => {
     ).rejects.toMatchObject({
       name: SessionListError.name,
       kind: SessionListErrorKind.LoginStateUnavailable,
-      message: '登录状态服务暂时不可用',
+      message: "登录状态服务暂时不可用",
     });
   });
 
-  it('normalizes an unavailable restriction inventory without exposing transport details', async () => {
+  it("normalizes an unavailable restriction inventory without exposing transport details", async () => {
     loginRestrictionListQuery.mockRejectedValueOnce(
-      Object.assign(new Error('redis host must stay internal'), {
+      Object.assign(new Error("redis host must stay internal"), {
         data: {
           httpStatus: 500,
           serviceCode: ApiErrorCode.AdminLoginStateUnavailable,
@@ -82,11 +82,11 @@ describe('session management service wrapper', () => {
     ).rejects.toMatchObject({
       name: LoginRestrictionListError.name,
       kind: LoginRestrictionListErrorKind.LoginStateUnavailable,
-      message: '登录状态服务暂时不可用',
+      message: "登录状态服务暂时不可用",
     });
   });
 
-  it('returns the safe restriction inventory from the shared Admin API intent', async () => {
+  it("returns the safe restriction inventory from the shared Admin API intent", async () => {
     const input = {
       conditions: { userId: 42 },
       pageNum: 1,
@@ -97,12 +97,12 @@ describe('session management service wrapper', () => {
         {
           user: {
             id: 42,
-            username: 'zhangsan',
-            name: '张三',
-            accountStatus: 'normal' as const,
+            username: "zhangsan",
+            name: "张三",
+            accountStatus: "normal" as const,
           },
-          cause: 'too_many_login_failures' as const,
-          triggerMethod: 'password' as const,
+          cause: "too_many_login_failures" as const,
+          triggerMethod: "password" as const,
           restrictedUntil: 1_900_000_000_000,
           remainingSeconds: 120,
         },
@@ -119,12 +119,12 @@ describe('session management service wrapper', () => {
     expect(loginRestrictionListQuery).toHaveBeenCalledWith(input);
   });
 
-  it('does not expose or misclassify an arbitrary restriction-list HTTP 503', async () => {
+  it("does not expose or misclassify an arbitrary restriction-list HTTP 503", async () => {
     loginRestrictionListQuery.mockRejectedValueOnce(
-      Object.assign(new Error('provider detail must stay internal'), {
+      Object.assign(new Error("provider detail must stay internal"), {
         data: {
           httpStatus: 503,
-          serviceCode: 'ANOTHER_SERVICE_UNAVAILABLE',
+          serviceCode: "ANOTHER_SERVICE_UNAVAILABLE",
         },
       }),
     );
@@ -138,13 +138,13 @@ describe('session management service wrapper', () => {
     ).rejects.toMatchObject({
       name: LoginRestrictionListError.name,
       kind: LoginRestrictionListErrorKind.RequestFailed,
-      message: '临时登录限制加载失败',
+      message: "临时登录限制加载失败",
     });
   });
 
-  it('normalizes restriction audit failure after effect without retrying the mutation', async () => {
+  it("normalizes restriction audit failure after effect without retrying the mutation", async () => {
     loginRestrictionReleaseMutation.mockRejectedValueOnce(
-      Object.assign(new Error('postgres host must stay internal'), {
+      Object.assign(new Error("postgres host must stay internal"), {
         data: {
           httpStatus: 500,
           serviceCode: ApiErrorCode.AdminLoginStateAuditFailedAfterEffect,
@@ -156,7 +156,7 @@ describe('session management service wrapper', () => {
     await expect(releaseLoginRestriction(input)).rejects.toMatchObject({
       name: LoginRestrictionReleaseError.name,
       kind: LoginRestrictionReleaseErrorKind.AuditFailedAfterEffect,
-      message: '操作可能已生效，但审计记录失败',
+      message: "操作可能已生效，但审计记录失败",
     });
     expect(loginRestrictionReleaseMutation).toHaveBeenCalledTimes(1);
     expect(loginRestrictionReleaseMutation).toHaveBeenCalledWith(input);
@@ -166,25 +166,23 @@ describe('session management service wrapper', () => {
     {
       serviceCode: ApiErrorCode.AdminLoginStateUnavailable,
       expectedKind: LoginRestrictionReleaseErrorKind.LoginStateUnavailable,
-      expectedMessage: '登录状态服务暂时不可用',
+      expectedMessage: "登录状态服务暂时不可用",
     },
     {
-      serviceCode: 'ANOTHER_INTERNAL_ERROR',
+      serviceCode: "ANOTHER_INTERNAL_ERROR",
       expectedKind: LoginRestrictionReleaseErrorKind.RequestFailed,
-      expectedMessage: '临时登录限制解除失败',
+      expectedMessage: "临时登录限制解除失败",
     },
   ])(
-    'normalizes $serviceCode to a stable restriction release error',
+    "normalizes $serviceCode to a stable restriction release error",
     async ({ serviceCode, expectedKind, expectedMessage }) => {
       loginRestrictionReleaseMutation.mockRejectedValueOnce(
-        Object.assign(new Error('transport detail must stay internal'), {
+        Object.assign(new Error("transport detail must stay internal"), {
           data: { serviceCode },
         }),
       );
 
-      await expect(
-        releaseLoginRestriction({ userId: 42 }),
-      ).rejects.toMatchObject({
+      await expect(releaseLoginRestriction({ userId: 42 })).rejects.toMatchObject({
         name: LoginRestrictionReleaseError.name,
         kind: expectedKind,
         message: expectedMessage,
@@ -193,7 +191,7 @@ describe('session management service wrapper', () => {
     },
   );
 
-  it('returns the safe restriction release result from the shared Admin API intent', async () => {
+  it("returns the safe restriction release result from the shared Admin API intent", async () => {
     const input = { userId: 42 };
     const response = {
       changed: false,
@@ -206,17 +204,14 @@ describe('session management service wrapper', () => {
     expect(loginRestrictionReleaseMutation).toHaveBeenCalledWith(input);
   });
 
-  it('does not expose or misclassify an arbitrary HTTP 503', async () => {
+  it("does not expose or misclassify an arbitrary HTTP 503", async () => {
     sessionListQuery.mockRejectedValueOnce(
-      Object.assign(
-        new Error('database host and credentials must stay internal'),
-        {
-          data: {
-            httpStatus: 503,
-            serviceCode: 'ANOTHER_SERVICE_UNAVAILABLE',
-          },
+      Object.assign(new Error("database host and credentials must stay internal"), {
+        data: {
+          httpStatus: 503,
+          serviceCode: "ANOTHER_SERVICE_UNAVAILABLE",
         },
-      ),
+      }),
     );
 
     await expect(
@@ -228,35 +223,31 @@ describe('session management service wrapper', () => {
     ).rejects.toMatchObject({
       name: SessionListError.name,
       kind: SessionListErrorKind.RequestFailed,
-      message: '会话记录加载失败',
+      message: "会话记录加载失败",
     });
   });
 
-  it('normalizes audit failure after effect without exposing transport details or retrying', async () => {
+  it("normalizes audit failure after effect without exposing transport details or retrying", async () => {
     sessionRevokeMutation.mockRejectedValueOnce(
-      Object.assign(
-        new Error('postgres host and statement must stay internal'),
-        {
-          data: {
-            httpStatus: 500,
-            serviceCode: 'ADMIN_LOGIN_STATE_AUDIT_FAILED_AFTER_EFFECT',
-            serviceMessage:
-              '登录状态已变更，但审计记录失败；请刷新确认且不要自动重试',
-          },
+      Object.assign(new Error("postgres host and statement must stay internal"), {
+        data: {
+          httpStatus: 500,
+          serviceCode: "ADMIN_LOGIN_STATE_AUDIT_FAILED_AFTER_EFFECT",
+          serviceMessage: "登录状态已变更，但审计记录失败；请刷新确认且不要自动重试",
         },
-      ),
+      }),
     );
     const input = {
       target: {
-        type: 'session' as const,
-        principalSessionId: 'ps-target',
+        type: "session" as const,
+        principalSessionId: "ps-target",
       },
     };
 
     await expect(revokeSessions(input)).rejects.toMatchObject({
       name: SessionRevokeError.name,
       kind: SessionRevokeErrorKind.AuditFailedAfterEffect,
-      message: '操作可能已生效，但审计记录失败',
+      message: "操作可能已生效，但审计记录失败",
     });
     expect(sessionRevokeMutation).toHaveBeenCalledTimes(1);
     expect(sessionRevokeMutation).toHaveBeenCalledWith(input);
@@ -264,50 +255,47 @@ describe('session management service wrapper', () => {
 
   it.each([
     {
-      serviceCode: 'ADMIN_SESSION_CURRENT_PROTECTED',
+      serviceCode: "ADMIN_SESSION_CURRENT_PROTECTED",
       expectedKind: SessionRevokeErrorKind.CurrentSessionProtected,
-      expectedMessage: '当前管理会话受保护',
+      expectedMessage: "当前管理会话受保护",
     },
     {
       serviceCode: ApiErrorCode.AdminLoginStateUnavailable,
       expectedKind: SessionRevokeErrorKind.LoginStateUnavailable,
-      expectedMessage: '登录状态服务暂时不可用',
+      expectedMessage: "登录状态服务暂时不可用",
     },
     {
-      serviceCode: 'ANOTHER_INTERNAL_ERROR',
+      serviceCode: "ANOTHER_INTERNAL_ERROR",
       expectedKind: SessionRevokeErrorKind.RequestFailed,
-      expectedMessage: '会话下线失败',
+      expectedMessage: "会话下线失败",
     },
-  ])(
-    'normalizes $serviceCode to a stable revoke error',
-    async ({ serviceCode, expectedKind, expectedMessage }) => {
-      sessionRevokeMutation.mockRejectedValueOnce(
-        Object.assign(new Error('transport detail must stay internal'), {
-          data: { serviceCode },
-        }),
-      );
+  ])("normalizes $serviceCode to a stable revoke error", async ({ serviceCode, expectedKind, expectedMessage }) => {
+    sessionRevokeMutation.mockRejectedValueOnce(
+      Object.assign(new Error("transport detail must stay internal"), {
+        data: { serviceCode },
+      }),
+    );
 
-      await expect(
-        revokeSessions({
-          target: {
-            type: 'session',
-            principalSessionId: 'ps-target',
-          },
-        }),
-      ).rejects.toMatchObject({
-        name: SessionRevokeError.name,
-        kind: expectedKind,
-        message: expectedMessage,
-      });
-    },
-  );
+    await expect(
+      revokeSessions({
+        target: {
+          type: "session",
+          principalSessionId: "ps-target",
+        },
+      }),
+    ).rejects.toMatchObject({
+      name: SessionRevokeError.name,
+      kind: expectedKind,
+      message: expectedMessage,
+    });
+  });
 
-  it('returns the safe revoke result from the shared Admin API intent', async () => {
+  it("returns the safe revoke result from the shared Admin API intent", async () => {
     const response = {
       changed: false,
       result: {
-        scope: 'session' as const,
-        generation: 'unified' as const,
+        scope: "session" as const,
+        generation: "unified" as const,
         currentPrincipalSessionExcluded: false,
         sessions: {
           userSessionsTerminated: 0,
@@ -328,19 +316,19 @@ describe('session management service wrapper', () => {
     await expect(
       revokeSessions({
         target: {
-          type: 'session',
-          principalSessionId: 'ps-inactive',
+          type: "session",
+          principalSessionId: "ps-inactive",
         },
       }),
     ).resolves.toEqual(response);
   });
 
-  it('passes a user target through the same shared revoke intent', async () => {
+  it("passes a user target through the same shared revoke intent", async () => {
     const response = {
       changed: true,
       result: {
-        scope: 'user' as const,
-        generation: 'unified' as const,
+        scope: "user" as const,
+        generation: "unified" as const,
         currentPrincipalSessionExcluded: true,
         sessions: {
           userSessionsTerminated: 2,
@@ -358,7 +346,7 @@ describe('session management service wrapper', () => {
     } satisfies SessionRevokeResult;
     const input = {
       target: {
-        type: 'user' as const,
+        type: "user" as const,
         userId: 42,
       },
     };

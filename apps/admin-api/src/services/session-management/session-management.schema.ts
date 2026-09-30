@@ -52,8 +52,7 @@ const UnifiedSessionRevokeSchema = z
   })
   .strict();
 
-export const AdminSessionRevokeResultSchema
-  = createAdminMutationResultSchema(UnifiedSessionRevokeSchema).strict();
+export const AdminSessionRevokeResultSchema = createAdminMutationResultSchema(UnifiedSessionRevokeSchema).strict();
 
 export const AdminLoginRestrictionReleaseResultSchema = createAdminMutationResultSchema(
   z

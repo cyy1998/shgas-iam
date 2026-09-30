@@ -1,7 +1,7 @@
-import type { CreateAppOptions } from "@iam/api-core/core/create-app";
 import env from "@api/env";
 import { logger } from "@api/lib/logger";
 import { createApiAuditLogWriter } from "@api/services/audit/audit.service";
+import type { CreateAppOptions } from "@iam/api-core/core/create-app";
 import db, { closeDb } from "@iam/db";
 import { createUserProfileJobProducer } from "@iam/user-profile-read-model/producer";
 import { sql } from "drizzle-orm";
@@ -83,7 +83,13 @@ export async function createApiComposition(options: CreateApiCompositionOptions 
     unitOfWork,
     services,
     useCases,
-    routes: await createApiRoutes({ auditLogWriter, runtime, services, useCases, verifyDatabase: () => db.execute(sql`SELECT 1`) }),
+    routes: await createApiRoutes({
+      auditLogWriter,
+      runtime,
+      services,
+      useCases,
+      verifyDatabase: () => db.execute(sql`SELECT 1`),
+    }),
     middlewares: await createApiMiddlewares({ runtime, services }),
     async close() {
       const results = await Promise.allSettled([
@@ -92,9 +98,8 @@ export async function createApiComposition(options: CreateApiCompositionOptions 
         closeDb({ timeoutSeconds: 5 }),
       ]);
       runtime.redis.disconnect();
-      const failed = results.find(result => result.status === "rejected");
-      if (failed?.status === "rejected")
-        throw failed.reason;
+      const failed = results.find((result) => result.status === "rejected");
+      if (failed?.status === "rejected") throw failed.reason;
     },
   };
 }

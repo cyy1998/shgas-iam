@@ -1,8 +1,4 @@
-import type {
-  AdminAuthorizationReasonCode,
-  AdminUserAllowedActions,
-  UserStatus,
-} from "@iam/contracts";
+import type { AdminAuthorizationReasonCode, AdminUserAllowedActions, UserStatus } from "@iam/contracts";
 import type { AdminOperationId } from "./admin-operation.registry";
 
 export interface AdminUserActionFacts {
@@ -33,6 +29,4 @@ export interface ScopedAdminUserAuthorization extends AdminUserAuthorizationBase
   organizationIds: readonly number[];
 }
 
-export type AdminUserAuthorization
-  = | FullAdminUserAuthorization
-    | ScopedAdminUserAuthorization;
+export type AdminUserAuthorization = FullAdminUserAuthorization | ScopedAdminUserAuthorization;

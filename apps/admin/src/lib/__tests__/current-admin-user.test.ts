@@ -1,41 +1,41 @@
-import { describe, expect, it } from 'vitest';
-import { mapCurrentAdminUser } from '../current-admin-user';
+import { describe, expect, it } from "vitest";
+import { mapCurrentAdminUser } from "../current-admin-user";
 
-describe('mapCurrentAdminUser', () => {
-  it('reads identity and roles only from the nested Custom SSO V1 projection', () => {
+describe("mapCurrentAdminUser", () => {
+  it("reads identity and roles only from the nested Custom SSO V1 projection", () => {
     expect(
       mapCurrentAdminUser({
         version: 2,
-        subjectIdentifier: '00000000-0000-4000-8000-000000000001',
+        subjectIdentifier: "00000000-0000-4000-8000-000000000001",
         profile: {
-          username: 'admin',
-          name: '管理员',
+          username: "admin",
+          name: "管理员",
         },
         authorization: {
           employments: [],
-          roles: ['iam:admin'],
-          privileges: ['iam:user:read'],
+          roles: ["iam:admin"],
+          privileges: ["iam:user:read"],
         },
       }),
     ).toEqual({
-      username: 'admin',
-      name: '管理员',
-      roles: ['iam:admin'],
+      username: "admin",
+      name: "管理员",
+      roles: ["iam:admin"],
     });
   });
 
-  it('does not accept removed flat compatibility fields', () => {
+  it("does not accept removed flat compatibility fields", () => {
     expect(
       mapCurrentAdminUser({
         version: 1,
-        subjectIdentifier: '00000000-0000-4000-8000-000000000001',
-        username: 'legacy-admin',
-        name: '旧管理员',
-        roles: ['iam:admin'],
+        subjectIdentifier: "00000000-0000-4000-8000-000000000001",
+        username: "legacy-admin",
+        name: "旧管理员",
+        roles: ["iam:admin"],
       } as never),
     ).toEqual({
-      username: '',
-      name: '',
+      username: "",
+      name: "",
       roles: [],
     });
   });

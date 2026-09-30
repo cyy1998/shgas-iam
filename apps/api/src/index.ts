@@ -7,8 +7,7 @@ appLifecycle.started(server.port!);
 let shutdownStarted = false;
 for (const signal of ["SIGINT", "SIGTERM"] as const) {
   process.once(signal, () => {
-    if (shutdownStarted)
-      return;
+    if (shutdownStarted) return;
     shutdownStarted = true;
     void (async () => {
       try {
@@ -16,8 +15,7 @@ for (const signal of ["SIGINT", "SIGTERM"] as const) {
         await closeAppComposition();
         appLifecycle.stopped();
         process.exit(0);
-      }
-      catch {
+      } catch {
         appLifecycle.shutdownFailed();
         process.exit(1);
       }

@@ -2,12 +2,9 @@ import type { PlaywrightJourneyRuntimeOptions } from "./playwright-journey.ts";
 import { createPlaywrightJourneyOperations } from "./playwright-journey.ts";
 import { createE2EScenarioInternalApiKey } from "./seed.ts";
 
-export type CreateAdminJourneyOperationsOptions
-  = PlaywrightJourneyRuntimeOptions;
+export type CreateAdminJourneyOperationsOptions = PlaywrightJourneyRuntimeOptions;
 
-export function createAdminJourneyOperations(
-  options: CreateAdminJourneyOperationsOptions,
-) {
+export function createAdminJourneyOperations(options: CreateAdminJourneyOperationsOptions) {
   return createPlaywrightJourneyOperations({
     ...options,
     specPath: "admin-custom-sso.spec.ts",
@@ -21,17 +18,13 @@ export function createAdminJourneyOperations(
       IAM_E2E_HR_ADMIN_ROLE_CODE: scenario.hrAdminRoleCode,
       IAM_E2E_NO_SCOPE_HR_ADMIN_USERNAME: scenario.noScopeHrAdminUsername,
       IAM_E2E_CUSTOM_SSO_CLIENT_CODE: scenario.customSsoClientCode,
-      IAM_E2E_CUSTOM_SSO_REDIRECT_URI:
-        `${descriptor.origin}/e2e/custom-sso/*`,
-      IAM_E2E_INTERNAL_API_KEY:
-        createE2EScenarioInternalApiKey(descriptor.runId),
+      IAM_E2E_CUSTOM_SSO_REDIRECT_URI: `${descriptor.origin}/e2e/custom-sso/*`,
+      IAM_E2E_INTERNAL_API_KEY: createE2EScenarioInternalApiKey(descriptor.runId),
       IAM_E2E_ORGANIZATION_CODE: scenario.organizationCode,
       IAM_E2E_PAUSED_USERNAME: scenario.pausedUsername,
       IAM_E2E_POSITION_CODE: scenario.positionCode,
-      IAM_E2E_RESPONSIBILITY_TARGET_ORGANIZATION_CODE:
-        scenario.responsibilityTargetOrganizationCode,
-      IAM_E2E_RESPONSIBILITY_HOLDER_POSITION_CODE:
-        scenario.responsibilityHolderPositionCode,
+      IAM_E2E_RESPONSIBILITY_TARGET_ORGANIZATION_CODE: scenario.responsibilityTargetOrganizationCode,
+      IAM_E2E_RESPONSIBILITY_HOLDER_POSITION_CODE: scenario.responsibilityHolderPositionCode,
     }),
   });
 }

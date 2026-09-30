@@ -34,14 +34,16 @@
     "./utils/*": "./src/utils/*.ts"
   },
   "scripts": {
-    "lint": "eslint src test-integration eslint.config.js",
-    "lint:fix": "eslint --fix src test-integration eslint.config.js",
+    "lint": "node ../../scripts/run-quality.mjs lint --workspace packages/api-core",
+    "lint:fix": "node ../../scripts/run-quality.mjs lint-fix --workspace packages/api-core",
     "test": "pnpm test:unit",
     "test:integration:component": "bun test --max-concurrency=2 test-integration/component",
     "test:integration:process": "bun test --max-concurrency=1 test-integration/process",
     "test:integration:redis": "bun test --max-concurrency=1 test-integration/redis",
     "test:unit": "bun test --max-concurrency=2 src",
-    "typecheck": "pnpm exec tsc --noEmit"
+    "typecheck": "pnpm exec tsc --noEmit",
+    "format": "node ../../scripts/run-quality.mjs format --workspace packages/api-core",
+    "format:check": "node ../../scripts/run-quality.mjs format-check --workspace packages/api-core"
   },
   "dependencies": {
     "@hono/zod-openapi": "^1.5.1",
@@ -59,11 +61,9 @@
     "zod": "^4.4.3"
   },
   "devDependencies": {
-    "@iam/eslint-config": "workspace:*",
     "@types/bun": "latest",
     "@types/sm-crypto": "^0.3.4",
     "@typescript/native": "npm:typescript@7.0.2",
-    "eslint": "^10.7.0",
     "typescript": "npm:@typescript/typescript6@6.0.2"
   }
 }

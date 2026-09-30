@@ -11,9 +11,6 @@ export const capabilitySummary = createRoute({
   tags: ["Admin/Authorization"],
   responses: {
     ...commonErrorResponses,
-    [HttpStatusCodes.OK]: jsonContent(
-      createSuccessResponseSchema(AdminCapabilitySummarySchema),
-      "当前管理员能力摘要",
-    ),
+    [HttpStatusCodes.OK]: jsonContent(createSuccessResponseSchema(AdminCapabilitySummarySchema), "当前管理员能力摘要"),
   },
 });

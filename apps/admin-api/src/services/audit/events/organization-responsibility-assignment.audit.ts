@@ -1,11 +1,8 @@
-import type {
-  OrganizationResponsibilityAssignmentStatus,
-  OrganizationResponsibilityTypeCode,
-} from "@iam/contracts";
-import type { OrganizationResponsibilityAssignmentRecordCreate } from "@iam/domain/organization-responsibility";
-import type { AdminAuditContext, AuditLogInput } from "../audit.context";
+import type { OrganizationResponsibilityAssignmentStatus, OrganizationResponsibilityTypeCode } from "@iam/contracts";
 import { ORGANIZATION_RESPONSIBILITY_ASSIGNMENT_AUDIT_ACTIONS } from "@iam/contracts";
+import type { OrganizationResponsibilityAssignmentRecordCreate } from "@iam/domain/organization-responsibility";
 import { buildAdminResourceAudit } from "../admin-resource-audit";
+import type { AdminAuditContext, AuditLogInput } from "../audit.context";
 
 export function buildOrganizationResponsibilityAssignmentCreateAudit(
   assignment: OrganizationResponsibilityAssignmentRecordCreate & { id: number },
@@ -36,8 +33,8 @@ export function buildOrganizationResponsibilityAssignmentCreateAudit(
   );
 }
 
-type OrganizationResponsibilityLifecycleAuditAction
-  = (typeof ORGANIZATION_RESPONSIBILITY_ASSIGNMENT_AUDIT_ACTIONS)[Exclude<
+type OrganizationResponsibilityLifecycleAuditAction =
+  (typeof ORGANIZATION_RESPONSIBILITY_ASSIGNMENT_AUDIT_ACTIONS)[Exclude<
     keyof typeof ORGANIZATION_RESPONSIBILITY_ASSIGNMENT_AUDIT_ACTIONS,
     "create"
   >];
@@ -48,14 +45,14 @@ interface OrganizationResponsibilityLifecycleAuditState {
   endTime: Date | null;
 }
 
-export type OrganizationResponsibilityAssignmentLifecycleAuditCause
-  = | "direct"
-    | {
+export type OrganizationResponsibilityAssignmentLifecycleAuditCause =
+  | "direct"
+  | {
       kind: "employment";
       action: "pause" | "end" | "transfer";
       employmentId: number;
     }
-    | {
+  | {
       kind: "user";
       action: "resignation";
       userId: number;

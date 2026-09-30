@@ -1,11 +1,11 @@
-import type { Context } from "hono";
+import { beforeEach, describe, expect, mock, test } from "bun:test";
 import { createRoleAdapter } from "@admin-api/routes/admin/role/role.adapter";
 import { createRoleRoute } from "@admin-api/routes/admin/role/role.index";
 import { BadRequestError } from "@iam/api-core/errors";
 import { createErrorHandler } from "@iam/api-core/middlewares";
 import { RoleAssignmentTargetType, RoleStatus } from "@iam/contracts";
 import { RoleCodeExistsError, RoleNotFoundError } from "@iam/domain/role";
-import { beforeEach, describe, expect, mock, test } from "bun:test";
+import type { Context } from "hono";
 import { Hono } from "hono";
 import { addTestAdminAuthorizationMiddleware, getTestAdminAuthorizationValue } from "../helpers/admin-authorization";
 
@@ -67,22 +67,17 @@ const roleService = {
 const handlers = createRoleAdapter({ roleService } as any);
 
 beforeEach(() => {
-  for (const fn of Object.values(roleService))
-    fn.mockReset();
+  for (const fn of Object.values(roleService)) fn.mockReset();
 });
 
 function createContext(valid: Record<string, unknown>) {
   return {
     get: mock((key: string) => {
       const authorizationValue = getTestAdminAuthorizationValue(key);
-      if (authorizationValue !== undefined)
-        return authorizationValue;
-      if (key === "userId")
-        return 1001;
-      if (key === "username")
-        return "admin";
-      if (key === "requestId")
-        return "req-1";
+      if (authorizationValue !== undefined) return authorizationValue;
+      if (key === "userId") return 1001;
+      if (key === "username") return "admin";
+      if (key === "requestId") return "req-1";
       return undefined;
     }),
     req: {
@@ -121,11 +116,14 @@ describe("admin role adapter", () => {
     await expect(handlers.rolesSearch(context, async () => {})).resolves.toMatchObject({ code: 200 });
 
     expect(roleService.searchRolesForAdmin).toHaveBeenCalledWith(query);
-    expect(context.json).toHaveBeenCalledWith(expect.objectContaining({
-      data: expect.objectContaining({
-        result: [expect.objectContaining({ roleCode: "portal-admin", statusText: "正常" })],
+    expect(context.json).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          result: [expect.objectContaining({ roleCode: "portal-admin", statusText: "正常" })],
+        }),
       }),
-    }), 200);
+      200,
+    );
   });
 
   test("delegates assignment scope updates with audit context", async () => {
@@ -188,11 +186,35 @@ describe("Role mutation public transports", () => {
     prepareResults();
     const { app } = surface();
     for (const item of [
-      { method: "POST", path: "", input: { roleCode: "portal-admin", roleName: "Portal Admin", clientCode: "portal" }, changed: true, result: { roleCode: "portal-admin", statusText: "正常" } },
+      {
+        method: "POST",
+        path: "",
+        input: { roleCode: "portal-admin", roleName: "Portal Admin", clientCode: "portal" },
+        changed: true,
+        result: { roleCode: "portal-admin", statusText: "正常" },
+      },
       { method: "PUT", path: "/portal-admin", input: { roleName: "Portal Admin" }, changed: false, result: null },
-      { method: "PATCH", path: "/portal-admin/status", input: { status: RoleStatus.Enable }, changed: false, result: null },
-      { method: "POST", path: "/portal-admin/assignments", input: { targetType: RoleAssignmentTargetType.Organization, orgCode: "ORG" }, changed: true, result: { id: 100, includeDescendants: true } },
-      { method: "PATCH", path: "/portal-admin/assignments/100/scope", input: { includeDescendants: true }, changed: false, result: null },
+      {
+        method: "PATCH",
+        path: "/portal-admin/status",
+        input: { status: RoleStatus.Enable },
+        changed: false,
+        result: null,
+      },
+      {
+        method: "POST",
+        path: "/portal-admin/assignments",
+        input: { targetType: RoleAssignmentTargetType.Organization, orgCode: "ORG" },
+        changed: true,
+        result: { id: 100, includeDescendants: true },
+      },
+      {
+        method: "PATCH",
+        path: "/portal-admin/assignments/100/scope",
+        input: { includeDescendants: true },
+        changed: false,
+        result: null,
+      },
       { method: "DELETE", path: "/portal-admin/assignments/100", changed: true, result: null },
       { method: "DELETE", path: "/portal-admin", changed: true, result: null },
     ]) {
@@ -210,15 +232,26 @@ describe("Role mutation public transports", () => {
   test("tRPC returns unified business results directly for every mutation", async () => {
     prepareResults();
     const { caller } = surface();
-    const created = await caller.create({ roleCode: "portal-admin", roleName: "Portal Admin", clientCode: "portal", status: RoleStatus.Enable });
+    const created = await caller.create({
+      roleCode: "portal-admin",
+      roleName: "Portal Admin",
+      clientCode: "portal",
+      status: RoleStatus.Enable,
+    });
     expect(created).toMatchObject({ changed: true, result: { roleCode: "portal-admin", statusText: "正常" } });
-    const assignment = await caller.assignments.create({ roleCode: "portal-admin", data: { targetType: RoleAssignmentTargetType.Organization, orgCode: "ORG" } });
+    const assignment = await caller.assignments.create({
+      roleCode: "portal-admin",
+      data: { targetType: RoleAssignmentTargetType.Organization, orgCode: "ORG" },
+    });
     expect(assignment).toMatchObject({ changed: true, result: { id: 100 } });
     const updated = await caller.update({ roleCode: "portal-admin", data: { roleName: "Portal Admin" } });
     const status = await caller.updateStatus({ roleCode: "portal-admin", status: RoleStatus.Enable });
-    const scope = await caller.assignments.updateScope({ roleCode: "portal-admin", assignmentId: 100, includeDescendants: true });
-    for (const result of [updated, status, scope])
-      expect(result).toEqual({ changed: false, result: null });
+    const scope = await caller.assignments.updateScope({
+      roleCode: "portal-admin",
+      assignmentId: 100,
+      includeDescendants: true,
+    });
+    for (const result of [updated, status, scope]) expect(result).toEqual({ changed: false, result: null });
     const deletedAssignment = await caller.assignments.delete({ roleCode: "portal-admin", assignmentId: 100 });
     const deletedRole = await caller.delete({ roleCode: "portal-admin" });
     expect(deletedAssignment).toEqual({ changed: true, result: null });
@@ -242,8 +275,7 @@ describe("Role mutation public transports", () => {
       let failure: unknown;
       try {
         await caller.update({ roleCode: "portal-admin", data: {} });
-      }
-      catch (error) {
+      } catch (error) {
         failure = error;
       }
       expect(failure).toMatchObject({ code: entry.code });

@@ -19,7 +19,7 @@ export const ClientSsoSaveSchema = ClientSsoAdminRecordSchema.pick({
   .extend({ clientName: z.string().trim().min(1).max(128) })
   .partial()
   .strict()
-  .refine(value => Object.keys(value).length > 0, "至少提交一个字段");
+  .refine((value) => Object.keys(value).length > 0, "至少提交一个字段");
 
 export const ClientSsoDetailSchema = ClientSsoAdminDtoSchema.extend({
   allowedActions: z

@@ -1,5 +1,3 @@
-import type { RoleService } from "@admin-api/services/role/role.service";
-import type { RoleRouteHandler } from "./role.type";
 import { defineAdminApiMutationOperation, defineAdminApiQueryOperation } from "@admin-api/lib/admin-api-adapter";
 import { resolveAdminAuditContext } from "@admin-api/services/audit/audit.context";
 import {
@@ -11,9 +9,11 @@ import {
   RoleStatusUpdateDtoSchema,
   RoleUpdateDtoSchema,
 } from "@admin-api/services/role/role.schema";
+import type { RoleService } from "@admin-api/services/role/role.service";
 import { router } from "@iam/api-core/trpc";
 import { z } from "zod";
 import { toRoleAssignmentVo, toRoleDetailVo, toRoleVo } from "./role.schema";
+import type { RoleRouteHandler } from "./role.type";
 
 export interface CreateRoleAdapterDeps {
   roleService: Pick<
@@ -35,24 +35,24 @@ export function createRoleAdapter(deps: CreateRoleAdapterDeps) {
   const searchRole = defineAdminApiQueryOperation({
     operationId: "admin.role.search",
     input: RolePaginationQueryDtoSchema,
-    restInput: c => c.req.valid("json") as z.infer<typeof RolePaginationQueryDtoSchema>,
+    restInput: (c) => c.req.valid("json") as z.infer<typeof RolePaginationQueryDtoSchema>,
     handler: async (input) => {
       const { result, ...rest } = await deps.roleService.searchRolesForAdmin(input);
-      return { result: result.map(row => toRoleVo(row)), ...rest };
+      return { result: result.map((row) => toRoleVo(row)), ...rest };
     },
   });
 
   const getRole = defineAdminApiQueryOperation({
     operationId: "admin.role.detail",
     input: z.object({ roleCode: z.string() }),
-    restInput: c => c.req.valid("param") as { roleCode: string },
+    restInput: (c) => c.req.valid("param") as { roleCode: string },
     handler: async ({ roleCode }) => toRoleDetailVo(await deps.roleService.getRoleDetailByCode(roleCode)),
   });
 
   const createRole = defineAdminApiMutationOperation({
     operationId: "admin.role.create",
     input: RoleCreateDtoSchema,
-    restInput: c => c.req.valid("json") as z.infer<typeof RoleCreateDtoSchema>,
+    restInput: (c) => c.req.valid("json") as z.infer<typeof RoleCreateDtoSchema>,
     handler: async (input, context) => {
       const outcome = await deps.roleService.createRole(input, resolveAdminAuditContext(context));
       return { ...outcome, result: toRoleDetailVo(outcome.result) };
@@ -65,7 +65,7 @@ export function createRoleAdapter(deps: CreateRoleAdapterDeps) {
       roleCode: z.string(),
       data: RoleUpdateDtoSchema,
     }),
-    restInput: c => ({
+    restInput: (c) => ({
       roleCode: (c.req.valid("param") as { roleCode: string }).roleCode,
       data: c.req.valid("json") as z.infer<typeof RoleUpdateDtoSchema>,
     }),
@@ -79,7 +79,7 @@ export function createRoleAdapter(deps: CreateRoleAdapterDeps) {
       roleCode: z.string(),
       status: RoleStatusUpdateDtoSchema.shape.status,
     }),
-    restInput: c => ({
+    restInput: (c) => ({
       roleCode: (c.req.valid("param") as { roleCode: string }).roleCode,
       status: (c.req.valid("json") as z.infer<typeof RoleStatusUpdateDtoSchema>).status,
     }),
@@ -90,7 +90,7 @@ export function createRoleAdapter(deps: CreateRoleAdapterDeps) {
   const deleteRole = defineAdminApiMutationOperation({
     operationId: "admin.role.delete",
     input: z.object({ roleCode: z.string() }),
-    restInput: c => c.req.valid("param") as { roleCode: string },
+    restInput: (c) => c.req.valid("param") as { roleCode: string },
     handler: ({ roleCode }, context) => deps.roleService.deleteRole(roleCode, resolveAdminAuditContext(context)),
   });
 
@@ -100,13 +100,13 @@ export function createRoleAdapter(deps: CreateRoleAdapterDeps) {
       roleCode: z.string(),
       query: RoleAssignmentPaginationQueryDtoSchema,
     }),
-    restInput: c => ({
+    restInput: (c) => ({
       roleCode: (c.req.valid("param") as { roleCode: string }).roleCode,
       query: c.req.valid("json") as z.infer<typeof RoleAssignmentPaginationQueryDtoSchema>,
     }),
     handler: async ({ roleCode, query }) => {
       const { result, ...rest } = await deps.roleService.searchAssignments(roleCode, query);
-      return { result: result.map(row => toRoleAssignmentVo(row)), ...rest };
+      return { result: result.map((row) => toRoleAssignmentVo(row)), ...rest };
     },
   });
 
@@ -116,7 +116,7 @@ export function createRoleAdapter(deps: CreateRoleAdapterDeps) {
       roleCode: z.string(),
       data: RoleAssignmentCreateDtoSchema,
     }),
-    restInput: c => ({
+    restInput: (c) => ({
       roleCode: (c.req.valid("param") as { roleCode: string }).roleCode,
       data: c.req.valid("json") as z.infer<typeof RoleAssignmentCreateDtoSchema>,
     }),
@@ -133,7 +133,7 @@ export function createRoleAdapter(deps: CreateRoleAdapterDeps) {
       assignmentId: z.number().int().positive(),
       includeDescendants: RoleAssignmentScopeUpdateDtoSchema.shape.includeDescendants,
     }),
-    restInput: c => ({
+    restInput: (c) => ({
       roleCode: (c.req.valid("param") as { roleCode: string }).roleCode,
       assignmentId: (c.req.valid("param") as { assignmentId: number }).assignmentId,
       includeDescendants: (c.req.valid("json") as z.infer<typeof RoleAssignmentScopeUpdateDtoSchema>)
@@ -154,7 +154,7 @@ export function createRoleAdapter(deps: CreateRoleAdapterDeps) {
       roleCode: z.string(),
       assignmentId: z.number().int().positive(),
     }),
-    restInput: c => ({
+    restInput: (c) => ({
       roleCode: (c.req.valid("param") as { roleCode: string }).roleCode,
       assignmentId: (c.req.valid("param") as { assignmentId: number }).assignmentId,
     }),

@@ -1,6 +1,6 @@
-import type { EnvMap } from "./types";
 import { readFileSync } from "node:fs";
 import path from "node:path";
+import type { EnvMap } from "./types";
 
 export function loadEnvFile(filePath: string): void {
   const absolutePath = path.resolve(process.cwd(), filePath);
@@ -27,11 +27,7 @@ export function loadEnvFile(filePath: string): void {
   }
 }
 
-export function renderEnvPlaceholders(
-  content: string,
-  env: EnvMap = process.env,
-  source = "manifest",
-): string {
+export function renderEnvPlaceholders(content: string, env: EnvMap = process.env, source = "manifest"): string {
   return content.replace(/\$\{([A-Z0-9_]+)\}/g, (_placeholder, name: string) => {
     const value = env[name];
     if (value === undefined) {
@@ -47,7 +43,7 @@ export function renderEnvValue(value: unknown, env: EnvMap, source: string): unk
   }
 
   if (Array.isArray(value)) {
-    return value.map(item => renderEnvValue(item, env, source));
+    return value.map((item) => renderEnvValue(item, env, source));
   }
 
   if (!isRecord(value)) {
@@ -64,10 +60,7 @@ export function renderEnvValue(value: unknown, env: EnvMap, source: string): unk
 
 function parseEnvValue(value: string): string {
   const trimmed = value.trim();
-  if (
-    (trimmed.startsWith("\"") && trimmed.endsWith("\""))
-    || (trimmed.startsWith("'") && trimmed.endsWith("'"))
-  ) {
+  if ((trimmed.startsWith('"') && trimmed.endsWith('"')) || (trimmed.startsWith("'") && trimmed.endsWith("'"))) {
     return trimmed.slice(1, -1);
   }
   return trimmed;

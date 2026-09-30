@@ -43,60 +43,72 @@ describe("Admin authorization contract", () => {
   });
 
   test("rejects omitted decisions and inconsistent allowed/reason pairs", () => {
-    expect(() => AdminCapabilitySummarySchema.parse({
-      visibleModules: ["user"],
-      collectionActions: {
-        user: { create: { allowed: true, reason: "ACTION_NOT_GRANTED" } },
-      },
-    })).toThrow();
+    expect(() =>
+      AdminCapabilitySummarySchema.parse({
+        visibleModules: ["user"],
+        collectionActions: {
+          user: { create: { allowed: true, reason: "ACTION_NOT_GRANTED" } },
+        },
+      }),
+    ).toThrow();
 
-    expect(() => AdminCapabilitySummarySchema.parse({
-      visibleModules: ["future-module"],
-      collectionActions: {},
-    })).toThrow();
+    expect(() =>
+      AdminCapabilitySummarySchema.parse({
+        visibleModules: ["future-module"],
+        collectionActions: {},
+      }),
+    ).toThrow();
   });
 
   test("requires every canonical User detail action decision", () => {
     const denied = { allowed: false, reason: "ACTION_NOT_GRANTED" } as const;
 
-    expect(AdminUserAllowedActionsSchema.parse({
-      editProfile: denied,
-      resetPassword: denied,
-      changeStatus: denied,
-      delete: denied,
-      resign: denied,
-    })).toEqual({
+    expect(
+      AdminUserAllowedActionsSchema.parse({
+        editProfile: denied,
+        resetPassword: denied,
+        changeStatus: denied,
+        delete: denied,
+        resign: denied,
+      }),
+    ).toEqual({
       editProfile: denied,
       resetPassword: denied,
       changeStatus: denied,
       delete: denied,
       resign: denied,
     });
-    expect(() => AdminUserAllowedActionsSchema.parse({
-      editProfile: denied,
-    })).toThrow();
+    expect(() =>
+      AdminUserAllowedActionsSchema.parse({
+        editProfile: denied,
+      }),
+    ).toThrow();
   });
 
   test("requires every canonical Organization detail action decision", () => {
     const allowed = { allowed: true, reason: null } as const;
     const denied = { allowed: false, reason: "INTEGRITY_GUARD_BLOCKED" } as const;
 
-    expect(AdminOrganizationAllowedActionsSchema.parse({
-      createChild: allowed,
-      edit: allowed,
-      changeStatus: denied,
-      delete: denied,
-    })).toEqual({
+    expect(
+      AdminOrganizationAllowedActionsSchema.parse({
+        createChild: allowed,
+        edit: allowed,
+        changeStatus: denied,
+        delete: denied,
+      }),
+    ).toEqual({
       createChild: allowed,
       edit: allowed,
       changeStatus: denied,
       delete: denied,
     });
-    expect(() => AdminOrganizationAllowedActionsSchema.parse({
-      createChild: allowed,
-      edit: allowed,
-      changeStatus: denied,
-    })).toThrow();
+    expect(() =>
+      AdminOrganizationAllowedActionsSchema.parse({
+        createChild: allowed,
+        edit: allowed,
+        changeStatus: denied,
+      }),
+    ).toThrow();
   });
 
   test("requires every canonical Organization Responsibility row decision", () => {
@@ -106,18 +118,22 @@ describe("Admin authorization contract", () => {
       reason: "RESOURCE_STATE_NOT_ACTIONABLE",
     } as const;
 
-    expect(AdminOrganizationResponsibilityAllowedActionsSchema.parse({
-      pause: allowed,
-      resume: denied,
-      end: allowed,
-    })).toEqual({
+    expect(
+      AdminOrganizationResponsibilityAllowedActionsSchema.parse({
+        pause: allowed,
+        resume: denied,
+        end: allowed,
+      }),
+    ).toEqual({
       pause: allowed,
       resume: denied,
       end: allowed,
     });
-    expect(() => AdminOrganizationResponsibilityAllowedActionsSchema.parse({
-      pause: allowed,
-      end: allowed,
-    })).toThrow();
+    expect(() =>
+      AdminOrganizationResponsibilityAllowedActionsSchema.parse({
+        pause: allowed,
+        end: allowed,
+      }),
+    ).toThrow();
   });
 });

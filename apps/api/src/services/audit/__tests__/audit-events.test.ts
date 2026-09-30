@@ -1,5 +1,5 @@
-import * as customSsoAuditEvents from "@iam/custom-sso/testing";
 import { describe, expect, test } from "bun:test";
+import * as customSsoAuditEvents from "@iam/custom-sso/testing";
 import * as authAudit from "../events/auth.audit";
 import * as internalAudit from "../events/internal.audit";
 import * as selfUserAudit from "../events/self-user.audit";
@@ -121,12 +121,14 @@ describe("api audit event builders", () => {
   });
 
   test("builds auth SMS verification payload", () => {
-    expect(authAudit.buildSmsCodeVerifyAudit({
-      phoneNumber: "17721462865",
-      usage: "login",
-      username: "zhangsan",
-      verified: false,
-    })).toMatchObject({
+    expect(
+      authAudit.buildSmsCodeVerifyAudit({
+        phoneNumber: "17721462865",
+        usage: "login",
+        username: "zhangsan",
+        verified: false,
+      }),
+    ).toMatchObject({
       action: "auth.sms_code.verify",
       outcome: "failure",
       targetCode: "177****2865",
@@ -134,17 +136,19 @@ describe("api audit event builders", () => {
   });
 
   test("builds internal supplier contact registration payload with injected client actor", () => {
-    expect(internalAudit.buildInternalPurveyorContactRegisterAudit(
-      { actorType: "client", actorClientCode: "portal" },
-      {
-        targetUserId: 1001,
-        username: "zhangsan",
-        name: "张三",
-        mobile: "17721462865",
-        orgCode: "ORG001",
-        existingContact: false,
-      },
-    )).toMatchObject({
+    expect(
+      internalAudit.buildInternalPurveyorContactRegisterAudit(
+        { actorType: "client", actorClientCode: "portal" },
+        {
+          targetUserId: 1001,
+          username: "zhangsan",
+          name: "张三",
+          mobile: "17721462865",
+          orgCode: "ORG001",
+          existingContact: false,
+        },
+      ),
+    ).toMatchObject({
       action: "internal.purveyor_contact.register",
       actorType: "client",
       actorClientCode: "portal",

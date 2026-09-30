@@ -1,14 +1,14 @@
-import type { OidcTokenResponse } from "@iam/oidc/wire";
+import { expect, test } from "bun:test";
 import { Buffer } from "node:buffer";
 import { randomUUID } from "node:crypto";
 import { ClientSsoProtocol, OidcClientType } from "@iam/contracts";
-import { expect, test } from "bun:test";
+import type { OidcTokenResponse } from "@iam/oidc/wire";
 import { fixture } from "./oidc.fixture";
 
 type Fixture = Awaited<ReturnType<typeof fixture>>;
 type Entry = "internal" | "external";
 const entries: Entry[] = ["internal", "external"];
-const other = (entry: Entry): Entry => entry === "internal" ? "external" : "internal";
+const other = (entry: Entry): Entry => (entry === "internal" ? "external" : "internal");
 function basic(client: string, secret = "current secret:+") {
   return `Basic ${Buffer.from(`${encodeURIComponent(client)}:${encodeURIComponent(secret)}`).toString("base64")}`;
 }
@@ -21,16 +21,19 @@ async function authorize(f: Fixture, entry: Entry, extra: Record<string, string>
   expect(parameters.get("iss")).toBe(f.issuers[entry]);
   const code = parameters.get("code")!;
   const record = await f.oidcState.readCode(extra.client_id ?? f.clientId, code);
-  if (!record)
-    throw new Error("Expected Code");
-  return { code, record, target: {
-    kind: "clientSession" as const,
-    id: record.clientSessionId,
-    instance: record.clientSessionInstance,
-    userSessionId: record.userSessionId,
-    subjectIdentifier: f.subjectIdentifier,
-    clientId: record.clientId,
-  } };
+  if (!record) throw new Error("Expected Code");
+  return {
+    code,
+    record,
+    target: {
+      kind: "clientSession" as const,
+      id: record.clientSessionId,
+      instance: record.clientSessionInstance,
+      userSessionId: record.userSessionId,
+      subjectIdentifier: f.subjectIdentifier,
+      clientId: record.clientId,
+    },
+  };
 }
 async function exchange(
   f: Fixture,
@@ -42,7 +45,14 @@ async function exchange(
   return await f.request("/oidc/token", {
     method: "POST",
     headers: { "Content-Type": "application/x-www-form-urlencoded", "X-IAM-Entry-Network": entry, ...headers },
-    body: new URLSearchParams({ client_id: f.clientId, grant_type: "authorization_code", code, redirect_uri: "https://rp.example/callback", code_verifier: "v".repeat(43), ...extra }),
+    body: new URLSearchParams({
+      client_id: f.clientId,
+      grant_type: "authorization_code",
+      code,
+      redirect_uri: "https://rp.example/callback",
+      code_verifier: "v".repeat(43),
+      ...extra,
+    }),
   });
 }
 async function token(f: Fixture, entry: Entry, clientId = f.clientId) {
@@ -53,10 +63,12 @@ async function token(f: Fixture, entry: Entry, clientId = f.clientId) {
   return { ...issued, value };
 }
 async function use(f: Fixture, entry: Entry, bearer: string) {
-  return await f.request("/oidc/me", { headers: { "X-IAM-Entry-Network": entry, "Authorization": `Bearer ${bearer}` } });
+  return await f.request("/oidc/me", { headers: { "X-IAM-Entry-Network": entry, Authorization: `Bearer ${bearer}` } });
 }
 async function root(f: Fixture) {
-  return await f.operations.run(operation => f.kernel.forOperation(operation).resolveUserSession(f.cookies.get("global_session")!));
+  return await f.operations.run((operation) =>
+    f.kernel.forOperation(operation).resolveUserSession(f.cookies.get("global_session")!),
+  );
 }
 async function beginLogout(f: Fixture, entry: Entry, hint?: string) {
   const response = await f.request(`/oidc/session/end?${new URLSearchParams(hint ? { id_token_hint: hint } : {})}`, {
@@ -79,18 +91,32 @@ for (const entry of entries) {
       const f = await fixture(undefined, true);
       try {
         if (confidential) {
-          await f.setClient(value => ({ ...value, ssoConfig: value.ssoConfig?.protocol === ClientSsoProtocol.Oidc
-            ? { ...value.ssoConfig, clientType: OidcClientType.Confidential }
-            : null }));
+          await f.setClient((value) => ({
+            ...value,
+            ssoConfig:
+              value.ssoConfig?.protocol === ClientSsoProtocol.Oidc
+                ? { ...value.ssoConfig, clientType: OidcClientType.Confidential }
+                : null,
+          }));
         }
         await f.login();
-        const metadataResponse = await f.request("/oidc/.well-known/openid-configuration", { headers: {
-          "X-IAM-Entry-Network": entry,
-          "Host": "attacker.example",
-          "Forwarded": "host=attacker.example;proto=https",
-        } });
+        const metadataResponse = await f.request("/oidc/.well-known/openid-configuration", {
+          headers: {
+            "X-IAM-Entry-Network": entry,
+            Host: "attacker.example",
+            Forwarded: "host=attacker.example;proto=https",
+          },
+        });
         const metadata = await metadataResponse.json();
-        expect(metadata).toMatchObject({ issuer: f.issuers[entry], authorization_endpoint: `${f.issuers[entry]}/auth`, token_endpoint: `${f.issuers[entry]}/token`, userinfo_endpoint: `${f.issuers[entry]}/me`, end_session_endpoint: `${f.issuers[entry]}/session/end`, jwks_uri: `${f.issuers[entry]}/jwks`, authorization_response_iss_parameter_supported: true });
+        expect(metadata).toMatchObject({
+          issuer: f.issuers[entry],
+          authorization_endpoint: `${f.issuers[entry]}/auth`,
+          token_endpoint: `${f.issuers[entry]}/token`,
+          userinfo_endpoint: `${f.issuers[entry]}/me`,
+          end_session_endpoint: `${f.issuers[entry]}/session/end`,
+          jwks_uri: `${f.issuers[entry]}/jwks`,
+          authorization_response_iss_parameter_supported: true,
+        });
         expect(metadataResponse.headers.get("Cache-Control")).toBe("no-store");
         const jwks = await f.request("/oidc/jwks", { headers: { "X-IAM-Entry-Network": entry } });
         const otherJwks = await f.request("/oidc/jwks", { headers: { "X-IAM-Entry-Network": other(entry) } });
@@ -109,15 +135,21 @@ for (const entry of entries) {
         expect(exchanged.status).toBe(200);
         const value: OidcTokenResponse = await exchanged.json();
         const claims = JSON.parse(Buffer.from(value.id_token.split(".")[1]!, "base64url").toString());
-        expect(claims).toMatchObject({ iss: f.issuers[entry], sub: f.subjectIdentifier, aud: f.clientId, nonce: "original-nonce" });
+        expect(claims).toMatchObject({
+          iss: f.issuers[entry],
+          sub: f.subjectIdentifier,
+          aud: f.clientId,
+          nonce: "original-nonce",
+        });
         const stored = await f.oidcState.readToken(value.access_token);
         expect(stored?.issuer).toBe(f.issuers[entry]);
         const userInfo = await use(f, entry, value.access_token);
         expect(userInfo.status).toBe(200);
         const body = await userInfo.json();
         expect(body.sub).toBe(f.subjectIdentifier);
+      } finally {
+        await f.close();
       }
-      finally { await f.close(); }
     });
   }
 
@@ -125,16 +157,18 @@ for (const entry of entries) {
     test(`${entry} ${mode} safe authorization errors identify the accepted issuer`, async () => {
       const f = await fixture(undefined, true);
       try {
-        const response = await f.request(`/oidc/auth?${f.parameters({ response_mode: mode, response_type: "token" })}`, {
-          headers: { "X-IAM-Entry-Network": entry },
-        });
+        const response = await f.request(
+          `/oidc/auth?${f.parameters({ response_mode: mode, response_type: "token" })}`,
+          {
+            headers: { "X-IAM-Entry-Network": entry },
+          },
+        );
         if (mode === "form_post") {
           expect(response.status).toBe(200);
           const html = await response.text();
           expect(html).toContain(`name="iss" value="${f.issuers[entry]}"`);
-          expect(html).toContain("name=\"error\" value=\"unsupported_response_type\"");
-        }
-        else {
+          expect(html).toContain('name="error" value="unsupported_response_type"');
+        } else {
           expect(response.status).toBe(303);
           const location = new URL(response.headers.get("Location")!);
           const params = mode === "query" ? location.searchParams : new URLSearchParams(location.hash.slice(1));
@@ -146,8 +180,9 @@ for (const entry of entries) {
         expect(inventory).toEqual([]);
         await f.login();
         await authorize(f, entry);
+      } finally {
+        await f.close();
       }
-      finally { await f.close(); }
     });
   }
 
@@ -166,8 +201,9 @@ for (const entry of entries) {
       expect(inventory).toEqual([]);
       await f.login();
       await authorize(f, entry);
+    } finally {
+      await f.close();
     }
-    finally { await f.close(); }
   });
 
   test(`${entry} continuation rejects the other issuer before permission, completion, consumption or Cookie effects`, async () => {
@@ -180,12 +216,13 @@ for (const entry of entries) {
       const saved = await f.oidcState.readContinuation(handle, binding);
       expect(saved?.authorization.issuer).toBe(f.issuers[entry]);
       for (const loggedIn of [false, true]) {
-        if (loggedIn)
-          await f.login();
+        if (loggedIn) await f.login();
         for (const path of ["login-guard", "resume"]) {
           const before = await f.oidcState.snapshot();
           const reads = { reads: f.state.reads, acquisitions: f.state.acquisitions };
-          const denied = await f.request(`/oidc/${path}?oidcReturn=${handle}`, { headers: { "X-IAM-Entry-Network": other(entry) } });
+          const denied = await f.request(`/oidc/${path}?oidcReturn=${handle}`, {
+            headers: { "X-IAM-Entry-Network": other(entry) },
+          });
           expect(denied.status).toBe(400);
           expect(denied.headers.getSetCookie()).toEqual([]);
           const after = await f.oidcState.snapshot();
@@ -200,8 +237,9 @@ for (const entry of entries) {
       const resumed = await f.request(`/oidc/resume?oidcReturn=${handle}`);
       expect(resumed.status).toBe(303);
       expect(new URL(resumed.headers.get("Location")!).searchParams.get("iss")).toBe(f.issuers[entry]);
+    } finally {
+      await f.close();
     }
-    finally { await f.close(); }
   });
 
   test(`${entry} wrong-issuer Code is consumed, revokes only the shared original relationship and cannot be retried`, async () => {
@@ -225,7 +263,10 @@ for (const entry of entries) {
       expect(failed.headers.getSetCookie()).toEqual([]);
       const consumed = await f.oidcState.readCode(f.clientId, issued.code);
       expect(consumed).toBeNull();
-      expect(f.reports.at(-1)).toMatchObject({ consumption: "consumed", revocation: { status: "terminated", target: issued.target } });
+      expect(f.reports.at(-1)).toMatchObject({
+        consumption: "consumed",
+        revocation: { status: "terminated", target: issued.target },
+      });
       const currentRoot = await root(f);
       if (originalRoot.status !== "resolved" || currentRoot.status !== "resolved")
         throw new Error("Root unexpectedly invalid");
@@ -240,8 +281,9 @@ for (const entry of entries) {
       expect(retry.status).toBe(400);
       const renewedUse = await use(f, entry, renewed.value.access_token);
       expect(renewedUse.status).toBe(200);
+    } finally {
+      await f.close();
     }
-    finally { await f.close(); }
   });
 
   test(`${entry} UserInfo mismatch does not acquire session facts or change online state`, async () => {
@@ -260,8 +302,9 @@ for (const entry of entries) {
       expect(f.reports).toEqual([]);
       const valid = await use(f, entry, issued.value.access_token);
       expect(valid.status).toBe(200);
+    } finally {
+      await f.close();
     }
-    finally { await f.close(); }
   });
 
   test(`${entry} logout hint mismatch does not acquire session facts or change online state`, async () => {
@@ -282,8 +325,9 @@ for (const entry of entries) {
       expect(valid.status).toBe(200);
       const acceptedHint = await beginLogout(f, entry, issued.value.id_token);
       expect(acceptedHint.response.status).toBe(200);
+    } finally {
+      await f.close();
     }
-    finally { await f.close(); }
   });
 
   for (const yes of [false, true]) {
@@ -310,8 +354,9 @@ for (const entry of entries) {
         expect(finished.headers.get("Location")).toBe("/oidc/session/end/success");
         const result = await use(f, entry, issued.value.access_token);
         expect(result.status).toBe(yes ? 401 : 200);
+      } finally {
+        await f.close();
       }
-      finally { await f.close(); }
     });
   }
 }
@@ -324,11 +369,27 @@ for (const entry of [undefined, "", "external, internal", "INTERNAL", "unknown"]
       const issued = await authorize(f, "external");
       const before = await f.oidcState.snapshot();
       const observations = { reads: f.state.reads, clients: f.state.acquisitions, signatures: f.state.signatures };
-      for (const path of [".well-known/openid-configuration", "jwks", "auth", "login-guard", "resume", "me", "session/end", "session/end/confirm", "token"]) {
-        const headers: Record<string, string> = { "Cookie": `global_session=${f.cookies.get("global_session")}`, "Host": "iam.example", "X-Forwarded-Host": "iam.example" };
-        if (entry !== undefined)
-          headers["X-IAM-Entry-Network"] = entry;
-        const response = await fetch(`${f.httpOrigin}/oidc/${path}`, { method: ["token", "session/end/confirm"].includes(path) ? "POST" : "GET", headers });
+      for (const path of [
+        ".well-known/openid-configuration",
+        "jwks",
+        "auth",
+        "login-guard",
+        "resume",
+        "me",
+        "session/end",
+        "session/end/confirm",
+        "token",
+      ]) {
+        const headers: Record<string, string> = {
+          Cookie: `global_session=${f.cookies.get("global_session")}`,
+          Host: "iam.example",
+          "X-Forwarded-Host": "iam.example",
+        };
+        if (entry !== undefined) headers["X-IAM-Entry-Network"] = entry;
+        const response = await fetch(`${f.httpOrigin}/oidc/${path}`, {
+          method: ["token", "session/end/confirm"].includes(path) ? "POST" : "GET",
+          headers,
+        });
         expect(response.status).toBe(400);
         expect(response.headers.getSetCookie()).toEqual([]);
         expect(response.headers.get("Location")).toBeNull();
@@ -343,25 +404,18 @@ for (const entry of [undefined, "", "external, internal", "INTERNAL", "unknown"]
       expect(f.reports).toEqual([]);
       const valid = await exchange(f, "external", issued.code);
       expect(valid.status).toBe(200);
+    } finally {
+      await f.close();
     }
-    finally { await f.close(); }
   });
 }
 
 test("equal configured origins allow opposite entry labels throughout continuation, Token, UserInfo and logout", async () => {
   const issuer = "https://iam.example/oidc";
-  const f = await fixture(
-    undefined,
-    true,
-    undefined,
-    45,
-    undefined,
-    true,
-    undefined,
-    true,
-    false,
-    { internal: issuer, external: issuer },
-  );
+  const f = await fixture(undefined, true, undefined, 45, undefined, true, undefined, true, false, {
+    internal: issuer,
+    external: issuer,
+  });
   try {
     f.setEntry("internal");
     const started = await f.authorize();
@@ -386,27 +440,43 @@ test("equal configured origins allow opposite entry labels throughout continuati
     expect(finished.status).toBe(303);
     const denied = await use(f, "internal", value.access_token);
     expect(denied.status).toBe(401);
+  } finally {
+    await f.close();
   }
-  finally { await f.close(); }
 });
 
 for (const entry of entries) {
-  for (const failure of ["secret", "issuer", "format", "owner", "missing", "expired", "replay", "consume-before", "consume-after", "revoke-before", "revoke-after"] as const) {
+  for (const failure of [
+    "secret",
+    "issuer",
+    "format",
+    "owner",
+    "missing",
+    "expired",
+    "replay",
+    "consume-before",
+    "consume-after",
+    "revoke-before",
+    "revoke-after",
+  ] as const) {
     test(`${entry} cross-issuer ${failure} preserves the authentication/location gates and distinct consumption/revocation reports`, async () => {
       const f = await fixture(undefined, true);
       try {
         const confidential = failure === "secret" || failure === "issuer";
         if (confidential) {
-          await f.setClient(value => ({ ...value, ssoConfig: value.ssoConfig?.protocol === ClientSsoProtocol.Oidc
-            ? { ...value.ssoConfig, clientType: OidcClientType.Confidential }
-            : null }));
+          await f.setClient((value) => ({
+            ...value,
+            ssoConfig:
+              value.ssoConfig?.protocol === ClientSsoProtocol.Oidc
+                ? { ...value.ssoConfig, clientType: OidcClientType.Confidential }
+                : null,
+          }));
         }
         await f.login();
         const issued = await authorize(f, entry);
         let code = issued.code;
         const extra: Record<string, string> = {};
-        if (failure === "format")
-          code = "unparseable";
+        if (failure === "format") code = "unparseable";
         if (failure === "owner") {
           const differentClient = `other-${randomUUID()}`;
           f.addClient(differentClient);
@@ -414,18 +484,21 @@ for (const entry of entries) {
         }
         if (failure === "missing")
           code = `${"x".repeat(43)}.${issued.record.userSessionId}.${issued.record.clientSessionId}`;
-        if (failure === "expired")
-          await f.oidcState.patchCode(f.clientId, code, { expiresAt: Date.now() - 1 });
+        if (failure === "expired") await f.oidcState.patchCode(f.clientId, code, { expiresAt: Date.now() - 1 });
         if (failure === "replay") {
           const first = await exchange(f, entry, code);
           expect(first.status).toBe(200);
         }
-        if (failure.startsWith("consume-"))
-          f.oidcState.failNext("takeCode", failure === "consume-after");
-        if (failure.startsWith("revoke-"))
-          f.scope.failNext("revoke", failure === "revoke-after");
+        if (failure.startsWith("consume-")) f.oidcState.failNext("takeCode", failure === "consume-after");
+        if (failure.startsWith("revoke-")) f.scope.failNext("revoke", failure === "revoke-after");
         const signatures = f.state.signatures;
-        const response = await exchange(f, other(entry), code, extra, confidential ? { Authorization: basic(f.clientId, failure === "secret" ? "wrong" : "current secret:+") } : {});
+        const response = await exchange(
+          f,
+          other(entry),
+          code,
+          extra,
+          confidential ? { Authorization: basic(f.clientId, failure === "secret" ? "wrong" : "current secret:+") } : {},
+        );
         expect(response.status).toBe(failure === "secret" ? 401 : failure.startsWith("consume-") ? 503 : 400);
         expect(response.headers.getSetCookie()).toEqual([]);
         expect(f.state.signatures).toBe(signatures);
@@ -444,10 +517,13 @@ for (const entry of entries) {
             confidential ? { Authorization: basic(f.clientId) } : {},
           );
           expect(valid.status).toBe(200);
-        }
-        else {
+        } else {
           expect(f.reports.at(-1)).toMatchObject({
-            consumption: failure.startsWith("consume-") ? "unknown" : ["missing", "replay"].includes(failure) ? "missing" : "consumed",
+            consumption: failure.startsWith("consume-")
+              ? "unknown"
+              : ["missing", "replay"].includes(failure)
+                ? "missing"
+                : "consumed",
             revocation: { status: failure.startsWith("revoke-") ? "unknown" : "terminated", target: issued.target },
           });
           expect(inspected.record?.state).toBe(failure === "revoke-before" ? "active" : "terminated");
@@ -456,8 +532,9 @@ for (const entry of entries) {
           const originalCode = await f.oidcState.readCode(f.clientId, issued.code);
           expect(Boolean(originalCode)).toBe(["missing", "consume-before"].includes(failure));
         }
+      } finally {
+        await f.close();
       }
-      finally { await f.close(); }
     });
   }
 
@@ -480,10 +557,8 @@ for (const entry of entries) {
           reached();
           await gate;
         };
-        if (winnerEntry === entry)
-          f.oidcState.beforeNext("saveToken", intercept);
-        else
-          f.oidcState.afterNext("takeCode", intercept);
+        if (winnerEntry === entry) f.oidcState.beforeNext("saveToken", intercept);
+        else f.oidcState.afterNext("takeCode", intercept);
         pending = exchange(f, winnerEntry, issued.code);
         await ready;
         const loser = await exchange(f, other(winnerEntry), issued.code);
@@ -503,11 +578,9 @@ for (const entry of entries) {
         expect(f.state.signatures).toBe(winnerEntry === entry ? 1 : 0);
         const replacement = await f.scope.inspect(newer.target);
         expect(replacement.record?.state).toBe("active");
-      }
-      finally {
+      } finally {
         release();
-        if (pending)
-          await pending;
+        if (pending) await pending;
         await f.close();
       }
     });
@@ -534,8 +607,7 @@ test("issuer mismatch revocation deadline remains bounded and its late exact eff
     expect(retry.status).toBe(400);
     const usable = await use(f, "internal", newer.value.access_token);
     expect(usable.status).toBe(200);
-  }
-  finally {
+  } finally {
     release();
     await f.close();
   }

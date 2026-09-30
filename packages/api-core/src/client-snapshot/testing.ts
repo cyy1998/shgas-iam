@@ -2,9 +2,12 @@ import { clientSnapshotKeys } from "./redis-store";
 
 export { clientSnapshotKeys };
 
-export function createClientSnapshotMaintenanceTestFixture(redis: {
-  set: (key: string, value: string) => Promise<unknown>;
-}, trackKey: (key: string) => void) {
+export function createClientSnapshotMaintenanceTestFixture(
+  redis: {
+    set: (key: string, value: string) => Promise<unknown>;
+  },
+  trackKey: (key: string) => void,
+) {
   function trackClient(code: string) {
     const keys = clientSnapshotKeys(code);
     const owned = [keys.control, ...keys.payloads];

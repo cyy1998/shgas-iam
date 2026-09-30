@@ -1,6 +1,6 @@
+import { beforeEach, describe, expect, mock, test } from "bun:test";
 import { AuditLogPaginationQueryDtoSchema } from "@admin-api/services/audit/audit.schema";
 import { createAdminAuditService } from "@admin-api/services/audit/audit.service";
-import { beforeEach, describe, expect, mock, test } from "bun:test";
 
 const insertedValues: unknown[] = [];
 let selectedRows: unknown[] = [];
@@ -90,15 +90,17 @@ describe("admin audit writer", () => {
 
 describe("admin auditService.searchAuditLogsForAdmin", () => {
   test("merges and deduplicates exact single and multiple action filters", async () => {
-    await auditService.searchAuditLogsForAdmin(AuditLogPaginationQueryDtoSchema.parse({
-      conditions: {
-        action: "auth.login.password",
-        actions: ["auth.login.password", "auth.login.password.failure", "external.import.success"],
-        outcome: "failure",
-      },
-      pageNum: 2,
-      pageSize: 10,
-    }));
+    await auditService.searchAuditLogsForAdmin(
+      AuditLogPaginationQueryDtoSchema.parse({
+        conditions: {
+          action: "auth.login.password",
+          actions: ["auth.login.password", "auth.login.password.failure", "external.import.success"],
+          outcome: "failure",
+        },
+        pageNum: 2,
+        pageSize: 10,
+      }),
+    );
     expect(searchAuditLogsPaged).toHaveBeenCalledWith({
       conditions: {
         actions: ["auth.login.password", "auth.login.password.failure", "external.import.success"],
@@ -145,8 +147,10 @@ describe("admin auditService.searchAuditLogsForAdmin", () => {
       pages: 1,
     });
 
-    expect(searchAuditLogsPaged).toHaveBeenCalledWith(expect.objectContaining({
-      conditions: expect.objectContaining({ traceId }),
-    }));
+    expect(searchAuditLogsPaged).toHaveBeenCalledWith(
+      expect.objectContaining({
+        conditions: expect.objectContaining({ traceId }),
+      }),
+    );
   });
 });

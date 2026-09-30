@@ -1,10 +1,10 @@
-import type { RunDescriptor } from "./lifecycle.ts";
 import { Buffer } from "node:buffer";
 import { access } from "node:fs/promises";
 import { join } from "node:path";
 import { writeAtomicJsonFile } from "./atomic-json-file.ts";
 import { createBoundedLineCapture } from "./command-capture.ts";
 import { collectRunDiagnostics } from "./diagnostics.ts";
+import type { RunDescriptor } from "./lifecycle.ts";
 import { assertCanonicalOriginComposeConfig } from "./origin-contract.ts";
 import { createE2EScenarioIdentity } from "./seed.ts";
 
@@ -31,11 +31,7 @@ export interface CommandOptions {
   signal?: AbortSignal;
 }
 
-export type CommandRunner = (
-  command: string,
-  args: string[],
-  options: CommandOptions,
-) => Promise<unknown>;
+export type CommandRunner = (command: string, args: string[], options: CommandOptions) => Promise<unknown>;
 
 export type CapturedCommandRunner = (
   command: string,
@@ -50,25 +46,11 @@ export interface CreateDockerInfraOperationsOptions {
   runCommand: CommandRunner;
   captureCommand: CapturedCommandRunner;
   probeGateway: (origin: string, signal?: AbortSignal) => Promise<unknown>;
-  probeOidcDiscovery: (
-    origin: string,
-    signal?: AbortSignal,
-  ) => Promise<unknown>;
-  probeSsoConfiguration: (
-    origin: string,
-    signal?: AbortSignal,
-  ) => Promise<unknown>;
-  probeRoute: (
-    origin: string,
-    path: string,
-    expectedStatuses: number[],
-    signal?: AbortSignal,
-  ) => Promise<unknown>;
+  probeOidcDiscovery: (origin: string, signal?: AbortSignal) => Promise<unknown>;
+  probeSsoConfiguration: (origin: string, signal?: AbortSignal) => Promise<unknown>;
+  probeRoute: (origin: string, path: string, expectedStatuses: number[], signal?: AbortSignal) => Promise<unknown>;
   signal?: AbortSignal;
-  writeMigrationReceipt?: (
-    descriptor: RunDescriptor,
-    receipt: MigrationReceipt,
-  ) => Promise<unknown>;
+  writeMigrationReceipt?: (descriptor: RunDescriptor, receipt: MigrationReceipt) => Promise<unknown>;
 }
 
 interface MigrationReceiptBase {
@@ -89,23 +71,10 @@ interface AttemptedMigrationReceipt extends MigrationReceiptBase {
   status: "applied" | "attempted" | "failed";
 }
 
-type MigrationReceipt
-  = | AttemptedMigrationReceipt
-    | NotAttemptedMigrationReceipt;
+type MigrationReceipt = AttemptedMigrationReceipt | NotAttemptedMigrationReceipt;
 
-export function composeArguments(
-  composeFile: string,
-  project: string,
-  args: string[],
-) {
-  return [
-    "compose",
-    "--file",
-    composeFile,
-    "--project-name",
-    project,
-    ...args,
-  ];
+export function composeArguments(composeFile: string, project: string, args: string[]) {
+  return ["compose", "--file", composeFile, "--project-name", project, ...args];
 }
 
 export function descriptorEnvironment(descriptor: RunDescriptor) {
@@ -125,11 +94,8 @@ export function descriptorEnvironment(descriptor: RunDescriptor) {
   };
 }
 
-export function createDockerInfraOperations(
-  options: CreateDockerInfraOperationsOptions,
-) {
-  const writeMigrationReceipt = options.writeMigrationReceipt
-    ?? persistMigrationReceipt;
+export function createDockerInfraOperations(options: CreateDockerInfraOperationsOptions) {
+  const writeMigrationReceipt = options.writeMigrationReceipt ?? persistMigrationReceipt;
   const commandOptions: CommandOptions = {
     cwd: options.repositoryRoot,
     signal: options.signal,
@@ -141,13 +107,7 @@ export function createDockerInfraOperations(
   ) => {
     await options.runCommand(
       "docker",
-      composeArguments(options.composeFile, project, [
-        "down",
-        "-v",
-        "--remove-orphans",
-        "--rmi",
-        "local",
-      ]),
+      composeArguments(options.composeFile, project, ["down", "-v", "--remove-orphans", "--rmi", "local"]),
       { cwd: options.repositoryRoot, env, signal },
     );
   };
@@ -168,23 +128,12 @@ export function createDockerInfraOperations(
         ...commandOptions,
         signal: signal ?? options.signal,
       };
-      await Promise.all(options.requiredPaths.map(path => access(path)));
+      await Promise.all(options.requiredPaths.map((path) => access(path)));
+      await options.runCommand("docker", ["version", "--format", "{{.Server.Version}}"], preflightCommandOptions);
+      await options.runCommand("docker", ["compose", "version", "--short"], preflightCommandOptions);
       await options.runCommand(
         "docker",
-        ["version", "--format", "{{.Server.Version}}"],
-        preflightCommandOptions,
-      );
-      await options.runCommand(
-        "docker",
-        ["compose", "version", "--short"],
-        preflightCommandOptions,
-      );
-      await options.runCommand(
-        "docker",
-        composeArguments(options.composeFile, "iam-e2e-preflight", [
-          "config",
-          "--quiet",
-        ]),
+        composeArguments(options.composeFile, "iam-e2e-preflight", ["config", "--quiet"]),
         {
           cwd: options.repositoryRoot,
           env: {
@@ -199,10 +148,7 @@ export function createDockerInfraOperations(
       );
     },
 
-    async startHealthyInfrastructure(
-      descriptor: RunDescriptor,
-      signal?: AbortSignal,
-    ) {
+    async startHealthyInfrastructure(descriptor: RunDescriptor, signal?: AbortSignal) {
       await options.runCommand(
         "docker",
         composeArguments(options.composeFile, descriptor.project, [
@@ -225,16 +171,10 @@ export function createDockerInfraOperations(
       await options.probeGateway(descriptor.origin, signal ?? options.signal);
     },
 
-    async prepareDiagnostics(
-      descriptor: RunDescriptor,
-      signal?: AbortSignal,
-    ) {
+    async prepareDiagnostics(descriptor: RunDescriptor, signal?: AbortSignal) {
       await options.runCommand(
         "docker",
-        composeArguments(options.composeFile, descriptor.project, [
-          "build",
-          "gateway-sync",
-        ]),
+        composeArguments(options.composeFile, descriptor.project, ["build", "gateway-sync"]),
         {
           cwd: options.repositoryRoot,
           env: descriptorEnvironment(descriptor),
@@ -255,21 +195,14 @@ export function createDockerInfraOperations(
       try {
         await options.runCommand(
           "docker",
-          composeArguments(options.composeFile, descriptor.project, [
-            "run",
-            "--rm",
-            "--no-deps",
-            "--build",
-            "migrate",
-          ]),
+          composeArguments(options.composeFile, descriptor.project, ["run", "--rm", "--no-deps", "--build", "migrate"]),
           {
             cwd: options.repositoryRoot,
             env: descriptorEnvironment(descriptor),
             signal: signal ?? options.signal,
           },
         );
-      }
-      catch (error) {
+      } catch (error) {
         try {
           await writeMigrationReceipt(descriptor, {
             attemptedAt,
@@ -280,8 +213,7 @@ export function createDockerInfraOperations(
             status: "failed",
             version: 1,
           });
-        }
-        catch (receiptFailure) {
+        } catch (receiptFailure) {
           throw new AggregateError(
             [error, receiptFailure],
             "migration failed and the failed receipt could not be written",
@@ -323,18 +255,11 @@ export function createDockerInfraOperations(
       );
     },
 
-    async verifyCanonicalOriginConfiguration(
-      descriptor: RunDescriptor,
-      signal?: AbortSignal,
-    ) {
+    async verifyCanonicalOriginConfiguration(descriptor: RunDescriptor, signal?: AbortSignal) {
       const scenario = createE2EScenarioIdentity(descriptor.runId);
       const result = await options.captureCommand(
         "docker",
-        composeArguments(options.composeFile, descriptor.project, [
-          "config",
-          "--format",
-          "json",
-        ]),
+        composeArguments(options.composeFile, descriptor.project, ["config", "--format", "json"]),
         {
           capture: { maxBytes: 512 * 1024, mode: "tail" },
           cwd: options.repositoryRoot,
@@ -345,8 +270,7 @@ export function createDockerInfraOperations(
       let renderedConfig: unknown;
       try {
         renderedConfig = JSON.parse(result.stdout);
-      }
-      catch {
+      } catch {
         throw new Error("rendered Compose configuration is not valid JSON");
       }
       assertCanonicalOriginComposeConfig(renderedConfig, {
@@ -360,13 +284,7 @@ export function createDockerInfraOperations(
     async seedE2EScenario(descriptor: RunDescriptor, signal?: AbortSignal) {
       await options.runCommand(
         "docker",
-        composeArguments(options.composeFile, descriptor.project, [
-          "run",
-          "--rm",
-          "--no-deps",
-          "--build",
-          "seed",
-        ]),
+        composeArguments(options.composeFile, descriptor.project, ["run", "--rm", "--no-deps", "--build", "seed"]),
         {
           cwd: options.repositoryRoot,
           env: descriptorEnvironment(descriptor),
@@ -375,10 +293,7 @@ export function createDockerInfraOperations(
       );
     },
 
-    async verifyUserProfileReadiness(
-      descriptor: RunDescriptor,
-      signal?: AbortSignal,
-    ) {
+    async verifyUserProfileReadiness(descriptor: RunDescriptor, signal?: AbortSignal) {
       for (const operation of ["verify-postgres", "verify-redis"] as const) {
         const script = `user-profile:${operation}`;
         const result = await options.captureCommand(
@@ -423,10 +338,7 @@ export function createDockerInfraOperations(
       );
     },
 
-    async awaitGatewayRouteReadiness(
-      descriptor: RunDescriptor,
-      signal?: AbortSignal,
-    ) {
+    async awaitGatewayRouteReadiness(descriptor: RunDescriptor, signal?: AbortSignal) {
       const probes = [
         { path: "/portal/login", statuses: [200] },
         { path: "/iam-admin/", statuses: [200] },
@@ -437,54 +349,29 @@ export function createDockerInfraOperations(
         { path: "/api/iam/admin/users/search", statuses: [403] },
       ];
       for (const probe of probes) {
-        await options.probeRoute(
-          descriptor.origin,
-          probe.path,
-          probe.statuses,
-          signal ?? options.signal,
-        );
+        await options.probeRoute(descriptor.origin, probe.path, probe.statuses, signal ?? options.signal);
       }
-      await options.probeOidcDiscovery(
-        descriptor.origin,
-        signal ?? options.signal,
-      );
-      await options.probeSsoConfiguration(
-        descriptor.origin,
-        signal ?? options.signal,
-      );
+      await options.probeOidcDiscovery(descriptor.origin, signal ?? options.signal);
+      await options.probeSsoConfiguration(descriptor.origin, signal ?? options.signal);
       if (descriptor.internalOrigin) {
         await options.probeOidcDiscovery(descriptor.internalOrigin, signal ?? options.signal);
         await options.probeSsoConfiguration(descriptor.internalOrigin, signal ?? options.signal);
       }
     },
 
-    async collectDiagnostics(
-      descriptor: RunDescriptor,
-      signal?: AbortSignal,
-    ) {
-      const capture = (
-        args: string[],
-        captureSignal?: AbortSignal,
-        captureOptions?: CommandOptions["capture"],
-      ) => options.captureCommand(
-        "docker",
-        composeArguments(options.composeFile, descriptor.project, args),
-        {
+    async collectDiagnostics(descriptor: RunDescriptor, signal?: AbortSignal) {
+      const capture = (args: string[], captureSignal?: AbortSignal, captureOptions?: CommandOptions["capture"]) =>
+        options.captureCommand("docker", composeArguments(options.composeFile, descriptor.project, args), {
           capture: captureOptions,
           cwd: options.repositoryRoot,
           env: descriptorEnvironment(descriptor),
           signal: captureSignal,
-        },
-      );
+        });
       await collectRunDiagnostics({
         descriptor,
         signal,
-        readComposePs: async sourceSignal => (await capture([
-          "ps",
-          "--all",
-          "--format",
-          "json",
-        ], sourceSignal)).stdout,
+        readComposePs: async (sourceSignal) =>
+          (await capture(["ps", "--all", "--format", "json"], sourceSignal)).stdout,
         readRecentLogs: async (sourceSignal) => {
           const logs = await Promise.all(
             diagnosticLogServices.map(async (service) => {
@@ -492,92 +379,65 @@ export function createDockerInfraOperations(
               let unavailable = false;
               try {
                 const result = await capture(
-                  [
-                    "logs",
-                    "--no-color",
-                    "--no-log-prefix",
-                    "--tail",
-                    "200",
-                    service,
-                  ],
+                  ["logs", "--no-color", "--no-log-prefix", "--tail", "200", service],
                   sourceSignal,
                   { maxBytes: maxDiagnosticLogBytesPerService, mode: "line-tail" },
                 );
-                content = boundCompleteLineTail(
-                  `${result.stdout}${result.stderr}`,
-                  maxDiagnosticLogBytesPerService,
-                );
-              }
-              catch (error) {
+                content = boundCompleteLineTail(`${result.stdout}${result.stderr}`, maxDiagnosticLogBytesPerService);
+              } catch (error) {
                 unavailable = true;
                 content = `diagnostic source unavailable: ${error instanceof Error ? error.name : "UnknownError"}`;
               }
               return {
-                content: [
-                  `===== ${service} =====`,
-                  content,
-                ].join("\n"),
+                content: [`===== ${service} =====`, content].join("\n"),
                 service,
                 unavailable,
               };
             }),
           );
           return {
-            content: `${logs.map(log => log.content).join("\n")}\n`,
-            unavailableSources: logs
-              .filter(log => log.unavailable)
-              .map(log => log.service),
+            content: `${logs.map((log) => log.content).join("\n")}\n`,
+            unavailableSources: logs.filter((log) => log.unavailable).map((log) => log.service),
           };
         },
         readGatewayState: async (sourceSignal) => {
-          const result = await capture([
-            "run",
-            "--rm",
-            "--no-deps",
-            "gateway-sync",
-            "bun",
-            "-e",
-            "const r=await fetch('http://apisix:9180/apisix/admin/routes',{headers:{'X-API-KEY':'dev-local-admin-key-change-me'},signal:AbortSignal.timeout(5000)});console.log(await r.text());if(!r.ok)process.exit(1)",
-          ], sourceSignal);
+          const result = await capture(
+            [
+              "run",
+              "--rm",
+              "--no-deps",
+              "gateway-sync",
+              "bun",
+              "-e",
+              "const r=await fetch('http://apisix:9180/apisix/admin/routes',{headers:{'X-API-KEY':'dev-local-admin-key-change-me'},signal:AbortSignal.timeout(5000)});console.log(await r.text());if(!r.ok)process.exit(1)",
+            ],
+            sourceSignal,
+          );
           return `${result.stdout}${result.stderr}`;
         },
       });
     },
 
     async cleanup(descriptor: RunDescriptor, signal?: AbortSignal) {
-      await cleanupProject(
-        descriptor.project,
-        descriptorEnvironment(descriptor),
-        signal,
-      );
+      await cleanupProject(descriptor.project, descriptorEnvironment(descriptor), signal);
     },
 
     cleanupProject,
   };
 }
 
-function assertUserProfileGateOutput(
-  operation: "verify-postgres" | "verify-redis",
-  output: string,
-) {
-  const expectedGate = operation === "verify-postgres"
-    ? "postgres"
-    : "redis-access";
+function assertUserProfileGateOutput(operation: "verify-postgres" | "verify-redis", output: string) {
+  const expectedGate = operation === "verify-postgres" ? "postgres" : "redis-access";
   const passed = output.split(/\r?\n/u).some((line) => {
     try {
       const record = JSON.parse(line) as Record<string, unknown>;
-      return record.version === 3
-        && record.gate === expectedGate
-        && record.status === "passed";
-    }
-    catch {
+      return record.version === 3 && record.gate === expectedGate && record.status === "passed";
+    } catch {
       return false;
     }
   });
   if (!passed) {
-    throw new Error(
-      `User Profile ${expectedGate} gate did not report a passing v3 inventory`,
-    );
+    throw new Error(`User Profile ${expectedGate} gate did not report a passing v3 inventory`);
   }
 }
 
@@ -587,14 +447,8 @@ function boundCompleteLineTail(value: string, maxBytes: number) {
   return capture.toString();
 }
 
-async function persistMigrationReceipt(
-  descriptor: RunDescriptor,
-  receipt: MigrationReceipt,
-) {
-  const receiptPath = join(
-    descriptor.artifactDirectory,
-    "migration-receipt.json",
-  );
+async function persistMigrationReceipt(descriptor: RunDescriptor, receipt: MigrationReceipt) {
+  const receiptPath = join(descriptor.artifactDirectory, "migration-receipt.json");
   await writeAtomicJsonFile(receiptPath, receipt);
 }
 

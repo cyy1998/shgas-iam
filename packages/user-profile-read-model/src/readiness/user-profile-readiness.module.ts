@@ -1,15 +1,10 @@
 import type { SubjectAccessBootstrap } from "@iam/api-core/subject-access";
 import type { DbClient } from "@iam/db";
 import type { PublishedProfileRowInput } from "../schema/profile-storage.schema";
-import type {
-  SubjectFactsRedisInspectionClient,
-} from "../subject-facts/subject-facts-redis-publisher.core";
+import type { SubjectFactsRedisInspectionClient } from "../subject-facts/subject-facts-redis-publisher.core";
 import type { UserProfileProjectionBundle } from "../worker/user-profile-projection";
 import { createCurrentUserProfileProjectionBundle } from "../worker/user-profile-worker.module";
-import {
-  createUserProfilePostgresGate,
-  createUserProfileRedisAccessGate,
-} from "./user-profile-readiness";
+import { createUserProfilePostgresGate, createUserProfileRedisAccessGate } from "./user-profile-readiness";
 import { createUserProfileReadinessRepository } from "./user-profile-readiness.repository";
 
 export function createUserProfileReadinessWithProjection<
@@ -67,9 +62,7 @@ export function createUserProfileRedisAccessReadinessWithProjection<
   config: { buildBatchSize: number };
 }) {
   const repository = createReadinessRepository(input);
-  const subjectFactsInspector = input.projection.subjectFacts.createInspector(
-    input.subjectFactsRedis,
-  );
+  const subjectFactsInspector = input.projection.subjectFacts.createInspector(input.subjectFactsRedis);
   return createUserProfileRedisAccessGate({
     schemaVersion: input.projection.schemaVersion,
     inventory: repository,
@@ -83,10 +76,7 @@ export function createUserProfileRedisAccessReadinessWithProjection<
 }
 
 export function createCurrentUserProfileReadiness(
-  input: Omit<
-    Parameters<typeof createUserProfileReadinessWithProjection>[0],
-    "projection"
-  >,
+  input: Omit<Parameters<typeof createUserProfileReadinessWithProjection>[0], "projection">,
 ) {
   return createUserProfileReadinessWithProjection({
     ...input,
@@ -95,10 +85,7 @@ export function createCurrentUserProfileReadiness(
 }
 
 export function createCurrentUserProfilePostgresReadiness(
-  input: Omit<
-    Parameters<typeof createUserProfilePostgresReadinessWithProjection>[0],
-    "projection"
-  >,
+  input: Omit<Parameters<typeof createUserProfilePostgresReadinessWithProjection>[0], "projection">,
 ) {
   return createUserProfilePostgresReadinessWithProjection({
     ...input,
@@ -107,10 +94,7 @@ export function createCurrentUserProfilePostgresReadiness(
 }
 
 export function createCurrentUserProfileRedisAccessReadiness(
-  input: Omit<
-    Parameters<typeof createUserProfileRedisAccessReadinessWithProjection>[0],
-    "projection"
-  >,
+  input: Omit<Parameters<typeof createUserProfileRedisAccessReadinessWithProjection>[0], "projection">,
 ) {
   return createUserProfileRedisAccessReadinessWithProjection({
     ...input,

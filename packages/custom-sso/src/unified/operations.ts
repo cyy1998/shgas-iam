@@ -1,19 +1,6 @@
-import type { ClientSnapshotReader } from "@iam/api-core/client-snapshot";
-import type { SubjectAccessOperation } from "@iam/api-core/subject-access";
-import type { PermittedClientSubjectProjectionService } from "@iam/client-subject-projection";
-import type { SubjectClaimName } from "@iam/contracts";
-import type { AuditRequestContext } from "@iam/domain/audit";
-import type { ClientSessionObservation, RevocationResult, UnifiedSessionKernel } from "@iam/session-kernel";
-import type {
-  CustomSsoAuditPort,
-  CustomSsoLoggerPort,
-  CustomSsoProjectionPermission,
-} from "../custom-sso.port";
-import type { CustomSsoSubjectProjection } from "../wire";
-import type { CustomSsoStateRedis } from "./state";
-import type { CustomSsoTokenRecord } from "./token-state";
 import { Buffer } from "node:buffer";
 import { randomUUID } from "node:crypto";
+import type { ClientSnapshotReader } from "@iam/api-core/client-snapshot";
 import { ClientSnapshotUnavailableError } from "@iam/api-core/client-snapshot";
 import {
   AuthzMaintenanceError,
@@ -22,11 +9,17 @@ import {
   InvalidSsoClientError,
 } from "@iam/api-core/errors";
 import { observabilityLogFields } from "@iam/api-core/observability";
+import type { SubjectAccessOperation } from "@iam/api-core/subject-access";
 import { requireSubjectAccessOperation, SubjectAccessUnavailableError } from "@iam/api-core/subject-access";
+import type { PermittedClientSubjectProjectionService } from "@iam/client-subject-projection";
 import { parseSubjectClaimSelection } from "@iam/client-subject-projection";
+import type { SubjectClaimName } from "@iam/contracts";
 import { ClientSsoCallbackType, ClientSsoProtocol, ClientStatus, SubjectClaim } from "@iam/contracts";
+import type { AuditRequestContext } from "@iam/domain/audit";
+import type { ClientSessionObservation, RevocationResult, UnifiedSessionKernel } from "@iam/session-kernel";
 import { SessionStorageError } from "@iam/session-kernel";
 import { z } from "zod";
+import type { CustomSsoAuditPort, CustomSsoLoggerPort, CustomSsoProjectionPermission } from "../custom-sso.port";
 import {
   buildGatewayLoginSuccessAudit,
   buildIndependentLoginSuccessAudit,
@@ -34,13 +27,11 @@ import {
 } from "../internal/audit";
 import { CustomSsoTrafficGateUnavailableError } from "../internal/traffic-gate";
 import { CustomSsoRequestMismatchError } from "../protocol-validation.error";
+import type { CustomSsoSubjectProjection } from "../wire";
 import { resolveCustomSsoSubjectProjection } from "../wire";
-import {
-  createCustomSsoState,
-  CustomSsoStateUnavailableError,
-  parseBusinessCode,
-  randomHandle,
-} from "./state";
+import type { CustomSsoStateRedis } from "./state";
+import { CustomSsoStateUnavailableError, createCustomSsoState, parseBusinessCode, randomHandle } from "./state";
+import type { CustomSsoTokenRecord } from "./token-state";
 import { createCustomSsoTokenState } from "./token-state";
 
 export interface UnifiedCustomSsoOperationsOptions {
@@ -72,8 +63,7 @@ export interface CustomSsoManagedResult {
   redirectUrl: string;
   state?: string;
 }
-export type CodeConsumptionOutcome
-  = "not_attempted" | "consumed" | "missing" | "changed" | "corrupt" | "unknown";
+export type CodeConsumptionOutcome = "not_attempted" | "consumed" | "missing" | "changed" | "corrupt" | "unknown";
 export class CustomSsoExchangeFailure extends Error {
   constructor(
     readonly failure: unknown,
@@ -112,8 +102,7 @@ export function createUnifiedCustomSsoOperations(options: UnifiedCustomSsoOperat
           timer = setTimeout(resolve, failureTimeout, unknown);
         }),
       ]);
-    }
-    finally {
+    } finally {
       clearTimeout(timer);
     }
   }
@@ -124,42 +113,36 @@ export function createUnifiedCustomSsoOperations(options: UnifiedCustomSsoOperat
       requireSubjectAccessOperation(operation);
       const sessions = options.kernel.forOperation(operation);
       async function accept(clientCode: string) {
-        let snapshot;
+        let snapshot: Awaited<ReturnType<typeof options.clients.acquire>>;
         try {
           snapshot = await options.clients.acquire(clientCode);
-        }
-        catch (error) {
-          if (error instanceof ClientSnapshotUnavailableError)
-            throw new CustomSsoTrafficGateUnavailableError();
+        } catch (error) {
+          if (error instanceof ClientSnapshotUnavailableError) throw new CustomSsoTrafficGateUnavailableError();
           throw error;
         }
         if (snapshot.kind === "present" && snapshot.value.status === ClientStatus.Maintenance)
           throw new AuthzMaintenanceError();
         if (
-          snapshot.kind !== "present"
-          || snapshot.value.clientCode !== clientCode
-          || snapshot.value.status !== ClientStatus.Enable
-          || !snapshot.value.ssoEnabled
-          || snapshot.value.ssoConfig?.protocol !== ClientSsoProtocol.CustomSso
+          snapshot.kind !== "present" ||
+          snapshot.value.clientCode !== clientCode ||
+          snapshot.value.status !== ClientStatus.Enable ||
+          !snapshot.value.ssoEnabled ||
+          snapshot.value.ssoConfig?.protocol !== ClientSsoProtocol.CustomSso
         ) {
           throw new InvalidSsoClientError();
         }
         return snapshot.value.ssoConfig;
       }
       async function permitted(target: { userSessionId: string; clientSessionId: string; clientId: string }) {
-        let resolved;
+        let resolved: Awaited<ReturnType<typeof sessions.resolveClientSessionForUse>>;
         try {
           resolved = await sessions.resolveClientSessionForUse(target);
-        }
-        catch (error) {
-          if (error instanceof SessionStorageError)
-            throw new SubjectAccessUnavailableError();
+        } catch (error) {
+          if (error instanceof SessionStorageError) throw new SubjectAccessUnavailableError();
           throw error;
         }
-        if (resolved.status === "corrupt")
-          throw new SubjectAccessUnavailableError();
-        if (resolved.status !== "resolved")
-          throw new AuthzUnauthorizedError();
+        if (resolved.status === "corrupt") throw new SubjectAccessUnavailableError();
+        if (resolved.status !== "resolved") throw new AuthzUnauthorizedError();
         const root = resolved.value.userSession;
         const permission = await operation.acquireForSession({
           principalSessionId: root.userSessionId,
@@ -172,15 +155,15 @@ export function createUnifiedCustomSsoOperations(options: UnifiedCustomSsoOperat
         record: { userSessionInstance: string; clientSessionInstance: string },
         observation: ClientSessionObservation,
       ) =>
-        record.userSessionInstance === observation.userSession.instance
-        && record.clientSessionInstance === observation.clientSession.instance;
+        record.userSessionInstance === observation.userSession.instance &&
+        record.clientSessionInstance === observation.clientSession.instance;
       async function project(
         clientCode: string,
         access: Awaited<ReturnType<typeof permitted>>,
         claims: SubjectClaimName[],
       ) {
         return await resolveCustomSsoSubjectProjection(
-          { resolve: input => options.projection.resolve(input, access.proof) },
+          { resolve: (input) => options.projection.resolve(input, access.proof) },
           {
             subjectIdentifier: access.observation.userSession.subjectIdentifier,
             clientCode,
@@ -188,13 +171,9 @@ export function createUnifiedCustomSsoOperations(options: UnifiedCustomSsoOperat
           },
         );
       }
-      async function prepareToken(
-        access: Awaited<ReturnType<typeof permitted>>,
-        purpose: "business" | "managed",
-      ) {
+      async function prepareToken(access: Awaited<ReturnType<typeof permitted>>, purpose: "business" | "managed") {
         const lifetime = await sessions.getIssuanceLifetime(access.observation, tokenTtl);
-        if (lifetime.remainingSeconds <= 0)
-          throw new AuthzUnauthorizedError();
+        if (lifetime.remainingSeconds <= 0) throw new AuthzUnauthorizedError();
         const { userSession, clientSession } = access.observation;
         const record: CustomSsoTokenRecord = {
           version: 1,
@@ -215,23 +194,17 @@ export function createUnifiedCustomSsoOperations(options: UnifiedCustomSsoOperat
         bearer: string;
         record: CustomSsoTokenRecord;
       }): Promise<CustomSsoExchangeFailure["tokenCompensation"]> {
-        if (!token)
-          return "not_attempted";
+        if (!token) return "not_attempted";
         try {
           return await bounded(tokens.remove(token.bearer, token.record), "unknown");
-        }
-        catch {
+        } catch {
           return "unknown";
         }
       }
       async function authenticateToken(bearer: string, clientCode: string, purpose?: "business" | "managed") {
         const token = await tokens.read(bearer);
-        if (!token)
-          throw new AuthzUnauthorizedError();
-        if (
-          token.record.clientCode !== clientCode
-          || (purpose !== undefined && token.record.purpose !== purpose)
-        ) {
+        if (!token) throw new AuthzUnauthorizedError();
+        if (token.record.clientCode !== clientCode || (purpose !== undefined && token.record.purpose !== purpose)) {
           throw new CustomSsoRequestMismatchError();
         }
         const access = await permitted({
@@ -239,8 +212,7 @@ export function createUnifiedCustomSsoOperations(options: UnifiedCustomSsoOperat
           clientSessionId: token.record.clientSessionId,
           clientId: clientCode,
         });
-        if (!matches(token.record, access.observation))
-          throw new AuthzUnauthorizedError();
+        if (!matches(token.record, access.observation)) throw new AuthzUnauthorizedError();
         const config = await accept(clientCode);
         return { access, config, record: token.record };
       }
@@ -259,13 +231,11 @@ export function createUnifiedCustomSsoOperations(options: UnifiedCustomSsoOperat
           try {
             const managed = options.managed;
             const config = await accept(input.clientCode);
-            if (!managed || config.callbackType !== ClientSsoCallbackType.Managed)
-              throw new InvalidSsoClientError();
-            let code;
+            if (!managed || config.callbackType !== ClientSsoCallbackType.Managed) throw new InvalidSsoClientError();
+            let code: Awaited<ReturnType<typeof codes.readCode>>;
             try {
               code = await codes.readCode(input.clientCode, input.code);
-            }
-            catch (error) {
+            } catch (error) {
               consumption = error instanceof CustomSsoStateUnavailableError ? error.outcome : "unknown";
               throw error;
             }
@@ -275,9 +245,9 @@ export function createUnifiedCustomSsoOperations(options: UnifiedCustomSsoOperat
             }
             // Original purpose is immutable: a later configuration edit cannot bypass the business Secret.
             if (
-              code.redeemer !== "managed"
-              || code.callbackEndpoint !== `${new URL(code.redirectUrl).origin}/sso/callback`
-              || code.redirectUrl !== input.redirectUrl
+              code.redeemer !== "managed" ||
+              code.callbackEndpoint !== `${new URL(code.redirectUrl).origin}/sso/callback` ||
+              code.redirectUrl !== input.redirectUrl
             ) {
               throw new CustomSsoRequestMismatchError();
             }
@@ -286,12 +256,10 @@ export function createUnifiedCustomSsoOperations(options: UnifiedCustomSsoOperat
               clientSessionId: code.clientSessionId,
               clientId: input.clientCode,
             });
-            if (!matches(code, access.observation))
-              throw new AuthzUnauthorizedError();
+            if (!matches(code, access.observation)) throw new AuthzUnauthorizedError();
             consumption = "unknown";
             consumption = await codes.consumeCode(code);
-            if (consumption !== "consumed")
-              throw new AuthzUnauthorizedError("Code 已失效，请重新授权");
+            if (consumption !== "consumed") throw new AuthzUnauthorizedError("Code 已失效，请重新授权");
             const prepared = await prepareToken(access, "managed");
             knownToken = prepared;
             await tokens.save(prepared.bearer, prepared.record);
@@ -299,14 +267,10 @@ export function createUnifiedCustomSsoOperations(options: UnifiedCustomSsoOperat
               await managed.audit.recordAuditLog(
                 withRequestContext(
                   input.requestContext,
-                  buildGatewayLoginSuccessAudit(
-                    access.observation.userSession.subjectIdentifier,
-                    input.clientCode,
-                  ),
+                  buildGatewayLoginSuccessAudit(access.observation.userSession.subjectIdentifier, input.clientCode),
                 ),
               );
-            }
-            catch {
+            } catch {
               managed.logger.warn(
                 {
                   clientCode: input.clientCode,
@@ -324,8 +288,7 @@ export function createUnifiedCustomSsoOperations(options: UnifiedCustomSsoOperat
               state: code.state,
             };
             return deliver ? await deliver(result) : result;
-          }
-          catch (failure) {
+          } catch (failure) {
             // Q38: no root Cookie gate and no business-exchange revocation of the shared ClientSession.
             throw new CustomSsoManagedFailure(failure, consumption, await compensate(knownToken));
           }
@@ -342,41 +305,34 @@ export function createUnifiedCustomSsoOperations(options: UnifiedCustomSsoOperat
           deliver?: (result: CustomSsoExchangeResult) => Promise<T> | T,
         ): Promise<T | CustomSsoExchangeResult> {
           const authenticated = await options.credentials.authenticate(input.clientCode, input.clientSecret);
-          if (!authenticated || authenticated.clientCode !== input.clientCode)
-            throw new InvalidSsoClientError();
+          if (!authenticated || authenticated.clientCode !== input.clientCode) throw new InvalidSsoClientError();
           const locator = parseBusinessCode(input.code);
-          if (!locator)
-            throw new BadRequestError("非法 Code");
+          if (!locator) throw new BadRequestError("非法 Code");
           const target = {
             userSessionId: locator.userSessionId,
             clientSessionId: locator.clientSessionId,
             clientId: input.clientCode,
           };
-          let located;
+          let located: Awaited<ReturnType<typeof sessions.observeClientSessionForRevocation>>;
           try {
             located = await sessions.observeClientSessionForRevocation(target);
-          }
-          catch (error) {
-            if (error instanceof SessionStorageError)
-              throw new SubjectAccessUnavailableError();
+          } catch (error) {
+            if (error instanceof SessionStorageError) throw new SubjectAccessUnavailableError();
             throw error;
           }
           if (located.status !== "resolved") {
-            if (located.status === "corrupt")
-              throw new SubjectAccessUnavailableError();
+            if (located.status === "corrupt") throw new SubjectAccessUnavailableError();
             throw new BadRequestError("非法 Code 归属");
           }
           let consumption: CodeConsumptionOutcome = "not_attempted";
           let knownToken: { bearer: string; record: CustomSsoTokenRecord } | undefined;
           try {
             const config = await accept(input.clientCode);
-            if (input.invalidParameters || !z.url().safeParse(input.redirectUri).success)
-              throw new BadRequestError();
-            let code;
+            if (input.invalidParameters || !z.url().safeParse(input.redirectUri).success) throw new BadRequestError();
+            let code: Awaited<ReturnType<typeof codes.readCode>>;
             try {
               code = await codes.readCode(input.clientCode, input.code);
-            }
-            catch (error) {
+            } catch (error) {
               consumption = error instanceof CustomSsoStateUnavailableError ? error.outcome : "unknown";
               throw error;
             }
@@ -385,24 +341,23 @@ export function createUnifiedCustomSsoOperations(options: UnifiedCustomSsoOperat
               throw new BadRequestError("Code 已失效，请重新授权");
             }
             if (
-              code.redeemer !== "business"
-              || config.callbackType !== ClientSsoCallbackType.Business
-              || code.callbackEndpoint !== new URL(config.callbackEndpoint).href
-              || code.redirectUrl !== input.redirectUri
+              code.redeemer !== "business" ||
+              config.callbackType !== ClientSsoCallbackType.Business ||
+              code.callbackEndpoint !== new URL(config.callbackEndpoint).href ||
+              code.redirectUrl !== input.redirectUri
             ) {
               throw new BadRequestError("Code 用途或交付地址不匹配");
             }
             const access = await permitted(target);
             if (
-              !matches(code, access.observation)
-              || access.observation.clientSession.instance !== located.value.target.instance
+              !matches(code, access.observation) ||
+              access.observation.clientSession.instance !== located.value.target.instance
             ) {
               throw new BadRequestError("Code 原实例已失效");
             }
             consumption = "unknown";
             consumption = await codes.consumeCode(code);
-            if (consumption !== "consumed")
-              throw new BadRequestError("Code 已失效，请重新授权");
+            if (consumption !== "consumed") throw new BadRequestError("Code 已失效，请重新授权");
             const subject = await project(input.clientCode, access, [...config.subjectClaims]);
             const prepared = await prepareToken(access, "business");
             knownToken = prepared;
@@ -419,8 +374,7 @@ export function createUnifiedCustomSsoOperations(options: UnifiedCustomSsoOperat
                     ),
                   ),
                 );
-              }
-              catch {
+              } catch {
                 options.business.logger.warn(
                   {
                     clientCode: input.clientCode,
@@ -433,61 +387,48 @@ export function createUnifiedCustomSsoOperations(options: UnifiedCustomSsoOperat
               }
             }
             return deliver ? await deliver(result) : result;
-          }
-          catch (failure) {
+          } catch (failure) {
             // One exact attempt is the request budget. No background work or signing replay.
-            const revocation = await bounded<RevocationResult>(
-              sessions.revokeObservedClientSession(located.value),
-              { target: located.value.target, status: "unknown" },
-            );
+            const revocation = await bounded<RevocationResult>(sessions.revokeObservedClientSession(located.value), {
+              target: located.value.target,
+              status: "unknown",
+            });
             const compensation = await compensate(knownToken);
             throw new CustomSsoExchangeFailure(failure, consumption, revocation, compensation);
           }
         },
         async logout(bearer: string) {
           const token = await tokens.read(bearer);
-          if (!token)
-            return false;
+          if (!token) return false;
           const record = token.record;
           const resolved = await sessions.resolveClientSessionForUse({
             userSessionId: record.userSessionId,
             clientSessionId: record.clientSessionId,
             clientId: record.clientCode,
           });
-          if (resolved.status === "corrupt")
-            throw new SubjectAccessUnavailableError();
-          if (resolved.status !== "resolved")
-            return false;
-          if (!matches(record, resolved.value))
-            throw new AuthzUnauthorizedError();
+          if (resolved.status === "corrupt") throw new SubjectAccessUnavailableError();
+          if (resolved.status !== "resolved") return false;
+          if (!matches(record, resolved.value)) throw new AuthzUnauthorizedError();
           const client = await options.clients.acquire(record.clientCode);
           if (
-            client.kind !== "present"
-            || client.value.clientCode !== record.clientCode
-            || client.value.status === ClientStatus.Disable
-            || !client.value.ssoEnabled
-            || client.value.ssoConfig?.protocol !== ClientSsoProtocol.CustomSso
+            client.kind !== "present" ||
+            client.value.clientCode !== record.clientCode ||
+            client.value.status === ClientStatus.Disable ||
+            !client.value.ssoEnabled ||
+            client.value.ssoConfig?.protocol !== ClientSsoProtocol.CustomSso
           ) {
             throw new AuthzUnauthorizedError();
           }
           // Logout observes the original relationship without asking Subject Access permission.
           const root = await sessions.resolveUserSessionById(record.userSessionId);
-          if (root.status === "corrupt")
-            throw new SubjectAccessUnavailableError();
-          if (root.status !== "resolved")
-            return false;
-          if (root.value.userSession.instance !== record.userSessionInstance)
-            throw new AuthzUnauthorizedError();
+          if (root.status === "corrupt") throw new SubjectAccessUnavailableError();
+          if (root.status !== "resolved") return false;
+          if (root.value.userSession.instance !== record.userSessionInstance) throw new AuthzUnauthorizedError();
           const result = await sessions.revokeObservedUserSession(root.value);
-          if (result.status === "failed" || result.status === "unknown")
-            throw new SubjectAccessUnavailableError();
+          if (result.status === "failed" || result.status === "unknown") throw new SubjectAccessUnavailableError();
           return true;
         },
-        async resolvePublicAuthentication(
-          bearer: string,
-          clientCode: string,
-          purpose?: "business" | "managed",
-        ) {
+        async resolvePublicAuthentication(bearer: string, clientCode: string, purpose?: "business" | "managed") {
           const { access, config } = await authenticateToken(bearer, clientCode, purpose);
           return {
             authenticationContext: {
@@ -505,10 +446,10 @@ export function createUnifiedCustomSsoOperations(options: UnifiedCustomSsoOperat
             clientCode,
             access,
             config.subjectClaims.filter(
-              claim =>
-                claim === SubjectClaim.SubjectIdentifier
-                || claim === SubjectClaim.ProfileUsername
-                || claim === SubjectClaim.ProfileName,
+              (claim) =>
+                claim === SubjectClaim.SubjectIdentifier ||
+                claim === SubjectClaim.ProfileUsername ||
+                claim === SubjectClaim.ProfileName,
             ),
           );
           return Buffer.from(

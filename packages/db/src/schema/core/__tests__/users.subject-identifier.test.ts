@@ -1,9 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import {
-  insertUserSchema,
-  updateUserSchema,
-  users,
-} from "../users";
+import { insertUserSchema, updateUserSchema, users } from "../users";
 
 describe("user Subject Identifier schema", () => {
   test("generates one immutable protocol-neutral Subject Identifier for every new user", () => {

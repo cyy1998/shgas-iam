@@ -1,25 +1,21 @@
-import type { ApiAuditLogWriter } from "@api/services/audit/audit.service";
-import type { SubjectAccessOperation } from "@iam/api-core/subject-access";
-import type { DbClient } from "@iam/db";
-import type { ApiRepositories } from "../repositories";
-import type { ApiRuntimePorts } from "../runtime";
-import type { createApiUnitOfWork } from "../tx";
 import { createAccountRecoveryService } from "@api/services/account-recovery/account-recovery.service";
+import type { ApiAuditLogWriter } from "@api/services/audit/audit.service";
 import { createLoginCredentialParser } from "@api/services/authentication/login-credential.parser";
 import { createClientService } from "@api/services/client/client.service";
 import { createCapService } from "@api/services/human-verification/cap.service";
 import { createHumanRiskService } from "@api/services/human-verification/human-risk.service";
-import { createMobileCodeCooldown } from "@api/services/mobile/mobile-code-cooldown";
 import { createMobileService } from "@api/services/mobile/mobile.service";
+import { createMobileCodeCooldown } from "@api/services/mobile/mobile-code-cooldown";
 import { createOrganizationService } from "@api/services/organization/organization.service";
 import { createPrivilegeDelegationService } from "@api/services/privilege/privilegeDelegation.service";
-import { createV3UserProfileSearchAdapter } from "@api/services/user-profile-search/user-profile-search-v3.adapter";
+import { createUserService } from "@api/services/user/user.service";
 import { createUserMobileBinding } from "@api/services/user/user-mobile-binding.helper";
 import { createUserPasswordHelper } from "@api/services/user/user-password.helper";
-import { createUserService } from "@api/services/user/user.service";
+import { createV3UserProfileSearchAdapter } from "@api/services/user-profile-search/user-profile-search-v3.adapter";
 import { createClientSnapshots } from "@iam/api-core/client-snapshot/composition";
 import { createClientSecretAuthenticator } from "@iam/api-core/client-snapshot/credentials";
 import { createLoginRestriction, createRedisLoginRestrictionStore } from "@iam/api-core/login-restriction";
+import type { SubjectAccessOperation } from "@iam/api-core/subject-access";
 import {
   createRedisSubjectAccessStore,
   createSubjectAccessBarrier,
@@ -29,6 +25,7 @@ import {
   requireSubjectAccessOperation,
 } from "@iam/api-core/subject-access";
 import { mapUnitOfWork } from "@iam/api-core/uow";
+import type { DbClient } from "@iam/db";
 import db from "@iam/db";
 import { createClientSnapshotRepository } from "@iam/db/client-snapshot";
 import { createOidcClientAuthRateLimiter } from "@iam/oidc";
@@ -42,11 +39,11 @@ import {
 import { createUserProfileQueryService } from "@iam/user-profile-read-model/query";
 import { createSubjectAccessTransitionRepository } from "@iam/user-profile-read-model/subject-access-transition";
 import { createSubjectFactsLoggerObservability } from "@iam/user-profile-read-model/subject-facts";
-import {
-  createV3UserProfileQueryRepository,
-  createV3UserProfileQueryService,
-} from "@iam/user-profile-read-model/v3";
+import { createV3UserProfileQueryRepository, createV3UserProfileQueryService } from "@iam/user-profile-read-model/v3";
+import type { ApiRepositories } from "../repositories";
 import { createRootAuthenticationComposition } from "../root-authentication";
+import type { ApiRuntimePorts } from "../runtime";
+import type { createApiUnitOfWork } from "../tx";
 import { createApiUserProfileSearch } from "./user-profile-search";
 
 type ApiUnitOfWork = ReturnType<typeof createApiUnitOfWork>;
@@ -88,7 +85,7 @@ export function createApiServices(options: CreateApiServicesOptions) {
   });
   let subjectAccessOperations: ReturnType<typeof createSubjectAccessOperations>;
   const sessionRevocation = createUnifiedSubjectAccessSessionRevocation(sessionKernel, {
-    run: callback => subjectAccessOperations.run(callback),
+    run: (callback) => subjectAccessOperations.run(callback),
   });
   subjectAccessOperations = createSubjectAccessOperations({
     barrier: subjectAccess,
@@ -186,7 +183,7 @@ export function createApiServices(options: CreateApiServicesOptions) {
         ),
     },
     subjectAccessLifecycle,
-    uow: mapUnitOfWork(unitOfWork, tx => ({
+    uow: mapUnitOfWork(unitOfWork, (tx) => ({
       userRepository: tx.repositories.user,
       auditLogWriter: tx.auditLogWriter,
       subjectAccessMutation: tx.subjectAccessMutation,
@@ -200,7 +197,7 @@ export function createApiServices(options: CreateApiServicesOptions) {
 
   const organizationService = createOrganizationService({
     organizationRepository: repositories.organization,
-    uow: mapUnitOfWork(unitOfWork, tx => ({
+    uow: mapUnitOfWork(unitOfWork, (tx) => ({
       organizationRepository: tx.repositories.organization,
       userProfileInvalidation: tx.userProfileInvalidation,
     })),
@@ -208,7 +205,7 @@ export function createApiServices(options: CreateApiServicesOptions) {
 
   const privilegeDelegationService = createPrivilegeDelegationService({
     privilegeDelegationRepository: repositories.privilegeDelegation,
-    uow: mapUnitOfWork(unitOfWork, tx => ({
+    uow: mapUnitOfWork(unitOfWork, (tx) => ({
       auditLogWriter: tx.auditLogWriter,
       userRepository: tx.repositories.user,
       organizationRepository: tx.repositories.organization,

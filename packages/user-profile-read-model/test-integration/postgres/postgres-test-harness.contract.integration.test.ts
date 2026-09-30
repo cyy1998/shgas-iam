@@ -1,6 +1,6 @@
-import type postgresFactory from "postgres";
-import process from "node:process";
 import { afterEach, expect, test } from "bun:test";
+import process from "node:process";
+import type postgresFactory from "postgres";
 import { createPostgresTestHarness } from "./postgres-test-harness";
 
 const testDatabaseUrlName = "IAM_USER_PROFILE_TEST_DATABASE_URL";
@@ -13,8 +13,7 @@ afterEach(() => {
 });
 
 test("cleans every resource created before PostgreSQL harness setup fails", async () => {
-  process.env[testDatabaseUrlName]
-    = "postgres://test-user@127.0.0.1/iam_harness_contract";
+  process.env[testDatabaseUrlName] = "postgres://test-user@127.0.0.1/iam_harness_contract";
   delete process.env.DATABASE_URL;
 
   const setupFailure = new Error("blocker client creation failed");
@@ -43,18 +42,15 @@ test("cleans every resource created before PostgreSQL harness setup fails", asyn
   };
   const createSql = (() => {
     clientIndex += 1;
-    if (clientIndex === 1)
-      return admin;
-    if (clientIndex === 2)
-      return scoped;
+    if (clientIndex === 1) return admin;
+    if (clientIndex === 2) return scoped;
     throw setupFailure;
   }) as unknown as typeof postgresFactory;
   let caught: unknown;
 
   try {
     await createPostgresTestHarness({ createSql });
-  }
-  catch (error) {
+  } catch (error) {
     caught = error;
   }
 
@@ -64,24 +60,14 @@ test("cleans every resource created before PostgreSQL harness setup fails", asyn
     errorCount: errors.length,
     errors: new Set(errors),
   }).toEqual({
-    cleanupAttempts: new Set([
-      "scoped-close",
-      "drop-schema",
-      "admin-close",
-    ]),
+    cleanupAttempts: new Set(["scoped-close", "drop-schema", "admin-close"]),
     errorCount: 4,
-    errors: new Set([
-      setupFailure,
-      scopedCloseFailure,
-      dropSchemaFailure,
-      adminCloseFailure,
-    ]),
+    errors: new Set([setupFailure, scopedCloseFailure, dropSchemaFailure, adminCloseFailure]),
   });
 });
 
 test("attempts every PostgreSQL harness close action and preserves every failure", async () => {
-  process.env[testDatabaseUrlName]
-    = "postgres://test-user@127.0.0.1/iam_harness_contract";
+  process.env[testDatabaseUrlName] = "postgres://test-user@127.0.0.1/iam_harness_contract";
   delete process.env.DATABASE_URL;
 
   const scopedCloseFailure = new Error("scoped client close failed");
@@ -124,8 +110,7 @@ test("attempts every PostgreSQL harness close action and preserves every failure
 
   try {
     await harness.close();
-  }
-  catch (error) {
+  } catch (error) {
     caught = error;
   }
 
@@ -135,25 +120,13 @@ test("attempts every PostgreSQL harness close action and preserves every failure
     errorCount: errors.length,
     errors: new Set(errors),
   }).toEqual({
-    cleanupAttempts: new Set([
-      "scoped-close",
-      "blocker-close",
-      "drop-schema",
-      "admin-close",
-    ]),
+    cleanupAttempts: new Set(["scoped-close", "blocker-close", "drop-schema", "admin-close"]),
     errorCount: 4,
-    errors: new Set([
-      scopedCloseFailure,
-      blockerCloseFailure,
-      dropSchemaFailure,
-      adminCloseFailure,
-    ]),
+    errors: new Set([scopedCloseFailure, blockerCloseFailure, dropSchemaFailure, adminCloseFailure]),
   });
 });
 
 function restoreEnvironmentValue(name: string, value: string | undefined) {
-  if (value === undefined)
-    delete process.env[name];
-  else
-    process.env[name] = value;
+  if (value === undefined) delete process.env[name];
+  else process.env[name] = value;
 }

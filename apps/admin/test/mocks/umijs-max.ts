@@ -1,5 +1,5 @@
-import { createElement, type ReactNode } from 'react';
-import { vi } from 'vitest';
+import { createElement, type ReactNode } from "react";
+import { vi } from "vitest";
 
 type LinkProps = {
   to?: string | { pathname?: string };
@@ -44,7 +44,6 @@ export const history = {
 
 export const request = vi.fn();
 
-// eslint-disable-next-line react/no-unnecessary-use-prefix -- mirrors @umijs/max
 export function useLocation() {
   return history.location;
 }
@@ -77,8 +76,8 @@ export function __resetUmiMaxMocks() {
 }
 
 export function Link({ to, href, children, ...rest }: LinkProps) {
-  const resolvedHref = href ?? (typeof to === 'string' ? to : to?.pathname);
-  return createElement('a', { ...rest, href: resolvedHref ?? '#' }, children);
+  const resolvedHref = href ?? (typeof to === "string" ? to : to?.pathname);
+  return createElement("a", { ...rest, href: resolvedHref ?? "#" }, children);
 }
 
 export function Outlet() {

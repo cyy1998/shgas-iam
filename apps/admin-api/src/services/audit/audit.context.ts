@@ -1,9 +1,9 @@
-import type { UnitOfWorkTransactionOptions } from "@iam/api-core/uow";
-import type { AuditActorType, AuditDetails, AuditOutcome, AuditRequestContext } from "@iam/domain/audit";
-import type { Context } from "hono";
 import { getRequestId, getRequestIp, getTraceId } from "@iam/api-core/core/request-context";
 import { pickObservabilityContext } from "@iam/api-core/observability";
+import type { UnitOfWorkTransactionOptions } from "@iam/api-core/uow";
+import type { AuditActorType, AuditDetails, AuditOutcome, AuditRequestContext } from "@iam/domain/audit";
 import { normalizeAuditActor } from "@iam/domain/audit";
+import type { Context } from "hono";
 
 export type AuditLogInput = {
   eventTime?: Date;
@@ -29,9 +29,10 @@ export type AuditLogInput = {
   details?: AuditDetails;
 };
 
-export type AdminAuditContext = Pick<AuditLogInput, "actorType"> & Partial<AuditLogInput> & {
-  principalSessionId?: string | null;
-};
+export type AdminAuditContext = Pick<AuditLogInput, "actorType"> &
+  Partial<AuditLogInput> & {
+    principalSessionId?: string | null;
+  };
 
 export function adminAuditTransactionOptions(auditContext?: AdminAuditContext): UnitOfWorkTransactionOptions {
   return {
@@ -44,7 +45,9 @@ function getContextUserName(c: Context): string | null {
   return typeof user?.name === "string" && user.name.trim() ? user.name.trim() : null;
 }
 
-export function getAdminAuditRequestContext(c: Context): AuditRequestContext & Pick<AdminAuditContext, "principalSessionId"> {
+export function getAdminAuditRequestContext(
+  c: Context,
+): AuditRequestContext & Pick<AdminAuditContext, "principalSessionId"> {
   return {
     sourceApp: "iam-admin",
     requestId: getRequestId(c) ?? c.req.header("x-request-id") ?? null,

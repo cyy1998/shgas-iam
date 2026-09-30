@@ -7,9 +7,9 @@ import {
   searchUsers,
   updateUser,
   updateUserStatus,
-} from '@admin/services/user';
-import { UserStatus } from '@iam/contracts';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+} from "@admin/services/user";
+import { UserStatus } from "@iam/contracts";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 const userSearchQuery = vi.hoisted(() => vi.fn());
 const userDetailQuery = vi.hoisted(() => vi.fn());
@@ -20,7 +20,7 @@ const userDeleteMutate = vi.hoisted(() => vi.fn());
 const userResetPasswordMutate = vi.hoisted(() => vi.fn());
 const userGeneratePasswordQuery = vi.hoisted(() => vi.fn());
 
-vi.mock('@admin/lib/api-client', () => ({
+vi.mock("@admin/lib/api-client", () => ({
   apiClient: {
     admin: {
       user: {
@@ -37,17 +37,17 @@ vi.mock('@admin/lib/api-client', () => ({
   },
 }));
 
-describe('user service wrappers', () => {
+describe("user service wrappers", () => {
   afterEach(() => {
     vi.clearAllMocks();
   });
 
-  it('passes search params to admin.user.search query', async () => {
+  it("passes search params to admin.user.search query", async () => {
     const params = {
       pageNum: 1,
       pageSize: 20,
       conditions: {
-        fuzzyConditions: { text: '张三' },
+        fuzzyConditions: { text: "张三" },
         exactConditions: { statuses: [UserStatus.Enable] },
       },
     };
@@ -59,51 +59,48 @@ describe('user service wrappers', () => {
 
   it.each([
     {
-      name: 'detail',
-      call: () => getUser('zhangsan'),
+      name: "detail",
+      call: () => getUser("zhangsan"),
       port: userDetailQuery,
-      input: { username: 'zhangsan' },
+      input: { username: "zhangsan" },
     },
     {
-      name: 'create',
-      call: () =>
-        createUser({ username: 'zhangsan' } as Parameters<
-          typeof createUser
-        >[0]),
+      name: "create",
+      call: () => createUser({ username: "zhangsan" } as Parameters<typeof createUser>[0]),
       port: userCreateMutate,
-      input: { username: 'zhangsan' },
+      input: { username: "zhangsan" },
     },
     {
-      name: 'update',
-      call: () => updateUser('zhangsan', { name: '张三丰' }),
+      name: "update",
+      call: () => updateUser("zhangsan", { name: "张三丰" }),
       port: userUpdateMutate,
-      input: { username: 'zhangsan', data: { name: '张三丰' } },
+      input: { username: "zhangsan", data: { name: "张三丰" } },
     },
     {
-      name: 'status',
-      call: () => updateUserStatus('zhangsan', UserStatus.Pause),
+      name: "status",
+      call: () => updateUserStatus("zhangsan", UserStatus.Pause),
       port: userUpdateStatusMutate,
-      input: { username: 'zhangsan', status: UserStatus.Pause },
+      input: { username: "zhangsan", status: UserStatus.Pause },
     },
     {
-      name: 'delete',
-      call: () => deleteUser('zhangsan'),
+      name: "delete",
+      call: () => deleteUser("zhangsan"),
       port: userDeleteMutate,
-      input: { username: 'zhangsan' },
+      input: { username: "zhangsan" },
     },
     {
-      name: 'reset password',
-      call: () => resetUserPassword('zhangsan'),
+      name: "reset password",
+      call: () => resetUserPassword("zhangsan"),
       port: userResetPasswordMutate,
-      input: { username: 'zhangsan' },
+      input: { username: "zhangsan" },
     },
     {
-      name: 'generate password',
+      name: "generate password",
       call: () => generateRandomPassword(),
       port: userGeneratePasswordQuery,
       input: undefined,
     },
-  ])('maps $name input to its procedure', async ({ call, port, input }) => {
+  ])("maps $name input to its procedure", async ({ call, port, input }) => {
     await call();
     expect(port).toHaveBeenCalledWith(input);
   });

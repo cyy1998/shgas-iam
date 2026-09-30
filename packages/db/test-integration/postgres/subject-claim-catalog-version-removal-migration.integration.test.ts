@@ -1,5 +1,5 @@
-import type { PostgresTestHarness } from "./postgres-harness";
 import { afterAll, beforeAll, beforeEach, describe, expect, test } from "bun:test";
+import type { PostgresTestHarness } from "./postgres-harness";
 import { createPostgresTestHarness } from "./postgres-harness";
 
 const FEATURE_MIGRATION = new URL(
@@ -47,7 +47,7 @@ describe("Subject Claim Catalog version removal migration", () => {
       FROM client
       ORDER BY client_code
     `;
-    expect(rows.map(row => row.clientCode)).toEqual(["missing", "unknown", "v1", "v2"]);
+    expect(rows.map((row) => row.clientCode)).toEqual(["missing", "unknown", "v1", "v2"]);
     for (const row of rows) {
       expect(row.config).toEqual({
         mode: "gateway",
@@ -169,16 +169,14 @@ async function insertGatewayClient(clientCode: string, marker: number | undefine
 }
 
 function requireHarness(): PostgresTestHarness {
-  if (!harness)
-    throw new Error("PostgreSQL test harness was not initialized");
+  if (!harness) throw new Error("PostgreSQL test harness was not initialized");
   return harness;
 }
 
 async function captureError(promise: Promise<unknown>) {
   try {
     await promise;
-  }
-  catch (error) {
+  } catch (error) {
     return error;
   }
   return undefined;

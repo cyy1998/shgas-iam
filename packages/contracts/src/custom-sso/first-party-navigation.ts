@@ -1,5 +1,4 @@
-const FIRST_PARTY_NAVIGATION_STATE_PREFIX
-  = "iam-first-party-navigation:v1:";
+const FIRST_PARTY_NAVIGATION_STATE_PREFIX = "iam-first-party-navigation:v1:";
 
 export interface FirstPartySsoNavigation {
   redirectUrl: string;
@@ -8,11 +7,7 @@ export interface FirstPartySsoNavigation {
 
 export interface FirstPartySsoBrowserHistory {
   readonly state: unknown;
-  readonly replaceState: (
-    historyState: unknown,
-    unused: string,
-    destination: string,
-  ) => void;
+  readonly replaceState: (historyState: unknown, unused: string, destination: string) => void;
 }
 
 export interface FirstPartySsoBrowserEventTarget<TEvent> {
@@ -23,9 +18,7 @@ export interface FirstPartySsoPopStateEventConstructor<TEvent> {
   new (type: "popstate", init: { readonly state: unknown }): TEvent;
 }
 
-export function splitFirstPartySsoNavigation(
-  currentUrl: string,
-): FirstPartySsoNavigation {
+export function splitFirstPartySsoNavigation(currentUrl: string): FirstPartySsoNavigation {
   const url = new URL(currentUrl);
   const dynamicLocation = `${url.search}${url.hash}`;
   url.search = "";
@@ -41,9 +34,7 @@ export function splitFirstPartySsoNavigation(
   };
 }
 
-export function resolveFirstPartySsoNavigation(
-  callbackUrl: string,
-): string | null {
+export function resolveFirstPartySsoNavigation(callbackUrl: string): string | null {
   const url = new URL(callbackUrl);
   if (!url.searchParams.get("token")) {
     return null;
@@ -54,13 +45,11 @@ export function resolveFirstPartySsoNavigation(
     return null;
   }
 
-  const dynamicLocation = state.slice(
-    FIRST_PARTY_NAVIGATION_STATE_PREFIX.length,
-  );
+  const dynamicLocation = state.slice(FIRST_PARTY_NAVIGATION_STATE_PREFIX.length);
   if (
-    dynamicLocation === ""
-    || (dynamicLocation[0] !== "?" && dynamicLocation[0] !== "#")
-    || /[\r\n]/u.test(dynamicLocation)
+    dynamicLocation === "" ||
+    (dynamicLocation[0] !== "?" && dynamicLocation[0] !== "#") ||
+    /[\r\n]/u.test(dynamicLocation)
   ) {
     return null;
   }
@@ -77,16 +66,16 @@ export function restoreFirstPartySsoBrowserNavigation<TEvent>(
   let destination: string | null;
   try {
     destination = resolveFirstPartySsoNavigation(callbackUrl);
-  }
-  catch {
+  } catch {
     return false;
   }
-  if (destination === null)
-    return false;
+  if (destination === null) return false;
 
   browserHistory.replaceState(browserHistory.state, "", destination);
-  eventTarget.dispatchEvent(new PopStateEventConstructor("popstate", {
-    state: browserHistory.state,
-  }));
+  eventTarget.dispatchEvent(
+    new PopStateEventConstructor("popstate", {
+      state: browserHistory.state,
+    }),
+  );
   return true;
 }

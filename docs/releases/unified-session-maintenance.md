@@ -15,12 +15,12 @@ Next review: 2026-10-31
 Worker `online-auth:state` 组合三个 owner 的 inventory、apply 和独立 verify，不启动 HTTP、队列或 PostgreSQL。
 命令只接受显式 `--layout unified`，每次操作固定 Redis 实例、DB、namespace、owner 和可选 Client 集合。
 
-| Owner | 当前库存 | 范围边界 |
-|---|---|---|
-| Kernel | `<kernel-namespace>:unified:v1:` 下的 UserSession、ClientSession、user-id、slot 与所属索引 | 扫描主记录和索引，不依赖管理索引完整；不接受 Client filter。 |
-| Custom SSO | `<custom-namespace>:custom-sso:v1:` 下的 Code、Token、token-id、Authentication Continuation | 业务与托管 Token 共 owner；Client 范围保留无法确定归属的孤立对象。 |
-| OIDC | `<oidc-namespace>:oidc:v1:` 下的 Code、Access Token、token-id、Authentication Continuation、退出确认 | 全量可处理合法孤立反向索引；Client 范围不猜测 orphan 归属。 |
-| Client Snapshot | `client-snapshot:v1:{<clientCode>}:control`、`payload:client`、`payload:credential` | 独立 repair/verify 命令；普通与敏感缓存共 control，定向 repair 同时使双 payload 失效。 |
+| Owner           | 当前库存                                                                                             | 范围边界                                                                               |
+| --------------- | ---------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------- |
+| Kernel          | `<kernel-namespace>:unified:v1:` 下的 UserSession、ClientSession、user-id、slot 与所属索引           | 扫描主记录和索引，不依赖管理索引完整；不接受 Client filter。                           |
+| Custom SSO      | `<custom-namespace>:custom-sso:v1:` 下的 Code、Token、token-id、Authentication Continuation          | 业务与托管 Token 共 owner；Client 范围保留无法确定归属的孤立对象。                     |
+| OIDC            | `<oidc-namespace>:oidc:v1:` 下的 Code、Access Token、token-id、Authentication Continuation、退出确认 | 全量可处理合法孤立反向索引；Client 范围不猜测 orphan 归属。                            |
+| Client Snapshot | `client-snapshot:v1:{<clientCode>}:control`、`payload:client`、`payload:credential`                  | 独立 repair/verify 命令；普通与敏感缓存共 control，定向 repair 同时使双 payload 失效。 |
 
 三个 namespace 必须分别核对 runtime 配置，不能从默认值推测。末尾冒号也是输入字节：factory 输入末尾有冒号时，
 后缀前会有两个冒号，维护命令必须使用同一输入。命令不接受任意 Redis pattern。
@@ -101,11 +101,11 @@ AUTH/SELECT/CLIENT/QUIT 依连接配置授权，避免以生产高权限账户�
 
 ## 部分作用与保留核验
 
-| 结果 | 操作要求 |
-|---|---|
-| 退出 2 | 参数无效，未创建连接；修正输入后再开始。 |
-| 退出 1 | 资源、读取、格式、比较、作用或期限未完全确认，保持停流。 |
-| 退出 0 且 `status=completed` | 该命令完成；只有独立完整 verify 零 matching 才证明所选范围无残留。 |
+| 结果                             | 操作要求                                                           |
+| -------------------------------- | ------------------------------------------------------------------ |
+| 退出 2                           | 参数无效，未创建连接；修正输入后再开始。                           |
+| 退出 1                           | 资源、读取、格式、比较、作用或期限未完全确认，保持停流。           |
+| 退出 0 且 `status=completed`     | 该命令完成；只有独立完整 verify 零 matching 才证明所选范围无残留。 |
 | `unknown` / `changed` / 报告丢失 | 不计为已清除，按原资源和范围重新观察；不得猜测成功或扩大清理范围。 |
 
 apply 跨 owner 不原子，前一 owner 的作用不因后一 owner 失败回滚。提交丢响应、timeout 或中断时可能已删除部分记录。
@@ -148,13 +148,13 @@ smoke 失败时关闭受控入口、排空并重做适用 gate。
 任一开放操作失败、超时或结果未知，立即停止后续开放，关闭已经开放或状态不确定的入口；
 独立确认全部相关控制面关闭并排空后，修复原因、重做失效的核验，再开始放流。命令成功不能代替控制面读回。
 
-| 当前责任 | 恢复边界 |
-|---|---|
-| 精确会话终止 | 失败/未知不记已终止；Admin 只重试原捕获集合，集合丢失则重新查询发起新操作。根已终止不因子作用失败恢复。 |
-| 协议产物回收 | 由各协议 owner 维护；实例撤销、Token 删除及外部退出是不同结果。请求内失败作用见 [Custom](../features/sso/custom-sso-contract.md) 与 [OIDC](../features/oidc/oidc-integration.md)，没有通用后台自动补齐承诺。 |
-| 账号与主体事实恢复 | 按 [Profile 与 Subject Access 维护](user-profile-maintenance.md)执行；会话清理不能把不确定 Barrier 改为 enabled。 |
-| 作用后的审计失败 | 人工告警与核对，不回滚已生效作用，不为补审计自动重放 mutation，见[写入结果契约](../features/admin/admin-mutation-contract.md)。 |
-| 第三方自有会话 | 外部系统负责查询、期限和精确退出；IAM 清理不代表第三方本地登录或离线 ID Token 立即失效。 |
+| 当前责任           | 恢复边界                                                                                                                                                                                                     |
+| ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| 精确会话终止       | 失败/未知不记已终止；Admin 只重试原捕获集合，集合丢失则重新查询发起新操作。根已终止不因子作用失败恢复。                                                                                                      |
+| 协议产物回收       | 由各协议 owner 维护；实例撤销、Token 删除及外部退出是不同结果。请求内失败作用见 [Custom](../features/sso/custom-sso-contract.md) 与 [OIDC](../features/oidc/oidc-integration.md)，没有通用后台自动补齐承诺。 |
+| 账号与主体事实恢复 | 按 [Profile 与 Subject Access 维护](user-profile-maintenance.md)执行；会话清理不能把不确定 Barrier 改为 enabled。                                                                                            |
+| 作用后的审计失败   | 人工告警与核对，不回滚已生效作用，不为补审计自动重放 mutation，见[写入结果契约](../features/admin/admin-mutation-contract.md)。                                                                              |
+| 第三方自有会话     | 外部系统负责查询、期限和精确退出；IAM 清理不代表第三方本地登录或离线 ID Token 立即失效。                                                                                                                     |
 
 恢复应用须使用与当前数据兼容的候选；不得从审计重建登录态或通过恢复登录态备份撤销已经发生的安全作用。
 验证入口和证明范围见[命令页](../development/commands.md)及[架构验证归属](../architecture/architecture-verification.md)；

@@ -24,8 +24,5 @@ export interface ClientSnapshotAtomicStore {
     payload: string,
     ttlMs: number,
   ) => Promise<"conflict" | "published">;
-  readonly invalidateClient: (
-    clientCode: string,
-    candidateEpoch: string,
-  ) => Promise<void>;
+  readonly invalidateClient: (clientCode: string, candidateEpoch: string) => Promise<void>;
 }

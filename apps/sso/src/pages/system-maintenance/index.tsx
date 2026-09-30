@@ -1,19 +1,19 @@
-import { ReloadOutlined, ToolOutlined } from '@ant-design/icons';
-import { ClientStatus } from '@iam/contracts';
-import logoColorfulTextWhite from '@sso/assets/logo-colorful-text-white.png';
-import { clientStatus } from '@sso/services/open';
-import { getQuery } from '@sso/utils/url';
-import { Button, message, Spin } from 'antd';
-import { useState } from 'react';
-import './index.less';
+import { ReloadOutlined, ToolOutlined } from "@ant-design/icons";
+import { ClientStatus } from "@iam/contracts";
+import logoColorfulTextWhite from "@sso/assets/logo-colorful-text-white.png";
+import { clientStatus } from "@sso/services/open";
+import { getQuery } from "@sso/utils/url";
+import { Button, message, Spin } from "antd";
+import { useState } from "react";
+import "./index.less";
 
 export default function SystemMaintenancePage() {
   const [loading, setLoading] = useState(false);
 
   const handleRetry = async () => {
-    const clientCode = getQuery('client')?.trim();
+    const clientCode = getQuery("client")?.trim();
     if (!clientCode) {
-      message.warning('缺少应用上下文，请从业务系统重新发起登录。');
+      message.warning("缺少应用上下文，请从业务系统重新发起登录。");
       return;
     }
 
@@ -21,7 +21,7 @@ export default function SystemMaintenancePage() {
     try {
       const data = await clientStatus({ clientCode });
       if (!data || data.status !== ClientStatus.Maintenance) {
-        const redirectUrl = getQuery('redirectUrl');
+        const redirectUrl = getQuery("redirectUrl");
         if (redirectUrl) {
           window.location.href = redirectUrl;
         }

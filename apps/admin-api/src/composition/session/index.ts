@@ -1,6 +1,5 @@
-import type { SubjectAccessOperation } from "@iam/api-core/subject-access";
-import type { AdminApiRuntimePorts } from "../runtime";
 import { createLoginRestriction, createRedisLoginRestrictionStore } from "@iam/api-core/login-restriction";
+import type { SubjectAccessOperation } from "@iam/api-core/subject-access";
 import {
   createRedisSubjectAccessStore,
   createSubjectAccessBarrier,
@@ -12,6 +11,7 @@ import {
 import db from "@iam/db";
 import { createUnifiedSessionKernel } from "@iam/session-kernel";
 import { createSubjectAccessTransitionRepository } from "@iam/user-profile-read-model/subject-access-transition";
+import type { AdminApiRuntimePorts } from "../runtime";
 import { createUnifiedAdminLifecycleRevocation } from "./unified-lifecycle";
 
 export interface CreateAdminApiSessionOptions {
@@ -44,7 +44,7 @@ export function createAdminApiSession(options: CreateAdminApiSessionOptions) {
   });
   let subjectAccessOperations: ReturnType<typeof createSubjectAccessOperations>;
   const unifiedRevocation = createUnifiedSubjectAccessSessionRevocation(sessionKernel, {
-    run: callback => subjectAccessOperations.run(callback),
+    run: (callback) => subjectAccessOperations.run(callback),
   });
   subjectAccessOperations = createSubjectAccessOperations({
     barrier: subjectAccess,

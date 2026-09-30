@@ -3,10 +3,12 @@ import { observabilityLogFields, pickObservabilityContext } from "../index";
 
 describe("observability helpers", () => {
   test("picks only request and trace identifiers with null fallbacks", () => {
-    expect(pickObservabilityContext({
-      requestId: " req-1 ",
-      traceId: " trace-1 ",
-    })).toEqual({
+    expect(
+      pickObservabilityContext({
+        requestId: " req-1 ",
+        traceId: " trace-1 ",
+      }),
+    ).toEqual({
       requestId: "req-1",
       traceId: "trace-1",
     });

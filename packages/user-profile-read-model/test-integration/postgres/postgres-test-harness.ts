@@ -1,8 +1,8 @@
-import type { db as database } from "@iam/db";
 import { randomUUID } from "node:crypto";
 import process from "node:process";
 import { fileURLToPath } from "node:url";
 import { runWithOwnedTestResources } from "@iam/api-core/testing/external-test-resources";
+import type { db as database } from "@iam/db";
 import { relations } from "@iam/db/relations";
 import { drizzle } from "drizzle-orm/postgres-js";
 import { migrate } from "drizzle-orm/postgres-js/migrator";
@@ -12,10 +12,7 @@ const TEST_DATABASE_URL_ENV = "IAM_USER_PROFILE_TEST_DATABASE_URL";
 const RESERVED_DATABASE_NAMES = new Set(["postgres", "template0", "template1"]);
 
 export interface HeldDirtyRowLock {
-  readonly commit: (nextState?: {
-    dirtyVersion: string;
-    status: string;
-  }) => Promise<void>;
+  readonly commit: (nextState?: { dirtyVersion: string; status: string }) => Promise<void>;
 }
 
 export interface PostgresTestHarness {
@@ -29,9 +26,7 @@ export interface PostgresTestHarness {
 }
 
 export interface CreatePostgresTestHarnessOptions {
-  readonly createDatabase?: (
-    client: ReturnType<typeof postgres>,
-  ) => typeof database;
+  readonly createDatabase?: (client: ReturnType<typeof postgres>) => typeof database;
   readonly createSql?: typeof postgres;
   readonly runMigrations?: typeof migrate;
 }
@@ -40,8 +35,7 @@ export async function createPostgresTestHarness(
   options: CreatePostgresTestHarnessOptions = {},
 ): Promise<PostgresTestHarness> {
   const databaseUrl = requireDedicatedTestDatabaseUrl();
-  const createDatabase = options.createDatabase
-    ?? (client => drizzle({ client, relations }));
+  const createDatabase = options.createDatabase ?? ((client) => drizzle({ client, relations }));
   const createSql = options.createSql ?? postgres;
   const runMigrations = options.runMigrations ?? migrate;
   const runId = randomUUID().replaceAll("-", "");
@@ -83,9 +77,8 @@ export async function createPostgresTestHarness(
               AND wait_event_type = 'Lock'
           ) AS blocked
         `;
-        if (rows[0]?.blocked === true)
-          return;
-        await new Promise(resolve => setTimeout(resolve, 10));
+        if (rows[0]?.blocked === true) return;
+        await new Promise((resolve) => setTimeout(resolve, 10));
       }
       throw new Error("scoped PostgreSQL client did not block on a row lock");
     };
@@ -95,7 +88,7 @@ export async function createPostgresTestHarness(
       sql: scopedSql,
       async reset() {
         await scopedSql!.unsafe(
-          "TRUNCATE TABLE subject_access_transition, user_profile_dirty, user_profile, \"user\" RESTART IDENTITY CASCADE",
+          'TRUNCATE TABLE subject_access_transition, user_profile_dirty, user_profile, "user" RESTART IDENTITY CASCADE',
         );
       },
       async holdDirtyRowLock(userId) {
@@ -125,8 +118,7 @@ export async function createPostgresTestHarness(
                 WHERE user_id = ${userId}
               `;
             }
-          }
-          catch (error) {
+          } catch (error) {
             rejectLocked(error);
             throw error;
           }
@@ -135,8 +127,7 @@ export async function createPostgresTestHarness(
         await locked;
         return {
           async commit(state) {
-            if (committed)
-              return;
+            if (committed) return;
             committed = true;
             nextState = state;
             releaseTransaction();
@@ -150,32 +141,25 @@ export async function createPostgresTestHarness(
         await runWithOwnedTestResources(async ({ registerCleanup }) => {
           registerCleanup(async () => await adminSql.end());
           registerCleanup(async () => {
-            await adminSql.unsafe(
-              `DROP SCHEMA ${quoteIdentifier(schemaName)} CASCADE`,
-            );
+            await adminSql.unsafe(`DROP SCHEMA ${quoteIdentifier(schemaName)} CASCADE`);
           });
           registerCleanup(async () => await blockerSql!.end());
           registerCleanup(async () => await scopedSql!.end());
         });
       },
     };
-  }
-  catch (error) {
+  } catch (error) {
     return await runWithOwnedTestResources<PostgresTestHarness>(async ({ registerCleanup }) => {
       registerCleanup(async () => await adminSql.end({ timeout: 1 }));
       if (schemaCreated) {
         registerCleanup(async () => {
-          await adminSql.unsafe(
-            `DROP SCHEMA IF EXISTS ${quoteIdentifier(schemaName)} CASCADE`,
-          );
+          await adminSql.unsafe(`DROP SCHEMA IF EXISTS ${quoteIdentifier(schemaName)} CASCADE`);
         });
       }
       const blockerToClose = blockerSql;
-      if (blockerToClose)
-        registerCleanup(async () => await blockerToClose.end({ timeout: 1 }));
+      if (blockerToClose) registerCleanup(async () => await blockerToClose.end({ timeout: 1 }));
       const scopedToClose = scopedSql;
-      if (scopedToClose)
-        registerCleanup(async () => await scopedToClose.end({ timeout: 1 }));
+      if (scopedToClose) registerCleanup(async () => await scopedToClose.end({ timeout: 1 }));
       throw error;
     });
   }
@@ -215,7 +199,6 @@ function databaseIdentity(databaseUrl: string): string {
 }
 
 function quoteIdentifier(identifier: string): string {
-  if (!/^[a-z0-9_]+$/u.test(identifier))
-    throw new Error("test schema name contains unsafe characters");
+  if (!/^[a-z0-9_]+$/u.test(identifier)) throw new Error("test schema name contains unsafe characters");
   return `"${identifier}"`;
 }

@@ -161,9 +161,7 @@ export async function destroySingleton(key: string): Promise<void> {
     if (entry.destroy) {
       // If instance is a Promise, wait for resolution before destroying
       // 如果实例是 Promise，等待其解析后再销毁
-      const instance = entry.instance instanceof Promise
-        ? await entry.instance
-        : entry.instance;
+      const instance = entry.instance instanceof Promise ? await entry.instance : entry.instance;
       await entry.destroy(instance);
     }
     registry.delete(key);
@@ -177,7 +175,7 @@ export async function destroySingleton(key: string): Promise<void> {
 export async function destroyAllSingletons(): Promise<void> {
   const registry = getRegistry();
 
-  const destroyPromises = Array.from(registry.keys()).map(key =>
+  const destroyPromises = Array.from(registry.keys()).map((key) =>
     destroySingleton(key).catch((error) => {
       console.error(`[单例]: 销毁 ${key} 失败`, error);
     }),

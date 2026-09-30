@@ -1,14 +1,13 @@
+import { afterEach, describe, expect, it, mock } from "bun:test";
 import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { afterEach, describe, expect, it, mock } from "bun:test";
 import { runJsonMaintenanceCommand } from "../maintenance-command";
 
 const temporaryDirectories: string[] = [];
 
 afterEach(async () => {
-  await Promise.all(temporaryDirectories.splice(0).map(path =>
-    rm(path, { force: true, recursive: true })));
+  await Promise.all(temporaryDirectories.splice(0).map((path) => rm(path, { force: true, recursive: true })));
 });
 
 describe("JSON maintenance command runner", () => {
@@ -30,7 +29,7 @@ describe("JSON maintenance command runner", () => {
       createComposition: async () => ({ shutdown }),
       execute,
       failureMessage: "failed safely\n",
-      parseManifest: value => value as { version: number },
+      parseManifest: (value) => value as { version: number },
       process: { setFailed, writeError: mock(() => undefined) },
     });
 
@@ -50,7 +49,7 @@ describe("JSON maintenance command runner", () => {
       createComposition,
       execute: async () => ({ status: "passed" as const }),
       failureMessage: "failed safely\n",
-      parseManifest: value => value,
+      parseManifest: (value) => value,
       process: { setFailed, writeError },
     });
 

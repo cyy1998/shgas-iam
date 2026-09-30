@@ -20,51 +20,41 @@ export async function runBoundedOperation<T>(
   validatePositiveInteger(options.timeoutMs, "bounded operation timeout");
   validatePositiveInteger(options.abortSettleTimeoutMs, "abort settle timeout");
   const controller = new AbortController();
-  const relayAbort = () => controller.abort(
-    options.parentSignal?.reason ?? new Error("bounded operation aborted"),
-  );
-  if (options.parentSignal?.aborted)
-    relayAbort();
-  else
-    options.parentSignal?.addEventListener("abort", relayAbort, { once: true });
-  const timer = options.timeoutMs === undefined
-    ? undefined
-    : setTimeout(() => controller.abort(new Error(
-        options.timeoutMessage
-        ?? `bounded operation timed out after ${options.timeoutMs}ms`,
-      )), options.timeoutMs);
+  const relayAbort = () => controller.abort(options.parentSignal?.reason ?? new Error("bounded operation aborted"));
+  if (options.parentSignal?.aborted) relayAbort();
+  else options.parentSignal?.addEventListener("abort", relayAbort, { once: true });
+  const timer =
+    options.timeoutMs === undefined
+      ? undefined
+      : setTimeout(
+          () =>
+            controller.abort(
+              new Error(options.timeoutMessage ?? `bounded operation timed out after ${options.timeoutMs}ms`),
+            ),
+          options.timeoutMs,
+        );
   const settled: Promise<Settled<T>> = Promise.resolve()
     .then(() => operation(controller.signal))
-    .then(value => ({ status: "fulfilled" as const, value }))
-    .catch(error => ({ error, status: "rejected" as const }));
+    .then((value) => ({ status: "fulfilled" as const, value }))
+    .catch((error) => ({ error, status: "rejected" as const }));
   let abortListener: (() => void) | undefined;
   const aborted = new Promise<undefined>((resolve) => {
     abortListener = () => resolve(undefined);
     controller.signal.addEventListener("abort", abortListener, { once: true });
   });
-  const first = controller.signal.aborted
-    ? undefined
-    : await Promise.race([
-        settled,
-        aborted,
-      ]);
+  const first = controller.signal.aborted ? undefined : await Promise.race([settled, aborted]);
   if (first !== undefined) {
     dispose();
     return unwrap(first);
   }
-  await waitForSettlement(
-    settled,
-    options.abortSettleTimeoutMs ?? defaultAbortSettleTimeoutMs,
-  );
+  await waitForSettlement(settled, options.abortSettleTimeoutMs ?? defaultAbortSettleTimeoutMs);
   const reason = controller.signal.reason ?? new Error("bounded operation aborted");
   dispose();
   throw reason;
 
   function dispose() {
-    if (timer !== undefined)
-      clearTimeout(timer);
-    if (abortListener !== undefined)
-      controller.signal.removeEventListener("abort", abortListener);
+    if (timer !== undefined) clearTimeout(timer);
+    if (abortListener !== undefined) controller.signal.removeEventListener("abort", abortListener);
     options.parentSignal?.removeEventListener("abort", relayAbort);
   }
 }
@@ -80,8 +70,7 @@ function waitForSettlement<T>(settled: Promise<Settled<T>>, timeoutMs: number) {
 }
 
 function unwrap<T>(settled: Settled<T>) {
-  if (settled.status === "rejected")
-    throw settled.error;
+  if (settled.status === "rejected") throw settled.error;
   return settled.value as T;
 }
 

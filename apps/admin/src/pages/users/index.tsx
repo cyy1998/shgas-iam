@@ -1,31 +1,17 @@
-import StatusTag from '@admin/components/StatusTag';
-import UserDetailDrawer from '@admin/pages/users/components/UserDetailDrawer';
-import UserFormModal from '@admin/pages/users/components/UserFormModal';
-import {
-  searchUsers,
-  type UserDetailVo,
-  type UserVo,
-} from '@admin/services/user';
-import {
-  type ActionType,
-  PageContainer,
-  type ProColumns,
-  ProTable,
-} from '@ant-design/pro-components';
-import {
-  getUserStatusOptions,
-  getUserTypeOptions,
-  type UserStatus,
-  type UserType,
-} from '@iam/contracts';
-import { useAccess } from '@umijs/max';
-import { Alert, Button, message } from 'antd';
-import { useRef, useState } from 'react';
+import StatusTag from "@admin/components/StatusTag";
+import UserDetailDrawer from "@admin/pages/users/components/UserDetailDrawer";
+import UserFormModal from "@admin/pages/users/components/UserFormModal";
+import { searchUsers, type UserDetailVo, type UserVo } from "@admin/services/user";
+import { type ActionType, PageContainer, type ProColumns, ProTable } from "@ant-design/pro-components";
+import { getUserStatusOptions, getUserTypeOptions, type UserStatus, type UserType } from "@iam/contracts";
+import { useAccess } from "@umijs/max";
+import { Alert, Button, message } from "antd";
+import { useRef, useState } from "react";
 
 type FormState =
   | { open: false }
-  | { open: true; mode: 'create' }
-  | { open: true; mode: 'edit'; initialValues: UserDetailVo };
+  | { open: true; mode: "create" }
+  | { open: true; mode: "edit"; initialValues: UserDetailVo };
 
 export default function UsersPage() {
   const access = useAccess();
@@ -34,68 +20,67 @@ export default function UsersPage() {
   const [formState, setFormState] = useState<FormState>({ open: false });
   const [drawerUsername, setDrawerUsername] = useState<string | null>(null);
 
-  const handleError = (err: unknown) =>
-    message.error(err instanceof Error ? err.message : '操作失败');
+  const handleError = (err: unknown) => message.error(err instanceof Error ? err.message : "操作失败");
 
   const columns: ProColumns<UserVo>[] = [
     {
-      title: '用户',
-      dataIndex: 'user',
+      title: "用户",
+      dataIndex: "user",
       hideInTable: true,
-      fieldProps: { placeholder: '工号或姓名' },
+      fieldProps: { placeholder: "工号或姓名" },
     },
-    { title: '工号', dataIndex: 'username', width: 120, search: false },
-    { title: '姓名', dataIndex: 'name', width: 120, search: false },
-    { title: '手机', dataIndex: 'mobile', width: 140, search: false },
+    { title: "工号", dataIndex: "username", width: 120, search: false },
+    { title: "姓名", dataIndex: "name", width: 120, search: false },
+    { title: "手机", dataIndex: "mobile", width: 140, search: false },
     {
-      title: '类型',
-      dataIndex: 'userType',
+      title: "类型",
+      dataIndex: "userType",
       width: 120,
-      valueType: 'select',
-      valueEnum: Object.fromEntries(
-        getUserTypeOptions().map((o) => [o.value, { text: o.label }]),
-      ),
+      valueType: "select",
+      valueEnum: Object.fromEntries(getUserTypeOptions().map((o) => [o.value, { text: o.label }])),
     },
     {
-      title: '状态',
-      dataIndex: 'status',
+      title: "状态",
+      dataIndex: "status",
       width: 100,
-      valueType: 'select',
-      valueEnum: Object.fromEntries(
-        getUserStatusOptions().map((o) => [o.value, { text: o.label }]),
-      ),
+      valueType: "select",
+      valueEnum: Object.fromEntries(getUserStatusOptions().map((o) => [o.value, { text: o.label }])),
       render: (_, row) => <StatusTag domain="user" status={row.status} />,
     },
     {
-      title: '创建时间',
-      dataIndex: 'createTime',
+      title: "创建时间",
+      dataIndex: "createTime",
       width: 170,
       search: false,
       render: (_, row) => new Date(row.createTime).toLocaleString(),
     },
     {
-      title: '操作',
-      fixed: 'right',
-      valueType: 'option',
+      title: "操作",
+      fixed: "right",
+      valueType: "option",
       width: 80,
       render: (_, row) => (
-        <a key="view" onClick={() => setDrawerUsername(row.username)}>
+        <Button
+          key="view"
+          type="link"
+          size="small"
+          style={{ paddingInline: 0 }}
+          onClick={() => setDrawerUsername(row.username)}
+        >
           查看
-        </a>
+        </Button>
       ),
     },
   ];
 
   return (
     <PageContainer title="用户管理">
-      {committedWarning && (
-        <Alert type="warning" showIcon message={committedWarning} />
-      )}
+      {committedWarning && <Alert type="warning" showIcon message={committedWarning} />}
       <ProTable<UserVo>
         actionRef={actionRef}
         rowKey="username"
         columns={columns}
-        search={{ labelWidth: 'auto' }}
+        search={{ labelWidth: "auto" }}
         scroll={{ x: 1050 }}
         request={async (params) => {
           try {
@@ -112,11 +97,9 @@ export default function UsersPage() {
               status?: string | number;
               userType?: UserType;
             };
-            const text = (user ?? '').trim();
+            const text = (user ?? "").trim();
             const statusNum =
-              status === undefined || status === null || status === ''
-                ? undefined
-                : (Number(status) as UserStatus);
+              status === undefined || status === null || status === "" ? undefined : (Number(status) as UserStatus);
             const data = await searchUsers({
               pageNum: current,
               pageSize,
@@ -141,11 +124,7 @@ export default function UsersPage() {
         toolBarRender={() =>
           access.canCreateUser
             ? [
-                <Button
-                  key="create"
-                  type="primary"
-                  onClick={() => setFormState({ open: true, mode: 'create' })}
-                >
+                <Button key="create" type="primary" onClick={() => setFormState({ open: true, mode: "create" })}>
                   + 新建用户
                 </Button>,
               ]
@@ -155,12 +134,8 @@ export default function UsersPage() {
 
       <UserFormModal
         open={formState.open}
-        mode={formState.open ? formState.mode : 'create'}
-        initialValues={
-          formState.open && formState.mode === 'edit'
-            ? formState.initialValues
-            : null
-        }
+        mode={formState.open ? formState.mode : "create"}
+        initialValues={formState.open && formState.mode === "edit" ? formState.initialValues : null}
         onOpenChange={(open) => {
           if (!open) setFormState({ open: false });
         }}
@@ -187,7 +162,7 @@ export default function UsersPage() {
         onClose={() => setDrawerUsername(null)}
         onEdit={(detail) => {
           setDrawerUsername(null);
-          setFormState({ open: true, mode: 'edit', initialValues: detail });
+          setFormState({ open: true, mode: "edit", initialValues: detail });
         }}
         onChanged={() => actionRef.current?.reload()}
       />

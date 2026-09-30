@@ -2,13 +2,11 @@ import { z } from "zod";
 
 export function parseOfflineMaintenanceEnv(env: NodeJS.ProcessEnv) {
   const requiredInteger = (value: string | undefined, max: number) => {
-    if (value === undefined || !/^\d+$/u.test(value))
-      throw new Error("Explicit maintenance resource required");
+    if (value === undefined || !/^\d+$/u.test(value)) throw new Error("Explicit maintenance resource required");
     return z.coerce.number().int().min(0).max(max).parse(value);
   };
   const port = requiredInteger(env.IAM_WORKER_REDIS_PORT, 65535);
-  if (!port)
-    throw new Error("Explicit maintenance port required");
+  if (!port) throw new Error("Explicit maintenance port required");
   return {
     host: z.string().trim().min(1).parse(env.IAM_WORKER_REDIS_HOST),
     port,
@@ -27,100 +25,119 @@ export type WorkerModuleSelection = {
 };
 
 function booleanString(defaultValue: boolean) {
-  return z.string().optional().transform((value) => {
-    if (value === undefined || value.trim() === "")
-      return defaultValue;
-    return ["1", "true", "yes", "on"].includes(value.trim().toLowerCase());
-  });
+  return z
+    .string()
+    .optional()
+    .transform((value) => {
+      if (value === undefined || value.trim() === "") return defaultValue;
+      return ["1", "true", "yes", "on"].includes(value.trim().toLowerCase());
+    });
 }
 
 function optionalNonEmptyString() {
-  return z.string().optional().transform(value => value?.trim() || undefined);
+  return z
+    .string()
+    .optional()
+    .transform((value) => value?.trim() || undefined);
 }
 
 function slashPath(defaultValue: string) {
-  return z.string().optional().transform((value, ctx) => {
-    const path = value?.trim() || defaultValue;
-    if (!path.startsWith("/")) {
-      ctx.addIssue({ code: "custom", message: `${path} must start with /` });
-      return z.NEVER;
-    }
-    return path.length > 1 ? path.replace(/\/+$/u, "") : path;
-  });
+  return z
+    .string()
+    .optional()
+    .transform((value, ctx) => {
+      const path = value?.trim() || defaultValue;
+      if (!path.startsWith("/")) {
+        ctx.addIssue({ code: "custom", message: `${path} must start with /` });
+        return z.NEVER;
+      }
+      return path.length > 1 ? path.replace(/\/+$/u, "") : path;
+    });
 }
 
 function moduleSelection(defaultValue: "all" | "none" | string) {
-  return z.string().optional().transform((value, ctx) => {
-    const raw = value?.trim() || defaultValue;
-    if (raw === "all" || raw === "none") {
-      return { mode: raw, keys: [] } satisfies WorkerModuleSelection;
-    }
+  return z
+    .string()
+    .optional()
+    .transform((value, ctx) => {
+      const raw = value?.trim() || defaultValue;
+      if (raw === "all" || raw === "none") {
+        return { mode: raw, keys: [] } satisfies WorkerModuleSelection;
+      }
 
-    const keys = [...new Set(raw.split(",").map(item => item.trim()).filter(Boolean))];
-    if (keys.length === 0) {
-      ctx.addIssue({ code: "custom", message: "module selection must be all, none, or a comma-separated list" });
-      return z.NEVER;
-    }
-
-    for (const key of keys) {
-      const parsed = moduleKeySchema.safeParse(key);
-      if (!parsed.success) {
-        ctx.addIssue({ code: "custom", message: `${key} is not a valid module key` });
+      const keys = [
+        ...new Set(
+          raw
+            .split(",")
+            .map((item) => item.trim())
+            .filter(Boolean),
+        ),
+      ];
+      if (keys.length === 0) {
+        ctx.addIssue({ code: "custom", message: "module selection must be all, none, or a comma-separated list" });
         return z.NEVER;
       }
-    }
 
-    return { mode: "list", keys } satisfies WorkerModuleSelection;
-  });
+      for (const key of keys) {
+        const parsed = moduleKeySchema.safeParse(key);
+        if (!parsed.success) {
+          ctx.addIssue({ code: "custom", message: `${key} is not a valid module key` });
+          return z.NEVER;
+        }
+      }
+
+      return { mode: "list", keys } satisfies WorkerModuleSelection;
+    });
 }
 
-const RawWorkerEnvSchema = z.object({
-  IAM_WORKER_DATABASE_URL: z.string().min(1),
-  IAM_WORKER_REDIS_HOST: z.string().min(1),
-  IAM_WORKER_REDIS_PORT: z.coerce.number().int().min(1).max(65535).default(6379),
-  IAM_WORKER_REDIS_PASSWORD: optionalNonEmptyString(),
-  IAM_WORKER_REDIS_DB: z.coerce.number().int().min(0).default(0),
-  NODE_ENV: z.enum(["development", "test", "production"]).default("development"),
-  IAM_WORKER_LOG_LEVEL: z.string().default("info"),
-  IAM_WORKER_LOG_FORMAT: z.enum(["auto", "json", "pretty"]).default("auto"),
-  IAM_WORKER_ENABLED_MODULES: moduleSelection("all"),
-  IAM_WORKER_HTTP_ENABLED: booleanString(true),
-  IAM_WORKER_HTTP_PORT: z.coerce.number().int().min(1).max(65535).default(30003),
-  IAM_WORKER_HEALTH_PATH: slashPath("/healthz"),
-  IAM_WORKER_BULL_BOARD_ENABLED: booleanString(false),
-  IAM_WORKER_BULL_BOARD_PATH: slashPath("/admin/queues"),
-  IAM_WORKER_BULL_BOARD_QUEUES: moduleSelection("all"),
-  IAM_WORKER_BULL_BOARD_AUTH_ENABLED: booleanString(true),
-  IAM_WORKER_BULL_BOARD_USERNAME: optionalNonEmptyString(),
-  IAM_WORKER_BULL_BOARD_PASSWORD: optionalNonEmptyString(),
-  IAM_WORKER_BULL_BOARD_READ_ONLY: booleanString(true),
-  IAM_WORKER_USER_PROFILE_CONCURRENCY: z.coerce.number().int().positive().default(2),
-  IAM_WORKER_USER_PROFILE_REBUILD_BATCH_SIZE: z.coerce.number().int().positive().default(100),
-  IAM_WORKER_USER_PROFILE_BACKFILL_BATCH_SIZE: z.coerce.number().int().positive().default(500),
-  IAM_WORKER_USER_PROFILE_REPAIR_STALE_SECONDS: z.coerce.number().int().positive().max(86_400).default(300),
-}).superRefine((raw, ctx) => {
-  if (!raw.IAM_WORKER_BULL_BOARD_ENABLED)
-    return;
+const RawWorkerEnvSchema = z
+  .object({
+    IAM_WORKER_DATABASE_URL: z.string().min(1),
+    IAM_WORKER_REDIS_HOST: z.string().min(1),
+    IAM_WORKER_REDIS_PORT: z.coerce.number().int().min(1).max(65535).default(6379),
+    IAM_WORKER_REDIS_PASSWORD: optionalNonEmptyString(),
+    IAM_WORKER_REDIS_DB: z.coerce.number().int().min(0).default(0),
+    NODE_ENV: z.enum(["development", "test", "production"]).default("development"),
+    IAM_WORKER_LOG_LEVEL: z.string().default("info"),
+    IAM_WORKER_LOG_FORMAT: z.enum(["auto", "json", "pretty"]).default("auto"),
+    IAM_WORKER_ENABLED_MODULES: moduleSelection("all"),
+    IAM_WORKER_HTTP_ENABLED: booleanString(true),
+    IAM_WORKER_HTTP_PORT: z.coerce.number().int().min(1).max(65535).default(30003),
+    IAM_WORKER_HEALTH_PATH: slashPath("/healthz"),
+    IAM_WORKER_BULL_BOARD_ENABLED: booleanString(false),
+    IAM_WORKER_BULL_BOARD_PATH: slashPath("/admin/queues"),
+    IAM_WORKER_BULL_BOARD_QUEUES: moduleSelection("all"),
+    IAM_WORKER_BULL_BOARD_AUTH_ENABLED: booleanString(true),
+    IAM_WORKER_BULL_BOARD_USERNAME: optionalNonEmptyString(),
+    IAM_WORKER_BULL_BOARD_PASSWORD: optionalNonEmptyString(),
+    IAM_WORKER_BULL_BOARD_READ_ONLY: booleanString(true),
+    IAM_WORKER_USER_PROFILE_CONCURRENCY: z.coerce.number().int().positive().default(2),
+    IAM_WORKER_USER_PROFILE_REBUILD_BATCH_SIZE: z.coerce.number().int().positive().default(100),
+    IAM_WORKER_USER_PROFILE_BACKFILL_BATCH_SIZE: z.coerce.number().int().positive().default(500),
+    IAM_WORKER_USER_PROFILE_REPAIR_STALE_SECONDS: z.coerce.number().int().positive().max(86_400).default(300),
+  })
+  .superRefine((raw, ctx) => {
+    if (!raw.IAM_WORKER_BULL_BOARD_ENABLED) return;
 
-  if (raw.NODE_ENV === "production" && !raw.IAM_WORKER_BULL_BOARD_AUTH_ENABLED) {
-    ctx.addIssue({
-      code: "custom",
-      path: ["IAM_WORKER_BULL_BOARD_AUTH_ENABLED"],
-      message: "IAM_WORKER_BULL_BOARD_AUTH_ENABLED must be true when dashboard is enabled in production",
-    });
-  }
+    if (raw.NODE_ENV === "production" && !raw.IAM_WORKER_BULL_BOARD_AUTH_ENABLED) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["IAM_WORKER_BULL_BOARD_AUTH_ENABLED"],
+        message: "IAM_WORKER_BULL_BOARD_AUTH_ENABLED must be true when dashboard is enabled in production",
+      });
+    }
 
-  if (
-    raw.NODE_ENV === "production"
-    && (raw.IAM_WORKER_BULL_BOARD_USERNAME === undefined || raw.IAM_WORKER_BULL_BOARD_PASSWORD === undefined)
-  ) {
-    ctx.addIssue({
-      code: "custom",
-      path: ["IAM_WORKER_BULL_BOARD_USERNAME"],
-      message: "IAM_WORKER_BULL_BOARD_USERNAME and IAM_WORKER_BULL_BOARD_PASSWORD are required in production",
-    });
-  }
-});
+    if (
+      raw.NODE_ENV === "production" &&
+      (raw.IAM_WORKER_BULL_BOARD_USERNAME === undefined || raw.IAM_WORKER_BULL_BOARD_PASSWORD === undefined)
+    ) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["IAM_WORKER_BULL_BOARD_USERNAME"],
+        message: "IAM_WORKER_BULL_BOARD_USERNAME and IAM_WORKER_BULL_BOARD_PASSWORD are required in production",
+      });
+    }
+  });
 
 const EmploymentCommandEnvSchema = z.object({
   IAM_WORKER_DATABASE_URL: z.string().min(1),
@@ -262,9 +279,7 @@ export function parseWorkerEnv(source: NodeJS.ProcessEnv): WorkerEnv {
   return env;
 }
 
-export function parseEmploymentCommandEnv(
-  source: NodeJS.ProcessEnv,
-): EmploymentCommandEnv {
+export function parseEmploymentCommandEnv(source: NodeJS.ProcessEnv): EmploymentCommandEnv {
   const raw = EmploymentCommandEnvSchema.parse(source);
   exposeDatabaseUrlForDbPackage(raw.IAM_WORKER_DATABASE_URL);
   return {

@@ -4,7 +4,7 @@ import type * as routes from "./role.routes";
 import type { RoleAssignmentVoSchema, RoleVoSchema } from "./role.schema";
 
 type RouteTypes = {
-  [K in keyof typeof routes]: typeof routes[K];
+  [K in keyof typeof routes]: (typeof routes)[K];
 };
 
 export type RoleRouteHandler<T extends keyof RouteTypes> = AdminRouteHandler<RouteTypes[T]>;

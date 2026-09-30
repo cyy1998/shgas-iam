@@ -44,7 +44,7 @@ describe("user profile schema", () => {
     expect(columns.name).toMatchObject({ columnType: "PgVarchar", notNull: true });
     expect(columns.source_dirty_version).toMatchObject({ columnType: "PgBigIntString", notNull: true });
     expect(columns.subject_facts).toMatchObject({ columnType: "PgJsonb", notNull: true });
-    expect(config.checks.map(check => check.name).sort()).toEqual([
+    expect(config.checks.map((check) => check.name).sort()).toEqual([
       "user_profile_source_dirty_version_positive_check",
       "user_profile_subject_facts_object_check",
     ]);
@@ -77,19 +77,23 @@ describe("user profile schema", () => {
     ]);
     expect(indexes.user_profile_search_doc_gin_idx).toMatchObject({ method: "gin" });
     expect(indexes.user_profile_search_doc_gin_idx.columns.map((column: any) => column.name)).toEqual(["search_doc"]);
-    expect(Object.values(indexes).some((index: any) =>
-      index.method === "gin" && index.columns.some((column: any) => column.name === "detail"),
-    )).toBe(false);
+    expect(
+      Object.values(indexes).some(
+        (index: any) => index.method === "gin" && index.columns.some((column: any) => column.name === "detail"),
+      ),
+    ).toBe(false);
     expect(indexes.user_profile_subject_identifier_idx).toMatchObject({
       method: "btree",
       unique: true,
     });
-    expect(indexes.user_profile_subject_identifier_idx.columns.map((column: any) => column.name))
-      .toEqual(["subject_identifier"]);
-    expect(Object.values(indexes).some((index: any) =>
-      index.method === "gin"
-      && index.columns.some((column: any) => column.name === "subject_facts"),
-    )).toBe(false);
+    expect(indexes.user_profile_subject_identifier_idx.columns.map((column: any) => column.name)).toEqual([
+      "subject_identifier",
+    ]);
+    expect(
+      Object.values(indexes).some(
+        (index: any) => index.method === "gin" && index.columns.some((column: any) => column.name === "subject_facts"),
+      ),
+    ).toBe(false);
   });
 });
 
@@ -113,10 +117,8 @@ describe("user profile dirty schema", () => {
       "status",
       "dirty_at",
     ]);
-    expect(indexes.user_profile_dirty_status_processing_started_at_idx.columns.map((column: any) => column.name))
-      .toEqual([
-        "status",
-        "processing_started_at",
-      ]);
+    expect(
+      indexes.user_profile_dirty_status_processing_started_at_idx.columns.map((column: any) => column.name),
+    ).toEqual(["status", "processing_started_at"]);
   });
 });

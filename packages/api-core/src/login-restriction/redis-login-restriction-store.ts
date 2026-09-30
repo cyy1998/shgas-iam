@@ -140,11 +140,7 @@ result[1] = redis.call("ZCARD", restrictionIndexKey)
 return result`;
 
 export interface LoginRestrictionRedis {
-  eval: (
-    script: string,
-    keyCount: number,
-    ...args: Array<number | string>
-  ) => Promise<unknown>;
+  eval: (script: string, keyCount: number, ...args: Array<number | string>) => Promise<unknown>;
 }
 
 export interface CreateRedisLoginRestrictionStoreOptions {
@@ -153,15 +149,13 @@ export interface CreateRedisLoginRestrictionStoreOptions {
 }
 
 function requireResultArray(value: unknown, operation: string) {
-  if (!Array.isArray(value))
-    throw new TypeError(`Redis ${operation} script returned an invalid result`);
+  if (!Array.isArray(value)) throw new TypeError(`Redis ${operation} script returned an invalid result`);
   return value;
 }
 
 function requireFiniteNumber(value: unknown, operation: string) {
   const parsed = Number(value);
-  if (!Number.isFinite(parsed))
-    throw new TypeError(`Redis ${operation} script returned an invalid number`);
+  if (!Number.isFinite(parsed)) throw new TypeError(`Redis ${operation} script returned an invalid number`);
   return parsed;
 }
 
@@ -172,12 +166,10 @@ function toAtomicState(
   remainingMilliseconds: unknown,
   operation: string,
 ): LoginRestrictionAtomicState | null {
-  if (triggerMethod === null || triggerMethod === false)
-    return null;
+  if (triggerMethod === null || triggerMethod === false) return null;
 
   const remaining = requireFiniteNumber(remainingMilliseconds, operation);
-  if (remaining <= 0)
-    return null;
+  if (remaining <= 0) return null;
 
   return {
     userId,
@@ -206,63 +198,54 @@ export function createRedisLoginRestrictionStore(
     triggerMethod: "password" | "mobile";
     failureMember: string;
   }): Promise<RecordLoginFailureAtomicResult> {
-    const result = requireResultArray(await options.redis.eval(
-      RECORD_FAILURE_SCRIPT,
-      3,
-      failureKey(input.userId),
-      restrictionKey(input.userId),
-      restrictionIndexKey,
-      input.failureMember,
-      String(LOGIN_FAILURE_WINDOW_SECONDS),
-      String(LOGIN_RESTRICTION_DURATION_SECONDS * 1000),
-      String(LOGIN_FAILURE_THRESHOLD),
-      String(input.userId),
-      input.triggerMethod,
-    ), "record failure");
+    const result = requireResultArray(
+      await options.redis.eval(
+        RECORD_FAILURE_SCRIPT,
+        3,
+        failureKey(input.userId),
+        restrictionKey(input.userId),
+        restrictionIndexKey,
+        input.failureMember,
+        String(LOGIN_FAILURE_WINDOW_SECONDS),
+        String(LOGIN_RESTRICTION_DURATION_SECONDS * 1000),
+        String(LOGIN_FAILURE_THRESHOLD),
+        String(input.userId),
+        input.triggerMethod,
+      ),
+      "record failure",
+    );
 
     return {
       failureCount: requireFiniteNumber(result[0], "record failure"),
       newlyRestricted: requireFiniteNumber(result[1], "record failure") === 1,
-      restriction: toAtomicState(
-        input.userId,
-        result[2],
-        result[3],
-        result[4],
-        "record failure",
-      ),
+      restriction: toAtomicState(input.userId, result[2], result[3], result[4], "record failure"),
     };
   }
 
   async function getRestriction(userId: number): Promise<LoginRestrictionAtomicState | null> {
-    const result = requireResultArray(await options.redis.eval(
-      GET_RESTRICTION_SCRIPT,
-      2,
-      restrictionKey(userId),
-      restrictionIndexKey,
-      String(userId),
-    ), "get restriction");
+    const result = requireResultArray(
+      await options.redis.eval(GET_RESTRICTION_SCRIPT, 2, restrictionKey(userId), restrictionIndexKey, String(userId)),
+      "get restriction",
+    );
     return toAtomicState(userId, result[0], result[1], result[2], "get restriction");
   }
 
   async function clearLoginState(userId: number): Promise<ClearLoginStateAtomicResult> {
-    const result = requireResultArray(await options.redis.eval(
-      CLEAR_LOGIN_STATE_SCRIPT,
-      3,
-      failureKey(userId),
-      restrictionKey(userId),
-      restrictionIndexKey,
-      String(userId),
-    ), "clear login state");
+    const result = requireResultArray(
+      await options.redis.eval(
+        CLEAR_LOGIN_STATE_SCRIPT,
+        3,
+        failureKey(userId),
+        restrictionKey(userId),
+        restrictionIndexKey,
+        String(userId),
+      ),
+      "clear login state",
+    );
 
     return {
       changed: requireFiniteNumber(result[0], "clear login state") === 1,
-      restriction: toAtomicState(
-        userId,
-        result[1],
-        result[2],
-        result[3],
-        "clear login state",
-      ),
+      restriction: toAtomicState(userId, result[1], result[2], result[3], "clear login state"),
     };
   }
 
@@ -270,27 +253,23 @@ export function createRedisLoginRestrictionStore(
     offset: number;
     limit: number;
   }): Promise<ListLoginRestrictionsAtomicResult> {
-    const result = requireResultArray(await options.redis.eval(
-      LIST_RESTRICTIONS_SCRIPT,
-      1,
-      restrictionIndexKey,
-      String(input.offset),
-      String(input.limit),
-      `${prefix}login-blacklist:user:`,
-    ), "list restrictions");
+    const result = requireResultArray(
+      await options.redis.eval(
+        LIST_RESTRICTIONS_SCRIPT,
+        1,
+        restrictionIndexKey,
+        String(input.offset),
+        String(input.limit),
+        `${prefix}login-blacklist:user:`,
+      ),
+      "list restrictions",
+    );
     const items: LoginRestrictionAtomicState[] = [];
 
     for (let index = 1; index < result.length; index += 4) {
       const userId = requireFiniteNumber(result[index], "list restrictions");
-      const state = toAtomicState(
-        userId,
-        result[index + 1],
-        result[index + 2],
-        result[index + 3],
-        "list restrictions",
-      );
-      if (state === null)
-        throw new TypeError("Redis list restrictions script returned incomplete state");
+      const state = toAtomicState(userId, result[index + 1], result[index + 2], result[index + 3], "list restrictions");
+      if (state === null) throw new TypeError("Redis list restrictions script returned incomplete state");
       items.push(state);
     }
 

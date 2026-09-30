@@ -112,7 +112,10 @@ GitHub Issues 保存需求、协作状态与恢复说明，Git 提交保存实�
 
 ## 验证节奏
 
-- TDD 与实现内循环运行最高层相关测试、单测试文件，以及受影响 workspace 的 lint/typecheck；文档变化运行
+- 日常格式与 lint 修复由[提交 Hook](../development/commands.md#commit-前检查)自动处理暂存文件；公开命令保留用于显式调用，
+  内循环和评审修复不再要求手动重复执行。全仓只读检查由 `verify:static` / `verify` 自动执行。
+  先通过普通提交取得 Hook 处理后的候选，再完成交接检查；核对自动修复 diff，并按实际变化重跑失效的类型或行为验证。
+- TDD 与实现内循环运行最高层相关测试、单测试文件，以及受影响 workspace 的 typecheck；文档变化运行
   `pnpm check:docs`。每票首次交接评审前，通过一次 `pnpm verify:static`、当前 ticket 完整受影响范围的
   typecheck 与行为测试，以及 `git diff --check`。静态入口已包含 Collection Guard，无需另外重复执行；
   AFK runner 不再重复实施者的静态和 diff 检查。

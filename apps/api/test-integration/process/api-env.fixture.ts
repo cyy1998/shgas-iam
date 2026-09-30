@@ -1,10 +1,20 @@
-import type { ProcessSmokeAttemptContext } from "@iam/api-core/testing/process-smoke-harness";
 import { generateKeyPairSync } from "node:crypto";
+import type { ProcessSmokeAttemptContext } from "@iam/api-core/testing/process-smoke-harness";
 import { createProcessSmokeEnvironment } from "@iam/api-core/testing/process-smoke-harness";
 
 const loginCredentialPrivateKey = "319b4e59ca80d7b4cc35955b63da4edf1ed51772ec8f33c0a4f769dda7b9fc65";
-const previousKey = JSON.stringify({ ...generateKeyPairSync("rsa", { modulusLength: 2048 }).privateKey.export({ format: "jwk" }), kid: "api-previous", alg: "RS256", use: "sig" });
-const signingKey = JSON.stringify({ ...generateKeyPairSync("rsa", { modulusLength: 2048 }).privateKey.export({ format: "jwk" }), kid: "api-process", alg: "RS256", use: "sig" });
+const previousKey = JSON.stringify({
+  ...generateKeyPairSync("rsa", { modulusLength: 2048 }).privateKey.export({ format: "jwk" }),
+  kid: "api-previous",
+  alg: "RS256",
+  use: "sig",
+});
+const signingKey = JSON.stringify({
+  ...generateKeyPairSync("rsa", { modulusLength: 2048 }).privateKey.export({ format: "jwk" }),
+  kid: "api-process",
+  alg: "RS256",
+  use: "sig",
+});
 export function createEntryEnvironment(context: ProcessSmokeAttemptContext, overrides: NodeJS.ProcessEnv = {}) {
   const origin = `http://${context.hostname}:${context.port}`;
   return createProcessSmokeEnvironment({

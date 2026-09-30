@@ -6,40 +6,35 @@ import {
   MobileOutlined,
   SafetyCertificateOutlined,
   UserOutlined,
-} from '@ant-design/icons';
-import logoColorfulTextWhite from '@sso/assets/logo-colorful-text-white.png';
-import { VerificationCodeInput } from '@sso/components/VerificationCodeInput';
-import { useSmsCodeCountdown } from '@sso/hooks/useSmsCodeCountdown';
-import { withHumanVerification } from '@sso/lib/human-verification';
-import {
-  codeVerify,
-  getMaskedMobile,
-  passwordReset,
-  sendMessage,
-} from '@sso/services/open';
-import { confirmPasswordRule, passwordRule } from '@sso/utils/form-check';
-import { ServiceError } from '@sso/utils/request';
-import { getQuery } from '@sso/utils/url';
-import { history } from '@umijs/max';
-import { Button, Form, Input, Modal, Select, Spin, message } from 'antd';
-import { useEffect, useState } from 'react';
-import './index.less';
+} from "@ant-design/icons";
+import logoColorfulTextWhite from "@sso/assets/logo-colorful-text-white.png";
+import { VerificationCodeInput } from "@sso/components/VerificationCodeInput";
+import { useSmsCodeCountdown } from "@sso/hooks/useSmsCodeCountdown";
+import { withHumanVerification } from "@sso/lib/human-verification";
+import { codeVerify, getMaskedMobile, passwordReset, sendMessage } from "@sso/services/open";
+import { confirmPasswordRule, passwordRule } from "@sso/utils/form-check";
+import { ServiceError } from "@sso/utils/request";
+import { getQuery } from "@sso/utils/url";
+import { history } from "@umijs/max";
+import { Button, Form, Input, Modal, message, Select, Spin } from "antd";
+import { useEffect, useState } from "react";
+import "./index.less";
 
 function StepBar({ current }: { current: 0 | 1 | 2 }) {
   const steps = [
     {
-      title: '确认账号',
-      desc: '识别您的身份',
+      title: "确认账号",
+      desc: "识别您的身份",
       icon: <UserOutlined />,
     },
     {
-      title: '安全验证',
-      desc: '校验绑定手机',
+      title: "安全验证",
+      desc: "校验绑定手机",
       icon: <MobileOutlined />,
     },
     {
-      title: '设置密码',
-      desc: '更新登录凭证',
+      title: "设置密码",
+      desc: "更新登录凭证",
       icon: <KeyOutlined />,
     },
   ];
@@ -50,13 +45,8 @@ function StepBar({ current }: { current: 0 | 1 | 2 }) {
         const isDone = current > index;
         const isActive = current === index;
         return (
-          <div
-            className={`step-item${isActive ? ' is-active' : ''}${isDone ? ' is-done' : ''}`}
-            key={step.title}
-          >
-            <div className="step-index">
-              {isDone ? <CheckCircleOutlined /> : step.icon}
-            </div>
+          <div className={`step-item${isActive ? " is-active" : ""}${isDone ? " is-done" : ""}`} key={step.title}>
+            <div className="step-index">{isDone ? <CheckCircleOutlined /> : step.icon}</div>
             <div>
               <div className="step-title">{step.title}</div>
               <div className="step-desc">{step.desc}</div>
@@ -68,7 +58,7 @@ function StepBar({ current }: { current: 0 | 1 | 2 }) {
   );
 }
 
-type Step1 = { type: '用户名'; username: string };
+type Step1 = { type: "用户名"; username: string };
 type Step2 = { phoneNumber: string; code: string };
 type Step3 = { newPassword: string; newPasswordCopy: string };
 
@@ -76,23 +66,15 @@ export default function ResetPasswordPage() {
   const [current, setCurrent] = useState(0);
   const [loading, setLoading] = useState(false);
   const [done, setDone] = useState(false);
-  const [mobileOptions, setMobileOptions] = useState<
-    { label: string; value: string }[]
-  >([]);
-  const {
-    countdown,
-    isCounting,
-    startCountdown,
-    resetCountdown,
-    restoreCountdown,
-  } = useSmsCodeCountdown();
+  const [mobileOptions, setMobileOptions] = useState<{ label: string; value: string }[]>([]);
+  const { countdown, isCounting, startCountdown, resetCountdown, restoreCountdown } = useSmsCodeCountdown();
   const [form1] = Form.useForm<Step1>();
   const [form2] = Form.useForm<Step2>();
   const [form3] = Form.useForm<Step3>();
 
   useEffect(() => {
-    const username = getQuery('username');
-    if (username) form1.setFieldValue('username', username);
+    const username = getQuery("username");
+    if (username) form1.setFieldValue("username", username);
   }, [form1]);
 
   const handleNext = async () => {
@@ -102,38 +84,34 @@ export default function ResetPasswordPage() {
         const v = await form1.validateFields();
         const body = { username: v.username };
         const data = await withHumanVerification(
-          'openUserInfoLookup',
+          "openUserInfoLookup",
           () => getMaskedMobile(body),
           (capToken) => getMaskedMobile({ ...body, capToken }),
         );
         if (data.mobile) {
-          setMobileOptions([
-            { label: `手机号：${data.mobile}`, value: data.mobile },
-          ]);
-          form2.setFieldValue('phoneNumber', data.mobile);
+          setMobileOptions([{ label: `手机号：${data.mobile}`, value: data.mobile }]);
+          form2.setFieldValue("phoneNumber", data.mobile);
         } else {
-          setMobileOptions([
-            { label: '无法获取绑定手机号', value: '无法获取绑定手机号' },
-          ]);
-          form2.setFieldValue('phoneNumber', '无法获取绑定手机号');
+          setMobileOptions([{ label: "无法获取绑定手机号", value: "无法获取绑定手机号" }]);
+          form2.setFieldValue("phoneNumber", "无法获取绑定手机号");
         }
         setCurrent(1);
         return;
       }
       if (current === 1) {
         const v = await form2.validateFields();
-        if (v.phoneNumber === '无法获取绑定手机号') {
-          message.warning('无法获取绑定手机号');
+        if (v.phoneNumber === "无法获取绑定手机号") {
+          message.warning("无法获取绑定手机号");
           return;
         }
         const verification = await codeVerify({
-          username: form1.getFieldValue('username'),
+          username: form1.getFieldValue("username"),
           phoneNumber: v.phoneNumber,
-          usage: 'resetPassword',
+          usage: "resetPassword",
           code: v.code,
         });
         if (!verification.result) {
-          message.error('验证码错误');
+          message.error("验证码错误");
           return;
         }
         setCurrent(2);
@@ -142,9 +120,9 @@ export default function ResetPasswordPage() {
       if (current === 2) {
         const v = await form3.validateFields();
         await passwordReset({
-          username: form1.getFieldValue('username'),
-          phoneNumber: form2.getFieldValue('phoneNumber'),
-          code: form2.getFieldValue('code'),
+          username: form1.getFieldValue("username"),
+          phoneNumber: form2.getFieldValue("phoneNumber"),
+          code: form2.getFieldValue("code"),
           newPassword: v.newPassword,
         });
         setDone(true);
@@ -165,21 +143,21 @@ export default function ResetPasswordPage() {
   };
 
   const sendCode = async () => {
-    const phoneNumber = form2.getFieldValue('phoneNumber');
-    if (phoneNumber === '无法获取绑定手机号') {
-      message.warning('无法获取绑定手机号');
+    const phoneNumber = form2.getFieldValue("phoneNumber");
+    if (phoneNumber === "无法获取绑定手机号") {
+      message.warning("无法获取绑定手机号");
       return;
     }
     if (isCounting) return;
     setLoading(true);
     try {
       const body = {
-        username: form1.getFieldValue('username'),
+        username: form1.getFieldValue("username"),
         phoneNumber,
-        usage: 'resetPassword',
+        usage: "resetPassword",
       } as const;
       await withHumanVerification(
-        'sendSmsCode',
+        "sendSmsCode",
         () => sendMessage(body),
         (capToken) => sendMessage({ ...body, capToken }),
       );
@@ -194,9 +172,9 @@ export default function ResetPasswordPage() {
 
   const goLogin = () => {
     const usp = new URLSearchParams(window.location.search);
-    usp.delete('username');
+    usp.delete("username");
     const query = usp.toString();
-    history.push(query ? `/login?${query}` : '/login');
+    history.push(query ? `/login?${query}` : "/login");
   };
 
   return (
@@ -223,17 +201,10 @@ export default function ResetPasswordPage() {
             <div className="reset-card-header">
               <div>
                 <div className="reset-title">找回密码</div>
-                <div className="reset-subtitle">
-                  按步骤完成账号验证与密码更新
-                </div>
+                <div className="reset-subtitle">按步骤完成账号验证与密码更新</div>
               </div>
               <div className="reset-header-actions">
-                <Button
-                  className="reset-back-login"
-                  icon={<ArrowLeftOutlined />}
-                  onClick={goLogin}
-                  type="text"
-                >
+                <Button className="reset-back-login" icon={<ArrowLeftOutlined />} onClick={goLogin} type="text">
                   返回登录
                 </Button>
                 <div className="reset-badge">
@@ -247,32 +218,12 @@ export default function ResetPasswordPage() {
 
             <div className="reset-form">
               {current === 0 && (
-                <Form
-                  form={form1}
-                  layout="vertical"
-                  initialValues={{ type: '用户名' }}
-                >
-                  <Form.Item
-                    label="请选择类型"
-                    name="type"
-                    rules={[{ required: true, message: '请选择类型' }]}
-                  >
-                    <Select
-                      size="large"
-                      options={[{ label: '用户名', value: '用户名' }]}
-                    />
+                <Form form={form1} layout="vertical" initialValues={{ type: "用户名" }}>
+                  <Form.Item label="请选择类型" name="type" rules={[{ required: true, message: "请选择类型" }]}>
+                    <Select size="large" options={[{ label: "用户名", value: "用户名" }]} />
                   </Form.Item>
-                  <Form.Item
-                    label="用户名"
-                    name="username"
-                    rules={[{ required: true, message: '请输入用户名' }]}
-                  >
-                    <Input
-                      size="large"
-                      placeholder="请输入用户名"
-                      prefix={<UserOutlined />}
-                      allowClear
-                    />
+                  <Form.Item label="用户名" name="username" rules={[{ required: true, message: "请输入用户名" }]}>
+                    <Input size="large" placeholder="请输入用户名" prefix={<UserOutlined />} allowClear />
                   </Form.Item>
                 </Form>
               )}
@@ -282,22 +233,16 @@ export default function ResetPasswordPage() {
                   <Form.Item
                     label="验证方式"
                     name="phoneNumber"
-                    rules={[{ required: true, message: '请选择验证方式' }]}
+                    rules={[{ required: true, message: "请选择验证方式" }]}
                   >
                     <Select size="large" options={mobileOptions} />
                   </Form.Item>
-                  <Form.Item
-                    label="验证码"
-                    name="code"
-                    rules={[{ required: true, message: '请输入验证码' }]}
-                  >
+                  <Form.Item label="验证码" name="code" rules={[{ required: true, message: "请输入验证码" }]}>
                     <VerificationCodeInput
                       placeholder="请输入验证码"
                       prefix={<LockOutlined />}
                       buttonDisabled={isCounting}
-                      buttonText={
-                        countdown <= 0 ? '获取验证码' : `${countdown} 秒后重试`
-                      }
+                      buttonText={countdown <= 0 ? "获取验证码" : `${countdown} 秒后重试`}
                       onSendCode={sendCode}
                     />
                   </Form.Item>
@@ -306,32 +251,16 @@ export default function ResetPasswordPage() {
 
               {current === 2 && (
                 <Form form={form3} layout="vertical">
-                  <Form.Item
-                    label="新密码"
-                    name="newPassword"
-                    rules={[passwordRule]}
-                  >
-                    <Input.Password
-                      size="large"
-                      placeholder="请输入新密码"
-                      prefix={<LockOutlined />}
-                    />
+                  <Form.Item label="新密码" name="newPassword" rules={[passwordRule]}>
+                    <Input.Password size="large" placeholder="请输入新密码" prefix={<LockOutlined />} />
                   </Form.Item>
                   <Form.Item
                     label="确认新密码"
                     name="newPasswordCopy"
-                    dependencies={['newPassword']}
-                    rules={[
-                      confirmPasswordRule(() =>
-                        form3.getFieldValue('newPassword'),
-                      ),
-                    ]}
+                    dependencies={["newPassword"]}
+                    rules={[confirmPasswordRule(() => form3.getFieldValue("newPassword"))]}
                   >
-                    <Input.Password
-                      size="large"
-                      placeholder="请再次输入新密码"
-                      prefix={<LockOutlined />}
-                    />
+                    <Input.Password size="large" placeholder="请再次输入新密码" prefix={<LockOutlined />} />
                   </Form.Item>
                 </Form>
               )}

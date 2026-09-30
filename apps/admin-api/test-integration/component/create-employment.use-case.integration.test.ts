@@ -1,6 +1,6 @@
+import { describe, expect, mock, test } from "bun:test";
 import type { AdminEmploymentAuthorization } from "@admin-api/services/admin-authorization/admin-employment-authorization.type";
 import type { AdminEmploymentRecordCreate } from "@admin-api/services/employment/employment.type";
-import type { Employment } from "@iam/domain/employment";
 import { createFakeClock, createImmediateUnitOfWork } from "@admin-api/test/fakes";
 import { createCreateEmploymentUseCase } from "@admin-api/use-cases/employment/create-employment/create-employment.use-case";
 import {
@@ -12,14 +12,11 @@ import {
   UserStatus,
   UserType,
 } from "@iam/contracts";
-import {
-  EmploymentAlreadyExistsError,
-  EmploymentOrganizationScopeMismatchError,
-} from "@iam/domain/employment";
+import type { Employment } from "@iam/domain/employment";
+import { EmploymentAlreadyExistsError, EmploymentOrganizationScopeMismatchError } from "@iam/domain/employment";
 import { OrganizationNotFoundError } from "@iam/domain/organization";
 import { PositionNotFoundError } from "@iam/domain/position";
 import { UserNotFoundError } from "@iam/domain/user";
-import { describe, expect, mock, test } from "bun:test";
 
 const now = new Date("2026-01-01T00:00:00.000Z");
 
@@ -81,7 +78,9 @@ function createLifecycle() {
       getOpenEmploymentByUserOrgPosId: mock(async () => null),
       getOpenPrimaryEmploymentIdsByUserId: mock(async (): Promise<number[]> => []),
       lockEmploymentsByIds: mock(async (): Promise<Employment[]> => []),
-      updateEmploymentRecord: mock(async (): Promise<Employment> => { throw new Error("unexpected primary update"); }),
+      updateEmploymentRecord: mock(async (): Promise<Employment> => {
+        throw new Error("unexpected primary update");
+      }),
     },
     organizationReader: {
       getOrganizationByCode: mock(async () => organization),
@@ -105,13 +104,15 @@ describe("Employment Lifecycle", () => {
   test("creates an immediately effective employment from one authoritative transaction time", async () => {
     const { clock, useCase, tx } = createLifecycle();
 
-    await expect(useCase.execute({
-      username: "zhangsan",
-      orgCode: "ORG",
-      posCode: "DEV",
-      isPrimary: true,
-      description: "new employment",
-    })).resolves.toEqual({ changed: true, result: { id: 10 } });
+    await expect(
+      useCase.execute({
+        username: "zhangsan",
+        orgCode: "ORG",
+        posCode: "DEV",
+        isPrimary: true,
+        description: "new employment",
+      }),
+    ).resolves.toEqual({ changed: true, result: { id: 10 } });
 
     expect(clock.nowDate).toHaveBeenCalledTimes(1);
     expect(tx.employmentStore.createEmploymentRecord).toHaveBeenCalledWith({
@@ -124,14 +125,14 @@ describe("Employment Lifecycle", () => {
       description: "new employment",
       status: EmploymentStatus.Enable,
     });
-    expect(tx.auditLogWriter.recordAuditLog).toHaveBeenCalledWith(expect.objectContaining({
-      action: "admin.employment.create",
-      targetId: 10,
-      details: expect.objectContaining({ startTime: now }),
-    }));
-    expect(tx.userProfileInvalidation.recordChanges).toHaveBeenCalledWith([
-      { kind: "employment", userId: 1 },
-    ]);
+    expect(tx.auditLogWriter.recordAuditLog).toHaveBeenCalledWith(
+      expect.objectContaining({
+        action: "admin.employment.create",
+        targetId: 10,
+        details: expect.objectContaining({ startTime: now }),
+      }),
+    );
+    expect(tx.userProfileInvalidation.recordChanges).toHaveBeenCalledWith([{ kind: "employment", userId: 1 }]);
   });
 
   test("defaults Primary to false without inferring or replacing another Primary", async () => {
@@ -153,11 +154,13 @@ describe("Employment Lifecycle", () => {
     const { useCase, tx } = createLifecycle();
     (tx.userReader.getUserByUsernameForAdmin as any).mockResolvedValueOnce(null);
 
-    await expect(useCase.execute({
-      username: "missing",
-      orgCode: "ORG",
-      posCode: "DEV",
-    })).rejects.toBeInstanceOf(UserNotFoundError);
+    await expect(
+      useCase.execute({
+        username: "missing",
+        orgCode: "ORG",
+        posCode: "DEV",
+      }),
+    ).rejects.toBeInstanceOf(UserNotFoundError);
 
     expect(tx.employmentStore.createEmploymentRecord).not.toHaveBeenCalled();
   });
@@ -169,11 +172,13 @@ describe("Employment Lifecycle", () => {
       status: OrganizationStatus.Disable,
     });
 
-    await expect(useCase.execute({
-      username: "zhangsan",
-      orgCode: "ORG",
-      posCode: "DEV",
-    })).rejects.toBeInstanceOf(OrganizationNotFoundError);
+    await expect(
+      useCase.execute({
+        username: "zhangsan",
+        orgCode: "ORG",
+        posCode: "DEV",
+      }),
+    ).rejects.toBeInstanceOf(OrganizationNotFoundError);
 
     expect(tx.employmentStore.createEmploymentRecord).not.toHaveBeenCalled();
   });
@@ -185,11 +190,13 @@ describe("Employment Lifecycle", () => {
       status: PositionStatus.Disable,
     });
 
-    await expect(useCase.execute({
-      username: "zhangsan",
-      orgCode: "ORG",
-      posCode: "DEV",
-    })).rejects.toBeInstanceOf(PositionNotFoundError);
+    await expect(
+      useCase.execute({
+        username: "zhangsan",
+        orgCode: "ORG",
+        posCode: "DEV",
+      }),
+    ).rejects.toBeInstanceOf(PositionNotFoundError);
 
     expect(tx.employmentStore.createEmploymentRecord).not.toHaveBeenCalled();
   });
@@ -198,12 +205,14 @@ describe("Employment Lifecycle", () => {
     const { useCase, tx } = createLifecycle();
     tx.organizationReader.isOrganizationDescendantOf.mockResolvedValueOnce(false);
 
-    await expect(useCase.execute({
-      username: "zhangsan",
-      orgCode: "ORG",
-      expectedAncestorOrgCode: "COMPANY",
-      posCode: "DEV",
-    })).rejects.toBeInstanceOf(EmploymentOrganizationScopeMismatchError);
+    await expect(
+      useCase.execute({
+        username: "zhangsan",
+        orgCode: "ORG",
+        expectedAncestorOrgCode: "COMPANY",
+        posCode: "DEV",
+      }),
+    ).rejects.toBeInstanceOf(EmploymentOrganizationScopeMismatchError);
 
     expect(tx.employmentStore.createEmploymentRecord).not.toHaveBeenCalled();
   });
@@ -222,14 +231,16 @@ describe("Employment Lifecycle", () => {
 
     let failure: unknown;
     try {
-      await useCase.execute({
-        username: "zhangsan",
-        orgCode: "ORG",
-        expectedAncestorOrgCode: "COMPANY",
-        posCode: "DEV",
-      }, { authorization });
-    }
-    catch (error) {
+      await useCase.execute(
+        {
+          username: "zhangsan",
+          orgCode: "ORG",
+          expectedAncestorOrgCode: "COMPANY",
+          posCode: "DEV",
+        },
+        { authorization },
+      );
+    } catch (error) {
       failure = error;
     }
 
@@ -250,11 +261,13 @@ describe("Employment Lifecycle", () => {
       status: EmploymentStatus.Pause,
     } as any);
 
-    await expect(useCase.execute({
-      username: "zhangsan",
-      orgCode: "ORG",
-      posCode: "DEV",
-    })).rejects.toBeInstanceOf(EmploymentAlreadyExistsError);
+    await expect(
+      useCase.execute({
+        username: "zhangsan",
+        orgCode: "ORG",
+        posCode: "DEV",
+      }),
+    ).rejects.toBeInstanceOf(EmploymentAlreadyExistsError);
 
     expect(tx.employmentStore.createEmploymentRecord).not.toHaveBeenCalled();
   });
@@ -302,7 +315,7 @@ describe("Employment Lifecycle", () => {
             },
             userProfileInvalidation: {
               async recordChanges(changes: readonly { userId: number }[]) {
-                staged.dirtyUserIds.push(...changes.map(change => change.userId));
+                staged.dirtyUserIds.push(...changes.map((change) => change.userId));
               },
             },
           };
@@ -315,11 +328,13 @@ describe("Employment Lifecycle", () => {
       },
     });
 
-    await expect(useCase.execute({
-      username: "zhangsan",
-      orgCode: "ORG",
-      posCode: "DEV",
-    })).rejects.toBe(failure);
+    await expect(
+      useCase.execute({
+        username: "zhangsan",
+        orgCode: "ORG",
+        posCode: "DEV",
+      }),
+    ).rejects.toBe(failure);
 
     expect(attempted).toEqual({ employmentWrites: 1, auditWrites: 1 });
     expect(committed).toEqual({
@@ -354,8 +369,10 @@ describe("Employment Lifecycle", () => {
     expect(result).toEqual({ changed: true, result: { id: 10 } });
     expect(tx.employmentStore.updateEmploymentRecord).toHaveBeenCalledTimes(1);
     expect(tx.employmentStore.updateEmploymentRecord).toHaveBeenCalledWith(7, { isPrimary: false });
-    expect(tx.auditLogWriter.recordAuditLog).toHaveBeenCalledWith(expect.objectContaining({
-      details: expect.objectContaining({ changed: true, clearedPrimaryEmploymentIds: [7] }),
-    }));
+    expect(tx.auditLogWriter.recordAuditLog).toHaveBeenCalledWith(
+      expect.objectContaining({
+        details: expect.objectContaining({ changed: true, clearedPrimaryEmploymentIds: [7] }),
+      }),
+    );
   });
 });

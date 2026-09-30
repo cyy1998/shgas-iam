@@ -36,5 +36,7 @@ export type InternalBindings<TClient = unknown> = {
 
 export type PublicRouteHandler<R extends HonoRouteConfig> = RouteHandler<R, PublicBindings>;
 export type BaseRouteHandler<R extends HonoRouteConfig> = RouteHandler<R, BaseBindings>;
-export type InternalRouteHandler<R extends HonoRouteConfig, TClient = unknown>
-  = RouteHandler<R, InternalBindings<TClient>>;
+export type InternalRouteHandler<R extends HonoRouteConfig, TClient = unknown> = RouteHandler<
+  R,
+  InternalBindings<TClient>
+>;

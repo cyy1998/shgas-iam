@@ -1,9 +1,6 @@
 import type { PaginationQuery } from "../core/pagination/type";
 
-export function paginate<T>(
-  items: T[],
-  pageQuery: PaginationQuery,
-) {
+export function paginate<T>(items: T[], pageQuery: PaginationQuery) {
   // 确保页码和页面大小有效
   const page = Math.max(1, pageQuery.pageNum || 1);
   const pageSize = Math.max(1, Math.min(pageQuery.pageSize || 10, 100)); // 限制最大每页100条

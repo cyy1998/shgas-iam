@@ -10,10 +10,12 @@
     "./testing": "./src/testing.ts"
   },
   "scripts": {
-    "lint": "eslint src test-integration eslint.config.js",
-    "lint:fix": "eslint --fix src test-integration eslint.config.js",
+    "lint": "node ../../scripts/run-quality.mjs lint --workspace packages/oidc",
+    "lint:fix": "node ../../scripts/run-quality.mjs lint-fix --workspace packages/oidc",
     "typecheck": "pnpm exec tsc --noEmit",
-    "test:integration:redis": "bun test --max-concurrency=1 test-integration/redis"
+    "test:integration:redis": "bun test --max-concurrency=1 test-integration/redis",
+    "format": "node ../../scripts/run-quality.mjs format --workspace packages/oidc",
+    "format:check": "node ../../scripts/run-quality.mjs format-check --workspace packages/oidc"
   },
   "dependencies": {
     "@iam/api-core": "workspace:*",
@@ -23,11 +25,9 @@
     "zod": "^4.4.3"
   },
   "devDependencies": {
-    "@iam/eslint-config": "workspace:*",
     "@types/bun": "latest",
     "@typescript/native": "npm:typescript@7.0.2",
-    "eslint": "^10.7.0",
-    "typescript": "npm:@typescript/typescript6@6.0.2",
-    "ioredis": "^6.0.0"
+    "ioredis": "^6.0.0",
+    "typescript": "npm:@typescript/typescript6@6.0.2"
   }
 }

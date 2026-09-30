@@ -49,11 +49,11 @@ export function createSmsClient(deps: CreateSmsClientDeps) {
         signal,
         method: "POST",
         body: JSON.stringify(createSignedRequest(phoneNumber, message)),
-        headers: { "Content-Type": "application/json", "Accept": "application/json" },
+        headers: { "Content-Type": "application/json", Accept: "application/json" },
       });
-      const smsResult = SMSServiceResultSchema
-        .catch(SMS_SERVICE_RESULT_FALLBACK)
-        .parse(await res.json().catch(() => null));
+      const smsResult = SMSServiceResultSchema.catch(SMS_SERVICE_RESULT_FALLBACK).parse(
+        await res.json().catch(() => null),
+      );
       signal.throwIfAborted();
       if (smsResult.resultCode !== "0000") {
         return {
@@ -73,7 +73,7 @@ export function createSmsClient(deps: CreateSmsClientDeps) {
       await fetchFn(deps.config.smsUrl, {
         method: "POST",
         body: JSON.stringify(createSignedRequest(phoneNumber, message)),
-        headers: { "Content-Type": "application/json", "Accept": "application/json" },
+        headers: { "Content-Type": "application/json", Accept: "application/json" },
       });
       return true;
     },

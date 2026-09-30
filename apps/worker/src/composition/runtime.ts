@@ -1,7 +1,7 @@
+import { createRedisClient } from "@iam/api-core/redis";
 import type { WorkerEnv } from "@worker/env";
 import type Redis from "ioredis";
 import type { Logger } from "pino";
-import { createRedisClient } from "@iam/api-core/redis";
 
 export type WorkerLogger = Pick<Logger, "debug" | "info" | "warn" | "error" | "child">;
 

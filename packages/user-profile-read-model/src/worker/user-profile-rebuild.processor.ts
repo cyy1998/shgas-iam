@@ -1,23 +1,17 @@
 import type { RebuildUserProfileJobPayload } from "@iam/contracts";
-import type { PublishedProfileRowInput } from "../schema/profile-storage.schema";
 import type { PublishedProfile } from "../schema/profile.schema";
+import type { PublishedProfileRowInput } from "../schema/profile-storage.schema";
 import type { SubjectFactsCacheRecord } from "../subject-facts/profile-cache";
 
 export type UserProfileRebuildProjection = PublishedProfileRowInput;
 
-export interface UserProfilePublicationPort<
-  TProfile extends UserProfileRebuildProjection = PublishedProfile,
-> {
+export interface UserProfilePublicationPort<TProfile extends UserProfileRebuildProjection = PublishedProfile> {
   publishCandidate: (input: {
     userId: number;
     dirtyVersion: string;
     profile: TProfile | null;
     processedAt: Date;
-  }) => Promise<
-    | { status: "published" }
-    | { status: "missing" }
-    | { status: "stale" }
-  >;
+  }) => Promise<{ status: "published" } | { status: "missing" } | { status: "stale" }>;
 }
 
 export interface SubjectFactsPublisherPort<
@@ -46,13 +40,8 @@ export interface UserProfileRebuildDirtyStorePort {
   }) => Promise<unknown | null>;
 }
 
-export interface UserProfileRebuildBuilderPort<
-  TProfile extends UserProfileRebuildProjection = PublishedProfile,
-> {
-  buildOne: (input: {
-    userId: number;
-    sourceDirtyVersion: string;
-  }) => Promise<TProfile | null>;
+export interface UserProfileRebuildBuilderPort<TProfile extends UserProfileRebuildProjection = PublishedProfile> {
+  buildOne: (input: { userId: number; sourceDirtyVersion: string }) => Promise<TProfile | null>;
 }
 
 export interface UserProfileRebuildLoggerPort {
@@ -73,10 +62,7 @@ export interface CreateUserProfileRebuildProcessorDeps<
   dirtyRepository: UserProfileRebuildDirtyStorePort;
   builder: UserProfileRebuildBuilderPort<TProfile>;
   publicationRepository: UserProfilePublicationPort<TProfile>;
-  createSubjectFactsRecord: (
-    profile: TProfile,
-    publishedAt: Date,
-  ) => TFactsRecord;
+  createSubjectFactsRecord: (profile: TProfile, publishedAt: Date) => TFactsRecord;
   subjectFactsPublisher: SubjectFactsPublisherPort<TFactsRecord>;
   subjectAccessRepair: SubjectAccessRepairPort;
   logger: UserProfileRebuildLoggerPort;
@@ -93,10 +79,7 @@ export function createUserProfileRebuildProcessor<
   },
 >(deps: CreateUserProfileRebuildProcessorDeps<TProfile, TFactsRecord>) {
   return {
-    async process(
-      payload: RebuildUserProfileJobPayload,
-      options: { jobId?: string } = {},
-    ) {
+    async process(payload: RebuildUserProfileJobPayload, options: { jobId?: string } = {}) {
       const claimed = await deps.dirtyRepository.claimForProcessing({
         userId: payload.userId,
         dirtyVersion: payload.dirtyVersion,
@@ -113,9 +96,8 @@ export function createUserProfileRebuildProcessor<
           sourceDirtyVersion: payload.dirtyVersion,
         });
         const processedAt = deps.clock.nowDate();
-        const cacheRecord = builtProfile === null
-          ? null
-          : deps.createSubjectFactsRecord(builtProfile, builtProfile.rebuiltAt);
+        const cacheRecord =
+          builtProfile === null ? null : deps.createSubjectFactsRecord(builtProfile, builtProfile.rebuiltAt);
         const publication = await deps.publicationRepository.publishCandidate({
           userId: payload.userId,
           dirtyVersion: payload.dirtyVersion,
@@ -133,24 +115,16 @@ export function createUserProfileRebuildProcessor<
           };
         }
 
-        const cacheStatus = await publishCache(
-          deps.subjectFactsPublisher,
-          cacheRecord,
-          {
-            userId: payload.userId,
-            dirtyVersion: payload.dirtyVersion,
-            logger: deps.logger,
-          },
-        );
+        const cacheStatus = await publishCache(deps.subjectFactsPublisher, cacheRecord, {
+          userId: payload.userId,
+          dirtyVersion: payload.dirtyVersion,
+          logger: deps.logger,
+        });
         if (cacheStatus !== "failed") {
-          await repairSubjectAccess(
-            deps.subjectAccessRepair,
-            cacheRecord.subjectIdentifier,
-            {
-              userId: payload.userId,
-              logger: deps.logger,
-            },
-          );
+          await repairSubjectAccess(deps.subjectAccessRepair, cacheRecord.subjectIdentifier, {
+            userId: payload.userId,
+            logger: deps.logger,
+          });
         }
         return {
           status: "rebuilt" as const,
@@ -158,8 +132,7 @@ export function createUserProfileRebuildProcessor<
           dirtyVersion: payload.dirtyVersion,
           cacheStatus,
         };
-      }
-      catch (error) {
+      } catch (error) {
         const failed = await deps.dirtyRepository.markFailed({
           userId: payload.userId,
           dirtyVersion: payload.dirtyVersion,
@@ -185,13 +158,15 @@ async function repairSubjectAccess(
 ) {
   try {
     await repair.repairSubject(subjectIdentifier);
-  }
-  catch (error) {
-    context.logger.warn({
-      userId: context.userId,
-      operation: "subject_access_repair",
-      errorType: readSafeErrorToken(error, "name") ?? "UnknownError",
-    }, "user profile Subject Access repair failed");
+  } catch (error) {
+    context.logger.warn(
+      {
+        userId: context.userId,
+        operation: "subject_access_repair",
+        errorType: readSafeErrorToken(error, "name") ?? "UnknownError",
+      },
+      "user profile Subject Access repair failed",
+    );
   }
 }
 
@@ -201,10 +176,12 @@ function errorMessage(error: unknown) {
   return error instanceof Error ? error.message : String(error);
 }
 
-async function publishCache<TFactsRecord extends {
-  subjectIdentifier: string;
-  sourceDirtyVersion: string;
-}>(
+async function publishCache<
+  TFactsRecord extends {
+    subjectIdentifier: string;
+    sourceDirtyVersion: string;
+  },
+>(
   publisher: SubjectFactsPublisherPort<TFactsRecord>,
   record: TFactsRecord,
   context: {
@@ -215,15 +192,17 @@ async function publishCache<TFactsRecord extends {
 ) {
   try {
     return (await publisher.publish(record)).status;
-  }
-  catch (error) {
+  } catch (error) {
     const errorSummary = summarizeCachePublicationError(error);
-    context.logger.warn({
-      userId: context.userId,
-      dirtyVersion: context.dirtyVersion,
-      cacheStatus: "failed",
-      ...errorSummary,
-    }, "user profile Subject Facts cache publication failed");
+    context.logger.warn(
+      {
+        userId: context.userId,
+        dirtyVersion: context.dirtyVersion,
+        cacheStatus: "failed",
+        ...errorSummary,
+      },
+      "user profile Subject Facts cache publication failed",
+    );
     return "failed" as const;
   }
 }
@@ -236,16 +215,12 @@ function summarizeCachePublicationError(error: unknown) {
 }
 
 function readSafeErrorToken(error: unknown, property: "code" | "name") {
-  if (typeof error !== "object" || error === null)
-    return undefined;
+  if (typeof error !== "object" || error === null) return undefined;
 
   try {
     const value = (error as Record<string, unknown>)[property];
-    return typeof value === "string" && /^[A-Za-z][\w.-]{0,63}$/u.test(value)
-      ? value
-      : undefined;
-  }
-  catch {
+    return typeof value === "string" && /^[A-Za-z][\w.-]{0,63}$/u.test(value) ? value : undefined;
+  } catch {
     return undefined;
   }
 }

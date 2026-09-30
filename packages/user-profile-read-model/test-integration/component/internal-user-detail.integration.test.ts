@@ -1,5 +1,5 @@
-import { UserStatus, UserType } from "@iam/contracts";
 import { expect, mock, test } from "bun:test";
+import { UserStatus, UserType } from "@iam/contracts";
 import { createInternalUserProfileQueryService } from "../../src/query/internal-user-query.service";
 
 const now = new Date("2026-08-22T12:00:00.000Z");
@@ -13,7 +13,7 @@ test("maps Internal Detail database failures to a sanitized unavailable error", 
     },
   });
 
-  const error = await service.getDetailByUsername("alice").catch(error => error);
+  const error = await service.getDetailByUsername("alice").catch((error) => error);
 
   expect(error).toMatchObject({
     code: "USER_SEARCH_UNAVAILABLE",
@@ -46,7 +46,7 @@ test("fails closed when the published current Detail is malformed", async () => 
     },
   });
 
-  const error = await service.getDetailByUsername("alice").catch(error => error);
+  const error = await service.getDetailByUsername("alice").catch((error) => error);
 
   expect(error).toMatchObject({
     message: "已发布的 User Profile Detail 不符合严格契约",

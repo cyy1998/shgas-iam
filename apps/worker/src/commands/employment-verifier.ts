@@ -23,9 +23,7 @@ export interface EmploymentVerifyCommandDeps {
   };
 }
 
-export async function runEmploymentVerifyCommand(
-  deps: EmploymentVerifyCommandDeps,
-) {
+export async function runEmploymentVerifyCommand(deps: EmploymentVerifyCommandDeps) {
   deps.logger.info({}, "Employment verification started");
   const report = await deps.verifier.verify();
   deps.logger.info({ ...report }, "Employment verification completed");
@@ -49,23 +47,17 @@ async function main() {
       verifier: composition.employment.verifier,
       logger: composition.logger,
     });
-    if (report.status === "failed")
-      process.exitCode = 1;
-  }
-  finally {
+    if (report.status === "failed") process.exitCode = 1;
+  } finally {
     await composition.shutdown();
   }
 }
 
 if (import.meta.main) {
   try {
-    // eslint-disable-next-line antfu/no-top-level-await -- Bun must keep the command alive through database shutdown.
     await main();
-  }
-  catch {
+  } catch {
     process.exitCode = 1;
-    process.stderr.write(
-      "Employment verification failed; inspect structured logs for the report.\n",
-    );
+    process.stderr.write("Employment verification failed; inspect structured logs for the report.\n");
   }
 }

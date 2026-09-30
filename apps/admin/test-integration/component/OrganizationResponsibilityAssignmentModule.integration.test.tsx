@@ -1,18 +1,18 @@
 import OrganizationResponsibilityAssignmentModule, {
   type OrganizationResponsibilityAssignmentState,
-} from '@admin/components/organization-responsibility/OrganizationResponsibilityAssignmentModule';
-import OrganizationResponsibilityAssignmentsPage from '@admin/pages/organization-responsibilities/OrganizationResponsibilityAssignmentsPage';
-import type { OrganizationResponsibilityAssignmentView } from '@admin/services/organization-responsibility';
+} from "@admin/components/organization-responsibility/OrganizationResponsibilityAssignmentModule";
+import OrganizationResponsibilityAssignmentsPage from "@admin/pages/organization-responsibilities/OrganizationResponsibilityAssignmentsPage";
+import type { OrganizationResponsibilityAssignmentView } from "@admin/services/organization-responsibility";
 import {
   OrganizationResponsibilityAssignmentStatus,
   OrganizationResponsibilityTypeCode,
   OrganizationStatus,
-} from '@iam/contracts';
-import { message, Modal } from 'antd';
-import { useState } from 'react';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { __setAccess } from '~admin/test/mocks/umijs-max';
-import { render, screen, waitFor, within } from '~admin/test/render';
+} from "@iam/contracts";
+import { Modal, message } from "antd";
+import { useState } from "react";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { __setAccess } from "~admin/test/mocks/umijs-max";
+import { render, screen, waitFor, within } from "~admin/test/render";
 
 const responsibilityService = vi.hoisted(() => ({
   createAssignment: vi.fn(),
@@ -26,24 +26,19 @@ const employmentService = vi.hoisted(() => ({
   searchEmployments: vi.fn(),
 }));
 
-vi.mock('@admin/services/organization-responsibility', () => ({
-  ORGANIZATION_RESPONSIBILITY_ASSIGNMENT_LIFECYCLES: ['open', 'ended', 'all'],
-  createOrganizationResponsibilityAssignment:
-    responsibilityService.createAssignment,
-  getOrganizationResponsibilityAssignment:
-    responsibilityService.detailAssignment,
+vi.mock("@admin/services/organization-responsibility", () => ({
+  ORGANIZATION_RESPONSIBILITY_ASSIGNMENT_LIFECYCLES: ["open", "ended", "all"],
+  createOrganizationResponsibilityAssignment: responsibilityService.createAssignment,
+  getOrganizationResponsibilityAssignment: responsibilityService.detailAssignment,
   endOrganizationResponsibilityAssignment: responsibilityService.endAssignment,
-  pauseOrganizationResponsibilityAssignment:
-    responsibilityService.pauseAssignment,
-  resumeOrganizationResponsibilityAssignment:
-    responsibilityService.resumeAssignment,
-  searchOrganizationResponsibilityAssignments:
-    responsibilityService.searchAssignments,
+  pauseOrganizationResponsibilityAssignment: responsibilityService.pauseAssignment,
+  resumeOrganizationResponsibilityAssignment: responsibilityService.resumeAssignment,
+  searchOrganizationResponsibilityAssignments: responsibilityService.searchAssignments,
 }));
-vi.mock('@admin/services/employment', () => ({
+vi.mock("@admin/services/employment", () => ({
   searchEmployments: employmentService.searchEmployments,
 }));
-vi.mock('@admin/components/OrganizationTreeSelector', () => ({
+vi.mock("@admin/components/OrganizationTreeSelector", () => ({
   default: ({
     value,
     onChange,
@@ -58,7 +53,7 @@ vi.mock('@admin/components/OrganizationTreeSelector', () => ({
     <div>
       <input
         aria-label="目标组织"
-        value={value ?? ''}
+        value={value ?? ""}
         onChange={(event) => onChange?.(event.target.value || undefined)}
       />
       <output data-testid="target-organization-statuses">
@@ -67,7 +62,7 @@ vi.mock('@admin/components/OrganizationTreeSelector', () => ({
     </div>
   ),
 }));
-vi.mock('@admin/components/audit/AuditLogTable', () => ({
+vi.mock("@admin/components/audit/AuditLogTable", () => ({
   default: ({ fixedConditions }: { fixedConditions: unknown }) => (
     <div data-testid="assignment-audit">{JSON.stringify(fixedConditions)}</div>
   ),
@@ -75,18 +70,18 @@ vi.mock('@admin/components/audit/AuditLogTable', () => ({
 
 const enabledAllowedActions = {
   pause: { allowed: true, reason: null },
-  resume: { allowed: false, reason: 'RESOURCE_STATE_NOT_ACTIONABLE' },
+  resume: { allowed: false, reason: "RESOURCE_STATE_NOT_ACTIONABLE" },
   end: { allowed: true, reason: null },
 } as const;
 const pausedAllowedActions = {
-  pause: { allowed: false, reason: 'RESOURCE_STATE_NOT_ACTIONABLE' },
+  pause: { allowed: false, reason: "RESOURCE_STATE_NOT_ACTIONABLE" },
   resume: { allowed: true, reason: null },
   end: { allowed: true, reason: null },
 } as const;
 const endedAllowedActions = {
-  pause: { allowed: false, reason: 'RESOURCE_STATE_NOT_ACTIONABLE' },
-  resume: { allowed: false, reason: 'RESOURCE_STATE_NOT_ACTIONABLE' },
-  end: { allowed: false, reason: 'RESOURCE_STATE_NOT_ACTIONABLE' },
+  pause: { allowed: false, reason: "RESOURCE_STATE_NOT_ACTIONABLE" },
+  resume: { allowed: false, reason: "RESOURCE_STATE_NOT_ACTIONABLE" },
+  end: { allowed: false, reason: "RESOURCE_STATE_NOT_ACTIONABLE" },
 } as const;
 
 const assignment = {
@@ -94,48 +89,46 @@ const assignment = {
   typeCode: OrganizationResponsibilityTypeCode.Head,
   targetOrganization: {
     id: 4,
-    orgCode: 'FIN',
-    orgName: '财务部',
+    orgCode: "FIN",
+    orgName: "财务部",
     isDelete: false,
     fullPath: [
-      { id: 1, orgCode: 'ROOT', orgName: '集团', isDelete: false },
-      { id: 4, orgCode: 'FIN', orgName: '财务部', isDelete: false },
+      { id: 1, orgCode: "ROOT", orgName: "集团", isDelete: false },
+      { id: 4, orgCode: "FIN", orgName: "财务部", isDelete: false },
     ],
   },
   holder: {
     employmentId: 42,
-    user: { id: 7, name: '张三', username: 'zhangsan', isDelete: false },
+    user: { id: 7, name: "张三", username: "zhangsan", isDelete: false },
     organization: {
       id: 3,
-      orgCode: 'OPS',
-      orgName: '运营部',
+      orgCode: "OPS",
+      orgName: "运营部",
       isDelete: false,
       fullPath: [
-        { id: 1, orgCode: 'ROOT', orgName: '集团', isDelete: false },
-        { id: 3, orgCode: 'OPS', orgName: '运营部', isDelete: false },
+        { id: 1, orgCode: "ROOT", orgName: "集团", isDelete: false },
+        { id: 3, orgCode: "OPS", orgName: "运营部", isDelete: false },
       ],
     },
     position: {
       id: 8,
-      posCode: 'OPS-LEAD',
-      posName: '运营负责人',
+      posCode: "OPS-LEAD",
+      posName: "运营负责人",
       isDelete: false,
     },
   },
   status: OrganizationResponsibilityAssignmentStatus.Enable,
-  startTime: '2026-08-20T00:00:00.000Z',
+  startTime: "2026-08-20T00:00:00.000Z",
   endTime: null,
   allowedActions: enabledAllowedActions,
 } satisfies OrganizationResponsibilityAssignmentView;
 
-describe('OrganizationResponsibilityAssignmentModule', () => {
+describe("OrganizationResponsibilityAssignmentModule", () => {
   beforeEach(() => {
-    Object.values(responsibilityService).forEach((mock) => mock.mockReset());
-    window.history.replaceState(
-      {},
-      '',
-      '/iam-admin/organization-responsibilities/assignments',
-    );
+    Object.values(responsibilityService).forEach((mock) => {
+      mock.mockReset();
+    });
+    window.history.replaceState({}, "", "/iam-admin/organization-responsibilities/assignments");
     responsibilityService.searchAssignments.mockResolvedValue({
       items: [assignment],
       total: 1,
@@ -162,12 +155,12 @@ describe('OrganizationResponsibilityAssignmentModule', () => {
       result: [
         {
           id: 42,
-          user: { username: 'zhangsan', name: '张三' },
+          user: { username: "zhangsan", name: "张三" },
           organization: {
-            assignedOrg: { orgName: '运营部' },
-            fullOrgPath: [{ orgName: '集团' }, { orgName: '运营部' }],
+            assignedOrg: { orgName: "运营部" },
+            fullOrgPath: [{ orgName: "集团" }, { orgName: "运营部" }],
           },
-          position: { posCode: 'OPS-LEAD', posName: '运营负责人' },
+          position: { posCode: "OPS-LEAD", posName: "运营负责人" },
         },
       ],
       total: 1,
@@ -179,16 +172,16 @@ describe('OrganizationResponsibilityAssignmentModule', () => {
     message.destroy();
   });
 
-  it('hydrates global filters and stable detail through the shared Module interface', async () => {
+  it("hydrates global filters and stable detail through the shared Module interface", async () => {
     render(
       <OrganizationResponsibilityAssignmentModule
         host={{
-          kind: 'global',
+          kind: "global",
           state: {
-            targetOrganizationCode: 'FIN',
+            targetOrganizationCode: "FIN",
             employmentId: 42,
             typeCode: OrganizationResponsibilityTypeCode.Head,
-            lifecycle: 'all',
+            lifecycle: "all",
             assignmentId: 101,
           },
           onStateChange: vi.fn(),
@@ -196,52 +189,39 @@ describe('OrganizationResponsibilityAssignmentModule', () => {
       />,
     );
 
-    const detailButton = await screen.findByRole('button', { name: '详情' });
+    const detailButton = await screen.findByRole("button", { name: "详情" });
     expect(detailButton).toBeVisible();
-    expect(screen.getByText('已按指定任职筛选')).toBeVisible();
-    const row = detailButton.closest('tr');
-    if (!(row instanceof HTMLElement))
-      throw new Error('Assignment table row is missing');
-    expect(within(row).getByText('启用')).toBeVisible();
-    expect(within(row).queryByRole('button', { name: '编辑' })).toBeNull();
+    expect(screen.getByText("已按指定任职筛选")).toBeVisible();
+    const row = detailButton.closest("tr");
+    if (!(row instanceof HTMLElement)) throw new Error("Assignment table row is missing");
+    expect(within(row).getByText("启用")).toBeVisible();
+    expect(within(row).queryByRole("button", { name: "编辑" })).toBeNull();
     expect(responsibilityService.searchAssignments).toHaveBeenCalledWith({
-      targetOrganizationCode: 'FIN',
+      targetOrganizationCode: "FIN",
       employmentId: 42,
       typeCode: OrganizationResponsibilityTypeCode.Head,
-      lifecycle: 'all',
+      lifecycle: "all",
       pageNum: 1,
       pageSize: 20,
     });
     expect(responsibilityService.detailAssignment).toHaveBeenCalledWith({
       id: 101,
     });
-    expect(
-      screen.getByTestId('target-organization-statuses'),
-    ).toHaveTextContent(
+    expect(screen.getByTestId("target-organization-statuses")).toHaveTextContent(
       JSON.stringify({
-        visibleStatuses: [
-          OrganizationStatus.Enable,
-          OrganizationStatus.Pause,
-          OrganizationStatus.Disable,
-        ],
-        selectableStatuses: [
-          OrganizationStatus.Enable,
-          OrganizationStatus.Pause,
-          OrganizationStatus.Disable,
-        ],
+        visibleStatuses: [OrganizationStatus.Enable, OrganizationStatus.Pause, OrganizationStatus.Disable],
+        selectableStatuses: [OrganizationStatus.Enable, OrganizationStatus.Pause, OrganizationStatus.Disable],
       }),
     );
 
-    const dialog = await screen.findByRole('dialog');
-    expect(within(dialog).getByText('任命 #101')).toBeInTheDocument();
-    expect(within(dialog).getByText('#42')).toBeInTheDocument();
-    await within(dialog).findByRole('tab', { name: '操作日志' });
-    await screen.findByText(
-      '{"targetType":"organization_responsibility_assignment","targetId":101}',
-    );
+    const dialog = await screen.findByRole("dialog");
+    expect(within(dialog).getByText("任命 #101")).toBeInTheDocument();
+    expect(within(dialog).getByText("#42")).toBeInTheDocument();
+    await within(dialog).findByRole("tab", { name: "操作日志" });
+    await screen.findByText('{"targetType":"organization_responsibility_assignment","targetId":101}');
   });
 
-  it('preserves the current page and page size when opening global detail', async () => {
+  it("preserves the current page and page size when opening global detail", async () => {
     responsibilityService.searchAssignments.mockResolvedValue({
       items: [assignment],
       total: 21,
@@ -251,9 +231,9 @@ describe('OrganizationResponsibilityAssignmentModule', () => {
     const { user } = render(
       <OrganizationResponsibilityAssignmentModule
         host={{
-          kind: 'global',
+          kind: "global",
           state: {
-            lifecycle: 'all',
+            lifecycle: "all",
             assignmentId: null,
             pageNum: 2,
             pageSize: 10,
@@ -262,21 +242,21 @@ describe('OrganizationResponsibilityAssignmentModule', () => {
         }}
       />,
     );
-    await user.click(await screen.findByRole('button', { name: '详情' }));
+    await user.click(await screen.findByRole("button", { name: "详情" }));
     expect(responsibilityService.searchAssignments).toHaveBeenCalledWith({
-      lifecycle: 'all',
+      lifecycle: "all",
       pageNum: 2,
       pageSize: 10,
     });
     expect(onStateChange).toHaveBeenCalledWith({
-      lifecycle: 'all',
+      lifecycle: "all",
       assignmentId: 101,
       pageNum: 2,
       pageSize: 10,
     });
   });
 
-  it('offers scoped HR Create and server-owned lifecycle actions while keeping Audit hidden', async () => {
+  it("offers scoped HR Create and server-owned lifecycle actions while keeping Audit hidden", async () => {
     __setAccess({
       canAccessOrganizationResponsibility: true,
       canCreateOrganizationResponsibility: true,
@@ -285,31 +265,23 @@ describe('OrganizationResponsibilityAssignmentModule', () => {
     render(
       <OrganizationResponsibilityAssignmentModule
         host={{
-          kind: 'global',
-          state: { lifecycle: 'open', assignmentId: 101 },
+          kind: "global",
+          state: { lifecycle: "open", assignmentId: 101 },
           onStateChange: vi.fn(),
         }}
       />,
     );
 
-    const dialog = await screen.findByRole('dialog');
-    expect(screen.getByRole('button', { name: /新建责任任命/ })).toBeVisible();
-    expect(
-      within(dialog).queryByRole('tab', { name: '操作日志' }),
-    ).not.toBeInTheDocument();
-    expect(
-      within(dialog).getByRole('button', { name: '暂停任命' }),
-    ).toBeVisible();
-    expect(
-      within(dialog).getByRole('button', { name: '结束任命' }),
-    ).toBeVisible();
-    expect(
-      within(dialog).queryByRole('button', { name: '恢复任命' }),
-    ).toBeNull();
-    expect(screen.queryByTestId('assignment-audit')).not.toBeInTheDocument();
+    const dialog = await screen.findByRole("dialog");
+    expect(screen.getByRole("button", { name: /新建责任任命/ })).toBeVisible();
+    expect(within(dialog).queryByRole("tab", { name: "操作日志" })).not.toBeInTheDocument();
+    expect(within(dialog).getByRole("button", { name: "暂停任命" })).toBeVisible();
+    expect(within(dialog).getByRole("button", { name: "结束任命" })).toBeVisible();
+    expect(within(dialog).queryByRole("button", { name: "恢复任命" })).toBeNull();
+    expect(screen.queryByTestId("assignment-audit")).not.toBeInTheDocument();
   });
 
-  it('rejects an Assignment ID outside the restored global scope', async () => {
+  it("rejects an Assignment ID outside the restored global scope", async () => {
     responsibilityService.detailAssignment.mockResolvedValue({
       ...assignment,
       status: OrganizationResponsibilityAssignmentStatus.Disable,
@@ -318,12 +290,12 @@ describe('OrganizationResponsibilityAssignmentModule', () => {
     render(
       <OrganizationResponsibilityAssignmentModule
         host={{
-          kind: 'global',
+          kind: "global",
           state: {
-            targetOrganizationCode: 'FIN',
+            targetOrganizationCode: "FIN",
             employmentId: 42,
             typeCode: OrganizationResponsibilityTypeCode.Head,
-            lifecycle: 'open',
+            lifecycle: "open",
             assignmentId: 101,
           },
           onStateChange: vi.fn(),
@@ -331,130 +303,108 @@ describe('OrganizationResponsibilityAssignmentModule', () => {
       />,
     );
 
-    const dialog = await screen.findByRole('dialog');
-    expect(
-      await within(dialog).findByText('任命不属于当前链接筛选范围'),
-    ).toBeVisible();
-    expect(within(dialog).queryByRole('tab')).not.toBeInTheDocument();
-    expect(screen.queryByTestId('assignment-audit')).not.toBeInTheDocument();
+    const dialog = await screen.findByRole("dialog");
+    expect(await within(dialog).findByText("任命不属于当前链接筛选范围")).toBeVisible();
+    expect(within(dialog).queryByRole("tab")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("assignment-audit")).not.toBeInTheDocument();
   });
 
-  it('creates a global assignment from the table toolbar without exposing Employment IDs', async () => {
+  it("creates a global assignment from the table toolbar without exposing Employment IDs", async () => {
     const { user } = render(
       <OrganizationResponsibilityAssignmentModule
         host={{
-          kind: 'global',
-          state: { lifecycle: 'open', assignmentId: null },
+          kind: "global",
+          state: { lifecycle: "open", assignmentId: null },
           onStateChange: vi.fn(),
         }}
       />,
     );
-    await screen.findByRole('button', { name: '详情' });
+    await screen.findByRole("button", { name: "详情" });
 
-    await user.click(screen.getByRole('button', { name: /新建责任任命/ }));
-    const dialog = await screen.findByRole('dialog');
-    await user.type(within(dialog).getByLabelText('目标组织'), 'FIN');
-    await user.click(
-      within(dialog).getByRole('combobox', { name: '责任类型' }),
-    );
-    await user.click(await screen.findByTitle('分管领导'));
-    const employment = within(dialog).getByRole('combobox', { name: '任职' });
-    expect(
-      within(dialog).getByText('搜索用户、账号、组织或岗位'),
-    ).toBeInTheDocument();
-    await user.type(employment, '张三');
-    await user.click(
-      await screen.findByTitle(
-        '张三（zhangsan） / 集团 / 运营部 / 运营负责人（OPS-LEAD）',
-      ),
-    );
+    await user.click(screen.getByRole("button", { name: /新建责任任命/ }));
+    const dialog = await screen.findByRole("dialog");
+    await user.type(within(dialog).getByLabelText("目标组织"), "FIN");
+    await user.click(within(dialog).getByRole("combobox", { name: "责任类型" }));
+    await user.click(await screen.findByTitle("分管领导"));
+    const employment = within(dialog).getByRole("combobox", { name: "任职" });
+    expect(within(dialog).getByText("搜索用户、账号、组织或岗位")).toBeInTheDocument();
+    await user.type(employment, "张三");
+    await user.click(await screen.findByTitle("张三（zhangsan） / 集团 / 运营部 / 运营负责人（OPS-LEAD）"));
     expect(within(dialog).queryByText(/任职 ID/)).not.toBeInTheDocument();
-    expect(within(dialog).queryByText('#42')).not.toBeInTheDocument();
-    await user.click(
-      within(dialog).getByRole('button', { name: /确 定|提交/ }),
-    );
+    expect(within(dialog).queryByText("#42")).not.toBeInTheDocument();
+    await user.click(within(dialog).getByRole("button", { name: /确 定|提交/ }));
 
     await waitFor(() => {
       expect(responsibilityService.createAssignment).toHaveBeenCalledWith({
-        orgCode: 'FIN',
+        orgCode: "FIN",
         typeCode: OrganizationResponsibilityTypeCode.Supervising,
         employmentId: 42,
       });
     });
   });
 
-  it('publishes edited global scope without silently retaining detail or cursor state', async () => {
+  it("publishes edited global scope without silently retaining detail or cursor state", async () => {
     const onStateChange = vi.fn();
     const { user } = render(
       <OrganizationResponsibilityAssignmentModule
         host={{
-          kind: 'global',
-          state: { lifecycle: 'open', assignmentId: null },
+          kind: "global",
+          state: { lifecycle: "open", assignmentId: null },
           onStateChange,
         }}
       />,
     );
-    await screen.findByRole('button', { name: '详情' });
+    await screen.findByRole("button", { name: "详情" });
 
-    await user.type(screen.getByLabelText('目标组织'), 'FIN');
-    expect(
-      screen.queryByRole('spinbutton', { name: '任职 ID' }),
-    ).not.toBeInTheDocument();
-    const employment = screen.getByRole('combobox', { name: '任职' });
-    await user.type(employment, '张三');
-    await user.click(
-      await screen.findByTitle(
-        '张三（zhangsan） / 集团 / 运营部 / 运营负责人（OPS-LEAD）',
-      ),
-    );
-    const queryButton = screen.getByRole('button', { name: /查\s*询/ });
+    await user.type(screen.getByLabelText("目标组织"), "FIN");
+    expect(screen.queryByRole("spinbutton", { name: "任职 ID" })).not.toBeInTheDocument();
+    const employment = screen.getByRole("combobox", { name: "任职" });
+    await user.type(employment, "张三");
+    await user.click(await screen.findByTitle("张三（zhangsan） / 集团 / 运营部 / 运营负责人（OPS-LEAD）"));
+    const queryButton = screen.getByRole("button", { name: /查\s*询/ });
     await waitFor(() => expect(queryButton).toBeEnabled());
     await user.click(queryButton);
 
     expect(onStateChange).toHaveBeenCalledWith({
-      targetOrganizationCode: 'FIN',
+      targetOrganizationCode: "FIN",
       employmentId: 42,
-      lifecycle: 'open',
+      lifecycle: "open",
       assignmentId: null,
     });
   });
 
-  it('shows an explicit URL error instead of querying a different scope', async () => {
+  it("shows an explicit URL error instead of querying a different scope", async () => {
     window.history.replaceState(
       {},
-      '',
-      '/iam-admin/organization-responsibilities/assignments?employment=oops&assignment=0',
+      "",
+      "/iam-admin/organization-responsibilities/assignments?employment=oops&assignment=0",
     );
 
     render(<OrganizationResponsibilityAssignmentsPage />);
 
-    expect(await screen.findByText('责任任命链接参数无效')).toBeInTheDocument();
+    expect(await screen.findByText("责任任命链接参数无效")).toBeInTheDocument();
     await waitFor(() => {
       expect(responsibilityService.searchAssignments).not.toHaveBeenCalled();
       expect(responsibilityService.detailAssignment).not.toHaveBeenCalled();
     });
   });
 
-  it('offers the shared Pause action and refreshes list and detail exactly once', async () => {
+  it("offers the shared Pause action and refreshes list and detail exactly once", async () => {
     const { user } = render(
       <OrganizationResponsibilityAssignmentModule
         host={{
-          kind: 'global',
-          state: { lifecycle: 'open', assignmentId: 101 },
+          kind: "global",
+          state: { lifecycle: "open", assignmentId: 101 },
           onStateChange: vi.fn(),
         }}
       />,
     );
 
-    const dialog = await screen.findByRole('dialog');
-    expect(
-      within(dialog).getByRole('button', { name: '暂停任命' }),
-    ).toBeVisible();
-    expect(
-      within(dialog).queryByRole('button', { name: '恢复任命' }),
-    ).toBeNull();
+    const dialog = await screen.findByRole("dialog");
+    expect(within(dialog).getByRole("button", { name: "暂停任命" })).toBeVisible();
+    expect(within(dialog).queryByRole("button", { name: "恢复任命" })).toBeNull();
 
-    await user.click(within(dialog).getByRole('button', { name: '暂停任命' }));
+    await user.click(within(dialog).getByRole("button", { name: "暂停任命" }));
 
     await waitFor(() => {
       expect(responsibilityService.pauseAssignment).toHaveBeenCalledTimes(1);
@@ -466,116 +416,80 @@ describe('OrganizationResponsibilityAssignmentModule', () => {
     });
   });
 
-  describe.each(['global', 'organization'] as const)(
-    '%s lifecycle results',
-    (kind) => {
-      for (const changed of [true, false]) {
-        it.each([
-          [
-            'pauseAssignment',
-            '暂停任命',
-            '责任任命已暂停',
-            enabledAllowedActions,
-          ],
-          [
-            'resumeAssignment',
-            '恢复任命',
-            '责任任命已恢复',
-            pausedAllowedActions,
-          ],
-        ] as const)(
-          `shows changed=${changed} for %s and refreshes HR actions`,
-          async (method, label, successMessage, allowedActions) => {
-            __setAccess({
-              canAccessOrganizationResponsibility: true,
-              canCreateOrganizationResponsibility: true,
-              canAccessAudit: false,
-            });
-            responsibilityService.detailAssignment.mockResolvedValue({
-              ...assignment,
-              allowedActions,
-            });
-            responsibilityService[method].mockResolvedValueOnce({
-              changed,
-              result: null,
-            });
-            const { user } = render(
-              <OrganizationResponsibilityAssignmentModule
-                host={
-                  kind === 'organization'
-                    ? { kind, targetOrganizationCode: 'FIN' }
-                    : {
-                        kind,
-                        state: { lifecycle: 'all', assignmentId: 101 },
-                        onStateChange: vi.fn(),
-                      }
-                }
-              />,
-            );
-            if (kind === 'organization')
-              await user.click(
-                await screen.findByRole('button', { name: '详情' }),
-              );
-            await user.click(
-              await screen.findByRole('button', { name: label }),
-            );
-            expect(
-              (
-                await screen.findAllByText(
-                  changed ? successMessage : '无需修改',
-                )
-              ).at(-1),
-            ).toBeInTheDocument();
-            await waitFor(() => {
-              expect(responsibilityService[method]).toHaveBeenCalledTimes(1);
-              expect(
-                responsibilityService.detailAssignment,
-              ).toHaveBeenCalledTimes(2);
-              expect(
-                responsibilityService.searchAssignments,
-              ).toHaveBeenCalledTimes(2);
-            });
-            expect(
-              screen.queryByTestId('assignment-audit'),
-            ).not.toBeInTheDocument();
-          },
-        );
-      }
-    },
-  );
-  it('renders only server-owned lifecycle decisions instead of inferring from status', async () => {
+  describe.each(["global", "organization"] as const)("%s lifecycle results", (kind) => {
+    for (const changed of [true, false]) {
+      it.each([
+        ["pauseAssignment", "暂停任命", "责任任命已暂停", enabledAllowedActions],
+        ["resumeAssignment", "恢复任命", "责任任命已恢复", pausedAllowedActions],
+      ] as const)(
+        `shows changed=${changed} for %s and refreshes HR actions`,
+        async (method, label, successMessage, allowedActions) => {
+          __setAccess({
+            canAccessOrganizationResponsibility: true,
+            canCreateOrganizationResponsibility: true,
+            canAccessAudit: false,
+          });
+          responsibilityService.detailAssignment.mockResolvedValue({
+            ...assignment,
+            allowedActions,
+          });
+          responsibilityService[method].mockResolvedValueOnce({
+            changed,
+            result: null,
+          });
+          const { user } = render(
+            <OrganizationResponsibilityAssignmentModule
+              host={
+                kind === "organization"
+                  ? { kind, targetOrganizationCode: "FIN" }
+                  : {
+                      kind,
+                      state: { lifecycle: "all", assignmentId: 101 },
+                      onStateChange: vi.fn(),
+                    }
+              }
+            />,
+          );
+          if (kind === "organization") await user.click(await screen.findByRole("button", { name: "详情" }));
+          await user.click(await screen.findByRole("button", { name: label }));
+          expect((await screen.findAllByText(changed ? successMessage : "无需修改")).at(-1)).toBeInTheDocument();
+          await waitFor(() => {
+            expect(responsibilityService[method]).toHaveBeenCalledTimes(1);
+            expect(responsibilityService.detailAssignment).toHaveBeenCalledTimes(2);
+            expect(responsibilityService.searchAssignments).toHaveBeenCalledTimes(2);
+          });
+          expect(screen.queryByTestId("assignment-audit")).not.toBeInTheDocument();
+        },
+      );
+    }
+  });
+  it("renders only server-owned lifecycle decisions instead of inferring from status", async () => {
     responsibilityService.detailAssignment.mockResolvedValueOnce({
       ...assignment,
       allowedActions: {
-        pause: { allowed: false, reason: 'ACTION_NOT_GRANTED' },
+        pause: { allowed: false, reason: "ACTION_NOT_GRANTED" },
         resume: { allowed: true, reason: null },
-        end: { allowed: false, reason: 'ACTION_NOT_GRANTED' },
+        end: { allowed: false, reason: "ACTION_NOT_GRANTED" },
       },
     });
 
     render(
       <OrganizationResponsibilityAssignmentModule
         host={{
-          kind: 'global',
-          state: { lifecycle: 'open', assignmentId: 101 },
+          kind: "global",
+          state: { lifecycle: "open", assignmentId: 101 },
           onStateChange: vi.fn(),
         }}
       />,
     );
 
-    const dialog = await screen.findByRole('dialog');
-    expect(
-      within(dialog).getByRole('button', { name: '恢复任命' }),
-    ).toBeVisible();
-    expect(
-      within(dialog).queryByRole('button', { name: '暂停任命' }),
-    ).toBeNull();
-    expect(
-      within(dialog).queryByRole('button', { name: '结束任命' }),
-    ).toBeNull();
+    const dialog = await screen.findByRole("dialog");
+    expect(within(dialog).getByRole("button", { name: "恢复任命" })).toBeVisible();
+    expect(within(dialog).queryByRole("button", { name: "暂停任命" })).toBeNull();
+    expect(within(dialog).queryByRole("button", { name: "结束任命" })).toBeNull();
   });
 
-  it('offers Resume for Pause and keeps Ended detail read-only', async () => {
+  it("offers Resume for Pause and keeps Ended detail read-only", async () => {
     responsibilityService.searchAssignments.mockResolvedValueOnce({
       items: [
         {
@@ -595,19 +509,15 @@ describe('OrganizationResponsibilityAssignmentModule', () => {
     const paused = render(
       <OrganizationResponsibilityAssignmentModule
         host={{
-          kind: 'global',
-          state: { lifecycle: 'open', assignmentId: 101 },
+          kind: "global",
+          state: { lifecycle: "open", assignmentId: 101 },
           onStateChange: vi.fn(),
         }}
       />,
     );
-    const pausedDialog = await screen.findByRole('dialog');
-    expect(
-      within(pausedDialog).getByRole('button', { name: '恢复任命' }),
-    ).toBeVisible();
-    expect(
-      within(pausedDialog).queryByRole('button', { name: '暂停任命' }),
-    ).toBeNull();
+    const pausedDialog = await screen.findByRole("dialog");
+    expect(within(pausedDialog).getByRole("button", { name: "恢复任命" })).toBeVisible();
+    expect(within(pausedDialog).queryByRole("button", { name: "暂停任命" })).toBeNull();
     paused.unmount();
 
     responsibilityService.searchAssignments.mockResolvedValueOnce({
@@ -624,63 +534,57 @@ describe('OrganizationResponsibilityAssignmentModule', () => {
     responsibilityService.detailAssignment.mockResolvedValueOnce({
       ...assignment,
       status: OrganizationResponsibilityAssignmentStatus.Disable,
-      endTime: '2026-08-20T08:00:00.000Z',
+      endTime: "2026-08-20T08:00:00.000Z",
       allowedActions: endedAllowedActions,
     });
     render(
       <OrganizationResponsibilityAssignmentModule
         host={{
-          kind: 'global',
-          state: { lifecycle: 'all', assignmentId: 101 },
+          kind: "global",
+          state: { lifecycle: "all", assignmentId: 101 },
           onStateChange: vi.fn(),
         }}
       />,
     );
-    const endedDialog = await screen.findByRole('dialog');
-    expect(
-      within(endedDialog).queryByRole('button', { name: '暂停任命' }),
-    ).toBeNull();
-    expect(
-      within(endedDialog).queryByRole('button', { name: '恢复任命' }),
-    ).toBeNull();
-    expect(
-      within(endedDialog).queryByRole('button', { name: '结束任命' }),
-    ).toBeNull();
+    const endedDialog = await screen.findByRole("dialog");
+    expect(within(endedDialog).queryByRole("button", { name: "暂停任命" })).toBeNull();
+    expect(within(endedDialog).queryByRole("button", { name: "恢复任命" })).toBeNull();
+    expect(within(endedDialog).queryByRole("button", { name: "结束任命" })).toBeNull();
   });
 
-  it.each(['none', 'user', 'position', 'organization', 'target'] as const)(
-    'opens Ended history with only %s marked deleted and no lifecycle actions',
+  it.each(["none", "user", "position", "organization", "target"] as const)(
+    "opens Ended history with only %s marked deleted and no lifecycle actions",
     async (deletedReference) => {
       const history = {
         ...assignment,
         status: OrganizationResponsibilityAssignmentStatus.Disable,
-        endTime: '2026-08-20T08:00:00.000Z',
+        endTime: "2026-08-20T08:00:00.000Z",
         allowedActions: endedAllowedActions,
         targetOrganization: {
           ...assignment.targetOrganization,
-          isDelete: deletedReference === 'target',
+          isDelete: deletedReference === "target",
           fullPath: assignment.targetOrganization.fullPath.map((node) => ({
             ...node,
-            isDelete: node.id === 4 && deletedReference === 'target',
+            isDelete: node.id === 4 && deletedReference === "target",
           })),
         },
         holder: {
           ...assignment.holder,
           user: {
             ...assignment.holder.user,
-            isDelete: deletedReference === 'user',
+            isDelete: deletedReference === "user",
           },
           organization: {
             ...assignment.holder.organization,
-            isDelete: deletedReference === 'organization',
+            isDelete: deletedReference === "organization",
             fullPath: assignment.holder.organization.fullPath.map((node) => ({
               ...node,
-              isDelete: node.id === 3 && deletedReference === 'organization',
+              isDelete: node.id === 3 && deletedReference === "organization",
             })),
           },
           position: {
             ...assignment.holder.position,
-            isDelete: deletedReference === 'position',
+            isDelete: deletedReference === "position",
           },
         },
       };
@@ -691,55 +595,38 @@ describe('OrganizationResponsibilityAssignmentModule', () => {
       });
       responsibilityService.detailAssignment.mockResolvedValue(history);
       function HistoryHarness() {
-        const [state, setState] =
-          useState<OrganizationResponsibilityAssignmentState>({
-            lifecycle: 'ended',
-            assignmentId: null,
-          });
-        return (
-          <OrganizationResponsibilityAssignmentModule
-            host={{ kind: 'global', state, onStateChange: setState }}
-          />
-        );
+        const [state, setState] = useState<OrganizationResponsibilityAssignmentState>({
+          lifecycle: "ended",
+          assignmentId: null,
+        });
+        return <OrganizationResponsibilityAssignmentModule host={{ kind: "global", state, onStateChange: setState }} />;
       }
       const { user } = render(<HistoryHarness />);
-      const detailButton = await screen.findByRole('button', { name: '详情' });
-      const row = detailButton.closest('tr');
-      if (!row) throw new Error('History row is missing');
+      const detailButton = await screen.findByRole("button", { name: "详情" });
+      const row = detailButton.closest("tr");
+      if (!row) throw new Error("History row is missing");
       const labels = [
-        ['user', '张三（zhangsan）'],
-        ['organization', '集团 / 运营部'],
-        ['target', '集团 / 财务部'],
-        ['position', '运营负责人（OPS-LEAD）'],
+        ["user", "张三（zhangsan）"],
+        ["organization", "集团 / 运营部"],
+        ["target", "集团 / 财务部"],
+        ["position", "运营负责人（OPS-LEAD）"],
       ] as const;
       for (const [reference, label] of labels) {
-        expect(
-          within(row).getByText(
-            deletedReference === reference ? `${label}（已删除）` : label,
-          ),
-        ).toBeVisible();
+        expect(within(row).getByText(deletedReference === reference ? `${label}（已删除）` : label)).toBeVisible();
       }
-      expect(within(row).queryAllByText(/已删除/)).toHaveLength(
-        deletedReference === 'none' ? 0 : 1,
-      );
+      expect(within(row).queryAllByText(/已删除/)).toHaveLength(deletedReference === "none" ? 0 : 1);
       await user.click(detailButton);
-      const dialog = await screen.findByRole('dialog');
+      const dialog = await screen.findByRole("dialog");
       for (const [reference, label] of labels) {
         expect(
-          await within(dialog).findByText(
-            deletedReference === reference ? `${label}（已删除）` : label,
-          ),
+          await within(dialog).findByText(deletedReference === reference ? `${label}（已删除）` : label),
         ).toBeVisible();
       }
       expect(
-        within(dialog).getByText(
-          deletedReference === 'target'
-            ? '财务部（FIN）（已删除）'
-            : '财务部（FIN）',
-        ),
+        within(dialog).getByText(deletedReference === "target" ? "财务部（FIN）（已删除）" : "财务部（FIN）"),
       ).toBeVisible();
-      for (const name of ['暂停任命', '恢复任命', '结束任命']) {
-        expect(within(dialog).queryByRole('button', { name })).toBeNull();
+      for (const name of ["暂停任命", "恢复任命", "结束任命"]) {
+        expect(within(dialog).queryByRole("button", { name })).toBeNull();
       }
       expect(responsibilityService.detailAssignment).toHaveBeenCalledWith({
         id: 101,
@@ -750,31 +637,26 @@ describe('OrganizationResponsibilityAssignmentModule', () => {
     },
   );
 
-  it('requires irreversible End confirmation before issuing one mutation', async () => {
+  it("requires irreversible End confirmation before issuing one mutation", async () => {
     const { user } = render(
       <OrganizationResponsibilityAssignmentModule
         host={{
-          kind: 'global',
-          state: { lifecycle: 'open', assignmentId: 101 },
+          kind: "global",
+          state: { lifecycle: "open", assignmentId: 101 },
           onStateChange: vi.fn(),
         }}
       />,
     );
-    const detailDialog = await screen.findByRole('dialog');
+    const detailDialog = await screen.findByRole("dialog");
 
-    await user.click(
-      within(detailDialog).getByRole('button', { name: '结束任命' }),
-    );
+    await user.click(within(detailDialog).getByRole("button", { name: "结束任命" }));
     expect(responsibilityService.endAssignment).not.toHaveBeenCalled();
-    const confirmButton = await screen.findByRole('button', {
-      name: '确认结束',
+    const confirmButton = await screen.findByRole("button", {
+      name: "确认结束",
     });
     const confirmation = confirmButton.closest('[role="dialog"]');
-    if (!(confirmation instanceof HTMLElement))
-      throw new Error('End confirmation dialog is missing');
-    expect(
-      within(confirmation).getByText(/结束后不可恢复/),
-    ).toBeInTheDocument();
+    if (!(confirmation instanceof HTMLElement)) throw new Error("End confirmation dialog is missing");
+    expect(within(confirmation).getByText(/结束后不可恢复/)).toBeInTheDocument();
 
     await user.click(confirmButton);
     await waitFor(() => {
@@ -782,30 +664,25 @@ describe('OrganizationResponsibilityAssignmentModule', () => {
     });
   });
 
-  it('preserves Drawer context and refreshes authority without replay after failure', async () => {
-    responsibilityService.pauseAssignment.mockRejectedValueOnce(
-      new Error('网络连接失败，已刷新权威状态'),
-    );
+  it("preserves Drawer context and refreshes authority without replay after failure", async () => {
+    responsibilityService.pauseAssignment.mockRejectedValueOnce(new Error("网络连接失败，已刷新权威状态"));
     const { user } = render(
       <OrganizationResponsibilityAssignmentModule
         host={{
-          kind: 'global',
-          state: { lifecycle: 'open', assignmentId: 101 },
+          kind: "global",
+          state: { lifecycle: "open", assignmentId: 101 },
           onStateChange: vi.fn(),
         }}
       />,
     );
-    const pauseButton = await screen.findByRole('button', { name: '暂停任命' });
+    const pauseButton = await screen.findByRole("button", { name: "暂停任命" });
     const dialog = pauseButton.closest('[role="dialog"]');
-    if (!(dialog instanceof HTMLElement))
-      throw new Error('Assignment detail Drawer is missing');
+    if (!(dialog instanceof HTMLElement)) throw new Error("Assignment detail Drawer is missing");
 
     await user.click(pauseButton);
 
-    expect(
-      await screen.findByText('网络连接失败，已刷新权威状态'),
-    ).toBeInTheDocument();
-    expect(within(dialog).getByText('张三（zhangsan）')).toBeVisible();
+    expect(await screen.findByText("网络连接失败，已刷新权威状态")).toBeInTheDocument();
+    expect(within(dialog).getByText("张三（zhangsan）")).toBeVisible();
     await waitFor(() => {
       expect(responsibilityService.pauseAssignment).toHaveBeenCalledTimes(1);
       expect(responsibilityService.searchAssignments).toHaveBeenCalledTimes(2);
@@ -813,7 +690,7 @@ describe('OrganizationResponsibilityAssignmentModule', () => {
     });
   });
 
-  it('removes stale detail and actions when HR scope is lost before a lifecycle retry', async () => {
+  it("removes stale detail and actions when HR scope is lost before a lifecycle retry", async () => {
     __setAccess({
       canAccessOrganizationResponsibility: true,
       canCreateOrganizationResponsibility: true,
@@ -822,22 +699,17 @@ describe('OrganizationResponsibilityAssignmentModule', () => {
     const { user } = render(
       <OrganizationResponsibilityAssignmentModule
         host={{
-          kind: 'global',
-          state: { lifecycle: 'all', assignmentId: 101 },
+          kind: "global",
+          state: { lifecycle: "all", assignmentId: 101 },
           onStateChange: vi.fn(),
         }}
       />,
     );
-    const pause = await screen.findByRole('button', { name: '暂停任命' });
+    const pause = await screen.findByRole("button", { name: "暂停任命" });
     const dialog = pause.closest('[role="dialog"]');
-    if (!(dialog instanceof HTMLElement))
-      throw new Error('Assignment detail Drawer is missing');
-    responsibilityService.pauseAssignment.mockRejectedValueOnce(
-      new Error('责任任命或关联对象不存在'),
-    );
-    responsibilityService.detailAssignment.mockRejectedValueOnce(
-      new Error('责任任命不存在'),
-    );
+    if (!(dialog instanceof HTMLElement)) throw new Error("Assignment detail Drawer is missing");
+    responsibilityService.pauseAssignment.mockRejectedValueOnce(new Error("责任任命或关联对象不存在"));
+    responsibilityService.detailAssignment.mockRejectedValueOnce(new Error("责任任命不存在"));
     responsibilityService.searchAssignments.mockResolvedValueOnce({
       items: [],
       total: 1,
@@ -846,14 +718,10 @@ describe('OrganizationResponsibilityAssignmentModule', () => {
 
     await user.click(pause);
 
-    expect(await within(dialog).findByText('责任任命不存在')).toBeVisible();
-    expect(
-      within(dialog).queryByText('张三（zhangsan）'),
-    ).not.toBeInTheDocument();
-    expect(
-      screen.queryByRole('button', { name: '暂停任命' }),
-    ).not.toBeInTheDocument();
-    expect(screen.queryByTestId('assignment-audit')).not.toBeInTheDocument();
+    expect(await within(dialog).findByText("责任任命不存在")).toBeVisible();
+    expect(within(dialog).queryByText("张三（zhangsan）")).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "暂停任命" })).not.toBeInTheDocument();
+    expect(screen.queryByTestId("assignment-audit")).not.toBeInTheDocument();
     expect(responsibilityService.pauseAssignment).toHaveBeenCalledTimes(1);
   });
 });

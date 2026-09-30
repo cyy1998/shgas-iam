@@ -1,5 +1,5 @@
-import { createApiAuditLogWriter } from "@api/services/audit/audit.service";
 import { beforeEach, describe, expect, mock, test } from "bun:test";
+import { createApiAuditLogWriter } from "@api/services/audit/audit.service";
 
 const insertedValues: unknown[] = [];
 const createAuditLog = mock(async (value: unknown) => {
@@ -47,13 +47,15 @@ describe("api audit writer", () => {
   });
 
   test("rejects invalid client actors before writing", async () => {
-    await expect(auditWriter.recordAuditLog({
-      action: "internal.delegation.create",
-      outcome: "success",
-      actorType: "client",
-      targetType: "delegation",
-      targetId: 1,
-    })).rejects.toThrow("client actor requires actorClientCode");
+    await expect(
+      auditWriter.recordAuditLog({
+        action: "internal.delegation.create",
+        outcome: "success",
+        actorType: "client",
+        targetType: "delegation",
+        targetId: 1,
+      }),
+    ).rejects.toThrow("client actor requires actorClientCode");
 
     expect(createAuditLog).not.toHaveBeenCalled();
   });

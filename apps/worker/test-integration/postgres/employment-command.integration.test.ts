@@ -1,3 +1,4 @@
+import { afterAll, beforeAll, beforeEach, describe, expect, test } from "bun:test";
 import process from "node:process";
 import { fileURLToPath } from "node:url";
 import {
@@ -6,7 +7,6 @@ import {
   spawnOwnedProcessTree,
 } from "@iam/api-core/testing/process-smoke-harness";
 import { EmploymentStatus, OrganizationStatus, PositionStatus } from "@iam/contracts";
-import { afterAll, beforeAll, beforeEach, describe, expect, test } from "bun:test";
 import { createWorkerPostgresTestHarness } from "./postgres-test-harness";
 
 const workerRoot = fileURLToPath(new URL("../../", import.meta.url));
@@ -19,9 +19,7 @@ describe("Employment verifier production command", () => {
   });
 
   beforeEach(async () => {
-    await harness.sql.unsafe(
-      "TRUNCATE TABLE employment, position, organization, \"user\" RESTART IDENTITY CASCADE",
-    );
+    await harness.sql.unsafe('TRUNCATE TABLE employment, position, organization, "user" RESTART IDENTITY CASCADE');
     await harness.sql`
       INSERT INTO "user" (id, username, name)
       VALUES (1, 'employment-command-user', 'Employment Command User')
@@ -50,29 +48,32 @@ describe("Employment verifier production command", () => {
   });
 
   afterAll(async () => {
-    if (harness)
-      await harness.close();
+    if (harness) await harness.close();
   });
 
-  test("exits non-zero for blockers and succeeds after operator correction", async () => {
-    const failed = await runCommand(1);
+  test(
+    "exits non-zero for blockers and succeeds after operator correction",
+    async () => {
+      const failed = await runCommand(1);
 
-    expect(failed.exitCode).toBe(1);
-    expect(failed.output).toContain("Employment verification completed");
-    expect(failed.output).toContain("unknown-employment-status");
+      expect(failed.exitCode).toBe(1);
+      expect(failed.output).toContain("Employment verification completed");
+      expect(failed.output).toContain("unknown-employment-status");
 
-    await harness.sql`
+      await harness.sql`
       UPDATE employment
       SET status = ${EmploymentStatus.Enable}
       WHERE id = 1
     `;
 
-    const passed = await runCommand(0);
+      const passed = await runCommand(0);
 
-    expect(passed.exitCode).toBe(0);
-    expect(passed.output).toContain("Employment verification completed");
-    expect(passed.output).toContain("\"status\":\"passed\"");
-  }, PROCESS_SMOKE_TEST_TIMEOUT_MS);
+      expect(passed.exitCode).toBe(0);
+      expect(passed.output).toContain("Employment verification completed");
+      expect(passed.output).toContain('"status":"passed"');
+    },
+    PROCESS_SMOKE_TEST_TIMEOUT_MS,
+  );
 
   async function runCommand(expectedExitCode: number) {
     return await runProcessCommandSmoke({
@@ -80,11 +81,7 @@ describe("Employment verifier production command", () => {
       start() {
         return spawnOwnedProcessTree({
           executable: process.execPath,
-          args: [
-            "--no-env-file",
-            "run",
-            "employment:verify",
-          ],
+          args: ["--no-env-file", "run", "employment:verify"],
           cwd: workerRoot,
           env: {
             ...process.env,

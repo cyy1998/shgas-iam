@@ -6,40 +6,35 @@ import {
   MobileOutlined,
   SafetyCertificateOutlined,
   UserOutlined,
-} from '@ant-design/icons';
-import { VerificationCodeInput } from '@sso/components/VerificationCodeInput';
-import { useSmsCodeCountdown } from '@sso/hooks/useSmsCodeCountdown';
-import { withHumanVerification } from '@sso/lib/human-verification';
-import { selfMobileSendMsg } from '@sso/services/open';
-import { mobileSet, passwordChange } from '@sso/services/public';
-import type { Employment } from '@sso/types/api';
-import {
-  confirmPasswordRule,
-  passwordRule,
-  phoneRule,
-} from '@sso/utils/form-check';
-import { ServiceError } from '@sso/utils/request';
-import { getQuery } from '@sso/utils/url';
-import { history, useModel } from '@umijs/max';
-import { Button, Form, Input, Spin, Table, Tabs, message } from 'antd';
-import { useEffect, useState } from 'react';
-import TopBar from './_components/TopBar';
-import './index.less';
+} from "@ant-design/icons";
+import { VerificationCodeInput } from "@sso/components/VerificationCodeInput";
+import { useSmsCodeCountdown } from "@sso/hooks/useSmsCodeCountdown";
+import { withHumanVerification } from "@sso/lib/human-verification";
+import { selfMobileSendMsg } from "@sso/services/open";
+import { mobileSet, passwordChange } from "@sso/services/public";
+import type { Employment } from "@sso/types/api";
+import { confirmPasswordRule, passwordRule, phoneRule } from "@sso/utils/form-check";
+import { ServiceError } from "@sso/utils/request";
+import { getQuery } from "@sso/utils/url";
+import { history, useModel } from "@umijs/max";
+import { Button, Form, Input, message, Spin, Table, Tabs } from "antd";
+import { useEffect, useState } from "react";
+import TopBar from "./_components/TopBar";
+import "./index.less";
 import {
   formatProjectionCompany,
   formatProjectionOrganizationPath,
   formatProjectionPosition,
-} from './user-info-projection';
+} from "./user-info-projection";
 
-type TabKey = 'password' | 'mobile';
+type TabKey = "password" | "mobile";
 
 export default function UserInfoPage() {
-  const { userInfo, loadUserInfo } = useModel('sso');
-  const [activeKey, setActiveKey] = useState<TabKey>('password');
+  const { userInfo, loadUserInfo } = useModel("sso");
+  const [activeKey, setActiveKey] = useState<TabKey>("password");
   const [submitting, setSubmitting] = useState(false);
   const [smsSending, setSmsSending] = useState(false);
-  const { countdown, isCounting, startCountdown, restoreCountdown } =
-    useSmsCodeCountdown();
+  const { countdown, isCounting, startCountdown, restoreCountdown } = useSmsCodeCountdown();
   const [pwdForm] = Form.useForm();
   const [mobileForm] = Form.useForm();
 
@@ -48,17 +43,17 @@ export default function UserInfoPage() {
   }, [userInfo, loadUserInfo]);
 
   const sendCode = async () => {
-    const phoneNumber = mobileForm.getFieldValue('phoneNumber');
+    const phoneNumber = mobileForm.getFieldValue("phoneNumber");
     if (!phoneNumber) {
-      message.error('请填写手机号');
+      message.error("请填写手机号");
       return;
     }
     if (isCounting) return;
     try {
       setSmsSending(true);
-      const body = { phoneNumber, usage: 'bindPhone' } as const;
+      const body = { phoneNumber, usage: "bindPhone" } as const;
       await withHumanVerification(
-        'sendSmsCode',
+        "sendSmsCode",
         () => selfMobileSendMsg(body),
         (capToken) => selfMobileSendMsg({ ...body, capToken }),
       );
@@ -79,7 +74,7 @@ export default function UserInfoPage() {
         oldPassword: v.oldPassword,
         newPassword: v.newPassword,
       });
-      message.success('更换成功！');
+      message.success("更换成功！");
       pwdForm.resetFields();
     } catch (e) {
       if (!(e instanceof ServiceError)) throw e;
@@ -93,7 +88,7 @@ export default function UserInfoPage() {
     setSubmitting(true);
     try {
       await mobileSet({ phoneNumber: v.phoneNumber, code: v.code });
-      message.success('更换成功！');
+      message.success("更换成功！");
       mobileForm.resetFields();
       void loadUserInfo();
     } catch (e) {
@@ -104,12 +99,12 @@ export default function UserInfoPage() {
   };
 
   const handleSubmit = () => {
-    if (activeKey === 'password') return submitPassword();
+    if (activeKey === "password") return submitPassword();
     return submitMobile();
   };
 
   const back = () => {
-    const redirectUrl = getQuery('redirectUrl');
+    const redirectUrl = getQuery("redirectUrl");
     if (redirectUrl) {
       window.location.href = redirectUrl;
     } else {
@@ -122,12 +117,7 @@ export default function UserInfoPage() {
       <TopBar />
       <main className="user-info-body">
         <section className="profile-hero">
-          <Button
-            type="text"
-            className="back-btn"
-            icon={<ArrowLeftOutlined />}
-            onClick={back}
-          >
+          <Button type="text" className="back-btn" icon={<ArrowLeftOutlined />} onClick={back}>
             返回
           </Button>
           <div className="hero-content">
@@ -146,31 +136,23 @@ export default function UserInfoPage() {
         <Spin spinning={!userInfo}>
           <div className="info-grid">
             <aside className="profile-panel">
-              <div className="avatar-ring">
-                {userInfo?.profile?.name?.[0] ?? <UserOutlined />}
-              </div>
-              <div className="profile-name">
-                {userInfo?.profile?.name ?? '-'}
-              </div>
-              <div className="profile-username">
-                {userInfo?.profile?.username ?? '-'}
-              </div>
+              <div className="avatar-ring">{userInfo?.profile?.name?.[0] ?? <UserOutlined />}</div>
+              <div className="profile-name">{userInfo?.profile?.name ?? "-"}</div>
+              <div className="profile-username">{userInfo?.profile?.username ?? "-"}</div>
 
               <div className="profile-meta">
                 <div className="meta-item">
                   <MobileOutlined />
                   <div>
                     <span>绑定手机号</span>
-                    <strong>{userInfo?.profile?.phone || '未绑定'}</strong>
+                    <strong>{userInfo?.profile?.phone || "未绑定"}</strong>
                   </div>
                 </div>
                 <div className="meta-item">
                   <IdcardOutlined />
                   <div>
                     <span>岗位数量</span>
-                    <strong>
-                      {userInfo?.profile?.employments?.length ?? 0}
-                    </strong>
+                    <strong>{userInfo?.profile?.employments?.length ?? 0}</strong>
                   </div>
                 </div>
               </div>
@@ -188,27 +170,24 @@ export default function UserInfoPage() {
               </div>
 
               <Table<Employment>
-                rowKey={(employment) =>
-                  `${employment.organization.code}:${employment.position.code}`
-                }
+                rowKey={(employment) => `${employment.organization.code}:${employment.position.code}`}
                 size="middle"
                 pagination={false}
                 dataSource={userInfo?.profile?.employments ?? []}
                 columns={[
                   {
-                    title: '公司',
-                    dataIndex: ['organization', 'path'],
+                    title: "公司",
+                    dataIndex: ["organization", "path"],
                     render: (_value, row) => formatProjectionCompany(row),
                   },
                   {
-                    title: '组织',
-                    dataIndex: ['organization', 'name'],
-                    render: (_value, row) =>
-                      formatProjectionOrganizationPath(row),
+                    title: "组织",
+                    dataIndex: ["organization", "name"],
+                    render: (_value, row) => formatProjectionOrganizationPath(row),
                   },
                   {
-                    title: '岗位',
-                    dataIndex: ['position', 'name'],
+                    title: "岗位",
+                    dataIndex: ["position", "name"],
                     render: (_value, row) => formatProjectionPosition(row),
                   },
                 ]}
@@ -230,7 +209,7 @@ export default function UserInfoPage() {
                   onChange={(k) => setActiveKey(k as TabKey)}
                   items={[
                     {
-                      key: 'password',
+                      key: "password",
                       label: (
                         <span className="tab-label">
                           <LockOutlined />
@@ -239,7 +218,7 @@ export default function UserInfoPage() {
                       ),
                     },
                     {
-                      key: 'mobile',
+                      key: "mobile",
                       label: (
                         <span className="tab-label">
                           <MobileOutlined />
@@ -250,86 +229,40 @@ export default function UserInfoPage() {
                   ]}
                 />
 
-                {activeKey === 'password' && (
+                {activeKey === "password" && (
                   <Form form={pwdForm} layout="vertical" requiredMark={false}>
-                    <Form.Item
-                      label="当前密码"
-                      name="oldPassword"
-                      rules={[{ required: true, message: '请输入密码' }]}
-                    >
-                      <Input.Password
-                        size="large"
-                        placeholder="请输入当前密码"
-                        prefix={<LockOutlined />}
-                      />
+                    <Form.Item label="当前密码" name="oldPassword" rules={[{ required: true, message: "请输入密码" }]}>
+                      <Input.Password size="large" placeholder="请输入当前密码" prefix={<LockOutlined />} />
                     </Form.Item>
-                    <Form.Item
-                      label="新密码"
-                      name="newPassword"
-                      rules={[passwordRule]}
-                    >
-                      <Input.Password
-                        size="large"
-                        placeholder="请输入新密码"
-                        prefix={<LockOutlined />}
-                      />
+                    <Form.Item label="新密码" name="newPassword" rules={[passwordRule]}>
+                      <Input.Password size="large" placeholder="请输入新密码" prefix={<LockOutlined />} />
                     </Form.Item>
                     <Form.Item
                       label="确认密码"
                       name="newCopyPassword"
-                      dependencies={['newPassword']}
-                      rules={[
-                        confirmPasswordRule(() =>
-                          pwdForm.getFieldValue('newPassword'),
-                        ),
-                      ]}
+                      dependencies={["newPassword"]}
+                      rules={[confirmPasswordRule(() => pwdForm.getFieldValue("newPassword"))]}
                     >
-                      <Input.Password
-                        size="large"
-                        placeholder="请再次输入新密码"
-                        prefix={<LockOutlined />}
-                      />
+                      <Input.Password size="large" placeholder="请再次输入新密码" prefix={<LockOutlined />} />
                     </Form.Item>
                   </Form>
                 )}
 
-                {activeKey === 'mobile' && (
-                  <Form
-                    form={mobileForm}
-                    layout="vertical"
-                    requiredMark={false}
-                  >
+                {activeKey === "mobile" && (
+                  <Form form={mobileForm} layout="vertical" requiredMark={false}>
                     <div className="current-mobile">
                       <span>当前手机号</span>
-                      <strong>{userInfo?.profile?.phone || '-'}</strong>
+                      <strong>{userInfo?.profile?.phone || "-"}</strong>
                     </div>
-                    <Form.Item
-                      label="新手机号"
-                      name="phoneNumber"
-                      rules={[phoneRule]}
-                    >
-                      <Input
-                        size="large"
-                        placeholder="请输入手机号"
-                        prefix={<MobileOutlined />}
-                      />
+                    <Form.Item label="新手机号" name="phoneNumber" rules={[phoneRule]}>
+                      <Input size="large" placeholder="请输入手机号" prefix={<MobileOutlined />} />
                     </Form.Item>
-                    <Form.Item
-                      label="验证码"
-                      name="code"
-                      rules={[{ required: true, message: '请输入验证码' }]}
-                    >
+                    <Form.Item label="验证码" name="code" rules={[{ required: true, message: "请输入验证码" }]}>
                       <VerificationCodeInput
                         placeholder="请输入验证码"
                         prefix={<LockOutlined />}
                         buttonDisabled={isCounting || smsSending}
-                        buttonText={
-                          smsSending
-                            ? '发送中'
-                            : countdown <= 0
-                              ? '获取验证码'
-                              : `${countdown} s`
-                        }
+                        buttonText={smsSending ? "发送中" : countdown <= 0 ? "获取验证码" : `${countdown} s`}
                         onSendCode={sendCode}
                       />
                     </Form.Item>
@@ -337,12 +270,7 @@ export default function UserInfoPage() {
                 )}
 
                 <div className="submit-row">
-                  <Button
-                    type="primary"
-                    size="large"
-                    loading={submitting}
-                    onClick={handleSubmit}
-                  >
+                  <Button type="primary" size="large" loading={submitting} onClick={handleSubmit}>
                     保存设置
                   </Button>
                 </div>

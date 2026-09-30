@@ -1,5 +1,5 @@
+import { describe, expect, mock, test } from "bun:test";
 import type { AdminOrganizationResponsibilityAuthorization } from "@admin-api/services/admin-authorization/admin-organization-responsibility-authorization.type";
-import type { OrganizationResponsibilityAssignmentRecordCreate } from "@iam/domain/organization-responsibility";
 import { createFakeClock, createImmediateUnitOfWork } from "@admin-api/test/fakes";
 import { createCreateOrganizationResponsibilityAssignmentUseCase } from "@admin-api/use-cases/organization-responsibility/create-assignment/create-assignment.use-case";
 import {
@@ -8,10 +8,9 @@ import {
   OrganizationResponsibilityTypeCode,
   OrganizationStatus,
 } from "@iam/contracts";
-import {
-  EmploymentNotFoundError,
-} from "@iam/domain/employment";
+import { EmploymentNotFoundError } from "@iam/domain/employment";
 import { OrganizationNotFoundError } from "@iam/domain/organization";
+import type { OrganizationResponsibilityAssignmentRecordCreate } from "@iam/domain/organization-responsibility";
 import {
   OrganizationResponsibilityAssignmentCardinalityConflictError,
   OrganizationResponsibilityAssignmentDuplicateOpenError,
@@ -19,7 +18,6 @@ import {
   OrganizationResponsibilityHolderEmploymentUnavailableError,
   OrganizationResponsibilityTargetOrganizationUnavailableError,
 } from "@iam/domain/organization-responsibility";
-import { describe, expect, mock, test } from "bun:test";
 import {
   testFullOrganizationResponsibilityAuthorization,
   withTestFullOrganizationResponsibilityAuthorization,
@@ -44,11 +42,13 @@ function createLifecycle() {
   };
   const tx = {
     assignmentStore: {
-      findOpenAssignmentForSlot: mock(async (): Promise<{
-        id: number;
-        employmentId: number;
-        isManageable: boolean;
-      } | null> => null),
+      findOpenAssignmentForSlot: mock(
+        async (): Promise<{
+          id: number;
+          employmentId: number;
+          isManageable: boolean;
+        } | null> => null,
+      ),
       createAssignmentRecord: mock(async (input: OrganizationResponsibilityAssignmentRecordCreate) => ({
         id: 31,
         ...input,
@@ -59,14 +59,10 @@ function createLifecycle() {
     },
     auditLogWriter: { recordAuditLog: mock(async () => undefined) },
     employmentReader: {
-      getEmploymentForResponsibilityById: mock(
-        async (): Promise<typeof employment | null> => employment,
-      ),
+      getEmploymentForResponsibilityById: mock(async (): Promise<typeof employment | null> => employment),
     },
     organizationReader: {
-      getOrganizationForResponsibilityByCode: mock(
-        async (): Promise<typeof organization | null> => organization,
-      ),
+      getOrganizationForResponsibilityByCode: mock(async (): Promise<typeof organization | null> => organization),
     },
     userProfileInvalidation: { recordChanges: mock(async () => undefined) },
   };
@@ -79,9 +75,7 @@ function createLifecycle() {
     clock,
     tx,
     rawUseCase,
-    useCase: withTestFullOrganizationResponsibilityAuthorization(
-      rawUseCase,
-    ),
+    useCase: withTestFullOrganizationResponsibilityAuthorization(rawUseCase),
   };
 }
 
@@ -91,16 +85,18 @@ describe("Create Organization Responsibility Assignment", () => {
     const authorization = {
       kind: "scoped",
       readScope: { kind: "scoped", organizationIds: [12, 22] },
-      getAllowedActions:
-        testFullOrganizationResponsibilityAuthorization.getAllowedActions,
+      getAllowedActions: testFullOrganizationResponsibilityAuthorization.getAllowedActions,
       denyMutation: testFullOrganizationResponsibilityAuthorization.denyMutation,
     } satisfies AdminOrganizationResponsibilityAuthorization;
 
-    const result = await rawUseCase.execute({
-      employmentId: 11,
-      targetOrganizationCode: "TARGET",
-      typeCode: OrganizationResponsibilityTypeCode.Head,
-    }, { authorization });
+    const result = await rawUseCase.execute(
+      {
+        employmentId: 11,
+        targetOrganizationCode: "TARGET",
+        typeCode: OrganizationResponsibilityTypeCode.Head,
+      },
+      { authorization },
+    );
 
     expect(result).toEqual({ changed: true, result: { id: 31 } });
     expect(tx.assignmentStore.isEndpointPairWithinReadScope).toHaveBeenCalledWith({
@@ -118,18 +114,22 @@ describe("Create Organization Responsibility Assignment", () => {
     const authorization = {
       kind: "scoped",
       readScope: { kind: "scoped", organizationIds: [12] },
-      getAllowedActions:
-        testFullOrganizationResponsibilityAuthorization.getAllowedActions,
+      getAllowedActions: testFullOrganizationResponsibilityAuthorization.getAllowedActions,
       denyMutation: mock((): never => {
         throw denied;
       }),
     } satisfies AdminOrganizationResponsibilityAuthorization;
 
-    const caught = await rawUseCase.execute({
-      employmentId: 11,
-      targetOrganizationCode: "TARGET",
-      typeCode: OrganizationResponsibilityTypeCode.Head,
-    }, { authorization }).catch(error => error);
+    const caught = await rawUseCase
+      .execute(
+        {
+          employmentId: 11,
+          targetOrganizationCode: "TARGET",
+          typeCode: OrganizationResponsibilityTypeCode.Head,
+        },
+        { authorization },
+      )
+      .catch((error) => error);
 
     expect(caught).toBe(denied);
     expect(tx.assignmentStore.findOpenAssignmentForSlot).not.toHaveBeenCalled();
@@ -141,45 +141,54 @@ describe("Create Organization Responsibility Assignment", () => {
   test("atomically creates, audits, and dirties an immediately enabled cross-tree assignment", async () => {
     const { clock, tx, useCase } = createLifecycle();
 
-    await expect(useCase.execute({
-      employmentId: 11,
-      targetOrganizationCode: "TARGET",
-      typeCode: OrganizationResponsibilityTypeCode.Head,
-    })).resolves.toEqual({ changed: true, result: { id: 31 } });
+    await expect(
+      useCase.execute({
+        employmentId: 11,
+        targetOrganizationCode: "TARGET",
+        typeCode: OrganizationResponsibilityTypeCode.Head,
+      }),
+    ).resolves.toEqual({ changed: true, result: { id: 31 } });
 
     expect(clock.nowDate).toHaveBeenCalledTimes(1);
-    expect(tx.assignmentStore.createAssignmentRecord).toHaveBeenCalledWith({
-      employmentId: 11,
-      targetOrganizationId: 22,
-      typeCode: OrganizationResponsibilityTypeCode.Head,
-      status: OrganizationResponsibilityAssignmentStatus.Enable,
-      startTime: now,
-      endTime: null,
-    }, { kind: "full" });
-    expect(tx.auditLogWriter.recordAuditLog).toHaveBeenCalledWith(expect.objectContaining({
-      action: "admin.organization_responsibility_assignment.create",
-      targetType: "organization_responsibility_assignment",
-      targetId: 31,
-      details: {
-        changed: true,
-        binding: {
-          employmentId: 11,
-          targetOrganizationId: 22,
-          typeCode: OrganizationResponsibilityTypeCode.Head,
-        },
-        before: null,
-        after: {
-          status: OrganizationResponsibilityAssignmentStatus.Enable,
-          startTime: now,
-          endTime: null,
-        },
-        cause: "direct",
+    expect(tx.assignmentStore.createAssignmentRecord).toHaveBeenCalledWith(
+      {
+        employmentId: 11,
+        targetOrganizationId: 22,
+        typeCode: OrganizationResponsibilityTypeCode.Head,
+        status: OrganizationResponsibilityAssignmentStatus.Enable,
+        startTime: now,
+        endTime: null,
       },
-    }));
-    expect(tx.userProfileInvalidation.recordChanges).toHaveBeenCalledWith([{
-      kind: "organization-responsibility-assignment",
-      userId: 7,
-    }]);
+      { kind: "full" },
+    );
+    expect(tx.auditLogWriter.recordAuditLog).toHaveBeenCalledWith(
+      expect.objectContaining({
+        action: "admin.organization_responsibility_assignment.create",
+        targetType: "organization_responsibility_assignment",
+        targetId: 31,
+        details: {
+          changed: true,
+          binding: {
+            employmentId: 11,
+            targetOrganizationId: 22,
+            typeCode: OrganizationResponsibilityTypeCode.Head,
+          },
+          before: null,
+          after: {
+            status: OrganizationResponsibilityAssignmentStatus.Enable,
+            startTime: now,
+            endTime: null,
+          },
+          cause: "direct",
+        },
+      }),
+    );
+    expect(tx.userProfileInvalidation.recordChanges).toHaveBeenCalledWith([
+      {
+        kind: "organization-responsibility-assignment",
+        userId: 7,
+      },
+    ]);
   });
 
   test("rejects a holder employment that is not enabled", async () => {
@@ -192,11 +201,13 @@ describe("Create Organization Responsibility Assignment", () => {
       isDelete: false,
     });
 
-    await expect(useCase.execute({
-      employmentId: 11,
-      targetOrganizationCode: "TARGET",
-      typeCode: OrganizationResponsibilityTypeCode.Head,
-    })).rejects.toBeInstanceOf(OrganizationResponsibilityHolderEmploymentUnavailableError);
+    await expect(
+      useCase.execute({
+        employmentId: 11,
+        targetOrganizationCode: "TARGET",
+        typeCode: OrganizationResponsibilityTypeCode.Head,
+      }),
+    ).rejects.toBeInstanceOf(OrganizationResponsibilityHolderEmploymentUnavailableError);
     expect(tx.assignmentStore.createAssignmentRecord).not.toHaveBeenCalled();
   });
 
@@ -204,20 +215,24 @@ describe("Create Organization Responsibility Assignment", () => {
     const missingHolder = createLifecycle();
     missingHolder.tx.employmentReader.getEmploymentForResponsibilityById.mockResolvedValueOnce(null);
 
-    await expect(missingHolder.useCase.execute({
-      employmentId: 404,
-      targetOrganizationCode: "TARGET",
-      typeCode: OrganizationResponsibilityTypeCode.Head,
-    })).rejects.toBeInstanceOf(EmploymentNotFoundError);
+    await expect(
+      missingHolder.useCase.execute({
+        employmentId: 404,
+        targetOrganizationCode: "TARGET",
+        typeCode: OrganizationResponsibilityTypeCode.Head,
+      }),
+    ).rejects.toBeInstanceOf(EmploymentNotFoundError);
 
     const missingTarget = createLifecycle();
     missingTarget.tx.organizationReader.getOrganizationForResponsibilityByCode.mockResolvedValueOnce(null);
 
-    await expect(missingTarget.useCase.execute({
-      employmentId: 11,
-      targetOrganizationCode: "MISSING",
-      typeCode: OrganizationResponsibilityTypeCode.Head,
-    })).rejects.toBeInstanceOf(OrganizationNotFoundError);
+    await expect(
+      missingTarget.useCase.execute({
+        employmentId: 11,
+        targetOrganizationCode: "MISSING",
+        typeCode: OrganizationResponsibilityTypeCode.Head,
+      }),
+    ).rejects.toBeInstanceOf(OrganizationNotFoundError);
   });
 
   test("rejects a target organization that is not enabled", async () => {
@@ -229,11 +244,13 @@ describe("Create Organization Responsibility Assignment", () => {
       isDelete: false,
     });
 
-    await expect(useCase.execute({
-      employmentId: 11,
-      targetOrganizationCode: "TARGET",
-      typeCode: OrganizationResponsibilityTypeCode.Head,
-    })).rejects.toBeInstanceOf(OrganizationResponsibilityTargetOrganizationUnavailableError);
+    await expect(
+      useCase.execute({
+        employmentId: 11,
+        targetOrganizationCode: "TARGET",
+        typeCode: OrganizationResponsibilityTypeCode.Head,
+      }),
+    ).rejects.toBeInstanceOf(OrganizationResponsibilityTargetOrganizationUnavailableError);
     expect(tx.assignmentStore.createAssignmentRecord).not.toHaveBeenCalled();
   });
 
@@ -245,11 +262,13 @@ describe("Create Organization Responsibility Assignment", () => {
       isManageable: true,
     });
 
-    await expect(useCase.execute({
-      employmentId: 11,
-      targetOrganizationCode: "TARGET",
-      typeCode: OrganizationResponsibilityTypeCode.Head,
-    })).rejects.toBeInstanceOf(OrganizationResponsibilityAssignmentCardinalityConflictError);
+    await expect(
+      useCase.execute({
+        employmentId: 11,
+        targetOrganizationCode: "TARGET",
+        typeCode: OrganizationResponsibilityTypeCode.Head,
+      }),
+    ).rejects.toBeInstanceOf(OrganizationResponsibilityAssignmentCardinalityConflictError);
   });
 
   test("returns a stable safe conflict when an invisible assignment occupies the scoped slot", async () => {
@@ -262,23 +281,23 @@ describe("Create Organization Responsibility Assignment", () => {
     const authorization = {
       kind: "scoped",
       readScope: { kind: "scoped", organizationIds: [12, 22] },
-      getAllowedActions:
-        testFullOrganizationResponsibilityAuthorization.getAllowedActions,
+      getAllowedActions: testFullOrganizationResponsibilityAuthorization.getAllowedActions,
       denyMutation: testFullOrganizationResponsibilityAuthorization.denyMutation,
     } satisfies AdminOrganizationResponsibilityAuthorization;
 
-    const caught = await rawUseCase.execute({
-      employmentId: 11,
-      targetOrganizationCode: "TARGET",
-      typeCode: OrganizationResponsibilityTypeCode.Head,
-    }, { authorization }).catch(error => error);
+    const caught = await rawUseCase
+      .execute(
+        {
+          employmentId: 11,
+          targetOrganizationCode: "TARGET",
+          typeCode: OrganizationResponsibilityTypeCode.Head,
+        },
+        { authorization },
+      )
+      .catch((error) => error);
 
-    expect(caught).toBeInstanceOf(
-      OrganizationResponsibilityAssignmentUnmanageableConflictError,
-    );
-    expect(caught.message).toBe(
-      "责任槽位已占用；如果当前列表没有可管理记录，请联系完整管理员",
-    );
+    expect(caught).toBeInstanceOf(OrganizationResponsibilityAssignmentUnmanageableConflictError);
+    expect(caught.message).toBe("责任槽位已占用；如果当前列表没有可管理记录，请联系完整管理员");
     expect(JSON.stringify(caught)).not.toContain("30");
     expect(JSON.stringify(caught)).not.toContain("99");
     expect(tx.assignmentStore.createAssignmentRecord).not.toHaveBeenCalled();
@@ -294,10 +313,12 @@ describe("Create Organization Responsibility Assignment", () => {
       isManageable: true,
     });
 
-    await expect(useCase.execute({
-      employmentId: 11,
-      targetOrganizationCode: "TARGET",
-      typeCode: OrganizationResponsibilityTypeCode.Supervising,
-    })).rejects.toBeInstanceOf(OrganizationResponsibilityAssignmentDuplicateOpenError);
+    await expect(
+      useCase.execute({
+        employmentId: 11,
+        targetOrganizationCode: "TARGET",
+        typeCode: OrganizationResponsibilityTypeCode.Supervising,
+      }),
+    ).rejects.toBeInstanceOf(OrganizationResponsibilityAssignmentDuplicateOpenError);
   });
 });

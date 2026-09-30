@@ -1,10 +1,10 @@
 import type { LoginWithMobileDeps } from "@api/use-cases/authentication/login-with-mobile/login-with-mobile.port";
-import type { LoginWithOaDeps } from "@api/use-cases/authentication/login-with-oa/login-with-oa.port";
-import type { LoginWithPasswordDeps } from "@api/use-cases/authentication/login-with-password/login-with-password.port";
-import type { LoginWithWechatDeps } from "@api/use-cases/authentication/login-with-wechat/login-with-wechat.port";
 import { createLoginWithMobileUseCase } from "@api/use-cases/authentication/login-with-mobile/login-with-mobile.use-case";
+import type { LoginWithOaDeps } from "@api/use-cases/authentication/login-with-oa/login-with-oa.port";
 import { createLoginWithOaUseCase } from "@api/use-cases/authentication/login-with-oa/login-with-oa.use-case";
+import type { LoginWithPasswordDeps } from "@api/use-cases/authentication/login-with-password/login-with-password.port";
 import { createLoginWithPasswordUseCase } from "@api/use-cases/authentication/login-with-password/login-with-password.use-case";
+import type { LoginWithWechatDeps } from "@api/use-cases/authentication/login-with-wechat/login-with-wechat.port";
 import { createLoginWithWechatUseCase } from "@api/use-cases/authentication/login-with-wechat/login-with-wechat.use-case";
 import { sleep } from "bun";
 
@@ -26,12 +26,14 @@ interface AuthenticationCompositionOptions {
     humanRisk: LoginWithPasswordDeps["humanRisk"] & LoginWithMobileDeps["humanRisk"];
     loginRestriction: LoginWithPasswordDeps["loginRestriction"] & LoginWithMobileDeps["loginRestriction"];
     mobile: LoginWithMobileDeps["verificationCodes"];
-    principalSessions: LoginWithPasswordDeps["principalSessions"]
-      & LoginWithMobileDeps["principalSessions"]
-      & LoginWithOaDeps["principalSessions"]
-      & LoginWithWechatDeps["principalSessions"];
-    user: LoginWithPasswordDeps["users"] & LoginWithMobileDeps["users"]
-      & LoginWithOaDeps["users"] & LoginWithWechatDeps["users"];
+    principalSessions: LoginWithPasswordDeps["principalSessions"] &
+      LoginWithMobileDeps["principalSessions"] &
+      LoginWithOaDeps["principalSessions"] &
+      LoginWithWechatDeps["principalSessions"];
+    user: LoginWithPasswordDeps["users"] &
+      LoginWithMobileDeps["users"] &
+      LoginWithOaDeps["users"] &
+      LoginWithWechatDeps["users"];
   };
 }
 
@@ -68,8 +70,8 @@ export function createAuthenticationUseCases({ auditLogWriter, runtime, services
     loginWithWechat: createLoginWithWechatUseCase({
       auditLogWriter,
       cache: {
-        del: key => runtime.redis.del(key),
-        get: key => runtime.redis.get(key),
+        del: (key) => runtime.redis.del(key),
+        get: (key) => runtime.redis.get(key),
         set: (key, value, mode, ttlSeconds) => runtime.redis.set(key, value, mode, ttlSeconds),
       },
       delay: { wait: sleep },

@@ -4,15 +4,10 @@ export interface CreateAdminClientCacheOptions {
   redis: Redis;
 }
 
-export function createAdminClientCache(
-  options: CreateAdminClientCacheOptions,
-) {
+export function createAdminClientCache(options: CreateAdminClientCacheOptions) {
   const { redis } = options;
   return {
-    async invalidateClient(clientDto: {
-      clientCode: string;
-      clientSecret: string;
-    }) {
+    async invalidateClient(clientDto: { clientCode: string; clientSecret: string }) {
       await Promise.all([
         redis.del(`cache:client:code:${clientDto.clientCode}`),
         redis.del(`cache:client:secret:${clientDto.clientSecret}`),

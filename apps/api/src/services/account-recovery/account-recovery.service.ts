@@ -1,5 +1,5 @@
-import type { AccountRecoveryServiceDeps } from "./account-recovery.port";
 import { BadRequestError } from "@iam/api-core/errors/BadRequestError";
+import type { AccountRecoveryServiceDeps } from "./account-recovery.port";
 
 export function createAccountRecoveryService(deps: AccountRecoveryServiceDeps) {
   async function resolveBoundMobile(username?: string, phoneNumber?: string): Promise<string> {

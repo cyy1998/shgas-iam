@@ -1,11 +1,7 @@
 import type { OrganizationResponsibilityReadScope } from "@admin-api/services/admin-authorization/admin-organization-responsibility-authorization.type";
 import type { AuditLogInput } from "@admin-api/services/audit/audit.context";
 import type { UnitOfWorkPort } from "@iam/api-core/uow";
-import type {
-  EmploymentStatus,
-  OrganizationResponsibilityTypeCode,
-  OrganizationStatus,
-} from "@iam/contracts";
+import type { EmploymentStatus, OrganizationResponsibilityTypeCode, OrganizationStatus } from "@iam/contracts";
 import type { OrganizationResponsibilityAssignmentRecordCreate } from "@iam/domain/organization-responsibility";
 
 export interface CreateOrganizationResponsibilityAssignmentTransactionPorts {
@@ -51,10 +47,12 @@ export interface CreateOrganizationResponsibilityAssignmentTransactionPorts {
     } | null>;
   };
   userProfileInvalidation: {
-    recordChanges: (changes: readonly {
-      readonly kind: "organization-responsibility-assignment";
-      readonly userId: number;
-    }[]) => Promise<void>;
+    recordChanges: (
+      changes: readonly {
+        readonly kind: "organization-responsibility-assignment";
+        readonly userId: number;
+      }[],
+    ) => Promise<void>;
   };
 }
 

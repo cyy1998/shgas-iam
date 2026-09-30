@@ -12,9 +12,12 @@ export function extractPostgresError(error: unknown): PostgresErrorInfo | null {
     if ("code" in current && typeof current.code === "string" && /^[0-9A-Z]{5}$/.test(current.code)) {
       return {
         code: current.code,
-        constraint: "constraint_name" in current && typeof current.constraint_name === "string"
-          ? current.constraint_name
-          : "constraint" in current && typeof current.constraint === "string" ? current.constraint : null,
+        constraint:
+          "constraint_name" in current && typeof current.constraint_name === "string"
+            ? current.constraint_name
+            : "constraint" in current && typeof current.constraint === "string"
+              ? current.constraint
+              : null,
       };
     }
     current = "cause" in current ? current.cause : null;

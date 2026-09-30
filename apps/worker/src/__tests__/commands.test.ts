@@ -10,17 +10,22 @@ describe("user-profile commands", () => {
     const backfillAllUsers = mock(async () => ({ enqueued: 3 }));
     const info = mock(() => {});
 
-    await expect(runUserProfileBackfillCommand({
-      maintenance: { backfillAllUsers },
-      logger: { info },
-      config: { batchSize: 25 },
-    })).resolves.toEqual({ enqueued: 3 });
+    await expect(
+      runUserProfileBackfillCommand({
+        maintenance: { backfillAllUsers },
+        logger: { info },
+        config: { batchSize: 25 },
+      }),
+    ).resolves.toEqual({ enqueued: 3 });
 
     expect(backfillAllUsers).toHaveBeenCalledWith({ batchSize: 25 });
-    expect(info).toHaveBeenCalledWith({
-      enqueued: 3,
-      readiness: "not-verified",
-    }, "user profile backfill jobs dispatched; run readiness gates after convergence");
+    expect(info).toHaveBeenCalledWith(
+      {
+        enqueued: 3,
+        readiness: "not-verified",
+      },
+      "user profile backfill jobs dispatched; run readiness gates after convergence",
+    );
   });
 
   test("repair command uses configured stale window by default", async () => {
@@ -59,8 +64,8 @@ describe("user-profile commands", () => {
       .mockResolvedValueOnce({ count: 2, oldestAgeMs: 5_250 });
     const info = mock(() => {});
 
-    await expect(runUserProfileRepairCommand(
-      {
+    await expect(
+      runUserProfileRepairCommand({
         maintenance: { repairFailedOrStale },
         subjectAccessRepairBacklog: { inspectRepairBacklog },
         subjectAccessRepair: { repairPending },
@@ -73,8 +78,8 @@ describe("user-profile commands", () => {
           repairStaleSeconds: 300,
           transitionStaleSeconds: 600,
         },
-      },
-    )).resolves.toEqual({
+      }),
+    ).resolves.toEqual({
       enqueued: 2,
       userIds: [1, 2],
       subjectAccess: {
@@ -103,48 +108,57 @@ describe("user-profile commands", () => {
     expect(repairFailedOrStale).toHaveBeenCalledWith({ staleBefore, limit: 10 });
     expect(repairPending).toHaveBeenCalledWith({ limit: 10 });
     expect(inspectRepairBacklog).toHaveBeenCalledTimes(2);
-    expect(callOrder.slice(0, 2)).toEqual([
-      "orphan-reap",
-      "transition-recovery",
-    ]);
-    expect(new Set(callOrder.slice(2))).toEqual(new Set([
-      "subject-access-repair",
-      "user-profile-repair",
-    ]));
-    expect(info).toHaveBeenCalledWith({
-      repairBacklogCount: 4,
-      repairBacklogOldestAgeMs: 5_000,
-    }, "Subject Access repair backlog observed before processing");
-    expect(info).toHaveBeenCalledWith({
-      limit: 10,
-      staleAfterSeconds: 600,
-    }, "Subject Access stale transition intent reap started");
-    expect(info).toHaveBeenCalledWith({
-      rolledBack: 4,
-      limit: 10,
-      staleAfterSeconds: 600,
-    }, "Subject Access stale transition intents reaped");
+    expect(callOrder.slice(0, 2)).toEqual(["orphan-reap", "transition-recovery"]);
+    expect(new Set(callOrder.slice(2))).toEqual(new Set(["subject-access-repair", "user-profile-repair"]));
+    expect(info).toHaveBeenCalledWith(
+      {
+        repairBacklogCount: 4,
+        repairBacklogOldestAgeMs: 5_000,
+      },
+      "Subject Access repair backlog observed before processing",
+    );
+    expect(info).toHaveBeenCalledWith(
+      {
+        limit: 10,
+        staleAfterSeconds: 600,
+      },
+      "Subject Access stale transition intent reap started",
+    );
+    expect(info).toHaveBeenCalledWith(
+      {
+        rolledBack: 4,
+        limit: 10,
+        staleAfterSeconds: 600,
+      },
+      "Subject Access stale transition intents reaped",
+    );
     expect(info).toHaveBeenCalledWith(
       { enqueued: 2, userIds: [1, 2], staleBefore: staleBefore.toISOString(), limit: 10 },
       "user profile repair jobs enqueued",
     );
-    expect(info).toHaveBeenCalledWith({
-      deferred: 1,
-      failed: 0,
-      prepared: 2,
-      rolledBack: 3,
-      limit: 10,
-    }, "Subject Access transition recovery backlog processed");
-    expect(info).toHaveBeenCalledWith({
-      disabled: 1,
-      enabled: 2,
-      deferred: 3,
-      failed: 0,
-      stable: 0,
-      limit: 10,
-      repairBacklogCount: 2,
-      repairBacklogOldestAgeMs: 5_250,
-    }, "Subject Access repair backlog processed");
+    expect(info).toHaveBeenCalledWith(
+      {
+        deferred: 1,
+        failed: 0,
+        prepared: 2,
+        rolledBack: 3,
+        limit: 10,
+      },
+      "Subject Access transition recovery backlog processed",
+    );
+    expect(info).toHaveBeenCalledWith(
+      {
+        disabled: 1,
+        enabled: 2,
+        deferred: 3,
+        failed: 0,
+        stable: 0,
+        limit: 10,
+        repairBacklogCount: 2,
+        repairBacklogOldestAgeMs: 5_250,
+      },
+      "Subject Access repair backlog processed",
+    );
   });
 
   test("repair command preserves explicit stale-before override", async () => {
@@ -238,17 +252,19 @@ describe("user-profile commands", () => {
         transitionId: "10000000-0000-4000-8000-000000000098",
       });
 
-    await expect(runSubjectAccessRepairCommand(
-      {
-        subjectAccessRepairBacklog: { inspectRepairBacklog },
-        subjectAccessRepair: { repairPending },
-        subjectAccessTransitionReaper: { reapStalePending },
-        subjectAccessTransitionRecovery: { recoverPending },
-        logger: { info },
-        config: { limit: 10, transitionStaleSeconds: 300 },
-      },
-      { limit: 7 },
-    )).resolves.toEqual({
+    await expect(
+      runSubjectAccessRepairCommand(
+        {
+          subjectAccessRepairBacklog: { inspectRepairBacklog },
+          subjectAccessRepair: { repairPending },
+          subjectAccessTransitionReaper: { reapStalePending },
+          subjectAccessTransitionRecovery: { recoverPending },
+          logger: { info },
+          config: { limit: 10, transitionStaleSeconds: 300 },
+        },
+        { limit: 7 },
+      ),
+    ).resolves.toEqual({
       subjectAccess: {
         disabled: 1,
         enabled: 2,
@@ -276,36 +292,51 @@ describe("user-profile commands", () => {
     expect(inspectRepairBacklog).toHaveBeenCalledTimes(2);
     expect(callOrder).toEqual(["orphan-reap", "transition-recovery", "repair"]);
     expect(info).toHaveBeenCalledTimes(5);
-    expect(info).toHaveBeenCalledWith({
-      repairBacklogCount: 12,
-      repairBacklogOldestAgeMs: 4_000,
-    }, "Subject Access repair backlog observed before processing");
-    expect(info).toHaveBeenCalledWith({
-      limit: 7,
-      staleAfterSeconds: 300,
-    }, "Subject Access stale transition intent reap started");
-    expect(info).toHaveBeenCalledWith({
-      rolledBack: 2,
-      limit: 7,
-      staleAfterSeconds: 300,
-    }, "Subject Access stale transition intents reaped");
-    expect(info).toHaveBeenCalledWith({
-      deferred: 6,
-      failed: 0,
-      prepared: 7,
-      rolledBack: 8,
-      limit: 7,
-    }, "Subject Access transition recovery backlog processed");
-    expect(info).toHaveBeenCalledWith({
-      disabled: 1,
-      enabled: 2,
-      deferred: 3,
-      failed: 4,
-      stable: 5,
-      limit: 7,
-      repairBacklogCount: 5,
-      repairBacklogOldestAgeMs: 4_250,
-    }, "Subject Access repair backlog processed");
+    expect(info).toHaveBeenCalledWith(
+      {
+        repairBacklogCount: 12,
+        repairBacklogOldestAgeMs: 4_000,
+      },
+      "Subject Access repair backlog observed before processing",
+    );
+    expect(info).toHaveBeenCalledWith(
+      {
+        limit: 7,
+        staleAfterSeconds: 300,
+      },
+      "Subject Access stale transition intent reap started",
+    );
+    expect(info).toHaveBeenCalledWith(
+      {
+        rolledBack: 2,
+        limit: 7,
+        staleAfterSeconds: 300,
+      },
+      "Subject Access stale transition intents reaped",
+    );
+    expect(info).toHaveBeenCalledWith(
+      {
+        deferred: 6,
+        failed: 0,
+        prepared: 7,
+        rolledBack: 8,
+        limit: 7,
+      },
+      "Subject Access transition recovery backlog processed",
+    );
+    expect(info).toHaveBeenCalledWith(
+      {
+        disabled: 1,
+        enabled: 2,
+        deferred: 3,
+        failed: 4,
+        stable: 5,
+        limit: 7,
+        repairBacklogCount: 5,
+        repairBacklogOldestAgeMs: 4_250,
+      },
+      "Subject Access repair backlog processed",
+    );
     expect(JSON.stringify(info.mock.calls)).not.toContain("must-not-log");
     expect(JSON.stringify(info.mock.calls)).not.toContain("000000000099");
     expect(JSON.stringify(info.mock.calls)).not.toContain("idx:repair:age");
@@ -343,45 +374,37 @@ describe("user-profile commands", () => {
     });
     const info = mock((_data: Record<string, unknown>, _message: string) => {});
 
-    await expect(runSubjectAccessRepairCommand({
-      subjectAccessRepairBacklog: { inspectRepairBacklog },
-      subjectAccessRepair: { repairPending },
-      subjectAccessTransitionReaper: { reapStalePending },
-      subjectAccessTransitionRecovery: { recoverPending },
-      logger: { info },
-      config: { limit: 10, transitionStaleSeconds: 300 },
-    })).resolves.toMatchObject({
+    await expect(
+      runSubjectAccessRepairCommand({
+        subjectAccessRepairBacklog: { inspectRepairBacklog },
+        subjectAccessRepair: { repairPending },
+        subjectAccessTransitionReaper: { reapStalePending },
+        subjectAccessTransitionRecovery: { recoverPending },
+        logger: { info },
+        config: { limit: 10, transitionStaleSeconds: 300 },
+      }),
+    ).resolves.toMatchObject({
       subjectAccess: { enabled: 1 },
       transitionReap: { rolledBack: 1 },
       transitionRecovery: { prepared: 1 },
     });
 
-    expect(callOrder).toEqual([
-      "orphan-reap",
-      "observe-backlog",
-      "transition-recovery",
-      "repair",
-      "observe-backlog",
-    ]);
-    expect(info.mock.calls.filter(([, message]) =>
-      message === "Subject Access repair backlog observation unavailable"))
-      .toHaveLength(2);
+    expect(callOrder).toEqual(["orphan-reap", "observe-backlog", "transition-recovery", "repair", "observe-backlog"]);
+    expect(
+      info.mock.calls.filter(([, message]) => message === "Subject Access repair backlog observation unavailable"),
+    ).toHaveLength(2);
     expect(JSON.stringify(info.mock.calls)).not.toContain("redis://");
   });
 
   test("retrying after a post-reap crash does not duplicate the released intent", async () => {
     const crash = new Error("crashed after transition reap");
-    const reapStalePending = mock()
-      .mockResolvedValueOnce({ rolledBack: 1 })
-      .mockResolvedValueOnce({ rolledBack: 0 });
-    const recoverPending = mock()
-      .mockRejectedValueOnce(crash)
-      .mockResolvedValueOnce({
-        deferred: 0,
-        failed: 0,
-        prepared: 0,
-        rolledBack: 0,
-      });
+    const reapStalePending = mock().mockResolvedValueOnce({ rolledBack: 1 }).mockResolvedValueOnce({ rolledBack: 0 });
+    const recoverPending = mock().mockRejectedValueOnce(crash).mockResolvedValueOnce({
+      deferred: 0,
+      failed: 0,
+      prepared: 0,
+      rolledBack: 0,
+    });
     const repairPending = mock(async () => ({
       disabled: 0,
       enabled: 0,
@@ -409,11 +432,11 @@ describe("user-profile commands", () => {
     expect(reapStalePending).toHaveBeenCalledTimes(2);
     expect(recoverPending).toHaveBeenCalledTimes(2);
     expect(repairPending).toHaveBeenCalledTimes(1);
-    expect(info.mock.calls.filter(([, message]) =>
-      message === "Subject Access repair backlog observed before processing"))
-      .toHaveLength(2);
-    expect(info.mock.calls.filter(([, message]) =>
-      message === "Subject Access repair backlog processed"))
-      .toHaveLength(1);
+    expect(
+      info.mock.calls.filter(([, message]) => message === "Subject Access repair backlog observed before processing"),
+    ).toHaveLength(2);
+    expect(info.mock.calls.filter(([, message]) => message === "Subject Access repair backlog processed")).toHaveLength(
+      1,
+    );
   });
 });

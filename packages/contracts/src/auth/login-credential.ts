@@ -60,10 +60,7 @@ export class LoginCredentialError extends Error {
 function bytesToBase64Url(bytes: Uint8Array): string {
   const base64 = btoa(String.fromCharCode(...bytes));
 
-  return base64
-    .replace(/\+/g, "-")
-    .replace(/\//g, "_")
-    .replace(/=+$/u, "");
+  return base64.replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/u, "");
 }
 
 function base64UrlToBytes(input: string): Uint8Array {
@@ -72,7 +69,7 @@ function base64UrlToBytes(input: string): Uint8Array {
     .replace(/_/g, "/")
     .padEnd(Math.ceil(input.length / 4) * 4, "=");
 
-  return Uint8Array.from(atob(base64), char => char.charCodeAt(0));
+  return Uint8Array.from(atob(base64), (char) => char.charCodeAt(0));
 }
 
 function hexToBytes(hex: string): Uint8Array {
@@ -88,7 +85,7 @@ function hexToBytes(hex: string): Uint8Array {
 }
 
 function bytesToHex(bytes: Uint8Array): string {
-  return Array.from(bytes, byte => byte.toString(16).padStart(2, "0")).join("");
+  return Array.from(bytes, (byte) => byte.toString(16).padStart(2, "0")).join("");
 }
 
 function utf8ToBytes(value: string): Uint8Array {
@@ -122,14 +119,7 @@ function base64UrlToHex(value: string): string {
 }
 
 function envelopeSigningInput(envelope: Omit<LoginCredentialEnvelope, "tag">): string {
-  return [
-    String(envelope.v),
-    envelope.alg,
-    envelope.kid,
-    envelope.ek,
-    envelope.iv,
-    envelope.ct,
-  ].join(".");
+  return [String(envelope.v), envelope.alg, envelope.kid, envelope.ek, envelope.iv, envelope.ct].join(".");
 }
 
 function calculateTag(envelope: Omit<LoginCredentialEnvelope, "tag">, macKey: string): string {
@@ -163,16 +153,16 @@ function assertPlaintext(value: unknown): LoginCredentialPlaintext {
 
   const payload = value as Record<string, unknown>;
   if (
-    payload.v !== LOGIN_CREDENTIAL_VERSION
-    || payload.typ !== LOGIN_CREDENTIAL_TYPE
-    || typeof payload.username !== "string"
-    || payload.username.trim() === ""
-    || typeof payload.password !== "string"
-    || payload.password === ""
-    || typeof payload.ts !== "number"
-    || !Number.isSafeInteger(payload.ts)
-    || typeof payload.nonce !== "string"
-    || payload.nonce.length < 16
+    payload.v !== LOGIN_CREDENTIAL_VERSION ||
+    payload.typ !== LOGIN_CREDENTIAL_TYPE ||
+    typeof payload.username !== "string" ||
+    payload.username.trim() === "" ||
+    typeof payload.password !== "string" ||
+    payload.password === "" ||
+    typeof payload.ts !== "number" ||
+    !Number.isSafeInteger(payload.ts) ||
+    typeof payload.nonce !== "string" ||
+    payload.nonce.length < 16
   ) {
     throw new LoginCredentialError();
   }
@@ -194,14 +184,14 @@ function assertEnvelope(value: unknown): LoginCredentialEnvelope {
 
   const envelope = value as Record<string, unknown>;
   if (
-    envelope.v !== LOGIN_CREDENTIAL_VERSION
-    || envelope.alg !== LOGIN_CREDENTIAL_ALG
-    || typeof envelope.kid !== "string"
-    || envelope.kid.trim() === ""
-    || typeof envelope.ek !== "string"
-    || typeof envelope.iv !== "string"
-    || typeof envelope.ct !== "string"
-    || typeof envelope.tag !== "string"
+    envelope.v !== LOGIN_CREDENTIAL_VERSION ||
+    envelope.alg !== LOGIN_CREDENTIAL_ALG ||
+    typeof envelope.kid !== "string" ||
+    envelope.kid.trim() === "" ||
+    typeof envelope.ek !== "string" ||
+    typeof envelope.iv !== "string" ||
+    typeof envelope.ct !== "string" ||
+    typeof envelope.tag !== "string"
   ) {
     throw new LoginCredentialError();
   }
@@ -276,10 +266,7 @@ export function createLoginCredential(input: CreateLoginCredentialInput): string
   return `${LOGIN_CREDENTIAL_PREFIX}.${encodeJson(envelope)}`;
 }
 
-export function decryptLoginCredential(
-  credential: string,
-  privateKeys: Record<string, string>,
-): ParsedLoginCredential {
+export function decryptLoginCredential(credential: string, privateKeys: Record<string, string>): ParsedLoginCredential {
   try {
     const envelope = parseCredentialEnvelope(credential);
     const privateKey = privateKeys[envelope.kid];
@@ -287,38 +274,35 @@ export function decryptLoginCredential(
       throw new LoginCredentialError();
     }
 
-    const keyMaterialText = sm2.doDecrypt(
-      base64UrlToHex(envelope.ek),
-      privateKey,
-      LOGIN_CREDENTIAL_SM2_CIPHER_MODE,
-    );
+    const keyMaterialText = sm2.doDecrypt(base64UrlToHex(envelope.ek), privateKey, LOGIN_CREDENTIAL_SM2_CIPHER_MODE);
     const keyMaterial = parseKeyMaterial(keyMaterialText);
-    const expectedTag = calculateTag({
-      v: envelope.v,
-      alg: envelope.alg,
-      kid: envelope.kid,
-      ek: envelope.ek,
-      iv: envelope.iv,
-      ct: envelope.ct,
-    }, keyMaterial.macKey);
+    const expectedTag = calculateTag(
+      {
+        v: envelope.v,
+        alg: envelope.alg,
+        kid: envelope.kid,
+        ek: envelope.ek,
+        iv: envelope.iv,
+        ct: envelope.ct,
+      },
+      keyMaterial.macKey,
+    );
 
     if (!constantTimeEqual(expectedTag, envelope.tag)) {
       throw new LoginCredentialError();
     }
 
-    const plaintextText = sm4.decrypt(
-      base64UrlToHex(envelope.ct),
-      keyMaterial.encKey,
-      { mode: "cbc", iv: base64UrlToHex(envelope.iv) },
-    );
+    const plaintextText = sm4.decrypt(base64UrlToHex(envelope.ct), keyMaterial.encKey, {
+      mode: "cbc",
+      iv: base64UrlToHex(envelope.iv),
+    });
 
     return {
       kid: envelope.kid,
       alg: envelope.alg,
       payload: assertPlaintext(JSON.parse(plaintextText)),
     };
-  }
-  catch (error) {
+  } catch (error) {
     if (error instanceof LoginCredentialError) {
       throw error;
     }

@@ -8,10 +8,12 @@ type AdminAuditTarget = {
 };
 
 function resolveAuditContext(auditContext?: AdminAuditContext): AdminAuditContext {
-  return auditContext ?? {
-    actorType: "system",
-    actorSystemKey: "admin-api",
-  };
+  return (
+    auditContext ?? {
+      actorType: "system",
+      actorSystemKey: "admin-api",
+    }
+  );
 }
 
 export function buildAdminResourceAudit(

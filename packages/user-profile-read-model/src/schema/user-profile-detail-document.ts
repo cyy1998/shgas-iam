@@ -3,19 +3,17 @@ const PROFILE_DETAIL_DATE_KEYS = new Set(["createTime", "updateTime", "startTime
 
 export function reviveUserProfileDetailDates(value: unknown, key?: string): unknown {
   if (
-    typeof value === "string"
-    && key !== undefined
-    && PROFILE_DETAIL_DATE_KEYS.has(key)
-    && ISO_DATE_REGEX.test(value)
+    typeof value === "string" &&
+    key !== undefined &&
+    PROFILE_DETAIL_DATE_KEYS.has(key) &&
+    ISO_DATE_REGEX.test(value)
   ) {
     return new Date(value);
   }
 
-  if (value instanceof Date || value === null || typeof value !== "object")
-    return value;
+  if (value instanceof Date || value === null || typeof value !== "object") return value;
 
-  if (Array.isArray(value))
-    return value.map(item => reviveUserProfileDetailDates(item));
+  if (Array.isArray(value)) return value.map((item) => reviveUserProfileDetailDates(item));
 
   return Object.fromEntries(
     Object.entries(value).map(([childKey, childValue]) => [

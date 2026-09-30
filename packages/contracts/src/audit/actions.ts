@@ -246,9 +246,9 @@ export const auditActionCatalog = [
 type AuditActionCatalogItem = (typeof auditActionCatalog)[number];
 export type CanonicalAuditAction = AuditActionCatalogItem["action"];
 
-export const AuditActions = Object.fromEntries(
-  auditActionCatalog.map(item => [item.action, item.action]),
-) as { readonly [Action in CanonicalAuditAction]: Action };
+export const AuditActions = Object.fromEntries(auditActionCatalog.map((item) => [item.action, item.action])) as {
+  readonly [Action in CanonicalAuditAction]: Action;
+};
 
 export const ORGANIZATION_RESPONSIBILITY_ASSIGNMENT_AUDIT_ACTIONS = {
   create: AuditActions["admin.organization_responsibility_assignment.create"],
@@ -263,18 +263,14 @@ export interface AuditActionOption {
 }
 
 export const auditActionLabels = Object.fromEntries(
-  auditActionCatalog.map(item => [item.action, item.label]),
+  auditActionCatalog.map((item) => [item.action, item.label]),
 ) as Record<CanonicalAuditAction, string>;
 
-export const auditActionOptions: AuditActionOption[] = auditActionCatalog.map(
-  item => ({
-    label: item.label,
-    value: item.action,
-  }),
-);
+export const auditActionOptions: AuditActionOption[] = auditActionCatalog.map((item) => ({
+  label: item.label,
+  value: item.action,
+}));
 
 export function getAuditActionLabel(action: string): string {
-  return Object.hasOwn(auditActionLabels, action)
-    ? auditActionLabels[action as CanonicalAuditAction]
-    : action;
+  return Object.hasOwn(auditActionLabels, action) ? auditActionLabels[action as CanonicalAuditAction] : action;
 }

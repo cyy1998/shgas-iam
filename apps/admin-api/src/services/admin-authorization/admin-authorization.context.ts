@@ -1,3 +1,4 @@
+import { AuthzForbiddenError } from "@iam/api-core/errors/AuthzForbiddenError";
 import type { Context, Next } from "hono";
 import type {
   AdminAuthorizationActor,
@@ -6,32 +7,24 @@ import type {
 } from "./admin-authorization.policy";
 import type { AdminOperationId } from "./admin-operation.registry";
 import type { AdminRestOperationSurface } from "./admin-rest-operation.surface";
-import { AuthzForbiddenError } from "@iam/api-core/errors/AuthzForbiddenError";
 
-const operationAuthorizationsByContext = new WeakMap<
-  Context,
-  Map<AdminOperationId, AdminOperationAuthorization>
->();
+const operationAuthorizationsByContext = new WeakMap<Context, Map<AdminOperationId, AdminOperationAuthorization>>();
 
 export function getAdminAuthorizationContext(c: Context): {
   actor: AdminAuthorizationActor;
   policy: AdminAuthorizationPolicy;
 } {
-  const policy = c.get("adminAuthorizationPolicy" as never) as
-    | AdminAuthorizationPolicy
-    | undefined;
-  const user = c.get("userDetailDto" as never) as
-    | { roles?: unknown }
-    | undefined;
+  const policy = c.get("adminAuthorizationPolicy" as never) as AdminAuthorizationPolicy | undefined;
+  const user = c.get("userDetailDto" as never) as { roles?: unknown } | undefined;
   const userId = c.get("userId" as never) as unknown;
   const username = c.get("username" as never) as unknown;
   if (
-    !policy
-    || !user
-    || !Array.isArray(user.roles)
-    || !user.roles.every(role => typeof role === "string")
-    || typeof userId !== "number"
-    || typeof username !== "string"
+    !policy ||
+    !user ||
+    !Array.isArray(user.roles) ||
+    !user.roles.every((role) => typeof role === "string") ||
+    typeof userId !== "number" ||
+    typeof username !== "string"
   ) {
     throw new AuthzForbiddenError("无管理端操作权限");
   }
@@ -41,13 +34,8 @@ export function getAdminAuthorizationContext(c: Context): {
   };
 }
 
-export function createAdminAuthorizationContextHandler(
-  policy: AdminAuthorizationPolicy,
-) {
-  return async function adminAuthorizationContextHandler(
-    c: Context,
-    next: Next,
-  ) {
+export function createAdminAuthorizationContextHandler(policy: AdminAuthorizationPolicy) {
+  return async function adminAuthorizationContextHandler(c: Context, next: Next) {
     c.set("adminAuthorizationPolicy" as never, policy as never);
     return await next();
   };
@@ -68,8 +56,7 @@ export async function authorizeAdminOperationForContext(
   });
   let authorizations = operationAuthorizationsByContext.get(c);
   const cached = authorizations?.get(input.operationId);
-  if (cached)
-    return cached;
+  if (cached) return cached;
 
   const authorization = await policy.assertOperationAllowed({
     actor,
@@ -82,19 +69,13 @@ export async function authorizeAdminOperationForContext(
   return authorization;
 }
 
-export async function resolveAdminUserAuthorizationForContext(
-  c: Context,
-  operationId: AdminOperationId,
-) {
+export async function resolveAdminUserAuthorizationForContext(c: Context, operationId: AdminOperationId) {
   const { actor, policy } = getAdminAuthorizationContext(c);
   const operationAuthorization = await authorizeAdminOperationForContext(c, {
     operationId,
     operationInput: undefined,
   });
-  return await policy.getUserAuthorization(
-    actor,
-    operationAuthorization.hrAdministrationScope,
-  );
+  return await policy.getUserAuthorization(actor, operationAuthorization.hrAdministrationScope);
 }
 
 export async function resolveAdminOrganizationResponsibilityAuthorizationForContext(
@@ -106,23 +87,15 @@ export async function resolveAdminOrganizationResponsibilityAuthorizationForCont
     operationId,
     operationInput: undefined,
   });
-  return await policy.getOrganizationResponsibilityAuthorization(
-    actor,
-    operationAuthorization.hrAdministrationScope,
-  );
+  return await policy.getOrganizationResponsibilityAuthorization(actor, operationAuthorization.hrAdministrationScope);
 }
 
-export function createAdminRestAuthorizationHandler(
-  surface: AdminRestOperationSurface,
-) {
+export function createAdminRestAuthorizationHandler(surface: AdminRestOperationSurface) {
   return async function adminRestAuthorizationHandler(c: Context, next: Next) {
     const tierBasePath = c.get("tierBasePath" as never) as unknown;
-    const relativePath = typeof tierBasePath === "string"
-      ? c.req.path.slice(tierBasePath.length) || "/"
-      : c.req.path;
+    const relativePath = typeof tierBasePath === "string" ? c.req.path.slice(tierBasePath.length) || "/" : c.req.path;
     const operation = surface.match(c.req.method, relativePath);
-    if (!operation)
-      return await next();
+    if (!operation) return await next();
 
     const requestInput = await readRequestInput(c);
     await authorizeAdminOperationForContext(c, {
@@ -140,13 +113,11 @@ export function createAdminRestAuthorizationHandler(
 async function readRequestInput(c: Context) {
   const query = c.req.queries();
   const contentType = c.req.header("content-type") ?? "";
-  if (!contentType.toLowerCase().includes("application/json"))
-    return { body: undefined, query };
+  if (!contentType.toLowerCase().includes("application/json")) return { body: undefined, query };
   try {
     const body = await c.req.raw.clone().json();
     return { body, query };
-  }
-  catch {
+  } catch {
     return { body: undefined, query };
   }
 }

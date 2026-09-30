@@ -1,9 +1,9 @@
-import type { RunDescriptor } from "./lifecycle.ts";
+import { describe, expect, test } from "bun:test";
 import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { describe, expect, test } from "bun:test";
 import { createDockerInfraOperations } from "./docker-infra.ts";
+import type { RunDescriptor } from "./lifecycle.ts";
 
 const descriptor: RunDescriptor = {
   version: 1,
@@ -31,10 +31,8 @@ describe("exact-project Docker infrastructure", () => {
     await operations.runMigrations(descriptor);
     await operations.cleanup(descriptor);
 
-    const composeCommands = commands.filter(command => command[1] === "compose");
-    expect(composeCommands.every(command => command.includes(
-      descriptor.project,
-    ))).toBe(true);
+    const composeCommands = commands.filter((command) => command[1] === "compose");
+    expect(composeCommands.every((command) => command.includes(descriptor.project))).toBe(true);
     expect(commands.at(-1)).toEqual([
       "docker",
       "compose",
@@ -49,10 +47,10 @@ describe("exact-project Docker infrastructure", () => {
       "local",
     ]);
     expect(commands.flat()).not.toContain("prune");
-    expect(commands.some(command => command[1] === "container")).toBe(false);
-    expect(commands.some(command => command[1] === "network")).toBe(false);
-    expect(commands.some(command => command[1] === "volume")).toBe(false);
-    expect(commands.some(command => command[1] === "image")).toBe(false);
+    expect(commands.some((command) => command[1] === "container")).toBe(false);
+    expect(commands.some((command) => command[1] === "network")).toBe(false);
+    expect(commands.some((command) => command[1] === "volume")).toBe(false);
+    expect(commands.some((command) => command[1] === "image")).toBe(false);
   });
 
   test("starts all repo runtimes and probes every public route", async () => {
@@ -62,8 +60,8 @@ describe("exact-project Docker infrastructure", () => {
       runCommand: async (command, args) => {
         commands.push([command, ...args]);
       },
-      probeOidcDiscovery: async origin => probes.push(`oidc:${origin}`),
-      probeSsoConfiguration: async origin => probes.push(`sso:${origin}`),
+      probeOidcDiscovery: async (origin) => probes.push(`oidc:${origin}`),
+      probeSsoConfiguration: async (origin) => probes.push(`sso:${origin}`),
       probeRoute: async (_origin, path, statuses) => {
         probes.push(`${path}:${statuses.join(",")}`);
       },
@@ -73,14 +71,8 @@ describe("exact-project Docker infrastructure", () => {
     await operations.renderGatewayRoutes(descriptor);
     await operations.awaitGatewayRouteReadiness(descriptor);
 
-    const runtime = commands.find(command => command.includes("api"));
-    for (const service of [
-      "api",
-      "admin-api",
-      "worker",
-      "admin",
-      "sso",
-    ]) {
+    const runtime = commands.find((command) => command.includes("api"));
+    for (const service of ["api", "admin-api", "worker", "admin", "sso"]) {
       expect(runtime).toContain(service);
     }
     expect(probes).toEqual([
@@ -103,19 +95,21 @@ describe("exact-project Docker infrastructure", () => {
 
     await operations.seedE2EScenario(descriptor);
 
-    expect(commands).toEqual([[
-      "docker",
-      "compose",
-      "--file",
-      "D:/repo/e2e/system/compose.yaml",
-      "--project-name",
-      descriptor.project,
-      "run",
-      "--rm",
-      "--no-deps",
-      "--build",
-      "seed",
-    ]]);
+    expect(commands).toEqual([
+      [
+        "docker",
+        "compose",
+        "--file",
+        "D:/repo/e2e/system/compose.yaml",
+        "--project-name",
+        descriptor.project,
+        "run",
+        "--rm",
+        "--no-deps",
+        "--build",
+        "seed",
+      ],
+    ]);
     expect(commands.flat().join(" ")).not.toMatch(/password|token|secret/iu);
   });
 
@@ -139,23 +133,9 @@ describe("exact-project Docker infrastructure", () => {
     await operations.verifyUserProfileReadiness(descriptor);
 
     expect(captures).toHaveLength(2);
-    expect(captures.map(command => command.slice(-6))).toEqual([
-      [
-        "worker",
-        "bun",
-        "run",
-        "user-profile:verify-postgres",
-        "--batch-size",
-        "100",
-      ],
-      [
-        "worker",
-        "bun",
-        "run",
-        "user-profile:verify-redis",
-        "--batch-size",
-        "100",
-      ],
+    expect(captures.map((command) => command.slice(-6))).toEqual([
+      ["worker", "bun", "run", "user-profile:verify-postgres", "--batch-size", "100"],
+      ["worker", "bun", "run", "user-profile:verify-redis", "--batch-size", "100"],
     ]);
     expect(captures.flat().join(" ")).not.toMatch(/password|token|secret/iu);
   });
@@ -190,11 +170,13 @@ describe("exact-project Docker infrastructure", () => {
 
     expect(environments).toHaveLength(2);
     for (const environment of environments) {
-      expect(environment).toEqual(expect.objectContaining({
-        IAM_E2E_ADMIN_CLIENT_CODE: "iam-admin",
-        IAM_E2E_ADMIN_ROLE_CODE: "iam:admin",
-        IAM_E2E_GATEWAY_AUTHORITY: "127.0.0.1:43210",
-      }));
+      expect(environment).toEqual(
+        expect.objectContaining({
+          IAM_E2E_ADMIN_CLIENT_CODE: "iam-admin",
+          IAM_E2E_ADMIN_ROLE_CODE: "iam:admin",
+          IAM_E2E_GATEWAY_AUTHORITY: "127.0.0.1:43210",
+        }),
+      );
     }
   });
 
@@ -212,17 +194,19 @@ describe("exact-project Docker infrastructure", () => {
 
     await operations.verifyCanonicalOriginConfiguration(descriptor);
 
-    expect(captures).toEqual([[
-      "docker",
-      "compose",
-      "--file",
-      "D:/repo/e2e/system/compose.yaml",
-      "--project-name",
-      descriptor.project,
-      "config",
-      "--format",
-      "json",
-    ]]);
+    expect(captures).toEqual([
+      [
+        "docker",
+        "compose",
+        "--file",
+        "D:/repo/e2e/system/compose.yaml",
+        "--project-name",
+        descriptor.project,
+        "config",
+        "--format",
+        "json",
+      ],
+    ]);
   });
 
   test("records attempted and failed migration receipts", async () => {
@@ -237,15 +221,15 @@ describe("exact-project Docker infrastructure", () => {
       },
     });
 
-    await expect(operations.runMigrations(descriptor)).rejects.toBe(
-      migrationFailure,
-    );
+    await expect(operations.runMigrations(descriptor)).rejects.toBe(migrationFailure);
     expect(receipts).toHaveLength(2);
     expect(receipts[0]).toEqual(expect.objectContaining({ status: "attempted" }));
-    expect(receipts[1]).toEqual(expect.objectContaining({
-      failureCategory: "Error",
-      status: "failed",
-    }));
+    expect(receipts[1]).toEqual(
+      expect.objectContaining({
+        failureCategory: "Error",
+        status: "failed",
+      }),
+    );
   });
 
   test("keeps bounded raw service logs and reports unavailable services", async () => {
@@ -253,30 +237,28 @@ describe("exact-project Docker infrastructure", () => {
     try {
       const operations = createOperations({
         captureCommand: async (_command, args) => {
-          if (!args.includes("logs"))
-            return { stdout: "{}", stderr: "" };
+          if (!args.includes("logs")) return { stdout: "{}", stderr: "" };
           const service = args.at(-1);
-          if (service === "api")
-            throw new Error("synthetic api logs unavailable");
+          if (service === "api") throw new Error("synthetic api logs unavailable");
           return {
-            stdout: service === "worker"
-              ? "Authorization: Bearer SYNTHETIC-TOKEN\nlatest-worker\n"
-              : `latest-${service}\n`,
+            stdout:
+              service === "worker" ? "Authorization: Bearer SYNTHETIC-TOKEN\nlatest-worker\n" : `latest-${service}\n`,
             stderr: "",
           };
         },
       });
 
-      await expect(operations.collectDiagnostics({
-        ...descriptor,
-        artifactDirectory,
-      })).rejects.toThrow("required diagnostic source failed");
+      await expect(
+        operations.collectDiagnostics({
+          ...descriptor,
+          artifactDirectory,
+        }),
+      ).rejects.toThrow("required diagnostic source failed");
       const logs = await readFile(join(artifactDirectory, "compose-logs.txt"), "utf8");
       expect(logs).toContain("diagnostic source unavailable: Error");
       expect(logs).toContain("SYNTHETIC-TOKEN");
       expect(logs).toContain("latest-worker");
-    }
-    finally {
+    } finally {
       await rm(artifactDirectory, { force: true, recursive: true });
     }
   });
@@ -285,8 +267,7 @@ describe("exact-project Docker infrastructure", () => {
     const cleanupFailure = new Error("synthetic compose down failure");
     const operations = createOperations({
       runCommand: async (_command, args) => {
-        if (args.includes("down"))
-          throw cleanupFailure;
+        if (args.includes("down")) throw cleanupFailure;
       },
     });
 
@@ -309,41 +290,49 @@ function createOperations(overrides: OperationOverrides = {}) {
     repositoryRoot: "D:/repo",
     requiredPaths: [],
     runCommand: overrides.runCommand ?? (async () => undefined),
-    captureCommand: overrides.captureCommand
-      ?? (async () => ({ stdout: "", stderr: "" })),
+    captureCommand: overrides.captureCommand ?? (async () => ({ stdout: "", stderr: "" })),
     probeGateway: async () => undefined,
-    probeOidcDiscovery: overrides.probeOidcDiscovery
-      ?? (async () => undefined),
+    probeOidcDiscovery: overrides.probeOidcDiscovery ?? (async () => undefined),
     probeRoute: overrides.probeRoute ?? (async () => undefined),
-    probeSsoConfiguration: overrides.probeSsoConfiguration
-      ?? (async () => undefined),
-    writeMigrationReceipt: overrides.writeMigrationReceipt
-      ?? (async () => undefined),
+    probeSsoConfiguration: overrides.probeSsoConfiguration ?? (async () => undefined),
+    writeMigrationReceipt: overrides.writeMigrationReceipt ?? (async () => undefined),
   });
 }
 
 function renderedComposeContract() {
   return {
     services: {
-      "api": { environment: {
-        IAM_API_SSO_INTERNAL_ORIGIN: descriptor.origin,
-        IAM_API_SSO_EXTERNAL_ORIGIN: descriptor.origin,
-      } },
-      "gateway-sync": { environment: {
-        IAM_SSO_INTERNAL_HOST: "127.0.0.1:43210",
-        IAM_SSO_EXTERNAL_HOST: "127.0.0.1:43210",
-      } },
-      "admin-api": { environment: {
-        IAM_ADMIN_API_ADMIN_CLIENT_CODES: "iam-admin",
-      } },
-      "admin": { build: { args: {
-        UMI_APP_ADMIN_CLIENT_CODE: "iam-admin",
-      } } },
-      "seed": { environment: {
-        IAM_E2E_RUN_ID: descriptor.runId,
-        IAM_E2E_ORIGIN: descriptor.origin,
-        IAM_E2E_SEED_RECEIPT_PATH: `/artifacts/${descriptor.runId}/seed-receipt.json`,
-      } },
+      api: {
+        environment: {
+          IAM_API_SSO_INTERNAL_ORIGIN: descriptor.origin,
+          IAM_API_SSO_EXTERNAL_ORIGIN: descriptor.origin,
+        },
+      },
+      "gateway-sync": {
+        environment: {
+          IAM_SSO_INTERNAL_HOST: "127.0.0.1:43210",
+          IAM_SSO_EXTERNAL_HOST: "127.0.0.1:43210",
+        },
+      },
+      "admin-api": {
+        environment: {
+          IAM_ADMIN_API_ADMIN_CLIENT_CODES: "iam-admin",
+        },
+      },
+      admin: {
+        build: {
+          args: {
+            UMI_APP_ADMIN_CLIENT_CODE: "iam-admin",
+          },
+        },
+      },
+      seed: {
+        environment: {
+          IAM_E2E_RUN_ID: descriptor.runId,
+          IAM_E2E_ORIGIN: descriptor.origin,
+          IAM_E2E_SEED_RECEIPT_PATH: `/artifacts/${descriptor.runId}/seed-receipt.json`,
+        },
+      },
     },
   };
 }

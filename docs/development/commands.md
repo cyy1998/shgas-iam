@@ -9,13 +9,13 @@
 
 ```bash
 pnpm --filter <workspace> test
-pnpm --filter <workspace> lint
 pnpm --filter <workspace> typecheck
 pnpm check:architecture
 pnpm check:docs
 git diff --check
 ```
 
+格式与 lint 由[提交 Hook](#commit-前检查)自动处理；上面的内循环无需手动追加这两类命令。
 实施交接、评审修复后的验证复用与批后检查，按[开发工作流的验证节奏](../agents/workflow.md#验证节奏)执行。
 
 根工具链变化的聚焦 Bun 测试：
@@ -24,7 +24,7 @@ git diff --check
 bun test scripts/__tests__/architecture-guard.test.ts
 bun test scripts/__tests__/test-orchestration.test.ts
 bun test scripts/__tests__/tooling-contracts.test.ts
-bun test scripts/__tests__/eslint-config-ownership.test.ts
+bun test scripts/__tests__/quality-tooling-ownership.test.ts
 ```
 
 Canonical collection 与编排变化还应运行：
@@ -37,6 +37,9 @@ pnpm test:integration:<component|process|redis|postgres|composition|browser>
 
 完整 root Gate 只在准备 merge、release 或用户明确要求时运行；ticket 实现内循环不重复运行。按需要选择基础
 `pnpm verify`、全资源 `pnpm verify:ci` 或包含 Full-system E2E 的 `pnpm verify:release`。
+
+统一格式与规则命令的真实 CLI 行为由 `pnpm test:integration:process:root` 聚焦执行；它同时由根
+`pnpm test:integration:process` 收集，使用临时 Git 仓库，不需要数据库或 Redis。
 
 ## Sandcastle AFK
 
@@ -78,6 +81,10 @@ Implementer 和 Merger 在 Codex CLI 启动前统一执行 `scripts/sandcastle/p
 保留宿主已有生成文件；Linux 类型不会写回宿主生成目录。Planner 只读选票，不执行这套依赖初始化。
 容器内修改依赖、Umi 配置或路由后，再运行 `sh scripts/sandcastle/prepare-workspace.sh` 更新环境；普通业务改动无需重复初始化。
 Smoke 覆盖旧宿主生成文件隔离、两个前端类型检查，以及安装或 setup 失败时不启动 agent。
+依赖安装保留 `HUSKY=0`，避免标准 Husky 安装改写可写挂载的宿主 Git 元数据。Implementer 与 Merger 在同一执行 shell
+中启用容器私有 hook 启动器，通过追加进程级 `core.hooksPath` 复用仓库 `.husky/pre-commit`，保留既有进程级 Git 配置。
+必要工具或 hook 初始化失败会阻止 agent 启动；容器不写宿主 local Git 配置或 `.husky/_` 包装文件。
+Smoke 分别在两种 checkout 中用真实普通 commit 验证自动修复、错误阻断与宿主配置保持不变。
 运行参数默认 10 批、最多 2 张 ticket 并行；`--iterations`、`--parallel` 只调整本次运行。
 Merger 每批最多 10 次 SDK 迭代，正常结束但未输出完成标记时继续；这与 `--iterations` 的批次数分别计数，
 也不重试初始化或进程异常。失败修复与继续执行规则见 [AFK 工作流](../agents/workflow.md#sandcastle-afk-批量实施)。
@@ -116,6 +123,8 @@ Profile 重建及 Subject Access 恢复见[Profile 维护手册](../releases/use
 
 - `pnpm dev`
 - `pnpm build`
+- `pnpm format`
+- `pnpm format:check`
 - `pnpm lint`
 - `pnpm lint:fix`
 - `pnpm test`
@@ -142,7 +151,28 @@ Profile 重建及 Subject Access 恢复见[Profile 维护手册](../releases/use
 - Env naming guard：`pnpm check:env-names`
 - Test Collection Guard：`pnpm check:test-collection`
 
-`pnpm lint` 调度各 workspace 的 lint 与根 ESLint；根 lint 范围为 `scripts/` 和三个根 ESLint/Stylelint 配置。
+统一格式与规则命令适用于根目录和所有 workspace，例如 `pnpm --filter @iam/admin format:check`：
+
+这些入口供显式调用和聚焦排查；日常提交及聚合验证已经自动执行，无需再逐项手动运行。
+
+| 命令           | 行为                                                  |
+| -------------- | ----------------------------------------------------- |
+| `format`       | 只排版，不整理 import 或修复代码规则。                |
+| `format:check` | 只读检查格式，差异或解析错误非零退出。                |
+| `lint`         | 只读检查代码规则及 import 整理要求。                  |
+| `lint:fix`     | 应用 Biome 安全修复及 import 整理；剩余错误非零退出。 |
+
+根命令覆盖全仓纳入范围的文件，workspace 命令只覆盖该 workspace，均使用同一配置和文件选择规则。
+这些命令直接运行工具，不复用 Turbo 检查缓存，因此配置或依赖变化后不会复用旧通过结果。
+在声明的 pnpm 版本与仓库锁文件就绪的环境中，`verifyDepsBeforeRun: error` 使项目依赖未就绪时直接失败，
+需先显式执行 `pnpm install`，检查入口不隐式安装项目依赖或运行安装生命周期。
+Biome 负责 JS/TS、JSX/TSX、JSON/JSONC、CSS；Prettier 只负责 Less、YAML、Markdown。
+Stylelint 只检查 Less，不自动修复。YAML 不执行通用 lint，也不会隐式触发 Gateway 等发布验证。
+其他类型（如 SQL、Shell、TOML、HTML 和二进制资产）不由这组命令验证，继续使用各自消费工具与专属检查。
+
+生成目录、依赖锁文件、数据库 migration 快照、vendored API 文档资源、`openspec/`、`.scratch/`、历史审查和
+外来 skill 副本不参与格式及规则改写。完整选择边界由统一 runner 维护；支持文件的解析失败不会视为无匹配跳过。
+`lint:fix` 保留裸副作用 import 的顺序，不启用 unsafe 修复；格式细节见[编码风格](coding-style.md)。
 
 ## 测试与验证通道
 
@@ -240,19 +270,18 @@ pnpm --filter @iam/user-profile-read-model test:integration:redis
 两个 resolution package 都没有空的 Unit profile。旧 Subject Projection V1 rehearsal 已随 strict V2 激活撤销；
 受控数据准备统一由 Worker 的版本无关 `user-profile:*` maintenance 命令拥有。
 
-Pure shared packages、ESLint config、Client Subject Projection 与 Gateway 已发布以下 package-local canonical commands：
+Pure shared packages、Client Subject Projection 与 Gateway 已发布以下 package-local canonical commands：
 
 ```bash
 pnpm --filter @iam/contracts test:unit
 pnpm --filter @iam/domain test:unit
-pnpm --filter @iam/eslint-config test:unit
 pnpm --filter @iam/jobs test:unit
 pnpm --filter @iam/client-subject-projection test:integration:component
 pnpm --filter @iam/gateway-apisix test:unit
 pnpm --filter @iam/gateway-apisix test:integration:component
 ```
 
-ESLint config 的 Unit command 显式收集 `test/` 下唯一 MJS test。Canonical tasks 只依赖 Turbo `transit`，不会通过
+Canonical tasks 只依赖 Turbo `transit`，不会通过
 `^test` 扩大执行拓扑。
 
 Admin 与 SSO frontend 已发布 Unit、component 与 mock-browser package-local canonical commands：
@@ -298,7 +327,7 @@ Cleanup 失败会非零退出并保留 descriptor，可使用同一目标重试�
 
 `pnpm verify` 通过 `scripts/verify.mjs` 按以下顺序 fail-fast：
 
-1. static：`pnpm lint`、`pnpm check:docs`、`pnpm check:env-names`、`pnpm check:architecture`、`pnpm check:test-collection`；
+1. static：`pnpm format:check`、`pnpm lint`、`pnpm check:docs`、`pnpm check:env-names`、`pnpm check:architecture`、`pnpm check:test-collection`；
 2. typecheck：`pnpm typecheck`；
 3. test:unit：`pnpm test:unit`；
 4. build：`pnpm build`。
@@ -489,14 +518,23 @@ node -e "const wrapper=require('typescript/package.json'); const api=require('ty
 
 ## Commit 前检查
 
-`pnpm install` 的 `prepare` 生命周期安装版本化 Husky hook。pre-commit 只运行：
+`pnpm install` 的 `prepare` 生命周期安装版本化 Husky hook。普通 `git commit` 通过 lint-staged 处理本次暂存文件：
 
 ```bash
-git diff --cached --check
+安全 lint 修复与 import 整理 → 自动排版 → git diff --cached --check
 ```
 
-Hook 不运行 lint、typecheck、test、build 或 tracker checker。按改动范围在 commit 前显式运行本页“实现内循环”中的
-相关命令。
+Hook 复用统一命令的工具分工、配置与排除范围；即使配置或依赖变化也不扩大到全仓。Biome 只做安全修复，
+Less 规则只检查，剩余错误、解析失败、工具失败及暂存 diff 空白错误都会阻止提交。无适用文件正常跳过工具检查。
+typecheck、test、build 与配置专属验证保持各自入口，不加入 pre-commit；不增加 pre-push 或 pre-merge-commit。
+
+lint-staged 自动重新暂存修复结果，并暂时隐藏部分暂存文件的未暂存改动。允许暂存版本的整文件排版变化，
+原有未暂存代码仍保持未暂存，无关文件不进入提交。失败时先按终端诊断检查 `git status` 和 diff；恢复冲突会阻止提交，
+lint-staged 会尝试还原原始状态。若自动恢复失败，保留其输出的备份 stash 和恢复提示，核对备份内容后再按提示恢复，
+不要用全仓 `git add` 或清理 stash 掩盖冲突。
+
+Hook 可以被本地绕过，自动 merge commit 也不保证触发 pre-commit；最终候选仍由 verify 的全仓只读检查覆盖。
+真实提交、部分暂存和失败恢复测试通过 `pnpm test:integration:process:root` 执行。
 
 ## Workspace 入口
 
@@ -551,6 +589,5 @@ Ended `endTime`、未来 Open `startTime`、重复 Open 组合和多个 Open Pri
 
 ```bash
 pnpm --filter @iam/domain test
-pnpm --filter @iam/domain lint
 pnpm --filter @iam/domain typecheck
 ```

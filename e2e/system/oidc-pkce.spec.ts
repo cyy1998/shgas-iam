@@ -1,6 +1,6 @@
-import type { APIRequestContext, Page } from "@playwright/test";
 import { Buffer } from "node:buffer";
 import { randomBytes } from "node:crypto";
+import type { APIRequestContext, Page } from "@playwright/test";
 import { expect, test } from "@playwright/test";
 import {
   loginToAdmin,
@@ -31,9 +31,7 @@ test("public RP observes reversible Maintenance and permanent logout through rea
   const clientId = requireEnvironment("IAM_E2E_OIDC_CLIENT_CODE");
   const redirectUri = requireEnvironment("IAM_E2E_OIDC_REDIRECT_URI");
   const internalApiKey = requireEnvironment("IAM_E2E_INTERNAL_API_KEY");
-  const responsibilityTargetOrganizationCode = requireEnvironment(
-    "IAM_E2E_RESPONSIBILITY_TARGET_ORGANIZATION_CODE",
-  );
+  const responsibilityTargetOrganizationCode = requireEnvironment("IAM_E2E_RESPONSIBILITY_TARGET_ORGANIZATION_CODE");
   const responsibilityHolderPositionCode = requireEnvironment("IAM_E2E_RESPONSIBILITY_HOLDER_POSITION_CODE");
   const adminContext = await browser.newContext({ baseURL: origin });
   const adminPage = await adminContext.newPage();
@@ -96,7 +94,7 @@ test("public RP observes reversible Maintenance and permanent logout through rea
   await expect(page).toHaveURL(/\/portal\/login\?/u);
 
   const interactionCookie = (await page.context().cookies(`${origin}/oidc/resume`)).find(
-    cookie => cookie.name === "oidc_interaction_binding",
+    (cookie) => cookie.name === "oidc_interaction_binding",
   );
   expect(interactionCookie).toMatchObject({
     httpOnly: true,
@@ -326,11 +324,9 @@ async function expectMaintenanceAuthorizationError(input: {
 
 function readJwtClaims(token: string) {
   const payload = token.split(".")[1];
-  if (payload === undefined)
-    throw new Error("OIDC ID Token did not contain a payload");
+  if (payload === undefined) throw new Error("OIDC ID Token did not contain a payload");
   const claims = JSON.parse(Buffer.from(payload, "base64url").toString("utf8")) as Record<string, unknown>;
-  if (typeof claims.sub !== "string")
-    throw new Error("OIDC ID Token did not contain a subject");
+  if (typeof claims.sub !== "string") throw new Error("OIDC ID Token did not contain a subject");
   return claims;
 }
 
@@ -343,8 +339,7 @@ async function ensureHeadResponsibility(input: {
   request: APIRequestContext;
   targetOrganizationCode: string;
 }) {
-  if (await readInternalResponsibility(input))
-    return;
+  if (await readInternalResponsibility(input)) return;
   await createHeadResponsibility({
     adminUsername: input.adminUsername,
     origin: input.origin,
@@ -377,9 +372,7 @@ async function resumeEmployment(adminPage: Page, adminUsername: string, position
   const row = findEmploymentRow(adminPage, adminUsername, positionCode);
   const drawer = await openEmploymentDrawer(adminPage, row, adminUsername, positionCode);
   await drawer.getByRole("button", { name: /恢\s*复/u }).click();
-  await expect(
-    adminPage.getByText("已恢复任职；责任任命不会自动恢复，请在组织责任中逐条确认后恢复"),
-  ).toBeVisible();
+  await expect(adminPage.getByText("已恢复任职；责任任命不会自动恢复，请在组织责任中逐条确认后恢复")).toBeVisible();
 }
 
 async function endEmployment(adminPage: Page, adminUsername: string, positionCode: string) {
@@ -406,10 +399,7 @@ async function openEmploymentDrawer(
   positionCode: string,
 ) {
   await row.getByText("查看", { exact: true }).click();
-  const drawer = adminPage
-    .getByRole("dialog")
-    .filter({ hasText: username })
-    .filter({ hasText: positionCode });
+  const drawer = adminPage.getByRole("dialog").filter({ hasText: username }).filter({ hasText: positionCode });
   await expect(drawer).toBeVisible();
   return drawer;
 }

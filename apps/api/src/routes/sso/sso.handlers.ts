@@ -1,18 +1,18 @@
 import type { LoggerPort } from "@api/composition/runtime";
-import type { LoginWithOaUseCase } from "@api/use-cases/authentication/login-with-oa/login-with-oa.use-case";
-import type { LoginWithWechatUseCase } from "@api/use-cases/authentication/login-with-wechat/login-with-wechat.use-case";
-import type { Context } from "hono";
-import type { SsoRouteHandler } from "./sso.type";
 import { mapCustomSsoRetryableError } from "@api/middlewares/custom-sso-retryable.error";
 import { getApiAuditRequestContext } from "@api/services/audit/audit.context";
 import { decodeCustomSsoClientCode } from "@api/services/sso/transport/custom-sso-client-code.transport";
 import { expireCustomSsoCookies } from "@api/services/sso/transport/custom-sso-cookie";
+import type { LoginWithOaUseCase } from "@api/use-cases/authentication/login-with-oa/login-with-oa.use-case";
+import type { LoginWithWechatUseCase } from "@api/use-cases/authentication/login-with-wechat/login-with-wechat.use-case";
 import * as HttpStatusCodes from "@iam/api-core/core/http-status-codes";
 import { InvalidSsoClientError } from "@iam/api-core/errors/InvalidSsoClientError";
 import * as resp from "@iam/api-core/http";
 import { createSubjectAccessHttpAdapter } from "@iam/api-core/subject-access";
 import { ApiErrorCode, ClientCodeSchema } from "@iam/contracts";
+import type { Context } from "hono";
 import { getCookie, setCookie } from "hono/cookie";
+import type { SsoRouteHandler } from "./sso.type";
 
 type SsoEntryNetwork = "internal" | "external";
 const subjectAccessHttp = createSubjectAccessHttpAdapter();
@@ -103,16 +103,17 @@ export function createRootSsoHandlers(deps: CreateRootSsoHandlersDeps) {
     const data = await subjectAccessHttp.run(
       c,
       { clearCookiesOnInvalidSession: [] },
-      async () => await deps.authentication.loginWithOa.execute(
-        {
-          clientCode,
-          loginId: loginid,
-          timestamp: ts,
-          token,
-          currentSessionToken: sessionId,
-        },
-        { requestContext: getApiAuditRequestContext(c) },
-      ),
+      async () =>
+        await deps.authentication.loginWithOa.execute(
+          {
+            clientCode,
+            loginId: loginid,
+            timestamp: ts,
+            token,
+            currentSessionToken: sessionId,
+          },
+          { requestContext: getApiAuditRequestContext(c) },
+        ),
     );
     if (data.kind === "authenticated" || globalSessionCookie === undefined) {
       setCookie(c, "global_session", data.token, {
@@ -169,8 +170,7 @@ async function runCustomSsoHttpBoundary<T>(
 ) {
   try {
     return await subjectAccessHttp.run(context, options, operation);
-  }
-  catch (error) {
+  } catch (error) {
     throw mapCustomSsoRetryableError(error, {
       retryAfterSeconds: options.retryAfterSeconds,
     });
@@ -189,37 +189,29 @@ function buildAuthorizeResumeUrl(input: {
     redirectUrl: input.redirectUrl,
     token: input.token,
   });
-  if (input.state !== undefined)
-    searchParams.set("state", input.state);
-  if (input.ssoReturn !== undefined)
-    searchParams.set("ssoReturn", input.ssoReturn);
+  if (input.state !== undefined) searchParams.set("state", input.state);
+  if (input.ssoReturn !== undefined) searchParams.set("ssoReturn", input.ssoReturn);
   return `/sso/authorize?${searchParams.toString()}`;
 }
 
 export function parseBasicClientCredentials(authorization: string | undefined) {
-  if (authorization === undefined)
-    throw new InvalidSsoClientError("非法Client");
+  if (authorization === undefined) throw new InvalidSsoClientError("非法Client");
   const match = /^Basic ([A-Z0-9+/]+={0,2})$/iu.exec(authorization);
   const encoded = match?.[1];
-  if (encoded === undefined || encoded.length % 4 !== 0)
-    throw new InvalidSsoClientError("非法Client");
+  if (encoded === undefined || encoded.length % 4 !== 0) throw new InvalidSsoClientError("非法Client");
   const bytes = Buffer.from(encoded, "base64");
-  if (bytes.toString("base64") !== encoded)
-    throw new InvalidSsoClientError("非法Client");
+  if (bytes.toString("base64") !== encoded) throw new InvalidSsoClientError("非法Client");
 
   let decoded: string;
   try {
     decoded = new TextDecoder("utf-8", { fatal: true }).decode(bytes);
-  }
-  catch {
+  } catch {
     throw new InvalidSsoClientError("非法Client");
   }
   const separator = decoded.indexOf(":");
-  if (separator <= 0 || separator === decoded.length - 1)
-    throw new InvalidSsoClientError("非法Client");
+  if (separator <= 0 || separator === decoded.length - 1) throw new InvalidSsoClientError("非法Client");
   const clientCodeResult = ClientCodeSchema.safeParse(decodeCustomSsoClientCode(decoded.slice(0, separator)));
-  if (!clientCodeResult.success)
-    throw new InvalidSsoClientError("非法Client");
+  if (!clientCodeResult.success) throw new InvalidSsoClientError("非法Client");
   return {
     clientCode: clientCodeResult.data,
     clientSecret: decoded.slice(separator + 1),

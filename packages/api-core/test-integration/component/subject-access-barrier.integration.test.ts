@@ -1,4 +1,3 @@
-import type { SubjectAccessAtomicStore } from "../../src/subject-access/storage/store";
 import { describe, expect, mock, test } from "bun:test";
 import {
   createSubjectAccessBarrier,
@@ -8,6 +7,7 @@ import {
   SubjectAccessUnavailableError,
   SubjectAccessWriteUnavailableError,
 } from "../../src/subject-access";
+import type { SubjectAccessAtomicStore } from "../../src/subject-access/storage/store";
 
 const subjectIdentifier = "00000000-0000-4000-8000-000000000001";
 
@@ -16,9 +16,8 @@ function record(state: "enabled" | "blocking" | "disabled") {
     version: 1,
     subjectIdentifier,
     state,
-    transitionId: state === "blocking"
-      ? "10000000-0000-4000-8000-000000000001"
-      : "20000000-0000-4000-8000-000000000001",
+    transitionId:
+      state === "blocking" ? "10000000-0000-4000-8000-000000000001" : "20000000-0000-4000-8000-000000000001",
     updatedAt: "2026-07-31T08:00:00.000Z",
   });
 }
@@ -58,9 +57,7 @@ describe("Subject Access Barrier", () => {
       clock: { nowDate: () => new Date("2026-07-31T08:00:00.000Z") },
       random: { uuid: () => "10000000-0000-4000-8000-000000000001" },
     });
-    await expect(disabled.assertAccessible(subjectIdentifier))
-      .rejects
-      .toBeInstanceOf(SubjectAccessDisabledError);
+    await expect(disabled.assertAccessible(subjectIdentifier)).rejects.toBeInstanceOf(SubjectAccessDisabledError);
 
     for (const serialized of [
       record("blocking"),
@@ -78,9 +75,9 @@ describe("Subject Access Barrier", () => {
         clock: { nowDate: () => new Date("2026-07-31T08:00:00.000Z") },
         random: { uuid: () => "10000000-0000-4000-8000-000000000001" },
       });
-      await expect(unavailable.assertAccessible(subjectIdentifier))
-        .rejects
-        .toBeInstanceOf(SubjectAccessUnavailableError);
+      await expect(unavailable.assertAccessible(subjectIdentifier)).rejects.toBeInstanceOf(
+        SubjectAccessUnavailableError,
+      );
     }
 
     const readFailure = createStore(record("enabled"));
@@ -92,29 +89,27 @@ describe("Subject Access Barrier", () => {
       clock: { nowDate: () => new Date("2026-07-31T08:00:00.000Z") },
       random: { uuid: () => "10000000-0000-4000-8000-000000000001" },
     });
-    await expect(unavailable.assertAccessible(subjectIdentifier))
-      .rejects
-      .toBeInstanceOf(SubjectAccessUnavailableError);
+    await expect(unavailable.assertAccessible(subjectIdentifier)).rejects.toBeInstanceOf(SubjectAccessUnavailableError);
   });
 
   test("fails closed for a stable record without a committed transition ID", async () => {
     const barrier = createSubjectAccessBarrier({
-      store: createStore(JSON.stringify({
-        version: 1,
-        subjectIdentifier,
-        state: "enabled",
-        updatedAt: "2026-07-31T08:00:00.000Z",
-      })),
+      store: createStore(
+        JSON.stringify({
+          version: 1,
+          subjectIdentifier,
+          state: "enabled",
+          updatedAt: "2026-07-31T08:00:00.000Z",
+        }),
+      ),
       clock: { nowDate: () => new Date("2026-07-31T08:00:00.000Z") },
       random: { uuid: () => "10000000-0000-4000-8000-000000000001" },
     });
 
-    await expect(barrier.assertAccessible(subjectIdentifier))
-      .rejects
-      .toBeInstanceOf(SubjectAccessUnavailableError);
-    await expect(barrier.readCommittedTransitionId(subjectIdentifier))
-      .rejects
-      .toBeInstanceOf(SubjectAccessUnavailableError);
+    await expect(barrier.assertAccessible(subjectIdentifier)).rejects.toBeInstanceOf(SubjectAccessUnavailableError);
+    await expect(barrier.readCommittedTransitionId(subjectIdentifier)).rejects.toBeInstanceOf(
+      SubjectAccessUnavailableError,
+    );
   });
 
   test("sanitizes write failures while preserving domain transition rejection", async () => {
@@ -135,13 +130,14 @@ describe("Subject Access Barrier", () => {
         clock: { nowDate: () => new Date("2026-07-31T08:00:00.000Z") },
         random: { uuid: () => transition.transitionId },
       });
-      const result = operation === "beginBlocking"
-        ? barrier.beginBlocking(subjectIdentifier)
-        : operation === "finalize"
-          ? barrier.finalize(transition, "disabled")
-          : barrier.rollback(transition);
+      const result =
+        operation === "beginBlocking"
+          ? barrier.beginBlocking(subjectIdentifier)
+          : operation === "finalize"
+            ? barrier.finalize(transition, "disabled")
+            : barrier.rollback(transition);
 
-      const error = await result.catch(caught => caught);
+      const error = await result.catch((caught) => caught);
       expect(error).toBeInstanceOf(SubjectAccessWriteUnavailableError);
       expect(error.cause).toBeUndefined();
       expect(error.message).toBe("Subject access write is unavailable");
@@ -155,9 +151,9 @@ describe("Subject Access Barrier", () => {
       clock: { nowDate: () => new Date("2026-07-31T08:00:00.000Z") },
       random: { uuid: () => transition.transitionId },
     });
-    await expect(rejectedBarrier.beginBlocking(subjectIdentifier))
-      .rejects
-      .toBeInstanceOf(SubjectAccessTransitionRejectedError);
+    await expect(rejectedBarrier.beginBlocking(subjectIdentifier)).rejects.toBeInstanceOf(
+      SubjectAccessTransitionRejectedError,
+    );
   });
 
   test("returns a recoverable receipt when begin may have committed before its response was lost", async () => {
@@ -171,8 +167,7 @@ describe("Subject Access Barrier", () => {
       random: { uuid: () => "10000000-0000-4000-8000-000000000001" },
     });
 
-    const pending = await barrier.beginBlocking(subjectIdentifier)
-      .catch(error => error);
+    const pending = await barrier.beginBlocking(subjectIdentifier).catch((error) => error);
 
     expect(pending).toBeInstanceOf(SubjectAccessBeginPendingError);
     expect(pending).toBeInstanceOf(SubjectAccessWriteUnavailableError);

@@ -1,35 +1,20 @@
-import StatusTag from '@admin/components/StatusTag';
-import AuditLogTable from '@admin/components/audit/AuditLogTable';
-import { roleAssignmentTargetTypeOptions } from '@admin/pages/roles/role-selectors';
-import { AdminMutationCommittedError } from '@admin/services/admin-mutation';
+import AuditLogTable from "@admin/components/audit/AuditLogTable";
+import StatusTag from "@admin/components/StatusTag";
+import { roleAssignmentTargetTypeOptions } from "@admin/pages/roles/role-selectors";
+import { AdminMutationCommittedError } from "@admin/services/admin-mutation";
 import {
-  type RoleAssignmentVo,
-  type RoleDetailVo,
   deleteRoleAssignment,
   getRole,
+  type RoleAssignmentVo,
+  type RoleDetailVo,
   searchRoleAssignments,
   updateRoleAssignmentScope,
-} from '@admin/services/role';
-import {
-  type ActionType,
-  type ProColumns,
-  ProDescriptions,
-  ProTable,
-} from '@ant-design/pro-components';
-import { RoleAssignmentTargetType } from '@iam/contracts';
-import {
-  Button,
-  Drawer,
-  Empty,
-  message,
-  Modal,
-  Skeleton,
-  Space,
-  Tabs,
-  Tag,
-} from 'antd';
-import { useCallback, useEffect, useRef, useState } from 'react';
-import RoleAssignmentFormModal from './RoleAssignmentFormModal';
+} from "@admin/services/role";
+import { type ActionType, type ProColumns, ProDescriptions, ProTable } from "@ant-design/pro-components";
+import { RoleAssignmentTargetType } from "@iam/contracts";
+import { Button, Drawer, Empty, Modal, message, Skeleton, Space, Tabs, Tag } from "antd";
+import { useCallback, useEffect, useRef, useState } from "react";
+import RoleAssignmentFormModal from "./RoleAssignmentFormModal";
 
 type Props = {
   open: boolean;
@@ -40,24 +25,13 @@ type Props = {
   onCommitted: (error: AdminMutationCommittedError) => void;
 };
 
-export default function RoleDetailDrawer({
-  open,
-  roleCode,
-  onOpenChange,
-  onChanged,
-  reloadSeq,
-  onCommitted,
-}: Props) {
+export default function RoleDetailDrawer({ open, roleCode, onOpenChange, onChanged, reloadSeq, onCommitted }: Props) {
   const assignmentActionRef = useRef<ActionType>(undefined);
   const [detail, setDetail] = useState<RoleDetailVo | null>(null);
   const [loading, setLoading] = useState(false);
   const [assignmentFormOpen, setAssignmentFormOpen] = useState(false);
 
-  const handleError = useCallback(
-    (err: unknown) =>
-      message.error(err instanceof Error ? err.message : '操作失败'),
-    [],
-  );
+  const handleError = useCallback((err: unknown) => message.error(err instanceof Error ? err.message : "操作失败"), []);
 
   const load = useCallback(async () => {
     if (!open || !roleCode) return;
@@ -72,6 +46,7 @@ export default function RoleDetailDrawer({
     }
   }, [handleError, open, roleCode]);
 
+  // biome-ignore lint/correctness/useExhaustiveDependencies: reloadSeq is an explicit parent-driven reload trigger.
   useEffect(() => {
     void load();
   }, [load, reloadSeq]);
@@ -97,11 +72,11 @@ export default function RoleDetailDrawer({
     Modal.confirm({
       title: `删除 ${row.targetTypeText} 分配？`,
       content: `${row.target.name} 将不再通过该角色获得授权。`,
-      okType: 'danger',
+      okType: "danger",
       onOk: async () => {
         try {
           const outcome = await deleteRoleAssignment(detail.roleCode, row.id);
-          message.success(outcome.changed ? '分配已删除' : '无需修改');
+          message.success(outcome.changed ? "分配已删除" : "无需修改");
           reloadAssignments();
         } catch (err) {
           handleMutationError(err);
@@ -113,12 +88,8 @@ export default function RoleDetailDrawer({
   const onToggleScope = async (row: RoleAssignmentVo) => {
     if (!detail) return;
     try {
-      const outcome = await updateRoleAssignmentScope(
-        detail.roleCode,
-        row.id,
-        !row.includeDescendants,
-      );
-      message.success(outcome.changed ? '作用范围已更新' : '无需修改');
+      const outcome = await updateRoleAssignmentScope(detail.roleCode, row.id, !row.includeDescendants);
+      message.success(outcome.changed ? "作用范围已更新" : "无需修改");
       reloadAssignments();
     } catch (err) {
       handleMutationError(err);
@@ -127,67 +98,63 @@ export default function RoleDetailDrawer({
 
   const assignmentColumns: ProColumns<RoleAssignmentVo>[] = [
     {
-      title: '类型',
-      dataIndex: 'targetType',
+      title: "类型",
+      dataIndex: "targetType",
       width: 100,
-      valueType: 'select',
-      valueEnum: Object.fromEntries(
-        roleAssignmentTargetTypeOptions.map((o) => [
-          o.value,
-          { text: o.label },
-        ]),
-      ),
+      valueType: "select",
+      valueEnum: Object.fromEntries(roleAssignmentTargetTypeOptions.map((o) => [o.value, { text: o.label }])),
       render: (_, row) => <Tag>{row.targetTypeText}</Tag>,
     },
     {
-      title: '对象',
-      dataIndex: 'targetText',
+      title: "对象",
+      dataIndex: "targetText",
       ellipsis: true,
       render: (_, row) => (
         <Space orientation="vertical" size={0}>
           <span>{row.target.name}</span>
-          <span style={{ color: '#6b7280', fontSize: 12 }}>
-            {row.target.code}
-          </span>
+          <span style={{ color: "#6b7280", fontSize: 12 }}>{row.target.code}</span>
         </Space>
       ),
     },
     {
-      title: '作用范围',
-      dataIndex: 'includeDescendants',
+      title: "作用范围",
+      dataIndex: "includeDescendants",
       width: 130,
-      valueType: 'select',
+      valueType: "select",
       valueEnum: {
-        true: { text: '含下级组织' },
-        false: { text: '仅当前对象' },
+        true: { text: "含下级组织" },
+        false: { text: "仅当前对象" },
       },
       render: (_, row) => row.scopeText,
     },
     {
-      title: '创建时间',
-      dataIndex: 'createTime',
+      title: "创建时间",
+      dataIndex: "createTime",
       width: 170,
       search: false,
       render: (_, row) => new Date(row.createTime).toLocaleString(),
     },
     {
-      title: '操作',
-      fixed: 'right',
-      valueType: 'option',
+      title: "操作",
+      fixed: "right",
+      valueType: "option",
       width: 150,
       render: (_, row) => [
         row.targetType === RoleAssignmentTargetType.Organization ? (
-          <a key="scope" onClick={() => onToggleScope(row)}>
-            {row.includeDescendants ? '仅本组织' : '含下级'}
-          </a>
+          <Button key="scope" type="link" size="small" style={{ paddingInline: 0 }} onClick={() => onToggleScope(row)}>
+            {row.includeDescendants ? "仅本组织" : "含下级"}
+          </Button>
         ) : null,
-        <a
+        <Button
           key="delete"
-          style={{ color: '#d4380d' }}
+          type="link"
+          size="small"
+          danger
+          style={{ paddingInline: 0 }}
           onClick={() => onDeleteAssignment(row)}
         >
           删除
-        </a>,
+        </Button>,
       ],
     },
   ];
@@ -203,13 +170,11 @@ export default function RoleDetailDrawer({
           detail ? (
             <Space>
               <span>{detail.roleName}</span>
-              <span style={{ color: '#999', fontSize: 12 }}>
-                {detail.roleCode}
-              </span>
+              <span style={{ color: "#999", fontSize: 12 }}>{detail.roleCode}</span>
               <StatusTag domain="role" status={detail.status} />
             </Space>
           ) : (
-            '角色详情'
+            "角色详情"
           )
         }
       >
@@ -219,56 +184,51 @@ export default function RoleDetailDrawer({
           <Tabs
             items={[
               {
-                key: 'basic',
-                label: '基本信息',
+                key: "basic",
+                label: "基本信息",
                 children: (
                   <ProDescriptions<RoleDetailVo>
                     column={2}
                     dataSource={detail}
                     columns={[
-                      { title: '角色编码', dataIndex: 'roleCode' },
-                      { title: '角色名称', dataIndex: 'roleName' },
+                      { title: "角色编码", dataIndex: "roleCode" },
+                      { title: "角色名称", dataIndex: "roleName" },
                       {
-                        title: '所属应用',
-                        dataIndex: ['client', 'clientName'],
-                        render: (_, row) =>
-                          `${row.client.clientName}（${row.client.clientCode}）`,
+                        title: "所属应用",
+                        dataIndex: ["client", "clientName"],
+                        render: (_, row) => `${row.client.clientName}（${row.client.clientCode}）`,
                       },
                       {
-                        title: '状态',
-                        dataIndex: 'status',
-                        render: (_, row) => (
-                          <StatusTag domain="role" status={row.status} />
-                        ),
+                        title: "状态",
+                        dataIndex: "status",
+                        render: (_, row) => <StatusTag domain="role" status={row.status} />,
                       },
                       {
-                        title: '分配数',
-                        dataIndex: 'assignmentCount',
+                        title: "分配数",
+                        dataIndex: "assignmentCount",
                       },
                       {
-                        title: '描述',
-                        dataIndex: 'description',
+                        title: "描述",
+                        dataIndex: "description",
                         span: 2,
-                        render: (_, row) => row.description ?? '—',
+                        render: (_, row) => row.description ?? "—",
                       },
                       {
-                        title: '创建时间',
-                        dataIndex: 'createTime',
-                        render: (_, row) =>
-                          new Date(row.createTime).toLocaleString(),
+                        title: "创建时间",
+                        dataIndex: "createTime",
+                        render: (_, row) => new Date(row.createTime).toLocaleString(),
                       },
                       {
-                        title: '更新时间',
-                        dataIndex: 'updateTime',
-                        render: (_, row) =>
-                          new Date(row.updateTime).toLocaleString(),
+                        title: "更新时间",
+                        dataIndex: "updateTime",
+                        render: (_, row) => new Date(row.updateTime).toLocaleString(),
                       },
                     ]}
                   />
                 ),
               },
               {
-                key: 'assignments',
+                key: "assignments",
                 label: `分配对象（${detail.assignmentCount}）`,
                 children: (
                   <ProTable<RoleAssignmentVo>
@@ -276,14 +236,10 @@ export default function RoleDetailDrawer({
                     rowKey="id"
                     size="small"
                     columns={assignmentColumns}
-                    search={{ labelWidth: 'auto' }}
+                    search={{ labelWidth: "auto" }}
                     scroll={{ x: 750 }}
                     toolBarRender={() => [
-                      <Button
-                        key="create"
-                        type="primary"
-                        onClick={() => setAssignmentFormOpen(true)}
-                      >
+                      <Button key="create" type="primary" onClick={() => setAssignmentFormOpen(true)}>
                         新增分配
                       </Button>,
                     ]}
@@ -305,24 +261,18 @@ export default function RoleDetailDrawer({
                         const includeValue =
                           includeDescendants === undefined
                             ? undefined
-                            : includeDescendants === true ||
-                              includeDescendants === 'true';
-                        const data = await searchRoleAssignments(
-                          detail.roleCode,
-                          {
-                            pageNum: current,
-                            pageSize,
-                            conditions: {
-                              fuzzyConditions: targetText
-                                ? { text: targetText }
-                                : {},
-                              exactConditions: {
-                                targetType,
-                                includeDescendants: includeValue,
-                              },
+                            : includeDescendants === true || includeDescendants === "true";
+                        const data = await searchRoleAssignments(detail.roleCode, {
+                          pageNum: current,
+                          pageSize,
+                          conditions: {
+                            fuzzyConditions: targetText ? { text: targetText } : {},
+                            exactConditions: {
+                              targetType,
+                              includeDescendants: includeValue,
                             },
                           },
-                        );
+                        });
                         return {
                           data: data.result,
                           total: data.total,
@@ -337,12 +287,12 @@ export default function RoleDetailDrawer({
                 ),
               },
               {
-                key: 'logs',
-                label: '操作日志',
+                key: "logs",
+                label: "操作日志",
                 children: (
                   <AuditLogTable
                     fixedConditions={{
-                      targetType: 'role',
+                      targetType: "role",
                       targetCode: detail.roleCode,
                     }}
                     pageSize={10}

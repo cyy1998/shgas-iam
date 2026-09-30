@@ -29,7 +29,6 @@ COPY packages/api-core/package.json ./packages/api-core/
 COPY packages/domain/package.json ./packages/domain/
 COPY packages/db/package.json ./packages/db/
 COPY packages/session-kernel/package.json ./packages/session-kernel/
-COPY packages/eslint-config/package.json ./packages/eslint-config/
 COPY packages/contracts/package.json ./packages/contracts/
 COPY apps/sso/package.json ./apps/sso/
 ARG HTTP_PROXY
@@ -66,7 +65,6 @@ COPY packages/api-core/ ./packages/api-core/
 COPY packages/domain/ ./packages/domain/
 COPY packages/db/ ./packages/db/
 COPY packages/session-kernel/ ./packages/session-kernel/
-COPY packages/eslint-config/ ./packages/eslint-config/
 COPY packages/contracts/ ./packages/contracts/
 COPY apps/sso/ ./apps/sso/
 RUN pnpm rebuild && pnpm --filter @iam/sso run setup && pnpm --filter @iam/sso run build

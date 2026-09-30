@@ -1,4 +1,18 @@
 import type { AdminAuditContext, AuditLogInput } from "@admin-api/services/audit/audit.context";
+import {
+  buildAdminLoginRestrictionReleaseAudit,
+  buildAdminSessionBatchRevokeAudit,
+  buildAdminSessionRevokeAudit,
+  buildAdminSessionRevokeUserAudit,
+} from "@admin-api/services/audit/events/session-management.audit";
+import { SystemLogEvent } from "@iam/api-core/logger";
+import { UserStatus } from "@iam/contracts";
+import {
+  AdminLoginStateAuditFailedAfterEffectError,
+  AdminLoginStateAuditFailedError,
+  AdminLoginStateUnavailableError,
+  AdminSessionCurrentProtectedError,
+} from "./session-management.error";
 import type {
   AdminLoginRestrictionState,
   AdminSessionControlSummary,
@@ -23,20 +37,6 @@ import type {
   AdminSessionRevokeResult,
 } from "./session-management.type";
 import {
-  buildAdminLoginRestrictionReleaseAudit,
-  buildAdminSessionBatchRevokeAudit,
-  buildAdminSessionRevokeAudit,
-  buildAdminSessionRevokeUserAudit,
-} from "@admin-api/services/audit/events/session-management.audit";
-import { SystemLogEvent } from "@iam/api-core/logger";
-import { UserStatus } from "@iam/contracts";
-import {
-  AdminLoginStateAuditFailedAfterEffectError,
-  AdminLoginStateAuditFailedError,
-  AdminLoginStateUnavailableError,
-  AdminSessionCurrentProtectedError,
-} from "./session-management.error";
-import {
   AdminLoginRestrictionCause,
   AdminLoginRestrictionTriggerMethod,
   AdminSessionAccountStatus,
@@ -50,8 +50,7 @@ export function createSessionManagementService(deps: AdminSessionManagementServi
   async function rejectProtectedRevoke(audit: AuditLogInput): Promise<never> {
     try {
       await deps.audit.recordAuditLog(audit);
-    }
-    catch (cause) {
+    } catch (cause) {
       throw new AdminLoginStateAuditFailedError(cause);
     }
     throw new AdminSessionCurrentProtectedError();
@@ -67,10 +66,8 @@ export function createSessionManagementService(deps: AdminSessionManagementServi
   }) {
     try {
       await deps.audit.recordAuditLog(input.audit);
-    }
-    catch (cause) {
-      if (!input.changed && !input.effectMayHaveOccurred)
-        throw new AdminLoginStateAuditFailedError(cause);
+    } catch (cause) {
+      if (!input.changed && !input.effectMayHaveOccurred) throw new AdminLoginStateAuditFailedError(cause);
       deps.logger.error(
         {
           event: SystemLogEvent.AdminLoginStateAuditFailedAfterEffect,
@@ -99,17 +96,13 @@ export function createSessionManagementService(deps: AdminSessionManagementServi
     if (input.target.type === "captured") {
       if (!currentPrincipalSessionId || !deps.control.executeCapturedSessions)
         throw new AdminSessionCurrentProtectedError();
-      const summary = await deps.control.executeCapturedSessions(
-        input.target.targets,
-        currentPrincipalSessionId,
-      );
+      const summary = await deps.control.executeCapturedSessions(input.target.targets, currentPrincipalSessionId);
       const result = toSessionRevokeResult(summary, "session");
       await recordMutationAudit({
         audit: buildAdminSessionBatchRevokeAudit(
           {
             outcome:
-              "sessions" in result.result
-              && (result.result.sessions.failed > 0 || result.result.sessions.unknown > 0)
+              "sessions" in result.result && (result.result.sessions.failed > 0 || result.result.sessions.unknown > 0)
                 ? "failure"
                 : "success",
             result,
@@ -179,8 +172,7 @@ export function createSessionManagementService(deps: AdminSessionManagementServi
           ...(exceptPrincipalSessionId ? { exceptPrincipalSessionId } : {}),
           auditContext,
         });
-      }
-      catch (cause) {
+      } catch (cause) {
         throw new AdminLoginStateUnavailableError(cause);
       }
       const result = toSessionRevokeResult(summary, "user", exceptPrincipalSessionId !== undefined);
@@ -189,8 +181,7 @@ export function createSessionManagementService(deps: AdminSessionManagementServi
           {
             userId: input.target.userId,
             outcome:
-              "sessions" in result.result
-              && (result.result.sessions.failed > 0 || result.result.sessions.unknown > 0)
+              "sessions" in result.result && (result.result.sessions.failed > 0 || result.result.sessions.unknown > 0)
                 ? "failure"
                 : "success",
             result,
@@ -228,8 +219,7 @@ export function createSessionManagementService(deps: AdminSessionManagementServi
     let summary: AdminSessionControlSummary;
     try {
       summary = await deps.control.revokePrincipalSession(input.target.principalSessionId, "admin_revoke");
-    }
-    catch (cause) {
+    } catch (cause) {
       throw new AdminLoginStateUnavailableError(cause);
     }
     const result = toSessionRevokeResult(summary, "session");
@@ -238,8 +228,7 @@ export function createSessionManagementService(deps: AdminSessionManagementServi
         {
           principalSessionId: input.target.principalSessionId,
           outcome:
-            "sessions" in result.result
-            && (result.result.sessions.failed > 0 || result.result.sessions.unknown > 0)
+            "sessions" in result.result && (result.result.sessions.failed > 0 || result.result.sessions.unknown > 0)
               ? "failure"
               : "success",
           result,
@@ -263,10 +252,8 @@ export function createSessionManagementService(deps: AdminSessionManagementServi
     input: AdminSessionListInput,
     actor: AdminSessionActorContext,
   ): Promise<AdminSessionListResult> {
-    const filteredUser
-      = input.userId === undefined
-        ? undefined
-        : (await deps.users.getSessionManagementUserSummaries([input.userId]))[0];
+    const filteredUser =
+      input.userId === undefined ? undefined : (await deps.users.getSessionManagementUserSummaries([input.userId]))[0];
     if (input.userId !== undefined && filteredUser === undefined) {
       return {
         result: [],
@@ -277,7 +264,7 @@ export function createSessionManagementService(deps: AdminSessionManagementServi
       };
     }
 
-    let inventory;
+    let inventory: Awaited<ReturnType<typeof deps.inventory.listPrincipalSessions>>;
     try {
       inventory = await deps.inventory.listPrincipalSessions({
         offset: (input.pageNum - 1) * input.pageSize,
@@ -286,19 +273,18 @@ export function createSessionManagementService(deps: AdminSessionManagementServi
         kind: input.kind,
         userSessionId: input.userSessionId,
       });
-    }
-    catch (cause) {
+    } catch (cause) {
       throw new AdminLoginStateUnavailableError(cause);
     }
     const subjectIdentifiers = uniqueSubjectIdentifiers(inventory.items);
-    const userSummaries
-      = subjectIdentifiers.length === 0
+    const userSummaries =
+      subjectIdentifiers.length === 0
         ? []
         : await deps.users.getSessionManagementUserSummariesBySubjectIdentifiers(subjectIdentifiers);
-    const usersBySubjectIdentifier = new Map(userSummaries.map(user => [user.subjectIdentifier, user]));
+    const usersBySubjectIdentifier = new Map(userSummaries.map((user) => [user.subjectIdentifier, user]));
 
     return {
-      result: inventory.items.map(item => toAdminSessionListItem(item, usersBySubjectIdentifier, actor)),
+      result: inventory.items.map((item) => toAdminSessionListItem(item, usersBySubjectIdentifier, actor)),
       total: inventory.total,
       pageNum: input.pageNum,
       pageSize: input.pageSize,
@@ -309,24 +295,22 @@ export function createSessionManagementService(deps: AdminSessionManagementServi
   async function listLoginRestrictions(
     input: AdminLoginRestrictionListInput,
   ): Promise<AdminLoginRestrictionListResult> {
-    let inventory;
+    let inventory: Awaited<ReturnType<typeof deps.loginRestrictions.listRestrictions>>;
     try {
       inventory = await deps.loginRestrictions.listRestrictions({
         offset: (input.pageNum - 1) * input.pageSize,
         limit: input.pageSize,
         userId: input.userId,
       });
-    }
-    catch (cause) {
+    } catch (cause) {
       throw new AdminLoginStateUnavailableError(cause);
     }
-    const userIds = [...new Set(inventory.items.map(item => item.userId))];
-    const userSummaries
-      = userIds.length === 0 ? [] : await deps.users.getSessionManagementUserSummaries(userIds);
-    const usersById = new Map(userSummaries.map(user => [user.id, user]));
+    const userIds = [...new Set(inventory.items.map((item) => item.userId))];
+    const userSummaries = userIds.length === 0 ? [] : await deps.users.getSessionManagementUserSummaries(userIds);
+    const usersById = new Map(userSummaries.map((user) => [user.id, user]));
 
     return {
-      result: inventory.items.map(item => toAdminLoginRestrictionListItem(item, usersById)),
+      result: inventory.items.map((item) => toAdminLoginRestrictionListItem(item, usersById)),
       total: inventory.total,
       pageNum: input.pageNum,
       pageSize: input.pageSize,
@@ -338,11 +322,10 @@ export function createSessionManagementService(deps: AdminSessionManagementServi
     input: AdminLoginRestrictionReleaseInput,
     auditContext: AdminAuditContext,
   ): Promise<AdminLoginRestrictionReleaseResult> {
-    let transition;
+    let transition: Awaited<ReturnType<typeof deps.loginRestrictions.clearLoginState>>;
     try {
       transition = await deps.loginRestrictions.clearLoginState(input.userId);
-    }
-    catch (cause) {
+    } catch (cause) {
       throw new AdminLoginStateUnavailableError(cause);
     }
     const result: AdminLoginRestrictionReleaseResult = {
@@ -406,8 +389,7 @@ function toAdminSessionListItem(
     authTime: item.authTime,
     expiresAt: item.expiresAt,
     origin: summarizeOrigin(item.origin),
-    isCurrentSession:
-      item.record?.kind !== "clientSession" && actor.principalSessionId === item.principalSessionId,
+    isCurrentSession: item.record?.kind !== "clientSession" && actor.principalSessionId === item.principalSessionId,
     isCurrentUser: user?.id === actor.actorUserId,
   };
 }
@@ -432,20 +414,15 @@ function toAdminLoginRestrictionListItem(
 }
 
 function uniqueSubjectIdentifiers(items: readonly AdminSessionInventoryItem[]) {
-  return [...new Set(items.map(item => item.principal.subjectId))];
+  return [...new Set(items.map((item) => item.principal.subjectId))];
 }
 
 function toAccountStatus(user: AdminSessionUserSummary | undefined): AdminSessionAccountStatusValue {
-  if (!user)
-    return AdminSessionAccountStatus.Unknown;
-  if (user.isDelete)
-    return AdminSessionAccountStatus.Deleted;
-  if (user.status === UserStatus.Enable)
-    return AdminSessionAccountStatus.Normal;
-  if (user.status === UserStatus.Pause)
-    return AdminSessionAccountStatus.Paused;
-  if (user.status === UserStatus.Disable)
-    return AdminSessionAccountStatus.Ended;
+  if (!user) return AdminSessionAccountStatus.Unknown;
+  if (user.isDelete) return AdminSessionAccountStatus.Deleted;
+  if (user.status === UserStatus.Enable) return AdminSessionAccountStatus.Normal;
+  if (user.status === UserStatus.Pause) return AdminSessionAccountStatus.Paused;
+  if (user.status === UserStatus.Disable) return AdminSessionAccountStatus.Ended;
   return AdminSessionAccountStatus.Unknown;
 }
 
@@ -453,22 +430,17 @@ function normalizeAuthMethods(amr: readonly string[]): AdminSessionAuthMethodVal
   const methods = new Set<AdminSessionAuthMethodValue>();
   for (const rawMethod of amr) {
     const method = rawMethod.trim().toLowerCase();
-    if (method === "pwd")
-      methods.add(AdminSessionAuthMethod.Password);
-    else if (method === "sms")
-      methods.add(AdminSessionAuthMethod.Mobile);
-    else if (method === "oa")
-      methods.add(AdminSessionAuthMethod.Oa);
-    else if (method === "wechat")
-      methods.add(AdminSessionAuthMethod.Wechat);
+    if (method === "pwd") methods.add(AdminSessionAuthMethod.Password);
+    else if (method === "sms") methods.add(AdminSessionAuthMethod.Mobile);
+    else if (method === "oa") methods.add(AdminSessionAuthMethod.Oa);
+    else if (method === "wechat") methods.add(AdminSessionAuthMethod.Wechat);
     else methods.add(AdminSessionAuthMethod.Unknown);
   }
   return methods.size === 0 ? [AdminSessionAuthMethod.Unknown] : [...methods];
 }
 
 function summarizeOrigin(origin: AdminSessionInventoryItem["origin"]): AdminSessionOriginSummary | null {
-  if (!origin)
-    return null;
+  if (!origin) return null;
   const userAgent = origin.userAgent?.toLowerCase() ?? "";
 
   return {
@@ -480,52 +452,34 @@ function summarizeOrigin(origin: AdminSessionInventoryItem["origin"]): AdminSess
 }
 
 function classifyDeviceType(userAgent: string) {
-  if (!userAgent)
-    return AdminSessionDeviceType.Unknown;
-  if (
-    /ipad|tablet|kindle|playbook|silk/.test(userAgent)
-    || (/android/.test(userAgent) && !/mobile/.test(userAgent))
-  ) {
+  if (!userAgent) return AdminSessionDeviceType.Unknown;
+  if (/ipad|tablet|kindle|playbook|silk/.test(userAgent) || (/android/.test(userAgent) && !/mobile/.test(userAgent))) {
     return AdminSessionDeviceType.Tablet;
   }
-  if (/iphone|ipod|mobile|android/.test(userAgent))
-    return AdminSessionDeviceType.Mobile;
-  if (/windows|macintosh|cros|x11|linux/.test(userAgent))
-    return AdminSessionDeviceType.Desktop;
+  if (/iphone|ipod|mobile|android/.test(userAgent)) return AdminSessionDeviceType.Mobile;
+  if (/windows|macintosh|cros|x11|linux/.test(userAgent)) return AdminSessionDeviceType.Desktop;
   return AdminSessionDeviceType.Unknown;
 }
 
 function classifyOperatingSystem(userAgent: string) {
-  if (/iphone|ipad|ipod|cpu (?:iphone )?os/.test(userAgent))
-    return AdminSessionOperatingSystem.Ios;
-  if (/android/.test(userAgent))
-    return AdminSessionOperatingSystem.Android;
-  if (/windows/.test(userAgent))
-    return AdminSessionOperatingSystem.Windows;
-  if (/macintosh|mac os x/.test(userAgent))
-    return AdminSessionOperatingSystem.Macos;
-  if (/linux|x11/.test(userAgent))
-    return AdminSessionOperatingSystem.Linux;
+  if (/iphone|ipad|ipod|cpu (?:iphone )?os/.test(userAgent)) return AdminSessionOperatingSystem.Ios;
+  if (/android/.test(userAgent)) return AdminSessionOperatingSystem.Android;
+  if (/windows/.test(userAgent)) return AdminSessionOperatingSystem.Windows;
+  if (/macintosh|mac os x/.test(userAgent)) return AdminSessionOperatingSystem.Macos;
+  if (/linux|x11/.test(userAgent)) return AdminSessionOperatingSystem.Linux;
   return AdminSessionOperatingSystem.Unknown;
 }
 
 function classifyBrowser(userAgent: string) {
-  if (/micromessenger/.test(userAgent))
-    return AdminSessionBrowser.Wechat;
-  if (/edg(?:e|a|ios)?\//.test(userAgent))
-    return AdminSessionBrowser.Edge;
-  if (/firefox|fxios/.test(userAgent))
-    return AdminSessionBrowser.Firefox;
-  if (/chrome|crios/.test(userAgent))
-    return AdminSessionBrowser.Chrome;
-  if (/safari/.test(userAgent))
-    return AdminSessionBrowser.Safari;
+  if (/micromessenger/.test(userAgent)) return AdminSessionBrowser.Wechat;
+  if (/edg(?:e|a|ios)?\//.test(userAgent)) return AdminSessionBrowser.Edge;
+  if (/firefox|fxios/.test(userAgent)) return AdminSessionBrowser.Firefox;
+  if (/chrome|crios/.test(userAgent)) return AdminSessionBrowser.Chrome;
+  if (/safari/.test(userAgent)) return AdminSessionBrowser.Safari;
   return AdminSessionBrowser.Other;
 }
 
-function emptySessionRevokeResult(
-  scope: AdminSessionRevokeResult["result"]["scope"],
-): AdminSessionRevokeResult {
+function emptySessionRevokeResult(scope: AdminSessionRevokeResult["result"]["scope"]): AdminSessionRevokeResult {
   return toSessionRevokeResult(
     { sessions: { userSessionsTerminated: 0, clientSessionsTerminated: 0, results: [], unfinished: [] } },
     scope,
@@ -543,14 +497,13 @@ function toSessionRevokeResult(
       scope,
       generation: "unified",
       currentPrincipalSessionExcluded:
-        currentPrincipalSessionExcluded
-        || summary.sessions.results.some(result => result.status === "excluded"),
+        currentPrincipalSessionExcluded || summary.sessions.results.some((result) => result.status === "excluded"),
       sessions: {
         userSessionsTerminated: summary.sessions.userSessionsTerminated,
         clientSessionsTerminated: summary.sessions.clientSessionsTerminated,
-        excluded: summary.sessions.results.filter(result => result.status === "excluded").length,
-        failed: summary.sessions.results.filter(result => result.status === "failed").length,
-        unknown: summary.sessions.results.filter(result => result.status === "unknown").length,
+        excluded: summary.sessions.results.filter((result) => result.status === "excluded").length,
+        failed: summary.sessions.results.filter((result) => result.status === "failed").length,
+        unknown: summary.sessions.results.filter((result) => result.status === "unknown").length,
       },
       batch: { results: summary.sessions.results, unfinished: summary.sessions.unfinished },
       artifactCleanup: { attempted: 0, succeeded: 0, failed: 0 },

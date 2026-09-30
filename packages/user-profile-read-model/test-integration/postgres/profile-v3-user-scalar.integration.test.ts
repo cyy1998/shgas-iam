@@ -1,15 +1,10 @@
-import type { PostgresTestHarness } from "./postgres-test-harness";
+import { afterAll, beforeAll, beforeEach, describe, expect, test } from "bun:test";
 import process from "node:process";
-import {
-  ApiErrorCode,
-  UserStatus,
-  UserType,
-} from "@iam/contracts";
+import { ApiErrorCode, UserStatus, UserType } from "@iam/contracts";
 import { relations } from "@iam/db/relations";
 import { userProfiles, users } from "@iam/db/schema";
 import { createOrganizationResponsibilityResolver } from "@iam/organization-responsibility-resolution";
 import { createRoleAssignmentResolver } from "@iam/role-assignment-resolution";
-import { afterAll, beforeAll, beforeEach, describe, expect, test } from "bun:test";
 import { eq } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/postgres-js";
 import postgres from "postgres";
@@ -21,6 +16,7 @@ import {
   V3_USER_PROFILE_SCHEMA_VERSION,
   V3UserProfileSearchRequestSchema,
 } from "../../src/v3";
+import type { PostgresTestHarness } from "./postgres-test-harness";
 import { createPostgresTestHarness } from "./postgres-test-harness";
 
 const now = new Date("2026-08-22T12:00:00.000Z");
@@ -139,8 +135,7 @@ describe("User Profile v3 User scalar tracer", () => {
       { userId: 2, sourceDirtyVersion: "1" },
       { userId: 3, sourceDirtyVersion: "1" },
     ]);
-    for (const candidate of candidates)
-      await candidatePersistence.upsert(candidate);
+    for (const candidate of candidates) await candidatePersistence.upsert(candidate);
 
     const normalized = V3UserProfileSearchRequestSchema.parse({
       filter: {
@@ -186,32 +181,36 @@ describe("User Profile v3 User scalar tracer", () => {
       op: "in",
       value: ["13800000002"],
     });
-    expect(formalWithoutBobMobile.map(detail => detail.id)).toEqual([1]);
-    expect(aliceOrBob.map(detail => detail.id)).toEqual([1, 2]);
+    expect(formalWithoutBobMobile.map((detail) => detail.id)).toEqual([1]);
+    expect(aliceOrBob.map((detail) => detail.id)).toEqual([1, 2]);
     expect(wrongCase).toEqual([]);
-    expect(nullableIn.map(detail => detail.id)).toEqual([2]);
+    expect(nullableIn.map((detail) => detail.id)).toEqual([2]);
   });
 
   test("preserves a legal 255-character wxId while enforcing the 128-character query budget", async () => {
     const wxId = "w".repeat(255);
-    await harness!.db.insert(users).values(user({
-      id: 1,
-      subjectIdentifier: "5ee46272-9123-4ec3-9d8d-8a7a6ac7f881",
-      username: "alice",
-      name: "Alice",
-      mobile: null,
-      wxId,
-      userType: UserType.Formal,
-      status: UserStatus.Enable,
-    }));
+    await harness!.db.insert(users).values(
+      user({
+        id: 1,
+        subjectIdentifier: "5ee46272-9123-4ec3-9d8d-8a7a6ac7f881",
+        username: "alice",
+        name: "Alice",
+        mobile: null,
+        wxId,
+        userType: UserType.Formal,
+        status: UserStatus.Enable,
+      }),
+    );
     const { builder, candidatePersistence, query } = createTracer();
 
     const candidate = await builder.buildOne({ userId: 1, sourceDirtyVersion: "1" });
     expect(candidate?.searchDoc.user.wxId).toBe(wxId);
     await candidatePersistence.upsert(candidate!);
-    const error = await query.search({
-      filter: { field: "user.wxId", op: "eq", value: "w".repeat(129) },
-    }).catch(error => error);
+    const error = await query
+      .search({
+        filter: { field: "user.wxId", op: "eq", value: "w".repeat(129) },
+      })
+      .catch((error) => error);
 
     expect(error).toMatchObject({
       code: ApiErrorCode.ValidationFailed,
@@ -250,7 +249,7 @@ describe("User Profile v3 User scalar tracer", () => {
     ];
 
     for (const request of invalidRequests) {
-      const error = await query.search(request).catch(error => error);
+      const error = await query.search(request).catch((error) => error);
       expect(error).toMatchObject({
         code: ApiErrorCode.ValidationFailed,
         httpStatus: 422,
@@ -288,21 +287,22 @@ describe("User Profile v3 User scalar tracer", () => {
       },
     ];
 
-    for (const filter of boundaryFilters)
-      expect(await query.search({ filter })).toEqual([]);
+    for (const filter of boundaryFilters) expect(await query.search({ filter })).toEqual([]);
   });
 
   test("fails the base query when a matched persisted Search Document is malformed", async () => {
-    await harness!.db.insert(users).values(user({
-      id: 1,
-      subjectIdentifier: "5ee46272-9123-4ec3-9d8d-8a7a6ac7f881",
-      username: "alice",
-      name: "Alice",
-      mobile: null,
-      wxId: null,
-      userType: UserType.Formal,
-      status: UserStatus.Enable,
-    }));
+    await harness!.db.insert(users).values(
+      user({
+        id: 1,
+        subjectIdentifier: "5ee46272-9123-4ec3-9d8d-8a7a6ac7f881",
+        username: "alice",
+        name: "Alice",
+        mobile: null,
+        wxId: null,
+        userType: UserType.Formal,
+        status: UserStatus.Enable,
+      }),
+    );
     const { builder, candidatePersistence, query } = createTracer();
     const candidate = await builder.buildOne({ userId: 1, sourceDirtyVersion: "1" });
     await candidatePersistence.upsert(candidate!);
@@ -315,13 +315,15 @@ describe("User Profile v3 User scalar tracer", () => {
       })
       .where(eq(userProfiles.userId, 1));
 
-    const error = await query.searchBase({
-      filter: {
-        field: "user.username",
-        op: "eq",
-        value: "alice",
-      },
-    }).catch(error => error);
+    const error = await query
+      .searchBase({
+        filter: {
+          field: "user.username",
+          op: "eq",
+          value: "alice",
+        },
+      })
+      .catch((error) => error);
     expect(error).toMatchObject({
       code: ApiErrorCode.UserSearchUnavailable,
       httpStatus: 503,
@@ -330,16 +332,18 @@ describe("User Profile v3 User scalar tracer", () => {
   });
 
   test("returns typed base facts without reading a malformed persisted Detail", async () => {
-    await harness!.db.insert(users).values(user({
-      id: 1,
-      subjectIdentifier: "5ee46272-9123-4ec3-9d8d-8a7a6ac7f881",
-      username: "alice",
-      name: "Alice",
-      mobile: null,
-      wxId: null,
-      userType: UserType.Formal,
-      status: UserStatus.Enable,
-    }));
+    await harness!.db.insert(users).values(
+      user({
+        id: 1,
+        subjectIdentifier: "5ee46272-9123-4ec3-9d8d-8a7a6ac7f881",
+        username: "alice",
+        name: "Alice",
+        mobile: null,
+        wxId: null,
+        userType: UserType.Formal,
+        status: UserStatus.Enable,
+      }),
+    );
     const { builder, candidatePersistence, query } = createTracer();
     const candidate = await builder.buildOne({ userId: 1, sourceDirtyVersion: "1" });
     await candidatePersistence.upsert(candidate!);
@@ -357,15 +361,17 @@ describe("User Profile v3 User scalar tracer", () => {
       filter: { field: "user.username", op: "eq", value: "alice" },
     } as const;
     const bases = await query.searchBase(filter);
-    const error = await query.search(filter).catch(error => error);
+    const error = await query.search(filter).catch((error) => error);
 
-    expect(bases).toEqual([{
-      mobile: null,
-      name: "Typed Bob",
-      subjectIdentifier: "87b69425-6d95-4a36-93c8-95327869318e",
-      username: "typed-bob",
-      wxId: null,
-    }]);
+    expect(bases).toEqual([
+      {
+        mobile: null,
+        name: "Typed Bob",
+        subjectIdentifier: "87b69425-6d95-4a36-93c8-95327869318e",
+        username: "typed-bob",
+        wxId: null,
+      },
+    ]);
     expect(error).toMatchObject({
       code: ApiErrorCode.UserSearchUnavailable,
       httpStatus: 503,
@@ -374,16 +380,18 @@ describe("User Profile v3 User scalar tracer", () => {
   });
 
   test("maps a real PostgreSQL statement timeout to one sanitized unavailable error", async () => {
-    await harness!.db.insert(users).values(user({
-      id: 1,
-      subjectIdentifier: "5ee46272-9123-4ec3-9d8d-8a7a6ac7f880",
-      username: "alice",
-      name: "Alice",
-      mobile: null,
-      wxId: null,
-      userType: UserType.Formal,
-      status: UserStatus.Enable,
-    }));
+    await harness!.db.insert(users).values(
+      user({
+        id: 1,
+        subjectIdentifier: "5ee46272-9123-4ec3-9d8d-8a7a6ac7f880",
+        username: "alice",
+        name: "Alice",
+        mobile: null,
+        wxId: null,
+        userType: UserType.Formal,
+        status: UserStatus.Enable,
+      }),
+    );
     const { builder, candidatePersistence } = createTracer();
     const candidate = await builder.buildOne({ userId: 1, sourceDirtyVersion: "1" });
     await candidatePersistence.upsert(candidate!);
@@ -392,23 +400,17 @@ describe("User Profile v3 User scalar tracer", () => {
       SELECT current_schema() AS "schemaName"
     `;
     const schemaName = schemaRows[0]?.schemaName;
-    if (schemaName === undefined)
-      throw new Error("PostgreSQL test schema is unavailable");
-    const timeoutSql = postgres(
-      process.env.IAM_USER_PROFILE_TEST_DATABASE_URL!,
-      {
-        connection: {
-          application_name: "iam-user-profile-v3-timeout-test",
-          search_path: schemaName,
-          statement_timeout: 50,
-        },
-        max: 1,
+    if (schemaName === undefined) throw new Error("PostgreSQL test schema is unavailable");
+    const timeoutSql = postgres(process.env.IAM_USER_PROFILE_TEST_DATABASE_URL!, {
+      connection: {
+        application_name: "iam-user-profile-v3-timeout-test",
+        search_path: schemaName,
+        statement_timeout: 50,
       },
-    );
+      max: 1,
+    });
     const timeoutQuery = createV3UserProfileQueryService({
-      profileRepository: createV3UserProfileQueryRepository(
-        drizzle({ client: timeoutSql, relations }),
-      ),
+      profileRepository: createV3UserProfileQueryRepository(drizzle({ client: timeoutSql, relations })),
     });
     let releaseLock!: () => void;
     let reportLocked!: () => void;
@@ -426,13 +428,15 @@ describe("User Profile v3 User scalar tracer", () => {
 
     await locked;
     try {
-      const error = await timeoutQuery.search({
-        filter: {
-          field: "user.username",
-          op: "eq",
-          value: "alice",
-        },
-      }).catch(error => error);
+      const error = await timeoutQuery
+        .search({
+          filter: {
+            field: "user.username",
+            op: "eq",
+            value: "alice",
+          },
+        })
+        .catch((error) => error);
 
       expect(error).toMatchObject({
         code: ApiErrorCode.UserSearchUnavailable,
@@ -442,8 +446,7 @@ describe("User Profile v3 User scalar tracer", () => {
       });
       expect(error).not.toHaveProperty("cause");
       expect(JSON.stringify(error)).not.toContain("statement timeout");
-    }
-    finally {
+    } finally {
       releaseLock();
       await tableLock;
       await timeoutSql.end();
@@ -451,38 +454,43 @@ describe("User Profile v3 User scalar tracer", () => {
   });
 
   test("returns 500 profiles in user ID order and rejects the 501st match without a partial result", async () => {
-    await harness!.db.insert(users).values(Array.from({ length: 501 }, (_, index) => user({
-      id: index + 1,
-      subjectIdentifier: `00000000-0000-4000-8000-${(index + 1).toString().padStart(12, "0")}`,
-      username: `user-${index + 1}`,
-      name: `User ${index + 1}`,
-      mobile: null,
-      wxId: null,
-      userType: index === 500 ? UserType.External : UserType.Formal,
-      status: UserStatus.Enable,
-    })));
+    await harness!.db.insert(users).values(
+      Array.from({ length: 501 }, (_, index) =>
+        user({
+          id: index + 1,
+          subjectIdentifier: `00000000-0000-4000-8000-${(index + 1).toString().padStart(12, "0")}`,
+          username: `user-${index + 1}`,
+          name: `User ${index + 1}`,
+          mobile: null,
+          wxId: null,
+          userType: index === 500 ? UserType.External : UserType.Formal,
+          status: UserStatus.Enable,
+        }),
+      ),
+    );
     const { builder, candidatePersistence, query } = createTracer();
-    const candidates = await builder.buildMany(Array.from({ length: 501 }, (_, index) => ({
-      userId: index + 1,
-      sourceDirtyVersion: "1",
-    })));
-    for (const candidate of candidates.reverse())
-      await candidatePersistence.upsert(candidate);
+    const candidates = await builder.buildMany(
+      Array.from({ length: 501 }, (_, index) => ({
+        userId: index + 1,
+        sourceDirtyVersion: "1",
+      })),
+    );
+    for (const candidate of candidates.reverse()) await candidatePersistence.upsert(candidate);
 
     const exactLimit = await query.search({
       filter: { field: "user.userType", op: "eq", value: UserType.Formal },
     });
-    expect(exactLimit.map(detail => detail.id)).toEqual(
-      Array.from({ length: 500 }, (_, index) => index + 1),
-    );
+    expect(exactLimit.map((detail) => detail.id)).toEqual(Array.from({ length: 500 }, (_, index) => index + 1));
 
-    const error = await query.search({
-      filter: {
-        field: "user.userType",
-        op: "in",
-        value: [UserType.Formal, UserType.External],
-      },
-    }).catch(error => error);
+    const error = await query
+      .search({
+        filter: {
+          field: "user.userType",
+          op: "in",
+          value: [UserType.Formal, UserType.External],
+        },
+      })
+      .catch((error) => error);
 
     expect(error).toMatchObject({
       code: ApiErrorCode.UserSearchResultTooLarge,
@@ -526,8 +534,7 @@ function user(input: {
 }
 
 function nestedNot(depth: number): unknown {
-  if (depth === 1)
-    return { field: "user.username", op: "eq", value: "alice" };
+  if (depth === 1) return { field: "user.username", op: "eq", value: "alice" };
   return { not: nestedNot(depth - 1) };
 }
 
@@ -545,7 +552,7 @@ function filterWithNodeCount65() {
 
 function filterWithNodeCount64() {
   return {
-    and: [15, 15, 15, 14].map(childCount => ({
+    and: [15, 15, 15, 14].map((childCount) => ({
       and: Array.from({ length: childCount }, () => ({
         field: "user.username",
         op: "eq",

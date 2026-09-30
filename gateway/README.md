@@ -174,11 +174,11 @@ pnpm gateway:apisix:apply -- --env dev:iam --env-file .env --prune
 
 同步脚本当前直接识别以下环境变量：
 
-| 变量 | 适用命令 | 说明 |
-| --- | --- | --- |
-| `APISIX_MANIFEST_ENV` | `validate`、`diff`、`apply` | manifest scope，格式必须是 `<env>:<app>`，例如 `dev:iam`。当未传 `--env` 时使用。 |
-| `APISIX_ADMIN_URL` | `diff`、`apply` | APISIX Admin API 地址。当未传 `--admin-url` 时使用；再未配置则默认 `http://127.0.0.1:9180/apisix/admin`。 |
-| `APISIX_ADMIN_KEY` | `diff`、`apply` | APISIX Admin API key。当未传 `--admin-key` 时使用；`diff` 和 `apply` 缺少 key 会失败。 |
+| 变量                  | 适用命令                    | 说明                                                                                                      |
+| --------------------- | --------------------------- | --------------------------------------------------------------------------------------------------------- |
+| `APISIX_MANIFEST_ENV` | `validate`、`diff`、`apply` | manifest scope，格式必须是 `<env>:<app>`，例如 `dev:iam`。当未传 `--env` 时使用。                         |
+| `APISIX_ADMIN_URL`    | `diff`、`apply`             | APISIX Admin API 地址。当未传 `--admin-url` 时使用；再未配置则默认 `http://127.0.0.1:9180/apisix/admin`。 |
+| `APISIX_ADMIN_KEY`    | `diff`、`apply`             | APISIX Admin API key。当未传 `--admin-key` 时使用；`diff` 和 `apply` 缺少 key 会失败。                    |
 
 参数优先级：
 

@@ -1,12 +1,12 @@
-import { createV3UserProfileSearchAdapter } from "@api/services/user-profile-search/user-profile-search-v3.adapter";
+import { describe, expect, mock, test } from "bun:test";
 import { createUserDelegationQuery } from "@api/services/user/user-delegation-query.helper";
 import { createUserMobileBinding } from "@api/services/user/user-mobile-binding.helper";
 import { createUserPasswordHelper } from "@api/services/user/user-password.helper";
+import { createV3UserProfileSearchAdapter } from "@api/services/user-profile-search/user-profile-search-v3.adapter";
 import { createFakePasswordHasher } from "@api/testing/fakes";
 import { BadRequestError } from "@iam/api-core/errors";
 import { UserStatus, UserType } from "@iam/contracts";
 import { createV3UserProfileQueryService } from "@iam/user-profile-read-model/v3";
-import { describe, expect, mock, test } from "bun:test";
 
 describe("user helper factories", () => {
   test("hashes and verifies passwords through injected hasher", async () => {
@@ -15,7 +15,9 @@ describe("user helper factories", () => {
     });
 
     await expect(passwordHelper.hashUserPassword("Abcd1234")).resolves.toBe("hashed:Abcd1234");
-    await expect(passwordHelper.verifyUserPassword({ password: "hashed:Abcd1234" } as any, "Abcd1234")).resolves.toBe(true);
+    await expect(passwordHelper.verifyUserPassword({ password: "hashed:Abcd1234" } as any, "Abcd1234")).resolves.toBe(
+      true,
+    );
     expect(() => passwordHelper.assertStrongPassword("short")).toThrow("新密码强度过低");
   });
 
@@ -51,24 +53,28 @@ describe("user helper factories", () => {
       },
     });
 
-    await expect(mobileBinding.assertCanBindMobile(1, "13800000000", "bad-code", {
-      requestContext: {
-        sourceApp: "iam",
+    await expect(
+      mobileBinding.assertCanBindMobile(1, "13800000000", "bad-code", {
+        requestContext: {
+          sourceApp: "iam",
+          requestId: "req-mobile-bind",
+          traceId: "11111111111111111111111111111111",
+          ip: "203.0.113.10",
+          userAgent: "user-helper-test",
+          route: "/public/mobile",
+          method: "POST",
+        },
+      }),
+    ).rejects.toThrow("验证码错误");
+
+    expect(auditLogWriter.recordAuditLog).toHaveBeenCalledWith(
+      expect.objectContaining({
+        action: "self.mobile.bind",
+        outcome: "failure",
         requestId: "req-mobile-bind",
         traceId: "11111111111111111111111111111111",
-        ip: "203.0.113.10",
-        userAgent: "user-helper-test",
-        route: "/public/mobile",
-        method: "POST",
-      },
-    })).rejects.toThrow("验证码错误");
-
-    expect(auditLogWriter.recordAuditLog).toHaveBeenCalledWith(expect.objectContaining({
-      action: "self.mobile.bind",
-      outcome: "failure",
-      requestId: "req-mobile-bind",
-      traceId: "11111111111111111111111111111111",
-    }));
+      }),
+    );
   });
 
   test("delegation query enforces a single ancestor organization", async () => {
@@ -79,10 +85,12 @@ describe("user helper factories", () => {
       },
     });
 
-    await expect(delegationQuery.searchUsersWithDelegations({
-      ancestorOrgCodes: [],
-      privilegeCode: "p",
-    } as any)).rejects.toBeInstanceOf(BadRequestError);
+    await expect(
+      delegationQuery.searchUsersWithDelegations({
+        ancestorOrgCodes: [],
+        privilegeCode: "p",
+      } as any),
+    ).rejects.toBeInstanceOf(BadRequestError);
   });
 
   test("delegation query combines profile users with live delegations", async () => {
@@ -115,11 +123,13 @@ describe("user helper factories", () => {
       },
     } as any);
 
-    await expect(delegationQuery.searchUsersWithDelegations({
-      ancestorOrgCodes: ["ORG"],
-      names: ["张三"],
-      privilegeCode: "privilege:a",
-    } as any)).resolves.toEqual({
+    await expect(
+      delegationQuery.searchUsersWithDelegations({
+        ancestorOrgCodes: ["ORG"],
+        names: ["张三"],
+        privilegeCode: "privilege:a",
+      } as any),
+    ).resolves.toEqual({
       users: [profileUser],
       delegations: [],
     });
@@ -155,10 +165,12 @@ describe("user helper factories", () => {
       },
     });
 
-    const error = await delegationQuery.searchUsersWithDelegations({
-      ancestorOrgCodes: [],
-      privilegeCode: "privilege:a",
-    }).catch((error: unknown) => error);
+    const error = await delegationQuery
+      .searchUsersWithDelegations({
+        ancestorOrgCodes: [],
+        privilegeCode: "privilege:a",
+      })
+      .catch((error: unknown) => error);
 
     expect(error).toMatchObject({
       code: "COMMON.VALIDATION_FAILED",

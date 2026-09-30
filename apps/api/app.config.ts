@@ -4,7 +4,7 @@ export default defineConfig({
   prefix: "",
   version: "1.0.0",
   openapi: {
-    enabled: env => env.NODE_ENV !== "production",
+    enabled: (env) => env.NODE_ENV !== "production",
     docEndpoint: "/doc",
     scalar: {
       theme: "elysiajs",
