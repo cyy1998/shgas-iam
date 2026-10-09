@@ -168,6 +168,56 @@ function getTenderInternalAuthzRequestHeaders(manifest: Awaited<ReturnType<typeo
 }
 
 describe("apisix manifest validation", () => {
+  it.each(["dev", "prod"])(
+    "materializes %s GDS subapps with separate authenticated APIs and preserved path prefixes",
+    async (env) => {
+      const manifest = await loadManifest(`${env}:gds`);
+      expect(validateManifest(manifest)).toEqual([]);
+      const frontend = manifest.resources.routes.find((route) => route.id === `gds.frontend.${env}`);
+
+      for (const module of ["ai-qc", "hr", "gas"]) {
+        const web = manifest.resources.routes.find((route) => route.id === `gds.subapp-${module}-web.${env}`);
+        const api = manifest.resources.routes.find((route) => route.id === `gds.subapp-${module}-api.${env}`);
+        const redirect = manifest.resources.routes.find(
+          (route) => route.id === `gds.subapp-${module}-web-root-redirect.${env}`,
+        );
+        expect(web).toMatchObject({
+          uri: `/data-platform/subapps/${module}/*`,
+          upstream_id: `gds.subapp-${module}-web.${env}`,
+        });
+        expect(Number(web?.priority)).toBeGreaterThan(Number(frontend?.priority ?? 0));
+        expect(web).not.toHaveProperty("plugin_config_id");
+        expect(redirect).toMatchObject({
+          uri: `/data-platform/subapps/${module}`,
+          plugins: { redirect: { uri: `/data-platform/subapps/${module}/`, append_query_string: true } },
+        });
+        expect(redirect).not.toHaveProperty("upstream_id");
+        if (env === "prod") {
+          // Host-indexed routing otherwise selects the old external frontend before the subapp path.
+          expect(web?.hosts).toEqual(["app.shgas.com", "jsc.shgas.com.cn"]);
+          expect(redirect?.hosts).toEqual(web?.hosts);
+        }
+        expect(api).toMatchObject({
+          uris: [`/subapps/${module}/api`, `/subapps/${module}/api/*`],
+          upstream_id: `gds.subapp-${module}-api.${env}`,
+          plugin_config_id: `gds.api-ip-rate-limit.${env}`,
+        });
+        expect(getForwardAuthConfig(api ?? {})).toMatchObject({
+          uri: `\${${env.toUpperCase()}_GDS_AUTHZ_API_URL}`,
+          allow_degradation: false,
+          extra_headers: { Client: "gds" },
+          request_headers: ["Cookie", "Authorization"],
+          upstream_headers: ["X-User-Info"],
+        });
+        for (const route of [web, api]) {
+          const plugins = route?.plugins as Record<string, unknown> | undefined;
+          expect(plugins?.["proxy-rewrite"]).toEqual({ headers: { remove: ["X-User-Info"] } });
+          expect(route?.labels).toMatchObject({ app: "gds", env, source: "repo-manifest" });
+        }
+      }
+    },
+  );
+
   it("accepts the checked-in dev IAM manifest", async () => {
     const manifest = await loadManifest("dev:iam");
     expect(validateManifest(manifest)).toEqual([]);

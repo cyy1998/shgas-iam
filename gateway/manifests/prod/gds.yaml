@@ -68,7 +68,208 @@ upstreams:
       verify: false
     nodes:
       ${PROD_GDS_DASHBOARD_UPSTREAM_HOST}:${PROD_GDS_DASHBOARD_UPSTREAM_PORT}: 0
+  - key: subapp-ai-qc-web
+    type: roundrobin
+    scheme: http
+    pass_host: pass
+    nodes:
+      ${PROD_GDS_SUBAPP_AI_QC_WEB_UPSTREAM_HOST}:${PROD_GDS_SUBAPP_AI_QC_WEB_UPSTREAM_PORT}: 1
+  - key: subapp-ai-qc-api
+    type: roundrobin
+    scheme: http
+    pass_host: pass
+    nodes:
+      ${PROD_GDS_SUBAPP_AI_QC_API_UPSTREAM_HOST}:${PROD_GDS_SUBAPP_AI_QC_API_UPSTREAM_PORT}: 1
+  - key: subapp-hr-web
+    type: roundrobin
+    scheme: http
+    pass_host: pass
+    nodes:
+      ${PROD_GDS_SUBAPP_HR_WEB_UPSTREAM_HOST}:${PROD_GDS_SUBAPP_HR_WEB_UPSTREAM_PORT}: 1
+  - key: subapp-hr-api
+    type: roundrobin
+    scheme: http
+    pass_host: pass
+    nodes:
+      ${PROD_GDS_SUBAPP_HR_API_UPSTREAM_HOST}:${PROD_GDS_SUBAPP_HR_API_UPSTREAM_PORT}: 1
+  - key: subapp-gas-web
+    type: roundrobin
+    scheme: http
+    pass_host: pass
+    nodes:
+      ${PROD_GDS_SUBAPP_GAS_WEB_UPSTREAM_HOST}:${PROD_GDS_SUBAPP_GAS_WEB_UPSTREAM_PORT}: 1
+  - key: subapp-gas-api
+    type: roundrobin
+    scheme: http
+    pass_host: pass
+    nodes:
+      ${PROD_GDS_SUBAPP_GAS_API_UPSTREAM_HOST}:${PROD_GDS_SUBAPP_GAS_API_UPSTREAM_PORT}: 1
 routes:
+  - key: subapp-ai-qc-web-root-redirect
+    hosts:
+      - app.shgas.com
+      - jsc.shgas.com.cn
+    uri: /data-platform/subapps/ai-qc
+    priority: 100
+    terminal: true
+    plugins:
+      redirect:
+        uri: /data-platform/subapps/ai-qc/
+        ret_code: 301
+        append_query_string: true
+  - key: subapp-ai-qc-web
+    hosts:
+      - app.shgas.com
+      - jsc.shgas.com.cn
+    uri: /data-platform/subapps/ai-qc/*
+    priority: 10
+    upstream: subapp-ai-qc-web
+    plugins:
+      proxy-rewrite:
+        headers:
+          remove:
+            - X-User-Info
+  - key: subapp-ai-qc-api
+    uris:
+      - /subapps/ai-qc/api
+      - /subapps/ai-qc/api/*
+    priority: 10
+    upstream: subapp-ai-qc-api
+    plugin_config: api-ip-rate-limit
+    plugins:
+      proxy-rewrite:
+        headers:
+          remove:
+            - X-User-Info
+      forward-auth:
+        uri: ${PROD_GDS_AUTHZ_API_URL}
+        allow_degradation: false
+        client_headers:
+          - Forbidden-Reason
+        extra_headers:
+          Client: gds
+        keepalive: true
+        keepalive_pool: 5
+        keepalive_timeout: 60000
+        request_headers:
+          - Cookie
+          - Authorization
+        request_method: GET
+        ssl_verify: false
+        status_on_error: 403
+        timeout: 3000
+        upstream_headers:
+          - X-User-Info
+  - key: subapp-hr-web-root-redirect
+    hosts:
+      - app.shgas.com
+      - jsc.shgas.com.cn
+    uri: /data-platform/subapps/hr
+    priority: 100
+    terminal: true
+    plugins:
+      redirect:
+        uri: /data-platform/subapps/hr/
+        ret_code: 301
+        append_query_string: true
+  - key: subapp-hr-web
+    hosts:
+      - app.shgas.com
+      - jsc.shgas.com.cn
+    uri: /data-platform/subapps/hr/*
+    priority: 10
+    upstream: subapp-hr-web
+    plugins:
+      proxy-rewrite:
+        headers:
+          remove:
+            - X-User-Info
+  - key: subapp-hr-api
+    uris:
+      - /subapps/hr/api
+      - /subapps/hr/api/*
+    priority: 10
+    upstream: subapp-hr-api
+    plugin_config: api-ip-rate-limit
+    plugins:
+      proxy-rewrite:
+        headers:
+          remove:
+            - X-User-Info
+      forward-auth:
+        uri: ${PROD_GDS_AUTHZ_API_URL}
+        allow_degradation: false
+        client_headers:
+          - Forbidden-Reason
+        extra_headers:
+          Client: gds
+        keepalive: true
+        keepalive_pool: 5
+        keepalive_timeout: 60000
+        request_headers:
+          - Cookie
+          - Authorization
+        request_method: GET
+        ssl_verify: false
+        status_on_error: 403
+        timeout: 3000
+        upstream_headers:
+          - X-User-Info
+  - key: subapp-gas-web-root-redirect
+    hosts:
+      - app.shgas.com
+      - jsc.shgas.com.cn
+    uri: /data-platform/subapps/gas
+    priority: 100
+    terminal: true
+    plugins:
+      redirect:
+        uri: /data-platform/subapps/gas/
+        ret_code: 301
+        append_query_string: true
+  - key: subapp-gas-web
+    hosts:
+      - app.shgas.com
+      - jsc.shgas.com.cn
+    uri: /data-platform/subapps/gas/*
+    priority: 10
+    upstream: subapp-gas-web
+    plugins:
+      proxy-rewrite:
+        headers:
+          remove:
+            - X-User-Info
+  - key: subapp-gas-api
+    uris:
+      - /subapps/gas/api
+      - /subapps/gas/api/*
+    priority: 10
+    upstream: subapp-gas-api
+    plugin_config: api-ip-rate-limit
+    plugins:
+      proxy-rewrite:
+        headers:
+          remove:
+            - X-User-Info
+      forward-auth:
+        uri: ${PROD_GDS_AUTHZ_API_URL}
+        allow_degradation: false
+        client_headers:
+          - Forbidden-Reason
+        extra_headers:
+          Client: gds
+        keepalive: true
+        keepalive_pool: 5
+        keepalive_timeout: 60000
+        request_headers:
+          - Cookie
+          - Authorization
+        request_method: GET
+        ssl_verify: false
+        status_on_error: 403
+        timeout: 3000
+        upstream_headers:
+          - X-User-Info
   - key: frontend-root-redirect
     uri: /data-platform
     plugins:
