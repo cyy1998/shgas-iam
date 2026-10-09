@@ -1,6 +1,6 @@
 name = "implementer_standard"
 description = "常规功能与多文件实现，边界和依赖已明确；信息不足时的默认选择。"
-model = "gpt-5.6-sol"
+model = "gpt-6.1-sol"
 model_reasoning_effort = "high"
 
 developer_instructions = """

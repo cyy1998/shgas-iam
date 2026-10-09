@@ -1,7 +1,7 @@
 name = "spec_reviewer"
 description = "当前一轮 code-review 的 Spec 轴，只读核对固定候选与 ticket、来源 Spec 的验收要求。"
-model = "gpt-6-astra"
-model_reasoning_effort = "high"
+model = "gpt-6.1-sol"
+model_reasoning_effort = "xhigh"
 sandbox_mode = "read-only"
 
 developer_instructions = """

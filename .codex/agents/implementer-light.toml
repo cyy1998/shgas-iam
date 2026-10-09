@@ -1,6 +1,6 @@
 name = "implementer_light"
 description = "验收明确、范围局限于单模块的小修改；不涉及安全、并发、一致性或跨 runtime 契约。"
-model = "gpt-5.6-luna"
+model = "gpt-6.1-sol"
 model_reasoning_effort = "medium"
 
 developer_instructions = """

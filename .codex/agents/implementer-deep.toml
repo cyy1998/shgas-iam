@@ -1,6 +1,6 @@
 name = "implementer_deep"
 description = "涉及安全或授权边界、事务与并发一致性、跨 runtime 生命周期、复杂重构或已有难解失败的任务。"
-model = "gpt-6-astra"
+model = "gpt-6.1-sol"
 model_reasoning_effort = "xhigh"
 
 developer_instructions = """

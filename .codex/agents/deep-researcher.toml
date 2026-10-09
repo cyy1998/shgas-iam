@@ -8,8 +8,8 @@ routine entry-point discovery, ordinary cross-file tracing, code edits, or
 duplicate investigation of an already established path.
 """
 
-model = "gpt-6-astra"
-model_reasoning_effort = "high"
+model = "gpt-6.1-sol"
+model_reasoning_effort = "xhigh"
 sandbox_mode = "read-only"
 
 developer_instructions = """
