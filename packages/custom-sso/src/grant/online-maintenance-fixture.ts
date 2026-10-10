@@ -29,55 +29,24 @@ export function createCustomSsoMaintenanceTestFixture(
     return owned(`${prefix}continuation:${tokenDigest(handle)}`);
   }
   return {
-    seedContinuation,
-    async seedAuthorizationPreservation(clientCode = "alpha") {
-      const identity = {
-        userSessionId: randomUUID(),
-        clientSessionId: randomUUID(),
-        userSessionInstance: randomUUID(),
-        clientSessionInstance: randomUUID(),
-        issuedAt: Date.now(),
-        expiresAt: Date.now() + 600000,
-      };
-      const retained: string[] = [];
-      const authorization: string[] = [];
-      for (const purpose of ["managed", "business"] as const) {
-        const bearer = randomHandle();
-        const tokenId = randomUUID();
-        await tokens.save(bearer, { ...identity, version: 1, protocol: "custom_sso", purpose, tokenId, clientCode });
-        retained.push(owned(`${prefix}token:${tokenDigest(bearer)}`), owned(`${prefix}token-id:${tokenId}`));
-        const codeId = randomHandle();
-        await state.saveCode({
-          ...identity,
-          version: 1,
-          protocol: "custom_sso",
-          codeId,
-          clientCode,
-          callbackEndpoint: "https://client.example/callback",
-          redirectUrl: "https://client.example/",
-          redeemer: purpose,
-        });
-        authorization.push(
-          owned(
-            `${prefix}code:${tokenDigest(JSON.stringify([clientCode, identity.userSessionId, identity.clientSessionId, codeId]))}`,
-          ),
-        );
-      }
-      const orphan = randomUUID();
-      const orphanBearer = randomHandle();
-      await tokens.save(orphanBearer, {
-        ...identity,
-        version: 1,
-        protocol: "custom_sso",
-        purpose: "managed",
-        tokenId: orphan,
-        clientCode,
-      });
-      await redis.del(`${prefix}token:${tokenDigest(orphanBearer)}`);
-      retained.push(owned(`${prefix}token-id:${orphan}`));
-      authorization.push(await seedContinuation(clientCode));
-      return { retained, authorization };
+    async seedVersionedKeys() {
+      const keys = [
+        owned(`${namespace}:custom-sso:v0:legacy:${randomUUID()}`),
+        owned(`${namespace}:custom-sso:v2:future:${randomUUID()}`),
+        owned(`${namespace}:custom-sso:unversioned:${randomUUID()}`),
+        owned(`${namespace}:custom-sso:v9:queue:${randomUUID()}`),
+        owned(`${namespace}:custom-sso:v3:members:${randomUUID()}`),
+        owned(`${namespace}:custom-sso:v4:events:${randomUUID()}`),
+      ];
+      await redis.set(keys[0]!, "{malformed");
+      await redis.hset(keys[1]!, "field", "arbitrary");
+      await redis.zadd(keys[2]!, 1, "non-uuid");
+      await redis.rpush(keys[3]!, "arbitrary");
+      await redis.sadd(keys[4]!, "arbitrary");
+      await redis.xadd(keys[5]!, "*", "field", "arbitrary");
+      return keys;
     },
+    seedContinuation,
     async seedUnified(clientCode = "alpha") {
       try {
         const identity = {

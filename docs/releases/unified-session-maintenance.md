@@ -2,32 +2,34 @@
 
 Type: runbook
 Status: Current
-Last verified: 2026-09-28
+Last verified: 2026-10-10
 Next review: 2026-10-31
 
-本页用于当前统一会话布局的离线定向清理和 Client Snapshot 修复。日常会话查询、撤销优先使用
+本页用于按 namespace 与 owner 前缀全量清空会话及协议产物，以及 Client Snapshot 修复。日常会话查询、撤销优先使用
 [会话管理](../features/admin/session-management.md)；主体访问与事实恢复见[Profile 维护](user-profile-maintenance.md)。
 旧来源升级工具已退役；需要升级时恢复匹配版本工具并按[固定历史手册](https://github.com/cyy1998/shgas-iam/tree/73315e4cef6f96dd79b29e18f74d68af30e559ec/docs/releases)
 核对实际版本，不套用本页流程。维护命令不负责部署、停流或放流。
 
 ## 所有权与明确范围
 
-Worker `online-auth:state` 组合三个 owner 的 inventory、apply 和独立 verify，不启动 HTTP、队列或 PostgreSQL。
-命令只接受显式 `--layout unified`，每次操作固定 Redis 实例、DB、namespace、owner 和可选 Client 集合。
+Worker `session:clear:inventory`、`session:clear`、`session:clear:verify` 分别执行清空前统计、清空和独立清零核验，
+通过三个 owner 的公开维护能力操作 Redis，不启动 HTTP、队列或 PostgreSQL。命令内置对应模式，用户不再传模式参数。
+命令只接受显式 `--layout unified`，每次操作固定 Redis 实例、DB、namespace 与 owner。
 
-| Owner           | 当前库存                                                                                             | 范围边界                                                                               |
-| --------------- | ---------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------- |
-| Kernel          | `<kernel-namespace>:unified:v1:` 下的 UserSession、ClientSession、user-id、slot 与所属索引           | 扫描主记录和索引，不依赖管理索引完整；不接受 Client filter。                           |
-| Custom SSO      | `<custom-namespace>:custom-sso:v1:` 下的 Code、Token、token-id、Authentication Continuation          | 业务与托管 Token 共 owner；Client 范围保留无法确定归属的孤立对象。                     |
-| OIDC            | `<oidc-namespace>:oidc:v1:` 下的 Code、Access Token、token-id、Authentication Continuation、退出确认 | 全量可处理合法孤立反向索引；Client 范围不猜测 orphan 归属。                            |
-| Client Snapshot | `client-snapshot:v1:{<clientCode>}:control`、`payload:client`、`payload:credential`                  | 独立 repair/verify 命令；普通与敏感缓存共 control，定向 repair 同时使双 payload 失效。 |
+| Owner           | 当前库存                                                                            | 范围边界                                                                               |
+| --------------- | ----------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------- |
+| Kernel          | `<kernel-namespace>:unified:*` 下全部 key                                           | 包含全部版本、键族与孤立索引。                                                         |
+| Custom SSO      | `<custom-namespace>:custom-sso:*` 下全部 key                                        | 包含业务与托管 Token、Code、续接及所有版本和键族。                                     |
+| OIDC            | `<oidc-namespace>:oidc:*` 下全部 key                                                | 包含 Code、Token、续接、退出确认及所有版本和键族。                                     |
+| Client Snapshot | `client-snapshot:v1:{<clientCode>}:control`、`payload:client`、`payload:credential` | 独立 repair/verify 命令；普通与敏感缓存共 control，定向 repair 同时使双 payload 失效。 |
 
 三个 namespace 必须分别核对 runtime 配置，不能从默认值推测。末尾冒号也是输入字节：factory 输入末尾有冒号时，
 后缀前会有两个冒号，维护命令必须使用同一输入。命令不接受任意 Redis pattern。
 
-未知版本、坏 JSON、错类型、非法身份或损坏索引成员会被保留，并使相应 inventory/apply 非成功。
-已知 Snapshot 三族内的坏缓存可以清除后回源；未知键族仍保留且不属于该 gate。
-在线状态不能按普通坏缓存直接删除，无法识别的记录由其 owner 根据受控事实处理。
+三个会话 owner 仅根据 key 前缀决定范围，不读取或解析 value，也不校验 schema、身份、期限或 Redis 类型。
+命中范围的未知版本、未知键族、坏 JSON、任意 Redis 类型、孤立索引和未过期会话都清空，不执行比较删除或索引修复。
+`global_session` 等不同前缀的旧布局、其他 namespace 和其他状态 owner 不在范围内，不能把本命令视为任意旧布局升级工具。
+Snapshot 仍按独立维护契约处理：已知三族内的坏缓存可以清除后回源，未知键族保留且不属于该 gate。
 
 ## 资源与维护窗口
 
@@ -49,9 +51,9 @@ API/Admin API 的对应配置须一致；Token 不延长根期限。
 
 ORCAS 退役必须在同一维护窗口按下列顺序执行，不允许新旧 runtime 混跑，也不能用新 reader 将无法解析的旧记录视为已清除：
 
-1. 固定仍能识别 Token `orcas` 字段与旧 Client 配置的应用、维护工具 commit/digest，完成停流，停止全部旧 reader/writer、
+1. 固定应用与按 owner 前缀清理的维护工具 commit/digest，核对旧状态确实属于本页前缀，完成停流，停止全部旧 reader/writer、
    Client mutation 与 Snapshot acquisition，并排空在途工作。
-2. 使用该旧版维护工具按[库存、清理与独立核验](#库存清理与独立核验)依次执行
+2. 使用不依赖记录 schema 的维护工具按[库存、清理与独立核验](#库存清理与独立核验)依次执行
    `--layout unified --owner all` 的 inventory、apply 和另起进程 verify。verify 必须证明 Kernel、Custom SSO 与 OIDC
    全部目标库存为零；此作用要求所有 IAM 用户重新登录。
 3. 执行正式 migration
@@ -72,47 +74,39 @@ ORCAS 退役必须在同一维护窗口按下列顺序执行，不允许新旧 r
 以下三个命令分别启动新进程，占位 namespace 替换为部署清单的精确值：
 
 ```bash
-pnpm --filter @iam/worker online-auth:state -- inventory --layout unified --owner all --kernel-namespace '<kernel>' --custom-namespace '<custom>' --oidc-namespace '<oidc>' --writers-stopped --drained
-pnpm --filter @iam/worker online-auth:state -- apply --layout unified --owner all --kernel-namespace '<kernel>' --custom-namespace '<custom>' --oidc-namespace '<oidc>' --writers-stopped --drained
-pnpm --filter @iam/worker online-auth:state -- verify --layout unified --owner all --kernel-namespace '<kernel>' --custom-namespace '<custom>' --oidc-namespace '<oidc>' --writers-stopped --drained
+pnpm --filter @iam/worker session:clear:inventory -- --layout unified --owner all --kernel-namespace '<kernel>' --custom-namespace '<custom>' --oidc-namespace '<oidc>' --writers-stopped --drained
+pnpm --filter @iam/worker session:clear -- --layout unified --owner all --kernel-namespace '<kernel>' --custom-namespace '<custom>' --oidc-namespace '<oidc>' --writers-stopped --drained
+pnpm --filter @iam/worker session:clear:verify -- --layout unified --owner all --kernel-namespace '<kernel>' --custom-namespace '<custom>' --oidc-namespace '<oidc>' --writers-stopped --drained
 ```
 
-全 owner 清理使该范围全部重新登录，不能用于只需清理单 Client 协议产物的任务。
-单 owner 可选 `kernel|custom-sso|oidc`；单协议 owner 可加 `--client-code`，不终止 Kernel 会话：
+全 owner 清理使该范围全部重新登录。单 owner 可选 `kernel|custom-sso|oidc`，每次仍清空所选 owner 前缀下全部 key，
+不能用于只清理单 Client 或部分协议产物的任务。`--client-code`、`--artifacts` 及其他未知参数在连接前明确拒绝；
+旧 `online-auth:state` 入口已移除。三个命令必须使用相同范围，局部 verify 不代表全局清零。
 
-```bash
-pnpm --filter @iam/worker online-auth:state -- inventory --layout unified --owner custom-sso --custom-namespace '<custom>' --client-code alpha --writers-stopped --drained
-pnpm --filter @iam/worker online-auth:state -- apply --layout unified --owner custom-sso --custom-namespace '<custom>' --client-code alpha --writers-stopped --drained
-pnpm --filter @iam/worker online-auth:state -- verify --layout unified --owner custom-sso --custom-namespace '<custom>' --client-code alpha --writers-stopped --drained
-```
-
-仅需 Custom Code/续接时，三个模式都加 `--artifacts authorization`；它只允许
-unified/custom-sso/明确 Client，保留 Token、token-id 和两类会话。省略该参数默认为全部协议产物。
-各模式必须使用相同范围，局部 verify 不代表全局清零。
-
-全范围 verify 仅使用 SCAN，不调用 GET、EVAL、UNLINK、acquisition 或在线 factory，可使用 scan-only ACL；
-Client scoped verify 需读取并分类 payload，须提供相应只读权限。inventory 需 SCAN/GET/TYPE/ZRANGE；
-apply 另需 EVAL 及 owner 脚本实际使用的 GET/TYPE/DEL/ZRANGE/ZREM/SMEMBERS/SISMEMBER/SREM/EXISTS。
+inventory 与 verify 仅使用 SCAN，可使用 scan-only ACL；apply 使用 SCAN 与批量 UNLINK。
+三个命令都不调用 GET、TYPE、EVAL、acquisition 或在线 factory。
 AUTH/SELECT/CLIENT/QUIT 依连接配置授权，避免以生产高权限账户代替确认工具所需权限。
 
 所有模式要求 `--writers-stopped --drained`。总 deadline 默认五分钟，`--deadline-ms <1..300000>` 可收紧；
-连接和单命令 timeout 各五秒，不自动重连或离线排队。每页最多 100 个 key，索引单批最多 1000 个成员，
-每 owner 最多 100000 页，总 deadline 优先；未完成批次保留并要求继续确认。信号或 deadline 导致非零退出。
+连接和单命令 timeout 各五秒，不自动重连、重试或离线排队。默认每个处理批次最多 100 个 key；SCAN COUNT 只是 hint，
+返回超额 key 时缓冲后分批处理。每 owner 最多 100000 个扫描页，总 deadline 优先；未完成批次要求继续确认。
+信号或 deadline 导致非零退出。报告仅输出脱敏资源信息与计数，不输出 value、完整 key、Token 或 Secret。
 
 ## 部分作用与保留核验
 
-| 结果                             | 操作要求                                                           |
-| -------------------------------- | ------------------------------------------------------------------ |
-| 退出 2                           | 参数无效，未创建连接；修正输入后再开始。                           |
-| 退出 1                           | 资源、读取、格式、比较、作用或期限未完全确认，保持停流。           |
-| 退出 0 且 `status=completed`     | 该命令完成；只有独立完整 verify 零 matching 才证明所选范围无残留。 |
-| `unknown` / `changed` / 报告丢失 | 不计为已清除，按原资源和范围重新观察；不得猜测成功或扩大清理范围。 |
+| 结果                         | 操作要求                                                           |
+| ---------------------------- | ------------------------------------------------------------------ |
+| 退出 2                       | 参数无效，未创建连接；修正输入后再开始。                           |
+| 退出 1                       | 资源、扫描、作用或期限未完全确认，保持停流。                       |
+| 退出 0 且 `status=completed` | 该命令完成；只有独立完整 verify 零 matching 才证明所选范围无残留。 |
+| `unknown` / 报告丢失         | 不计为已清除，按原资源和范围重新观察；不得猜测成功或扩大清理范围。 |
 
 apply 跨 owner 不原子，前一 owner 的作用不因后一 owner 失败回滚。提交丢响应、timeout 或中断时可能已删除部分记录。
 保持停流，用同一固定候选和原范围重新 inventory，处理原因后 apply，再另起 verify；不恢复已消费 Code 或过期登录状态。
-SCAN 可重复，matching 是观察量，removed 是确认操作数，不是独立登录数量，也不能相减证明残留。
+SCAN 可重复，matching 是观察量，removed 是已确认 UNLINK 删除的 key 数，不是独立登录数量，也不能相减证明残留。
+apply 成功不能代替另起进程的独立 verify。
 
-维护前后独立比较非目标 owner 的值摘要、对象身份与绝对 expiry：其他 Client/namespace、Subject Access、Facts、
+维护前后独立比较非目标 owner 的值摘要、对象身份与绝对 expiry：其他 namespace/未选 owner、Subject Access、Facts、
 Login Restriction、短信码/nonce、队列、非目标 Snapshot，以及 PostgreSQL 用户、Client、角色、审计与 Internal 凭据。
 自然到期单列。报告的 `preservation=requires_independent_baseline_comparison` 不是保留验证结果，
 零目标库存也不能替代保留集比较。

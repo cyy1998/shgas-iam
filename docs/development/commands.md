@@ -114,7 +114,7 @@ container/network ID 恢复清理。`run.lock` 记录进程与目标分支，确
 
 ## Workspace 命令
 
-当前会话和 Snapshot 维护入口为 Worker `online-auth:state`、`client-snapshot:repair`、`client-snapshot:verify`。
+当前会话和 Snapshot 维护入口为 Worker `session:clear:inventory`、`session:clear`、`session:clear:verify`、`client-snapshot:repair`、`client-snapshot:verify`。
 同名 scripts 通过 `bun run` 默认读取 `apps/worker/.env`，已有进程环境变量优先。
 资源、当前布局、namespace、停流/排空与失败处理见[统一维护手册](../releases/unified-session-maintenance.md)。
 Profile 重建及 Subject Access 恢复见[Profile 维护手册](../releases/user-profile-maintenance.md)；
@@ -556,7 +556,7 @@ Hook 可以被本地绕过，自动 merge commit 也不保证触发 pre-commit�
 - Custom SSO：`pnpm --filter @iam/custom-sso <lint|test|test:unit|typecheck>`；完整 HTTP/Redis 在 API collection。
 - Client Subject Projection：`pnpm --filter @iam/client-subject-projection <lint|test:integration:component|typecheck>`
 - User Profile Read Model：`pnpm --filter @iam/user-profile-read-model <lint|test|test:unit|test:integration:component|test:integration:postgres|test:integration:redis|typecheck>`
-- Worker：`pnpm --filter @iam/worker <dev|serve|lint|test|test:unit|test:integration:component|test:integration:process|test:integration:postgres|test:integration:redis|typecheck|employment:verify|user-profile:backfill|user-profile:repair|user-profile:verify-postgres|user-profile:verify-redis|client-snapshot:repair|client-snapshot:verify|online-auth:state>`
+- Worker：`pnpm --filter @iam/worker <dev|serve|lint|test|test:unit|test:integration:component|test:integration:process|test:integration:postgres|test:integration:redis|typecheck|employment:verify|user-profile:backfill|user-profile:repair|user-profile:verify-postgres|user-profile:verify-redis|client-snapshot:repair|client-snapshot:verify|session:clear:inventory|session:clear|session:clear:verify>`
 - Employment 全库只读诊断：
   `IAM_WORKER_DATABASE_URL=<target-url> pnpm --filter @iam/worker employment:verify`
 - Subject Access 恢复：
@@ -572,7 +572,7 @@ Hook 可以被本地绕过，自动 merge commit 也不保证触发 pre-commit�
   `pnpm --filter @iam/worker user-profile:verify-redis -- [--batch-size <positive-integer>]`。Backfill 的 `enqueued`
   只表示已派发，不表示 readiness 已通过；窗口、两 gate 和放流见[Profile 维护手册](../releases/user-profile-maintenance.md#全量重建与恢复)。
 - 当前 Snapshot repair/verify 与 unified 状态维护：使用 Worker `client-snapshot:repair`、`client-snapshot:verify`、
-  `online-auth:state`，完整停流/资源/参数/失败重跑边界见[统一维护手册](../releases/unified-session-maintenance.md)。
+  `session:clear:inventory`、`session:clear`、`session:clear:verify`，完整停流/资源/参数/失败重跑边界见[统一维护手册](../releases/unified-session-maintenance.md)。
   旧 `client-runtime:*`、Provider 维护、epoch 和扩展期 Client 升级命令已退役。
 - Admin frontend：`pnpm --filter @iam/admin <dev|build|lint|test|test:unit|test:integration:component|test:integration:browser|typecheck|format>`
 - SSO frontend：`pnpm --filter @iam/sso <dev|build|lint|test|test:unit|test:integration:component|test:integration:browser|typecheck|format>`

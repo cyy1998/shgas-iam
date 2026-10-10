@@ -393,7 +393,7 @@ Internal Privilege Delegation 已在 API 自身的 service、repository 与 Unit
 - 取得 Client Snapshot 和 access 后交付 capability 复用同一观察，Mapper 不重新读 Client；根 UserInfo 独立 Client 校验保持。
   真实 I/O、唯一消费、替换保护和 Token 补偿不能作为重复内存判断删除，#155 清单在统一维护手册。
 - API route 只负责 HTTP、Cookie、错误/redirect，完整操作处理内部顺序。协议 `/wire` 是浏览器可用纯出口，
-  `/maintenance` 负责离线库存；只处理当前 Code/Token 布局，旧 Grant decoder 已退役。
+  `/maintenance` 负责按 owner 前缀扫描和清空离线库存，不依赖 Code/Token schema；旧 Grant decoder 已退役。
 
 ## Runtime-specific Composition
 
@@ -413,10 +413,11 @@ API env 注入 current/previous RS256 JWK，JWKS 只输出公钥；非法配置�
 
 ### Worker
 
-- Spec #178 的新维护由 Worker `online-auth:state` 只通过公开 owner 组合 unified inventory、CAS apply 和只读 verify；
-  Kernel、OIDC、Custom SSO 分别拥有 decoder、索引及终态，不导入 app 私有状态。旧 Provider decoder 和
+- Worker `session:clear:inventory`、`session:clear`、`session:clear:verify` 通过公开 owner 组合前缀扫描、批量 UNLINK
+  和只读独立清零核验；Kernel、OIDC、Custom SSO 各自声明 namespace 下的 owner 前缀，不读取状态内容，
+  覆盖所选前缀全部版本、键族和 Redis 类型，不执行 CAS 或索引修复，也不导入 app 私有状态。旧 Provider decoder 和
   `/offline-maintenance` 出口已退役。 `client-snapshot:repair/verify` 只消费 API Core 新 Snapshot
-  维护出口；三个 CLI 默认读取 `apps/worker/.env`，已有进程环境变量优先，使用 Worker 资源变量连接、限制 deadline 并在结束时断开资源。它们没有 HTTP、队列或 PG 连接，
+  维护出口；这些 CLI 默认读取 `apps/worker/.env`，已有进程环境变量优先，使用 Worker 资源变量连接、限制 deadline 并在结束时断开资源。它们没有 HTTP、队列或 PG 连接，
   也没有可靠后台执行器。当前 owner 和人工边界见[统一维护手册](../releases/unified-session-maintenance.md)，旧来源操作见[历史工具入口](../development/commands.md#历史数据维护工具)。
 
 - `apps/worker/src/modules/registry.ts` 定义稳定 `WorkerModule` contract：`key`、`queueRegistrations`、

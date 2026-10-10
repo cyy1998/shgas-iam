@@ -1,12 +1,12 @@
 import { createOfflineMaintenanceRedis } from "@worker/composition/offline-maintenance-redis";
-import { createOnlineStateMaintenance } from "@worker/composition/online-state-maintenance";
+import { createSessionClearMaintenance } from "@worker/composition/session-clear-maintenance";
 import { parseOfflineMaintenanceEnv } from "@worker/env";
-import { parseOnlineStateArgs } from "./arguments";
+import { parseSessionClearArgs } from "./arguments";
 
 async function main() {
-  let input: ReturnType<typeof parseOnlineStateArgs>;
+  let input: ReturnType<typeof parseSessionClearArgs>;
   try {
-    input = parseOnlineStateArgs(process.argv.slice(2));
+    input = parseSessionClearArgs(process.argv.slice(2));
   } catch {
     process.stdout.write(`${JSON.stringify({ version: 1, status: "failed", reason: "invalid-input" })}\n`);
     process.exitCode = 2;
@@ -16,8 +16,6 @@ async function main() {
     version: 1,
     mode: input.mode,
     layout: input.layout,
-    artifacts: input.artifacts,
-    clientCode: input.clientCode,
     status: "failed",
     reason: "operation-failed",
     preservation: "requires_independent_baseline_comparison",
@@ -26,7 +24,6 @@ async function main() {
       status: string;
       matching?: number;
       removed?: number;
-      changed?: number;
       unknown?: number;
     }>,
   };
@@ -39,15 +36,13 @@ async function main() {
   try {
     connection = createOfflineMaintenanceRedis(parseOfflineMaintenanceEnv(process.env), controller.signal);
     await connection.connect();
-    for (const owner of createOnlineStateMaintenance(connection.redis, input, controller.signal)) {
+    for (const owner of createSessionClearMaintenance(connection.redis, input, controller.signal)) {
       controller.signal.throwIfAborted();
       try {
         const result = await owner.run();
         controller.signal.throwIfAborted();
         const status =
-          result.unknown === 0 && result.changed === 0 && (input.mode !== "verify" || result.matching === 0)
-            ? "completed"
-            : "failed";
+          result.unknown === 0 && (input.mode !== "verify" || result.matching === 0) ? "completed" : "failed";
         report.owners.push({ owner: owner.name, status, ...result });
       } catch {
         report.owners.push({ owner: owner.name, status: "failed" });

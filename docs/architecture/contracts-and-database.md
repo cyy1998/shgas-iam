@@ -62,7 +62,9 @@ Projection 唯一工厂要求许可证明，均不在缺少容器时自动恢复
 
 Kernel 的在线根出口只公开 UserSession/ClientSession 生命周期与观察身份。Code/Token 属于各协议 owner；
 协议调用方必须显式取得操作许可和 Client Snapshot，再验证会话关系，不能从旧四对象出口恢复线上读取。
-旧 Kernel/Provider/Grant decoder 与 source 布局维护出口已退役；当前维护只处理 unified 布局。
+旧 Kernel/Provider/Grant decoder 与 source 布局维护出口已退役。当前离线清理仍要求显式 unified 布局，
+通过各 owner 公开维护出口按精确 namespace 的前缀处理全部版本和键族，不依赖记录 schema；
+其他前缀旧布局不在范围内，操作边界见[统一维护手册](../releases/unified-session-maintenance.md)。
 
 Client 数据库只有统一 `ssoEnabled`、可空单协议 `ssoConfig` 与独立当前 SSO Secret/id/updatedAt；Internal API secret 独立。
 普通管理与 Runtime DTO 使用显式安全字段，不能默认选择 SSO Secret；认证与超级管理员 Secret 重读各用窄能力。

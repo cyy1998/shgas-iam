@@ -505,7 +505,7 @@ test("OIDC Token ignores mutable protocol marker, uses current config and denies
   }
 });
 
-test("OIDC Token maintenance finds no-TTL/index state and independently verifies targeted removal", async () => {
+test("OIDC Token maintenance clears no-TTL/index and unknown state while preserving session owner state", async () => {
   const f = await setup();
   const independent = new Redis(process.env.IAM_API_TEST_REDIS_URL!, { maxRetriesPerRequest: 0 });
   try {
@@ -516,12 +516,15 @@ test("OIDC Token maintenance finds no-TTL/index state and independently verifies
     await f.oidcState.addUnknown();
     const maintenance = createOidcMaintenance(f.oidcState.redis, f.oidcState.namespace);
     const verifier = createOidcInventory(independent, f.oidcState.namespace);
-    expect(await verifier.inventory({ clientId: f.clientId })).toMatchObject({ matching: 1, unknown: 1 });
+    const before = await verifier.inventory();
+    expect(before).toMatchObject({ matching: 2, unknown: 0 });
     const rootBefore = await f.scope.inspect(issued.target);
-    const report = await maintenance.apply({ clientId: f.clientId });
-    expect(report).toMatchObject({ removed: 1, unknown: 1 });
-    expect(await verifier.inventory({ clientId: f.clientId })).toMatchObject({ matching: 0, unknown: 1 });
-    expect(await f.scope.inspect(issued.target)).toEqual(rootBefore);
+    const report = await maintenance.apply();
+    expect(report).toMatchObject({ matching: 2, removed: 2, unknown: 0 });
+    const after = await verifier.inventory();
+    expect(after).toMatchObject({ matching: 0, unknown: 0 });
+    const rootAfter = await f.scope.inspect(issued.target);
+    expect(rootAfter).toEqual(rootBefore);
   } finally {
     independent.disconnect();
     await f.close();
@@ -750,7 +753,7 @@ for (const fault of ["expired", "corrupt", "missing-index"] as const) {
   });
 }
 
-test("OIDC Token maintenance partial failure is explicit and exact rerun preserves non-target records", async () => {
+test("OIDC Token maintenance reports unlink failure and rerun clears all clients while preserving session state", async () => {
   const f = await setup();
   const independent = new Redis(process.env.IAM_API_TEST_REDIS_URL!, { maxRetriesPerRequest: 0 });
   try {
@@ -760,25 +763,34 @@ test("OIDC Token maintenance partial failure is explicit and exact rerun preserv
     f.addClient(otherClient);
     const authorized = await f.authorize({ client_id: otherClient });
     const otherCode = new URL(authorized.headers.get("Location")!).searchParams.get("code")!;
-    const nonTarget = await f.oidcState.readCode(otherClient, otherCode);
+    const rootBefore = await f.scope.inspect(first.target);
     const failing = createOidcMaintenance(
       {
         scan: f.oidcState.redis.scan.bind(f.oidcState.redis),
-        get: f.oidcState.redis.get.bind(f.oidcState.redis),
-        async eval() {
+        async unlink() {
           throw new Error("Maintenance transport unavailable");
         },
       },
       f.oidcState.namespace,
     );
-    const failed = await failing.apply({ clientId: f.clientId });
-    expect(failed).toMatchObject({ removed: 0, unknown: 1 });
-    expect(await f.oidcState.readToken(value.access_token)).not.toBeNull();
+    const failed = await failing.apply();
+    expect(failed).toMatchObject({ matching: 3, removed: 0, unknown: 3 });
+    const tokenAfterFailure = await f.oidcState.readToken(value.access_token);
+    expect(tokenAfterFailure).not.toBeNull();
+    const codeAfterFailure = await f.oidcState.readCode(otherClient, otherCode);
+    expect(codeAfterFailure).not.toBeNull();
     const maintenance = createOidcMaintenance(f.oidcState.redis, f.oidcState.namespace);
-    expect(await maintenance.apply({ clientId: f.clientId })).toMatchObject({ removed: 1 });
+    const rerun = await maintenance.apply();
+    expect(rerun).toMatchObject({ matching: 3, removed: 3, unknown: 0 });
     const verifier = createOidcInventory(independent, f.oidcState.namespace);
-    expect(await verifier.inventory({ clientId: f.clientId })).toMatchObject({ matching: 0, unknown: 0 });
-    expect(await f.oidcState.readCode(otherClient, otherCode)).toEqual(nonTarget);
+    const after = await verifier.inventory();
+    expect(after).toMatchObject({ matching: 0, unknown: 0 });
+    const tokenAfter = await f.oidcState.readToken(value.access_token);
+    const codeAfter = await f.oidcState.readCode(otherClient, otherCode);
+    expect(tokenAfter).toBeNull();
+    expect(codeAfter).toBeNull();
+    const rootAfter = await f.scope.inspect(first.target);
+    expect(rootAfter).toEqual(rootBefore);
   } finally {
     independent.disconnect();
     await f.close();

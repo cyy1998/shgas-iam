@@ -15,6 +15,23 @@ export function createOidcMaintenanceTestFixture(redis: Redis, namespace: string
     return key;
   }
   return {
+    async seedVersionedKeys() {
+      const keys = [
+        owned(`${namespace}:oidc:v0:legacy:${randomUUID()}`),
+        owned(`${namespace}:oidc:v2:future:${randomUUID()}`),
+        owned(`${namespace}:oidc:unversioned:${randomUUID()}`),
+        owned(`${namespace}:oidc:v9:queue:${randomUUID()}`),
+        owned(`${namespace}:oidc:v3:members:${randomUUID()}`),
+        owned(`${namespace}:oidc:v4:events:${randomUUID()}`),
+      ];
+      await redis.set(keys[0]!, "{malformed");
+      await redis.hset(keys[1]!, "field", "arbitrary");
+      await redis.zadd(keys[2]!, 1, "non-uuid");
+      await redis.rpush(keys[3]!, "arbitrary");
+      await redis.sadd(keys[4]!, "arbitrary");
+      await redis.xadd(keys[5]!, "*", "field", "arbitrary");
+      return keys;
+    },
     async seedUnified(clientId = "alpha") {
       try {
         const identity = {

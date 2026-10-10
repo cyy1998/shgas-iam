@@ -295,30 +295,27 @@ describe("OIDC candidate logout HTTP and real Redis", () => {
       subjectIdentifier: f.subjectIdentifier,
     });
   });
-  it("maintains logout inventory without TTL and preserves unknown/non-target records with independent verification", async () => {
+  it("clears logout state without TTL and unknown owner keys with independent verification", async () => {
     const f = await setup();
     await begin(f);
     await f.oidcState.removeLogoutTtl(f.cookies.get("oidc_logout_request")!);
     await f.oidcState.addUnknown();
     const maintenance = createOidcMaintenance(f.oidcState.redis, f.oidcState.namespace);
-    expect((await maintenance.inventory({ clientId: randomUUID() })).matching).toBe(0);
-    const before = await maintenance.inventory({ clientId: f.clientId });
-    expect(before.matching).toBe(2);
-    expect(before.unknown).toBe(1);
-    const applied = await maintenance.apply({ clientId: f.clientId });
-    expect(applied.removed).toBe(2);
+    const rootBefore = await rootStatus(f);
+    const before = await maintenance.inventory();
+    expect(before).toMatchObject({ matching: 4, unknown: 0 });
+    const applied = await maintenance.apply();
+    expect(applied).toMatchObject({ matching: 4, removed: 4, unknown: 0 });
     const independent = await createOidcRedisTestScope(process.env.IAM_API_TEST_REDIS_URL!);
     try {
-      expect(
-        (
-          await createOidcInventory(independent.redis, f.oidcState.namespace).inventory({
-            clientId: f.clientId,
-          })
-        ).matching,
-      ).toBe(0);
+      const after = await createOidcInventory(independent.redis, f.oidcState.namespace).inventory();
+      expect(after).toMatchObject({ matching: 0, unknown: 0 });
     } finally {
       await independent.close();
     }
-    expect((await f.oidcState.snapshot()).length).toBe(1);
+    const snapshot = await f.oidcState.snapshot();
+    expect(snapshot).toHaveLength(0);
+    const rootAfter = await rootStatus(f);
+    expect(rootAfter).toBe(rootBefore);
   });
 });

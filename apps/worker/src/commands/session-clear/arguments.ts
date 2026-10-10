@@ -1,9 +1,8 @@
 import { parseArgs } from "node:util";
-import { ClientCodeSchema } from "@iam/contracts";
 import { z } from "zod";
 
-export function parseOnlineStateArgs(argv: string[]) {
-  const args = argv[0] === "--" ? argv.slice(1) : argv;
+export function parseSessionClearArgs(argv: string[]) {
+  const args = argv.filter((arg) => arg !== "--");
   const { values, positionals } = parseArgs({
     args,
     strict: true,
@@ -14,8 +13,6 @@ export function parseOnlineStateArgs(argv: string[]) {
       "kernel-namespace": { type: "string" },
       "custom-namespace": { type: "string" },
       "oidc-namespace": { type: "string" },
-      "client-code": { type: "string" },
-      artifacts: { type: "string" },
       "writers-stopped": { type: "boolean" },
       drained: { type: "boolean" },
       "deadline-ms": { type: "string" },
@@ -33,15 +30,10 @@ export function parseOnlineStateArgs(argv: string[]) {
   const customNamespace =
     values["custom-namespace"] === undefined ? undefined : namespace.parse(values["custom-namespace"]);
   const oidcNamespace = values["oidc-namespace"] === undefined ? undefined : namespace.parse(values["oidc-namespace"]);
-  const clientCode = values["client-code"] === undefined ? undefined : ClientCodeSchema.parse(values["client-code"]);
-  const artifacts = z.enum(["all", "authorization"]).parse(values.artifacts ?? "all");
-  if (artifacts === "authorization" && (owner !== "custom-sso" || !clientCode))
-    throw new Error("Authorization cleanup requires an explicit unified Custom Client scope");
   if (
     ((owner === "all" || owner === "kernel") && !kernelNamespace) ||
     ((owner === "all" || owner === "custom-sso") && !customNamespace) ||
-    ((owner === "all" || owner === "oidc") && !oidcNamespace) ||
-    (clientCode !== undefined && owner !== "custom-sso" && owner !== "oidc")
+    ((owner === "all" || owner === "oidc") && !oidcNamespace)
   ) {
     throw new Error("Maintenance scope is incomplete");
   }
@@ -49,6 +41,6 @@ export function parseOnlineStateArgs(argv: string[]) {
     values["deadline-ms"] === undefined
       ? 300_000
       : z.coerce.number().int().positive().max(300_000).parse(values["deadline-ms"]);
-  return { mode, layout, owner, kernelNamespace, customNamespace, oidcNamespace, clientCode, artifacts, deadlineMs };
+  return { mode, layout, owner, kernelNamespace, customNamespace, oidcNamespace, deadlineMs };
 }
-export type OnlineStateInput = ReturnType<typeof parseOnlineStateArgs>;
+export type SessionClearInput = ReturnType<typeof parseSessionClearArgs>;

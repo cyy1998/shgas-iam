@@ -136,7 +136,8 @@ OIDC 模块 Redis 使用 `IAM_OIDC_TEST_REDIS_URL`，API HTTP 使用 `IAM_API_TE
 
 旧四对象/Provider/version/Claims Snapshot 测试随旧在线图退役；当前替代必须按行为观察，不能用计数或启动替代。
 并发、损坏、归属、期限与索引归 Kernel；消费与失败结果、补偿、当前披露、取消/确认退出归 API/协议 owner；
-配置 no-op/COMMIT/Secret隔离归 Admin；source 五模型/特殊 Client/非目标/ACL/部分失败归 Worker 新进程 CLI。
+配置 no-op/COMMIT/Secret隔离归 Admin；跨版本、损坏 payload、任意 Redis 类型、非目标保留、scan-only ACL、
+UNLINK 部分失败重跑及已移除定向参数的连接前拒绝归 Worker 新进程清空 CLI。
 详细最高入口与证明限制见[验证归属](architecture-verification.md)。所有正常状态由 production owner 建立，破坏变体和离线 schema
 留在 owner `/testing`，消费者不手写协议 key、Lua 或 serialization。历史 writer 的冻结 SHA 证据在统一维护手册单列。
 Custom SSO strict V2 schema、mapper、错误与 preview 契约由 `@iam/custom-sso` 的 Unit collection 收集；Projection 的中性裁剪与 Catalog 契约继续由其 Component collection 收集。API 保留 OpenAPI、输出交付与错误映射测试；Admin preview 的配置响应、SSO 数据处理与页面状态由各自行为测试证明，固定样例回显不单独建测试。前端构建与类型检查不替代浏览器行为执行。

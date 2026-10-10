@@ -16,7 +16,9 @@
   "scripts": {
     "dev": "bun --hot src/index.ts",
     "serve": "bun run src/index.ts",
-    "online-auth:state": "bun run src/commands/online-state/online-state.ts",
+    "session:clear:inventory": "bun run src/commands/session-clear/session-clear.ts inventory",
+    "session:clear": "bun run src/commands/session-clear/session-clear.ts apply",
+    "session:clear:verify": "bun run src/commands/session-clear/session-clear.ts verify",
     "client-snapshot:repair": "bun run src/commands/client-runtime/client-snapshot-maintenance.ts repair",
     "client-snapshot:verify": "bun run src/commands/client-runtime/client-snapshot-maintenance.ts verify",
     "employment:verify": "bun run src/commands/employment-verifier.ts",

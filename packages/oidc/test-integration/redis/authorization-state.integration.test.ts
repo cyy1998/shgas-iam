@@ -99,7 +99,7 @@ async function fixture() {
   };
 }
 
-test("OIDC maintenance inventories Codes and continuations without TTL and preserves other Clients and unknown data", async () => {
+test("OIDC maintenance clears every Client and unknown key family while preserving Session Kernel state", async () => {
   const f = await fixture();
   try {
     const authorized = await f.authorize("target");
@@ -111,36 +111,31 @@ test("OIDC maintenance inventories Codes and continuations without TTL and prese
     await f.state.removeContinuationTtl(continuation.handle);
     await f.authorize("other");
     await f.state.addUnknown();
-    const before = await f.state.snapshot();
     const maintenance = createOidcMaintenance(f.state.redis, f.state.namespace);
     let cursor = "0";
     let matched = 0;
     do {
-      const page = await maintenance.inventory({ cursor, clientId: "target", limit: 1 });
+      const page = await maintenance.inventory({ cursor, limit: 1 });
       matched += page.matching;
       cursor = page.nextCursor;
     } while (cursor !== "0");
-    expect(matched).toBe(2);
+    expect(matched).toBe(4);
     let removed = 0;
     do {
-      const page = await maintenance.apply({ cursor, clientId: "target", limit: 100 });
+      const page = await maintenance.apply({ cursor, limit: 100 });
       removed += page.removed;
       cursor = page.nextCursor;
     } while (cursor !== "0");
-    expect(removed).toBe(2);
+    expect(removed).toBe(4);
     const after = await f.state.snapshot();
-    expect(after).toHaveLength(2);
-    for (const record of after) expect(before).toContainEqual(record);
+    expect(after).toHaveLength(0);
     const connection = new Redis(f.url, { maxRetriesPerRequest: 0, retryStrategy: () => null });
     try {
       await connection.ping();
-      const verifier = createOidcInventory(
-        { scan: (...args) => connection.scan(...args), get: (key) => connection.get(key) },
-        f.state.namespace,
-      );
+      const verifier = createOidcInventory({ scan: (...args) => connection.scan(...args) }, f.state.namespace);
       let matching = 0;
       do {
-        const page = await verifier.inventory({ cursor, clientId: "target" });
+        const page = await verifier.inventory({ cursor });
         cursor = page.nextCursor;
         matching += page.matching;
       } while (cursor !== "0");
@@ -157,7 +152,7 @@ test("OIDC maintenance inventories Codes and continuations without TTL and prese
   }
 });
 
-test("OIDC maintenance preserves corrupt records and partial failed targets can be explicitly retried", async () => {
+test("OIDC maintenance reports failed writes and permits an explicit retry", async () => {
   const f = await fixture();
   try {
     const authorization = await f.authorize("target");
@@ -166,27 +161,34 @@ test("OIDC maintenance preserves corrupt records and partial failed targets can 
     const maintenance = createOidcMaintenance(
       {
         scan: (...args) => f.state.redis.scan(...args),
-        get: (key) => f.state.redis.get(key),
-        eval: async () => {
+        unlink: async () => {
           throw new Error("Injected write unavailable");
         },
       },
       f.state.namespace,
     );
-    const failed = await maintenance.apply({ clientId: "target" });
+    const failed = await maintenance.apply();
     expect(failed).toMatchObject({ removed: 0, unknown: 1 });
     const surviving = await f.state.readCode("target", authorization.response.parameters.code);
     expect(surviving).not.toBeNull();
-    const retry = await createOidcMaintenance(f.state.redis, f.state.namespace).apply({ clientId: "target" });
+    const retry = await createOidcMaintenance(f.state.redis, f.state.namespace).apply();
     expect(retry).toMatchObject({ removed: 1, unknown: 0 });
-    const next = await f.authorize("target");
-    if (next.kind !== "response" || !("code" in next.response.parameters)) throw new Error("Code required");
-    await f.state.corruptCode("target", next.response.parameters.code);
-    const before = await f.state.snapshot();
+  } finally {
+    await f.close();
+  }
+});
+
+test("OIDC maintenance clears corrupt Code payloads", async () => {
+  const f = await fixture();
+  try {
+    const authorization = await f.authorize("target");
+    if (authorization.kind !== "response" || !("code" in authorization.response.parameters))
+      throw new Error("Code required");
+    await f.state.corruptCode("target", authorization.response.parameters.code);
     const corrupt = await createOidcMaintenance(f.state.redis, f.state.namespace).apply();
-    expect(corrupt).toMatchObject({ removed: 0, unknown: 1 });
+    expect(corrupt).toMatchObject({ matching: 1, removed: 1, unknown: 0 });
     const after = await f.state.snapshot();
-    expect(after).toEqual(before);
+    expect(after).toHaveLength(0);
   } finally {
     await f.close();
   }

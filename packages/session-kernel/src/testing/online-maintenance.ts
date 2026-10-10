@@ -17,6 +17,23 @@ export function createSessionMaintenanceTestFixture(redis: Redis, namespace: str
     return key;
   }
   return {
+    async seedVersionedKeys() {
+      const keys = [
+        owned(`${namespace}:unified:v0:legacy:${randomUUID()}`),
+        owned(`${namespace}:unified:v2:future:${randomUUID()}`),
+        owned(`${namespace}:unified:unversioned:${randomUUID()}`),
+        owned(`${namespace}:unified:v9:queue:${randomUUID()}`),
+        owned(`${namespace}:unified:v3:members:${randomUUID()}`),
+        owned(`${namespace}:unified:v4:events:${randomUUID()}`),
+      ];
+      await redis.set(keys[0]!, "{malformed");
+      await redis.hset(keys[1]!, "field", "arbitrary");
+      await redis.zadd(keys[2]!, 1, "non-uuid");
+      await redis.rpush(keys[3]!, "arbitrary");
+      await redis.sadd(keys[4]!, "arbitrary");
+      await redis.xadd(keys[5]!, "*", "field", "arbitrary");
+      return keys;
+    },
     async seedUnified() {
       const kernel = createUnifiedSessionKernel({
         redis,

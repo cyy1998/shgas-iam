@@ -101,7 +101,7 @@ releases 只保留当前代发布与维护；一次性升级和旧验收见[固�
 | [ADR-0036](adr/0036-bind-oidc-to-internal-and-external-issuers.md)                         | decision | Current | 2026-09-21    | 2026-10-31  | 双 issuer 身份、可信入口与 Cookie 隔离。                                                      |
 | [ADR-0038](adr/0038-derive-managed-sso-callback-from-redirect-origin.md)                   | decision | Current | 2026-09-28    | 2026-10-31  | 显式回调类型与 managed origin 信任。                                                          |
 | [ADR-0039](adr/0039-tighten-admin-reference-integrity-and-preserve-history.md)             | decision | Current | 2026-09-22    | 2026-10-31  | 管理引用完整性、输入规范化与软删除历史。                                                      |
-| [ADR-0040](adr/0040-retire-orcas-custom-sso-integration.md)                                | decision | Current | 2026-09-28    | 2026-10-31  | ORCAS 完整退役决定；全量清理登录态、维护窗口切换及外部会话责任。                              |
+| [ADR-0040](adr/0040-retire-orcas-custom-sso-integration.md)                                | decision | Current | 2026-10-10    | 2026-10-31  | ORCAS 完整退役决定；全量清理登录态、维护窗口切换及外部会话责任。                              |
 | [ADR-0041](adr/0041-unify-format-and-lint-with-biome.md)                                   | decision | Current | 2026-09-30    | 2026-10-31  | 已接受：Biome 与提交时修复；YAML 仅排版并保留专属验证，最终只读检查；实施与验收见 Spec #217。 |
 
 </details>
@@ -181,14 +181,14 @@ releases 只保留当前代发布与维护；一次性升级和旧验收见[固�
 <details>
 <summary>展开发布与维护</summary>
 
-| Document                                                                    | Type    | Status  | Last verified | Next review | Notes                                                       |
-| --------------------------------------------------------------------------- | ------- | ------- | ------------- | ----------- | ----------------------------------------------------------- |
-| [APISIX Gateway 配置发布手册](releases/apisix-gateway-release.md)           | runbook | Current | 2026-09-21    | 2026-10-31  | 限定 scope 的发布、代理信任、验收与回滚。                   |
-| [IAM 系统日志可观测性运行手册](releases/observability-system-logs.md)       | runbook | Current | 2026-09-21    | 2026-10-31  | 日志栈、Grafana OIDC、排障与 trace 关联。                   |
-| [API OIDC 发布与密钥维护](releases/oidc-release-runbook.md)                 | runbook | Current | 2026-09-21    | 2026-10-31  | 当前双入口配置、JWK 轮换与故障恢复。                        |
-| [登录凭证配置与部署](releases/sm-encrypted-password-login-release.md)       | runbook | Current | 2026-09-21    | 2026-10-31  | API/SSO 配对密钥、nonce 与当前登录验收。                    |
-| [当前会话与 Client Snapshot 维护](releases/unified-session-maintenance.md)  | runbook | Current | 2026-09-28    | 2026-10-31  | 当前布局定向清理、Snapshot 恢复、ORCAS 退役切换与人工放流。 |
-| [User Profile 与 Subject Access 维护](releases/user-profile-maintenance.md) | runbook | Current | 2026-09-21    | 2026-10-31  | 当前重建、完整校验、Barrier 恢复与调度责任。                |
+| Document                                                                    | Type    | Status  | Last verified | Next review | Notes                                                         |
+| --------------------------------------------------------------------------- | ------- | ------- | ------------- | ----------- | ------------------------------------------------------------- |
+| [APISIX Gateway 配置发布手册](releases/apisix-gateway-release.md)           | runbook | Current | 2026-09-21    | 2026-10-31  | 限定 scope 的发布、代理信任、验收与回滚。                     |
+| [IAM 系统日志可观测性运行手册](releases/observability-system-logs.md)       | runbook | Current | 2026-09-21    | 2026-10-31  | 日志栈、Grafana OIDC、排障与 trace 关联。                     |
+| [API OIDC 发布与密钥维护](releases/oidc-release-runbook.md)                 | runbook | Current | 2026-09-21    | 2026-10-31  | 当前双入口配置、JWK 轮换与故障恢复。                          |
+| [登录凭证配置与部署](releases/sm-encrypted-password-login-release.md)       | runbook | Current | 2026-09-21    | 2026-10-31  | API/SSO 配对密钥、nonce 与当前登录验收。                      |
+| [当前会话与 Client Snapshot 维护](releases/unified-session-maintenance.md)  | runbook | Current | 2026-10-10    | 2026-10-31  | owner 前缀全量清空、Snapshot 恢复、ORCAS 退役切换与人工放流。 |
+| [User Profile 与 Subject Access 维护](releases/user-profile-maintenance.md) | runbook | Current | 2026-09-21    | 2026-10-31  | 当前重建、完整校验、Barrier 恢复与调度责任。                  |
 
 </details>
 

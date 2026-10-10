@@ -696,8 +696,8 @@ test("owner maintenance recognizes and removes a managed Token", async () => {
     const callback = await f.callback(code);
     expect(callback.status).toBe(302);
     const token = new URL(callback.headers.get("Location")!).searchParams.get("token")!;
-    const report = await f.codes.maintenance.apply({ clientCode: "app", limit: 1000 });
-    expect(report.removed).toBe(1);
+    const report = await f.codes.maintenance.apply({ limit: 1000 });
+    expect(report.removed).toBe(2);
     expect(report.unknown).toBe(0);
     const stored = await f.codes.inspectToken(token);
     expect(stored).toBeNull();
@@ -713,7 +713,7 @@ test.each([
   { name: "empty Client identity", patch: { clientCode: "" } },
   { name: "unknown field", patch: { unexpected: { sessionId: "external-session" } } },
   { name: "unknown purpose", patch: { purpose: "external" } },
-])("invalid Token with $name fails authentication and inventory validation", async ({ patch }) => {
+])("invalid Token with $name fails authentication and remains discoverable for clearing", async ({ patch }) => {
   const f = await managedFixture();
   try {
     const code = await f.authorize();
@@ -725,8 +725,12 @@ test.each([
       headers: { Authorization: token, Client: "app" },
     });
     expect(response.status).toBe(503);
-    const report = await f.codes.maintenance.inventory({ clientCode: "app", limit: 1000 });
-    expect(report.unknown).toBe(1);
+    const report = await f.codes.maintenance.inventory({ limit: 1000 });
+    expect(report).toMatchObject({ matching: 2, unknown: 0 });
+    const applied = await f.codes.maintenance.apply({ limit: 1000 });
+    expect(applied).toMatchObject({ matching: 2, removed: 2, unknown: 0 });
+    const verification = await f.codes.independentInventory();
+    expect(verification.matching).toBe(0);
   } finally {
     await f.close();
   }
@@ -1416,8 +1420,8 @@ for (const after of [false, true]) {
       const inventory = await f.codes.tokenInventory();
       expect(inventory).toHaveLength(1);
       expect((await f.scope.inspect(target)).record?.state).toBe(after ? "terminated" : "active");
-      const report = await f.codes.maintenance.apply({ clientCode: "app", limit: 1000 });
-      expect(report.removed).toBe(1);
+      const report = await f.codes.maintenance.apply({ limit: 1000 });
+      expect(report.removed).toBe(2);
       expect(report.unknown).toBe(0);
       const verification = await f.codes.independentInventory();
       expect(verification.matching).toBe(0);
@@ -1427,7 +1431,7 @@ for (const after of [false, true]) {
   });
 }
 
-test("owner maintenance finds unindexed/no-TTL token and preserves another Client and malformed Code", async () => {
+test("owner maintenance clears unindexed/no-TTL tokens, all Clients and malformed Code while preserving sessions", async () => {
   const f = await businessFixture();
   try {
     const code = await f.authorize();
@@ -1437,14 +1441,19 @@ test("owner maintenance finds unindexed/no-TTL token and preserves another Clien
       await f.exchange(otherCode, "business-secret", "", "https://app.example/callback", "other")
     ).json();
     const malformed = await f.authorize();
+    const target = await f.target(malformed);
+    const sessionBefore = await f.scope.inspect(target);
     await f.codes.corruptCode("app", malformed);
     await f.codes.removeTokenIndex(token.data.sid);
     await f.codes.removeTokenTtl(token.data.sid);
-    const report = await f.codes.maintenance.apply({ clientCode: "app", limit: 1000 });
-    expect(report.removed).toBe(1);
-    expect(report.unknown).toBe(1);
+    const report = await f.codes.maintenance.apply({ limit: 1000 });
+    expect(report).toMatchObject({ matching: 4, removed: 4, unknown: 0 });
     expect((await f.use(token.data.sid)).status).not.toBe(200);
-    expect((await f.use(other.data.sid, "other")).status).toBe(200);
+    expect((await f.use(other.data.sid, "other")).status).not.toBe(200);
+    const verification = await f.codes.independentInventory();
+    expect(verification.matching).toBe(0);
+    const sessionAfter = await f.scope.inspect(target);
+    expect(sessionAfter).toEqual(sessionBefore);
   } finally {
     await f.close();
   }
@@ -1758,7 +1767,7 @@ test("maintenance inventory carries SCAN overflow without exceeding the per-page
     let matching = 0;
     let pages = 0;
     do {
-      const page = await f.codes.maintenance.inventory({ cursor, limit: 1, clientCode: "app" });
+      const page = await f.codes.maintenance.inventory({ cursor, limit: 1 });
       expect(page.matching).toBeLessThanOrEqual(1);
       expect(page.unknown).toBe(0);
       matching += page.matching;
@@ -1766,7 +1775,7 @@ test("maintenance inventory carries SCAN overflow without exceeding the per-page
       pages++;
       expect(pages).toBeLessThan(30);
     } while (cursor !== "0");
-    expect(matching).toBe(3);
+    expect(matching).toBe(4);
   } finally {
     await f.close();
   }

@@ -180,10 +180,11 @@ Redis、坏状态、配置故障或撤销 failed/unknown 返回 503 并保留 Co
 
 ## 维护与验证
 
-`@iam/oidc/maintenance` 按当前 namespace 的 Code、Token、续接及 logout 状态做有界 inventory/apply；
-无 TTL/缺索引仍需发现，删除比较原字节，Token 反向键另比摘要。
-全量可在原子重验后处理孤立反向键；Client 范围无法判定其归属时保留。无 Client 的退出状态仅全 owner 处理，
-未知/非目标数据保留。全量 verifier 只需 SCAN，步骤见[统一维护手册](../../releases/unified-session-maintenance.md)。
+`@iam/oidc/maintenance` 按显式 namespace 的 `:oidc:` owner 前缀做有界扫描和批量 UNLINK，
+清空前缀内全部版本、键族及 Redis 类型，包括 Code、Token、续接、logout 状态、损坏记录和孤立索引。
+维护过程不读取 value、不解析 schema、不比较原值或修复索引，也不按 Client 筛选；其他 namespace 和前缀保留。
+清空前统计与独立清零核验只需 SCAN。维护窗口、Worker 三个公开命令及核验步骤见
+[统一维护手册](../../releases/unified-session-maintenance.md)。
 
 `/wire` 供浏览器消费，`/testing` 仅提供状态观察和故障注入。HTTP/Redis、真实浏览器、独立 RP 和
 官方套件分别证明不同事实，见[验证归属](../../architecture/architecture-verification.md)、
