@@ -56,8 +56,8 @@ HTTP cookie jar 不能替代浏览器证据。
 
 ## 聚合 Gate 与人工证据
 
-每票交接执行 `pnpm verify:static`、完整受影响 typecheck 和行为通道，固定最终候选记录实际结果。
-最终聚合按[开发工作流](../agents/workflow.md#验证节奏)执行；官方固定 OIDC 套件单独验证，组合/E2E 不能替代其证据。
+手动验证时机见[工作流补充](../agents/workflow.md#验证节奏)，AFK 交接与批后验证见 [AFK 工作流](../agents/sandcastle-afk.md#验证节奏)。
+官方固定 OIDC 套件单独验证，组合/E2E 不能替代其证据。
 发布负责人仍须按[统一维护](../releases/unified-session-maintenance.md)、[Gateway](../releases/apisix-gateway-release.md)、
 [Profile 恢复](../releases/user-profile-maintenance.md)、[OIDC 发布](../releases/oidc-release-runbook.md)、[观测](../releases/observability-system-logs.md)核验停流、drain、数据、
 新登录、真实代理信任和放流。代码接线及临时测试均不表示已执行目标环境切换。

@@ -1,7 +1,7 @@
 # 合并本批已完成分支
 
 这是 Sandcastle AFK Merger 阶段，已获得本批本地普通合并、issue 交接与关闭权限。
-读取 `AGENTS.md`、`docs/agents/workflow.md` 的 AFK 规则和 `docs/agents/issue-tracker.md`。
+读取 `AGENTS.md`、`docs/agents/sandcastle-afk.md` 和 `docs/agents/issue-tracker.md`。
 GitHub 仓库 `{{REPO}}`，当前合入分支必须是 `{{INVOCATION_BRANCH}}`，本批起点 `{{BASE_SHA}}`。
 
 本批实施者提交完成标记的分支及固定候选 SHA，交付条件由你根据实际交接核对：
@@ -28,7 +28,7 @@ GitHub 仓库 `{{REPO}}`，当前合入分支必须是 `{{INVOCATION_BRANCH}}`�
 3. 必要时追加普通集成修复提交，由提交 Hook 自动处理暂存文件的 format/lint，并核对修复后的候选。
    自动 merge commit 的全仓格式与规则检查由最终 `pnpm verify` 只读执行。
    若合入改变依赖、Umi 配置或路由，先在容器运行 `sh scripts/sandcastle/prepare-workspace.sh`，
-   确认成功后再验证。所有本批分支合入后，按工作流“验证节奏”在最终树上运行一次 `pnpm verify`，
+   确认成功后再验证。所有本批分支合入后，按 AFK 工作流“验证节奏”在最终树上运行一次 `pnpm verify`，
    并将本批 tickets/Spec 所需的额外 Integration、E2E 或 Gateway 检查去重后执行；分支测试结果不能替代合并后的验证。
    专用 PostgreSQL/Redis URL 已注入。类型检查或测试失败时先诊断，在本批授权范围内自行修复并继续验证；
    补齐缺失检查，修复后重跑失效的检查，通过后继续收尾。无法自行解决或需要范围外决策时保留现场并报告阻碍。

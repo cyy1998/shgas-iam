@@ -43,32 +43,25 @@ GitHub Issues 与 PR 共用编号空间。遇到裸 `#42` 时，先运行
 
 创建 GitHub issue：
 
-- `/to-spec` 按[设计文档提交与交接](workflow.md#设计文档提交与交接)完成发布前提交，再把 spec 发布为一个 issue；
+- `/to-spec` 把 spec 发布为一个 issue；
 - `/to-tickets` 按 blockers-first 顺序为每张 implementation ticket 创建独立 issue，并用 GitHub 原生关系或正文中的
   issue 引用表达来源与阻塞边；
 - `/wayfinder` 按下文的 map/child issue 结构发布决策记录。
 
 需要跨会话恢复时，GitHub issue 自身就是外置记忆：
 
-- spec issue 正文保存 feature 范围、设计和测试决策，以及工作流要求的分支与提交交接记录；
+- spec issue 正文保存 feature 范围、设计和测试决策；跨会话恢复时记录目标分支、功能分支、起始基线及必要上下文链接；
 - ticket 正文保存独立切片、验收条件和 blockers；
 - assignee 表达认领，open/closed 表达是否完成，triage label 表达当前处理角色；
 - 评论只追加重要决策、验证摘要、评审结果和下一安全动作，并链接正式来源，不复制整份 spec 或 ticket。
 
-父 Spec 与 implementation ticket 的完成、关闭时机以[完成与本地合入](workflow.md#完成与本地合入)为准。
+本仓库通过评论验收结果并关闭 GitHub issue 完成 ticket，默认不使用 PR 关闭工作。
+手动 tickets 的关闭时机由所用 skill 决定；父 Spec 按[完成与本地合入](workflow.md#完成与本地合入)收尾。
 
 ## Sandcastle AFK 交接
 
-AFK 从全仓 open `ready-for-agent` backlog 选票，沿用现有 labels、assignee、依赖和父子关系，不另建 tracker schema。
-父 issue 的子票承担实施；Planner 读取 assignee 和最新评论区分可恢复的工作与他人正在实施的工作。
-手动路径写入的功能分支记录仍保留，AFK 评论另记录本次调用分支、ticket 分支、基线与候选提交，避免把两条路径混为一谈。
-
-Planner 的实施者选择及理由进入交接；Implementer 记录固定 review base、最终候选及 Standards/Spec 两轴评审结果，
-评审与修复在该实施者会话内完成，issue 保持 open。Merger 在本地合入并完成必需验证后评论并关闭成功 tickets，
-再核对已完成父 Spec 的完整验收并关闭；评论明确是本地合入，不能描述成已 push 或部署。
-失败交接记录实际候选、已完成动作、未执行检查及下一安全动作；重启前先核对 issue 与本地 Git 状态，不能仅因已有
-assignee 跳过自己的未完成工作，也不能把进程成功退出解释为 ticket 完成。执行边界见
-[AFK 批量实施](workflow.md#sandcastle-afk-批量实施)。
+AFK 沿用现有 labels、assignee、依赖和父子关系，不另建 tracker schema。手动路径的功能分支记录仍保留，
+AFK 评论另记录本次调用分支、ticket 分支、基线与候选提交。交接材料、恢复与关票职责见 [AFK 工作流](sandcastle-afk.md)。
 
 ## 当 skill 要求“fetch the relevant ticket”
 

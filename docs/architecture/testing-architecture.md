@@ -1,276 +1,177 @@
 # 测试编排架构
 
-> 状态：Current。本文描述 monorepo 已实施的 canonical test collections、资源所有权、编排与验证契约。
+> 状态：Current。本文维护测试分类、收集、跨 package 编排及测试资源的生命周期。
 
-核心决策见 [ADR-0009](../adr/0009-adopt-canonical-test-collections.md)。Architecture Guard 的规则准入与观察边界见
-[架构守卫规范](architecture-guard.md)；可执行入口见[构建、测试与开发命令](../development/commands.md)。
+collection 指一个 runner 或命令拥有的测试集合；owner 指维护该集合及其 harness 的 app、package 或 root tooling。
+按需要选择入口：
 
-系统关键约束由哪个 owner 验证、现有代表性测试及其证明范围，见[架构验证归属](architecture-verification.md)。
+| 要解决的问题             | 本文入口                                                                         |
+| ------------------------ | -------------------------------------------------------------------------------- |
+| 测试放在哪一层           | [公开测试语言](#公开测试语言)                                                    |
+| 如何编写或清理测试       | [测试质量原则](#测试质量原则)                                                    |
+| 文件放哪里、如何收集     | [路径、命名与 collection](#路径命名与-collection)、[测试收集维护](#测试收集维护) |
+| Root 与 package 如何编排 | [命令分工](#root-与-package-commands)、[Turbo 与缓存](#turbo-task-graph-与缓存)  |
+| 如何管理资源和失败       | [并发与清理](#并发timeout-与清理)、[Full-system E2E](#full-system-e2e)           |
+| 验证结果能支持什么结论   | [默认验证与交付](#默认验证与交付)                                                |
+
+分类决策及取舍见 [ADR-0009](../adr/0009-adopt-canonical-test-collections.md)；具体命令、参数与资源 URL 见
+[命令入口](../development/commands.md)。业务约束的验证 owner、代表性测试和证明范围由
+[架构验证归属](architecture-verification.md)维护；静态规则的准入与观察边界由
+[架构守卫规范](architecture-guard.md)维护。
 
 ## 公开测试语言
 
-仓库只使用 Unit、Integration、E2E 三层。Integration 的六个 sibling profiles 表达资源模型与 harness owner：
+仓库只使用 Unit、Integration、E2E 三层。Integration 的六个并列 profile 表达资源模型与 harness owner：
 
-| Profile       | 观察目标                                                         | 外部资源                                 |
-| ------------- | ---------------------------------------------------------------- | ---------------------------------------- |
-| `component`   | 进程内多个 module 协作，出站 seam 使用 fake 或 in-memory adapter | 无                                       |
-| `process`     | 真实子进程、端口、readiness、退出与进程树清理                    | 本机进程与端口                           |
-| `redis`       | production Redis adapter 行为                                    | 调用方负责；agent 可临时启动 Docker 容器 |
-| `postgres`    | schema、transaction 与 repository 行为                           | 调用方负责；agent 可临时启动 Docker 容器 |
-| `composition` | production composition 与多个真实 adapter 协作                   | profile 声明的全部资源                   |
-| `browser`     | 真实浏览器 harness，允许替代 journey 不经过的系统 seam           | 浏览器与 package-local web server        |
+| Profile       | 观察目标                                             | 外部资源                          |
+| ------------- | ---------------------------------------------------- | --------------------------------- |
+| `component`   | 进程内多个模块协作，出站边界使用 fake 或内存 adapter | 无                                |
+| `process`     | 真实子进程、端口、readiness、退出与进程树清理        | 本机进程与端口                    |
+| `redis`       | 生产 Redis adapter 行为                              | 调用方提供专用 Redis              |
+| `postgres`    | schema、transaction 与 repository 行为               | 调用方提供专用 PostgreSQL         |
+| `composition` | 生产 composition 与多个真实 adapter 协作             | profile 声明的全部资源            |
+| `browser`     | 真实浏览器 harness，可替代旅程未经过的系统边界       | 浏览器与 package-local web server |
 
-profile 不是新的测试层级、速度标签或 Gate。多资源测试按测试重点与 harness owner 唯一归属。
+profile 不增加测试层级，也不表示速度或发布 Gate。多资源测试按观察重点与 harness owner 唯一归属。
+Full-system E2E 使用完整临时系统，其资源由 E2E workspace 管理。
 
 ## 测试质量原则
 
 测试应对行为变化敏感，对不改变行为的内部重构保持稳定。优先通过所属模块的公开接口，给出明确输入、状态或操作，
-观察结果、错误及必要副作用；失败时应能直接知道哪项要求被破坏。以下原则适用于所有 collection，资源需求仍按上节分类。
+观察结果、错误和必要副作用；失败时应能直接知道哪项要求被破坏。
 
-- 一个用例聚焦一个可命名的行为场景。同一行为的前后状态、返回值和副作用可以一起断言；互不依赖的成功、拒绝、
-  恢复和输入变体使用独立用例或具名参数化案例，不把所有 API 调用塞进一个测试。
-- 测试独立建立并清理状态，不依赖执行顺序。异步操作必须等待完成；并发与 pending 状态优先使用显式同步信号、
-  受控 Promise 或适用的受控时钟。真实 Redis 到期和进程退出仍使用真实资源，不用应用假时钟替代资源语义。
-- 只在所测模块的外部边界替换依赖，优先保留模块内部真实协作。出站接口上的提交参数、脱敏、零写入和禁止重放是
-  有价值的行为观察；内部 helper 名称、调用顺序和调用次数只有本身属于当前契约时才锁定。
-- Fake 必须让待验证行为有失败的可能：缓存测试应区分命中与再次回源；筛选测试应观察传出的条件或真实筛选结果。
-  固定返回值相等不能证明缓存有效，mock 加密输出不含明文不能证明生产加密安全。
-- 纯类型兼容由 typecheck 收集的 `*.type-contract.ts` 验证，保留正向约束和必要的 `@ts-expect-error`；不创建空函数
-  调用或恒真断言的运行时测试。共享 mapper 的完整结果由 owner 验证，消费方只验证自身适配。
-- 行为测试不通过其他源文件中的变量名、注释或调用文本推断资源隔离、清理和业务语义；使用能观察该事实的接口。
-  静态分析工具自身的路径/import fixture 是其公开输入，继续按 Architecture Guard 的允许模型验证。
-- 性能采样与正确性证明分开。已接受的资源预算应有直接、适用的证据；不把一次实现的完整端点调用数或 socket
-  `data` 回调次数冻结成永久正确性契约。采样结果不能冒充命令数、往返数或业务串行波次。
+- **聚焦场景**：一个用例保护一个可命名的行为。同一行为的前后状态、返回值和副作用可以一起断言；互不依赖的成功、
+  拒绝、恢复和输入变体使用独立用例或具名参数化案例。
+- **独立状态**：每个测试建立并清理自己的状态，不依赖执行顺序。异步操作必须等待完成；并发与 pending 状态优先使用
+  显式同步信号、受控 Promise 或适用的受控时钟。真实 Redis 到期与进程退出仍使用真实资源。
+- **替换外部依赖**：只在所测模块的外部边界替换依赖，保留内部真实协作。提交参数、脱敏、零写入和禁止重放是有效观察；
+  内部 helper 名称、调用顺序和次数只有本身属于当前契约时才锁定。
+- **让测试能够失败**：缓存测试须区分命中与再次回源；筛选测试须观察传出的条件或真实筛选结果。固定返回值相等不能证明
+  缓存有效，mock 加密输出不含明文不能证明生产加密安全。
+- **选择适用证据**：纯类型兼容由 typecheck 收集的 `*.type-contract.ts` 验证，保留正向约束和必要的 `@ts-expect-error`。
+  不创建空函数调用或恒真断言的运行时测试；共享 mapper 的完整结果由 owner 验证，消费方验证自身适配。
+- **直接观察行为**：不通过其他源文件中的变量名、注释或调用文本推断资源隔离、清理和业务语义。静态分析工具自身的
+  路径/import fixture 是公开输入，按 Architecture Guard 的允许模型验证。
+- **区分性能与正确性**：资源预算使用直接、适用的证据，不把一次实现的完整端点调用数或 socket `data` 回调次数冻结成
+  永久契约。性能采样不能冒充命令数、往返数或业务串行波次。
 
-评审时检查：去掉待保护的行为，测试是否会失败；只改变内部实现，测试是否仍可通过；失败能否定位具体要求。
-不以测试数量、mock 数量、matcher 名称或覆盖率代替这些判断，也不为本原则增加断言扫描器。
+评审时核对：去掉待保护的行为，测试是否会失败；只改变内部实现，测试是否仍可通过；失败能否定位具体要求。
+测试数量、mock 数量、matcher 名称和覆盖率不能代替这些判断，也不为本原则增加断言扫描器。
 原则来源：[好的与不好的单元测试](https://chatgpt.com/share/6aa8d88c-bd6c-83e9-9a84-84646123864d)。
 
-## 当前契约与测试清理
+### 当前契约与测试清理
 
-永久测试应证明去掉迁移背景后仍成立的当前可观察要求。评审候选时按保护目标分类，不按 `legacy`、`V1` 或
-`removed` 等关键词批量删除：
+永久测试应证明去掉迁移背景后仍成立的当前要求。按保护目标分类，不按 `legacy`、`V1` 或 `removed` 等关键词批量删除：
 
-| 分类                     | 处置依据                                                                                                     |
-| ------------------------ | ------------------------------------------------------------------------------------------------------------ |
-| 纯墓碑                   | 历史名称、字段、命令或目录缺席本身没有独立当前要求，删除该检查及仅供其使用的 helper。                        |
-| 冗余检查                 | 当前完整结果相等已覆盖的字段否定可以删除；冻结、敏感输入裁剪等独立语义仍须保留。                             |
-| 当前边界的历史表达       | 要求仍有效，改用当前完整结果、公开解析、消费方结构兼容或实际行为证明。                                       |
-| 现行迁移、兼容或恢复能力 | 有当前生产 owner 且执行实际行为，继续保留；历史输入、无 fallback 和 non-owner namespace 保护不能按名称退役。 |
-| 临时迁移检查             | 按 feature 记录 owner、reason、removal date，到期核对并移除，不进入永久架构规则集合。                        |
+| 分类                     | 处置依据                                                                                                   |
+| ------------------------ | ---------------------------------------------------------------------------------------------------------- |
+| 纯墓碑                   | 历史名称、字段、命令或目录缺席没有独立当前要求，删除检查及专用 helper。                                    |
+| 冗余检查                 | 完整结果相等已覆盖的字段否定可以删除；冻结、敏感输入裁剪等独立语义仍须保留。                               |
+| 当前边界的历史表达       | 要求仍有效，改用当前完整结果、公开解析、消费方结构兼容或实际行为证明。                                     |
+| 现行迁移、兼容或恢复能力 | 有当前生产 owner 且执行实际行为，继续保留；历史输入、无 fallback 和非 owner namespace 保护不能按名称退役。 |
+| 临时迁移检查             | 在 feature 中记录 owner、reason、removal date，到期核对并移除，不进入永久架构规则。                        |
 
-删除前在交付或评审摘要说明原保护目标、当前是否成立、替代测试或冗余原因。仍成立但缺少直接证据的要求，必须在
-同一提交补齐替代证明，或先验证替代测试通过再删除旧检查；同时核对专用 fixture、故障开关和清理登记是否仍可达。
-只序列化手写 fixture 的测试不能证明生产输出隔离，只抛错而不观察副作用的测试不能证明零写入。
+删除前说明原保护目标、当前是否成立、替代测试或冗余原因。仍成立但缺少直接证据的要求，须在同一提交补齐替代证明，
+或先验证替代测试通过再删除旧检查；同时核对专用 fixture、故障开关和清理登记是否仍可达。
 
-DTO/wire 的完整结果由正式 mapper/serializer owner 验证，包括必要的嵌套结果；裁剪测试必须实际提供额外字段并
-调用生产解析或映射。App 的单纯 re-export 不重复维护共享字段词典，只验证自身转换、协议适配和调用行为。
-接口以消费方所需能力及 provider-to-port 结构兼容验证；subject-only reader、只读 verifier 等明确安全封装另有直接
-证明。不要把旧成员黑名单换成完整 factory 方法白名单，未被消费的新方法不普遍构成测试失败条件。
+DTO/wire 的完整结果由正式 mapper/serializer owner 验证，包括必要的嵌套结果；裁剪测试须提供额外字段并调用生产解析
+或映射。只序列化手写 fixture 不能证明生产输出隔离，只抛错而不观察副作用不能证明零写入。App 的单纯 re-export
+不重复维护共享字段词典，只验证自身转换、协议适配和调用行为。
+
+接口按消费方所需能力与 provider-to-port 结构兼容验证；subject-only reader、只读 verifier 等安全封装另有直接证明。
+不把旧成员黑名单换成完整 factory 方法白名单，未被消费的新方法不普遍构成失败条件。
 
 测试清理不授权改变生产行为或新增 seam。替代测试暴露生产缺陷时，保留最小失败证据并单独报告，不降低断言换取通过。
-交付摘要区分已执行、仅保留和未执行的通道；测试数减少、关键词零命中或 coverage 百分比不能替代契约验收。
-这些分类由实现与评审核对，不新增断言语义扫描器、永久历史词典、baseline 或逐文件 mapping Guard；Architecture Guard
-继续遵守既有观察模型。
+交付摘要区分已执行、仅保留和未执行的通道；测试数减少、关键词零命中或 coverage 百分比不能替代验收。
+这些判断由实现者与评审者完成，不新增断言语义扫描器、永久历史词典、baseline 或逐文件 mapping Guard。
 
-## 禁止纯展示测试
+### 禁止纯展示测试
 
-所有 collection 均禁止新增或保留只锁定静态 UI、展示文案或视觉实现细节的测试与断言，包括固定标题、说明文字、
-静态标签字典、装饰图标、CSS class、颜色、间距、字重、固定 DOM 排列，以及只保存这些内容的 HTML/DOM/截图快照。
-仅检查固定 mock 数据中的姓名、电话或目录字段被原样显示，也属于纯展示；它不足以成为独立的行为用例。
-仅为使测试显得有交互而打开页面、点击展开固定说明或等待一次请求，不会使静态展示检查变成行为验证。
+所有 collection 均禁止只锁定静态 UI、展示文案或视觉实现细节的测试与断言。固定标题、静态标签字典、装饰图标、
+CSS class、颜色、间距、字重、固定 DOM 排列及只保存这些内容的快照都属于此类；固定 mock 数据原样回显也不足以构成
+独立行为。打开页面、展开固定说明或等待一次请求，不会改变这些检查的性质。
 
-前端行为测试应能说明：给定什么输入、权限、状态或用户操作，产品必须产生什么可观察的功能结果。没有用户点击不代表
-没有行为；权限控制、数据转换、条件展示和异步状态变化都可以具有独立的功能契约。
+前端行为测试须说明输入、权限、状态或操作与功能结果之间的关系。权限控制、数据转换、条件展示和异步状态变化
+可以没有用户点击，仍具有独立功能契约。
 
-| 观察目标                                                                 | 处置                                                                       |
-| ------------------------------------------------------------------------ | -------------------------------------------------------------------------- |
-| 固定页面标题、帮助文字、按钮配色或布局；导出的静态字典逐项等于硬编码文案 | 删除独立用例；混合用例只删除这些断言。                                     |
-| 权限未加载时不开放操作、只读目录不提供写入口、登录检查中不展示表单       | 保留对应权限或状态条件与可见、隐藏、禁用等功能结果。                       |
-| 提交后的错误反馈、重试恢复、跳转、刷新、表单校验及提交参数               | 保留触发条件与结果；纯样式和无关固定说明不附带进入断言。                   |
-| 数据排序或格式化、嵌套数据转换、缺失值回退、状态或错误类型映射到相应提示 | 保留真实输入到输出的规则；不把固定样例回显或复制静态标签表包装成映射测试。 |
-| 协议响应、序列化、转义或敏感信息不泄露                                   | 按相应协议或安全契约保留，不能因输出是文本或 HTML 而归为纯展示。           |
+| 观察目标                                                           | 处置                                                                   |
+| ------------------------------------------------------------------ | ---------------------------------------------------------------------- |
+| 固定标题、帮助文字、按钮配色或布局；静态字典等于硬编码文案         | 删除独立用例；混合用例只删除这些断言。                                 |
+| 权限未加载时不开放操作、只读目录不提供写入口、登录检查中不展示表单 | 保留条件与可见、隐藏、禁用等功能结果。                                 |
+| 错误反馈、重试恢复、跳转、刷新、表单校验及提交参数                 | 保留触发条件与结果，去掉纯样式和无关固定说明。                         |
+| 排序、格式化、嵌套转换、缺失值回退、状态或错误类型映射             | 保留真实输入到输出的规则；固定样例回显或复制静态标签表不构成映射测试。 |
+| 协议响应、序列化、转义或敏感信息不泄露                             | 按协议或安全契约保留，不能因输出是文本或 HTML 而归为纯展示。           |
 
-`getByText`、`getByRole`、`toBeVisible`、`toHaveTextContent` 等 API 本身不是删除依据。使用文案定位操作目标、
-等待页面就绪或观察功能状态可以保留；精确文案只有在措辞本身属于当前功能契约时才需要锁定。行为测试中的整页快照
-不能替代对目标功能结果的直接断言，也不能成为附带锁定视觉细节的理由。
+`getByText`、`getByRole`、`toBeVisible`、`toHaveTextContent` 等 API 本身不是删除依据。文案可用于定位操作、等待就绪
+或观察状态；措辞本身属于当前功能契约时才锁定精确文案。整页快照不能替代对功能结果的直接断言。
 
-清理按用例和断言逐项进行，保留混合文件中的行为证明，并移除只供已删检查使用的 import、fixture 和 helper。
-仍成立的功能要求缺少直接证明时，沿用上节的替代验证规则；不以把纯渲染用例改名为行为测试、增加无关点击或复制到
-其他 collection 的方式保留它。
-
-本规则由测试编写者与评审者按保护目标执行。不通过 matcher 黑名单、断言文本扫描器或快照文件计数判断行为价值；
-Architecture Guard 的既有观察边界保持不变。
+按用例和断言逐项清理，保留混合文件中的行为证明，移除专用 import、fixture 和 helper。缺少替代证明时遵守
+[测试清理规则](#当前契约与测试清理)，不通过改名、无关点击或移动 collection 保留纯展示用例。
+不新增 matcher 黑名单、断言文本扫描器或快照计数门禁；Architecture Guard 继续使用既有观察模型。
 
 ## 路径、命名与 collection
 
-- Unit 保留 owner-local 窄根，通常为 `src/**/*.test.ts[x]`；tooling owner 可以使用 `test/` 或
-  `scripts/__tests__/`。
-- Admin 与 SSO frontend 的 Unit 分别在一个 package-local Vitest 进程中使用 Node 与 DOM execution environments。
-  普通 `*.test.ts[x]` 默认进入 Node，只有 `*.dom.test.ts[x]` 显式进入 jsdom。Node 不加载全局 DOM setup；DOM 才加载
-  Testing Library 与必要的浏览器兼容 setup。需要 HTTP mock 的文件显式注册 package-local MSW lifecycle，不以 MSW
-  的使用决定 Node/DOM 环境。Node 与 DOM 仍属于同一个 Unit collection，不形成新的公开命令或 profile。
-- 非 browser Integration 位于 `test-integration/<profile>/**/*.integration.test.ts[x]`。
-- Browser Integration 位于 `test-integration/browser/**/*.spec.ts`。
+每个测试候选由一个且仅一个 canonical collection 收集，目录与命名表达其归属：
 
-API 的 OIDC 退出 Browser Integration 使用真实候选 API、动态 loopback 测试 RP 和专用 `IAM_API_TEST_REDIS_URL`，
-不 mock IAM 协议请求。该通道单 Chromium、单 worker、零重试；fixture 子进程经 readiness 后交付浏览器种子，父进程关闭
-stdin 后清理本次 HTTP server 与随机 Redis namespace，启动失败也进入同一收尾。其取消/确认、Cookie、state 与安全错误
-证据不替代全系统 E2E、真实第三方 RP 或部署；后者继续使用独立通道。
+| Collection             | 路径与命名                                                                                       |
+| ---------------------- | ------------------------------------------------------------------------------------------------ |
+| Unit                   | owner-local 窄根，通常为 `src/**/*.test.ts[x]`；tooling 可使用 `test/` 或 `scripts/__tests__/`。 |
+| 非 browser Integration | `test-integration/<profile>/**/*.integration.test.ts[x]`。                                       |
+| Browser Integration    | `test-integration/browser/**/*.spec.ts`。                                                        |
+| Full-system E2E        | `e2e/system/**/*.spec.ts`，由 root `pnpm test:e2e` 独占。                                        |
 
-- Full-system E2E 独占 `e2e/system/**/*.spec.ts`。Root `pnpm test:e2e` 是唯一完整 collection owner；workspace-local
-  `admin:journey`、`hr-admin:journey` 与 `oidc:journey` 只保留为单 journey 调试入口。
-- 版本无关的 User Profile backfill、repair 与 readiness 是操作命令，不采用测试命名，也不属于任何 collection；
-  PostgreSQL command Integration 验证命令进程；Full-system E2E 从存量 v2 row 经真实 Worker backfill 收敛到 v3，随后在
-  Gateway routes 发布前实际运行 PostgreSQL 与 Redis/Subject Facts/Subject Access 两道 production gate，并通过真实 HTTP
-  验证 canonical Filter、legacy/Public/Delegation adapter 与 Employment invalidation 的代表矩阵。
-- Employment 全库诊断通过 `@iam/user-profile-read-model/worker` 与 Worker `employment:verify` 验证；Component
-  覆盖分类、完整 ID 集合与稳定排序，PostgreSQL contract 验证真实只读库存和命令退出码。它不等价于 Profile builder
-  发布前的父对象 fail-closed 守卫，后者的独立行为测试继续保留。
+Admin/SSO frontend 的 Unit 在各自一个 package-local Vitest 进程中使用 Node 与 DOM 两种环境：普通 `*.test.ts[x]`
+默认进入 Node，`*.dom.test.ts[x]` 显式进入 jsdom。只有 DOM 加载 Testing Library 与浏览器兼容 setup；需要 HTTP mock
+的文件显式注册 package-local MSW lifecycle。MSW 的使用不决定环境，Node/DOM 不增加公开命令或 profile。
+Component Integration 则整体使用 jsdom、完整 setup 与自己的收集目录。
 
-每个测试候选必须由一个且仅一个 canonical collection 收集。Admin Client 配置/Secret/状态的真实传播位于
-`composition`，generic InternalAuthz cache 另保留 Redis contract；共享统一 Snapshot 与 Subject Access 在 Core Redis。
-Kernel 两类会话只发布 Redis collection（`IAM_SESSION_KERNEL_TEST_REDIS_URL`）；Custom SSO 纯 wire/redirect Unit 保留，
-完整协议与故障由 API HTTP Redis 的正式操作 factory 承接，旧空 Custom component/redis 命令已删除。
-OIDC 模块 Redis 使用 `IAM_OIDC_TEST_REDIS_URL`，API HTTP 使用 `IAM_API_TEST_REDIS_URL`。
+各 package 持有 runner、config、fixture 和 setup。仓库不提供 root Vitest workspace、跨 package 共享配置模块或共享 setup。
+正常状态由生产 owner 建立，破坏变体与离线 schema 放在 owner 的 `/testing`；消费方不手写协议 key、Lua 或 serialization。
+业务验证的具体归属见[架构验证归属](architecture-verification.md#行为资源与系统验证)。
 
-旧四对象/Provider/version/Claims Snapshot 测试随旧在线图退役；当前替代必须按行为观察，不能用计数或启动替代。
-并发、损坏、归属、期限与索引归 Kernel；消费与失败结果、补偿、当前披露、取消/确认退出归 API/协议 owner；
-配置 no-op/COMMIT/Secret隔离归 Admin；跨版本、损坏 payload、任意 Redis 类型、非目标保留、scan-only ACL、
-UNLINK 部分失败重跑及已移除定向参数的连接前拒绝归 Worker 新进程清空 CLI。
-详细最高入口与证明限制见[验证归属](architecture-verification.md)。所有正常状态由 production owner 建立，破坏变体和离线 schema
-留在 owner `/testing`，消费者不手写协议 key、Lua 或 serialization。历史 writer 的冻结 SHA 证据在统一维护手册单列。
-Custom SSO strict V2 schema、mapper、错误与 preview 契约由 `@iam/custom-sso` 的 Unit collection 收集；Projection 的中性裁剪与 Catalog 契约继续由其 Component collection 收集。API 保留 OpenAPI、输出交付与错误映射测试；Admin preview 的配置响应、SSO 数据处理与页面状态由各自行为测试证明，固定样例回显不单独建测试。前端构建与类型检查不替代浏览器行为执行。
+User Profile backfill、repair、readiness 与 Employment 全库诊断属于操作命令，不采用测试命名，也不属于 collection。
+PostgreSQL 命令测试观察真实命令进程；E2E 观察 Worker backfill 与生产 readiness gate。Employment 的 Component 测试
+验证分类、完整 ID 集合与排序，PostgreSQL 测试验证只读库存和退出码；它们不替代 Profile 发布前的父对象守卫。
+命令入口见[Workspace 入口](../development/commands.md#workspace-入口)。
 
-E2E workspace 的 command runner 输出隔离和取消清理在其 `Integration/process` 中通过真实子进程验证，
-由 `pnpm --filter @iam/e2e-system test:integration:process` 收集；纯 capture 与 discovery parser 留在 Unit。
+E2E command runner 的输出隔离与取消清理由该 workspace 的 Process Integration 通过真实子进程验证，
+纯 capture 和 discovery parser 留在 Unit。
 
 ## Root 与 package commands
 
-新 OIDC owner 的状态/维护 Redis 测试由 `@iam/oidc` 收集，使用专用 `IAM_OIDC_TEST_REDIS_URL`；
-API 正式根认证与 OIDC HTTP 组合使用 API Redis profile。旧 Provider app 已退役，历史 writer 证明独立固定 SHA，不能当最终候选执行。现行协议能力与验证入口见 [OIDC 协议契约](../features/oidc/oidc-integration.md)。
+Root 通过 Turbo 编排跨 package 测试，package 拥有实际 runner 与本地命令：
 
-长期 root interface 为：
+| Root 入口                         | 职责                                                                                              |
+| --------------------------------- | ------------------------------------------------------------------------------------------------- |
+| `pnpm test`                       | 代理 `test:unit`；有 Unit collection 的 package 同样代理，没有 Unit 的 package 不发布空 `test`。  |
+| `pnpm test:unit`                  | 执行 package Unit tasks，并通过 `test:unit:root` 收集 root tooling tests。                        |
+| `pnpm test:integration:<profile>` | 执行同名 package tasks；process 另运行 `test:integration:process:root`。                          |
+| `pnpm test:integration`           | 先一次性检查全部专用资源 URL，再按固定顺序运行六个 profile，传播第一个失败。                      |
+| `pnpm test:e2e`                   | 完整 Full-system collection 的唯一 owner，由 `@iam/e2e-system` 管理[生命周期](#full-system-e2e)。 |
 
-```text
-pnpm test
-pnpm test:unit
-pnpm test:integration
-pnpm test:integration:component
-pnpm test:integration:process
-pnpm test:integration:redis
-pnpm test:integration:postgres
-pnpm test:integration:composition
-pnpm test:integration:browser
-pnpm test:e2e
-```
-
-`pnpm test` 永久代理 `pnpm test:unit`。有 Unit collection 的 package 也令 `test` 代理 `test:unit`；没有 Unit
-collection 的 package 不发布空 `test`。旧 `test:smoke`、`test:external`、package-local `test:postgres`/
-`test:redis` 与 frontend `e2e` collection aliases 已删除。
-
-`@iam/e2e-system` 当前通过 root `pnpm test:e2e` 从 exact-project 空 volumes 运行 migrations、五个 repo
-runtimes、固定 synthetic scenario seed、单一 `127.0.0.1` Gateway route readiness、失败诊断与 cleanup。Runtime healthy 后先校验
-rendered Compose 中 API、Gateway、Admin 与 seed 的 canonical origin/authority 合同，再运行 seed；seed 通过 production
-Drizzle、Role Assignment、User Profile 与 Subject Access owner 建立数据并做 owner read-back，不复制 Redis key、serializer 或 Lua 协议。
-Descriptor 落盘后、infra 与 migration 前会先
-构建 project-scoped Gateway 诊断查询镜像，使早期失败也能在 cleanup 前保存 route state；诊断阶段不临时 build 或暴露
-APISIX Admin host port。Descriptor 落盘后、diagnostic tool build 与任何资源创建前，先原子写入只含 stage/timestamp 的安全
-`not-attempted` migration receipt；初始化失败时不创建资源。Migration command 前再更新为 `attempted`，随后只更新为 `applied`
-或不含原始错误、命令及环境的 `failed` receipt。Full-system Compose/runtime 只使用 feature 固定或 run-generated synthetic
-data/credentials，不接受 production endpoint、production credential 或真实 PII。Compose 日志按完整行保留 recent tail；单行超过
-service byte cap 时整行替换为 `[TRUNCATED]`。Diagnostics 保留有界原始内容，不做 JSON/YAML/JWK/PEM/credential 分类或脱敏；
-synthetic token/password/key 允许出现在受 artifact directory、retention 与访问控制治理的临时产物中。
-普通 command runner 不把 child stdout/stderr 回显到 console；原始输出只由有界 capture 进入 artifact。Compose ps/health、
-每个固定 service log、Gateway state 或 existing-evidence inventory 任一采集失败时，仍 all-settled 写完可得证据、placeholder 与 index，
-随后令顶层 run 非零并继续 best-effort exact-project cleanup。所有 source failure 都走普通 required-source 路径，不存在 typed
-unconfirmed-termination 特殊 gate。若 run-scoped Playwright staging 存在，diagnostics 把 raw `trace.zip`、PNG 与 WebM 安全移动到
-run artifact directory，保留原始内容；metadata index 只辅助列出 type/name/size，不替代或删除 raw 文件。Intake 与其他 source一样
-受独立 deadline 约束，并限制最多 128 个文件、单文件 16 MiB、合计 64 MiB；路径越界、symlink、枚举、限额或移动失败都是 required
-diagnostic failure。
-Preflight 在 descriptor 和资源创建前受独立 60 秒 deadline 约束；该阶段失败时不存在 exact project 或已创建资源，因此直接
-非零退出，不运行 project diagnostics/cleanup。Descriptor 落盘后的 runtime setup、readiness、timeout 与可捕获 signal 进入同一
-`collectDiagnostics -> cleanup` 路径；cleanup failure 保持顶层非零。`runtime:cleanup` 只接受明确 descriptor 或 exact
-project，不枚举模糊前缀，也不执行全局 prune。Cleanup 对 exact project 执行一次
-`compose down -v --remove-orphans --rmi local`；不再查询/删除 image IDs 或复查 container/network/volume/image 为零。普通 down
-failure 令 cleanup 非零并保留 descriptor，允许残留供显式 recovery 重试，且不得影响 unrelated Docker 资源。cleanup 使用独立
-deadline。Signal/timeout 对当前 child/tree 做一次 best-effort 终止并有界等待：Windows 可调用一次 `taskkill /T /F`，POSIX 可终止
-process group 或 direct child；不记录 PID CreationDate、不使用 CIM leaf-to-root fallback、不确认 process identity，也没有 typed
-unconfirmed-termination gate。正常完成应尝试 clean，但异常路径不以 inventory=0 作为硬门禁。Gateway
-readiness 对 OIDC discovery 不只检查 HTTP 200，还精确核对 canonical origin 下的 issuer、authorization、token、JWKS、UserInfo
-与 RP-initiated logout URLs；Custom SSO 的 internal/external well-known configuration 也必须回读同一 canonical origin。Seed receipt
-只记录 stage、timestamps、failure category 或 run-scoped public references，不记录 credential、token 或 secret。
-
-`admin:journey` 在上述 lifecycle 的 protocol readiness 之后运行浏览器 preflight，并以单 Chromium project、单 worker、零 retry
-执行 `admin-custom-sso.spec.ts`。Journey 用 bootstrap Admin client 通过真实 SSO 登录 Admin，由真实 Admin UI 创建跨树 Organization
-Responsibility，再轮询 Internal Detail/DSL 与 Custom SSO UserInfo 证明 PostgreSQL/Redis 发布一致，并证明 Gateway/authorization 裁剪责任。
-随后 Admin UI 配置并启用 managed Custom SSO，将目标 Client 切入 Maintenance；公开 authorize 与 user-info 观察
-`503 AUTH.MAINTENANCE`，恢复正常后取得并复用同一 Custom Token，再在维护中执行真实 disable/enable mutation。
-Admin 通过捕获的 ClientSession 身份显式撤销目标 Client 的会话，确认旧 Token 永久失效，并由同一有效 UserSession 重新授权。
-浏览器失败证据沿用 run-scoped Playwright staging，随后进入统一
-diagnostics 与 exact-project cleanup。`hr-admin:journey` 复用同一 lifecycle 与浏览器约束；seed 通过真实 `iam-admin` Client、
-两个 HR Scope Roots、跨根 role-bearing Employment、双端四组合、隐藏 Open blocker、mixed-role Full Admin、ordinary actor
-与无有效 scope 的 HR actor 建立不扩权场景，经 production Worker 发布后真实 SSO 登录。Journey 验收 Organization
-Responsibility 菜单、Type Catalog、独立 Assignment 页面及 Organization/Employment/User 嵌入面板，执行
-Create → Pause → Resume → End → Ended 历史，并验证 selector 裁剪、server-owned `allowedActions`、隐藏 Audit、direct
-URL/猜测 ID、REST/tRPC 四组合（in/in 进入领域冲突，其他组合 404）、安全 cardinality/Organization blocker、scope
-撤销后下一次读取与 mutation 均 404，
-以及 ordinary/no-scope actor 403。随后 production Drizzle verifier 在 cleanup 前证明 lifecycle audit、
-`organization-responsibility-updated` invalidation/Profile 收敛、隐藏 blocker 保持、撤销的 Role Assignment 消失且越界
-无写入；有界 Admin API log capture 验证 `RESOURCE_OUT_OF_SCOPE` denial 不泄露 Assignment、holder、Organization path
-或 scope/root 集合。同一 full actor 在移除 `iam:hr-admin` Role Assignment 前后分别命中 mixed/full policy 分支，
-并以隐藏 Assignment 的 Pause/Resume 证明两种身份都保持全局读取与 mutation 能力。
-`oidc:journey` 复用同一 lifecycle 与浏览器约束；独立 Admin 浏览器上下文在 Maintenance 中执行
-OIDC disable/enable 并恢复正常，test-owned RP helper 生成 S256 verifier/challenge 并接收 registered callback。公开 authorize、token 与
-`/oidc/me` 验收标准暂态错误、恢复、PKCE、Code 单次使用与当前 `iam:employments` 披露。Authorization Code 取得后通过
-真实 Employment Pause → Resume → End 验证当前发布事实；错误 PKCE 消费 Code 并终止其原 ClientSession，正确 verifier 重试仍失败，
-同一有效 UserSession 重新授权后取得新 Code 与 Token。UserInfo 读取当前事实，已结束任职的责任不再披露；ID Token 明确排除
-employment/authorization responsibility。Discovery、JWKS 与 `/oidc/health` 在单个 Client 维护中保持可用，
-RP-initiated logout 在维护中终止当前根下的访问。Local HTTP 配置令 API 的 `oidc_interaction_binding` Cookie `Secure=false`，
-并继续验证 `HttpOnly`、`SameSite=Lax` 与 `Path=/oidc`；登录后的根 Cookie 则使用 `Path=/`。三个 journey 都不使用
-`page.route` 替代 repo-owned core。完整命令在同一个 exact-project lifecycle 中固定按 Admin → HR Admin → OIDC 运行；任一 journey
-失败都先收集 diagnostics 再尝试 cleanup，cleanup failure 始终使 root command 非零。
-
-Root `test:unit` 通过 Turbo fan out package Unit tasks，并由 `test:unit:root` 精确收集 root tooling tests。
-六个 profile commands fan out 同名 package tasks；process 额外运行 `test:integration:process:root`，收集
-`scripts/test-integration/process/` 下真实工具 CLI 的隔离进程测试。Integration 资源由调用方负责：可以直接提供专用 URL，也可以由
-agent 先启动临时 Docker 容器。`test:integration` 本身不创建资源；它在启动任何 profile 前一次性检查所有资源 URL，
-再按以下顺序串行运行并传播第一个失败：
+聚合 Integration 固定串行执行：
 
 ```text
 component -> process -> redis -> postgres -> composition -> browser
 ```
 
-每项专用 URL 均不得回退 runtime 或其他 test URL。缺少任一 URL 时，命令在启动 profile 前失败。
-Agent 可以补齐临时资源后重新运行，但命令不得 skip、自动 retry 或读取 runtime/development 配置。
+Integration 命令本身不创建资源。缺少任一 URL 时，在启动 profile 前失败；不得 skip、自动 retry 或回退到 runtime、
+development、production 或其他 test URL。调用方可补齐专用资源后重新运行。
+workspace-local `admin:journey`、`hr-admin:journey`、`oidc:journey` 保留为单旅程调试入口。
+完整命令列表与参数见[测试与验证通道](../development/commands.md#测试与验证通道)。
 
-## 双入口验收与产物隔离
-
-#200 为 root Full-system collection 添加独立双入口阶段：先完成上述同 origin 基线，再启动另一个 exact project，
-以 `internal.iam.localhost` / `external.iam.localhost` 和动态 Gateway 端口执行
-`dual-entry.spec.ts`。基线的 OIDC selector 也收集该文件，因此相同 origin 另有实际场景；
-双入口阶段只运行该文件，复用完整 migrations、seed、readiness、正式 APISIX 与诊断/清理 owner。
-它直接观察两协议相对登录、同一 managed Client 按本次落地 origin 回调、固定 business callback、host-only Cookie、授权 `iss`、退出与未知 host/伪造 header。
-E2E 从正式 manifest 发布 API upstream 的受控 Host rewrite，并回读已发布 upstream 后才运行旅程；不改生产 manifest 的部署输入。
-旧状态升级演练已退役，历史证据通过固定 Git 版本追溯；
-当前 suite/RP 证据入口见[协议套件入口](../development/commands.md#oidc-协议套件)。
-
-API Browser Integration 的 Playwright 输出固定为 `apps/api/test-results/browser`，不能使用会清理其他通道产物的
-默认 `apps/api/test-results` 根。独立协议套件的持久验收材料放在调用方明确的任务目录，避免被浏览器 runner 清理。
-
-## 测试收集维护
+### 测试收集维护
 
 测试由所属 runner 在 owner-local 窄目录自动发现；root Unit 使用 `scripts/__tests__/`，root Process Integration
-使用 `scripts/test-integration/process/`。新增测试放入所属目录，保留当前路径、命名与唯一 collection 归属约定。
+使用 `scripts/test-integration/process/`。新增测试放入所属目录，维护路径、命名与唯一 collection 归属。
 
-修改 runner 的 include/exclude、Vitest projects 或 workspace scripts 时，评审者核对归属与 root Turbo task 接入，
-并运行受影响 owner 的测试命令。命令成功只证明实际收集的测试执行结果，不自动证明磁盘候选全部被收集或没有重复；
-收集检查的取舍见 [ADR-0009](../adr/0009-adopt-canonical-test-collections.md)。
+修改 include/exclude、Vitest projects 或 workspace scripts 时，核对归属与 root Turbo task 接入，并运行受影响 owner 的
+测试命令。命令成功只证明实际收集的测试执行结果，不自动证明磁盘候选全部收集或没有重复；取舍见
+[ADR-0009](../adr/0009-adopt-canonical-test-collections.md)。
 
-## Turbo task graph 与缓存
+### Turbo task graph 与缓存
 
-Turbo 是唯一跨 package orchestrator；package 继续拥有 runner、configs、fixtures 与 scripts。Unit/component 使用
-`transit` 传播依赖源码变化，而不通过 `^test` 执行依赖 package 的测试：
+Turbo 是唯一跨 package orchestrator。测试任务通过 `transit` 传播依赖源码变化，不通过 `^test` 执行依赖 package 的测试：
 
 ```json
 {
@@ -284,75 +185,143 @@ Turbo 是唯一跨 package orchestrator；package 继续拥有 runner、configs�
 }
 ```
 
-Frontend package 内部的 Vitest projects、setup 与测试支持代码仍由该 package 自己持有；仓库不提供 root Vitest
-workspace、跨 package 共享配置模块或共享 setup。Admin/SSO Component Integration 与 DOM Unit 是不同的行为边界：
-前者继续整体使用 jsdom、完整 setup 与 `test-integration/component/**/*.integration.test.ts[x]` 收集规则，后者只是
-Unit collection 内的显式执行环境。
-
-Unit/component 只有在输入、env、fixtures、时间与随机性都可重现时允许缓存。process、redis、postgres、composition、
-browser、Full-system E2E 与其他外部验证均 `cache:false`。资源 tasks 通过 Turbo strict env 只透传 owner-specific test URLs。
+Unit/component 只有在输入、env、fixture、时间和随机性都可重现时允许缓存。process、redis、postgres、composition、
+browser、Full-system E2E 及其他外部验证均 `cache:false`。资源任务通过 Turbo strict env 只透传 owner-specific test URLs。
 
 ## 并发、timeout 与清理
 
-| Collection                               | Turbo package concurrency | Runner 预算                                                                                |
-| ---------------------------------------- | ------------------------: | ------------------------------------------------------------------------------------------ |
-| Unit                                     |                         2 | Admin/SSO Vitest `maxWorkers: 4`；其他 Vitest `maxWorkers: 25%`；Bun `--max-concurrency=2` |
-| component                                |                         2 | Vitest `maxWorkers: 25%`；Bun `--max-concurrency=2`                                        |
-| process / redis / postgres / composition |                         1 | 单 package；资源 owner 独占                                                                |
-| browser                                  |                         1 | Playwright 管理单 Chromium project                                                         |
-| Full-system E2E                          |                         1 | 三次 Playwright journey 均为单 Chromium project、单 worker、零 retry                       |
+### 执行预算
 
-Timeout 只保护测试不永久挂起，不承担性能 SLA。Process harness 必须使用真实 readiness 信号、同时观察 child exit/error、
-限制 stdout/stderr 缓冲，并在成功、失败、timeout 与中断路径清理完整进程树、端口与临时目录。不得通过放宽全局 timeout、
-重试或吞掉 cleanup 错误换取绿色结果。
+| Collection                               | Turbo package concurrency | Runner 预算                                                                                  |
+| ---------------------------------------- | ------------------------: | -------------------------------------------------------------------------------------------- |
+| Unit                                     |                         2 | Admin/SSO Vitest `maxWorkers: 4`；其他 Vitest `maxWorkers: 25%`；Bun `--max-concurrency=2`。 |
+| component                                |                         2 | Vitest `maxWorkers: 25%`；Bun `--max-concurrency=2`。                                        |
+| process / redis / postgres / composition |                         1 | 单 package，资源 owner 独占。                                                                |
+| browser                                  |                         1 | Playwright 管理单 Chromium project。                                                         |
+| Full-system E2E                          |                         1 | 每个旅程均为单 Chromium project、单 worker、零 retry。                                       |
+
+Timeout 用于避免永久挂起，不承担性能 SLA。Process harness 使用真实 readiness 信号，同时观察 child exit/error，
+限制 stdout/stderr 缓冲，在成功、失败、timeout 和中断路径清理进程树、端口与临时目录。
+不得通过放宽全局 timeout、重试或吞掉 cleanup 错误换取绿色结果。
+
+### 专用资源与隔离
+
+PostgreSQL 测试只清理自己创建的随机 schema；Redis 测试只清理自己的随机 namespace，禁止 `FLUSHDB`/`FLUSHALL`。
+Integration 命令和 harness 不启动 Docker、PostgreSQL 或 Redis；browser 可按 Playwright config 启动 package-local web server。
+没有专用测试 URL 时，agent 在 Docker 可用的情况下先创建任务独占临时容器，等待 ready，再传入专用 URL。
+使用仓库声明的镜像版本、本次任务唯一的 name/label 和动态宿主端口；AFK sandbox 的独占网络方式见
+[AFK 工作流](../agents/sandcastle-afk.md#验证节奏)。创建后立即记录准确 container ID，在成功、失败或中断后只按该 ID 清理，
+不使用 glob、prefix scan 或 prune，也不使用 development、runtime 或 production 资源。
+Docker 不可用或资源无法安全创建时，明确报告未执行的测试及原因，不得记为通过。
+
+以下 harness 还有独立的资源约束；其他 owner URL 见[命令页](../development/commands.md#测试与验证通道)：
+
+| Owner 与通道                | 专用 URL                          | Fixture 与清理约束                                                                                      |
+| --------------------------- | --------------------------------- | ------------------------------------------------------------------------------------------------------- |
+| Admin API PostgreSQL        | `IAM_ADMIN_API_TEST_DATABASE_URL` | 通过生产 Admin UoW factory 注入随机 schema client，不回退进程级数据库 singleton。                       |
+| Worker Redis repair/verify  | `IAM_WORKER_TEST_REDIS_URL`       | targeted/full repair 与独立 verify 共用 owner 资源；保留对 Worker 自身 runtime tuple 的直接防误用检查。 |
+| API Core Redis full restore | `IAM_API_CORE_TEST_REDIS_URL`     | 按 Redis profile 串行运行；写 fixture 前确认当前 Snapshot owner inventory 为空。                        |
+
+Worker full restore 同样先确认当前 owner inventory 为空，只登记本次 Client/restore fixture 与 non-owner sentinel。
+该通道执行生产 Redis-only command composition，观察普通/敏感 payload 重新回源、重复 repair、分批恢复、部分失败重跑、
+另起 Worker 进程的 scan-only verify 及 non-owner sentinel 保留。它不增加第二个 cleanup URL，也不枚举或推断其他
+test/runtime Redis 的 identity。
+
+Worker/Core 结束时只精确 `UNLINK` 登记键，并验证当前 owner inventory 无残留。非 owner namespace 可保留；旧 OIDC、
+Custom SSO、Traffic Gate key 不属于当前 Snapshot inventory，其残留不使 verify 失败。测试不要求整个 logical DB 为空，
+也不证明旧 namespace 已清空。
+
+### 浏览器 harness 与产物
+
+API OIDC 退出 Browser Integration 使用真实候选 API、动态 loopback RP 和专用 `IAM_API_TEST_REDIS_URL`，不 mock IAM
+协议请求。其 fixture 子进程经 readiness 交付浏览器种子，父进程关闭 stdin 后清理本次 HTTP server 与随机 Redis
+namespace；启动失败也进入收尾。该通道同样单 Chromium、单 worker、零 retry，不替代全系统 E2E、第三方 RP 或部署证据。
+
+API Browser Integration 的输出固定为 `apps/api/test-results/browser`，避免清理其他通道产物。
+独立协议套件的持久证据放入调用方明确的任务目录，不使用浏览器 runner 会清理的输出根。
 
 ### Bun 异步断言
 
-Bun 1.3.14 中曾发现 `bun:test` 的 async matcher 可能在 matcher 内同步重入 event loop；数据库、Redis、HTTP、
-subprocess、readiness 或其他依赖 I/O callback 完成的 Promise 因此可能悬挂。仓库解除此兼容约束前，新增或修改的 Bun 测试
-必须先用普通 `await` 完成异步操作，再对结果做同步断言。运行时升级到 Bun 1.4.2 后仍保留此约束：
+`bun:test` 的 async matcher 在 Bun 1.3.14 中曾出现 event-loop 重入，导致真实 I/O Promise 悬挂。运行时升级到 Bun 1.4.2
+后仍保留兼容约束：数据库、Redis、HTTP、subprocess、readiness 等操作先用普通 `await` 完成，再做同步断言。
 
 ```ts
 const report = await databaseOperation();
 expect(report).toMatchObject(expectedReport);
 ```
 
-失败路径先捕获 rejection，再同步断言错误；不要把 I/O-backed Promise 直接传给 `.resolves`、`.rejects` 或 async
-`toThrow`。即使外层写成 `await expect(databaseOperation()).resolves...` 也没有消除 matcher 内的 event-loop 重入。
-这属于测试 runner 兼容边界，不得用增大 timeout、重试或修改 production I/O lifecycle 掩盖。Bun 修复并完成仓库级
-真实 PostgreSQL/Redis/process 回归验证后，才能移除此约束；上游跟踪见
-[oven-sh/bun#33261](https://github.com/oven-sh/bun/issues/33261)。Vitest 测试不受本条 Bun 专用约束影响。
+失败路径先捕获 rejection，再同步断言错误。不得把真实 I/O Promise 传给 `.resolves`、`.rejects` 或 async `toThrow`，
+外层的 `await expect(...)` 也不能消除该风险。不得以增大 timeout、重试或修改生产 I/O lifecycle 掩盖。
+Bun 修复并完成仓库级真实 PostgreSQL/Redis/process 回归后，才能解除约束；上游跟踪见
+[oven-sh/bun#33261](https://github.com/oven-sh/bun/issues/33261)。Vitest 不受此 Bun 专用规则影响。
 
-PostgreSQL 测试只清理自己创建的随机 schema。Redis 测试只清理自己的随机 namespace；禁止对共享实例执行
-`FLUSHDB`/`FLUSHALL`。Integration 测试命令和 harness 不负责启动 Docker、PostgreSQL 或 Redis。Agent 可以在运行命令前
-启动任务独占的临时容器，但必须等待服务 ready、传入专用 URL，并负责测试成功、失败和中断后的精确清理。Browser
-profile 可以按 Playwright config 启动 package-local web server。缺少资源 URL 时命令仍然 fail closed，且不得回退开发或
-生产资源。
+## Full-system E2E
 
-Admin API 的真实事务与 PostgreSQL correctness contract 使用 owner-specific
-`IAM_ADMIN_API_TEST_DATABASE_URL`；其 harness 必须通过 production Admin UoW factory 注入随机 schema client，不能回退
-进程级数据库 singleton。
+`@iam/e2e-system` 管理完整临时系统，从独立 Compose project 的空 volumes 开始，运行 migrations、五个正式 runtime、
+synthetic seed、Gateway readiness、浏览器旅程及诊断清理。每次运行以 descriptor 记录准确的 project，恢复时使用同一目标。
+Full-system Compose/runtime 只使用固定测试或本次生成的数据与凭据，不接受生产端点、生产凭据或真实 PII。
 
-维护者决定 Client Runtime targeted/full repair 与独立 verify 的真实成功路径统一沿用 #68 的 owner-specific
-`IAM_WORKER_TEST_REDIS_URL`，不为 full repair 增加第二个 cleanup URL，也不枚举或推断其他可见 test/runtime Redis 的
-hostname、port 或 logical DB identity。调用方仍须提供专用、非 production Redis；harness 保留 #68 对 Worker 自身 runtime
-tuple 的直接防误用检查，full restore contract 在写 fixture 前证明 Module-owned inventory 为空，并只登记本次
-Client/restore fixture 与 non-owner sentinel。该 profile 运行 production Redis-only command composition：targeted contract 以独立 observer 验证普通/敏感 payload 均重新回源、重复 repair 安全且 sentinel 保留；restore contract 建立当前 Snapshot owner inventory，验证
-分批 full repair、部分失败重跑、另起 Worker process 的 scan-only full verify 与 non-owner sentinel 保留。
-旧 OIDC、Custom SSO 与 Traffic Gate key 不属于当前 owner inventory，其残留不使 verify 失败；测试不证明旧 namespace 已清空。
-测试结束只精确 `UNLINK` 本次登记键并验证
-owner inventory 无残留，禁止 `FLUSHDB`/`FLUSHALL`。
+### 初始化与就绪
 
-API Core 的 Client Runtime full restore contract 使用现有 `IAM_API_CORE_TEST_REDIS_URL`，按 Redis profile 串行运行。
-写入 fixture 前先验证当前 Snapshot owner inventory 为空，测试后只精确清理登记的 fixture，并验证 owner inventory 无残留。
-非 owner namespace 可保留；不要求整个 logical DB 为空，也不使用 `FLUSHDB`/`FLUSHALL`。
-旧 Session cleanup CLI、共享 harness 与专属 Redis 配置已退役；API composition 继续使用 API 自有 PostgreSQL/Redis 资源。
+1. **Preflight**：在 descriptor 和资源创建前执行，使用独立 60 秒 deadline。失败直接非零退出，此时没有 project
+   diagnostics 或 cleanup。
+2. **初始化记录与诊断工具**：descriptor 落盘后，在构建或创建资源前原子写入只含 stage/timestamp 的 `not-attempted`
+   migration receipt；写入失败不创建资源。随后构建 project-scoped Gateway 诊断镜像，再启动 infra 和 migration，
+   使早期失败也能在 cleanup 前保存 route state。诊断阶段不临时 build，也不暴露 APISIX Admin host port。
+3. **Migration**：命令前把 receipt 更新为 `attempted`，结束后记为 `applied` 或安全的 `failed`；不写入原始错误、命令或环境。
+4. **Runtime 与 seed**：runtime healthy 后，核对 rendered Compose 中 API、Gateway、Admin 与 seed 的 canonical origin/authority。
+   Seed 通过生产 Drizzle、Role Assignment、User Profile 与 Subject Access owner 建立数据并回读，避免复制 Redis 协议。
+   Profile backfill 经真实 Worker 收敛；Gateway routes 发布前执行 PostgreSQL 与 Redis/Subject Facts/Subject Access 生产 gate。
+   Seed receipt 只记录 stage、timestamps、failure category 或 run-scoped public references，不记录凭据、token 或 secret。
+5. **协议与浏览器就绪**：OIDC discovery 除 HTTP 200 外，还须精确匹配 canonical origin 下的 issuer、authorization、token、
+   JWKS、UserInfo 与 RP-initiated logout URLs；Custom SSO 的 internal/external well-known configuration 回读同一 origin。
+   协议 ready 后执行浏览器 preflight，再开始旅程。
+
+### 旅程编排
+
+同源基线在同一个 project lifecycle 中固定按 Admin → HR Admin → OIDC 执行。每个旅程使用单 Chromium project、
+单 worker、零 retry，均通过真实 SSO、Admin/API 与正式 runtime 观察行为，不使用 `page.route` 替代 repo-owned core。
+具体场景与证明范围见[系统旅程的验证归属](architecture-verification.md#行为资源与系统验证)及各旅程测试。
+任何旅程失败先收集 diagnostics，再尝试 cleanup；cleanup failure 始终令 root command 非零。
+
+### 双入口验收与产物隔离
+
+完整 collection 在同源基线后启动另一个独立 project，以 `internal.iam.localhost` / `external.iam.localhost` 和动态
+Gateway 端口运行 `dual-entry.spec.ts`。基线的 OIDC selector 同样收集该文件；双入口阶段只运行此文件，复用完整
+migrations、seed、readiness、正式 APISIX 与诊断清理 owner。
+
+该阶段观察两协议相对登录、managed Client 按本次 origin 回调、固定 business callback、host-only Cookie、授权 `iss`、
+退出以及未知 host/伪造 header。E2E 从正式 manifest 发布 API upstream 的受控 Host rewrite，回读已发布 upstream 后
+才运行旅程，不改生产 manifest 的部署输入。独立 suite/RP 的证据入口见[协议套件](../development/commands.md#oidc-协议套件)。
+
+跨通道产物遵守[浏览器产物隔离](#浏览器-harness-与产物)，避免 runner 清理其他通道的验收材料。
+
+### 失败诊断与清理
+
+Descriptor 落盘后的 setup、readiness、timeout 和可捕获 signal 进入统一的 `collectDiagnostics -> cleanup` 路径。
+诊断 source 分别受 deadline 约束，逐项尝试保存可得证据、失败 placeholder 与 index；任何必需 source 失败都使顶层非零，
+随后仍尝试清理准确 project。
+
+- **日志与状态**：收集 Compose ps/health、固定 service logs、Gateway state 和已有证据清单。日志按完整行保留有界
+  recent tail；单行超过 service byte cap 时整行替换为 `[TRUNCATED]`。普通 command runner 不向 console 回显 child
+  stdout/stderr，原始输出仅通过有界 capture 进入 artifact。
+- **浏览器产物**：将 run-scoped staging 中的原始 `trace.zip`、PNG、WebM 安全移动到 run artifact directory。
+  Intake 最多 128 个文件、单文件 16 MiB、合计 64 MiB；路径越界、symlink、枚举、限额或移动失败均为必需诊断失败。
+  Metadata index 只列 type/name/size，不替代或删除原始文件。
+- **内容与访问**：diagnostics 保留有界原始内容，不做 JSON/YAML/JWK/PEM/credential 分类或脱敏。合成 token/password/key
+  可出现在临时产物中，由 artifact directory 的访问控制与 retention 管理。
+
+Cleanup 使用独立 deadline，对准确 project 执行一次 `compose down -v --remove-orphans --rmi local`，不枚举模糊前缀、
+不全局 prune，也不另行查询或删除 image IDs。失败时非零退出并保留 descriptor，供显式 recovery 重试；不得影响无关
+Docker 资源。显式 `runtime:cleanup` 只接受 descriptor 或 exact project，命令见
+[Full-system E2E 入口](../development/commands.md#full-system-e2e)。
+
+Signal/timeout 对当前 child/tree 做一次尽力终止并有界等待：Windows 可调用一次 `taskkill /T /F`，POSIX 可终止
+process group 或 direct child。正常与异常路径都尝试 cleanup；异常清理不以全部资源 inventory 为零作为硬门禁。
 
 ## 默认验证与交付
 
-Spec #178 当前候选的实际命令与结果按逐票交接记录；历史切片结果不代替最终树，环境切换另行验收。
-
-基础 `pnpm verify` 固定 fail fast：
+基础 `pnpm verify` 固定快速失败：
 
 ```mermaid
 flowchart LR
@@ -361,30 +330,23 @@ flowchart LR
   C --> D["build"]
 ```
 
-`pnpm verify:static` 通过同一 runner 的 `--static` 参数只运行静态阶段：只读 format/lint、文档索引、环境变量命名 Guard、
-Architecture Guard。`verify` 不读取真实 PostgreSQL/Redis，
-不启动 browser 或 Full-system stack，也不隐式执行 Integration。开发者按改动风险显式追加相关 profiles；完整
-`test:integration` 只在调用方准备好全部专用资源时运行。
+`pnpm verify:static` 使用同一 runner 的 `--static` 参数，只执行只读 format/lint、文档索引、环境变量命名 Guard 和
+Architecture Guard。基础 `verify` 不读取真实 PostgreSQL/Redis，也不隐式运行 Integration、浏览器或 Full-system stack；
+按改动风险显式追加相关 profile。
+完整 `test:integration` 只在调用方准备好全部专用资源时运行。
 
-两级 provider-neutral 聚合 Gate 只组合上述 owner commands，并保持 fail fast：
+| 聚合 Gate             | 固定执行顺序                 |
+| --------------------- | ---------------------------- |
+| `pnpm verify:ci`      | `verify -> test:integration` |
+| `pnpm verify:release` | `verify:ci -> test:e2e`      |
 
-```text
-pnpm verify:ci       = verify -> test:integration
-pnpm verify:release  = verify:ci -> test:e2e
-```
+Gate 只组合 owner commands，保持快速失败，不另行读取资源配置或复制 preflight、descriptor、diagnostics、cleanup。
+命令名不表示已接入 CI 平台；平台采用与验收结论须有独立证据。
 
-Gate 本身不读取资源配置，不复制 Integration preflight 或 Full-system E2E 的 descriptor、diagnostics 与 exact-project
-cleanup，也不把命令名解释为 provider adoption。各 owner command 的资源与 lifecycle 契约见
-[构建、测试与开发命令](../development/commands.md)。
-
-实施交接、修复后的结果复用及 AFK 批后验证统一按[开发工作流的验证节奏](../agents/workflow.md#验证节奏)执行。
+手动验证与修复后的结果复用见[工作流补充](../agents/workflow.md#验证节奏)，AFK 交接与批后验证见
+[AFK 工作流](../agents/sandcastle-afk.md#验证节奏)。
 必需检查执行或解析失败阻断交接与交付；静态检查通过不表示测试断言已执行或通过。
+测试也不代替目标环境的停流、drain、恢复和独立核验，操作流程见[统一维护手册](../releases/unified-session-maintenance.md)。
 
-统一 Snapshot 使用 Core Redis、Admin PG/Redis composition 与 Worker 新进程 CLI，测试不能代替停流/drain/独立核验。
-当前操作流程见[统一维护手册](../releases/unified-session-maintenance.md)，旧三类 Snapshot 恢复仅为历史。
-
-2026-08-06 的 Windows 本地候选周期在同一次完整连续流程中依次通过 `pnpm verify` 3/3、全资源 `pnpm verify:ci` 1/1、
-干净 E2E `pnpm verify:release` 1/1，且最终 task-owned 与 exact-project Docker inventory 均为零。Feature 历史中的正式
-evidence 失败和 setup retries 继续保留；环境或代码根因修复后从头重启的完整流程可用于验收，但不得在同一流程内重试单个
-阶段或隐藏历史。当前没有 CI 平台；Linux/真实 CI 仍为 `pending`，平台状态不能通过 placeholder command、silent skip 或
-本地重跑伪装为已采用。
+候选 SHA、实际命令、结果、未执行项及平台验收记录留在对应 issue 或验收记录；历史结果不能代替最终候选或环境切换证据。
+本页只维护长期验证契约，不保存某次运行的日期、通过次数或交付状态。

@@ -4,7 +4,8 @@ model = "gpt-6.1-sol"
 model_reasoning_effort = "medium"
 
 developer_instructions = """
-你负责实施当前获授权的 ticket，完成聚焦验证，并在同一会话内组织 code-review 双轴只读子代理评审。
-按 AGENTS.md 和 docs/agents/workflow.md 执行。只修改本票范围；评审 findings 由你修复和提交。
-实际复杂度超出角色范围时报告阻碍与恢复点，交还 Planner 重新选型；不要降低验收或评审标准。
+你负责实施当前获授权的 ticket，完成聚焦验证。按 AGENTS.md 和 docs/agents/workflow.md 执行，只修改本票范围。
+手动模式按协调者要求交接，不自行启动逐票双轴评审；分配给你的 findings 由你修复和提交。
+AFK 模式另读 docs/agents/sandcastle-afk.md，在同一会话内组织逐票双轴只读子代理评审，并修复、提交 findings。
+实际复杂度超出角色范围时报告阻碍与恢复点，交还协调者或 AFK Planner 重新选型；不要降低验收或评审标准。
 """

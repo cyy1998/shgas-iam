@@ -16,7 +16,8 @@ git diff --check
 ```
 
 格式与 lint 由[提交 Hook](#commit-前检查)自动处理；上面的内循环无需手动追加这两类命令。
-实施交接、评审修复后的验证复用与批后检查，按[开发工作流的验证节奏](../agents/workflow.md#验证节奏)执行。
+手动验证与修复后的结果复用见[工作流补充](../agents/workflow.md#验证节奏)，AFK 交接与批后检查见
+[AFK 工作流](../agents/sandcastle-afk.md#验证节奏)。
 
 根工具链变化的聚焦 Bun 测试：
 
@@ -43,7 +44,7 @@ pnpm test:integration:<component|process|redis|postgres|composition|browser>
 ## Sandcastle AFK
 
 本机 Docker + Codex CLI 执行全仓 `ready-for-agent` backlog；选票、评审、合并和关票权限见
-[AFK 工作流](../agents/workflow.md#sandcastle-afk-批量实施)。`pnpm sandcastle` 会调用模型、修改代码和 GitHub issues，
+[AFK 工作流](../agents/sandcastle-afk.md)。`pnpm sandcastle` 会调用模型、修改代码和 GitHub issues，
 并把通过验收的 ticket 分支普通合并到启动时的调用分支；运行前选定该分支。
 
 首次使用时，按 `.sandcastle/.env.example` 创建未跟踪的 `.sandcastle/.env`，填写 `GH_TOKEN`。
@@ -86,7 +87,7 @@ Smoke 覆盖旧宿主生成文件隔离、两个前端类型检查，以及安�
 Smoke 分别在两种 checkout 中用真实普通 commit 验证自动修复、错误阻断与宿主配置保持不变。
 运行参数默认 10 批、最多 2 张 ticket 并行；`--iterations`、`--parallel` 只调整本次运行。
 Merger 每批最多 10 次 SDK 迭代，正常结束但未输出完成标记时继续；这与 `--iterations` 的批次数分别计数，
-也不重试初始化或进程异常。失败修复与继续执行规则见 [AFK 工作流](../agents/workflow.md#sandcastle-afk-批量实施)。
+也不重试初始化或进程异常。失败修复与继续执行规则见 [AFK 工作流](../agents/sandcastle-afk.md#批量实施)。
 `--model`（优先）或 `SANDCASTLE_MODEL` 只覆盖 Planner/Merger 的模型，两者默认 `gpt-6-astra`、思考程度 `high`。
 
 Planner 从仓库 `.codex/agents/implementer-{light,standard,deep}.toml` 定义的实施者中选择，
@@ -94,11 +95,11 @@ Planner 从仓库 `.codex/agents/implementer-{light,standard,deep}.toml` 定义�
 standard 为 `gpt-5.6-sol` / `high`，deep 为 `gpt-6-astra` / `xhigh`。
 双轴评审使用 `.codex/agents/standards-reviewer.toml` 与 `.codex/agents/spec-reviewer.toml`，
 两轴均为 `gpt-6-astra` / `high`，不随实施者档位降低。Runner 为容器内 CLI 提供子代理配置，
-不修改用户宿主 Codex 配置；会话内评审和十轮上限见[双轴评审流程](../agents/workflow.md#sandcastle-afk-批量实施)。
+不修改用户宿主 Codex 配置；会话内评审和十轮上限见[双轴评审流程](../agents/sandcastle-afk.md#批量实施)。
 
 Codex CLI 0.154 的角色 override 忽略 `sandbox_mode`，因此评审角色的只读要求属于职责约束，不能保证子代理在
 操作系统层面只能读取。双轴由实施者执行、Merger 阅读报告核对，runner 不解析评审报告或会话文件，
-也不重复实施者的静态和 diff 检查；职责见[工作流](../agents/workflow.md#双轴评审子代理生命周期)。
+也不重复实施者的静态和 diff 检查；职责见[AFK 工作流](../agents/sandcastle-afk.md#双轴评审子代理生命周期)。
 
 普通失败和 Ctrl+C 会清理本次测试资源；若宿主被强制终止，按 `.sandcastle/resources/` 中对应记录的准确
 container/network ID 恢复清理。`run.lock` 记录进程与目标分支，确认旧进程已结束后才移除该文件。
@@ -303,7 +304,7 @@ Browser Integration 保留原 API mocks、package-local `webServer`、base URL �
 
 `pnpm test:e2e` 由 `@iam/e2e-system` 管理完整临时系统：Docker 与浏览器 preflight、迁移、seed、
 readiness、同 origin 旅程及独立双 hostname 阶段。完整行为和诊断契约见
-[测试编排架构](../architecture/testing-architecture.md#root-与-package-commands)与
+[测试编排架构](../architecture/testing-architecture.md#full-system-e2e)与
 [双入口验收](../architecture/testing-architecture.md#双入口验收与产物隔离)。
 
 只使用测试生成的数据与凭据，不接入生产端点、生产凭据或真实 PII。产物位于 `e2e/system/test-results/`；
@@ -323,7 +324,7 @@ pnpm --filter @iam/e2e-system runtime:cleanup -- --project iam-e2e-<run-id>
 
 显式恢复有独立 120 秒 cleanup deadline，只清理给定 descriptor 或 exact project；不接受 glob、prefix 或 prune。
 Cleanup 失败会非零退出并保留 descriptor，可使用同一目标重试。生命周期和进程终止规则见
-[测试编排架构](../architecture/testing-architecture.md#root-与-package-commands)。
+[测试编排架构](../architecture/testing-architecture.md#full-system-e2e)。
 
 ### 聚合验证
 
@@ -345,8 +346,8 @@ E2E lifecycle 的详细契约分别由本页后续专用资源说明和 [测试�
 统一 Snapshot 通过 Core Redis、Admin composition 和 Worker CLI 验证；最终 schema/数据门禁分别使用 DB/Worker PostgreSQL。
 当前维护步骤见[统一维护手册](../releases/unified-session-maintenance.md)，旧工具操作见[历史数据维护工具](#历史数据维护工具)；测试不提供目标环境操作授权。
 
-当前 Windows 本地聚合 evidence 与平台 adoption 状态见
-[测试编排架构的“默认验证与交付”](../architecture/testing-architecture.md#默认验证与交付)；Linux/真实 CI 尚未验收。
+聚合验证的证明边界见[默认验证与交付](../architecture/testing-architecture.md#默认验证与交付)。
+候选结果和平台验收状态记录在对应 issue 或验收记录中。
 
 外部资源检查不进入 `pnpm verify`，需要时显式运行：
 
@@ -410,8 +411,8 @@ pnpm --filter @iam/sso test:integration:browser
 pnpm gateway:apisix:validate -- <environment-arguments>
 ```
 
-测试命令和 harness 不负责启动 Docker。Agent 按开发工作流提供临时资源、等待 ready 并记录准确 container ID，
-测试结束只按该 ID 清理，不使用 glob、prefix scan 或 prune。
+测试命令和 harness 不负责启动 Docker。Agent 提供临时资源与清理的要求见
+[专用资源与隔离](../architecture/testing-architecture.md#专用资源与隔离)。
 
 维护者决定 #69 的 Client Runtime full repair contract 与 #68 targeted repair 共用
 `IAM_WORKER_TEST_REDIS_URL` owner resource，不新增 cleanup-specific env，也不跨其他可见环境推断 Redis identity。Worker harness
@@ -495,7 +496,7 @@ b648、managed-callback 配置升级、`online-auth:state --layout source` 及�
 
 ## 工具链强制执行
 
-#200 后 `pnpm test:e2e` 在原同 origin 全系统基线之后，再启动独立 exact project 执行两个不同 hostname 的
+`pnpm test:e2e` 在同 origin 全系统基线之后，再启动独立 exact project 执行两个不同 hostname 的
 `dual-entry.spec.ts`；不需要另设环境变量选择第二阶段。workspace-local journey 仍只服务聚焦调试。
 双入口协议的命令与资源见[OIDC 协议套件](#oidc-协议套件)。
 
@@ -548,7 +549,6 @@ Hook 可以被本地绕过，自动 merge commit 也不保证触发 pre-commit�
 - Full-system E2E lifecycle：
   root `pnpm test:e2e`；workspace-local
   `pnpm --filter @iam/e2e-system <test:e2e|runtime:lifecycle|admin:journey|hr-admin:journey|oidc:journey|runtime:cleanup|lint|test|test:unit|test:integration:process|typecheck>`。
-  当前只完成 Windows 本地验收，未宣称 Linux/CI adoption
 - API backend：`pnpm --filter @iam/api <dev|serve|lint|test|test:unit|test:integration:component|test:integration:process|test:integration:composition|test:integration:postgres|test:integration:redis|typecheck>`
 - Admin API backend：`pnpm --filter @iam/admin-api <dev|serve|lint|test|test:unit|test:integration:component|test:integration:process|test:integration:postgres|test:integration:composition|test:integration:redis|typecheck>`
 - Session Kernel：`pnpm --filter @iam/session-kernel <lint|test:integration:redis|typecheck>`

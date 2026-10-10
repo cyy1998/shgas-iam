@@ -1,6 +1,6 @@
 # 实施指定 ticket
 
-本次为 Sandcastle AFK 模式。读取 `AGENTS.md` 和 `docs/agents/workflow.md` 的 AFK 规则，按命中范围读取工程文档。
+本次为 Sandcastle AFK 模式。读取 `AGENTS.md` 和 `docs/agents/sandcastle-afk.md`，按命中范围读取工程文档。
 GitHub 仓库：`{{REPO}}`；ticket：#{{ISSUE_NUMBER}}；实施分支：`{{BRANCH}}`；
 本批目标基线：`{{BASE_SHA}}`；最终合入分支：`{{INVOCATION_BRANCH}}`。
 本次实施者：`{{IMPLEMENTER}}`；Planner 选择依据：{{SELECTION_REASON}}。
@@ -14,7 +14,7 @@ GitHub 仓库：`{{REPO}}`；ticket：#{{ISSUE_NUMBER}}；实施分支：`{{BRAN
    容器已安装依赖并生成前端类型；后续若修改依赖、Umi 配置或路由，在验证前运行 `sh scripts/sandcastle/prepare-workspace.sh` 并确认成功。
 5. 在 `{{BRANCH}}` 创建普通 focused commits，消息引用 #{{ISSUE_NUMBER}}；提交 Hook 自动处理暂存文件的 format/lint。
    核对 Hook 自动修复的 diff，按工作流判断已有类型或行为验证是否失效；检查工作区干净，固定当前 candidate SHA。
-6. 在该候选上按工作流“验证节奏”执行一次 `pnpm verify:static`、完整受影响范围的 typecheck/行为测试和 `git diff --check`；已有专用测试资源 URL 由 runner 注入。
+6. 在该候选上按 AFK 工作流“验证节奏”执行一次 `pnpm verify:static`、完整受影响范围的 typecheck/行为测试和 `git diff --check`；已有专用测试资源 URL 由 runner 注入。
    缺少 E2E/Gateway 等必需资源时报告未执行项，保持本票未完成。测试真实 I/O 先普通 await，再同步断言。
 7. 读取 `.agents/skills/code-review/SKILL.md`，在本会话内组织双轴评审。每轮新建两个相互独立的子代理，使用
    `standards_reviewer` 和 `spec_reviewer` 角色，使用独立上下文（`fork_context=false`），并行审查从

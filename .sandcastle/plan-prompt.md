@@ -1,6 +1,6 @@
 # 规划本批 tickets
 
-这是仓库的 Sandcastle AFK 模式。先读取 `AGENTS.md`、`docs/agents/workflow.md` 的 AFK 规则和
+这是仓库的 Sandcastle AFK 模式。先读取 `AGENTS.md`、`docs/agents/sandcastle-afk.md` 和
 `docs/agents/issue-tracker.md`。本次 GitHub 仓库为 `{{REPO}}`，本地合入目标为 `{{INVOCATION_BRANCH}}`。
 本阶段只读取仓库与 issues，输出计划。
 

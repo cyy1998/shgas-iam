@@ -8,7 +8,7 @@
 2. 调查、设计或改动前，按下表读取所有命中项。跨边界任务叠加阅读；每篇先读通用规则，再读涉及模块的小节。
    范围扩大时补读新命中项，已读且未变化的内容无需重复加载。
 3. 讨论首次落盘、开始实施、修改文件或执行提交、合并、发布、关闭 Spec 前，必须先读
-   [开发工作流](docs/agents/workflow.md)，遵守分支复用、设计提交、验证与人工授权收尾约束。
+   [工作流补充](docs/agents/workflow.md)，核对仓库的分支、验证与本地收尾约束。
 
 | 任务触发条件                                                                                   | 必须读取                                                                                                                                            |
 | ---------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -52,8 +52,9 @@
 
 ## 开发方法与 Issue 路由
 
-- 通用开发方法以 `mattpocock/skills` 为准。小型明确改动可以直接进入 `/implement`，单会话直接实现无需创建 issue。
-- 跨会话 feature 使用 `cyy1998/shgas-iam` GitHub Issues 保存 spec、tickets 和状态，评审方式按
-  [开发工作流](docs/agents/workflow.md)区分手动与 Sandcastle AFK 路径。
+- 完整 Spec 的手动实施使用 [`implement-spec`](.agents/skills/implement-spec/SKILL.md)，仓库差异见[工作流补充](docs/agents/workflow.md)。
+- 小型明确任务直接实施；显式调用 [`implement`](.agents/skills/implement/SKILL.md) 时才走该 skill 的双轴评审流程。
+- 运行或维护 Sandcastle AFK 时读 [AFK 工作流](docs/agents/sandcastle-afk.md)。
+- 跨会话 feature 使用 `cyy1998/shgas-iam` GitHub Issues 保存 spec、tickets 和状态。
   创建、读取、更新 issue 或恢复跨会话工作前，先读[议题跟踪规则](docs/agents/issue-tracker.md)。
 - 执行 triage 或设置 issue 标签前，先读[标签约定](docs/agents/triage-labels.md)，沿用默认 canonical labels。

@@ -85,12 +85,12 @@ Apps 表用于定位入口；依赖方向、分层职责、命名和 wiring 统�
 `e2e/system`（`@iam/e2e-system`）拥有根 `pnpm test:e2e` 的完整系统测试，包括 Compose、migration / Gateway
 镜像、seed、旅程、诊断与精确恢复。workspace-local journey 命令用于聚焦调试。
 
-生命周期、资源与旅程契约见[测试编排](testing-architecture.md#root-与-package-commands)，双 hostname 阶段见
+生命周期、资源与旅程契约见[测试编排](testing-architecture.md#full-system-e2e)，双 hostname 阶段见
 [双入口验收](testing-architecture.md#双入口验收与产物隔离)，可执行入口见[命令页](../development/commands.md#full-system-e2e)，
 证明范围见[验证归属](architecture-verification.md#行为资源与系统验证)。
 
 Run descriptor、receipts、diagnostics 与 Playwright 产物写入 `e2e/system/test-results/`，可重新生成，不提交。
-平台验收状态见[默认验证与交付](testing-architecture.md#默认验证与交付)。
+聚合验证的证明边界见[默认验证与交付](testing-architecture.md#默认验证与交付)。
 
 ## 基础设施与仓库工具
 
@@ -102,7 +102,7 @@ Run descriptor、receipts、diagnostics 与 Playwright 产物写入 `e2e/system/
 | `scripts/`            | 文档和架构守卫、测试编排、验证入口及 tooling performance helpers。                                                                               |
 | `scripts/sandcastle/` | AFK runner、宿主预检与临时测试资源编排。                                                                                                         |
 | `.sandcastle/`        | Sandcastle Planner、Implementer、Merger prompts、Dockerfile 和 `.env.example`；运行命令见[命令入口](../development/commands.md#sandcastle-afk)。 |
-| `.codex/agents/`      | Codex 调查角色、AFK 三档实施者与 Standards/Spec 只读评审角色配置；由 runner 为容器配置实施者内的子代理评审。                                     |
+| `.codex/agents/`      | Codex 调查角色、手动与 AFK 共用的三档实施者、Standards/Spec 只读评审角色；AFK runner 配置容器内逐票评审。                                        |
 | `.husky/`             | Git hooks 与安装脚本。                                                                                                                           |
 | `patches/`            | pnpm 管理的固定依赖补丁；Sandcastle signal 适配允许宿主 runner 等待中断清理。                                                                    |
 
