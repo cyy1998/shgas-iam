@@ -26,7 +26,9 @@ import {
   EmploymentStatus,
   OrganizationLevel,
   OrganizationResponsibilityTypeCode,
+  OrganizationStatus,
   OrganizationType,
+  PositionStatus,
   UserStatus,
   UserType,
 } from "@iam/contracts";
@@ -283,6 +285,47 @@ async function waitForLock(table: string, minimum = 1) {
   }
   throw new Error(`No blocked PostgreSQL query for ${table}`);
 }
+
+describe("Employment lifecycle reads through production PostgreSQL", () => {
+  test.each([
+    {
+      name: "paused parents",
+      organizationStatus: OrganizationStatus.Pause,
+      positionStatus: PositionStatus.Pause,
+      isDelete: false,
+    },
+    {
+      name: "disabled parents",
+      organizationStatus: OrganizationStatus.Disable,
+      positionStatus: PositionStatus.Disable,
+      isDelete: false,
+    },
+    {
+      name: "soft-deleted parents",
+      organizationStatus: OrganizationStatus.Enable,
+      positionStatus: PositionStatus.Enable,
+      isDelete: true,
+    },
+  ])("returns $name without hiding lifecycle facts", async ({ organizationStatus, positionStatus, isDelete }) => {
+    const fixture = await seed();
+    const [organization] = await harness.db
+      .update(organizations)
+      .set({ status: organizationStatus, isDelete })
+      .where(eq(organizations.id, fixture.org.id))
+      .returning();
+    const [position] = await harness.db
+      .update(positions)
+      .set({ status: positionStatus, isDelete })
+      .where(eq(positions.id, fixture.position.id))
+      .returning();
+
+    if (!fixture.employment || !organization || !position) throw new Error("Expected seeded lifecycle records");
+    const repository = createAdminApiRepositories(harness.db).employment;
+    const context = await repository.getEmploymentLifecycleContextById(fixture.employment.id);
+
+    expect(context).toEqual({ employment: fixture.employment, organization, position });
+  });
+});
 
 describe("Employment mutations through production PostgreSQL UnitOfWork", () => {
   for (const scoped of [false, true]) {

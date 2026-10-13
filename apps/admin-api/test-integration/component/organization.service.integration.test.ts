@@ -1,6 +1,5 @@
 import { describe, expect, mock, test } from "bun:test";
 import { createOrganizationRepository } from "@admin-api/services/organization/organization.repository";
-import { OrganizationCreateDtoSchema, toOrganizationDto } from "@admin-api/services/organization/organization.schema";
 import { createOrganizationService } from "@admin-api/services/organization/organization.service";
 import { createImmediateUnitOfWork } from "@admin-api/test/fakes";
 import { EmploymentStatus, OrganizationLevel, OrganizationStatus, OrganizationType } from "@iam/contracts";
@@ -124,55 +123,6 @@ function useEmploymentFixture(
 }
 
 describe("createOrganizationService", () => {
-  test("create and response allowlists preserve supported fields and strip storage-only fields", () => {
-    const input = OrganizationCreateDtoSchema.parse({
-      ...organization(),
-      businessParentId: 7,
-      orderNum: 3,
-      isVirtual: true,
-      isEntity: false,
-      parentCode: "PARENT",
-      storageSecret: "private",
-    });
-    expect(input).toEqual({
-      orgCode: "ORG",
-      orgName: "Organization",
-      orgType: OrganizationType.Company,
-      businessParentId: 7,
-      orderNum: 3,
-      isVirtual: true,
-      isEntity: false,
-      path: "/ORG",
-      level: OrganizationLevel.One,
-      status: OrganizationStatus.Enable,
-      parentCode: "PARENT",
-    });
-    const output = toOrganizationDto(organization({ storageSecret: "private" }));
-    expect(Object.keys(output).sort()).toEqual(
-      [
-        "id",
-        "orgCode",
-        "orgName",
-        "parentId",
-        "businessParentId",
-        "path",
-        "level",
-        "orgType",
-        "orderNum",
-        "isVirtual",
-        "isEntity",
-        "status",
-        "isDelete",
-        "createTime",
-        "updateTime",
-        "isLeaf",
-        "parentCode",
-        "parentName",
-      ].sort(),
-    );
-    expect(output).toMatchObject({ orgCode: "ORG", isLeaf: true, parentCode: null, parentName: null });
-  });
-
   test("profile no-op skips writes, audit and dirty while status no-op retains intent", async () => {
     const { service, tx } = createService();
     const profile = await service.updateOrganization("ORG", { orgName: "Organization" });

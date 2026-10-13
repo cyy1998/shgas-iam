@@ -55,13 +55,14 @@ describe("RoleAssignmentFormModal", () => {
     await user.click(screen.getByRole("button", { name: /提交|确 定/ }));
 
     await waitFor(() => {
-      expect(createRoleAssignment).toHaveBeenCalledWith("admin-role", {
-        targetType: RoleAssignmentTargetType.Position,
-        posCode: "FIN-001",
-      });
+      expect(createRoleAssignment.mock.calls[0]).toStrictEqual([
+        "admin-role",
+        {
+          targetType: RoleAssignmentTargetType.Position,
+          posCode: "FIN-001",
+        },
+      ]);
     });
-    expect(createRoleAssignment.mock.calls[0][1]).not.toHaveProperty("orgCode");
-    expect(createRoleAssignment.mock.calls[0][1]).not.toHaveProperty("includeDescendants");
     expect(onOpenChange).toHaveBeenCalledWith(false);
     expect(onSuccess).toHaveBeenCalled();
   });

@@ -12,25 +12,6 @@ function uniqueViolation() {
 }
 
 describe("createEmploymentRepository", () => {
-  test("loads lifecycle parents without hiding disabled or soft-deleted records", async () => {
-    const employment = { id: 4, orgId: 2, posId: 3 } as any;
-    const organization = { id: 2, status: 3, isDelete: true } as any;
-    const position = { id: 3, status: 3, isDelete: true } as any;
-    const repository = createEmploymentRepository({
-      query: {
-        employments: { findFirst: mock(async () => employment) },
-        organizations: { findFirst: mock(async () => organization) },
-        positions: { findFirst: mock(async () => position) },
-      },
-    } as any);
-
-    await expect(repository.getEmploymentLifecycleContextById(4)).resolves.toEqual({
-      employment,
-      organization,
-      position,
-    });
-  });
-
   test("finds duplicate open employments across enabled and paused states", async () => {
     const findFirst = mock(async () => undefined);
     const repository = createEmploymentRepository({

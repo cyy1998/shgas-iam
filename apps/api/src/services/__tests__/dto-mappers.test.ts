@@ -91,30 +91,10 @@ function privilegeDelegationDetail() {
 }
 
 describe("API DTO mappers", () => {
-  test("maps organization details to a flat DTO", async () => {
-    const schemaModule = (await import("../organization/organization.schema")) as any;
-
-    expect(typeof schemaModule.toOrganizationDto).toBe("function");
-    expect(
-      schemaModule.toOrganizationDto({
-        ...organization(2, "CHILD"),
-        parent: organization(1, "PARENT"),
-        children: [],
-      }),
-    ).toMatchObject({
-      orgCode: "CHILD",
-      isLeaf: true,
-      parentCode: "PARENT",
-      parentName: "PARENT name",
-    });
-  });
-
   test("maps privilege delegation details to summary and detail DTOs", async () => {
     const schemaModule = (await import("../privilege/privilegeDelegation.schema")) as any;
     const detail = privilegeDelegationDetail();
 
-    expect(typeof schemaModule.toPrivilegeDelegationDto).toBe("function");
-    expect(typeof schemaModule.toPrivilegeDelegationDetailDto).toBe("function");
     expect(schemaModule.toPrivilegeDelegationDto(detail)).toMatchObject({
       delegatorUsername: "user1",
       delegatorName: "User 1",

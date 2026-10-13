@@ -167,18 +167,18 @@ describe("Subject Facts Reader", () => {
       return { where };
     });
     const select = mock((columns: Record<string, unknown>) => {
-      expect(Object.keys(columns)).toEqual([
-        "subjectIdentifier",
-        "username",
-        "name",
-        "mobile",
-        "profileSchemaVersion",
-        "sourceDirtyVersion",
-        "subjectFacts",
-        "rebuiltAt",
-      ]);
-      expect(columns).not.toHaveProperty("detail");
-      expect(columns).not.toHaveProperty("searchDoc");
+      expect(new Set(Object.keys(columns))).toEqual(
+        new Set([
+          "subjectIdentifier",
+          "username",
+          "name",
+          "mobile",
+          "profileSchemaVersion",
+          "sourceDirtyVersion",
+          "subjectFacts",
+          "rebuiltAt",
+        ]),
+      );
       return { from };
     });
     const publish = mock(async () => ({ status: "published" as const }));

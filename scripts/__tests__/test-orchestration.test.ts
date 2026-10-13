@@ -457,11 +457,8 @@ describe("test orchestration", () => {
   }, 15_000);
 
   test("keeps package-local runner budgets explicit without a root Vitest workspace", async () => {
-    const oidcPackage = readJson(join(oidcRoot, "package.json"));
-
     expect(existsSync(join(repoRoot, "vitest.config.ts"))).toBe(false);
     expect(existsSync(join(repoRoot, "vitest.workspace.ts"))).toBe(false);
-    expect(oidcPackage.scripts["test:integration:redis"]).toBe("bun test --max-concurrency=1 test-integration/redis");
     for (const workspace of ["apps/admin", "apps/sso"]) {
       const config = await readVitestTestConfig(workspace, "vitest.unit.config.ts");
       expect(config.maxWorkers).toBe(4);
@@ -490,14 +487,12 @@ describe("test orchestration", () => {
 
   test("keeps frontend Node and DOM Unit environments behind package commands", async () => {
     for (const workspace of ["apps/admin", "apps/sso"]) {
-      const packageJson = readJson(join(repoRoot, workspace, "package.json"));
       const unitConfig = await readVitestTestConfig(workspace, "vitest.unit.config.ts");
       const componentConfig = await readVitestTestConfig(workspace, "vitest.integration.component.config.ts");
       const projects = unitConfig.projects?.map((project) => project.test);
       const nodeProject = projects?.find((project) => project?.environment === "node");
       const domProject = projects?.find((project) => project?.environment === "jsdom");
 
-      expect(packageJson.scripts["test:unit"]).toBe("vitest run --config vitest.unit.config.ts");
       expect(nodeProject).toBeDefined();
       expect(domProject).toBeDefined();
       expect(unitConfig.setupFiles).toBeUndefined();

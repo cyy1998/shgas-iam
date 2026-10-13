@@ -116,17 +116,16 @@ describe("EmploymentFormModal", () => {
     await user.click(screen.getByRole("button", { name: /确 定|提交/ }));
 
     await waitFor(() => {
-      expect(createEmployment).toHaveBeenCalledWith({
-        username: "zhangsan",
-        orgCode: "ORG",
-        posCode: "DEV",
-        isPrimary: false,
-        description: null,
-      });
+      expect(createEmployment.mock.calls[0]).toStrictEqual([
+        {
+          username: "zhangsan",
+          orgCode: "ORG",
+          posCode: "DEV",
+          isPrimary: false,
+          description: null,
+        },
+      ]);
     });
-    expect(createEmployment.mock.calls[0]?.[0]).not.toHaveProperty("startTime");
-    expect(createEmployment.mock.calls[0]?.[0]).not.toHaveProperty("endTime");
-    expect(createEmployment.mock.calls[0]?.[0]).not.toHaveProperty("status");
     expect(onSuccess).toHaveBeenCalledOnce();
   });
 
@@ -191,17 +190,16 @@ describe("EmploymentFormModal", () => {
     await user.click(screen.getByRole("button", { name: /确 定|提交/ }));
 
     await waitFor(() => {
-      expect(createEmployment).toHaveBeenCalledWith({
-        username: "zhangsan",
-        orgCode: "ORG",
-        posCode: "DEV",
-        isPrimary: false,
-        description: null,
-      });
+      expect(createEmployment.mock.calls[0]).toStrictEqual([
+        {
+          username: "zhangsan",
+          orgCode: "ORG",
+          posCode: "DEV",
+          isPrimary: false,
+          description: null,
+        },
+      ]);
     });
-    expect(createEmployment.mock.calls[0]?.[0]).not.toHaveProperty("startTime");
-    expect(createEmployment.mock.calls[0]?.[0]).not.toHaveProperty("endTime");
-    expect(createEmployment.mock.calls[0]?.[0]).not.toHaveProperty("status");
     expect(onSuccess).not.toHaveBeenCalled();
     expect(onCommitted).toHaveBeenCalledWith(committedError);
     expect(createEmployment).toHaveBeenCalledOnce();

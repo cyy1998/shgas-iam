@@ -4,13 +4,11 @@ import { expect, test } from "@playwright/test";
 import { adminClientDetail, adminClientSearchResult } from "../../test/mocks/fixtures";
 import { fulfillJson, fulfillTrpc, mockAdminApi, parseTrpcBatchInput } from "./fixtures";
 
-test("client list has one edit entry with protocol summaries", async ({ page }) => {
+test("client list has one edit entry leading to the unified editor", async ({ page }) => {
   await mockAdminApi(page);
 
   await page.goto("/iam-admin/clients");
 
-  await expect(page.getByRole("columnheader", { name: "SSO 协议" })).toBeVisible();
-  await expect(page.getByRole("columnheader", { name: "SSO 启用" })).toBeVisible();
   await expect(page.getByRole("link", { name: "编辑" })).toHaveCount(1);
   await expect(page.getByRole("link", { name: "SSO 启用" })).toHaveCount(0);
 

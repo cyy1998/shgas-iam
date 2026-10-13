@@ -44,36 +44,29 @@ function createSelectDb(row: GenericClientRecord) {
   };
 }
 
-test("generic Client provider reads only the protocol-neutral projection", async () => {
+test.each([
+  { method: "getClientByCode", value: "portal" },
+  { method: "getClientBySecret", value: "general-secret" },
+] as const)("$method reads only the protocol-neutral projection", async ({ method, value }) => {
   const fake = createSelectDb(genericClientRecord);
   const repository = createClientRepository(fake.db as never);
 
-  await expect(repository.getClientByCode("portal")).resolves.toEqual(genericClientRecord);
-  await expect(repository.getClientBySecret("general-secret")).resolves.toEqual(genericClientRecord);
-  expect(fake.selections).toEqual([
-    [
-      "id",
-      "clientCode",
-      "clientName",
-      "clientSecret",
-      "url",
-      "status",
-      "description",
-      "isDelete",
-      "createTime",
-      "updateTime",
-    ],
-    [
-      "id",
-      "clientCode",
-      "clientName",
-      "clientSecret",
-      "url",
-      "status",
-      "description",
-      "isDelete",
-      "createTime",
-      "updateTime",
-    ],
+  const result = await repository[method](value);
+  expect(result).toEqual(genericClientRecord);
+  const expectedColumns = new Set([
+    "id",
+    "clientCode",
+    "clientName",
+    "clientSecret",
+    "url",
+    "status",
+    "description",
+    "isDelete",
+    "createTime",
+    "updateTime",
   ]);
+  expect(fake.selections.length).toBeGreaterThan(0);
+  for (const selection of fake.selections) {
+    expect(new Set(selection)).toEqual(expectedColumns);
+  }
 });

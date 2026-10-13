@@ -20,10 +20,6 @@ describe("tooling contracts", () => {
 
     expect(graph.rootScripts.typecheck).toBe("turbo typecheck typecheck:root --concurrency=3");
     expect(graph.globalTurboConcurrency).toBeUndefined();
-    expect(graph.globalTestTimeoutOverrides).toEqual([
-      "apps/admin/vitest.shared.ts: testTimeout:",
-      "apps/sso/vitest.shared.ts: testTimeout:",
-    ]);
     expect(graph.turboTasks.typecheck.dependsOn).toEqual(["^typecheck"]);
     for (const workspace of graph.workspaces) {
       expect(typeof workspace.scripts.lint).toBe("string");

@@ -111,8 +111,6 @@ describe("admin route VO mappers", () => {
   test("maps user DTOs to VOs with status text", async () => {
     const schemaModule = (await import("../user/user.schema")) as any;
 
-    expect(typeof schemaModule.toUserVo).toBe("function");
-    expect(typeof schemaModule.toUserDetailVo).toBe("function");
     expect(schemaModule.toUserVo(userDto())).toMatchObject({
       username: "user1",
       statusText: userStatusToString[UserStatus.Enable],
@@ -151,8 +149,6 @@ describe("admin route VO mappers", () => {
   test("maps employment DTOs to VOs with defaults and status text", async () => {
     const schemaModule = (await import("../employment/employment.schema")) as any;
 
-    expect(typeof schemaModule.toEmploymentVo).toBe("function");
-    expect(typeof schemaModule.toEmploymentDetailVo).toBe("function");
     const vo = schemaModule.toEmploymentVo(employmentDto());
     expect(vo).toMatchObject({
       user: { username: "user1" },
@@ -187,7 +183,6 @@ describe("admin route VO mappers", () => {
   test("maps position details to VOs with member count", async () => {
     const schemaModule = (await import("../position/position.schema")) as any;
 
-    expect(typeof schemaModule.toPositionVo).toBe("function");
     expect(schemaModule.toPositionVo(positionDetail())).toMatchObject({
       posCode: "POS1",
       memberNumber: 1,

@@ -438,9 +438,6 @@ describe("apisix manifest validation", () => {
       const requestHeaders = getTenderInternalAuthzRequestHeaders(manifest);
 
       expect(requestHeaders).toEqual(["apikey"]);
-      expect(requestHeaders).not.toContain("IP-Chain");
-      expect(requestHeaders).not.toContain("Cookie");
-      expect(requestHeaders).not.toContain("Authorization");
     }
   });
 
