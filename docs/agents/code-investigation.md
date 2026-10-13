@@ -45,7 +45,7 @@
 ## 委派约束
 
 1. 每个调查 agent 只接收一个问题，并明确 included scope、excluded scope 和 completion condition。
-2. 默认最多并行启动三个 `code_researcher`；按独立 subsystem 或 concern 拆分，不按任意文件数量拆分。
+2. 按独立 subsystem 或 concern 拆分调查任务，不按任意文件数量拆分。
    `deep_researcher` 默认只启动一个，负责范围更窄的复杂裁决。
 3. 调查 agent 不修改 production code、测试、文档、tracker 或配置，也不递归委派其他 agent。
 4. 主代理等待所有必要调查完成后再综合，只针对冲突或缺口做聚焦补充调查，不重复已完成的扫描。
