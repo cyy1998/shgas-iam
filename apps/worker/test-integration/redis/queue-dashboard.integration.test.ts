@@ -6,7 +6,7 @@ import type { WorkerEnv } from "@worker/env";
 import { createWorkerHttpApp } from "@worker/http/server";
 import { resolveWorkerRedisTestUrl } from "./redis-test-harness";
 
-function createFixture() {
+function createFixture(readOnly = true) {
   const url = new URL(resolveWorkerRedisTestUrl(process.env));
   const redis = {
     host: url.hostname,
@@ -34,7 +34,7 @@ function createFixture() {
       authEnabled: true,
       username: "test-ops",
       password: "test-password",
-      readOnly: true,
+      readOnly,
     },
     userProfile: { concurrency: 1, rebuildBatchSize: 100, backfillBatchSize: 500, repairStaleSeconds: 300 },
   };
@@ -151,6 +151,24 @@ test("dashboard rejects authenticated writes to a read-only queue", async () => 
     expect(write.status).toBe(405);
     const paused = await fixture.queue.isPaused();
     expect(paused).toBe(false);
+  } finally {
+    await fixture.close();
+  }
+}, 10_000);
+
+test("dashboard lets an authenticated operator pause a writable queue", async () => {
+  const fixture = createFixture(false);
+  const headers = { Authorization: `Basic ${btoa("test-ops:test-password")}` };
+  try {
+    const initiallyPaused = await fixture.queue.isPaused();
+    expect(initiallyPaused).toBe(false);
+    const write = await fixture.app.request(`/admin/queues/api/queues/${fixture.name}/pause`, {
+      method: "PUT",
+      headers,
+    });
+    expect(write.status).toBe(200);
+    const paused = await fixture.queue.isPaused();
+    expect(paused).toBe(true);
   } finally {
     await fixture.close();
   }

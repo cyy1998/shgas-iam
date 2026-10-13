@@ -137,6 +137,9 @@ PostgreSQL 命令测试观察真实命令进程；E2E 观察 Worker backfill 与
 E2E command runner 的输出隔离与取消清理由该 workspace 的 Process Integration 通过真实子进程验证，
 纯 capture 和 discovery parser 留在 Unit。
 
+Root Process Integration 也拥有真实 Docker CLI 的构建上下文与 Compose 环境传值验证；它只使用合成临时文件，
+不创建 runtime 容器。Docker CLI、Compose、Buildx 与 server 前提见[命令入口](../development/commands.md#实现内循环)。
+
 ## Root 与 package commands
 
 Root 通过 Turbo 编排跨 package 测试，package 拥有实际 runner 与本地命令：

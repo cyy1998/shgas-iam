@@ -37,11 +37,13 @@ describe("OIDC PKCE journey operations", () => {
     await operations.preflight();
     await operations.runJourney(descriptor);
 
-    expect(checkedPaths.map((path) => path.replaceAll("\\", "/"))).toEqual([
-      "D:/repo/e2e/system/oidc-pkce.spec.ts",
-      "D:/repo/e2e/system/playwright.config.ts",
-      "D:/repo/e2e/system/src/playwright-browser-preflight.ts",
-    ]);
+    expect(new Set(checkedPaths.map((path) => path.replaceAll("\\", "/")))).toEqual(
+      new Set([
+        "D:/repo/e2e/system/oidc-pkce.spec.ts",
+        "D:/repo/e2e/system/playwright.config.ts",
+        "D:/repo/e2e/system/src/playwright-browser-preflight.ts",
+      ]),
+    );
     expect(calls).toHaveLength(2);
     expect(calls[0]).toMatchObject({
       command: "node",

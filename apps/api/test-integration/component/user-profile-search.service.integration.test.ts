@@ -47,7 +47,7 @@ test("maps legacy user search to one canonical Filter and preserves the UserDto 
     privileges: [],
     roles: [],
   };
-  const search = mock(async () => [detail]);
+  const search = mock(async (_input: unknown) => [detail]);
   const adapter = createV3UserProfileSearchAdapter({
     search,
     searchBase: mock(async () => []),
@@ -64,7 +64,8 @@ test("maps legacy user search to one canonical Filter and preserves the UserDto 
     roleCodes: ["role:a", "role:b"],
   });
 
-  expect(search).toHaveBeenCalledWith({
+  expect(search).toHaveBeenCalled();
+  const expectedQuery = {
     filter: {
       and: [
         { field: "user.username", op: "in", value: ["zhangsan", "lisi"] },
@@ -95,7 +96,10 @@ test("maps legacy user search to one canonical Filter and preserves the UserDto 
         },
       ],
     },
-  });
+  };
+  for (const [query] of search.mock.calls) {
+    expect(unorderedConjunctions(query)).toEqual(unorderedConjunctions(expectedQuery));
+  }
   expect(result).toEqual([
     {
       id: 101,
@@ -112,6 +116,18 @@ test("maps legacy user search to one canonical Filter and preserves the UserDto 
     },
   ]);
 });
+
+// Conjunction order is irrelevant; collection scopes and all other values stay exact.
+function unorderedConjunctions(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map(unorderedConjunctions);
+  if (value === null || typeof value !== "object") return value;
+  return Object.fromEntries(
+    Object.entries(value).map(([key, child]) => [
+      key,
+      key === "and" && Array.isArray(child) ? new Set(child.map(unorderedConjunctions)) : unorderedConjunctions(child),
+    ]),
+  );
+}
 
 test("rejects legacy requests without real conditions before querying profiles", async () => {
   const searchCurrentProfiles = mock(async () => []);

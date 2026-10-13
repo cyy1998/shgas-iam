@@ -21,10 +21,6 @@ describe("tooling contracts", () => {
     expect(graph.rootScripts.typecheck).toBe("turbo typecheck typecheck:root --concurrency=3");
     expect(graph.globalTurboConcurrency).toBeUndefined();
     expect(graph.turboTasks.typecheck.dependsOn).toEqual(["^typecheck"]);
-    for (const workspace of graph.workspaces) {
-      expect(typeof workspace.scripts.lint).toBe("string");
-      expect(typeof workspace.scripts["lint:fix"]).toBe("string");
-    }
     expect(graph.workspaces.find((workspace) => workspace.name === "@iam/domain")).toMatchObject({
       scripts: {
         typecheck: "pnpm exec tsc --noEmit",

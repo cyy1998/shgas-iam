@@ -25,7 +25,13 @@ export async function copyFixtureToolLaunchers(repoRoot: string, fixtureRoot: st
   }
 }
 
-export async function runOwnedCommand(command: string[], cwd: string, signal: AbortSignal, timeoutMs = 20_000) {
+export async function runOwnedCommand(
+  command: string[],
+  cwd: string,
+  signal: AbortSignal,
+  timeoutMs = 20_000,
+  environmentOverrides: NodeJS.ProcessEnv = {},
+) {
   signal.throwIfAborted();
   const executable = command[0];
   if (executable === undefined) throw new Error("command must contain an executable");
@@ -36,7 +42,7 @@ export async function runOwnedCommand(command: string[], cwd: string, signal: Ab
     env: createProcessSmokeEnvironment({
       source: process.env,
       temporaryDirectory: cwd,
-      overrides: { FORCE_COLOR: "0", NO_COLOR: "1" },
+      overrides: { ...environmentOverrides, FORCE_COLOR: "0", NO_COLOR: "1" },
     }),
   });
   const capture = createBoundedProcessLogCapture(child, { maxBytes: 64 * 1024 });

@@ -41,6 +41,11 @@ pnpm test:integration:<component|process|redis|postgres|composition|browser>
 统一格式与规则命令的真实 CLI 行为由 `pnpm test:integration:process:root` 聚焦执行；它同时由根
 `pnpm test:integration:process` 收集，使用临时 Git 仓库，不需要数据库或 Redis。
 
+该 root process collection 还通过真实 Docker CLI 验证 `.dockerignore` 的构建上下文排除与 Custom SSO Compose
+环境传值，需要可用的 Docker CLI、Compose、Buildx 和运行中的 Docker server。构建只使用合成临时上下文，
+从 `scratch` 导出本地文件；配置检查显式提供合成 env-file。这些测试不启动 runtime 容器，不加载本地 `.env`，
+不进入默认 `pnpm verify`；环境缺失时直接失败。
+
 ## Sandcastle AFK
 
 本机 Docker + Codex CLI 执行全仓 `ready-for-agent` backlog；选票、评审、合并和关票权限见

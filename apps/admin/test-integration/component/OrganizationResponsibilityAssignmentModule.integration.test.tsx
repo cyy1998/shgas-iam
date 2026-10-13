@@ -389,33 +389,6 @@ describe("OrganizationResponsibilityAssignmentModule", () => {
     });
   });
 
-  it("offers the shared Pause action and refreshes list and detail exactly once", async () => {
-    const { user } = render(
-      <OrganizationResponsibilityAssignmentModule
-        host={{
-          kind: "global",
-          state: { lifecycle: "open", assignmentId: 101 },
-          onStateChange: vi.fn(),
-        }}
-      />,
-    );
-
-    const dialog = await screen.findByRole("dialog");
-    expect(within(dialog).getByRole("button", { name: "暂停任命" })).toBeVisible();
-    expect(within(dialog).queryByRole("button", { name: "恢复任命" })).toBeNull();
-
-    await user.click(within(dialog).getByRole("button", { name: "暂停任命" }));
-
-    await waitFor(() => {
-      expect(responsibilityService.pauseAssignment).toHaveBeenCalledTimes(1);
-      expect(responsibilityService.pauseAssignment).toHaveBeenCalledWith({
-        id: 101,
-      });
-      expect(responsibilityService.searchAssignments).toHaveBeenCalledTimes(2);
-      expect(responsibilityService.detailAssignment).toHaveBeenCalledTimes(2);
-    });
-  });
-
   describe.each(["global", "organization"] as const)("%s lifecycle results", (kind) => {
     for (const changed of [true, false]) {
       it.each([
@@ -429,10 +402,26 @@ describe("OrganizationResponsibilityAssignmentModule", () => {
             canCreateOrganizationResponsibility: true,
             canAccessAudit: false,
           });
-          responsibilityService.detailAssignment.mockResolvedValue({
+          const initial = {
             ...assignment,
+            status:
+              method === "pauseAssignment"
+                ? OrganizationResponsibilityAssignmentStatus.Enable
+                : OrganizationResponsibilityAssignmentStatus.Pause,
             allowedActions,
-          });
+          };
+          const refreshed = {
+            ...assignment,
+            status:
+              method === "pauseAssignment"
+                ? OrganizationResponsibilityAssignmentStatus.Pause
+                : OrganizationResponsibilityAssignmentStatus.Enable,
+            allowedActions: method === "pauseAssignment" ? pausedAllowedActions : enabledAllowedActions,
+          };
+          responsibilityService.detailAssignment.mockResolvedValueOnce(initial).mockResolvedValue(refreshed);
+          responsibilityService.searchAssignments
+            .mockResolvedValueOnce({ items: [initial], total: 1, nextCursor: null })
+            .mockResolvedValue({ items: [refreshed], total: 1, nextCursor: null });
           responsibilityService[method].mockResolvedValueOnce({
             changed,
             result: null,
@@ -450,14 +439,27 @@ describe("OrganizationResponsibilityAssignmentModule", () => {
               }
             />,
           );
-          if (kind === "organization") await user.click(await screen.findByRole("button", { name: "详情" }));
+          const detailButton = await screen.findByRole("button", { name: "详情" });
+          const row = detailButton.closest("tr");
+          if (!(row instanceof HTMLElement)) throw new Error("Assignment table row is missing");
+          expect(within(row).getByText(method === "pauseAssignment" ? "启用" : "暂停")).toBeVisible();
+          if (kind === "organization") await user.click(detailButton);
           await user.click(await screen.findByRole("button", { name: label }));
           expect((await screen.findAllByText(changed ? successMessage : "无需修改")).at(-1)).toBeInTheDocument();
           await waitFor(() => {
-            expect(responsibilityService[method]).toHaveBeenCalledTimes(1);
-            expect(responsibilityService.detailAssignment).toHaveBeenCalledTimes(2);
-            expect(responsibilityService.searchAssignments).toHaveBeenCalledTimes(2);
+            const currentRow = screen.getByRole("button", { name: "详情" }).closest("tr");
+            if (!(currentRow instanceof HTMLElement)) throw new Error("Assignment table row is missing");
+            expect(within(currentRow).getByText(method === "pauseAssignment" ? "暂停" : "启用")).toBeVisible();
           });
+          const dialog = await screen.findByRole("dialog");
+          expect(
+            await within(dialog).findByRole("button", {
+              name: method === "pauseAssignment" ? "恢复任命" : "暂停任命",
+            }),
+          ).toBeVisible();
+          expect(within(dialog).queryByRole("button", { name: label })).toBeNull();
+          expect(responsibilityService[method]).toHaveBeenCalledTimes(1);
+          expect(responsibilityService[method]).toHaveBeenCalledWith({ id: 101 });
           expect(screen.queryByTestId("assignment-audit")).not.toBeInTheDocument();
         },
       );

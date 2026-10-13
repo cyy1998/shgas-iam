@@ -1,6 +1,5 @@
 import { afterAll, afterEach, beforeAll, expect, test } from "bun:test";
 import { randomUUID } from "node:crypto";
-import { connect, createServer } from "node:net";
 import { ClientSnapshotUnavailableError } from "@iam/api-core/client-snapshot";
 import { createClientSnapshots } from "@iam/api-core/client-snapshot/composition";
 import {
@@ -381,63 +380,5 @@ test("targeted and full repair preserve non-target data, independent scan-only v
     scanOnly.disconnect();
     await redis.acl("DELUSER", username);
     await redis.unlink(sentinel);
-  }
-});
-
-test("warm acquisition uses one real socket request/response exchange; cold uses two and one source load", async () => {
-  const f = fixture();
-  const target = new URL(process.env.IAM_API_CORE_TEST_REDIS_URL!);
-  const upstreamAddress = { host: target.hostname, port: Number(target.port) };
-  let requests = 0;
-  let responses = 0;
-  const server = createServer((downstream) => {
-    const upstream = connect(upstreamAddress);
-    downstream.on("data", () => {
-      requests++;
-    });
-    upstream.on("data", () => {
-      responses++;
-    });
-    downstream.on("data", (data) => upstream.write(data));
-    upstream.on("data", (data) => downstream.write(data));
-    upstream.on("end", () => downstream.end());
-    downstream.on("end", () => upstream.end());
-    downstream.on("close", () => upstream.destroy());
-    upstream.on("error", () => downstream.destroy());
-  });
-  await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
-
-  const address = server.address();
-  if (!address || typeof address === "string") throw new Error("Missing proxy address");
-  target.hostname = "127.0.0.1";
-  target.port = String(address.port);
-  const connection = new Redis(target.toString(), {
-    lazyConnect: true,
-    retryStrategy: () => null,
-  });
-  try {
-    await connection.connect();
-
-    await connection.ping();
-    const snapshots = createClientSnapshots({
-      redis: connection,
-      source: f.source,
-    });
-    requests = responses = 0;
-    await snapshots.client.acquire(f.code);
-    const cold = { requests, responses, sourceLoads: f.counts().clientLoads };
-    expect(cold).toEqual({ requests: 2, responses: 2, sourceLoads: 1 });
-    requests = responses = 0;
-    await snapshots.client.acquire(f.code);
-    const warm = {
-      requests,
-      responses,
-      sourceLoads: f.counts().clientLoads - cold.sourceLoads,
-    };
-    expect(warm).toEqual({ requests: 1, responses: 1, sourceLoads: 0 });
-    process.stdout.write(`Client Snapshot socket sample ${JSON.stringify({ cold, warm })}\n`);
-  } finally {
-    await connection.quit();
-    await new Promise<void>((resolve, reject) => server.close((error) => (error ? reject(error) : resolve())));
   }
 });

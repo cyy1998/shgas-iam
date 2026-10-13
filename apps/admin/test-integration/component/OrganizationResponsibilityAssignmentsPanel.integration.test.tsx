@@ -130,16 +130,6 @@ describe("OrganizationResponsibilityAssignmentsPanel", () => {
     expect(within(dialog).getByText("任命 #101")).toBeInTheDocument();
     expect(within(dialog).getByText("财务部（FIN）")).toBeInTheDocument();
     expect(within(dialog).getByText("集团 / 财务部")).toBeInTheDocument();
-
-    await user.click(within(dialog).getByRole("button", { name: "暂停任命" }));
-    await waitFor(() => {
-      expect(responsibilityService.pauseAssignment).toHaveBeenCalledOnce();
-      expect(responsibilityService.pauseAssignment).toHaveBeenCalledWith({
-        id: 101,
-      });
-      expect(responsibilityService.listAssignments).toHaveBeenCalledTimes(2);
-      expect(responsibilityService.detailAssignment).toHaveBeenCalledTimes(2);
-    });
   });
 
   it("creates an assignment with only the fixed organization, type and holder employment", async () => {
@@ -181,16 +171,13 @@ describe("OrganizationResponsibilityAssignmentsPanel", () => {
     await user.click(within(dialog).getByRole("button", { name: /确 定|提交/ }));
 
     await waitFor(() => {
-      expect(responsibilityService.createAssignment).toHaveBeenCalledWith({
-        orgCode: "FIN",
-        typeCode: OrganizationResponsibilityTypeCode.Supervising,
-        employmentId: 42,
-      });
-    });
-    expect(responsibilityService.createAssignment.mock.calls[0][0]).toEqual({
-      orgCode: "FIN",
-      typeCode: OrganizationResponsibilityTypeCode.Supervising,
-      employmentId: 42,
+      expect(responsibilityService.createAssignment.mock.calls[0]).toStrictEqual([
+        {
+          orgCode: "FIN",
+          typeCode: OrganizationResponsibilityTypeCode.Supervising,
+          employmentId: 42,
+        },
+      ]);
     });
   });
 

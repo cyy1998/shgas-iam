@@ -838,6 +838,7 @@ test("restriction inventory clears stale rows when login state becomes unavailab
 });
 
 test("restriction release 503 keeps the current inventory without false success or retry", async ({ page }) => {
+  await page.clock.install();
   const { listInputs, releaseInputs } = await setupLoginRestrictionRelease(page, () => ({
     type: "login-state-unavailable",
   }));
@@ -847,7 +848,7 @@ test("restriction release 503 keeps the current inventory without false success 
 
   await expect(page.getByText("登录状态服务暂时不可用")).toBeVisible();
   await expect.poll(() => releaseInputs).toEqual([{ userId: 43 }]);
-  await page.waitForTimeout(500);
+  await page.clock.runFor(60_000);
   expect(releaseInputs).toHaveLength(1);
   expect(listInputs).toHaveLength(listRequestCount);
   await expect(page.getByText("已删除用户")).toBeVisible();

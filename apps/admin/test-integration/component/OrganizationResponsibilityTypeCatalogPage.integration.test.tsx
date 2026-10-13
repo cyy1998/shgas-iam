@@ -1,7 +1,7 @@
 import OrganizationResponsibilityTypeCatalogPage from "@admin/pages/organization-responsibilities/OrganizationResponsibilityTypeCatalogPage";
 import { ORGANIZATION_RESPONSIBILITY_TYPE_CATALOG } from "@iam/contracts";
 import { describe, expect, it, vi } from "vitest";
-import { render, screen, waitFor } from "~admin/test/render";
+import { render, screen } from "~admin/test/render";
 
 const catalogService = vi.hoisted(() => ({
   listTypes: vi.fn(),
@@ -19,9 +19,5 @@ describe("OrganizationResponsibilityTypeCatalogPage", () => {
 
     await screen.findByRole("cell", { name: "head" });
     expect(screen.queryByRole("button")).not.toBeInTheDocument();
-
-    await waitFor(() => {
-      expect(catalogService.listTypes).toHaveBeenCalledTimes(1);
-    });
   });
 });

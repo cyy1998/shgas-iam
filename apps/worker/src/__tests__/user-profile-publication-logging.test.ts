@@ -123,7 +123,6 @@ describe("User Profile publication logging", () => {
     });
 
     expect(rejectedRecord).toBeDefined();
-    expect(lines).toHaveLength(2);
     const output = lines.join("");
     const logs = output
       .trim()

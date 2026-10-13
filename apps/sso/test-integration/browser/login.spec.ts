@@ -95,15 +95,21 @@ test("continues an existing session without form flash and replaces login histor
 
 test("keeps login hidden while unavailable and retries only after user action", async ({ page }) => {
   await mockSsoApi(page, { loginGuard: "unavailable-then-login" });
+  await page.clock.install();
+  const guardRequests: string[] = [];
+  page.on("request", (request) => {
+    if (new URL(request.url()).pathname === "/sso/login-guard") guardRequests.push(request.url());
+  });
 
   await page.goto("/portal/login?client=iam-admin&redirectUrl=http%3A%2F%2Fexample.test%2Fiam-admin");
 
   await expect(page.getByText("统一身份认证服务暂时不可用，请稍后重试")).toBeVisible();
   await expect(page.getByPlaceholder("请输入您的工号")).toHaveCount(0);
-  await page.waitForTimeout(500);
-  await expect(page.getByPlaceholder("请输入您的工号")).toHaveCount(0);
+  await page.clock.runFor(60_000);
+  expect(guardRequests).toHaveLength(1);
   await page.getByRole("button", { name: /重\s*试/ }).click();
   await expect(page.getByPlaceholder("请输入您的工号")).toBeVisible();
+  expect(guardRequests).toHaveLength(2);
 });
 
 test("distinguishes an invalid continuation from temporary unavailability", async ({ page }) => {

@@ -1,6 +1,5 @@
 import { describe, expect, test } from "bun:test";
 import type { WorkerEnv } from "@worker/env";
-import { createDashboardQueueAdapters } from "@worker/http/dashboard";
 import { createWorkerHttpApp } from "@worker/http/server";
 
 function fakeBullMqQueue() {
@@ -93,21 +92,5 @@ describe("worker HTTP app", () => {
 
     expect(response.status).toBe(200);
     expect(response.headers.get("content-type")).toContain("text/html");
-  });
-
-  test("configures dashboard queue adapters as read-only by default", () => {
-    const [adapter] = createDashboardQueueAdapters({
-      env: env(),
-      queues: [{ moduleKey: "user-profile", queueName: "user-profile", queue: fakeBullMqQueue() }],
-    });
-
-    expect(adapter?.readOnlyMode).toBe(true);
-
-    const [writeAdapter] = createDashboardQueueAdapters({
-      env: env({ dashboard: { ...env().dashboard, readOnly: false } }),
-      queues: [{ moduleKey: "user-profile", queueName: "user-profile", queue: fakeBullMqQueue() }],
-    });
-
-    expect(writeAdapter?.readOnlyMode).toBe(false);
   });
 });
