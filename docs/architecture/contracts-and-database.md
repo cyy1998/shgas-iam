@@ -55,6 +55,8 @@
 | `role-assignment-resolution`             | 统一有效角色与角色变化影响用户的解析；管理后端授权和 User Profile 构建/失效使用同一规则。                                                                          |
 | `organization-responsibility-resolution` | 统一有效责任与 holder 反向解析；当前生产直接消费者是 User Profile Read Model，用于构建和变更影响分析。                                                             |
 | `user-profile-read-model`                | 拥有派生档案的失效、重建、PostgreSQL 发布、Redis 缓存、查询与恢复；由 API、Admin API、Worker 按职责消费。Read Model 为读取整理数据，也负责写入和维护这些派生数据。 |
+| `organization-search-read-model`         | 独立拥有组织源变化事件、提交后子树展开、组织版本、完整路径构建和 PostgreSQL 发布；API 消费 query，源事务 composition 消费 producer，Worker 消费 worker。           |
+| `filter-engine`                          | 按调用方显式公开结构派生 Filter 校验、类型化路径、集合作用域及 JSONB 编译；不拥有读模型发布或连接生命周期。                                                        |
 
 Kernel 根出口只托管不透明 `subjectContext`，`/maintenance` 和 `/testing` 分离。Subject Access operation/context/拒绝编排
 由 API Core 单向消费 Kernel；不公开旧 fence、validator 或专用 Kernel 代际字段。Custom SSO root 要求显式操作容器，
@@ -119,9 +121,18 @@ Admin 表单仅在 business 回填、展示和提交地址；隐藏控件的旧�
   Redis monotonic publisher，以及 `subject-facts` subpath 下的 Redis read-through、单主体 single-flight、
   PostgreSQL 已发布 Facts 窄行回源；请求时不仲裁 Dirty 新鲜度，后台发布版本仲裁仍由该 package 拥有。
   调用方不复制 profile/facts projection、cache repair 或发布版本仲裁规则。
+- `@iam/filter-engine` 根出口持有共享 Filter 语言。调用方用 `searchScalar`、`searchScalarArray`、`searchObject`、
+  `searchCollection` 与 `searchOrganization` 声明公开结构，由 `createDocumentSchema` 生成严格文档 schema；
+  `createFilterEngine(structure)` 返回 `filterSchema` 和 `compile(filter, document)`。后者接受调用方提供的 Drizzle
+  `SQLWrapper`，重新校验条件后编译为参数化 JSONB 谓词；请求不能选择目标列或提交任意 SQL/JSON path。
+  Organization 引用通过结构中的 `valueSchema`、`pathField` 与 `codeField` 明确其子树规则。语言预算由共享包维护，
+  `createFilterTransportSchemas` 统一通用严格 AST 与递归解析前的预算检查；入口通过 `annotateExpression` 添加自己的
+  HTTP/OpenAPI 名称，递归引用使用该回调返回的 schema，共享包不依赖 OpenAPI 工具。
+  字符串字段的查询 schema 使用共享 `FILTER_MAX_STRING_LENGTH`；结果上限、排序、超时及错误映射
+  由各读模型和入口持有。共享包只依赖 Zod 与 Drizzle，不引入源表、数据库实例、dirty、publisher 或 app composition。
 - User Profile v3 通过 `@iam/user-profile-read-model` 默认入口暴露 schema、Redis publisher/cache、strict Subject Facts
   read-through reader 与只读 query seam；builder/publication 只由 `worker` subpath 组装。Internal Detail、Internal/Public
-  legacy adapter 与 Delegation 基础搜索从同一个 `user_profile` v3 row 返回严格 Detail；canonical Filter engine 只查询并校验已发布的
+  legacy adapter 与 Delegation 基础搜索从同一个 `user_profile` v3 row 返回严格 Detail；User Profile 查询使用共享 Filter 引擎绑定其公开结构和 `search_doc` 列，只查询并校验已发布的
   Search Document，Internal Filter DSL 从同一行的类型化列返回 `UserProfileBase`，不读取 Detail 或回查 source tables。Responsibility Snapshot 子项复用 Client Subject Projection
   的协议中性 contract，read-model 仍拥有 resolver 驱动的 Snapshot build。版本无关 Worker maintenance/readiness 命令复用
   同一 dirty/job/publication 与两项全量 gate；active Worker consumer、Internal User、Custom SSO 与 OIDC composition 只使用
@@ -172,6 +183,22 @@ Admin 表单仅在 business 回填、展示和提交地址；隐藏控件的旧�
   使用 snake_case。
 - 使用 `drizzle-orm/zod` 生成 table-derived Zod schema。
 - Join table 的 primary key、index 和 uniqueness constraint 保持显式定义。
+
+### Organization Search publication schema
+
+`organization_search_change` 保存源事务登记的不可变变化身份和模块决定的自身/子树范围；
+`organization_search_dirty` 保存每个组织的单调待重建版本。两个阶段都保存处理状态、领取 token、处理时间和失败信息，
+队列只负责唤醒。事件展开在事务中锁定并重验 token，将当前闭包目标的版本登记与事件完成原子提交；完成事件保存本次
+重建 payload，重复投递只重唤醒这些版本，不重复推进版本。
+
+`organization_search_document` 保存当前 schema、JSONB、已发布版本和构建时间。删除通过不可见的空文档墓碑保留已发布
+版本，不删除仲裁事实。发布锁定 dirty，重验版本、processing 状态和领取 token，文档替换与 processed 同事务提交。
+构建使用一致的只读源快照，验证完整闭包路径、层级、距离、父链和存储路径。搜索只读取当前 schema 的可见已发布文档，
+不在请求时联查源组织或检查全量覆盖率；详细契约见 [Organization Filter DSL](../features/organization-search/filter-dsl.md)。
+
+独立全量 verifier 使用同一个 `REPEATABLE READ READ ONLY` transaction 完整读取源组织、文档/墓碑、dirty、
+源变化事件，并把该 transaction 绑定到 source reader 的闭包和祖先读取。它核对覆盖、schema、严格结构、源事实、
+处理版本及完成凭据，不更新数据或触发任务；维护失败保持停流，正式修复后重新完整核验，见[组织搜索维护](../releases/organization-search-maintenance.md)。
 
 ### User Profile publication schema
 

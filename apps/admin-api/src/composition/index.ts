@@ -9,6 +9,7 @@ import { USER_PROFILE_QUEUE_NAME } from "@iam/contracts";
 import type { DbClient } from "@iam/db";
 import db from "@iam/db";
 import { createJobQueue } from "@iam/jobs";
+import { createOrganizationSearchWriteResources } from "@iam/organization-search-read-model/producer";
 import { createRoleAssignmentResolver } from "@iam/role-assignment-resolution";
 import { createUserProfileJobProducer } from "@iam/user-profile-read-model/producer";
 import { createAdminApiMiddlewares } from "./middlewares";
@@ -31,6 +32,7 @@ export interface AdminApiComposition {
   authorizationPolicy: ReturnType<typeof createAdminAuthorizationPolicy>;
   userProfileQueue: ReturnType<typeof createJobQueue<RebuildUserProfileJobPayload, unknown, UserProfileJobName>>;
   userProfileJobProducer: ReturnType<typeof createUserProfileJobProducer>;
+  organizationSearchWrites: ReturnType<typeof createOrganizationSearchWriteResources>;
   unitOfWork: ReturnType<typeof createAdminApiUnitOfWork>;
   services: ReturnType<typeof createAdminApiServices>;
   useCases: ReturnType<typeof createAdminApiUseCases>;
@@ -68,10 +70,15 @@ export async function createAdminApiComposition(
     redis: runtime.config.env.redis,
   });
   const userProfileJobProducer = createUserProfileJobProducer(userProfileQueue);
+  const organizationSearchWrites = createOrganizationSearchWriteResources({
+    redis: runtime.config.env.redis,
+    logger: runtime.logger,
+  });
   const unitOfWork = createAdminApiUnitOfWork({
     db: compositionDb,
     logger: runtime.afterCommitLogger,
     userProfileJobProducer,
+    organizationSearchJobProducer: organizationSearchWrites.jobProducer,
     clock: runtime.clock,
   });
   const services = createAdminApiServices({
@@ -108,6 +115,7 @@ export async function createAdminApiComposition(
     authorizationPolicy,
     userProfileQueue,
     userProfileJobProducer,
+    organizationSearchWrites,
     unitOfWork,
     services,
     useCases,

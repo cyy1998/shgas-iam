@@ -3,6 +3,7 @@ export * from "./delegation-details";
 export * from "./employments";
 export * from "./organization-closures";
 export * from "./organization-responsibility-assignments";
+export * from "./organization-search";
 export * from "./organizations";
 export * from "./positions";
 export * from "./privilege-delegations";

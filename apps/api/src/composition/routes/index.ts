@@ -37,6 +37,7 @@ export async function createApiRoutes(options: CreateApiRoutesOptions): Promise<
   const organizationHandlers = createOrganizationHandlers({
     auditLogWriter,
     organizationService: services.organization,
+    organizationSearch: services.organizationSearch,
   });
 
   const delegationHandlers = createDelegationHandlers({

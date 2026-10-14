@@ -20,7 +20,11 @@ import {
   OrganizationHasEmploymentError,
   OrganizationNotFoundError,
 } from "@iam/domain/organization";
-import type { AdminOrganizationReadScope, AdminOrganizationServiceDeps } from "./organization.port";
+import type {
+  AdminOrganizationReadScope,
+  AdminOrganizationSearchChangedField,
+  AdminOrganizationServiceDeps,
+} from "./organization.port";
 
 export function createOrganizationService(deps: AdminOrganizationServiceDeps) {
   const mutation = createAdminMutation(deps.uow);
@@ -95,6 +99,7 @@ export function createOrganizationService(deps: AdminOrganizationServiceDeps) {
           parentOrg,
         );
         if (created === null) throw new Error("Organization insert returned no row");
+        await tx.organizationSearchInvalidation.recordChanges([{ kind: "created", organizationId: created.id }]);
         await tx.auditService.recordAuditLog(
           buildOrganizationAudit(
             "admin.organization.create",
@@ -248,11 +253,12 @@ export function createOrganizationService(deps: AdminOrganizationServiceDeps) {
             reason: "ACTION_NOT_GRANTED",
           });
         }
-        const changed =
-          (data.orgCode !== undefined && data.orgCode !== existing.orgCode) ||
-          (data.orgName !== undefined && data.orgName !== existing.orgName) ||
-          (data.orgType !== undefined && data.orgType !== existing.orgType) ||
-          (data.status !== undefined && data.status !== existing.status);
+        const changedFields: AdminOrganizationSearchChangedField[] = [];
+        if (data.orgCode !== undefined && data.orgCode !== existing.orgCode) changedFields.push("code");
+        if (data.orgName !== undefined && data.orgName !== existing.orgName) changedFields.push("name");
+        if (data.orgType !== undefined && data.orgType !== existing.orgType) changedFields.push("type");
+        if (data.status !== undefined && data.status !== existing.status) changedFields.push("status");
+        const changed = changedFields.length > 0;
         if (!changed && data.status === undefined) return { changed: false, result: null };
         if (data.orgCode && data.orgCode !== orgCode) {
           const conflict = await tx.organizationRepository.getAnyOrganizationByCode(data.orgCode);
@@ -291,6 +297,9 @@ export function createOrganizationService(deps: AdminOrganizationServiceDeps) {
           ),
         );
         if (changed) {
+          await tx.organizationSearchInvalidation.recordChanges([
+            { kind: "updated", organizationId: existing.id, changedFields },
+          ]);
           await tx.userProfileInvalidation.recordChanges([{ kind: "organization", organizationId: existing.id }]);
         }
         return { changed, result: null };
@@ -344,6 +353,7 @@ export function createOrganizationService(deps: AdminOrganizationServiceDeps) {
         }
         const deleted = await tx.organizationRepository.softDeleteOrganizationByCode(orgCode);
         if (deleted === null) throw new Error("Locked Organization delete returned no row");
+        await tx.organizationSearchInvalidation.recordChanges([{ kind: "deleted", organizationId: existing.id }]);
         await tx.auditService.recordAuditLog(
           buildOrganizationAudit(
             "admin.organization.delete",

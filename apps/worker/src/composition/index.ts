@@ -1,5 +1,6 @@
 import { createSubjectAccessRepair, createSubjectAccessTransitionRecovery } from "@iam/api-core/subject-access";
 import db, { closeDb } from "@iam/db";
+import { createOrganizationSearchWorkerModule } from "@iam/organization-search-read-model/worker";
 import { createSubjectFactsRedisPublisher } from "@iam/user-profile-read-model";
 import {
   createSubjectAccessTransitionRecoveryAuthority,
@@ -84,7 +85,14 @@ export async function createWorkerComposition(options: CreateWorkerCompositionOp
     clock: runtime.clock,
     config: runtime.config.userProfile,
   });
-  const knownModules = [userProfileModule];
+  const organizationSearchModule = createOrganizationSearchWorkerModule({
+    db,
+    redis: runtime.config.redis,
+    logger: runtime.logger,
+    clock: runtime.clock,
+    config: runtime.config.organizationSearch,
+  });
+  const knownModules = [userProfileModule, organizationSearchModule];
   const enabledModuleKeys = resolveModuleKeys(options.env.modules.enabled, knownModules);
   const enabledModules = selectModules(options.env.modules.enabled, knownModules);
   const dashboardQueues = commandOnly ? [] : selectQueueRegistrations(options.env.dashboard.queues, knownModules);
@@ -148,6 +156,7 @@ export async function createWorkerComposition(options: CreateWorkerCompositionOp
     httpApp,
     httpServer,
     userProfile: userProfileModule,
+    organizationSearch: organizationSearchModule,
     subjectAccess: {
       barrier: subjectAccess.barrier,
       repair: subjectAccess.repair,

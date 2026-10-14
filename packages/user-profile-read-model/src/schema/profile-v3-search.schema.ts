@@ -1,60 +1,28 @@
 import { z } from "@hono/zod-openapi";
 import { OrganizationResponsibilityTypeCode, OrganizationType, UserStatus, UserType } from "@iam/contracts";
+import type { SearchFactShape, SearchOrganizationFact } from "@iam/filter-engine";
+import {
+  createDocumentSchema,
+  searchOrganization as createSearchOrganization,
+  FILTER_MAX_STRING_LENGTH,
+  searchCollection,
+  searchObject,
+  searchScalar,
+  searchScalarArray,
+} from "@iam/filter-engine";
 
-export const V3_USER_PROFILE_FILTER_MAX_STRING_LENGTH = 128;
+export type {
+  SearchCollectionFact as V3UserProfileSearchCollectionFact,
+  SearchFact as V3UserProfileSearchFact,
+  SearchFactShape as V3UserProfileSearchFactShape,
+  SearchObjectFact as V3UserProfileSearchObjectFact,
+  SearchOrganizationFact as V3UserProfileSearchOrganizationFact,
+  SearchScalarArrayFact as V3UserProfileSearchScalarArrayFact,
+  SearchScalarFact as V3UserProfileSearchScalarFact,
+} from "@iam/filter-engine";
 
+export const V3_USER_PROFILE_FILTER_MAX_STRING_LENGTH = FILTER_MAX_STRING_LENGTH;
 const queryStringSchema = z.string().max(V3_USER_PROFILE_FILTER_MAX_STRING_LENGTH);
-
-export interface V3UserProfileSearchScalarFact<
-  DocumentSchema extends z.ZodType = z.ZodType,
-  ValueSchema extends z.ZodType = z.ZodType,
-> {
-  readonly kind: "scalar";
-  readonly documentSchema: DocumentSchema;
-  readonly valueSchema: ValueSchema;
-}
-
-export interface V3UserProfileSearchScalarArrayFact<
-  ItemDocumentSchema extends z.ZodType = z.ZodType,
-  ItemValueSchema extends z.ZodType = z.ZodType,
-> {
-  readonly kind: "scalar-array";
-  readonly itemDocumentSchema: ItemDocumentSchema;
-  readonly itemValueSchema: ItemValueSchema;
-}
-
-export type V3UserProfileSearchFact =
-  | V3UserProfileSearchScalarFact
-  | V3UserProfileSearchScalarArrayFact
-  | V3UserProfileSearchObjectFact
-  | V3UserProfileSearchCollectionFact;
-
-export type V3UserProfileSearchFactShape = Record<string, V3UserProfileSearchFact>;
-
-export interface V3UserProfileSearchObjectFact<
-  Fields extends V3UserProfileSearchFactShape = V3UserProfileSearchFactShape,
-> {
-  readonly kind: "object";
-  readonly fields: Fields;
-}
-
-export interface V3UserProfileSearchCollectionFact<
-  Fields extends V3UserProfileSearchFactShape = V3UserProfileSearchFactShape,
-> {
-  readonly kind: "collection";
-  readonly fields: Fields;
-}
-
-export interface V3UserProfileSearchOrganizationFact<
-  Fields extends V3UserProfileSearchFactShape = V3UserProfileSearchFactShape,
-  ValueSchema extends z.ZodType<string> = z.ZodType<string>,
-> extends V3UserProfileSearchObjectFact<Fields> {
-  readonly organization: {
-    readonly valueSchema: ValueSchema;
-    readonly pathField: "path";
-    readonly codeField: "code";
-  };
-}
 
 export const V3_USER_PROFILE_USER_SCALARS = {
   subjectIdentifier: searchScalar(z.uuid(), z.uuid()),
@@ -107,67 +75,8 @@ export const V3UserProfileSearchDocumentSchema = createDocumentSchema(V3_USER_PR
 
 export type V3UserProfileSearchDocument = z.infer<typeof V3UserProfileSearchDocumentSchema>;
 
-function searchScalar<const DocumentSchema extends z.ZodType, const ValueSchema extends z.ZodType>(
-  documentSchema: DocumentSchema,
-  valueSchema: ValueSchema,
-): V3UserProfileSearchScalarFact<DocumentSchema, ValueSchema> {
-  return { kind: "scalar", documentSchema, valueSchema };
-}
-
-function searchScalarArray<const ItemDocumentSchema extends z.ZodType, const ItemValueSchema extends z.ZodType>(
-  itemDocumentSchema: ItemDocumentSchema,
-  itemValueSchema: ItemValueSchema,
-): V3UserProfileSearchScalarArrayFact<ItemDocumentSchema, ItemValueSchema> {
-  return { kind: "scalar-array", itemDocumentSchema, itemValueSchema };
-}
-
-function searchObject<const Fields extends V3UserProfileSearchFactShape>(
+function searchOrganization<const Fields extends SearchFactShape>(
   fields: Fields,
-): V3UserProfileSearchObjectFact<Fields> {
-  return { kind: "object", fields };
-}
-
-function searchCollection<const Fields extends V3UserProfileSearchFactShape>(
-  fields: Fields,
-): V3UserProfileSearchCollectionFact<Fields> {
-  return { kind: "collection", fields };
-}
-
-function searchOrganization<const Fields extends V3UserProfileSearchFactShape>(
-  fields: Fields,
-): V3UserProfileSearchOrganizationFact<Fields, typeof queryStringSchema> {
-  return {
-    kind: "object",
-    fields,
-    organization: {
-      valueSchema: queryStringSchema,
-      pathField: "path",
-      codeField: "code",
-    },
-  };
-}
-
-type DocumentValue<Fact extends V3UserProfileSearchFact> =
-  Fact extends V3UserProfileSearchScalarFact<infer Schema, z.ZodType>
-    ? z.infer<Schema>
-    : Fact extends V3UserProfileSearchScalarArrayFact<infer Schema, z.ZodType>
-      ? z.infer<Schema>[]
-      : Fact extends V3UserProfileSearchObjectFact<infer Fields>
-        ? { [Key in keyof Fields]: DocumentValue<Fields[Key]> }
-        : Fact extends V3UserProfileSearchCollectionFact<infer Fields>
-          ? { [Key in keyof Fields]: DocumentValue<Fields[Key]> }[]
-          : never;
-
-function createDocumentSchema<const Fact extends V3UserProfileSearchFact>(fact: Fact): z.ZodType<DocumentValue<Fact>> {
-  if (fact.kind === "scalar") return fact.documentSchema as z.ZodType<DocumentValue<Fact>>;
-  if (fact.kind === "scalar-array")
-    return z.array(fact.itemDocumentSchema) as unknown as z.ZodType<DocumentValue<Fact>>;
-
-  const shape = Object.fromEntries(
-    Object.entries(fact.fields).map(([field, child]) => [field, createDocumentSchema(child)]),
-  );
-  const objectSchema = z.object(shape).strict();
-  return (fact.kind === "collection" ? z.array(objectSchema) : objectSchema) as unknown as z.ZodType<
-    DocumentValue<Fact>
-  >;
+): SearchOrganizationFact<Fields, typeof queryStringSchema> {
+  return createSearchOrganization(fields, { valueSchema: queryStringSchema, pathField: "path", codeField: "code" });
 }

@@ -56,6 +56,11 @@ export interface AdminOrganizationProfileChange {
   readonly organizationId: number;
 }
 
+export type AdminOrganizationSearchChangedField = "code" | "name" | "type" | "status";
+export type AdminOrganizationSearchChange =
+  | { kind: "created" | "deleted"; organizationId: number }
+  | { kind: "updated"; organizationId: number; changedFields: readonly AdminOrganizationSearchChangedField[] };
+
 export interface AdminOrganizationTransactionPorts {
   organizationRepository: AdminOrganizationTransactionStorePort;
   auditService: AuditLogWriterPort;
@@ -64,6 +69,9 @@ export interface AdminOrganizationTransactionPorts {
   };
   userProfileInvalidation: {
     recordChanges: (changes: readonly AdminOrganizationProfileChange[]) => Promise<void>;
+  };
+  organizationSearchInvalidation: {
+    recordChanges: (changes: readonly AdminOrganizationSearchChange[]) => Promise<void>;
   };
 }
 

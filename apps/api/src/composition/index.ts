@@ -3,9 +3,11 @@ import { logger } from "@api/lib/logger";
 import { createApiAuditLogWriter } from "@api/services/audit/audit.service";
 import type { CreateAppOptions } from "@iam/api-core/core/create-app";
 import db, { closeDb } from "@iam/db";
+import { createOrganizationSearchWriteResources } from "@iam/organization-search-read-model/producer";
 import { createUserProfileJobProducer } from "@iam/user-profile-read-model/producer";
 import { sql } from "drizzle-orm";
 import { createInternalDelegationQueryResource } from "./internal-delegation-query";
+import { createInternalOrganizationQueryResource } from "./internal-organization-query";
 import { createApiMiddlewares } from "./middlewares";
 import { createApiRepositories } from "./repositories";
 import { createApiRoutes } from "./routes";
@@ -23,6 +25,7 @@ export interface ApiComposition {
   auditLogWriter: ReturnType<typeof createApiAuditLogWriter>;
   userProfileQueue: ReturnType<typeof createApiUserProfileResources>["queue"];
   userProfileJobProducer: ReturnType<typeof createUserProfileJobProducer>;
+  organizationSearchWrites: ReturnType<typeof createOrganizationSearchWriteResources>;
   unitOfWork: ReturnType<typeof createApiUnitOfWork>;
   services: ReturnType<typeof createApiServices>;
   useCases: ReturnType<typeof createApiUseCases>;
@@ -48,13 +51,21 @@ export async function createApiComposition(options: CreateApiCompositionOptions 
     databaseUrl: compositionEnv.databaseUrl,
   });
   const repositories = createApiRepositories(db);
+  const organizationQueryResource = createInternalOrganizationQueryResource({
+    databaseUrl: compositionEnv.databaseUrl,
+  });
   const auditLogWriter = createApiAuditLogWriter({ auditRepository: repositories.audit });
   const userProfileQueue = userProfileResources.queue;
   const userProfileJobProducer = createUserProfileJobProducer(userProfileQueue);
+  const organizationSearchWrites = createOrganizationSearchWriteResources({
+    redis: runtime.config.env.redis,
+    logger: runtime.logger,
+  });
   const unitOfWork = createApiUnitOfWork({
     db,
     logger: runtime.afterCommitLogger,
     userProfileJobProducer,
+    organizationSearchJobProducer: organizationSearchWrites.jobProducer,
     clock: runtime.clock,
   });
   const services = createApiServices({
@@ -63,6 +74,7 @@ export async function createApiComposition(options: CreateApiCompositionOptions 
     auditLogWriter,
     unitOfWork,
     userProfileQueryDb: userProfileResources.query.db,
+    organizationQueryDb: organizationQueryResource.db,
   });
   const useCases = createApiUseCases({
     auditLogWriter,
@@ -80,6 +92,7 @@ export async function createApiComposition(options: CreateApiCompositionOptions 
     auditLogWriter,
     userProfileQueue,
     userProfileJobProducer,
+    organizationSearchWrites,
     unitOfWork,
     services,
     useCases,
@@ -94,6 +107,8 @@ export async function createApiComposition(options: CreateApiCompositionOptions 
     async close() {
       const results = await Promise.allSettled([
         delegationResolutionResource.close(),
+        organizationQueryResource.close(),
+        organizationSearchWrites.close(),
         userProfileResources.close(),
         closeDb({ timeoutSeconds: 5 }),
       ]);

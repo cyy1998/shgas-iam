@@ -3,10 +3,12 @@ import { beforeAll, describe, expect, test } from "bun:test";
 type ParseWorkerEnv = typeof import("../env").parseWorkerEnv;
 type ParsePostgresReadinessEnv = typeof import("../env").parseUserProfilePostgresReadinessCommandEnv;
 type ParseAuditActionMaintenanceEnv = typeof import("../env").parseAuditActionMaintenanceCommandEnv;
+type ParseOrganizationCommandEnv = typeof import("../env").parseOrganizationSearchBackfillCommandEnv;
 
 let parseWorkerEnv: ParseWorkerEnv;
 let parsePostgresReadinessEnv: ParsePostgresReadinessEnv;
 let parseAuditActionMaintenanceEnv: ParseAuditActionMaintenanceEnv;
+let parseOrganizationCommandEnv: ParseOrganizationCommandEnv;
 
 function validEnv(): NodeJS.ProcessEnv {
   return {
@@ -24,7 +26,22 @@ describe("worker environment", () => {
       parseAuditActionMaintenanceCommandEnv: parseAuditActionMaintenanceEnv,
       parseUserProfilePostgresReadinessCommandEnv: parsePostgresReadinessEnv,
       parseWorkerEnv,
+      parseOrganizationSearchBackfillCommandEnv: parseOrganizationCommandEnv,
     } = await import("../env"));
+  });
+
+  test("runtime and organization maintenance reject a queue namespace unavailable to formal source producers", () => {
+    const previousDatabaseUrl = process.env.DATABASE_URL;
+    for (const parse of [parseWorkerEnv, parseOrganizationCommandEnv]) {
+      expect(() =>
+        parse({
+          ...validEnv(),
+          IAM_WORKER_DATABASE_URL: "postgresql://iam:password@different-host/iam",
+          IAM_WORKER_ORGANIZATION_SEARCH_QUEUE_PREFIX: "isolated-but-unconsumed",
+        }),
+      ).toThrow("Organization Search queue prefix is fixed to iam");
+    }
+    expect(process.env.DATABASE_URL).toBe(previousDatabaseUrl);
   });
 
   test("audit maintenance accepts only its PostgreSQL configuration without changing global database configuration", () => {

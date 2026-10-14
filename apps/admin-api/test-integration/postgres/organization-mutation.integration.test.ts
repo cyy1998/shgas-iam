@@ -21,6 +21,9 @@ import {
   employments,
   organizationClosures,
   organizationResponsibilityAssignments,
+  organizationSearchChanges,
+  organizationSearchDirty,
+  organizationSearchDocuments,
   organizations,
   positions,
   userProfileDirty,
@@ -35,6 +38,14 @@ import {
   OrganizationNotFoundError,
   OrganizationUpdateDtoSchema,
 } from "@iam/domain/organization";
+import {
+  createOrganizationSearchQueryRepository,
+  createOrganizationSearchQueryService,
+} from "@iam/organization-search-read-model";
+import {
+  createOrganizationSearchProcessor,
+  type OrganizationRebuildJobPayload,
+} from "@iam/organization-search-read-model/worker";
 import { eq } from "drizzle-orm";
 import type { AdminApiPostgresTestHarness } from "./postgres-test-harness";
 import { createAdminApiPostgresTestHarness } from "./postgres-test-harness";
@@ -60,6 +71,11 @@ function createCommand(
     logger: { error: mock(() => undefined), warn },
     clock: { nowDate: () => new Date("2026-09-07T00:00:00Z") },
     userProfileJobProducer: { enqueueRebuildJobs },
+    organizationSearchJobProducer: {
+      async enqueueSourceChanges() {
+        return { enqueued: 0 };
+      },
+    },
   });
   return {
     enqueueRebuildJobs,
@@ -73,6 +89,7 @@ function createCommand(
           auditService: tx.auditService,
           responsibilityParentLifecycle: tx.responsibilityParentLifecycle,
           userProfileInvalidation: tx.userProfileInvalidation,
+          organizationSearchInvalidation: tx.organizationSearchInvalidation,
         }),
       ),
     }),
@@ -96,7 +113,12 @@ async function seedOrganization(orgCode = "ORGANIZATION") {
     descendantId: organization!.id,
     depth: 0,
   });
-  return organization!;
+  const [persisted] = await harness.db
+    .update(organizations)
+    .set({ path: `/${organization!.id}` })
+    .where(eq(organizations.id, organization!.id))
+    .returning();
+  return persisted!;
 }
 
 async function seedEmployment(organizationId: number, status = EmploymentStatus.Enable) {
@@ -130,7 +152,40 @@ async function facts() {
       .orderBy(organizationClosures.ancestorId, organizationClosures.descendantId),
     audits: await harness.db.select().from(auditLogs).orderBy(auditLogs.id),
     dirty: await harness.db.select().from(userProfileDirty),
+    searchChanges: await harness.db.select().from(organizationSearchChanges),
+    searchDirty: await harness.db.select().from(organizationSearchDirty),
+    searchDocuments: await harness.db.select().from(organizationSearchDocuments),
   };
+}
+
+async function publishOrganizationChanges() {
+  const rebuilds: OrganizationRebuildJobPayload[] = [];
+  const processor = createOrganizationSearchProcessor({
+    db: harness.db,
+    jobProducer: {
+      async enqueueSourceChanges() {
+        return { enqueued: 0 };
+      },
+      async enqueueRebuilds(payloads) {
+        rebuilds.push(...payloads);
+        return { enqueued: payloads.length };
+      },
+    },
+  });
+  const changes = await harness.db
+    .select()
+    .from(organizationSearchChanges)
+    .where(eq(organizationSearchChanges.status, "pending"));
+  for (const change of changes) await processor.processSourceChange({ changeId: change.id });
+  for (const payload of rebuilds) await processor.processRebuild(payload);
+}
+
+async function searchOrganizations(codes: string[]) {
+  return await createOrganizationSearchQueryService({
+    repository: createOrganizationSearchQueryRepository(harness.db),
+  }).search({
+    filter: { field: "organization.code", op: "in", value: codes },
+  });
 }
 
 async function failure(operation: () => Promise<unknown>) {
@@ -143,6 +198,116 @@ async function failure(operation: () => Promise<unknown>) {
 }
 
 describe("Organization mutations through production PostgreSQL UnitOfWork", () => {
+  test("publishes an Admin-created organization without members or roles after source commit", async () => {
+    const { service } = createCommand();
+    const created = await service.setOrganization(
+      OrganizationCreateDtoSchema.parse({
+        orgCode: "NEW",
+        orgName: "New",
+        orgType: OrganizationType.Company,
+      }),
+    );
+    expect(created).toMatchObject({ changed: true, result: { orgCode: "NEW", status: OrganizationStatus.Enable } });
+    const before = await searchOrganizations(["NEW"]);
+    expect(before).toEqual([]);
+    await publishOrganizationChanges();
+    const published = await searchOrganizations(["NEW"]);
+    expect(published).toMatchObject([
+      {
+        organization: {
+          code: "NEW",
+          name: "New",
+          type: OrganizationType.Company,
+          status: OrganizationStatus.Enable,
+          level: 1,
+          path: [{ code: "NEW", name: "New", type: OrganizationType.Company, level: 1, distanceToTarget: 0 }],
+        },
+      },
+    ]);
+  });
+
+  test("publishes Pause and Disable then removes an Admin-deleted organization without hiding its old document early", async () => {
+    const { service } = createCommand();
+    await service.setOrganization(
+      OrganizationCreateDtoSchema.parse({ orgCode: "NEW", orgName: "New", orgType: OrganizationType.Company }),
+    );
+    await publishOrganizationChanges();
+    for (const status of [OrganizationStatus.Pause, OrganizationStatus.Disable]) {
+      const result = await service.updateOrganizationStatus("NEW", status);
+      expect(result).toEqual({ changed: true, result: null });
+      await publishOrganizationChanges();
+      const published = await searchOrganizations(["NEW"]);
+      expect(published).toMatchObject([{ organization: { code: "NEW", status } }]);
+    }
+    const deleted = await service.deleteOrganization("NEW");
+    expect(deleted).toEqual({ changed: true, result: null });
+    const beforePublication = await searchOrganizations(["NEW"]);
+    expect(beforePublication).toMatchObject([{ organization: { code: "NEW", status: OrganizationStatus.Disable } }]);
+    await publishOrganizationChanges();
+    const removed = await searchOrganizations(["NEW"]);
+    expect(removed).toEqual([]);
+    const persisted = await facts();
+    expect(persisted.searchDirty).toMatchObject([{ version: "4", status: "processed" }]);
+    expect(persisted.searchDocuments).toMatchObject([{ sourceVersion: "4", document: null, searchVisible: false }]);
+    expect(persisted.organizations).toMatchObject([{ isDelete: true }]);
+  });
+
+  test("reports all real fields in a mixed Admin patch and keeps same-value ancestor fields at self scope", async () => {
+    const { service } = createCommand();
+    await service.setOrganization(
+      OrganizationCreateDtoSchema.parse({ orgCode: "ROOT", orgName: "Root", orgType: OrganizationType.Company }),
+    );
+    await service.setOrganization(
+      OrganizationCreateDtoSchema.parse({
+        orgCode: "CHILD",
+        orgName: "Child",
+        orgType: OrganizationType.Department,
+        parentCode: "ROOT",
+      }),
+    );
+    await publishOrganizationChanges();
+    await service.updateOrganization("ROOT", {
+      orgCode: "RENAMED",
+      orgName: "Renamed root",
+      orgType: OrganizationType.Department,
+      status: OrganizationStatus.Pause,
+    });
+    await publishOrganizationChanges();
+    const propagated = await searchOrganizations(["RENAMED", "CHILD"]);
+    expect(propagated).toMatchObject([
+      {
+        organization: {
+          code: "RENAMED",
+          name: "Renamed root",
+          type: OrganizationType.Department,
+          status: OrganizationStatus.Pause,
+        },
+      },
+      {
+        organization: {
+          code: "CHILD",
+          path: [
+            { code: "RENAMED", name: "Renamed root", type: OrganizationType.Department, level: 1, distanceToTarget: 1 },
+            { code: "CHILD", level: 2, distanceToTarget: 0 },
+          ],
+        },
+      },
+    ]);
+    const before = await facts();
+    await service.updateOrganization("RENAMED", {
+      orgCode: "RENAMED",
+      orgName: "Renamed root",
+      orgType: OrganizationType.Department,
+      status: OrganizationStatus.Disable,
+    });
+    await publishOrganizationChanges();
+    const after = await facts();
+    expect(after.searchDocuments.find((row) => row.organizationId === 2)).toEqual(
+      before.searchDocuments.find((row) => row.organizationId === 2),
+    );
+    const current = await searchOrganizations(["RENAMED"]);
+    expect(current).toMatchObject([{ organization: { status: OrganizationStatus.Disable } }]);
+  });
   for (const actor of ["scoped-outside", "full-outside", "scoped-inside"] as const) {
     test(`${actor} classifies a real code race after rollback without leaking an outside organization`, async () => {
       const parent = await seedOrganization("PARENT");
@@ -678,7 +843,7 @@ describe("Organization mutations through production PostgreSQL UnitOfWork", () =
     });
   }
 
-  for (const stage of ["audit", "dirty"] as const) {
+  for (const stage of ["audit", "dirty", "search"] as const) {
     test(`rolls back the source, audit and dirty when ${stage} fails`, async () => {
       const organization = await seedOrganization();
       await seedEmployment(organization.id);
@@ -695,14 +860,23 @@ describe("Organization mutations through production PostgreSQL UnitOfWork", () =
                 },
               },
             }
-          : {
-              userProfileInvalidation: {
-                recordChanges: async (changes) => {
-                  await tx.userProfileInvalidation.recordChanges(changes);
-                  throw sentinel;
+          : stage === "dirty"
+            ? {
+                userProfileInvalidation: {
+                  recordChanges: async (changes) => {
+                    await tx.userProfileInvalidation.recordChanges(changes);
+                    throw sentinel;
+                  },
                 },
-              },
-            }),
+              }
+            : {
+                organizationSearchInvalidation: {
+                  recordChanges: async (changes) => {
+                    await tx.organizationSearchInvalidation.recordChanges(changes);
+                    throw sentinel;
+                  },
+                },
+              }),
       }));
       const before = await facts();
       const error = await failure(() => service.updateOrganization("ORGANIZATION", { orgName: "Rolled back" }));
@@ -712,6 +886,34 @@ describe("Organization mutations through production PostgreSQL UnitOfWork", () =
       expect(enqueueRebuildJobs).not.toHaveBeenCalled();
     });
   }
+
+  test.each(["create", "delete"] as const)(
+    "rolls back Admin %s source, closure, audit and search registration together",
+    async (operation) => {
+      if (operation === "delete") await seedOrganization();
+      const sentinel = new Error("injected durable registration failure");
+      const { service } = createCommand((tx) => ({
+        ...tx,
+        organizationSearchInvalidation: {
+          async recordChanges(changes) {
+            await tx.organizationSearchInvalidation.recordChanges(changes);
+            throw sentinel;
+          },
+        },
+      }));
+      const before = await facts();
+      const error = await failure(() =>
+        operation === "create"
+          ? service.setOrganization(
+              OrganizationCreateDtoSchema.parse({ orgCode: "NEW", orgName: "New", orgType: OrganizationType.Company }),
+            )
+          : service.deleteOrganization("ORGANIZATION"),
+      );
+      expect(error).toBe(sentinel);
+      const after = await facts();
+      expect(after).toEqual(before);
+    },
+  );
 
   test("bestEffort queue failure preserves committed success and dirty recovery", async () => {
     const organization = await seedOrganization();

@@ -1,3 +1,4 @@
+import { DEFAULT_QUEUE_PREFIX } from "@iam/jobs";
 import { z } from "zod";
 
 export function parseOfflineMaintenanceEnv(env: NodeJS.ProcessEnv) {
@@ -115,6 +116,8 @@ const RawWorkerEnvSchema = z
     IAM_WORKER_USER_PROFILE_REBUILD_BATCH_SIZE: z.coerce.number().int().positive().default(100),
     IAM_WORKER_USER_PROFILE_BACKFILL_BATCH_SIZE: z.coerce.number().int().positive().default(500),
     IAM_WORKER_USER_PROFILE_REPAIR_STALE_SECONDS: z.coerce.number().int().positive().max(86_400).default(300),
+    IAM_WORKER_ORGANIZATION_SEARCH_CONCURRENCY: z.coerce.number().int().positive().default(2),
+    IAM_WORKER_ORGANIZATION_SEARCH_BACKFILL_BATCH_SIZE: z.coerce.number().int().positive().default(500),
   })
   .superRefine((raw, ctx) => {
     if (!raw.IAM_WORKER_BULL_BOARD_ENABLED) return;
@@ -159,6 +162,72 @@ const UserProfilePostgresReadinessCommandEnvSchema = z.object({
   IAM_WORKER_USER_PROFILE_BACKFILL_BATCH_SIZE: z.coerce.number().int().positive().default(500),
 });
 
+const OrganizationSearchBackfillCommandEnvSchema = z.object({
+  IAM_WORKER_DATABASE_URL: z.url().refine((value) => ["postgres:", "postgresql:"].includes(new URL(value).protocol)),
+  IAM_WORKER_REDIS_HOST: z.string().trim().min(1),
+  IAM_WORKER_REDIS_PORT: z.coerce.number().int().min(1).max(65535).default(6379),
+  IAM_WORKER_REDIS_DB: z.coerce.number().int().min(0).default(0),
+  IAM_WORKER_REDIS_PASSWORD: optionalNonEmptyString(),
+  IAM_WORKER_REDIS_USERNAME: optionalNonEmptyString(),
+  NODE_ENV: z.enum(["development", "test", "production"]).default("development"),
+  IAM_WORKER_LOG_LEVEL: z.string().default("info"),
+  IAM_WORKER_LOG_FORMAT: z.enum(["auto", "json", "pretty"]).default("auto"),
+  IAM_WORKER_ORGANIZATION_SEARCH_BACKFILL_BATCH_SIZE: z.coerce.number().int().positive().default(500),
+  IAM_WORKER_ORGANIZATION_SEARCH_REPAIR_STALE_SECONDS: z.coerce.number().int().positive().max(86_400).default(300),
+});
+
+export interface OrganizationSearchBackfillCommandEnv {
+  databaseUrl: string;
+  redis: { host: string; port: number; db: number; password?: string; username?: string };
+  nodeEnv: "development" | "test" | "production";
+  log: { level: string; format: "auto" | "json" | "pretty" };
+  organizationSearch: { backfillBatchSize: number; repairStaleSeconds: number };
+}
+
+export function parseOrganizationSearchBackfillCommandEnv(
+  source: NodeJS.ProcessEnv,
+): OrganizationSearchBackfillCommandEnv {
+  requireDefaultOrganizationQueuePrefix(source);
+  const raw = OrganizationSearchBackfillCommandEnvSchema.parse(source);
+  exposeDatabaseUrlForDbPackage(raw.IAM_WORKER_DATABASE_URL);
+  return {
+    databaseUrl: raw.IAM_WORKER_DATABASE_URL,
+    redis: {
+      host: raw.IAM_WORKER_REDIS_HOST,
+      port: raw.IAM_WORKER_REDIS_PORT,
+      db: raw.IAM_WORKER_REDIS_DB,
+      password: raw.IAM_WORKER_REDIS_PASSWORD,
+      username: raw.IAM_WORKER_REDIS_USERNAME,
+    },
+    nodeEnv: raw.NODE_ENV,
+    log: { level: raw.IAM_WORKER_LOG_LEVEL, format: raw.IAM_WORKER_LOG_FORMAT },
+    organizationSearch: {
+      backfillBatchSize: raw.IAM_WORKER_ORGANIZATION_SEARCH_BACKFILL_BATCH_SIZE,
+      repairStaleSeconds: raw.IAM_WORKER_ORGANIZATION_SEARCH_REPAIR_STALE_SECONDS,
+    },
+  };
+}
+
+export type OrganizationSearchVerifyCommandEnv = Pick<
+  OrganizationSearchBackfillCommandEnv,
+  "databaseUrl" | "nodeEnv" | "log"
+>;
+
+export function parseOrganizationSearchVerifyCommandEnv(source: NodeJS.ProcessEnv): OrganizationSearchVerifyCommandEnv {
+  const raw = OrganizationSearchBackfillCommandEnvSchema.pick({
+    IAM_WORKER_DATABASE_URL: true,
+    NODE_ENV: true,
+    IAM_WORKER_LOG_LEVEL: true,
+    IAM_WORKER_LOG_FORMAT: true,
+  }).parse(source);
+  exposeDatabaseUrlForDbPackage(raw.IAM_WORKER_DATABASE_URL);
+  return {
+    databaseUrl: raw.IAM_WORKER_DATABASE_URL,
+    nodeEnv: raw.NODE_ENV,
+    log: { level: raw.IAM_WORKER_LOG_LEVEL, format: raw.IAM_WORKER_LOG_FORMAT },
+  };
+}
+
 type RawWorkerEnv = z.infer<typeof RawWorkerEnvSchema>;
 
 export interface WorkerEnv {
@@ -196,6 +265,10 @@ export interface WorkerEnv {
     rebuildBatchSize: number;
     backfillBatchSize: number;
     repairStaleSeconds: number;
+  };
+  organizationSearch: {
+    concurrency: number;
+    backfillBatchSize: number;
   };
 }
 
@@ -258,6 +331,10 @@ function toWorkerEnv(raw: RawWorkerEnv): WorkerEnv {
       backfillBatchSize: raw.IAM_WORKER_USER_PROFILE_BACKFILL_BATCH_SIZE,
       repairStaleSeconds: raw.IAM_WORKER_USER_PROFILE_REPAIR_STALE_SECONDS,
     },
+    organizationSearch: {
+      concurrency: raw.IAM_WORKER_ORGANIZATION_SEARCH_CONCURRENCY,
+      backfillBatchSize: raw.IAM_WORKER_ORGANIZATION_SEARCH_BACKFILL_BATCH_SIZE,
+    },
   };
 }
 
@@ -274,9 +351,16 @@ function exposeDatabaseUrlForDbPackage(databaseUrl: string) {
 }
 
 export function parseWorkerEnv(source: NodeJS.ProcessEnv): WorkerEnv {
+  requireDefaultOrganizationQueuePrefix(source);
   const env = toWorkerEnv(RawWorkerEnvSchema.parse(source));
   exposeDatabaseUrlForDbPackage(env.databaseUrl);
   return env;
+}
+
+function requireDefaultOrganizationQueuePrefix(source: NodeJS.ProcessEnv) {
+  const prefix = source.IAM_WORKER_ORGANIZATION_SEARCH_QUEUE_PREFIX;
+  if (prefix !== undefined && prefix !== DEFAULT_QUEUE_PREFIX)
+    throw new RangeError(`Organization Search queue prefix is fixed to ${DEFAULT_QUEUE_PREFIX}`);
 }
 
 export function parseEmploymentCommandEnv(source: NodeJS.ProcessEnv): EmploymentCommandEnv {

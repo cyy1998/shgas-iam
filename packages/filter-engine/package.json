@@ -1,0 +1,26 @@
+{
+  "name": "@iam/filter-engine",
+  "type": "module",
+  "version": "0.0.1",
+  "private": true,
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "lint": "biome check --formatter-enabled=false . && stylelint \"**/*.less\" --allow-empty-input",
+    "lint:fix": "biome check --formatter-enabled=false --write . && stylelint \"**/*.less\" --allow-empty-input",
+    "test": "pnpm test:unit",
+    "test:unit": "bun test --max-concurrency=2 src",
+    "typecheck": "pnpm exec tsc --noEmit",
+    "format": "biome format --write . && prettier \"**/*.{less,md,yaml,yml}\" --ignore-path ../../.gitignore --ignore-path ../../.prettierignore --no-error-on-unmatched-pattern --write",
+    "format:check": "biome format . && prettier \"**/*.{less,md,yaml,yml}\" --ignore-path ../../.gitignore --ignore-path ../../.prettierignore --no-error-on-unmatched-pattern --check"
+  },
+  "dependencies": {
+    "drizzle-orm": "1.0.0-rc.2",
+    "zod": "^4.4.3"
+  },
+  "devDependencies": {
+    "@types/bun": "1.4.2",
+    "typescript": "npm:@typescript/typescript6@6.0.2"
+  }
+}

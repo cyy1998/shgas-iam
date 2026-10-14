@@ -154,6 +154,18 @@ Profile 重建及 Subject Access 恢复见[Profile 维护手册](../releases/use
 - 后端 Architecture Guard（唯一静态架构入口）：`pnpm check:architecture`
 - 文档索引与 freshness guard：`pnpm check:docs`
 - Env naming guard：`pnpm check:env-names`
+- 组织搜索首建：`pnpm --filter @iam/worker organization-search:backfill`。命令使用 `IAM_WORKER_DATABASE_URL` 与
+  Worker Redis 配置，只创建组织队列及数据库资源，退出时关闭；按批保存全部组织（含删除组织）的源变化记录并唤醒普通
+  `organization-search` consumer，报告中的 `enqueued` 不表示已经发布。消费者由 dev/prod Compose 的
+  `worker-organization-search` 服务独立启动；完整维护窗口与放流要求见
+  [Organization Filter DSL](../features/organization-search/filter-dsl.md#版本切换与维护)。
+- 组织搜索补偿：`pnpm --filter @iam/worker organization-search:repair -- --limit 500 --deadline-ms 30000`。
+  两个持久阶段的回收、报告、重复执行和外部周期责任见
+  [组织搜索恢复契约](../features/organization-search/filter-dsl.md#补偿命令与失败观察)。
+- 组织搜索全量只读核验：`pnpm --filter @iam/worker organization-search:verify -- --deadline-ms 30000`。
+  只使用 `IAM_WORKER_DATABASE_URL`，同一 `REPEATABLE READ READ ONLY` transaction 完整观察源组织、闭包、文档、
+  删除墓碑和两阶段工作；`status: passed` 且退出 0 才通过数据门禁。没有 schema 选择、部分 batch 或入队副作用。
+  首次、升级、失败重跑与人工放流见[组织搜索维护](../releases/organization-search-maintenance.md)。
 
 统一格式与规则命令适用于根目录和所有 workspace，例如 `pnpm --filter @iam/admin format:check`：
 
@@ -236,7 +248,7 @@ pnpm --filter @iam/api test:integration:browser
 OIDC 完整协议由 `@iam/oidc` Redis collection 与 `@iam/api` 的 HTTP/process/composition/browser collection 验证。
 
 `@iam/admin-api` 已发布 Unit、component、process、postgres、composition 与 redis package-local canonical commands；`@iam/worker` 已发布
-Unit、component、process、postgres 与 redis commands：
+Unit、component、process、postgres、composition 与 redis commands：
 
 ```bash
 pnpm --filter @iam/admin-api test:unit
@@ -249,6 +261,7 @@ pnpm --filter @iam/worker test:unit
 pnpm --filter @iam/worker test:integration:component
 pnpm --filter @iam/worker test:integration:process
 pnpm --filter @iam/worker test:integration:postgres
+pnpm --filter @iam/worker test:integration:composition
 pnpm --filter @iam/worker test:integration:redis
 ```
 
@@ -273,6 +286,8 @@ pnpm --filter @iam/user-profile-read-model test:unit
 pnpm --filter @iam/user-profile-read-model test:integration:component
 pnpm --filter @iam/user-profile-read-model test:integration:postgres
 pnpm --filter @iam/user-profile-read-model test:integration:redis
+pnpm --filter @iam/organization-search-read-model test:integration:component
+pnpm --filter @iam/organization-search-read-model test:integration:postgres
 ```
 
 两个 resolution package 都没有空的 Unit profile。旧 Subject Projection V1 rehearsal 已随 strict V2 激活撤销；
@@ -371,6 +386,10 @@ pnpm --filter @iam/db test:integration:postgres
 # Worker Client Protocol epoch 与 User Profile maintenance contracts（需专用 IAM_WORKER_TEST_DATABASE_URL）
 pnpm --filter @iam/worker test:integration:postgres
 
+# Organization Search 真实队列、维护 CLI、重试耗尽与中断恢复（两个专用 owner URL 均必需）
+IAM_WORKER_TEST_DATABASE_URL=<dedicated-url> IAM_WORKER_TEST_REDIS_URL=<dedicated-url> \
+pnpm --filter @iam/worker test:integration:composition
+
 # Worker Client Runtime targeted/full repair 与独立 full verify production wiring（需 owner-specific 专用 URL）
 IAM_WORKER_TEST_REDIS_URL=<dedicated-non-production-url> \
 pnpm --filter @iam/worker test:integration:redis
@@ -396,6 +415,9 @@ pnpm --filter @iam/admin-api test:integration:redis
 
 # User Profile V3 publication、readiness 与查询 contracts（需专用 IAM_USER_PROFILE_TEST_DATABASE_URL）
 pnpm --filter @iam/user-profile-read-model test:integration:postgres
+
+# Organization Search 持久展开、快照构建与版本发布（需专用 IAM_ORGANIZATION_SEARCH_TEST_DATABASE_URL）
+pnpm --filter @iam/organization-search-read-model test:integration:postgres
 
 # User Profile Subject Facts 单条/CAS/batch prewarm contract（需专用 IAM_USER_PROFILE_TEST_REDIS_URL）
 pnpm --filter @iam/user-profile-read-model test:integration:redis
@@ -561,7 +583,8 @@ Hook 可以被本地绕过，自动 merge commit 也不保证触发 pre-commit�
 - Custom SSO：`pnpm --filter @iam/custom-sso <lint|test|test:unit|typecheck>`；完整 HTTP/Redis 在 API collection。
 - Client Subject Projection：`pnpm --filter @iam/client-subject-projection <lint|test:integration:component|typecheck>`
 - User Profile Read Model：`pnpm --filter @iam/user-profile-read-model <lint|test|test:unit|test:integration:component|test:integration:postgres|test:integration:redis|typecheck>`
-- Worker：`pnpm --filter @iam/worker <dev|serve|lint|test|test:unit|test:integration:component|test:integration:process|test:integration:postgres|test:integration:redis|typecheck|employment:verify|user-profile:backfill|user-profile:repair|user-profile:verify-postgres|user-profile:verify-redis|client-snapshot:repair|client-snapshot:verify|session:clear:inventory|session:clear|session:clear:verify>`
+- Filter Engine：`pnpm --filter @iam/filter-engine <lint|test|test:unit|typecheck>`；可配置 JSONB 编译的真实 PostgreSQL 行为由 User Profile PostgreSQL collection 验证，沿用该 owner 的专用资源。
+- Worker：`pnpm --filter @iam/worker <dev|serve|lint|test|test:unit|test:integration:component|test:integration:process|test:integration:postgres|test:integration:composition|test:integration:redis|typecheck|employment:verify|organization-search:backfill|organization-search:repair|organization-search:verify|user-profile:backfill|user-profile:repair|user-profile:verify-postgres|user-profile:verify-redis|client-snapshot:repair|client-snapshot:verify|session:clear:inventory|session:clear|session:clear:verify>`
 - Employment 全库只读诊断：
   `IAM_WORKER_DATABASE_URL=<target-url> pnpm --filter @iam/worker employment:verify`
 - Subject Access 恢复：

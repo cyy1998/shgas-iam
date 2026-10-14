@@ -96,6 +96,11 @@ async function fixture() {
     db: pg.db,
     logger,
     clock: { nowDate: () => new Date() },
+    organizationSearchJobProducer: {
+      async enqueueSourceChanges() {
+        return { enqueued: 0 };
+      },
+    },
     userProfileJobProducer: { enqueueRebuildJobs: async () => ({ enqueued: 0, jobIds: [] }) },
   });
   let failAudit = false;

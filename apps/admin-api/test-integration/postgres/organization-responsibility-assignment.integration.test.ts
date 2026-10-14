@@ -304,6 +304,7 @@ describe("Organization Responsibility Assignment PostgreSQL command", () => {
       uow: mapUnitOfWork(unitOfWork, (tx) => ({
         auditService: tx.auditService,
         responsibilityParentLifecycle: tx.responsibilityParentLifecycle,
+        organizationSearchInvalidation: tx.organizationSearchInvalidation,
         userProfileInvalidation: tx.userProfileInvalidation,
         organizationRepository: tx.repositories.organization,
       })),
@@ -1557,6 +1558,7 @@ describe("Organization Responsibility Assignment PostgreSQL command", () => {
       uow: mapUnitOfWork(parentUnitOfWork, (tx) => ({
         auditService: tx.auditService,
         responsibilityParentLifecycle: tx.responsibilityParentLifecycle,
+        organizationSearchInvalidation: tx.organizationSearchInvalidation,
         userProfileInvalidation: tx.userProfileInvalidation,
         organizationRepository: {
           ...tx.repositories.organization,
@@ -1630,6 +1632,7 @@ describe("Organization Responsibility Assignment PostgreSQL command", () => {
       uow: mapUnitOfWork(parentUnitOfWork, (tx) => ({
         auditService: tx.auditService,
         responsibilityParentLifecycle: tx.responsibilityParentLifecycle,
+        organizationSearchInvalidation: tx.organizationSearchInvalidation,
         userProfileInvalidation: {
           recordChanges: async (changes: Parameters<typeof tx.userProfileInvalidation.recordChanges>[0]) => {
             await tx.userProfileInvalidation.recordChanges(changes);
@@ -2724,6 +2727,11 @@ function createUnitOfWork(
   return createAdminApiUnitOfWork({
     db,
     logger: { error: mock(() => undefined), warn },
+    organizationSearchJobProducer: {
+      async enqueueSourceChanges() {
+        return { enqueued: 0 };
+      },
+    },
     userProfileJobProducer: { enqueueRebuildJobs } as never,
     clock: { nowDate: () => now },
   });
@@ -3057,6 +3065,7 @@ function createHistoryParentCommands(
       uow: mapUnitOfWork(uow, (tx) => ({
         auditService: tx.auditService,
         responsibilityParentLifecycle: tx.responsibilityParentLifecycle,
+        organizationSearchInvalidation: tx.organizationSearchInvalidation,
         userProfileInvalidation: tx.userProfileInvalidation,
         organizationRepository: tx.repositories.organization,
       })),

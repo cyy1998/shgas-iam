@@ -57,6 +57,7 @@ function createService() {
     userProfileInvalidation: {
       recordChanges: mock(async () => undefined),
     },
+    organizationSearchInvalidation: { recordChanges: mock(async () => undefined) },
     organizationRepository: {
       countActiveChildrenByOrgCode: mock(async () => 0),
       countOpenEmploymentsByOrgCode: mock(async (_orgCode: string) => 0),

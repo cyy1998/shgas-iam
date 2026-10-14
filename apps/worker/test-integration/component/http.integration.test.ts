@@ -29,6 +29,7 @@ function env(overrides: Partial<WorkerEnv> = {}): WorkerEnv {
       readOnly: true,
     },
     userProfile: { concurrency: 2, rebuildBatchSize: 100, backfillBatchSize: 500, repairStaleSeconds: 300 },
+    organizationSearch: { concurrency: 2, backfillBatchSize: 500 },
     ...overrides,
   };
 }

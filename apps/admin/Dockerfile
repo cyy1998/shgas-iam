@@ -34,6 +34,8 @@ COPY packages/jobs/package.json ./packages/jobs/
 COPY packages/organization-responsibility-resolution/package.json ./packages/organization-responsibility-resolution/
 COPY packages/role-assignment-resolution/package.json ./packages/role-assignment-resolution/
 COPY packages/user-profile-read-model/package.json ./packages/user-profile-read-model/
+COPY packages/organization-search-read-model/package.json ./packages/organization-search-read-model/
+COPY packages/filter-engine/package.json ./packages/filter-engine/
 COPY apps/admin-api/package.json ./apps/admin-api/
 COPY apps/admin/package.json ./apps/admin/
 ARG HTTP_PROXY
@@ -69,6 +71,8 @@ COPY packages/jobs/ ./packages/jobs/
 COPY packages/organization-responsibility-resolution/ ./packages/organization-responsibility-resolution/
 COPY packages/role-assignment-resolution/ ./packages/role-assignment-resolution/
 COPY packages/user-profile-read-model/ ./packages/user-profile-read-model/
+COPY packages/organization-search-read-model/ ./packages/organization-search-read-model/
+COPY packages/filter-engine/ ./packages/filter-engine/
 COPY apps/admin-api/ ./apps/admin-api/
 COPY apps/admin/ ./apps/admin/
 RUN pnpm rebuild && pnpm --filter @iam/admin run setup && pnpm --filter @iam/admin run build

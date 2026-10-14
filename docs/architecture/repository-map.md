@@ -60,6 +60,8 @@ Apps 表用于定位入口；依赖方向、分层职责、命名和 wiring 统�
 | `packages/organization-responsibility-resolution/src` | Organization Responsibility 的正向有效解析与跨树 holder 反向解析。                                                              |
 | `packages/role-assignment-resolution/src`             | Effective Role 正向解析与受影响用户反向解析。                                                                                   |
 | `packages/user-profile-read-model/src`                | User Profile、Search / Subject Facts 的失效、构建、发布、查询与维护。                                                           |
+| `packages/organization-search-read-model/src`         | 独立组织文档的事务绑定变化登记、提交后展开、构建发布、DSL 查询、补偿和一致只读全量核验。                                        |
+| `packages/filter-engine/src`                          | 显式公开结构、类型化 Filter 校验与作用域、调用方 JSONB 表达式编译；不持有发布状态或数据库连接。                                 |
 
 使用或新增共享代码前，按[共享契约与数据库](contracts-and-database.md)核对运行环境、公开出口、DTO 与事务边界；
 模块语义见[后端所有权](backend-architecture.md#关键模块所有权)。当前维护见

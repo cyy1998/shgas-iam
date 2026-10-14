@@ -55,6 +55,8 @@ const protectedSourceRoots = [
   "packages/organization-responsibility-resolution/src",
   "packages/role-assignment-resolution/src",
   "packages/user-profile-read-model/src",
+  "packages/filter-engine/src",
+  "packages/organization-search-read-model/src",
 ] as const;
 
 const excludedSourceDirectories = new Set([
@@ -80,6 +82,8 @@ const architectureWorkspaceRoots = new Map([
   ["@iam/organization-responsibility-resolution", "packages/organization-responsibility-resolution"],
   ["@iam/role-assignment-resolution", "packages/role-assignment-resolution"],
   ["@iam/user-profile-read-model", "packages/user-profile-read-model"],
+  ["@iam/filter-engine", "packages/filter-engine"],
+  ["@iam/organization-search-read-model", "packages/organization-search-read-model"],
 ]);
 const workspaceBuildDependencySections = ["dependencies", "devDependencies", "optionalDependencies"] as const;
 
@@ -111,6 +115,7 @@ const canonicalStaticSourceRoots = new Map([
   ["@iam/organization-responsibility-resolution", "packages/organization-responsibility-resolution/src"],
   ["@iam/sso", "apps/sso/src"],
   ["@iam/user-profile-read-model", "packages/user-profile-read-model/src"],
+  ["@iam/organization-search-read-model", "packages/organization-search-read-model/src"],
   ["@iam/worker", "apps/worker/src"],
 ]);
 

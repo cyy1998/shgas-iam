@@ -15,8 +15,8 @@ export interface OrganizationTransactionStorePort {
   getAnyOrganizationByCode: (orgCode: string) => Promise<Organization | null>;
   getOrganizationByCode: (orgCode: string) => Promise<Organization | null>;
   getOrganizationByCodeForAdmin: (orgCode: string) => Promise<Organization | null>;
-  setOrganization: (input: OrganizationCreateDto, parent: Organization | null) => Promise<unknown>;
-  updateOrganizationByCode: (orgCode: string, input: OrganizationUpdateDto) => Promise<unknown>;
+  setOrganization: (input: OrganizationCreateDto, parent: Organization | null) => Promise<{ id: number }>;
+  updateOrganizationByCode: (orgCode: string, input: OrganizationUpdateDto) => Promise<{ id: number } | null>;
 }
 
 export interface ApiOrganizationProfileChange {
@@ -24,8 +24,16 @@ export interface ApiOrganizationProfileChange {
   readonly organizationId: number;
 }
 
+export type ApiOrganizationSearchChangedField = "code" | "name" | "type" | "status";
+export type ApiOrganizationSearchChange =
+  | { kind: "created"; organizationId: number }
+  | { kind: "updated"; organizationId: number; changedFields: readonly ApiOrganizationSearchChangedField[] };
+
 export interface OrganizationTransactionPorts {
   organizationRepository: OrganizationTransactionStorePort;
+  organizationSearchInvalidation: {
+    recordChanges: (changes: readonly ApiOrganizationSearchChange[]) => Promise<void>;
+  };
   userProfileInvalidation: {
     recordChanges: (changes: readonly ApiOrganizationProfileChange[]) => Promise<void>;
   };

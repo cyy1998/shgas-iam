@@ -23,7 +23,7 @@ function entryOrigin(context: ProcessSmokeAttemptContext) {
   return `http://${context.hostname}:${context.port}`;
 }
 
-function createEntryEnvironment(context: ProcessSmokeAttemptContext) {
+function createEntryEnvironment(context: ProcessSmokeAttemptContext, enabledModules = "none") {
   return createProcessSmokeEnvironment({
     source: process.env,
     temporaryDirectory: context.temporaryDirectory,
@@ -33,7 +33,7 @@ function createEntryEnvironment(context: ProcessSmokeAttemptContext) {
       IAM_WORKER_REDIS_HOST: "127.0.0.1",
       IAM_WORKER_REDIS_PORT: "1",
       IAM_WORKER_REDIS_DB: "15",
-      IAM_WORKER_ENABLED_MODULES: "none",
+      IAM_WORKER_ENABLED_MODULES: enabledModules,
       IAM_WORKER_HTTP_ENABLED: "true",
       IAM_WORKER_HTTP_PORT: String(context.port),
       IAM_WORKER_BULL_BOARD_ENABLED: "true",
@@ -60,6 +60,31 @@ async function probeWorkerReadiness(origin: string, signal: AbortSignal) {
 }
 
 describe("Worker entry", () => {
+  test(
+    "starts the independent organization consumer and reports unavailable storage as not ready",
+    async () => {
+      const result = await entrySmoke.run({
+        start(context) {
+          return spawnOwnedProcessTree({
+            executable: process.execPath,
+            args: ["--no-env-file", "run", "src/index.ts"],
+            cwd: workerRoot,
+            env: createEntryEnvironment(context, "organization-search"),
+          });
+        },
+        probe: (context, signal) => probeWorkerReadiness(entryOrigin(context), signal),
+        childReadinessEvidence: "worker started",
+      });
+      expect(result).toMatchObject({
+        ok: false,
+        enabledModules: ["organization-search"],
+        modulesStarted: true,
+        dependencies: { db: "error", redis: "error" },
+      });
+    },
+    PROCESS_SMOKE_TEST_TIMEOUT_MS,
+  );
+
   test(
     "reports unavailable storage as not ready without starting consumers",
     async () => {

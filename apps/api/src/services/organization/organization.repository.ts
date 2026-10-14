@@ -153,10 +153,13 @@ export function createOrganizationRepository(db: DbClient) {
     },
     async updateOrganizationByCode(orgCode: string, data: OrganizationUpdateDto) {
       return await write(async () => {
-        return await db
-          .update(organizations)
-          .set(compactUpdate(data))
-          .where(and(eq(organizations.orgCode, orgCode), eq(organizations.isDelete, false)));
+        return firstRow(
+          await db
+            .update(organizations)
+            .set(compactUpdate(data))
+            .where(and(eq(organizations.orgCode, orgCode), eq(organizations.isDelete, false)))
+            .returning({ id: organizations.id }),
+        );
       });
     },
   };

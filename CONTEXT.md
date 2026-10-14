@@ -39,6 +39,18 @@ _Avoid_: online shadow cutover, mixed-version search, caller-selected schema ver
 从根 Organization 到目标 Organization 且包含目标自身的有序当前路径；每个公开节点包含 code、name、type 与 `distanceToTarget`，其中目标自身为 `0`、父级为 `1`。为查询或索引派生的平行数组和组合 key 不属于 Organization Path 的公开结构。
 _Avoid_: ancestorCodes, ancestorDepths, ancestorKeys, storage path encoding
 
+以下 Organization Search 与 Organization Search Document 描述独立组织搜索的当前能力，发布与恢复窗口见[组织搜索维护](docs/releases/organization-search-maintenance.md)。
+
+**Organization Search**:
+IAM 以未删除的 Organization 为唯一结果根，按照组织自身属性和完整 Organization Path 筛选组织的查询能力；Enable、Pause 与 Disable 均可搜索，状态由调用方显式筛选，首版不包含按成员、岗位、角色或组织责任持有人反查组织的条件。
+_Avoid_: User Profile Search, organization member search, generic entity query
+
+**Organization Search Document**:
+由组织源事实派生、可重新构建并按组织独立异步发布的组织搜索事实视图，承载组织自身属性和完整 Organization Path，搜索直接返回用于匹配的同一份完整文档；单份文档内部保持一致，不同组织可以处于不同更新进度，它允许落后于源事实，不取代组织源事实或成为独立的业务写入来源。
+_Avoid_: organization source of truth, editable organization document, User Profile Search Document
+
+组织搜索的公开字段、路径绝对层级与既有接口边界见[Organization Filter DSL 设计](docs/features/organization-search/filter-dsl.md)。
+
 **User Profile Filter DSL**:
 User Profile Search 用于组合 User Profile Search Path 条件的非空类型化过滤表达式；JSON 节点统一为 `{ and: [...] }`、`{ or: [...] }`、`{ not: expression }`、`{ exists: { path, where } }` 或 `{ field, op, value }`，不兼容旧 `all`/`any`。它只决定用户是否匹配，不负责排序、分页或返回字段投影。集合条件使用带 `where` 的 `exists(path, where)` 建立元素作用域，内部字段路径相对于该作用域，并且不得把不同任职或其他不同关联事实拼成一个虚构事实；当前词汇不提供 null、空集合、字段缺失或无条件集合存在性查询。
 _Avoid_: generic query DSL, result projection DSL, flattened relation filter, `all`/`any` boolean vocabulary, null/empty/missing predicate

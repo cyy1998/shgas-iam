@@ -117,6 +117,36 @@ test("returns UserProfileBase from typed profile columns without depending on De
   });
 });
 
+test("preserves Profile HTTP depth and node budgets before executing the query", async () => {
+  const searchCurrentProfileBases = mock(async () => []);
+  const app = createProductionApp(
+    createV3UserProfileQueryService({
+      profileRepository: { searchCurrentProfileBases, searchCurrentProfiles: mock(async () => []) },
+    }),
+  );
+  const condition = { field: "user.username", op: "eq", value: "alice" };
+  let atDepthLimit: unknown = condition;
+  for (let depth = 1; depth < 8; depth++) atDepthLimit = { not: atDepthLimit };
+  const valid = await request(app, { filter: atDepthLimit });
+  const validBody = await valid.json();
+  expect(valid.status).toBe(200);
+  expect(validBody).toMatchObject({ code: 200, data: [] });
+  const tooManyNodes = { and: Array.from({ length: 8 }, () => ({ and: Array.from({ length: 8 }, () => condition) })) };
+  for (const filter of [
+    { not: atDepthLimit },
+    tooManyNodes,
+    { and: Array.from({ length: 17 }, () => condition) },
+    { ...condition, op: "in", value: Array.from({ length: 501 }, () => "alice") },
+    { ...condition, value: "x".repeat(129) },
+  ]) {
+    const response = await request(app, { filter });
+    const body = await response.json();
+    expect(response.status).toBe(422);
+    expect(body).toMatchObject({ code: "COMMON.VALIDATION_FAILED" });
+  }
+  expect(searchCurrentProfileBases).toHaveBeenCalledTimes(1);
+});
+
 test("describes one generic recursive Filter AST without enumerating field and operator pairs", async () => {
   const query = createV3UserProfileQueryService({
     profileRepository: {

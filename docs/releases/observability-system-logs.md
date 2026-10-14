@@ -9,7 +9,7 @@ Next review: 2026-10-31
 
 该栈通过 Docker stdout/stderr、Grafana Alloy、Loki 和 Grafana 收集带有
 `shgas-iam.logs.enabled=true` 标签的 IAM 容器运行时系统日志。当前 dev/prod compose 会采集 `api`、
-`admin-api`、`worker-user-profile`、`worker-dashboard` 与 `apisix`。它不替代
+`admin-api`、`worker-user-profile`、`worker-organization-search`、`worker-dashboard` 与 `apisix`。它不替代
 PostgreSQL 审计日志，也不会创建 `system_log` 表。
 
 前端 `admin` 和 `sso` 容器当前未打日志采集标签，仍有意排除在系统日志栈之外。

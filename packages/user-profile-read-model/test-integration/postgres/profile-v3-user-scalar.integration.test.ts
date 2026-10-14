@@ -3,11 +3,19 @@ import process from "node:process";
 import { ApiErrorCode, UserStatus, UserType } from "@iam/contracts";
 import { relations } from "@iam/db/relations";
 import { userProfiles, users } from "@iam/db/schema";
+import {
+  createFilterEngine,
+  searchCollection,
+  searchObject,
+  searchOrganization,
+  searchScalar,
+} from "@iam/filter-engine";
 import { createOrganizationResponsibilityResolver } from "@iam/organization-responsibility-resolution";
 import { createRoleAssignmentResolver } from "@iam/role-assignment-resolution";
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/postgres-js";
 import postgres from "postgres";
+import { z } from "zod";
 import { createUserProfileRowRepository } from "../../src/publication/user-profile-row.repository";
 import {
   createV3UserProfileBuilder,
@@ -32,6 +40,58 @@ beforeEach(async () => {
 
 afterAll(async () => {
   await harness?.close();
+});
+
+test("the shared Filter engine compiles caller-defined paths against each supplied JSONB expression", async () => {
+  const organizationFields = {
+    identifier: searchScalar(z.string(), z.string()),
+    chain: searchCollection({ identifier: searchScalar(z.string(), z.string()) }),
+  };
+  const engine = createFilterEngine(
+    searchObject({
+      record: searchOrganization(organizationFields, {
+        valueSchema: z.string(),
+        pathField: "chain",
+        codeField: "identifier",
+      }),
+      entries: searchCollection({
+        code: searchScalar(z.string(), z.string()),
+        active: searchScalar(z.boolean(), z.boolean()),
+      }),
+    }),
+  );
+  const first = {
+    record: { identifier: "child", chain: [{ identifier: "root" }, { identifier: "child" }] },
+    entries: [
+      { code: "A", active: false },
+      { code: "B", active: true },
+    ],
+  };
+  const second = {
+    record: { identifier: "root", chain: [{ identifier: "root" }] },
+    entries: [{ code: "A", active: true }],
+  };
+  const filter = engine.filterSchema.parse({
+    and: [
+      { field: "record", op: "withinSubtreeOf", value: "root" },
+      {
+        exists: {
+          path: "entries",
+          where: {
+            and: [
+              { field: "code", op: "eq", value: "A" },
+              { field: "active", op: "eq", value: true },
+            ],
+          },
+        },
+      },
+    ],
+  });
+  const rows = await harness!.db.execute(sql`SELECT
+    ${engine.compile(filter, sql`${JSON.stringify(first)}::jsonb`)} AS first,
+    ${engine.compile(filter, sql`${JSON.stringify(second)}::jsonb`)} AS second
+  `);
+  expect([...rows]).toEqual([{ first: false, second: true }]);
 });
 
 describe("User Profile v3 User scalar tracer", () => {

@@ -72,6 +72,11 @@ function createSubjects() {
   const unitOfWork = createAdminApiUnitOfWork({
     db: harness.db,
     logger: { error: mock(() => undefined), warn: mock(() => undefined) },
+    organizationSearchJobProducer: {
+      async enqueueSourceChanges() {
+        return { enqueued: 0 };
+      },
+    },
     userProfileJobProducer: {
       enqueueRebuildJobs: mock(async () => ({ enqueued: 0, jobIds: [] })),
     } as never,

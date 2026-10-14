@@ -61,6 +61,7 @@ IAM 自身 routes 不统一使用 `forward-auth`。例如 [Tender manifests](../
 | --------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | 用户、任职、组织、角色、Client 配置等业务事实             | PostgreSQL；业务写入口拥有 mutation，`@iam/db` 拥有 schema 与持久化基础能力。                                                  | 共享包选址和 DTO 演进遵守[共享契约](contracts-and-database.md)，读模型或队列不反向成为源业务事实。                                                                                        |
 | User Profile / Subject Facts                              | `@iam/user-profile-read-model` 从源事实构建；PostgreSQL 的 Profile 与 Dirty Version 记录发布及新鲜度状态。                     | Redis Facts 是可重建缓存；Worker 拥有重建与 publication，Reader 拥有窄行 read-through，见[发布契约](backend-architecture.md#user-profile-subject-facts-publication)。                     |
+| Organization Search                                       | `@iam/organization-search-read-model` 从组织及闭包构建；PostgreSQL 保存源变化、dirty、文档与删除墓碑。                         | 队列只负责唤醒；按组织异步发布，独立 schema、补偿与一致只读全量核验。首次、升级及全量恢复的人工窗口见[组织搜索维护](../releases/organization-search-maintenance.md)。                     |
 | UserSession / ClientSession / Temporary Login Restriction | Redis 实时状态，由 Session Kernel / LoginRestriction 拥有。                                                                    | PostgreSQL 审计不能重建登录状态或历史会话清单；丢失状态的后果见 [ADR-0005](../adr/0005-keep-live-login-state-in-redis.md)。                                                               |
 | Subject Access Barrier                                    | Redis 保存请求时访问屏障；lifecycle coordinator 和 Worker recovery 对照 PostgreSQL 账号、transition intent 与当前 Facts 收敛。 | 缺失或不确定状态失败关闭，不能按普通缓存 miss 默认启用；恢复入口及调度责任见[Barrier 契约](backend-architecture.md#subject-access-barrier)。                                              |
 | Client Runtime Snapshot                                   | PostgreSQL 拥有 Client 配置；共享 Snapshot Module 拥有 Redis control、统一安全 payload 与独立敏感 Credential payload。         | 可重建，但不等于普通 TTL 缓存。Worker 拥有 targeted repair 和停流后的 full repair/verify，见 [ADR-0021](../adr/0021-bind-protocol-runtime-cache-consistency-to-snapshot-acquisition.md)。 |
@@ -94,6 +95,10 @@ TTL 或逐 Client 访问自然收敛。当前 full repair/verify 只拥有当前
 
 这些边界有意不同。新增跨 runtime workflow 时先明确事实 owner、观察时点、失败后已生效的作用与恢复 owner，
 再选择公开接口和验证层；改变已有边界时同步更新其权威契约或 ADR，以及[验证归属](architecture-verification.md)。
+
+Organization Search 的源 mutation 与变化事件同事务提交，提交后按当前闭包可靠展开，再以 dirty 版本和 ownership
+仲裁逐组织发布。在线查询只消费当前 schema 的已发布文档，允许合法旧事实、新建暂不可见及删除延迟退出；
+完整放流门禁由维护窗口显式执行，不与 User Profile 发布绑定，也不成为每次查询的覆盖率检查。
 
 ## 部署与观测边界
 

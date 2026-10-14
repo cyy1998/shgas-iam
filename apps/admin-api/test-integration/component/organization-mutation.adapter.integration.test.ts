@@ -56,6 +56,7 @@ function surface(roles = ["iam:admin"]) {
         recordAuditLogFromContext: async () => undefined,
       },
       userProfileInvalidation: { recordChanges: async () => undefined },
+      organizationSearchInvalidation: { recordChanges: async () => undefined },
     }),
   });
   const adapter = createOrganizationAdapter({ organizationService: service });

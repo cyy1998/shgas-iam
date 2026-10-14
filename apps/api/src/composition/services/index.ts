@@ -29,6 +29,10 @@ import type { DbClient } from "@iam/db";
 import db from "@iam/db";
 import { createClientSnapshotRepository } from "@iam/db/client-snapshot";
 import { createOidcClientAuthRateLimiter } from "@iam/oidc";
+import {
+  createOrganizationSearchQueryRepository,
+  createOrganizationSearchQueryService,
+} from "@iam/organization-search-read-model";
 import { createUnifiedSessionKernel } from "@iam/session-kernel";
 import {
   createInternalUserProfileQueryRepository,
@@ -54,6 +58,7 @@ export interface CreateApiServicesOptions {
   auditLogWriter: ApiAuditLogWriter;
   unitOfWork: ApiUnitOfWork;
   userProfileQueryDb: DbClient;
+  organizationQueryDb: DbClient;
 }
 
 function createApiSubjectAccess(runtime: Pick<ApiRuntimePorts, "clock" | "random" | "redis">) {
@@ -200,7 +205,12 @@ export function createApiServices(options: CreateApiServicesOptions) {
     uow: mapUnitOfWork(unitOfWork, (tx) => ({
       organizationRepository: tx.repositories.organization,
       userProfileInvalidation: tx.userProfileInvalidation,
+      organizationSearchInvalidation: tx.organizationSearchInvalidation,
     })),
+  });
+
+  const organizationSearch = createOrganizationSearchQueryService({
+    repository: createOrganizationSearchQueryRepository(options.organizationQueryDb),
   });
 
   const privilegeDelegationService = createPrivilegeDelegationService({
@@ -242,6 +252,7 @@ export function createApiServices(options: CreateApiServicesOptions) {
     loginRestriction,
     mobile: mobileService,
     organization: organizationService,
+    organizationSearch,
     privilegeDelegation: privilegeDelegationService,
     subjectAccess,
     subjectAccessLifecycle,

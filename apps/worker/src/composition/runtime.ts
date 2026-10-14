@@ -16,6 +16,7 @@ export interface WorkerRuntime {
   config: {
     redis: WorkerEnv["redis"];
     userProfile: WorkerEnv["userProfile"];
+    organizationSearch: WorkerEnv["organizationSearch"];
   };
 }
 
@@ -41,6 +42,7 @@ export function createWorkerRuntime(options: CreateWorkerRuntimeOptions): Worker
     config: {
       redis: options.env.redis,
       userProfile: options.env.userProfile,
+      organizationSearch: options.env.organizationSearch,
     },
   };
 }

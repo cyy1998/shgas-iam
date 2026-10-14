@@ -6,6 +6,7 @@ export async function createHangingRedisServer() {
   const server = createServer((socket) => {
     sockets.add(socket);
     socket.on("close", () => sockets.delete(socket));
+    socket.resume();
   });
   await new Promise<void>((resolve, reject) => {
     server.once("error", reject);
@@ -20,7 +21,15 @@ export async function createHangingRedisServer() {
     async close() {
       if (closed) return;
       closed = true;
-      for (const socket of sockets) socket.destroy();
+      await Promise.all(
+        [...sockets].map(
+          (socket) =>
+            new Promise<void>((resolve) => {
+              socket.once("close", () => resolve());
+              socket.destroy();
+            }),
+        ),
+      );
       await new Promise<void>((resolve, reject) => server.close((error) => (error ? reject(error) : resolve())));
       if (sockets.size !== 0) throw new Error("Hanging Redis test server left accepted sockets open");
     },

@@ -63,6 +63,11 @@ function createCommand(decorate: (tx: AdminRoleTransactionPorts) => AdminRoleTra
     db: harness.db,
     logger: { error: mock(() => undefined), warn: mock(() => undefined) },
     clock: { nowDate: () => now },
+    organizationSearchJobProducer: {
+      async enqueueSourceChanges() {
+        return { enqueued: 0 };
+      },
+    },
     userProfileJobProducer: { enqueueRebuildJobs },
   });
   return {

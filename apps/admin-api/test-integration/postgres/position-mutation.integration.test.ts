@@ -32,6 +32,11 @@ function createCommand(
     db: harness.db,
     logger: { error: mock(() => undefined), warn },
     clock: { nowDate: () => new Date("2026-09-07T00:00:00Z") },
+    organizationSearchJobProducer: {
+      async enqueueSourceChanges() {
+        return { enqueued: 0 };
+      },
+    },
     userProfileJobProducer: { enqueueRebuildJobs },
   });
   return {

@@ -335,6 +335,9 @@ importers:
       '@iam/jobs':
         specifier: workspace:*
         version: link:../../packages/jobs
+      '@iam/organization-search-read-model':
+        specifier: workspace:*
+        version: link:../../packages/organization-search-read-model
       '@iam/role-assignment-resolution':
         specifier: workspace:*
         version: link:../../packages/role-assignment-resolution
@@ -411,12 +414,18 @@ importers:
       '@iam/domain':
         specifier: workspace:*
         version: link:../../packages/domain
+      '@iam/filter-engine':
+        specifier: workspace:*
+        version: link:../../packages/filter-engine
       '@iam/jobs':
         specifier: workspace:*
         version: link:../../packages/jobs
       '@iam/oidc':
         specifier: workspace:*
         version: link:../../packages/oidc
+      '@iam/organization-search-read-model':
+        specifier: workspace:*
+        version: link:../../packages/organization-search-read-model
       '@iam/role-assignment-resolution':
         specifier: workspace:*
         version: link:../../packages/role-assignment-resolution
@@ -593,6 +602,9 @@ importers:
       '@iam/oidc':
         specifier: workspace:*
         version: link:../../packages/oidc
+      '@iam/organization-search-read-model':
+        specifier: workspace:*
+        version: link:../../packages/organization-search-read-model
       '@iam/session-kernel':
         specifier: workspace:*
         version: link:../../packages/session-kernel
@@ -876,6 +888,22 @@ importers:
         specifier: npm:@typescript/typescript6@6.0.2
         version: '@typescript/typescript6@6.0.2'
 
+  packages/filter-engine:
+    dependencies:
+      drizzle-orm:
+        specifier: 1.0.0-rc.2
+        version: 1.0.0-rc.2(bun-types@1.4.2)(postgres@3.4.9)(valibot@1.5.0(@typescript/typescript6@6.0.2))(zod@4.4.3)
+      zod:
+        specifier: ^4.4.3
+        version: 4.4.3
+    devDependencies:
+      '@types/bun':
+        specifier: 1.4.2
+        version: 1.4.2
+      typescript:
+        specifier: npm:@typescript/typescript6@6.0.2
+        version: '@typescript/typescript6@6.0.2'
+
   packages/jobs:
     dependencies:
       bullmq:
@@ -954,6 +982,46 @@ importers:
         specifier: npm:@typescript/typescript6@6.0.2
         version: '@typescript/typescript6@6.0.2'
 
+  packages/organization-search-read-model:
+    dependencies:
+      '@iam/api-core':
+        specifier: workspace:*
+        version: link:../api-core
+      '@iam/contracts':
+        specifier: workspace:*
+        version: link:../contracts
+      '@iam/db':
+        specifier: workspace:*
+        version: link:../db
+      '@iam/filter-engine':
+        specifier: workspace:*
+        version: link:../filter-engine
+      '@iam/jobs':
+        specifier: workspace:*
+        version: link:../jobs
+      bullmq:
+        specifier: ^6.3.8
+        version: 6.3.8(ioredis@6.0.0(supports-color@10.2.2))
+      drizzle-orm:
+        specifier: 1.0.0-rc.2
+        version: 1.0.0-rc.2(bun-types@1.4.2)(postgres@3.4.9)(valibot@1.5.0(@typescript/typescript6@6.0.2))(zod@4.4.3)
+      zod:
+        specifier: ^4.4.3
+        version: 4.4.3
+    devDependencies:
+      '@types/bun':
+        specifier: latest
+        version: 1.4.2
+      '@typescript/native':
+        specifier: npm:typescript@7.0.2
+        version: typescript@7.0.2
+      postgres:
+        specifier: ^3.4.9
+        version: 3.4.9
+      typescript:
+        specifier: npm:@typescript/typescript6@6.0.2
+        version: '@typescript/typescript6@6.0.2'
+
   packages/role-assignment-resolution:
     dependencies:
       '@iam/contracts':
@@ -1018,6 +1086,9 @@ importers:
       '@iam/domain':
         specifier: workspace:*
         version: link:../domain
+      '@iam/filter-engine':
+        specifier: workspace:*
+        version: link:../filter-engine
       '@iam/jobs':
         specifier: workspace:*
         version: link:../jobs

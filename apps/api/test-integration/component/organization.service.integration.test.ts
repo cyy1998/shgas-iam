@@ -78,6 +78,7 @@ describe("createOrganizationService", () => {
             await callback({
               organizationRepository,
               userProfileInvalidation,
+              organizationSearchInvalidation: { recordChanges: async () => undefined },
             }),
         ),
       },

@@ -88,7 +88,7 @@ test("formal migration removes only ORCAS configuration and preserves every othe
   );
   for (const row of after) expect(ClientSsoConfigSchema.nullable().safeParse(row.config).success).toBe(true);
   const journal = await h.sql`SELECT * FROM __drizzle_migrations ORDER BY id`;
-  expect(journal.at(-1)?.name).toBe(retirement);
+  expect(journal.filter((entry) => entry.name === retirement)).toHaveLength(1);
   await migrateFinal();
   const replayedJournal = await h.sql`SELECT * FROM __drizzle_migrations ORDER BY id`;
   const replayedClients = await clients();

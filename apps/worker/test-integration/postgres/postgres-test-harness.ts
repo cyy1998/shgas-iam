@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import process from "node:process";
 import { fileURLToPath } from "node:url";
-import type { DbClient } from "@iam/db";
+import type { db as database } from "@iam/db";
 import { relations } from "@iam/db/relations";
 import { drizzle } from "drizzle-orm/postgres-js";
 import { migrate } from "drizzle-orm/postgres-js/migrator";
@@ -11,7 +11,7 @@ const TEST_DATABASE_URL_ENV = "IAM_WORKER_TEST_DATABASE_URL";
 const RESERVED_DATABASE_NAMES = new Set(["postgres", "template0", "template1"]);
 
 export interface WorkerPostgresTestHarness {
-  readonly db: DbClient;
+  readonly db: typeof database;
   readonly sql: ReturnType<typeof postgres>;
   readonly commandDatabaseUrl: string;
   readonly schemaName: string;

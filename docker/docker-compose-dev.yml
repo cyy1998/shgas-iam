@@ -99,6 +99,8 @@ x-worker-env: &worker-env
   IAM_WORKER_USER_PROFILE_REBUILD_BATCH_SIZE: ${IAM_WORKER_USER_PROFILE_REBUILD_BATCH_SIZE:-100}
   IAM_WORKER_USER_PROFILE_BACKFILL_BATCH_SIZE: ${IAM_WORKER_USER_PROFILE_BACKFILL_BATCH_SIZE:-500}
   IAM_WORKER_USER_PROFILE_REPAIR_STALE_SECONDS: ${IAM_WORKER_USER_PROFILE_REPAIR_STALE_SECONDS:-300}
+  IAM_WORKER_ORGANIZATION_SEARCH_CONCURRENCY: ${IAM_WORKER_ORGANIZATION_SEARCH_CONCURRENCY:-2}
+  IAM_WORKER_ORGANIZATION_SEARCH_BACKFILL_BATCH_SIZE: ${IAM_WORKER_ORGANIZATION_SEARCH_BACKFILL_BATCH_SIZE:-500}
 
 services:
   db:
@@ -255,6 +257,29 @@ services:
     environment:
       <<: *worker-env
       IAM_WORKER_ENABLED_MODULES: ${IAM_WORKER_USER_PROFILE_ENABLED_MODULES:-user-profile}
+      IAM_WORKER_BULL_BOARD_ENABLED: "false"
+      IAM_WORKER_BULL_BOARD_QUEUES: ${IAM_WORKER_BULL_BOARD_QUEUES:-all}
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  # Consumes organization search changes and rebuilds independently from User Profile.
+  worker-organization-search:
+    build:
+      context: ..
+      dockerfile: apps/worker/Dockerfile
+      args: *build-proxy-args
+    restart: unless-stopped
+    labels:
+      shgas-iam.logs.enabled: "true"
+      shgas-iam.logs.env: dev
+      shgas-iam.logs.service: worker-organization-search
+      shgas-iam.logs.component: backend-worker
+    environment:
+      <<: *worker-env
+      IAM_WORKER_ENABLED_MODULES: organization-search
       IAM_WORKER_BULL_BOARD_ENABLED: "false"
       IAM_WORKER_BULL_BOARD_QUEUES: ${IAM_WORKER_BULL_BOARD_QUEUES:-all}
     depends_on:

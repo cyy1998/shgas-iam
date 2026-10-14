@@ -427,7 +427,16 @@ API env 注入 current/previous RS256 JWK，JWKS 只输出公钥；非法配置�
 - `src/http/` 只提供 health/readiness 与可选 Bull Board，不是业务 API。Readiness 由 composition 注入依赖检查和
   module 状态；Bull Board 只接收 module 显式注册的 queues。
 - `createWorkerCommandComposition` 使用 `commandOnly` 模式复用 DB/Redis/module wiring，但不启动 consumers、不注册
-  dashboard queues，也不启动 HTTP server；`src/commands/` 的 backfill/repair entrypoints 使用该入口。
+  dashboard queues，也不启动 HTTP server；User Profile backfill/repair entrypoints 使用该入口。
+- `createOrganizationSearchCommandComposition` 是 Organization Search backfill/repair 共用的窄 PostgreSQL + queue
+  composition，复用组织写入资源的有界唤醒与强制关闭能力，不创建其他领域 module、consumer 或 HTTP。
+  组织正式生产者、consumer、命令和 dashboard queue 均使用 `@iam/jobs` 的固定默认前缀；命令不暴露独立队列命名空间。
+  两种命令共用 deadline 与 signal lifecycle，失败或中断保留持久工作；repair 仅重新投递，最终发布由普通 consumer 完成。
+  两阶段回收、报告语义与外部调度责任见[组织搜索恢复契约](../features/organization-search/filter-dsl.md#补偿命令与失败观察)。
+- `createOrganizationSearchVerifyCommandComposition` 是独立 PostgreSQL-only composition，拥有专用单连接池，
+  仅组装完整只读 verifier。所有 inventory 和 source reader 在同一个 repeatable-read read-only transaction 中观察；
+  不创建队列、其他领域 module 或 HTTP。deadline/中断时仅取消本次唯一 application name、当前数据库和角色的查询，
+  关闭查询池和取消连接；执行或关闭失败非零退出。核验与在线缺行过滤分别遵循[组织搜索契约](../features/organization-search/filter-dsl.md#独立全量只读核验)。
 - 当前 Snapshot repair/verify 使用独立 Redis-only composition，普通/敏感 payload 共享控制，targeted 与 full 分开，
   full 必须停流，另起进程 scan-only verify；旧三类 Runtime command、b648 与 managed-callback 升级工具已退役。
 - `createEmploymentCommandComposition` 是更窄的 PostgreSQL-only composition：只从

@@ -26,7 +26,7 @@
 | 文档登记、状态日期与本地目标存在                | 根 `pnpm check:docs`；[文档检查实现](../../scripts/check-docs-index.ts)。                                                                                 | 当前检查 `docs/**/*.md`，不验证语义一致性、根 AGENTS.md 链接或 Markdown 锚点；这些变更须另行核对。                              |
 
 Architecture Guard 当前 production source roots 为三个后端 app（API、Admin API、Worker）及
-Session Kernel、Custom SSO、OIDC、Client Subject Projection、Organization Responsibility Resolution、Role Assignment Resolution、User Profile Read Model 七个包。
+Session Kernel、Custom SSO、OIDC、Client Subject Projection、Organization Responsibility Resolution、Role Assignment Resolution、User Profile Read Model、Filter Engine 与 Organization Search Read Model 九个包。
 Admin/SSO 前端、`api-core`、`domain`、`contracts`、`db`、`jobs`、Gateway 等源码内部不在该扫描范围；被某条规则识别为
 依赖目标不等于其内部也被扫描。Docker closure 另按 workspace manifests 与 Dockerfile `COPY` 检查。
 改变该覆盖范围时同步维护本说明，不扩张扫描器去推断业务语义。
@@ -47,6 +47,21 @@ Admin/SSO 前端、`api-core`、`domain`、`contracts`、`db`、`jobs`、Gateway
 | 离线维护          | [Worker Redis CLI](../../apps/worker/test-integration/redis/session-clear-command.integration.test.ts)                                                                                                                        | 新进程清空前统计/清空/独立核验；owner 前缀跨版本、损坏 payload、任意类型、非目标、scan-only ACL、UNLINK 部分失败重跑及无效布局/定向参数连接前拒绝。  |
 | 代表系统旅程      | 根 `pnpm test:e2e`：[Admin](../../e2e/system/admin-custom-sso.spec.ts)、[HR](../../e2e/system/hr-admin-user-management.spec.ts)、[OIDC](../../e2e/system/oidc-pkce.spec.ts)                                                   | 同一临时 PG/Redis/APISIX 与全部正式 runtime；不证明真实外部集成或目标环境切换。                                                                      |
 | 双入口联合验收    | [双 hostname 浏览器](../../e2e/system/dual-entry.spec.ts)、[独立 RP](../../apps/api/test-integration/composition/oidc-rp.integration.test.ts)                                                                                 | 正式 APISIX、独立 same-origin 场景及两 issuer 协议；复现命令与资源见[协议套件入口](../development/commands.md#oidc-协议套件)。旧来源升级演练已退役。 |
+
+Organization Search 的[公开 PostgreSQL 恢复能力](../../packages/organization-search-read-model/test-integration/postgres/recovery.integration.test.ts)
+验证两阶段持久工作、唤醒丢失及源事件/同版本构建的 ownership fence；
+[Worker composition](../../apps/worker/test-integration/composition/organization-search-recovery.integration.test.ts)
+使用专用 PostgreSQL 与 Redis 验证普通 BullMQ 重试耗尽、实际 consumer 进程终止、重复 repair、DSL 结果和处理版本。
+命令 deadline 与运行时 signal listener 验证失败关闭；Windows 的 SIGTERM 用 child-local signal event 进入真实 CLI listener，
+不据此声称 Windows 提供 POSIX signal delivery。以上均不代替目标环境的外部周期调度、完整核验或放流证据。
+
+[Organization Search verifier PG](../../packages/organization-search-read-model/test-integration/postgres/verification.integration.test.ts)
+验证完整覆盖、schema/严格路径/源事实、删除墓碑、处理版本、两阶段工作和同一 RR 快照的受控交错；
+[Worker PG-only verify CLI](../../apps/worker/test-integration/postgres/organization-search-verify-command.integration.test.ts)
+验证实际报告、退出码、只读库存、阻塞 deadline、signal listener、连接关闭及并发核验的取消隔离。
+[组织维护闭环](../../apps/worker/test-integration/composition/organization-search-maintenance.integration.test.ts)
+通过真实 backfill/repair/verify 命令和 consumer 验证首次构建、不兼容 schema 下保持失败、修复后重新完整核验，
+并观察非目标 Profile/Redis 库存及零入队核验。它们不代替部署负责人按[组织维护手册](../releases/organization-search-maintenance.md)取得的停流、drain 和放流证据。
 
 旧 Kernel 四对象、Provider、配置版本和旧 Snapshot/Gate 测试随被替代模型删除；其仍成立的行为分别由上表
 会话/协议/配置/账号/维护最高入口承接。历史 schema/旧 writer 证明不能冒称在最终候选重跑。

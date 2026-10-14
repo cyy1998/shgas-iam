@@ -121,11 +121,16 @@ function input(overrides: Partial<PrivilegeDelegationCreateDto> = {}): Privilege
   };
 }
 
-function createService(db = harness.db) {
+function createService(db: DbClient = harness.db) {
   const uow = createApiUnitOfWork({
     db,
     logger: { error() {}, warn() {} },
     clock: { nowDate: () => observedAt },
+    organizationSearchJobProducer: {
+      async enqueueSourceChanges() {
+        return { enqueued: 0 };
+      },
+    },
     userProfileJobProducer: {
       async enqueueRebuildJobs() {
         return { enqueued: 0, jobIds: [] };

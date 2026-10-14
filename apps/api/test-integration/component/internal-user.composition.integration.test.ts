@@ -4,6 +4,10 @@ import {
   INTERNAL_DELEGATION_STATEMENT_TIMEOUT_MS,
 } from "@api/composition/internal-delegation-query";
 import {
+  createInternalOrganizationQueryResource,
+  INTERNAL_ORGANIZATION_STATEMENT_TIMEOUT_MS,
+} from "@api/composition/internal-organization-query";
+import {
   createInternalUserQueryResource,
   INTERNAL_USER_STATEMENT_TIMEOUT_MS,
 } from "@api/composition/internal-user-query";
@@ -11,6 +15,7 @@ import { createApiRoutes } from "@api/composition/routes";
 import { createApiUserProfileSearch } from "@api/composition/services/user-profile-search";
 import { createApiUserProfileResources } from "@api/composition/user-profile-resources";
 import { PRIVILEGE_DELEGATION_RESOLUTION_HANDLER_TIMEOUT_MS } from "@api/routes/internal/delegation/delegation.handlers";
+import { INTERNAL_ORGANIZATION_HANDLER_TIMEOUT_MS } from "@api/routes/internal/organization/organization.handlers";
 import { INTERNAL_USER_HANDLER_TIMEOUT_MS } from "@api/routes/internal/user/user.handlers";
 import { createPublicHandlers } from "@api/routes/public/public.handlers";
 import * as publicRoutes from "@api/routes/public/public.routes";
@@ -38,6 +43,8 @@ test("owns dedicated Internal query clients with fixed budgets and deterministic
   expect(INTERNAL_USER_HANDLER_TIMEOUT_MS).toBe(5_000);
   expect(INTERNAL_DELEGATION_STATEMENT_TIMEOUT_MS).toBe(2_000);
   expect(PRIVILEGE_DELEGATION_RESOLUTION_HANDLER_TIMEOUT_MS).toBe(5_000);
+  expect(INTERNAL_ORGANIZATION_STATEMENT_TIMEOUT_MS).toBe(2_000);
+  expect(INTERNAL_ORGANIZATION_HANDLER_TIMEOUT_MS).toBe(5_000);
 
   const resources = [
     {
@@ -49,6 +56,11 @@ test("owns dedicated Internal query clients with fixed budgets and deterministic
       applicationName: "iam-api-internal-delegation-resolution",
       createResource: createInternalDelegationQueryResource,
       databaseUrl: "postgresql://delegation-resolution.invalid/iam",
+    },
+    {
+      applicationName: "iam-api-internal-organization-search",
+      createResource: createInternalOrganizationQueryResource,
+      databaseUrl: "postgresql://organization-search.invalid/iam",
     },
   ];
   for (const expected of resources) {

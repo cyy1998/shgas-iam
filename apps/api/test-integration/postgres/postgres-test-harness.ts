@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import process from "node:process";
 import { fileURLToPath } from "node:url";
-import type { DbClient } from "@iam/db";
+import type { db as database } from "@iam/db";
 import { relations } from "@iam/db/relations";
 import { drizzle } from "drizzle-orm/postgres-js";
 import { migrate } from "drizzle-orm/postgres-js/migrator";
@@ -12,7 +12,7 @@ const RESERVED_DATABASE_NAMES = new Set(["postgres", "template0", "template1"]);
 
 export interface ApiPostgresTestHarness {
   readonly databaseUrl: string;
-  readonly db: DbClient;
+  readonly db: typeof database;
   readonly sql: ReturnType<typeof postgres>;
   readonly reset: () => Promise<void>;
   readonly close: () => Promise<void>;
@@ -46,6 +46,9 @@ export async function createApiPostgresTestHarness(): Promise<ApiPostgresTestHar
       async reset() {
         await scopedSql!.unsafe(
           `TRUNCATE TABLE
+            organization_search_change,
+            organization_search_dirty,
+            organization_search_document,
             audit_log,
             delegation_detail,
             privilege_delegation,

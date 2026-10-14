@@ -1,3 +1,4 @@
+import { runWithinInternalHandlerBudget } from "@api/routes/internal/_handler-budget";
 import { getInternalAuditActor } from "@api/services/audit/audit.context";
 import type { AuditLogWriterPort } from "@api/services/audit/audit.service";
 import { buildInternalPurveyorRegisterAudit } from "@api/services/audit/events/internal.audit";
@@ -6,10 +7,17 @@ import type { OrganizationService } from "@api/services/organization/organizatio
 import * as HttpStatusCodes from "@iam/api-core/core/http-status-codes";
 import * as resp from "@iam/api-core/http";
 import { OrganizationType } from "@iam/contracts";
+import {
+  type OrganizationSearchQueryService,
+  OrganizationSearchUnavailableError,
+} from "@iam/organization-search-read-model";
 import type { OrganizationRouteHandler } from "./organization.type";
+
+export const INTERNAL_ORGANIZATION_HANDLER_TIMEOUT_MS = 5_000;
 
 export interface CreateOrganizationHandlersDeps {
   auditLogWriter: AuditLogWriterPort;
+  organizationSearch: Pick<OrganizationSearchQueryService, "search">;
   organizationService: Pick<
     OrganizationService,
     | "findOrganizationByCode"
@@ -21,6 +29,15 @@ export interface CreateOrganizationHandlersDeps {
 }
 
 export function createOrganizationHandlers(deps: CreateOrganizationHandlersDeps) {
+  const organizationsSearchDsl: OrganizationRouteHandler<"organizationsSearchDsl"> = async (c) => {
+    const input = c.req.valid("json");
+    const data = await runWithinInternalHandlerBudget(
+      () => deps.organizationSearch.search(input),
+      INTERNAL_ORGANIZATION_HANDLER_TIMEOUT_MS,
+      () => new OrganizationSearchUnavailableError(),
+    );
+    return c.json(resp.ok(data), HttpStatusCodes.OK);
+  };
   const organizationsSearch: OrganizationRouteHandler<"organizationsSearch"> = async (c) => {
     const organizationQueryDto = c.req.valid("json");
     const data = await deps.organizationService.searchOrganizations(organizationQueryDto);
@@ -67,6 +84,7 @@ export function createOrganizationHandlers(deps: CreateOrganizationHandlersDeps)
   };
 
   return {
+    organizationsSearchDsl,
     organizationGetByCode,
     organizationsSearch,
     organizationUpdate,

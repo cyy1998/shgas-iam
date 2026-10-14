@@ -103,6 +103,7 @@ releases 只保留当前代发布与维护；一次性升级和旧验收见[固�
 | [ADR-0039](adr/0039-tighten-admin-reference-integrity-and-preserve-history.md)             | decision | Current | 2026-09-22    | 2026-10-31  | 管理引用完整性、输入规范化与软删除历史。                                                      |
 | [ADR-0040](adr/0040-retire-orcas-custom-sso-integration.md)                                | decision | Current | 2026-10-10    | 2026-10-31  | ORCAS 完整退役决定；全量清理登录态、维护窗口切换及外部会话责任。                              |
 | [ADR-0041](adr/0041-unify-format-and-lint-with-biome.md)                                   | decision | Current | 2026-09-30    | 2026-10-31  | 已接受：Biome 与提交时修复；YAML 仅排版并保留专属验证，最终只读检查；实施与验收见 Spec #217。 |
+| [ADR-0042](adr/0042-search-organizations-with-published-documents.md)                      | decision | Current | 2026-10-14    | 2026-10-31  | 组织源事实、异步搜索文档与同文档完整响应。                                                    |
 
 </details>
 
@@ -132,7 +133,7 @@ releases 只保留当前代发布与维护；一次性升级和旧验收见[固�
 | [架构守卫规范](architecture/architecture-guard.md)         | architecture | Current | 2026-09-15    | 2026-10-31  | 静态守卫的观察模型、准入与复杂度边界。              |
 | [架构验证归属](architecture/architecture-verification.md)  | architecture | Current | 2026-10-10    | 2026-10-31  | 系统约束的验证 owner、证据入口与证明限制。          |
 | [后端架构](architecture/backend-architecture.md)           | architecture | Current | 2026-09-28    | 2026-10-31  | 后端分层、事务、模块所有权与一致性契约。            |
-| [共享契约与数据库](architecture/contracts-and-database.md) | architecture | Current | 2026-09-28    | 2026-10-31  | 共享代码选址、公开出口、DTO、数据库与事务边界。     |
+| [共享契约与数据库](architecture/contracts-and-database.md) | architecture | Current | 2026-10-14    | 2026-10-31  | 共享代码选址、公开出口、DTO、数据库与事务边界。     |
 | [前端架构](architecture/frontend-architecture.md)          | architecture | Current | 2026-09-15    | 2026-10-31  | Admin / SSO service、页面状态、路由与权限规则。     |
 | [仓库地图](architecture/repository-map.md)                 | architecture | Current | 2026-09-22    | 2026-10-31  | Apps、packages、基础设施、AFK、测试与生成目录定位。 |
 | [系统架构视图](architecture/system-architecture.md)        | architecture | Current | 2026-09-28    | 2026-10-31  | 运行时拓扑、信任边界、数据权威与恢复责任。          |
@@ -158,22 +159,23 @@ releases 只保留当前代发布与维护；一次性升级和旧验收见[固�
 <details>
 <summary>展开功能契约与设计</summary>
 
-| Document                                                                                  | Type    | Status  | Last verified | Next review | Notes                                              |
-| ----------------------------------------------------------------------------------------- | ------- | ------- | ------------- | ----------- | -------------------------------------------------- |
-| [Admin 写入结果与失败恢复](features/admin/admin-mutation-contract.md)                     | feature | Current | 2026-09-21    | 2026-10-31  | Admin 结果、no-op、已提交/未知与页面恢复。         |
-| [Client 单协议配置与 Secret 管理](features/admin/client-sso-configuration.md)             | feature | Current | 2026-09-28    | 2026-10-31  | 单协议配置、Secret 授权读取与传播修复。            |
-| [会话管理与本人安全](features/admin/session-management.md)                                | feature | Current | 2026-09-21    | 2026-10-31  | 安全列表、固定批次撤销、本人安全与临时限制。       |
-| [统一审计日志](features/audit/audit-logging.md)                                           | feature | Current | 2026-09-21    | 2026-10-31  | 审计 action、目标、安全字段与作用后失败。          |
-| [OIDC 接入与协议契约](features/oidc/oidc-integration.md)                                  | feature | Current | 2026-09-21    | 2026-10-31  | OIDC 接入、双 issuer、处理顺序与失败作用。         |
-| [HR 组织责任管理契约](features/organization-responsibility/hr-admin-management-design.md) | feature | Current | 2026-09-21    | 2026-10-31  | HR 双端范围、生命周期、隐藏 blocker 与页面能力。   |
-| [登录、认证续接与账号恢复](features/sso/authentication-and-recovery.md)                   | feature | Current | 2026-09-21    | 2026-10-31  | 根认证、登录重入、短信冷却与脱敏手机号恢复。       |
-| [Client Snapshot 契约](features/sso/client-snapshot-contract.md)                          | feature | Current | 2026-09-21    | 2026-10-31  | 普通/敏感 Snapshot、缓存观察、提交传播与恢复。     |
-| [Custom SSO 协议契约](features/sso/custom-sso-contract.md)                                | feature | Current | 2026-09-28    | 2026-10-31  | Custom 授权、两类交付、Code/Token 与失败矩阵。     |
-| [已发布 Subject Facts 的授权交付](features/sso/published-subject-facts-contract.md)       | feature | Current | 2026-09-21    | 2026-10-31  | 已发布权限、当前披露与事实不可得的交付边界。       |
-| [Subject Access 操作许可](features/sso/subject-access-operation-contract.md)              | feature | Current | 2026-09-28    | 2026-10-31  | 单次操作许可、严格 context 与消费方责任。          |
-| [第三方 Custom SSO 接入指南](features/sso/third-party-sso-integration.md)                 | feature | Current | 2026-09-28    | 2026-10-31  | 业务/托管 SSO、可信登录、编码及错误处理。          |
-| [两类会话的 Kernel 能力](features/sso/unified-session-kernel.md)                          | feature | Current | 2026-09-21    | 2026-10-31  | 两类会话模型、可信观察、原子关系与精确撤销。       |
-| [User Profile Filter DSL 规则](features/user-profile-search/filter-dsl.md)                | feature | Current | 2026-09-21    | 2026-10-31  | User Profile Filter DSL v3 与 Internal Base 响应。 |
+| Document                                                                                  | Type    | Status  | Last verified | Next review | Notes                                                       |
+| ----------------------------------------------------------------------------------------- | ------- | ------- | ------------- | ----------- | ----------------------------------------------------------- |
+| [Admin 写入结果与失败恢复](features/admin/admin-mutation-contract.md)                     | feature | Current | 2026-09-21    | 2026-10-31  | Admin 结果、no-op、已提交/未知与页面恢复。                  |
+| [Client 单协议配置与 Secret 管理](features/admin/client-sso-configuration.md)             | feature | Current | 2026-09-28    | 2026-10-31  | 单协议配置、Secret 授权读取与传播修复。                     |
+| [会话管理与本人安全](features/admin/session-management.md)                                | feature | Current | 2026-09-21    | 2026-10-31  | 安全列表、固定批次撤销、本人安全与临时限制。                |
+| [统一审计日志](features/audit/audit-logging.md)                                           | feature | Current | 2026-09-21    | 2026-10-31  | 审计 action、目标、安全字段与作用后失败。                   |
+| [OIDC 接入与协议契约](features/oidc/oidc-integration.md)                                  | feature | Current | 2026-09-21    | 2026-10-31  | OIDC 接入、双 issuer、处理顺序与失败作用。                  |
+| [HR 组织责任管理契约](features/organization-responsibility/hr-admin-management-design.md) | feature | Current | 2026-09-21    | 2026-10-31  | HR 双端范围、生命周期、隐藏 blocker 与页面能力。            |
+| [Organization Filter DSL](features/organization-search/filter-dsl.md)                     | feature | Current | 2026-10-14    | 2026-10-31  | 组织文档、路径层级、异步发布与独立完整核验。                |
+| [登录、认证续接与账号恢复](features/sso/authentication-and-recovery.md)                   | feature | Current | 2026-09-21    | 2026-10-31  | 根认证、登录重入、短信冷却与脱敏手机号恢复。                |
+| [Client Snapshot 契约](features/sso/client-snapshot-contract.md)                          | feature | Current | 2026-09-21    | 2026-10-31  | 普通/敏感 Snapshot、缓存观察、提交传播与恢复。              |
+| [Custom SSO 协议契约](features/sso/custom-sso-contract.md)                                | feature | Current | 2026-09-28    | 2026-10-31  | Custom 授权、两类交付、Code/Token 与失败矩阵。              |
+| [已发布 Subject Facts 的授权交付](features/sso/published-subject-facts-contract.md)       | feature | Current | 2026-09-21    | 2026-10-31  | 已发布权限、当前披露与事实不可得的交付边界。                |
+| [Subject Access 操作许可](features/sso/subject-access-operation-contract.md)              | feature | Current | 2026-09-28    | 2026-10-31  | 单次操作许可、严格 context 与消费方责任。                   |
+| [第三方 Custom SSO 接入指南](features/sso/third-party-sso-integration.md)                 | feature | Current | 2026-09-28    | 2026-10-31  | 业务/托管 SSO、可信登录、编码及错误处理。                   |
+| [两类会话的 Kernel 能力](features/sso/unified-session-kernel.md)                          | feature | Current | 2026-09-21    | 2026-10-31  | 两类会话模型、可信观察、原子关系与精确撤销。                |
+| [User Profile Filter DSL 规则](features/user-profile-search/filter-dsl.md)                | feature | Current | 2026-10-14    | 2026-10-31  | User Profile Filter DSL v3、Internal Base 与缺行/失败边界。 |
 
 </details>
 
@@ -187,6 +189,7 @@ releases 只保留当前代发布与维护；一次性升级和旧验收见[固�
 | [APISIX Gateway 配置发布手册](releases/apisix-gateway-release.md)           | runbook | Current | 2026-09-21    | 2026-10-31  | 限定 scope 的发布、代理信任、验收与回滚。                     |
 | [IAM 系统日志可观测性运行手册](releases/observability-system-logs.md)       | runbook | Current | 2026-09-21    | 2026-10-31  | 日志栈、Grafana OIDC、排障与 trace 关联。                     |
 | [API OIDC 发布与密钥维护](releases/oidc-release-runbook.md)                 | runbook | Current | 2026-09-21    | 2026-10-31  | 当前双入口配置、JWK 轮换与故障恢复。                          |
+| [Organization Search 维护](releases/organization-search-maintenance.md)     | runbook | Current | 2026-10-14    | 2026-10-31  | 独立 schema 1 首建、升级、两阶段补偿与一致只读全量核验。      |
 | [登录凭证配置与部署](releases/sm-encrypted-password-login-release.md)       | runbook | Current | 2026-09-21    | 2026-10-31  | API/SSO 配对密钥、nonce 与当前登录验收。                      |
 | [当前会话与 Client Snapshot 维护](releases/unified-session-maintenance.md)  | runbook | Current | 2026-10-10    | 2026-10-31  | owner 前缀全量清空、Snapshot 恢复、ORCAS 退役切换与人工放流。 |
 | [User Profile 与 Subject Access 维护](releases/user-profile-maintenance.md) | runbook | Current | 2026-09-21    | 2026-10-31  | 当前重建、完整校验、Barrier 恢复与调度责任。                  |

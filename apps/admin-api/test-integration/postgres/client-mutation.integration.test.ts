@@ -81,6 +81,11 @@ function createMutation(invalidateClient: (clientCode: string) => Promise<unknow
       error: mock(() => undefined),
       warn: mock(() => undefined),
     },
+    organizationSearchJobProducer: {
+      async enqueueSourceChanges() {
+        return { enqueued: 0 };
+      },
+    },
     userProfileJobProducer: {
       enqueueRebuildJobs: mock(async () => ({ enqueued: 0, jobIds: [] })),
     } as never,

@@ -1,0 +1,37 @@
+{
+  "name": "@iam/organization-search-read-model",
+  "type": "module",
+  "version": "0.0.1",
+  "private": true,
+  "exports": {
+    ".": "./src/index.ts",
+    "./producer": "./src/producer.ts",
+    "./query": "./src/query.ts",
+    "./worker": "./src/worker.ts"
+  },
+  "scripts": {
+    "test:integration:component": "bun test --max-concurrency=2 test-integration/component",
+    "lint": "biome check --formatter-enabled=false . && stylelint \"**/*.less\" --allow-empty-input",
+    "lint:fix": "biome check --formatter-enabled=false --write . && stylelint \"**/*.less\" --allow-empty-input",
+    "test:integration:postgres": "bun test --max-concurrency=1 test-integration/postgres",
+    "typecheck": "pnpm exec tsc --noEmit",
+    "format": "biome format --write . && prettier \"**/*.{less,md,yaml,yml}\" --ignore-path ../../.gitignore --ignore-path ../../.prettierignore --no-error-on-unmatched-pattern --write",
+    "format:check": "biome format . && prettier \"**/*.{less,md,yaml,yml}\" --ignore-path ../../.gitignore --ignore-path ../../.prettierignore --no-error-on-unmatched-pattern --check"
+  },
+  "dependencies": {
+    "@iam/api-core": "workspace:*",
+    "@iam/contracts": "workspace:*",
+    "@iam/db": "workspace:*",
+    "@iam/filter-engine": "workspace:*",
+    "@iam/jobs": "workspace:*",
+    "bullmq": "^6.3.8",
+    "drizzle-orm": "1.0.0-rc.2",
+    "zod": "^4.4.3"
+  },
+  "devDependencies": {
+    "@types/bun": "latest",
+    "@typescript/native": "npm:typescript@7.0.2",
+    "postgres": "^3.4.9",
+    "typescript": "npm:@typescript/typescript6@6.0.2"
+  }
+}

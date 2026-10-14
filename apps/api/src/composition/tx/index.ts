@@ -3,6 +3,11 @@ import { createApiAuditLogWriter } from "@api/services/audit/audit.service";
 import type { UnitOfWorkPort } from "@iam/api-core/uow";
 import { createUnitOfWork } from "@iam/api-core/uow";
 import type { DbClient } from "@iam/db";
+import {
+  type CreateOrganizationSearchInvalidationInput,
+  createOrganizationSearchInvalidation,
+  type OrganizationSearchInvalidation,
+} from "@iam/organization-search-read-model/producer";
 import type { CreateUserProfileInvalidationDeps, UserProfileInvalidation } from "@iam/user-profile-read-model/producer";
 import { createUserProfileInvalidation } from "@iam/user-profile-read-model/producer";
 import type { SubjectAccessTransitionRepository } from "@iam/user-profile-read-model/subject-access-transition";
@@ -16,12 +21,14 @@ export interface ApiTxPorts {
   auditLogWriter: ApiAuditLogWriter;
   subjectAccessMutation: Pick<SubjectAccessTransitionRepository, "runMutation">;
   userProfileInvalidation: UserProfileInvalidation;
+  organizationSearchInvalidation: OrganizationSearchInvalidation;
 }
 
 export interface CreateApiUnitOfWorkOptions {
   db: DbClient;
   logger: AfterCommitLoggerPort;
   userProfileJobProducer: CreateUserProfileInvalidationDeps["jobProducer"];
+  organizationSearchJobProducer: CreateOrganizationSearchInvalidationInput["jobProducer"];
   clock: Pick<ClockPort, "nowDate">;
 }
 
@@ -35,6 +42,12 @@ export function createApiUnitOfWork(options: CreateApiUnitOfWorkOptions): UnitOf
         repositories,
         auditLogWriter: createApiAuditLogWriter({ auditRepository: repositories.audit }),
         subjectAccessMutation: createSubjectAccessTransitionRepository(tx),
+        organizationSearchInvalidation: createOrganizationSearchInvalidation({
+          db: tx,
+          jobProducer: options.organizationSearchJobProducer,
+          lifecycle,
+          clock: options.clock,
+        }),
         userProfileInvalidation: createUserProfileInvalidation({
           db: tx,
           jobProducer: options.userProfileJobProducer,

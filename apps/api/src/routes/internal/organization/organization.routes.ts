@@ -4,14 +4,30 @@ import {
   OrganizationQueryDtoSchema,
   OrganizationUpdateDtoSchema,
 } from "@api/services/organization/organization.schema";
+import { OrganizationSearchTransportRequestSchema } from "@api/services/organization-search/organization-search.schema";
 import { createRoute, z } from "@hono/zod-openapi";
 import * as HttpStatusCodes from "@iam/api-core/core/http-status-codes";
 import { commonErrorResponses } from "@iam/api-core/core/openapi/helpers/common-error-responses";
 import jsonContent from "@iam/api-core/core/openapi/helpers/json-content";
 import jsonContentRequired from "@iam/api-core/core/openapi/helpers/json-content-required";
 import createSuccessResponseSchema from "@iam/api-core/core/openapi/schemas/create-success-schema";
+import { OrganizationSearchDocumentSchema } from "@iam/organization-search-read-model";
 
 const tags = ["Internal/Organization"];
+
+export const organizationsSearchDsl = createRoute({
+  method: "post",
+  path: "/search-dsl",
+  tags,
+  request: { body: jsonContentRequired(OrganizationSearchTransportRequestSchema, "严格组织 Filter DSL") },
+  responses: {
+    ...commonErrorResponses,
+    [HttpStatusCodes.OK]: jsonContent(
+      createSuccessResponseSchema(z.array(OrganizationSearchDocumentSchema.openapi("OrganizationSearchDocument"))),
+      "完整组织搜索文档",
+    ),
+  },
+});
 
 export const organizationsSearch = createRoute({
   method: "post",

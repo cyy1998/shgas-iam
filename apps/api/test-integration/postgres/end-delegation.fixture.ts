@@ -21,6 +21,11 @@ async function main() {
       db,
       logger: { error() {}, warn() {} },
       clock: { nowDate: () => new Date() },
+      organizationSearchJobProducer: {
+        async enqueueSourceChanges() {
+          return { enqueued: 0 };
+        },
+      },
       userProfileJobProducer: { enqueueRebuildJobs: async () => ({ enqueued: 0, jobIds: [] }) },
     });
     const service = createPrivilegeDelegationService({

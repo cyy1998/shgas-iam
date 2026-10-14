@@ -39,6 +39,7 @@
     "@iam/db": "workspace:*",
     "@iam/domain": "workspace:*",
     "@iam/jobs": "workspace:*",
+    "@iam/organization-search-read-model": "workspace:*",
     "@iam/role-assignment-resolution": "workspace:*",
     "@iam/session-kernel": "workspace:*",
     "@iam/user-profile-read-model": "workspace:*",

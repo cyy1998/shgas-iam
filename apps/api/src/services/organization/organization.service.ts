@@ -9,7 +9,7 @@ import {
   OrganizationCodeExistsError,
   OrganizationNotFoundError,
 } from "@iam/domain/organization";
-import type { OrganizationServiceDeps } from "./organization.port";
+import type { ApiOrganizationSearchChangedField, OrganizationServiceDeps } from "./organization.port";
 
 export function createOrganizationService(deps: OrganizationServiceDeps) {
   async function findOrganizationByCode(orgCode: string) {
@@ -43,7 +43,8 @@ export function createOrganizationService(deps: OrganizationServiceDeps) {
       if (newOrg !== null) {
         throw new OrganizationAlreadyExistsError("待创建组织已存在");
       }
-      await tx.organizationRepository.setOrganization(organizationCreateDto, parentOrg);
+      const created = await tx.organizationRepository.setOrganization(organizationCreateDto, parentOrg);
+      await tx.organizationSearchInvalidation.recordChanges([{ kind: "created", organizationId: created.id }]);
       return true;
     });
   }
@@ -60,7 +61,21 @@ export function createOrganizationService(deps: OrganizationServiceDeps) {
           throw new OrganizationCodeExistsError(`组织编码已存在: ${data.orgCode}`);
         }
       }
-      await tx.organizationRepository.updateOrganizationByCode(orgCode, data);
+      const updated = await tx.organizationRepository.updateOrganizationByCode(orgCode, data);
+      // Internal writes keep their existing unlocked precheck. A same-value patch can
+      // overwrite a concurrent change, so register every explicitly written public field.
+      const changedFields: ApiOrganizationSearchChangedField[] = [];
+      if (data.orgCode !== undefined) changedFields.push("code");
+      if (data.orgName !== undefined) changedFields.push("name");
+      if (data.orgType !== undefined) changedFields.push("type");
+      if (data.status !== undefined) changedFields.push("status");
+      // A concurrent code reassignment can change the target after the precheck.
+      // Register only the stable identity returned by the actual source update.
+      if (updated !== null) {
+        await tx.organizationSearchInvalidation.recordChanges([
+          { kind: "updated", organizationId: updated.id, changedFields },
+        ]);
+      }
       await tx.userProfileInvalidation.recordChanges([{ kind: "organization", organizationId: existing.id }]);
       return true;
     });

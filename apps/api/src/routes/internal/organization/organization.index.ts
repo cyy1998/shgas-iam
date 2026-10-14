@@ -5,6 +5,7 @@ import * as routes from "./organization.routes";
 export function createOrganizationRoute(handlers: OrganizationHandlers) {
   return createRouter()
     .basePath("/organizations")
+    .openapi(routes.organizationsSearchDsl, handlers.organizationsSearchDsl)
     .openapi(routes.organizationsSearch, handlers.organizationsSearch)
     .openapi(routes.organizationGetByCode, handlers.organizationGetByCode)
     .openapi(routes.organizationUpdate, handlers.organizationUpdate)

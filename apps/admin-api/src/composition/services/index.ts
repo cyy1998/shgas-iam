@@ -95,6 +95,7 @@ export function createAdminApiServices(options: CreateAdminApiServicesOptions) {
       auditService: tx.auditService,
       responsibilityParentLifecycle: tx.responsibilityParentLifecycle,
       userProfileInvalidation: tx.userProfileInvalidation,
+      organizationSearchInvalidation: tx.organizationSearchInvalidation,
     })),
   });
   const organizationResponsibilityService = createOrganizationResponsibilityService({
