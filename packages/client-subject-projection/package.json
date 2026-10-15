@@ -9,10 +9,11 @@
   "scripts": {
     "lint": "biome check --formatter-enabled=false . && stylelint \"**/*.less\" --allow-empty-input",
     "lint:fix": "biome check --formatter-enabled=false --write . && stylelint \"**/*.less\" --allow-empty-input",
-    "test:integration:component": "node ../../scripts/run-package-integration.mjs component -- bun test --max-concurrency=2 test-integration/component",
     "typecheck": "pnpm exec tsc --noEmit",
     "format": "biome format --write . && prettier \"**/*.{less,md,yaml,yml}\" --ignore-path ../../.gitignore --ignore-path ../../.prettierignore --no-error-on-unmatched-pattern --write",
-    "format:check": "biome format . && prettier \"**/*.{less,md,yaml,yml}\" --ignore-path ../../.gitignore --ignore-path ../../.prettierignore --no-error-on-unmatched-pattern --check"
+    "format:check": "biome format . && prettier \"**/*.{less,md,yaml,yml}\" --ignore-path ../../.gitignore --ignore-path ../../.prettierignore --no-error-on-unmatched-pattern --check",
+    "test": "pnpm test:unit",
+    "test:unit": "bun test --max-concurrency=2 src"
   },
   "dependencies": {
     "@iam/contracts": "workspace:*",

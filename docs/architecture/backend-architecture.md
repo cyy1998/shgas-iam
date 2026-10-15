@@ -128,7 +128,7 @@ Client 基础创建/list/兼容 ID 编辑与 Internal API credential 保留；�
 
 数据库提交后 required Snapshot invalidation 及 generic InternalAuthz code/secret cache 失效各自执行；
 未知 COMMIT 保守失效，已提交传播失败保留修复提示，不自动重放写入。详情与页面使用安全 mutation DTO。
-相关真实 PG/Redis composition 位于 `apps/admin-api/test-integration/composition/client-sso-snapshot.integration.test.ts`。
+相关真实 PG/Redis composition 位于 `apps/admin-api/test-integration/client/client-sso-snapshot.integration.test.ts`。
 岗位、组织、Role、Role Assignment 及上述 User、Employment、Responsibility 命令及 Client 基础、OIDC 与 Custom SSO 命令的 REST、legacy、tRPC 和页面已协调修改；整个集成分支的混合中间态不得部署，外部 REST 调用方核验仍是最终切换前的责任。
 
 成功业务结果通过现有 REST envelope 或直接通过 tRPC 返回，并协调切换调用方。状态/生命周期、主任职、授权、协议、凭据及会话命令的合法 no-op 保留意图审计，普通资料无变化不记变更审计。Client Runtime invalidation 与提交后失败沿用 ADR-0025 的结果语义；SSO Secret 的独立授权读取和审计边界见[Client 配置契约](../features/admin/client-sso-configuration.md)。

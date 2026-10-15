@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test";
 import process from "node:process";
-import { createPostgresTestHarness } from "../../test-integration/postgres/postgres-harness";
+import { createPostgresTestHarness } from "../../test-integration/support/postgres-harness";
 
 // These failure paths stop before resource creation; real isolation stays in resource contracts.
 test.each([{ name: "IAM_DB_TEST_DATABASE_URL", create: createPostgresTestHarness }])(

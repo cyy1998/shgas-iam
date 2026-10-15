@@ -30,7 +30,8 @@ GitHub 仓库 `{{REPO}}`，当前合入分支必须是 `{{INVOCATION_BRANCH}}`�
    若合入改变依赖、Umi 配置或路由，先在容器运行 `sh scripts/sandcastle/prepare-workspace.sh`，
    确认成功后再验证。所有本批分支合入后，按 AFK 工作流“验证节奏”在最终树上运行一次 `pnpm verify`，
    并将本批 tickets/Spec 所需的额外 Integration、E2E 或 Gateway 检查去重后执行；分支测试结果不能替代合并后的验证。
-   正式资源检查从根 `pnpm test:integration`（可筛选 workspace/profile/file）或 `pnpm test:e2e` 启动，
+   正式资源检查从根 `pnpm test:integration`（可用 `--workspace`、`--file` 筛选）或 `pnpm test:e2e` 启动，
+   例如 `pnpm test:integration --workspace @iam/worker --file apps/worker/test-integration/queues/queue-dashboard.integration.test.ts`；单文件仍使用所属 workspace/执行器声明的资源集合。
    每条命令自行创建和清理临时资源；执行器不预建或跨命令复用 PostgreSQL/Redis。类型检查或测试失败时先诊断，在本批授权范围内自行修复并继续验证；
    补齐缺失检查，修复后重跑失效的检查，通过后继续收尾。无法自行解决或需要范围外决策时保留现场并报告阻碍。
    不自动 reset，不关闭尚未验收的票，也不能靠删除测试、缩小验收或忽略失败换取通过。

@@ -11,5 +11,5 @@
     "verbatimModuleSyntax": true,
     "skipLibCheck": true
   },
-  "include": ["./**/*.ts", "./**/*.mts", "../__tests__/sandcastle*.test.ts"]
+  "include": ["./**/*.ts", "./**/*.mts", "../test-integration/sandcastle/**/*.ts"]
 }

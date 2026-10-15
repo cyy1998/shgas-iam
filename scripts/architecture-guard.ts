@@ -345,7 +345,7 @@ function collectConsumerOwnedPortViolations(sources: readonly IndexedSourceFile[
     .filter((source) => source.file.endsWith(".port.ts"))
     .flatMap((source) => {
       const importViolations = source.imports.flatMap((declaration): ArchitectureViolation[] => {
-        if (!ts.isStringLiteral(declaration.moduleSpecifier)) return [];
+        if (!declaration.moduleSpecifier || !ts.isStringLiteral(declaration.moduleSpecifier)) return [];
         const moduleSpecifier = declaration.moduleSpecifier.text;
         if (!isConcreteRepositoryModule(moduleSpecifier)) return [];
         return [
@@ -387,7 +387,7 @@ function collectRoleResolutionOwnerViolations(sources: readonly IndexedSourceFil
     const schemaViolations = isRoleAssignmentSchemaOwner(source.file)
       ? []
       : dependencies.flatMap((declaration): ArchitectureViolation[] => {
-          if (!ts.isStringLiteral(declaration.moduleSpecifier)) return [];
+          if (!declaration.moduleSpecifier || !ts.isStringLiteral(declaration.moduleSpecifier)) return [];
           const moduleSpecifier = declaration.moduleSpecifier.text;
           if (normalizeStaticModulePath(moduleSpecifier) !== "@iam/db/schema/role-assignments") return [];
           return [
@@ -405,7 +405,7 @@ function collectRoleResolutionOwnerViolations(sources: readonly IndexedSourceFil
     const resolverValueViolations = isRoleAssignmentResolverValueOwner(source.file)
       ? []
       : dependencies.flatMap((declaration): ArchitectureViolation[] => {
-          if (!ts.isStringLiteral(declaration.moduleSpecifier)) return [];
+          if (!declaration.moduleSpecifier || !ts.isStringLiteral(declaration.moduleSpecifier)) return [];
           const moduleSpecifier = declaration.moduleSpecifier.text;
           if (
             normalizeStaticModulePath(moduleSpecifier) !== "@iam/role-assignment-resolution" ||
@@ -433,7 +433,7 @@ function collectRoleResolutionOwnerViolations(sources: readonly IndexedSourceFil
 function collectUserProfileOwnerViolations(sources: readonly IndexedSourceFile[]): ArchitectureViolation[] {
   return sources.flatMap((source) =>
     [...source.imports, ...source.reExports].flatMap((declaration): ArchitectureViolation[] => {
-      if (!ts.isStringLiteral(declaration.moduleSpecifier)) return [];
+      if (!declaration.moduleSpecifier || !ts.isStringLiteral(declaration.moduleSpecifier)) return [];
       const moduleSpecifier = declaration.moduleSpecifier.text;
       const normalizedModule = normalizeStaticModulePath(moduleSpecifier);
       if (normalizedModule === "@iam/user-profile-read-model/producer" && !isUserProfileProducerOwner(source.file)) {
@@ -493,7 +493,7 @@ function collectStaticModuleOwnershipViolations(sources: readonly IndexedSourceF
       .filter((rule) => !rule.allowedSources.some((owner) => matchesStaticSourcePattern(source.file, owner)))
       .flatMap((rule) =>
         [...source.imports, ...source.reExports].flatMap((declaration): ArchitectureViolation[] => {
-          if (!ts.isStringLiteral(declaration.moduleSpecifier)) return [];
+          if (!declaration.moduleSpecifier || !ts.isStringLiteral(declaration.moduleSpecifier)) return [];
           if (rule.dependencyKind === "value" && !hasValueDependency(declaration)) return [];
           const moduleSpecifier = declaration.moduleSpecifier.text;
           const normalizedTargets = normalizeStaticModuleEdges(source.file, moduleSpecifier);
@@ -526,7 +526,7 @@ function collectStaticModuleOwnershipViolations(sources: readonly IndexedSourceF
 
 function collectSourceDependencyDirectionViolations(source: IndexedSourceFile): ArchitectureViolation[] {
   return [...source.imports, ...source.reExports].flatMap((declaration): ArchitectureViolation[] => {
-    if (!ts.isStringLiteral(declaration.moduleSpecifier)) return [];
+    if (!declaration.moduleSpecifier || !ts.isStringLiteral(declaration.moduleSpecifier)) return [];
     const moduleSpecifier = declaration.moduleSpecifier.text;
     if (
       moduleSpecifier === "@iam/db" &&
@@ -898,10 +898,10 @@ function isApplicationUseCaseModule(moduleSpecifier: string) {
 
 function resolveAppLocalModule(sourceFile: string, moduleSpecifier: string) {
   const sourceMatch = /^apps\/(api|admin-api)\/src\/(.+)$/u.exec(sourceFile);
-  if (!sourceMatch) return undefined;
+  if (!sourceMatch?.[1] || !sourceMatch[2]) return undefined;
   const [, app, appRelativeFile] = sourceMatch;
   const aliasedModule = resolveAliasedAppModule(moduleSpecifier);
-  if (aliasedModule?.app === app) return aliasedModule.path;
+  if (aliasedModule && aliasedModule.app === app) return aliasedModule.path;
   if (!moduleSpecifier.startsWith(".")) return undefined;
   return normalizeStaticModulePath(posix.normalize(posix.join(posix.dirname(appRelativeFile), moduleSpecifier)));
 }

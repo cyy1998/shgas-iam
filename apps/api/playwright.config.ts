@@ -1,8 +1,8 @@
 import { defineConfig, devices } from "@playwright/test";
 
 export default defineConfig({
-  testDir: "./test-integration/browser",
-  testMatch: "*.spec.ts",
+  testDir: "./test-integration",
+  testMatch: "**/*.spec.ts",
   outputDir: "./test-results/browser",
   timeout: 30000,
   workers: 1,

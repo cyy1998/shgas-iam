@@ -22,7 +22,7 @@ export default defineConfig({
     },
   },
   test: {
-    exclude: ["dist/**", "test-integration/browser/**", "node_modules/**", "src/.umi/**", "src/.umi-production/**"],
+    exclude: ["dist/**", "test-integration/**", "node_modules/**", "src/.umi/**", "src/.umi-production/**"],
     maxWorkers: "25%",
     testTimeout: 10_000,
     coverage: {

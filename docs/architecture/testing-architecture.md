@@ -21,19 +21,17 @@ collection 指一个 runner 或命令拥有的测试集合；owner 指维护该�
 
 ## 公开测试语言
 
-仓库只使用 Unit、Integration、E2E 三层。Integration 的六个并列 profile 表达资源模型与 harness owner：
+仓库只使用 Unit、Integration、E2E 三层。先判断是否属于完整系统 E2E，再按被测行为及 fixture 的真实资源依赖区分 Unit 与 Integration：
 
-| Profile       | 观察目标                                             | 外部资源                          |
-| ------------- | ---------------------------------------------------- | --------------------------------- |
-| `component`   | 进程内多个模块协作，出站边界使用 fake 或内存 adapter | 无                                |
-| `process`     | 真实子进程、端口、readiness、退出与进程树清理        | 本机进程与端口                    |
-| `redis`       | 生产 Redis adapter 行为                              | 编排器创建独占 Redis              |
-| `postgres`    | schema、transaction 与 repository 行为               | 编排器创建独占 PostgreSQL         |
-| `composition` | 生产 composition 与多个真实 adapter 协作             | profile 声明的全部资源            |
-| `browser`     | 真实浏览器 harness，可替代旅程未经过的系统边界       | 浏览器与 package-local web server |
+| 层级        | 归类依据                                                                                                          |
+| ----------- | ----------------------------------------------------------------------------------------------------------------- |
+| Unit        | 在测试进程内完成，不依赖真实外部运行资源。允许多个模块真实协作、Hono 内存请求、jsdom 和不产生真实网络连接的 MSW。 |
+| Integration | 依赖真实数据库、网络连接或监听端口、子进程、浏览器，或需要创建、修改、清理的真实文件系统状态。                    |
+| E2E         | 启动完整临时系统，通过真实入口验证关键业务旅程，由 E2E workspace 管理资源。                                       |
 
-profile 不增加测试层级，也不表示速度或发布 Gate。多资源测试按观察重点与 harness owner 唯一归属。
-Full-system E2E 使用完整临时系统，其资源由 E2E workspace 管理。
+读取固定只读 fixture、测试框架加载源码等基础活动不单独构成 Integration。模块数量、HTTP adapter、真实进程内接线、
+执行器或工具所属 workspace 均不能单独决定层级；真实浏览器测试也不自动成为完整系统 E2E。
+Integration 内部按功能组织，不再以六个强制 profile 分类。
 
 ## 测试质量原则
 
@@ -113,63 +111,58 @@ CSS class、颜色、间距、字重、固定 DOM 排列及只保存这些内容
 
 每个测试候选由一个且仅一个 canonical collection 收集，目录与命名表达其归属：
 
-| Collection             | 路径与命名                                                                                       |
-| ---------------------- | ------------------------------------------------------------------------------------------------ |
-| Unit                   | owner-local 窄根，通常为 `src/**/*.test.ts[x]`；tooling 可使用 `test/` 或 `scripts/__tests__/`。 |
-| 非 browser Integration | `test-integration/<profile>/**/*.integration.test.ts[x]`。                                       |
-| Browser Integration    | `test-integration/browser/**/*.spec.ts`。                                                        |
-| Full-system E2E        | `e2e/system/**/*.spec.ts`，由 root `pnpm test:e2e` 独占。                                        |
+| Collection               | 路径与命名                                                                                                      |
+| ------------------------ | --------------------------------------------------------------------------------------------------------------- |
+| Unit                     | 被测模块对应层级的 `__tests__/*.test.ts[x]`；root tooling 同样放在对应模块的 `__tests__/`。                     |
+| Bun / Vitest Integration | 所属 owner 的 `test-integration/<feature>/**/*.integration.test.ts[x]`；root 使用 `scripts/test-integration/`。 |
+| Playwright Integration   | 所属 owner 的 `test-integration/<feature>/**/*.spec.ts`。                                                       |
+| Full-system E2E          | `e2e/system/**/*.spec.ts`，由 root `pnpm test:e2e` 独占。                                                       |
 
 Admin/SSO frontend 的 Unit 在各自一个 package-local Vitest 进程中使用 Node 与 DOM 两种环境：普通 `*.test.ts[x]`
-默认进入 Node，`*.dom.test.ts[x]` 显式进入 jsdom。只有 DOM 加载 Testing Library 与浏览器兼容 setup；需要 HTTP mock
-的文件显式注册 package-local MSW lifecycle。MSW 的使用不决定环境，Node/DOM 不增加公开命令或 profile。
-Component Integration 则整体使用 jsdom、完整 setup 与自己的收集目录。
+进入 Node 并排除 DOM 后缀，`*.dom.test.ts[x]` 显式进入 jsdom。只有 DOM 加载 Testing Library 与浏览器兼容 setup；
+需要 HTTP mock 的文件显式注册 package-local MSW lifecycle。MSW 的使用不决定环境，Node/DOM 不增加公开命令或测试层级。
 
 各 package 持有 runner、config、fixture 和 setup。仓库不提供 root Vitest workspace、跨 package 共享配置模块或共享 setup。
 正常状态由生产 owner 建立，破坏变体与离线 schema 放在 owner 的 `/testing`；消费方不手写协议 key、Lua 或 serialization。
 业务验证的具体归属见[架构验证归属](architecture-verification.md#行为资源与系统验证)。
 
 User Profile backfill、repair、readiness 与 Employment 全库诊断属于操作命令，不采用测试命名，也不属于 collection。
-PostgreSQL 命令测试观察真实命令进程；E2E 观察 Worker backfill 与生产 readiness gate。Employment 的 Component 测试
+PostgreSQL 命令测试观察真实命令进程；E2E 观察 Worker backfill 与生产 readiness gate。Employment 的 Unit 测试
 验证分类、完整 ID 集合与排序，PostgreSQL 测试验证只读库存和退出码；它们不替代 Profile 发布前的父对象守卫。
 命令入口见[Workspace 入口](../development/commands.md#workspace-入口)。
 
-E2E command runner 的输出隔离与取消清理由该 workspace 的 Process Integration 通过真实子进程验证，
+E2E command runner 的输出隔离与取消清理由该 workspace 的 Integration 通过真实子进程验证，
 纯 capture 和 discovery parser 留在 Unit。
 
-Root Process Integration 也拥有真实 Docker CLI 的构建上下文与 Compose 环境传值验证；它只使用合成临时文件，
+Root Docker Integration 也拥有真实 Docker CLI 的构建上下文与 Compose 环境传值验证；它只使用合成临时文件，
 不创建 runtime 容器。Docker CLI、Compose、Buildx 与 server 前提见[命令入口](../development/commands.md#实现内循环)。
 
 ## Root 与 package commands
 
-Root 通过 Turbo 编排跨 package 测试，package 拥有实际 runner 与本地命令：
+Root 通过 Turbo 编排跨 package 测试，package 拥有实际 runner、原生 config、fixture 与 setup：
 
-| Root 入口                         | 职责                                                                                              |
-| --------------------------------- | ------------------------------------------------------------------------------------------------- |
-| `pnpm test`                       | 代理 `test:unit`；有 Unit collection 的 package 同样代理，没有 Unit 的 package 不发布空 `test`。  |
-| `pnpm test:unit`                  | 执行 package Unit tasks，并通过 `test:unit:root` 收集 root tooling tests。                        |
-| `pnpm test:integration:<profile>` | 统一根入口的 profile 别名；process/composition 同时接入各自 root collection。                     |
-| `pnpm test:integration`           | 按 workspace/profile/file 选择准备一次性资源，通过 Turbo 执行 package runner，最后准确清理。      |
-| `pnpm test:e2e`                   | 完整 Full-system collection 的唯一 owner，由 `@iam/e2e-system` 管理[生命周期](#full-system-e2e)。 |
+| Root 入口               | 职责                                                                                              |
+| ----------------------- | ------------------------------------------------------------------------------------------------- |
+| `pnpm test`             | 代理 `test:unit`；有 Unit collection 的 package 同样代理，没有 Unit 的 package 不发布空命令。     |
+| `pnpm test:unit`        | 执行 package Unit tasks 与 `test:unit:root`。                                                     |
+| `pnpm test:integration` | 按 workspace/file 选择，准备一次性资源，通过 Turbo 串行执行内部 runner，最后准确清理。            |
+| `pnpm test:e2e`         | 完整 Full-system collection 的唯一 owner，由 `@iam/e2e-system` 管理[生命周期](#full-system-e2e)。 |
 
-聚合 Integration 固定串行执行：
+根 Integration 入口与 package runner 共用 manifest 中的 `iamTest.integration` 声明，以 workspace＋执行器决定 PostgreSQL/Redis
+资源集合。单文件选择仍使用该集合，接受启动它不需要的部分服务；空资源声明不创建这两类服务。
+声明与内部任务格式见[命令入口](../development/commands.md#测试与验证通道)。内部 runner 仅消费本次环境，核对 run ID、
+记录状态和完全相同的内部 URL，不自行准备第二套环境，也不接受任意外部 URL。
 
-```text
-component -> process -> redis -> postgres -> composition -> browser
-```
-
-根入口按所选 owner/profile 创建需要的 PostgreSQL/Redis，等待就绪后注入连接地址与运行记录。Package resource runner
-只消费本次已经准备好的环境，核对 run ID、记录状态及完全相同的内部 URL；调用方任意提供外部 URL 不能作为正式运行模式。
-选中 component、process 或前端 mock-browser 时不创建这两类服务。一次正式命令拥有一次环境；不同命令可以并行，
-不跨命令复用数据。缺少运行条件、无匹配或首个失败直接非零退出，不 skip、自动 retry 或回退到其他环境。
-workspace-local `admin:journey`、`hr-admin:journey`、`oidc:journey` 保留为单旅程调试入口。
-完整命令列表与参数见[测试与验证通道](../development/commands.md#测试与验证通道)。
+根命令是唯一受支持的 Integration 入口。一次正式资源命令拥有一次环境；独立命令可以并行，不跨命令复用数据。
+缺少运行条件、错误参数、无匹配或首个失败直接非零退出，不 skip、自动 retry 或回退到其他环境。
+Unit 支持 package-local 执行；workspace-local `admin:journey`、`hr-admin:journey`、`oidc:journey` 保留为单旅程调试入口。
 
 ### 测试收集维护
 
-测试由所属 runner 在 owner-local 窄目录自动发现；root Unit 使用 `scripts/__tests__/`，root Process Integration
-使用 `scripts/test-integration/process/`；root Composition Integration 使用 `scripts/test-integration/composition/`。
-后者通过受控的独立根命令证明真实资源生命周期，外层不另建无用 PG/Redis。新增测试放入所属目录，维护路径、命名与唯一 collection 归属。
+测试由所属 runner 在 owner-local 窄目录自动发现；root Unit 位于 `scripts/<module>/__tests__/`，
+Integration 按功能进入 `scripts/test-integration/`。其中资源 owner 通过受控的独立根命令证明真实生命周期，
+外层无需声明无用 PG/Redis。新增测试维护路径、命名与唯一 collection 归属，不登记逐文件清单。
+Bun/Vitest 只收 `*.integration.test.ts[x]`，Playwright 只收 `*.spec.ts`；同一 owner 的非浏览器 Integration 只选择 Bun 或 Vitest。
 
 修改 include/exclude、Vitest projects 或 workspace scripts 时，核对归属与 root Turbo task 接入，并运行受影响 owner 的
 测试命令。命令成功只证明实际收集的测试执行结果，不自动证明磁盘候选全部收集或没有重复；取舍见
@@ -184,29 +177,30 @@ Turbo 是唯一跨 package orchestrator。测试任务通过 `transit` 传播依
   "tasks": {
     "transit": { "dependsOn": ["^transit"] },
     "test:unit": { "dependsOn": ["transit"] },
-    "test:integration:component": { "dependsOn": ["transit"] },
-    "test:integration:process": { "dependsOn": ["transit"], "cache": false },
+    "test:integration:bun": { "dependsOn": ["transit"], "cache": false },
+    "test:integration:vitest": { "dependsOn": ["transit"], "cache": false },
+    "test:integration:playwright": { "dependsOn": ["transit"], "cache": false },
     "test:e2e": { "dependsOn": ["transit"], "cache": false }
   }
 }
 ```
 
-Unit/component 只有在输入、env、fixture、时间和随机性都可重现时允许缓存。process、redis、postgres、composition、
-browser、Full-system E2E 及其他外部验证均 `cache:false`。Turbo strict env 透传所属 owner 的内部 URL、run ID、record、
-文件选择和可选 registry。Component 的文件选择进入 env hash，runner 与资源工具进入 inputs，避免不同选择错误复用缓存。
-进程树归属 marker 只透传、不进入 hash；Browser/E2E 窄透传 `PLAYWRIGHT_BROWSERS_PATH`，使 sandbox 使用镜像内已安装的 Chromium。
+Unit 只有在输入、env、fixture、时间和随机性均可重现时允许缓存。Integration 与 Full-system E2E 均 `cache:false`。
+Turbo strict env 透传所属 owner 的内部 URL、run ID、record、文件选择和可选 registry；runner 与资源工具进入 inputs。
+Root typecheck 显式包含工具测试及其 api-core 源码依赖。进程树归属 marker 只透传、不进入 hash；
+Integration/E2E 窄透传 `PLAYWRIGHT_BROWSERS_PATH`，使 sandbox 使用镜像内 Chromium。
 
 ## 并发、timeout 与清理
 
 ### 执行预算
 
-| Collection                               | Turbo package concurrency | Runner 预算                                                                                  |
-| ---------------------------------------- | ------------------------: | -------------------------------------------------------------------------------------------- |
-| Unit                                     |                         2 | Admin/SSO Vitest `maxWorkers: 4`；其他 Vitest `maxWorkers: 25%`；Bun `--max-concurrency=2`。 |
-| component                                |                         2 | Vitest `maxWorkers: 25%`；Bun `--max-concurrency=2`。                                        |
-| process / redis / postgres / composition |                         1 | 单 package，Bun suite/case 串行并在首个失败后停止；用例内竞态并发保留。                      |
-| browser                                  |                         1 | 单 Chromium project、单 worker、零 retry、首个失败后停止。                                   |
-| Full-system E2E                          |                         1 | 每个旅程均为单 Chromium project、单 worker、零 retry。                                       |
+| Collection      | Turbo package concurrency | Runner 预算                                                                                  |
+| --------------- | ------------------------: | -------------------------------------------------------------------------------------------- |
+| Unit            |                         2 | Admin/SSO Vitest `maxWorkers: 4`；其他 Vitest `maxWorkers: 25%`；Bun `--max-concurrency=2`。 |
+| Integration     |                         1 | Bun/Vitest suite/case 串行，首错停止；Playwright 单 Chromium project、单 worker、零 retry。  |
+| Full-system E2E |                         1 | 每个旅程单 Chromium project、单 worker、零 retry。                                           |
+
+层级默认预算由根入口及共享 runner 统一执行，不在 manifest 重复填写。用例内部用于验证竞态的并发保留。
 
 Timeout 用于避免永久挂起，不承担性能 SLA。Process harness 使用真实 readiness 信号，同时观察 child exit/error，
 限制 stdout/stderr 缓冲，在成功、失败、timeout 和中断路径清理进程树、端口与临时目录。
@@ -215,8 +209,8 @@ Timeout 用于避免永久挂起，不承担性能 SLA。Process harness 使用�
 ### 专用资源与隔离
 
 正式资源测试仅使用本次编排创建的可销毁环境，不使用 development、runtime 或 production 资源。Root tooling 用 Compose
-与薄的 Node owner 管理创建、就绪、运行记录和销毁；服务使用仓库声明的镜像与动态 loopback 端口。PG-only 选择只启动
-PostgreSQL，Redis-only 选择只启动 Redis。Browser 的 web server 仍由所属 package harness 管理。
+与薄的 Node owner 管理创建、就绪、运行记录和销毁；服务使用仓库声明的镜像与动态 loopback 端口。只声明 PostgreSQL 的集合仅启动
+PostgreSQL，只声明 Redis 的集合仅启动 Redis。浏览器 web server 仍由所属 package harness 管理。
 
 创建前登记唯一 run ID、准确 project、Compose 配置及产物位置。记录中的配置、环境文件和产物路径相对于仓库根目录，
 由宿主或 sandbox 自行解析。连接地址是编排器与 runner 的内部传参；可选 registry 为 AFK 外层登记本执行器的准确记录。
@@ -225,7 +219,7 @@ PostgreSQL，Redis-only 选择只启动 Redis。Browser 的 web server 仍由所
 #### 运行、失败与恢复
 
 同环境的资源套件和用例串行运行，单个用例用于证明竞态的并发事务、消费者与进程保留。首个断言、setup、teardown、
-重置失败或 timeout 后不再启动后续用例或 profile。外层先终止并等待自己的测试进程树，再用独立、有界的收尾预算
+重置失败或 timeout 后不再启动后续用例或执行器集合。外层先终止并等待自己的测试进程树，再用独立、有界的收尾预算
 采集可得诊断并销毁准确 project；部分初始化失败与可捕获中断使用同一出口，原始失败与清理失败均保留。
 
 默认成功和失败都清理本次容器、网络及数据卷，保留日志和运行记录。运行前可显式选择保留环境，结束时输出准确清理
@@ -245,7 +239,7 @@ PostgreSQL 保留随机 schema、scoped connection 与整体删除。Redis 用�
 仍尝试其他执行者收尾并汇总错误，然后结束整条命令。禁止 `FLUSHALL`，普通 fixture 不再逐 key/job 登记清理或等待锁自然过期。
 
 生产命令的连接关闭、只读作用与非目标数据保护必须在 reset 之前断言，环境清理不能替代这些事实。共享资源 owner
-集中证明故障和恢复，消费方保留真实入口接线与自身业务差异；不为每个 profile 复制完整故障矩阵。
+集中证明故障和恢复，消费方保留真实入口接线与自身业务差异；不为每个消费集合复制完整故障矩阵。
 
 以下 harness 还有独立的行为约束；其他 owner 的内部 URL 见[命令页](../development/commands.md#测试与验证通道)：
 
@@ -253,7 +247,7 @@ PostgreSQL 保留随机 schema、scoped connection 与整体删除。Redis 用�
 | --------------------------- | --------------------------------- | ------------------------------------------------------------------------------------------------------ |
 | Admin API PostgreSQL        | `IAM_ADMIN_API_TEST_DATABASE_URL` | 通过生产 Admin UoW factory 注入随机 schema client，不回退进程级数据库 singleton。                      |
 | Worker Redis repair/verify  | `IAM_WORKER_TEST_REDIS_URL`       | targeted/full repair 与独立 verify 共用本次 owner 资源；保留对 Worker runtime tuple 的直接防误用检查。 |
-| API Core Redis full restore | `IAM_API_CORE_TEST_REDIS_URL`     | 按 Redis profile 串行运行；受管理独占 DB 与停止后 reset 保证用例干净起点。                             |
+| API Core Redis full restore | `IAM_API_CORE_TEST_REDIS_URL`     | 由所属 Integration 串行运行；受管理独占 DB 与停止后 reset 保证用例干净起点。                           |
 
 Worker full restore 同样以受管理独占 DB 与停止后 reset 保证干净起点。生产 Redis-only command composition 继续观察普通/敏感 payload
 回源、重复 repair、分批恢复、部分失败重跑、另起 Worker 的 scan-only verify 及 non-owner sentinel 保留。旧 OIDC、Custom SSO
@@ -365,7 +359,7 @@ flowchart LR
 
 `pnpm verify:static` 使用同一 runner 的 `--static` 参数，只执行只读 format/lint、文档索引、环境变量命名 Guard 和
 Architecture Guard。基础 `verify` 不读取真实 PostgreSQL/Redis，也不隐式运行 Integration、浏览器或 Full-system stack；
-按改动风险显式追加相关 profile。
+按改动风险显式追加相关 Integration 或 E2E。
 完整 `test:integration` 自动准备其声明的服务；Docker、浏览器及所属通道的其他运行条件仍须就绪。
 
 | 聚合 Gate             | 固定执行顺序                 |

@@ -103,6 +103,6 @@ already_terminated，不把旧作用重新计数。没有自动补齐或持久�
 ## 验证边界
 
 `@iam/session-kernel/testing` 仅用于独立 Redis scope、操作生命周期、窄故障注入和 owner 状态观察。
-[Redis 生命周期测试](../../../packages/session-kernel/test-integration/redis/unified-session-lifecycle.integration.test.ts)
+[Redis 生命周期测试](../../../packages/session-kernel/test-integration/session-lifecycle/unified-session-lifecycle.integration.test.ts)
 覆盖并发、时间、防伪、精确作用、未知结果与 TTL；协议交付和系统部署的证明范围见
 [架构验证归属](../../architecture/architecture-verification.md)。

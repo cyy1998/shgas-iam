@@ -4,7 +4,9 @@ const port = 8000;
 const baseURL = `http://127.0.0.1:${port}`;
 
 export default defineConfig({
-  testDir: "./test-integration/browser",
+  testDir: "./test-integration",
+  testMatch: "**/*.spec.ts",
+  outputDir: "./test-results/browser",
   timeout: 180_000,
   expect: {
     timeout: 120_000,

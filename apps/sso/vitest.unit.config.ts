@@ -14,7 +14,7 @@ export default defineConfig({
         test: {
           name: "node",
           environment: "node",
-          include: ["src/**/*.test.{ts,tsx}"],
+          include: ["src/**/__tests__/**/*.test.{ts,tsx}"],
           exclude: [...sharedExclude, "src/**/*.dom.test.{ts,tsx}"],
         },
       },
@@ -23,7 +23,7 @@ export default defineConfig({
         test: {
           name: "dom",
           ...domTestOptions,
-          include: ["src/**/*.dom.test.{ts,tsx}"],
+          include: ["src/**/__tests__/**/*.dom.test.{ts,tsx}"],
           exclude: sharedExclude,
           setupFiles: ["./test/setup-dom.ts"],
         },

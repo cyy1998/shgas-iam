@@ -26,7 +26,8 @@ export async function smokeCommandResources(
   resources: ExecutorResources,
   signal: AbortSignal,
 ): Promise<void> {
-  const file = "apps/worker/test-integration/redis/sandcastle-resource-smoke.integration.test.ts";
+  const directory = "apps/worker/test-integration/resources";
+  const file = `${directory}/sandcastle-resource-smoke.integration.test.ts`;
   const fixture = `
 import { expect, test } from "bun:test";
 import { readFileSync, writeFileSync } from "node:fs";
@@ -49,9 +50,13 @@ test("each AFK command receives a fresh managed Redis database", async () => {
   } finally { await redis.quit(); }
 });
 `;
-  await checkedExec(sandbox, `printf '%s' ${shellQuote(fixture)} > ${shellQuote(file)}`, signal);
-  const before = await readManagedResourceRegistry(cwd, resources.registryFile);
   try {
+    await checkedExec(
+      sandbox,
+      `mkdir -p ${shellQuote(directory)} && printf '%s' ${shellQuote(fixture)} > ${shellQuote(file)}`,
+      signal,
+    );
+    const before = await readManagedResourceRegistry(cwd, resources.registryFile);
     const denied = withDockerPreflight({
       ...codex("smoke-no-model", { captureSessions: false }),
       buildPrintCommand: () => ({ command: "touch /tmp/iam-afk-network-agent-started" }),
@@ -83,7 +88,7 @@ test("each AFK command receives a fresh managed Redis database", async () => {
         agent: withDockerPreflight({
           ...codex("smoke-no-model", { captureSessions: false }),
           buildPrintCommand: () => ({
-            command: `pnpm test:integration --workspace @iam/worker --profile redis --file ${shellQuote(file)} && ${completionCommand}`,
+            command: `pnpm test:integration --workspace @iam/worker --file ${shellQuote(file)} && ${completionCommand}`,
           }),
         }),
         prompt: `Run fresh resource command ${index}; no model call.`,

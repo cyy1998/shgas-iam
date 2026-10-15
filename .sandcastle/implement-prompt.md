@@ -15,7 +15,8 @@ GitHub 仓库：`{{REPO}}`；ticket：#{{ISSUE_NUMBER}}；实施分支：`{{BRAN
 5. 在 `{{BRANCH}}` 创建普通 focused commits，消息引用 #{{ISSUE_NUMBER}}；提交 Hook 自动处理暂存文件的 format/lint。
    核对 Hook 自动修复的 diff，按工作流判断已有类型或行为验证是否失效；检查工作区干净，固定当前 candidate SHA。
 6. 在该候选上按 AFK 工作流“验证节奏”执行一次 `pnpm verify:static`、完整受影响范围的 typecheck/行为测试和 `git diff --check`。
-   资源测试使用根 `pnpm test:integration`（可筛选 workspace/profile/file）或 `pnpm test:e2e`；每条命令独立创建和清理环境，不依赖执行器预建的资源或外部 URL。
+   资源测试使用根 `pnpm test:integration`（可用 `--workspace`、`--file` 筛选）或 `pnpm test:e2e`；每条命令独立创建和清理环境，不依赖执行器预建的资源或外部 URL。
+   例如 `pnpm test:integration --workspace @iam/worker --file apps/worker/test-integration/session-clear/session-clear-command.integration.test.ts`；单文件仍使用所属 workspace/执行器声明的资源集合。
    缺少 E2E/Gateway 等必需资源时报告未执行项，保持本票未完成。测试真实 I/O 先普通 await，再同步断言。
 7. 读取 `.agents/skills/code-review/SKILL.md`，在本会话内组织双轴评审。每轮新建两个相互独立的子代理，使用
    `standards_reviewer` 和 `spec_reviewer` 角色，使用独立上下文（`fork_context=false`），并行审查从

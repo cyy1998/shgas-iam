@@ -3,7 +3,7 @@ import { writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import process from "node:process";
 import {
-  integrationProfiles,
+  integrationExecutors,
   parseIntegrationArguments,
   selectIntegrationTasks,
 } from "./test-resources/integration-selection.mjs";
@@ -39,7 +39,7 @@ try {
   const environment = {
     ...process.env,
     IAM_TEST_INTEGRATION_SELECTION: JSON.stringify(
-      Object.fromEntries(tasks.map((task) => [`${task.name}:${task.profile}`, task.files])),
+      Object.fromEntries(tasks.map((task) => [`${task.name}:${task.executor}`, task.files])),
     ),
   };
   for (const name of Object.keys(environment))
@@ -48,9 +48,7 @@ try {
   delete environment.IAM_TEST_RESOURCE_RECORD;
   const names = [...new Set(tasks.flatMap((task) => task.environmentNames))];
   if (names.length > 0) {
-    const services = ["postgres", "redis"].filter((service) =>
-      names.some((name) => name.endsWith(service === "postgres" ? "DATABASE_URL" : "REDIS_URL")),
-    );
+    const services = ["postgres", "redis"].filter((service) => tasks.some((task) => task.resources[service]));
     run = await createManagedResourceRun({
       root,
       composeFile: "scripts/test-resources/compose.yaml",
@@ -80,33 +78,25 @@ try {
     await saveManagedResourceRun(run);
   }
   executionStart = performance.now();
-  for (const profile of integrationProfiles) {
-    const selected = tasks.filter((task) => task.profile === profile);
+  for (const executor of integrationExecutors) {
+    const selected = tasks.filter((task) => task.executor === executor);
     if (selected.length === 0) continue;
     controller.signal.throwIfAborted();
     const commands = [...new Set(selected.map((task) => task.task))];
     const filters = [...new Set(selected.map((task) => `--filter=${task.directory === "." ? "//" : task.name}`))];
     const result = await runOwnedCommand({
-      ...pnpmCommand(pnpmCli, [
-        "exec",
-        "turbo",
-        "run",
-        ...commands,
-        ...filters,
-        `--concurrency=${profile === "component" ? 2 : 1}`,
-        "--no-daemon",
-      ]),
+      ...pnpmCommand(pnpmCli, ["exec", "turbo", "run", ...commands, ...filters, "--concurrency=1", "--no-daemon"]),
       cwd: root,
       env: environment,
       signal: controller.signal,
       timeoutMs: options.timeoutMs,
       cleanupTimeoutMs: options.cleanupTimeoutMs,
       inheritOutput: true,
-      logFile: run ? join(root, run.record.artifactDirectory, `${profile}.log`) : undefined,
+      logFile: run ? join(root, run.record.artifactDirectory, `${executor}.log`) : undefined,
     });
     if (result.exitCode !== 0) {
       process.exitCode = result.exitCode;
-      throw new Error(`Integration ${profile} failed with exit ${result.exitCode}`);
+      throw new Error(`Integration ${executor} failed with exit ${result.exitCode}`);
     }
   }
 } catch (error) {

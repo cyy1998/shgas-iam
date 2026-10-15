@@ -22,26 +22,26 @@ git diff --check
 根工具链变化的聚焦 Bun 测试：
 
 ```bash
-bun test scripts/__tests__/architecture-guard.test.ts
-bun test scripts/__tests__/test-orchestration.test.ts
-bun test scripts/__tests__/tooling-contracts.test.ts
-bun test scripts/__tests__/quality-tooling-ownership.test.ts
+pnpm test:integration --workspace iam-monorepo --file scripts/test-integration/architecture/architecture-guard.integration.test.ts
+pnpm test:integration --workspace iam-monorepo --file scripts/test-integration/runner/test-orchestration.integration.test.ts
+bun test scripts/tooling/__tests__/tooling-contracts.test.ts
+bun test scripts/tooling/__tests__/quality-tooling-ownership.test.ts
 ```
 
 Canonical collection 与编排变化还应运行：
 
 ```bash
 pnpm test:unit
-pnpm test:integration:<component|process|redis|postgres|composition|browser>
+pnpm test:integration
 ```
 
 完整 root Gate 只在准备 merge、release 或用户明确要求时运行；ticket 实现内循环不重复运行。按需要选择基础
 `pnpm verify`、全资源 `pnpm verify:ci` 或包含 Full-system E2E 的 `pnpm verify:release`。
 
-统一格式与规则命令的真实 CLI 行为由 `pnpm test:integration:process:root` 聚焦执行；它同时由根
-`pnpm test:integration:process` 收集，使用临时 Git 仓库，不需要数据库或 Redis。
+统一格式与规则命令的真实 CLI 行为使用临时 Git 仓库，通过根 `pnpm test:integration --workspace iam-monorepo`
+收集，不需要数据库或 Redis。
 
-该 root process collection 还通过真实 Docker CLI 验证 `.dockerignore` 的构建上下文排除与 Custom SSO Compose
+该 root Integration collection 还通过真实 Docker CLI 验证 `.dockerignore` 的构建上下文排除与 Custom SSO Compose
 环境传值，需要可用的 Docker CLI、Compose、Buildx 和运行中的 Docker server。构建只使用合成临时上下文，
 从 `scratch` 导出本地文件；配置检查显式提供合成 env-file。这些测试不启动 runtime 容器，不加载本地 `.env`，
 不进入默认 `pnpm verify`；环境缺失时直接失败。
@@ -148,7 +148,7 @@ Codex CLI 0.154 的角色 override 忽略 `sandbox_mode`，因此评审角色的
 
 Planner、Implementer 与 Merger 均通过共享宿主 daemon 和 host networking 运行，在模型命令前由实际 UID 1000 检查
 socket 权限、Docker CLI/Compose/Buildx 和宿主 loopback 可达。执行器不预建 PostgreSQL/Redis，不注入私网 URL。
-资源测试使用根 `pnpm test:integration`（支持 workspace/profile/file 筛选）或 `pnpm test:e2e`，每条命令独立创建和销毁环境。
+资源测试使用根 `pnpm test:integration`（支持 workspace/file 筛选）或 `pnpm test:e2e`，每条命令独立创建和销毁环境。
 Linux sandbox 内独立安装 workspace 依赖，不复用 Windows `node_modules`。Windows 的来源 checkout 可以是 worktree；
 SDK 固定补丁只挂载目标 worktree 的 Linux Git 指针，Git 长路径配置仅用于具体命令，不改宿主配置。
 必需检查缺少运行条件时保留 ticket open，不能以基础 `pnpm verify` 通过代替。
@@ -170,7 +170,6 @@ Profile 重建及 Subject Access 恢复见[Profile 维护手册](../releases/use
 - `pnpm test`
 - `pnpm test:unit`
 - `pnpm test:integration`
-- `pnpm test:integration:<component|process|redis|postgres|composition|browser>`
 - `pnpm test:e2e`
 - `pnpm typecheck`
 - `pnpm verify:static`
@@ -231,160 +230,73 @@ Stylelint 只检查 Less，不自动修复。YAML 不执行通用 lint，也不�
 
 ## 测试与验证通道
 
-Root 与 package 已切换到以下长期 collection commands：
+日常入口为 `pnpm test:unit`、`pnpm test:integration`、`pnpm test:e2e`；`pnpm test` 代理 Unit。
+命名、唯一收集、缓存和并发预算见[测试编排架构](../architecture/testing-architecture.md#root-与-package-commands)。
+
+根 Integration 入口根据 workspace manifest 声明创建本次 PostgreSQL/Redis，等待就绪后通过 Turbo 注入 owner-specific URL；
+结束时清理准确 Compose project 的容器、网络和数据卷。未声明这两类服务的集合不创建它们。
+内部按 Bun → Vitest → Playwright 执行器顺序调度，Turbo concurrency 为 1、禁用缓存，首错停止。
+执行器名称仅服务内部调度，目录按功能组织。
+
+`--workspace` 接受 package name 或仓库相对 workspace 目录；`--workspace` 与 `--file` 均可重复。
+文件接受绝对路径、仓库相对路径或 owner 相对路径，必须属于所选 owner 的 canonical collection。
+无匹配、范围外文件和未知参数均失败，不自动扩大范围。旧 profile 命令及 `--profile` 不再支持。
 
 ```bash
-pnpm test:unit
 pnpm test:integration
-pnpm test:integration:component
-pnpm test:integration:process
-pnpm test:integration:redis
-pnpm test:integration:postgres
-pnpm test:integration:composition
-pnpm test:integration:browser
+pnpm test:integration --workspace @iam/worker
+pnpm test:integration --workspace @iam/worker --file test-integration/session-clear/session-clear-command.integration.test.ts
+pnpm test:integration --workspace apps/admin --workspace apps/sso
+pnpm test:integration --workspace iam-monorepo --file scripts/test-integration/resources/managed-resources.integration.test.ts
 ```
 
-各 profile command 只运行同名 package task；`pnpm test` 代理 Unit。命名、唯一收集、缓存与并发预算统一见
-[测试编排架构](../architecture/testing-architecture.md#root-与-package-commands)。
+每个 owner 在自己的 `package.json` 声明执行器与服务映射，例如 API：
 
-根 Integration 入口按选择创建一次性 PostgreSQL/Redis，等待就绪后通过 Turbo 注入 owner-specific URL；结束时清理本次
-准确 Compose project 的容器、网络和数据卷。组件、本地进程及前端 mock-browser 的选择不创建这两类服务。
-未筛选时仍按 component → process → redis → postgres → composition → browser 执行，首个失败停止后续 profile。
+```json
+{
+  "iamTest": {
+    "integration": {
+      "bun": {
+        "postgres": "IAM_API_TEST_DATABASE_URL",
+        "redis": "IAM_API_TEST_REDIS_URL"
+      },
+      "playwright": {
+        "redis": "IAM_API_TEST_REDIS_URL"
+      }
+    }
+  }
+}
+```
 
-`--workspace` 接受 package name 或仓库相对 workspace 目录；`--profile` 和 `--file` 可重复。文件使用仓库相对路径或所选
-owner 的相对路径，必须位于所选 profile 的 canonical collection；没有匹配时失败，不扩大到其他目录。
-根 profile 命令是同一入口的别名，例如：
+空对象表示该执行器不需要 PostgreSQL/Redis；Bun 与 Vitest 不同时拥有一个 owner 的非浏览器 Integration，Playwright 可并存。
+根入口与内部 runner 使用同一解析器，保留既有内部连接变量名。单文件也使用所属 workspace＋执行器声明的完整资源集合，
+接受多启动部分服务，不引入逐文件资源标签。浏览器、HTTP server、子进程和临时目录继续由所属 harness 管理。
+
+内部脚本为 `test:integration:bun|vitest|playwright`，root 为 `test:integration:bun:root`；脚本通过
+`scripts/run-package-integration.mjs <executor> [--preflight <path>] -- <executor> ...` 消费本次选择和环境。
+这些脚本不作为 package-local 资源测试入口；手动和 AFK 均通过根命令选择 owner/file。Unit 支持 package-local 执行：
 
 ```bash
-pnpm test:integration --workspace @iam/worker --profile redis --file apps/worker/test-integration/redis/session-clear-command.integration.test.ts
-pnpm test:integration:postgres --workspace @iam/worker --file test-integration/postgres/employment-command.integration.test.ts
-pnpm test:integration:component --workspace @iam/sso --file apps/sso/test-integration/component/masked-mobile.service.integration.test.ts
+pnpm --filter @iam/api-core test:unit
+pnpm --filter @iam/admin test:unit
 ```
 
 每次资源运行的准确 project、Compose 配置、环境文件和产物位置登记在
-`test-results/integration/<run-id>/run.json`，其中路径相对于仓库根目录。诊断失败只告警；初始化、测试、进程关闭和清理
-失败仍使命令非零，原始失败与清理失败都保留。`--timeout-ms` 设置整条命令预算，`--cleanup-timeout-ms` 设置独立清理预算，
-默认分别为 30 分钟和 30 秒。
+`test-results/integration/<run-id>/run.json`，其中路径相对于仓库根目录。内部 runner 核对本次 run ID、运行记录状态及
+完全相同的 URL，不接受任意外部地址，也不另建正式环境。初始化、测试、进程关闭或清理失败均非零退出；
+辅助诊断失败只告警，原始失败和清理失败均保留。
 
-运行前增加 `--keep-resources` 可保留环境，结束时会打印准确清理命令。清理失败或强杀后也使用同一份记录恢复：
+`--timeout-ms` 为整条命令预算，`--cleanup-timeout-ms` 为独立清理预算，默认分别 30 分钟和 30 秒。
+运行前加 `--keep-resources` 显式保留环境；清理失败或强杀后按同一准确记录恢复：
 
 ```bash
 pnpm test:resources:cleanup --record test-results/integration/<run-id>/run.json
 ```
 
-Package-local resource runner 只接受本次受管理运行的 marker、record 和相同 URL，不接受调用方任意提供外部 URL。
-下方 package commands 用于表达 runner 所有权；手动执行资源 profile 时使用上述根入口筛选。Unit、component 和 process
-仍可直接运行 package-local commands。
-
-Root 资源生命周期的真实 Node 子进程测试归入 `scripts/test-integration/composition/`，由
-`test:integration:composition:root` 收集。该 owner 调用受控的独立根命令验证创建、故障、保留与恢复，外层不另建无用资源。
-可通过 `pnpm test:integration:composition --workspace iam-monorepo` 聚焦执行；原 root process collection 继续只验证本地进程、
-Docker 构建上下文和配置。
-
-真实进程/端口行为由 `test:integration:process` 以 Turbo concurrency 1 运行，并禁用任务缓存：
-
-```bash
-pnpm --filter @iam/api-core test:integration:process
-pnpm --filter @iam/api test:integration:process
-pnpm --filter @iam/admin-api test:integration:process
-pnpm --filter @iam/worker test:integration:process
-```
-
-`@iam/api-core` 已作为 collection migration 的 Bun tracer bullet 发布 package-local canonical commands：
-
-```bash
-pnpm --filter @iam/api-core test:unit
-pnpm --filter @iam/api-core test:integration:component
-pnpm --filter @iam/api-core test:integration:process
-pnpm --filter @iam/api-core test:integration:redis
-```
-
-`@iam/api` 已发布以下 package-local canonical commands：
-
-```bash
-pnpm --filter @iam/api test:unit
-pnpm --filter @iam/api test:integration:component
-pnpm --filter @iam/api test:integration:process
-pnpm --filter @iam/api test:integration:composition
-pnpm --filter @iam/api test:integration:postgres
-pnpm --filter @iam/api test:integration:redis
-pnpm --filter @iam/api test:integration:browser
-```
-
-OIDC 完整协议由 `@iam/oidc` Redis collection 与 `@iam/api` 的 HTTP/process/composition/browser collection 验证。
-
-`@iam/admin-api` 已发布 Unit、component、process、postgres、composition 与 redis package-local canonical commands；`@iam/worker` 已发布
-Unit、component、process、postgres、composition 与 redis commands：
-
-```bash
-pnpm --filter @iam/admin-api test:unit
-pnpm --filter @iam/admin-api test:integration:component
-pnpm --filter @iam/admin-api test:integration:process
-pnpm --filter @iam/admin-api test:integration:postgres
-pnpm --filter @iam/admin-api test:integration:composition
-pnpm --filter @iam/admin-api test:integration:redis
-pnpm --filter @iam/worker test:unit
-pnpm --filter @iam/worker test:integration:component
-pnpm --filter @iam/worker test:integration:process
-pnpm --filter @iam/worker test:integration:postgres
-pnpm --filter @iam/worker test:integration:composition
-pnpm --filter @iam/worker test:integration:redis
-```
-
-Admin 的 `test-smoke/client-cache-invalidation.runtime-smoke.ts` 是 Redis test 使用的 production runtime entry
-fixture，不是测试候选。legacy client cache 仅以真实 Redis profile 验证通用 invalidation/update；Custom SSO 与 Traffic Gate
-通过 production `clientRuntimeInvalidation` seam 和真实 service mutation 验证 required Snapshot invalidation，Traffic Gate acquisition
-另由 canonical Snapshot Adapter/Reader、共享真实 Redis 与 production composition contracts 覆盖；API
-legacy cleanup 的精确删除边界由 API Core 的真实 Redis profile 在独占 cleanup 资源上验证；process profile 不再运行 RESP
-compatibility case。
-
-Database、Role Assignment、Organization Responsibility Resolution 与 User Profile Read Model 已发布以下
-package-local canonical commands：
-
-```bash
-pnpm --filter @iam/db test:unit
-pnpm --filter @iam/db test:integration:postgres
-pnpm --filter @iam/organization-responsibility-resolution test:integration:component
-pnpm --filter @iam/organization-responsibility-resolution test:integration:postgres
-pnpm --filter @iam/role-assignment-resolution test:integration:component
-pnpm --filter @iam/role-assignment-resolution test:integration:postgres
-pnpm --filter @iam/user-profile-read-model test:unit
-pnpm --filter @iam/user-profile-read-model test:integration:component
-pnpm --filter @iam/user-profile-read-model test:integration:postgres
-pnpm --filter @iam/user-profile-read-model test:integration:redis
-pnpm --filter @iam/organization-search-read-model test:integration:component
-pnpm --filter @iam/organization-search-read-model test:integration:postgres
-```
-
-两个 resolution package 都没有空的 Unit profile。旧 Subject Projection V1 rehearsal 已随 strict V2 激活撤销；
-受控数据准备统一由 Worker 的版本无关 `user-profile:*` maintenance 命令拥有。
-
-Pure shared packages、Client Subject Projection 与 Gateway 已发布以下 package-local canonical commands：
-
-```bash
-pnpm --filter @iam/contracts test:unit
-pnpm --filter @iam/domain test:unit
-pnpm --filter @iam/jobs test:unit
-pnpm --filter @iam/client-subject-projection test:integration:component
-pnpm --filter @iam/gateway-apisix test:unit
-pnpm --filter @iam/gateway-apisix test:integration:component
-```
-
-Canonical tasks 只依赖 Turbo `transit`，不会通过
-`^test` 扩大执行拓扑。
-
-Admin 与 SSO frontend 已发布 Unit、component 与 mock-browser package-local canonical commands：
-
-```bash
-pnpm --filter @iam/admin test:unit
-pnpm --filter @iam/admin test:integration:component
-pnpm --filter @iam/admin test:integration:browser
-pnpm --filter @iam/sso test:unit
-pnpm --filter @iam/sso test:integration:component
-pnpm --filter @iam/sso test:integration:browser
-```
-
-Browser Integration 保留原 API mocks、package-local `webServer`、base URL 与单 Chromium project，不是 Full-system E2E。
+Root 的资源 owner 测试调用受控独立根命令验证创建、故障、keep 与恢复，外层不另建无用资源；其他 root Integration
+按 architecture、docker、quality、runner、sandcastle 等功能组织。
+Admin/SSO Playwright 保留 API mocks、package-local `webServer`、base URL 与单 Chromium project，属于 Integration。
+完整 OIDC 协议由 OIDC package 与 API 的真实资源集合验证；正式固定套件仍使用下方独立入口。
 
 ### Full-system E2E
 
@@ -404,10 +316,11 @@ pnpm --filter @iam/e2e-system hr-admin:journey
 pnpm --filter @iam/e2e-system oidc:journey
 
 # 宿主异常后只按一个明确恢复目标清理；不接受 glob/prefix scan
-pnpm --filter @iam/e2e-system runtime:cleanup -- --descriptor e2e/system/test-results/<run-id>/run-descriptor.json
+pnpm --filter @iam/e2e-system runtime:cleanup -- --descriptor test-results/<run-id>/run-descriptor.json
 pnpm --filter @iam/e2e-system runtime:cleanup -- --project iam-e2e-<run-id>
 ```
 
+通过 `pnpm --filter` 运行时，相对 descriptor 路径从 `e2e/system/` 解析；也可使用绝对路径。
 显式恢复有独立 120 秒 cleanup deadline，只清理给定 descriptor 或 exact project；不接受 glob、prefix 或 prune。
 Cleanup 失败会非零退出并保留 descriptor，可使用同一目标重试。生命周期和进程终止规则见
 [测试编排架构](../architecture/testing-architecture.md#full-system-e2e)。
@@ -435,39 +348,31 @@ E2E lifecycle 的详细契约分别由本页后续专用资源说明和 [测试�
 聚合验证的证明边界见[默认验证与交付](../architecture/testing-architecture.md#默认验证与交付)。
 候选结果和平台验收状态记录在对应 issue 或验收记录中。
 
-真实资源检查不进入 `pnpm verify`，需要时通过正式根入口选择 owner 与 profile：
+真实资源检查不进入 `pnpm verify`，需要时通过根入口选择 owner 或文件：
 
 ```bash
-# API/OIDC production entry 联合 PG/Redis；由本次命令自动创建和清理
-pnpm test:integration:composition --workspace @iam/api
+# API/OIDC 联合 PG/Redis；由本次命令创建和清理
+pnpm test:integration --workspace @iam/api
 
-# Database migration contract；db:check 检查 migration 配置，真实 PG 测试使用根入口
+# Database migration contract
 pnpm --filter @iam/db db:check
-pnpm test:integration:postgres --workspace @iam/db
+pnpm test:integration --workspace @iam/db
 
-# Worker 维护 CLI 的 PG-only 接线和组织搜索队列/恢复
-pnpm test:integration:postgres --workspace @iam/worker
-pnpm test:integration:composition --workspace @iam/worker
-pnpm test:integration:redis --workspace @iam/worker
+# Worker 命令、队列、恢复与真实资源接线
+pnpm test:integration --workspace @iam/worker
 
-# 共享 PostgreSQL owners；仅启动 PG，保持随机 schema
-pnpm test:integration:postgres --workspace @iam/role-assignment-resolution
-pnpm test:integration:postgres --workspace @iam/organization-responsibility-resolution
-pnpm test:integration:postgres --workspace @iam/organization-search-read-model
-pnpm test:integration:postgres --workspace @iam/user-profile-read-model
+# 共享 PostgreSQL owners
+pnpm test:integration --workspace @iam/role-assignment-resolution --workspace @iam/organization-responsibility-resolution
+pnpm test:integration --workspace @iam/organization-search-read-model
 
-# API/Admin 并发、事务和缓存行为
-pnpm test:integration:postgres --workspace @iam/api --workspace @iam/admin-api
-pnpm test:integration:redis --workspace @iam/api --workspace @iam/admin-api
+# Admin 事务和缓存；User Profile 同时声明 PG/Redis
+pnpm test:integration --workspace @iam/admin-api --workspace @iam/user-profile-read-model
 
-# 共享 Redis owners；仅启动 Redis
-pnpm test:integration:redis --workspace @iam/user-profile-read-model
-pnpm test:integration:redis --workspace @iam/session-kernel
-pnpm test:integration:redis --workspace @iam/api-core
-pnpm test:integration:redis --workspace @iam/oidc
+# 共享 Redis owners；Core 集合仍按其 manifest 提供完整资源需求
+pnpm test:integration --workspace @iam/session-kernel --workspace @iam/api-core --workspace @iam/oidc
 
-# 前端 mock-browser Integration 不启动 PG/Redis
-pnpm test:integration:browser --workspace @iam/admin --workspace @iam/sso
+# 前端浏览器 Integration 不启动 PG/Redis
+pnpm test:integration --workspace @iam/admin --workspace @iam/sso
 
 # APISIX 发布配置有独立验证参数与资源前提
 pnpm gateway:apisix:validate -- <environment-arguments>
@@ -488,8 +393,8 @@ Token、Subject、完整 Redis key 或 Secret 写入验收记录。
 
 ## OIDC 协议套件
 
-正式 fixture 位于 [oidc-suite.fixture.ts](../../apps/api/test-integration/composition/oidc-suite.fixture.ts)，
-独立 RP 位于 [oidc-rp.integration.test.ts](../../apps/api/test-integration/composition/oidc-rp.integration.test.ts)。
+正式 fixture 位于 [oidc-suite.fixture.ts](../../apps/api/test-integration/oidc/oidc-suite.fixture.ts)，
+独立 RP 位于 [oidc-rp.integration.test.ts](../../apps/api/test-integration/oidc/oidc-rp.integration.test.ts)。
 它们不是普通浏览器旅程，也不由基础 verify 自动运行。
 
 ### 固定套件与运行配置
@@ -530,9 +435,8 @@ issuerMode 默认 dual；需要指定主机时使用 fixture 的 hostnames 配�
 outputDirectory 使用独立任务目录，不放在会被 API Browser 清理的默认产物根。
 
 ```bash
-pnpm --filter @iam/api exec bun run test-integration/composition/oidc-suite.fixture.ts <config.json>
-pnpm test:integration:composition --workspace @iam/api
-pnpm test:integration:redis --workspace @iam/api
+pnpm --filter @iam/api exec bun run test-integration/oidc/oidc-suite.fixture.ts <config.json>
+pnpm test:integration --workspace @iam/api
 ```
 
 需要调试保留时，在独立 fixture 命令的配置路径后增加 `--keep`；结束时按打印的准确记录清理，内部 marker 不作为公开运行模式。
@@ -600,28 +504,28 @@ lint-staged 会尝试还原原始状态。若自动恢复失败，保留其输�
 不要用全仓 `git add` 或清理 stash 掩盖冲突。
 
 Hook 可以被本地绕过，自动 merge commit 也不保证触发 pre-commit；最终候选仍由 verify 的全仓只读检查覆盖。
-真实提交、部分暂存和失败恢复测试通过 `pnpm test:integration:process:root` 执行。
+真实提交、部分暂存和失败恢复测试通过 `pnpm test:integration --workspace iam-monorepo --file scripts/test-integration/quality/pre-commit.integration.test.ts` 执行。
 
 ## Workspace 入口
 
-- OIDC：`pnpm --filter @iam/oidc <lint|typecheck>`；真实 Redis 使用 `pnpm test:integration:redis --workspace @iam/oidc`，
-  内部 `IAM_OIDC_TEST_REDIS_URL` 由本次根编排注入。
-  本包的完整授权 HTTP 组合由 API Redis profile 收集，生产已由 API 默认装配，旧 Provider app 已删除。
-  退出浏览器回归为 `pnpm test:integration:browser --workspace @iam/api`，根 owner 自动创建 Redis，浏览器使用已安装 Chromium；
-  单 worker、零重试，由 fixture 启动动态 loopback 候选 API/测试 RP，不使用运行环境。
+所有 Integration 均使用根 `pnpm test:integration --workspace <name-or-directory> [--file <path>]`；
+下列 package-local 列表只列开发、Unit、类型及运维入口，内部执行器脚本见上文。
 
-- Full-system E2E lifecycle：
-  root `pnpm test:e2e`；workspace-local
-  `pnpm --filter @iam/e2e-system <test:e2e|runtime:lifecycle|admin:journey|hr-admin:journey|oidc:journey|runtime:cleanup|lint|test|test:unit|test:integration:process|typecheck>`。
-- API backend：`pnpm --filter @iam/api <dev|serve|lint|test|test:unit|test:integration:component|test:integration:process|test:integration:composition|test:integration:postgres|test:integration:redis|typecheck>`
-- Admin API backend：`pnpm --filter @iam/admin-api <dev|serve|lint|test|test:unit|test:integration:component|test:integration:process|test:integration:postgres|test:integration:composition|test:integration:redis|typecheck>`
-- Session Kernel：`pnpm --filter @iam/session-kernel <lint|test:integration:redis|typecheck>`
-- API Core：`pnpm --filter @iam/api-core <lint|test|test:unit|test:integration:component|test:integration:process|test:integration:redis|typecheck>`
+- OIDC：`pnpm --filter @iam/oidc <lint|test|test:unit|typecheck>`；真实 Redis 使用根 Integration。
+  完整授权 HTTP 组合与浏览器退出回归由 API owner 承担；浏览器使用已安装 Chromium、单 worker、零 retry，
+  fixture 启动动态 loopback 候选 API/测试 RP，不使用运行环境。
+- Full-system E2E：root `pnpm test:e2e`；workspace-local
+  `pnpm --filter @iam/e2e-system <test:e2e|runtime:lifecycle|admin:journey|hr-admin:journey|oidc:journey|runtime:cleanup|lint|test|test:unit|typecheck>`。
+- API backend：`pnpm --filter @iam/api <dev|serve|lint|test|test:unit|typecheck>`
+- Admin API backend：`pnpm --filter @iam/admin-api <dev|serve|lint|test|test:unit|typecheck>`
+- Session Kernel：`pnpm --filter @iam/session-kernel <lint|test|test:unit|typecheck>`
+- API Core：`pnpm --filter @iam/api-core <lint|test|test:unit|typecheck>`
 - Custom SSO：`pnpm --filter @iam/custom-sso <lint|test|test:unit|typecheck>`；完整 HTTP/Redis 在 API collection。
-- Client Subject Projection：`pnpm --filter @iam/client-subject-projection <lint|test:integration:component|typecheck>`
-- User Profile Read Model：`pnpm --filter @iam/user-profile-read-model <lint|test|test:unit|test:integration:component|test:integration:postgres|test:integration:redis|typecheck>`
-- Filter Engine：`pnpm --filter @iam/filter-engine <lint|test|test:unit|typecheck>`；可配置 JSONB 编译的真实 PostgreSQL 行为由 User Profile PostgreSQL collection 验证，沿用该 owner 的专用资源。
-- Worker：`pnpm --filter @iam/worker <dev|serve|lint|test|test:unit|test:integration:component|test:integration:process|test:integration:postgres|test:integration:composition|test:integration:redis|typecheck|employment:verify|organization-search:backfill|organization-search:repair|organization-search:verify|user-profile:backfill|user-profile:repair|user-profile:verify-postgres|user-profile:verify-redis|client-snapshot:repair|client-snapshot:verify|session:clear:inventory|session:clear|session:clear:verify>`
+- Client Subject Projection：`pnpm --filter @iam/client-subject-projection <lint|test|test:unit|typecheck>`
+- User Profile Read Model：`pnpm --filter @iam/user-profile-read-model <lint|test|test:unit|typecheck>`
+- Filter Engine：`pnpm --filter @iam/filter-engine <lint|test|test:unit|typecheck>`；JSONB 编译的真实 PostgreSQL 行为由 User Profile owner 验证。
+- Worker：`pnpm --filter @iam/worker <dev|serve|lint|test|test:unit|typecheck|employment:verify|organization-search:backfill|organization-search:repair|organization-search:verify|user-profile:backfill|user-profile:repair|user-profile:verify-postgres|user-profile:verify-redis|client-snapshot:repair|client-snapshot:verify|session:clear:inventory|session:clear|session:clear:verify>`
+
 - Employment 全库只读诊断：
   `IAM_WORKER_DATABASE_URL=<target-url> pnpm --filter @iam/worker employment:verify`
 - Subject Access 恢复：
@@ -639,12 +543,12 @@ Hook 可以被本地绕过，自动 merge commit 也不保证触发 pre-commit�
 - 当前 Snapshot repair/verify 与 unified 状态维护：使用 Worker `client-snapshot:repair`、`client-snapshot:verify`、
   `session:clear:inventory`、`session:clear`、`session:clear:verify`，完整停流/资源/参数/失败重跑边界见[统一维护手册](../releases/unified-session-maintenance.md)。
   旧 `client-runtime:*`、Provider 维护、epoch 和扩展期 Client 升级命令已退役。
-- Admin frontend：`pnpm --filter @iam/admin <dev|build|lint|test|test:unit|test:integration:component|test:integration:browser|typecheck|format>`
-- SSO frontend：`pnpm --filter @iam/sso <dev|build|lint|test|test:unit|test:integration:component|test:integration:browser|typecheck|format>`
-- Database：`pnpm --filter @iam/db <lint|test|test:unit|test:integration:postgres|typecheck|db:push|db:generate|db:migrate|db:check>`
-- Role Assignment：`pnpm --filter @iam/role-assignment-resolution <lint|test:integration:component|test:integration:postgres|typecheck>`
-- Organization Responsibility Resolution：`pnpm --filter @iam/organization-responsibility-resolution <lint|test:integration:component|test:integration:postgres|typecheck>`
-- Gateway：`pnpm --filter @iam/gateway-apisix <validate|diff|apply|lint|test|test:unit|test:integration:component|typecheck>`
+- Admin frontend：`pnpm --filter @iam/admin <dev|build|lint|test|test:unit|typecheck|format>`
+- SSO frontend：`pnpm --filter @iam/sso <dev|build|lint|test|test:unit|typecheck|format>`
+- Database：`pnpm --filter @iam/db <lint|test|test:unit|typecheck|db:push|db:generate|db:migrate|db:check>`
+- Role Assignment：`pnpm --filter @iam/role-assignment-resolution <lint|typecheck>`
+- Organization Responsibility Resolution：`pnpm --filter @iam/organization-responsibility-resolution <lint|typecheck>`
+- Gateway：`pnpm --filter @iam/gateway-apisix <validate|diff|apply|lint|test|test:unit|typecheck>`
 
 `employment:verify` 只在运维人员显式调用时扫描 Employment，不属于 Worker 启动或请求路径。它在 PostgreSQL
 `READ ONLY` transaction 中检查非墓碑未知状态、Open Position/Organization 完整性、Employment Period、Open `endTime`、

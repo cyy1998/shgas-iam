@@ -13,9 +13,9 @@
     "lint": "biome check --formatter-enabled=false . && stylelint \"**/*.less\" --allow-empty-input",
     "lint:fix": "biome check --formatter-enabled=false --write . && stylelint \"**/*.less\" --allow-empty-input",
     "typecheck": "pnpm exec tsc --noEmit",
-    "test:integration:redis": "node ../../scripts/run-package-integration.mjs redis -- bun test --max-concurrency=1 test-integration/redis",
     "format": "biome format --write . && prettier \"**/*.{less,md,yaml,yml}\" --ignore-path ../../.gitignore --ignore-path ../../.prettierignore --no-error-on-unmatched-pattern --write",
-    "format:check": "biome format . && prettier \"**/*.{less,md,yaml,yml}\" --ignore-path ../../.gitignore --ignore-path ../../.prettierignore --no-error-on-unmatched-pattern --check"
+    "format:check": "biome format . && prettier \"**/*.{less,md,yaml,yml}\" --ignore-path ../../.gitignore --ignore-path ../../.prettierignore --no-error-on-unmatched-pattern --check",
+    "test:integration:bun": "node ../../scripts/run-package-integration.mjs bun -- bun test test-integration"
   },
   "dependencies": {
     "@iam/api-core": "workspace:*",
@@ -29,5 +29,12 @@
     "@typescript/native": "npm:typescript@7.0.2",
     "ioredis": "^6.0.0",
     "typescript": "npm:@typescript/typescript6@6.0.2"
+  },
+  "iamTest": {
+    "integration": {
+      "bun": {
+        "redis": "IAM_OIDC_TEST_REDIS_URL"
+      }
+    }
   }
 }

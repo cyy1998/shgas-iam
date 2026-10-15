@@ -260,12 +260,6 @@ pnpm lint
 pnpm test
 pnpm test:unit
 pnpm test:integration
-pnpm test:integration:component
-pnpm test:integration:process
-pnpm test:integration:redis
-pnpm test:integration:postgres
-pnpm test:integration:composition
-pnpm test:integration:browser
 pnpm typecheck
 ```
 
@@ -353,7 +347,7 @@ pnpm --filter @iam/admin format
 pnpm --filter @iam/admin test
 pnpm --filter @iam/admin test:watch
 pnpm --filter @iam/admin test:coverage
-pnpm --filter @iam/admin test:integration:browser
+pnpm test:integration --workspace @iam/admin
 pnpm --filter @iam/admin typecheck
 
 pnpm --filter @iam/sso dev
@@ -362,13 +356,13 @@ pnpm --filter @iam/sso format
 pnpm --filter @iam/sso test
 pnpm --filter @iam/sso test:watch
 pnpm --filter @iam/sso test:coverage
-pnpm --filter @iam/sso test:integration:browser
+pnpm test:integration --workspace @iam/sso
 pnpm --filter @iam/sso typecheck
 ```
 
 `pnpm test` 永久代理 `pnpm test:unit`。前端 Unit 使用 Vitest + React Testing Library + MSW；
 `test:coverage` 生成 Unit 覆盖率报告但不设置全局覆盖率硬阈值。Admin/SSO 的 Playwright mock-browser 流程由
-`pnpm test:integration:browser` 或 package-local 同名命令执行，不进入默认 `test`/`verify`。Linux/WSL 缺少
+`pnpm test:integration --workspace @iam/admin --workspace @iam/sso` 执行，不进入默认 `test`/`verify`。Linux/WSL 缺少
 Playwright Chromium 系统依赖时，preflight 会提示运行 `pnpm e2e:install`。
 
 后续前端变更的验收规则：
@@ -657,7 +651,7 @@ OIDC 接入见 [docs/features/oidc/oidc-integration.md](docs/features/oidc/oidc-
 - API 调试：开发环境分别访问 <http://localhost:30000> 和 <http://localhost:30001>
 - 数据调试：Drizzle Kit 命令或直接连接本地 PostgreSQL
 - 前端代理：查看 `apps/admin/.umirc.ts` 和 `apps/sso/.umirc.ts`
-- 测试：`pnpm test` 等价于 `pnpm test:unit`；Integration 按 profile 显式运行；前端使用 Vitest，API OIDC 使用 Bun/Playwright，Playwright mock-browser 测试通过 `pnpm test:integration:browser` 执行
+- 测试：`pnpm test` 等价于 `pnpm test:unit`；Integration 按 workspace/file 选择，由根命令消费 workspace 执行器与服务声明；前端 Unit 使用 Vitest，真实浏览器通过根 `pnpm test:integration` 执行
 - 类型检查：`pnpm typecheck`
 
 ## 🤝 贡献指南

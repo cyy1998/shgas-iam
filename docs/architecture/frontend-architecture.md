@@ -70,13 +70,13 @@ Admin Sessions 使用会话记录语义：记录存在不代表账号当前可�
 不以固定等待一小段时间证明永久不会重试，也不重复共享协议 owner 的算法或字段词典。
 
 - 前端测试应在可用时使用 app-local Vitest setup、React Testing Library helper、MSW handler 和 Umi runtime mock。
-  当前 test workflow 由两个前端 package 的 `vitest.unit.config.ts`、`vitest.integration.component.config.ts`、
-  `playwright.config.ts`、canonical scripts 和已提交测试共同维护；
+  当前 test workflow 由两个前端 package 的 `vitest.unit.config.ts`、`playwright.config.ts`、manifest 运行声明与内部 scripts 和已提交测试共同维护；
   命令入口见 [../development/commands.md](../development/commands.md)。
 - Admin 与 SSO Unit 分别在单个 package-local Vitest 进程内使用 Node/DOM projects。普通 `*.test.ts[x]` 默认使用 Node 且不加载
   全局 DOM setup；确实使用浏览器全局或 React DOM render 的测试命名为 `*.dom.test.ts[x]`，由 jsdom project 加载
-  Testing Library 和浏览器兼容 setup。这个后缀只表达 Unit 执行环境；Component Integration 仍整体使用 jsdom、完整
-  setup 与 `*.integration.test.ts[x]` 收集规则。
+  Testing Library 和浏览器兼容 setup。测试放在模块对应层级的 `__tests__/`，这个后缀只表达 Unit 执行环境。
+  Hono 内存请求、jsdom 和不产生真实网络连接的 MSW 按真实资源标准属于 Unit；所需文件显式维护 MSW lifecycle。
+  浏览器 Integration 通过根命令按 workspace/file 选择，保留 package-local harness。
 - 类型与公开出口通过 typecheck 验证，service 的响应与错误语义使用行为测试；路由、权限 UI 和 guard 状态使用
   组件或浏览器测试。具体通道与预算遵守 [testing-architecture.md](testing-architecture.md)。
 - 禁止只验证静态 UI、固定文案或样式的测试；混合行为用例中的纯展示断言也应删除。权限、状态、输入和操作驱动的

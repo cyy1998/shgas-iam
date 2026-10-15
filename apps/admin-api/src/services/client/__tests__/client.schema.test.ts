@@ -89,3 +89,34 @@ describe("client update contracts", () => {
     });
   });
 });
+
+test("actual generic input parsers reject new sensitive columns", () => {
+  const row = { id: 1, clientCode: "portal", clientName: "Portal", clientSecret: "general-secret" };
+  expect(
+    ClientCreateDtoSchema.safeParse({
+      clientCode: row.clientCode,
+      clientName: row.clientName,
+      clientSecret: row.clientSecret,
+    }).success,
+  ).toBe(true);
+  expect(ClientUpdateDtoSchema.safeParse({ clientName: "edit" }).success).toBe(true);
+  expect(ClientInputDtoSchema.safeParse({ id: row.id, clientName: "edit" }).success).toBe(true);
+  for (const field of ["ssoSecret", "ssoCredentialId", "ssoSecretUpdatedAt", "ssoEnabled", "ssoConfig"]) {
+    expect(
+      ClientCreateDtoSchema.safeParse({
+        clientCode: row.clientCode,
+        clientName: row.clientName,
+        clientSecret: row.clientSecret,
+        [field]: "ATTACK",
+      }).success,
+    ).toBe(false);
+    expect(ClientUpdateDtoSchema.safeParse({ clientName: "edit", [field]: "ATTACK" }).success).toBe(false);
+    expect(
+      ClientInputDtoSchema.safeParse({
+        id: row.id,
+        clientName: "edit",
+        [field]: "ATTACK",
+      }).success,
+    ).toBe(false);
+  }
+});

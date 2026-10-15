@@ -20,11 +20,11 @@
 
 | 文件 | 基线行号与测试名 | 原观察目标 |
 |---|---|---|
-| [Admin shell](../../apps/admin/test-integration/browser/shell.spec.ts) | 5：`users page opens with admin shell and user list` | 固定标题、菜单及 mock 用户回显。 |
+| [Admin shell](https://github.com/cyy1998/shgas-iam/blob/fd436c8fc487193c8d588acf7342f0b872ff59b2/apps/admin/test-integration/browser/shell.spec.ts) | 5：`users page opens with admin shell and user list` | 固定标题、菜单及 mock 用户回显。 |
 | 同上 | 63：`global Organization Responsibility navigation opens the read-only Type Catalog` | 直接打开页面后检查目录固定字段；未执行导航或验证只读限制。 |
-| [AuditLogTable](../../apps/admin/test-integration/component/AuditLogTable.integration.test.tsx) | 50：`labels the exact Principal Session audit target` | 静态字典中的固定英文标签。 |
+| [AuditLogTable](https://github.com/cyy1998/shgas-iam/blob/fd436c8fc487193c8d588acf7342f0b872ff59b2/apps/admin/test-integration/component/AuditLogTable.integration.test.tsx) | 50：`labels the exact Principal Session audit target` | 静态字典中的固定英文标签。 |
 | `apps/sso/test-integration/component/system-maintenance-page.integration.test.tsx` | 5：`shows concise business system maintenance copy` | 固定维护提示、重试按钮文字及旧说明缺席；未执行重试逻辑。 |
-| [SSO 资料页](../../apps/sso/test-integration/browser/user-info.spec.ts) | 7：`user info displays the shared Custom SSO profile wire` | 固定 mock 姓名、用户名、电话及标题回显。 |
+| [SSO 资料页](https://github.com/cyy1998/shgas-iam/blob/fd436c8fc487193c8d588acf7342f0b872ff59b2/apps/sso/test-integration/browser/user-info.spec.ts) | 7：`user info displays the shared Custom SSO profile wire` | 固定 mock 姓名、用户名、电话及标题回显。 |
 
 删除理由是这些观察本身被维护者排除于永久行为测试范围，并非声称另一个测试已经证明其全部内容。
 维护页重试逻辑原本未由该静态测试覆盖；资料 formatter 与匿名入口跳转的行为测试继续保留。
@@ -36,19 +36,19 @@
 
 | 文件 | 删除的展示部分 | 保留的行为 |
 |---|---|---|
-| [authorization.test.ts](../../apps/admin/src/services/authorization.test.ts) | 36–59 行：八项固定中文理由文案。 | null 输入回退与 capability service 调用。 |
-| [AuditLogTable](../../apps/admin/test-integration/component/AuditLogTable.integration.test.tsx) | 11–16、23 行：已知 action 和 outcome 固定标签。 | 未知 action 回退、查询条件映射及 request/trace ID 去空白。 |
-| [Type Catalog](../../apps/admin/test-integration/component/OrganizationResponsibilityTypeCatalogPage.integration.test.tsx) | 23–27、30–38 行：固定说明、样例行数和字段回显。 | 数据加载完成后的只读无写入口约束及 service 调用。生产页面直接呈现返回顺序，没有客户端排序逻辑；保留有效的数据就绪等待，不能只等静态标题。 |
-| [clients.spec.ts](../../apps/admin/test-integration/browser/clients.spec.ts) | 25–26、31 行：固定标题、mock 名称和协议值回显。 | 功能字段选择、单一编辑入口、点击后的精确 URL。 |
-| [EmploymentDetailDrawer](../../apps/admin/test-integration/component/EmploymentDetailDrawer.integration.test.tsx) | 166–176 行：按钮 CSS class 检查循环。 | 服务端授权动作与备注编辑提交参数。 |
-| [OrganizationResponsibilityAssignmentModule](../../apps/admin/test-integration/component/OrganizationResponsibilityAssignmentModule.integration.test.tsx) | 196 行：状态标签的 `ant-tag` 样式要求。 | 状态本身、请求筛选参数、详情身份及 Audit context。 |
-| [hr-administration.spec.ts](../../apps/admin/test-integration/browser/hr-administration.spec.ts) | 291、303–305 行的固定姓名回显；397–399、403–410 行的 class、padding、字重采样和比较。 | 权限菜单、操作可用性、mutation、scope 与导航。 |
-| [SSO login-page](../../apps/sso/test-integration/component/login-page.integration.test.tsx) | 47、50 行：错误弹窗的 `centered` 和 `okText`；使用部分对象匹配保留功能要求。 | 提交失败触发错误反馈，及其他登录 guard 状态。 |
-| [SSO login browser](../../apps/sso/test-integration/browser/login.spec.ts) | 16 行：首个用例中的固定欢迎标题。 | 输入、提交、失败反馈及其他续接/恢复行为。 |
-| [SSO reset-password](../../apps/sso/test-integration/browser/reset-password.spec.ts) | 12、16、21 行：标题与常驻步骤条文案。 | 验证码、新密码输入和完成弹窗；常驻步骤文字不能证明当前步骤。 |
-| [SSO user-info](../../apps/sso/test-integration/browser/user-info.spec.ts) | 58 行：匿名跳转用例末尾的欢迎标题。 | 跳转路径和 client/redirectUrl 参数。 |
-| [Worker HTTP](../../apps/worker/test-integration/component/http.integration.test.ts) | 95 行：第三方页面固定 `Bull Dashboard` 标题。 | 认证后的 HTTP 成功与 HTML 内容类型，以及其他认证/只读配置行为。 |
-| [Responsibility journey](../../e2e/system/src/responsibility-journey.ts) | 39–42、49–50 行：固定 ID 表头/标签缺席。 | 创建、详情、只读操作约束；同一 helper 本来允许显示编号，这些缺席断言不证明保密。 |
+| [authorization.test.ts](https://github.com/cyy1998/shgas-iam/blob/fd436c8fc487193c8d588acf7342f0b872ff59b2/apps/admin/src/services/authorization.test.ts) | 36–59 行：八项固定中文理由文案。 | null 输入回退与 capability service 调用。 |
+| [AuditLogTable](https://github.com/cyy1998/shgas-iam/blob/fd436c8fc487193c8d588acf7342f0b872ff59b2/apps/admin/test-integration/component/AuditLogTable.integration.test.tsx) | 11–16、23 行：已知 action 和 outcome 固定标签。 | 未知 action 回退、查询条件映射及 request/trace ID 去空白。 |
+| [Type Catalog](https://github.com/cyy1998/shgas-iam/blob/fd436c8fc487193c8d588acf7342f0b872ff59b2/apps/admin/test-integration/component/OrganizationResponsibilityTypeCatalogPage.integration.test.tsx) | 23–27、30–38 行：固定说明、样例行数和字段回显。 | 数据加载完成后的只读无写入口约束及 service 调用。生产页面直接呈现返回顺序，没有客户端排序逻辑；保留有效的数据就绪等待，不能只等静态标题。 |
+| [clients.spec.ts](https://github.com/cyy1998/shgas-iam/blob/fd436c8fc487193c8d588acf7342f0b872ff59b2/apps/admin/test-integration/browser/clients.spec.ts) | 25–26、31 行：固定标题、mock 名称和协议值回显。 | 功能字段选择、单一编辑入口、点击后的精确 URL。 |
+| [EmploymentDetailDrawer](https://github.com/cyy1998/shgas-iam/blob/fd436c8fc487193c8d588acf7342f0b872ff59b2/apps/admin/test-integration/component/EmploymentDetailDrawer.integration.test.tsx) | 166–176 行：按钮 CSS class 检查循环。 | 服务端授权动作与备注编辑提交参数。 |
+| [OrganizationResponsibilityAssignmentModule](https://github.com/cyy1998/shgas-iam/blob/fd436c8fc487193c8d588acf7342f0b872ff59b2/apps/admin/test-integration/component/OrganizationResponsibilityAssignmentModule.integration.test.tsx) | 196 行：状态标签的 `ant-tag` 样式要求。 | 状态本身、请求筛选参数、详情身份及 Audit context。 |
+| [hr-administration.spec.ts](https://github.com/cyy1998/shgas-iam/blob/fd436c8fc487193c8d588acf7342f0b872ff59b2/apps/admin/test-integration/browser/hr-administration.spec.ts) | 291、303–305 行的固定姓名回显；397–399、403–410 行的 class、padding、字重采样和比较。 | 权限菜单、操作可用性、mutation、scope 与导航。 |
+| [SSO login-page](https://github.com/cyy1998/shgas-iam/blob/fd436c8fc487193c8d588acf7342f0b872ff59b2/apps/sso/test-integration/component/login-page.integration.test.tsx) | 47、50 行：错误弹窗的 `centered` 和 `okText`；使用部分对象匹配保留功能要求。 | 提交失败触发错误反馈，及其他登录 guard 状态。 |
+| [SSO login browser](https://github.com/cyy1998/shgas-iam/blob/fd436c8fc487193c8d588acf7342f0b872ff59b2/apps/sso/test-integration/browser/login.spec.ts) | 16 行：首个用例中的固定欢迎标题。 | 输入、提交、失败反馈及其他续接/恢复行为。 |
+| [SSO reset-password](https://github.com/cyy1998/shgas-iam/blob/fd436c8fc487193c8d588acf7342f0b872ff59b2/apps/sso/test-integration/browser/reset-password.spec.ts) | 12、16、21 行：标题与常驻步骤条文案。 | 验证码、新密码输入和完成弹窗；常驻步骤文字不能证明当前步骤。 |
+| [SSO user-info](https://github.com/cyy1998/shgas-iam/blob/fd436c8fc487193c8d588acf7342f0b872ff59b2/apps/sso/test-integration/browser/user-info.spec.ts) | 58 行：匿名跳转用例末尾的欢迎标题。 | 跳转路径和 client/redirectUrl 参数。 |
+| [Worker HTTP](https://github.com/cyy1998/shgas-iam/blob/fd436c8fc487193c8d588acf7342f0b872ff59b2/apps/worker/test-integration/component/http.integration.test.ts) | 95 行：第三方页面固定 `Bull Dashboard` 标题。 | 认证后的 HTTP 成功与 HTML 内容类型，以及其他认证/只读配置行为。 |
+| [Responsibility journey](https://github.com/cyy1998/shgas-iam/blob/fd436c8fc487193c8d588acf7342f0b872ff59b2/e2e/system/src/responsibility-journey.ts) | 39–42、49–50 行：固定 ID 表头/标签缺席。 | 创建、详情、只读操作约束；同一 helper 本来允许显示编号，这些缺席断言不证明保密。 |
 
 不能因为使用文字或 HTML 断言而删除权限拒绝、登录互斥状态、错误反馈、数据处理、CSRF、协议响应或敏感信息隔离的证明。
 UI 操作所用的标签与 placeholder 也不是独立展示断言。

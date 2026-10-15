@@ -1,0 +1,57 @@
+import process from "node:process";
+import { ClientSsoCallbackType, ClientSsoProtocol, SubjectClaim } from "@iam/contracts";
+import { fixture } from "../authentication/root-authentication.fixture";
+import { cleanupAfterFixtureFailure, closeFixtureResources } from "../oidc/oidc.fixture";
+
+async function main() {
+  const f = await fixture();
+  let iam: ReturnType<typeof Bun.serve> | undefined;
+  let proxy: ReturnType<typeof Bun.serve> | undefined;
+  let closing: Promise<void> | undefined;
+  const close = () =>
+    (closing ??= (async () => {
+      await closeFixtureResources([() => f.close(), () => iam?.stop(true), () => proxy?.stop(true)]);
+      process.stderr.write("fixture-stopped\n");
+    })());
+  try {
+    iam = Bun.serve({ hostname: "127.0.0.1", port: 0, fetch: f.app.fetch });
+    const iamOrigin = iam.url.origin;
+    let callbackQuery = "";
+    proxy = Bun.serve({
+      hostname: "127.0.0.1",
+      port: 0,
+      async fetch(request) {
+        const url = new URL(request.url);
+        if (url.pathname === "/sso/callback") {
+          callbackQuery = url.search;
+          const upstream = await fetch(`${iamOrigin}/sso/callback${url.search}`, { redirect: "manual" });
+          return new Response(upstream.body, { status: upstream.status, headers: upstream.headers });
+        }
+        return Response.json({ cookie: request.headers.get("Cookie"), callbackQuery });
+      },
+    });
+    const businessOrigins = [`http://internal.localhost:${proxy.port}`, `http://external.localhost:${proxy.port}`];
+    const redirectUrls = businessOrigins.map((origin) => `${origin}/work/done?order=123`);
+    f.setClient({
+      ...f.getClient(),
+      ssoConfig: {
+        protocol: ClientSsoProtocol.CustomSso,
+        callbackType: ClientSsoCallbackType.Managed,
+        validRedirectUrls: businessOrigins.map((origin) => `${origin}/work/*`),
+        subjectClaims: [SubjectClaim.SubjectIdentifier],
+      },
+    });
+    const token = await f.login();
+    process.stdout.write(`${JSON.stringify({ iamOrigin, businessOrigins, redirectUrls, token })}\n`);
+    for await (const _chunk of process.stdin) {
+      // EOF is the parent's ownership signal.
+    }
+  } catch (failure) {
+    await cleanupAfterFixtureFailure(failure, close);
+  }
+  await close();
+}
+void main().catch((error) => {
+  console.error(error);
+  process.exitCode = 1;
+});

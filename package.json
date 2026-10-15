@@ -15,20 +15,13 @@
     "lint:fix": "biome check --formatter-enabled=false --write . && stylelint \"**/*.less\" --allow-empty-input",
     "test": "pnpm test:unit",
     "test:unit": "turbo test:unit test:unit:root --concurrency=2",
-    "test:unit:root": "bun test --max-concurrency=2 scripts/__tests__",
+    "test:unit:root": "bun test --max-concurrency=2 scripts/sandcastle/__tests__ scripts/tooling/__tests__",
     "test:integration": "node scripts/run-test-integration.mjs",
-    "test:integration:component": "node scripts/run-test-integration.mjs --profile component",
-    "test:integration:process": "node scripts/run-test-integration.mjs --profile process",
-    "test:integration:process:root": "node scripts/run-package-integration.mjs process -- bun test --max-concurrency=1 scripts/test-integration/process",
-    "test:integration:redis": "node scripts/run-test-integration.mjs --profile redis",
-    "test:integration:postgres": "node scripts/run-test-integration.mjs --profile postgres",
-    "test:integration:composition": "node scripts/run-test-integration.mjs --profile composition",
-    "test:integration:browser": "node scripts/run-test-integration.mjs --profile browser",
     "test:e2e": "turbo test:e2e --concurrency=1",
     "e2e:install": "pnpm --filter @iam/admin exec playwright install --with-deps chromium",
     "e2e:install:browsers": "pnpm --filter @iam/admin exec playwright install chromium",
     "typecheck": "turbo typecheck typecheck:root --concurrency=3",
-    "typecheck:root": "tsc --project scripts/sandcastle/tsconfig.json",
+    "typecheck:root": "tsc --project scripts/sandcastle/tsconfig.json && tsc --project scripts/test-entry.tsconfig.json",
     "sandcastle": "tsx scripts/sandcastle/main.mts",
     "sandcastle:check": "tsx scripts/sandcastle/main.mts --check",
     "sandcastle:build": "tsx scripts/sandcastle/main.mts --build",
@@ -45,7 +38,7 @@
     "verify:ci": "node scripts/run-verification-gate.mjs ci",
     "verify:release": "node scripts/run-verification-gate.mjs release",
     "test:resources:cleanup": "node scripts/run-test-resource-cleanup.mjs",
-    "test:integration:composition:root": "node scripts/run-package-integration.mjs composition -- bun test --max-concurrency=1 scripts/test-integration/composition"
+    "test:integration:bun:root": "node scripts/run-package-integration.mjs bun -- bun test scripts/test-integration"
   },
   "devDependencies": {
     "@ai-hero/sandcastle": "0.12.0",
@@ -64,5 +57,10 @@
     "tsx": "4.23.15",
     "turbo": "^2.10.5",
     "typescript": "npm:@typescript/typescript6@6.0.2"
+  },
+  "iamTest": {
+    "integration": {
+      "bun": {}
+    }
   }
 }

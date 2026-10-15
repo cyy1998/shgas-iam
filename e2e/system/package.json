@@ -23,11 +23,16 @@
     "lint": "biome check --formatter-enabled=false . && stylelint \"**/*.less\" --allow-empty-input",
     "lint:fix": "biome check --formatter-enabled=false --write . && stylelint \"**/*.less\" --allow-empty-input",
     "test": "pnpm test:unit",
-    "test:unit": "bun test --max-concurrency=1 src",
+    "test:unit": "bun test --max-concurrency=2 src/__tests__",
     "typecheck": "pnpm exec tsc --noEmit",
-    "test:integration:process": "node ../../scripts/run-package-integration.mjs process -- bun test --max-concurrency=1 test-integration/process",
+    "test:integration:bun": "node ../../scripts/run-package-integration.mjs bun -- bun test test-integration",
     "format": "biome format --write . && prettier \"**/*.{less,md,yaml,yml}\" --ignore-path ../../.gitignore --ignore-path ../../.prettierignore --no-error-on-unmatched-pattern --write",
     "format:check": "biome format . && prettier \"**/*.{less,md,yaml,yml}\" --ignore-path ../../.gitignore --ignore-path ../../.prettierignore --no-error-on-unmatched-pattern --check"
+  },
+  "iamTest": {
+    "integration": {
+      "bun": {}
+    }
   },
   "devDependencies": {
     "@playwright/test": "^1.61.1",
