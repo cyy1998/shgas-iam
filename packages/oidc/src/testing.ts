@@ -6,9 +6,36 @@ import { createOidcTokenState } from "./token-state";
 export { createOidcMaintenanceTestFixture } from "./offline/testing";
 
 /** Owner-only state observation and faults. Tests do not reimplement persistence or a Redis server. */
-export async function createOidcRedisTestScope(url: string) {
+export async function createOidcRedisTestScope(url: string, trackStop?: (stop: () => Promise<void>) => void) {
   const redis = new Redis(url, { maxRetriesPerRequest: 0, retryStrategy: () => null });
-  await redis.ping();
+  let closePromise: Promise<void> | undefined;
+  let initialized = false;
+  function close() {
+    closePromise ??= (async () => {
+      const ended =
+        redis.status === "end" ? Promise.resolve() : new Promise<void>((resolve) => redis.once("end", resolve));
+      try {
+        if (initialized && redis.status !== "end") await redis.quit();
+      } finally {
+        redis.disconnect();
+        await ended;
+      }
+    })();
+    return closePromise;
+  }
+  try {
+    trackStop?.(close);
+    await redis.ping();
+    if (closePromise) throw new Error("OIDC Redis test scope stopped during setup");
+    initialized = true;
+  } catch (error) {
+    try {
+      await close();
+    } catch (closeError) {
+      throw new AggregateError([error, closeError], "OIDC Redis test scope setup failed");
+    }
+    throw error;
+  }
   const namespace = `iam-oidc-test:${randomUUID()}`;
   const prefix = statePrefix(namespace);
   const state = createOidcState(redis, namespace);
@@ -133,13 +160,6 @@ export async function createOidcRedisTestScope(url: string) {
         })),
       );
     },
-    async close() {
-      try {
-        const keys = await ownedKeys();
-        if (keys.length) await redis.del(...keys);
-      } finally {
-        redis.disconnect();
-      }
-    },
+    close,
   };
 }

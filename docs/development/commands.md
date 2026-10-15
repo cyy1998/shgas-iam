@@ -61,23 +61,50 @@ pnpm test:integration:<component|process|redis|postgres|composition|browser>
 `CODEX_API_KEY`；`CODEX_AUTH_FILE` 可指定登录凭据文件。GitHub 固定为 `cyy1998/shgas-iam`。
 宿主需要仓库工具链、Git、GitHub CLI 和运行中的 Docker；镜像内版本与依赖以 `.sandcastle/Dockerfile` 为准。
 
+私有 `docker.xuanyuan.run` 镜像需要认证时，在 `.sandcastle/.env` 显式设置 `SANDCASTLE_DOCKER_CONFIG_FILE`。
+它指向调用者提供的可读普通 JSON 文件，绝对路径直接使用，相对路径从调用仓库根目录解析。只允许顶层 `auths` 与
+单一 `docker.xuanyuan.run`，其中 `auth`、`identitytoken` 或 `registrytoken` 必须为非空字符串；不支持
+`credsStore`、`credHelpers`、`credentialHelpers`、多 registry 或其他宿主配置字段。未设置时不读取或复制宿主 Docker 凭据，
+也不调用 credential helper。`sandcastle:check` 检查文件与格式，不证明 registry 认证已成功。
+
+每个执行器在模型回调前重新校验来源，复制到仓库外的私有 `tmpdir/iam-sandcastle-docker/executor-<run-id>/config.json`，
+只读挂载到 `/home/agent/.docker/config.json`。来源路径与认证内容不写入运行记录、日志或错误，也不透传宿主路径到
+Turbo。调用者在需要创建新执行器期间保持源文件可读并自行保管；runner 只回收自己的副本，不改写或删除源文件。
+只有确认创建者 sandbox 已停止后才回收副本；无法确认时保留，按下方准确执行器恢复入口清理，不扫描临时目录。
+
 ```bash
 pnpm sandcastle:build
 pnpm sandcastle:check
 pnpm sandcastle:smoke
+pnpm sandcastle --smoke-docker
 pnpm sandcastle
 pnpm sandcastle --iterations 2 --parallel 2 --model <model>
 ```
 
 `sandcastle:build` 构建执行镜像；`sandcastle:check` 只预检工具、镜像和认证配置。
-`sandcastle:smoke` 创建可销毁的 sandbox 与 PostgreSQL/Redis，验证工具链、Merger 依赖挂载和连接，并用本地桩程序
+`--smoke-docker` 通过实际 UID 1000 的两个 sandbox 单独验证共享宿主 Docker：专用 socket 的 daemon-side 挂载、
+supplementary socket group、Docker CLI/Compose/Buildx、host-network 宿主 loopback HTTP、候选文件传输与构建、
+Chromium 双 hostname 的 host-only Cookie、停止容器后的 `docker cp` 和并行 project 的动态端口/准确清理。
+构建输入经文件传输交付给 sandbox 内 Docker CLI，不把 sandbox 路径当作 daemon bind source。
+此模式需要 Linux Docker Engine，或 Docker Desktop 4.34+ 已启用 host networking 并关闭 Enhanced Container Isolation；
+条件不满足时明确失败，不自动切换其他网络、DinD 或代理。共享 daemon 与 host network 提供宿主 Docker 管理和网络访问能力，
+project 名称仅用于资源归属，不构成权限隔离。普通文件 mounts 继续执行 SDK 的客户端路径检查。
+运行结果、工具版本、receipt 和准确 project/sandbox 标识保存在 `.sandcastle/resources/docker-smoke-<run-id>/`；
+成功、失败和可捕获中断均从宿主清理本次资源。强杀或清理失败后，按该记录的每个 `project` 和 `composePath` 执行
+`docker compose --project-name <project> --file <composePath> down --volumes --remove-orphans --rmi local`，
+再按准确 `sandboxName` 清理 sandbox；不扫描名称前缀或 prune。此聚焦 smoke 不调用模型或写入 GitHub。
+既有 `sandcastle:smoke` 先执行上述 Docker 检查，再运行下面的完整工具链 smoke。
+`sandcastle:smoke` 创建可销毁的 sandbox，验证工具链、Merger 依赖挂载和共享 Docker，并用本地桩程序
 让 Planner、Implementer、Merger 三份真实 prompt 经过 SDK 的参数校验与展开，检查 Codex 生效角色配置；不调用模型或访问 GitHub，
 也不证明真实 Codex 模型已执行双轴子代理评审。
+Smoke 通过实际根 Integration → Turbo → Bun 连续运行两条资源命令，观察不同 project、动态 URL、空数据起点和宿主记录，
+并验证另一执行器异常后按准确记录恢复、并行环境隔离及显式 keep。共享资源 owner 的完整故障矩阵由其专属测试承担。
 Smoke 还安装 Linux workspace 依赖，验证 Turbo 缓存写入及再次命中，执行 `pnpm verify:static`，并检查只读缓存会阻止
 agent 命令启动。各阶段统一使用容器独占的 `TURBO_CACHE_DIR=/tmp/iam-sandcastle-turbo/cache`；调用模型前以实际
 执行用户检查目录创建、文件写入和删除，失败则报错并进入既有容器清理流程。缓存随容器清理，不挂载宿主缓存，也无需 root 权限。
 镜像预装与 `.sandcastle/Dockerfile` 中 Playwright 固定版本匹配的 Chromium 和 Linux 系统依赖，浏览器路径为
 `PLAYWRIGHT_BROWSERS_PATH=/opt/ms-playwright`。升级仓库 Playwright 时同步镜像版本并重新运行 `pnpm sandcastle:build`。
+Turbo 的 Browser/E2E tasks 窄透传该变量，使正式根命令使用镜像内 Chromium；不自动跳过实际用户的 browser preflight。
 Smoke 以实际非 root 用户执行原浏览器预检，并用 workspace 的 Playwright 启动 headless shell 和完整 Chromium、执行页面脚本后关闭；
 不设置 `PLAYWRIGHT_E2E_SKIP_PREFLIGHT`。版本、路径、权限或依赖不匹配都会使 smoke 失败。
 Implementer 和 Merger 在 Codex CLI 启动前统一执行 `scripts/sandcastle/prepare-workspace.sh`：安装锁定依赖、清理前端生成目录内容、
@@ -106,17 +133,25 @@ Codex CLI 0.154 的角色 override 忽略 `sandbox_mode`，因此评审角色的
 操作系统层面只能读取。双轴由实施者执行、Merger 阅读报告核对，runner 不解析评审报告或会话文件，
 也不重复实施者的静态和 diff 检查；职责见[AFK 工作流](../agents/sandcastle-afk.md#双轴评审子代理生命周期)。
 
-普通失败和 Ctrl+C 会清理本次测试资源；若宿主被强制终止，按 `.sandcastle/resources/` 中对应记录的准确
-container/network ID 恢复清理。`run.lock` 记录进程与目标分支，确认旧进程已结束后才移除该文件。
+普通失败和 Ctrl+C 会先停止并等待准确的创建者 sandbox，再用独立有界预算清理该执行器 registry 中的资源记录。
+执行器记录与 registry 留在 `.sandcastle/resources/executor-<run-id>/`，正式命令记录与 Compose 环境留在稳定挂载的
+`test-results/integration/<run-id>/`；强杀或收尾失败后可执行
+`pnpm sandcastle --recover-executor .sandcastle/resources/executor-<run-id>/executor.json`。
+恢复复用同一 stop/wait 与 exact-record 清理，尊重显式 keep；需要销毁保留的单个环境时，使用该记录打印的
+`pnpm test:resources:cleanup --record <repo-relative run.json>`。不扫描其他执行器或名称前缀。
+`run.lock` 记录进程与目标分支，确认旧进程已结束后才移除该文件。
+无法确认创建者已停止或宿主同步退出时保留锁；先按执行器记录恢复，核对停止事实后再移除锁。
 已有 ticket 分支可重新进入评审和合入交接，包括代码已合入、GitHub 关票尚未完成的情况。
 成功批次的本地 ticket 分支由 runner 在合入与关票核对后清理；分支偏移、worktree 占用等清理失败会停止后续批次，按报错恢复。
 队列耗尽前还有一次父 Spec 收尾核对。锁定的 Sandcastle 0.12.0 使用 `patches/` 中的 signal 补丁，允许此 runner
 通过 AbortSignal 等待清理，避免 SDK 提前 `process.exit`；升级依赖时须重新验证普通与 provisioning 中断路径。
 
-宿主 runner 为每个执行器提供独占 PostgreSQL、Redis 与网络，等待 ready 后注入 owner-specific test URLs，
-结束时按记录的准确资源 ID 清理。Linux sandbox 内独立安装 workspace 依赖，不复用 Windows `node_modules`。
-当前 sandbox 不提供 Docker-in-Docker，Full-system E2E 等额外环境要求可能无法满足；这些检查属于 ticket 或 Spec 的
-必需验收时，应保留 open 并记录缺失条件，不能以 `pnpm verify` 通过代替。
+Planner、Implementer 与 Merger 均通过共享宿主 daemon 和 host networking 运行，在模型命令前由实际 UID 1000 检查
+socket 权限、Docker CLI/Compose/Buildx 和宿主 loopback 可达。执行器不预建 PostgreSQL/Redis，不注入私网 URL。
+资源测试使用根 `pnpm test:integration`（支持 workspace/profile/file 筛选）或 `pnpm test:e2e`，每条命令独立创建和销毁环境。
+Linux sandbox 内独立安装 workspace 依赖，不复用 Windows `node_modules`。Windows 的来源 checkout 可以是 worktree；
+SDK 固定补丁只挂载目标 worktree 的 Linux Git 指针，Git 长路径配置仅用于具体命令，不改宿主配置。
+必需检查缺少运行条件时保留 ticket open，不能以基础 `pnpm verify` 通过代替。
 
 ## Workspace 命令
 
@@ -212,8 +247,39 @@ pnpm test:integration:browser
 各 profile command 只运行同名 package task；`pnpm test` 代理 Unit。命名、唯一收集、缓存与并发预算统一见
 [测试编排架构](../architecture/testing-architecture.md#root-与-package-commands)。
 
-Integration 所需的 owner-specific URL 由调用方提供；agent 可先创建任务独占临时资源。
-聚合 `test:integration` 在启动任何 profile 前检查全部 URL，缺失即失败，不启动 Docker，也不回退 runtime 或其他 test URL。
+根 Integration 入口按选择创建一次性 PostgreSQL/Redis，等待就绪后通过 Turbo 注入 owner-specific URL；结束时清理本次
+准确 Compose project 的容器、网络和数据卷。组件、本地进程及前端 mock-browser 的选择不创建这两类服务。
+未筛选时仍按 component → process → redis → postgres → composition → browser 执行，首个失败停止后续 profile。
+
+`--workspace` 接受 package name 或仓库相对 workspace 目录；`--profile` 和 `--file` 可重复。文件使用仓库相对路径或所选
+owner 的相对路径，必须位于所选 profile 的 canonical collection；没有匹配时失败，不扩大到其他目录。
+根 profile 命令是同一入口的别名，例如：
+
+```bash
+pnpm test:integration --workspace @iam/worker --profile redis --file apps/worker/test-integration/redis/session-clear-command.integration.test.ts
+pnpm test:integration:postgres --workspace @iam/worker --file test-integration/postgres/employment-command.integration.test.ts
+pnpm test:integration:component --workspace @iam/sso --file apps/sso/test-integration/component/masked-mobile.service.integration.test.ts
+```
+
+每次资源运行的准确 project、Compose 配置、环境文件和产物位置登记在
+`test-results/integration/<run-id>/run.json`，其中路径相对于仓库根目录。诊断失败只告警；初始化、测试、进程关闭和清理
+失败仍使命令非零，原始失败与清理失败都保留。`--timeout-ms` 设置整条命令预算，`--cleanup-timeout-ms` 设置独立清理预算，
+默认分别为 30 分钟和 30 秒。
+
+运行前增加 `--keep-resources` 可保留环境，结束时会打印准确清理命令。清理失败或强杀后也使用同一份记录恢复：
+
+```bash
+pnpm test:resources:cleanup --record test-results/integration/<run-id>/run.json
+```
+
+Package-local resource runner 只接受本次受管理运行的 marker、record 和相同 URL，不接受调用方任意提供外部 URL。
+下方 package commands 用于表达 runner 所有权；手动执行资源 profile 时使用上述根入口筛选。Unit、component 和 process
+仍可直接运行 package-local commands。
+
+Root 资源生命周期的真实 Node 子进程测试归入 `scripts/test-integration/composition/`，由
+`test:integration:composition:root` 收集。该 owner 调用受控的独立根命令验证创建、故障、保留与恢复，外层不另建无用资源。
+可通过 `pnpm test:integration:composition --workspace iam-monorepo` 聚焦执行；原 root process collection 继续只验证本地进程、
+Docker 构建上下文和配置。
 
 真实进程/端口行为由 `test:integration:process` 以 Turbo concurrency 1 运行，并禁用任务缓存：
 
@@ -369,86 +435,55 @@ E2E lifecycle 的详细契约分别由本页后续专用资源说明和 [测试�
 聚合验证的证明边界见[默认验证与交付](../architecture/testing-architecture.md#默认验证与交付)。
 候选结果和平台验收状态记录在对应 issue 或验收记录中。
 
-外部资源检查不进入 `pnpm verify`，需要时显式运行：
+真实资源检查不进入 `pnpm verify`，需要时通过正式根入口选择 owner 与 profile：
 
 ```bash
-# API/OIDC 真实 production entry 联合 PG/Redis 验证；全部资源由调用方独占、非生产且可销毁
-IAM_API_TEST_DATABASE_URL=<dedicated-url> IAM_API_TEST_REDIS_URL=<dedicated-url> \
-pnpm test:integration:composition
+# API/OIDC production entry 联合 PG/Redis；由本次命令自动创建和清理
+pnpm test:integration:composition --workspace @iam/api
 
-# 也可按 package 单独运行；缺少该 package 的任一 URL 会 fail fast，不会 skip 或回退
-pnpm --filter @iam/api test:integration:composition
-
-# Database migration contract（guard、raw rollback、Drizzle journal replay、普通索引锁；需专用 IAM_DB_TEST_DATABASE_URL）
+# Database migration contract；db:check 检查 migration 配置，真实 PG 测试使用根入口
 pnpm --filter @iam/db db:check
-pnpm --filter @iam/db test:integration:postgres
+pnpm test:integration:postgres --workspace @iam/db
 
-# Worker Client Protocol epoch 与 User Profile maintenance contracts（需专用 IAM_WORKER_TEST_DATABASE_URL）
-pnpm --filter @iam/worker test:integration:postgres
+# Worker 维护 CLI 的 PG-only 接线和组织搜索队列/恢复
+pnpm test:integration:postgres --workspace @iam/worker
+pnpm test:integration:composition --workspace @iam/worker
+pnpm test:integration:redis --workspace @iam/worker
 
-# Organization Search 真实队列、维护 CLI、重试耗尽与中断恢复（两个专用 owner URL 均必需）
-IAM_WORKER_TEST_DATABASE_URL=<dedicated-url> IAM_WORKER_TEST_REDIS_URL=<dedicated-url> \
-pnpm --filter @iam/worker test:integration:composition
+# 共享 PostgreSQL owners；仅启动 PG，保持随机 schema
+pnpm test:integration:postgres --workspace @iam/role-assignment-resolution
+pnpm test:integration:postgres --workspace @iam/organization-responsibility-resolution
+pnpm test:integration:postgres --workspace @iam/organization-search-read-model
+pnpm test:integration:postgres --workspace @iam/user-profile-read-model
 
-# Worker Client Runtime targeted/full repair 与独立 full verify production wiring（需 owner-specific 专用 URL）
-IAM_WORKER_TEST_REDIS_URL=<dedicated-non-production-url> \
-pnpm --filter @iam/worker test:integration:redis
+# API/Admin 并发、事务和缓存行为
+pnpm test:integration:postgres --workspace @iam/api --workspace @iam/admin-api
+pnpm test:integration:redis --workspace @iam/api --workspace @iam/admin-api
 
-# Role assignment PostgreSQL contract（需由调用方提供专用 IAM_ROLE_ASSIGNMENT_TEST_DATABASE_URL）
-pnpm --filter @iam/role-assignment-resolution test:integration:postgres
+# 共享 Redis owners；仅启动 Redis
+pnpm test:integration:redis --workspace @iam/user-profile-read-model
+pnpm test:integration:redis --workspace @iam/session-kernel
+pnpm test:integration:redis --workspace @iam/api-core
+pnpm test:integration:redis --workspace @iam/oidc
 
-# Organization Responsibility resolver PostgreSQL contract（需专用 IAM_ORGANIZATION_RESPONSIBILITY_TEST_DATABASE_URL）
-pnpm --filter @iam/organization-responsibility-resolution test:integration:postgres
+# 前端 mock-browser Integration 不启动 PG/Redis
+pnpm test:integration:browser --workspace @iam/admin --workspace @iam/sso
 
-# API Purveyor contact 并发 contract（需由调用方提供专用 IAM_API_TEST_DATABASE_URL）
-pnpm --filter @iam/api test:integration:postgres
-
-# Admin API 组织责任任命事务/并发 contract（需由调用方提供专用 IAM_ADMIN_API_TEST_DATABASE_URL）
-pnpm --filter @iam/admin-api test:integration:postgres
-
-# API Custom SSO Client runtime Redis contract（需由调用方提供专用 IAM_API_TEST_REDIS_URL）
-pnpm --filter @iam/api test:integration:redis
-
-# Admin API Custom SSO Client cache mutation contract（需由调用方提供专用 IAM_ADMIN_API_TEST_REDIS_URL）
-pnpm --filter @iam/admin-api test:integration:redis
-
-
-# User Profile V3 publication、readiness 与查询 contracts（需专用 IAM_USER_PROFILE_TEST_DATABASE_URL）
-pnpm --filter @iam/user-profile-read-model test:integration:postgres
-
-# Organization Search 持久展开、快照构建与版本发布（需专用 IAM_ORGANIZATION_SEARCH_TEST_DATABASE_URL）
-pnpm --filter @iam/organization-search-read-model test:integration:postgres
-
-# User Profile Subject Facts 单条/CAS/batch prewarm contract（需专用 IAM_USER_PROFILE_TEST_REDIS_URL）
-pnpm --filter @iam/user-profile-read-model test:integration:redis
-
-# Session Kernel Redis contracts（需专用 owner URL）
-IAM_SESSION_KERNEL_TEST_REDIS_URL=<namespace-isolated-url> \
-pnpm --filter @iam/session-kernel test:integration:redis
-
-# API Core Redis contracts（需专用 owner URL；当前 Snapshot inventory 测试串行运行）
-IAM_API_CORE_TEST_REDIS_URL=<namespace-isolated-url> \
-pnpm --filter @iam/api-core test:integration:redis
-
-# Mock-browser Integration
-pnpm --filter @iam/admin test:integration:browser
-pnpm --filter @iam/sso test:integration:browser
-
-# APISIX
+# APISIX 发布配置有独立验证参数与资源前提
 pnpm gateway:apisix:validate -- <environment-arguments>
 ```
 
-测试命令和 harness 不负责启动 Docker。Agent 提供临时资源与清理的要求见
+底层 package runner 消费本次已准备环境，内部 owner URL 继续用于正式 CLI 的 scoped/runtime 配置传递；
+不单独准备外部 URL 或调用另一套容器生命周期。资源隔离与停止后重置见
 [专用资源与隔离](../architecture/testing-architecture.md#专用资源与隔离)。
 
-维护者决定 #69 的 Client Runtime full repair contract 与 #68 targeted repair 共用
-`IAM_WORKER_TEST_REDIS_URL` owner resource，不新增 cleanup-specific env，也不跨其他可见环境推断 Redis identity。Worker harness
-只登记本次 Client/restore fixture 与 non-owner sentinel，测试后精确 `UNLINK` 并验证当前 Module-owned inventory 无残留。
-API Core full restore contract 使用现有 `IAM_API_CORE_TEST_REDIS_URL`，写 fixture 前证明当前 Snapshot inventory 为空；七条旧 Runtime pattern 对应的测试 key 只是 non-owner fixture，
-用于证明当前 repair 保留它们且 verify 不以其残留失败。测试仅精确清理自己登记的 fixture，维护命令不拥有旧 key。
+Worker targeted/full Snapshot repair 与独立 verify 共用本次 `IAM_WORKER_TEST_REDIS_URL`，不新增 cleanup-specific env，
+也不跨其他可见环境推断 Redis identity。Core 的 full restore 使用本次 `IAM_API_CORE_TEST_REDIS_URL`，与 Worker 一样
+由受管理独占 DB 和停止后 reset 保证用例干净起点。两者在 reset 前验证 non-owner sentinel 和旧 namespace 的保留、只读 verify 与
+生产部分失败重跑；随后停止本例执行者并整体重置独占 Redis DB，不再为 fixture 逐键登记或精确 UNLINK。
 
 旧 Ticket 12 的 V1 rehearsal/backfill/verify 入口已随 strict V2 激活撤销。维护者只使用本页列出的
-User Profile maintenance、API/OIDC external entry、hermetic process smoke；不得把 URL credential、
+User Profile maintenance、正式 API/OIDC entry、hermetic process smoke；不得把 URL credential、
 Token、Subject、完整 Redis key 或 Secret 写入验收记录。
 
 ## OIDC 协议套件
@@ -472,8 +507,8 @@ mvn -B -Dmaven.test.skip -Dpmd.skip clean package
 补丁仅在 Code Flow 且 iam_s256_required=true 时增加 S256 sequence/verifier，默认关闭；
 仓库 suite runner 为本用途显式启用，专用 PKCE 正负用例仍保持原构造，不修改官方断言。
 
-调用方准备任务独占的 IAM_API_TEST_DATABASE_URL、IAM_API_TEST_REDIS_URL，
-固定套件及其 MongoDB 6.0.13、Java 原生 HTTPS 与合成 PKCS12、loopback 端口和
+独立 fixture 自动创建并销毁本次 PostgreSQL/Redis，与根资源入口复用同一 owner、运行记录和恢复能力。
+调用方准备固定套件及其 MongoDB 6.0.13、Java 原生 HTTPS 与合成 PKCS12、loopback 端口和
 fintechlabs.devmode=true。Node/tsx/Playwright 使用仓库锁定依赖。
 API 候选由 fixture 启动，TLS 代理不改协议参数，NODE_EXTRA_CA_CERTS 只传给任务 Node 子进程，
 不修改机器 trust store。
@@ -496,12 +531,13 @@ outputDirectory 使用独立任务目录，不放在会被 API Browser 清理的
 
 ```bash
 pnpm --filter @iam/api exec bun run test-integration/composition/oidc-suite.fixture.ts <config.json>
-pnpm --filter @iam/api test:integration:composition
-pnpm --filter @iam/api test:integration:redis
+pnpm test:integration:composition --workspace @iam/api
+pnpm test:integration:redis --workspace @iam/api
 ```
 
-fixture 负责候选 API、TLS 代理、随机 PG schema、Redis owner 和 Node 进程树，
-driver 负责浏览器与官方模块；信号/失败仍逐项尝试清理，超时不冒称清理完成。
+需要调试保留时，在独立 fixture 命令的配置路径后增加 `--keep`；结束时按打印的准确记录清理，内部 marker 不作为公开运行模式。
+fixture 负责候选 API、TLS 代理、随机 PG schema、Redis 和 Node 进程树，driver 负责浏览器与官方模块。
+信号/失败仍逐项尝试收尾，再以独立预算清理准确 project；超时不冒称清理完成，原始失败与清理失败均保留。
 官方 REVIEW 使自动 driver 非零，必须独立完成图像判读并保留官方结果，不把它改写为套件 PASSED。
 不同 loopback 端口只证明两 issuer 协议；hostname/Cookie 隔离须由真实 APISIX/browser 验证，
 见[验证归属](../architecture/architecture-verification.md#行为资源与系统验证)。
@@ -568,10 +604,11 @@ Hook 可以被本地绕过，自动 merge commit 也不保证触发 pre-commit�
 
 ## Workspace 入口
 
-- OIDC：`pnpm --filter @iam/oidc <lint|typecheck|test:integration:redis>`；Redis 使用独立 `IAM_OIDC_TEST_REDIS_URL`。
+- OIDC：`pnpm --filter @iam/oidc <lint|typecheck>`；真实 Redis 使用 `pnpm test:integration:redis --workspace @iam/oidc`，
+  内部 `IAM_OIDC_TEST_REDIS_URL` 由本次根编排注入。
   本包的完整授权 HTTP 组合由 API Redis profile 收集，生产已由 API 默认装配，旧 Provider app 已删除。
-  退出浏览器回归为 `pnpm --filter @iam/api test:integration:browser`，使用专用 `IAM_API_TEST_REDIS_URL` 和已安装 Chromium；
-  单 worker、零重试，由 fixture 启动动态 loopback 候选 API/测试 RP，不创建 Docker 或使用运行环境。
+  退出浏览器回归为 `pnpm test:integration:browser --workspace @iam/api`，根 owner 自动创建 Redis，浏览器使用已安装 Chromium；
+  单 worker、零重试，由 fixture 启动动态 loopback 候选 API/测试 RP，不使用运行环境。
 
 - Full-system E2E lifecycle：
   root `pnpm test:e2e`；workspace-local

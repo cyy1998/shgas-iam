@@ -263,7 +263,7 @@ test("HR admin reads scoped directories and manages an authorized User from deta
   await expect(page.getByRole("menuitem", { name: /审计日志/ })).toHaveCount(0);
   await expect(page.getByRole("menuitem", { name: /系统日志/ })).toHaveCount(0);
 
-  const viewActions = page.locator("td a").filter({ hasText: "查看" });
+  const viewActions = page.locator("td").getByRole("button", { name: "查看", exact: true });
   await expect(viewActions).toHaveCount(3);
   await expect(page.getByRole("button", { name: /新建用户/ })).toHaveCount(0);
 
@@ -392,7 +392,7 @@ test("HR admin sees the server reason when an HR-managed User is not enabled for
   });
 
   await page.goto("/iam-admin/users");
-  await page.locator("td a").filter({ hasText: "查看" }).first().click();
+  await page.locator("td").getByRole("button", { name: "查看", exact: true }).first().click();
   const drawer = page.getByRole("dialog");
   await expect(drawer.getByRole("button", { name: /编\s*辑/ })).toBeEnabled();
   const resetPassword = drawer.getByRole("button", {
@@ -422,7 +422,7 @@ test("HR admin sees only executable User status actions and submits the selected
   });
 
   await page.goto("/iam-admin/users");
-  await page.locator("td a").filter({ hasText: "查看" }).first().click();
+  await page.locator("td").getByRole("button", { name: "查看", exact: true }).first().click();
   const drawer = page.getByRole("dialog");
   const changeStatus = drawer.getByRole("button", { name: /状\s*态/ });
 
@@ -481,7 +481,7 @@ test("HR admin completes resignation and can retry the server-confirmed complete
   });
 
   await page.goto("/iam-admin/users");
-  await page.locator("td a").filter({ hasText: "查看" }).first().click();
+  await page.locator("td").getByRole("button", { name: "查看", exact: true }).first().click();
   const drawer = page.getByRole("dialog");
 
   for (const expectedCount of [1, 2]) {
@@ -540,7 +540,7 @@ for (const role of ["Full Admin", "HR"] as const) {
       ]);
     });
     await page.goto("/iam-admin/users");
-    await page.locator("td a").filter({ hasText: "查看" }).first().click();
+    await page.locator("td").getByRole("button", { name: "查看", exact: true }).first().click();
     await page
       .getByRole("dialog")
       .getByRole("button", { name: /离\s*职/ })
@@ -591,7 +591,7 @@ test("HR admin does not report resignation success when the mutation is rejected
   );
 
   await page.goto("/iam-admin/users");
-  await page.locator("td a").filter({ hasText: "查看" }).first().click();
+  await page.locator("td").getByRole("button", { name: "查看", exact: true }).first().click();
   const drawer = page.getByRole("dialog");
   await drawer.getByRole("button", { name: /离\s*职/ }).click();
   const confirmation = page.getByRole("dialog").filter({ hasText: "办理用户 张三 离职？" });
@@ -617,7 +617,7 @@ test("HR admin sees the server reason when a User is not HR-managed for status c
   });
 
   await page.goto("/iam-admin/users");
-  await page.locator("td a").filter({ hasText: "查看" }).first().click();
+  await page.locator("td").getByRole("button", { name: "查看", exact: true }).first().click();
   const changeStatus = page.getByRole("dialog").getByRole("button", { name: /状\s*态/ });
 
   await expect(changeStatus).toBeDisabled();
@@ -808,7 +808,7 @@ test("HR cannot rehire an ended-only disabled User until a restored Pause respon
     return fulfillTrpc(route, { changed: true, result: { id: 101 } });
   });
   await page.goto("/iam-admin/users");
-  await page.locator("td a").filter({ hasText: "查看" }).first().click();
+  await page.locator("td").getByRole("button", { name: "查看", exact: true }).first().click();
   let drawer = page.getByRole("dialog");
   await expect(drawer.getByRole("button", { name: /状\s*态/ })).toBeDisabled();
   await drawer.getByRole("tab", { name: /雇佣/ }).click();
@@ -816,7 +816,7 @@ test("HR cannot rehire an ended-only disabled User until a restored Pause respon
   // The actual Full Admin -> HR state transition is proved by the PostgreSQL command sequence.
   status = UserStatus.Pause;
   await drawer.getByRole("button", { name: "关闭" }).click();
-  await page.locator("td a").filter({ hasText: "查看" }).first().click();
+  await page.locator("td").getByRole("button", { name: "查看", exact: true }).first().click();
   drawer = page.getByRole("dialog");
   await drawer.getByRole("tab", { name: /雇佣/ }).click();
   await drawer.getByRole("button", { name: /新增雇佣/ }).click();
@@ -855,7 +855,7 @@ test("HR sees disabled Transfer while existing Employment lifecycle actions rema
     }),
   );
   await page.goto("/iam-admin/users");
-  await page.locator("td a").filter({ hasText: "查看" }).first().click();
+  await page.locator("td").getByRole("button", { name: "查看", exact: true }).first().click();
   const drawer = page.getByRole("dialog");
   await drawer.getByRole("tab", { name: /雇佣/ }).click();
   const row = drawer.getByRole("row").filter({ hasText: "财务部" });

@@ -35,6 +35,8 @@ Admin/SSO 前端、`api-core`、`domain`、`contracts`、`db`、`jobs`、Gateway
 
 | 能力              | 当前最高相关入口                                                                                                                                                                                                              | 证明范围与限制                                                                                                                                       |
 | ----------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 临时资源生命周期  | [Root Composition](../../scripts/test-integration/composition/managed-resources.integration.test.ts) 与[根命令接缝](../../scripts/__tests__/managed-integration.test.ts)                                                      | 真实根子进程的创建、筛选、首错停止、部分初始化、timeout/中断、进程树收尾、诊断告警、清理失败、keep、按记录恢复及并行环境隔离；消费方另证接线。       |
+| 共享 PG 资源关闭  | [Worker PG owner](../../apps/worker/test-integration/postgres/organization-search-postgres-resources.integration.test.ts)                                                                                                     | 公开 owner 下真实锁等待的取消、连接关闭与 peer 取消隔离；不据共享 factory 推定各 CLI 的配置、signal/deadline、报告和退出码已经正确接入。             |
 | 两类会话          | [Kernel Redis](../../packages/session-kernel/test-integration/redis/unified-session-lifecycle.integration.test.ts)                                                                                                            | 并发 open、根/应用关系期限、损坏/观察身份、精确撤销、索引及旧实例替换保护；不证明协议交付。                                                          |
 | Subject Access    | [Core Redis](../../packages/api-core/test-integration/redis/subject-access-operation-kernel.integration.test.ts)                                                                                                              | 操作固定、重启用后旧代拒绝、prepared 原上下文、损坏上下文失败、迟到撤销保留新代；数据库原子性由 Admin PG 另证。                                      |
 | Snapshot          | [Core Snapshot Redis](../../packages/api-core/test-integration/redis/client-snapshot.integration.test.ts)                                                                                                                     | 统一普通/敏感 acquisition、缓存损坏、晚到回填、required invalidation、失败和 repair；专用 DB0 清空库存与 scan-only verify。                          |
@@ -58,10 +60,16 @@ Organization Search 的[公开 PostgreSQL 恢复能力](../../packages/organizat
 [Organization Search verifier PG](../../packages/organization-search-read-model/test-integration/postgres/verification.integration.test.ts)
 验证完整覆盖、schema/严格路径/源事实、删除墓碑、处理版本、两阶段工作和同一 RR 快照的受控交错；
 [Worker PG-only verify CLI](../../apps/worker/test-integration/postgres/organization-search-verify-command.integration.test.ts)
-验证实际报告、退出码、只读库存、阻塞 deadline、signal listener、连接关闭及并发核验的取消隔离。
+验证实际报告、退出码、只读库存、阻塞 deadline、signal listener 与连接关闭；共享取消隔离由上表 PG owner 集中证明。
 [组织维护闭环](../../apps/worker/test-integration/composition/organization-search-maintenance.integration.test.ts)
 通过真实 backfill/repair/verify 命令和 consumer 验证首次构建、不兼容 schema 下保持失败、修复后重新完整核验，
 并观察非目标 Profile/Redis 库存及零入队核验。它们不代替部署负责人按[组织维护手册](../releases/organization-search-maintenance.md)取得的停流、drain 和放流证据。
+
+通用 PG 关闭用例不再重复完整 repair、消费和收敛旅程；这些业务恢复仍由专门 recovery/maintenance 入口证明。
+普通 fixture 停止消费者、子进程及连接后重置独占 Redis；生产连接关闭、只读作用和非目标数据保护在重置前观察，
+环境销毁成功不能代替这些业务事实。Root owner 的完整故障矩阵集中执行，消费入口保留自身 wiring 和独有失败行为。
+E2E 的当前镜像输入、seed receipt 及时导出与同源/双入口语义由真实旅程承接；辅助诊断采集失败只告警，
+receipt 等必需输入缺失及 cleanup 失败仍阻断通过。
 
 旧 Kernel 四对象、Provider、配置版本和旧 Snapshot/Gate 测试随被替代模型删除；其仍成立的行为分别由上表
 会话/协议/配置/账号/维护最高入口承接。历史 schema/旧 writer 证明不能冒称在最终候选重跑。

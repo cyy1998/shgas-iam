@@ -1,4 +1,4 @@
-import { expect, mock, test } from "bun:test";
+import { afterEach, expect, mock, test } from "bun:test";
 import { randomUUID } from "node:crypto";
 import process from "node:process";
 import { VerificationCodeUsage } from "@api/enums/verificationCode.usage";
@@ -6,19 +6,23 @@ import { createMobileService } from "@api/services/mobile/mobile.service";
 import { createMobileCodeCooldown } from "@api/services/mobile/mobile-code-cooldown";
 import { ApiErrorCode } from "@iam/contracts";
 import Redis from "ioredis";
+import { closeApiRedisConnection, ownApiTestExecutor, resetApiRedisTestDatabase } from "./fixture-lifecycle";
+import { cleanupAfterFixtureFailure, closeFixtureResources } from "./oidc.fixture";
+
+afterEach(resetApiRedisTestDatabase);
 
 async function fixture() {
   const url = process.env.IAM_API_TEST_REDIS_URL;
   if (!url) throw new Error("IAM_API_TEST_REDIS_URL is required");
   const keyPrefix = `sms-cooldown-test:${randomUUID()}:`;
   const clients = [0, 1].map(() => new Redis(url, { keyPrefix, lazyConnect: true, maxRetriesPerRequest: 0 }));
+  const close = ownApiTestExecutor(() =>
+    closeFixtureResources(clients.map((client) => () => closeApiRedisConnection(client))),
+  );
   try {
     await Promise.all(clients.map((client) => client.connect()));
   } catch (error) {
-    clients.forEach((client) => {
-      client.disconnect();
-    });
-    throw error;
+    return await cleanupAfterFixtureFailure(error, close);
   }
   const sender = mock(async (_phone: string) => ({ success: true, code: "1234" }));
   const services = clients.map((redis) =>
@@ -34,16 +38,7 @@ async function fixture() {
     clients,
     services,
     sender,
-    async close() {
-      try {
-        const keys = await clients[0]!.keys(`${keyPrefix}*`);
-        if (keys.length) await clients[0]!.del(...keys.map((key) => key.slice(keyPrefix.length)));
-      } finally {
-        clients.forEach((client) => {
-          client.disconnect();
-        });
-      }
-    },
+    close,
   };
 }
 

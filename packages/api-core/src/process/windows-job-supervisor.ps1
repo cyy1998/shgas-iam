@@ -1,4 +1,4 @@
-# Package-shared supervisor for process-smoke Windows Job ownership.
+# Package-shared supervisor for owned-process Windows Job ownership.
 [CmdletBinding()]
 param(
   [Parameter(Mandatory = $true)]
@@ -24,7 +24,7 @@ try {
 using System;
 using System.Runtime.InteropServices;
 
-namespace IamProcessSmoke
+namespace IamOwnedProcess
 {
     public static class JobApi
     {
@@ -93,7 +93,7 @@ namespace IamProcessSmoke
 }
 '@
 
-  $jobHandle = [IamProcessSmoke.JobApi]::CreateJobObject(
+  $jobHandle = [IamOwnedProcess.JobApi]::CreateJobObject(
     [IntPtr]::Zero,
     $null
   )
@@ -104,11 +104,11 @@ namespace IamProcessSmoke
   }
 
   $basicInfo =
-    New-Object IamProcessSmoke.JobApi+BasicLimitInformation
+    New-Object IamOwnedProcess.JobApi+BasicLimitInformation
   $basicInfo.LimitFlags =
-    [IamProcessSmoke.JobApi]::JobObjectLimitKillOnJobClose
+    [IamOwnedProcess.JobApi]::JobObjectLimitKillOnJobClose
   $extendedInfo =
-    New-Object IamProcessSmoke.JobApi+ExtendedLimitInformation
+    New-Object IamOwnedProcess.JobApi+ExtendedLimitInformation
   $extendedInfo.BasicLimitInformation = $basicInfo
   $infoLength =
     [Runtime.InteropServices.Marshal]::SizeOf($extendedInfo)
@@ -119,9 +119,9 @@ namespace IamProcessSmoke
     $infoPointer,
     $false
   )
-  if (-not [IamProcessSmoke.JobApi]::SetInformationJobObject(
+  if (-not [IamOwnedProcess.JobApi]::SetInformationJobObject(
     $jobHandle,
-    [IamProcessSmoke.JobApi]::JobObjectExtendedLimitInformation,
+    [IamOwnedProcess.JobApi]::JobObjectExtendedLimitInformation,
     $infoPointer,
     $infoLength
   )) {
@@ -151,7 +151,7 @@ namespace IamProcessSmoke
   if (-not $launcherStarted) {
     throw "failed to start the Windows Job launcher"
   }
-  if (-not [IamProcessSmoke.JobApi]::AssignProcessToJobObject(
+  if (-not [IamOwnedProcess.JobApi]::AssignProcessToJobObject(
     $jobHandle,
     $launcher.Handle
   )) {
@@ -175,7 +175,7 @@ namespace IamProcessSmoke
 }
 catch {
   [Console]::Error.WriteLine(
-    "Windows process-smoke Job supervisor failed: " + $_.Exception.Message
+    "Windows owned-process Job supervisor failed: " + $_.Exception.Message
   )
 }
 finally {
@@ -191,7 +191,7 @@ finally {
     [Runtime.InteropServices.Marshal]::FreeHGlobal($infoPointer)
   }
   if ($jobHandle -ne [IntPtr]::Zero) {
-    [IamProcessSmoke.JobApi]::CloseHandle($jobHandle) | Out-Null
+    [IamOwnedProcess.JobApi]::CloseHandle($jobHandle) | Out-Null
   }
   if ($launcher -ne $null) {
     $launcher.Dispose()

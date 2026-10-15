@@ -1,9 +1,8 @@
-import { expect, test } from "bun:test";
+import { afterEach, expect, test } from "bun:test";
 import { randomUUID } from "node:crypto";
 import { connect, createServer } from "node:net";
 import process from "node:process";
 import type { ClientSnapshotValue } from "@iam/api-core/client-snapshot";
-import { clientSnapshotKeys } from "@iam/api-core/client-snapshot/testing";
 import { SubjectAccessUnavailableError } from "@iam/api-core/subject-access";
 import {
   ClientSsoCallbackType,
@@ -15,8 +14,11 @@ import {
 } from "@iam/contracts";
 import { CustomSsoManagedFailure } from "@iam/custom-sso";
 import Redis from "ioredis";
-
+import { closeApiRedisConnection, ownApiTestExecutor, resetApiRedisTestDatabase } from "./fixture-lifecycle";
+import { cleanupAfterFixtureFailure, closeFixtureResources } from "./oidc.fixture";
 import { fixture } from "./root-authentication.fixture";
+
+afterEach(resetApiRedisTestDatabase);
 
 test("the protocol fixture requires its dedicated Redis URL before creating state", async () => {
   const previous = process.env.IAM_API_TEST_REDIS_URL;
@@ -526,6 +528,7 @@ test("candidate sub-only delivery avoids Facts, never falls back from a cookie, 
     });
     expect(invalidCookie.status).toBe(401);
     const legacyRedis = new Redis(process.env.IAM_API_TEST_REDIS_URL!);
+    const closeLegacy = ownApiTestExecutor(() => closeApiRedisConnection(legacyRedis));
     const legacyToken = `iam_ps_legacy_${randomUUID()}`;
     const legacyKey = `global_session:${legacyToken}`;
     try {
@@ -537,8 +540,7 @@ test("candidate sub-only delivery avoids Facts, never falls back from a cookie, 
       const legacyExists = await legacyRedis.exists(legacyKey);
       expect(legacyExists).toBe(1);
     } finally {
-      await legacyRedis.del(legacyKey);
-      legacyRedis.disconnect();
+      await closeLegacy();
     }
     const child = await f.operations.run(async (operation) => {
       const root = await f.kernel.forOperation(operation).resolveUserSession(token);
@@ -570,60 +572,67 @@ test("candidate sub-only delivery avoids Facts, never falls back from a cookie, 
 
 async function businessFixture(codeTtlSeconds = 30, networkUrl?: string, tokenTtlSeconds = 45) {
   const f = await fixture(codeTtlSeconds, networkUrl, tokenTtlSeconds);
-  const server = Bun.serve({ hostname: "127.0.0.1", port: 0, fetch: f.app.fetch });
-  const request = (path: string, init?: RequestInit) =>
-    fetch(new URL(path, server.url), { ...init, redirect: "manual" });
-  const root = await f.login();
-  async function authorize(client = f.businessClientCode, bearer = root, redirectUrl = "https://app.example/callback") {
-    const response = await request(`/sso/authorize?${new URLSearchParams({ client, redirectUrl })}`, {
-      headers: { Cookie: `global_session=${bearer}` },
-    });
-    expect(response.status).toBe(302);
-    return new URL(response.headers.get("location")!).searchParams.get("code")!;
-  }
-  const exchange = (
-    code: string,
-    secret = "business-secret",
-    suffix = "",
-    redirect = "https://app.example/callback",
-    client = f.businessClientCode,
-  ) =>
-    request(`/sso/token${suffix}`, {
-      method: "POST",
-      headers: {
-        Authorization: `Basic ${Buffer.from(`${client}:${secret}`).toString("base64")}`,
-        "Content-Type": "application/x-www-form-urlencoded",
-      },
-      body: new URLSearchParams({ code, redirect_uri: redirect }),
-    });
-  const use = (sid: string, client = f.businessClientCode, authz = false) =>
-    request(authz ? "/auth/authz" : "/public/user-info", {
-      headers: { Authorization: sid, Client: client, "X-Forwarded-Uri": "/home" },
-    });
-  async function target(code: string, client = f.businessClientCode) {
-    return await f.operations.run(async (operation) => {
-      const result = await f.kernel.forOperation(operation).observeClientSessionForRevocation({
-        userSessionId: code.split(".")[1]!,
-        clientSessionId: code.split(".")[2]!,
-        clientId: client,
+  let server: ReturnType<typeof Bun.serve>;
+  const close = ownApiTestExecutor(() => closeFixtureResources([() => f.close(), () => server?.stop(true)]));
+  try {
+    server = Bun.serve({ hostname: "127.0.0.1", port: 0, fetch: f.app.fetch });
+    const request = (path: string, init?: RequestInit) =>
+      fetch(new URL(path, server.url), { ...init, redirect: "manual" });
+    const root = await f.login();
+    async function authorize(
+      client = f.businessClientCode,
+      bearer = root,
+      redirectUrl = "https://app.example/callback",
+    ) {
+      const response = await request(`/sso/authorize?${new URLSearchParams({ client, redirectUrl })}`, {
+        headers: { Cookie: `global_session=${bearer}` },
       });
-      if (result.status !== "resolved") throw new Error("Test target missing");
-      return result.value.target;
-    });
+      expect(response.status).toBe(302);
+      return new URL(response.headers.get("location")!).searchParams.get("code")!;
+    }
+    const exchange = (
+      code: string,
+      secret = "business-secret",
+      suffix = "",
+      redirect = "https://app.example/callback",
+      client = f.businessClientCode,
+    ) =>
+      request(`/sso/token${suffix}`, {
+        method: "POST",
+        headers: {
+          Authorization: `Basic ${Buffer.from(`${client}:${secret}`).toString("base64")}`,
+          "Content-Type": "application/x-www-form-urlencoded",
+        },
+        body: new URLSearchParams({ code, redirect_uri: redirect }),
+      });
+    const use = (sid: string, client = f.businessClientCode, authz = false) =>
+      request(authz ? "/auth/authz" : "/public/user-info", {
+        headers: { Authorization: sid, Client: client, "X-Forwarded-Uri": "/home" },
+      });
+    async function target(code: string, client = f.businessClientCode) {
+      return await f.operations.run(async (operation) => {
+        const result = await f.kernel.forOperation(operation).observeClientSessionForRevocation({
+          userSessionId: code.split(".")[1]!,
+          clientSessionId: code.split(".")[2]!,
+          clientId: client,
+        });
+        if (result.status !== "resolved") throw new Error("Test target missing");
+        return result.value.target;
+      });
+    }
+    return {
+      ...f,
+      root,
+      request,
+      authorize,
+      exchange,
+      use,
+      target,
+      close,
+    };
+  } catch (failure) {
+    return await cleanupAfterFixtureFailure(failure, close);
   }
-  return {
-    ...f,
-    root,
-    request,
-    authorize,
-    exchange,
-    use,
-    target,
-    async close() {
-      await server.stop(true);
-      await f.scope.close();
-    },
-  };
 }
 
 async function managedFixture() {
@@ -1462,11 +1471,6 @@ test("owner maintenance clears unindexed/no-TTL tokens, all Clients and malforme
 test("candidate complete warm HTTP endpoints reuse cached sources and record socket chunk samples", async () => {
   const upstreamUrl = new URL(process.env.IAM_API_TEST_REDIS_URL!);
   const upstreamAddress = { host: upstreamUrl.hostname, port: Number(upstreamUrl.port) };
-  const observer = new Redis(upstreamUrl.toString(), { maxRetriesPerRequest: 0, retryStrategy: () => null });
-  const appKeys = clientSnapshotKeys("app");
-  const sentinelKeys = [appKeys.control, ...appKeys.payloads];
-  const sentinelValue = `non-target:${randomUUID()}`;
-  const ownedSentinels: string[] = [];
   let requestChunks = 0;
   let responseChunks = 0;
   const proxy = createServer((downstream) => {
@@ -1485,23 +1489,16 @@ test("candidate complete warm HTTP endpoints reuse cached sources and record soc
     upstream.on("error", () => downstream.destroy());
   });
   await new Promise<void>((resolve) => proxy.listen(0, "127.0.0.1", resolve));
+  const closeProxy = ownApiTestExecutor(
+    () => new Promise<void>((resolve, reject) => proxy.close((error) => (error ? reject(error) : resolve()))),
+  );
   const address = proxy.address();
   if (!address || typeof address === "string") throw new Error("Missing proxy address");
   upstreamUrl.hostname = "127.0.0.1";
   upstreamUrl.port = String(address.port);
   let f: Awaited<ReturnType<typeof businessFixture>> | undefined;
+  const close = () => closeFixtureResources([closeProxy, () => f?.close()]);
   try {
-    await observer.ping();
-    for (const key of sentinelKeys) {
-      const created = await observer.set(key, sentinelValue, "NX");
-      if (created === "OK") ownedSentinels.push(key);
-    }
-    const sentinelBefore = await Promise.all(
-      sentinelKeys.map(async (key) => ({
-        value: await observer.dump(key),
-        expiry: await observer.pexpiretime(key),
-      })),
-    );
     f = await businessFixture(30, upstreamUrl.toString());
     expect(f.businessClientCode).not.toBe("app");
     const warm = await f.authorize();
@@ -1540,29 +1537,10 @@ test("candidate complete warm HTTP endpoints reuse cached sources and record soc
     process.stdout.write(`Custom candidate HTTP network samples ${report}\n`);
     await f.close();
     f = undefined;
-    const sentinelAfter = await Promise.all(
-      sentinelKeys.map(async (key) => ({
-        value: await observer.dump(key),
-        expiry: await observer.pexpiretime(key),
-      })),
-    );
-    expect(sentinelAfter).toEqual(sentinelBefore);
-  } finally {
-    try {
-      await f?.close();
-      for (const key of ownedSentinels) {
-        await observer.eval(
-          "if redis.call('TYPE',KEYS[1]).ok=='string' and redis.call('GET',KEYS[1])==ARGV[1] then return redis.call('DEL',KEYS[1]) end; return 0",
-          1,
-          key,
-          sentinelValue,
-        );
-      }
-    } finally {
-      observer.disconnect();
-      await new Promise<void>((resolve, reject) => proxy.close((error) => (error ? reject(error) : resolve())));
-    }
+  } catch (failure) {
+    await cleanupAfterFixtureFailure(failure, close);
   }
+  await close();
 });
 
 test("expired Code and unavailable original root still trigger precise post-location revocation", async () => {

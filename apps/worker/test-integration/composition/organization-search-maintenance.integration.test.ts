@@ -1,4 +1,4 @@
-import { expect, test } from "bun:test";
+import { afterEach, beforeEach, expect, test } from "bun:test";
 import { randomUUID } from "node:crypto";
 import { fileURLToPath } from "node:url";
 import { createLogger, LoggerSourceApp } from "@iam/api-core/logger";
@@ -16,14 +16,21 @@ import {
 } from "@iam/organization-search-read-model/worker";
 import Redis from "ioredis";
 import { createWorkerPostgresTestHarness } from "../postgres/postgres-test-harness";
-import { resolveWorkerRedisTestUrl } from "../redis/redis-test-harness";
-import { createOrganizationQueueInventory } from "./organization-queue-inventory";
+import { resetWorkerRedisTestDatabase, resolveWorkerRedisTestUrl } from "../redis/redis-test-harness";
 import { createOrganizationFixtureRuntime } from "./organization-worker-runtime";
 
 const workerRoot = fileURLToPath(new URL("../../", import.meta.url));
+let stopExecutors: Array<() => Promise<void> | void>;
+beforeEach(() => {
+  stopExecutors = [];
+});
+afterEach(async () => {
+  if (stopExecutors.length) await resetWorkerRedisTestDatabase(stopExecutors);
+});
 
 test("first build and incompatible schema recovery require a fresh full verification while other read models remain independent", async () => {
   const harness = await createWorkerPostgresTestHarness();
+  stopExecutors.push(harness.close);
   const redisUrl = resolveWorkerRedisTestUrl(process.env);
   const url = new URL(redisUrl);
   const redis = {
@@ -34,11 +41,17 @@ test("first build and incompatible schema recovery require a fresh full verifica
     password: url.password ? decodeURIComponent(url.password) : undefined,
   };
   const observer = new Redis(redisUrl);
+  stopExecutors.push(async () => {
+    try {
+      await observer.quit();
+    } finally {
+      observer.disconnect();
+    }
+  });
   const prefix = DEFAULT_QUEUE_PREFIX;
-  const inventoryQueue = createJobQueue({ name: ORGANIZATION_SEARCH_QUEUE_NAME, redis, prefix });
+  const queue = createJobQueue({ name: ORGANIZATION_SEARCH_QUEUE_NAME, redis, prefix });
+  stopExecutors.push(() => queue.close());
   const sentinel = `iam:test:organization-maintenance:${randomUUID()}:unrelated`;
-  const lateSentinel = `iam:test:organization-maintenance:${randomUUID()}:late`;
-  const sharedMetaField = `test:${randomUUID()}`;
   const search = createOrganizationSearchQueryService({
     repository: createOrganizationSearchQueryRepository(harness.db),
   });
@@ -57,218 +70,106 @@ test("first build and incompatible schema recovery require a fresh full verifica
     },
     createLogger({ nodeEnv: "test", logLevel: "silent", logFormat: "json", sourceApp: LoggerSourceApp.Worker }),
   );
-  const createModule = () =>
-    createOrganizationSearchWorkerModule({
+  stopExecutors.push(async () => {
+    try {
+      await runtime.redis.quit();
+    } finally {
+      runtime.redis.disconnect();
+    }
+  });
+  const createModule = () => {
+    const module = createOrganizationSearchWorkerModule({
       db: harness.db,
       redis: runtime.config.redis,
       config: runtime.config.organizationSearch,
       clock: runtime.clock,
       logger: runtime.logger,
     });
+    stopExecutors.push(module.close);
+    return module;
+  };
   let module = createModule();
-  let inventory: Awaited<ReturnType<typeof createOrganizationQueueInventory>> | undefined;
-  const foreignJobIds: string[] = [];
-  let sharedEventId: string | undefined;
-  try {
-    // This other fixture's default-queue job predates ownership registration and
-    // deliberately has the same payload as a rebuild this fixture will produce.
-    const initialForeign = await inventoryQueue.add(
-      "rebuild-document",
-      { organizationId: 1, version: "1" },
-      {
-        jobId: randomUUID(),
-        delay: 3_600_000,
-      },
-    );
-    if (!initialForeign.id) throw new Error("Foreign fixture did not receive a job ID");
-    foreignJobIds.push(initialForeign.id);
-    inventory = await createOrganizationQueueInventory(inventoryQueue, harness.sql);
-    await observer.set(sentinel, "non-target-state");
-    await harness.sql`INSERT INTO organization (id,org_code,org_name,parent_id,path,level,org_type,status,is_delete)
+  await observer.set(sentinel, "non-target-state");
+  await harness.sql`INSERT INTO organization (id,org_code,org_name,parent_id,path,level,org_type,status,is_delete)
       VALUES (1,'ROOT','Root',-1,'/1',1,${OrganizationType.Department},${OrganizationStatus.Enable},false),
         (2,'CHILD','Child',1,'/1/2',2,${OrganizationType.Department},${OrganizationStatus.Disable},false),
         (3,'DELETED','Deleted',-1,'/3',1,${OrganizationType.Department},${OrganizationStatus.Disable},true)`;
-    await harness.sql`INSERT INTO organization_closure (ancestor_id,descendant_id,depth) VALUES (1,1,0),(1,2,1),(2,2,0),(3,3,0)`;
-    // Organization maintenance has no authority over this independent Profile schema or pending work.
-    await harness.sql`INSERT INTO user_profile (user_id,subject_identifier,username,name,status,profile_schema_version,source_dirty_version,detail,search_doc,subject_facts)
+  await harness.sql`INSERT INTO organization_closure (ancestor_id,descendant_id,depth) VALUES (1,1,0),(1,2,1),(2,2,0),(3,3,0)`;
+  // Organization maintenance has no authority over this independent Profile schema or pending work.
+  await harness.sql`INSERT INTO user_profile (user_id,subject_identifier,username,name,status,profile_schema_version,source_dirty_version,detail,search_doc,subject_facts)
       VALUES (9001,${randomUUID()},'independent','Independent',1,99,7,'{"sentinel":true}','{}','{}')`;
-    await harness.sql`INSERT INTO user_profile_dirty (user_id,dirty_version,status) VALUES (9001,7,'pending')`;
-    const nonTargetBefore = await nonTarget();
-    const missing = await command("verify", 1);
-    expect(missing.output).toContain('"code":"missing-document"');
-    const backfill = await command("backfill", 0, ["--batch-size", "1"]);
-    await inventory.registerCurrentJobs();
-    expect(backfill.output).toContain('"publication":"not-verified"');
-    const beforeConsumption = await command("verify", 1);
-    expect(beforeConsumption.output).toContain('"code":"unprocessed-change"');
-    await module.startConsumers();
-    await converged();
-    await inventory.registerCurrentJobs();
-    const firstPassed = await command("verify", 0);
-    expect(firstPassed.output).toContain('"status":"passed"');
-    expect(firstPassed.output).toContain('"tombstones":1');
-    const beforeUpgradeVersions = await harness.sql<
-      { organization_id: number; source_version: string }[]
-    >`SELECT organization_id,source_version FROM organization_search_document ORDER BY organization_id`;
+  await harness.sql`INSERT INTO user_profile_dirty (user_id,dirty_version,status) VALUES (9001,7,'pending')`;
+  const nonTargetBefore = await nonTarget();
+  const missing = await command("verify", 1);
+  expect(missing.output).toContain('"code":"missing-document"');
+  const backfill = await command("backfill", 0, ["--batch-size", "1"]);
+  expect(backfill.output).toContain('"publication":"not-verified"');
+  const beforeConsumption = await command("verify", 1);
+  expect(beforeConsumption.output).toContain('"code":"unprocessed-change"');
+  await module.startConsumers();
+  await converged();
+  const firstPassed = await command("verify", 0);
+  expect(firstPassed.output).toContain('"status":"passed"');
+  expect(firstPassed.output).toContain('"tombstones":1');
+  const beforeUpgradeVersions = await harness.sql<
+    { organization_id: number; source_version: string }[]
+  >`SELECT organization_id,source_version FROM organization_search_document ORDER BY organization_id`;
 
-    // Stop the prior publisher before replacing incompatible documents in the maintenance window.
-    await module.close();
-    await harness.sql`UPDATE organization_search_document SET schema_version=2 WHERE organization_id IN (1,2)`;
-    await harness.sql`UPDATE organization SET org_name='Upgraded root', is_virtual=true WHERE id=1`;
-    await harness.sql`UPDATE organization SET status=${OrganizationStatus.Pause} WHERE id=2`;
-    const oldSchemaResults = await search.search({
-      filter: { field: "organization", op: "withinSubtreeOf", value: "ROOT" },
-    });
-    expect(oldSchemaResults).toEqual([]);
-    const incompatible = await command("verify", 1);
-    expect(incompatible.output).toContain('"code":"schema-mismatch"');
-    module = createModule();
-    await command("backfill", 0, ["--batch-size", "1"]);
-    await inventory.registerCurrentJobs();
-    const stillMaintaining = await command("verify", 1);
-    expect(stillMaintaining.output).toContain('"code":"unprocessed-change"');
-    const repaired = await command("repair", 0, ["--limit", "10"]);
-    expect(repaired.output).toContain('"publication":"not-verified"');
-    await module.startConsumers();
-    await converged();
-    await inventory.registerCurrentJobs();
-    const recovered = await command("verify", 0);
-    expect(recovered.output).toContain('"status":"passed"');
-    const recoveredVersions = await harness.sql<
-      { organization_id: number; source_version: string; version: string; status: string }[]
-    >`SELECT document.organization_id,document.source_version,dirty.version,dirty.status
+  // Stop the prior publisher before replacing incompatible documents in the maintenance window.
+  await module.close();
+  await harness.sql`UPDATE organization_search_document SET schema_version=2 WHERE organization_id IN (1,2)`;
+  await harness.sql`UPDATE organization SET org_name='Upgraded root', is_virtual=true WHERE id=1`;
+  await harness.sql`UPDATE organization SET status=${OrganizationStatus.Pause} WHERE id=2`;
+  const oldSchemaResults = await search.search({
+    filter: { field: "organization", op: "withinSubtreeOf", value: "ROOT" },
+  });
+  expect(oldSchemaResults).toEqual([]);
+  const incompatible = await command("verify", 1);
+  expect(incompatible.output).toContain('"code":"schema-mismatch"');
+  module = createModule();
+  await command("backfill", 0, ["--batch-size", "1"]);
+  const stillMaintaining = await command("verify", 1);
+  expect(stillMaintaining.output).toContain('"code":"unprocessed-change"');
+  const repaired = await command("repair", 0, ["--limit", "10"]);
+  expect(repaired.output).toContain('"publication":"not-verified"');
+  await module.startConsumers();
+  await converged();
+  const recovered = await command("verify", 0);
+  expect(recovered.output).toContain('"status":"passed"');
+  const recoveredVersions = await harness.sql<
+    { organization_id: number; source_version: string; version: string; status: string }[]
+  >`SELECT document.organization_id,document.source_version,dirty.version,dirty.status
       FROM organization_search_document document JOIN organization_search_dirty dirty USING (organization_id) ORDER BY organization_id`;
-    expect(recoveredVersions).toHaveLength(3);
-    for (const row of recoveredVersions) {
-      const previous = beforeUpgradeVersions.find((version) => version.organization_id === row.organization_id);
-      if (!previous) throw new Error("Upgrade lost a source organization");
-      expect(BigInt(row.source_version) > BigInt(previous.source_version)).toBe(true);
-      expect(row.source_version).toBe(row.version);
-      expect(row.status).toBe("processed");
-    }
-    const documents = await search.search({ filter: { field: "organization", op: "withinSubtreeOf", value: "ROOT" } });
-    expect(documents.map((document) => document.organization.code)).toEqual(["ROOT", "CHILD"]);
-    expect(documents[0]?.organization).toMatchObject({ name: "Upgraded root", isVirtual: true });
-    expect(documents[1]?.organization).toMatchObject({
-      status: OrganizationStatus.Pause,
-      path: [
-        { code: "ROOT", name: "Upgraded root", level: 1, distanceToTarget: 1 },
-        { code: "CHILD", name: "Child", level: 2, distanceToTarget: 0 },
-      ],
-    });
-    const repeatedRepair = await command("repair", 0, ["--limit", "10"]);
-    expect(repeatedRepair.output).toContain('"enqueued":0');
-    await module.close();
-    const jobsBefore = await inventoryQueue.getJobs();
-    const finalVerification = await command("verify", 0);
-    const jobsAfter = await inventoryQueue.getJobs();
-    expect(finalVerification.output).toContain('"status":"passed"');
-    expect(jobsAfter.map((job) => job.id).sort()).toEqual(jobsBefore.map((job) => job.id).sort());
-    const nonTargetAfter = await nonTarget();
-    expect(nonTargetAfter).toEqual(nonTargetBefore);
-    const sentinelAfter = await observer.get(sentinel);
-    expect(sentinelAfter).toBe("non-target-state");
-    await inventory.seal();
-    expect(inventory.registeredJobIds().length).toBeGreaterThan(0);
-    const foreign = await inventoryQueue.add(
-      "rebuild-document",
-      { organizationId: 1, version: "1" },
-      {
-        jobId: randomUUID(),
-        delay: 3_600_000,
-      },
-    );
-    if (!foreign.id) throw new Error("Late foreign fixture did not receive a job ID");
-    foreignJobIds.push(foreign.id);
-    await observer.set(lateSentinel, "late-non-target-state");
-    await observer.hset(inventoryQueue.toKey("meta"), sharedMetaField, "shared-meta-state");
-    sharedEventId =
-      (await observer.xadd(
-        inventoryQueue.toKey("events"),
-        "*",
-        "event",
-        "fixture-sentinel",
-        "marker",
-        sharedMetaField,
-      )) ?? undefined;
-    if (!sharedEventId) throw new Error("Foreign fixture did not receive an event ID");
-    const foreignHashesBefore = await Promise.all(
-      foreignJobIds.map((id) => observer.hgetall(inventoryQueue.toKey(id))),
-    );
-    const sharedIdBefore = await observer.get(inventoryQueue.toKey("id"));
-    await cleanupQueueJobs();
-    for (const id of foreignJobIds) {
-      const retained = await inventoryQueue.getJob(id);
-      expect(retained?.data).toEqual({ organizationId: 1, version: "1" });
-      const retainedState = await retained?.getState();
-      expect(retainedState).toBe("delayed");
-    }
-    for (const id of inventory.registeredJobIds()) {
-      const removed = await inventoryQueue.getJob(id);
-      expect(removed).toBeUndefined();
-    }
-    const sharedIdAfter = await observer.get(inventoryQueue.toKey("id"));
-    const sharedMetaAfter = await observer.hget(inventoryQueue.toKey("meta"), sharedMetaField);
-    const eventsType = await observer.type(inventoryQueue.toKey("events"));
-    const lateSentinelAfter = await observer.get(lateSentinel);
-    const foreignHashesAfter = await Promise.all(foreignJobIds.map((id) => observer.hgetall(inventoryQueue.toKey(id))));
-    const sharedEventAfter = await observer.xrange(inventoryQueue.toKey("events"), sharedEventId, sharedEventId);
-    expect(sharedIdAfter).toBe(sharedIdBefore);
-    expect(sharedMetaAfter).toBe("shared-meta-state");
-    expect(eventsType).toBe("stream");
-    expect(lateSentinelAfter).toBe("late-non-target-state");
-    expect(foreignHashesAfter).toEqual(foreignHashesBefore);
-    expect(sharedEventAfter).toEqual([[sharedEventId, ["event", "fixture-sentinel", "marker", sharedMetaField]]]);
-  } finally {
-    await cleanup();
+  expect(recoveredVersions).toHaveLength(3);
+  for (const row of recoveredVersions) {
+    const previous = beforeUpgradeVersions.find((version) => version.organization_id === row.organization_id);
+    if (!previous) throw new Error("Upgrade lost a source organization");
+    expect(BigInt(row.source_version) > BigInt(previous.source_version)).toBe(true);
+    expect(row.source_version).toBe(row.version);
+    expect(row.status).toBe("processed");
   }
-
-  async function cleanup() {
-    const failures: unknown[] = [];
-    try {
-      await module.close();
-    } catch (error) {
-      failures.push(error);
-    }
-    try {
-      await cleanupQueueJobs();
-    } catch (error) {
-      failures.push(error);
-    }
-    // The separate foreign fixture owner removes its exact IDs only after the proof.
-    for (const id of foreignJobIds) {
-      try {
-        await (await inventoryQueue.getJob(id))?.remove({ removeChildren: false });
-      } catch (error) {
-        failures.push(new Error(`Foreign fixture cleanup failed for job ${id}`, { cause: error }));
-      }
-    }
-    const closed = await Promise.allSettled([
-      runtime.redis.quit(),
-      inventoryQueue.close(),
-      harness.close(),
-      (async () => {
-        try {
-          await observer.unlink(sentinel);
-          await observer.unlink(lateSentinel);
-          await observer.hdel(inventoryQueue.toKey("meta"), sharedMetaField);
-          if (sharedEventId) await observer.xdel(inventoryQueue.toKey("events"), sharedEventId);
-        } finally {
-          await observer.quit();
-        }
-      })(),
-    ]);
-    for (const result of closed) if (result.status === "rejected") failures.push(result.reason);
-    if (failures.length) throw new AggregateError(failures, "Organization maintenance cleanup failed");
-  }
-
-  async function cleanupQueueJobs() {
-    if (inventory) {
-      await inventory.seal();
-      await inventory.removeOwnedJobs();
-    }
-  }
-
+  const documents = await search.search({ filter: { field: "organization", op: "withinSubtreeOf", value: "ROOT" } });
+  expect(documents.map((document) => document.organization.code)).toEqual(["ROOT", "CHILD"]);
+  expect(documents[0]?.organization).toMatchObject({ name: "Upgraded root", isVirtual: true });
+  expect(documents[1]?.organization).toMatchObject({
+    status: OrganizationStatus.Pause,
+    path: [
+      { code: "ROOT", name: "Upgraded root", level: 1, distanceToTarget: 1 },
+      { code: "CHILD", name: "Child", level: 2, distanceToTarget: 0 },
+    ],
+  });
+  const repeatedRepair = await command("repair", 0, ["--limit", "10"]);
+  expect(repeatedRepair.output).toContain('"enqueued":0');
+  await module.close();
+  const jobsBefore = await queue.getJobs();
+  const finalVerification = await command("verify", 0);
+  const jobsAfter = await queue.getJobs();
+  expect(finalVerification.output).toContain('"status":"passed"');
+  expect(jobsAfter.map((job) => job.id).sort()).toEqual(jobsBefore.map((job) => job.id).sort());
+  const nonTargetAfter = await nonTarget();
+  expect(nonTargetAfter).toEqual(nonTargetBefore);
+  const sentinelAfter = await observer.get(sentinel);
+  expect(sentinelAfter).toBe("non-target-state");
   async function nonTarget() {
     const [row] = await harness.sql`SELECT
       (SELECT jsonb_agg(to_jsonb(t) ORDER BY user_id) FROM user_profile t) AS profile,
@@ -285,7 +186,7 @@ test("first build and incompatible schema recovery require a fresh full verifica
     throw new Error("Organization maintenance did not pass complete verification");
   }
   async function command(operation: "backfill" | "repair" | "verify", expectedExitCode: number, args: string[] = []) {
-    return await runProcessCommandSmoke({
+    const pending = runProcessCommandSmoke({
       label: `Organization Search maintenance ${operation}`,
       start: () =>
         spawnOwnedProcessTree({
@@ -318,5 +219,10 @@ test("first build and incompatible schema recovery require a fresh full verifica
       expectedExitCode,
       maxOutputBytes: 128 * 1024,
     });
+    stopExecutors.push(async () => {
+      await pending;
+    });
+    void pending.catch(() => {});
+    return await pending;
   }
 }, 60_000);

@@ -87,7 +87,11 @@ export async function runOwnedCommand(
   return outcome;
 }
 
-export async function withCommandFixture<T>(prefix: string, run: (root: string, signal: AbortSignal) => Promise<T>) {
+export async function withCommandFixture<T>(
+  prefix: string,
+  run: (root: string, signal: AbortSignal) => Promise<T>,
+  options: { scenarioTimeoutMs?: number } = {},
+) {
   const controller = new AbortController();
   let interruptedSignal: "SIGINT" | "SIGTERM" | undefined;
   const interrupt = (signal: "SIGINT" | "SIGTERM") => {
@@ -96,9 +100,10 @@ export async function withCommandFixture<T>(prefix: string, run: (root: string, 
   };
   const onInterrupt = () => interrupt("SIGINT");
   const onTerminate = () => interrupt("SIGTERM");
+  const deadlineMs = options.scenarioTimeoutMs ?? scenarioTimeoutMs;
   const timer = setTimeout(
-    () => controller.abort(new Error(`command fixture deadline exceeded after ${scenarioTimeoutMs}ms`)),
-    scenarioTimeoutMs,
+    () => controller.abort(new Error(`command fixture deadline exceeded after ${deadlineMs}ms`)),
+    deadlineMs,
   );
   process.on("SIGINT", onInterrupt);
   process.on("SIGTERM", onTerminate);

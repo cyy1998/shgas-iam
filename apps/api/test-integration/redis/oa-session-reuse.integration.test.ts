@@ -1,5 +1,6 @@
-import { expect, test } from "bun:test";
+import { afterEach, expect, test } from "bun:test";
 import { randomUUID } from "node:crypto";
+import { resetApiRedisTestDatabase } from "./fixture-lifecycle";
 import { fixture } from "./root-authentication.fixture";
 
 type Fixture = Awaited<ReturnType<typeof fixture>>;
@@ -248,3 +249,5 @@ test("OA does not restore the old session when new session creation fails after 
     await f.scope.close();
   }
 });
+
+afterEach(resetApiRedisTestDatabase);

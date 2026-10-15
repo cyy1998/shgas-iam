@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import process from "node:process";
 import { fileURLToPath } from "node:url";
+import { runWithOwnedTestResources } from "@iam/api-core/testing/external-test-resources";
 import type { db as database } from "@iam/db";
 import { relations } from "@iam/db/relations";
 import { drizzle } from "drizzle-orm/postgres-js";
@@ -39,6 +40,7 @@ export async function createAdminApiPostgresTestHarness(): Promise<AdminApiPostg
 
     const commandDatabaseUrl = new URL(databaseUrl);
     commandDatabaseUrl.searchParams.set("options", `-c search_path=${schemaName}`);
+    let closing: Promise<void> | undefined;
     return {
       db,
       sql: scopedSql,
@@ -61,17 +63,26 @@ export async function createAdminApiPostgresTestHarness(): Promise<AdminApiPostg
           RESTART IDENTITY CASCADE
         `);
       },
-      async close() {
-        await scopedSql!.end();
-        await adminSql.unsafe(`DROP SCHEMA ${quoteIdentifier(schemaName)} CASCADE`);
-        await adminSql.end();
+      close() {
+        closing ??= runWithOwnedTestResources(async (lifecycle) => {
+          lifecycle.registerCleanup(() => adminSql.end({ timeout: 1 }));
+          lifecycle.registerCleanup(async () => {
+            await adminSql.unsafe(`DROP SCHEMA ${quoteIdentifier(schemaName)} CASCADE`);
+          });
+          lifecycle.registerCleanup(() => scopedSql!.end({ timeout: 1 }));
+        });
+        return closing;
       },
     };
   } catch (error) {
-    if (scopedSql) await scopedSql.end({ timeout: 1 });
-    await adminSql.unsafe(`DROP SCHEMA IF EXISTS ${quoteIdentifier(schemaName)} CASCADE`);
-    await adminSql.end({ timeout: 1 });
-    throw error;
+    return await runWithOwnedTestResources(async (lifecycle) => {
+      lifecycle.registerCleanup(() => adminSql.end({ timeout: 1 }));
+      lifecycle.registerCleanup(async () => {
+        await adminSql.unsafe(`DROP SCHEMA IF EXISTS ${quoteIdentifier(schemaName)} CASCADE`);
+      });
+      lifecycle.registerCleanup(() => scopedSql?.end({ timeout: 1 }));
+      throw error;
+    });
   }
 }
 

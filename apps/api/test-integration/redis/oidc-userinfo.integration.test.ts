@@ -1,4 +1,4 @@
-import { expect, test } from "bun:test";
+import { afterEach, expect, test } from "bun:test";
 import { randomUUID } from "node:crypto";
 import type { ClientSnapshotValue } from "@iam/api-core/client-snapshot";
 import type { SubjectFactsSnapshot } from "@iam/client-subject-projection";
@@ -10,6 +10,7 @@ import {
   OidcScope,
   OrganizationType,
 } from "@iam/contracts";
+import { resetApiRedisTestDatabase } from "./fixture-lifecycle";
 import { userInfoFixture } from "./oidc-userinfo.fixture";
 
 test("UserInfo real GET/POST and form Bearer transport retain standard errors and registered Client CORS", async () => {
@@ -358,3 +359,5 @@ test("UserInfo maps published employment wire and isolates two Clients authoriza
     await f.close();
   }
 });
+
+afterEach(resetApiRedisTestDatabase);

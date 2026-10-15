@@ -1,13 +1,14 @@
 import type { Buffer } from "node:buffer";
-import type { ChildProcess } from "node:child_process";
-import { spawn } from "node:child_process";
+import { type OwnedProcessTree, spawnOwnedProcessTree, waitForOwnedProcessTree } from "@iam/api-core/process";
 import { createBoundedByteCapture, createBoundedLineCapture } from "./command-capture.ts";
 import type { CapturedCommandRunner, CommandRunner } from "./docker-infra.ts";
 
-const abortedCommandWaitMs = 2_000;
+const processCleanupTimeoutMs = 5_000;
 
 export const runCommand: CommandRunner = async (command, args, options) => {
-  const child = startCommand(command, args, options, "ignore");
+  const child = startCommand(command, args, options);
+  child.stdout.resume();
+  child.stderr.resume();
   await waitForCommand(child, command, options.signal);
 };
 
@@ -22,89 +23,40 @@ export const captureCommand: CapturedCommandRunner = async (command, args, optio
     captureMode === "line-tail"
       ? createBoundedLineCapture(maxCapturedBytes)
       : createBoundedByteCapture(captureMode, maxCapturedBytes);
-  const child = startCommand(command, args, options, ["ignore", "pipe", "pipe"]);
-  if (child.stdout === null || child.stderr === null) throw new Error(`failed to capture output from ${command}`);
+  const child = startCommand(command, args, options);
   child.stdout.on("data", (chunk: Buffer) => stdout.append(chunk));
   child.stderr.on("data", (chunk: Buffer) => stderr.append(chunk));
-  await waitForCommand(child, command, options.signal);
+  try {
+    await waitForCommand(child, command, options.signal);
+  } catch (error) {
+    if (error instanceof Error) Object.assign(error, { stdout: stdout.toString(), stderr: stderr.toString() });
+    throw error;
+  }
   return { stdout: stdout.toString(), stderr: stderr.toString() };
 };
 
-function startCommand(
-  command: string,
-  args: string[],
-  options: Parameters<CommandRunner>[2],
-  stdio: "ignore" | ["ignore", "pipe", "pipe"],
-) {
-  return spawn(command, args, {
-    cwd: options.cwd,
-    detached: process.platform !== "win32",
-    env: options.env ?? process.env,
-    stdio,
-    windowsHide: true,
-  });
+function startCommand(command: string, args: string[], options: Parameters<CommandRunner>[2]) {
+  options.signal?.throwIfAborted();
+  return spawnOwnedProcessTree({ executable: command, args, cwd: options.cwd, env: options.env ?? process.env });
 }
 
-function waitForCommand(child: ChildProcess, command: string, abortSignal?: AbortSignal) {
-  return new Promise<void>((resolve, reject) => {
-    let completed = false;
-    let abortRequested = false;
-    let abortTimer: ReturnType<typeof setTimeout> | undefined;
-    const finish = (error?: Error) => {
-      if (completed) return;
-      completed = true;
-      if (abortTimer !== undefined) clearTimeout(abortTimer);
-      child.removeListener("error", onError);
-      child.removeListener("close", onClose);
-      abortSignal?.removeEventListener("abort", onAbort);
-      error === undefined ? resolve() : reject(error);
-    };
-    const abortError = () =>
-      new Error(`${command} command was aborted`, {
-        cause: abortSignal?.reason,
-      });
-    function onError(error: Error) {
-      finish(new Error(`failed to start ${command}`, { cause: error }));
-    }
-    function onClose(code: number | null, signal: NodeJS.Signals | null) {
-      if (abortRequested) {
-        finish(abortError());
-        return;
-      }
-      if (code === 0 && signal === null) {
-        finish();
-        return;
-      }
-      finish(new Error(`${command} exited with code ${code ?? "null"} and signal ${signal ?? "null"}`));
-    }
-    function onAbort() {
-      if (abortRequested || completed) return;
-      abortRequested = true;
-      bestEffortTerminateProcessTree(child.pid);
-      abortTimer = setTimeout(() => finish(abortError()), abortedCommandWaitMs);
-    }
-    child.once("error", onError);
-    child.once("close", onClose);
-    abortSignal?.addEventListener("abort", onAbort, { once: true });
-    if (abortSignal?.aborted) onAbort();
+async function waitForCommand(child: OwnedProcessTree, command: string, signal?: AbortSignal) {
+  const { outcome, executionFailure, cleanupFailure } = await waitForOwnedProcessTree(child, {
+    signal,
+    cleanupTimeoutMs: processCleanupTimeoutMs,
   });
-}
-
-function bestEffortTerminateProcessTree(pid: number | undefined) {
-  if (pid === undefined) return;
-  if (process.platform === "win32") {
-    const killer = spawn("taskkill.exe", ["/PID", String(pid), "/T", "/F"], { stdio: "ignore", windowsHide: true });
-    killer.once("error", () => undefined);
-    killer.unref();
-    return;
-  }
-  try {
-    process.kill(-pid, "SIGKILL");
-  } catch {
-    try {
-      process.kill(pid, "SIGKILL");
-    } catch {
-      // Best-effort termination allows residue for explicit recovery.
-    }
-  }
+  const failures: unknown[] = [];
+  if (executionFailure)
+    failures.push(
+      new Error(executionFailure.kind === "abort" ? `${command} command was aborted` : `${command} failed to start`, {
+        cause: executionFailure.error,
+      }),
+    );
+  if (outcome && (outcome.exitCode !== 0 || outcome.signal !== null))
+    failures.push(
+      new Error(`${command} exited with code ${outcome.exitCode ?? "null"} and signal ${outcome.signal ?? "null"}`),
+    );
+  if (cleanupFailure) failures.push(new Error(`${command} process tree cleanup failed`, { cause: cleanupFailure }));
+  if (failures.length === 1) throw failures[0];
+  if (failures.length > 1) throw new AggregateError(failures, `${command} failed and process tree cleanup failed`);
 }

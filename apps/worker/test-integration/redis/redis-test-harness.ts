@@ -1,6 +1,9 @@
 import { randomUUID } from "node:crypto";
 import process from "node:process";
-import { createClientSnapshotVerifier } from "@iam/api-core/client-snapshot/maintenance";
+import {
+  resetExclusiveRedisTestDatabase,
+  runWithOwnedTestResources,
+} from "@iam/api-core/testing/external-test-resources";
 import { createProcessSmokeEnvironment } from "@iam/api-core/testing/process-smoke-harness";
 import type { Redis as RedisType } from "ioredis";
 import Redis from "ioredis";
@@ -10,8 +13,6 @@ const TEST_REDIS_URL_ENV = "IAM_WORKER_TEST_REDIS_URL";
 export interface WorkerRedisTestHarness {
   readonly writer: RedisType;
   readonly observer: RedisType;
-  readonly ownedRestoreFixtureKey: (key: string) => string;
-  readonly ownedSentinelKey: (label: string) => string;
   readonly seedNonOwnerSentinels: (prefixes: readonly string[]) => Promise<string[]>;
   readonly commandEnvironment: (temporaryDirectory: string) => NodeJS.ProcessEnv;
   readonly close: () => Promise<void>;
@@ -24,37 +25,33 @@ export async function createWorkerRedisTestHarness(
   const parsed = new URL(redisUrl);
   const writer = createRedisClient(redisUrl);
   const observer = createRedisClient(redisUrl);
-  const cleanup = createRedisClient(redisUrl);
-  const ownedRestoreFixtureKeys: string[] = [];
-  const ownedSentinelKeys: string[] = [];
+  let closePromise: Promise<void> | undefined;
+
+  function close() {
+    closePromise ??= runWithOwnedTestResources(async (lifecycle) => {
+      lifecycle.registerCleanup(() => closeRedisClient(writer));
+      lifecycle.registerCleanup(() => closeRedisClient(observer));
+    });
+    return closePromise;
+  }
 
   try {
-    await Promise.all([connectRedis(writer), connectRedis(observer), connectRedis(cleanup)]);
+    await Promise.all([connectRedis(writer), connectRedis(observer)]);
   } catch (error) {
-    writer.disconnect();
-    observer.disconnect();
-    cleanup.disconnect();
-    throw error;
+    return await runWithOwnedTestResources(async (lifecycle) => {
+      lifecycle.registerCleanup(close);
+      throw error;
+    });
   }
 
   return {
     writer,
     observer,
-    ownedRestoreFixtureKey(key) {
-      ownedRestoreFixtureKeys.push(key);
-      return key;
-    },
-    ownedSentinelKey(label) {
-      const key = `iam:test:worker-runtime-repair:${randomUUID()}:${label}`;
-      ownedSentinelKeys.push(key);
-      return key;
-    },
     async seedNonOwnerSentinels(prefixes) {
       // Deliberately opaque resource sentinels, not serialized records of another production owner.
       const keys: string[] = [];
       for (const prefix of prefixes) {
         const key = `${prefix}${randomUUID()}`;
-        ownedSentinelKeys.push(key);
         keys.push(key);
         await writer.set(key, "sensitive-fixture", "PX", 120000);
       }
@@ -63,27 +60,27 @@ export async function createWorkerRedisTestHarness(
     commandEnvironment(temporaryDirectory) {
       return createClientRuntimeMaintenanceProcessEnvironment(parsed, temporaryDirectory);
     },
-    async close() {
-      const errors: unknown[] = [];
-      const ownedKeys = [...ownedRestoreFixtureKeys, ...ownedSentinelKeys];
-      try {
-        if (ownedKeys.length > 0) await cleanup.unlink(...ownedKeys);
-        const remainingOwnerInventory = await createClientSnapshotVerifier(observer).verifyAllAfterRedisRestore({
-          protocolTrafficStopped: true,
-        });
-        if (remainingOwnerInventory.matchingKeys > 0) {
-          throw new Error(`Worker Redis test left ${remainingOwnerInventory.matchingKeys} Client Runtime owner key(s)`);
-        }
-      } catch (error) {
-        errors.push(error);
-      }
-      const closeResults = await Promise.allSettled([writer.quit(), observer.quit(), cleanup.quit()]);
-      for (const result of closeResults) {
-        if (result.status === "rejected") errors.push(result.reason);
-      }
-      if (errors.length > 0) throw new AggregateError(errors, "Failed to close Worker Redis test harness");
-    },
+    close,
   };
+}
+
+export async function resetWorkerRedisTestDatabase(stopExecutors: ReadonlyArray<() => Promise<void> | void>) {
+  let control: RedisType | undefined;
+  await runWithOwnedTestResources(async (lifecycle) => {
+    lifecycle.registerCleanup(() => (control ? closeRedisClient(control) : undefined));
+    await resetExclusiveRedisTestDatabase({
+      redis: {
+        async flushdb() {
+          // Create only after all executors stopped, so even a failed control connection
+          // leaves the caller's resources stopped and the original failure observable.
+          control = createRedisClient(resolveWorkerRedisTestUrl(process.env));
+          await connectRedis(control);
+          return await control.flushdb();
+        },
+      },
+      stopExecutors,
+    });
+  });
 }
 
 function createClientRuntimeMaintenanceProcessEnvironment(parsed: URL, temporaryDirectory: string) {
@@ -149,4 +146,12 @@ function createRedisClient(redisUrl: string) {
 async function connectRedis(redis: RedisType) {
   await redis.connect();
   await redis.ping();
+}
+
+async function closeRedisClient(redis: RedisType) {
+  try {
+    if (redis.status === "ready") await redis.quit();
+  } finally {
+    redis.disconnect();
+  }
 }

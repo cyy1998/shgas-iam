@@ -13,8 +13,8 @@ status: accepted
 跨包编排，不把 package 依赖图自动当作测试执行拓扑。
 
 基础 verify 依次执行 static、typecheck、Unit、build 并快速失败；Integration 和 Full-system E2E 显式追加。
-外部资源由调用方提供，聚合 Integration 在启动前报告全部缺失资源，不回退到开发或运行资源。代价是基础通过不能代替
-真实数据库、进程、浏览器和完整系统证据。
+真实资源由正式测试命令创建和销毁，不回退到开发或运行资源。代价是基础通过不能代替真实数据库、进程、浏览器和
+完整系统证据，执行这些通道仍需满足其 Docker、工具链和浏览器前提。
 
 测试由 owner-local 窄目录自动收集；root Unit 使用 `scripts/__tests__/`，保留 Turbo task 与并发预算。
 不再维护独立 Collection Guard：其 runner list 与 Turbo dry-run 子进程增加检查耗时，专属 adapter、fixtures 和文档增加
@@ -26,6 +26,28 @@ status: accepted
 
 保留 Guard 或优化其子进程启动可以继续自动检查收集，但仍需维护独立观察模型；仅从默认 static 阶段跳过会保留专属实现
 与文档成本，因此采用完整删除。
+
+## 受管理的临时测试环境
+
+正式资源测试采用编排器管理的一次性环境，每次命令负责创建、使用和销毁自己的资源。
+手动与 AFK 使用同一入口和生命周期，同环境资源测试串行复用；PostgreSQL 保留 schema 隔离，Redis 允许整体重置。
+资源测试遇到首个失败即结束命令；辅助诊断失败只告警，初始化、测试与清理失败仍阻断通过。
+详细流程及验证边界见[专用资源与隔离](../architecture/testing-architecture.md#专用资源与隔离)。
+
+该模式取代调用方任意提供外部 URL、fixture 逐项保护共享环境的正式运行方式，减少资源所有权判断、逐 job/key 清理与
+残留锁等待。代价是独立命令需要启动服务，同环境测试让出并行度，且一次失败只报告当时已执行的范围。
+运行内复用服务控制启动成本；显式保留环境用于调试，成功与失败默认自动清理。
+
+AFK 直接接入共享宿主 Docker，并采用 host networking；运行前核对平台、网络与非 root socket 访问条件。接受宿主
+Docker 管理权限和宿主网络访问范围，以减少另一套 daemon、地址转换或代理的维护。条件不满足时报告环境要求，
+不自动切换 DinD。E2E 静态文件进入测试镜像，seed 结果及时导出，使手动和 AFK 使用相同的容器输入输出方式。
+私有 registry 认证需要调用者显式提供受支持的单 registry 配置；执行器使用私有只读副本，默认不继承宿主凭据，
+只有确认创建者停止后才回收副本。配置前提和恢复操作见[AFK 命令](../development/commands.md#sandcastle-afk)。
+
+共享能力的完整故障证明放在其 owner，调用方保留接线与业务差异验证。环境整体销毁之前，仍需观察生产命令的退出、
+连接关闭和非目标数据保护；资源清理成功不能替代这些业务证明。
+
+共享 daemon、host networking、容器输入输出和并行 project 隔离由实际 sandbox smoke 验证；配置检查不能代替运行证据。
 
 ## 当前契约与历史
 

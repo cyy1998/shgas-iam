@@ -1,4 +1,4 @@
-import { afterAll, beforeAll, describe, expect, test } from "bun:test";
+import { afterAll, afterEach, beforeAll, describe, expect, test } from "bun:test";
 import type { SubjectFactsCacheRecord } from "../../src/subject-facts";
 import { createRedisTestHarness } from "./redis-test-harness";
 
@@ -14,37 +14,32 @@ describe("Subject Facts v3 Redis publisher", () => {
   afterAll(async () => {
     await harness?.close();
   });
+  afterEach(async () => {
+    await harness?.reset();
+  });
 
   test("retains the greatest v3 Dirty Version across concurrent publishers", async () => {
     const scope = await harness.createScope();
-    try {
-      await Promise.all([
-        scope.firstProfilePublisher.publish(record("12")),
-        scope.secondProfilePublisher.publish(record("9")),
-        scope.firstProfilePublisher.publish(record("11")),
-      ]);
+    await Promise.all([
+      scope.firstProfilePublisher.publish(record("12")),
+      scope.secondProfilePublisher.publish(record("9")),
+      scope.firstProfilePublisher.publish(record("11")),
+    ]);
 
-      expect(await scope.readPublishedProfileRecord(subjectIdentifier)).toEqual(record("12"));
-      const retained = await scope.secondProfilePublisher.publish(record("10"));
-      expect(retained).toEqual({ status: "retained-newer" });
-    } finally {
-      await scope.close();
-    }
+    expect(await scope.readPublishedProfileRecord(subjectIdentifier)).toEqual(record("12"));
+    const retained = await scope.secondProfilePublisher.publish(record("10"));
+    expect(retained).toEqual({ status: "retained-newer" });
   });
 
   test("inspects the exact requested v3 records without scanning", async () => {
     const scope = await harness.createScope();
-    try {
-      await scope.firstProfilePublisher.publish(record("4"));
+    await scope.firstProfilePublisher.publish(record("4"));
 
-      const inspected = await scope.profileInspector.inspectMany([
-        subjectIdentifier,
-        "46739d0b-cdda-48f5-af1f-1f90e2d81170",
-      ]);
-      expect(inspected).toEqual([{ status: "valid", record: record("4") }, { status: "missing" }]);
-    } finally {
-      await scope.close();
-    }
+    const inspected = await scope.profileInspector.inspectMany([
+      subjectIdentifier,
+      "46739d0b-cdda-48f5-af1f-1f90e2d81170",
+    ]);
+    expect(inspected).toEqual([{ status: "valid", record: record("4") }, { status: "missing" }]);
   });
 });
 

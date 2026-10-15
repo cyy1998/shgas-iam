@@ -77,4 +77,10 @@ AFK 在以下时点执行交接和批后检查：
   最终验证后再有修改时，重跑因此失效的检查。
 
 专用测试资源遵守[资源隔离](../architecture/testing-architecture.md#专用资源与隔离)；
-AFK sandbox 通过独占网络访问临时容器时不发布宿主端口。
+AFK sandbox 通过共享宿主 daemon 和 host networking 调用正式根测试入口；每条命令使用动态 loopback 端口和独立 project。
+执行器只管理 Docker 接入、稳定运行记录与异常恢复，不预建或跨命令复用 PostgreSQL/Redis。
+外层先停止并等待准确的创建者 sandbox，再按本执行器 registry 复用公共清理入口，尊重显式 keep，最后关闭 worktree 与配置。
+无法确认创建者已停止时保留挂载和恢复记录，不先清理仍可能创建资源的执行器环境。恢复命令见[命令页](../development/commands.md#sandcastle-afk)。
+私有 registry 的认证由调用者显式提供受支持的配置；执行器只读挂载私有副本，不自动继承宿主凭据。
+副本同样等创建者停止后回收；停止未确认时与其他恢复材料一起保留，使用同一准确执行器恢复入口。
+配置格式、源文件责任和回收边界统一见[AFK 命令](../development/commands.md#sandcastle-afk)。

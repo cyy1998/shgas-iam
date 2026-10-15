@@ -5,7 +5,6 @@ import { createLoginCredentialParser } from "@api/services/authentication/login-
 import type { ClientSnapshotValue } from "@iam/api-core/client-snapshot";
 import { createClientSnapshots } from "@iam/api-core/client-snapshot/composition";
 import { createClientSecretAuthenticator } from "@iam/api-core/client-snapshot/credentials";
-import { clientSnapshotKeys } from "@iam/api-core/client-snapshot/testing";
 import { createErrorHandler } from "@iam/api-core/middlewares/error-handler";
 import type { SubjectAccessOperation } from "@iam/api-core/subject-access";
 import {
@@ -36,6 +35,7 @@ import { drizzle } from "drizzle-orm/postgres-js";
 import { Hono } from "hono";
 import postgres from "postgres";
 import { sm2 } from "sm-crypto";
+import { ownApiTestExecutor } from "./fixture-lifecycle";
 
 export function signingKeys(kid = "current") {
   return JSON.stringify({
@@ -48,8 +48,14 @@ export function signingKeys(kid = "current") {
 const currentJwkJson = signingKeys();
 const previousJwkJson = signingKeys("previous");
 export async function closeFixtureResources(tasks: Array<() => unknown | Promise<unknown>>) {
-  const results = await Promise.allSettled(tasks.map(async (task) => await task()));
-  const failures = results.flatMap((result) => (result.status === "rejected" ? [result.reason] : []));
+  const failures: unknown[] = [];
+  for (const task of tasks.toReversed()) {
+    try {
+      await task();
+    } catch (failure) {
+      failures.push(failure);
+    }
+  }
   if (failures.length) throw new AggregateError(failures, "OIDC fixture resource cleanup failed");
 }
 
@@ -79,22 +85,18 @@ export async function fixture(
   const url = networkUrl ?? process.env.IAM_API_TEST_REDIS_URL;
   if (!url) throw new Error("IAM_API_TEST_REDIS_URL is required");
   const resources: Array<() => unknown | Promise<unknown>> = [];
-  const close = () => closeFixtureResources(resources);
+  let stopped = false;
+  const close = ownApiTestExecutor(async () => {
+    stopped = true;
+    await closeFixtureResources(resources);
+  });
   try {
-    const scope = await createUnifiedSessionRedisTestScope(url, { user: 120, client: 60 });
-    resources.push(() => scope.close());
-    const oidcState = await createOidcRedisTestScope(url);
-    const oidcKeys = new Set<string>();
-    resources.push(async () => {
-      const results = await Promise.allSettled([...oidcKeys].map(async (key) => await oidcState.redis.del(key)));
-      const closing = await Promise.allSettled([oidcState.close()]);
-      const failures = [...results, ...closing].flatMap((result) =>
-        result.status === "rejected" ? [result.reason] : [],
-      );
-      if (failures.length) throw new AggregateError(failures, "OIDC fixture state cleanup failed");
-    });
-    const customState = joint ? await createUnifiedCustomSsoRedisTestScope(url) : undefined;
-    if (customState) resources.push(() => customState.close());
+    const trackStop = (stop: () => Promise<void>) => {
+      resources.push(stop);
+    };
+    const scope = await createUnifiedSessionRedisTestScope(url, { user: 120, client: 60 }, trackStop);
+    const oidcState = await createOidcRedisTestScope(url, trackStop);
+    const customState = joint ? await createUnifiedCustomSsoRedisTestScope(url, trackStop) : undefined;
     const kernel = scope.createFactoryForOperations<SubjectAccessOperation>(requireSubjectAccessOperation);
     const clientId = `oidc-${randomUUID()}`;
     const subjectIdentifier = randomUUID();
@@ -117,16 +119,6 @@ export async function fixture(
       failClientAuthClear: false,
     };
     const networkPrefix = `${oidcState.namespace}:network:`;
-    oidcKeys.add(`${networkPrefix}record:${subjectIdentifier}`);
-    oidcKeys.add(`${networkPrefix}facts:${subjectIdentifier}`);
-    const ownClient = (code: string) => {
-      const keys = clientSnapshotKeys(code);
-      oidcKeys.add(keys.control);
-      keys.payloads.forEach((key) => {
-        oidcKeys.add(key);
-      });
-    };
-    ownClient(clientId);
     const realBarrier =
       networkUrl &&
       createSubjectAccessBarrier({
@@ -262,9 +254,6 @@ export async function fixture(
           : createOidcClientAuthRateLimiter({
               redis: {
                 async eval(script, count, ...args) {
-                  args.slice(0, count).forEach((key) => {
-                    oidcKeys.add(key);
-                  });
                   if (state.failClientAuthClear && script === "return redis.call('DEL',KEYS[1])") {
                     state.failClientAuthClear = false;
                     throw new Error("Injected Client authentication clear failure");
@@ -314,7 +303,6 @@ export async function fixture(
       },
       clients: {
         async acquire(code) {
-          ownClient(code);
           state.acquisitions++;
           if (state.clientFailure) throw new Error("Snapshot unavailable");
           return await snapshots.client.acquire(code);
@@ -420,6 +408,7 @@ export async function fixture(
     const app = new Hono();
     if (joint) app.onError(createErrorHandler(logger));
     app.route("/", composition.router);
+    if (stopped) throw new Error("OIDC fixture stopped during initialization");
     const server = withTokens ? Bun.serve({ hostname: "127.0.0.1", port: 0, fetch: app.fetch }) : undefined;
     if (server) resources.push(() => server.stop(true));
     const challenge = createHash("sha256").update("v".repeat(43)).digest("base64url");
@@ -510,7 +499,6 @@ export async function fixture(
       close,
       httpOrigin: server?.url.origin,
       addClient(code: string) {
-        ownClient(code);
         otherClients.set(code, { ...client, clientCode: code });
       },
       async setClient(transform: (value: ClientSnapshotValue) => ClientSnapshotValue) {

@@ -18,9 +18,9 @@
     "lint:fix": "biome check --formatter-enabled=false --write . && stylelint \"**/*.less\" --allow-empty-input",
     "test": "pnpm test:unit",
     "test:unit": "bun test --max-concurrency=2 src",
-    "test:integration:component": "bun test --max-concurrency=2 test-integration/component",
-    "test:integration:postgres": "bun test --max-concurrency=1 test-integration/postgres",
-    "test:integration:redis": "bun test --max-concurrency=1 test-integration/redis",
+    "test:integration:component": "node ../../scripts/run-package-integration.mjs component -- bun test --max-concurrency=2 test-integration/component",
+    "test:integration:postgres": "node ../../scripts/run-package-integration.mjs postgres -- bun test --max-concurrency=1 test-integration/postgres",
+    "test:integration:redis": "node ../../scripts/run-package-integration.mjs redis -- bun test --max-concurrency=1 test-integration/redis",
     "typecheck": "pnpm exec tsc --noEmit",
     "format": "biome format --write . && prettier \"**/*.{less,md,yaml,yml}\" --ignore-path ../../.gitignore --ignore-path ../../.prettierignore --no-error-on-unmatched-pattern --write",
     "format:check": "biome format . && prettier \"**/*.{less,md,yaml,yml}\" --ignore-path ../../.gitignore --ignore-path ../../.prettierignore --no-error-on-unmatched-pattern --check"

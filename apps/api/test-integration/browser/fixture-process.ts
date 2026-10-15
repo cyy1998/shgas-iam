@@ -1,40 +1,67 @@
-import type { ChildProcessWithoutNullStreams } from "node:child_process";
 import { execSync, spawn } from "node:child_process";
 import process from "node:process";
+import type { ProcessSmokeChild } from "@iam/api-core/testing/process-smoke-harness";
+import { terminateProcessTree } from "@iam/api-core/testing/process-smoke-harness";
+import { ownApiTestExecutor, resetApiRedisTestDatabase } from "../redis/fixture-lifecycle";
 
-export async function startBrowserFixture(script: string, args: string[] = []) {
-  if (!process.env.IAM_API_TEST_REDIS_URL) throw new Error("IAM_API_TEST_REDIS_URL is required");
-  // Resolve the real executable through the installed CLI shim, then own the direct child.
-  const executable = execSync('bun -e "console.log(process.execPath)"', {
+export function fixtureBunExecutable() {
+  return execSync('bun -e "console.log(process.execPath)"', {
     encoding: "utf8",
     windowsHide: true,
     timeout: 10000,
     maxBuffer: 4096,
   }).trim();
-  const child = spawn(executable, [script, ...args], {
+}
+
+export async function startBrowserFixture(script: string, args: string[] = []) {
+  if (!process.env.IAM_API_TEST_REDIS_URL) throw new Error("IAM_API_TEST_REDIS_URL is required");
+  // Resolve the real executable through the installed CLI shim, then own the direct child.
+  const executable = fixtureBunExecutable();
+  const child = spawn(executable, ["--no-env-file", script, ...args], {
     cwd: process.cwd(),
     env: process.env,
+    detached: process.platform !== "win32",
     windowsHide: true,
     stdio: "pipe",
   });
   const exit = new Promise<number | null>((resolve, reject) => {
     child.once("error", reject);
-    child.once("exit", resolve);
+    child.once("close", resolve);
   });
   let stderr = "";
-  child.stderr.on("data", (chunk) => {
+  child.stderr!.on("data", (chunk) => {
     stderr = (stderr + String(chunk)).slice(-4096);
   });
-  async function close() {
+  let exitCode: number | null;
+  const stop = ownApiTestExecutor(async () => {
     child.stdin.end();
-    const timer = setTimeout(() => child.kill(), 5000);
+    let timer: ReturnType<typeof setTimeout> | undefined;
     try {
-      const code = await exit;
-      if (code !== 0) throw new Error(`Browser fixture failed (${code}): ${stderr}`);
+      exitCode = await Promise.race([
+        exit,
+        new Promise<never>((_, reject) => {
+          timer = setTimeout(() => reject(new Error("Browser fixture did not exit after stdin closed")), 5000);
+        }),
+      ]);
+      if (!/^fixture-stopped$/mu.test(stderr)) throw new Error(`Browser fixture stop was not confirmed: ${stderr}`);
+    } catch (failure) {
+      try {
+        await terminateProcessTree(child, { timeoutMs: 5000 });
+      } catch (cleanup) {
+        throw new AggregateError([failure, cleanup], "Browser fixture stop failed");
+      }
+      throw failure;
     } finally {
       clearTimeout(timer);
     }
-  }
+  });
+  let closing: Promise<void> | undefined;
+  const close = () =>
+    (closing ??= (async () => {
+      await resetApiRedisTestDatabase();
+      await stop();
+      if (exitCode !== 0) throw new Error(`Browser fixture failed (${exitCode}): ${stderr}`);
+    })());
   try {
     const line = await readReady(child, exit);
     return { ready: line, close };
@@ -49,13 +76,13 @@ export async function startBrowserFixture(script: string, args: string[] = []) {
     throw failure;
   }
 }
-async function readReady(child: ChildProcessWithoutNullStreams, exit: Promise<number | null>) {
+async function readReady(child: ProcessSmokeChild, exit: Promise<number | null>) {
   let timer: ReturnType<typeof setTimeout>;
   try {
     return await Promise.race([
       new Promise<string>((resolve, reject) => {
         let stdout = "";
-        child.stdout.on("data", (chunk) => {
+        child.stdout!.on("data", (chunk) => {
           stdout = (stdout + String(chunk)).slice(0, 32769);
           if (stdout.length > 32768) reject(new Error("Browser fixture readiness exceeded limit"));
           const newline = stdout.indexOf("\n");

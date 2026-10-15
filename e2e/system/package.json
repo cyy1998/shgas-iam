@@ -25,7 +25,7 @@
     "test": "pnpm test:unit",
     "test:unit": "bun test --max-concurrency=1 src",
     "typecheck": "pnpm exec tsc --noEmit",
-    "test:integration:process": "bun test --max-concurrency=1 test-integration/process",
+    "test:integration:process": "node ../../scripts/run-package-integration.mjs process -- bun test --max-concurrency=1 test-integration/process",
     "format": "biome format --write . && prettier \"**/*.{less,md,yaml,yml}\" --ignore-path ../../.gitignore --ignore-path ../../.prettierignore --no-error-on-unmatched-pattern --write",
     "format:check": "biome format . && prettier \"**/*.{less,md,yaml,yml}\" --ignore-path ../../.gitignore --ignore-path ../../.prettierignore --no-error-on-unmatched-pattern --check"
   },

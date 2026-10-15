@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import process from "node:process";
 import { fileURLToPath } from "node:url";
+import { runWithOwnedTestResources } from "@iam/api-core/testing/external-test-resources";
 import type { db as database } from "@iam/db";
 import { relations } from "@iam/db/relations";
 import { drizzle } from "drizzle-orm/postgres-js";
@@ -24,6 +25,17 @@ export async function createWorkerPostgresTestHarness(): Promise<WorkerPostgresT
   const schemaName = `iam_worker_${randomUUID().replaceAll("-", "")}`;
   const adminSql = postgres(databaseUrl, { max: 1 });
   let scopedSql: ReturnType<typeof postgres> | undefined;
+  let closePromise: Promise<void> | undefined;
+  function close() {
+    closePromise ??= runWithOwnedTestResources(async (lifecycle) => {
+      lifecycle.registerCleanup(() => adminSql.end({ timeout: 1 }));
+      lifecycle.registerCleanup(async () => {
+        await adminSql.unsafe(`DROP SCHEMA IF EXISTS ${quoteIdentifier(schemaName)} CASCADE`);
+      });
+      lifecycle.registerCleanup(() => scopedSql?.end({ timeout: 1 }));
+    });
+    return closePromise;
+  }
 
   try {
     await adminSql.unsafe(`CREATE SCHEMA ${quoteIdentifier(schemaName)}`);
@@ -46,18 +58,34 @@ export async function createWorkerPostgresTestHarness(): Promise<WorkerPostgresT
       async reset() {
         await scopedSql!.unsafe("TRUNCATE TABLE client RESTART IDENTITY CASCADE");
       },
-      async close() {
-        await scopedSql!.end();
-        await adminSql.unsafe(`DROP SCHEMA ${quoteIdentifier(schemaName)} CASCADE`);
-        await adminSql.end();
-      },
+      close,
     };
   } catch (error) {
-    if (scopedSql) await scopedSql.end({ timeout: 1 });
-    await adminSql.unsafe(`DROP SCHEMA IF EXISTS ${quoteIdentifier(schemaName)} CASCADE`);
-    await adminSql.end({ timeout: 1 });
-    throw error;
+    return await runWithOwnedTestResources(async (lifecycle) => {
+      lifecycle.registerCleanup(close);
+      throw error;
+    });
   }
+}
+
+export async function reserveWorkerPostgresConnection(
+  harness: WorkerPostgresTestHarness,
+  stopExecutors: Array<() => Promise<void> | void>,
+) {
+  const sql = await harness.sql.reserve();
+  let closePromise: Promise<void> | undefined;
+  function close() {
+    closePromise ??= (async () => {
+      try {
+        await sql.unsafe("ROLLBACK");
+      } finally {
+        sql.release();
+      }
+    })();
+    return closePromise;
+  }
+  stopExecutors.push(close);
+  return { sql, close };
 }
 
 function requireDedicatedTestDatabaseUrl() {

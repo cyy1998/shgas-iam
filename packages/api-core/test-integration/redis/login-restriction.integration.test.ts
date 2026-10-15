@@ -19,7 +19,7 @@ beforeEach(async () => {
 });
 
 afterEach(async () => {
-  await scope?.close();
+  await harness?.reset();
   scope = undefined;
 });
 

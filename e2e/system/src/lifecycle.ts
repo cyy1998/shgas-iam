@@ -8,6 +8,7 @@ export interface RunDescriptor {
   origin: string;
   internalOrigin?: string;
   artifactDirectory: string;
+  resourceRecord?: string;
   labels: {
     "com.docker.compose.project": string;
     "com.shgas-iam.e2e.run-id": string;
@@ -40,6 +41,7 @@ export interface ExactProjectJourneyLifecycle extends ExactProjectRuntimeLifecyc
 }
 
 export interface RuntimeLifecycleOptions {
+  warn?: (message: string) => void;
   abortSettleTimeoutMs?: number;
   cleanupTimeoutMs?: number;
   diagnosticsTimeoutMs?: number;
@@ -119,15 +121,9 @@ async function runRuntimeLifecycle(
       timeoutMs,
     });
   } catch (diagnosticsFailure) {
-    if (failed) {
-      failure = new AggregateError(
-        [failure, diagnosticsFailure],
-        "E2E runtime failed and diagnostic collection also failed",
-      );
-    } else {
-      failed = true;
-      failure = diagnosticsFailure;
-    }
+    (options.warn ?? console.warn)(
+      `Warning: E2E auxiliary diagnostic collection failed (${diagnosticsFailure instanceof Error ? diagnosticsFailure.name : "UnknownError"})`,
+    );
   }
 
   try {

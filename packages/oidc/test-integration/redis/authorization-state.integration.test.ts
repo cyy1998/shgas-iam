@@ -7,6 +7,10 @@ import {
   createUnifiedSubjectAccessSessionRevocation,
   requireSubjectAccessOperation,
 } from "@iam/api-core/subject-access";
+import {
+  resetExclusiveRedisTestDatabase,
+  runWithOwnedTestResources,
+} from "@iam/api-core/testing/external-test-resources";
 import { ClientSsoProtocol, ClientStatus, OidcClientType, OidcScope } from "@iam/contracts";
 import { createOidcAuthorization } from "@iam/oidc";
 import { createOidcInventory, createOidcMaintenance } from "@iam/oidc/maintenance";
@@ -17,91 +21,161 @@ import Redis from "ioredis";
 async function fixture() {
   const url = process.env.IAM_OIDC_TEST_REDIS_URL;
   if (!url) throw new Error("IAM_OIDC_TEST_REDIS_URL is required");
-  const scope = await createUnifiedSessionRedisTestScope(url, { user: 120, client: 60 });
-  const state = await createOidcRedisTestScope(url);
-  const kernel = scope.createFactoryForOperations<SubjectAccessOperation>(requireSubjectAccessOperation);
-  const generation = randomUUID();
-  let operations: ReturnType<typeof createSubjectAccessOperations>;
-  const revocation = createUnifiedSubjectAccessSessionRevocation(kernel, {
-    run: (callback) => operations.run(callback),
-  });
-  operations = createSubjectAccessOperations({
-    barrier: {
-      async readCommittedTransitionId() {
-        return generation;
-      },
-    },
-    revocation,
-  });
-  const root = await operations.run(async (operation) => {
-    const subjectIdentifier = randomUUID();
-    const permission = await operation.acquireForAuthentication(subjectIdentifier);
-    return await kernel.forOperation(operation).createUserSession({
-      subjectIdentifier,
-      subjectContext: operation.getSubjectContext(permission),
-      amr: ["pwd"],
+  const stopExecutors: Array<() => Promise<void>> = [];
+  let closePromise: Promise<void> | undefined;
+  function trackConnection(redis: Redis) {
+    let stopPromise: Promise<void> | undefined;
+    stopExecutors.push(() => {
+      stopPromise ??= closeConnection(redis);
+      return stopPromise;
     });
-  });
-  const oidc = createOidcAuthorization({
-    kernel,
-    redis: state.redis,
-    namespace: state.namespace,
-    codeTtlSeconds: 30,
-    continuationTtlSeconds: 60,
-    clients: {
-      async acquire(clientCode) {
-        return {
-          kind: "present",
-          value: {
-            clientCode,
-            status: ClientStatus.Enable,
-            ssoEnabled: true,
-            ssoConfig: {
-              protocol: ClientSsoProtocol.Oidc,
-              clientType: OidcClientType.Public,
-              redirectUris: ["https://rp.example/cb"],
-              postLogoutRedirectUris: [],
-              allowedScopes: [OidcScope.OpenId],
-            },
-          },
-        };
-      },
-    },
-  });
-  async function authorize(clientId: string, loggedIn = true) {
-    return await operations.run((operation) =>
-      oidc.forOperation(operation, "https://iam.example/oidc").authorize(
-        new URLSearchParams({
-          client_id: clientId,
-          redirect_uri: "https://rp.example/cb",
-          response_type: "code",
-          scope: "openid",
-          state: "state",
-          code_challenge: "a".repeat(43),
-          code_challenge_method: "S256",
-        }),
-        loggedIn ? { globalSessionToken: root.bearer } : {},
-      ),
-    );
+    return redis;
   }
-  return {
-    scope,
-    state,
-    kernel,
-    operations,
-    root,
-    authorize,
-    url,
-    async close() {
-      await state.close();
-      await scope.close();
-    },
-  };
+  function close() {
+    closePromise ??= runWithOwnedTestResources(async ({ registerCleanup }) => {
+      const control = new Redis(url!, {
+        lazyConnect: true,
+        enableOfflineQueue: false,
+        maxRetriesPerRequest: 0,
+        retryStrategy: () => null,
+      });
+      registerCleanup(() => closeConnection(control));
+      await resetExclusiveRedisTestDatabase({
+        redis: {
+          async flushdb() {
+            await control.connect();
+            return await control.flushdb();
+          },
+        },
+        stopExecutors,
+      });
+    });
+    return closePromise;
+  }
+  try {
+    const scope = await createUnifiedSessionRedisTestScope(url, { user: 120, client: 60 }, (close) =>
+      stopExecutors.push(close),
+    );
+    const state = await createOidcRedisTestScope(url, (close) => stopExecutors.push(close));
+    const kernel = scope.createFactoryForOperations<SubjectAccessOperation>(requireSubjectAccessOperation);
+    const generation = randomUUID();
+    let operations: ReturnType<typeof createSubjectAccessOperations>;
+    const revocation = createUnifiedSubjectAccessSessionRevocation(kernel, {
+      run: (callback) => operations.run(callback),
+    });
+    operations = createSubjectAccessOperations({
+      barrier: {
+        async readCommittedTransitionId() {
+          return generation;
+        },
+      },
+      revocation,
+    });
+    const root = await operations.run(async (operation) => {
+      const subjectIdentifier = randomUUID();
+      const permission = await operation.acquireForAuthentication(subjectIdentifier);
+      return await kernel.forOperation(operation).createUserSession({
+        subjectIdentifier,
+        subjectContext: operation.getSubjectContext(permission),
+        amr: ["pwd"],
+      });
+    });
+    const oidc = createOidcAuthorization({
+      kernel,
+      redis: state.redis,
+      namespace: state.namespace,
+      codeTtlSeconds: 30,
+      continuationTtlSeconds: 60,
+      clients: {
+        async acquire(clientCode) {
+          return {
+            kind: "present",
+            value: {
+              clientCode,
+              status: ClientStatus.Enable,
+              ssoEnabled: true,
+              ssoConfig: {
+                protocol: ClientSsoProtocol.Oidc,
+                clientType: OidcClientType.Public,
+                redirectUris: ["https://rp.example/cb"],
+                postLogoutRedirectUris: [],
+                allowedScopes: [OidcScope.OpenId],
+              },
+            },
+          };
+        },
+      },
+    });
+    async function authorize(clientId: string, loggedIn = true) {
+      return await operations.run((operation) =>
+        oidc.forOperation(operation, "https://iam.example/oidc").authorize(
+          new URLSearchParams({
+            client_id: clientId,
+            redirect_uri: "https://rp.example/cb",
+            response_type: "code",
+            scope: "openid",
+            state: "state",
+            code_challenge: "a".repeat(43),
+            code_challenge_method: "S256",
+          }),
+          loggedIn ? { globalSessionToken: root.bearer } : {},
+        ),
+      );
+    }
+    return {
+      scope,
+      state,
+      kernel,
+      operations,
+      root,
+      authorize,
+      url,
+      trackConnection,
+      close,
+    };
+  } catch (error) {
+    return await runWithOwnedTestResources<never>(async ({ registerCleanup }) => {
+      registerCleanup(close);
+      throw error;
+    });
+  }
 }
 
-test("OIDC maintenance clears every Client and unknown key family while preserving Session Kernel state", async () => {
-  const f = await fixture();
+async function closeConnection(redis: Redis) {
+  const ended = redis.status === "end" ? Promise.resolve() : new Promise<void>((resolve) => redis.once("end", resolve));
   try {
+    if (redis.status !== "wait" && redis.status !== "end") await redis.quit();
+  } finally {
+    redis.disconnect();
+    await ended;
+  }
+}
+
+test("closing OIDC state preserves the Kernel until the complete case resets", async () => {
+  return await runWithOwnedTestResources(async ({ registerCleanup }) => {
+    const f = await fixture();
+    registerCleanup(f.close);
+    await f.authorize("target");
+    await f.state.close();
+    const root = await f.operations.run((operation) =>
+      f.kernel.forOperation(operation).resolveUserSession(f.root.bearer),
+    );
+    expect(root.status).toBe("resolved");
+    await f.close();
+    const nextCase = new Redis(f.url, { maxRetriesPerRequest: 0, retryStrategy: () => null });
+    try {
+      const remaining = await nextCase.dbsize();
+      expect(remaining).toBe(0);
+    } finally {
+      await nextCase.quit();
+    }
+  });
+});
+
+test("OIDC maintenance clears every Client and unknown key family while preserving Session Kernel state", async () => {
+  return await runWithOwnedTestResources(async ({ registerCleanup }) => {
+    const f = await fixture();
+    registerCleanup(f.close);
     const authorized = await f.authorize("target");
     if (authorized.kind !== "response" || !("code" in authorized.response.parameters)) throw new Error("Code required");
     const code = authorized.response.parameters.code;
@@ -129,32 +203,27 @@ test("OIDC maintenance clears every Client and unknown key family while preservi
     expect(removed).toBe(4);
     const after = await f.state.snapshot();
     expect(after).toHaveLength(0);
-    const connection = new Redis(f.url, { maxRetriesPerRequest: 0, retryStrategy: () => null });
-    try {
-      await connection.ping();
-      const verifier = createOidcInventory({ scan: (...args) => connection.scan(...args) }, f.state.namespace);
-      let matching = 0;
-      do {
-        const page = await verifier.inventory({ cursor });
-        cursor = page.nextCursor;
-        matching += page.matching;
-      } while (cursor !== "0");
-      expect(matching).toBe(0);
-    } finally {
-      connection.disconnect();
-    }
+    const connection = f.trackConnection(new Redis(f.url, { maxRetriesPerRequest: 0, retryStrategy: () => null }));
+    await connection.ping();
+    const verifier = createOidcInventory({ scan: (...args) => connection.scan(...args) }, f.state.namespace);
+    let matching = 0;
+    do {
+      const page = await verifier.inventory({ cursor });
+      cursor = page.nextCursor;
+      matching += page.matching;
+    } while (cursor !== "0");
+    expect(matching).toBe(0);
     const roots = await f.operations.run((operation) =>
       f.kernel.forOperation(operation).resolveUserSession(f.root.bearer),
     );
     expect(roots.status).toBe("resolved");
-  } finally {
-    await f.close();
-  }
+  });
 });
 
 test("OIDC maintenance reports failed writes and permits an explicit retry", async () => {
-  const f = await fixture();
-  try {
+  return await runWithOwnedTestResources(async ({ registerCleanup }) => {
+    const f = await fixture();
+    registerCleanup(f.close);
     const authorization = await f.authorize("target");
     if (authorization.kind !== "response" || !("code" in authorization.response.parameters))
       throw new Error("Code required");
@@ -173,14 +242,13 @@ test("OIDC maintenance reports failed writes and permits an explicit retry", asy
     expect(surviving).not.toBeNull();
     const retry = await createOidcMaintenance(f.state.redis, f.state.namespace).apply();
     expect(retry).toMatchObject({ removed: 1, unknown: 0 });
-  } finally {
-    await f.close();
-  }
+  });
 });
 
 test("OIDC maintenance clears corrupt Code payloads", async () => {
-  const f = await fixture();
-  try {
+  return await runWithOwnedTestResources(async ({ registerCleanup }) => {
+    const f = await fixture();
+    registerCleanup(f.close);
     const authorization = await f.authorize("target");
     if (authorization.kind !== "response" || !("code" in authorization.response.parameters))
       throw new Error("Code required");
@@ -189,14 +257,13 @@ test("OIDC maintenance clears corrupt Code payloads", async () => {
     expect(corrupt).toMatchObject({ matching: 1, removed: 1, unknown: 0 });
     const after = await f.state.snapshot();
     expect(after).toHaveLength(0);
-  } finally {
-    await f.close();
-  }
+  });
 });
 
 test("OIDC record keeps original instance and fixed deadline when authorization renews or recreates relationship", async () => {
-  const f = await fixture();
-  try {
+  return await runWithOwnedTestResources(async ({ registerCleanup }) => {
+    const f = await fixture();
+    registerCleanup(f.close);
     const first = await f.authorize("target");
     if (first.kind !== "response" || !("code" in first.response.parameters)) throw new Error("Code required");
     const original = await f.state.readCode("target", first.response.parameters.code);
@@ -222,7 +289,5 @@ test("OIDC record keeps original instance and fixed deadline when authorization 
     const retained = await f.state.readCode("target", first.response.parameters.code);
     expect(retained).toEqual(original);
     expect(original!.expiresAt).toBeLessThanOrEqual(f.root.observation.userSession.expiresAt);
-  } finally {
-    await f.close();
-  }
+  });
 });

@@ -14,7 +14,7 @@ collection 指一个 runner 或命令拥有的测试集合；owner 指维护该�
 | 如何管理资源和失败       | [并发与清理](#并发timeout-与清理)、[Full-system E2E](#full-system-e2e)           |
 | 验证结果能支持什么结论   | [默认验证与交付](#默认验证与交付)                                                |
 
-分类决策及取舍见 [ADR-0009](../adr/0009-adopt-canonical-test-collections.md)；具体命令、参数与资源 URL 见
+分类决策及取舍见 [ADR-0009](../adr/0009-adopt-canonical-test-collections.md)；具体命令、参数与内部资源配置见
 [命令入口](../development/commands.md)。业务约束的验证 owner、代表性测试和证明范围由
 [架构验证归属](architecture-verification.md)维护；静态规则的准入与观察边界由
 [架构守卫规范](architecture-guard.md)维护。
@@ -27,8 +27,8 @@ collection 指一个 runner 或命令拥有的测试集合；owner 指维护该�
 | ------------- | ---------------------------------------------------- | --------------------------------- |
 | `component`   | 进程内多个模块协作，出站边界使用 fake 或内存 adapter | 无                                |
 | `process`     | 真实子进程、端口、readiness、退出与进程树清理        | 本机进程与端口                    |
-| `redis`       | 生产 Redis adapter 行为                              | 调用方提供专用 Redis              |
-| `postgres`    | schema、transaction 与 repository 行为               | 调用方提供专用 PostgreSQL         |
+| `redis`       | 生产 Redis adapter 行为                              | 编排器创建独占 Redis              |
+| `postgres`    | schema、transaction 与 repository 行为               | 编排器创建独占 PostgreSQL         |
 | `composition` | 生产 composition 与多个真实 adapter 协作             | profile 声明的全部资源            |
 | `browser`     | 真实浏览器 harness，可替代旅程未经过的系统边界       | 浏览器与 package-local web server |
 
@@ -148,8 +148,8 @@ Root 通过 Turbo 编排跨 package 测试，package 拥有实际 runner 与本�
 | --------------------------------- | ------------------------------------------------------------------------------------------------- |
 | `pnpm test`                       | 代理 `test:unit`；有 Unit collection 的 package 同样代理，没有 Unit 的 package 不发布空 `test`。  |
 | `pnpm test:unit`                  | 执行 package Unit tasks，并通过 `test:unit:root` 收集 root tooling tests。                        |
-| `pnpm test:integration:<profile>` | 执行同名 package tasks；process 另运行 `test:integration:process:root`。                          |
-| `pnpm test:integration`           | 先一次性检查全部专用资源 URL，再按固定顺序运行六个 profile，传播第一个失败。                      |
+| `pnpm test:integration:<profile>` | 统一根入口的 profile 别名；process/composition 同时接入各自 root collection。                     |
+| `pnpm test:integration`           | 按 workspace/profile/file 选择准备一次性资源，通过 Turbo 执行 package runner，最后准确清理。      |
 | `pnpm test:e2e`                   | 完整 Full-system collection 的唯一 owner，由 `@iam/e2e-system` 管理[生命周期](#full-system-e2e)。 |
 
 聚合 Integration 固定串行执行：
@@ -158,15 +158,18 @@ Root 通过 Turbo 编排跨 package 测试，package 拥有实际 runner 与本�
 component -> process -> redis -> postgres -> composition -> browser
 ```
 
-Integration 命令本身不创建资源。缺少任一 URL 时，在启动 profile 前失败；不得 skip、自动 retry 或回退到 runtime、
-development、production 或其他 test URL。调用方可补齐专用资源后重新运行。
+根入口按所选 owner/profile 创建需要的 PostgreSQL/Redis，等待就绪后注入连接地址与运行记录。Package resource runner
+只消费本次已经准备好的环境，核对 run ID、记录状态及完全相同的内部 URL；调用方任意提供外部 URL 不能作为正式运行模式。
+选中 component、process 或前端 mock-browser 时不创建这两类服务。一次正式命令拥有一次环境；不同命令可以并行，
+不跨命令复用数据。缺少运行条件、无匹配或首个失败直接非零退出，不 skip、自动 retry 或回退到其他环境。
 workspace-local `admin:journey`、`hr-admin:journey`、`oidc:journey` 保留为单旅程调试入口。
 完整命令列表与参数见[测试与验证通道](../development/commands.md#测试与验证通道)。
 
 ### 测试收集维护
 
 测试由所属 runner 在 owner-local 窄目录自动发现；root Unit 使用 `scripts/__tests__/`，root Process Integration
-使用 `scripts/test-integration/process/`。新增测试放入所属目录，维护路径、命名与唯一 collection 归属。
+使用 `scripts/test-integration/process/`；root Composition Integration 使用 `scripts/test-integration/composition/`。
+后者通过受控的独立根命令证明真实资源生命周期，外层不另建无用 PG/Redis。新增测试放入所属目录，维护路径、命名与唯一 collection 归属。
 
 修改 include/exclude、Vitest projects 或 workspace scripts 时，核对归属与 root Turbo task 接入，并运行受影响 owner 的
 测试命令。命令成功只证明实际收集的测试执行结果，不自动证明磁盘候选全部收集或没有重复；取舍见
@@ -189,7 +192,9 @@ Turbo 是唯一跨 package orchestrator。测试任务通过 `transit` 传播依
 ```
 
 Unit/component 只有在输入、env、fixture、时间和随机性都可重现时允许缓存。process、redis、postgres、composition、
-browser、Full-system E2E 及其他外部验证均 `cache:false`。资源任务通过 Turbo strict env 只透传 owner-specific test URLs。
+browser、Full-system E2E 及其他外部验证均 `cache:false`。Turbo strict env 透传所属 owner 的内部 URL、run ID、record、
+文件选择和可选 registry。Component 的文件选择进入 env hash，runner 与资源工具进入 inputs，避免不同选择错误复用缓存。
+进程树归属 marker 只透传、不进入 hash；Browser/E2E 窄透传 `PLAYWRIGHT_BROWSERS_PATH`，使 sandbox 使用镜像内已安装的 Chromium。
 
 ## 并发、timeout 与清理
 
@@ -199,8 +204,8 @@ browser、Full-system E2E 及其他外部验证均 `cache:false`。资源任务�
 | ---------------------------------------- | ------------------------: | -------------------------------------------------------------------------------------------- |
 | Unit                                     |                         2 | Admin/SSO Vitest `maxWorkers: 4`；其他 Vitest `maxWorkers: 25%`；Bun `--max-concurrency=2`。 |
 | component                                |                         2 | Vitest `maxWorkers: 25%`；Bun `--max-concurrency=2`。                                        |
-| process / redis / postgres / composition |                         1 | 单 package，资源 owner 独占。                                                                |
-| browser                                  |                         1 | Playwright 管理单 Chromium project。                                                         |
+| process / redis / postgres / composition |                         1 | 单 package，Bun suite/case 串行并在首个失败后停止；用例内竞态并发保留。                      |
+| browser                                  |                         1 | 单 Chromium project、单 worker、零 retry、首个失败后停止。                                   |
 | Full-system E2E                          |                         1 | 每个旅程均为单 Chromium project、单 worker、零 retry。                                       |
 
 Timeout 用于避免永久挂起，不承担性能 SLA。Process harness 使用真实 readiness 信号，同时观察 child exit/error，
@@ -209,36 +214,57 @@ Timeout 用于避免永久挂起，不承担性能 SLA。Process harness 使用�
 
 ### 专用资源与隔离
 
-PostgreSQL 测试只清理自己创建的随机 schema；Redis 测试只清理自己的随机 namespace，禁止 `FLUSHDB`/`FLUSHALL`。
-Integration 命令和 harness 不启动 Docker、PostgreSQL 或 Redis；browser 可按 Playwright config 启动 package-local web server。
-没有专用测试 URL 时，agent 在 Docker 可用的情况下先创建任务独占临时容器，等待 ready，再传入专用 URL。
-使用仓库声明的镜像版本、本次任务唯一的 name/label 和动态宿主端口；AFK sandbox 的独占网络方式见
-[AFK 工作流](../agents/sandcastle-afk.md#验证节奏)。创建后立即记录准确 container ID，在成功、失败或中断后只按该 ID 清理，
-不使用 glob、prefix scan 或 prune，也不使用 development、runtime 或 production 资源。
-Docker 不可用或资源无法安全创建时，明确报告未执行的测试及原因，不得记为通过。
+正式资源测试仅使用本次编排创建的可销毁环境，不使用 development、runtime 或 production 资源。Root tooling 用 Compose
+与薄的 Node owner 管理创建、就绪、运行记录和销毁；服务使用仓库声明的镜像与动态 loopback 端口。PG-only 选择只启动
+PostgreSQL，Redis-only 选择只启动 Redis。Browser 的 web server 仍由所属 package harness 管理。
 
-以下 harness 还有独立的资源约束；其他 owner URL 见[命令页](../development/commands.md#测试与验证通道)：
+创建前登记唯一 run ID、准确 project、Compose 配置及产物位置。记录中的配置、环境文件和产物路径相对于仓库根目录，
+由宿主或 sandbox 自行解析。连接地址是编排器与 runner 的内部传参；可选 registry 为 AFK 外层登记本执行器的准确记录。
+命令参数、默认预算和记录路径由[命令入口](../development/commands.md#测试与验证通道)维护。
 
-| Owner 与通道                | 专用 URL                          | Fixture 与清理约束                                                                                      |
-| --------------------------- | --------------------------------- | ------------------------------------------------------------------------------------------------------- |
-| Admin API PostgreSQL        | `IAM_ADMIN_API_TEST_DATABASE_URL` | 通过生产 Admin UoW factory 注入随机 schema client，不回退进程级数据库 singleton。                       |
-| Worker Redis repair/verify  | `IAM_WORKER_TEST_REDIS_URL`       | targeted/full repair 与独立 verify 共用 owner 资源；保留对 Worker 自身 runtime tuple 的直接防误用检查。 |
-| API Core Redis full restore | `IAM_API_CORE_TEST_REDIS_URL`     | 按 Redis profile 串行运行；写 fixture 前确认当前 Snapshot owner inventory 为空。                        |
+#### 运行、失败与恢复
 
-Worker full restore 同样先确认当前 owner inventory 为空，只登记本次 Client/restore fixture 与 non-owner sentinel。
-该通道执行生产 Redis-only command composition，观察普通/敏感 payload 重新回源、重复 repair、分批恢复、部分失败重跑、
-另起 Worker 进程的 scan-only verify 及 non-owner sentinel 保留。它不增加第二个 cleanup URL，也不枚举或推断其他
-test/runtime Redis 的 identity。
+同环境的资源套件和用例串行运行，单个用例用于证明竞态的并发事务、消费者与进程保留。首个断言、setup、teardown、
+重置失败或 timeout 后不再启动后续用例或 profile。外层先终止并等待自己的测试进程树，再用独立、有界的收尾预算
+采集可得诊断并销毁准确 project；部分初始化失败与可捕获中断使用同一出口，原始失败与清理失败均保留。
 
-Worker/Core 结束时只精确 `UNLINK` 登记键，并验证当前 owner inventory 无残留。非 owner namespace 可保留；旧 OIDC、
-Custom SSO、Traffic Gate key 不属于当前 Snapshot inventory，其残留不使 verify 失败。测试不要求整个 logical DB 为空，
-也不证明旧 namespace 已清空。
+默认成功和失败都清理本次容器、网络及数据卷，保留日志和运行记录。运行前可显式选择保留环境，结束时输出准确清理
+命令。强杀或清理失败后按该记录恢复；只清理准确登记的 project，不扫描名称前缀或全局 prune。Docker 不可用或必要
+条件不满足时明确报告未执行范围，不记为通过。辅助日志、截图、trace 或容器状态采集失败只告警并继续清理；初始化、
+readiness、测试、必需输入或断言证据、进程关闭、数据重置及环境清理失败仍使命令非零。
+
+AFK 使用同一正式根入口与每命令生命周期，通过共享宿主 Docker 和 host networking 访问动态 loopback 端口。
+实际非 root 用户须通过 socket group 访问 daemon；平台、工具、网络及可选 registry 认证前提见
+[AFK 命令](../development/commands.md#sandcastle-afk)。外层先确认创建者 sandbox 停止，再按其 registry 清理未完成记录，
+尊重显式 keep；无法确认停止时保留挂载与恢复记录。执行器不预建或跨命令复用 PostgreSQL/Redis，不自动回退 DinD 或代理。
+
+#### Fixture 与数据重置
+
+PostgreSQL 保留随机 schema、scoped connection 与整体删除。Redis 用例完成业务观察后，先停止本例所有消费者、
+子进程与连接，再由统一 helper 对本次独占 DB 执行 `FLUSHDB`；控制连接最后另行关闭。任何停止失败都禁止 reset，
+仍尝试其他执行者收尾并汇总错误，然后结束整条命令。禁止 `FLUSHALL`，普通 fixture 不再逐 key/job 登记清理或等待锁自然过期。
+
+生产命令的连接关闭、只读作用与非目标数据保护必须在 reset 之前断言，环境清理不能替代这些事实。共享资源 owner
+集中证明故障和恢复，消费方保留真实入口接线与自身业务差异；不为每个 profile 复制完整故障矩阵。
+
+以下 harness 还有独立的行为约束；其他 owner 的内部 URL 见[命令页](../development/commands.md#测试与验证通道)：
+
+| Owner 与通道                | 内部 URL                          | Fixture 与行为约束                                                                                     |
+| --------------------------- | --------------------------------- | ------------------------------------------------------------------------------------------------------ |
+| Admin API PostgreSQL        | `IAM_ADMIN_API_TEST_DATABASE_URL` | 通过生产 Admin UoW factory 注入随机 schema client，不回退进程级数据库 singleton。                      |
+| Worker Redis repair/verify  | `IAM_WORKER_TEST_REDIS_URL`       | targeted/full repair 与独立 verify 共用本次 owner 资源；保留对 Worker runtime tuple 的直接防误用检查。 |
+| API Core Redis full restore | `IAM_API_CORE_TEST_REDIS_URL`     | 按 Redis profile 串行运行；受管理独占 DB 与停止后 reset 保证用例干净起点。                             |
+
+Worker full restore 同样以受管理独占 DB 与停止后 reset 保证干净起点。生产 Redis-only command composition 继续观察普通/敏感 payload
+回源、重复 repair、分批恢复、部分失败重跑、另起 Worker 的 scan-only verify 及 non-owner sentinel 保留。旧 OIDC、Custom SSO
+等 namespace 不属于当前 Snapshot inventory；在 reset 前证明其残留不会使 verify 失败，不用整库清理冒充生产保护。
+不增加第二个 cleanup URL，也不跨其他可见环境推断 Redis identity。
 
 ### 浏览器 harness 与产物
 
 API OIDC 退出 Browser Integration 使用真实候选 API、动态 loopback RP 和专用 `IAM_API_TEST_REDIS_URL`，不 mock IAM
-协议请求。其 fixture 子进程经 readiness 交付浏览器种子，父进程关闭 stdin 后清理本次 HTTP server 与随机 Redis
-namespace；启动失败也进入收尾。该通道同样单 Chromium、单 worker、零 retry，不替代全系统 E2E、第三方 RP 或部署证据。
+协议请求。其 fixture 子进程经 readiness 交付浏览器种子，父进程关闭 stdin 并等待本次 HTTP server、子进程与连接
+停止后，由用例外层重置独占 Redis DB；启动失败也进入收尾。该通道同样单 Chromium、单 worker、零 retry，不替代全系统 E2E、第三方 RP 或部署证据。
 
 API Browser Integration 的输出固定为 `apps/api/test-results/browser`，避免清理其他通道产物。
 独立协议套件的持久证据放入调用方明确的任务目录，不使用浏览器 runner 会清理的输出根。
@@ -261,7 +287,9 @@ Bun 修复并完成仓库级真实 PostgreSQL/Redis/process 回归后，才能�
 ## Full-system E2E
 
 `@iam/e2e-system` 管理完整临时系统，从独立 Compose project 的空 volumes 开始，运行 migrations、五个正式 runtime、
-synthetic seed、Gateway readiness、浏览器旅程及诊断清理。每次运行以 descriptor 记录准确的 project，恢复时使用同一目标。
+synthetic seed、Gateway readiness、浏览器旅程及诊断清理。每次运行以 descriptor 和公共资源记录登记准确 project、
+配置与产物，恢复时使用同一目标。APISIX 测试配置、API 启动脚本和 RP 静态页进入当前候选构建的测试镜像，
+不以调用方 checkout 路径作为 daemon bind source；本次 JWK 等凭据仍在运行时生成。
 Full-system Compose/runtime 只使用固定测试或本次生成的数据与凭据，不接受生产端点、生产凭据或真实 PII。
 
 ### 初始化与就绪
@@ -275,7 +303,9 @@ Full-system Compose/runtime 只使用固定测试或本次生成的数据与凭�
 4. **Runtime 与 seed**：runtime healthy 后，核对 rendered Compose 中 API、Gateway、Admin 与 seed 的 canonical origin/authority。
    Seed 通过生产 Drizzle、Role Assignment、User Profile 与 Subject Access owner 建立数据并回读，避免复制 Redis 协议。
    Profile backfill 经真实 Worker 收敛；Gateway routes 发布前执行 PostgreSQL 与 Redis/Subject Facts/Subject Access 生产 gate。
-   Seed receipt 只记录 stage、timestamps、failure category 或 run-scoped public references，不记录凭据、token 或 secret。
+   Seed one-shot 容器按准确名称保留，通过 `docker cp` 导出 receipt 后再删除，不挂载宿主结果目录。成功与失败均尝试
+   导出已有 receipt；成功 seed 的 receipt 必须在 HR 旅程启动前可读，缺失或导出失败属于初始化失败。Receipt 只记录
+   stage、timestamps、failure category 或 run-scoped public references，不记录凭据、token 或 secret。
 5. **协议与浏览器就绪**：OIDC discovery 除 HTTP 200 外，还须精确匹配 canonical origin 下的 issuer、authorization、token、
    JWKS、UserInfo 与 RP-initiated logout URLs；Custom SSO 的 internal/external well-known configuration 回读同一 origin。
    协议 ready 后执行浏览器 preflight，再开始旅程。
@@ -302,14 +332,14 @@ migrations、seed、readiness、正式 APISIX 与诊断清理 owner。
 ### 失败诊断与清理
 
 Descriptor 落盘后的 setup、readiness、timeout 和可捕获 signal 进入统一的 `collectDiagnostics -> cleanup` 路径。
-诊断 source 分别受 deadline 约束，逐项尝试保存可得证据、失败 placeholder 与 index；任何必需 source 失败都使顶层非零，
-随后仍尝试清理准确 project。
+诊断 source 分别受 deadline 约束，逐项尝试保存可得证据、失败 placeholder 与 index；辅助采集失败只告警，
+随后仍清理准确 project。初始化、测试所需输入及断言证据（包括 seed receipt）不属于辅助诊断，缺失仍阻断通过。
 
 - **日志与状态**：收集 Compose ps/health、固定 service logs、Gateway state 和已有证据清单。日志按完整行保留有界
   recent tail；单行超过 service byte cap 时整行替换为 `[TRUNCATED]`。普通 command runner 不向 console 回显 child
   stdout/stderr，原始输出仅通过有界 capture 进入 artifact。
 - **浏览器产物**：将 run-scoped staging 中的原始 `trace.zip`、PNG、WebM 安全移动到 run artifact directory。
-  Intake 最多 128 个文件、单文件 16 MiB、合计 64 MiB；路径越界、symlink、枚举、限额或移动失败均为必需诊断失败。
+  Intake 最多 128 个文件、单文件 16 MiB、合计 64 MiB；路径越界、symlink、枚举、限额或移动失败报告诊断告警。
   Metadata index 只列 type/name/size，不替代或删除原始文件。
 - **内容与访问**：diagnostics 保留有界原始内容，不做 JSON/YAML/JWK/PEM/credential 分类或脱敏。合成 token/password/key
   可出现在临时产物中，由 artifact directory 的访问控制与 retention 管理。
@@ -319,8 +349,8 @@ Cleanup 使用独立 deadline，对准确 project 执行一次 `compose down -v 
 Docker 资源。显式 `runtime:cleanup` 只接受 descriptor 或 exact project，命令见
 [Full-system E2E 入口](../development/commands.md#full-system-e2e)。
 
-Signal/timeout 对当前 child/tree 做一次尽力终止并有界等待：Windows 可调用一次 `taskkill /T /F`，POSIX 可终止
-process group 或 direct child。正常与异常路径都尝试 cleanup；异常清理不以全部资源 inventory 为零作为硬门禁。
+Signal/timeout 对所属 child/tree 终止并有界等待；公共 process owner 在 Windows 使用 Job，在 Linux 按继承的归属
+marker 处理包括 detached 后代在内的进程，进程组终止仍是适用的第一步。正常与异常路径都尝试 cleanup；异常清理不以全部资源 inventory 为零作为硬门禁。
 
 ## 默认验证与交付
 
@@ -336,7 +366,7 @@ flowchart LR
 `pnpm verify:static` 使用同一 runner 的 `--static` 参数，只执行只读 format/lint、文档索引、环境变量命名 Guard 和
 Architecture Guard。基础 `verify` 不读取真实 PostgreSQL/Redis，也不隐式运行 Integration、浏览器或 Full-system stack；
 按改动风险显式追加相关 profile。
-完整 `test:integration` 只在调用方准备好全部专用资源时运行。
+完整 `test:integration` 自动准备其声明的服务；Docker、浏览器及所属通道的其他运行条件仍须就绪。
 
 | 聚合 Gate             | 固定执行顺序                 |
 | --------------------- | ---------------------------- |

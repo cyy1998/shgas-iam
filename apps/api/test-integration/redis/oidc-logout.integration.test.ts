@@ -6,17 +6,12 @@ import { ClientSsoProtocol, ClientStatus } from "@iam/contracts";
 import { createOidcSigningKeys } from "@iam/oidc";
 import { createOidcInventory, createOidcMaintenance } from "@iam/oidc/maintenance";
 import { createOidcRedisTestScope } from "@iam/oidc/testing";
+import { ownApiTestExecutor, resetApiRedisTestDatabase } from "./fixture-lifecycle";
 import { fixture, signingKeys } from "./oidc.fixture";
 
-const fixtures: Array<Awaited<ReturnType<typeof fixture>>> = [];
-afterEach(async () => {
-  const results = await Promise.allSettled(fixtures.splice(0).map((f) => f.close()));
-  const failures = results.flatMap((r) => (r.status === "rejected" ? [r.reason] : []));
-  if (failures.length) throw new AggregateError(failures, "Logout fixture cleanup failed");
-});
+afterEach(resetApiRedisTestDatabase);
 async function setup() {
   const f = await fixture(undefined, true);
-  fixtures.push(f);
   await f.setClient((value) => ({
     ...value,
     ssoConfig:
@@ -307,11 +302,12 @@ describe("OIDC candidate logout HTTP and real Redis", () => {
     const applied = await maintenance.apply();
     expect(applied).toMatchObject({ matching: 4, removed: 4, unknown: 0 });
     const independent = await createOidcRedisTestScope(process.env.IAM_API_TEST_REDIS_URL!);
+    const closeIndependent = ownApiTestExecutor(() => independent.close());
     try {
       const after = await createOidcInventory(independent.redis, f.oidcState.namespace).inventory();
       expect(after).toMatchObject({ matching: 0, unknown: 0 });
     } finally {
-      await independent.close();
+      await closeIndependent();
     }
     const snapshot = await f.oidcState.snapshot();
     expect(snapshot).toHaveLength(0);

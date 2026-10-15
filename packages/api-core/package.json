@@ -31,15 +31,16 @@
     "./types": "./src/types/lib.ts",
     "./uow": "./src/uow/index.ts",
     "./utils": "./src/utils/index.ts",
-    "./utils/*": "./src/utils/*.ts"
+    "./utils/*": "./src/utils/*.ts",
+    "./process": "./src/process/owned-process-tree.mjs"
   },
   "scripts": {
     "lint": "biome check --formatter-enabled=false . && stylelint \"**/*.less\" --allow-empty-input",
     "lint:fix": "biome check --formatter-enabled=false --write . && stylelint \"**/*.less\" --allow-empty-input",
     "test": "pnpm test:unit",
-    "test:integration:component": "bun test --max-concurrency=2 test-integration/component",
-    "test:integration:process": "bun test --max-concurrency=1 test-integration/process",
-    "test:integration:redis": "bun test --max-concurrency=1 test-integration/redis",
+    "test:integration:component": "node ../../scripts/run-package-integration.mjs component -- bun test --max-concurrency=2 test-integration/component",
+    "test:integration:process": "node ../../scripts/run-package-integration.mjs process -- bun test --max-concurrency=1 test-integration/process",
+    "test:integration:redis": "node ../../scripts/run-package-integration.mjs redis -- bun test --max-concurrency=1 test-integration/redis",
     "test:unit": "bun test --max-concurrency=2 src",
     "typecheck": "pnpm exec tsc --noEmit",
     "format": "biome format --write . && prettier \"**/*.{less,md,yaml,yml}\" --ignore-path ../../.gitignore --ignore-path ../../.prettierignore --no-error-on-unmatched-pattern --write",

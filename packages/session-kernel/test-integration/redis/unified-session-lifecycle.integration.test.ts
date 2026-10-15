@@ -1,16 +1,101 @@
 import { afterEach, beforeEach, expect, spyOn, test } from "bun:test";
+import { createConnection, createServer, type Socket } from "node:net";
 import type { ClientSessionObservation, UserSessionObservation } from "@iam/session-kernel";
 import { SessionObservationRequiredError, SessionStorageError } from "@iam/session-kernel";
 import { createUnifiedSessionRedisTestScope } from "@iam/session-kernel/testing";
+import Redis from "ioredis";
+import { closeRedisTestClient, resetRedisTestCase } from "./redis-test-harness";
 
 let scope: Awaited<ReturnType<typeof createUnifiedSessionRedisTestScope>>;
+let stopScope: (() => Promise<void>) | undefined;
 beforeEach(async () => {
+  stopScope = undefined;
   const url = process.env.IAM_SESSION_KERNEL_TEST_REDIS_URL;
   if (!url) throw new Error("IAM_SESSION_KERNEL_TEST_REDIS_URL must point to a dedicated Redis instance");
-  scope = await createUnifiedSessionRedisTestScope(url);
+  scope = await createUnifiedSessionRedisTestScope(url, {}, (close) => {
+    stopScope = close;
+  });
 });
 afterEach(async () => {
-  await scope.close();
+  await resetRedisTestCase(() => stopScope?.());
+});
+
+test("an initializing scope registers its stop before readiness and cannot return after being stopped", async () => {
+  const upstreamUrl = new URL(process.env.IAM_SESSION_KERNEL_TEST_REDIS_URL!);
+  const sockets = new Set<Socket>();
+  let observeReply!: () => void;
+  let rejectReply!: (error: unknown) => void;
+  const replyHeld = new Promise<void>((resolve, reject) => {
+    observeReply = resolve;
+    rejectReply = reject;
+  });
+  const proxy = createServer((client) => {
+    const upstream = createConnection({ host: upstreamUrl.hostname, port: Number(upstreamUrl.port || "6379") });
+    for (const socket of [client, upstream]) {
+      sockets.add(socket);
+      socket.once("close", () => sockets.delete(socket));
+      socket.on("error", rejectReply);
+    }
+    client.pipe(upstream);
+    // Forward the real commands, but hold every Redis reply until the test closes this connection.
+    upstream.on("data", observeReply);
+    client.once("close", () => upstream.destroy());
+    upstream.once("close", () => client.destroy());
+  });
+  await new Promise<void>((resolve, reject) => {
+    proxy.once("error", reject);
+    proxy.listen(0, "127.0.0.1", resolve);
+  });
+  const address = proxy.address();
+  if (!address || typeof address === "string") throw new Error("Redis proxy address required");
+  const proxyUrl = new URL(upstreamUrl);
+  proxyUrl.hostname = "127.0.0.1";
+  proxyUrl.port = String(address.port);
+  let stop: (() => Promise<void>) | undefined;
+  const initializing = createUnifiedSessionRedisTestScope(proxyUrl.toString(), {}, (close) => {
+    stop = close;
+  });
+  const outcome = initializing.then(
+    (created) => ({ scope: created }),
+    (error: unknown) => ({ error }),
+  );
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    expect(stop).toBeTypeOf("function");
+    await replyHeld;
+    const stopped = await Promise.race([
+      stop!().then(() => true),
+      new Promise<false>((resolve) => {
+        timer = setTimeout(resolve, 1_000, false);
+      }),
+    ]);
+    expect(stopped).toBe(true);
+    const result = await outcome;
+    expect("error" in result ? result.error : undefined).toBeInstanceOf(Error);
+  } finally {
+    clearTimeout(timer);
+    for (const socket of sockets) socket.destroy();
+    await new Promise<void>((resolve, reject) => proxy.close((error) => (error ? reject(error) : resolve())));
+    const result = await outcome;
+    if ("scope" in result) await result.scope.close();
+  }
+});
+
+test("scope close stops its connection while case data remains for the outer reset", async () => {
+  const op = operation();
+  await op.api.createUserSession(authentication);
+  const observer = new Redis(process.env.IAM_SESSION_KERNEL_TEST_REDIS_URL!, {
+    maxRetriesPerRequest: 0,
+    retryStrategy: () => null,
+  });
+  try {
+    await scope.close();
+    const remaining = await observer.dbsize();
+    expect(remaining).toBeGreaterThan(0);
+  } finally {
+    await closeRedisTestClient(observer);
+    op.close();
+  }
 });
 
 const subjectIdentifier = "00000000-0000-4000-8000-000000000001";

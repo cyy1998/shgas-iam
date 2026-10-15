@@ -1,7 +1,8 @@
-import { afterAll, beforeAll, describe, expect, test } from "bun:test";
+import { afterAll, afterEach, beforeAll, describe, expect, test } from "bun:test";
 import process from "node:process";
 import { fileURLToPath } from "node:url";
 import type { DedicatedRedisTestConfig } from "@iam/api-core/testing/external-test-resources";
+import { runWithOwnedTestResources } from "@iam/api-core/testing/external-test-resources";
 import {
   createProcessSmokeEnvironment,
   runProcessCommandSmoke,
@@ -21,25 +22,14 @@ describe("Admin client cache Redis contract", () => {
   afterAll(async () => {
     if (harness) await harness.close();
   });
-
-  test("restores the caller-owned Redis inventory after invalidation", async () => {
-    const scope = await harness.createScope();
-    const before = await harness.inventoryKeys();
-    try {
-      const clientCode = scope.clientCode("inventory");
-      await runCacheRuntimeEntry(["invalidate", clientCode, `secret-${clientCode}`], harness.redisConfig);
-    } finally {
-      await scope.close();
-    }
-
-    const after = await harness.inventoryKeys();
-    expect([...after].filter((key) => !before.has(key))).toEqual([]);
-    expect([...before].filter((key) => !after.has(key))).toEqual([]);
+  afterEach(async () => {
+    await harness.reset();
   });
 
   test("deletes exactly the four generic cache identities through the production update entry", async () => {
     const scope = await harness.createScope();
-    try {
+    await runWithOwnedTestResources(async (lifecycle) => {
+      lifecycle.registerCleanup(() => scope.close());
       const oldClientCode = scope.clientCode("update-old");
       const newClientCode = scope.clientCode("update-new");
       const oldSecret = `secret-${oldClientCode}`;
@@ -70,9 +60,7 @@ describe("Admin client cache Redis contract", () => {
       const unrelatedValue = await scope.observer.get(unrelatedKey);
       expect(deletedValues).toEqual([null, null, null, null]);
       expect(unrelatedValue).toBe("unrelated");
-    } finally {
-      await scope.close();
-    }
+    });
   });
 });
 async function runCacheRuntimeEntry(args: string[], redisConfig: DedicatedRedisTestConfig) {

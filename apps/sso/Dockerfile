@@ -69,7 +69,13 @@ COPY packages/contracts/ ./packages/contracts/
 COPY apps/sso/ ./apps/sso/
 RUN pnpm rebuild && pnpm --filter @iam/sso run setup && pnpm --filter @iam/sso run build
 
-FROM docker.xuanyuan.run/nginx:1.27.5-alpine AS runner
+FROM docker.xuanyuan.run/nginx:1.27.5-alpine AS runtime
 COPY apps/sso/nginx.conf /etc/nginx/conf.d/default.conf
 COPY --from=builder /app/apps/sso/dist/ /usr/share/nginx/html/portal/
 EXPOSE 80
+
+FROM runtime AS e2e
+COPY e2e/system/docker/rp-terminal.html /usr/share/nginx/html/portal/e2e-rp.html
+
+# Production remains the default target.
+FROM runtime AS runner

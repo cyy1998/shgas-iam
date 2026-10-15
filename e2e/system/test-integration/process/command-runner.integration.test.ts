@@ -40,6 +40,16 @@ describe("system command process boundaries", () => {
     expect(output).not.toContain("SYNTHETIC-CHILD-OUTPUT");
     expect(output).not.toContain("SYNTHETIC-CHILD-ERROR");
     expect(output).toContain("exited with code 17");
+    const failure = await captureCommand(process.execPath, ["-e", childCode], {
+      capture: { maxBytes: 4_096, mode: "tail" },
+      cwd: process.cwd(),
+    }).then(
+      () => undefined,
+      (error) => error,
+    );
+    expect(failure.message).toContain("exited with code 17");
+    expect(failure.stdout).toBe("SYNTHETIC-CHILD-OUTPUT");
+    expect(failure.stderr).toBe("SYNTHETIC-CHILD-ERROR");
   });
 
   test.each(["run", "capture"] as const)(

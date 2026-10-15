@@ -18,7 +18,11 @@ const localOverridePaths = fixtureDirectories.flatMap((directory) =>
   localOverrideNames.map((name) => (directory ? `${directory}/${name}` : name)),
 );
 const includedPaths = ["apps/api/deep/.env.example", "public/visible.txt"];
-const fixturePaths = new Set([...localOverridePaths, ...includedPaths]);
+const artifactPaths = [
+  "test-results/integration/run/compose-environment.json",
+  "e2e/system/test-results/run/receipt.json",
+];
+const fixturePaths = new Set([...localOverridePaths, ...artifactPaths, ...includedPaths]);
 
 async function exportedFiles(root: string): Promise<string[]> {
   const entries = await readdir(root, { withFileTypes: true });
@@ -39,7 +43,7 @@ describe("Docker build context environment isolation", () => {
         const context = join(root, "context");
         const output = join(root, "export");
         await mkdir(context);
-        for (const path of [...localOverridePaths, ...includedPaths]) {
+        for (const path of [...localOverridePaths, ...artifactPaths, ...includedPaths]) {
           await mkdir(dirname(join(context, path)), { recursive: true });
           await writeFile(join(context, path), `synthetic:${path}\n`, "utf8");
         }

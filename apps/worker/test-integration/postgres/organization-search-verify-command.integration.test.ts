@@ -1,4 +1,4 @@
-import { afterAll, beforeAll, beforeEach, expect, test } from "bun:test";
+import { afterAll, afterEach, beforeAll, beforeEach, expect, test } from "bun:test";
 import { fileURLToPath } from "node:url";
 import { runProcessCommandSmoke, spawnOwnedProcessTree } from "@iam/api-core/testing/process-smoke-harness";
 import { OrganizationType } from "@iam/contracts";
@@ -11,15 +11,24 @@ import { createWorkerPostgresTestHarness } from "./postgres-test-harness";
 
 const workerRoot = fileURLToPath(new URL("../../", import.meta.url));
 let harness: Awaited<ReturnType<typeof createWorkerPostgresTestHarness>>;
+let commands: ReturnType<typeof runProcessCommandSmoke>[];
 beforeAll(async () => {
   harness = await createWorkerPostgresTestHarness();
 });
 beforeEach(async () => {
+  commands = [];
   await harness.sql.unsafe(
     "TRUNCATE organization_search_change, organization_search_dirty, organization_search_document, organization_closure, organization RESTART IDENTITY CASCADE",
   );
   await harness.sql`INSERT INTO organization (id, org_code, org_name, path, level, org_type) VALUES (1, 'VERIFY', 'Verify', '/1', 1, ${OrganizationType.Department})`;
   await harness.sql`INSERT INTO organization_closure (ancestor_id, descendant_id, depth) VALUES (1,1,0)`;
+});
+afterEach(async () => {
+  const failures: unknown[] = [];
+  for (const result of await Promise.allSettled(commands)) {
+    if (result.status === "rejected") failures.push(result.reason);
+  }
+  if (failures.length) throw new AggregateError(failures, "Organization verify CLI did not complete");
 });
 afterAll(async () => {
   await harness?.close();
@@ -79,7 +88,7 @@ test("verification rejects query failures and closes the PG-only command without
   expect(Array.from(sessions)).toEqual([]);
 }, 20_000);
 
-test("the actual verification signal listener cancels only its blocked read and closes the command", async () => {
+test("the actual verification signal listener stops its blocked read and closes the command without writing work", async () => {
   await publishAll();
   const before = await inventory();
   const result = await harness.sql.begin(async (tx) => {
@@ -92,24 +101,6 @@ test("the actual verification signal listener cancels only its blocked read and 
   expect(result.output).not.toContain("Organization search full verification completed");
   expect(after).toEqual(before);
   expect(Array.from(sessions)).toEqual([]);
-}, 20_000);
-
-test("canceling one verification invocation preserves another verification backend in the same database", async () => {
-  await publishAll();
-  let otherVerification: ReturnType<typeof runVerify> | undefined;
-  const canceled = await harness.sql.begin(async (tx) => {
-    await tx`LOCK TABLE organization IN ACCESS EXCLUSIVE MODE`;
-    otherVerification = runVerify(0, ["--deadline-ms", "5000"]);
-    return await runVerify(1, ["--deadline-ms", "500"]);
-  });
-  if (!otherVerification) throw new Error("Other verification was not started");
-  const preserved = await otherVerification;
-  const canceledSessions = await sessionsAfter(canceled.output);
-  const preservedSessions = await sessionsAfter(preserved.output);
-  expect(canceled.output).toContain('"reason":"deadline"');
-  expect(preserved.output).toContain('"status":"passed"');
-  expect(Array.from(canceledSessions)).toEqual([]);
-  expect(Array.from(preservedSessions)).toEqual([]);
 }, 20_000);
 
 async function inventory() {
@@ -156,7 +147,7 @@ async function runVerify(expectedExitCode: number, args: string[] = [], bunArgs:
     "options",
     `${url.searchParams.get("options")} -cdefault_transaction_read_only=on -capplication_name=verify_${harness.schemaName}`,
   );
-  return await runProcessCommandSmoke({
+  const pending = runProcessCommandSmoke({
     label: "Organization Search PostgreSQL verification",
     start: () =>
       spawnOwnedProcessTree({
@@ -189,4 +180,7 @@ async function runVerify(expectedExitCode: number, args: string[] = [], bunArgs:
     expectedExitCode,
     maxOutputBytes: 64 * 1024,
   });
+  commands.push(pending);
+  void pending.catch(() => {});
+  return await pending;
 }

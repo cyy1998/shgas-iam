@@ -8,13 +8,16 @@ import { prepareCodexAuth } from "./auth.ts";
 import { codexConfigProbe, configuredCodex, prepareAgentConfig, shellQuote } from "./codex-provider.mts";
 import { command, deleteMergedTicketBranch } from "./commands.ts";
 import { hookCommitProbe, hookSmokeEnvironment, snapshotHostHooks } from "./hook-smoke.mts";
-import { withTestResources } from "./resources.ts";
+import { smokeCommandResources, smokeExecutorRecovery } from "./resource-smoke.mts";
+import { ExecutorTerminationError, withExecutorResources } from "./resources.ts";
 import {
   cachePreflight,
+  dockerPreflight,
   dockerSandbox,
   frontendGeneratedPaths,
   turboCacheDirectory,
   withCachePreflight,
+  withDockerPreflight,
   withFrontendMounts,
   withWorkspacePreparation,
 } from "./sandbox.mts";
@@ -89,7 +92,11 @@ export async function createRuntime(options: RuntimeOptions) {
   try {
     auth = await prepareCodexAuth();
   } catch (error) {
-    await agentConfig.close();
+    try {
+      await agentConfig.close();
+    } catch (closeError) {
+      throw new AggregateError([error, closeError], "Codex 初始化与配置收尾同时失败。");
+    }
     throw error;
   }
   const mounts = [...auth.mounts, ...agentConfig.mounts];
@@ -100,8 +107,14 @@ export async function createRuntime(options: RuntimeOptions) {
   const common = invocationArgs(branch);
   const candidates = new Map<number, string>();
   let baseSha = "";
+  let unsafeCreator = false;
+  const onUnsafeClose = () => {
+    unsafeCreator = true;
+  };
 
   const assertTarget = async () => {
+    if (unsafeCreator)
+      throw new ExecutorTerminationError("仍有未确认停止的创建者；停止启动后续模型任务，先恢复 executor.json。");
     if ((await git("branch", "--show-current")) !== branch) throw new Error(`宿主已离开目标分支 ${branch}；停止运行。`);
     if (await git("status", "--porcelain")) throw new Error("目标工作区有未提交改动；保留现场并停止运行。");
   };
@@ -110,28 +123,47 @@ export async function createRuntime(options: RuntimeOptions) {
     signal,
     report: (message: string) => console.log(message),
     close: async () => {
+      if (unsafeCreator)
+        throw new ExecutorTerminationError(
+          "创建者 sandbox 尚未确认停止；保留 Codex auth/config 挂载，先按 executor.json 恢复。",
+        );
+      const failures: unknown[] = [];
       try {
         await auth.close();
-      } finally {
-        await agentConfig.close();
+      } catch (error) {
+        failures.push(error);
       }
+      try {
+        await agentConfig.close();
+      } catch (error) {
+        failures.push(error);
+      }
+      if (failures.length === 1) throw failures[0];
+      if (failures.length) throw new AggregateError(failures, "Codex auth/config 收尾失败。");
     },
 
     async plan(iteration: number): Promise<Ticket[]> {
       await assertTarget();
       baseSha = await git("rev-parse", "HEAD");
       candidates.clear();
-      const result = await run({
-        cwd,
-        branchStrategy: { type: "head" },
-        sandbox: dockerSandbox({ imageName: image, env: { ...githubCredentials, ...auth.env }, mounts }),
-        agent,
-        promptFile: promptFile("plan"),
-        promptArgs: { ...common, IMPLEMENTERS: implementerCatalog(roles) },
-        maxIterations: 1,
-        name: `Planner ${iteration}`,
-        signal,
-      });
+      const result = await withExecutorResources({ cwd, image, signal, onUnsafeClose }, (resources) =>
+        run({
+          cwd,
+          branchStrategy: { type: "head" },
+          sandbox: dockerSandbox({
+            ...resources,
+            imageName: image,
+            env: { ...githubCredentials, ...auth.env, ...resources.env },
+            mounts: [...mounts, ...resources.mounts],
+          }),
+          agent: withDockerPreflight(agent),
+          promptFile: promptFile("plan"),
+          promptArgs: { ...common, IMPLEMENTERS: implementerCatalog(roles) },
+          maxIterations: 1,
+          name: `Planner ${iteration}`,
+          signal,
+        }),
+      );
       await assertTarget();
       if ((await git("rev-parse", "HEAD")) !== baseSha)
         throw new Error("规划期间目标 HEAD 发生变化；请核对现场后重新启动。");
@@ -139,25 +171,52 @@ export async function createRuntime(options: RuntimeOptions) {
     },
 
     async execute(ticket: Ticket): Promise<boolean> {
+      if (unsafeCreator) throw new ExecutorTerminationError("仍有未确认停止的创建者；停止启动后续实施者。");
       const role = roles[ticket.implementer];
       console.log(`#${ticket.number}: ${role.name} (${role.model}, ${role.effort}) — ${ticket.reason}`);
-      return withTestResources(
-        cwd,
-        ({ network, env }) =>
-          withFrontendMounts(async (generatedMounts) => {
-            signal.throwIfAborted();
-            const worktree = await createWorktree({
+      let worktree: Awaited<ReturnType<typeof createWorktree>> | undefined;
+      let sandbox: Sandbox | undefined;
+      return withFrontendMounts(
+        async (generatedMounts) =>
+          withExecutorResources(
+            {
               cwd,
-              branchStrategy: { type: "branch", branch: ticket.branch, baseBranch: baseSha },
-            });
-            let sandbox: Sandbox | undefined;
-            try {
+              image,
+              signal,
+              onUnsafeClose,
+              close: async () => {
+                const failures: unknown[] = [];
+                try {
+                  await sandbox?.close();
+                } catch (error) {
+                  failures.push(error);
+                }
+                if (worktree) {
+                  try {
+                    await command("git", ["status", "--porcelain"], worktree.worktreePath);
+                    const closed = await worktree.close();
+                    if (closed.preservedWorktreePath)
+                      console.log(`保留 ticket 恢复目录：${closed.preservedWorktreePath}`);
+                  } catch (error) {
+                    failures.push(error);
+                  }
+                }
+                if (failures.length === 1) throw failures[0];
+                if (failures.length) throw new AggregateError(failures, "Sandbox 与 worktree 收尾失败。");
+              },
+            },
+            async (resources) => {
+              signal.throwIfAborted();
+              worktree = await createWorktree({
+                cwd,
+                branchStrategy: { type: "branch", branch: ticket.branch, baseBranch: baseSha },
+              });
               sandbox = await worktree.createSandbox({
                 sandbox: dockerSandbox({
+                  ...resources,
                   imageName: image,
-                  network,
-                  env: { ...githubCredentials, ...auth.env, ...env },
-                  mounts: [...mounts, ...generatedMounts],
+                  env: { ...githubCredentials, ...auth.env, ...resources.env },
+                  mounts: [...mounts, ...generatedMounts, ...resources.mounts],
                 }),
               });
               signal.throwIfAborted();
@@ -171,7 +230,7 @@ export async function createRuntime(options: RuntimeOptions) {
               };
               await mkdir(join(cwd, ".sandcastle", "logs"), { recursive: true });
               const implemented = await sandbox.run({
-                agent: withWorkspacePreparation(configuredCodex(model, roles, role)),
+                agent: withDockerPreflight(withWorkspacePreparation(configuredCodex(model, roles, role))),
                 name: `Implementer #${ticket.number}`,
                 promptFile: promptFile("implement"),
                 promptArgs,
@@ -193,18 +252,9 @@ export async function createRuntime(options: RuntimeOptions) {
               const candidate = await checkedExec(sandbox, "git rev-parse HEAD");
               candidates.set(ticket.number, candidate);
               return true;
-            } finally {
-              try {
-                await sandbox?.close();
-              } finally {
-                // SDK close treats an unreadable Git status as clean; keep the worktree in that case.
-                await command("git", ["status", "--porcelain"], worktree.worktreePath);
-                const closed = await worktree.close();
-                if (closed.preservedWorktreePath) console.log(`保留 ticket 恢复目录：${closed.preservedWorktreePath}`);
-              }
-            }
-          }),
-        signal,
+            },
+          ),
+        () => !unsafeCreator,
       );
     },
 
@@ -216,22 +266,21 @@ export async function createRuntime(options: RuntimeOptions) {
       await assertTarget();
       if ((await git("rev-parse", "HEAD")) !== baseSha)
         throw new Error("并行实施期间目标 HEAD 发生变化；停止自动合并。");
-      await withTestResources(
-        cwd,
-        ({ network, env }) =>
-          withFrontendMounts(async (generatedMounts) => {
+      await withFrontendMounts(
+        async (generatedMounts) =>
+          withExecutorResources({ cwd, image, signal, onUnsafeClose }, async (resources) => {
             signal.throwIfAborted();
             const dependencyMounts = await mergerDependencyMounts(cwd);
             const result = await run({
               cwd,
               branchStrategy: { type: "head" },
               sandbox: dockerSandbox({
+                ...resources,
                 imageName: image,
-                network,
-                env: { ...githubCredentials, ...auth.env, ...env },
-                mounts: [...dependencyMounts, ...mounts, ...generatedMounts],
+                env: { ...githubCredentials, ...auth.env, ...resources.env },
+                mounts: [...dependencyMounts, ...mounts, ...generatedMounts, ...resources.mounts],
               }),
-              agent: withWorkspacePreparation(configuredCodex(model, roles)),
+              agent: withDockerPreflight(withWorkspacePreparation(configuredCodex(model, roles))),
               promptFile: promptFile("merge"),
               promptArgs: {
                 ...common,
@@ -246,7 +295,7 @@ export async function createRuntime(options: RuntimeOptions) {
             if (result.completionSignal !== complete)
               throw new Error("Merger 达到迭代上限仍未报告完成；保留合并现场和 issue 实际状态。");
           }),
-        signal,
+        () => !unsafeCreator,
       );
       await assertTarget();
       for (const ticket of tickets) {
@@ -273,6 +322,7 @@ export async function smoke(options: Pick<RuntimeOptions, "cwd" | "image" | "sig
   const roles = await loadAgentRoles(cwd);
   const agentConfig = await prepareAgentConfig(roles);
   const branch = `codex/sandcastle/smoke-${Date.now()}`;
+  let unsafeCreator = false;
   try {
     // A read-only cache must prevent the agent command from starting.
     let cacheFailure: unknown;
@@ -322,119 +372,129 @@ export async function smoke(options: Pick<RuntimeOptions, "cwd" | "image" | "sig
           "utf8",
         );
       }
-      await withTestResources(
-        cwd,
-        ({ network, env }) =>
-          withFrontendMounts(async (generatedMounts) => {
-            const mounts = await mergerDependencyMounts(cwd);
-            const sandbox = await worktree.createSandbox({
-              sandbox: dockerSandbox({
-                imageName: image,
-                network,
-                mounts: [...mounts, ...agentConfig.mounts, ...generatedMounts],
-                env: {
-                  ...env,
-                  ...hookSmokeEnvironment,
-                  PATH: "/tmp/iam-afk-smoke-bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
-                },
-              }),
-            });
-            try {
-              await checkedExec(sandbox, cachePreflight, signal);
-              await checkedExec(sandbox, 'git config --global --add safe.directory "$PWD"');
-              console.log(
-                await checkedExec(
-                  sandbox,
-                  "node --version && pnpm --version && bun --version && codex --version && gh --version" +
-                    " && git status --short && test -f .agents/skills/implement/SKILL.md" +
-                    " && pg_isready -h postgres -U iam_afk -d iam_afk && redis-cli -h redis ping",
-                ),
-              );
-              console.log(await checkedExec(sandbox, `node -e ${shellQuote(codexConfigProbe(roles))}`, signal));
-              for (const path of frontendGeneratedPaths)
-                await checkedExec(sandbox, `test ! -e ${shellQuote(`${path}/host-sentinel`)}`, signal);
-              await checkedExec(sandbox, "mkdir -p /tmp/iam-afk-smoke-bin", signal);
-              for (const phase of ["install", "setup"]) {
-                const failureMessage = `smoke-${phase}-failure`;
-                const stub =
-                  phase === "install"
-                    ? `#!/bin/sh
+      await withFrontendMounts(
+        async (generatedMounts) =>
+          withExecutorResources(
+            {
+              cwd,
+              image,
+              signal,
+              onUnsafeClose: () => {
+                unsafeCreator = true;
+              },
+            },
+            async (resources) => {
+              const mounts = await mergerDependencyMounts(cwd);
+              const sandbox = await worktree.createSandbox({
+                sandbox: dockerSandbox({
+                  ...resources,
+                  imageName: image,
+                  mounts: [...mounts, ...agentConfig.mounts, ...generatedMounts, ...resources.mounts],
+                  env: {
+                    ...resources.env,
+                    ...hookSmokeEnvironment,
+                    PATH: "/tmp/iam-afk-smoke-bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
+                  },
+                }),
+              });
+              try {
+                await checkedExec(sandbox, dockerPreflight, signal);
+                await checkedExec(sandbox, cachePreflight, signal);
+                await checkedExec(sandbox, 'git config --global --add safe.directory "$PWD"');
+                console.log(
+                  await checkedExec(
+                    sandbox,
+                    "node --version && pnpm --version && bun --version && codex --version && gh --version" +
+                      " && git status --short && test -f .agents/skills/implement/SKILL.md" +
+                      " && docker compose version && docker buildx version",
+                  ),
+                );
+                console.log(await checkedExec(sandbox, `node -e ${shellQuote(codexConfigProbe(roles))}`, signal));
+                for (const path of frontendGeneratedPaths)
+                  await checkedExec(sandbox, `test ! -e ${shellQuote(`${path}/host-sentinel`)}`, signal);
+                await checkedExec(sandbox, "mkdir -p /tmp/iam-afk-smoke-bin", signal);
+                for (const phase of ["install", "setup"]) {
+                  const failureMessage = `smoke-${phase}-failure`;
+                  const stub =
+                    phase === "install"
+                      ? `#!/bin/sh
 echo ${failureMessage} >&2
 exit 71
 `
-                    : `#!/bin/sh
+                      : `#!/bin/sh
 if [ "$1" = install ]; then exit 0; fi
 echo ${failureMessage} >&2
 exit 72
 `;
-                await checkedExec(
-                  sandbox,
-                  `printf '%s' ${shellQuote(stub)} > /tmp/iam-afk-smoke-bin/pnpm` +
-                    " && chmod +x /tmp/iam-afk-smoke-bin/pnpm",
-                  signal,
-                );
-                let failure: unknown;
-                try {
-                  await sandbox.run({
-                    agent: withWorkspacePreparation({
-                      ...codex("smoke-no-model", { captureSessions: false }),
-                      buildPrintCommand: () => ({ command: "touch /tmp/preparation-smoke-agent-started" }),
-                    }),
-                    prompt: "Initialization failure smoke; do not invoke a model.",
+                  await checkedExec(
+                    sandbox,
+                    `printf '%s' ${shellQuote(stub)} > /tmp/iam-afk-smoke-bin/pnpm` +
+                      " && chmod +x /tmp/iam-afk-smoke-bin/pnpm",
                     signal,
-                  });
-                } catch (error) {
-                  failure = error;
-                } finally {
-                  await checkedExec(sandbox, "rm -f /tmp/iam-afk-smoke-bin/pnpm", signal);
+                  );
+                  let failure: unknown;
+                  try {
+                    await sandbox.run({
+                      agent: withWorkspacePreparation({
+                        ...codex("smoke-no-model", { captureSessions: false }),
+                        buildPrintCommand: () => ({ command: "touch /tmp/preparation-smoke-agent-started" }),
+                      }),
+                      prompt: "Initialization failure smoke; do not invoke a model.",
+                      signal,
+                    });
+                  } catch (error) {
+                    failure = error;
+                  } finally {
+                    await checkedExec(sandbox, "rm -f /tmp/iam-afk-smoke-bin/pnpm", signal);
+                  }
+                  await checkedExec(sandbox, "test ! -e /tmp/preparation-smoke-agent-started", signal);
+                  if (!String(failure).includes(failureMessage))
+                    throw new Error(`${phase} 初始化失败未阻止 agent。`, { cause: failure });
+                  console.log(`${phase} 初始化失败已阻止 agent 命令启动。`);
                 }
-                await checkedExec(sandbox, "test ! -e /tmp/preparation-smoke-agent-started", signal);
-                if (!String(failure).includes(failureMessage))
-                  throw new Error(`${phase} 初始化失败未阻止 agent。`, { cause: failure });
-                console.log(`${phase} 初始化失败已阻止 agent 命令启动。`);
-              }
-              for (const path of frontendGeneratedPaths)
-                await checkedExec(sandbox, `touch ${shellQuote(`${path}/stale-container-output`)}`, signal);
-              const preparationPrompt = "Initialization must preserve this prompt on stdin.";
-              const preparationProgram = (prompt: string) => `let input = ""; process.stdin.setEncoding("utf8");
+                for (const path of frontendGeneratedPaths)
+                  await checkedExec(sandbox, `touch ${shellQuote(`${path}/stale-container-output`)}`, signal);
+                const preparationPrompt = "Initialization must preserve this prompt on stdin.";
+                const preparationProgram = (prompt: string) => `let input = ""; process.stdin.setEncoding("utf8");
             process.stdin.on("data", chunk => { input += chunk; });
             process.stdin.on("end", () => {
               if (input !== ${JSON.stringify(prompt)}) throw new Error("Initialization consumed prompt stdin");
               console.log(JSON.stringify({ type: "thread.started", thread_id: "smoke-preparation" }));
               console.log(JSON.stringify({ type: "item.completed", item: { type: "agent_message", text: ${JSON.stringify(complete)} } }));
             });`;
-              const prepared = await sandbox.run({
-                agent: withWorkspacePreparation({
-                  ...codex("smoke-no-model", { captureSessions: false }),
-                  buildPrintCommand: ({ prompt }: { prompt: string }) => ({
-                    command: `${hookCommitProbe("Implementer")}\nnode -e ${shellQuote(preparationProgram(prompt))}`,
-                    stdin: prompt,
+                const prepared = await sandbox.run({
+                  agent: withWorkspacePreparation({
+                    ...codex("smoke-no-model", { captureSessions: false }),
+                    buildPrintCommand: ({ prompt }: { prompt: string }) => ({
+                      command: `${hookCommitProbe("Implementer")}\nnode -e ${shellQuote(preparationProgram(prompt))}`,
+                      stdin: prompt,
+                    }),
                   }),
-                }),
-                prompt: preparationPrompt,
-                signal,
-              });
-              if (prepared.completionSignal !== complete) throw new Error("初始化后 agent 未正确接收 prompt stdin。");
-              if ((await snapshotHostHooks(cwd, worktree.worktreePath)) !== hostHooksBefore)
-                throw new Error("Implementer 初始化或提交改变了宿主 Git 配置/Husky 包装文件。");
-              console.log("Implementer 真实提交门禁及宿主 Git/Husky 隔离检查通过。");
-              for (const path of frontendGeneratedPaths)
-                await checkedExec(sandbox, `test ! -e ${shellQuote(`${path}/stale-container-output`)}`, signal);
-              console.log(await checkedExec(sandbox, "pnpm --filter @iam/admin --filter @iam/sso typecheck", signal));
-              for (const path of frontendGeneratedPaths) {
-                const directory = join(worktree.worktreePath, path);
-                const sentinel = await readFile(join(directory, "host-sentinel"), "utf8");
-                const history = await readFile(join(directory, "core", "historyIntelli.ts"), "utf8");
-                if (
-                  sentinel !== "host-generated-output" ||
-                  history !== "export type UmiHistory = import('D:/missing-windows-dependencies/history').History;\n"
-                ) {
-                  throw new Error(`容器初始化改变了宿主生成文件：${path}`);
+                  prompt: preparationPrompt,
+                  signal,
+                });
+                if (prepared.completionSignal !== complete) throw new Error("初始化后 agent 未正确接收 prompt stdin。");
+                await smokeCommandResources(sandbox, cwd, resources, signal);
+                if ((await snapshotHostHooks(cwd, worktree.worktreePath)) !== hostHooksBefore)
+                  throw new Error("Implementer 初始化或提交改变了宿主 Git 配置/Husky 包装文件。");
+                console.log("Implementer 真实提交门禁及宿主 Git/Husky 隔离检查通过。");
+                for (const path of frontendGeneratedPaths)
+                  await checkedExec(sandbox, `test ! -e ${shellQuote(`${path}/stale-container-output`)}`, signal);
+                console.log(await checkedExec(sandbox, "pnpm --filter @iam/admin --filter @iam/sso typecheck", signal));
+                for (const path of frontendGeneratedPaths) {
+                  const directory = join(worktree.worktreePath, path);
+                  const sentinel = await readFile(join(directory, "host-sentinel"), "utf8");
+                  const history = await readFile(join(directory, "core", "historyIntelli.ts"), "utf8");
+                  if (
+                    sentinel !== "host-generated-output" ||
+                    history !== "export type UmiHistory = import('D:/missing-windows-dependencies/history').History;\n"
+                  ) {
+                    throw new Error(`容器初始化改变了宿主生成文件：${path}`);
+                  }
                 }
-              }
-              console.log("容器前端生成目录隔离及 Admin/SSO 类型检查通过，宿主生成文件保持不变。");
-              await checkedExec(sandbox, "cd apps/admin && node ../../scripts/playwright-e2e-preflight.mjs", signal);
-              const browserProbe = `
+                console.log("容器前端生成目录隔离及 Admin/SSO 类型检查通过，宿主生成文件保持不变。");
+                await checkedExec(sandbox, "cd apps/admin && node ../../scripts/playwright-e2e-preflight.mjs", signal);
+                const browserProbe = `
             const { chromium } = require("@playwright/test");
             (async () => {
               for (const channel of [undefined, "chromium"]) {
@@ -450,132 +510,138 @@ exit 72
               }
             })().catch(error => { console.error(error); process.exitCode = 1; });
           `;
-              console.log(await checkedExec(sandbox, `cd apps/admin && node -e ${shellQuote(browserProbe)}`, signal));
-              const cacheTask = "pnpm exec turbo typecheck --filter=@iam/contracts --output-logs=full";
-              await checkedExec(sandbox, cacheTask, signal);
-              const cached = await checkedExec(sandbox, cacheTask, signal);
-              if (!cached.includes("cache hit")) throw new Error("Turbo smoke 未命中前一次执行写入的缓存。");
-              console.log("Turbo 缓存写入及再次命中通过。");
-              console.log(await checkedExec(sandbox, "pnpm verify:static && git diff --check", signal));
-              // Exercise the real SDK's prompt preprocessing without GitHub traffic or model calls.
-              await checkedExec(
-                sandbox,
-                "mkdir -p /tmp/iam-afk-smoke-bin" +
-                  " && printf '%s\\n' '#!/bin/sh' 'printf \"[]\\n\"' > /tmp/iam-afk-smoke-bin/gh" +
-                  " && chmod +x /tmp/iam-afk-smoke-bin/gh",
-              );
-              const baseSha = await checkedExec(sandbox, "git rev-parse HEAD");
-              const response = '<plan>{"issues":[]}</plan>\n<promise>COMPLETE</promise>';
-              const stream = [
-                { type: "thread.started", thread_id: "smoke-parent" },
-                {
-                  type: "item.completed",
-                  item: { type: "agent_message", text: response },
-                },
-              ];
-              const program = `process.stdin.resume(); process.stdin.on("end", () => {
+                console.log(await checkedExec(sandbox, `cd apps/admin && node -e ${shellQuote(browserProbe)}`, signal));
+                const cacheTask = "pnpm exec turbo typecheck --filter=@iam/contracts --output-logs=full";
+                await checkedExec(sandbox, cacheTask, signal);
+                const cached = await checkedExec(sandbox, cacheTask, signal);
+                if (!cached.includes("cache hit")) throw new Error("Turbo smoke 未命中前一次执行写入的缓存。");
+                console.log("Turbo 缓存写入及再次命中通过。");
+                console.log(await checkedExec(sandbox, "pnpm verify:static && git diff --check", signal));
+                // Exercise the real SDK's prompt preprocessing without GitHub traffic or model calls.
+                await checkedExec(
+                  sandbox,
+                  "mkdir -p /tmp/iam-afk-smoke-bin" +
+                    " && printf '%s\\n' '#!/bin/sh' 'printf \"[]\\n\"' > /tmp/iam-afk-smoke-bin/gh" +
+                    " && chmod +x /tmp/iam-afk-smoke-bin/gh",
+                );
+                const baseSha = await checkedExec(sandbox, "git rev-parse HEAD");
+                const response = '<plan>{"issues":[]}</plan>\n<promise>COMPLETE</promise>';
+                const stream = [
+                  { type: "thread.started", thread_id: "smoke-parent" },
+                  {
+                    type: "item.completed",
+                    item: { type: "agent_message", text: response },
+                  },
+                ];
+                const program = `process.stdin.resume(); process.stdin.on("end", () => {
           for (const event of ${JSON.stringify(stream)}) console.log(JSON.stringify(event));
         });`;
-              const probe = withCachePreflight({
-                ...codex("smoke-no-model", { captureSessions: false }),
-                buildPrintCommand: ({ prompt }: { prompt: string }) => ({
-                  command: `node -e ${shellQuote(program)}`,
-                  stdin: prompt,
-                }),
-              });
-              await mkdir(join(cwd, ".sandcastle", "logs"), { recursive: true });
-              for (const stage of ["plan", "implement", "merge"]) {
-                const result = await sandbox.run({
-                  agent: probe,
-                  name: `Smoke ${stage}`,
-                  promptFile: join(cwd, ".sandcastle", `${stage}-prompt.md`),
-                  promptArgs: {
-                    ...invocationArgs(branch),
-                    ISSUE_NUMBER: "42",
-                    BRANCH: branch,
-                    BASE_SHA: baseSha,
-                    BRANCHES: `- ${branch}: ${baseSha}`,
-                    ISSUES: "- #42",
-                    IMPLEMENTERS: implementerCatalog(roles),
-                    IMPLEMENTER: "implementer_standard",
-                    SELECTION_REASON: "Smoke fixture",
-                  },
-                  signal,
-                  logging: {
-                    type: "file",
-                    path: join(cwd, ".sandcastle", "logs", `smoke-${stage}.log`),
-                  },
-                });
-                if (result.completionSignal !== complete) throw new Error(`${stage} 的 SDK prompt 接线检查未完成。`);
-                if (stage === "plan") parsePlan(result.stdout);
-              }
-              // Make only the container-private hook directory unwritable. Stub
-              // dependency setup so this case reaches the hook initialization
-              // boundary without another install; the real setup passed above.
-              await checkedExec(
-                sandbox,
-                "chmod 500 /tmp/iam-sandcastle-hooks" +
-                  " && printf '%s\\n' '#!/bin/sh' 'exit 0' > /tmp/iam-afk-smoke-bin/pnpm" +
-                  " && chmod +x /tmp/iam-afk-smoke-bin/pnpm",
-                signal,
-              );
-              let hookInitializationFailure: unknown;
-              try {
-                await sandbox.run({
-                  agent: withWorkspacePreparation({
-                    ...codex("smoke-no-model", { captureSessions: false }),
-                    buildPrintCommand: () => ({ command: "touch /tmp/hook-smoke-agent-started" }),
+                const probe = withCachePreflight({
+                  ...codex("smoke-no-model", { captureSessions: false }),
+                  buildPrintCommand: ({ prompt }: { prompt: string }) => ({
+                    command: `node -e ${shellQuote(program)}`,
+                    stdin: prompt,
                   }),
-                  prompt: "Hook initialization failure smoke; do not invoke a model.",
-                  signal,
                 });
-              } catch (error) {
-                hookInitializationFailure = error;
+                await mkdir(join(cwd, ".sandcastle", "logs"), { recursive: true });
+                for (const stage of ["plan", "implement", "merge"]) {
+                  const result = await sandbox.run({
+                    agent: probe,
+                    name: `Smoke ${stage}`,
+                    promptFile: join(cwd, ".sandcastle", `${stage}-prompt.md`),
+                    promptArgs: {
+                      ...invocationArgs(branch),
+                      ISSUE_NUMBER: "42",
+                      BRANCH: branch,
+                      BASE_SHA: baseSha,
+                      BRANCHES: `- ${branch}: ${baseSha}`,
+                      ISSUES: "- #42",
+                      IMPLEMENTERS: implementerCatalog(roles),
+                      IMPLEMENTER: "implementer_standard",
+                      SELECTION_REASON: "Smoke fixture",
+                    },
+                    signal,
+                    logging: {
+                      type: "file",
+                      path: join(cwd, ".sandcastle", "logs", `smoke-${stage}.log`),
+                    },
+                  });
+                  if (result.completionSignal !== complete) throw new Error(`${stage} 的 SDK prompt 接线检查未完成。`);
+                  if (stage === "plan") parsePlan(result.stdout);
+                }
+                // Make only the container-private hook directory unwritable. Stub
+                // dependency setup so this case reaches the hook initialization
+                // boundary without another install; the real setup passed above.
+                await checkedExec(
+                  sandbox,
+                  "chmod 500 /tmp/iam-sandcastle-hooks" +
+                    " && printf '%s\\n' '#!/bin/sh' 'exit 0' > /tmp/iam-afk-smoke-bin/pnpm" +
+                    " && chmod +x /tmp/iam-afk-smoke-bin/pnpm",
+                  signal,
+                );
+                let hookInitializationFailure: unknown;
+                try {
+                  await sandbox.run({
+                    agent: withWorkspacePreparation({
+                      ...codex("smoke-no-model", { captureSessions: false }),
+                      buildPrintCommand: () => ({ command: "touch /tmp/hook-smoke-agent-started" }),
+                    }),
+                    prompt: "Hook initialization failure smoke; do not invoke a model.",
+                    signal,
+                  });
+                } catch (error) {
+                  hookInitializationFailure = error;
+                } finally {
+                  await checkedExec(
+                    sandbox,
+                    "chmod 700 /tmp/iam-sandcastle-hooks && rm -f /tmp/iam-afk-smoke-bin/pnpm",
+                  );
+                }
+                await checkedExec(sandbox, "test ! -e /tmp/hook-smoke-agent-started", signal);
+                if (!String(hookInitializationFailure).includes("Sandcastle hook 初始化失败"))
+                  throw new Error("Hook 初始化失败未阻止 agent。", { cause: hookInitializationFailure });
+                console.log("Hook 初始化失败已阻止 agent 命令启动。");
               } finally {
-                await checkedExec(sandbox, "chmod 700 /tmp/iam-sandcastle-hooks && rm -f /tmp/iam-afk-smoke-bin/pnpm");
+                await sandbox.close();
               }
-              await checkedExec(sandbox, "test ! -e /tmp/hook-smoke-agent-started", signal);
-              if (!String(hookInitializationFailure).includes("Sandcastle hook 初始化失败"))
-                throw new Error("Hook 初始化失败未阻止 agent。", { cause: hookInitializationFailure });
-              console.log("Hook 初始化失败已阻止 agent 命令启动。");
-            } finally {
-              await sandbox.close();
-            }
-            // Match the production Merger's head checkout. Its host is the
-            // disposable smoke worktree, so ordinary commits cannot move the
-            // caller's feature branch even though Git common metadata is shared.
-            const mergerProbe = await run({
-              cwd: worktree.worktreePath,
-              branchStrategy: { type: "head" },
-              sandbox: dockerSandbox({
-                imageName: image,
-                network,
-                mounts: [...mounts, ...agentConfig.mounts, ...generatedMounts],
-                env: { ...env, ...hookSmokeEnvironment },
-              }),
-              agent: withWorkspacePreparation({
-                ...codex("smoke-no-model", { captureSessions: false }),
-                buildPrintCommand: () => ({
-                  command:
-                    hookCommitProbe("Merger") +
-                    `\nprintf '%s\\n' ${shellQuote(
-                      JSON.stringify({
-                        type: "item.completed",
-                        item: { type: "agent_message", text: complete },
-                      }),
-                    )}`,
+              // Match the production Merger's head checkout. Its host is the
+              // disposable smoke worktree, so ordinary commits cannot move the
+              // caller's feature branch even though Git common metadata is shared.
+              const mergerProbe = await run({
+                cwd: worktree.worktreePath,
+                branchStrategy: { type: "head" },
+                sandbox: dockerSandbox({
+                  ...resources,
+                  imageName: image,
+                  mounts: [...mounts, ...agentConfig.mounts, ...generatedMounts, ...resources.mounts],
+                  env: { ...resources.env, ...hookSmokeEnvironment },
                 }),
-              }),
-              prompt: "Merger head checkout hook smoke; do not invoke a model.",
-              signal,
-            });
-            if (mergerProbe.completionSignal !== complete) throw new Error("Merger 真实提交门禁检查未完成。");
-            if ((await snapshotHostHooks(cwd, worktree.worktreePath)) !== hostHooksBefore)
-              throw new Error("Merger 初始化或提交改变了宿主 Git 配置/Husky 包装文件。");
-            smokeCandidate = await command("git", ["rev-parse", "HEAD"], worktree.worktreePath);
-            console.log("Merger head checkout 真实提交门禁及宿主 Git/Husky 隔离检查通过。");
-          }),
-        signal,
+                agent: withDockerPreflight(
+                  withWorkspacePreparation({
+                    ...codex("smoke-no-model", { captureSessions: false }),
+                    buildPrintCommand: () => ({
+                      command:
+                        hookCommitProbe("Merger") +
+                        `\nprintf '%s\\n' ${shellQuote(
+                          JSON.stringify({
+                            type: "item.completed",
+                            item: { type: "agent_message", text: complete },
+                          }),
+                        )}`,
+                    }),
+                  }),
+                ),
+                prompt: "Merger head checkout hook smoke; do not invoke a model.",
+                signal,
+              });
+              if (mergerProbe.completionSignal !== complete) throw new Error("Merger 真实提交门禁检查未完成。");
+              if ((await snapshotHostHooks(cwd, worktree.worktreePath)) !== hostHooksBefore)
+                throw new Error("Merger 初始化或提交改变了宿主 Git 配置/Husky 包装文件。");
+              smokeCandidate = await command("git", ["rev-parse", "HEAD"], worktree.worktreePath);
+              console.log("Merger head checkout 真实提交门禁及宿主 Git/Husky 隔离检查通过。");
+            },
+          ),
+        () => !unsafeCreator,
       );
     } catch (error) {
       smokeFailures.push(error);
@@ -587,6 +653,7 @@ exit 72
       smokeFailures.push(error);
     }
     try {
+      if (unsafeCreator) throw new Error(`创建者尚未确认停止；保留 smoke worktree：${worktree.worktreePath}`);
       const closed = await worktree.close();
       if (closed.preservedWorktreePath)
         throw new Error(`Smoke 工作区仍有改动，保留分支和恢复目录：${closed.preservedWorktreePath}`);
@@ -604,7 +671,8 @@ exit 72
     // The owned smoke branch now contains test commits. Delete only its exact
     // observed tip after successful cleanup, never another writer's update.
     await command("git", ["update-ref", "-d", `refs/heads/${branch}`, smokeCandidate], cwd);
+    await smokeExecutorRecovery({ cwd, image, signal });
   } finally {
-    await agentConfig.close();
+    if (!unsafeCreator) await agentConfig.close();
   }
 }

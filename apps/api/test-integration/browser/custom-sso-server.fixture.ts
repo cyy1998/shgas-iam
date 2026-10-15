@@ -1,20 +1,18 @@
 import process from "node:process";
 import { ClientSsoCallbackType, ClientSsoProtocol, SubjectClaim } from "@iam/contracts";
+import { cleanupAfterFixtureFailure, closeFixtureResources } from "../redis/oidc.fixture";
 import { fixture } from "../redis/root-authentication.fixture";
 
 async function main() {
   const f = await fixture();
   let iam: ReturnType<typeof Bun.serve> | undefined;
   let proxy: ReturnType<typeof Bun.serve> | undefined;
-  async function close() {
-    const results = await Promise.allSettled([proxy?.stop(true), iam?.stop(true), f.scope.close()]);
-    const failures = results.filter((result) => result.status === "rejected");
-    if (failures.length > 0)
-      throw new AggregateError(
-        failures.map((result) => result.reason),
-        "Custom browser fixture cleanup failed",
-      );
-  }
+  let closing: Promise<void> | undefined;
+  const close = () =>
+    (closing ??= (async () => {
+      await closeFixtureResources([() => f.close(), () => iam?.stop(true), () => proxy?.stop(true)]);
+      process.stderr.write("fixture-stopped\n");
+    })());
   try {
     iam = Bun.serve({ hostname: "127.0.0.1", port: 0, fetch: f.app.fetch });
     const iamOrigin = iam.url.origin;
@@ -48,9 +46,10 @@ async function main() {
     for await (const _chunk of process.stdin) {
       // EOF is the parent's ownership signal.
     }
-  } finally {
-    await close();
+  } catch (failure) {
+    await cleanupAfterFixtureFailure(failure, close);
   }
+  await close();
 }
 void main().catch((error) => {
   console.error(error);

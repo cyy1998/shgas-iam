@@ -13,6 +13,7 @@ FROM base AS deps
 WORKDIR /workspace
 ENV HUSKY=0
 COPY .npmrc pnpm-workspace.yaml package.json pnpm-lock.yaml ./
+COPY patches/ ./patches/
 COPY e2e/system/package.json ./e2e/system/package.json
 COPY packages/api-core/package.json ./packages/api-core/package.json
 COPY packages/session-kernel/package.json ./packages/session-kernel/package.json
@@ -24,6 +25,7 @@ COPY packages/jobs/package.json ./packages/jobs/package.json
 COPY packages/organization-responsibility-resolution/package.json ./packages/organization-responsibility-resolution/package.json
 COPY packages/role-assignment-resolution/package.json ./packages/role-assignment-resolution/package.json
 COPY packages/user-profile-read-model/package.json ./packages/user-profile-read-model/package.json
+COPY packages/filter-engine/package.json ./packages/filter-engine/package.json
 RUN --mount=type=cache,id=iam-e2e-pnpm-v12,target=/pnpm/store \
     pnpm install --filter @iam/e2e-system... --frozen-lockfile --prod --ignore-scripts
 
@@ -39,6 +41,7 @@ COPY packages/jobs ./packages/jobs
 COPY packages/organization-responsibility-resolution ./packages/organization-responsibility-resolution
 COPY packages/role-assignment-resolution ./packages/role-assignment-resolution
 COPY packages/user-profile-read-model ./packages/user-profile-read-model
+COPY packages/filter-engine ./packages/filter-engine
 RUN --mount=type=cache,id=iam-e2e-pnpm-v12,target=/pnpm/store \
     pnpm --config.inject-workspace-packages=true --filter @iam/e2e-system deploy --prod /deploy/e2e-system
 

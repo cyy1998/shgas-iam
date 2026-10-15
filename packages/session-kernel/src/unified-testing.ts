@@ -9,9 +9,37 @@ import { SessionObservationRequiredError, sessionRecordSchema } from "./unified/
 export async function createUnifiedSessionRedisTestScope(
   redisUrl: string,
   ttl: { user?: number; client?: number } = {},
+  trackStop?: (stop: () => Promise<void>) => void,
 ) {
   const redis = new Redis(redisUrl, { maxRetriesPerRequest: 0, retryStrategy: () => null });
-  await redis.ping();
+  let closePromise: Promise<void> | undefined;
+  let initialized = false;
+  function close() {
+    closePromise ??= (async () => {
+      const ended =
+        redis.status === "end" ? Promise.resolve() : new Promise<void>((resolve) => redis.once("end", resolve));
+      try {
+        if (initialized && redis.status !== "end") await redis.quit();
+      } finally {
+        redis.disconnect();
+        await ended;
+      }
+    })();
+    return closePromise;
+  }
+  try {
+    trackStop?.(close);
+    await redis.ping();
+    if (closePromise) throw new Error("Kernel Redis test scope stopped during setup");
+    initialized = true;
+  } catch (error) {
+    try {
+      await close();
+    } catch (closeError) {
+      throw new AggregateError([error, closeError], "Kernel Redis test scope setup failed");
+    }
+    throw error;
+  }
   const namespace = `test:unified:${randomUUID()}`;
   const prefix = `${namespace}:unified:v1:`;
   const operations = new WeakSet<object>();
@@ -151,13 +179,6 @@ export async function createUnifiedSessionRedisTestScope(
       const hash = createHash("sha256").update(bearer).digest("hex");
       return await redis.get(`${prefix}user:${hash}`);
     },
-    async close() {
-      try {
-        const keys = await redis.keys(`${namespace}:*`);
-        if (keys.length) await redis.del(...keys);
-      } finally {
-        redis.disconnect();
-      }
-    },
+    close,
   };
 }

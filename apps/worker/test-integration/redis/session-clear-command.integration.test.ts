@@ -4,7 +4,6 @@ import type { Socket } from "node:net";
 import { createConnection, createServer } from "node:net";
 import { fileURLToPath } from "node:url";
 import { createClientSnapshots } from "@iam/api-core/client-snapshot/composition";
-import { createClientSnapshotVerifier } from "@iam/api-core/client-snapshot/maintenance";
 import { createClientSnapshotMaintenanceTestFixture } from "@iam/api-core/client-snapshot/testing";
 import {
   runProcessCommandSmoke,
@@ -15,26 +14,26 @@ import { ClientStatus } from "@iam/contracts";
 import { createCustomSsoMaintenanceTestFixture } from "@iam/custom-sso/testing";
 import { createOidcMaintenanceTestFixture } from "@iam/oidc/testing";
 import { createSessionMaintenanceTestFixture } from "@iam/session-kernel/testing";
-import { createWorkerRedisTestHarness, resolveWorkerRedisTestUrl } from "./redis-test-harness";
+import {
+  createWorkerRedisTestHarness,
+  resetWorkerRedisTestDatabase,
+  resolveWorkerRedisTestUrl,
+} from "./redis-test-harness";
 
 const workerRoot = fileURLToPath(new URL("../../", import.meta.url));
 let harness: Awaited<ReturnType<typeof createWorkerRedisTestHarness>>;
 const cleanups: Array<() => Promise<void>> = [];
+let stopHarness: (() => Promise<void>) | undefined;
 beforeEach(async () => {
+  stopHarness = undefined;
   harness = await createWorkerRedisTestHarness();
-  const snapshots = await createClientSnapshotVerifier(harness.observer).verifyAllAfterRedisRestore({
-    protocolTrafficStopped: true,
-  });
-  expect(snapshots.matchingKeys).toBe(0);
+  stopHarness = harness.close;
 });
 afterEach(async () => {
-  const results = await Promise.allSettled(cleanups.splice(0).map((close) => close()));
-  await harness.close();
-  const errors = results.filter((result) => result.status === "rejected").map((result) => result.reason);
-  if (errors.length) throw new AggregateError(errors, "Maintenance test resource cleanup failed");
+  const stops = cleanups.splice(0);
+  if (stopHarness) await resetWorkerRedisTestDatabase([stopHarness, ...stops]);
 });
 
-const owned = (key: string) => harness.ownedRestoreFixtureKey(key);
 async function observation(keys: string[]) {
   return await Promise.all(
     keys.map(async (key) => ({
@@ -44,7 +43,7 @@ async function observation(keys: string[]) {
   );
 }
 async function command(script: string, args: string[], expectedExitCode = 0, overrides: NodeJS.ProcessEnv = {}) {
-  const result = await withOwnedTemporaryDirectory({
+  const pending = withOwnedTemporaryDirectory({
     prefix: "iam-session-clear-",
     cleanupTimeoutMs: 5000,
     async run(temporaryDirectory) {
@@ -63,6 +62,11 @@ async function command(script: string, args: string[], expectedExitCode = 0, ove
       });
     },
   });
+  cleanups.push(async () => {
+    await pending;
+  });
+  void pending.catch(() => {});
+  const result = await pending;
   const line = result.output.split(/\r?\n/u).find((line) => line.includes('{"version":1,'));
   if (!line) throw new Error(`Safe report missing for ${script}`);
   const report = JSON.parse(line.slice(line.indexOf('{"version":1,')));
@@ -86,9 +90,9 @@ function target(ns: string) {
 }
 function fixtures(ns: string) {
   return {
-    kernel: createSessionMaintenanceTestFixture(harness.writer, ns, owned),
-    custom: createCustomSsoMaintenanceTestFixture(harness.writer, ns, owned),
-    oidc: createOidcMaintenanceTestFixture(harness.writer, ns, owned),
+    kernel: createSessionMaintenanceTestFixture(harness.writer, ns),
+    custom: createCustomSsoMaintenanceTestFixture(harness.writer, ns),
+    oidc: createOidcMaintenanceTestFixture(harness.writer, ns),
   };
 }
 async function seedUnified(ns: string) {
@@ -251,7 +255,7 @@ test("Snapshot verify can use a read-only ACL while repair requires write permis
   });
   const env = { IAM_WORKER_REDIS_USERNAME: user, IAM_WORKER_REDIS_PASSWORD: "scan-password" };
   await command("client-snapshot:verify", ["--all", ...stopped], 0, env);
-  const cache = await createClientSnapshotMaintenanceTestFixture(harness.writer, owned).seedInvalidClientPayload(
+  const cache = await createClientSnapshotMaintenanceTestFixture(harness.writer).seedInvalidClientPayload(
     `session-clear-${randomUUID()}`,
   );
   await command("client-snapshot:verify", ["--all", ...stopped], 1, env);
@@ -285,8 +289,7 @@ test("Snapshot CLI shares control across ordinary and sensitive readers without 
       },
     },
   });
-  const snapshotFixture = createClientSnapshotMaintenanceTestFixture(harness.writer, owned);
-  snapshotFixture.trackClient(clientCode);
+  const snapshotFixture = createClientSnapshotMaintenanceTestFixture(harness.writer);
   const otherKeys = snapshotFixture.trackClient(other);
   const beforeClient = await snapshots.client.acquire(clientCode);
   const beforeSecret = await snapshots.credential.acquire(clientCode);
@@ -311,7 +314,7 @@ test("Snapshot CLI shares control across ordinary and sensitive readers without 
 test("Snapshot full repair clears invalid payloads without changing sessions", async () => {
   const sessions = await fixtures(`session-clear:${randomUUID()}`).kernel.seedUnified();
   const sessionBefore = await observation(sessions);
-  const badCache = await createClientSnapshotMaintenanceTestFixture(harness.writer, owned).seedInvalidClientPayload(
+  const badCache = await createClientSnapshotMaintenanceTestFixture(harness.writer).seedInvalidClientPayload(
     `session-clear-${randomUUID()}`,
   );
   await command("client-snapshot:verify", ["--all", ...stopped], 1);

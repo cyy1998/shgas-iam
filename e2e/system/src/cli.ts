@@ -26,6 +26,7 @@ const repositoryRoot = resolve(workspaceRoot, "../..");
 const composeFile = join(workspaceRoot, "compose.yaml");
 const artifactRoot = join(workspaceRoot, "test-results");
 const runtimeTimeoutMs = 12 * 60 * 1000;
+const keepResources = process.argv.slice(3).includes("--keep-resources");
 
 type JourneyFactoryOptions = PlaywrightJourneyRuntimeOptions & {
   captureCommand: typeof captureCommand;
@@ -49,9 +50,11 @@ function createOperations(signal?: AbortSignal) {
     requiredPaths: [
       composeFile,
       join(workspaceRoot, "docker", "migrate.Dockerfile"),
+      join(workspaceRoot, "docker", "apisix.Dockerfile"),
       join(workspaceRoot, "docker", "seed.Dockerfile"),
       join(workspaceRoot, "docker", "gateway-sync.Dockerfile"),
       join(workspaceRoot, "docker", "start-api.sh"),
+      join(workspaceRoot, "docker", "rp-terminal.html"),
       join(repositoryRoot, "gateway", "config", "config.dev.yaml"),
       join(repositoryRoot, "gateway", "manifests", "dev", "iam.yaml"),
       join(repositoryRoot, "packages", "db", "drizzle.config.ts"),
@@ -65,6 +68,8 @@ function createOperations(signal?: AbortSignal) {
     probeSsoConfiguration,
     probeRoute: probeHttpRoute,
     signal,
+    keep: keepResources,
+    registryFile: process.env.IAM_TEST_RESOURCE_REGISTRY,
   });
 }
 
@@ -81,16 +86,22 @@ async function runRuntimeLifecycle() {
             runId: createRunId(),
           });
         },
-        persistDescriptor: persistRunDescriptor,
+        async persistDescriptor(descriptor) {
+          await operations.registerManagedRun(descriptor);
+          await persistRunDescriptor(descriptor);
+        },
       },
       {
         signal,
         timeoutMs: runtimeTimeoutMs,
+        abortSettleTimeoutMs: 60_000,
       },
     );
     console.log(
       JSON.stringify({
-        status: "runtime-seeded-routes-ready-and-cleaned",
+        status: "runtime-seeded-routes-ready",
+        resources: keepResources ? "retained" : "cleaned",
+        resourceRecord: descriptor.resourceRecord,
         project: descriptor.project,
         origin: descriptor.origin,
         artifactDirectory: descriptor.artifactDirectory,
@@ -158,16 +169,22 @@ async function runJourneyLifecycle(
             runId: createRunId(),
           });
         },
-        persistDescriptor: persistRunDescriptor,
+        async persistDescriptor(descriptor) {
+          await operations.registerManagedRun(descriptor);
+          await persistRunDescriptor(descriptor);
+        },
       },
       {
         signal,
         timeoutMs: runtimeTimeoutMs,
+        abortSettleTimeoutMs: 60_000,
       },
     );
     console.log(
       JSON.stringify({
-        status,
+        status: status.replace("-and-cleaned", ""),
+        resources: keepResources ? "retained" : "cleaned",
+        resourceRecord: descriptor.resourceRecord,
         project: descriptor.project,
         origin: descriptor.origin,
         artifactDirectory: descriptor.artifactDirectory,
@@ -180,11 +197,7 @@ async function runRecovery(args: string[]) {
   const input = parseRecoveryArgs(args);
   await withCapturableSignals(async (signal) => {
     const operations = createOperations(signal);
-    const project = await recoverExactProject(
-      input,
-      async (target, cleanupSignal) => operations.cleanupProject(target, undefined, cleanupSignal),
-      { signal },
-    );
+    const project = await recoverExactProject(input, async (target) => operations.recoverProject(target), { signal });
     console.log(JSON.stringify({ status: "exact-project-cleaned", project }));
   });
 }
@@ -214,6 +227,9 @@ function parseRecoveryArgs(args: string[]) {
 
 try {
   const command = process.argv[2];
+  if (command !== "cleanup" && process.argv.slice(3).some((argument) => argument !== "--keep-resources")) {
+    throw new Error("E2E lifecycle accepts only --keep-resources");
+  }
   if (command === "admin") await runAdminJourneyLifecycle();
   else if (command === "hr-admin") await runHrAdminJourneyLifecycle();
   else if (command === "oidc") await runOidcJourneyLifecycle();

@@ -1,8 +1,9 @@
-import { expect, test } from "bun:test";
+import { afterEach, expect, test } from "bun:test";
 import { Buffer } from "node:buffer";
 import { randomUUID } from "node:crypto";
 import { ClientSsoProtocol, OidcClientType } from "@iam/contracts";
 import type { OidcTokenResponse } from "@iam/oidc/wire";
+import { resetApiRedisTestDatabase } from "./fixture-lifecycle";
 import { fixture } from "./oidc.fixture";
 
 type Fixture = Awaited<ReturnType<typeof fixture>>;
@@ -612,3 +613,5 @@ test("issuer mismatch revocation deadline remains bounded and its late exact eff
     await f.close();
   }
 });
+
+afterEach(resetApiRedisTestDatabase);

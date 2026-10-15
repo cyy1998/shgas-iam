@@ -17,7 +17,7 @@
     "lint:fix": "biome check --formatter-enabled=false --write . && stylelint \"**/*.less\" --allow-empty-input",
     "test": "pnpm test:unit",
     "test:unit": "bun test --max-concurrency=2 src",
-    "test:integration:postgres": "bun test --max-concurrency=1 test-integration/postgres",
+    "test:integration:postgres": "node ../../scripts/run-package-integration.mjs postgres -- bun test --max-concurrency=1 test-integration/postgres",
     "typecheck": "pnpm exec tsc --noEmit",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate",

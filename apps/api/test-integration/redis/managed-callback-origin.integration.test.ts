@@ -1,6 +1,7 @@
-import { expect, test } from "bun:test";
+import { afterEach, expect, test } from "bun:test";
 import { Buffer } from "node:buffer";
 import { ClientSsoCallbackType, ClientSsoProtocol, SubjectClaim } from "@iam/contracts";
+import { resetApiRedisTestDatabase } from "./fixture-lifecycle";
 import { fixture } from "./root-authentication.fixture";
 
 function configure(f: Awaited<ReturnType<typeof fixture>>, patterns: string[], type = ClientSsoCallbackType.Managed) {
@@ -185,3 +186,5 @@ test("expired managed Code cannot deliver a Cookie or Token", async () => {
     await f.scope.close();
   }
 });
+
+afterEach(resetApiRedisTestDatabase);

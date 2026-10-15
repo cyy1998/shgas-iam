@@ -1,152 +1,250 @@
-import { execFileSync } from "node:child_process";
 import { randomUUID } from "node:crypto";
-import { unlinkSync, writeFileSync } from "node:fs";
-import { mkdir, readFile, rm } from "node:fs/promises";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { createServer } from "node:http";
 import { join } from "node:path";
-import { setTimeout } from "node:timers/promises";
+import type { DockerOptions } from "@ai-hero/sandcastle/sandboxes/docker";
+import {
+  cleanupManagedResources,
+  formatResourceFailure,
+  managedCleanupCommand,
+  readManagedResourceRegistry,
+  readManagedResourceRun,
+  repositoryPath,
+} from "../test-resources/managed-resources.mjs";
 import { command } from "./commands.ts";
+import type { DockerConfig } from "./docker-config.ts";
+import { closeDockerConfig, prepareDockerConfig } from "./docker-config.ts";
+import type { DockerDaemonAccess } from "./sandbox.mts";
 
-export async function withTestResources<T>(
-  cwd: string,
-  use: (resources: { network: string; env: Record<string, string> }) => Promise<T>,
-  signal?: AbortSignal,
-): Promise<T> {
-  const name = `iam-afk-${randomUUID()}`;
-  const descriptor = join(cwd, ".sandcastle", "resources", `${name}.json`);
-  const containers: string[] = [];
-  let network: string | undefined;
-  const save = () => writeFileSync(descriptor, JSON.stringify({ network, containers }, null, 2));
-  const docker = (args: string[]) => command("docker", args, cwd);
-  // Persist each resource ID before dispatching signal handlers.
-  const create = (args: string[]) =>
-    execFileSync("docker", args, {
-      cwd,
-      timeout: 60_000,
-      windowsHide: true,
-      encoding: "utf8",
-      stdio: ["ignore", "pipe", "pipe"],
-    }).trim();
-  await mkdir(join(cwd, ".sandcastle", "resources"), { recursive: true });
+export const hostNetworkRequirements =
+  "需要 Linux Docker Engine，或 Docker Desktop 4.34+ 已启用 host networking 且关闭 Enhanced Container Isolation；" +
+  "需要实际 UID 1000 访问共享 Docker socket，不自动切换网络、DinD 或代理。";
 
-  // A synchronous exit cannot await the normal finalizer.
-  const cleanupOnExit = () => {
-    let failed = false;
-    const remove = (args: string[]) => {
-      try {
-        execFileSync("docker", args, { cwd, timeout: 30_000, windowsHide: true, stdio: "ignore" });
-      } catch {
-        failed = true;
-      }
-    };
-    for (const id of containers) remove(["rm", "-f", "-v", id]);
-    if (network) remove(["network", "rm", network]);
-    if (failed) {
-      console.error(`中断清理未完成，按准确 ID 恢复：${descriptor}`);
-    } else {
-      try {
-        unlinkSync(descriptor);
-      } catch {
-        /* No descriptor exists if provisioning never started. */
-      }
-    }
-  };
-  process.once("exit", cleanupOnExit);
+export class ExecutorTerminationError extends Error {}
 
-  async function cleanup() {
-    const settled = await Promise.allSettled(containers.map((id) => docker(["rm", "-f", "-v", id])));
-    const failures = settled.filter((result) => result.status === "rejected");
-    if (network && failures.length === 0) {
-      try {
-        await docker(["network", "rm", network]);
-      } catch (error) {
-        failures.push({ status: "rejected", reason: error });
-      }
-    }
-    if (failures.length > 0)
-      throw new AggregateError(
-        failures.map((result) => result.reason),
-        `临时资源清理失败，恢复记录：${descriptor}`,
-      );
-    await rm(descriptor, { force: true });
-  }
+export function hasUnstoppedExecutor(error: unknown): boolean {
+  return (
+    error instanceof ExecutorTerminationError ||
+    (error instanceof AggregateError && error.errors.some(hasUnstoppedExecutor)) ||
+    (error instanceof Error && error.cause !== undefined && hasUnstoppedExecutor(error.cause))
+  );
+}
 
+export type ExecutorResources = {
+  containerName: string;
+  network: "host";
+  containerUid: 1000;
+  containerGid: 1000;
+  daemonAccess: DockerDaemonAccess;
+  env: Record<string, string>;
+  mounts: NonNullable<DockerOptions["mounts"]>;
+  registryFile: string;
+};
+
+/** Missing is a valid stopped state; daemon errors are never evidence of termination. */
+async function inspectSandbox(cwd: string, name: string): Promise<{ Running: boolean } | undefined> {
   try {
-    signal?.throwIfAborted();
-    network = create(["network", "create", "--label", `iam.afk.run=${name}`, name]);
-    save();
-    const services = [
-      {
-        alias: "postgres",
-        image: "docker.xuanyuan.run/postgres:18.4",
-        args: ["-e", "POSTGRES_USER=iam_afk", "-e", "POSTGRES_PASSWORD=iam_afk_test", "-e", "POSTGRES_DB=iam_afk"],
-        ready: ["pg_isready", "-U", "iam_afk", "-d", "iam_afk"],
-      },
-      {
-        alias: "redis",
-        image: "docker.xuanyuan.run/library/redis:8.8.0",
-        args: [],
-        ready: ["redis-cli", "ping"],
-      },
-    ];
-    for (const service of services) {
-      signal?.throwIfAborted();
-      try {
-        await docker(["image", "inspect", service.image]);
-      } catch {
-        await command("docker", ["pull", service.image], cwd, 600_000);
-      }
-      signal?.throwIfAborted();
-      const id = create([
-        "create",
-        "--name",
-        `${name}-${service.alias}`,
-        "--label",
-        `iam.afk.run=${name}`,
-        "--network",
-        network,
-        "--network-alias",
-        service.alias,
-        ...service.args,
-        service.image,
-      ]);
-      containers.push(id);
-      save();
-      await docker(["start", id]);
-      const deadline = Date.now() + 60_000;
-      while (true) {
-        signal?.throwIfAborted();
-        try {
-          await docker(["exec", id, ...service.ready]);
-          break;
-        } catch (error) {
-          if (Date.now() >= deadline) throw error;
-          await setTimeout(1000, undefined, { signal });
-        }
-      }
-    }
+    return JSON.parse(await command("docker", ["inspect", "--format", "{{json .State}}", name], cwd, 10_000));
+  } catch (error) {
+    if (/No such (?:object|container)/i.test(formatResourceFailure(error))) return undefined;
+    throw error;
+  }
+}
 
-    // The canonical task graph owns the list of dedicated test resource variables.
-    const turbo: { tasks: Record<string, { passThroughEnv?: string[] }> } = JSON.parse(
-      await readFile(join(cwd, "turbo.json"), "utf8"),
-    );
-    const names = new Set(Object.values(turbo.tasks).flatMap((task) => task.passThroughEnv ?? []));
-    const env = Object.fromEntries(
-      [...names]
-        .filter((key) => /_TEST_(?:DATABASE|REDIS)_URL$/.test(key))
-        .map((key) => [
-          key,
-          key.endsWith("DATABASE_URL")
-            ? "postgresql://iam_afk:iam_afk_test@postgres:5432/iam_afk"
-            : "redis://redis:6379/0",
-        ]),
-    );
-    signal?.throwIfAborted();
-    return await use({ network, env });
-  } finally {
+export async function stopExecutorSandbox(cwd: string, name: string): Promise<void> {
+  const state = await inspectSandbox(cwd, name);
+  if (!state) return;
+  if (state.Running) await command("docker", ["stop", "--time", "2", name], cwd, 20_000);
+  await command("docker", ["wait", name], cwd, 10_000);
+  if ((await inspectSandbox(cwd, name))?.Running) throw new Error(`Sandbox ${name} 仍在运行；保留 registry 等待恢复。`);
+}
+
+/** One executor owns only these registered records; command lifecycles own all data services. */
+export async function cleanupExecutorResources(cwd: string, registryFile: string): Promise<void> {
+  const failures: unknown[] = [];
+  for (const recordPath of await readManagedResourceRegistry(cwd, registryFile)) {
     try {
-      await cleanup();
-    } finally {
-      process.removeListener("exit", cleanupOnExit);
+      const run = await readManagedResourceRun(cwd, recordPath);
+      await cleanupManagedResources(run, { respectKeep: true, timeoutMs: 30_000 });
+      if (run.record.keep) console.log(`保留测试环境 ${run.record.project}；清理：${managedCleanupCommand(run)}`);
+    } catch (error) {
+      failures.push(error);
     }
   }
+  if (failures.length) throw new AggregateError(failures, `执行器资源恢复失败；保留准确 registry：${registryFile}`);
+}
+
+/** Explicit recovery uses the same stop/wait and exact registry cleanup as the live finalizer. */
+export async function recoverExecutorResources(cwd: string, descriptorFile: string): Promise<void> {
+  const path = repositoryPath(cwd, descriptorFile);
+  const record = JSON.parse(await readFile(join(cwd, path), "utf8"));
+  if (
+    typeof record.runId !== "string" ||
+    !/^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/.test(record.runId) ||
+    path !== `.sandcastle/resources/executor-${record.runId}/executor.json` ||
+    record.containerName !== `iam-afk-executor-${record.runId}` ||
+    record.socketProbeName !== `iam-afk-socket-${record.runId}` ||
+    record.registryFile !== `.sandcastle/resources/executor-${record.runId}/registry.jsonl`
+  )
+    throw new Error("Invalid executor recovery record");
+  await stopExecutorSandbox(cwd, record.containerName);
+  await cleanupExecutorResources(cwd, record.registryFile);
+  for (const name of [record.containerName, record.socketProbeName])
+    if (await inspectSandbox(cwd, name)) await command("docker", ["rm", "--force", name], cwd, 10_000);
+  await closeDockerConfig(record.runId);
+  console.log(`执行器准确恢复清理完成：${path}`);
+}
+
+export async function withExecutorResources<T>(
+  options: { cwd: string; image: string; signal: AbortSignal; close?: () => Promise<void>; onUnsafeClose?: () => void },
+  use: (resources: ExecutorResources) => Promise<T>,
+): Promise<T> {
+  const { cwd, image, signal } = options;
+  const runId = randomUUID();
+  const directory = `.sandcastle/resources/executor-${runId}`;
+  const registryFile = `${directory}/registry.jsonl`;
+  const containerName = `iam-afk-executor-${runId}`;
+  const socketProbeName = `iam-afk-socket-${runId}`;
+  const descriptor = join(cwd, directory, "executor.json");
+  const failures: unknown[] = [];
+  let result: T | undefined;
+  let stopped = false;
+  let abortStop: Promise<void> | undefined;
+  let dockerConfig: DockerConfig | undefined;
+  const server = createServer((_request, response) => response.end(runId));
+  const save = (status: string) =>
+    writeFile(
+      descriptor,
+      `${JSON.stringify({ runId, containerName, socketProbeName, registryFile, status, failures: failures.map(formatResourceFailure) }, null, 2)}\n`,
+      { mode: 0o600 },
+    );
+  const abort = () => {
+    abortStop ??= stopExecutorSandbox(cwd, containerName).catch((error) => {
+      failures.push(error);
+    });
+  };
+  await mkdir(join(cwd, directory), { recursive: true });
+  await mkdir(join(cwd, "test-results/integration"), { recursive: true });
+  await writeFile(join(cwd, registryFile), "", { flag: "wx", mode: 0o600 });
+  // Persist names before provisioning. SDK close cannot prove the creator stopped.
+  await save("registered");
+  signal.addEventListener("abort", abort, { once: true });
+  try {
+    signal.throwIfAborted();
+    dockerConfig = await prepareDockerConfig(runId, cwd);
+    if ((await command("docker", ["info", "--format", "{{.OSType}}"], cwd)) !== "linux")
+      throw new Error(hostNetworkRequirements);
+    const socketGroupId = Number(
+      await command(
+        "docker",
+        [
+          "run",
+          "--rm",
+          "--name",
+          socketProbeName,
+          "--mount",
+          "type=bind,source=/var/run/docker.sock,target=/var/run/docker.sock,readonly",
+          "--entrypoint",
+          "stat",
+          image,
+          "-c",
+          "%g",
+          "/var/run/docker.sock",
+        ],
+        cwd,
+      ),
+    );
+    if (!Number.isSafeInteger(socketGroupId) || socketGroupId < 0) throw new Error("无法读取 Docker socket GID。");
+    signal.throwIfAborted();
+    await new Promise<void>((resolve, reject) => {
+      server.once("error", reject);
+      server.listen(0, "127.0.0.1", resolve);
+    });
+    const address = server.address();
+    if (!address || typeof address === "string") throw new Error("Host-network 预检缺少 loopback 端口。");
+    await save("executing");
+    result = await use({
+      containerName,
+      network: "host",
+      containerUid: 1000,
+      containerGid: 1000,
+      daemonAccess: { socketGroupId },
+      registryFile,
+      env: {
+        IAM_TEST_RESOURCE_REGISTRY: registryFile,
+        IAM_AFK_HOST_PROBE_URL: `http://127.0.0.1:${address.port}`,
+        IAM_AFK_HOST_PROBE_VALUE: runId,
+      },
+      mounts: [
+        ...["test-results/integration", directory].map((path) => ({
+          hostPath: join(cwd, path),
+          sandboxPath: `/home/agent/workspace/${path}`,
+        })),
+        ...dockerConfig.mounts,
+      ],
+    });
+  } catch (error) {
+    failures.push(error);
+  } finally {
+    signal.removeEventListener("abort", abort);
+    await abortStop;
+    try {
+      await stopExecutorSandbox(cwd, containerName);
+      stopped = true;
+      await save("creator-stopped");
+      // Recovery uses a fresh bounded budget, independent of the execution signal.
+      await cleanupExecutorResources(cwd, registryFile);
+    } catch (error) {
+      failures.push(error);
+    }
+    if (stopped) {
+      try {
+        if (await inspectSandbox(cwd, containerName))
+          await command("docker", ["rm", "--force", containerName], cwd, 10_000);
+      } catch (error) {
+        failures.push(error);
+      }
+      try {
+        await options.close?.();
+      } catch (error) {
+        failures.push(error);
+      }
+      try {
+        await dockerConfig?.close();
+      } catch (error) {
+        failures.push(error);
+      }
+    } else {
+      failures.push(new ExecutorTerminationError(`创建者 sandbox 尚未确认停止；先按 ${descriptor} 恢复。`));
+      if (dockerConfig?.recoveryDirectory)
+        failures.push(new ExecutorTerminationError(`保留 Docker 配置暂存目录：${dockerConfig.recoveryDirectory}`));
+      options.onUnsafeClose?.();
+    }
+    try {
+      if (await inspectSandbox(cwd, socketProbeName))
+        await command("docker", ["rm", "--force", socketProbeName], cwd, 10_000);
+    } catch (error) {
+      failures.push(error);
+    }
+    await new Promise<void>((resolve, reject) =>
+      server.close((error) => {
+        if (error && (!("code" in error) || error.code !== "ERR_SERVER_NOT_RUNNING")) reject(error);
+        else resolve();
+      }),
+    ).catch((error) => {
+      failures.push(error);
+    });
+    try {
+      await save(failures.length ? "failed" : "closed");
+    } catch (error) {
+      failures.push(error);
+    }
+  }
+  if (failures.length === 1) throw failures[0];
+  if (failures.length)
+    throw new AggregateError(
+      failures,
+      `执行器失败或收尾未完成；恢复记录：${descriptor}\n${failures.map(formatResourceFailure).join("\n")}`,
+    );
+  return result!;
 }

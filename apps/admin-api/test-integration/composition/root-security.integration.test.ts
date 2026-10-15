@@ -1,4 +1,4 @@
-import { afterAll, beforeAll, expect, test } from "bun:test";
+import { afterAll, afterEach, beforeAll, expect, test } from "bun:test";
 import { randomUUID } from "node:crypto";
 import process from "node:process";
 import { createAdminApiRepositories } from "@admin-api/composition/repositories";
@@ -30,6 +30,7 @@ import {
   requireSubjectAccessOperation,
   SubjectAccessUnavailableError,
 } from "@iam/api-core/subject-access";
+import { runWithOwnedTestResources } from "@iam/api-core/testing/external-test-resources";
 import { createTRPCContext } from "@iam/api-core/trpc";
 import { createUnitOfWork, mapUnitOfWork } from "@iam/api-core/uow";
 import {
@@ -57,173 +58,203 @@ let pg: Awaited<ReturnType<typeof createAdminApiPostgresTestHarness>>;
 let barrierHarness: Awaited<ReturnType<typeof createAdminApiRedisTestHarness>>;
 beforeAll(async () => {
   pg = await createAdminApiPostgresTestHarness();
-  barrierHarness = await createAdminApiRedisTestHarness();
+  try {
+    barrierHarness = await createAdminApiRedisTestHarness();
+  } catch (error) {
+    await runWithOwnedTestResources(async (lifecycle) => {
+      lifecycle.registerCleanup(() => pg.close());
+      throw error;
+    });
+  }
+});
+afterEach(async () => {
+  await barrierHarness?.reset();
 });
 afterAll(async () => {
-  await pg?.close();
-  await barrierHarness?.close();
+  await runWithOwnedTestResources(async (lifecycle) => {
+    lifecycle.registerCleanup(() => pg?.close());
+    lifecycle.registerCleanup(() => barrierHarness?.close());
+  });
 });
 
 async function fixture() {
   const url = process.env.IAM_ADMIN_API_TEST_REDIS_URL;
   if (!url) throw new Error("IAM_ADMIN_API_TEST_REDIS_URL is required");
-  const scope = await createUnifiedSessionRedisTestScope(url);
-  const kernel = scope.createFactoryForOperations<SubjectAccessOperation>(requireSubjectAccessOperation);
-  const [user] = await pg.db
-    .insert(users)
-    .values({
-      username: `root-${randomUUID()}`,
-      name: "Root Security",
-      userType: UserType.Formal,
-      status: UserStatus.Enable,
-      password: "old-hash",
-    })
-    .returning();
-  if (!user) throw new Error("User fixture missing");
-  const account = user;
-  const repositories = createAdminApiRepositories(pg.db);
-  const auditService = createAdminAuditService({ auditRepository: repositories.audit });
-  const errorLogs: Array<Record<string, unknown>> = [];
-  const logger = {
-    info() {},
-    warn() {},
-    error(fields: Record<string, unknown>) {
-      errorLogs.push(fields);
-    },
-    bindings: () => ({ sourceApp: "root-security-test" }),
-  };
-  const unitOfWork = createAdminApiUnitOfWork({
-    db: pg.db,
-    logger,
-    clock: { nowDate: () => new Date() },
-    organizationSearchJobProducer: {
-      async enqueueSourceChanges() {
-        return { enqueued: 0 };
+  const scope = await createUnifiedSessionRedisTestScope(url, {}, (stop) => {
+    barrierHarness.registerStopExecutor(stop);
+  });
+  const closeKernel = () => scope.close();
+  let closeBarrier: (() => Promise<void>) | undefined;
+  let closing: Promise<void> | undefined;
+  function close() {
+    closing ??= runWithOwnedTestResources(async (lifecycle) => {
+      lifecycle.registerCleanup(closeKernel);
+      if (closeBarrier) lifecycle.registerCleanup(closeBarrier);
+    });
+    return closing;
+  }
+  try {
+    const kernel = scope.createFactoryForOperations<SubjectAccessOperation>(requireSubjectAccessOperation);
+    const [user] = await pg.db
+      .insert(users)
+      .values({
+        username: `root-${randomUUID()}`,
+        name: "Root Security",
+        userType: UserType.Formal,
+        status: UserStatus.Enable,
+        password: "old-hash",
+      })
+      .returning();
+    if (!user) throw new Error("User fixture missing");
+    const account = user;
+    const repositories = createAdminApiRepositories(pg.db);
+    const auditService = createAdminAuditService({ auditRepository: repositories.audit });
+    const errorLogs: Array<Record<string, unknown>> = [];
+    const logger = {
+      info() {},
+      warn() {},
+      error(fields: Record<string, unknown>) {
+        errorLogs.push(fields);
       },
-    },
-    userProfileJobProducer: { enqueueRebuildJobs: async () => ({ enqueued: 0, jobIds: [] }) },
-  });
-  let failAudit = false;
-  let unavailable = false;
-  const barrierScope = await barrierHarness.createScope();
-  const clock = { nowDate: () => new Date() };
-  const random = { uuid: randomUUID };
-  const keyPrefix = `${barrierScope.clientCode("subject-access")}:`;
-  const bootstrap = createSubjectAccessBootstrap({ redis: barrierScope.redis, random, keyPrefix });
-  const barrier = createSubjectAccessBarrier({
-    clock,
-    random,
-    store: createRedisSubjectAccessStore({ redis: barrierScope.redis, keyPrefix }),
-  });
-  const subjectAccessLifecycle = createSubjectAccessLifecycle({
-    barrier,
-    random,
-    logger,
-    transitionIntent: createSubjectAccessTransitionRepository(pg.db),
-  });
-  const candidate = createRootSecurityComposition({
-    kernel,
-    barrier: {
-      async readCommittedTransitionId(subjectIdentifier) {
-        if (unavailable) throw new SubjectAccessUnavailableError();
-        return await barrier.readCommittedTransitionId(subjectIdentifier);
-      },
-    },
-    config: { allowedClientCodes: ["iam-admin"] },
-    user: {
-      userRepository: repositories.user,
-      employmentRepository: repositories.employment,
-      roleRepository: repositories.role,
-      privilegeRepository: repositories.privilege,
-      roleAssignmentResolver: { resolveEffectiveRoles: async () => new Map() },
-      passwordHasher: { hashPassword: async (value) => `hash:${value}` },
-      random: { uuid: randomUUID, password: () => "New-Password-183" },
-      subjectAccessLifecycle,
-      uow: mapUnitOfWork(unitOfWork, (tx) => ({
-        userRepository: tx.repositories.user,
-        auditService: tx.auditService,
-        subjectAccessMutation: tx.subjectAccessMutation,
-        userProfileInvalidation: tx.userProfileInvalidation,
-      })),
-    },
-    sessions: {
-      users: repositories.user,
+      bindings: () => ({ sourceApp: "root-security-test" }),
+    };
+    const unitOfWork = createAdminApiUnitOfWork({
+      db: pg.db,
       logger,
-      loginRestrictions: {
-        listRestrictions: async () => {
-          throw new Error("Not used");
-        },
-        clearLoginState: async () => {
-          throw new Error("Not used");
+      clock: { nowDate: () => new Date() },
+      organizationSearchJobProducer: {
+        async enqueueSourceChanges() {
+          return { enqueued: 0 };
         },
       },
-      audit: {
-        async recordAuditLog(input) {
-          if (failAudit) throw new Error("Audit unavailable");
-          await auditService.recordAuditLog(input);
+      userProfileJobProducer: { enqueueRebuildJobs: async () => ({ enqueued: 0, jobIds: [] }) },
+    });
+    let failAudit = false;
+    let unavailable = false;
+    const barrierScope = await barrierHarness.createScope();
+    closeBarrier = () => barrierScope.close();
+    const clock = { nowDate: () => new Date() };
+    const random = { uuid: randomUUID };
+    const keyPrefix = `${barrierScope.clientCode("subject-access")}:`;
+    const bootstrap = createSubjectAccessBootstrap({ redis: barrierScope.redis, random, keyPrefix });
+    const barrier = createSubjectAccessBarrier({
+      clock,
+      random,
+      store: createRedisSubjectAccessStore({ redis: barrierScope.redis, keyPrefix }),
+    });
+    const subjectAccessLifecycle = createSubjectAccessLifecycle({
+      barrier,
+      random,
+      logger,
+      transitionIntent: createSubjectAccessTransitionRepository(pg.db),
+    });
+    const candidate = createRootSecurityComposition({
+      kernel,
+      barrier: {
+        async readCommittedTransitionId(subjectIdentifier) {
+          if (unavailable) throw new SubjectAccessUnavailableError();
+          return await barrier.readCommittedTransitionId(subjectIdentifier);
         },
       },
-    },
-  });
-  async function create(subjectIdentifier = account.subjectIdentifier, clientId = "client") {
-    await bootstrap.seedMany([{ subjectIdentifier, state: "enabled" }], clock.nowDate());
-    return await candidate.operations.run(async (operation) => {
-      const permission = await operation.acquireForAuthentication(subjectIdentifier);
-      const root = await kernel.forOperation(operation).createUserSession({
-        subjectIdentifier,
-        subjectContext: operation.getSubjectContext(permission),
-        amr: ["pwd"],
+      config: { allowedClientCodes: ["iam-admin"] },
+      user: {
+        userRepository: repositories.user,
+        employmentRepository: repositories.employment,
+        roleRepository: repositories.role,
+        privilegeRepository: repositories.privilege,
+        roleAssignmentResolver: { resolveEffectiveRoles: async () => new Map() },
+        passwordHasher: { hashPassword: async (value) => `hash:${value}` },
+        random: { uuid: randomUUID, password: () => "New-Password-183" },
+        subjectAccessLifecycle,
+        uow: mapUnitOfWork(unitOfWork, (tx) => ({
+          userRepository: tx.repositories.user,
+          auditService: tx.auditService,
+          subjectAccessMutation: tx.subjectAccessMutation,
+          userProfileInvalidation: tx.userProfileInvalidation,
+        })),
+      },
+      sessions: {
+        users: repositories.user,
+        logger,
+        loginRestrictions: {
+          listRestrictions: async () => {
+            throw new Error("Not used");
+          },
+          clearLoginState: async () => {
+            throw new Error("Not used");
+          },
+        },
+        audit: {
+          async recordAuditLog(input) {
+            if (failAudit) throw new Error("Audit unavailable");
+            await auditService.recordAuditLog(input);
+          },
+        },
+      },
+    });
+    async function create(subjectIdentifier = account.subjectIdentifier, clientId = "client") {
+      await bootstrap.seedMany([{ subjectIdentifier, state: "enabled" }], clock.nowDate());
+      return await candidate.operations.run(async (operation) => {
+        const permission = await operation.acquireForAuthentication(subjectIdentifier);
+        const root = await kernel.forOperation(operation).createUserSession({
+          subjectIdentifier,
+          subjectContext: operation.getSubjectContext(permission),
+          amr: ["pwd"],
+        });
+        const child = await kernel
+          .forOperation(operation)
+          .openClientSession(root.observation, { clientId, protocol: "oidc" });
+        if (child.status !== "created" && child.status !== "reused") throw new Error("Missing child");
+        return { root: root.observation.userSession, child: child.value.clientSession, bearer: root.bearer };
       });
-      const child = await kernel
-        .forOperation(operation)
-        .openClientSession(root.observation, { clientId, protocol: "oidc" });
-      if (child.status !== "created" && child.status !== "reused") throw new Error("Missing child");
-      return { root: root.observation.userSession, child: child.value.clientSession, bearer: root.bearer };
+    }
+    async function status(token: string) {
+      return await candidate.operations.run(
+        async (operation) => (await kernel.forOperation(operation).resolveUserSession(token)).status,
+      );
+    }
+    const useCases = createAdminApiUseCases({
+      clock,
+      sessionRevocation: candidate.lifecycleRevocation,
+      subjectAccessLifecycle,
+      unitOfWork,
+      userReader: repositories.user,
+    });
+    return {
+      ...candidate,
+      useCases,
+      barrier,
+      redis: barrierScope.redis,
+      clientCode: barrierScope.clientCode,
+      scope: {
+        ...scope,
+        close,
+      },
+      kernel,
+      errorLogs,
+      account,
+      create,
+      status,
+      setFailAudit() {
+        failAudit = true;
+      },
+      setUnavailable() {
+        unavailable = true;
+      },
+      logger,
+    };
+  } catch (error) {
+    return await runWithOwnedTestResources(async (lifecycle) => {
+      lifecycle.registerCleanup(close);
+      throw error;
     });
   }
-  async function status(token: string) {
-    return await candidate.operations.run(
-      async (operation) => (await kernel.forOperation(operation).resolveUserSession(token)).status,
-    );
-  }
-  const useCases = createAdminApiUseCases({
-    clock,
-    sessionRevocation: candidate.lifecycleRevocation,
-    subjectAccessLifecycle,
-    unitOfWork,
-    userReader: repositories.user,
-  });
-  return {
-    ...candidate,
-    useCases,
-    barrier,
-    redis: barrierScope.redis,
-    clientCode: barrierScope.clientCode,
-    scope: {
-      ...scope,
-      async close() {
-        await barrierScope.close();
-        await scope.close();
-      },
-    },
-    kernel,
-    errorLogs,
-    account,
-    create,
-    status,
-    setFailAudit() {
-      failAudit = true;
-    },
-    setUnavailable() {
-      unavailable = true;
-    },
-    logger,
-  };
 }
 
 test("formal self revoke and password reset preserve current root, terminate its children and audit actual effects", async () => {
   const f = await fixture();
-  try {
+  await runWithOwnedTestResources(async (lifecycle) => {
+    lifecycle.registerCleanup(() => f.scope.close());
     const current = await f.create();
     const other = await f.create();
     const audit = {
@@ -273,16 +304,15 @@ test("formal self revoke and password reset preserve current root, terminate its
     const audits = await pg.db.select().from(auditLogs).where(eq(auditLogs.targetId, f.account.id));
     expect(audits.map((row) => row.action)).toContain("admin.user.reset_password");
     expect(audits.filter((row) => row.action === "admin.session.revoke_user")).toHaveLength(2);
-  } finally {
-    await f.scope.close();
-  }
+  });
 });
 
 test.each(["revoke", "password"])(
   "self %s preserves uncertain after-effect audit classification when no termination is confirmed",
   async (command) => {
     const f = await fixture();
-    try {
+    await runWithOwnedTestResources(async (lifecycle) => {
+      lifecycle.registerCleanup(() => f.scope.close());
       const current = await f.create();
       const audit = {
         actorType: "admin" as const,
@@ -334,15 +364,14 @@ test.each(["revoke", "password"])(
       expect(child.status).toBe("terminated");
       const [account] = await pg.db.select().from(users).where(eq(users.id, f.account.id));
       expect(account?.password).toBe(command === "password" ? "hash:New-Password-183" : "old-hash");
-    } finally {
-      await f.scope.close();
-    }
+    });
   },
 );
 
 test("formal password reset reports committed failure when session after-effect audit fails", async () => {
   const f = await fixture();
-  try {
+  await runWithOwnedTestResources(async (lifecycle) => {
+    lifecycle.registerCleanup(() => f.scope.close());
     const current = await f.create();
     const other = await f.create();
     f.setFailAudit();
@@ -361,14 +390,13 @@ test("formal password reset reports committed failure when session after-effect 
     expect(updated?.password).toBe("hash:New-Password-183");
     const statuses = [await f.status(current.bearer), await f.status(other.bearer)];
     expect(statuses).toEqual(["resolved", "terminated"]);
-  } finally {
-    await f.scope.close();
-  }
+  });
 });
 
 test("formal Admin authentication accepts candidate roots and preserves Cookie on unknown permission", async () => {
   const f = await fixture();
-  try {
+  await runWithOwnedTestResources(async (lifecycle) => {
+    lifecycle.registerCleanup(() => f.scope.close());
     const root = await f.create();
     const app = new Hono();
     app.onError(createErrorHandler(f.logger));
@@ -381,14 +409,13 @@ test("formal Admin authentication accepts candidate roots and preserves Cookie o
     const unknown = await app.request("/protected", { headers });
     expect(unknown.status).toBe(503);
     expect(unknown.headers.get("set-cookie")).toBeNull();
-  } finally {
-    await f.scope.close();
-  }
+  });
 });
 
 test("candidate formal REST serializes only unified counts after real root authentication and password commit", async () => {
   const f = await fixture();
-  try {
+  await runWithOwnedTestResources(async (lifecycle) => {
+    lifecycle.registerCleanup(() => f.scope.close());
     const root = await f.create();
     await f.create();
     const app = new Hono();
@@ -430,14 +457,13 @@ test("candidate formal REST serializes only unified counts after real root authe
     expect(resetBody).toMatchObject({
       data: { changed: true, result: "New-Password-183", sessions: { excluded: 1 } },
     });
-  } finally {
-    await f.scope.close();
-  }
+  });
 });
 
 test("self password reset without the current root rejects before changing PostgreSQL", async () => {
   const f = await fixture();
-  try {
+  await runWithOwnedTestResources(async (lifecycle) => {
+    lifecycle.registerCleanup(() => f.scope.close());
     let failure: unknown;
     try {
       await f.user.resetPasswordByUsername(f.account.username, {
@@ -452,16 +478,15 @@ test("self password reset without the current root rejects before changing Postg
     expect(account?.password).toBe("old-hash");
     const audits = await pg.db.select().from(auditLogs).where(eq(auditLogs.targetId, f.account.id));
     expect(audits).toEqual([]);
-  } finally {
-    await f.scope.close();
-  }
+  });
 });
 
 test.each(["rest", "trpc"])(
   "formal %s lists both neutral record types and retries only original uncertain instances",
   async (transport) => {
     const f = await fixture();
-    try {
+    await runWithOwnedTestResources(async (lifecycle) => {
+      lifecycle.registerCleanup(() => f.scope.close());
       const current = await f.create();
       const [targetUser] = await pg.db
         .insert(users)
@@ -584,15 +609,14 @@ test.each(["rest", "trpc"])(
       );
       expect(storedDetails).not.toContain(original.child.clientSessionId);
       expect(storedDetails).not.toContain(current.root.userSessionId);
-    } finally {
-      await f.scope.close();
-    }
+    });
   },
 );
 
 test("neutral inventory fails on damaged records and a missing inventory never restores a terminated root", async () => {
   const f = await fixture();
-  try {
+  await runWithOwnedTestResources(async (lifecycle) => {
+    lifecycle.registerCleanup(() => f.scope.close());
     const current = await f.create();
     const other = await f.create();
     const actor = { actorUserId: f.account.id, principalSessionId: current.root.userSessionId };
@@ -619,14 +643,13 @@ test("neutral inventory fails on damaged records and a missing inventory never r
     );
     const status = await f.status(other.bearer);
     expect(status).toBe("terminated");
-  } finally {
-    await f.scope.close();
-  }
+  });
 });
 
 test("delegation-blocked User deletion restores real access and preserves both session kinds", async () => {
   const f = await fixture();
-  try {
+  await runWithOwnedTestResources(async (lifecycle) => {
+    lifecycle.registerCleanup(() => f.scope.close());
     const original = await f.create();
     const [other] = await pg.db
       .insert(users)
@@ -679,16 +702,15 @@ test("delegation-blocked User deletion restores real access and preserves both s
     });
     expect(rootStatus).toBe("resolved");
     expect(child.status).toBe("resolved");
-  } finally {
-    await f.scope.close();
-  }
+  });
 });
 
 test.each(["disable", "delete", "resign"])(
   "real account %s commits PostgreSQL and terminates only its original generation",
   async (command) => {
     const f = await fixture();
-    try {
+    await runWithOwnedTestResources(async (lifecycle) => {
+      lifecycle.registerCleanup(() => f.scope.close());
       const original = await f.create();
       const audit = { actorType: "admin" as const, actorUserId: f.account.id };
       const prepared = await f.lifecycleRevocation.prepareUserSessionRevocation({
@@ -718,15 +740,14 @@ test.each(["disable", "delete", "resign"])(
       await prepared.revoke({});
       const newerStatus = await f.status(newer.bearer);
       expect(newerStatus).toBe("resolved");
-    } finally {
-      await f.scope.close();
-    }
+    });
   },
 );
 
 test("real resignation no-op retries original residual sessions after an unconfirmed first effect", async () => {
   const f = await fixture();
-  try {
+  await runWithOwnedTestResources(async (lifecycle) => {
+    lifecycle.registerCleanup(() => f.scope.close());
     const original = await f.create();
     f.scope.failNext("revoke");
     await f.useCases.employment.resignUser.execute(
@@ -742,14 +763,13 @@ test("real resignation no-op retries original residual sessions after an unconfi
     expect(retried.changed).toBe(false);
     const finalStatus = await f.status(original.bearer);
     expect(finalStatus).toBe("terminated");
-  } finally {
-    await f.scope.close();
-  }
+  });
 });
 
 test("Role-blocked Client deletion preserves real sessions and cached Snapshot observations", async () => {
   const f = await fixture();
-  try {
+  await runWithOwnedTestResources(async (lifecycle) => {
+    lifecycle.registerCleanup(() => f.scope.close());
     const code = f.clientCode("role-blocked");
     const [client] = await pg.db
       .insert(clients)
@@ -815,14 +835,13 @@ test("Role-blocked Client deletion preserves real sessions and cached Snapshot o
       }),
     );
     expect(session.status).toBe("resolved");
-  } finally {
-    await f.scope.close();
-  }
+  });
 });
 
 test("Client ordinary edits preserve real sessions; formal deletion and explicit retry terminate only that Client", async () => {
   const f = await fixture();
-  try {
+  await runWithOwnedTestResources(async (lifecycle) => {
+    lifecycle.registerCleanup(() => f.scope.close());
     const code = f.clientCode("lifecycle");
     await pg.db.insert(clients).values({
       clientCode: code,
@@ -893,14 +912,13 @@ test("Client ordinary edits preserve real sessions; formal deletion and explicit
     expect(otherAfter.status).toBe("resolved");
     const rootAfter = await f.status(original.bearer);
     expect(rootAfter).toBe("resolved");
-  } finally {
-    await f.scope.close();
-  }
+  });
 });
 
 test("candidate REST and tRPC keep HR outside session management without changing real records", async () => {
   const f = await fixture();
-  try {
+  await runWithOwnedTestResources(async (lifecycle) => {
+    lifecycle.registerCleanup(() => f.scope.close());
     const root = await f.create();
     const app = new Hono();
     app.onError(createErrorHandler(f.logger));
@@ -939,14 +957,13 @@ test("candidate REST and tRPC keep HR outside session management without changin
     expect(status.status).toBe("resolved");
     const rows = await pg.db.select().from(auditLogs).where(eq(auditLogs.targetId, f.account.id));
     expect(rows).toEqual([]);
-  } finally {
-    await f.scope.close();
-  }
+  });
 });
 
 test("captured batches distinguish missing, replaced, failed, terminated and current-root exclusion", async () => {
   const f = await fixture();
-  try {
+  await runWithOwnedTestResources(async (lifecycle) => {
+    lifecycle.registerCleanup(() => f.scope.close());
     const current = await f.create();
     const missing = await f.create();
     const replaced = await f.create();
@@ -1007,14 +1024,13 @@ test("captured batches distinguish missing, replaced, failed, terminated and cur
     await restore();
     const rootStatus = await f.status(current.bearer);
     expect(rootStatus).toBe("resolved");
-  } finally {
-    await f.scope.close();
-  }
+  });
 });
 
 test("Client deletion audit rollback and unknown COMMIT preserve their true PostgreSQL and Redis outcomes", async () => {
   const f = await fixture();
-  try {
+  await runWithOwnedTestResources(async (lifecycle) => {
+    lifecycle.registerCleanup(() => f.scope.close());
     const code = f.clientCode("commit");
     await pg.db.insert(clients).values({
       clientCode: code,
@@ -1121,14 +1137,13 @@ test("Client deletion audit rollback and unknown COMMIT preserve their true Post
         }),
     );
     expect(state.status).toBe("resolved");
-  } finally {
-    await f.scope.close();
-  }
+  });
 });
 
 test("single-root aggregate rejects 10001 before effects and its 10000-item unfinished batch can be retried", async () => {
   const f = await fixture();
-  try {
+  await runWithOwnedTestResources(async (lifecycle) => {
+    lifecycle.registerCleanup(() => f.scope.close());
     const current = await f.create();
     const target = await f.create();
     const actor = { actorUserId: f.account.id, principalSessionId: current.root.userSessionId };
@@ -1234,7 +1249,5 @@ test("single-root aggregate rejects 10001 before effects and its 10000-item unfi
     });
     const statuses = [await f.status(target.bearer), await f.status(newer.bearer), await f.status(current.bearer)];
     expect(statuses).toEqual(["terminated", "resolved", "resolved"]);
-  } finally {
-    await f.scope.close();
-  }
+  });
 }, 120000);

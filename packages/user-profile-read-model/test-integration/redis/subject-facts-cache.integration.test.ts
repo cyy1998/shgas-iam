@@ -1,4 +1,4 @@
-import { afterAll, beforeAll, describe, expect, test } from "bun:test";
+import { afterAll, afterEach, beforeAll, describe, expect, test } from "bun:test";
 import type { SubjectFactsCacheRecord } from "../../src/subject-facts";
 import { createRedisTestHarness } from "./redis-test-harness";
 
@@ -14,64 +14,55 @@ describe("Subject Facts Redis publisher", () => {
   afterAll(async () => {
     if (harness) await harness.close();
   });
+  afterEach(async () => {
+    await harness?.reset();
+  });
 
   test("compares dirty versions without losing bigint precision", async () => {
     const scope = await harness.createScope();
-    try {
-      const higherVersion = "9007199254740993";
-      await scope.firstProfilePublisher.publish(cacheRecord(higherVersion));
+    const higherVersion = "9007199254740993";
+    await scope.firstProfilePublisher.publish(cacheRecord(higherVersion));
 
-      const retained = await scope.secondProfilePublisher.publish(cacheRecord("9007199254740992"));
-      expect(retained).toEqual({ status: "retained-newer" });
-      const published = await scope.readPublishedProfileRecord(SUBJECT_IDENTIFIER);
-      expect(published).toEqual(cacheRecord(higherVersion));
-    } finally {
-      await scope.close();
-    }
+    const retained = await scope.secondProfilePublisher.publish(cacheRecord("9007199254740992"));
+    expect(retained).toEqual({ status: "retained-newer" });
+    const published = await scope.readPublishedProfileRecord(SUBJECT_IDENTIFIER);
+    expect(published).toEqual(cacheRecord(higherVersion));
   });
 
   test("reads the same schema-valid record through the read-through cache adapter", async () => {
     const scope = await harness.createScope();
-    try {
-      const record = cacheRecord("13");
-      await scope.firstCache.publish(record);
+    const record = cacheRecord("13");
+    await scope.firstCache.publish(record);
 
-      const stored = await scope.secondCache.read(SUBJECT_IDENTIFIER);
+    const stored = await scope.secondCache.read(SUBJECT_IDENTIFIER);
 
-      expect(stored).not.toBeNull();
-      expect(JSON.parse(stored!)).toEqual(record);
-    } finally {
-      await scope.close();
-    }
+    expect(stored).not.toBeNull();
+    expect(JSON.parse(stored!)).toEqual(record);
   });
 
   test("batch prewarming retains newer Facts while publishing and inspecting missing subjects", async () => {
     const scope = await harness.createScope();
     const secondSubject = "46739d0b-cdda-48f5-af1f-1f90e2d81170";
-    try {
-      await scope.firstProfilePublisher.publish(cacheRecord("20"));
+    await scope.firstProfilePublisher.publish(cacheRecord("20"));
 
-      const publication = await scope.firstProfilePublisher.publishMany([
-        cacheRecord("19"),
-        cacheRecord("1", secondSubject),
-      ]);
-      expect(publication).toEqual({ published: 1, retainedNewer: 1 });
-      const published = await scope.readPublishedProfileRecord(SUBJECT_IDENTIFIER);
-      expect(published).toEqual(cacheRecord("20"));
-      const inspected = await scope.profileInspector.inspectMany([SUBJECT_IDENTIFIER, secondSubject]);
-      expect(inspected).toEqual([
-        {
-          status: "valid",
-          record: cacheRecord("20"),
-        },
-        {
-          status: "valid",
-          record: cacheRecord("1", secondSubject),
-        },
-      ]);
-    } finally {
-      await scope.close();
-    }
+    const publication = await scope.firstProfilePublisher.publishMany([
+      cacheRecord("19"),
+      cacheRecord("1", secondSubject),
+    ]);
+    expect(publication).toEqual({ published: 1, retainedNewer: 1 });
+    const published = await scope.readPublishedProfileRecord(SUBJECT_IDENTIFIER);
+    expect(published).toEqual(cacheRecord("20"));
+    const inspected = await scope.profileInspector.inspectMany([SUBJECT_IDENTIFIER, secondSubject]);
+    expect(inspected).toEqual([
+      {
+        status: "valid",
+        record: cacheRecord("20"),
+      },
+      {
+        status: "valid",
+        record: cacheRecord("1", secondSubject),
+      },
+    ]);
   });
 });
 

@@ -10,19 +10,19 @@ import {
 } from "@iam/session-kernel/maintenance";
 import { createSessionMaintenanceTestFixture } from "@iam/session-kernel/testing";
 import Redis from "ioredis";
+import { closeRedisTestClient, resetRedisTestCase } from "./redis-test-harness";
 
 test("maintenance clears all owner versions and Redis types using only SCAN and UNLINK", async () => {
   const url = process.env.IAM_SESSION_KERNEL_TEST_REDIS_URL;
   if (!url) throw new Error("IAM_SESSION_KERNEL_TEST_REDIS_URL is required");
   const redis = new Redis(url, { maxRetriesPerRequest: 0, retryStrategy: () => null });
   const namespace = `test:maintenance:${randomUUID()}:`;
-  const tracked: string[] = [];
+  let failure: unknown;
   try {
     await redis.ping();
-    const fixture = createSessionMaintenanceTestFixture(redis, namespace, (key) => tracked.push(key));
+    const fixture = createSessionMaintenanceTestFixture(redis, namespace);
     const targetKeys = await fixture.seedVersionedKeys();
     const sentinel = `${namespace.slice(0, -1)}:unified:v1:untouched`;
-    tracked.push(sentinel);
     await redis.set(sentinel, "preserved");
     const scanOnly: UnifiedSessionInventoryRedis = { scan: (...args) => redis.scan(...args) };
     const inventory = createUnifiedSessionInventory(scanOnly, namespace);
@@ -53,13 +53,16 @@ test("maintenance clears all owner versions and Redis types using only SCAN and 
     expect(verified).toEqual({ matching: 0 });
     const preserved = await redis.get(sentinel);
     expect(preserved).toBe("preserved");
-  } finally {
-    try {
-      if (tracked.length) await redis.unlink(...tracked);
-    } finally {
-      redis.disconnect();
-    }
+  } catch (error) {
+    failure = error;
   }
+  try {
+    await resetRedisTestCase(() => closeRedisTestClient(redis));
+  } catch (error) {
+    if (failure !== undefined) throw new AggregateError([failure, error], "Kernel maintenance test and reset failed");
+    throw error;
+  }
+  if (failure !== undefined) throw failure;
 });
 
 test("maintenance bounds COUNT overflow across removal batches", async () => {

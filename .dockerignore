@@ -101,6 +101,7 @@ coverage
 
 # Testing
 .vitest
+**/test-results
 
 # Documentation
 README.md

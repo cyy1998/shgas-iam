@@ -1,12 +1,24 @@
 import { Buffer } from "node:buffer";
-import { access } from "node:fs/promises";
-import { join } from "node:path";
+import { access, mkdir, writeFile } from "node:fs/promises";
+import { join, relative } from "node:path";
+import {
+  cleanupManagedResources,
+  createManagedResourceRun,
+  type ManagedResourceRun,
+  managedCleanupCommand,
+  managedComposeArguments,
+  readManagedResourceRun,
+  repositoryPath,
+  saveManagedResourceRun,
+} from "../../../scripts/test-resources/managed-resources.mjs";
 import { writeAtomicJsonFile } from "./atomic-json-file.ts";
+import { runBoundedOperation } from "./bounded-operation.ts";
 import { createBoundedLineCapture } from "./command-capture.ts";
 import { collectRunDiagnostics } from "./diagnostics.ts";
 import type { RunDescriptor } from "./lifecycle.ts";
 import { assertCanonicalOriginComposeConfig } from "./origin-contract.ts";
 import { createE2EScenarioIdentity } from "./seed.ts";
+import { readAppliedSeedReferences } from "./seed-receipt.ts";
 
 const diagnosticLogServices = [
   "postgres",
@@ -40,6 +52,8 @@ export type CapturedCommandRunner = (
 ) => Promise<{ stdout: string; stderr: string }>;
 
 export interface CreateDockerInfraOperationsOptions {
+  keep?: boolean;
+  registryFile?: string;
   composeFile: string;
   repositoryRoot: string;
   requiredPaths: string[];
@@ -95,24 +109,135 @@ export function descriptorEnvironment(descriptor: RunDescriptor) {
 }
 
 export function createDockerInfraOperations(options: CreateDockerInfraOperationsOptions) {
+  const managedRuns = new Map<string, ManagedResourceRun>();
+  const requireManagedRun = (descriptor: RunDescriptor) => {
+    const run = managedRuns.get(descriptor.project);
+    if (!run) throw new Error(`E2E project ${descriptor.project} has no registered managed resource record`);
+    return run;
+  };
+  const projectArguments = (descriptor: RunDescriptor, args: string[]) => {
+    return managedComposeArguments(requireManagedRun(descriptor), args);
+  };
   const writeMigrationReceipt = options.writeMigrationReceipt ?? persistMigrationReceipt;
   const commandOptions: CommandOptions = {
     cwd: options.repositoryRoot,
     signal: options.signal,
   };
-  const cleanupProject = async (
-    project: string,
-    env: NodeJS.ProcessEnv = recoveryEnvironment(project),
-    signal?: AbortSignal,
-  ) => {
-    await options.runCommand(
-      "docker",
-      composeArguments(options.composeFile, project, ["down", "-v", "--remove-orphans", "--rmi", "local"]),
-      { cwd: options.repositoryRoot, env, signal },
-    );
-  };
+  const cleanupRun = (run: ManagedResourceRun, parentSignal?: AbortSignal) =>
+    cleanupManagedResources(run, {
+      timeoutMs: 120_000,
+      runCommand: async ({ executable, args = [], cwd, env, timeoutMs, cleanupTimeoutMs, logFile }) => {
+        let output = "";
+        let commandFailure: unknown;
+        try {
+          const result = await runBoundedOperation(
+            async (signal) => {
+              try {
+                return await options.captureCommand(executable, [...args], {
+                  cwd,
+                  env,
+                  signal,
+                  capture: { maxBytes: 128 * 1024, mode: "tail" },
+                });
+              } catch (error) {
+                commandFailure = error;
+                if (error instanceof Error && "stdout" in error && "stderr" in error)
+                  output = `${error.stdout}${error.stderr}`.slice(-128 * 1024);
+                throw error;
+              }
+            },
+            {
+              abortSettleTimeoutMs: (cleanupTimeoutMs ?? 5_000) + 1_000,
+              parentSignal,
+              timeoutMs: timeoutMs ?? 120_000,
+              timeoutMessage: "E2E managed resource cleanup timed out",
+            },
+          );
+          output = `${result.stdout}${result.stderr}`.slice(-128 * 1024);
+          return { exitCode: 0, signal: null, output };
+        } catch (error) {
+          if (commandFailure !== undefined && error !== commandFailure)
+            throw new AggregateError([error, commandFailure], "E2E cleanup deadline and command both failed");
+          throw error;
+        } finally {
+          if (logFile) {
+            try {
+              await writeFile(logFile, output, "utf8");
+            } catch (error) {
+              console.warn(
+                `Warning: command log could not be saved: ${error instanceof Error ? error.message : String(error)}`,
+              );
+            }
+          }
+        }
+      },
+    });
 
   return {
+    async registerManagedRun(descriptor: RunDescriptor) {
+      const artifactDirectory = `test-results/integration/${descriptor.runId}`;
+      const snapshot = `${artifactDirectory}/compose.json`;
+      const result = await options.captureCommand(
+        "docker",
+        composeArguments(options.composeFile, descriptor.project, ["config", "--format", "json"]),
+        {
+          capture: { maxBytes: 512 * 1024, mode: "tail" },
+          cwd: options.repositoryRoot,
+          env: descriptorEnvironment(descriptor),
+          signal: options.signal,
+        },
+      );
+      const configuration = JSON.parse(result.stdout);
+      assertCanonicalOriginComposeConfig(configuration, {
+        runId: descriptor.runId,
+        canonicalOrigin: descriptor.origin,
+        internalOrigin: descriptor.internalOrigin,
+        adminClientCode: createE2EScenarioIdentity(descriptor.runId).adminClientCode,
+      });
+      for (const service of Object.values(configuration.services) as Array<{ build?: { context: string } }>) {
+        if (service.build) service.build.context = ".";
+      }
+      await mkdir(join(options.repositoryRoot, artifactDirectory), { recursive: true });
+      await writeFile(join(options.repositoryRoot, snapshot), `${JSON.stringify(configuration, null, 2)}\n`, {
+        mode: 0o600,
+      });
+      const environment = Object.fromEntries(
+        Object.entries(descriptorEnvironment(descriptor)).filter(
+          ([key]) => key.startsWith("IAM_E2E_") || key === "COMPOSE_DISABLE_ENV_FILE",
+        ),
+      ) as Record<string, string>;
+      const run = await createManagedResourceRun({
+        root: options.repositoryRoot,
+        composeFile: snapshot,
+        project: descriptor.project,
+        artifactDirectory,
+        composeEnvironment: environment,
+        removeLocalImages: true,
+        keep: options.keep,
+        registryFile: options.registryFile,
+      });
+      Object.assign(run.record, {
+        e2e: {
+          runId: descriptor.runId,
+          seedContainer: `${descriptor.project}-seed`,
+          artifactDirectory: repositoryPath(
+            options.repositoryRoot,
+            relative(options.repositoryRoot, descriptor.artifactDirectory),
+          ),
+        },
+      });
+      await saveManagedResourceRun(run);
+      descriptor.resourceRecord = run.recordPath;
+      managedRuns.set(descriptor.project, run);
+    },
+
+    async recoverProject(project: string) {
+      const recordPath = `test-results/integration/${project.slice("iam-e2e-".length)}/run.json`;
+      const run = await readManagedResourceRun(options.repositoryRoot, recordPath);
+      if (run.record.project !== project)
+        throw new Error("E2E recovery record does not name the requested exact project");
+      await cleanupRun(run);
+    },
     async initializeMigrationReceipt(descriptor: RunDescriptor) {
       await writeMigrationReceipt(descriptor, {
         project: descriptor.project,
@@ -151,7 +276,7 @@ export function createDockerInfraOperations(options: CreateDockerInfraOperations
     async startHealthyInfrastructure(descriptor: RunDescriptor, signal?: AbortSignal) {
       await options.runCommand(
         "docker",
-        composeArguments(options.composeFile, descriptor.project, [
+        projectArguments(descriptor, [
           "up",
           "--detach",
           "--wait",
@@ -172,15 +297,14 @@ export function createDockerInfraOperations(options: CreateDockerInfraOperations
     },
 
     async prepareDiagnostics(descriptor: RunDescriptor, signal?: AbortSignal) {
-      await options.runCommand(
-        "docker",
-        composeArguments(options.composeFile, descriptor.project, ["build", "gateway-sync"]),
-        {
-          cwd: options.repositoryRoot,
-          env: descriptorEnvironment(descriptor),
-          signal: signal ?? options.signal,
-        },
-      );
+      const run = requireManagedRun(descriptor);
+      run.record.status = "initializing";
+      await saveManagedResourceRun(run);
+      await options.runCommand("docker", projectArguments(descriptor, ["build", "gateway-sync"]), {
+        cwd: options.repositoryRoot,
+        env: descriptorEnvironment(descriptor),
+        signal: signal ?? options.signal,
+      });
     },
 
     async runMigrations(descriptor: RunDescriptor, signal?: AbortSignal) {
@@ -195,7 +319,7 @@ export function createDockerInfraOperations(options: CreateDockerInfraOperations
       try {
         await options.runCommand(
           "docker",
-          composeArguments(options.composeFile, descriptor.project, ["run", "--rm", "--no-deps", "--build", "migrate"]),
+          projectArguments(descriptor, ["run", "--rm", "--no-deps", "--build", "migrate"]),
           {
             cwd: options.repositoryRoot,
             env: descriptorEnvironment(descriptor),
@@ -234,7 +358,7 @@ export function createDockerInfraOperations(options: CreateDockerInfraOperations
     async startRepoRuntimes(descriptor: RunDescriptor, signal?: AbortSignal) {
       await options.runCommand(
         "docker",
-        composeArguments(options.composeFile, descriptor.project, [
+        projectArguments(descriptor, [
           "up",
           "--detach",
           "--wait",
@@ -259,7 +383,7 @@ export function createDockerInfraOperations(options: CreateDockerInfraOperations
       const scenario = createE2EScenarioIdentity(descriptor.runId);
       const result = await options.captureCommand(
         "docker",
-        composeArguments(options.composeFile, descriptor.project, ["config", "--format", "json"]),
+        projectArguments(descriptor, ["config", "--format", "json"]),
         {
           capture: { maxBytes: 512 * 1024, mode: "tail" },
           cwd: options.repositoryRoot,
@@ -282,15 +406,62 @@ export function createDockerInfraOperations(options: CreateDockerInfraOperations
     },
 
     async seedE2EScenario(descriptor: RunDescriptor, signal?: AbortSignal) {
-      await options.runCommand(
-        "docker",
-        composeArguments(options.composeFile, descriptor.project, ["run", "--rm", "--no-deps", "--build", "seed"]),
-        {
-          cwd: options.repositoryRoot,
-          env: descriptorEnvironment(descriptor),
-          signal: signal ?? options.signal,
-        },
-      );
+      requireManagedRun(descriptor);
+      const container = `${descriptor.project}-seed`;
+      const failures: unknown[] = [];
+      try {
+        await options.runCommand(
+          "docker",
+          projectArguments(descriptor, ["run", "--name", container, "--no-deps", "--build", "seed"]),
+          {
+            cwd: options.repositoryRoot,
+            env: descriptorEnvironment(descriptor),
+            signal: signal ?? options.signal,
+          },
+        );
+      } catch (error) {
+        failures.push(error);
+      }
+      // The creating CLI has settled. Export and removal have their own budget, including after cancellation.
+      try {
+        await runBoundedOperation(
+          async (exportSignal) => {
+            const artifactOptions = { cwd: options.repositoryRoot, signal: exportSignal };
+            if (failures.length > 0) {
+              try {
+                await options.runCommand("docker", ["stop", "--time", "5", container], artifactOptions);
+              } catch (error) {
+                failures.push(error);
+              }
+            }
+            try {
+              await mkdir(descriptor.artifactDirectory, { recursive: true });
+              await options.runCommand(
+                "docker",
+                [
+                  "cp",
+                  `${container}:/artifacts/${descriptor.runId}/seed-receipt.json`,
+                  join(descriptor.artifactDirectory, "seed-receipt.json"),
+                ],
+                artifactOptions,
+              );
+              if (failures.length === 0) await readAppliedSeedReferences(descriptor);
+            } catch (error) {
+              failures.push(error);
+            }
+            try {
+              await options.runCommand("docker", ["rm", "--force", container], artifactOptions);
+            } catch (error) {
+              failures.push(error);
+            }
+          },
+          { timeoutMs: 30_000, timeoutMessage: "E2E seed receipt export and removal timed out" },
+        );
+      } catch (error) {
+        failures.push(error);
+      }
+      if (failures.length === 1) throw failures[0];
+      if (failures.length > 1) throw new AggregateError(failures, "E2E seed or required receipt export failed");
     },
 
     async verifyUserProfileReadiness(descriptor: RunDescriptor, signal?: AbortSignal) {
@@ -298,7 +469,7 @@ export function createDockerInfraOperations(options: CreateDockerInfraOperations
         const script = `user-profile:${operation}`;
         const result = await options.captureCommand(
           "docker",
-          composeArguments(options.composeFile, descriptor.project, [
+          projectArguments(descriptor, [
             "run",
             "--rm",
             "--no-deps",
@@ -323,13 +494,7 @@ export function createDockerInfraOperations(options: CreateDockerInfraOperations
     async renderGatewayRoutes(descriptor: RunDescriptor, signal?: AbortSignal) {
       await options.runCommand(
         "docker",
-        composeArguments(options.composeFile, descriptor.project, [
-          "run",
-          "--rm",
-          "--no-deps",
-          "--build",
-          "gateway-sync",
-        ]),
+        projectArguments(descriptor, ["run", "--rm", "--no-deps", "--build", "gateway-sync"]),
         {
           cwd: options.repositoryRoot,
           env: descriptorEnvironment(descriptor),
@@ -339,6 +504,7 @@ export function createDockerInfraOperations(options: CreateDockerInfraOperations
     },
 
     async awaitGatewayRouteReadiness(descriptor: RunDescriptor, signal?: AbortSignal) {
+      const run = requireManagedRun(descriptor);
       const probes = [
         { path: "/portal/login", statuses: [200] },
         { path: "/iam-admin/", statuses: [200] },
@@ -357,11 +523,13 @@ export function createDockerInfraOperations(options: CreateDockerInfraOperations
         await options.probeOidcDiscovery(descriptor.internalOrigin, signal ?? options.signal);
         await options.probeSsoConfiguration(descriptor.internalOrigin, signal ?? options.signal);
       }
+      run.record.status = "running";
+      await saveManagedResourceRun(run);
     },
 
     async collectDiagnostics(descriptor: RunDescriptor, signal?: AbortSignal) {
       const capture = (args: string[], captureSignal?: AbortSignal, captureOptions?: CommandOptions["capture"]) =>
-        options.captureCommand("docker", composeArguments(options.composeFile, descriptor.project, args), {
+        options.captureCommand("docker", projectArguments(descriptor, args), {
           capture: captureOptions,
           cwd: options.repositoryRoot,
           env: descriptorEnvironment(descriptor),
@@ -419,10 +587,13 @@ export function createDockerInfraOperations(options: CreateDockerInfraOperations
     },
 
     async cleanup(descriptor: RunDescriptor, signal?: AbortSignal) {
-      await cleanupProject(descriptor.project, descriptorEnvironment(descriptor), signal);
+      const run = requireManagedRun(descriptor);
+      if (run.record.keep) {
+        run.record.status = "kept";
+        await saveManagedResourceRun(run);
+        console.log(`[test-resources] Environment retained; cleanup: ${managedCleanupCommand(run)}`);
+      } else await cleanupRun(run, signal);
     },
-
-    cleanupProject,
   };
 }
 
@@ -450,16 +621,4 @@ function boundCompleteLineTail(value: string, maxBytes: number) {
 async function persistMigrationReceipt(descriptor: RunDescriptor, receipt: MigrationReceipt) {
   const receiptPath = join(descriptor.artifactDirectory, "migration-receipt.json");
   await writeAtomicJsonFile(receiptPath, receipt);
-}
-
-function recoveryEnvironment(project: string) {
-  const runId = project.slice("iam-e2e-".length);
-  return {
-    ...process.env,
-    COMPOSE_DISABLE_ENV_FILE: "1",
-    IAM_E2E_GATEWAY_PORT: "49152",
-    IAM_E2E_ORIGIN: "http://127.0.0.1:49152",
-    IAM_E2E_PROJECT: project,
-    IAM_E2E_RUN_ID: runId,
-  };
 }

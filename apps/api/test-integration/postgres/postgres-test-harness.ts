@@ -18,14 +18,35 @@ export interface ApiPostgresTestHarness {
   readonly close: () => Promise<void>;
 }
 
-export async function createApiPostgresTestHarness(): Promise<ApiPostgresTestHarness> {
+export async function createApiPostgresTestHarness(
+  trackStop?: (close: () => Promise<void>) => void,
+): Promise<ApiPostgresTestHarness> {
   const databaseUrl = requireDedicatedTestDatabaseUrl();
   const schemaName = `iam_api_${randomUUID().replaceAll("-", "")}`;
   const adminSql = postgres(databaseUrl, { max: 1 });
   let scopedSql: ReturnType<typeof postgres> | undefined;
+  let closing: Promise<void> | undefined;
+  const close = () =>
+    (closing ??= (async () => {
+      const failures: unknown[] = [];
+      for (const cleanup of [
+        () => scopedSql?.end({ timeout: 1 }),
+        () => adminSql.unsafe(`DROP SCHEMA IF EXISTS ${quoteIdentifier(schemaName)} CASCADE`),
+        () => adminSql.end({ timeout: 1 }),
+      ]) {
+        try {
+          await cleanup();
+        } catch (failure) {
+          failures.push(failure);
+        }
+      }
+      if (failures.length) throw new AggregateError(failures, "API PostgreSQL fixture cleanup failed");
+    })());
 
   try {
+    trackStop?.(close);
     await adminSql.unsafe(`CREATE SCHEMA ${quoteIdentifier(schemaName)}`);
+    if (closing) throw new Error("API PostgreSQL fixture stopped during initialization");
     scopedSql = postgres(databaseUrl, {
       connection: {
         application_name: `iam-api-contract-${schemaName}`,
@@ -36,6 +57,7 @@ export async function createApiPostgresTestHarness(): Promise<ApiPostgresTestHar
     const db = drizzle({ client: scopedSql, relations });
     const migrationsFolder = fileURLToPath(new URL("../../../../packages/db/src/migrations", import.meta.url));
     await migrate(db, { migrationsFolder, migrationsSchema: schemaName });
+    if (closing) throw new Error("API PostgreSQL fixture stopped during initialization");
 
     const scopedUrl = new URL(databaseUrl);
     scopedUrl.searchParams.set("search_path", schemaName);
@@ -60,16 +82,14 @@ export async function createApiPostgresTestHarness(): Promise<ApiPostgresTestHar
           RESTART IDENTITY CASCADE`,
         );
       },
-      async close() {
-        await scopedSql!.end();
-        await adminSql.unsafe(`DROP SCHEMA ${quoteIdentifier(schemaName)} CASCADE`);
-        await adminSql.end();
-      },
+      close,
     };
   } catch (error) {
-    if (scopedSql) await scopedSql.end({ timeout: 1 });
-    await adminSql.unsafe(`DROP SCHEMA IF EXISTS ${quoteIdentifier(schemaName)} CASCADE`);
-    await adminSql.end({ timeout: 1 });
+    try {
+      await close();
+    } catch (cleanup) {
+      throw new AggregateError([error, cleanup], "API PostgreSQL fixture setup and cleanup failed");
+    }
     throw error;
   }
 }

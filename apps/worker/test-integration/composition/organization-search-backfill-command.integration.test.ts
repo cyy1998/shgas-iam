@@ -1,4 +1,4 @@
-import { afterAll, beforeAll, beforeEach, expect, test } from "bun:test";
+import { afterEach, beforeEach, expect, test } from "bun:test";
 import { fileURLToPath } from "node:url";
 import { createLogger, LoggerSourceApp } from "@iam/api-core/logger";
 import {
@@ -8,36 +8,30 @@ import {
   withOwnedTemporaryDirectory,
 } from "@iam/api-core/testing/process-smoke-harness";
 import { OrganizationStatus, OrganizationType } from "@iam/contracts";
-import { createJobQueue, DEFAULT_QUEUE_PREFIX } from "@iam/jobs";
+import { DEFAULT_QUEUE_PREFIX } from "@iam/jobs";
 import {
   createOrganizationSearchQueryRepository,
   createOrganizationSearchQueryService,
 } from "@iam/organization-search-read-model/query";
-import {
-  createOrganizationSearchWorkerModule,
-  ORGANIZATION_SEARCH_QUEUE_NAME,
-} from "@iam/organization-search-read-model/worker";
+import { createOrganizationSearchWorkerModule } from "@iam/organization-search-read-model/worker";
 import { createWorkerPostgresTestHarness } from "../postgres/postgres-test-harness";
-import { resolveWorkerRedisTestUrl } from "../redis/redis-test-harness";
-import { createOrganizationQueueInventory } from "./organization-queue-inventory";
+import { resetWorkerRedisTestDatabase, resolveWorkerRedisTestUrl } from "../redis/redis-test-harness";
 import { createOrganizationFixtureRuntime } from "./organization-worker-runtime";
 
 const workerRoot = fileURLToPath(new URL("../../", import.meta.url));
 let harness: Awaited<ReturnType<typeof createWorkerPostgresTestHarness>>;
-beforeAll(async () => {
-  harness = await createWorkerPostgresTestHarness();
-});
+let stopExecutors: Array<() => Promise<void> | void>;
 beforeEach(async () => {
-  await harness.sql.unsafe(
-    "TRUNCATE organization_search_change, organization_search_dirty, organization_search_document, organization_closure, organization RESTART IDENTITY CASCADE",
-  );
+  stopExecutors = [];
+  harness = await createWorkerPostgresTestHarness();
+  stopExecutors.push(harness.close);
   await harness.sql`INSERT INTO organization (id, org_code, org_name, parent_id, path, level, org_type, status)
     VALUES (1, 'ROOT', 'Root', -1, '/1', 1, ${OrganizationType.Department}, ${OrganizationStatus.Pause}),
       (2, 'CHILD', 'Child', 1, '/1/2', 2, ${OrganizationType.Department}, ${OrganizationStatus.Disable})`;
   await harness.sql`INSERT INTO organization_closure (ancestor_id, descendant_id, depth) VALUES (1,1,0), (1,2,1), (2,2,0)`;
 });
-afterAll(async () => {
-  if (harness) await harness.close();
+afterEach(async () => {
+  if (stopExecutors.length) await resetWorkerRedisTestDatabase(stopExecutors);
 });
 
 test("organization backfill uses the normal consumer to publish complete documents without users or cache state", async () => {
@@ -63,6 +57,13 @@ test("organization backfill uses the normal consumer to publish complete documen
     },
     createLogger({ nodeEnv: "test", logLevel: "silent", logFormat: "json", sourceApp: LoggerSourceApp.Worker }),
   );
+  stopExecutors.push(async () => {
+    try {
+      await runtime.redis.quit();
+    } finally {
+      runtime.redis.disconnect();
+    }
+  });
   const module = createOrganizationSearchWorkerModule({
     db: harness.db,
     redis: runtime.config.redis,
@@ -70,69 +71,41 @@ test("organization backfill uses the normal consumer to publish complete documen
     clock: runtime.clock,
     config: runtime.config.organizationSearch,
   });
+  stopExecutors.push(module.close);
   const search = createOrganizationSearchQueryService({
     repository: createOrganizationSearchQueryRepository(harness.db),
   });
-  const inventoryQueue = createJobQueue({ name: ORGANIZATION_SEARCH_QUEUE_NAME, redis, prefix });
-  let inventory: Awaited<ReturnType<typeof createOrganizationQueueInventory>> | undefined;
-  try {
-    inventory = await createOrganizationQueueInventory(inventoryQueue, harness.sql);
-    const result = await runBackfillCLI(redis, prefix);
-    await inventory.registerCurrentJobs();
-    const beforeConsumption = await search.search({ filter: { field: "organization.code", op: "eq", value: "CHILD" } });
-    expect(result.output).toContain('"registered":2');
-    expect(result.output).toContain('"enqueued":2');
-    expect(result.output).toContain('"publication":"not-verified"');
-    expect(beforeConsumption).toEqual([]);
-    await module.startConsumers();
-    const published = await waitForPublishedChild(search);
-    await inventory.registerCurrentJobs();
-    expect(published).toEqual([
-      {
-        organization: {
-          code: "CHILD",
-          name: "Child",
-          type: OrganizationType.Department,
-          status: OrganizationStatus.Disable,
-          level: 2,
-          isVirtual: false,
-          isEntity: false,
-          path: [
-            { code: "ROOT", name: "Root", type: OrganizationType.Department, level: 1, distanceToTarget: 1 },
-            { code: "CHILD", name: "Child", type: OrganizationType.Department, level: 2, distanceToTarget: 0 },
-          ],
-        },
+  const result = await runBackfillCLI(redis, prefix);
+  const beforeConsumption = await search.search({ filter: { field: "organization.code", op: "eq", value: "CHILD" } });
+  expect(result.output).toContain('"registered":2');
+  expect(result.output).toContain('"enqueued":2');
+  expect(result.output).toContain('"publication":"not-verified"');
+  expect(beforeConsumption).toEqual([]);
+  await module.startConsumers();
+  const published = await waitForPublishedChild(search);
+  expect(published).toEqual([
+    {
+      organization: {
+        code: "CHILD",
+        name: "Child",
+        type: OrganizationType.Department,
+        status: OrganizationStatus.Disable,
+        level: 2,
+        isVirtual: false,
+        isEntity: false,
+        path: [
+          { code: "ROOT", name: "Root", type: OrganizationType.Department, level: 1, distanceToTarget: 1 },
+          { code: "CHILD", name: "Child", type: OrganizationType.Department, level: 2, distanceToTarget: 0 },
+        ],
       },
-    ]);
-  } finally {
-    await cleanup();
-  }
-
-  async function cleanup() {
-    const failures: unknown[] = [];
-    try {
-      await module.close();
-    } catch (error) {
-      failures.push(error);
-    }
-    try {
-      if (inventory) {
-        await inventory.seal();
-        await inventory.removeOwnedJobs();
-      }
-    } catch (error) {
-      failures.push(error);
-    }
-    const closed = await Promise.allSettled([inventoryQueue.close(), runtime.redis.quit()]);
-    for (const result of closed) if (result.status === "rejected") failures.push(result.reason);
-    if (failures.length) throw new AggregateError(failures, "Organization backfill fixture cleanup failed");
-  }
+    },
+  ]);
 }, 15_000);
 
 test(
   "the real backfill CLI retains committed changes and closes resources when Redis wakeup fails",
   async () => {
-    const result = await withOwnedTemporaryDirectory({
+    const pending = withOwnedTemporaryDirectory({
       prefix: "iam-organization-backfill-postgres-",
       cleanupTimeoutMs: 5_000,
       async run(temporaryDirectory) {
@@ -173,6 +146,11 @@ test(
         });
       },
     });
+    stopExecutors.push(async () => {
+      await pending;
+    });
+    void pending.catch(() => {});
+    const result = await pending;
     const changes =
       await harness.sql`SELECT organization_id, status FROM organization_search_change ORDER BY organization_id`;
     const search = createOrganizationSearchQueryService({
@@ -197,7 +175,7 @@ async function waitForPublishedChild(search: ReturnType<typeof createOrganizatio
 }
 
 async function runBackfillCLI(redis: { host: string; port: number; db: number; password?: string }, prefix: string) {
-  return await withOwnedTemporaryDirectory({
+  const pending = withOwnedTemporaryDirectory({
     prefix: "iam-organization-backfill-success-",
     cleanupTimeoutMs: 5_000,
     async run(temporaryDirectory) {
@@ -240,4 +218,9 @@ async function runBackfillCLI(redis: { host: string; port: number; db: number; p
       });
     },
   });
+  stopExecutors.push(async () => {
+    await pending;
+  });
+  void pending.catch(() => {});
+  return await pending;
 }

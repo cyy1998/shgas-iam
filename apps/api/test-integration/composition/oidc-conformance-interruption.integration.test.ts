@@ -1,4 +1,4 @@
-import { expect, test } from "bun:test";
+import { afterEach, expect, test } from "bun:test";
 import { EventEmitter } from "node:events";
 import { cp, mkdir, mkdtemp, readFile, rm, stat } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -7,8 +7,11 @@ import { fileURLToPath } from "node:url";
 import { requireDedicatedPostgresTestUrl, requireExternalTestUrl } from "@iam/api-core/testing/external-test-resources";
 import Redis from "ioredis";
 import postgres from "postgres";
+import { closeApiRedisConnection, ownApiTestExecutor, resetApiRedisTestDatabase } from "../redis/fixture-lifecycle";
 import { createOidcConformanceCandidate } from "./oidc-conformance.fixture";
 import { withOidcConformanceLifecycle } from "./oidc-conformance-lifecycle.fixture";
+
+afterEach(resetApiRedisTestDatabase);
 
 for (const interruptedPhase of ["postgres-ready", "redis-seeded", "api-ready", "cleanup"]) {
   test(`conformance signal at ${interruptedPhase} closes actual partial PostgreSQL/Redis/API resources`, async () => {
@@ -29,13 +32,14 @@ for (const interruptedPhase of ["postgres-ready", "redis-seeded", "api-ready", "
     });
     const sql = postgres(databaseUrl, { max: 1 });
     const redis = new Redis(redisUrl, { maxRetriesPerRequest: 1 });
+    ownApiTestExecutor(() => closeApiRedisConnection(redis));
+    ownApiTestExecutor(() => sql.end({ timeout: 1 }));
     const signals = new EventEmitter();
     const directory = await mkdtemp(join(tmpdir(), "iam195-interruption-"));
     const logPath = join(directory, "api.log");
     const failures: unknown[] = [];
     try {
       const schemasBefore = await sql`SELECT nspname FROM pg_namespace ORDER BY nspname`;
-      const keysBefore = await redis.dbsize();
       let reachedDriver = false;
       let failure: unknown;
       try {
@@ -69,9 +73,7 @@ for (const interruptedPhase of ["postgres-ready", "redis-seeded", "api-ready", "
       expect(signals.listenerCount("SIGINT")).toBe(0);
       expect(signals.listenerCount("SIGTERM")).toBe(0);
       const schemasAfter = await sql`SELECT nspname FROM pg_namespace ORDER BY nspname`;
-      const keysAfter = await redis.dbsize();
       expect(schemasAfter).toEqual(schemasBefore);
-      expect(keysAfter).toBe(keysBefore);
       const owner = JSON.parse(await readFile(`${logPath}.owner.json`, "utf8"));
       let directoryExists = true;
       try {
@@ -94,7 +96,7 @@ for (const interruptedPhase of ["postgres-ready", "redis-seeded", "api-ready", "
     } catch (error) {
       failures.push(error);
     } finally {
-      for (const cleanup of [() => redis.disconnect(), () => sql.end({ timeout: 1 })]) {
+      for (const cleanup of [() => closeApiRedisConnection(redis), () => sql.end({ timeout: 1 })]) {
         try {
           await cleanup();
         } catch (error) {

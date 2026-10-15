@@ -1,9 +1,10 @@
-import { afterAll, beforeAll, expect, test } from "bun:test";
+import { afterAll, afterEach, beforeAll, expect, test } from "bun:test";
 import { randomUUID } from "node:crypto";
 import { connect, createServer, type Socket } from "node:net";
 import { createAdminApiRepositories } from "@admin-api/composition/repositories";
 import { createAdminApiUnitOfWork } from "@admin-api/composition/tx";
 import { createOrganizationService } from "@admin-api/services/organization/organization.service";
+import { runWithOwnedTestResources } from "@iam/api-core/testing/external-test-resources";
 import { mapUnitOfWork } from "@iam/api-core/uow";
 import { OrganizationType } from "@iam/contracts";
 import { organizationSearchChanges, organizations } from "@iam/db/schema";
@@ -18,13 +19,29 @@ import {
   type OrganizationRebuildJobPayload,
 } from "@iam/organization-search-read-model/worker";
 import { createAdminApiPostgresTestHarness } from "../postgres/postgres-test-harness";
+import { createAdminApiRedisTestHarness } from "../redis/redis-test-harness";
 
 let pg: Awaited<ReturnType<typeof createAdminApiPostgresTestHarness>>;
+let redisHarness: Awaited<ReturnType<typeof createAdminApiRedisTestHarness>>;
 beforeAll(async () => {
   pg = await createAdminApiPostgresTestHarness();
+  try {
+    redisHarness = await createAdminApiRedisTestHarness();
+  } catch (error) {
+    await runWithOwnedTestResources(async (lifecycle) => {
+      lifecycle.registerCleanup(() => pg.close());
+      throw error;
+    });
+  }
+});
+afterEach(async () => {
+  await redisHarness?.reset();
 });
 afterAll(async () => {
-  await pg?.close();
+  await runWithOwnedTestResources(async (lifecycle) => {
+    lifecycle.registerCleanup(() => pg?.close());
+    lifecycle.registerCleanup(() => redisHarness?.close());
+  });
 });
 
 async function withDeadline<T>(pending: Promise<T>, milliseconds: number) {
@@ -106,14 +123,28 @@ async function createPausedRedisProxy() {
 }
 
 test("a stalled real Redis wake preserves committed source work and the same queue wakes again after recovery", async () => {
-  const proxy = await createPausedRedisProxy();
-  const resources = createOrganizationSearchWriteResources({
-    redis: proxy.redis,
-    prefix: `org-write-${randomUUID()}`,
-    logger: { error() {} },
-  });
-  let pending: Promise<unknown> | undefined;
-  try {
+  await runWithOwnedTestResources(async (lifecycle) => {
+    const proxy = await createPausedRedisProxy();
+    const closeProxy = redisHarness.registerStopExecutor(() => proxy.close());
+    lifecycle.registerCleanup(closeProxy);
+    const resources = createOrganizationSearchWriteResources({
+      redis: proxy.redis,
+      prefix: `org-write-${randomUUID()}`,
+      logger: { error() {} },
+    });
+    const closeResources = redisHarness.registerStopExecutor(() => resources.close());
+    lifecycle.registerCleanup(closeResources);
+    const pending: Promise<unknown>[] = [];
+    function trackMutation<T>(work: Promise<T>) {
+      pending.push(work);
+      return work;
+    }
+    lifecycle.registerCleanup(
+      redisHarness.registerStopExecutor(async () => {
+        proxy.restore();
+        await withDeadline(Promise.allSettled(pending), 5_000);
+      }),
+    );
     const repositories = createAdminApiRepositories(pg.db);
     const warnings: unknown[] = [];
     const uow = createAdminApiUnitOfWork({
@@ -143,10 +174,12 @@ test("a stalled real Redis wake preserves committed source work and the same que
         organizationSearchInvalidation: tx.organizationSearchInvalidation,
       })),
     });
-    pending = service.setOrganization(
-      OrganizationCreateDtoSchema.parse({ orgCode: "OUTAGE", orgName: "Outage", orgType: OrganizationType.Company }),
+    const writing = trackMutation(
+      service.setOrganization(
+        OrganizationCreateDtoSchema.parse({ orgCode: "OUTAGE", orgName: "Outage", orgType: OrganizationType.Company }),
+      ),
     );
-    const result = await withDeadline(pending, 3_500);
+    const result = await withDeadline(writing, 3_500);
     expect(result).toMatchObject({ changed: true, result: { orgCode: "OUTAGE" } });
     const committed = await pg.db.select().from(organizations);
     const durable = await pg.db.select().from(organizationSearchChanges);
@@ -156,17 +189,19 @@ test("a stalled real Redis wake preserves committed source work and the same que
 
     proxy.restore();
     await withDeadline(resources.queue.waitUntilReady(), 5_000);
-    const restored = await service.setOrganization(
-      OrganizationCreateDtoSchema.parse({
-        orgCode: "RESTORED",
-        orgName: "Restored",
-        orgType: OrganizationType.Company,
-      }),
+    const restored = await trackMutation(
+      service.setOrganization(
+        OrganizationCreateDtoSchema.parse({
+          orgCode: "RESTORED",
+          orgName: "Restored",
+          orgType: OrganizationType.Company,
+        }),
+      ),
     );
     expect(restored).toMatchObject({ changed: true, result: { orgCode: "RESTORED" } });
     proxy.stall();
     const interrupted = await withDeadline(
-      service.updateOrganization("RESTORED", { orgName: "After disconnect" }),
+      trackMutation(service.updateOrganization("RESTORED", { orgName: "After disconnect" })),
       3_500,
     );
     expect(interrupted).toEqual({ changed: true, result: null });
@@ -175,7 +210,10 @@ test("a stalled real Redis wake preserves committed source work and the same que
     if (recoveredClient.status !== "ready") {
       await withDeadline(new Promise<void>((resolve) => recoveredClient.once("ready", resolve)), 5_000);
     }
-    const recovered = await withDeadline(service.updateOrganization("RESTORED", { orgName: "Recovered" }), 3_500);
+    const recovered = await withDeadline(
+      trackMutation(service.updateOrganization("RESTORED", { orgName: "Recovered" })),
+      3_500,
+    );
     expect(recovered).toEqual({ changed: true, result: null });
     const changes = await pg.db.select().from(organizationSearchChanges);
     const jobs = await resources.queue.getJobs(["wait"]);
@@ -202,30 +240,28 @@ test("a stalled real Redis wake preserves committed source work and the same que
       { organization: { code: "OUTAGE" } },
       { organization: { code: "RESTORED", name: "Recovered" } },
     ]);
-  } finally {
-    proxy.restore();
-    if (pending) await withDeadline(Promise.allSettled([pending]), 5_000);
-    await withDeadline(resources.queue.waitUntilReady(), 5_000);
-    await resources.queue.obliterate({ force: true });
-    await resources.close();
-    await proxy.close();
-  }
+  });
 }, 15_000);
 
 test("closes organization write resources while the first Redis connection has never become ready", async () => {
-  const proxy = await createPausedRedisProxy();
-  const resources = createOrganizationSearchWriteResources({
-    redis: proxy.redis,
-    prefix: `org-close-${randomUUID()}`,
-    logger: { error() {} },
-  });
-  try {
+  await runWithOwnedTestResources(async (lifecycle) => {
+    const proxy = await createPausedRedisProxy();
+    lifecycle.registerCleanup(redisHarness.registerStopExecutor(() => proxy.close()));
+    const resources = createOrganizationSearchWriteResources({
+      redis: proxy.redis,
+      prefix: `org-close-${randomUUID()}`,
+      logger: { error() {} },
+    });
+    const closeResources = redisHarness.registerStopExecutor(() => resources.close());
+    lifecycle.registerCleanup(closeResources);
     const wake = resources.jobProducer.enqueueSourceChanges([{ changeId: randomUUID() }]);
-    await withDeadline(resources.close(), 1_500);
+    lifecycle.registerCleanup(
+      redisHarness.registerStopExecutor(async () => {
+        await withDeadline(Promise.allSettled([wake]), 3_000);
+      }),
+    );
+    await withDeadline(closeResources(), 1_500);
     const outcomes = await withDeadline(Promise.allSettled([wake]), 3_000);
     expect(outcomes).toMatchObject([{ status: "rejected" }]);
-  } finally {
-    await resources.close();
-    await proxy.close();
-  }
+  });
 });

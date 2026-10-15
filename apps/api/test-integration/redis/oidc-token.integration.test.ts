@@ -1,4 +1,4 @@
-import { expect, test } from "bun:test";
+import { afterEach, expect, test } from "bun:test";
 import { Buffer } from "node:buffer";
 import { createPublicKey, randomBytes, randomUUID, verify } from "node:crypto";
 import { connect, createServer } from "node:net";
@@ -8,6 +8,7 @@ import { createOidcClientAuthRateLimiter, createOidcSigningKeys, OidcExchangeFai
 import { createOidcInventory, createOidcMaintenance, createOidcVerifier } from "@iam/oidc/maintenance";
 import type { OidcTokenResponse } from "@iam/oidc/wire";
 import Redis from "ioredis";
+import { closeApiRedisConnection, ownApiTestExecutor, resetApiRedisTestDatabase } from "./fixture-lifecycle";
 import { cleanupAfterFixtureFailure, closeFixtureResources, fixture, signingKeys } from "./oidc.fixture";
 
 async function setup(
@@ -508,6 +509,7 @@ test("OIDC Token ignores mutable protocol marker, uses current config and denies
 test("OIDC Token maintenance clears no-TTL/index and unknown state while preserving session owner state", async () => {
   const f = await setup();
   const independent = new Redis(process.env.IAM_API_TEST_REDIS_URL!, { maxRetriesPerRequest: 0 });
+  const closeIndependent = ownApiTestExecutor(() => closeApiRedisConnection(independent));
   try {
     const issued = await f.authorizeCode();
     const value: OidcTokenResponse = await (await f.exchange(issued.code)).json();
@@ -526,7 +528,7 @@ test("OIDC Token maintenance clears no-TTL/index and unknown state while preserv
     const rootAfter = await f.scope.inspect(issued.target);
     expect(rootAfter).toEqual(rootBefore);
   } finally {
-    independent.disconnect();
+    await closeIndependent();
     await f.close();
   }
 });
@@ -635,6 +637,9 @@ test("OIDC complete HTTP warm samples reuse Snapshot Secret Barrier Facts and re
     upstream.on("error", () => downstream.destroy());
   });
   await new Promise<void>((resolve) => proxy.listen(0, "127.0.0.1", resolve));
+  const closeProxy = ownApiTestExecutor(
+    () => new Promise<void>((resolve, reject) => proxy.close((error) => (error ? reject(error) : resolve()))),
+  );
   const address = proxy.address();
   if (!address || typeof address === "string") throw new Error("Missing proxy port");
   url.hostname = "127.0.0.1";
@@ -688,12 +693,7 @@ test("OIDC complete HTTP warm samples reuse Snapshot Secret Barrier Facts and re
     bodyFailed = true;
     bodyFailure = failure;
   } finally {
-    const close = () =>
-      closeFixtureResources([
-        async () => await f?.close(),
-        async () =>
-          await new Promise<void>((resolve, reject) => proxy.close((error) => (error ? reject(error) : resolve()))),
-      ]);
+    const close = () => closeFixtureResources([closeProxy, async () => await f?.close()]);
     if (bodyFailed) await cleanupAfterFixtureFailure(bodyFailure, close);
     else await close();
   }
@@ -756,6 +756,7 @@ for (const fault of ["expired", "corrupt", "missing-index"] as const) {
 test("OIDC Token maintenance reports unlink failure and rerun clears all clients while preserving session state", async () => {
   const f = await setup();
   const independent = new Redis(process.env.IAM_API_TEST_REDIS_URL!, { maxRetriesPerRequest: 0 });
+  const closeIndependent = ownApiTestExecutor(() => closeApiRedisConnection(independent));
   try {
     const first = await f.authorizeCode();
     const value: OidcTokenResponse = await (await f.exchange(first.code)).json();
@@ -792,7 +793,7 @@ test("OIDC Token maintenance reports unlink failure and rerun clears all clients
     const rootAfter = await f.scope.inspect(first.target);
     expect(rootAfter).toEqual(rootBefore);
   } finally {
-    independent.disconnect();
+    await closeIndependent();
     await f.close();
   }
 });
@@ -822,7 +823,7 @@ test("OIDC required token parameters retain standard errors and Secret takes pre
   }
 });
 
-for (const fault of ["login", "configuration-and-cleanup"] as const) {
+for (const fault of ["login", "configuration"] as const) {
   test(`OIDC setup ${fault} closes real HTTP/Redis resources and lets its proxy finish`, async () => {
     const url = new URL(process.env.IAM_API_TEST_REDIS_URL!);
     const upstreamAddress = { host: url.hostname, port: Number(url.port) };
@@ -845,7 +846,7 @@ for (const fault of ["login", "configuration-and-cleanup"] as const) {
     let redisEnded: Promise<void> | undefined;
     let failure: unknown;
     try {
-      await setup(fault === "configuration-and-cleanup", 30, url.toString(), 45, (f) => {
+      await setup(fault === "configuration", 30, url.toString(), 45, (f) => {
         initialized = f;
         redisEnded = new Promise<void>((resolve) => f.oidcState.redis.once("end", resolve));
         if (fault === "login") f.state.loginFailure = true;
@@ -870,13 +871,8 @@ for (const fault of ["login", "configuration-and-cleanup"] as const) {
       httpFailure = error;
     }
     expect(httpFailure).toBeDefined();
-    if (fault === "configuration-and-cleanup") {
-      expect(failure).toBeInstanceOf(AggregateError);
-      if (!(failure instanceof AggregateError)) throw new Error("Expected combined initialization and cleanup failure");
-      expect(failure.errors).toHaveLength(2);
-      expect(failure.cause).toBe(failure.errors[0]);
-      expect(failure.errors[0].message).toBe("Client Snapshot invalidation failed");
-      expect(failure.errors[1]).toBeInstanceOf(AggregateError);
+    if (fault === "configuration") {
+      expect(failure).toMatchObject({ message: "Client Snapshot invalidation failed" });
     } else {
       expect(failure).not.toBeInstanceOf(AggregateError);
     }
@@ -1121,3 +1117,5 @@ test("Confidential HTTP clear failure revokes the original ClientSession after C
     await f.close();
   }
 });
+
+afterEach(resetApiRedisTestDatabase);

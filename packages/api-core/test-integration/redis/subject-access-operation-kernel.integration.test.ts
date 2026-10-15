@@ -19,6 +19,7 @@ const principal = { subjectId: subject };
 let harness: RedisTestHarness;
 let barrier: SubjectAccessRedisTestScope;
 let scope: Awaited<ReturnType<typeof createUnifiedSessionRedisTestScope>>;
+let stopScope: (() => Promise<void>) | undefined;
 let kernel: ReturnType<typeof scope.createFactoryForOperations<SubjectAccessOperation>>;
 let operations: ReturnType<typeof createSubjectAccessOperations>;
 let revocation: ReturnType<typeof createUnifiedSubjectAccessSessionRevocation>;
@@ -27,12 +28,15 @@ beforeAll(async () => {
   harness = await createRedisTestHarness();
 });
 beforeEach(async () => {
+  stopScope = undefined;
   reads = 0;
   barrier = await harness.createSubjectAccessScope({
     writerTransitionIds: Array.from({ length: 20 }, () => randomUUID()),
     observerTransitionIds: Array.from({ length: 20 }, () => randomUUID()),
   });
-  scope = await createUnifiedSessionRedisTestScope(process.env.IAM_API_CORE_TEST_REDIS_URL!);
+  scope = await createUnifiedSessionRedisTestScope(process.env.IAM_API_CORE_TEST_REDIS_URL!, {}, (close) => {
+    stopScope = close;
+  });
   kernel = scope.createFactoryForOperations<SubjectAccessOperation>(requireSubjectAccessOperation);
   revocation = createUnifiedSubjectAccessSessionRevocation(kernel, {
     run: (callback) => operations.run(callback),
@@ -49,8 +53,7 @@ beforeEach(async () => {
   await transition("enabled");
 });
 afterEach(async () => {
-  await scope.close();
-  await barrier.close();
+  await harness.reset([() => stopScope?.()]);
 });
 afterAll(async () => {
   await harness.close();

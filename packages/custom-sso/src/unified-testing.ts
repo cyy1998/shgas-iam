@@ -4,9 +4,39 @@ import { createCustomSsoState } from "./unified/state";
 import { createCustomSsoTokenState, tokenDigest } from "./unified/token-state";
 import { createUnifiedCustomSsoInventory, createUnifiedCustomSsoMaintenance } from "./unified-maintenance";
 
-export async function createUnifiedCustomSsoRedisTestScope(url: string) {
+export async function createUnifiedCustomSsoRedisTestScope(
+  url: string,
+  trackStop?: (stop: () => Promise<void>) => void,
+) {
   const redis = new Redis(url, { maxRetriesPerRequest: 0, retryStrategy: () => null });
-  await redis.ping();
+  let closePromise: Promise<void> | undefined;
+  let initialized = false;
+  function close() {
+    closePromise ??= (async () => {
+      const ended =
+        redis.status === "end" ? Promise.resolve() : new Promise<void>((resolve) => redis.once("end", resolve));
+      try {
+        if (initialized && redis.status !== "end") await redis.quit();
+      } finally {
+        redis.disconnect();
+        await ended;
+      }
+    })();
+    return closePromise;
+  }
+  try {
+    trackStop?.(close);
+    await redis.ping();
+    if (closePromise) throw new Error("Custom SSO Redis test scope stopped during setup");
+    initialized = true;
+  } catch (error) {
+    try {
+      await close();
+    } catch (closeError) {
+      throw new AggregateError([error, closeError], "Custom SSO Redis test scope setup failed");
+    }
+    throw error;
+  }
   const namespace = `test:custom:${randomUUID()}`;
   let fault: { after: boolean; match?: string } | undefined;
   let interception: { match: string; callback: () => Promise<void> } | undefined;
@@ -92,13 +122,6 @@ export async function createUnifiedCustomSsoRedisTestScope(url: string) {
       const key = `${namespace}:custom-sso:v1:code:${tokenDigest(JSON.stringify([clientCode, record.userSessionId, record.clientSessionId, record.codeId]))}`;
       await redis.set(key, JSON.stringify({ ...record, ...patch }), "KEEPTTL");
     },
-    async close() {
-      try {
-        const keys = await redis.keys(`${namespace}:custom-sso:v1:*`);
-        if (keys.length) await redis.del(...keys);
-      } finally {
-        redis.disconnect();
-      }
-    },
+    close,
   };
 }

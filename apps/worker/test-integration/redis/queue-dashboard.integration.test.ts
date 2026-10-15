@@ -1,10 +1,32 @@
-import { expect, test } from "bun:test";
+import { afterEach, beforeEach, expect, test } from "bun:test";
 import { randomUUID } from "node:crypto";
 import process from "node:process";
 import { createJobQueue, createJobWorker } from "@iam/jobs";
 import type { WorkerEnv } from "@worker/env";
 import { createWorkerHttpApp } from "@worker/http/server";
-import { resolveWorkerRedisTestUrl } from "./redis-test-harness";
+import Redis from "ioredis";
+import { resetWorkerRedisTestDatabase, resolveWorkerRedisTestUrl } from "./redis-test-harness";
+
+let stopExecutors: Array<() => Promise<void> | void>;
+beforeEach(async () => {
+  stopExecutors = [];
+  const observer = new Redis(resolveWorkerRedisTestUrl(process.env), {
+    connectTimeout: 2_000,
+    enableOfflineQueue: false,
+    lazyConnect: true,
+    maxRetriesPerRequest: 0,
+  });
+  try {
+    await observer.connect();
+    const remaining = await observer.dbsize();
+    expect(remaining).toBe(0);
+  } finally {
+    observer.disconnect();
+  }
+});
+afterEach(async () => {
+  if (stopExecutors.length) await resetWorkerRedisTestDatabase(stopExecutors);
+});
 
 function createFixture(readOnly = true) {
   const url = new URL(resolveWorkerRedisTestUrl(process.env));
@@ -19,6 +41,11 @@ function createFixture(readOnly = true) {
     name,
     redis,
     defaultJobOptions: { attempts: 2, backoff: { type: "fixed", delay: 10 } },
+  });
+  let closePromise: Promise<void> | undefined;
+  stopExecutors.push(() => {
+    closePromise ??= queue.close();
+    return closePromise;
   });
   const env: WorkerEnv = {
     databaseUrl: "postgresql://unused:unused@localhost/unused",
@@ -49,14 +76,6 @@ function createFixture(readOnly = true) {
     redis,
     queue,
     app,
-    async close() {
-      try {
-        // This randomly named queue is owned exclusively by this fixture.
-        await queue.obliterate({ force: true });
-      } finally {
-        await queue.close();
-      }
-    },
   };
 }
 
@@ -76,6 +95,8 @@ test("bulk jobs retry transient failures, complete with results and close the co
         return job.data.value * 2;
       },
     });
+    const currentWorker = worker;
+    stopExecutors.push(() => currentWorker.close());
     worker.on("completed", (job, result) => {
       results.set(job.data.value, result);
       if (results.size === 2) completed.resolve();
@@ -101,76 +122,55 @@ test("bulk jobs retry transient failures, complete with results and close the co
     expect(counts).toMatchObject({ completed: 2, failed: 0 });
   } finally {
     clearTimeout(timeout);
-    try {
-      await worker?.close();
-    } finally {
-      await fixture.close();
-    }
   }
 }, 10_000);
 
 test("dashboard rejects unauthenticated queue reads", async () => {
   const fixture = createFixture();
-  try {
-    const denied = await fixture.app.request("/admin/queues/api/queues");
-    expect(denied.status).toBe(401);
-  } finally {
-    await fixture.close();
-  }
+  const denied = await fixture.app.request("/admin/queues/api/queues");
+  expect(denied.status).toBe(401);
 }, 10_000);
 
 test("dashboard returns real queue state to an authenticated reader", async () => {
   const fixture = createFixture();
   const headers = { Authorization: `Basic ${btoa("test-ops:test-password")}` };
-  try {
-    await fixture.queue.add("double", { value: 3 });
-    const response = await fixture.app.request("/admin/queues/api/queues", { headers });
-    expect(response.status).toBe(200);
-    const body = await response.json();
-    expect(body).toMatchObject({
-      queues: expect.arrayContaining([
-        expect.objectContaining({
-          name: fixture.name,
-          readOnlyMode: true,
-          counts: expect.objectContaining({ waiting: 1 }),
-        }),
-      ]),
-    });
-  } finally {
-    await fixture.close();
-  }
+  await fixture.queue.add("double", { value: 3 });
+  const response = await fixture.app.request("/admin/queues/api/queues", { headers });
+  expect(response.status).toBe(200);
+  const body = await response.json();
+  expect(body).toMatchObject({
+    queues: expect.arrayContaining([
+      expect.objectContaining({
+        name: fixture.name,
+        readOnlyMode: true,
+        counts: expect.objectContaining({ waiting: 1 }),
+      }),
+    ]),
+  });
 }, 10_000);
 
 test("dashboard rejects authenticated writes to a read-only queue", async () => {
   const fixture = createFixture();
   const headers = { Authorization: `Basic ${btoa("test-ops:test-password")}` };
-  try {
-    const write = await fixture.app.request(`/admin/queues/api/queues/${fixture.name}/pause`, {
-      method: "PUT",
-      headers,
-    });
-    expect(write.status).toBe(405);
-    const paused = await fixture.queue.isPaused();
-    expect(paused).toBe(false);
-  } finally {
-    await fixture.close();
-  }
+  const write = await fixture.app.request(`/admin/queues/api/queues/${fixture.name}/pause`, {
+    method: "PUT",
+    headers,
+  });
+  expect(write.status).toBe(405);
+  const paused = await fixture.queue.isPaused();
+  expect(paused).toBe(false);
 }, 10_000);
 
 test("dashboard lets an authenticated operator pause a writable queue", async () => {
   const fixture = createFixture(false);
   const headers = { Authorization: `Basic ${btoa("test-ops:test-password")}` };
-  try {
-    const initiallyPaused = await fixture.queue.isPaused();
-    expect(initiallyPaused).toBe(false);
-    const write = await fixture.app.request(`/admin/queues/api/queues/${fixture.name}/pause`, {
-      method: "PUT",
-      headers,
-    });
-    expect(write.status).toBe(200);
-    const paused = await fixture.queue.isPaused();
-    expect(paused).toBe(true);
-  } finally {
-    await fixture.close();
-  }
+  const initiallyPaused = await fixture.queue.isPaused();
+  expect(initiallyPaused).toBe(false);
+  const write = await fixture.app.request(`/admin/queues/api/queues/${fixture.name}/pause`, {
+    method: "PUT",
+    headers,
+  });
+  expect(write.status).toBe(200);
+  const paused = await fixture.queue.isPaused();
+  expect(paused).toBe(true);
 }, 10_000);

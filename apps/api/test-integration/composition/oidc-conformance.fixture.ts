@@ -5,11 +5,7 @@ import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { hashSecret } from "@iam/api-core/security";
 import { createSubjectAccessBootstrap } from "@iam/api-core/subject-access";
-import {
-  cleanupRedisKeysMatchingOwnerMarkers,
-  createRedisKeyInventoryPort,
-  parseDedicatedRedisTestUrl,
-} from "@iam/api-core/testing/external-test-resources";
+import { parseDedicatedRedisTestUrl } from "@iam/api-core/testing/external-test-resources";
 import { spawnOwnedProcessTree, terminateProcessTree } from "@iam/api-core/testing/process-smoke-harness";
 import { ClientSsoProtocol, createLoginCredential, OidcClientType, OidcScope, UserType } from "@iam/contracts";
 import { UserProfileDetailDocumentSchema } from "@iam/user-profile-read-model";
@@ -17,10 +13,12 @@ import Redis from "ioredis";
 import { sm2 } from "sm-crypto";
 import { createApiPostgresTestHarness } from "../postgres/postgres-test-harness";
 import { createEntryEnvironment } from "../process/api-env.fixture";
+import { closeApiRedisConnection, ownApiTestExecutor } from "../redis/fixture-lifecycle";
+import { requireManagedApiResources } from "./managed-api-resources.fixture";
 import type { OidcConformanceLifecycle } from "./oidc-conformance-lifecycle.fixture";
 import { runConformanceCleanup } from "./oidc-conformance-lifecycle.fixture";
 
-/** Caller supplies dedicated PG/Redis; this fixture never starts Docker or reads runtime env files. */
+/** The root owner supplies this run's managed PG/Redis; this fixture owns its executors. */
 export async function createOidcConformanceCandidate(options: {
   redirectUris: string[];
   postLogoutRedirectUris: string[];
@@ -31,27 +29,26 @@ export async function createOidcConformanceCandidate(options: {
   /** Caller owns loopback DNS mapping and, for TLS, matching certificate SANs. */
   hostnames?: { internal: string; external: string };
 }) {
-  const checkpoint = async (phase: string) => options.lifecycle?.checkpoint(phase);
+  let stopped = false;
+  const checkpoint = async (phase: string) => {
+    await options.lifecycle?.checkpoint(phase);
+    if (stopped) throw new Error("OIDC candidate stopped during initialization");
+  };
   await checkpoint("setup");
+  await requireManagedApiResources();
   const redisUrl = process.env.IAM_API_TEST_REDIS_URL;
   if (!redisUrl) throw new Error("IAM_API_TEST_REDIS_URL is required");
   const redisConfig = parseDedicatedRedisTestUrl({ name: "IAM_API_TEST_REDIS_URL", value: redisUrl });
   const temporaryDirectory = await mkdtemp(join(tmpdir(), "iam195-candidate-"));
   const cleanups: (() => unknown | Promise<unknown>)[] = [];
   function registerCleanup(cleanup: () => unknown | Promise<unknown>) {
-    let pending = true;
-    const once = async () => {
-      if (!pending) return;
-      pending = false;
-      await cleanup();
-    };
-    cleanups.push(once);
-    options.lifecycle?.own(once);
+    cleanups.push(cleanup);
   }
   registerCleanup(() => rm(temporaryDirectory, { recursive: true, force: true }));
-  async function close() {
+  const close = ownApiTestExecutor(async () => {
+    stopped = true;
     const failures: unknown[] = [];
-    for (const cleanup of cleanups.splice(0).reverse()) {
+    for (const cleanup of cleanups.toReversed()) {
       try {
         await runConformanceCleanup(cleanup);
       } catch (error) {
@@ -59,28 +56,21 @@ export async function createOidcConformanceCandidate(options: {
       }
     }
     if (failures.length) throw new AggregateError(failures, "OIDC candidate cleanup failed");
-  }
+  });
+  options.lifecycle?.own(close);
   try {
     await writeFile(`${options.logPath}.owner.json`, JSON.stringify({ temporaryDirectory }));
     await checkpoint("temporary-directory-ready");
-    const pg = await createApiPostgresTestHarness();
-    registerCleanup(() => pg.close());
+    const pg = await createApiPostgresTestHarness(registerCleanup);
     await checkpoint("postgres-ready");
     const redis = new Redis(redisUrl, { maxRetriesPerRequest: 1 });
-    registerCleanup(() => redis.disconnect());
+    registerCleanup(() => closeApiRedisConnection(redis));
     const namespace = `oidc-conformance:${randomUUID()}`;
     const subjectIdentifier = randomUUID();
     const username = `oidc-${randomUUID()}`;
     const clientId = `oidc-${randomUUID()}`;
     const publicClientId = `oidc-${randomUUID()}`;
     const secondClientId = `oidc-${randomUUID()}`;
-    registerCleanup(() =>
-      cleanupRedisKeysMatchingOwnerMarkers({
-        diagnosticLabel: "OIDC conformance candidate",
-        redis: createRedisKeyInventoryPort(redis),
-        ownerMarkers: new Set([namespace, subjectIdentifier, username, clientId, publicClientId, secondClientId]),
-      }),
-    );
     const password = "Conformance195!synthetic";
     const secret = "conformance195-synthetic-secret-for-local-testing";
     const passwordHash = await hashSecret(password, 4);
@@ -129,6 +119,7 @@ export async function createOidcConformanceCandidate(options: {
     const tls = options.tls
       ? { key: await readFile(options.tls.keyPath), cert: await readFile(options.tls.certPath) }
       : undefined;
+    await checkpoint("before-proxy-start");
     function entryProxy(network: "internal" | "external") {
       // Test-owned trusted entry; actual APISIX routing belongs to system E2E.
       const proxy = Bun.serve({

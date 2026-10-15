@@ -17,6 +17,12 @@ const workerRoot = join(repoRoot, "apps", "worker");
 const roleAssignmentRoot = join(repoRoot, "packages", "role-assignment-resolution");
 const userProfileRoot = join(repoRoot, "packages", "user-profile-read-model");
 const ssoRoot = join(repoRoot, "apps", "sso");
+const managedIntegrationEnvironment = [
+  "IAM_TEST_RESOURCE_RUN_ID",
+  "IAM_TEST_RESOURCE_RECORD",
+  "IAM_TEST_INTEGRATION_SELECTION",
+  "IAM_TEST_RESOURCE_REGISTRY",
+];
 const postgresIntegrationPassThroughEnv = [
   "IAM_ADMIN_API_TEST_DATABASE_URL",
   "IAM_API_TEST_DATABASE_URL",
@@ -54,23 +60,6 @@ const pnpmRecorderControlEnvNames = [
   "IAM_VERIFICATION_GATE_SIGNAL_COMMAND",
   "IAM_VERIFY_COMMAND_LOG",
   "IAM_VERIFY_FAIL_COMMAND",
-] as const;
-const integrationResourceEnvNames = [
-  "IAM_API_CORE_TEST_REDIS_URL",
-  "IAM_SESSION_KERNEL_TEST_REDIS_URL",
-  "IAM_OIDC_TEST_REDIS_URL",
-  "IAM_ADMIN_API_TEST_REDIS_URL",
-  "IAM_ADMIN_API_TEST_DATABASE_URL",
-  "IAM_API_TEST_DATABASE_URL",
-  "IAM_API_TEST_REDIS_URL",
-  "IAM_DB_TEST_DATABASE_URL",
-  "IAM_ORGANIZATION_RESPONSIBILITY_TEST_DATABASE_URL",
-  "IAM_ORGANIZATION_SEARCH_TEST_DATABASE_URL",
-  "IAM_ROLE_ASSIGNMENT_TEST_DATABASE_URL",
-  "IAM_USER_PROFILE_TEST_DATABASE_URL",
-  "IAM_USER_PROFILE_TEST_REDIS_URL",
-  "IAM_WORKER_TEST_DATABASE_URL",
-  "IAM_WORKER_TEST_REDIS_URL",
 ] as const;
 
 function readJson(path: string) {
@@ -271,23 +260,14 @@ function runVerificationGateWithRecorder(
   });
 }
 
-function runTestIntegrationWithRecorder(options: { failCommand?: string; missing?: string[] } = {}) {
-  const environment: Record<string, string | undefined> = {
-    IAM_TEST_INTEGRATION_FAIL_COMMAND: options.failCommand,
-  };
-  for (const name of integrationResourceEnvNames) environment[name] = "caller-owned-test-resource";
-  for (const name of options.missing ?? []) environment[name] = undefined;
-  const result = runWithPnpmRecorder({
+function runTestIntegrationWithRecorder(options: { failCommand?: string } = {}) {
+  return runWithPnpmRecorder({
+    args: ["--workspace", "@iam/api", "--profile", "component", "--profile", "process"],
     commandLogEnvName: "IAM_TEST_INTEGRATION_COMMAND_LOG",
-    environment,
+    environment: { IAM_TEST_INTEGRATION_FAIL_COMMAND: options.failCommand },
     orchestrationScript: testIntegrationScript,
     temporaryDirectoryPrefix: "iam-test-integration-recorder-",
   });
-  return {
-    commands: result.commands,
-    exitCode: result.exitCode,
-    output: result.output,
-  };
 }
 
 function withCallerEnvironment<T>(overrides: Record<string, string>, run: () => T) {
@@ -327,59 +307,39 @@ describe("test orchestration", () => {
 
     expect(rootPackage.scripts["test:unit"]).toBe("turbo test:unit test:unit:root --concurrency=2");
     expect(rootPackage.scripts["test:unit:root"]).toBe("bun test --max-concurrency=2 scripts/__tests__");
-    expect(rootPackage.scripts["test:integration:component"]).toBe("turbo test:integration:component --concurrency=2");
+    expect(rootPackage.scripts["test:integration:component"]).toBe(
+      "node scripts/run-test-integration.mjs --profile component",
+    );
     expect(rootPackage.scripts["test:integration:process"]).toBe(
-      "turbo test:integration:process test:integration:process:root --concurrency=1",
+      "node scripts/run-test-integration.mjs --profile process",
     );
     expect(rootPackage.scripts["test:integration:process:root"]).toBe(
-      "bun test --max-concurrency=1 scripts/test-integration/process",
+      "node scripts/run-package-integration.mjs process -- bun test --max-concurrency=1 scripts/test-integration/process",
     );
-    expect(rootPackage.scripts["test:integration:redis"]).toBe("turbo test:integration:redis --concurrency=1");
-    expect(rootPackage.scripts["test:integration:postgres"]).toBe("turbo test:integration:postgres --concurrency=1");
+    expect(rootPackage.scripts["test:integration:redis"]).toBe("node scripts/run-test-integration.mjs --profile redis");
+    expect(rootPackage.scripts["test:integration:postgres"]).toBe(
+      "node scripts/run-test-integration.mjs --profile postgres",
+    );
     expect(rootPackage.scripts["test:integration:composition"]).toBe(
-      "turbo test:integration:composition --concurrency=1",
+      "node scripts/run-test-integration.mjs --profile composition",
     );
-    expect(rootPackage.scripts["test:integration:browser"]).toBe("turbo test:integration:browser --concurrency=1");
+    expect(rootPackage.scripts["test:integration:browser"]).toBe(
+      "node scripts/run-test-integration.mjs --profile browser",
+    );
     expect(rootPackage.scripts["test:integration"]).toBe("node scripts/run-test-integration.mjs");
     expect(turbo.tasks["//#test:unit:root"]).toEqual({});
-    expect(turbo.tasks["//#test:integration:process:root"]).toEqual({ cache: false });
+    expect(turbo.tasks["//#test:integration:process:root"]).toEqual({
+      cache: false,
+      passThroughEnv: managedIntegrationEnvironment,
+    });
   });
 
-  test("preflights every Integration resource before starting a profile", () => {
-    const result = runTestIntegrationWithRecorder({
-      missing: ["IAM_DB_TEST_DATABASE_URL", "IAM_USER_PROFILE_TEST_REDIS_URL"],
-    });
-
-    expect(result.exitCode).toBe(1);
-    expect(result.commands).toEqual([]);
-    expect(result.output).toContain("Provide dedicated URLs or start disposable Docker resources first");
-    expect(result.output).toContain("IAM_DB_TEST_DATABASE_URL");
-    expect(result.output).toContain("IAM_USER_PROFILE_TEST_REDIS_URL");
-  });
-
-  test("runs Integration profiles in order and propagates the first failure", () => {
-    expect(runTestIntegrationWithRecorder()).toMatchObject({
-      commands: [
-        "test:integration:component",
-        "test:integration:process",
-        "test:integration:redis",
-        "test:integration:postgres",
-        "test:integration:composition",
-        "test:integration:browser",
-      ],
-      exitCode: 0,
-    });
-    expect(
-      runTestIntegrationWithRecorder({
-        failCommand: "test:integration:postgres",
-      }),
-    ).toMatchObject({
-      commands: [
-        "test:integration:component",
-        "test:integration:process",
-        "test:integration:redis",
-        "test:integration:postgres",
-      ],
+  test("runs selected non-resource profiles in order and propagates the first failure", () => {
+    const component = "exec turbo run test:integration:component --filter=@iam/api --concurrency=2 --no-daemon";
+    const processTask = "exec turbo run test:integration:process --filter=@iam/api --concurrency=1 --no-daemon";
+    expect(runTestIntegrationWithRecorder()).toMatchObject({ commands: [component, processTask], exitCode: 0 });
+    expect(runTestIntegrationWithRecorder({ failCommand: component })).toMatchObject({
+      commands: [component],
       exitCode: 37,
     });
   });
@@ -398,15 +358,22 @@ describe("test orchestration", () => {
     });
     expect(turbo.tasks["test:integration:component"]).toEqual({
       dependsOn: ["transit"],
+      inputs: [
+        "$TURBO_DEFAULT$",
+        "$TURBO_ROOT$/scripts/run-package-integration.mjs",
+        "$TURBO_ROOT$/scripts/test-resources/**",
+      ],
+      env: ["IAM_TEST_INTEGRATION_SELECTION"],
     });
     expect(turbo.tasks["test:integration:process"]).toEqual({
       dependsOn: ["transit"],
       cache: false,
+      passThroughEnv: managedIntegrationEnvironment,
     });
     expect(turbo.tasks["test:integration:postgres"]).toEqual({
       dependsOn: ["transit"],
       cache: false,
-      passThroughEnv: postgresIntegrationPassThroughEnv,
+      passThroughEnv: [...postgresIntegrationPassThroughEnv, ...managedIntegrationEnvironment],
     });
     expect(turbo.tasks["test:integration:composition"]).toEqual({
       dependsOn: ["transit"],
@@ -420,12 +387,13 @@ describe("test orchestration", () => {
         "IAM_USER_PROFILE_TEST_REDIS_URL",
         "IAM_WORKER_TEST_DATABASE_URL",
         "IAM_WORKER_TEST_REDIS_URL",
+        ...managedIntegrationEnvironment,
       ],
     });
     expect(turbo.tasks["test:integration:redis"]).toEqual({
       dependsOn: ["transit"],
       cache: false,
-      passThroughEnv: redisIntegrationPassThroughEnv,
+      passThroughEnv: [...redisIntegrationPassThroughEnv, ...managedIntegrationEnvironment],
     });
     expect(turbo.tasks["test:coverage"]).toEqual({
       dependsOn: ["transit"],
@@ -521,96 +489,127 @@ describe("test orchestration", () => {
         root: adminRoot,
         scripts: {
           "test:unit": "vitest run --config vitest.unit.config.ts",
-          "test:integration:component": "vitest run --config vitest.integration.component.config.ts",
-          "test:integration:browser": "node ../../scripts/playwright-e2e-preflight.mjs && playwright test",
+          "test:integration:component":
+            "node ../../scripts/run-package-integration.mjs component -- vitest run --config vitest.integration.component.config.ts",
+          "test:integration:browser":
+            "node ../../scripts/run-package-integration.mjs browser --preflight ../../scripts/playwright-e2e-preflight.mjs -- playwright test",
         },
       },
       {
         root: ssoRoot,
         scripts: {
           "test:unit": "vitest run --config vitest.unit.config.ts",
-          "test:integration:component": "vitest run --config vitest.integration.component.config.ts",
-          "test:integration:browser": "node ../../scripts/playwright-e2e-preflight.mjs && playwright test",
+          "test:integration:component":
+            "node ../../scripts/run-package-integration.mjs component -- vitest run --config vitest.integration.component.config.ts",
+          "test:integration:browser":
+            "node ../../scripts/run-package-integration.mjs browser --preflight ../../scripts/playwright-e2e-preflight.mjs -- playwright test",
         },
       },
       {
         root: oidcRoot,
-        scripts: { "test:integration:redis": "bun test --max-concurrency=1 test-integration/redis" },
+        scripts: {
+          "test:integration:redis":
+            "node ../../scripts/run-package-integration.mjs redis -- bun test --max-concurrency=1 test-integration/redis",
+        },
       },
       {
         root: join(repoRoot, "packages", "client-subject-projection"),
         scripts: {
-          "test:integration:component": "bun test --max-concurrency=2 test-integration/component",
+          "test:integration:component":
+            "node ../../scripts/run-package-integration.mjs component -- bun test --max-concurrency=2 test-integration/component",
         },
       },
       {
         root: join(repoRoot, "gateway"),
         scripts: {
           "test:unit": "bun test --max-concurrency=2 src",
-          "test:integration:component": "bun test --max-concurrency=2 test-integration/component",
+          "test:integration:component":
+            "node ../scripts/run-package-integration.mjs component -- bun test --max-concurrency=2 test-integration/component",
         },
       },
       {
         root: apiCoreRoot,
         scripts: {
           "test:unit": "bun test --max-concurrency=2 src",
-          "test:integration:component": "bun test --max-concurrency=2 test-integration/component",
-          "test:integration:process": "bun test --max-concurrency=1 test-integration/process",
-          "test:integration:redis": "bun test --max-concurrency=1 test-integration/redis",
+          "test:integration:component":
+            "node ../../scripts/run-package-integration.mjs component -- bun test --max-concurrency=2 test-integration/component",
+          "test:integration:process":
+            "node ../../scripts/run-package-integration.mjs process -- bun test --max-concurrency=1 test-integration/process",
+          "test:integration:redis":
+            "node ../../scripts/run-package-integration.mjs redis -- bun test --max-concurrency=1 test-integration/redis",
         },
       },
       {
         root: apiRoot,
         scripts: {
           "test:unit": "bun test --max-concurrency=2 src",
-          "test:integration:component": "bun test --max-concurrency=2 test-integration/component",
-          "test:integration:process": "bun test --max-concurrency=1 test-integration/process",
-          "test:integration:composition": "bun test --max-concurrency=1 test-integration/composition",
-          "test:integration:postgres": "bun test --max-concurrency=1 test-integration/postgres",
-          "test:integration:redis": "bun test --max-concurrency=1 test-integration/redis",
+          "test:integration:component":
+            "node ../../scripts/run-package-integration.mjs component -- bun test --max-concurrency=2 test-integration/component",
+          "test:integration:process":
+            "node ../../scripts/run-package-integration.mjs process -- bun test --max-concurrency=1 test-integration/process",
+          "test:integration:composition":
+            "node ../../scripts/run-package-integration.mjs composition -- bun test --max-concurrency=1 test-integration/composition",
+          "test:integration:postgres":
+            "node ../../scripts/run-package-integration.mjs postgres -- bun test --max-concurrency=1 test-integration/postgres",
+          "test:integration:redis":
+            "node ../../scripts/run-package-integration.mjs redis -- bun test --max-concurrency=1 test-integration/redis",
         },
       },
       {
         root: adminApiRoot,
         scripts: {
           "test:unit": "bun test --max-concurrency=2 src",
-          "test:integration:component": "bun test --max-concurrency=2 test-integration/component",
-          "test:integration:process": "bun test --max-concurrency=1 test-integration/process",
-          "test:integration:postgres": "bun test --max-concurrency=1 test-integration/postgres",
-          "test:integration:redis": "bun test --max-concurrency=1 test-integration/redis",
+          "test:integration:component":
+            "node ../../scripts/run-package-integration.mjs component -- bun test --max-concurrency=2 test-integration/component",
+          "test:integration:process":
+            "node ../../scripts/run-package-integration.mjs process -- bun test --max-concurrency=1 test-integration/process",
+          "test:integration:postgres":
+            "node ../../scripts/run-package-integration.mjs postgres -- bun test --max-concurrency=1 test-integration/postgres",
+          "test:integration:redis":
+            "node ../../scripts/run-package-integration.mjs redis -- bun test --max-concurrency=1 test-integration/redis",
         },
       },
       {
         root: workerRoot,
         scripts: {
           "test:unit": "bun test --max-concurrency=2 src",
-          "test:integration:component": "bun test --max-concurrency=2 test-integration/component",
-          "test:integration:process": "bun test --max-concurrency=1 test-integration/process",
-          "test:integration:postgres": "bun test --max-concurrency=1 test-integration/postgres",
-          "test:integration:redis": "bun test --max-concurrency=1 test-integration/redis",
+          "test:integration:component":
+            "node ../../scripts/run-package-integration.mjs component -- bun test --max-concurrency=2 test-integration/component",
+          "test:integration:process":
+            "node ../../scripts/run-package-integration.mjs process -- bun test --max-concurrency=1 test-integration/process",
+          "test:integration:postgres":
+            "node ../../scripts/run-package-integration.mjs postgres -- bun test --max-concurrency=1 test-integration/postgres",
+          "test:integration:redis":
+            "node ../../scripts/run-package-integration.mjs redis -- bun test --max-concurrency=1 test-integration/redis",
         },
       },
       {
         root: dbRoot,
         scripts: {
           "test:unit": "bun test --max-concurrency=2 src",
-          "test:integration:postgres": "bun test --max-concurrency=1 test-integration/postgres",
+          "test:integration:postgres":
+            "node ../../scripts/run-package-integration.mjs postgres -- bun test --max-concurrency=1 test-integration/postgres",
         },
       },
       {
         root: roleAssignmentRoot,
         scripts: {
-          "test:integration:component": "bun test --max-concurrency=2 test-integration/component",
-          "test:integration:postgres": "bun test --max-concurrency=1 test-integration/postgres",
+          "test:integration:component":
+            "node ../../scripts/run-package-integration.mjs component -- bun test --max-concurrency=2 test-integration/component",
+          "test:integration:postgres":
+            "node ../../scripts/run-package-integration.mjs postgres -- bun test --max-concurrency=1 test-integration/postgres",
         },
       },
       {
         root: userProfileRoot,
         scripts: {
           "test:unit": "bun test --max-concurrency=2 src",
-          "test:integration:component": "bun test --max-concurrency=2 test-integration/component",
-          "test:integration:postgres": "bun test --max-concurrency=1 test-integration/postgres",
-          "test:integration:redis": "bun test --max-concurrency=1 test-integration/redis",
+          "test:integration:component":
+            "node ../../scripts/run-package-integration.mjs component -- bun test --max-concurrency=2 test-integration/component",
+          "test:integration:postgres":
+            "node ../../scripts/run-package-integration.mjs postgres -- bun test --max-concurrency=1 test-integration/postgres",
+          "test:integration:redis":
+            "node ../../scripts/run-package-integration.mjs redis -- bun test --max-concurrency=1 test-integration/redis",
         },
       },
     ];

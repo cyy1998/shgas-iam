@@ -1,4 +1,3 @@
-import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { SystemLogEvent } from "@iam/api-core/logger";
 import { writeAtomicJsonFile } from "./atomic-json-file.ts";
@@ -10,6 +9,7 @@ import type { PlaywrightJourneyRuntimeOptions } from "./playwright-journey.ts";
 import { createPlaywrightJourneyOperations } from "./playwright-journey.ts";
 import type { E2EScenarioGeneratedReferences } from "./seed.ts";
 import { createE2EScenarioIdentity } from "./seed.ts";
+import { readAppliedSeedReferences } from "./seed-receipt.ts";
 
 interface HrAdminOutcomeReceipt {
   version: 1;
@@ -27,7 +27,7 @@ export interface CreateHrAdminJourneyOperationsOptions extends PlaywrightJourney
 }
 
 export function createHrAdminJourneyOperations(options: CreateHrAdminJourneyOperationsOptions) {
-  const readScenarioReferences = options.readScenarioReferences ?? readGeneratedScenarioReferences;
+  const readScenarioReferences = options.readScenarioReferences ?? readAppliedSeedReferences;
   const playwright = createPlaywrightJourneyOperations({
     ...options,
     specPath: "hr-admin-user-management.spec.ts",
@@ -120,26 +120,6 @@ export function createHrAdminJourneyOperations(options: CreateHrAdminJourneyOper
       }
     },
   };
-}
-
-async function readGeneratedScenarioReferences(descriptor: RunDescriptor): Promise<E2EScenarioGeneratedReferences> {
-  const raw = await readFile(join(descriptor.artifactDirectory, "seed-receipt.json"), "utf8");
-  const receipt: unknown = JSON.parse(raw);
-  if (!isObject(receipt) || receipt.status !== "applied" || !isObject(receipt.scenario)) {
-    throw new Error("HR Admin journey requires an applied seed receipt");
-  }
-  const scenario = receipt.scenario;
-  const references = {
-    adminMixedRoleAssignmentId: scenario.adminMixedRoleAssignmentId,
-    hiddenResponsibilityAssignmentId: scenario.hiddenResponsibilityAssignmentId,
-    hrSecondScopeRoleAssignmentId: scenario.hrSecondScopeRoleAssignmentId,
-    outsideResponsibilityHolderEmploymentId: scenario.outsideResponsibilityHolderEmploymentId,
-    responsibilityHolderEmploymentId: scenario.responsibilityHolderEmploymentId,
-  };
-  if (!Object.values(references).every((value) => Number.isInteger(value) && Number(value) > 0)) {
-    throw new Error("HR Admin seed receipt is missing generated references");
-  }
-  return references as E2EScenarioGeneratedReferences;
 }
 
 export function assertHrAdminDenialLog(

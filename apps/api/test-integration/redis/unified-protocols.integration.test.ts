@@ -1,4 +1,4 @@
-import { expect, test } from "bun:test";
+import { afterEach, expect, test } from "bun:test";
 import { Buffer } from "node:buffer";
 import type { ClientSsoConfig } from "@iam/contracts";
 import {
@@ -9,6 +9,7 @@ import {
   OidcScope,
   SubjectClaim,
 } from "@iam/contracts";
+import { resetApiRedisTestDatabase } from "./fixture-lifecycle";
 import { fixture } from "./oidc.fixture";
 
 test("joint HTTP original relationship rejects both protocols after a late Token race and missing-index root termination", async () => {
@@ -171,3 +172,5 @@ test("joint HTTP original relationship rejects both protocols after a late Token
     await f.close();
   }
 }, 15000);
+
+afterEach(resetApiRedisTestDatabase);

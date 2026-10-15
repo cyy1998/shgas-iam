@@ -9,6 +9,7 @@ import {
   createSubjectAccessBootstrap,
 } from "../../src/subject-access";
 import type { SubjectAccessAtomicStore } from "../../src/subject-access/storage/store";
+import { resetExclusiveRedisTestDatabase, runWithOwnedTestResources } from "../../src/testing/external-test-resources";
 
 const TEST_REDIS_URL_ENV = "IAM_API_CORE_TEST_REDIS_URL";
 const OBSERVER_CLOCK_SKEW_MS = 24 * 60 * 60 * 1000;
@@ -20,6 +21,7 @@ export interface RedisTestScope {
 }
 
 export interface RedisTestHarness {
+  readonly reset: (stopExecutors?: ReadonlyArray<() => Promise<void> | void>) => Promise<void>;
   readonly createScope: () => Promise<RedisTestScope>;
   readonly createSubjectAccessScope: (input: {
     writerTransitionIds: readonly string[];
@@ -59,27 +61,25 @@ export interface SubjectAccessRedisTestScope {
 
 export async function createRedisTestHarness(): Promise<RedisTestHarness> {
   const redisUrl = requireDedicatedRedisTestUrl();
-  const cleanupRedis = createRedisClient(redisUrl);
-
-  try {
-    await connectRedis(cleanupRedis);
-  } catch (error) {
-    cleanupRedis.disconnect();
-    throw error;
-  }
+  const scopeClosers: Array<() => Promise<void>> = [];
 
   return {
     async createScope() {
       const keyPrefix = `iam:test:login-restriction:${randomUUID()}:`;
       const writerRedis = createRedisClient(redisUrl);
       const observerRedis = createRedisClient(redisUrl);
+      const close = createRedisTestScopeCloser({
+        clients: [writerRedis, observerRedis],
+      });
+      scopeClosers.push(close);
 
       try {
         await Promise.all([connectRedis(writerRedis), connectRedis(observerRedis)]);
       } catch (error) {
-        writerRedis.disconnect();
-        observerRedis.disconnect();
-        throw error;
+        return await runWithOwnedTestResources<RedisTestScope>(async ({ registerCleanup }) => {
+          registerCleanup(close);
+          throw error;
+        });
       }
 
       const writer = createLoginRestrictionClient({
@@ -92,13 +92,6 @@ export async function createRedisTestHarness(): Promise<RedisTestHarness> {
         keyPrefix,
         redis: observerRedis,
       });
-      const close = createRedisTestScopeCloser({
-        cleanupRedis,
-        clients: [writerRedis, observerRedis],
-        errorMessage: "Failed to close LoginRestriction Redis test scope",
-        keyPrefix,
-      });
-
       return {
         close,
         observer,
@@ -109,13 +102,18 @@ export async function createRedisTestHarness(): Promise<RedisTestHarness> {
       const keyPrefix = `iam:test:subject-access:${randomUUID()}:`;
       const writerRedis = createRedisClient(redisUrl);
       const observerRedis = createRedisClient(redisUrl);
+      const close = createRedisTestScopeCloser({
+        clients: [writerRedis, observerRedis],
+      });
+      scopeClosers.push(close);
 
       try {
         await Promise.all([connectRedis(writerRedis), connectRedis(observerRedis)]);
       } catch (error) {
-        writerRedis.disconnect();
-        observerRedis.disconnect();
-        throw error;
+        return await runWithOwnedTestResources<SubjectAccessRedisTestScope>(async ({ registerCleanup }) => {
+          registerCleanup(close);
+          throw error;
+        });
       }
 
       const writerClient = createSubjectAccessClient({
@@ -128,13 +126,6 @@ export async function createRedisTestHarness(): Promise<RedisTestHarness> {
         redis: observerRedis,
         transitionIds: input.observerTransitionIds,
       });
-      const close = createRedisTestScopeCloser({
-        cleanupRedis,
-        clients: [writerRedis, observerRedis],
-        errorMessage: "Failed to close Subject Access Redis test scope",
-        keyPrefix,
-      });
-
       return {
         bootstrap: createSubjectAccessBootstrap({
           keyPrefix,
@@ -168,37 +159,49 @@ export async function createRedisTestHarness(): Promise<RedisTestHarness> {
         writerBacklog: writerClient.backlog,
       };
     },
+    async reset(stopExecutors = []) {
+      const control = createRedisClient(redisUrl);
+      await runWithOwnedTestResources(async ({ registerCleanup }) => {
+        registerCleanup(() => closeRedisClient(control));
+        await resetExclusiveRedisTestDatabase({
+          redis: {
+            async flushdb() {
+              await connectRedis(control);
+              return await control.flushdb();
+            },
+          },
+          stopExecutors: [...scopeClosers, ...stopExecutors],
+        });
+      });
+      scopeClosers.length = 0;
+    },
     async close() {
-      await cleanupRedis.quit();
+      await runWithOwnedTestResources(async ({ registerCleanup }) => {
+        for (const close of scopeClosers) registerCleanup(close);
+      });
+      scopeClosers.length = 0;
     },
   };
 }
 
-function createRedisTestScopeCloser(input: {
-  cleanupRedis: Redis;
-  clients: readonly Redis[];
-  errorMessage: string;
-  keyPrefix: string;
-}) {
-  let closed = false;
-  return async function close() {
-    if (closed) return;
-    closed = true;
-
-    const errors: unknown[] = [];
-    const closeResults = await Promise.allSettled(input.clients.map((client) => client.quit()));
-    for (const result of closeResults) {
-      if (result.status === "rejected") errors.push(result.reason);
-    }
-
-    try {
-      await deleteOwnedKeys(input.cleanupRedis, input.keyPrefix);
-    } catch (error) {
-      errors.push(error);
-    }
-
-    if (errors.length > 0) throw new AggregateError(errors, input.errorMessage);
+export function createRedisTestScopeCloser(input: { clients: readonly Redis[] }) {
+  let closePromise: Promise<void> | undefined;
+  return function close() {
+    closePromise ??= runWithOwnedTestResources(async ({ registerCleanup }) => {
+      for (const client of input.clients) registerCleanup(() => closeRedisClient(client));
+    });
+    return closePromise;
   };
+}
+
+async function closeRedisClient(redis: Redis) {
+  const ended = redis.status === "end" ? Promise.resolve() : new Promise<void>((resolve) => redis.once("end", resolve));
+  try {
+    if (redis.status !== "end" && redis.status !== "wait") await redis.quit();
+  } finally {
+    redis.disconnect();
+    await ended;
+  }
 }
 
 function createSubjectAccessClient(input: { keyPrefix: string; redis: Redis; transitionIds: readonly string[] }) {
@@ -266,15 +269,6 @@ function requireDedicatedRedisTestUrl() {
     throw new Error(`${TEST_REDIS_URL_ENV} must use the redis or rediss protocol`);
 
   return redisUrl;
-}
-
-async function deleteOwnedKeys(redis: Redis, keyPrefix: string) {
-  let cursor = "0";
-  do {
-    const [nextCursor, keys] = await redis.scan(cursor, "MATCH", `${keyPrefix}*`, "COUNT", 100);
-    cursor = nextCursor;
-    if (keys.length > 0) await redis.unlink(...keys);
-  } while (cursor !== "0");
 }
 
 export async function waitForRedisCondition(observe: () => Promise<boolean>, message: string) {

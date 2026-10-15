@@ -1,4 +1,4 @@
-import { afterAll, afterEach, beforeAll, expect, test } from "bun:test";
+import { afterAll, afterEach, beforeAll, beforeEach, expect, test } from "bun:test";
 import { randomUUID } from "node:crypto";
 import { ClientSnapshotUnavailableError } from "@iam/api-core/client-snapshot";
 import { createClientSnapshots } from "@iam/api-core/client-snapshot/composition";
@@ -6,34 +6,42 @@ import {
   createClientSnapshotMaintenance,
   createClientSnapshotVerifier,
 } from "@iam/api-core/client-snapshot/maintenance";
-import { clientSnapshotKeys } from "@iam/api-core/client-snapshot/testing";
+import { clientSnapshotKeys, createClientSnapshotMaintenanceTestFixture } from "@iam/api-core/client-snapshot/testing";
 import { ClientStatus } from "@iam/contracts";
 import Redis from "ioredis";
+import { createRedisTestHarness, createRedisTestScopeCloser } from "./redis-test-harness";
 
 let redis: Redis;
-const codes: string[] = [];
+let harness: Awaited<ReturnType<typeof createRedisTestHarness>>;
+const stopExecutors: Array<() => Promise<void>> = [];
 beforeAll(async () => {
+  harness = await createRedisTestHarness();
+});
+beforeEach(async () => {
   const url = process.env.IAM_API_CORE_TEST_REDIS_URL;
   if (!url) throw new Error("IAM_API_CORE_TEST_REDIS_URL required");
-  redis = new Redis(url, {
-    lazyConnect: true,
-    maxRetriesPerRequest: 0,
-    retryStrategy: () => null,
-  });
+  redis = trackRedis(
+    new Redis(url, {
+      lazyConnect: true,
+      maxRetriesPerRequest: 0,
+      retryStrategy: () => null,
+    }),
+  );
   await redis.connect();
 });
 afterEach(async () => {
-  for (const code of codes.splice(0)) {
-    const keys = clientSnapshotKeys(code);
-    await redis.unlink(keys.control, ...keys.payloads);
-  }
+  await harness?.reset(stopExecutors);
+  stopExecutors.length = 0;
 });
 afterAll(async () => {
-  await redis?.quit();
+  await harness?.close();
 });
+function trackRedis(client: Redis) {
+  stopExecutors.push(createRedisTestScopeCloser({ clients: [client] }));
+  return client;
+}
 function fixture() {
   const code = `snapshot-${randomUUID()}`;
-  codes.push(code);
   let ordinary: unknown = {
     clientCode: code,
     status: ClientStatus.Enable,
@@ -174,7 +182,7 @@ for (const kind of ["client", "gate", "credential"] as const) {
       const keys = clientSnapshotKeys(f.code);
       if (cache === "bad-payload") await redis.set(keys.payloads[kind === "credential" ? 1 : 0], "bad");
       if (cache === "bad-control") await redis.hset(keys.control, "schemaVersion", "bad");
-      const independent = redis.duplicate({ lazyConnect: true });
+      const independent = trackRedis(redis.duplicate({ lazyConnect: true }));
       await independent.connect();
       delay = true;
       const a = snapshots[kind].acquire(f.code);
@@ -219,7 +227,6 @@ for (const kind of ["client", "gate", "credential"] as const) {
       } finally {
         resume.release();
         await Promise.allSettled([a, ...(b ? [b] : [])]);
-        await independent.quit();
       }
     });
   }
@@ -306,11 +313,13 @@ test("bad payload rebuilds; bad control clears both payloads; Redis failure neve
     const recovered = await snapshots.client.acquire(f.code);
     expect(recovered.kind).toBe("present");
   }
-  const disconnected = redis.duplicate({
-    lazyConnect: true,
-    maxRetriesPerRequest: 0,
-    retryStrategy: () => null,
-  });
+  const disconnected = trackRedis(
+    redis.duplicate({
+      lazyConnect: true,
+      maxRetriesPerRequest: 0,
+      retryStrategy: () => null,
+    }),
+  );
   await disconnected.connect();
   disconnected.disconnect();
   const before = f.counts();
@@ -339,6 +348,7 @@ test("targeted and full repair preserve non-target data, independent scan-only v
   await otherSnapshots.client.acquire(other.code);
   const otherKeys = clientSnapshotKeys(other.code);
   const preserved = await redis.get(otherKeys.payloads[0]);
+  await createClientSnapshotMaintenanceTestFixture(redis).seedInvalidClientPayload(f.code);
   await maintenance.repairClient(f.code);
   const afterTarget = await redis.get(otherKeys.payloads[0]);
   expect(afterTarget).toBe(preserved);
@@ -347,38 +357,35 @@ test("targeted and full repair preserve non-target data, independent scan-only v
   const username = `snapshot-verify-${randomUUID()}`;
   const password = randomUUID();
   await redis.acl("SETUSER", username, "on", `>${password}`, "~*", "-@all", "+scan");
-  const scanOnly = redis.duplicate({ username, password, lazyConnect: true, enableReadyCheck: false });
-  try {
-    await scanOnly.connect();
-    const restricted = createClientSnapshotVerifier(scanOnly);
-    const notEmpty = await restricted.verifyAllAfterRedisRestore({ protocolTrafficStopped: true });
-    expect(notEmpty.matchingKeys).toBeGreaterThan(0);
-    let unlinked = false;
-    const interrupted = createClientSnapshotMaintenance({
-      eval: (...args) => redis.eval(...args),
-      scan: (...args) => redis.scan(...args),
-      async unlink(...keys) {
-        if (unlinked) throw new Error("interrupted repair");
-        unlinked = true;
-        return redis.unlink(...keys);
-      },
-    });
-    const failedRepair = await failure(() => interrupted.repairAllAfterRedisRestore({ protocolTrafficStopped: true }));
-    expect(failedRepair).toBeInstanceOf(Error);
-    await maintenance.repairAllAfterRedisRestore({
-      protocolTrafficStopped: true,
-    });
-    const report = await restricted.verifyAllAfterRedisRestore({
-      protocolTrafficStopped: true,
-    });
-    expect(report.matchingKeys).toBe(0);
-    const retained = await redis.get(sentinel);
-    expect(retained).toBe("retained");
-    const recovered = await snapshots.client.acquire(f.code);
-    expect(recovered.kind).toBe("present");
-  } finally {
-    scanOnly.disconnect();
+  stopExecutors.push(async () => {
     await redis.acl("DELUSER", username);
-    await redis.unlink(sentinel);
-  }
+  });
+  const scanOnly = trackRedis(redis.duplicate({ username, password, lazyConnect: true, enableReadyCheck: false }));
+  await scanOnly.connect();
+  const restricted = createClientSnapshotVerifier(scanOnly);
+  const notEmpty = await restricted.verifyAllAfterRedisRestore({ protocolTrafficStopped: true });
+  expect(notEmpty.matchingKeys).toBeGreaterThan(0);
+  let unlinked = false;
+  const interrupted = createClientSnapshotMaintenance({
+    eval: (...args) => redis.eval(...args),
+    scan: (...args) => redis.scan(...args),
+    async unlink(...keys) {
+      if (unlinked) throw new Error("interrupted repair");
+      unlinked = true;
+      return redis.unlink(...keys);
+    },
+  });
+  const failedRepair = await failure(() => interrupted.repairAllAfterRedisRestore({ protocolTrafficStopped: true }));
+  expect(failedRepair).toBeInstanceOf(Error);
+  await maintenance.repairAllAfterRedisRestore({
+    protocolTrafficStopped: true,
+  });
+  const report = await restricted.verifyAllAfterRedisRestore({
+    protocolTrafficStopped: true,
+  });
+  expect(report.matchingKeys).toBe(0);
+  const retained = await redis.get(sentinel);
+  expect(retained).toBe("retained");
+  const recovered = await snapshots.client.acquire(f.code);
+  expect(recovered.kind).toBe("present");
 });

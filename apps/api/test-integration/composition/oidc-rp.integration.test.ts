@@ -1,9 +1,12 @@
-import { expect, test } from "bun:test";
+import { afterEach, expect, test } from "bun:test";
 import { mkdtemp } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import * as rp from "openid-client";
+import { resetApiRedisTestDatabase } from "../redis/fixture-lifecycle";
 import { createOidcConformanceCandidate } from "./oidc-conformance.fixture";
+
+afterEach(resetApiRedisTestDatabase);
 
 const scenarios = (["same-origin", "dual"] as const).flatMap((issuerMode) =>
   (issuerMode === "dual" ? (["internal", "external"] as const) : (["external"] as const)).flatMap((entry) =>

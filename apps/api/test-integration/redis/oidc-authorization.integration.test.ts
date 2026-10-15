@@ -1,4 +1,4 @@
-import { expect, test } from "bun:test";
+import { afterEach, expect, test } from "bun:test";
 import { randomUUID } from "node:crypto";
 import {
   ClientSsoProtocol,
@@ -7,6 +7,7 @@ import {
   OidcScope,
   OidcTokenEndpointAuthMethod,
 } from "@iam/contracts";
+import { resetApiRedisTestDatabase } from "./fixture-lifecycle";
 
 import { fixture } from "./oidc.fixture";
 
@@ -544,3 +545,5 @@ for (const corruption of ["record", "index"] as const) {
     });
   }
 }
+
+afterEach(resetApiRedisTestDatabase);

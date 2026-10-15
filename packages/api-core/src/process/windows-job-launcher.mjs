@@ -1,8 +1,8 @@
-// Package-shared launcher for process-smoke Windows Job ownership.
+// Package-shared launcher for owned-process Windows Job ownership.
 import { spawn } from "node:child_process";
 import process from "node:process";
 
-const commandEnvironmentKey = "IAM_PROCESS_SMOKE_COMMAND_BASE64";
+const commandEnvironmentKey = "IAM_OWNED_PROCESS_COMMAND_BASE64";
 
 function normalizeExitCode(code) {
   return Number.isInteger(code) && code >= 0 ? code : 1;
@@ -37,7 +37,7 @@ function readTargetCommand() {
     !command.args.every((argument) => typeof argument === "string") ||
     typeof command.cwd !== "string"
   ) {
-    throw new Error("invalid process-smoke target command");
+    throw new Error("invalid owned-process target command");
   }
   return command;
 }
@@ -108,7 +108,7 @@ async function main() {
     }
   };
   target.once("error", (error) => {
-    process.stderr.write(`process-smoke target spawn failed: ${error.message}\n`);
+    process.stderr.write(`owned-process target spawn failed: ${error.message}\n`);
     drainTimer ??= setTimeout(finishLauncher, 250, 1);
   });
   target.once("exit", (code) => {

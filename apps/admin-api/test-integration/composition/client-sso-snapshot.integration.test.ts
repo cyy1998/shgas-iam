@@ -1,4 +1,4 @@
-import { afterAll, beforeAll, expect, test } from "bun:test";
+import { afterAll, afterEach, beforeAll, expect, test } from "bun:test";
 import { randomUUID } from "node:crypto";
 import { createAdminClientCache } from "@admin-api/composition/runtime/client-cache";
 import { createClientSsoSnapshotManagement } from "@admin-api/composition/services/client-sso-snapshots";
@@ -10,6 +10,7 @@ import { createClientSnapshots } from "@iam/api-core/client-snapshot/composition
 import { createClientSecretAuthenticator } from "@iam/api-core/client-snapshot/credentials";
 import { createClientSnapshotMaintenance } from "@iam/api-core/client-snapshot/maintenance";
 import { createErrorHandler } from "@iam/api-core/middlewares";
+import { runWithOwnedTestResources } from "@iam/api-core/testing/external-test-resources";
 import { createUnitOfWork } from "@iam/api-core/uow";
 import type { ClientSsoConfig } from "@iam/contracts";
 import {
@@ -34,11 +35,23 @@ let pg: Awaited<ReturnType<typeof createAdminApiPostgresTestHarness>>;
 let resource: Awaited<ReturnType<typeof createAdminApiRedisTestHarness>>;
 beforeAll(async () => {
   pg = await createAdminApiPostgresTestHarness();
-  resource = await createAdminApiRedisTestHarness();
+  try {
+    resource = await createAdminApiRedisTestHarness();
+  } catch (error) {
+    await runWithOwnedTestResources(async (lifecycle) => {
+      lifecycle.registerCleanup(() => pg.close());
+      throw error;
+    });
+  }
+});
+afterEach(async () => {
+  await resource?.reset();
 });
 afterAll(async () => {
-  await pg?.close();
-  await resource?.close();
+  await runWithOwnedTestResources(async (lifecycle) => {
+    lifecycle.registerCleanup(() => pg?.close());
+    lifecycle.registerCleanup(() => resource?.close());
+  });
 });
 const logger = { error() {}, warn() {} };
 const oidc = {
@@ -107,14 +120,17 @@ async function createManagedRestFixture() {
       });
     return { scope, code, candidate, app, endpoint, save };
   } catch (error) {
-    await scope.close();
-    throw error;
+    return await runWithOwnedTestResources(async (lifecycle) => {
+      lifecycle.registerCleanup(() => scope.close());
+      throw error;
+    });
   }
 }
 
 test("managed REST save persists and publishes the strict shape without exposing credentials", async () => {
   const { scope, code, candidate, app, endpoint, save } = await createManagedRestFixture();
-  try {
+  await runWithOwnedTestResources(async (lifecycle) => {
+    lifecycle.registerCleanup(() => scope.close());
     await candidate.snapshots.client.acquire(code);
     const response = await save(managed);
     expect(response.status).toBe(200);
@@ -130,9 +146,7 @@ test("managed REST save persists and publishes the strict shape without exposing
     expect(published).toMatchObject({ kind: "present", value: { ssoConfig: managed } });
     const audits = await pg.db.select().from(auditLogs).where(eq(auditLogs.targetCode, code));
     expect(JSON.stringify(audits)).not.toContain("SENTINEL");
-  } finally {
-    await scope.close();
-  }
+  });
 });
 
 test.each([
@@ -141,7 +155,8 @@ test.each([
   ["business without callbackEndpoint", { ...managed, callbackType: ClientSsoCallbackType.Business }],
 ])("REST rejects %s without changing saved managed configuration", async (_name, invalid) => {
   const { scope, code, save } = await createManagedRestFixture();
-  try {
+  await runWithOwnedTestResources(async (lifecycle) => {
+    lifecycle.registerCleanup(() => scope.close());
     const saved = await save(managed);
     expect(saved.status).toBe(200);
     const before = await pg.db.select().from(clients).where(eq(clients.clientCode, code));
@@ -149,14 +164,13 @@ test.each([
     expect(rejected.status).toBe(422);
     const after = await pg.db.select().from(clients).where(eq(clients.clientCode, code));
     expect(after).toEqual(before);
-  } finally {
-    await scope.close();
-  }
+  });
 });
 
 test("managed to business and back preserves the existing SSO credential", async () => {
   const { scope, candidate, code, save } = await createManagedRestFixture();
-  try {
+  await runWithOwnedTestResources(async (lifecycle) => {
+    lifecycle.registerCleanup(() => scope.close());
     const originalSecret = await candidate.management.service.readSecret(code);
     const saved = await save(managed);
     expect(saved.status).toBe(200);
@@ -173,14 +187,13 @@ test("managed to business and back preserves the existing SSO credential", async
     expect(secret).toEqual(originalSecret);
     const persisted = await pg.db.select().from(clients).where(eq(clients.clientCode, code));
     expect(persisted[0]!.ssoConfig).toEqual(managed);
-  } finally {
-    await scope.close();
-  }
+  });
 });
 
 test("managed Snapshot repair makes a fresh reader load the strict persisted shape", async () => {
   const { scope, code, candidate, save } = await createManagedRestFixture();
-  try {
+  await runWithOwnedTestResources(async (lifecycle) => {
+    lifecycle.registerCleanup(() => scope.close());
     const saved = await save(managed);
     expect(saved.status).toBe(200);
     await candidate.snapshots.client.acquire(code);
@@ -202,14 +215,13 @@ test("managed Snapshot repair makes a fresh reader load the strict persisted sha
     expect(acquired).toMatchObject({ kind: "present", value: { ssoConfig: managed } });
     const audits = await pg.db.select().from(auditLogs).where(eq(auditLogs.targetCode, code));
     expect(JSON.stringify(audits)).not.toContain("SENTINEL");
-  } finally {
-    await scope.close();
-  }
+  });
 });
 
 test("rotation authentication uses cached current credentials, retains accepted in-flight authentication and failed propagation until repair", async () => {
   const scope = await resource.createScope();
-  try {
+  await runWithOwnedTestResources(async (lifecycle) => {
+    lifecycle.registerCleanup(() => scope.close());
     const code = scope.clientCode("secret");
     await seed(code);
     const sessions = createUnifiedSessionKernel({
@@ -299,14 +311,13 @@ test("rotation authentication uses cached current credentials, retains accepted 
     expect(childAfter.status).toBe("resolved");
     if (rootAfter.status === "resolved") expect(rootAfter.value.userSession).toEqual(root.observation.userSession);
     if (childAfter.status === "resolved") expect(childAfter.value.clientSession).toEqual(child.value.clientSession);
-  } finally {
-    await scope.close();
-  }
+  });
 });
 
 test("actual PG projection and candidate Admin mutation invalidate ordinary and credential observations", async () => {
   const scope = await resource.createScope();
-  try {
+  await runWithOwnedTestResources(async (lifecycle) => {
+    lifecycle.registerCleanup(() => scope.close());
     const code = scope.clientCode("sso");
     await seed(code);
     const candidate = createClientSsoSnapshotManagement({
@@ -389,14 +400,13 @@ test("actual PG projection and candidate Admin mutation invalidate ordinary and 
     });
     const detail = await candidate.management.service.detail(code);
     expect(JSON.stringify(detail)).not.toContain("SENTINEL");
-  } finally {
-    await scope.close();
-  }
+  });
 });
 
 test("actual committed mutation with failed Redis propagation retains old value until explicit repair, no replay", async () => {
   const scope = await resource.createScope();
-  try {
+  await runWithOwnedTestResources(async (lifecycle) => {
+    lifecycle.registerCleanup(() => scope.close());
     const code = scope.clientCode("failure");
     await seed(code);
     let failInvalidation = false;
@@ -441,15 +451,14 @@ test("actual committed mutation with failed Redis propagation retains old value 
       kind: "present",
       value: { status: ClientStatus.Maintenance },
     });
-  } finally {
-    await scope.close();
-  }
+  });
 });
 
 for (const operation of ["save", "rotateSecret"] as const) {
   test(`Unknown COMMIT ${operation} keeps original error, actual mutation is not replayed and both caches invalidate`, async () => {
     const scope = await resource.createScope();
-    try {
+    await runWithOwnedTestResources(async (lifecycle) => {
+      lifecycle.registerCleanup(() => scope.close());
       const code = scope.clientCode("unknown");
       await seed(code);
       const snapshots = createClientSnapshots({
@@ -515,9 +524,7 @@ for (const operation of ["save", "rotateSecret"] as const) {
       });
       const audits = await pg.db.select().from(auditLogs).where(eq(auditLogs.targetCode, code));
       expect(audits).toHaveLength(1);
-    } finally {
-      await scope.close();
-    }
+    });
   });
 }
 
@@ -526,7 +533,8 @@ for (const kind of ["client", "credential"] as const) {
     const scope = await resource.createScope();
     const reached = latch();
     const resume = latch();
-    try {
+    await runWithOwnedTestResources(async (lifecycle) => {
+      lifecycle.registerCleanup(() => scope.close());
       const code = scope.clientCode("late");
       await seed(code);
       const source = createClientSnapshotRepository(pg.db);
@@ -550,6 +558,13 @@ for (const kind of ["client", "credential"] as const) {
         },
       });
       const pending = snapshots[kind].acquire(code);
+      const pendingSettled = Promise.allSettled([pending]);
+      lifecycle.registerCleanup(
+        resource.registerStopExecutor(async () => {
+          resume.release();
+          await pendingSettled;
+        }),
+      );
       await reached.promise;
       const admin = createClientSsoSnapshotManagement({
         clientCache: createAdminClientCache({ redis: scope.redis }),
@@ -574,9 +589,6 @@ for (const kind of ["client", "credential"] as const) {
         if (credential.kind === "present") expect(credential.value.secret).not.toBe("SSO-SENTINEL");
       }
       expect(once).toBe(false);
-    } finally {
-      resume.release();
-      await scope.close();
-    }
+    });
   });
 }

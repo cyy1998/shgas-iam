@@ -12,8 +12,6 @@ import {
   requireSubjectAccessOperation,
 } from "@iam/api-core/subject-access";
 import {
-  cleanupRedisKeysMatchingOwnerMarkers,
-  createRedisKeyInventoryPort,
   parseDedicatedRedisTestUrl,
   requireDedicatedPostgresTestUrl,
   requireExternalTestUrl,
@@ -39,6 +37,7 @@ import { createSubjectFactsRedisCache } from "@iam/user-profile-read-model/subje
 import Redis from "ioredis";
 import { createApiPostgresTestHarness } from "../postgres/postgres-test-harness";
 import { createEntryEnvironment } from "../process/api-env.fixture";
+import { closeApiRedisConnection, ownApiTestExecutor, resetApiRedisTestDatabase } from "../redis/fixture-lifecycle";
 
 requireDedicatedPostgresTestUrl({
   name: "IAM_API_TEST_DATABASE_URL",
@@ -63,17 +62,20 @@ const suite = createProcessSmokeSuite({
   temporaryDirectoryPrefix: "iam-api-unified-",
   hostname: "localhost",
 });
-afterEach(suite.cleanup);
+afterEach(resetApiRedisTestDatabase);
 
 test(
   "production API serves root, Custom and OIDC with one live session generation and shared PostgreSQL/Redis owners",
   async () => {
     await runWithOwnedTestResources(async ({ registerCleanup }) => {
-      const pg = await createApiPostgresTestHarness();
+      registerCleanup(resetApiRedisTestDatabase);
+      const pg = await createApiPostgresTestHarness((close) => {
+        ownApiTestExecutor(close);
+      });
       const sql = pg.sql;
-      registerCleanup(() => pg.close());
       const redis = new Redis(redisUrl, { maxRetriesPerRequest: 1 });
-      registerCleanup(() => redis.disconnect());
+      ownApiTestExecutor(() => closeApiRedisConnection(redis));
+      ownApiTestExecutor(suite.cleanup);
       const subjectIdentifier = randomUUID();
       const userId = randomInt(100000000, 1000000000);
       const namespace = `api194:${randomUUID()}`;
@@ -83,18 +85,6 @@ test(
       const redirectUri = "https://rp.example/complete";
       const secret = "original-secret";
       const rotatedSecret = "rotated-secret";
-      registerCleanup(async () => {
-        await cleanupRedisKeysMatchingOwnerMarkers({
-          diagnosticLabel: "API unified composition",
-          ownerMarkers: new Set([namespace, subjectIdentifier, custom, managed, oidc]),
-          redis: createRedisKeyInventoryPort(redis),
-        });
-      });
-      registerCleanup(async () => {
-        await sql`DELETE FROM user_profile_dirty WHERE user_id = ${userId}`;
-        await sql`DELETE FROM user_profile WHERE subject_identifier = ${subjectIdentifier}`;
-        await sql`DELETE FROM client WHERE client_code IN (${custom}, ${managed}, ${oidc})`;
-      });
       const facts = {
         schemaVersion: 3 as const,
         sourceDirtyVersion: "1",
@@ -378,7 +368,6 @@ test(
         },
       });
       expect(result).toBe(true);
-      await suite.cleanup();
     });
   },
   PROCESS_SMOKE_TEST_TIMEOUT_MS,

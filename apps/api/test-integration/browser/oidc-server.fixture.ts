@@ -10,11 +10,14 @@ async function main() {
     fetch: () => new Response("<p>RP</p>", { headers: { "Content-Type": "text/html" } }),
   });
   const logoutUri = `${rp.url.origin}/logout`;
-  async function close() {
-    const current = running;
-    running = undefined;
-    await closeFixtureResources([() => current?.close(), () => rp.stop(true)]);
-  }
+  let closing: Promise<void> | undefined;
+  const close = () =>
+    (closing ??= (async () => {
+      const current = running;
+      running = undefined;
+      await closeFixtureResources([() => current?.close(), () => rp.stop(true)]);
+      process.stderr.write("fixture-stopped\n");
+    })());
   try {
     running = await fixture(undefined, true, undefined, 45, undefined, false);
     process.stderr.write(`fixture-created:${JSON.stringify({ origin: running.httpOrigin, rp: rp.url.origin })}\n`);

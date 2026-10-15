@@ -1,92 +1,70 @@
 import { expect, test } from "bun:test";
 import {
-  cleanupRedisKeysAddedSince,
-  cleanupRedisKeysMatchingOwnerMarkers,
   parseDedicatedRedisTestUrl,
   requireDedicatedPostgresTestUrl,
   requireExternalTestUrl,
+  resetExclusiveRedisTestDatabase,
   runWithOwnedTestResources,
 } from "../external-test-resources";
 
-test("removes only Redis keys matched by caller-owned markers and verifies cleanup", async () => {
-  const keys = new Set(["sess:api-owned:principal", "subject-access:oidc-owned", "shared-unrelated-sentinel"]);
-  const removed: string[][] = [];
-  const redis = {
-    async removeKeys(ownedKeys: readonly string[]) {
-      removed.push([...ownedKeys]);
-      for (const key of ownedKeys) keys.delete(key);
-      return ownedKeys.length;
+test("resets the exclusive Redis DB after all executors have stopped in reverse order", async () => {
+  const events: string[] = [];
+  const keys = new Set(["case-data", "unexpired-lock"]);
+  await resetExclusiveRedisTestDatabase({
+    redis: {
+      async flushdb() {
+        events.push("reset");
+        keys.clear();
+        return "OK";
+      },
     },
-    async scanPage() {
-      return ["0", [...keys]] as [string, string[]];
-    },
-  };
-
-  await cleanupRedisKeysMatchingOwnerMarkers({
-    diagnosticLabel: "composition fixture",
-    ownerMarkers: new Set(["api-owned", "oidc-owned"]),
-    redis,
+    stopExecutors: [
+      async () => {
+        events.push("connection stopped");
+      },
+      async () => {
+        events.push("consumer stopped");
+      },
+    ],
   });
-
-  expect({ keys: [...keys], removed }).toEqual({
-    keys: ["shared-unrelated-sentinel"],
-    removed: [["sess:api-owned:principal", "subject-access:oidc-owned"]],
+  expect({ events, keys: [...keys] }).toEqual({
+    events: ["consumer stopped", "connection stopped", "reset"],
+    keys: [],
   });
 });
 
-test("identifies the caller when owned Redis keys remain after cleanup", async () => {
-  const redis = {
-    async removeKeys(keys: readonly string[]) {
-      return keys.length;
-    },
-    async scanPage() {
-      return ["0", ["sess:oidc-owned:principal"]] as [string, string[]];
-    },
-  };
-
-  await expect(
-    cleanupRedisKeysMatchingOwnerMarkers({
-      diagnosticLabel: "OIDC composition",
-      ownerMarkers: new Set(["oidc-owned"]),
-      redis,
-    }),
-  ).rejects.toThrow("OIDC composition cleanup left 1 owned Redis keys");
-});
-
-test.each([
-  ["an empty marker set", new Set<string>()],
-  ["an empty marker", new Set(["api-owned", ""])],
-  ["a whitespace-only marker", new Set(["api-owned", "   "])],
-  ["an untrimmed marker", new Set(["api-owned", " oidc-owned"])],
-])("rejects %s before inventorying or deleting Redis keys", async (_, ownerMarkers) => {
-  const keys = new Set(["shared-unrelated-sentinel"]);
-  let inventoryCalls = 0;
-  let removeCalls = 0;
-  const redis = {
-    async removeKeys(ownedKeys: readonly string[]) {
-      removeCalls += 1;
-      for (const key of ownedKeys) keys.delete(key);
-      return ownedKeys.length;
-    },
-    async scanPage() {
-      inventoryCalls += 1;
-      return ["0", [...keys]] as [string, string[]];
-    },
-  };
-
-  await expect(
-    cleanupRedisKeysMatchingOwnerMarkers({
-      diagnosticLabel: "composition fixture",
-      ownerMarkers,
-      redis,
-    }),
-  ).rejects.toThrow("composition fixture cleanup requires non-empty trimmed owner markers");
-
-  expect({ inventoryCalls, keys: [...keys], removeCalls }).toEqual({
-    inventoryCalls: 0,
-    keys: ["shared-unrelated-sentinel"],
-    removeCalls: 0,
-  });
+test("attempts every executor stop, preserves stop errors and refuses to reset an uncertain DB", async () => {
+  const firstFailure = new Error("connection did not stop");
+  const secondFailure = new Error("consumer did not stop");
+  const events: string[] = [];
+  let caught: unknown;
+  try {
+    await resetExclusiveRedisTestDatabase({
+      redis: {
+        async flushdb() {
+          events.push("reset");
+          return "OK";
+        },
+      },
+      stopExecutors: [
+        async () => {
+          events.push("connection stop");
+          throw firstFailure;
+        },
+        async () => {
+          events.push("other stop");
+        },
+        async () => {
+          events.push("consumer stop");
+          throw secondFailure;
+        },
+      ],
+    });
+  } catch (error) {
+    caught = error;
+  }
+  expect(events).toEqual(["consumer stop", "other stop", "connection stop"]);
+  expect(caught instanceof AggregateError ? caught.errors : []).toEqual([secondFailure, firstFailure]);
 });
 
 test("preserves the body failure while attempting every owned resource cleanup", async () => {
@@ -123,41 +101,6 @@ test("preserves the body failure while attempting every owned resource cleanup",
     attempted: ["third", "second", "first"],
     errors: [bodyFailure, thirdCleanupFailure, firstCleanupFailure],
     isAggregate: true,
-  });
-});
-
-test("continues deleting later Redis inventory batches after one batch fails", async () => {
-  const existingKeys = new Set(["existing"]);
-  const addedKeys = Array.from({ length: 202 }, (_, index) => `added-${index.toString().padStart(3, "0")}`);
-  const allKeys = ["existing", ...addedKeys];
-  const attempted: string[][] = [];
-  const batchFailure = new Error("first batch failed");
-  const redis = {
-    async removeKeys(keys: readonly string[]) {
-      attempted.push([...keys]);
-      if (attempted.length === 1) throw batchFailure;
-      return keys.length;
-    },
-    async scanPage(cursor: string) {
-      return cursor === "0"
-        ? (["1", allKeys.slice(0, 101)] as [string, string[]])
-        : (["0", allKeys.slice(101)] as [string, string[]]);
-    },
-  };
-  let caught: unknown;
-
-  try {
-    await cleanupRedisKeysAddedSince(redis, existingKeys);
-  } catch (error) {
-    caught = error;
-  }
-
-  expect({
-    attempted: attempted.map((batch) => batch.length),
-    caught,
-  }).toEqual({
-    attempted: [100, 100, 2],
-    caught: batchFailure,
   });
 });
 

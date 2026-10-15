@@ -2,11 +2,10 @@ import { randomUUID } from "node:crypto";
 import process from "node:process";
 import type { DedicatedRedisTestConfig } from "@iam/api-core/testing/external-test-resources";
 import {
-  cleanupRedisKeysMatchingOwnerMarkers,
-  createRedisKeyInventoryPort,
-  inventoryRedisKeys,
   parseDedicatedRedisTestUrl,
   requireExternalTestUrl,
+  resetExclusiveRedisTestDatabase,
+  runWithOwnedTestResources,
 } from "@iam/api-core/testing/external-test-resources";
 import Redis from "ioredis";
 
@@ -23,8 +22,8 @@ export interface AdminApiRedisTestScope {
 export interface AdminApiRedisTestHarness {
   readonly createScope: () => Promise<AdminApiRedisTestScope>;
   readonly close: () => Promise<void>;
-  readonly inventoryKeys: () => Promise<Set<string>>;
-  readonly removeKeys: (keys: readonly string[]) => Promise<void>;
+  readonly reset: () => Promise<void>;
+  readonly registerStopExecutor: (stop: () => Promise<void>) => () => Promise<void>;
   readonly redisConfig: DedicatedRedisTestConfig;
 }
 
@@ -37,68 +36,72 @@ export async function createAdminApiRedisTestHarness(options?: {
     name: resourceEnvName,
     value: redisUrl,
   });
-  const cleanupRedis = createRedisClient(redisUrl);
-  try {
-    await connectRedis(cleanupRedis);
-  } catch (error) {
-    cleanupRedis.disconnect();
-    throw error;
+  const stopExecutors: Array<() => Promise<void>> = [];
+  function registerStopExecutor(stop: () => Promise<void>) {
+    let closing: Promise<void> | undefined;
+    const close = () => {
+      closing ??= Promise.resolve().then(stop);
+      return closing;
+    };
+    stopExecutors.push(close);
+    return close;
   }
 
   return {
     redisConfig,
-    async inventoryKeys() {
-      return await inventoryRedisKeys(createRedisKeyInventoryPort(cleanupRedis));
-    },
-    async removeKeys(keys) {
-      if (keys.length > 0) await cleanupRedis.unlink(...keys);
-    },
+    registerStopExecutor,
     async createScope() {
-      const ownerMarker = `admin-api-${randomUUID().replaceAll("-", "")}`;
+      const caseId = `admin-api-${randomUUID().replaceAll("-", "")}`;
       const redis = createRedisClient(redisUrl);
       const observer = createRedisClient(redisUrl);
+      const close = registerStopExecutor(() =>
+        runWithOwnedTestResources(async (lifecycle) => {
+          lifecycle.registerCleanup(() => closeRedis(redis));
+          lifecycle.registerCleanup(() => closeRedis(observer));
+        }),
+      );
       try {
-        await Promise.all([connectRedis(redis), connectRedis(observer)]);
+        const connections = await Promise.allSettled([connectRedis(redis), connectRedis(observer)]);
+        const failures = connections.flatMap((result) => (result.status === "rejected" ? [result.reason] : []));
+        if (failures.length > 0) throw new AggregateError(failures, "Admin API Redis scope setup failed");
       } catch (error) {
-        redis.disconnect();
-        observer.disconnect();
-        throw error;
+        return await runWithOwnedTestResources(async (lifecycle) => {
+          lifecycle.registerCleanup(close);
+          throw error;
+        });
       }
 
       let sequence = 0;
-      let closed = false;
       return {
         redis,
         observer,
         clientCode(label) {
           sequence += 1;
-          return `${ownerMarker}-${label}-${sequence}`;
+          return `${caseId}-${label}-${sequence}`;
         },
-        async close() {
-          if (closed) return;
-          closed = true;
-          const errors: unknown[] = [];
-          try {
-            await cleanupRedisKeysMatchingOwnerMarkers({
-              diagnosticLabel: "Admin API Redis test",
-              ownerMarkers: new Set([ownerMarker]),
-              redis: createRedisKeyInventoryPort(cleanupRedis),
-            });
-          } catch (error) {
-            errors.push(error);
-          }
-          const closeResults = await Promise.allSettled([redis.quit(), observer.quit()]);
-          for (const result of closeResults) {
-            if (result.status === "rejected") errors.push(result.reason);
-          }
-          if (errors.length > 0) {
-            throw new AggregateError(errors, "Failed to close Admin API Redis test scope");
-          }
-        },
+        close,
       };
     },
+    async reset() {
+      const control = createRedisClient(redisUrl);
+      await runWithOwnedTestResources(async (lifecycle) => {
+        lifecycle.registerCleanup(() => closeRedis(control));
+        await resetExclusiveRedisTestDatabase({
+          redis: {
+            async flushdb() {
+              await connectRedis(control);
+              return await control.flushdb();
+            },
+          },
+          stopExecutors,
+        });
+      });
+      stopExecutors.length = 0;
+    },
     async close() {
-      await cleanupRedis.quit();
+      await runWithOwnedTestResources(async (lifecycle) => {
+        for (const stop of stopExecutors) lifecycle.registerCleanup(stop);
+      });
     },
   };
 }
@@ -115,6 +118,14 @@ function createRedisClient(redisUrl: string) {
 async function connectRedis(redis: Redis) {
   await redis.connect();
   await redis.ping();
+}
+
+async function closeRedis(redis: Redis) {
+  try {
+    if (redis.status === "ready") await redis.quit();
+  } finally {
+    redis.disconnect();
+  }
 }
 
 function requireDedicatedRedisTestUrl(resourceEnvName: AdminApiRedisTestResourceEnvName) {

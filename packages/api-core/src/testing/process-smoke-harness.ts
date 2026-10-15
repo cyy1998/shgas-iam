@@ -6,12 +6,10 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import process from "node:process";
 import type { Readable } from "node:stream";
-import { fileURLToPath } from "node:url";
+import { spawnOwnedProcessTree as spawnProcessTree } from "../process/owned-process-tree.mjs";
 
-const windowsCommandEnvironmentKey = "IAM_PROCESS_SMOKE_COMMAND_BASE64";
-const windowsJobLauncherPath = fileURLToPath(new URL("./fixtures/windows-job-launcher.mjs", import.meta.url));
-const windowsJobSupervisorPath = fileURLToPath(new URL("./fixtures/windows-job-supervisor.ps1", import.meta.url));
 const portableRuntimeEnvironmentKeys = new Set([
+  "iam_owned_process_markers",
   "comspec",
   "dyld_fallback_library_path",
   "dyld_library_path",
@@ -53,6 +51,7 @@ export function createProcessSmokeEnvironment(options: {
 export interface ProcessSmokeChild extends EventEmitter {
   readonly pid?: number;
   readonly processTreeOwner?: ProcessTreeOwner;
+  readonly closeOwnedProcessTree?: (options: { timeoutMs: number; forceAfterMs?: number }) => Promise<void>;
   readonly stdout: Readable | null;
   readonly stderr: Readable | null;
   exitCode: number | null;
@@ -438,67 +437,13 @@ async function runWindowsTreeKill(pid: number) {
   });
 }
 
-function markProcessTreeOwner(child: ProcessSmokeChild, owner: ProcessTreeOwner) {
-  Object.defineProperty(child, "processTreeOwner", {
-    configurable: false,
-    enumerable: false,
-    value: owner,
-    writable: false,
-  });
-  return child;
-}
-
 export function spawnOwnedProcessTree(options: {
   executable: string;
   args: string[];
   cwd: string;
   env: NodeJS.ProcessEnv;
-}) {
-  if (process.platform === "win32") {
-    const command = Buffer.from(
-      JSON.stringify({
-        executable: options.executable,
-        args: options.args,
-        cwd: options.cwd,
-      }),
-    ).toString("base64");
-    const child = spawn(
-      "powershell.exe",
-      [
-        "-NoLogo",
-        "-NoProfile",
-        "-NonInteractive",
-        "-ExecutionPolicy",
-        "Bypass",
-        "-File",
-        windowsJobSupervisorPath,
-        "-NodeExecutable",
-        process.execPath,
-        "-LauncherPath",
-        windowsJobLauncherPath,
-        "-RuntimeKind",
-        process.versions.bun === undefined ? "node" : "bun",
-      ],
-      {
-        cwd: options.cwd,
-        env: {
-          ...options.env,
-          [windowsCommandEnvironmentKey]: command,
-        },
-        stdio: ["ignore", "pipe", "pipe"],
-        windowsHide: true,
-      },
-    );
-    return markProcessTreeOwner(child, "windows-job");
-  }
-
-  const child = spawn(options.executable, options.args, {
-    cwd: options.cwd,
-    detached: true,
-    env: options.env,
-    stdio: ["ignore", "pipe", "pipe"],
-  });
-  return markProcessTreeOwner(child, "posix-process-group");
+}): ProcessSmokeChild {
+  return spawnProcessTree(options);
 }
 
 function isMissingProcess(error: unknown) {
@@ -610,6 +555,18 @@ export async function terminateProcessTree(child: ProcessSmokeChild, options: Te
       }
       if (!(await closeWaiter.wait(remaining())))
         throw new Error(`process tree did not exit within ${options.timeoutMs}ms after taskkill`);
+      return;
+    }
+
+    if (
+      platform === process.platform &&
+      child.closeOwnedProcessTree &&
+      !options.isProcessTreeAlive &&
+      !options.killProcess
+    ) {
+      await child.closeOwnedProcessTree({ timeoutMs: remaining(), forceAfterMs: options.forceAfterMs });
+      if (!(await closeWaiter.wait(remaining())))
+        throw new Error("Owned process tree stopped but its stdio did not close");
       return;
     }
 

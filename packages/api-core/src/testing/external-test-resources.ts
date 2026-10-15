@@ -11,20 +11,22 @@ export interface DedicatedRedisTestConfig {
   readonly port: number;
 }
 
-export interface RedisKeyInventoryPort {
-  readonly removeKeys: (keys: readonly string[]) => Promise<unknown>;
-  readonly scanPage: (cursor: string) => Promise<[cursor: string, keys: string[]]>;
-}
-
-export function createRedisKeyInventoryPort(redis: Pick<Redis, "scan" | "unlink">): RedisKeyInventoryPort {
-  return {
-    async removeKeys(keys) {
-      return await redis.unlink(...keys);
-    },
-    async scanPage(cursor) {
-      return await redis.scan(cursor, "COUNT", "100");
-    },
-  };
+/** 仅用于本例独占的 DB；调用方登记全部执行者，控制连接在 reset 后另行关闭。 */
+export async function resetExclusiveRedisTestDatabase(input: {
+  readonly redis: Pick<Redis, "flushdb">;
+  readonly stopExecutors: ReadonlyArray<() => Promise<void> | void>;
+}): Promise<void> {
+  const failures: unknown[] = [];
+  for (const stop of input.stopExecutors.toReversed()) {
+    try {
+      await stop();
+    } catch (error) {
+      failures.push(error);
+    }
+  }
+  if (failures.length > 0)
+    throw new AggregateError(failures, "Exclusive Redis executors failed to stop; database was not reset");
+  await input.redis.flushdb();
 }
 
 export function requireExternalTestUrl(input: {
@@ -93,64 +95,6 @@ export function parseDedicatedRedisTestUrl(input: {
     password: parsed.password ? decodeURIComponent(parsed.password) : undefined,
     port,
   };
-}
-
-export async function inventoryRedisKeys(redis: Pick<RedisKeyInventoryPort, "scanPage">): Promise<Set<string>> {
-  const keys = new Set<string>();
-  let cursor = "0";
-  do {
-    const [nextCursor, page] = await redis.scanPage(cursor);
-    cursor = nextCursor;
-    for (const key of page) keys.add(key);
-  } while (cursor !== "0");
-  return keys;
-}
-
-export async function cleanupRedisKeysAddedSince(
-  redis: RedisKeyInventoryPort,
-  existingKeys: ReadonlySet<string>,
-): Promise<number> {
-  const currentKeys = await inventoryRedisKeys(redis);
-  const addedKeys = [...currentKeys].filter((key) => !existingKeys.has(key)).sort();
-  const failures: unknown[] = [];
-  for (let offset = 0; offset < addedKeys.length; offset += 100) {
-    try {
-      await redis.removeKeys(addedKeys.slice(offset, offset + 100));
-    } catch (error) {
-      failures.push(error);
-    }
-  }
-  if (failures.length === 1) throw failures[0];
-  if (failures.length > 1) {
-    throw new AggregateError(failures, "Failed to clean added Redis test keys");
-  }
-  return addedKeys.length;
-}
-
-export async function cleanupRedisKeysMatchingOwnerMarkers(input: {
-  readonly diagnosticLabel: string;
-  readonly ownerMarkers: ReadonlySet<string>;
-  readonly redis: RedisKeyInventoryPort;
-}): Promise<void> {
-  const markers = [...input.ownerMarkers];
-  if (
-    markers.length === 0 ||
-    markers.some((marker) => typeof marker !== "string" || marker.length === 0 || marker.trim() !== marker)
-  ) {
-    throw new TypeError(`${input.diagnosticLabel} cleanup requires non-empty trimmed owner markers`);
-  }
-  async function listOwnedKeys() {
-    return [...(await inventoryRedisKeys(input.redis))]
-      .filter((key) => markers.some((marker) => key.includes(marker)))
-      .sort();
-  }
-
-  const ownedKeys = await listOwnedKeys();
-  if (ownedKeys.length > 0) await input.redis.removeKeys(ownedKeys);
-  const remainingOwnedKeyCount = (await listOwnedKeys()).length;
-  if (remainingOwnedKeyCount > 0) {
-    throw new Error(`${input.diagnosticLabel} cleanup left ${remainingOwnedKeyCount} owned Redis keys`);
-  }
 }
 
 function postgresDatabaseIdentity(parsed: URL) {

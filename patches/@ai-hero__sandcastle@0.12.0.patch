@@ -1,8 +1,95 @@
+diff --git a/dist/SandboxProvider-EkSMuBp8.d.ts b/dist/SandboxProvider-EkSMuBp8.d.ts
+index 5ebe75081651f603c90b5106c847d6291f0eb30a..3eb26e533908b60b05512e808b9cdfb1921e1d84 100644
+--- a/dist/SandboxProvider-EkSMuBp8.d.ts
++++ b/dist/SandboxProvider-EkSMuBp8.d.ts
+@@ -139,6 +139,8 @@ interface IsolatedSandboxProviderConfig {
+ }
+ /** A bind-mount sandbox provider. */
+ interface BindMountSandboxProvider {
++    /** Create a Docker/provider handle directly without provisioning a Git worktree. */
++    readonly create: BindMountSandboxProviderConfig["create"];
+     /** Human-readable provider name. */
+     readonly name: string;
+     /** Environment variables injected by this provider. */
+diff --git a/dist/chunk-CP3TYXZA.js b/dist/chunk-CP3TYXZA.js
+index 7d097321871cfee95a8ba7e6d12a7fe002190cc5..ea8d598d821be6a528d59685c026e8f7cdc42527 100644
+--- a/dist/chunk-CP3TYXZA.js
++++ b/dist/chunk-CP3TYXZA.js
+@@ -77,6 +77,10 @@ var startContainer = (containerName, imageName, env, options) => Effect_exports.
+     "-v",
+     formatVolumeMount(mount, selinuxLabel)
+   ]);
++  const daemonSocketFlags = options?.daemonSocket ? [
++    "--mount",
++    `type=bind,source=${options.daemonSocket},target=/var/run/docker.sock`
++  ] : [];
+   const workdirFlags = options?.workdir ? ["-w", options.workdir] : [];
+   const userFlags = options?.user ? ["--user", options.user] : [];
+   const networks = options?.network ? Array.isArray(options.network) ? options.network : [options.network] : [];
+@@ -97,6 +101,7 @@ var startContainer = (containerName, imageName, env, options) => Effect_exports.
+     containerName,
+     ...envFlags,
+     ...volumeFlags,
++    ...daemonSocketFlags,
+     ...workdirFlags,
+     ...userFlags,
+     ...networkFlags,
+@@ -116,6 +121,9 @@ var removeImage = (imageName) => Effect_exports.gen(function* () {
+
+ // src/sandboxes/docker.ts
+ var docker = (options) => {
++  if (options?.daemonSocket && (!options.daemonSocket.startsWith("/") || /[,:\\\0\r\n]/.test(options.daemonSocket))) {
++    throw new Error("daemonSocket must be an absolute daemon-side Unix path without mount delimiters");
++  }
+   const configuredImageName = options?.imageName;
+   const selinuxLabel = options?.selinuxLabel ?? "z";
+   const maxOutputTailChars = options?.maxOutputTailChars ?? MAX_TAIL_CHARS;
+@@ -130,7 +138,7 @@ var docker = (options) => {
+     env: options?.env,
+     sandboxHomedir,
+     create: async (createOptions) => {
+-      const containerName = `sandcastle-${randomUUID()}`;
++      const containerName = options?.containerName ?? `sandcastle-${randomUUID()}`;
+       const worktreePath = createOptions.mounts.find(
+         (m) => m.hostPath === createOptions.worktreePath
+       )?.sandboxPath ?? "/home/agent/workspace";
+@@ -154,6 +162,7 @@ var docker = (options) => {
+           },
+           {
+             volumeMounts,
++            daemonSocket: options?.daemonSocket,
+             workdir: worktreePath,
+             user: `${containerUid}:${containerGid}`,
+             network: options?.network,
 diff --git a/dist/chunk-VOG34SRF.js b/dist/chunk-VOG34SRF.js
-index 93f24d139b795c284915a10c34d82f2fa769eab0..08968bc58df80cee3960075936c876f61f526675 100644
+index 93f24d139b795c284915a10c34d82f2fa769eab0..3163d9bccb3a70b162ac6a18aaf1aed7d85abe58 100644
 --- a/dist/chunk-VOG34SRF.js
 +++ b/dist/chunk-VOG34SRF.js
-@@ -26985,8 +26985,10 @@ var attachListeners = () => {
+@@ -25146,7 +25146,7 @@ var sanitizeName = (name) => name.toLowerCase().replace(/[^a-z0-9]/g, "-");
+ var execGit = (args2, cwd) => Effect_exports.async((resume2) => {
+   execFile(
+     "git",
+-    args2,
++    process.platform === "win32" ? ["-c", "core.longpaths=true", ...args2] : args2,
+     { cwd, env: { ...process.env, LC_ALL: "C" } },
+     (error3, stdout2, stderr2) => {
+       if (error3) {
+@@ -26923,6 +26923,14 @@ var patchGitMountsForWindows = (gitMounts, worktreeHostPath, sandboxRepoDir, rea
+         sandboxPath: `${sandboxRepoDir}/.git`
+       });
+       replacedGitFile = true;
++    } else if (normalizedHostPath.endsWith("/.git") && (yield* Effect_exports.tryPromise({
++      try: () => _statFile(m.hostPath),
++      catch: () => null
++    }).pipe(Effect_exports.catchAll(() => Effect_exports.succeed(null)))) === "file") {
++      // resolveGitMounts can describe the source checkout, while this override
++      // belongs to a newly created target worktree. Its Windows pointer is not
++      // a valid Linux mount target; only the target override is needed.
++      continue;
+     } else {
+       correctedMounts.push(m);
+     }
+@@ -26985,8 +26993,10 @@ var attachListeners = () => {
    if (listenersInstalled) return;
    listenersInstalled = true;
    process.on("exit", handleExit);
@@ -15,3 +102,32 @@ index 93f24d139b795c284915a10c34d82f2fa769eab0..08968bc58df80cee3960075936c876f6
  };
  var detachListeners = () => {
    if (!listenersInstalled) return;
+diff --git a/dist/sandboxes/docker.d.ts b/dist/sandboxes/docker.d.ts
+index c7cc9e78dd3f14021ae64061d70e715bb98f768f..3a084437ee165df8040fd786caf2298ee00518a1 100644
+--- a/dist/sandboxes/docker.d.ts
++++ b/dist/sandboxes/docker.d.ts
+@@ -1,4 +1,4 @@
+-import { S as SandboxProvider } from '../SandboxProvider-EkSMuBp8.js';
++import { e as BindMountSandboxProvider } from '../SandboxProvider-EkSMuBp8.js';
+ import { M as MountConfig } from '../MountConfig-CmXclHA5.js';
+ import { S as SelinuxLabel } from '../mountUtils-CCA-bbpK.js';
+ export { d as defaultImageName } from '../mountUtils-CCA-bbpK.js';
+@@ -12,6 +12,10 @@ export { d as defaultImageName } from '../mountUtils-CCA-bbpK.js';
+  */
+
+ interface DockerOptions {
++    /** Optional exact name for caller-owned provisioning and cleanup recovery records. */
++    readonly containerName?: string;
++    /** Dedicated daemon-side Unix socket path, mounted at /var/run/docker.sock without client file-path checks. */
++    readonly daemonSocket?: string;
+     /** Docker image name (default: derived from repo directory name). */
+     readonly imageName?: string;
+     /**
+@@ -105,6 +109,6 @@ interface DockerOptions {
+  * The returned provider creates Docker containers with bind-mounts
+  * for the worktree and git directories.
+  */
+-declare const docker: (options?: DockerOptions) => SandboxProvider;
++declare const docker: (options?: DockerOptions) => BindMountSandboxProvider;
+
+ export { type DockerOptions, docker };

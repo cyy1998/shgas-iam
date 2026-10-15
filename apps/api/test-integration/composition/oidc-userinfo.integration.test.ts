@@ -1,4 +1,4 @@
-import { expect, test } from "bun:test";
+import { afterEach, expect, test } from "bun:test";
 import { randomUUID } from "node:crypto";
 import process from "node:process";
 import { OidcScope, OrganizationType, UserStatus } from "@iam/contracts";
@@ -7,27 +7,24 @@ import { createSubjectFactsReader, createSubjectFactsRedisCache } from "@iam/use
 import { drizzle } from "drizzle-orm/postgres-js";
 import Redis from "ioredis";
 import { createApiPostgresTestHarness } from "../postgres/postgres-test-harness";
-import { closeFixtureResources } from "../redis/oidc.fixture";
+import { closeApiRedisConnection, ownApiTestExecutor, resetApiRedisTestDatabase } from "../redis/fixture-lifecycle";
+import { cleanupAfterFixtureFailure, closeFixtureResources } from "../redis/oidc.fixture";
 import { userInfoFixture } from "../redis/oidc-userinfo.fixture";
+
+afterEach(resetApiRedisTestDatabase);
 
 test("UserInfo HTTP uses real published Facts cache, narrow PostgreSQL fallback and transient I/O boundaries", async () => {
   const redisUrl = process.env.IAM_API_TEST_REDIS_URL;
   if (!redisUrl) throw new Error("IAM_API_TEST_REDIS_URL is required");
   const resources: Array<() => unknown | Promise<unknown>> = [];
+  const close = ownApiTestExecutor(() => closeFixtureResources(resources));
   try {
-    const pg = await createApiPostgresTestHarness();
-    resources.push(() => pg.close());
+    const pg = await createApiPostgresTestHarness((close) => resources.push(close));
     const redis = new Redis(redisUrl, { maxRetriesPerRequest: 0, retryStrategy: () => null });
-    resources.push(() => redis.disconnect());
+    resources.push(() => closeApiRedisConnection(redis));
     const cleanup = new Redis(redisUrl);
     const ownedKeys = new Set<string>();
-    resources.push(async () => {
-      try {
-        if (ownedKeys.size) await cleanup.del(...ownedKeys);
-      } finally {
-        cleanup.disconnect();
-      }
-    });
+    resources.push(() => closeApiRedisConnection(cleanup));
     const cache = createSubjectFactsRedisCache(
       {
         async get(key) {
@@ -130,7 +127,8 @@ test("UserInfo HTTP uses real published Facts cache, narrow PostgreSQL fallback 
     expect(pgFailure.status).toBe(503);
     expect(await pgFailure.json()).toMatchObject({ error: "temporarily_unavailable" });
     expect(await f.oidcState.readToken(issued.access_token)).not.toBeNull();
-  } finally {
-    await closeFixtureResources(resources);
+  } catch (failure) {
+    await cleanupAfterFixtureFailure(failure, close);
   }
+  await close();
 });

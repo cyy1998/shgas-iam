@@ -1,6 +1,10 @@
 import { randomUUID } from "node:crypto";
 import process from "node:process";
 import { createSubjectAccessBootstrap } from "@iam/api-core/subject-access";
+import {
+  resetExclusiveRedisTestDatabase,
+  runWithOwnedTestResources,
+} from "@iam/api-core/testing/external-test-resources";
 import Redis from "ioredis";
 import type { SubjectFactsCacheRecord } from "../../src/subject-facts";
 import {
@@ -34,19 +38,13 @@ export interface RedisTestScope {
 
 export interface RedisTestHarness {
   readonly createScope: () => Promise<RedisTestScope>;
+  readonly reset: () => Promise<void>;
   readonly close: () => Promise<void>;
 }
 
 export async function createRedisTestHarness(): Promise<RedisTestHarness> {
   const redisUrl = requireDedicatedRedisTestUrl();
-  const cleanupRedis = createRedisClient(redisUrl);
-
-  try {
-    await connectRedis(cleanupRedis);
-  } catch (error) {
-    cleanupRedis.disconnect();
-    throw error;
-  }
+  const scopeClosers: Array<() => Promise<void>> = [];
 
   return {
     async createScope() {
@@ -55,17 +53,26 @@ export async function createRedisTestHarness(): Promise<RedisTestHarness> {
       const firstRedis = createRedisClient(redisUrl);
       const secondRedis = createRedisClient(redisUrl);
       const observerRedis = createRedisClient(redisUrl);
+      let closePromise: Promise<void> | undefined;
+      function close() {
+        closePromise ??= runWithOwnedTestResources(async ({ registerCleanup }) => {
+          for (const client of [firstRedis, secondRedis, observerRedis]) {
+            registerCleanup(() => closeRedisClient(client));
+          }
+        });
+        return closePromise;
+      }
+      scopeClosers.push(close);
 
       try {
         await Promise.all([connectRedis(firstRedis), connectRedis(secondRedis), connectRedis(observerRedis)]);
       } catch (error) {
-        firstRedis.disconnect();
-        secondRedis.disconnect();
-        observerRedis.disconnect();
-        throw error;
+        return await runWithOwnedTestResources<RedisTestScope>(async ({ registerCleanup }) => {
+          registerCleanup(close);
+          throw error;
+        });
       }
 
-      let closed = false;
       const firstCache = createSubjectFactsRedisCache(firstRedis, { keyPrefix });
       const secondCache = createSubjectFactsRedisCache(secondRedis, { keyPrefix });
       return {
@@ -88,29 +95,30 @@ export async function createRedisTestHarness(): Promise<RedisTestHarness> {
           const stored = await observerRedis.get(`${keyPrefix}${subjectIdentifier}`);
           return stored === null ? null : SubjectFactsCacheRecordSchema.parse(JSON.parse(stored));
         },
-        async close() {
-          if (closed) return;
-          closed = true;
-
-          const errors: unknown[] = [];
-          const closeResults = await Promise.allSettled([firstRedis.quit(), secondRedis.quit(), observerRedis.quit()]);
-          for (const result of closeResults) {
-            if (result.status === "rejected") errors.push(result.reason);
-          }
-
-          try {
-            await deleteOwnedKeys(cleanupRedis, keyPrefix);
-            await deleteOwnedKeys(cleanupRedis, subjectAccessKeyPrefix);
-          } catch (error) {
-            errors.push(error);
-          }
-
-          if (errors.length > 0) throw new AggregateError(errors, "Failed to close Subject Facts Redis test scope");
-        },
+        close,
       };
     },
+    async reset() {
+      const control = createRedisClient(redisUrl);
+      await runWithOwnedTestResources(async ({ registerCleanup }) => {
+        registerCleanup(() => closeRedisClient(control));
+        await resetExclusiveRedisTestDatabase({
+          redis: {
+            async flushdb() {
+              await connectRedis(control);
+              return await control.flushdb();
+            },
+          },
+          stopExecutors: scopeClosers,
+        });
+      });
+      scopeClosers.length = 0;
+    },
     async close() {
-      await cleanupRedis.quit();
+      await runWithOwnedTestResources(async ({ registerCleanup }) => {
+        for (const close of scopeClosers) registerCleanup(close);
+      });
+      scopeClosers.length = 0;
     },
   };
 }
@@ -144,11 +152,12 @@ function requireDedicatedRedisTestUrl() {
   return redisUrl;
 }
 
-async function deleteOwnedKeys(redis: Redis, keyPrefix: string) {
-  let cursor = "0";
-  do {
-    const [nextCursor, keys] = await redis.scan(cursor, "MATCH", `${keyPrefix}*`, "COUNT", 100);
-    cursor = nextCursor;
-    if (keys.length > 0) await redis.unlink(...keys);
-  } while (cursor !== "0");
+async function closeRedisClient(redis: Redis) {
+  const ended = redis.status === "end" ? Promise.resolve() : new Promise<void>((resolve) => redis.once("end", resolve));
+  try {
+    if (redis.status !== "end" && redis.status !== "wait") await redis.quit();
+  } finally {
+    redis.disconnect();
+    await ended;
+  }
 }

@@ -1,11 +1,15 @@
-import { closeSync, unlinkSync } from "node:fs";
+import { closeSync } from "node:fs";
 import { mkdir, open, readFile, rm } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { parseArgs } from "node:util";
+import { formatResourceFailure } from "../test-resources/managed-resources.mjs";
 import { loadAgentRoles } from "./agents.ts";
 import { checkCodexAuth } from "./auth.ts";
 import { command } from "./commands.ts";
+import { checkDockerConfig } from "./docker-config.ts";
+import { smokeDocker } from "./docker-smoke.mts";
+import { hasUnstoppedExecutor, recoverExecutorResources } from "./resources.ts";
 import { createRuntime, smoke } from "./runtime.mts";
 import { runWorkflow } from "./workflow.ts";
 
@@ -21,7 +25,9 @@ const { values } = parseArgs({
     help: { type: "boolean" },
     check: { type: "boolean" },
     smoke: { type: "boolean" },
+    "smoke-docker": { type: "boolean" },
     build: { type: "boolean" },
+    "recover-executor": { type: "string" },
     model: { type: "string" },
     iterations: { type: "string" },
     parallel: { type: "string" },
@@ -35,12 +41,22 @@ async function main() {
   if (values.help) {
     console.log("用法：pnpm sandcastle [--iterations 10] [--parallel 2] [--model <model>]");
     console.log("--check 预检；--build 构建镜像；--smoke 检查临时 sandbox 与测试资源，不调用模型。");
+    console.log("--smoke-docker 只验证共享宿主 Docker、host networking、构建、浏览器、导出与并行清理。");
     console.log("--model 仅覆盖 Planner/Merger；实施者与评审模型读取 .codex/agents/ 的角色配置。");
+    console.log(
+      "--recover-executor <repository-relative executor.json> 停止准确 sandbox 后按 registry 恢复，尊重 keep。",
+    );
     console.log("运行模式读取全仓 ready-for-agent，在当前分支自动合并通过评审的 tickets 并更新 GitHub issues。");
     return;
   }
-  const actions = [values.check, values.build, values.smoke].filter(Boolean);
-  if (actions.length > 1) throw new Error("--check、--build、--smoke 每次只选择一个。");
+  const actions = [values.check, values.build, values.smoke, values["smoke-docker"], values["recover-executor"]].filter(
+    Boolean,
+  );
+  if (actions.length > 1) throw new Error("--check、--build、--smoke、--smoke-docker 每次只选择一个。");
+  if (values["recover-executor"]) {
+    await recoverExecutorResources(cwd, values["recover-executor"]);
+    return;
+  }
   const model = values.model ?? process.env.SANDCASTLE_MODEL ?? "gpt-6-astra";
   const image = process.env.SANDCASTLE_IMAGE ?? "iam-sandcastle:local";
   const maxIterations = Number(values.iterations ?? process.env.SANDCASTLE_ITERATIONS ?? "10");
@@ -71,11 +87,12 @@ async function main() {
     return;
   }
   await command("docker", ["image", "inspect", image, "--format", "{{.Id}}"], cwd);
+  const dockerConfigProvided = await checkDockerConfig(cwd);
   const branch = await command("git", ["branch", "--show-current"], cwd);
   if (!branch) throw new Error("需要一个已检出的命名分支。");
   if (!/^[\w./-]+$/.test(branch)) throw new Error("AFK 目标分支名只接受字母、数字、下划线、点、斜杠和连字符。");
   let authMode = "未检查";
-  if (!values.smoke) {
+  if (!values.smoke && !values["smoke-docker"]) {
     await command("gh", ["--version"], cwd);
     if (!process.env.GH_TOKEN?.trim())
       throw new Error("缺少 GH_TOKEN；按 .sandcastle/.env.example 配置本机 .sandcastle/.env。");
@@ -86,7 +103,7 @@ async function main() {
   if (values.check) {
     await loadAgentRoles(cwd);
     console.log(
-      `本机预检通过：分支 ${branch}，镜像 ${image}，模型 ${model}，Codex 认证 ${authMode}。联网认证待实际调用验证。`,
+      `本机预检通过：分支 ${branch}，镜像 ${image}，模型 ${model}，Codex 认证 ${authMode}，Docker registry 配置${dockerConfigProvided ? "已提供" : "未提供"}。联网认证待实际调用验证。`,
     );
     return;
   }
@@ -100,6 +117,7 @@ async function main() {
     throw new Error(`已有 runner 锁：${owner}。确认旧进程已结束后，仅移除 ${lockPath} 再重试。`);
   }
   const controller = new AbortController();
+  let retainLock = false;
   // Keep a fallback if another integration exits synchronously before our finalizer.
   const releaseLockOnExit = () => {
     try {
@@ -107,11 +125,8 @@ async function main() {
     } catch {
       /* The normal finalizer may already have closed the handle. */
     }
-    try {
-      unlinkSync(lockPath);
-    } catch {
-      /* Keep the original process exit status. */
-    }
+    // A synchronous exit cannot prove Docker creators stopped or clean their records.
+    // The lock remains a recovery pointer; the normal finalizer removes it explicitly.
   };
   process.once("exit", releaseLockOnExit);
   const abort = () => controller.abort(new Error("用户中断 Sandcastle；正在等待已启动任务清理。"));
@@ -120,30 +135,44 @@ async function main() {
   try {
     await lock.writeFile(JSON.stringify({ pid: process.pid, branch, startedAt: new Date().toISOString() }));
     const options = { cwd, branch, model, image, signal: controller.signal };
-    if (values.smoke) {
+    if (values["smoke-docker"]) {
+      await smokeDocker(options);
+    } else if (values.smoke) {
+      await smokeDocker(options);
       await smoke(options);
-      console.log("Sandbox、skills 与独占 PostgreSQL/Redis 连接 smoke 通过；未调用模型或修改 issues。");
+      console.log("Sandbox、skills、共享 Docker 与每命令独立资源 smoke 通过；未调用模型或修改 issues。");
     } else {
       console.log(`Sandcastle：${branch}，最多 ${maxIterations} 批，并发 ${maxParallel}，${model}。`);
       const runtime = await createRuntime(options);
+      const failures: unknown[] = [];
       try {
         const result = await runWorkflow({ maxIterations, maxParallel }, runtime);
         console.log(JSON.stringify(result, null, 2));
         if (!result.exhausted || result.failed.length > 0) process.exitCode = 1;
+      } catch (error) {
+        failures.push(error);
       } finally {
-        await runtime.close?.();
+        try {
+          await runtime.close?.();
+        } catch (error) {
+          failures.push(error);
+        }
       }
+      if (failures.length) throw new AggregateError(failures, "Sandcastle 运行或收尾失败。");
     }
+  } catch (error) {
+    retainLock = hasUnstoppedExecutor(error);
+    throw error;
   } finally {
     process.removeListener("SIGINT", abort);
     process.removeListener("SIGTERM", abort);
     await lock.close();
-    await rm(lockPath);
+    if (!retainLock) await rm(lockPath);
     process.removeListener("exit", releaseLockOnExit);
   }
 }
 
 main().catch((error: unknown) => {
-  console.error(error instanceof Error ? error.message : String(error));
+  console.error(formatResourceFailure(error));
   process.exitCode = 1;
 });
