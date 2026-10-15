@@ -38,6 +38,13 @@ import type { PostgresTestHarness } from "../support/postgres-test-harness";
 import { createPostgresTestHarness } from "../support/postgres-test-harness";
 
 const now = new Date("2026-08-22T12:00:00.000Z");
+const aliceBase = {
+  subjectIdentifier: "5ee46272-9123-4ec3-9d8d-8a7a6ac7f888",
+  username: "alice",
+  name: "Alice",
+  mobile: null,
+  wxId: "wx-alice",
+};
 let harness: PostgresTestHarness | undefined;
 
 beforeAll(async () => {
@@ -113,7 +120,7 @@ describe("User Profile v3 Employment tracer", () => {
     const candidate = await builder.buildOne({ userId: 1, sourceDirtyVersion: "1" });
     await candidatePersistence.upsert(candidate!);
 
-    const byRootSubtree = await query.search({
+    const byRootSubtree = await query.searchBase({
       filter: {
         exists: {
           path: "employments",
@@ -121,7 +128,7 @@ describe("User Profile v3 Employment tracer", () => {
         },
       },
     });
-    const byTargetSubtree = await query.search({
+    const byTargetSubtree = await query.searchBase({
       filter: {
         exists: {
           path: "employments",
@@ -129,7 +136,7 @@ describe("User Profile v3 Employment tracer", () => {
         },
       },
     });
-    const byEquivalentPath = await query.search({
+    const byEquivalentPath = await query.searchBase({
       filter: {
         exists: {
           path: "employments",
@@ -142,7 +149,7 @@ describe("User Profile v3 Employment tracer", () => {
         },
       },
     });
-    const byPathNodeDistance = await query.search({
+    const byPathNodeDistance = await query.searchBase({
       filter: {
         exists: {
           path: "employments",
@@ -160,7 +167,7 @@ describe("User Profile v3 Employment tracer", () => {
         },
       },
     });
-    const byPathNodeDistanceIn = await query.search({
+    const byPathNodeDistanceIn = await query.searchBase({
       filter: {
         exists: {
           path: "employments",
@@ -177,7 +184,7 @@ describe("User Profile v3 Employment tracer", () => {
         },
       },
     });
-    const byPrimaryIn = await query.search({
+    const byPrimaryIn = await query.searchBase({
       filter: {
         exists: {
           path: "employments",
@@ -189,7 +196,7 @@ describe("User Profile v3 Employment tracer", () => {
         },
       },
     });
-    const outsideSubtree = await query.search({
+    const outsideSubtree = await query.searchBase({
       filter: {
         exists: {
           path: "employments",
@@ -198,8 +205,8 @@ describe("User Profile v3 Employment tracer", () => {
       },
     });
 
-    expect(byRootSubtree).toEqual([candidate!.detail]);
-    expect(byTargetSubtree).toEqual([candidate!.detail]);
+    expect(byRootSubtree).toEqual([aliceBase]);
+    expect(byTargetSubtree).toEqual([aliceBase]);
     expect(byEquivalentPath).toEqual(byRootSubtree);
     expect(byPathNodeDistance).toEqual(byRootSubtree);
     expect(byPathNodeDistanceIn).toEqual(byRootSubtree);
@@ -261,7 +268,7 @@ describe("User Profile v3 Employment tracer", () => {
     ]);
     await candidatePersistence.upsert(candidate!);
 
-    const sameResponsibility = await query.search({
+    const sameResponsibility = await query.searchBase({
       filter: employmentResponsibilities({
         and: [
           { field: "type.code", op: "eq", value: OrganizationResponsibilityTypeCode.Head },
@@ -269,7 +276,7 @@ describe("User Profile v3 Employment tracer", () => {
         ],
       }),
     });
-    const independentResponsibilities = await query.search({
+    const independentResponsibilities = await query.searchBase({
       filter: {
         exists: {
           path: "employments",
@@ -292,14 +299,14 @@ describe("User Profile v3 Employment tracer", () => {
         },
       },
     });
-    const targetSubtree = await query.search({
+    const targetSubtree = await query.searchBase({
       filter: employmentResponsibilities({
         field: "targetOrganization",
         op: "withinSubtreeOf",
         value: "target-root",
       }),
     });
-    const notExistsHead = await query.search({
+    const notExistsHead = await query.searchBase({
       filter: {
         not: employmentResponsibilities({
           field: "type.code",
@@ -308,7 +315,7 @@ describe("User Profile v3 Employment tracer", () => {
         }),
       },
     });
-    const existsNotHead = await query.search({
+    const existsNotHead = await query.searchBase({
       filter: employmentResponsibilities({
         not: {
           field: "type.code",
@@ -319,10 +326,10 @@ describe("User Profile v3 Employment tracer", () => {
     });
 
     expect(sameResponsibility).toEqual([]);
-    expect(independentResponsibilities).toEqual([candidate!.detail]);
-    expect(targetSubtree).toEqual([candidate!.detail]);
+    expect(independentResponsibilities).toEqual([aliceBase]);
+    expect(targetSubtree).toEqual([aliceBase]);
     expect(notExistsHead).toEqual([]);
-    expect(existsNotHead).toEqual([candidate!.detail]);
+    expect(existsNotHead).toEqual([aliceBase]);
   });
 
   test("keeps conditions in one Employment scope while independent scopes can match different Employments", async () => {
@@ -350,7 +357,7 @@ describe("User Profile v3 Employment tracer", () => {
     const candidate = await builder.buildOne({ userId: 1, sourceDirtyVersion: "1" });
     await candidatePersistence.upsert(candidate!);
 
-    const crossEmploymentJoin = await query.search({
+    const crossEmploymentJoin = await query.searchBase({
       filter: {
         exists: {
           path: "employments",
@@ -363,7 +370,7 @@ describe("User Profile v3 Employment tracer", () => {
         },
       },
     });
-    const independentScopes = await query.search({
+    const independentScopes = await query.searchBase({
       filter: {
         and: [
           {
@@ -381,7 +388,7 @@ describe("User Profile v3 Employment tracer", () => {
         ],
       },
     });
-    const oneCompleteEmployment = await query.search({
+    const oneCompleteEmployment = await query.searchBase({
       filter: {
         exists: {
           path: "employments",
@@ -402,8 +409,8 @@ describe("User Profile v3 Employment tracer", () => {
     });
 
     expect(crossEmploymentJoin).toEqual([]);
-    expect(independentScopes).toEqual([candidate!.detail]);
-    expect(oneCompleteEmployment).toEqual([candidate!.detail]);
+    expect(independentScopes).toEqual([aliceBase]);
+    expect(oneCompleteEmployment).toEqual([aliceBase]);
   });
 
   test("supports strict, normalized Role and Privilege array conditions", async () => {
@@ -424,8 +431,8 @@ describe("User Profile v3 Employment tracer", () => {
         },
       },
     });
-    const containsAny = await query.search(normalized);
-    const containsAll = await query.search({
+    const containsAny = await query.searchBase(normalized);
+    const containsAll = await query.searchBase({
       filter: {
         exists: {
           path: "employments",
@@ -437,7 +444,7 @@ describe("User Profile v3 Employment tracer", () => {
         },
       },
     });
-    const missingAll = await query.search({
+    const missingAll = await query.searchBase({
       filter: {
         exists: {
           path: "employments",
@@ -460,8 +467,8 @@ describe("User Profile v3 Employment tracer", () => {
         },
       },
     });
-    expect(containsAny).toEqual([candidate!.detail]);
-    expect(containsAll).toEqual([candidate!.detail]);
+    expect(containsAny).toEqual([aliceBase]);
+    expect(containsAll).toEqual([aliceBase]);
     expect(missingAll).toEqual([]);
   });
 });

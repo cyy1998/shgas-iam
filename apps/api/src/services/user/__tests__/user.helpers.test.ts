@@ -1,12 +1,7 @@
 import { describe, expect, mock, test } from "bun:test";
-import { createUserDelegationQuery } from "@api/services/user/user-delegation-query.helper";
 import { createUserMobileBinding } from "@api/services/user/user-mobile-binding.helper";
 import { createUserPasswordHelper } from "@api/services/user/user-password.helper";
-import { createV3UserProfileSearchAdapter } from "@api/services/user-profile-search/user-profile-search-v3.adapter";
 import { createFakePasswordHasher } from "@api/testing/fakes";
-import { BadRequestError } from "@iam/api-core/errors";
-import { UserStatus, UserType } from "@iam/contracts";
-import { createV3UserProfileQueryService } from "@iam/user-profile-read-model/v3";
 
 describe("user helper factories", () => {
   test("hashes and verifies passwords through injected hasher", async () => {
@@ -75,108 +70,5 @@ describe("user helper factories", () => {
         traceId: "11111111111111111111111111111111",
       }),
     );
-  });
-
-  test("delegation query enforces a single ancestor organization", async () => {
-    const delegationQuery = createUserDelegationQuery({
-      userProfileSearch: { searchLegacyUsers: mock(async () => []) },
-      privilegeDelegationRepository: {
-        getDelegationsByUserAndOrganizationScopeAndPrivilege: mock(async () => []),
-      },
-    });
-
-    await expect(
-      delegationQuery.searchUsersWithDelegations({
-        ancestorOrgCodes: [],
-        privilegeCode: "p",
-      } as any),
-    ).rejects.toBeInstanceOf(BadRequestError);
-  });
-
-  test("delegation query combines profile users with live delegations", async () => {
-    const events: string[] = [];
-    const profileUser = {
-      id: 1,
-      username: "zhangsan",
-      wxId: null,
-      name: "张三",
-      mobile: "13800000000",
-      userType: UserType.Formal,
-      orderNum: 1,
-      status: UserStatus.Enable,
-      isDelete: false,
-      createTime: new Date("2026-01-01T00:00:00.000Z"),
-      updateTime: new Date("2026-01-01T00:00:00.000Z"),
-    };
-    const searchLegacyUsers = mock(async () => {
-      events.push("search");
-      return [profileUser];
-    });
-    const getDelegationsByUserAndOrganizationScopeAndPrivilege = mock(async () => {
-      events.push("delegation");
-      return [];
-    });
-    const delegationQuery = createUserDelegationQuery({
-      userProfileSearch: { searchLegacyUsers },
-      privilegeDelegationRepository: {
-        getDelegationsByUserAndOrganizationScopeAndPrivilege,
-      },
-    } as any);
-
-    await expect(
-      delegationQuery.searchUsersWithDelegations({
-        ancestorOrgCodes: ["ORG"],
-        names: ["张三"],
-        privilegeCode: "privilege:a",
-      } as any),
-    ).resolves.toEqual({
-      users: [profileUser],
-      delegations: [],
-    });
-
-    expect(searchLegacyUsers).toHaveBeenCalledWith({
-      ancestorOrgCodes: ["ORG"],
-      names: ["张三"],
-      privilegeCode: "privilege:a",
-    });
-    expect(getDelegationsByUserAndOrganizationScopeAndPrivilege).toHaveBeenCalledWith(
-      ["zhangsan"],
-      "ORG",
-      "privilege:a",
-    );
-    expect(events).toEqual(["search", "delegation"]);
-  });
-
-  test("lets the canonical search boundary reject an empty delegation organization filter", async () => {
-    const searchCurrentProfiles = mock(async () => []);
-    const profileSearch = createV3UserProfileSearchAdapter(
-      createV3UserProfileQueryService({
-        profileRepository: {
-          searchCurrentProfileBases: mock(async () => []),
-          searchCurrentProfiles,
-        },
-      }),
-    );
-    const getDelegationsByUserAndOrganizationScopeAndPrivilege = mock(async () => []);
-    const delegationQuery = createUserDelegationQuery({
-      userProfileSearch: profileSearch,
-      privilegeDelegationRepository: {
-        getDelegationsByUserAndOrganizationScopeAndPrivilege,
-      },
-    });
-
-    const error = await delegationQuery
-      .searchUsersWithDelegations({
-        ancestorOrgCodes: [],
-        privilegeCode: "privilege:a",
-      })
-      .catch((error: unknown) => error);
-
-    expect(error).toMatchObject({
-      code: "COMMON.VALIDATION_FAILED",
-      httpStatus: 422,
-    });
-    expect(searchCurrentProfiles).not.toHaveBeenCalled();
-    expect(getDelegationsByUserAndOrganizationScopeAndPrivilege).not.toHaveBeenCalled();
   });
 });

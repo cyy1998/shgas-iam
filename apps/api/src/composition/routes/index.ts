@@ -48,7 +48,6 @@ export async function createApiRoutes(options: CreateApiRoutesOptions): Promise<
   const userHandlers = createUserHandlers({
     registerPurveyorContact: useCases.registerPurveyorContact,
     internalUserProfileQuery: services.internalUserProfileQuery,
-    userDelegationQuery: services.userDelegationQuery,
     userProfileSearch: services.userProfileSearch,
   });
 

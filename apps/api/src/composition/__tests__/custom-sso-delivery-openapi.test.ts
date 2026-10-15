@@ -69,8 +69,6 @@ function createContractApp() {
       },
     },
     publicServices: {
-      organizationService: { searchOrganizations: unexpectedDependencyCall },
-      userProfileSearch: { searchLegacyUsers: unexpectedDependencyCall },
       userService: {
         getActiveUserBySubjectIdentifier: unexpectedDependencyCall,
         getUserDetailById: unexpectedDependencyCall,

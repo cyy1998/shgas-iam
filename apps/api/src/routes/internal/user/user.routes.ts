@@ -1,10 +1,4 @@
-import { PrivilegeDelegationDtoSchema } from "@api/services/privilege/privilegeDelegation.schema";
-import {
-  UserDtoSchema,
-  UserProfileBaseSchema,
-  UserQueryDtoSchema,
-  UserQueryWithPrivilegeDelegationDtoSchema,
-} from "@api/services/user/user.schema";
+import { UserProfileBaseSchema } from "@api/services/user/user.schema";
 import { createRoute, z } from "@hono/zod-openapi";
 import * as HttpStatusCodes from "@iam/api-core/core/http-status-codes";
 import { commonErrorResponses } from "@iam/api-core/core/openapi/helpers/common-error-responses";
@@ -34,41 +28,6 @@ export const userInfo = createRoute({
     ...commonErrorResponses,
     [HttpStatusCodes.SERVICE_UNAVAILABLE]: jsonContent(StandardErrorResponseSchema, "用户详情暂时不可用"),
     [HttpStatusCodes.OK]: jsonContent(createSuccessResponseSchema(UserProfileDetailDocumentSchema), "用户详细信息"),
-  },
-});
-
-export const usersSearch = createRoute({
-  method: "post",
-  path: "/search",
-  tags,
-  deprecated: true,
-  request: {
-    body: jsonContentRequired(UserQueryDtoSchema, "用户搜索条件"),
-  },
-  responses: {
-    ...commonErrorResponses,
-    [HttpStatusCodes.OK]: jsonContent(createSuccessResponseSchema(z.array(UserDtoSchema)), "用户搜索结果"),
-  },
-});
-
-export const usersSearchWithPrivilegeDelegation = createRoute({
-  method: "post",
-  path: "/search-with-delegation",
-  tags,
-  request: {
-    body: jsonContent(UserQueryWithPrivilegeDelegationDtoSchema, "用户搜索条件"),
-  },
-  responses: {
-    ...commonErrorResponses,
-    [HttpStatusCodes.OK]: jsonContent(
-      createSuccessResponseSchema(
-        z.object({
-          users: z.array(UserDtoSchema),
-          delegations: z.array(PrivilegeDelegationDtoSchema),
-        }),
-      ),
-      "用户搜索结果",
-    ),
   },
 });
 

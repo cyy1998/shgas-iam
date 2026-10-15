@@ -1,7 +1,6 @@
 import {
   OrganizationCreateDtoSchema,
   OrganizationDtoSchema,
-  OrganizationQueryDtoSchema,
   OrganizationUpdateDtoSchema,
 } from "@api/services/organization/organization.schema";
 import { OrganizationSearchTransportRequestSchema } from "@api/services/organization-search/organization-search.schema";
@@ -26,19 +25,6 @@ export const organizationsSearchDsl = createRoute({
       createSuccessResponseSchema(z.array(OrganizationSearchDocumentSchema.openapi("OrganizationSearchDocument"))),
       "完整组织搜索文档",
     ),
-  },
-});
-
-export const organizationsSearch = createRoute({
-  method: "post",
-  path: "/search",
-  tags,
-  request: {
-    body: jsonContentRequired(OrganizationQueryDtoSchema, "组织搜索参数"),
-  },
-  responses: {
-    ...commonErrorResponses,
-    [HttpStatusCodes.OK]: jsonContent(createSuccessResponseSchema(z.array(OrganizationDtoSchema)), "组织搜索结果"),
   },
 });
 

@@ -19,7 +19,8 @@ Internal Client 需要在同一当前观察点取得各 User 的直接 Delegatee
 - 任一用户匹配多条记录，即使 Delegatee 相同，或记录自委托、引用缺失/已删除对象，均属完整性异常。
   异常、数据库不可用和超时统一为脱敏 `503 PRIVILEGE.DELEGATION_RESOLUTION_UNAVAILABLE`，不选 winner、折叠或返回部分结果。
 - 全部合法且 Enable 的 Internal Client 共享能力；app-local resolver 不缓存或自动重试，保留 2 秒 statement timeout
-  与 5 秒 handler budget。旧 `/internal/users/search-with-delegation` 不由本决定删除或改变响应。
+  与 5 秒 handler budget。调用方可先通过用户 DSL 筛选 username，再按本接口预算独立解析；旧用户搜索与委托组合接口
+  按 [ADR-0043](0043-retire-public-and-legacy-internal-directory-search.md) 退役，不影响本解析契约。
 
 ## 按委托人协调写入
 

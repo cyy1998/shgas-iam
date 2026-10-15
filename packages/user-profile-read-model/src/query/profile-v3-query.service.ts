@@ -1,5 +1,4 @@
 import { UserProfileBaseSchema } from "@iam/domain/user";
-import { parseUserProfileDetailDocument } from "../schema/profile.schema";
 import { V3UserProfileSearchDocumentSchema } from "../schema/profile-v3-search.schema";
 import type { V3UserProfileFilter } from "./profile-v3-filter";
 import { V3UserProfileSearchRequestSchema } from "./profile-v3-filter";
@@ -18,10 +17,6 @@ export interface V3UserProfileQueryServiceDeps {
 
 export function createV3UserProfileQueryService(deps: V3UserProfileQueryServiceDeps) {
   return {
-    async search(input: unknown) {
-      const rows = await executeSearch(input, deps.profileRepository.searchCurrentProfiles);
-      return parseRows(rows, (row) => parseUserProfileDetailDocument(row.detail));
-    },
     async searchBase(input: unknown) {
       const rows = await executeSearch(input, deps.profileRepository.searchCurrentProfileBases);
       return parseRows(rows, (row) =>

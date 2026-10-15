@@ -222,8 +222,8 @@ Internal Privilege Delegation 已在 API 自身的 service、repository 与 Unit
   下一请求立即收敛。
 - `@iam/user-profile-read-model` 默认入口生成并读取同一 Dirty Version
   下的 Detail、Search 与 Subject Facts v3，并复用 PostgreSQL atomic publication、Redis monotonic CAS 与严格 v3
-  cache/PostgreSQL read-through。Active Internal Detail、canonical Filter DSL、Internal/Public legacy adapter 与 Delegation
-  基础搜索均只读同一个 `user_profile` v3 row；API 使用独立的 2 秒 PostgreSQL statement timeout 连接和 5 秒 handler
+  cache/PostgreSQL read-through。Active Internal Detail 与 canonical Filter DSL 均只读同一个 `user_profile` v3 row，
+  分别返回严格 Detail 与固定 User Profile Base；委托通过独立解析接口读取。API 使用独立的 2 秒 PostgreSQL statement timeout 连接和 5 秒 handler
   budget，并在 composition shutdown 中关闭该资源。Worker 通过版本无关的 `user-profile:backfill`、`user-profile:repair`
   与 PostgreSQL/Redis readiness 命令复用普通 dirty/job/publication 路径；命令不应用 client manifest 或推进 epoch。Active
   Worker consumer、Internal User、Custom SSO 与 OIDC 只发布和读取 v3，不允许同一 live User 混写、双读、fallback 或由

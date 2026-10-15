@@ -55,11 +55,10 @@ test("deduplicates membership values before applying the distinct value budget",
 });
 
 test("rejects every structural and value budget before calling the repository", async () => {
-  const searchCurrentProfiles = mock(async () => []);
+  const searchCurrentProfileBases = mock(async () => []);
   const service = createV3UserProfileQueryService({
     profileRepository: {
-      searchCurrentProfileBases: mock(async () => []),
-      searchCurrentProfiles,
+      searchCurrentProfileBases,
     },
   });
   const invalidRequests = [
@@ -98,27 +97,26 @@ test("rejects every structural and value budget before calling the repository", 
   ];
 
   for (const request of invalidRequests) {
-    const error = await service.search(request).catch((error) => error);
+    const error = await service.searchBase(request).catch((error) => error);
     expect(error).toMatchObject({
       name: "V3UserProfileFilterValidationError",
       httpStatus: 422,
     });
   }
-  expect(searchCurrentProfiles).not.toHaveBeenCalled();
+  expect(searchCurrentProfileBases).not.toHaveBeenCalled();
 });
 
 test("maps repository failures to the stable sanitized unavailable error", async () => {
   const service = createV3UserProfileQueryService({
     profileRepository: {
-      searchCurrentProfileBases: mock(async () => []),
-      searchCurrentProfiles: mock(async () => {
+      searchCurrentProfileBases: mock(async () => {
         throw new Error("postgresql://user:secret@database/internal-detail");
       }),
     },
   });
 
   const error = await service
-    .search({
+    .searchBase({
       filter: {
         field: "user.status",
         op: "eq",
@@ -190,7 +188,7 @@ test("strictly rejects legacy, empty, unknown, and wrongly typed expressions", a
   ];
 
   for (const request of invalidRequests) {
-    const error = await query.search(request).catch((error) => error);
+    const error = await query.searchBase(request).catch((error) => error);
     expect(error).toMatchObject({
       code: ApiErrorCode.ValidationFailed,
       httpStatus: 422,
@@ -260,7 +258,7 @@ test("rejects invalid Employment, Role, Privilege and Responsibility filters bef
     },
   ];
   for (const request of invalidRequests) {
-    const error = await query.search(request).catch((error) => error);
+    const error = await query.searchBase(request).catch((error) => error);
     expect(error).toMatchObject({
       code: ApiErrorCode.ValidationFailed,
       httpStatus: 422,
@@ -276,7 +274,6 @@ function createValidationQuery() {
   return createV3UserProfileQueryService({
     profileRepository: {
       searchCurrentProfileBases: rejectRead,
-      searchCurrentProfiles: rejectRead,
     },
   });
 }

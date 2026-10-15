@@ -7,14 +7,14 @@
 
 ## 能力与数据来源
 
-新增 `POST /internal/organizations/search-dsl`，以 Organization 为唯一结果根，支持组织自身属性和完整 Organization Path 条件。
+提供 `POST /internal/organizations/search-dsl`，以 Organization 为唯一结果根，支持组织自身属性和完整 Organization Path 条件。
 首版不按成员、岗位、角色或组织责任持有人反查组织。
 
 组织关系表继续作为唯一源事实。PostgreSQL JSONB 保存可从源事实重新构建的 Organization Search Document，
 用于检索，不接受独立业务写入。组织读模型独立持有文档、待重建记录、版本与核验能力，不借用 User Profile 的发布状态。
 
 搜索目标集合包含全部未删除组织，不自动排除 Pause 或 Disable；调用方通过 `organization.status` 显式选择状态。
-这与旧组织搜索只返回 Enable 组织的规则不同。新 DSL 观察异步发布后的文档，业务写入成功不保证立即可见。
+DSL 观察异步发布后的文档，业务写入成功不保证立即可见。
 
 ## 公开搜索结构
 
@@ -195,7 +195,7 @@ Organization Search 与 User Profile 共享 Filter DSL 的语言规则，但分�
 3. 在独立只读核验中确认组织覆盖、当前 schema、文档结构及源事实一致性、处理版本和待处理工作均满足放流要求。
 4. 全量核验通过后恢复组织写入与新 DSL。核验失败保持维护状态，修复后重新完整核验。
 
-组织读模型的 schema 升级不要求 User Profile 同时升级，也不改变旧组织搜索与详情的数据读取方式。
+组织读模型的 schema 升级不要求 User Profile 同时升级，也不改变组织详情的数据读取方式。
 完整核验是发布与恢复门禁，在线查询继续遵守上文的缺行、版本过滤和错误行为。
 
 ### 恢复职责
@@ -279,12 +279,17 @@ pnpm --filter @iam/worker organization-search:repair -- --limit 500 --deadline-m
 队列唤醒失败、任务重试耗尽、恢复命令和首次/升级核验另通过各自公开接口验证。
 提取共享 Filter 能力时，现有用户 DSL 的请求、结果及错误回归也属于受影响验证范围。
 
-## 既有接口
+## 接口范围
 
-`POST /internal/organizations/search` 与组织详情接口保持现有契约和数据读取方式；本次不把它们迁移到新引擎，
-也不据新增 DSL 自动弃用旧接口。旧搜索的祖先、后代参数不因此自动成为新 DSL 的操作符。
+面向其他内部服务的组织搜索只提供 `POST /internal/organizations/search-dsl`，使用有效 Internal Client 认证。
+Public 和 Internal 非 DSL 组织搜索按 [ADR-0043](../../adr/0043-retire-public-and-legacy-internal-directory-search.md)
+直接退役，不保留兼容期或源表搜索替代入口。
+
+Internal 组织详情、写入口以及 Admin 搜索、组织树和选择器继续保留。DSL 使用本文的完整文档响应、状态范围、
+500 条上限和异步读取边界，不为旧搜索参数新增操作符或兼容响应。
 
 ## 实施边界
 
-本设计不新增组织移动、历史组织查询、成员反查、Admin 页面或旧接口迁移，不修改 User Profile 的文档字段、响应或发布契约。
+组织 DSL 本身不新增组织移动、历史组织查询、成员反查或 Admin 页面；旧搜索退役按 ADR-0043 单独界定，
+不修改 User Profile 的文档字段、响应或发布契约。
 代码交付与目标环境切换分别记录；本契约不表示真实维护或部署已经执行。目标环境的停流、旧任务 drain、完整核验及放流读回由发布负责人负责。

@@ -1,9 +1,5 @@
 import { toOrganizationDto } from "@api/services/organization/organization.schema";
-import type {
-  OrganizationCreateDto,
-  OrganizationQueryDto,
-  OrganizationUpdateDto,
-} from "@api/services/organization/organization.type";
+import type { OrganizationCreateDto, OrganizationUpdateDto } from "@api/services/organization/organization.type";
 import {
   OrganizationAlreadyExistsError,
   OrganizationCodeExistsError,
@@ -26,12 +22,6 @@ export function createOrganizationService(deps: OrganizationServiceDeps) {
       throw new OrganizationNotFoundError("组织不存在");
     }
     return organization;
-  }
-
-  async function searchOrganizations(organizationQueryDto: OrganizationQueryDto) {
-    const organizations = await deps.organizationRepository.searchOrganizations(organizationQueryDto);
-    const orgDtos = organizations.map((o) => toOrganizationDto(o));
-    return orgDtos;
   }
 
   async function setOrganization(organizationCreateDto: OrganizationCreateDto) {
@@ -84,7 +74,6 @@ export function createOrganizationService(deps: OrganizationServiceDeps) {
   return {
     findOrganizationByCode,
     getOrganizationByCode,
-    searchOrganizations,
     setOrganization,
     updateOrganization,
   };

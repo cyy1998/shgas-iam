@@ -13,8 +13,6 @@ export function createUserRoute(handlers: UserHandlers) {
   });
   return router
     .openapi(routes.userInfo, handlers.userInfo)
-    .openapi(routes.usersSearch, handlers.usersSearch)
     .openapi(routes.usersSearchDsl, handlers.usersSearchDsl)
-    .openapi(routes.usersSearchWithPrivilegeDelegation, handlers.usersSearchWithPrivilegeDelegation)
     .openapi(routes.contactRegister, handlers.contactRegister);
 }

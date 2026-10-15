@@ -1,9 +1,7 @@
-import { OrganizationDtoSchema, OrganizationQueryDtoSchema } from "@api/services/organization/organization.schema";
 import { CUSTOM_SSO_SESSION_AUTHORIZATION_SECURITY_SCHEME } from "@api/services/sso/transport/custom-sso-delivery.security";
 import { CustomSsoDeliveryRequestHeadersSchema } from "@api/services/sso/transport/custom-sso-delivery-request.schema";
 import { createCustomSsoUnavailableResponse } from "@api/services/sso/transport/custom-sso-retryable.openapi";
 import { CustomSsoSubjectProjectionV2Schema } from "@api/services/sso/transport/custom-sso-subject.schema";
-import { UserDtoSchema, UserQueryDtoSchema } from "@api/services/user/user.schema";
 import { createRoute, z } from "@hono/zod-openapi";
 import * as HttpStatusCodes from "@iam/api-core/core/http-status-codes";
 import { commonErrorResponses } from "@iam/api-core/core/openapi/helpers/common-error-responses";
@@ -71,31 +69,5 @@ export const mobileSet = createRoute({
   responses: {
     ...commonErrorResponses,
     [HttpStatusCodes.OK]: jsonContent(createSuccessResponseSchema(z.boolean()), "移动电话设置成功"),
-  },
-});
-
-export const organizationsSearch = createRoute({
-  method: "post",
-  path: `${routePrefix}/organizations/search`,
-  tags,
-  request: {
-    body: jsonContentRequired(OrganizationQueryDtoSchema, "组织查询请求参数"),
-  },
-  responses: {
-    ...commonErrorResponses,
-    [HttpStatusCodes.OK]: jsonContent(createSuccessResponseSchema(z.array(OrganizationDtoSchema)), "组织查询结果"),
-  },
-});
-
-export const usersSearch = createRoute({
-  method: "post",
-  path: `${routePrefix}/users/search`,
-  tags,
-  request: {
-    body: jsonContentRequired(UserQueryDtoSchema, "用户查询参数"),
-  },
-  responses: {
-    ...commonErrorResponses,
-    [HttpStatusCodes.OK]: jsonContent(createSuccessResponseSchema(z.array(UserDtoSchema)), "用户查询结果"),
   },
 });

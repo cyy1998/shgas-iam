@@ -266,18 +266,6 @@ export async function fixture(
         config: { privateKeysByKid: { test: keys.privateKey }, maxSkewMs: 60000, nonceTtlSeconds: 120 },
       }),
       publicServices: {
-        organizationService: {
-          searchOrganizations: async () => {
-            state.publicBusinessReads++;
-            return [];
-          },
-        },
-        userProfileSearch: {
-          searchLegacyUsers: async () => {
-            state.publicBusinessReads++;
-            return [];
-          },
-        },
         userService: {
           getActiveUserBySubjectIdentifier: async () => ({ ...user, password: null }),
           getUserDetailById: async () => user,

@@ -22,8 +22,9 @@ Privilege Delegation 仍在搜索后独立组合，不进入档案。严格二�
 ## 固定摘要与一致性边界
 
 Internal Filter DSL 固定返回 `UserProfileBase`：username、name、mobile、wxId、subjectIdentifier，缺失的 mobile/wxId
-仍为 null。过滤结构不决定响应形状，全部有效 Internal Client 可以批量读取 Subject Identifier；不顺带改变 legacy search、
-Detail 或 Delegation search 的响应。
+仍为 null。过滤结构不决定响应形状，全部有效 Internal Client 可以批量读取 Subject Identifier；Detail 与 Delegation 实体搜索
+继续使用各自响应。Public 用户搜索、Internal 旧参数搜索及搜索与委托的组合接口已按
+[ADR-0043](0043-retire-public-and-legacy-internal-directory-search.md) 直接退役；这不改变本页的 DSL 摘要与一致性决定。
 
 匹配行的 Search Document 仍严格校验；摘要从同一 Profile 行的类型化列组装，不读取或校验未返回的 Detail，也不比较
 类型化列与 Search Document 中的重复值。接受损坏时“返回摘要可能不满足刚执行的筛选条件”的风险，以隔离摘要对未返回

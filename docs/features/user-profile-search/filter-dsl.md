@@ -158,13 +158,19 @@ HTTP 结果统一如下：
 匹配行在返回前严格解析，未匹配的损坏文档不保证被发现；损坏导致 SQL 执行异常时仍按查询失败返回 `503`。
 这些行为不同于发布与恢复流程中的完整数据门禁，不能把后者理解为每次 DSL 请求都会执行的验证。
 
-## 9. 既有接口适配
+## 9. 接口范围与委托组合
 
-- Internal `/internal/users/search` 保留原请求字段和 `UserDto[]` 响应，但作为 deprecated 参数适配器接入统一引擎；删除必须等调用方迁移完成并通过独立变更批准。
-- Public `/public/users/search` 继续作为正式 Public 契约，不直接开放 Filter DSL；它保留原请求与响应格式，只在内部转换为统一过滤表达式。
-- 旧数组参数内部取 `or`，不同参数取 `and`，全部 Employment 参数仍约束同一条任职。适配后采用新的未删除用户集合、Effective Employment、非空过滤器、500 条上限和错误规则。
-- `ancestorOrgCodes` 与 `ancestorOrgDepths` 同时提供时，必须由该 Employment 的同一个 Organization Path 节点满足：节点 code 属于前者且 depth 属于后者；只提供其中一个参数时，只检查对应条件。
-- `/internal/users/search-with-delegation` 先执行相同的基础用户搜索，再独立组合实时 Delegation；Delegation 不进入 Search Document。
+面向其他内部服务的用户搜索只提供 `POST /internal/users/search-dsl`，使用有效 Internal Client 认证。
+Public 搜索、Internal 旧参数搜索和旧用户搜索与委托的组合接口按
+[ADR-0043](../../adr/0043-retire-public-and-legacy-internal-directory-search.md) 直接退役，不保留兼容期或转换适配器。
+DSL 继续使用本文定义的固定 Base 响应与过滤语义，不扩展为旧响应的兼容替代。
+
+调用方需要委托信息时，使用搜索结果中的 username 独立调用 `/internal/delegations/resolve`，其输入预算和失败行为遵守
+[委托解析契约](../../adr/0020-provide-fail-closed-privilege-delegation-resolution.md)。搜索最多返回 500 个用户，
+解析每次接受 1–100 个唯一 username，调用方按需分批；各次解析独立观察当前委托，不保证跨请求的共同快照。
+Privilege Delegation 不进入 Search Document。
+
+Internal 用户详情、Admin 用户搜索与 Delegation 实体搜索继续保留；登录等流程使用的 Detail 能力不受搜索退役影响。
 
 ## 10. 代表性示例
 

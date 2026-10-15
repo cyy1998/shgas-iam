@@ -1,16 +1,13 @@
 import { mapCustomSsoRetryableError } from "@api/middlewares/custom-sso-retryable.error";
 import { getApiAuditRequestContext } from "@api/services/audit/audit.context";
-import type { OrganizationService } from "@api/services/organization/organization.service";
 import type { CustomSsoSubjectProjectionV2Dto } from "@api/services/sso/transport/custom-sso-subject.schema";
 import type { UserService } from "@api/services/user/user.service";
-import type { UserProfileSearchPort } from "@api/services/user-profile-search/user-profile-search.port";
 import * as HttpStatusCodes from "@iam/api-core/core/http-status-codes";
 import { AuthzUnauthorizedError } from "@iam/api-core/errors/AuthzUnauthorizedError";
 import * as resp from "@iam/api-core/http";
 import type { PublicRouteHandler } from "./public.type";
 
 export interface CreatePublicHandlersDeps {
-  organizationService: Pick<OrganizationService, "searchOrganizations">;
   subjectDeliveryRequests: {
     resolveUserInfoForRequest: (request: object) => Promise<CustomSsoSubjectProjectionV2Dto>;
   };
@@ -18,7 +15,6 @@ export interface CreatePublicHandlersDeps {
     UserService,
     "getActiveUserBySubjectIdentifier" | "getUserDetailById" | "setMobile" | "setPassword"
   >;
-  userProfileSearch: Pick<UserProfileSearchPort, "searchLegacyUsers">;
   config: {
     projectionRetryAfterSeconds: number;
   };
@@ -51,24 +47,10 @@ export function createPublicHandlers(deps: CreatePublicHandlersDeps) {
     return c.json(resp.ok(true), HttpStatusCodes.OK);
   };
 
-  const organizationsSearch: PublicRouteHandler<"organizationsSearch"> = async (c) => {
-    const organizationQueryDto = c.req.valid("json");
-    const data = await deps.organizationService.searchOrganizations(organizationQueryDto);
-    return c.json(resp.ok(data), HttpStatusCodes.OK);
-  };
-
-  const usersSearch: PublicRouteHandler<"usersSearch"> = async (c) => {
-    const userQueryDto = c.req.valid("json");
-    const data = await deps.userProfileSearch.searchLegacyUsers(userQueryDto);
-    return c.json(resp.ok(data), HttpStatusCodes.OK);
-  };
-
   return {
     mobileSet,
-    organizationsSearch,
     passwordChange,
     ...createRootPublicHandlers(deps),
-    usersSearch,
   };
 }
 

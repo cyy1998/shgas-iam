@@ -216,9 +216,6 @@ function createProductionApp(
       getOrganizationByCode: async () => {
         throw new Error("DSL must not read source detail");
       },
-      searchOrganizations: async () => {
-        throw new Error("DSL must not use source search");
-      },
       setOrganization: async () => true,
       updateOrganization: async () => true,
     },

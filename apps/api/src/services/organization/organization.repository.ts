@@ -1,17 +1,12 @@
-import type {
-  OrganizationCreateDto,
-  OrganizationQueryDto,
-  OrganizationUpdateDto,
-} from "@api/services/organization/organization.type";
+import type { OrganizationCreateDto, OrganizationUpdateDto } from "@api/services/organization/organization.type";
 import { getChildOrganizationLevel, OrganizationStatus } from "@iam/contracts";
 import type { DbClient } from "@iam/db";
 import { extractPostgresError } from "@iam/db/postgres-error";
-import { compactUpdate, firstRow, inArrayIf } from "@iam/db/query-utils";
+import { compactUpdate, firstRow } from "@iam/db/query-utils";
 import type { Organization } from "@iam/db/schema";
 import { organizationClosures, organizations } from "@iam/db/schema";
 import { OrganizationCodeExistsError } from "@iam/domain/organization";
-import { and, eq, exists, inArray, sql } from "drizzle-orm";
-import { alias } from "drizzle-orm/pg-core";
+import { and, eq, inArray } from "drizzle-orm";
 
 export function createOrganizationRepository(db: DbClient) {
   async function write<T>(operation: () => Promise<T>): Promise<T> {
@@ -46,53 +41,6 @@ export function createOrganizationRepository(db: DbClient) {
         )
         .limit(1);
       return firstRow(await attachOrganizationRelations(rows, db)) ?? null;
-    },
-    async searchOrganizations(query: OrganizationQueryDto) {
-      const ancestor = alias(organizations, "ancestor_filter");
-      const descendant = alias(organizations, "descendant_filter");
-      const rows = await db
-        .select()
-        .from(organizations)
-        .where(
-          and(
-            query.ancestorCodes === undefined
-              ? undefined
-              : exists(
-                  db
-                    .select({ value: sql`1` })
-                    .from(organizationClosures)
-                    .innerJoin(ancestor, eq(organizationClosures.ancestorId, ancestor.id))
-                    .where(
-                      and(
-                        eq(organizationClosures.descendantId, organizations.id),
-                        inArrayIf(ancestor.orgCode, query.ancestorCodes),
-                        inArrayIf(organizationClosures.depth, query.ancestorDepths),
-                      ),
-                    ),
-                ),
-            query.descendantCodes === undefined
-              ? undefined
-              : exists(
-                  db
-                    .select({ value: sql`1` })
-                    .from(organizationClosures)
-                    .innerJoin(descendant, eq(organizationClosures.descendantId, descendant.id))
-                    .where(
-                      and(
-                        eq(organizationClosures.ancestorId, organizations.id),
-                        inArrayIf(descendant.orgCode, query.descendantCodes),
-                        inArrayIf(organizationClosures.depth, query.descendantDepths),
-                      ),
-                    ),
-                ),
-            inArrayIf(organizations.level, query.orgLevels),
-            inArrayIf(organizations.orgType, query.orgTypes),
-            inArrayIf(organizations.orgCode, query.orgCodes),
-            eq(organizations.status, OrganizationStatus.Enable),
-            eq(organizations.isDelete, false),
-          ),
-        );
-      return await attachOrganizationRelations(rows, db);
     },
     async setOrganization(organizationCreateDto: OrganizationCreateDto, parentOrganization: Organization | null) {
       const { parentCode, ...org } = organizationCreateDto;

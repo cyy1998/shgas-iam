@@ -1748,8 +1748,6 @@ test("every retained Public endpoint uses the same root and Custom authenticatio
     const endpoints = [
       { path: "/password/change", body: { oldPassword: "old", newPassword: "new" } },
       { path: "/mobile/set", body: { phoneNumber: "17721462865", code: "1234" } },
-      { path: "/organizations/search", body: {} },
-      { path: "/users/search", body: {} },
     ];
     for (const client of ["iam", "app"]) {
       for (const endpoint of endpoints) {
@@ -1773,7 +1771,7 @@ test("every retained Public endpoint uses the same root and Custom authenticatio
         expect(f.state.publicBusinessReads).toBe(calls);
       }
     }
-    expect(f.state.publicBusinessReads).toBe(8);
+    expect(f.state.publicBusinessReads).toBe(4);
   } finally {
     await f.close();
   }

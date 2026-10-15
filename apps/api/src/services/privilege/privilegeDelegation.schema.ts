@@ -34,27 +34,6 @@ export const PrivilegeDelegationDetailSchema = PrivilegeDelegationSchema.extend(
   ),
 });
 
-export const PrivilegeDelegationDtoSchema = PrivilegeDelegationSchema.extend({
-  delegatorUsername: z.string().openapi({ example: "138550" }),
-  delegatorName: z.string().openapi({ example: "蔡奕阳" }),
-  delegateeUsername: z.string().openapi({ example: "138550" }),
-  delegateeName: z.string().openapi({ example: "蔡奕阳" }),
-})
-  .required()
-  .openapi("PrivilegeDelegationDto");
-
-export function toPrivilegeDelegationDto(input: unknown) {
-  const e = PrivilegeDelegationDetailSchema.parse(input);
-  const { delegatorUser, delegateeUser, organizationScope, delegationDetails, ...rest } = e;
-  return PrivilegeDelegationDtoSchema.parse({
-    ...rest,
-    delegatorUsername: delegatorUser.username,
-    delegatorName: delegatorUser.name,
-    delegateeUsername: delegateeUser.username,
-    delegateeName: delegateeUser.name,
-  });
-}
-
 export const PrivilegeDelegationDetailDtoSchema = PrivilegeDelegationDetailSchema.extend({
   delegatorUsername: z.string().openapi({ example: "138550" }),
   delegatorName: z.string().openapi({ example: "蔡奕阳" }),

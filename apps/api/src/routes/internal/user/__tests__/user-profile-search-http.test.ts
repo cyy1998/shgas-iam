@@ -1,9 +1,12 @@
 import { expect, mock, test } from "bun:test";
+import { createInternalMiddlewares } from "@api/routes/internal/_middleware";
 import { createUserHandlers } from "@api/routes/internal/user/user.handlers";
 import { createUserRoute } from "@api/routes/internal/user/user.index";
 import { createV3UserProfileSearchAdapter } from "@api/services/user-profile-search/user-profile-search-v3.adapter";
 import createApp from "@iam/api-core/core/create-app";
+import { createInternalAuthenticationHandler } from "@iam/api-core/middlewares";
 import { UserStatus, UserType } from "@iam/contracts";
+import type { GenericClientRuntimeDto } from "@iam/domain/client";
 import { createV3UserProfileQueryService } from "@iam/user-profile-read-model/v3";
 import pino from "pino";
 import appConfig from "~api/app.config";
@@ -13,7 +16,6 @@ test("maps the canonical v3 Filter request through the production Internal HTTP 
   const query = createV3UserProfileQueryService({
     profileRepository: {
       searchCurrentProfileBases,
-      searchCurrentProfiles: mock(async () => []),
     },
   });
   const app = createProductionApp(query);
@@ -65,6 +67,7 @@ test("maps the canonical v3 Filter request through the production Internal HTTP 
 test("returns UserProfileBase from typed profile columns without depending on Detail", async () => {
   const searchCurrentProfileBases = mock(async () => [
     {
+      detail: { malformed: "unused" },
       mobile: null,
       name: "Typed Bob",
       searchDocument: {
@@ -87,12 +90,6 @@ test("returns UserProfileBase from typed profile columns without depending on De
   const query = createV3UserProfileQueryService({
     profileRepository: {
       searchCurrentProfileBases,
-      searchCurrentProfiles: mock(async () => [
-        {
-          detail: { malformed: "unused" },
-          searchDocument: {},
-        },
-      ]),
     },
   });
   const app = createProductionApp(query);
@@ -121,7 +118,7 @@ test("preserves Profile HTTP depth and node budgets before executing the query",
   const searchCurrentProfileBases = mock(async () => []);
   const app = createProductionApp(
     createV3UserProfileQueryService({
-      profileRepository: { searchCurrentProfileBases, searchCurrentProfiles: mock(async () => []) },
+      profileRepository: { searchCurrentProfileBases },
     }),
   );
   const condition = { field: "user.username", op: "eq", value: "alice" };
@@ -151,7 +148,6 @@ test("describes one generic recursive Filter AST without enumerating field and o
   const query = createV3UserProfileQueryService({
     profileRepository: {
       searchCurrentProfileBases: mock(async () => []),
-      searchCurrentProfiles: mock(async () => []),
     },
   });
   const app = createProductionApp(query);
@@ -244,12 +240,11 @@ test("maps the fixed Internal handler deadline to the sanitized v3 unavailable r
   }
 });
 
-function createProductionApp(query: ReturnType<typeof createV3UserProfileQueryService>) {
+function createProductionApp(query: ReturnType<typeof createV3UserProfileQueryService>, authenticate = false) {
   const adapter = createV3UserProfileSearchAdapter(query);
   const handlers = createUserHandlers({
     registerPurveyorContact: { execute: async () => true },
     internalUserProfileQuery: { getDetailByUsername: async () => null as never },
-    userDelegationQuery: { searchUsersWithDelegations: async () => ({ users: [], delegations: [] }) },
     userProfileSearch: adapter,
   });
   return createApp(appConfig, {
@@ -260,7 +255,17 @@ function createProductionApp(query: ReturnType<typeof createV3UserProfileQuerySe
         default: createUserRoute(handlers),
       },
     },
-    middlewares: {},
+    middlewares: authenticate
+      ? {
+          "./src/routes/internal/_middleware.ts": {
+            default: createInternalMiddlewares({
+              internalAuthenticationHandler: createInternalAuthenticationHandler({
+                getClientBySecret: async (): Promise<GenericClientRuntimeDto | null> => null,
+              }),
+            }),
+          },
+        }
+      : {},
   });
 }
 
@@ -286,3 +291,24 @@ async function requestWithRawBody(app: ReturnType<typeof createProductionApp>, b
     body,
   });
 }
+
+test("requires a valid Internal Client credential before querying user profiles", async () => {
+  const searchCurrentProfileBases = mock(async () => []);
+  const app = createProductionApp(
+    createV3UserProfileQueryService({ profileRepository: { searchCurrentProfileBases } }),
+    true,
+  );
+  for (const credential of [undefined, "invalid-secret"]) {
+    const headers = new Headers({ "content-type": "application/json" });
+    if (credential !== undefined) headers.set("apikey", credential);
+    const response = await app.request("http://localhost/internal/users/search-dsl", {
+      method: "POST",
+      headers,
+      body: JSON.stringify({ filter: { field: "user.username", op: "eq", value: "alice" } }),
+    });
+    const body = await response.json();
+    expect(response.status).toBe(401);
+    expect(body.data).toBeNull();
+  }
+  expect(searchCurrentProfileBases).not.toHaveBeenCalled();
+});

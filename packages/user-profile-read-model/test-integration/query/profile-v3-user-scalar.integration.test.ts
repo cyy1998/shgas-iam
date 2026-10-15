@@ -130,7 +130,7 @@ describe("User Profile v3 User scalar tracer", () => {
       .select({ profileSchemaVersion: userProfiles.profileSchemaVersion })
       .from(userProfiles)
       .where(eq(userProfiles.userId, 1));
-    const details = await query.search({
+    const bases = await query.searchBase({
       filter: {
         field: "user.subjectIdentifier",
         op: "eq",
@@ -139,21 +139,15 @@ describe("User Profile v3 User scalar tracer", () => {
     });
 
     expect(persisted).toEqual([{ profileSchemaVersion: 3 }]);
-    expect(details).toHaveLength(1);
-    expect(details[0]).toMatchObject({
-      id: 1,
-      username: "alice",
-      name: "Alice",
-      mobile: null,
-      wxId: "wx-alice",
-      userType: UserType.Formal,
-      orderNum: 10,
-      status: UserStatus.Pause,
-      employments: [],
-      roles: [],
-      privileges: [],
-    });
-    expect(details[0]?.createTime).toBeInstanceOf(Date);
+    expect(bases).toEqual([
+      {
+        subjectIdentifier: "5ee46272-9123-4ec3-9d8d-8a7a6ac7f888",
+        username: "alice",
+        name: "Alice",
+        mobile: null,
+        wxId: "wx-alice",
+      },
+    ]);
   });
 
   test("applies exact scalar eq, normalized in, and binary not semantics", async () => {
@@ -204,7 +198,7 @@ describe("User Profile v3 User scalar tracer", () => {
         value: ["13800000002", "13800000002"],
       },
     });
-    const formalWithoutBobMobile = await query.search({
+    const formalWithoutBobMobile = await query.searchBase({
       filter: {
         and: [
           {
@@ -223,7 +217,7 @@ describe("User Profile v3 User scalar tracer", () => {
         ],
       },
     });
-    const aliceOrBob = await query.search({
+    const aliceOrBob = await query.searchBase({
       filter: {
         or: [
           { field: "user.name", op: "eq", value: "Alice" },
@@ -231,20 +225,20 @@ describe("User Profile v3 User scalar tracer", () => {
         ],
       },
     });
-    const wrongCase = await query.search({
+    const wrongCase = await query.searchBase({
       filter: { field: "user.name", op: "eq", value: "alice" },
     });
-    const nullableIn = await query.search(normalized);
+    const nullableIn = await query.searchBase(normalized);
 
     expect(normalized.filter).toEqual({
       field: "user.mobile",
       op: "in",
       value: ["13800000002"],
     });
-    expect(formalWithoutBobMobile.map((detail) => detail.id)).toEqual([1]);
-    expect(aliceOrBob.map((detail) => detail.id)).toEqual([1, 2]);
+    expect(formalWithoutBobMobile.map((base) => base.username)).toEqual(["alice"]);
+    expect(aliceOrBob.map((base) => base.username)).toEqual(["alice", "bob"]);
     expect(wrongCase).toEqual([]);
-    expect(nullableIn.map((detail) => detail.id)).toEqual([2]);
+    expect(nullableIn.map((base) => base.username)).toEqual(["bob"]);
   });
 
   test("preserves a legal 255-character wxId while enforcing the 128-character query budget", async () => {
@@ -267,7 +261,7 @@ describe("User Profile v3 User scalar tracer", () => {
     expect(candidate?.searchDoc.user.wxId).toBe(wxId);
     await candidatePersistence.upsert(candidate!);
     const error = await query
-      .search({
+      .searchBase({
         filter: { field: "user.wxId", op: "eq", value: "w".repeat(129) },
       })
       .catch((error) => error);
@@ -308,7 +302,10 @@ describe("User Profile v3 User scalar tracer", () => {
       },
     ];
 
-    for (const filter of boundaryFilters) expect(await query.search({ filter })).toEqual([]);
+    for (const filter of boundaryFilters) {
+      const bases = await query.searchBase({ filter });
+      expect(bases).toEqual([]);
+    }
   });
 
   test("fails the base query when a matched persisted Search Document is malformed", async () => {
@@ -382,7 +379,6 @@ describe("User Profile v3 User scalar tracer", () => {
       filter: { field: "user.username", op: "eq", value: "alice" },
     } as const;
     const bases = await query.searchBase(filter);
-    const error = await query.search(filter).catch((error) => error);
 
     expect(bases).toEqual([
       {
@@ -393,11 +389,6 @@ describe("User Profile v3 User scalar tracer", () => {
         wxId: null,
       },
     ]);
-    expect(error).toMatchObject({
-      code: ApiErrorCode.UserSearchUnavailable,
-      httpStatus: 503,
-      name: "V3UserProfileDocumentIntegrityError",
-    });
   });
 
   test("maps a real PostgreSQL statement timeout to one sanitized unavailable error", async () => {
@@ -450,7 +441,7 @@ describe("User Profile v3 User scalar tracer", () => {
     await locked;
     try {
       const error = await timeoutQuery
-        .search({
+        .searchBase({
           filter: {
             field: "user.username",
             op: "eq",
@@ -498,13 +489,15 @@ describe("User Profile v3 User scalar tracer", () => {
     );
     for (const candidate of candidates.reverse()) await candidatePersistence.upsert(candidate);
 
-    const exactLimit = await query.search({
+    const exactLimit = await query.searchBase({
       filter: { field: "user.userType", op: "eq", value: UserType.Formal },
     });
-    expect(exactLimit.map((detail) => detail.id)).toEqual(Array.from({ length: 500 }, (_, index) => index + 1));
+    expect(exactLimit.map((base) => base.username)).toEqual(
+      Array.from({ length: 500 }, (_, index) => `user-${index + 1}`),
+    );
 
     const error = await query
-      .search({
+      .searchBase({
         filter: {
           field: "user.userType",
           op: "in",

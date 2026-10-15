@@ -1,14 +1,8 @@
 import type { UnitOfWorkPort } from "@iam/api-core/uow";
-import type {
-  Organization,
-  OrganizationCreateDto,
-  OrganizationQueryDto,
-  OrganizationUpdateDto,
-} from "./organization.type";
+import type { Organization, OrganizationCreateDto, OrganizationUpdateDto } from "./organization.type";
 
 export interface OrganizationReaderPort {
   getOrganizationByCode: (orgCode: string) => Promise<Organization | null>;
-  searchOrganizations: (query: OrganizationQueryDto) => Promise<Organization[]>;
 }
 
 export interface OrganizationTransactionStorePort {

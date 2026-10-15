@@ -48,7 +48,6 @@ import type { ApiRepositories } from "../repositories";
 import { createRootAuthenticationComposition } from "../root-authentication";
 import type { ApiRuntimePorts } from "../runtime";
 import type { createApiUnitOfWork } from "../tx";
-import { createApiUserProfileSearch } from "./user-profile-search";
 
 type ApiUnitOfWork = ReturnType<typeof createApiUnitOfWork>;
 
@@ -151,17 +150,11 @@ export function createApiServices(options: CreateApiServicesOptions) {
   const internalUserProfileQuery = createInternalUserProfileQueryService({
     profileRepository: createInternalUserProfileQueryRepository(options.userProfileQueryDb),
   });
-  const canonicalUserProfileSearch = createV3UserProfileSearchAdapter(
+  const userProfileSearch = createV3UserProfileSearchAdapter(
     createV3UserProfileQueryService({
       profileRepository: createV3UserProfileQueryRepository(options.userProfileQueryDb),
     }),
   );
-  const { userDelegationQuery, userProfileSearch } = createApiUserProfileSearch({
-    dslSearch: canonicalUserProfileSearch,
-    legacySearch: canonicalUserProfileSearch,
-    privilegeDelegationRepository: repositories.privilegeDelegation,
-  });
-
   const userMobileBinding = createUserMobileBinding({
     mobileService,
     auditLogWriter,
@@ -257,7 +250,6 @@ export function createApiServices(options: CreateApiServicesOptions) {
     subjectAccess,
     subjectAccessLifecycle,
     user: userService,
-    userDelegationQuery,
     userPassword: userPasswordHelper,
     userProfileQuery,
     userProfileSearch,
@@ -283,7 +275,7 @@ export function createApiServices(options: CreateApiServicesOptions) {
         ssoInternalOrigin: runtime.config.env.sso.internalOrigin,
       },
     },
-    publicServices: { organizationService, userService, userProfileSearch },
+    publicServices: { userService },
     config: {
       ...runtime.config.auth,
       loginEndpoint: runtime.config.env.sso.loginEndpoint,

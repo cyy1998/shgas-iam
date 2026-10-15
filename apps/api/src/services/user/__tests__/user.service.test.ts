@@ -90,7 +90,6 @@ function createDeps(overrides: Record<string, unknown> = {}) {
       getDetailByUserId: mock(async () => user),
       getDetailByUsername: mock(async () => user),
       getDetailByWxId: mock(async () => user),
-      searchLegacyUsers: mock(async () => [user]),
     },
     userRepository: {
       getUserById: mock(async () => user),

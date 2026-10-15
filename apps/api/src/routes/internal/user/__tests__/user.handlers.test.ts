@@ -17,10 +17,6 @@ function createHandlers() {
     },
     userProfileSearch: {
       searchDsl: mock(async () => []),
-      searchLegacyUsers: mock(async () => [{ username: "zhangsan" }]),
-    },
-    userDelegationQuery: {
-      searchUsersWithDelegations: mock(async () => ({ users: [], delegations: [] })),
     },
   };
 
@@ -64,39 +60,6 @@ describe("createUserHandlers", () => {
         sourceApp: "iam",
       }),
     });
-  });
-
-  test("delegates legacy search through the shared profile search facade", async () => {
-    const { deps, handlers } = createHandlers();
-    const query = { usernames: ["zhangsan"] };
-    const context = {
-      req: { valid: mock(() => query) },
-      json: mock((payload: unknown) => payload),
-    };
-
-    await expect(handlers.usersSearch(context as never, undefined as never)).resolves.toMatchObject({
-      code: 200,
-      data: [{ username: "zhangsan" }],
-    });
-
-    expect(deps.userProfileSearch.searchLegacyUsers).toHaveBeenCalledWith(query);
-  });
-
-  test("combines live delegations after searching users through the shared facade", async () => {
-    const { deps, handlers } = createHandlers();
-    const query = { ancestorOrgCodes: ["ORG"], privilegeCode: "privilege:a" };
-    const context = {
-      req: { valid: mock(() => query) },
-      json: mock((payload: unknown) => payload),
-    };
-
-    const result = await handlers.usersSearchWithPrivilegeDelegation(context as never, undefined as never);
-
-    expect(result).toMatchObject({
-      code: 200,
-      data: { users: [], delegations: [] },
-    });
-    expect(deps.userDelegationQuery.searchUsersWithDelegations).toHaveBeenCalledWith(query);
   });
 
   test("delegates canonical v3 Filter search through the shared profile search facade", async () => {

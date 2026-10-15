@@ -22,7 +22,6 @@ import type {
 import type { PrivilegeDelegationRepository } from "@api/services/privilege/privilegeDelegation.repository";
 import type { SessionOrigin } from "@api/services/session/session-origin";
 import type {
-  UserDelegationReaderPort,
   UserMobileBindingPort,
   UserMobileVerificationPort,
   UserProfileReaderPort,
@@ -115,7 +114,6 @@ type _PrivilegeDelegationResolutionPort = AssertAssignable<
 >;
 
 type _UserProfileReaderPort = AssertAssignable<UserProfileReaderPort, UserProfileQueryService>;
-type _UserDelegationReaderPort = AssertAssignable<UserDelegationReaderPort, PrivilegeDelegationRepository>;
 type _UserMobileBindingPort = AssertAssignable<UserMobileBindingPort, MobileService>;
 type _UserMobileVerificationPort = AssertAssignable<UserMobileVerificationPort, MobileService>;
 type _UserStorePort = AssertAssignable<UserStorePort, UserRepository>;

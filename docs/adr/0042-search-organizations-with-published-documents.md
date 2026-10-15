@@ -32,7 +32,9 @@ Organization Search 保留组织关系表作为唯一源事实，以 PostgreSQL 
 ## 范围
 
 首版只搜索组织自身属性与完整路径，不收录成员、岗位、角色或责任持有人条件。
-只新增组织 DSL；既有组织搜索与详情保留原契约和读取方式，不在本决定中迁移或弃用。
+新增组织 DSL 时保留了既有组织搜索与详情。后续按
+[ADR-0043](0043-retire-public-and-legacy-internal-directory-search.md) 直接退役 Public 和 Internal 非 DSL 组织搜索，
+组织详情继续保留原契约和读取方式；这不改变本页的异步文档与完整响应决定。
 
 组织读模型独立管理文档版本、待处理记录和数据核验，首次完整构建并核验后开放新接口，
 不与 User Profile 绑定发布或恢复。组织文档直接从 PostgreSQL 查询，首版不增加 Redis 文档缓存。

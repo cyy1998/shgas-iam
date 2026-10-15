@@ -46,28 +46,6 @@ export function createPrivilegeDelegationRepository(db: DbClient) {
         .where(eq(delegationDetails.delegationId, id));
       return { ...row, privilegeIds: details.map((detail) => detail.privilegeId) };
     },
-    async getDelegationsByUserAndOrganizationScopeAndPrivilege(usernames: string[], orgCode: string, privCode: string) {
-      const now = new Date();
-      const rows = await db
-        .select()
-        .from(privilegeDelegations)
-        .where(
-          and(
-            delegationHasPrivileges([privCode], db),
-            organizationScopeContainsOrg([orgCode], db),
-            exists(
-              db
-                .select({ value: sql`1` })
-                .from(users)
-                .where(and(eq(users.id, privilegeDelegations.delegatorUserId), inArrayIf(users.username, usernames))),
-            ),
-            eq(privilegeDelegations.status, PrivilegeDelegationStatus.Enable),
-            lte(privilegeDelegations.startTime, now),
-            gte(privilegeDelegations.endTime, now),
-          ),
-        );
-      return await attachDelegationRelations(rows, db);
-    },
     async searchDelegations(query: Prettify<PrivilegeDelegationQueryDto>) {
       const rows = await db
         .select()

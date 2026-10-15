@@ -29,7 +29,6 @@ function createHandlers(findResult: unknown = null) {
       getOrganizationByCode: mock(async () => {
         throw new Error("getOrganizationByCode should not be called");
       }),
-      searchOrganizations: mock(async () => []),
       setOrganization: mock(async () => true),
       updateOrganization: mock(async () => true),
     },

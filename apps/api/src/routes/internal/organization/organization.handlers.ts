@@ -20,11 +20,7 @@ export interface CreateOrganizationHandlersDeps {
   organizationSearch: Pick<OrganizationSearchQueryService, "search">;
   organizationService: Pick<
     OrganizationService,
-    | "findOrganizationByCode"
-    | "getOrganizationByCode"
-    | "searchOrganizations"
-    | "setOrganization"
-    | "updateOrganization"
+    "findOrganizationByCode" | "getOrganizationByCode" | "setOrganization" | "updateOrganization"
   >;
 }
 
@@ -38,12 +34,6 @@ export function createOrganizationHandlers(deps: CreateOrganizationHandlersDeps)
     );
     return c.json(resp.ok(data), HttpStatusCodes.OK);
   };
-  const organizationsSearch: OrganizationRouteHandler<"organizationsSearch"> = async (c) => {
-    const organizationQueryDto = c.req.valid("json");
-    const data = await deps.organizationService.searchOrganizations(organizationQueryDto);
-    return c.json(resp.ok(data), HttpStatusCodes.OK);
-  };
-
   const organizationGetByCode: OrganizationRouteHandler<"organizationGetByCode"> = async (c) => {
     const { orgCode } = c.req.valid("param");
     const data = await deps.organizationService.getOrganizationByCode(orgCode);
@@ -86,7 +76,6 @@ export function createOrganizationHandlers(deps: CreateOrganizationHandlersDeps)
   return {
     organizationsSearchDsl,
     organizationGetByCode,
-    organizationsSearch,
     organizationUpdate,
     purveyorRegister,
   };

@@ -187,42 +187,22 @@ export async function expectInternalUserProfileSearchMatrix(input: InternalSearc
   expect(readUsernames(notExists)).toEqual(allUsernames);
 }
 
-export async function expectLegacyUserSearchEquivalence(input: {
+export async function expectUserSearchDelegationResolution(input: {
   adminPrivilegeCode: string;
   adminUsername: string;
-  clientCode: string;
   delegateeUsername: string;
-  disabledUsername: string;
   internalApiKey: string;
-  localSession: string;
   organizationCode: string;
   origin: string;
-  pausedUsername: string;
   request: APIRequestContext;
 }) {
-  const usernames = [input.adminUsername, input.pausedUsername, input.disabledUsername];
-  const [internalResponse, publicResponse] = await Promise.all([
-    input.request.post(`${input.origin}/api/iam/internal/users/search`, {
-      headers: { apikey: input.internalApiKey },
-      data: { usernames },
-    }),
-    input.request.post(`${input.origin}/api/iam/public/users/search`, {
-      headers: {
-        Authorization: input.localSession,
-        Client: encodeURIComponent(input.clientCode),
-      },
-      data: { usernames },
-    }),
-  ]);
-  expect(internalResponse.status()).toBe(200);
-  expect(publicResponse.status()).toBe(200);
-  const internalUsers = readData(await internalResponse.json());
-  const publicUsers = readData(await publicResponse.json());
-  expect(readUsernames(internalUsers)).toEqual(usernames);
-  expect(readUsernames(publicUsers)).toEqual(usernames);
-  expect(publicUsers).toEqual(internalUsers);
-  expect(readRecords(internalUsers).every((user) => !("employments" in user))).toBe(true);
-  expect(readRecords(publicUsers).every((user) => !("employments" in user))).toBe(true);
+  const profiles = await searchDsl(input, {
+    field: "user.username",
+    op: "eq",
+    value: input.adminUsername,
+  });
+  expectUserProfileBases(profiles, [input.adminUsername]);
+  const usernames = readUsernames(profiles);
 
   const now = Date.now();
   const createDelegationResponse = await input.request.post(`${input.origin}/api/iam/internal/delegations`, {
@@ -247,25 +227,24 @@ export async function expectLegacyUserSearchEquivalence(input: {
   expect(delegationId).toEqual(expect.any(Number));
 
   const queryLiveDelegations = async () => {
-    const response = await input.request.post(`${input.origin}/api/iam/internal/users/search-with-delegation`, {
+    const response = await input.request.post(`${input.origin}/api/iam/internal/delegations/resolve`, {
       headers: { apikey: input.internalApiKey },
       data: {
-        usernames: [input.adminUsername],
-        ancestorOrgCodes: [input.organizationCode],
+        usernames,
+        orgCode: input.organizationCode,
         privilegeCode: input.adminPrivilegeCode,
       },
     });
     expect(response.status()).toBe(200);
-    const data = readRecord(readData(await response.json()));
-    expect(readUsernames(data?.users)).toEqual([input.adminUsername]);
-    return readRecords(data?.delegations);
+    return readRecords(readData(await response.json()));
   };
 
-  expect(await queryLiveDelegations()).toEqual([
-    expect.objectContaining({
+  const activeDelegations = await queryLiveDelegations();
+  expect(activeDelegations).toEqual([
+    {
       delegateeUsername: input.delegateeUsername,
-      delegatorUsername: input.adminUsername,
-    }),
+      username: input.adminUsername,
+    },
   ]);
 
   const pauseDelegationResponse = await input.request.patch(
@@ -277,7 +256,8 @@ export async function expectLegacyUserSearchEquivalence(input: {
   );
   expect(pauseDelegationResponse.status()).toBe(200);
 
-  expect(await queryLiveDelegations()).toEqual([]);
+  const pausedDelegations = await queryLiveDelegations();
+  expect(pausedDelegations).toEqual([{ delegateeUsername: null, username: input.adminUsername }]);
 }
 
 export async function waitForEmploymentSearchVisibility(input: {

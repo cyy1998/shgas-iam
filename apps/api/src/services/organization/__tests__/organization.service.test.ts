@@ -30,7 +30,6 @@ function createService(repositoryResult: ReturnType<typeof organization> | null 
   const deps = {
     organizationRepository: {
       getOrganizationByCode: mock(async () => repositoryResult),
-      searchOrganizations: mock(async () => []),
     },
     uow: {
       transaction: mock(async () => undefined),
@@ -70,7 +69,6 @@ describe("createOrganizationService", () => {
     const service = createOrganizationService({
       organizationRepository: {
         getOrganizationByCode: mock(async () => organization()),
-        searchOrganizations: mock(async () => []),
       },
       uow: {
         transaction: mock(

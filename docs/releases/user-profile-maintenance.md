@@ -2,7 +2,7 @@
 
 Type: runbook
 Status: Current
-Last verified: 2026-09-21
+Last verified: 2026-10-15
 Next review: 2026-10-31
 
 本页覆盖当前 Profile v3、Dirty Queue、Subject Facts 与 Subject Access 的日常修复和全量恢复。
@@ -116,7 +116,7 @@ Facts/Barrier 缺失或不一致、资源故障、timeout、报告不完整或�
 数据 gate 后核对固定 runtime readiness，在受控数据上验证：
 
 - 源事实变更产生 dirty 并发布当前 Profile/Facts；Employment 暂停/恢复和角色变化影响相应读取。
-- Internal Detail、Internal/Public Search 及 Delegation 基础搜索使用当前 v3；Filter DSL 的响应与范围遵守
+- Internal Detail 与 Internal Filter DSL 使用当前 v3；Filter DSL 的响应与范围遵守
   [DSL 契约](../features/user-profile-search/filter-dsl.md)，不以 Profile 清理改变查询协议。
 - Subject Access 按账号状态拒绝或授予新操作许可；责任完整性失败通过
   [正式管理入口](../features/organization-responsibility/hr-admin-management-design.md)处理，不能绕过双端范围和审计。

@@ -1,5 +1,4 @@
 import { getApiAuditRequestContext, getInternalAuditActor } from "@api/services/audit/audit.context";
-import type { UserDelegationQuery } from "@api/services/user/user-delegation-query.helper";
 import type { UserProfileSearchPort } from "@api/services/user-profile-search/user-profile-search.port";
 import type { RegisterPurveyorContactUseCase } from "@api/use-cases/internal/register-purveyor-contact/register-purveyor-contact.use-case";
 import * as HttpStatusCodes from "@iam/api-core/core/http-status-codes";
@@ -14,7 +13,6 @@ export { INTERNAL_USER_HANDLER_TIMEOUT_MS } from "./user-handler-budget";
 
 export interface CreateUserHandlersDeps {
   registerPurveyorContact: Pick<RegisterPurveyorContactUseCase, "execute">;
-  userDelegationQuery: Pick<UserDelegationQuery, "searchUsersWithDelegations">;
   userProfileSearch: UserProfileSearchPort;
   internalUserProfileQuery: Pick<InternalUserProfileQueryService, "getDetailByUsername">;
 }
@@ -26,18 +24,6 @@ export function createUserHandlers(deps: CreateUserHandlersDeps) {
       () => deps.internalUserProfileQuery.getDetailByUsername(username),
       () => new InternalUserProfileSearchUnavailableError(),
     );
-    return c.json(resp.ok(data), HttpStatusCodes.OK);
-  };
-
-  const usersSearch: UserRouteHandler<"usersSearch"> = async (c) => {
-    const userQueryDto = c.req.valid("json");
-    const data = await deps.userProfileSearch.searchLegacyUsers(userQueryDto);
-    return c.json(resp.ok(data), HttpStatusCodes.OK);
-  };
-
-  const usersSearchWithPrivilegeDelegation: UserRouteHandler<"usersSearchWithPrivilegeDelegation"> = async (c) => {
-    const userQueryDto = c.req.valid("json");
-    const data = await deps.userDelegationQuery.searchUsersWithDelegations(userQueryDto);
     return c.json(resp.ok(data), HttpStatusCodes.OK);
   };
 
@@ -63,8 +49,6 @@ export function createUserHandlers(deps: CreateUserHandlersDeps) {
     contactRegister,
     userInfo,
     usersSearchDsl,
-    usersSearch,
-    usersSearchWithPrivilegeDelegation,
   };
 }
 

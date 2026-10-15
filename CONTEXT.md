@@ -16,7 +16,7 @@ User Profile 面向搜索结果公开的最小稳定身份与联系方式视图�
 _Avoid_: UserDto, User Profile Detail, Basic User
 
 **User Profile Search**:
-IAM 以未删除的当前 User Profile 为唯一结果根，按照用户自身及明确纳入搜索词汇的当前关联事实筛选用户；Internal Filter DSL 按内部 user ID 稳定排序返回 User Profile Base，既有 Internal 与 Public 适配器保留各自响应形状。Internal 与 Public 搜索观察相同的用户集合，不隐式排除 Pause 或 Disable 状态，调用方可以通过公开的 status 路径显式筛选。任职、组织责任、角色等只作为筛选作用域，不进入 User Profile Base。任职条件只观察 Effective Employment，Privilege Delegation 不进入搜索档案或过滤作用域；本能力不承担历史任职、历史任命或其他实体的通用查询。
+IAM 以未删除的当前 User Profile 为唯一结果根，按照用户自身及明确纳入搜索词汇的当前关联事实筛选用户；面向其他内部服务的搜索只提供 Internal Filter DSL，按内部 user ID 稳定排序返回 User Profile Base。不隐式排除 Pause 或 Disable 状态，调用方可以通过公开的 status 路径显式筛选。任职、组织责任、角色等只作为筛选作用域，不进入 User Profile Base。任职条件只观察 Effective Employment，Privilege Delegation 不进入搜索档案或过滤作用域，由调用方在搜索后独立解析；本能力不承担历史任职、历史任命或其他实体的通用查询。
 _Avoid_: generic entity query, historical profile search, arbitrary data graph query
 
 **User Profile Search Document**:
@@ -26,10 +26,6 @@ _Avoid_: source-table view, historical employment document, internal index docum
 **User Profile Search Path**:
 从 User Profile 根沿 User Profile Search Document 的公开结构到达可比较字段的类型化条件路径；Search Document 的公开类型结构是合法路径与通用操作符的唯一机器事实来源，普通标量产生 `eq`/`in`、标量数组产生 `containsAny`/`containsAll`、对象集合通过 `exists` 进入，标记为 Organization 的对象额外产生 `withinSubtreeOf`，不维护独立硬编码字段白名单。每个新增的公开可比较字段都会自动成为所有有效 Internal Client 共享的搜索条件。同一集合元素作用域内的条件必须由同一元素满足，独立作用域可以由不同元素满足；Subject Identifier 属于公开业务身份路径，内部 numeric ID、派生索引字段、未知路径、容器路径、源业务表路径和调用方任意指定的 JSON path 都不属于合法条件路径。
 _Avoid_: arbitrary JSON path, source-table path, client-specific search path
-
-**Legacy User Search Adapter**:
-既有 Internal 与 Public User Search 请求格式到 User Profile Filter DSL 的契约转换层；它保留原参数名称、参数组合规则和响应形状，但采用 User Profile Search 的统一事实、用户集合与执行边界。Internal `/search` 是待调用方迁移后通过独立变更删除的 deprecated 接口；Public `/search` 因不直接开放 Filter DSL 而继续作为正式 Public 契约，其内部转换不是对外弃用信号。
-_Avoid_: second search semantics, public Filter DSL endpoint, permanent internal compatibility endpoint
 
 **User Profile Search Cutover**:
 在维护窗口内把全局 User Profile schema 从 v2 单代原地替换为 v3 的协调发布边界；业务读取和源事实写入保持关闭，旧 v2 publisher 停止，唯一固定的 v3 publisher 通过既有 User Profile backfill 工作流重建全部 Profile，完整门禁通过后所有入口统一恢复并只接受 v3。调用方不能选择文档或 DSL 版本，运行时不保存并行代际、不双读或回退，硬切换后不保留旧 DSL 名称或兼容解释。
@@ -96,7 +92,7 @@ _Avoid_: authorization resolution, recursive delegation resolution, missing user
 _Avoid_: delegation winner selection, duplicate delegation collapse, self-delegation, multi-delegate resolution
 
 **Legacy User Detail Read Model**:
-`user_profile.detail` 中面向既有用户详情与搜索接口预计算的完整 `UserDetailDto` 文档；在这些接口迁移前它仍是被实际使用的读模型，而不是 Custom SSO 兼容字段。Client Subject Projection Module 的 Repository Port 不得暴露、查询或回退到该文档，只能读取 Subject Facts 所需的显式字段；待全部既有消费者迁移后再单独删除。
+`user_profile.detail` 中面向用户详情与登录等流程预计算的完整 `UserDetailDto` 文档；它仍是被实际使用的读模型，而不是 Custom SSO 兼容字段。Internal Filter DSL 返回 User Profile Base，不读取该文档；删除旧搜索不删除详情能力。Client Subject Projection Module 的 Repository Port 不得暴露、查询或回退到该文档，只能读取 Subject Facts 所需的显式字段；待全部既有消费者迁移后再单独删除。
 _Avoid_: Subject Facts, SSO projection fallback, compatibility alias
 
 **User Profile Read Model Row**:

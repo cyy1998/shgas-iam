@@ -86,7 +86,7 @@ export interface RootAuthenticationCompositionOptions {
   };
   config: CreateRootSsoHandlersDeps["config"];
   endpoints?: SsoEndpointsOptions;
-  publicServices?: Pick<CreatePublicHandlersDeps, "organizationService" | "userService" | "userProfileSearch">;
+  publicServices?: Pick<CreatePublicHandlersDeps, "userService">;
   customSso?: Omit<UnifiedCustomSsoAuthorizationOptions, "kernel" | "clients" | "redirectUrls">;
   oidc?: Omit<OidcAuthorizationOptions, "kernel" | "clients"> & {
     issuers: { internal: string; external: string };
@@ -299,8 +299,6 @@ export function createRootAuthenticationComposition(options: RootAuthenticationC
     });
     publicRouter.openapi(publicRoutes.passwordChange, handlers.passwordChange);
     publicRouter.openapi(publicRoutes.mobileSet, handlers.mobileSet);
-    publicRouter.openapi(publicRoutes.organizationsSearch, handlers.organizationsSearch);
-    publicRouter.openapi(publicRoutes.usersSearch, handlers.usersSearch);
   }
   router.route("/auth", authenticationRouter);
   router.route("/sso", ssoRouter);

@@ -376,9 +376,6 @@ function createOrganizationApp() {
       getOrganizationByCode: async () => {
         throw new Error("DSL cannot read source detail");
       },
-      searchOrganizations: async () => {
-        throw new Error("DSL cannot use source search");
-      },
       setOrganization: async () => true,
       updateOrganization: async () => true,
     },

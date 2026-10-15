@@ -91,16 +91,10 @@ function privilegeDelegationDetail() {
 }
 
 describe("API DTO mappers", () => {
-  test("maps privilege delegation details to summary and detail DTOs", async () => {
+  test("maps privilege delegation details to the detail DTO", async () => {
     const schemaModule = (await import("../privilege/privilegeDelegation.schema")) as any;
     const detail = privilegeDelegationDetail();
 
-    expect(schemaModule.toPrivilegeDelegationDto(detail)).toMatchObject({
-      delegatorUsername: "user1",
-      delegatorName: "User 1",
-      delegateeUsername: "user2",
-      delegateeName: "User 2",
-    });
     expect(schemaModule.toPrivilegeDelegationDetailDto(detail)).toMatchObject({
       delegatorUser: { username: "user1" },
       delegateeUser: { username: "user2" },

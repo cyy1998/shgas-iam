@@ -131,8 +131,9 @@ Admin 表单仅在 business 回填、展示和提交地址；隐藏控件的旧�
   字符串字段的查询 schema 使用共享 `FILTER_MAX_STRING_LENGTH`；结果上限、排序、超时及错误映射
   由各读模型和入口持有。共享包只依赖 Zod 与 Drizzle，不引入源表、数据库实例、dirty、publisher 或 app composition。
 - User Profile v3 通过 `@iam/user-profile-read-model` 默认入口暴露 schema、Redis publisher/cache、strict Subject Facts
-  read-through reader 与只读 query seam；builder/publication 只由 `worker` subpath 组装。Internal Detail、Internal/Public
-  legacy adapter 与 Delegation 基础搜索从同一个 `user_profile` v3 row 返回严格 Detail；User Profile 查询使用共享 Filter 引擎绑定其公开结构和 `search_doc` 列，只查询并校验已发布的
+  read-through reader 与只读 query seam；builder/publication 只由 `worker` subpath 组装。Internal Detail 从
+  `user_profile` v3 row 返回严格 Detail；面向其他内部服务的用户搜索只提供 Internal Filter DSL，
+  使用共享 Filter 引擎绑定其公开结构和 `search_doc` 列，只查询并校验已发布的
   Search Document，Internal Filter DSL 从同一行的类型化列返回 `UserProfileBase`，不读取 Detail 或回查 source tables。Responsibility Snapshot 子项复用 Client Subject Projection
   的协议中性 contract，read-model 仍拥有 resolver 驱动的 Snapshot build。版本无关 Worker maintenance/readiness 命令复用
   同一 dirty/job/publication 与两项全量 gate；active Worker consumer、Internal User、Custom SSO 与 OIDC composition 只使用

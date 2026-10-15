@@ -18,7 +18,7 @@ import {
 } from "./src/responsibility-journey.ts";
 import {
   expectInternalUserProfileSearchMatrix,
-  expectLegacyUserSearchEquivalence,
+  expectUserSearchDelegationResolution,
 } from "./src/user-profile-search-journey.ts";
 
 test("Admin prepares Custom SSO in Maintenance and existing access resumes after recovery", async ({
@@ -169,17 +169,13 @@ test("Admin prepares Custom SSO in Maintenance and existing access resumes after
       targetOrganizationCode: responsibilityTargetOrganizationCode,
     }),
   ).toBe(true);
-  await expectLegacyUserSearchEquivalence({
+  await expectUserSearchDelegationResolution({
     adminPrivilegeCode,
     adminUsername,
-    clientCode: customSsoClientCode,
     delegateeUsername,
-    disabledUsername,
     internalApiKey,
-    localSession: String(localSession),
     organizationCode,
     origin,
-    pausedUsername,
     request: context.request,
   });
   expect(JSON.stringify(initialUserInfoBody.data.authorization)).not.toContain("responsibilit");
