@@ -81,11 +81,6 @@ export function createOidcMaintenanceTestFixture(redis: Redis, namespace: string
       for (const key of keys) await redis.persist(key);
       return keys;
     },
-    async seedUnknownUnifiedFamily() {
-      const key = `${prefix}future:${randomUUID()}`;
-      await redis.set(key, "sensitive-fixture", "PX", 120000);
-      return key;
-    },
     async seedMalformedToken() {
       const key = `${prefix}token:${digest(randomHandle())}`;
       await redis.set(key, "sensitive-fixture");

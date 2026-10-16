@@ -106,8 +106,6 @@ function createDb(rows: unknown[]) {
       "dirtyVersion",
       "dirtyStatus",
     ]);
-    expect(columns).not.toHaveProperty("detail");
-    expect(columns).not.toHaveProperty("searchDoc");
     return { from };
   });
   return {

@@ -8,7 +8,7 @@ type LinkProps = {
   [key: string]: unknown;
 };
 
-let modelMocks: Record<string, unknown> = {};
+const modelMocks: Record<string, unknown> = {};
 const fullAdminAccess = {
   canAccessUser: true,
   canAccessOrganization: true,
@@ -58,16 +58,11 @@ function getAccess<T = Record<string, unknown>>(): T {
 
 export { getAccess as useAccess, getModel as useModel };
 
-export function __setModel(namespace: string, value: unknown) {
-  modelMocks = { ...modelMocks, [namespace]: value };
-}
-
 export function __setAccess(value: Record<string, unknown>) {
   accessMock = value;
 }
 
 export function __resetUmiMaxMocks() {
-  modelMocks = {};
   accessMock = fullAdminAccess;
   history.push.mockReset();
   history.replace.mockReset();

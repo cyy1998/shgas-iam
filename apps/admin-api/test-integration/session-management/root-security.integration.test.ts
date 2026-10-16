@@ -14,11 +14,15 @@ import {
 } from "@admin-api/routes/admin/session-management/session-management.schema";
 import { createUserRoute } from "@admin-api/routes/admin/user/user.index";
 import { AdminMutationCommittedError } from "@admin-api/services/admin-mutation/admin-mutation";
+import { createAuditRepository } from "@admin-api/services/audit/audit.repository";
 import { createAdminAuditService } from "@admin-api/services/audit/audit.service";
+import { createClientRepository } from "@admin-api/services/client/client.repository";
+import { createClientService } from "@admin-api/services/client/client.service";
 import { createClientSsoRepository } from "@admin-api/services/client-sso/client-sso.repository";
 import { createClientSsoService } from "@admin-api/services/client-sso/client-sso.service";
 import { AdminLoginStateAuditFailedAfterEffectError } from "@admin-api/services/session-management/session-management.error";
 import { AdminSessionRevokeResultSchema } from "@admin-api/services/session-management/session-management.schema";
+import { createFakePasswordHasher, createFakeRandom } from "@admin-api/test/fakes";
 import { createClientSnapshots } from "@iam/api-core/client-snapshot/composition";
 import { createErrorHandler } from "@iam/api-core/middlewares/error-handler";
 import type { SubjectAccessOperation } from "@iam/api-core/subject-access";
@@ -35,7 +39,10 @@ import { createTRPCContext } from "@iam/api-core/trpc";
 import { createUnitOfWork, mapUnitOfWork } from "@iam/api-core/uow";
 import {
   ApiErrorCode,
+  ClientSsoProtocol,
   ClientStatus,
+  OidcClientType,
+  OidcScope,
   PrivilegeDelegationStatus,
   RoleStatus,
   UserStatus,
@@ -835,6 +842,78 @@ test("Role-blocked Client deletion preserves real sessions and cached Snapshot o
       }),
     );
     expect(session.status).toBe("resolved");
+  });
+});
+
+test("Internal API credential updates preserve SSO configuration, credentials and existing session instances", async () => {
+  const f = await fixture();
+  await runWithOwnedTestResources(async (lifecycle) => {
+    lifecycle.registerCleanup(() => f.scope.close());
+    const code = f.clientCode("internal-credential");
+    await pg.db.insert(clients).values({
+      clientCode: code,
+      clientName: "Independent credentials",
+      clientSecret: "original-internal-secret",
+      extAttributes: {},
+    });
+    const clientCache = createAdminClientCache({ redis: f.redis });
+    const { management, snapshots } = createClientSsoSnapshotManagement({
+      clientCache,
+      db: pg.db,
+      redis: f.redis,
+      logger: f.logger,
+      sessionTermination: f.lifecycleRevocation,
+    });
+    await management.service.selectProtocol(code, {
+      protocol: ClientSsoProtocol.Oidc,
+      clientType: OidcClientType.Confidential,
+      redirectUris: ["https://client.example/callback"],
+      postLogoutRedirectUris: [],
+      allowedScopes: [OidcScope.OpenId],
+    });
+    await management.service.setEnabled(code, true);
+    const [before] = await pg.db.select().from(clients).where(eq(clients.clientCode, code));
+    if (!before) throw new Error("Client fixture missing");
+    const original = await f.create(f.account.subjectIdentifier, code);
+    const credentialBefore = await snapshots.credential.acquire(code);
+    expect(credentialBefore.kind).toBe("present");
+    const service = createClientService({
+      clientRepository: createClientRepository(pg.db),
+      clientCache,
+      clientRuntimeInvalidation: snapshots,
+      clientMutationLogger: f.logger,
+      management: management.service,
+      passwordHasher: createFakePasswordHasher(),
+      random: createFakeRandom(),
+      uow: createUnitOfWork({
+        db: pg.db,
+        logger: f.logger,
+        createTxPorts: (tx) => ({
+          clientRepository: createClientRepository(tx),
+          auditService: createAdminAuditService({ auditRepository: createAuditRepository(tx) }),
+        }),
+      }),
+    });
+
+    const result = await service.updateClientById({ id: before.id, clientSecret: "rotated-internal-secret" });
+
+    expect(result).toEqual({ changed: true, result: null });
+    const after = await pg.db.select().from(clients).where(eq(clients.clientCode, code));
+    expect(after).toEqual([{ ...before, clientSecret: "rotated-internal-secret", updateTime: expect.any(Date) }]);
+    const credentialAfter = await snapshots.credential.acquire(code);
+    expect(credentialAfter).toEqual(credentialBefore);
+    const rootAfter = await f.operations.run((operation) =>
+      f.kernel.forOperation(operation).resolveUserSession(original.bearer),
+    );
+    const childAfter = await f.operations.run((operation) =>
+      f.kernel.forOperation(operation).resolveClientSessionForUse({
+        userSessionId: original.root.userSessionId,
+        clientSessionId: original.child.clientSessionId,
+        clientId: code,
+      }),
+    );
+    expect(rootAfter).toMatchObject({ status: "resolved", value: { userSession: original.root } });
+    expect(childAfter).toMatchObject({ status: "resolved", value: { clientSession: original.child } });
   });
 });
 

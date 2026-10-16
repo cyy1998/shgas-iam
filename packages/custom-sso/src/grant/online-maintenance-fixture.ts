@@ -38,7 +38,6 @@ export function createCustomSsoMaintenanceTestFixture(redis: Redis, namespace: s
       await redis.xadd(keys[5]!, "*", "field", "arbitrary");
       return keys;
     },
-    seedContinuation,
     async seedUnified(clientCode = "alpha") {
       const identity = {
         userSessionId: randomUUID(),

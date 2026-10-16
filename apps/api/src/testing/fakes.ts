@@ -5,11 +5,6 @@ import { createImmediateUnitOfWork as createImmediateUnitOfWorkBase } from "@iam
 type RedisResult = [Error | null, unknown];
 type RedisOperation = () => Promise<unknown> | unknown;
 
-type SortedSetMember = {
-  member: string;
-  score: number;
-};
-
 interface MemoryRedisPipeline {
   set: (key: string, value: unknown, ...args: Array<number | string>) => MemoryRedisPipeline;
   del: (...keys: string[]) => MemoryRedisPipeline;
@@ -17,20 +12,11 @@ interface MemoryRedisPipeline {
   expire: (key: string, seconds: number) => MemoryRedisPipeline;
   sadd: (key: string, ...members: string[]) => MemoryRedisPipeline;
   scard: (key: string) => MemoryRedisPipeline;
-  zremrangebyscore: (key: string, min: number | string, max: number | string) => MemoryRedisPipeline;
-  zadd: (key: string, score: number, member: string) => MemoryRedisPipeline;
-  zcard: (key: string) => MemoryRedisPipeline;
   exec: () => Promise<RedisResult[]>;
 }
 
 function toError(error: unknown) {
   return error instanceof Error ? error : new Error(String(error));
-}
-
-function numericBoundary(value: number | string) {
-  if (value === "-inf") return Number.NEGATIVE_INFINITY;
-  if (value === "+inf" || value === "inf") return Number.POSITIVE_INFINITY;
-  return Number(value);
 }
 
 function readExpirationMs(args: Array<number | string>, now: number) {
@@ -48,7 +34,6 @@ function readExpirationMs(args: Array<number | string>, now: number) {
 export function createMemoryRedis(now: () => number = Date.now) {
   const values = new Map<string, string>();
   const sets = new Map<string, Set<string>>();
-  const sortedSets = new Map<string, SortedSetMember[]>();
   const expires = new Map<string, number>();
 
   function cleanupExpired(key: string) {
@@ -57,19 +42,17 @@ export function createMemoryRedis(now: () => number = Date.now) {
 
     values.delete(key);
     sets.delete(key);
-    sortedSets.delete(key);
     expires.delete(key);
   }
 
   function hasKey(key: string) {
     cleanupExpired(key);
-    return values.has(key) || sets.has(key) || sortedSets.has(key);
+    return values.has(key) || sets.has(key);
   }
 
   const redis = {
     __values: values,
     __sets: sets,
-    __sortedSets: sortedSets,
     __expires: expires,
 
     async get(key: string) {
@@ -88,7 +71,6 @@ export function createMemoryRedis(now: () => number = Date.now) {
 
       values.set(key, String(value));
       sets.delete(key);
-      sortedSets.delete(key);
 
       const expiresAt = readExpirationMs(args, now());
       if (expiresAt === null) expires.delete(key);
@@ -103,7 +85,6 @@ export function createMemoryRedis(now: () => number = Date.now) {
         const existed = hasKey(key);
         values.delete(key);
         sets.delete(key);
-        sortedSets.delete(key);
         expires.delete(key);
         if (existed) deleted += 1;
       }
@@ -143,7 +124,6 @@ export function createMemoryRedis(now: () => number = Date.now) {
       }
       sets.set(key, set);
       values.delete(key);
-      sortedSets.delete(key);
       return added;
     },
 
@@ -204,39 +184,6 @@ export function createMemoryRedis(now: () => number = Date.now) {
 
         scard(key) {
           operations.push(() => redis.scard(key));
-          return pipeline;
-        },
-
-        zremrangebyscore(key, min, max) {
-          operations.push(() => {
-            cleanupExpired(key);
-            const minScore = numericBoundary(min);
-            const maxScore = numericBoundary(max);
-            const existing = sortedSets.get(key) ?? [];
-            const next = existing.filter((item) => item.score < minScore || item.score > maxScore);
-            sortedSets.set(key, next);
-            return existing.length - next.length;
-          });
-          return pipeline;
-        },
-
-        zadd(key, score, member) {
-          operations.push(() => {
-            cleanupExpired(key);
-            const existing = sortedSets.get(key) ?? [];
-            sortedSets.set(key, [...existing.filter((item) => item.member !== member), { member, score }]);
-            values.delete(key);
-            sets.delete(key);
-            return 1;
-          });
-          return pipeline;
-        },
-
-        zcard(key) {
-          operations.push(() => {
-            cleanupExpired(key);
-            return sortedSets.get(key)?.length ?? 0;
-          });
           return pipeline;
         },
 

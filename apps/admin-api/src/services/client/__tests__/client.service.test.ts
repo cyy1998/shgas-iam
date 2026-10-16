@@ -2,7 +2,7 @@ import { describe, expect, mock, test } from "bun:test";
 import { AdminMutationCommittedError } from "@admin-api/services/admin-mutation/admin-mutation";
 import { createClientService } from "@admin-api/services/client/client.service";
 import { createFakePasswordHasher, createFakeRandom, createImmediateUnitOfWork } from "@admin-api/test/fakes";
-import { ClientStatus } from "@iam/contracts";
+import { ClientSsoCallbackType, ClientSsoProtocol, ClientStatus } from "@iam/contracts";
 
 function client(overrides: Record<string, unknown> = {}) {
   const record = {
@@ -29,29 +29,7 @@ function client(overrides: Record<string, unknown> = {}) {
   return record;
 }
 
-function _createAfterCommitLogger() {
-  return {
-    warn: mock((_obj: Record<string, unknown>, _msg: string) => undefined),
-    error: mock((_obj: Record<string, unknown>, _msg: string) => undefined),
-  };
-}
-
-function revokeSummary() {
-  return {
-    principalSessions: { revoked: 0, alreadyRevoked: 0, missing: 0, excluded: 0 },
-    bindings: { revoked: 0, alreadyRevoked: 0, missing: 0, excluded: 0 },
-    credentials: { revoked: 0, alreadyRevoked: 0, missing: 0, excluded: 0 },
-    artifacts: { revoked: 0, alreadyRevoked: 0, missing: 0, excluded: 0 },
-    cleanup: { attempted: 0, succeeded: 0, failed: 0, failures: [] },
-  };
-}
-
-function createService(
-  options: {
-    afterCommitLogger?: ReturnType<typeof _createAfterCommitLogger>;
-    uowFactory?: (tx: Record<string, unknown>) => unknown;
-  } = {},
-) {
+function createService() {
   const tx = {
     auditService: { recordAuditLog: mock(async (_input: unknown) => undefined) },
     clientRepository: {
@@ -61,29 +39,7 @@ function createService(
       lockClientByCode: mock(async () => client()),
       lockClientById: mock(async () => client()),
       getClientById: mock(async () => client()),
-      softDeleteClientByCode: mock(async () => client({ isDelete: true })),
       updateClientByCode: mock(async (_clientCode: string, data: Record<string, unknown>) => client(data)),
-      updateClientByCodeWithProtocolEpochs: mock(async (_clientCode: string, data: Record<string, unknown>) =>
-        client({
-          ...data,
-          customSsoConfigVersion: 1,
-          oidcConfigVersion: 2,
-        }),
-      ),
-      updateClientById: mock(async (data: Record<string, unknown>) => client(data)),
-      updateClientByIdWithProtocolEpochs: mock(async (data: Record<string, unknown>) =>
-        client({
-          ...data,
-          customSsoConfigVersion: 1,
-          oidcConfigVersion: 2,
-        }),
-      ),
-      updateClientOidcByCode: mock(async (_clientCode: string, data: Record<string, unknown>) =>
-        client({ ...data, oidcConfigVersion: 2 }),
-      ),
-      updateClientCustomSsoByCode: mock(async (_clientCode: string, data: Record<string, unknown>) =>
-        client({ ...data, customSsoConfigVersion: 1 }),
-      ),
     },
   };
   const deps = {
@@ -106,17 +62,9 @@ function createService(
       save: mock(async () => ({ changed: false, result: null })),
       deleteClient: mock(async () => ({ changed: true, result: null })),
     },
-    sessionRevocation: {
-      revokeClientAllProtocols: mock(async () => revokeSummary()),
-      revokeClientProtocol: mock(async () => revokeSummary()),
-    },
     passwordHasher: createFakePasswordHasher(),
     random: createFakeRandom(),
-    uow:
-      options.uowFactory?.(tx) ??
-      createImmediateUnitOfWork(tx, {
-        logger: options.afterCommitLogger,
-      }),
+    uow: createImmediateUnitOfWork(tx),
   } as any;
   return { service: createClientService(deps), deps, tx };
 }
@@ -207,22 +155,32 @@ describe("createClientService", () => {
     expect(tx.clientRepository.createClient).not.toHaveBeenCalled();
   });
 
-  test("generic client secret changes do not mutate or revoke Custom SSO configuration", async () => {
+  test("Internal API secret updates submit only the independent credential patch", async () => {
     const { service, deps, tx } = createService();
+    const existing = client({
+      ssoEnabled: true,
+      hasSsoSecret: true,
+      ssoConfig: {
+        protocol: ClientSsoProtocol.CustomSso,
+        callbackType: ClientSsoCallbackType.Business,
+        callbackEndpoint: "https://portal.example.com/sso/callback",
+        validRedirectUrls: ["https://portal.example.com/*"],
+        subjectClaims: ["subjectIdentifier"],
+      },
+    });
+    deps.clientRepository.getClientById.mockResolvedValue(existing);
+    tx.clientRepository.lockClientByCode.mockResolvedValue(existing);
 
-    await expect(
-      service.updateClientById({
-        id: 1,
-        clientCode: "portal",
-        clientSecret: "rotated-secret",
-        extAttributes: {},
-      } as any),
-    ).resolves.toEqual({ changed: true, result: null });
+    const result = await service.updateClientById({
+      id: existing.id,
+      clientCode: existing.clientCode,
+      clientSecret: "rotated-secret",
+      extAttributes: {},
+    });
 
-    expect(tx.clientRepository.updateClientByCode).toHaveBeenCalled();
-    expect(tx.clientRepository.updateClientCustomSsoByCode).not.toHaveBeenCalled();
-    expect(deps.sessionRevocation.revokeClientProtocol).not.toHaveBeenCalledWith(
-      expect.objectContaining({ protocol: "custom-sso" }),
-    );
+    expect(result).toEqual({ changed: true, result: null });
+    expect(tx.clientRepository.updateClientByCode.mock.calls).toEqual([
+      ["portal", { clientSecret: "rotated-secret", extAttributes: {} }],
+    ]);
   });
 });

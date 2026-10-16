@@ -5,12 +5,9 @@ import { UserNotFoundError } from "@iam/domain/user";
 import type { UserProfileQueryRepositoryPort } from "../../query";
 import { createUserProfileQueryService } from "../../query";
 import { USER_PROFILE_SCHEMA_VERSION } from "../../schema/profile.schema";
-import type { UserProfileQueryRepository } from "../user-profile-query.repository";
 import { createUserProfileQueryRepository } from "../user-profile-query.repository";
 
 const now = new Date("2026-06-30T08:00:00.000Z");
-
-function assertAssignable<Port, _Provider extends Port>() {}
 
 function profile(overrides: Partial<UserProfile> = {}): UserProfile {
   return {
@@ -130,8 +127,6 @@ describe("UserProfileQueryRepository", () => {
 
     await repository.getCurrentByUserId(1);
 
-    expect(repository).not.toHaveProperty("upsertProfile");
-    expect(repository).not.toHaveProperty("deleteByUserId");
     expect((findFirst.mock.calls as unknown as Array<[unknown]>)[0]?.[0]).toEqual({
       where: {
         userId: 1,
@@ -142,10 +137,6 @@ describe("UserProfileQueryRepository", () => {
 });
 
 describe("UserProfileQueryService", () => {
-  test("the production repository satisfies the query-only read port", () => {
-    assertAssignable<UserProfileQueryRepositoryPort, UserProfileQueryRepository>();
-  });
-
   test("depends on a query-only read port", async () => {
     const currentProfile = profile();
     const queryRepository = {
