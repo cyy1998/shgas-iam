@@ -1,0 +1,22 @@
+deployment:
+  role: traditional
+  role_traditional:
+    config_provider: etcd
+  admin:
+    admin_api_version: v3
+    admin_listen:
+      ip: 0.0.0.0
+      port: 9180
+    allow_admin:
+      - 0.0.0.0/0
+    admin_key:
+      - name: integration
+        key: iam-gateway-integration-admin-key
+        role: admin
+  etcd:
+    host:
+      - http://apisix-etcd:2379
+
+apisix:
+  node_listen: 9080
+  enable_admin: true

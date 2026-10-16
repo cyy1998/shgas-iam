@@ -1,9 +1,12 @@
 # Production compose for APISIX gateway deployment.
 #
-# Copy this file to the gateway server and start APISIX with its etcd backend:
+# Run from the repository checkout, or provide the prebuilt IAM_GATEWAY_IMAGE and
+# the matching APISIX config on the gateway host. Prepare the IAM readonly database
+# role and matching Client before the first HTTP publication:
 #
 #   docker compose -f docker-compose-gateway-prod.yml up -d apisix-etcd
 #   docker compose -f docker-compose-gateway-prod.yml up -d apisix
+#   docker compose -f docker-compose-gateway-prod.yml up -d gateway-api
 #
 # It uses the same compose project name as docker-compose-prod.yml so services
 # can share the default network when they are deployed on the same host.
@@ -72,7 +75,42 @@ services:
       APISIX_ETCD_PASSWORD: ${APISIX_ETCD_PASSWORD:-${APISIX_ETCD_ROOT_PASSWORD:?set APISIX_ETCD_ROOT_PASSWORD}}
       APISIX_OTEL_COLLECTOR_ENDPOINT: ${APISIX_OTEL_COLLECTOR_ENDPOINT:?set APISIX_OTEL_COLLECTOR_ENDPOINT}
     volumes:
-      - "${APISIX_CONFIG_PATH:-../gateway/config/config.prod.example.yaml}:/usr/local/apisix/conf/config.yaml:ro"
+      - "${APISIX_CONFIG_PATH:-../apps/gateway/config/config.prod.example.yaml}:/usr/local/apisix/conf/config.yaml:ro"
     depends_on:
       apisix-etcd:
         condition: service_healthy
+    healthcheck:
+      test: ["CMD", "apisix", "status"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+
+  gateway-api:
+    image: ${IAM_GATEWAY_IMAGE:-iam-gateway:1.0.0}
+    build:
+      context: ..
+      dockerfile: apps/gateway/Dockerfile
+    restart: unless-stopped
+    # Covers the maximum permitted Gateway shutdown deadline (300 seconds).
+    stop_grace_period: 310s
+    ports:
+      - "${IAM_GATEWAY_PUBLISHED_HOST:-127.0.0.1}:${IAM_GATEWAY_PUBLISHED_PORT:-30004}:30004"
+    environment:
+      IAM_GATEWAY_DATABASE_URL: ${IAM_GATEWAY_DATABASE_URL:?set IAM_GATEWAY_DATABASE_URL to a dedicated IAM read-only credential}
+      IAM_GATEWAY_APISIX_ADMIN_URL: ${IAM_GATEWAY_APISIX_ADMIN_URL:-http://apisix:9180/apisix/admin}
+      IAM_GATEWAY_APISIX_ADMIN_KEY: ${APISIX_ADMIN_KEY:?set APISIX_ADMIN_KEY}
+      IAM_GATEWAY_HOSTNAME: 0.0.0.0
+      IAM_GATEWAY_PORT: "30004"
+      IAM_GATEWAY_MAX_REQUEST_BYTES: ${IAM_GATEWAY_MAX_REQUEST_BYTES:-1048576}
+      IAM_GATEWAY_OPERATION_TIMEOUT_MS: ${IAM_GATEWAY_OPERATION_TIMEOUT_MS:-60000}
+      IAM_GATEWAY_APISIX_REQUEST_TIMEOUT_MS: ${IAM_GATEWAY_APISIX_REQUEST_TIMEOUT_MS:-10000}
+      IAM_GATEWAY_SHUTDOWN_TIMEOUT_MS: ${IAM_GATEWAY_SHUTDOWN_TIMEOUT_MS:-70000}
+    depends_on:
+      apisix:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "bun", "-e", "const r=await fetch('http://127.0.0.1:30004/health');if(!r.ok)process.exit(1)"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+      start_period: 5s

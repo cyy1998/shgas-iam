@@ -42,6 +42,7 @@ import type { CreateUserProfileWorkerModuleInput } from "@iam/user-profile-read-
 import { createUserProfileWorkerModule } from "@iam/user-profile-read-model/worker";
 import { and, eq } from "drizzle-orm";
 import type { Redis } from "ioredis";
+import { createE2EGatewayApiKey } from "./gateway-credential";
 import type {
   E2EScenarioGeneratedReferences,
   E2EScenarioOwner,
@@ -70,12 +71,20 @@ export function createProductionE2EScenarioOwner(input: CreateProductionE2EScena
     scenario: E2EScenarioSeedReferences & {
       adminPassword: string;
       internalApiKey: string;
+      gatewayApiKey: string;
     },
   ) {
     const passwordHash = await hashSecret(scenario.adminPassword, input.passwordHashCost);
     const entryOrigins = [...new Set([scenario.canonicalOrigin, scenario.internalOrigin ?? scenario.canonicalOrigin])];
     let generatedReferences: E2EScenarioGeneratedReferences | undefined;
     await input.db.transaction(async (tx) => {
+      await tx.insert(clients).values({
+        clientCode: "iam",
+        clientName: `E2E IAM Gateway ${scenario.runId}`,
+        clientSecret: scenario.gatewayApiKey,
+        status: ClientStatus.Enable,
+        extAttributes: {},
+      });
       const [adminClient] = await tx
         .insert(clients)
         .values({
@@ -783,6 +792,7 @@ export function createProductionE2EScenarioOwner(input: CreateProductionE2EScena
       globalPosition,
       responsibilityHolderPosition,
       outsideResponsibilityHolderPosition,
+      gatewayClient,
       adminClient,
       customSsoClient,
       internalClient,
@@ -847,6 +857,7 @@ export function createProductionE2EScenarioOwner(input: CreateProductionE2EScena
           isDelete: false,
         },
       }),
+      input.db.query.clients.findFirst({ where: { clientCode: "iam", isDelete: false } }),
       input.db.query.clients.findFirst({
         where: { clientCode: references.adminClientCode, isDelete: false },
       }),
@@ -1169,6 +1180,11 @@ export function createProductionE2EScenarioOwner(input: CreateProductionE2EScena
           hiddenResponsibilityAssignment?.targetOrganizationId === hrResponsibilityTargetOrganization?.id
             ? (hrResponsibilityTargetOrganization?.orgCode ?? "")
             : "",
+      },
+      gatewayClient: {
+        active: gatewayClient?.status === ClientStatus.Enable && !gatewayClient.isDelete,
+        clientCode: gatewayClient?.clientCode ?? "",
+        credentialMatches: gatewayClient?.clientSecret === createE2EGatewayApiKey(references.runId),
       },
       adminClient: {
         active: adminClient?.status === ClientStatus.Enable && adminClient.isDelete === false,

@@ -22,7 +22,6 @@ export async function discoverQualityWorkspaces(): Promise<QualityWorkspace[]> {
   const workspacePaths = [
     ...(await listWorkspaceDirectories("apps")),
     ...(await listWorkspaceDirectories("packages")),
-    "gateway",
     "e2e/system",
   ];
   const workspaces = await Promise.all(

@@ -79,6 +79,7 @@ describe("E2E scenario seed", () => {
     expect(established[0]).toMatchObject({
       adminPassword: "SYNTHETIC-PASSWORD-ONLY-FOR-E2E",
       internalApiKey: "iam-e2e-internal-api-key-123000000-a1b2c3d4",
+      gatewayApiKey: "iam-e2e-gateway-api-key-123000000-a1b2c3d4",
     });
     expect(result.adminClientCode).not.toBe(result.customSsoClientCode);
     expect(JSON.stringify(result)).not.toMatch(/password|token|secret/iu);
@@ -194,6 +195,7 @@ function completeReadBack(references: E2EScenarioReferences) {
       active: true,
       clientCode: "e2e-internal-123000000-a1b2c3d4",
     },
+    gatewayClient: { active: true, clientCode: "iam", credentialMatches: true },
     organization: { active: true, code: references.organizationCode },
     responsibilityHolderOrganization: {
       active: true,

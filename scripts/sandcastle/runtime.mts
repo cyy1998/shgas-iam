@@ -39,7 +39,7 @@ export type RuntimeOptions = {
 async function mergerDependencyMounts(cwd: string) {
   const manifests = await command(
     "git",
-    ["ls-files", "apps/*/package.json", "packages/*/package.json", "gateway/package.json", "e2e/system/package.json"],
+    ["ls-files", "apps/*/package.json", "packages/*/package.json", "e2e/system/package.json"],
     cwd,
   );
   const paths = [

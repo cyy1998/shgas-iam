@@ -6,7 +6,7 @@ import jsonContent from "@iam/api-core/core/openapi/helpers/json-content";
 import jsonContentRequired from "@iam/api-core/core/openapi/helpers/json-content-required";
 import createSuccessResponseSchema from "@iam/api-core/core/openapi/schemas/create-success-schema";
 import { StandardErrorResponseSchema } from "@iam/api-core/core/openapi/schemas/error-response-schema";
-import { GenericClientRuntimeDtoSchema } from "@iam/domain/client";
+import { PublicClientStatusDtoSchema } from "@iam/contracts";
 import { MaskedMobileSchema } from "./open.schema";
 
 const routePrefix = "";
@@ -24,7 +24,7 @@ export const clientStatus = createRoute({
   responses: {
     ...commonErrorResponses,
     [HttpStatusCodes.OK]: jsonContent(
-      createSuccessResponseSchema(GenericClientRuntimeDtoSchema.nullable()),
+      createSuccessResponseSchema(z.object(PublicClientStatusDtoSchema.shape).openapi("PublicClientStatus").nullable()),
       "应用信息",
     ),
   },

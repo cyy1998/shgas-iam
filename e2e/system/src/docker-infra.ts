@@ -30,6 +30,7 @@ const diagnosticLogServices = [
   "worker",
   "admin",
   "sso",
+  "gateway-api",
 ];
 const maxDiagnosticLogBytesPerService = 5 * 1024;
 
@@ -370,6 +371,7 @@ export function createDockerInfraOperations(options: CreateDockerInfraOperations
           "worker",
           "admin",
           "sso",
+          "gateway-api",
         ]),
         {
           cwd: options.repositoryRoot,

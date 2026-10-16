@@ -307,6 +307,10 @@ _Avoid_: local session, client session, recoverable authorization code, replayab
 业务自行接入 Custom SSO 时取得的 Client scoped Token；第三方可以据此建立自己的本地会话，但本地会话不属于 IAM。
 _Avoid_: third-party local session, IAM-created third-party session
 
+**Gateway Application Configuration**:
+以一个 IAM Client 为归属单位的一组网关配置，可以包含多条路由和多个上游；需要独立维护的子应用拥有各自的 Client，统一维护的子应用共用所属 Client。该归属表达配置的管理单位，本身不构成调用者的操作权限。
+_Avoid_: Gateway Local Session, SSO Client Configuration, caller authorization
+
 **Gateway Local Session**:
 IAM 托管接入为浏览器保存的 Custom SSO Token 及其 ClientSession 关系；它受根登录、应用关系和当前接入规则约束。
 _Avoid_: Independent Client Credential, third-party local session
@@ -330,6 +334,10 @@ _Avoid_: Client Disablement, configuration deletion, Session Revocation
 **SSO Client Secret**:
 IAM 为 Client 签发、用于所选 SSO 协议的客户端认证凭据，与 Internal API 凭据独立。轮换替换当前值而不撤销既有会话或协议授权，IAM 不主动提供新旧值并存的宽限期。
 _Avoid_: Internal API credential, user password, Authorization Code, Session Token
+
+**Internal API Client Secret**:
+IAM 为 Client 持有、用于服务间调用身份验证的秘密凭据，与 SSO Client Secret 独立。Gateway 配置管理使用它证明调用方能够以目标 Client 的身份操作，凭据本身不授予额外的环境或配置项权限。
+_Avoid_: SSO Client Secret, APISIX Admin Key, ClientSession Token, public Client metadata
 
 **Client Protocol Selection**:
 Client 当前采用的 SSO 协议及其相应配置，决定后续操作允许使用的协议。改变选择不自动撤销已有应用关系，后续授权可以复用有效关系；切回后仍满足自身条件的旧访问可以恢复，永久终止由显式撤销表达。

@@ -1,0 +1,63 @@
+services:
+  apisix-etcd:
+    image: docker.xuanyuan.run/bitnamilegacy/etcd:3.5.11
+    # A disposable single node needs no bootstrap probe process from the image entrypoint.
+    entrypoint: ["etcd"]
+    command:
+      - --name=default
+      - --data-dir=/bitnami/etcd/data
+      - --advertise-client-urls=http://apisix-etcd:2379
+      - --listen-client-urls=http://0.0.0.0:2379
+      - --listen-peer-urls=http://0.0.0.0:2380
+      - --initial-advertise-peer-urls=http://apisix-etcd:2380
+      - --initial-cluster=default=http://apisix-etcd:2380
+    volumes:
+      - etcd-data:/bitnami/etcd
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "etcdctl endpoint health --endpoints=http://127.0.0.1:2379 --user=root:synthetic-etcd-key || etcdctl endpoint health --endpoints=http://127.0.0.1:2379",
+        ]
+      interval: 1s
+      timeout: 3s
+      retries: 30
+
+  apisix-etcd-auth:
+    image: docker.xuanyuan.run/bitnamilegacy/etcd:3.5.11
+    entrypoint: ["sh", "-ec"]
+    command:
+      - |
+        etcdctl --endpoints=http://apisix-etcd:2379 user add root:synthetic-etcd-key
+        etcdctl --endpoints=http://apisix-etcd:2379 user grant-role root root
+        etcdctl --endpoints=http://apisix-etcd:2379 auth enable
+    depends_on:
+      apisix-etcd:
+        condition: service_healthy
+
+  apisix:
+    build:
+      context: .
+      dockerfile: apps/gateway/test-integration/support/apisix.deployment.Dockerfile
+      args:
+        APISIX_CONFIG: config.prod.example.yaml
+    environment:
+      APISIX_OTEL_COLLECTOR_ENDPOINT: 127.0.0.1:9
+      APISIX_ADMIN_KEY: dev-local-admin-key-change-me
+      APISIX_ADMIN_ALLOW_CIDR: 0.0.0.0/0
+      APISIX_ETCD_ENDPOINT: http://apisix-etcd:2379
+      APISIX_ETCD_USER: root
+      APISIX_ETCD_PASSWORD: synthetic-etcd-key
+    ports:
+      - "127.0.0.1::9180"
+    depends_on:
+      apisix-etcd-auth:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD", "apisix", "status"]
+      interval: 1s
+      timeout: 3s
+      retries: 30
+
+volumes:
+  etcd-data:

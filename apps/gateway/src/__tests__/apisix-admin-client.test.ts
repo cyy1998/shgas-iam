@@ -1,0 +1,72 @@
+import { describe, expect, it } from "bun:test";
+import { ApisixAdminClient } from "../apisix-admin-client";
+import { getDefinition } from "../resources";
+
+describe("apisix admin client", () => {
+  it("supports fetch injection, API key header, and URL joining", async () => {
+    const calls: Array<{ url: string; init: RequestInit }> = [];
+    const fetchImpl = async (url: string | URL | Request, init?: RequestInit) => {
+      calls.push({ url: String(url), init: init ?? {} });
+      return Response.json({ key: "/apisix/routes/route-a", value: { id: "route-a" } });
+    };
+    const client = new ApisixAdminClient({
+      adminUrl: "http://127.0.0.1:9180/apisix/admin/",
+      adminKey: "secret-key",
+      fetch: fetchImpl as any,
+    });
+
+    await client.upsert("routes", "route-a", { id: "route-a" });
+
+    const firstCall = calls.at(0);
+    expect(firstCall).toBeDefined();
+    if (!firstCall) throw new Error("expected APISIX request");
+    expect(firstCall.url).toBe("http://127.0.0.1:9180/apisix/admin/routes/route-a");
+    expect(firstCall.init.method).toBe("PUT");
+    expect((firstCall.init.headers as Record<string, string>)["X-API-KEY"]).toBe("secret-key");
+  });
+
+  it("throws on non-2xx responses", async () => {
+    const client = new ApisixAdminClient({
+      adminUrl: "http://127.0.0.1:9180/apisix/admin",
+      adminKey: "secret-key",
+      fetch: (async () => new Response("denied", { status: 403 })) as any,
+    });
+
+    let failure: unknown;
+    try {
+      await client.delete("routes", "route-a");
+    } catch (error) {
+      failure = error;
+    }
+    expect(failure).toMatchObject({ effect: "rejected", message: "APISIX rejected a configuration write" });
+  });
+
+  it("unwraps APISIX list responses and derives missing IDs from keys", async () => {
+    const client = new ApisixAdminClient({
+      adminUrl: "http://127.0.0.1:9180/apisix/admin",
+      adminKey: "secret-key",
+      fetch: (async () =>
+        new Response(
+          JSON.stringify({
+            total: 1,
+            list: [
+              {
+                key: "/apisix/routes/route-a",
+                value: {
+                  uri: "/a/*",
+                },
+              },
+            ],
+          }),
+          { status: 200 },
+        )) as any,
+    });
+
+    await expect(client.list(getDefinition("routes"))).resolves.toEqual([
+      {
+        id: "route-a",
+        uri: "/a/*",
+      },
+    ]);
+  });
+});

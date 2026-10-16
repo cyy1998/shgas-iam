@@ -256,12 +256,37 @@ services:
       retries: 60
       start_period: 5s
 
+  gateway-api:
+    build:
+      context: ../..
+      dockerfile: apps/gateway/Dockerfile
+    labels: *e2e-labels
+    stop_grace_period: 310s
+    environment:
+      IAM_GATEWAY_DATABASE_URL: postgresql://iam_e2e:iam_e2e_local_password@postgres:5432/iam_e2e
+      IAM_GATEWAY_APISIX_ADMIN_URL: http://apisix:9180/apisix/admin
+      IAM_GATEWAY_APISIX_ADMIN_KEY: dev-local-admin-key-change-me
+      IAM_GATEWAY_PORT: "30004"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      apisix:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "bun", "-e", "const r=await fetch('http://127.0.0.1:30004/health');if(!r.ok)process.exit(1)"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+      start_period: 5s
+
   gateway-sync:
     build:
       context: ../..
       dockerfile: e2e/system/docker/gateway-sync.Dockerfile
     labels: *e2e-labels
     environment:
+      IAM_E2E_GATEWAY_API_ORIGIN: http://gateway-api:30004
+      IAM_E2E_RUN_ID: ${IAM_E2E_RUN_ID:-preflight}
       APISIX_OTEL_COLLECTOR_ENDPOINT: 127.0.0.1:9
       DEV_IAM_API_UPSTREAM_HOST: api
       DEV_IAM_API_UPSTREAM_PORT: "30000"
@@ -274,6 +299,8 @@ services:
       IAM_SSO_INTERNAL_HOST: ${IAM_E2E_INTERNAL_AUTHORITY:-127.0.0.1:49152}
       IAM_SSO_EXTERNAL_HOST: ${IAM_E2E_GATEWAY_AUTHORITY:-127.0.0.1:49152}
     depends_on:
+      gateway-api:
+        condition: service_healthy
       apisix:
         condition: service_healthy
       api:

@@ -280,7 +280,7 @@ Bun 修复并完成仓库级真实 PostgreSQL/Redis/process 回归后，才能�
 
 ## Full-system E2E
 
-`@iam/e2e-system` 管理完整临时系统，从独立 Compose project 的空 volumes 开始，运行 migrations、五个正式 runtime、
+`@iam/e2e-system` 管理完整临时系统，从独立 Compose project 的空 volumes 开始，运行 migrations、六个正式 runtime（含独立 Gateway API）、
 synthetic seed、Gateway readiness、浏览器旅程及诊断清理。每次运行以 descriptor 和公共资源记录登记准确 project、
 配置与产物，恢复时使用同一目标。APISIX 测试配置、API 启动脚本和 RP 静态页进入当前候选构建的测试镜像，
 不以调用方 checkout 路径作为 daemon bind source；本次 JWK 等凭据仍在运行时生成。
@@ -296,7 +296,8 @@ Full-system Compose/runtime 只使用固定测试或本次生成的数据与凭�
 3. **Migration**：命令前把 receipt 更新为 `attempted`，结束后记为 `applied` 或安全的 `failed`；不写入原始错误、命令或环境。
 4. **Runtime 与 seed**：runtime healthy 后，核对 rendered Compose 中 API、Gateway、Admin 与 seed 的 canonical origin/authority。
    Seed 通过生产 Drizzle、Role Assignment、User Profile 与 Subject Access owner 建立数据并回读，避免复制 Redis 协议。
-   Profile backfill 经真实 Worker 收敛；Gateway routes 发布前执行 PostgreSQL 与 Redis/Subject Facts/Subject Access 生产 gate。
+   Profile backfill 经真实 Worker 收敛；seed 同时准备与 iam scope 匹配的 Enable Client，专用合成 Internal Secret 由本次 run ID 派生。
+   Gateway routes 由 publisher 通过直连 Gateway HTTP API 发布，发布前执行 PostgreSQL 与 Redis/Subject Facts/Subject Access 生产 gate。
    Seed one-shot 容器按准确名称保留，通过 `docker cp` 导出 receipt 后再删除，不挂载宿主结果目录。成功与失败均尝试
    导出已有 receipt；成功 seed 的 receipt 必须在 HR 旅程启动前可读，缺失或导出失败属于初始化失败。Receipt 只记录
    stage、timestamps、failure category 或 run-scoped public references，不记录凭据、token 或 secret。

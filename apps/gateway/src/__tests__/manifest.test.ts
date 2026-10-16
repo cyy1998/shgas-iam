@@ -1,0 +1,434 @@
+import { describe, expect, it } from "bun:test";
+import { readFile } from "node:fs/promises";
+import path from "node:path";
+import { parse as parseYaml } from "yaml";
+import { renderEnvPlaceholders } from "../env";
+import { validateManifest } from "../validators";
+import { loadManifest, packageRoot, relativePath } from "./test-helpers";
+
+function getSsoRoutes(manifest: Awaited<ReturnType<typeof loadManifest>>) {
+  return manifest.resources.routes.filter((route) => route.uri === "/sso/*");
+}
+
+function expectRootRedirectToSsoLogin(manifest: Awaited<ReturnType<typeof loadManifest>>) {
+  const route = manifest.resources.routes.find((route) => route.id === `iam.root-redirect.${manifest.scope.env}`);
+  const redirect = (route?.plugins as Record<string, unknown> | undefined)?.redirect;
+
+  expect(route).toMatchObject({
+    name: `iam.root-redirect.${manifest.scope.env}`,
+    uri: "/",
+    priority: 100,
+  });
+  expect(route).not.toHaveProperty("service_id");
+  expect(route).not.toHaveProperty("upstream_id");
+  expect(redirect).toEqual({
+    uri: "/portal/login",
+    ret_code: 302,
+  });
+}
+
+function getEntryNetwork(route: Record<string, unknown>) {
+  return (
+    ((route.plugins as Record<string, unknown> | undefined)?.["proxy-rewrite"] as Record<string, unknown> | undefined)
+      ?.headers as Record<string, unknown> | undefined
+  )?.set as Record<string, unknown> | undefined;
+}
+
+function expectSsoRoutesClassifyEntryNetwork(
+  manifest: Awaited<ReturnType<typeof loadManifest>>,
+  matcher: { authorities: string[] } | { hosts: string[] },
+) {
+  const routes = getSsoRoutes(manifest);
+
+  expect(routes).toHaveLength(2);
+  if ("hosts" in matcher) {
+    expect(routes.flatMap((route) => route.hosts).sort()).toEqual([...matcher.hosts].sort());
+    expect(routes.some((route) => route.hosts === undefined)).toBe(false);
+  } else {
+    expect(routes.map((route) => route.vars).sort()).toEqual(
+      matcher.authorities.map((authority) => [["http_host", "==", authority]]).sort(),
+    );
+    expect(routes.every((route) => route.hosts === undefined)).toBe(true);
+  }
+  expect(routes.every((route) => route.service_id === `iam.${manifest.scope.env}`)).toBe(true);
+  expect(routes.every((route) => route.upstream_id === `iam.api.${manifest.scope.env}`)).toBe(true);
+  expect(routes.every((route) => route.plugin_config_id === `iam.sso-api-plugin.${manifest.scope.env}`)).toBe(true);
+  expect(routes.some((route) => route.id === `iam.sso.${manifest.scope.env}`)).toBe(false);
+  expect(routes.map((route) => getEntryNetwork(route)?.["X-IAM-Entry-Network"]).sort()).toEqual([
+    "external",
+    "internal",
+  ]);
+  expect(routes.every((route) => (route.plugins as Record<string, unknown> | undefined)?.cors === undefined)).toBe(
+    true,
+  );
+
+  const oidc = manifest.resources.routes.filter((route) => Array.isArray(route.uris) && route.uris.includes("/oidc"));
+  expect(oidc).toHaveLength(2);
+  expect(oidc.map((route) => getEntryNetwork(route)?.["X-IAM-Entry-Network"]).sort()).toEqual(["external", "internal"]);
+  for (const route of oidc) {
+    expect(route).toMatchObject({ uris: ["/oidc", "/oidc/*"], upstream_id: `iam.api.${manifest.scope.env}` });
+    expect(route.plugins).toMatchObject({
+      "proxy-rewrite": { headers: { set: { "X-Forwarded-Host": "$http_host", "X-Forwarded-Proto": "$scheme" } } },
+    });
+    expect(route).not.toHaveProperty("plugins.proxy-rewrite.regex_uri");
+  }
+  if ("hosts" in matcher) expect(oidc.flatMap((route) => route.hosts).sort()).toEqual([...matcher.hosts].sort());
+  else
+    expect(oidc.map((route) => route.vars).sort()).toEqual(
+      matcher.authorities.map((authority) => [["http_host", "==", authority]]).sort(),
+    );
+
+  const ssoPluginConfig = manifest.resources.plugin_configs.find(
+    (config) => config.id === `iam.sso-api-plugin.${manifest.scope.env}`,
+  );
+  expect(ssoPluginConfig?.plugins).toMatchObject({
+    "request-id": expect.objectContaining({
+      header_name: "X-Request-Id",
+      include_in_response: true,
+    }),
+    opentelemetry: expect.objectContaining({
+      sampler: expect.objectContaining({
+        name: "always_on",
+      }),
+    }),
+    "limit-req": expect.any(Object),
+    "real-ip": expect.any(Object),
+    cors: expect.any(Object),
+  });
+}
+
+function expectTokenExchangeToExcludeBrowserCors(manifest: Awaited<ReturnType<typeof loadManifest>>) {
+  const tokenRoutes = manifest.resources.routes.filter((route) => route.uri === "/sso/token");
+  const browserRoutes = getSsoRoutes(manifest);
+
+  expect(tokenRoutes).toHaveLength(2);
+  expect(
+    tokenRoutes
+      .map((route) =>
+        JSON.stringify({
+          hosts: route.hosts,
+          vars: route.vars,
+        }),
+      )
+      .sort(),
+  ).toEqual(
+    browserRoutes
+      .map((route) =>
+        JSON.stringify({
+          hosts: route.hosts,
+          vars: route.vars,
+        }),
+      )
+      .sort(),
+  );
+  expect(tokenRoutes.map((route) => getEntryNetwork(route)?.["X-IAM-Entry-Network"]).sort()).toEqual([
+    "external",
+    "internal",
+  ]);
+
+  for (const route of tokenRoutes) {
+    const routePlugins = route.plugins as Record<string, unknown> | undefined;
+    const pluginConfig = manifest.resources.plugin_configs.find((config) => config.id === route.plugin_config_id);
+    const configPlugins = pluginConfig?.plugins as Record<string, unknown> | undefined;
+
+    expect(route.priority).toBeGreaterThan(
+      Math.max(...browserRoutes.map((browserRoute) => Number(browserRoute.priority ?? 0))),
+    );
+    expect(route.service_id).toBe(`iam.${manifest.scope.env}`);
+    expect(route.upstream_id).toBe(`iam.api.${manifest.scope.env}`);
+    expect(route.plugin_config_id).toBe(`iam.api-ip-rate-limit.${manifest.scope.env}`);
+    expect(route).not.toHaveProperty("methods");
+    expect(routePlugins?.cors).toBeUndefined();
+    expect(configPlugins?.cors).toBeUndefined();
+  }
+
+  for (const route of browserRoutes) {
+    const pluginConfig = manifest.resources.plugin_configs.find((config) => config.id === route.plugin_config_id);
+    const configPlugins = pluginConfig?.plugins as Record<string, unknown> | undefined;
+
+    expect(route.uri).toBe("/sso/*");
+    expect(configPlugins?.cors).toEqual(expect.any(Object));
+  }
+}
+
+function getForwardAuthConfig(route: Record<string, unknown>) {
+  return (route.plugins as Record<string, unknown> | undefined)?.["forward-auth"] as
+    | Record<string, unknown>
+    | undefined;
+}
+
+function getTenderInternalAuthzRequestHeaders(manifest: Awaited<ReturnType<typeof loadManifest>>) {
+  const route = manifest.resources.routes.find((candidate) => {
+    const forwardAuth = getForwardAuthConfig(candidate);
+    return typeof forwardAuth?.uri === "string" && forwardAuth.uri.endsWith("/auth/internal-authz");
+  });
+
+  return getForwardAuthConfig(route ?? {})?.request_headers;
+}
+
+describe("apisix manifest validation", () => {
+  it.each(["dev", "prod"])(
+    "materializes %s GDS subapps with separate authenticated APIs and preserved path prefixes",
+    async (env) => {
+      const manifest = await loadManifest(`${env}:gds`);
+      expect(validateManifest(manifest)).toEqual([]);
+      const frontend = manifest.resources.routes.find((route) => route.id === `gds.frontend.${env}`);
+
+      for (const module of ["ai-qc", "hr", "gas"]) {
+        const web = manifest.resources.routes.find((route) => route.id === `gds.subapp-${module}-web.${env}`);
+        const api = manifest.resources.routes.find((route) => route.id === `gds.subapp-${module}-api.${env}`);
+        const redirect = manifest.resources.routes.find(
+          (route) => route.id === `gds.subapp-${module}-web-root-redirect.${env}`,
+        );
+        expect(web).toMatchObject({
+          uri: `/data-platform/subapps/${module}/*`,
+          upstream_id: `gds.subapp-${module}-web.${env}`,
+        });
+        expect(Number(web?.priority)).toBeGreaterThan(Number(frontend?.priority ?? 0));
+        expect(web).not.toHaveProperty("plugin_config_id");
+        expect(redirect).toMatchObject({
+          uri: `/data-platform/subapps/${module}`,
+          plugins: { redirect: { uri: `/data-platform/subapps/${module}/`, append_query_string: true } },
+        });
+        expect(redirect).not.toHaveProperty("upstream_id");
+        if (env === "prod") {
+          // Host-indexed routing otherwise selects the old external frontend before the subapp path.
+          expect(web?.hosts).toEqual(["app.shgas.com", "jsc.shgas.com.cn"]);
+          expect(redirect?.hosts).toEqual(web?.hosts);
+        }
+        expect(api).toMatchObject({
+          uris: [`/subapps/${module}/api`, `/subapps/${module}/api/*`],
+          upstream_id: `gds.subapp-${module}-api.${env}`,
+          plugin_config_id: `gds.api-ip-rate-limit.${env}`,
+        });
+        expect(getForwardAuthConfig(api ?? {})).toMatchObject({
+          uri: `\${${env.toUpperCase()}_GDS_AUTHZ_API_URL}`,
+          allow_degradation: false,
+          extra_headers: { Client: "gds" },
+          request_headers: ["Cookie", "Authorization"],
+          upstream_headers: ["X-User-Info"],
+        });
+        for (const route of [web, api]) {
+          const plugins = route?.plugins as Record<string, unknown> | undefined;
+          expect(plugins?.["proxy-rewrite"]).toEqual({ headers: { remove: ["X-User-Info"] } });
+          expect(route?.labels).toMatchObject({ app: "gds", env, source: "repo-manifest" });
+        }
+      }
+    },
+  );
+  it("accepts the checked-in dev IAM manifest", async () => {
+    const manifest = await loadManifest("dev:iam");
+    expect(validateManifest(manifest)).toEqual([]);
+    expectRootRedirectToSsoLogin(manifest);
+    expect(manifest.resources.plugin_metadata).toContainEqual(
+      expect.objectContaining({
+        id: "opentelemetry",
+        set_ngx_var: true,
+        collector: expect.objectContaining({
+          address: "${APISIX_OTEL_COLLECTOR_ENDPOINT}",
+          request_timeout: 3,
+        }),
+      }),
+    );
+    expect(
+      manifest.resources.routes.every((route) => {
+        const routePlugins = route.plugins as Record<string, unknown> | undefined;
+        const pluginConfig = manifest.resources.plugin_configs.find((config) => config.id === route.plugin_config_id);
+        const configPlugins = pluginConfig?.plugins as Record<string, unknown> | undefined;
+        return routePlugins?.["request-id"] !== undefined || configPlugins?.["request-id"] !== undefined;
+      }),
+    ).toBe(true);
+    expect(
+      manifest.resources.routes.every((route) => {
+        const routePlugins = route.plugins as Record<string, unknown> | undefined;
+        const pluginConfig = manifest.resources.plugin_configs.find((config) => config.id === route.plugin_config_id);
+        const configPlugins = pluginConfig?.plugins as Record<string, unknown> | undefined;
+        return routePlugins?.opentelemetry !== undefined || configPlugins?.opentelemetry !== undefined;
+      }),
+    ).toBe(true);
+  });
+
+  it("splits dev IAM SSO routes by canonical authority and injects entry network", async () => {
+    const manifest = await loadManifest("dev:iam");
+
+    expectSsoRoutesClassifyEntryNetwork(manifest, {
+      authorities: ["${IAM_SSO_EXTERNAL_HOST}", "${IAM_SSO_INTERNAL_HOST}"],
+    });
+  });
+
+  it("matches a rendered dev canonical authority including its dynamic port", async () => {
+    const manifest = await loadManifest("e2e:iam", path.join(packageRoot, "manifests/dev/iam.yaml"), {
+      renderEnv: true,
+      env: {
+        APISIX_OTEL_COLLECTOR_ENDPOINT: "alloy:4318",
+        DEV_IAM_ADMIN_API_UPSTREAM_HOST: "admin-api",
+        DEV_IAM_ADMIN_API_UPSTREAM_PORT: "3001",
+        DEV_IAM_ADMIN_FRONTEND_UPSTREAM_HOST: "admin",
+        DEV_IAM_ADMIN_FRONTEND_UPSTREAM_PORT: "80",
+        DEV_IAM_API_UPSTREAM_HOST: "api",
+        DEV_IAM_API_UPSTREAM_PORT: "3000",
+        DEV_IAM_SSO_FRONTEND_UPSTREAM_HOST: "sso",
+        DEV_IAM_SSO_FRONTEND_UPSTREAM_PORT: "80",
+        IAM_SSO_EXTERNAL_HOST: "127.0.0.1:43123",
+        IAM_SSO_INTERNAL_HOST: "127.0.0.1:43123",
+      },
+    });
+
+    const routes = manifest.resources.routes.filter(
+      (route) =>
+        route.uri === "/sso/*" ||
+        route.uri === "/sso/token" ||
+        (Array.isArray(route.uris) && route.uris.includes("/oidc")),
+    );
+    expect(routes).toHaveLength(6);
+    expect(routes.every((route) => route.hosts === undefined)).toBe(true);
+    expect(
+      routes.every((route) => JSON.stringify(route.vars) === JSON.stringify([["http_host", "==", "127.0.0.1:43123"]])),
+    ).toBe(true);
+  });
+
+  it("renders prod IAM SSO hosts and injects entry network enum values", async () => {
+    const manifest = await loadManifest("prod:iam", undefined, {
+      renderEnv: true,
+      env: {
+        IAM_SSO_CORS_ALLOW_ORIGINS: "https://iam.example.com",
+        IAM_SSO_EXTERNAL_HOST: "iam.example.com",
+        IAM_SSO_INTERNAL_HOST: "iam.internal.example.com",
+        PROD_IAM_ADMIN_API_UPSTREAM_HOST: "iam-admin-api.internal",
+        PROD_IAM_ADMIN_API_UPSTREAM_PORT: "30001",
+        PROD_IAM_ADMIN_FRONTEND_UPSTREAM_HOST: "iam-admin.internal",
+        PROD_IAM_ADMIN_FRONTEND_UPSTREAM_PORT: "80",
+        PROD_IAM_API_UPSTREAM_HOST: "iam-api.internal",
+        PROD_IAM_API_UPSTREAM_PORT: "30000",
+        PROD_IAM_SSO_FRONTEND_UPSTREAM_HOST: "iam-sso.internal",
+        PROD_IAM_SSO_FRONTEND_UPSTREAM_PORT: "80",
+        APISIX_OTEL_COLLECTOR_ENDPOINT: "alloy:4318",
+        TENCENT_NGINX_TRUSTED_CIDR: "10.0.0.0/24",
+      },
+    });
+
+    expect(validateManifest(manifest)).toEqual([]);
+    expectRootRedirectToSsoLogin(manifest);
+    expectSsoRoutesClassifyEntryNetwork(manifest, { hosts: ["iam.example.com", "iam.internal.example.com"] });
+  });
+
+  it("keeps token exchange outside browser CORS while authorize and callback retain it", async () => {
+    const manifests = await Promise.all([loadManifest("dev:iam"), loadManifest("prod:iam")]);
+
+    for (const manifest of manifests) {
+      expectTokenExchangeToExcludeBrowserCors(manifest);
+    }
+  });
+
+  it("loads app-scoped manifests from env:app single files", async () => {
+    const manifest = await loadManifest("prod:tender");
+
+    expect(relativePath(manifest.manifest).replaceAll("\\", "/")).toBe("apps/gateway/manifests/prod/tender.yaml");
+    expect(validateManifest(manifest)).toEqual([]);
+    expect(manifest.resources.services).toHaveLength(1);
+    expect(manifest.resources.services.at(0)).toMatchObject({
+      id: "tender.prod",
+      name: "tender.prod",
+    });
+    expect(manifest.resources.services.at(0)).not.toHaveProperty("upstream_id");
+  });
+
+  it("forwards only apikey to tender internal authz routes", async () => {
+    const manifests = await Promise.all([loadManifest("dev:tender"), loadManifest("prod:tender")]);
+
+    for (const manifest of manifests) {
+      const requestHeaders = getTenderInternalAuthzRequestHeaders(manifest);
+
+      expect(requestHeaders).toEqual(["apikey"]);
+    }
+  });
+
+  it("preserves tender forward-auth and proxy-rewrite behavior after materialization", async () => {
+    const manifest = await loadManifest("prod:tender");
+    const apiRoute = manifest.resources.routes.find((route) => route.id === "tender.api.prod");
+    const publicRoute = manifest.resources.routes.find((route) => route.id === "tender.public.prod");
+    const thirdpartyRoute = manifest.resources.routes.find((route) => route.id === "tender.thirdparty.prod");
+
+    expect(apiRoute).toMatchObject({
+      service_id: "tender.prod",
+      upstream_id: "tender.api.prod",
+      plugin_config_id: "tender.api-ip-rate-limit.prod",
+    });
+    expect(getForwardAuthConfig(apiRoute ?? {})?.request_headers).toEqual(["Cookie", "Client", "Authorization"]);
+    expect((apiRoute?.plugins as Record<string, unknown> | undefined)?.["proxy-rewrite"]).toMatchObject({
+      regex_uri: ["^/api/tender/(.*)", "/$1"],
+    });
+    expect((publicRoute?.plugins as Record<string, unknown> | undefined)?.["proxy-rewrite"]).toMatchObject({
+      regex_uri: ["^/api/tender/(.*)", "/$1"],
+    });
+    expect(getForwardAuthConfig(thirdpartyRoute ?? {})?.request_headers).toEqual(["apikey"]);
+    expect((thirdpartyRoute?.plugins as Record<string, unknown> | undefined)?.["proxy-rewrite"]).toMatchObject({
+      regex_uri: ["^/thirdparty/tender/(.*)", "/thirdparty/$1"],
+    });
+  });
+
+  it("preserves Tender and GDS special upstream overrides", async () => {
+    const [tender, gds] = await Promise.all([loadManifest("prod:tender"), loadManifest("prod:gds")]);
+
+    expect(tender.resources.routes.find((route) => route.id === "tender.frontend-external.prod")).toMatchObject({
+      service_id: "tender.prod",
+      upstream_id: "tender.frontend-external.prod",
+    });
+    expect(tender.resources.routes.find((route) => route.id === "tender.minio.prod")).toMatchObject({
+      service_id: "tender.prod",
+      upstream_id: "tender.minio.prod",
+    });
+    expect(gds.resources.routes.find((route) => route.id === "gds.external-frontend.prod")).toMatchObject({
+      service_id: "gds.prod",
+      upstream_id: "gds.external-frontend.prod",
+    });
+    expect(gds.resources.routes.find((route) => route.id === "gds.dashboard.prod")).toMatchObject({
+      service_id: "gds.prod",
+      upstream_id: "gds.dashboard.prod",
+    });
+  });
+
+  it("configures APISIX JSON stdout access logs without sensitive fields", async () => {
+    for (const configPath of ["config.dev.yaml", "config.prod.example.yaml"]) {
+      const parsed = parseYaml(await readFile(path.join(process.cwd(), "config", configPath), "utf8"));
+      const httpConfig = parsed.nginx_config.http;
+      const format = httpConfig.access_log_format as string;
+
+      expect(httpConfig.access_log).toBe("/dev/stdout");
+      expect(parsed.plugins).toContain("opentelemetry");
+      expect(parsed.plugins).not.toContain("...");
+      expect(parsed.plugin_attr.opentelemetry).toMatchObject({
+        set_ngx_var: true,
+        collector: {
+          request_timeout: 3,
+        },
+      });
+      for (const field of [
+        "event",
+        "sourceApp",
+        "requestId",
+        "traceId",
+        "spanId",
+        "traceparent",
+        "method",
+        "path",
+        "statusCode",
+        "durationMs",
+        "upstreamStatus",
+        "upstreamAddr",
+      ]) {
+        expect(format).toContain(`"${field}"`);
+      }
+      expect(format).toContain("$opentelemetry_trace_id");
+      expect(format).toContain("$opentelemetry_span_id");
+      expect(format).toContain("$opentelemetry_context_traceparent");
+      expect(format).not.toMatch(/request_body|resp_body|authorization|cookie|set_cookie|\$args/i);
+    }
+  });
+
+  it("rejects missing environment placeholders when rendering is enabled", () => {
+    expect(() => renderEnvPlaceholders("host: ${MISSING_HOST}", {}, "manifest.yaml")).toThrow(
+      "manifest.yaml references missing environment variable MISSING_HOST",
+    );
+  });
+});

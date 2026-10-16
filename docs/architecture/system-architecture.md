@@ -26,6 +26,7 @@ flowchart LR
     api["API · Bun / Hono"]
     admin["Admin API · Bun / Hono"]
     worker["Worker · Bun"]
+    gatewayApi["Gateway 配置 API · Bun / Hono"]
   end
 
   subgraph storage["数据与状态"]
@@ -40,6 +41,9 @@ flowchart LR
   gateway --> business["接入业务 upstream"]
   gateway -. "部分业务路由的 forward-auth" .-> api
   gateway --> etcd
+  publisher["配置调用方：YAML / 请求变量"] --> gatewayApi
+  gatewayApi -. "当前 Client 凭据只读认证" .-> pg
+  gatewayApi -. "APISIX Admin API" .-> gateway
   api --> pg
   admin --> pg
   worker --> pg
@@ -54,7 +58,7 @@ flowchart LR
 
 ### 请求入口与后台任务
 
-主要 HTTP 入口由 [IAM manifests](../../gateway/manifests/prod/iam.yaml) 声明：
+主要 HTTP 入口由 [IAM manifests](../../apps/gateway/manifests/prod/iam.yaml) 声明：
 
 | 外部路径                                                                         | 处理方              | 路由说明                                                                             |
 | -------------------------------------------------------------------------------- | ------------------- | ------------------------------------------------------------------------------------ |
@@ -67,9 +71,13 @@ flowchart LR
 Worker 负责队列消费、health/readiness、可选 Bull Board 和一次性修复任务（one-shot repair）。
 它的 HTTP 入口不提供业务 API；命令和 consumer 的资源生命周期由 Worker composition 管理。
 
+Gateway 配置 API 独立监听 30004，Compose 默认向宿主 loopback 映射，首次发布可直连而不依赖 IAM 数据面路由。
+它提供 validate/diff/apply，通过 IAM PostgreSQL 当前 Client 的 Internal Secret 与 scope 匹配认证，不依赖 Redis。
+`GET /health` 只证明 HTTP 就绪；服务启动不证明数据库认证或 APISIX 可用。
+
 **经过 Gateway 不代表已经完成认证或授权。** IAM 自身路由并不统一使用 `forward-auth`。
-[Tender manifests](../../gateway/manifests/prod/tender.yaml) 中的部分业务路径调用 IAM authz；
-[GDS manifests](../../gateway/manifests/prod/gds.yaml) 有自己的 authz endpoint 和适用路径。
+[Tender manifests](../../apps/gateway/manifests/prod/tender.yaml) 中的部分业务路径调用 IAM authz；
+[GDS manifests](../../apps/gateway/manifests/prod/gds.yaml) 有自己的 authz endpoint 和适用路径。
 新增接入时，必须确认具体路由由谁负责认证。
 
 ## 信任与协议边界
@@ -90,6 +98,14 @@ Gateway 负责 host/path rewrite、真实 IP 信任配置，以及按路由设�
 
 API、Admin API 分别负责各自的协议解析、认证和错误映射。
 规范化后的 actor 与请求上下文通过显式接口流入业务层，详见[后端架构](backend-architecture.md#请求审计与可观测上下文)。
+
+### 配置调用方 → Gateway API → APISIX：凭据与管理目标分开
+
+调用方以 apikey 提交 scope 对应 Client 的 Internal Secret，不能指定 APISIX 地址、Admin Key 或服务器文件路径。
+Gateway 每次只读查询当前 Client，要求 Enable、未删除且 Secret 匹配；首次 iam 发布必须预备 iam Client，
+iam-admin 不自动替代。部署配置固定 APISIX 管理目标与 Admin Key，并提供数据库专用最小读取角色。
+该身份匹配不建立域名/路径配额、插件权限或完整多租户隔离，详见
+[Gateway 功能契约](../features/gateway/gateway-configuration-api.md)。
 
 ### IAM → 第三方：各自管理协议和本地会话
 
@@ -115,6 +131,7 @@ Independent client 自建的本地会话由第三方负责，IAM 撤销不等于
 | Client Runtime Snapshot                                   | PostgreSQL 中的 Client 配置                                    | 共享 Snapshot Module 负责 Redis control、统一安全 payload 与独立敏感 Credential payload。            |
 | BullMQ rebuild 工作                                       | PostgreSQL Dirty 状态保存待处理事实                            | Queue 负责唤醒和处理，repair 负责恢复提交后的入队失败。                                              |
 | Audit 与运行日志                                          | PostgreSQL `audit_log` 记录业务审计；Loki 保存采集的应用日志   | 应用日志经 Alloy → Loki，由 Grafana 查询。                                                           |
+| Gateway Application Configuration                         | 调用方保管源 YAML，APISIX/etcd 保存实际配置                    | Gateway 只在当前请求内暂存前态并发布/补偿；不持有期望配置库、历史结果或持久恢复任务。                |
 
 读模型和队列不能反向成为源业务事实，日志也不能替代当前授权或业务事实。
 共享包选址与 DTO 演进见[共享契约](contracts-and-database.md)；敏感字段和作用已生效后的审计失败处理见
@@ -137,6 +154,8 @@ Redis 中同时存在可重建缓存和实时权威状态，故障后必须按�
   停流后的全量修复与核验（full repair/verify），见 [ADR-0021](../adr/0021-bind-protocol-runtime-cache-consistency-to-snapshot-acquisition.md)。
 - **BullMQ rebuild 工作**：入队成功只表示工作已派发，不证明发布完成。提交后的入队失败由 repair 恢复，
   见[失效契约](backend-architecture.md#user-profile-失效)。
+- **Gateway 发布前态与阻断**：只保存在当前进程内。恢复失败、未知或崩溃后，由发布负责人确认在途与迟到调用结束，
+  核对并修复 APISIX，再重启服务；重启不核验恢复，也不重放旧请求，见[Gateway 发布手册](../releases/apisix-gateway-release.md)。
 
 ### Redis 备份恢复后的 Snapshot 处理
 
@@ -151,6 +170,14 @@ Redis 中同时存在可重建缓存和实时权威状态，故障后必须按�
 ## 一致性边界
 
 不同状态的观察时点不同。阅读以下规则时，重点区分：当前调用已经固定了什么，以及后续调用会重新检查什么。
+
+### Gateway 配置：实例内串行与有界补偿
+
+每次请求重新读取 Client 认证事实，已认证的在途操作不因后续轮换、启停或删除中止。
+apply 从 fresh read 到发布或恢复结束持有本实例执行权；首错停止正向写入并补偿已尝试目标，允许短暂部分生效。
+补偿失败或未知后阻断本实例发布；调用方断连后原操作继续，发布和补偿均不自动重试。
+服务不协调多个实例或外部写者，回滚保证以发布窗口没有这些并发写入为前提，不提供跨资源事务或崩溃自动恢复。
+正常关闭等待在途操作，部署须为有界关闭保留余量；未知结果的人工恢复顺序由发布手册维护。
 
 ### 会话与协议状态
 

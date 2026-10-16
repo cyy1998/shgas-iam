@@ -30,12 +30,14 @@ const appEnvSchemaChecks: AppEnvSchemaCheck[] = [
   { file: "apps/api/src/env.ts", prefix: "IAM_API_" },
   { file: "apps/admin-api/src/env.ts", prefix: "IAM_ADMIN_API_" },
   { file: "apps/worker/src/env.ts", prefix: "IAM_WORKER_" },
+  { file: "apps/gateway/src/env.ts", prefix: "IAM_GATEWAY_" },
 ];
 
 const envExampleChecks: EnvExampleCheck[] = [
   { file: "apps/api/.env.example", allowedPrefixes: ["IAM_API_"], allowedKeys: ["NODE_ENV"] },
   { file: "apps/admin-api/.env.example", allowedPrefixes: ["IAM_ADMIN_API_"], allowedKeys: ["NODE_ENV"] },
   { file: "apps/worker/.env.example", allowedPrefixes: ["IAM_WORKER_"], allowedKeys: ["NODE_ENV"] },
+  { file: "apps/gateway/.env.example", allowedPrefixes: ["IAM_GATEWAY_"] },
   { file: "apps/admin/.env.example", allowedPrefixes: ["UMI_APP_ADMIN_"], allowedKeys: ["PORT"] },
   { file: "apps/sso/.env.example", allowedPrefixes: ["UMI_APP_SSO_"], allowedKeys: ["PORT"] },
 ];

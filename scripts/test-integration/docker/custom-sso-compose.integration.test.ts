@@ -7,6 +7,7 @@ import { dockerCliEnvironment } from "./docker-cli-fixture";
 const repositoryRoot = join(import.meta.dirname, "..", "..", "..");
 const retryAfterVariable = "IAM_API_CUSTOM_SSO_PROJECTION_RETRY_AFTER_SECONDS";
 const syntheticEnvironment = {
+  IAM_GATEWAY_DATABASE_URL: "postgresql://synthetic-reader:synthetic-password@synthetic-postgres.invalid/iam_test",
   POSTGRES_PASSWORD: "synthetic-postgres-password",
   POSTGRES_REPLICATION_PASSWORD: "synthetic-replication-password",
   POSTGRES_PRIMARY_HOST: "synthetic-postgres.invalid",

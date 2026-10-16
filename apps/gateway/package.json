@@ -1,0 +1,40 @@
+{
+  "name": "@iam/gateway-apisix",
+  "type": "module",
+  "version": "0.0.1",
+  "private": true,
+  "scripts": {
+    "dev": "bun --watch src/main.ts",
+    "start": "bun src/main.ts",
+    "lint": "biome check --formatter-enabled=false . && stylelint \"**/*.less\" --allow-empty-input",
+    "lint:fix": "biome check --formatter-enabled=false --write . && stylelint \"**/*.less\" --allow-empty-input",
+    "test": "pnpm test:unit",
+    "test:unit": "bun test --max-concurrency=2 src",
+    "typecheck": "pnpm exec tsc --noEmit",
+    "format": "biome format --write . && prettier \"**/*.{less,md,yaml,yml}\" --ignore-path ../../.gitignore --ignore-path ../../.prettierignore --no-error-on-unmatched-pattern --write",
+    "format:check": "biome format . && prettier \"**/*.{less,md,yaml,yml}\" --ignore-path ../../.gitignore --ignore-path ../../.prettierignore --no-error-on-unmatched-pattern --check",
+    "test:integration:bun": "node ../../scripts/run-package-integration.mjs bun -- bun test test-integration"
+  },
+  "dependencies": {
+    "@iam/api-core": "workspace:*",
+    "@iam/contracts": "workspace:*",
+    "@iam/db": "workspace:*",
+    "drizzle-orm": "1.0.0-rc.2",
+    "hono": "^4.12.30",
+    "postgres": "^3.4.9",
+    "yaml": "^2.9.1",
+    "zod": "^4.4.3"
+  },
+  "devDependencies": {
+    "@types/bun": "latest",
+    "@typescript/native": "npm:typescript@7.0.2",
+    "typescript": "npm:@typescript/typescript6@6.0.2"
+  },
+  "iamTest": {
+    "integration": {
+      "bun": {
+        "postgres": "IAM_GATEWAY_TEST_DATABASE_URL"
+      }
+    }
+  }
+}

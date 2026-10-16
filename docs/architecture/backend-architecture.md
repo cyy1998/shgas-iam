@@ -11,6 +11,7 @@
 | `apps/api`       | Bun + Hono public IAM backend，拥有 `/public`、`/open`、`/internal`、`/sso`、`/auth`          | `src/app.ts` → `createApiComposition()`                |
 | `apps/admin-api` | Bun + Hono admin backend，拥有 `/admin` 和 `/rpc`；`/rpc` 对应 `src/routes/trpc/`             | `src/app.ts` → `createAdminApiComposition()`           |
 | `apps/worker`    | Bun background runtime，拥有 queue consumer、health/Bull Board HTTP 面和 maintenance commands | `src/index.ts` 或 `src/commands/` → worker composition |
+| `apps/gateway`   | Bun + Hono 独立 Gateway 配置入口，只读认证当前 Client，校验、预览、发布 YAML 并执行必要补偿   | `src/main.ts` → `createGatewayComposition()`           |
 
 API tier 分别在 `apps/api/app.config.ts` 和 `apps/admin-api/app.config.ts` 声明。共享 `createApp` 位于
 `packages/api-core`，只挂载 app composition root 提供的已物化 routes 和 middlewares；它保持 app-agnostic，
@@ -49,6 +50,12 @@ Domain-aligned application service 使用 `<domain>.service.ts`、`create<Domain
 Route 可以调用 use case 或 service facade，但不得直接依赖 app-local repository 或 `@iam/api-core/uow`。
 `services/**` 不得反向 import `use-cases/**`；`packages/domain` 不得 import app-local use case、service 或
 composition。跨层实例连接统一由 composition 完成。
+
+Gateway 的薄 HTTP 入口位于 `src/http/`，适用同一 route owner 和 consumer-owned port 边界。
+其 service 持有请求认证、规划和发布/补偿编排，composition 注入窄 Client credential reader 与 APISIX reader/writer。
+认证只读 IAM PostgreSQL，不使用 Redis、其他 app 私有 repository 或 SSO Snapshot；
+实例内执行权和恢复阻断由 Gateway service 持有，无持久任务或跨实例锁。
+配置与恢复契约见[Gateway 配置 API](../features/gateway/gateway-configuration-api.md)。
 
 ## Composition、Factory 与 Port
 
@@ -460,7 +467,7 @@ API env 注入 current/previous RS256 JWK，JWKS 只输出公钥；非法配置�
 
 ## 后端 App 工具配置
 
-- Bun runtime apps（`apps/api`、`apps/admin-api`、`apps/worker`）的 `tsconfig.json` 包含 Bun types。
+- Bun runtime apps（`apps/api`、`apps/admin-api`、`apps/worker`、`apps/gateway`）的 `tsconfig.json` 包含 Bun types。
 - App-local maintenance scripts 属于非生产工具。新增 `scripts/` 时，在 production `tsconfig.json` 中排除该目录；
   仓库自有且受支持的脚本仍纳入统一 format/lint。Worker 使用 production
   `src/commands/`，没有独立 maintenance `scripts/`。

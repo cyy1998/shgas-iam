@@ -67,7 +67,7 @@ YAML 明确放弃现有通用 ESLint 规则覆盖：为少量配置文件保留 
 
 Biome 负责 JS/TS、JSX/TSX、JSON/JSONC 和 CSS。Prettier 仅为 Less、YAML、Markdown 等未支持类型提供排版；
 Less 保留 Stylelint，YAML 不引入通用 linter；移除 JS/TS 的 Antfu 链路，也不为 YAML 保留 ESLint。
-YAML 的专属验证沿用实际消费工具的入口，例如现有 `pnpm gateway:apisix:validate` 及
+YAML 的专属验证沿用实际消费工具的入口，例如 Gateway `POST /validate` 及
 [Gateway 发布流程](../releases/apisix-gateway-release.md)，不由 format/lint 命令代为执行。
 这保留当前 Less 源码，不把样式语言转换混入工具迁移。补充工具不与 Biome 对同一文件重复排版；
 没有可靠安全修复分类的规则默认只报错，不能因其支持 `--fix` 就视为满足安全修复要求。

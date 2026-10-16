@@ -15,6 +15,7 @@ import type { VerifyPasswordResetCodeUseCase } from "@api/use-cases/account-reco
 import { OK } from "@iam/api-core/core/http-status-codes";
 import { InvalidHumanVerificationSiteError } from "@iam/api-core/errors/InvalidHumanVerificationSiteError";
 import * as resp from "@iam/api-core/http";
+import { PublicClientStatusDtoSchema } from "@iam/contracts";
 import { maskMobile } from "./open.presenter";
 import type { OpenRouteHandler } from "./open.type";
 import { requirePhoneNumber } from "./open.validation";
@@ -36,7 +37,8 @@ export interface CreateOpenHandlersDeps {
 export function createOpenHandlers(deps: CreateOpenHandlersDeps) {
   const clientStatus: OpenRouteHandler<"clientStatus"> = async (c) => {
     const { clientCode } = c.req.valid("query");
-    const data = await deps.clientService.getClientByCode(clientCode);
+    const client = await deps.clientService.getClientByCode(clientCode);
+    const data = client === null ? null : PublicClientStatusDtoSchema.parse(client);
     return c.json(resp.ok(data), OK);
   };
 

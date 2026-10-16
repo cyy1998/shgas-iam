@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { ClientStatus } from "./enums/client.status";
 
 const CLIENT_CODE_MAX_LENGTH = 64;
 
@@ -10,6 +11,15 @@ export const ClientCodeSchema = z
     description: "Client Code",
     maxLength: CLIENT_CODE_MAX_LENGTH,
   });
+
+export const PublicClientStatusDtoSchema = z.object({
+  clientCode: z.string(),
+  clientName: z.string(),
+  status: z.enum(ClientStatus),
+  url: z.string().nullable(),
+});
+
+export type PublicClientStatusDto = z.infer<typeof PublicClientStatusDtoSchema>;
 
 function hasAtMostUnicodeCodePoints(value: string, maximum: number) {
   let count = 0;

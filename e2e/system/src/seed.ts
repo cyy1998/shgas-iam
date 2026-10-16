@@ -1,4 +1,5 @@
 import { OidcClientType } from "@iam/contracts";
+import { createE2EGatewayApiKey } from "./gateway-credential";
 
 export interface E2EScenarioReferences {
   version: 1;
@@ -147,6 +148,7 @@ export interface E2EScenarioReadBack {
     redirectUris: string[];
   };
   internalClient: { active: boolean; clientCode: string };
+  gatewayClient: { active: boolean; clientCode: string; credentialMatches: boolean };
   oidcClient: {
     active: boolean;
     clientCode: string;
@@ -190,6 +192,7 @@ export interface E2EScenarioOwner {
     input: E2EScenarioSeedReferences & {
       adminPassword: string;
       internalApiKey: string;
+      gatewayApiKey: string;
     },
   ) => Promise<E2EScenarioGeneratedReferences>;
   readBack: (references: E2EScenarioReferences) => Promise<E2EScenarioReadBack>;
@@ -231,6 +234,7 @@ export async function seedE2EScenario(input: SeedE2EScenarioInput): Promise<E2ES
     ...fixedReferences,
     adminPassword: input.adminPassword,
     internalApiKey: createE2EScenarioInternalApiKey(input.runId),
+    gatewayApiKey: createE2EGatewayApiKey(input.runId),
   });
   const references: E2EScenarioReferences = {
     ...fixedReferences,
@@ -347,6 +351,9 @@ function assertScenarioReadBack(expected: E2EScenarioReferences, actual: E2EScen
     actual.hiddenResponsibilityAssignment.id === expected.hiddenResponsibilityAssignmentId &&
     actual.hiddenResponsibilityAssignment.holderEmploymentId === expected.outsideResponsibilityHolderEmploymentId &&
     actual.hiddenResponsibilityAssignment.targetOrganizationCode === expected.hrResponsibilityTargetOrganizationCode &&
+    actual.gatewayClient.active &&
+    actual.gatewayClient.clientCode === "iam" &&
+    actual.gatewayClient.credentialMatches &&
     actual.adminClient.active &&
     actual.adminClient.ssoEnabled &&
     actual.adminClient.clientCode === expected.adminClientCode &&

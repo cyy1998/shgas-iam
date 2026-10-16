@@ -103,6 +103,10 @@ Architecture Guard 只覆盖仓库规范的静态写法。对同一依赖边采�
 - `worker-ownership`
 - `docker-build-closure`
 
+Gateway 的 production source 纳入受保护 roots，并沿既有 `dependency-direction` 和 `consumer-owned-port`
+保护依赖方向；`apps/gateway/src/http/` 使用与 routes 相同的 owner predicate，不能直接依赖 repository 或 UnitOfWork。
+Gateway 独立 Dockerfile 同样接受 build closure 检查；这不增加规则族或观察事实。
+
 新 `packages/oidc` 同属 `session-runtime-owner`：不依赖 Custom SSO、旧 Provider、app、HTTP 或数据库 owner，
 Kernel 不反向依赖 OIDC。此规则沿已有静态 import/路径模型保护协议独立性，允许正常 Kernel/Snapshot 注入能力；
 新包纳入 source roots、canonical workspace mapping 与 Docker closure。API 的默认 HTTP 负责 transport，见

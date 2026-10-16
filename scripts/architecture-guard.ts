@@ -47,6 +47,7 @@ type StaticModuleOwnershipRule = Readonly<{
 const protectedSourceRoots = [
   "apps/api/src",
   "apps/admin-api/src",
+  "apps/gateway/src",
   "apps/worker/src",
   "packages/session-kernel/src",
   "packages/custom-sso/src",
@@ -111,7 +112,7 @@ const canonicalStaticSourceRoots = new Map([
   ["@iam/client-subject-projection", "packages/client-subject-projection/src"],
   ["@iam/db", "packages/db/src"],
   ["@iam/domain", "packages/domain/src"],
-  ["@iam/gateway-apisix", "gateway/src"],
+  ["@iam/gateway-apisix", "apps/gateway/src"],
   ["@iam/organization-responsibility-resolution", "packages/organization-responsibility-resolution/src"],
   ["@iam/sso", "apps/sso/src"],
   ["@iam/user-profile-read-model", "packages/user-profile-read-model/src"],
@@ -126,7 +127,6 @@ const clientSubjectProjectionExternalOwnerTargets: readonly StaticModulePattern[
   { kind: "prefix", module: "packages/domain/src" },
   { kind: "prefix", module: "packages/user-profile-read-model/src" },
   { kind: "prefix", module: "apps" },
-  { kind: "prefix", module: "gateway" },
   { kind: "prefix", module: "@hono" },
   { kind: "package", module: "hono" },
   { kind: "package", module: "ioredis" },
@@ -482,7 +482,9 @@ function collectUserProfileOwnerViolations(sources: readonly IndexedSourceFile[]
 
 function collectDependencyDirectionViolations(sources: readonly IndexedSourceFile[]): ArchitectureViolation[] {
   return sources
-    .filter((source) => source.file.startsWith("apps/api/src/") || source.file.startsWith("apps/admin-api/src/"))
+    .filter((source) =>
+      ["apps/api/src/", "apps/admin-api/src/", "apps/gateway/src/"].some((root) => source.file.startsWith(root)),
+    )
     .flatMap(collectSourceDependencyDirectionViolations);
 }
 
@@ -559,7 +561,7 @@ function collectSourceDependencyDirectionViolations(source: IndexedSourceFile): 
         },
       ];
     }
-    if (source.file.includes("/src/routes/")) {
+    if (source.file.includes("/src/routes/") || source.file.startsWith("apps/gateway/src/http/")) {
       if (moduleSpecifier === "@iam/api-core/uow") {
         return [
           {
@@ -734,7 +736,6 @@ function collectWorkspaceDependencyGraph(repoRoot: string) {
       .filter((entry) => entry.isDirectory())
       .map((entry) => `${parent}/${entry.name}`);
   });
-  if (existsSync(join(repoRoot, "gateway", "package.json"))) workspaceRoots.push("gateway");
 
   const graph = new Map<string, WorkspaceDependencyNode>();
   for (const workspaceRoot of workspaceRoots.sort(compareText)) {

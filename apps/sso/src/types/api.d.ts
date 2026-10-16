@@ -1,4 +1,4 @@
-import type { ApiErrorCode, ClientStatus } from "@iam/contracts";
+import type { ApiErrorCode, PublicClientStatusDto } from "@iam/contracts";
 import type { CustomSsoEmployment, CustomSsoSubjectProjection } from "@iam/custom-sso/wire";
 
 export type ApiEnvelope<T> = {
@@ -28,9 +28,4 @@ export type LoginPasswordResult = {
   isMobileSet: boolean;
 };
 
-export type ClientStatusResult = {
-  clientCode: string;
-  clientName: string;
-  status: ClientStatus;
-  extAttributes?: Record<string, unknown> | null;
-} | null;
+export type ClientStatusResult = PublicClientStatusDto | null;

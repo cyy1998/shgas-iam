@@ -503,6 +503,43 @@ importers:
         specifier: npm:@typescript/typescript6@6.0.2
         version: '@typescript/typescript6@6.0.2'
 
+  apps/gateway:
+    dependencies:
+      '@iam/api-core':
+        specifier: workspace:*
+        version: link:../../packages/api-core
+      '@iam/contracts':
+        specifier: workspace:*
+        version: link:../../packages/contracts
+      '@iam/db':
+        specifier: workspace:*
+        version: link:../../packages/db
+      drizzle-orm:
+        specifier: 1.0.0-rc.2
+        version: 1.0.0-rc.2(bun-types@1.4.2)(postgres@3.4.9)(valibot@1.5.0(@typescript/typescript6@6.0.2))(zod@4.4.3)
+      hono:
+        specifier: ^4.12.30
+        version: 4.12.30
+      postgres:
+        specifier: ^3.4.9
+        version: 3.4.9
+      yaml:
+        specifier: ^2.9.1
+        version: 2.9.1
+      zod:
+        specifier: ^4.4.3
+        version: 4.4.3
+    devDependencies:
+      '@types/bun':
+        specifier: latest
+        version: 1.4.2
+      '@typescript/native':
+        specifier: npm:typescript@7.0.2
+        version: typescript@7.0.2
+      typescript:
+        specifier: npm:@typescript/typescript6@6.0.2
+        version: '@typescript/typescript6@6.0.2'
+
   apps/sso:
     dependencies:
       '@ant-design/cssinjs':
@@ -670,25 +707,6 @@ importers:
       '@playwright/test':
         specifier: ^1.61.1
         version: 1.61.1
-      '@types/bun':
-        specifier: latest
-        version: 1.4.2
-      '@typescript/native':
-        specifier: npm:typescript@7.0.2
-        version: typescript@7.0.2
-      typescript:
-        specifier: npm:@typescript/typescript6@6.0.2
-        version: '@typescript/typescript6@6.0.2'
-
-  gateway:
-    dependencies:
-      commander:
-        specifier: ^15.0.0
-        version: 15.0.0
-      yaml:
-        specifier: ^2.9.1
-        version: 2.9.1
-    devDependencies:
       '@types/bun':
         specifier: latest
         version: 1.4.2
@@ -5066,10 +5084,6 @@ packages:
   combined-stream@1.0.8:
     resolution: {integrity: sha512-FQN4MRfuJeHf7cBbBMJFXhKSDq+2kAArBlmRBvcvFE5BB1HZKXtSFASDhdlz9zOYwxh8lDdnvmMOe/+5cdoEdg==}
     engines: {node: '>= 0.8'}
-
-  commander@15.0.0:
-    resolution: {integrity: sha512-z67u4ZhzCL/Tydu1lJARtEZYWbWaN7oYLHbsuzocr6y4N6WZAagG3RQ4FW61V1/0+jImpj293XfrcYnd1qxtPg==}
-    engines: {node: '>=22.12.0'}
 
   commander@2.20.0:
     resolution: {integrity: sha512-7j2y+40w61zy6YC2iRNpUe/NwhNyoXrYpHMrSunaMG64nRnaf96zO/KMQR4OyN/UnE5KLyEBnKHd4aG3rskjpQ==}
@@ -14755,8 +14769,6 @@ snapshots:
   combined-stream@1.0.8:
     dependencies:
       delayed-stream: 1.0.0
-
-  commander@15.0.0: {}
 
   commander@2.20.0: {}
 

@@ -12,6 +12,20 @@ afterEach(() => {
 });
 
 describe("repository architecture guard", () => {
+  test("protects Gateway HTTP and consumer ports while allowing composition wiring", () => {
+    const repoRoot = createFixtureRepository({
+      "apps/gateway/src/http/app.ts": 'import type { Reader } from "../repositories/client-credential.repository";',
+      "apps/gateway/src/services/gateway/gateway.port.ts":
+        'import type { Reader } from "../../repositories/client-credential.repository";',
+      "apps/gateway/src/composition/index.ts": 'import { reader } from "../repositories/client-credential.repository";',
+    });
+    expect(new Set(analyzeRepositoryArchitecture(repoRoot).map(({ ruleId, file }) => `${ruleId}:${file}`))).toEqual(
+      new Set([
+        "dependency-direction:apps/gateway/src/http/app.ts",
+        "consumer-owned-port:apps/gateway/src/services/gateway/gateway.port.ts",
+      ]),
+    );
+  });
   test("keeps new OIDC independent of protocol, transport, app and database owners while allowing composition", () => {
     const repoRoot = createFixtureRepository({
       "packages/oidc/src/authorization.ts": [

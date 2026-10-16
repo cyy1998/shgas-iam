@@ -1,7 +1,6 @@
 packages:
   - "apps/*"
   - "e2e/system"
-  - "gateway"
   - "packages/*"
 trustLockfile: true
 verifyDepsBeforeRun: error

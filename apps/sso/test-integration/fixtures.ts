@@ -64,7 +64,7 @@ export async function mockSsoApi(page: Page, options: SsoMockOptions = {}) {
         clientCode: new URL(route.request().url()).searchParams.get("clientCode"),
         clientName: "IAM 管理后台",
         status: ClientStatus.Enable,
-        extAttributes: {},
+        url: null,
       }),
     ),
   );

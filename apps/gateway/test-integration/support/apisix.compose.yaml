@@ -1,0 +1,38 @@
+services:
+  apisix-etcd:
+    image: docker.xuanyuan.run/bitnamilegacy/etcd:3.5.11
+    # A disposable single node needs no bootstrap probe process from the image entrypoint.
+    entrypoint: ["etcd"]
+    command:
+      - --name=default
+      - --data-dir=/bitnami/etcd/data
+      - --advertise-client-urls=http://apisix-etcd:2379
+      - --listen-client-urls=http://0.0.0.0:2379
+      - --listen-peer-urls=http://0.0.0.0:2380
+      - --initial-advertise-peer-urls=http://apisix-etcd:2380
+      - --initial-cluster=default=http://apisix-etcd:2380
+    volumes:
+      - etcd-data:/bitnami/etcd
+    healthcheck:
+      test: ["CMD", "etcdctl", "endpoint", "health", "--endpoints=http://127.0.0.1:2379"]
+      interval: 1s
+      timeout: 3s
+      retries: 30
+
+  apisix:
+    build:
+      context: ./apps/gateway/test-integration/support
+      dockerfile: apisix.Dockerfile
+    ports:
+      - "127.0.0.1::9180"
+    depends_on:
+      apisix-etcd:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "apisix", "status"]
+      interval: 1s
+      timeout: 3s
+      retries: 30
+
+volumes:
+  etcd-data:

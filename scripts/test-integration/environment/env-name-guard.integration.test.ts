@@ -8,6 +8,7 @@ const requiredEmptyFiles = [
   "apps/api/.env.example",
   "apps/admin-api/.env.example",
   "apps/worker/.env.example",
+  "apps/gateway/.env.example",
   "apps/admin/.env.example",
   "apps/sso/.env.example",
   "docker/.env.dev.example",
@@ -38,6 +39,11 @@ async function initializeEnvGuardFixture(root: string, apiSchema: string) {
     root,
     "apps/worker/src/env.ts",
     "const RawWorkerEnvSchema = z.object({\n  IAM_WORKER_PORT: z.number(),\n});\n",
+  );
+  await writeFixtureFile(
+    root,
+    "apps/gateway/src/env.ts",
+    "const RawEnvSchema = z.object({\n  IAM_GATEWAY_PORT: z.number(),\n});\n",
   );
   for (const path of requiredEmptyFiles) await writeFixtureFile(root, path, "");
 }

@@ -6,7 +6,7 @@
 跨 runtime 的请求流、数据权威来源与恢复责任见[系统架构视图](system-architecture.md)，关键约束的证据入口见
 [架构验证归属](architecture-verification.md)。
 
-`pnpm` workspace 包含 `apps/*`、`packages/*`、`gateway` 和 root-owned `e2e/system`；`docker/`、
+`pnpm` workspace 包含 `apps/*`、`packages/*` 和 root-owned `e2e/system`；`docker/`、
 `observability/` 等目录属于仓库级运行和运维资产，不是 workspace package。
 
 ## 快速导航
@@ -15,7 +15,6 @@
 .
 ├── apps/             # 可部署的后端、前端和 worker
 ├── packages/         # 跨 app 复用的 workspace packages
-├── gateway/          # APISIX manifests 与发布工具
 ├── e2e/system/       # root-owned Full-system E2E workspace
 ├── docker/           # 本地依赖栈及 dev/prod Compose
 ├── observability/    # Alloy、Loki 与 Grafana 配置
@@ -31,13 +30,14 @@
 
 ## 运行时 Apps
 
-| 路径             | Runtime 与职责                               | 主要入口                                                                                                                                                                                                                                     |
-| ---------------- | -------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `apps/api`       | Bun + Hono public IAM backend（`@iam/api`）  | `src/routes/`：public/open/internal/sso/auth 协议入口；`src/use-cases/`：跨领域 workflow；`src/services/`：domain-aligned application services；`src/composition/`：production wiring；`src/env.ts`：环境校验                                |
-| `apps/admin-api` | Bun + Hono admin backend（`@iam/admin-api`） | `src/routes/admin/`：Admin REST；`src/routes/trpc/`：tRPC entry routes；`src/use-cases/`：跨领域 workflow；`src/services/`：domain-aligned application services；`src/composition/`：production wiring；`src/trpc/`：tRPC router composition |
-| `apps/worker`    | Bun background job runtime（`@iam/worker`）  | `src/composition/`：runtime wiring；`src/modules/`：worker modules；`src/http/`：health 与 Bull Board；`src/commands/`：backfill/repair 命令；`src/env.ts`：环境校验                                                                         |
-| `apps/admin`     | Umi Max + React 管理端                       | `src/pages/`：页面；`src/components/`：可复用 UI；`src/lib/api-client.ts`：tRPC client；`src/services/`：page-side API wrappers                                                                                                              |
-| `apps/sso`       | Umi Max + React SSO portal                   | `src/pages/`：页面；`src/assets/`：静态资源；`src/services/`：API wrappers；`src/lib/`、`src/utils/`：browser helpers                                                                                                                        |
+| 路径             | Runtime 与职责                                       | 主要入口                                                                                                                                                                                                                                     |
+| ---------------- | ---------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `apps/api`       | Bun + Hono public IAM backend（`@iam/api`）          | `src/routes/`：public/open/internal/sso/auth 协议入口；`src/use-cases/`：跨领域 workflow；`src/services/`：domain-aligned application services；`src/composition/`：production wiring；`src/env.ts`：环境校验                                |
+| `apps/admin-api` | Bun + Hono admin backend（`@iam/admin-api`）         | `src/routes/admin/`：Admin REST；`src/routes/trpc/`：tRPC entry routes；`src/use-cases/`：跨领域 workflow；`src/services/`：domain-aligned application services；`src/composition/`：production wiring；`src/trpc/`：tRPC router composition |
+| `apps/worker`    | Bun background job runtime（`@iam/worker`）          | `src/composition/`：runtime wiring；`src/modules/`：worker modules；`src/http/`：health 与 Bull Board；`src/commands/`：backfill/repair 命令；`src/env.ts`：环境校验                                                                         |
+| `apps/gateway`   | Bun + Hono Gateway 配置 API（`@iam/gateway-apisix`） | `src/main.ts` / `runtime.ts`：独立进程与关闭；`src/http/`：请求与 envelope；`src/composition/`：只读认证与 APISIX 接线；`src/services/gateway/`：认证、规划、发布与补偿；`src/repositories/`：Client 窄读取。                                |
+| `apps/admin`     | Umi Max + React 管理端                               | `src/pages/`：页面；`src/components/`：可复用 UI；`src/lib/api-client.ts`：tRPC client；`src/services/`：page-side API wrappers                                                                                                              |
+| `apps/sso`       | Umi Max + React SSO portal                           | `src/pages/`：页面；`src/assets/`：静态资源；`src/services/`：API wrappers；`src/lib/`、`src/utils/`：browser helpers                                                                                                                        |
 
 ### 后端分层速查
 
@@ -98,7 +98,7 @@ Run descriptor、receipts、diagnostics 与 Playwright 产物写入 `e2e/system/
 
 | 路径                  | 职责                                                                                                                                             |
 | --------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `gateway/`            | APISIX manifest package（`@iam/gateway-apisix`），包含 dev/prod manifests、config template，以及 sync/validate/diff/apply scripts。              |
+| `apps/gateway/`       | 独立配置 API、dev/prod manifests 与 APISIX config template；`Dockerfile` 构建独立服务镜像，常规发布经 HTTP。                                     |
 | `docker/`             | 本地依赖栈，以及 dev/prod application、gateway、observability Compose files。                                                                    |
 | `observability/`      | Alloy 日志/OTLP pipeline、Loki 配置、Grafana datasource/dashboard/alert provisioning，以及版本化 dashboards。                                    |
 | `scripts/`            | 文档和架构守卫、测试编排、验证入口及 tooling performance helpers。                                                                               |

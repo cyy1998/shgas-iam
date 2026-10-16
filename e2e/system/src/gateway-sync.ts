@@ -1,8 +1,20 @@
-async function publishGateway() {
-  // Start with the production manifest and publish through its normal CLI. The
+import { createE2EGatewayApiKey } from "./gateway-credential";
+
+export async function publishGateway(
+  input: {
+    yaml: string;
+    variables: Record<string, string>;
+    clientSecret: string;
+    gatewayOrigin: string;
+    adminUrl: string;
+    adminKey: string;
+  },
+  request: (input: string, init?: RequestInit) => Promise<Response> = fetch,
+) {
+  // Start with the production manifest and publish through its authenticated HTTP API. The
   // test topology rewrites only the API upstream Host; browser authorities and
   // the production route/header policy are unchanged.
-  const source = Bun.YAML.parse(await Bun.file("gateway/manifests/dev/iam.yaml").text());
+  const source = Bun.YAML.parse(input.yaml);
   if (typeof source !== "object" || source === null || !("upstreams" in source) || !Array.isArray(source.upstreams))
     throw new Error("E2E Gateway manifest has no upstreams");
   const api = source.upstreams.find(
@@ -21,8 +33,8 @@ async function publishGateway() {
   // These test-owned RP terminals only receive completed protocol navigation.
   // The static upstream has no IAM logic or browser script that can redirect.
   for (const [entry, authority] of [
-    ["internal", process.env.IAM_SSO_INTERNAL_HOST],
-    ["external", process.env.IAM_SSO_EXTERNAL_HOST],
+    ["internal", input.variables.IAM_SSO_INTERNAL_HOST],
+    ["external", input.variables.IAM_SSO_EXTERNAL_HOST],
   ]) {
     if (!authority) throw new Error(`E2E Gateway ${entry} authority is missing`);
     source.routes.push({
@@ -36,44 +48,66 @@ async function publishGateway() {
       upstream: "sso-frontend",
     });
   }
-  const manifest = "/tmp/iam-e2e-gateway.json";
-  await Bun.write(manifest, JSON.stringify(source));
-  const child = Bun.spawn(
-    [
-      process.execPath,
-      "gateway/src/cli.ts",
-      "apply",
-      "--env",
-      "e2e:iam",
-      "--manifest",
-      manifest,
-      "--render-env",
-      "--admin-url",
-      "http://apisix:9180/apisix/admin",
-      "--admin-key",
-      "dev-local-admin-key-change-me",
-      "--prune",
-      "--json",
-    ],
-    { stdout: "inherit", stderr: "inherit" },
-  );
-  if ((await child.exited) !== 0) throw new Error("E2E Gateway publication failed");
-  const response = await fetch("http://apisix:9180/apisix/admin/upstreams/iam.api.e2e", {
-    headers: { "X-API-KEY": "dev-local-admin-key-change-me" },
+  const publication = await request(`${input.gatewayOrigin}/apply`, {
+    method: "POST",
+    headers: { "content-type": "application/json", apikey: input.clientSecret },
+    body: JSON.stringify({
+      scope: "e2e:iam",
+      yaml: Bun.YAML.stringify(source),
+      variables: input.variables,
+      prune: true,
+    }),
+    signal: AbortSignal.timeout(70_000),
+  });
+  if (!publication.ok)
+    throw new Error(
+      `E2E Gateway publication failed (HTTP ${publication.status}); inspect Gateway state before retrying`,
+    );
+  const result = await publication.json();
+  if (result.code !== 200 || !["applied", "no_change"].includes(result.data?.outcome))
+    throw new Error("E2E Gateway did not confirm publication; inspect Gateway state before retrying");
+  const response = await request(`${input.adminUrl}/upstreams/iam.api.e2e`, {
+    headers: { "X-API-KEY": input.adminKey },
     signal: AbortSignal.timeout(10_000),
   });
   if (!response.ok) throw new Error("E2E Gateway applied upstream cannot be read back");
   const applied = await response.json();
   if (applied.value?.pass_host !== "rewrite" || applied.value?.upstream_host !== "api.e2e.internal")
     throw new Error("E2E Gateway did not apply the Host rewrite topology");
-  console.log(
-    JSON.stringify({
-      gatewayHostRewrite: { verified: true, upstream: "iam.api.e2e", host: applied.value.upstream_host },
-    }),
-  );
+  return { gatewayHostRewrite: { verified: true, upstream: "iam.api.e2e", host: applied.value.upstream_host } };
 }
 
-publishGateway().catch((error) => {
-  console.error(error instanceof Error ? error.message : error);
-  process.exitCode = 1;
-});
+if (import.meta.main) {
+  const variableNames = [
+    "APISIX_OTEL_COLLECTOR_ENDPOINT",
+    "DEV_IAM_API_UPSTREAM_HOST",
+    "DEV_IAM_API_UPSTREAM_PORT",
+    "DEV_IAM_ADMIN_API_UPSTREAM_HOST",
+    "DEV_IAM_ADMIN_API_UPSTREAM_PORT",
+    "DEV_IAM_SSO_FRONTEND_UPSTREAM_HOST",
+    "DEV_IAM_SSO_FRONTEND_UPSTREAM_PORT",
+    "DEV_IAM_ADMIN_FRONTEND_UPSTREAM_HOST",
+    "DEV_IAM_ADMIN_FRONTEND_UPSTREAM_PORT",
+    "IAM_SSO_INTERNAL_HOST",
+    "IAM_SSO_EXTERNAL_HOST",
+  ];
+  const required = (name: string) => {
+    const value = process.env[name];
+    if (!value) throw new Error(`E2E Gateway configuration missing ${name}`);
+    return value;
+  };
+  try {
+    const result = await publishGateway({
+      yaml: await Bun.file("apps/gateway/manifests/dev/iam.yaml").text(),
+      variables: Object.fromEntries(variableNames.map((name) => [name, required(name)])),
+      clientSecret: createE2EGatewayApiKey(required("IAM_E2E_RUN_ID")),
+      gatewayOrigin: required("IAM_E2E_GATEWAY_API_ORIGIN"),
+      adminUrl: "http://apisix:9180/apisix/admin",
+      adminKey: "dev-local-admin-key-change-me",
+    });
+    console.log(JSON.stringify(result));
+  } catch {
+    console.error("E2E Gateway publication failed; inspect Gateway and APISIX before retrying");
+    process.exitCode = 1;
+  }
+}

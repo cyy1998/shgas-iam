@@ -35,7 +35,7 @@ export const handlers = [
       clientCode: "iam-admin",
       clientName: "IAM 管理后台",
       status: ClientStatus.Enable,
-      extAttributes: {},
+      url: null,
     }),
   ),
   http.get("*/open/users/:username/masked-mobile", () => ok(resetPasswordMaskedMobile)),

@@ -11,7 +11,6 @@ export function readToolingGraph(repoRoot = defaultRepoRoot) {
   const workspaceDirectories = [
     ...listDirectories(join(repoRoot, "apps")),
     ...listDirectories(join(repoRoot, "packages")),
-    ...(existsSync(join(repoRoot, "gateway")) ? [join(repoRoot, "gateway")] : []),
     ...(existsSync(join(repoRoot, "e2e", "system")) ? [join(repoRoot, "e2e", "system")] : []),
   ];
   const workspaces = workspaceDirectories

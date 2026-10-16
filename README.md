@@ -189,7 +189,7 @@ cp apps/worker/.env.example apps/worker/.env
 cp apps/admin/.env.example apps/admin/.env.local
 cp apps/sso/.env.example apps/sso/.env.local
 cp docker/.env.dev.example docker/.env
-cp gateway/.env.example gateway/.env
+cp apps/gateway/.env.example apps/gateway/.env
 ```
 
 本地 PostgreSQL 对应的连接串可设置为：
@@ -623,22 +623,24 @@ docker compose -f docker/docker-compose-dev.yml up -d
 ```
 
 `docker/docker-compose-dev.yml` 是唯一的开发编排入口，会同时编排 PostgreSQL、Redis、APISIX、公共 API、
-管理端 API、worker-user-profile、worker-dashboard、SSO 前端和管理端前端。开发环境变量模板在
+管理端 API、Gateway 配置 API、worker-user-profile、worker-dashboard、SSO 前端和管理端前端。开发环境变量模板在
 `docker/.env.dev.example`，复制为 `docker/.env` 后按需替换本地端口、代理、第三方服务和开发密钥。
 如需同时启动 Loki、Grafana 和 Alloy，追加 `--profile observability`。
 
 ```bash
-docker compose -f docker/docker-compose-dev.yml up -d --build api apisix-etcd apisix
-pnpm gateway:apisix:validate -- --env dev:iam
-pnpm gateway:apisix:diff -- --env dev:iam --env-file .env
+docker compose -f docker/docker-compose-dev.yml up -d --build gateway-api apisix-etcd apisix
 ```
 
 若 Docker 构建需要使用宿主机代理，请在 `docker/.env` 中配置 `DOCKER_BUILD_HTTP_PROXY`、
 `DOCKER_BUILD_HTTPS_PROXY` 和 `DOCKER_BUILD_NO_PROXY`。代理监听在宿主机回环地址时，应将地址写为
-`host.docker.internal`，不能使用容器自身的 `127.0.0.1`。访问 APISIX Admin API 时还需确保
-`127.0.0.1` 在宿主机 `NO_PROXY` 中。Gateway CLI 的 APISIX Admin API 地址和 key 配置在
-`gateway/.env`，模板见 `gateway/.env.example`；通过 `pnpm gateway:apisix:*` 执行时，`--env-file .env`
-会解析到 gateway package 目录下的 `.env`。生产模板还包含
+`host.docker.internal`，不能使用容器自身的 `127.0.0.1`。访问管理入口时还需确保
+`127.0.0.1` 在宿主机 `NO_PROXY` 中。Gateway API 默认直连 `http://127.0.0.1:30004`，
+`GET /health` 只证明 HTTP 就绪，不检查数据库或 APISIX。dev/prod 必须显式提供独立的
+`IAM_GATEWAY_DATABASE_URL` 只读连接及 `IAM_GATEWAY_APISIX_ADMIN_URL`、`IAM_GATEWAY_APISIX_ADMIN_KEY`。
+首次发布前准备 Enable、未删除的 `iam` Client 及 Internal Secret，`iam-admin` 不能替代。
+通过 `apikey` header 调用 `POST /validate`、`/diff`、`/apply`，JSON 提交 scope、YAML 文本和本次变量；
+旧 CLI 和根 `gateway:apisix:*` 已退役。启动和请求示例见 [Gateway README](apps/gateway/README.md)，
+只读权限、首次配置及人工恢复见[发布手册](docs/releases/apisix-gateway-release.md)。生产模板还包含
 API OIDC 和 Worker，使用前必须补齐 issuer、current/previous RS256 JWK、Redis、worker
 dashboard 凭据和限流参数。
 

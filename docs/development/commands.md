@@ -155,6 +155,15 @@ SDK 固定补丁只挂载目标 worktree 的 Linux Git 指针，Git 长路径配
 
 ## Workspace 命令
 
+Gateway API：`pnpm --filter @iam/gateway-apisix start`；开发监听使用 `dev`。启动前按
+[`apps/gateway/.env.example`](../../apps/gateway/.env.example) 提供 `IAM_GATEWAY_*` 配置。默认独立监听 30004，
+`GET /health` 仅证明 HTTP 已启动；`POST /validate`、`/diff`、`/apply` 通过 `apikey` 验证 scope 对应的当前 Client。
+三种操作以 JSON 提交 scope、YAML 文本和请求级 variables；apply 另支持 dryRun/prune。
+旧 CLI 与根 `gateway:apisix:*` 已退役，HTTP 发布步骤和只读数据库权限见
+[Gateway 发布手册](../releases/apisix-gateway-release.md)。
+认证 Integration 使用根 `pnpm test:integration --workspace apps/gateway` 准备的
+`IAM_GATEWAY_TEST_DATABASE_URL`，不读取开发数据库；请求和配置说明见 [Gateway README](../../apps/gateway/README.md)。
+
 当前会话和 Snapshot 维护入口为 Worker `session:clear:inventory`、`session:clear`、`session:clear:verify`、`client-snapshot:repair`、`client-snapshot:verify`。
 同名 scripts 通过 `bun run` 默认读取 `apps/worker/.env`，已有进程环境变量优先。
 资源、当前布局、namespace、停流/排空与失败处理见[统一维护手册](../releases/unified-session-maintenance.md)。
@@ -374,8 +383,8 @@ pnpm test:integration --workspace @iam/session-kernel --workspace @iam/api-core 
 # 前端浏览器 Integration 不启动 PG/Redis
 pnpm test:integration --workspace @iam/admin --workspace @iam/sso
 
-# APISIX 发布配置有独立验证参数与资源前提
-pnpm gateway:apisix:validate -- <environment-arguments>
+# Gateway HTTP、真实 PG/APISIX 与正式进程的聚焦验证
+pnpm test:integration --workspace apps/gateway
 ```
 
 底层 package runner 消费本次已准备环境，内部 owner URL 继续用于正式 CLI 的 scoped/runtime 配置传递；
@@ -548,7 +557,7 @@ Hook 可以被本地绕过，自动 merge commit 也不保证触发 pre-commit�
 - Database：`pnpm --filter @iam/db <lint|test|test:unit|typecheck|db:push|db:generate|db:migrate|db:check>`
 - Role Assignment：`pnpm --filter @iam/role-assignment-resolution <lint|typecheck>`
 - Organization Responsibility Resolution：`pnpm --filter @iam/organization-responsibility-resolution <lint|typecheck>`
-- Gateway：`pnpm --filter @iam/gateway-apisix <validate|diff|apply|lint|test|test:unit|typecheck>`
+- Gateway：`pnpm --filter @iam/gateway-apisix <dev|start|lint|test|test:unit|typecheck>`；配置发布通过 HTTP API。
 
 `employment:verify` 只在运维人员显式调用时扫描 Employment，不属于 Worker 启动或请求路径。它在 PostgreSQL
 `READ ONLY` transaction 中检查非墓碑未知状态、Open Position/Organization 完整性、Employment Period、Open `endTime`、

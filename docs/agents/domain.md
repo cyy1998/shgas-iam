@@ -19,7 +19,7 @@ This repo uses a single-context layout:
 ├── docs/
 │   └── adr/
 ├── apps/
-├── gateway/
+│   └── gateway/
 └── packages/
 ```
 
