@@ -1,7 +1,7 @@
 import { describe, expect, mock, test } from "bun:test";
 import type { AdminEmploymentAuthorization } from "@admin-api/services/admin-authorization/admin-employment-authorization.type";
 import { createEmploymentService } from "@admin-api/services/employment/employment.service";
-import { createFakeClock, createImmediateUnitOfWork } from "@admin-api/test/fakes";
+import { createImmediateUnitOfWork } from "@admin-api/test/fakes";
 import { BadRequestError } from "@iam/api-core/errors";
 import {
   EmploymentStatus,
@@ -108,24 +108,11 @@ function createService() {
       recordChanges: mock(async () => undefined),
     },
     employmentRepository: {
-      createEmploymentRecord: mock(async () => employment({ id: 10 })),
       lockEmploymentByIdForAdmin: mock(async () => employment()),
-      getOpenEmploymentByUserOrgPosId: mock(async () => null),
       updateEmploymentRecord: mock(async () => employment()),
-    },
-    organizationRepository: {
-      getOrganizationByCode: mock(async () => organization()),
-      isOrganizationDescendantOf: mock(async () => true),
-    },
-    positionRepository: {
-      getPositionByCode: mock(async () => position()),
-    },
-    userRepository: {
-      getUserByUsernameForAdmin: mock(async () => user()),
     },
   };
   const deps = {
-    clock: createFakeClock(now.getTime()),
     employmentRepository: {
       getEmploymentByIdForAdmin: mock(async () => employment()),
       getEmploymentAuthorizationFactsByIdForAdmin: mock(async () => ({

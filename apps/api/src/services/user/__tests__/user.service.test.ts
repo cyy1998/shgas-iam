@@ -49,9 +49,6 @@ function createDeps(overrides: Record<string, unknown> = {}) {
   return {
     mobileBinding: { assertCanBindMobile: mock(async () => bindPhoneReservation) },
     mobileService: {
-      checkExistingPhoneNumber: mock(async () => false),
-      checkValidPhoneNumber: mock(() => true),
-      consumeVerificationCode: mock(async () => true),
       confirmReservedVerificationCode: mock(async () => true),
       releaseReservedVerificationCode: mock(async () => undefined),
     },

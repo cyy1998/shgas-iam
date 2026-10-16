@@ -201,26 +201,12 @@ function createService(
               invalidatedSubjectAccessTransitionId: string;
             },
           ) => Promise<unknown>;
-          observability?: { requestId?: string; traceId?: string };
         }) => {
           if (options.preBlockError) throw options.preBlockError;
           const result = await input.mutate(subjectAccessMutationReceipt);
-          try {
-            await input.revokeSessions?.(result, {
-              invalidatedSubjectAccessTransitionId: "20000000-0000-4000-8000-000000000001",
-            });
-          } catch (error) {
-            options.afterCommitLogger?.warn(
-              {
-                afterCommit: "admin.session_revoke.user",
-                mode: "bestEffort",
-                err: error,
-                requestId: input.observability?.requestId,
-                traceId: input.observability?.traceId,
-              },
-              "best-effort afterCommit task failed",
-            );
-          }
+          await input.revokeSessions?.(result, {
+            invalidatedSubjectAccessTransitionId: "20000000-0000-4000-8000-000000000001",
+          });
           return result;
         },
       ),
@@ -662,10 +648,8 @@ describe("createUserService", () => {
     );
   });
 
-  test("keeps user status update successful when session revocation fails", async () => {
-    const afterCommitLogger = createAfterCommitLogger();
-    const { service, deps, tx } = createService({ afterCommitLogger });
-    (tx.userRepository.getUserByUsernameForAdmin as any).mockResolvedValue(user());
+  test("preserves committed disabled access when lifecycle session revocation fails", async () => {
+    const fixture = createLifecycleService({ initialStatus: UserStatus.Enable, stateful: true });
     const revocationFailure = new Error("revocation failed");
     const auditContext = {
       actorType: "admin" as const,
@@ -673,28 +657,49 @@ describe("createUserService", () => {
       requestId: "req-user-revoke",
       traceId: "11111111111111111111111111111111",
     };
-    deps.sessionRevocation.revokeUserSessions.mockRejectedValueOnce(revocationFailure);
+    let stateAtRevocation: { userStatus: UserStatus; accessState: string | null } | undefined;
+    fixture.sessionRevocation.revokeUserSessions.mockImplementationOnce(async () => {
+      stateAtRevocation = {
+        userStatus: fixture.readUserStatus(),
+        accessState: await fixture.readAccessState(),
+      };
+      throw revocationFailure;
+    });
 
-    expect(await service.updateUser("zhangsan", { status: UserStatus.Disable }, auditContext)).toEqual({
+    const result = await fixture.service.updateUser("zhangsan", { status: UserStatus.Disable }, auditContext);
+
+    expect(result).toEqual({
       changed: true,
       result: null,
     });
+    expect(stateAtRevocation).toEqual({ userStatus: UserStatus.Disable, accessState: "disabled" });
 
-    expect(tx.userRepository.updateUserByUsername).toHaveBeenCalledWith("zhangsan", {
+    expect(fixture.tx.userRepository.updateUserByUsername).toHaveBeenCalledWith("zhangsan", {
       status: UserStatus.Disable,
     });
-    expect(deps.sessionRevocation.revokeUserSessions).toHaveBeenCalled();
-    expect(afterCommitLogger.warn).toHaveBeenCalledWith(
-      {
-        afterCommit: "admin.session_revoke.user",
-        mode: "bestEffort",
-        err: revocationFailure,
+    expect(fixture.readUserStatus()).toBe(UserStatus.Disable);
+    expect(await fixture.readAccessState()).toBe("disabled");
+    expect(fixture.sessionRevocation.revokeUserSessions).toHaveBeenCalledTimes(1);
+    expect(fixture.sessionRevocation.revokeUserSessions).toHaveBeenCalledWith({
+      userId: 1,
+      subjectIdentifier: subjectAccessMutationReceipt.subjectIdentifier,
+      reason: "user_disabled",
+      onlySubjectAccessTransitionId: "20000000-0000-4000-8000-000000000001",
+      auditContext,
+    });
+    expect(fixture.transitionIntent.assertCommitted).toHaveBeenCalledWith(expect.any(Object), "disabled");
+    expect(fixture.transitionIntent.markRolledBack).not.toHaveBeenCalled();
+    expect(fixture.lifecycleLogger.warn).toHaveBeenCalledWith(
+      expect.objectContaining({
+        operation: "revoke_sessions",
+        subjectIdentifier: subjectAccessMutationReceipt.subjectIdentifier,
         requestId: "req-user-revoke",
         traceId: "11111111111111111111111111111111",
-      },
-      "best-effort afterCommit task failed",
+        errorType: "Error",
+      }),
+      "Subject Access post-commit action failed",
     );
-    expect(afterCommitLogger.error).not.toHaveBeenCalled();
+    expect(await claimRepairBacklog(fixture.store)).toEqual([]);
   });
 
   test.each([
@@ -1101,6 +1106,8 @@ function createLifecycleService(options: {
     random: { uuid: () => "10000000-0000-4000-8000-000000000001" },
   });
   let failFinalize = options.failNextFinalize ?? false;
+  const lifecycleLogger = { warn: mock((_fields: Record<string, unknown>, _message: string) => undefined) };
+  const transitionLifecycleOptions = createTransitionLifecycleOptions();
   const lifecycle = createSubjectAccessLifecycle({
     barrier: {
       abortBegin: barrier.abortBegin,
@@ -1115,8 +1122,8 @@ function createLifecycleService(options: {
         await barrier.finalize(transition, targetState);
       },
     },
-    logger: { warn: mock(() => undefined) },
-    ...createTransitionLifecycleOptions(),
+    logger: lifecycleLogger,
+    ...transitionLifecycleOptions,
   });
   let currentStatus = options.initialStatus;
   const existingUser = user({ status: options.transactionStatus ?? options.initialStatus });
@@ -1179,10 +1186,14 @@ function createLifecycleService(options: {
 
   return {
     barrier,
+    lifecycleLogger,
     repair,
     service,
     sessionRevocation,
     store,
+    tx,
+    transitionIntent: transitionLifecycleOptions.transitionIntent,
+    readUserStatus: () => currentStatus,
     async readAccessState() {
       const serialized = await store.read(subjectIdentifier);
       return serialized === null ? null : SubjectAccessRecordV1Schema.parse(JSON.parse(serialized)).state;

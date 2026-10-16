@@ -32,7 +32,6 @@ function createLifecycle() {
       lockAssignmentsForEmployment: mock(async () => []),
       endOpenAssignmentsForEmployment: mock(async () => true),
     },
-    sessionRevocation: { revokeAllForUser: mock(async () => undefined) },
     userProfileInvalidation: { recordChanges: mock(async () => undefined) },
     employmentStore: {
       lockEmploymentLifecycleContextById: mock(async () => ({ employment: currentEmployment })),
@@ -85,7 +84,6 @@ describe("Employment Lifecycle End", () => {
       { kind: "employment", userId: 1 },
       { kind: "organization-responsibility-assignment", userId: 1 },
     ]);
-    expect(tx.sessionRevocation.revokeAllForUser).not.toHaveBeenCalled();
   });
 
   test("ends a paused Employment without rewriting its start time", async () => {

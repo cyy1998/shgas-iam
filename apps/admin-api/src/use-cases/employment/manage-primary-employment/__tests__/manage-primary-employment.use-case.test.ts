@@ -28,7 +28,6 @@ function createLifecycle() {
   const currentEmployment = employment();
   const tx = {
     auditLogWriter: { recordAuditLog: mock(async () => undefined) },
-    sessionRevocation: { revokeAllForUser: mock(async () => undefined) },
     userProfileInvalidation: { recordChanges: mock(async () => undefined) },
     employmentStore: {
       getEmploymentLifecycleContextById: mock(async () => ({ employment: currentEmployment })),
@@ -73,7 +72,6 @@ describe("Employment Lifecycle Primary", () => {
       }),
     );
     expect(tx.userProfileInvalidation.recordChanges).toHaveBeenCalledWith([{ kind: "employment", userId: 1 }]);
-    expect(tx.sessionRevocation.revokeAllForUser).not.toHaveBeenCalled();
   });
 
   test("allows a paused Employment to become Primary", async () => {

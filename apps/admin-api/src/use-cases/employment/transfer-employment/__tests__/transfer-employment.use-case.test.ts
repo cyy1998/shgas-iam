@@ -105,7 +105,6 @@ function createLifecycle() {
       lockAssignmentsForEmployment: mock(async () => []),
       endOpenAssignmentsForEmployment: mock(async () => true),
     },
-    sessionRevocation: { revokeAllForUser: mock(async () => undefined) },
     userProfileInvalidation: { recordChanges: mock(async () => undefined) },
     employmentStore: {
       createEmploymentRecord: mock(async (input: AdminEmploymentRecordCreate) => ({
@@ -206,7 +205,6 @@ describe("Employment Lifecycle Transfer", () => {
       { kind: "employment", userId: 1 },
       { kind: "organization-responsibility-assignment", userId: 1 },
     ]);
-    expect(tx.sessionRevocation.revokeAllForUser).not.toHaveBeenCalled();
   });
 
   test("transfers a paused source into an enabled Primary without inheriting its lifecycle state", async () => {

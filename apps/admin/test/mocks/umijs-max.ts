@@ -8,7 +8,6 @@ type LinkProps = {
   [key: string]: unknown;
 };
 
-const modelMocks: Record<string, unknown> = {};
 const fullAdminAccess = {
   canAccessUser: true,
   canAccessOrganization: true,
@@ -38,25 +37,18 @@ export function defineConfig<T>(config: T): T {
 export const history = {
   push: vi.fn(),
   replace: vi.fn(),
-  goBack: vi.fn(),
   location: window.location,
 };
 
-export const request = vi.fn();
-
 export function useLocation() {
   return history.location;
-}
-
-function getModel<T = unknown>(namespace: string): T {
-  return (modelMocks[namespace] ?? {}) as T;
 }
 
 function getAccess<T = Record<string, unknown>>(): T {
   return accessMock as T;
 }
 
-export { getAccess as useAccess, getModel as useModel };
+export { getAccess as useAccess };
 
 export function __setAccess(value: Record<string, unknown>) {
   accessMock = value;
@@ -66,15 +58,9 @@ export function __resetUmiMaxMocks() {
   accessMock = fullAdminAccess;
   history.push.mockReset();
   history.replace.mockReset();
-  history.goBack.mockReset();
-  request.mockReset();
 }
 
 export function Link({ to, href, children, ...rest }: LinkProps) {
   const resolvedHref = href ?? (typeof to === "string" ? to : to?.pathname);
   return createElement("a", { ...rest, href: resolvedHref ?? "#" }, children);
-}
-
-export function Outlet() {
-  return null;
 }

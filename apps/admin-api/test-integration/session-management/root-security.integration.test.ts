@@ -41,15 +41,29 @@ import {
   ApiErrorCode,
   ClientSsoProtocol,
   ClientStatus,
+  EmploymentStatus,
   OidcClientType,
   OidcScope,
+  OrganizationLevel,
+  OrganizationType,
   PrivilegeDelegationStatus,
   RoleStatus,
   UserStatus,
   UserType,
 } from "@iam/contracts";
 import { createClientSnapshotRepository } from "@iam/db/client-snapshot";
-import { auditLogs, clients, privilegeDelegations, roles, userProfileDirty, users } from "@iam/db/schema";
+import {
+  auditLogs,
+  clients,
+  employments,
+  organizationClosures,
+  organizations,
+  positions,
+  privilegeDelegations,
+  roles,
+  userProfileDirty,
+  users,
+} from "@iam/db/schema";
 import type { CapturedSession } from "@iam/session-kernel";
 import { createUnifiedSessionRedisTestScope } from "@iam/session-kernel/testing";
 import { createSubjectAccessTransitionRepository } from "@iam/user-profile-read-model/subject-access-transition";
@@ -916,6 +930,126 @@ test("Internal API credential updates preserve SSO configuration, credentials an
     expect(childAfter).toMatchObject({ status: "resolved", value: { clientSession: original.child } });
   });
 });
+
+test.each(["pause", "resume", "end", "setPrimary", "clearPrimary", "transfer"] as const)(
+  "Employment %s preserves existing UserSession and ClientSession instances and deadlines",
+  async (command) => {
+    const f = await fixture();
+    await runWithOwnedTestResources(async (lifecycle) => {
+      lifecycle.registerCleanup(() => f.scope.close());
+      const [organization] = await pg.db
+        .insert(organizations)
+        .values({
+          orgCode: f.clientCode("employment-org"),
+          orgName: "Employment organization",
+          path: "/employment",
+          level: OrganizationLevel.One,
+          orgType: OrganizationType.Department,
+        })
+        .returning();
+      const [position, destination] = await pg.db
+        .insert(positions)
+        .values([
+          { posCode: f.clientCode("employment-pos"), posName: "Original position" },
+          { posCode: f.clientCode("employment-dest"), posName: "Destination position" },
+        ])
+        .returning();
+      if (!organization || !position || !destination) throw new Error("Employment parents missing");
+      await pg.db
+        .insert(organizationClosures)
+        .values({ ancestorId: organization.id, descendantId: organization.id, depth: 0 });
+      const [employment] = await pg.db
+        .insert(employments)
+        .values({
+          userId: f.account.id,
+          orgId: organization.id,
+          posId: position.id,
+          startTime: new Date(Date.now() - 60_000),
+          status: command === "resume" ? EmploymentStatus.Pause : EmploymentStatus.Enable,
+          isPrimary: command === "clearPrimary",
+        })
+        .returning();
+      if (!employment) throw new Error("Employment fixture missing");
+      const original = await f.create();
+      async function observeSessions() {
+        return await f.operations.run(async (operation) => {
+          const kernel = f.kernel.forOperation(operation);
+          return {
+            root: await kernel.resolveUserSession(original.bearer),
+            child: await kernel.resolveClientSessionForUse({
+              userSessionId: original.root.userSessionId,
+              clientSessionId: original.child.clientSessionId,
+              clientId: original.child.clientId,
+            }),
+          };
+        });
+      }
+      const before = await observeSessions();
+      expect(before).toMatchObject({
+        root: { status: "resolved", value: { userSession: original.root } },
+        child: { status: "resolved", value: { clientSession: original.child } },
+      });
+
+      const useCases = f.useCases.employment;
+      const result =
+        command === "pause" || command === "resume"
+          ? await useCases.changeEmploymentAvailability.execute({
+              employmentId: employment.id,
+              command,
+              expectedAncestorOrgCode: organization.orgCode,
+            })
+          : command === "end"
+            ? await useCases.endEmployment.execute({ employmentId: employment.id })
+            : command === "transfer"
+              ? await useCases.transferEmployment.execute({
+                  employmentId: employment.id,
+                  newOrgCode: organization.orgCode,
+                  newPosCode: destination.posCode,
+                  isPrimary: false,
+                })
+              : await useCases.managePrimaryEmployment.execute({
+                  employmentId: employment.id,
+                  command: command === "setPrimary" ? "set" : "clear",
+                });
+
+      expect(result.changed).toBe(true);
+      const persisted = await pg.db.select().from(employments).where(eq(employments.userId, f.account.id));
+      if (command === "transfer") {
+        expect(result.result).toEqual({ id: expect.any(Number) });
+        expect(persisted).toEqual(
+          expect.arrayContaining([
+            expect.objectContaining({ id: employment.id, status: EmploymentStatus.Disable, endTime: expect.any(Date) }),
+            expect.objectContaining({
+              ...result.result,
+              posId: destination.id,
+              status: EmploymentStatus.Enable,
+              endTime: null,
+            }),
+          ]),
+        );
+      } else {
+        expect(persisted).toMatchObject([
+          {
+            id: employment.id,
+            status:
+              command === "pause"
+                ? EmploymentStatus.Pause
+                : command === "end"
+                  ? EmploymentStatus.Disable
+                  : EmploymentStatus.Enable,
+            isPrimary: command === "setPrimary",
+            endTime: command === "end" ? expect.any(Date) : null,
+          },
+        ]);
+      }
+      const after = await observeSessions();
+      expect(after).toMatchObject({
+        root: { status: "resolved", value: { userSession: original.root } },
+        child: { status: "resolved", value: { clientSession: original.child } },
+      });
+    });
+  },
+);
 
 test("Client ordinary edits preserve real sessions; formal deletion and explicit retry terminate only that Client", async () => {
   const f = await fixture();
