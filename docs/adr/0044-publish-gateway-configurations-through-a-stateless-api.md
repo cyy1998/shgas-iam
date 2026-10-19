@@ -7,7 +7,7 @@ status: accepted
 现有 Gateway 使用本地 CLI 发布 YAML，第三方应用无法通过统一 API 自行提交配置。
 决定将该能力迁入 `apps/gateway/`，提供独立的无状态配置发布服务，第三方应用和 IAM 自身统一使用 API；
 调用方保管配置，服务不新增期望配置数据库、历史版本或后台发布任务，并移除原有直接发布 CLI。
-本页是已接受的目标决策；具体契约见 [Gateway 配置 API 设计](../features/gateway/gateway-configuration-api.md)，
+本页是已接受的目标决策；具体契约见 [Gateway 配置 API 契约](../features/gateway/gateway-configuration-api.md)，
 实施与验收见 [Spec #253](https://github.com/cyy1998/shgas-iam/issues/253)。
 
 ## 取舍

@@ -10,6 +10,19 @@ Next review: 2026-10-31
 旧来源升级工具已退役；需要升级时恢复匹配版本工具并按[固定历史手册](https://github.com/cyy1998/shgas-iam/tree/73315e4cef6f96dd79b29e18f74d68af30e559ec/docs/releases)
 核对实际版本，不套用本页流程。维护命令不负责部署、停流或放流。
 
+## 先选择维护任务
+
+| 任务                                          | 入口与前置判断                                                                                           |
+| --------------------------------------------- | -------------------------------------------------------------------------------------------------------- |
+| 查询或撤销指定用户、根或应用关系              | 使用[会话管理](../features/admin/session-management.md)，不执行 namespace 全清。                         |
+| 清空当前 namespace 的全部会话或指定协议 owner | 先固定 owner 范围，再执行[库存、清理与独立核验](#库存清理与独立核验)。所选 owner 不支持按 Client 筛选。  |
+| Client 提交后 Snapshot 传播失败               | 使用[定向 repair](#新-snapshot-的定向修复与全量恢复)，不重放数据库写入。                                 |
+| Redis 备份恢复后的 Snapshot 处理              | 停流、冻结 mutation/acquisition 并排空后执行全量 repair 与独立 verify。                                  |
+| 尚未完成 ORCAS 退役的环境                     | 先证明旧状态属于本页 owner 前缀，再按[一次切换](#orcas-退役的一次切换)执行；已完成退役的环境跳过该流程。 |
+| 其他旧布局或旧数据库来源升级                  | 固定来源版本，转入匹配的历史流程；当前 `--layout unified` 不能证明本页前缀外的旧状态已清除。             |
+
+只开展日常维护时，不重跑退役 migration 或其全量清理。任务清单须写明选用的流程及明确排除的分支。
+
 ## 所有权与明确范围
 
 Worker `session:clear:inventory`、`session:clear`、`session:clear:verify` 分别执行清空前统计、清空和独立清零核验，
@@ -49,18 +62,23 @@ API/Admin API 的对应配置须一致；Token 不延长根期限。
 
 ## ORCAS 退役的一次切换
 
-ORCAS 退役必须在同一维护窗口按下列顺序执行，不允许新旧 runtime 混跑，也不能用新 reader 将无法解析的旧记录视为已清除：
+本节仅适用于尚未完成 [ADR-0040](../adr/0040-retire-orcas-custom-sso-integration.md) 退役、且旧会话实际位于本页 owner
+前缀内的环境。先核对部署版本、精确 namespace、migration journal 与全表配置观察；不得仅凭当前文档状态推定已经退役。
+若来源仍使用本页前缀外的旧布局，停止本节，恢复对应历史工具和流程；不得通过增加任意 pattern 扩大当前命令范围。
+
+符合来源条件时，在同一维护窗口按下列顺序执行，不允许新旧 runtime 混跑，也不能用新 reader 将无法解析的旧记录视为已清除：
 
 1. 固定应用与按 owner 前缀清理的维护工具 commit/digest，核对旧状态确实属于本页前缀，完成停流，停止全部旧 reader/writer、
    Client mutation 与 Snapshot acquisition，并排空在途工作。
 2. 使用不依赖记录 schema 的维护工具按[库存、清理与独立核验](#库存清理与独立核验)依次执行
    `--layout unified --owner all` 的 inventory、apply 和另起进程 verify。verify 必须证明 Kernel、Custom SSO 与 OIDC
    全部目标库存为零；此作用要求所有 IAM 用户重新登录。
-3. 执行正式 migration
+3. 若该 migration 尚未应用，通过正式 migration 入口执行
    [`20260928095714_retire_orcas_configuration`](../../packages/db/src/migrations/20260928095714_retire_orcas_configuration/migration.sql)。
    它在同一事务取得 Client 表 `ACCESS EXCLUSIVE` 锁，移除全部 Custom SSO 配置（包括软删除 Client）中的 `orcas`，
    并替换约束以严格拒绝该字段；OIDC、空配置、其他 Custom 配置、SSO 启用意图、Client 状态与 SSO Secret 不变。
-   独立查询全表 `sso_config ? 'orcas'` 的计数必须为零，并核对新 `client_sso_config_check` 已生效。历史 migration 不修改或重放。
+   独立查询全表 `sso_config ? 'orcas'` 的计数必须为零，并核对新 `client_sso_config_check` 已生效。
+   已应用时只读核验 journal、数据和约束，不修改或重放历史 migration；journal 与真实 schema 不符时保持停流，调查后再继续。
 4. 在 mutation 与 acquisition 仍冻结、旧 reader/writer 仍停止时，按
    [新 Snapshot 的定向修复与全量恢复](#新-snapshot-的定向修复与全量恢复)依次执行 `client-snapshot:repair --all`
    和另起进程 `client-snapshot:verify --all`，证明普通与敏感 Snapshot 三族库存为零。
@@ -106,10 +124,53 @@ apply 跨 owner 不原子，前一 owner 的作用不因后一 owner 失败回�
 SCAN 可重复，matching 是观察量，removed 是已确认 UNLINK 删除的 key 数，不是独立登录数量，也不能相减证明残留。
 apply 成功不能代替另起进程的独立 verify。
 
-维护前后独立比较非目标 owner 的值摘要、对象身份与绝对 expiry：其他 namespace/未选 owner、Subject Access、Facts、
-Login Restriction、短信码/nonce、队列、非目标 Snapshot，以及 PostgreSQL 用户、Client、角色、审计与 Internal 凭据。
-自然到期单列。报告的 `preservation=requires_independent_baseline_comparison` 不是保留验证结果，
+维护前后按下节独立比较非目标数据。报告的 `preservation=requires_independent_baseline_comparison` 不是保留验证结果，
 零目标库存也不能替代保留集比较。
+
+### 非目标基线的采集与判定
+
+在首次 apply 前完成下表清单，停写并排空后采集一次，在 repair/clear 完成且任何 smoke 或恢复写入之前再次采集。
+清单登记完整资源、目标规则与反选出的非目标范围；不能用少量 sentinel 代表全部保留集。
+
+| 资源       | 必须登记的非目标范围                                                                                                                        | 只读采集方法                                                                                                                                                                                                        |
+| ---------- | ------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Redis      | 同 DB 中其他 namespace、未选会话 owner、Subject Access、Facts、Login Restriction、短信码、nonce、队列及非目标 Snapshot；保留未知前缀/键族。 | 对固定 primary/DB 完整 `SCAN` 至 cursor 为 `0`，在受控客户端内按本次目标规则排除目标、按 key 去重；对非目标逐键执行 `TYPE`、二进制安全的 `DUMP` 与 `PEXPIRETIME`，同时以 `TIME` 记录服务端采集时间。                |
+| PostgreSQL | 用户、Client（含 Internal/SSO 凭据）、角色与授权关系、审计，以及清单中其他不应改变的业务表。                                                | 使用专用只读连接，在 `BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY` 中按主键稳定排序分批读取完整行；逐行在受控客户端内规范化并计算摘要，记录行数与完整主键集合。结束使用 `COMMIT`，不启动业务 reader 或 worker。 |
+
+PostgreSQL 清单从当前 schema 和业务 owner 核对实际表名、主键、关联表与列，不能只比较 `count(*)` 或 `update_time`。
+ORCAS 分支明确允许 Client 的 `sso_config.orcas` 删除和该约束/migration journal 变化：为 Client 分别采集完整配置变换结果及
+排除该指定字段后的行摘要；其他配置、状态、启用意图、Secret 与 Internal 凭据仍须一致。不得把整个 Client 表列为豁免。
+
+上述 Redis 采集需要独立只读权限，现有 scan-only verifier 不能读取或证明非目标 value 未变。完整扫描不是原子快照：
+采集期间仍有业务写入、primary 切换、连接失败、扫描未结束或对象在读取中消失时，该次基线无效；重新确认停写与范围后重采。
+自然过期允许发生：基线中记录了绝对 expiry，且该 expiry 不晚于后测对应 Redis `TIME`，才可把该键消失单列为 `naturally_expired`。
+`PEXPIRETIME=-1` 的无期限对象不得消失；`-2` 或读取期间变化不能直接算成功。仍存在的对象类型、值和绝对 expiry 须一致，
+相对 TTL 随时间减少不算改变，续期或提前删除不能归为自然过期。
+
+值和完整对象身份只进入受控客户端内存，不复制到工单、聊天、终端 transcript 或普通日志。使用本次维护专用高熵密钥做
+HMAC-SHA-256，分别对原 key/主键和二进制 value/规范化行计算摘要；前后使用同一密钥和序列化版本，密钥保存在受控 Secret 中。
+不要只对可猜测资料做无密钥哈希。记录格式例如：
+
+```json
+{
+  "runId": "maintenance-2026-example",
+  "phase": "before",
+  "resourceRef": "approved-redis-db",
+  "owner": "subject-access",
+  "identityHmac": "<HMAC>",
+  "valueHmac": "<HMAC>",
+  "type": "string",
+  "expiresAtMs": 1792000000000,
+  "observedAtMs": 1791999900000,
+  "serializerVersion": 1
+}
+```
+
+资源引用不含连接口令，摘要记录存放在受限验收目录；汇总仅列 owner、条数、通过/差异/自然过期数量与证据引用。
+PostgreSQL 行记录省略 expiry、增加表引用，仍只保留身份及行 HMAC。仓库维护 CLI 不提供这个通用基线导出功能，
+执行前必须用现场已有的受控采集客户端落实上述命令、HMAC 与完整性检查并演练；没有可用采集手段时，不能勾选保留 gate。
+停写窗口中不接受未解释的业务差异。若必须保留某类合法写者，应在采集前单独定义可核验的变化规则与证据；
+不能在发现差异后临时扩大豁免，无法解释或采集不完整时保持停流。
 
 ## 新 Snapshot 的定向修复与全量恢复
 

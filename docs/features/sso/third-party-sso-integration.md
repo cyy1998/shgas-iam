@@ -4,6 +4,16 @@
 Custom SSO 是自定义协议；标准 OIDC 接入见[OIDC 指南](../oidc/oidc-integration.md)。
 内部状态与失败作用见[Custom SSO 契约](custom-sso-contract.md)。
 
+## 选择接入方式
+
+| 回调类型                          | 业务系统负责什么                                                        | IAM 交付什么                              |
+| --------------------------------- | ----------------------------------------------------------------------- | ----------------------------------------- |
+| [business](#business业务后端兑换) | 后端接收 Code、兑换 Token，并建立自己的本地会话。                       | Token、剩余期限和获准披露的主体信息。     |
+| [managed](#managed托管回调)       | 为每个业务 origin 配置 `/sso/callback` 代理，并接入用户信息或网关鉴权。 | 业务域下的局部 Cookie，并跳回原落地地址。 |
+
+两种方式都先完成下方 Client 配置和地址编码，再[发起授权](#发起授权)。
+本文中的 UserSession 是 IAM 根登录，ClientSession 是该根与一个应用的关系；业务自建的本地会话由业务自行管理。
+
 ## 地址与接入配置
 
 `{IAM_ORIGIN}` 表示实际访问入口，例如 `https://iam.example.com`。
@@ -109,7 +119,8 @@ IAM 不建立或存储第三方自有 session。
 遇 500、503 或响应结果未知时，放弃旧 Code，按 Retry-After 等待后重新授权，不重放 token 请求。
 认证/参数/配置错误先修正，避免自动授权循环。认证且定位原实例之后，即使 Maintenance 在消费前拒绝，
 服务端仍会尝试终止原 ClientSession；旧应用 Token 可能因此失效，仍有效的根通常可直接重新授权。
-三个 X-IAM 消费/撤销/补偿 Header 仅供安全诊断，不改变重新授权策略。
+诊断 Header 仅供判断 Code 消费、会话撤销和本次 Token 补偿结果，不改变重新授权策略；
+字段定义见[协议失败契约](custom-sso-contract.md)。
 
 ## managed：托管回调
 
@@ -141,7 +152,7 @@ Authorization 直接使用 sid，不加 Bearer 前缀。服务端优先读取该
 `Client: iam` 是独立根 UserInfo 入口，使用 global_session/UserSession Token，不是任意 Custom Token 的通用入口。
 
 响应 data 是当前 Client 获准接收的 V2 主体。旧 Token 同样采用当前 subjectClaims；
-全部 Claim 使用同一次已发布 Facts，合法缓存可能落后于源权限，没有固定撤权传播期限。
+全部字段使用同一份已发布主体资料（Subject Facts），它可能落后于源权限，没有固定撤权传播期限。
 第三方复制后的刷新由第三方负责，IAM 不提供推送撤权。根、原实例或账号失效仍独立阻止访问。
 
 网关请求：
@@ -164,7 +175,7 @@ subjectIdentifier 必有，username/name 仅在允许时出现。数据库 ID、
 
 | 情况                                                   | 接入方处理                                                                                                         |
 | ------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------ |
-| Header/Client 编码非法，或当前 Client/SSO/协议配置拒绝 | 当前 InvalidSsoClientError 为 400；修正配置，不把它当 Token 到期。该配置错误不触发 Cookie 清理或实例撤销。         |
+| Header/Client 编码非法，或当前 Client/SSO/协议配置拒绝 | 400；修正配置，不把它当 Token 到期。该配置错误不触发 Cookie 清理或实例撤销。                                       |
 | Token/根/实例明确失效或账号明确拒绝                    | 401；重新授权，第三方自行处理本地 session。Cookie 来源的明确失效可清对应 Cookie；Client/用途不匹配不触发这种清理。 |
 | Maintenance                                            | 503、AUTH.MAINTENANCE 与 Retry-After；在线 UserInfo/authz 保留有效 Cookie，可重试原访问。                          |
 | Snapshot、账号状态或 Facts 暂时不可确认                | 503；保留仍有效凭据，按 Retry-After 重试访问。Code 兑换仍用前述重新授权策略。                                      |
@@ -223,5 +234,5 @@ business 应先清理自己的 Cookie/session，再退出 IAM；单独清应用 
 400/401/503 分别处理、托管 Cookie 所属域与代理、显式退出和第三方本地清理。
 SSO Secret 与通用 clientSecret 不混用、不下发前端；日志不记录明文 Token/Code/Secret。
 业务自行持有的 sid 保存在服务端，浏览器以自己的 HttpOnly Cookie 表达本地会话。
-当前维护、独立核验和放流见[统一维护手册](../../releases/unified-session-maintenance.md)，旧来源升级见[历史工具入口](../../development/commands.md#历史数据维护工具)；
-本文的协议说明不代表目标环境已部署。
+IAM 侧状态维护见[统一维护手册](../../releases/unified-session-maintenance.md)，
+代理配置及现场检查见[Gateway 发布手册](../../releases/apisix-gateway-release.md)。

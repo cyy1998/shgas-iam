@@ -204,7 +204,7 @@ Profile 重建及 Subject Access 恢复见[Profile 维护手册](../releases/use
   [Organization Filter DSL](../features/organization-search/filter-dsl.md#版本切换与维护)。
 - 组织搜索补偿：`pnpm --filter @iam/worker organization-search:repair -- --limit 500 --deadline-ms 30000`。
   两个持久阶段的回收、报告、重复执行和外部周期责任见
-  [组织搜索恢复契约](../features/organization-search/filter-dsl.md#补偿命令与失败观察)。
+  [组织搜索维护](../releases/organization-search-maintenance.md#日常补偿与外部调度)。
 - 组织搜索全量只读核验：`pnpm --filter @iam/worker organization-search:verify -- --deadline-ms 30000`。
   只使用 `IAM_WORKER_DATABASE_URL`，同一 `REPEATABLE READ READ ONLY` transaction 完整观察源组织、闭包、文档、
   删除墓碑和两阶段工作；`status: passed` 且退出 0 才通过数据门禁。没有 schema 选择、部分 batch 或入队副作用。

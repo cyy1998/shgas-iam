@@ -17,15 +17,17 @@ Client 交付拒绝保留根 Cookie；根/账号明确失效按对应 adapter �
 
 ## 密码登录凭证
 
-`POST /auth/login/password` 只接受 `credential` 和可选 `capToken`，不接受旧明文 username/password 请求。
+`POST /auth/login/password` 只接受 `credential` 和可选 `capToken`，不接受明文 username/password 请求。
 凭证使用 `iam-login-v1`、`SM2-SM4-CBC`、`password-login` 协议标识；前端加密，
-API 校验 kid、算法、解密结果、完整性、payload 结构与时间窗口，并通过 Redis nonce 防重放。
+API 校验 kid、算法、解密结果、完整性、payload 结构与时间窗口，并通过 Redis nonce 拒绝占用期内的重复凭证。
+当前默认 nonce TTL 尚未覆盖完整时间接受窗口，已知限制及待讨论修复见
+[时间窗口与已知限制](../../releases/sm-encrypted-password-login-release.md#时间窗口与已知限制)。
 
 | 场景                                                       | 当前结果                                                   |
 | ---------------------------------------------------------- | ---------------------------------------------------------- |
 | kid 不存在、算法不支持、解密/完整性校验或 payload 结构失败 | `LOGIN.INVALID_CREDENTIAL`。                               |
 | ts 过期或明显晚于服务端时间                                | `LOGIN.INVALID_CREDENTIAL`，提示凭证过期或设备时间不正确。 |
-| nonce 已使用                                               | `LOGIN.INVALID_CREDENTIAL`，不继续校验密码或创建根。       |
+| nonce 仍处于已占用状态                                     | `LOGIN.INVALID_CREDENTIAL`，不继续校验密码或创建根。       |
 | Cap token 缺失或无效                                       | 对应人机校验业务码，前端求解后携带 capToken 重试。         |
 | 用户名或密码错误                                           | 保持登录失败计数、临时登录限制和审计语义。                 |
 
@@ -47,9 +49,16 @@ API 校验 kid、算法、解密结果、完整性、payload 结构与时间窗�
 | 请求有效、根过期/撤销或主体明确不可访问 | 由服务端完成失效处理后允许登录。               | 按明确拒绝规则清理。 |
 | Client Maintenance、状态未知或依赖故障  | 暂时不可用，仅手动重试。                       | 保留。               |
 
-前端状态互斥：`checking` 首屏全页加载且不闪现表单；`login` 才显示凭据表单；
-`invalid_request` 无表单或固定跳转落点；`unavailable` 显示暂态提示和手动重试；
-`continuing` 使用 `window.location.replace`，不把登录页留在后退栈。
+前端按互斥状态显示页面：
+
+| 状态              | 显示与导航                                             |
+| ----------------- | ------------------------------------------------------ |
+| `checking`        | 首屏全页加载，不闪现表单。                             |
+| `login`           | 显示凭据表单。                                         |
+| `invalid_request` | 显示失效提示，不显示表单或提供固定跳转落点。           |
+| `unavailable`     | 显示暂态提示和手动重试。                               |
+| `continuing`      | 使用 `window.location.replace`，不把登录页留在后退栈。 |
+
 一次检查超时 10 秒；重试开启完整新检查，旧请求迟到结果、已卸载页面或目标变化不能覆盖新状态。
 没有自动轮询、forceLogin 绕过或额外跨标签页协调。
 
@@ -79,14 +88,15 @@ OIDC 自有 continuation 保存原授权参数；guard 不消费它。
 | 发送失败/超时，冷却仍可确认    | 同时提示发送失败与剩余倒计时。                                |
 | Redis 不可用或无法确认剩余时间 | 暂时不可用；不虚构剩余时间。                                  |
 
-SSO service 保留等待秒数；共享倒计时只接受短信冷却/发送失败业务码，不能把 Gateway 的所有 429 都解释成手机号冷却。
+SSO service 保留等待秒数；响应未给出剩余时间时不虚构倒计时。共享倒计时只接受短信冷却/发送失败业务码，
+不能把 Gateway 的所有 429 都解释成手机号冷却。
 刷新页面不会绕过后端限制，再次发送取得服务端剩余时间；三个页面都消费相同规则。
 
 ## 账号恢复与脱敏手机号
 
-`GET /open/users/{username}/masked-mobile` 沿用响应 envelope，业务数据严格为 `{ mobile: string | null }`；
+`GET /open/users/{username}/masked-mobile` 使用标准响应 envelope，业务数据严格为 `{ mobile: string | null }`；
 不返回 username、name 等资料。不存在账号与未绑定手机号统一成功返回 null，页面统一提示“无法获取绑定手机号”，
-阻止发码及继续重置。现有脱敏格式、人机验证和限流保持；保留脱敏号码仍意味着部分手机号匿名披露，
+阻止发码及继续重置。接口执行手机号脱敏、人机验证和限流；返回脱敏号码仍意味着部分手机号匿名披露，
 不承诺完全消除账号枚举。
 
 资料来源是已发布 Profile。Profile 缺失时再核对未删除身份记录，不按 Enable/Pause/Disable 过滤；
@@ -100,11 +110,8 @@ Hono 解外层，参数解析解内层；避免 `.`、`..` 被浏览器折叠，
 
 ## 验证与发布边界
 
-行为验证应覆盖 guard 状态、迟到结果、history replacement，短信跨用途/实例争用、拒绝不续冷却、
-供应商失败/超时，以及恢复接口 null 与真实失败、特殊用户名编码。
-通道与证据范围见[测试编排](../../architecture/testing-architecture.md)、
-[架构验证归属](../../architecture/architecture-verification.md)；HTTP/service 编码测试不代替真实 Gateway 特殊字符链路。
-
-API 与 SSO 需协调更新恢复接口，并刷新旧页面。全部验证码 API 实例升级后才具备完整跨实例冷却；
-旧 SSO 能收到限制，新 SSO 对缺少 Retry-After 的服务端响应不虚构倒计时。上述两项无需数据库迁移，
-当前会话恢复按[统一维护手册](../../releases/unified-session-maintenance.md)；旧代切换使用[固定历史流程](https://github.com/cyy1998/shgas-iam/tree/73315e4cef6f96dd79b29e18f74d68af30e559ec/docs/releases)。
+验证通道和证明范围见[架构验证归属](../../architecture/architecture-verification.md)；
+用户名编码的 HTTP/service 测试不能代替真实 Gateway 特殊字符链路验证。
+当前会话恢复见[统一维护手册](../../releases/unified-session-maintenance.md)。
+恢复接口与跨实例短信冷却的首次切换说明见
+[固定历史版本](https://github.com/cyy1998/shgas-iam/blob/48c2d6cc20e8a3675cbd1269eed2d5612141791d/docs/features/sso/authentication-and-recovery.md#验证与发布边界)。

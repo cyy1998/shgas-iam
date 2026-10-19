@@ -31,7 +31,7 @@ Kernel 不解释账号状态，不重新取得许可。具体操作与原实例�
 许可取得后账号进入 blocking、disabled 或重新启用，不推翻本次判断；迟到签发沿原 context。
 下一调用检查新状态，重新启用不恢复旧代。会话到期、原根/实例终止、Code 消费和 Client 配置仍按各自 owner 校验，
 许可不代替这些条件。Code 消费前后的检查和失败撤销由[Custom](custom-sso-contract.md)、
-[OIDC](../oidc/oidc-integration.md)分别规定，不从旧 Provider 流程推导。
+[OIDC](../oidc/oidc-integration.md)分别规定。
 
 ## 消费方责任
 
@@ -53,6 +53,5 @@ Kernel 不解释账号状态，不重新取得许可。具体操作与原实例�
 统一遵守[后端 Subject Access Barrier](../../architecture/backend-architecture.md#subject-access-barrier)。
 撤销或清理失败不能把账号拒绝变成放行；不确定状态不能当普通缓存 miss 默认启用。
 
-公开操作、真实资源和生产装配的证明范围见[架构验证归属](../../architecture/architecture-verification.md)。
-当前恢复步骤见[Profile 与 Subject Access 维护](../../releases/user-profile-maintenance.md)；
-历史故事与测试迁移记录不作为当前协议顺序。
+公开操作、真实资源和生产装配的证明范围见[架构验证归属](../../architecture/architecture-verification.md)，
+恢复步骤见[Profile 与 Subject Access 维护](../../releases/user-profile-maintenance.md)。

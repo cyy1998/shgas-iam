@@ -12,17 +12,23 @@ Custom 使用 callbackType、允许落地和 subjectClaims。
 managed 禁止 callbackEndpoint；business 必填固定完整地址。
 不接受 mode、logoutEndpoint、第二份认证方法或跨协议字段。类型切换时隐藏控件的旧地址不得进入 managed 请求。
 
-Domain 校验 URL/pattern 并规范化集合顺序。
-数据库约束保护协议 shape、无配置不能启用及 Secret/id/updatedAt 同时存在；
-完整字段规则与公开出口见[共享契约](../../architecture/contracts-and-database.md)。
+URL 与 redirect pattern 必须通过校验，集合按规范顺序保存。
+没有配置时不能启用 SSO，Secret、credentialId 与 updatedAt 必须同时存在；
+schema、数据库约束与公开出口见[共享契约](../../architecture/contracts-and-database.md)。
 
 普通 list/detail、Admin/Runtime mapper 显式选择安全字段，只暴露 hasSsoSecret。
 当前 SSO 原文、credentialId、updatedAt 仅专用存储与敏感 reader 可读，不与 Internal API secret 混用；
 类型声明不能代替实际输出裁剪。
 
-## 配置操作与结果
+### 公开 Client 状态
 
-`createClientSsoManagement` 组合 repository、service、事务审计与同一 REST/tRPC adapter。
+匿名 `GET /open/client/status?clientCode=...` 返回统一 envelope，`data` 仅含
+`clientCode`、`clientName`、`status`、可空的 `url`；不存在的 Client 返回成功响应且 `data:null`。
+HTTP 输出与 OpenAPI 使用同一显式公开 DTO；数据库回源、缓存命中均裁剪到上述字段，
+不输出 Internal/SSO 凭据、协议配置或扩展对象中的嵌套秘密。
+SSO 登录页和维护页分别使用名称与状态；该公开读取不提供 Secret，也不替代 Internal API 认证。
+
+## 配置操作与结果
 
 | 操作           | 作用                                                                                                                |
 | -------------- | ------------------------------------------------------------------------------------------------------------------- |
@@ -45,13 +51,20 @@ readSecret 只读取并记审计，不执行 Snapshot 失效，不作为缓存�
 明确回滚不传播，不自动重放写入。
 
 配置、启停、协议选择和轮换本身不撤销会话或协议产物，也不要求先进入 Maintenance。
-后续兑换失败及删除 Client 的会话作用是独立契约，分别见[Custom](../sso/custom-sso-contract.md)、
-[OIDC](../oidc/oidc-integration.md)和[会话管理](session-management.md)。
+后续兑换失败的作用见[Custom SSO](../sso/custom-sso-contract.md)与[OIDC](../oidc/oidc-integration.md)。
+
+## 删除 Client
 
 首次删除 Client 在同一事务锁定 Client 后，检查是否存在任何未删除 Role，不区分 Enable、Pause 或 Disable。
 存在依赖时返回 `409 CLIENT.HAS_ROLE`，不改变 Client、不写成功删除审计，也不执行 Snapshot 失效或会话终止。
 管理员须先按既有规则处理 Role Assignment、删除 Role，再删除 Client；软删除的 Role 历史不阻断。
 该检查保持跨对象普通预检边界，不新增锁或并发保证；已删除 Client 的显式重试仍按会话管理契约处理残余会话。
+
+通过检查后，Client 删除与业务审计在同一事务提交，再执行必需的 Snapshot 失效和会话终止。
+确认提交后会话终止未确认时返回 `ADMIN_MUTATION_COMMITTED`；显式重复删除允许返回 no-op 并重试残余 ClientSession。
+Unknown COMMIT 只保守失效并保留原错误，不执行删除后的会话终止。
+会话终止的作用边界与报告见[会话管理](session-management.md#精确撤销与未完成批次)，
+传播与会话作用的人工恢复见[统一维护手册](../../releases/unified-session-maintenance.md#放流与人工恢复责任)。
 
 ## 管理权限与 Secret
 

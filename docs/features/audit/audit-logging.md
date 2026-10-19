@@ -71,19 +71,16 @@ cause=too_many_login_failures、triggerMethod（password/mobile/unknown）、cha
 Redis 原子清理先于审计，changed=true 后审计失败使用作用后失败错误；解除不影响已有 UserSession，
 因此不产生 Session Revocation 审计。完整页面及结果见[会话管理](../admin/session-management.md)。
 
-## Secret 与历史 action
+## Secret 审计
 
 SSO Secret 轮换和读取使用独立安全审计，读取提交未确认时不交付原文，
 见[Client Secret 管理](../admin/client-sso-configuration.md#管理权限与-secret)。
 
-历史八类登录 action 别名由 Worker audit:actions 规范化，只修改 action。
+## Action 查询与历史数据
+
 当前查询合并去重单 action/多 actions 后精确筛选，outcome 独立；展示规范标签，未知 action 原文回退。
-旧 writer、迁移、独立 verify、查询验收及旧备份恢复遵守[规范化手册](https://github.com/cyy1998/shgas-iam/blob/73315e4cef6f96dd79b29e18f74d68af30e559ec/docs/releases/audit-action-canonicalization.md)。
-
-## login_log 退役来源
-
 新登录事件只写 audit_log，DB 不再导出旧 login_log schema/relations。
-当前仓库没有旧 migrate:login-log-audit 的一次性实现；
-[历史退役记录](https://github.com/cyy1998/shgas-iam/blob/73315e4cef6f96dd79b29e18f74d68af30e559ec/docs/releases/audit-login-log-retirement-release.md)只供追溯，不可执行。
-升级此类旧环境时，先备份并盘点，按当前 audit_log 另行制定 actor/target/action/outcome 与脱敏映射，
-确认需保留记录完成迁移后再执行破坏性删除；不能假定当前分支能直接运行旧工具。
+
+旧 action 与备份规范化按[历史数据维护工具](../../development/commands.md#历史数据维护工具)进入匹配版本流程；
+决策与规范化边界见 [ADR-0024](../../adr/0024-canonicalize-historical-audit-actions.md)。
+旧 login_log 工具已不在当前仓库，迁移前提见[整理前的退役说明](https://github.com/cyy1998/shgas-iam/blob/48c2d6cc20e8a3675cbd1269eed2d5612141791d/docs/features/audit/audit-logging.md#login_log-退役来源)。

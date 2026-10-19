@@ -188,9 +188,14 @@ Admin 表单仅在 business 回填、展示和提交地址；隐藏控件的旧�
 ### Organization Search publication schema
 
 `organization_search_change` 保存源事务登记的不可变变化身份和模块决定的自身/子树范围；
+登记使用实际 mutation 返回的受影响组织 ID，更新零行不登记。创建、状态和删除登记自身，code/name/type
+变化登记子树。
 `organization_search_dirty` 保存每个组织的单调待重建版本。两个阶段都保存处理状态、领取 token、处理时间和失败信息，
 队列只负责唤醒。事件展开在事务中锁定并重验 token，将当前闭包目标的版本登记与事件完成原子提交；完成事件保存本次
 重建 payload，重复投递只重唤醒这些版本，不重复推进版本。
+
+提交后按当前闭包展开祖先变化：展开前已提交的后代创建由该次展开覆盖；展开后才提交的后代创建由自己的变化登记覆盖。
+这两个路径共同保证祖先修改与后代创建交错时的最终传播，不把源事务当时捕获的后代列表视为完整目标集。
 
 `organization_search_document` 保存当前 schema、JSONB、已发布版本和构建时间。删除通过不可见的空文档墓碑保留已发布
 版本，不删除仲裁事实。发布锁定 dirty，重验版本、processing 状态和领取 token，文档替换与 processed 同事务提交。

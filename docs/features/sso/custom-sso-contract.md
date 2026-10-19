@@ -112,11 +112,9 @@ Token 的完整随机 bearer 经 SHA-256 直接定位唯一记录，独立随机
 
 ## 库存与验证入口
 
-`/maintenance` 按显式 namespace 的 `:custom-sso:` owner 前缀扫描，批量 UNLINK 清空前缀内全部版本、键族及
-Redis 类型，包括 Code、Token、续接、损坏记录和孤立索引。它不读取 value、不解析 schema、不比较原值或修复索引，
-也不按 Client 筛选；其他 namespace 和前缀保留。每批最多 limit 个键，SCAN 多出的键保存在不透明 cursor；
-重复扫描不代表全局一致快照。清空前统计与独立清零核验只需 SCAN，apply 成功不能代替独立核验。
-维护窗口与 Worker 三个公开命令的执行步骤见[统一维护手册](../../releases/unified-session-maintenance.md)。
+`/maintenance` 只按显式 namespace 下的 owner 前缀维护，范围包含 Code、Token、续接及全部版本、键族和孤立索引；
+不按 Client 筛选，其他 namespace 和 owner 保留。具体库存范围、扫描与清理规则、维护窗口及独立清零核验统一见
+[维护手册](../../releases/unified-session-maintenance.md#所有权与明确范围)。
 
 `/testing` 仅用于状态观察和故障注入。协议、真实 HTTP/Redis、Gateway 与外部系统的证明范围见
-[架构验证归属](../../architecture/architecture-verification.md#行为资源与系统验证)；本文不保存某次候选的执行结果。
+[架构验证归属](../../architecture/architecture-verification.md#行为资源与系统验证)。

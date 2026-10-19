@@ -44,17 +44,19 @@ await subjectAccessOperations.run(async (operation) => {
 
 示例说明公开能力的调用顺序；账号代际撤销由 API Core 的 `createUnifiedSubjectAccessSessionRevocation` 适配。
 统一认证先取得自己的认证结果和 Subject Access Permission，再以 `createUserSession` 提交主体、opaque subjectContext、
-amr 与可选 origin。authTime、createdAt、expiresAt 和响应剩余秒数由 Redis 时间确定，单位为毫秒；剩余秒数向下取整。
-服务端 runtime 将独立的 `IAM_API_USER_SESSION_TTL_SECONDS` / `IAM_API_CLIENT_SESSION_TTL_SECONDS` 注入工厂；
-AdminAPI 使用对应 `IAM_ADMIN_API_*` 变量，Compose 同步同类取值。默认各 86400 秒；Custom/OIDC Token 的签发 TTL 单独配置，
-不能因两类会话默认值相同而共用一个配置。新根期限固定，应用关系的建立/延长仍受该根上限裁剪。
+amr 与可选 origin。时间由 Redis 确定：`authTime`、`createdAt`、`expiresAt`、`observedAt` 和 `issuedAt` 均为毫秒时间戳，
+`remainingSeconds` 为向下取整的非负剩余秒数。
+
+根与 ClientSession 的 TTL 独立配置，默认各 86400 秒；Custom/OIDC Token 的签发 TTL 也单独配置。
+新根期限固定，应用关系的建立/延长受该根上限裁剪。运行时环境变量与跨服务配置核对见
+[维护手册](../../releases/unified-session-maintenance.md#资源与维护窗口)。
 
 根 bearer 与内部 ID 分别经过 `resolveUserSession` 和 `resolveUserSessionById`。管理/协议内部使用 ID 时仍须执行自身认证、
 归属与账号许可检查，ID 不是 Cookie 或 bearer。`resolveClientSessionForUse` 必须带原 userSessionId、clientSessionId、
 clientId，原子观察原根与原实例，不读取当前关系槽替换目标，也不比较 Token 用途与 ClientSession 的可变 protocol。
 
-观察登记在 factory 私有 WeakMap 中，同时绑定 operation identity。外部字段深冻结，私有依据另存副本；复制、JSON 往返、
-管理记录、另一 factory/operation、结束后的 operation 均不能取得可信父。异步结果在发放观察前再次检查 operation 是否有效。
+可信观察只对创建它的 factory 和当前 operation 有效；调用方不能通过修改、复制、JSON 往返或管理记录构造它。
+另一 factory/operation 或已经结束的 operation 不能使用该观察。异步结果在发放观察前再次检查 operation 是否有效。
 关闭操作不取消已经开始的 Redis 写入，迟到写入可能存在，但不会交付新的有效观察。
 
 `useObservation` 在本操作中复用既有观察；`getIssuanceLifetime` 以新的 Redis 时间计算协议产物自身 TTL 与已观察两类会话
@@ -63,8 +65,8 @@ clientId，原子观察原根与原实例，不读取当前关系槽替换目标
 
 ## 原子生命周期与隔离
 
-默认新代 namespace 为 `iam:session:unified:v1:`。自定义 namespace 后仍追加固定 `:unified:v1:`，不探测 bearer 格式、
-不读取旧模型、不转换旧会话。线上与离线维护只装配这一代；旧布局维护已退役。
+在线生命周期只处理当前 unified 模型，不探测或转换旧会话。namespace 与离线维护范围见
+[维护手册](../../releases/unified-session-maintenance.md#所有权与明确范围)。
 
 同根同 Client 的授权通过一次 Redis 执行新建或复用 ClientSession。有效关系保持 ID 和原始身份，在同一原子操作更新
 protocol 与授权时间，并使用 `min(root.expiresAt, max(old.expiresAt, redisNow + clientTtl))` 更新期限。失效后创建新 ID。
@@ -79,9 +81,8 @@ protocol 与授权时间，并使用 `min(root.expiresAt, max(old.expiresAt, red
 
 管理入口提供 `listSessions({kind, subjectIdentifier?, offset, limit})`，在一次有界 Redis 操作中返回所选索引页和总数，
 不获取目标账号许可。每页最多 1000 条；安全 Admin 映射及实际 HTTP 页上限见[管理契约](../admin/session-management.md#列表与安全视图)。
-`inventory:userSession`、`inventory:clientSession` 与 `subject-clients:<subjectIdentifier>` 属于相同 unified namespace，
-随原子生命周期维护并保留期限；它们只负责记录查询，不构成在线访问或完整库存权威。缺索引不恢复已终止根，
-页内坏记录失败关闭。维护库存覆盖这三类索引；旧数据不在在线路径补读或重建。
+查询索引随原子生命周期维护并保留期限，只负责记录查询，不构成在线访问或完整库存权威。
+缺索引不恢复已终止根，页内坏记录失败关闭。维护库存包含这些索引；在线路径不补读或重建旧数据。
 
 `observeUserSessionForRevocation` / `observeClientSessionForRevocation` 核对原目标并生成本操作私有撤销观察，接受仍存在的
 终态记录，不要求根或账号许可有效。在线观察也可交给同类型 `revokeObserved…Session`。精确撤销比较稳定实例身份，

@@ -227,6 +227,9 @@ Internal Privilege Delegation 已在 API 自身的 service、repository 与 Unit
   Organization lifecycle 的不可管理开放责任使用稳定 `UNMANAGEABLE_RESPONSIBILITY_BLOCKED` reason，安全 cardinality
   conflict 不暴露被隐藏记录。请求时 scope 每次从 PostgreSQL Effective Role/Employment/Organization Path 解析，撤权后的
   下一请求立即收敛。
+- Organization Responsibility 的唯一约束失败后，不在已失败事务中继续查询 blocker；
+  不为分类冲突来源增加父行锁、提高隔离级别或自动重试。Full/HR 的安全错误映射见
+  [HR 管理契约](../features/organization-responsibility/hr-admin-management-design.md#越界阻塞与错误语义)。
 - `@iam/user-profile-read-model` 默认入口生成并读取同一 Dirty Version
   下的 Detail、Search 与 Subject Facts v3，并复用 PostgreSQL atomic publication、Redis monotonic CAS 与严格 v3
   cache/PostgreSQL read-through。Active Internal Detail 与 canonical Filter DSL 均只读同一个 `user_profile` v3 row，
@@ -439,11 +442,12 @@ API env 注入 current/previous RS256 JWK，JWKS 只输出公钥；非法配置�
   composition，复用组织写入资源的有界唤醒与强制关闭能力，不创建其他领域 module、consumer 或 HTTP。
   组织正式生产者、consumer、命令和 dashboard queue 均使用 `@iam/jobs` 的固定默认前缀；命令不暴露独立队列命名空间。
   两种命令共用 deadline 与 signal lifecycle，失败或中断保留持久工作；repair 仅重新投递，最终发布由普通 consumer 完成。
-  两阶段回收、报告语义与外部调度责任见[组织搜索恢复契约](../features/organization-search/filter-dsl.md#补偿命令与失败观察)。
+  两阶段回收、报告语义与外部调度责任见[组织搜索维护](../releases/organization-search-maintenance.md#日常补偿与外部调度)。
 - `createOrganizationSearchVerifyCommandComposition` 是独立 PostgreSQL-only composition，拥有专用单连接池，
   仅组装完整只读 verifier。所有 inventory 和 source reader 在同一个 repeatable-read read-only transaction 中观察；
   不创建队列、其他领域 module 或 HTTP。deadline/中断时仅取消本次唯一 application name、当前数据库和角色的查询，
-  关闭查询池和取消连接；执行或关闭失败非零退出。核验与在线缺行过滤分别遵循[组织搜索契约](../features/organization-search/filter-dsl.md#独立全量只读核验)。
+  关闭查询池和取消连接；执行或关闭失败非零退出。核验遵循[独立全量只读核验](../releases/organization-search-maintenance.md#独立全量只读核验)，
+  在线缺行过滤遵循[组织搜索契约](../features/organization-search/filter-dsl.md#错误与缺行行为)。
 - 当前 Snapshot repair/verify 使用独立 Redis-only composition，普通/敏感 payload 共享控制，targeted 与 full 分开，
   full 必须停流，另起进程 scan-only verify；旧三类 Runtime command、b648 与 managed-callback 升级工具已退役。
 - `createEmploymentCommandComposition` 是更窄的 PostgreSQL-only composition：只从

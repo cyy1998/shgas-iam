@@ -10,7 +10,6 @@ Next review: 2026-10-31
 本手册通过独立 Gateway HTTP API 发布调用方保管的 app-centric YAML，包括仓库
 `apps/gateway/manifests/<env>/<app>.yaml` 中的 IAM 基线。输入、结果和恢复边界以
 [Gateway 配置 API 契约](../features/gateway/gateway-configuration-api.md)为准。
-正式入口为 `apps/gateway/src/main.ts`，HTTP、service 和 APISIX adapter 由 composition 接线。
 旧直接发布 CLI 和根 `gateway:apisix:*` 已退役，常规发布统一通过 HTTP。
 
 ## 服务配置与部署
@@ -55,7 +54,7 @@ Compose 的 `stop_grace_period: 310s` 覆盖允许的最大 300 秒关闭预算�
 - 明确 `<env>:<app>` scope；prod:iam 的 app 精确匹配当前 IAM Client code iam。
   Client 必须 Enable、未删除，apikey header 提交其 Internal API Secret，不使用 SSO Secret。
   首次发布前通过已有 Client 管理流程准备 iam 和 Internal Secret，iam-admin 不能替代，也没有免认证入口。
-- 核对受影响版本的公开 Client 状态响应。当前匿名入口和 OpenAPI 只公开 clientCode、clientName、status、url；
+- 从曾暴露 Internal 凭据的版本升级时，核对公开 Client 状态响应。当前匿名入口和 OpenAPI 只公开 clientCode、clientName、status、url；
   若现场旧版本或入口已暴露 Internal 凭据，先轮换这些凭据再开放 Gateway 管理。仓库静态问题不证明生产已经泄露。
 - 同一 APISIX 集群的发布窗口由部署负责人统一协调写入口，暂停其他 Gateway 实例和外部写者的并发发布。
   代码只串行当前实例，没有分布式锁、唯一实例检测或跨实例隔离。
@@ -79,10 +78,12 @@ $gatewayRequest = @{
   yaml = Get-Content -LiteralPath 'apps/gateway/manifests/prod/iam.yaml' -Raw -Encoding utf8
   variables = Get-Content -LiteralPath 'variables.json' -Raw -Encoding utf8 | ConvertFrom-Json -AsHashtable
 }
-Invoke-RestMethod -Uri "$gatewayEndpoint/validate" -Method Post -Headers $gatewayHeaders `
+$validation = Invoke-RestMethod -Uri "$gatewayEndpoint/validate" -Method Post -Headers $gatewayHeaders -ErrorAction Stop `
   -ContentType 'application/json' -Body ($gatewayRequest | ConvertTo-Json -Depth 20)
-Invoke-RestMethod -Uri "$gatewayEndpoint/diff" -Method Post -Headers $gatewayHeaders `
+if ($validation.data.valid -ne $true) { throw 'Gateway validation did not pass' }
+$preview = Invoke-RestMethod -Uri "$gatewayEndpoint/diff" -Method Post -Headers $gatewayHeaders -ErrorAction Stop `
   -ContentType 'application/json' -Body ($gatewayRequest | ConvertTo-Json -Depth 20)
+$preview.data.plan
 ```
 
 IAM_GATEWAY_URL（本机可为 http://127.0.0.1:30004）和 IAM_GATEWAY_CLIENT_SECRET 是示例调用方变量，
@@ -90,22 +91,30 @@ IAM_GATEWAY_URL（本机可为 http://127.0.0.1:30004）和 IAM_GATEWAY_CLIENT_S
 不把服务启动环境整体转发。
 
 3. 检查 data.plan 中的创建、更新、删除候选和忽略项；忽略原因只应含预期的 dynamic、out_of_scope、unmanaged。
+   核对资源数量、目标 scope 和每项差异；有非预期对象或请求失败时停止，不继续 apply。
    diff 是观察时预览，不冻结后续发布计划。
 4. 先 dry-run；需要删除当前 scope 内多余 repo-manifest 对象时，预览和正式请求均显式设 prune=true：
 
 ```powershell
 $gatewayRequest.dryRun = $true
 $gatewayRequest.prune = $false
-Invoke-RestMethod -Uri "$gatewayEndpoint/apply" -Method Post -Headers $gatewayHeaders `
+$dryRun = Invoke-RestMethod -Uri "$gatewayEndpoint/apply" -Method Post -Headers $gatewayHeaders -ErrorAction Stop `
   -ContentType 'application/json' -Body ($gatewayRequest | ConvertTo-Json -Depth 20)
+if ($dryRun.data.outcome -ne 'preview' -or $dryRun.data.dryRun -ne $true) {
+  throw 'Gateway dry-run result was not confirmed'
+}
+$dryRun.data.plan
 ```
 
 5. 确认后明确提交正式发布：
 
 ```powershell
 $gatewayRequest.dryRun = $false
-Invoke-RestMethod -Uri "$gatewayEndpoint/apply" -Method Post -Headers $gatewayHeaders `
+$applied = Invoke-RestMethod -Uri "$gatewayEndpoint/apply" -Method Post -Headers $gatewayHeaders -ErrorAction Stop `
   -ContentType 'application/json' -Body ($gatewayRequest | ConvertTo-Json -Depth 20)
+if ($applied.data.outcome -notin @('applied', 'no_change')) {
+  throw 'Gateway apply result was not confirmed'
+}
 ```
 
 响应为 `{code,data,message}` envelope；HTTP 200 的 data.outcome 分别为 preview、no_change 或 applied，
@@ -113,23 +122,33 @@ Invoke-RestMethod -Uri "$gatewayEndpoint/apply" -Method Post -Headers $gatewayHe
 APISIX SSL list 返回加密私钥，含明文私钥变量的相同源配置再次提交仍可能显示 SSL update 并重写；
 Gateway 不自行解密比较，no_change 只表示当前实际写集为空，不是七类重复提交均无写入的保证。
 
-6. 回读 APISIX 并执行下述 smoke；回读只证明观察时配置，不保证所有数据面节点同时切换。
-   聚焦验证只需 PostgreSQL、APISIX/etcd 和正式 Gateway，以匹配 Client 直连发布并回读，
-   不需要完整 IAM runtime 或浏览器旅程。
+6. 通过受控 APISIX Admin API 回读本次触及的对象，核对资源身份、引用和预期字段，再执行下述受影响数据面 smoke。
+   仅配置 API 验证时，PostgreSQL、APISIX/etcd 和 Gateway 足以证明请求与回读；
+   业务路由放流还必须有对应 upstream/runtime 及真实调用证据。回读不证明所有数据面节点同时切换。
 
 prune 只删除当前 scope、来源规则允许的对象，不清理 dynamic-registry、其他 app/env 或未管理对象。
-Consumer username 为 `<app>_<key>_<env>`，其余资源保留既有标识规则，plugin_metadata 仍以插件 key 标识。
+资源标识与归属见[YAML 契约](../features/gateway/gateway-configuration-api.md#yaml-配置与资源归属)。
 待删 Consumer 如有独立 credential 子资源，或无法确认子列表为空，整次 apply 写前拒绝且不阻断。
 先由子凭据实际 owner 处理，再重新预览和提交；不绕过检查，也不把子树当作七类恢复集合。
 
 ## 真实 IP、限流与 Smoke
 
-- IAM、Tender、GDS API routes 以 route 级 plugin_config 绑定 limit-req；real-ip 只信任配置的腾讯云 Nginx CIDR。
-  非可信来源不能以自带 X-Forwarded-For 改写真实 IP。修改限流后校验 dev/prod 的 iam、tender、gds 六个 scope。
-- 单节点使用 policy:local；多节点前评估并切换 Redis 或 redis-cluster 计数，否则额度按节点数放大。
-- 通过数据面核对 public、admin、rpc、SSO、OIDC 和前端，确认 rewrite、forward-auth、CORS 与 host。
-- OpenTelemetry metadata、Alloy receiver 和安全字段按[Trace 发布前置](observability-system-logs.md#trace-发布前置)
-  与[Trace Smoke](observability-system-logs.md#trace-smoke)验收，debug exporter 不代表持久 trace backend。
+发布前列出受影响 scope、路由和对应 upstream，以及合法身份、无凭据/错误身份等预期结果；
+对未涉及的业务不扩大操作范围。仅 `health=200` 或 API apply 成功不能代替下面的数据面检查。
+
+| 检查                  | 执行与通过条件                                                                                                                                             |
+| --------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| host/path 与 upstream | 通过正式业务入口发送受控请求，确认到达预期服务，rewrite 后路径和响应符合该接口约定；不只检查网关返回 200。                                                 |
+| 认证与浏览器入口      | 对需要鉴权的路由分别检查合法和无效身份；涉及 Admin、SSO、OIDC 或前端时完成对应浏览器流程，确认 host、Cookie、回调与 CORS。                                 |
+| 真实 IP 与限流        | 核对受影响路由的 plugin_config，在可信代理与非可信来源分别检查 IP 观察；非可信来源自带 X-Forwarded-For 不能改写真实 IP。使用受控限流请求确认实际拒绝行为。 |
+| 日志关联              | 按[Trace 发布前置](observability-system-logs.md#trace-发布前置)及[Trace Smoke](observability-system-logs.md#trace-smoke)确认同一请求的网关/后端关联。      |
+
+IAM、Tender、GDS 的共用限流配置变化时，核对 dev/prod 中 iam、tender、gds 六个 scope 的配置，
+再在本次目标环境执行受影响路由的 smoke。real-ip 仅信任配置的腾讯云 Nginx CIDR。
+单节点使用 policy:local；多节点前评估并切换 Redis 或 redis-cluster 计数，否则额度按节点数放大。
+
+任一回读或 smoke 失败时，停止后续发布和受影响业务放流，按下节核对现场并恢复；
+记录目标、结果、requestId/traceId 与时间窗口，不记录凭据或未经裁剪的配置。Alloy debug exporter 不证明持久 trace 存储可用。
 
 ## 失败、补偿与人工恢复
 
@@ -143,7 +162,7 @@ Consumer username 为 `<app>_<key>_<env>`，其余资源保留既有标识规则
 
 `GATEWAY_SNAPSHOT_INVALID` 包括本次写集中缺少必需结构的前态或载荷，以及无法确认待删除 Consumer 的子凭据为空。
 例如缺少路由目标的 Upstream、缺少 uri/uris 的 Route 不会进入写阶段；修正来源或现场后可明确提交新请求，无需重启解除阻断。
-七类最低结构与插件业务字段的检查边界见[功能契约](../features/gateway/gateway-configuration-api.md#已确认的回滚与并发边界)。
+七类最低结构与插件业务字段的检查边界见[功能契约](../features/gateway/gateway-configuration-api.md#回滚与并发边界)。
 
 补偿覆盖所有已尝试目标，包括报错但可能生效的目标，恢复旧值、重建删除对象和移除本次新建对象。
 它允许中间配置短暂生效，不是跨资源事务，不撤销业务请求作用。发布和补偿都不自动重试，

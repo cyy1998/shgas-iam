@@ -4,7 +4,7 @@
 
 ## 1. 能力边界
 
-`POST /internal/users/search-dsl` 始终搜索 User Profile，并返回固定的 User Profile Base。User、Employment、Organization、Position、Role、Privilege 和 Organization Responsibility 可以提供条件，但不会变成结果根或进入响应摘要。
+`POST /internal/users/search-dsl` 使用有效 Internal Client 认证，始终搜索 User Profile，并返回固定的 User Profile Base。User、Employment、Organization、Position、Role、Privilege 和 Organization Responsibility 可以提供条件，但不会变成结果根或进入响应摘要。
 
 - 搜索范围是所有未删除用户，包括 Enable、Pause 和 Disable；账号状态需要通过 `user.status` 显式筛选。
 - 关联任职只观察 Effective Employment，历史、暂停或已结束任职不能满足条件。
@@ -15,11 +15,31 @@
 
 ## 2. 表达式结构
 
-请求体固定为：
+请求通过 `apikey` 头携带 Internal API Secret，body 固定为 `{ "filter": Expression }`。例如：
+
+```http
+POST /internal/users/search-dsl HTTP/1.1
+Content-Type: application/json
+apikey: <Internal API Secret>
+
+{"filter":{"field":"user.username","op":"eq","value":"alice"}}
+```
+
+匹配成功时返回 HTTP 200。下面是固定 Base 响应示例；没有匹配时 `data` 为 `[]`：
 
 ```json
 {
-  "filter": { "field": "user.username", "op": "eq", "value": "alice" }
+  "code": 200,
+  "message": "success",
+  "data": [
+    {
+      "username": "alice",
+      "name": "张三",
+      "mobile": null,
+      "wxId": null,
+      "subjectIdentifier": "00000000-0000-4000-8000-000000000001"
+    }
+  ]
 }
 ```
 
@@ -38,7 +58,9 @@ Expression =
 
 ## 3. Search Document 公开结构
 
-v3 的公开搜索结构如下；未列出的存储辅助结构不是合法路径：
+v3 的公开搜索结构如下；未列出的存储辅助结构不是合法路径。字段类型、枚举和可空性以
+[Search Document schema](../../../packages/user-profile-read-model/src/schema/profile-v3-search.schema.ts)为准，
+响应的五个字段以 [UserProfileBaseSchema](../../../packages/domain/src/user/schema.ts) 为准。
 
 ```text
 user
@@ -136,7 +158,6 @@ DSL 使用二值匹配语义。nullable 字段为 null 时，任何原子比较�
 - `/internal/users/search-dsl` 按内部 user ID 升序返回 User Profile Base；内部 ID 只用于稳定排序，不进入响应。
 - 每项固定包含 `username`、`name`、`mobile`、`wxId` 与 `subjectIdentifier`；`mobile`、`wxId` 缺失时返回 `null`。五项事实来自 `user_profile` 类型化列，全部有效 Internal Client 都能读取 Subject Identifier。
 - 匹配行的 Search Document 继续严格校验；`detail` 不读取、不校验，单纯的 Detail 损坏不影响本端点。类型化列不与 `search_doc.user` 做跨副本一致性比较，不一致时仍返回类型化列值。
-- 不支持调用方排序、分页或字段投影。
 - 最多返回 500 个用户；查询第 501 个匹配项后整体返回 422，不截断。
 - DSL 最大深度 8，最多 64 个节点，每个 `and`/`or` 最多 16 个子表达式。
 - 每个 `in`、`containsAny` 或 `containsAll` 最多 50 个去重查询值；字符串查询值最长 128。
@@ -160,7 +181,7 @@ HTTP 结果统一如下：
 
 ## 9. 接口范围与委托组合
 
-面向其他内部服务的用户搜索只提供 `POST /internal/users/search-dsl`，使用有效 Internal Client 认证。
+面向其他内部服务的用户搜索只提供 `POST /internal/users/search-dsl`。
 Public 搜索、Internal 旧参数搜索和旧用户搜索与委托的组合接口按
 [ADR-0043](../../adr/0043-retire-public-and-legacy-internal-directory-search.md) 直接退役，不保留兼容期或转换适配器。
 DSL 继续使用本文定义的固定 Base 响应与过滤语义，不扩展为旧响应的兼容替代。
@@ -168,7 +189,6 @@ DSL 继续使用本文定义的固定 Base 响应与过滤语义，不扩展为�
 调用方需要委托信息时，使用搜索结果中的 username 独立调用 `/internal/delegations/resolve`，其输入预算和失败行为遵守
 [委托解析契约](../../adr/0020-provide-fail-closed-privilege-delegation-resolution.md)。搜索最多返回 500 个用户，
 解析每次接受 1–100 个唯一 username，调用方按需分批；各次解析独立观察当前委托，不保证跨请求的共同快照。
-Privilege Delegation 不进入 Search Document。
 
 Internal 用户详情、Admin 用户搜索与 Delegation 实体搜索继续保留；登录等流程使用的 Detail 能力不受搜索退役影响。
 

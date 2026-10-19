@@ -1,14 +1,13 @@
 # Organization Filter DSL
 
-本文汇总 Organization Search 的当前公开契约；实施与验收由
-[Spec #221](https://github.com/cyy1998/shgas-iam/issues/221) 跟踪。
+本文定义 Organization Search 的接入方式、过滤语义与异步读取边界。
 领域词汇见 [CONTEXT.md](../../../CONTEXT.md)，查询语言沿用 [User Profile Filter DSL](../user-profile-search/filter-dsl.md)，
 读模型与响应来源的取舍见 [ADR-0042](../../adr/0042-search-organizations-with-published-documents.md)。
 
 ## 能力与数据来源
 
 提供 `POST /internal/organizations/search-dsl`，以 Organization 为唯一结果根，支持组织自身属性和完整 Organization Path 条件。
-首版不按成员、岗位、角色或组织责任持有人反查组织。
+不支持按成员、岗位、角色或组织责任持有人反查组织，也不提供组织移动或历史组织查询。
 
 组织关系表继续作为唯一源事实。PostgreSQL JSONB 保存可从源事实重新构建的 Organization Search Document，
 用于检索，不接受独立业务写入。组织读模型独立持有文档、待重建记录、版本与核验能力，不借用 User Profile 的发布状态。
@@ -35,7 +34,9 @@ organization
     └── distanceToTarget
 ```
 
-数据库 numeric ID、存储用 numeric-ID path 字符串、创建时间和业务父组织不进入首版公开搜索结构。
+字段类型与允许值以 [Organization Search schema](../../../packages/organization-search-read-model/src/schema.ts)
+及其引用的枚举为准，其中 [OrganizationType](../../../packages/contracts/src/enums/organization.type.ts) 使用中文枚举值。
+数据库 numeric ID、存储用 numeric-ID path 字符串、创建时间和业务父组织不进入公开搜索结构。
 公开字段使用现有业务类型；`level` 沿用现有组织层级，从根的 1 开始，当前源模型最大为 5。
 
 ### 绝对层级与相对距离
@@ -87,13 +88,48 @@ organization
 
 路径包含自身，因此符合条件的第二层组织本身也可匹配。需要限定结果层级时，另加根作用域的 `organization.level` 条件。
 
+### 请求与响应示例
+
+请求通过 `apikey` 头携带有效 Internal Client 的 Internal API Secret：
+
+```http
+POST /internal/organizations/search-dsl HTTP/1.1
+Content-Type: application/json
+apikey: <Internal API Secret>
+
+{"filter":{"field":"organization.code","op":"eq","value":"ROOT"}}
+```
+
+匹配成功时返回 HTTP 200。例如，根组织的完整文档如下；没有匹配时 `data` 为 `[]`：
+
+```json
+{
+  "code": 200,
+  "message": "success",
+  "data": [
+    {
+      "organization": {
+        "code": "ROOT",
+        "name": "根组织",
+        "type": "分公司",
+        "status": "Pause",
+        "level": 1,
+        "isVirtual": false,
+        "isEntity": true,
+        "path": [{ "code": "ROOT", "name": "根组织", "type": "分公司", "level": 1, "distanceToTarget": 0 }]
+      }
+    }
+  ]
+}
+```
+
 ## 固定响应与查询预算
 
 成功响应通过共享 success envelope 返回完整 Organization Search Document 数组；每项固定为
 `{ organization: { code, name, type, status, level, isVirtual, isEntity, path } }`，路径节点包含上文列出的全部五个字段。
 筛选与响应使用同一份文档，不另查源表详情或从另一份摘要副本拼装；调用方不能选择返回字段。
 
-结果按内部组织 ID 升序稳定排列，该 ID 只用于内部处理，不进入公开文档。首版不分页，不支持调用方排序。
+结果按内部组织 ID 升序稳定排列，该 ID 只用于内部处理，不进入公开文档。不支持分页或调用方排序。
 最多返回 500 个组织，发现第 501 个匹配项时整体返回 422，不截断。
 
 过滤器必须非空，并沿用用户 DSL 的结构预算：
@@ -104,9 +140,7 @@ organization
 
 非法条件、空过滤器和结构超预算均整体返回 422。
 
-### 与用户搜索一致的错误与缺行行为
-
-对齐当前用户 DSL 的实际请求行为，不另设“投影尚未齐全时一律返回 503”的规则：
+### 错误与缺行行为
 
 | 情况                                                       | 结果                                                               |
 | ---------------------------------------------------------- | ------------------------------------------------------------------ |
@@ -114,14 +148,14 @@ organization
 | 合法但没有当前版本匹配行                                   | 200，空数组                                                        |
 | 文档行尚未发布、缺失或 schema 版本不是当前版本             | 该行不参与搜索；可以返回其他当前版本匹配行，不因覆盖率缺口整体拒绝 |
 | 非法、空或超预算过滤器，或超过 500 个匹配项                | 422，不返回部分结果                                                |
-| 命中的文档严格解析失败、数据库查询异常或超时、请求预算耗尽 | 沿用用户搜索的错误映射，目前为 503，不返回部分结果                 |
+| 命中的文档严格解析失败、数据库查询异常或超时、请求预算耗尽 | 503，不返回部分结果                                                |
 
 搜索不在请求时检查源组织与文档的全量覆盖率、待重建状态或整库版本完整性，不临时联查源表生成返回文档。
 未匹配的损坏文档不保证被本次查询发现；若损坏使数据库表达式执行失败，则按查询失败处理。
 “不返回部分结果”约束一次查询的执行失败与结果超限，不表示对源组织覆盖完整性的保证。
 
 同样保留 PostgreSQL statement timeout 2 秒与 handler budget 5 秒；handler 超时返回不等于已经取消底层数据库操作。
-数据首建与发布核验属于运维流程，不应描述成现有用户 DSL 已具备的请求时完整性门禁。
+完整覆盖与发布核验由[维护流程](../../releases/organization-search-maintenance.md)显式执行。
 
 ## 异步构建
 
@@ -140,144 +174,26 @@ organization
 单份文档的构建必须取得一致源快照；版本仲裁必须阻止旧任务覆盖较新发布。
 失效登记还必须覆盖祖先修改与后代创建的并发交错，不能把文档级版本校验当作失效范围完整性的证明。
 
-### 可靠变化传播与发布
-
-实施采用持久源变化记录和文档待重建记录两个阶段，均由组织读模型拥有：
-
-1. 组织源事务以稳定的内部组织 ID 登记变化；创建登记自身，影响公开路径的 code、name、type 变化登记子树范围，
-   状态与删除等只影响本组织文档的变化登记自身范围。记录与源事实同提交或同回滚。
-   按可变 code 定位的资料更新使用实际受影响行返回的内部 ID；预读成功后实际更新零行，不登记虚假搜索变化。
-2. 提交后由 Worker 消费持久变化记录，再查询当前闭包、展开受影响组织并推进各组织的待重建版本。
-   本次展开对应的待重建登记与完成标记原子提交；中断或失败可重试，不能先确认完成再登记工作。
-   并发新变化不得被旧处理器的完成标记覆盖。
-3. 文档构建取得目标组织、闭包与祖先的一致源快照，严格验证完整路径与层级，再生成候选文档。
-4. 发布事务重验该组织当前待重建版本和处理状态，再原子替换文档与标记完成；旧候选被拒绝。
-   删除处理使文档退出可搜索集合，仍保留足以拒绝旧任务的处理版本，不能让迟到任务恢复已删除组织。
-
-队列只负责唤醒，两阶段的待处理事实以 PostgreSQL 为准；任何入队成功都不代表展开或发布已完成。
-提交后唤醒可以 best effort，但源变化记录本身不能只存在于内存 callback 或队列中。
-
-此设计处理一个具体交错：祖先尚未提交的新名称，在源事务扫描时可能看不到刚创建的后代，后代却可能先发布旧路径。
-将子树展开安排在祖先变化提交之后，展开前已提交的后代会被覆盖；展开后才提交的后代依靠自身创建记录构建，
-此时已经能看到该祖先变化。单靠源事务内扫描和文档版本校验不能保证这一点。
+变化登记、提交后子树展开与发布仲裁的工程约束见
+[Organization Search publication schema](../../architecture/contracts-and-database.md#organization-search-publication-schema)。
 
 ## Internal Client 访问范围
 
 全部有效 Internal Client 使用相同的公开搜索字段，并读取相同的完整组织文档。
-首版不按 Client 裁剪字段或限定组织子树；公开结构新增字段时，须作为向全部有效 Internal Client 开放数据的变更审查。
-
-## 独立生命周期与模块职责
-
-Organization Search 与 User Profile 共享 Filter DSL 的语言规则，但分别管理源事实、文档版本、待处理工作、发布与恢复。
-首次全量构建和数据核验通过后才开放新组织 DSL；这是发布操作要求，不增加请求时的全量覆盖率检查。
-组织搜索直接读取 PostgreSQL，首版不增加 Redis 文档缓存；任务队列可以复用现有基础设施。
-
-模块职责按以下范围收敛，具体文件与公开出口在实施设计中确定：
-
-- 组织源写入负责提交业务变化；通过事务绑定的窄接口登记源变化，不直接操作搜索文档或队列。
-- 组织读模型统一拥有变化影响范围、持久待处理记录、文档构建、版本仲裁、查询和维护行为。
-- Worker 通过组织读模型的公开接口组装任务消费与维护，API 通过查询接口执行 DSL，Admin API 与 API 复用变化登记能力。
-- 数据库 schema 与迁移归 `@iam/db`；可共享的 Filter 校验和编译能力只依赖显式公开结构，不持有某一结果根的发布状态。
-
-持久化使用独立组织搜索读模型，以内部组织 ID 关联源事实，保存 JSONB 文档及其 schema 版本、已发布处理版本和更新时间。
-源变化记录和各组织的待重建状态独立于 User Profile；公开响应只取文档业务字段，不暴露这些存储元数据。
-共享 Filter 能力由公开结构生成允许的路径和操作符，不维护第二套字段白名单，不允许调用方提交任意 SQL 或 JSON path。
+不按 Client 裁剪字段或限定组织子树；公开结构新增字段时，须作为向全部有效 Internal Client 开放数据的变更审查。
 
 ## 版本切换与维护
 
+Organization Search 独立管理文档、发布与恢复，不与 User Profile 绑定升级，也不改变组织详情的读取方式。
+组织搜索直接读取 PostgreSQL，不使用 Redis 文档缓存；模块所有权与公开出口见
+[共享契约与数据库](../../architecture/contracts-and-database.md#专用能力包契约)。
+
 组织搜索采用独立的单一当前 schema 版本；调用方不能选择版本，运行时不混读不同 schema 代际或回退旧结构。
-同一 schema 版本内不同组织各自的新旧事实仍按异步发布规则处理，与 schema 混读是不同概念。
+同一 schema 版本内不同组织各自的新旧事实仍按异步发布规则处理。
 
-首次构建或不兼容升级在组织搜索维护窗口完成：
-
-1. 暂停新组织 DSL 与正式组织写入口，停止旧组织文档发布任务；由发布流程保持窗口，不能依赖请求时自动核验覆盖率。
-2. 使用匹配当前版本的构建器，登记并完成全部组织的重建或删除处理。
-3. 在独立只读核验中确认组织覆盖、当前 schema、文档结构及源事实一致性、处理版本和待处理工作均满足放流要求。
-4. 全量核验通过后恢复组织写入与新 DSL。核验失败保持维护状态，修复后重新完整核验。
-
-组织读模型的 schema 升级不要求 User Profile 同时升级，也不改变组织详情的数据读取方式。
-完整核验是发布与恢复门禁，在线查询继续遵守上文的缺行、版本过滤和错误行为。
-
-### 恢复职责
-
-提供全量重建、失败补偿和只读核验三类维护命令，由 Worker 的命令入口调用组织读模型公开能力。
-维护命令的资源创建、关闭和配置遵循现有 Worker 约定，不启动额外业务 HTTP 服务。
-组织任务统一使用 `@iam/jobs` 的固定 `DEFAULT_QUEUE_PREFIX`（`iam`），源事务生产者、Worker consumer、命令和队列面板共享同一命名空间。
-Worker 命令不单独选择前缀；此前 Worker-only 前缀配置的非默认值在资源创建前拒绝，避免投递到正式消费者无法处理的队列。
-
-- 普通任务使用队列的自动重试；重试耗尽不删除持久待处理事实，也不以失败状态伪装发布完成。
-- 补偿命令恢复尚未展开的源变化、未完成或失败的文档构建，以及进程中断留下的过期处理状态，按当前版本重新唤醒工作。
-- 全量重建用于首次构建、版本升级及明确的全量修复，仍经过普通持久登记、构建和版本发布路径。
-- 只读核验不修复源事实、不改写文档、不触发新工作，也不能用入队数量或几个成功样本代替完整扫描。
-
-由部署环境周期触发补偿；本仓库不新增调度系统或 Worker 内置周期补偿，搜索请求不修复数据。
-部署负责人负责调度频率、执行失败告警及积压处理；没有固定新鲜度承诺，不等于可以丢弃或忽略失败工作。
-
-### 独立全量只读核验
-
-Worker `organization-search:verify` 通过 `@iam/organization-search-read-model/worker` 的
-`createOrganizationSearchVerifier` 完整读取源组织、全部发布记录（含删除墓碑）、dirty 与源变化事件。
-这些读取及 transaction-bound source reader 对闭包和祖先的事实重建均在同一个 PostgreSQL
-`REPEATABLE READ READ ONLY` transaction 中执行；不分批提交，不使用 User Profile 的多次根连接读取门禁。
-
-核验检查全量组织覆盖、独立当前 schema、严格文档与层级路径、源事实及删除状态、发布版本与 processed dirty
-版本一致性、两个阶段的完成凭据、源变化所记录的重建请求是否已履行，以及无源对象的孤立记录。
-历史 processed 事件可以保留较早处理版本，但不能指向尚未完成的更高版本。缺行、旧 schema、结构或源路径损坏、
-事实差异、未完成工作与凭据异常均报告 `failed`。报告按分类列出完整、排序后的 Organization ID 和变化 UUID，
-不采样、不以 enqueued、队列为空或单个 batch 成功代替全库判断。
-
-核验不更新源事实、生成文档、标记工作或入队；完成报告的 `status: passed` 对应退出 0，`failed` 对应退出 1。
-数据库执行失败、deadline、中断和资源关闭失败非零退出，不能将未完成扫描作为 passed。命令只连接 PostgreSQL，
-拥有专用连接池；中断取消仅匹配本次唯一连接身份、当前数据库和当前角色，随后关闭查询与取消连接。
-只读约束指业务数据扫描及零数据写入；deadline/中断时另一个控制连接调用 `pg_cancel_backend` 终止本次查询，
-不据此宣称命令没有服务器控制调用。
-这项门禁由维护流程显式执行，在线搜索仍按上文过滤缺行和非当前 schema。操作顺序见[组织搜索维护](../../releases/organization-search-maintenance.md)。
-
-### 补偿命令与失败观察
-
-Worker 提供 `organization-search:repair`，默认读取 `apps/worker/.env`，已有进程环境变量优先。
-使用 `IAM_WORKER_DATABASE_URL` 与 `IAM_WORKER_REDIS_HOST/PORT/DB`，以及适用的 Redis username/password；
-命令只构造组织 PostgreSQL 与队列资源，不启动 consumer、业务 HTTP、User Profile 或 Subject Access 恢复。
-普通 Worker 必须启用 `organization-search` module 才会消费重新投递的工作。
-
-```bash
-pnpm --filter @iam/worker organization-search:repair -- --limit 500 --deadline-ms 30000
-```
-
-每轮在源变化和文档构建两个阶段各选取最多 `--limit` 条 pending、failed 或过期 processing 工作。
-默认 limit 来自 `IAM_WORKER_ORGANIZATION_SEARCH_BACKFILL_BATCH_SIZE`；过期阈值来自
-`IAM_WORKER_ORGANIZATION_SEARCH_REPAIR_STALE_SECONDS`，默认 300 秒。阈值应覆盖部署中合理的处理时长，
-避免主动中断仍在执行的工作；持有处理事务行锁的工作会被跳过。确认原进程已退出时，运维人员可显式传入
-`--stale-before <ISO timestamp>` 调整本轮回收边界。
-
-回收保留待处理版本、失败诊断和重试次数，清除旧 claim；下一次普通处理取得新 ownership token。
-同版本旧构建候选也不能完成或覆盖重领后的工作。每次唤醒使用新的队列 job ID，重复补偿依靠 PostgreSQL
-状态与版本仲裁保持幂等，不重放源业务 mutation。重试耗尽后的队列失败记录和 PostgreSQL 的 attempts、lastError
-用于排障，合法旧文档继续可搜索。
-
-结构化完成报告分别列出 `sourceChanges` 和 `rebuilds` 的 `selected/enqueued/failed`，并给出总数。
-`status: enqueued` 且退出 0 只证明本轮选中的工作已投递，`publication: not-verified` 明确表示没有完成发布核验；
-空批次同样不证明全库完整。任何投递失败报告 `status: failed` 并退出 1，数据库或资源关闭失败也非零退出。
-本轮操作 deadline 默认 30 秒、最大 300 秒，随后执行有界资源关闭；deadline、SIGINT 或 SIGTERM 会停止本轮并关闭已创建的资源，
-保留已提交工作供下一轮恢复，不输出成功投递报告。强制杀进程可能留下 processing，之后由过期回收处理。
-
-部署环境负责周期调用、非零退出和阶段失败告警、积压检查及必要的连续有界排空。依赖恢复后可以重复运行同一命令；
-随后等待普通 Worker 收敛并执行独立完整核验，核验失败继续保持适用维护状态。本仓库没有创建外部 schedule，
-也没有 Worker 内置周期补偿；一次成功 repair、enqueued 数量或队列为空均不能代替放流核验。
-
-## 验证范围
-
-本次不做性能验收，不要求生成一万或十万组织基准数据、收集执行计划、测量 p50/p95 或进行并发压测。
-不以性能测试结果作为本次完成条件；必要索引仍作为正常实现设计的一部分。
-
-功能与可靠性验证继续覆盖公开查询语义、500/501 边界、同一文档筛选与返回、层级与路径、错误映射、
-源变化的事务登记、并发祖先变化传播、旧候选拒绝以及失败恢复。数据库与请求超时属于既有资源保护和错误行为，
-其正确性验证不等同于性能验收。
-
-并发与故障用例通过真实 PostgreSQL 验证祖先修改与后代创建的两种提交顺序、不同祖先并发修改、迟到候选、
-源事务回滚、展开事务回滚及中断后的重复处理；断言最终文档与处理版本收敛，而不是只断言任务出现。
-队列唤醒失败、任务重试耗尽、恢复命令和首次/升级核验另通过各自公开接口验证。
-提取共享 Filter 能力时，现有用户 DSL 的请求、结果及错误回归也属于受影响验证范围。
+首次构建、不兼容升级及全量恢复须在维护窗口完成重建和独立全量核验，通过后才恢复写入与 DSL。
+核验失败保持维护状态，修复后重新完整核验。完整核验是发布与恢复门禁，在线查询仍按上文过滤缺行和非当前 schema。
+操作步骤、命令、补偿调度与失败处置统一见[组织搜索维护](../../releases/organization-search-maintenance.md)。
 
 ## 接口范围
 
@@ -287,9 +203,3 @@ Public 和 Internal 非 DSL 组织搜索按 [ADR-0043](../../adr/0043-retire-pub
 
 Internal 组织详情、写入口以及 Admin 搜索、组织树和选择器继续保留。DSL 使用本文的完整文档响应、状态范围、
 500 条上限和异步读取边界，不为旧搜索参数新增操作符或兼容响应。
-
-## 实施边界
-
-组织 DSL 本身不新增组织移动、历史组织查询、成员反查或 Admin 页面；旧搜索退役按 ADR-0043 单独界定，
-不修改 User Profile 的文档字段、响应或发布契约。
-代码交付与目标环境切换分别记录；本契约不表示真实维护或部署已经执行。目标环境的停流、旧任务 drain、完整核验及放流读回由发布负责人负责。

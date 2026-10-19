@@ -13,14 +13,16 @@ Next review: 2026-10-31
 PostgreSQL 审计日志，也不会创建 `system_log` 表。
 
 前端 `admin` 和 `sso` 容器当前未打日志采集标签，仍有意排除在系统日志栈之外。
+执行前固定镜像、配置版本、目标主机及数据目录。以下命令从仓库根目录执行，`docker/.env` 表示该主机的私有环境文件；
+开发按 `.env.dev.example`、生产按 `.env.prod.example` 准备，分别核对，命令始终使用同一目标环境文件。
 
 ## 开发环境
 
 照常启动普通开发栈。Loki、Grafana 和 Alloy 位于同一个 compose 文件中，并通过 `observability` profile 按需启用：
 
 ```bash
-docker compose -f docker/docker-compose-dev.yml up -d
-docker compose -f docker/docker-compose-dev.yml --profile observability up -d loki grafana alloy
+docker compose --env-file docker/.env -f docker/docker-compose-dev.yml up -d
+docker compose --env-file docker/.env -f docker/docker-compose-dev.yml --profile observability up -d loki grafana alloy
 ```
 
 默认开发端口：
@@ -32,31 +34,60 @@ docker compose -f docker/docker-compose-dev.yml --profile observability up -d lo
 在不停止 IAM 的情况下停止可观测性栈：
 
 ```bash
-docker compose -f docker/docker-compose-dev.yml stop loki grafana alloy
-docker compose -f docker/docker-compose-dev.yml rm -f loki grafana alloy
+docker compose --env-file docker/.env -f docker/docker-compose-dev.yml stop loki grafana alloy
+docker compose --env-file docker/.env -f docker/docker-compose-dev.yml rm -f loki grafana alloy
 ```
 
 ## 生产环境
 
-运行一组集中式 Loki 与 Grafana，并在每台运行 IAM 目标容器的主机上运行一个 Alloy agent：
+运行一组集中式 Loki 与 Grafana，并在每台运行 IAM 目标容器的主机上运行一个 Alloy agent。
+启动前准备 Grafana root URL、管理员凭据及下文 OIDC 配置；按主机填写 Alloy host 标签和 Loki 推送地址。
+Compose 的必填项以[生产编排](../../docker/docker-compose-observability-prod.yml)为准，不能只设置下表中的部分变量。
+
+在中心主机启动 Loki/Grafana，在各 IAM 主机启动 Alloy：
 
 ```bash
-docker compose -f docker/docker-compose-observability-prod.yml up -d loki grafana
-docker compose -f docker/docker-compose-observability-prod.yml up -d alloy
+docker compose --env-file docker/.env -f docker/docker-compose-observability-prod.yml up -d loki grafana
+docker compose --env-file docker/.env -f docker/docker-compose-observability-prod.yml up -d alloy
 ```
 
 重要环境变量：
 
 - `LOKI_IMAGE`、`GRAFANA_IMAGE`、`GRAFANA_ALLOY_IMAGE`：为内部镜像仓库覆盖固定的默认镜像。
 - `LOKI_PUSH_URL`：Alloy 推送端点，例如 `http://loki.internal:3100/loki/api/v1/push`。
+- `LOKI_HTTP_PUBLISHED_HOST`：中心 Loki 默认只绑定 `127.0.0.1`；跨主机采集需由部署方提供受控可达的地址或代理。
+  核对各 Alloy 主机的 DNS、路由和访问边界，不能把仅本机可达的默认端口当成远端推送入口。
 - `GRAFANA_LOKI_URL`：Grafana 中 Loki 数据源的 URL。
 - `IAM_LOG_ENV`：Loki `env` 标签，生产 compose 中默认为 `prod`。
 - `IAM_LOG_HOST`：本地 Alloy agent 的稳定主机标签。
 - `LOKI_DATA_PATH`、`GRAFANA_DATA_PATH`、`ALLOY_DATA_PATH`：持久化数据目录。
 
-Loki 默认配置为保留 30 天（`720h`）。如果某个环境需要不同的保留窗口，可覆盖 `LOKI_RETENTION_PERIOD`。监控 Loki 数据目录，并在磁盘使用率达到危险水位前告警；随附的 Grafana 告警规则包含采集失败信号，但磁盘水位也应由宿主平台监控。
+Loki 配置中的默认保留期为 30 天（`720h`）。当前 dev/prod Compose 未向 Loki 容器透传 `LOKI_RETENTION_PERIOD`，
+仅修改宿主 `.env` 不会完成保留期覆盖。接线修复与生效核验方式见[讨论 #262](https://github.com/cyy1998/shgas-iam/issues/262)。
+有部署侧额外注入时，应独立核对容器接收值和 Loki 的实际配置；未取得生效证据时按默认值记录，不能宣称覆盖已完成。
+磁盘使用率与水位告警由宿主平台监控；随附采集失败告警不能替代容量监控。
 
-通过快照 `LOKI_DATA_PATH` 和 `GRAFANA_DATA_PATH` 备份 Loki 与 Grafana。回滚该栈时，停止可观测性 compose 服务即可；IAM 应用会继续写 stdout/stderr 日志。
+### 启动后的完成检查
+
+1. 用相同 Compose 文件和环境执行 `ps`，确认目标服务持续运行，没有反复重启；进程存在仅是第一步。
+2. 在 Grafana 检查 `iam-loki` 数据源及三个下述 dashboard 已加载，选取本次部署时间窗口。
+   对每个预期主机和 service 查询新日志，例如 `{env="prod", host="prod-host-01"} | json`，
+   对照一条已知请求确认新日志到达，不能用旧日志或空图证明采集成功。
+3. 启用 OIDC 时完成一次真实登录，核对 issuer、Token/UserInfo 入口和实际 dashboard 权限；生产还须验证实际告警通知路由。
+4. 改动 trace 链路时执行[Trace Smoke](#trace-smoke)。任一检查失败，按下面的恢复步骤处理后重验；保留缺失主机、时间窗口和安全诊断。
+
+### 停止、回退与数据恢复
+
+停止 Loki、Grafana 或 Alloy 只停止相应处理，不恢复旧镜像、配置或数据。IAM 仍可写 stdout/stderr，
+但停采期间的日志能否补齐受 Docker 日志保留与采集位置影响，恢复后需独立核对缺口。
+
+- 发布前记录镜像 digest、配置版本和挂载目录，为 Loki/Grafana 数据取得可恢复的一致备份；备份方式须适配目标存储与版本。
+- 配置或镜像发布失败时，停止受影响组件，恢复已知兼容的配置与镜像后重新创建服务；保留数据卷，
+  不用删卷或 `down -v` 代替回退。新版已改写数据格式时，先核对旧版兼容性，不能直接降级。
+- 只有确需数据恢复且版本、备份范围和恢复点均明确时，停止相关写入并按存储恢复流程恢复目录；
+  记录恢复点之后的数据缺口。缩短保留期已删除的日志不能靠调大参数找回。
+- 恢复后重做启动完成检查、适用 Trace Smoke 和告警验证，分别记录服务恢复与日志缺口；
+  检查仍失败时保留现场和备份，不把停止服务或容器启动成功标为恢复完成。
 
 ## Trace 发布前置
 
@@ -102,7 +133,7 @@ GRAFANA_OIDC_CLIENT_SECRET=<secret>
 然后从统一开发 compose 文件重新创建 Grafana：
 
 ```bash
-docker compose -f docker/docker-compose-dev.yml --profile observability up -d --force-recreate grafana
+docker compose --env-file docker/.env -f docker/docker-compose-dev.yml --profile observability up -d --force-recreate grafana
 ```
 
 显式设置 `GRAFANA_OIDC_AUTH_URL`、`GRAFANA_OIDC_TOKEN_URL`、`GRAFANA_OIDC_USERINFO_URL`，
@@ -135,8 +166,6 @@ Grafana provisioning 文件位于 `observability/grafana/provisioning/`。
 - `IAM Error Center`：当 Overview 显示错误时使用。它按服务、事件和错误类型/代码聚合错误，然后展示带 request 和 trace 标识的近期样例，便于下钻。
 - `IAM Request Drilldown`：用于指定 `requestId` 或 `traceId`。它展示关联详情、请求级汇总信号、结构化时间线、可读时间线，以及用于留证的原始 JSON 日志。
 
-Dashboard 颜色使用稳定的运维语义：红色表示 `error`/`fatal` 或 5xx，黄色表示 `warn` 或延迟风险，绿色表示健康/2xx 信号，蓝色表示流量或总量。Dashboard 图例和表格列应使用可读名称，例如 service、event、status、request ID 和 duration，而不是原始 `{label="value"}` 表达式。
-
 Grafana data link 和管理端深链只能携带技术关联字段：
 
 - `env`
@@ -146,8 +175,6 @@ Grafana data link 和管理端深链只能携带技术关联字段：
 - time range
 
 不要把用户名、用户 ID、手机号、client secret、token、审计详情、业务查询字符串、堆栈、完整请求 URL、请求体或响应体放进 dashboard link。
-
-当前没有把 dashboard 截图作为视觉基线提交到仓库。如果某次发布需要截图评审，请在 provisioning 加载后从开发可观测性栈生成截图，并将截图产物保留在仓库外，除非有专门评审流程要求纳入。
 
 ## Trace Smoke
 
@@ -196,6 +223,6 @@ Authorization header、Cookie、请求体、响应体、完整业务 URL query�
 
 Alloy 会对常见敏感 key name 执行二次脱敏。APISIX 访问日志不包含 body、敏感 header 或原始查询字符串。
 
-管理端 Grafana 深链只包含 requestId、traceId、service、env，以及围绕审计事件的时间范围。不得包含 username、userId、mobile、client secret、token、审计详情、业务查询字符串或堆栈。
+管理端深链与 Grafana data link 统一遵守[Dashboard 工作流](#dashboard-工作流)中的字段限制。
 
 OIDC 现在随 API 写入 service=api。结构化 oidc_server_error/error 用于依赖与服务失败，oidc_protocol_error/warn 用于已知协议拒绝；只记录安全 code/outcome/path/status，不记录原始请求或凭据。
