@@ -8,7 +8,7 @@ import { and, count, eq, getTableColumns, inArray } from "drizzle-orm";
 import type { PositionCreateDto, PositionFuzzyQueryDto, PositionUpdateDto } from "./position.type";
 
 export function createPositionRepository(db: DbClient) {
-  async function write<T>(operation: () => Promise<T>): Promise<T> {
+  async function write<T>(operation: () => Promise<T>, conflictMessage: string): Promise<T> {
     try {
       return await operation();
     } catch (error) {
@@ -17,7 +17,7 @@ export function createPositionRepository(db: DbClient) {
         detail?.code === "23505" &&
         (detail.constraint === "position_post_code_unique" || detail.constraint === "position_post_code_key")
       ) {
-        throw new PositionCodeExistsError();
+        throw new PositionCodeExistsError(conflictMessage);
       }
       throw error;
     }
@@ -52,7 +52,10 @@ export function createPositionRepository(db: DbClient) {
       return firstRow(rows) ?? null;
     },
     async setPosition(positionCreateDto: PositionCreateDto) {
-      return write(async () => firstRow(await db.insert(positions).values(positionCreateDto).returning()));
+      return write(
+        async () => firstRow(await db.insert(positions).values(positionCreateDto).returning()),
+        "重复岗位code代码",
+      );
     },
     async searchPositionsFuzzy(positionAdminQueryDto: PositionFuzzyQueryDto) {
       const { exactConditions, fuzzyConditions } = positionAdminQueryDto.conditions;
@@ -78,14 +81,16 @@ export function createPositionRepository(db: DbClient) {
       });
     },
     async updatePositionByCode(posCode: string, data: PositionUpdateDto) {
-      return write(async () =>
-        firstRow(
-          await db
-            .update(positions)
-            .set(compactUpdate(data))
-            .where(and(eq(positions.posCode, posCode), eq(positions.isDelete, false)))
-            .returning(),
-        ),
+      return write(
+        async () =>
+          firstRow(
+            await db
+              .update(positions)
+              .set(compactUpdate(data))
+              .where(and(eq(positions.posCode, posCode), eq(positions.isDelete, false)))
+              .returning(),
+          ),
+        "重命名岗位编码失败：岗位编码已存在",
       );
     },
     async softDeletePositionByCode(posCode: string) {
@@ -111,13 +116,6 @@ export function createPositionRepository(db: DbClient) {
           ),
         );
       return firstRow(rows)?.value ?? 0;
-    },
-    async getAnyPositionByCode(posCode: string) {
-      return (
-        (await db.query.positions.findFirst({
-          where: { posCode },
-        })) ?? null
-      );
     },
   };
 }

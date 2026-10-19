@@ -3,7 +3,6 @@ import { OrganizationStatus, type OrganizationType } from "@iam/contracts";
 import type { TreeSelectProps } from "antd";
 import { message, TreeSelect } from "antd";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { filterOrganizationSelectorNodesByStatus } from "./organizationTreeSelector.helpers";
 
 type TreeNode = NonNullable<TreeSelectProps["treeData"]>[number];
 const DEFAULT_SELECTABLE_STATUSES = [OrganizationStatus.Enable];
@@ -123,7 +122,6 @@ export default function OrganizationTreeSelector({
     }),
     [selectableOrgTypesKey, selectableStatusesKey, visibleStatusesKey],
   );
-  const currentVisibleStatuses = baseQuery.visibleStatuses;
   const loading = loadedBaseQuery !== baseQuery;
 
   useEffect(() => {
@@ -139,7 +137,7 @@ export default function OrganizationTreeSelector({
     })
       .then((nodes) => {
         if (!cancelled) {
-          const rootNodes = filterOrganizationSelectorNodesByStatus(nodes, currentVisibleStatuses).map(toTreeNode);
+          const rootNodes = nodes.map(toTreeNode);
           setTreeData((prev) => {
             const nextNodes = preserveLoadedChildren(rootNodes, prev);
             const selectedNode = valueRef.current ? findTreeNode(prev, valueRef.current) : null;
@@ -158,7 +156,7 @@ export default function OrganizationTreeSelector({
     return () => {
       cancelled = true;
     };
-  }, [baseQuery, currentVisibleStatuses]);
+  }, [baseQuery]);
 
   useEffect(() => {
     if (!value) return;
@@ -170,8 +168,8 @@ export default function OrganizationTreeSelector({
       pageSize: 1,
     })
       .then((nodes) => {
-        if (cancelled || nodes.length === 0) return;
-        const [node] = filterOrganizationSelectorNodesByStatus(nodes, currentVisibleStatuses);
+        if (cancelled) return;
+        const [node] = nodes;
         if (!node) return;
         const selectedNode = toTreeNode(node);
         setTreeData((prev) => upsertTreeNode(prev, selectedNode));
@@ -185,7 +183,7 @@ export default function OrganizationTreeSelector({
     return () => {
       cancelled = true;
     };
-  }, [baseQuery, currentVisibleStatuses, value]);
+  }, [baseQuery, value]);
 
   const loadData: TreeSelectProps["loadData"] = async (node) => {
     const children = await getOrganizationSelectorNodes({
@@ -193,13 +191,7 @@ export default function OrganizationTreeSelector({
       parentOrgCode: String(node.value),
       pageSize: 200,
     });
-    setTreeData((prev) =>
-      mergeChildren(
-        prev,
-        String(node.value),
-        filterOrganizationSelectorNodesByStatus(children, currentVisibleStatuses).map(toTreeNode),
-      ),
-    );
+    setTreeData((prev) => mergeChildren(prev, String(node.value), children.map(toTreeNode)));
   };
 
   const onSearch = async (text: string) => {
@@ -213,7 +205,7 @@ export default function OrganizationTreeSelector({
       text: keyword,
       pageSize: 80,
     });
-    setSearchData(filterOrganizationSelectorNodesByStatus(nodes, currentVisibleStatuses).map(toTreeNode));
+    setSearchData(nodes.map(toTreeNode));
   };
 
   return (

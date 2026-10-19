@@ -1,5 +1,4 @@
 import { isRecord } from "../manifest";
-import { getLabel, isRepoManaged, ownershipPolicy, validateResourceScope } from "../ownership-policy";
 import { getResourceId, resourceDefinitions } from "../resources";
 import type { LoadedManifest, ManifestObject, ResourceKind, ValidationIssue } from "../types";
 
@@ -8,8 +7,6 @@ type Validator = (manifest: LoadedManifest) => ValidationIssue[];
 const validators: Validator[] = [
   validateSourceSchema,
   validateIds,
-  validateOwnershipLabels,
-  validateScopeLabels,
   validateReferences,
   validateTlsMaterial,
   validateSensitiveValues,
@@ -248,48 +245,6 @@ function validateIds(manifest: LoadedManifest): ValidationIssue[] {
       } else {
         ids.add(id);
       }
-    }
-  }
-
-  return issues;
-}
-
-function validateOwnershipLabels(manifest: LoadedManifest): ValidationIssue[] {
-  const issues: ValidationIssue[] = [];
-
-  for (const definition of resourceDefinitions) {
-    const file = manifest.manifest;
-    for (const [index, resource] of manifest.resources[definition.kind].entries()) {
-      const basePath = `${definition.topKey}[${index}]`;
-
-      if (!isRepoManaged(resource)) {
-        issues.push({
-          code: "OWNERSHIP_LABELS_REQUIRED",
-          file,
-          path: `${basePath}.labels`,
-        });
-      }
-
-      if (getLabel(resource, ownershipPolicy.labelKeys.source) === ownershipPolicy.dynamicSource) {
-        issues.push({
-          code: "DYNAMIC_SOURCE_FORBIDDEN",
-          file,
-          path: `${basePath}.labels.source`,
-        });
-      }
-    }
-  }
-
-  return issues;
-}
-
-function validateScopeLabels(manifest: LoadedManifest): ValidationIssue[] {
-  const issues: ValidationIssue[] = [];
-
-  for (const definition of resourceDefinitions) {
-    const file = manifest.manifest;
-    for (const [index, resource] of manifest.resources[definition.kind].entries()) {
-      validateResourceScope(file, `${definition.topKey}[${index}]`, resource, manifest.scope, issues);
     }
   }
 

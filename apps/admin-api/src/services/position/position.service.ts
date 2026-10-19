@@ -4,8 +4,8 @@ import { adminAuditTransactionOptions } from "@admin-api/services/audit/audit.co
 import { buildPositionAudit } from "@admin-api/services/audit/events/position.audit";
 import { BadRequestError } from "@iam/api-core/errors";
 import { PositionStatus } from "@iam/contracts";
-import { PositionCodeExistsError, PositionHasEmploymentError, PositionNotFoundError } from "@iam/domain/position";
-import type { AdminPositionServiceDeps, AdminPositionTransactionPorts } from "./position.port";
+import { PositionHasEmploymentError, PositionNotFoundError } from "@iam/domain/position";
+import type { AdminPositionServiceDeps } from "./position.port";
 import {
   PositionCreateDtoSchema,
   PositionDtoSchema,
@@ -19,21 +19,6 @@ import type {
   PositionUpdateDto,
 } from "./position.type";
 
-async function assertRenamedPositionCodeAvailable(
-  currentPosCode: string,
-  nextPosCode: string | undefined,
-  tx: AdminPositionTransactionPorts,
-) {
-  if (nextPosCode === undefined || nextPosCode === currentPosCode) {
-    return;
-  }
-
-  const existingPos = await tx.positionRepository.getAnyPositionByCode(nextPosCode);
-  if (existingPos !== null) {
-    throw new PositionCodeExistsError("重命名岗位编码失败：岗位编码已存在");
-  }
-}
-
 export function createPositionService(deps: AdminPositionServiceDeps) {
   const mutation = createAdminMutation(deps.uow);
   async function searchPositionsFuzzy(input: PositionFuzzyQueryDto): Promise<PositionSearchResult> {
@@ -43,10 +28,6 @@ export function createPositionService(deps: AdminPositionServiceDeps) {
   async function setPosition(positionCreateDto: PositionCreateDto, auditContext?: AdminAuditContext) {
     const normalizedInput = PositionCreateDtoSchema.parse(positionCreateDto);
     return await mutation.transaction(async (tx) => {
-      const existingPos = await tx.positionRepository.getAnyPositionByCode(normalizedInput.posCode);
-      if (existingPos !== null) {
-        throw new PositionCodeExistsError("重复岗位code代码");
-      }
       const created = await tx.positionRepository.setPosition(normalizedInput);
       if (created === null) throw new Error("Position insert returned no row");
       await tx.auditService.recordAuditLog(
@@ -92,7 +73,6 @@ export function createPositionService(deps: AdminPositionServiceDeps) {
           (normalizedPatch.status !== undefined && normalizedPatch.status !== existing.status);
         const intent = normalizedPatch.status !== undefined;
         if (!changed && !intent) return { changed: false, result: null };
-        await assertRenamedPositionCodeAvailable(posCode, normalizedPatch.posCode, tx);
         if (
           changed &&
           normalizedPatch.status !== undefined &&

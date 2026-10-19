@@ -309,6 +309,11 @@ test("observations reject copies, serialization, cross operation/factory, manage
   expect(Reflect.set(root.observation.userSession.amr, "0", "fake")).toBe(false);
   expect(Reflect.set(root.observation.userSession.origin!, "ip", "fake")).toBe(false);
   expect(api.useObservation(root.observation).userSession).toMatchObject(authentication);
+  expect(Reflect.set(child.userSession, "subjectContext", "changed")).toBe(false);
+  expect(Reflect.set(child.clientSession, "instance", "changed")).toBe(false);
+  expect(Reflect.set(child.clientSession, "expiresAt", 0)).toBe(false);
+  const lifetime = await api.getIssuanceLifetime(child, 7200);
+  expect(lifetime.expiresAt).toBe(child.clientSession.expiresAt);
   const inventory = await api.captureSessions({ scope: { subjectIdentifier } });
   const dtoError = await rejection(() => open(api, inventory.records[0] as unknown as UserSessionObservation));
   expect(dtoError).toBeInstanceOf(SessionObservationRequiredError);

@@ -335,12 +335,14 @@ describe("Position mutations through production PostgreSQL UnitOfWork", () => {
   for (const status of [EmploymentStatus.Enable, EmploymentStatus.Pause]) {
     test(`Open Employment ${status} blocks pause and deletion`, async () => {
       const position = await seedPosition();
+      await seedPosition("OCCUPIED");
       await seedEmployment(position.id, status);
       const { service } = createCommand();
       const before = await facts();
       for (const command of [
         () => service.updatePositionStatus("POSITION", PositionStatus.Pause),
         () => service.deletePosition("POSITION"),
+        () => service.updatePosition("POSITION", { posCode: "OCCUPIED", status: PositionStatus.Pause }),
       ]) {
         const error = await failure(command);
         expect(error).toBeInstanceOf(PositionHasEmploymentError);
@@ -431,12 +433,16 @@ describe("Position mutations through production PostgreSQL UnitOfWork", () => {
     const { service } = createCommand();
     await service.deletePosition("OCCUPIED");
     const before = await facts();
-    for (const command of [
-      () => service.setPosition({ posCode: "  OCCUPIED  ", posName: "New", status: PositionStatus.Enable }),
-      () => service.updatePosition("POSITION", { posCode: "  OCCUPIED  " }),
-    ]) {
+    for (const [command, message] of [
+      [
+        () => service.setPosition({ posCode: "  OCCUPIED  ", posName: "New", status: PositionStatus.Enable }),
+        "重复岗位code代码",
+      ],
+      [() => service.updatePosition("POSITION", { posCode: "  OCCUPIED  " }), "重命名岗位编码失败：岗位编码已存在"],
+    ] as const) {
       const error = await failure(command);
       expect(error).toBeInstanceOf(PositionCodeExistsError);
+      expect(error).toMatchObject({ httpStatus: 409, message });
     }
     const after = await facts();
     expect(after).toEqual(before);
@@ -465,25 +471,28 @@ describe("Position mutations through production PostgreSQL UnitOfWork", () => {
   });
 
   for (const operation of ["create", "rename"] as const) {
-    test(`${operation} competitors pass prechecks in independent transactions and unique constraint picks one winner`, async () => {
+    test(`${operation} competitors reach independent writes and unique constraint picks one winner`, async () => {
       if (operation === "rename") {
         await seedPosition("FIRST");
         await seedPosition("SECOND");
       }
       let arrived = 0;
       const gate = Promise.withResolvers<void>();
+      async function waitForBothWrites() {
+        if (++arrived === 2) gate.resolve();
+        await gate.promise;
+      }
       const { service } = createCommand((tx) => ({
         ...tx,
         positionRepository: {
           ...tx.positionRepository,
-          getAnyPositionByCode: async (code) => {
-            const current = await tx.positionRepository.getAnyPositionByCode(code);
-            if (code === "WINNER") {
-              arrived++;
-              if (arrived === 2) gate.resolve();
-              await gate.promise;
-            }
-            return current;
+          setPosition: async (input) => {
+            await waitForBothWrites();
+            return await tx.positionRepository.setPosition(input);
+          },
+          updatePositionByCode: async (code, patch) => {
+            await waitForBothWrites();
+            return await tx.positionRepository.updatePositionByCode(code, patch);
           },
         },
       }));
@@ -498,6 +507,7 @@ describe("Position mutations through production PostgreSQL UnitOfWork", () => {
       expect(results.filter((result) => result.status === "fulfilled")).toHaveLength(1);
       const rejected = results.find((result) => result.status === "rejected");
       expect(rejected?.reason).toBeInstanceOf(PositionCodeExistsError);
+      expect(rejected?.reason).toMatchObject({ httpStatus: 409 });
       const after = await facts();
       expect(after.positions.filter((position) => position.posCode === "WINNER")).toHaveLength(1);
       expect(after.positions).toHaveLength(operation === "create" ? 1 : 2);

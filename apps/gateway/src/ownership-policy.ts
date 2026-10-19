@@ -1,4 +1,4 @@
-import type { ManifestObject, ManifestScope, ValidationIssue } from "./types";
+import type { ManifestObject, ManifestScope } from "./types";
 
 export const ownershipPolicy = {
   managedBy: "shgas-iam",
@@ -41,30 +41,6 @@ export function isInManifestScope(resource: ManifestObject, scope: ManifestScope
     getLabel(resource, ownershipPolicy.labelKeys.env) === scope.env &&
     getLabel(resource, ownershipPolicy.labelKeys.app) === scope.app
   );
-}
-
-export function validateResourceScope(
-  file: string,
-  basePath: string,
-  resource: ManifestObject,
-  scope: ManifestScope,
-  issues: ValidationIssue[],
-): void {
-  if (getLabel(resource, ownershipPolicy.labelKeys.env) !== scope.env) {
-    issues.push({
-      code: "SCOPE_ENV_MISMATCH",
-      file,
-      path: `${basePath}.labels.env`,
-    });
-  }
-
-  if (getLabel(resource, ownershipPolicy.labelKeys.app) !== scope.app) {
-    issues.push({
-      code: "SCOPE_APP_MISMATCH",
-      file,
-      path: `${basePath}.labels.app`,
-    });
-  }
 }
 
 function isRecord(value: unknown): value is ManifestObject {

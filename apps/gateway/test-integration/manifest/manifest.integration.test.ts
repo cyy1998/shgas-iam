@@ -31,6 +31,8 @@ describe("apisix manifest validation", () => {
             },
           }),
         ],
+        consumers: [{ key: "reader" }],
+        ssls: [{ key: "tls", cert: "certificate", private_key: "${TLS_PRIVATE_KEY}" }],
         routes: [
           sourceRoute({
             key: "api",
@@ -61,6 +63,17 @@ describe("apisix manifest validation", () => {
     );
 
     expect(validateManifest(manifest)).toEqual([]);
+    for (const resources of Object.values(manifest.resources)) {
+      expect(resources.length).toBeGreaterThan(0);
+      for (const resource of resources) {
+        expect(resource.labels).toMatchObject({
+          managed_by: "shgas-iam",
+          source: "repo-manifest",
+          env: "test",
+          app: "iam",
+        });
+      }
+    }
     expect(manifest.resources.services.at(0)).toMatchObject({
       id: "iam.test",
       name: "iam.test",

@@ -8,6 +8,7 @@ import { createErrorHandler } from "@iam/api-core/middlewares";
 import { getApiRuntimeErrorFormatterData } from "@iam/api-core/trpc";
 import { PositionStatus } from "@iam/contracts";
 import type { Position } from "@iam/domain/position";
+import { PositionCodeExistsError } from "@iam/domain/position";
 import type { Context } from "hono";
 import { Hono } from "hono";
 import {
@@ -19,9 +20,9 @@ function surface(roles = ["iam:admin"]) {
   const now = new Date("2026-09-07T00:00:00Z");
   let row: Position | null = null;
   const repository = {
-    getAnyPositionByCode: async (code: string) => (row?.posCode === code ? row : null),
     lockPositionByCode: async (code: string) => (row?.posCode === code && !row.isDelete ? row : null),
     setPosition: async (data: { posCode: string; posName: string }) => {
+      if (row?.posCode === data.posCode) throw new PositionCodeExistsError();
       row = {
         ...data,
         id: 1,

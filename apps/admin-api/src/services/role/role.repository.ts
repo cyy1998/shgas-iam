@@ -68,14 +68,6 @@ export function createRoleRepository(db: DbClient) {
       return firstRow(await attachRoleContext(row === undefined ? [] : [row], db)) ?? null;
     },
 
-    async getAnyRoleByCode(roleCode: string) {
-      return (
-        (await db.query.roles.findFirst({
-          where: { roleCode },
-        })) ?? null
-      );
-    },
-
     async searchRolesPaged(input: RolePaginationQueryDto) {
       const where = roleAdminWhere(input, db);
       const [rows, totalRows] = await Promise.all([
@@ -229,14 +221,6 @@ export function createRoleRepository(db: DbClient) {
         rows: await attachAssignmentTargets(rows, db),
         total: firstRow(totalRows)?.value ?? 0,
       };
-    },
-
-    async findAssignmentByRoleTarget(roleId: number, targetType: RoleAssignmentTargetType, targetId: number) {
-      return (
-        (await db.query.roleAssignments.findFirst({
-          where: { roleId, targetType, targetId },
-        })) ?? null
-      );
     },
 
     async createAssignment(data: AdminRoleAssignmentCreateRecord) {

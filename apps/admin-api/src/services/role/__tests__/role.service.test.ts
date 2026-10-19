@@ -2,6 +2,7 @@ import { describe, expect, mock, test } from "bun:test";
 import { createRoleService } from "@admin-api/services/role/role.service";
 import { createImmediateUnitOfWork } from "@admin-api/test/fakes";
 import { RoleAssignmentTargetType, RoleStatus } from "@iam/contracts";
+import { RoleAssignmentExistsError } from "@iam/domain/role";
 
 const now = new Date("2026-01-01T00:00:00Z");
 
@@ -58,8 +59,6 @@ function createService() {
       createAssignment: mock(async () => ({ ...assignment(), target: undefined })),
       createRole: mock(async () => role()),
       deleteAssignment: mock(async () => assignment()),
-      findAssignmentByRoleTarget: mock(async () => null),
-      getAnyRoleByCode: mock(async () => null),
       lockAssignmentByIdForRole: mock(async () => assignment()),
       getAssignableEmploymentById: mock(async (id: number) => ({
         id,
@@ -144,18 +143,20 @@ describe("createRoleService", () => {
     ]);
   });
 
-  test("rejects duplicate assignment before insert", async () => {
+  test("preserves an assignment conflict without recording success facts", async () => {
     const { service, tx } = createService();
-    (tx.roleRepository.findAssignmentByRoleTarget as any).mockResolvedValue(assignment());
+    const conflict = new RoleAssignmentExistsError();
+    tx.roleRepository.createAssignment.mockRejectedValue(conflict);
 
     await expect(
       service.createAssignment("portal-admin", {
         targetType: RoleAssignmentTargetType.Organization,
         orgCode: "ORG",
       }),
-    ).rejects.toThrow("角色分配已存在");
+    ).rejects.toBe(conflict);
 
-    expect(tx.roleRepository.createAssignment).not.toHaveBeenCalled();
+    expect(tx.auditService.recordAuditLog).not.toHaveBeenCalled();
+    expect(tx.userProfileInvalidation.recordChanges).not.toHaveBeenCalled();
   });
 
   test("rejects descendant scope on non-organization assignment", async () => {

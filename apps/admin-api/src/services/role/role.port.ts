@@ -20,12 +20,6 @@ export interface AdminRoleTransactionStorePort {
   createAssignment: (input: AdminRoleAssignmentCreateRecord) => Promise<AdminRoleAssignmentRecord | null>;
   createRole: (input: AdminRoleCreateRecord) => Promise<Role | null>;
   deleteAssignment: (roleId: number, assignmentId: number) => Promise<AdminRoleAssignmentRecord | null>;
-  findAssignmentByRoleTarget: (
-    roleId: number,
-    targetType: RoleAssignmentTargetType,
-    targetId: number,
-  ) => Promise<unknown | null>;
-  getAnyRoleByCode: (roleCode: string) => Promise<Role | null>;
   lockAssignmentByIdForRole: (roleId: number, assignmentId: number) => Promise<RoleAssignmentDto | null>;
   getAssignableEmploymentById: (employmentId: number) => Promise<RoleAssignmentTargetSummaryDto | null>;
   getAssignableOrganizationByCode: (orgCode: string) => Promise<RoleAssignmentTargetSummaryDto | null>;

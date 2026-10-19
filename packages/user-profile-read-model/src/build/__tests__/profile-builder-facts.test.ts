@@ -225,11 +225,25 @@ describe("UserProfileBuilder", () => {
 
   test.each([
     {
+      name: "Enable Employment references a missing Position",
+      employment: employment(10, 1, 100, 1000),
+      positions: [],
+      orgPathRows: [orgPathRow(100, 100, "ORG", 0)],
+      reason: "position-not-effective",
+    },
+    {
       name: "Enable Employment references an inactive Position",
       employment: employment(10, 1, 100, 1000),
       positions: [{ ...position(1000), isDelete: true }],
       orgPathRows: [orgPathRow(100, 100, "ORG", 0)],
       reason: "position-not-effective",
+    },
+    {
+      name: "Enable Employment has no assigned Organization in its path",
+      employment: employment(10, 1, 100, 1000),
+      positions: [position(1000)],
+      orgPathRows: [orgPathRow(100, 200, "PARENT", 1)],
+      reason: "organization-not-effective",
     },
     {
       name: "Pause Employment references an inactive Organization",

@@ -8,9 +8,7 @@ import { ClientNotFoundError } from "@iam/domain/client";
 import type { RoleAssignmentTargetSummaryDto } from "@iam/domain/role";
 import {
   InvalidRoleAssignmentScopeError,
-  RoleAssignmentExistsError,
   RoleAssignmentTargetNotFoundError,
-  RoleCodeExistsError,
   RoleHasAssignmentError,
   RoleNotFoundError,
   toRoleAssignmentDto,
@@ -47,11 +45,6 @@ export function createRoleService(deps: AdminRoleServiceDeps) {
 
   async function createRole(dto: RoleCreateDto, auditContext?: AdminAuditContext) {
     return await mutation.transaction(async (tx) => {
-      const existing = await tx.roleRepository.getAnyRoleByCode(dto.roleCode);
-      if (existing !== null) {
-        throw new RoleCodeExistsError("角色编码已存在");
-      }
-
       const client = await tx.roleRepository.getClientByCode(dto.clientCode);
       if (client === null) {
         throw new ClientNotFoundError("所属应用不存在");
@@ -176,11 +169,6 @@ export function createRoleService(deps: AdminRoleServiceDeps) {
         throw new RoleNotFoundError();
       }
       const resolved = await resolveAssignmentTarget(dto, tx);
-      const existing = await tx.roleRepository.findAssignmentByRoleTarget(role.id, dto.targetType, resolved.target.id);
-      if (existing !== null) {
-        throw new RoleAssignmentExistsError();
-      }
-
       const assignment = await tx.roleRepository.createAssignment({
         roleId: role.id,
         targetType: dto.targetType,

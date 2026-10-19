@@ -28,6 +28,7 @@ import {
   users,
 } from "@iam/db/schema";
 import { roleAssignments } from "@iam/db/schema/role-assignments";
+import { ClientNotFoundError } from "@iam/domain/client";
 import {
   RoleAssignmentExistsError,
   RoleAssignmentTargetNotFoundError,
@@ -561,6 +562,22 @@ describe("Role mutations through production PostgreSQL UnitOfWork", () => {
     });
   }
 
+  test("requires an existing client before checking the role code during insert", async () => {
+    await seedRole();
+    const { service } = createCommand();
+    const before = await facts();
+    const error = await failure(() =>
+      service.createRole({
+        roleCode: "ROLE",
+        roleName: "Duplicate",
+        clientCode: "MISSING",
+        status: RoleStatus.Enable,
+      }),
+    );
+    expect(error).toBeInstanceOf(ClientNotFoundError);
+    expect(await facts()).toEqual(before);
+  });
+
   test("soft-deleted role codes remain occupied and real unknown constraints stay internal", async () => {
     await seedRole();
     const { service } = createCommand();
@@ -602,7 +619,7 @@ describe("Role mutations through production PostgreSQL UnitOfWork", () => {
     }
   });
 
-  test("concurrent role creates pass friendly precheck and production unique constraint maps loser to 409", async () => {
+  test("concurrent role creates reach independent writes and unique constraint maps loser to 409", async () => {
     await seedRole();
     let arrived = 0;
     const gate = Promise.withResolvers<void>();
@@ -610,11 +627,10 @@ describe("Role mutations through production PostgreSQL UnitOfWork", () => {
       ...tx,
       roleRepository: {
         ...tx.roleRepository,
-        getAnyRoleByCode: async (code) => {
-          const row = await tx.roleRepository.getAnyRoleByCode(code);
+        createRole: async (input) => {
           if (++arrived === 2) gate.resolve();
           await gate.promise;
-          return row;
+          return await tx.roleRepository.createRole(input);
         },
       },
     }));
@@ -628,11 +644,15 @@ describe("Role mutations through production PostgreSQL UnitOfWork", () => {
         }),
       ),
     );
+    expect(arrived).toBe(2);
     expect(results.filter((result) => result.status === "fulfilled")).toHaveLength(1);
-    expect(results.find((result) => result.status === "rejected")?.reason).toBeInstanceOf(RoleCodeExistsError);
+    const rejected = results.find((result) => result.status === "rejected");
+    expect(rejected?.reason).toBeInstanceOf(RoleCodeExistsError);
+    expect(rejected?.reason).toMatchObject({ httpStatus: 409, message: "角色编码已存在" });
     const after = await facts();
     expect(after.roles.filter((role) => role.roleCode === "WINNER")).toHaveLength(1);
     expect(after.audits).toHaveLength(1);
+    expect(after.dirty).toEqual([]);
   });
 
   test("competing assignment creates retain unique constraint and exactly one audit/dirty", async () => {
@@ -645,11 +665,10 @@ describe("Role mutations through production PostgreSQL UnitOfWork", () => {
       ...tx,
       roleRepository: {
         ...tx.roleRepository,
-        findAssignmentByRoleTarget: async (...args) => {
-          const row = await tx.roleRepository.findAssignmentByRoleTarget(...args);
+        createAssignment: async (input) => {
           if (++arrived === 2) gate.resolve();
           await gate.promise;
-          return row;
+          return await tx.roleRepository.createAssignment(input);
         },
       },
     }));
@@ -661,8 +680,11 @@ describe("Role mutations through production PostgreSQL UnitOfWork", () => {
         }),
       ),
     );
+    expect(arrived).toBe(2);
     expect(results.filter((result) => result.status === "fulfilled")).toHaveLength(1);
-    expect(results.find((result) => result.status === "rejected")?.reason).toBeInstanceOf(RoleAssignmentExistsError);
+    const rejected = results.find((result) => result.status === "rejected");
+    expect(rejected?.reason).toBeInstanceOf(RoleAssignmentExistsError);
+    expect(rejected?.reason).toMatchObject({ httpStatus: 409, message: "角色分配已存在" });
     const after = await facts();
     expect(after.assignments).toHaveLength(1);
     expect(after.audits).toHaveLength(1);
@@ -672,21 +694,18 @@ describe("Role mutations through production PostgreSQL UnitOfWork", () => {
   test("assignment creation waits for uncommitted deletion; a repeated delete cannot delete its replacement", async () => {
     const role = await seedRole();
     const { assignment, employment, user } = await seedHolder(role.id);
-    const prechecked = Promise.withResolvers<void>();
+    const createReady = Promise.withResolvers<void>();
     const allowCreate = Promise.withResolvers<void>();
     const removed = Promise.withResolvers<void>();
     const allowDeleteCommit = Promise.withResolvers<void>();
-    // The create transaction takes an empty-slot snapshot before another transaction establishes the old assignment.
-    await harness.db.delete(roleAssignments);
     const creating = createCommand((tx) => ({
       ...tx,
       roleRepository: {
         ...tx.roleRepository,
-        findAssignmentByRoleTarget: async (...args) => {
-          const row = await tx.roleRepository.findAssignmentByRoleTarget(...args);
-          prechecked.resolve();
+        createAssignment: async (input) => {
+          createReady.resolve();
           await allowCreate.promise;
-          return row;
+          return await tx.roleRepository.createAssignment(input);
         },
       },
     })).service;
@@ -694,13 +713,7 @@ describe("Role mutations through production PostgreSQL UnitOfWork", () => {
       targetType: RoleAssignmentTargetType.Employment,
       employmentId: employment.id,
     });
-    await prechecked.promise;
-    await harness.db.insert(roleAssignments).values({
-      id: assignment.id,
-      roleId: role.id,
-      targetType: assignment.targetType,
-      targetId: assignment.targetId,
-    });
+    await Promise.race([createReady.promise, createPending]);
     const deleting = createCommand((tx) => ({
       ...tx,
       roleRepository: {

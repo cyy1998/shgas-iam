@@ -3,7 +3,7 @@ import { createPositionRepository } from "@admin-api/services/position/position.
 import { createPositionService } from "@admin-api/services/position/position.service";
 import { createImmediateUnitOfWork } from "@admin-api/test/fakes";
 import { EmploymentStatus, PositionStatus } from "@iam/contracts";
-import { PositionHasEmploymentError } from "@iam/domain/position";
+import { PositionCodeExistsError, PositionHasEmploymentError } from "@iam/domain/position";
 import { createOpenEmploymentFixtureDb } from "../../../testing/drizzle-query-capture";
 
 function position(overrides: Record<string, unknown> = {}) {
@@ -28,7 +28,6 @@ function createService(overrides: Record<string, unknown> = {}) {
     },
     positionRepository: {
       countOpenEmploymentsByPosCode: mock(async (_posCode: string) => 0),
-      getAnyPositionByCode: mock(async () => null),
       lockPositionByCode: mock(async () => position()),
       setPosition: mock(async () => position()),
       softDeletePositionByCode: mock(async () => position({ isDelete: true })),
@@ -80,13 +79,15 @@ describe("createPositionService", () => {
     expect(tx.userProfileInvalidation.recordChanges).toHaveBeenCalledWith([{ kind: "position", positionId: 1 }]);
   });
 
-  test("rejects renaming to an existing position code", async () => {
+  test("preserves a rename conflict without recording success facts", async () => {
     const { service, tx } = createService();
-    (tx.positionRepository.getAnyPositionByCode as any).mockResolvedValue(position({ id: 2, posCode: "OPS" }));
+    const conflict = new PositionCodeExistsError("重命名岗位编码失败：岗位编码已存在");
+    tx.positionRepository.updatePositionByCode.mockRejectedValue(conflict);
 
-    await expect(service.updatePosition("DEV", { posCode: "OPS" })).rejects.toThrow("岗位编码已存在");
+    await expect(service.updatePosition("DEV", { posCode: "OPS" })).rejects.toBe(conflict);
 
-    expect(tx.positionRepository.updatePositionByCode).not.toHaveBeenCalled();
+    expect(tx.auditService.recordAuditLog).not.toHaveBeenCalled();
+    expect(tx.userProfileInvalidation.recordChanges).not.toHaveBeenCalled();
   });
 
   test.each([

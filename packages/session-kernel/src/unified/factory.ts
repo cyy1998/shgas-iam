@@ -125,7 +125,7 @@ export function createUnifiedSessionKernel<Operation extends object>(options: Un
         observedAt,
         remainingSeconds: Math.max(0, Math.floor((userSession.expiresAt - observedAt) / 1000)),
       }) as UserSessionObservation;
-      observations.set(observation, { operation, userSession: structuredClone(userSession) });
+      observations.set(observation, { operation, userSession: observation.userSession });
       return observation;
     }
     function observeClient(
@@ -145,8 +145,8 @@ export function createUnifiedSessionKernel<Operation extends object>(options: Un
       }) as ClientSessionObservation;
       observations.set(observation, {
         operation,
-        userSession: structuredClone(userSession),
-        clientSession: structuredClone(clientSession),
+        userSession: observation.userSession,
+        clientSession: observation.clientSession,
       });
       return observation;
     }

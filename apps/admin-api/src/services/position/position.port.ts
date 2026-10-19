@@ -10,7 +10,6 @@ import type {
 } from "./position.type";
 
 export interface AdminPositionTransactionStorePort {
-  getAnyPositionByCode: (posCode: string) => Promise<Position | null>;
   lockPositionByCode: (posCode: string) => Promise<Position | null>;
   setPosition: (input: PositionCreateDto) => Promise<Position | null>;
   updatePositionByCode: (posCode: string, input: PositionUpdateDto) => Promise<Position | null>;

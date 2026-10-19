@@ -51,20 +51,15 @@ export function buildProfileDocumentsFromDataset(
     const sourceDirtyVersion = targetsByUserId.get(user.id);
     if (sourceDirtyVersion === undefined) throw new Error(`User Profile build returned unexpected user ${user.id}`);
     const employmentRows = employmentRowsByUserId.get(user.id) ?? [];
-    assertOpenEmploymentIntegrity({
+    const openEmployments = resolveOpenEmployments({
       userId: user.id,
       employments: employmentRows,
       positionById,
       orgPathByOrgId,
     });
-    const employmentDetails = employmentRows
-      .filter((employment) => employment.status === EmploymentStatus.Enable && !employment.isDelete)
-      .map((employment) => {
-        const position = positionById.get(employment.posId);
-        const fullOrgPath = orgPathByOrgId.get(employment.orgId) ?? [];
-        const assignedOrg = fullOrgPath.find((node) => node.id === employment.orgId);
-        if (position === undefined || assignedOrg === undefined) return null;
-
+    const employmentDetails = openEmployments
+      .filter(({ employment }) => employment.status === EmploymentStatus.Enable)
+      .map(({ employment, position, fullOrgPath, assignedOrg }) => {
         const roleRows = roleRowsByEmploymentId.get(employment.id) ?? [];
         const roles = unique(roleRows.map((row) => row.roleCode));
         const roleIds = roleRows.map((row) => row.roleId);
@@ -95,8 +90,7 @@ export function buildProfileDocumentsFromDataset(
             privileges,
           }),
         };
-      })
-      .filter((item): item is NonNullable<typeof item> => item !== null);
+      });
 
     const detail = UserDetailDtoSchema.parse({
       ...user,
@@ -150,12 +144,20 @@ export function buildProfileDocumentsFromDataset(
 
 export type BuiltProfileDocuments = ReturnType<typeof buildProfileDocumentsFromDataset>[number];
 
-function assertOpenEmploymentIntegrity(input: {
+type ResolvedOpenEmployment = {
+  employment: Employment;
+  position: UserProfileBuildPosition;
+  fullOrgPath: EmploymentOrgNode[];
+  assignedOrg: EmploymentOrgNode;
+};
+
+function resolveOpenEmployments(input: {
   userId: number;
   employments: Employment[];
   positionById: ReadonlyMap<number, UserProfileBuildPosition>;
   orgPathByOrgId: ReadonlyMap<number, EmploymentOrgNode[]>;
 }) {
+  const openEmployments: ResolvedOpenEmployment[] = [];
   for (const employment of input.employments) {
     if (!isOpenEmployment(employment)) continue;
 
@@ -164,17 +166,14 @@ function assertOpenEmploymentIntegrity(input: {
       throw new UserProfileEmploymentIntegrityError(input.userId, employment.id, "position-not-effective");
     }
 
-    const assignedOrganization = input.orgPathByOrgId
-      .get(employment.orgId)
-      ?.find((node) => node.id === employment.orgId);
-    if (
-      assignedOrganization === undefined ||
-      assignedOrganization.status !== OrganizationStatus.Enable ||
-      assignedOrganization.isDelete
-    ) {
+    const fullOrgPath = input.orgPathByOrgId.get(employment.orgId) ?? [];
+    const assignedOrg = fullOrgPath.find((node) => node.id === employment.orgId);
+    if (assignedOrg === undefined || assignedOrg.status !== OrganizationStatus.Enable || assignedOrg.isDelete) {
       throw new UserProfileEmploymentIntegrityError(input.userId, employment.id, "organization-not-effective");
     }
+    openEmployments.push({ employment, position, fullOrgPath, assignedOrg });
   }
+  return openEmployments;
 }
 
 function isOpenEmployment(employment: Employment) {
