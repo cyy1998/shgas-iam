@@ -85,10 +85,8 @@ export default function LoginPage() {
         username: values.username.trim(),
         password: values.password.trim(),
       };
-      const data = await withHumanVerification(
-        "passwordLogin",
-        () => login(body, { suppressErrorMessage: true }),
-        (capToken) => login({ ...body, capToken }, { suppressErrorMessage: true }),
+      const data = await withHumanVerification("passwordLogin", (capToken) =>
+        login({ ...body, capToken }, { suppressErrorMessage: true }),
       );
       if (!data.isMobileSet) {
         setMode("BMN");
@@ -115,10 +113,8 @@ export default function LoginPage() {
         phoneNumber: values.phoneNumber.trim(),
         code: values.code.trim(),
       };
-      await withHumanVerification(
-        "mobileLogin",
-        () => mobileLogin(body, { suppressErrorMessage: true }),
-        (capToken) => mobileLogin({ ...body, capToken }, { suppressErrorMessage: true }),
+      await withHumanVerification("mobileLogin", (capToken) =>
+        mobileLogin({ ...body, capToken }, { suppressErrorMessage: true }),
       );
       redirectAfterLogin();
     } catch (e) {
@@ -170,11 +166,7 @@ export default function LoginPage() {
         phoneNumber: phoneNumber.trim(),
         usage: mode === "BMN" ? "bindPhone" : "login",
       } as const;
-      await withHumanVerification(
-        "sendSmsCode",
-        () => sendMessage(body),
-        (capToken) => sendMessage({ ...body, capToken }),
-      );
+      await withHumanVerification("sendSmsCode", (capToken) => sendMessage({ ...body, capToken }));
       startCountdown();
     } catch (e) {
       restoreCountdown(e);

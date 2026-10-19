@@ -67,16 +67,6 @@ export function createClientRepository(db: DbClient) {
       );
       return row === null ? null : toAdminClientRecord(row);
     },
-    async lockClientById(id: number) {
-      const row = firstRow(
-        await db
-          .select(columns)
-          .from(clients)
-          .where(and(eq(clients.id, id), eq(clients.isDelete, false)))
-          .for("update"),
-      );
-      return row === null ? null : toAdminClientRecord(row);
-    },
     async getAnyClientByCode(clientCode: string) {
       const row = firstRow(await db.select(columns).from(clients).where(eq(clients.clientCode, clientCode)));
       return row === null ? null : toAdminClientRecord(row);

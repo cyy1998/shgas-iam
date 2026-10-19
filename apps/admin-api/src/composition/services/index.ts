@@ -79,8 +79,6 @@ export function createAdminApiServices(options: CreateAdminApiServicesOptions) {
     clientRuntimeInvalidation: clientSso.snapshots,
     clientMutationLogger: runtime.logger,
     management: clientSso.management.service,
-    passwordHasher: runtime.passwordHasher,
-    random: runtime.random,
     uow: mapUnitOfWork(unitOfWork, (tx) => ({
       clientRepository: tx.repositories.client,
       auditService: tx.auditService,

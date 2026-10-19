@@ -12,12 +12,6 @@ export type ResourceKind =
 export type ManifestObject = Record<string, unknown>;
 export type EnvMap = Record<string, string | undefined>;
 
-export interface ResourceReference {
-  field: string;
-  targetKind: ResourceKind;
-  targetName: string;
-}
-
 export interface ResourceCompareRules {
   ignoreFields: string[];
   defaultValues: Record<string, unknown>;
@@ -29,7 +23,6 @@ export interface ResourceDefinition {
   endpoint: string;
   idFields: string[];
   syncOrder: number;
-  references: ResourceReference[];
   compare: ResourceCompareRules;
 }
 

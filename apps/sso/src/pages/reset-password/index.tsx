@@ -83,10 +83,8 @@ export default function ResetPasswordPage() {
       if (current === 0) {
         const v = await form1.validateFields();
         const body = { username: v.username };
-        const data = await withHumanVerification(
-          "openUserInfoLookup",
-          () => getMaskedMobile(body),
-          (capToken) => getMaskedMobile({ ...body, capToken }),
+        const data = await withHumanVerification("openUserInfoLookup", (capToken) =>
+          getMaskedMobile({ ...body, capToken }),
         );
         if (data.mobile) {
           setMobileOptions([{ label: `手机号：${data.mobile}`, value: data.mobile }]);
@@ -156,11 +154,7 @@ export default function ResetPasswordPage() {
         phoneNumber,
         usage: "resetPassword",
       } as const;
-      await withHumanVerification(
-        "sendSmsCode",
-        () => sendMessage(body),
-        (capToken) => sendMessage({ ...body, capToken }),
-      );
+      await withHumanVerification("sendSmsCode", (capToken) => sendMessage({ ...body, capToken }));
       startCountdown();
     } catch (e) {
       restoreCountdown(e);

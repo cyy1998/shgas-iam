@@ -36,23 +36,23 @@ describe("withHumanVerification", () => {
 
   it("returns the original operation result when no verification is required", async () => {
     const operation = vi.fn().mockResolvedValue("ok");
-    const retryOperation = vi.fn();
 
-    await expect(withHumanVerification("passwordLogin", operation, retryOperation)).resolves.toBe("ok");
+    await expect(withHumanVerification("passwordLogin", operation)).resolves.toBe("ok");
 
-    expect(retryOperation).not.toHaveBeenCalled();
+    expect(operation.mock.calls).toEqual([[]]);
+    expect(capSolve).not.toHaveBeenCalled();
   });
 
   it("solves Cap and retries with the returned token", async () => {
     const operation = vi
       .fn()
-      .mockRejectedValue(new ServiceError("需要安全校验", ApiErrorCode.HumanVerificationRequired));
-    const retryOperation = vi.fn().mockResolvedValue("verified");
+      .mockRejectedValueOnce(new ServiceError("需要安全校验", ApiErrorCode.HumanVerificationRequired))
+      .mockResolvedValueOnce("verified");
     capSolve.mockResolvedValue({ success: true, token: "cap-token" });
 
-    await expect(withHumanVerification("mobileLogin", operation, retryOperation)).resolves.toBe("verified");
+    await expect(withHumanVerification("mobileLogin", operation)).resolves.toBe("verified");
 
-    expect(retryOperation).toHaveBeenCalledWith("cap-token");
+    expect(operation.mock.calls).toEqual([[], ["cap-token"]]);
     expect(window.CAP_CUSTOM_FETCH).toBeUndefined();
   });
 
@@ -60,15 +60,14 @@ describe("withHumanVerification", () => {
     const operation = vi
       .fn()
       .mockRejectedValue(new ServiceError("需要安全校验", ApiErrorCode.HumanVerificationRequired));
-    const retryOperation = vi.fn();
     capSolve.mockResolvedValue({ success: false });
 
-    await expect(withHumanVerification("sendSmsCode", operation, retryOperation)).rejects.toMatchObject({
+    await expect(withHumanVerification("sendSmsCode", operation)).rejects.toMatchObject({
       code: ApiErrorCode.HumanVerificationRequired,
       message: "安全校验失败，请重试",
     });
 
     expect(message.error).toHaveBeenCalledWith("安全校验失败，请重试");
-    expect(retryOperation).not.toHaveBeenCalled();
+    expect(operation).toHaveBeenCalledTimes(1);
   });
 });

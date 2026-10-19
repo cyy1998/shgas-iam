@@ -9,13 +9,10 @@ export type RedisPort = Redis;
 
 export interface PasswordHasherPort {
   hashPassword: (password: string) => Promise<string>;
-  hashSecret: (secret: string) => Promise<string>;
 }
 
 export interface RandomPort {
   uuid: () => string;
-  customSsoClientSecret: () => string;
-  oidcClientSecret: () => string;
   password: (length: number) => string;
   integer: (min: number, max: number) => number;
   bytes: (size: number) => Uint8Array;

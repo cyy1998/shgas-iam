@@ -9,8 +9,6 @@ export const validationIssueMessages = {
   UPSTREAM_REQUIRED: "Route must declare upstream unless terminal is true",
   REFERENCE_NOT_FOUND: "Resource references a missing target",
   PLUGIN_CONFIG_REFERENCE_INVALID: "Route plugin_config must reference a service.plugin_configs key",
-  ID_REQUIRED: "Resource is missing its required generated identifier",
-  ID_DUPLICATE: "Resource identifiers must be unique within their collection",
   SSL_MATERIAL_REQUIRED: "SSL requires cert and an external private_key",
   SECRET_REFERENCE_REQUIRED: "Secret fields must use request placeholders or external secret references",
   TRUSTED_PROXY_ALL_ADDRESSES: "Trusted proxies must not include all addresses",

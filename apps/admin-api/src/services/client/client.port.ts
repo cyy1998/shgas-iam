@@ -16,7 +16,6 @@ export interface AdminClientTransactionStorePort {
   getAnyClientByCode: (clientCode: string) => Promise<AdminClientRecord | null>;
   getClientByCode: (clientCode: string) => Promise<AdminClientRecord | null>;
   lockClientByCode: (clientCode: string) => Promise<AdminClientRecord | null>;
-  lockClientById: (id: number) => Promise<AdminClientRecord | null>;
   createClient: (input: ClientCreateDto) => Promise<AdminClientRecord | null>;
   updateClientByCode: (clientCode: string, input: ClientUpdateDto) => Promise<AdminClientRecord | null>;
 }
@@ -49,15 +48,6 @@ export interface AdminClientCachePort {
   ) => Promise<unknown>;
 }
 
-export interface AdminClientSecretHasherPort {
-  hashSecret: (secret: string) => Promise<string>;
-}
-
-export interface AdminClientSecretGeneratorPort {
-  customSsoClientSecret: () => string;
-  oidcClientSecret: () => string;
-}
-
 export interface AdminClientServiceDeps {
   clientRepository: AdminClientReaderPort;
   clientCache: AdminClientCachePort;
@@ -71,7 +61,5 @@ export interface AdminClientServiceDeps {
     ) => Promise<{ changed: boolean }>;
     deleteClient: (clientCode: string, auditContext?: AdminAuditContext) => Promise<{ changed: boolean; result: null }>;
   };
-  passwordHasher: AdminClientSecretHasherPort;
-  random: AdminClientSecretGeneratorPort;
   uow: AdminClientUnitOfWorkPort;
 }

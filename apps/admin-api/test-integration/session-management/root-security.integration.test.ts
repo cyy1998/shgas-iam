@@ -897,8 +897,6 @@ test("Internal API credential updates preserve SSO configuration, credentials an
       clientRuntimeInvalidation: snapshots,
       clientMutationLogger: f.logger,
       management: management.service,
-      passwordHasher: createFakePasswordHasher(),
-      random: createFakeRandom(),
       uow: createUnitOfWork({
         db: pg.db,
         logger: f.logger,

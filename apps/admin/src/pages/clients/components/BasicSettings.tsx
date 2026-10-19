@@ -3,13 +3,12 @@ import { type ClientDetailVo, deleteClient, updateClient, updateClientStatus } f
 import { ClientStatus, getClientStatusOptions } from "@iam/contracts";
 import { Button, Card, Form, Input, message, Select, Space, Typography } from "antd";
 import { useEffect, useState } from "react";
-import type { ClientCommittedFailureKind } from "./settingsHelpers";
 import { confirmClientSettingAction } from "./settingsHelpers";
 
 type Props = {
   client: ClientDetailVo;
   onDirtyChange: (dirty: boolean) => void;
-  onCommitted: (kind?: ClientCommittedFailureKind) => Promise<void>;
+  onCommitted: () => Promise<void>;
   onMutated: () => Promise<void>;
   onDeleted: () => void;
 };
@@ -44,16 +43,12 @@ export default function BasicSettings({ client, onDirtyChange, onMutated, onComm
     onDirtyChange(formDirty || secretDirty || statusDirty);
   }, [formDirty, secretDirty, onDirtyChange, statusDirty]);
 
-  const handleError = async (
-    err: unknown,
-    section: "profile" | "secret" | "status" | "delete",
-    kind: ClientCommittedFailureKind = "mutation",
-  ) => {
+  const handleError = async (err: unknown, section: "profile" | "secret" | "status" | "delete") => {
     if (err instanceof AdminMutationCommittedError) {
       if (section === "profile") setFormDirty(false);
       if (section === "secret") setSecretDirty(false);
       if (section === "status") setPendingStatus(null);
-      await onCommitted(kind);
+      await onCommitted();
       return;
     }
     message.error(err instanceof Error ? err.message : "操作失败");

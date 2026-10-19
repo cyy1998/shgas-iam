@@ -90,6 +90,13 @@ test("maintenance status updates without a destructive confirmation", async ({ p
 
 test("basic editor guards unsaved Internal API credentials across tabs and history", async ({ page }) => {
   await mockAdminApi(page);
+  await page.route("**/rpc/admin.clientSso.detail**", (route) =>
+    fulfillTrpc(route, {
+      ...adminClientDetail,
+      ssoConfig: null,
+      allowedActions: { save: true, selectProtocol: true, setEnabled: true, rotateSecret: true, readSecret: true },
+    }),
+  );
   await page.goto("/iam-admin/clients");
   await page.getByRole("link", { name: "编辑" }).click();
   await page.getByLabel("通用应用密钥").fill("unsaved-secret");
@@ -100,9 +107,18 @@ test("basic editor guards unsaved Internal API credentials across tabs and histo
   await expect(confirmation).toHaveCount(0);
   await expect(page).toHaveURL(/section=basic$/);
   await expect(page.getByLabel("通用应用密钥")).toHaveValue("unsaved-secret");
+  await page.getByRole("tab", { name: "SSO 配置" }).click();
+  await expect(confirmation).toBeVisible();
+  await page.getByRole("button", { name: "放弃修改" }).click();
+  await expect(page).toHaveURL(/section=sso$/);
+  await page.getByRole("tab", { name: "基础信息" }).click();
+  await expect(page.getByLabel("通用应用密钥")).toHaveValue(adminClientDetail.clientSecret);
+  await page.getByLabel("通用应用密钥").fill("another-unsaved-secret");
   await page.evaluate(() => window.history.back());
   await expect(confirmation).toBeVisible();
   await page.getByRole("button", { name: "放弃修改" }).click();
+  await expect(page).toHaveURL(/section=sso$/);
+  await page.getByRole("button", { name: /返回应用列表/ }).click();
   await expect(page).toHaveURL(/clients$/);
   await page.getByRole("link", { name: "编辑" }).click();
   await expect(page.getByLabel("通用应用密钥")).toHaveValue(adminClientDetail.clientSecret);

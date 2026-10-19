@@ -334,37 +334,41 @@ test("unrepaired propagation warning survives rejection, unknown result, success
   expect(writes).toBe(5);
 });
 
-test("protocol drafts survive refresh, block rotation and enable, and guard navigation", async ({ page }) => {
-  await mockAdminApi(page);
-  const current = configured();
-  let auxiliaryWrites = 0;
-  await page.route("**/rpc/admin.clientSso.detail**", (route) => fulfillTrpc(route, current));
-  for (const operation of ["rotateSecret", "setEnabled"]) {
-    await page.route(`**/rpc/admin.clientSso.${operation}**`, (route) => {
-      auxiliaryWrites++;
-      return fulfillTrpc(route, { changed: true, result: current });
+for (const view of ["standalone", "unified"] as const) {
+  test(`${view} protocol drafts survive refresh, block rotation and enable, and guard navigation`, async ({ page }) => {
+    await mockAdminApi(page);
+    const current = configured();
+    let auxiliaryWrites = 0;
+    await page.route("**/rpc/admin.clientSso.detail**", (route) => fulfillTrpc(route, current));
+    for (const operation of ["rotateSecret", "setEnabled"]) {
+      await page.route(`**/rpc/admin.clientSso.${operation}**`, (route) => {
+        auxiliaryWrites++;
+        return fulfillTrpc(route, { changed: true, result: current });
+      });
+    }
+    await page.goto(
+      view === "standalone" ? "/iam-admin/clients/portal/sso" : "/iam-admin/clients/portal/edit?section=sso",
+    );
+    const callback = page.getByLabel("回调地址");
+    await callback.fill("https://business.example/draft");
+    const rotate = page.getByRole("button", { name: "轮换 SSO Secret" });
+    const enable = page.getByRole("button", { name: "启用 SSO", exact: true });
+    await expect(rotate).toBeDisabled();
+    await expect(enable).toBeDisabled();
+    await page.getByRole("button", { name: "刷新详情" }).click();
+    await expect(callback).toHaveValue("https://business.example/draft");
+    await expect(rotate).toBeDisabled();
+    await expect(enable).toBeDisabled();
+    expect(auxiliaryWrites).toBe(0);
+    await page.getByRole("menuitem", { name: /应用管理/ }).click();
+    const dialog = page.getByRole("dialog", {
+      name: "放弃未保存的修改？",
+      exact: true,
     });
-  }
-  await page.goto("/iam-admin/clients/portal/sso");
-  const callback = page.getByLabel("回调地址");
-  await callback.fill("https://business.example/draft");
-  const rotate = page.getByRole("button", { name: "轮换 SSO Secret" });
-  const enable = page.getByRole("button", { name: "启用 SSO", exact: true });
-  await expect(rotate).toBeDisabled();
-  await expect(enable).toBeDisabled();
-  await page.getByRole("button", { name: "刷新详情" }).click();
-  await expect(callback).toHaveValue("https://business.example/draft");
-  await expect(rotate).toBeDisabled();
-  await expect(enable).toBeDisabled();
-  expect(auxiliaryWrites).toBe(0);
-  await page.getByRole("menuitem", { name: /应用管理/ }).click();
-  const dialog = page.getByRole("dialog", {
-    name: "放弃未保存的修改？",
-    exact: true,
+    await expect(dialog).toBeVisible();
+    await expect(page.getByRole("dialog")).toHaveCount(1);
+    await dialog.getByRole("button", { name: /取\s*消/ }).click();
+    await expect(page.getByRole("dialog")).toHaveCount(0);
+    await expect(callback).toHaveValue("https://business.example/draft");
   });
-  await expect(dialog).toBeVisible();
-  await expect(page.getByRole("dialog")).toHaveCount(1);
-  await dialog.getByRole("button", { name: /取\s*消/ }).click();
-  await expect(page.getByRole("dialog")).toHaveCount(0);
-  await expect(callback).toHaveValue("https://business.example/draft");
-});
+}

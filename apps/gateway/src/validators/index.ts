@@ -1,13 +1,11 @@
 import { isRecord } from "../manifest";
-import { getResourceId, resourceDefinitions } from "../resources";
+import { resourceDefinitions } from "../resources";
 import type { LoadedManifest, ManifestObject, ResourceKind, ValidationIssue } from "../types";
 
 type Validator = (manifest: LoadedManifest) => ValidationIssue[];
 
 const validators: Validator[] = [
   validateSourceSchema,
-  validateIds,
-  validateReferences,
   validateTlsMaterial,
   validateSensitiveValues,
   validateTrustedProxy,
@@ -217,77 +215,6 @@ function getSourceLists(manifest: LoadedManifest): Array<{ path: string; items: 
 
 function getSourceListItems(value: unknown): ManifestObject[] {
   return Array.isArray(value) ? value.filter(isRecord) : [];
-}
-
-function validateIds(manifest: LoadedManifest): ValidationIssue[] {
-  const issues: ValidationIssue[] = [];
-
-  for (const definition of resourceDefinitions) {
-    const ids = new Set<string>();
-    const file = manifest.manifest;
-
-    for (const [index, resource] of manifest.resources[definition.kind].entries()) {
-      const basePath = `${definition.topKey}[${index}]`;
-      const id = getResourceId(definition, resource);
-
-      if (!id) {
-        issues.push({
-          code: "ID_REQUIRED",
-          file,
-          path: basePath,
-        });
-      } else if (ids.has(id)) {
-        issues.push({
-          code: "ID_DUPLICATE",
-          file,
-          path: `${basePath}.${definition.idFields[0]}`,
-        });
-      } else {
-        ids.add(id);
-      }
-    }
-  }
-
-  return issues;
-}
-
-function validateReferences(manifest: LoadedManifest): ValidationIssue[] {
-  const issues: ValidationIssue[] = [];
-  const idsByKind = new Map<ResourceKind, Set<string>>();
-
-  for (const definition of resourceDefinitions) {
-    idsByKind.set(
-      definition.kind,
-      new Set(
-        manifest.resources[definition.kind]
-          .map((resource) => getResourceId(definition, resource))
-          .filter((id): id is string => id !== undefined),
-      ),
-    );
-  }
-
-  for (const definition of resourceDefinitions) {
-    const file = manifest.manifest;
-    for (const [index, resource] of manifest.resources[definition.kind].entries()) {
-      for (const reference of definition.references) {
-        const targetId = resource[reference.field];
-        if (typeof targetId !== "string") {
-          continue;
-        }
-
-        const targetIds = idsByKind.get(reference.targetKind) ?? new Set<string>();
-        if (!targetIds.has(targetId)) {
-          issues.push({
-            code: "REFERENCE_NOT_FOUND",
-            file,
-            path: `${definition.topKey}[${index}].${reference.field}`,
-          });
-        }
-      }
-    }
-  }
-
-  return issues;
 }
 
 function validateSensitiveValues(manifest: LoadedManifest): ValidationIssue[] {

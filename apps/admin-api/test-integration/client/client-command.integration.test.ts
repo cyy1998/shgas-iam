@@ -79,8 +79,6 @@ function createCommand(decorate: (tx: AdminClientTransactionPorts) => AdminClien
     clientRuntimeInvalidation: { invalidateClient },
     clientMutationLogger: { error: mock(() => undefined) },
     management: management.service,
-    passwordHasher: { hashSecret: async (secret) => `hash-${secret}` },
-    random: { customSsoClientSecret: () => "custom-secret", oidcClientSecret: () => "oidc-secret" },
     uow: mapUnitOfWork(uow, (tx) =>
       decorate({
         clientRepository: tx.repositories.client,
@@ -322,12 +320,14 @@ describe("Client commands through production PostgreSQL UnitOfWork", () => {
     });
   }
 
-  test("empty and identity-only legacy input fail with 400 and code cannot be renamed", async () => {
+  test("invalid update shapes fail with 400 and legacy code cannot be renamed", async () => {
     const row = await seedClient();
     const { service, invalidateClient } = createCommand();
     const before = await facts();
     for (const command of [
       () => service.updateClient("portal", {}),
+      () => service.updateClient("portal", { extAttributes: {} }),
+      () => service.updateClient("portal", { clientSecret: "rotated-secret", clientName: "Other" }),
       () => service.updateClientById({ id: row.id }),
       () => service.updateClientById({ id: row.id, clientCode: "portal" }),
     ]) {
@@ -457,7 +457,7 @@ describe("Client commands through production PostgreSQL UnitOfWork", () => {
     }
   });
 
-  for (const operation of ["create", "code", "id", "disable", "delete"] as const) {
+  for (const operation of ["create", "code", "id", "credential", "disable", "delete"] as const) {
     test(`real zero-row ${operation} fails without successful audit or propagation`, async () => {
       const row = await seedClient();
       const { service, invalidateClient } = createCommand();
@@ -472,9 +472,11 @@ describe("Client commands through production PostgreSQL UnitOfWork", () => {
               ? service.updateClient("portal", { clientName: "New" })
               : operation === "id"
                 ? service.updateClientById({ id: row.id, clientName: "New" })
-                : operation === "disable"
-                  ? service.updateClientStatus("portal", ClientStatus.Disable)
-                  : service.deleteClient("portal"),
+                : operation === "credential"
+                  ? service.updateClient("portal", { clientSecret: "rotated-secret" })
+                  : operation === "disable"
+                    ? service.updateClientStatus("portal", ClientStatus.Disable)
+                    : service.deleteClient("portal"),
         );
         expect(error).toBeInstanceOf(Error);
         expect(error).not.toBeInstanceOf(ClientCodeExistsError);

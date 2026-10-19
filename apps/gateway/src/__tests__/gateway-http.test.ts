@@ -352,6 +352,21 @@ test("validation preserves a stable code and the safe correction for misplaced p
   ]);
 });
 
+test("duplicate keys report only the source diagnostic", async () => {
+  const app = createValidationApp();
+  const response = await app.request("/validate", {
+    method: "POST",
+    headers: { "content-type": "application/json", apikey: "key" },
+    body: JSON.stringify({ scope: "test:tender", yaml: "service: {}\nupstreams:\n  - key: api\n  - key: api\n" }),
+  });
+  const body = await response.json();
+  expect(response.status).toBe(400);
+  expect(body.code).toBe("GATEWAY_VALIDATION_FAILED");
+  expect(body.data.issues).toEqual([
+    { code: "LOCAL_KEY_DUPLICATE", path: "upstreams[1]", message: expect.any(String) },
+  ]);
+});
+
 test("validation codes cannot be influenced by caller values or disclose dynamic field names", async () => {
   const app = createValidationApp();
   const secret = "private_key=do-not-disclose";

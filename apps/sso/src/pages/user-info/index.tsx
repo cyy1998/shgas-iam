@@ -52,11 +52,7 @@ export default function UserInfoPage() {
     try {
       setSmsSending(true);
       const body = { phoneNumber, usage: "bindPhone" } as const;
-      await withHumanVerification(
-        "sendSmsCode",
-        () => selfMobileSendMsg(body),
-        (capToken) => selfMobileSendMsg({ ...body, capToken }),
-      );
+      await withHumanVerification("sendSmsCode", (capToken) => selfMobileSendMsg({ ...body, capToken }));
       startCountdown();
     } catch (e) {
       restoreCountdown(e);

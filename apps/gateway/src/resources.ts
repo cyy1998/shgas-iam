@@ -14,7 +14,6 @@ export const resourceDefinitions = [
     endpoint: "upstreams",
     idFields: ["id"],
     syncOrder: 10,
-    references: [],
     compare: {
       ...commonCompare,
       defaultValues: {
@@ -28,7 +27,6 @@ export const resourceDefinitions = [
     endpoint: "plugin_metadata",
     idFields: ["id"],
     syncOrder: 15,
-    references: [],
     compare: commonCompare,
   },
   {
@@ -37,7 +35,6 @@ export const resourceDefinitions = [
     endpoint: "plugin_configs",
     idFields: ["id"],
     syncOrder: 20,
-    references: [],
     compare: commonCompare,
   },
   {
@@ -46,7 +43,6 @@ export const resourceDefinitions = [
     endpoint: "services",
     idFields: ["id"],
     syncOrder: 30,
-    references: [{ field: "upstream_id", targetKind: "upstreams", targetName: "upstream" }],
     compare: commonCompare,
   },
   {
@@ -55,7 +51,6 @@ export const resourceDefinitions = [
     endpoint: "consumers",
     idFields: ["username", "id"],
     syncOrder: 40,
-    references: [],
     compare: commonCompare,
   },
   {
@@ -64,7 +59,6 @@ export const resourceDefinitions = [
     endpoint: "ssls",
     idFields: ["id"],
     syncOrder: 50,
-    references: [],
     compare: commonCompare,
   },
   {
@@ -73,11 +67,6 @@ export const resourceDefinitions = [
     endpoint: "routes",
     idFields: ["id"],
     syncOrder: 60,
-    references: [
-      { field: "service_id", targetKind: "services", targetName: "service" },
-      { field: "upstream_id", targetKind: "upstreams", targetName: "upstream" },
-      { field: "plugin_config_id", targetKind: "plugin_configs", targetName: "plugin_config" },
-    ],
     compare: {
       ...commonCompare,
       defaultValues: {

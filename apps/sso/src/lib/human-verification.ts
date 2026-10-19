@@ -4,8 +4,7 @@ import type { HumanVerificationAction } from "@sso/types/api";
 import { ServiceError } from "@sso/utils/request";
 import { message } from "antd";
 
-type Operation<T> = () => Promise<T>;
-type RetryOperation<T> = (capToken: string) => Promise<T>;
+type Operation<T> = (capToken?: string) => Promise<T>;
 
 function configureCapAssetUrls() {
   window.CAP_CUSTOM_WASM_URL = CAP_WASM_URL;
@@ -38,11 +37,7 @@ async function solveCap(action: HumanVerificationAction): Promise<string> {
   }
 }
 
-export async function withHumanVerification<T>(
-  action: HumanVerificationAction,
-  operation: Operation<T>,
-  retryOperation: RetryOperation<T>,
-): Promise<T> {
+export async function withHumanVerification<T>(action: HumanVerificationAction, operation: Operation<T>): Promise<T> {
   try {
     return await operation();
   } catch (error) {
@@ -61,5 +56,5 @@ export async function withHumanVerification<T>(
     }
     throw new ServiceError("安全校验失败，请重试", ApiErrorCode.HumanVerificationRequired);
   }
-  return await retryOperation(capToken);
+  return await operation(capToken);
 }

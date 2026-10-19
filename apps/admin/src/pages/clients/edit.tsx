@@ -6,8 +6,7 @@ import { ArrowLeftOutlined } from "@ant-design/icons";
 import { PageContainer } from "@ant-design/pro-components";
 import { history, useLocation, useParams } from "@umijs/max";
 import { Alert, Button, Card, Modal, message, Result, Space, Tabs, Typography } from "antd";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import type { ClientCommittedFailureKind } from "./components/settingsHelpers";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 type ClientSection = "basic" | "sso";
 
@@ -37,20 +36,10 @@ export default function ClientEditPage() {
   const [loadState, setLoadState] = useState<LoadState>({
     status: "loading",
   });
-  const [dirty, setDirty] = useState<Record<ClientSection, boolean>>({
-    basic: false,
-    sso: false,
-  });
-  const [discardRevision, setDiscardRevision] = useState<Record<ClientSection, number>>({
-    basic: 0,
-    sso: 0,
-  });
+  const [basicDirty, setBasicDirty] = useState(false);
+  const [basicDiscardRevision, setBasicDiscardRevision] = useState(0);
   const unblockRef = useRef<null | (() => void)>(null);
 
-  const setBasicDirty = useCallback(
-    (value: boolean) => setDirty((current) => (current.basic === value ? current : { ...current, basic: value })),
-    [],
-  );
   const loadClient = useCallback(async () => {
     try {
       const client = await getClient(clientCode);
@@ -72,14 +61,8 @@ export default function ClientEditPage() {
     }
   }, [clientCode]);
 
-  const handleCommitted = async (kind: ClientCommittedFailureKind = "mutation") => {
-    setRepairMessage(
-      kind === "rotation"
-        ? "轮换已生效，但后续处理失败。请联系管理员修复传播，再主动读取当前 Secret。"
-        : kind === "configuration"
-          ? "配置已生效，但后续处理失败。请联系管理员修复传播，再主动读取当前状态。"
-          : "操作已生效，但后续处理失败；请联系管理员修复传播。详情可读不代表传播已恢复。",
-    );
+  const handleCommitted = async () => {
+    setRepairMessage("操作已生效，但后续处理失败；请联系管理员修复传播。详情可读不代表传播已恢复。");
     await loadClient();
   };
 
@@ -96,9 +79,8 @@ export default function ClientEditPage() {
     }
   }, [clientCode, location.search]);
 
-  const hasDirtyChanges = useMemo(() => Object.values(dirty).some(Boolean), [dirty]);
   useEffect(() => {
-    if (!hasDirtyChanges) return;
+    if (!basicDirty) return;
     let confirmationOpen = false;
     const unblock = history.block((transition) => {
       if (confirmationOpen) return;
@@ -114,11 +96,8 @@ export default function ClientEditPage() {
             unblockRef.current = null;
           }
           unblock();
-          setDirty((current) => ({ ...current, [section]: false }));
-          setDiscardRevision((current) => ({
-            ...current,
-            [section]: current[section] + 1,
-          }));
+          setBasicDirty(false);
+          setBasicDiscardRevision((current) => current + 1);
           transition.retry();
         },
         onCancel: () => {
@@ -133,7 +112,7 @@ export default function ClientEditPage() {
       }
       unblock();
     };
-  }, [hasDirtyChanges, section]);
+  }, [basicDirty]);
 
   const goToSection = (nextSection: ClientSection) => {
     if (nextSection === section) return;
@@ -145,10 +124,7 @@ export default function ClientEditPage() {
   const leaveAfterDelete = () => {
     unblockRef.current?.();
     unblockRef.current = null;
-    setDirty({
-      basic: false,
-      sso: false,
-    });
+    setBasicDirty(false);
     history.push("/clients");
   };
 
@@ -227,7 +203,7 @@ export default function ClientEditPage() {
             label: "基础信息",
             children: (
               <BasicSettings
-                key={`basic-${discardRevision.basic}`}
+                key={`basic-${basicDiscardRevision}`}
                 client={client}
                 onDirtyChange={setBasicDirty}
                 onCommitted={handleCommitted}

@@ -2,7 +2,6 @@ import { randomBytes, randomInt, randomUUID } from "node:crypto";
 import env from "@admin-api/env";
 import redis from "@admin-api/lib/infra/redis";
 import { logger } from "@admin-api/lib/logger";
-import { hashSecret } from "@iam/api-core/security";
 import { generateRandomPassword } from "@iam/api-core/utils";
 import { hash } from "bcrypt-ts";
 import { createAdminClientCache } from "./client-cache";
@@ -26,18 +25,9 @@ export function createAdminApiRuntime(options: CreateAdminApiRuntimeOptions = {}
       async hashPassword(password) {
         return await hash(password, runtimeEnv.passwordHashRounds);
       },
-      async hashSecret(secret) {
-        return await hashSecret(secret, runtimeEnv.passwordHashRounds);
-      },
     },
     random: {
       uuid: randomUUID,
-      customSsoClientSecret() {
-        return `iam_sso_${randomBytes(32).toString("base64url")}`;
-      },
-      oidcClientSecret() {
-        return `iam_oidc_${randomBytes(32).toString("base64url")}`;
-      },
       password(length) {
         return generateRandomPassword(length);
       },

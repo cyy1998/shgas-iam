@@ -1,7 +1,7 @@
 import { describe, expect, mock, test } from "bun:test";
 import { AdminMutationCommittedError } from "@admin-api/services/admin-mutation/admin-mutation";
 import { createClientService } from "@admin-api/services/client/client.service";
-import { createFakePasswordHasher, createFakeRandom, createImmediateUnitOfWork } from "@admin-api/test/fakes";
+import { createImmediateUnitOfWork } from "@admin-api/test/fakes";
 import { ClientSsoCallbackType, ClientSsoProtocol, ClientStatus } from "@iam/contracts";
 
 function client(overrides: Record<string, unknown> = {}) {
@@ -37,7 +37,6 @@ function createService() {
       getAnyClientByCode: mock(async () => null),
       getClientByCode: mock(async () => client()),
       lockClientByCode: mock(async () => client()),
-      lockClientById: mock(async () => client()),
       getClientById: mock(async () => client()),
       updateClientByCode: mock(async (_clientCode: string, data: Record<string, unknown>) => client(data)),
     },
@@ -62,8 +61,6 @@ function createService() {
       save: mock(async () => ({ changed: false, result: null })),
       deleteClient: mock(async () => ({ changed: true, result: null })),
     },
-    passwordHasher: createFakePasswordHasher(),
-    random: createFakeRandom(),
     uow: createImmediateUnitOfWork(tx),
   } as any;
   return { service: createClientService(deps), deps, tx };
@@ -182,5 +179,18 @@ describe("createClientService", () => {
     expect(tx.clientRepository.updateClientByCode.mock.calls).toEqual([
       ["portal", { clientSecret: "rotated-secret", extAttributes: {} }],
     ]);
+    expect(deps.clientCache.invalidateUpdatedClient).toHaveBeenCalledWith(
+      expect.objectContaining({ clientCode: "portal", clientSecret: "secret" }),
+      expect.objectContaining({ clientCode: "portal", clientSecret: "rotated-secret" }),
+    );
+    expect(tx.auditService.recordAuditLog).toHaveBeenCalledWith(
+      expect.objectContaining({
+        action: "admin.client.rotate_secret",
+        details: expect.objectContaining({
+          changed: true,
+          patch: { extAttributes: {}, clientSecretRotated: true },
+        }),
+      }),
+    );
   });
 });

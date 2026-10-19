@@ -94,63 +94,34 @@ export function createClientService(deps: AdminClientServiceDeps) {
     }, adminAuditTransactionOptions(auditContext));
   }
 
-  async function updateClientTarget(
-    target: string | { id: number; clientCode?: string },
-    data: ClientUpdateDto,
+  async function updateInternalApiSecret(
+    clientCode: string,
+    data: Pick<ClientUpdateDto, "extAttributes"> & { clientSecret: string },
     auditContext?: AdminAuditContext,
-    actionOverride?: string,
   ) {
-    if (!Object.entries(data).some(([key, value]) => key !== "extAttributes" && value !== undefined))
-      throw new BadRequestError("至少提交一个客户端更新字段");
-    if (data.clientSecret === undefined && typeof target === "string") {
-      const { extAttributes: _attributes, ...patch } = data;
-      const result = await deps.management.save(target, patch, auditContext);
-      return { changed: result.changed, result: null };
-    }
-    if (
-      data.clientSecret !== undefined &&
-      Object.entries(data).some(
-        ([key, value]) => key !== "clientSecret" && key !== "extAttributes" && value !== undefined,
-      )
-    )
-      throw new BadRequestError("Internal API 凭据必须独立更新");
-    if (!Object.values(data).some((value) => value !== undefined))
-      throw new BadRequestError("至少提交一个客户端更新字段");
     return await basicMutation.locked(
-      (tx) =>
-        typeof target === "string"
-          ? tx.clientRepository.lockClientByCode(target)
-          : tx.clientRepository.lockClientById(target.id),
+      (tx) => tx.clientRepository.lockClientByCode(clientCode),
       () => new ClientNotFoundError("客户端不存在"),
       async (tx, existing) =>
         tx.bindTarget(existing.clientCode, async () => {
-          if (typeof target !== "string") assertClientCodeUnchanged(existing.clientCode, target.clientCode);
-          const changed =
-            (data.clientName !== undefined && data.clientName !== existing.clientName) ||
-            (data.clientSecret !== undefined && data.clientSecret !== existing.clientSecret) ||
-            (data.url !== undefined && data.url !== existing.url) ||
-            (data.description !== undefined && data.description !== existing.description) ||
-            (data.status !== undefined && data.status !== existing.status);
+          const changed = data.clientSecret !== existing.clientSecret;
           const client = changed ? await tx.clientRepository.updateClientByCode(existing.clientCode, data) : existing;
           if (client === null) throw new Error("Locked Client update returned no row");
           const parsedExisting = toGenericClientRuntimeDto(existing);
           const parsedUpdated = toGenericClientRuntimeDto(client);
-          const secretRotated = data.clientSecret !== undefined && data.clientSecret !== existing.clientSecret;
-          if (changed || data.status !== undefined || data.clientSecret !== undefined) {
-            const auditPatch: Record<string, unknown> = { ...data };
-            if ("clientSecret" in auditPatch) {
-              delete auditPatch.clientSecret;
-              auditPatch.clientSecretRotated = secretRotated;
-            }
-            await tx.auditService.recordAuditLog(
-              buildAdminClientAudit(
-                actionOverride ?? (secretRotated ? "admin.client.rotate_secret" : "admin.client.update"),
-                parsedUpdated,
-                { changed, previousClientCode: existing.clientCode, patch: auditPatch },
-                auditContext,
-              ),
-            );
-          }
+          const { clientSecret: _secret, ...attributes } = data;
+          await tx.auditService.recordAuditLog(
+            buildAdminClientAudit(
+              changed ? "admin.client.rotate_secret" : "admin.client.update",
+              parsedUpdated,
+              {
+                changed,
+                previousClientCode: existing.clientCode,
+                patch: { ...attributes, clientSecretRotated: changed },
+              },
+              auditContext,
+            ),
+          );
           tx.afterCommit.required("admin.client.cache.invalidate", async () => {
             await deps.clientCache.invalidateUpdatedClient(parsedExisting, parsedUpdated);
           });
@@ -161,7 +132,20 @@ export function createClientService(deps: AdminClientServiceDeps) {
   }
 
   async function updateClient(clientCode: string, data: ClientUpdateDto, auditContext?: AdminAuditContext) {
-    return await updateClientTarget(clientCode, data, auditContext);
+    if (!Object.entries(data).some(([key, value]) => key !== "extAttributes" && value !== undefined))
+      throw new BadRequestError("至少提交一个客户端更新字段");
+    const { clientSecret, extAttributes, ...patch } = data;
+    if (clientSecret === undefined) {
+      const result = await deps.management.save(clientCode, patch, auditContext);
+      return { changed: result.changed, result: null };
+    }
+    if (Object.values(patch).some((value) => value !== undefined))
+      throw new BadRequestError("Internal API 凭据必须独立更新");
+    return await updateInternalApiSecret(
+      clientCode,
+      { clientSecret, ...(extAttributes === undefined ? {} : { extAttributes }) },
+      auditContext,
+    );
   }
 
   async function updateClientById(clientDto: ClientInputDto, auditContext?: AdminAuditContext) {
@@ -169,11 +153,11 @@ export function createClientService(deps: AdminClientServiceDeps) {
     const existing = await deps.clientRepository.getClientById(id);
     if (!existing) throw new ClientNotFoundError();
     assertClientCodeUnchanged(existing.clientCode, clientCode);
-    return await updateClientTarget(existing.clientCode, data, auditContext);
+    return await updateClient(existing.clientCode, data, auditContext);
   }
 
   async function updateClientStatus(clientCode: string, status: ClientStatus, auditContext?: AdminAuditContext) {
-    return await updateClientTarget(clientCode, { status }, auditContext, "admin.client.status_update");
+    return await updateClient(clientCode, { status }, auditContext);
   }
 
   return {
