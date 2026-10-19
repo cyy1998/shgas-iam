@@ -1,4 +1,4 @@
-import type { SubjectAccessRecordV1 } from "../model";
+import type { SubjectAccessRecord } from "../model";
 import { parseSubjectAccessRecord, serializeSubjectAccessRecord } from "../model";
 import { SUBJECT_ACCESS_REDIS_KEY_PREFIX } from "../storage/redis-store";
 
@@ -59,7 +59,7 @@ export function createSubjectAccessBootstrap(options: CreateSubjectAccessBootstr
 
   async function inspectMany(
     subjectIdentifiers: string[],
-  ): Promise<Array<{ status: "missing" | "invalid" } | { status: "valid"; record: SubjectAccessRecordV1 }>> {
+  ): Promise<Array<{ status: "missing" | "invalid" } | { status: "valid"; record: SubjectAccessRecord }>> {
     assertUniqueSubjects(subjectIdentifiers);
     if (subjectIdentifiers.length === 0) return [];
     const values = await options.redis.mget(

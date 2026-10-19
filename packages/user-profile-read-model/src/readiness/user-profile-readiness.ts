@@ -1,5 +1,5 @@
 import { isDeepStrictEqual } from "node:util";
-import type { SubjectAccessRecordV1 } from "@iam/api-core/subject-access";
+import type { SubjectAccessRecord } from "@iam/api-core/subject-access";
 import { assertUserProfileInventoryPage, requirePositiveSafeInteger } from "./user-profile-inventory.guards";
 
 export interface UserProfileReadinessProjection {
@@ -93,7 +93,7 @@ export function createUserProfileRedisAccessGate<TProfile extends UserProfileRea
     inspectMany: (subjectIdentifiers: string[]) => Promise<Array<InspectionResult<TFactsRecord>>>;
   };
   subjectAccess: {
-    inspectMany: (subjectIdentifiers: string[]) => Promise<Array<InspectionResult<SubjectAccessRecordV1>>>;
+    inspectMany: (subjectIdentifiers: string[]) => Promise<Array<InspectionResult<SubjectAccessRecord>>>;
   };
   clock: { nowDate: () => Date };
 }) {

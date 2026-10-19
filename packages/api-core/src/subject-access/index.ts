@@ -32,14 +32,14 @@ export { createSubjectAccessLifecycle } from "./lifecycle";
 export type {
   SubjectAccessBeginReceipt,
   SubjectAccessMutationReceipt,
-  SubjectAccessRecordV1,
+  SubjectAccessRecord,
   SubjectAccessState,
   SubjectAccessTransition,
   SubjectAccessTransitionTarget,
 } from "./model";
 export {
   SUBJECT_ACCESS_RECORD_VERSION,
-  SubjectAccessRecordV1Schema,
+  SubjectAccessRecordSchema,
   SubjectAccessStateSchema,
 } from "./model";
 export type {

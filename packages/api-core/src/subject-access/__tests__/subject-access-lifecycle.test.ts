@@ -6,7 +6,7 @@ import {
   createSubjectAccessRepair,
   SubjectAccessBeginPendingError,
   SubjectAccessCommitPendingError,
-  SubjectAccessRecordV1Schema,
+  SubjectAccessRecordSchema,
   SubjectAccessRollbackPendingError,
 } from "..";
 import { createInMemorySubjectAccessStore } from "../testing";
@@ -59,7 +59,7 @@ function createHarness() {
 
 async function readRecord(store: ReturnType<typeof createInMemorySubjectAccessStore>) {
   const serialized = await store.read(subjectIdentifier);
-  return serialized === null ? null : SubjectAccessRecordV1Schema.parse(JSON.parse(serialized));
+  return serialized === null ? null : SubjectAccessRecordSchema.parse(JSON.parse(serialized));
 }
 
 async function repairBacklog(store: ReturnType<typeof createInMemorySubjectAccessStore>) {

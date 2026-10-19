@@ -9,7 +9,7 @@ import {
   createSubjectAccessLifecycle,
   createSubjectAccessOperations,
   createSubjectAccessRepair,
-  SubjectAccessRecordV1Schema,
+  SubjectAccessRecordSchema,
 } from "@iam/api-core/subject-access";
 import { createInMemorySubjectAccessStore } from "@iam/api-core/subject-access/testing";
 import {
@@ -1196,14 +1196,14 @@ function createLifecycleService(options: {
     readUserStatus: () => currentStatus,
     async readAccessState() {
       const serialized = await store.read(subjectIdentifier);
-      return serialized === null ? null : SubjectAccessRecordV1Schema.parse(JSON.parse(serialized)).state;
+      return serialized === null ? null : SubjectAccessRecordSchema.parse(JSON.parse(serialized)).state;
     },
   };
 }
 
 async function readStoreState(store: ReturnType<typeof createInMemorySubjectAccessStore>, subjectIdentifier: string) {
   const serialized = await store.read(subjectIdentifier);
-  return serialized === null ? null : SubjectAccessRecordV1Schema.parse(JSON.parse(serialized)).state;
+  return serialized === null ? null : SubjectAccessRecordSchema.parse(JSON.parse(serialized)).state;
 }
 
 test("permitted Admin profile query preserves disabled and deleted profiles without another account decision", async () => {

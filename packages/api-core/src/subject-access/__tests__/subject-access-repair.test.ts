@@ -1,6 +1,6 @@
 import { describe, expect, mock, test } from "bun:test";
 import type { SubjectAccessAuthorityState } from "..";
-import { createSubjectAccessBarrier, createSubjectAccessRepair, SubjectAccessRecordV1Schema } from "..";
+import { createSubjectAccessBarrier, createSubjectAccessRepair, SubjectAccessRecordSchema } from "..";
 import { createInMemorySubjectAccessStore } from "../testing";
 
 const subjectIdentifier = "00000000-0000-4000-8000-000000000001";
@@ -61,7 +61,7 @@ function createHarness(initialState: "enabled" | "disabled" = "enabled") {
 async function state(store: ReturnType<typeof createInMemorySubjectAccessStore>) {
   const serialized = await store.read(subjectIdentifier);
   if (serialized === null) return null;
-  return SubjectAccessRecordV1Schema.parse(JSON.parse(serialized)).state;
+  return SubjectAccessRecordSchema.parse(JSON.parse(serialized)).state;
 }
 
 describe("Subject Access repair", () => {

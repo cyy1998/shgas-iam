@@ -81,7 +81,7 @@ export function createProfileBuildRepository(
 async function loadTargetOrganizationPaths(db: DbClient, targetOrganizationIds: number[]) {
   if (targetOrganizationIds.length === 0) return new Map<number, ResponsibilityOrganizationNode[]>();
 
-  const ancestor = alias(organizations, "user_profile_v2_responsibility_target_ancestor");
+  const ancestor = alias(organizations, "user_profile_responsibility_target_ancestor");
   const rows = await db
     .select({
       targetOrganizationId: organizationClosures.descendantId,

@@ -1,4 +1,4 @@
-import type { SubjectAccessRecordV1 } from "./model";
+import type { SubjectAccessRecord } from "./model";
 import { parseSubjectAccessRecord, serializeSubjectAccessRecord } from "./model";
 import type {
   SubjectAccessAbortBeginResult,
@@ -53,7 +53,7 @@ export interface CreateInMemorySubjectAccessStoreOptions {
 }
 
 export function createInMemorySubjectAccessStore(
-  initialRecords: readonly SubjectAccessRecordV1[] = [],
+  initialRecords: readonly SubjectAccessRecord[] = [],
   options: CreateInMemorySubjectAccessStoreOptions = {},
 ): SubjectAccessAtomicStore {
   const records = new Map(

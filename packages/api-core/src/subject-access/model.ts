@@ -5,7 +5,7 @@ export const SUBJECT_ACCESS_RECORD_VERSION = 1;
 export const SubjectAccessStateSchema = z.enum(["enabled", "blocking", "disabled"]);
 export type SubjectAccessState = z.infer<typeof SubjectAccessStateSchema>;
 
-export const SubjectAccessRecordV1Schema = z
+export const SubjectAccessRecordSchema = z
   .object({
     version: z.literal(SUBJECT_ACCESS_RECORD_VERSION),
     subjectIdentifier: z.uuid(),
@@ -24,7 +24,7 @@ export const SubjectAccessRecordV1Schema = z
     }
   });
 
-export type SubjectAccessRecordV1 = z.infer<typeof SubjectAccessRecordV1Schema>;
+export type SubjectAccessRecord = z.infer<typeof SubjectAccessRecordSchema>;
 
 export interface SubjectAccessTransition {
   readonly subjectIdentifier: string;
@@ -43,13 +43,13 @@ export interface SubjectAccessMutationReceipt extends SubjectAccessBeginReceipt 
 
 export type SubjectAccessTransitionTarget = "enabled" | "disabled" | "rollback";
 
-export function serializeSubjectAccessRecord(record: SubjectAccessRecordV1) {
-  return JSON.stringify(SubjectAccessRecordV1Schema.parse(record));
+export function serializeSubjectAccessRecord(record: SubjectAccessRecord) {
+  return JSON.stringify(SubjectAccessRecordSchema.parse(record));
 }
 
 export function parseSubjectAccessRecord(serialized: string) {
   try {
-    return SubjectAccessRecordV1Schema.safeParse(JSON.parse(serialized) as unknown);
+    return SubjectAccessRecordSchema.safeParse(JSON.parse(serialized) as unknown);
   } catch {
     return {
       success: false as const,
