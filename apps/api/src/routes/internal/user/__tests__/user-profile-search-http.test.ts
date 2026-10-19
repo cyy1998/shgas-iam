@@ -2,18 +2,18 @@ import { expect, mock, test } from "bun:test";
 import { createInternalMiddlewares } from "@api/routes/internal/_middleware";
 import { createUserHandlers } from "@api/routes/internal/user/user.handlers";
 import { createUserRoute } from "@api/routes/internal/user/user.index";
-import { createV3UserProfileSearchAdapter } from "@api/services/user-profile-search/user-profile-search-v3.adapter";
+import { createUserProfileSearchAdapter } from "@api/services/user-profile-search/user-profile-search.adapter";
 import createApp from "@iam/api-core/core/create-app";
 import { createInternalAuthenticationHandler } from "@iam/api-core/middlewares";
 import { UserStatus, UserType } from "@iam/contracts";
 import type { GenericClientRuntimeDto } from "@iam/domain/client";
-import { createV3UserProfileQueryService } from "@iam/user-profile-read-model/v3";
+import { createUserProfileSearchService } from "@iam/user-profile-read-model/query";
 import pino from "pino";
 import appConfig from "~api/app.config";
 
 test("maps the canonical v3 Filter request through the production Internal HTTP route", async () => {
   const searchCurrentProfileBases = mock(async () => []);
-  const query = createV3UserProfileQueryService({
+  const query = createUserProfileSearchService({
     profileRepository: {
       searchCurrentProfileBases,
     },
@@ -87,7 +87,7 @@ test("returns UserProfileBase from typed profile columns without depending on De
       wxId: null,
     },
   ]);
-  const query = createV3UserProfileQueryService({
+  const query = createUserProfileSearchService({
     profileRepository: {
       searchCurrentProfileBases,
     },
@@ -117,7 +117,7 @@ test("returns UserProfileBase from typed profile columns without depending on De
 test("preserves Profile HTTP depth and node budgets before executing the query", async () => {
   const searchCurrentProfileBases = mock(async () => []);
   const app = createProductionApp(
-    createV3UserProfileQueryService({
+    createUserProfileSearchService({
       profileRepository: { searchCurrentProfileBases },
     }),
   );
@@ -145,7 +145,7 @@ test("preserves Profile HTTP depth and node budgets before executing the query",
 });
 
 test("describes one generic recursive Filter AST without enumerating field and operator pairs", async () => {
-  const query = createV3UserProfileQueryService({
+  const query = createUserProfileSearchService({
     profileRepository: {
       searchCurrentProfileBases: mock(async () => []),
     },
@@ -160,18 +160,18 @@ test("describes one generic recursive Filter AST without enumerating field and o
   };
 
   expect(response.status).toBe(200);
-  expect(document.components.schemas.V3UserProfileSearchRequest).toMatchObject({
+  expect(document.components.schemas.UserProfileSearchRequest).toMatchObject({
     type: "object",
     additionalProperties: false,
     required: ["filter"],
     properties: {
       filter: {
-        $ref: "#/components/schemas/V3UserProfileFilterExpression",
+        $ref: "#/components/schemas/UserProfileFilterExpression",
       },
     },
   });
-  const expressionDocument = JSON.stringify(document.components.schemas.V3UserProfileFilterExpression);
-  expect(document.components.schemas.V3UserProfileFilterExpression).toMatchObject({
+  const expressionDocument = JSON.stringify(document.components.schemas.UserProfileFilterExpression);
+  expect(document.components.schemas.UserProfileFilterExpression).toMatchObject({
     anyOf: expect.any(Array),
   });
   expect(expressionDocument).toContain('"and"');
@@ -240,8 +240,8 @@ test("maps the fixed Internal handler deadline to the sanitized v3 unavailable r
   }
 });
 
-function createProductionApp(query: ReturnType<typeof createV3UserProfileQueryService>, authenticate = false) {
-  const adapter = createV3UserProfileSearchAdapter(query);
+function createProductionApp(query: ReturnType<typeof createUserProfileSearchService>, authenticate = false) {
+  const adapter = createUserProfileSearchAdapter(query);
   const handlers = createUserHandlers({
     registerPurveyorContact: { execute: async () => true },
     internalUserProfileQuery: { getDetailByUsername: async () => null as never },
@@ -295,7 +295,7 @@ async function requestWithRawBody(app: ReturnType<typeof createProductionApp>, b
 test("requires a valid Internal Client credential before querying user profiles", async () => {
   const searchCurrentProfileBases = mock(async () => []);
   const app = createProductionApp(
-    createV3UserProfileQueryService({ profileRepository: { searchCurrentProfileBases } }),
+    createUserProfileSearchService({ profileRepository: { searchCurrentProfileBases } }),
     true,
   );
   for (const credential of [undefined, "invalid-secret"]) {

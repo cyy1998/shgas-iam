@@ -1,7 +1,7 @@
 import { EmploymentStatus, ORGANIZATION_RESPONSIBILITY_TYPE_CATALOG } from "@iam/contracts";
 import type { PublishedProfile } from "../schema/profile.schema";
 import { PublishedProfileSchema, USER_PROFILE_SCHEMA_VERSION } from "../schema/profile.schema";
-import type { V3UserProfileSearchDocument } from "../schema/profile-v3-search.schema";
+import type { UserProfileSearchDocument } from "../schema/profile-search.schema";
 import type { ProfileBuildDataset, ProfileBuildRepository } from "./profile-build.repository";
 import type { BuiltProfileDocuments } from "./profile-document-builder.core";
 import { buildProfileDocumentsFromDataset } from "./profile-document-builder.core";
@@ -59,7 +59,7 @@ function toPublishedProfile(
     ...profile,
     profileSchemaVersion: USER_PROFILE_SCHEMA_VERSION,
     detail,
-    searchDoc: buildV3SearchDocument({ ...profile, detail }),
+    searchDoc: buildSearchDocument({ ...profile, detail }),
     subjectFacts: {
       employments: profile.subjectFacts.employments.map((employment, index) => ({
         ...employment,
@@ -69,10 +69,10 @@ function toPublishedProfile(
   });
 }
 
-function buildV3SearchDocument(
+function buildSearchDocument(
   profile: Omit<PublishedProfile, "profileSchemaVersion" | "searchDoc" | "subjectFacts"> &
     Pick<PublishedProfile, "detail">,
-): V3UserProfileSearchDocument {
+): UserProfileSearchDocument {
   return {
     user: {
       subjectIdentifier: profile.subjectIdentifier,
@@ -112,7 +112,7 @@ function buildV3SearchDocument(
   };
 }
 
-type SearchOrganization = V3UserProfileSearchDocument["employments"][number]["organization"];
+type SearchOrganization = UserProfileSearchDocument["employments"][number]["organization"];
 type SearchOrganizationInput = Omit<SearchOrganization, "path"> & {
   readonly path: readonly (Omit<SearchOrganization["path"][number], "distanceToTarget"> &
     Partial<Pick<SearchOrganization["path"][number], "distanceToTarget">>)[];

@@ -1,8 +1,8 @@
 import { expect, mock, test } from "bun:test";
 import { ApiErrorCode, UserStatus } from "@iam/contracts";
-import { V3UserProfileSearchRequestSchema } from "../profile-v3-filter";
-import { createV3UserProfileQueryRepository } from "../profile-v3-query.repository";
-import { createV3UserProfileQueryService } from "../profile-v3-query.service";
+import { UserProfileSearchRequestSchema } from "../user-profile-filter";
+import { createUserProfileSearchRepository } from "../user-profile-search.repository";
+import { createUserProfileSearchService } from "../user-profile-search.service";
 
 test("rejects an extremely deep filter without overflowing the public schema parser", () => {
   let filter: unknown = {
@@ -12,20 +12,20 @@ test("rejects an extremely deep filter without overflowing the public schema par
   };
   for (let depth = 0; depth < 10_000; depth++) filter = { not: filter };
 
-  const result = V3UserProfileSearchRequestSchema.safeParse({ filter });
+  const result = UserProfileSearchRequestSchema.safeParse({ filter });
 
   expect(result.success).toBeFalse();
 });
 
 test("deduplicates membership values before applying the distinct value budget", () => {
-  const scalarResult = V3UserProfileSearchRequestSchema.safeParse({
+  const scalarResult = UserProfileSearchRequestSchema.safeParse({
     filter: {
       field: "user.status",
       op: "in",
       value: Array.from({ length: 101 }).fill(UserStatus.Enable),
     },
   });
-  const arrayResult = V3UserProfileSearchRequestSchema.safeParse({
+  const arrayResult = UserProfileSearchRequestSchema.safeParse({
     filter: {
       exists: {
         path: "employments",
@@ -95,7 +95,7 @@ test("rejects every structural and value budget before accessing the database", 
   for (const request of invalidRequests) {
     const error = await service.searchBase(request).catch((error) => error);
     expect(error).toMatchObject({
-      name: "V3UserProfileFilterValidationError",
+      name: "UserProfileFilterValidationError",
       httpStatus: 422,
     });
   }
@@ -103,7 +103,7 @@ test("rejects every structural and value budget before accessing the database", 
 });
 
 test("maps repository failures to the stable sanitized unavailable error", async () => {
-  const service = createV3UserProfileQueryService({
+  const service = createUserProfileSearchService({
     profileRepository: {
       searchCurrentProfileBases: mock(async () => {
         throw new Error("postgresql://user:secret@database/internal-detail");
@@ -122,7 +122,7 @@ test("maps repository failures to the stable sanitized unavailable error", async
     .catch((error) => error);
 
   expect(error).toMatchObject({
-    name: "V3UserProfileSearchUnavailableError",
+    name: "UserProfileSearchUnavailableError",
     code: ApiErrorCode.UserSearchUnavailable,
     httpStatus: 503,
     message: "用户搜索暂时不可用",
@@ -193,7 +193,7 @@ test("strictly rejects legacy, empty, unknown, and wrongly typed expressions", a
     expect(error).toMatchObject({
       code: ApiErrorCode.ValidationFailed,
       httpStatus: 422,
-      name: "V3UserProfileFilterValidationError",
+      name: "UserProfileFilterValidationError",
     });
   }
 });
@@ -263,7 +263,7 @@ test("rejects invalid Employment, Role, Privilege and Responsibility filters bef
     expect(error).toMatchObject({
       code: ApiErrorCode.ValidationFailed,
       httpStatus: 422,
-      name: "V3UserProfileFilterValidationError",
+      name: "UserProfileFilterValidationError",
     });
   }
 });
@@ -272,8 +272,8 @@ function createValidationQuery() {
   const select = mock(() => {
     throw new Error("Invalid filters must fail before reading profiles");
   });
-  const query = createV3UserProfileQueryService({
-    profileRepository: createV3UserProfileQueryRepository({ select } as never),
+  const query = createUserProfileSearchService({
+    profileRepository: createUserProfileSearchRepository({ select } as never),
   });
   return { query, select };
 }

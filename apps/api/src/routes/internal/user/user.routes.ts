@@ -11,7 +11,7 @@ import {
 } from "@iam/api-core/core/openapi/schemas/error-response-schema";
 import { UserNameWriteSchema, UsernameWriteSchema } from "@iam/domain/user";
 import { UserProfileDetailDocumentSchema } from "@iam/user-profile-read-model";
-import { V3UserProfileSearchTransportRequestSchema } from "@iam/user-profile-read-model/v3";
+import { UserProfileSearchTransportRequestSchema } from "@iam/user-profile-read-model/query";
 
 const tags = ["Internal/User"];
 
@@ -36,7 +36,7 @@ export const usersSearchDsl = createRoute({
   path: "/search-dsl",
   tags,
   request: {
-    body: jsonContentRequired(V3UserProfileSearchTransportRequestSchema, "User Profile v3 Filter DSL 搜索条件"),
+    body: jsonContentRequired(UserProfileSearchTransportRequestSchema, "User Profile v3 Filter DSL 搜索条件"),
   },
   responses: {
     ...commonErrorResponses,

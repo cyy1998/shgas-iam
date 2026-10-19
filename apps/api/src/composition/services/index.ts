@@ -11,7 +11,7 @@ import { createPrivilegeDelegationService } from "@api/services/privilege/privil
 import { createUserService } from "@api/services/user/user.service";
 import { createUserMobileBinding } from "@api/services/user/user-mobile-binding.helper";
 import { createUserPasswordHelper } from "@api/services/user/user-password.helper";
-import { createV3UserProfileSearchAdapter } from "@api/services/user-profile-search/user-profile-search-v3.adapter";
+import { createUserProfileSearchAdapter } from "@api/services/user-profile-search/user-profile-search.adapter";
 import { createClientSnapshots } from "@iam/api-core/client-snapshot/composition";
 import { createClientSecretAuthenticator } from "@iam/api-core/client-snapshot/credentials";
 import { createLoginRestriction, createRedisLoginRestrictionStore } from "@iam/api-core/login-restriction";
@@ -40,10 +40,13 @@ import {
   createSubjectFactsReader,
   createSubjectFactsRedisCache,
 } from "@iam/user-profile-read-model";
-import { createUserProfileQueryService } from "@iam/user-profile-read-model/query";
+import {
+  createUserProfileQueryService,
+  createUserProfileSearchRepository,
+  createUserProfileSearchService,
+} from "@iam/user-profile-read-model/query";
 import { createSubjectAccessTransitionRepository } from "@iam/user-profile-read-model/subject-access-transition";
 import { createSubjectFactsLoggerObservability } from "@iam/user-profile-read-model/subject-facts";
-import { createV3UserProfileQueryRepository, createV3UserProfileQueryService } from "@iam/user-profile-read-model/v3";
 import type { ApiRepositories } from "../repositories";
 import { createRootAuthenticationComposition } from "../root-authentication";
 import type { ApiRuntimePorts } from "../runtime";
@@ -150,9 +153,9 @@ export function createApiServices(options: CreateApiServicesOptions) {
   const internalUserProfileQuery = createInternalUserProfileQueryService({
     profileRepository: createInternalUserProfileQueryRepository(options.userProfileQueryDb),
   });
-  const userProfileSearch = createV3UserProfileSearchAdapter(
-    createV3UserProfileQueryService({
-      profileRepository: createV3UserProfileQueryRepository(options.userProfileQueryDb),
+  const userProfileSearch = createUserProfileSearchAdapter(
+    createUserProfileSearchService({
+      profileRepository: createUserProfileSearchRepository(options.userProfileQueryDb),
     }),
   );
   const userMobileBinding = createUserMobileBinding({

@@ -2,7 +2,7 @@ import { afterAll, beforeAll, beforeEach, describe, expect, mock, test } from "b
 import type { RebuildUserProfileJobPayload, UserProfileJobName } from "@iam/contracts";
 import { UserProfileDirtyStatus, UserStatus } from "@iam/contracts";
 import type { db as database } from "@iam/db";
-import { V3_USER_PROFILE_SCHEMA_VERSION } from "../../src/v3";
+import { USER_PROFILE_SCHEMA_VERSION } from "../../src/index";
 import {
   createCurrentUserProfileProjectionBundle,
   createUserProfilePostgresGate,
@@ -146,7 +146,7 @@ describe("production User Profile v3 Worker", () => {
     });
     const report = await gate.verify({ batchSize: 10 });
     expect(report).toMatchObject({
-      version: V3_USER_PROFILE_SCHEMA_VERSION,
+      version: USER_PROFILE_SCHEMA_VERSION,
       status: "passed",
       failures: [],
     });

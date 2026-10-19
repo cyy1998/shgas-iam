@@ -59,7 +59,7 @@ Expression =
 ## 3. Search Document 公开结构
 
 v3 的公开搜索结构如下；未列出的存储辅助结构不是合法路径。字段类型、枚举和可空性以
-[Search Document schema](../../../packages/user-profile-read-model/src/schema/profile-v3-search.schema.ts)为准，
+[Search Document schema](../../../packages/user-profile-read-model/src/schema/profile-search.schema.ts)为准，
 响应的五个字段以 [UserProfileBaseSchema](../../../packages/domain/src/user/schema.ts) 为准。
 
 ```text

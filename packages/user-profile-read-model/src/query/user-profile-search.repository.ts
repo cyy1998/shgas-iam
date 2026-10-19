@@ -1,16 +1,16 @@
 import type { DbClient } from "@iam/db";
 import { userProfiles } from "@iam/db/schema";
 import { and, asc, eq } from "drizzle-orm";
-import { V3_USER_PROFILE_SCHEMA_VERSION } from "../build/profile-v3";
-import { compileV3UserProfileFilter } from "./profile-v3-filter";
-import { V3_USER_PROFILE_RESULT_LIMIT } from "./profile-v3-query.port";
+import { USER_PROFILE_SCHEMA_VERSION } from "../schema/profile.schema";
+import { compileUserProfileFilter } from "./user-profile-filter";
+import { USER_PROFILE_RESULT_LIMIT } from "./user-profile-search.port";
 
-const V3_USER_PROFILE_RESULT_SENTINEL_LIMIT = V3_USER_PROFILE_RESULT_LIMIT + 1;
+const USER_PROFILE_RESULT_SENTINEL_LIMIT = USER_PROFILE_RESULT_LIMIT + 1;
 
-export function createV3UserProfileQueryRepository(db: DbClient) {
+export function createUserProfileSearchRepository(db: DbClient) {
   return {
     async searchCurrentProfileBases(filter: unknown) {
-      const condition = compileV3UserProfileFilter(filter);
+      const condition = compileUserProfileFilter(filter);
       return await db
         .select({
           mobile: userProfiles.mobile,
@@ -23,15 +23,15 @@ export function createV3UserProfileQueryRepository(db: DbClient) {
         .from(userProfiles)
         .where(
           and(
-            eq(userProfiles.profileSchemaVersion, V3_USER_PROFILE_SCHEMA_VERSION),
+            eq(userProfiles.profileSchemaVersion, USER_PROFILE_SCHEMA_VERSION),
             eq(userProfiles.isDelete, false),
             condition,
           ),
         )
         .orderBy(asc(userProfiles.userId))
-        .limit(V3_USER_PROFILE_RESULT_SENTINEL_LIMIT);
+        .limit(USER_PROFILE_RESULT_SENTINEL_LIMIT);
     },
   };
 }
 
-export type V3UserProfileQueryRepository = ReturnType<typeof createV3UserProfileQueryRepository>;
+export type UserProfileSearchRepository = ReturnType<typeof createUserProfileSearchRepository>;

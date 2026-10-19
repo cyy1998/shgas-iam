@@ -5,7 +5,7 @@ import * as HttpStatusCodes from "@iam/api-core/core/http-status-codes";
 import * as resp from "@iam/api-core/http";
 import type { InternalUserProfileQueryService } from "@iam/user-profile-read-model";
 import { InternalUserProfileSearchUnavailableError } from "@iam/user-profile-read-model";
-import { V3UserProfileSearchUnavailableError } from "@iam/user-profile-read-model/v3";
+import { UserProfileSearchUnavailableError } from "@iam/user-profile-read-model/query";
 import type { UserRouteHandler } from "./user.type";
 import { runWithinInternalUserHandlerBudget } from "./user-handler-budget";
 
@@ -31,7 +31,7 @@ export function createUserHandlers(deps: CreateUserHandlersDeps) {
     const request = c.req.valid("json");
     const data = await runWithinInternalUserHandlerBudget(
       () => deps.userProfileSearch.searchDsl(request),
-      () => new V3UserProfileSearchUnavailableError(),
+      () => new UserProfileSearchUnavailableError(),
     );
     return c.json(resp.ok(data), HttpStatusCodes.OK);
   };

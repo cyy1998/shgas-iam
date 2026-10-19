@@ -1,7 +1,7 @@
 import { SERVICE_UNAVAILABLE, UNPROCESSABLE_ENTITY } from "@iam/api-core/core/http-status-codes";
 import { ApiErrorCode } from "@iam/contracts";
 
-export class V3UserProfileFilterValidationError extends Error {
+export class UserProfileFilterValidationError extends Error {
   readonly code = ApiErrorCode.ValidationFailed;
   readonly httpStatus = UNPROCESSABLE_ENTITY;
 
@@ -11,7 +11,7 @@ export class V3UserProfileFilterValidationError extends Error {
   }
 }
 
-export class V3UserProfileSearchResultTooLargeError extends Error {
+export class UserProfileSearchResultTooLargeError extends Error {
   readonly code = ApiErrorCode.UserSearchResultTooLarge;
   readonly httpStatus = UNPROCESSABLE_ENTITY;
 
@@ -21,7 +21,7 @@ export class V3UserProfileSearchResultTooLargeError extends Error {
   }
 }
 
-export class V3UserProfileSearchUnavailableError extends Error {
+export class UserProfileSearchUnavailableError extends Error {
   readonly code = ApiErrorCode.UserSearchUnavailable;
   readonly httpStatus = SERVICE_UNAVAILABLE;
 
@@ -31,7 +31,7 @@ export class V3UserProfileSearchUnavailableError extends Error {
   }
 }
 
-export class V3UserProfileDocumentIntegrityError extends Error {
+export class UserProfileDocumentIntegrityError extends Error {
   readonly code = ApiErrorCode.UserSearchUnavailable;
   readonly httpStatus = SERVICE_UNAVAILABLE;
 

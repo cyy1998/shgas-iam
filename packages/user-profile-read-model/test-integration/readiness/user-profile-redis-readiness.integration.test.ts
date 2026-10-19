@@ -1,6 +1,6 @@
 import { afterAll, afterEach, beforeAll, describe, expect, test } from "bun:test";
 import { UserProfileDirtyReason, UserStatus, UserType } from "@iam/contracts";
-import { V3UserProfileSchema } from "../../src/v3";
+import { PublishedProfileSchema } from "../../src/index";
 import {
   createCurrentUserProfileProjectionBundle,
   createUserProfileRebuildProcessor,
@@ -134,7 +134,7 @@ function inventory(profiles: ReturnType<typeof profile>[]) {
 
 function profile(userId: number, sourceDirtyVersion: string) {
   const subjectIdentifier = `00000000-0000-4000-8000-${String(userId).padStart(12, "0")}`;
-  return V3UserProfileSchema.parse({
+  return PublishedProfileSchema.parse({
     userId,
     subjectIdentifier,
     username: `user-${userId}`,

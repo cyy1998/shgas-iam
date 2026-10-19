@@ -1,23 +1,23 @@
 import { UserProfileBaseSchema } from "@iam/domain/user";
 import { FilterValidationError } from "@iam/filter-engine";
 import { z } from "zod";
-import { V3UserProfileSearchDocumentSchema } from "../schema/profile-v3-search.schema";
+import { UserProfileSearchDocumentSchema } from "../schema/profile-search.schema";
 import {
-  V3UserProfileDocumentIntegrityError,
-  V3UserProfileFilterValidationError,
-  V3UserProfileSearchResultTooLargeError,
-  V3UserProfileSearchUnavailableError,
-} from "./profile-v3-query.error";
-import type { V3UserProfileQueryRepositoryPort } from "./profile-v3-query.port";
-import { V3_USER_PROFILE_RESULT_LIMIT } from "./profile-v3-query.port";
+  UserProfileDocumentIntegrityError,
+  UserProfileFilterValidationError,
+  UserProfileSearchResultTooLargeError,
+  UserProfileSearchUnavailableError,
+} from "./user-profile-search.error";
+import type { UserProfileSearchRepositoryPort } from "./user-profile-search.port";
+import { USER_PROFILE_RESULT_LIMIT } from "./user-profile-search.port";
 
 const SearchRequestEnvelopeSchema = z.object({ filter: z.unknown().nonoptional() }).strict();
 
-export interface V3UserProfileQueryServiceDeps {
-  readonly profileRepository: V3UserProfileQueryRepositoryPort;
+export interface UserProfileSearchServiceDeps {
+  readonly profileRepository: UserProfileSearchRepositoryPort;
 }
 
-export function createV3UserProfileQueryService(deps: V3UserProfileQueryServiceDeps) {
+export function createUserProfileSearchService(deps: UserProfileSearchServiceDeps) {
   return {
     async searchBase(input: unknown) {
       const rows = await executeSearch(input, deps.profileRepository.searchCurrentProfileBases);
@@ -39,17 +39,17 @@ async function executeSearch<Row>(input: unknown, search: (filter: unknown) => P
   try {
     request = SearchRequestEnvelopeSchema.parse(input);
   } catch {
-    throw new V3UserProfileFilterValidationError();
+    throw new UserProfileFilterValidationError();
   }
 
   let rows: readonly Row[];
   try {
     rows = await search(request.filter);
   } catch (error) {
-    if (error instanceof FilterValidationError) throw new V3UserProfileFilterValidationError();
-    throw new V3UserProfileSearchUnavailableError();
+    if (error instanceof FilterValidationError) throw new UserProfileFilterValidationError();
+    throw new UserProfileSearchUnavailableError();
   }
-  if (rows.length > V3_USER_PROFILE_RESULT_LIMIT) throw new V3UserProfileSearchResultTooLargeError();
+  if (rows.length > USER_PROFILE_RESULT_LIMIT) throw new UserProfileSearchResultTooLargeError();
   return rows;
 }
 
@@ -59,12 +59,12 @@ function parseRows<Row extends { readonly searchDocument: unknown }, Result>(
 ) {
   try {
     return rows.map((row) => {
-      V3UserProfileSearchDocumentSchema.parse(row.searchDocument);
+      UserProfileSearchDocumentSchema.parse(row.searchDocument);
       return parse(row);
     });
   } catch {
-    throw new V3UserProfileDocumentIntegrityError();
+    throw new UserProfileDocumentIntegrityError();
   }
 }
 
-export type V3UserProfileQueryService = ReturnType<typeof createV3UserProfileQueryService>;
+export type UserProfileSearchService = ReturnType<typeof createUserProfileSearchService>;

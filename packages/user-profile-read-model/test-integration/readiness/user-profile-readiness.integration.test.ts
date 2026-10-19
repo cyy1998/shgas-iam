@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, test } from "bun:test";
 import { UserProfileDirtyReason, UserProfileDirtyStatus, UserStatus } from "@iam/contracts";
 import type { db as database } from "@iam/db";
-import { V3_USER_PROFILE_SCHEMA_VERSION } from "../../src/v3";
+import { USER_PROFILE_SCHEMA_VERSION } from "../../src/index";
 import {
   createCurrentUserProfileProjectionBundle,
   createUserProfilePostgresGate,
@@ -87,7 +87,7 @@ describe("User Profile v3 PostgreSQL readiness", () => {
 
     const passedReport = await gate.verify({ batchSize: 10 });
     expect(passedReport).toMatchObject({
-      version: V3_USER_PROFILE_SCHEMA_VERSION,
+      version: USER_PROFILE_SCHEMA_VERSION,
       status: "passed",
       counts: { users: 1, profiles: 1, verifiedUsers: 1 },
       failures: [],
@@ -106,7 +106,7 @@ describe("User Profile v3 PostgreSQL readiness", () => {
 
     await harness.sql`
       UPDATE user_profile
-      SET profile_schema_version = ${V3_USER_PROFILE_SCHEMA_VERSION},
+      SET profile_schema_version = ${USER_PROFILE_SCHEMA_VERSION},
           search_doc = '{}'::jsonb
       WHERE user_id = 1
     `;

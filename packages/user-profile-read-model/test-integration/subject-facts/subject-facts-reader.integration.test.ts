@@ -7,8 +7,8 @@ import {
   UserProfileDirtyStatus,
   UserStatus,
 } from "@iam/contracts";
+import { USER_PROFILE_SCHEMA_VERSION } from "../../src/index";
 import { createSubjectFactsReader } from "../../src/subject-facts";
-import { V3_USER_PROFILE_SCHEMA_VERSION } from "../../src/v3";
 import { createPostgresTestHarness } from "../support/postgres-test-harness";
 
 const SUBJECT_IDENTIFIER = "62b1eede-a7a5-4b6a-a716-54e3314f790f";
@@ -30,7 +30,7 @@ describe("Subject Facts PostgreSQL reader", () => {
   });
 
   test("rejects a published V1 row without fallback or cache publication", async () => {
-    await seedPublishedSubject(harness, "21");
+    await seedLegacyPublishedSubject(harness, "21");
     const publish = mock(async () => ({ status: "published" as const }));
     const reader = createSubjectFactsReader({
       db: harness.db,
@@ -47,7 +47,7 @@ describe("Subject Facts PostgreSQL reader", () => {
   });
 
   test("reads one strict v3 responsibility row and publishes its recorded version", async () => {
-    await seedPublishedSubjectV3(harness, "22");
+    await seedPublishedSubject(harness, "22");
     const publish = mock(async () => ({ status: "published" as const }));
     const reader = createSubjectFactsReader({
       db: harness.db,
@@ -90,7 +90,7 @@ describe("Subject Facts PostgreSQL reader", () => {
     UserProfileDirtyStatus.Processed,
     null,
   ])("delivers published authorization from PostgreSQL and cache while Dirty is %s", async (status) => {
-    await seedPublishedSubjectV3(harness, "22");
+    await seedPublishedSubject(harness, "22");
     if (status === null) {
       await harness.sql`DELETE FROM user_profile_dirty WHERE user_id = 1`;
     } else {
@@ -129,7 +129,7 @@ describe("Subject Facts PostgreSQL reader", () => {
   });
 });
 
-async function seedPublishedSubject(
+async function seedLegacyPublishedSubject(
   harness: Awaited<ReturnType<typeof createPostgresTestHarness>>,
   dirtyVersion: string,
 ) {
@@ -189,7 +189,7 @@ async function seedPublishedSubject(
   `;
 }
 
-async function seedPublishedSubjectV3(
+async function seedPublishedSubject(
   harness: Awaited<ReturnType<typeof createPostgresTestHarness>>,
   dirtyVersion: string,
 ) {
@@ -263,7 +263,7 @@ async function seedPublishedSubjectV3(
       ${UserStatus.Enable},
       FALSE,
       TRUE,
-      ${V3_USER_PROFILE_SCHEMA_VERSION},
+      ${USER_PROFILE_SCHEMA_VERSION},
       ${dirtyVersion},
       ${JSON.stringify({ candidate: true })}::jsonb,
       ${JSON.stringify({ candidate: true })}::jsonb,

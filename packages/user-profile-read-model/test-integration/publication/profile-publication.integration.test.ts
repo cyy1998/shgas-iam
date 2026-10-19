@@ -79,7 +79,7 @@ describe("User Profile v3 PostgreSQL publication", () => {
     `;
     await seedProcessingDirty("4");
     await harness.sql.unsafe(`
-      CREATE FUNCTION reject_v3_processed_dirty() RETURNS trigger AS $$
+      CREATE FUNCTION reject_processed_dirty() RETURNS trigger AS $$
       BEGIN
         IF NEW.status = 'processed' THEN
           RAISE EXCEPTION 'forced v3 dirty failure';
@@ -89,9 +89,9 @@ describe("User Profile v3 PostgreSQL publication", () => {
       $$ LANGUAGE plpgsql
     `);
     await harness.sql.unsafe(`
-      CREATE TRIGGER reject_v3_processed_dirty_trigger
+      CREATE TRIGGER reject_processed_dirty_trigger
       BEFORE UPDATE ON user_profile_dirty
-      FOR EACH ROW EXECUTE FUNCTION reject_v3_processed_dirty()
+      FOR EACH ROW EXECUTE FUNCTION reject_processed_dirty()
     `);
 
     try {
@@ -125,8 +125,8 @@ describe("User Profile v3 PostgreSQL publication", () => {
         sourceDirtyVersion: "3",
       });
     } finally {
-      await harness.sql.unsafe("DROP TRIGGER reject_v3_processed_dirty_trigger ON user_profile_dirty");
-      await harness.sql.unsafe("DROP FUNCTION reject_v3_processed_dirty()");
+      await harness.sql.unsafe("DROP TRIGGER reject_processed_dirty_trigger ON user_profile_dirty");
+      await harness.sql.unsafe("DROP FUNCTION reject_processed_dirty()");
     }
   });
 

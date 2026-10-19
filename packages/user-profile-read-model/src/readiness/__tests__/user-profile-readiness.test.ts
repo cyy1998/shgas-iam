@@ -39,7 +39,7 @@ describe("version-independent User Profile readiness gates", () => {
   }
 
   test("pins the PostgreSQL gate version in composition and rebuilds every profile", async () => {
-    const stored = v3Profile(1, "3");
+    const stored = publishedProfile(1, "3");
     const expected = { ...stored, name: "Current name" };
     const rebuildExpected = mock(async () => [expected]);
     const gate = createUserProfilePostgresGate({
@@ -74,7 +74,7 @@ describe("version-independent User Profile readiness gates", () => {
   });
 
   test("pins the Redis gate version and compares Facts plus Subject Access for all users", async () => {
-    const stored = v3Profile(1, "3");
+    const stored = publishedProfile(1, "3");
     const expectedFacts = factsRecord(stored);
     const staleFacts = {
       ...expectedFacts,
@@ -117,7 +117,7 @@ describe("version-independent User Profile readiness gates", () => {
   });
 
   test("fails the complete inventory when profile counts or orphan rows disagree", async () => {
-    const stored = v3Profile(1, "3");
+    const stored = publishedProfile(1, "3");
     const gate = createUserProfilePostgresGate({
       schemaVersion: 3,
       repository: {
@@ -148,7 +148,7 @@ describe("version-independent User Profile readiness gates", () => {
 });
 
 function inventoryGate(kind: "postgres" | "redis", ids: number[], count = ids.length, paginate = false) {
-  const profiles = ids.map((id) => v3Profile(id, "3"));
+  const profiles = ids.map((id) => publishedProfile(id, "3"));
   const inventory = {
     readVerificationSummary: async () => summary(count),
     scanPage: async ({ afterUserId, limit }: { afterUserId: number; limit: number }) =>
@@ -193,7 +193,7 @@ function summary(count: number) {
   };
 }
 
-function pageRow(currentProfile: ReturnType<typeof v3Profile>) {
+function pageRow(currentProfile: ReturnType<typeof publishedProfile>) {
   return {
     userId: currentProfile.userId,
     subjectIdentifier: currentProfile.subjectIdentifier,
@@ -204,7 +204,7 @@ function pageRow(currentProfile: ReturnType<typeof v3Profile>) {
   };
 }
 
-function factsRecord(source: ReturnType<typeof v3Profile>) {
+function factsRecord(source: ReturnType<typeof publishedProfile>) {
   return {
     schemaVersion: 3 as const,
     sourceDirtyVersion: source.sourceDirtyVersion,
@@ -215,7 +215,7 @@ function factsRecord(source: ReturnType<typeof v3Profile>) {
   };
 }
 
-function barrierRecord(source: ReturnType<typeof v3Profile>, state: "disabled" | "enabled") {
+function barrierRecord(source: ReturnType<typeof publishedProfile>, state: "disabled" | "enabled") {
   return {
     version: 1 as const,
     subjectIdentifier: source.subjectIdentifier,
@@ -225,7 +225,7 @@ function barrierRecord(source: ReturnType<typeof v3Profile>, state: "disabled" |
   };
 }
 
-function v3Profile(userId: number, sourceDirtyVersion: string) {
+function publishedProfile(userId: number, sourceDirtyVersion: string) {
   return {
     ...currentProfile(userId, sourceDirtyVersion),
     name: "Stale name",

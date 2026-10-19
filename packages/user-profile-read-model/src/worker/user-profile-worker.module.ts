@@ -9,15 +9,13 @@ import type { BullMqRedisConfig, CreateJobQueueInput, CreateJobWorkerInput, JobQ
 import { createJobQueue, createJobWorker } from "@iam/jobs";
 import { createOrganizationResponsibilityResolver } from "@iam/organization-responsibility-resolution";
 import { createRoleAssignmentResolver } from "@iam/role-assignment-resolution";
-import type { V3SubjectFactsCacheRecord, V3UserProfile } from "../build/profile-v3";
-import {
-  createV3UserProfileBuilder,
-  parseV3UserProfileRow,
-  V3_USER_PROFILE_SCHEMA_VERSION,
-  V3SubjectFactsCacheRecordSchema,
-} from "../build/profile-v3";
+import { createUserProfileBuilder, parseUserProfileRow } from "../build/user-profile-builder";
 import { createUserProfileDirtyRepository } from "../invalidation/dirty.repository";
 import { createUserProfileJobProducer } from "../invalidation/user-profile-job.producer";
+import type { PublishedProfile } from "../schema/profile.schema";
+import { USER_PROFILE_SCHEMA_VERSION } from "../schema/profile.schema";
+import type { SubjectFactsCacheRecord } from "../subject-facts/profile-cache";
+import { SubjectFactsCacheRecordSchema } from "../subject-facts/profile-cache";
 import { createSubjectFactsCacheRecordInput } from "../subject-facts/subject-facts-cache.core";
 import type { SubjectFactsRedisClient } from "../subject-facts/subject-facts-redis-publisher.core";
 import { createUserProfileMaintenanceRepository } from "./user-profile-maintenance.repository";
@@ -144,11 +142,11 @@ export interface UserProfileWorkerModule {
 }
 
 export function createCurrentUserProfileProjectionBundle() {
-  return createUserProfileProjectionBundle<V3UserProfile, V3SubjectFactsCacheRecord>({
-    schemaVersion: V3_USER_PROFILE_SCHEMA_VERSION,
-    parseProfileRow: parseV3UserProfileRow,
+  return createUserProfileProjectionBundle<PublishedProfile, SubjectFactsCacheRecord>({
+    schemaVersion: USER_PROFILE_SCHEMA_VERSION,
+    parseProfileRow: parseUserProfileRow,
     createBuilder(input) {
-      return createV3UserProfileBuilder({
+      return createUserProfileBuilder({
         db: input.db,
         roleAssignmentResolver: createRoleAssignmentResolver(input.db),
         responsibilityResolver: createOrganizationResponsibilityResolver(input.db),
@@ -157,11 +155,11 @@ export function createCurrentUserProfileProjectionBundle() {
       });
     },
     createFactsRecord(profile, publishedAt) {
-      return V3SubjectFactsCacheRecordSchema.parse(
-        createSubjectFactsCacheRecordInput(profile, publishedAt, V3_USER_PROFILE_SCHEMA_VERSION),
+      return SubjectFactsCacheRecordSchema.parse(
+        createSubjectFactsCacheRecordInput(profile, publishedAt, USER_PROFILE_SCHEMA_VERSION),
       );
     },
-    parseFactsRecord: (input) => V3SubjectFactsCacheRecordSchema.parse(input),
+    parseFactsRecord: (input) => SubjectFactsCacheRecordSchema.parse(input),
   });
 }
 

@@ -27,13 +27,13 @@ import { roleAssignments } from "@iam/db/schema/role-assignments";
 import { createOrganizationResponsibilityResolver } from "@iam/organization-responsibility-resolution";
 import { createRoleAssignmentResolver } from "@iam/role-assignment-resolution";
 import { eq } from "drizzle-orm";
-import { createUserProfileRowRepository } from "../../src/publication/user-profile-row.repository";
 import {
-  createV3UserProfileBuilder,
-  createV3UserProfileQueryRepository,
-  createV3UserProfileQueryService,
-  V3UserProfileSearchRequestSchema,
-} from "../../src/v3";
+  createUserProfileSearchRepository,
+  createUserProfileSearchService,
+  UserProfileSearchRequestSchema,
+} from "../../src/index";
+import { createUserProfileRowRepository } from "../../src/publication/user-profile-row.repository";
+import { createUserProfileBuilder } from "../../src/worker";
 import type { PostgresTestHarness } from "../support/postgres-test-harness";
 import { createPostgresTestHarness } from "../support/postgres-test-harness";
 
@@ -419,7 +419,7 @@ describe("User Profile v3 Employment tracer", () => {
     const candidate = await builder.buildOne({ userId: 1, sourceDirtyVersion: "1" });
     await candidatePersistence.upsert(candidate!);
 
-    const normalized = V3UserProfileSearchRequestSchema.parse({
+    const normalized = UserProfileSearchRequestSchema.parse({
       filter: {
         exists: {
           path: "employments",
@@ -475,7 +475,7 @@ describe("User Profile v3 Employment tracer", () => {
 
 function createTracer() {
   return {
-    builder: createV3UserProfileBuilder({
+    builder: createUserProfileBuilder({
       db: harness!.db,
       roleAssignmentResolver: createRoleAssignmentResolver(harness!.db),
       responsibilityResolver: createOrganizationResponsibilityResolver(harness!.db),
@@ -483,8 +483,8 @@ function createTracer() {
       config: { batchSize: 100 },
     }),
     candidatePersistence: createUserProfileRowRepository(harness!.db),
-    query: createV3UserProfileQueryService({
-      profileRepository: createV3UserProfileQueryRepository(harness!.db),
+    query: createUserProfileSearchService({
+      profileRepository: createUserProfileSearchRepository(harness!.db),
     }),
   };
 }

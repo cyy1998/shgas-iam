@@ -16,7 +16,7 @@ import { createApiUserProfileResources } from "@api/composition/user-profile-res
 import { PRIVILEGE_DELEGATION_RESOLUTION_HANDLER_TIMEOUT_MS } from "@api/routes/internal/delegation/delegation.handlers";
 import { INTERNAL_ORGANIZATION_HANDLER_TIMEOUT_MS } from "@api/routes/internal/organization/organization.handlers";
 import { INTERNAL_USER_HANDLER_TIMEOUT_MS } from "@api/routes/internal/user/user.handlers";
-import { createV3UserProfileSearchAdapter } from "@api/services/user-profile-search/user-profile-search-v3.adapter";
+import { createUserProfileSearchAdapter } from "@api/services/user-profile-search/user-profile-search.adapter";
 import createApp from "@iam/api-core/core/create-app";
 import { createRouter } from "@iam/api-core/core/create-router";
 import pino from "pino";
@@ -39,7 +39,7 @@ test("owns dedicated Internal query clients with fixed budgets and deterministic
 
   const resources = [
     {
-      applicationName: "iam-api-internal-user-v3",
+      applicationName: "iam-api-internal-user",
       createResource: createInternalUserQueryResource,
       databaseUrl: "postgresql://internal-user.invalid/iam",
     },
@@ -103,7 +103,7 @@ test("wires canonical Filter search to the Base query and preserves Internal det
   const detail = { ...base, employments: [], roles: [], privileges: [] };
   const searchBase = mock(async (_input: unknown) => [base]);
   const getDetailByUsername = mock(async (_username: string) => detail);
-  const userProfileSearch = createV3UserProfileSearchAdapter({ searchBase });
+  const userProfileSearch = createUserProfileSearchAdapter({ searchBase });
   const activeRoutes = await createApiRoutes({
     verifyDatabase: async () => {},
     auditLogWriter: {} as never,

@@ -16,14 +16,14 @@ import { eq, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/postgres-js";
 import postgres from "postgres";
 import { z } from "zod";
-import { createUserProfileRowRepository } from "../../src/publication/user-profile-row.repository";
 import {
-  createV3UserProfileBuilder,
-  createV3UserProfileQueryRepository,
-  createV3UserProfileQueryService,
-  V3_USER_PROFILE_SCHEMA_VERSION,
-  V3UserProfileSearchRequestSchema,
-} from "../../src/v3";
+  createUserProfileSearchRepository,
+  createUserProfileSearchService,
+  USER_PROFILE_SCHEMA_VERSION,
+  UserProfileSearchRequestSchema,
+} from "../../src/index";
+import { createUserProfileRowRepository } from "../../src/publication/user-profile-row.repository";
+import { createUserProfileBuilder } from "../../src/worker";
 import type { PostgresTestHarness } from "../support/postgres-test-harness";
 import { createPostgresTestHarness } from "../support/postgres-test-harness";
 
@@ -111,7 +111,7 @@ describe("User Profile v3 User scalar tracer", () => {
 
     const candidate = await builder.buildOne({ userId: 1, sourceDirtyVersion: "1" });
     expect(candidate).not.toBeNull();
-    expect(candidate?.profileSchemaVersion).toBe(V3_USER_PROFILE_SCHEMA_VERSION);
+    expect(candidate?.profileSchemaVersion).toBe(USER_PROFILE_SCHEMA_VERSION);
     expect(candidate?.searchDoc).toEqual({
       user: {
         subjectIdentifier: "5ee46272-9123-4ec3-9d8d-8a7a6ac7f888",
@@ -191,7 +191,7 @@ describe("User Profile v3 User scalar tracer", () => {
     ]);
     for (const candidate of candidates) await candidatePersistence.upsert(candidate);
 
-    const normalized = V3UserProfileSearchRequestSchema.parse({
+    const normalized = UserProfileSearchRequestSchema.parse({
       filter: {
         field: "user.mobile",
         op: "in",
@@ -269,7 +269,7 @@ describe("User Profile v3 User scalar tracer", () => {
     expect(error).toMatchObject({
       code: ApiErrorCode.ValidationFailed,
       httpStatus: 422,
-      name: "V3UserProfileFilterValidationError",
+      name: "UserProfileFilterValidationError",
     });
   });
 
@@ -345,7 +345,7 @@ describe("User Profile v3 User scalar tracer", () => {
     expect(error).toMatchObject({
       code: ApiErrorCode.UserSearchUnavailable,
       httpStatus: 503,
-      name: "V3UserProfileDocumentIntegrityError",
+      name: "UserProfileDocumentIntegrityError",
     });
   });
 
@@ -415,14 +415,14 @@ describe("User Profile v3 User scalar tracer", () => {
     if (schemaName === undefined) throw new Error("PostgreSQL test schema is unavailable");
     const timeoutSql = postgres(process.env.IAM_USER_PROFILE_TEST_DATABASE_URL!, {
       connection: {
-        application_name: "iam-user-profile-v3-timeout-test",
+        application_name: "iam-user-profile-timeout-test",
         search_path: schemaName,
         statement_timeout: 50,
       },
       max: 1,
     });
-    const timeoutQuery = createV3UserProfileQueryService({
-      profileRepository: createV3UserProfileQueryRepository(drizzle({ client: timeoutSql, relations })),
+    const timeoutQuery = createUserProfileSearchService({
+      profileRepository: createUserProfileSearchRepository(drizzle({ client: timeoutSql, relations })),
     });
     let releaseLock!: () => void;
     let reportLocked!: () => void;
@@ -453,7 +453,7 @@ describe("User Profile v3 User scalar tracer", () => {
       expect(error).toMatchObject({
         code: ApiErrorCode.UserSearchUnavailable,
         httpStatus: 503,
-        name: "V3UserProfileSearchUnavailableError",
+        name: "UserProfileSearchUnavailableError",
         message: "用户搜索暂时不可用",
       });
       expect(error).not.toHaveProperty("cause");
@@ -509,13 +509,13 @@ describe("User Profile v3 User scalar tracer", () => {
     expect(error).toMatchObject({
       code: ApiErrorCode.UserSearchResultTooLarge,
       httpStatus: 422,
-      name: "V3UserProfileSearchResultTooLargeError",
+      name: "UserProfileSearchResultTooLargeError",
     });
   }, 15_000);
 });
 
 function createTracer() {
-  const builder = createV3UserProfileBuilder({
+  const builder = createUserProfileBuilder({
     db: harness!.db,
     roleAssignmentResolver: createRoleAssignmentResolver(harness!.db),
     responsibilityResolver: createOrganizationResponsibilityResolver(harness!.db),
@@ -525,8 +525,8 @@ function createTracer() {
   return {
     builder,
     candidatePersistence: createUserProfileRowRepository(harness!.db),
-    query: createV3UserProfileQueryService({
-      profileRepository: createV3UserProfileQueryRepository(harness!.db),
+    query: createUserProfileSearchService({
+      profileRepository: createUserProfileSearchRepository(harness!.db),
     }),
   };
 }

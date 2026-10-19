@@ -12,19 +12,19 @@ import {
 } from "@iam/filter-engine";
 
 export type {
-  SearchCollectionFact as V3UserProfileSearchCollectionFact,
-  SearchFact as V3UserProfileSearchFact,
-  SearchFactShape as V3UserProfileSearchFactShape,
-  SearchObjectFact as V3UserProfileSearchObjectFact,
-  SearchOrganizationFact as V3UserProfileSearchOrganizationFact,
-  SearchScalarArrayFact as V3UserProfileSearchScalarArrayFact,
-  SearchScalarFact as V3UserProfileSearchScalarFact,
+  SearchCollectionFact as UserProfileSearchCollectionFact,
+  SearchFact as UserProfileSearchFact,
+  SearchFactShape as UserProfileSearchFactShape,
+  SearchObjectFact as UserProfileSearchObjectFact,
+  SearchOrganizationFact as UserProfileSearchOrganizationFact,
+  SearchScalarArrayFact as UserProfileSearchScalarArrayFact,
+  SearchScalarFact as UserProfileSearchScalarFact,
 } from "@iam/filter-engine";
 
-export const V3_USER_PROFILE_FILTER_MAX_STRING_LENGTH = FILTER_MAX_STRING_LENGTH;
-const queryStringSchema = z.string().max(V3_USER_PROFILE_FILTER_MAX_STRING_LENGTH);
+export const USER_PROFILE_FILTER_MAX_STRING_LENGTH = FILTER_MAX_STRING_LENGTH;
+const queryStringSchema = z.string().max(USER_PROFILE_FILTER_MAX_STRING_LENGTH);
 
-export const V3_USER_PROFILE_USER_SCALARS = {
+export const USER_PROFILE_USER_SCALARS = {
   subjectIdentifier: searchScalar(z.uuid(), z.uuid()),
   username: searchScalar(z.string().max(64), queryStringSchema),
   name: searchScalar(z.string().max(64), queryStringSchema),
@@ -34,27 +34,27 @@ export const V3_USER_PROFILE_USER_SCALARS = {
   status: searchScalar(z.enum(UserStatus), z.enum(UserStatus)),
 } as const;
 
-const V3_ORGANIZATION_NODE_FIELDS = {
+const ORGANIZATION_NODE_FIELDS = {
   code: searchScalar(z.string(), queryStringSchema),
   name: searchScalar(z.string(), queryStringSchema),
   type: searchScalar(z.enum(OrganizationType), z.enum(OrganizationType)),
 } as const;
 
-const V3_ORGANIZATION_PATH_NODE_FIELDS = {
-  ...V3_ORGANIZATION_NODE_FIELDS,
+const ORGANIZATION_PATH_NODE_FIELDS = {
+  ...ORGANIZATION_NODE_FIELDS,
   distanceToTarget: searchScalar(z.number().int().nonnegative(), z.number().int().nonnegative()),
 } as const;
 
-const V3_ORGANIZATION_REFERENCE_FIELDS = {
-  ...V3_ORGANIZATION_NODE_FIELDS,
-  path: searchCollection(V3_ORGANIZATION_PATH_NODE_FIELDS),
+const ORGANIZATION_REFERENCE_FIELDS = {
+  ...ORGANIZATION_NODE_FIELDS,
+  path: searchCollection(ORGANIZATION_PATH_NODE_FIELDS),
 } as const;
 
-export const V3_USER_PROFILE_SEARCH_STRUCTURE = searchObject({
-  user: searchObject(V3_USER_PROFILE_USER_SCALARS),
+export const USER_PROFILE_SEARCH_STRUCTURE = searchObject({
+  user: searchObject(USER_PROFILE_USER_SCALARS),
   employments: searchCollection({
     isPrimary: searchScalar(z.boolean(), z.boolean()),
-    organization: searchOrganization(V3_ORGANIZATION_REFERENCE_FIELDS),
+    organization: searchOrganization(ORGANIZATION_REFERENCE_FIELDS),
     position: searchObject({
       code: searchScalar(z.string(), queryStringSchema),
       name: searchScalar(z.string(), queryStringSchema),
@@ -66,14 +66,14 @@ export const V3_USER_PROFILE_SEARCH_STRUCTURE = searchObject({
         code: searchScalar(z.enum(OrganizationResponsibilityTypeCode), z.enum(OrganizationResponsibilityTypeCode)),
         name: searchScalar(z.string(), queryStringSchema),
       }),
-      targetOrganization: searchOrganization(V3_ORGANIZATION_REFERENCE_FIELDS),
+      targetOrganization: searchOrganization(ORGANIZATION_REFERENCE_FIELDS),
     }),
   }),
 });
 
-export const V3UserProfileSearchDocumentSchema = createDocumentSchema(V3_USER_PROFILE_SEARCH_STRUCTURE);
+export const UserProfileSearchDocumentSchema = createDocumentSchema(USER_PROFILE_SEARCH_STRUCTURE);
 
-export type V3UserProfileSearchDocument = z.infer<typeof V3UserProfileSearchDocumentSchema>;
+export type UserProfileSearchDocument = z.infer<typeof UserProfileSearchDocumentSchema>;
 
 function searchOrganization<const Fields extends SearchFactShape>(
   fields: Fields,

@@ -192,7 +192,7 @@ Internal Privilege Delegation 已在 API 自身的 service、repository 与 Unit
 - Snapshot `control/payload/credential` 由 API Core `client-snapshot` 独占。成功 invalidation 阻止晚到旧回填；
   传播失败可能继续读到旧已发布事实，required 提示和显式 repair 保持。旧三类 Snapshot/Gate 不进入在线图。
   User Profile 的初代 V1 builder、Facts reader/publisher 与 Subject Projection 切换实现已移除。
-  当前 Worker 通过 `createCurrentUserProfileProjectionBundle` 直接组装 V3 builder、原子 publication 与 Facts publisher；
+  当前 Worker 通过 `createCurrentUserProfileProjectionBundle` 直接组装 `createUserProfileBuilder`、原子 publication 与 Facts publisher；
   查询 DTO 由 `query/user-query.schema.ts` 拥有，readiness 继续复用版本无关校验规则。
 
 ### 角色分配解析

@@ -7,7 +7,7 @@ export type CreateInternalUserQueryResourceOptions = CreateInternalQueryResource
 
 export function createInternalUserQueryResource(options: CreateInternalUserQueryResourceOptions) {
   return createInternalQueryResource(options, {
-    applicationName: "iam-api-internal-user-v3",
+    applicationName: "iam-api-internal-user",
     statementTimeoutMs: INTERNAL_USER_STATEMENT_TIMEOUT_MS,
   });
 }

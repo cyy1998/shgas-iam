@@ -1,3 +1,4 @@
+export * from "./build/user-profile-builder";
 export * from "./employment/employment.repository";
 export * from "./employment/employment-verifier";
 export * from "./readiness/user-profile-readiness";

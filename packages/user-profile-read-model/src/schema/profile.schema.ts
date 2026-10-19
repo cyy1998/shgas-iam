@@ -3,8 +3,8 @@ import type { EmploymentResponsibilitySnapshot as ClientEmploymentResponsibility
 import { EmploymentResponsibilitySnapshotSchema as ClientEmploymentResponsibilitySnapshotSchema } from "@iam/client-subject-projection";
 import { EmploymentDetailDtoSchema } from "@iam/domain/employment";
 import { UserDetailDtoSchema } from "@iam/domain/user";
+import { UserProfileSearchDocumentSchema } from "./profile-search.schema";
 import { PublishedProfileBaseSchema } from "./profile-storage.schema";
-import { V3UserProfileSearchDocumentSchema } from "./profile-v3-search.schema";
 import { SubjectFactsEmploymentSchema } from "./subject-facts-schema.core";
 import { reviveUserProfileDetailDates } from "./user-profile-detail-document";
 
@@ -26,7 +26,7 @@ export const UserProfileDetailDocumentSchema = UserDetailDtoSchema.omit({
   })
   .strict();
 
-export const UserProfileSearchDocumentSchema = V3UserProfileSearchDocumentSchema;
+export { UserProfileSearchDocumentSchema } from "./profile-search.schema";
 
 export const ProfileSubjectFactsEmploymentSchema = SubjectFactsEmploymentSchema.extend({
   responsibilities: z.array(EmploymentResponsibilitySnapshotSchema),
