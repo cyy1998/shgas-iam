@@ -16,7 +16,7 @@ import { confirmPasswordRule, passwordRule } from "@sso/utils/form-check";
 import { ServiceError } from "@sso/utils/request";
 import { getQuery } from "@sso/utils/url";
 import { history } from "@umijs/max";
-import { Button, Form, Input, Modal, message, Select, Spin } from "antd";
+import { Button, Form, Input, Modal, message, Spin } from "antd";
 import { useEffect, useState } from "react";
 import "./index.less";
 
@@ -58,15 +58,15 @@ function StepBar({ current }: { current: 0 | 1 | 2 }) {
   );
 }
 
-type Step1 = { type: "用户名"; username: string };
-type Step2 = { phoneNumber: string; code: string };
+type Step1 = { username: string };
+type Step2 = { code: string };
 type Step3 = { newPassword: string; newPasswordCopy: string };
 
 export default function ResetPasswordPage() {
   const [current, setCurrent] = useState(0);
   const [loading, setLoading] = useState(false);
   const [done, setDone] = useState(false);
-  const [mobileOptions, setMobileOptions] = useState<{ label: string; value: string }[]>([]);
+  const [maskedMobile, setMaskedMobile] = useState<string | null>(null);
   const { countdown, isCounting, startCountdown, resetCountdown, restoreCountdown } = useSmsCodeCountdown();
   const [form1] = Form.useForm<Step1>();
   const [form2] = Form.useForm<Step2>();
@@ -86,25 +86,19 @@ export default function ResetPasswordPage() {
         const data = await withHumanVerification("openUserInfoLookup", (capToken) =>
           getMaskedMobile({ ...body, capToken }),
         );
-        if (data.mobile) {
-          setMobileOptions([{ label: `手机号：${data.mobile}`, value: data.mobile }]);
-          form2.setFieldValue("phoneNumber", data.mobile);
-        } else {
-          setMobileOptions([{ label: "无法获取绑定手机号", value: "无法获取绑定手机号" }]);
-          form2.setFieldValue("phoneNumber", "无法获取绑定手机号");
-        }
+        setMaskedMobile(data.mobile);
         setCurrent(1);
+        return;
+      }
+      if (maskedMobile === null) {
+        message.warning("无法获取绑定手机号");
         return;
       }
       if (current === 1) {
         const v = await form2.validateFields();
-        if (v.phoneNumber === "无法获取绑定手机号") {
-          message.warning("无法获取绑定手机号");
-          return;
-        }
         const verification = await codeVerify({
           username: form1.getFieldValue("username"),
-          phoneNumber: v.phoneNumber,
+          phoneNumber: maskedMobile,
           usage: "resetPassword",
           code: v.code,
         });
@@ -119,7 +113,7 @@ export default function ResetPasswordPage() {
         const v = await form3.validateFields();
         await passwordReset({
           username: form1.getFieldValue("username"),
-          phoneNumber: form2.getFieldValue("phoneNumber"),
+          phoneNumber: maskedMobile,
           code: form2.getFieldValue("code"),
           newPassword: v.newPassword,
         });
@@ -141,8 +135,7 @@ export default function ResetPasswordPage() {
   };
 
   const sendCode = async () => {
-    const phoneNumber = form2.getFieldValue("phoneNumber");
-    if (phoneNumber === "无法获取绑定手机号") {
+    if (maskedMobile === null) {
       message.warning("无法获取绑定手机号");
       return;
     }
@@ -151,7 +144,7 @@ export default function ResetPasswordPage() {
     try {
       const body = {
         username: form1.getFieldValue("username"),
-        phoneNumber,
+        phoneNumber: maskedMobile,
         usage: "resetPassword",
       } as const;
       await withHumanVerification("sendSmsCode", (capToken) => sendMessage({ ...body, capToken }));
@@ -212,10 +205,7 @@ export default function ResetPasswordPage() {
 
             <div className="reset-form">
               {current === 0 && (
-                <Form form={form1} layout="vertical" initialValues={{ type: "用户名" }}>
-                  <Form.Item label="请选择类型" name="type" rules={[{ required: true, message: "请选择类型" }]}>
-                    <Select size="large" options={[{ label: "用户名", value: "用户名" }]} />
-                  </Form.Item>
+                <Form form={form1} layout="vertical">
                   <Form.Item label="用户名" name="username" rules={[{ required: true, message: "请输入用户名" }]}>
                     <Input size="large" placeholder="请输入用户名" prefix={<UserOutlined />} allowClear />
                   </Form.Item>
@@ -224,12 +214,12 @@ export default function ResetPasswordPage() {
 
               {current === 1 && (
                 <Form form={form2} layout="vertical">
-                  <Form.Item
-                    label="验证方式"
-                    name="phoneNumber"
-                    rules={[{ required: true, message: "请选择验证方式" }]}
-                  >
-                    <Select size="large" options={mobileOptions} />
+                  <Form.Item label="验证方式">
+                    {maskedMobile === null ? (
+                      "无法获取绑定手机号"
+                    ) : (
+                      <Input size="large" value={`手机号：${maskedMobile}`} readOnly />
+                    )}
                   </Form.Item>
                   <Form.Item label="验证码" name="code" rules={[{ required: true, message: "请输入验证码" }]}>
                     <VerificationCodeInput

@@ -1,6 +1,7 @@
 import { expect, mock, test } from "bun:test";
 import { ApiErrorCode, UserStatus } from "@iam/contracts";
 import { V3UserProfileSearchRequestSchema } from "../profile-v3-filter";
+import { createV3UserProfileQueryRepository } from "../profile-v3-query.repository";
 import { createV3UserProfileQueryService } from "../profile-v3-query.service";
 
 test("rejects an extremely deep filter without overflowing the public schema parser", () => {
@@ -54,13 +55,8 @@ test("deduplicates membership values before applying the distinct value budget",
   });
 });
 
-test("rejects every structural and value budget before calling the repository", async () => {
-  const searchCurrentProfileBases = mock(async () => []);
-  const service = createV3UserProfileQueryService({
-    profileRepository: {
-      searchCurrentProfileBases,
-    },
-  });
+test("rejects every structural and value budget before accessing the database", async () => {
+  const { query: service, select } = createValidationQuery();
   const invalidRequests = [
     { filter: nestedNot(9) },
     { filter: filterWithNodeCount65() },
@@ -103,7 +99,7 @@ test("rejects every structural and value budget before calling the repository", 
       httpStatus: 422,
     });
   }
-  expect(searchCurrentProfileBases).not.toHaveBeenCalled();
+  expect(select).not.toHaveBeenCalled();
 });
 
 test("maps repository failures to the stable sanitized unavailable error", async () => {
@@ -159,8 +155,13 @@ function filterWithNodeCount65() {
 }
 
 test("strictly rejects legacy, empty, unknown, and wrongly typed expressions", async () => {
-  const query = createValidationQuery();
+  const { query } = createValidationQuery();
   const invalidRequests = [
+    undefined,
+    null,
+    {},
+    { filter: undefined },
+    { filter: { field: "user.username", op: "eq", value: "alice" }, limit: 1 },
     { filter: { all: [] } },
     { filter: { any: [] } },
     { filter: { nested: "user", where: { field: "username", op: "eq", value: "alice" } } },
@@ -198,7 +199,7 @@ test("strictly rejects legacy, empty, unknown, and wrongly typed expressions", a
 });
 
 test("rejects invalid Employment, Role, Privilege and Responsibility filters before reading profiles", async () => {
-  const query = createValidationQuery();
+  const { query } = createValidationQuery();
   const invalidRequests = [
     { filter: { exists: { path: "employments", where: { field: "roles", op: "in", value: ["role-effective"] } } } },
     { filter: { exists: { path: "employments", where: { field: "privileges", op: "eq", value: "profile:read" } } } },
@@ -268,14 +269,13 @@ test("rejects invalid Employment, Role, Privilege and Responsibility filters bef
 });
 
 function createValidationQuery() {
-  const rejectRead = async () => {
+  const select = mock(() => {
     throw new Error("Invalid filters must fail before reading profiles");
-  };
-  return createV3UserProfileQueryService({
-    profileRepository: {
-      searchCurrentProfileBases: rejectRead,
-    },
   });
+  const query = createV3UserProfileQueryService({
+    profileRepository: createV3UserProfileQueryRepository({ select } as never),
+  });
+  return { query, select };
 }
 
 function employmentResponsibilities(where: unknown) {

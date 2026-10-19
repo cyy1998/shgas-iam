@@ -1,6 +1,14 @@
 import { expect, test } from "bun:test";
+import { sql } from "drizzle-orm";
 import { z } from "zod";
-import { createDocumentSchema, createFilterEngine, searchCollection, searchObject, searchScalar } from "../index";
+import {
+  createDocumentSchema,
+  createFilterEngine,
+  FilterValidationError,
+  searchCollection,
+  searchObject,
+  searchScalar,
+} from "../index";
 
 test("a caller-defined document supplies its own typed paths and strict document schema", () => {
   const structure = searchObject({
@@ -15,8 +23,12 @@ test("a caller-defined document supplies its own typed paths and strict document
     op: "in",
     value: [2, 3],
   });
-  expect(engine.filterSchema.safeParse({ field: "record.rank", op: "eq", value: "2" }).success).toBe(false);
-  expect(engine.filterSchema.safeParse({ field: "user.name", op: "eq", value: "Alice" }).success).toBe(false);
+  expect(() => engine.compile({ field: "record.rank", op: "eq", value: "2" }, sql`document`)).toThrow(
+    FilterValidationError,
+  );
+  expect(() => engine.compile({ field: "user.name", op: "eq", value: "Alice" }, sql`document`)).toThrow(
+    FilterValidationError,
+  );
   const documentSchema = createDocumentSchema(structure);
   expect(documentSchema.parse({ record: { label: "two", rank: 2 } })).toEqual({ record: { label: "two", rank: 2 } });
   expect(documentSchema.safeParse({ record: { label: "two", rank: 2, internalId: 4 } }).success).toBe(false);

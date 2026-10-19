@@ -19,7 +19,7 @@ import type { AuditRequestContext } from "@iam/domain/audit";
 import type { ClientSessionObservation, RevocationResult, UnifiedSessionKernel } from "@iam/session-kernel";
 import { SessionStorageError } from "@iam/session-kernel";
 import { z } from "zod";
-import type { CustomSsoAuditPort, CustomSsoLoggerPort, CustomSsoProjectionPermission } from "../custom-sso.port";
+import type { CustomSsoAuditPort, CustomSsoLoggerPort } from "../custom-sso.port";
 import {
   buildGatewayLoginSuccessAudit,
   buildIndependentLoginSuccessAudit,
@@ -40,7 +40,7 @@ export interface UnifiedCustomSsoOperationsOptions {
   credentials: {
     authenticate: (clientCode: string, secret: string) => Promise<{ clientCode: string } | null>;
   };
-  projection: PermittedClientSubjectProjectionService<CustomSsoProjectionPermission>;
+  projection: PermittedClientSubjectProjectionService<SubjectAccessOperation>;
   redis: CustomSsoStateRedis;
   namespace: string;
   tokenTtlSeconds: number;
@@ -144,12 +144,12 @@ export function createUnifiedCustomSsoOperations(options: UnifiedCustomSsoOperat
         if (resolved.status === "corrupt") throw new SubjectAccessUnavailableError();
         if (resolved.status !== "resolved") throw new AuthzUnauthorizedError();
         const root = resolved.value.userSession;
-        const permission = await operation.acquireForSession({
+        await operation.acquireForSession({
           principalSessionId: root.userSessionId,
           subjectIdentifier: root.subjectIdentifier,
           subjectContext: root.subjectContext,
         });
-        return { observation: resolved.value, proof: { operation, permission } };
+        return { observation: resolved.value };
       }
       const matches = (
         record: { userSessionInstance: string; clientSessionInstance: string },
@@ -163,7 +163,7 @@ export function createUnifiedCustomSsoOperations(options: UnifiedCustomSsoOperat
         claims: SubjectClaimName[],
       ) {
         return await resolveCustomSsoSubjectProjection(
-          { resolve: (input) => options.projection.resolve(input, access.proof) },
+          { resolve: (input) => options.projection.resolve(input, operation) },
           {
             subjectIdentifier: access.observation.userSession.subjectIdentifier,
             clientCode,

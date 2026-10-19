@@ -5,7 +5,6 @@ import type { SubjectAccessOperation } from "@iam/api-core/subject-access";
 import { SubjectAccessUnavailableError } from "@iam/api-core/subject-access";
 import { parseSubjectClaimSelection, SUBJECT_CLAIM_CATALOG } from "@iam/client-subject-projection";
 import { ClientSsoProtocol, ClientStatus } from "@iam/contracts";
-import type { CustomSsoProjectionPermission } from "@iam/custom-sso";
 import {
   CustomSsoClientDeliveryUnauthorizedError,
   CustomSsoRequestMismatchError,
@@ -19,7 +18,7 @@ interface RootSessionServiceDeps {
   kernel: UnifiedSessionKernel<SubjectAccessOperation>;
   logoutApplicationToken?: (token: string, operation: SubjectAccessOperation) => Promise<boolean>;
   clients: ClientSnapshotReader;
-  projection: import("@iam/client-subject-projection").PermittedClientSubjectProjectionService<CustomSsoProjectionPermission>;
+  projection: import("@iam/client-subject-projection").PermittedClientSubjectProjectionService<SubjectAccessOperation>;
 }
 
 /** IAM root consumption. Protocol tokens remain with their respective owners. */
@@ -62,12 +61,12 @@ export function createRootSessionService(deps: RootSessionServiceDeps) {
         const root = await resolve(token);
         if (root.status !== "resolved") throw new AuthzUnauthorizedError("未登录");
         const user = root.value.userSession;
-        const permission = await operation.acquireForSession({
+        await operation.acquireForSession({
           principalSessionId: user.userSessionId,
           subjectIdentifier: user.subjectIdentifier,
           subjectContext: user.subjectContext,
         });
-        return { observation: root.value, permission };
+        return { observation: root.value };
       }
       return {
         resolvePermittedRoot,
@@ -86,8 +85,7 @@ export function createRootSessionService(deps: RootSessionServiceDeps) {
               resolveUserInfo: async () =>
                 await resolveCustomSsoSubjectProjection(
                   {
-                    resolve: async (input) =>
-                      await deps.projection.resolve(input, { operation, permission: root.permission }),
+                    resolve: async (input) => await deps.projection.resolve(input, operation),
                   },
                   { subjectIdentifier, clientCode, selection },
                 ),

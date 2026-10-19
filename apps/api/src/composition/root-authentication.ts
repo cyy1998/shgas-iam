@@ -33,16 +33,11 @@ import {
   createUnifiedSubjectAccessSessionRevocation,
   requireSubjectAccessOperation,
   SubjectAccessOperationDeniedError,
-  SubjectAccessPermissionRequiredError,
   SubjectAccessUnavailableError,
 } from "@iam/api-core/subject-access";
 import type { PublicBindings } from "@iam/api-core/types";
 import { createPermittedClientSubjectProjectionService } from "@iam/client-subject-projection";
-import type {
-  CustomSsoProjectionPermission,
-  UnifiedCustomSsoAuthorizationOptions,
-  UnifiedCustomSsoOperationsOptions,
-} from "@iam/custom-sso";
+import type { UnifiedCustomSsoAuthorizationOptions, UnifiedCustomSsoOperationsOptions } from "@iam/custom-sso";
 import {
   createSsoRedirectUrlValidator,
   createUnifiedCustomSsoAuthorization,
@@ -66,9 +61,7 @@ import type { UnifiedSessionKernel } from "@iam/session-kernel";
 import { createAuthenticationUseCases } from "./use-cases/authentication";
 
 type AuthenticationOptions = Parameters<typeof createAuthenticationUseCases>[0];
-type ProjectionOptions = Parameters<
-  typeof createPermittedClientSubjectProjectionService<CustomSsoProjectionPermission>
->[0];
+type ProjectionOptions = Parameters<typeof createPermittedClientSubjectProjectionService<SubjectAccessOperation>>[0];
 
 export interface RootAuthenticationCompositionOptions {
   kernel: UnifiedSessionKernel<SubjectAccessOperation>;
@@ -111,13 +104,10 @@ export function createRootAuthenticationComposition(options: RootAuthenticationC
     run: (callback) => operations.run(callback),
   });
   operations = createSubjectAccessOperations({ barrier: options.barrier, revocation });
-  const projection = createPermittedClientSubjectProjectionService<CustomSsoProjectionPermission>({
+  const projection = createPermittedClientSubjectProjectionService<SubjectAccessOperation>({
     subjectFacts: options.subjectFacts,
-    assertPermission(proof, subjectIdentifier) {
-      const operation = requireSubjectAccessOperation(proof?.operation);
-      if (operation.requirePermission(subjectIdentifier) !== proof.permission)
-        throw new SubjectAccessPermissionRequiredError();
-    },
+    assertPermission: (operation, subjectIdentifier) =>
+      requireSubjectAccessOperation(operation).requirePermission(subjectIdentifier),
   });
   const customAccess =
     options.customSso &&

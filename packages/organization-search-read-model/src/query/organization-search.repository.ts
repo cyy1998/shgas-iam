@@ -2,7 +2,7 @@ import type { DbClient } from "@iam/db";
 import { organizationSearchDocuments } from "@iam/db/schema";
 import { and, asc, eq } from "drizzle-orm";
 import { ORGANIZATION_SEARCH_SCHEMA_VERSION } from "../schema";
-import { type OrganizationSearchFilter, organizationSearchFilterEngine } from "./organization-search.filter";
+import { organizationSearchFilterEngine } from "./organization-search.filter";
 import {
   ORGANIZATION_SEARCH_RESULT_LIMIT,
   type OrganizationSearchQueryRepositoryPort,
@@ -10,7 +10,8 @@ import {
 
 export function createOrganizationSearchQueryRepository(db: DbClient): OrganizationSearchQueryRepositoryPort {
   return {
-    async searchCurrentDocuments(filter: OrganizationSearchFilter) {
+    async searchCurrentDocuments(filter: unknown) {
+      const condition = organizationSearchFilterEngine.compile(filter, organizationSearchDocuments.document);
       return await db
         .select({ document: organizationSearchDocuments.document })
         .from(organizationSearchDocuments)
@@ -18,7 +19,7 @@ export function createOrganizationSearchQueryRepository(db: DbClient): Organizat
           and(
             eq(organizationSearchDocuments.schemaVersion, ORGANIZATION_SEARCH_SCHEMA_VERSION),
             eq(organizationSearchDocuments.searchVisible, true),
-            organizationSearchFilterEngine.compile(filter, organizationSearchDocuments.document),
+            condition,
           ),
         )
         .orderBy(asc(organizationSearchDocuments.organizationId))

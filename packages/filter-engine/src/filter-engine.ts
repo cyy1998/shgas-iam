@@ -91,6 +91,13 @@ export const FILTER_MAX_CHILDREN = 16;
 export const FILTER_MAX_IN_VALUES = 50;
 export const FILTER_MAX_RAW_VALUES = 500;
 
+export class FilterValidationError extends Error {
+  constructor() {
+    super("Filter does not satisfy its structure or resource budget");
+    this.name = new.target.name;
+  }
+}
+
 interface ComparablePath {
   readonly segments: string[];
   readonly fact: SearchScalarFact | SearchScalarArrayFact | SearchOrganizationFact;
@@ -114,9 +121,10 @@ export function createFilterEngine<const Fields extends SearchFactShape>(structu
     .pipe(createFilterExpressionSchema(scope)) as z.ZodType<FilterForShape<Fields>>;
   return {
     filterSchema,
-    compile(filter: FilterForShape<Fields>, document: SQLWrapper): SQL {
-      const parsed = filterSchema.parse(filter);
-      return compileFilterInScope(parsed as ParsedFilter, scope, document, { nextAlias: 1 });
+    compile(filter: unknown, document: SQLWrapper): SQL {
+      const parsed = filterSchema.safeParse(filter);
+      if (!parsed.success) throw new FilterValidationError();
+      return compileFilterInScope(parsed.data as ParsedFilter, scope, document, { nextAlias: 1 });
     },
   };
 }

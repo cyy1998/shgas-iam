@@ -124,7 +124,9 @@ Admin 表单仅在 business 回填、展示和提交地址；隐藏控件的旧�
 - `@iam/filter-engine` 根出口持有共享 Filter 语言。调用方用 `searchScalar`、`searchScalarArray`、`searchObject`、
   `searchCollection` 与 `searchOrganization` 声明公开结构，由 `createDocumentSchema` 生成严格文档 schema；
   `createFilterEngine(structure)` 返回 `filterSchema` 和 `compile(filter, document)`。后者接受调用方提供的 Drizzle
-  `SQLWrapper`，重新校验条件后编译为参数化 JSONB 谓词；请求不能选择目标列或提交任意 SQL/JSON path。
+  `SQLWrapper`，校验未知输入后编译为参数化 JSONB 谓词；请求不能选择目标列或提交任意 SQL/JSON path。
+  在线查询由 service 校验请求外层结构，repository 在访问数据库前调用 checked compiler 完成一次语义校验。
+  条件无效产生不携带原始输入的 `FilterValidationError`，由读模型映射为 422；数据库异常仍映射为 503。
   Organization 引用通过结构中的 `valueSchema`、`pathField` 与 `codeField` 明确其子树规则。语言预算由共享包维护，
   `createFilterTransportSchemas` 统一通用严格 AST 与递归解析前的预算检查；入口通过 `annotateExpression` 添加自己的
   HTTP/OpenAPI 名称，递归引用使用该回调返回的 schema，共享包不依赖 OpenAPI 工具。

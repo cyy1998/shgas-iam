@@ -44,6 +44,6 @@ const engine = createFilterEngine(V3_USER_PROFILE_SEARCH_STRUCTURE);
 export const V3UserProfileFilterSchema = engine.filterSchema;
 export const V3UserProfileSearchRequestSchema = z.object({ filter: V3UserProfileFilterSchema }).strict();
 export type V3UserProfileSearchRequest = z.infer<typeof V3UserProfileSearchRequestSchema>;
-export function compileV3UserProfileFilter(filter: V3UserProfileFilter): SQL {
+export function compileV3UserProfileFilter(filter: unknown): SQL {
   return engine.compile(filter, userProfiles.searchDoc);
 }

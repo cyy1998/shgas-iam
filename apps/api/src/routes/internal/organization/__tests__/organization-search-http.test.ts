@@ -6,7 +6,10 @@ import createApp from "@iam/api-core/core/create-app";
 import { createInternalAuthenticationHandler } from "@iam/api-core/middlewares";
 import { OrganizationStatus, OrganizationType } from "@iam/contracts";
 import type { GenericClientRuntimeDto } from "@iam/domain/client";
-import { createOrganizationSearchQueryService } from "@iam/organization-search-read-model";
+import {
+  createOrganizationSearchQueryRepository,
+  createOrganizationSearchQueryService,
+} from "@iam/organization-search-read-model";
 import pino from "pino";
 import appConfig from "~api/app.config";
 
@@ -207,7 +210,15 @@ function createProductionApp(
   searchCurrentDocuments: () => Promise<readonly { document: unknown }[]>,
   authenticate = false,
 ) {
-  const query = createOrganizationSearchQueryService({ repository: { searchCurrentDocuments } });
+  const selection = {
+    from: () => selection,
+    where: () => selection,
+    orderBy: () => selection,
+    limit: searchCurrentDocuments,
+  };
+  const query = createOrganizationSearchQueryService({
+    repository: createOrganizationSearchQueryRepository({ select: () => selection } as never),
+  });
   const handlers = createOrganizationHandlers({
     auditLogWriter: { recordAuditLog: async () => undefined, recordAuditLogFromContext: async () => undefined },
     organizationSearch: query,

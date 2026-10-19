@@ -1,4 +1,3 @@
-import type { SubjectAccessOperation, SubjectAccessPermission } from "@iam/api-core/subject-access";
 import type { AuditActorType, AuditDetails, AuditOutcome, AuditRequestContext } from "@iam/domain/audit";
 
 export interface CustomSsoLoggerPort {
@@ -19,9 +18,4 @@ export type CustomSsoAuditInput = Partial<AuditRequestContext> & {
 
 export interface CustomSsoAuditPort {
   recordAuditLog: (input: CustomSsoAuditInput) => Promise<void>;
-}
-
-export interface CustomSsoProjectionPermission {
-  readonly operation: SubjectAccessOperation;
-  readonly permission: SubjectAccessPermission;
 }

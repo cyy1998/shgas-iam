@@ -1,7 +1,7 @@
 import { UserProfileBaseSchema } from "@iam/domain/user";
+import { FilterValidationError } from "@iam/filter-engine";
+import { z } from "zod";
 import { V3UserProfileSearchDocumentSchema } from "../schema/profile-v3-search.schema";
-import type { V3UserProfileFilter } from "./profile-v3-filter";
-import { V3UserProfileSearchRequestSchema } from "./profile-v3-filter";
 import {
   V3UserProfileDocumentIntegrityError,
   V3UserProfileFilterValidationError,
@@ -10,6 +10,8 @@ import {
 } from "./profile-v3-query.error";
 import type { V3UserProfileQueryRepositoryPort } from "./profile-v3-query.port";
 import { V3_USER_PROFILE_RESULT_LIMIT } from "./profile-v3-query.port";
+
+const SearchRequestEnvelopeSchema = z.object({ filter: z.unknown().nonoptional() }).strict();
 
 export interface V3UserProfileQueryServiceDeps {
   readonly profileRepository: V3UserProfileQueryRepositoryPort;
@@ -32,10 +34,10 @@ export function createV3UserProfileQueryService(deps: V3UserProfileQueryServiceD
   };
 }
 
-async function executeSearch<Row>(input: unknown, search: (filter: V3UserProfileFilter) => Promise<readonly Row[]>) {
-  let request: ReturnType<typeof V3UserProfileSearchRequestSchema.parse>;
+async function executeSearch<Row>(input: unknown, search: (filter: unknown) => Promise<readonly Row[]>) {
+  let request: ReturnType<typeof SearchRequestEnvelopeSchema.parse>;
   try {
-    request = V3UserProfileSearchRequestSchema.parse(input);
+    request = SearchRequestEnvelopeSchema.parse(input);
   } catch {
     throw new V3UserProfileFilterValidationError();
   }
@@ -43,7 +45,8 @@ async function executeSearch<Row>(input: unknown, search: (filter: V3UserProfile
   let rows: readonly Row[];
   try {
     rows = await search(request.filter);
-  } catch {
+  } catch (error) {
+    if (error instanceof FilterValidationError) throw new V3UserProfileFilterValidationError();
     throw new V3UserProfileSearchUnavailableError();
   }
   if (rows.length > V3_USER_PROFILE_RESULT_LIMIT) throw new V3UserProfileSearchResultTooLargeError();

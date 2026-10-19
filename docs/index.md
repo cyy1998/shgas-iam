@@ -135,7 +135,7 @@ releases 只保留当前代发布与维护；一次性升级和旧验收见[固�
 | [架构守卫规范](architecture/architecture-guard.md)         | architecture | Current | 2026-10-16    | 2026-10-31  | 静态守卫的观察模型、准入与复杂度边界。                     |
 | [架构验证归属](architecture/architecture-verification.md)  | architecture | Current | 2026-10-16    | 2026-10-31  | 系统约束的验证 owner、证据入口与证明限制。                 |
 | [后端架构](architecture/backend-architecture.md)           | architecture | Current | 2026-10-16    | 2026-10-31  | 后端分层、事务、模块所有权与一致性契约。                   |
-| [共享契约与数据库](architecture/contracts-and-database.md) | architecture | Current | 2026-10-15    | 2026-10-31  | 共享代码选址、公开出口、DTO、数据库与事务边界。            |
+| [共享契约与数据库](architecture/contracts-and-database.md) | architecture | Current | 2026-10-19    | 2026-10-31  | 共享代码选址、公开出口、DTO、数据库与事务边界。            |
 | [前端架构](architecture/frontend-architecture.md)          | architecture | Current | 2026-10-15    | 2026-10-31  | Admin / SSO service、页面状态、路由与权限规则。            |
 | [仓库地图](architecture/repository-map.md)                 | architecture | Current | 2026-10-16    | 2026-10-31  | Apps、packages、基础设施、AFK、测试与生成目录定位。        |
 | [系统架构视图](architecture/system-architecture.md)        | architecture | Current | 2026-10-16    | 2026-10-31  | 运行时拓扑、信任边界、数据权威与恢复责任。                 |

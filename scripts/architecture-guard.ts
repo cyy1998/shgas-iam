@@ -44,21 +44,50 @@ type StaticModuleOwnershipRule = Readonly<{
   message: (moduleSpecifier: string, declaration: StaticDependencyDeclaration) => string;
 }>;
 
-const protectedSourceRoots = [
-  "apps/api/src",
-  "apps/admin-api/src",
-  "apps/gateway/src",
-  "apps/worker/src",
-  "packages/session-kernel/src",
-  "packages/custom-sso/src",
-  "packages/oidc/src",
-  "packages/client-subject-projection/src",
-  "packages/organization-responsibility-resolution/src",
-  "packages/role-assignment-resolution/src",
-  "packages/user-profile-read-model/src",
-  "packages/filter-engine/src",
-  "packages/organization-search-read-model/src",
-] as const;
+type ArchitectureWorkspaceView = "source" | "docker" | "canonical";
+
+const architectureWorkspaces: readonly (readonly [
+  name: string,
+  root: string,
+  views: readonly ArchitectureWorkspaceView[],
+])[] = [
+  ["@iam/api", "apps/api", ["source", "canonical"]],
+  ["@iam/admin-api", "apps/admin-api", ["source", "canonical"]],
+  ["@iam/gateway-apisix", "apps/gateway", ["source", "canonical"]],
+  ["@iam/worker", "apps/worker", ["source", "canonical"]],
+  ["@iam/session-kernel", "packages/session-kernel", ["source", "docker", "canonical"]],
+  ["@iam/custom-sso", "packages/custom-sso", ["source", "docker", "canonical"]],
+  ["@iam/oidc", "packages/oidc", ["source", "docker", "canonical"]],
+  ["@iam/client-subject-projection", "packages/client-subject-projection", ["source", "docker", "canonical"]],
+  [
+    "@iam/organization-responsibility-resolution",
+    "packages/organization-responsibility-resolution",
+    ["source", "docker", "canonical"],
+  ],
+  ["@iam/role-assignment-resolution", "packages/role-assignment-resolution", ["source", "docker"]],
+  ["@iam/user-profile-read-model", "packages/user-profile-read-model", ["source", "docker", "canonical"]],
+  ["@iam/filter-engine", "packages/filter-engine", ["source", "docker"]],
+  ["@iam/organization-search-read-model", "packages/organization-search-read-model", ["source", "docker", "canonical"]],
+  ["@iam/admin", "apps/admin", ["canonical"]],
+  ["@iam/api-core", "packages/api-core", ["canonical"]],
+  ["@iam/db", "packages/db", ["canonical"]],
+  ["@iam/domain", "packages/domain", ["canonical"]],
+  ["@iam/sso", "apps/sso", ["canonical"]],
+];
+
+const protectedSourceRoots = architectureWorkspaces
+  .filter(([, , views]) => views.includes("source"))
+  .map(([, root]) => `${root}/src`);
+
+const architectureWorkspaceRoots = new Map(
+  architectureWorkspaces.filter(([, , views]) => views.includes("docker")).map(([name, root]) => [name, root]),
+);
+
+const canonicalStaticSourceRoots = new Map(
+  architectureWorkspaces
+    .filter(([, , views]) => views.includes("canonical"))
+    .map(([name, root]) => [name, `${root}/src`]),
+);
 
 const excludedSourceDirectories = new Set([
   "__generated__",
@@ -75,17 +104,6 @@ const excludedSourceDirectories = new Set([
   "tests",
 ]);
 
-const architectureWorkspaceRoots = new Map([
-  ["@iam/session-kernel", "packages/session-kernel"],
-  ["@iam/custom-sso", "packages/custom-sso"],
-  ["@iam/oidc", "packages/oidc"],
-  ["@iam/client-subject-projection", "packages/client-subject-projection"],
-  ["@iam/organization-responsibility-resolution", "packages/organization-responsibility-resolution"],
-  ["@iam/role-assignment-resolution", "packages/role-assignment-resolution"],
-  ["@iam/user-profile-read-model", "packages/user-profile-read-model"],
-  ["@iam/filter-engine", "packages/filter-engine"],
-  ["@iam/organization-search-read-model", "packages/organization-search-read-model"],
-]);
 const workspaceBuildDependencySections = ["dependencies", "devDependencies", "optionalDependencies"] as const;
 
 interface WorkspacePackageManifest {
@@ -100,25 +118,6 @@ interface WorkspaceDependencyNode {
   packageRoot: string;
   dependencies: Record<string, string>;
 }
-
-const canonicalStaticSourceRoots = new Map([
-  ["@iam/session-kernel", "packages/session-kernel/src"],
-  ["@iam/custom-sso", "packages/custom-sso/src"],
-  ["@iam/oidc", "packages/oidc/src"],
-  ["@iam/admin", "apps/admin/src"],
-  ["@iam/admin-api", "apps/admin-api/src"],
-  ["@iam/api", "apps/api/src"],
-  ["@iam/api-core", "packages/api-core/src"],
-  ["@iam/client-subject-projection", "packages/client-subject-projection/src"],
-  ["@iam/db", "packages/db/src"],
-  ["@iam/domain", "packages/domain/src"],
-  ["@iam/gateway-apisix", "apps/gateway/src"],
-  ["@iam/organization-responsibility-resolution", "packages/organization-responsibility-resolution/src"],
-  ["@iam/sso", "apps/sso/src"],
-  ["@iam/user-profile-read-model", "packages/user-profile-read-model/src"],
-  ["@iam/organization-search-read-model", "packages/organization-search-read-model/src"],
-  ["@iam/worker", "apps/worker/src"],
-]);
 
 const clientSubjectProjectionExternalOwnerTargets: readonly StaticModulePattern[] = [
   { kind: "prefix", module: "packages/session-kernel/src" },
