@@ -24,19 +24,9 @@ function validateTlsMaterial(manifest: LoadedManifest): ValidationIssue[] {
     typeof resource.key === "string" &&
     resource.key.length > 0
       ? []
-      : [{ file: manifest.manifest, path: `ssls[${index}]`, message: "SSL requires cert and external private_key" }],
+      : [{ code: "SSL_MATERIAL_REQUIRED", file: manifest.manifest, path: `ssls[${index}]` }],
   );
 }
-
-const knownNonSecretKeyPaths = [
-  ".labels.source",
-  ".labels.managed_by",
-  ".labels.env",
-  ".labels.app",
-  ".labels.template",
-  ".plugins.limit-req.key",
-  ".plugins.prometheus.prefer_name",
-];
 
 const generatedSourceFields = ["id", "name", "service_id", "upstream_id", "plugin_config_id"];
 const reservedSourceLabels = ["managed_by", "source", "env", "app"];
@@ -59,17 +49,17 @@ function validateSourceSchema(manifest: LoadedManifest): ValidationIssue[] {
 
   if (!serviceIsRecord) {
     issues.push({
+      code: "SERVICE_REQUIRED",
       file: manifest.manifest,
       path: "service",
-      message: "source manifest must contain exactly one service object",
     });
   }
 
   if (Object.hasOwn(source, "plugin_configs")) {
     issues.push({
+      code: "PLUGIN_CONFIGS_LOCATION",
       file: manifest.manifest,
       path: "plugin_configs",
-      message: "top-level plugin_configs are not allowed; use service.plugin_configs",
     });
   }
 
@@ -93,7 +83,7 @@ function validateSourceSchema(manifest: LoadedManifest): ValidationIssue[] {
 }
 
 function validateLocalKeys(file: string, sourcePath: string, items: ManifestObject[], issues: ValidationIssue[]): void {
-  const seen = new Map<string, number>();
+  const seen = new Set<string>();
 
   for (const [index, item] of items.entries()) {
     const key = item.key;
@@ -101,32 +91,31 @@ function validateLocalKeys(file: string, sourcePath: string, items: ManifestObje
 
     if (typeof key !== "string") {
       issues.push({
+        code: "LOCAL_KEY_REQUIRED",
         file,
         path: keyPath,
-        message: `${sourcePath}[${index}] must declare a string key`,
       });
       continue;
     }
 
     if (!localKeyPattern.test(key)) {
       issues.push({
+        code: "LOCAL_KEY_INVALID",
         file,
         path: keyPath,
-        message: `key ${key} must be a kebab-case segment`,
       });
     }
 
-    const previous = seen.get(key);
-    if (previous !== undefined) {
+    if (seen.has(key)) {
       issues.push({
+        code: "LOCAL_KEY_DUPLICATE",
         file,
         path: keyPath,
-        message: `duplicate ${sourcePath} key ${key}; first declared at ${sourcePath}[${previous}].key`,
       });
       continue;
     }
 
-    seen.set(key, index);
+    seen.add(key);
   }
 }
 
@@ -139,9 +128,9 @@ function validateGeneratedFields(
   for (const field of generatedSourceFields) {
     if (Object.hasOwn(resource, field)) {
       issues.push({
+        code: "GENERATED_FIELD",
         file,
         path: `${basePath}.${field}`,
-        message: `${field} is generated and must not be declared in source manifests`,
       });
     }
   }
@@ -160,9 +149,9 @@ function validateReservedLabels(
   for (const label of reservedSourceLabels) {
     if (Object.hasOwn(resource.labels, label)) {
       issues.push({
+        code: "RESERVED_LABEL",
         file,
         path: `${basePath}.labels.${label}`,
-        message: `reserved label ${label} cannot be overridden in source manifests`,
       });
     }
   }
@@ -181,20 +170,18 @@ function validateRouteSourceReferences(manifest: LoadedManifest, issues: Validat
   );
 
   for (const [index, route] of getSourceListItems(manifest.source.routes).entries()) {
-    const routeKey = typeof route.key === "string" ? route.key : `routes[${index}]`;
-
     if (route.terminal !== true) {
       if (typeof route.upstream !== "string") {
         issues.push({
+          code: "UPSTREAM_REQUIRED",
           file: manifest.manifest,
           path: `routes[${index}].upstream`,
-          message: `${routeKey} must declare upstream unless terminal is true`,
         });
       } else if (!upstreamKeys.has(route.upstream)) {
         issues.push({
+          code: "REFERENCE_NOT_FOUND",
           file: manifest.manifest,
           path: `routes[${index}].upstream`,
-          message: `${routeKey} references missing upstream ${route.upstream}`,
         });
       }
     }
@@ -202,15 +189,15 @@ function validateRouteSourceReferences(manifest: LoadedManifest, issues: Validat
     if (route.plugin_config !== undefined) {
       if (typeof route.plugin_config !== "string") {
         issues.push({
+          code: "PLUGIN_CONFIG_REFERENCE_INVALID",
           file: manifest.manifest,
           path: `routes[${index}].plugin_config`,
-          message: `${routeKey} plugin_config must reference a service.plugin_configs key`,
         });
       } else if (!pluginConfigKeys.has(route.plugin_config)) {
         issues.push({
+          code: "REFERENCE_NOT_FOUND",
           file: manifest.manifest,
           path: `routes[${index}].plugin_config`,
-          message: `${routeKey} references missing service plugin_config ${route.plugin_config}`,
         });
       }
     }
@@ -248,15 +235,15 @@ function validateIds(manifest: LoadedManifest): ValidationIssue[] {
 
       if (!id) {
         issues.push({
+          code: "ID_REQUIRED",
           file,
           path: basePath,
-          message: `missing required id field (${definition.idFields.join(" or ")})`,
         });
       } else if (ids.has(id)) {
         issues.push({
+          code: "ID_DUPLICATE",
           file,
           path: `${basePath}.${definition.idFields[0]}`,
-          message: `duplicate ${definition.kind} id ${id}`,
         });
       } else {
         ids.add(id);
@@ -277,17 +264,17 @@ function validateOwnershipLabels(manifest: LoadedManifest): ValidationIssue[] {
 
       if (!isRepoManaged(resource)) {
         issues.push({
+          code: "OWNERSHIP_LABELS_REQUIRED",
           file,
           path: `${basePath}.labels`,
-          message: `repo manifest objects must include labels.managed_by=${ownershipPolicy.managedBy} and labels.source=${ownershipPolicy.repoSource}`,
         });
       }
 
       if (getLabel(resource, ownershipPolicy.labelKeys.source) === ownershipPolicy.dynamicSource) {
         issues.push({
+          code: "DYNAMIC_SOURCE_FORBIDDEN",
           file,
           path: `${basePath}.labels.source`,
-          message: "dynamic-registry objects are owned by IAM runtime state and must not be declared in repo manifests",
         });
       }
     }
@@ -327,8 +314,6 @@ function validateReferences(manifest: LoadedManifest): ValidationIssue[] {
   for (const definition of resourceDefinitions) {
     const file = manifest.manifest;
     for (const [index, resource] of manifest.resources[definition.kind].entries()) {
-      const ownerId = getResourceId(definition, resource) ?? `${definition.topKey}[${index}]`;
-
       for (const reference of definition.references) {
         const targetId = resource[reference.field];
         if (typeof targetId !== "string") {
@@ -338,9 +323,9 @@ function validateReferences(manifest: LoadedManifest): ValidationIssue[] {
         const targetIds = idsByKind.get(reference.targetKind) ?? new Set<string>();
         if (!targetIds.has(targetId)) {
           issues.push({
+            code: "REFERENCE_NOT_FOUND",
             file,
             path: `${definition.topKey}[${index}].${reference.field}`,
-            message: `${ownerId} references missing ${reference.targetName} ${targetId}`,
           });
         }
       }
@@ -356,7 +341,7 @@ function validateSensitiveValues(manifest: LoadedManifest): ValidationIssue[] {
   for (const definition of resourceDefinitions) {
     const file = manifest.manifest;
     for (const [index, resource] of manifest.resources[definition.kind].entries()) {
-      collectSensitiveIssues(file, `${definition.topKey}[${index}]`, resource, issues);
+      collectSensitiveIssues(file, `${definition.topKey}[${index}]`, resource, definition.kind, issues);
     }
   }
 
@@ -384,9 +369,9 @@ function validateIamLoggingPolicy(manifest: LoadedManifest): ValidationIssue[] {
   const issues: ValidationIssue[] = [];
   if (!manifest.resources.plugin_metadata.some((metadata) => metadata.id === "opentelemetry")) {
     issues.push({
+      code: "IAM_TELEMETRY_REQUIRED",
       file: manifest.manifest,
       path: "plugin_metadata",
-      message: "iam manifest must configure opentelemetry plugin_metadata",
     });
   }
 
@@ -397,7 +382,6 @@ function validateIamLoggingPolicy(manifest: LoadedManifest): ValidationIssue[] {
   );
 
   for (const [index, route] of manifest.resources.routes.entries()) {
-    const routeId = typeof route.id === "string" ? route.id : `routes[${index}]`;
     const routePlugins = getPlugins(route);
     collectForbiddenLoggerPluginIssues(manifest.manifest, `routes[${index}].plugins`, routePlugins, issues);
 
@@ -405,17 +389,17 @@ function validateIamLoggingPolicy(manifest: LoadedManifest): ValidationIssue[] {
       typeof route.plugin_config_id === "string" ? pluginConfigsById.get(route.plugin_config_id) : undefined;
     if (!hasPlugin(routePlugins, "request-id") && !hasPlugin(getPlugins(pluginConfig), "request-id")) {
       issues.push({
+        code: "IAM_REQUEST_ID_REQUIRED",
         file: manifest.manifest,
         path: `routes[${index}]`,
-        message: `${routeId} must enable request-id through route plugins or plugin_config_id`,
       });
     }
 
     if (!hasPlugin(routePlugins, "opentelemetry") && !hasPlugin(getPlugins(pluginConfig), "opentelemetry")) {
       issues.push({
+        code: "IAM_TRACING_REQUIRED",
         file: manifest.manifest,
         path: `routes[${index}]`,
-        message: `${routeId} must enable opentelemetry through route plugins or plugin_config_id`,
       });
     }
   }
@@ -452,37 +436,40 @@ function collectForbiddenLoggerPluginIssues(
   for (const pluginName of ["loki-logger", "http-logger", "file-logger"]) {
     if (hasPlugin(plugins, pluginName)) {
       issues.push({
+        code: "IAM_LOGGER_FORBIDDEN",
         file,
         path: `${basePath}.${pluginName}`,
-        message: `${pluginName} must not be used for IAM system logs; use stdout/stderr collection through Alloy`,
       });
     }
   }
 }
 
-function collectSensitiveIssues(file: string, basePath: string, value: unknown, issues: ValidationIssue[]): void {
-  walkValue(value, basePath, (currentPath, currentValue) => {
-    const key = currentPath.split(".").at(-1) ?? "";
-
+function collectSensitiveIssues(
+  file: string,
+  basePath: string,
+  value: unknown,
+  kind: ResourceKind,
+  issues: ValidationIssue[],
+): void {
+  walkValue(value, basePath, (currentPath, currentValue, segments) => {
     if (typeof currentValue === "string" && containsSecretMaterial(currentValue) && !isSecretReference(currentValue)) {
       issues.push({
+        code: "SECRET_REFERENCE_REQUIRED",
         file,
         path: currentPath,
-        message: "secret-looking value must be provided through external environment or secret management",
       });
       return;
     }
 
     if (
       typeof currentValue === "string" &&
-      isSensitiveKeyName(key) &&
-      !isAllowedSensitivePlaceholder(currentValue) &&
-      !isKnownNonSecretKeyPath(currentPath)
+      isSensitiveField(kind, segments) &&
+      !isAllowedSensitivePlaceholder(currentValue)
     ) {
       issues.push({
+        code: "SECRET_REFERENCE_REQUIRED",
         file,
         path: currentPath,
-        message: "sensitive field must use a placeholder or external secret reference",
       });
     }
   });
@@ -496,27 +483,32 @@ function collectTrustedProxyIssues(file: string, basePath: string, value: unknow
       isAllAddressesCidr(currentValue)
     ) {
       issues.push({
+        code: "TRUSTED_PROXY_ALL_ADDRESSES",
         file,
         path: currentPath,
-        message: "real-ip trusted_addresses must not trust all source addresses",
       });
     }
   });
 }
 
-function walkValue(value: unknown, currentPath: string, visitor: (path: string, value: unknown) => void): void {
-  visitor(currentPath, value);
+function walkValue(
+  value: unknown,
+  currentPath: string,
+  visitor: (path: string, value: unknown, segments: readonly (string | number)[]) => void,
+  segments: readonly (string | number)[] = [],
+): void {
+  visitor(currentPath, value, segments);
 
   if (Array.isArray(value)) {
     value.forEach((item, index) => {
-      walkValue(item, `${currentPath}[${index}]`, visitor);
+      walkValue(item, `${currentPath}[${index}]`, visitor, [...segments, index]);
     });
     return;
   }
 
   if (isRecord(value)) {
     for (const [key, child] of Object.entries(value)) {
-      walkValue(child, `${currentPath}.${key}`, visitor);
+      walkValue(child, `${currentPath}.${key}`, visitor, [...segments, key]);
     }
   }
 }
@@ -532,9 +524,23 @@ function isAllAddressesCidr(value: string): boolean {
   return value === "0.0.0.0/0" || value === "::/0";
 }
 
-function isSensitiveKeyName(key: string): boolean {
-  return /^(?:password|secret|private[_-]?key|admin[_-]?key|jwt[_-]?secret|signature[_-]?key|apikey|api[_-]?key|key)$/i.test(
-    key,
+function isSensitiveField(kind: ResourceKind, segments: readonly (string | number)[]): boolean {
+  const key = segments.at(-1);
+  if (typeof key !== "string") return false;
+  if (
+    /^(?:password|secret|private[_-]?key|admin[_-]?key|jwt[_-]?secret|signature[_-]?key|apikey|api[_-]?key)$/i.test(key)
+  ) {
+    return true;
+  }
+  return (
+    (kind === "ssls" && segments.length === 1 && key === "key") ||
+    (segments.length === 3 && segments[0] === "plugins" && segments[1] === "key-auth" && key === "key") ||
+    (kind === "consumers" &&
+      segments.length === 4 &&
+      segments[0] === "credentials" &&
+      typeof segments[1] === "number" &&
+      segments[2] === "config" &&
+      key === "key")
   );
 }
 
@@ -544,8 +550,4 @@ function isAllowedSensitivePlaceholder(value: string): boolean {
 
 function isSecretReference(value: string): boolean {
   return /^\$\{[A-Z0-9_]+(?::[^}]*)?\}$/.test(value) || /^secret:\/\//.test(value) || /^vault:\/\//.test(value);
-}
-
-function isKnownNonSecretKeyPath(currentPath: string): boolean {
-  return knownNonSecretKeyPaths.some((pathSuffix) => currentPath.endsWith(pathSuffix));
 }

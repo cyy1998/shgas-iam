@@ -1,5 +1,4 @@
-import { formatScope } from "./manifest";
-import type { ManifestObject, ManifestScope } from "./types";
+import type { ManifestObject, ManifestScope, ValidationIssue } from "./types";
 
 export const ownershipPolicy = {
   managedBy: "shgas-iam",
@@ -49,21 +48,21 @@ export function validateResourceScope(
   basePath: string,
   resource: ManifestObject,
   scope: ManifestScope,
-  issues: Array<{ file: string; path: string; message: string }>,
+  issues: ValidationIssue[],
 ): void {
   if (getLabel(resource, ownershipPolicy.labelKeys.env) !== scope.env) {
     issues.push({
+      code: "SCOPE_ENV_MISMATCH",
       file,
       path: `${basePath}.labels.env`,
-      message: `repo manifest objects for ${formatScope(scope)} must include labels.env=${scope.env}`,
     });
   }
 
   if (getLabel(resource, ownershipPolicy.labelKeys.app) !== scope.app) {
     issues.push({
+      code: "SCOPE_APP_MISMATCH",
       file,
       path: `${basePath}.labels.app`,
-      message: `repo manifest objects for ${formatScope(scope)} must include labels.app=${scope.app}`,
     });
   }
 }

@@ -5,21 +5,25 @@ import { useCallback, useEffect, useState } from "react";
 
 export default function useSsoModel() {
   const [authConfig, setAuthConfig] = useState<AuthConfig | null>(null);
+  const [authConfigStatus, setAuthConfigStatus] = useState<"loading" | "success" | "error">("loading");
   const [userInfo, setUserInfo] = useState<UserInfo | null>(null);
+  const [userInfoStatus, setUserInfoStatus] = useState<"idle" | "loading" | "success" | "error">("idle");
 
   const loadAuthConfig = useCallback(async () => {
+    setAuthConfigStatus("loading");
     const cfg = await fetchAuthenticationConfig();
-    if (cfg) setAuthConfig(cfg);
+    setAuthConfig(cfg);
+    setAuthConfigStatus(cfg ? "success" : "error");
   }, []);
 
   const loadUserInfo = useCallback(async () => {
+    setUserInfoStatus("loading");
     try {
       const info = await getCurrentUserInfo();
       setUserInfo(info);
-      return info;
+      setUserInfoStatus("success");
     } catch {
-      setUserInfo(null);
-      return null;
+      setUserInfoStatus("error");
     }
   }, []);
 
@@ -29,7 +33,9 @@ export default function useSsoModel() {
 
   return {
     authConfig,
+    authConfigStatus,
     userInfo,
+    userInfoStatus,
     setUserInfo,
     loadAuthConfig,
     loadUserInfo,

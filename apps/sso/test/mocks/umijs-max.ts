@@ -4,6 +4,8 @@ import { authenticationConfig } from "./fixtures";
 let modelMocks: Record<string, unknown> = {
   sso: {
     authConfig: authenticationConfig,
+    authConfigStatus: "success",
+    loadAuthConfig: vi.fn(),
   },
 };
 
@@ -26,6 +28,8 @@ export function __resetUmiMaxMocks() {
   modelMocks = {
     sso: {
       authConfig: authenticationConfig,
+      authConfigStatus: "success",
+      loadAuthConfig: vi.fn(),
     },
   };
   history.push.mockReset();

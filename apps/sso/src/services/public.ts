@@ -2,7 +2,7 @@ import type { UserInfo } from "@sso/types/api";
 import { request } from "@sso/utils/request";
 
 export function getCurrentUserInfo() {
-  return request<UserInfo>("/public/user-info");
+  return request<UserInfo>("/public/user-info", { suppressErrorMessage: true });
 }
 
 export function passwordChange(body: { oldPassword: string; newPassword: string }) {

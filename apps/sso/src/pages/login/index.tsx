@@ -47,6 +47,8 @@ export default function LoginPage() {
     redirectUrl,
     state,
     ssoReturn,
+    authConfigStatus,
+    loadAuthConfig,
   } = loginRedirect;
   const loginGuard = useLoginPageGuard({
     client: client ?? "",
@@ -184,6 +186,18 @@ export default function LoginPage() {
 
   if (isUnsafeEntry) {
     return <UnsafeEntryNotice />;
+  }
+
+  if (!oidcReturn && loginGuard.status !== "invalid_request" && authConfigStatus !== "success") {
+    return (
+      <LoginGuardNotice
+        status={authConfigStatus === "error" ? "unavailable" : "checking"}
+        onRetry={() => {
+          void loadAuthConfig();
+          loginGuard.retry();
+        }}
+      />
+    );
   }
 
   if (loginGuard.status !== "login") {

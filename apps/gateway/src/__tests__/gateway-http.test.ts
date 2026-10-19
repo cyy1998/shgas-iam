@@ -267,6 +267,119 @@ test("all seven resource kinds accept external secret variables and return only 
   expect(text).not.toContain("synthetic-");
 });
 
+function createValidationApp() {
+  return createGatewayApp({
+    service: createGatewayService({
+      credentials: {
+        async readByClientCode() {
+          return { clientSecret: "key", status: ClientStatus.Enable, isDelete: false };
+        },
+      },
+    }),
+  });
+}
+
+test("ordinary metadata key values validate consistently with literal and request variable input", async () => {
+  const app = createValidationApp();
+  for (const value of ["canary", "${LABEL}"]) {
+    const response = await app.request("/validate", {
+      method: "POST",
+      headers: { "content-type": "application/json", apikey: "key" },
+      body: JSON.stringify({
+        scope: "test:tender",
+        yaml: `service:\n  labels:\n    key: ${value}\n  plugins:\n    limit-req:\n      key: remote_addr\n`,
+        variables: { LABEL: "canary" },
+      }),
+    });
+    const body = await response.json();
+    expect({ value, status: response.status, data: body.data }).toEqual({
+      value,
+      status: 200,
+      data: {
+        valid: true,
+        resources: {
+          routes: 0,
+          upstreams: 0,
+          plugin_metadata: 0,
+          services: 1,
+          plugin_configs: 0,
+          consumers: 0,
+          ssls: 0,
+        },
+        issues: [],
+      },
+    });
+  }
+});
+
+test("inline credentials and private keys remain invalid without disclosing their values", async () => {
+  const app = createValidationApp();
+  const secret = "credential-value-must-not-escape";
+  for (const source of [
+    `service: {}\nconsumers:\n  - key: api\n    plugins:\n      key-auth: { key: ${secret} }\n`,
+    `service: {}\nconsumers:\n  - key: api\n    credentials:\n      - type: key-auth\n        config: { key: ${secret} }\n`,
+    `service: {}\nssls:\n  - key: tls\n    cert: certificate\n    private_key: ${secret}\n`,
+    `service:\n  plugins:\n    jwt-auth: { secret: ${secret} }\n`,
+    `service:\n  labels:\n    key: '-----BEGIN PRIVATE KEY-----${secret}'\n`,
+  ]) {
+    const response = await app.request("/validate", {
+      method: "POST",
+      headers: { "content-type": "application/json", apikey: "key" },
+      body: JSON.stringify({ scope: "test:tender", yaml: source }),
+    });
+    const text = await response.text();
+    expect(response.status).toBe(400);
+    expect(JSON.parse(text).code).toBe("GATEWAY_VALIDATION_FAILED");
+    expect(text).not.toContain(secret);
+  }
+});
+
+test("validation preserves a stable code and the safe correction for misplaced plugin configs", async () => {
+  const app = createValidationApp();
+  const response = await app.request("/validate", {
+    method: "POST",
+    headers: { "content-type": "application/json", apikey: "key" },
+    body: JSON.stringify({ scope: "test:tender", yaml: "service: {}\nplugin_configs: []\n" }),
+  });
+  const body = await response.json();
+  expect(response.status).toBe(400);
+  expect(body.data.issues).toEqual([
+    {
+      code: "PLUGIN_CONFIGS_LOCATION",
+      path: "plugin_configs",
+      message: "top-level plugin_configs are not allowed; use service.plugin_configs",
+    },
+  ]);
+});
+
+test("validation codes cannot be influenced by caller values or disclose dynamic field names", async () => {
+  const app = createValidationApp();
+  const secret = "private_key=do-not-disclose";
+  const response = await app.request("/validate", {
+    method: "POST",
+    headers: { "content-type": "application/json", apikey: "key" },
+    body: JSON.stringify({
+      scope: "test:tender",
+      yaml: `service:\n  plugins:\n    '${secret}':\n      password: '${secret}'\nroutes:\n  - key: '${secret}'\n    upstream: '${secret}'\n`,
+    }),
+  });
+  const text = await response.text();
+  const body = JSON.parse(text);
+  expect(response.status).toBe(400);
+  expect(text).not.toContain(secret);
+  expect(body.data.issues).toContainEqual({
+    code: "LOCAL_KEY_INVALID",
+    path: "routes[0]",
+    message: "Resource keys must be lowercase kebab-case segments",
+  });
+  expect(body.data.issues).toContainEqual({
+    code: "REFERENCE_NOT_FOUND",
+    path: "routes[0]",
+    message: "Resource references a missing target",
+  });
+  expect(body.data.issues.some((issue: { code: string }) => issue.code === "SSL_MATERIAL_REQUIRED")).toBe(false);
+});
+
 test("IAM, Tender and GDS representative manifests remain valid through HTTP", async () => {
   const app = createGatewayApp({
     service: createGatewayService({

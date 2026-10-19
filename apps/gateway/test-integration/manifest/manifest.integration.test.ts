@@ -115,7 +115,11 @@ describe("apisix manifest validation", () => {
     );
 
     const issues = validateManifest(manifest);
-    expect(issues.some((issue) => issue.message.includes("references missing upstream missing-upstream"))).toBe(true);
+    expect(issues).toContainEqual({
+      code: "REFERENCE_NOT_FOUND",
+      file: manifest.manifest,
+      path: "routes[0].upstream",
+    });
   });
   it("rejects missing service plugin_config references", async () => {
     const manifest = await loadManifest(
@@ -131,7 +135,11 @@ describe("apisix manifest validation", () => {
     );
 
     const issues = validateManifest(manifest);
-    expect(issues.some((issue) => issue.message.includes("missing service plugin_config missing-plugin"))).toBe(true);
+    expect(issues).toContainEqual({
+      code: "REFERENCE_NOT_FOUND",
+      file: manifest.manifest,
+      path: "routes[0].plugin_config",
+    });
   });
   it("rejects duplicate and invalid source keys", async () => {
     const manifest = await loadManifest(
@@ -143,8 +151,16 @@ describe("apisix manifest validation", () => {
     );
 
     const issues = validateManifest(manifest);
-    expect(issues.some((issue) => issue.message.includes("duplicate upstreams key api"))).toBe(true);
-    expect(issues.some((issue) => issue.message.includes("key Route.A must be a kebab-case segment"))).toBe(true);
+    expect(issues).toContainEqual({
+      code: "LOCAL_KEY_DUPLICATE",
+      file: manifest.manifest,
+      path: "upstreams[1].key",
+    });
+    expect(issues).toContainEqual({
+      code: "LOCAL_KEY_INVALID",
+      file: manifest.manifest,
+      path: "routes[0].key",
+    });
   });
   it("rejects generated source fields and reserved label overrides", async () => {
     const manifest = await loadManifest(
@@ -243,7 +259,7 @@ describe("apisix manifest validation", () => {
     );
 
     const issues = validateManifest(manifest);
-    expect(issues.some((issue) => issue.message.includes("must not trust all source addresses"))).toBe(true);
+    expect(issues.some((issue) => issue.code === "TRUSTED_PROXY_ALL_ADDRESSES")).toBe(true);
   });
   it("allows unresolved real-ip trusted_addresses placeholders", async () => {
     const manifest = await loadManifest(
@@ -280,7 +296,7 @@ describe("apisix manifest validation", () => {
     );
 
     const issues = validateManifest(manifest);
-    expect(issues.some((issue) => issue.message.includes("must enable request-id"))).toBe(true);
+    expect(issues.some((issue) => issue.code === "IAM_REQUEST_ID_REQUIRED")).toBe(true);
   });
   it("rejects IAM routes without opentelemetry", async () => {
     const manifest = await loadManifest(
@@ -301,7 +317,7 @@ describe("apisix manifest validation", () => {
     );
 
     const issues = validateManifest(manifest);
-    expect(issues.some((issue) => issue.message.includes("must enable opentelemetry"))).toBe(true);
+    expect(issues.some((issue) => issue.code === "IAM_TRACING_REQUIRED")).toBe(true);
   });
   it("rejects IAM manifests without opentelemetry plugin metadata", async () => {
     const manifest = await loadManifest(
@@ -319,7 +335,7 @@ describe("apisix manifest validation", () => {
     );
 
     const issues = validateManifest(manifest);
-    expect(issues.some((issue) => issue.message.includes("must configure opentelemetry plugin_metadata"))).toBe(true);
+    expect(issues.some((issue) => issue.code === "IAM_TELEMETRY_REQUIRED")).toBe(true);
   });
   it("rejects IAM Loki/http/file logger plugins", async () => {
     const manifest = await loadManifest(
@@ -345,7 +361,7 @@ describe("apisix manifest validation", () => {
     );
 
     const issues = validateManifest(manifest);
-    expect(issues.some((issue) => issue.message.includes("loki-logger must not be used"))).toBe(true);
+    expect(issues.some((issue) => issue.code === "IAM_LOGGER_FORBIDDEN")).toBe(true);
   });
   it("renders environment placeholders after parsing manifest YAML", async () => {
     const manifest = await loadManifest(

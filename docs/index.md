@@ -170,7 +170,7 @@ releases 只保留当前代发布与维护；一次性升级和旧验收见[固�
 | [Client 单协议配置与 Secret 管理](features/admin/client-sso-configuration.md)             | feature | Current | 2026-09-28    | 2026-10-31  | 协议配置、公开状态安全字段、Secret 读取、Client 删除与传播恢复。       |
 | [会话管理与本人安全](features/admin/session-management.md)                                | feature | Current | 2026-09-21    | 2026-10-31  | 安全列表、固定批次撤销、本人安全与临时限制。                           |
 | [统一审计日志](features/audit/audit-logging.md)                                           | feature | Current | 2026-09-21    | 2026-10-31  | 审计 action、目标、安全字段与作用后失败。                              |
-| [Gateway 配置 API 契约](features/gateway/gateway-configuration-api.md)                    | feature | Current | 2026-10-16    | 2026-10-31  | HTTP 输入输出、YAML 资源归属、认证、补偿与并发及断连边界。             |
+| [Gateway 配置 API 契约](features/gateway/gateway-configuration-api.md)                    | feature | Current | 2026-10-19    | 2026-10-31  | HTTP 输入输出、YAML 资源归属、认证、补偿与并发及断连边界。             |
 | [OIDC 接入与协议契约](features/oidc/oidc-integration.md)                                  | feature | Current | 2026-09-21    | 2026-10-31  | 接入流程与示例、当前披露；协议实现的双 issuer、处理顺序与失败作用。    |
 | [HR 组织责任管理契约](features/organization-responsibility/hr-admin-management-design.md) | feature | Current | 2026-09-21    | 2026-10-31  | HR 双端范围、生命周期、隐藏 blocker 与页面能力。                       |
 | [Organization Filter DSL](features/organization-search/filter-dsl.md)                     | feature | Current | 2026-10-15    | 2026-10-31  | 请求与完整文档响应、过滤规则、异步读取与错误边界；维护步骤见组织手册。 |

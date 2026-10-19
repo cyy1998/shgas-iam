@@ -7,7 +7,7 @@ import { useCallback, useEffect, useState } from "react";
 import { isValidOidcReturnHandle } from "./oidc-return";
 
 export function useLoginRedirect() {
-  const { authConfig } = useModel("sso");
+  const { authConfig, authConfigStatus, loadAuthConfig } = useModel("sso");
   const client = getQuery("client");
   const oidcReturn = getQuery("oidcReturn") ?? "";
   const redirectUrl = getQuery("redirectUrl") ?? "";
@@ -65,6 +65,8 @@ export function useLoginRedirect() {
     ssoReturn,
     clientLabel,
     isUnsafeEntry,
+    authConfigStatus,
+    loadAuthConfig,
     isContinuationReady: Boolean(oidcReturn || (authConfig && client)),
     redirectAfterLogin,
   };

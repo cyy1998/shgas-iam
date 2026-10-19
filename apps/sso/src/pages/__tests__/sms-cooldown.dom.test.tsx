@@ -32,7 +32,7 @@ async function openPage(page: Page) {
     await screen.findByRole("button", { name: "获取验证码" });
     return view;
   }
-  __setModel("sso", { userInfo: currentUserInfo, loadUserInfo: vi.fn() });
+  __setModel("sso", { userInfo: currentUserInfo, userInfoStatus: "success", loadUserInfo: vi.fn() });
   const view = render(<UserInfoPage />);
   fireEvent.click(screen.getByRole("tab", { name: /绑定手机号/ }));
   fireEvent.change(screen.getByPlaceholderText("请输入手机号"), {

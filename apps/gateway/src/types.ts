@@ -1,3 +1,5 @@
+import type { ValidationIssueCode } from "./validation-issue";
+
 export type ResourceKind =
   | "routes"
   | "upstreams"
@@ -45,9 +47,9 @@ export interface LoadedManifest {
 }
 
 export interface ValidationIssue {
+  code: ValidationIssueCode;
   file: string;
   path: string;
-  message: string;
 }
 
 export interface PlannedChange {

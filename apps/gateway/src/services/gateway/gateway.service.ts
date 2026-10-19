@@ -9,6 +9,7 @@ import { serializePlan } from "../../output";
 import { planChanges } from "../../planner";
 import { countResources } from "../../resources";
 import type { LoadedManifest, ManifestScope, ValidationIssue } from "../../types";
+import { validationIssueMessages } from "../../validation-issue";
 import { validateManifest } from "../../validators";
 import { GatewayError } from "./gateway.error";
 import type { GatewayCredentialReader, GatewayRemoteReader, GatewayRemoteWriter } from "./gateway.port";
@@ -149,26 +150,20 @@ export function createGatewayService(deps: {
 }
 
 function safeIssues(issues: ValidationIssue[]) {
+  // Recursive paths can contain caller-owned field names; only return known resource locations and static templates.
   const result = issues.map((issue) => ({
+    code: issue.code,
     path:
-      issue.path.match(
-        /^(?:service(?:\.plugin_configs)?|upstreams|plugin_metadata|routes|consumers|ssls)(?:\[\d+\])?/,
-      )?.[0] ?? "manifest",
-    message: issue.message.includes("private_key")
-      ? "SSL requires cert and an external private_key"
-      : issue.message.includes("secret") || issue.message.includes("sensitive")
-        ? "Secret fields must use request placeholders or external secret references"
-        : issue.message.includes("references missing")
-          ? "Resource references a missing target"
-          : issue.message.includes("trust all")
-            ? "Trusted proxies must not include all addresses"
-            : issue.message.includes("key")
-              ? "Resource keys must be unique lowercase kebab-case segments"
-              : "Resource does not satisfy manifest rules",
+      issue.path
+        .match(
+          /^(?:service(?:\.plugin_configs)?|services|upstreams|plugin_metadata|plugin_configs|routes|consumers|ssls)(?:\[\d+\])?(?=$|\.|\[)/,
+        )?.[0]
+        .replace(/^services\[0\]/, "service")
+        .replace(/^plugin_configs\[/, "service.plugin_configs[") ?? "manifest",
+    message: validationIssueMessages[issue.code],
   }));
   return result.filter(
-    (issue, index) =>
-      result.findIndex((other) => other.path === issue.path && other.message === issue.message) === index,
+    (issue, index) => result.findIndex((other) => other.path === issue.path && other.code === issue.code) === index,
   );
 }
 
