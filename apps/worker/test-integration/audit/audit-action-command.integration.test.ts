@@ -128,7 +128,7 @@ describe("historical audit action maintenance command", () => {
       const deadline = Date.now() + 5000;
       while (!waiting && Date.now() < deadline) {
         const active = await harness.sql`SELECT 1 FROM pg_stat_activity
-          WHERE application_name = 'iam-audit-action-maintenance-v1' AND wait_event_type = 'Lock'`;
+          WHERE application_name = 'iam-audit-action-maintenance' AND wait_event_type = 'Lock'`;
         waiting = active.length > 0;
         if (!waiting) await Bun.sleep(20);
       }

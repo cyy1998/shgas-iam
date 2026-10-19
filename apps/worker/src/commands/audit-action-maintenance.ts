@@ -30,7 +30,7 @@ async function main() {
     connect_timeout: 10,
     onnotice: () => {},
     connection: {
-      application_name: "iam-audit-action-maintenance-v1",
+      application_name: "iam-audit-action-maintenance",
       statement_timeout: 300_000,
       lock_timeout: 10_000,
       idle_in_transaction_session_timeout: 300_000,
