@@ -1,6 +1,6 @@
 import { mapCustomSsoRetryableError } from "@api/middlewares/custom-sso-retryable.error";
 import { getApiAuditRequestContext } from "@api/services/audit/audit.context";
-import type { CustomSsoSubjectProjectionV2Dto } from "@api/services/sso/transport/custom-sso-subject.schema";
+import type { CustomSsoSubjectProjectionDto } from "@api/services/sso/transport/custom-sso-subject.schema";
 import type { UserService } from "@api/services/user/user.service";
 import * as HttpStatusCodes from "@iam/api-core/core/http-status-codes";
 import { AuthzUnauthorizedError } from "@iam/api-core/errors/AuthzUnauthorizedError";
@@ -9,7 +9,7 @@ import type { PublicRouteHandler } from "./public.type";
 
 export interface CreatePublicHandlersDeps {
   subjectDeliveryRequests: {
-    resolveUserInfoForRequest: (request: object) => Promise<CustomSsoSubjectProjectionV2Dto>;
+    resolveUserInfoForRequest: (request: object) => Promise<CustomSsoSubjectProjectionDto>;
   };
   userService: Pick<
     UserService,

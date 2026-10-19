@@ -1,12 +1,12 @@
 import { z } from "@hono/zod-openapi";
 import { ApiErrorCode } from "@iam/contracts";
-import { CustomSsoSubjectProjectionSchema } from "@iam/custom-sso/wire";
+import { CustomSsoSubjectProjectionSchema as WireCustomSsoSubjectProjectionSchema } from "@iam/custom-sso/wire";
 
-export const CustomSsoSubjectProjectionV2Schema = z
-  .readonly(CustomSsoSubjectProjectionSchema)
+export const CustomSsoSubjectProjectionSchema = z
+  .readonly(WireCustomSsoSubjectProjectionSchema)
   .openapi("CustomSsoSubjectProjectionV2");
 
-export type { CustomSsoSubjectProjection as CustomSsoSubjectProjectionV2Dto } from "@iam/custom-sso/wire";
+export type { CustomSsoSubjectProjection as CustomSsoSubjectProjectionDto } from "@iam/custom-sso/wire";
 
 export const CustomSsoUnavailableResponseSchema = z
   .object({

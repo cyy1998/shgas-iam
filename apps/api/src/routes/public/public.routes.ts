@@ -1,7 +1,7 @@
 import { CUSTOM_SSO_SESSION_AUTHORIZATION_SECURITY_SCHEME } from "@api/services/sso/transport/custom-sso-delivery.security";
 import { CustomSsoDeliveryRequestHeadersSchema } from "@api/services/sso/transport/custom-sso-delivery-request.schema";
 import { createCustomSsoUnavailableResponse } from "@api/services/sso/transport/custom-sso-retryable.openapi";
-import { CustomSsoSubjectProjectionV2Schema } from "@api/services/sso/transport/custom-sso-subject.schema";
+import { CustomSsoSubjectProjectionSchema } from "@api/services/sso/transport/custom-sso-subject.schema";
 import { createRoute, z } from "@hono/zod-openapi";
 import * as HttpStatusCodes from "@iam/api-core/core/http-status-codes";
 import { commonErrorResponses } from "@iam/api-core/core/openapi/helpers/common-error-responses";
@@ -25,7 +25,7 @@ export const userInfo = createRoute({
   responses: {
     ...commonErrorResponses,
     [HttpStatusCodes.OK]: jsonContent(
-      createSuccessResponseSchema(CustomSsoSubjectProjectionV2Schema),
+      createSuccessResponseSchema(CustomSsoSubjectProjectionSchema),
       "当前 Custom SSO Client 可见的主体投影",
     ),
     [HttpStatusCodes.SERVICE_UNAVAILABLE]: createCustomSsoUnavailableResponse(
