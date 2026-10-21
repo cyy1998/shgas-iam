@@ -1,12 +1,11 @@
 import type { RelationsConfig, RelationsHelper } from "../types";
+import { clientDelegationsRelations } from "./client-delegations";
 import { clientsRelations } from "./clients";
-import { delegationDetailsRelations } from "./delegation-details";
 import { employmentsRelations } from "./employments";
 import { organizationClosuresRelations } from "./organization-closures";
 import { organizationResponsibilityAssignmentsRelations } from "./organization-responsibility-assignments";
 import { organizationsRelations } from "./organizations";
 import { positionsRelations } from "./positions";
-import { privilegeDelegationsRelations } from "./privilege-delegations";
 import { privilegesRelations } from "./privileges";
 import { roleAssignmentsRelations } from "./role-assignments";
 import { rolePrivilegesRelations } from "./role-privileges";
@@ -18,13 +17,12 @@ import { usersRelations } from "./users";
 export function coreRelations(r: RelationsHelper) {
   return {
     ...clientsRelations(r),
-    ...delegationDetailsRelations(r),
     ...employmentsRelations(r),
     ...organizationClosuresRelations(r),
     ...organizationResponsibilityAssignmentsRelations(r),
     ...organizationsRelations(r),
     ...positionsRelations(r),
-    ...privilegeDelegationsRelations(r),
+    ...clientDelegationsRelations(r),
     ...privilegesRelations(r),
     ...roleAssignmentsRelations(r),
     ...rolePrivilegesRelations(r),

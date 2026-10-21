@@ -11,7 +11,7 @@
 - 搜索只读取已发布 User Profile Search Document，不实时联查源业务表。
 - 所有有效 Internal Client 使用相同路径和操作符，不存在 client 级字段授权。
 - Filter DSL 不提供调用方排序、分页、字段投影或其他实体查询；User Profile Base 是服务端固定响应，不是 projection DSL。
-- Privilege Delegation 不进入 Search Document 或 Filter DSL。
+- Client Delegation 不进入 Search Document 或 Filter DSL。
 
 ## 2. 表达式结构
 

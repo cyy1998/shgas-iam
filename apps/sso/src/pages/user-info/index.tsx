@@ -19,6 +19,7 @@ import { getQuery } from "@sso/utils/url";
 import { history, useModel } from "@umijs/max";
 import { Alert, Button, Form, Input, message, Spin, Table, Tabs } from "antd";
 import { useEffect, useState } from "react";
+import DelegationSettings from "./_components/DelegationSettings";
 import TopBar from "./_components/TopBar";
 import "./index.less";
 import {
@@ -284,6 +285,7 @@ export default function UserInfoPage() {
                     </Button>
                   </div>
                 </div>
+                <DelegationSettings />
               </section>
             </div>
           )}

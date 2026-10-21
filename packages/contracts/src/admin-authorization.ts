@@ -20,6 +20,7 @@ export const ADMIN_MODULE_CODES = [
   "employment",
   "client",
   "role",
+  "delegation",
   "sessionManagement",
   "audit",
   "systemLog",
@@ -43,6 +44,7 @@ export const AdminCapabilitySummarySchema = z
     visibleModules: z.array(AdminModuleCodeSchema),
     collectionActions: z
       .object({
+        delegation: z.object({ create: AdminAuthorizationDecisionSchema }).strict(),
         user: z
           .object({
             create: AdminAuthorizationDecisionSchema,

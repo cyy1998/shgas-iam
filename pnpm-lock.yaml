@@ -256,6 +256,9 @@ importers:
       antd:
         specifier: ^6.5.1
         version: 6.5.1(date-fns@2.0.0)(luxon@3.7.2)(moment@2.30.1)(react-dom@19.2.7(react@19.2.7))(react@19.2.7)
+      dayjs:
+        specifier: 1.11.21
+        version: 1.11.21
       react:
         specifier: ^19.2.7
         version: 19.2.7
@@ -329,6 +332,9 @@ importers:
       '@iam/db':
         specifier: workspace:*
         version: link:../../packages/db
+      '@iam/delegation':
+        specifier: workspace:*
+        version: link:../../packages/delegation
       '@iam/domain':
         specifier: workspace:*
         version: link:../../packages/domain
@@ -411,6 +417,9 @@ importers:
       '@iam/db':
         specifier: workspace:*
         version: link:../../packages/db
+      '@iam/delegation':
+        specifier: workspace:*
+        version: link:../../packages/delegation
       '@iam/domain':
         specifier: workspace:*
         version: link:../../packages/domain
@@ -554,6 +563,9 @@ importers:
       '@iam/custom-sso':
         specifier: workspace:*
         version: link:../../packages/custom-sso
+      '@iam/delegation':
+        specifier: workspace:*
+        version: link:../../packages/delegation
       '@umijs/max':
         specifier: ^4.6.79
         version: 4.6.79(@babel/core@7.29.7(supports-color@10.2.2))(@types/node@25.9.1)(@types/react-dom@19.2.3(@types/react@19.2.17))(@types/react@19.2.17)(@typescript/typescript6@6.0.2)(debug@4.4.3(supports-color@10.2.2))(dva@2.5.0-beta.2(react-dom@19.2.7(react@19.2.7))(react@19.2.7))(lightningcss@1.32.0)(postcss-less@6.0.0(postcss@8.5.28))(prettier@3.9.9)(rc-field-form@1.38.2(react-dom@19.2.7(react@19.2.7))(react@19.2.7))(react-dom@19.2.7(react@19.2.7))(react@19.2.7)(rollup@3.30.0)(sass@1.101.0)(styled-jsx@5.1.7(@babel/core@7.29.7(supports-color@10.2.2))(babel-plugin-macros@3.1.0)(react@19.2.7))(supports-color@10.2.2)(terser@5.49.0)(type-fest@0.20.2)(webpack@5.106.2(clean-css@5.3.3)(csso@4.2.0)(esbuild@0.28.1)(html-minifier-terser@6.1.0)(lightningcss@1.32.0)(postcss@8.5.28))
@@ -563,6 +575,9 @@ importers:
       cap-widget:
         specifier: ^0.1.57
         version: 0.1.57
+      dayjs:
+        specifier: 1.11.21
+        version: 1.11.21
       react:
         specifier: ^19.2.7
         version: 19.2.7
@@ -871,6 +886,31 @@ importers:
       drizzle-kit:
         specifier: 1.0.0-rc.2
         version: 1.0.0-rc.2
+      typescript:
+        specifier: npm:@typescript/typescript6@6.0.2
+        version: '@typescript/typescript6@6.0.2'
+
+  packages/delegation:
+    dependencies:
+      '@iam/contracts':
+        specifier: workspace:*
+        version: link:../contracts
+      '@iam/db':
+        specifier: workspace:*
+        version: link:../db
+      '@iam/domain':
+        specifier: workspace:*
+        version: link:../domain
+      drizzle-orm:
+        specifier: 1.0.0-rc.2
+        version: 1.0.0-rc.2(bun-types@1.4.2)(postgres@3.4.9)(valibot@1.5.0(@typescript/typescript6@6.0.2))(zod@4.4.3)
+      zod:
+        specifier: ^4.4.3
+        version: 4.4.3
+    devDependencies:
+      '@types/bun':
+        specifier: latest
+        version: 1.4.2
       typescript:
         specifier: npm:@typescript/typescript6@6.0.2
         version: '@typescript/typescript6@6.0.2'

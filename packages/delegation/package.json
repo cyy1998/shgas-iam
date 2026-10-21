@@ -1,0 +1,30 @@
+{
+  "name": "@iam/delegation",
+  "type": "module",
+  "version": "0.0.1",
+  "private": true,
+  "exports": {
+    ".": "./src/index.ts",
+    "./wire": "./src/wire.ts"
+  },
+  "scripts": {
+    "typecheck": "pnpm exec tsc --noEmit",
+    "test": "pnpm test:unit",
+    "test:unit": "bun test --max-concurrency=2 src",
+    "lint": "biome check --formatter-enabled=false . && stylelint \"**/*.less\" --allow-empty-input",
+    "lint:fix": "biome check --formatter-enabled=false --write . && stylelint \"**/*.less\" --allow-empty-input",
+    "format": "biome format --write .",
+    "format:check": "biome format ."
+  },
+  "dependencies": {
+    "@iam/contracts": "workspace:*",
+    "@iam/db": "workspace:*",
+    "@iam/domain": "workspace:*",
+    "drizzle-orm": "1.0.0-rc.2",
+    "zod": "^4.4.3"
+  },
+  "devDependencies": {
+    "@types/bun": "latest",
+    "typescript": "npm:@typescript/typescript6@6.0.2"
+  }
+}

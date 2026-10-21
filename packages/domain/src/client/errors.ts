@@ -36,3 +36,12 @@ export class ClientCodeImmutableError extends DomainBusinessError {
     });
   }
 }
+
+export class ClientHasOpenDelegationError extends DomainBusinessError {
+  constructor() {
+    super("该对象存在未结束的委托，无法删除；请先结束相关委托", {
+      code: ApiErrorCode.ClientHasOpenDelegation,
+      httpStatus: DomainHttpStatus.Conflict,
+    });
+  }
+}

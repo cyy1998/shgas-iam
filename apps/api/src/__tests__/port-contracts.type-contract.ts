@@ -12,14 +12,6 @@ import type {
 import type { OrganizationRepository } from "@api/services/organization/organization.repository";
 import type { PositionRepository } from "@api/services/position/position.repository";
 import type { PrivilegeRepository } from "@api/services/privilege/privilege.repository";
-import type {
-  PrivilegeDelegationOrganizationReaderPort,
-  PrivilegeDelegationPrivilegeReaderPort,
-  PrivilegeDelegationSearchPort,
-  PrivilegeDelegationTransactionStorePort,
-  PrivilegeDelegationUserReaderPort,
-} from "@api/services/privilege/privilegeDelegation.port";
-import type { PrivilegeDelegationRepository } from "@api/services/privilege/privilegeDelegation.repository";
 import type { SessionOrigin } from "@api/services/session/session-origin";
 import type {
   UserMobileBindingPort,
@@ -94,20 +86,6 @@ type _MobileUserReaderPort = AssertAssignable<MobileUserReaderPort, UserReposito
 type _OrganizationReaderPort = AssertAssignable<OrganizationReaderPort, OrganizationRepository>;
 type _OrganizationTransactionStorePort = AssertAssignable<OrganizationTransactionStorePort, OrganizationRepository>;
 
-type _PrivilegeDelegationUserReaderPort = AssertAssignable<PrivilegeDelegationUserReaderPort, UserRepository>;
-type _PrivilegeDelegationOrganizationReaderPort = AssertAssignable<
-  PrivilegeDelegationOrganizationReaderPort,
-  OrganizationRepository
->;
-type _PrivilegeDelegationPrivilegeReaderPort = AssertAssignable<
-  PrivilegeDelegationPrivilegeReaderPort,
-  PrivilegeRepository
->;
-type _PrivilegeDelegationTransactionStorePort = AssertAssignable<
-  PrivilegeDelegationTransactionStorePort,
-  PrivilegeDelegationRepository
->;
-type _PrivilegeDelegationSearchPort = AssertAssignable<PrivilegeDelegationSearchPort, PrivilegeDelegationRepository>;
 type _PrivilegeDelegationResolutionPort = AssertAssignable<
   PrivilegeDelegationResolutionPort,
   PrivilegeDelegationResolutionRepository

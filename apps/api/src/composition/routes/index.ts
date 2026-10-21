@@ -41,7 +41,7 @@ export async function createApiRoutes(options: CreateApiRoutesOptions): Promise<
   });
 
   const delegationHandlers = createDelegationHandlers({
-    privilegeDelegationService: services.privilegeDelegation,
+    delegationService: services.delegation,
     resolvePrivilegeDelegations: useCases.resolvePrivilegeDelegations,
   });
 

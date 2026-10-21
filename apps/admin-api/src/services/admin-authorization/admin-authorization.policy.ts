@@ -472,6 +472,7 @@ export function createAdminAuthorizationPolicy(deps: CreateAdminAuthorizationPol
       return {
         visibleModules: [...ADMIN_MODULE_CODES],
         collectionActions: {
+          delegation: { create: allowedDecision },
           user: { create: allowedDecision },
           employment: { create: allowedDecision },
           organization: { createRoot: allowedDecision },
@@ -492,6 +493,7 @@ export function createAdminAuthorizationPolicy(deps: CreateAdminAuthorizationPol
         ? ["user", "organization", "organizationResponsibility", "position", "employment"]
         : [],
       collectionActions: {
+        delegation: { create: actionNotGrantedDecision },
         user: { create: actionNotGrantedDecision },
         employment: { create: hasHrCapability ? allowedDecision : actionNotGrantedDecision },
         organization: { createRoot: actionNotGrantedDecision },

@@ -24,9 +24,10 @@ import {
   OidcScope,
 } from "@iam/contracts";
 import type { DbClient } from "@iam/db";
-import { auditLogs, clients, roles } from "@iam/db/schema";
+import { auditLogs, clientDelegations, clients, roles } from "@iam/db/schema";
 import { toClientAdminDetailDto } from "@iam/domain/client";
 import { fetchRequestHandler } from "@trpc/server/adapters/fetch";
+import { eq } from "drizzle-orm";
 import { Hono } from "hono";
 import { addTestAdminAuthorizationMiddleware } from "../../src/testing/admin-authorization";
 import type { AdminApiPostgresTestHarness } from "../support/postgres-test-harness";
@@ -103,6 +104,48 @@ function system() {
     invalidateClient,
   };
 }
+
+test.each([
+  [1, "2000-01-01", "2001-01-01"],
+  [2, "2000-01-01", "2001-01-01"],
+  [1, "2099-01-01", "2100-01-01"],
+  [2, "2099-01-01", "2100-01-01"],
+])("Client deletion refuses open Delegation status %s from %s until %s", async (status, start, end) => {
+  const client = await seed();
+  const [delegation] = await harness.db
+    .insert(clientDelegations)
+    .values({
+      delegatorUserId: 900,
+      delegateeUserId: 901,
+      clientId: client!.id,
+      organizationScopeId: 900,
+      status,
+      startTime: new Date(start),
+      endTime: new Date(end),
+    })
+    .returning();
+  const revokeClientSessions = mock(async () => undefined);
+  const command = createClientSsoManagement({
+    db: harness.db,
+    logger,
+    invalidation: { invalidateClient: async () => undefined },
+    sessionTermination: { revokeClientSessions },
+  });
+  const before = await facts();
+  const blocked = await failure(() => command.service.deleteClient("portal"));
+  expect(blocked).toMatchObject({ code: "CLIENT.HAS_OPEN_DELEGATION", httpStatus: 409 });
+  expect(await facts()).toEqual(before);
+  expect(revokeClientSessions).not.toHaveBeenCalled();
+  await harness.db.update(clientDelegations).set({ status: 3 }).where(eq(clientDelegations.id, delegation!.id));
+  const ended = await harness.db.select().from(clientDelegations);
+  const rolesStillBlock = await failure(() => command.service.deleteClient("portal"));
+  expect(rolesStillBlock).toMatchObject({ code: "CLIENT.HAS_ROLE" });
+  await harness.db.update(roles).set({ isDelete: true }).where(eq(roles.clientId, client!.id));
+  const removed = await command.service.deleteClient("portal");
+  expect(removed).toEqual({ changed: true, result: null });
+  expect(await harness.db.select().from(clientDelegations)).toEqual(ended);
+  expect(revokeClientSessions).toHaveBeenCalledTimes(1);
+});
 function http(candidate: ReturnType<typeof createClientSsoAdapter>, rolesForActor = ["iam:admin"]) {
   const app = new Hono();
   addTestAdminAuthorizationMiddleware(app, rolesForActor);

@@ -410,9 +410,7 @@ describe("UserDetailDrawer Employment lifecycle actions", () => {
 
   it("shows the delegation deletion blocker and keeps the detail open without retrying", async () => {
     lifecycle.getUser.mockResolvedValue(detail(EmploymentStatus.Disable));
-    lifecycle.deleteUser.mockRejectedValue(
-      new Error("该用户存在未结束的权限委托，无法删除；请先通过 Internal 接口结束相关委托"),
-    );
+    lifecycle.deleteUser.mockRejectedValue(new Error("该用户存在未结束的委托，无法删除；请先结束相关委托"));
     const onClose = vi.fn();
     const onChanged = vi.fn();
     const { user } = render(
@@ -424,7 +422,7 @@ describe("UserDetailDrawer Employment lifecycle actions", () => {
     expect(dialog).not.toBeNull();
     await user.click(within(dialog as HTMLElement).getByRole("button", { name: /确\s*定/ }));
     await waitFor(() => expect(dialog).not.toBeInTheDocument());
-    expect(await screen.findByText(/存在未结束的权限委托，无法删除/)).toBeInTheDocument();
+    expect(await screen.findByText(/存在未结束的委托，无法删除/)).toBeInTheDocument();
     expect(screen.queryByText("已删除")).not.toBeInTheDocument();
     expect(screen.queryByText(/操作已生效，但后续处理失败/)).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: "删除" })).toBeEnabled();

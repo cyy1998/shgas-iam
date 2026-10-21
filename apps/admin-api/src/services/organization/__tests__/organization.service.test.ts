@@ -59,6 +59,7 @@ function createService() {
     },
     organizationSearchInvalidation: { recordChanges: mock(async () => undefined) },
     organizationRepository: {
+      hasOpenDelegationsByOrganizationId: mock(async (_id: number) => false),
       countActiveChildrenByOrgCode: mock(async () => 0),
       countOpenEmploymentsByOrgCode: mock(async (_orgCode: string) => 0),
       getOrganizationByCode: mock(async () => null),

@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { OidcClientType } from "@iam/contracts";
+import { ClientSsoCallbackType, ClientSsoProtocol, OidcClientType, SubjectClaim } from "@iam/contracts";
 import type { E2EScenarioOwner, E2EScenarioReferences } from "../seed.ts";
 import { seedE2EScenario } from "../seed.ts";
 
@@ -143,6 +143,66 @@ describe("E2E scenario seed", () => {
       }),
     ).rejects.toThrow("E2E scenario owner read-back did not confirm the complete fixed scenario");
   });
+
+  test("rejects a gateway-ready iam Client whose portal SSO delivery is disabled", async () => {
+    const owner: E2EScenarioOwner = {
+      establish: async () => generatedReferences(),
+      async readBack(references) {
+        const readBack = completeReadBack(references);
+        return { ...readBack, gatewayClient: { ...readBack.gatewayClient, ssoEnabled: false } };
+      },
+    };
+    let failure: unknown;
+    try {
+      await seedE2EScenario({
+        adminPassword: "SYNTHETIC-PASSWORD-ONLY-FOR-E2E",
+        canonicalOrigin: "http://127.0.0.1:43123",
+        owner,
+        random: { uuid: () => "3b766c91-1daa-4c09-89e4-ea87ad123456" },
+        runId: "20260806123000000-a1b2c3d4",
+      });
+    } catch (error) {
+      failure = error;
+    }
+    expect(failure).toBeInstanceOf(Error);
+    expect(failure).toMatchObject({
+      message: "E2E scenario owner read-back did not confirm the complete fixed scenario",
+    });
+  });
+
+  test.each(["protocol", "callback", "redirect", "claims"] as const)(
+    "rejects an iam Client with an invalid portal %s prerequisite",
+    async (variant) => {
+      const owner: E2EScenarioOwner = {
+        establish: async () => generatedReferences(),
+        async readBack(references) {
+          const readBack = completeReadBack(references);
+          const changes =
+            variant === "protocol"
+              ? { ssoProtocol: ClientSsoProtocol.Oidc }
+              : variant === "callback"
+                ? { callbackType: ClientSsoCallbackType.Business }
+                : variant === "redirect"
+                  ? { redirectUris: [`${references.canonicalOrigin}/other/*`] }
+                  : { subjectClaims: [SubjectClaim.SubjectIdentifier] };
+          return { ...readBack, gatewayClient: { ...readBack.gatewayClient, ...changes } };
+        },
+      };
+      let failure: unknown;
+      try {
+        await seedE2EScenario({
+          adminPassword: "SYNTHETIC-PASSWORD-ONLY-FOR-E2E",
+          canonicalOrigin: "http://127.0.0.1:43123",
+          owner,
+          random: { uuid: () => "3b766c91-1daa-4c09-89e4-ea87ad123456" },
+          runId: "20260806123000000-a1b2c3d4",
+        });
+      } catch (error) {
+        failure = error;
+      }
+      expect(failure).toBeInstanceOf(Error);
+    },
+  );
 });
 
 function completeReadBack(references: E2EScenarioReferences) {
@@ -195,7 +255,24 @@ function completeReadBack(references: E2EScenarioReferences) {
       active: true,
       clientCode: "e2e-internal-123000000-a1b2c3d4",
     },
-    gatewayClient: { active: true, clientCode: "iam", credentialMatches: true },
+    gatewayClient: {
+      active: true,
+      ssoEnabled: true,
+      clientCode: "iam",
+      credentialMatches: true,
+      ssoProtocol: ClientSsoProtocol.CustomSso,
+      callbackType: ClientSsoCallbackType.Managed,
+      redirectUris: [
+        ...new Set([references.canonicalOrigin, references.internalOrigin ?? references.canonicalOrigin]),
+      ].map((origin) => `${origin}/portal/*`),
+      subjectClaims: [
+        SubjectClaim.SubjectIdentifier,
+        SubjectClaim.ProfileUsername,
+        SubjectClaim.ProfileName,
+        SubjectClaim.ProfilePhone,
+        SubjectClaim.ProfileEmployments,
+      ],
+    },
     organization: { active: true, code: references.organizationCode },
     responsibilityHolderOrganization: {
       active: true,

@@ -18,6 +18,7 @@ import {
 export const adminCapabilitySummary = {
   visibleModules: [...ADMIN_MODULE_CODES],
   collectionActions: {
+    delegation: { create: { allowed: true, reason: null } },
     user: { create: { allowed: true, reason: null } },
     employment: { create: { allowed: true, reason: null } },
     organization: { createRoot: { allowed: true, reason: null } },
@@ -47,6 +48,7 @@ const stateNotActionableAction = {
 export const hrAdminCapabilitySummary = {
   visibleModules: ["user", "organization", "organizationResponsibility", "position", "employment"],
   collectionActions: {
+    delegation: { create: deniedAction },
     user: { create: deniedAction },
     employment: { create: allowedAction },
     organization: { createRoot: deniedAction },

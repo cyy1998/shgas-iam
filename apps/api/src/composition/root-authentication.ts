@@ -7,6 +7,11 @@ import {
 } from "@api/routes/auth/auth.handlers";
 import * as authRoutes from "@api/routes/auth/auth.routes";
 import { createOidcHttpRouter } from "@api/routes/oidc/oidc.http";
+import {
+  createPublicDelegationHandlers,
+  type PublicDelegationDependencies,
+} from "@api/routes/public/delegation/delegation.handlers";
+import { createPublicDelegationRoute } from "@api/routes/public/delegation/delegation.index";
 import type { CreatePublicHandlersDeps } from "@api/routes/public/public.handlers";
 import { createPublicHandlers, createRootPublicHandlers } from "@api/routes/public/public.handlers";
 import * as publicRoutes from "@api/routes/public/public.routes";
@@ -80,6 +85,7 @@ export interface RootAuthenticationCompositionOptions {
   config: CreateRootSsoHandlersDeps["config"];
   endpoints?: SsoEndpointsOptions;
   publicServices?: Pick<CreatePublicHandlersDeps, "userService">;
+  publicDelegation?: PublicDelegationDependencies;
   customSso?: Omit<UnifiedCustomSsoAuthorizationOptions, "kernel" | "clients" | "redirectUrls">;
   oidc?: Omit<OidcAuthorizationOptions, "kernel" | "clients"> & {
     issuers: { internal: string; external: string };
@@ -281,6 +287,10 @@ export function createRootAuthenticationComposition(options: RootAuthenticationC
       }),
   );
   publicRouter.openapi(publicRoutes.userInfo, publicHandlers.userInfo);
+  if (options.publicDelegation) {
+    const handlers = createPublicDelegationHandlers(options.publicDelegation);
+    publicRouter.route("/", createPublicDelegationRoute(handlers));
+  }
   if (options.publicServices) {
     const handlers = createPublicHandlers({
       ...options.publicServices,

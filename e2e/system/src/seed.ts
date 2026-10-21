@@ -1,4 +1,4 @@
-import { OidcClientType } from "@iam/contracts";
+import { ClientSsoCallbackType, ClientSsoProtocol, OidcClientType, SubjectClaim } from "@iam/contracts";
 import { createE2EGatewayApiKey } from "./gateway-credential";
 
 export interface E2EScenarioReferences {
@@ -148,7 +148,16 @@ export interface E2EScenarioReadBack {
     redirectUris: string[];
   };
   internalClient: { active: boolean; clientCode: string };
-  gatewayClient: { active: boolean; clientCode: string; credentialMatches: boolean };
+  gatewayClient: {
+    active: boolean;
+    ssoEnabled: boolean;
+    clientCode: string;
+    credentialMatches: boolean;
+    ssoProtocol: ClientSsoProtocol | null;
+    callbackType: ClientSsoCallbackType | null;
+    redirectUris: string[];
+    subjectClaims: string[];
+  };
   oidcClient: {
     active: boolean;
     clientCode: string;
@@ -352,8 +361,24 @@ function assertScenarioReadBack(expected: E2EScenarioReferences, actual: E2EScen
     actual.hiddenResponsibilityAssignment.holderEmploymentId === expected.outsideResponsibilityHolderEmploymentId &&
     actual.hiddenResponsibilityAssignment.targetOrganizationCode === expected.hrResponsibilityTargetOrganizationCode &&
     actual.gatewayClient.active &&
+    actual.gatewayClient.ssoEnabled &&
     actual.gatewayClient.clientCode === "iam" &&
     actual.gatewayClient.credentialMatches &&
+    actual.gatewayClient.ssoProtocol === ClientSsoProtocol.CustomSso &&
+    actual.gatewayClient.callbackType === ClientSsoCallbackType.Managed &&
+    exactlyAll(
+      actual.gatewayClient.redirectUris,
+      [...new Set([expected.canonicalOrigin, expected.internalOrigin ?? expected.canonicalOrigin])].map(
+        (origin) => `${origin}/portal/*`,
+      ),
+    ) &&
+    exactlyAll(actual.gatewayClient.subjectClaims, [
+      SubjectClaim.SubjectIdentifier,
+      SubjectClaim.ProfileUsername,
+      SubjectClaim.ProfileName,
+      SubjectClaim.ProfilePhone,
+      SubjectClaim.ProfileEmployments,
+    ]) &&
     actual.adminClient.active &&
     actual.adminClient.ssoEnabled &&
     actual.adminClient.clientCode === expected.adminClientCode &&

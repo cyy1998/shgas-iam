@@ -18,6 +18,7 @@ import {
 import { extractPostgresError } from "@iam/db/postgres-error";
 import {
   auditLogs,
+  clientDelegations,
   employments,
   organizationClosures,
   organizationResponsibilityAssignments,
@@ -120,6 +121,32 @@ async function seedOrganization(orgCode = "ORGANIZATION") {
     .returning();
   return persisted!;
 }
+
+test("an expired open direct Delegation blocks Organization deletion until explicitly ended", async () => {
+  const organization = await seedOrganization();
+  const [delegation] = await harness.db
+    .insert(clientDelegations)
+    .values({
+      delegatorUserId: 900,
+      delegateeUserId: 901,
+      clientId: 900,
+      organizationScopeId: organization.id,
+      startTime: new Date("2000-01-01"),
+      endTime: new Date("2001-01-01"),
+    })
+    .returning();
+  const command = createCommand();
+  let rejected: unknown;
+  try {
+    await command.service.deleteOrganization(organization.orgCode);
+  } catch (error) {
+    rejected = error;
+  }
+  expect(rejected).toMatchObject({ code: "ORG.HAS_OPEN_DELEGATION", httpStatus: 409 });
+  await harness.db.update(clientDelegations).set({ status: 3 }).where(eq(clientDelegations.id, delegation!.id));
+  const result = await command.service.deleteOrganization(organization.orgCode);
+  expect(result).toEqual({ changed: true, result: null });
+});
 
 async function seedEmployment(organizationId: number, status = EmploymentStatus.Enable) {
   const [user] = await harness.db
@@ -1057,4 +1084,21 @@ describe("Organization mutations through production PostgreSQL UnitOfWork", () =
       expect(after.dirty).toEqual([]);
     });
   }
+});
+
+test("an ancestor Delegation does not block deleting an indirectly covered descendant", async () => {
+  const root = await seedOrganization("ROOT");
+  const child = await seedOrganization("CHILD");
+  await harness.db.update(organizations).set({ parentId: root.id }).where(eq(organizations.id, child.id));
+  await harness.db.insert(organizationClosures).values({ ancestorId: root.id, descendantId: child.id, depth: 1 });
+  await harness.db.insert(clientDelegations).values({
+    delegatorUserId: 900,
+    delegateeUserId: 901,
+    clientId: 900,
+    organizationScopeId: root.id,
+    startTime: new Date("2000-01-01"),
+    endTime: new Date("2100-01-01"),
+  });
+  const result = await createCommand().service.deleteOrganization("CHILD");
+  expect(result).toEqual({ changed: true, result: null });
 });

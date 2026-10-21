@@ -66,6 +66,7 @@ const architectureWorkspaces: readonly (readonly [
   ],
   ["@iam/role-assignment-resolution", "packages/role-assignment-resolution", ["source", "docker"]],
   ["@iam/user-profile-read-model", "packages/user-profile-read-model", ["source", "docker", "canonical"]],
+  ["@iam/delegation", "packages/delegation", ["source", "docker", "canonical"]],
   ["@iam/filter-engine", "packages/filter-engine", ["source", "docker"]],
   ["@iam/organization-search-read-model", "packages/organization-search-read-model", ["source", "docker", "canonical"]],
   ["@iam/admin", "apps/admin", ["canonical"]],

@@ -54,12 +54,12 @@ import {
 import { createClientSnapshotRepository } from "@iam/db/client-snapshot";
 import {
   auditLogs,
+  clientDelegations,
   clients,
   employments,
   organizationClosures,
   organizations,
   positions,
-  privilegeDelegations,
   roles,
   userProfileDirty,
   users,
@@ -676,12 +676,32 @@ test("delegation-blocked User deletion restores real access and preserves both s
       .insert(users)
       .values({ username: `delegator-${randomUUID()}`, name: "Delegator" })
       .returning();
+    const [client] = await pg.db
+      .insert(clients)
+      .values({
+        clientCode: f.clientCode("delegation-blocker"),
+        clientName: "Delegation blocker",
+        clientSecret: "test",
+        extAttributes: {},
+      })
+      .returning();
+    const [organization] = await pg.db
+      .insert(organizations)
+      .values({
+        orgCode: `delegation-${randomUUID()}`,
+        orgName: "Delegation scope",
+        path: "scope",
+        level: OrganizationLevel.One,
+        orgType: OrganizationType.Company,
+      })
+      .returning();
     const [delegation] = await pg.db
-      .insert(privilegeDelegations)
+      .insert(clientDelegations)
       .values({
         delegatorUserId: other!.id,
         delegateeUserId: f.account.id,
-        organizationScopeId: 1,
+        organizationScopeId: organization!.id,
+        clientId: client!.id,
         status: PrivilegeDelegationStatus.Pause,
         startTime: new Date("2099-01-01"),
         endTime: new Date("2100-01-01"),
@@ -699,8 +719,8 @@ test("delegation-blocked User deletion restores real access and preserves both s
     const accountAfter = await pg.db.select().from(users).where(eq(users.id, f.account.id));
     const delegationAfter = await pg.db
       .select()
-      .from(privilegeDelegations)
-      .where(eq(privilegeDelegations.id, delegation!.id));
+      .from(clientDelegations)
+      .where(eq(clientDelegations.id, delegation!.id));
     const audits = await pg.db.select().from(auditLogs).where(eq(auditLogs.targetId, f.account.id));
     const dirty = await pg.db.select().from(userProfileDirty).where(eq(userProfileDirty.userId, f.account.id));
     expect(barrierAfter).toEqual(barrierBefore);

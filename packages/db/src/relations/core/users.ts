@@ -15,14 +15,14 @@ export function usersRelations(r: RelationsHelper) {
         from: r.users.id,
         to: r.userProfileDirty.userId,
       }),
-      delegationTo: r.many.privilegeDelegations({
+      delegationTo: r.many.clientDelegations({
         from: r.users.id,
-        to: r.privilegeDelegations.delegatorUserId,
+        to: r.clientDelegations.delegatorUserId,
         alias: "delegationTo",
       }),
-      delegationFrom: r.many.privilegeDelegations({
+      delegationFrom: r.many.clientDelegations({
         from: r.users.id,
-        to: r.privilegeDelegations.delegateeUserId,
+        to: r.clientDelegations.delegateeUserId,
         alias: "delegationFrom",
       }),
     },

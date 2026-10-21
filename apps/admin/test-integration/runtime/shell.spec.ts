@@ -8,6 +8,7 @@ test("a role without Admin capability is default-denied before management reques
     capabilitySummary: {
       visibleModules: [],
       collectionActions: {
+        delegation: { create: { allowed: false, reason: "ACTION_NOT_GRANTED" } },
         user: { create: { allowed: false, reason: "ACTION_NOT_GRANTED" } },
         employment: {
           create: { allowed: false, reason: "ACTION_NOT_GRANTED" },

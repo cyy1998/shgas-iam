@@ -8,6 +8,9 @@ import { createClientAdapter } from "@admin-api/routes/admin/client/client.adapt
 import { createClientRoute } from "@admin-api/routes/admin/client/client.index";
 import { createClientAdminRouter } from "@admin-api/routes/admin/client/client.trpc";
 import { createClientSsoAdapter } from "@admin-api/routes/admin/client-sso/client-sso.adapter";
+import { createDelegationAdapter } from "@admin-api/routes/admin/delegation/delegation.adapter";
+import { createDelegationRoute } from "@admin-api/routes/admin/delegation/delegation.index";
+import { createDelegationAdminRouter } from "@admin-api/routes/admin/delegation/delegation.trpc";
 import { createEmploymentAdapter } from "@admin-api/routes/admin/employment/employment.adapter";
 import { createEmploymentRoute } from "@admin-api/routes/admin/employment/employment.index";
 import { createEmploymentAdminRouter } from "@admin-api/routes/admin/employment/employment.trpc";
@@ -52,6 +55,7 @@ export function createAdminApiRouteComposition(options: CreateAdminApiRoutesOpti
   const { auditService, runtime, services, useCases } = options;
 
   const authorizationAdapter = createAdminAuthorizationAdapter();
+  const delegationAdapter = createDelegationAdapter({ delegationService: services.delegation });
   const auditAdapter = createAuditAdapter({ auditService });
   const clientAdapter = createClientAdapter({ clientService: services.client });
   const employmentAdapter = createEmploymentAdapter({
@@ -85,6 +89,7 @@ export function createAdminApiRouteComposition(options: CreateAdminApiRoutesOpti
 
   const clientSsoAdapter = createClientSsoAdapter(services.clientSso.service);
   const adminRouter = createAdminRouter({
+    delegation: createDelegationAdminRouter(delegationAdapter),
     clientSso: clientSsoAdapter.trpc,
     authorization: createAdminAuthorizationAdminRouter(authorizationAdapter),
     audit: createAuditAdminRouter(auditAdapter),
@@ -102,6 +107,7 @@ export function createAdminApiRouteComposition(options: CreateAdminApiRoutesOpti
   if (!adminTier) throw new Error("Admin API config must declare the admin tier");
 
   const routes: CreateAppOptions["routes"] = {
+    "./src/routes/admin/delegation/delegation.index.ts": { default: createDelegationRoute(delegationAdapter) },
     "./src/routes/admin/client-sso/client-sso.index.ts": { default: clientSsoAdapter.rest },
     "./src/routes/admin/authorization/authorization.index.ts": {
       default: createAdminAuthorizationRoute(authorizationAdapter),

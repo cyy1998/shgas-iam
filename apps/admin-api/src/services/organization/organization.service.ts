@@ -18,6 +18,7 @@ import {
   OrganizationCodeExistsError,
   OrganizationHasChildrenError,
   OrganizationHasEmploymentError,
+  OrganizationHasOpenDelegationError,
   OrganizationNotFoundError,
 } from "@iam/domain/organization";
 import type {
@@ -340,6 +341,8 @@ export function createOrganizationService(deps: AdminOrganizationServiceDeps) {
             concealExistence: true,
           });
         }
+        if (await tx.organizationRepository.hasOpenDelegationsByOrganizationId(existing.id))
+          throw new OrganizationHasOpenDelegationError();
         await tx.responsibilityParentLifecycle.assertNoOpenAssignmentsTargetingOrganizationSubtree({
           organizationId: existing.id,
         });

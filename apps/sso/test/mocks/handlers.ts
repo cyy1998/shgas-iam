@@ -10,6 +10,7 @@ export const handlers = [
   http.get("*/sso/login-guard", () => ok({ decision: LoginPageGuardDecision.Login })),
   http.get("*/sso/.well-known/authentication-configuration", () => ok(authenticationConfig)),
   http.get("*/public/user-info", () => ok(currentUserInfo)),
+  http.post("*/public/delegations/search", () => ok([])),
   http.post("*/open/code/send", () => ok(null)),
   http.get("*/open/client/status", () =>
     ok({

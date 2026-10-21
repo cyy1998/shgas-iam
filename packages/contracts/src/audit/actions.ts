@@ -1,4 +1,8 @@
 export const auditActionCatalog = [
+  { action: "admin.delegation.create", label: "管理员创建应用委托" },
+  { action: "admin.delegation.update", label: "管理员更新应用委托" },
+  { action: "sso.delegation.create", label: "自助创建应用委托" },
+  { action: "sso.delegation.update", label: "自助更新应用委托" },
   { action: "admin.client.sso_secret_rotate", label: "轮换 SSO Secret" },
   { action: "admin.client.sso_secret_read", label: "读取当前 SSO Secret" },
   {
@@ -227,11 +231,11 @@ export const auditActionCatalog = [
   },
   {
     action: "internal.delegation.create",
-    label: "创建权限委派",
+    label: "创建应用委托",
   },
   {
     action: "internal.delegation.update",
-    label: "更新权限委派",
+    label: "更新应用委托",
   },
   {
     action: "internal.purveyor.register",

@@ -59,7 +59,7 @@ export function withApiRequestContext(
 }
 
 export function getInternalAuditActor(c: Context) {
-  const clientCode = c.req.header("Client");
+  const clientCode = c.get("clientCode") as string | undefined;
   return normalizeAuditActor(
     clientCode
       ? {

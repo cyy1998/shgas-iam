@@ -1,7 +1,7 @@
 export interface ResolvePrivilegeDelegationsInput {
   usernames: string[];
   orgCode: string;
-  privilegeCode: string;
+  clientId: number;
 }
 
 export interface PrivilegeDelegationResolutionQuery extends ResolvePrivilegeDelegationsInput {
@@ -16,7 +16,6 @@ export type PrivilegeDelegationResolutionResult = {
 export interface PrivilegeDelegationResolutionMissingInputs {
   usernames: string[];
   orgCodes: string[];
-  privilegeCodes: string[];
 }
 
 export type PrivilegeDelegationResolutionIntegrityViolation =
@@ -34,7 +33,7 @@ export type PrivilegeDelegationResolutionIntegrityViolation =
       category: "invalid-reference";
       username: string;
       delegationId: number;
-      relation: "delegatee-user" | "scope-organization" | "privilege";
+      relation: "delegatee-user" | "scope-organization";
       referencedIds: number[];
     };
 

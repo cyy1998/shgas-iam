@@ -33,9 +33,11 @@
     "@ant-design/icons": "^6.3.4",
     "@iam/contracts": "workspace:*",
     "@iam/custom-sso": "workspace:*",
+    "@iam/delegation": "workspace:*",
     "@umijs/max": "^4.6.79",
     "antd": "^6.5.1",
     "cap-widget": "^0.1.57",
+    "dayjs": "1.11.21",
     "react": "^19.2.7",
     "react-dom": "^19.2.7"
   },

@@ -1,62 +1,25 @@
-import process from "node:process";
-import { createApiRepositories } from "@api/composition/repositories";
-import { createApiUnitOfWork } from "@api/composition/tx";
-import { createPrivilegeDelegationService } from "@api/services/privilege/privilegeDelegation.service";
-import { mapUnitOfWork } from "@iam/api-core/uow";
-import { PrivilegeDelegationStatus } from "@iam/contracts";
+import { createAuditRepository } from "@api/services/audit/audit.repository";
+import { createApiAuditLogWriter } from "@api/services/audit/audit.service";
 import { relations } from "@iam/db/relations";
+import { createDelegationService, DelegationStatus } from "@iam/delegation";
 import { drizzle } from "drizzle-orm/postgres-js";
 import postgres from "postgres";
 
-async function main() {
-  // The Admin PostgreSQL harness owns this schema and invokes the API command in its own workspace.
-  const databaseUrl = process.env.IAM_API_TEST_DATABASE_URL;
-  const delegationId = Number(process.argv[2]);
-  if (!databaseUrl || !Number.isSafeInteger(delegationId) || delegationId <= 0)
-    throw new Error("A dedicated test database and delegation ID are required");
-  const sql = postgres(databaseUrl, { max: 1 });
-  try {
-    const db = drizzle({ client: sql, relations });
-    const uow = createApiUnitOfWork({
-      db,
-      logger: { error() {}, warn() {} },
-      clock: { nowDate: () => new Date() },
-      organizationSearchJobProducer: {
-        async enqueueSourceChanges() {
-          return { enqueued: 0 };
-        },
-      },
-      userProfileJobProducer: { enqueueRebuildJobs: async () => ({ enqueued: 0, jobIds: [] }) },
-    });
-    const service = createPrivilegeDelegationService({
-      privilegeDelegationRepository: createApiRepositories(db).privilegeDelegation,
-      uow: mapUnitOfWork(uow, (tx) => ({
-        userRepository: tx.repositories.user,
-        organizationRepository: tx.repositories.organization,
-        privilegeRepository: tx.repositories.privilege,
-        privilegeDelegationRepository: tx.repositories.privilegeDelegation,
-        auditLogWriter: tx.auditLogWriter,
-      })),
-    });
-    await service.updateDelegation(
-      delegationId,
-      { status: PrivilegeDelegationStatus.Disable },
-      {
-        actor: {
-          actorType: "client",
-          actorUserId: null,
-          actorUsername: null,
-          actorClientCode: "delegation-deletion-contract",
-          actorSystemKey: null,
-        },
-      },
-    );
-  } finally {
-    await sql.end();
-  }
+const url = process.env.IAM_API_TEST_DATABASE_URL;
+if (!url) throw new Error("IAM_API_TEST_DATABASE_URL is required");
+const client = postgres(url);
+try {
+  const service = createDelegationService({
+    db: drizzle({ client, relations }),
+    recordAudit: async (tx, event) =>
+      createApiAuditLogWriter({ auditRepository: createAuditRepository(tx) }).recordAuditLog(event),
+  });
+  await service.update(
+    Number(process.argv[2]),
+    { status: DelegationStatus.Disable },
+    { kind: "client", clientId: Number(process.argv[3]) },
+    { actionPrefix: "internal", actor: { actorType: "client", actorClientCode: "delegation-test" } },
+  );
+} finally {
+  await client.end();
 }
-
-main().catch((error) => {
-  console.error(error);
-  process.exitCode = 1;
-});

@@ -34,6 +34,7 @@ COPY packages/db/package.json ./packages/db/
 COPY packages/api-core/package.json ./packages/api-core/
 COPY packages/session-kernel/package.json ./packages/session-kernel/
 COPY packages/domain/package.json ./packages/domain/
+COPY packages/delegation/package.json ./packages/delegation/
 COPY packages/jobs/package.json ./packages/jobs/
 COPY packages/organization-responsibility-resolution/package.json ./packages/organization-responsibility-resolution/
 COPY packages/role-assignment-resolution/package.json ./packages/role-assignment-resolution/
@@ -60,6 +61,7 @@ COPY packages/db/ ./packages/db/
 COPY packages/api-core/ ./packages/api-core/
 COPY packages/session-kernel/ ./packages/session-kernel/
 COPY packages/domain/ ./packages/domain/
+COPY packages/delegation/ ./packages/delegation/
 COPY packages/jobs/ ./packages/jobs/
 COPY packages/organization-responsibility-resolution/ ./packages/organization-responsibility-resolution/
 COPY packages/role-assignment-resolution/ ./packages/role-assignment-resolution/

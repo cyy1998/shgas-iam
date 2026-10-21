@@ -20,6 +20,7 @@ export function createAdminJourneyOperations(options: CreateAdminJourneyOperatio
       IAM_E2E_CUSTOM_SSO_CLIENT_CODE: scenario.customSsoClientCode,
       IAM_E2E_CUSTOM_SSO_REDIRECT_URI: `${descriptor.origin}/e2e/custom-sso/*`,
       IAM_E2E_INTERNAL_API_KEY: createE2EScenarioInternalApiKey(descriptor.runId),
+      IAM_E2E_INTERNAL_CLIENT_CODE: scenario.internalClientCode,
       IAM_E2E_ORGANIZATION_CODE: scenario.organizationCode,
       IAM_E2E_PAUSED_USERNAME: scenario.pausedUsername,
       IAM_E2E_POSITION_CODE: scenario.positionCode,

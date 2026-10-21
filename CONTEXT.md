@@ -16,7 +16,7 @@ User Profile 面向搜索结果公开的最小稳定身份与联系方式视图�
 _Avoid_: UserDto, User Profile Detail, Basic User
 
 **User Profile Search**:
-IAM 以未删除的当前 User Profile 为唯一结果根，按照用户自身及明确纳入搜索词汇的当前关联事实筛选用户；面向其他内部服务的搜索只提供 Internal Filter DSL，按内部 user ID 稳定排序返回 User Profile Base。不隐式排除 Pause 或 Disable 状态，调用方可以通过公开的 status 路径显式筛选。任职、组织责任、角色等只作为筛选作用域，不进入 User Profile Base。任职条件只观察 Effective Employment，Privilege Delegation 不进入搜索档案或过滤作用域，由调用方在搜索后独立解析；本能力不承担历史任职、历史任命或其他实体的通用查询。
+IAM 以未删除的当前 User Profile 为唯一结果根，按照用户自身及明确纳入搜索词汇的当前关联事实筛选用户；面向其他内部服务的搜索只提供 Internal Filter DSL，按内部 user ID 稳定排序返回 User Profile Base。不隐式排除 Pause 或 Disable 状态，调用方可以通过公开的 status 路径显式筛选。任职、组织责任、角色等只作为筛选作用域，不进入 User Profile Base。任职条件只观察 Effective Employment，Client Delegation 不进入搜索档案或过滤作用域，由调用方在搜索后独立解析；本能力不承担历史任职、历史任命或其他实体的通用查询。
 _Avoid_: generic entity query, historical profile search, arbitrary data graph query
 
 **User Profile Search Document**:
@@ -59,36 +59,43 @@ _Avoid_: implicit normalization, fuzzy equality, empty membership condition, raw
 保护统一 User Profile Search 的契约资源边界：Filter DSL 最大深度为 8、最多 64 个节点、每个 `and`/`or` 最多 16 个子表达式、每个 `in`/`contains` 最多 50 个去重值、字符串值最长 128；结果最多 500 个 User Profile，并保留数据库查询与请求级超时保护。非法、空或超预算过滤器以及超过结果上限都整体返回 422；无匹配返回 200 空数组，Profile 不可用、文档损坏或查询超时返回 503，任何情况都不截断或返回部分结果。
 _Avoid_: unbounded filter, unbounded result set, caller-controlled query cost
 
-**Current Privilege Delegation**:
-自身未删除、状态为 Enable 且服务端观察时刻位于闭区间 `[startTime, endTime]` 内的 Privilege Delegation；其引用对象的 Pause 或 Disable 状态以及委托人当时是否拥有该 Privilege 都不参与判定。
-_Avoid_: effective authorization, currently authorized delegation
+Client Delegation 的决策见 [ADR-0020](docs/adr/0020-provide-fail-closed-privilege-delegation-resolution.md)，
+三类入口与切换边界见[功能契约](docs/features/delegation/client-delegation.md)。
 
-**Open Privilege Delegation**:
-自身未删除且尚未结束、状态为 Enable 或 Pause 的 Privilege Delegation；是否已到开始时间或超过业务期间不改变其未结束的生命周期事实。它会阻止委托人和受托人的 User Deletion，只有结束委托后才释放这项删除约束。
-_Avoid_: Current Privilege Delegation, enabled-only deletion blocker, automatic delegation expiry
+**Client Delegation**:
+绑定一个 Client、在指定组织范围内为委托人确定直接代办人的委托关系；它不向受托人授予或复制委托人的角色、权限或登录身份，不同 Client 的委托分别管理。
+_Avoid_: permission grant, role inheritance, impersonation
 
-**Privilege Delegation Lifecycle**:
-Privilege Delegation 创建时为 Enable，未结束时允许在 Enable 与 Pause 间切换并修改期间或说明；委托人、受托人、组织范围及权限绑定创建后不可修改。Disable 是不可重开的结束状态，结束后不能修改业务字段，纯重复结束保持原有事实。
-_Avoid_: mutable delegation bindings, delegation reopening, repeated end time rewrite
+**Client Delegation Scope**:
+Client Delegation 适用的组织集合，包含所选 Organization 及其当前全部后代；以后新增的后代自动纳入。
+_Avoid_: exact organization only, implicit global scope, creation-time subtree snapshot
 
-**Privilege Delegation Scope**:
-一条 Privilege Delegation 适用的组织集合，由指定 Organization 及其全部后代组成；只有被解析的 Organization 属于该集合时，这条委托才可能被匹配。
-_Avoid_: exact organization only, global organization scope
+**Client Delegation Resolution**:
+在同一服务端观察时刻和数据库快照，为指定 User 及 Organization 查找属于调用方 Client 的零或一个直接代办人；Client 由认证身份确定，无当前委托时为 null。不沿链递归，不验证委托人或受托人是否持有该应用角色或权限，调用方不能指定其他 Client。
+_Avoid_: caller-selected client, cross-client delegation resolution, authorization resolution
 
-**Privilege Delegation Conflict**:
-同一委托人的两条未删除且未结束委托，在权限集合、闭区间业务期间和 Privilege Delegation Scope 三者均有交集时形成的冲突；Pause 仍占用期间，受托人相同也不豁免。相同组织及祖先与下级组织的范围有交集，互不包含的部门或独立组织树允许并存。
-_Avoid_: global privilege exclusivity, exact-scope-only conflict, nearest-scope override
+**Client Delegation Lifecycle**:
+Client Delegation 无需受托人确认，按指定期间与自身状态参与解析；未结束时可修改期间与说明、暂停或恢复，委托人、受托人、Client 和组织范围固定。手动结束不可恢复，自然到期但未手动结束时仍可延期，结束或到期的记录仍可查看。
+_Avoid_: delegatee approval, mutable delegation bindings, delegation reopening, delegation deletion
 
-**Privilege Delegation Resolution Input**:
-Privilege Delegation Resolution 中以 username、Organization code 或 Privilege code 指向的存在且未删除领域对象；Pause 或 Disable 状态不影响识别。任一输入无法识别时解析整体失败，不返回部分结果。
-_Avoid_: enabled-only resolution input, missing input as no delegation
+**Client Delegation Conflict**:
+同一委托人在同一 Client 下的两条未结束委托，其组织覆盖范围和闭区间业务期间均有交集时形成的冲突；Pause 仍占位，受托人相同不豁免，时间端点相接也属于重叠。
+_Avoid_: nearest-scope override, duplicate delegation collapse, paused-slot reuse
 
-**Privilege Delegation Resolution**:
-在同一服务端观察时刻，对一组已识别 User 和一个指定 Organization、Privilege，按照 Organization scope 覆盖该 Organization 的 Current Privilege Delegation，为每个 User 确定零或一个直接 Delegatee；没有 Current Privilege Delegation 时结果为 null。它不沿委托链递归，也不重新验证委托人当前是否拥有该 Privilege。
-_Avoid_: authorization resolution, recursive delegation resolution, missing user as no delegation
+**Current Client Delegation**:
+状态为 Enable 且观察时刻位于闭区间业务期间内的 Client Delegation；双方 User 或组织的 Pause、Disable 不改变已有委托关系的解析，委托关系本身不证明受托人能够登录或执行代办操作。
+_Avoid_: effective authorization, delegatee login permission, automatic delegation termination
 
-**Privilege Delegation Resolution Integrity Violation**:
-同一观察时刻、Organization 与 Privilege 下，一个已识别 User 匹配多条 Current Privilege Delegation、匹配记录发生自委托，或匹配记录引用缺失或已删除的 User、Organization 或 Privilege 的数据异常；多条记录即使指向同一 Delegatee 仍属异常，直接委托形成双向环则不属于异常。解析必须整体失败，不得选择或折叠记录、把异常降级为 null 或返回部分结果。
+**Open Client Delegation**:
+尚未手动结束、状态为 Enable 或 Pause 的 Client Delegation，不因尚未开始或自然到期改变其未结束的生命周期事实；它阻止委托双方、绑定的 Client 和所选 Organization 被删除，只有显式结束后才释放这项约束。
+_Avoid_: Current Client Delegation, automatic delegation expiry, implicit cascade termination
+
+**Client Delegation Resolution Input**:
+Client Delegation Resolution 中以 username 或 Organization code 指向的存在且未删除领域对象；Pause 或 Disable 状态不影响识别。任一输入无法识别时解析整体失败，不返回部分结果；Client 固定来自已认证 Internal 调用方。
+_Avoid_: enabled-only resolution input, missing input as no delegation, caller-selected client
+
+**Client Delegation Resolution Integrity Violation**:
+同一观察时刻、Organization 与 Client 下，一个已识别 User 匹配多条 Current Client Delegation、匹配记录发生自委托，或引用缺失或已删除的用户、组织的数据异常；多条记录即使指向同一 Delegatee 仍属异常，双向直接委托不属于异常。解析必须整体失败，不得选择或折叠记录、把异常降级为 null 或返回部分结果。
 _Avoid_: delegation winner selection, duplicate delegation collapse, self-delegation, multi-delegate resolution
 
 **Legacy User Detail Read Model**:
@@ -440,7 +447,7 @@ User 账号处于 Disable 的可恢复停用状态；处于该状态时不能新
 _Avoid_: permanent user end, User Deletion, Employment End
 
 **User Deletion**:
-在用户已不存在任何 Open Employment，且不再作为委托人或受托人被 Open Privilege Delegation 引用后软删除其 IAM 账号；暂停任职和未结束委托仍会阻止删除，已结束的 Employment 与 Organization Responsibility Assignment 历史不会阻止并继续保留。它不替代 User Resignation，也不是普通账号禁用，不隐式结束委托；普通账号 Disable 不改变 Organization Responsibility Assignment。
+在用户已不存在任何 Open Employment，且不再作为委托人或受托人被 Open Client Delegation 引用后软删除其 IAM 账号；暂停任职和未结束委托仍会阻止删除，已结束的 Employment 与 Organization Responsibility Assignment 历史不会阻止并继续保留。它不替代 User Resignation，也不是普通账号禁用，不隐式结束委托；普通账号 Disable 不改变 Organization Responsibility Assignment。
 _Avoid_: User Resignation, account disable, employment cascade deletion
 
 **OIDC Claims Snapshot**:

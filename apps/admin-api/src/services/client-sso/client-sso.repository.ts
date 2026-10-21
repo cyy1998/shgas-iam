@@ -1,7 +1,8 @@
+import { PrivilegeDelegationStatus } from "@iam/contracts";
 import type { DbClient } from "@iam/db";
-import { clients, roles } from "@iam/db/schema";
+import { clientDelegations, clients, roles } from "@iam/db/schema";
 import { ClientSsoAdminDtoSchema, ClientSsoAdminRecordSchema } from "@iam/domain/client";
-import { and, eq, isNotNull } from "drizzle-orm";
+import { and, eq, isNotNull, ne } from "drizzle-orm";
 import type { ClientSsoStorageUpdate } from "./client-sso.type";
 
 const columns = {
@@ -51,6 +52,19 @@ export function createClientSsoRepository(db: DbClient) {
           .where(includeDeleted ? eq(clients.clientCode, clientCode) : where(clientCode))
           .for("update"),
       );
+    },
+    async hasOpenDelegations(clientId: number) {
+      const rows = await db
+        .select({ id: clientDelegations.id })
+        .from(clientDelegations)
+        .where(
+          and(
+            eq(clientDelegations.clientId, clientId),
+            ne(clientDelegations.status, PrivilegeDelegationStatus.Disable),
+          ),
+        )
+        .limit(1);
+      return rows.length > 0;
     },
     async hasUndeletedRoles(clientId: number) {
       const rows = await db

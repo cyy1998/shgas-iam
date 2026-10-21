@@ -4,7 +4,6 @@ import { createEmploymentRepository } from "@api/services/employment/employment.
 import { createOrganizationRepository } from "@api/services/organization/organization.repository";
 import { createPositionRepository } from "@api/services/position/position.repository";
 import { createPrivilegeRepository } from "@api/services/privilege/privilege.repository";
-import { createPrivilegeDelegationRepository } from "@api/services/privilege/privilegeDelegation.repository";
 import { createUserRepository } from "@api/services/user/user.repository";
 import type { DbClient } from "@iam/db";
 import { createUserProfileQueryRepository } from "@iam/user-profile-read-model/query/repository";
@@ -17,7 +16,6 @@ export function createApiRepositories(client: DbClient) {
     organization: createOrganizationRepository(client),
     position: createPositionRepository(client),
     privilege: createPrivilegeRepository(client),
-    privilegeDelegation: createPrivilegeDelegationRepository(client),
     user: createUserRepository(client),
     userProfile: createUserProfileQueryRepository(client),
   };

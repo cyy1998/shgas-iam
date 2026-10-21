@@ -58,7 +58,8 @@
     "postgres": "^3.4.9",
     "sm-crypto": "^0.4.0",
     "ts-enum-util": "^4.1.0",
-    "zod": "^4.4.3"
+    "zod": "^4.4.3",
+    "@iam/delegation": "workspace:*"
   },
   "devDependencies": {
     "@playwright/test": "^1.61.1",

@@ -1,54 +1,6 @@
 import type { AuditLogInput, InternalAuditActor } from "@api/services/audit/audit.context";
 import { maskMobileForAudit } from "@iam/domain/audit";
 
-export function buildInternalDelegationUpdateAudit(
-  actor: InternalAuditActor,
-  id: number,
-  patch: Record<string, unknown>,
-  changed?: boolean,
-): AuditLogInput {
-  return {
-    action: "internal.delegation.update",
-    outcome: "success",
-    ...actor,
-    targetType: "delegation",
-    targetId: id,
-    details: {
-      patch,
-      ...(changed === undefined ? {} : { changed }),
-    },
-  };
-}
-
-export function buildInternalDelegationCreateAudit(
-  actor: InternalAuditActor,
-  input: {
-    id: number;
-    delegatorUsername: string;
-    delegateeUsername: string;
-    orgCode: string;
-    privilegeCodes: string[];
-    startTime: Date;
-    endTime: Date;
-  },
-): AuditLogInput {
-  return {
-    action: "internal.delegation.create",
-    outcome: "success",
-    ...actor,
-    targetType: "delegation",
-    targetId: input.id,
-    details: {
-      delegatorUsername: input.delegatorUsername,
-      delegateeUsername: input.delegateeUsername,
-      orgCode: input.orgCode,
-      privilegeCodes: input.privilegeCodes,
-      startTime: input.startTime,
-      endTime: input.endTime,
-    },
-  };
-}
-
 export function buildInternalPurveyorRegisterAudit(
   actor: InternalAuditActor,
   input: { orgCode: string; orgName: string; parentOrg: string | null; orgType: string },

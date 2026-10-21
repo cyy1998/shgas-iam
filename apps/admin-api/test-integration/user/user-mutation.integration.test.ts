@@ -35,12 +35,11 @@ import {
 import { extractPostgresError } from "@iam/db/postgres-error";
 import {
   auditLogs,
-  delegationDetails,
+  clientDelegations,
+  clients,
   employments,
   organizations,
   positions,
-  privilegeDelegations,
-  privileges,
   subjectAccessTransitions,
   userProfileDirty,
   users,
@@ -59,9 +58,8 @@ beforeAll(async () => {
 });
 beforeEach(async () => {
   await harness.reset();
-  await harness.db.delete(delegationDetails);
-  await harness.db.delete(privilegeDelegations);
-  await harness.db.delete(privileges);
+  await harness.db.delete(clientDelegations);
+  await harness.db.delete(clients);
 });
 afterAll(async () => {
   await harness?.close();
@@ -203,7 +201,6 @@ async function seedDelegation(
   side: "delegator" | "delegatee",
   status: PrivilegeDelegationStatus,
   period: "current" | "future" | "past",
-  isDelete = false,
 ) {
   const [other] = await harness.db.insert(users).values({ username: "other", name: "Other" }).returning();
   const [organization] = await harness.db
@@ -216,9 +213,9 @@ async function seedDelegation(
       orgType: OrganizationType.Company,
     })
     .returning();
-  const [privilege] = await harness.db
-    .insert(privileges)
-    .values({ privilegeCode: "read", privilegeName: "Read" })
+  const [client] = await harness.db
+    .insert(clients)
+    .values({ clientCode: "delegation-test", clientName: "Delegation", clientSecret: "test", extAttributes: {} })
     .returning();
   const periods = {
     current: ["2000-01-01", "2099-01-01"],
@@ -226,18 +223,17 @@ async function seedDelegation(
     past: ["2000-01-01", "2001-01-01"],
   } as const;
   const [delegation] = await harness.db
-    .insert(privilegeDelegations)
+    .insert(clientDelegations)
     .values({
       delegatorUserId: side === "delegator" ? userId : other!.id,
       delegateeUserId: side === "delegatee" ? userId : other!.id,
       organizationScopeId: organization!.id,
       status,
-      isDelete,
+      clientId: client!.id,
       startTime: new Date(periods[period][0]),
       endTime: new Date(periods[period][1]),
     })
     .returning();
-  await harness.db.insert(delegationDetails).values({ delegationId: delegation!.id, privilegeId: privilege!.id });
   return delegation!;
 }
 
@@ -252,8 +248,7 @@ async function facts() {
 async function deletionFacts() {
   return {
     ...(await facts()),
-    delegations: await harness.db.select().from(privilegeDelegations).orderBy(privilegeDelegations.id),
-    delegationDetails: await harness.db.select().from(delegationDetails).orderBy(delegationDetails.delegationId),
+    delegations: await harness.db.select().from(clientDelegations).orderBy(clientDelegations.id),
   };
 }
 
@@ -443,7 +438,6 @@ describe("User lifecycle mutations through production PostgreSQL UnitOfWork", ()
     const after = await deletionFacts();
     expect(result).toEqual({ changed: true, result: null });
     expect(after.delegations).toEqual(before.delegations);
-    expect(after.delegationDetails).toEqual(before.delegationDetails);
   });
 
   test.each(["REST", "tRPC"])(
@@ -476,7 +470,7 @@ describe("User lifecycle mutations through production PostgreSQL UnitOfWork", ()
             });
       const body = await response.json();
       expect(response.status).toBe(409);
-      const message = "该用户存在未结束的权限委托，无法删除；请先通过 Internal 接口结束相关委托";
+      const message = "该用户存在未结束的委托，无法删除；请先结束相关委托";
       expect(body).toMatchObject(
         protocol === "REST"
           ? { code: "USER.HAS_OPEN_PRIVILEGE_DELEGATION", message }
@@ -519,15 +513,11 @@ describe("User lifecycle mutations through production PostgreSQL UnitOfWork", ()
       expect(revokeUserSessions).not.toHaveBeenCalled();
     });
 
-    test.each([
-      [PrivilegeDelegationStatus.Disable, false],
-      [PrivilegeDelegationStatus.Enable, true],
-      [PrivilegeDelegationStatus.Pause, true],
-    ] as const)(
-      "status %s with isDelete=%s permits deletion and preserves delegation history",
-      async (status, isDelete) => {
+    test.each([[PrivilegeDelegationStatus.Disable, false]] as const)(
+      "ended status %s permits deletion and preserves delegation history",
+      async (status) => {
         const user = await seedUser();
-        await seedDelegation(user.id, side, status, "current", isDelete);
+        await seedDelegation(user.id, side, status, "current");
         const { service, barrier, revokeUserSessions } = createCommand(
           undefined,
           undefined,
@@ -540,7 +530,6 @@ describe("User lifecycle mutations through production PostgreSQL UnitOfWork", ()
         expect(result).toEqual({ changed: true, result: null });
         expect(after.users[0]).toMatchObject({ id: user.id, isDelete: true });
         expect(after.delegations).toEqual(before.delegations);
-        expect(after.delegationDetails).toEqual(before.delegationDetails);
         expect(after.audits).toMatchObject([{ action: "admin.user.delete", details: { changed: true } }]);
         expect(after.dirty).toMatchObject([{ userId: user.id, dirtyVersion: "1" }]);
         expect(access.state).toBe("disabled");
@@ -564,6 +553,7 @@ describe("User lifecycle mutations through production PostgreSQL UnitOfWork", ()
               "run",
               "test-integration/delegation/end-delegation.fixture.ts",
               String(delegation.id),
+              String(delegation.clientId),
             ],
             cwd: fileURLToPath(new URL("../../../api/", import.meta.url)),
             env: { ...process.env, IAM_API_TEST_DATABASE_URL: harness.commandDatabaseUrl },
@@ -580,7 +570,6 @@ describe("User lifecycle mutations through production PostgreSQL UnitOfWork", ()
       expect(result).toEqual({ changed: true, result: null });
       expect(after.users[0]).toMatchObject({ id: user.id, isDelete: true });
       expect(after.delegations).toEqual(ended.delegations);
-      expect(after.delegationDetails).toEqual(ended.delegationDetails);
       expect(after.audits.map((audit) => audit.action)).toEqual(["internal.delegation.update", "admin.user.delete"]);
     }, 25_000);
   });

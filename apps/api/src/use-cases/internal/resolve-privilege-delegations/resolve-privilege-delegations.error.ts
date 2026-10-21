@@ -6,8 +6,8 @@ import type {
   PrivilegeDelegationResolutionMissingInputs,
 } from "./resolve-privilege-delegations.type";
 
-export const PRIVILEGE_DELEGATION_RESOLUTION_INPUT_NOT_FOUND_MESSAGE = "权限委托解析输入无法识别";
-export const PRIVILEGE_DELEGATION_RESOLUTION_UNAVAILABLE_MESSAGE = "权限委托解析暂时不可用";
+export const PRIVILEGE_DELEGATION_RESOLUTION_INPUT_NOT_FOUND_MESSAGE = "委托解析输入无法识别";
+export const PRIVILEGE_DELEGATION_RESOLUTION_UNAVAILABLE_MESSAGE = "委托解析暂时不可用";
 
 export type PrivilegeDelegationResolutionFailureDiagnostic =
   | {
@@ -18,7 +18,7 @@ export type PrivilegeDelegationResolutionFailureDiagnostic =
       failureCategory: "persistence-failure" | "statement-timeout" | "handler-timeout";
       context: {
         orgCode: string;
-        privilegeCode: string;
+        clientId: number;
         usernameCount: number;
       };
     };

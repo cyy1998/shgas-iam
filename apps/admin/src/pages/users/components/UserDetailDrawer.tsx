@@ -149,7 +149,8 @@ function UserDetailDrawerContent({ open, username, onClose, onEdit, onChanged }:
     if (!detail) return;
     Modal.confirm({
       title: `删除用户 ${detail.name}？`,
-      content: "软删除后用户将不再可见。存在开放任职或未结束的权限委托时无法删除，请先处理相关关系。",
+      content:
+        "软删除后用户将不再可见。存在开放任职或未结束的应用委托时无法删除，请先处理任职或在委托管理中结束相关委托。",
       okType: "danger",
       onOk: async () => {
         try {

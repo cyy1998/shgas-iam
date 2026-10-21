@@ -1,10 +1,4 @@
 import {
-  PrivilegeDelegationCreateDtoSchema,
-  PrivilegeDelegationDetailDtoSchema,
-  PrivilegeDelegationQueryDtoSchema,
-  PrivilegeDelegationUpdateDtoSchema,
-} from "@api/services/privilege/privilegeDelegation.schema";
-import {
   PRIVILEGE_DELEGATION_RESOLUTION_INPUT_NOT_FOUND_MESSAGE,
   PRIVILEGE_DELEGATION_RESOLUTION_UNAVAILABLE_MESSAGE,
 } from "@api/use-cases/internal/resolve-privilege-delegations/resolve-privilege-delegations.error";
@@ -15,28 +9,25 @@ import jsonContent from "@iam/api-core/core/openapi/helpers/json-content";
 import jsonContentRequired from "@iam/api-core/core/openapi/helpers/json-content-required";
 import createSuccessResponseSchema from "@iam/api-core/core/openapi/schemas/create-success-schema";
 import { ApiErrorCode } from "@iam/contracts";
-import { UserSchema } from "@iam/domain/user";
+import {
+  DelegationCreateSchema,
+  DelegationDetailSchema,
+  DelegationResolveSchema,
+  DelegationSearchSchema,
+  DelegationUpdateSchema,
+} from "@iam/delegation/wire";
 
 const tags = ["Internal/Delegation"];
 
-const PrivilegeDelegationResolutionRequestSchema = z
-  .object({
-    usernames: z
-      .array(UserSchema.shape.username.min(1))
-      .min(1)
-      .max(100)
-      .refine((usernames) => new Set(usernames).size === usernames.length, {
-        message: "usernames must not contain exact duplicates",
-      })
-      .openapi({
-        example: ["alice", "bob"],
-        uniqueItems: true,
-      }),
-    orgCode: z.string().min(1).openapi({ example: "ORG" }),
-    privilegeCode: z.string().min(1).openapi({ example: "document:read" }),
-  })
-  .strict()
-  .openapi("PrivilegeDelegationResolutionRequest");
+const PrivilegeDelegationResolutionRequestSchema = DelegationResolveSchema.openapi("DelegationResolutionRequest");
+const PrivilegeDelegationCreateDtoSchema = DelegationCreateSchema.omit({ clientId: true })
+  .required({ delegatorUsername: true })
+  .openapi("DelegationCreateDto");
+const PrivilegeDelegationUpdateDtoSchema = DelegationUpdateSchema.openapi("DelegationUpdateDto");
+const PrivilegeDelegationQueryDtoSchema = DelegationSearchSchema.omit({ clientIds: true }).openapi(
+  "DelegationQueryDto",
+);
+const PrivilegeDelegationDetailDtoSchema = DelegationDetailSchema.openapi("DelegationDetailDto");
 
 const PrivilegeDelegationResolutionResultSchema = z
   .object({
@@ -53,7 +44,6 @@ const PrivilegeDelegationResolutionInputNotFoundResponseSchema = z
       .object({
         usernames: z.array(z.string()),
         orgCodes: z.array(z.string()),
-        privilegeCodes: z.array(z.string()),
       })
       .strict(),
     message: z.string().openapi({
@@ -79,7 +69,7 @@ export const privilegeDelegationsResolve = createRoute({
   path: "/resolve",
   tags,
   request: {
-    body: jsonContentRequired(PrivilegeDelegationResolutionRequestSchema, "当前直接权限委托解析参数"),
+    body: jsonContentRequired(PrivilegeDelegationResolutionRequestSchema, "当前直接应用委托解析参数"),
   },
   responses: {
     ...commonErrorResponses,
@@ -103,13 +93,13 @@ export const privilegeDelegationsQuery = createRoute({
   path: "/search",
   tags,
   request: {
-    body: jsonContentRequired(PrivilegeDelegationQueryDtoSchema, "权限代理搜索参数"),
+    body: jsonContentRequired(PrivilegeDelegationQueryDtoSchema, "应用代理搜索参数"),
   },
   responses: {
     ...commonErrorResponses,
     [HttpStatusCodes.OK]: jsonContent(
       createSuccessResponseSchema(z.array(PrivilegeDelegationDetailDtoSchema)),
-      "权限Delegation列表",
+      "应用Delegation列表",
     ),
   },
 });
@@ -122,11 +112,11 @@ export const privilegeDelegationUpdate = createRoute({
     params: z.object({
       id: z.coerce.number().int().openapi({ example: 1 }),
     }),
-    body: jsonContentRequired(PrivilegeDelegationUpdateDtoSchema, "权限Delegation更新参数"),
+    body: jsonContentRequired(PrivilegeDelegationUpdateDtoSchema, "应用Delegation更新参数"),
   },
   responses: {
     ...commonErrorResponses,
-    [HttpStatusCodes.OK]: jsonContent(createSuccessResponseSchema(z.boolean()), "权限Delegation更新结果"),
+    [HttpStatusCodes.OK]: jsonContent(createSuccessResponseSchema(z.boolean()), "应用Delegation更新结果"),
   },
 });
 
@@ -135,13 +125,13 @@ export const privilegeDelegationSet = createRoute({
   path: "/",
   tags,
   request: {
-    body: jsonContentRequired(PrivilegeDelegationCreateDtoSchema, "权限Delegation设置参数"),
+    body: jsonContentRequired(PrivilegeDelegationCreateDtoSchema, "应用Delegation设置参数"),
   },
   responses: {
     ...commonErrorResponses,
     [HttpStatusCodes.OK]: jsonContent(
       createSuccessResponseSchema(PrivilegeDelegationDetailDtoSchema),
-      "权限Delegation设置结果",
+      "应用Delegation设置结果",
     ),
   },
 });

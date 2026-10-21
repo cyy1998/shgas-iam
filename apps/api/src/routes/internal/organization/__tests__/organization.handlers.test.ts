@@ -4,6 +4,7 @@ import { OrganizationType } from "@iam/contracts";
 
 function createContext() {
   return {
+    get: mock((name: string) => (name === "clientCode" ? "portal" : undefined)),
     req: {
       valid: mock((target: string) => {
         expect(target).toBe("json");
@@ -13,7 +14,7 @@ function createContext() {
           parentOrg: "GY",
         };
       }),
-      header: mock((name: string) => (name === "Client" ? "portal" : undefined)),
+      header: mock((name: string) => (name === "Client" ? "forged-client" : undefined)),
     },
     json: mock((payload: unknown) => payload),
   };
@@ -64,6 +65,9 @@ describe("createOrganizationHandlers", () => {
         parentCode: "GY",
       }),
     );
-    expect(deps.auditLogWriter.recordAuditLogFromContext).toHaveBeenCalled();
+    expect(deps.auditLogWriter.recordAuditLogFromContext).toHaveBeenCalledWith(
+      context,
+      expect.objectContaining({ actorType: "client", actorClientCode: "portal", actorSystemKey: null }),
+    );
   });
 });

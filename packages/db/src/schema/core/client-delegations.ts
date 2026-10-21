@@ -4,34 +4,34 @@ import { createInsertSchema, createSelectSchema, createUpdateSchema } from "driz
 import { z } from "zod";
 import { baseColumns } from "../_shard/base-columns";
 
-export const privilegeDelegations = snakeCase.table(
-  "privilege_delegation",
+export const clientDelegations = snakeCase.table(
+  "client_delegation",
   {
     id: baseColumns.id,
     delegatorUserId: integer().notNull(),
     delegateeUserId: integer().notNull(),
+    clientId: integer().notNull(),
     organizationScopeId: integer().notNull(),
     startTime: timestamp().notNull(),
     endTime: timestamp().notNull(),
     status: integer().$type<PrivilegeDelegationStatus>().notNull().default(PrivilegeDelegationStatus.Enable),
     description: varchar({ length: 500 }),
-    isDelete: baseColumns.isDelete,
     createTime: baseColumns.createTime,
     updateTime: baseColumns.updateTime,
   },
   (table) => [
-    index("idx_delegationTo").on(table.delegatorUserId, table.delegateeUserId),
-    index("idx_delegationFrom").on(table.delegateeUserId, table.delegatorUserId),
-    index("idx_organizationScopeId").on(table.organizationScopeId),
+    index("client_delegation_delegator_client_idx").on(table.delegatorUserId, table.clientId),
+    index("client_delegation_delegatee_idx").on(table.delegateeUserId),
+    index("client_delegation_client_idx").on(table.clientId),
+    index("client_delegation_organization_idx").on(table.organizationScopeId),
   ],
 );
-
-export const selectPrivilegeDelegationSchema = createSelectSchema(privilegeDelegations, {
+export const selectClientDelegationSchema = createSelectSchema(clientDelegations, {
   status: () => z.enum(PrivilegeDelegationStatus),
 });
-export const insertPrivilegeDelegationSchema = createInsertSchema(privilegeDelegations, {
+export const insertClientDelegationSchema = createInsertSchema(clientDelegations, {
   status: () => z.enum(PrivilegeDelegationStatus),
-}).omit({ id: true, createTime: true, updateTime: true, isDelete: true });
-export const updatePrivilegeDelegationSchema = createUpdateSchema(privilegeDelegations, {
+}).omit({ id: true, createTime: true, updateTime: true });
+export const updateClientDelegationSchema = createUpdateSchema(clientDelegations, {
   status: () => z.enum(PrivilegeDelegationStatus),
-}).omit({ id: true, createTime: true, updateTime: true, isDelete: true });
+}).pick({ startTime: true, endTime: true, status: true, description: true });

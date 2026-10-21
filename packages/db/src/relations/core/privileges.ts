@@ -7,10 +7,6 @@ export function privilegesRelations(r: RelationsHelper) {
         from: r.privileges.id,
         to: r.rolePrivileges.privilegeId,
       }),
-      delegations: r.many.delegationDetails({
-        from: r.privileges.id,
-        to: r.delegationDetails.privilegeId,
-      }),
     },
   } satisfies RelationsConfig;
 }

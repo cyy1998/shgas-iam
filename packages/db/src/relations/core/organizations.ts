@@ -29,9 +29,9 @@ export function organizationsRelations(r: RelationsHelper) {
         to: r.organizationClosures.ancestorId,
         alias: "org_descendant",
       }),
-      privilegeDelegations: r.many.privilegeDelegations({
+      clientDelegations: r.many.clientDelegations({
         from: r.organizations.id,
-        to: r.privilegeDelegations.organizationScopeId,
+        to: r.clientDelegations.organizationScopeId,
       }),
       responsibilityAssignments: r.many.organizationResponsibilityAssignments({
         from: r.organizations.id,

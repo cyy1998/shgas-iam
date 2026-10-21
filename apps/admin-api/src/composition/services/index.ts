@@ -1,4 +1,6 @@
+import { createAuditRepository } from "@admin-api/services/audit/audit.repository";
 import type { AdminAuditService } from "@admin-api/services/audit/audit.service";
+import { createAdminAuditService } from "@admin-api/services/audit/audit.service";
 import { createClientService } from "@admin-api/services/client/client.service";
 import { createEmploymentService } from "@admin-api/services/employment/employment.service";
 import { createOrganizationService } from "@admin-api/services/organization/organization.service";
@@ -7,6 +9,7 @@ import { createPositionService } from "@admin-api/services/position/position.ser
 import { createRoleService } from "@admin-api/services/role/role.service";
 import { mapUnitOfWork } from "@iam/api-core/uow";
 import type { DbClient } from "@iam/db";
+import { createDelegationService } from "@iam/delegation";
 import type { RoleAssignmentResolver } from "@iam/role-assignment-resolution";
 import type { AdminApiRepositories } from "../repositories";
 import { createRootSecurityComposition } from "../root-security";
@@ -131,6 +134,12 @@ export function createAdminApiServices(options: CreateAdminApiServicesOptions) {
   });
 
   return {
+    delegation: createDelegationService({
+      db: options.db,
+      recordAudit: async (tx, event) => {
+        await createAdminAuditService({ auditRepository: createAuditRepository(tx) }).recordAuditLog(event);
+      },
+    }),
     client: clientService,
     clientSso: clientSso.management,
     employment: employmentService,

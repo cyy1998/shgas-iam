@@ -7,15 +7,15 @@ import type {
   OrganizationSelectorQueryDto,
   OrganizationUpdateDto,
 } from "@admin-api/services/organization/organization.type";
-import { getChildOrganizationLevel, OrganizationStatus } from "@iam/contracts";
+import { getChildOrganizationLevel, OrganizationStatus, PrivilegeDelegationStatus } from "@iam/contracts";
 import type { DbClient } from "@iam/db";
 import { extractPostgresError } from "@iam/db/postgres-error";
 import { compactUpdate, firstRow, ilikeContainsIf, inArrayIf } from "@iam/db/query-utils";
 import type { Organization } from "@iam/db/schema";
-import { employments, organizationClosures, organizations } from "@iam/db/schema";
+import { clientDelegations, employments, organizationClosures, organizations } from "@iam/db/schema";
 import { OPEN_EMPLOYMENT_STATUSES } from "@iam/domain/employment";
 import { OrganizationCodeExistsError } from "@iam/domain/organization";
-import { and, count, eq, exists, gt, inArray, or, sql } from "drizzle-orm";
+import { and, count, eq, exists, gt, inArray, ne, or, sql } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 
 export function createOrganizationRepository(db: DbClient) {
@@ -355,6 +355,19 @@ export function createOrganizationRepository(db: DbClient) {
           .where(and(eq(organizations.orgCode, orgCode), eq(organizations.isDelete, false)))
           .returning(),
       );
+    },
+    async hasOpenDelegationsByOrganizationId(organizationId: number) {
+      const rows = await db
+        .select({ id: clientDelegations.id })
+        .from(clientDelegations)
+        .where(
+          and(
+            eq(clientDelegations.organizationScopeId, organizationId),
+            ne(clientDelegations.status, PrivilegeDelegationStatus.Disable),
+          ),
+        )
+        .limit(1);
+      return rows.length > 0;
     },
     async countActiveChildrenByOrgCode(orgCode: string) {
       const parent = alias(organizations, "child_count_parent");

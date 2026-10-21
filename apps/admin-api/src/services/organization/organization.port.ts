@@ -18,6 +18,7 @@ export interface AdminOrganizationTransactionStorePort {
   getOrganizationByCodeForAdmin: (orgCode: string) => Promise<AdminOrganizationRecord | null>;
   setOrganization: (input: OrganizationCreateDto, parent: Organization | null) => Promise<AdminOrganizationRecord>;
   updateOrganizationByCode: (orgCode: string, input: OrganizationUpdateDto) => Promise<Organization | null>;
+  hasOpenDelegationsByOrganizationId: (organizationId: number) => Promise<boolean>;
   countActiveChildrenByOrgCode: (orgCode: string) => Promise<number>;
   countOpenEmploymentsByOrgCode: (orgCode: string) => Promise<number>;
   softDeleteOrganizationByCode: (orgCode: string) => Promise<Organization | null>;

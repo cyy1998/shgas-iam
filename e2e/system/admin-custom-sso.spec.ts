@@ -31,6 +31,8 @@ test("Admin prepares Custom SSO in Maintenance and existing access resumes after
   const customSsoClientCode = requireEnvironment("IAM_E2E_CUSTOM_SSO_CLIENT_CODE");
   const customSsoRedirectUri = requireEnvironment("IAM_E2E_CUSTOM_SSO_REDIRECT_URI");
   const internalApiKey = requireEnvironment("IAM_E2E_INTERNAL_API_KEY");
+  const internalClientCode = requireEnvironment("IAM_E2E_INTERNAL_CLIENT_CODE");
+  const adminClientCode = requireEnvironment("IAM_E2E_ADMIN_CLIENT_CODE");
   const adminPrivilegeCode = requireEnvironment("IAM_E2E_ADMIN_PRIVILEGE_CODE");
   const adminRoleCode = requireEnvironment("IAM_E2E_ADMIN_ROLE_CODE");
   const hrAdminRoleCode = requireEnvironment("IAM_E2E_HR_ADMIN_ROLE_CODE");
@@ -170,8 +172,12 @@ test("Admin prepares Custom SSO in Maintenance and existing access resumes after
     }),
   ).toBe(true);
   await expectUserSearchDelegationResolution({
-    adminPrivilegeCode,
+    adminPassword,
+    adminClientCode,
     adminUsername,
+    hrAdminUsername,
+    internalClientCode,
+    page,
     delegateeUsername,
     internalApiKey,
     organizationCode,

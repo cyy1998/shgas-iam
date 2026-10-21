@@ -3,7 +3,6 @@ import { createInternalMiddlewares } from "@api/routes/internal/_middleware";
 import { createDelegationHandlers } from "@api/routes/internal/delegation/delegation.handlers";
 import { createDelegationRoute } from "@api/routes/internal/delegation/delegation.index";
 import type { PrivilegeDelegationResolutionPort } from "@api/use-cases/internal/resolve-privilege-delegations/resolve-privilege-delegations.port";
-import type { ResolvePrivilegeDelegationsInput } from "@api/use-cases/internal/resolve-privilege-delegations/resolve-privilege-delegations.type";
 import { createResolvePrivilegeDelegationsUseCase } from "@api/use-cases/internal/resolve-privilege-delegations/resolve-privilege-delegations.use-case";
 import createApp from "@iam/api-core/core/create-app";
 import { createInternalAuthenticationHandler } from "@iam/api-core/middlewares";
@@ -31,7 +30,7 @@ const unavailableResolutionResponse = {
   body: {
     code: "PRIVILEGE.DELEGATION_RESOLUTION_UNAVAILABLE",
     data: null,
-    message: "权限委托解析暂时不可用",
+    message: "委托解析暂时不可用",
   },
 } as const;
 
@@ -48,7 +47,7 @@ function createResolutionApp(
   });
   const logger = options.logger ?? pino({ enabled: false });
   const handlers = createDelegationHandlers({
-    privilegeDelegationService: {} as never,
+    delegationService: {} as never,
     resolvePrivilegeDelegations: resolver,
   });
   const internalAuthenticationHandler = createInternalAuthenticationHandler({
@@ -100,8 +99,7 @@ test("rejects malformed and over-budget request bodies as validation failures", 
   const validInput = {
     usernames: ["alice"],
     orgCode: "ORG",
-    privilegeCode: "document:read",
-  } satisfies ResolvePrivilegeDelegationsInput;
+  };
   const invalidInputs: unknown[] = [
     {},
     { ...validInput, unexpected: true },
@@ -129,6 +127,27 @@ test("rejects malformed and over-budget request bodies as validation failures", 
       message: "请求参数不合法",
     });
   }
+});
+
+test("resolves the authenticated Client without accepting a target Client or privilege", async () => {
+  const queries: unknown[] = [];
+  const app = createResolutionApp({
+    resolution: {
+      async resolveCurrent(query) {
+        queries.push(query);
+        return {
+          results: [{ username: "alice", delegateeUsername: "bob" }],
+          missingInputs: { usernames: [], orgCodes: [] },
+          integrityViolations: [],
+        };
+      },
+    },
+  });
+  const result = await requestResolution(app, { usernames: ["alice"], orgCode: "ORG" });
+  expect(result.status).toBe(200);
+  expect(queries).toEqual([{ usernames: ["alice"], orgCode: "ORG", clientId: 1, observedAt }]);
+  const old = await requestResolution(app, { usernames: ["alice"], orgCode: "ORG", privilegeCode: "read" });
+  expect(old.status).toBe(422);
 });
 
 test("maps persistence, statement, and handler timeouts to one sanitized contract with structured diagnostics", async () => {
@@ -159,7 +178,6 @@ test("maps persistence, statement, and handler timeouts to one sanitized contrac
       {
         usernames: ["alice"],
         orgCode: "ORG",
-        privilegeCode: "document:read",
       },
     );
 
@@ -172,8 +190,8 @@ test("maps persistence, statement, and handler timeouts to one sanitized contrac
         diagnostic: {
           failureCategory: failure.failureCategory,
           context: {
+            clientId: 1,
             orgCode: "ORG",
-            privilegeCode: "document:read",
             usernameCount: 1,
           },
         },
@@ -192,7 +210,6 @@ test("maps persistence, statement, and handler timeouts to one sanitized contrac
     {
       usernames: ["alice"],
       orgCode: "ORG",
-      privilegeCode: "document:read",
     },
   );
 
@@ -204,8 +221,8 @@ test("maps persistence, statement, and handler timeouts to one sanitized contrac
       diagnostic: {
         failureCategory: "handler-timeout",
         context: {
+          clientId: 1,
           orgCode: "ORG",
-          privilegeCode: "document:read",
           usernameCount: 1,
         },
       },
@@ -250,20 +267,18 @@ test("publishes the strict success contract in the Internal OpenAPI document", a
   expect(document.paths["/internal/delegations/resolve"]?.post?.responses).toHaveProperty("404");
   expect(document.paths["/internal/delegations/resolve"]?.post?.responses).toHaveProperty("422");
   expect(document.paths["/internal/delegations/resolve"]?.post?.responses).toHaveProperty("503");
-  expect(document.components.schemas.PrivilegeDelegationResolutionRequest).toMatchObject({
+  expect(document.components.schemas.DelegationResolutionRequest).toMatchObject({
     type: "object",
-    required: ["usernames", "orgCode", "privilegeCode"],
+    required: ["usernames", "orgCode"],
     additionalProperties: false,
     properties: {
       usernames: {
         type: "array",
         minItems: 1,
         maxItems: 100,
-        uniqueItems: true,
         items: { type: "string", minLength: 1, maxLength: 64 },
       },
       orgCode: { type: "string", minLength: 1 },
-      privilegeCode: { type: "string", minLength: 1 },
     },
   });
   expect(document.components.schemas.PrivilegeDelegationResolutionInputNotFoundResponse).toMatchObject({
@@ -277,7 +292,7 @@ test("publishes the strict success contract in the Internal OpenAPI document", a
       },
       data: {
         type: "object",
-        required: ["usernames", "orgCodes", "privilegeCodes"],
+        required: ["usernames", "orgCodes"],
         additionalProperties: false,
       },
     },

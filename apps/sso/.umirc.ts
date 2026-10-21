@@ -4,6 +4,7 @@ import { ssoTheme } from "./src/theme";
 
 export default defineConfig({
   alias: {
+    "@iam/delegation/wire": resolve(__dirname, "../../packages/delegation/src/wire.ts"),
     "@sso": resolve(__dirname, "src"),
     "@iam/contracts": resolve(__dirname, "../../packages/contracts/src"),
     "~sso": __dirname,

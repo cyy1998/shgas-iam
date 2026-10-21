@@ -1,6 +1,8 @@
-import { EmploymentStatus, PrivilegeDelegationStatus, UserStatus } from "@iam/contracts";
-import type { APIRequestContext } from "@playwright/test";
+import { EmploymentStatus, UserStatus } from "@iam/contracts";
+import type { APIRequestContext, Page } from "@playwright/test";
 import { expect } from "@playwright/test";
+
+import { expectClientDelegationJourney } from "./delegation-journey.ts";
 
 const publicationTimeoutMs = 45_000;
 
@@ -188,12 +190,16 @@ export async function expectInternalUserProfileSearchMatrix(input: InternalSearc
 }
 
 export async function expectUserSearchDelegationResolution(input: {
-  adminPrivilegeCode: string;
+  adminPassword: string;
   adminUsername: string;
+  adminClientCode: string;
   delegateeUsername: string;
+  hrAdminUsername: string;
   internalApiKey: string;
+  internalClientCode: string;
   organizationCode: string;
   origin: string;
+  page: Page;
   request: APIRequestContext;
 }) {
   const profiles = await searchDsl(input, {
@@ -202,62 +208,7 @@ export async function expectUserSearchDelegationResolution(input: {
     value: input.adminUsername,
   });
   expectUserProfileBases(profiles, [input.adminUsername]);
-  const usernames = readUsernames(profiles);
-
-  const now = Date.now();
-  const createDelegationResponse = await input.request.post(`${input.origin}/api/iam/internal/delegations`, {
-    headers: { apikey: input.internalApiKey },
-    data: {
-      delegateeUsername: input.delegateeUsername,
-      delegatorUsername: input.adminUsername,
-      description: "Full-system live delegation evidence",
-      endTime: new Date(now + 60 * 60 * 1000).toISOString(),
-      orgCode: input.organizationCode,
-      privilegeCodes: [input.adminPrivilegeCode],
-      startTime: new Date(now - 60 * 1000).toISOString(),
-    },
-  });
-  expect(createDelegationResponse.status()).toBe(200);
-  const createdDelegation = readRecord(readData(await createDelegationResponse.json()));
-  expect(createdDelegation).toMatchObject({
-    delegateeUsername: input.delegateeUsername,
-    delegatorUsername: input.adminUsername,
-  });
-  const delegationId = createdDelegation?.id;
-  expect(delegationId).toEqual(expect.any(Number));
-
-  const queryLiveDelegations = async () => {
-    const response = await input.request.post(`${input.origin}/api/iam/internal/delegations/resolve`, {
-      headers: { apikey: input.internalApiKey },
-      data: {
-        usernames,
-        orgCode: input.organizationCode,
-        privilegeCode: input.adminPrivilegeCode,
-      },
-    });
-    expect(response.status()).toBe(200);
-    return readRecords(readData(await response.json()));
-  };
-
-  const activeDelegations = await queryLiveDelegations();
-  expect(activeDelegations).toEqual([
-    {
-      delegateeUsername: input.delegateeUsername,
-      username: input.adminUsername,
-    },
-  ]);
-
-  const pauseDelegationResponse = await input.request.patch(
-    `${input.origin}/api/iam/internal/delegations/${String(delegationId)}`,
-    {
-      headers: { apikey: input.internalApiKey },
-      data: { status: PrivilegeDelegationStatus.Pause },
-    },
-  );
-  expect(pauseDelegationResponse.status()).toBe(200);
-
-  const pausedDelegations = await queryLiveDelegations();
-  expect(pausedDelegations).toEqual([{ delegateeUsername: null, username: input.adminUsername }]);
+  await expectClientDelegationJourney(input);
 }
 
 export async function waitForEmploymentSearchVisibility(input: {

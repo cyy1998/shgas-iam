@@ -52,6 +52,7 @@ export async function createAdminApiPostgresTestHarness(): Promise<AdminApiPostg
             organization_search_dirty,
             organization_search_document,
             organization_responsibility_assignment,
+            client_delegation,
             audit_log,
             user_profile_dirty,
             subject_access_transition,

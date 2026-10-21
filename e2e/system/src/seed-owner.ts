@@ -83,7 +83,22 @@ export function createProductionE2EScenarioOwner(input: CreateProductionE2EScena
         clientName: `E2E IAM Gateway ${scenario.runId}`,
         clientSecret: scenario.gatewayApiKey,
         status: ClientStatus.Enable,
+        url: `${scenario.canonicalOrigin}/portal`,
         extAttributes: {},
+        ssoEnabled: true,
+        ssoConfig: {
+          protocol: ClientSsoProtocol.CustomSso,
+          callbackType: ClientSsoCallbackType.Managed,
+          validRedirectUrls: entryOrigins.map((origin) => `${origin}/portal/*`),
+          subjectClaims: [
+            SubjectClaim.SubjectIdentifier,
+            SubjectClaim.ProfileUsername,
+            SubjectClaim.ProfileName,
+            SubjectClaim.ProfilePhone,
+            SubjectClaim.ProfileEmployments,
+          ],
+        },
+        ssoSecret: null,
       });
       const [adminClient] = await tx
         .insert(clients)
@@ -1183,8 +1198,22 @@ export function createProductionE2EScenarioOwner(input: CreateProductionE2EScena
       },
       gatewayClient: {
         active: gatewayClient?.status === ClientStatus.Enable && !gatewayClient.isDelete,
+        ssoEnabled: gatewayClient?.ssoEnabled ?? false,
         clientCode: gatewayClient?.clientCode ?? "",
         credentialMatches: gatewayClient?.clientSecret === createE2EGatewayApiKey(references.runId),
+        ssoProtocol: gatewayClient?.ssoConfig?.protocol ?? null,
+        callbackType:
+          gatewayClient?.ssoConfig?.protocol === ClientSsoProtocol.CustomSso
+            ? gatewayClient.ssoConfig.callbackType
+            : null,
+        redirectUris:
+          gatewayClient?.ssoConfig?.protocol === ClientSsoProtocol.CustomSso
+            ? gatewayClient.ssoConfig.validRedirectUrls
+            : [],
+        subjectClaims:
+          gatewayClient?.ssoConfig?.protocol === ClientSsoProtocol.CustomSso
+            ? gatewayClient.ssoConfig.subjectClaims
+            : [],
       },
       adminClient: {
         active: adminClient?.status === ClientStatus.Enable && adminClient.isDelete === false,

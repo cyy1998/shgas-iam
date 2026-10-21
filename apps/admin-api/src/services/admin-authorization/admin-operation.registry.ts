@@ -128,6 +128,26 @@ function roleAssignmentMutation(keys: string[]) {
 }
 
 export const ADMIN_OPERATION_REGISTRY = {
+  "admin.delegation.search": { module: "delegation", type: "query", resourceType: "delegation" },
+  "admin.delegation.create": {
+    module: "delegation",
+    type: "mutation",
+    resourceType: "delegation",
+    resourceIdentifier: identify("delegatorUsername"),
+  },
+  "admin.delegation.update": {
+    module: "delegation",
+    type: "mutation",
+    resourceType: "delegation",
+    resourceIdentifier: identify("id"),
+  },
+  "admin.delegation.selectUsers": { module: "delegation", type: "query", resourceType: "delegationUserOption" },
+  "admin.delegation.selectClients": { module: "delegation", type: "query", resourceType: "delegationClientOption" },
+  "admin.delegation.selectOrganizations": {
+    module: "delegation",
+    type: "query",
+    resourceType: "delegationOrganizationOption",
+  },
   "admin.authorization.capabilitySummary": { module: "user", type: "query", resourceType: "adminCapability" },
   "admin.audit.search": { module: "audit", type: "query", resourceType: "auditLog" },
 

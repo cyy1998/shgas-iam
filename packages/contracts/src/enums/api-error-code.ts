@@ -44,6 +44,7 @@ export enum ApiErrorCode {
   OrganizationAlreadyExists = "ORG.ALREADY_EXISTS",
   OrganizationCodeExists = "ORG.CODE_EXISTS",
   OrganizationHasChildren = "ORG.HAS_CHILDREN",
+  OrganizationHasOpenDelegation = "ORG.HAS_OPEN_DELEGATION",
   OrganizationHasEmployment = "ORG.HAS_EMPLOYMENT",
   OrganizationHasOpenResponsibilityAssignment = "ORG.HAS_OPEN_RESPONSIBILITY_ASSIGNMENT",
 
@@ -66,6 +67,7 @@ export enum ApiErrorCode {
 
   ClientNotFound = "CLIENT.NOT_FOUND",
   ClientCodeExists = "CLIENT.CODE_EXISTS",
+  ClientHasOpenDelegation = "CLIENT.HAS_OPEN_DELEGATION",
   ClientHasRole = "CLIENT.HAS_ROLE",
 
   RoleNotFound = "ROLE.NOT_FOUND",

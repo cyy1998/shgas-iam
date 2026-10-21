@@ -6,14 +6,7 @@ import type {
 } from "@api/use-cases/internal/resolve-privilege-delegations/resolve-privilege-delegations.type";
 import { PrivilegeDelegationStatus } from "@iam/contracts";
 import type { DbClient } from "@iam/db";
-import {
-  delegationDetails,
-  organizationClosures,
-  organizations,
-  privilegeDelegations,
-  privileges,
-  users,
-} from "@iam/db/schema";
+import { clientDelegations, organizationClosures, organizations, users } from "@iam/db/schema";
 import { sql } from "drizzle-orm";
 
 interface PrivilegeDelegationResolutionRow extends PrivilegeDelegationResolutionResult, Record<string, unknown> {
@@ -23,10 +16,8 @@ interface PrivilegeDelegationResolutionRow extends PrivilegeDelegationResolution
   organizationScopeId: number | null;
   delegateeRecognized: boolean;
   scopeOrganizationRecognized: boolean;
-  invalidPrivilegeIds: number[];
   userRecognized: boolean;
   organizationRecognized: boolean;
-  privilegeRecognized: boolean;
 }
 
 export function createPrivilegeDelegationResolutionRepository(db: DbClient) {
@@ -51,12 +42,6 @@ export function createPrivilegeDelegationResolutionRepository(db: DbClient) {
               WHERE requested_organization.org_code = ${query.orgCode}
                 AND requested_organization.is_delete = false
             ) AS organization_id,
-            (
-              SELECT requested_privilege.id
-              FROM ${privileges} AS requested_privilege
-              WHERE requested_privilege.privilege_code = ${query.privilegeCode}
-                AND requested_privilege.is_delete = false
-            ) AS privilege_id,
             ${observedAt}::timestamp AS observed_at
         )
         SELECT
@@ -68,27 +53,16 @@ export function createPrivilegeDelegationResolutionRepository(db: DbClient) {
           delegatee.username AS "delegateeUsername",
           delegatee.id IS NOT NULL AS "delegateeRecognized",
           scope_organization.id IS NOT NULL AS "scopeOrganizationRecognized",
-          ARRAY(
-            SELECT checked_detail.privilege_id
-            FROM ${delegationDetails} AS checked_detail
-            LEFT JOIN ${privileges} AS checked_privilege
-              ON checked_privilege.id = checked_detail.privilege_id
-              AND checked_privilege.is_delete = false
-            WHERE checked_detail.delegation_id = delegation.id
-              AND checked_privilege.id IS NULL
-            ORDER BY checked_detail.privilege_id
-          ) AS "invalidPrivilegeIds",
           delegator.id IS NOT NULL AS "userRecognized",
-          context.organization_id IS NOT NULL AS "organizationRecognized",
-          context.privilege_id IS NOT NULL AS "privilegeRecognized"
+          context.organization_id IS NOT NULL AS "organizationRecognized"
         FROM requested_users AS requested
         LEFT JOIN ${users} AS delegator
           ON delegator.username = requested.username
           AND delegator.is_delete = false
         CROSS JOIN requested_context AS context
-        LEFT JOIN ${privilegeDelegations} AS delegation
+        LEFT JOIN ${clientDelegations} AS delegation
           ON delegation.delegator_user_id = delegator.id
-          AND delegation.is_delete = false
+          AND delegation.client_id = ${query.clientId}
           AND delegation.status = ${PrivilegeDelegationStatus.Enable}
           AND delegation.start_time <= context.observed_at
           AND delegation.end_time >= context.observed_at
@@ -97,12 +71,6 @@ export function createPrivilegeDelegationResolutionRepository(db: DbClient) {
             FROM ${organizationClosures} AS scope_closure
             WHERE scope_closure.ancestor_id = delegation.organization_scope_id
               AND scope_closure.descendant_id = context.organization_id
-          )
-          AND EXISTS (
-            SELECT 1
-            FROM ${delegationDetails} AS delegation_detail
-            WHERE delegation_detail.delegation_id = delegation.id
-              AND delegation_detail.privilege_id = context.privilege_id
           )
         LEFT JOIN ${users} AS delegatee
           ON delegatee.id = delegation.delegatee_user_id
@@ -155,15 +123,6 @@ export function createPrivilegeDelegationResolutionRepository(db: DbClient) {
             referencedIds: [row.organizationScopeId!],
           });
         }
-        if (row.invalidPrivilegeIds.length > 0) {
-          integrityViolations.push({
-            category: "invalid-reference",
-            username: row.username,
-            delegationId: row.delegationId,
-            relation: "privilege",
-            referencedIds: row.invalidPrivilegeIds,
-          });
-        }
       }
       return {
         results: rows
@@ -175,7 +134,6 @@ export function createPrivilegeDelegationResolutionRepository(db: DbClient) {
         missingInputs: {
           usernames: rows.filter((row) => !row.userRecognized).map((row) => row.username),
           orgCodes: context?.organizationRecognized ? [] : [query.orgCode],
-          privilegeCodes: context?.privilegeRecognized ? [] : [query.privilegeCode],
         },
         integrityViolations,
       };

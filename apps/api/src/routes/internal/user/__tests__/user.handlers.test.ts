@@ -31,17 +31,18 @@ describe("createUserHandlers", () => {
     const { deps, handlers } = createHandlers();
     const input = { username: "newuser", mobile: "13900000000", name: "新用户", orgCode: "SUP" };
     const context = {
-      get: mock(() => undefined),
+      get: mock((name: string) => (name === "clientCode" ? "portal" : undefined)),
       req: {
         valid: mock(() => input),
-        header: mock((name: string) => (name === "Client" ? "portal" : undefined)),
+        header: mock((name: string) => (name === "Client" ? "forged-client" : undefined)),
         method: "POST",
         path: "/internal/users/purveyor/contacts",
       },
       json: mock((payload: unknown) => payload),
     };
 
-    await expect(handlers.contactRegister(context as never, undefined as never)).resolves.toMatchObject({
+    const response = await handlers.contactRegister(context as never, undefined as never);
+    expect(response).toMatchObject({
       code: 200,
       data: true,
     });

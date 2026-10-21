@@ -1,5 +1,7 @@
 import { createAccountRecoveryService } from "@api/services/account-recovery/account-recovery.service";
+import { createAuditRepository } from "@api/services/audit/audit.repository";
 import type { ApiAuditLogWriter } from "@api/services/audit/audit.service";
+import { createApiAuditLogWriter } from "@api/services/audit/audit.service";
 import { createLoginCredentialParser } from "@api/services/authentication/login-credential.parser";
 import { createClientService } from "@api/services/client/client.service";
 import { createCapService } from "@api/services/human-verification/cap.service";
@@ -7,7 +9,6 @@ import { createHumanRiskService } from "@api/services/human-verification/human-r
 import { createMobileService } from "@api/services/mobile/mobile.service";
 import { createMobileCodeCooldown } from "@api/services/mobile/mobile-code-cooldown";
 import { createOrganizationService } from "@api/services/organization/organization.service";
-import { createPrivilegeDelegationService } from "@api/services/privilege/privilegeDelegation.service";
 import { createUserService } from "@api/services/user/user.service";
 import { createUserMobileBinding } from "@api/services/user/user-mobile-binding.helper";
 import { createUserPasswordHelper } from "@api/services/user/user-password.helper";
@@ -28,6 +29,7 @@ import { mapUnitOfWork } from "@iam/api-core/uow";
 import type { DbClient } from "@iam/db";
 import db from "@iam/db";
 import { createClientSnapshotRepository } from "@iam/db/client-snapshot";
+import { createDelegationService } from "@iam/delegation";
 import { createOidcClientAuthRateLimiter } from "@iam/oidc";
 import {
   createOrganizationSearchQueryRepository,
@@ -47,6 +49,7 @@ import {
 } from "@iam/user-profile-read-model/query";
 import { createSubjectAccessTransitionRepository } from "@iam/user-profile-read-model/subject-access-transition";
 import { createSubjectFactsLoggerObservability } from "@iam/user-profile-read-model/subject-facts";
+import { createPublicDelegationDependencies } from "../public-delegation";
 import type { ApiRepositories } from "../repositories";
 import { createRootAuthenticationComposition } from "../root-authentication";
 import type { ApiRuntimePorts } from "../runtime";
@@ -209,15 +212,10 @@ export function createApiServices(options: CreateApiServicesOptions) {
     repository: createOrganizationSearchQueryRepository(options.organizationQueryDb),
   });
 
-  const privilegeDelegationService = createPrivilegeDelegationService({
-    privilegeDelegationRepository: repositories.privilegeDelegation,
-    uow: mapUnitOfWork(unitOfWork, (tx) => ({
-      auditLogWriter: tx.auditLogWriter,
-      userRepository: tx.repositories.user,
-      organizationRepository: tx.repositories.organization,
-      privilegeRepository: tx.repositories.privilege,
-      privilegeDelegationRepository: tx.repositories.privilegeDelegation,
-    })),
+  const delegationService = createDelegationService({
+    db,
+    recordAudit: async (tx, event) =>
+      createApiAuditLogWriter({ auditRepository: createAuditRepository(tx) }).recordAuditLog(event),
   });
 
   const loginRestriction = createLoginRestriction({
@@ -249,7 +247,7 @@ export function createApiServices(options: CreateApiServicesOptions) {
     mobile: mobileService,
     organization: organizationService,
     organizationSearch,
-    privilegeDelegation: privilegeDelegationService,
+    delegation: delegationService,
     subjectAccess,
     subjectAccessLifecycle,
     user: userService,
@@ -279,6 +277,7 @@ export function createApiServices(options: CreateApiServicesOptions) {
       },
     },
     publicServices: { userService },
+    publicDelegation: createPublicDelegationDependencies(db, delegationService),
     config: {
       ...runtime.config.auth,
       loginEndpoint: runtime.config.env.sso.loginEndpoint,

@@ -53,6 +53,7 @@ Apps 表用于定位入口；依赖方向、分层职责、命名和 wiring 统�
 | `packages/custom-sso/src`                             | Custom SSO 授权、Code / Token、续接与交付；`/wire` 提供浏览器可加载契约。                                                                                              |
 | `packages/oidc/src`                                   | OIDC 授权、Code / Token、续接、退出、UserInfo 与密钥；由 API HTTP adapter 消费。                                                                                       |
 | `packages/client-subject-projection/src`              | 中性主体裁剪、Catalog 与责任任职投影。                                                                                                                                 |
+| `packages/delegation/src`                             | Client 委托的跨入口创建、生命周期、组织与期间冲突、范围查询及安全选择器；root 由 API/Admin API 消费，`/wire` 供浏览器使用。                                            |
 | `packages/contracts/src`                              | 跨端或跨 app/package 的稳定枚举、常量、schemas、类型与协议 helper。                                                                                                    |
 | `packages/domain/src`                                 | 后端 DTO、mapper、纯业务规则、audit helper 与业务错误。                                                                                                                |
 | `packages/db/src`                                     | Drizzle schema、relations、migrations、client 与 query helpers；领域为 `core`、`log`，列 helper 在 `schema/_shard/`。                                                  |

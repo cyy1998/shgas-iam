@@ -34,7 +34,7 @@ status: accepted
 [组织 DSL](../features/organization-search/filter-dsl.md)。
 
 需要先筛选用户再解析委托的调用方，使用用户 DSL 返回的 username 调用现有 `POST /internal/delegations/resolve`。
-两次调用分别取得结果，不提供原组合接口的响应兼容或新增跨请求一致性保证；Privilege Delegation 继续独立于搜索文档。
+两次调用分别取得结果，不提供原组合接口的响应兼容或新增跨请求一致性保证；Client Delegation 继续独立于搜索文档。
 
 ## 保留边界
 

@@ -7,6 +7,7 @@ import { BadRequestError, CustomError } from "@iam/api-core/errors";
 import type { ClientSsoConfig } from "@iam/contracts";
 import { ApiErrorCode, ClientSsoCallbackType, ClientSsoProtocol, OidcClientType } from "@iam/contracts";
 import {
+  ClientHasOpenDelegationError,
   ClientHasRoleError,
   ClientNotFoundError,
   normalizeClientSsoConfig,
@@ -30,6 +31,7 @@ export function createClientSsoService(deps: ClientSsoServiceDeps) {
     return await mutation.transaction(async (tx, bindTarget) => {
       const client = await tx.client.lock(clientCode, true);
       if (!client) throw new ClientNotFoundError();
+      if (!client.isDelete && (await tx.client.hasOpenDelegations(client.id))) throw new ClientHasOpenDelegationError();
       if (!client.isDelete && (await tx.client.hasUndeletedRoles(client.id))) throw new ClientHasRoleError();
       return await bindTarget(client.clientCode, async () => {
         const changed = !client.isDelete;

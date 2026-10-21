@@ -113,6 +113,13 @@ export default defineConfig({
       access: getAdminRouteAccess("/sessions"),
     },
     {
+      path: "/delegations",
+      name: "委托管理",
+      icon: "swap",
+      component: "./delegations/index",
+      access: getAdminRouteAccess("/delegations"),
+    },
+    {
       path: "/audit-logs",
       name: "审计日志",
       icon: "fileSearch",

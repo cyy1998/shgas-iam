@@ -42,6 +42,7 @@ function surface(roles = ["iam:admin"]) {
     },
     updateOrganizationByCode: async (_code: string, data: object) => (row = row ? { ...row, ...data } : null),
     softDeleteOrganizationByCode: async () => (row = row ? { ...row, isDelete: true } : null),
+    hasOpenDelegationsByOrganizationId: async () => false,
     countActiveChildrenByOrgCode: async () => 0,
     getOrganizationByCode: async () => null,
     getOrganizationByCodeForAdmin: async () => null,

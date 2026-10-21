@@ -42,6 +42,7 @@ describe("Admin Authorization Policy", () => {
 
     expect(summary.visibleModules).toEqual([...ADMIN_MODULE_CODES]);
     expect(summary.collectionActions).toEqual({
+      delegation: { create: { allowed: true, reason: null } },
       user: { create: { allowed: true, reason: null } },
       employment: { create: { allowed: true, reason: null } },
       organization: { createRoot: { allowed: true, reason: null } },

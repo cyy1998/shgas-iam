@@ -13,6 +13,7 @@ describe("Admin authorization contract", () => {
     const result = AdminCapabilitySummarySchema.parse({
       visibleModules: [...ADMIN_MODULE_CODES],
       collectionActions: {
+        delegation: { create: { allowed: true, reason: null } },
         user: { create: { allowed: true, reason: null } },
         employment: { create: { allowed: true, reason: null } },
         organization: { createRoot: { allowed: false, reason: "ACTION_NOT_GRANTED" } },

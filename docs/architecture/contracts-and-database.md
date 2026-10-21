@@ -50,6 +50,7 @@
 
 | 包                                       | 当前职责与消费关系                                                                                                                                                 |
 | ---------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `delegation`                             | 统一 Client 委托的创建、生命周期、冲突、范围查询及安全选择器，由 API 与 Admin API 消费；`/wire` 只公开浏览器可用的 schema 与类型。                                 |
 | `custom-sso`                             | root 拥有完整协议操作与 Code/Token；API 注入出站能力，Worker 消费 maintenance，Admin/SSO 消费支持浏览器的 `/wire`；测试构造与检查只走 `/testing`。                 |
 | `session-kernel`                         | 协议中性的 UserSession/ClientSession 生命周期，由 API、Admin API、两协议与 API Core Subject Access 适配方消费；不反向依赖这些消费者。                              |
 | `role-assignment-resolution`             | 统一有效角色与角色变化影响用户的解析；管理后端授权和 User Profile 构建/失效使用同一规则。                                                                          |

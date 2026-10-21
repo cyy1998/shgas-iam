@@ -3,7 +3,7 @@ import { EmploymentStatus, PrivilegeDelegationStatus, UserStatus } from "@iam/co
 import type { DbClient } from "@iam/db";
 import { extractPostgresError } from "@iam/db/postgres-error";
 import { compactUpdate, firstRow, ilikeContainsIf, inArrayIf } from "@iam/db/query-utils";
-import { employments, privilegeDelegations, users } from "@iam/db/schema";
+import { clientDelegations, employments, users } from "@iam/db/schema";
 import { OPEN_EMPLOYMENT_STATUSES } from "@iam/domain/employment";
 import { UsernameAlreadyExistsError } from "@iam/domain/user";
 import { and, count, eq, inArray, or } from "drizzle-orm";
@@ -152,13 +152,12 @@ export function createUserRepository(db: DbClient) {
     },
     async hasOpenPrivilegeDelegationsByUserId(userId: number) {
       const rows = await db
-        .select({ id: privilegeDelegations.id })
-        .from(privilegeDelegations)
+        .select({ id: clientDelegations.id })
+        .from(clientDelegations)
         .where(
           and(
-            eq(privilegeDelegations.isDelete, false),
-            inArray(privilegeDelegations.status, [PrivilegeDelegationStatus.Enable, PrivilegeDelegationStatus.Pause]),
-            or(eq(privilegeDelegations.delegatorUserId, userId), eq(privilegeDelegations.delegateeUserId, userId)),
+            inArray(clientDelegations.status, [PrivilegeDelegationStatus.Enable, PrivilegeDelegationStatus.Pause]),
+            or(eq(clientDelegations.delegatorUserId, userId), eq(clientDelegations.delegateeUserId, userId)),
           ),
         )
         .limit(1);

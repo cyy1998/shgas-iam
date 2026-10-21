@@ -6,6 +6,7 @@ export default function access(initialState: { capabilities?: AdminCapabilitySum
   const visibleModules = new Set(capabilities?.visibleModules ?? []);
 
   return {
+    canCreateDelegation: capabilities?.collectionActions.delegation?.create.allowed ?? false,
     ...Object.fromEntries(
       Object.entries(ADMIN_MODULE_ACCESS_KEYS).map(([module, key]) => [key, visibleModules.has(module as never)]),
     ),
