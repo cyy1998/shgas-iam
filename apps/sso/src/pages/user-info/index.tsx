@@ -120,8 +120,8 @@ export default function UserInfoPage() {
           <div className="hero-content">
             <div>
               <div className="hero-kicker">Account Center</div>
-              <h1>个人信息与账户安全</h1>
-              <p>查看组织岗位信息，维护登录密码与绑定手机号。</p>
+              <h1>个人设置</h1>
+              <p>查看组织岗位信息，管理账号安全与应用委托。</p>
             </div>
             <div className="hero-badge">
               <SafetyCertificateOutlined />
@@ -165,127 +165,159 @@ export default function UserInfoPage() {
               </aside>
 
               <section className="workspace-panel">
-                <div className="panel-heading">
-                  <div>
-                    <div className="section-kicker">
-                      <BankOutlined />
-                      岗位信息
-                    </div>
-                    <h2>组织任职</h2>
-                  </div>
-                </div>
+                <Tabs
+                  className="settings-tabs"
+                  defaultActiveKey="security"
+                  items={[
+                    {
+                      key: "security",
+                      label: "账号安全",
+                      children: (
+                        <>
+                          <div className="panel-heading">
+                            <div>
+                              <div className="section-kicker">
+                                <BankOutlined />
+                                岗位信息
+                              </div>
+                              <h2>组织任职</h2>
+                            </div>
+                          </div>
 
-                <Table<Employment>
-                  rowKey={(employment) => `${employment.organization.code}:${employment.position.code}`}
-                  size="middle"
-                  pagination={false}
-                  dataSource={userInfo?.profile?.employments ?? []}
-                  columns={[
-                    {
-                      title: "公司",
-                      dataIndex: ["organization", "path"],
-                      render: (_value, row) => formatProjectionCompany(row),
+                          <Table<Employment>
+                            rowKey={(employment) => `${employment.organization.code}:${employment.position.code}`}
+                            size="middle"
+                            pagination={false}
+                            dataSource={userInfo?.profile?.employments ?? []}
+                            columns={[
+                              {
+                                title: "公司",
+                                dataIndex: ["organization", "path"],
+                                render: (_value, row) => formatProjectionCompany(row),
+                              },
+                              {
+                                title: "组织",
+                                dataIndex: ["organization", "name"],
+                                render: (_value, row) => formatProjectionOrganizationPath(row),
+                              },
+                              {
+                                title: "岗位",
+                                dataIndex: ["position", "name"],
+                                render: (_value, row) => formatProjectionPosition(row),
+                              },
+                            ]}
+                          />
+
+                          <div className="security-panel">
+                            <div className="panel-heading">
+                              <div>
+                                <div className="section-kicker">
+                                  <LockOutlined />
+                                  账户安全
+                                </div>
+                                <h2>安全设置</h2>
+                              </div>
+                            </div>
+
+                            <Tabs
+                              activeKey={activeKey}
+                              onChange={(k) => setActiveKey(k as TabKey)}
+                              items={[
+                                {
+                                  key: "password",
+                                  label: (
+                                    <span className="tab-label">
+                                      <LockOutlined />
+                                      更改密码
+                                    </span>
+                                  ),
+                                },
+                                {
+                                  key: "mobile",
+                                  label: (
+                                    <span className="tab-label">
+                                      <MobileOutlined />
+                                      绑定手机号
+                                    </span>
+                                  ),
+                                },
+                              ]}
+                            />
+
+                            {activeKey === "password" && (
+                              <Form form={pwdForm} layout="vertical" requiredMark={false}>
+                                <Form.Item
+                                  label="当前密码"
+                                  name="oldPassword"
+                                  rules={[{ required: true, message: "请输入密码" }]}
+                                >
+                                  <Input.Password size="large" placeholder="请输入当前密码" prefix={<LockOutlined />} />
+                                </Form.Item>
+                                <Form.Item label="新密码" name="newPassword" rules={[passwordRule]}>
+                                  <Input.Password size="large" placeholder="请输入新密码" prefix={<LockOutlined />} />
+                                </Form.Item>
+                                <Form.Item
+                                  label="确认密码"
+                                  name="newCopyPassword"
+                                  dependencies={["newPassword"]}
+                                  rules={[confirmPasswordRule(() => pwdForm.getFieldValue("newPassword"))]}
+                                >
+                                  <Input.Password
+                                    size="large"
+                                    placeholder="请再次输入新密码"
+                                    prefix={<LockOutlined />}
+                                  />
+                                </Form.Item>
+                              </Form>
+                            )}
+
+                            {activeKey === "mobile" && (
+                              <Form form={mobileForm} layout="vertical" requiredMark={false}>
+                                <div className="current-mobile">
+                                  <span>当前手机号</span>
+                                  <strong>{userInfo?.profile?.phone || "-"}</strong>
+                                </div>
+                                <Form.Item label="新手机号" name="phoneNumber" rules={[phoneRule]}>
+                                  <Input size="large" placeholder="请输入手机号" prefix={<MobileOutlined />} />
+                                </Form.Item>
+                                <Form.Item
+                                  label="验证码"
+                                  name="code"
+                                  rules={[{ required: true, message: "请输入验证码" }]}
+                                >
+                                  <VerificationCodeInput
+                                    placeholder="请输入验证码"
+                                    prefix={<LockOutlined />}
+                                    buttonDisabled={isCounting || smsSending}
+                                    buttonText={
+                                      smsSending ? "发送中" : countdown <= 0 ? "获取验证码" : `${countdown} s`
+                                    }
+                                    onSendCode={sendCode}
+                                  />
+                                </Form.Item>
+                              </Form>
+                            )}
+
+                            <div className="submit-row">
+                              <Button type="primary" size="large" loading={submitting} onClick={handleSubmit}>
+                                保存设置
+                              </Button>
+                            </div>
+                          </div>
+                        </>
+                      ),
                     },
                     {
-                      title: "组织",
-                      dataIndex: ["organization", "name"],
-                      render: (_value, row) => formatProjectionOrganizationPath(row),
-                    },
-                    {
-                      title: "岗位",
-                      dataIndex: ["position", "name"],
-                      render: (_value, row) => formatProjectionPosition(row),
+                      key: "delegation",
+                      label: "委托设置",
+                      children: (
+                        <div className="delegation-tab">
+                          <DelegationSettings />
+                        </div>
+                      ),
                     },
                   ]}
                 />
-
-                <div className="security-panel">
-                  <div className="panel-heading">
-                    <div>
-                      <div className="section-kicker">
-                        <LockOutlined />
-                        账户安全
-                      </div>
-                      <h2>安全设置</h2>
-                    </div>
-                  </div>
-
-                  <Tabs
-                    activeKey={activeKey}
-                    onChange={(k) => setActiveKey(k as TabKey)}
-                    items={[
-                      {
-                        key: "password",
-                        label: (
-                          <span className="tab-label">
-                            <LockOutlined />
-                            更改密码
-                          </span>
-                        ),
-                      },
-                      {
-                        key: "mobile",
-                        label: (
-                          <span className="tab-label">
-                            <MobileOutlined />
-                            绑定手机号
-                          </span>
-                        ),
-                      },
-                    ]}
-                  />
-
-                  {activeKey === "password" && (
-                    <Form form={pwdForm} layout="vertical" requiredMark={false}>
-                      <Form.Item
-                        label="当前密码"
-                        name="oldPassword"
-                        rules={[{ required: true, message: "请输入密码" }]}
-                      >
-                        <Input.Password size="large" placeholder="请输入当前密码" prefix={<LockOutlined />} />
-                      </Form.Item>
-                      <Form.Item label="新密码" name="newPassword" rules={[passwordRule]}>
-                        <Input.Password size="large" placeholder="请输入新密码" prefix={<LockOutlined />} />
-                      </Form.Item>
-                      <Form.Item
-                        label="确认密码"
-                        name="newCopyPassword"
-                        dependencies={["newPassword"]}
-                        rules={[confirmPasswordRule(() => pwdForm.getFieldValue("newPassword"))]}
-                      >
-                        <Input.Password size="large" placeholder="请再次输入新密码" prefix={<LockOutlined />} />
-                      </Form.Item>
-                    </Form>
-                  )}
-
-                  {activeKey === "mobile" && (
-                    <Form form={mobileForm} layout="vertical" requiredMark={false}>
-                      <div className="current-mobile">
-                        <span>当前手机号</span>
-                        <strong>{userInfo?.profile?.phone || "-"}</strong>
-                      </div>
-                      <Form.Item label="新手机号" name="phoneNumber" rules={[phoneRule]}>
-                        <Input size="large" placeholder="请输入手机号" prefix={<MobileOutlined />} />
-                      </Form.Item>
-                      <Form.Item label="验证码" name="code" rules={[{ required: true, message: "请输入验证码" }]}>
-                        <VerificationCodeInput
-                          placeholder="请输入验证码"
-                          prefix={<LockOutlined />}
-                          buttonDisabled={isCounting || smsSending}
-                          buttonText={smsSending ? "发送中" : countdown <= 0 ? "获取验证码" : `${countdown} s`}
-                          onSendCode={sendCode}
-                        />
-                      </Form.Item>
-                    </Form>
-                  )}
-
-                  <div className="submit-row">
-                    <Button type="primary" size="large" loading={submitting} onClick={handleSubmit}>
-                      保存设置
-                    </Button>
-                  </div>
-                </div>
-                <DelegationSettings />
               </section>
             </div>
           )}

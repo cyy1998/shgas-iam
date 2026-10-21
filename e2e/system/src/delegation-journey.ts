@@ -69,6 +69,7 @@ export async function expectClientDelegationJourney(input: DelegationJourneyInpu
     const receiverPage = await receiverContext.newPage();
     await test.step("SSO outgoing and incoming show the same relationship while the receiver cannot manage it", async () => {
       await ownerPage.goto(`${input.origin}/portal/userInfo`);
+      await ownerPage.getByRole("tab", { name: "委托设置", exact: true }).click();
       const outgoing = ownerPage.getByRole("region", { name: "委托设置", exact: true });
       await outgoing.getByRole("tab", { name: "我委托的", exact: true }).click();
       await showAllDelegations(ownerPage);
@@ -146,6 +147,7 @@ export async function expectClientDelegationJourney(input: DelegationJourneyInpu
       await page.reload();
       await expect(page.getByRole("row").filter({ hasText: description })).toContainText("已结束");
       await receiverPage.reload();
+      await receiverPage.getByRole("tab", { name: "委托设置", exact: true }).click();
       await receiverPage.getByRole("tab", { name: "委托给我的", exact: true }).click();
       await showAllDelegations(receiverPage);
       await expect(receiverPage.getByRole("row").filter({ hasText: description })).toContainText("已结束");
@@ -224,10 +226,12 @@ async function loginToPortal(page: Page, input: DelegationJourneyInput, username
   await page.getByPlaceholder("请输入登录密码").fill(input.adminPassword);
   await page.getByRole("button", { name: "安全登录" }).click();
   await page.getByRole("button", { name: "跳过", exact: true }).click();
+  await page.getByRole("tab", { name: "委托设置", exact: true }).click();
   await expect(page.getByRole("region", { name: "委托设置", exact: true })).toBeVisible();
 }
 
 async function showAllDelegations(page: Page) {
+  await page.getByRole("tab", { name: "委托设置", exact: true }).click();
   await page.getByRole("combobox", { name: "委托状态筛选", exact: true }).click();
   await page.locator(".ant-select-dropdown:visible").getByTitle("全部", { exact: true }).click();
 }
