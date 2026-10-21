@@ -16,6 +16,7 @@ import {
   SubjectAccessDisabledError,
   SubjectAccessUnavailableError,
 } from "@iam/api-core/subject-access";
+import type { SubjectFactsSnapshot } from "@iam/client-subject-projection";
 import {
   ClientSsoCallbackType,
   ClientSsoProtocol,
@@ -42,6 +43,7 @@ export async function fixture(
   networkUrl?: string,
   tokenTtlSeconds = 45,
   continuationTtlSeconds = 60,
+  subjectFacts?: { read: (subject: string) => Promise<SubjectFactsSnapshot | null> },
 ) {
   const url = networkUrl ?? process.env.IAM_API_TEST_REDIS_URL;
   if (!url) throw new Error("IAM_API_TEST_REDIS_URL is required");
@@ -76,7 +78,6 @@ export async function fixture(
       updateTime: new Date(),
       employments: [],
       roles: [],
-      privileges: [],
     };
     const state = {
       publicBusinessReads: 0,
@@ -173,7 +174,7 @@ export async function fixture(
         random: { uuid: () => state.generation },
       }).seedMany([{ subjectIdentifier, state: "enabled" }], new Date());
       await factsCache.publish({
-        schemaVersion: 3,
+        schemaVersion: 4,
         sourceDirtyVersion: "1",
         publishedAt: new Date().toISOString(),
         subjectIdentifier,
@@ -245,6 +246,7 @@ export async function fixture(
         async read() {
           state.factsReads++;
           if (realFacts) return await realFacts.read(subjectIdentifier);
+          if (subjectFacts) return await subjectFacts.read(subjectIdentifier);
           await duringFacts?.();
           return {
             subjectIdentifier,

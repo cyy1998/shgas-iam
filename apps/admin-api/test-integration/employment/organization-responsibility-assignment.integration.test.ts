@@ -3083,7 +3083,7 @@ function createHistoryParentCommands(
       employmentRepository: repositories.employment,
       roleAssignmentResolver: { resolveEffectiveRoles: async () => new Map() },
       roleRepository: repositories.role,
-      privilegeRepository: repositories.privilege,
+
       passwordHasher: { hashPassword: async (password) => `hash:${password}` },
       random: { uuid: randomUUID, password: () => "Random123!" },
       sessionRevocation: { revokeUserSessions: async () => undefined },

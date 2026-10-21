@@ -604,13 +604,13 @@ function assertUserProfileGateOutput(operation: "verify-postgres" | "verify-redi
   const passed = output.split(/\r?\n/u).some((line) => {
     try {
       const record = JSON.parse(line) as Record<string, unknown>;
-      return record.version === 3 && record.gate === expectedGate && record.status === "passed";
+      return record.version === 4 && record.gate === expectedGate && record.status === "passed";
     } catch {
       return false;
     }
   });
   if (!passed) {
-    throw new Error(`User Profile ${expectedGate} gate did not report a passing v3 inventory`);
+    throw new Error(`User Profile ${expectedGate} gate did not report a passing v4 inventory`);
   }
 }
 

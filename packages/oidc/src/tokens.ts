@@ -224,7 +224,7 @@ export function createOidcTokens(options: OidcTokenOptions) {
               {
                 subjectIdentifier: observed.userSession.subjectIdentifier,
                 clientCode: input.clientId,
-                selection: { catalogVersion: 2, optionalClaims: claims },
+                selection: { catalogVersion: 3, optionalClaims: claims },
               },
               operation,
             );

@@ -117,13 +117,13 @@ describe("Subject Facts PostgreSQL reader", () => {
     const input = {
       subjectIdentifier: SUBJECT_IDENTIFIER,
       clientCode: "console",
-      selection: { catalogVersion: 2, optionalClaims: ["profile:name", "iam:authorization"] },
+      selection: { catalogVersion: 3, optionalClaims: ["profile:name", "iam:authorization"] },
     } as const;
     const fromDatabase = await projection.resolve(input, permission);
     const fromCache = await projection.resolve(input, permission);
     expect(fromDatabase).toMatchObject({
       name: "Alice",
-      authorization: { roles: ["operator"], privileges: ["approve"] },
+      authorization: { roles: ["operator"] },
     });
     expect(fromCache).toEqual(fromDatabase);
   });
@@ -230,7 +230,7 @@ async function seedPublishedSubject(
           ],
         },
         position: { code: "position-a", name: "甲岗位" },
-        clientAuthorizations: [{ clientCode: "console", roles: [{ code: "operator", privileges: ["approve"] }] }],
+        clientAuthorizations: [{ clientCode: "console", roles: [{ code: "operator" }] }],
         responsibilities,
       },
     ],

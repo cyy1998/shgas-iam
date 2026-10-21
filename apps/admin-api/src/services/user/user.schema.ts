@@ -22,11 +22,9 @@ export const UserDetailDtoSchema = SharedUserDetailDtoSchema.pick({
   createTime: true,
   updateTime: true,
   roles: true,
-  privileges: true,
 }).extend({
   employments: z.array(EmploymentDetailDtoSchema).default([]),
   roleNames: z.record(z.string(), z.string()).default({}),
-  privilegeNames: z.record(z.string(), z.string()).default({}),
 });
 
 export {

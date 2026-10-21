@@ -1,19 +1,19 @@
 import { afterAll, beforeAll, beforeEach, expect, test } from "bun:test";
 import { createInternalDelegationQueryResource } from "@api/composition/internal-delegation-query";
-import { createPrivilegeDelegationResolutionRepository } from "@api/composition/repositories/privilege-delegation-resolution.repository";
+import { createClientDelegationResolutionRepository } from "@api/composition/repositories/client-delegation-resolution.repository";
 import { createInternalMiddlewares } from "@api/routes/internal/_middleware";
 import { createDelegationHandlers } from "@api/routes/internal/delegation/delegation.handlers";
 import { createDelegationRoute } from "@api/routes/internal/delegation/delegation.index";
 import { createAuditRepository } from "@api/services/audit/audit.repository";
 import { createApiAuditLogWriter } from "@api/services/audit/audit.service";
-import { createResolvePrivilegeDelegationsUseCase } from "@api/use-cases/internal/resolve-privilege-delegations/resolve-privilege-delegations.use-case";
+import { createResolveClientDelegationsUseCase } from "@api/use-cases/internal/resolve-client-delegations/resolve-client-delegations.use-case";
 import createApp from "@iam/api-core/core/create-app";
 import { createInternalAuthenticationHandler } from "@iam/api-core/middlewares";
 import {
   OrganizationLevel,
   OrganizationStatus,
   OrganizationType,
-  PrivilegeDelegationStatus as Status,
+  ClientDelegationStatus as Status,
   UserStatus,
 } from "@iam/contracts";
 import type { DbClient } from "@iam/db";
@@ -98,9 +98,9 @@ function input(overrides: Record<string, unknown> = {}) {
 function app(db: DbClient = harness.db) {
   const handlers = createDelegationHandlers({
     delegationService: service(db),
-    resolvePrivilegeDelegations: createResolvePrivilegeDelegationsUseCase({
+    resolveClientDelegations: createResolveClientDelegationsUseCase({
       clock: { nowDate: () => observedAt },
-      resolution: createPrivilegeDelegationResolutionRepository(db),
+      resolution: createClientDelegationResolutionRepository(db),
     }),
   });
   return createApp(appConfig, {
@@ -205,6 +205,7 @@ test("open overlapping subtrees and closed periods conflict, including Pause and
   ]) {
     const failure = await request("/", candidate);
     expect(failure.status).toBe(409);
+    expect(failure.body.code).toBe("CLIENT_DELEGATION.CONFLICT");
   }
   expect((await request("/", input({ orgCode: "RIGHT" }))).status).toBe(200);
   expect((await request("/", input(), { client: "two" })).status).toBe(200);
@@ -233,7 +234,9 @@ test("expiry can be extended, Pause stays paused, terminal updates cannot reopen
   const before = (await service().search({}, { kind: "all" }))[0]!;
   expect((await request(`/${id}`, { status: Status.Disable }, { method: "PATCH" })).body.data).toBe(true);
   expect((await service().search({}, { kind: "all" }))[0]!.updateTime).toEqual(before.updateTime);
-  expect((await request(`/${id}`, { status: Status.Enable }, { method: "PATCH" })).status).toBe(409);
+  const reopen = await request(`/${id}`, { status: Status.Enable }, { method: "PATCH" });
+  expect(reopen.status).toBe(409);
+  expect(reopen.body.code).toBe("CLIENT_DELEGATION.ENDED");
   expect(
     (await request(`/${id}`, { status: Status.Disable, description: "rewrite" }, { method: "PATCH" })).status,
   ).toBe(409);

@@ -39,6 +39,7 @@ import { createTRPCContext } from "@iam/api-core/trpc";
 import { createUnitOfWork, mapUnitOfWork } from "@iam/api-core/uow";
 import {
   ApiErrorCode,
+  ClientDelegationStatus,
   ClientSsoProtocol,
   ClientStatus,
   EmploymentStatus,
@@ -46,7 +47,6 @@ import {
   OidcScope,
   OrganizationLevel,
   OrganizationType,
-  PrivilegeDelegationStatus,
   RoleStatus,
   UserStatus,
   UserType,
@@ -182,7 +182,7 @@ async function fixture() {
         userRepository: repositories.user,
         employmentRepository: repositories.employment,
         roleRepository: repositories.role,
-        privilegeRepository: repositories.privilege,
+
         roleAssignmentResolver: { resolveEffectiveRoles: async () => new Map() },
         passwordHasher: { hashPassword: async (value) => `hash:${value}` },
         random: { uuid: randomUUID, password: () => "New-Password-183" },
@@ -702,7 +702,7 @@ test("delegation-blocked User deletion restores real access and preserves both s
         delegateeUserId: f.account.id,
         organizationScopeId: organization!.id,
         clientId: client!.id,
-        status: PrivilegeDelegationStatus.Pause,
+        status: ClientDelegationStatus.Pause,
         startTime: new Date("2099-01-01"),
         endTime: new Date("2100-01-01"),
       })
@@ -714,7 +714,7 @@ test("delegation-blocked User deletion restores real access and preserves both s
     } catch (error) {
       failure = error;
     }
-    expect(failure).toMatchObject({ code: "USER.HAS_OPEN_PRIVILEGE_DELEGATION", httpStatus: 409 });
+    expect(failure).toMatchObject({ code: "USER.HAS_OPEN_CLIENT_DELEGATION", httpStatus: 409 });
     const barrierAfter = await f.barrier.read(f.account.subjectIdentifier);
     const accountAfter = await pg.db.select().from(users).where(eq(users.id, f.account.id));
     const delegationAfter = await pg.db

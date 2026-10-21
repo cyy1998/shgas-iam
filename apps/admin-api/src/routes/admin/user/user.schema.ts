@@ -39,7 +39,7 @@ export function toUserVo(input: unknown) {
 
 export const UserDetailVoSchema = UserVoSchema.extend({
   roleNames: UserDetailDtoSchema.shape.roleNames,
-  privilegeNames: UserDetailDtoSchema.shape.privilegeNames,
+
   allowedActions: AdminUserAllowedActionsSchema,
   employments: z.array(
     EmploymentDetailDtoSchema.extend({
@@ -47,7 +47,7 @@ export const UserDetailVoSchema = UserVoSchema.extend({
       managementPath: z.string().nullable(),
     }),
   ),
-  privileges: z.array(z.string()).openapi({ example: ["ui:button:tender:create-GYBG"] }),
+
   roles: z.array(z.string()).openapi({ example: ["tender:default-user"] }),
 }).openapi("UserDetailVo");
 

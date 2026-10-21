@@ -70,6 +70,15 @@ Organization Search 的[公开 PostgreSQL 恢复能力](../../packages/organizat
 通过真实 backfill/repair/verify 命令和 consumer 验证首次构建、不兼容 schema 下保持失败、修复后重新完整核验，
 并观察非目标 Profile/Redis 库存及零入队核验。它们不代替部署负责人按[组织维护手册](../releases/organization-search-maintenance.md)取得的停流、drain 和放流证据。
 
+[Profile 维护闭环](../../apps/worker/test-integration/user-profile/user-profile-maintenance.integration.test.ts)
+通过正式 backfill/repair/双 verify 命令及真实 consumer 验证完整 User inventory（包括禁用及已删除用户）、
+缺失/损坏/schema/版本及 Redis Facts 不匹配的只读失败门禁、非目标保留，以及源事实 smoke 后再次收敛和完整双门禁。
+它不以队列为空替代全量核验，也不单独证明跨制品的旧协议凭据连续性。
+
+[权限点源数据收缩](../../packages/db/test-integration/migrations/privilege-retirement-migration.integration.test.ts)
+由 DB owner 执行完整正式来源迁移链、代表数据和最终 runner，验证两表及专属索引删除、非目标全行与历史审计保留、
+journal 单次登记、空库安装及重跑不重置角色或 Client 委托；不以静态符号缺席代替数据库行为。
+
 通用 PG 关闭用例不再重复完整 repair、消费和收敛旅程；这些业务恢复仍由专门 recovery/maintenance 入口证明。
 普通 fixture 停止消费者、子进程及连接后重置独占 Redis；生产连接关闭、只读作用和非目标数据保护在重置前观察，
 环境销毁成功不能代替这些业务事实。Root owner 的完整故障矩阵集中执行，消费入口保留自身 wiring 和独有失败行为。
@@ -78,6 +87,11 @@ receipt 等必需输入缺失及 cleanup 失败仍阻断通过。
 
 旧 Kernel 四对象、Provider、配置版本和旧 Snapshot/Gate 测试随被替代模型删除；其仍成立的行为分别由上表
 会话/协议/配置/账号/维护最高入口承接。历史 schema/旧 writer 证明不能冒称在最终候选重跑。
+
+[权限点退役跨制品 fixture](../../apps/api/test-integration/privilege-retirement/cutover.fixture.ts) 是一次性 API owner 验收，
+使用固定旧制品建立 Profile v3 和有效协议状态，经正式迁移、受控新 Worker、独立双 gate 后由同 issuer 新 API 交付新结构，
+并观察原期限及拒绝语义。其 owner、来源、移除日期与显式命令见[命令入口](../development/commands.md#权限点退役的一次性跨制品验收)，
+不纳入默认 Integration，也不以新版本创建的状态代替旧状态。
 
 两个 loopback 端口的套件/RP 只证明两 issuer 协议；不同 hostname 的真实 APISIX/browser 才证明 Cookie 域隔离，
 HTTP cookie jar 不能替代浏览器证据。

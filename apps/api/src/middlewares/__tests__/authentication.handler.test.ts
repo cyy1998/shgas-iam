@@ -33,7 +33,7 @@ function resolvedAuthentication(authenticationContext: { authenticatedClientCode
     authenticationContext,
     subjectDeliveryCapability: {
       resolveUserInfo: async () => ({
-        version: 2 as const,
+        version: 3 as const,
         subjectIdentifier: authenticationContext.subjectIdentifier,
       }),
     },
@@ -314,7 +314,7 @@ describe("publicAuthenticationHandler", () => {
     const logger = createMockLogger();
     const subjectDeliveryRequests = createCustomSsoSubjectDeliveryRequestScope();
     const resolveUserInfo = mock(async () => ({
-      version: 2 as const,
+      version: 3 as const,
       subjectIdentifier: "00000000-0000-4000-8000-000000001001",
     }));
     const handlers = createApiAuthenticationHandlersImpl({

@@ -6,9 +6,7 @@ import { organizationClosuresRelations } from "./organization-closures";
 import { organizationResponsibilityAssignmentsRelations } from "./organization-responsibility-assignments";
 import { organizationsRelations } from "./organizations";
 import { positionsRelations } from "./positions";
-import { privilegesRelations } from "./privileges";
 import { roleAssignmentsRelations } from "./role-assignments";
-import { rolePrivilegesRelations } from "./role-privileges";
 import { rolesRelations } from "./roles";
 import { userProfileDirtyRelations } from "./user-profile-dirty";
 import { userProfilesRelations } from "./user-profiles";
@@ -23,9 +21,7 @@ export function coreRelations(r: RelationsHelper) {
     ...organizationsRelations(r),
     ...positionsRelations(r),
     ...clientDelegationsRelations(r),
-    ...privilegesRelations(r),
     ...roleAssignmentsRelations(r),
-    ...rolePrivilegesRelations(r),
     ...rolesRelations(r),
     ...userProfileDirtyRelations(r),
     ...userProfilesRelations(r),

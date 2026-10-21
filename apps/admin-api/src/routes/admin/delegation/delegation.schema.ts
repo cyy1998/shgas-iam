@@ -1,6 +1,6 @@
 import { z } from "@hono/zod-openapi";
 import { AdminAuthorizationDecisionSchema } from "@iam/contracts";
-import { DelegationCreateSchema, DelegationDetailSchema, DelegationStatus } from "@iam/delegation";
+import { ClientDelegationStatus, DelegationCreateSchema, DelegationDetailSchema } from "@iam/delegation";
 
 export const AdminDelegationCreateSchema = DelegationCreateSchema.extend({
   delegatorUsername: z.string().min(1).max(64),
@@ -36,13 +36,13 @@ export function toAdminDelegationVo(input: unknown) {
   const detail = DelegationDetailSchema.parse(input);
   const allowed = { allowed: true, reason: null } as const;
   const denied = { allowed: false, reason: "RESOURCE_STATE_NOT_ACTIONABLE" } as const;
-  const ended = detail.status === DelegationStatus.Disable;
+  const ended = detail.status === ClientDelegationStatus.Disable;
   return AdminDelegationVoSchema.parse({
     ...detail,
     allowedActions: {
       edit: ended ? denied : allowed,
-      pause: detail.status === DelegationStatus.Enable ? allowed : denied,
-      resume: detail.status === DelegationStatus.Pause ? allowed : denied,
+      pause: detail.status === ClientDelegationStatus.Enable ? allowed : denied,
+      resume: detail.status === ClientDelegationStatus.Pause ? allowed : denied,
       end: ended ? denied : allowed,
     },
   });

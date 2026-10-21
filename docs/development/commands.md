@@ -400,6 +400,36 @@ Worker targeted/full Snapshot repair 与独立 verify 共用本次 `IAM_WORKER_T
 User Profile maintenance、正式 API/OIDC entry、hermetic process smoke；不得把 URL credential、
 Token、Subject、完整 Redis key 或 Secret 写入验收记录。
 
+## 权限点退役的一次性跨制品验收
+
+Owner 为 `@iam/api`；用途是 [Spec #269 / Ticket #274](https://github.com/cyy1998/shgas-iam/issues/274)
+的旧协议凭据连续性验收，移除复核日期为 2026-11-21。入口不进入默认 Integration，不构成线上多代兼容能力。
+先在来源提交 `99b27c614a668cd66d354d4581ae5166a7275ff8` 的独立 checkout 准备旧 API/Worker、正式 migrations
+和公开 owner 测试支持制品，记录构建命令、来源及文件 SHA-256。不得把旧入口链接到当前 workspace，或用当前制品创建的凭据代替旧状态。
+本次固定制品与清理记录的证据引用保存在该 ticket；后续复现须重新核对来源及 manifest。
+
+显式配置文件使用绝对路径：
+
+```json
+{
+  "baselineManifest": "<fixed-old-artifacts>/manifest.json",
+  "outputDirectory": "<absolute-task-evidence-directory>",
+  "candidate": "<fixed-candidate-sha>"
+}
+```
+
+通过[一次性 fixture](../../apps/api/test-integration/privilege-retirement/cutover.fixture.ts)执行：
+
+```bash
+pnpm --filter @iam/api exec bun --no-env-file run test-integration/privilege-retirement/cutover.fixture.ts <config.json>
+```
+
+外层复用正式根资源 owner 创建、登记及销毁本次 PostgreSQL/Redis，内部核对完全相同的受管理 URL。
+fixture 固定旧制品来源/hash，建立真实旧 Profile 和协议状态，经正式迁移、新 Worker 全量重建和独立双 gate，
+再从同 issuer 新 API 使用旧凭据，并在 smoke 关闭后再次完整核验。退出 0 且完整 report 为 passed 才表示本次演练通过；
+阶段部分成功、资源关闭或清理失败均不算通过。证据目录独立于 Browser Integration 的可清理输出。
+本地演练不证明目标环境停流、备份、第三方旧副本处理或生产放流；正式维护按[Profile 手册](../releases/user-profile-maintenance.md#权限点退役的协调切换)。
+
 ## OIDC 协议套件
 
 正式 fixture 位于 [oidc-suite.fixture.ts](../../apps/api/test-integration/oidc/oidc-suite.fixture.ts)，

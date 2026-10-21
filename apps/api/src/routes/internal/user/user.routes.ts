@@ -36,7 +36,7 @@ export const usersSearchDsl = createRoute({
   path: "/search-dsl",
   tags,
   request: {
-    body: jsonContentRequired(UserProfileSearchTransportRequestSchema, "User Profile v3 Filter DSL 搜索条件"),
+    body: jsonContentRequired(UserProfileSearchTransportRequestSchema, "User Profile v4 Filter DSL 搜索条件"),
   },
   responses: {
     ...commonErrorResponses,
@@ -47,7 +47,7 @@ export const usersSearchDsl = createRoute({
     [HttpStatusCodes.SERVICE_UNAVAILABLE]: jsonContent(StandardErrorResponseSchema, "用户搜索暂时不可用"),
     [HttpStatusCodes.OK]: jsonContent(
       createSuccessResponseSchema(z.array(UserProfileBaseSchema)),
-      "User Profile v3 Filter DSL 搜索结果",
+      "User Profile v4 Filter DSL 搜索结果",
     ),
   },
 });

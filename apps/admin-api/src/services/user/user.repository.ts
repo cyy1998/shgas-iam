@@ -1,5 +1,5 @@
 import type { UserCreateDto, UserPaginationQueryDto, UserUpdateDto } from "@admin-api/services/user/user.type";
-import { EmploymentStatus, PrivilegeDelegationStatus, UserStatus } from "@iam/contracts";
+import { ClientDelegationStatus, EmploymentStatus, UserStatus } from "@iam/contracts";
 import type { DbClient } from "@iam/db";
 import { extractPostgresError } from "@iam/db/postgres-error";
 import { compactUpdate, firstRow, ilikeContainsIf, inArrayIf } from "@iam/db/query-utils";
@@ -150,13 +150,13 @@ export function createUserRepository(db: DbClient) {
           .returning(),
       );
     },
-    async hasOpenPrivilegeDelegationsByUserId(userId: number) {
+    async hasOpenClientDelegationsByUserId(userId: number) {
       const rows = await db
         .select({ id: clientDelegations.id })
         .from(clientDelegations)
         .where(
           and(
-            inArray(clientDelegations.status, [PrivilegeDelegationStatus.Enable, PrivilegeDelegationStatus.Pause]),
+            inArray(clientDelegations.status, [ClientDelegationStatus.Enable, ClientDelegationStatus.Pause]),
             or(eq(clientDelegations.delegatorUserId, userId), eq(clientDelegations.delegateeUserId, userId)),
           ),
         )

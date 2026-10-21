@@ -68,7 +68,7 @@ describe("Subject Facts Redis publisher", () => {
 
 function cacheRecord(sourceDirtyVersion: string, subjectIdentifier = SUBJECT_IDENTIFIER): SubjectFactsCacheRecord {
   return {
-    schemaVersion: 3,
+    schemaVersion: 4,
     sourceDirtyVersion,
     publishedAt: "2026-07-25T10:00:00.000Z",
     subjectIdentifier,
@@ -109,7 +109,6 @@ function cacheRecord(sourceDirtyVersion: string, subjectIdentifier = SUBJECT_IDE
               roles: [
                 {
                   code: "operator",
-                  privileges: ["subject:read"],
                 },
               ],
             },

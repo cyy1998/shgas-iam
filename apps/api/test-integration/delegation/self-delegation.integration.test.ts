@@ -12,7 +12,7 @@ import {
   OrganizationLevel,
   OrganizationStatus,
   OrganizationType,
-  PrivilegeDelegationStatus as Status,
+  ClientDelegationStatus as Status,
   UserStatus,
 } from "@iam/contracts";
 import { clients, organizationClosures, organizations, users } from "@iam/db/schema";
@@ -111,6 +111,7 @@ test("only the delegator can change a record; receiving it does not permit manag
   const id = created.body.data.result.id;
   const receiverPatch = await request(`/${id}`, { status: Status.Pause }, { method: "PATCH", subject: bobSubject });
   expect(receiverPatch.status).toBe(404);
+  expect(receiverPatch.body.code).toBe("CLIENT_DELEGATION.NOT_FOUND");
   const ownerPatch = await request(`/${id}`, { status: Status.Pause, description: "出差期间" }, { method: "PATCH" });
   expect(ownerPatch.status).toBe(200);
   expect(ownerPatch.body.data).toMatchObject({

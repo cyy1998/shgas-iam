@@ -61,7 +61,7 @@ export function createOidcUserInfo(options: {
             {
               subjectIdentifier: observation.userSession.subjectIdentifier,
               clientCode: token.clientId,
-              selection: { catalogVersion: 2, optionalClaims: claims },
+              selection: { catalogVersion: 3, optionalClaims: claims },
             },
             operation,
           );
@@ -85,10 +85,8 @@ export function createOidcUserInfo(options: {
                     employments: subject.authorization.employments.map((employment) => ({
                       ...employmentBase(employment),
                       roles: employment.roles,
-                      privileges: employment.privileges,
                     })),
                     roles: subject.authorization.roles,
-                    privileges: subject.authorization.privileges,
                   },
                 }),
           };

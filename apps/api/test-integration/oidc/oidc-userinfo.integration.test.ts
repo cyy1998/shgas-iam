@@ -26,7 +26,7 @@ test("UserInfo real GET/POST and form Bearer transport retain standard errors an
         name: "测试",
         phone_number: "17721462865",
         "iam:employments": [],
-        "iam:authorization": { employments: [], roles: [], privileges: [] },
+        "iam:authorization": { employments: [], roles: [] },
       });
       expect(result.headers.get("Access-Control-Allow-Origin")).toBe("https://rp.example");
       expect(result.headers.get("Access-Control-Allow-Credentials")).toBeNull();
@@ -309,7 +309,7 @@ test("UserInfo maps published employment wire and isolates two Clients authoriza
       return {
         subjectIdentifier: subject,
         sourceDirtyVersion: "1",
-        profile: { username: "old", name: "旧权限", phone: null },
+        profile: { username: "old", name: "已发布角色", phone: null },
         employments: [
           {
             isPrimary: true,
@@ -322,8 +322,8 @@ test("UserInfo maps published employment wire and isolates two Clients authoriza
             position: { code: "position", name: "岗位" },
             responsibilities: [],
             clientAuthorizations: [
-              { clientCode: first, roles: [{ code: "a", privileges: ["a:read"] }] },
-              { clientCode: other, roles: [{ code: "b", privileges: ["b:write"] }] },
+              { clientCode: first, roles: [{ code: "a" }] },
+              { clientCode: other, roles: [{ code: "b" }] },
             ],
           },
         ],
@@ -333,14 +333,28 @@ test("UserInfo maps published employment wire and isolates two Clients authoriza
   try {
     first = f.clientId;
     f.addClient(other);
-    for (const [client, role, privilege] of [
-      [first, "a", "a:read"],
-      [other, "b", "b:write"],
+    for (const [client, role] of [
+      [first, "a"],
+      [other, "b"],
     ]) {
       const issued = await f.issue("openid", client);
       const value = await (await f.me(issued.access_token)).json();
-      expect(value["iam:authorization"].roles).toEqual([role]);
-      expect(value["iam:authorization"].privileges).toEqual([privilege]);
+      expect(value["iam:authorization"]).toEqual({
+        employments: [
+          {
+            isPrimary: true,
+            organization: {
+              orgCode: "org",
+              orgName: "组织",
+              orgType: OrganizationType.Department,
+              fullOrgPath: [{ orgCode: "org", orgName: "组织", orgType: OrganizationType.Department }],
+            },
+            position: { posCode: "position", posName: "岗位" },
+            roles: [role],
+          },
+        ],
+        roles: [role],
+      });
       expect(value["iam:employments"]).toEqual([
         {
           isPrimary: true,

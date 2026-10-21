@@ -46,7 +46,7 @@ describe("User Profile publication logging", () => {
           status: UserStatus.Enable,
           isDelete: false,
           searchVisible: true,
-          profileSchemaVersion: 3 as const,
+          profileSchemaVersion: 4 as const,
           sourceDirtyVersion: "4",
           detail: {} as never,
           searchDoc: {} as never,

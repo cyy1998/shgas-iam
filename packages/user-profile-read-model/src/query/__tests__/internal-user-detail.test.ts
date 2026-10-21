@@ -39,7 +39,7 @@ test("fails closed when the published current Detail is malformed", async () => 
           createTime: now,
           updateTime: now,
           employments: [{ responsibilities: "malformed" }],
-          privileges: [],
+
           roles: [],
         },
       })),

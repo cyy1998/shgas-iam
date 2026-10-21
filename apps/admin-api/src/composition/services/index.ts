@@ -50,7 +50,6 @@ export function createAdminApiServices(options: CreateAdminApiServicesOptions) {
       employmentRepository: repositories.employment,
       roleAssignmentResolver,
       roleRepository: repositories.role,
-      privilegeRepository: repositories.privilege,
       passwordHasher: runtime.passwordHasher,
       random: runtime.random,
       subjectAccessLifecycle: session.subjectAccessLifecycle,
@@ -125,7 +124,6 @@ export function createAdminApiServices(options: CreateAdminApiServicesOptions) {
     employmentRepository: repositories.employment,
     roleAssignmentResolver,
     roleRepository: repositories.role,
-    privilegeRepository: repositories.privilege,
     uow: mapUnitOfWork(unitOfWork, (tx) => ({
       employmentRepository: tx.repositories.employment,
       auditService: tx.auditService,

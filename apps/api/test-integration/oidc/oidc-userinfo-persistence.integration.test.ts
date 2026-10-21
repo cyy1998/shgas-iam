@@ -63,20 +63,18 @@ test("UserInfo HTTP uses real published Facts cache, narrow PostgreSQL fallback 
           },
           position: { code: "position", name: "岗位" },
           responsibilities: [],
-          clientAuthorizations: [
-            { clientCode: f.clientId, roles: [{ code: "published-role", privileges: ["published:read"] }] },
-          ],
+          clientAuthorizations: [{ clientCode: f.clientId, roles: [{ code: "published-role" }] }],
         },
       ],
     };
     await pg.sql`INSERT INTO user_profile (user_id, subject_identifier, username, name, status, is_delete, search_visible, profile_schema_version, source_dirty_version, detail, search_doc, subject_facts, rebuilt_at)
-      VALUES (1, ${f.subjectIdentifier}, 'published', '已发布旧资料', ${UserStatus.Enable}, false, true, 3, 1, '{}'::jsonb, '{}'::jsonb, ${JSON.stringify(facts)}::jsonb, now())`;
+      VALUES (1, ${f.subjectIdentifier}, 'published', '已发布旧资料', ${UserStatus.Enable}, false, true, 4, 1, '{}'::jsonb, '{}'::jsonb, ${JSON.stringify(facts)}::jsonb, now())`;
     const first = await f.me(issued.access_token);
     expect(first.status).toBe(200);
     expect(await first.json()).toMatchObject({
       sub: f.subjectIdentifier,
       name: "已发布旧资料",
-      "iam:authorization": { roles: ["published-role"], privileges: ["published:read"] },
+      "iam:authorization": { roles: ["published-role"] },
     });
     expect(queries).toHaveLength(1);
     // Exact production SQL proves the accepted narrow read, independent from invalid Detail/Search and absent Dirty.
@@ -88,7 +86,7 @@ test("UserInfo HTTP uses real published Facts cache, narrow PostgreSQL fallback 
     const warm = await f.me(issued.access_token);
     expect(await warm.json()).toMatchObject({
       name: "已发布旧资料",
-      "iam:authorization": { roles: ["published-role"], privileges: ["published:read"] },
+      "iam:authorization": { roles: ["published-role"] },
     });
     expect(queries).toHaveLength(0);
     expect(ownedKeys.size).toBe(1);
@@ -98,7 +96,7 @@ test("UserInfo HTTP uses real published Facts cache, narrow PostgreSQL fallback 
     expect(repaired.status).toBe(200);
     expect(await repaired.json()).toMatchObject({
       name: "较新发布资料",
-      "iam:authorization": { roles: [], privileges: [] },
+      "iam:authorization": { roles: [] },
     });
     expect(queries).toHaveLength(1);
     queries.length = 0;

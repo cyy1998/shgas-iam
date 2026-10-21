@@ -177,7 +177,7 @@ function commands(
     profile: createEmploymentService({
       employmentRepository: repositories.employment,
       roleRepository: repositories.role,
-      privilegeRepository: repositories.privilege,
+
       roleAssignmentResolver: { resolveEffectiveRoles: async () => new Map() },
       uow: mapUnitOfWork(uow, (tx) => ({
         employmentRepository: tx.repositories.employment,

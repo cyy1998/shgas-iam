@@ -1,7 +1,7 @@
 import {
-  PRIVILEGE_DELEGATION_RESOLUTION_INPUT_NOT_FOUND_MESSAGE,
-  PRIVILEGE_DELEGATION_RESOLUTION_UNAVAILABLE_MESSAGE,
-} from "@api/use-cases/internal/resolve-privilege-delegations/resolve-privilege-delegations.error";
+  CLIENT_DELEGATION_RESOLUTION_INPUT_NOT_FOUND_MESSAGE,
+  CLIENT_DELEGATION_RESOLUTION_UNAVAILABLE_MESSAGE,
+} from "@api/use-cases/internal/resolve-client-delegations/resolve-client-delegations.error";
 import { createRoute, z } from "@hono/zod-openapi";
 import * as HttpStatusCodes from "@iam/api-core/core/http-status-codes";
 import { commonErrorResponses } from "@iam/api-core/core/openapi/helpers/common-error-responses";
@@ -19,27 +19,25 @@ import {
 
 const tags = ["Internal/Delegation"];
 
-const PrivilegeDelegationResolutionRequestSchema = DelegationResolveSchema.openapi("DelegationResolutionRequest");
-const PrivilegeDelegationCreateDtoSchema = DelegationCreateSchema.omit({ clientId: true })
+const ClientDelegationResolutionRequestSchema = DelegationResolveSchema.openapi("DelegationResolutionRequest");
+const ClientDelegationCreateDtoSchema = DelegationCreateSchema.omit({ clientId: true })
   .required({ delegatorUsername: true })
   .openapi("DelegationCreateDto");
-const PrivilegeDelegationUpdateDtoSchema = DelegationUpdateSchema.openapi("DelegationUpdateDto");
-const PrivilegeDelegationQueryDtoSchema = DelegationSearchSchema.omit({ clientIds: true }).openapi(
-  "DelegationQueryDto",
-);
-const PrivilegeDelegationDetailDtoSchema = DelegationDetailSchema.openapi("DelegationDetailDto");
+const ClientDelegationUpdateDtoSchema = DelegationUpdateSchema.openapi("DelegationUpdateDto");
+const ClientDelegationQueryDtoSchema = DelegationSearchSchema.omit({ clientIds: true }).openapi("DelegationQueryDto");
+const ClientDelegationDetailDtoSchema = DelegationDetailSchema.openapi("DelegationDetailDto");
 
-const PrivilegeDelegationResolutionResultSchema = z
+const ClientDelegationResolutionResultSchema = z
   .object({
     username: z.string().openapi({ example: "alice" }),
     delegateeUsername: z.string().nullable().openapi({ example: "bob" }),
   })
   .strict()
-  .openapi("PrivilegeDelegationResolutionResult");
+  .openapi("ClientDelegationResolutionResult");
 
-const PrivilegeDelegationResolutionInputNotFoundResponseSchema = z
+const ClientDelegationResolutionInputNotFoundResponseSchema = z
   .object({
-    code: z.literal(ApiErrorCode.PrivilegeDelegationResolutionInputNotFound),
+    code: z.literal(ApiErrorCode.ClientDelegationResolutionInputNotFound),
     data: z
       .object({
         usernames: z.array(z.string()),
@@ -47,64 +45,64 @@ const PrivilegeDelegationResolutionInputNotFoundResponseSchema = z
       })
       .strict(),
     message: z.string().openapi({
-      example: PRIVILEGE_DELEGATION_RESOLUTION_INPUT_NOT_FOUND_MESSAGE,
+      example: CLIENT_DELEGATION_RESOLUTION_INPUT_NOT_FOUND_MESSAGE,
     }),
   })
   .strict()
-  .openapi("PrivilegeDelegationResolutionInputNotFoundResponse");
+  .openapi("ClientDelegationResolutionInputNotFoundResponse");
 
-const PrivilegeDelegationResolutionUnavailableResponseSchema = z
+const ClientDelegationResolutionUnavailableResponseSchema = z
   .object({
-    code: z.literal(ApiErrorCode.PrivilegeDelegationResolutionUnavailable),
+    code: z.literal(ApiErrorCode.ClientDelegationResolutionUnavailable),
     data: z.null(),
     message: z.string().openapi({
-      example: PRIVILEGE_DELEGATION_RESOLUTION_UNAVAILABLE_MESSAGE,
+      example: CLIENT_DELEGATION_RESOLUTION_UNAVAILABLE_MESSAGE,
     }),
   })
   .strict()
-  .openapi("PrivilegeDelegationResolutionUnavailableResponse");
+  .openapi("ClientDelegationResolutionUnavailableResponse");
 
-export const privilegeDelegationsResolve = createRoute({
+export const clientDelegationsResolve = createRoute({
   method: "post",
   path: "/resolve",
   tags,
   request: {
-    body: jsonContentRequired(PrivilegeDelegationResolutionRequestSchema, "当前直接应用委托解析参数"),
+    body: jsonContentRequired(ClientDelegationResolutionRequestSchema, "当前直接应用委托解析参数"),
   },
   responses: {
     ...commonErrorResponses,
     [HttpStatusCodes.NOT_FOUND]: jsonContent(
-      PrivilegeDelegationResolutionInputNotFoundResponseSchema,
-      PRIVILEGE_DELEGATION_RESOLUTION_INPUT_NOT_FOUND_MESSAGE,
+      ClientDelegationResolutionInputNotFoundResponseSchema,
+      CLIENT_DELEGATION_RESOLUTION_INPUT_NOT_FOUND_MESSAGE,
     ),
     [HttpStatusCodes.SERVICE_UNAVAILABLE]: jsonContent(
-      PrivilegeDelegationResolutionUnavailableResponseSchema,
-      PRIVILEGE_DELEGATION_RESOLUTION_UNAVAILABLE_MESSAGE,
+      ClientDelegationResolutionUnavailableResponseSchema,
+      CLIENT_DELEGATION_RESOLUTION_UNAVAILABLE_MESSAGE,
     ),
     [HttpStatusCodes.OK]: jsonContent(
-      createSuccessResponseSchema(z.array(PrivilegeDelegationResolutionResultSchema)),
+      createSuccessResponseSchema(z.array(ClientDelegationResolutionResultSchema)),
       "按输入顺序返回当前直接被委托人",
     ),
   },
 });
 
-export const privilegeDelegationsQuery = createRoute({
+export const clientDelegationsQuery = createRoute({
   method: "post",
   path: "/search",
   tags,
   request: {
-    body: jsonContentRequired(PrivilegeDelegationQueryDtoSchema, "应用代理搜索参数"),
+    body: jsonContentRequired(ClientDelegationQueryDtoSchema, "应用代理搜索参数"),
   },
   responses: {
     ...commonErrorResponses,
     [HttpStatusCodes.OK]: jsonContent(
-      createSuccessResponseSchema(z.array(PrivilegeDelegationDetailDtoSchema)),
+      createSuccessResponseSchema(z.array(ClientDelegationDetailDtoSchema)),
       "应用Delegation列表",
     ),
   },
 });
 
-export const privilegeDelegationUpdate = createRoute({
+export const clientDelegationUpdate = createRoute({
   method: "patch",
   path: "/:id",
   tags,
@@ -112,7 +110,7 @@ export const privilegeDelegationUpdate = createRoute({
     params: z.object({
       id: z.coerce.number().int().openapi({ example: 1 }),
     }),
-    body: jsonContentRequired(PrivilegeDelegationUpdateDtoSchema, "应用Delegation更新参数"),
+    body: jsonContentRequired(ClientDelegationUpdateDtoSchema, "应用Delegation更新参数"),
   },
   responses: {
     ...commonErrorResponses,
@@ -120,17 +118,17 @@ export const privilegeDelegationUpdate = createRoute({
   },
 });
 
-export const privilegeDelegationSet = createRoute({
+export const clientDelegationSet = createRoute({
   method: "post",
   path: "/",
   tags,
   request: {
-    body: jsonContentRequired(PrivilegeDelegationCreateDtoSchema, "应用Delegation设置参数"),
+    body: jsonContentRequired(ClientDelegationCreateDtoSchema, "应用Delegation设置参数"),
   },
   responses: {
     ...commonErrorResponses,
     [HttpStatusCodes.OK]: jsonContent(
-      createSuccessResponseSchema(PrivilegeDelegationDetailDtoSchema),
+      createSuccessResponseSchema(ClientDelegationDetailDtoSchema),
       "应用Delegation设置结果",
     ),
   },

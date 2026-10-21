@@ -36,7 +36,7 @@ export class UserProfileDocumentIntegrityError extends Error {
   readonly httpStatus = SERVICE_UNAVAILABLE;
 
   constructor() {
-    super("已发布的 User Profile v3 文档不符合严格契约");
+    super("已发布的 User Profile v4 文档不符合严格契约");
     this.name = new.target.name;
   }
 }

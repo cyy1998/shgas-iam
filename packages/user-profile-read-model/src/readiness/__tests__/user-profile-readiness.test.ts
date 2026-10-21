@@ -43,7 +43,7 @@ describe("version-independent User Profile readiness gates", () => {
     const expected = { ...stored, name: "Current name" };
     const rebuildExpected = mock(async () => [expected]);
     const gate = createUserProfilePostgresGate({
-      schemaVersion: 3,
+      schemaVersion: 4,
       repository: {
         readVerificationSummary: mock(async () => summary(1)),
         scanPage: mock(async ({ afterUserId }: { afterUserId: number }) =>
@@ -58,7 +58,7 @@ describe("version-independent User Profile readiness gates", () => {
 
     expect(rebuildExpected).toHaveBeenCalledWith([stored], observedAt);
     expect(report).toEqual({
-      version: 3,
+      version: 4,
       gate: "postgres",
       verifiedAt: observedAt.toISOString(),
       status: "failed",
@@ -81,7 +81,7 @@ describe("version-independent User Profile readiness gates", () => {
       profile: { ...expectedFacts.profile, name: "Older name" },
     };
     const gate = createUserProfileRedisAccessGate({
-      schemaVersion: 3,
+      schemaVersion: 4,
       inventory: {
         readVerificationSummary: mock(async () => summary(1)),
         scanPage: mock(async ({ afterUserId }: { afterUserId: number }) =>
@@ -104,7 +104,7 @@ describe("version-independent User Profile readiness gates", () => {
     });
 
     await expect(gate.verify({ batchSize: 100 })).resolves.toEqual({
-      version: 3,
+      version: 4,
       gate: "redis-access",
       verifiedAt: observedAt.toISOString(),
       status: "failed",
@@ -119,7 +119,7 @@ describe("version-independent User Profile readiness gates", () => {
   test("fails the complete inventory when profile counts or orphan rows disagree", async () => {
     const stored = publishedProfile(1, "3");
     const gate = createUserProfilePostgresGate({
-      schemaVersion: 3,
+      schemaVersion: 4,
       repository: {
         readVerificationSummary: mock(async () => ({
           userCount: 1,
@@ -156,13 +156,13 @@ function inventoryGate(kind: "postgres" | "redis", ids: number[], count = ids.le
   };
   if (kind === "postgres") {
     return createUserProfilePostgresGate({
-      schemaVersion: 3,
+      schemaVersion: 4,
       repository: { ...inventory, rebuildExpected: async (profiles) => profiles },
       clock: { nowDate: () => observedAt },
     });
   }
   return createUserProfileRedisAccessGate({
-    schemaVersion: 3,
+    schemaVersion: 4,
     inventory,
     subjectFacts: {
       createRecord: factsRecord,
@@ -206,7 +206,7 @@ function pageRow(currentProfile: ReturnType<typeof publishedProfile>) {
 
 function factsRecord(source: ReturnType<typeof publishedProfile>) {
   return {
-    schemaVersion: 3 as const,
+    schemaVersion: 4 as const,
     sourceDirtyVersion: source.sourceDirtyVersion,
     publishedAt: source.rebuiltAt.toISOString(),
     subjectIdentifier: source.subjectIdentifier,
@@ -229,7 +229,7 @@ function publishedProfile(userId: number, sourceDirtyVersion: string) {
   return {
     ...currentProfile(userId, sourceDirtyVersion),
     name: "Stale name",
-    profileSchemaVersion: 3 as const,
+    profileSchemaVersion: 4 as const,
     searchDoc: {
       user: {
         subjectIdentifier: `00000000-0000-4000-8000-${String(userId).padStart(12, "0")}`,
@@ -256,7 +256,7 @@ function currentProfile(userId: number, sourceDirtyVersion: string): PublishedPr
     status: UserStatus.Enable,
     isDelete: false,
     searchVisible: true,
-    profileSchemaVersion: 3,
+    profileSchemaVersion: 4,
     sourceDirtyVersion,
     detail: {
       id: userId,
@@ -272,7 +272,6 @@ function currentProfile(userId: number, sourceDirtyVersion: string): PublishedPr
       updateTime: observedAt,
       employments: [],
       roles: [],
-      privileges: [],
     },
     searchDoc: {
       user: {

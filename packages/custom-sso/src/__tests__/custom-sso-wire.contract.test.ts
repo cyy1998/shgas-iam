@@ -11,7 +11,7 @@ import {
 
 const subjectIdentifier = "00000000-0000-4000-8000-000000000001";
 
-describe("Custom SSO V2 subject wire mapping contract", () => {
+describe("Custom SSO V3 subject wire mapping contract", () => {
   test("maps responsibilities only into profile employments", async () => {
     const employment = {
       isPrimary: true,
@@ -60,11 +60,9 @@ describe("Custom SSO V2 subject wire mapping contract", () => {
           {
             ...employment,
             roles: ["admin"],
-            privileges: ["read"],
           },
         ],
         roles: ["admin"],
-        privileges: ["read"],
       },
     };
 
@@ -76,14 +74,14 @@ describe("Custom SSO V2 subject wire mapping contract", () => {
         subjectIdentifier,
         clientCode: "client-a",
         selection: {
-          catalogVersion: 2,
+          catalogVersion: 3,
           optionalClaims: ["profile:employments", "iam:authorization"],
         },
       },
     );
 
     expect(wire).toMatchObject({
-      version: 2,
+      version: 3,
       profile: {
         employments: [
           {
@@ -103,7 +101,6 @@ describe("Custom SSO V2 subject wire mapping contract", () => {
           {
             organization: { code: "org-a" },
             roles: ["admin"],
-            privileges: ["read"],
           },
         ],
       },
@@ -130,12 +127,12 @@ describe("Custom SSO V2 subject wire mapping contract", () => {
     };
     const invalidWires = [
       {
-        version: 2,
+        version: 3,
         subjectIdentifier,
         profile: { employments: [baseEmployment] },
       },
       {
-        version: 2,
+        version: 3,
         subjectIdentifier,
         profile: {
           employments: [
@@ -166,7 +163,7 @@ describe("Custom SSO V2 subject wire mapping contract", () => {
         },
       },
       {
-        version: 2,
+        version: 3,
         subjectIdentifier,
         profile: {
           employments: [
@@ -198,7 +195,7 @@ describe("Custom SSO V2 subject wire mapping contract", () => {
         },
       },
       {
-        version: 2,
+        version: 3,
         subjectIdentifier,
         profile: {
           employments: [
@@ -243,7 +240,7 @@ describe("Custom SSO V2 subject wire mapping contract", () => {
           subjectIdentifier,
           clientCode: "client-a",
           selection: {
-            catalogVersion: 2,
+            catalogVersion: 3,
             optionalClaims: ["profile:employments"],
           },
         },
@@ -266,7 +263,7 @@ describe("Custom SSO V2 subject wire mapping contract", () => {
         {
           subjectIdentifier,
           clientCode: "client-a",
-          selection: { catalogVersion: 2, optionalClaims: [] },
+          selection: { catalogVersion: 3, optionalClaims: [] },
         },
       ),
     );
@@ -296,7 +293,7 @@ describe("Custom SSO V2 subject wire mapping contract", () => {
         {
           subjectIdentifier,
           clientCode: "client-a",
-          selection: { catalogVersion: 2, optionalClaims: ["profile:username"] },
+          selection: { catalogVersion: 3, optionalClaims: ["profile:username"] },
         },
       ),
     );
@@ -332,7 +329,7 @@ describe("Custom SSO V2 subject wire mapping contract", () => {
         {
           subjectIdentifier,
           clientCode: "client-a",
-          selection: { catalogVersion: 2, optionalClaims: [] },
+          selection: { catalogVersion: 3, optionalClaims: [] },
         },
       ),
     );
@@ -340,13 +337,14 @@ describe("Custom SSO V2 subject wire mapping contract", () => {
     expect(result).toBe(error);
   });
 
-  test("owns one strict runtime schema for every Custom SSO V2 consumer", async () => {
+  test("owns one strict runtime schema for every Custom SSO V3 consumer", async () => {
     const wire = await resolveWire({
       subjectIdentifier,
       username: "zhangsan",
     });
 
     expect(CustomSsoSubjectProjectionSchema.safeParse(wire).success).toBe(true);
+    expect(CustomSsoSubjectProjectionSchema.safeParse({ ...wire, version: 2 }).success).toBe(false);
     expect(() =>
       CustomSsoSubjectProjectionSchema.parse({
         ...wire,
@@ -357,7 +355,7 @@ describe("Custom SSO V2 subject wire mapping contract", () => {
 
   test("accepts an omitted profile parent and rejects an empty profile parent", () => {
     const wire = {
-      version: 2 as const,
+      version: 3 as const,
       subjectIdentifier,
     };
 
@@ -376,7 +374,7 @@ describe("Custom SSO V2 subject wire mapping contract", () => {
     });
 
     expect(wire).toEqual({
-      version: 2,
+      version: 3,
       subjectIdentifier,
     });
   });
@@ -397,7 +395,7 @@ describe("Custom SSO V2 subject wire mapping contract", () => {
 
     expect([populated, empty]).toEqual([
       {
-        version: 2,
+        version: 3,
         subjectIdentifier,
         profile: {
           username: "zhangsan",
@@ -405,7 +403,7 @@ describe("Custom SSO V2 subject wire mapping contract", () => {
         },
       },
       {
-        version: 2,
+        version: 3,
         subjectIdentifier,
       },
     ]);
@@ -418,12 +416,11 @@ describe("Custom SSO V2 subject wire mapping contract", () => {
       authorization: {
         employments: [],
         roles: [],
-        privileges: [],
       },
     });
 
     expect(wire).toEqual({
-      version: 2,
+      version: 3,
       subjectIdentifier,
       profile: {
         employments: [],
@@ -431,7 +428,6 @@ describe("Custom SSO V2 subject wire mapping contract", () => {
       authorization: {
         employments: [],
         roles: [],
-        privileges: [],
       },
     });
   });
@@ -460,14 +456,13 @@ describe("Custom SSO V2 subject wire mapping contract", () => {
         authorization: {
           employments: [],
           roles: [],
-          privileges: [],
         },
       }),
     );
     expect(scalarPreview).not.toHaveProperty("profile.phone");
     expect(arrayPreview).toMatchObject({
       profile: { employments: [] },
-      authorization: { employments: [], roles: [], privileges: [] },
+      authorization: { employments: [], roles: [] },
     });
   });
 
@@ -515,12 +510,10 @@ describe("Custom SSO V2 subject wire mapping contract", () => {
           {
             ...employment,
             roles: ["admin"],
-            privileges: ["read"],
             authorizationDecision: "allow",
           },
         ],
         roles: ["admin"],
-        privileges: ["read"],
         authorizationDecision: "allow",
       },
       id: 1001,
@@ -546,7 +539,7 @@ describe("Custom SSO V2 subject wire mapping contract", () => {
       },
     };
     expect(wire).toEqual({
-      version: 2,
+      version: 3,
       subjectIdentifier,
       profile: {
         username: "zhangsan",
@@ -559,11 +552,9 @@ describe("Custom SSO V2 subject wire mapping contract", () => {
           {
             ...wireEmployment,
             roles: ["admin"],
-            privileges: ["read"],
           },
         ],
         roles: ["admin"],
-        privileges: ["read"],
       },
     });
   });
@@ -575,7 +566,7 @@ async function resolveWire(projection: ClientSubjectProjection) {
     {
       subjectIdentifier,
       clientCode: "client-a",
-      selection: { catalogVersion: 2, optionalClaims: [] },
+      selection: { catalogVersion: 3, optionalClaims: [] },
     },
   );
 }

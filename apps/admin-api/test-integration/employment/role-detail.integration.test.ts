@@ -11,21 +11,10 @@ import {
   EmploymentStatus,
   OrganizationLevel,
   OrganizationType,
-  PrivilegeStatus,
   RoleAssignmentTargetType,
   UserType,
 } from "@iam/contracts";
-import {
-  clients,
-  employments,
-  organizationClosures,
-  organizations,
-  positions,
-  privileges,
-  rolePrivileges,
-  roles,
-  users,
-} from "@iam/db/schema";
+import { clients, employments, organizationClosures, organizations, positions, roles, users } from "@iam/db/schema";
 import { roleAssignments } from "@iam/db/schema/role-assignments";
 import { createRoleAssignmentResolver } from "@iam/role-assignment-resolution";
 import { createAdminApiPostgresTestHarness } from "../support/postgres-test-harness";
@@ -38,32 +27,62 @@ beforeAll(async () => {
 
 beforeEach(async () => {
   await harness.reset();
-  await harness.sql`truncate role_privilege, role_assignment, privilege, role, client restart identity cascade`;
+  await harness.sql`truncate role_assignment, role, client restart identity cascade`;
 });
 
 afterAll(async () => {
   await harness.close();
 });
 
-test("User and Employment details expose only distinct enabled non-deleted privileges", async () => {
-  const seeded = await seedPrivilegeDetailGraph();
+test("User and Employment details preserve effective roles with the current complete response shape", async () => {
+  const seeded = await seedRoleDetailGraph();
   const { employmentService, userService } = createSubjects();
-
   const employmentDetail = await employmentService.getEmploymentDetailByIdForAdmin(seeded.employmentId);
-  const userDetail = await userService.getUserDetailByUsernameForAdmin("privilege-holder");
-  const userEmploymentDetail = userDetail.employments.find((item) => item.id === seeded.employmentId);
-  const expectedPrivileges = ["shared:read", "unique:write"];
-  const expectedPrivilegeNames = {
-    "shared:read": "Shared read",
-    "unique:write": "Unique write",
-  };
-
-  expect([...employmentDetail.privileges].sort()).toEqual(expectedPrivileges);
-  expect(employmentDetail.privilegeNames).toEqual(expectedPrivilegeNames);
-  expect([...userDetail.privileges].sort()).toEqual(expectedPrivileges);
-  expect(userDetail.privilegeNames).toEqual(expectedPrivilegeNames);
-  expect([...userEmploymentDetail!.privileges].sort()).toEqual(expectedPrivileges);
-  expect(userEmploymentDetail!.privilegeNames).toEqual(expectedPrivilegeNames);
+  const userDetail = await userService.getUserDetailByUsernameForAdmin("role-holder");
+  const userEmploymentDetail = userDetail.employments.find((item) => item.id === seeded.employmentId)!;
+  const employmentFields = [
+    "id",
+    "userId",
+    "orgId",
+    "posId",
+    "isPrimary",
+    "status",
+    "startTime",
+    "endTime",
+    "description",
+    "isDelete",
+    "createTime",
+    "updateTime",
+    "user",
+    "position",
+    "organization",
+    "roles",
+    "roleNames",
+  ];
+  expect(Object.keys(employmentDetail).sort()).toEqual([...employmentFields, "userStatus"].sort());
+  expect(Object.keys(userEmploymentDetail).sort()).toEqual(employmentFields.sort());
+  expect(Object.keys(userDetail).sort()).toEqual(
+    [
+      "id",
+      "username",
+      "wxId",
+      "name",
+      "mobile",
+      "userType",
+      "orderNum",
+      "status",
+      "isDelete",
+      "createTime",
+      "updateTime",
+      "employments",
+      "roles",
+      "roleNames",
+    ].sort(),
+  );
+  for (const detail of [employmentDetail, userEmploymentDetail, userDetail]) {
+    expect([...detail.roles].sort()).toEqual(["ROLE:FIRST", "ROLE:SECOND"]);
+    expect(detail.roleNames).toEqual({ "ROLE:FIRST": "First role", "ROLE:SECOND": "Second role" });
+  }
 });
 
 function createSubjects() {
@@ -86,7 +105,7 @@ function createSubjects() {
     employmentRepository: repositories.employment,
     roleAssignmentResolver,
     roleRepository: repositories.role,
-    privilegeRepository: repositories.privilege,
+
     uow: mapUnitOfWork(
       unitOfWork,
       (tx) =>
@@ -107,7 +126,7 @@ function createSubjects() {
     employmentRepository: repositories.employment,
     roleAssignmentResolver,
     roleRepository: repositories.role,
-    privilegeRepository: repositories.privilege,
+
     passwordHasher: { hashPassword: async (password) => password },
     random: {
       password: () => "unused-password",
@@ -137,12 +156,12 @@ function createSubjects() {
   return { employmentService, userService };
 }
 
-async function seedPrivilegeDetailGraph() {
+async function seedRoleDetailGraph() {
   const [client] = await harness.db
     .insert(clients)
     .values({
-      clientCode: "privilege-detail",
-      clientName: "Privilege detail",
+      clientCode: "role-detail",
+      clientName: "Role detail",
       clientSecret: "synthetic",
       extAttributes: {},
     })
@@ -150,19 +169,19 @@ async function seedPrivilegeDetailGraph() {
   const [user] = await harness.db
     .insert(users)
     .values({
-      username: "privilege-holder",
-      name: "Privilege Holder",
+      username: "role-holder",
+      name: "Role Holder",
       userType: UserType.Formal,
     })
     .returning();
   const [organization] = await harness.db
     .insert(organizations)
     .values({
-      orgCode: "PRIVILEGE",
-      orgName: "Privilege Organization",
+      orgCode: "ROLE",
+      orgName: "Role Organization",
       parentId: -1,
       businessParentId: -1,
-      path: "/PRIVILEGE",
+      path: "/ROLE",
       level: OrganizationLevel.One,
       orgType: OrganizationType.Department,
     })
@@ -175,8 +194,8 @@ async function seedPrivilegeDetailGraph() {
   const [position] = await harness.db
     .insert(positions)
     .values({
-      posCode: "PRIVILEGE",
-      posName: "Privilege Position",
+      posCode: "ROLE",
+      posName: "Role Position",
     })
     .returning();
   const [employment] = await harness.db
@@ -192,8 +211,8 @@ async function seedPrivilegeDetailGraph() {
   const seededRoles = await harness.db
     .insert(roles)
     .values([
-      { roleCode: "PRIVILEGE:FIRST", roleName: "First role", clientId: client!.id },
-      { roleCode: "PRIVILEGE:SECOND", roleName: "Second role", clientId: client!.id },
+      { roleCode: "ROLE:FIRST", roleName: "First role", clientId: client!.id },
+      { roleCode: "ROLE:SECOND", roleName: "Second role", clientId: client!.id },
     ])
     .returning();
   await harness.db.insert(roleAssignments).values(
@@ -204,24 +223,5 @@ async function seedPrivilegeDetailGraph() {
       includeDescendants: false,
     })),
   );
-  const seededPrivileges = await harness.db
-    .insert(privileges)
-    .values([
-      { privilegeCode: "shared:read", privilegeName: "Shared read", status: PrivilegeStatus.Enable },
-      { privilegeCode: "unique:write", privilegeName: "Unique write", status: PrivilegeStatus.Enable },
-      { privilegeCode: "paused:read", privilegeName: "Paused read", status: PrivilegeStatus.Pause },
-      { privilegeCode: "disabled:read", privilegeName: "Disabled read", status: PrivilegeStatus.Disable },
-      { privilegeCode: "deleted:read", privilegeName: "Deleted read", status: PrivilegeStatus.Enable, isDelete: true },
-    ])
-    .returning();
-  const privilegeId = (code: string) => seededPrivileges.find((item) => item.privilegeCode === code)!.id;
-  await harness.db.insert(rolePrivileges).values([
-    { roleId: seededRoles[0]!.id, privilegeId: privilegeId("shared:read") },
-    { roleId: seededRoles[1]!.id, privilegeId: privilegeId("shared:read") },
-    { roleId: seededRoles[1]!.id, privilegeId: privilegeId("unique:write") },
-    { roleId: seededRoles[0]!.id, privilegeId: privilegeId("paused:read") },
-    { roleId: seededRoles[0]!.id, privilegeId: privilegeId("disabled:read") },
-    { roleId: seededRoles[1]!.id, privilegeId: privilegeId("deleted:read") },
-  ]);
   return { employmentId: employment!.id };
 }

@@ -217,27 +217,14 @@ function EmploymentDetailDrawerContent({ open, employmentId, onClose, onChanged 
               },
               {
                 key: "roles",
-                label: `角色 / 权限 (${detail.roles.length}/${detail.privileges.length})`,
+                label: `角色 (${detail.roles.length})`,
                 children: (
                   <div>
-                    <div style={{ marginBottom: 12 }}>
-                      <strong>角色：</strong>
-                      {detail.roles.length === 0 ? (
-                        <span style={{ color: "#999" }}>无</span>
-                      ) : (
-                        detail.roles.map((r: string) => <Tag key={r}>{detail.roleNames[r] || "未命名角色"}</Tag>)
-                      )}
-                    </div>
-                    <div>
-                      <strong>权限：</strong>
-                      {detail.privileges.length === 0 ? (
-                        <span style={{ color: "#999" }}>无</span>
-                      ) : (
-                        detail.privileges.map((p: string) => (
-                          <Tag key={p}>{detail.privilegeNames[p] || "未命名权限"}</Tag>
-                        ))
-                      )}
-                    </div>
+                    {detail.roles.length === 0 ? (
+                      <span style={{ color: "#999" }}>无</span>
+                    ) : (
+                      detail.roles.map((r: string) => <Tag key={r}>{detail.roleNames[r] || "未命名角色"}</Tag>)
+                    )}
                   </div>
                 ),
               },

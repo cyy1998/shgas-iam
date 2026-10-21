@@ -11,7 +11,7 @@ import { createRedisTestHarness } from "../support/redis-test-harness";
 const OBSERVED_AT = new Date("2026-08-22T08:00:00.000Z");
 const PROCESS_COMPLETED_AT = new Date("2026-08-22T08:00:01.000Z");
 
-describe("User Profile v3 Redis readiness", () => {
+describe("User Profile v4 Redis readiness", () => {
   let harness: Awaited<ReturnType<typeof createRedisTestHarness>>;
 
   beforeAll(async () => {
@@ -38,7 +38,7 @@ describe("User Profile v3 Redis readiness", () => {
     await publisher.publish(projection.subjectFacts.createRecord(profiles[0]!, OBSERVED_AT));
     const staleFacts = {
       ...projection.subjectFacts.createRecord(profiles[1]!, OBSERVED_AT),
-      schemaVersion: 2,
+      schemaVersion: 3,
     };
     await scope.projectionRedis.publisher.eval(
       "redis.call('SET', KEYS[1], ARGV[2]); return 1",
@@ -97,7 +97,7 @@ describe("User Profile v3 Redis readiness", () => {
     }
     const passedReport = await gate.verify({ batchSize: 2 });
     expect(passedReport).toMatchObject({
-      version: 3,
+      version: 4,
       status: "passed",
       counts: { users: 3, profiles: 3, verifiedUsers: 3 },
       failures: [],
@@ -144,7 +144,7 @@ function profile(userId: number, sourceDirtyVersion: string) {
     status: UserStatus.Enable,
     isDelete: false,
     searchVisible: true,
-    profileSchemaVersion: 3,
+    profileSchemaVersion: 4,
     sourceDirtyVersion,
     detail: {
       id: userId,
@@ -160,7 +160,6 @@ function profile(userId: number, sourceDirtyVersion: string) {
       updateTime: OBSERVED_AT,
       employments: [],
       roles: [],
-      privileges: [],
     },
     searchDoc: {
       user: {

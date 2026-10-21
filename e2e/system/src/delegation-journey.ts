@@ -1,4 +1,4 @@
-import { ApiErrorCode, PrivilegeDelegationStatus } from "@iam/contracts";
+import { ApiErrorCode, ClientDelegationStatus } from "@iam/contracts";
 import type { APIRequestContext, Locator, Page } from "@playwright/test";
 import { expect, test } from "@playwright/test";
 import { expectRpcMutationResult, isSuccessfulRpcResponse, loginToAdmin } from "./admin-client-journey.ts";
@@ -83,7 +83,7 @@ export async function expectClientDelegationJourney(input: DelegationJourneyInpu
       await expect(incomingRow.getByRole("button", { name: /^(编辑|暂停|恢复|结束)$/u })).toHaveCount(0);
       const forbiddenUpdate = await receiverContext.request.patch(`${input.origin}/api/iam/public/delegations/${id}`, {
         headers: { Client: "iam" },
-        data: { status: PrivilegeDelegationStatus.Disable },
+        data: { status: ClientDelegationStatus.Disable },
       });
       expect(forbiddenUpdate.status()).toBe(404);
       await expectResolution(input, input.delegateeUsername);
@@ -103,8 +103,8 @@ export async function expectClientDelegationJourney(input: DelegationJourneyInpu
         { headers: { Client: encodeURIComponent(input.adminClientCode) } },
       );
       expect(deletion.status()).toBe(409);
-      expect(await deletion.json()).toMatchObject({ code: ApiErrorCode.UserHasOpenPrivilegeDelegation });
-      await internalUpdate(input, id, { status: PrivilegeDelegationStatus.Enable });
+      expect(await deletion.json()).toMatchObject({ code: ApiErrorCode.UserHasOpenClientDelegation });
+      await internalUpdate(input, id, { status: ClientDelegationStatus.Enable });
       await expectResolution(input, input.delegateeUsername);
       await ownerPage.reload();
       await showAllDelegations(ownerPage);
@@ -135,13 +135,13 @@ export async function expectClientDelegationJourney(input: DelegationJourneyInpu
       await expect(row.getByRole("button", { name: /^(编辑|暂停|恢复|结束)$/u })).toHaveCount(0);
       const reopen = await input.request.patch(`${input.origin}/api/iam/internal/delegations/${id}`, {
         headers: { apikey: input.internalApiKey },
-        data: { status: PrivilegeDelegationStatus.Enable },
+        data: { status: ClientDelegationStatus.Enable },
       });
       expect(reopen.status()).toBe(409);
-      expect(await reopen.json()).toMatchObject({ code: ApiErrorCode.PrivilegeDelegationEnded });
+      expect(await reopen.json()).toMatchObject({ code: ApiErrorCode.ClientDelegationEnded });
       const history = await internalSearch(input);
       expect(history.find((item) => item.id === id)).toMatchObject({
-        status: PrivilegeDelegationStatus.Disable,
+        status: ClientDelegationStatus.Disable,
         description,
       });
       await page.reload();
@@ -190,12 +190,12 @@ async function expectClientBoundary(input: DelegationJourneyInput, id: number, n
     expect((await internalSearch(input)).map((item) => item.id)).toEqual([id]);
     const rejected = await input.request.patch(`${input.origin}/api/iam/internal/delegations/${alternateRecord.id}`, {
       headers: { apikey: input.internalApiKey },
-      data: { status: PrivilegeDelegationStatus.Disable },
+      data: { status: ClientDelegationStatus.Disable },
     });
     expect(rejected.status()).toBe(404);
     const ended = await input.request.patch(`${input.origin}/api/iam/admin/delegations/${alternateRecord.id}`, {
       headers: { Client: encodeURIComponent(input.adminClientCode) },
-      data: { status: PrivilegeDelegationStatus.Disable },
+      data: { status: ClientDelegationStatus.Disable },
     });
     expect(ended.status()).toBe(200);
     await expectResolution(input, input.delegateeUsername);
@@ -283,7 +283,7 @@ async function internalSearch(input: DelegationJourneyInput) {
   return recordsFrom(await response.json());
 }
 
-async function internalUpdate(input: DelegationJourneyInput, id: number, data: { status: PrivilegeDelegationStatus }) {
+async function internalUpdate(input: DelegationJourneyInput, id: number, data: { status: ClientDelegationStatus }) {
   const response = await input.request.patch(`${input.origin}/api/iam/internal/delegations/${id}`, {
     headers: { apikey: input.internalApiKey },
     data,

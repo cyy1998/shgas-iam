@@ -73,10 +73,10 @@ export class UserHasOpenEmploymentError extends DomainBusinessError {
   }
 }
 
-export class UserHasOpenPrivilegeDelegationError extends DomainBusinessError {
+export class UserHasOpenClientDelegationError extends DomainBusinessError {
   constructor(message: string = "该用户存在未结束的委托，无法删除；请先结束相关委托") {
     super(message, {
-      code: ApiErrorCode.UserHasOpenPrivilegeDelegation,
+      code: ApiErrorCode.UserHasOpenClientDelegation,
       httpStatus: DomainHttpStatus.Conflict,
     });
   }

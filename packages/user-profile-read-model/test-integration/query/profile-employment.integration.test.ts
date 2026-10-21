@@ -6,7 +6,6 @@ import {
   OrganizationResponsibilityTypeCode,
   OrganizationType,
   PositionStatus,
-  PrivilegeStatus,
   RoleAssignmentTargetType,
   UserStatus,
   UserType,
@@ -18,8 +17,6 @@ import {
   organizationResponsibilityAssignments,
   organizations,
   positions,
-  privileges,
-  rolePrivileges,
   roles,
   users,
 } from "@iam/db/schema";
@@ -53,8 +50,8 @@ beforeAll(async () => {
 
 beforeEach(async () => {
   await harness!.sql.unsafe(
-    "TRUNCATE TABLE organization_responsibility_assignment, role_assignment, role_privilege, " +
-      "privilege, role, client, employment, " +
+    "TRUNCATE TABLE organization_responsibility_assignment, role_assignment, " +
+      "role, client, employment, " +
       'organization_closure, organization, position, user_profile, "user" RESTART IDENTITY CASCADE',
   );
 });
@@ -63,7 +60,7 @@ afterAll(async () => {
   await harness?.close();
 });
 
-describe("User Profile v3 Employment tracer", () => {
+describe("User Profile v4 Employment tracer", () => {
   test("publishes only strict Effective Employment facts without internal identity or period fields", async () => {
     await seedEmploymentProjectionGraph();
     const { builder } = createTracer();
@@ -107,7 +104,6 @@ describe("User Profile v3 Employment tracer", () => {
             name: "Position effective",
           },
           roles: ["role-effective"],
-          privileges: ["profile:read", "profile:write"],
           responsibilities: [],
         },
       ],
@@ -341,13 +337,6 @@ describe("User Profile v3 Employment tracer", () => {
       roleName: "Second role",
       clientId: 1,
     });
-    await harness!.db.insert(privileges).values({
-      id: 302,
-      privilegeCode: "second:read",
-      privilegeName: "Second read",
-      status: PrivilegeStatus.Enable,
-    });
-    await harness!.db.insert(rolePrivileges).values({ roleId: 201, privilegeId: 302 });
     await harness!.db.insert(roleAssignments).values({
       roleId: 201,
       targetType: RoleAssignmentTargetType.Employment,
@@ -401,7 +390,6 @@ describe("User Profile v3 Employment tracer", () => {
               { field: "position.code", op: "eq", value: "position-effective" },
               { field: "position.name", op: "eq", value: "Position effective" },
               { field: "roles", op: "containsAll", value: ["role-effective"] },
-              { field: "privileges", op: "containsAny", value: ["profile:write"] },
             ],
           },
         },
@@ -413,7 +401,7 @@ describe("User Profile v3 Employment tracer", () => {
     expect(oneCompleteEmployment).toEqual([aliceBase]);
   });
 
-  test("supports strict, normalized Role and Privilege array conditions", async () => {
+  test("supports strict, normalized Role array conditions", async () => {
     await seedEmploymentProjectionGraph();
     const { builder, candidatePersistence, query } = createTracer();
     const candidate = await builder.buildOne({ userId: 1, sourceDirtyVersion: "1" });
@@ -437,9 +425,9 @@ describe("User Profile v3 Employment tracer", () => {
         exists: {
           path: "employments",
           where: {
-            field: "privileges",
+            field: "roles",
             op: "containsAll",
-            value: ["profile:read", "profile:write", "profile:read"],
+            value: ["role-effective", "role-effective"],
           },
         },
       },
@@ -449,9 +437,9 @@ describe("User Profile v3 Employment tracer", () => {
         exists: {
           path: "employments",
           where: {
-            field: "privileges",
+            field: "roles",
             op: "containsAll",
-            value: ["profile:read", "missing:privilege"],
+            value: ["role-effective", "missing-role"],
           },
         },
       },
@@ -470,6 +458,29 @@ describe("User Profile v3 Employment tracer", () => {
     expect(containsAny).toEqual([aliceBase]);
     expect(containsAll).toEqual([aliceBase]);
     expect(missingAll).toEqual([]);
+  });
+
+  test("rejects a retired authorization condition without broadening a matching user query", async () => {
+    await seedEmploymentProjectionGraph();
+    const { builder, candidatePersistence, query } = createTracer();
+    const candidate = await builder.buildOne({ userId: 1, sourceDirtyVersion: "1" });
+    await candidatePersistence.upsert(candidate!);
+
+    let failure: unknown;
+    try {
+      await query.searchBase({
+        filter: {
+          and: [
+            { field: "user.username", op: "eq", value: "alice" },
+            { exists: { path: "employments", where: { field: "privileges", op: "containsAny", value: ["read"] } } },
+          ],
+        },
+      });
+    } catch (error) {
+      failure = error;
+    }
+
+    expect(failure).toMatchObject({ httpStatus: 422, code: "COMMON.VALIDATION_FAILED" });
   });
 });
 
@@ -560,24 +571,6 @@ async function seedEmploymentProjectionGraph() {
     roleName: "Effective role",
     clientId: 1,
   });
-  await harness!.db.insert(privileges).values([
-    {
-      id: 300,
-      privilegeCode: "profile:write",
-      privilegeName: "Profile write",
-      status: PrivilegeStatus.Enable,
-    },
-    {
-      id: 301,
-      privilegeCode: "profile:read",
-      privilegeName: "Profile read",
-      status: PrivilegeStatus.Enable,
-    },
-  ]);
-  await harness!.db.insert(rolePrivileges).values([
-    { roleId: 200, privilegeId: 300 },
-    { roleId: 200, privilegeId: 301 },
-  ]);
   await harness!.db.insert(roleAssignments).values({
     roleId: 200,
     targetType: RoleAssignmentTargetType.Employment,

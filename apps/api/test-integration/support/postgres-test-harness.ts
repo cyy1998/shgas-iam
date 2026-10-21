@@ -76,7 +76,6 @@ export async function createApiPostgresTestHarness(
             client,
             organization_closure,
             organization,
-            privilege,
             employment,
             "user"
           RESTART IDENTITY CASCADE`,

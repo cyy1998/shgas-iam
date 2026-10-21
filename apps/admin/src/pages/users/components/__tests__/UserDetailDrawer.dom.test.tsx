@@ -107,7 +107,7 @@ vi.mock("@ant-design/pro-components", () => {
   }) => (
     <>
       {columns
-        .filter((column) => ["roles", "privileges"].includes(String(column.dataIndex)))
+        .filter((column) => column.dataIndex === "roles")
         .map((column) => (
           <section aria-label={column.title} key={String(column.dataIndex)}>
             {column.render?.(null, dataSource)}
@@ -179,7 +179,7 @@ function detail(
     createTime: now,
     updateTime: now,
     roles: [],
-    privileges: [],
+
     allowedActions,
     employments: [
       {
@@ -205,7 +205,7 @@ function detail(
         position: { id: 3, posCode: "DEV", posName: "Developer" },
         organization,
         roles: ["iam:hr-admin"],
-        privileges: ["people:read"],
+
         allowedActions: createHrEmploymentAllowedActions(employmentStatus, isPrimary),
         managementPath: employmentStatus === EmploymentStatus.Disable ? null : "/employments?employmentId=4",
       },
@@ -237,24 +237,25 @@ describe("UserDetailDrawer Employment lifecycle actions", () => {
       ...detail(EmploymentStatus.Enable),
       roles: ["iam:hr-admin"],
       roleNames: { "iam:hr-admin": "人事管理员" },
-      privilegeNames: {},
     });
     render(<UserDetailDrawer open username="zhangsan" onClose={vi.fn()} onEdit={vi.fn()} onChanged={vi.fn()} />);
     expect(await screen.findByText("人事管理员")).toBeInTheDocument();
     expect(screen.queryByText("iam:hr-admin")).not.toBeInTheDocument();
   });
 
-  it("replaces the permission count when the selected user detail changes", async () => {
+  it("replaces the roles when the selected user detail changes", async () => {
     lifecycle.getUser
       .mockResolvedValueOnce({
         ...detail(EmploymentStatus.Enable),
         username: "first",
-        privileges: ["people:read", "people:write"],
+        roles: ["first:reader", "first:editor"],
+        roleNames: { "first:reader": "读取角色", "first:editor": "编辑角色" },
       })
       .mockResolvedValueOnce({
         ...detail(EmploymentStatus.Enable),
         username: "second",
-        privileges: ["people:read"],
+        roles: ["second:reader"],
+        roleNames: { "second:reader": "其他读取角色" },
       });
     const props = {
       open: true,
@@ -264,10 +265,11 @@ describe("UserDetailDrawer Employment lifecycle actions", () => {
     };
     const view = render(<UserDetailDrawer {...props} username="first" />);
 
-    expect(await screen.findByLabelText("权限数")).toHaveTextContent("2");
+    expect(await screen.findByText("编辑角色")).toBeInTheDocument();
 
     view.rerender(<UserDetailDrawer {...props} username="second" />);
-    await waitFor(() => expect(screen.getByLabelText("权限数")).toHaveTextContent("1"));
+    expect(await screen.findByText("其他读取角色")).toBeInTheDocument();
+    expect(screen.queryByText("编辑角色")).not.toBeInTheDocument();
   });
 
   beforeEach(() => {
@@ -484,9 +486,7 @@ describe("UserDetailDrawer Employment lifecycle actions", () => {
     for (const button of deniedButtons) expect(button).toBeDisabled();
     await user.click(await screen.findByRole("tab", { name: "雇佣（1）" }));
     expect(screen.queryByRole("columnheader", { name: "角色" })).not.toBeInTheDocument();
-    expect(screen.queryByRole("columnheader", { name: "权限" })).not.toBeInTheDocument();
     expect(screen.queryByText("iam:hr-admin")).not.toBeInTheDocument();
-    expect(screen.queryByText("people:read")).not.toBeInTheDocument();
     expect(screen.queryByText("+ 新增雇佣")).not.toBeInTheDocument();
     expect(screen.getByRole("link", { name: "查看任职" })).toHaveAttribute("href", "/employments?employmentId=4");
     expect(screen.queryByRole("tab", { name: "操作日志" })).not.toBeInTheDocument();

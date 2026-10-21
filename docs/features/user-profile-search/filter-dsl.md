@@ -1,10 +1,10 @@
 # User Profile Filter DSL 规则
 
-本文定义 User Profile Search v3 的过滤契约。查询与固定 Base 响应的决定见 [ADR-0015](../../adr/0015-adopt-schema-driven-user-profile-filter-dsl.md)；领域术语以根目录 [CONTEXT.md](../../../CONTEXT.md) 为准。全部搜索入口使用同一 canonical Filter engine。
+本文定义 User Profile Search v4 的过滤契约。查询与固定 Base 响应的决定见 [ADR-0015](../../adr/0015-adopt-schema-driven-user-profile-filter-dsl.md)；领域术语以根目录 [CONTEXT.md](../../../CONTEXT.md) 为准。全部搜索入口使用同一 canonical Filter engine。
 
 ## 1. 能力边界
 
-`POST /internal/users/search-dsl` 使用有效 Internal Client 认证，始终搜索 User Profile，并返回固定的 User Profile Base。User、Employment、Organization、Position、Role、Privilege 和 Organization Responsibility 可以提供条件，但不会变成结果根或进入响应摘要。
+`POST /internal/users/search-dsl` 使用有效 Internal Client 认证，始终搜索 User Profile，并返回固定的 User Profile Base。User、Employment、Organization、Position、Role 和 Organization Responsibility 可以提供条件，但不会变成结果根或进入响应摘要。
 
 - 搜索范围是所有未删除用户，包括 Enable、Pause 和 Disable；账号状态需要通过 `user.status` 显式筛选。
 - 关联任职只观察 Effective Employment，历史、暂停或已结束任职不能满足条件。
@@ -58,7 +58,7 @@ Expression =
 
 ## 3. Search Document 公开结构
 
-v3 的公开搜索结构如下；未列出的存储辅助结构不是合法路径。字段类型、枚举和可空性以
+v4 的公开搜索结构如下；未列出的存储辅助结构不是合法路径。字段类型、枚举和可空性以
 [Search Document schema](../../../packages/user-profile-read-model/src/schema/profile-search.schema.ts)为准，
 响应的五个字段以 [UserProfileBaseSchema](../../../packages/domain/src/user/schema.ts) 为准。
 
@@ -87,7 +87,6 @@ employments[]                    Effective Employment
 │   ├── code
 │   └── name
 ├── roles[]                      Role code
-├── privileges[]                 Privilege code
 └── responsibilities[]
     ├── type
     │   ├── code
@@ -127,7 +126,7 @@ employments[]                    Effective Employment
 | 标量数组                           | `containsAll`     | 文档数组包含非空查询数组中的全部值。                                 |
 | Organization reference             | `withinSubtreeOf` | Organization 自身或其当前完整路径中存在给定 Organization code。      |
 
-`in` 只用于单值字段；`roles`、`privileges` 等数组字段使用 `containsAny` 或 `containsAll`。所有查询数组先去重，再应用数量限制。
+`in` 只用于单值字段；`roles` 等数组字段使用 `containsAny` 或 `containsAll`。所有查询数组先去重，再应用数量限制。
 
 比较使用已发布事实的规范值，不隐式 trim、不转换大小写、不进行分词或模糊匹配。当前词汇不提供范围、正则、前后缀、全文、null、空集合或字段缺失操作符。
 
@@ -171,6 +170,8 @@ HTTP 结果统一如下：
 | 合法但无匹配                                                   | `200` + `[]`                   |
 | 空过滤器、未知路径、类型或操作符错误、结构超预算、结果超过 500 | `422`                          |
 | 命中文档解析失败、数据库查询异常或超时、请求预算耗尽           | `503`                          |
+
+退役的权限点路径（例如 Employment 作用域的 `privileges`）与其他未知路径一样返回 `422`；不会忽略条件、转换为角色条件或返回范围扩大的结果。
 
 任何失败都不返回部分结果。
 
@@ -252,7 +253,7 @@ Internal 用户详情、Admin 用户搜索与 Delegation 实体搜索继续保�
 
 ## 11. 版本切换
 
-Filter 随全局 profileSchemaVersion=v3 发布，不维护独立 searchDocVersion。
+Filter 随全局 profileSchemaVersion=v4 发布，不维护独立 searchDocVersion。
 调用方不能选择版本，不接受旧 all/any，也不双读或逐用户回退。
 当前 Profile、Detail、Search 与 Subject Facts 的重建、恢复窗口和双数据门禁，
 统一由[Profile 维护手册](../../releases/user-profile-maintenance.md)拥有。

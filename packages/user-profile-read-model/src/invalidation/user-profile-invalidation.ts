@@ -58,7 +58,6 @@ const CANONICAL_DIRTY_REASON_ORDER: readonly UserProfileDirtyReason[] = [
   UserProfileDirtyReasonValue.OrganizationUpdated,
   UserProfileDirtyReasonValue.PositionUpdated,
   UserProfileDirtyReasonValue.RoleUpdated,
-  UserProfileDirtyReasonValue.PrivilegeUpdated,
   UserProfileDirtyReasonValue.ManualRebuild,
   UserProfileDirtyReasonValue.Backfill,
 ];

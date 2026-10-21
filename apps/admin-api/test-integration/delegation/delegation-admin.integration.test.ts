@@ -244,6 +244,8 @@ describe("Admin Client delegation public requests", () => {
     await post(router, "/", input);
     const duplicate = await post(router, "/", input);
     expect(duplicate.status).toBe(409);
+    const duplicateBody = await duplicate.json();
+    expect(duplicateBody).toMatchObject({ code: "CLIENT_DELEGATION.CONFLICT" });
     const oldParameters = await post(router, "/", { ...input, privilegeCodes: ["legacy"] });
     expect(oldParameters.status).toBe(422);
     const selected = await post(router, "/selectors/clients", { purpose: "create" });

@@ -139,7 +139,7 @@ describe("UserProfileRebuildProcessor", () => {
       cacheStatus: "published",
     });
     expect(cachedRecord).toEqual({
-      schemaVersion: 3,
+      schemaVersion: 4,
       sourceDirtyVersion: "4",
       publishedAt: "2026-07-25T10:00:00.000Z",
       subjectIdentifier: "8af9666f-3e20-49ef-bd03-7ca7f5c51ed4",

@@ -7,7 +7,7 @@ import { createPostgresTestHarness } from "../support/postgres-test-harness";
 const now = new Date("2026-08-20T12:00:00.000Z");
 const subjectIdentifier = "c188a58a-5f25-43ad-82c7-82b54ff972c5";
 
-describe("User Profile v3 PostgreSQL publication", () => {
+describe("User Profile v4 PostgreSQL publication", () => {
   let harness: Awaited<ReturnType<typeof createPostgresTestHarness>>;
 
   beforeAll(async () => {
@@ -56,7 +56,7 @@ describe("User Profile v3 PostgreSQL publication", () => {
       WHERE p.user_id = 1
     `;
     expect(row).toEqual({
-      profileSchemaVersion: 3,
+      profileSchemaVersion: 4,
       sourceDirtyVersion: "4",
       detail: jsonDocument(profile("4").detail),
       searchDoc: jsonDocument(profile("4").searchDoc),
@@ -154,7 +154,7 @@ function profile(sourceDirtyVersion: string) {
     status: UserStatus.Enable,
     isDelete: false,
     searchVisible: true,
-    profileSchemaVersion: 3,
+    profileSchemaVersion: 4,
     sourceDirtyVersion,
     detail: {
       id: 1,
@@ -169,7 +169,7 @@ function profile(sourceDirtyVersion: string) {
       createTime: now,
       updateTime: now,
       employments: [],
-      privileges: [],
+
       roles: [],
     },
     searchDoc: {

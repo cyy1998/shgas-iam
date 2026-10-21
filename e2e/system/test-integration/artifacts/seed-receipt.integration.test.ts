@@ -47,7 +47,6 @@ describe("seed receipt", () => {
           hrSecondScopeRoleAssignmentId: 42,
           adminRoleCode: "e2e-role-run-receipt-01",
           hrAdminRoleCode: "iam:hr-admin",
-          adminPrivilegeCode: "e2e-privilege-run-receipt-01",
           adminClientCode: "iam-admin",
           adminRedirectUri: "http://127.0.0.1:43123/iam-admin/*",
           customSsoClientCode: "e2e-custom-run-receipt-01",

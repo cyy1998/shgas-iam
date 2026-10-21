@@ -1,5 +1,5 @@
 import { describe, expect, mock, test } from "bun:test";
-import { employments, organizationClosures, positions, rolePrivileges, roles, users } from "@iam/db/schema";
+import { employments, organizationClosures, positions, roles, users } from "@iam/db/schema";
 import type { UserProfileEffectiveRoleResolverPort } from "../user-profile-build.repository";
 import { createUserProfileBuildRepository } from "../user-profile-build.repository";
 
@@ -9,7 +9,6 @@ interface BuildQueryRows {
   readonly positions: readonly unknown[];
   readonly organizationPaths: readonly unknown[];
   readonly roleClients: readonly unknown[];
-  readonly privileges: readonly unknown[];
 }
 
 function createBuildDb(rows: BuildQueryRows) {
@@ -23,7 +22,6 @@ function createBuildDb(rows: BuildQueryRows) {
           else if (table === positions) selectedRows = rows.positions;
           else if (table === organizationClosures) selectedRows = rows.organizationPaths;
           else if (table === roles) selectedRows = rows.roleClients;
-          else if (table === rolePrivileges) selectedRows = rows.privileges;
           else throw new Error("Unexpected User Profile build query table");
 
           return query;
@@ -37,7 +35,7 @@ function createBuildDb(rows: BuildQueryRows) {
 }
 
 describe("UserProfileBuildRepository", () => {
-  test("builds role and privilege rows from one batch Effective Role resolution", async () => {
+  test("builds client-scoped role rows from one batch Effective Role resolution", async () => {
     const db = createBuildDb({
       users: [{ id: 1, username: "alice" }],
       employments: [
@@ -55,10 +53,6 @@ describe("UserProfileBuildRepository", () => {
       roleClients: [
         { roleId: 7, clientCode: "portal" },
         { roleId: 8, clientCode: "backoffice" },
-      ],
-      privileges: [
-        { roleId: 7, privilegeCode: "user:read" },
-        { roleId: 8, privilegeCode: "user:write" },
       ],
     });
     const resolveEffectiveRoles = mock(
@@ -86,10 +80,6 @@ describe("UserProfileBuildRepository", () => {
       { employmentId: 10, roleId: 7, roleCode: "role-a", clientCode: "portal" },
       { employmentId: 10, roleId: 8, roleCode: "role-b", clientCode: "backoffice" },
       { employmentId: 11, roleId: 7, roleCode: "role-a", clientCode: "portal" },
-    ]);
-    expect(dataset.privilegeRows).toEqual([
-      { roleId: 7, privilegeCode: "user:read" },
-      { roleId: 8, privilegeCode: "user:write" },
     ]);
   });
 });

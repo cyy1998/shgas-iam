@@ -106,7 +106,6 @@ describe("UserProfileBuilder", () => {
       positions: [],
       orgPathRows: [],
       roleRows: [],
-      privilegeRows: [],
     };
     const builder = createProfileBuilder({
       buildRepository: { loadByUserIds: mock(async () => dataset) },
@@ -127,7 +126,6 @@ describe("UserProfileBuilder", () => {
       status: UserStatus.Enable,
       employments: [],
       roles: [],
-      privileges: [],
     });
   });
 
@@ -139,7 +137,6 @@ describe("UserProfileBuilder", () => {
       positions: [],
       orgPathRows: [],
       roleRows: [],
-      privilegeRows: [],
     } as ProfileBuildDataset;
     const builder = createProfileBuilder({
       buildRepository: {
@@ -191,7 +188,6 @@ describe("UserProfileBuilder", () => {
         orgPathRow(150, 150, "TOMBSTONE", 0),
       ],
       roleRows: [],
-      privilegeRows: [],
     } as unknown as ProfileBuildDataset;
     const builder = createProfileBuilder({
       buildRepository: {
@@ -268,7 +264,6 @@ describe("UserProfileBuilder", () => {
               positions,
               orgPathRows,
               roleRows: [],
-              privilegeRows: [],
             }) as unknown as ProfileBuildDataset,
         ),
       },
@@ -305,12 +300,6 @@ describe("UserProfileBuilder", () => {
         { employmentId: 10, roleId: 7, roleCode: "role-b", clientCode: "client-a" },
         { employmentId: 10, roleId: 6, roleCode: "role-a", clientCode: "client-a" },
       ],
-      privilegeRows: [
-        { roleId: 7, privilegeCode: "write" },
-        { roleId: 6, privilegeCode: "read" },
-        { roleId: 6, privilegeCode: "audit" },
-        { roleId: 8, privilegeCode: "export" },
-      ],
     } as unknown as ProfileBuildDataset;
     const builder = createProfileBuilder({
       buildRepository: {
@@ -344,14 +333,11 @@ describe("UserProfileBuilder", () => {
           clientAuthorizations: [
             {
               clientCode: "client-a",
-              roles: [
-                { code: "role-a", privileges: ["audit", "read"] },
-                { code: "role-b", privileges: ["write"] },
-              ],
+              roles: [{ code: "role-a" }, { code: "role-b" }],
             },
             {
               clientCode: "client-b",
-              roles: [{ code: "role-z", privileges: ["export"] }],
+              roles: [{ code: "role-z" }],
             },
           ],
         },
@@ -399,12 +385,6 @@ describe("UserProfileBuilder", () => {
         { employmentId: 10, roleId: 3, roleCode: "organization-role", clientCode: "portal" },
         { employmentId: 11, roleId: 4, roleCode: "second-role", clientCode: "portal" },
       ],
-      privilegeRows: [
-        { roleId: 1, privilegeCode: "priv:position" },
-        { roleId: 2, privilegeCode: "priv:employment" },
-        { roleId: 3, privilegeCode: "priv:organization" },
-        { roleId: 4, privilegeCode: "priv:second" },
-      ],
     };
     const builder = createProfileBuilder({
       buildRepository: {
@@ -432,12 +412,6 @@ describe("UserProfileBuilder", () => {
       "organization-role",
       "second-role",
     ]);
-    expect(activeProfile.detail.privileges).toEqual([
-      "priv:position",
-      "priv:employment",
-      "priv:organization",
-      "priv:second",
-    ]);
     expect(activeProfile.searchDoc.employments[0]).toMatchObject({
       organization: {
         code: "DEPT",
@@ -448,7 +422,7 @@ describe("UserProfileBuilder", () => {
       },
       position: { code: "POS1000" },
       roles: ["employment-role", "organization-role", "position-role"],
-      privileges: ["priv:employment", "priv:organization", "priv:position"],
+
       isPrimary: true,
     });
     expect(hiddenProfile.searchVisible).toBe(false);

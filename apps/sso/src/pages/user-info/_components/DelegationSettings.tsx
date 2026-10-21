@@ -1,4 +1,4 @@
-import { DelegationStatus } from "@iam/delegation/wire";
+import { ClientDelegationStatus } from "@iam/delegation/wire";
 import {
   type DelegationDetail,
   type DelegationDirection,
@@ -13,20 +13,22 @@ import DelegationEditor from "./DelegationEditor";
 type StatusFilter = "open" | "all" | "planned" | "active" | "paused" | "expired" | "ended";
 function lifecycle(record: DelegationDetail, now: number) {
   const period = now < record.startTime.getTime() ? "未开始" : now > record.endTime.getTime() ? "已到期" : "期间内";
-  if (record.status === DelegationStatus.Disable) return `已结束（${period}）`;
-  if (record.status === DelegationStatus.Pause) return `暂停（${period}）`;
+  if (record.status === ClientDelegationStatus.Disable) return `已结束（${period}）`;
+  if (record.status === ClientDelegationStatus.Pause) return `暂停（${period}）`;
   return period === "期间内" ? "生效中" : period;
 }
 function matches(record: DelegationDetail, filter: StatusFilter, now: number) {
   if (filter === "all") return true;
-  if (filter === "ended") return record.status === DelegationStatus.Disable;
-  if (record.status === DelegationStatus.Disable) return false;
+  if (filter === "ended") return record.status === ClientDelegationStatus.Disable;
+  if (record.status === ClientDelegationStatus.Disable) return false;
   if (filter === "open") return true;
-  if (filter === "paused") return record.status === DelegationStatus.Pause;
+  if (filter === "paused") return record.status === ClientDelegationStatus.Pause;
   if (filter === "expired") return record.endTime.getTime() < now;
-  if (filter === "planned") return record.status === DelegationStatus.Enable && now < record.startTime.getTime();
+  if (filter === "planned") return record.status === ClientDelegationStatus.Enable && now < record.startTime.getTime();
   return (
-    record.status === DelegationStatus.Enable && record.startTime.getTime() <= now && now <= record.endTime.getTime()
+    record.status === ClientDelegationStatus.Enable &&
+    record.startTime.getTime() <= now &&
+    now <= record.endTime.getTime()
   );
 }
 
@@ -59,7 +61,7 @@ export default function DelegationSettings() {
       requestVersion.current += 1;
     };
   }, [refresh]);
-  async function changeStatus(record: DelegationDetail, status: DelegationStatus) {
+  async function changeStatus(record: DelegationDetail, status: ClientDelegationStatus) {
     if (mutationPending.current) return;
     mutationPending.current = true;
     setMutating(true);
@@ -144,28 +146,30 @@ export default function DelegationSettings() {
                 {
                   title: "操作",
                   render: (_: unknown, row: DelegationDetail) =>
-                    row.status === DelegationStatus.Disable ? null : (
+                    row.status === ClientDelegationStatus.Disable ? null : (
                       <Space>
                         <Button aria-label="编辑" disabled={loading || mutating} onClick={() => setEditing(row)}>
                           编辑
                         </Button>
                         <Button
-                          aria-label={row.status === DelegationStatus.Pause ? "恢复" : "暂停"}
+                          aria-label={row.status === ClientDelegationStatus.Pause ? "恢复" : "暂停"}
                           disabled={loading || mutating}
                           onClick={() =>
                             void changeStatus(
                               row,
-                              row.status === DelegationStatus.Pause ? DelegationStatus.Enable : DelegationStatus.Pause,
+                              row.status === ClientDelegationStatus.Pause
+                                ? ClientDelegationStatus.Enable
+                                : ClientDelegationStatus.Pause,
                             )
                           }
                         >
-                          {row.status === DelegationStatus.Pause ? "恢复" : "暂停"}
+                          {row.status === ClientDelegationStatus.Pause ? "恢复" : "暂停"}
                         </Button>
                         <Popconfirm
                           title="结束后不能恢复，确认结束此委托？"
                           okText="确认结束"
                           cancelText="取消"
-                          onConfirm={() => changeStatus(row, DelegationStatus.Disable)}
+                          onConfirm={() => changeStatus(row, ClientDelegationStatus.Disable)}
                         >
                           <Button aria-label="结束" danger disabled={loading || mutating}>
                             结束

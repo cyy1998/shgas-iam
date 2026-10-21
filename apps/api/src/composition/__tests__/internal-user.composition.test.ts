@@ -13,7 +13,7 @@ import {
 } from "@api/composition/internal-user-query";
 import { createApiRoutes } from "@api/composition/routes";
 import { createApiUserProfileResources } from "@api/composition/user-profile-resources";
-import { PRIVILEGE_DELEGATION_RESOLUTION_HANDLER_TIMEOUT_MS } from "@api/routes/internal/delegation/delegation.handlers";
+import { CLIENT_DELEGATION_RESOLUTION_HANDLER_TIMEOUT_MS } from "@api/routes/internal/delegation/delegation.handlers";
 import { INTERNAL_ORGANIZATION_HANDLER_TIMEOUT_MS } from "@api/routes/internal/organization/organization.handlers";
 import { INTERNAL_USER_HANDLER_TIMEOUT_MS } from "@api/routes/internal/user/user.handlers";
 import { createUserProfileSearchAdapter } from "@api/services/user-profile-search/user-profile-search.adapter";
@@ -33,7 +33,7 @@ test("owns dedicated Internal query clients with fixed budgets and deterministic
   expect(INTERNAL_USER_STATEMENT_TIMEOUT_MS).toBe(2_000);
   expect(INTERNAL_USER_HANDLER_TIMEOUT_MS).toBe(5_000);
   expect(INTERNAL_DELEGATION_STATEMENT_TIMEOUT_MS).toBe(2_000);
-  expect(PRIVILEGE_DELEGATION_RESOLUTION_HANDLER_TIMEOUT_MS).toBe(5_000);
+  expect(CLIENT_DELEGATION_RESOLUTION_HANDLER_TIMEOUT_MS).toBe(5_000);
   expect(INTERNAL_ORGANIZATION_STATEMENT_TIMEOUT_MS).toBe(2_000);
   expect(INTERNAL_ORGANIZATION_HANDLER_TIMEOUT_MS).toBe(5_000);
 
@@ -100,7 +100,7 @@ test("wires canonical Filter search to the Base query and preserves Internal det
     mobile: null,
     wxId: null,
   };
-  const detail = { ...base, employments: [], roles: [], privileges: [] };
+  const detail = { ...base, employments: [], roles: [] };
   const searchBase = mock(async (_input: unknown) => [base]);
   const getDetailByUsername = mock(async (_username: string) => detail);
   const userProfileSearch = createUserProfileSearchAdapter({ searchBase });

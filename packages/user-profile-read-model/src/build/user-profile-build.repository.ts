@@ -1,17 +1,6 @@
-import { PrivilegeStatus } from "@iam/contracts";
 import type { DbClient } from "@iam/db";
 import type { Employment, Organization, User } from "@iam/db/schema";
-import {
-  clients,
-  employments,
-  organizationClosures,
-  organizations,
-  positions,
-  privileges,
-  rolePrivileges,
-  roles,
-  users,
-} from "@iam/db/schema";
+import { clients, employments, organizationClosures, organizations, positions, roles, users } from "@iam/db/schema";
 import { OPEN_EMPLOYMENT_STATUSES } from "@iam/domain/employment";
 import type { EffectiveRole } from "@iam/role-assignment-resolution";
 import { and, eq, inArray } from "drizzle-orm";
@@ -36,18 +25,12 @@ export interface UserProfileBuildRoleRow {
 
 type ResolvedUserProfileBuildRoleRow = Omit<UserProfileBuildRoleRow, "clientCode">;
 
-export interface UserProfileBuildPrivilegeRow {
-  roleId: number;
-  privilegeCode: string;
-}
-
 export interface UserProfileBuildDataset {
   users: User[];
   employments: Employment[];
   positions: UserProfileBuildPosition[];
   orgPathRows: UserProfileBuildOrgPathRow[];
   roleRows: UserProfileBuildRoleRow[];
-  privilegeRows: UserProfileBuildPrivilegeRow[];
 }
 
 export interface UserProfileEffectiveRoleResolverPort {
@@ -89,10 +72,7 @@ export function createUserProfileBuildRepository(
         loadEmploymentRoles(roleAssignmentResolver, employmentIds),
       ]);
       const roleIds = [...new Set(roleRows.map((row) => row.roleId))];
-      const [roleClientRows, privilegeRows] = await Promise.all([
-        loadRoleClients(db, roleIds),
-        loadRolePrivileges(db, roleIds),
-      ]);
+      const roleClientRows = await loadRoleClients(db, roleIds);
       const clientCodeByRoleId = new Map(roleClientRows.map((row) => [row.roleId, row.clientCode]));
 
       return {
@@ -105,7 +85,6 @@ export function createUserProfileBuildRepository(
           if (clientCode === undefined) throw new Error(`Effective Role ${row.roleId} has no client code`);
           return { ...row, clientCode };
         }),
-        privilegeRows,
       };
     },
   };
@@ -120,7 +99,6 @@ function emptyDataset(): UserProfileBuildDataset {
     positions: [],
     orgPathRows: [],
     roleRows: [],
-    privilegeRows: [],
   };
 }
 
@@ -168,25 +146,6 @@ async function loadEmploymentRoles(
       roleCode: role.roleCode,
     })),
   );
-}
-
-async function loadRolePrivileges(db: DbClient, roleIds: number[]) {
-  if (roleIds.length === 0) return [];
-
-  return await db
-    .select({
-      roleId: rolePrivileges.roleId,
-      privilegeCode: privileges.privilegeCode,
-    })
-    .from(rolePrivileges)
-    .innerJoin(privileges, eq(rolePrivileges.privilegeId, privileges.id))
-    .where(
-      and(
-        inArray(rolePrivileges.roleId, roleIds),
-        eq(privileges.status, PrivilegeStatus.Enable),
-        eq(privileges.isDelete, false),
-      ),
-    );
 }
 
 async function loadRoleClients(db: DbClient, roleIds: number[]) {

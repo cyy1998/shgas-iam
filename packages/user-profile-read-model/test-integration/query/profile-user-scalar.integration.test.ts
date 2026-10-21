@@ -94,7 +94,7 @@ test("the shared Filter engine compiles caller-defined paths against each suppli
   expect([...rows]).toEqual([{ first: false, second: true }]);
 });
 
-describe("User Profile v3 User scalar tracer", () => {
+describe("User Profile v4 User scalar tracer", () => {
   test("builds, persists, and queries the public User Search Document by subject identifier", async () => {
     await harness!.db.insert(users).values({
       id: 1,
@@ -138,7 +138,7 @@ describe("User Profile v3 User scalar tracer", () => {
       },
     });
 
-    expect(persisted).toEqual([{ profileSchemaVersion: 3 }]);
+    expect(persisted).toEqual([{ profileSchemaVersion: 4 }]);
     expect(bases).toEqual([
       {
         subjectIdentifier: "5ee46272-9123-4ec3-9d8d-8a7a6ac7f888",

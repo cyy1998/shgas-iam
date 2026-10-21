@@ -41,7 +41,7 @@ describe("User Profile readiness command", () => {
 
 function gateReport(gate: "postgres" | "redis-access", status: "failed" | "passed") {
   return {
-    version: 3,
+    version: 4,
     gate,
     verifiedAt: "2026-08-22T04:00:00.000Z",
     status,

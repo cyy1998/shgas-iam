@@ -312,7 +312,7 @@ describe("Subject Facts Reader", () => {
       subjectIdentifier: SUBJECT_IDENTIFIER,
       clientCode: "console",
       selection: {
-        catalogVersion: 2,
+        catalogVersion: 3,
         optionalClaims: ["profile:name", "iam:authorization"],
       },
     });
@@ -340,7 +340,7 @@ describe("Subject Facts Reader", () => {
       subjectIdentifier: SUBJECT_IDENTIFIER,
       clientCode: "console",
       selection: {
-        catalogVersion: 2,
+        catalogVersion: 3,
         optionalClaims: ["iam:authorization"],
       },
     });
@@ -349,7 +349,6 @@ describe("Subject Facts Reader", () => {
       authorization: {
         employments: [],
         roles: [],
-        privileges: [],
       },
     });
     expect(select).not.toHaveBeenCalled();
@@ -372,12 +371,12 @@ describe("Subject Facts Reader", () => {
       const result = await projection.resolve({
         subjectIdentifier: SUBJECT_IDENTIFIER,
         clientCode: "console",
-        selection: { catalogVersion: 2, optionalClaims: ["profile:name", "iam:authorization"] },
+        selection: { catalogVersion: 3, optionalClaims: ["profile:name", "iam:authorization"] },
       });
       expect(result).toEqual({
         subjectIdentifier: SUBJECT_IDENTIFIER,
         name: "Alice",
-        authorization: { employments: [], roles: [], privileges: [] },
+        authorization: { employments: [], roles: [] },
       });
       expect(limit).toHaveBeenCalledTimes(1);
     },
@@ -442,7 +441,7 @@ describe("Subject Facts Reader", () => {
 
 function cacheRecord(sourceDirtyVersion: string): SubjectFactsCacheRecord {
   return {
-    schemaVersion: 3,
+    schemaVersion: 4,
     sourceDirtyVersion,
     publishedAt: "2026-07-25T10:00:00.000Z",
     subjectIdentifier: SUBJECT_IDENTIFIER,
@@ -463,7 +462,7 @@ function profileRow(sourceDirtyVersion: string) {
     username: "alice",
     name: "Alice",
     mobile: "13800138000",
-    profileSchemaVersion: 3,
+    profileSchemaVersion: 4,
     sourceDirtyVersion,
     subjectFacts: {
       employments: [],

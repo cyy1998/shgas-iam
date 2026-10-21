@@ -53,7 +53,7 @@ describe("User Profile PostgreSQL readiness production command", () => {
       });
 
       expect(result.output).toContain("User Profile PostgreSQL gate completed");
-      expect(result.output).toContain('"version":3');
+      expect(result.output).toContain('"version":4');
       expect(result.output).toContain('"status":"passed"');
       expect(result.output).not.toContain("ECONNREFUSED");
     },

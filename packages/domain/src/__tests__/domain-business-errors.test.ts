@@ -2,11 +2,11 @@ import { describe, expect, test } from "bun:test";
 import { ApiErrorCode } from "@iam/contracts";
 import * as Domain from "@iam/domain";
 import * as ClientErrors from "@iam/domain/client";
+import * as ClientDelegationErrors from "@iam/domain/client-delegation";
 import * as EmploymentErrors from "@iam/domain/employment";
 import * as OrganizationErrors from "@iam/domain/organization";
 import * as OrganizationResponsibilityErrors from "@iam/domain/organization-responsibility";
 import * as PositionErrors from "@iam/domain/position";
-import * as PrivilegeErrors from "@iam/domain/privilege";
 import * as RoleErrors from "@iam/domain/role";
 import * as UserErrors from "@iam/domain/user";
 import { DomainBusinessError } from "../errors";
@@ -273,31 +273,24 @@ const cases: ExpectedError[] = [
     httpStatus: 404,
   },
   {
-    className: "PrivilegeDelegationNotFoundError",
-    exports: PrivilegeErrors,
+    className: "ClientDelegationNotFoundError",
+    exports: ClientDelegationErrors,
     message: "委托记录不存在",
-    code: ApiErrorCode.PrivilegeDelegationNotFound,
+    code: ApiErrorCode.ClientDelegationNotFound,
     httpStatus: 404,
   },
   {
-    className: "PrivilegeDelegationEndedError",
-    exports: PrivilegeErrors,
+    className: "ClientDelegationEndedError",
+    exports: ClientDelegationErrors,
     message: "该委托已结束，不允许再修改",
-    code: ApiErrorCode.PrivilegeDelegationEnded,
+    code: ApiErrorCode.ClientDelegationEnded,
     httpStatus: 409,
   },
   {
-    className: "PrivilegeNotFoundError",
-    exports: PrivilegeErrors,
-    message: "权限不存在",
-    code: ApiErrorCode.PrivilegeNotFound,
-    httpStatus: 404,
-  },
-  {
-    className: "PrivilegeAlreadyDelegatedError",
-    exports: PrivilegeErrors,
-    message: "以下权限已被授权",
-    code: ApiErrorCode.PrivilegeAlreadyDelegated,
+    className: "ClientDelegationConflictError",
+    exports: ClientDelegationErrors,
+    message: "同一应用在相交的组织范围和期间内已有委托",
+    code: ApiErrorCode.ClientDelegationConflict,
     httpStatus: 409,
   },
 ];

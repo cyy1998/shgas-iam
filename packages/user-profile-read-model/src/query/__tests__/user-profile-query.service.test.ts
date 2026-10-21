@@ -35,7 +35,7 @@ function profile(overrides: Partial<UserProfile> = {}): UserProfile {
       createTime: now,
       updateTime: now,
       employments: [],
-      privileges: [],
+
       roles: [],
     } as unknown as UserProfile["detail"],
     searchDoc: {
@@ -105,7 +105,7 @@ function employmentDetail(overrides: Record<string, unknown> = {}) {
       fullOrgPath: [orgNode()],
       companyNodes: [],
     },
-    privileges: ["privilege:a"],
+
     roles: ["role:a"],
     responsibilities: [],
     ...overrides,

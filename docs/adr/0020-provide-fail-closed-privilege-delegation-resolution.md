@@ -16,11 +16,11 @@ Client Delegation 在指定组织范围和期间内为用户查找直接代办�
 
 - 必填 `usernames/orgCode`；username 精确、唯一且为 1–100 项。非法格式、旧权限参数或额外 Client 输入整体返回
   `422 COMMON.VALIDATION_FAILED`；任一输入用户或组织不存在、已删除，整体返回
-  `404 PRIVILEGE.DELEGATION_RESOLUTION_INPUT_NOT_FOUND`。
+  `404 CLIENT_DELEGATION.RESOLUTION_INPUT_NOT_FOUND`。
 - null 仅表示已识别 User 没有当前委托。输入用户和组织的 Pause、Disable 不妨碍识别；委托自身须为 Enable，
   观察点位于闭区间 `[startTime, endTime]`，请求组织属于所选组织当前子树。新后代自动纳入，不冻结组织树。
 - 多条匹配即使 Delegatee 相同，或自委托、匹配记录引用缺失/已删除对象，均属完整性异常。
-  异常、数据库不可用和超时统一为脱敏 `503 PRIVILEGE.DELEGATION_RESOLUTION_UNAVAILABLE`，不选 winner、折叠或返回部分结果。
+  异常、数据库不可用和超时统一为脱敏 `503 CLIENT_DELEGATION.RESOLUTION_UNAVAILABLE`，不选 winner、折叠或返回部分结果。
 - Internal 四类能力全部保留，但创建、搜索、修改和解析都限定在认证 Client 内；越界 ID 不暴露其他 Client 的记录。
   resolver 不缓存或自动重试，保留 2 秒 statement timeout 和 5 秒 handler budget。
 - 调用方可以先通过用户 DSL 筛选 username，再独立解析；委托不进入档案、Subject Facts 或角色权限投影，

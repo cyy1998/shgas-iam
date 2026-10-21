@@ -1,7 +1,7 @@
 import { createAuditRepository } from "@api/services/audit/audit.repository";
 import { createApiAuditLogWriter } from "@api/services/audit/audit.service";
 import { relations } from "@iam/db/relations";
-import { createDelegationService, DelegationStatus } from "@iam/delegation";
+import { ClientDelegationStatus, createDelegationService } from "@iam/delegation";
 import { drizzle } from "drizzle-orm/postgres-js";
 import postgres from "postgres";
 
@@ -16,7 +16,7 @@ try {
   });
   await service.update(
     Number(process.argv[2]),
-    { status: DelegationStatus.Disable },
+    { status: ClientDelegationStatus.Disable },
     { kind: "client", clientId: Number(process.argv[3]) },
     { actionPrefix: "internal", actor: { actorType: "client", actorClientCode: "delegation-test" } },
   );

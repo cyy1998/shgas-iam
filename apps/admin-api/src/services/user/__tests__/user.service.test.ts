@@ -156,7 +156,7 @@ function createService(
       recordChanges: mock(async () => undefined),
     },
     userRepository: {
-      hasOpenPrivilegeDelegationsByUserId: mock(async (_userId: number) => false),
+      hasOpenClientDelegationsByUserId: mock(async (_userId: number) => false),
       countOpenEmploymentsByUsername: mock(async (_username: string) => 0),
       getOpenEmploymentOrganizationIdsByUserId: mock(async (_userId: number) => [10]),
       getUserByUsernameForAdmin,
@@ -181,9 +181,7 @@ function createService(
     },
     passwordHasher: createFakePasswordHasher(),
     roleRepository: { getRoleNamesByIds: async () => [] },
-    privilegeRepository: {
-      getPrivilegesByRoleIds: mock(async () => []),
-    },
+
     random: createFakeRandom(),
     roleAssignmentResolver: {
       resolveEffectiveRoles: mock(async () => new Map()),
@@ -320,9 +318,7 @@ describe("createUserService", () => {
         [5, [{ id: 13, roleCode: "legacy" }]],
       ]),
     );
-    deps.privilegeRepository.getPrivilegesByRoleIds.mockImplementation(async (roleIds: number[]) =>
-      roleIds.map((roleId) => ({ privilegeCode: `privilege:${roleId}`, privilegeName: `权限${roleId}` })),
-    );
+
     deps.roleRepository.getRoleNamesByIds = mock(async () => [
       { roleCode: "admin", roleName: "管理员" },
       { roleCode: "reviewer", roleName: "审核员" },
@@ -333,20 +329,15 @@ describe("createUserService", () => {
 
     expect(deps.roleAssignmentResolver.resolveEffectiveRoles).toHaveBeenCalledTimes(1);
     expect(deps.roleAssignmentResolver.resolveEffectiveRoles).toHaveBeenCalledWith({ employmentIds: [4, 5] });
-    expect(
-      detail.employments.map((item) => ({
-        id: item.id,
-        roles: item.roles,
-        privileges: item.privileges,
-      })),
-    ).toEqual([
-      { id: 4, roles: ["admin", "reviewer"], privileges: ["privilege:11", "privilege:12"] },
-      { id: 5, roles: ["legacy"], privileges: ["privilege:13"] },
+    expect(detail.employments.map(({ id, roles }) => ({ id, roles }))).toEqual([
+      { id: 4, roles: ["admin", "reviewer"] },
+      { id: 5, roles: ["legacy"] },
     ]);
+
     expect(detail.roles).toEqual(["admin", "reviewer"]);
-    expect(detail.privileges).toEqual(["privilege:11", "privilege:12"]);
+
     expect(detail.roleNames).toEqual({ admin: "管理员", reviewer: "审核员" });
-    expect(detail.privilegeNames).toEqual({ "privilege:11": "权限11", "privilege:12": "权限12" });
+
     expect(detail.employments[1]?.roleNames).toEqual({ legacy: "历史角色" });
     expect(deps.roleRepository.getRoleNamesByIds).toHaveBeenCalledWith([11, 12, 13]);
   });
@@ -360,10 +351,8 @@ describe("createUserService", () => {
 
     const detail = await service.getUserDetailByUsernameForAdmin("zhangsan");
 
-    expect(deps.privilegeRepository.getPrivilegesByRoleIds).toHaveBeenCalledWith([]);
-    expect(detail.employments[0]).toMatchObject({ roles: [], privileges: [] });
+    expect(detail.employments[0]).toMatchObject({ roles: [] });
     expect(detail.roles).toEqual([]);
-    expect(detail.privileges).toEqual([]);
   });
 
   test("keeps the existing user-not-found behavior before resolving roles", async () => {
@@ -1036,7 +1025,7 @@ describe("createUserService", () => {
       },
       passwordHasher: createFakePasswordHasher(),
       roleRepository: { getRoleNamesByIds: async () => [] },
-      privilegeRepository: { getPrivilegesByRoleIds: mock(async () => []) },
+
       random: createFakeRandom(),
       roleAssignmentResolver: { resolveEffectiveRoles: mock(async () => new Map()) },
       sessionRevocation: { revokeUserSessions: mock(async () => revokeSummary()) },
@@ -1153,9 +1142,7 @@ function createLifecycleService(options: {
     },
     passwordHasher: createFakePasswordHasher(),
     roleRepository: { getRoleNamesByIds: async () => [] },
-    privilegeRepository: {
-      getPrivilegesByRoleIds: mock(async () => []),
-    },
+
     random: createFakeRandom(),
     roleAssignmentResolver: {
       resolveEffectiveRoles: mock(async () => new Map()),

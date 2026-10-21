@@ -10,7 +10,7 @@ test("closing a Subject Facts scope preserves another until the case resets", as
     const first = await harness.createScope();
     const second = await harness.createScope();
     const record = {
-      schemaVersion: 3 as const,
+      schemaVersion: 4 as const,
       sourceDirtyVersion: "1",
       publishedAt: "2026-07-25T10:00:00.000Z",
       subjectIdentifier: "46739d0b-cdda-48f5-af1f-1f90e2d81169",

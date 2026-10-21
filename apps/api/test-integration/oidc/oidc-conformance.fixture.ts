@@ -93,9 +93,8 @@ export async function createOidcConformanceCandidate(options: {
       updateTime: new Date(),
       employments: [],
       roles: [],
-      privileges: [],
     });
-    await sql`INSERT INTO user_profile (user_id, subject_identifier, username, name, mobile, status, is_delete, search_visible, profile_schema_version, source_dirty_version, detail, search_doc, subject_facts, rebuilt_at) VALUES (${user.id}, ${subjectIdentifier}, ${username}, 'Conformance User', '+8613800000195', 1, FALSE, TRUE, 3, 1, ${JSON.stringify(detail)}::jsonb, '{}'::jsonb, '{"employments":[]}'::jsonb, NOW())`;
+    await sql`INSERT INTO user_profile (user_id, subject_identifier, username, name, mobile, status, is_delete, search_visible, profile_schema_version, source_dirty_version, detail, search_doc, subject_facts, rebuilt_at) VALUES (${user.id}, ${subjectIdentifier}, ${username}, 'Conformance User', '+8613800000195', 1, FALSE, TRUE, 4, 1, ${JSON.stringify(detail)}::jsonb, '{}'::jsonb, '{"employments":[]}'::jsonb, NOW())`;
     await sql`INSERT INTO user_profile_dirty (user_id, dirty_version, status, reason_codes, dirty_at, processed_at) VALUES (${user.id}, 1, 'processed', '["user-updated"]'::jsonb, NOW(), NOW())`;
     for (const code of [clientId, secondClientId, publicClientId]) {
       const config = {

@@ -1,4 +1,4 @@
-import { PrivilegeDelegationStatus } from "@iam/contracts";
+import { ClientDelegationStatus } from "@iam/contracts";
 import { index, integer, snakeCase, timestamp, varchar } from "drizzle-orm/pg-core";
 import { createInsertSchema, createSelectSchema, createUpdateSchema } from "drizzle-orm/zod";
 import { z } from "zod";
@@ -14,7 +14,7 @@ export const clientDelegations = snakeCase.table(
     organizationScopeId: integer().notNull(),
     startTime: timestamp().notNull(),
     endTime: timestamp().notNull(),
-    status: integer().$type<PrivilegeDelegationStatus>().notNull().default(PrivilegeDelegationStatus.Enable),
+    status: integer().$type<ClientDelegationStatus>().notNull().default(ClientDelegationStatus.Enable),
     description: varchar({ length: 500 }),
     createTime: baseColumns.createTime,
     updateTime: baseColumns.updateTime,
@@ -27,11 +27,11 @@ export const clientDelegations = snakeCase.table(
   ],
 );
 export const selectClientDelegationSchema = createSelectSchema(clientDelegations, {
-  status: () => z.enum(PrivilegeDelegationStatus),
+  status: () => z.enum(ClientDelegationStatus),
 });
 export const insertClientDelegationSchema = createInsertSchema(clientDelegations, {
-  status: () => z.enum(PrivilegeDelegationStatus),
+  status: () => z.enum(ClientDelegationStatus),
 }).omit({ id: true, createTime: true, updateTime: true });
 export const updateClientDelegationSchema = createUpdateSchema(clientDelegations, {
-  status: () => z.enum(PrivilegeDelegationStatus),
+  status: () => z.enum(ClientDelegationStatus),
 }).pick({ startTime: true, endTime: true, status: true, description: true });

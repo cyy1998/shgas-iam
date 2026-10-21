@@ -8,7 +8,7 @@ import { PublishedProfileBaseSchema } from "./profile-storage.schema";
 import { SubjectFactsEmploymentSchema } from "./subject-facts-schema.core";
 import { reviveUserProfileDetailDates } from "./user-profile-detail-document";
 
-export const USER_PROFILE_SCHEMA_VERSION = 3;
+export const USER_PROFILE_SCHEMA_VERSION = 4;
 
 export const EmploymentResponsibilitySnapshotSchema = ClientEmploymentResponsibilitySnapshotSchema;
 

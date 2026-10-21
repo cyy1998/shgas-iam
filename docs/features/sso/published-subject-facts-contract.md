@@ -10,7 +10,7 @@ Reader 优先合法 Redis 缓存，缺失或无效才回源已发布 Profile，�
 single-flight、窄行回源、CAS 和错误处理统一见[Client Subject Projection](../../architecture/backend-architecture.md#client-subject-projection)，
 发布与恢复见[Subject Facts publication](../../architecture/backend-architecture.md#user-profile-subject-facts-publication)。
 
-`iam:authorization` 接受源权限改变后的旧 Facts，重建持续失败时仍可继续交付。
+`iam:authorization` 接受源角色事实改变后的旧 Facts，重建持续失败时仍可继续交付。
 有效缓存也可能落后于数据库已发布行，不为寻找更高版本主动回源；“已发布”不等于“最新”。
 不承诺固定撤权传播期限，不增加请求时 Dirty/Redis 新鲜度屏障。
 [账号访问许可](subject-access-operation-contract.md)和会话关系校验独立保持。

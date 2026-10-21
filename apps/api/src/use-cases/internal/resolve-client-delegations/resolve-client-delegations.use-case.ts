@@ -1,20 +1,20 @@
 import {
-  PrivilegeDelegationResolutionInputNotFoundError,
-  PrivilegeDelegationResolutionUnavailableError,
-} from "./resolve-privilege-delegations.error";
-import type { ResolvePrivilegeDelegationsUseCaseDeps } from "./resolve-privilege-delegations.port";
+  ClientDelegationResolutionInputNotFoundError,
+  ClientDelegationResolutionUnavailableError,
+} from "./resolve-client-delegations.error";
+import type { ResolveClientDelegationsUseCaseDeps } from "./resolve-client-delegations.port";
 import type {
-  PrivilegeDelegationResolutionMissingInputs,
-  PrivilegeDelegationResolutionResult,
-  ResolvePrivilegeDelegationsInput,
-} from "./resolve-privilege-delegations.type";
+  ClientDelegationResolutionMissingInputs,
+  ClientDelegationResolutionResult,
+  ResolveClientDelegationsInput,
+} from "./resolve-client-delegations.type";
 
-function hasMissingInputs(input: PrivilegeDelegationResolutionMissingInputs) {
+function hasMissingInputs(input: ClientDelegationResolutionMissingInputs) {
   return input.usernames.length > 0 || input.orgCodes.length > 0;
 }
 
-export function createResolvePrivilegeDelegationsUseCase(deps: ResolvePrivilegeDelegationsUseCaseDeps) {
-  async function execute(input: ResolvePrivilegeDelegationsInput): Promise<PrivilegeDelegationResolutionResult[]> {
+export function createResolveClientDelegationsUseCase(deps: ResolveClientDelegationsUseCaseDeps) {
+  async function execute(input: ResolveClientDelegationsInput): Promise<ClientDelegationResolutionResult[]> {
     const observedAt = deps.clock.nowDate();
     let observation: Awaited<ReturnType<typeof deps.resolution.resolveCurrent>>;
     try {
@@ -23,7 +23,7 @@ export function createResolvePrivilegeDelegationsUseCase(deps: ResolvePrivilegeD
         observedAt,
       });
     } catch (error) {
-      throw new PrivilegeDelegationResolutionUnavailableError(
+      throw new ClientDelegationResolutionUnavailableError(
         {
           failureCategory: isStatementTimeout(error) ? "statement-timeout" : "persistence-failure",
           context: {
@@ -36,10 +36,10 @@ export function createResolvePrivilegeDelegationsUseCase(deps: ResolvePrivilegeD
       );
     }
     if (hasMissingInputs(observation.missingInputs)) {
-      throw new PrivilegeDelegationResolutionInputNotFoundError(observation.missingInputs);
+      throw new ClientDelegationResolutionInputNotFoundError(observation.missingInputs);
     }
     if (observation.integrityViolations.length > 0) {
-      throw new PrivilegeDelegationResolutionUnavailableError({
+      throw new ClientDelegationResolutionUnavailableError({
         failureCategory: "integrity-violation",
         violations: observation.integrityViolations,
       });
@@ -54,4 +54,4 @@ function isStatementTimeout(error: unknown) {
   return typeof error === "object" && error !== null && "code" in error && error.code === "57014";
 }
 
-export type ResolvePrivilegeDelegationsUseCase = ReturnType<typeof createResolvePrivilegeDelegationsUseCase>;
+export type ResolveClientDelegationsUseCase = ReturnType<typeof createResolveClientDelegationsUseCase>;

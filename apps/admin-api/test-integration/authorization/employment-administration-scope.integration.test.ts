@@ -598,7 +598,7 @@ function createSubject() {
       resolveEffectiveRoles: mock(async () => new Map()),
     },
     roleRepository: repositories.role,
-    privilegeRepository: repositories.privilege,
+
     uow: mapUnitOfWork(unitOfWork, (tx) => ({
       employmentRepository: tx.repositories.employment,
       auditService: tx.auditService,

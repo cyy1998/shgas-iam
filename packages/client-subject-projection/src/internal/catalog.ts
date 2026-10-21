@@ -48,7 +48,7 @@ const subjectClaimCatalogEntries = [
 ] as const;
 
 export const SUBJECT_CLAIM_CATALOG = {
-  version: 2,
+  version: 3,
   claims: subjectClaimCatalogEntries,
   requiredClaims: subjectClaimCatalogEntries.filter((entry) => entry.required).map((entry) => entry.claim),
   optionalClaims: subjectClaimCatalogEntries.filter((entry) => !entry.required).map((entry) => entry.claim),
@@ -57,7 +57,7 @@ export const SUBJECT_CLAIM_CATALOG = {
 const optionalSubjectClaims = new Set<string>(SUBJECT_CLAIM_CATALOG.optionalClaims);
 
 export function parseSubjectClaimSelection(input: unknown): SubjectClaimSelection {
-  if (!isCatalogDeclaration(input) || input.catalogVersion !== 2) throw new InvalidSubjectClaimSelectionError();
+  if (!isCatalogDeclaration(input) || input.catalogVersion !== 3) throw new InvalidSubjectClaimSelectionError();
 
   const seen = new Set<string>();
   for (const claim of input.claims) {
@@ -73,7 +73,7 @@ export function parseSubjectClaimSelection(input: unknown): SubjectClaimSelectio
   if (!seen.has(SubjectClaim.SubjectIdentifier)) throw new InvalidSubjectClaimSelectionError();
 
   return {
-    catalogVersion: 2,
+    catalogVersion: 3,
     optionalClaims: input.claims.filter((claim) => claim !== SubjectClaim.SubjectIdentifier) as OptionalSubjectClaim[],
   };
 }
@@ -83,7 +83,7 @@ export function assertSubjectClaimSelection(input: unknown): asserts input is Su
     typeof input !== "object" ||
     input === null ||
     !("catalogVersion" in input) ||
-    input.catalogVersion !== 2 ||
+    input.catalogVersion !== 3 ||
     !("optionalClaims" in input) ||
     !Array.isArray(input.optionalClaims)
   ) {

@@ -22,8 +22,8 @@ afterAll(async () => {
 });
 
 describe("Internal User Profile Detail", () => {
-  test("reads only the strict v3 Detail by username", async () => {
-    await harness!.db.insert(userProfiles).values([profile(1, 3), profile(2, 2)]);
+  test("reads only the strict v4 Detail by username", async () => {
+    await harness!.db.insert(userProfiles).values([profile(1, 4), profile(2, 3)]);
     const service = createInternalUserProfileQueryService({
       profileRepository: createInternalUserProfileQueryRepository(harness!.db),
     });
@@ -67,7 +67,7 @@ function profile(userId: number, profileSchemaVersion: number) {
       createTime: now,
       updateTime: now,
       employments: [],
-      privileges: [],
+
       roles: [],
     },
     searchDoc: {

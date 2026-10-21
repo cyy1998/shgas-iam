@@ -11,10 +11,6 @@ export function rolesRelations(r: RelationsHelper) {
         from: r.roles.id,
         to: r.roleAssignments.roleId,
       }),
-      privileges: r.many.rolePrivileges({
-        from: r.roles.id,
-        to: r.rolePrivileges.roleId,
-      }),
     },
   } satisfies RelationsConfig;
 }

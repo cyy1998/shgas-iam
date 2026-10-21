@@ -44,7 +44,6 @@ export interface SubjectPosition {
 
 export interface SubjectFactsRole {
   readonly code: string;
-  readonly privileges: readonly string[];
 }
 
 export interface SubjectFactsClientAuthorization {
@@ -77,11 +76,9 @@ export interface EmploymentProfileBase {
 
 export interface ClientAuthorizationEmploymentBase extends EmploymentProfileBase {
   readonly roles: readonly string[];
-  readonly privileges: readonly string[];
 }
 
 export interface ClientAuthorizationBase {
   readonly employments: readonly ClientAuthorizationEmploymentBase[];
   readonly roles: readonly string[];
-  readonly privileges: readonly string[];
 }

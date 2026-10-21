@@ -4,6 +4,7 @@ import { connect, createServer } from "node:net";
 import process from "node:process";
 import type { ClientSnapshotValue } from "@iam/api-core/client-snapshot";
 import { SubjectAccessUnavailableError } from "@iam/api-core/subject-access";
+import type { SubjectFactsSnapshot } from "@iam/client-subject-projection";
 import {
   ClientSsoCallbackType,
   ClientSsoProtocol,
@@ -551,8 +552,13 @@ test("candidate sub-only delivery avoids Facts, never falls back from a cookie, 
   }
 });
 
-async function businessFixture(codeTtlSeconds = 30, networkUrl?: string, tokenTtlSeconds = 45) {
-  const f = await fixture(codeTtlSeconds, networkUrl, tokenTtlSeconds);
+async function businessFixture(
+  codeTtlSeconds = 30,
+  networkUrl?: string,
+  tokenTtlSeconds = 45,
+  subjectFacts?: { read: (subject: string) => Promise<SubjectFactsSnapshot | null> },
+) {
+  const f = await fixture(codeTtlSeconds, networkUrl, tokenTtlSeconds, 60, subjectFacts);
   let server: ReturnType<typeof Bun.serve>;
   const close = ownApiTestExecutor(() => closeFixtureResources([() => f.close(), () => server?.stop(true)]));
   try {
@@ -1113,6 +1119,66 @@ test.each(["", "#/djDesk/orgStruct?tab=1"])(
   },
 );
 
+test("Custom SSO exchange and existing Token deliver client-scoped role authorization", async () => {
+  const employment = {
+    isPrimary: true,
+    organization: {
+      code: "org",
+      name: "组织",
+      type: "department",
+      path: [{ code: "org", name: "组织", type: "department" }],
+    },
+    position: { code: "position", name: "岗位" },
+  };
+  const f = await businessFixture(30, undefined, 45, {
+    async read(subjectIdentifier) {
+      return {
+        subjectIdentifier,
+        sourceDirtyVersion: "1",
+        profile: { username: "published", name: "已发布角色", phone: null },
+        employments: [
+          {
+            ...employment,
+            responsibilities: [],
+            clientAuthorizations: [
+              { clientCode: "app", roles: [{ code: "viewer" }] },
+              { clientCode: "other", roles: [{ code: "operator" }] },
+            ],
+          },
+        ],
+      };
+    },
+  });
+  try {
+    const client = f.getClient();
+    if (client.ssoConfig?.protocol !== ClientSsoProtocol.CustomSso) throw new Error("Expected Custom Client");
+    f.setClient({
+      ...client,
+      ssoConfig: {
+        ...client.ssoConfig,
+        subjectClaims: [SubjectClaim.SubjectIdentifier, SubjectClaim.ProfileEmployments, SubjectClaim.IamAuthorization],
+      },
+    });
+    const response = await f.exchange(await f.authorize());
+    expect(response.status).toBe(200);
+    const { data } = await response.json();
+    const expected = {
+      version: 3,
+      subjectIdentifier: f.subjectIdentifier,
+      profile: { employments: [{ ...employment, responsibilities: [] }] },
+      authorization: { employments: [{ ...employment, roles: ["viewer"] }], roles: ["viewer"] },
+    };
+    expect(data.subject).toEqual(expected);
+    const originalToken = await f.codes.inspectToken(data.sid);
+    const info = await f.use(data.sid);
+    expect(info.status).toBe(200);
+    expect((await info.json()).data).toEqual(expected);
+    expect(await f.codes.inspectToken(data.sid)).toEqual(originalToken);
+  } finally {
+    await f.close();
+  }
+});
+
 test("SSO disablement pauses Token use and re-enablement restores the same Token", async () => {
   const f = await businessFixture();
   try {
@@ -1158,7 +1224,7 @@ test("current sub-only disclosure trims UserInfo and Gateway output without read
     const reads = f.state.factsReads;
     const minimalResponse = await f.use(data.sid);
     expect((await minimalResponse.json()).data).toEqual({
-      version: 2,
+      version: 3,
       subjectIdentifier: f.subjectIdentifier,
     });
     const authz = await f.use(data.sid, "app", true);

@@ -1,11 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import {
-  RebuildUserProfileJobPayloadSchema,
-  USER_PROFILE_QUEUE_NAME,
-  UserProfileDirtyReasonSchema,
-  UserProfileJobName,
-  UserProfileJobNameSchema,
-} from "../user-profile";
+import { RebuildUserProfileJobPayloadSchema, USER_PROFILE_QUEUE_NAME, UserProfileJobNameSchema } from "../user-profile";
 
 describe("user-profile job contract", () => {
   test("defines the stable rebuild queue and job name", () => {
@@ -81,14 +75,5 @@ describe("user-profile job contract", () => {
         }).success,
       ).toBe(false);
     }
-  });
-
-  test("continues parsing the historical privilege dirty reason", () => {
-    const result = UserProfileDirtyReasonSchema.safeParse("privilege-updated");
-
-    expect(result.success).toBe(true);
-    if (!result.success) throw result.error;
-    expect(String(result.data)).toBe("privilege-updated");
-    expect(String(UserProfileJobName.RebuildUserProfile)).toBe("rebuild-user-profile");
   });
 });

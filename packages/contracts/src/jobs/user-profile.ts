@@ -13,7 +13,6 @@ export enum UserProfileDirtyReason {
   OrganizationUpdated = "organization-updated",
   PositionUpdated = "position-updated",
   RoleUpdated = "role-updated",
-  PrivilegeUpdated = "privilege-updated",
   ManualRebuild = "manual-rebuild",
   Backfill = "backfill",
 }

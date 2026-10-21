@@ -8,7 +8,7 @@ import {
   updateDelegation,
 } from "@admin/services/delegation";
 import { PageContainer } from "@ant-design/pro-components";
-import { PrivilegeDelegationStatus as DelegationStatus } from "@iam/contracts";
+import { ClientDelegationStatus } from "@iam/contracts";
 import { useAccess } from "@umijs/max";
 import {
   Alert,
@@ -44,10 +44,10 @@ function periodState(row: DelegationVo, now: number) {
   return new Date(row.endTime).getTime() < now ? "expired" : "active";
 }
 function matchesState(row: DelegationVo, selected: BusinessState, now: number) {
-  if (selected === "ended") return row.status === DelegationStatus.Disable;
-  if (selected === "paused") return row.status === DelegationStatus.Pause;
-  if (row.status === DelegationStatus.Disable) return false;
-  return periodState(row, now) === selected && (selected !== "active" || row.status === DelegationStatus.Enable);
+  if (selected === "ended") return row.status === ClientDelegationStatus.Disable;
+  if (selected === "paused") return row.status === ClientDelegationStatus.Pause;
+  if (row.status === ClientDelegationStatus.Disable) return false;
+  return periodState(row, now) === selected && (selected !== "active" || row.status === ClientDelegationStatus.Enable);
 }
 function identity(name: string, code: string, deleted: boolean) {
   return `${name}（${code}）${deleted ? " · 已删除" : ""}`;
@@ -99,12 +99,12 @@ export default function DelegationsPage() {
         ? {
             statuses:
               values.businessState === "ended"
-                ? [DelegationStatus.Disable]
+                ? [ClientDelegationStatus.Disable]
                 : values.businessState === "paused"
-                  ? [DelegationStatus.Pause]
+                  ? [ClientDelegationStatus.Pause]
                   : values.businessState === "active"
-                    ? [DelegationStatus.Enable]
-                    : [DelegationStatus.Enable, DelegationStatus.Pause],
+                    ? [ClientDelegationStatus.Enable]
+                    : [ClientDelegationStatus.Enable, ClientDelegationStatus.Pause],
           }
         : {}),
     };
@@ -143,7 +143,7 @@ export default function DelegationsPage() {
     } else message.error(cause instanceof Error ? cause.message : "操作失败");
     void load();
   };
-  const changeStatus = async (row: DelegationVo, status: DelegationStatus) => {
+  const changeStatus = async (row: DelegationVo, status: ClientDelegationStatus) => {
     setSaving(true);
     try {
       const outcome = await updateDelegation(row.id, { status });
@@ -355,9 +355,9 @@ export default function DelegationsPage() {
                 render: (_, row) => (
                   <Space>
                     <Tag>
-                      {row.status === DelegationStatus.Disable
+                      {row.status === ClientDelegationStatus.Disable
                         ? "已结束"
-                        : row.status === DelegationStatus.Pause
+                        : row.status === ClientDelegationStatus.Pause
                           ? "暂停"
                           : "启用"}
                     </Tag>
@@ -366,7 +366,7 @@ export default function DelegationsPage() {
                         ? "未开始"
                         : periodState(row, observedAt) === "expired"
                           ? "已到期"
-                          : row.status === DelegationStatus.Enable
+                          : row.status === ClientDelegationStatus.Enable
                             ? "生效中"
                             : "期间内"}
                     </Tag>
@@ -388,7 +388,7 @@ export default function DelegationsPage() {
                         type="link"
                         disabled={saving}
                         onClick={() => {
-                          void changeStatus(row, DelegationStatus.Pause);
+                          void changeStatus(row, ClientDelegationStatus.Pause);
                         }}
                       >
                         暂停
@@ -399,7 +399,7 @@ export default function DelegationsPage() {
                         type="link"
                         disabled={saving}
                         onClick={() => {
-                          void changeStatus(row, DelegationStatus.Enable);
+                          void changeStatus(row, ClientDelegationStatus.Enable);
                         }}
                       >
                         恢复
@@ -414,7 +414,7 @@ export default function DelegationsPage() {
                           Modal.confirm({
                             title: "结束此委托？",
                             content: "结束后不可恢复。",
-                            onOk: () => changeStatus(row, DelegationStatus.Disable),
+                            onOk: () => changeStatus(row, ClientDelegationStatus.Disable),
                           })
                         }
                       >

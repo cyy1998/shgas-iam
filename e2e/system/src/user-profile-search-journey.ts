@@ -7,7 +7,6 @@ import { expectClientDelegationJourney } from "./delegation-journey.ts";
 const publicationTimeoutMs = 45_000;
 
 interface InternalSearchInput {
-  adminPrivilegeCode: string;
   adminRoleCode: string;
   adminUsername: string;
   delegateeUsername: string;
@@ -90,11 +89,6 @@ export async function expectInternalUserProfileSearchMatrix(input: InternalSearc
             op: "containsAll",
             value: [input.adminRoleCode],
           },
-          {
-            field: "privileges",
-            op: "containsAny",
-            value: [input.adminPrivilegeCode],
-          },
         ],
       },
     },
@@ -117,7 +111,7 @@ export async function expectInternalUserProfileSearchMatrix(input: InternalSearc
           position: expect.objectContaining({
             posCode: input.positionCode,
           }),
-          privileges: [input.adminPrivilegeCode],
+
           responsibilities: expect.any(Array),
           roles: [input.adminRoleCode, input.hrAdminRoleCode],
           status: EmploymentStatus.Enable,
@@ -125,7 +119,7 @@ export async function expectInternalUserProfileSearchMatrix(input: InternalSearc
       ]),
       id: expect.any(Number),
       name: expect.any(String),
-      privileges: [input.adminPrivilegeCode],
+
       roles: [input.adminRoleCode, input.hrAdminRoleCode],
       status: UserStatus.Enable,
       username: input.adminUsername,

@@ -6,13 +6,11 @@ export * from "./core/organization-responsibility-assignments";
 export * from "./core/organization-search";
 export * from "./core/organizations";
 export * from "./core/positions";
-export * from "./core/privileges";
 export {
   insertRoleAssignmentSchema,
   selectRoleAssignmentSchema,
   updateRoleAssignmentSchema,
 } from "./core/role-assignments";
-export * from "./core/role-privileges";
 export * from "./core/roles";
 export * from "./core/subject-access-transitions";
 export * from "./core/user-profile-dirty";

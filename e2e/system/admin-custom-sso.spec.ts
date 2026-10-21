@@ -33,7 +33,6 @@ test("Admin prepares Custom SSO in Maintenance and existing access resumes after
   const internalApiKey = requireEnvironment("IAM_E2E_INTERNAL_API_KEY");
   const internalClientCode = requireEnvironment("IAM_E2E_INTERNAL_CLIENT_CODE");
   const adminClientCode = requireEnvironment("IAM_E2E_ADMIN_CLIENT_CODE");
-  const adminPrivilegeCode = requireEnvironment("IAM_E2E_ADMIN_PRIVILEGE_CODE");
   const adminRoleCode = requireEnvironment("IAM_E2E_ADMIN_ROLE_CODE");
   const hrAdminRoleCode = requireEnvironment("IAM_E2E_HR_ADMIN_ROLE_CODE");
   const delegateeUsername = requireEnvironment("IAM_E2E_DELEGATEE_USERNAME");
@@ -74,7 +73,6 @@ test("Admin prepares Custom SSO in Maintenance and existing access resumes after
     targetOrganizationCode: responsibilityTargetOrganizationCode,
   });
   await expectInternalUserProfileSearchMatrix({
-    adminPrivilegeCode,
     adminRoleCode,
     adminUsername,
     delegateeUsername,
@@ -158,7 +156,7 @@ test("Admin prepares Custom SSO in Maintenance and existing access resumes after
   const initialUserInfoBody = await initialUserInfo.json();
   expect(initialUserInfoBody).toMatchObject({
     data: {
-      version: 2,
+      version: 3,
       profile: {
         username: adminUsername,
       },

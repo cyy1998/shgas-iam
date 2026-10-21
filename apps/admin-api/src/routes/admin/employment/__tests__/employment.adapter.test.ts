@@ -112,7 +112,6 @@ describe("admin employment adapter", () => {
         },
         position: { id: 12, posCode: "DEV", posName: "Developer" },
         roles: [],
-        privileges: [],
       };
     });
     const createEmployment = mock(async () => ({ changed: true, result: { id: 5 } }));

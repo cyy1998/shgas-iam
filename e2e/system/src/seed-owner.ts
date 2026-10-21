@@ -13,7 +13,6 @@ import {
   OrganizationStatus,
   OrganizationType,
   PositionStatus,
-  PrivilegeStatus,
   RoleAssignmentTargetType,
   RoleStatus,
   SubjectClaim,
@@ -28,8 +27,6 @@ import {
   organizationResponsibilityAssignments,
   organizations,
   positions,
-  privileges,
-  rolePrivileges,
   roles,
   userProfileDirty,
   userProfiles,
@@ -571,19 +568,6 @@ export function createProductionE2EScenarioOwner(input: CreateProductionE2EScena
         })
         .returning({ id: roles.id });
       if (hrRole === undefined) throw new Error("E2E HR Admin role was not created");
-      const [privilege] = await tx
-        .insert(privileges)
-        .values({
-          privilegeCode: scenario.adminPrivilegeCode,
-          privilegeName: `E2E Admin Privilege ${scenario.runId}`,
-          status: PrivilegeStatus.Enable,
-        })
-        .returning({ id: privileges.id });
-      if (privilege === undefined) throw new Error("E2E admin privilege was not created");
-      await tx.insert(rolePrivileges).values({
-        roleId: role.id,
-        privilegeId: privilege.id,
-      });
       const createdRoleAssignments = await tx
         .insert(roleAssignments)
         .values([
@@ -779,7 +763,7 @@ export function createProductionE2EScenarioOwner(input: CreateProductionE2EScena
         selectedRows.length === subjectIdentifiers.length &&
         selectedRows.every(
           (row) =>
-            row.profileSchemaVersion === 3 &&
+            row.profileSchemaVersion === 4 &&
             row.profileVersion === row.dirtyVersion &&
             row.dirtyStatus === UserProfileDirtyStatus.Processed,
         ) &&
@@ -789,7 +773,7 @@ export function createProductionE2EScenarioOwner(input: CreateProductionE2EScena
       }
       await Bun.sleep(250);
     }
-    throw new Error("E2E production Worker did not publish all v3 User Profiles before the deadline");
+    throw new Error("E2E production Worker did not publish all v4 User Profiles before the deadline");
   }
 
   async function readBack(references: E2EScenarioReferences) {

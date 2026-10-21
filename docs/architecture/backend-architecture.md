@@ -166,20 +166,20 @@ Client Delegation 的创建、生命周期、冲突、范围查询和选择器�
   校验、Subject Facts 读取、client 裁剪、稳定排序与投影组装。调用方只提交 Subject Identifier、`clientCode` 和
   `SubjectClaimSelection` 与本操作许可证明；facts/permission dependencies 只在 factory 处注入。
 - Subject Facts port 只暴露已发布 Profile 与有效任职事实，不暴露 Legacy User Detail。普通 Profile 与
-  `iam:authorization` 统一消费取得的合法已发布 Facts，允许源权限已改变但重建未完成或持续失败时仍交付旧权限，
+  `iam:authorization` 统一消费取得的合法已发布 Facts，允许源角色事实已改变但重建未完成或持续失败时仍交付旧角色，
   不再查询 Dirty 或执行 Authorization Freshness Barrier。Facts 缺失或主体错配时整份投影失败；
   撤权传播不承诺固定期限，第三方复制后自行刷新，见 [ADR-0032](../adr/0032-consume-published-subject-facts-for-authorization.md)。
-- 核心投影保持协议中性。`@iam/custom-sso/wire` 只公开一个完整 V2 交付 Interface：
+- 核心投影保持协议中性。`@iam/custom-sso/wire` 只公开一个完整 V3 交付 Interface：
   `resolveCustomSsoSubjectProjection` 先调用 root Projection Service，再核对返回的 Subject Identifier 与 resolve input，
   随后执行 wire mapping 和 strict schema parse。Schema、Wire 类型与 placeholder preview
   继续公开。Subject mismatch 产生只含安全 reason `subject_mismatch` 的内部不变量错误，mapping/parse 失败产生
   `invalid_wire`；resolve 阶段的既有错误原样传播。该 subpath 只能通过 package root public Interface 取得 Projection
   类型或能力，不得导入其他 core subpath、Facts persistence、client 配置、runtime 或 transport。
-- Package root 是唯一 active V2 projection Interface；Custom SSO wire 只从 `@iam/custom-sso/wire` 公开。Catalog V2 保持既有 claim vocabulary，
+- Package root 是唯一 active V3 projection Interface；Custom SSO wire 只从 `@iam/custom-sso/wire` 公开。Catalog V3 保持既有 claim vocabulary，
   选择 `profile:employments` 时每条 Employment 原子携带 canonical `responsibilities`/`[]`；authorization employment
-  继续只含 Employment identity、roles 与 privileges。Custom SSO 的 `/wire` 拥有 V2 strict schema/mapper，缺失、
-  未知或非法 responsibility 拒绝整份 projection，不提供 V1 alias、translation、fallback 或 caller version switch；
-  V1 投影、wire 与演练源码已移除。
+  继续只含 Employment identity 与 roles。Custom SSO 的 `/wire` 拥有 V3 strict schema/mapper，缺失、
+  未知或非法 responsibility 拒绝整份 projection，只接受当前 Catalog/Selection v3 和 Custom SSO wire v3，
+  不提供旧代际 alias、translation、fallback 或 caller version switch。
 - `@iam/user-profile-read-model/subject-facts` 只公开 Facts read 能力：有效 Redis record 直读；miss、损坏、
   未知 schema 或主体错配按 Subject single-flight 查询一行窄 `user_profile` 并以版本 CAS 尽力回填；
   回填失败仍可使用合法数据库 Facts。Redis 读取故障直接失败，不触发回源；数据库错误沿用既有失败路径。
@@ -187,7 +187,7 @@ Client Delegation 的创建、生命周期、冲突、范围查询和选择器�
 - API 默认 composition 组装 Root authentication、Custom SSO 与 OIDC，Kernel 只管两类会话，协议各自管 Code/Token。
   Client Snapshot 一次取得当前状态和单协议配置，Secret 由独立认证能力读取；操作接受后不追溯重查配置。
   访问必须验证 UserSession/ClientSession 关系及 Subject Access。SSO disable/maintenance/config/secret 维护与显式撤销分离。
-- Custom SSO token/UserInfo 按当前 Client selection 输出 V2 wire；Gateway authz 强制裁剪 Subject、username/name，
+- Custom SSO token/UserInfo 按当前 Client selection 输出 V3 wire；Gateway authz 强制裁剪 Subject、username/name，
   body/header 使用同一 Base64 值。单 callback 决定托管或业务接入，不再接受 mode/logoutEndpoint。
 - OIDC 的 Code 保留原 redirect/scope/nonce 等授权事实；UserInfo 使用当前 Client 披露范围和已发布 Facts，
   ID Token 固定签发内容并排除 IAM 扩展声明，不再持有 Claims Snapshot。OIDC HTTP、Cookie、错误与进程生命周期由 API 拥有。
@@ -233,13 +233,13 @@ Client Delegation 的创建、生命周期、冲突、范围查询和选择器�
   不为分类冲突来源增加父行锁、提高隔离级别或自动重试。Full/HR 的安全错误映射见
   [HR 管理契约](../features/organization-responsibility/hr-admin-management-design.md#越界阻塞与错误语义)。
 - `@iam/user-profile-read-model` 默认入口生成并读取同一 Dirty Version
-  下的 Detail、Search 与 Subject Facts v3，并复用 PostgreSQL atomic publication、Redis monotonic CAS 与严格 v3
-  cache/PostgreSQL read-through。Active Internal Detail 与 canonical Filter DSL 均只读同一个 `user_profile` v3 row，
+  下的 Detail、Search 与 Subject Facts v4，并复用 PostgreSQL atomic publication、Redis monotonic CAS 与严格 v4
+  cache/PostgreSQL read-through。Active Internal Detail 与 canonical Filter DSL 均只读同一个 `user_profile` v4 row，
   分别返回严格 Detail 与固定 User Profile Base；委托通过独立解析接口读取。API 使用独立的 2 秒 PostgreSQL statement timeout 连接和 5 秒 handler
   budget，并在 composition shutdown 中关闭该资源。Worker 通过版本无关的 `user-profile:backfill`、`user-profile:repair`
   与 PostgreSQL/Redis readiness 命令复用普通 dirty/job/publication 路径；命令不应用 client manifest 或推进 epoch。Active
-  Worker consumer、Internal User、Custom SSO 与 OIDC 只发布和读取 v3，不允许同一 live User 混写、双读、fallback 或由
-  caller 选择版本。Client Protocol V2 仍是独立版本边界。
+  Worker consumer、Internal User、Custom SSO 与 OIDC 只发布和读取 v4，不允许同一 live User 混写、双读、fallback 或由
+  caller 选择版本。Catalog/Selection v3 与 Custom SSO wire v3 各自保持独立版本边界。
 
 ### User Profile 失效
 
@@ -261,7 +261,7 @@ Client Delegation 的创建、生命周期、冲突、范围查询和选择器�
 - Worker claim 在 transaction 外绑定 candidate 的 Dirty Version。Builder 加载全部 Open Employment 及其父对象事实，
   先对 Position 与直属 Organization 执行 fail-closed 完整性守卫，再只投影当前位于 `[startTime, endTime)` 的 Enable
   Employment。它通过 `@iam/role-assignment-resolution` 的唯一 Effective Role seam 取得 assignment/closure 结果，再按
-  不可变 `clientCode` 形成最小 Subject Facts；organization path、client、role 和 privilege 均稳定排序，无角色任职
+  不可变 `clientCode` 形成最小 Subject Facts；organization path、client 与 role 均稳定排序，无角色任职
   保留空 authorization 数组。
 - PostgreSQL publication 是模块内部 deep seam：transaction 先对目标 dirty row 取行锁并重验同一 user/version 仍为
   processing，再单调 upsert/delete `user_profile`，最后在同一 transaction 标记 dirty processed。过期 candidate

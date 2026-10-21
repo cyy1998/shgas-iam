@@ -7,7 +7,7 @@ import type {
   OrganizationSelectorQueryDto,
   OrganizationUpdateDto,
 } from "@admin-api/services/organization/organization.type";
-import { getChildOrganizationLevel, OrganizationStatus, PrivilegeDelegationStatus } from "@iam/contracts";
+import { ClientDelegationStatus, getChildOrganizationLevel, OrganizationStatus } from "@iam/contracts";
 import type { DbClient } from "@iam/db";
 import { extractPostgresError } from "@iam/db/postgres-error";
 import { compactUpdate, firstRow, ilikeContainsIf, inArrayIf } from "@iam/db/query-utils";
@@ -363,7 +363,7 @@ export function createOrganizationRepository(db: DbClient) {
         .where(
           and(
             eq(clientDelegations.organizationScopeId, organizationId),
-            ne(clientDelegations.status, PrivilegeDelegationStatus.Disable),
+            ne(clientDelegations.status, ClientDelegationStatus.Disable),
           ),
         )
         .limit(1);

@@ -10,8 +10,8 @@ import type { SubjectAccessMutationReceipt, SubjectAccessOperation } from "@iam/
 import { requireSubjectAccessOperation } from "@iam/api-core/subject-access";
 import { EmploymentStatus, UserStatus } from "@iam/contracts";
 import {
+  UserHasOpenClientDelegationError,
   UserHasOpenEmploymentError,
-  UserHasOpenPrivilegeDelegationError,
   UserNotFoundError,
   UsernameAlreadyExistsError,
 } from "@iam/domain/user";
@@ -96,25 +96,20 @@ export function createUserService(deps: AdminUserServiceDeps) {
     );
     for (const employment of employments) {
       const roles = rolesByEmployment.get(employment.id) ?? [];
-      const privileges = await deps.privilegeRepository.getPrivilegesByRoleIds(roles.map((r) => r.id));
       const employmentDto = EmploymentDetailDtoSchema.parse(toEmploymentDto(employment));
       employmentDto.roles = roles.map((r) => r.roleCode);
-      employmentDto.privileges = privileges.map((p) => p.privilegeCode);
       employmentDto.roleNames = Object.fromEntries(
         roles.flatMap((role) => {
           const name = roleNames.get(role.roleCode);
           return name === undefined ? [] : [[role.roleCode, name]];
         }),
       );
-      employmentDto.privilegeNames = Object.fromEntries(privileges.map((p) => [p.privilegeCode, p.privilegeName]));
       employmentDtos.push(employmentDto);
     }
     userDto.employments = employmentDtos;
     const currentEmploymentDtos = employmentDtos.filter((e) => e.status === EmploymentStatus.Enable);
     userDto.roles = [...new Set(currentEmploymentDtos.flatMap((e) => e.roles))];
-    userDto.privileges = [...new Set(currentEmploymentDtos.flatMap((e) => e.privileges))];
     userDto.roleNames = Object.fromEntries(currentEmploymentDtos.flatMap((e) => Object.entries(e.roleNames)));
-    userDto.privilegeNames = Object.fromEntries(currentEmploymentDtos.flatMap((e) => Object.entries(e.privilegeNames)));
     return userDto;
   }
 
@@ -344,8 +339,8 @@ export function createUserService(deps: AdminUserServiceDeps) {
                 if (openEmployments > 0) {
                   throw new UserHasOpenEmploymentError();
                 }
-                if (await tx.userRepository.hasOpenPrivilegeDelegationsByUserId(current.id)) {
-                  throw new UserHasOpenPrivilegeDelegationError();
+                if (await tx.userRepository.hasOpenClientDelegationsByUserId(current.id)) {
+                  throw new UserHasOpenClientDelegationError();
                 }
                 const deletedUser = await tx.userRepository.softDeleteUserByUsername(username);
                 if (deletedUser === null) throw new Error("Locked User delete returned no row");

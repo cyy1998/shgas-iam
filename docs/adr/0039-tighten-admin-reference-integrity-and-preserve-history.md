@@ -16,9 +16,12 @@ status: accepted
 - **Q7：已有任职与状态文案。** Disable 用户同时禁止新增 Employment 和 Transfer；转岗被拒绝时不结束旧任职。已有 Open Employment 仍可依原有授权与生命周期规则修改说明、暂停、恢复、结束以及设置或清除主任职；账号停用不自动结束任职，整体结束任职继续使用 User Resignation。用户 Disable 的管理端文案由“结束”改为“停用”。
 - **Q8：HR 返聘流程。** Disable 且没有 Open Employment 的用户，先由完整管理员恢复为 Pause，再由 HR 在其管理范围内新建任职；用户重新满足 HR User Status Administration 的条件后，由 HR 启用账号。不凭已结束任职赋予 HR 额外的账号恢复权限。
 
-## 本次修复沿用的权限展示口径
+## 当前详情展示口径
 
-Admin 用户和任职详情的权限集合只包含由当前有效角色派生、且权限本身为 Enable 并未软删除的权限，与正式用户档案的过滤口径一致。现有遗漏状态和软删除条件的详情查询按此修复；不扩展 Admin 的角色授权策略，也不增加历史权限展示模式。
+Admin 用户和任职详情继续展示角色事实，遵守既有角色有效性及管理范围。
+后续 [ADR-0045](0045-retire-privilege-permission-points.md) 已退役权限点及其详情字段；本决定原先修复的权限过滤口径
+保留在 [Spec #207](https://github.com/cyy1998/shgas-iam/issues/207) 及其实施历史中，不再作为现行输出契约。
+退役不改变 Admin Authorization Policy 或 HR 范围，也不引入历史权限展示。
 
 ## 取舍与既有决定的关系
 

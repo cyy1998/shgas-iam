@@ -167,7 +167,7 @@ export function createUnifiedCustomSsoOperations(options: UnifiedCustomSsoOperat
           {
             subjectIdentifier: access.observation.userSession.subjectIdentifier,
             clientCode,
-            selection: parseSubjectClaimSelection({ catalogVersion: 2, claims }),
+            selection: parseSubjectClaimSelection({ catalogVersion: 3, claims }),
           },
         );
       }

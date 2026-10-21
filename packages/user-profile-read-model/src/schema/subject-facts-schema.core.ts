@@ -29,7 +29,6 @@ export const SubjectFactsEmploymentSchema = z
               z
                 .object({
                   code: z.string().min(1),
-                  privileges: z.array(z.string().min(1)),
                 })
                 .strict(),
             )

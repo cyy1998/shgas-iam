@@ -120,10 +120,9 @@ describe("admin route VO mappers", () => {
         {
           ...userDto(),
           employments: [],
-          privileges: ["priv:1"],
+
           roles: ["role:1"],
           roleNames: { "role:1": "管理员" },
-          privilegeNames: { "priv:1": "查看用户" },
         },
         {
           editProfile: { allowed: true, reason: null },
@@ -138,10 +137,10 @@ describe("admin route VO mappers", () => {
         editProfile: { allowed: true, reason: null },
       },
       username: "user1",
-      privileges: ["priv:1"],
+
       roles: ["role:1"],
       roleNames: { "role:1": "管理员" },
-      privilegeNames: { "priv:1": "查看用户" },
+
       statusText: userStatusToString[UserStatus.Enable],
     });
   });
@@ -159,7 +158,6 @@ describe("admin route VO mappers", () => {
         {
           ...employmentDto(),
           roleNames: { "role:1": "管理员" },
-          privilegeNames: { "priv:1": "查看用户" },
         },
         {
           editDescription: { allowed: true, reason: null },
@@ -172,10 +170,9 @@ describe("admin route VO mappers", () => {
         },
       ),
     ).toMatchObject({
-      privileges: [],
       roles: [],
       roleNames: { "role:1": "管理员" },
-      privilegeNames: { "priv:1": "查看用户" },
+
       statusText: employmentStatusToString[EmploymentStatus.Enable],
     });
   });

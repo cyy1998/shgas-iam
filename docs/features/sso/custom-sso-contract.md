@@ -48,7 +48,7 @@ Code 与续接由协议 owner 独占，不在 Kernel 建第二登记。
 `createUnifiedCustomSsoOperations().forOperation(operation).exchange(input, deliver)` 包含整个兑换及响应构造。
 POST `/sso/token` 要求严格 Basic 与 form `code`、`redirect_uri`；后者是原最终落地地址。
 仅 query 中的 Code 不替代 form 输入。已取得可解析 form Code 后，query、重复/未知参数、Content-Type 和地址错误
-交给完整操作在认证与定位之后拒绝。成功交付 `{ sid, ttl, subject }`，使用唯一 V2 wire schema。
+交给完整操作在认证与定位之后拒绝。成功交付 `{ sid, ttl, subject }`，使用唯一 V3 wire schema。
 
 顺序为：适用 Secret 认证 → 有界解析 Code → 中性观察原根及同 Client 的原实例 → 当前 Snapshot/Gate、参数、
 Code 用途/回调/兑换方/地址与账号许可检查 → 原子比较完整已观察记录、校验时间并消费 → 投影 → Token 签发与交付。
@@ -105,9 +105,9 @@ Token 的完整随机 bearer 经 SHA-256 直接定位唯一记录，独立随机
 但当前 Client 协议选择、启停和状态继续控制访问。成功终止根后的新访问不依赖子索引，晚到 Token 也不能恢复原实例；
 已取得观察的在途操作不在交付前复查。
 
-完整 Subject 按当前 `subjectClaims` 经 permitted Projection 与 V2 mapper 裁剪；最小 authz Header
+完整 Subject 按当前 `subjectClaims` 经 permitted Projection 与 V3 mapper 裁剪；最小 authz Header
 仅有 version、subjectIdentifier 及允许的 username/name，仅稳定主体不读 Facts。
-[已发布 Facts](published-subject-facts-contract.md)允许旧权限，配置披露变化也适用于旧 Token。
+[已发布 Facts](published-subject-facts-contract.md)允许已发布旧角色，配置披露变化也适用于旧 Token。
 各 HTTP 入口允许的用途、错误与 Cookie 行为见接入指南；配置拒绝不能概括成“Token 过期”。
 
 ## 库存与验证入口

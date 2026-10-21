@@ -1,7 +1,7 @@
-import { PrivilegeDelegationStatus } from "@iam/contracts";
+import { ClientDelegationStatus } from "@iam/contracts";
 import { z } from "zod";
 
-export { PrivilegeDelegationStatus as DelegationStatus } from "@iam/contracts";
+export { ClientDelegationStatus } from "@iam/contracts";
 
 const username = z.string().min(1).max(64);
 export const DelegationCreateSchema = z
@@ -20,7 +20,7 @@ export const DelegationUpdateSchema = z
     startTime: z.coerce.date().optional(),
     endTime: z.coerce.date().optional(),
     description: z.string().max(500).nullish(),
-    status: z.enum(PrivilegeDelegationStatus).optional(),
+    status: z.enum(ClientDelegationStatus).optional(),
   })
   .strict();
 export const DelegationSearchSchema = z
@@ -29,7 +29,7 @@ export const DelegationSearchSchema = z
     delegateeUsernames: z.array(username).optional(),
     clientIds: z.array(z.number().int().positive()).optional(),
     orgCodes: z.array(z.string().min(1)).optional(),
-    statuses: z.array(z.enum(PrivilegeDelegationStatus)).optional(),
+    statuses: z.array(z.enum(ClientDelegationStatus)).optional(),
     validTime: z.coerce.date().optional(),
     startTime: z.coerce.date().optional(),
     endTime: z.coerce.date().optional(),
@@ -63,7 +63,7 @@ export const DelegationDetailSchema = z
     organizationScopeId: z.number(),
     startTime: z.coerce.date(),
     endTime: z.coerce.date(),
-    status: z.enum(PrivilegeDelegationStatus),
+    status: z.enum(ClientDelegationStatus),
     description: z.string().nullable(),
     createTime: z.coerce.date(),
     updateTime: z.coerce.date(),

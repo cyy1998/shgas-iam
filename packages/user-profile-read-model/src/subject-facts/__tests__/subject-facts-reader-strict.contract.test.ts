@@ -5,10 +5,10 @@ import { createSubjectFactsReader } from "../../subject-facts";
 
 const SUBJECT_IDENTIFIER = "46739d0b-cdda-48f5-af1f-1f90e2d81169";
 
-describe("Subject Facts v3 Reader", () => {
-  test("uses one strict v3 cached record without querying PostgreSQL", async () => {
+describe("Subject Facts v4 Reader", () => {
+  test("uses one strict v4 cached record without querying PostgreSQL", async () => {
     const select = mock(() => {
-      throw new Error("a v3 cache hit must not query PostgreSQL");
+      throw new Error("a v4 cache hit must not query PostgreSQL");
     });
     const publish = mock(async () => ({ status: "published" as const }));
     const reader = createSubjectFactsReader({
@@ -71,7 +71,7 @@ describe("Subject Facts v3 Reader", () => {
     expect(publish).not.toHaveBeenCalled();
   });
 
-  test("rejects a v1 cache record and read-through publishes only a strict v3 profile row", async () => {
+  test("rejects the previous cache generation and read-through publishes only a strict v4 profile row", async () => {
     const record = cacheRecord("8");
     const limit = mock(async () => [
       {
@@ -79,7 +79,7 @@ describe("Subject Facts v3 Reader", () => {
         username: record.profile.username,
         name: record.profile.name,
         mobile: record.profile.phone,
-        profileSchemaVersion: 3,
+        profileSchemaVersion: 4,
         sourceDirtyVersion: record.sourceDirtyVersion,
         subjectFacts: record.facts,
         rebuiltAt: new Date(record.publishedAt),
@@ -98,7 +98,7 @@ describe("Subject Facts v3 Reader", () => {
         read: mock(async () =>
           JSON.stringify({
             ...record,
-            schemaVersion: 1,
+            schemaVersion: 3,
           }),
         ),
         publish,
@@ -122,7 +122,7 @@ describe("Subject Facts v3 Reader", () => {
     expect(publish).toHaveBeenCalledWith(record);
   });
 
-  test("fails closed instead of publishing a malformed v3 responsibility", async () => {
+  test("fails closed instead of publishing a malformed v4 responsibility", async () => {
     const record = cacheRecord("9");
     const malformedFacts = structuredClone(record.facts);
     Reflect.set(malformedFacts.employments[0]!.responsibilities[0]!.type, "unknown", true);
@@ -138,7 +138,7 @@ describe("Subject Facts v3 Reader", () => {
                   username: record.profile.username,
                   name: record.profile.name,
                   mobile: record.profile.phone,
-                  profileSchemaVersion: 3,
+                  profileSchemaVersion: 4,
                   sourceDirtyVersion: record.sourceDirtyVersion,
                   subjectFacts: malformedFacts,
                   rebuiltAt: new Date(record.publishedAt),
@@ -161,7 +161,7 @@ describe("Subject Facts v3 Reader", () => {
 
 function cacheRecord(sourceDirtyVersion: string): SubjectFactsCacheRecord {
   return {
-    schemaVersion: 3,
+    schemaVersion: 4,
     sourceDirtyVersion,
     publishedAt: "2026-07-25T10:00:00.000Z",
     subjectIdentifier: SUBJECT_IDENTIFIER,

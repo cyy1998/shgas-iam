@@ -45,14 +45,13 @@ export const CustomSsoEmploymentSchema = CustomSsoEmploymentBaseObjectSchema.ext
 
 const CustomSsoAuthorizationEmploymentSchema = CustomSsoEmploymentBaseObjectSchema.extend({
   roles: z.array(z.string()).readonly(),
-  privileges: z.array(z.string()).readonly(),
 })
   .strict()
   .readonly();
 
 export const CustomSsoSubjectProjectionSchema = z
   .object({
-    version: z.literal(2),
+    version: z.literal(3),
     subjectIdentifier: z.uuid(),
     profile: z
       .object({
@@ -71,7 +70,6 @@ export const CustomSsoSubjectProjectionSchema = z
       .object({
         employments: z.array(CustomSsoAuthorizationEmploymentSchema).readonly(),
         roles: z.array(z.string()).readonly(),
-        privileges: z.array(z.string()).readonly(),
       })
       .strict()
       .readonly()
@@ -115,12 +113,12 @@ const PLACEHOLDER_SUBJECT_IDENTIFIER = "00000000-0000-4000-8000-000000000001";
 
 export function buildCustomSsoPlaceholderPreview(subjectClaims: readonly SubjectClaimName[]) {
   const selection = parseSubjectClaimSelection({
-    catalogVersion: 2,
+    catalogVersion: 3,
     claims: [...subjectClaims],
   });
   const selected = new Set(selection.optionalClaims);
   return CustomSsoSubjectProjectionSchema.parse({
-    version: 2,
+    version: 3,
     subjectIdentifier: PLACEHOLDER_SUBJECT_IDENTIFIER,
     ...(selected.has(SubjectClaim.ProfileUsername) ||
     selected.has(SubjectClaim.ProfileName) ||
@@ -140,7 +138,6 @@ export function buildCustomSsoPlaceholderPreview(subjectClaims: readonly Subject
           authorization: {
             employments: [],
             roles: [],
-            privileges: [],
           },
         }
       : {}),
@@ -149,12 +146,12 @@ export function buildCustomSsoPlaceholderPreview(subjectClaims: readonly Subject
 
 function mapClientSubjectProjectionToCustomSso(projection: ClientSubjectProjection): CustomSsoSubjectProjection {
   const wire: {
-    version: 2;
+    version: 3;
     subjectIdentifier: string;
     profile?: CustomSsoSubjectProfile;
     authorization?: CustomSsoClientAuthorization;
   } = {
-    version: 2,
+    version: 3,
     subjectIdentifier: projection.subjectIdentifier,
   };
   const profile: {
@@ -181,10 +178,8 @@ function mapAuthorization(authorization: ClientAuthorization): CustomSsoClientAu
     employments: authorization.employments.map((employment) => ({
       ...mapEmploymentBase(employment),
       roles: [...employment.roles],
-      privileges: [...employment.privileges],
     })),
     roles: [...authorization.roles],
-    privileges: [...authorization.privileges],
   };
 }
 

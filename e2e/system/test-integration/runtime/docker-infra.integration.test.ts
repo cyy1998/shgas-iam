@@ -222,7 +222,7 @@ describe("exact-project Docker infrastructure", () => {
     }
   });
 
-  test("runs both production User Profile v3 gates before route publication", async () => {
+  test("runs both production User Profile v4 gates before route publication", async () => {
     const captures: string[][] = [];
     const operations = await createOperations({
       captureCommand: async (command, args) => {
@@ -230,7 +230,7 @@ describe("exact-project Docker infrastructure", () => {
         const operation = args.at(-3)?.replace("user-profile:", "");
         return {
           stdout: JSON.stringify({
-            version: 3,
+            version: 4,
             gate: operation === "verify-postgres" ? "postgres" : "redis-access",
             status: "passed",
           }),
@@ -248,11 +248,11 @@ describe("exact-project Docker infrastructure", () => {
     expect(captures.flat().join(" ")).not.toMatch(/password|token|secret/iu);
   });
 
-  test("rejects a gate command that does not report a passing v3 inventory", async () => {
+  test("rejects a gate command that does not report a passing v4 inventory", async () => {
     const operations = await createOperations({
       captureCommand: async () => ({
         stdout: JSON.stringify({
-          version: 2,
+          version: 3,
           gate: "postgres",
           status: "passed",
         }),
@@ -264,7 +264,7 @@ describe("exact-project Docker infrastructure", () => {
       () => undefined,
       (error) => error,
     );
-    expect(failure).toMatchObject({ message: "User Profile postgres gate did not report a passing v3 inventory" });
+    expect(failure).toMatchObject({ message: "User Profile postgres gate did not report a passing v4 inventory" });
   });
 
   test("renders run-scoped client, role, and Gateway authority from the descriptor", async () => {

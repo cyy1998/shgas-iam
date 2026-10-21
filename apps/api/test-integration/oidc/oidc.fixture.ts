@@ -144,7 +144,7 @@ export async function fixture(
         random: { uuid: () => generation },
       }).seedMany([{ subjectIdentifier, state: "enabled" }], new Date());
       await factsCache.publish({
-        schemaVersion: 3,
+        schemaVersion: 4,
         sourceDirtyVersion: "1",
         publishedAt: new Date().toISOString(),
         subjectIdentifier,
@@ -210,7 +210,6 @@ export async function fixture(
       updateTime: new Date(),
       employments: [],
       roles: [],
-      privileges: [],
     };
     const keys = sm2.generateKeyPairHex();
     const now = 1700000000000;

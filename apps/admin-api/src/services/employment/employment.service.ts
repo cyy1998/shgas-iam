@@ -35,17 +35,14 @@ export function createEmploymentService(deps: AdminEmploymentServiceDeps) {
       employmentIds: [employment.id],
     });
     const roles = rolesByEmployment.get(employment.id) ?? [];
-    const privileges = await deps.privilegeRepository.getPrivilegesByRoleIds(roles.map((r) => r.id));
     const dto = EmploymentDetailDtoSchema.parse(toEmploymentDto(employment));
     dto.roles = roles.map((r) => r.roleCode);
-    dto.privileges = privileges.map((p) => p.privilegeCode);
     dto.roleNames = Object.fromEntries(
       (await deps.roleRepository.getRoleNamesByIds(roles.map((r) => r.id))).map((role) => [
         role.roleCode,
         role.roleName,
       ]),
     );
-    dto.privilegeNames = Object.fromEntries(privileges.map((p) => [p.privilegeCode, p.privilegeName]));
     return { ...dto, userStatus: employment.user.status };
   }
 

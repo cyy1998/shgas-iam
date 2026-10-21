@@ -60,7 +60,6 @@ export const USER_PROFILE_SEARCH_STRUCTURE = searchObject({
       name: searchScalar(z.string(), queryStringSchema),
     }),
     roles: searchScalarArray(z.string(), queryStringSchema),
-    privileges: searchScalarArray(z.string(), queryStringSchema),
     responsibilities: searchCollection({
       type: searchObject({
         code: searchScalar(z.enum(OrganizationResponsibilityTypeCode), z.enum(OrganizationResponsibilityTypeCode)),

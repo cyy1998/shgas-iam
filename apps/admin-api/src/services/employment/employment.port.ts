@@ -46,10 +46,6 @@ export interface AdminEmploymentEffectiveRoleResolverPort {
   >;
 }
 
-export interface AdminEmploymentPrivilegeReaderPort {
-  getPrivilegesByRoleIds: (roleIds: number[]) => Promise<Array<{ privilegeCode: string; privilegeName: string }>>;
-}
-
 export interface AdminEmploymentTransactionPorts {
   employmentRepository: AdminEmploymentStorePort;
   auditService: AuditLogWriterPort;
@@ -64,6 +60,5 @@ export interface AdminEmploymentServiceDeps {
   employmentRepository: AdminEmploymentReaderPort;
   roleAssignmentResolver: AdminEmploymentEffectiveRoleResolverPort;
   roleRepository: { getRoleNamesByIds: (ids: number[]) => Promise<Array<{ roleCode: string; roleName: string }>> };
-  privilegeRepository: AdminEmploymentPrivilegeReaderPort;
   uow: AdminEmploymentUnitOfWorkPort;
 }

@@ -5,8 +5,8 @@ import * as routes from "./delegation.routes";
 export function createDelegationRoute(handlers: DelegationHandlers) {
   return createRouter()
     .basePath("/delegations")
-    .openapi(routes.privilegeDelegationsResolve, handlers.privilegeDelegationsResolve)
-    .openapi(routes.privilegeDelegationsQuery, handlers.privilegeDelegationsQuery)
-    .openapi(routes.privilegeDelegationUpdate, handlers.privilegeDelegationUpdate)
-    .openapi(routes.privilegeDelegationSet, handlers.privilegeDelegationSet);
+    .openapi(routes.clientDelegationsResolve, handlers.clientDelegationsResolve)
+    .openapi(routes.clientDelegationsQuery, handlers.clientDelegationsQuery)
+    .openapi(routes.clientDelegationUpdate, handlers.clientDelegationUpdate)
+    .openapi(routes.clientDelegationSet, handlers.clientDelegationSet);
 }

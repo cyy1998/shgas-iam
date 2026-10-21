@@ -86,14 +86,14 @@ test(
       const secret = "original-secret";
       const rotatedSecret = "rotated-secret";
       const facts = {
-        schemaVersion: 3 as const,
+        schemaVersion: 4 as const,
         sourceDirtyVersion: "1",
         publishedAt: new Date().toISOString(),
         subjectIdentifier,
         profile: { username: "production194", name: "Published Name", phone: null },
         facts: { employments: [] },
       };
-      await sql`INSERT INTO user_profile (user_id, subject_identifier, username, name, mobile, wx_id, status, is_delete, search_visible, profile_schema_version, source_dirty_version, detail, search_doc, subject_facts, rebuilt_at) VALUES (${userId}, ${subjectIdentifier}, 'production194', 'Published Name', NULL, NULL, 1, FALSE, TRUE, 3, 1, '{}'::jsonb, '{}'::jsonb, ${JSON.stringify(facts.facts)}::jsonb, NOW())`;
+      await sql`INSERT INTO user_profile (user_id, subject_identifier, username, name, mobile, wx_id, status, is_delete, search_visible, profile_schema_version, source_dirty_version, detail, search_doc, subject_facts, rebuilt_at) VALUES (${userId}, ${subjectIdentifier}, 'production194', 'Published Name', NULL, NULL, 1, FALSE, TRUE, 4, 1, '{}'::jsonb, '{}'::jsonb, ${JSON.stringify(facts.facts)}::jsonb, NOW())`;
       await sql`INSERT INTO user_profile_dirty (user_id, dirty_version, status, reason_codes, dirty_at, processed_at) VALUES (${userId}, 1, 'processed', '["user-updated"]'::jsonb, NOW(), NOW())`;
       const factsCache = createSubjectFactsRedisCache(redis);
       await factsCache.publish(facts);

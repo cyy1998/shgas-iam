@@ -6,9 +6,18 @@ const DbUserSchema = z.object(selectUserSchema.shape);
 
 export const UserSchema = DbUserSchema;
 
-export const UserDtoSchema = UserSchema.omit({
-  password: true,
-  subjectIdentifier: true,
+export const UserDtoSchema = UserSchema.pick({
+  id: true,
+  username: true,
+  wxId: true,
+  name: true,
+  mobile: true,
+  userType: true,
+  orderNum: true,
+  status: true,
+  isDelete: true,
+  createTime: true,
+  updateTime: true,
 }).openapi("UserDto");
 
 export const UserProfileBaseSchema = UserSchema.pick({
@@ -37,10 +46,6 @@ export const UserNameWriteSchema = z
 
 export const UserDetailDtoSchema = UserDtoSchema.extend({
   employments: z.array(EmploymentDetailDtoSchema).default([]),
-  privileges: z
-    .array(z.string())
-    .default([])
-    .openapi({ example: ["ui:button:tender:create-GYBG"] }),
   roles: z
     .array(z.string())
     .default([])

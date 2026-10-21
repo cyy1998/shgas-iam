@@ -25,10 +25,10 @@ import { createTRPCContext } from "@iam/api-core/trpc";
 import { mapUnitOfWork } from "@iam/api-core/uow";
 import {
   ApiErrorCode,
+  ClientDelegationStatus,
   EmploymentStatus,
   OrganizationLevel,
   OrganizationType,
-  PrivilegeDelegationStatus,
   UserStatus,
   UserType,
 } from "@iam/contracts";
@@ -123,7 +123,7 @@ function createCommand(
       employmentRepository: repositories.employment,
       roleAssignmentResolver: { resolveEffectiveRoles: async () => new Map() },
       roleRepository: repositories.role,
-      privilegeRepository: { getPrivilegesByRoleIds: async () => [] },
+
       passwordHasher: { hashPassword: async (password) => `hash:${password}` },
       random,
       sessionRevocation: { revokeUserSessions },
@@ -199,7 +199,7 @@ async function seedUser(status = UserStatus.Enable, isDelete = false) {
 async function seedDelegation(
   userId: number,
   side: "delegator" | "delegatee",
-  status: PrivilegeDelegationStatus,
+  status: ClientDelegationStatus,
   period: "current" | "future" | "past",
 ) {
   const [other] = await harness.db.insert(users).values({ username: "other", name: "Other" }).returning();
@@ -431,7 +431,7 @@ describe("User lifecycle mutations through production PostgreSQL UnitOfWork", ()
   test("an open delegation between other Users does not block deletion", async () => {
     const user = await seedUser();
     const [unrelated] = await harness.db.insert(users).values({ username: "unrelated", name: "Unrelated" }).returning();
-    await seedDelegation(unrelated!.id, "delegator", PrivilegeDelegationStatus.Enable, "current");
+    await seedDelegation(unrelated!.id, "delegator", ClientDelegationStatus.Enable, "current");
     const { service } = createCommand(undefined, undefined, stableStore(user.subjectIdentifier));
     const before = await deletionFacts();
     const result = await service.deleteUser("user");
@@ -444,7 +444,7 @@ describe("User lifecycle mutations through production PostgreSQL UnitOfWork", ()
     "%s deletion returns the stable delegation conflict without effects",
     async (protocol) => {
       const user = await seedUser();
-      await seedDelegation(user.id, "delegatee", PrivilegeDelegationStatus.Enable, "past");
+      await seedDelegation(user.id, "delegatee", ClientDelegationStatus.Enable, "past");
       const command = createCommand(undefined, undefined, stableStore(user.subjectIdentifier));
       const adapter = createUserAdapter({ userService: command.service, random: command.random });
       const app = new Hono();
@@ -473,8 +473,8 @@ describe("User lifecycle mutations through production PostgreSQL UnitOfWork", ()
       const message = "该用户存在未结束的委托，无法删除；请先结束相关委托";
       expect(body).toMatchObject(
         protocol === "REST"
-          ? { code: "USER.HAS_OPEN_PRIVILEGE_DELEGATION", message }
-          : { error: { message, data: { code: "CONFLICT", serviceCode: "USER.HAS_OPEN_PRIVILEGE_DELEGATION" } } },
+          ? { code: "USER.HAS_OPEN_CLIENT_DELEGATION", message }
+          : { error: { message, data: { code: "CONFLICT", serviceCode: "USER.HAS_OPEN_CLIENT_DELEGATION" } } },
       );
       const after = await deletionFacts();
       expect(after).toEqual(before);
@@ -485,12 +485,12 @@ describe("User lifecycle mutations through production PostgreSQL UnitOfWork", ()
 
   describe.each(["delegator", "delegatee"] as const)("Open Delegation deletion gate for %s", (side) => {
     test.each([
-      [PrivilegeDelegationStatus.Enable, "current"],
-      [PrivilegeDelegationStatus.Pause, "current"],
-      [PrivilegeDelegationStatus.Enable, "future"],
-      [PrivilegeDelegationStatus.Pause, "future"],
-      [PrivilegeDelegationStatus.Enable, "past"],
-      [PrivilegeDelegationStatus.Pause, "past"],
+      [ClientDelegationStatus.Enable, "current"],
+      [ClientDelegationStatus.Pause, "current"],
+      [ClientDelegationStatus.Enable, "future"],
+      [ClientDelegationStatus.Pause, "future"],
+      [ClientDelegationStatus.Enable, "past"],
+      [ClientDelegationStatus.Pause, "past"],
     ] as const)("status %s in %s period rejects without deletion effects", async (status, period) => {
       const user = await seedUser();
       await seedDelegation(user.id, side, status, period);
@@ -502,7 +502,7 @@ describe("User lifecycle mutations through production PostgreSQL UnitOfWork", ()
       const before = await deletionFacts();
       const barrierBefore = await store.read(user.subjectIdentifier);
       const error = await failure(() => service.deleteUser("user"));
-      expect(error).toMatchObject({ code: "USER.HAS_OPEN_PRIVILEGE_DELEGATION", httpStatus: 409 });
+      expect(error).toMatchObject({ code: "USER.HAS_OPEN_CLIENT_DELEGATION", httpStatus: 409 });
       const after = await deletionFacts();
       const barrierAfter = await store.read(user.subjectIdentifier);
       const intents = await transitions();
@@ -513,7 +513,7 @@ describe("User lifecycle mutations through production PostgreSQL UnitOfWork", ()
       expect(revokeUserSessions).not.toHaveBeenCalled();
     });
 
-    test.each([[PrivilegeDelegationStatus.Disable, false]] as const)(
+    test.each([[ClientDelegationStatus.Disable, false]] as const)(
       "ended status %s permits deletion and preserves delegation history",
       async (status) => {
         const user = await seedUser();
@@ -539,10 +539,10 @@ describe("User lifecycle mutations through production PostgreSQL UnitOfWork", ()
 
     test("ending the delegation through the Internal command releases the deletion gate", async () => {
       const user = await seedUser();
-      const delegation = await seedDelegation(user.id, side, PrivilegeDelegationStatus.Pause, "future");
+      const delegation = await seedDelegation(user.id, side, ClientDelegationStatus.Pause, "future");
       const { service } = createCommand(undefined, undefined, stableStore(user.subjectIdentifier));
       const error = await failure(() => service.deleteUser("user"));
-      expect(error).toMatchObject({ code: "USER.HAS_OPEN_PRIVILEGE_DELEGATION" });
+      expect(error).toMatchObject({ code: "USER.HAS_OPEN_CLIENT_DELEGATION" });
       await runProcessCommandSmoke({
         label: "Internal delegation end before Admin user deletion",
         start: () =>
@@ -564,7 +564,7 @@ describe("User lifecycle mutations through production PostgreSQL UnitOfWork", ()
         expectedExitCode: 0,
       });
       const ended = await deletionFacts();
-      expect(ended.delegations).toMatchObject([{ id: delegation.id, status: PrivilegeDelegationStatus.Disable }]);
+      expect(ended.delegations).toMatchObject([{ id: delegation.id, status: ClientDelegationStatus.Disable }]);
       const result = await service.deleteUser("user");
       const after = await deletionFacts();
       expect(result).toEqual({ changed: true, result: null });

@@ -20,7 +20,7 @@ export interface AdminUserTransactionStorePort {
   getOpenEmploymentOrganizationIdsByUserId: (userId: number) => Promise<number[]>;
   setUserForAdmin: (input: UserCreateDto & { subjectIdentifier: string }) => Promise<User | null>;
   updateUserByUsername: (username: string, input: UserUpdateDto) => Promise<User | null>;
-  hasOpenPrivilegeDelegationsByUserId: (userId: number) => Promise<boolean>;
+  hasOpenClientDelegationsByUserId: (userId: number) => Promise<boolean>;
   countOpenEmploymentsByUsername: (username: string) => Promise<number>;
   softDeleteUserByUsername: (username: string) => Promise<User | null>;
   setPassword: (userId: number, password: string) => Promise<User | null>;
@@ -52,10 +52,6 @@ export interface AdminUserEffectiveRoleResolverPort {
       }[]
     >
   >;
-}
-
-export interface AdminUserPrivilegeReaderPort {
-  getPrivilegesByRoleIds: (roleIds: number[]) => Promise<Array<{ privilegeCode: string; privilegeName: string }>>;
 }
 
 export interface AdminUserTransactionPorts {
@@ -102,7 +98,6 @@ export interface AdminUserServiceDeps {
   employmentRepository: AdminUserEmploymentReaderPort;
   roleAssignmentResolver: AdminUserEffectiveRoleResolverPort;
   roleRepository: { getRoleNamesByIds: (ids: number[]) => Promise<Array<{ roleCode: string; roleName: string }>> };
-  privilegeRepository: AdminUserPrivilegeReaderPort;
   passwordHasher: Pick<PasswordHasherPort, "hashPassword">;
   random: Pick<RandomPort, "password" | "uuid">;
   sessionRevocation: {

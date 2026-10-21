@@ -226,7 +226,7 @@ Admin 变更传播成功，影响的是后续获取。
 - 缓存有效命中时，不查 PostgreSQL。
 - 缓存缺失或无效时，读取已发布 Profile，不检查 Dirty 新鲜度。
 
-因此，旧权限可能持续交付；账号访问保护仍独立生效。
+因此，旧角色事实可能持续交付；账号访问保护仍独立生效。
 Custom SSO 与 OIDC UserInfo 在实际交付时，按当前披露范围构建投影；Code 只保留原授权事实，已签发的 ID Token 内容固定。
 详见[投影契约](backend-architecture.md#client-subject-projection)。
 

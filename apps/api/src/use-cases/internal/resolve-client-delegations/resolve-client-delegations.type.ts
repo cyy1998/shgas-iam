@@ -1,24 +1,24 @@
-export interface ResolvePrivilegeDelegationsInput {
+export interface ResolveClientDelegationsInput {
   usernames: string[];
   orgCode: string;
   clientId: number;
 }
 
-export interface PrivilegeDelegationResolutionQuery extends ResolvePrivilegeDelegationsInput {
+export interface ClientDelegationResolutionQuery extends ResolveClientDelegationsInput {
   observedAt: Date;
 }
 
-export type PrivilegeDelegationResolutionResult = {
+export type ClientDelegationResolutionResult = {
   username: string;
   delegateeUsername: string | null;
 };
 
-export interface PrivilegeDelegationResolutionMissingInputs {
+export interface ClientDelegationResolutionMissingInputs {
   usernames: string[];
   orgCodes: string[];
 }
 
-export type PrivilegeDelegationResolutionIntegrityViolation =
+export type ClientDelegationResolutionIntegrityViolation =
   | {
       category: "ambiguous-delegation";
       username: string;
@@ -37,8 +37,8 @@ export type PrivilegeDelegationResolutionIntegrityViolation =
       referencedIds: number[];
     };
 
-export interface PrivilegeDelegationResolutionObservation {
-  results: PrivilegeDelegationResolutionResult[];
-  missingInputs: PrivilegeDelegationResolutionMissingInputs;
-  integrityViolations: PrivilegeDelegationResolutionIntegrityViolation[];
+export interface ClientDelegationResolutionObservation {
+  results: ClientDelegationResolutionResult[];
+  missingInputs: ClientDelegationResolutionMissingInputs;
+  integrityViolations: ClientDelegationResolutionIntegrityViolation[];
 }

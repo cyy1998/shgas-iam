@@ -42,7 +42,7 @@ export async function createApiRoutes(options: CreateApiRoutesOptions): Promise<
 
   const delegationHandlers = createDelegationHandlers({
     delegationService: services.delegation,
-    resolvePrivilegeDelegations: useCases.resolvePrivilegeDelegations,
+    resolveClientDelegations: useCases.resolveClientDelegations,
   });
 
   const userHandlers = createUserHandlers({

@@ -25,9 +25,9 @@ describe("Client Subject Projection Interface", () => {
     return { resolve: (input: Parameters<typeof service.resolve>[0]) => service.resolve(input, permission) };
   }
 
-  test("publishes a closed V2 Catalog without a responsibility-only claim", () => {
+  test("publishes a closed V3 Catalog without a responsibility-only claim", () => {
     expect(SUBJECT_CLAIM_CATALOG).toEqual({
-      version: 2,
+      version: 3,
       claims: [
         {
           claim: "subjectIdentifier",
@@ -72,22 +72,22 @@ describe("Client Subject Projection Interface", () => {
 
     expect(
       parseSubjectClaimSelection({
-        catalogVersion: 2,
+        catalogVersion: 3,
         claims: ["subjectIdentifier", "profile:employments"],
       }),
     ).toEqual({
-      catalogVersion: 2,
+      catalogVersion: 3,
       optionalClaims: ["profile:employments"],
     });
     expect(() =>
       parseSubjectClaimSelection({
-        catalogVersion: 1,
+        catalogVersion: 2,
         claims: ["subjectIdentifier"],
       }),
     ).toThrow();
     expect(() =>
       parseSubjectClaimSelection({
-        catalogVersion: 2,
+        catalogVersion: 3,
         claims: ["subjectIdentifier", "profile:responsibilities"],
       }),
     ).toThrow();
@@ -121,7 +121,7 @@ describe("Client Subject Projection Interface", () => {
               clientAuthorizations: [
                 {
                   clientCode: "client-a",
-                  roles: [{ code: "admin", privileges: ["read"] }],
+                  roles: [{ code: "admin" }],
                 },
               ],
               responsibilities: [
@@ -166,7 +166,7 @@ describe("Client Subject Projection Interface", () => {
       subjectIdentifier,
       clientCode: "client-a",
       selection: {
-        catalogVersion: 2,
+        catalogVersion: 3,
         optionalClaims: ["profile:employments", "iam:authorization"],
       },
     });
@@ -195,9 +195,9 @@ describe("Client Subject Projection Interface", () => {
       expect(employment).not.toHaveProperty("responsibilities");
   });
 
-  test("normalizes a Catalog V2 declaration into optional claim Selection", () => {
+  test("normalizes a Catalog V3 declaration into optional claim Selection", () => {
     const selection = parseSubjectClaimSelection({
-      catalogVersion: 2,
+      catalogVersion: 3,
       claims: [
         "subjectIdentifier",
         "profile:username",
@@ -209,7 +209,7 @@ describe("Client Subject Projection Interface", () => {
     });
 
     expect(selection).toEqual({
-      catalogVersion: 2,
+      catalogVersion: 3,
       optionalClaims: ["profile:username", "profile:name", "profile:phone", "profile:employments", "iam:authorization"],
     });
   });
@@ -221,31 +221,31 @@ describe("Client Subject Projection Interface", () => {
         claims: ["subjectIdentifier"],
       },
       {
-        catalogVersion: 2,
+        catalogVersion: 3,
         claims: ["subjectIdentifier", "profile:unknown"],
       },
       {
-        catalogVersion: 2,
+        catalogVersion: 3,
         claims: ["subjectIdentifier", "profile:name", "profile:name"],
       },
       {
-        catalogVersion: 2,
+        catalogVersion: 3,
         claims: ["profile:name"],
       },
       {
-        catalogVersion: 2,
+        catalogVersion: 3,
         claims: ["subjectIdentifier", "username"],
       },
       {
-        catalogVersion: 2,
+        catalogVersion: 3,
         claims: ["subjectIdentifier", "id"],
       },
       {
-        catalogVersion: 2,
+        catalogVersion: 3,
         claims: ["subjectIdentifier", "$.profile.name"],
       },
       {
-        catalogVersion: 2,
+        catalogVersion: 3,
         claims: ["subjectIdentifier", "favoriteColor"],
       },
     ];
@@ -262,20 +262,21 @@ describe("Client Subject Projection Interface", () => {
       },
     });
     const invalidSelections = [
+      { catalogVersion: 2, optionalClaims: [] },
       {
         catalogVersion: 99,
         optionalClaims: [],
       },
       {
-        catalogVersion: 2,
+        catalogVersion: 3,
         optionalClaims: ["profile:unknown"],
       },
       {
-        catalogVersion: 2,
+        catalogVersion: 3,
         optionalClaims: ["profile:name", "profile:name"],
       },
       {
-        catalogVersion: 2,
+        catalogVersion: 3,
         optionalClaims: ["subjectIdentifier"],
       },
     ];
@@ -308,7 +309,7 @@ describe("Client Subject Projection Interface", () => {
       subjectIdentifier,
       clientCode: "client-a",
       selection: {
-        catalogVersion: 2,
+        catalogVersion: 3,
         optionalClaims: [],
       },
     });
@@ -337,7 +338,7 @@ describe("Client Subject Projection Interface", () => {
       subjectIdentifier,
       clientCode: "client-a",
       selection: {
-        catalogVersion: 2,
+        catalogVersion: 3,
         optionalClaims: ["profile:username"],
       },
     });
@@ -368,7 +369,7 @@ describe("Client Subject Projection Interface", () => {
       subjectIdentifier,
       clientCode: "client-a",
       selection: {
-        catalogVersion: 2,
+        catalogVersion: 3,
         optionalClaims: ["profile:name", "profile:phone"],
       },
     });
@@ -495,7 +496,7 @@ describe("Client Subject Projection Interface", () => {
       subjectIdentifier,
       clientCode: "client-a",
       selection: {
-        catalogVersion: 2,
+        catalogVersion: 3,
         optionalClaims: ["profile:employments"],
       },
     });
@@ -581,7 +582,6 @@ describe("Client Subject Projection Interface", () => {
               roles: [
                 {
                   code: "operator",
-                  privileges: ["read", "execute", "execute"],
                 },
               ],
             },
@@ -609,15 +609,12 @@ describe("Client Subject Projection Interface", () => {
               roles: [
                 {
                   code: "viewer",
-                  privileges: ["read", "read"],
                 },
                 {
                   code: "admin",
-                  privileges: ["write", "read"],
                 },
                 {
                   code: "viewer",
-                  privileges: ["read"],
                 },
               ],
             },
@@ -626,7 +623,6 @@ describe("Client Subject Projection Interface", () => {
               roles: [
                 {
                   code: "auditor",
-                  privileges: ["audit", "audit"],
                 },
               ],
             },
@@ -638,7 +634,7 @@ describe("Client Subject Projection Interface", () => {
       subjectFacts: { read: async () => facts },
     });
     const selection = {
-      catalogVersion: 2,
+      catalogVersion: 3,
       optionalClaims: ["iam:authorization"],
     } as const;
 
@@ -688,16 +684,13 @@ describe("Client Subject Projection Interface", () => {
             {
               ...primaryEmployment,
               roles: ["admin", "viewer"],
-              privileges: ["read", "write"],
             },
             {
               ...secondaryEmployment,
               roles: [],
-              privileges: [],
             },
           ],
           roles: ["admin", "viewer"],
-          privileges: ["read", "write"],
         },
       },
       {
@@ -707,16 +700,13 @@ describe("Client Subject Projection Interface", () => {
             {
               ...primaryEmployment,
               roles: ["auditor"],
-              privileges: ["audit"],
             },
             {
               ...secondaryEmployment,
               roles: ["operator"],
-              privileges: ["execute", "read"],
             },
           ],
           roles: ["auditor", "operator"],
-          privileges: ["audit", "execute", "read"],
         },
       },
     ]);
@@ -754,7 +744,7 @@ describe("Client Subject Projection Interface", () => {
           clientAuthorizations: [
             {
               clientCode: "client-a",
-              roles: [{ code: "old-role", privileges: ["old-privilege"] }],
+              roles: [{ code: "old-role" }],
             },
           ],
         },
@@ -775,7 +765,7 @@ describe("Client Subject Projection Interface", () => {
           clientAuthorizations: [
             {
               clientCode: "client-a",
-              roles: [{ code: "new-role", privileges: ["new-privilege"] }],
+              roles: [{ code: "new-role" }],
             },
           ],
         },
@@ -792,20 +782,20 @@ describe("Client Subject Projection Interface", () => {
       subjectIdentifier,
       clientCode: "client-a",
       selection: {
-        catalogVersion: 2,
+        catalogVersion: 3,
         optionalClaims: ["profile:name", "iam:authorization"],
       },
     });
 
     expect(projection).toMatchObject({
       name: "旧姓名",
-      authorization: { roles: ["old-role"], privileges: ["old-privilege"] },
+      authorization: { roles: ["old-role"] },
     });
     publishedFacts = refreshedFacts;
     const nextProjection = await service.resolve({
       subjectIdentifier,
       clientCode: "client-a",
-      selection: { catalogVersion: 2, optionalClaims: ["profile:name", "iam:authorization"] },
+      selection: { catalogVersion: 3, optionalClaims: ["profile:name", "iam:authorization"] },
     });
 
     expect(nextProjection).toEqual({
@@ -816,11 +806,9 @@ describe("Client Subject Projection Interface", () => {
           {
             ...employment,
             roles: ["new-role"],
-            privileges: ["new-privilege"],
           },
         ],
         roles: ["new-role"],
-        privileges: ["new-privilege"],
       },
     });
   });
@@ -830,7 +818,7 @@ describe("Projection access proof", () => {
   const input = {
     subjectIdentifier,
     clientCode: "client-a",
-    selection: { catalogVersion: 2, optionalClaims: [] },
+    selection: { catalogVersion: 3, optionalClaims: [] },
   } as const;
 
   test("requires proof before facts, selection validation or identity-only delivery", async () => {
@@ -888,7 +876,7 @@ describe("Projection access proof", () => {
       service.resolve(
         {
           ...input,
-          selection: { catalogVersion: 2, optionalClaims: ["iam:authorization"] },
+          selection: { catalogVersion: 3, optionalClaims: ["iam:authorization"] },
         },
         permission,
       ),

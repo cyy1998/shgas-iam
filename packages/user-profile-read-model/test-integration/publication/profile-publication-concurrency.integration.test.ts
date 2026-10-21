@@ -389,7 +389,6 @@ async function buildProfile(userId: number, sourceDirtyVersion: string): Promise
           positions: [],
           orgPathRows: [],
           roleRows: [],
-          privilegeRows: [],
         };
       },
     },

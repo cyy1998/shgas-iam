@@ -1,14 +1,14 @@
-import { ApiErrorCode, ClientStatus, OrganizationStatus, PrivilegeDelegationStatus, UserStatus } from "@iam/contracts";
+import { ApiErrorCode, ClientDelegationStatus, ClientStatus, OrganizationStatus, UserStatus } from "@iam/contracts";
 import type { DbClient } from "@iam/db";
 import { compactUpdate, firstRow } from "@iam/db/query-utils";
 import { clients, clientDelegations as delegations, organizationClosures, organizations, users } from "@iam/db/schema";
 import { DomainBusinessError, DomainHttpStatus } from "@iam/domain";
 import {
-  PrivilegeAlreadyDelegatedError,
-  PrivilegeDelegationEndedError,
-  PrivilegeDelegationNotFoundError,
-  validatePrivilegeDelegationCandidate,
-} from "@iam/domain/privilege";
+  ClientDelegationConflictError,
+  ClientDelegationEndedError,
+  ClientDelegationNotFoundError,
+  validateClientDelegationCandidate,
+} from "@iam/domain/client-delegation";
 import { UserNotFoundError } from "@iam/domain/user";
 import { and, desc, eq, exists, getTableColumns, gte, ilike, inArray, lte, ne, or, sql } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
@@ -89,7 +89,7 @@ async function details(db: DbClient, where: ReturnType<typeof and>) {
   );
 }
 async function assertNoConflict(db: DbClient, candidate: typeof delegations.$inferInsert, excludeId?: number) {
-  if (candidate.status === PrivilegeDelegationStatus.Disable) return;
+  if (candidate.status === ClientDelegationStatus.Disable) return;
   const conflict = await db
     .select({ id: delegations.id })
     .from(delegations)
@@ -97,7 +97,7 @@ async function assertNoConflict(db: DbClient, candidate: typeof delegations.$inf
       and(
         eq(delegations.delegatorUserId, candidate.delegatorUserId),
         eq(delegations.clientId, candidate.clientId),
-        ne(delegations.status, PrivilegeDelegationStatus.Disable),
+        ne(delegations.status, ClientDelegationStatus.Disable),
         gte(delegations.endTime, candidate.startTime),
         lte(delegations.startTime, candidate.endTime),
         excludeId === undefined ? undefined : ne(delegations.id, excludeId),
@@ -124,7 +124,7 @@ async function assertNoConflict(db: DbClient, candidate: typeof delegations.$inf
       ),
     )
     .limit(1);
-  if (conflict.length) throw new PrivilegeAlreadyDelegatedError("同一应用在相交的组织范围和期间内已有委托");
+  if (conflict.length) throw new ClientDelegationConflictError("同一应用在相交的组织范围和期间内已有委托");
 }
 
 export function createDelegationService(deps: DelegationServiceDependencies) {
@@ -209,10 +209,10 @@ export function createDelegationService(deps: DelegationServiceDependencies) {
         organizationScopeId: organization.id,
         startTime: dto.startTime,
         endTime: dto.endTime,
-        status: PrivilegeDelegationStatus.Enable,
+        status: ClientDelegationStatus.Enable,
         description: dto.description ?? null,
       };
-      validatePrivilegeDelegationCandidate(candidate);
+      validateClientDelegationCandidate(candidate);
       await assertNoConflict(tx, candidate);
       const row = firstRow(await tx.insert(delegations).values(candidate).returning({ id: delegations.id }))!;
       const result = (await details(tx, eq(delegations.id, row.id)))[0]!;
@@ -241,7 +241,7 @@ export function createDelegationService(deps: DelegationServiceDependencies) {
       const locator = firstRow(
         await tx.select({ userId: delegations.delegatorUserId }).from(delegations).where(withinScope),
       );
-      if (!locator) throw new PrivilegeDelegationNotFoundError();
+      if (!locator) throw new ClientDelegationNotFoundError();
       const owner = firstRow(
         await tx
           .select({ id: users.id })
@@ -251,19 +251,19 @@ export function createDelegationService(deps: DelegationServiceDependencies) {
       );
       if (!owner) throw new UserNotFoundError("委托人不存在");
       const current = firstRow(await tx.select().from(delegations).where(withinScope).for("update"));
-      if (!current) throw new PrivilegeDelegationNotFoundError();
+      if (!current) throw new ClientDelegationNotFoundError();
       if (current.delegatorUserId !== owner.id) throw new Error("Delegation lock owner changed");
       const fields = Object.keys(dto).filter((key) => dto[key as keyof typeof dto] !== undefined);
-      if (current.status === PrivilegeDelegationStatus.Disable) {
-        if (fields.length !== 1 || dto.status !== PrivilegeDelegationStatus.Disable)
-          throw new PrivilegeDelegationEndedError();
+      if (current.status === ClientDelegationStatus.Disable) {
+        if (fields.length !== 1 || dto.status !== ClientDelegationStatus.Disable)
+          throw new ClientDelegationEndedError();
         const result = (await details(tx, withinScope))[0]!;
         await audit(tx, "update", id, context, { patch: dto, changed: false });
         return { changed: false, result };
       }
       if (!fields.length) invalid("更新参数不能为空");
       const candidate = { ...current, ...compactUpdate(dto) };
-      validatePrivilegeDelegationCandidate(candidate);
+      validateClientDelegationCandidate(candidate);
       await assertNoConflict(tx, candidate, id);
       const changed =
         candidate.startTime.getTime() !== current.startTime.getTime() ||

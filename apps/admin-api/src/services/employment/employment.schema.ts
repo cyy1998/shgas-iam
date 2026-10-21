@@ -20,10 +20,8 @@ export const EmploymentDetailDtoSchema = SharedEmploymentDetailDtoSchema.pick({
   position: true,
   organization: true,
   roles: true,
-  privileges: true,
 }).extend({
   roleNames: z.record(z.string(), z.string()).default({}),
-  privilegeNames: z.record(z.string(), z.string()).default({}),
 });
 
 export {

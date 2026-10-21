@@ -1,15 +1,15 @@
 import type {
-  PrivilegeDelegationResolutionIntegrityViolation,
-  PrivilegeDelegationResolutionObservation,
-  PrivilegeDelegationResolutionQuery,
-  PrivilegeDelegationResolutionResult,
-} from "@api/use-cases/internal/resolve-privilege-delegations/resolve-privilege-delegations.type";
-import { PrivilegeDelegationStatus } from "@iam/contracts";
+  ClientDelegationResolutionIntegrityViolation,
+  ClientDelegationResolutionObservation,
+  ClientDelegationResolutionQuery,
+  ClientDelegationResolutionResult,
+} from "@api/use-cases/internal/resolve-client-delegations/resolve-client-delegations.type";
+import { ClientDelegationStatus } from "@iam/contracts";
 import type { DbClient } from "@iam/db";
 import { clientDelegations, organizationClosures, organizations, users } from "@iam/db/schema";
 import { sql } from "drizzle-orm";
 
-interface PrivilegeDelegationResolutionRow extends PrivilegeDelegationResolutionResult, Record<string, unknown> {
+interface ClientDelegationResolutionRow extends ClientDelegationResolutionResult, Record<string, unknown> {
   delegationId: number | null;
   delegatorUserId: number | null;
   delegateeUserId: number | null;
@@ -20,15 +20,15 @@ interface PrivilegeDelegationResolutionRow extends PrivilegeDelegationResolution
   organizationRecognized: boolean;
 }
 
-export function createPrivilegeDelegationResolutionRepository(db: DbClient) {
+export function createClientDelegationResolutionRepository(db: DbClient) {
   return {
-    async resolveCurrent(query: PrivilegeDelegationResolutionQuery): Promise<PrivilegeDelegationResolutionObservation> {
+    async resolveCurrent(query: ClientDelegationResolutionQuery): Promise<ClientDelegationResolutionObservation> {
       const requestedUsernames = sql.join(
         query.usernames.map((username) => sql`${username}`),
         sql`, `,
       );
       const observedAt = query.observedAt.toISOString();
-      const rows = await db.execute<PrivilegeDelegationResolutionRow>(sql`
+      const rows = await db.execute<ClientDelegationResolutionRow>(sql`
         WITH requested_users AS (
           SELECT requested.username, requested.ordinality::int AS ordinal
           FROM unnest(ARRAY[${requestedUsernames}]::text[])
@@ -63,7 +63,7 @@ export function createPrivilegeDelegationResolutionRepository(db: DbClient) {
         LEFT JOIN ${clientDelegations} AS delegation
           ON delegation.delegator_user_id = delegator.id
           AND delegation.client_id = ${query.clientId}
-          AND delegation.status = ${PrivilegeDelegationStatus.Enable}
+          AND delegation.status = ${ClientDelegationStatus.Enable}
           AND delegation.start_time <= context.observed_at
           AND delegation.end_time >= context.observed_at
           AND EXISTS (
@@ -89,7 +89,7 @@ export function createPrivilegeDelegationResolutionRepository(db: DbClient) {
         delegationIds.push(row.delegationId);
         delegationIdsByUsername.set(row.username, delegationIds);
       }
-      const integrityViolations: PrivilegeDelegationResolutionIntegrityViolation[] = [...delegationIdsByUsername]
+      const integrityViolations: ClientDelegationResolutionIntegrityViolation[] = [...delegationIdsByUsername]
         .filter(([, delegationIds]) => delegationIds.length > 1)
         .map(([username, delegationIds]) => ({
           category: "ambiguous-delegation",
@@ -141,4 +141,4 @@ export function createPrivilegeDelegationResolutionRepository(db: DbClient) {
   };
 }
 
-export type PrivilegeDelegationResolutionRepository = ReturnType<typeof createPrivilegeDelegationResolutionRepository>;
+export type ClientDelegationResolutionRepository = ReturnType<typeof createClientDelegationResolutionRepository>;

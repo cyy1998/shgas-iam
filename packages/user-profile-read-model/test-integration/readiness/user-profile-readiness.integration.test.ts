@@ -11,7 +11,7 @@ import { createPostgresTestHarness } from "../support/postgres-test-harness";
 
 const OBSERVED_AT = new Date("2026-08-22T06:00:00.000Z");
 
-describe("User Profile v3 PostgreSQL readiness", () => {
+describe("User Profile v4 PostgreSQL readiness", () => {
   let harness: Awaited<ReturnType<typeof createPostgresTestHarness>>;
 
   beforeAll(async () => {
@@ -95,7 +95,7 @@ describe("User Profile v3 PostgreSQL readiness", () => {
 
     await harness.sql`
       UPDATE user_profile
-      SET profile_schema_version = 2
+      SET profile_schema_version = 3
       WHERE user_id = 1
     `;
     const oldVersionReport = await gate.verify({ batchSize: 10 });

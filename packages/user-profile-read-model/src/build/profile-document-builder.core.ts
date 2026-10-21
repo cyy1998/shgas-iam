@@ -7,7 +7,6 @@ import type {
   UserProfileBuildDataset,
   UserProfileBuildOrgPathRow,
   UserProfileBuildPosition,
-  UserProfileBuildPrivilegeRow,
   UserProfileBuildRoleRow,
 } from "./user-profile-build.repository";
 
@@ -45,7 +44,6 @@ export function buildProfileDocumentsFromDataset(
   const positionById = new Map(dataset.positions.map((position) => [position.id, position]));
   const orgPathByOrgId = buildOrgPathMap(dataset.orgPathRows);
   const roleRowsByEmploymentId = groupItemsBy(dataset.roleRows, (row) => row.employmentId);
-  const privilegesByRoleId = groupItemsBy(dataset.privilegeRows, (row) => row.roleId);
 
   return dataset.users.map((user) => {
     const sourceDirtyVersion = targetsByUserId.get(user.id);
@@ -62,10 +60,6 @@ export function buildProfileDocumentsFromDataset(
       .map(({ employment, position, fullOrgPath, assignedOrg }) => {
         const roleRows = roleRowsByEmploymentId.get(employment.id) ?? [];
         const roles = unique(roleRows.map((row) => row.roleCode));
-        const roleIds = roleRows.map((row) => row.roleId);
-        const privileges = unique(
-          roleIds.flatMap((roleId) => (privilegesByRoleId.get(roleId) ?? []).map((row) => row.privilegeCode)),
-        );
         const organization = {
           assignedOrg,
           fullOrgPath,
@@ -78,7 +72,6 @@ export function buildProfileDocumentsFromDataset(
           position,
           roleRows,
           roles,
-          privileges,
           dto: EmploymentDetailDtoSchema.parse({
             ...toEmploymentDto({
               ...employment,
@@ -87,7 +80,6 @@ export function buildProfileDocumentsFromDataset(
               position,
             }),
             roles,
-            privileges,
           }),
         };
       });
@@ -96,7 +88,6 @@ export function buildProfileDocumentsFromDataset(
       ...user,
       employments: employmentDetails.map((item) => item.dto),
       roles: unique(employmentDetails.flatMap((item) => item.roles)),
-      privileges: unique(employmentDetails.flatMap((item) => item.privileges)),
     });
     const searchDoc = {
       user: {
@@ -114,7 +105,7 @@ export function buildProfileDocumentsFromDataset(
       .filter((item) => isEffectiveEmployment(item.employment, rebuiltAt))
       .map((item) => ({
         employmentId: item.employment.id,
-        facts: toSubjectFactsEmployment(item, privilegesByRoleId),
+        facts: toSubjectFactsEmployment(item),
       }))
       .sort((left, right) => compareSubjectFactsEmployments(left.facts, right.facts));
 
@@ -189,18 +180,15 @@ function isEffectiveEmployment(employment: Employment, now: Date) {
   );
 }
 
-function toSubjectFactsEmployment(
-  input: {
-    employment: Employment;
-    organization: {
-      assignedOrg: EmploymentOrgNode;
-      fullOrgPath: EmploymentOrgNode[];
-    };
-    position: UserProfileBuildPosition;
-    roleRows: UserProfileBuildRoleRow[];
-  },
-  privilegesByRoleId: Map<number, UserProfileBuildPrivilegeRow[]>,
-) {
+function toSubjectFactsEmployment(input: {
+  employment: Employment;
+  organization: {
+    assignedOrg: EmploymentOrgNode;
+    fullOrgPath: EmploymentOrgNode[];
+  };
+  position: UserProfileBuildPosition;
+  roleRows: UserProfileBuildRoleRow[];
+}) {
   return {
     isPrimary: input.employment.isPrimary,
     organization: {
@@ -225,9 +213,6 @@ function toSubjectFactsEmployment(
           .sort((left, right) => compareCodes(left.roleCode, right.roleCode))
           .map((role) => ({
             code: role.roleCode,
-            privileges: unique((privilegesByRoleId.get(role.roleId) ?? []).map((row) => row.privilegeCode)).sort(
-              compareCodes,
-            ),
           })),
       })),
   };
@@ -253,7 +238,6 @@ function toSearchEmploymentDoc(input: {
   };
   position: UserProfileBuildPosition;
   roles: string[];
-  privileges: string[];
 }) {
   const ancestorCodes = input.organization.fullOrgPath.map((node) => node.orgCode);
   const ancestorDepths = input.organization.fullOrgPath.map((node) => node.distanceToAssignedOrg);
@@ -276,7 +260,6 @@ function toSearchEmploymentDoc(input: {
       code: input.position.posCode,
     },
     roles: input.roles,
-    privileges: input.privileges,
     isPrimary: input.employment.isPrimary,
   };
 }

@@ -14,7 +14,7 @@ import type {
 } from "../index";
 
 export interface SubjectClaimSelection {
-  readonly catalogVersion: 2;
+  readonly catalogVersion: 3;
   readonly optionalClaims: readonly OptionalSubjectClaim[];
 }
 

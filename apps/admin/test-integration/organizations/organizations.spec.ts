@@ -275,7 +275,6 @@ test("shows the Employment Pause cascade before executing the parent lifecycle c
       createTime: "2026-08-20T00:00:00.000Z",
       updateTime: "2026-08-20T00:00:00.000Z",
       roles: [],
-      privileges: [],
     }),
   );
   await page.route("**/rpc/admin.organization.selector**", (route) => fulfillTrpc(route, []));

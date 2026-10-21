@@ -52,11 +52,25 @@ export const EmploymentDetailSchema = EmploymentSchema.extend({
   position: z.lazy(() => PositionDtoSchema),
 });
 
-export const EmploymentDtoSchema = EmploymentSchema.extend({
-  user: EmploymentUserSummarySchema,
-  position: EmploymentPositionSummarySchema,
-  organization: EmploymentOrganizationContextSchema,
+export const EmploymentDtoSchema = EmploymentSchema.pick({
+  id: true,
+  userId: true,
+  orgId: true,
+  posId: true,
+  isPrimary: true,
+  status: true,
+  startTime: true,
+  endTime: true,
+  description: true,
+  isDelete: true,
+  createTime: true,
+  updateTime: true,
 })
+  .extend({
+    user: EmploymentUserSummarySchema,
+    position: EmploymentPositionSummarySchema,
+    organization: EmploymentOrganizationContextSchema,
+  })
   .required()
   .openapi("EmploymentDto");
 
@@ -81,10 +95,6 @@ export function toEmploymentDto(input: unknown) {
 }
 
 export const EmploymentDetailDtoSchema = EmploymentDtoSchema.extend({
-  privileges: z
-    .array(z.string())
-    .default([])
-    .openapi({ example: ["ui:button:tender:create-GYBG"] }),
   roles: z
     .array(z.string())
     .default([])

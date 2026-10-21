@@ -5,10 +5,13 @@
 当前词汇采用 [ADR-0035](docs/adr/0035-unify-user-and-client-session-lifecycles.md) 已接受的统一会话模型。
 两类会话表达根登录和应用关系；配置、启停与凭据维护不等于永久撤销。代码和环境的交付状态见发布手册。
 
+IAM 交付角色事实，由接入应用解释角色对应的业务操作权限；权限点退役及协调发布的决定见
+[ADR-0045](docs/adr/0045-retire-privilege-permission-points.md)。代码模型与目标环境的发布验收分别记录。
+
 ## Language
 
 **User Profile**:
-IAM 中关于一个用户的稳定档案视图，包括用户基础身份信息、任职、角色和权限。
+IAM 中关于一个用户的稳定档案视图，包括用户基础身份信息、任职、角色和组织责任。
 _Avoid_: session payload, protocol payload
 
 **User Profile Base**:
@@ -20,7 +23,7 @@ IAM 以未删除的当前 User Profile 为唯一结果根，按照用户自身�
 _Avoid_: generic entity query, historical profile search, arbitrary data graph query
 
 **User Profile Search Document**:
-随 User Profile 一起发布并带版本的当前搜索事实快照；公开结构包含 User 的 subjectIdentifier、username、name、mobile、wxId、userType、status，以及 Effective Employment 的 isPrimary、Organization、Position、Role code、Privilege code 和 Organization Responsibility。Organization 公开 code、name、type 与 Organization Path，Position 公开 code 与 name；内部 numeric ID、任职时间字段和派生索引结构不进入该文档的公开搜索结构。
+随 User Profile 一起发布并带版本的当前搜索事实快照；公开结构包含 User 的 subjectIdentifier、username、name、mobile、wxId、userType、status，以及 Effective Employment 的 isPrimary、Organization、Position、Role code 和 Organization Responsibility。Organization 公开 code、name、type 与 Organization Path，Position 公开 code 与 name；内部 numeric ID、任职时间字段和派生索引结构不进入该文档的公开搜索结构。
 _Avoid_: source-table view, historical employment document, internal index document
 
 **User Profile Search Path**:
@@ -28,7 +31,7 @@ _Avoid_: source-table view, historical employment document, internal index docum
 _Avoid_: arbitrary JSON path, source-table path, client-specific search path
 
 **User Profile Search Cutover**:
-在维护窗口内把全局 User Profile schema 从 v2 单代原地替换为 v3 的协调发布边界；业务读取和源事实写入保持关闭，旧 v2 publisher 停止，唯一固定的 v3 publisher 通过既有 User Profile backfill 工作流重建全部 Profile，完整门禁通过后所有入口统一恢复并只接受 v3。调用方不能选择文档或 DSL 版本，运行时不保存并行代际、不双读或回退，硬切换后不保留旧 DSL 名称或兼容解释。
+在维护窗口内把全局 User Profile schema 从 v3 单代原地替换为 v4 的协调发布边界；业务读取和源事实写入保持关闭，旧 publisher 停止并排空，唯一固定的 v4 publisher 通过既有 User Profile backfill 工作流重建全部 Profile，完整门禁通过后所有入口统一恢复并只接受 v4。调用方不能选择文档或 DSL 版本，运行时不保存并行代际、不双读或回退，已退役的权限搜索条件明确失败。
 _Avoid_: online shadow cutover, mixed-version search, caller-selected schema version, per-request version fallback
 
 **Organization Path**:
@@ -131,7 +134,7 @@ _Avoid_: Provider Session, protocol Token, per-protocol relationship, per-author
 _Avoid_: request user detail, shared user DTO, protocol claim payload
 
 **Organization Responsibility Type**:
-IAM 封闭枚举中可被 Organization Responsibility Assignment 引用的一种组织责任类型；其 code、业务含义与 `assignmentCardinality` 永久稳定且不可复用，任一项需要改变时必须使用新的 Type，历史 Assignment 始终通过 code 解析当前名称和说明而不保存展示文本快照。Type 没有状态或生命周期，已发布成员永久保留并始终可用于新任命；它不表示具体任命或授予 Role、Privilege。
+IAM 封闭枚举中可被 Organization Responsibility Assignment 引用的一种组织责任类型；其 code、业务含义与 `assignmentCardinality` 永久稳定且不可复用，任一项需要改变时必须使用新的 Type，历史 Assignment 始终通过 code 解析当前名称和说明而不保存展示文本快照。Type 没有状态或生命周期，已发布成员永久保留并始终可用于新任命；它不表示具体任命或授予 Role。
 _Avoid_: Organization Responsibility Definition, Organization Responsibility Assignment, Employment, Role Assignment
 
 **Organization Responsibility Type Catalog**:
@@ -263,7 +266,7 @@ _Avoid_: all-employments-in-scope user, Effective-Employment-only user, employme
 _Avoid_: open-only employment view, editable employment history, Legacy Employment Tombstone
 
 **HR User Profile Administration**:
-HR Administrator 对未删除 User 的全局读取和对 HR-Managed User 的受限档案管理能力；User 详情与 `iam:admin` 一样展示其全部非墓碑 Employment 及 Role、Privilege，范围外任职保持只读且不能进入任职管理，普通档案编辑只包含 name、mobile、wxId 与 userType。它不创建或删除 User；Credential 重置与 User Status 变更是另行约束的全局账号动作。
+HR Administrator 对未删除 User 的全局读取和对 HR-Managed User 的受限档案管理能力；User 详情与 `iam:admin` 一样展示其全部非墓碑 Employment 及 Role，范围外任职保持只读且不能进入任职管理，普通档案编辑只包含 name、mobile、wxId 与 userType。它不创建或删除 User；Credential 重置与 User Status 变更是另行约束的全局账号动作。
 _Avoid_: scoped user visibility, user provisioning, user deletion
 
 **HR Credential Reset**:
@@ -407,7 +410,7 @@ IAM 按 Client 当前披露配置及适用协议规则确定的本次主体字�
 _Avoid_: ProjectionSpec, client configuration, protocol scope, requested HTTP fields
 
 **Subject Facts**:
-按 Subject Identifier 识别、供 IAM 内部投影使用的已发布协议中性主体事实，包含基础资料、发布版本中的 Effective Employment、组织及完整路径、岗位，以及按 Client 区分的 Effective Role 和派生权限；无角色的有效任职仍保留，无授权的 Client 在投影中表达空角色与空权限。它由同一主体的全部 Client Subject Projection 共同消费，不包含账号可访问性或授权决策，允许落后于源业务事实，且不承诺固定时间内完成更新；取得合法已发布事实不等于确认其与当前源事实一致。
+按 Subject Identifier 识别、供 IAM 内部投影使用的已发布协议中性主体事实，包含基础资料、发布版本中的 Effective Employment、组织及完整路径、岗位，以及按 Client 区分的 Effective Role；无角色的有效任职仍保留，无该 Client 角色时在投影中表达空角色。它由同一主体的全部 Client Subject Projection 共同消费，不包含账号可访问性或授权决策，允许落后于源业务事实，且不承诺固定时间内完成更新；取得合法已发布事实不等于确认其与当前源事实一致。
 _Avoid_: User Profile DTO cache, client projection cache, session payload, legacy detail document, live aggregate fallback, cached account status
 
 **Subject Facts Publication**:
@@ -427,7 +430,7 @@ _Avoid_: profile cache field, eventual account disable, protocol-specific blackl
 _Avoid_: request-wide boolean, persistent authorization, reusable access token
 
 **Client Authorization Claim**:
-`iam:authorization` 表达指定 Client 在已发布 Subject Facts 中可见的授权主体属性，包括有效任职及仅属于该 Client 的有效角色与派生权限，不包含其他 Client 的授权、数据库标识或授权决策。两协议实际交付时均可使用落后于源事实的已发布权限，无法取得合法 Facts 时不能省略必要声明伪装成功，第三方复制后的刷新由其自行负责。
+`iam:authorization` 表达指定 Client 在已发布 Subject Facts 中可见的角色事实，包括有效任职及仅属于该 Client 的有效角色，不包含其他 Client 的角色、数据库标识或授权决策。两协议实际交付时均可使用落后于源事实的已发布角色，无法取得合法 Facts 时不能省略必要声明伪装成功，接入应用解释角色对应的业务操作权限，并负责其副本的刷新。
 _Avoid_: global roles, global privileges, authorization decision, guaranteed current authorization
 
 **Employment Profile Claim**:

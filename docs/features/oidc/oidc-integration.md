@@ -101,20 +101,22 @@ Portal 对发现的完整端点先验证属于当前入口，再构造相对导�
 
 ### Token、Scope 与当前披露
 
-| Scope             | 披露                                                                                                  |
-| ----------------- | ----------------------------------------------------------------------------------------------------- |
-| openid            | 稳定 Subject Identifier 作为 opaque sub。                                                             |
-| profile           | name、preferred_username，不隐含任职。                                                                |
-| phone             | 存在时返回 phone_number。                                                                             |
-| iam:employments   | 仅 UserInfo 的有效任职与 responsibility；不进入 ID Token。                                            |
-| iam:authorization | 仅 UserInfo 中当前 Client 的已发布角色/权限，不含其他 Client 授权或 responsibility；不进入 ID Token。 |
+| Scope             | 披露                                                                                             |
+| ----------------- | ------------------------------------------------------------------------------------------------ |
+| openid            | 稳定 Subject Identifier 作为 opaque sub。                                                        |
+| profile           | name、preferred_username，不隐含任职。                                                           |
+| phone             | 存在时返回 phone_number。                                                                        |
+| iam:employments   | 仅 UserInfo 的有效任职与 responsibility；不进入 ID Token。                                       |
+| iam:authorization | 仅 UserInfo 中当前 Client 的已发布角色，不含其他 Client 授权或 responsibility；不进入 ID Token。 |
 
-IAM 任职 wire 保持 isPrimary、orgCode/orgName/orgType/fullOrgPath、posCode/posName，角色/权限去重并稳定排序。
+IAM 任职 wire 保持 isPrimary、orgCode/orgName/orgType/fullOrgPath、posCode/posName，角色去重并稳定排序。
+`iam:authorization` 的顶层和各任职仅含角色；不再返回权限点字段或空数组占位。Scope 名称、现有 allowedScopes
+及角色为空时的空数组语义保持。接入应用须升级消费契约，并负责清理或停止使用自己保存的旧权限副本。
 不返回数据库 ID、密码、状态、软删除字段或时间戳，也不混入 Custom wire。
 UserInfo 以当前 Client allowedScopes 构造披露，新增和收窄均适用于旧 Token；原请求 scope 不再作为交集上限，
 也不接受调用方 scope 覆盖。ID Token 内容在签名后固定：显式映射 iss/aud/sub/iat/exp/auth_time、可选 nonce 及
 profile/phone；仅 sub 或 IAM 扩展 scope 不读取完整 Facts。没有 Claims Snapshot。
-已发布旧权限可继续交付，必要 Facts 不可得时失败，不能省略声明伪装成功；详见[事实契约](../sso/published-subject-facts-contract.md)。
+已发布旧角色可继续交付，必要 Facts 不可得时失败，不能省略声明伪装成功；详见[事实契约](../sso/published-subject-facts-contract.md)。
 
 ID Token 使用 RS256，JWKS 仅公开 kty/kid/alg/use/n/e，不交付私钥。
 

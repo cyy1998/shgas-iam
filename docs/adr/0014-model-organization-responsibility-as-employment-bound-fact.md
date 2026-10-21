@@ -5,7 +5,7 @@ status: accepted
 # 将 Organization Responsibility 建模为任职绑定的非授权事实
 
 Organization Responsibility Assignment 由 Employment 持有，可指向组织树任意位置的 target Organization。
-它有自己的身份和生命周期，是档案事实，不是任职属性，也不产生 Role、Privilege 或授权决定。
+它有自己的身份和生命周期，是档案事实，不是任职属性，也不产生 Role 或授权决定。
 Type Catalog 由 IAM 代码拥有，采用只增不减、没有运行时生命周期的封闭词汇。
 
 ## 理由与代价

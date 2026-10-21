@@ -29,8 +29,23 @@ export async function requireManagedApiResources() {
 
 /** The standalone suite has the same one-command owner as the root collections. */
 export async function runManagedOidcSuite(args: string[]) {
+  await runManagedApiFixture({
+    args,
+    entry: "test-integration/oidc/oidc-suite.fixture.ts",
+    label: "OIDC suite",
+    projectPrefix: "iam-oidc-suite",
+  });
+}
+
+/** Explicit standalone protocol checks use the same resource owner as collections. */
+export async function runManagedApiFixture(options: {
+  args: string[];
+  entry: string;
+  label: string;
+  projectPrefix: string;
+}) {
   const controller = new AbortController();
-  const interrupt = () => controller.abort(new Error("OIDC suite interrupted"));
+  const interrupt = () => controller.abort(new Error(`${options.label} interrupted`));
   process.on("SIGINT", interrupt);
   process.on("SIGTERM", interrupt);
   const failures: unknown[] = [];
@@ -40,9 +55,9 @@ export async function runManagedOidcSuite(args: string[]) {
     run = await createManagedResourceRun({
       root,
       composeFile: "scripts/test-resources/compose.yaml",
-      projectPrefix: "iam-oidc-suite",
+      projectPrefix: options.projectPrefix,
       services: ["postgres", "redis"],
-      keep: args.includes("--keep"),
+      keep: options.args.includes("--keep"),
       registryFile: process.env.IAM_TEST_RESOURCE_REGISTRY,
     });
     await startManagedResources(run, { signal: controller.signal, timeoutMs: 60000 });
@@ -56,7 +71,7 @@ export async function runManagedOidcSuite(args: string[]) {
     executeStart = performance.now();
     const result = await runOwnedCommand({
       executable: process.execPath,
-      args: ["--no-env-file", "run", "test-integration/oidc/oidc-suite.fixture.ts", ...args, "--managed-api-resources"],
+      args: ["--no-env-file", "run", options.entry, ...options.args, "--managed-api-resources"],
       cwd: fileURLToPath(new URL("../../", import.meta.url)),
       env: {
         ...process.env,
@@ -69,7 +84,7 @@ export async function runManagedOidcSuite(args: string[]) {
       inheritOutput: true,
       logFile: join(root, run.record.artifactDirectory, "suite.log"),
     });
-    if (result.exitCode !== 0) throw new Error(`OIDC suite exited ${result.exitCode}`);
+    if (result.exitCode !== 0) throw new Error(`${options.label} exited ${result.exitCode}`);
   } catch (failure) {
     failures.push(failure);
   } finally {
@@ -84,5 +99,5 @@ export async function runManagedOidcSuite(args: string[]) {
     process.off("SIGINT", interrupt);
     process.off("SIGTERM", interrupt);
   }
-  if (failures.length) throw new AggregateError(failures, "Managed OIDC suite execution or cleanup failed");
+  if (failures.length) throw new AggregateError(failures, `Managed ${options.label} execution or cleanup failed`);
 }

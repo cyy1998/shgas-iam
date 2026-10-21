@@ -4,7 +4,7 @@ import { CustomSsoSubjectProjectionSchema as WireCustomSsoSubjectProjectionSchem
 
 export const CustomSsoSubjectProjectionSchema = z
   .readonly(WireCustomSsoSubjectProjectionSchema)
-  .openapi("CustomSsoSubjectProjectionV2");
+  .openapi("CustomSsoSubjectProjectionV3");
 
 export type { CustomSsoSubjectProjection as CustomSsoSubjectProjectionDto } from "@iam/custom-sso/wire";
 

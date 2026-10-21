@@ -266,7 +266,7 @@ function adminUser(overrides: Partial<UserDetailDto> = {}): UserDetailDto {
     updateTime: new Date(),
     employments: [],
     roles: ["iam:admin"],
-    privileges: [],
+
     ...overrides,
   } as UserDetailDto;
 }

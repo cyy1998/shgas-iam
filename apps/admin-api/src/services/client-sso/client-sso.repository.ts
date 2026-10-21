@@ -1,4 +1,4 @@
-import { PrivilegeDelegationStatus } from "@iam/contracts";
+import { ClientDelegationStatus } from "@iam/contracts";
 import type { DbClient } from "@iam/db";
 import { clientDelegations, clients, roles } from "@iam/db/schema";
 import { ClientSsoAdminDtoSchema, ClientSsoAdminRecordSchema } from "@iam/domain/client";
@@ -58,10 +58,7 @@ export function createClientSsoRepository(db: DbClient) {
         .select({ id: clientDelegations.id })
         .from(clientDelegations)
         .where(
-          and(
-            eq(clientDelegations.clientId, clientId),
-            ne(clientDelegations.status, PrivilegeDelegationStatus.Disable),
-          ),
+          and(eq(clientDelegations.clientId, clientId), ne(clientDelegations.status, ClientDelegationStatus.Disable)),
         )
         .limit(1);
       return rows.length > 0;

@@ -1,4 +1,4 @@
-import { DelegationStatus } from "@iam/delegation/wire";
+import { ClientDelegationStatus } from "@iam/delegation/wire";
 import DelegationSettings from "@sso/pages/user-info/_components/DelegationSettings";
 import { HttpResponse, http } from "msw";
 import { expect, test } from "vitest";
@@ -105,7 +105,7 @@ test("editing changes only the period and description and refreshes the current 
   expect(Object.keys(submitted!)).toEqual(["startTime", "endTime", "description"]);
 });
 test("pause and resume refresh available actions, and ending removes further management", async () => {
-  let status = DelegationStatus.Enable;
+  let status = ClientDelegationStatus.Enable;
   const patches: unknown[] = [];
   server.use(
     http.post("*/public/delegations/search", () =>
@@ -115,7 +115,7 @@ test("pause and resume refresh available actions, and ending removes further man
       }),
     ),
     http.patch("*/public/delegations/42", async ({ request }) => {
-      const patch = (await request.json()) as { status: DelegationStatus };
+      const patch = (await request.json()) as { status: ClientDelegationStatus };
       patches.push(patch);
       status = patch.status;
       return HttpResponse.json({ code: 200, data: { changed: true, result: { ...delegationRecord, status } } });
@@ -132,9 +132,9 @@ test("pause and resume refresh available actions, and ending removes further man
   fireEvent.click(await screen.findByRole("button", { name: "确认结束" }));
   await waitFor(() => expect(screen.queryByRole("button", { name: "编辑" })).not.toBeInTheDocument());
   expect(patches).toEqual([
-    { status: DelegationStatus.Pause },
-    { status: DelegationStatus.Enable },
-    { status: DelegationStatus.Disable },
+    { status: ClientDelegationStatus.Pause },
+    { status: ClientDelegationStatus.Enable },
+    { status: ClientDelegationStatus.Disable },
   ]);
 });
 test("history filters keep expired open records manageable and ended records read-only", async () => {
@@ -156,7 +156,7 @@ test("history filters keep expired open records manageable and ended records rea
             startTime: "2000-01-01T00:00:00Z",
             endTime: "2000-02-01T00:00:00Z",
           },
-          { ...delegationRecord, id: 44, description: "结束委托", status: DelegationStatus.Disable },
+          { ...delegationRecord, id: 44, description: "结束委托", status: ClientDelegationStatus.Disable },
         ],
       }),
     ),
@@ -182,7 +182,7 @@ test("a rejected write stays visible and manual refresh reads facts without repl
     http.post("*/public/delegations/search", () =>
       HttpResponse.json({
         code: 200,
-        data: [{ ...delegationRecord, status: ended ? DelegationStatus.Disable : DelegationStatus.Enable }],
+        data: [{ ...delegationRecord, status: ended ? ClientDelegationStatus.Disable : ClientDelegationStatus.Enable }],
       }),
     ),
     http.patch("*/public/delegations/42", () => {

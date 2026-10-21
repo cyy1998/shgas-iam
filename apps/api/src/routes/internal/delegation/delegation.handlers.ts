@@ -1,11 +1,11 @@
 import { runWithinInternalHandlerBudget } from "@api/routes/internal/_handler-budget";
 import { getApiAuditRequestContext, getInternalAuditActor } from "@api/services/audit/audit.context";
 import {
-  PRIVILEGE_DELEGATION_RESOLUTION_INPUT_NOT_FOUND_MESSAGE,
-  PrivilegeDelegationResolutionInputNotFoundError,
-  PrivilegeDelegationResolutionUnavailableError,
-} from "@api/use-cases/internal/resolve-privilege-delegations/resolve-privilege-delegations.error";
-import type { ResolvePrivilegeDelegationsUseCase } from "@api/use-cases/internal/resolve-privilege-delegations/resolve-privilege-delegations.use-case";
+  CLIENT_DELEGATION_RESOLUTION_INPUT_NOT_FOUND_MESSAGE,
+  ClientDelegationResolutionInputNotFoundError,
+  ClientDelegationResolutionUnavailableError,
+} from "@api/use-cases/internal/resolve-client-delegations/resolve-client-delegations.error";
+import type { ResolveClientDelegationsUseCase } from "@api/use-cases/internal/resolve-client-delegations/resolve-client-delegations.use-case";
 import * as HttpStatusCodes from "@iam/api-core/core/http-status-codes";
 import { getContextValue } from "@iam/api-core/core/request-context";
 import { AuthzUnauthorizedError } from "@iam/api-core/errors";
@@ -14,22 +14,22 @@ import type { DelegationService } from "@iam/delegation";
 import type { Context } from "hono";
 import type { DelegationRouteHandler } from "./delegation.type";
 
-export const PRIVILEGE_DELEGATION_RESOLUTION_HANDLER_TIMEOUT_MS = 5_000;
+export const CLIENT_DELEGATION_RESOLUTION_HANDLER_TIMEOUT_MS = 5_000;
 
 export interface CreateDelegationHandlersDeps {
   delegationService: Pick<DelegationService, "create" | "search" | "update">;
-  resolvePrivilegeDelegations: Pick<ResolvePrivilegeDelegationsUseCase, "execute">;
+  resolveClientDelegations: Pick<ResolveClientDelegationsUseCase, "execute">;
 }
 
 export function createDelegationHandlers(deps: CreateDelegationHandlersDeps) {
-  const privilegeDelegationsResolve: DelegationRouteHandler<"privilegeDelegationsResolve"> = async (c) => {
+  const clientDelegationsResolve: DelegationRouteHandler<"clientDelegationsResolve"> = async (c) => {
     const input = c.req.valid("json");
     try {
       const data = await runWithinInternalHandlerBudget(
-        () => deps.resolvePrivilegeDelegations.execute({ ...input, clientId: internalClient(c).id }),
-        PRIVILEGE_DELEGATION_RESOLUTION_HANDLER_TIMEOUT_MS,
+        () => deps.resolveClientDelegations.execute({ ...input, clientId: internalClient(c).id }),
+        CLIENT_DELEGATION_RESOLUTION_HANDLER_TIMEOUT_MS,
         () =>
-          new PrivilegeDelegationResolutionUnavailableError({
+          new ClientDelegationResolutionUnavailableError({
             failureCategory: "handler-timeout",
             context: {
               orgCode: input.orgCode,
@@ -40,9 +40,9 @@ export function createDelegationHandlers(deps: CreateDelegationHandlersDeps) {
       );
       return c.json(resp.ok(data), HttpStatusCodes.OK);
     } catch (error) {
-      if (error instanceof PrivilegeDelegationResolutionInputNotFoundError) {
+      if (error instanceof ClientDelegationResolutionInputNotFoundError) {
         return c.json(
-          resp.fail(error.code, PRIVILEGE_DELEGATION_RESOLUTION_INPUT_NOT_FOUND_MESSAGE, error.missingInputs),
+          resp.fail(error.code, CLIENT_DELEGATION_RESOLUTION_INPUT_NOT_FOUND_MESSAGE, error.missingInputs),
           HttpStatusCodes.NOT_FOUND,
         );
       }
@@ -50,13 +50,13 @@ export function createDelegationHandlers(deps: CreateDelegationHandlersDeps) {
     }
   };
 
-  const privilegeDelegationsQuery: DelegationRouteHandler<"privilegeDelegationsQuery"> = async (c) => {
+  const clientDelegationsQuery: DelegationRouteHandler<"clientDelegationsQuery"> = async (c) => {
     const query = c.req.valid("json");
     const data = await deps.delegationService.search(query, { kind: "client", clientId: internalClient(c).id });
     return c.json(resp.ok(data), HttpStatusCodes.OK);
   };
 
-  const privilegeDelegationUpdate: DelegationRouteHandler<"privilegeDelegationUpdate"> = async (c) => {
+  const clientDelegationUpdate: DelegationRouteHandler<"clientDelegationUpdate"> = async (c) => {
     const { id } = c.req.valid("param");
     const dto = c.req.valid("json");
     await deps.delegationService.update(
@@ -72,7 +72,7 @@ export function createDelegationHandlers(deps: CreateDelegationHandlersDeps) {
     return c.json(resp.ok(true), HttpStatusCodes.OK);
   };
 
-  const privilegeDelegationSet: DelegationRouteHandler<"privilegeDelegationSet"> = async (c) => {
+  const clientDelegationSet: DelegationRouteHandler<"clientDelegationSet"> = async (c) => {
     const dto = c.req.valid("json");
     const data = await deps.delegationService.create(
       dto,
@@ -87,10 +87,10 @@ export function createDelegationHandlers(deps: CreateDelegationHandlersDeps) {
   };
 
   return {
-    privilegeDelegationsResolve,
-    privilegeDelegationSet,
-    privilegeDelegationUpdate,
-    privilegeDelegationsQuery,
+    clientDelegationsResolve,
+    clientDelegationSet,
+    clientDelegationUpdate,
+    clientDelegationsQuery,
   };
 }
 

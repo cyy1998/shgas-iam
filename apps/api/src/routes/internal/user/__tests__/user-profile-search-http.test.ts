@@ -7,11 +7,11 @@ import createApp from "@iam/api-core/core/create-app";
 import { createInternalAuthenticationHandler } from "@iam/api-core/middlewares";
 import { UserStatus, UserType } from "@iam/contracts";
 import type { GenericClientRuntimeDto } from "@iam/domain/client";
-import { createUserProfileSearchService } from "@iam/user-profile-read-model/query";
+import { compileUserProfileFilter, createUserProfileSearchService } from "@iam/user-profile-read-model/query";
 import pino from "pino";
 import appConfig from "~api/app.config";
 
-test("maps the canonical v3 Filter request through the production Internal HTTP route", async () => {
+test("maps the canonical v4 Filter request through the production Internal HTTP route", async () => {
   const searchCurrentProfileBases = mock(async () => []);
   const query = createUserProfileSearchService({
     profileRepository: {
@@ -62,6 +62,30 @@ test("maps the canonical v3 Filter request through the production Internal HTTP 
   expect(excessiveRawValues.status).toBe(422);
   expect(callerControlledExecution.status).toBe(422);
   expect(searchCurrentProfileBases).toHaveBeenCalledTimes(1);
+});
+
+test("returns 422 for retired authorization paths while role conditions remain searchable", async () => {
+  const app = createProductionApp(
+    createUserProfileSearchService({
+      profileRepository: {
+        async searchCurrentProfileBases(filter) {
+          compileUserProfileFilter(filter);
+          return [];
+        },
+      },
+    }),
+  );
+
+  const roles = await request(app, {
+    filter: { exists: { path: "employments", where: { field: "roles", op: "containsAny", value: ["reader"] } } },
+  });
+  const retired = await request(app, {
+    filter: { exists: { path: "employments", where: { field: "privileges", op: "containsAny", value: ["read"] } } },
+  });
+  const retiredBody = await retired.json();
+  expect(roles.status).toBe(200);
+  expect(retired.status).toBe(422);
+  expect(retiredBody).toMatchObject({ code: "COMMON.VALIDATION_FAILED", data: null });
 });
 
 test("returns UserProfileBase from typed profile columns without depending on Detail", async () => {
@@ -205,7 +229,7 @@ test("describes one generic recursive Filter AST without enumerating field and o
   );
 });
 
-test("maps the fixed Internal handler deadline to the sanitized v3 unavailable response", async () => {
+test("maps the fixed Internal handler deadline to the sanitized v4 unavailable response", async () => {
   const originalSetTimeout = globalThis.setTimeout;
   const originalClearTimeout = globalThis.clearTimeout;
   const events: string[] = [];

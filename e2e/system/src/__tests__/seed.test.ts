@@ -65,7 +65,6 @@ describe("E2E scenario seed", () => {
       responsibilityHolderEmploymentId: 44,
       adminRoleCode: "iam:admin",
       hrAdminRoleCode: "iam:hr-admin",
-      adminPrivilegeCode: "e2e-privilege-123000000-a1b2c3d4",
       adminClientCode: "iam-admin",
       adminRedirectUri: "http://127.0.0.1:43123/iam-admin/*",
       customSsoClientCode: "e2e-custom-123000000-a1b2c3d4",
@@ -340,7 +339,7 @@ function completeReadBack(references: E2EScenarioReferences) {
     },
     hrSubjectProfileReady: true,
     hrSubjectProfileVersion: "1",
-    hrSubjectProfileSchemaVersion: 3,
+    hrSubjectProfileSchemaVersion: 4,
     subjectAccess: "enabled" as const,
     subjectFacts: {
       ready: true,
@@ -356,7 +355,7 @@ function completeReadBack(references: E2EScenarioReferences) {
     },
     subjectProfileReady: true,
     subjectProfileVersion: "1",
-    subjectProfileSchemaVersion: 3,
+    subjectProfileSchemaVersion: 4,
   };
 }
 

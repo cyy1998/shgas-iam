@@ -43,10 +43,7 @@ export const employmentsDetail = createRoute({
   },
   responses: {
     ...commonErrorResponses,
-    [HttpStatusCodes.OK]: jsonContent(
-      createSuccessResponseSchema(EmploymentDetailVoSchema),
-      "雇佣详情（含 roles/privileges 聚合）",
-    ),
+    [HttpStatusCodes.OK]: jsonContent(createSuccessResponseSchema(EmploymentDetailVoSchema), "雇佣详情（含角色聚合）"),
   },
 });
 

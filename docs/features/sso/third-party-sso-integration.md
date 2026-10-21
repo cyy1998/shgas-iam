@@ -104,7 +104,7 @@ code={urlencoded_code}&redirect_uri={urlencoded_original_redirect_url}
     "sid": "opaque-custom-token",
     "ttl": 300,
     "subject": {
-      "version": 2,
+      "version": 3,
       "subjectIdentifier": "00000000-0000-4000-8000-000000001001",
       "profile": { "username": "138550", "name": "张三" }
     }
@@ -112,7 +112,9 @@ code={urlencoded_code}&redirect_uri={urlencoded_original_redirect_url}
 }
 ```
 
-subject 仅包含当前 Client 选择的字段，授权只含该 Client 的角色/权限，不含数据库 ID 或兼容别名。
+subject 仅包含当前 Client 选择的字段，授权只含该 Client 的角色，不含数据库 ID 或兼容别名。
+完整主体仅接受 wire v3，`authorization` 及其每条任职只交付角色，不再包含权限点字段或空数组占位。
+`subjectClaims` 的名称及选择保持；接入应用须同步升级解析，并在恢复访问前清理或停止使用自己的旧权限副本。
 业务后端自行建立本地会话、关联 sid、设置自己的 HttpOnly Cookie，再跳回原 redirectUrl；
 IAM 不建立或存储第三方自有 session。
 
@@ -151,8 +153,8 @@ Authorization: {sid}
 Authorization 直接使用 sid，不加 Bearer 前缀。服务端优先读取该 Client 的局部 Cookie，缺少 Cookie 才使用 Header。
 `Client: iam` 是独立根 UserInfo 入口，使用 global_session/UserSession Token，不是任意 Custom Token 的通用入口。
 
-响应 data 是当前 Client 获准接收的 V2 主体。旧 Token 同样采用当前 subjectClaims；
-全部字段使用同一份已发布主体资料（Subject Facts），它可能落后于源权限，没有固定撤权传播期限。
+响应 data 是当前 Client 获准接收的 V3 主体。旧 Token 同样采用当前 subjectClaims；
+全部字段使用同一份已发布主体资料（Subject Facts），它可能落后于源角色事实，没有固定撤权传播期限。
 第三方复制后的刷新由第三方负责，IAM 不提供推送撤权。根、原实例或账号失效仍独立阻止访问。
 
 网关请求：
@@ -171,7 +173,7 @@ Client 和 X-Forwarded-Uri 必填，优先使用局部 Cookie。成功把相同 
 ```
 
 subjectIdentifier 必有，username/name 仅在允许时出现。数据库 ID、phone、任职和授权不进入该 Header；
-仅主体不读 Facts。authz 不做接口级角色/权限判定，业务系统仍负责自己的授权。
+仅主体不读 Facts。authz 不做接口级角色判定，业务系统仍负责自己的授权。
 
 | 情况                                                   | 接入方处理                                                                                                         |
 | ------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------ |

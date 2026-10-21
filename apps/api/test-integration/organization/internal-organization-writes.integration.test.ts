@@ -376,7 +376,7 @@ describe("Internal Organization HTTP writes with production PostgreSQL", () => {
       },
     });
   });
-  test("keeps legacy organization search and detail on enabled source facts without requiring published documents", async () => {
+  test("keeps organization detail on enabled source facts without requiring published documents", async () => {
     await harness.db.insert(organizations).values([
       {
         orgCode: "PAUSED",
@@ -403,9 +403,6 @@ describe("Internal Organization HTTP writes with production PostgreSQL", () => {
         level: OrganizationLevel.One,
       },
     ]);
-    const legacy = await request("POST", "/search", {});
-    expect(legacy.status).toBe(200);
-    expect(legacy.body.data.map((organization: { orgCode: string }) => organization.orgCode)).toEqual(["GY"]);
     const dsl = await request("POST", "/search-dsl", { filter: { field: "organization.code", op: "eq", value: "GY" } });
     expect(dsl).toMatchObject({ status: 200, body: { data: [] } });
     for (const [orgCode, status] of [
@@ -439,7 +436,7 @@ describe("Internal Organization HTTP writes with production PostgreSQL", () => {
     expect(audits).toMatchObject([{ action: "internal.purveyor.register", targetCode: "SUPPLIER" }]);
   });
 
-  test("publishes status and mixed ancestor patches while the legacy APIs retain enabled-only behavior", async () => {
+  test("publishes status and mixed ancestor patches", async () => {
     const created = await request("POST", "/purveyors", { orgCode: "CHILD", orgName: "Child" });
     expect(created.status).toBe(200);
     await publishOrganizationChanges();
@@ -492,8 +489,6 @@ describe("Internal Organization HTTP writes with production PostgreSQL", () => {
         ],
       },
     });
-    const legacy = await request("POST", "/search", { orgCodes: ["RENAMED", "CHILD"] });
-    expect(legacy).toMatchObject({ status: 200, body: { data: [{ orgCode: "CHILD" }] } });
   });
 
   test("registers an explicitly written same-value patch that overwrites a concurrent update", async () => {

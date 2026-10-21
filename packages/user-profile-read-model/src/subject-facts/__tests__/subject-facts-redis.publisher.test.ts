@@ -45,7 +45,7 @@ describe("Subject Facts Redis batch publisher", () => {
 
 function record(sourceDirtyVersion: string, suffix: number) {
   return {
-    schemaVersion: 3 as const,
+    schemaVersion: 4 as const,
     sourceDirtyVersion,
     publishedAt: "2026-08-01T02:00:00.000Z",
     subjectIdentifier: `00000000-0000-4000-8000-${String(suffix).padStart(12, "0")}`,

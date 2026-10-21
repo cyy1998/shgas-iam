@@ -4,7 +4,6 @@ import { createEmploymentRepository } from "@admin-api/services/employment/emplo
 import { createOrganizationRepository } from "@admin-api/services/organization/organization.repository";
 import { createOrganizationResponsibilityRepository } from "@admin-api/services/organization-responsibility/organization-responsibility.repository";
 import { createPositionRepository } from "@admin-api/services/position/position.repository";
-import { createPrivilegeRepository } from "@admin-api/services/privilege/privilege.repository";
 import { createRoleRepository } from "@admin-api/services/role/role.repository";
 import { createUserRepository } from "@admin-api/services/user/user.repository";
 import type { DbClient } from "@iam/db";
@@ -17,7 +16,6 @@ export function createAdminApiRepositories(client: DbClient) {
     organization: createOrganizationRepository(client),
     organizationResponsibility: createOrganizationResponsibilityRepository(client),
     position: createPositionRepository(client),
-    privilege: createPrivilegeRepository(client),
     role: createRoleRepository(client),
     user: createUserRepository(client),
   };

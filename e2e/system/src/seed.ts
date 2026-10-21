@@ -35,7 +35,6 @@ export interface E2EScenarioReferences {
   hrSecondScopeRoleAssignmentId: number;
   adminRoleCode: string;
   hrAdminRoleCode: string;
-  adminPrivilegeCode: string;
   adminClientCode: string;
   adminRedirectUri: string;
   customSsoClientCode: string;
@@ -77,7 +76,6 @@ export type E2EScenarioIdentity = Pick<
   | "outsideResponsibilityHolderPositionCode"
   | "adminRoleCode"
   | "hrAdminRoleCode"
-  | "adminPrivilegeCode"
   | "adminClientCode"
   | "customSsoClientCode"
   | "internalClientCode"
@@ -274,7 +272,6 @@ export function createE2EScenarioIdentity(runId: string): E2EScenarioIdentity {
     outsideResponsibilityHolderPositionCode: `e2e-outside-resp-pos-${runKey}`,
     adminRoleCode: "iam:admin",
     hrAdminRoleCode: "iam:hr-admin",
-    adminPrivilegeCode: `e2e-privilege-${runKey}`,
     adminClientCode: "iam-admin",
     customSsoClientCode: `e2e-custom-${runKey}`,
     internalClientCode: `e2e-internal-${runKey}`,
@@ -401,7 +398,7 @@ function assertScenarioReadBack(expected: E2EScenarioReferences, actual: E2EScen
     actual.subjectFacts.ready &&
     actual.subjectFacts.subjectIdentifier === expected.adminSubjectIdentifier &&
     actual.subjectFacts.sourceDirtyVersion === actual.subjectProfileVersion &&
-    actual.subjectProfileSchemaVersion === 3 &&
+    actual.subjectProfileSchemaVersion === 4 &&
     actual.subjectFacts.profileUsername === expected.adminUsername &&
     exactlyAll(actual.subjectFacts.organizationCodes, [
       expected.organizationCode,
@@ -431,7 +428,7 @@ function assertScenarioReadBack(expected: E2EScenarioReferences, actual: E2EScen
     exactly(actual.hrSubjectFacts.clientCodes, expected.adminClientCode) &&
     exactly(actual.hrSubjectFacts.roleCodes, expected.hrAdminRoleCode) &&
     actual.hrSubjectProfileReady &&
-    actual.hrSubjectProfileSchemaVersion === 3;
+    actual.hrSubjectProfileSchemaVersion === 4;
   if (!matches || !hrMatches)
     throw new Error("E2E scenario owner read-back did not confirm the complete fixed scenario");
 }

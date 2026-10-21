@@ -50,7 +50,7 @@ function userDetail(employments: unknown[] = [], status: UserStatus = UserStatus
     createTime: createdAt,
     updateTime: createdAt,
     employments,
-    privileges: [],
+
     roles: [],
   };
 }
@@ -85,7 +85,6 @@ function employment(id: number, orgId: number, status: EmploymentStatus) {
     organization: { assignedOrg: node, fullOrgPath: [node], companyNodes: [] },
     position: { id: 3, posCode: "DEV", posName: "Developer" },
     roles: [],
-    privileges: [],
   };
 }
 

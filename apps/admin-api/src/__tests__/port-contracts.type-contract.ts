@@ -3,7 +3,6 @@ import type { AdminClientReaderPort, AdminClientTransactionStorePort } from "@ad
 import type { ClientRepository } from "@admin-api/services/client/client.repository";
 import type {
   AdminEmploymentEffectiveRoleResolverPort,
-  AdminEmploymentPrivilegeReaderPort,
   AdminEmploymentReaderPort,
   AdminEmploymentStorePort,
 } from "@admin-api/services/employment/employment.port";
@@ -19,7 +18,6 @@ import type {
   AdminPositionTransactionStorePort,
 } from "@admin-api/services/position/position.port";
 import type { PositionRepository } from "@admin-api/services/position/position.repository";
-import type { PrivilegeRepository } from "@admin-api/services/privilege/privilege.repository";
 import type { AdminRoleReaderPort, AdminRoleTransactionStorePort } from "@admin-api/services/role/role.port";
 import type { RoleRepository } from "@admin-api/services/role/role.repository";
 import type {
@@ -30,7 +28,6 @@ import type {
 import type {
   AdminUserEffectiveRoleResolverPort,
   AdminUserEmploymentReaderPort,
-  AdminUserPrivilegeReaderPort,
   AdminUserReaderPort,
   AdminUserTransactionStorePort,
 } from "@admin-api/services/user/user.port";
@@ -66,7 +63,6 @@ type _AdminEmploymentEffectiveRoleResolverPort = AssertAssignable<
   AdminEmploymentEffectiveRoleResolverPort,
   RoleAssignmentResolver
 >;
-type _AdminEmploymentPrivilegeReaderPort = AssertAssignable<AdminEmploymentPrivilegeReaderPort, PrivilegeRepository>;
 
 type _AdminOrganizationReaderPort = AssertAssignable<AdminOrganizationReaderPort, OrganizationRepository>;
 type _AdminOrganizationTransactionStorePort = AssertAssignable<
@@ -100,7 +96,6 @@ type _ResignUserReaderPort = AssertAssignable<ResignUserReaderPort, UserReposito
 type _ResignUserTransactionPortsuserStore = AssertAssignable<ResignUserTransactionPorts["userStore"], UserRepository>;
 type _AdminUserEmploymentReaderPort = AssertAssignable<AdminUserEmploymentReaderPort, EmploymentRepository>;
 type _AdminUserEffectiveRoleResolverPort = AssertAssignable<AdminUserEffectiveRoleResolverPort, RoleAssignmentResolver>;
-type _AdminUserPrivilegeReaderPort = AssertAssignable<AdminUserPrivilegeReaderPort, PrivilegeRepository>;
 
 type _AdminLoginRestrictionPort = AssertAssignable<AdminLoginRestrictionPort, LoginRestriction>;
 type _AdminSessionUserSummaryPort = AssertAssignable<AdminSessionUserSummaryPort, UserRepository>;

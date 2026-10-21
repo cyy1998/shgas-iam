@@ -1,4 +1,4 @@
-import type { PrivilegeDelegationResolutionRepository } from "@api/composition/repositories/privilege-delegation-resolution.repository";
+import type { ClientDelegationResolutionRepository } from "@api/composition/repositories/client-delegation-resolution.repository";
 import type { createUserSessionAuthenticationAdapter } from "@api/services/authentication/user-session.adapter";
 import type { ClientReaderPort } from "@api/services/client/client.port";
 import type { ClientRepository } from "@api/services/client/client.repository";
@@ -11,7 +11,6 @@ import type {
 } from "@api/services/organization/organization.port";
 import type { OrganizationRepository } from "@api/services/organization/organization.repository";
 import type { PositionRepository } from "@api/services/position/position.repository";
-import type { PrivilegeRepository } from "@api/services/privilege/privilege.repository";
 import type { SessionOrigin } from "@api/services/session/session-origin";
 import type {
   UserMobileBindingPort,
@@ -38,7 +37,7 @@ import type {
   RegisterPurveyorPositionReaderPort,
   RegisterPurveyorUserStorePort,
 } from "@api/use-cases/internal/register-purveyor-contact/register-purveyor-contact.port";
-import type { PrivilegeDelegationResolutionPort } from "@api/use-cases/internal/resolve-privilege-delegations/resolve-privilege-delegations.port";
+import type { ClientDelegationResolutionPort } from "@api/use-cases/internal/resolve-client-delegations/resolve-client-delegations.port";
 
 import type { LoginRestriction } from "@iam/api-core/login-restriction";
 import type { UserProfileQueryService } from "@iam/user-profile-read-model/query";
@@ -86,9 +85,9 @@ type _MobileUserReaderPort = AssertAssignable<MobileUserReaderPort, UserReposito
 type _OrganizationReaderPort = AssertAssignable<OrganizationReaderPort, OrganizationRepository>;
 type _OrganizationTransactionStorePort = AssertAssignable<OrganizationTransactionStorePort, OrganizationRepository>;
 
-type _PrivilegeDelegationResolutionPort = AssertAssignable<
-  PrivilegeDelegationResolutionPort,
-  PrivilegeDelegationResolutionRepository
+type _ClientDelegationResolutionPort = AssertAssignable<
+  ClientDelegationResolutionPort,
+  ClientDelegationResolutionRepository
 >;
 
 type _UserProfileReaderPort = AssertAssignable<UserProfileReaderPort, UserProfileQueryService>;

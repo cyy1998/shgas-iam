@@ -4,6 +4,7 @@
 决策及本次取舍见 [ADR-0020](../../adr/0020-provide-fail-closed-privilege-delegation-resolution.md)，
 领域词汇见 [CONTEXT.md](../../../CONTEXT.md)。本契约同时覆盖 Internal、Admin 和 SSO。
 实施与验收记录见 [Spec #264](https://github.com/cyy1998/shgas-iam/issues/264)。
+现行 Client Delegation 命名及错误码按 [Spec #269](https://github.com/cyy1998/shgas-iam/issues/269) 收敛。
 
 ## 委托含义与范围
 
@@ -56,6 +57,9 @@ Admin 授权沿用 [ADR-0017](../../adr/0017-centralize-admin-role-policy-with-r
 | 重复结束   | 允许纯重复结束，保留已有事实，不改写业务行                               |
 | 删除       | 不提供委托删除操作；新模型的结束和到期记录继续可查                       |
 
+共享状态名称为 `ClientDelegationStatus`，Enable、Pause、Disable 仍分别持久化为 `1`、`2`、`3`。
+命名切换不迁移或清空已有 Client 委托，也不改变生命周期与期间。
+
 同一委托人在同一 Client 下，两条未结束委托的组织范围和闭区间期间均相交时构成冲突。
 同组织或祖先与后代组织算范围相交，互不包含的部门可以并存；不同 Client 不冲突。
 Pause 仍占位，同一受托人也不豁免，时间端点相接算相交；不采用下级优先、最近祖先优先或重复折叠。
@@ -96,6 +100,22 @@ Pause、未来开始、自然到期的 Enable/Pause 记录均阻断，必须先�
 Internal 创建沿用详情结果、更新沿用 boolean；Admin 使用统一 `{ changed, result }`，
 创建保留新资源，编辑、暂停、恢复及结束的 `result` 为 null。
 结果和失败恢复见 [Admin 写入契约](../admin/admin-mutation-contract.md)。
+
+### 业务错误码
+
+委托错误使用 `CLIENT_DELEGATION` 领域名称，三类入口共用同一错误含义；不存在旧错误码别名。
+
+| HTTP 状态 | 错误码                                         | 含义                                                   |
+| --------- | ---------------------------------------------- | ------------------------------------------------------ |
+| 404       | `CLIENT_DELEGATION.NOT_FOUND`                  | 委托不存在或不属于当前调用范围，不泄露其他范围的记录   |
+| 409       | `CLIENT_DELEGATION.ENDED`                      | 已手动结束，当前修改不属于允许的纯重复结束             |
+| 409       | `CLIENT_DELEGATION.CONFLICT`                   | 同 Client 的未结束记录在组织覆盖范围及闭区间期间上相交 |
+| 404       | `CLIENT_DELEGATION.RESOLUTION_INPUT_NOT_FOUND` | 解析输入中的用户或组织不存在或已删除，整体失败         |
+| 503       | `CLIENT_DELEGATION.RESOLUTION_UNAVAILABLE`     | 解析完整性异常、数据库不可用或超时；响应保持脱敏       |
+
+用户删除的未结束委托门禁返回 `USER.HAS_OPEN_CLIENT_DELEGATION`；Client 和 Organization 的既有门禁错误含义保持。
+调用方必须配对升级错误码处理，不能继续依赖 `PRIVILEGE.*` 或 `USER.HAS_OPEN_PRIVILEGE_DELEGATION`。
+Admin tRPC 沿既有 transport 错误适配交付业务失败；HTTP 状态与管理权限不因领域命名变化而改变。
 
 解析沿用以下基线规则：
 
@@ -147,13 +167,19 @@ Internal 消费方与服务端同步切换请求契约；旧 writer、旧 reader
 更早来源须先恢复匹配版本的升级流程；新装空库直接执行完整正式 migrations，不伪造 migration journal。
 本节仅定义操作顺序，目标环境的备份、停流及命令执行由发布负责人按其部署配置安排。
 
+本节的清理及空模型验收只适用于尚未执行该项迁移的旧委托来源。已经使用 `client_delegation` 且 journal
+已登记该项的环境跳过本节清理，保留已有全部 Client 委托。升级到当前完整制品还包含权限点退役，须继续执行
+[Profile v4 协调切换](../../releases/user-profile-maintenance.md#权限点退役的协调切换)的停流、重建、双门禁及配对验收；
+不能仅完成本节的旧委托 DDL 就开放当前协议入口。
+
 1. 冻结 Admin、SSO、Internal 的委托写入与读取流量，排空在途请求并停止全部旧 API/Admin API 副本。
    同步准备新 Admin/SSO 前端、配对后端及 Internal 消费方，确保没有旧 reader/writer 再访问旧表。
-2. 在同一停流窗口保管可恢复的数据库备份，记录 migration journal、旧委托及绑定行数、已有审计和 User、Client、Organization、Privilege 等非目标事实基线。
+2. 在同一停流窗口保管可恢复的数据库备份，记录 migration journal、旧委托及绑定行数、已有审计和 User、Client、Organization、Role 等非目标事实基线。
    不单独删除历史 migration、journal 或审计，也不把审计当成可恢复的旧委托数据源。
 3. 由部署环境显式提供 `DATABASE_URL`，通过 `pnpm --filter @iam/db db:migrate` 执行正式链，包含
    `20261020090553_client_delegation`。迁移创建 `client_delegation`，删除旧两表及其业务记录，不向新表复制数据。
    不使用 `db:push` 或临时手写清表替代正式 migration；migration 未成功时保持停流并核对实际 journal/表状态。
+   完整当前链还会删除权限点源表；Profile v4 全量重建和独立双门禁通过前，不执行下方协议 smoke。
 4. 启动新副本前，只读核验 migration 已登记、新表行数为零、旧两表已不存在，且审计及基线中的非目标事实保留。
    可在受控数据库连接执行以下核验；PostgreSQL 默认 schema 为 `public`，若部署采用其他 schema，应使用实际配置：
 

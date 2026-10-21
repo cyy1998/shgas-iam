@@ -45,7 +45,7 @@ describe("Subject Facts v3 Redis publisher", () => {
 
 function record(sourceDirtyVersion: string): SubjectFactsCacheRecord {
   return {
-    schemaVersion: 3,
+    schemaVersion: 4,
     sourceDirtyVersion,
     publishedAt: "2026-08-20T12:00:00.000Z",
     subjectIdentifier,

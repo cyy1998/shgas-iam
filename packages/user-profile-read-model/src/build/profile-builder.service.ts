@@ -103,7 +103,6 @@ function buildSearchDocument(
           name: employment.position.posName,
         },
         roles: uniqueSorted(employment.roles),
-        privileges: uniqueSorted(employment.privileges),
         responsibilities: employment.responsibilities.map((responsibility) => ({
           type: responsibility.type,
           targetOrganization: toSearchOrganization(responsibility.targetOrganization),

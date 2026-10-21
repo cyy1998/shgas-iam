@@ -1,4 +1,7 @@
 import { afterEach, beforeEach, expect, test } from "bun:test";
+import { mkdtemp, rm, rmdir, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { runWithOwnedTestResources } from "@iam/api-core/testing/external-test-resources";
 import { runProcessCommandSmoke, spawnOwnedProcessTree } from "@iam/api-core/testing/process-smoke-harness";
@@ -74,6 +77,16 @@ for (const mode of ["backfill", "repair"] as const)
       const blocker = reserved.sql;
       await runWithOwnedTestResources(async (lifecycle) => {
         lifecycle.registerCleanup(reserved.close);
+        let interruptFile: string | undefined;
+        if (control === "SIGTERM") {
+          const directory = await mkdtemp(join(tmpdir(), "iam-worker-interrupt-"));
+          interruptFile = join(directory, "requested");
+          const marker = interruptFile;
+          lifecycle.registerCleanup(async () => {
+            await rm(marker, { force: true });
+            await rmdir(directory);
+          });
+        }
         await blocker.unsafe("BEGIN");
         await blocker.unsafe(
           mode === "backfill"
@@ -85,6 +98,7 @@ for (const mode of ["backfill", "repair"] as const)
           control === "deadline" ? 1 : 143,
           control === "deadline" ? ["--deadline-ms", "500"] : [],
           control === "SIGTERM" ? ["--preload=./test-integration/support/interrupt-command.fixture.ts"] : [],
+          interruptFile,
         );
         const blocked = await Promise.race([
           waitForLocks(1),
@@ -92,6 +106,7 @@ for (const mode of ["backfill", "repair"] as const)
             throw new Error("Command completed without an observed PostgreSQL lock wait");
           }),
         ]);
+        if (interruptFile) await writeFile(interruptFile, "", { flag: "wx" });
         const result = await pending;
         expect(result.output).toContain(`"signal":"${control}"`);
         const applicationName = await closedOwner(result.output);
@@ -159,6 +174,7 @@ async function command(
   expectedExitCode: number,
   args: string[] = [],
   bunArgs: string[] = [],
+  interruptFile?: string,
 ) {
   const pending = runProcessCommandSmoke({
     label: `Organization ${mode} PG lifecycle`,
@@ -187,6 +203,7 @@ async function command(
           IAM_WORKER_REDIS_PASSWORD: redis.password,
           IAM_WORKER_LOG_FORMAT: "json",
           IAM_WORKER_LOG_LEVEL: "info",
+          IAM_WORKER_TEST_INTERRUPT_FILE: interruptFile,
         },
       }),
   });

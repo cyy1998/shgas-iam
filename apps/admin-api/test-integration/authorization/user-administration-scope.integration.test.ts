@@ -326,9 +326,7 @@ function createService(revokeUserSessions: AdminSessionRevocationPort["revokeUse
       resolveEffectiveRoles: mock(async () => new Map()),
     },
     roleRepository: repositories.role,
-    privilegeRepository: {
-      getPrivilegesByRoleIds: mock(async () => []),
-    },
+
     passwordHasher: {
       hashPassword: mock(async (password: string) => `hashed:${password}`),
     },

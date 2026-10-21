@@ -3,10 +3,10 @@ import { createRequestPasswordResetCodeUseCase } from "@api/use-cases/account-re
 import { createResetPasswordUseCase } from "@api/use-cases/account-recovery/reset-password/reset-password.use-case";
 import { createVerifyPasswordResetCodeUseCase } from "@api/use-cases/account-recovery/verify-password-reset-code/verify-password-reset-code.use-case";
 import { createRegisterPurveyorContactUseCase } from "@api/use-cases/internal/register-purveyor-contact/register-purveyor-contact.use-case";
-import { createResolvePrivilegeDelegationsUseCase } from "@api/use-cases/internal/resolve-privilege-delegations/resolve-privilege-delegations.use-case";
+import { createResolveClientDelegationsUseCase } from "@api/use-cases/internal/resolve-client-delegations/resolve-client-delegations.use-case";
 import { mapUnitOfWork } from "@iam/api-core/uow";
 import type { DbClient } from "@iam/db";
-import { createPrivilegeDelegationResolutionRepository } from "../repositories/privilege-delegation-resolution.repository";
+import { createClientDelegationResolutionRepository } from "../repositories/client-delegation-resolution.repository";
 import type { ApiRuntimePorts } from "../runtime";
 import type { ApiServices } from "../services";
 import type { createApiUnitOfWork } from "../tx";
@@ -67,15 +67,15 @@ export function createApiUseCases(options: CreateApiUseCasesOptions) {
     userReader: services.user,
   });
 
-  const resolvePrivilegeDelegations = createResolvePrivilegeDelegationsUseCase({
+  const resolveClientDelegations = createResolveClientDelegationsUseCase({
     clock: runtime.clock,
-    resolution: createPrivilegeDelegationResolutionRepository(options.delegationResolutionDb),
+    resolution: createClientDelegationResolutionRepository(options.delegationResolutionDb),
   });
 
   return {
     accountRecovery,
     registerPurveyorContact,
-    resolvePrivilegeDelegations,
+    resolveClientDelegations,
   };
 }
 

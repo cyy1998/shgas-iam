@@ -88,7 +88,7 @@ const employment = {
     companyNodes: [],
   },
   roles: [],
-  privileges: [],
+
   allowedActions: createHrEmploymentAllowedActions(EmploymentStatus.Enable, true),
 };
 
@@ -118,53 +118,44 @@ const assignment = {
 };
 
 describe("EmploymentDetailDrawer responsibility wayfinding", () => {
-  it("displays role and privilege names while preserving distinct roles with the same name", async () => {
+  it("preserves distinct roles with the same display name", async () => {
     services.getEmployment.mockResolvedValue({
       ...employment,
       roles: ["app:admin", "other:admin"],
-      privileges: ["people:read"],
+
       roleNames: { "app:admin": "管理员", "other:admin": "管理员" },
-      privilegeNames: { "people:read": "查看人员" },
     });
     const { user } = render(<EmploymentDetailDrawer open employmentId={42} onClose={vi.fn()} />);
-    await user.click(await screen.findByRole("tab", { name: "角色 / 权限 (2/1)" }));
+    await user.click(await screen.findByRole("tab", { name: /^角色/ }));
     expect(screen.getAllByText("管理员")).toHaveLength(2);
-    expect(screen.getByText("查看人员")).toBeInTheDocument();
     expect(screen.queryByText("app:admin")).not.toBeInTheDocument();
-    expect(screen.queryByText("people:read")).not.toBeInTheDocument();
   });
 
-  it("replaces the permission list and count when the selected Employment detail changes", async () => {
+  it("replaces the roles when the selected Employment detail changes", async () => {
     services.getEmployment
       .mockResolvedValueOnce({
         ...employment,
         id: 42,
-        privileges: ["people:read", "people:write"],
-        privilegeNames: {
-          "people:read": "查看人员",
-          "people:write": "编辑人员",
-        },
+        roles: ["app:reader", "app:editor"],
+        roleNames: { "app:reader": "读取角色", "app:editor": "编辑角色" },
       })
       .mockResolvedValueOnce({
         ...employment,
         id: 43,
-        privileges: ["people:read"],
-        privilegeNames: {
-          "people:read": "查看人员",
-          "people:write": "编辑人员",
-        },
+        roles: ["app:reader"],
+        roleNames: { "app:reader": "读取角色" },
       });
     const props = { open: true, onClose: vi.fn() };
     const view = render(<EmploymentDetailDrawer {...props} employmentId={42} />);
 
-    await view.user.click(await screen.findByRole("tab", { name: "角色 / 权限 (0/2)" }));
-    expect(screen.getByText("查看人员")).toBeInTheDocument();
-    expect(screen.getByText("编辑人员")).toBeInTheDocument();
+    await view.user.click(await screen.findByRole("tab", { name: /^角色/ }));
+    expect(screen.getByText("读取角色")).toBeInTheDocument();
+    expect(screen.getByText("编辑角色")).toBeInTheDocument();
 
     view.rerender(<EmploymentDetailDrawer {...props} employmentId={43} />);
-    await view.user.click(await screen.findByRole("tab", { name: "角色 / 权限 (0/1)" }));
-    expect(screen.getByText("查看人员")).toBeInTheDocument();
-    expect(screen.queryByText("编辑人员")).not.toBeInTheDocument();
+    await view.user.click(await screen.findByRole("tab", { name: /^角色/ }));
+    expect(screen.queryByText("编辑角色")).not.toBeInTheDocument();
+    expect(screen.getByText("读取角色")).toBeInTheDocument();
   });
 
   it("edits description and renders only the server-granted lifecycle actions", async () => {

@@ -441,11 +441,6 @@ function UserDetailDrawerContent({ open, username, onClose, onEdit, onChanged }:
                           ),
                       },
                       {
-                        title: "权限数",
-                        dataIndex: "privileges",
-                        render: (_, r) => r.privileges.length,
-                      },
-                      {
                         title: "雇佣数",
                         dataIndex: "employments",
                         render: (_, r) => r.employments.length,

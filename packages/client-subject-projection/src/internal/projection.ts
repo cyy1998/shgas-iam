@@ -73,33 +73,25 @@ function toEmploymentProfileWithResponsibilities(employment: SubjectFactsEmploym
 
 function toClientAuthorization(facts: SubjectFactsSnapshot, clientCode: string): ClientAuthorization {
   const topLevelRoles = new Set<string>();
-  const topLevelPrivileges = new Set<string>();
   const employments = facts.employments.map((employment): ClientAuthorizationEmployment => {
     const roles = new Set<string>();
-    const privileges = new Set<string>();
     for (const authorization of employment.clientAuthorizations) {
       if (authorization.clientCode !== clientCode) continue;
       for (const role of authorization.roles) {
         roles.add(role.code);
         topLevelRoles.add(role.code);
-        for (const privilege of role.privileges) {
-          privileges.add(privilege);
-          topLevelPrivileges.add(privilege);
-        }
       }
     }
 
     return {
       ...toEmploymentProfile(employment),
       roles: [...roles].sort(compareCodes),
-      privileges: [...privileges].sort(compareCodes),
     };
   });
 
   return {
     employments: employments.sort(compareEmploymentProfiles),
     roles: [...topLevelRoles].sort(compareCodes),
-    privileges: [...topLevelPrivileges].sort(compareCodes),
   };
 }
 

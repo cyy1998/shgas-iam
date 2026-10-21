@@ -10,7 +10,6 @@ export function createAdminJourneyOperations(options: CreateAdminJourneyOperatio
     specPath: "admin-custom-sso.spec.ts",
     environment: (descriptor, scenario) => ({
       IAM_E2E_ADMIN_CLIENT_CODE: scenario.adminClientCode,
-      IAM_E2E_ADMIN_PRIVILEGE_CODE: scenario.adminPrivilegeCode,
       IAM_E2E_ADMIN_ROLE_CODE: scenario.adminRoleCode,
       IAM_E2E_DELEGATEE_USERNAME: scenario.delegateeUsername,
       IAM_E2E_DISABLED_USERNAME: scenario.disabledUsername,

@@ -28,7 +28,7 @@ function fixture() {
     async (): Promise<CustomSsoExchangeResult> => ({
       sid: "token",
       ttl: 37,
-      subject: { version: 2, subjectIdentifier: randomUUID() },
+      subject: { version: 3, subjectIdentifier: randomUUID() },
     }),
   );
   const callback = mock(
@@ -111,7 +111,7 @@ test.each(["client", "legacy:client/中文", "legacy%3Aclient", "😀".repeat(33
     expect(body.data).toEqual({
       sid: "token",
       ttl: 37,
-      subject: { version: 2, subjectIdentifier: expect.any(String) },
+      subject: { version: 3, subjectIdentifier: expect.any(String) },
     });
     expect(f.calls[0]).toMatchObject({
       clientCode: client,

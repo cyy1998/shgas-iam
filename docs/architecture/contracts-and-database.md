@@ -99,10 +99,10 @@ Admin 表单仅在 business 回填、展示和提交地址；隐藏控件的旧�
   `packages/client-subject-projection`。调用方只通过公开 `resolve` Interface 提交 Subject Identifier、
   `clientCode`、`SubjectClaimSelection` 和本操作许可证明；已发布 Subject Facts 与许可断言由
   composition 注入最窄 port。协议 wire mapper 只能消费 package root public Projection Interface，不能导入其他
-  core subpath 或直连 Facts persistence、client 配置、runtime 与 transport。Custom SSO V2 wire 的 runtime schema、
+  core subpath 或直连 Facts persistence、client 配置、runtime 与 transport。Custom SSO V3 wire 的 runtime schema、
   派生 TypeScript type、mapper 与 preview 统一由 `@iam/custom-sso/wire` 拥有；API 只能复用该
-  schema 添加 OpenAPI metadata，不得重写第二份 wire shape。Package root 拥有 Catalog/Selection V2、带 canonical responsibility 子项的协议中性
-  Employment Profile 与 V2 projection service；Custom SSO 包独占 V2 strict wire；responsibility 仍是
+  schema 添加 OpenAPI metadata，不得重写第二份 wire shape。Package root 拥有 Catalog/Selection V3、带 canonical responsibility 子项的协议中性
+  Employment Profile 与 V3 projection service；Custom SSO 包独占 V3 strict wire；responsibility 仍是
   `profile:employments` 的原子子项，不形成独立 claim，也不进入 authorization employment。
 - 角色分配的正向 Effective Role 与反向受影响用户解析放在 `packages/role-assignment-resolution`；该 package
   接收 composition root 提供的 `DbClient`，调用方不复制 assignment 或组织闭包匹配规则。
@@ -114,9 +114,8 @@ Admin 表单仅在 business 回填、展示和提交地址；隐藏控件的旧�
   client 范围；Employment 的 Position 与直属 Organization 状态属于 Employment Integrity，不再由正向解析静默过滤。
   User Profile Builder 在发布前加载并校验全部 Open Employment 的父对象事实，异常时整次 fail closed。反向 dirty-scope
   解析有意更保守，只过滤失效任职，不因角色、岗位或组织已失效而漏掉重建。
-- Role Assignment 的正向与反向操作都批量接收 ID、处理重复和空输入，并返回稳定排序结果。Admin 角色管理 CRUD 与
-  role-privilege 聚合仍属于
-  调用方，不进入 resolver。
+- Role Assignment 的正向与反向操作都批量接收 ID、处理重复和空输入，并返回稳定排序结果。
+  Admin 角色管理 CRUD 仍属于调用方，不进入 resolver；角色不再派生权限点。
 - user-profile read-model producer/query/worker 逻辑放在 `packages/user-profile-read-model`。该 package 拥有
   version-bound Subject Facts 构建、`user_profile` 与 dirty row 的 PostgreSQL atomic publication、提交后的
   Redis monotonic publisher，以及 `subject-facts` subpath 下的 Redis read-through、单主体 single-flight、
@@ -133,18 +132,19 @@ Admin 表单仅在 business 回填、展示和提交地址；隐藏控件的旧�
   HTTP/OpenAPI 名称，递归引用使用该回调返回的 schema，共享包不依赖 OpenAPI 工具。
   字符串字段的查询 schema 使用共享 `FILTER_MAX_STRING_LENGTH`；结果上限、排序、超时及错误映射
   由各读模型和入口持有。共享包只依赖 Zod 与 Drizzle，不引入源表、数据库实例、dirty、publisher 或 app composition。
-- User Profile v3 通过 `@iam/user-profile-read-model` 默认入口暴露 schema、Redis publisher/cache、strict Subject Facts
+- User Profile v4 通过 `@iam/user-profile-read-model` 默认入口暴露 schema、Redis publisher/cache、strict Subject Facts
   read-through reader 与只读 query seam；builder/publication 只由 `worker` subpath 组装。Internal Detail 从
-  `user_profile` v3 row 返回严格 Detail；面向其他内部服务的用户搜索只提供 Internal Filter DSL，
+  `user_profile` v4 row 返回严格 Detail；面向其他内部服务的用户搜索只提供 Internal Filter DSL，
   使用共享 Filter 引擎绑定其公开结构和 `search_doc` 列，只查询并校验已发布的
   Search Document，Internal Filter DSL 从同一行的类型化列返回 `UserProfileBase`，不读取 Detail 或回查 source tables。Responsibility Snapshot 子项复用 Client Subject Projection
   的协议中性 contract，read-model 仍拥有 resolver 驱动的 Snapshot build。版本无关 Worker maintenance/readiness 命令复用
   同一 dirty/job/publication 与两项全量 gate；active Worker consumer、Internal User、Custom SSO 与 OIDC composition 只使用
-  v3，同一 live User 不得混写、双读、fallback 或建立版本选择。Client Protocol V2 不随 Profile 命令推进。
+  v4，同一 live User 不得混写、双读、fallback 或建立版本选择。Catalog/Selection v3 与 Custom SSO wire v3
+  分别由各自 owner 固定，不随 Profile 命令推进。
 
 ## 现存差距与验证
 
-当前部分 User、Client、Role DTO 仍由整表 schema 或排除字段派生，不能视为已满足显式字段规则。修改这些 DTO 的
+当前部分 Client、Role DTO 仍由整表 schema 或排除字段派生，不能视为已满足显式字段规则。修改这些 DTO 的
 形状或其来源数据库字段时按上述规则收敛；不因无关改动批量迁移。既有 crypto root 出口按前述运行环境约定维护，
 新增 subpath 或搬迁实现应作为明确的结构变更处理。
 
@@ -216,8 +216,9 @@ Admin 表单仅在 business 回填、展示和提交地址；隐藏控件的旧�
   之前验证全量 user/profile/dirty coverage、Subject Identifier 映射、schema/version 与 Subject Facts shape，失败时
   使用 `23514` 中止且不改变 staged schema。
 - `source_dirty_version` 的数据库 CHECK 只接受正 bigint；`subject_facts` 的数据库 CHECK 只约束为 JSON object，
-  strict v3 与顶层只允许 `employments` 由唯一 active Worker writer 和 read-side parser 在应用边界保证。数据库仍可
-  保留历史 V1 row 供迁移核验，但 active runtime 不双读、不 fallback。查询用 `search_doc` 保留现有 GIN，
+  strict v4 与顶层只允许 `employments` 由唯一 active Worker writer 和 read-side parser 在应用边界保证。
+  迁移或恢复窗口可存在待重建的旧 row，放流前必须完成 v4 全量覆盖；active runtime 不双读、不 fallback。
+  查询用 `search_doc` 保留现有 GIN，
   `subject_facts` 不建立 GIN。普通唯一索引需要在 maintenance
   freeze 中执行。旧 Subject Projection 专用回退工具已退役；历史 migration 与 rollback SQL 仅作为旧版本记录保留。
   当前数据库回退须使用匹配旧制品及备份，不通过删除 migration journal 重放旧迁移。

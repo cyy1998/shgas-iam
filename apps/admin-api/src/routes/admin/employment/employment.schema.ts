@@ -17,7 +17,7 @@ export function toEmploymentVo(input: unknown) {
 export const EmploymentDetailVoSchema = EmploymentDetailDtoSchema.extend({
   allowedActions: AdminEmploymentAllowedActionsSchema,
   statusText: z.string().openapi({ example: "正常" }),
-  privileges: z.array(z.string()).openapi({ example: ["ui:button:tender:create-GYBG"] }),
+
   roles: z.array(z.string()).openapi({ example: ["tender:default-user"] }),
 }).openapi("EmploymentDetailVo");
 
@@ -26,7 +26,7 @@ export function toEmploymentDetailVo(input: unknown, allowedActions: unknown) {
   return EmploymentDetailVoSchema.parse({
     ...parsed,
     allowedActions,
-    privileges: parsed.privileges ?? [],
+
     roles: parsed.roles ?? [],
     statusText: employmentStatusToString[parsed.status],
   });

@@ -2,8 +2,8 @@ import { expect, test } from "bun:test";
 import { createInternalMiddlewares } from "@api/routes/internal/_middleware";
 import { createDelegationHandlers } from "@api/routes/internal/delegation/delegation.handlers";
 import { createDelegationRoute } from "@api/routes/internal/delegation/delegation.index";
-import type { PrivilegeDelegationResolutionPort } from "@api/use-cases/internal/resolve-privilege-delegations/resolve-privilege-delegations.port";
-import { createResolvePrivilegeDelegationsUseCase } from "@api/use-cases/internal/resolve-privilege-delegations/resolve-privilege-delegations.use-case";
+import type { ClientDelegationResolutionPort } from "@api/use-cases/internal/resolve-client-delegations/resolve-client-delegations.port";
+import { createResolveClientDelegationsUseCase } from "@api/use-cases/internal/resolve-client-delegations/resolve-client-delegations.use-case";
 import createApp from "@iam/api-core/core/create-app";
 import { createInternalAuthenticationHandler } from "@iam/api-core/middlewares";
 import { ClientStatus } from "@iam/contracts";
@@ -28,16 +28,16 @@ const enabledClient: GenericClientRuntimeDto = {
 const unavailableResolutionResponse = {
   status: 503,
   body: {
-    code: "PRIVILEGE.DELEGATION_RESOLUTION_UNAVAILABLE",
+    code: "CLIENT_DELEGATION.RESOLUTION_UNAVAILABLE",
     data: null,
     message: "委托解析暂时不可用",
   },
 } as const;
 
 function createResolutionApp(
-  options: { clock?: { nowDate: () => Date }; logger?: Logger; resolution?: PrivilegeDelegationResolutionPort } = {},
+  options: { clock?: { nowDate: () => Date }; logger?: Logger; resolution?: ClientDelegationResolutionPort } = {},
 ) {
-  const resolver = createResolvePrivilegeDelegationsUseCase({
+  const resolver = createResolveClientDelegationsUseCase({
     clock: options.clock ?? { nowDate: () => observedAt },
     resolution: options.resolution ?? {
       async resolveCurrent() {
@@ -48,7 +48,7 @@ function createResolutionApp(
   const logger = options.logger ?? pino({ enabled: false });
   const handlers = createDelegationHandlers({
     delegationService: {} as never,
-    resolvePrivilegeDelegations: resolver,
+    resolveClientDelegations: resolver,
   });
   const internalAuthenticationHandler = createInternalAuthenticationHandler({
     getClientBySecret: async (secret) => (secret === enabledClient.clientSecret ? enabledClient : null),
@@ -185,7 +185,7 @@ test("maps persistence, statement, and handler timeouts to one sanitized contrac
     expect(JSON.stringify(result.body)).not.toContain(failure.error.message);
     expect(logs.find((log) => log.event === "api.error.handled")).toMatchObject({
       statusCode: 503,
-      errorCode: "PRIVILEGE.DELEGATION_RESOLUTION_UNAVAILABLE",
+      errorCode: "CLIENT_DELEGATION.RESOLUTION_UNAVAILABLE",
       err: {
         diagnostic: {
           failureCategory: failure.failureCategory,
@@ -216,7 +216,7 @@ test("maps persistence, statement, and handler timeouts to one sanitized contrac
   expect(handlerTimeoutResult).toEqual(unavailableResolutionResponse);
   expect(handlerLogs.find((log) => log.event === "api.error.handled")).toMatchObject({
     statusCode: 503,
-    errorCode: "PRIVILEGE.DELEGATION_RESOLUTION_UNAVAILABLE",
+    errorCode: "CLIENT_DELEGATION.RESOLUTION_UNAVAILABLE",
     err: {
       diagnostic: {
         failureCategory: "handler-timeout",
@@ -281,14 +281,14 @@ test("publishes the strict success contract in the Internal OpenAPI document", a
       orgCode: { type: "string", minLength: 1 },
     },
   });
-  expect(document.components.schemas.PrivilegeDelegationResolutionInputNotFoundResponse).toMatchObject({
+  expect(document.components.schemas.ClientDelegationResolutionInputNotFoundResponse).toMatchObject({
     type: "object",
     required: ["code", "data", "message"],
     additionalProperties: false,
     properties: {
       code: {
         type: "string",
-        enum: ["PRIVILEGE.DELEGATION_RESOLUTION_INPUT_NOT_FOUND"],
+        enum: ["CLIENT_DELEGATION.RESOLUTION_INPUT_NOT_FOUND"],
       },
       data: {
         type: "object",
@@ -297,7 +297,7 @@ test("publishes the strict success contract in the Internal OpenAPI document", a
       },
     },
   });
-  expect(document.components.schemas.PrivilegeDelegationResolutionResult).toEqual({
+  expect(document.components.schemas.ClientDelegationResolutionResult).toEqual({
     type: "object",
     properties: {
       username: { type: "string", example: "alice" },
@@ -309,14 +309,14 @@ test("publishes the strict success contract in the Internal OpenAPI document", a
     required: ["username", "delegateeUsername"],
     additionalProperties: false,
   });
-  expect(document.components.schemas.PrivilegeDelegationResolutionUnavailableResponse).toMatchObject({
+  expect(document.components.schemas.ClientDelegationResolutionUnavailableResponse).toMatchObject({
     type: "object",
     required: ["code", "data", "message"],
     additionalProperties: false,
     properties: {
       code: {
         type: "string",
-        enum: ["PRIVILEGE.DELEGATION_RESOLUTION_UNAVAILABLE"],
+        enum: ["CLIENT_DELEGATION.RESOLUTION_UNAVAILABLE"],
       },
       data: { type: "null" },
     },
