@@ -440,10 +440,11 @@ fixture 固定旧制品来源/hash，建立真实旧 Profile 和协议状态，�
 
 复现使用 OpenID conformance-suite release-v5.2.4，固定提交
 `ab35a8df4864da35b49eff11483e204e01aa7961`。在对应源码目录应用
-[S256 补丁](../features/oidc/conformance-suite-s256.patch)，以 Java 21.0.4、Maven 3.9.11 构建：
+[S256 补丁](../../apps/api/test-integration/oidc/patches/conformance-suite-s256.patch)，以 Java 21.0.4、Maven 3.9.11 构建。
+补丁作为 API OIDC Integration 的测试资产，与 fixture、runner 一同维护：
 
 ```bash
-git apply --unidiff-zero <iam-checkout>/docs/features/oidc/conformance-suite-s256.patch
+git apply --unidiff-zero <iam-checkout>/apps/api/test-integration/oidc/patches/conformance-suite-s256.patch
 mvn -B -Dmaven.test.skip -Dpmd.skip clean package
 ```
 
