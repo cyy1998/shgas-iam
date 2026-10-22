@@ -48,6 +48,27 @@ AFK 的逐轮复审要求由 [AFK 工作流](sandcastle-afk.md#双轴评审子�
 命令见[命令入口](../development/commands.md)，验证的证明范围见[默认验证与交付](../architecture/testing-architecture.md#默认验证与交付)，
 临时 PostgreSQL/Redis 的创建与清理见[专用资源与隔离](../architecture/testing-architecture.md#专用资源与隔离)。
 
+## 子代理与工作树收尾
+
+手动任务使用 Codex managed worktree 时，由主会话维护子代理 ID、父子关系、工作树路径和所属会话；
+实施、调查、评审子代理及其后代都纳入清单。子代理可能继承工作树附件，返回结果或停止运行不等于释放引用。
+
+完成集成、评审和适用验证后，按以下顺序回收：
+
+1. 确认子代理及相关进程已停止，所需提交已集成或另有可恢复记录，交接结果和需保留的 ignored 文件已外置。
+   尚需继续修复的子代理及工作树保留；中断的子代理须先核对其工作已接管。
+2. 对本任务创建且不再需要的子代理，用 `set_thread_archived` 从后代到父级归档会话，保留主会话。
+   核对持有目标工作树附件的调查和评审子代理，不能只处理实际在该目录写代码的实施者。
+3. 由工作树所属主会话通过 `list_artifacts` 取得准确 identityKey，再调用 `archive_worktree`。
+   不同主会话的工作树分别由各自所属会话处理；每个目标提交一次请求后等待结果。
+4. 退避核验应用附件变为 `archived_worktree`、`git worktree list` 中目标登记消失、原 checkout 目录消失，
+   三项均满足才报告工作树回收完成。`queued`、Git 命令退出成功或附件已归档都不能单独证明目录已回收。
+
+状态持续不变或失败时，保留准确路径、所属会话、子代理归档状态和已完成阶段，检查仍未归档的附件引用与后台错误。
+区分代码交付和环境回收结果，恢复时只继续未完成步骤。managed worktree 保持通过应用归档，
+不在请求尚未结算时改用 `git worktree remove` 或直接删除目录。手工创建的普通 Git worktree 使用 Git 回收并核验目录；
+已失去 Git 登记的孤立目录单独核对所有权和保留内容，不能作为正常工作树反复请求归档。
+
 ## 完成与本地合入
 
 本仓库默认本地交付。父 Spec 在最终合入前保持 open；tickets 的完成按所用 skill 执行，GitHub 操作见[议题跟踪](issue-tracker.md)。
