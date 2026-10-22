@@ -2,6 +2,7 @@ import { expect, test } from "bun:test";
 import { copyFile, mkdir, readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { COMMAND_FIXTURE_TEST_TIMEOUT_MS, runOwnedCommand, withCommandFixture } from "../harness/command-fixture";
+import { syntheticAppEnvironment } from "./compose-fixture";
 import { dockerCliEnvironment } from "./docker-cli-fixture";
 
 const repositoryRoot = join(import.meta.dirname, "..", "..", "..");
@@ -11,11 +12,12 @@ for (const mode of ["dev", "prod"]) {
     async () => {
       await withCommandFixture("iam-gateway-compose-", async (root, signal) => {
         await mkdir(join(root, "docker"));
-        const file = mode === "dev" ? "docker-compose-dev.yml" : "docker-compose-gateway-prod.yml";
+        const file = mode === "dev" ? "compose.dev.yaml" : "compose.prod.apps.yaml";
         const composePath = join(root, "docker", file);
         await copyFile(join(repositoryRoot, "docker", file), composePath);
         const databaseUrl = "postgresql://synthetic-reader:synthetic-password@postgres.invalid/iam_test";
         const environment = {
+          ...syntheticAppEnvironment,
           IAM_GATEWAY_DATABASE_URL: databaseUrl,
           IAM_GATEWAY_APISIX_ADMIN_KEY: "synthetic-admin-key",
           APISIX_ADMIN_KEY: "synthetic-admin-key",
@@ -72,8 +74,12 @@ for (const mode of ["dev", "prod"]) {
         });
         expect(gateway.ports).toMatchObject([{ host_ip: "127.0.0.1", target: 30004, published: "30004" }]);
         expect(gateway.stop_grace_period).toBe("5m10s");
-        expect(gateway.depends_on.apisix.condition).toBe("service_healthy");
-        if (mode === "dev") expect(gateway.depends_on.db.condition).toBe("service_healthy");
+        if (mode === "dev") {
+          expect(gateway.depends_on.apisix.condition).toBe("service_healthy");
+          expect(gateway.depends_on.db.condition).toBe("service_healthy");
+        } else {
+          expect(gateway.depends_on).toBeUndefined();
+        }
       });
     },
     COMMAND_FIXTURE_TEST_TIMEOUT_MS,

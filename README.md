@@ -169,10 +169,10 @@ pnpm install
 推荐先启动 PostgreSQL 与 Redis：
 
 ```bash
-docker compose -f docker/docker-compose-dev.yml up -d db redis
+docker compose -f docker/compose.dev.yaml up -d db redis
 ```
 
-`docker/docker-compose-dev.yml` 中 PostgreSQL 默认暴露在 `localhost:5432`，Redis 默认暴露在
+`docker/compose.dev.yaml` 中 PostgreSQL 默认暴露在 `localhost:5432`，Redis 默认暴露在
 `localhost:6390`。如果在宿主机直接运行 Bun 服务，本地环境变量请按应用使用
 `IAM_API_REDIS_HOST=localhost` / `IAM_API_REDIS_PORT=6390`、
 `IAM_ADMIN_API_REDIS_HOST=localhost` / `IAM_ADMIN_API_REDIS_PORT=6390`、
@@ -613,22 +613,22 @@ docker run --rm -p 30003:30003 --env-file apps/worker/.env iam-worker
 本地依赖栈：
 
 ```bash
-docker compose -f docker/docker-compose-dev.yml up -d db redis
+docker compose -f docker/compose.dev.yaml up -d db redis
 ```
 
 开发编排：
 
 ```bash
-docker compose -f docker/docker-compose-dev.yml up -d
+docker compose -f docker/compose.dev.yaml up -d
 ```
 
-`docker/docker-compose-dev.yml` 是唯一的开发编排入口，会同时编排 PostgreSQL、Redis、APISIX、公共 API、
-管理端 API、Gateway 配置 API、worker-user-profile、worker-dashboard、SSO 前端和管理端前端。开发环境变量模板在
+`docker/compose.dev.yaml` 是唯一的开发编排入口，会同时编排 PostgreSQL、Redis、APISIX、公共 API、
+管理端 API、Gateway 配置 API、worker-user-profile、worker-organization-search、worker-dashboard、SSO 前端和管理端前端。开发环境变量模板在
 `docker/.env.dev.example`，复制为 `docker/.env` 后按需替换本地端口、代理、第三方服务和开发密钥。
 如需同时启动 Loki、Grafana 和 Alloy，追加 `--profile observability`。
 
 ```bash
-docker compose -f docker/docker-compose-dev.yml up -d --build gateway-api apisix-etcd apisix
+docker compose -f docker/compose.dev.yaml up -d --build gateway-api apisix-etcd apisix
 ```
 
 若 Docker 构建需要使用宿主机代理，请在 `docker/.env` 中配置 `DOCKER_BUILD_HTTP_PROXY`、
@@ -643,6 +643,45 @@ docker compose -f docker/docker-compose-dev.yml up -d --build gateway-api apisix
 只读权限、首次配置及人工恢复见[发布手册](docs/releases/apisix-gateway-release.md)。生产模板还包含
 API OIDC 和 Worker，使用前必须补齐 issuer、current/previous RS256 JWK、Redis、worker
 dashboard 凭据和限流参数。
+
+生产按运行职责组织为四份 Compose，均位于 `docker/`：
+
+| 文件                              | 服务                                                 |
+| --------------------------------- | ---------------------------------------------------- |
+| `compose.prod.data.yaml`          | PostgreSQL primary、两个 replica 与 Redis            |
+| `compose.prod.apps.yaml`          | API、Admin API、SSO、Admin、各 Worker 与 Gateway API |
+| `compose.prod.gateway.yaml`       | APISIX、etcd 及 etcd 初始化服务                      |
+| `compose.prod.observability.yaml` | Loki、Grafana 与 Alloy                               |
+
+从 `docker/.env.prod.example` 准备该主机私有的 `docker/.env`，下列命令从仓库根目录执行。
+按主机职责显式选择服务；例如分别在数据主机、应用主机和网关主机运行：
+
+```bash
+docker compose --env-file docker/.env -f docker/compose.prod.data.yaml up -d postgres-primary
+docker compose --env-file docker/.env -f docker/compose.prod.data.yaml up -d redis
+docker compose --env-file docker/.env -f docker/compose.prod.apps.yaml up -d api admin-api worker-user-profile worker-organization-search sso admin gateway-api
+docker compose --env-file docker/.env -f docker/compose.prod.gateway.yaml up -d apisix
+```
+
+PostgreSQL replicas 默认与 primary 使用相同宿主端口，应分主机部署，或先覆盖端口再同机运行。
+应用通过配置的数据库、Redis 与 APISIX 地址连接依赖；跨主机时必须填写实际可达的地址。
+生产 apps 中的 Gateway API 独立启动，发布前另行核验 APISIX 可用性与数据库权限。
+APISIX 配置和发布 manifests 集中在 `docker/apisix/`，观测配置在 `docker/observability/`。
+应用 Dockerfile 和前端 `nginx.conf` 跟随各自 app，测试 Compose 继续由所属测试维护。
+
+data、apps、gateway 共用 `iam-service-prod` project，同机时共享默认网络；观测使用独立的
+`iam-service-observability` project。拆分文件不隔离同一 project 的生命周期。日常停止和删除只操作明确的服务，
+例如 `stop api`、`rm -f api`；不要对部分文件执行 `up --remove-orphans`，也不要用单份文件的 `down` 清理整个项目。
+确需完整停止并清理本机项目时，先确认该主机运行的全部服务，再用包含这些服务的完整文件集执行 `down`；
+例如本机同时部署 data、apps、gateway 时：
+
+```bash
+docker compose --env-file docker/.env -f docker/compose.prod.data.yaml -f docker/compose.prod.apps.yaml -f docker/compose.prod.gateway.yaml down
+```
+
+此操作不用于应用发布，持久化数据目录按对应维护手册管理。Compose 解析所选文件时会校验其中的必填变量，
+即使只启动某个服务，也须补齐同文件要求的配置；apps 合并后的前后端与 Gateway API 共用这份配置输入。
+观测栈的分主机启动与恢复见[运行手册](docs/releases/observability-system-logs.md)。
 
 OIDC 接入见 [docs/features/oidc/oidc-integration.md](docs/features/oidc/oidc-integration.md)，发布与回滚见
 [docs/releases/oidc-release-runbook.md](docs/releases/oidc-release-runbook.md)。

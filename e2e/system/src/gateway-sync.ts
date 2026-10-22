@@ -98,7 +98,7 @@ if (import.meta.main) {
   };
   try {
     const result = await publishGateway({
-      yaml: await Bun.file("apps/gateway/manifests/dev/iam.yaml").text(),
+      yaml: await Bun.file("docker/apisix/manifests/dev/iam.yaml").text(),
       variables: Object.fromEntries(variableNames.map((name) => [name, required(name)])),
       clientSecret: createE2EGatewayApiKey(required("IAM_E2E_RUN_ID")),
       gatewayOrigin: required("IAM_E2E_GATEWAY_API_ORIGIN"),

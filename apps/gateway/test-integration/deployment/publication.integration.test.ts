@@ -29,7 +29,9 @@ for (const deployment of ["dev", "prod"] as const) {
             adminKey: apisix.adminKey,
           });
           lifecycle.registerCleanup(() => gateway.close());
-          const source = parse(await Bun.file(new URL("../../manifests/dev/iam.yaml", import.meta.url)).text());
+          const source = parse(
+            await Bun.file(new URL("../../../../docker/apisix/manifests/dev/iam.yaml", import.meta.url)).text(),
+          );
           source.consumers = [{ key: "reader", plugins: { "key-auth": { key: "${CONSUMER_KEY}" } } }];
           source.ssls = [
             { key: "tls", cert: "${TLS_CERT}", private_key: "${TLS_PRIVATE_KEY}", snis: ["gateway.invalid"] },

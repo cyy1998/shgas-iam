@@ -163,7 +163,7 @@ services:
     environment:
       APISIX_OTEL_COLLECTOR_ENDPOINT: ${APISIX_OTEL_COLLECTOR_ENDPOINT:-alloy:4318}
     volumes:
-      - ../apps/gateway/config/config.dev.yaml:/usr/local/apisix/conf/config.yaml:ro
+      - ./apisix/config.dev.yaml:/usr/local/apisix/conf/config.yaml:ro
     depends_on:
       apisix-etcd:
         condition: service_healthy
@@ -362,7 +362,7 @@ services:
     ports:
       - "${LOKI_HTTP_PUBLISHED_PORT:-3100}:3100"
     volumes:
-      - ../observability/loki/loki.dev.yaml:/etc/loki/loki.yaml:ro
+      - ./observability/loki/loki.dev.yaml:/etc/loki/loki.yaml:ro
       - loki_data:/loki
 
   grafana:
@@ -400,8 +400,8 @@ services:
       - host.docker.internal:host-gateway
     volumes:
       - grafana_data:/var/lib/grafana
-      - ../observability/grafana/provisioning:/etc/grafana/provisioning:ro
-      - ../observability/grafana/dashboards:/var/lib/grafana/dashboards:ro
+      - ./observability/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./observability/grafana/dashboards:/var/lib/grafana/dashboards:ro
     depends_on:
       - loki
 
@@ -426,7 +426,7 @@ services:
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock:ro
       - alloy_data:/var/lib/alloy/data
-      - ../observability/alloy/iam-logs.dev.alloy:/etc/alloy/iam-logs.alloy:ro
+      - ./observability/alloy/iam-logs.dev.alloy:/etc/alloy/iam-logs.alloy:ro
     depends_on:
       - loki
 

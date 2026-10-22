@@ -21,8 +21,8 @@ PostgreSQL 审计日志，也不会创建 `system_log` 表。
 照常启动普通开发栈。Loki、Grafana 和 Alloy 位于同一个 compose 文件中，并通过 `observability` profile 按需启用：
 
 ```bash
-docker compose --env-file docker/.env -f docker/docker-compose-dev.yml up -d
-docker compose --env-file docker/.env -f docker/docker-compose-dev.yml --profile observability up -d loki grafana alloy
+docker compose --env-file docker/.env -f docker/compose.dev.yaml up -d
+docker compose --env-file docker/.env -f docker/compose.dev.yaml --profile observability up -d loki grafana alloy
 ```
 
 默认开发端口：
@@ -34,21 +34,21 @@ docker compose --env-file docker/.env -f docker/docker-compose-dev.yml --profile
 在不停止 IAM 的情况下停止可观测性栈：
 
 ```bash
-docker compose --env-file docker/.env -f docker/docker-compose-dev.yml stop loki grafana alloy
-docker compose --env-file docker/.env -f docker/docker-compose-dev.yml rm -f loki grafana alloy
+docker compose --env-file docker/.env -f docker/compose.dev.yaml stop loki grafana alloy
+docker compose --env-file docker/.env -f docker/compose.dev.yaml rm -f loki grafana alloy
 ```
 
 ## 生产环境
 
 运行一组集中式 Loki 与 Grafana，并在每台运行 IAM 目标容器的主机上运行一个 Alloy agent。
 启动前准备 Grafana root URL、管理员凭据及下文 OIDC 配置；按主机填写 Alloy host 标签和 Loki 推送地址。
-Compose 的必填项以[生产编排](../../docker/docker-compose-observability-prod.yml)为准，不能只设置下表中的部分变量。
+Compose 的必填项以[生产编排](../../docker/compose.prod.observability.yaml)为准，不能只设置下表中的部分变量。
 
 在中心主机启动 Loki/Grafana，在各 IAM 主机启动 Alloy：
 
 ```bash
-docker compose --env-file docker/.env -f docker/docker-compose-observability-prod.yml up -d loki grafana
-docker compose --env-file docker/.env -f docker/docker-compose-observability-prod.yml up -d alloy
+docker compose --env-file docker/.env -f docker/compose.prod.observability.yaml up -d loki grafana
+docker compose --env-file docker/.env -f docker/compose.prod.observability.yaml up -d alloy
 ```
 
 重要环境变量：
@@ -133,7 +133,7 @@ GRAFANA_OIDC_CLIENT_SECRET=<secret>
 然后从统一开发 compose 文件重新创建 Grafana：
 
 ```bash
-docker compose --env-file docker/.env -f docker/docker-compose-dev.yml --profile observability up -d --force-recreate grafana
+docker compose --env-file docker/.env -f docker/compose.dev.yaml --profile observability up -d --force-recreate grafana
 ```
 
 显式设置 `GRAFANA_OIDC_AUTH_URL`、`GRAFANA_OIDC_TOKEN_URL`、`GRAFANA_OIDC_USERINFO_URL`，
@@ -148,7 +148,7 @@ Grafana 自己负责最终的 dashboard 和 datasource 授权。管理端前端�
 
 ## Provisioning
 
-Grafana provisioning 文件位于 `observability/grafana/provisioning/`。
+Grafana provisioning 文件位于 `docker/observability/grafana/provisioning/`。
 
 - Datasource UID：`iam-loki`。
 - Dashboard UID：`iam-overview`、`iam-request-drilldown`、`iam-error-center`。

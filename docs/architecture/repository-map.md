@@ -6,8 +6,8 @@
 跨 runtime 的请求流、数据权威来源与恢复责任见[系统架构视图](system-architecture.md)，关键约束的证据入口见
 [架构验证归属](architecture-verification.md)。
 
-`pnpm` workspace 包含 `apps/*`、`packages/*` 和 root-owned `e2e/system`；`docker/`、
-`observability/` 等目录属于仓库级运行和运维资产，不是 workspace package。
+`pnpm` workspace 包含 `apps/*`、`packages/*` 和 root-owned `e2e/system`；`docker/` 中的 Compose、
+APISIX 和可观测性配置属于仓库级运行和运维资产，不是 workspace package。
 
 ## 快速导航
 
@@ -16,8 +16,7 @@
 ├── apps/             # 可部署的后端、前端和 worker
 ├── packages/         # 跨 app 复用的 workspace packages
 ├── e2e/system/       # root-owned Full-system E2E workspace
-├── docker/           # 本地依赖栈及 dev/prod Compose
-├── observability/    # Alloy、Loki 与 Grafana 配置
+├── docker/           # dev/prod Compose、APISIX 与可观测性配置
 ├── scripts/          # 仓库级检查、canonical test collection/Integration 编排和辅助脚本
 ├── docs/             # 当前架构、功能、runbook、ADR 与历史记录
 ├── CONTEXT.md        # 稳定领域语言
@@ -97,17 +96,18 @@ Run descriptor、receipts、diagnostics 与 Playwright 产物写入 `e2e/system/
 
 ## 基础设施与仓库工具
 
-| 路径                  | 职责                                                                                                                                             |
-| --------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `apps/gateway/`       | 独立配置 API、dev/prod manifests 与 APISIX config template；`Dockerfile` 构建独立服务镜像，常规发布经 HTTP。                                     |
-| `docker/`             | 本地依赖栈，以及 dev/prod application、gateway、observability Compose files。                                                                    |
-| `observability/`      | Alloy 日志/OTLP pipeline、Loki 配置、Grafana datasource/dashboard/alert provisioning，以及版本化 dashboards。                                    |
-| `scripts/`            | 文档和架构守卫、测试编排、验证入口及 tooling performance helpers。                                                                               |
-| `scripts/sandcastle/` | AFK runner、宿主预检与临时测试资源编排。                                                                                                         |
-| `.sandcastle/`        | Sandcastle Planner、Implementer、Merger prompts、Dockerfile 和 `.env.example`；运行命令见[命令入口](../development/commands.md#sandcastle-afk)。 |
-| `.codex/agents/`      | Codex 调查角色、手动与 AFK 共用的三档实施者、Standards/Spec 只读评审角色；AFK runner 配置容器内逐票评审。                                        |
-| `.husky/`             | Git hooks 与安装脚本。                                                                                                                           |
-| `patches/`            | pnpm 管理的固定依赖补丁；Sandcastle signal 适配允许宿主 runner 等待中断清理。                                                                    |
+| 路径                    | 职责                                                                                                                                             |
+| ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `apps/gateway/`         | 独立 Gateway 配置 API 与应用镜像构建；常规配置发布经 HTTP。                                                                                      |
+| `docker/`               | 统一开发入口 `compose.dev.yaml`；生产按 data、apps、gateway、observability 四份编排，其中 apps 包含 Gateway API。                                |
+| `docker/apisix/`        | APISIX dev/prod config template 与 `manifests/<env>/<app>.yaml`；manifest 是调用方持有的 HTTP 发布输入。                                         |
+| `docker/observability/` | Alloy 日志/OTLP pipeline、Loki 配置、Grafana datasource/dashboard/alert provisioning，以及版本化 dashboards。                                    |
+| `scripts/`              | 文档和架构守卫、测试编排、验证入口及 tooling performance helpers。                                                                               |
+| `scripts/sandcastle/`   | AFK runner、宿主预检与临时测试资源编排。                                                                                                         |
+| `.sandcastle/`          | Sandcastle Planner、Implementer、Merger prompts、Dockerfile 和 `.env.example`；运行命令见[命令入口](../development/commands.md#sandcastle-afk)。 |
+| `.codex/agents/`        | Codex 调查角色、手动与 AFK 共用的三档实施者、Standards/Spec 只读评审角色；AFK runner 配置容器内逐票评审。                                        |
+| `.husky/`               | Git hooks 与安装脚本。                                                                                                                           |
+| `patches/`              | pnpm 管理的固定依赖补丁；Sandcastle signal 适配允许宿主 runner 等待中断清理。                                                                    |
 
 ## 文档与 Agent 工作流
 

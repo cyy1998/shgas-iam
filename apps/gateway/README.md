@@ -56,8 +56,6 @@ Secret 字段必须使用占位符或外部秘密引用。请求示例见[发布
 
 ```text
 apps/gateway/
-  config/                 # APISIX dev/prod 配置，显式使用 Admin API v3
-  manifests/<env>/<app>.yaml
   src/
     main.ts               # 正式进程入口
     runtime.ts            # HTTP 监听与关闭
@@ -70,7 +68,7 @@ apps/gateway/
   .env.example
 ```
 
-manifest 是调用方维护的 app-centric 单文件源，仓库示例位于 `manifests/<env>/<app>.yaml`。
+manifest 是调用方维护的 app-centric 单文件源，仓库示例位于 `docker/apisix/manifests/<env>/<app>.yaml`。
 `dev:iam` 为本地基线，`prod:iam` 为生产示例；生产地址、证书和秘密通过本次请求变量提供。
 YAML 支持 service、upstreams、routes、consumers、ssls、service plugin_configs 和 plugin_metadata，
 物化为七类 APISIX 资源。例如：
@@ -108,9 +106,13 @@ routes:
 
 ## 本地与生产基线
 
-开发编排为 `docker/docker-compose-dev.yml`，模板为 `docker/.env.dev.example`；Gateway 数据库 URL
-必须显式提供，不能继承其他 app 的读写连接。生产使用 `docker/docker-compose-gateway-prod.yml` 和
-`apps/gateway/Dockerfile`。首次配置通过直连 API 完成，不依赖尚未创建的 IAM 路由。
+开发编排为 `docker/compose.dev.yaml`，模板为 `docker/.env.dev.example`；Gateway 数据库 URL
+必须显式提供，不能继承其他 app 的读写连接。生产 `gateway-api` 位于 `docker/compose.prod.apps.yaml`，
+镜像由 `apps/gateway/Dockerfile` 构建；APISIX 与 etcd 位于 `docker/compose.prod.gateway.yaml`。
+APISIX 启动配置位于 `docker/apisix/`，发布基线位于 `docker/apisix/manifests/<env>/<app>.yaml`。
+生产 Gateway API 可独立启动，通过 `IAM_GATEWAY_APISIX_ADMIN_URL` 连接 APISIX；发布前须按
+[发布手册](../../docs/releases/apisix-gateway-release.md)核验数据库权限与 APISIX 可用性。
+首次配置通过直连 API 完成，不依赖尚未创建的 IAM 路由。
 APISIX Admin API 固定使用 v3，Admin Key 只留在服务部署配置。
 
 本地数据面为 `http://localhost:30080` / `https://localhost:30443`，Admin API 为

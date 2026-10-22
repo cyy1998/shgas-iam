@@ -186,6 +186,7 @@ Turbo 是唯一跨 package orchestrator。测试任务通过 `transit` 传播依
 ```
 
 Unit 只有在输入、env、fixture、时间和随机性均可重现时允许缓存。Integration 与 Full-system E2E 均 `cache:false`。
+Gateway Unit 读取仓库级 `docker/apisix/` 配置和 manifests，该目录显式纳入其 Turbo inputs，配置变化会使测试缓存失效。
 Turbo strict env 透传所属 owner 的内部 URL、run ID、record、文件选择和可选 registry；runner 与资源工具进入 inputs。
 Root typecheck 显式包含工具测试及其 api-core 源码依赖。进程树归属 marker 只透传、不进入 hash；
 Integration/E2E 窄透传 `PLAYWRIGHT_BROWSERS_PATH`，使 sandbox 使用镜像内 Chromium。

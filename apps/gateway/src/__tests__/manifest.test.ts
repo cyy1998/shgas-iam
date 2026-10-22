@@ -4,7 +4,7 @@ import path from "node:path";
 import { parse as parseYaml } from "yaml";
 import { renderEnvPlaceholders } from "../env";
 import { validateManifest } from "../validators";
-import { loadManifest, packageRoot, relativePath } from "./test-helpers";
+import { loadManifest, relativePath, repositoryRoot } from "./test-helpers";
 
 function getSsoRoutes(manifest: Awaited<ReturnType<typeof loadManifest>>) {
   return manifest.resources.routes.filter((route) => route.uri === "/sso/*");
@@ -257,7 +257,7 @@ describe("apisix manifest validation", () => {
   });
 
   it("matches a rendered dev canonical authority including its dynamic port", async () => {
-    const manifest = await loadManifest("e2e:iam", path.join(packageRoot, "manifests/dev/iam.yaml"), {
+    const manifest = await loadManifest("e2e:iam", path.join(repositoryRoot, "docker/apisix/manifests/dev/iam.yaml"), {
       renderEnv: true,
       env: {
         APISIX_OTEL_COLLECTOR_ENDPOINT: "alloy:4318",
@@ -323,7 +323,7 @@ describe("apisix manifest validation", () => {
   it("loads app-scoped manifests from env:app single files", async () => {
     const manifest = await loadManifest("prod:tender");
 
-    expect(relativePath(manifest.manifest).replaceAll("\\", "/")).toBe("apps/gateway/manifests/prod/tender.yaml");
+    expect(relativePath(manifest.manifest).replaceAll("\\", "/")).toBe("docker/apisix/manifests/prod/tender.yaml");
     expect(validateManifest(manifest)).toEqual([]);
     expect(manifest.resources.services).toHaveLength(1);
     expect(manifest.resources.services.at(0)).toMatchObject({
@@ -390,7 +390,7 @@ describe("apisix manifest validation", () => {
 
   it("configures APISIX JSON stdout access logs without sensitive fields", async () => {
     for (const configPath of ["config.dev.yaml", "config.prod.example.yaml"]) {
-      const parsed = parseYaml(await readFile(path.join(process.cwd(), "config", configPath), "utf8"));
+      const parsed = parseYaml(await readFile(path.join(repositoryRoot, "docker", "apisix", configPath), "utf8"));
       const httpConfig = parsed.nginx_config.http;
       const format = httpConfig.access_log_format as string;
 

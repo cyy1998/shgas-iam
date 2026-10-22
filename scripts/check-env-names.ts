@@ -58,9 +58,11 @@ const frontendChecks: FrontendCheck[] = [
 const dockerFiles = [
   "docker/.env.dev.example",
   "docker/.env.prod.example",
-  "docker/docker-compose-dev.yml",
-  "docker/docker-compose-prod.yml",
-  "docker/docker-compose-frontend-prod.yml",
+  "docker/compose.dev.yaml",
+  "docker/compose.prod.data.yaml",
+  "docker/compose.prod.apps.yaml",
+  "docker/compose.prod.gateway.yaml",
+  "docker/compose.prod.observability.yaml",
   "apps/admin/Dockerfile",
   "apps/sso/Dockerfile",
 ];

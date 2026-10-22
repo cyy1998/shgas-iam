@@ -1,10 +1,10 @@
 # Production observability compose for centralized Loki/Grafana and per-host Alloy agents.
 #
 # Central observability host:
-#   docker compose -f docker-compose-observability-prod.yml up -d loki grafana
+#   docker compose -f compose.prod.observability.yaml up -d loki grafana
 #
 # Each IAM service or gateway host:
-#   docker compose -f docker-compose-observability-prod.yml up -d alloy
+#   docker compose -f compose.prod.observability.yaml up -d alloy
 
 name: iam-service-observability
 
@@ -18,7 +18,7 @@ services:
     ports:
       - "${LOKI_HTTP_PUBLISHED_HOST:-127.0.0.1}:${LOKI_HTTP_PUBLISHED_PORT:-3100}:3100"
     volumes:
-      - ../observability/loki/loki.prod.yaml:/etc/loki/loki.yaml:ro
+      - ./observability/loki/loki.prod.yaml:/etc/loki/loki.yaml:ro
       - "${LOKI_DATA_PATH:-/data/loki}:/loki"
 
   grafana:
@@ -48,8 +48,8 @@ services:
       GRAFANA_DEV_ALERT_WEBHOOK_URL: ${GRAFANA_DEV_ALERT_WEBHOOK_URL:-http://127.0.0.1:9/iam-prod-null}
     volumes:
       - "${GRAFANA_DATA_PATH:-/data/grafana}:/var/lib/grafana"
-      - ../observability/grafana/provisioning:/etc/grafana/provisioning:ro
-      - ../observability/grafana/dashboards:/var/lib/grafana/dashboards:ro
+      - ./observability/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./observability/grafana/dashboards:/var/lib/grafana/dashboards:ro
 
   alloy:
     image: ${GRAFANA_ALLOY_IMAGE:-grafana/alloy:v1.9.2}
@@ -70,4 +70,4 @@ services:
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock:ro
       - "${ALLOY_DATA_PATH:-/data/alloy}:/var/lib/alloy/data"
-      - ../observability/alloy/iam-logs.prod.alloy:/etc/alloy/iam-logs.alloy:ro
+      - ./observability/alloy/iam-logs.prod.alloy:/etc/alloy/iam-logs.alloy:ro

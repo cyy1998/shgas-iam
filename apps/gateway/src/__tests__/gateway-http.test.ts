@@ -407,7 +407,10 @@ test("IAM, Tender and GDS representative manifests remain valid through HTTP", a
   });
   for (const stage of ["dev", "prod"])
     for (const client of ["iam", "tender", "gds"]) {
-      const source = await readFile(new URL(`../../manifests/${stage}/${client}.yaml`, import.meta.url), "utf8");
+      const source = await readFile(
+        new URL(`../../../../docker/apisix/manifests/${stage}/${client}.yaml`, import.meta.url),
+        "utf8",
+      );
       const variables = Object.fromEntries(
         [...source.matchAll(/\$\{([A-Z0-9_]+)\}/g)].map((match) => {
           const name = match[1]!;

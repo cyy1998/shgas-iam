@@ -1,0 +1,158 @@
+# 生产数据依赖：PostgreSQL 主从与 Redis。
+# 各主机只启动分配给自己的服务；复制节点默认使用相同宿主端口，不能整组在同机启动。
+# docker compose --env-file docker/.env -f docker/compose.prod.data.yaml up -d postgres-primary
+# 数据目录默认位于 /data，可通过 *_DATA_PATH 指定绝对路径。
+# 与 apps/gateway 共用项目；项目级清理必须加载本机完整文件集，日常维护指定服务 stop/rm。
+
+name: iam-service-prod
+
+x-postgres-environment: &postgres-environment
+  POSTGRES_USER: ${POSTGRES_USER:-iam}
+  POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD}
+  POSTGRES_DB: ${POSTGRES_DB:-iam_db}
+  POSTGRES_INITDB_ARGS: "--auth-host=scram-sha-256"
+  PGDATA: /var/lib/postgresql/data
+  POSTGRES_REPLICATION_USER: ${POSTGRES_REPLICATION_USER:-iam_replicator}
+  POSTGRES_REPLICATION_PASSWORD: ${POSTGRES_REPLICATION_PASSWORD:?set POSTGRES_REPLICATION_PASSWORD}
+  POSTGRES_REPLICATION_CIDR: ${POSTGRES_REPLICATION_CIDR:-0.0.0.0/0}
+
+x-postgres-common: &postgres-common
+  image: ${POSTGRES_IMAGE:-docker.xuanyuan.run/postgres:18.4}
+  restart: unless-stopped
+  environment: *postgres-environment
+  healthcheck:
+    test: ["CMD-SHELL", 'pg_isready -U "$${POSTGRES_USER}" -d "$${POSTGRES_DB}"']
+    interval: 10s
+    timeout: 5s
+    retries: 10
+    start_period: 30s
+
+x-postgres-replica-common: &postgres-replica-common
+  <<: *postgres-common
+  entrypoint:
+    - bash
+    - -ec
+    - |
+      if [ ! -s "$${PGDATA}/PG_VERSION" ]; then
+        : "$${POSTGRES_PRIMARY_HOST:?set POSTGRES_PRIMARY_HOST}"
+        : "$${POSTGRES_PRIMARY_PORT:=5432}"
+        : "$${POSTGRES_REPLICATION_SLOT:?set POSTGRES_REPLICATION_SLOT}"
+        rm -rf "$${PGDATA:?}"/*
+        install -d -m 0700 -o postgres -g postgres "$${PGDATA}"
+        until pg_isready -h "$${POSTGRES_PRIMARY_HOST}" -p "$${POSTGRES_PRIMARY_PORT}" -U "$${POSTGRES_USER}"; do
+          sleep 5
+        done
+        export PGPASSWORD="$${POSTGRES_REPLICATION_PASSWORD}"
+        printf "%s\n" "SELECT pg_create_physical_replication_slot(:'slot') WHERE NOT EXISTS (SELECT 1 FROM pg_replication_slots WHERE slot_name = :'slot');" | psql \
+          -h "$${POSTGRES_PRIMARY_HOST}" \
+          -p "$${POSTGRES_PRIMARY_PORT}" \
+          -U "$${POSTGRES_REPLICATION_USER}" \
+          -d "$${POSTGRES_DB}" \
+          -v ON_ERROR_STOP=1 \
+          -v slot="$${POSTGRES_REPLICATION_SLOT}"
+        gosu postgres pg_basebackup \
+          -h "$${POSTGRES_PRIMARY_HOST}" \
+          -p "$${POSTGRES_PRIMARY_PORT}" \
+          -U "$${POSTGRES_REPLICATION_USER}" \
+          -S "$${POSTGRES_REPLICATION_SLOT}" \
+          -D "$${PGDATA}" \
+          -Fp \
+          -Xs \
+          -P
+        {
+          printf "%s\n" "primary_conninfo = 'host=$${POSTGRES_PRIMARY_HOST} port=$${POSTGRES_PRIMARY_PORT} user=$${POSTGRES_REPLICATION_USER} password=$${POSTGRES_REPLICATION_PASSWORD} application_name=$${POSTGRES_REPLICATION_SLOT}'"
+          printf "%s\n" "primary_slot_name = '$${POSTGRES_REPLICATION_SLOT}'"
+        } > "$${PGDATA}/postgresql.auto.conf"
+        touch "$${PGDATA}/standby.signal"
+        chown -R postgres:postgres "$${PGDATA}"
+        chmod 0700 "$${PGDATA}"
+      fi
+      exec docker-entrypoint.sh postgres \
+        -c hot_standby=on \
+        -c max_connections="$${POSTGRES_MAX_CONNECTIONS:-200}"
+
+services:
+  postgres-primary:
+    <<: *postgres-common
+    ports:
+      - "${POSTGRES_PRIMARY_PUBLISHED_PORT:-5432}:5432"
+    volumes:
+      - "${POSTGRES_PRIMARY_DATA_PATH:-/data/postgres-primary}:/var/lib/postgresql/data"
+    entrypoint:
+      - bash
+      - -ec
+      - |
+        repl_hba="host replication $${POSTGRES_REPLICATION_USER} $${POSTGRES_REPLICATION_CIDR} scram-sha-256"
+        if [ -s "$${PGDATA}/PG_VERSION" ] && ! grep -Fqx "$${repl_hba}" "$${PGDATA}/pg_hba.conf"; then
+          echo "$${repl_hba}" >> "$${PGDATA}/pg_hba.conf"
+        fi
+        mkdir -p /docker-entrypoint-initdb.d
+        {
+          printf "%s\n" "#!/usr/bin/env bash"
+          printf "%s\n" "set -euo pipefail"
+          printf "%s\n" "psql \\"
+          printf "%s\n" "  -v ON_ERROR_STOP=1 \\"
+          printf "%s\n" "  -v repl_user=\"$${POSTGRES_REPLICATION_USER}\" \\"
+          printf "%s\n" "  -v repl_password=\"$${POSTGRES_REPLICATION_PASSWORD}\" \\"
+          printf "%s\n" "  --username \"$${POSTGRES_USER}\" \\"
+          printf "%s\n" "  --dbname \"$${POSTGRES_DB}\" <<EOSQL"
+          printf "%s\n" "SELECT format('CREATE ROLE %I WITH REPLICATION LOGIN PASSWORD %L', :'repl_user', :'repl_password')"
+          printf "%s\n" "WHERE NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = :'repl_user')\gexec"
+          printf "%s\n" "SELECT format('ALTER ROLE %I WITH REPLICATION LOGIN PASSWORD %L', :'repl_user', :'repl_password')\gexec"
+          printf "%s\n" "EOSQL"
+          printf "%s\n" "repl_hba=\"host replication $${POSTGRES_REPLICATION_USER} $${POSTGRES_REPLICATION_CIDR} scram-sha-256\""
+          printf "%s\n" "grep -Fqx \"$${repl_hba}\" \"$${PGDATA}/pg_hba.conf\" || echo \"$${repl_hba}\" >> \"$${PGDATA}/pg_hba.conf\""
+        } > /docker-entrypoint-initdb.d/10-replication.sh
+        chmod +x /docker-entrypoint-initdb.d/10-replication.sh
+        exec docker-entrypoint.sh postgres \
+          -c wal_level=replica \
+          -c max_wal_senders="$${POSTGRES_MAX_WAL_SENDERS:-10}" \
+          -c max_replication_slots="$${POSTGRES_MAX_REPLICATION_SLOTS:-10}" \
+          -c wal_keep_size="$${POSTGRES_WAL_KEEP_SIZE:-1024MB}" \
+          -c max_connections="$${POSTGRES_MAX_CONNECTIONS:-200}"
+
+  postgres-replica-1:
+    <<: *postgres-replica-common
+    environment:
+      <<: *postgres-environment
+      POSTGRES_PRIMARY_HOST: ${POSTGRES_PRIMARY_HOST:?set POSTGRES_PRIMARY_HOST}
+      POSTGRES_PRIMARY_PORT: ${POSTGRES_PRIMARY_PORT:-5432}
+      POSTGRES_REPLICATION_SLOT: ${POSTGRES_REPLICA_1_SLOT:-iam_replica_1}
+    ports:
+      - "${POSTGRES_REPLICA_1_PUBLISHED_PORT:-5432}:5432"
+    volumes:
+      - "${POSTGRES_REPLICA_1_DATA_PATH:-/data/postgres-replica-1}:/var/lib/postgresql/data"
+
+  postgres-replica-2:
+    <<: *postgres-replica-common
+    environment:
+      <<: *postgres-environment
+      POSTGRES_PRIMARY_HOST: ${POSTGRES_PRIMARY_HOST:?set POSTGRES_PRIMARY_HOST}
+      POSTGRES_PRIMARY_PORT: ${POSTGRES_PRIMARY_PORT:-5432}
+      POSTGRES_REPLICATION_SLOT: ${POSTGRES_REPLICA_2_SLOT:-iam_replica_2}
+    ports:
+      - "${POSTGRES_REPLICA_2_PUBLISHED_PORT:-5432}:5432"
+    volumes:
+      - "${POSTGRES_REPLICA_2_DATA_PATH:-/data/postgres-replica-2}:/var/lib/postgresql/data"
+
+  redis:
+    image: ${REDIS_IMAGE:-docker.xuanyuan.run/library/redis:8.8.0}
+    restart: unless-stopped
+    environment:
+      REDIS_PASSWORD: ${REDIS_PASSWORD:?set REDIS_PASSWORD}
+    command:
+      - redis-server
+      - --appendonly
+      - "yes"
+      - --requirepass
+      - ${REDIS_PASSWORD:?set REDIS_PASSWORD}
+    ports:
+      - "${REDIS_PUBLISHED_PORT:-6379}:6379"
+    volumes:
+      - "${REDIS_DATA_PATH:-/data/redis}:/data"
+    healthcheck:
+      test: ["CMD-SHELL", 'redis-cli -a "$${REDIS_PASSWORD}" ping']
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 15s

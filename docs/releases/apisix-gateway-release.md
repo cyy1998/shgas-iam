@@ -8,13 +8,14 @@ Next review: 2026-10-31
 ## 适用范围
 
 本手册通过独立 Gateway HTTP API 发布调用方保管的 app-centric YAML，包括仓库
-`apps/gateway/manifests/<env>/<app>.yaml` 中的 IAM 基线。输入、结果和恢复边界以
+`docker/apisix/manifests/<env>/<app>.yaml` 中的 IAM 基线。输入、结果和恢复边界以
 [Gateway 配置 API 契约](../features/gateway/gateway-configuration-api.md)为准。
 旧直接发布 CLI 和根 `gateway:apisix:*` 已退役，常规发布统一通过 HTTP。
 
 ## 服务配置与部署
 
-dev 使用 `docker/docker-compose-dev.yml`，prod 使用 `docker/docker-compose-gateway-prod.yml`；
+dev 使用 `docker/compose.dev.yaml`；prod 的 `gateway-api` 位于 `docker/compose.prod.apps.yaml`，
+APISIX 与 etcd 位于 `docker/compose.prod.gateway.yaml`。APISIX 启动配置位于 `docker/apisix/`；
 `gateway-api` 独立构建自 `apps/gateway/Dockerfile`，默认向宿主 `127.0.0.1:30004` 映射，
 不经过尚未建立的 IAM 路由。直连入口和 APISIX Admin API 均只对可信管理网络开放。
 Gateway API 的 dev/prod 默认宿主映射均为 loopback；既有 dev APISIX Admin 映射默认监听所有宿主地址，prod 默认仅 loopback，
@@ -43,7 +44,9 @@ Gateway 不需要 Redis，也不执行 migration、创建 schema 或角色。部
 应用级只读设置不能代替数据库角色的最小权限。
 
 源码启动使用 `pnpm --filter @iam/gateway-apisix start`（`bun src/main.ts`），开发监听使用 dev。
-dev Compose 等待数据库与 APISIX 健康，prod Compose 等待 APISIX，外部 IAM 数据库由部署负责人先核对连通性与权限。
+dev Compose 等待数据库与 APISIX 健康。prod Gateway API 不声明跨文件 `depends_on`，可独立启动；
+同机部署保留 `iam-service-prod` 默认网络，跨主机部署将 `IAM_GATEWAY_APISIX_ADMIN_URL` 配置为实际可达的管理地址。
+首次发布前，由部署负责人核对 IAM 数据库连通性与只读权限，以及 APISIX 健康、管理入口可达性和 Admin 凭据。
 `GET /health` 的 200 仅证明 HTTP 就绪，
 不证明数据库认证、APISIX 可读写或业务路由已经发布；关闭期间返回 503。
 SIGTERM/SIGINT 停止新工作并等待在途操作和数据库连接关闭，关闭期限耗尽失败退出。
@@ -75,7 +78,7 @@ $gatewayEndpoint = $env:IAM_GATEWAY_URL.TrimEnd('/')
 $gatewayHeaders = @{ apikey = $env:IAM_GATEWAY_CLIENT_SECRET }
 $gatewayRequest = @{
   scope = 'prod:iam'
-  yaml = Get-Content -LiteralPath 'apps/gateway/manifests/prod/iam.yaml' -Raw -Encoding utf8
+  yaml = Get-Content -LiteralPath 'docker/apisix/manifests/prod/iam.yaml' -Raw -Encoding utf8
   variables = Get-Content -LiteralPath 'variables.json' -Raw -Encoding utf8 | ConvertFrom-Json -AsHashtable
 }
 $validation = Invoke-RestMethod -Uri "$gatewayEndpoint/validate" -Method Post -Headers $gatewayHeaders -ErrorAction Stop `

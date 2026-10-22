@@ -58,7 +58,7 @@ flowchart LR
 
 ### 请求入口与后台任务
 
-主要 HTTP 入口由 [IAM manifests](../../apps/gateway/manifests/prod/iam.yaml) 声明：
+主要 HTTP 入口由 [IAM manifests](../../docker/apisix/manifests/prod/iam.yaml) 声明：
 
 | 外部路径                                                                         | 处理方              | 路由说明                                                                             |
 | -------------------------------------------------------------------------------- | ------------------- | ------------------------------------------------------------------------------------ |
@@ -76,8 +76,8 @@ Gateway 配置 API 独立监听 30004，Compose 默认向宿主 loopback 映射�
 `GET /health` 只证明 HTTP 就绪；服务启动不证明数据库认证或 APISIX 可用。
 
 **经过 Gateway 不代表已经完成认证或授权。** IAM 自身路由并不统一使用 `forward-auth`。
-[Tender manifests](../../apps/gateway/manifests/prod/tender.yaml) 中的部分业务路径调用 IAM authz；
-[GDS manifests](../../apps/gateway/manifests/prod/gds.yaml) 有自己的 authz endpoint 和适用路径。
+[Tender manifests](../../docker/apisix/manifests/prod/tender.yaml) 中的部分业务路径调用 IAM authz；
+[GDS manifests](../../docker/apisix/manifests/prod/gds.yaml) 有自己的 authz endpoint 和适用路径。
 新增接入时，必须确认具体路由由谁负责认证。
 
 ## 信任与协议边界
@@ -248,8 +248,11 @@ Organization Search 的源 mutation 与变化事件同事务提交，提交后�
 
 ### 部署配置与现场验收
 
-生产 Compose 分别声明[后端与数据服务](../../docker/docker-compose-prod.yml)、[前端](../../docker/docker-compose-frontend-prod.yml)、
-[Gateway](../../docker/docker-compose-gateway-prod.yml)和[观测服务](../../docker/docker-compose-observability-prod.yml)。
+生产 Compose 分别声明[PostgreSQL 与 Redis](../../docker/compose.prod.data.yaml)、
+[自研应用](../../docker/compose.prod.apps.yaml)、[APISIX 与 etcd](../../docker/compose.prod.gateway.yaml)
+和[观测服务](../../docker/compose.prod.observability.yaml)。自研应用包含 API、Admin API、前端、各 Worker 与 Gateway 配置 API。
+数据、应用和 Gateway 编排保留相同的 `iam-service-prod` project；观测使用独立 project。
+部署入口、按主机选服务及停止清理约定见 [README](../../README.md#docker)。
 这些文件是部署输入，不能单独证明生产 profile、网络、TLS、备份恢复或外部依赖已经验收。
 
 真实环境的 readiness、停流、旧实例 drain、恢复和放流证据由发布负责人取得。
@@ -257,7 +260,7 @@ Organization Search 的源 mutation 与变化事件同事务提交，提交后�
 
 ### 日志与 Trace
 
-[Alloy 配置](../../observability/alloy/iam-logs.prod.alloy)采集带相应标签的 Docker 日志并写入 Loki。
+[Alloy 配置](../../docker/observability/alloy/iam-logs.prod.alloy)采集带相应标签的 Docker 日志并写入 Loki。
 APISIX OTLP span 进入 Alloy 后使用 debug exporter，因此不能据此宣称已有持久化 trace backend。
 采集标签、敏感字段、保留与 smoke 由[观测运行手册](../releases/observability-system-logs.md)负责。
 

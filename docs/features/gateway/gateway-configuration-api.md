@@ -104,7 +104,7 @@ YAML 使用以下七类资源；集合元素以 `key` 表达本地名称，生�
 普通 Route 自动引用本 scope 的 Service，`upstream` 和 `plugin_config` 按本地 key 解析；
 `terminal:true` 不自动添加 Service/Upstream 引用。资源带 `managed_by=shgas-iam`、`source=repo-manifest`
 及当前 app/env 标签。源字段校验见[配置校验器](../../../apps/gateway/src/validators/index.ts)，
-可参考 [IAM YAML](../../../apps/gateway/manifests/dev/iam.yaml)。
+可参考 [IAM YAML](../../../docker/apisix/manifests/dev/iam.yaml)。
 
 `prune:true` 只删除源配置已移除、属于当前 app/env 且由 `repo-manifest` 管理的远端对象；
 `dynamic-registry`、其他 scope 和未管理对象列为忽略项。该删除筛选不构成创建或更新的细粒度授权。
