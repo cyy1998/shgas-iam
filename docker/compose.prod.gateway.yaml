@@ -62,7 +62,7 @@ services:
       APISIX_ETCD_PASSWORD: ${APISIX_ETCD_PASSWORD:-${APISIX_ETCD_ROOT_PASSWORD:?set APISIX_ETCD_ROOT_PASSWORD}}
       APISIX_OTEL_COLLECTOR_ENDPOINT: ${APISIX_OTEL_COLLECTOR_ENDPOINT:?set APISIX_OTEL_COLLECTOR_ENDPOINT}
     volumes:
-      - "${APISIX_CONFIG_PATH:-./apisix/config.prod.example.yaml}:/usr/local/apisix/conf/config.yaml:ro"
+      - "${APISIX_CONFIG_PATH:-../tmp/gateway-config/apisix/config.prod.example.yaml}:/usr/local/apisix/conf/config.yaml:ro"
     depends_on:
       apisix-etcd:
         condition: service_healthy

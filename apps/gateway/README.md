@@ -68,7 +68,7 @@ apps/gateway/
   .env.example
 ```
 
-manifest 是调用方维护的 app-centric 单文件源，仓库示例位于 `docker/apisix/manifests/<env>/<app>.yaml`。
+manifest 是调用方维护的 app-centric 单文件源，仓库示例位于 `tmp/gateway-config/apisix/manifests/<env>/<app>.yaml`。
 `dev:iam` 为本地基线，`prod:iam` 为生产示例；生产地址、证书和秘密通过本次请求变量提供。
 YAML 支持 service、upstreams、routes、consumers、ssls、service plugin_configs 和 plugin_metadata，
 物化为七类 APISIX 资源。例如：
@@ -106,14 +106,32 @@ routes:
 
 ## 本地与生产基线
 
+Gateway 配置由调用方在 Git 忽略目录 `tmp/gateway-config/apisix/` 保管，不随 clone 提供。
+运行 Compose 或准备发布前，须在该目录准备 `config.dev.yaml`、
+`config.prod.example.yaml` 及 `manifests/dev/`、`manifests/prod/` 中的应用配置。
+缺失时相关入口会失败；应用源码本身不读取此目录。不要将发布变量、凭据或现场快照加入 Git。
+本次迁移未调整测试及测试镜像，现有配置测试和 Full-system E2E 仍引用原 `docker/apisix/` 路径。
+
 开发编排为 `docker/compose.dev.yaml`，模板为 `docker/.env.dev.example`；Gateway 数据库 URL
 必须显式提供，不能继承其他 app 的读写连接。生产 `gateway-api` 位于 `docker/compose.prod.apps.yaml`，
 镜像由 `apps/gateway/Dockerfile` 构建；APISIX 与 etcd 位于 `docker/compose.prod.gateway.yaml`。
-APISIX 启动配置位于 `docker/apisix/`，发布基线位于 `docker/apisix/manifests/<env>/<app>.yaml`。
+APISIX 启动配置位于 `tmp/gateway-config/apisix/`，发布基线位于 `tmp/gateway-config/apisix/manifests/<env>/<app>.yaml`。
 生产 Gateway API 可独立启动，通过 `IAM_GATEWAY_APISIX_ADMIN_URL` 连接 APISIX；发布前须按
 [发布手册](../../docs/releases/apisix-gateway-release.md)核验数据库权限与 APISIX 可用性。
 首次配置通过直连 API 完成，不依赖尚未创建的 IAM 路由。
 APISIX Admin API 固定使用 v3，Admin Key 只留在服务部署配置。
+
+本机 dev 发布变量示例为 [`variables.dev.example.json`](../../tmp/gateway-config/apisix/variables.dev.example.json)，
+作为请求的 `variables` 字段提交，不由 Compose 自动加载。示例保留本机 IAM 和 GDS 主应用地址，
+GDS 子应用、dashboard、Tender、Contract 与 MinIO 使用远程 dev 上游；发布前按实际运行位置调整。
+SSO/OIDC 的两个 Host 必须与 API 的 internal/external origin 一致，示例为 `localhost:30080` 和
+`localhost:39999`；变量本身不创建端口映射，外部入口还需相应的监听或代理。
+
+dev manifests 包含 `iam`、`gds`、`tender`、`contract`。Contract API 和 Tender 的 MinIO 路由来自
+远程 dev 的未管理配置，纳入 manifest 后使用生成的资源 ID；Contract 的内嵌上游改为独立上游。
+MinIO 保留远程的路径重写与无网关鉴权插件配置；Contract/Tender 鉴权仍指向远程 IAM，
+GDS 示例鉴权指向本机 IAM。发布各 scope 前均需准备同名、已启用的 Client；不能为同步配置绕过禁用状态。
+这两条路由在远程仍是未管理对象，不会被 `prune` 清除，不能直接将新增 manifest 发布到远程造成重叠路由。
 
 本地数据面为 `http://localhost:30080` / `https://localhost:30443`，Admin API 为
 `http://127.0.0.1:9180/apisix/admin`。IAM 的 `/api/iam` 前缀经 proxy-rewrite 去除：

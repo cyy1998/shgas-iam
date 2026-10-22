@@ -163,7 +163,7 @@ services:
     environment:
       APISIX_OTEL_COLLECTOR_ENDPOINT: ${APISIX_OTEL_COLLECTOR_ENDPOINT:-alloy:4318}
     volumes:
-      - ./apisix/config.dev.yaml:/usr/local/apisix/conf/config.yaml:ro
+      - ../tmp/gateway-config/apisix/config.dev.yaml:/usr/local/apisix/conf/config.yaml:ro
     depends_on:
       apisix-etcd:
         condition: service_healthy

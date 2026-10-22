@@ -8,14 +8,17 @@ Next review: 2026-10-31
 ## 适用范围
 
 本手册通过独立 Gateway HTTP API 发布调用方保管的 app-centric YAML，包括仓库
-`docker/apisix/manifests/<env>/<app>.yaml` 中的 IAM 基线。输入、结果和恢复边界以
+`tmp/gateway-config/apisix/manifests/<env>/<app>.yaml` 中的 IAM 基线。输入、结果和恢复边界以
 [Gateway 配置 API 契约](../features/gateway/gateway-configuration-api.md)为准。
 旧直接发布 CLI 和根 `gateway:apisix:*` 已退役，常规发布统一通过 HTTP。
 
 ## 服务配置与部署
 
+本文引用的 `tmp/gateway-config/apisix/` 是 Git 忽略的调用方配置目录，不随 clone 提供。
+先从部署方保管的配置准备该目录，再运行 Compose、校验或发布；不将实际配置和发布变量重新纳入 Git。
+
 dev 使用 `docker/compose.dev.yaml`；prod 的 `gateway-api` 位于 `docker/compose.prod.apps.yaml`，
-APISIX 与 etcd 位于 `docker/compose.prod.gateway.yaml`。APISIX 启动配置位于 `docker/apisix/`；
+APISIX 与 etcd 位于 `docker/compose.prod.gateway.yaml`。APISIX 启动配置位于 `tmp/gateway-config/apisix/`；
 `gateway-api` 独立构建自 `apps/gateway/Dockerfile`，默认向宿主 `127.0.0.1:30004` 映射，
 不经过尚未建立的 IAM 路由。直连入口和 APISIX Admin API 均只对可信管理网络开放。
 Gateway API 的 dev/prod 默认宿主映射均为 loopback；既有 dev APISIX Admin 映射默认监听所有宿主地址，prod 默认仅 loopback，
@@ -78,7 +81,7 @@ $gatewayEndpoint = $env:IAM_GATEWAY_URL.TrimEnd('/')
 $gatewayHeaders = @{ apikey = $env:IAM_GATEWAY_CLIENT_SECRET }
 $gatewayRequest = @{
   scope = 'prod:iam'
-  yaml = Get-Content -LiteralPath 'docker/apisix/manifests/prod/iam.yaml' -Raw -Encoding utf8
+  yaml = Get-Content -LiteralPath 'tmp/gateway-config/apisix/manifests/prod/iam.yaml' -Raw -Encoding utf8
   variables = Get-Content -LiteralPath 'variables.json' -Raw -Encoding utf8 | ConvertFrom-Json -AsHashtable
 }
 $validation = Invoke-RestMethod -Uri "$gatewayEndpoint/validate" -Method Post -Headers $gatewayHeaders -ErrorAction Stop `

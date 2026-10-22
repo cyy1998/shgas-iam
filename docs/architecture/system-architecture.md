@@ -58,7 +58,7 @@ flowchart LR
 
 ### 请求入口与后台任务
 
-主要 HTTP 入口由 [IAM manifests](../../docker/apisix/manifests/prod/iam.yaml) 声明：
+主要 HTTP 入口由 [IAM manifests](../../tmp/gateway-config/apisix/manifests/prod/iam.yaml) 声明：
 
 | 外部路径                                                                         | 处理方              | 路由说明                                                                             |
 | -------------------------------------------------------------------------------- | ------------------- | ------------------------------------------------------------------------------------ |
@@ -76,8 +76,8 @@ Gateway 配置 API 独立监听 30004，Compose 默认向宿主 loopback 映射�
 `GET /health` 只证明 HTTP 就绪；服务启动不证明数据库认证或 APISIX 可用。
 
 **经过 Gateway 不代表已经完成认证或授权。** IAM 自身路由并不统一使用 `forward-auth`。
-[Tender manifests](../../docker/apisix/manifests/prod/tender.yaml) 中的部分业务路径调用 IAM authz；
-[GDS manifests](../../docker/apisix/manifests/prod/gds.yaml) 有自己的 authz endpoint 和适用路径。
+[Tender manifests](../../tmp/gateway-config/apisix/manifests/prod/tender.yaml) 中的部分业务路径调用 IAM authz；
+[GDS manifests](../../tmp/gateway-config/apisix/manifests/prod/gds.yaml) 有自己的 authz endpoint 和适用路径。
 新增接入时，必须确认具体路由由谁负责认证。
 
 ## 信任与协议边界

@@ -666,7 +666,7 @@ docker compose --env-file docker/.env -f docker/compose.prod.gateway.yaml up -d 
 PostgreSQL replicas 默认与 primary 使用相同宿主端口，应分主机部署，或先覆盖端口再同机运行。
 应用通过配置的数据库、Redis 与 APISIX 地址连接依赖；跨主机时必须填写实际可达的地址。
 生产 apps 中的 Gateway API 独立启动，发布前另行核验 APISIX 可用性与数据库权限。
-APISIX 配置和发布 manifests 集中在 `docker/apisix/`，观测配置在 `docker/observability/`。
+APISIX 配置和发布 manifests 集中在 `tmp/gateway-config/apisix/`，观测配置在 `docker/observability/`。
 应用 Dockerfile 和前端 `nginx.conf` 跟随各自 app，测试 Compose 继续由所属测试维护。
 
 data、apps、gateway 共用 `iam-service-prod` project，同机时共享默认网络；观测使用独立的
