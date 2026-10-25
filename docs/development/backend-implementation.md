@@ -69,8 +69,8 @@ SSO Secret 读取必须先确认独立审计提交，再交付原文；失败不
 
 ## Logging
 
-- Runtime diagnostics 使用 app logger（`@api/lib/logger`、`@admin-api/lib/logger`、`@worker/lib/logger` 或 OIDC
-  provider logger）。
+- Runtime diagnostics 使用所属 app 的 logger。API/Admin API 业务模块通过注入取得 logger，实例导入的适用位置见
+  [装配边界](../architecture/backend-architecture.md#composition-与-port)。
 - 优先使用结构化 Pino 调用，data object 在前、message 在后，例如 `logger.info({ userId }, "user synced")`。
 - Application code 中避免使用 `console.log`、`console.warn` 和 `console.error`。
 - 可接受的 console 例外包括 env validation、singleton/process lifecycle code、tests、one-off scripts 和 centralized
@@ -114,9 +114,7 @@ Alloy 二次脱敏常见敏感 key，APISIX access log 不含 body、敏感 head
   `*DomainService`。
 
 Application Use Case 的 consumer-owned ports 与输入类型和主文件同目录，分别使用 `*.port.ts`、`*.type.ts`。
-实例在 `composition/use-cases/` 创建，composition root 通过独立 `useCases` 字段把它交给 route。Route 只负责解析
-schema/context、调用 use-case/service、映射 VO 和构造 response，不得通过 type-only import 绕过 repository 或
-UnitOfWork 边界。
+实例在 `composition/use-cases/` 创建，composition root 通过独立 `useCases` 字段把它交给 route。Route 的职责与依赖限制见[核心依赖方向](../architecture/backend-architecture.md#核心依赖方向)。
 
 编写或修改 production `*.port.ts` 时：
 
@@ -128,30 +126,37 @@ UnitOfWork 边界。
 - 用只在类型检查阶段执行的 provider-to-port compatibility assertion 固定 structural compatibility。只有确需字段或语义
   转换时才在 composition 写显式 adapter，并为映射行为补测试；不要添加空转 adapter 或 `as unknown as`。
 
-## Protocol Adapter 与 Non-Hono Composition
+## Factory、Route 与 Composition
 
-- 直接实现 framework/protocol hooks、并在 public signature 中使用 framework protocol types 的模块使用 Adapter、
-  Resolver、Policy、Verifier 等实际角色命名，不因其含业务数据就命名为 Application Service。
-- OIDC 协议操作由 `packages/oidc` 拥有，API 的 `routes/oidc/oidc.http.ts` 负责 HTTP 适配，
-  `composition/root-authentication.ts` 接入统一 Kernel、Client Snapshot、主体披露与签名能力。旧 Provider app 和 claims hook 已退役，
-  不重建旧 Provider facade 或 compatibility alias。
-- UserInfo 在 OIDC owner 中按当前允许的披露选择调用 Subject Projection；HTTP adapter 不自行拼装业务 claims、
-  重查会话或实现另一套 Code/Token 生命周期。
-- Protocol adapter tests 通过正式 factory 注入所需 ports，断言 claims、认证与验证错误、Code/Token 消费及撤销等
-  调用方可观察行为；根级 Architecture Guard 只约束稳定的 production module edge owner。
+可替换业务模块导出 factory 和返回类型，例如 `createUserService(deps)` 与
+`type UserService = ReturnType<typeof createUserService>`；不绑定生产依赖导出 service/repository 单例。
+基础设施实例放在 app-local `src/lib/`，纯常量、schema 与 helper 静态导入。
 
-## Audit 与 Architecture Guards
+API/Admin API composition 按 runtime、repositories、tx、services、use-cases、routes、middlewares 分工。
+其他 runtime 按实际职责划分 stores、workers、security 等，不把协议或基础设施组件统称 service。
+Hono app 入口只读取 env/config/logger、调用 composition，再交给共享 createApp。
 
-- `services/audit/events` 下的 backend audit event helper 应是纯 payload builder。
-- Service 和 handler 通过注入的 root 或 tx audit writer port 写入 audit payload。
-- `pnpm check:architecture` 是唯一静态架构入口；package 普通测试不扫描其他 workspace 的 production source。
-- 根级 Architecture Guard 扫描受保护 workspace 的 production `*.port.ts`，拒绝 concrete repository import、
-  `repositories/**` import 和从 Repository/Service 派生的直接 `Pick`；合法 `Pick<...Port>` 与 platform narrowing
-  不应误报。
-- Route production module 的 type/value import 都受根 guard 约束：不得 import app-local `*.repository` 或
-  `@iam/api-core/uow`；`services/**` 不得反向 import `use-cases/**`。失败信息保留稳定 rule ID、违规文件、行号与
-  可操作诊断。
-- Package public surface 与 provider/port 结构兼容由 exports 和 typecheck 负责；业务与 transaction 语义由公开
-  behavior/contract tests 负责；真实 composition wiring/readiness 由 process smoke 负责；PostgreSQL、浏览器和
-  Gateway 事实由各自外部资源通道负责。新增永久静态规则前遵守
-  [架构守卫规范](../architecture/architecture-guard.md)的观察模型与准入流程。
+REST 使用 `*.routes.ts`、`*.handlers.ts`、`*.type.ts`；`*.index.ts` 暴露接收已创建依赖的 router factory。
+Admin REST 与 tRPC 共用 `*.adapter.ts` 操作，`*.trpc.ts` 保持薄层。Tier middleware 只导出 factory 或注入数组，
+共享认证 handler 放 app-local `src/middlewares/`。分层限制统一见[后端架构](../architecture/backend-architecture.md#核心依赖方向)。
+
+直接实现协议或框架接口的模块按 Adapter、Resolver、Policy、Verifier 等职责命名。
+HTTP adapter 消费完整协议操作，不拼装 claims 或重建 Code/Token 流程，职责见
+[协议边界](../architecture/backend-architecture.md#custom-sso-与-oidc)。
+
+Bun app 的 tsconfig 包含 Bun types；app-local 非生产维护 scripts 从生产 tsconfig 排除，但仍纳入格式与 lint。
+Worker 的正式命令位于 `src/commands/`。
+
+## 数据库文件约定
+
+修改 schema 前按[共享契约与数据库](../architecture/contracts-and-database.md#repository-与数据库)使用对应 skill。
+
+- 表定义放 `packages/db/src/schema/<domain>/`，关系定义放 `relations/<domain>/`，迁移放 `migrations/`。
+- 领域和顶层 schema/relations 出口同步维护。
+- 使用 `snakeCase.table` / `snakeCase.schema`，TypeScript 属性 camelCase，数据库表列 snake_case。
+- 表派生 Zod schema 使用 `drizzle-orm/zod`，关联表显式定义主键、索引和唯一约束。
+
+## 验证入口
+
+行为、类型和真实资源的验证选择见[测试规范](testing.md#验证选择)。
+修改静态规则前阅读[架构守卫规范](architecture-guard.md)，不要用源码扫描替代业务验证。

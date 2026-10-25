@@ -45,7 +45,7 @@ AFK 的逐轮复审要求由 [AFK 工作流](sandcastle-afk.md#双轴评审子�
 - 必需检查失败或未执行时保持工作未完成。认定基线失败需在固定基线、可比环境复现并记录证据；
   维护者明确接受后才可作为例外，创建 issue 本身不构成豁免。
 
-命令见[命令入口](../development/commands.md)，验证的证明范围见[默认验证与交付](../architecture/testing-architecture.md#默认验证与交付)，
+命令见[命令入口](../development/commands.md)，验证的证明范围见[验证结果与交付](../development/testing.md#验证结果与交付)，
 临时 PostgreSQL/Redis 的创建与清理见[专用资源与隔离](../architecture/testing-architecture.md#专用资源与隔离)。
 
 ## 子代理与工作树收尾

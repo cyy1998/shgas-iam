@@ -1,108 +1,66 @@
 # 前端架构
 
-本文定义 `apps/admin` 和 `apps/sso` 下 Umi Max + React 前端 app 的通用结构与 composition 约定。
-编码风格见 [../development/coding-style.md](../development/coding-style.md)，共享类型的所有权和运行环境边界见
-[contracts-and-database.md](contracts-and-database.md)。下列规则适用于新增代码；旧代码的收敛时机见本文末节。
-
-Admin 的 Custom SSO 配置 preview 与 Admin/SSO 协议类型统一消费 `@iam/custom-sso/wire`。该独立出口只加载浏览器可用的协议 schema/mapper/preview 与中性 Projection 契约，不通过服务端聚合入口加载 Kernel 或 Redis。Admin 的 Umi 配置将 `/wire` 精确映射到 workspace 源文件，与现有 Projection/Contracts alias 同路编译，避免 MFSU 预构建与 app 源模块混用。
+本文说明 Admin 与 SSO 的页面、请求、权限和状态职责。编码规则见[开发规范](../development/coding-style.md)，
+共享类型与浏览器依赖见[共享契约](contracts-and-database.md#公开接口与运行环境)。
 
 ## App 与状态边界
 
-- `apps/admin` 是管理前端，通过 app-local `src/services/` 消费 admin 能力；共享 tRPC client 位于
-  `src/lib/api-client.ts`。`apps/sso` 是 SSO 门户，通过 app-local service 消费 public/auth/self-service 能力；
-  共享 request 与浏览器机制放在 `src/lib/` 和 `src/utils/`。
-- Route-level screen 放在 `src/pages/`，拥有筛选、选中记录、弹窗、提交状态和 mutation 后的刷新编排。
-  Page-private component 放在页面旁的 `components/` 或 `_components/`；多个 page 复用的 UI 放在 `src/components/`。
-- 可复用浏览器或 UI 行为放在 `src/hooks/`；page-only hook 放在页面旁。`src/models/` 只承载跨 route 的全局状态。
-- Umi runtime integration 放在 `src/app.ts`、`src/access.ts` 和 app-local models，聚焦 bootstrap、layout/auth hooks
-  与全局状态 wiring；页面业务流程留在页面和对应 hook/service。
-- 构建时公开 env 必须留在 Umi `UMI_APP_` 前缀和 env contract 定义的 app-specific namespace 之后。
-  Page component 不散落 raw deployment env 名称。
+Admin 通过 app-local service 消费管理能力，SSO 通过 service 消费登录和本人操作能力。
+页面拥有筛选、选中记录、弹窗、提交状态及操作后的刷新；页面私有组件和 hook 就近放置，跨页面复用能力放公共目录。
+全局 model 只承载跨路由状态，Umi runtime 负责启动、布局和认证接线，业务流程留在页面与对应 hook/service。
+
+构建公开环境变量使用 Umi 前缀和 app 专用 namespace，页面不散落部署变量名。
+Admin/SSO 的 Custom SSO 类型和预览消费 `/wire` 浏览器出口；Umi alias 与共享契约源码同路编译，避免预构建与源码模块混用。
 
 ## 请求、类型与错误的所有权
 
-- 新增业务请求统一经过 app-local service。先复用已有方法，没有时增加最小 wrapper；页面、组件和页面 hook
-  通过 service 发起请求。
-- Service 拥有 endpoint、请求选项、transport 响应解析和必要的错误归一化。Admin service 拥有 tRPC procedure
-  path 及从公开 tRPC 入口进行的 type-only request/response 推断；SSO service 拥有 REST path、auth redirect
-  与 response-envelope handling。页面消费 service 公开的方法和类型。
-- 简单 service 可以透传已有结果与错误，不强造 DTO、错误类或通用 CRUD 抽象。需要将协议错误转成稳定页面语义时，
-  在 service 完成映射，页面按功能契约呈现；不要让页面解析 transport envelope 或 HTTP/tRPC 错误结构。
-- 共享 transport 与浏览器机制由 `lib/utils` 拥有；特殊协议可由专用 service 使用 `fetch`，例如登录页 guard。
-  这里约束的是业务请求调用与 transport 解析，不是一律禁止导入低层文件；页面仍可消费已有公共错误类型。
-- 优先消费 `@iam/contracts` 的稳定枚举、schema 派生类型或 service 导出的 tRPC 推断类型，避免重复 enum、magic
-  number 和为复用而复制 DTO。浏览器依赖边界遵守共享契约文档，type-only 推断不意味着可以 value-import 后端包。
+新增请求统一经 app-local service。Service 拥有端点、选项、响应解析和必要的错误归一化，页面消费它公开的方法与类型。
+Admin 在这一层推断 tRPC 输入输出；SSO 在这一层处理 REST envelope 和认证跳转。
+简单调用可以透传已有结果，不为统一形式新增 DTO、错误类或 CRUD 抽象。
+
+公共请求和浏览器机制放 `lib/utils`，特殊协议 service 可直接使用 fetch。页面可以消费公共错误类型，但不解析传输协议。
+优先复用 schema 派生类型或 service 推断类型，避免复制字段和枚举；type-only 导入不代表后端代码能在浏览器执行。
 
 ## 管理路由与权限
 
-现存 Admin mutation 已统一消费 `{ changed, result }`：页面区分已修改与无需修改，创建与凭据从 result 取得必要资源。
-公共 service 归一化已提交错误，页面自动重读事实但不重放写入；普通刷新成功不清除尚需修复的提示。
-COMMIT 结果未知时先读取当前事实，不把错误解释为确定回滚；作用后审计失败同样刷新并保留修复提示。
-暂态拒绝、明确业务拒绝和结果未知分别展示，是否允许主动重试由对应功能决定。
-生成密码未交付时先修复再主动重置。SSO Secret 的配置/轮换只返回安全结果，原文经独立授权和审计读取；
-读取响应丢失可重读当前值，不自动再次轮换，详见[应用接入配置](../features/admin/client-sso-configuration.md)。通用结果与恢复见
-[写入结果契约](../development/backend-implementation.md#admin-写入结果与失败恢复)；首次消费者切换仅见[历史协调清单](https://github.com/cyy1998/shgas-iam/blob/73315e4cef6f96dd79b29e18f74d68af30e559ec/docs/releases/admin-mutation-contract-cutover.md)。
+新路由登记到 `admin-route-registry`，复用模块 access key 与拒绝访问路径。
+模块和集合操作使用服务端 capability，资源操作使用 `allowedActions`；前端不复制角色或组织范围策略。
+权限未加载或加载失败时不开放受保护操作，服务端仍须逐请求授权。
 
-- 新管理路由登记到 `admin-route-registry`，复用模块 access key 和既有拒绝访问路径。
-- 模块可见性与 collection action 消费服务端 capability；服务端提供资源 `allowedActions` 时，行或详情按钮
-  以它为准。新增需要资源级授权的操作时，同步设计服务端授权元数据，前端不复制角色字符串或组织范围策略。
-- Capability 未加载或加载失败时不默认开放受保护功能。Capability 和按钮状态指导 UI，服务端仍须在每次请求时授权。
-- Mutation 后按功能契约刷新数据和操作能力。“可能已生效”、部分失败和是否可重试由该功能明确规定，不能统一按
-  失败自动重试。
-- 修改 Sessions 的列表、撤销或临时登录限制交互时，读取
-  [功能说明](../features/sso/login-and-session.md)和[接口 schema](../../apps/admin-api/src/routes/admin/session-management/session-management.schema.ts)。
-- 修改 Organization Responsibility 的 scoped selector、嵌入面板、操作按钮、Audit 可见性或隐藏 blocker 时，读取
-  [组织责任说明](../features/organization-responsibility/management.md)与下方恢复规则。
+操作后刷新数据和能力，区分已修改、无需修改、明确拒绝、暂态故障与结果未知。
+已提交或作用后失败时重读事实、保留修复提示，不自动重放写入。返回值与通用恢复统一见
+[Admin 写入结果](../development/backend-implementation.md#admin-写入结果与失败恢复)。
 
-Admin Sessions 使用会话记录语义：记录存在不代表账号当前可访问；筛选、分页、刷新与撤销反馈保持。
-后端自身许可每请求重查，前端不复制 Barrier 或代际判断；当前恢复见[Profile 与 Subject Access 维护](../releases/data-maintenance.md)。
+会话记录存在不代表账号当前可访问；前端不复制访问屏障或代际判断。
+页面与选择器使用服务端返回的可见数据，阻塞只展示安全说明，不推断隐藏记录；写入时仍由后端重新授权。
+具体操作、历史展示和审计可见性见[会话](../features/sso/login-and-session.md)和
+[组织责任](../features/organization-responsibility/management.md)。
 
 ### 会话与配置恢复
 
-会话未完成批次保留原失败或未知目标，由用户确认后重试。刷新、切换标签或权限变化不能自动提交或清除它；
-有未完成批次时关闭其他新撤销操作。响应丢失且没有批次时，重新查询后明确发起新操作。
-Secret 原文仅留在组件内存，刷新或离开即清除。Client 传播修复提示按 Client 保存在 sessionStorage，
-重读、后续成功或合法 no-op 均不清除，只有修复流程可确认恢复。
+会话未完成批次保存原失败或未知目标，经用户确认后重试。刷新、切换标签或权限变化不能自动提交或清除它；
+未完成期间关闭其他新撤销操作。响应丢失且未保存批次时，重新查询并明确发起新操作。
 
-HR 责任页面按服务端 allowedActions 显示操作，用 isDelete 标注历史关联对象；纯 HR 不显示 Audit Tab。
-隐藏责任造成的阻塞只提供安全说明，选择器按当前范围展示候选，写入仍由服务端重新授权。
+Secret 原文仅存组件内存，刷新或离开即清除。Client 传播修复提示按 Client 保存在 sessionStorage；
+重读、后续成功或合法 no-op 不清除，只有修复流程可以确认恢复。
 
 ## SSO 登录守卫
 
-- 受 guard 保护的登录流程只在 guard 明确允许登录后展示表单。检查中、续接中、无效请求和暂时不可用分别表达，
-  检查失败不能回退成无会话。
-- Service 解析协议结果；hook 管理超时、取消和过期响应；页面渲染互斥状态并执行对应交互。
-- `/portal/login` 先验证目标、续接和浏览器绑定，再探测根。无安全请求不显示表单；暂态故障保留 Cookie，仅手动重试。
-  检查限时 10 秒，迟到结果不能覆盖重试、目标变化或已卸载页面；续接使用 location.replace，避免后退再次进入登录。
-  找回密码不经过此守卫；已有有效根却要求新鲜认证时，OIDC 返回 login_required。
-  首次登录的续接证明由协议保存，参见[OIDC 接入](../guides/oidc.md#兑换失败与重新登录)。
+Service 解析协议结果，hook 管理超时、取消与过期响应，页面呈现互斥状态。
+登录流程先验证目标、续接和浏览器绑定，再探测根会话；guard 明确允许后才显示表单。
+检查中、续接中、无效请求与暂态故障分别展示，检查失败不能视为无会话。
+
+检查有明确超时，迟到结果不能覆盖重试、目标变化或卸载后的页面。暂态故障保留 Cookie，仅手动重试。
+续接替换历史记录，避免后退再次进入登录；首次登录证明由协议持有。
+找回密码不经过此守卫，新鲜认证要求由协议处理，见[OIDC 接入](../guides/oidc.md#兑换失败与重新登录)。
 
 ## 测试与生成路径
 
-测试场景、替身和异步控制统一遵守[测试质量原则](testing-architecture.md#测试质量原则)。Service wrapper 验证对外请求、
-返回值与错误转换；页面验证输入、权限和状态驱动的结果。Pending/重试优先由受控请求或时钟建立明确边界，
-不以固定等待一小段时间证明永久不会重试，也不重复共享协议 owner 的算法或字段词典。
-
-- 前端测试应在可用时使用 app-local Vitest setup、React Testing Library helper、MSW handler 和 Umi runtime mock。
-  当前 test workflow 由两个前端 package 的 `vitest.unit.config.ts`、`playwright.config.ts`、manifest 运行声明与内部 scripts 和已提交测试共同维护；
-  命令入口见 [../development/commands.md](../development/commands.md)。
-- Admin 与 SSO Unit 分别在单个 package-local Vitest 进程内使用 Node/DOM projects。普通 `*.test.ts[x]` 默认使用 Node 且不加载
-  全局 DOM setup；确实使用浏览器全局或 React DOM render 的测试命名为 `*.dom.test.ts[x]`，由 jsdom project 加载
-  Testing Library 和浏览器兼容 setup。测试放在模块对应层级的 `__tests__/`，这个后缀只表达 Unit 执行环境。
-  Hono 内存请求、jsdom 和不产生真实网络连接的 MSW 按真实资源标准属于 Unit；所需文件显式维护 MSW lifecycle。
-  浏览器 Integration 通过根命令按 workspace/file 选择，保留 package-local harness。
-- 类型与公开出口通过 typecheck 验证，service 的响应与错误语义使用行为测试；路由、权限 UI 和 guard 状态使用
-  组件或浏览器测试。具体通道与预算遵守 [testing-architecture.md](testing-architecture.md)。
-- 禁止只验证静态 UI、固定文案或样式的测试；混合行为用例中的纯展示断言也应删除。权限、状态、输入和操作驱动的
-  功能展示仍可通过组件或浏览器测试验证；判定示例与清理规则见[禁止纯展示测试](testing-architecture.md#禁止纯展示测试)。
-- 不要直接编辑 Umi generated directory 或 frontend build output；generated 和 vendored path 规则见
-  [repository-map.md](repository-map.md)。
+Service 验证请求和错误转换，页面验证输入、权限及状态驱动的结果，组件或浏览器覆盖路由、guard 和恢复交互。
+异步测试使用受控请求或时钟，不重复协议包算法与字段词典。通用规则见[测试规范](../development/testing.md)，
+资源编排见[测试架构](testing-architecture.md)，生成目录的编辑限制见[仓库地图](repository-map.md#生成目录与-vendored-资源)。
 
 ## 现存差距与收敛时机
 
-当前仍有页面直接调用低层 client，普通 service 也不都提供错误归一化。这些现状不表示新增调用可以继续绕过 service，
-也不要求一次性重写所有 wrapper：修改旧请求的参数、调用流程、响应或错误处理时，将该调用收敛到上述边界；
-纯布局、样式和文案改动不触发请求迁移。
-
-本次文档整理不批量迁移代码或新增守卫。现有 Architecture Guard 的通过结果不能证明本页全部规则已被自动检查；
-评审仍需检查请求和状态所有权，以及相关功能契约。
+部分既有页面仍直调低层 client，service 也未全部归一化错误。修改请求参数、调用流程、响应或错误处理时，
+将该调用收敛到上述边界；纯布局、样式和文案改动不触发迁移。验证应覆盖相关行为，静态守卫不覆盖全部前端规则。

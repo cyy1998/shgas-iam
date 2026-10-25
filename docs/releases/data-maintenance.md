@@ -139,7 +139,7 @@ backfill/repair/verify 都支持 `--deadline-ms <1..300000>`，默认 30000；de
    ```
 
    同一一致只读快照覆盖源事实、文档/墓碑、schema、路径、版本、完成凭据和持久工作；仅 `status=passed` 且退出 0 通过。
-   失败分类见[发布与核验契约](../architecture/contracts-and-database.md#organization-search-publication-schema)。
+   完整检查范围见[组织发布与核验](../architecture/backend-architecture.md#organization-search-发布与核验)。
 
 4. 保持公共流量关闭，仅开放受控入口，检查新建、祖先改名、状态与删除最终反映到 DSL 完整响应，并核对受影响的组织详情等功能。
 5. 关闭临时入口并排空，等待验证和清理产生的变化、dirty、文档发布收敛，再运行完整 verify。

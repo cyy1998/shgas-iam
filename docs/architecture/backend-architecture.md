@@ -1,595 +1,320 @@
 # 后端架构
 
-本文记录后端 runtime、依赖方向、composition、事务和关键模块的稳定边界。具体编码方式见
-[后端实现约定](../development/backend-implementation.md)，package/database ownership 见
-[共享契约与数据库](contracts-and-database.md)，验证通道见 [测试编排架构](testing-architecture.md)。
+本文说明后端的职责、依赖、事务和关键模块协作。文件定位见[仓库地图](repository-map.md)，命名与编写方式见
+[后端实现约定](../development/backend-implementation.md)，包出口与 DTO 演进见[共享契约](contracts-and-database.md)。
 
-## Runtime 与 App 边界
+## 运行时与分层
 
-| App              | Runtime 与职责                                                                                | Composition 入口                                       |
-| ---------------- | --------------------------------------------------------------------------------------------- | ------------------------------------------------------ |
-| `apps/api`       | Bun + Hono public IAM backend，拥有 `/public`、`/open`、`/internal`、`/sso`、`/auth`          | `src/app.ts` → `createApiComposition()`                |
-| `apps/admin-api` | Bun + Hono admin backend，拥有 `/admin` 和 `/rpc`；`/rpc` 对应 `src/routes/trpc/`             | `src/app.ts` → `createAdminApiComposition()`           |
-| `apps/worker`    | Bun background runtime，拥有 queue consumer、health/Bull Board HTTP 面和 maintenance commands | `src/index.ts` 或 `src/commands/` → worker composition |
-| `apps/gateway`   | Bun + Hono 独立 Gateway 配置入口，只读认证当前 Client，校验、预览、发布 YAML 并执行必要补偿   | `src/main.ts` → `createGatewayComposition()`           |
+### 运行时职责
 
-API tier 分别在 `apps/api/app.config.ts` 和 `apps/admin-api/app.config.ts` 声明。共享 `createApp` 位于
-`packages/api-core`，只挂载 app composition root 提供的已物化 routes 和 middlewares；它保持 app-agnostic，
-不拥有 app 私有 DI wiring。
+| 运行时    | 职责                                     |
+| --------- | ---------------------------------------- |
+| API       | 登录、SSO/OIDC 与公共、开放和内部接口    |
+| Admin API | 管理端 REST 与 tRPC 接口                 |
+| Worker    | 队列消费、读模型重建、维护命令与健康检查 |
+| Gateway   | 独立的网关配置校验、预览、发布与补偿     |
 
-Hono app 的 `src/app.ts` 只负责导入 env、app config 和 app-local logger，调用 app-local composition root，再把
-已物化 routes 与 middlewares 交给 `createApp`。
-
-## 核心依赖方向
+### 核心依赖方向
 
 ```text
-composition -> routes -> use-cases -> domain-aligned services / consumer-owned ports
-                    \-> domain-aligned services
-use-cases / domain-aligned services -> pure domain logic
+composition → routes → use-cases → services / ports
+                     ↘ services → pure domain logic
 ```
 
-后端通过位置和命名区分以下职责：
+- 协议入口解析请求、取得认证上下文、调用业务能力并映射响应；REST 与 tRPC 复用同一管理操作。
+- Use case 编排跨领域流程；service 提供单个领域的应用能力；纯领域规则只计算结果，不访问基础设施。
+- Composition 创建依赖并连接各层。共享 `createApp` 只接收已创建的路由和 middleware，app 私有接线由 app 自己负责。
+- Route 的类型和值依赖均不得越过业务层访问 repository 或 UnitOfWork；service 不反向依赖 use case，纯领域规则不依赖 app。
+- API、Admin API、Worker、Gateway 各有独立 composition。Gateway 的 `src/http/` 同样遵守薄协议入口边界。
 
-| 层                                 | 位置                                            | 职责                                                                              |
-| ---------------------------------- | ----------------------------------------------- | --------------------------------------------------------------------------------- |
-| Protocol entry                     | `apps/<app>/src/routes/`                        | 解析 HTTP/tRPC 输入、调用 use case 或 service、映射输出                           |
-| Application use case               | `apps/<app>/src/use-cases/<scope>/<verb-noun>/` | 表达调用方目标下的跨领域 workflow，以及 transaction 后的副作用编排                |
-| Domain-aligned application service | `apps/<app>/src/services/<domain>/`             | 提供围绕一个领域能力的 app-local command/query facade                             |
-| Pure domain logic                  | `packages/domain/src/<domain>/`                 | 保存不依赖 repository、UnitOfWork、audit、network、Hono 或 composition 的业务规则 |
-| Composition                        | `apps/<app>/src/composition/`                   | 物化 runtime dependencies，并连接 routes、use cases、services 和 repositories     |
+### Composition 与 Port
 
-Application use case 的主文件、consumer-owned port 和输入类型分别命名为 `<verb-noun>.use-case.ts`、
-`<verb-noun>.port.ts` 和 `<verb-noun>.type.ts`；factory 与返回类型使用 `create<VerbNoun>UseCase` 和
-`<VerbNoun>UseCase`。Use-case 实例在 `composition/use-cases/` 创建，并通过独立 `useCases` 字段交给 route
-composition，不并入 `services`。
+消费方声明所需的窄接口，provider 通过结构类型满足它；跨层类型归稳定的共享模块或相邻类型文件。
+业务模块导出 factory，由 composition 注入运行时依赖。静态枚举、schema 和纯规则直接导入。
+具体命名、port 声明与适配规则见[业务编排模块的选择与命名](../development/backend-implementation.md#业务编排模块的选择与命名)。
 
-Domain-aligned application service 使用 `<domain>.service.ts`、`create<Domain>Service` 和 `<Domain>Service`。
-现有 `UserService`、`RoleService` 是 application facade，不是 pure DDD Domain Service。Pure domain logic 优先使用
-`<Concept>Policy`、`<Concept>Rules`、`<Concept>Specification` 等表达规则角色的名称。
+API/Admin API 的实例装配遵守以下边界：
 
-Route 可以调用 use case 或 service facade，但不得直接依赖 app-local repository 或 `@iam/api-core/uow`。
-`services/**` 不得反向 import `use-cases/**`；`packages/domain` 不得 import app-local use case、service 或
-composition。跨层实例连接统一由 composition 完成。
+- 具体 service/repository 的运行时导入与实例化由 composition 负责，业务模块使用注入的实例。
+- 全局数据库实例只由 composition 与 repository 实现接入。
+- Redis 单例由 composition 或 Redis 基础设施层接入；logger 单例由 composition、app 入口或日志基础设施层接入。
 
-Gateway 的薄 HTTP 入口位于 `src/http/`，适用同一 route owner 和 consumer-owned port 边界。
-其 service 持有请求认证、规划和发布/补偿编排，composition 注入窄 Client credential reader 与 APISIX reader/writer。
-认证只读 IAM PostgreSQL，不使用 Redis、其他 app 私有 repository 或 SSO Snapshot；
-实例内执行权和恢复阻断由 Gateway service 持有，无持久任务或跨实例锁。
-配置与恢复契约见[Gateway 配置 API](../guides/gateway.md)。
+类型引用不加载实例，但仍须遵守 route 和 port 的依赖限制。具体检查范围见
+[架构守卫](../../scripts/architecture-guard.ts)。
 
-## Composition、Factory 与 Port
+## 请求处理与事务
 
-- App-local infrastructure singleton 放在 `src/lib/`，例如 `@api/lib/logger`、`@admin-api/lib/logger`、
-  `@worker/lib/logger` 和 `src/lib/infra/redis.ts`。
-- API/Admin API 的 production composition 按 `runtime`、`repositories`、`tx`、`services`、`use-cases`、
-  `routes`、`middlewares` 分类。Non-Hono app 按实际 ownership 使用 `provider`、`security`、`session`、`stores`、
-  `workers` 等分类，不把异构 protocol/runtime components 伪装成 Application Services。
-- 后端可替换模块导出 factory 和返回类型，例如 `createUserService(deps)` 和
-  `type UserService = ReturnType<typeof createUserService>`。不要重新引入绑定了 production 依赖的
-  service/repository singleton。
-- Consumer-owned `*.port.ts` 直接声明 use case/service 所需的最窄出站行为。enum、DTO schema、domain error、
-  业务常量和纯 helper 保持静态 import，不作为 DI deps 注入。
-- Production port 不 import app-local `*.repository`、`repositories/**`，也不通过
-  `Pick<...Repository>` 或 `Pick<...Service>` 从 provider 类型派生接口。允许从另一个 consumer-owned `*Port`
-  继续收窄，也允许收窄 platform type。
-- 多个边界共享的 input/result type 由 `packages/domain`、`packages/contracts`、相邻 `*.type.ts` 或单一 neutral
-  protocol/session module 持有，不从 concrete provider 反向导出。
-- Provider 优先通过 TypeScript structural typing 直接满足 port。只有两侧语义不同、确实需要映射时，才在
-  composition 建立有行为且有测试的 adapter；不得用 unchecked assertion 或 behaviorless wrapper 掩盖不兼容。
+### 请求、审计与可观测上下文
 
-## Transactions 与 afterCommit
+Hono Context 留在协议层。Actor、审计上下文、requestId 和 traceId 经显式接口传入业务、事务与外部 adapter，
+下层不重读请求头，也不依赖隐藏的全局请求状态。审计 context 由独立类型模块持有，事件构造器保持纯函数，写入使用注入的审计接口。
 
-- 事务性 workflow 使用 app-local `UnitOfWork`。Composition 的 transaction-port factory 根据当前 transaction
-  `DbClient` 创建 tx-bound repositories、audit writer 和其他 transaction-owned ports；业务代码不传递 raw `tx`
-  参数。
-- Transaction callback 接收 tx-bound ports 与 `tx.afterCommit`。Port factory lifecycle 中的 `afterCommit` 与
-  callback 暴露的是同一个 registration port；`mapUnitOfWork` 必须保留该 registration API。
-- 一个 workflow 只拥有一个 UnitOfWork transaction boundary。嵌套 UnitOfWork 不受支持，因为 inner commit 可能在
-  outer transaction 回滚前执行 after-commit tasks。
-- 外部 side effect 不在数据库 transaction callback 内直接执行；应在 callback 外执行，或注册为
-  after-commit task。Client runtime cache 同样只通过 required after-commit invalidation 协调，不存在 pre-commit
-  Redis fence 例外；不得把通知、Session 撤销、业务 cache 写入或其他不可逆作用放入 transaction callback。
-  Task 只在 transaction 成功提交后按注册顺序运行：
-  - `required`：失败会记录 error；所有 task 尝试完成后，required failures 聚合为
-    `AfterCommitRequiredTaskError` 返回给调用方。
-  - `bestEffort`：失败只记录 warning，不让已完成的业务调用失败。
-- 两种模式都发生在数据库提交之后，因此 task 失败不能回滚已提交的业务事实。调用方收到 required failure 时，也不得
-  把它解释为数据库事务已回滚。Cache 同步等调用契约要求完成的动作可以使用 `required`；session revocation、
-  rebuild wake-up 等可恢复动作使用 `bestEffort`。
-- `UnitOfWorkTransactionOptions.observability` 携带当前 `requestId`、`traceId`。它同时传给 transaction-port factory
-  和 after-commit logger；下层模块不重新解析 protocol context。
-- `RegisterPurveyorContactUseCase` 的同手机号 create-or-attach 规则由 transaction-bound user port
-  `lockPurveyorContactMobile` 串行化。Production repository 使用 operation-specific key 的
-  PostgreSQL transaction advisory lock，并在新建和复用联系人两条 transaction 路径中都先取锁、再查询手机号。
-  当前 schema 有意不把所有用户手机号提升为全局唯一约束：手机号可空且其他用户写流程并不共享该 upsert 语义；
-  新增任何供应商联系人数据库写入口时必须复用同一 lock key/用例，而不能绕过该并发边界。
+Trace ID 按 `traceparent`、`x-b3-traceid`、`x-trace-id` 优先级解析；traceparent 只取 trace-id。
+没有上游 trace 时保留缺失值，不随机补造。字段与脱敏见[Logging](../development/backend-implementation.md#logging)，
+业务作用先于审计时的失败处理见[审计安全边界](../development/backend-implementation.md#审计安全边界)。
 
-## Admin 同对象写入规范
+### Transactions 与 afterCommit
 
-[ADR-0025](../adr/0025-align-admin-mutation-results-with-committed-facts.md) 已实施，现存 Admin PostgreSQL 写入口及全部 Admin 结果契约已迁移；调用方结果与失败恢复见[Admin 写入契约](../development/backend-implementation.md#admin-写入结果与失败恢复)：后续新增或修改的 Admin PostgreSQL 同对象写入统一在同一 UnitOfWork 内使用 `SELECT ... FOR UPDATE` 读取目标，再检查前提、判断业务变化、写入并登记审计和 Profile dirty，持锁至事务结束。Organization Responsibility Assignment 已移除 Admin expectedStatus CAS，与级联共用责任集合取锁能力，不按领域维持第二套同对象并发方案。
+一个业务流程只拥有一个 UnitOfWork 事务边界，不嵌套 UnitOfWork。Composition 用当前事务连接创建 repository、审计和其他
+事务接口；业务代码只消费这些接口，不向下传递原始 transaction client。Port factory 和 callback 共用同一个
+`afterCommit` 注册口，映射 UnitOfWork 时须保留它。
 
-普通资料编辑本次不增加页面版本校验；只能覆盖请求明确提交的资料字段，生命周期或 Secret 等关联状态使用锁定后的当前事实。锁定命令拟修改的现存目标及级联选中行，只读父对象保留普通预检；多行写入统一安排取锁顺序。创建不存在的目标由既有数据库唯一约束裁决重复并映射已知冲突，不假定已锁住空槽。该规范不替代 Redis Session、Runtime Snapshot、Profile publication 的既有原子机制，也不自动提升跨对象、跨表的完整性保证；实施范围与验收沿 [Spec #95](https://github.com/cyy1998/shgas-iam/issues/95) 跟踪，来源讨论见 [Issue #29](https://github.com/cyy1998/shgas-iam/issues/29)，代码候选与真实部署仍须区分；首次外部消费者切换见[历史协调清单](https://github.com/cyy1998/shgas-iam/blob/73315e4cef6f96dd79b29e18f74d68af30e559ec/docs/releases/admin-mutation-contract-cutover.md)。
+数据库事务内只执行可随事务回滚的作用。网络请求、Redis 写入、会话撤销和通知放在事务外或提交后执行；
+Client Snapshot 失效也遵守这一规则。提交成功后按注册顺序尝试所有任务：
 
-Admin 应用层公共模块统一事务、锁定流程与 `{ changed, result }` 业务结果；repository 提供锁定读取和明确的写入结果，领域拥有合法转换、变化比较及审计内容。数据库基础层提取包含 `cause` 的结构化 SQLSTATE/constraint 信息，由领域 repository 映射已知约束，未知约束不伪装成普通业务冲突。
+| 模式       | 失败处理                                                                 |
+| ---------- | ------------------------------------------------------------------------ |
+| required   | 记录错误，全部任务尝试后汇总失败并返回调用方；用于调用契约要求完成的传播 |
+| bestEffort | 记录告警，业务结果仍成功；用于可恢复的撤销或重建唤醒                     |
 
-当前 `services/admin-mutation` 复用 UnitOfWork，提供创建事务与现存目标锁定流程；所有 Admin PostgreSQL 命令均直接使用或通过既有 Client/Subject Access wrapper 适配该模块。创建和 Transfer 保留新资源，生成密码保留必要一次性结果；SSO 配置/轮换返回安全 Client，当前 Secret 通过独立授权和审计读取，具体见[应用接入配置](../features/admin/client-sso-configuration.md)。其他无资源命令返回 `result:null`；普通资料无变化不写审计和 dirty，显式提交状态的所有入口（包括资料更新入口）及 Assignment scope 无变化保留 `changed:false` 意图审计。页面编辑不回填未修改的初始状态。锁后写入零行属于不变量失败，不产生成功审计或 dirty；普通缺失目标和重复删除返回 404。岗位、组织和角色编码的既有全表唯一约束继续覆盖非启用及软删除行，Assignment 保留角色与目标组合唯一约束，由 repository 映射真实 Drizzle 包装错误。
+提交后任务失败不能回滚数据库，也不能据此自动重放业务写入。事务结果未知时先保留未知状态，由模块核对事实并恢复。
+调用方结果见[Admin 写入结果与失败恢复](../development/backend-implementation.md#admin-写入结果与失败恢复)。
 
-Role 状态变化根据锁定后的当前事实登记 dirty；名称与说明不进入当前 Profile 角色投影，因此这些资料的真实变化只记录审计。Assignment 创建、scope 变化与删除在源事务中登记保存目标的失效，仍由原 resolver 推导受影响用户。Assignment 命令只锁拟修改的 Assignment，Role 与其他只读父对象保持普通预检，不提升跨对象保证。真实 PostgreSQL 测试通过显式事务同步、中间版本的 production Profile publication 和最终 dirty/version 验证角色状态交错，并覆盖 Assignment 删除、创建与重复删除竞争。
+供应商联系人 create-or-attach 使用同手机号的事务 advisory lock，新建与复用路径都先锁后查。
+所有此类写入口必须复用同一用例与锁键；这不要求全库手机号唯一。
 
-Employment 创建、说明编辑、Pause、Resume 与 End 已使用公共 mutation 和统一结果；创建保留 `result:{id}`，其余返回 `result:null`。说明空输入拒绝，同值不写审计或 dirty；合法重复生命周期命令保留 `changed:false` 意图审计，不重写结束时间。真实父、子变化与各自审计及 dirty 在同一事务提交。
+### Admin 同对象写入规范
 
-基础任职级联采用固定取锁顺序：Employment 在前，Organization Responsibility Assignment 在后，各表均按主键升序。Pause/End 先锁任职，再一次选出本次 Enable/Open Assignment 的 ID，以身份锁定完整选中集合，然后才重验状态、更新父子并记录真实变化。Responsibility repository 的 `lockAssignmentsByIds` 同时为直接责任命令提供集合取锁能力。锁等待期间已经结束的选中责任不会被重新暂停或重写结束时间；后来新插入或从未选中的责任不在该集合中。创建时调整既有 Primary 的路径也先锁完整选中任职集合；不存在的目标与后来出现的 Primary 槽位仍不受行锁保护。
+Admin PostgreSQL 写入统一在同一 UnitOfWork 内锁定目标，再校验、比较变化、写入并登记审计与 dirty，持锁至事务结束。
+公共 mutation 模块负责流程，repository 负责锁定和写入，领域负责转换规则、变化比较及审计内容。
 
-上述方法只锁拟修改目标和级联选中行，User、Organization、Position 等只读父对象仍普通预检。它不防止 phantom，不提升跨表父对象、跨记录 Primary 或请求时 HR scope 的乐观保证。Set/Clear Primary 和 Transfer 也已采用统一结果与意图审计：主任职命令合法 no-op 不登记 dirty，Transfer 返回新任职的 `result:{id}`。这些命令在首次业务行锁前合并 URL 任职与拟清除的既有 Primary ID，一次按 ID 升序锁齐；Transfer 随后锁齐选中责任，才重验状态与候选并原子结束旧任职、结束责任、清除 Primary、创建新任职。审计记录实际清除的 Primary ID，非法重复 Transfer 不改写历史时间。Resignation 已统一 Full Admin 与 HR 的 `{ changed, result:null }` 结果：合法 no-op 保留 `changed:false` 意图审计，不登记 dirty、不重写既有结束时间，仍执行 Subject Access 与 Session 撤销重试。离职依次锁 User、精确 transition intent、按 ID 升序的完整选中 Employment 集合、按 ID 升序的完整选中 Assignment 集合，锁齐后重验 HR 资格，再以同一事务提交业务事实、审计及 dirty。该锁定范围仍仅覆盖拟修改的现存行与级联选中行，不提升上述乐观保证。离职在 pre-block 后、数据库事务前通过外层 Subject Access adapter 与 Kernel 的 `prepareUserSessionRevocationByContext` 计划原始读取合法已存在 Principal Session 的上下文，不做访问校验或触发 cleanup；提交后将捕获代际与 callback 的前代合并，按代际集合精确撤销。重试重新捕获遗留旧代，晚到撤销保留重新启用后的新代。准备失败仅记录 bestEffort 诊断并退回 callback 前代撤销，不阻断业务；本次未知的更早代留待后续重试。该读取不是全局原子快照：捕获后才落库的更早代极迟在途 Session 由下一次重试或访问校验处理，已 tombstone 对象的派生清理仍属既有 cleanup owner。
+- 锁定拟修改的现存行和级联选中的完整集合，再重验状态。只读父对象普通预检；创建竞争由数据库唯一约束裁决。
+- 多行按固定顺序取锁。任职及责任级联先 Employment、后 Assignment，各表按 ID 升序；直接责任命令只锁 Assignment，
+  不反向锁父 Employment。Set/Clear Primary 与 Transfer 在首次取锁前合并全部目标任职，Transfer 随后锁齐选中责任。
+- 账号生命周期写入先锁 User、后锁精确 transition intent；离职随后锁选中 Employment 和 Assignment，锁齐后重验 HR 资格，原子提交事实、审计与 dirty。
+- 锁后写入零行属于不变量失败；已结束的级联对象不重写历史时间。新插入或未被选中的记录不属于本次集合。
+- 资料编辑只提交修改字段，关联状态取锁定后的事实。普通同值资料不写审计或 dirty；合法的显式状态、安全和授权意图保留 no-op 审计。
+- 已知唯一约束按领域映射冲突；未知数据库错误原样进入异常处理。事务失败后不能继续查询来推断冲突，也不为此自动重试或扩大锁范围。
 
-组织省略初始状态时以 Enable 创建，显式非 Enable 输入被拒绝；成功创建原子完成路径及闭包关系。父组织保持普通预检，Open Employment、子组织与 Open Responsibility 的既有生命周期和安全范围阻断继续生效，不增加全父树锁或跨表强保证。
+这些行锁不保护空槽或 phantom，也不把父对象完整性、Primary 唯一性和请求时 HR 范围提升为跨对象串行保证。
+各领域仍承担引用、生命周期和授权校验。SQLSTATE 与 constraint 的提取由数据库基础层统一处理，包括包装错误的 cause。
+组织创建与路径、闭包关系同事务完成；领域引用预检不额外锁整棵父树。具体返回值、缺失与冲突状态见开发约定，决策见 [ADR-0025](../adr/0025-align-admin-mutation-results-with-committed-facts.md)。
 
-公共模块把确认提交后的 `AfterCommitRequiredTaskError` 映射为 `ADMIN_MUTATION_COMMITTED`，普通失败原样保留；当前岗位、组织与角色切片只有既有 bestEffort Profile 唤醒，不新增 required 副作用。User 创建、显式状态命令、删除与 Resignation 通过公共 `runAdminSubjectAccessMutation` 保持既有 Subject Access lifecycle；仅在源事务成功返回后发生的 lifecycle 失败映射为同一已提交错误，事务回滚错误保持原对象以供 lifecycle 确认。User 页面自动刷新已提交事实并保留修复提示，不自动重放；生成密码未交付时提示先修复再主动重置。Client 基础管理也已迁移该错误契约与实际详情恢复；OIDC 与 Custom SSO 专项结果也已迁移，均在锁定事实下比较配置并返回安全 Client 与明确授权的 Secret 结果。Custom SSO 相同规范化配置与合法重复启停/移除保留意图审计和 required Snapshot invalidation，不推进 epoch 或撤销会话；当前配置修改及 Secret 轮换不要求先禁用，Maintenance 不阻止合法准备操作。User 创建返回安全用户对象与原有生成密码，密码重置返回新密码，均置于统一 result 内；密码哈希不进入响应或审计。用户名预检覆盖软删除行，repository 仅映射已知用户名唯一约束。User 资料空更新拒绝，同值普通资料不写审计/dirty；显式状态仍保留 lifecycle 和意图审计，专用状态与删除也返回统一结果；删除按 User 行、精确 transition intent 的次序加锁，检查未删除目标、Open Employment 和委托双端的 Open Client Delegation，并验证实际软删除返回行。委托门禁不按业务期间过滤；已结束委托不阻断，拒绝不产生成功删除审计、dirty 或会话撤销。该顺序与资料状态命令一致；只读 Employment/Delegation predicate 保持既有跨表乐观边界。reset 取得 User 行锁后仍执行 Enable 且非删除的 guarded update，保留当前会话例外和 bestEffort 撤销。
-
-直接 Responsibility 创建、Pause、Resume 与 End 已采用同一公共 mutation 结果：创建保留 `result:{id}`，生命周期返回 `result:null`。直接命令先按 ID 锁定 Assignment，再普通读取父对象并校验双端授权与转换；与任职级联共用 `lockAssignmentsByIds`，不反向锁父 Employment。合法 no-op 保留 `changed:false` 意图审计且不新增 dirty，非法终态转换返回 409。Open slot 唯一约束继续裁决创建竞争；真实 Drizzle 已知约束按 Full/HR 映射稳定安全冲突，未知约束不掩盖为领域冲突。
-
-Client 基础创建/list/兼容 ID 编辑与 Internal API credential 保留；统一 `ClientSso` management 拥有单协议配置、
-启用意图、SSO Secret、状态与删除。锁定 Client 后比较规范化事实；合法显式 no-op 仍审计并失效 Snapshot。
-配置、启停、Secret 轮换和协议选择不自动撤销会话，永久终止由 Session management 捕获精确实例表达。
-当前 Secret 与 Internal credential 分离；普通 detail 不带敏感值，超级管理员窄读取需留审计。
-
-数据库提交后 required Snapshot invalidation 及 generic InternalAuthz code/secret cache 失效各自执行；
-未知 COMMIT 保守失效，已提交传播失败保留修复提示，不自动重放写入。详情与页面使用安全 mutation DTO。
-相关真实 PG/Redis composition 位于 `apps/admin-api/test-integration/client/client-sso-snapshot.integration.test.ts`。
-岗位、组织、Role、Role Assignment 及上述 User、Employment、Responsibility 命令及 Client 基础、OIDC 与 Custom SSO 命令的 REST、legacy、tRPC 和页面已协调修改；整个集成分支的混合中间态不得部署，外部 REST 调用方核验仍是最终切换前的责任。
-
-成功业务结果通过现有 REST envelope 或直接通过 tRPC 返回，并协调切换调用方。状态/生命周期、主任职、授权、协议、凭据及会话命令的合法 no-op 保留意图审计，普通资料无变化不记变更审计。Client Runtime invalidation 与提交后失败沿用 ADR-0025 的结果语义；SSO Secret 的独立授权读取和审计边界见[应用接入配置](../features/admin/client-sso-configuration.md)。
-
-Client Delegation 的创建、生命周期、冲突、范围查询和选择器由 `@iam/delegation` 统一拥有，API 与 Admin API 通过公开 root 接口注入数据库和事务审计能力；浏览器仅消费 `/wire`。Admin 传全局管理范围，SSO 传本人委托人或受托人范围，Internal 从认证身份传 Client 范围，app 不互相导入私有实现。直接解析仍由 API 的独立 resolver 在同一观察时刻和数据库快照完成，不进入 User Profile 或 Subject Facts。
-
-[ADR-0020](../adr/0020-provide-fail-closed-privilege-delegation-resolution.md#按委托人协调写入) 的顺序继续适用于全部写入口：创建先锁委托人 User，更新只预读不可变的委托人 ID；取得 User 锁后重读完整记录及调用范围，再校验候选、冲突并原子写入事实和成功审计。同一委托人串行化，但仅同一 Client、相交闭区间及组织范围构成业务冲突。Pause 占位，Disable 后只允许纯重复结束且不重写业务行；Internal 保留详情/boolean，Admin 适配统一 mutation result。该能力不登记 Profile dirty，也不改变其他对象引用预检的跨对象乐观边界；删除门禁在原有 User、Client、Organization owner 中检查所有未结束直接引用，不因自然到期解除。
-
-## 请求、审计与可观测上下文
-
-- Hono `Context` 属于 route/protocol boundary。Use case 只接收 normalized actor、最小 audit request context 等
-  协议无关输入，不接收 Hono `Context`。
-- API/Admin API 的 `services/audit/audit.context.ts` 拥有 `AuditLogInput`、actor/request context type 和 context
-  normalization helper。Event builders、services、ports 和 use-case types 从该 context owner 导入，不从 concrete
-  audit service factory 反向获取类型。
-- `recordAuditLogFromContext` 是供 protocol boundary 使用的 convenience；跨 transaction 或进入 use case/service
-  的调用应传递已规范化的 audit context。
-- `services/audit/events/` 中的 event helpers 是纯 payload builders。业务模块通过 composition 注入的 root 或
-  tx-bound audit writer port 写入，不直接绑定 audit repository。
-- `requestId` 与 `traceId` 从协议边界显式流入 audit、UnitOfWork observability、after-commit 日志及需要它们的
-  integration port；不得依赖隐藏的全局 request state，也不得在叶子模块重复解析 headers。
-- 后端按 `traceparent`、`x-b3-traceid`、`x-trace-id` 的优先级解析 traceId；从 traceparent 只提取 32 位 trace-id，
-  不记录完整 header 原文。无 trace header 时保留 null/缺失值，不由后端随机生成；APISIX 可创建并向上游传递上下文。
-
-## 关键模块所有权
-
-### Client Subject Projection
-
-- `@iam/client-subject-projection` 通过单一 `PermittedClientSubjectProjectionService.resolve` Interface 隐藏 Catalog
-  校验、Subject Facts 读取、client 裁剪、稳定排序与投影组装。调用方只提交 Subject Identifier、`clientCode` 和
-  `SubjectClaimSelection` 与本操作许可证明；facts/permission dependencies 只在 factory 处注入。
-  同次交付的全部所选 Claim 使用同一份合法 Facts；仅 Subject Identifier 时不读取 Facts。
-- Subject Facts port 只暴露已发布 Profile 与有效任职事实，不暴露 Legacy User Detail。普通 Profile 与
-  `iam:authorization` 统一消费取得的合法已发布 Facts，允许源角色事实已改变但重建未完成或持续失败时仍交付旧角色，
-  不再查询 Dirty 或执行 Authorization Freshness Barrier。Facts 缺失或主体错配时整份投影失败；
-  撤权传播不承诺固定期限，第三方复制后自行刷新，见 [ADR-0032](../adr/0032-consume-published-subject-facts-for-authorization.md)。
-- 核心投影保持协议中性。`@iam/custom-sso/wire` 只公开一个完整 V3 交付 Interface：
-  `resolveCustomSsoSubjectProjection` 先调用 root Projection Service，再核对返回的 Subject Identifier 与 resolve input，
-  随后执行 wire mapping 和 strict schema parse。Schema、Wire 类型与 placeholder preview
-  继续公开。Subject mismatch 产生只含安全 reason `subject_mismatch` 的内部不变量错误，mapping/parse 失败产生
-  `invalid_wire`；resolve 阶段的既有错误原样传播。该 subpath 只能通过 package root public Interface 取得 Projection
-  类型或能力，不得导入其他 core subpath、Facts persistence、client 配置、runtime 或 transport。
-- Package root 是唯一 active V3 projection Interface；Custom SSO wire 只从 `@iam/custom-sso/wire` 公开。Catalog V3 保持既有 claim vocabulary，
-  选择 `profile:employments` 时每条 Employment 原子携带 canonical `responsibilities`/`[]`；authorization employment
-  继续只含 Employment identity 与 roles。Custom SSO 的 `/wire` 拥有 V3 strict schema/mapper，缺失、
-  未知或非法 responsibility 拒绝整份 projection，只接受当前 Catalog/Selection v3 和 Custom SSO wire v3，
-  不提供旧代际 alias、translation、fallback 或 caller version switch。
-- `@iam/user-profile-read-model/subject-facts` 只公开 Facts read 能力：有效 Redis record 直读；miss、损坏、
-  未知 schema 或主体错配按 Subject single-flight 查询一行窄 `user_profile` 并以版本 CAS 尽力回填；
-  回填失败仍可使用合法数据库 Facts。Redis 读取故障直接失败，不触发回源；数据库错误沿用既有失败路径。
-  查询不读取 Legacy `detail`/`search_doc`、Dirty 状态或联查源业务表，数据库行缺失或无效时返回 Projection Not Ready。
-- API 默认 composition 组装 Root authentication、Custom SSO 与 OIDC，Kernel 只管两类会话，协议各自管 Code/Token。
-  Client Snapshot 一次取得当前状态和单协议配置，Secret 由独立认证能力读取；操作接受后不追溯重查配置。
-  访问必须验证 UserSession/ClientSession 关系及 Subject Access。SSO disable/maintenance/config/secret 维护与显式撤销分离。
-- Custom SSO token/UserInfo 按当前 Client selection 输出 V3 wire；Gateway authz 强制裁剪 Subject、username/name，
-  body/header 使用同一 Base64 值。单 callback 决定托管或业务接入，不再接受 mode/logoutEndpoint。
-- OIDC 的 Code 保留原 redirect/scope/nonce 等授权事实；UserInfo 使用当前 Client 披露范围和已发布 Facts，
-  ID Token 固定签发内容并排除 IAM 扩展声明，不再持有 Claims Snapshot。OIDC HTTP、Cookie、错误与进程生命周期由 API 拥有。
-- Snapshot 的读取、传播与恢复由 [Client Snapshot](#client-snapshot)统一维护；旧三类 Snapshot/Gate 不进入在线图。
-  User Profile 的初代 V1 builder、Facts reader/publisher 与 Subject Projection 切换实现已移除。
-  当前 Worker 通过 `createCurrentUserProfileProjectionBundle` 直接组装 `createUserProfileBuilder`、原子 publication 与 Facts publisher；
-  查询 DTO 由 `query/user-query.schema.ts` 拥有，readiness 继续复用版本无关校验规则。
+## 认证、会话与访问控制
 
 ### Client Snapshot
 
-API Core `client-snapshot` 独占 control/payload/credential；`createClientSnapshots` 在 composition 连接 Redis 与窄 source。
-普通 `ClientSnapshotReader` 同次取得 clientCode/status/ssoEnabled/ssoConfig，`kind:absent` 仅表示源行不存在或已删除，
-ssoConfig:null 表示现存 Client 未配置协议。`gate.acquire` 复用普通 reader，只返回 code/status，不要求协议配置或启用。
-`ClientCredentialReader` 独立取得 Secret、凭据 ID 和 ISO 更新时间。普通 source/query 不含 SSO 或 Internal 凭据，
-两个 reader 的源与缓存结果各经 schema 校验，不向消费者返回额外字段或缓存控制信息。
+API Core 独占 Client 缓存控制、普通配置和敏感凭据。普通读取一次固定 Client 状态与单协议配置；凭据通过独立窄接口取得并认证，
+普通查询和 DTO 不携带 Secret。认证成功只交付身份信息，敏感观察和比较细节留在模块内。
 
-敏感出口 `createClientSecretAuthenticator(reader).authenticate(clientCode, secret)` 每次取得敏感观察，
-以固定长度摘要 constant-time 比较 Secret；成功仅返回 Client code、凭据 ID 和更新时间，无凭据/错误 Secret 返回 null，
-缓存错误保持暂态。协议 owner 负责 Public/managed 例外和入口解析，接受结果后不再次认证。
-Admin `createClientSnapshotRepository` 提供普通与敏感窄 source；其他 composition 可按相同 port 注入。
+缓存缺失或损坏才回源；Redis 读取故障直接失败。同一读取器、Client 和失效观察的并发回源合并。
+成功失效阻止旧结果晚到回填，新请求不能复用失效前的在途观察；已接受 Snapshot 的调用仍可完成。
+发布遇失效冲突至多重取一次，再冲突返回暂态失败。
 
-缓存缺失或解析失败才回源；Redis 连接或读取失败不回源。默认正缓存 30 秒、负缓存 3 秒，均可注入。
-同 Client、同实际 reader、同失效观察的并发回源合并；Gate 与普通 reader 共享回源。
-发布遇失效冲突时每个调用方至多重新获取一次，再冲突暂态失败。
-成功失效阻止旧结果晚到回填，新调用也不能复用失效前的在途缓存观察；已接受观察的原调用仍可完成。
+Client 写入提交后统一失效普通与敏感缓存，合法配置、启停等意图即使 no-op 也保留审计和 required 失效；InternalAuthz 缓存按自身机制失效。确认提交但传播失败时报告已提交；
+COMMIT 未知时保留原错误并保守失效。Secret 重读只读并记审计。配置、启停和轮换均不自动撤销会话。
 
-`createClientSsoSnapshotManagement` 统一管理写入与失效；提交后清除普通/敏感 payload。
-确认提交后的传播失败映射 `ADMIN_MUTATION_COMMITTED`，Unknown COMMIT 保留原错误并尝试保守失效，不重放 mutation。
-readSecret 只读取并记审计，不失效缓存。业务后果与页面恢复由[Client 配置](../features/admin/client-sso-configuration.md)维护。
-
-`/client-snapshot/maintenance` 提供 `createClientSnapshotMaintenance(redis).repairClient(code)`，
-以及带 `{protocolTrafficStopped:true}` 的 `repairAllAfterRedisRestore`。
-`createClientSnapshotVerifier(scanOnlyRedis).verifyAllAfterRedisRestore` 独立只读扫描并返回 matchingKeys；
-仅完整成功且为零可由 CLI 判定恢复完成，扫描失败抛出安全错误。
-维护只处理当前 Snapshot owner 的已知库存，保留其他 Client（定向时）、旧布局、其他 owner 和未知键族，
-不读写 PostgreSQL、不轮换 Secret、不撤销会话。全量修复与独立核验前须停流排空，失败保持停流，
-操作见[Snapshot 修复](../releases/authentication-and-session.md#client-snapshot-修复)。
-
-### 角色分配解析
-
-- `@iam/role-assignment-resolution` 是 Effective Role 与角色变更受影响用户解析的唯一 production seam。Admin 和
-  User Profile 的叶子 service/repository 只消费 composition 注入的最窄 resolver 能力，不直接读取 `role_assignment`
-  重建解析规则。OIDC 消费已发布 Subject Facts，不直接调用角色解析器；决定见
-  [ADR-0002](../adr/0002-centralize-role-assignment-resolution.md)。
-- App composition root 或 `createUserProfileWorkerModule` 使用当前 `DbClient` 为普通消费者创建 resolver，同一
-  composition 中的消费者复用该实例。
-- User Profile 失效是模块自有边界：API/Admin transaction composition 不创建或注入 resolver/projection
-  repositories，只把当前 transaction `DbClient`、rebuild queue adapter、lifecycle 和 clock 交给
-  `createUserProfileInvalidation`，由模块内部创建 tx-bound resolver 及 projection repositories。
-- Admin 角色管理 repository 可以直接读写 assignment 以实现 CRUD、搜索和约束检查；这不属于 Effective Role 或
-  受影响用户解析。根级 Architecture Guard 允许该 owner，并阻止其他 production 调用方导入专用 assignment schema
-  subpath。
-
-### Organization Responsibility 解析
-
-- `@iam/organization-responsibility-resolution` 是 Effective Responsibility 与跨树 holder 反向解析的唯一跨 runtime
-  seam。调用方显式提供 observation time；resolver 批量返回 Type/target identity，并在引用、父生命周期、Period 或
-  Open cardinality 异常时整批 fail closed，不拥有 cache、ACL、Admin history、transport DTO 或 protocol wire。
-- User Profile invalidation 使用 transaction-bound resolver，把 Organization subtree 的既有 Employment 用户与
-  responsibility target reverse holders 合并后只登记一次 Dirty Version；Catalog 已发布字段/order 变化通过 Type holder
-  seam 失效当前 holder。Admin 管理 repository 继续直接读写 Assignment，但不向其他 runtime 暴露其查询规则。
-- Admin Organization Responsibility 管理由同一个 `AdminOrganizationResponsibilityAuthorization` deep seam 统一表达
-  `full` 与 `scoped`。有效 `iam:hr-admin` 的 scoped read scope 在 SQL pagination/cursor 前同时约束 holder Employment
-  Organization 与 target Organization，并以 `AND` 组合；Create、Pause、Resume、End 在事务内复查同一双端条件。
-  任一端越界对 detail/mutation 返回 404 concealment，拒绝日志只记录稳定 operation/resource/reason，不记录 Assignment、
-  holder、Organization path 或 scope/root 集合。`iam:admin` 以及 mixed-role actor 继续走 full 分支。
-- Assignment view/detail 的 `allowedActions` 是服务端事实，综合当前 scope、lifecycle、parent integrity 与隐藏 blocker；
-  Organization lifecycle 的不可管理开放责任使用稳定 `UNMANAGEABLE_RESPONSIBILITY_BLOCKED` reason，安全 cardinality
-  conflict 不暴露被隐藏记录。请求时 scope 每次从 PostgreSQL Effective Role/Employment/Organization Path 解析，撤权后的
-  下一请求立即收敛。
-- Organization Responsibility 的唯一约束失败后，不在已失败事务中继续查询 blocker；
-  不为分类冲突来源增加父行锁、提高隔离级别或自动重试。完整管理员收到名额冲突，纯 HR 收到不可管理责任的安全阻塞说明。
-- `@iam/user-profile-read-model` 默认入口生成并读取同一 Dirty Version
-  下的 Detail、Search 与 Subject Facts v4，并复用 PostgreSQL atomic publication、Redis monotonic CAS 与严格 v4
-  cache/PostgreSQL read-through。Active Internal Detail 与 canonical Filter DSL 均只读同一个 `user_profile` v4 row，
-  分别返回严格 Detail 与固定 User Profile Base；委托通过独立解析接口读取。API 使用独立的 2 秒 PostgreSQL statement timeout 连接和 5 秒 handler
-  budget，并在 composition shutdown 中关闭该资源。Worker 通过版本无关的 `user-profile:backfill`、`user-profile:repair`
-  与 PostgreSQL/Redis readiness 命令复用普通 dirty/job/publication 路径；命令不应用 client manifest 或推进 epoch。Active
-  Worker consumer、Internal User、Custom SSO 与 OIDC 只发布和读取 v4，不允许同一 live User 混写、双读、fallback 或由
-  caller 选择版本。Catalog/Selection v3 与 Custom SSO wire v3 各自保持独立版本边界。
-
-### User Profile 失效
-
-- `@iam/user-profile-read-model` 的 transaction-bound `UserProfileInvalidation.recordChanges` 是业务写路径唯一的
-  User Profile 失效 seam。调用方只提交 user、employment、organization、position、role、role-assignment、
-  organization-responsibility-assignment 或 organization-responsibility-type source change，并在同一 source
-  transaction 的领域写入完成后调用。
-- 调用方不选择 dirty reason 或 scope，不接触 dirty/affected-user repository、job producer、after-commit
-  registration，也不复制 request/trace metadata。业务 service/use case 只接收自己所需的最窄 `recordChanges` port。
-- API/Admin API 的 transaction composition 使用当前 transaction `DbClient` 创建 `UserProfileInvalidation`；
-  模块内部拥有 tx-bound dirty repository、affected-user repository、role-assignment resolver 和 Organization
-  Responsibility resolver。普通 repository
-  composition 不创建或暴露这些 projection implementations。
-- `recordChanges` 成功表示 dirty fact 已在 source transaction 持久化并登记 rebuild wake-up，不表示 BullMQ 已完成
-  入队。提交后的批量 enqueue 是 best-effort；失败由日志和 repair 路径恢复，不回滚业务事实。
-
-### User Profile Subject Facts publication
-
-- Worker claim 在 transaction 外绑定 candidate 的 Dirty Version。Builder 加载全部 Open Employment 及其父对象事实，
-  先对 Position 与直属 Organization 执行 fail-closed 完整性守卫，再只投影当前位于 `[startTime, endTime)` 的 Enable
-  Employment。它通过 `@iam/role-assignment-resolution` 的唯一 Effective Role seam 取得 assignment/closure 结果，再按
-  不可变 `clientCode` 形成最小 Subject Facts；organization path、client 与 role 均稳定排序，无角色任职
-  保留空 authorization 数组。
-- PostgreSQL publication 是模块内部 deep seam：transaction 先对目标 dirty row 取行锁并重验同一 user/version 仍为
-  processing，再单调 upsert/delete `user_profile`，最后在同一 transaction 标记 dirty processed。过期 candidate
-  或低于已发布 `source_dirty_version` 的 candidate 直接丢弃。
-- PostgreSQL 提交后，Worker 才把一个 versioned Subject record 发布到 Redis。Redis CAS 以规范十进制字符串比较
-  Dirty Version，原子保留较新记录；缓存失败的结构化 warning 只记录 user、Dirty Version、`cacheStatus` 及严格
-  白名单化的 error type/code。原始 error、message、stack、Redis command/args 和 Subject Facts record 不进入日志。
-  `cacheStatus=failed` 同时进入 processor 结果和 Worker 完成日志，不执行数据库补偿。
-  自动恢复由 Subject Facts Reader 的 read-through/cache repair 负责；Reader 只在缓存未命中或不可解析时读取
-  `user_profile` 窄行，并继续使用同一版本 CAS publisher。Facts cache 发布成功后，Worker 还通过注入的
-  Subject Access repair port 尝试收敛对应账号；repair 失败不回滚已经提交的 Profile 或 Dirty 状态。
-- API 与 OIDC composition 为同一 Reader 注入 `subject_facts.operation.observed` logger adapter。事件只含
-  `operation`、`outcome`、`durationMs`：区分 cache hit/miss/invalid、Profile load 与 single-flight wait；不得包含 Subject Identifier、Facts/Dirty payload、Redis key 或 Token。observer 失败不会
-  改变认证结果。
-
-### Subject Access Barrier
-
-- API、Admin API、Custom SSO 与 OIDC 已统一使用每操作一次的 Subject Access Permission。
-  `createSubjectAccessOperations({ barrier, revocation })` 提供 `run(callback)`（自动关闭）和
-  `createOperation()`（调用方在 `finally` 关闭）。可信认证后用 `acquireForAuthentication` 取得新代际，
-  只读对象解析后用 `acquireForSession` 比较已有 context；同一个 pending Promise 固定成功、拒绝与暂态失败。
-  无主体和未解析出可信身份的无效凭据可以零读取结束；并行回调共享检查，新请求重新检查。
-- `requireSubjectAccessOperation` 拒绝缺失、伪造和已关闭容器，`requirePermission` 验证同主体的已有许可；
-  `getSubjectContext` 只接受该容器创建的许可。不同主体或代际直接拒绝，不换身份重查，也不向后台转交许可。
-  `encodeSubjectAccessContext` / `parseSubjectAccessContext` 严格编码 JSON string 中的
-  `{ version: 1, subjectIdentifier, transitionId }`。缺失、坏 JSON、额外字段、非法 UUID 或不支持版本失败关闭，
-  不按当前 Barrier 补齐；持久化 context 不是许可。
-- 许可成功后账号进入 blocking、disabled 或重新启用，不推翻本次判断；迟到签发沿用原代际。
-  下一调用重新检查，重新启用不恢复旧代。对象存在、到期、撤销、消费、归属和并发冲突仍由 Kernel 校验。
-- 明确拒绝使用 `SubjectAccessOperationDeniedError`：旧代撤当前根，disabled 按原凭据 context 精确撤销，
-  新认证尚无旧代时不撤销。撤销或 cleanup 失败仍拒绝。`createSubjectAccessSessionRevocation` 在 Subject Access
-  内将代际翻译成不透明 context，Kernel 不解释账号含义。blocking、缺失、坏记录和 Redis 故障不撤销、不清 Cookie。
-- Admin authentication 在管理员可信 Principal 解析后、资料和 REST/tRPC 业务处理前取得许可。
-  资料只按 Subject Identifier 查询；缺失仍是既有未登录结果，角色、scope 和目标用户业务状态保持独立。
-  session-management 使用中性 inventory/control 返回未过期、未撤销的 Principal Session Record，
-  不读取目标 Barrier，不触发账号拒绝清理。User、Client 和 Resignation 经统一 Session Revocation adapter 执行终止。
-  prepared 读取失败保持 bestEffort 诊断和 callback 前代 fallback；空集合不扩大撤销，新代不受晚到清理影响。
-- `@iam/api-core/subject-access` 是账号实时可访问性的唯一共享 seam。公开 Barrier 只接受严格版本化的
-  `enabled`、`blocking`、`disabled` record；缺失、非法内容、Redis 失败和 `blocking` 都 fail closed。
-  Redis adapter 独占 record、transition journal、repair ZSET 与 Lua 原子转换；rollback/finalize 只接受同一
-  transition ID，repair 不从缺失 record 创建 `enabled`。普通 package export 只暴露 Barrier/lifecycle/repair
-  factory、稳定错误和配置所需 port；record serializer、atomic store 结果和 Lua mechanics 保持模块私有。
-  Barrier 写 adapter 的基础设施异常统一收敛为无 cause 的 `SubjectAccessWriteUnavailableError`，domain conflict
-  仍使用 `SubjectAccessTransitionRejectedError`，原始 Redis error/message 不跨越写接口。
-- API/Admin HTTP adapter 将明确拒绝映射为 `401 / SESSION_INVALID`（清 Cookie），暂态为
-  `503 / SUBJECT_ACCESS_UNAVAILABLE`（保留 Cookie）。Cookie 删除保持 `Path=/`、epoch `Expires` 和 `Max-Age=0`。
-  OIDC Subject Access 明确失效在 Token 返回 `401 / login_required`，UserInfo 返回 `401 / invalid_token`，
-  暂态失败返回 `503 / temporarily_unavailable`；只有明确失效清全局 Cookie。`invalid_grant` 属于已消费 Code
-  重放等协议拒绝，不是 Token 的 Subject Access 错误映射。原生 handler 继续保留各自路由错误契约。
-- Admin 用户创建、状态变更、删除与离职 use case 复用同一 lifecycle coordinator：数据库 mutation 前原子
-  pre-block，回滚时恢复转换前状态；pre-block 前先独立持久化窄 PostgreSQL transition intent，实际 domain mutation
-  与精确 intent 的 `FOR UPDATE`/committed outcome 处于同一 transaction，因此被回收的旧 owner 会在 domain write 前
-  被 status fence 拒绝。禁用类提交后 finalize `disabled` 再 best-effort 撤销 Principal Sessions。lifecycle
-  disposition 可以由 transaction 结果决定；Admin 状态更新使用 transaction 内的 old/new 状态，同态更新
-  `restore_previous`，实际新启用保持 `blocking`，直到当前版本 Subject Facts 发布成功并由 repair finalize `enabled`。
-- Worker repair 以 Redis ZSET 为可索引 backlog，通过 PostgreSQL `user` 状态/删除标记核对账号权威状态；启用账号
-  还必须证明 `user_profile` 与 processed Dirty version 一致、严格解析 Facts，并成功执行版本 CAS 发布。
-  worker 用单个 Lua claim 原子领取所有到期成员并把 score 推进到 lease deadline；并发 worker 不重复领取，
-  crash 后 lease 到期重试。deferred/failed 仅在 record 仍是同一 blocking transition 时重排，stable ack 与新
-  pre-block 原子线性化，因此旧 worker 不能删除或推迟新 transition。
-  从仅有 `idx:repair` 的旧部署滚动升级时，claim Lua 对缺失的 `idx:repair:age` member 做原子惰性补齐，不能因
-  指标索引尚未迁移而阻断 repair。旧 entry 的精确首次入队时间不可恢复；迁移后的 entered-at 定义为“当前 legacy
-  调度 score 与新 owner 首次观察到的 Redis server time 中较早者”，后续 lease/backoff 只推进调度索引，不重置该 age。
-  `user-profile:repair` 的 Subject Access 路径严格分三阶段：先用 PostgreSQL server time 与
-  `IAM_WORKER_USER_PROFILE_REPAIR_STALE_SECONDS` 阈值，在单条写事务中按 `update_time`、`id` 有界选取最多
-  `--limit` 个 stale `pending` intent，以 `FOR UPDATE SKIP LOCKED` 跳过活跃 writer 并原子改为
-  `rolled_back`/`rollback`；该扫描覆盖 Redis 尚未索引的 PG-only gap。之后处理 Redis transition recovery，最后
-  运行上述 authority repair。PostgreSQL reaper 失败时命令 fail closed，不执行后续 Redis recovery 或 authority repair。
-  `--subject-access-only` 使用不创建 BullMQ Queue、不执行 User Profile maintenance 的窄 command composition，
-  但它不是 PostgreSQL 只读路径，也不局限于 indexed Barrier backlog；Worker DB role 必须具有 schema access 以及
-  `subject_access_transition` 的 `SELECT`、`UPDATE` 权限，并保留 authority repair 所需读权限。默认模式在 transition
-  recovery 后并行执行 Dirty maintenance 与 authority repair；`--stale-before` 只影响 Dirty row，不改变 PG-only
-  transition 使用的 server-time threshold。
-  仓库不内置 scheduler；部署 owner 必须按文档化恢复 SLO 配置外部周期、stale threshold、`--limit`、重复排空和告警，
-  并把 threshold、等待下一轮调度和有界排空三段最坏耗时计入 SLO。
-  结构化监控以 `Subject Access stale transition intent reap started` 的 `limit`、`staleAfterSeconds`，
-  `Subject Access stale transition intents reaped` 的 `rolledBack`、`limit`、`staleAfterSeconds`，
-  `Subject Access transition recovery backlog processed` 的 `prepared`、`rolledBack`、`deferred`、`failed`、
-  `limit`，以及 `Subject Access repair backlog processed` 的 `disabled`、`enabled`、`deferred`、`failed`、
-  `stable`、`limit` 为准；非零退出或 start 后缺少完成日志表示该轮未完成。请求路径、cache warmer 和 read-through
-  都不得把缺失或不确定 Barrier 推断为启用。
-
-- 统一认证先验证凭据，再取许可并创建根；协议在首次可信主体解析后固定许可，投影与交付复用它，不在操作末尾重查。
-  `createPermittedClientSubjectProjectionService` 要求当前许可与主体一致，Facts 的格式和主体匹配仍独立校验。
-  已许可的管理员资料读取与 OIDC 账号查询不以 enabled/deleted 再追加账号拒绝，缺资料和查询错误仍失败；
-  其他业务查询的状态过滤不因此取消。授权、guard、resume、兑换、callback、UserInfo/authz 各有独立容器，
-  不能把浏览器旅程合并成一次许可，关闭后 acquire、require 和 context 访问均拒绝。
-  API Core 的 `createUnifiedSubjectAccessSessionRevocation` 连接代际与中性撤销，Kernel 不解释账号状态或获取许可。
-
-### Session runtime 与跨 App 边界
-
-- `createUnifiedSessionKernel` 是唯一在线中性工厂，从 `@iam/session-kernel` 根出口消费。Kernel 只拥有 UserSession/ClientSession，
-  不依赖 API Core、协议或 app。新根显式接收不透明 subjectContext，应用关系继承原根与主体，调用方不能替换。
-- 根期限由统一认证 env 决定且固定不滑动，ClientSession 期限受根上限约束。Redis 原子状态拥有时间、关系、open 复用、
-  实例观察与撤销；协议 Token 不放入 Kernel，不使用旧四对象或配置代际比较。
-- Subject Access 由 API Core 的每操作容器拥有；首次可信主体取得许可后固定结果，在途不重新判账号状态。
-  新操作再次取许可，并验证 Token 自身及 UserSession/ClientSession。缺失、损坏或未知关系失败关闭，不误清暂态 Cookie。
-- 四认证用例保留身份验证、限制、AMR、Origin 和审计，通过 API root-authentication composition 创建 UserSession。
-  `global_session` Cookie 是浏览器根；新授权复用有效根，续接事实由所属协议保存。普通登录参数不能绕过 guard。
-- Root security 供 Admin/本人安全/账号 lifecycle 复用；禁用、删除和离职按原 Subject Access transition 规则处理。
-  Prepared 只捕获合法原上下文，损坏结果不伪造空集合；明确原代际撤销保留重新启用后的新代。
-- 管理查询是中性索引观察，不给目标账号发许可，不把 total 当完整在线人数。撤销捕获精确 identity，
-  用户/根/应用关系结果与失败、未知、剩余原集合分开。原请求重试不重选新实例，根终止后 Token 在线访问拒绝。
-- 同根与子对象的作用不是一般事务；不承诺第三方本地退出或可靠后台补齐。Code/Token TTL、同步精确补偿、
-  独立维护和人工/外部责任见[统一维护手册](../releases/authentication-and-session.md#恢复边界)。
-- `/maintenance` 与 `/testing` 分离；仅维护当前 unified 布局；旧 source decoder 已退役，不探测或转换旧关系。
-  当前 API/Admin/Worker 同一生产图只消费一代；环境切换仍需人工发布验收。
-
-#### Kernel 操作与观察
-
-`createUnifiedSessionKernel` 接受 Redis eval、根与 ClientSession 的秒数 TTL 和消费方的 assertOperationActive port；
-`requireSubjectAccessOperation` 可满足该 port，Kernel 不反向依赖 API Core。通过 forOperation 绑定操作，
-可信根解析后由调用方 acquireForSession，再 openClientSession；统一认证则取得认证许可后 createUserSession。
-认证输入含主体、opaque context、amr 和可选 origin。时间由 Redis 决定，authTime/createdAt/expiresAt/observedAt/issuedAt
-为毫秒，remainingSeconds 向下取整且非负。两类会话默认 TTL 各 86400 秒，协议 TTL 独立。
-
-根 bearer 用 resolveUserSession，内部 ID 用 resolveUserSessionById；后者仍需调用方认证、归属及许可检查。
-resolveClientSessionForUse 带原 userSessionId/clientSessionId/clientId，原子观察原根与原实例，不以当前关系槽替换目标，
-不比较 Token 用途与可变 protocol。可信观察仅属于创建它的 factory 和活跃 operation，修改、复制、JSON 往返或管理 DTO
-均不能构造观察。异步结果在交付观察前再检查活跃性；关闭不取消已开始的 Redis 写入，但迟到结果不发放有效观察。
-
-useObservation 复用本操作观察；getIssuanceLifetime 用新的 Redis 时间取协议 TTL 与已观察两类会话期限的最小值。
-这些能力不续期或在提交前复查会话，也不登记协议产物。新操作重新观察。
-同根同 Client 的 open 在一次 Redis 执行中新建或复用，保持原 ID/主体/instance，更新 protocol、授权时间和
-`min(root.expiresAt, max(old.expiresAt, redisNow + clientTtl))`；失效后创建新 ID。
-根身份、认证事实、context 和期限固定，子副本仅用于归属检查。根终止不依赖子索引；在途授权可落入旧根，之后在线使用仍拒绝。
-
-#### Kernel 列表与撤销
-
-listSessions 按 kind、可选 subjectIdentifier、offset/limit 在一次有界 Redis 操作中返回索引页和 total，每页最多 1000。
-索引只服务查询，页内坏记录失败关闭；索引漏项不恢复终止的根，在线路径不重建旧数据。
-HTTP 字段与分页预算见[接口 schema](../../apps/admin-api/src/routes/admin/session-management/session-management.schema.ts)，撤销结果见
-[管理服务及测试](../../apps/admin-api/src/services/session-management/)。
-
-observeUserSessionForRevocation / observeClientSessionForRevocation 核对原目标，接受仍存在的终态记录，
-不要求根或账号许可有效。同类在线观察也可用于 revokeObserved…Session；撤销比较稳定 instance，
-不比较合法变化的 protocol/期限，只作用于原对象。
-
-captureSessions 按 subjectIdentifier、userSessionId 或 clientId 分页返回 DTO、targets 和 nextOffset，每页最多 1000，
-多页不是全局快照。执行前完成全部捕获，不能边删边沿变化游标捕获。
-executeCapturedSessions 仅处理显式 targets，按原实例去重，可排除当前根而保留其子目标，不自动扩展子树。
-结果分开报告 terminated、already_terminated、missing、expired、excluded、replaced、failed 和 unknown；
-实际终止数与仅含失败/未知原目标的 unfinished 分离，后者可序列化供授权后重试。
-丢失集合时重新查询并发起新操作，不能自动扩大旧重试；已确认终止但响应丢失仍为 unknown，重试见终态不重新计数。
-
-权威终态保留原 expiresAt，根反向 ID 同期到期；索引保留各自期限且终止时尽力移除。
-索引回收失败不取消终态 TTL 或否定已确认终止；Kernel 不提供协议产物登记、pending 或可靠后台任务。
-`/testing` 只服务独立 scope、操作生命周期、故障注入和状态观察；维护范围与操作由[运维手册](../releases/authentication-and-session.md#会话清理)定义。
+维护模块只处理当前 owner 库存，保留非目标 Client、其他 owner、旧布局及未知键族，不修改数据库或会话。
+Redis 备份恢复后须停流排空、全量修复，再由独立只读核验确认库存清零，不能等待 TTL 自愈。
+操作见[Snapshot 修复](../releases/authentication-and-session.md#client-snapshot-修复)，
+关键并发行为见[Snapshot 集成测试](../../packages/api-core/test-integration/client-snapshot/client-snapshot.integration.test.ts)。
 
 ### Temporary Login Restriction
 
-- `@iam/api-core/login-restriction` 是 Temporary Login Restriction 实时生命周期的共享 production seam。它统一拥有
-  `login-failures:user:*`、`login-blacklist:user:*` 兼容 key、5 次阈值、30 分钟滚动窗口、30 分钟限制和
-  `login-blacklist:idx:users` 派生索引。
-- `LoginRestriction` 生命周期 facade 只依赖业务语义化 atomic storage port；production Redis adapter 独占 key 与
-  Lua，并使用 Redis 服务端时间创建、清理和遍历到期索引。列表遍历期间不得重写成员 score。
-- 密码与手机登录 use case 只通过 consumer-owned `loginRestriction` port 查询状态、原子记录失败和原子清理状态；
-  不自行持有 Redis key、阈值、限制写入或清理顺序。Temporary Login Restriction 不调用 Session Kernel，也不撤销或
-  恢复已有 Principal Session。
-- Admin `services/session-management/**` 通过 consumer-owned `loginRestrictions` port 读取限制和原子清理登录状态；
-  production `LoginRestriction` 以 structural typing 直接满足该 port。列表按自动到期时间倒序使用现有分页形状，
-  支持可选精确 numeric user ID，并通过一次批量用户摘要补充正常、暂停、结束、已删除或未知账号状态；用户记录缺失
-  不会使限制不可见或不可解除。
-- `POST /admin/session-management/login-restrictions/search`、
-  `DELETE /admin/session-management/login-restrictions/{userId}` 与对应
-  `admin.sessionManagement.listLoginRestrictions`、`admin.sessionManagement.releaseLoginRestriction` procedure
-  复用同一 adapter。安全列表 VO 只暴露用户摘要、规范 `too_many_login_failures` cause、最后
-  `password` / `mobile` / `unknown` Trigger Method、自动到期时间与服务端剩余秒数。
-- 解除意图只调用共享 `clearLoginState` 原子删除限制、当前失败历史与限制索引成员，返回 `{ changed, result:{ failureStateCleared:true } }`；自然过期或并发处理返回 `200 / changed:false`。它不调用 Session inventory/control，
-  不创建 allowlist 或宽限期，也不创建、撤销、续期或恢复任何 Principal Session；后续新失败立即按现有策略计数。
-- 限制查询或解除无法确认 Redis 状态时返回 `503 / ADMIN_LOGIN_STATE_UNAVAILABLE`。解除作用先于
-  `admin.login_restriction.release` PostgreSQL 审计；`changed:true` 后审计失败返回
-  `500 / ADMIN_LOGIN_STATE_AUDIT_FAILED_AFTER_EFFECT`，调用方刷新状态且不得自动重试 mutation。
-- Redis 状态无法确认时，共享模块抛出中性的 unavailable error，由登录入口映射为
-  `503 / LOGIN_PROTECTION_UNAVAILABLE`；登录审计使用 `login_protection_unavailable`，不得伪装成凭据错误或真实限制。
-- 新索引不执行旧 Temporary Login Restriction backfill，也不增加维护扫描或页面开放门禁；上线前未索引状态允许在
-  最长约 30 分钟的既有 TTL 窗口内不可见。
-- Production 使用未加前缀的兼容 key；`keyPrefix` 只用于真实 Redis contract 的随机 namespace 隔离，不属于业务输入。
+API Core 统一登录失败计数、限制状态和派生索引，Redis adapter 拥有键、原子转换和服务端时间。
+登录与管理入口仅消费该能力；解除原子清除限制、失败历史和索引，不创建宽限期或改变已有会话。
+无法确认 Redis 状态时报告暂态故障，不能算作凭据错误。管理解除先作用、后写审计，失败处理遵守审计安全边界。
+索引不反向决定限制是否生效，缺少用户资料也不能隐藏或阻止解除限制。阈值与字段见[登录功能](../features/sso/login-and-session.md)及代码。
 
-### Custom SSO Authorization Grant
+### Subject Access Barrier
 
-- `@iam/custom-sso` 完整操作拥有授权、续接、Code 唯一消费、Token、交付和本次 Token 补偿。
-  单 callback 决定托管/业务路径，不再接受 mode/logoutEndpoint；原 Code purpose 固定，后续配置不能绕过业务 Secret。
-- 业务兑换先认证当前 Client 并精确定位原 ClientSession，再消费 Code。适用门槛后失败在本请求内有界尝试终止原实例，
-  不恢复 Code、不重放成功结果；失败与未知保留真实副作用报告。错误 Client/用途不会撤销无关实例。
-- 托管回调在消费后签发并交付 Token，不强加业务兑换失败撤销。当前审计保留 historical gateway/independent 标签，
-  不构成配置字段。
-- 取得 Client Snapshot 和 access 后交付 capability 复用同一观察，Mapper 不重新读 Client；根 UserInfo 独立 Client 校验保持。
-  真实 I/O、唯一消费、替换保护和 Token 补偿不能作为重复内存判断删除，#155 清单在统一维护手册。
-- API route 只负责 HTTP、Cookie、错误/redirect，完整操作处理内部顺序。协议 `/wire` 是浏览器可用纯出口，
-  `/maintenance` 负责按 owner 前缀扫描和清空离线库存，不依赖 Code/Token schema；旧 Grant decoder 已退役。
+API Core 拥有账号实时访问屏障。每个业务操作在首次取得可信主体后获取一次许可，固定本次成功、拒绝或暂态结果；
+并行分支共享该结果，投影复用许可。下一次操作重新检查，在途已许可请求不因后续禁用而回查。浏览器旅程中的各请求是独立操作。
 
-#### Custom SSO 状态与完整操作
+许可绑定主体、代际和活跃容器，不能伪造、换主体或转交后台；容器关闭后拒绝继续使用。
+持久化 context 只记录身份，不能当作许可；缺失或损坏时不得根据当前屏障补齐。重新启用不恢复旧代。
+Kernel 检查会话存在、期限、归属和撤销，不解释账号状态；Code 一次消费由协议模块负责。
 
-Custom 状态 namespace 追加 `:custom-sso:v1:`。Code 外部值为 `Code ID.UserSession ID.ClientSession ID`；
-随机 Code ID 没有 MAC 或签名。记录绑定 Client、原根/子实例 ID、不可变 instance、用途、回调、兑换方、落地/state
-及 Redis 时间确定的固定期限。摘要定位同时绑定 Client、原根、子实例和 Code ID；拼接其他范围不能取得原 Code。
-Code 与续接由协议 owner 独占，不在 Kernel 建第二登记。
+明确失效拒绝访问，并按原上下文精确撤销；旧代清理不能影响新代。blocking、缺失、损坏或基础设施故障作为暂态失败，
+保留可恢复 Cookie。管理会话查询只观察索引和记录，不给目标账号发许可或触发访问清理。
+错误与 HTTP 映射由[Subject Access adapter](../../packages/api-core/src/subject-access/)维护，底层写异常不得泄漏原始 Redis 内容。
 
-Token 的完整随机 bearer 经 SHA-256 直接定位唯一记录，独立随机 ID 的反向键仅用于管理。
-记录保存 managed/business 用途、Client、原确切会话身份与固定 issuedAt/expiresAt。
-它不保存 Subject/Facts/Claims Snapshot 或外部系统会话引用。
-期限取协议 TTL 与已观察根/ClientSession 上限；兑换、访问及重新授权不延长旧 Token。
-补偿比较本次完整原值；反向键仅在仍指向相同摘要时删除。
+账号生命周期按以下顺序协调 PostgreSQL 与 Redis：
 
-授权入口为 createUnifiedCustomSsoAuthorization，业务兑换使用
-createUnifiedCustomSsoOperations().forOperation(operation).exchange(input, deliver)，覆盖整个响应构造；
-completeCallback 接收 code、clientCode、redirectUrl 和可选审计上下文。
-协议状态清理只按 namespace 与 owner 前缀，不按 Client 筛选，覆盖全部版本、键族和孤立索引，保留其他 namespace/owner。
-`/testing` 仅用于状态观察和故障注入，行为边界见[Custom SSO 接入](../guides/custom-sso.md)。
+1. 独立持久化窄 transition intent，再原子 pre-block。
+2. 业务事务锁定精确 intent 并记录提交结果；被回收的旧 owner 在写入前被状态检查拒绝。
+3. 回滚恢复原状态；禁用类提交后 finalize disabled，再尽力撤销会话。真正重新启用保持 blocking，直到当前 Facts 发布并完成 repair。
 
-## Runtime-specific Composition
+同态状态更新恢复原状态；合法重复离职仍尝试生命周期恢复与会话撤销。离职在业务事务前尽力捕获已有会话原上下文，提交后合并捕获代际与 callback 前代精确撤销。
+捕获失败退回 callback 前代，未知更早代留待重试；捕获不是全局快照，晚到旧会话由后续重试或访问校验处理。
 
-### API OIDC
+Worker 恢复先用 PostgreSQL 服务端时间回收 stale pending intent，并跳过活跃行锁；失败则停止，随后才处理 Redis transition 与账号修复。
+修复按数据库账号状态决定；启用前须证明当前 Profile 与 processed dirty 一致、Facts 合法且成功发布。
+Redis 领取和 lease、确认与新 transition 原子协调，旧 worker 不能删除或推迟新工作。repair 不从缺失屏障直接创建 enabled。
+旧调度记录补齐年龄时保留可恢复的最早观察，后续 lease/backoff 不重置年龄。
 
-API composition 装配 `@iam/oidc` 的授权、Code、Token、续接、UserInfo 与退出确认；旧独立 app 已删除。
-HTTP adapter 保持外部 issuer 和 `/oidc` 各路径，负责 Cookie、标准错误、CORS 与重定向，协议包不依赖 HTTP/DB/app/Custom SSO。
+专用 Subject Access repair 仍需数据库写权限；dirty 的 stale 参数不改变 intent 的服务端时间阈值。
+部署方负责外部周期调度和告警，把 stale 阈值、等待下一轮及有界排空计入恢复时限。
+步骤见[数据维护](../releases/data-maintenance.md)，关键行为见
+[操作许可测试](../../packages/api-core/test-integration/subject-access/subject-access-operation-kernel.integration.test.ts)。
 
-Code 保留首次接受的授权事实并由所属 owner 原子消费；认证和原实例定位后的失败有界处理原 ClientSession。
-Token 使用校验自身与两类会话关系及当前 Client/Subject Access；UserInfo 使用当前披露和已发布 Facts，
-不保存 Claims Snapshot，已签发 ID Token 内容固定。取消只消费退出确认，确认作用于请求当前根，不新增多标签页保证。
+### Session runtime 与跨 App 边界
 
-API env 注入 current/previous RS256 JWK，JWKS 只输出公钥；非法配置启动失败。`/health`、`/oidc/health` 检查 Redis，
-`/ready` 检查 PG 与 Redis；进程关闭由 composition/lifecycle 释放 server 和连接。依赖失败保留可恢复 Cookie并返回暂态。
-安全 `oidc_protocol_error`/`oidc_server_error` 日志由 API 写出，Gateway `/oidc` 路由只改 upstream 为 API。
-具体配置、密钥轮换、当前协议接口和人工边界见[OIDC 接入](../guides/oidc.md)与[发布手册](../releases/authentication-and-session.md#oidc-双入口配置)。
+Session Kernel 只拥有 UserSession 和 ClientSession，由 Redis 原子状态决定时间、关系、观察与撤销。
+它不依赖协议、API Core 或 app；Code、Token 和续接由各协议拥有。认证用例负责凭据、登录限制、认证方式和审计，随后创建根会话。
 
-OIDC createOidcAuthorization、createOidcTokens().forOperation(operation).exchange(input, deliver) 和 createOidcLogout
-分别拥有授权、完整兑换和退出。Code 为 Code ID.UserSession ID.ClientSession ID，摘要定位绑定 Client、原根、
-不可变实例和 Code ID；记录固定授权事实与 Redis 期限，不建立消费墓碑或 Kernel 第二登记。
-Token 摘要记录为唯一权威，UUID 反向键只用于管理且不保存 bearer。
-`/maintenance` 清理所选 namespace 内 OIDC owner 的全部协议状态，包括损坏记录与孤立索引，不按 Client 筛选，
-保留其他 namespace/owner；`/wire` 供浏览器消费，`/testing` 仅供状态观察和故障注入。
-处理顺序见[兑换实现](../../packages/oidc/src/tokens.ts)，调用方失败处理见[OIDC 指南](../guides/oidc.md#兑换失败与重新登录)，维护前提见[运维手册](../releases/authentication-and-session.md#会话清理)。
+Custom SSO 路由与用例通过注入的应用接口访问会话，不直接导入 Kernel、协议内部实现或 app Redis。
+Admin 用户和 Client 业务通过撤销接口操作会话，Kernel 接线及原上下文适配由 composition 负责。
 
-### Worker
+根身份、认证事实、context 和期限固定。ClientSession 继承原根与主体，同根同 Client 的 open 原子新建或复用有效实例，
+更新协议标记并单调延长到根期限以内。协议凭据期限也受已观察两类会话限制，使用或重新授权不延长旧 Token。
 
-- Worker `session:clear:inventory`、`session:clear`、`session:clear:verify` 通过公开 owner 组合前缀扫描、批量 UNLINK
-  和只读独立清零核验；Kernel、OIDC、Custom SSO 各自声明 namespace 下的 owner 前缀，不读取状态内容，
-  覆盖所选前缀全部版本、键族和 Redis 类型，不执行 CAS 或索引修复，也不导入 app 私有状态。旧 Provider decoder 和
-  `/offline-maintenance` 出口已退役。 `client-snapshot:repair/verify` 只消费 API Core 新 Snapshot
-  维护出口；这些 CLI 默认读取 `apps/worker/.env`，已有进程环境变量优先，使用 Worker 资源变量连接、限制 deadline 并在结束时断开资源。它们没有 HTTP、队列或 PG 连接，
-  也没有可靠后台执行器。当前 owner 和人工边界见[统一维护手册](../releases/authentication-and-session.md)，旧来源操作见[历史工具入口](../development/commands.md#历史数据维护工具)。
+可信观察绑定创建它的 factory 和活跃操作，复制或序列化不能制造观察；迟到结果交付前仍检查操作活跃性。
+关闭操作不取消已开始的 Redis 写入。观察可以在本操作复用，下一操作重新观察；内部 ID 查询仍须调用方完成认证、归属与许可检查。
+根终止后在线使用拒绝，不依赖子索引枚举或异步 Token 清理；在途授权仍可能落入旧根。
 
-- `apps/worker/src/modules/registry.ts` 定义稳定 `WorkerModule` contract：`key`、`queueRegistrations`、
-  `startConsumers()` 和 `close()`。具体 queue/processor implementation 由对应 public workspace package 提供。
-- `createWorkerComposition` 拥有 runtime、已构造 modules、module selection、dashboard queue selection、HTTP server
-  和 shutdown。未知 module key 在启动时失败；consumer 按配置启动，module 按反向顺序关闭。
-- `src/http/` 只提供 health/readiness 与可选 Bull Board，不是业务 API。Readiness 由 composition 注入依赖检查和
-  module 状态；Bull Board 只接收 module 显式注册的 queues。
-- `createWorkerCommandComposition` 使用 `commandOnly` 模式复用 DB/Redis/module wiring，但不启动 consumers、不注册
-  dashboard queues，也不启动 HTTP server；User Profile backfill/repair entrypoints 使用该入口。
-- `createOrganizationSearchCommandComposition` 是 Organization Search backfill/repair 共用的窄 PostgreSQL + queue
-  composition，复用组织写入资源的有界唤醒与强制关闭能力，不创建其他领域 module、consumer 或 HTTP。
-  组织正式生产者、consumer、命令和 dashboard queue 均使用 `@iam/jobs` 的固定默认前缀；命令不暴露独立队列命名空间。
-  两种命令共用 deadline 与 signal lifecycle，失败或中断保留持久工作；repair 仅重新投递，最终发布由普通 consumer 完成。
-  两阶段回收、报告语义与外部调度责任见[组织搜索维护](../releases/data-maintenance.md#组织搜索日常修复)。
-- `createOrganizationSearchVerifyCommandComposition` 是独立 PostgreSQL-only composition，拥有专用单连接池，
-  仅组装完整只读 verifier。所有 inventory 和 source reader 在同一个 repeatable-read read-only transaction 中观察；
-  不创建队列、其他领域 module 或 HTTP。deadline/中断时仅取消本次唯一 application name、当前数据库和角色的查询，
-  关闭查询池和取消连接；执行或关闭失败非零退出。核验遵循[独立全量只读核验](../releases/data-maintenance.md#组织搜索全量重建)，
-  在线缺行过滤遵循[组织搜索契约](../guides/search.md#处理结果)。
-- 当前 Snapshot repair/verify 使用独立 Redis-only composition，普通/敏感 payload 共享控制，targeted 与 full 分开，
-  full 必须停流，另起进程 scan-only verify；旧三类 Runtime command、b648 与 managed-callback 升级工具已退役。
-- `createEmploymentCommandComposition` 是更窄的 PostgreSQL-only composition：只从
-  `@iam/user-profile-read-model/worker` 组装 Employment Verifier 与只读 repository，不构造 Redis、queue、consumer、
-  dashboard 或 HTTP server。对应命令仅由运维人员按需显式调用，不进入普通 Worker 启动或请求路径。
-- `audit:actions` 是独立 PostgreSQL-only 一次性命令，入口直接拥有单连接与关闭，不加载 Worker composition barrel。
-  固定八映射不依赖 runtime aliases；只读 inventory/verify 与持写锁事务 apply 的门禁见
-  [审计规范化手册](https://github.com/cyy1998/shgas-iam/blob/73315e4cef6f96dd79b29e18f74d68af30e559ec/docs/releases/audit-action-canonicalization.md)。当前代码候选已删除运行时别名，Admin 按精确 action/outcome 查询；目标环境迁移与代码交付分开。
-- Worker composition 负责关闭构造出的 modules、HTTP server、Redis 和 DB。业务 package 不拥有 process signal
-  handling；`src/index.ts` 只负责启动、记录 runtime 状态和转交 graceful shutdown。
+#### Kernel 列表与撤销
 
-## Routes 与 Middleware
+列表是有界索引观察，不是完整在线人数；页内坏记录拒绝，多页不构成全局快照。
+撤销先捕获全部目标，再执行，不能边删边沿变化游标捕获。捕获前校验目标，已存在的终态也可作为撤销观察，不要求账号许可有效。执行只处理显式目标和稳定实例身份，不扩大子树或替换为当前关系槽。
 
-- Tier-level `_middleware.ts` 保持薄层，只暴露 middleware factory 或 composition 注入的 middleware 数组；共享认证
-  handler 放在 app-level `src/middlewares/*.handler.ts`，并由 composition 物化。
-- REST-only route module 使用 `*.routes.ts`、`*.handlers.ts` 和 `*.type.ts`。`*.index.ts` 暴露 router factory，
-  接收已物化 handlers/adapters。
-- Admin REST + tRPC route module 共享 `*.adapter.ts` operation factory，并暴露薄的 `*.trpc.ts` module。
-- Route production module 负责协议解析、middleware context 提取、facade 调用、VO mapping 和 response 适配；不得
-  持有 repository/UnitOfWork，或编排依赖 transaction 内部结果的后续业务副作用。
+结果区分已终止、替换、失败和未知；重试只处理原失败或未知集合。没有保存集合时重新查询并明确发起新操作。
+响应丢失的作用保持 unknown，重试见终态不重复计数。终态保留原期限，索引清理失败不撤销终态。
+协议产物没有 Kernel 第二登记，也没有可靠后台补齐保证。关键行为见
+[会话生命周期测试](../../packages/session-kernel/test-integration/session-lifecycle/unified-session-lifecycle.integration.test.ts)。
 
-## 后端 App 工具配置
+### Custom SSO 与 OIDC
 
-- Bun runtime apps（`apps/api`、`apps/admin-api`、`apps/worker`、`apps/gateway`）的 `tsconfig.json` 包含 Bun types。
-- App-local maintenance scripts 属于非生产工具。新增 `scripts/` 时，在 production `tsconfig.json` 中排除该目录；
-  仓库自有且受支持的脚本仍纳入统一 format/lint。Worker 使用 production
-  `src/commands/`，没有独立 maintenance `scripts/`。
+两协议各自拥有授权、续接、Code 一次消费、Token、交付和补偿，单向消费 Kernel、Client Snapshot 与主体投影。
+API 负责 HTTP、Cookie、错误和重定向，不能重建协议状态机；OIDC 不依赖 Custom SSO、app、HTTP 或数据库实现。
 
-## 验证责任
+Code 固定原 Client、会话实例、用途和授权事实；消费前认证当前 Client 并定位原实例，后续配置不能绕过原用途约束。
+消费后失败不恢复 Code 或重放成功结果，适用路径有界终止原 ClientSession；错误 Client 或用途不能撤销无关实例。
+托管回调保留独立失败规则，不套用业务兑换撤销。完整兑换覆盖响应构造，补偿只处理本次原始 Token，反向索引不替代权威记录。
 
-- `pnpm check:architecture` 是唯一静态架构入口。根级 Architecture Guard 只按 production source path、规范化静态
-  module edge 和 type/value dependency 检查稳定 ownership 与依赖方向；规则准入见
-  [架构守卫规范](architecture-guard.md)。
-- Package exports 与 consumer typecheck 验证 public surface 和 structural compatibility。
-- Port、UnitOfWork、User Profile、Session Kernel、Worker module 等公开 interface 的可观察语义由 behavior/contract
-  tests 维护，不转写成脆弱的 AST 语义规则。
-- Process smoke 验证真实 production composition、进程生命周期与 readiness；PostgreSQL、浏览器和 Gateway 事实由
-  对应外部资源通道验证。
+Token 记录保存协议校验所需事实、有效期限与原会话绑定；不保存主体资料快照或第三方本地会话。OIDC 退出取消只消费确认，确认作用于请求当前根。
+签名配置启动时校验，只公开公钥；生命周期由 API composition 管理。第三方会话、密钥兼容与失败细节分别见
+[Custom SSO](../guides/custom-sso.md)、[OIDC](../guides/oidc.md)和[会话维护](../releases/authentication-and-session.md)。
+
+### 角色分配解析
+
+`@iam/role-assignment-resolution` 统一有效角色与受影响用户的反向解析，调用方不复制 assignment 或组织闭包规则。
+Composition 用当前连接创建并复用 resolver，失效模块自行创建事务绑定实例。
+
+正向解析检查任职、分配目标和角色有效性；岗位与直属组织完整性由 Profile builder 在发布前校验。
+反向解析更保守，不能因角色、岗位或组织已失效而漏掉需重建的用户。管理端 CRUD 可以直接维护 assignment，协议消费已发布 Facts。
+理由见 [ADR-0002](../adr/0002-centralize-role-assignment-resolution.md)。
+
+### Organization Responsibility 解析
+
+独立 resolver 负责有效责任和跨树 holder 反向解析，调用方显式提供观察时间。
+引用、父生命周期、期间或开放名额异常时整批拒绝；resolver 不拥有缓存、授权、管理历史或协议输出。
+组织变更的失效集合同时包含子树任职用户和责任反向 holder；Type 的披露字段或排序变化也须使 holder 失效。
+
+Admin 通过同一授权能力区分 full 与 scoped。HR 在分页前同时约束 holder 任职组织和目标组织，写入事务内复查双端条件。
+越界详情与操作隐藏存在性，拒绝日志不泄漏记录、路径或范围集合。完整管理员和混合角色走 full 分支。
+`allowedActions` 综合范围、生命周期、父完整性与隐藏阻塞；唯一冲突按 Full/HR 返回适当的安全说明。
+授权按每次请求的数据库事实决定，不保证提交时线性化撤权。
+
+### Client Subject Projection
+
+`@iam/client-subject-projection` 拥有协议中性的 Catalog、披露裁剪和投影。核心通过注入的 Facts 与许可接口协作，
+不直接依赖数据库、读模型实现、app、会话运行时或协议包。一次交付用同一份合法 Facts，
+仅交付 Subject Identifier 时不读取 Facts。调用方提交主体、Client、披露选择和本操作许可；投影不重新认证或读取 Client 配置。
+
+普通资料和授权都消费已发布 Facts，不在请求时检查 dirty 新鲜度或联查源角色表。角色变更可能在重建前继续交付旧事实，
+不承诺固定撤权传播期限；账号访问屏障另行生效。Facts 缺失或主体错配时整份投影失败。
+
+Custom SSO 的浏览器出口 `/wire` 拥有 schema、mapper 和预览，只通过 Projection 根接口取得中性能力，不能访问
+其内部实现、持久化或服务端入口。映射后校验主体一致和完整输出。责任随任职资料一起交付，不形成独立 claim 或授权任职字段。
+OIDC UserInfo 与 Custom SSO 实际交付时使用当前披露；Code 保留原授权事实，已签发 ID Token 内容固定。
+版本和字段分别以各 owner 的 schema 为准，不由调用方选择版本或通过旧格式回退。
+
+代码入口：[Projection](../../packages/client-subject-projection/src/)、[Custom SSO wire](../../packages/custom-sso/src/wire.ts)。
+决策见 [ADR-0032](../adr/0032-consume-published-subject-facts-for-authorization.md)。
+
+### Client 委托
+
+`@iam/delegation` 统一创建、生命周期、冲突、范围查询与安全选择器。API 与 Admin API 消费公开接口，分别传入
+Client、本人或全局管理范围；app 不互相导入私有实现。解析由 API 在同一观察时刻和数据库快照完成，不进入 Profile 或 Subject Facts。
+
+写入按委托人协调：创建先锁 User；更新只预读不可变委托人 ID，取 User 锁后重读记录和范围，再校验并写入事实及审计。
+同一委托人的写入共用该锁，冲突校验与写入在锁内完成；这些写入不登记 Profile dirty。
+委托引用的删除门禁由 User、Client、Organization 各自的写入口执行。
+状态、冲突及删除限制见[应用委托](../features/delegation/client-delegation.md)，设计理由见
+[ADR-0020](../adr/0020-provide-fail-closed-privilege-delegation-resolution.md)。
+
+## 读模型与异步处理
+
+User Profile 的包外装配按出口分工：producer 由 API/Admin API composition 接入，worker 由 Worker composition 接入，
+query repository 由 API composition 接入。业务模块消费装配后注入的能力，不自行跨出口创建实现。
+
+### User Profile 失效
+
+业务写入只提交源变化，事务绑定的 invalidation 模块负责解析受影响用户、登记 dirty 和提交后唤醒。
+调用方不选择 dirty reason、不持有投影 repository，也不自行入队。源事实与 dirty 在同一事务提交。
+登记成功不代表入队或发布完成，提交后的入队失败由 repair 恢复。
+
+### User Profile Subject Facts publication
+
+Worker 在构建前固定候选版本，读取全部开放任职并校验岗位和直属组织完整性，再投影当前有效任职。
+角色、Client 和组织路径按稳定顺序输出，合法的无角色任职保留空授权集合。
+
+发布事务锁定 dirty 行，重验 user、版本与 processing 状态，单调写入 Profile 并同时标记 processed。
+过期候选不能覆盖新版本。PostgreSQL 提交后才向 Redis 发布，版本比较须保持 bigint 精度；缓存失败不回滚数据库。
+失败诊断只记录安全字段，原始 Redis 错误、命令或 Facts 不进入日志。
+
+Facts reader 在合法缓存命中时直接返回；缺失、损坏或主体错配时按主体合并回源，读取一行已发布 Facts 并尽力回填。
+回填失败仍可使用合法数据库结果，Redis 读取故障不回源；不读取 Detail、搜索文档、dirty 或源业务表。
+读取观测只含操作、结果和耗时，观测失败不改变认证结果。
+
+同一 Profile 行承载 Detail、Search 与 Facts。Internal 查询只消费当前 schema 的已发布数据，不能混写、双读或回退旧格式。
+数据库约束与应用严格解析分别承担其检查范围；恢复放流前由完整 PG/Redis 核验确认覆盖与版本一致。
+数据库回退须匹配旧制品和备份，不删除 migration journal 重放迁移。
+
+Employment verifier 使用一致只读快照核对任职及父对象，报告完整 blocker 集合；不推断历史结束时间或生成修复 SQL。
+维护与关键恢复验证见[数据维护](../releases/data-maintenance.md)及
+[Profile 维护测试](../../apps/worker/test-integration/user-profile/user-profile-maintenance.integration.test.ts)。
+
+### Organization Search 发布与核验
+
+组织读模型独立拥有源变化、dirty、文档和恢复流程。源事务用实际修改结果登记变化：创建、状态和删除登记自身，
+code/name/type 变化登记子树；零行修改不登记。提交后按当前闭包展开，后续创建的后代由自己的变化登记覆盖。
+
+展开事务锁定并重验领取 token，原子登记目标版本和事件完成凭据。已完成事件重复投递只唤醒原版本，不推进新版本。
+repair 在源事件和重建两阶段回收失败或过期工作，跳过活跃事务；重领更换 token，旧 owner 即使持有同版本也不能发布或完成新工作。
+
+构建使用一致源快照并校验完整路径。发布锁定 dirty、重验版本和 owner，将文档或删除墓碑与 processed 同事务提交。
+墓碑保留版本仲裁事实。在线查询只读当前 schema 的可见已发布文档，允许延迟，不联查源表或执行全量覆盖检查。
+
+独立 verifier 在同一 `REPEATABLE READ READ ONLY` 事务读取源组织、闭包、文档/墓碑、dirty 和变化凭据，
+完整检查覆盖、结构、源事实、处理版本及孤立记录，不写数据或派发任务。历史完成事件可以指向较早版本，不能指向未完成的更高版本。
+核验失败须修复后重新全量检查，不能抽样放流。
+关键验证见[恢复测试](../../packages/organization-search-read-model/test-integration/recovery/recovery.integration.test.ts)与
+[核验测试](../../packages/organization-search-read-model/test-integration/verification/verification.integration.test.ts)，操作见
+[组织搜索维护](../releases/data-maintenance.md#组织搜索全量重建)。
+
+### Filter 引擎
+
+共享引擎按调用方显式公开的文档结构派生校验与参数化 JSONB 条件。目标列由 repository 提供，输入不能指定任意 SQL 或路径。
+入口检查外层请求，repository 在查询前使用受校验的 compiler；递归解析前执行语言预算检查。
+引擎只拥有语言、作用域和编译，不持有数据库连接、源表或发布状态。结果预算、排序、超时和错误映射由读模型及入口负责。
+接口见[Filter 引擎](../../packages/filter-engine/src/)，调用规则见[搜索接入](../guides/search.md)。
+
+### Internal 查询资源
+
+Internal 用户查询、组织搜索和委托解析分别使用专用数据库连接，由 API composition 创建、注入并在关闭时释放。
+数据库语句超时与 HTTP 请求超时分别设置；不能仅靠请求超时限制数据库执行时间。
+连接与预算配置见[查询资源实现](../../apps/api/src/composition/internal-query-resource.ts)，装配约束见
+[查询资源测试](../../apps/api/src/composition/__tests__/internal-user.composition.test.ts)。
+
+### Worker 运行与维护
+
+Worker 通过公开 workspace package 复用业务能力，不导入 API 私有实现。
+Worker composition 拥有模块选择、队列注册、consumer、health/readiness、Bull Board 和关闭顺序。
+未知模块启动失败；模块反序关闭，信号由 app 处理，业务包不持有进程生命周期。
+命令按实际需要使用窄 composition：重建复用普通发布路径，核验使用独立只读连接，Redis 维护不加载无关数据库或队列。
+
+组织写入命令与 consumer 共用正式队列前缀，repair 只重新投递，发布仍由普通 consumer 完成。
+只读 verifier 的取消仅作用于本次连接身份、数据库和角色；deadline、中断或关闭失败均非零退出。
+会话维护通过各 owner 的公开维护出口按 namespace 和前缀处理全部版本与键类型，保留非目标库存，不按损坏记录的 schema 决定清理范围。
+`/maintenance` 与 `/testing` 分开，当前维护不探测或转换其他旧布局。命令入口见[开发命令](../development/commands.md)。
+
+## 网关配置发布
+
+Gateway service 拥有认证、规划、发布和补偿；composition 注入当前 Client 窄读取与固定 APISIX 目标。
+每请求只读数据库认证，在途操作不因后续凭据变化中止。发布从读取前态到补偿结束持有本实例执行权，失败后停止正向写入并补偿已尝试目标。
+允许短暂部分生效，补偿失败或未知后阻断本实例；断连不终止原操作，不自动重试。
+此保证以无其他实例或外部并发写入为前提；服务没有持久恢复任务，正常关闭等待在途操作，崩溃或未知结果由人工核对恢复。
+见[Gateway 接入](../guides/gateway.md)、[发布手册](../releases/apisix-gateway-release.md)及
+[发布生命周期测试](../../apps/gateway/test-integration/runtime/publication-lifecycle.integration.test.ts)。

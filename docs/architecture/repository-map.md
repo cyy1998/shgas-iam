@@ -3,8 +3,7 @@
 本仓库是 `pnpm` workspace + Turborepo monorepo。本页用于回答“代码或配置应该去哪里找”，不是逐文件清单。
 当前行为仍以实现、可执行测试和 [Current 文档](../index.md) 为准。
 
-跨 runtime 的请求流、数据权威来源与恢复责任见[系统架构视图](system-architecture.md)，关键约束的证据入口见
-[架构验证归属](architecture-verification.md)。
+请求流与恢复分工见[系统架构](system-architecture.md)，模块协作见[后端架构](backend-architecture.md)。
 
 `pnpm` workspace 包含 `apps/*`、`packages/*` 和 root-owned `e2e/system`；`docker/` 中的 Compose、
 APISIX 和可观测性配置属于仓库级运行和运维资产，不是 workspace package。
@@ -45,54 +44,31 @@ Apps 表用于定位入口；依赖方向、分层职责、命名和 wiring 统�
 
 ## 共享 Packages
 
-| 路径                                                  | 定位用途                                                                                                                                                               |
-| ----------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `packages/api-core/src`                               | 后端基础设施、UnitOfWork、LoginRestriction、Subject Access 与 `client-snapshot/`；`process/` 通过独立出口提供 Node/Bun 进程树所有权，`testing/` 提供 process harness。 |
-| `packages/session-kernel/src`                         | 协议中性的 UserSession / ClientSession 生命周期、Redis 原子状态与管理观察。                                                                                            |
-| `packages/custom-sso/src`                             | Custom SSO 授权、Code / Token、续接与交付；`/wire` 提供浏览器可加载契约。                                                                                              |
-| `packages/oidc/src`                                   | OIDC 授权、Code / Token、续接、退出、UserInfo 与密钥；由 API HTTP adapter 消费。                                                                                       |
-| `packages/client-subject-projection/src`              | 中性主体裁剪、Catalog 与责任任职投影。                                                                                                                                 |
-| `packages/delegation/src`                             | Client 委托的跨入口创建、生命周期、组织与期间冲突、范围查询及安全选择器；root 由 API/Admin API 消费，`/wire` 供浏览器使用。                                            |
-| `packages/contracts/src`                              | 跨端或跨 app/package 的稳定枚举、常量、schemas、类型与协议 helper。                                                                                                    |
-| `packages/domain/src`                                 | 后端 DTO、mapper、纯业务规则、audit helper 与业务错误。                                                                                                                |
-| `packages/db/src`                                     | Drizzle schema、relations、migrations、client 与 query helpers；领域为 `core`、`log`，列 helper 在 `schema/_shard/`。                                                  |
-| `packages/jobs/src`                                   | BullMQ connection、queue、worker、job ID 与默认选项。                                                                                                                  |
-| `packages/organization-responsibility-resolution/src` | Organization Responsibility 的正向有效解析与跨树 holder 反向解析。                                                                                                     |
-| `packages/role-assignment-resolution/src`             | Effective Role 正向解析与受影响用户反向解析。                                                                                                                          |
-| `packages/user-profile-read-model/src`                | User Profile、Search / Subject Facts 的失效、构建、发布、查询与维护。                                                                                                  |
-| `packages/organization-search-read-model/src`         | 独立组织文档的事务绑定变化登记、提交后展开、构建发布、DSL 查询、补偿和一致只读全量核验。                                                                               |
-| `packages/filter-engine/src`                          | 显式公开结构、类型化 Filter 校验与作用域、调用方 JSONB 表达式编译；不持有发布状态或数据库连接。                                                                        |
+| 路径                                                  | 定位用途                                                                                                              |
+| ----------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------- |
+| `packages/api-core/src`                               | 后端基础设施、UnitOfWork、LoginRestriction、Subject Access 与 `client-snapshot/`；`process/` 提供进程管理。           |
+| `packages/session-kernel/src`                         | 协议中性的 UserSession / ClientSession 生命周期、Redis 原子状态与管理观察。                                           |
+| `packages/custom-sso/src`                             | Custom SSO 授权、Code / Token、续接与交付；`/wire` 提供浏览器可加载契约。                                             |
+| `packages/oidc/src`                                   | OIDC 授权、Code / Token、续接、退出、UserInfo 与密钥；由 API HTTP adapter 消费。                                      |
+| `packages/client-subject-projection/src`              | 中性主体裁剪、Catalog 与责任任职投影。                                                                                |
+| `packages/delegation/src`                             | Client 委托；`/wire` 提供浏览器契约。                                                                                 |
+| `packages/contracts/src`                              | 跨端或跨 app/package 的稳定枚举、常量、schemas、类型与协议 helper。                                                   |
+| `packages/domain/src`                                 | 后端 DTO、mapper、纯业务规则、audit helper 与业务错误。                                                               |
+| `packages/db/src`                                     | Drizzle schema、relations、migrations、client 与 query helpers；领域为 `core`、`log`，列 helper 在 `schema/_shard/`。 |
+| `packages/jobs/src`                                   | BullMQ connection、queue、worker、job ID 与默认选项。                                                                 |
+| `packages/organization-responsibility-resolution/src` | Organization Responsibility 的正向有效解析与跨树 holder 反向解析。                                                    |
+| `packages/role-assignment-resolution/src`             | Effective Role 正向解析与受影响用户反向解析。                                                                         |
+| `packages/user-profile-read-model/src`                | User Profile、Search / Subject Facts 的失效、构建、发布、查询与维护。                                                 |
+| `packages/organization-search-read-model/src`         | 组织搜索文档的构建、发布、查询与维护。                                                                                |
+| `packages/filter-engine/src`                          | 共享 Filter 校验与 JSONB 查询编译。                                                                                   |
 
 使用或新增共享代码前，按[共享契约与数据库](contracts-and-database.md)核对运行环境、公开出口、DTO 与事务边界；
-模块语义见[后端所有权](backend-architecture.md#关键模块所有权)。当前维护见
-[统一维护手册](../releases/authentication-and-session.md)；旧数据操作见[历史命令入口](../development/commands.md#历史数据维护工具)。
-
-### 密集模块的内部目录
-
-定位内部实现时沿公开入口进入对应目录；跨 package 消费仍使用公开 exports。
-
-| 模块                                     | 内部职责目录                                                                                                                                                                                                             |
-| ---------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `packages/user-profile-read-model/src`   | `invalidation/`、`build/`、`publication/`：失效与发布；`query/`、`schema/`、`subject-facts/`：查询与事实；`subject-access/`：authority / transition；`worker/`、`readiness/`、`employment/`：重建、就绪与全库 verifier。 |
-| `packages/client-subject-projection/src` | `internal/`：当前 Catalog、contract 与 projection。                                                                                                                                                                      |
-| `packages/session-kernel/src`            | `unified/`：当前两类会话；`storage/maintenance-scan.ts` 提供维护共用的分页扫描、批量清理与独立核验；`testing/` 提供当前布局测试支持；`state/model.ts` 提供中性 SessionOrigin。                                           |
-| `packages/api-core/src/subject-access`   | `storage/`：store / Redis adapter；`adapters/`：HTTP 映射；`recovery/`：bootstrap、repair 与 transition recovery。                                                                                                       |
-| `packages/custom-sso/src`                | `unified/`：当前协议流程与状态；`internal/`：校验和交付 helper；`grant/`：离线维护测试 fixture。`/maintenance` 入口声明 owner 前缀并复用 Kernel 的共享维护能力。                                                         |
-| `apps/api/src/services/sso`              | `subject-delivery/`：请求 capability；`transport/`：Cookie、请求/schema、安全与 OpenAPI。门户续接入口在 `routes/sso/unified-authorization.handlers.ts`。                                                                 |
-| `apps/api/src/use-cases/authentication`  | 密码、手机、OA、微信统一认证；装配在 `composition/use-cases/authentication.ts` 与 `composition/root-authentication.ts`。OA/微信 HTTP 入口仍在 SSO route。                                                                |
-| `apps/worker/src/commands`               | `user-profile/`、`session-clear/`、`client-runtime/` 命令族；Employment verifier 留在根层。                                                                                                                              |
+模块语义见[后端架构](backend-architecture.md)。操作入口见[运维手册](../releases/README.md)。
 
 ## Root-owned Full-system E2E Workspace
 
-`e2e/system`（`@iam/e2e-system`）拥有根 `pnpm test:e2e` 的完整系统测试，包括 Compose、migration / Gateway
-镜像、seed、旅程、诊断与精确恢复。workspace-local journey 命令用于聚焦调试。
-
-生命周期、资源与旅程契约见[测试编排](testing-architecture.md#full-system-e2e)，双 hostname 阶段见
-[双入口验收](testing-architecture.md#双入口验收与产物隔离)，可执行入口见[命令页](../development/commands.md#full-system-e2e)，
-证明范围见[验证归属](architecture-verification.md#行为资源与系统验证)。
-
-Run descriptor、receipts、diagnostics 与 Playwright 产物写入 `e2e/system/test-results/`，可重新生成，不提交。
-聚合验证的证明边界见[默认验证与交付](testing-architecture.md#默认验证与交付)。
+`e2e/system` 拥有完整系统测试的 Compose、镜像、seed、旅程和恢复工具。生成产物位于 `test-results/`，不提交。
+资源生命周期见[测试架构](testing-architecture.md#full-system-e2e)，命令见[开发命令](../development/commands.md#full-system-e2e)。
 
 ## 基础设施与仓库工具
 

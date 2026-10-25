@@ -23,6 +23,6 @@ Position 或所属 Organization 状态当作下游静默过滤开关。角色分
 ## 当前契约与历史
 
 接口和 composition 归属见[后端架构](../architecture/backend-architecture.md#角色分配解析)，共享能力边界见
-[共享契约](../architecture/contracts-and-database.md#专用能力包契约)。
+[共享出口](../architecture/contracts-and-database.md#公开接口与运行环境)。
 
 历史来源：[ADR-0002 原文](https://github.com/cyy1998/shgas-iam/blob/73315e4cef6f96dd79b29e18f74d68af30e559ec/docs/adr/0002-centralize-role-assignment-resolution.md)、[ADR-0011 原文](https://github.com/cyy1998/shgas-iam/blob/73315e4cef6f96dd79b29e18f74d68af30e559ec/docs/adr/0011-model-employment-as-an-immutable-tenure-lifecycle.md)。原始决定与后续修订按各版本追溯。

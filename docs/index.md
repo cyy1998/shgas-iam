@@ -33,7 +33,7 @@
 | -------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | 启动项目、查找代码   | [README](../README.md)、[仓库地图](architecture/repository-map.md)                                                                                     |
 | 修改代码或开展设计   | [仓库规则路由](../AGENTS.md)、[系统架构](architecture/system-architecture.md)                                                                          |
-| 开发、测试与验证     | [命令入口](development/commands.md)、[测试编排](architecture/testing-architecture.md)、[验证归属](architecture/architecture-verification.md)           |
+| 开发、测试与验证     | [命令入口](development/commands.md)、[测试编排](architecture/testing-architecture.md)、[测试规范](development/testing.md)                              |
 | 理解业务与决策       | [领域语言](../CONTEXT.md)、[ADR 清单](#架构决策)                                                                                                       |
 | 了解或使用功能       | [功能说明](features/README.md)、[功能清单](#功能说明)                                                                                                  |
 | 接入或修改接口       | [接入指南](guides/README.md)，字段与响应沿指南查代码定义                                                                                               |
@@ -46,7 +46,7 @@
   操作步骤在 runbook，功能用法与业务规则在 features，接入步骤在 guides。字段与接口定义以代码为准，其他页面链接出处。
 - 索引只登记用途、状态和必要的替代关系；实施进度、候选 SHA、测试次数与验收结论留在对应 issue 或验收记录。
   `Current` 表示文档可用，不代表目标已经实现、合入或部署；`Last verified` 也不是部署日期。
-- 仓库地图负责定位，命令页负责可执行入口，测试架构负责收集与资源生命周期，验证归属负责证据能证明什么。
+- 仓库地图负责定位，命令页负责可执行入口，测试规范负责验证选择和编写规则，测试架构负责收集与资源生命周期。
   功能变更优先更新其权威文档，避免在这些入口重复追加交付流水账。
 - releases 按运维任务组织为入口和五个专题；操作保留适用情况、前提、步骤、完成标准与失败处理。验收按影响选择，不要求额外留证；机制说明归对应契约。一次性升级和旧代切换通过入口中的固定 Git 版本追溯。
 - features 以功能说明为主，讲用途、使用者、主要流程、业务规则和异常影响，使用简明业务语言。
@@ -55,6 +55,10 @@
   内部模块、缓存、锁和装配归架构文档。功能页只摘要必要限制并链接技术出处，不复制接口清单。
   不强制固定模板或额外留证，也不按页面、实体或实施 ticket 新建长期文档。
   实施进度、候选和固定验收记录留在 issue 或 Git 历史。
+- architecture 面向开发者与代码 agent，维护职责、跨模块流程、关键约束和失败恢复责任。
+  系统页提供概要，具体模块机制只在所属主题维护；命名和编码写法归 development。
+  函数、字段、错误码、参数和算法细节链接代码，测试场景由测试维护；只保留必要的关键验证入口。
+  实施流水账与退役过程从 issue 和 Git 历史追溯，当前兼容与恢复限制仍须保留。
 - ADR 按独立决策组织，保留当前决定、理由、拒绝方案与代价，不按实施切片新增。合并时承接独有理由，不能因功能契约
   已存在而删掉取舍；算法和操作步骤引用对应权威文档。保留原编号与路径，被删除编号不复用、不重排，新决定从 0039 继续递增。
   当前正文汇总后续已接受修订，原始决定与被取代方案通过固定 Git 历史追溯，不建跳转壳，也不将整理日期视作原接受日期。
@@ -137,16 +141,14 @@ releases 维护当前代操作；一次性迁移与更早版本从[运维入口]
 <details>
 <summary>展开工程架构</summary>
 
-| Document                                                   | Type         | Status  | Last verified | Next review | Notes                                                      |
-| ---------------------------------------------------------- | ------------ | ------- | ------------- | ----------- | ---------------------------------------------------------- |
-| [架构守卫规范](architecture/architecture-guard.md)         | architecture | Current | 2026-10-16    | 2026-10-31  | 静态守卫的观察模型、准入与复杂度边界。                     |
-| [架构验证归属](architecture/architecture-verification.md)  | architecture | Current | 2026-10-21    | 2026-11-21  | 系统约束的验证 owner、证据入口与证明限制。                 |
-| [后端架构](architecture/backend-architecture.md)           | architecture | Current | 2026-10-25    | 2026-11-25  | 后端分层、事务、模块所有权与一致性契约。                   |
-| [共享契约与数据库](architecture/contracts-and-database.md) | architecture | Current | 2026-10-25    | 2026-11-25  | 共享代码选址、公开出口、DTO、数据库与事务边界。            |
-| [前端架构](architecture/frontend-architecture.md)          | architecture | Current | 2026-10-25    | 2026-11-25  | Admin / SSO service、页面状态、路由与权限规则。            |
-| [仓库地图](architecture/repository-map.md)                 | architecture | Current | 2026-10-25    | 2026-11-25  | Apps、packages、基础设施、AFK、测试与生成目录定位。        |
-| [系统架构视图](architecture/system-architecture.md)        | architecture | Current | 2026-10-21    | 2026-11-21  | 运行时拓扑、信任边界、数据权威与恢复责任。                 |
-| [测试编排架构](architecture/testing-architecture.md)       | architecture | Current | 2026-10-15    | 2026-10-31  | 测试层级、质量、收集、资源预算、统一临时环境与停止后重置。 |
+| Document                                                   | Type         | Status  | Last verified | Next review | Notes                                              |
+| ---------------------------------------------------------- | ------------ | ------- | ------------- | ----------- | -------------------------------------------------- |
+| [后端架构](architecture/backend-architecture.md)           | architecture | Current | 2026-10-25    | 2026-11-25  | 分层、事务、关键模块协作与一致性约束。             |
+| [共享契约与数据库](architecture/contracts-and-database.md) | architecture | Current | 2026-10-25    | 2026-11-25  | 代码选址、包出口、运行环境、DTO 演进与持久化边界。 |
+| [前端架构](architecture/frontend-architecture.md)          | architecture | Current | 2026-10-25    | 2026-11-25  | 页面、请求、权限、状态与失败恢复的职责。           |
+| [仓库地图](architecture/repository-map.md)                 | architecture | Current | 2026-10-25    | 2026-11-25  | 代码、基础设施、工具与生成目录定位。               |
+| [系统架构视图](architecture/system-architecture.md)        | architecture | Current | 2026-10-25    | 2026-11-25  | 拓扑、信任边界、数据权威与恢复分工。               |
+| [测试编排架构](architecture/testing-architecture.md)       | architecture | Current | 2026-10-25    | 2026-11-25  | 收集、编排、缓存、资源隔离与生命周期。             |
 
 </details>
 
@@ -155,11 +157,13 @@ releases 维护当前代操作；一次性迁移与更早版本从[运维入口]
 <details>
 <summary>展开开发约定</summary>
 
-| Document                                              | Type        | Status  | Last verified | Next review | Notes                                           |
-| ----------------------------------------------------- | ----------- | ------- | ------------- | ----------- | ----------------------------------------------- |
-| [后端实现约定](development/backend-implementation.md) | development | Current | 2026-10-25    | 2026-11-25  | 响应封装、OpenAPI、logger 与 audit 实现约定。   |
-| [编码风格与命名约定](development/coding-style.md)     | development | Current | 2026-10-15    | 2026-10-31  | TypeScript、formatter、文件命名与 import 风格。 |
-| [构建、测试与开发命令](development/commands.md)       | development | Current | 2026-10-21    | 2026-11-21  | 开发、构建、验证、AFK 与维护的命令和资源入口。  |
+| Document                                              | Type        | Status  | Last verified | Next review | Notes                                                  |
+| ----------------------------------------------------- | ----------- | ------- | ------------- | ----------- | ------------------------------------------------------ |
+| [架构守卫规范](development/architecture-guard.md)     | development | Current | 2026-10-25    | 2026-11-25  | 静态守卫的观察范围、规则准入与测试要求。               |
+| [后端实现约定](development/backend-implementation.md) | development | Current | 2026-10-25    | 2026-11-25  | 响应、审计、日志、编排命名、factory 与数据库文件约定。 |
+| [编码风格与命名约定](development/coding-style.md)     | development | Current | 2026-10-25    | 2026-11-25  | TypeScript、formatter、文件命名与 import 风格。        |
+| [构建、测试与开发命令](development/commands.md)       | development | Current | 2026-10-25    | 2026-11-25  | 开发、构建、验证、AFK 与维护的命令和资源入口。         |
+| [测试规范](development/testing.md)                    | development | Current | 2026-10-25    | 2026-11-25  | 验证选择、测试分类、命名、断言与清理规则。             |
 
 </details>
 

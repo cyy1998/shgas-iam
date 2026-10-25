@@ -240,7 +240,7 @@ Stylelint 只检查 Less，不自动修复。YAML 不执行通用 lint，也不�
 ## 测试与验证通道
 
 日常入口为 `pnpm test:unit`、`pnpm test:integration`、`pnpm test:e2e`；`pnpm test` 代理 Unit。
-命名、唯一收集、缓存和并发预算见[测试编排架构](../architecture/testing-architecture.md#root-与-package-commands)。
+命名见[测试规范](testing.md#路径与命名)，收集、缓存与资源管理见[测试架构](../architecture/testing-architecture.md)。
 
 根 Integration 入口根据 workspace manifest 声明创建本次 PostgreSQL/Redis，等待就绪后通过 Turbo 注入 owner-specific URL；
 结束时清理准确 Compose project 的容器、网络和数据卷。未声明这两类服务的集合不创建它们。
@@ -354,7 +354,7 @@ E2E lifecycle 的详细契约分别由本页后续专用资源说明和 [测试�
 统一 Snapshot 通过 Core Redis、Admin composition 和 Worker CLI 验证；最终 schema/数据门禁分别使用 DB/Worker PostgreSQL。
 当前维护步骤见[统一维护手册](../releases/authentication-and-session.md)，旧工具操作见[历史数据维护工具](#历史数据维护工具)；测试不提供目标环境操作授权。
 
-聚合验证的证明边界见[默认验证与交付](../architecture/testing-architecture.md#默认验证与交付)。
+聚合验证的证明边界见[验证结果与交付](testing.md#验证结果与交付)。
 候选结果和平台验收状态记录在对应 issue 或验收记录中。
 
 真实资源检查不进入 `pnpm verify`，需要时通过根入口选择 owner 或文件：
@@ -484,7 +484,7 @@ fixture 负责候选 API、TLS 代理、随机 PG schema、Redis 和 Node 进程
 信号/失败仍逐项尝试收尾，再以独立预算清理准确 project；超时不冒称清理完成，原始失败与清理失败均保留。
 官方 REVIEW 使自动 driver 非零，必须独立完成图像判读并保留官方结果，不把它改写为套件 PASSED。
 不同 loopback 端口只证明两 issuer 协议；hostname/Cookie 隔离须由真实 APISIX/browser 验证，
-见[验证归属](../architecture/architecture-verification.md#行为资源与系统验证)。
+见[验证选择](testing.md#验证选择)。
 
 ## 历史数据维护工具
 

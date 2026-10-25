@@ -1,238 +1,61 @@
 # 共享契约与数据库
 
-本文记录 package 边界、repository 事务规则，以及 Drizzle/PostgreSQL 布局约定。修改数据库 schema 或 migration 前，
-先使用 schema 相关 skill 并遵守 workflow 门禁。
+本文规定共享代码、公开出口、DTO 演进和持久化边界。具体模块机制见[后端架构](backend-architecture.md)。
 
 ## 共享代码选址
 
-先查已有能力 owner，再按消费方与运行环境选择落点。下面的规则约束新增代码与受影响的修改；既有实现的收敛范围见
-[现存差距与验证](#现存差距与验证)。共享不等于集中到 `contracts`，文件名含 DTO 也不构成提升为共享代码的理由。
+先找已有能力，再按实际消费者和运行环境选位置。文件名带 DTO、文件较多或未来可能复用，都不足以单独成立一个共享包。
 
-| 位置                                                | 职责与允许依赖                                                                                                                        |
-| --------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
-| `packages/contracts`                                | 跨端或跨应用的稳定枚举、常量、runtime schema、派生类型及紧贴这些契约的协议 helper；不依赖数据库、app 或服务端基础设施。               |
-| `packages/domain` 的纯规则文件                      | 根据显式输入计算结果或抛出业务错误；依赖共享常量、纯 helper 和业务错误，不依赖数据库、OpenAPI、网络、运行时实例或 composition。       |
-| `packages/domain` 的 DTO/schema/mapper              | 后端复用的领域输入输出；允许依赖数据库字段 schema、Drizzle schema 派生工具和既有 OpenAPI 工具，不执行数据库访问。                     |
-| `packages/domain` 的 error/audit helper             | 可复用业务错误和纯审计 payload 构造；实际审计写入由后端注入的能力负责。                                                               |
-| 专用能力包                                          | 拥有完整业务能力及其公开 schema、类型和行为；已有 owner 的协议 schema 继续留在该 owner，例如 Custom SSO wire 由 `custom-sso` 包拥有。 |
-| `packages/db`、`packages/api-core`、`packages/jobs` | 分别拥有持久化定义与查询基础能力、后端基础设施、BullMQ 基础能力；业务事实的解析规则由业务 owner 持有。                                |
-| app 内部                                            | 单 app 的 enum、schema、error、流程类型和页面模型；有实际共享消费者后再评估提升位置。                                                 |
+| 位置                              | 职责                                                                  |
+| --------------------------------- | --------------------------------------------------------------------- |
+| `contracts`                       | 跨端或跨应用的稳定枚举、schema、派生类型和紧贴契约的协议 helper       |
+| `domain` 纯规则                   | 只依赖显式输入、常量与纯 helper 的业务计算                            |
+| `domain` DTO、mapper、审计 helper | 后端复用的输入输出和纯数据转换，可依赖数据库派生 schema，但不执行查询 |
+| 专用能力包                        | 完整业务能力及其公开类型；已有 owner 的协议 schema 继续由该包持有     |
+| `db`、`api-core`、`jobs`          | 持久化定义与查询基础能力、后端基础设施、队列基础能力                  |
+| app 内部                          | 单 app 的类型、流程和页面模型，有真实共享需求后再评估提升             |
 
-`domain` 当前同时包含纯规则和数据库派生 DTO；“纯”约束适用于规则文件，不代表整个 package 无数据库依赖。
-新增纯规则放在所属领域中按职责命名的文件，DTO/mapper 依赖规则，规则不反向依赖 DTO 或其聚合出口。
+纯规则不依赖数据库、OpenAPI、网络、运行时实例或 composition，也不反向依赖 DTO 及其聚合出口。
+`domain` 同时含规则与数据库派生 DTO，不能把整个包视为纯模块。
 
-### 公开接口与运行环境
+独立模块可以通过同一包的公开 subpath 分工。新建包需说明稳定职责、实际消费者或依赖隔离需求，以及要隐藏的实现；
+合并包需评估依赖并集、测试和构建失效范围。处理方式相同，例如都做 resolution，不意味着属于同一业务模块。
 
-- 跨包通过 `package.json` 声明的公开出口消费能力，不通过相对源码路径或未公开的深层路径访问实现。
-- 公开出口不自动代表浏览器可用。浏览器运行时代码不 value-import `domain`、`db` 或后端基础设施；共享 runtime
-  schema 使用 `contracts` 或支持浏览器的专用能力出口，类型共享使用 type-only import。
-- Admin 可以从后端公开 tRPC 入口进行 type-only 推断，推断集中在 app-local service/client 边界；不为此复制一套
-  DTO 到 `contracts`。前端职责见 [前端架构](frontend-architecture.md)。
-- 已有 runtime schema 时，从 schema 派生 TypeScript type；解析与 mapper 复用同一个 shape owner。Protocol entry
-  可以添加 OpenAPI metadata，不另写一份相同 wire shape。
-- 协议 helper 只实现该契约的编码、解码或续接语义，不承载 app 业务流程或数据库、网络请求。现有 SSO 导航恢复
-  helper 通过调用方传入的窄接口操作 browser history 和派发事件；平台适配应保持显式，不在共享模块中绑定 app 实例。
-- `contracts` 当前 root 还公开登录 credential 的加解密 helper。它们是跨运行时协议实现，依赖 `sm-crypto`、
-  Web Crypto 及 `btoa`/`atob` 等能力，并使用时间和随机数；不属于纯规则。修改这些 helper 或引入新的消费运行环境时，
-  核验实际执行分支所需的平台能力。本约定保留现有出口，不据此允许任意平台实现进入 `contracts`，也不声称 root
-  re-export 的所有代码必然进入每个浏览器 bundle。
+## 公开接口与运行环境
 
-### 独立模块与独立包
+- 跨包只消费 `package.json` 声明的公开出口，不访问相对源码或未公开深层路径。
+- 浏览器运行时代码使用 `contracts` 或明确支持浏览器的专用出口，不 value-import `domain`、`db` 或服务端基础设施。
+- Admin 的 tRPC 类型推断集中在 app-local service/client，通过后端公开入口 type-only 导入，不复制一套 DTO。
+- 已有 runtime schema 时由它派生类型，解析和 mapper 共用 shape；协议入口只补元数据，不重写 wire。
+- 协议 helper 仅实现编码、解码和续接等协议能力；平台适配通过窄接口传入，不绑定 app 实例或承载业务流程。
 
-独立模块不一定需要独立 workspace package。新建包应说明稳定的业务职责、实际消费者或具体的依赖隔离需求，
-以及希望隐藏的实现；文件数量、提炼出一个 helper 或假设未来复用都不足以单独证明建包必要性。
-
-多个独立模块可以共享一个包，通过明确的公开 subpath 保持职责分离。合并包前应界定业务收录范围，并评估依赖并集、
-测试与构建失效粒度；不要求仅因共享包就互相调用。`resolution` 只是处理方式，不能成为所有解析逻辑的默认落点。
-选择独立包或共享包时，不以独立发布作为没有实际需求支撑的理由。
-
-当前专用能力包的分工如下；本约定不改变它们的物理布局：
-
-| 包                                       | 当前职责与消费关系                                                                                                                                                 |
-| ---------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `delegation`                             | 统一 Client 委托的创建、生命周期、冲突、范围查询及安全选择器，由 API 与 Admin API 消费；`/wire` 只公开浏览器可用的 schema 与类型。                                 |
-| `custom-sso`                             | root 拥有完整协议操作与 Code/Token；API 注入出站能力，Worker 消费 maintenance，Admin/SSO 消费支持浏览器的 `/wire`；测试构造与检查只走 `/testing`。                 |
-| `session-kernel`                         | 协议中性的 UserSession/ClientSession 生命周期，由 API、Admin API、两协议与 API Core Subject Access 适配方消费；不反向依赖这些消费者。                              |
-| `role-assignment-resolution`             | 统一有效角色与角色变化影响用户的解析；管理后端授权和 User Profile 构建/失效使用同一规则。                                                                          |
-| `organization-responsibility-resolution` | 统一有效责任与 holder 反向解析；当前生产直接消费者是 User Profile Read Model，用于构建和变更影响分析。                                                             |
-| `user-profile-read-model`                | 拥有派生档案的失效、重建、PostgreSQL 发布、Redis 缓存、查询与恢复；由 API、Admin API、Worker 按职责消费。Read Model 为读取整理数据，也负责写入和维护这些派生数据。 |
-| `organization-search-read-model`         | 独立拥有组织源变化事件、提交后子树展开、组织版本、完整路径构建和 PostgreSQL 发布；API 消费 query，源事务 composition 消费 producer，Worker 消费 worker。           |
-| `filter-engine`                          | 按调用方显式公开结构派生 Filter 校验、类型化路径、集合作用域及 JSONB 编译；不拥有读模型发布或连接生命周期。                                                        |
-
-Kernel 根出口只托管不透明 `subjectContext`，`/maintenance` 和 `/testing` 分离。Subject Access operation/context/拒绝编排
-由 API Core 单向消费 Kernel；不公开旧 fence、validator 或专用 Kernel 代际字段。Custom SSO root 要求显式操作容器，
-Projection 唯一工厂要求许可证明，均不在缺少容器时自动恢复访问检查。
-
-Kernel 的在线根出口只公开 UserSession/ClientSession 生命周期与观察身份。Code/Token 属于各协议 owner；
-协议调用方必须显式取得操作许可和 Client Snapshot，再验证会话关系，不能从旧四对象出口恢复线上读取。
-旧 Kernel/Provider/Grant decoder 与 source 布局维护出口已退役。当前离线清理仍要求显式 unified 布局，
-通过各 owner 公开维护出口按精确 namespace 的前缀处理全部版本和键族，不依赖记录 schema；
-其他前缀旧布局不在范围内，操作边界见[统一维护手册](../releases/authentication-and-session.md)。
-
-Client 数据库只有统一 `ssoEnabled`、可空单协议 `ssoConfig` 与独立当前 SSO Secret/id/updatedAt；Internal API secret 独立。
-普通管理与 Runtime DTO 使用显式安全字段，不能默认选择 SSO Secret；认证与超级管理员 Secret 重读各用窄能力。
-最终 migration 先锁 Client 表并拒绝未完成旧配置选择/凭据迁移的记录，再删除旧双协议列与约束。
-旧扩展期 Client 来源须按[固定版本收缩流程](https://github.com/cyy1998/shgas-iam/blob/73315e4cef6f96dd79b29e18f74d68af30e559ec/docs/releases/unified-session-maintenance.md#首次升级的数据库收缩顺序)完成 apply/全量 verify 后执行最终 DDL；不能套用于其他来源或新装空库。
-
-#203 的在线 Custom 配置按 `callbackType` 严格分支：managed 禁止 `callbackEndpoint`，business 必填完整地址。
-Admin 表单仅在 business 回填、展示和提交地址；隐藏控件的旧值不得进入 managed 请求。Domain、普通 DTO、Snapshot
-和数据库最终约束消费同一形状；该形状不接受 ORCAS 配置。普通类型切换保留已有 SSO Secret。
-新装空库直接执行正式 migrations。b648 与 managed-callback 一次性升级工具及离线中间配置契约已退役；
-原 migration SQL、hash、journal 和快照继续保留。旧库升级必须恢复匹配的历史工具，见
-[历史工具说明](../development/commands.md#历史数据维护工具)，不能把旧配置交给当前在线 reader。
+`contracts` 的 credential 加解密出口使用密码库、时间、随机数和 Web API，并非纯规则。
+修改它或增加运行环境时须核对实际执行分支的平台能力；公开出口和 type-only 兼容均不证明浏览器可加载。
+跨协议与中性能力的依赖方向见[认证与会话模块](backend-architecture.md#认证会话与访问控制)。
 
 ## DTO 字段与兼容演进
 
-- 新增或修改跨边界 DTO 字段形状时，使用显式 `pick` 或 `z.object` 确定允许字段；允许从已经明确选字段的 DTO
-  继续 `omit`、`extend` 或调整可选性。直接从整表 shape 排除少数字段，不能保证新增数据库字段仍留在持久化边界内。
-- 请求输入、响应输出与内部敏感记录分别定义。数据库新增字段不能自动成为可提交或可返回字段；修改数据库字段时
-  检查其派生 DTO，受影响且仍自动继承整表字段的跨边界 DTO 在该次改动中收敛到显式字段集合。
-- DTO schema 要在实际输入解析或输出 mapper/serializer 边界生效；仅声明类型或 schema 不证明运行时输出已被裁剪。
-- 字段新增、删除、类型、必填性、可空性及未知字段解析策略变化都要检查消费者。新增响应字段也可能被旧 strict
-  parser 拒绝，不能一律认定为向后兼容。是否使用 `.strict()` 由协议要求决定，不统一收紧所有 DTO。
-- 兼容发布应说明新旧生产者/消费者的可共存组合与部署顺序；不能共存时使用对应功能的协调切换契约。消费范围包括
-  浏览器、后端、Worker、外部协议客户端及会跨发布保留的消息或缓存（按实际契约涉及范围检查），不建立通用双版本框架。
+新增或修改跨边界 DTO，先用显式 `pick` 或 `z.object` 确定允许字段，再按需组合。
+请求、普通响应和敏感记录分别定义；整表排除少数字段不足以阻止新增数据库字段外溢。
+Schema 必须在实际解析或输出边界生效，只声明类型不证明字段已被裁剪。
 
-## 专用能力包契约
+字段的类型、必填、可空和未知字段策略变化都要检查消费者。新增字段也可能被旧 strict parser 拒绝；
+是否 strict 由协议决定，不统一收紧。兼容发布需明确生产者和消费者可共存的组合、顺序，以及跨发布保留的缓存和消息。
+不能共存时采用对应主题的协调切换，不为此建立通用双版本框架。
 
-- client-scoped 主体信息裁剪、Subject Claim Catalog 与协议中性投影类型放在
-  `packages/client-subject-projection`。调用方只通过公开 `resolve` Interface 提交 Subject Identifier、
-  `clientCode`、`SubjectClaimSelection` 和本操作许可证明；已发布 Subject Facts 与许可断言由
-  composition 注入最窄 port。协议 wire mapper 只能消费 package root public Projection Interface，不能导入其他
-  core subpath 或直连 Facts persistence、client 配置、runtime 与 transport。Custom SSO V3 wire 的 runtime schema、
-  派生 TypeScript type、mapper 与 preview 统一由 `@iam/custom-sso/wire` 拥有；API 只能复用该
-  schema 添加 OpenAPI metadata，不得重写第二份 wire shape。Package root 拥有 Catalog/Selection V3、带 canonical responsibility 子项的协议中性
-  Employment Profile 与 V3 projection service；Custom SSO 包独占 V3 strict wire；responsibility 仍是
-  `profile:employments` 的原子子项，不形成独立 claim，也不进入 authorization employment。
-- 角色分配的正向 Effective Role 与反向受影响用户解析放在 `packages/role-assignment-resolution`；该 package
-  接收 composition root 提供的 `DbClient`，调用方不复制 assignment 或组织闭包匹配规则。
-- Organization Responsibility 的正向 Effective Type/target identity 与按 target Organization/Type 的反向 holder
-  Employment 解析放在 `packages/organization-responsibility-resolution`。该 package 只接收 `DbClient` 和调用方给定的
-  observation time；引用、父生命周期、Period 与 Open cardinality 异常整批 fail closed，调用方不得复制 SQL 或读取时修复。
-- Role Assignment 正向解析只把 Employment 本身、assignment target 和角色的启用/删除状态作为运行时有效性，并由
-  resolver 过滤可选
-  client 范围；Employment 的 Position 与直属 Organization 状态属于 Employment Integrity，不再由正向解析静默过滤。
-  User Profile Builder 在发布前加载并校验全部 Open Employment 的父对象事实，异常时整次 fail closed。反向 dirty-scope
-  解析有意更保守，只过滤失效任职，不因角色、岗位或组织已失效而漏掉重建。
-- Role Assignment 的正向与反向操作都批量接收 ID、处理重复和空输入，并返回稳定排序结果。
-  Admin 角色管理 CRUD 仍属于调用方，不进入 resolver；角色不再派生权限点。
-- user-profile read-model producer/query/worker 逻辑放在 `packages/user-profile-read-model`。该 package 拥有
-  version-bound Subject Facts 构建、`user_profile` 与 dirty row 的 PostgreSQL atomic publication、提交后的
-  Redis monotonic publisher，以及 `subject-facts` subpath 下的 Redis read-through、单主体 single-flight、
-  PostgreSQL 已发布 Facts 窄行回源；请求时不仲裁 Dirty 新鲜度，后台发布版本仲裁仍由该 package 拥有。
-  调用方不复制 profile/facts projection、cache repair 或发布版本仲裁规则。
-- `@iam/filter-engine` 根出口持有共享 Filter 语言。调用方用 `searchScalar`、`searchScalarArray`、`searchObject`、
-  `searchCollection` 与 `searchOrganization` 声明公开结构，由 `createDocumentSchema` 生成严格文档 schema；
-  `createFilterEngine(structure)` 返回 `filterSchema` 和 `compile(filter, document)`。后者接受调用方提供的 Drizzle
-  `SQLWrapper`，校验未知输入后编译为参数化 JSONB 谓词；请求不能选择目标列或提交任意 SQL/JSON path。
-  在线查询由 service 校验请求外层结构，repository 在访问数据库前调用 checked compiler 完成一次语义校验。
-  条件无效产生不携带原始输入的 `FilterValidationError`，由读模型映射为 422；数据库异常仍映射为 503。
-  Organization 引用通过结构中的 `valueSchema`、`pathField` 与 `codeField` 明确其子树规则。语言预算由共享包维护，
-  `createFilterTransportSchemas` 统一通用严格 AST 与递归解析前的预算检查；入口通过 `annotateExpression` 添加自己的
-  HTTP/OpenAPI 名称，递归引用使用该回调返回的 schema，共享包不依赖 OpenAPI 工具。
-  字符串字段的查询 schema 使用共享 `FILTER_MAX_STRING_LENGTH`；结果上限、排序、超时及错误映射
-  由各读模型和入口持有。共享包只依赖 Zod 与 Drizzle，不引入源表、数据库实例、dirty、publisher 或 app composition。
-- User Profile v4 通过 `@iam/user-profile-read-model` 默认入口暴露 schema、Redis publisher/cache、strict Subject Facts
-  read-through reader 与只读 query seam；builder/publication 只由 `worker` subpath 组装。Internal Detail 从
-  `user_profile` v4 row 返回严格 Detail；面向其他内部服务的用户搜索只提供 Internal Filter DSL，
-  使用共享 Filter 引擎绑定其公开结构和 `search_doc` 列，只查询并校验已发布的
-  Search Document，Internal Filter DSL 从同一行的类型化列返回 `UserProfileBase`，不读取 Detail 或回查 source tables。Responsibility Snapshot 子项复用 Client Subject Projection
-  的协议中性 contract，read-model 仍拥有 resolver 驱动的 Snapshot build。版本无关 Worker maintenance/readiness 命令复用
-  同一 dirty/job/publication 与两项全量 gate；active Worker consumer、Internal User、Custom SSO 与 OIDC composition 只使用
-  v4，同一 live User 不得混写、双读、fallback 或建立版本选择。Catalog/Selection v3 与 Custom SSO wire v3
-  分别由各自 owner 固定，不随 Profile 命令推进。
+部分既有 Client、Role DTO 仍从整表派生。修改其形状或来源字段时收敛到显式字段集合，无关改动不触发批量迁移。
+验证方式见[验证选择](../development/testing.md#验证选择)：类型兼容、浏览器可加载和运行时字段裁剪分别验证。
 
-## 现存差距与验证
+## Repository 与数据库
 
-当前部分 Client、Role DTO 仍由整表 schema 或排除字段派生，不能视为已满足显式字段规则。修改这些 DTO 的
-形状或其来源数据库字段时按上述规则收敛；不因无关改动批量迁移。既有 crypto root 出口按前述运行环境约定维护，
-新增 subpath 或搬迁实现应作为明确的结构变更处理。
+Repository 通过 factory 接收 root 或 transaction `DbClient`；事务由调用方的 UnitOfWork 统一拥有。
+数据库事实、审计和 dirty 的原子关系，以及提交后作用，遵守[事务边界](backend-architecture.md#transactions-与-aftercommit)。
 
-| 要证明的事实               | 验证方式                                                                                             |
-| -------------------------- | ---------------------------------------------------------------------------------------------------- |
-| 公开出口可用、类型结构兼容 | package exports 与消费方 typecheck；类型正确不等于浏览器运行时可加载。                               |
-| DTO 输入与输出字段受控     | 公开解析/mapper 的行为测试，覆盖允许字段、额外存储字段不外溢、敏感字段裁剪及协议要求的未知字段处理。 |
-| 共享出口支持目标浏览器     | 相关前端构建；涉及平台能力时补对应运行环境的执行验证。                                               |
-| 业务解析、发布与恢复行为   | 最高相关公开接口的行为测试，以及涉及 PostgreSQL/Redis 等资源的 Integration 通道。                    |
-| 稳定依赖方向与 owner 路径  | 仅在既有 Architecture Guard 覆盖范围内由其检查；新增规则须通过准入流程。                             |
+数据库约束保护存储完整性，应用 schema 保护输入输出，两者不能互相代替。特定读模型的版本、发布与核验规则
+集中在[Profile](backend-architecture.md#user-profile-subject-facts-publication)和
+[组织搜索](backend-architecture.md#organization-search-发布与核验)。
 
-当前 Architecture Guard 不覆盖这里全部通用共享包分层、浏览器运行环境或 DTO 字段规则；这些约束仍需实现时审查并选择
-对应验证。不要用源码字符串检查推断 Zod 链、运行时字段裁剪或 bundle 行为。验证层与准入条件见
-[架构守卫规范](architecture-guard.md)，测试通道见 [测试编排架构](testing-architecture.md)。
-
-## Repositories 与 Transactions
-
-- 仓储使用来自 `@iam/db` 的 Drizzle，并通过 `createXRepository(db)` factory 创建；`db` 绑定 root
-  `DbClient` 或 transaction `DbClient`。
-- Business service 方法不应把 `tx` 参数传给 repository 调用。
-- 事务性后端 workflow 应使用 app-local `UnitOfWork`。
-- Transaction callback 接收 tx-bound repository、audit writer port 和 `afterCommit` registration port；业务代码不传递
-  raw transaction client。
-- Redis/cache/OIDC/SMS/fetch side effect 默认不在数据库 transaction callback 内直接执行；应在 callback 外执行，
-  或注册 after-commit task。Client Traffic Gate 不再是例外：Client mutation 只在取得 canonical target 后注册
-  required client-wide Runtime Snapshot invalidation，不在 transaction 内建立 Redis reserve、ownership fence、heartbeat
-  或 settlement。不得借缓存协调在 transaction 内执行不可逆业务副作用。
-- `required` after-commit 用于调用契约要求完成的动作，失败会在数据库提交后返回错误；`bestEffort` 用于可恢复动作，
-  失败只记录日志。两种模式都不能回滚已经提交的业务事实。完整语义见
-  [后端架构](backend-architecture.md#transactions-与-aftercommit)。
-
-## Drizzle Schema 布局
-
-- Drizzle table definition 放在 `packages/db/src/schema/<domain>/*.ts`。
-- Relation definition 放在 `packages/db/src/relations/<domain>/*.ts`。
-- Migration 放在 `packages/db/src/migrations/`。
-- 保持 domain-level 和 top-level schema/relation export 同步，例如 `packages/db/src/schema/core/index.ts`、
-  `packages/db/src/relations/core/index.ts`、`schema/index.ts` 和 `relations/index.ts`。
-- 使用 `snakeCase.table` / `snakeCase.schema`；TypeScript property 名称保持 camelCase，数据库 table/column 名称
-  使用 snake_case。
-- 使用 `drizzle-orm/zod` 生成 table-derived Zod schema。
-- Join table 的 primary key、index 和 uniqueness constraint 保持显式定义。
-
-### Organization Search publication schema
-
-`organization_search_change` 保存源事务登记的不可变变化身份和模块决定的自身/子树范围；
-登记使用实际 mutation 返回的受影响组织 ID，更新零行不登记。创建、状态和删除登记自身，code/name/type
-变化登记子树。
-`organization_search_dirty` 保存每个组织的单调待重建版本。两个阶段都保存处理状态、领取 token、处理时间和失败信息，
-队列只负责唤醒。事件展开在事务中锁定并重验 token，将当前闭包目标的版本登记与事件完成原子提交；完成事件保存本次
-重建 payload，重复投递只重唤醒这些版本，不重复推进版本。
-
-repair 在源变化与 rebuild 两阶段分别有界选取 pending、failed 或过期 processing；活跃处理事务锁定的工作跳过。
-重领保留 desired version、尝试次数及诊断，替换 ownership token，每次唤醒使用新的队列 job ID；
-旧处理器即使持有同版本候选也不能覆盖或完成新 owner 的工作。重投不推进版本，普通 consumer 完成发布。
-
-提交后按当前闭包展开祖先变化：展开前已提交的后代创建由该次展开覆盖；展开后才提交的后代创建由自己的变化登记覆盖。
-这两个路径共同保证祖先修改与后代创建交错时的最终传播，不把源事务当时捕获的后代列表视为完整目标集。
-
-`organization_search_document` 保存当前 schema、JSONB、已发布版本和构建时间。删除通过不可见的空文档墓碑保留已发布
-版本，不删除仲裁事实。发布锁定 dirty，重验版本、processing 状态和领取 token，文档替换与 processed 同事务提交。
-构建使用一致的只读源快照，验证完整闭包路径、层级、距离、父链和存储路径。搜索只读取当前 schema 的可见已发布文档，
-不在请求时联查源组织或检查全量覆盖率；详细契约见 [搜索接入](../guides/search.md)。
-
-独立全量 verifier 使用同一个 `REPEATABLE READ READ ONLY` transaction 完整读取源组织、文档/墓碑、dirty、
-源变化事件，并把该 transaction 绑定到 source reader 的闭包和祖先读取。它核对覆盖、schema、严格结构、源事实、
-处理版本及完成凭据，不更新数据或触发任务。核验还检查源变化登记的重建请求是否履行及无源对象的孤立记录；
-历史 processed 事件可保留较早版本，但不能指向未完成的更高版本。缺行、旧 schema、结构/路径损坏、事实差异、
-未完成工作或凭据异常报告 failed，按稳定分类返回完整排序的 Organization ID 与源变化 UUID，不采样。
-维护失败保持停流，正式修复后重新完整核验，见[组织搜索全量重建](../releases/data-maintenance.md#组织搜索全量重建)。
-
-### User Profile publication schema
-
-- `user_profile` 的 current shape 固定为 17 列。`subject_identifier`、`name`、`source_dirty_version` 与
-  `subject_facts` 均为 `NOT NULL`，`subject_identifier` 由普通唯一索引保证全表唯一；收紧 migration 在任何 DDL
-  之前验证全量 user/profile/dirty coverage、Subject Identifier 映射、schema/version 与 Subject Facts shape，失败时
-  使用 `23514` 中止且不改变 staged schema。
-- `source_dirty_version` 的数据库 CHECK 只接受正 bigint；`subject_facts` 的数据库 CHECK 只约束为 JSON object，
-  strict v4 与顶层只允许 `employments` 由唯一 active Worker writer 和 read-side parser 在应用边界保证。
-  迁移或恢复窗口可存在待重建的旧 row，放流前必须完成 v4 全量覆盖；active runtime 不双读、不 fallback。
-  查询用 `search_doc` 保留现有 GIN，
-  `subject_facts` 不建立 GIN。普通唯一索引需要在 maintenance
-  freeze 中执行。旧 Subject Projection 专用回退工具已退役；历史 migration 与 rollback SQL 仅作为旧版本记录保留。
-  当前数据库回退须使用匹配旧制品及备份，不通过删除 migration journal 重放旧迁移。
-- Worker publication transaction 必须锁定并重验同一 `user_profile_dirty` 的 user/version/processing 状态，再以
-  单调 `source_dirty_version` 写入或删除 profile，并在同一 transaction 标记 dirty processed。Redis publication
-  只能发生在 PostgreSQL 提交后，失败不得回滚已提交事实。
-- Employment Verifier 通过 `@iam/user-profile-read-model/worker` 的公开 read-side seam 在 PostgreSQL
-  `READ ONLY` transaction 中取得按 Employment ID 排序的一致 snapshot，只联接 Position 与直属 Organization 事实。
-  Verifier 不写数据库、不从 `updateTime` 推断结束时间，也不生成修复 SQL；全部非墓碑 blocker 以稳定分类和完整
-  Employment ID 集合报告，Legacy Employment Tombstone 只计数。
+修改 PostgreSQL schema、索引、约束或 Drizzle 派生 schema 前使用
+[db-schema skill](../../.codex/skills/db-schema/SKILL.md)；涉及 Relations v2 或 RQB v2 时另用
+[drizzle-v1 skill](../../.codex/skills/drizzle-v1/SKILL.md)。目录与命名见
+[数据库文件约定](../development/backend-implementation.md#数据库文件约定)，操作命令见[命令入口](../development/commands.md#workspace-入口)。
