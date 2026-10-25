@@ -21,7 +21,7 @@ OIDC 首次登录的短期 HttpOnly 完成证明区分“守卫后刚完成认�
 
 ## 当前契约与历史
 
-现行 owner、请求、Cookie 与首次登录证明见[认证契约](../features/sso/authentication-and-recovery.md#登录页重入)。
+页面规则见[登录守卫](../architecture/frontend-architecture.md#sso-登录守卫)，续接与首次登录证明见[协议实现](../../packages/oidc/src/authorization.ts)。
 旧独立 Provider 与旧根模型的实现安排只作历史追溯。
 
 历史来源：[ADR-0013 原文](https://github.com/cyy1998/shgas-iam/blob/73315e4cef6f96dd79b29e18f74d68af30e559ec/docs/adr/0013-guard-login-page-reentry-with-authentication-continuation.md)。原始决定与后续修订按各版本追溯。

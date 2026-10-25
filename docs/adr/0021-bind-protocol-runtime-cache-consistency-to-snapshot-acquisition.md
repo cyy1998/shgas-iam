@@ -36,7 +36,7 @@ Redis 备份可能同时恢复格式正确却过时的 control 和 payload，在
 ## 当前契约与历史
 
 模块隐藏键、Lua、CAS、正负缓存和 single-flight 等实现。完整读取与错误契约见
-[Client Snapshot](../features/sso/client-snapshot-contract.md)，写入边界见
+[Client Snapshot](../architecture/backend-architecture.md#client-snapshot)，写入边界见
 [Client 配置](../features/admin/client-sso-configuration.md)，修复见[统一维护](../releases/authentication-and-session.md)。
 
 历史来源：[ADR-0021 原文](https://github.com/cyy1998/shgas-iam/blob/73315e4cef6f96dd79b29e18f74d68af30e559ec/docs/adr/0021-bind-protocol-runtime-cache-consistency-to-snapshot-acquisition.md)、[ADR-0022 原文](https://github.com/cyy1998/shgas-iam/blob/73315e4cef6f96dd79b29e18f74d68af30e559ec/docs/adr/0022-adopt-snapshot-consistency-for-client-traffic-gate.md)、[ADR-0023 原文](https://github.com/cyy1998/shgas-iam/blob/73315e4cef6f96dd79b29e18f74d68af30e559ec/docs/adr/0023-retire-legacy-maintenance-support.md)、[ADR-0035 原文](https://github.com/cyy1998/shgas-iam/blob/73315e4cef6f96dd79b29e18f74d68af30e559ec/docs/adr/0035-unify-user-and-client-session-lifecycles.md)。原始决定与后续修订按各版本追溯。

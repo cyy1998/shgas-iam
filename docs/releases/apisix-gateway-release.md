@@ -6,7 +6,7 @@ Last verified: 2026-10-25
 Next review: 2026-11-25
 
 通过独立 Gateway HTTP API 发布调用方保管的 app-centric YAML，例如 `tmp/gateway-config/apisix/manifests/<env>/<app>.yaml`。
-输入及资源归属见[Gateway 配置契约](../features/gateway/gateway-configuration-api.md)，常规发布统一使用 HTTP。
+输入及资源归属见[网关接入](../guides/gateway.md)，常规发布统一使用 HTTP。
 
 ## 服务与首次配置
 
@@ -125,4 +125,4 @@ IAM/Tender/GDS 共用限流变更时，核对 dev/prod 的六个 scope 配置，
 5. 重做 validate、diff、dry-run，明确提交新发布，完成回读和受影响数据面检查后恢复调用方与业务入口。
 
 恢复旧 YAML 也走相同流程，prune 只在删除范围确认后开启。
-补偿允许中间配置短暂生效，不撤销业务请求作用；崩溃无自动恢复，详见[回滚与并发边界](../features/gateway/gateway-configuration-api.md#回滚与并发边界)。
+补偿允许中间配置短暂生效，不撤销业务请求作用；崩溃无自动恢复，仍须按上述步骤人工核对。

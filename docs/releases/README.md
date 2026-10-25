@@ -28,10 +28,13 @@ Next review: 2026-11-25
 以下指引保存在整理前的固定版本中，按实际来源环境选择；本次整理不表示目标环境已经执行迁移。
 尚待迁移的环境先完成对应独立流程，再使用当前代日常维护步骤；不能把当前命令直接套到其他旧布局。
 
-| 迁移任务                         | 固定版本指引                                                                                                                                                                        |
-| -------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| ORCAS 退役                       | [来源判断与一次切换](https://github.com/cyy1998/shgas-iam/blob/5feeec63992a89c4f407b5c424b6177184ba6098/docs/releases/unified-session-maintenance.md#orcas-退役的一次切换)          |
-| 权限点退役与 Profile v4 配对升级 | [停流、迁移、重建及接入应用切换](https://github.com/cyy1998/shgas-iam/blob/5feeec63992a89c4f407b5c424b6177184ba6098/docs/releases/user-profile-maintenance.md#权限点退役的协调切换) |
-| 更早的布局、协议或数据库升级     | [历史发布手册](https://github.com/cyy1998/shgas-iam/tree/73315e4cef6f96dd79b29e18f74d68af30e559ec/docs/releases)、[历史工具入口](../development/commands.md#历史数据维护工具)       |
+| 迁移任务                         | 固定版本指引                                                                                                                                                                         |
+| -------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| ORCAS 退役                       | [来源判断与一次切换](https://github.com/cyy1998/shgas-iam/blob/5feeec63992a89c4f407b5c424b6177184ba6098/docs/releases/unified-session-maintenance.md#orcas-退役的一次切换)           |
+| 权限点退役与 Profile v4 配对升级 | [停流、迁移、重建及接入应用切换](https://github.com/cyy1998/shgas-iam/blob/5feeec63992a89c4f407b5c424b6177184ba6098/docs/releases/user-profile-maintenance.md#权限点退役的协调切换)  |
+| 旧权限委托切换为 Client 委托     | [来源限制、正式 migration 与恢复](https://github.com/cyy1998/shgas-iam/blob/5feeec63992a89c4f407b5c424b6177184ba6098/docs/features/delegation/client-delegation.md#旧数据与发布切换) |
+| 更早的布局、协议或数据库升级     | [历史发布手册](https://github.com/cyy1998/shgas-iam/tree/73315e4cef6f96dd79b29e18f74d68af30e559ec/docs/releases)、[历史工具入口](../development/commands.md#历史数据维护工具)        |
 
 历史指引中的额外留证与通用全库非目标基线要求不再作为操作前提；实际迁移步骤、来源限制、必要备份及目标数据核验仍适用。
+
+旧接入与管理契约的切换说明见[固定功能文档快照](https://github.com/cyy1998/shgas-iam/tree/48c2d6cc20e8a3675cbd1269eed2d5612141791d/docs/features)。

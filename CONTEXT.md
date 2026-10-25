@@ -48,7 +48,7 @@ _Avoid_: User Profile Search, organization member search, generic entity query
 由组织源事实派生、可重新构建并按组织独立异步发布的组织搜索事实视图，承载组织自身属性和完整 Organization Path，搜索直接返回用于匹配的同一份完整文档；单份文档内部保持一致，不同组织可以处于不同更新进度，它允许落后于源事实，不取代组织源事实或成为独立的业务写入来源。
 _Avoid_: organization source of truth, editable organization document, User Profile Search Document
 
-组织搜索的公开字段、路径绝对层级与既有接口边界见[Organization Filter DSL 设计](docs/features/organization-search/filter-dsl.md)。
+组织搜索的调用与层级条件见[搜索接入](docs/guides/search.md)，字段以指南链接的 schema 为准。
 
 **User Profile Filter DSL**:
 User Profile Search 用于组合 User Profile Search Path 条件的非空类型化过滤表达式；JSON 节点统一为 `{ and: [...] }`、`{ or: [...] }`、`{ not: expression }`、`{ exists: { path, where } }` 或 `{ field, op, value }`，不兼容旧 `all`/`any`。它只决定用户是否匹配，不负责排序、分页或返回字段投影。集合条件使用带 `where` 的 `exists(path, where)` 建立元素作用域，内部字段路径相对于该作用域，并且不得把不同任职或其他不同关联事实拼成一个虚构事实；当前词汇不提供 null、空集合、字段缺失或无条件集合存在性查询。
@@ -63,7 +63,7 @@ _Avoid_: implicit normalization, fuzzy equality, empty membership condition, raw
 _Avoid_: unbounded filter, unbounded result set, caller-controlled query cost
 
 Client Delegation 的决策见 [ADR-0020](docs/adr/0020-provide-fail-closed-privilege-delegation-resolution.md)，
-三类入口与切换边界见[功能契约](docs/features/delegation/client-delegation.md)。
+三类入口见[应用委托](docs/features/delegation/client-delegation.md)，调用与切换边界见[委托接入](docs/guides/delegation.md)。
 
 **Client Delegation**:
 绑定一个 Client、在指定组织范围内为委托人确定直接代办人的委托关系；它不向受托人授予或复制委托人的角色、权限或登录身份，不同 Client 的委托分别管理。

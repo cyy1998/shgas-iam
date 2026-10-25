@@ -11,6 +11,6 @@ OIDC、User Profile 与搜索共享这一身份，不各自生成协议专属标
 旧 Principal Session / Snapshot 的存储安排不再是身份决定的一部分。
 
 当前词汇见[CONTEXT](../../CONTEXT.md)，两类会话如何引用主体见
-[Kernel 契约](../features/sso/unified-session-kernel.md)。
+[Kernel 契约](../architecture/backend-architecture.md#session-runtime-与跨-app-边界)。
 
 历史来源：[ADR-0006 原文](https://github.com/cyy1998/shgas-iam/blob/73315e4cef6f96dd79b29e18f74d68af30e559ec/docs/adr/0006-elevate-user-subject-identifier.md)。原始决定与后续修订按各版本追溯。

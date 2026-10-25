@@ -20,7 +20,7 @@ Next review: 2026-11-25
 | Cap          | 核对 SSO 的 `UMI_APP_SSO_CAP_ENDPOINT`、`UMI_APP_SSO_CAP_SITE_KEY`、`UMI_APP_SSO_CAP_WASM_URL`、`UMI_APP_SSO_CAP_PAKO_URL` |
 
 当前默认偏移 300000 ms、nonce TTL 360 s 尚未覆盖完整接受期，env 没有交叉校验。
-需要完整防重放保证时，先解决并验证[时间窗口缺口](../features/sso/authentication-and-recovery.md#凭证时间窗口与防重放限制)；
+需要完整防重放保证时，先解决并验证[时间窗口缺口](#凭证时间窗口与防重放限制)；
 只调大 TTL 或即时重复请求被拒绝都不足以证明缺口已解决。
 
 1. 准备兼容的 API/SSO 构建与回退配置，关闭密码登录公共入口、直连和自动重试，排空在途认证。
@@ -37,6 +37,17 @@ Next review: 2026-11-25
 
 失败时保持受影响登录关闭，修正 key/kid、时间问题或恢复配对 API/SSO 构建，刷新缓存后重验。
 Redis 异常先恢复依赖；`login-credential-nonce:<digest>` 不能批量清空，仅可清理明确的演练测试 key。回退不恢复明文入口。
+
+### 凭证时间窗口与防重放限制
+
+当前实现接受 `abs(now - ts) <= maxSkewMs`，包含未来时间戳；nonce 从首次占用起按固定 TTL 过期。
+同一凭证的接受跨度可接近两倍偏移窗口，因此 nonce TTL 不短于单侧偏移并不足以覆盖完整接受期。
+默认偏移 300000 毫秒、nonce TTL 360 秒尚有缺口，env 未做交叉校验；修复由
+[讨论 #261](https://github.com/cyy1998/shgas-iam/issues/261)跟踪。
+
+稳定时钟且忽略在途延迟时，固定 TTL 须严格大于两倍偏移；实际还须考虑 API 副本时钟差、回拨与时间校验至 nonce 写入的延迟。
+仅调大 TTL、通过环境校验或拒绝即时重放，尚不足以确认缺口已解决。
+本限制不改变现有凭证拒绝与登录失败计数规则。
 
 ## OIDC 双入口配置
 
@@ -64,7 +75,7 @@ Redis 异常先恢复依赖；`login-credential-nonce:<digest>` 不能批量清�
 本流程停止旧 signer 并协调更新全部 API 副本，共用进程的其他入口也纳入维护窗口。
 
 **先判断能否轮换：** 设 current 为 A、已有 previous 为 P、新 key 为 B。P 仍需用于接入应用验签或 IAM 退出 hint 时不能开始，
-两槽无法容纳 P/A/B。普通 Token 到期不表示退出 hint 已退役；规则见[密钥兼容边界](../features/oidc/oidc-integration.md#签名密钥兼容边界)。
+两槽无法容纳 P/A/B。普通 Token 到期不表示退出 hint 已退役；规则见[密钥兼容边界](#签名密钥兼容边界)。
 
 1. 准备唯一新 kid 的 B、对应公开 JWK 与回退配置，确认所有 API 副本及自动扩容模板。
    关闭 OIDC 授权、兑换、续接、退出及直连/重试入口，停止旧 API signer，排空在途请求。
@@ -88,14 +99,28 @@ Invoke-RestMethod -Uri "$oidcOrigin/oidc/jwks" -TimeoutSec 10 -ErrorAction Stop
 失败时保持维护，核对本轮已实际签名的 key 集合。B 已签发 Token/hint 后，不能直接回退到丢弃 B 的配置。
 若无第三个必须保留的 key，可按 A current、B previous 协调恢复并重新核验；否则先解决兼容集合问题，不能擅自移除所需 key。
 
+### 签名密钥兼容边界
+
+密钥在启动时加载，仅支持 current/previous 两组 private JWK；不支持热更新、更多历史密钥或 public-only previous。
+两个槽不能同时容纳已有 previous P、current A 与新 key B；P 仍需验证时不能直接覆盖为 A。
+滚动轮换须单独安排兼容窗口。
+
+旧普通 ID Token 至少须被接受到：最后可能的旧密钥签名时刻，加最长 TTL 与接入应用的时钟宽限。该签名时刻须在全部旧 signer 停止并排空后确认。
+代理/RP 的 JWKS 缓存不延长 Token expiry，但可能延迟新 key 可见，需分别确认缓存刷新和未知 kid 重试行为。
+IAM 允许过期 ID Token 作退出 hint，未用 exp 限制其使用期限。因此普通 Token 到期后，旧 key 仍可能需要保留。
+保持既有 hint 兼容就必须保留其 key；多代验证、滚动轮换及 hint 退役政策见
+[讨论 #263](https://github.com/cyy1998/shgas-iam/issues/263)，不能视为已实现能力。
+
+新 key 已签发 Token/hint 后，回退同样必须包含它及其他仍需接受的 key。共享 key 不取消各协议产物的 issuer 归属检查。
+
 ## 选择会话维护任务
 
-| 目标                                      | 操作                                                                         |
-| ----------------------------------------- | ---------------------------------------------------------------------------- |
-| 查询、撤销指定用户/根/应用关系            | 使用[会话管理](../features/admin/session-management.md)，不做 namespace 全清 |
-| 清空当前 namespace 中全部会话或协议 owner | 按下节 inventory、clear、verify；不能按 Client 筛选                          |
-| Client 提交后 Snapshot 传播失败           | 使用定向 repair，不重放数据库写入                                            |
-| Redis 备份恢复后的 Snapshot 修复          | 停流执行全量 repair 和独立 verify                                            |
+| 目标                                      | 操作                                                                                     |
+| ----------------------------------------- | ---------------------------------------------------------------------------------------- |
+| 查询、撤销指定用户/根/应用关系            | 使用[会话管理](../features/sso/login-and-session.md#查看和终止会话)，不做 namespace 全清 |
+| 清空当前 namespace 中全部会话或协议 owner | 按下节 inventory、clear、verify；不能按 Client 筛选                                      |
+| Client 提交后 Snapshot 传播失败           | 使用定向 repair，不重放数据库写入                                                        |
+| Redis 备份恢复后的 Snapshot 修复          | 停流执行全量 repair 和独立 verify                                                        |
 
 ## 会话清理
 
@@ -140,7 +165,7 @@ pnpm --filter @iam/worker client-snapshot:repair -- --client-code alpha
 ```
 
 成功后通过正式入口确认当前 Client 状态/配置和凭据生效。repair 同时失效普通与敏感 payload，不重放 mutation、轮换 Secret 或撤销会话。
-失败先恢复 Redis 等依赖，再重跑同一目标；传播失败前后业务写入是否已提交按[写入结果契约](../features/admin/admin-mutation-contract.md)判断。
+失败先恢复 Redis 等依赖，再重跑同一目标；传播失败前后业务写入是否已提交按[写入结果契约](../development/backend-implementation.md#admin-写入结果与失败恢复)判断。
 
 **全量恢复**用于 Redis restore 后：关闭使用 Snapshot 的协议和管理入口，冻结 Client mutation 及所有 acquisition，排空在途请求和任务后执行：
 
@@ -158,6 +183,6 @@ verify 须独立完整扫描、退出 0 且 matching=0，且发生在 reader 回
 
 - 账号与 Subject Access 恢复使用[数据维护](data-maintenance.md)，不能通过清会话或手工写 Redis 把不确定 Barrier 变成 enabled。
 - 精确会话撤销失败时仅重试原捕获集合；集合丢失重新查询发起操作，已终止的根不恢复。
-- 作用后审计失败不回滚已生效动作，也不为补审计重放 mutation；按[写入结果契约](../features/admin/admin-mutation-contract.md)处理。
+- 作用后审计失败不回滚已生效动作，也不为补审计重放 mutation；按[写入结果契约](../development/backend-implementation.md#admin-写入结果与失败恢复)处理。
 - Redis 实时登录态以服务端时间为准；主从时钟异常先处理时钟与 failover，不能靠续期或恢复登录态备份补偿。
 - 入口开放失败或状态未知时，停止继续开放，关闭不确定入口并排空，完成该操作所需核验后再恢复。

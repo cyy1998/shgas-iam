@@ -105,13 +105,13 @@ API、Admin API 分别负责各自的协议解析、认证和错误映射。
 Gateway 每次只读查询当前 Client，要求 Enable、未删除且 Secret 匹配；首次 iam 发布必须预备 iam Client，
 iam-admin 不自动替代。部署配置固定 APISIX 管理目标与 Admin Key，并提供数据库专用最小读取角色。
 该身份匹配不建立域名/路径配额、插件权限或完整多租户隔离，详见
-[Gateway 功能契约](../features/gateway/gateway-configuration-api.md)。
+[网关接入](../guides/gateway.md)。
 
 ### IAM → 第三方：各自管理协议和本地会话
 
 Custom SSO 与 OIDC 共享主体投影能力，各自负责协议报文（wire）和协议产物（artifact）的生命周期。
 Independent client 自建的本地会话由第三方负责，IAM 撤销不等于第三方本地退出。
-详见[第三方 SSO 对接](../features/sso/third-party-sso-integration.md)和 [OIDC 对接](../features/oidc/oidc-integration.md)。
+详见[第三方 SSO 对接](../guides/custom-sso.md)和 [OIDC 对接](../guides/oidc.md)。
 
 短信和企业微信由 API composition 注入外部 adapter，分别用于验证码与微信登录；失败语义以各调用方契约为准。
 新增外部调用时，按[事务与 afterCommit 规则](backend-architecture.md#transactions-与-aftercommit)选择执行位置：
@@ -135,7 +135,7 @@ Independent client 自建的本地会话由第三方负责，IAM 撤销不等于
 
 读模型和队列不能反向成为源业务事实，日志也不能替代当前授权或业务事实。
 共享包选址与 DTO 演进见[共享契约](contracts-and-database.md)；敏感字段和作用已生效后的审计失败处理见
-[审计契约](../features/audit/audit-logging.md)。
+[审计契约](../development/backend-implementation.md#审计安全边界)。
 
 Organization Search 按组织异步发布，独立维护 schema、补偿与一致只读全量核验。
 首次、升级及全量恢复的人工窗口见[组织搜索维护](../releases/data-maintenance.md#组织搜索全量重建)。

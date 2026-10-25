@@ -35,7 +35,7 @@ Redis 作用后审计失败也不能包装为“没有发生作用”。
 
 ## 当前契约与历史
 
-结果、领域拒绝及页面恢复见[Admin 写入契约](../features/admin/admin-mutation-contract.md)，
+结果、领域拒绝及页面恢复见[Admin 写入契约](../development/backend-implementation.md#admin-写入结果与失败恢复)，
 事务与锁序见[后端架构](../architecture/backend-architecture.md#admin-同对象写入规范)，
 Secret 边界见[Client 配置](../features/admin/client-sso-configuration.md)。
 历史消费者切换与调用方协调见

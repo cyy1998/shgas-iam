@@ -35,8 +35,8 @@ IAM 代理路由的责任。
 ## 当前契约与历史
 
 配置、Secret 与类型变更见[Client 配置](../features/admin/client-sso-configuration.md)，
-接入步骤见[第三方指南](../features/sso/third-party-sso-integration.md)，授权和回调规则见
-[Custom SSO 契约](../features/sso/custom-sso-contract.md)。
+接入步骤见[第三方指南](../guides/custom-sso.md)，授权和回调规则见
+[Custom SSO 接入](../guides/custom-sso.md)。
 
 同代转换与跨代升级的源识别、原凭据及非目标数据保护、失败恢复和人工发布责任仍按匹配版本历史流程执行，不能把
 任意旧来源套到当前维护。入口见[历史维护命令](../development/commands.md#历史数据维护工具)；

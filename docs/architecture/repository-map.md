@@ -112,8 +112,10 @@ Run descriptor、receipts、diagnostics 与 Playwright 产物写入 `e2e/system/
 ## 文档与 Agent 工作流
 
 - `AGENTS.md`：仓库级指引入口；详细规则通过它链接到 `docs/`。
-- `docs/`：Current architecture/feature/runbook、agent workflow、ADR 和历史审查记录。文档状态与事实来源以
-  [文档索引](../index.md) 为准。
+- `docs/features/`：面向使用者的功能说明与业务规则。
+- `docs/guides/`：面向接入方的配置、调用示例与失败处理；字段和接口定义直接链接代码。
+- `docs/architecture/`、`docs/development/`：内部设计与工程约定；`docs/releases/`：运维操作。
+  其他工作流、ADR 和历史记录以及文档状态见[文档索引](../index.md)。
 - `CONTEXT.md`：IAM 的稳定领域语言；长期架构决策位于 `docs/adr/`。
 - GitHub Issues：新建 spec、tickets 与跨会话状态的 tracker。仓库与操作约定见
   [GitHub 议题跟踪](../agents/issue-tracker.md)。

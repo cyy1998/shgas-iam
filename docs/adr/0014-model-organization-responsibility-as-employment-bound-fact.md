@@ -26,6 +26,6 @@ parent-vs-assignment 或 Resume-vs-Pause predicate：它们仍有乐观并发边
 模型词汇见[CONTEXT](../../CONTEXT.md)，解析与写入归属见
 [后端架构](../architecture/backend-architecture.md#organization-responsibility-解析)。
 HR 管理范围由 [ADR-0017](0017-centralize-admin-role-policy-with-request-time-scope.md) 决定，
-功能见[HR 管理契约](../features/organization-responsibility/hr-admin-management-design.md)。
+功能见[组织责任管理](../features/organization-responsibility/management.md)。
 
 历史来源：[ADR-0014 原文](https://github.com/cyy1998/shgas-iam/blob/73315e4cef6f96dd79b29e18f74d68af30e559ec/docs/adr/0014-model-organization-responsibility-as-employment-bound-fact.md)。原始决定与后续修订按各版本追溯。

@@ -1,8 +1,8 @@
 # 第三方 Custom SSO 接入指南
 
-本文面向业务系统接入者，覆盖统一登录、Code 兑换、托管回调、用户信息、网关鉴权与退出。
-Custom SSO 是自定义协议；标准 OIDC 接入见[OIDC 指南](../oidc/oidc-integration.md)。
-内部状态与失败作用见[Custom SSO 契约](custom-sso-contract.md)。
+本文介绍统一登录、Code 兑换、托管回调、用户信息、网关鉴权和退出的接入方式。
+Custom SSO 是自定义协议；标准 OIDC 接入见[OIDC 指南](oidc.md)。
+业务流程见[应用单点登录](../features/sso/single-sign-on.md)。
 
 ## 选择接入方式
 
@@ -41,13 +41,13 @@ authorizationEndpoint、logoutEndpoint、thirdPartyOAEndpoint；内外入口各�
 | callbackEndpoint  | managed 禁止；business 必填固定完整回调，允许 query。                                      |
 
 目标 Client 必须可通行、启用 SSO 并选择 Custom 协议。
-Secret 的生成/轮换结果不自动交付原文，管理员通过独立授权且审计的读取操作获取当前值，
-详见[Client 配置](../admin/client-sso-configuration.md)。
+生成或轮换后，管理员须另行读取 Secret；读取需要授权并记录审计，
+详见[Client 配置](../features/admin/client-sso-configuration.md)。
 
 ## Client Code 与地址编码
 
-Client Code 原值保持业务含义。进入 Basic username、Client Header 或局部 Cookie 名时，
-先按 UTF-8 和 RFC 3986 URI component 规则编码为 transportClientCode：
+Client Code 用于 Basic username、Client Header 或局部 Cookie 名时，
+按 UTF-8 和 RFC 3986 URI component 规则编码为 transportClientCode：
 
 | 原值            | transportClientCode                           |
 | --------------- | --------------------------------------------- |
@@ -75,8 +75,8 @@ client、redirectUrl 必填，state 可选。浏览器通常携带 HttpOnly glob
 无根时进入统一登录页并通过服务端续接完成认证。新请求校验当前允许列表，续接/Code 固定已接受地址；
 普通列表编辑不改写它，callbackType 改变要求重新授权。
 
-Code 一次消费，不能当长期凭据或重放成功结果。根 UserSession 期限固定；
-新协议 Token 的期限受协议 TTL、原根和 ClientSession 上限裁剪，响应 ttl 为本次签发的剩余秒数。
+Code 只能消费一次，成功结果不重放。根 UserSession 期限固定；
+Token 有效期取协议 TTL、根及 ClientSession 剩余期限的最小值，响应 ttl 以秒表示。
 普通访问、其他 Client 活动及新授权不延长旧 Token，也不提供 refresh 或 Cookie 滑动续期接口。
 新接入不要通过 query 传根 Token；现有兼容入口仍接受 token，第三方可信登录的既有跳转也仍使用它。
 
@@ -114,15 +114,17 @@ code={urlencoded_code}&redirect_uri={urlencoded_original_redirect_url}
 
 subject 仅包含当前 Client 选择的字段，授权只含该 Client 的角色，不含数据库 ID 或兼容别名。
 完整主体仅接受 wire v3，`authorization` 及其每条任职只交付角色，不再包含权限点字段或空数组占位。
-`subjectClaims` 的名称及选择保持；接入应用须同步升级解析，并在恢复访问前清理或停止使用自己的旧权限副本。
+`subjectClaims` 的名称和选项保持不变；接入方须适配新响应，并在恢复访问前清理或停用旧权限副本。
 业务后端自行建立本地会话、关联 sid、设置自己的 HttpOnly Cookie，再跳回原 redirectUrl；
 IAM 不建立或存储第三方自有 session。
 
 遇 500、503 或响应结果未知时，放弃旧 Code，按 Retry-After 等待后重新授权，不重放 token 请求。
-认证/参数/配置错误先修正，避免自动授权循环。认证且定位原实例之后，即使 Maintenance 在消费前拒绝，
-服务端仍会尝试终止原 ClientSession；旧应用 Token 可能因此失效，仍有效的根通常可直接重新授权。
-诊断 Header 仅供判断 Code 消费、会话撤销和本次 Token 补偿结果，不改变重新授权策略；
-字段定义见[协议失败契约](custom-sso-contract.md)。
+认证、参数或配置错误应先修正。认证并定位会话后发生的拒绝，即使是消费前的 Maintenance，也会尝试终止原 ClientSession。
+旧应用 Token 可能因此失效，有效根仍可重新授权。
+诊断 Header 分别报告 Code 消费、会话撤销和 Token 补偿结果；失败后仍须重新授权。
+三个诊断 Header 为 `X-IAM-Code-Consumption`、`X-IAM-Client-Session-Revocation`、`X-IAM-Token-Compensation`。
+unknown/failed 不表示撤销成功；响应构造完成也不保证调用方已收到。managed 只报告消费和 Token 补偿，不返回业务兑换的会话撤销 Header。
+具体结果类型和错误映射见[协议操作](../../packages/custom-sso/src/unified/operations.ts)。
 
 ## managed：托管回调
 
@@ -136,8 +138,8 @@ IAM 不建立或存储第三方自有 session。
 URL 交付 token 和原 state。
 
 失败返回 JSON。返回业务应用重新发起授权，不刷新携带旧 Code 的 callback。
-消费后的签发/响应构造失败不恢复 Code，只同步尽力补偿本次已知 Token，
-不因托管交付失败撤销共享 ClientSession；账号明确失效的独立拒绝作用仍保留。
+消费后的签发或响应构造失败时，Code 保持已消费，仅尽力清理本次已知 Token，保留共享 ClientSession。
+账号明确失效时仍按账号规则拒绝和撤销。
 补偿失败/未知的 Token 可能留存至到期或会话终止。
 
 ## 用户信息与 Gateway 鉴权
@@ -151,11 +153,11 @@ Authorization: {sid}
 ```
 
 Authorization 直接使用 sid，不加 Bearer 前缀。服务端优先读取该 Client 的局部 Cookie，缺少 Cookie 才使用 Header。
-`Client: iam` 是独立根 UserInfo 入口，使用 global_session/UserSession Token，不是任意 Custom Token 的通用入口。
+`Client: iam` 专用于根 UserInfo，须使用 global_session/UserSession Token，不能传应用 Custom Token。
 
 响应 data 是当前 Client 获准接收的 V3 主体。旧 Token 同样采用当前 subjectClaims；
-全部字段使用同一份已发布主体资料（Subject Facts），它可能落后于源角色事实，没有固定撤权传播期限。
-第三方复制后的刷新由第三方负责，IAM 不提供推送撤权。根、原实例或账号失效仍独立阻止访问。
+主体资料可能落后于源事实，接入方负责自己副本的刷新；根、原实例或账号失效仍独立阻止访问。
+共有披露与时效保证见[主体信息交付](../features/sso/subject-delivery.md)。
 
 网关请求：
 
@@ -182,15 +184,15 @@ subjectIdentifier 必有，username/name 仅在允许时出现。数据库 ID、
 | Maintenance                                            | 503、AUTH.MAINTENANCE 与 Retry-After；在线 UserInfo/authz 保留有效 Cookie，可重试原访问。                          |
 | Snapshot、账号状态或 Facts 暂时不可确认                | 503；保留仍有效凭据，按 Retry-After 重试访问。Code 兑换仍用前述重新授权策略。                                      |
 
-Client 配置拒绝与根/账号拒绝不同；IAM Client 的交付配置不可用也不因此清全局 Cookie。
+IAM Client 的交付配置不可用时，仍保留全局 Cookie。
 根成功终止后，即使子索引漏项或 Token 仍物理存在，后续在线使用仍拒绝。
 
 ## 第三方可信登录：OA 与微信
 
 已有可信登录态的第三方可通过 OA 签名入口建立或复用 IAM 根，再授权目标业务系统。
 路径 clientCode 表示**发起认证的系统**，用于读取通用 clientSecret；query client 表示**目标业务系统**。
-二者可相同或不同，redirectUrl 始终属于目标。源凭据读取不使用目标 SSO 配置，也不以源 Client 的 status/isDelete
-作为此 use case 的拒绝条件；目标 Client 的流量与落地校验由后续 authorize 执行。
+二者可以不同，redirectUrl 始终属于目标。源凭据直接从源 Client 读取，此处不检查其 status/isDelete，也不使用目标 SSO 配置。
+后续 authorize 再检查目标 Client 的访问条件和落地地址。
 
 ```http
 GET {IAM_ORIGIN}/sso/thirdparty/{sourceClientCode}?loginid={username}&ts={timestamp_ms}&token={signature}&client={targetClientCode}&redirectUrl={encoded_url}
@@ -199,7 +201,7 @@ GET {IAM_ORIGIN}/sso/thirdparty/{sourceClientCode}?loginid={username}&ts={timest
 loginid、ts、token、client、redirectUrl 必填，state/ssoReturn 可选并透传；ssoReturn 是既有续接 handle。
 用户须为 active 且 Formal 正式员工。production 校验毫秒时间与服务端偏差严格小于 5 分钟，发送方应同步时钟。
 签名为 `Base64(SM3(loginid + "|" + ts + "|" + clientSecret + clientSecret))`；
-先取得 SM3 摘要字节，再标准 Base64，不编码十六进制文本的 UTF-8 字节。
+对 SM3 摘要的原始字节做标准 Base64 编码，不能编码其十六进制文本。
 以下服务端示例同时正确编码路径、Base64 和嵌套 URL：
 
 ```ts
@@ -225,16 +227,14 @@ OA 同主体有效根复用原 Token/剩余期限；不同主体有效根先退�
 服务端交换 wxId 并查 active 用户，没有 OA 的 Formal 类型限制；成功创建新根，不复用传入根。
 两种入口的全局 Cookie 均使用 HttpOnly、SameSite=Lax、Path=/、剩余秒数，当前未设置 Secure。
 
-## 退出与联调
+## 退出与接入方责任
 
 浏览器请求 `/sso/logout?redirectUrl={encoded_after_logout_url}`，优先使用 global_session；
-兼容 token 参数接受根 Token 或经 Custom owner 定位原根的应用 Token。退出不要求账号仍能取得在线许可，
-只作用于该根，不保证第三方自有 session 或离线 ID Token 退出，也不发送后台退出通知。
+兼容 token 参数接受根 Token，也可用 Custom 应用 Token 定位原根。退出无需账号访问许可，仅终止该根。
+第三方自有 session 和离线 ID Token 须由接入方处理，IAM 不发送后台退出通知。
 business 应先清理自己的 Cookie/session，再退出 IAM；单独清应用 Token 不等于清理整个第三方登录态。
 
-联调覆盖：正确入口发现、允许地址/fragment、编码后的 Client、一次 Code 兑换、当前字段裁剪、
-400/401/503 分别处理、托管 Cookie 所属域与代理、显式退出和第三方本地清理。
 SSO Secret 与通用 clientSecret 不混用、不下发前端；日志不记录明文 Token/Code/Secret。
-业务自行持有的 sid 保存在服务端，浏览器以自己的 HttpOnly Cookie 表达本地会话。
-IAM 侧状态维护见[统一维护手册](../../releases/authentication-and-session.md)，
-代理配置及现场检查见[Gateway 发布手册](../../releases/apisix-gateway-release.md)。
+sid 保存在业务服务端，浏览器使用业务自己的 HttpOnly Cookie。
+IAM 侧状态维护见[统一维护手册](../releases/authentication-and-session.md)，
+代理配置及现场检查见[Gateway 发布手册](../releases/apisix-gateway-release.md)。

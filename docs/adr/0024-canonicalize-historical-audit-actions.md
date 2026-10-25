@@ -18,7 +18,7 @@ status: accepted
 
 ## 当前契约与历史
 
-当前字段与敏感信息规则见[审计契约](../features/audit/audit-logging.md)。
+当前字段与敏感信息规则见[审计契约](../development/backend-implementation.md#审计安全边界)。
 旧数据工具入口见[历史维护命令](../development/commands.md#历史数据维护工具)，
 [规范化与备份恢复流程](https://github.com/cyy1998/shgas-iam/blob/73315e4cef6f96dd79b29e18f74d68af30e559ec/docs/releases/audit-action-canonicalization.md)
 保留在固定 Git 版本。退出运行时别名不等于工具退役，也不说明实际环境已经完成规范化。

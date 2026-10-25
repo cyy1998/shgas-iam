@@ -201,7 +201,7 @@ Profile 重建及 Subject Access 恢复见[Profile 维护手册](../releases/dat
   Worker Redis 配置，只创建组织队列及数据库资源，退出时关闭；按批保存全部组织（含删除组织）的源变化记录并唤醒普通
   `organization-search` consumer，报告中的 `enqueued` 不表示已经发布。消费者由 dev/prod Compose 的
   `worker-organization-search` 服务独立启动；完整维护窗口与放流要求见
-  [Organization Filter DSL](../features/organization-search/filter-dsl.md#版本切换与维护)。
+  [组织搜索全量重建](../releases/data-maintenance.md#组织搜索全量重建)。
 - 组织搜索补偿：`pnpm --filter @iam/worker organization-search:repair -- --limit 500 --deadline-ms 30000`。
   两个持久阶段的回收、报告、重复执行和外部周期责任见
   [组织搜索维护](../releases/data-maintenance.md#组织搜索日常修复)。

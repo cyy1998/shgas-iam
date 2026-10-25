@@ -26,7 +26,7 @@ Custom managed callback 不再固定属于某个 SSO origin，其显式类型与
 
 ## 当前契约与历史
 
-入口与产物规则见[OIDC 契约](../features/oidc/oidc-integration.md#双-issuer)，
+入口与产物规则见[OIDC 接入](../guides/oidc.md#接入与端点)，
 配置与 JWK 维护见[OIDC 手册](../releases/authentication-and-session.md#oidc-双入口配置)，
 真实代理边界见[Gateway 手册](../releases/apisix-gateway-release.md)。
 首次双入口切换与旧无 issuer 清场留在历史版本，不据此推定真实环境已经切换。

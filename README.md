@@ -86,6 +86,8 @@ iam-service/
 文档的稳定入口是 [docs/index.md](docs/index.md)。判断当前行为时应对照代码、可执行测试和索引中标记为
 `Current` 的文档；`Historical`、`Stale` 及冻结的 OpenSpec 记录只用于追溯，不应单独作为实现依据。
 
+了解 IAM 的能力和使用规则，先读[功能说明](docs/features/README.md)；实际对接见[接入指南](docs/guides/README.md)，字段与响应沿指南查代码定义。
+
 ### 后端装配模型
 
 API 后端公共装配逻辑在 `packages/api-core/src/core/`。`apps/api` 和 `apps/admin-api` 通过自己的

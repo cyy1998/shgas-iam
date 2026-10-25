@@ -21,8 +21,8 @@ Custom 托管交付保持自己的失败补偿边界，不机械套用业务兑�
 
 ## 当前契约与历史
 
-状态和维护操作见[Client 配置](../features/admin/client-sso-configuration.md)，失败顺序分别见
-[Custom SSO](../features/sso/custom-sso-contract.md)、[OIDC](../features/oidc/oidc-integration.md)；
+状态和维护操作见[Client 配置](../features/admin/client-sso-configuration.md)，失败处理分别见
+[Custom SSO](../guides/custom-sso.md)、[OIDC](../guides/oidc.md)；
 永久终止的理由见 [ADR-0035](0035-unify-user-and-client-session-lifecycles.md)。
 
 历史来源：[ADR-0012 原文](https://github.com/cyy1998/shgas-iam/blob/73315e4cef6f96dd79b29e18f74d68af30e559ec/docs/adr/0012-model-client-maintenance-as-reversible-protocol-traffic-suspension.md)、[ADR-0035 原文](https://github.com/cyy1998/shgas-iam/blob/73315e4cef6f96dd79b29e18f74d68af30e559ec/docs/adr/0035-unify-user-and-client-session-lifecycles.md)。原始决定与后续修订按各版本追溯。

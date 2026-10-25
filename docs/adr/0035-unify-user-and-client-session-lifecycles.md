@@ -67,9 +67,9 @@ SHA-256 适用于此类随机 bearer，不是密码哈希方案，也不承诺�
 不恢复旧模型在线双读，不引入强化的跨标签页/Cookie 响应仲裁或通用可靠清理执行器。
 在线关系失效不改写已经签发的离线 ID Token。官方套件有明确适用范围与偏离，不能包装为完整认证或本次测试已通过。
 
-对象、期限及观察见[Kernel 契约](../features/sso/unified-session-kernel.md)，固定批次和作用报告见
-[会话管理](../features/admin/session-management.md)，完整失败矩阵见
-[Custom SSO](../features/sso/custom-sso-contract.md)与[OIDC](../features/oidc/oidc-integration.md)。
+对象、期限及观察见[Kernel 契约](../architecture/backend-architecture.md#session-runtime-与跨-app-边界)，固定批次见
+[Kernel 列表与撤销](../architecture/backend-architecture.md#kernel-列表与撤销)，调用方失败处理见
+[Custom SSO](../guides/custom-sso.md)与[OIDC](../guides/oidc.md)。
 复现入口见[命令页](../development/commands.md#oidc-协议套件)，维护责任见
 [统一维护手册](../releases/authentication-and-session.md)。
 

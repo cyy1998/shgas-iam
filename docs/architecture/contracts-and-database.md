@@ -207,7 +207,7 @@ repair 在源变化与 rebuild 两阶段分别有界选取 pending、failed 或�
 `organization_search_document` 保存当前 schema、JSONB、已发布版本和构建时间。删除通过不可见的空文档墓碑保留已发布
 版本，不删除仲裁事实。发布锁定 dirty，重验版本、processing 状态和领取 token，文档替换与 processed 同事务提交。
 构建使用一致的只读源快照，验证完整闭包路径、层级、距离、父链和存储路径。搜索只读取当前 schema 的可见已发布文档，
-不在请求时联查源组织或检查全量覆盖率；详细契约见 [Organization Filter DSL](../features/organization-search/filter-dsl.md)。
+不在请求时联查源组织或检查全量覆盖率；详细契约见 [搜索接入](../guides/search.md)。
 
 独立全量 verifier 使用同一个 `REPEATABLE READ READ ONLY` transaction 完整读取源组织、文档/墓碑、dirty、
 源变化事件，并把该 transaction 绑定到 source reader 的闭包和祖先读取。它核对覆盖、schema、严格结构、源事实、

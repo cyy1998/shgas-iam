@@ -2,7 +2,7 @@
 
 `@iam/gateway-apisix` 是独立 Bun + Hono 配置 API，IAM 和第三方应用统一通过 HTTP 发布。
 调用方保管 YAML，APISIX 保存实际配置；Gateway 不保存期望配置、版本历史或持久发布任务。
-完整输入、结果和恢复边界见[功能契约](../../docs/features/gateway/gateway-configuration-api.md)，
+调用方式、配置示例和结果处理见[接入指南](../../docs/guides/gateway.md)，
 部署、首次发布和人工恢复见[发布手册](../../docs/releases/apisix-gateway-release.md)。
 
 ## 启动与调用

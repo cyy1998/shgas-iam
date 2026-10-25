@@ -5,8 +5,8 @@ status: accepted
 # 直接 Client 委托的失败关闭解析与写入协调
 
 Client Delegation 在指定组织范围和期间内为用户查找直接代办人。2026-10-20 的修订以单个 Client 替换原权限集合，
-统一 Admin、SSO、Internal 的维护规则与调用范围。本页保存决定和取舍；完整接口、生命周期、页面及切换流程见
-[Client 委托与管理契约](../features/delegation/client-delegation.md)，实施与验收见
+统一 Admin、SSO、Internal 的维护规则与调用范围。本页保存决定和取舍；生命周期与管理范围见[应用委托](../features/delegation/client-delegation.md)，调用与切换见
+[委托接入](../guides/delegation.md)，实施与验收见
 [Spec #264](https://github.com/cyy1998/shgas-iam/issues/264)。
 
 ## 直接解析与公开边界

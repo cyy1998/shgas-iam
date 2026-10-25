@@ -32,7 +32,7 @@ holder Employment 所属 Organization 与 target Organization 必须同时位于
 ## 当前契约与历史
 
 领域模型见 [ADR-0014](0014-model-organization-responsibility-as-employment-bound-fact.md)，操作、错误与页面见
-[HR 功能契约](../features/organization-responsibility/hr-admin-management-design.md)，授权接线见
+[组织责任管理](../features/organization-responsibility/management.md)，授权接线见
 [前端架构](../architecture/frontend-architecture.md#管理路由与权限)。
 
 历史来源：[ADR-0017 原文](https://github.com/cyy1998/shgas-iam/blob/73315e4cef6f96dd79b29e18f74d68af30e559ec/docs/adr/0017-centralize-admin-role-policy-with-request-time-scope.md)、[ADR-0018 原文](https://github.com/cyy1998/shgas-iam/blob/73315e4cef6f96dd79b29e18f74d68af30e559ec/docs/adr/0018-authorize-hr-organization-responsibility-by-both-endpoints.md)。原始决定与后续修订按各版本追溯。

@@ -30,8 +30,8 @@ status: accepted
 
 保留 `POST /internal/users/search-dsl` 与 `POST /internal/organizations/search-dsl`，继续使用现有有效 Internal Client
 认证，不新增 Public DSL、调用方专属字段授权或其他搜索入口。过滤语言、固定响应、排序、结果上限、超时、错误映射、
-发布与恢复契约均沿用各自现有定义，见[用户 DSL](../features/user-profile-search/filter-dsl.md)和
-[组织 DSL](../features/organization-search/filter-dsl.md)。
+发布与恢复契约均沿用各自现有定义，见[用户 DSL](../guides/search.md)和
+[组织 DSL](../guides/search.md)。
 
 需要先筛选用户再解析委托的调用方，使用用户 DSL 返回的 username 调用现有 `POST /internal/delegations/resolve`。
 两次调用分别取得结果，不提供原组合接口的响应兼容或新增跨请求一致性保证；Client Delegation 继续独立于搜索文档。

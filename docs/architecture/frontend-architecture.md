@@ -37,9 +37,11 @@ Admin 的 Custom SSO 配置 preview 与 Admin/SSO 协议类型统一消费 `@iam
 
 现存 Admin mutation 已统一消费 `{ changed, result }`：页面区分已修改与无需修改，创建与凭据从 result 取得必要资源。
 公共 service 归一化已提交错误，页面自动重读事实但不重放写入；普通刷新成功不清除尚需修复的提示。
+COMMIT 结果未知时先读取当前事实，不把错误解释为确定回滚；作用后审计失败同样刷新并保留修复提示。
+暂态拒绝、明确业务拒绝和结果未知分别展示，是否允许主动重试由对应功能决定。
 生成密码未交付时先修复再主动重置。SSO Secret 的配置/轮换只返回安全结果，原文经独立授权和审计读取；
-读取响应丢失可重读当前值，不自动再次轮换，详见[Client 配置契约](../features/admin/client-sso-configuration.md)。通用结果与恢复见
-[写入结果契约](../features/admin/admin-mutation-contract.md)；首次消费者切换仅见[历史协调清单](https://github.com/cyy1998/shgas-iam/blob/73315e4cef6f96dd79b29e18f74d68af30e559ec/docs/releases/admin-mutation-contract-cutover.md)。
+读取响应丢失可重读当前值，不自动再次轮换，详见[应用接入配置](../features/admin/client-sso-configuration.md)。通用结果与恢复见
+[写入结果契约](../development/backend-implementation.md#admin-写入结果与失败恢复)；首次消费者切换仅见[历史协调清单](https://github.com/cyy1998/shgas-iam/blob/73315e4cef6f96dd79b29e18f74d68af30e559ec/docs/releases/admin-mutation-contract-cutover.md)。
 
 - 新管理路由登记到 `admin-route-registry`，复用模块 access key 和既有拒绝访问路径。
 - 模块可见性与 collection action 消费服务端 capability；服务端提供资源 `allowedActions` 时，行或详情按钮
@@ -48,20 +50,32 @@ Admin 的 Custom SSO 配置 preview 与 Admin/SSO 协议类型统一消费 `@iam
 - Mutation 后按功能契约刷新数据和操作能力。“可能已生效”、部分失败和是否可重试由该功能明确规定，不能统一按
   失败自动重试。
 - 修改 Sessions 的列表、撤销或临时登录限制交互时，读取
-  [会话管理页面契约](../features/admin/session-management.md)。
+  [功能说明](../features/sso/login-and-session.md)和[接口 schema](../../apps/admin-api/src/routes/admin/session-management/session-management.schema.ts)。
 - 修改 Organization Responsibility 的 scoped selector、嵌入面板、操作按钮、Audit 可见性或隐藏 blocker 时，读取
-  [HR 管理设计](../features/organization-responsibility/hr-admin-management-design.md#响应与前端)。
+  [组织责任说明](../features/organization-responsibility/management.md)与下方恢复规则。
 
 Admin Sessions 使用会话记录语义：记录存在不代表账号当前可访问；筛选、分页、刷新与撤销反馈保持。
 后端自身许可每请求重查，前端不复制 Barrier 或代际判断；当前恢复见[Profile 与 Subject Access 维护](../releases/data-maintenance.md)。
+
+### 会话与配置恢复
+
+会话未完成批次保留原失败或未知目标，由用户确认后重试。刷新、切换标签或权限变化不能自动提交或清除它；
+有未完成批次时关闭其他新撤销操作。响应丢失且没有批次时，重新查询后明确发起新操作。
+Secret 原文仅留在组件内存，刷新或离开即清除。Client 传播修复提示按 Client 保存在 sessionStorage，
+重读、后续成功或合法 no-op 均不清除，只有修复流程可确认恢复。
+
+HR 责任页面按服务端 allowedActions 显示操作，用 isDelete 标注历史关联对象；纯 HR 不显示 Audit Tab。
+隐藏责任造成的阻塞只提供安全说明，选择器按当前范围展示候选，写入仍由服务端重新授权。
 
 ## SSO 登录守卫
 
 - 受 guard 保护的登录流程只在 guard 明确允许登录后展示表单。检查中、续接中、无效请求和暂时不可用分别表达，
   检查失败不能回退成无会话。
 - Service 解析协议结果；hook 管理超时、取消和过期响应；页面渲染互斥状态并执行对应交互。
-- 修改 `/portal/login` 的重入检查、协议续接、超时重试或浏览器历史时，读取
-  [登录与恢复契约](../features/sso/authentication-and-recovery.md)，其中定义适用范围、状态转换和协议语义。
+- `/portal/login` 先验证目标、续接和浏览器绑定，再探测根。无安全请求不显示表单；暂态故障保留 Cookie，仅手动重试。
+  检查限时 10 秒，迟到结果不能覆盖重试、目标变化或已卸载页面；续接使用 location.replace，避免后退再次进入登录。
+  找回密码不经过此守卫；已有有效根却要求新鲜认证时，OIDC 返回 login_required。
+  首次登录的续接证明由协议保存，参见[OIDC 接入](../guides/oidc.md#兑换失败与重新登录)。
 
 ## 测试与生成路径
 

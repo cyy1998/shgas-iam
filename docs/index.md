@@ -35,20 +35,26 @@
 | 修改代码或开展设计   | [仓库规则路由](../AGENTS.md)、[系统架构](architecture/system-architecture.md)                                                                          |
 | 开发、测试与验证     | [命令入口](development/commands.md)、[测试编排](architecture/testing-architecture.md)、[验证归属](architecture/architecture-verification.md)           |
 | 理解业务与决策       | [领域语言](../CONTEXT.md)、[ADR 清单](#架构决策)                                                                                                       |
-| 接入协议或维护功能   | [Custom SSO 对接](features/sso/third-party-sso-integration.md)、[OIDC 对接](features/oidc/oidc-integration.md)、[功能清单](#功能契约与设计)            |
+| 了解或使用功能       | [功能说明](features/README.md)、[功能清单](#功能说明)                                                                                                  |
+| 接入或修改接口       | [接入指南](guides/README.md)，字段与响应沿指南查代码定义                                                                                               |
 | 升级、恢复或发布     | [运维操作入口](releases/README.md)、[发布手册清单](#发布与维护)；按任务选择操作，旧代切换单独查阅                                                      |
 | 追溯旧设计与候选验收 | [精简前的固定文档快照](https://github.com/cyy1998/shgas-iam/tree/73315e4cef6f96dd79b29e18f74d68af30e559ec/docs/features)；不作为当前实现或本次验证依据 |
 
 ## 维护方式
 
 - 同一规则保留一个权威出处：领域术语在 `CONTEXT.md`，决策及理由在 ADR，工程约束在专题指南，
-  操作步骤在 runbook，功能专属契约在 feature 文档。其他页面保留必要摘要并链接该出处。
+  操作步骤在 runbook，功能用法与业务规则在 features，接入步骤在 guides。字段与接口定义以代码为准，其他页面链接出处。
 - 索引只登记用途、状态和必要的替代关系；实施进度、候选 SHA、测试次数与验收结论留在对应 issue 或验收记录。
   `Current` 表示文档可用，不代表目标已经实现、合入或部署；`Last verified` 也不是部署日期。
 - 仓库地图负责定位，命令页负责可执行入口，测试架构负责收集与资源生命周期，验证归属负责证据能证明什么。
   功能变更优先更新其权威文档，避免在这些入口重复追加交付流水账。
 - releases 按运维任务组织为入口和五个专题；操作保留适用情况、前提、步骤、完成标准与失败处理。验收按影响选择，不要求额外留证；机制说明归对应契约。一次性升级和旧代切换通过入口中的固定 Git 版本追溯。
-- features 按完整能力组织；切片候选、实施进度和固定验收记录留在 issue 或 Git 历史，不按 ticket 新建长期文档。
+- features 以功能说明为主，讲用途、使用者、主要流程、业务规则和异常影响，使用简明业务语言。
+  guides 保存接入配置、调用步骤、示例及调用方必须知道的协议限制。
+  字段、类型、错误码由 schema 与接口定义维护；边界行为由实现和测试表达，不另建 reference 副本。
+  内部模块、缓存、锁和装配归架构文档。功能页只摘要必要限制并链接技术出处，不复制接口清单。
+  不强制固定模板或额外留证，也不按页面、实体或实施 ticket 新建长期文档。
+  实施进度、候选和固定验收记录留在 issue 或 Git 历史。
 - ADR 按独立决策组织，保留当前决定、理由、拒绝方案与代价，不按实施切片新增。合并时承接独有理由，不能因功能契约
   已存在而删掉取舍；算法和操作步骤引用对应权威文档。保留原编号与路径，被删除编号不复用、不重排，新决定从 0039 继续递增。
   当前正文汇总后续已接受修订，原始决定与被取代方案通过固定 Git 历史追溯，不建跳转壳，也不将整理日期视作原接受日期。
@@ -65,7 +71,7 @@ git diff --check
 
 ## 文档清单
 
-按路径排序，保留原文件地址和状态；展开相关目录即可。features 仅保留接入指南与长期功能契约，旧候选和设计从上方固定快照追溯。
+按路径排序，保留原文件地址和状态；展开相关目录即可。features 保存功能说明，guides 保存接入指南，字段与协议细节沿指南查代码；旧候选和设计从上方固定快照追溯。
 releases 维护当前代操作；一次性迁移与更早版本从[运维入口](releases/README.md#一次性迁移与旧版本)按来源查找。
 其他目录阅读前仍须核对 Status 及适用限制。
 
@@ -137,8 +143,8 @@ releases 维护当前代操作；一次性迁移与更早版本从[运维入口]
 | [架构验证归属](architecture/architecture-verification.md)  | architecture | Current | 2026-10-21    | 2026-11-21  | 系统约束的验证 owner、证据入口与证明限制。                 |
 | [后端架构](architecture/backend-architecture.md)           | architecture | Current | 2026-10-25    | 2026-11-25  | 后端分层、事务、模块所有权与一致性契约。                   |
 | [共享契约与数据库](architecture/contracts-and-database.md) | architecture | Current | 2026-10-25    | 2026-11-25  | 共享代码选址、公开出口、DTO、数据库与事务边界。            |
-| [前端架构](architecture/frontend-architecture.md)          | architecture | Current | 2026-10-15    | 2026-10-31  | Admin / SSO service、页面状态、路由与权限规则。            |
-| [仓库地图](architecture/repository-map.md)                 | architecture | Current | 2026-10-20    | 2026-10-31  | Apps、packages、基础设施、AFK、测试与生成目录定位。        |
+| [前端架构](architecture/frontend-architecture.md)          | architecture | Current | 2026-10-25    | 2026-11-25  | Admin / SSO service、页面状态、路由与权限规则。            |
+| [仓库地图](architecture/repository-map.md)                 | architecture | Current | 2026-10-25    | 2026-11-25  | Apps、packages、基础设施、AFK、测试与生成目录定位。        |
 | [系统架构视图](architecture/system-architecture.md)        | architecture | Current | 2026-10-21    | 2026-11-21  | 运行时拓扑、信任边界、数据权威与恢复责任。                 |
 | [测试编排架构](architecture/testing-architecture.md)       | architecture | Current | 2026-10-15    | 2026-10-31  | 测试层级、质量、收集、资源预算、统一临时环境与停止后重置。 |
 
@@ -157,33 +163,44 @@ releases 维护当前代操作；一次性迁移与更早版本从[运维入口]
 
 </details>
 
-### 功能契约与设计
+### 功能说明
 
 <details>
-<summary>展开功能契约与设计</summary>
+<summary>展开功能说明</summary>
 
-接入指南说明调用流程与示例；功能契约维护输入输出、权限、状态变化、失败作用及一致性保证。
-内部工程机制沿文中链接查架构文档，命令、部署与恢复步骤查发布手册；实施和固定验收记录查对应 issue 或 Git 历史。
+面向功能使用者，介绍用途、权限、主要流程、业务规则和异常影响。
 
-| Document                                                                                  | Type    | Status  | Last verified | Next review | Notes                                                                   |
-| ----------------------------------------------------------------------------------------- | ------- | ------- | ------------- | ----------- | ----------------------------------------------------------------------- |
-| [Admin 写入结果与失败恢复](features/admin/admin-mutation-contract.md)                     | feature | Current | 2026-09-21    | 2026-10-31  | Admin 结果、no-op、已提交/未知与页面恢复。                              |
-| [Client 单协议配置与 Secret 管理](features/admin/client-sso-configuration.md)             | feature | Current | 2026-09-28    | 2026-10-31  | 协议配置、公开状态安全字段、Secret 读取、Client 删除与传播恢复。        |
-| [会话管理与本人安全](features/admin/session-management.md)                                | feature | Current | 2026-09-21    | 2026-10-31  | 安全列表、固定批次撤销、本人安全与临时限制。                            |
-| [统一审计日志](features/audit/audit-logging.md)                                           | feature | Current | 2026-09-21    | 2026-10-31  | 审计 action、目标、安全字段与作用后失败。                               |
-| [Client 委托与管理契约](features/delegation/client-delegation.md)                         | feature | Current | 2026-10-21    | 2026-10-31  | Client 隔离、三类入口、生命周期、页面及正式 migration 切换；Spec #264。 |
-| [Gateway 配置 API 契约](features/gateway/gateway-configuration-api.md)                    | feature | Current | 2026-10-19    | 2026-10-31  | HTTP 输入输出、YAML 资源归属、认证、补偿与并发及断连边界。              |
-| [OIDC 接入与协议契约](features/oidc/oidc-integration.md)                                  | feature | Current | 2026-10-25    | 2026-11-25  | 接入流程与示例、当前披露；协议实现的双 issuer、处理顺序与失败作用。     |
-| [HR 组织责任管理契约](features/organization-responsibility/hr-admin-management-design.md) | feature | Current | 2026-09-21    | 2026-10-31  | HR 双端范围、生命周期、隐藏 blocker 与页面能力。                        |
-| [Organization Filter DSL](features/organization-search/filter-dsl.md)                     | feature | Current | 2026-10-15    | 2026-10-31  | 请求与完整文档响应、过滤规则、异步读取与错误边界；维护步骤见组织手册。  |
-| [登录、认证续接与账号恢复](features/sso/authentication-and-recovery.md)                   | feature | Current | 2026-10-25    | 2026-11-25  | 根认证、登录重入、短信冷却与脱敏手机号恢复。                            |
-| [Client Snapshot 契约](features/sso/client-snapshot-contract.md)                          | feature | Current | 2026-09-21    | 2026-10-31  | 普通/敏感 Snapshot、缓存观察、提交传播与恢复。                          |
-| [Custom SSO 协议契约](features/sso/custom-sso-contract.md)                                | feature | Current | 2026-09-28    | 2026-10-31  | Custom 授权、两类交付、Code/Token 与失败矩阵。                          |
-| [已发布 Subject Facts 的授权交付](features/sso/published-subject-facts-contract.md)       | feature | Current | 2026-09-21    | 2026-10-31  | 已发布角色、当前披露与事实不可得的交付边界。                            |
-| [Subject Access 操作许可](features/sso/subject-access-operation-contract.md)              | feature | Current | 2026-09-28    | 2026-10-31  | 单次操作许可、严格 context 与消费方责任。                               |
-| [第三方 Custom SSO 接入指南](features/sso/third-party-sso-integration.md)                 | feature | Current | 2026-09-28    | 2026-10-31  | 业务/托管 SSO、可信登录、编码及错误处理。                               |
-| [两类会话的 Kernel 能力](features/sso/unified-session-kernel.md)                          | feature | Current | 2026-10-15    | 2026-10-31  | 两类会话模型、可信观察、原子关系与精确撤销。                            |
-| [User Profile Filter DSL 规则](features/user-profile-search/filter-dsl.md)                | feature | Current | 2026-10-21    | 2026-10-31  | DSL v4 请求与 Base 响应示例、同元素规则及失败边界；委托解析独立。       |
+| Document                                                           | Type    | Status  | Last verified | Next review | Notes                                            |
+| ------------------------------------------------------------------ | ------- | ------- | ------------- | ----------- | ------------------------------------------------ |
+| [功能说明入口](features/README.md)                                 | feature | Current | 2026-10-25    | 2026-11-25  | 按使用场景查阅功能、流程和业务规则。             |
+| [应用接入配置](features/admin/client-sso-configuration.md)         | feature | Current | 2026-10-25    | 2026-11-25  | 协议、回调、凭据、启停、删除及配置保存后的异常。 |
+| [审计日志](features/audit/audit-logging.md)                        | feature | Current | 2026-10-25    | 2026-11-25  | 记录范围、敏感信息、查询和操作生效后的审计失败。 |
+| [应用委托](features/delegation/client-delegation.md)               | feature | Current | 2026-10-25    | 2026-11-25  | 管理权限、创建、期间冲突、生命周期和代办人查询。 |
+| [网关配置发布](features/gateway/gateway-configuration.md)          | feature | Current | 2026-10-25    | 2026-11-25  | 校验、预览、发布、删除范围及人工恢复。           |
+| [组织责任管理](features/organization-responsibility/management.md) | feature | Current | 2026-10-25    | 2026-11-25  | HR 范围、任命、名额、生命周期和历史查看。        |
+| [组织搜索](features/search/organization-search.md)                 | feature | Current | 2026-10-25    | 2026-11-25  | 组织属性、层级与路径查询、结果范围和更新延迟。   |
+| [用户搜索](features/search/user-profile-search.md)                 | feature | Current | 2026-10-25    | 2026-11-25  | 用户与任职条件、摘要结果、限制和委托组合。       |
+| [登录与会话](features/sso/login-and-session.md)                    | feature | Current | 2026-10-25    | 2026-11-25  | 登录恢复、会话下线、改密和临时登录限制。         |
+| [应用单点登录](features/sso/single-sign-on.md)                     | feature | Current | 2026-10-25    | 2026-11-25  | 接入方式、登录流程、共享信息和退出责任。         |
+| [用户信息共享](features/sso/subject-delivery.md)                   | feature | Current | 2026-10-25    | 2026-11-25  | 可提供的资料、披露范围、更新延迟和应用责任。     |
+
+</details>
+
+### 接入指南
+
+<details>
+<summary>展开接入指南</summary>
+
+面向应用开发者，提供配置、调用步骤和可用示例。
+
+| Document                                    | Type  | Status  | Last verified | Next review | Notes                                      |
+| ------------------------------------------- | ----- | ------- | ------------- | ----------- | ------------------------------------------ |
+| [接入指南入口](guides/README.md)            | guide | Current | 2026-10-25    | 2026-11-25  | 选择接入流程及代码定义。                   |
+| [Custom SSO 接入指南](guides/custom-sso.md) | guide | Current | 2026-10-25    | 2026-11-25  | 业务与托管接入、可信登录、示例和错误处理。 |
+| [委托接入](guides/delegation.md)            | guide | Current | 2026-10-25    | 2026-11-25  | Client 范围、代办人解析和失败处理。        |
+| [网关配置接入](guides/gateway.md)           | guide | Current | 2026-10-25    | 2026-11-25  | 凭据、YAML、调用步骤及未知结果处理。       |
+| [OIDC 接入指南](guides/oidc.md)             | guide | Current | 2026-10-25    | 2026-11-25  | 端点、参数、示例、Scope、CORS 和退出。     |
+| [搜索接入](guides/search.md)                | guide | Current | 2026-10-25    | 2026-11-25  | 用户与组织查询示例、过滤条件及结果限制。   |
 
 </details>
 
@@ -192,7 +209,7 @@ releases 维护当前代操作；一次性迁移与更早版本从[运维入口]
 <details>
 <summary>展开发布与维护</summary>
 
-从操作入口选择任务，核对必要前提、完成标准和失败处理；详细机制由功能契约与架构文档维护。
+从操作入口选择任务，核对必要前提、完成标准和失败处理；接口定义见代码，实现边界见架构文档。
 
 | Document                                             | Type    | Status  | Last verified | Next review | Notes                                                    |
 | ---------------------------------------------------- | ------- | ------- | ------------- | ----------- | -------------------------------------------------------- |

@@ -1,99 +1,38 @@
-# Client 单协议配置与 Secret 管理
+# 应用接入配置
 
-Client 在一个严格联合中选择 OIDC 或 Custom SSO，统一 ssoEnabled 表达启用意图；
-业务身份、Role 归属和 Internal API 凭据独立。决策理由见
-[ADR-0035](../../adr/0035-unify-user-and-client-session-lifecycles.md)、
-[ADR-0038](../../adr/0038-derive-managed-sso-callback-from-redirect-origin.md)。
+完整管理员管理应用的登录协议、回调地址、用户信息范围和接入凭据；HR 管理员无此权限。
+每个应用选择 OIDC 或 Custom SSO，业务身份、角色归属和内部接口凭据分别管理。
 
-## 配置与安全输出
+## 配置和启停
 
-`ClientSsoConfigSchema` 拥有公开配置形状：OIDC 的认证方法由 clientType 派生；
-Custom 使用 callbackType、允许落地和 subjectClaims。
-managed 禁止 callbackEndpoint；business 必填固定完整地址。
-不接受 mode、logoutEndpoint、第二份认证方法或跨协议字段。类型切换时隐藏控件的旧地址不得进入 managed 请求。
+先选择协议并填写配置，再启用登录。停用会保留配置；删除登录配置会关闭登录，但保留应用本身。
 
-URL 与 redirect pattern 必须通过校验，集合按规范顺序保存。
-没有配置时不能启用 SSO，Secret、credentialId 与 updatedAt 必须同时存在；
-schema、数据库约束与公开出口见[共享契约](../../architecture/contracts-and-database.md)。
+- Custom SSO 可选择业务回调或托管回调，两种方式的回调配置不同。
+- OIDC 按应用类型配置回调和允许提供的用户信息。
+- 配置地址须通过校验；业务系统只能使用允许的回调。
+- 保存配置或切换协议通常保留已有凭据；需要更换凭据时单独执行轮换。
 
-普通 list/detail、Admin/Runtime mapper 显式选择安全字段，只暴露 hasSsoSecret。
-当前 SSO 原文、credentialId、updatedAt 仅专用存储与敏感 reader 可读，不与 Internal API secret 混用；
-类型声明不能代替实际输出裁剪。
+编辑、启停、切换协议和轮换凭据无需先进入维护状态，也不会直接终止既有会话。
+后续访问仍按新配置判断；正在执行的请求可能使用此前已取得的配置。某些登录兑换失败会影响原应用会话，见[单点登录](../sso/single-sign-on.md)。
 
-### 公开 Client 状态
+## 查看和轮换凭据
 
-匿名 `GET /open/client/status?clientCode=...` 返回统一 envelope，`data` 仅含
-`clientCode`、`clientName`、`status`、可空的 `url`；不存在的 Client 返回成功响应且 `data:null`。
-HTTP 输出与 OpenAPI 使用同一显式公开 DTO；数据库回源、缓存命中均裁剪到上述字段，
-不输出 Internal/SSO 凭据、协议配置或扩展对象中的嵌套秘密。
-SSO 登录页和维护页分别使用名称与状态；该公开读取不提供 Secret，也不替代 Internal API 认证。
+凭据生成或轮换后不会随普通详情返回原文。管理员须主动读取，系统记录审计后才显示；读取或审计失败时不显示凭据。
+凭据只在当前页面临时展示，刷新或离开后清除。读取响应丢失时可以重读，无需再次轮换。
 
-## 配置操作与结果
+登录凭据和内部接口凭据用途不同，不应混用或交给浏览器代码保存。
+读取后如果另一个管理员完成了轮换，刚取得的值可能已失效。
 
-| 操作           | 作用                                                                                                                |
-| -------------- | ------------------------------------------------------------------------------------------------------------------- |
-| save           | 仅修改 clientName、url、description、status 普通资料；页面未编辑的 status 不回填旧值。协议配置使用 selectProtocol。 |
-| selectProtocol | 在同一事务选择协议及其完整配置；保留已有启用意图和当前凭据。                                                        |
-| setEnabled     | 单独表达 SSO 启停；停用保留配置。                                                                                   |
-| 删除配置       | 清配置并关闭 SSO，不等同于删除 Client 业务对象。                                                                    |
-| rotateSecret   | 显式生成当前原文、随机凭据 ID 和更新时间。                                                                          |
-| readSecret     | 主动读取观察到的当前凭据，提交独立审计后才交付。                                                                    |
+## 删除应用
 
-首次选择需要 Secret 的接入且尚无凭据时，在同事务创建；普通保存/切换不轮换或清除既有凭据。
-Public 和 managed 不增加外部提交 Secret 的要求。
-配置和轮换只返回安全 Client 的 `{ changed, result }`；原文另经 readSecret 交付。
+删除前须处理未删除角色，以及尚未结束的委托等依赖。暂停或禁用的角色仍会阻止删除；已结束委托和已删除角色的历史不阻止删除。
+通过检查后删除应用，并终止相关应用会话。
 
-同行锁、比较、审计和 no-op 沿[Admin 写入规范](../../architecture/backend-architecture.md#admin-同对象写入规范)。
-协议、启停及显式状态的合法 no-op 保留意图审计，纯资料 no-op 不写变更审计。
-配置、状态与轮换等写操作（含合法 no-op）在提交后执行 required Snapshot 失效，同时清普通/敏感 payload。
-readSecret 只读取并记审计，不执行 Snapshot 失效，不作为缓存修复。
-确认提交后失效失败为 ADMIN_MUTATION_COMMITTED；Unknown COMMIT 保留原错误并保守失效一次，
-明确回滚不传播，不自动重放写入。
+应用已删除但会话清理未完成时，可按提示重试剩余处理。删除结果不确定时应先查询当前状态，不能根据报错直接认定删除未生效。
 
-配置、启停、协议选择和轮换本身不撤销会话或协议产物，也不要求先进入 Maintenance。
-后续兑换失败的作用见[Custom SSO](../sso/custom-sso-contract.md)与[OIDC](../oidc/oidc-integration.md)。
+## 配置保存后的异常
 
-## 删除 Client
+配置可能已经保存，但尚未同步到实际使用处；此时旧配置或旧凭据仍可能被接受。
+页面会保留修复提示，刷新详情或重新读取凭据都不能替代修复。不要自动重复保存或轮换。
 
-首次删除 Client 在同一事务锁定 Client 后，检查是否存在任何未删除 Role，不区分 Enable、Pause 或 Disable。
-存在依赖时返回 `409 CLIENT.HAS_ROLE`，不改变 Client、不写成功删除审计，也不执行 Snapshot 失效或会话终止。
-管理员须先按既有规则处理 Role Assignment、删除 Role，再删除 Client；软删除的 Role 历史不阻断。
-该检查保持跨对象普通预检边界，不新增锁或并发保证；已删除 Client 的显式重试仍按会话管理契约处理残余会话。
-
-通过检查后，Client 删除与业务审计在同一事务提交，再执行必需的 Snapshot 失效和会话终止。
-确认提交后会话终止未确认时返回 `ADMIN_MUTATION_COMMITTED`；显式重复删除允许返回 no-op 并重试残余 ClientSession。
-Unknown COMMIT 只保守失效并保留原错误，不执行删除后的会话终止。
-会话终止的作用边界与报告见[会话管理](session-management.md#精确撤销与未完成批次)，
-传播与会话作用的人工恢复见[统一维护手册](../../releases/authentication-and-session.md#恢复边界)。
-
-## 管理权限与 Secret
-
-REST 基础路径为 `/admin/clients-sso/{clientCode}`，详情及 /save、/protocol、/enabled，
-Secret 的 /secret/rotate 和 /secret/read 使用 POST；tRPC 经 `/rpc/admin.clientSso.*` 暴露。
-集中策略只授予完整管理员，HR 无权调用；详情返回各项 allowedActions，页面不自行解释角色字符串。
-Secret 读取有审计写入，不作为可缓存 query。
-
-readSecret 直接观察 PostgreSQL 当前行，在独立 UnitOfWork 提交 `admin.client.sso_secret_read` 后返回
-`{ secret, credentialId, updatedAt }`，无凭据时为 null。并发轮换可能在观察后发生，
-读取只代表该次观察，不保证稍后仍是最新。
-读取或审计提交未确认时返回 ADMIN_CLIENT_SECRET_READ_AUDIT_FAILED，绝不交付原文；
-原文和可能包含参数的 Drizzle 错误不进入审计、日志或异常 cause。
-轮换使用 `admin.client.sso_secret_rotate`，只记录安全身份与变化。
-
-页面逐次由管理员主动发起读取；响应丢失可重新读取当前值，不再次轮换。
-原文仅在组件内存，可隐藏，刷新/离开后清除，不写 browser storage。
-普通编辑和轮换不隐式调用原文读取。
-
-## 页面恢复与维护
-
-默认 Client 编辑页的 SSO 分区和独立详情复用正式 service，显示无配置、协议字段、启用意图及明确操作。
-已提交、Unknown COMMIT、审计未确认、读取响应丢失和明确 4xx 分别表达；只刷新，不自动重放。
-
-传播修复提示按 Client 存于当前 sessionStorage，与单次错误独立。
-详情重读、页面 reload、后续成功/no-op/拒绝或 Secret 重读均不清除提示；
-只有明确修复流程可确认恢复。失效失败窗口中旧 Secret 仍可能通过认证，数据库重读不修复缓存。
-Snapshot 观察与传播契约见[Client Snapshot](../sso/client-snapshot-contract.md)。
-
-当前传播修复见[统一维护手册](../../releases/authentication-and-session.md#client-snapshot-修复)；旧配置迁移按[历史工具入口](../../development/commands.md#历史数据维护工具)恢复匹配版本流程。
-权限、事务审计、敏感响应、并发读取/轮换及页面不自动重放的证明范围见
-[架构验证归属](../../architecture/architecture-verification.md)。
+接入步骤见[接入指南](../../guides/README.md)，配置同步恢复见[维护手册](../../releases/authentication-and-session.md#client-snapshot-修复)。

@@ -11,6 +11,62 @@
 - 在 OpenAPI route definition 和显式非 200 response 中使用 `@iam/api-core/core/http-status-codes` 常量，而不是
   numeric literal。
 
+## Admin 写入结果与失败恢复
+
+Admin 业务 mutation 返回 `{ changed, result }`；REST 放入现有 envelope 的 data，tRPC 直接返回。
+本页拥有调用方可观察的结果及恢复语义；事务与锁序见
+[Admin 同对象写入规范](../architecture/backend-architecture.md#admin-同对象写入规范)、
+[Transactions 与 afterCommit](../architecture/backend-architecture.md#transactions-与-aftercommit)。
+决策理由见 [ADR-0025](../adr/0025-align-admin-mutation-results-with-committed-facts.md)。
+
+### 成功、无变化与领域拒绝
+
+| 操作           | 结果                                                                      |
+| -------------- | ------------------------------------------------------------------------- |
+| 创建、Transfer | 保留该操作约定的新资源或资源 ID。                                         |
+| 密码生成/重置  | result 保留明确授权的一次性生成结果，密码哈希不进入响应或审计。           |
+| 普通无资源命令 | result 为 null。                                                          |
+| 会话管理       | 保留两类实际终止计数、原批次未完成结果与安全摘要。                        |
+| 解除登录限制   | result.failureStateCleared 表达原子清理完成，changed 只表示有效限制变化。 |
+
+空资料更新返回 400，普通缺失和重复删除返回 404，非法生命周期转换或已知唯一冲突返回 409；
+Client 显式删除允许重试其残余会话作用的例外见[删除应用](../features/admin/client-sso-configuration.md#删除应用)。
+授权与范围判断先于可公开的存在性、冲突信息。
+
+普通同值资料不记变更审计或 dirty；显式生命周期、安全、授权意图的合法 no-op 保留 changed:false 意图审计。
+同态命令不改写历史时间，非法转换不伪装成幂等成功。
+Internal 委托保持其独立详情/boolean 协议，不套 Admin wire。
+
+### 已提交、未知与作用后失败
+
+| 错误或情况                                    | 已知事实                                                           | 调用方下一步                                                           |
+| --------------------------------------------- | ------------------------------------------------------------------ | ---------------------------------------------------------------------- |
+| `ADMIN_MUTATION_COMMITTED`                    | 业务已提交，必需的提交后任务或生命周期处理失败。                   | 读取已提交详情并持续显示修复提示；先修复后续作用，不自动重放业务写入。 |
+| COMMIT 结果不确定                             | 尚不能确认成功提交或确定回滚；保留原未知错误及对应模块的保守处理。 | 读取事实并按对应模块的恢复流程处理，不根据错误推断未生效或自动重试。   |
+| `ADMIN_LOGIN_STATE_AUDIT_FAILED_AFTER_EFFECT` | Redis 会话或限制作用已发生或可能发生，审计未确认完成。             | 刷新确认当前状态，保留审计修复提示，不自动重放操作。                   |
+
+读取成功不证明缓存传播或审计恢复，不能据此清除修复提示。
+生成密码未交付时先修复再主动重置。**SSO Secret 是独立例外**：
+生成/轮换只返回安全结果，管理员可经授权且成功提交审计的窄读取取得当前原文；
+读取响应丢失可主动重读，不需要再次轮换。未确认读取审计时不交付原文，
+详见[Client 配置](../features/admin/client-sso-configuration.md)。
+
+会话未知作用不计入成功数量，即使 changed 和确认终止数为零，也不能把 unknown-only 当成“没有可能作用”。
+本人改密的密码提交与后续会话处理分开报告，见[本人改密](../features/sso/login-and-session.md#修改密码与全部下线)。
+
+### 审计安全边界
+
+审计仅记录可追责的业务身份和脱敏变化。密码、哈希、验证码、Secret、Token、Cookie、Authorization、
+可认证摘要、原始异常及任意上下文不得进入 details。会话审计也不保存 Redis key、原始 Session Origin 或撤销捕获 identity。
+事件字段和 action 由[事件构造器](../../apps/admin-api/src/services/audit/events/)定义，
+会话事件见[实现](../../apps/admin-api/src/services/audit/events/session-management.audit.ts)及[行为测试](../../apps/admin-api/src/services/session-management/__tests__/session-management.service.test.ts)。
+
+会话操作先作用于 Redis，再写审计。确认有变化或存在 unknown 时，审计失败使用作用后失败错误；
+只有 failed、没有确认变化也没有 unknown 时，仍是普通审计失败。unknown 不计入 changed 或成功终止数。
+SSO Secret 读取必须先确认独立审计提交，再交付原文；失败不携带可能含参数的数据库异常。
+字段读取、配置与轮换的行为由[Client SSO service](../../apps/admin-api/src/services/client-sso/client-sso.service.ts)及
+[集成测试](../../apps/admin-api/test-integration/client/client-sso-management.integration.test.ts)维护。
+
 ## Logging
 
 - Runtime diagnostics 使用 app logger（`@api/lib/logger`、`@admin-api/lib/logger`、`@worker/lib/logger` 或 OIDC
