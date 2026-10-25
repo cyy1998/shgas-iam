@@ -31,7 +31,7 @@ ORCAS 自己负责外部会话的有效期与注销。IAM 全量清理不证明 
 现行 `session:clear:inventory`、`session:clear` 和独立 `session:clear:verify` 配合 `--layout unified --owner all`，
 按显式 namespace 的 owner 前缀覆盖 Kernel、Custom SSO 及 OIDC 全部版本和键族；它不处理 PostgreSQL Client 配置
 或 Client Snapshot。执行要求与命令统一引用
-[当前会话维护手册](../releases/unified-session-maintenance.md#库存清理与独立核验)，不另造清理脚本。
+[当前会话维护手册](../releases/authentication-and-session.md#会话清理)，不另造清理脚本。
 
 原退役决定以严格 schema 校验的旧 Token 为背景，要求先清除旧记录再切换 reader。现行清理工具不读取记录内容，
 可直接清除所选 owner 前缀内含 `orcas` 字段的旧 payload、未知版本及损坏记录，无需恢复旧 schema 解析器。
@@ -40,7 +40,7 @@ ORCAS 自己负责外部会话的有效期与注销。IAM 全量清理不证明 
 数据库迁移移除既存 Custom SSO 配置中的 `orcas`，并收紧配置约束；保留其他 Client 配置、SSO 启用意图和 Secret。
 历史 migration 保留，新增迁移承接数据变化。数据库配置完成转换后，在停止 Client mutation、Snapshot acquisition
 并排空旧 reader/writer 的条件下，复用
-[Snapshot 全量修复与独立核验](../releases/unified-session-maintenance.md#新-snapshot-的定向修复与全量恢复)，
+[Snapshot 全量修复与独立核验](../releases/authentication-and-session.md#client-snapshot-修复)，
 新 reader 随后从转换后的数据库配置回源。
 
 清理不扩展到 Subject Access Barrier、Subject Facts、登录限制、短信码、nonce、队列或审计记录。

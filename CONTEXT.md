@@ -38,7 +38,7 @@ _Avoid_: online shadow cutover, mixed-version search, caller-selected schema ver
 从根 Organization 到目标 Organization 且包含目标自身的有序当前路径；每个公开节点包含 code、name、type 与 `distanceToTarget`，其中目标自身为 `0`、父级为 `1`。为查询或索引派生的平行数组和组合 key 不属于 Organization Path 的公开结构。
 _Avoid_: ancestorCodes, ancestorDepths, ancestorKeys, storage path encoding
 
-以下 Organization Search 与 Organization Search Document 描述独立组织搜索的当前能力，发布与恢复窗口见[组织搜索维护](docs/releases/organization-search-maintenance.md)。
+以下 Organization Search 与 Organization Search Document 描述独立组织搜索的当前能力，发布与恢复窗口见[组织搜索维护](docs/releases/data-maintenance.md#组织搜索全量重建)。
 
 **Organization Search**:
 IAM 以未删除的 Organization 为唯一结果根，按照组织自身属性和完整 Organization Path 筛选组织的查询能力；Enable、Pause 与 Disable 均可搜索，状态由调用方显式筛选，首版不包含按成员、岗位、角色或组织责任持有人反查组织的条件。

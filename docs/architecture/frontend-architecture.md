@@ -53,7 +53,7 @@ Admin 的 Custom SSO 配置 preview 与 Admin/SSO 协议类型统一消费 `@iam
   [HR 管理设计](../features/organization-responsibility/hr-admin-management-design.md#响应与前端)。
 
 Admin Sessions 使用会话记录语义：记录存在不代表账号当前可访问；筛选、分页、刷新与撤销反馈保持。
-后端自身许可每请求重查，前端不复制 Barrier 或代际判断；当前恢复见[Profile 与 Subject Access 维护](../releases/user-profile-maintenance.md)。
+后端自身许可每请求重查，前端不复制 Barrier 或代际判断；当前恢复见[Profile 与 Subject Access 维护](../releases/data-maintenance.md)。
 
 ## SSO 登录守卫
 

@@ -33,6 +33,6 @@ Detail 和跨副本一致性门禁的依赖。Detail 单独损坏不阻断摘要
 ## 当前契约与历史
 
 操作符、适配器差异、排序、预算和错误见[Filter DSL 契约](../features/user-profile-search/filter-dsl.md)，
-单代重建与双重完整校验见[Profile 维护](../releases/user-profile-maintenance.md)。
+单代重建与双重完整校验见[Profile 维护](../releases/data-maintenance.md)。
 
 历史来源：[ADR-0015 原文](https://github.com/cyy1998/shgas-iam/blob/73315e4cef6f96dd79b29e18f74d68af30e559ec/docs/adr/0015-adopt-schema-driven-user-profile-filter-dsl.md)、[ADR-0019 原文](https://github.com/cyy1998/shgas-iam/blob/73315e4cef6f96dd79b29e18f74d68af30e559ec/docs/adr/0019-return-user-profile-base-from-internal-filter-dsl.md)。原始决定与后续修订按各版本追溯。

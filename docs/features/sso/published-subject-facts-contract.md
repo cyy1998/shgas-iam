@@ -23,5 +23,5 @@ Facts 不可得时交付失败，不恢复已消费 Code；已有 Token 可在 U
 ## 验证与维护
 
 存储、投影与协议验证的证明范围见[架构验证归属](../../architecture/architecture-verification.md)。
-当前会话维护见[统一维护手册](../../releases/unified-session-maintenance.md)，
-数据重建、publication 校验与恢复见[Profile 维护手册](../../releases/user-profile-maintenance.md)。
+当前会话维护见[统一维护手册](../../releases/authentication-and-session.md)，
+数据重建、publication 校验与恢复见[Profile 维护手册](../../releases/data-maintenance.md)。

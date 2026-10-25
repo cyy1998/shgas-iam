@@ -155,7 +155,7 @@ apikey: <Internal API Secret>
 “不返回部分结果”约束一次查询的执行失败与结果超限，不表示对源组织覆盖完整性的保证。
 
 同样保留 PostgreSQL statement timeout 2 秒与 handler budget 5 秒；handler 超时返回不等于已经取消底层数据库操作。
-完整覆盖与发布核验由[维护流程](../../releases/organization-search-maintenance.md)显式执行。
+完整覆盖与发布核验由[维护流程](../../releases/data-maintenance.md#组织搜索全量重建)显式执行。
 
 ## 异步构建
 
@@ -193,7 +193,7 @@ Organization Search 独立管理文档、发布与恢复，不与 User Profile �
 
 首次构建、不兼容升级及全量恢复须在维护窗口完成重建和独立全量核验，通过后才恢复写入与 DSL。
 核验失败保持维护状态，修复后重新完整核验。完整核验是发布与恢复门禁，在线查询仍按上文过滤缺行和非当前 schema。
-操作步骤、命令、补偿调度与失败处置统一见[组织搜索维护](../../releases/organization-search-maintenance.md)。
+操作步骤、命令、补偿调度与失败处置统一见[组织搜索维护](../../releases/data-maintenance.md#组织搜索全量重建)。
 
 ## 接口范围
 

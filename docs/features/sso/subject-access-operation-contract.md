@@ -54,4 +54,4 @@ Kernel 不解释账号状态，不重新取得许可。具体操作与原实例�
 撤销或清理失败不能把账号拒绝变成放行；不确定状态不能当普通缓存 miss 默认启用。
 
 公开操作、真实资源和生产装配的证明范围见[架构验证归属](../../architecture/architecture-verification.md)，
-恢复步骤见[Profile 与 Subject Access 维护](../../releases/user-profile-maintenance.md)。
+恢复步骤见[Profile 与 Subject Access 维护](../../releases/data-maintenance.md)。

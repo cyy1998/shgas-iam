@@ -38,7 +38,7 @@ Next review: 2026-10-31
 
 IAM 自身的 `prod:iam` 同样要求已启用的 `iam` Client，`iam-admin` 不能替代，也没有免认证入口。
 公开 Client 状态的安全字段见[Client 配置契约](../admin/client-sso-configuration.md#公开-client-状态)。
-首次准备凭据及旧版本凭据暴露的核对步骤见[发布前置条件](../../releases/apisix-gateway-release.md#发布前置条件)。
+首次准备凭据及旧版本凭据暴露的核对步骤见[发布前置条件](../../releases/apisix-gateway-release.md#服务与首次配置)。
 
 ## 接口契约
 
@@ -142,7 +142,7 @@ Service 没有额外必填业务字段，Consumer 必须有合法 username；Plu
 执行总预算覆盖取得执行权后的远端读取、正向写入和必要补偿；APISIX 单次请求同时受单次上限与剩余总预算限制。
 恢复不另行延长总期限，也不自动重试；总期限耗尽后无法确认的作用返回未知并阻断。
 写前读取耗尽预算且尚无任何写入尝试时，仅返回写前失败，不进入阻断。预算不保证任意大小的写集都能完成补偿。
-默认值与配置范围见[服务配置](../../releases/apisix-gateway-release.md#服务配置与部署)。
+默认值与配置范围见[服务配置](../../releases/apisix-gateway-release.md#服务与首次配置)。
 
 同一 APISIX 集群的统一写入口保留为部署约定，代码不检测或禁止多个 Gateway API 实例，
 也不加入分布式锁或集群唯一实例注册。本实例的串行控制不约束其他实例或直接调用 APISIX 的外部写者；
@@ -159,8 +159,8 @@ Service 没有额外必填业务字段，Consumer 必须有合法 username；Plu
 发布、回滚及失败阻断状态也继续按原操作的最终结果更新。
 
 关闭预算独立于发布预算，必须大于执行总预算，不重置或延长原发布期限；耗尽时服务失败退出。
-信号、配置值及关闭余量见[服务配置](../../releases/apisix-gateway-release.md#服务配置与部署)，
-未知结果或阻断后的操作顺序见[人工恢复](../../releases/apisix-gateway-release.md#失败补偿与人工恢复)。
+信号、配置值及关闭余量见[服务配置](../../releases/apisix-gateway-release.md#服务与首次配置)，
+未知结果或阻断后的操作顺序见[人工恢复](../../releases/apisix-gateway-release.md#失败与恢复)。
 
 ## 维护与来源
 

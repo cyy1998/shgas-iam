@@ -45,7 +45,7 @@ Client Delegation 的错误码使用 `CLIENT_DELEGATION.*`，用户删除门禁�
 
 全量重建用户档案 Detail、Search Document 和 Subject Facts，并独立核验 PostgreSQL 与 Redis 中的派生数据已去除权限点。
 单纯删除源表不能清除已发布文档及缓存，不以缓存自然过期、样本成功或队列为空替代全量核验。
-重建与核验沿用 [Profile 维护流程](../releases/user-profile-maintenance.md) 的 owner 和完整门禁；
+重建与核验沿用 [Profile 维护流程](../releases/data-maintenance.md) 的 owner 和完整门禁；
 该手册记录 Profile v4 的维护入口和本次切换顺序，命令存在及本地验证不能代替目标环境的完整放流证据。
 
 接受调用方同步升级、维护窗口及源数据删除的成本，以换取单一现行模型；拒绝长期兼容分支和保留空字段的方案。

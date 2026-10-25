@@ -36,7 +36,7 @@
 | 开发、测试与验证     | [命令入口](development/commands.md)、[测试编排](architecture/testing-architecture.md)、[验证归属](architecture/architecture-verification.md)           |
 | 理解业务与决策       | [领域语言](../CONTEXT.md)、[ADR 清单](#架构决策)                                                                                                       |
 | 接入协议或维护功能   | [Custom SSO 对接](features/sso/third-party-sso-integration.md)、[OIDC 对接](features/oidc/oidc-integration.md)、[功能清单](#功能契约与设计)            |
-| 升级、恢复或发布     | [统一会话维护](releases/unified-session-maintenance.md)、[发布手册清单](#发布与维护)；先核对来源代际与适用环境                                         |
+| 升级、恢复或发布     | [运维操作入口](releases/README.md)、[发布手册清单](#发布与维护)；按任务选择操作，旧代切换单独查阅                                                      |
 | 追溯旧设计与候选验收 | [精简前的固定文档快照](https://github.com/cyy1998/shgas-iam/tree/73315e4cef6f96dd79b29e18f74d68af30e559ec/docs/features)；不作为当前实现或本次验证依据 |
 
 ## 维护方式
@@ -47,7 +47,7 @@
   `Current` 表示文档可用，不代表目标已经实现、合入或部署；`Last verified` 也不是部署日期。
 - 仓库地图负责定位，命令页负责可执行入口，测试架构负责收集与资源生命周期，验证归属负责证据能证明什么。
   功能变更优先更新其权威文档，避免在这些入口重复追加交付流水账。
-- releases 按当前代维护任务组织；一次性升级、旧代切换和执行记录通过固定 Git 提交追溯，不复制成新的常驻升级清单。
+- releases 按运维任务组织为入口和五个专题；操作保留适用情况、前提、步骤、完成标准与失败处理。验收按影响选择，不要求额外留证；机制说明归对应契约。一次性升级和旧代切换通过入口中的固定 Git 版本追溯。
 - features 按完整能力组织；切片候选、实施进度和固定验收记录留在 issue 或 Git 历史，不按 ticket 新建长期文档。
 - ADR 按独立决策组织，保留当前决定、理由、拒绝方案与代价，不按实施切片新增。合并时承接独有理由，不能因功能契约
   已存在而删掉取舍；算法和操作步骤引用对应权威文档。保留原编号与路径，被删除编号不复用、不重排，新决定从 0039 继续递增。
@@ -66,7 +66,7 @@ git diff --check
 ## 文档清单
 
 按路径排序，保留原文件地址和状态；展开相关目录即可。features 仅保留接入指南与长期功能契约，旧候选和设计从上方固定快照追溯。
-releases 只保留当前代发布与维护；一次性升级和旧验收见[固定发布手册快照](https://github.com/cyy1998/shgas-iam/tree/73315e4cef6f96dd79b29e18f74d68af30e559ec/docs/releases)。
+releases 维护当前代操作；一次性迁移与更早版本从[运维入口](releases/README.md#一次性迁移与旧版本)按来源查找。
 其他目录阅读前仍须核对 Status 及适用限制。
 
 ### 架构决策
@@ -135,8 +135,8 @@ releases 只保留当前代发布与维护；一次性升级和旧验收见[固�
 | ---------------------------------------------------------- | ------------ | ------- | ------------- | ----------- | ---------------------------------------------------------- |
 | [架构守卫规范](architecture/architecture-guard.md)         | architecture | Current | 2026-10-16    | 2026-10-31  | 静态守卫的观察模型、准入与复杂度边界。                     |
 | [架构验证归属](architecture/architecture-verification.md)  | architecture | Current | 2026-10-21    | 2026-11-21  | 系统约束的验证 owner、证据入口与证明限制。                 |
-| [后端架构](architecture/backend-architecture.md)           | architecture | Current | 2026-10-21    | 2026-11-21  | 后端分层、事务、模块所有权与一致性契约。                   |
-| [共享契约与数据库](architecture/contracts-and-database.md) | architecture | Current | 2026-10-21    | 2026-11-21  | 共享代码选址、公开出口、DTO、数据库与事务边界。            |
+| [后端架构](architecture/backend-architecture.md)           | architecture | Current | 2026-10-25    | 2026-11-25  | 后端分层、事务、模块所有权与一致性契约。                   |
+| [共享契约与数据库](architecture/contracts-and-database.md) | architecture | Current | 2026-10-25    | 2026-11-25  | 共享代码选址、公开出口、DTO、数据库与事务边界。            |
 | [前端架构](architecture/frontend-architecture.md)          | architecture | Current | 2026-10-15    | 2026-10-31  | Admin / SSO service、页面状态、路由与权限规则。            |
 | [仓库地图](architecture/repository-map.md)                 | architecture | Current | 2026-10-20    | 2026-10-31  | Apps、packages、基础设施、AFK、测试与生成目录定位。        |
 | [系统架构视图](architecture/system-architecture.md)        | architecture | Current | 2026-10-21    | 2026-11-21  | 运行时拓扑、信任边界、数据权威与恢复责任。                 |
@@ -151,7 +151,7 @@ releases 只保留当前代发布与维护；一次性升级和旧验收见[固�
 
 | Document                                              | Type        | Status  | Last verified | Next review | Notes                                           |
 | ----------------------------------------------------- | ----------- | ------- | ------------- | ----------- | ----------------------------------------------- |
-| [后端实现约定](development/backend-implementation.md) | development | Current | 2026-07-26    | 2026-10-31  | 响应封装、OpenAPI、logger 与 audit 实现约定。   |
+| [后端实现约定](development/backend-implementation.md) | development | Current | 2026-10-25    | 2026-11-25  | 响应封装、OpenAPI、logger 与 audit 实现约定。   |
 | [编码风格与命名约定](development/coding-style.md)     | development | Current | 2026-10-15    | 2026-10-31  | TypeScript、formatter、文件命名与 import 风格。 |
 | [构建、测试与开发命令](development/commands.md)       | development | Current | 2026-10-21    | 2026-11-21  | 开发、构建、验证、AFK 与维护的命令和资源入口。  |
 
@@ -173,10 +173,10 @@ releases 只保留当前代发布与维护；一次性升级和旧验收见[固�
 | [统一审计日志](features/audit/audit-logging.md)                                           | feature | Current | 2026-09-21    | 2026-10-31  | 审计 action、目标、安全字段与作用后失败。                               |
 | [Client 委托与管理契约](features/delegation/client-delegation.md)                         | feature | Current | 2026-10-21    | 2026-10-31  | Client 隔离、三类入口、生命周期、页面及正式 migration 切换；Spec #264。 |
 | [Gateway 配置 API 契约](features/gateway/gateway-configuration-api.md)                    | feature | Current | 2026-10-19    | 2026-10-31  | HTTP 输入输出、YAML 资源归属、认证、补偿与并发及断连边界。              |
-| [OIDC 接入与协议契约](features/oidc/oidc-integration.md)                                  | feature | Current | 2026-09-21    | 2026-10-31  | 接入流程与示例、当前披露；协议实现的双 issuer、处理顺序与失败作用。     |
+| [OIDC 接入与协议契约](features/oidc/oidc-integration.md)                                  | feature | Current | 2026-10-25    | 2026-11-25  | 接入流程与示例、当前披露；协议实现的双 issuer、处理顺序与失败作用。     |
 | [HR 组织责任管理契约](features/organization-responsibility/hr-admin-management-design.md) | feature | Current | 2026-09-21    | 2026-10-31  | HR 双端范围、生命周期、隐藏 blocker 与页面能力。                        |
 | [Organization Filter DSL](features/organization-search/filter-dsl.md)                     | feature | Current | 2026-10-15    | 2026-10-31  | 请求与完整文档响应、过滤规则、异步读取与错误边界；维护步骤见组织手册。  |
-| [登录、认证续接与账号恢复](features/sso/authentication-and-recovery.md)                   | feature | Current | 2026-09-21    | 2026-10-31  | 根认证、登录重入、短信冷却与脱敏手机号恢复。                            |
+| [登录、认证续接与账号恢复](features/sso/authentication-and-recovery.md)                   | feature | Current | 2026-10-25    | 2026-11-25  | 根认证、登录重入、短信冷却与脱敏手机号恢复。                            |
 | [Client Snapshot 契约](features/sso/client-snapshot-contract.md)                          | feature | Current | 2026-09-21    | 2026-10-31  | 普通/敏感 Snapshot、缓存观察、提交传播与恢复。                          |
 | [Custom SSO 协议契约](features/sso/custom-sso-contract.md)                                | feature | Current | 2026-09-28    | 2026-10-31  | Custom 授权、两类交付、Code/Token 与失败矩阵。                          |
 | [已发布 Subject Facts 的授权交付](features/sso/published-subject-facts-contract.md)       | feature | Current | 2026-09-21    | 2026-10-31  | 已发布角色、当前披露与事实不可得的交付边界。                            |
@@ -192,18 +192,16 @@ releases 只保留当前代发布与维护；一次性升级和旧验收见[固�
 <details>
 <summary>展开发布与维护</summary>
 
-先按维护目标与来源环境选择流程，再核对资源、停流范围、完成判据和失败恢复；受控 smoke 后重新收敛并完成适用核验才放流。
-已完成 ORCAS 退役的环境跳过来源切换分支。手册中的已知实现限制仍须解决，文档整理不表示代码问题或目标环境操作已完成。
+从操作入口选择任务，核对必要前提、完成标准和失败处理；详细机制由功能契约与架构文档维护。
 
-| Document                                                                    | Type    | Status  | Last verified | Next review | Notes                                                                   |
-| --------------------------------------------------------------------------- | ------- | ------- | ------------- | ----------- | ----------------------------------------------------------------------- |
-| [APISIX Gateway 配置发布手册](releases/apisix-gateway-release.md)           | runbook | Current | 2026-10-16    | 2026-10-31  | HTTP 发布、只读认证与首次配置、代理信任、未知结果和人工恢复。           |
-| [IAM 系统日志可观测性运行手册](releases/observability-system-logs.md)       | runbook | Current | 2026-09-21    | 2026-10-31  | 日志栈启动核验、生效配置限制、Grafana OIDC、trace 与版本/数据恢复。     |
-| [API OIDC 发布与密钥维护](releases/oidc-release-runbook.md)                 | runbook | Current | 2026-09-21    | 2026-10-31  | 双入口、停流密钥轮换、两槽兼容限制、逐副本/RP 核验与恢复。              |
-| [Organization Search 维护](releases/organization-search-maintenance.md)     | runbook | Current | 2026-10-14    | 2026-10-31  | 独立 schema 1 首建、升级、两阶段补偿与一致只读全量核验。                |
-| [登录凭证配置与部署](releases/sm-encrypted-password-login-release.md)       | runbook | Current | 2026-09-21    | 2026-10-31  | API/SSO 配对发布、nonce 时间窗已知限制与实际密码路径验收。              |
-| [当前会话与 Client Snapshot 维护](releases/unified-session-maintenance.md)  | runbook | Current | 2026-10-10    | 2026-10-31  | 任务分流、owner 清空、非目标基线、Snapshot 与适用 ORCAS 切换。          |
-| [User Profile 与 Subject Access 维护](releases/user-profile-maintenance.md) | runbook | Current | 2026-10-21    | 2026-11-21  | Profile v4 日常维护、权限点退役协调切换、双门禁、有效登录态保留及放流。 |
+| Document                                             | Type    | Status  | Last verified | Next review | Notes                                                    |
+| ---------------------------------------------------- | ------- | ------- | ------------- | ----------- | -------------------------------------------------------- |
+| [运维操作入口](releases/README.md)                   | runbook | Current | 2026-10-25    | 2026-11-25  | 任务导航、简短通用约定、独立迁移与历史版本入口。         |
+| [网关管理](releases/apisix-gateway-release.md)       | runbook | Current | 2026-10-25    | 2026-11-25  | 首次配置、HTTP 发布、数据面检查和失败恢复。              |
+| [登录与会话](releases/authentication-and-session.md) | runbook | Current | 2026-10-25    | 2026-11-25  | 密码配置、OIDC 双入口与密钥、会话清理和 Snapshot 恢复。  |
+| [数据维护](releases/data-maintenance.md)             | runbook | Current | 2026-10-25    | 2026-11-25  | Profile、Subject Access 与组织搜索分别修复、重建及核验。 |
+| [部署与发布](releases/deployment.md)                 | runbook | Current | 2026-10-25    | 2026-11-25  | 首次部署、常规更新、正式迁移、兼容回退与定向停止。       |
+| [日志与排障](releases/observability-system-logs.md)  | runbook | Current | 2026-10-25    | 2026-11-25  | 日志栈、Grafana、Trace 关联、告警与采集恢复。            |
 
 </details>
 

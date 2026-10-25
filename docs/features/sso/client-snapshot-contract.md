@@ -50,7 +50,7 @@ Gate 与普通 reader 共用回源。发布遇失效冲突时，每个调用方�
 
 维护能力不读写 PostgreSQL、不轮换 Secret、不撤销会话、不处理旧 Snapshot 或其他 owner，未知键族保留。
 全量恢复必须先停流并排空，repair 后独立 verify；失败保持停流。
-精确范围、Worker 命令与恢复步骤见[维护手册](../../releases/unified-session-maintenance.md#新-snapshot-的定向修复与全量恢复)。
+精确范围、Worker 命令与恢复步骤见[维护手册](../../releases/authentication-and-session.md#client-snapshot-修复)。
 
 ## 验证入口
 

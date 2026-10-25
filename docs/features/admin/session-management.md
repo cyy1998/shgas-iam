@@ -71,7 +71,7 @@ failed-only 且没有确认变化/unknown 的审计失败仍是普通审计失�
 
 Client 删除的 Role 依赖、提交后会话作用与重复删除规则见[删除 Client](client-sso-configuration.md#删除-client)。
 普通配置编辑、启停、切换及轮换本身不撤销会话。
-这些作用的可靠恢复与外部责任见[统一维护手册](../../releases/unified-session-maintenance.md#放流与人工恢复责任)。
+这些作用的可靠恢复与外部责任见[统一维护手册](../../releases/authentication-and-session.md#恢复边界)。
 
 ## 临时登录限制
 

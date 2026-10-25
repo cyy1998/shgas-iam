@@ -6,7 +6,7 @@ status: accepted
 
 Organization Search 保留组织关系表作为唯一源事实，以 PostgreSQL JSONB 保存可重建的搜索文档。
 文档由后台任务异步构建，承载组织自身属性和完整路径；新 Internal DSL 返回用于匹配的同一份完整文档。
-这是当前实现采用的已接受决定，完整契约见 [Organization Filter DSL](../features/organization-search/filter-dsl.md)，维护流程见[组织搜索维护](../releases/organization-search-maintenance.md)。
+这是当前实现采用的已接受决定，完整契约见 [Organization Filter DSL](../features/organization-search/filter-dsl.md)，维护流程见[组织搜索维护](../releases/data-maintenance.md#组织搜索全量重建)。
 实施与验收由 [Spec #221](https://github.com/cyy1998/shgas-iam/issues/221) 跟踪，不以本决定推定实现或部署已完成。
 
 ## 理由与取舍

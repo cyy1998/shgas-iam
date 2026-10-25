@@ -25,6 +25,6 @@ Kernel 只判断对象生命周期，不解释 Barrier；投影复用既有许�
 
 操作边界与消费方责任见[Subject Access 契约](../features/sso/subject-access-operation-contract.md)，
 存储及 transition 归属见[后端架构](../architecture/backend-architecture.md#subject-access-barrier)，
-恢复顺序和调度责任见[Profile 维护](../releases/user-profile-maintenance.md)。
+恢复顺序和调度责任见[Profile 维护](../releases/data-maintenance.md)。
 
 历史来源：[ADR-0029 原文](https://github.com/cyy1998/shgas-iam/blob/73315e4cef6f96dd79b29e18f74d68af30e559ec/docs/adr/0029-check-subject-access-once-per-business-operation.md)、[ADR-0035 原文](https://github.com/cyy1998/shgas-iam/blob/73315e4cef6f96dd79b29e18f74d68af30e559ec/docs/adr/0035-unify-user-and-client-session-lifecycles.md)。原始决定与后续修订按各版本追溯。

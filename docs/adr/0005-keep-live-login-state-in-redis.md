@@ -22,6 +22,6 @@ Redis 时间不是对任意跳时的防护。基础设施负责人仍须同步�
 ## 当前契约与历史
 
 对象与观察契约见[Session Kernel](../features/sso/unified-session-kernel.md)；时间同步、恢复和放流责任见
-[统一维护手册](../releases/unified-session-maintenance.md)。
+[统一维护手册](../releases/authentication-and-session.md)。
 
 历史来源：[ADR-0005 原文](https://github.com/cyy1998/shgas-iam/blob/73315e4cef6f96dd79b29e18f74d68af30e559ec/docs/adr/0005-keep-live-login-state-in-redis.md)、[ADR-0027 原文](https://github.com/cyy1998/shgas-iam/blob/73315e4cef6f96dd79b29e18f74d68af30e559ec/docs/adr/0027-own-online-authentication-lifecycle-time-in-redis.md)。原始决定与后续修订按各版本追溯。

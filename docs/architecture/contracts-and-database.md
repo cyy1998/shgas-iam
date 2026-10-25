@@ -67,7 +67,7 @@ Kernel 的在线根出口只公开 UserSession/ClientSession 生命周期与观�
 协议调用方必须显式取得操作许可和 Client Snapshot，再验证会话关系，不能从旧四对象出口恢复线上读取。
 旧 Kernel/Provider/Grant decoder 与 source 布局维护出口已退役。当前离线清理仍要求显式 unified 布局，
 通过各 owner 公开维护出口按精确 namespace 的前缀处理全部版本和键族，不依赖记录 schema；
-其他前缀旧布局不在范围内，操作边界见[统一维护手册](../releases/unified-session-maintenance.md)。
+其他前缀旧布局不在范围内，操作边界见[统一维护手册](../releases/authentication-and-session.md)。
 
 Client 数据库只有统一 `ssoEnabled`、可空单协议 `ssoConfig` 与独立当前 SSO Secret/id/updatedAt；Internal API secret 独立。
 普通管理与 Runtime DTO 使用显式安全字段，不能默认选择 SSO Secret；认证与超级管理员 Secret 重读各用窄能力。
@@ -197,6 +197,10 @@ Admin 表单仅在 business 回填、展示和提交地址；隐藏控件的旧�
 队列只负责唤醒。事件展开在事务中锁定并重验 token，将当前闭包目标的版本登记与事件完成原子提交；完成事件保存本次
 重建 payload，重复投递只重唤醒这些版本，不重复推进版本。
 
+repair 在源变化与 rebuild 两阶段分别有界选取 pending、failed 或过期 processing；活跃处理事务锁定的工作跳过。
+重领保留 desired version、尝试次数及诊断，替换 ownership token，每次唤醒使用新的队列 job ID；
+旧处理器即使持有同版本候选也不能覆盖或完成新 owner 的工作。重投不推进版本，普通 consumer 完成发布。
+
 提交后按当前闭包展开祖先变化：展开前已提交的后代创建由该次展开覆盖；展开后才提交的后代创建由自己的变化登记覆盖。
 这两个路径共同保证祖先修改与后代创建交错时的最终传播，不把源事务当时捕获的后代列表视为完整目标集。
 
@@ -207,7 +211,10 @@ Admin 表单仅在 business 回填、展示和提交地址；隐藏控件的旧�
 
 独立全量 verifier 使用同一个 `REPEATABLE READ READ ONLY` transaction 完整读取源组织、文档/墓碑、dirty、
 源变化事件，并把该 transaction 绑定到 source reader 的闭包和祖先读取。它核对覆盖、schema、严格结构、源事实、
-处理版本及完成凭据，不更新数据或触发任务；维护失败保持停流，正式修复后重新完整核验，见[组织搜索维护](../releases/organization-search-maintenance.md)。
+处理版本及完成凭据，不更新数据或触发任务。核验还检查源变化登记的重建请求是否履行及无源对象的孤立记录；
+历史 processed 事件可保留较早版本，但不能指向未完成的更高版本。缺行、旧 schema、结构/路径损坏、事实差异、
+未完成工作或凭据异常报告 failed，按稳定分类返回完整排序的 Organization ID 与源变化 UUID，不采样。
+维护失败保持停流，正式修复后重新完整核验，见[组织搜索全量重建](../releases/data-maintenance.md#组织搜索全量重建)。
 
 ### User Profile publication schema
 

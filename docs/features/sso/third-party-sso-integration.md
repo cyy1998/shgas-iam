@@ -236,5 +236,5 @@ business 应先清理自己的 Cookie/session，再退出 IAM；单独清应用 
 400/401/503 分别处理、托管 Cookie 所属域与代理、显式退出和第三方本地清理。
 SSO Secret 与通用 clientSecret 不混用、不下发前端；日志不记录明文 Token/Code/Secret。
 业务自行持有的 sid 保存在服务端，浏览器以自己的 HttpOnly Cookie 表达本地会话。
-IAM 侧状态维护见[统一维护手册](../../releases/unified-session-maintenance.md)，
+IAM 侧状态维护见[统一维护手册](../../releases/authentication-and-session.md)，
 代理配置及现场检查见[Gateway 发布手册](../../releases/apisix-gateway-release.md)。

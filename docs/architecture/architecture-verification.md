@@ -12,7 +12,7 @@
 | 定义和维护不变量 | 能力所属 app/package 的实现者维护公开接口契约，并为本次行为变化选择直接观察该事实的测试。跨 runtime 变化同时检查各消费方的契约。    |
 | 核对证据是否适用 | 评审者确认测试触及本次变化、使用了正确的真实或替代资源，且结论没有超出断言范围。存在测试文件不等于已经执行，也不等于覆盖全部场景。  |
 | 候选交付验证     | 合入或发布负责人按测试编排契约执行最终候选检查，记录候选、命令、结果和未执行项；有 issue 时记录在对应 issue，否则在交付摘要中说明。 |
-| 真实环境与放流   | 发布负责人取得目标环境配置、readiness、smoke 和适用 runbook 要求的停流、drain、恢复证据。测试命令不代替这些操作，也不提供部署授权。 |
+| 真实环境与放流   | 发布负责人现场核验配置、readiness、smoke 和适用 runbook 要求的停流、drain、恢复状态。测试命令不代替这些操作，也不提供部署授权。     |
 
 这里的 owner 是维护职责，不表示每个 app 必须有独立团队，也不建立新的审批或 tracker 流程。
 
@@ -60,7 +60,7 @@ Organization Search 的[公开 PostgreSQL 恢复能力](../../packages/organizat
 [Worker recovery](../../apps/worker/test-integration/organization-search/organization-search-recovery.integration.test.ts)
 使用专用 PostgreSQL 与 Redis 验证普通 BullMQ 重试耗尽、实际 consumer 进程终止、重复 repair、DSL 结果和处理版本。
 命令 deadline 与运行时 signal listener 验证失败关闭；Windows 的 SIGTERM 用 child-local signal event 进入真实 CLI listener，
-不据此声称 Windows 提供 POSIX signal delivery。以上均不代替目标环境的外部周期调度、完整核验或放流证据。
+不据此声称 Windows 提供 POSIX signal delivery。以上均不代替目标环境的外部周期调度、完整核验或实际放流检查。
 
 [Organization Search verifier PG](../../packages/organization-search-read-model/test-integration/verification/verification.integration.test.ts)
 验证完整覆盖、schema/严格路径/源事实、删除墓碑、处理版本、两阶段工作和同一 RR 快照的受控交错；
@@ -68,7 +68,7 @@ Organization Search 的[公开 PostgreSQL 恢复能力](../../packages/organizat
 验证实际报告、退出码、只读库存、阻塞 deadline、signal listener 与连接关闭；共享取消隔离由上表 PG owner 集中证明。
 [组织维护闭环](../../apps/worker/test-integration/organization-search/organization-search-maintenance.integration.test.ts)
 通过真实 backfill/repair/verify 命令和 consumer 验证首次构建、不兼容 schema 下保持失败、修复后重新完整核验，
-并观察非目标 Profile/Redis 库存及零入队核验。它们不代替部署负责人按[组织维护手册](../releases/organization-search-maintenance.md)取得的停流、drain 和放流证据。
+并观察非目标 Profile/Redis 库存及零入队核验。它们不代替部署负责人按[组织维护手册](../releases/data-maintenance.md#组织搜索全量重建)执行的停流、drain 和放流检查。
 
 [Profile 维护闭环](../../apps/worker/test-integration/user-profile/user-profile-maintenance.integration.test.ts)
 通过正式 backfill/repair/双 verify 命令及真实 consumer 验证完整 User inventory（包括禁用及已删除用户）、
@@ -100,8 +100,8 @@ HTTP cookie jar 不能替代浏览器证据。
 
 手动验证时机见[工作流补充](../agents/workflow.md#验证节奏)，AFK 交接与批后验证见 [AFK 工作流](../agents/sandcastle-afk.md#验证节奏)。
 官方固定 OIDC 套件单独验证，组合/E2E 不能替代其证据。
-发布负责人仍须按[统一维护](../releases/unified-session-maintenance.md)、[Gateway](../releases/apisix-gateway-release.md)、
-[Profile 恢复](../releases/user-profile-maintenance.md)、[OIDC 发布](../releases/oidc-release-runbook.md)、[观测](../releases/observability-system-logs.md)核验停流、drain、数据、
+发布负责人仍须按[统一维护](../releases/authentication-and-session.md)、[Gateway](../releases/apisix-gateway-release.md)、
+[Profile 恢复](../releases/data-maintenance.md)、[OIDC 发布](../releases/authentication-and-session.md#oidc-双入口配置)、[观测](../releases/observability-system-logs.md)核验停流、drain、数据、
 新登录、真实代理信任和放流。代码接线及临时测试均不表示已执行目标环境切换。
 
 ## 变更时如何维护

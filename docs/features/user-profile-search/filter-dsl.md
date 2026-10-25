@@ -256,5 +256,5 @@ Internal 用户详情、Admin 用户搜索与 Delegation 实体搜索继续保�
 Filter 随全局 profileSchemaVersion=v4 发布，不维护独立 searchDocVersion。
 调用方不能选择版本，不接受旧 all/any，也不双读或逐用户回退。
 当前 Profile、Detail、Search 与 Subject Facts 的重建、恢复窗口和双数据门禁，
-统一由[Profile 维护手册](../../releases/user-profile-maintenance.md)拥有。
+统一由[Profile 维护手册](../../releases/data-maintenance.md)拥有。
 backfill 的 enqueued 仅表示投递，不证明发布完成；门禁失败不能用部分结果放流。

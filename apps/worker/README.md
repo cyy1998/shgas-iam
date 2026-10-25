@@ -19,9 +19,9 @@ pnpm --filter @iam/worker client-snapshot:verify -- --all --writers-stopped --dr
 当前 Snapshot repair/verify 使用独立 Redis composition，不创建数据库、queue、consumer 或 HTTP。
 定向 repair 同时失效普通/敏感 payload；全量恢复须停流、冻结 mutation、排空 reader/source load，
 再分别运行 repair 与 scan-only verify。资源、deadline、未知作用与放流见
-[当前维护手册](../../docs/releases/unified-session-maintenance.md#新-snapshot-的定向修复与全量恢复)。
+[当前维护手册](../../docs/releases/authentication-and-session.md#client-snapshot-修复)。
 
-Profile 重建、Subject Access 恢复、外部调度与告警见[Profile 维护手册](../../docs/releases/user-profile-maintenance.md)。
+Profile 重建、Subject Access 恢复、外部调度与告警见[Profile 维护手册](../../docs/releases/data-maintenance.md)。
 旧数据升级工具及匹配版本流程见[历史命令入口](../../docs/development/commands.md#历史数据维护工具)。
 
 `employment:verify` 是 Employment 全库显式只读诊断。命令只要求

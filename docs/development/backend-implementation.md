@@ -20,6 +20,19 @@
 - 可接受的 console 例外包括 env validation、singleton/process lifecycle code、tests、one-off scripts 和 centralized
   error handler。
 
+系统日志使用结构化字段：`event`、`sourceApp`、`requestId`、`traceId`，以及适用的
+`method/path/route/statusCode/durationMs`、`clientIp/userAgent` 和 `errorName/errorCode/errorMessage/source`。
+`sourceApp` 为 `iam-api`、`iam-admin-api`、`iam-worker` 或 `apisix`；网关另有 `spanId`、`traceparent`。
+一般 event 使用稳定小写点分命名，不拼接请求 ID、用户标识、client code、动态业务值或原始 URL。
+OIDC 既有事件保留 `oidc_server_error`（error）和 `oidc_protocol_error`（warn），仅记录安全 code/outcome/path/status。
+
+系统日志不采集请求体或响应体。应用 logger 输出 stdout 前脱敏 authorization、cookie/set-cookie、password、
+token/accessToken/idToken/refreshToken、secret/clientSecret/privateKey、验证码及 OIDC authorization code。
+不得输出 SM2 私钥、SM4 key material、nonce/credential 原文、Cap token 或 challenge solution。
+Alloy 二次脱敏常见敏感 key，APISIX access log 不含 body、敏感 header 或原始 query；后续脱敏不代替生产者的最小字段约束。
+上下文传递见[后端架构](../architecture/backend-architecture.md#请求审计与可观测上下文)，
+采集标签、Dashboard 链接限制和排障见[日志与排障](../releases/observability-system-logs.md)。
+
 ## Types、Constants 与 Guard Clauses
 
 - Business query 中优先使用来自 `packages/contracts` 或所属模块的 enum 和 constant，避免 magic strings/numbers，

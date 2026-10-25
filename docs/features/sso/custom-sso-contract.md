@@ -114,7 +114,7 @@ Token 的完整随机 bearer 经 SHA-256 直接定位唯一记录，独立随机
 
 `/maintenance` 只按显式 namespace 下的 owner 前缀维护，范围包含 Code、Token、续接及全部版本、键族和孤立索引；
 不按 Client 筛选，其他 namespace 和 owner 保留。具体库存范围、扫描与清理规则、维护窗口及独立清零核验统一见
-[维护手册](../../releases/unified-session-maintenance.md#所有权与明确范围)。
+[维护手册](../../releases/authentication-and-session.md#会话清理)。
 
 `/testing` 仅用于状态观察和故障注入。协议、真实 HTTP/Redis、Gateway 与外部系统的证明范围见
 [架构验证归属](../../architecture/architecture-verification.md#行为资源与系统验证)。

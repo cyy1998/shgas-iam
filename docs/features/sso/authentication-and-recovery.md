@@ -20,8 +20,7 @@ Client 交付拒绝保留根 Cookie；根/账号明确失效按对应 adapter �
 `POST /auth/login/password` 只接受 `credential` 和可选 `capToken`，不接受明文 username/password 请求。
 凭证使用 `iam-login-v1`、`SM2-SM4-CBC`、`password-login` 协议标识；前端加密，
 API 校验 kid、算法、解密结果、完整性、payload 结构与时间窗口，并通过 Redis nonce 拒绝占用期内的重复凭证。
-当前默认 nonce TTL 尚未覆盖完整时间接受窗口，已知限制及待讨论修复见
-[时间窗口与已知限制](../../releases/sm-encrypted-password-login-release.md#时间窗口与已知限制)。
+当前默认 nonce TTL 尚未覆盖完整时间接受窗口，限制见下文。
 
 | 场景                                                       | 当前结果                                                   |
 | ---------------------------------------------------------- | ---------------------------------------------------------- |
@@ -32,7 +31,18 @@ API 校验 kid、算法、解密结果、完整性、payload 结构与时间窗�
 | 用户名或密码错误                                           | 保持登录失败计数、临时登录限制和审计语义。                 |
 
 密钥/kid 配对、nonce TTL、缓存更新、发布与恢复见
-[登录凭证配置与部署](../../releases/sm-encrypted-password-login-release.md)，不在协议契约中重复运维步骤。
+[密码登录配置](../../releases/authentication-and-session.md#密码登录配置)，不在协议契约中重复运维步骤。
+
+### 凭证时间窗口与防重放限制
+
+当前实现接受 `abs(now - ts) <= maxSkewMs`，包含未来时间戳；nonce 从首次占用起按固定 TTL 过期。
+同一凭证的接受跨度可接近两倍偏移窗口，因此 nonce TTL 不短于单侧偏移并不足以覆盖完整接受期。
+默认偏移 300000 毫秒、nonce TTL 360 秒尚有缺口，env 未做交叉校验；修复由
+[讨论 #261](https://github.com/cyy1998/shgas-iam/issues/261)跟踪。
+
+稳定时钟且忽略在途延迟时，固定 TTL 须严格大于两倍偏移；实际还须考虑 API 副本时钟差、回拨与时间校验至 nonce 写入的延迟。
+调大 TTL、env validation 通过或即时重放被拒绝都不能单独证明完整保证。
+验证应覆盖未来边界时间戳、nonce 到期后重复及接受期末端；本限制不改变现有凭证拒绝与登录失败计数规则。
 
 ## 登录页重入
 
@@ -112,6 +122,6 @@ Hono 解外层，参数解析解内层；避免 `.`、`..` 被浏览器折叠，
 
 验证通道和证明范围见[架构验证归属](../../architecture/architecture-verification.md)；
 用户名编码的 HTTP/service 测试不能代替真实 Gateway 特殊字符链路验证。
-当前会话恢复见[统一维护手册](../../releases/unified-session-maintenance.md)。
+当前会话恢复见[统一维护手册](../../releases/authentication-and-session.md)。
 恢复接口与跨实例短信冷却的首次切换说明见
 [固定历史版本](https://github.com/cyy1998/shgas-iam/blob/48c2d6cc20e8a3675cbd1269eed2d5612141791d/docs/features/sso/authentication-and-recovery.md#验证与发布边界)。

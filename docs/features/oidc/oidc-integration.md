@@ -31,7 +31,7 @@ Basic 按 form URL 解码并以首个冒号分隔，Basic 与 body client_id 冲
 
 Confidential 认证失败按 Client/IP 计数：首次失败起 60 秒固定窗口，达到 5 次后正确 Secret 也暂时拒绝；
 成功兑换清除该 Client/IP 计数。该门槛拒绝不消费 Code、不撤销会话。
-客户端 IP 的可信代理配置见[发布前提](../../releases/oidc-release-runbook.md#配置与发布前提)。
+客户端 IP 的可信代理配置见[发布前提](../../releases/authentication-and-session.md#oidc-双入口配置)。
 
 ### 最小接入示例
 
@@ -215,7 +215,21 @@ Token 摘要记录是唯一权威，独立 UUID 反向键仅用于管理且不�
 不比较可变 ClientSession.protocol。已观察的在途请求不在交付前复查，原根终止后新使用不依赖子索引。
 
 签名配置包含完整 current/previous RSA 私钥、alg=RS256 和唯一非空 kid；只有 current 签名。
-轮换步骤见[JWK 维护](../../releases/oidc-release-runbook.md#jwk-签名密钥轮换)。
+轮换步骤见[签名密钥轮换](../../releases/authentication-and-session.md#oidc-签名密钥轮换)。
+
+### 签名密钥兼容边界
+
+密钥只在进程启动时加载，没有热更新或独立多代验证集合；current/previous 都要求 private JWK，不接受 public-only previous。
+两个槽不能同时容纳已有 previous P、current A 与新 key B；P 仍需验证时不能直接覆盖为 A。
+两槽配置也不自动提供无缝滚动轮换保证。
+
+旧普通 ID Token 的接受期下界为：全部旧 signer 停止并排空后最后可能签名时点上界，加实际最长 TTL 与接入应用时钟宽限。
+代理/RP 的 JWKS 缓存不延长 Token expiry，但可能延迟新 key 可见，需分别确认缓存刷新和未知 kid 重试行为。
+IAM 退出 hint 刻意允许过期 ID Token，未按 exp 定义退役期限，故等待普通 TTL 不能证明旧 key 可移除。
+保持既有 hint 兼容就必须保留其 key；多代验证、滚动轮换及 hint 退役政策见
+[讨论 #263](https://github.com/cyy1998/shgas-iam/issues/263)，不能视为已实现能力。
+
+新 key 已签发 Token/hint 后，回退同样必须包含它及其他仍需接受的 key。共享 key 不取消各协议产物的 issuer 归属检查。
 
 ### 退出确认与取消
 
@@ -242,7 +256,7 @@ Redis、坏状态、配置故障或撤销 failed/unknown 返回 503 并保留 Co
 
 `@iam/oidc/maintenance` 清空所选 namespace 中 OIDC owner 的全部协议状态，包括损坏记录与孤立索引；
 不按 Client 筛选，其他 namespace 和 owner 保留。清理范围、执行前提和独立核验见
-[统一维护手册](../../releases/unified-session-maintenance.md#所有权与明确范围)。
+[统一维护手册](../../releases/authentication-and-session.md#会话清理)。
 
 `/wire` 供浏览器消费，`/testing` 仅提供状态观察和故障注入。HTTP/Redis、真实浏览器、独立 RP 和
 官方套件分别证明不同事实，见[验证归属](../../architecture/architecture-verification.md)、

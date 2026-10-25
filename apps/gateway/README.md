@@ -20,7 +20,7 @@ pnpm --filter @iam/gateway-apisix dev
 Compose 的 `gateway-api` 默认只向宿主 `127.0.0.1:30004` 映射，应限制在可信管理网络。
 `GET /health` 返回 200 只证明 HTTP 就绪，不检查 PostgreSQL 或 APISIX；关闭期间返回 503。
 Gateway 不依赖 Redis。自有 PostgreSQL pool 最多 4 条连接并设置默认只读，部署仍需专用 reader role。
-启动参数、权限和执行/关闭预算见[服务配置](../../docs/releases/apisix-gateway-release.md#服务配置与部署)。
+启动参数、权限和执行/关闭预算见[服务配置](../../docs/releases/apisix-gateway-release.md#服务与首次配置)。
 
 三种操作均要求 `Content-Type: application/json`，通过 `apikey` header 提交 scope 对应 Client 的
 Internal API Secret。例如 `prod:tender` 要求 code 为 tender、Enable 且未删除的 Client。
@@ -49,7 +49,7 @@ Internal API Secret。例如 `prod:tender` 要求 code 为 tender、Enable 且�
 APISIX SSL list 的私钥是加密值，同一份含明文私钥变量的源配置再次提交时，仍可能规划 SSL update 并重写。
 no_change 仅表示当前计划没有实际写集，不保证七类资源重复提交都不写入；Gateway 不解密私钥作等价比较。
 变量只从本次 variables 映射解析，省略为空；不回退进程环境，不接受服务器文件路径或请求指定的远端地址。
-Secret 字段必须使用占位符或外部秘密引用。请求示例见[发布流程](../../docs/releases/apisix-gateway-release.md#标准发布流程)。
+Secret 字段必须使用占位符或外部秘密引用。请求示例见[发布流程](../../docs/releases/apisix-gateway-release.md#发布配置)。
 旧 CLI、根 `gateway:apisix:*` 命令及其 env/file 参数已退役。
 
 ## 目录与 YAML
@@ -137,7 +137,7 @@ GDS 示例鉴权指向本机 IAM。发布各 scope 前均需准备同名、已�
 `http://127.0.0.1:9180/apisix/admin`。IAM 的 `/api/iam` 前缀经 proxy-rewrite 去除：
 public/open/internal/auth 转 API，admin/rpc 转 Admin API；`/portal`、`/iam-admin` 转前端。
 SSO/OIDC 使用受控内外网 host，分别覆盖 X-IAM-Entry-Network，无未知 host 的协议兜底。
-双入口发布见[OIDC 手册](../../docs/releases/oidc-release-runbook.md)。
+双入口发布见[OIDC 手册](../../docs/releases/authentication-and-session.md#oidc-双入口配置)。
 
 API routes 经 route 级 plugin_config 绑定 limit-req，普通 API 为 rate 10 / burst 20，
 IAM internal 为 rate 50 / burst 100；前端、静态和文件入口不使用本 API 限流策略。

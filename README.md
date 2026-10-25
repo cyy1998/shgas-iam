@@ -485,10 +485,10 @@ Playwright Chromium 系统依赖时，preflight 会提示运行 `pnpm e2e:instal
 `IAM_API_SSO_INTERNAL_ORIGIN`、`IAM_API_SSO_EXTERNAL_ORIGIN` 与 `IAM_API_OIDC_CURRENT_JWK_JSON` 必填；previous JWK 可选。
 两项 HTTP(S) origin 分别加 `/oidc` 得到固定 issuer，相同 origin 合并为同一身份。Gateway 按受控 host 覆盖
 `X-IAM-Entry-Network`，API 拒绝缺失/非法标记；单 issuer/public-origin 输入已退役。两入口共用 Client、密钥及会话关系。
-当前双入口配置与密钥维护见[OIDC 发布手册](docs/releases/oidc-release-runbook.md)；首次切换按[固定历史流程](https://github.com/cyy1998/shgas-iam/blob/73315e4cef6f96dd79b29e18f74d68af30e559ec/docs/releases/oidc-release-runbook.md)核对来源。
+当前双入口配置与密钥维护见[OIDC 发布手册](docs/releases/authentication-and-session.md#oidc-双入口配置)；首次切换按[固定历史流程](https://github.com/cyy1998/shgas-iam/blob/73315e4cef6f96dd79b29e18f74d68af30e559ec/docs/releases/oidc-release-runbook.md)核对来源。
 完整 TTL、namespace、secure Cookie 与登录路径见 [API env](apps/api/.env.example)。旧 Provider env/镜像/Cookie keys 已退役。
 API/Admin 共用 Kernel namespace 和固定根期限；旧 idle/absolute/tombstone 配置已移除。
-当前会话与 Snapshot 恢复按[统一维护手册](docs/releases/unified-session-maintenance.md)；旧数据操作见[历史命令入口](docs/development/commands.md#历史数据维护工具)。
+当前会话与 Snapshot 恢复按[统一维护手册](docs/releases/authentication-and-session.md)；旧数据操作见[历史命令入口](docs/development/commands.md#历史数据维护工具)。
 
 ### Worker（`apps/worker/.env`）
 
@@ -568,123 +568,13 @@ pnpm --filter @iam/db db:migrate
 
 ## 🚢 部署
 
-### 后端
+从[运维操作入口](docs/releases/README.md)按任务选择手册。
 
-```bash
-pnpm install --frozen-lockfile
-pnpm --filter @iam/db db:migrate
-pnpm --filter @iam/api serve
-pnpm --filter @iam/admin-api serve
-pnpm --filter @iam/worker serve
-```
-
-### 前端
-
-```bash
-pnpm --filter @iam/admin build
-pnpm --filter @iam/sso build
-```
-
-构建产物分别位于：
-
-- `apps/admin/dist`，默认 base 为 `/iam-admin`
-- `apps/sso/dist`，默认 base 为 `/portal`
-
-静态服务器或 APISIX 需要把后端路径按服务拆分反向代理：
-
-- `/public`、`/open`、`/internal`、`/sso`、`/auth` 代理到公共 API 服务
-- `/admin`、`/rpc` 代理到管理端 API 服务
-- `/oidc` 代理到 API，并保留外部 Host 与协议转发头
-
-### Docker
-
-仓库提供四个后端镜像构建文件，构建上下文为仓库根目录：
-
-```bash
-docker build -f apps/api/Dockerfile -t iam-api .
-docker build -f apps/admin-api/Dockerfile -t iam-admin-api .
-docker build -f apps/worker/Dockerfile -t iam-worker .
-
-docker run --rm -p 30000:30000 --env-file apps/api/.env iam-api
-docker run --rm -p 30001:30001 --env-file apps/admin-api/.env iam-admin-api
-docker run --rm -p 30003:30003 --env-file apps/worker/.env iam-worker
-```
-
-本地依赖栈：
-
-```bash
-docker compose -f docker/compose.dev.yaml up -d db redis
-```
-
-开发编排：
-
-```bash
-docker compose -f docker/compose.dev.yaml up -d
-```
-
-`docker/compose.dev.yaml` 是唯一的开发编排入口，会同时编排 PostgreSQL、Redis、APISIX、公共 API、
-管理端 API、Gateway 配置 API、worker-user-profile、worker-organization-search、worker-dashboard、SSO 前端和管理端前端。开发环境变量模板在
-`docker/.env.dev.example`，复制为 `docker/.env` 后按需替换本地端口、代理、第三方服务和开发密钥。
-如需同时启动 Loki、Grafana 和 Alloy，追加 `--profile observability`。
-
-```bash
-docker compose -f docker/compose.dev.yaml up -d --build gateway-api apisix-etcd apisix
-```
-
-若 Docker 构建需要使用宿主机代理，请在 `docker/.env` 中配置 `DOCKER_BUILD_HTTP_PROXY`、
-`DOCKER_BUILD_HTTPS_PROXY` 和 `DOCKER_BUILD_NO_PROXY`。代理监听在宿主机回环地址时，应将地址写为
-`host.docker.internal`，不能使用容器自身的 `127.0.0.1`。访问管理入口时还需确保
-`127.0.0.1` 在宿主机 `NO_PROXY` 中。Gateway API 默认直连 `http://127.0.0.1:30004`，
-`GET /health` 只证明 HTTP 就绪，不检查数据库或 APISIX。dev/prod 必须显式提供独立的
-`IAM_GATEWAY_DATABASE_URL` 只读连接及 `IAM_GATEWAY_APISIX_ADMIN_URL`、`IAM_GATEWAY_APISIX_ADMIN_KEY`。
-首次发布前准备 Enable、未删除的 `iam` Client 及 Internal Secret，`iam-admin` 不能替代。
-通过 `apikey` header 调用 `POST /validate`、`/diff`、`/apply`，JSON 提交 scope、YAML 文本和本次变量；
-旧 CLI 和根 `gateway:apisix:*` 已退役。启动和请求示例见 [Gateway README](apps/gateway/README.md)，
-只读权限、首次配置及人工恢复见[发布手册](docs/releases/apisix-gateway-release.md)。生产模板还包含
-API OIDC 和 Worker，使用前必须补齐 issuer、current/previous RS256 JWK、Redis、worker
-dashboard 凭据和限流参数。
-
-生产按运行职责组织为四份 Compose，均位于 `docker/`：
-
-| 文件                              | 服务                                                 |
-| --------------------------------- | ---------------------------------------------------- |
-| `compose.prod.data.yaml`          | PostgreSQL primary、两个 replica 与 Redis            |
-| `compose.prod.apps.yaml`          | API、Admin API、SSO、Admin、各 Worker 与 Gateway API |
-| `compose.prod.gateway.yaml`       | APISIX、etcd 及 etcd 初始化服务                      |
-| `compose.prod.observability.yaml` | Loki、Grafana 与 Alloy                               |
-
-从 `docker/.env.prod.example` 准备该主机私有的 `docker/.env`，下列命令从仓库根目录执行。
-按主机职责显式选择服务；例如分别在数据主机、应用主机和网关主机运行：
-
-```bash
-docker compose --env-file docker/.env -f docker/compose.prod.data.yaml up -d postgres-primary
-docker compose --env-file docker/.env -f docker/compose.prod.data.yaml up -d redis
-docker compose --env-file docker/.env -f docker/compose.prod.apps.yaml up -d api admin-api worker-user-profile worker-organization-search sso admin gateway-api
-docker compose --env-file docker/.env -f docker/compose.prod.gateway.yaml up -d apisix
-```
-
-PostgreSQL replicas 默认与 primary 使用相同宿主端口，应分主机部署，或先覆盖端口再同机运行。
-应用通过配置的数据库、Redis 与 APISIX 地址连接依赖；跨主机时必须填写实际可达的地址。
-生产 apps 中的 Gateway API 独立启动，发布前另行核验 APISIX 可用性与数据库权限。
-APISIX 配置和发布 manifests 集中在 `tmp/gateway-config/apisix/`，观测配置在 `docker/observability/`。
-应用 Dockerfile 和前端 `nginx.conf` 跟随各自 app，测试 Compose 继续由所属测试维护。
-
-data、apps、gateway 共用 `iam-service-prod` project，同机时共享默认网络；观测使用独立的
-`iam-service-observability` project。拆分文件不隔离同一 project 的生命周期。日常停止和删除只操作明确的服务，
-例如 `stop api`、`rm -f api`；不要对部分文件执行 `up --remove-orphans`，也不要用单份文件的 `down` 清理整个项目。
-确需完整停止并清理本机项目时，先确认该主机运行的全部服务，再用包含这些服务的完整文件集执行 `down`；
-例如本机同时部署 data、apps、gateway 时：
-
-```bash
-docker compose --env-file docker/.env -f docker/compose.prod.data.yaml -f docker/compose.prod.apps.yaml -f docker/compose.prod.gateway.yaml down
-```
-
-此操作不用于应用发布，持久化数据目录按对应维护手册管理。Compose 解析所选文件时会校验其中的必填变量，
-即使只启动某个服务，也须补齐同文件要求的配置；apps 合并后的前后端与 Gateway API 共用这份配置输入。
-观测栈的分主机启动与恢复见[运行手册](docs/releases/observability-system-logs.md)。
-
-OIDC 接入见 [docs/features/oidc/oidc-integration.md](docs/features/oidc/oidc-integration.md)，发布与回滚见
-[docs/releases/oidc-release-runbook.md](docs/releases/oidc-release-runbook.md)。
+- [部署与发布](docs/releases/deployment.md)：首次部署、生产 Compose、常规更新与兼容回退。
+- [网关管理](docs/releases/apisix-gateway-release.md)：配置 API 准备、路由发布与失败恢复。
+- [登录与会话](docs/releases/authentication-and-session.md)：密码配置、OIDC 密钥、会话与 Snapshot 维护。
+- [数据维护](docs/releases/data-maintenance.md)：Profile、Subject Access 与组织搜索修复和重建。
+- [日志与排障](docs/releases/observability-system-logs.md)：日志栈、Grafana、Trace 与采集故障。
 
 ## 🔧 调试与排障
 

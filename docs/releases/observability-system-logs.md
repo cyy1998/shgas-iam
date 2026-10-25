@@ -1,228 +1,123 @@
-# IAM 系统日志可观测性运行手册
+# 日志与排障
 
 Type: runbook
 Status: Current
-Last verified: 2026-09-21
-Next review: 2026-10-31
+Last verified: 2026-10-25
+Next review: 2026-11-25
 
-## 范围
+系统日志经 Docker stdout/stderr → Alloy → Loki → Grafana，采集带 `shgas-iam.logs.enabled=true` 的容器。
+当前包括 API、Admin API、两个 Worker、Worker dashboard 与 APISIX；Admin/SSO 前端未启用采集。
+PostgreSQL 业务审计独立保留。应用字段与脱敏规则见[Logging](../development/backend-implementation.md#logging)。
 
-该栈通过 Docker stdout/stderr、Grafana Alloy、Loki 和 Grafana 收集带有
-`shgas-iam.logs.enabled=true` 标签的 IAM 容器运行时系统日志。当前 dev/prod compose 会采集 `api`、
-`admin-api`、`worker-user-profile`、`worker-organization-search`、`worker-dashboard` 与 `apisix`。它不替代
-PostgreSQL 审计日志，也不会创建 `system_log` 表。
+## 日志栈部署
 
-前端 `admin` 和 `sso` 容器当前未打日志采集标签，仍有意排除在系统日志栈之外。
-执行前固定镜像、配置版本、目标主机及数据目录。以下命令从仓库根目录执行，`docker/.env` 表示该主机的私有环境文件；
-开发按 `.env.dev.example`、生产按 `.env.prod.example` 准备，分别核对，命令始终使用同一目标环境文件。
+从对应 `.env.dev.example` 或 `.env.prod.example` 准备私有 `docker/.env`，补齐所选 Compose 的必填项。
+生产部署一组集中 Loki/Grafana，每台运行目标容器的主机部署 Alloy。
 
-## 开发环境
+| 配置                                                     | 核对内容                                                                   |
+| -------------------------------------------------------- | -------------------------------------------------------------------------- |
+| `LOKI_IMAGE`、`GRAFANA_IMAGE`、`GRAFANA_ALLOY_IMAGE`     | 固定的兼容镜像版本                                                         |
+| `LOKI_PUSH_URL`、`GRAFANA_LOKI_URL`                      | Alloy 推送地址、Grafana 数据源地址可达；跨主机检查 DNS、路由及管理网络限制 |
+| `LOKI_HTTP_PUBLISHED_HOST`                               | 默认 loopback 不能供远端 Alloy 使用，需受控可达地址或代理                  |
+| `IAM_LOG_ENV`、`IAM_LOG_HOST`                            | 环境和每台 Alloy 的稳定主机标签                                            |
+| `LOKI_DATA_PATH`、`GRAFANA_DATA_PATH`、`ALLOY_DATA_PATH` | 实际持久化目录、权限与容量                                                 |
+| Grafana root URL、管理员凭据与 OIDC                      | 与实际访问地址及下节登录设置一致                                           |
 
-照常启动普通开发栈。Loki、Grafana 和 Alloy 位于同一个 compose 文件中，并通过 `observability` profile 按需启用：
+开发环境启动：
 
 ```bash
-docker compose --env-file docker/.env -f docker/compose.dev.yaml up -d
 docker compose --env-file docker/.env -f docker/compose.dev.yaml --profile observability up -d loki grafana alloy
 ```
 
-默认开发端口：
-
-- Loki：`http://localhost:3100`
-- Grafana：`http://localhost:30030`
-- Alloy：`http://localhost:12345`
-
-在不停止 IAM 的情况下停止可观测性栈：
-
-```bash
-docker compose --env-file docker/.env -f docker/compose.dev.yaml stop loki grafana alloy
-docker compose --env-file docker/.env -f docker/compose.dev.yaml rm -f loki grafana alloy
-```
-
-## 生产环境
-
-运行一组集中式 Loki 与 Grafana，并在每台运行 IAM 目标容器的主机上运行一个 Alloy agent。
-启动前准备 Grafana root URL、管理员凭据及下文 OIDC 配置；按主机填写 Alloy host 标签和 Loki 推送地址。
-Compose 的必填项以[生产编排](../../docker/compose.prod.observability.yaml)为准，不能只设置下表中的部分变量。
-
-在中心主机启动 Loki/Grafana，在各 IAM 主机启动 Alloy：
+开发默认 Loki `http://localhost:3100`、Grafana `http://localhost:30030`、Alloy `http://localhost:12345`。
+生产分别在中心主机和各采集主机启动：
 
 ```bash
 docker compose --env-file docker/.env -f docker/compose.prod.observability.yaml up -d loki grafana
 docker compose --env-file docker/.env -f docker/compose.prod.observability.yaml up -d alloy
 ```
 
-重要环境变量：
+Loki 默认保留期 30 天（`720h`）；当前 Compose 未透传 `LOKI_RETENTION_PERIOD`，只改宿主 `.env` 不会生效。
+需覆盖时先落实配置接线并检查容器实际生效值，见[问题 #262](https://github.com/cyy1998/shgas-iam/issues/262)。
+宿主另行监控磁盘容量，采集失败告警不能代替容量告警。
 
-- `LOKI_IMAGE`、`GRAFANA_IMAGE`、`GRAFANA_ALLOY_IMAGE`：为内部镜像仓库覆盖固定的默认镜像。
-- `LOKI_PUSH_URL`：Alloy 推送端点，例如 `http://loki.internal:3100/loki/api/v1/push`。
-- `LOKI_HTTP_PUBLISHED_HOST`：中心 Loki 默认只绑定 `127.0.0.1`；跨主机采集需由部署方提供受控可达的地址或代理。
-  核对各 Alloy 主机的 DNS、路由和访问边界，不能把仅本机可达的默认端口当成远端推送入口。
-- `GRAFANA_LOKI_URL`：Grafana 中 Loki 数据源的 URL。
-- `IAM_LOG_ENV`：Loki `env` 标签，生产 compose 中默认为 `prod`。
-- `IAM_LOG_HOST`：本地 Alloy agent 的稳定主机标签。
-- `LOKI_DATA_PATH`、`GRAFANA_DATA_PATH`、`ALLOY_DATA_PATH`：持久化数据目录。
+**完成检查：** 用同一 Compose 的 `ps` 检查服务稳定运行；Grafana 的 `iam-loki` 数据源和三个 dashboard 加载成功；
+按实际环境、主机和 service 查询新日志，例如 `{env="prod", host="prod-host-01"} | json`，用一条已知请求确认采集到达。
+启用 OIDC 时验证真实登录与 dashboard 权限，生产还要验证通知路由。失败按下文排障，修复后重验。
 
-Loki 配置中的默认保留期为 30 天（`720h`）。当前 dev/prod Compose 未向 Loki 容器透传 `LOKI_RETENTION_PERIOD`，
-仅修改宿主 `.env` 不会完成保留期覆盖。接线修复与生效核验方式见[讨论 #262](https://github.com/cyy1998/shgas-iam/issues/262)。
-有部署侧额外注入时，应独立核对容器接收值和 Loki 的实际配置；未取得生效证据时按默认值记录，不能宣称覆盖已完成。
-磁盘使用率与水位告警由宿主平台监控；随附采集失败告警不能替代容量监控。
+## Grafana 登录与告警
 
-### 启动后的完成检查
+通过现有 Client 管理流程创建 `grafana` confidential OIDC Client：
 
-1. 用相同 Compose 文件和环境执行 `ps`，确认目标服务持续运行，没有反复重启；进程存在仅是第一步。
-2. 在 Grafana 检查 `iam-loki` 数据源及三个下述 dashboard 已加载，选取本次部署时间窗口。
-   对每个预期主机和 service 查询新日志，例如 `{env="prod", host="prod-host-01"} | json`，
-   对照一条已知请求确认新日志到达，不能用旧日志或空图证明采集成功。
-3. 启用 OIDC 时完成一次真实登录，核对 issuer、Token/UserInfo 入口和实际 dashboard 权限；生产还须验证实际告警通知路由。
-4. 改动 trace 链路时执行[Trace Smoke](#trace-smoke)。任一检查失败，按下面的恢复步骤处理后重验；保留缺失主机、时间窗口和安全诊断。
+- Redirect URI 为 `${GRAFANA_ROOT_URL}/login/generic_oauth`，scope 为 `openid profile`。
+- 经[授权读取](../features/admin/client-sso-configuration.md)取得 SSO Secret，注入 `GRAFANA_OIDC_CLIENT_SECRET`。
+- 设置 `GRAFANA_OIDC_ENABLED=true`、`GRAFANA_AUTH_ANONYMOUS_ENABLED=false`。
+- `GRAFANA_OIDC_AUTH_URL`、`GRAFANA_OIDC_TOKEN_URL`、`GRAFANA_OIDC_USERINFO_URL` 分别指向同一 issuer 的 `/auth`、`/token`、`/me`。
+  浏览器与 Grafana 容器都须可达该入口，可使用不同 DNS 解析，但请求 authority 必须命中同一 Gateway issuer。
+- 当前 login/name/email attribute path 保持 `preferred_username`、`name`、`preferred_username`，不要假设 IAM 已签发 email claim。
 
-### 停止、回退与数据恢复
-
-停止 Loki、Grafana 或 Alloy 只停止相应处理，不恢复旧镜像、配置或数据。IAM 仍可写 stdout/stderr，
-但停采期间的日志能否补齐受 Docker 日志保留与采集位置影响，恢复后需独立核对缺口。
-
-- 发布前记录镜像 digest、配置版本和挂载目录，为 Loki/Grafana 数据取得可恢复的一致备份；备份方式须适配目标存储与版本。
-- 配置或镜像发布失败时，停止受影响组件，恢复已知兼容的配置与镜像后重新创建服务；保留数据卷，
-  不用删卷或 `down -v` 代替回退。新版已改写数据格式时，先核对旧版兼容性，不能直接降级。
-- 只有确需数据恢复且版本、备份范围和恢复点均明确时，停止相关写入并按存储恢复流程恢复目录；
-  记录恢复点之后的数据缺口。缩短保留期已删除的日志不能靠调大参数找回。
-- 恢复后重做启动完成检查、适用 Trace Smoke 和告警验证，分别记录服务恢复与日志缺口；
-  检查仍失败时保留现场和备份，不把停止服务或容器启动成功标为恢复完成。
-
-## Trace 发布前置
-
-当前 Alloy 将 APISIX span 送入 debug exporter，没有配置持久化 trace backend；本页 trace 验收证明日志关联。
-
-APISIX 与后端 trace 关联依赖以下条件同时满足：
-
-- APISIX manifest 保留 `opentelemetry` plugin metadata，且设置 `set_ngx_var: true`，使
-  `$opentelemetry_trace_id`、`$opentelemetry_span_id` 和 `$opentelemetry_context_traceparent` 可进入 access log。
-- APISIX 容器配置 `APISIX_OTEL_COLLECTOR_ENDPOINT`，开发 compose 默认指向 `alloy:4318`。
-- Alloy 配置启用 `otelcol.receiver.otlp "apisix"`，并开放 OTLP HTTP receiver；开发 compose 默认发布
-  `ALLOY_OTLP_HTTP_PUBLISHED_PORT=4318`。
-- APISIX access log JSON 字段包含 `traceId`、`spanId` 和 `traceparent`；缺失 OpenTelemetry 变量时字段保持空字符串或等价缺失值。
-- 后端按 `traceparent`、`x-b3-traceid`、`x-trace-id` 的优先级解析 `traceId`，并只记录
-  `traceparent` 中的 32 位 trace-id，不记录完整 header 原文。
-
-发布 APISIX 或 Alloy 变更前，先确认 `gateway` manifest 校验与可观测性 compose 配置都来自同一变更集。直接绕过
-APISIX 访问后端且没有 trace header 的请求，应在后端系统日志和审计日志中保留 `traceId = null` 或等价缺失值，
-不得由后端随机生成 traceId。
-
-## Grafana OIDC
-
-通过现有客户端注册表或管理端客户端管理流程，创建一个客户端编码为 `grafana` 的 confidential IAM OIDC client。
-
-使用以下设置：
-
-- 客户端类型：confidential。
-- Redirect URI：`${GRAFANA_ROOT_URL}/login/generic_oauth`。
-- Scopes：`openid profile`。
-- 经授权且审计读取当前 SSO Secret，通过 `GRAFANA_OIDC_CLIENT_SECRET` 注入；普通详情不返回 Secret，响应丢失可重新读取。
-  具体权限与轮换边界见[Client 配置契约](../features/admin/client-sso-configuration.md)，不要提交 Secret 到仓库。
-- 从 IAM OIDC issuer 配置 `GRAFANA_OIDC_AUTH_URL`、`GRAFANA_OIDC_TOKEN_URL` 和 `GRAFANA_OIDC_USERINFO_URL`。
-- 除非 IAM 开始签发 `email` claim，否则 Grafana 的 login/name/email attribute path 保持为 `preferred_username`、`name` 和 `preferred_username`。
-
-本地调试时，可通过 `docker/.env` 启用 Grafana OIDC：
-
-```dotenv
-GRAFANA_AUTH_ANONYMOUS_ENABLED=false
-GRAFANA_OIDC_ENABLED=true
-GRAFANA_OIDC_CLIENT_SECRET=<secret>
-```
-
-然后从统一开发 compose 文件重新创建 Grafana：
+开发默认 localhost 与 host.docker.internal 的 URL 组合不保证双入口 issuer 一致；按实际部署覆盖三项 URL 并配置容器解析。
+更新后重建 Grafana，例如开发环境：
 
 ```bash
 docker compose --env-file docker/.env -f docker/compose.dev.yaml --profile observability up -d --force-recreate grafana
 ```
 
-显式设置 `GRAFANA_OIDC_AUTH_URL`、`GRAFANA_OIDC_TOKEN_URL`、`GRAFANA_OIDC_USERINFO_URL`，
-分别使用同一已配置 issuer 的 `/auth`、`/token`、`/me`。该入口必须同时对浏览器和 Grafana 容器可达；
-容器 DNS/网络可以使用不同解析，但请求 authority 必须命中同一受控 Gateway 入口，不能把同一次授权分到不同 issuer。
+完成一次登录和 UserInfo 获取，确认实际授权；失败时按[OIDC 双入口](authentication-and-session.md#oidc-双入口配置)检查 URI、issuer、Secret 和网络。
+Grafana 自己负责 dashboard/datasource 授权，Admin 只提供链接，不通过 iframe 或 Admin API 代理查询。
 
-开发 compose 的默认 URL 仍分别使用 localhost 和 host.docker.internal；当前 Gateway 按配置的 host/authority 选择入口，
-这些默认值不保证可直接用于双入口 OIDC。先按实际部署覆盖三项 URL、配置容器解析，再核对 Discovery、完整登录及 UserInfo；
-不要以容器能连通某个端口代替 issuer 一致性检查。入口设置见[OIDC 发布手册](oidc-release-runbook.md)。
+Provisioning 位于 [grafana/provisioning](../../docker/observability/grafana/provisioning/)。
+随附告警覆盖 API/Admin API service error spike、APISIX 5xx、API OIDC server error 和采集失败；Worker 积压需按[数据维护](data-maintenance.md#周期任务与监控)补充。
+开发默认 null webhook；生产用环境管理的 provisioning 替换 contact point，并实际测试通知。
 
-Grafana 自己负责最终的 dashboard 和 datasource 授权。管理端前端只链接到 Grafana，绝不通过 iframe 嵌入。`admin-api` 不代理 Loki 查询。
+## 查询错误与关联请求
 
-## Provisioning
+| Dashboard                                         | 使用方式                                                  |
+| ------------------------------------------------- | --------------------------------------------------------- |
+| `IAM Overview` / `iam-overview`                   | 选时间窗口，从错误率、4xx/5xx、耗时和活跃服务判断异常范围 |
+| `IAM Error Center` / `iam-error-center`           | 按服务、事件、错误类型/代码聚合，找到相关请求             |
+| `IAM Request Drilldown` / `iam-request-drilldown` | 使用 requestId 或 traceId 查询关联详情与网关/后端时间线   |
 
-Grafana provisioning 文件位于 `docker/observability/grafana/provisioning/`。
+OIDC 日志位于 `service=api`：`oidc_server_error` 为依赖/服务失败，`oidc_protocol_error` 为已知协议拒绝。
+Alloy 标签仅用 `env`、`service`、`component`、`level`、`host`，不把请求 ID 或业务标识作为标签；Loki 自动 `service_name` 发现已禁用。
+Grafana deep link 仅携带 env、service、requestId、traceId 和时间范围，不放业务查询参数、用户资料、Token 或请求原文。
 
-- Datasource UID：`iam-loki`。
-- Dashboard UID：`iam-overview`、`iam-request-drilldown`、`iam-error-center`。
-- 告警规则覆盖核心 service error spike、APISIX 5xx spike、API OIDC server error，以及采集失败。
-  当前 service error spike 规则聚焦 `api` 和 `admin-api`；worker 日志已进入 Loki 与 dashboard，
-  但专门告警需按队列运行指标或 worker 事件另行补充。
+## Trace 关联检查
 
-开发环境告警默认使用 null webhook，以避免本地通知噪音。生产通知路由应通过环境管理的 Grafana provisioning 替换默认 contact point。
+修改 APISIX OpenTelemetry、Alloy、日志格式、dashboard 或审计 trace 查询时执行。
+当前 Alloy 使用 debug exporter，没有持久化 trace backend；这里检查日志关联。
 
-## Dashboard 工作流
+执行前确认 manifest 的 `opentelemetry` metadata 设置 `set_ngx_var: true`，APISIX 使用正确的
+`APISIX_OTEL_COLLECTOR_ENDPOINT`，Alloy 开启 `otelcol.receiver.otlp "apisix"` 和 OTLP HTTP receiver。
+开发通常指向 `alloy:4318`，宿主映射由 `ALLOY_OTLP_HTTP_PUBLISHED_PORT` 控制。
+APISIX access log 应包含 traceId、spanId、traceparent；配置与 Gateway 发布使用配对版本。
 
-使用已 provision 的 dashboard，按三步排查问题：
+1. 带合法 `traceparent` 经 APISIX 访问受控 IAM API，在 Loki 用 requestId/traceId 找到 `gateway.request.completed`。
+2. 确认其 traceId、spanId、traceparent、requestId、statusCode、durationMs、upstream，并找到同请求的 API/Admin API 日志。
+3. 若涉及审计关联，执行受控审计动作，检查 `audit_log.request_id`、`audit_log.trace_id` 与请求一致。
+4. 不带 traceparent 再请求 Gateway，确认 APISIX 创建上下文并传给上游；在 Request Drilldown 查看完整网关/后端时间线。
 
-- `IAM Overview`：从这里开始判断当前时间窗口是否健康。第一行汇总总日志量、错误日志、HTTP 4xx/5xx、APISIX 5xx、请求耗时和活跃服务。趋势面板说明哪个服务或状态族发生变化。
-- `IAM Error Center`：当 Overview 显示错误时使用。它按服务、事件和错误类型/代码聚合错误，然后展示带 request 和 trace 标识的近期样例，便于下钻。
-- `IAM Request Drilldown`：用于指定 `requestId` 或 `traceId`。它展示关联详情、请求级汇总信号、结构化时间线、可读时间线，以及用于留证的原始 JSON 日志。
+缺失时检查 plugin metadata、日志格式、OTLP 网络与 Alloy receiver，再重验。
+直接绕过 APISIX 且无 trace header 的后端请求可以没有 traceId，后端不应随机补造；上下文规则见[后端架构](../architecture/backend-architecture.md#请求审计与可观测上下文)。
 
-Grafana data link 和管理端深链只能携带技术关联字段：
+## 采集故障与恢复
 
-- `env`
-- `service`
-- `requestId`
-- `traceId`
-- time range
+| 现象                    | 排查与恢复                                                                    |
+| ----------------------- | ----------------------------------------------------------------------------- |
+| 某主机/service 无新日志 | 核对容器采集标签、Docker 日志、Alloy 状态、env/host 筛选和 Loki 推送连通性    |
+| Grafana 查不到日志      | 检查时间范围、`iam-loki` 地址、实际 Loki 状态；不要把旧日志或空图视为采集正常 |
+| OIDC 登录失败           | 检查同 issuer 三个 URL、容器解析、redirect URI 与 Secret，修正后重建 Grafana  |
+| 无通知或容量告警        | 核对 production contact point 和实际发送；磁盘及 Worker 积压告警另行配置      |
 
-不要把用户名、用户 ID、手机号、client secret、token、审计详情、业务查询字符串、堆栈、完整请求 URL、请求体或响应体放进 dashboard link。
+停止日志组件只停止相应处理。开发环境示例：
 
-## Trace Smoke
+```bash
+docker compose --env-file docker/.env -f docker/compose.dev.yaml stop loki grafana alloy
+docker compose --env-file docker/.env -f docker/compose.dev.yaml rm -f loki grafana alloy
+```
 
-发布或调整 APISIX OpenTelemetry、Alloy OTLP receiver、日志格式、dashboard 或审计 trace 查询时，至少执行以下 smoke：
-
-1. 带合法 `traceparent` 访问一个经过 APISIX 的 IAM API endpoint，记录请求使用的 `X-Request-Id`。
-2. 在 Loki 中查询 `service="apisix"` 的 gateway access log，确认同一请求包含 `event="gateway.request.completed"`、
-   `traceId`、`spanId`、`traceparent`、`requestId`、`statusCode`、`durationMs` 和 upstream 字段。
-3. 查询 backend 日志，确认同一 `requestId` 或 `traceId` 可以找到 `api` 或 `admin-api`
-   的 request log。
-4. 触发一条会写审计的操作，确认 `audit_log.request_id` 与 `audit_log.trace_id` 可与 gateway/backend 日志关联。
-5. 不带 `traceparent` 再访问一次 gateway，确认 APISIX OpenTelemetry 创建 trace context，并将 trace 字段传给上游。
-6. 在 `IAM Request Drilldown` 使用 `requestId` 或 `traceId` 打开请求详情，确认时间线覆盖 gateway 和后端日志。
-
-证据留存只记录 requestId、traceId、服务名、时间窗口、查询表达式摘要和截图或命令结果摘要。不得保存
-Authorization header、Cookie、请求体、响应体、完整业务 URL query、token、client secret、验证码或审计 details 原文。
-
-## 日志契约
-
-系统日志使用如下 JSON 字段：
-
-- `event`：稳定的小写点分事件名。
-- `sourceApp`：`iam-api`、`iam-admin-api`、`iam-worker` 或 `apisix`。
-- `requestId`：来自 `X-Request-Id` 的主要关联 ID。
-- `traceId`：存在时记录标准 trace context 的 trace id。
-- `spanId`：gateway access log 中记录 APISIX OpenTelemetry span id。
-- `traceparent`：gateway access log 中记录 APISIX 传递给上游的 traceparent。
-- `method`、`path`、`route`、`statusCode`、`durationMs`。
-- `clientIp`、`userAgent`。
-- `errorName`、`errorCode`、`errorMessage`、`source`。
-
-不要把 requestId、traceId、route、userId、username、clientIp 或 userAgent 放入 Loki 标签。Alloy 标签仅限于 `env`、`service`、`component`、`level` 和 `host`。Loki `service_name` 自动发现已禁用，以保持标签集合显式可控。
-
-事件名不得包含请求 ID、用户标识、client code、动态业务值或原始 URL。
-
-## 敏感数据规则
-
-系统日志不得采集请求体或响应体。
-
-应用 logger 在输出到 stdout 前会脱敏常见敏感字段：
-
-- `authorization`、`cookie`、`set-cookie`
-- `password`、`token`、`accessToken`、`idToken`、`refreshToken`
-- `secret`、`clientSecret`、`privateKey`
-- 验证码和 OIDC authorization code
-
-Alloy 会对常见敏感 key name 执行二次脱敏。APISIX 访问日志不包含 body、敏感 header 或原始查询字符串。
-
-管理端深链与 Grafana data link 统一遵守[Dashboard 工作流](#dashboard-工作流)中的字段限制。
-
-OIDC 现在随 API 写入 service=api。结构化 oidc_server_error/error 用于依赖与服务失败，oidc_protocol_error/warn 用于已知协议拒绝；只记录安全 code/outcome/path/status，不记录原始请求或凭据。
+生产使用对应 Compose，按本机服务选择目标。IAM 继续写 stdout/stderr，停采期间能否补齐取决于 Docker 日志保留及采集位置。
+更新镜像/配置前准备已知兼容版本和 Loki/Grafana 一致备份。发布失败时停止受影响组件，恢复兼容版本并重建，保留数据卷，不用删卷或 `down -v` 回退。
+若新版已改写数据格式，先确认兼容性；确需恢复数据时停止相关写入，按匹配存储/版本的恢复流程恢复目录并核对数据缺口。
+缩短保留期已删除的日志不能通过调大参数找回。
+恢复后重做新日志查询、适用 Trace 检查、登录和通知检查；失败时保留现场与备份继续修复。

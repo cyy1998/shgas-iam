@@ -64,7 +64,7 @@ readSecret 只读取并记审计，不执行 Snapshot 失效，不作为缓存�
 确认提交后会话终止未确认时返回 `ADMIN_MUTATION_COMMITTED`；显式重复删除允许返回 no-op 并重试残余 ClientSession。
 Unknown COMMIT 只保守失效并保留原错误，不执行删除后的会话终止。
 会话终止的作用边界与报告见[会话管理](session-management.md#精确撤销与未完成批次)，
-传播与会话作用的人工恢复见[统一维护手册](../../releases/unified-session-maintenance.md#放流与人工恢复责任)。
+传播与会话作用的人工恢复见[统一维护手册](../../releases/authentication-and-session.md#恢复边界)。
 
 ## 管理权限与 Secret
 
@@ -94,6 +94,6 @@ readSecret 直接观察 PostgreSQL 当前行，在独立 UnitOfWork 提交 `admi
 只有明确修复流程可确认恢复。失效失败窗口中旧 Secret 仍可能通过认证，数据库重读不修复缓存。
 Snapshot 观察与传播契约见[Client Snapshot](../sso/client-snapshot-contract.md)。
 
-当前传播修复见[统一维护手册](../../releases/unified-session-maintenance.md#新-snapshot-的定向修复与全量恢复)；旧配置迁移按[历史工具入口](../../development/commands.md#历史数据维护工具)恢复匹配版本流程。
+当前传播修复见[统一维护手册](../../releases/authentication-and-session.md#client-snapshot-修复)；旧配置迁移按[历史工具入口](../../development/commands.md#历史数据维护工具)恢复匹配版本流程。
 权限、事务审计、敏感响应、并发读取/轮换及页面不自动重放的证明范围见
 [架构验证归属](../../architecture/architecture-verification.md)。

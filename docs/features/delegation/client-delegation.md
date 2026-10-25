@@ -169,7 +169,7 @@ Internal 消费方与服务端同步切换请求契约；旧 writer、旧 reader
 
 本节的清理及空模型验收只适用于尚未执行该项迁移的旧委托来源。已经使用 `client_delegation` 且 journal
 已登记该项的环境跳过本节清理，保留已有全部 Client 委托。升级到当前完整制品还包含权限点退役，须继续执行
-[Profile v4 协调切换](../../releases/user-profile-maintenance.md#权限点退役的协调切换)的停流、重建、双门禁及配对验收；
+[Profile v4 协调切换](https://github.com/cyy1998/shgas-iam/blob/5feeec63992a89c4f407b5c424b6177184ba6098/docs/releases/user-profile-maintenance.md#权限点退役的协调切换)的停流、重建、双门禁及配对验收；
 不能仅完成本节的旧委托 DDL 就开放当前协议入口。
 
 1. 冻结 Admin、SSO、Internal 的委托写入与读取流量，排空在途请求并停止全部旧 API/Admin API 副本。

@@ -26,7 +26,7 @@ Worker 只编排各 owner 的公开维护能力；离线全量清理按显式 na
 包位置和公开能力见[仓库地图](../architecture/repository-map.md#共享-packages)，
 依赖与接线见[后端架构](../architecture/backend-architecture.md#核心依赖方向)。
 生命周期选择见 [ADR-0035](0035-unify-user-and-client-session-lifecycles.md)，当前维护见
-[统一维护手册](../releases/unified-session-maintenance.md)。Custom SSO 不再注入 ORCAS 外部能力，退役边界见
+[统一维护手册](../releases/authentication-and-session.md)。Custom SSO 不再注入 ORCAS 外部能力，退役边界见
 [ADR-0040](0040-retire-orcas-custom-sso-integration.md)。
 
 历史来源：[ADR-0028 原文](https://github.com/cyy1998/shgas-iam/blob/73315e4cef6f96dd79b29e18f74d68af30e559ec/docs/adr/0028-extract-session-and-grant-state.md)、[ADR-0035 原文](https://github.com/cyy1998/shgas-iam/blob/73315e4cef6f96dd79b29e18f74d68af30e559ec/docs/adr/0035-unify-user-and-client-session-lifecycles.md)。原始决定与后续修订按各版本追溯。

@@ -166,8 +166,8 @@ Gateway API：`pnpm --filter @iam/gateway-apisix start`；开发监听使用 `de
 
 当前会话和 Snapshot 维护入口为 Worker `session:clear:inventory`、`session:clear`、`session:clear:verify`、`client-snapshot:repair`、`client-snapshot:verify`。
 同名 scripts 通过 `bun run` 默认读取 `apps/worker/.env`，已有进程环境变量优先。
-资源、当前布局、namespace、停流/排空与失败处理见[统一维护手册](../releases/unified-session-maintenance.md)。
-Profile 重建及 Subject Access 恢复见[Profile 维护手册](../releases/user-profile-maintenance.md)；
+资源、当前布局、namespace、停流/排空与失败处理见[统一维护手册](../releases/authentication-and-session.md)。
+Profile 重建及 Subject Access 恢复见[Profile 维护手册](../releases/data-maintenance.md)；
 一次性升级工具集中在[历史数据维护工具](#历史数据维护工具)，不用于当前代日常恢复。
 
 - `pnpm dev`
@@ -204,11 +204,11 @@ Profile 重建及 Subject Access 恢复见[Profile 维护手册](../releases/use
   [Organization Filter DSL](../features/organization-search/filter-dsl.md#版本切换与维护)。
 - 组织搜索补偿：`pnpm --filter @iam/worker organization-search:repair -- --limit 500 --deadline-ms 30000`。
   两个持久阶段的回收、报告、重复执行和外部周期责任见
-  [组织搜索维护](../releases/organization-search-maintenance.md#日常补偿与外部调度)。
+  [组织搜索维护](../releases/data-maintenance.md#组织搜索日常修复)。
 - 组织搜索全量只读核验：`pnpm --filter @iam/worker organization-search:verify -- --deadline-ms 30000`。
   只使用 `IAM_WORKER_DATABASE_URL`，同一 `REPEATABLE READ READ ONLY` transaction 完整观察源组织、闭包、文档、
   删除墓碑和两阶段工作；`status: passed` 且退出 0 才通过数据门禁。没有 schema 选择、部分 batch 或入队副作用。
-  首次、升级、失败重跑与人工放流见[组织搜索维护](../releases/organization-search-maintenance.md)。
+  首次、升级、失败重跑与人工放流见[组织搜索维护](../releases/data-maintenance.md#组织搜索全量重建)。
 
 统一格式与规则命令适用于根目录和所有 workspace，例如 `pnpm --filter @iam/admin format:check`：
 
@@ -352,7 +352,7 @@ diagnostics 或 cleanup。命令名不表示已经接入 CI provider，也不授
 E2E lifecycle 的详细契约分别由本页后续专用资源说明和 [测试编排架构](../architecture/testing-architecture.md) 持有。
 
 统一 Snapshot 通过 Core Redis、Admin composition 和 Worker CLI 验证；最终 schema/数据门禁分别使用 DB/Worker PostgreSQL。
-当前维护步骤见[统一维护手册](../releases/unified-session-maintenance.md)，旧工具操作见[历史数据维护工具](#历史数据维护工具)；测试不提供目标环境操作授权。
+当前维护步骤见[统一维护手册](../releases/authentication-and-session.md)，旧工具操作见[历史数据维护工具](#历史数据维护工具)；测试不提供目标环境操作授权。
 
 聚合验证的证明边界见[默认验证与交付](../architecture/testing-architecture.md#默认验证与交付)。
 候选结果和平台验收状态记录在对应 issue 或验收记录中。
@@ -428,7 +428,7 @@ pnpm --filter @iam/api exec bun --no-env-file run test-integration/privilege-ret
 fixture 固定旧制品来源/hash，建立真实旧 Profile 和协议状态，经正式迁移、新 Worker 全量重建和独立双 gate，
 再从同 issuer 新 API 使用旧凭据，并在 smoke 关闭后再次完整核验。退出 0 且完整 report 为 passed 才表示本次演练通过；
 阶段部分成功、资源关闭或清理失败均不算通过。证据目录独立于 Browser Integration 的可清理输出。
-本地演练不证明目标环境停流、备份、第三方旧副本处理或生产放流；正式维护按[Profile 手册](../releases/user-profile-maintenance.md#权限点退役的协调切换)。
+本地演练不证明目标环境停流、备份、第三方旧副本处理或生产放流；正式维护按[Profile 手册](https://github.com/cyy1998/shgas-iam/blob/5feeec63992a89c4f407b5c424b6177184ba6098/docs/releases/user-profile-maintenance.md#权限点退役的协调切换)。
 
 ## OIDC 协议套件
 
@@ -572,16 +572,16 @@ Hook 可以被本地绕过，自动 merge commit 也不保证触发 pre-commit�
   `pnpm --filter @iam/worker run user-profile:repair -- --subject-access-only --limit <positive-integer>`。
   该模式依次执行 PostgreSQL stale pending transition intent 回收、Redis transition recovery 与 authority repair，
   不执行 User Profile maintenance。它会更新 PostgreSQL transition intent，不局限于 Redis indexed backlog；所需权限、
-  stale threshold、调度与失败恢复见[Profile 维护手册](../releases/user-profile-maintenance.md#subject-access-恢复与外部调度)。
+  stale threshold、调度与失败恢复见[Profile 维护手册](../releases/data-maintenance.md#subject-access-恢复)。
 - User Profile 全量重建与版本无关 readiness：先运行
   `pnpm --filter @iam/worker user-profile:backfill` 派发既有 versioned rebuild jobs；批量大小通过
   `IAM_WORKER_USER_PROFILE_BACKFILL_BATCH_SIZE=<positive-integer>` 配置。
   等待 Worker 收敛并按需运行 `user-profile:repair` 后，依次运行
   `pnpm --filter @iam/worker user-profile:verify-postgres -- [--batch-size <positive-integer>]` 和
   `pnpm --filter @iam/worker user-profile:verify-redis -- [--batch-size <positive-integer>]`。Backfill 的 `enqueued`
-  只表示已派发，不表示 readiness 已通过；窗口、两 gate 和放流见[Profile 维护手册](../releases/user-profile-maintenance.md#全量重建与恢复)。
+  只表示已派发，不表示 readiness 已通过；窗口、两 gate 和放流见[Profile 维护手册](../releases/data-maintenance.md#profile-全量重建)。
 - 当前 Snapshot repair/verify 与 unified 状态维护：使用 Worker `client-snapshot:repair`、`client-snapshot:verify`、
-  `session:clear:inventory`、`session:clear`、`session:clear:verify`，完整停流/资源/参数/失败重跑边界见[统一维护手册](../releases/unified-session-maintenance.md)。
+  `session:clear:inventory`、`session:clear`、`session:clear:verify`，完整停流/资源/参数/失败重跑边界见[统一维护手册](../releases/authentication-and-session.md)。
   旧 `client-runtime:*`、Provider 维护、epoch 和扩展期 Client 升级命令已退役。
 - Admin frontend：`pnpm --filter @iam/admin <dev|build|lint|test|test:unit|typecheck|format>`
 - SSO frontend：`pnpm --filter @iam/sso <dev|build|lint|test|test:unit|typecheck|format>`

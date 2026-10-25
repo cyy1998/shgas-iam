@@ -28,6 +28,6 @@ Profile 构建触及的记录，不能被单个 builder 的守卫替代；异常
 
 当前领域语言见[CONTEXT](../../CONTEXT.md)，写入和发布边界见
 [后端架构](../architecture/backend-architecture.md#admin-同对象写入规范)，维护与完整校验见
-[Profile 手册](../releases/user-profile-maintenance.md)。
+[Profile 手册](../releases/data-maintenance.md)。
 
 历史来源：[ADR-0011 原文](https://github.com/cyy1998/shgas-iam/blob/73315e4cef6f96dd79b29e18f74d68af30e559ec/docs/adr/0011-model-employment-as-an-immutable-tenure-lifecycle.md)、[ADR-0023 原文](https://github.com/cyy1998/shgas-iam/blob/73315e4cef6f96dd79b29e18f74d68af30e559ec/docs/adr/0023-retire-legacy-maintenance-support.md)。原始决定与后续修订按各版本追溯。

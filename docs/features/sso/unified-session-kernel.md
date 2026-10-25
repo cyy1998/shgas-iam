@@ -49,7 +49,7 @@ amr 与可选 origin。时间由 Redis 确定：`authTime`、`createdAt`、`expi
 
 根与 ClientSession 的 TTL 独立配置，默认各 86400 秒；Custom/OIDC Token 的签发 TTL 也单独配置。
 新根期限固定，应用关系的建立/延长受该根上限裁剪。运行时环境变量与跨服务配置核对见
-[维护手册](../../releases/unified-session-maintenance.md#资源与维护窗口)。
+[维护手册](../../releases/authentication-and-session.md#会话清理)。
 
 根 bearer 与内部 ID 分别经过 `resolveUserSession` 和 `resolveUserSessionById`。管理/协议内部使用 ID 时仍须执行自身认证、
 归属与账号许可检查，ID 不是 Cookie 或 bearer。`resolveClientSessionForUse` 必须带原 userSessionId、clientSessionId、
@@ -66,7 +66,7 @@ clientId，原子观察原根与原实例，不读取当前关系槽替换目标
 ## 原子生命周期与隔离
 
 在线生命周期只处理当前 unified 模型，不探测或转换旧会话。namespace 与离线维护范围见
-[维护手册](../../releases/unified-session-maintenance.md#所有权与明确范围)。
+[维护手册](../../releases/authentication-and-session.md#会话清理)。
 
 同根同 Client 的授权通过一次 Redis 执行新建或复用 ClientSession。有效关系保持 ID 和原始身份，在同一原子操作更新
 protocol 与授权时间，并使用 `min(root.expiresAt, max(old.expiresAt, redisNow + clientTtl))` 更新期限。失效后创建新 ID。

@@ -138,7 +138,7 @@ Independent client 自建的本地会话由第三方负责，IAM 撤销不等于
 [审计契约](../features/audit/audit-logging.md)。
 
 Organization Search 按组织异步发布，独立维护 schema、补偿与一致只读全量核验。
-首次、升级及全量恢复的人工窗口见[组织搜索维护](../releases/organization-search-maintenance.md)。
+首次、升级及全量恢复的人工窗口见[组织搜索维护](../releases/data-maintenance.md#组织搜索全量重建)。
 
 ### 哪些状态可以重建
 
@@ -164,7 +164,7 @@ Redis 中同时存在可重建缓存和实时权威状态，故障后必须按�
 
 当前 full repair/verify 只处理当前 Snapshot namespace，不清理或验证旧 Runtime key。
 旧部署、旧备份的升级迁移必须另行安排，不能混跑旧 reader/writer。
-完整步骤见[统一维护手册的 Snapshot 恢复流程](../releases/unified-session-maintenance.md#新-snapshot-的定向修复与全量恢复)；
+完整步骤见[统一维护手册的 Snapshot 恢复流程](../releases/authentication-and-session.md#client-snapshot-修复)；
 首次切换的历史边界见[历史 hard-cutover 手册](https://github.com/cyy1998/shgas-iam/blob/73315e4cef6f96dd79b29e18f74d68af30e559ec/docs/releases/client-runtime-snapshot-hard-cutover.md)。
 
 ## 一致性边界
@@ -197,7 +197,7 @@ API、Admin、Custom SSO 与 OIDC 在每个受影响接口首次解析出可信�
 本次调用的成功、拒绝或暂态失败结果随之固定：已获许可的在途调用不复查账号状态，下一次调用重新检查。
 Kernel 只管理对象生命周期，Projection 复用该许可。
 
-重新启用账号不会恢复旧代。恢复步骤见 [Profile 与 Subject Access 维护](../releases/user-profile-maintenance.md)。
+重新启用账号不会恢复旧代。恢复步骤见 [Profile 与 Subject Access 维护](../releases/data-maintenance.md)。
 
 ### 数据库写入与发布：提交后失败不代表回滚
 
@@ -252,17 +252,17 @@ Organization Search 的源 mutation 与变化事件同事务提交，提交后�
 [自研应用](../../docker/compose.prod.apps.yaml)、[APISIX 与 etcd](../../docker/compose.prod.gateway.yaml)
 和[观测服务](../../docker/compose.prod.observability.yaml)。自研应用包含 API、Admin API、前端、各 Worker 与 Gateway 配置 API。
 数据、应用和 Gateway 编排保留相同的 `iam-service-prod` project；观测使用独立 project。
-部署入口、按主机选服务及停止清理约定见 [README](../../README.md#docker)。
+部署入口、按主机选服务及停止清理约定见 [部署与发布](../releases/deployment.md)。
 这些文件是部署输入，不能单独证明生产 profile、网络、TLS、备份恢复或外部依赖已经验收。
 
-真实环境的 readiness、停流、旧实例 drain、恢复和放流证据由发布负责人取得。
+发布负责人在真实环境核验 readiness、停流、旧实例 drain、恢复和放流状态。
 本地测试与拓扑图不能代替现场验收；代码交付也不表示目标环境已经切换。
 
 ### 日志与 Trace
 
 [Alloy 配置](../../docker/observability/alloy/iam-logs.prod.alloy)采集带相应标签的 Docker 日志并写入 Loki。
 APISIX OTLP span 进入 Alloy 后使用 debug exporter，因此不能据此宣称已有持久化 trace backend。
-采集标签、敏感字段、保留与 smoke 由[观测运行手册](../releases/observability-system-logs.md)负责。
+采集标签、保留与关联检查见[日志与排障](../releases/observability-system-logs.md)，应用字段与脱敏见[Logging](../development/backend-implementation.md#logging)。
 
 ### 当前模型与历史迁移
 
@@ -270,7 +270,7 @@ Spec #178 的最终在线图由 API、Admin API、Worker 和前端共同消费�
 旧 OIDC app、Kernel 四对象、双协议列、Claims Snapshot 和三类旧 Snapshot/Gate 已退出生产；
 旧候选的历史测试不能代替当前候选执行。
 
-当前维护使用[会话与 Snapshot 手册](../releases/unified-session-maintenance.md)和
-[Profile 恢复手册](../releases/user-profile-maintenance.md)。
+当前维护使用[会话与 Snapshot 手册](../releases/authentication-and-session.md)和
+[Profile 恢复手册](../releases/data-maintenance.md)。
 旧来源的数据库和状态迁移，需要从[历史工具入口](../development/commands.md#历史数据维护工具)恢复匹配版本的流程，
 不能套用当前维护步骤。人工发布责任仍由发布负责人承担。

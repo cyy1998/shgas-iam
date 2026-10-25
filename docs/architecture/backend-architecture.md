@@ -157,6 +157,8 @@ Client Delegation 的创建、生命周期、冲突、范围查询和选择器�
   tx-bound audit writer port 写入，不直接绑定 audit repository。
 - `requestId` 与 `traceId` 从协议边界显式流入 audit、UnitOfWork observability、after-commit 日志及需要它们的
   integration port；不得依赖隐藏的全局 request state，也不得在叶子模块重复解析 headers。
+- 后端按 `traceparent`、`x-b3-traceid`、`x-trace-id` 的优先级解析 traceId；从 traceparent 只提取 32 位 trace-id，
+  不记录完整 header 原文。无 trace header 时保留 null/缺失值，不由后端随机生成；APISIX 可创建并向上游传递上下文。
 
 ## 关键模块所有权
 
@@ -360,7 +362,7 @@ Client Delegation 的创建、生命周期、冲突、范围查询和选择器�
 - 管理查询是中性索引观察，不给目标账号发许可，不把 total 当完整在线人数。撤销捕获精确 identity，
   用户/根/应用关系结果与失败、未知、剩余原集合分开。原请求重试不重选新实例，根终止后 Token 在线访问拒绝。
 - 同根与子对象的作用不是一般事务；不承诺第三方本地退出或可靠后台补齐。Code/Token TTL、同步精确补偿、
-  独立维护和人工/外部责任见[统一维护手册](../releases/unified-session-maintenance.md#放流与人工恢复责任)。
+  独立维护和人工/外部责任见[统一维护手册](../releases/authentication-and-session.md#恢复边界)。
 - `/maintenance` 与 `/testing` 分离；仅维护当前 unified 布局；旧 source decoder 已退役，不探测或转换旧关系。
   当前 API/Admin/Worker 同一生产图只消费一代；环境切换仍需人工发布验收。
 
@@ -421,7 +423,7 @@ Token 使用校验自身与两类会话关系及当前 Client/Subject Access；U
 API env 注入 current/previous RS256 JWK，JWKS 只输出公钥；非法配置启动失败。`/health`、`/oidc/health` 检查 Redis，
 `/ready` 检查 PG 与 Redis；进程关闭由 composition/lifecycle 释放 server 和连接。依赖失败保留可恢复 Cookie并返回暂态。
 安全 `oidc_protocol_error`/`oidc_server_error` 日志由 API 写出，Gateway `/oidc` 路由只改 upstream 为 API。
-具体配置、密钥轮换、当前协议接口和人工边界见[OIDC 接入](../features/oidc/oidc-integration.md)与[发布手册](../releases/oidc-release-runbook.md)。
+具体配置、密钥轮换、当前协议接口和人工边界见[OIDC 接入](../features/oidc/oidc-integration.md)与[发布手册](../releases/authentication-and-session.md#oidc-双入口配置)。
 
 ### Worker
 
@@ -430,7 +432,7 @@ API env 注入 current/previous RS256 JWK，JWKS 只输出公钥；非法配置�
   覆盖所选前缀全部版本、键族和 Redis 类型，不执行 CAS 或索引修复，也不导入 app 私有状态。旧 Provider decoder 和
   `/offline-maintenance` 出口已退役。 `client-snapshot:repair/verify` 只消费 API Core 新 Snapshot
   维护出口；这些 CLI 默认读取 `apps/worker/.env`，已有进程环境变量优先，使用 Worker 资源变量连接、限制 deadline 并在结束时断开资源。它们没有 HTTP、队列或 PG 连接，
-  也没有可靠后台执行器。当前 owner 和人工边界见[统一维护手册](../releases/unified-session-maintenance.md)，旧来源操作见[历史工具入口](../development/commands.md#历史数据维护工具)。
+  也没有可靠后台执行器。当前 owner 和人工边界见[统一维护手册](../releases/authentication-and-session.md)，旧来源操作见[历史工具入口](../development/commands.md#历史数据维护工具)。
 
 - `apps/worker/src/modules/registry.ts` 定义稳定 `WorkerModule` contract：`key`、`queueRegistrations`、
   `startConsumers()` 和 `close()`。具体 queue/processor implementation 由对应 public workspace package 提供。
@@ -444,11 +446,11 @@ API env 注入 current/previous RS256 JWK，JWKS 只输出公钥；非法配置�
   composition，复用组织写入资源的有界唤醒与强制关闭能力，不创建其他领域 module、consumer 或 HTTP。
   组织正式生产者、consumer、命令和 dashboard queue 均使用 `@iam/jobs` 的固定默认前缀；命令不暴露独立队列命名空间。
   两种命令共用 deadline 与 signal lifecycle，失败或中断保留持久工作；repair 仅重新投递，最终发布由普通 consumer 完成。
-  两阶段回收、报告语义与外部调度责任见[组织搜索维护](../releases/organization-search-maintenance.md#日常补偿与外部调度)。
+  两阶段回收、报告语义与外部调度责任见[组织搜索维护](../releases/data-maintenance.md#组织搜索日常修复)。
 - `createOrganizationSearchVerifyCommandComposition` 是独立 PostgreSQL-only composition，拥有专用单连接池，
   仅组装完整只读 verifier。所有 inventory 和 source reader 在同一个 repeatable-read read-only transaction 中观察；
   不创建队列、其他领域 module 或 HTTP。deadline/中断时仅取消本次唯一 application name、当前数据库和角色的查询，
-  关闭查询池和取消连接；执行或关闭失败非零退出。核验遵循[独立全量只读核验](../releases/organization-search-maintenance.md#独立全量只读核验)，
+  关闭查询池和取消连接；执行或关闭失败非零退出。核验遵循[独立全量只读核验](../releases/data-maintenance.md#组织搜索全量重建)，
   在线缺行过滤遵循[组织搜索契约](../features/organization-search/filter-dsl.md#错误与缺行行为)。
 - 当前 Snapshot repair/verify 使用独立 Redis-only composition，普通/敏感 payload 共享控制，targeted 与 full 分开，
   full 必须停流，另起进程 scan-only verify；旧三类 Runtime command、b648 与 managed-callback 升级工具已退役。

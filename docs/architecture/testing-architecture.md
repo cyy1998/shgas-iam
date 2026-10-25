@@ -375,7 +375,7 @@ Gate 只组合 owner commands，保持快速失败，不另行读取资源配置
 手动验证与修复后的结果复用见[工作流补充](../agents/workflow.md#验证节奏)，AFK 交接与批后验证见
 [AFK 工作流](../agents/sandcastle-afk.md#验证节奏)。
 必需检查执行或解析失败阻断交接与交付；静态检查通过不表示测试断言已执行或通过。
-测试也不代替目标环境的停流、drain、恢复和独立核验，操作流程见[统一维护手册](../releases/unified-session-maintenance.md)。
+测试也不代替目标环境的停流、drain、恢复和独立核验，操作流程见[统一维护手册](../releases/authentication-and-session.md)。
 
 候选 SHA、实际命令、结果、未执行项及平台验收记录留在对应 issue 或验收记录；历史结果不能代替最终候选或环境切换证据。
 本页只维护长期验证契约，不保存某次运行的日期、通过次数或交付状态。

@@ -65,7 +65,7 @@ Apps 表用于定位入口；依赖方向、分层职责、命名和 wiring 统�
 
 使用或新增共享代码前，按[共享契约与数据库](contracts-and-database.md)核对运行环境、公开出口、DTO 与事务边界；
 模块语义见[后端所有权](backend-architecture.md#关键模块所有权)。当前维护见
-[统一维护手册](../releases/unified-session-maintenance.md)；旧数据操作见[历史命令入口](../development/commands.md#历史数据维护工具)。
+[统一维护手册](../releases/authentication-and-session.md)；旧数据操作见[历史命令入口](../development/commands.md#历史数据维护工具)。
 
 ### 密集模块的内部目录
 
