@@ -43,9 +43,9 @@ GitHub Issues 与 PR 共用编号空间。遇到裸 `#42` 时，先运行
 
 创建 GitHub issue：
 
-- `/to-spec` 把 spec 发布为一个 issue；
+- `/to-spec` 把 spec 发布为一个 issue，应用 `type:spec` 与 `ready-for-agent`；
 - `/to-tickets` 按 blockers-first 顺序为每张 implementation ticket 创建独立 issue，并用 GitHub 原生关系或正文中的
-  issue 引用表达来源与阻塞边；
+  issue 引用表达来源与阻塞边；有父 Spec 的实施票按下文类型与关系规则发布；
 - `/wayfinder` 按下文的 map/child issue 结构发布决策记录。
 
 需要跨会话恢复时，GitHub issue 自身就是外置记忆：
@@ -58,9 +58,25 @@ GitHub Issues 与 PR 共用编号空间。遇到裸 `#42` 时，先运行
 本仓库通过评论验收结果并关闭 GitHub issue 完成 ticket，默认不使用 PR 关闭工作。
 手动 tickets 的关闭时机由所用 skill 决定；父 Spec 按[完成与本地合入](workflow.md#完成与本地合入)收尾。
 
+### Spec 任务图
+
+Spec 与 implementation ticket 使用[互斥类型标签](triage-labels.md#spec-与实施票类型)。
+`/to-tickets` 为每张有父 Spec 的票应用 `type:ticket` 与 `ready-for-agent`，
+通过 GitHub 原生父子关系关联到父 Spec，通过原生 blocking 关系登记前置条件。
+正文中的 Parent 或依赖解释用于阅读，不替代这两种关系，也不授权自动推断或修正关系。
+
+当前 GitHub CLI 支持创建时传 `--parent <spec-number>` 与 `--blocked-by <numbers>`，
+修改已有子票时可用 `--parent`、`--add-blocked-by`；仍须显式指定仓库。
+读取列表和原生关系须分页，完整子票不能只取当前 `ready-for-agent` 子集。
+关系或必要 API 不可用时报告阻塞，AFK 不降级到正文猜测归属或依赖。
+
+父 Spec 和待实施子票分别检查准入及认领。子票缺少准入、被他人认领、依赖矛盾或循环时，
+受影响切片保持阻塞，独立切片仍可推进；未准入的必要子票仍属于完整 Spec 范围。
+空子票列表和 issue 的 closed 状态本身不构成 Spec 已验收、代码已集成或已交付的证明。
+
 ## Sandcastle AFK 交接
 
-AFK 沿用现有 labels、assignee、依赖和父子关系，不另建 tracker schema。手动路径的功能分支记录仍保留，
+AFK 使用上述类型与原生任务图，沿用 triage、assignee 和普通交接，不另建 tracker schema。手动路径的功能分支记录仍保留，
 AFK 评论另记录本次调用分支、ticket 分支、基线与候选提交。交接材料、恢复与关票职责见 [AFK 工作流](sandcastle-afk.md)。
 
 ## 当 skill 要求“fetch the relevant ticket”

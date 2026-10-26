@@ -22,6 +22,7 @@ export type ManagedComposeCommandOptions = Omit<OwnedCommandOptions, "executable
 };
 export function repositoryPath(root: string, path: string): string;
 export function saveManagedResourceRun(run: ManagedResourceRun): Promise<void>;
+export function writeAtomicResourceRecord(destination: string, record: unknown): Promise<void>;
 export function createManagedResourceRun(options: {
   root: string;
   composeFile: string;

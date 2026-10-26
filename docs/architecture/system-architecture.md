@@ -47,7 +47,7 @@ flowchart LR
 
 ### 请求入口与后台任务
 
-路由和 rewrite 由[环境 manifest](../../tmp/gateway-config/apisix/manifests/prod/iam.yaml)声明：
+路由和 rewrite 由调用方保管的环境 manifest（`tmp/gateway-config/apisix/manifests/prod/iam.yaml`）声明；准备方式见[网关手册](../releases/apisix-gateway-release.md#服务与首次配置)：
 
 | 入口                                                                             | 处理方              |
 | -------------------------------------------------------------------------------- | ------------------- |

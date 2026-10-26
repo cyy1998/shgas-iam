@@ -12,10 +12,10 @@ index 5ebe75081651f603c90b5106c847d6291f0eb30a..3eb26e533908b60b05512e808b9cdfb1
      readonly name: string;
      /** Environment variables injected by this provider. */
 diff --git a/dist/chunk-CP3TYXZA.js b/dist/chunk-CP3TYXZA.js
-index 7d097321871cfee95a8ba7e6d12a7fe002190cc5..ea8d598d821be6a528d59685c026e8f7cdc42527 100644
+index 7d097321871cfee95a8ba7e6d12a7fe002190cc5..44e33a8de9f47b1ba89fc4ead4dff7bf6f70e325 100644
 --- a/dist/chunk-CP3TYXZA.js
 +++ b/dist/chunk-CP3TYXZA.js
-@@ -77,6 +77,10 @@ var startContainer = (containerName, imageName, env, options) => Effect_exports.
+@@ -77,6 +77,13 @@ var startContainer = (containerName, imageName, env, options) => Effect_exports.
      "-v",
      formatVolumeMount(mount, selinuxLabel)
    ]);
@@ -23,28 +23,47 @@ index 7d097321871cfee95a8ba7e6d12a7fe002190cc5..ea8d598d821be6a528d59685c026e8f7
 +    "--mount",
 +    `type=bind,source=${options.daemonSocket},target=/var/run/docker.sock`
 +  ] : [];
++  const anonymousVolumeFlags = (options?.anonymousVolumes ?? []).flatMap((target) => [
++    "--mount", `type=volume,target=${target},volume-nocopy`
++  ]);
    const workdirFlags = options?.workdir ? ["-w", options.workdir] : [];
    const userFlags = options?.user ? ["--user", options.user] : [];
    const networks = options?.network ? Array.isArray(options.network) ? options.network : [options.network] : [];
-@@ -97,6 +101,7 @@ var startContainer = (containerName, imageName, env, options) => Effect_exports.
+@@ -97,6 +104,8 @@ var startContainer = (containerName, imageName, env, options) => Effect_exports.
      containerName,
      ...envFlags,
      ...volumeFlags,
 +    ...daemonSocketFlags,
++    ...anonymousVolumeFlags,
      ...workdirFlags,
      ...userFlags,
      ...networkFlags,
-@@ -116,6 +121,9 @@ var removeImage = (imageName) => Effect_exports.gen(function* () {
+@@ -108,7 +117,7 @@ var startContainer = (containerName, imageName, env, options) => Effect_exports.
+ });
+ var removeContainer = (containerName) => Effect_exports.gen(function* () {
+   yield* Effect_exports.ignore(dockerExec(["stop", containerName]));
+-  yield* Effect_exports.ignore(dockerExec(["rm", containerName]));
++  yield* Effect_exports.ignore(dockerExec(["rm", "--volumes", containerName]));
+ });
+ var removeImage = (imageName) => Effect_exports.gen(function* () {
+   yield* dockerExec(["rmi", imageName]);
+@@ -116,6 +125,15 @@ var removeImage = (imageName) => Effect_exports.gen(function* () {
 
  // src/sandboxes/docker.ts
  var docker = (options) => {
 +  if (options?.daemonSocket && (!options.daemonSocket.startsWith("/") || /[,:\\\0\r\n]/.test(options.daemonSocket))) {
 +    throw new Error("daemonSocket must be an absolute daemon-side Unix path without mount delimiters");
 +  }
++  const anonymousVolumes = options?.anonymousVolumes ?? [];
++  if (!Array.isArray(anonymousVolumes) || new Set(anonymousVolumes).size !== anonymousVolumes.length
++    || anonymousVolumes.some((target) => typeof target !== "string" || !target.startsWith("/")
++      || target === "/" || target.split("/").includes("..") || /[,:\\\0\r\n]/.test(target))) {
++    throw new Error("anonymousVolumes must be unique absolute container paths without traversal or mount delimiters");
++  }
    const configuredImageName = options?.imageName;
    const selinuxLabel = options?.selinuxLabel ?? "z";
    const maxOutputTailChars = options?.maxOutputTailChars ?? MAX_TAIL_CHARS;
-@@ -130,7 +138,7 @@ var docker = (options) => {
+@@ -130,7 +148,7 @@ var docker = (options) => {
      env: options?.env,
      sandboxHomedir,
      create: async (createOptions) => {
@@ -53,16 +72,87 @@ index 7d097321871cfee95a8ba7e6d12a7fe002190cc5..ea8d598d821be6a528d59685c026e8f7
        const worktreePath = createOptions.mounts.find(
          (m) => m.hostPath === createOptions.worktreePath
        )?.sandboxPath ?? "/home/agent/workspace";
-@@ -154,6 +162,7 @@ var docker = (options) => {
+@@ -140,6 +158,9 @@ var docker = (options) => {
+         sandboxPath: m.sandboxPath,
+         readonly: m.readonly
+       }));
++      if (anonymousVolumes.some((target) => allMounts.some((mount) => mount.sandboxPath === target))) {
++        throw new Error("Anonymous volume target conflicts with an ordinary bind mount");
++      }
+       const imageName = configuredImageName ?? defaultImageName(createOptions.hostRepoPath);
+       const containerUid = options?.containerUid ?? process.getuid?.() ?? 1e3;
+       const containerGid = options?.containerGid ?? process.getgid?.() ?? 1e3;
+@@ -154,6 +175,8 @@ var docker = (options) => {
            },
            {
              volumeMounts,
 +            daemonSocket: options?.daemonSocket,
++            anonymousVolumes,
              workdir: worktreePath,
              user: `${containerUid}:${containerGid}`,
              network: options?.network,
+@@ -164,6 +187,37 @@ var docker = (options) => {
+           }
+         )
+       );
++      const removeContainerSync = () => {
++        try {
++          execFileSync("docker", ["rm", "-f", "--volumes", containerName], {
++            stdio: "ignore"
++          });
++        } catch {
++        }
++      };
++      let unregisterShutdown = () => {};
++      try {
++      if (anonymousVolumes.length) {
++        const mounts = JSON.parse(await Effect_exports.runPromise(dockerExec([
++          "inspect", "--format", "{{json .Mounts}}", containerName
++        ])));
++        for (const target of anonymousVolumes) {
++          if (!Array.isArray(mounts) || !mounts.some((mount) => mount.Type === "volume"
++            && mount.Destination === target && typeof mount.Name === "string" && mount.Name)) {
++            throw new Error(`Cannot initialize unverified anonymous volume: ${target}`);
++          }
++        }
++        if (options?.onAnonymousVolumes) {
++          await options.onAnonymousVolumes(anonymousVolumes.map((target) => mounts.find((mount) => mount.Destination === target).Name));
++        }
++        // Only register synchronous removal after the owner has durably captured volume IDs.
++        unregisterShutdown = registerShutdown(removeContainerSync);
++        // Initialize only verified volume roots; never chown the checkout or a host bind directory.
++        await Effect_exports.runPromise(dockerExec([
++          "exec", "--user", "0:0", containerName, "chown", `${containerUid}:${containerGid}`, "--", ...anonymousVolumes
++        ]));
++      }
++      if (!anonymousVolumes.length) unregisterShutdown = registerShutdown(removeContainerSync);
+       for (const dir of parentDirsToCreate) {
+         await new Promise((resolve2, reject) => {
+           execFile(
+@@ -194,15 +248,12 @@ var docker = (options) => {
+           );
+         });
+       }
+-      const removeContainerSync = () => {
+-        try {
+-          execFileSync("docker", ["rm", "-f", containerName], {
+-            stdio: "ignore"
+-          });
+-        } catch {
+-        }
+-      };
+-      const unregisterShutdown = registerShutdown(removeContainerSync);
++      } catch (error) {
++        unregisterShutdown();
++        // A resource owner may need the exact container to recover failed ownership persistence.
++        if (!options?.onAnonymousVolumes) await Effect_exports.runPromise(removeContainer(containerName));
++        throw error;
++      }
+       const handle = {
+         worktreePath,
+         exec: (command, opts) => {
 diff --git a/dist/chunk-VOG34SRF.js b/dist/chunk-VOG34SRF.js
-index 93f24d139b795c284915a10c34d82f2fa769eab0..3163d9bccb3a70b162ac6a18aaf1aed7d85abe58 100644
+index 93f24d139b795c284915a10c34d82f2fa769eab0..64dac84040152ab70d1a15fbe0075ec36198dad9 100644
 --- a/dist/chunk-VOG34SRF.js
 +++ b/dist/chunk-VOG34SRF.js
 @@ -25146,7 +25146,7 @@ var sanitizeName = (name) => name.toLowerCase().replace(/[^a-z0-9]/g, "-");
@@ -103,7 +193,7 @@ index 93f24d139b795c284915a10c34d82f2fa769eab0..3163d9bccb3a70b162ac6a18aaf1aed7
  var detachListeners = () => {
    if (!listenersInstalled) return;
 diff --git a/dist/sandboxes/docker.d.ts b/dist/sandboxes/docker.d.ts
-index c7cc9e78dd3f14021ae64061d70e715bb98f768f..3a084437ee165df8040fd786caf2298ee00518a1 100644
+index c7cc9e78dd3f14021ae64061d70e715bb98f768f..66b75c569fe999fbf1b5f920e5ed2b4482a2ed59 100644
 --- a/dist/sandboxes/docker.d.ts
 +++ b/dist/sandboxes/docker.d.ts
 @@ -1,4 +1,4 @@
@@ -112,10 +202,14 @@ index c7cc9e78dd3f14021ae64061d70e715bb98f768f..3a084437ee165df8040fd786caf2298e
  import { M as MountConfig } from '../MountConfig-CmXclHA5.js';
  import { S as SelinuxLabel } from '../mountUtils-CCA-bbpK.js';
  export { d as defaultImageName } from '../mountUtils-CCA-bbpK.js';
-@@ -12,6 +12,10 @@ export { d as defaultImageName } from '../mountUtils-CCA-bbpK.js';
+@@ -12,6 +12,14 @@ export { d as defaultImageName } from '../mountUtils-CCA-bbpK.js';
   */
 
  interface DockerOptions {
++    /** Container-private anonymous volumes, initialized for the agent UID and removed with the exact container. */
++    readonly anonymousVolumes?: readonly string[];
++    /** Persist exact allocated volume IDs before initialization or agent commands. */
++    readonly onAnonymousVolumes?: (names: readonly string[]) => Promise<void>;
 +    /** Optional exact name for caller-owned provisioning and cleanup recovery records. */
 +    readonly containerName?: string;
 +    /** Dedicated daemon-side Unix socket path, mounted at /var/run/docker.sock without client file-path checks. */
@@ -123,7 +217,7 @@ index c7cc9e78dd3f14021ae64061d70e715bb98f768f..3a084437ee165df8040fd786caf2298e
      /** Docker image name (default: derived from repo directory name). */
      readonly imageName?: string;
      /**
-@@ -105,6 +109,6 @@ interface DockerOptions {
+@@ -105,6 +113,6 @@ interface DockerOptions {
   * The returned provider creates Docker containers with bind-mounts
   * for the worktree and git directories.
   */

@@ -11,7 +11,7 @@ import { checkDockerConfig } from "./docker-config.ts";
 import { smokeDocker } from "./docker-smoke.mts";
 import { hasUnstoppedExecutor, recoverExecutorResources } from "./resources.ts";
 import { createRuntime, smoke } from "./runtime.mts";
-import { runWorkflow } from "./workflow.ts";
+import { runWorkflow, workflowLimits } from "./workflow.ts";
 
 const cwd = resolve(fileURLToPath(new URL("../..", import.meta.url)));
 try {
@@ -39,14 +39,17 @@ process.env.SANDCASTLE_HOST_HANDLES_SIGNALS = "1";
 
 async function main() {
   if (values.help) {
-    console.log("用法：pnpm sandcastle [--iterations 10] [--parallel 2] [--model <model>]");
+    console.log("用法：pnpm sandcastle [--iterations 1] [--parallel 4] [--model <model>]");
+    console.log("--iterations 本次最多尝试的 Spec 数量（含恢复）；--parallel 同一 Spec 内最多并行实施的 ticket 数量。");
     console.log("--check 预检；--build 构建镜像；--smoke 检查临时 sandbox 与测试资源，不调用模型。");
     console.log("--smoke-docker 只验证共享宿主 Docker、host networking、构建、浏览器、导出与并行清理。");
-    console.log("--model 仅覆盖 Planner/Merger；实施者与评审模型读取 .codex/agents/ 的角色配置。");
+    console.log("--model 覆盖 Planner 与最终评审协调者；实施者与独立评审模型读取 .codex/agents/ 的角色配置。");
     console.log(
       "--recover-executor <repository-relative executor.json> 停止准确 sandbox 后按 registry 恢复，尊重 keep。",
     );
-    console.log("运行模式读取全仓 ready-for-agent，在当前分支自动合并通过评审的 tickets 并更新 GitHub issues。");
+    console.log(
+      "运行模式读取全仓 ready-for-agent Spec，逐票集成后进入整个 Spec 的最终验收；本地交付后更新 GitHub issues。",
+    );
     return;
   }
   const actions = [values.check, values.build, values.smoke, values["smoke-docker"], values["recover-executor"]].filter(
@@ -59,10 +62,10 @@ async function main() {
   }
   const model = values.model ?? process.env.SANDCASTLE_MODEL ?? "gpt-6-astra";
   const image = process.env.SANDCASTLE_IMAGE ?? "iam-sandcastle:local";
-  const maxIterations = Number(values.iterations ?? process.env.SANDCASTLE_ITERATIONS ?? "10");
-  const maxParallel = Number(values.parallel ?? process.env.SANDCASTLE_PARALLEL ?? "2");
-  if (![maxIterations, maxParallel].every((value) => Number.isSafeInteger(value) && value > 0))
-    throw new Error("iterations 与 parallel 必须为正整数。");
+  const { maxSpecs, maxParallel } = workflowLimits({
+    maxSpecs: Number(values.iterations ?? process.env.SANDCASTLE_ITERATIONS ?? "1"),
+    maxParallel: Number(values.parallel ?? process.env.SANDCASTLE_PARALLEL ?? "4"),
+  });
   if (Number(process.versions.node.split(".")[0]) !== 24) throw new Error("宿主 runner 需要 Node.js 24。");
   await command("docker", ["info", "--format", "{{.ServerVersion}}"], cwd);
   if (values.build) {
@@ -142,13 +145,18 @@ async function main() {
       await smoke(options);
       console.log("Sandbox、skills、共享 Docker 与每命令独立资源 smoke 通过；未调用模型或修改 issues。");
     } else {
-      console.log(`Sandcastle：${branch}，最多 ${maxIterations} 批，并发 ${maxParallel}，${model}。`);
+      console.log(`Sandcastle：${branch}，最多尝试 ${maxSpecs} 个 Spec，并行实施 ${maxParallel} 张 ticket，${model}。`);
       const runtime = await createRuntime(options);
       const failures: unknown[] = [];
       try {
-        const result = await runWorkflow({ maxIterations, maxParallel }, runtime);
+        const result = await runWorkflow({ maxSpecs, maxParallel }, runtime);
         console.log(JSON.stringify(result, null, 2));
-        if (!result.exhausted || result.failed.length > 0) process.exitCode = 1;
+        if (
+          result.incompleteSpecs.length > 0 ||
+          result.failed.length > 0 ||
+          result.attemptedSpecs.some((number) => !result.delivered.includes(number))
+        )
+          process.exitCode = 1;
       } catch (error) {
         failures.push(error);
       } finally {

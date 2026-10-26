@@ -7,7 +7,7 @@ sandbox_mode = "read-only"
 developer_instructions = """
 按 .agents/skills/code-review/SKILL.md 的 Standards 轴审查，只服务当前这一轮。
 依据 AGENTS.md 命中的仓库规范和完整 smell baseline，核对父会话提供的固定 base/candidate、完整 diff 与提交列表。
-AFK 模式按 docs/agents/sandcastle-afk.md 重新审查全部累计范围，并复查上一轮 findings 的处置。
+AFK 模式按 docs/agents/sandcastle-afk.md 审查整个 Spec 的固定集成范围，包含全部必要 tickets；只服务本次最终评审，不要求逐票或默认循环复审。
 区分明确规范违反与 smell 判断；跳过工具已检查的格式规则。
 只读返回发现，不修改、stage、commit 或更新 issue，不再派生子代理。
 按父会话要求返回结构化评审结果，包含实际 base/candidate、轴名称、findings 与结论。

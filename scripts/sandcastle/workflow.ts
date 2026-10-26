@@ -1,5 +1,9 @@
 import type { ImplementerName } from "./agents.ts";
 import { isImplementer } from "./agents.ts";
+import type { FinalizedSpec } from "./finalization.ts";
+import { ExecutorInfrastructureError, hasUnstoppedExecutor } from "./resources.ts";
+import type { SpecBlocker } from "./specs.ts";
+import { GitStateError, type SpecWorkspace } from "./tickets.ts";
 
 export interface Ticket {
   number: number;
@@ -9,21 +13,56 @@ export interface Ticket {
   reason: string;
 }
 
+export type SpecSelection = { workspace: SpecWorkspace; tickets: Ticket[] };
+export type SpecFrontier = { tickets: Ticket[]; complete: boolean; blocked: SpecBlocker[] };
+
 export interface WorkflowRuntime {
-  plan: (iteration: number) => Promise<Ticket[]>;
+  plan: (attempt: number, excludedSpecs: ReadonlySet<number>) => Promise<SpecSelection | undefined>;
+  frontier: (workspace: SpecWorkspace, attemptedTickets: ReadonlySet<number>) => Promise<SpecFrontier>;
   execute: (ticket: Ticket) => Promise<boolean>;
-  merge: (tickets: Ticket[]) => Promise<void>;
-  finish?: () => Promise<void>;
+  integrate: (ticket: Ticket) => Promise<unknown>;
+  finalize?: (workspace: SpecWorkspace) => Promise<FinalizedSpec>;
+  deliver?: (finalized: FinalizedSpec) => Promise<unknown>;
+  pause?: (
+    workspace: SpecWorkspace,
+    outcome: { integrated: number[]; failed: number[]; blocked: SpecBlocker[] },
+  ) => Promise<void>;
   close?: () => Promise<void>;
   report: (message: string) => void;
   signal?: AbortSignal;
 }
 
 export interface WorkflowResult {
-  iterations: number;
-  merged: number[];
+  attemptedSpecs: number[];
+  integrated: number[];
   failed: number[];
+  readyForFinalization: number[];
+  finalized: number[];
+  delivered: number[];
+  incompleteSpecs: number[];
   exhausted: boolean;
+}
+
+export type WorkflowLimits = { maxSpecs: number; maxParallel: number };
+
+export function workflowLimits(options: Partial<WorkflowLimits> = {}): WorkflowLimits {
+  const limits = { maxSpecs: 1, maxParallel: 4, ...options };
+  for (const [name, value] of Object.entries(limits)) {
+    if (!Number.isSafeInteger(value) || value <= 0) throw new Error(`${name} must be a positive safe integer.`);
+  }
+  return limits;
+}
+
+export function isFatalWorkflowError(error: unknown, seen = new Set<unknown>()): boolean {
+  if (seen.has(error)) return false;
+  seen.add(error);
+  return (
+    error instanceof GitStateError ||
+    error instanceof ExecutorInfrastructureError ||
+    hasUnstoppedExecutor(error) ||
+    (error instanceof AggregateError && error.errors.some((entry) => isFatalWorkflowError(entry, seen))) ||
+    (error instanceof Error && isFatalWorkflowError(error.cause, seen))
+  );
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -76,68 +115,121 @@ export function parsePlan(stdout: string): Ticket[] {
   });
 }
 
-export async function runWorkflow(
-  options: { maxIterations: number; maxParallel: number },
-  runtime: WorkflowRuntime,
-): Promise<WorkflowResult> {
-  for (const [name, value] of Object.entries(options)) {
-    if (!Number.isSafeInteger(value) || value <= 0) {
-      throw new Error(`${name} must be a positive safe integer.`);
-    }
-  }
-
-  const result: WorkflowResult = { iterations: 0, merged: [], failed: [], exhausted: false };
-  for (let iteration = 1; iteration <= options.maxIterations; iteration++) {
+export async function runWorkflow(options: Partial<WorkflowLimits>, runtime: WorkflowRuntime): Promise<WorkflowResult> {
+  const limits = workflowLimits(options);
+  const result: WorkflowResult = {
+    attemptedSpecs: [],
+    integrated: [],
+    failed: [],
+    readyForFinalization: [],
+    finalized: [],
+    delivered: [],
+    incompleteSpecs: [],
+    exhausted: false,
+  };
+  const attemptedSpecs = new Set<number>();
+  for (let attempt = 1; attempt <= limits.maxSpecs; attempt++) {
     runtime.signal?.throwIfAborted();
-    const tickets = await runtime.plan(iteration);
+    const selection = await runtime.plan(attempt, new Set(attemptedSpecs));
     runtime.signal?.throwIfAborted();
-    if (tickets.length === 0) {
-      await runtime.finish?.();
-      runtime.signal?.throwIfAborted();
+    if (!selection) {
       result.exhausted = true;
-      return result;
+      break;
     }
-    result.iterations++;
-
-    let next = 0;
-    const outcomes = new Map<Ticket, PromiseSettledResult<boolean>>();
-    async function executeNext() {
-      while (!runtime.signal?.aborted) {
-        const ticket = tickets[next++];
-        if (!ticket) {
-          return;
+    const { workspace } = selection;
+    const number = workspace.graph.spec.number;
+    if (attemptedSpecs.has(number)) throw new Error(`Planner selected already attempted Spec #${number}.`);
+    attemptedSpecs.add(number);
+    result.attemptedSpecs.push(number);
+    const attemptedTickets = new Set<number>();
+    type Completion = { ticket: Ticket; outcome: PromiseSettledResult<boolean> };
+    const running = new Map<number, Promise<Completion>>();
+    const fatal: unknown[] = [];
+    const localIntegrated: number[] = [];
+    const localFailed: number[] = [];
+    let frontier: SpecFrontier = { tickets: selection.tickets, complete: false, blocked: [] };
+    const failed = (ticket: Ticket, error?: unknown) => {
+      result.failed.push(ticket.number);
+      localFailed.push(ticket.number);
+      runtime.report(`Issue #${ticket.number} failed${error === undefined ? "" : `: ${String(error)}`}`);
+    };
+    const dispatch = () => {
+      for (const ticket of frontier.tickets) {
+        if (running.size >= limits.maxParallel || fatal.length || runtime.signal?.aborted) break;
+        if (attemptedTickets.has(ticket.number)) continue;
+        attemptedTickets.add(ticket.number);
+        const pending = Promise.resolve()
+          .then(() => runtime.execute(ticket))
+          .then(
+            (value): Completion => ({ ticket, outcome: { status: "fulfilled", value } }),
+            (reason): Completion => {
+              if (isFatalWorkflowError(reason)) fatal.push(reason);
+              return { ticket, outcome: { status: "rejected", reason } };
+            },
+          );
+        running.set(ticket.number, pending);
+      }
+    };
+    try {
+      dispatch();
+      while (running.size) {
+        const { ticket, outcome } = await Promise.race(running.values());
+        running.delete(ticket.number);
+        if (fatal.length || runtime.signal?.aborted) break;
+        if (outcome.status === "fulfilled" && outcome.value === true) {
+          try {
+            await runtime.integrate(ticket);
+            result.integrated.push(ticket.number);
+            localIntegrated.push(ticket.number);
+          } catch (error) {
+            if (isFatalWorkflowError(error)) throw error;
+            failed(ticket, error);
+          }
+        } else {
+          failed(ticket, outcome.status === "rejected" ? outcome.reason : undefined);
         }
+        if (fatal.length || runtime.signal?.aborted) break;
+        frontier = await runtime.frontier(workspace, new Set(attemptedTickets));
+        dispatch();
+      }
+    } catch (error) {
+      fatal.push(error);
+    } finally {
+      // Each ticket promise includes its executor/resource finalizers. Never leave started peers behind.
+      await Promise.allSettled(running.values());
+    }
+    if (fatal.length === 1) throw fatal[0];
+    if (fatal.length) throw new AggregateError(fatal, "Sandcastle 公共故障；已等待全部在途任务收尾。");
+    runtime.signal?.throwIfAborted();
+    frontier = await runtime.frontier(workspace, new Set(attemptedTickets));
+    if (frontier.complete && !localFailed.length) {
+      result.readyForFinalization.push(number);
+      if (runtime.finalize) {
         try {
-          outcomes.set(ticket, { status: "fulfilled", value: await runtime.execute(ticket) });
-        } catch (reason) {
-          outcomes.set(ticket, { status: "rejected", reason });
+          const finalized = await runtime.finalize(workspace);
+          result.finalized.push(number);
+          if (!runtime.deliver) throw new Error("缺少 Spec 交付接线，最终门禁通过仍保持未完成。");
+          runtime.signal?.throwIfAborted();
+          await runtime.deliver(finalized);
+          result.delivered.push(number);
+        } catch (error) {
+          if (isFatalWorkflowError(error) || runtime.signal?.aborted) throw error;
+          result.incompleteSpecs.push(number);
+          runtime.report(`Spec #${number} 最终验收或交付未完成：${String(error)}`);
+          await runtime.pause?.(workspace, {
+            integrated: localIntegrated,
+            failed: localFailed,
+            blocked: frontier.blocked,
+          });
         }
-      }
-    }
-
-    // Each worker settles its executions before cancellation or a peer failure can leave the batch.
-    await Promise.all(Array.from({ length: Math.min(options.maxParallel, tickets.length) }, executeNext));
-    runtime.signal?.throwIfAborted();
-
-    const successful: Ticket[] = [];
-    for (const ticket of tickets) {
-      const outcome = outcomes.get(ticket);
-      if (outcome?.status === "fulfilled" && outcome.value === true) {
-        successful.push(ticket);
       } else {
-        result.failed.push(ticket.number);
-        const detail = outcome?.status === "rejected" ? `: ${String(outcome.reason)}` : "";
-        runtime.report(`Issue #${ticket.number} failed${detail}`);
+        result.incompleteSpecs.push(number);
       }
-    }
-
-    runtime.signal?.throwIfAborted();
-    if (successful.length > 0) {
-      await runtime.merge(successful);
-      result.merged.push(...successful.map((ticket) => ticket.number));
+    } else {
+      result.incompleteSpecs.push(number);
+      await runtime.pause?.(workspace, { integrated: localIntegrated, failed: localFailed, blocked: frontier.blocked });
     }
   }
-
   runtime.signal?.throwIfAborted();
   return result;
 }

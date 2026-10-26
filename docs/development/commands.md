@@ -16,7 +16,7 @@ git diff --check
 ```
 
 格式与 lint 由[提交 Hook](#commit-前检查)自动处理；上面的内循环无需手动追加这两类命令。
-手动验证与修复后的结果复用见[工作流补充](../agents/workflow.md#验证节奏)，AFK 交接与批后检查见
+手动验证与修复后的结果复用见[工作流补充](../agents/workflow.md#验证节奏)，AFK 交接与 Spec 最终检查见
 [AFK 工作流](../agents/sandcastle-afk.md#验证节奏)。
 
 根工具链变化的聚焦 Bun 测试：
@@ -50,7 +50,8 @@ pnpm test:integration
 
 本机 Docker + Codex CLI 执行全仓 `ready-for-agent` backlog；选票、评审、合并和关票权限见
 [AFK 工作流](../agents/sandcastle-afk.md)。`pnpm sandcastle` 会调用模型、修改代码和 GitHub issues，
-并把通过验收的 ticket 分支普通合并到启动时的调用分支；运行前选定该分支。
+每票普通合入独立 Spec 集成分支，整个 Spec 最终验收后以一个 squash commit 进入启动时的调用分支；运行前选定该分支。
+交付事实核验后先关闭 tickets，再关闭父 Spec；门禁通过但尚未完成交付与关票仍以未完成退出。
 
 首次使用时，按 `.sandcastle/.env.example` 创建未跟踪的 `.sandcastle/.env`，填写 `GH_TOKEN`。
 默认认证为 ChatGPT/Codex 账号：先执行 `codex login`，并确保 Codex 使用文件凭据存储；runner 会把本次运行的
@@ -94,9 +95,14 @@ project 名称仅用于资源归属，不构成权限隔离。普通文件 mount
 `docker compose --project-name <project> --file <composePath> down --volumes --remove-orphans --rmi local`，
 再按准确 `sandboxName` 清理 sandbox；不扫描名称前缀或 prune。此聚焦 smoke 不调用模型或写入 GitHub。
 既有 `sandcastle:smoke` 先执行上述 Docker 检查，再运行下面的完整工具链 smoke。
-`sandcastle:smoke` 创建可销毁的 sandbox，验证工具链、Merger 依赖挂载和共享 Docker，并用本地桩程序
-让 Planner、Implementer、Merger 三份真实 prompt 经过 SDK 的参数校验与展开，检查 Codex 生效角色配置；不调用模型或访问 GitHub，
-也不证明真实 Codex 模型已执行双轴子代理评审。
+`sandcastle:smoke` 创建可销毁的 sandbox，验证工具链、候选工作树、提交 Hook 和共享 Docker。
+随后在临时 Git 仓库中复用正式 runtime、动态 workflow、票级与最终验收执行器，使用受控 GitHub 与本地模型命令
+完成 A/B 并行、A 集成后 C 立即解锁、集中评审与修复、真实单一 squash、统一关票及准确清理。
+Planner、Implementer、票级验收、Spec 评审与集中修复五份真实 prompt 均经过 SDK 参数校验与展开。
+Codex 配置探针核对容器生效角色和单层调用配置；受控模型不会执行真实双轴模型推理，不访问 GitHub 或真实 backlog，
+这些结果只证明编排与接线。报告、展开后的 prompt 与 SDK 日志保存在 `.sandcastle/resources/workflow-smoke-<run-id>/`。
+Root Sandcastle Integration 通过同一高层 fixture 验证部分集成后中断恢复、squash 后关票中断恢复及预算接线；
+该通道替换外部 SDK run，不能替代实际 Docker smoke。首次真实 Spec 执行留待后续实际运行验证。
 Smoke 通过实际根 Integration → Turbo → Bun 连续运行两条资源命令，观察不同 project、动态 URL、空数据起点和宿主记录，
 并验证另一执行器异常后按准确记录恢复、并行环境隔离及显式 keep。共享资源 owner 的完整故障矩阵由其专属测试承担。
 Smoke 还安装 Linux workspace 依赖，验证 Turbo 缓存写入及再次命中，执行 `pnpm verify:static`，并检查只读缓存会阻止
@@ -107,31 +113,34 @@ agent 命令启动。各阶段统一使用容器独占的 `TURBO_CACHE_DIR=/tmp/
 Turbo 的 Browser/E2E tasks 窄透传该变量，使正式根命令使用镜像内 Chromium；不自动跳过实际用户的 browser preflight。
 Smoke 以实际非 root 用户执行原浏览器预检，并用 workspace 的 Playwright 启动 headless shell 和完整 Chromium、执行页面脚本后关闭；
 不设置 `PLAYWRIGHT_E2E_SKIP_PREFLIGHT`。版本、路径、权限或依赖不匹配都会使 smoke 失败。
-Implementer 和 Merger 在 Codex CLI 启动前统一执行 `scripts/sandcastle/prepare-workspace.sh`：安装锁定依赖、清理前端生成目录内容、
+票级实施、票级验收和 Spec 最终会话 在 Codex CLI 启动前统一执行 `scripts/sandcastle/prepare-workspace.sh`：安装锁定依赖、清理前端生成目录内容、
 显式运行 Admin/SSO `setup`。初始化任一步非零退出即停止；不依赖 SDK ready hook 或 `postinstall` 隐式保证成功。
 每个执行器独立挂载两个前端的 `src/.umi`、`src/.umi-production`、`src/.umi-test`，结束后清理暂存目录，
 保留宿主已有生成文件；Linux 类型不会写回宿主生成目录。Planner 只读选票，不执行这套依赖初始化。
 容器内修改依赖、Umi 配置或路由后，再运行 `sh scripts/sandcastle/prepare-workspace.sh` 更新环境；普通业务改动无需重复初始化。
 Smoke 覆盖旧宿主生成文件隔离、两个前端类型检查，以及安装或 setup 失败时不启动 agent。
-依赖安装保留 `HUSKY=0`，避免标准 Husky 安装改写可写挂载的宿主 Git 元数据。Implementer 与 Merger 在同一执行 shell
+依赖安装保留 `HUSKY=0`，避免标准 Husky 安装改写可写挂载的宿主 Git 元数据。票级实施、票级验收和 Spec 最终会话 在同一执行 shell
 中启用容器私有 hook 启动器，通过追加进程级 `core.hooksPath` 复用仓库 `.husky/pre-commit`，保留既有进程级 Git 配置。
 必要工具或 hook 初始化失败会阻止 agent 启动；容器不写宿主 local Git 配置或 `.husky/_` 包装文件。
 Smoke 分别在两种 checkout 中用真实普通 commit 验证自动修复、错误阻断与宿主配置保持不变。
-运行参数默认 10 批、最多 2 张 ticket 并行；`--iterations`、`--parallel` 只调整本次运行。
-Merger 每批最多 10 次 SDK 迭代，正常结束但未输出完成标记时继续；这与 `--iterations` 的批次数分别计数，
-也不重试初始化或进程异常。失败修复与继续执行规则见 [AFK 工作流](../agents/sandcastle-afk.md#批量实施)。
-`--model`（优先）或 `SANDCASTLE_MODEL` 只覆盖 Planner/Merger 的模型，两者默认 `gpt-6-astra`、思考程度 `high`。
+运行参数默认最多尝试 1 个 Spec、同一 Spec 内最多 4 张 ticket 并行实施。`--iterations` 或
+`SANDCASTLE_ITERATIONS` 控制本次 Spec 额度，恢复旧 Spec 也计一次；`--parallel` 或 `SANDCASTLE_PARALLEL`
+控制并行实施上限，CLI 优先，均须为正整数。已经开始的 Spec 推进到完成或无法继续后才选择下一个，额度耗尽正常停止。
+单票完成后立即串行验收并集成，再解锁依赖并补位；失败项本轮不重派，独立工作继续。Git 状态异常、执行器无法停止或
+公共基础设施故障终止整次运行。中断后停止派发并等待已启动操作完成准确资源清理；失败恢复见
+[AFK 工作流](../agents/sandcastle-afk.md#批量实施)。
+`--model`（优先）或 `SANDCASTLE_MODEL` 只覆盖 Planner 与最终评审协调者的模型，两者默认 `gpt-6-astra`、思考程度 `high`。
 
 Planner 从仓库 `.codex/agents/implementer-{light,standard,deep}.toml` 定义的实施者中选择，
-实施者的模型、思考程度与职责以这些角色文件为准。当前 light 为 `gpt-5.6-luna` / `medium`，
-standard 为 `gpt-5.6-sol` / `high`，deep 为 `gpt-6-astra` / `xhigh`。
-双轴评审使用 `.codex/agents/standards-reviewer.toml` 与 `.codex/agents/spec-reviewer.toml`，
-两轴均为 `gpt-6-astra` / `high`，不随实施者档位降低。Runner 为容器内 CLI 提供子代理配置，
-不修改用户宿主 Codex 配置；会话内评审和十轮上限见[双轴评审流程](../agents/sandcastle-afk.md#批量实施)。
+模型、思考程度与职责以角色文件为准。票级会话执行聚焦验证；整个 Spec 集成后，由最终评审协调会话按
+`code-review` 启动 `.codex/agents/standards-reviewer.toml` 与 `.codex/agents/spec-reviewer.toml` 两个只读子代理。
+后续集中修复会话使用既有 standard/deep 实施者角色，处理 findings 并完成 `pnpm verify` 与 Spec 所需额外检查。
+评审协调者使用调用者配置的模型；角色模型保持角色配置，不随协调模型或票级档位自动降低。
 
-Codex CLI 0.154 的角色 override 忽略 `sandbox_mode`，因此评审角色的只读要求属于职责约束，不能保证子代理在
-操作系统层面只能读取。双轴由实施者执行、Merger 阅读报告核对，runner 不解析评审报告或会话文件，
-也不重复实施者的静态和 diff 检查；职责见[AFK 工作流](../agents/sandcastle-afk.md#双轴评审子代理生命周期)。
+Runner 为容器内 CLI 注入角色配置，保持单层子代理调用，不修改用户宿主 Codex 配置。Codex CLI 0.154 的角色 override
+忽略 `sandbox_mode`，因此评审角色的只读要求属于职责约束，不能保证操作系统层面只读。
+真实报告、单实施者修复、最终验证和失败交接见[最终评审流程](../agents/sandcastle-afk.md#双轴评审子代理生命周期)。
+宿主不解析自然语言 findings 或会话事件推断通过，也不默认启动逐票或循环双轴评审。
 
 普通失败和 Ctrl+C 会先停止并等待准确的创建者 sandbox，再用独立有界预算清理该执行器 registry 中的资源记录。
 执行器记录与 registry 留在 `.sandcastle/resources/executor-<run-id>/`，正式命令记录与 Compose 环境留在稳定挂载的
@@ -141,15 +150,34 @@ Codex CLI 0.154 的角色 override 忽略 `sandbox_mode`，因此评审角色的
 `pnpm test:resources:cleanup --record <repo-relative run.json>`。不扫描其他执行器或名称前缀。
 `run.lock` 记录进程与目标分支，确认旧进程已结束后才移除该文件。
 无法确认创建者已停止或宿主同步退出时保留锁；先按执行器记录恢复，核对停止事实后再移除锁。
-已有 ticket 分支可重新进入评审和合入交接，包括代码已合入、GitHub 关票尚未完成的情况。
-成功批次的本地 ticket 分支由 runner 在合入与关票核对后清理；分支偏移、worktree 占用等清理失败会停止后续批次，按报错恢复。
-队列耗尽前还有一次父 Spec 收尾核对。锁定的 Sandcastle 0.12.0 使用 `patches/` 中的 signal 补丁，允许此 runner
+未完成票和 Spec 保留分支与 worktree；已 squash 但交接或关票未完成时，先核对真实提交和 issue，只补剩余收尾。
+再次运行 `pnpm sandcastle` 时，宿主先读取分页普通 issue 评论，优先核对当前 GitHub 身份留下且仍满足类型、准入与认领条件的
+未完成 Spec。恢复也消耗一次 Spec 额度。已验收且普通合入的票复用原交接，保留票分支和准确登记的 worktree 继续未完成工作；
+只有能确认归属的未提交内容才交给实施者续做，路径、HEAD 或归属矛盾时保留现场并报错，不 reset 或重建覆盖。
+集成或验证报告缺失时补必要验收；候选或启动基线变化使旧最终门禁失效，先普通整合新基线，再重新评审和完成组合验证。
+已交付时核对聚合提交中的 Spec、分支和候选、单一 parent、文件树及启动分支的祖先关系，只补普通记录、剩余关票和清理。
+父 Spec 已关闭但清理失败时，仅从启动分支的交付提交及仍存在的本地集成 ref 重新读取该 Spec，核对真实 issues 后继续准确清理；
+不扫描历史 closed backlog。已经移除的已知工作树和 ref 经核对后跳过，未知目录、锁或偏移候选保留并报告。
+全部关票后按准确候选、干净状态、worktree 登记及创建者停止事实清理本地分支与工作树；清理不明或失败时保留现场。
+`--recover-executor` 只负责准确 sandbox 与 registry 资源，不恢复实施进度或删除 Spec 工作树。若自动恢复缺少可信交接，先用
+`git worktree list --porcelain`、对应分支的 `git log` 和 `gh issue view <number> --repo cyy1998/shgas-iam --comments`
+核对归属、实际候选、交付与关闭事实，并从已有 `.sandcastle/logs/` 补齐普通 issue 交接。代码交付完成与环境回收完成分别确认；
+创建者未确认停止时先沿准确 executor 入口恢复，保留锁和挂载，不用资源清理成功代替 Spec 验收或交付。
+普通交接与失败恢复责任见[Spec 交付与清理](../agents/sandcastle-afk.md#spec-交付与清理)。锁定的 Sandcastle 0.12.0 使用 `patches/` 中的 signal 补丁，允许此 runner
 通过 AbortSignal 等待清理，避免 SDK 提前 `process.exit`；升级依赖时须重新验证普通与 provisioning 中断路径。
 
-Planner、Implementer 与 Merger 均通过共享宿主 daemon 和 host networking 运行，在模型命令前由实际 UID 1000 检查
+所有阶段均通过共享宿主 daemon 和 host networking 运行，在模型命令前由实际 UID 1000 检查
 socket 权限、Docker CLI/Compose/Buildx 和宿主 loopback 可达。执行器不预建 PostgreSQL/Redis，不注入私网 URL。
 资源测试使用根 `pnpm test:integration`（支持 workspace/file 筛选）或 `pnpm test:e2e`，每条命令独立创建和销毁环境。
-Linux sandbox 内独立安装 workspace 依赖，不复用 Windows `node_modules`。Windows 的来源 checkout 可以是 worktree；
+Linux sandbox 的 root 和实际 pnpm workspaces 的 `node_modules` 使用每个执行器独占的磁盘匿名卷，不复用或写回 Windows 依赖。
+宿主只读调用已知 pnpm 入口读取目标 checkout 清单，不安装、运行项目脚本或按修改后的 `packageManager` 自动下载/切换版本；
+声明与现有工具不匹配时明确停止。Windows 普通 Node 入口缺少 `npm_execpath` 时，只从 checkout 外的绝对 PATH 目录
+固定解析工具，排除相对和空项，在受控空目录中用 `--dir` 读取目标清单，不执行 ticket 提供的同名 launcher。
+容器建立后先核验准确目标确为 volume，再仅对卷根初始化 UID/GID 1000 的写权限。
+`prepare-workspace.sh` 在安装前重新读取实际 workspace 清单并检查挂载覆盖；新增 workspace 未覆盖时保留改动并停止，
+须在新的执行器中重新准备，不能回落到宿主目录。匿名卷与准确容器关联，SDK 正常关闭、同步退出及宿主 live/recovery
+均请求回收；executor 记录在模型启动前保存准确匿名卷 ID。SDK 已移除容器而卷仍存在时，宿主按这些 ID 补回收，
+在用或无法核验的卷保留并报错，不强删其他创建者资源。Windows 的来源 checkout 可以是 worktree；
 SDK 固定补丁只挂载目标 worktree 的 Linux Git 指针，Git 长路径配置仅用于具体命令，不改宿主配置。
 必需检查缺少运行条件时保留 ticket open，不能以基础 `pnpm verify` 通过代替。
 

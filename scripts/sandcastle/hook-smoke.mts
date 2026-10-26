@@ -56,7 +56,7 @@ export async function snapshotHostHooks(cwd: string, checkout: string): Promise<
 }
 
 /** Called as the agent command, after the production preparation wrapper. */
-export function hookCommitProbe(mode: "Implementer" | "Merger"): string {
+export function hookCommitProbe(mode: "Implementer" | "Finalization"): string {
   const path = `scripts/sandcastle-hook-${mode.toLowerCase()}-probe.ts`;
   const source = `export const hookProbe={mode:'${mode}'}\n`;
   const expected = `export const hookProbe = { mode: "${mode}" };`;

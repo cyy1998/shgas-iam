@@ -172,7 +172,7 @@ overrides:
   typescript: npm:@typescript/typescript6@6.0.2
 
 patchedDependencies:
-  '@ai-hero/sandcastle@0.12.0': 00b079aa71fd589c7a0773a5ce51e69946f54cca05a1507ae18cd2640adcf426
+  '@ai-hero/sandcastle@0.12.0': ab2f7a725f097ac3bfeea3027778deed41b1b810eb262f62f7521d2311ee6c0d
 
 importers:
 
@@ -180,7 +180,7 @@ importers:
     devDependencies:
       '@ai-hero/sandcastle':
         specifier: 0.12.0
-        version: 0.12.0(patch_hash=00b079aa71fd589c7a0773a5ce51e69946f54cca05a1507ae18cd2640adcf426)
+        version: 0.12.0(patch_hash=ab2f7a725f097ac3bfeea3027778deed41b1b810eb262f62f7521d2311ee6c0d)
       '@biomejs/biome':
         specifier: ^2.5.14
         version: 2.5.14
@@ -10053,7 +10053,7 @@ snapshots:
       lodash.throttle: 4.1.1
       react: 19.2.7
 
-  '@ai-hero/sandcastle@0.12.0(patch_hash=00b079aa71fd589c7a0773a5ce51e69946f54cca05a1507ae18cd2640adcf426)':
+  '@ai-hero/sandcastle@0.12.0(patch_hash=ab2f7a725f097ac3bfeea3027778deed41b1b810eb262f62f7521d2311ee6c0d)':
     dependencies:
       '@clack/prompts': 1.7.0
 

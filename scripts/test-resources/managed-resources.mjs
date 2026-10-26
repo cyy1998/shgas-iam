@@ -12,10 +12,9 @@ export function repositoryPath(root, path) {
   return normalized;
 }
 
-export async function saveManagedResourceRun(run) {
-  const destination = join(run.root, run.recordPath);
+export async function writeAtomicResourceRecord(destination, record) {
   const temporary = `${destination}.${randomUUID()}.tmp`;
-  await writeFile(temporary, `${JSON.stringify(run.record, null, 2)}\n`, { mode: 0o600 });
+  await writeFile(temporary, `${JSON.stringify(record, null, 2)}\n`, { mode: 0o600 });
   // Windows readers may briefly deny replacement; retain atomic replacement and a bounded deadline.
   for (let attempt = 0; ; attempt++) {
     try {
@@ -27,6 +26,10 @@ export async function saveManagedResourceRun(run) {
       await new Promise((resolve) => setTimeout(resolve, 50));
     }
   }
+}
+
+export async function saveManagedResourceRun(run) {
+  await writeAtomicResourceRecord(join(run.root, run.recordPath), run.record);
 }
 
 export async function createManagedResourceRun(options) {

@@ -17,3 +17,18 @@ test("daemon access requires the selected host network architecture", () => {
 test("dedicated socket cannot inject another Docker mount option", () => {
   expect(() => dockerSandbox({ daemonSocket: "/var/run/docker.sock,target=/tmp/other" })).toThrow("mount delimiters");
 });
+
+test.each([
+  "relative/node_modules",
+  "/",
+  "/tmp/../node_modules",
+  "/tmp,node_modules",
+  "/tmp\\node_modules",
+  "/tmp\nnode_modules",
+])("anonymous volume target rejects unsafe path %s", (target) => {
+  expect(() => dockerSandbox({ anonymousVolumes: [target] })).toThrow("anonymousVolumes");
+});
+
+test("anonymous volume targets cannot allocate duplicate mounts", () => {
+  expect(() => dockerSandbox({ anonymousVolumes: ["/tmp/node_modules", "/tmp/node_modules"] })).toThrow("unique");
+});

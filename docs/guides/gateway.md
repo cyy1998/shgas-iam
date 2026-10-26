@@ -11,7 +11,7 @@ Client 须启用且未删除，以其 Internal API Secret 作为 `apikey`。SSO 
 scope 只匹配应用身份，环境仍由部署目标校验；当前没有域名/路径配额、插件审批或完整多租户隔离。
 同一 APISIX 集群须保持一个写入口，发布期间也不能从其他工具修改配置。
 
-按[现有 YAML](../../tmp/gateway-config/apisix/manifests/dev/iam.yaml)准备资源。占位符仅从本次 variables 取值，缺失时报错；秘密使用变量或外部秘密引用。
+按调用方保管的 YAML（例如 `tmp/gateway-config/apisix/manifests/dev/iam.yaml`）准备资源；配置不随 clone 提供，准备方式见[网关手册](../releases/apisix-gateway-release.md#服务与首次配置)。占位符仅从本次 variables 取值，缺失时报错；秘密使用变量或外部秘密引用。
 资源名按以下规则生成，跨应用接管资源前须核对归属：
 
 | YAML 资源                                                  | 远端标识                          |

@@ -72,18 +72,18 @@ Apps 表用于定位入口；依赖方向、分层职责、命名和 wiring 统�
 
 ## 基础设施与仓库工具
 
-| 路径                         | 职责                                                                                                                                             |
-| ---------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `apps/gateway/`              | 独立 Gateway 配置 API 与应用镜像构建；常规配置发布经 HTTP。                                                                                      |
-| `docker/`                    | 统一开发入口 `compose.dev.yaml`；生产按 data、apps、gateway、observability 四份编排，其中 apps 包含 Gateway API。                                |
-| `tmp/gateway-config/apisix/` | APISIX dev/prod config template 与 `manifests/<env>/<app>.yaml`；manifest 是调用方持有的 HTTP 发布输入。                                         |
-| `docker/observability/`      | Alloy 日志/OTLP pipeline、Loki 配置、Grafana datasource/dashboard/alert provisioning，以及版本化 dashboards。                                    |
-| `scripts/`                   | 文档和架构守卫、测试编排、验证入口及 tooling performance helpers。                                                                               |
-| `scripts/sandcastle/`        | AFK runner、宿主预检与临时测试资源编排。                                                                                                         |
-| `.sandcastle/`               | Sandcastle Planner、Implementer、Merger prompts、Dockerfile 和 `.env.example`；运行命令见[命令入口](../development/commands.md#sandcastle-afk)。 |
-| `.codex/agents/`             | Codex 调查角色、手动与 AFK 共用的三档实施者、Standards/Spec 只读评审角色；AFK runner 配置容器内逐票评审。                                        |
-| `.husky/`                    | Git hooks 与安装脚本。                                                                                                                           |
-| `patches/`                   | pnpm 管理的固定依赖补丁；Sandcastle signal 适配允许宿主 runner 等待中断清理。                                                                    |
+| 路径                         | 职责                                                                                                                                                          |
+| ---------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `apps/gateway/`              | 独立 Gateway 配置 API 与应用镜像构建；常规配置发布经 HTTP。                                                                                                   |
+| `docker/`                    | 统一开发入口 `compose.dev.yaml`；生产按 data、apps、gateway、observability 四份编排，其中 apps 包含 Gateway API。                                             |
+| `tmp/gateway-config/apisix/` | APISIX dev/prod config template 与 `manifests/<env>/<app>.yaml`；manifest 是调用方持有的 HTTP 发布输入。                                                      |
+| `docker/observability/`      | Alloy 日志/OTLP pipeline、Loki 配置、Grafana datasource/dashboard/alert provisioning，以及版本化 dashboards。                                                 |
+| `scripts/`                   | 文档和架构守卫、测试编排、验证入口及 tooling performance helpers。                                                                                            |
+| `scripts/sandcastle/`        | AFK runner、宿主预检与临时测试资源编排。                                                                                                                      |
+| `.sandcastle/`               | Sandcastle 规划、票级实施与验收、Spec 最终评审与修复 prompts、Dockerfile 和 `.env.example`；运行命令见[命令入口](../development/commands.md#sandcastle-afk)。 |
+| `.codex/agents/`             | Codex 调查角色、手动与 AFK 共用的三档实施者、Standards/Spec 只读评审角色；AFK runner 配置容器内 Spec 最终评审。                                               |
+| `.husky/`                    | Git hooks 与安装脚本。                                                                                                                                        |
+| `patches/`                   | pnpm 管理的固定依赖补丁；Sandcastle signal 适配允许宿主 runner 等待中断清理。                                                                                 |
 
 ## 文档与 Agent 工作流
 

@@ -6,6 +6,6 @@ model_reasoning_effort = "high"
 developer_instructions = """
 你负责实施当前获授权的 ticket，完成受影响范围验证。按 AGENTS.md 和 docs/agents/workflow.md 执行，保持 ticket 范围与现有模块边界。
 手动模式按协调者要求交接，不自行启动逐票双轴评审；分配给你的 findings 由你修复和提交。
-AFK 模式另读 docs/agents/sandcastle-afk.md，在同一会话内组织逐票双轴只读子代理评审，并修复、提交 findings。
+AFK 模式另读 docs/agents/sandcastle-afk.md：票级会话执行聚焦验证并交接；整个 Spec 最终评审后的唯一修复会话集中处理 findings、提交并完成最终验证。正式双轴评审由独立协调阶段执行，不默认循环复审。
 涉及未解决的安全、并发、一致性或跨 runtime 设计时报告阻碍与恢复点，交还协调者或 AFK Planner 重新选型。
 """

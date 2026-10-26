@@ -90,7 +90,7 @@ releases 维护当前代操作；一次性迁移与更早版本从[运维入口]
 | Document                                                                                   | Type     | Status  | Last verified | Next review | Notes                                                                                         |
 | ------------------------------------------------------------------------------------------ | -------- | ------- | ------------- | ----------- | --------------------------------------------------------------------------------------------- |
 | [ADR-0002](adr/0002-centralize-role-assignment-resolution.md)                              | decision | Current | 2026-09-21    | 2026-10-31  | 独立角色解析与正反向有效性边界。                                                              |
-| [ADR-0004](adr/0004-adopt-upstream-first-matt-skills.md)                                   | decision | Current | 2026-10-14    | 2026-10-31  | 上游优先、手动工作流薄补充与独立 AFK 路径的取舍。                                             |
+| [ADR-0004](adr/0004-adopt-upstream-first-matt-skills.md)                                   | decision | Current | 2026-10-25    | 2026-11-25  | 上游优先与手动薄适配；AFK 按 Spec 动态实施、集中评审及本地 squash 交付。                      |
 | [ADR-0005](adr/0005-keep-live-login-state-in-redis.md)                                     | decision | Current | 2026-09-21    | 2026-10-31  | Redis 实时状态与生命周期时间权威。                                                            |
 | [ADR-0006](adr/0006-elevate-user-subject-identifier.md)                                    | decision | Current | 2026-09-21    | 2026-10-31  | 跨协议稳定 Subject Identifier 归属 IAM 身份域。                                               |
 | [ADR-0009](adr/0009-adopt-canonical-test-collections.md)                                   | decision | Current | 2026-10-15    | 2026-10-31  | 按真实资源归类、workspace 运行声明与每命令临时环境的取舍。                                    |
@@ -129,9 +129,9 @@ releases 维护当前代操作；一次性迁移与更早版本从[运维入口]
 | ------------------------------------------------- | ------------ | ------- | ------------- | ----------- | ----------------------------------------------------------- |
 | [代码调查子代理](agents/code-investigation.md)    | agent-config | Current | 2026-09-05    | 2026-10-31  | 只读调查路由、子代理返回契约与跨会话记忆。                  |
 | [Domain Docs](agents/domain.md)                   | agent-config | Current | 2026-07-16    | 2026-10-31  | 工程 skills 的领域文档消费规则。                            |
-| [GitHub 议题跟踪](agents/issue-tracker.md)        | agent-config | Current | 2026-10-10    | 2026-10-31  | GitHub spec、ticket、分支恢复与手动/AFK 交接约定。          |
-| [Sandcastle AFK 工作流](agents/sandcastle-afk.md) | agent-config | Current | 2026-10-15    | 2026-10-31  | 无人值守批量实施的授权、逐票评审、批后合入与验证。          |
-| [Triage Labels](agents/triage-labels.md)          | agent-config | Current | 2026-07-16    | 2026-10-31  | 默认 canonical labels 与 triage 映射。                      |
+| [GitHub 议题跟踪](agents/issue-tracker.md)        | agent-config | Current | 2026-10-25    | 2026-11-25  | GitHub spec、ticket 类型、原生任务图与手动/AFK 交接。       |
+| [Sandcastle AFK 工作流](agents/sandcastle-afk.md) | agent-config | Current | 2026-10-26    | 2026-11-25  | 原生 Spec 图选票，以及无人值守实施、评审、合入与验证。      |
+| [Triage Labels](agents/triage-labels.md)          | agent-config | Current | 2026-10-25    | 2026-11-25  | 默认 canonical triage labels 与 Spec/ticket 互斥类型。      |
 | [工作流补充](agents/workflow.md)                  | agent-config | Current | 2026-10-14    | 2026-10-31  | implement-spec 与直接小任务的仓库分支、验证和本地收尾补充。 |
 
 </details>

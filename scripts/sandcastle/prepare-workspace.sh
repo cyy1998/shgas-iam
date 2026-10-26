@@ -3,6 +3,7 @@
 set -eu
 
 git config --global --add safe.directory "$PWD"
+node scripts/sandcastle/workspace-dependencies.mts
 HUSKY=0 pnpm install --frozen-lockfile
 
 # Umi's bundled rimraf does not clear a busy mount root. Remove only its contents

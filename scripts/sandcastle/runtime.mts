@@ -1,13 +1,18 @@
 import { mkdir, readFile, writeFile } from "node:fs/promises";
-import { dirname, join } from "node:path";
+import { join } from "node:path";
 import type { Sandbox } from "@ai-hero/sandcastle";
 import { codex, createSandbox, createWorktree, run } from "@ai-hero/sandcastle";
 import { implementerCatalog, loadAgentRoles } from "./agents.ts";
 import type { CodexAuth } from "./auth.ts";
 import { prepareCodexAuth } from "./auth.ts";
 import { codexConfigProbe, configuredCodex, prepareAgentConfig, shellQuote } from "./codex-provider.mts";
-import { command, deleteMergedTicketBranch } from "./commands.ts";
+import { command } from "./commands.ts";
+import { closeDeliveredIssue, createSpecDelivery } from "./delivery.ts";
+import { createFinalizationLifecycle, type FinalizedSpec } from "./finalization.ts";
+import { createFinalizationExecutor } from "./finalization-runtime.mts";
+import { createGitHubIssueTracker, githubRepo } from "./github.ts";
 import { hookCommitProbe, hookSmokeEnvironment, snapshotHostHooks } from "./hook-smoke.mts";
+import { createSpecRecovery, type RecoveredSpec } from "./recovery.ts";
 import { smokeCommandResources, smokeExecutorRecovery } from "./resource-smoke.mts";
 import { ExecutorTerminationError, withExecutorResources } from "./resources.ts";
 import {
@@ -21,10 +26,20 @@ import {
   withFrontendMounts,
   withWorkspacePreparation,
 } from "./sandbox.mts";
-import type { Ticket } from "./workflow.ts";
-import { parsePlan } from "./workflow.ts";
+import type { SpecGraph } from "./specs.ts";
+import { loadSpecBacklog, loadSpecGraph, parseSpecPlan, specFrontier } from "./specs.ts";
+import {
+  createTicketExecutor,
+  type ExecutorDependencies,
+  ExecutorInfrastructureError,
+  recordTicketHandoff,
+} from "./ticket-runtime.mts";
+import { createTicketLifecycle, GitStateError, type SpecWorkspace } from "./tickets.ts";
+import type { SpecFrontier, SpecSelection, Ticket } from "./workflow.ts";
+import { dependencyVolumeTargets } from "./workspace-dependencies.mts";
 
-export const githubRepo = "cyy1998/shgas-iam";
+export { githubRepo } from "./github.ts";
+
 const complete = "<promise>COMPLETE</promise>";
 const invocationArgs = (branch: string) => ({ REPO: githubRepo, INVOCATION_BRANCH: branch });
 
@@ -35,28 +50,6 @@ export type RuntimeOptions = {
   image: string;
   signal: AbortSignal;
 };
-
-async function mergerDependencyMounts(cwd: string) {
-  const manifests = await command(
-    "git",
-    ["ls-files", "apps/*/package.json", "packages/*/package.json", "e2e/system/package.json"],
-    cwd,
-  );
-  const paths = [
-    "node_modules",
-    ...manifests
-      .split("\n")
-      .filter(Boolean)
-      .map((path) => `${dirname(path)}/node_modules`),
-  ];
-  return Promise.all(
-    paths.map(async (sandboxPath) => {
-      const hostPath = join(cwd, ".sandcastle", "dependencies", sandboxPath);
-      await mkdir(hostPath, { recursive: true });
-      return { hostPath, sandboxPath: `/home/agent/workspace/${sandboxPath.replaceAll("\\", "/")}` };
-    }),
-  );
-}
 
 export async function checkedExec(sandbox: Sandbox, script: string, signal?: AbortSignal): Promise<string> {
   signal?.throwIfAborted();
@@ -81,16 +74,23 @@ export async function checkedExec(sandbox: Sandbox, script: string, signal?: Abo
   return result.stdout.trim();
 }
 
-export async function createRuntime(options: RuntimeOptions) {
+export type RuntimeDependencies = ExecutorDependencies & {
+  prepareAuth?: () => Promise<CodexAuth>;
+};
+
+export async function createRuntime(options: RuntimeOptions, dependencies: RuntimeDependencies = {}) {
   const { cwd, branch, model, image, signal } = options;
-  const githubCredentials = Object.fromEntries(
-    ["GH_TOKEN"].flatMap((key) => (process.env[key] ? [[key, process.env[key]!]] : [])),
-  );
+  const runGh = dependencies.runGh ?? ((args: string[]) => command("gh", args, cwd));
+  const actor = await runGh(["api", "user", "--jq", ".login"]);
+  if (!actor.trim()) throw new ExecutorInfrastructureError("无法确认当前 GitHub 认领身份，停止启动。");
+  const githubCredentials = dependencies.runGh
+    ? {}
+    : Object.fromEntries(["GH_TOKEN"].flatMap((key) => (process.env[key] ? [[key, process.env[key]!]] : [])));
   const roles = await loadAgentRoles(cwd);
   const agentConfig = await prepareAgentConfig(roles);
   let auth: CodexAuth;
   try {
-    auth = await prepareCodexAuth();
+    auth = await (dependencies.prepareAuth ?? prepareCodexAuth)();
   } catch (error) {
     try {
       await agentConfig.close();
@@ -101,25 +101,175 @@ export async function createRuntime(options: RuntimeOptions) {
   }
   const mounts = [...auth.mounts, ...agentConfig.mounts];
   if (auth.mode === "chatgpt") console.log(`Codex 登录凭据暂存与恢复目录：${auth.mounts[0]!.hostPath}`);
-  const agent = withCachePreflight(configuredCodex(model, roles));
   const promptFile = (name: string) => join(cwd, ".sandcastle", `${name}-prompt.md`);
   const git = (...args: string[]) => command("git", args, cwd);
   const common = invocationArgs(branch);
-  const candidates = new Map<number, string>();
-  let baseSha = "";
+  const tracker = createGitHubIssueTracker(cwd, runGh);
+  const recordHandoff = (number: number, body: string) => recordTicketHandoff(cwd, number, body, runGh);
+  let selectedSpec: SpecGraph | undefined;
+  let specWorkspace: SpecWorkspace | undefined;
+  let recovered: RecoveredSpec | undefined;
   let unsafeCreator = false;
   const onUnsafeClose = () => {
     unsafeCreator = true;
   };
 
+  const tickets = createTicketLifecycle({
+    cwd,
+    invocationBranch: branch,
+    signal,
+    runTicket: createTicketExecutor({
+      ...dependencies,
+      cwd,
+      model,
+      image,
+      signal,
+      roles,
+      auth,
+      mounts,
+      githubCredentials,
+      onUnsafeClose,
+      canClose: () => !unsafeCreator,
+    }),
+    recordHandoff,
+  });
+  const recovery = createSpecRecovery({
+    cwd,
+    invocationBranch: branch,
+    actor,
+    tickets,
+    recordHandoff,
+  });
+
   const assertTarget = async () => {
     if (unsafeCreator)
       throw new ExecutorTerminationError("仍有未确认停止的创建者；停止启动后续模型任务，先恢复 executor.json。");
-    if ((await git("branch", "--show-current")) !== branch) throw new Error(`宿主已离开目标分支 ${branch}；停止运行。`);
-    if (await git("status", "--porcelain")) throw new Error("目标工作区有未提交改动；保留现场并停止运行。");
+    if ((await git("branch", "--show-current")) !== branch)
+      throw new GitStateError(`宿主已离开目标分支 ${branch}；停止运行。`);
+    if (await git("status", "--porcelain")) throw new GitStateError("目标工作区有未提交改动；保留现场并停止运行。");
   };
 
+  async function planFrontier(backlog: { specs: SpecGraph[] }, attempted: ReadonlySet<number>, name: string) {
+    await assertTarget();
+    const baseSha = await git("rev-parse", "HEAD");
+    const planning = backlog.specs.map((graph) => {
+      const frontier = specFrontier(graph, recovery.progress);
+      return {
+        ...graph,
+        frontier: { ...frontier, ready: frontier.ready.filter((entry) => !attempted.has(entry.number)) },
+      };
+    });
+    for (const entry of planning)
+      for (const blocked of entry.frontier.blocked) console.log(`#${blocked.number}: ${blocked.reasons.join(" ")}`);
+    if (!planning.some((entry) => entry.frontier.ready.length)) return { graph: undefined, tickets: [] };
+    let result: { stdout: string };
+    try {
+      result = await withExecutorResources({ cwd, image, signal, onUnsafeClose }, (resources) =>
+        (dependencies.run ?? run)({
+          cwd,
+          branchStrategy: { type: "head" },
+          sandbox: dockerSandbox({
+            ...resources,
+            imageName: image,
+            env: { ...githubCredentials, ...auth.env, ...resources.env },
+            mounts: [...mounts, ...resources.mounts],
+          }),
+          agent: withDockerPreflight(
+            withCachePreflight(
+              dependencies.agent?.({
+                worktreePath: cwd,
+                name,
+                promptFile: promptFile("plan"),
+                promptArgs: {
+                  ...common,
+                  IMPLEMENTERS: implementerCatalog(roles),
+                  SPEC_BACKLOG: JSON.stringify(planning),
+                },
+              }) ?? configuredCodex(model, roles),
+            ),
+          ),
+          promptFile: promptFile("plan"),
+          promptArgs: { ...common, IMPLEMENTERS: implementerCatalog(roles), SPEC_BACKLOG: JSON.stringify(planning) },
+          maxIterations: 1,
+          name,
+          signal,
+        }),
+      );
+    } catch (cause) {
+      throw new ExecutorInfrastructureError("Planner 执行器或公共资源失败；停止本次运行。", { cause });
+    }
+    await assertTarget();
+    if ((await git("rev-parse", "HEAD")) !== baseSha)
+      throw new GitStateError("规划期间启动分支 HEAD 发生变化；请核对现场后重新启动。");
+    const plan = parseSpecPlan(result.stdout, backlog, recovery.progress);
+    if (plan.tickets.some((entry) => attempted.has(entry.number)))
+      throw new Error("Planner 重新选择了本轮已尝试的 ticket；停止重复派发。");
+    return plan;
+  }
+
+  const finalization = createFinalizationLifecycle({
+    cwd,
+    signal,
+    runFinal: createFinalizationExecutor({
+      ...dependencies,
+      cwd,
+      model,
+      image,
+      signal,
+      roles,
+      auth,
+      mounts,
+      githubCredentials,
+      onUnsafeClose,
+      canClose: () => !unsafeCreator,
+    }),
+    recordHandoff,
+  });
+  const delivery = createSpecDelivery({
+    cwd,
+    signal,
+    creatorsStopped: () => !unsafeCreator,
+    recordHandoff,
+    closeIssue: (number) => closeDeliveredIssue(cwd, number, runGh),
+  });
+
   return {
+    get selectedSpec() {
+      return selectedSpec;
+    },
+    get specWorkspace() {
+      return specWorkspace;
+    },
+    get ticketContexts() {
+      return tickets.contexts;
+    },
+    get integrated() {
+      return tickets.integrated;
+    },
+    finalize: async (workspace = specWorkspace) => {
+      if (!workspace) throw new Error("尚未准备 Spec 集成工作树。");
+      await assertTarget();
+      if (recovered?.workspace === workspace && recovered.finalized) return recovered.finalized;
+      return finalization.finalize(workspace, tickets.contexts, tickets.integrated);
+    },
+    deliver: async (finalized: FinalizedSpec) => {
+      await assertTarget();
+      if (finalized.workspace !== specWorkspace) throw new GitStateError("最终验收交接不属于当前 Spec，保留现场。");
+      return delivery.deliver(
+        finalized,
+        tickets.contexts,
+        recovered?.squashSha ? { squashSha: recovered.squashSha } : undefined,
+      );
+    },
+    prepareSpec: async (graph: SpecGraph, selection?: { branch?: string }) => {
+      selectedSpec = graph;
+      specWorkspace = await tickets.prepareSpec(graph, selection);
+      return specWorkspace;
+    },
+    integrate: async (ticket: Ticket) => {
+      if (!specWorkspace) throw new Error("尚未准备 Spec 集成工作树。");
+      return tickets.integrate(specWorkspace, ticket);
+    },
     signal,
     report: (message: string) => console.log(message),
     close: async () => {
@@ -142,177 +292,92 @@ export async function createRuntime(options: RuntimeOptions) {
       if (failures.length) throw new AggregateError(failures, "Codex auth/config 收尾失败。");
     },
 
-    async plan(iteration: number): Promise<Ticket[]> {
+    async plan(attempt: number, excludedSpecs: ReadonlySet<number>): Promise<SpecSelection | undefined> {
       await assertTarget();
-      baseSha = await git("rev-parse", "HEAD");
-      candidates.clear();
-      const result = await withExecutorResources({ cwd, image, signal, onUnsafeClose }, (resources) =>
-        run({
-          cwd,
-          branchStrategy: { type: "head" },
-          sandbox: dockerSandbox({
-            ...resources,
-            imageName: image,
-            env: { ...githubCredentials, ...auth.env, ...resources.env },
-            mounts: [...mounts, ...resources.mounts],
-          }),
-          agent: withDockerPreflight(agent),
-          promptFile: promptFile("plan"),
-          promptArgs: { ...common, IMPLEMENTERS: implementerCatalog(roles) },
-          maxIterations: 1,
-          name: `Planner ${iteration}`,
-          signal,
-        }),
+      const backlog = await loadSpecBacklog(tracker);
+      // Only local unfinished closeout branches add closed parents; never sweep historical closed issues.
+      const localCloseouts = await recovery.localSpecs();
+      for (const number of localCloseouts) {
+        if (!backlog.specs.some((graph) => graph.spec.number === number))
+          backlog.specs.push(await loadSpecGraph(tracker, await tracker.readIssue(number)));
+      }
+      for (const issue of new Map(
+        backlog.specs.flatMap((graph) => graph.dependencies).map((issue) => [issue.number, issue]),
+      ).values())
+        await recovery.confirmDelivered(issue);
+      for (const rejected of backlog.rejected) console.log(`#${rejected.number}: ${rejected.reasons.join(" ")}`);
+      const available = { specs: backlog.specs.filter((graph) => !excludedSpecs.has(graph.spec.number)) };
+      recovered = await recovery.select(available.specs);
+      if (recovered) {
+        selectedSpec = recovered.workspace.graph;
+        specWorkspace = recovered.workspace;
+        const plan = recovered.squashSha
+          ? { tickets: [] }
+          : await planFrontier(
+              { specs: [selectedSpec] },
+              new Set(),
+              `Planner recovered Spec #${selectedSpec.spec.number}`,
+            );
+        return { workspace: specWorkspace, tickets: plan.tickets };
+      }
+      if (available.specs.some((graph) => localCloseouts.includes(graph.spec.number)))
+        throw new GitStateError(
+          "本地仍有 Spec 交付收尾现场，但当前类型、准入、认领或普通交接不允许恢复；保留分支和工作树，先核对报告。",
+        );
+      const plan = await planFrontier(available, new Set(), `Planner Spec ${attempt}`);
+      if (!plan.graph) return undefined;
+      selectedSpec = plan.graph;
+      specWorkspace = await tickets.prepareSpec(selectedSpec);
+      return { workspace: specWorkspace, tickets: plan.tickets };
+    },
+
+    async frontier(workspace: SpecWorkspace, attemptedTickets: ReadonlySet<number>): Promise<SpecFrontier> {
+      if (workspace !== specWorkspace) throw new GitStateError("当前 Spec 工作树与调度上下文不匹配；保留现场。");
+      if (recovered?.workspace === workspace && recovered.squashSha)
+        return { tickets: [], complete: true, blocked: [] };
+      const frontier = specFrontier(workspace.graph, recovery.progress);
+      const plan = await planFrontier(
+        { specs: [workspace.graph] },
+        attemptedTickets,
+        `Planner Spec #${workspace.graph.spec.number} frontier`,
       );
-      await assertTarget();
-      if ((await git("rev-parse", "HEAD")) !== baseSha)
-        throw new Error("规划期间目标 HEAD 发生变化；请核对现场后重新启动。");
-      return parsePlan(result.stdout);
+      return { tickets: plan.tickets, complete: frontier.complete, blocked: frontier.blocked };
+    },
+
+    async pause(
+      workspace: SpecWorkspace,
+      outcome: { integrated: number[]; failed: number[]; blocked: { number: number; reasons: string[] }[] },
+    ): Promise<void> {
+      const contexts = workspace.graph.tickets.flatMap((entry) => {
+        const context = tickets.contexts.get(entry.number);
+        return context
+          ? [
+              `#${entry.number}: branch=${context.ticket.branch}; base=${context.baseSha}; candidate=${context.candidate ?? "pending"}; merged=${context.mergedSha ?? "pending"}`,
+            ]
+          : [];
+      });
+      try {
+        await recordTicketHandoff(
+          cwd,
+          workspace.graph.spec.number,
+          [
+            `AFK 本轮暂停 Spec #${workspace.graph.spec.number}，保留未完成工作。`,
+            `集成分支：${workspace.branch}；启动分支：${workspace.invocationBranch}；启动基线：${workspace.invocationBase}。`,
+            `本轮集成：${outcome.integrated.join(", ") || "无"}；失败：${outcome.failed.join(", ") || "无"}。`,
+            ...contexts,
+            ...outcome.blocked.map((entry) => `#${entry.number}: ${entry.reasons.join(" ")}`),
+            "恢复时先核对真实 Git、票级交接和日志；本轮不重派失败项，未确认最终交付，不关闭 issues。",
+          ].join("\n\n"),
+          runGh,
+        );
+      } catch (cause) {
+        throw new ExecutorInfrastructureError("无法保存 Spec 普通交接；停止本次运行并保留 Git 与日志。", { cause });
+      }
     },
 
     async execute(ticket: Ticket): Promise<boolean> {
-      if (unsafeCreator) throw new ExecutorTerminationError("仍有未确认停止的创建者；停止启动后续实施者。");
-      const role = roles[ticket.implementer];
-      console.log(`#${ticket.number}: ${role.name} (${role.model}, ${role.effort}) — ${ticket.reason}`);
-      let worktree: Awaited<ReturnType<typeof createWorktree>> | undefined;
-      let sandbox: Sandbox | undefined;
-      return withFrontendMounts(
-        async (generatedMounts) =>
-          withExecutorResources(
-            {
-              cwd,
-              image,
-              signal,
-              onUnsafeClose,
-              close: async () => {
-                const failures: unknown[] = [];
-                try {
-                  await sandbox?.close();
-                } catch (error) {
-                  failures.push(error);
-                }
-                if (worktree) {
-                  try {
-                    await command("git", ["status", "--porcelain"], worktree.worktreePath);
-                    const closed = await worktree.close();
-                    if (closed.preservedWorktreePath)
-                      console.log(`保留 ticket 恢复目录：${closed.preservedWorktreePath}`);
-                  } catch (error) {
-                    failures.push(error);
-                  }
-                }
-                if (failures.length === 1) throw failures[0];
-                if (failures.length) throw new AggregateError(failures, "Sandbox 与 worktree 收尾失败。");
-              },
-            },
-            async (resources) => {
-              signal.throwIfAborted();
-              worktree = await createWorktree({
-                cwd,
-                branchStrategy: { type: "branch", branch: ticket.branch, baseBranch: baseSha },
-              });
-              sandbox = await worktree.createSandbox({
-                sandbox: dockerSandbox({
-                  ...resources,
-                  imageName: image,
-                  env: { ...githubCredentials, ...auth.env, ...resources.env },
-                  mounts: [...mounts, ...generatedMounts, ...resources.mounts],
-                }),
-              });
-              signal.throwIfAborted();
-              const promptArgs = {
-                ...common,
-                ISSUE_NUMBER: String(ticket.number),
-                BRANCH: ticket.branch,
-                BASE_SHA: baseSha,
-                IMPLEMENTER: role.name,
-                SELECTION_REASON: ticket.reason,
-              };
-              await mkdir(join(cwd, ".sandcastle", "logs"), { recursive: true });
-              const implemented = await sandbox.run({
-                agent: withDockerPreflight(withWorkspacePreparation(configuredCodex(model, roles, role))),
-                name: `Implementer #${ticket.number}`,
-                promptFile: promptFile("implement"),
-                promptArgs,
-                maxIterations: 1,
-                signal,
-                logging: {
-                  type: "file",
-                  path: join(cwd, ".sandcastle", "logs", `issue-${ticket.number}-${Date.now()}.log`),
-                  verbose: true,
-                },
-              });
-              if (implemented.completionSignal !== complete)
-                throw new Error(`#${ticket.number} 未报告实现完成；保留分支，下轮可恢复。`);
-              if ((await checkedExec(sandbox, "git branch --show-current")) !== ticket.branch)
-                throw new Error(`#${ticket.number} 评审后分支不匹配。`);
-              await checkedExec(sandbox, `git merge-base --is-ancestor ${baseSha} HEAD`);
-              if (await checkedExec(sandbox, "git status --porcelain"))
-                throw new Error(`#${ticket.number} 仍有未提交改动；保留 worktree。`);
-              const candidate = await checkedExec(sandbox, "git rev-parse HEAD");
-              candidates.set(ticket.number, candidate);
-              return true;
-            },
-          ),
-        () => !unsafeCreator,
-      );
-    },
-
-    async finish(): Promise<void> {
-      await this.merge([]);
-    },
-
-    async merge(tickets: Ticket[]): Promise<void> {
-      await assertTarget();
-      if ((await git("rev-parse", "HEAD")) !== baseSha)
-        throw new Error("并行实施期间目标 HEAD 发生变化；停止自动合并。");
-      await withFrontendMounts(
-        async (generatedMounts) =>
-          withExecutorResources({ cwd, image, signal, onUnsafeClose }, async (resources) => {
-            signal.throwIfAborted();
-            const dependencyMounts = await mergerDependencyMounts(cwd);
-            const result = await run({
-              cwd,
-              branchStrategy: { type: "head" },
-              sandbox: dockerSandbox({
-                ...resources,
-                imageName: image,
-                env: { ...githubCredentials, ...auth.env, ...resources.env },
-                mounts: [...dependencyMounts, ...mounts, ...generatedMounts, ...resources.mounts],
-              }),
-              agent: withDockerPreflight(withWorkspacePreparation(configuredCodex(model, roles))),
-              promptFile: promptFile("merge"),
-              promptArgs: {
-                ...common,
-                BASE_SHA: baseSha,
-                BRANCHES: tickets.map((ticket) => `- ${ticket.branch}: ${candidates.get(ticket.number)}`).join("\n"),
-                ISSUES: tickets.map((ticket) => `- #${ticket.number}`).join("\n"),
-              },
-              maxIterations: 10,
-              name: "Merger",
-              signal,
-            });
-            if (result.completionSignal !== complete)
-              throw new Error("Merger 达到迭代上限仍未报告完成；保留合并现场和 issue 实际状态。");
-          }),
-        () => !unsafeCreator,
-      );
-      await assertTarget();
-      for (const ticket of tickets) {
-        const candidate = candidates.get(ticket.number);
-        if (!candidate) throw new Error(`#${ticket.number} 缺少候选 SHA。`);
-        await git("merge-base", "--is-ancestor", candidate, "HEAD");
-        const state = await command(
-          "gh",
-          ["issue", "view", String(ticket.number), "--repo", githubRepo, "--json", "state", "--jq", ".state"],
-          cwd,
-        );
-        if (state !== "CLOSED") throw new Error(`#${ticket.number} 已合入但尚未关闭；停止并保留交接现场。`);
-      }
-      for (const ticket of tickets) {
-        await deleteMergedTicketBranch(cwd, ticket.branch, candidates.get(ticket.number)!);
-        console.log(`已清理合入的 ticket 分支：${ticket.branch}`);
-      }
+      if (!specWorkspace) throw new Error("尚未准备 Spec 集成工作树。");
+      return recovery.execute(specWorkspace, ticket);
     },
   };
 }
@@ -379,17 +444,19 @@ export async function smoke(options: Pick<RuntimeOptions, "cwd" | "image" | "sig
               cwd,
               image,
               signal,
+              anonymousVolumes: await dependencyVolumeTargets(worktree.worktreePath),
               onUnsafeClose: () => {
                 unsafeCreator = true;
               },
             },
             async (resources) => {
-              const mounts = await mergerDependencyMounts(cwd);
+              const anonymousVolumes = resources.anonymousVolumes;
               const sandbox = await worktree.createSandbox({
                 sandbox: dockerSandbox({
                   ...resources,
                   imageName: image,
-                  mounts: [...mounts, ...agentConfig.mounts, ...generatedMounts, ...resources.mounts],
+                  anonymousVolumes,
+                  mounts: [...agentConfig.mounts, ...generatedMounts, ...resources.mounts],
                   env: {
                     ...resources.env,
                     ...hookSmokeEnvironment,
@@ -418,10 +485,12 @@ export async function smoke(options: Pick<RuntimeOptions, "cwd" | "image" | "sig
                   const stub =
                     phase === "install"
                       ? `#!/bin/sh
+if [ "$1" = --version ] || [ "$1" = list ]; then exec /usr/local/bin/pnpm "$@"; fi
 echo ${failureMessage} >&2
 exit 71
 `
                       : `#!/bin/sh
+if [ "$1" = --version ] || [ "$1" = list ]; then exec /usr/local/bin/pnpm "$@"; fi
 if [ "$1" = install ]; then exit 0; fi
 echo ${failureMessage} >&2
 exit 72
@@ -517,65 +586,13 @@ exit 72
                 if (!cached.includes("cache hit")) throw new Error("Turbo smoke 未命中前一次执行写入的缓存。");
                 console.log("Turbo 缓存写入及再次命中通过。");
                 console.log(await checkedExec(sandbox, "pnpm verify:static && git diff --check", signal));
-                // Exercise the real SDK's prompt preprocessing without GitHub traffic or model calls.
-                await checkedExec(
-                  sandbox,
-                  "mkdir -p /tmp/iam-afk-smoke-bin" +
-                    " && printf '%s\\n' '#!/bin/sh' 'printf \"[]\\n\"' > /tmp/iam-afk-smoke-bin/gh" +
-                    " && chmod +x /tmp/iam-afk-smoke-bin/gh",
-                );
-                const baseSha = await checkedExec(sandbox, "git rev-parse HEAD");
-                const response = '<plan>{"issues":[]}</plan>\n<promise>COMPLETE</promise>';
-                const stream = [
-                  { type: "thread.started", thread_id: "smoke-parent" },
-                  {
-                    type: "item.completed",
-                    item: { type: "agent_message", text: response },
-                  },
-                ];
-                const program = `process.stdin.resume(); process.stdin.on("end", () => {
-          for (const event of ${JSON.stringify(stream)}) console.log(JSON.stringify(event));
-        });`;
-                const probe = withCachePreflight({
-                  ...codex("smoke-no-model", { captureSessions: false }),
-                  buildPrintCommand: ({ prompt }: { prompt: string }) => ({
-                    command: `node -e ${shellQuote(program)}`,
-                    stdin: prompt,
-                  }),
-                });
-                await mkdir(join(cwd, ".sandcastle", "logs"), { recursive: true });
-                for (const stage of ["plan", "implement", "merge"]) {
-                  const result = await sandbox.run({
-                    agent: probe,
-                    name: `Smoke ${stage}`,
-                    promptFile: join(cwd, ".sandcastle", `${stage}-prompt.md`),
-                    promptArgs: {
-                      ...invocationArgs(branch),
-                      ISSUE_NUMBER: "42",
-                      BRANCH: branch,
-                      BASE_SHA: baseSha,
-                      BRANCHES: `- ${branch}: ${baseSha}`,
-                      ISSUES: "- #42",
-                      IMPLEMENTERS: implementerCatalog(roles),
-                      IMPLEMENTER: "implementer_standard",
-                      SELECTION_REASON: "Smoke fixture",
-                    },
-                    signal,
-                    logging: {
-                      type: "file",
-                      path: join(cwd, ".sandcastle", "logs", `smoke-${stage}.log`),
-                    },
-                  });
-                  if (result.completionSignal !== complete) throw new Error(`${stage} 的 SDK prompt 接线检查未完成。`);
-                  if (stage === "plan") parsePlan(result.stdout);
-                }
                 // Make only the container-private hook directory unwritable. Stub
                 // dependency setup so this case reaches the hook initialization
                 // boundary without another install; the real setup passed above.
                 await checkedExec(
                   sandbox,
                   "chmod 500 /tmp/iam-sandcastle-hooks" +
-                    " && printf '%s\\n' '#!/bin/sh' 'exit 0' > /tmp/iam-afk-smoke-bin/pnpm" +
+                    " && printf '%s\\n' '#!/bin/sh' 'if [ \"$1\" = --version ] || [ \"$1\" = list ]; then exec /usr/local/bin/pnpm \"$@\"; fi' 'exit 0' > /tmp/iam-afk-smoke-bin/pnpm" +
                     " && chmod +x /tmp/iam-afk-smoke-bin/pnpm",
                   signal,
                 );
@@ -604,41 +621,55 @@ exit 72
               } finally {
                 await sandbox.close();
               }
-              // Match the production Merger's head checkout. Its host is the
+              // Match the production Spec finalization's head checkout. Its host is the
               // disposable smoke worktree, so ordinary commits cannot move the
               // caller's feature branch even though Git common metadata is shared.
-              const mergerProbe = await run({
-                cwd: worktree.worktreePath,
-                branchStrategy: { type: "head" },
-                sandbox: dockerSandbox({
-                  ...resources,
-                  imageName: image,
-                  mounts: [...mounts, ...agentConfig.mounts, ...generatedMounts, ...resources.mounts],
-                  env: { ...resources.env, ...hookSmokeEnvironment },
-                }),
-                agent: withDockerPreflight(
-                  withWorkspacePreparation({
-                    ...codex("smoke-no-model", { captureSessions: false }),
-                    buildPrintCommand: () => ({
-                      command:
-                        hookCommitProbe("Merger") +
-                        `\nprintf '%s\\n' ${shellQuote(
-                          JSON.stringify({
-                            type: "item.completed",
-                            item: { type: "agent_message", text: complete },
-                          }),
-                        )}`,
+              const headProbe = await withExecutorResources(
+                {
+                  cwd,
+                  image,
+                  signal,
+                  anonymousVolumes,
+                  onUnsafeClose: () => {
+                    unsafeCreator = true;
+                  },
+                },
+                (headResources) =>
+                  run({
+                    cwd: worktree.worktreePath,
+                    branchStrategy: { type: "head" },
+                    sandbox: dockerSandbox({
+                      ...headResources,
+                      imageName: image,
+                      anonymousVolumes,
+                      mounts: [...agentConfig.mounts, ...generatedMounts, ...headResources.mounts],
+                      env: { ...headResources.env, ...hookSmokeEnvironment },
                     }),
+                    agent: withDockerPreflight(
+                      withWorkspacePreparation({
+                        ...codex("smoke-no-model", { captureSessions: false }),
+                        buildPrintCommand: () => ({
+                          command:
+                            hookCommitProbe("Finalization") +
+                            `\nprintf '%s\\n' ${shellQuote(
+                              JSON.stringify({
+                                type: "item.completed",
+                                item: { type: "agent_message", text: complete },
+                              }),
+                            )}`,
+                        }),
+                      }),
+                    ),
+                    prompt: "Spec finalization head checkout hook smoke; do not invoke a model.",
+                    signal,
                   }),
-                ),
-                prompt: "Merger head checkout hook smoke; do not invoke a model.",
-                signal,
-              });
-              if (mergerProbe.completionSignal !== complete) throw new Error("Merger 真实提交门禁检查未完成。");
+              );
+              if (headProbe.completionSignal !== complete)
+                throw new Error("Spec finalization 真实提交门禁检查未完成。");
               if ((await snapshotHostHooks(cwd, worktree.worktreePath)) !== hostHooksBefore)
-                throw new Error("Merger 初始化或提交改变了宿主 Git 配置/Husky 包装文件。");
+                throw new Error("Spec finalization 初始化或提交改变了宿主 Git 配置/Husky 包装文件。");
               smokeCandidate = await command("git", ["rev-parse", "HEAD"], worktree.worktreePath);
-              console.log("Merger head checkout 真实提交门禁及宿主 Git/Husky 隔离检查通过。");
+              console.log("Spec finalization head checkout 真实提交门禁及宿主 Git/Husky 隔离检查通过。");
             },
           ),
         () => !unsafeCreator,
@@ -672,6 +703,8 @@ exit 72
     // observed tip after successful cleanup, never another writer's update.
     await command("git", ["update-ref", "-d", `refs/heads/${branch}`, smokeCandidate], cwd);
     await smokeExecutorRecovery({ cwd, image, signal });
+    const { controlledWorkflowJourney } = await import("./workflow-smoke.mts");
+    await controlledWorkflowJourney({ sourceCwd: cwd, mode: "docker", scenario: "complete", image, signal });
   } finally {
     if (!unsafeCreator) await agentConfig.close();
   }

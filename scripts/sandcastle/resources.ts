@@ -10,6 +10,7 @@ import {
   readManagedResourceRegistry,
   readManagedResourceRun,
   repositoryPath,
+  writeAtomicResourceRecord,
 } from "../test-resources/managed-resources.mjs";
 import { command } from "./commands.ts";
 import type { DockerConfig } from "./docker-config.ts";
@@ -21,6 +22,7 @@ export const hostNetworkRequirements =
   "需要实际 UID 1000 访问共享 Docker socket，不自动切换网络、DinD 或代理。";
 
 export class ExecutorTerminationError extends Error {}
+export class ExecutorInfrastructureError extends Error {}
 
 export function hasUnstoppedExecutor(error: unknown): boolean {
   return (
@@ -39,7 +41,59 @@ export type ExecutorResources = {
   env: Record<string, string>;
   mounts: NonNullable<DockerOptions["mounts"]>;
   registryFile: string;
+  anonymousVolumes: readonly string[];
+  onAnonymousVolumes: (names: readonly string[]) => Promise<void>;
 };
+
+function dependencyTargets(value: unknown): string[] {
+  if (
+    !Array.isArray(value) ||
+    value.some(
+      (path) =>
+        typeof path !== "string" ||
+        !path.startsWith("/home/agent/workspace/") ||
+        !path.endsWith("/node_modules") ||
+        path.split("/").includes("..") ||
+        /[,:\\\0\r\n]/.test(path),
+    )
+  )
+    throw new Error("Invalid dependency volume targets");
+  if (new Set(value).size !== value.length) throw new Error("Duplicate dependency volume targets");
+  return value;
+}
+
+function dependencyVolumes(value: unknown): string[] {
+  if (
+    !Array.isArray(value) ||
+    value.some((name) => typeof name !== "string" || !/^[a-f0-9]{64}$/.test(name)) ||
+    new Set(value).size !== value.length
+  )
+    throw new Error("Invalid dependency volume ownership");
+  return value;
+}
+
+async function attachedDependencyVolumes(cwd: string, name: string, targets: readonly string[]): Promise<string[]> {
+  const mounts: { Type: string; Destination: string; Name: string }[] = JSON.parse(
+    await command("docker", ["inspect", "--format", "{{json .Mounts}}", name], cwd, 10_000),
+  );
+  return dependencyVolumes(
+    mounts.filter((mount) => targets.includes(mount.Destination) && mount.Type === "volume").map((mount) => mount.Name),
+  );
+}
+
+async function cleanupDependencyVolumes(cwd: string, names: readonly string[]): Promise<void> {
+  for (const name of names) {
+    try {
+      await command("docker", ["volume", "inspect", name], cwd, 10_000);
+    } catch (error) {
+      if (/no such volume/i.test(formatResourceFailure(error))) continue;
+      throw error;
+    }
+    // A surviving anonymous volume is still ours, even if SDK close removed its container first.
+    // Docker refuses an in-use volume; never force another creator's storage away.
+    await command("docker", ["volume", "rm", name], cwd, 10_000);
+  }
+}
 
 /** Missing is a valid stopped state; daemon errors are never evidence of termination. */
 async function inspectSandbox(cwd: string, name: string): Promise<{ Running: boolean } | undefined> {
@@ -87,16 +141,33 @@ export async function recoverExecutorResources(cwd: string, descriptorFile: stri
     record.registryFile !== `.sandcastle/resources/executor-${record.runId}/registry.jsonl`
   )
     throw new Error("Invalid executor recovery record");
+  const targets = dependencyTargets(record.dependencyTargets ?? []);
+  let volumes = dependencyVolumes(record.dependencyVolumes ?? []);
   await stopExecutorSandbox(cwd, record.containerName);
+  if (targets.length && (await inspectSandbox(cwd, record.containerName))) {
+    const attached = await attachedDependencyVolumes(cwd, record.containerName, targets);
+    if (volumes.length && (attached.length !== volumes.length || attached.some((name) => !volumes.includes(name))))
+      throw new Error("Dependency volume ownership changed; preserve the exact executor for inspection");
+    volumes = attached;
+    await writeAtomicResourceRecord(join(cwd, path), { ...record, dependencyVolumes: volumes });
+  }
   await cleanupExecutorResources(cwd, record.registryFile);
   for (const name of [record.containerName, record.socketProbeName])
-    if (await inspectSandbox(cwd, name)) await command("docker", ["rm", "--force", name], cwd, 10_000);
+    if (await inspectSandbox(cwd, name)) await command("docker", ["rm", "--force", "--volumes", name], cwd, 10_000);
+  await cleanupDependencyVolumes(cwd, volumes);
   await closeDockerConfig(record.runId);
   console.log(`执行器准确恢复清理完成：${path}`);
 }
 
 export async function withExecutorResources<T>(
-  options: { cwd: string; image: string; signal: AbortSignal; close?: () => Promise<void>; onUnsafeClose?: () => void },
+  options: {
+    cwd: string;
+    image: string;
+    signal: AbortSignal;
+    anonymousVolumes?: readonly string[];
+    close?: () => Promise<void>;
+    onUnsafeClose?: () => void;
+  },
   use: (resources: ExecutorResources) => Promise<T>,
 ): Promise<T> {
   const { cwd, image, signal } = options;
@@ -107,21 +178,38 @@ export async function withExecutorResources<T>(
   const socketProbeName = `iam-afk-socket-${runId}`;
   const descriptor = join(cwd, directory, "executor.json");
   const failures: unknown[] = [];
+  const targets = dependencyTargets(options.anonymousVolumes ?? []);
+  let volumes: string[] = [];
+  let ownershipRecorded = !targets.length;
   let result: T | undefined;
   let stopped = false;
   let abortStop: Promise<void> | undefined;
   let dockerConfig: DockerConfig | undefined;
   const server = createServer((_request, response) => response.end(runId));
   const save = (status: string) =>
-    writeFile(
-      descriptor,
-      `${JSON.stringify({ runId, containerName, socketProbeName, registryFile, status, failures: failures.map(formatResourceFailure) }, null, 2)}\n`,
-      { mode: 0o600 },
-    );
+    writeAtomicResourceRecord(descriptor, {
+      runId,
+      containerName,
+      socketProbeName,
+      registryFile,
+      dependencyTargets: targets,
+      dependencyVolumes: volumes,
+      status,
+      failures: failures.map(formatResourceFailure),
+    });
   const abort = () => {
     abortStop ??= stopExecutorSandbox(cwd, containerName).catch((error) => {
       failures.push(error);
     });
+  };
+  const recordVolumes = async (names: readonly string[], complete = true) => {
+    const observed = dependencyVolumes([...names]);
+    if (complete && observed.length !== targets.length) throw new Error("Incomplete dependency volume allocation");
+    if (volumes.length && (observed.length !== volumes.length || observed.some((name) => !volumes.includes(name))))
+      throw new Error("Dependency volume ownership changed during execution");
+    volumes = observed;
+    await save(stopped ? "creator-stopped" : "executing");
+    ownershipRecorded = true;
   };
   await mkdir(join(cwd, directory), { recursive: true });
   await mkdir(join(cwd, "test-results/integration"), { recursive: true });
@@ -169,6 +257,8 @@ export async function withExecutorResources<T>(
       containerUid: 1000,
       containerGid: 1000,
       daemonAccess: { socketGroupId },
+      anonymousVolumes: targets,
+      onAnonymousVolumes: (names) => recordVolumes(names),
       registryFile,
       env: {
         IAM_TEST_RESOURCE_REGISTRY: registryFile,
@@ -191,6 +281,9 @@ export async function withExecutorResources<T>(
     try {
       await stopExecutorSandbox(cwd, containerName);
       stopped = true;
+      if (targets.length && (await inspectSandbox(cwd, containerName)))
+        await recordVolumes(await attachedDependencyVolumes(cwd, containerName, targets), false);
+      else if (!volumes.length) ownershipRecorded = true;
       await save("creator-stopped");
       // Recovery uses a fresh bounded budget, independent of the execution signal.
       await cleanupExecutorResources(cwd, registryFile);
@@ -198,11 +291,15 @@ export async function withExecutorResources<T>(
       failures.push(error);
     }
     if (stopped) {
-      try {
-        if (await inspectSandbox(cwd, containerName))
-          await command("docker", ["rm", "--force", containerName], cwd, 10_000);
-      } catch (error) {
-        failures.push(error);
+      if (!ownershipRecorded) failures.push(new Error(`依赖卷归属未持久化，保留准确执行器：${descriptor}`));
+      else {
+        try {
+          if (await inspectSandbox(cwd, containerName))
+            await command("docker", ["rm", "--force", "--volumes", containerName], cwd, 10_000);
+          await cleanupDependencyVolumes(cwd, volumes);
+        } catch (error) {
+          failures.push(error);
+        }
       }
       try {
         await options.close?.();
@@ -222,7 +319,7 @@ export async function withExecutorResources<T>(
     }
     try {
       if (await inspectSandbox(cwd, socketProbeName))
-        await command("docker", ["rm", "--force", socketProbeName], cwd, 10_000);
+        await command("docker", ["rm", "--force", "--volumes", socketProbeName], cwd, 10_000);
     } catch (error) {
       failures.push(error);
     }
