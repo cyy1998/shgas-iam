@@ -31,8 +31,18 @@ Internal 与 SSO Secret 分别绑定原 Client 字段；不要将两者互换。
 
 ## 验证与边界
 
-Worker 的原 `test:unit` 自动收集初始化输入、严格 Client 合同、secret 分离，以及 publication 缺失/过期时不 seed、已有 Barrier 保留和核验失败场景。原 Integration collection 增加 `test-integration/initialization/initialization.integration.test.ts`，通过既有 UUID schema harness 真执行正式 migrations、初始化、重复执行、原生授权登记失败回滚、已有对象保护和并发初始化。
+Worker 的原 `test:unit` 自动收集初始化输入、严格 Client 合同、secret 分离，以及 publication 未就绪时不 seed、已有 Barrier 保留和核验失败场景。原 Integration collection 的 `test-integration/initialization/initialization.integration.test.ts` 通过既有 UUID schema harness 真执行正式 migrations、初始化、重复执行、原生授权登记失败回滚、已有对象保护和并发初始化。
 
-本任务只在项目指定托管 PG16 上执行需要服务的检查，不运行原通用测试资源创建器另起临时 PG/Redis。QA 沿原授权注入独立托管验证库的 `IAM_WORKER_TEST_DATABASE_URL`，明确选择上述 Bun 文件；harness 只创建并清理本例 UUID schema，不创建数据库或服务。未执行的 PG16、真实登录/Worker、镜像交付必须如实单列，不能由 unit/typecheck 推导通过。
+`initialization-access.integration.test.ts` 调用与正式 access 命令相同的资源接线：从源事实构建并事务发布真实 PG Profile，再发布 Redis Facts，验证缺失／旧版本／同版本错内容／自有键实际到期，以及 Barrier 缺失、既有 enabled、disabled、blocking、非法值和重复执行。断言 PG/Facts/Barrier 字节、版本、transitionId 和 updatedAt 保持。Facts 没有按 publishedAt 年龄自动失效的合同；用例不新增该规则，也不启动 Worker 或假服务器。
+
+`database-migrate-command.integration.test.ts` 启动正式 `database:migrate` 子进程，对同一托管 PG 上的自有随机空数据库执行原 migrations，再验证重复执行保留默认 drizzle 账本、表 OID 和受控行；另核连接失败不输出完成或凭据。由于原 migrator 使用数据库默认账本，该用例需要验证账号的 CREATEDB 能力，并准确删除自有数据库，不用 schema 夹具冒充 CLI 空库证明。
+
+本任务只在项目指定托管 PG16／Redis 上执行需要服务的检查，不运行原通用测试资源创建器另起临时服务。QA 沿原授权注入 `IAM_WORKER_TEST_DATABASE_URL` 和 `IAM_WORKER_TEST_REDIS_URL`，在 IAM 仓库根选择下列正式文件。PG harness 只创建并清理本例 UUID schema；CLI 用例另创建并删除自己的随机数据库。Redis 仅写入和删除各例 subjectIdentifier 对应的准确 Facts/Barrier 键，不 flush DB。
+
+```text
+bun --no-env-file test ./apps/worker/test-integration/initialization/initialization.integration.test.ts ./apps/worker/test-integration/initialization/initialization-access.integration.test.ts ./apps/worker/test-integration/initialization/database-migrate-command.integration.test.ts
+```
+
+资源场景不替代真实 source 命令投递、两类运行 Worker、登录／管理端、镜像和同请求观测验收。各范围的实际执行与未覆盖分别记录，不能由 unit/typecheck 或初始化成功推导全部通过。
 
 正式初始化源事实由 Worker 的 initialization-source 拥有，包括首次 Role Assignment 写入；日常管理写入仍由 Admin Role Management 拥有，运行时角色解析仍只用原 Resolver。该新装事务不向在线 API 暴露第二条角色管理路径。

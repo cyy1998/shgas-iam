@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { completeInitializationAccess } from "./initialization-access";
+import { completeInitializationAccess } from "../../composition/initialization-access";
 
 for (const missing of ["postgres", "facts", "access", null]) {
   test(`首次访问只在已发布事实后 seed，并保留已有 Barrier：${missing ?? "complete"}`, async () => {
