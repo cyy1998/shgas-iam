@@ -5,8 +5,8 @@ import { wecomMobileCertificatePin } from "./src/wecom-mobile-tls.ts";
 const origin = requireEnvironment("IAM_E2E_ORIGIN");
 const outputDir = requireEnvironment("IAM_E2E_PLAYWRIGHT_OUTPUT_DIR");
 const journey = process.env.IAM_E2E_JOURNEY ?? "admin";
-if (journey !== "admin" && journey !== "hr-admin" && journey !== "oidc")
-  throw new Error("IAM_E2E_JOURNEY must be admin, hr-admin, or oidc");
+if (journey !== "admin" && journey !== "hr-admin" && journey !== "oidc" && journey !== "managed")
+  throw new Error("IAM_E2E_JOURNEY must be admin, hr-admin, oidc, or managed");
 
 export default defineConfig({
   expect: { timeout: 30_000 },
@@ -45,8 +45,8 @@ export default defineConfig({
       ],
     },
     screenshot: "only-on-failure",
-    trace: "retain-on-failure",
-    video: "retain-on-failure",
+    trace: journey === "managed" ? "off" : "retain-on-failure",
+    video: journey === "managed" ? "off" : "retain-on-failure",
   },
   workers: 1,
 });

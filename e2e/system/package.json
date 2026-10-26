@@ -12,7 +12,9 @@
     "@iam/runtime": "workspace:*",
     "@iam/subject-access": "workspace:*",
     "drizzle-orm": "1.0.0-rc.2",
-    "ioredis": "^6.0.0"
+    "ioredis": "^6.0.0",
+    "@iam/jobs": "workspace:*",
+    "@iam/organization-search-read-model": "workspace:*"
   },
   "scripts": {
     "admin:journey": "bun src/cli.ts admin",

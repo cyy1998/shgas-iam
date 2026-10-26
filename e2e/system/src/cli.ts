@@ -7,6 +7,7 @@ import { createDockerInfraOperations } from "./docker-infra.ts";
 import { createFullSystemJourneyOperations } from "./full-system-journey.ts";
 import { createHrAdminJourneyOperations } from "./hr-admin-journey.ts";
 import { runExactProjectJourneyLifecycle, runExactProjectRuntimeLifecycle } from "./lifecycle.ts";
+import { runManagedIamJourney } from "./managed-iam-journey.ts";
 import { createOidcJourneyOperations } from "./oidc-journey.ts";
 import type { PlaywrightJourneyRuntimeOptions } from "./playwright-journey.ts";
 import { recoverExactProject } from "./recovery.ts";
@@ -230,10 +231,14 @@ function parseRecoveryArgs(args: string[]) {
 
 try {
   const command = process.argv[2];
-  if (command !== "cleanup" && process.argv.slice(3).some((argument) => argument !== "--keep-resources")) {
+  const managed =
+    command === "e2e" &&
+    (process.argv.slice(3).join(" ") === "--managed" || process.argv.slice(3).join(" ") === "-- --managed");
+  if (!managed && command !== "cleanup" && process.argv.slice(3).some((argument) => argument !== "--keep-resources")) {
     throw new Error("E2E lifecycle accepts only --keep-resources");
   }
-  if (command === "admin") await runAdminJourneyLifecycle();
+  if (managed) await withCapturableSignals((signal) => runManagedIamJourney(signal));
+  else if (command === "admin") await runAdminJourneyLifecycle();
   else if (command === "hr-admin") await runHrAdminJourneyLifecycle();
   else if (command === "oidc") await runOidcJourneyLifecycle();
   else if (command === "e2e") await runFullSystemJourneyLifecycle();

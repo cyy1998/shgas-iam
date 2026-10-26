@@ -46,3 +46,17 @@ bun --no-env-file test ./apps/worker/test-integration/initialization/initializat
 资源场景不替代真实 source 命令投递、两类运行 Worker、登录／管理端、镜像和同请求观测验收。各范围的实际执行与未覆盖分别记录，不能由 unit/typecheck 或初始化成功推导全部通过。
 
 正式初始化源事实由 Worker 的 initialization-source 拥有，包括首次 Role Assignment 写入；日常管理写入仍由 Admin Role Management 拥有，运行时角色解析仍只用原 Resolver。该新装事务不向在线 API 暴露第二条角色管理路径。
+
+## 已托管环境的登录与两类 Worker
+
+本任务通过同一个 E2E 入口的显式 managed 模式访问父仓已经部署、初始化并完成 access 的 IAM test/prod。该模式不调用 Docker 生命周期、seed、端口分配或 APISIX apply，不启动 API/Worker/代理/测试依赖。使用根 pnpm test:e2e -- --managed，或从仓根直接调用原 CLI：
+
+```text
+bun --no-env-file e2e/system/src/cli.ts e2e --managed
+```
+
+IAM_MANAGED_ACCEPTANCE_INPUT_FILE 指向 ignored temp 内、由父组合 Git 映射及正式初始化私有输入生成的私有 UTF-8 JSON：environment、origin、database、databaseUrl；admin.username/password；redis.host/port/db 和实际配置的可选 username/password。非 secret 映射取父 Git，账号取正式初始化，动态 id/subject 由真实登录后的管理端与 user-info 取得并交叉核对，不能复制历史 seed 或伪造 Cookie。字段和值不入日志/附件。DATABASE_URL 只在实际测试子进程内绑定该 IAM 库。输出仅为自有环境、请求RID、原生jobId/版本/处理时间及自有组织code；trace/video关闭，错误剔除私有输入和回调grant。
+
+正式 managed-hosting.spec.ts 有两个独立场景：真实管理员登录和管理端读取后，只改受控账号名字一次，核新代 Redis Facts、同原生 JobId 的 completed/dirtyVersion/requestId，以及正式 user-info 最终读回；finally 通过原API恢复名字并等发布。另一例经原管理API创建自有根/子/叶，只改叶名一次，使用原 Organization Search 查询 consumer 读取 PG 发布文档，核完整路径/旧名消失、同叶新代原生任务完成；结束沿正常停用/删除API按叶到根清理，并核搜索发布不再返回。只取该队列最新100份完成任务的必要句柄，不读取业务全量或清空Redis。
+
+新增的 Jobs/Search 两项 workspace 依赖及已有 Facts 依赖只复用现有 Jobs、Facts、Search 的公开schema/ID/原生reader，不增加第三方版本，不复制 Redis key 或第二查询实现。程序只建立并关闭自己的数据库/Redis/浏览器连接，不启动消费者替身。原异步发布若未完成仍FAIL；不以入队、源表变化或health代替实际Worker结果。原资源型Integration继续按前节指定正式文件；本模式不代签外部来源、HR、业务版组合、真实日志/Grafana下钻或完整A1–A7，相关环境证据分别收集。
