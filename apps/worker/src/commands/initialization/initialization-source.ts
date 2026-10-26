@@ -151,6 +151,7 @@ export async function initializeSourceFacts(
         })
         .from(sql`(values (1)) as initialization_input(value)`);
       if (state?.occupied) throw conflict();
+      const transactionTime = new Date();
       const createdClients = await tx
         .insert(clients)
         .values(
@@ -161,7 +162,7 @@ export async function initializeSourceFacts(
             ssoEnabled: true,
             status: ClientStatus.Enable,
             ssoCredentialId: randomUUID(),
-            ssoSecretUpdatedAt: new Date().toISOString(),
+            ssoSecretUpdatedAt: transactionTime.toISOString(),
           })),
         )
         .returning({ id: clients.id, clientCode: clients.clientCode });
@@ -196,6 +197,7 @@ export async function initializeSourceFacts(
           posId: position!.id,
           orgId: organization!.id,
           isPrimary: true,
+          startTime: transactionTime,
           status: EmploymentStatus.Enable,
         })
         .returning({ id: employments.id });

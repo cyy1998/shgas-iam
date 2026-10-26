@@ -17,7 +17,7 @@ let redis: Awaited<ReturnType<typeof createWorkerRedisTestHarness>> | undefined;
 let source: Awaited<ReturnType<typeof initializeSourceFacts>>;
 let factsKey: string;
 let barrierKey: string;
-const clock = { now: () => Date.parse("2026-10-26T12:00:00Z"), nowDate: () => new Date("2026-10-26T12:00:00Z") };
+const clock = { now: Date.now, nowDate: () => new Date() };
 const projection = createCurrentUserProfileProjectionBundle();
 
 beforeEach(async () => {
@@ -147,6 +147,30 @@ test("Facts 自有键真实到期后拒绝初始化，未增加按 publishedAt �
 test("完整 publication 后种缺失 Barrier，重复执行保留 PG/Facts/Barrier 字节和代际", async () => {
   await publish();
   const initialFacts = await redis!.observer.get(factsKey);
+  const expectedEmployments = [
+    {
+      isPrimary: true,
+      organization: {
+        code: "controlled-root",
+        name: "受控组织",
+        type: "虚拟组织",
+        path: [{ code: "controlled-root", name: "受控组织", type: "虚拟组织" }],
+      },
+      position: { code: "controlled-operator", name: "受控维护岗位" },
+      responsibilities: [],
+      clientAuthorizations: [{ clientCode: "iam-admin", roles: [{ code: "iam:admin" }] }],
+    },
+  ];
+  const [publication] = await pg!.sql.unsafe("select username,name,subject_facts from user_profile where user_id=$1", [
+    source.userId,
+  ]);
+  expect(publication!.username).toBe("controlled-admin");
+  expect(publication!.name).toBe("受控管理员");
+  expect(publication!.subject_facts).toEqual({ employments: expectedEmployments });
+  const facts = JSON.parse(initialFacts!);
+  expect(facts.profile).toMatchObject({ username: "controlled-admin", name: "受控管理员" });
+  expect(facts.facts).toEqual({ employments: expectedEmployments });
+
   const [initialProfile] = await pg!.sql`select to_jsonb(p) as row from user_profile p where user_id=${source.userId}`;
   const first = await completeAccess();
   expect(first).toEqual({ seeded: 1, retainedExisting: 0 });
