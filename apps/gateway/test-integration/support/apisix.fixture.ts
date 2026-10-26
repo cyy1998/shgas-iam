@@ -44,7 +44,7 @@ async function waitForAdmin(adminUrl: string, adminKey: string, signal?: AbortSi
 
 export async function createApisixFixture(options: ApisixFixtureOptions = {}): Promise<ApisixFixture> {
   options.signal?.throwIfAborted();
-  const key = options.deployment ? "dev-local-admin-key-change-me" : adminKey;
+  const key = adminKey;
   const controller = new AbortController();
   const signal = options.signal ? AbortSignal.any([controller.signal, options.signal]) : controller.signal;
   const onInterrupt = () => {

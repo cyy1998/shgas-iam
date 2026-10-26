@@ -111,7 +111,9 @@ Gateway 配置由调用方在 Git 忽略目录 `tmp/gateway-config/apisix/` 保�
 `config.prod.example.yaml` 及 `manifests/dev/`、`manifests/prod/` 中的应用配置。
 缺失时相关入口会失败；应用源码本身不读取此目录。不要将发布变量、凭据或现场快照加入 Git。
 Unit 使用 `src/__tests__/` 内的合成 manifest 验证解析、资源物化与 HTTP 输入，不依赖部署配置。
-Gateway deployment Integration 与 Full-system E2E 尚未迁移，仍引用原 `docker/apisix/` 路径；Unit 通过不代表这两个通道可用。
+Gateway deployment Integration 使用 `test-integration/support/` 内的 APISIX 测试配置与合成发布输入，
+分别验证无认证和有认证的 etcd；Full-system E2E 独立维护 `e2e/system/test-assets/` 中的启动配置和 IAM 路由。
+这些测试资产不作为部署模板；现场配置仍须由部署方准备并按发布手册验收。
 
 开发编排为 `docker/compose.dev.yaml`，模板为 `docker/.env.dev.example`；Gateway 数据库 URL
 必须显式提供，不能继承其他 app 的读写连接。生产 `gateway-api` 位于 `docker/compose.prod.apps.yaml`，

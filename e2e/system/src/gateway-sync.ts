@@ -11,9 +11,8 @@ export async function publishGateway(
   },
   request: (input: string, init?: RequestInit) => Promise<Response> = fetch,
 ) {
-  // Start with the production manifest and publish through its authenticated HTTP API. The
-  // test topology rewrites only the API upstream Host; browser authorities and
-  // the production route/header policy are unchanged.
+  // Publish the test-owned topology through the authenticated Gateway API. The
+  // API upstream Host differs from browser authorities to exercise trusted forwarding.
   const source = Bun.YAML.parse(input.yaml);
   if (typeof source !== "object" || source === null || !("upstreams" in source) || !Array.isArray(source.upstreams))
     throw new Error("E2E Gateway manifest has no upstreams");
@@ -98,7 +97,7 @@ if (import.meta.main) {
   };
   try {
     const result = await publishGateway({
-      yaml: await Bun.file("docker/apisix/manifests/dev/iam.yaml").text(),
+      yaml: await Bun.file(new URL("../test-assets/iam.yaml", import.meta.url)).text(),
       variables: Object.fromEntries(variableNames.map((name) => [name, required(name)])),
       clientSecret: createE2EGatewayApiKey(required("IAM_E2E_RUN_ID")),
       gatewayOrigin: required("IAM_E2E_GATEWAY_API_ORIGIN"),

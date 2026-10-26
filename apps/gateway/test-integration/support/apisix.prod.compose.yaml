@@ -37,17 +37,10 @@ services:
 
   apisix:
     build:
-      context: .
-      dockerfile: apps/gateway/test-integration/support/apisix.deployment.Dockerfile
+      context: ./apps/gateway/test-integration/support
+      dockerfile: apisix.deployment.Dockerfile
       args:
-        APISIX_CONFIG: config.prod.example.yaml
-    environment:
-      APISIX_OTEL_COLLECTOR_ENDPOINT: 127.0.0.1:9
-      APISIX_ADMIN_KEY: dev-local-admin-key-change-me
-      APISIX_ADMIN_ALLOW_CIDR: 0.0.0.0/0
-      APISIX_ETCD_ENDPOINT: http://apisix-etcd:2379
-      APISIX_ETCD_USER: root
-      APISIX_ETCD_PASSWORD: synthetic-etcd-key
+        APISIX_CONFIG: apisix.authenticated.config.yaml
     ports:
       - "127.0.0.1::9180"
     depends_on:

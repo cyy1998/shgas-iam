@@ -80,7 +80,9 @@ API 协议浏览器测试使用真实候选 API、动态 RP 和专用资源，�
 ## Full-system E2E
 
 `e2e/system` 拥有独立 project，从空卷开始执行 migrations、正式 runtime、合成 seed、Gateway 发布、旅程与清理。
-镜像包含当前候选的配置和脚本，不依赖 daemon 挂载调用方 checkout。仅使用固定测试或本次生成的数据与凭据，不接入生产端点或真实 PII。
+镜像包含当前候选的测试配置和脚本，不依赖 daemon 挂载调用方 checkout。仅使用固定测试或本次生成的数据与凭据，不接入生产端点或真实 PII。
+APISIX 启动配置与 IAM 路由由 `e2e/system/test-assets/` 独立维护，通过正式 Gateway API 发布，
+不读取调用方的部署目录，也不将测试配置视为生产部署验收。
 
 ### 初始化与就绪
 

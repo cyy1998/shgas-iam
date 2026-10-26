@@ -21,12 +21,10 @@ services:
 
   apisix:
     build:
-      context: .
-      dockerfile: apps/gateway/test-integration/support/apisix.deployment.Dockerfile
+      context: ./apps/gateway/test-integration/support
+      dockerfile: apisix.deployment.Dockerfile
       args:
-        APISIX_CONFIG: config.dev.yaml
-    environment:
-      APISIX_OTEL_COLLECTOR_ENDPOINT: 127.0.0.1:9
+        APISIX_CONFIG: apisix.publication.config.yaml
     ports:
       - "127.0.0.1::9180"
     depends_on:

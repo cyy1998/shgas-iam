@@ -1,0 +1,105 @@
+# Synthetic application topology owned by Full-system E2E.
+service:
+  desc: Full-system E2E
+  plugin_configs:
+    - key: api
+      plugins: &telemetry
+        request-id:
+          header_name: X-Request-Id
+          include_in_response: true
+        opentelemetry:
+          sampler:
+            name: always_on
+
+plugin_metadata:
+  - key: opentelemetry
+    set_ngx_var: true
+    collector:
+      address: ${APISIX_OTEL_COLLECTOR_ENDPOINT}
+      request_timeout: 1
+
+upstreams:
+  - key: api
+    type: roundrobin
+    nodes:
+      ${DEV_IAM_API_UPSTREAM_HOST}:${DEV_IAM_API_UPSTREAM_PORT}: 1
+  - key: admin-api
+    type: roundrobin
+    nodes:
+      ${DEV_IAM_ADMIN_API_UPSTREAM_HOST}:${DEV_IAM_ADMIN_API_UPSTREAM_PORT}: 1
+  - key: sso-frontend
+    type: roundrobin
+    nodes:
+      ${DEV_IAM_SSO_FRONTEND_UPSTREAM_HOST}:${DEV_IAM_SSO_FRONTEND_UPSTREAM_PORT}: 1
+  - key: admin-frontend
+    type: roundrobin
+    nodes:
+      ${DEV_IAM_ADMIN_FRONTEND_UPSTREAM_HOST}:${DEV_IAM_ADMIN_FRONTEND_UPSTREAM_PORT}: 1
+
+routes:
+  - key: api
+    uris: [/api/iam/public/*, /api/iam/open/*, /api/iam/internal/*, /api/iam/auth/*]
+    upstream: api
+    plugin_config: api
+    plugins:
+      proxy-rewrite:
+        regex_uri: ["^/api/iam/(.*)", "/$1"]
+  - key: admin-api
+    uris: [/api/iam/admin/*, /api/iam/rpc/*]
+    upstream: admin-api
+    plugin_config: api
+    plugins:
+      proxy-rewrite:
+        regex_uri: ["^/api/iam/(.*)", "/$1"]
+  - key: sso-internal
+    uri: /sso/*
+    vars: [[http_host, "==", "${IAM_SSO_INTERNAL_HOST}"]]
+    upstream: api
+    plugin_config: api
+    plugins:
+      proxy-rewrite:
+        headers:
+          set:
+            X-IAM-Entry-Network: internal
+  - key: sso-external
+    uri: /sso/*
+    vars: [[http_host, "==", "${IAM_SSO_EXTERNAL_HOST}"]]
+    upstream: api
+    plugin_config: api
+    plugins:
+      proxy-rewrite:
+        headers:
+          set:
+            X-IAM-Entry-Network: external
+  - key: oidc-internal
+    uris: [/oidc, /oidc/*]
+    vars: [[http_host, "==", "${IAM_SSO_INTERNAL_HOST}"]]
+    upstream: api
+    plugin_config: api
+    plugins:
+      proxy-rewrite:
+        headers:
+          set:
+            X-IAM-Entry-Network: internal
+            X-Forwarded-Host: $http_host
+            X-Forwarded-Proto: $scheme
+  - key: oidc-external
+    uris: [/oidc, /oidc/*]
+    vars: [[http_host, "==", "${IAM_SSO_EXTERNAL_HOST}"]]
+    upstream: api
+    plugin_config: api
+    plugins:
+      proxy-rewrite:
+        headers:
+          set:
+            X-IAM-Entry-Network: external
+            X-Forwarded-Host: $http_host
+            X-Forwarded-Proto: $scheme
+  - key: sso-frontend
+    uris: [/portal, /portal/*]
+    upstream: sso-frontend
+    plugins: *telemetry
+  - key: admin-frontend
+    uris: [/iam-admin, /iam-admin/*]
+    upstream: admin-frontend
+    plugin_config: api

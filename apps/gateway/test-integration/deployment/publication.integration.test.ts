@@ -2,14 +2,14 @@ import { expect, test } from "bun:test";
 import { runWithOwnedTestResources } from "@iam/api-core/testing/external-test-resources";
 import { ClientStatus } from "@iam/contracts";
 import { clients } from "@iam/db/schema";
-import { parse, stringify } from "yaml";
+import { stringify } from "yaml";
 import { withApisixFixture } from "../support/apisix.fixture";
 import { createGatewayProcessFixture } from "../support/gateway-process.fixture";
 import { createGatewayPostgresTestHarness } from "../support/postgres-test-harness";
 import { certificate, privateKey } from "../support/tls.fixture";
 
 for (const deployment of ["dev", "prod"] as const) {
-  test(`independent Gateway publishes seven kinds against the actual ${deployment} APISIX configuration`, async () => {
+  test(`independent Gateway publishes seven kinds against the synthetic ${deployment} APISIX configuration`, async () => {
     await withApisixFixture(
       async (apisix) => {
         await runWithOwnedTestResources(async (lifecycle) => {
@@ -29,25 +29,35 @@ for (const deployment of ["dev", "prod"] as const) {
             adminKey: apisix.adminKey,
           });
           lifecycle.registerCleanup(() => gateway.close());
-          const source = parse(
-            await Bun.file(new URL("../../../../docker/apisix/manifests/dev/iam.yaml", import.meta.url)).text(),
-          );
-          source.consumers = [{ key: "reader", plugins: { "key-auth": { key: "${CONSUMER_KEY}" } } }];
-          source.ssls = [
-            { key: "tls", cert: "${TLS_CERT}", private_key: "${TLS_PRIVATE_KEY}", snis: ["gateway.invalid"] },
-          ];
+          const source = {
+            service: {
+              desc: "Synthetic seven-resource publication",
+              plugin_configs: [
+                {
+                  key: "api",
+                  plugins: {
+                    "request-id": { header_name: "X-Request-Id", include_in_response: true },
+                    opentelemetry: { sampler: { name: "always_off" } },
+                  },
+                },
+              ],
+            },
+            upstreams: [{ key: "api", nodes: { "${API_HOST}:${API_PORT}": 1 } }],
+            routes: [{ key: "api", uri: "/synthetic/*", upstream: "api", plugin_config: "api" }],
+            plugin_metadata: [
+              {
+                key: "opentelemetry",
+                set_ngx_var: true,
+                collector: { address: "${COLLECTOR}", request_timeout: 3 },
+              },
+            ],
+            consumers: [{ key: "reader", plugins: { "key-auth": { key: "${CONSUMER_KEY}" } } }],
+            ssls: [{ key: "tls", cert: "${TLS_CERT}", private_key: "${TLS_PRIVATE_KEY}", snis: ["gateway.invalid"] }],
+          };
           const variables = {
-            APISIX_OTEL_COLLECTOR_ENDPOINT: "127.0.0.1:9",
-            DEV_IAM_API_UPSTREAM_HOST: "127.0.0.1",
-            DEV_IAM_API_UPSTREAM_PORT: "30000",
-            DEV_IAM_ADMIN_API_UPSTREAM_HOST: "127.0.0.1",
-            DEV_IAM_ADMIN_API_UPSTREAM_PORT: "30001",
-            DEV_IAM_SSO_FRONTEND_UPSTREAM_HOST: "127.0.0.1",
-            DEV_IAM_SSO_FRONTEND_UPSTREAM_PORT: "30002",
-            DEV_IAM_ADMIN_FRONTEND_UPSTREAM_HOST: "127.0.0.1",
-            DEV_IAM_ADMIN_FRONTEND_UPSTREAM_PORT: "30003",
-            IAM_SSO_INTERNAL_HOST: "internal.gateway.invalid",
-            IAM_SSO_EXTERNAL_HOST: "external.gateway.invalid",
+            API_HOST: "127.0.0.1",
+            API_PORT: "30000",
+            COLLECTOR: "127.0.0.1:9",
             CONSUMER_KEY: "synthetic-key",
             TLS_CERT: certificate,
             TLS_PRIVATE_KEY: privateKey,
@@ -71,6 +81,22 @@ for (const deployment of ["dev", "prod"] as const) {
           const actual = await response.json();
           expect(response.status).toBe(200);
           expect(actual.value.nodes).toEqual({ "127.0.0.1:30000": 1 });
+          for (const [kind, id, expected] of [
+            ["services", `iam.${deployment}`, { desc: "Synthetic seven-resource publication" }],
+            ["routes", `iam.api.${deployment}`, { uri: "/synthetic/*", upstream_id: `iam.api.${deployment}` }],
+            ["plugin_configs", `iam.api.${deployment}`, { plugins: { "request-id": { header_name: "X-Request-Id" } } }],
+            ["plugin_metadata", "opentelemetry", { collector: { address: "127.0.0.1:9" } }],
+            ["consumers", `iam_reader_${deployment}`, { username: `iam_reader_${deployment}` }],
+            ["ssls", `iam.tls.${deployment}`, { snis: ["gateway.invalid"] }],
+          ] as const) {
+            const published = await fetch(`${apisix.adminUrl}/${kind}/${id}`, {
+              headers: { "X-API-KEY": apisix.adminKey },
+              signal: AbortSignal.timeout(5000),
+            });
+            const resource = await published.json();
+            expect(published.status).toBe(200);
+            expect(resource.value).toMatchObject(expected);
+          }
           // APISIX encrypts SSL list keys, so remove the synthetic TLS resource before checking no-change.
           source.ssls = [];
           source.consumers = [];
