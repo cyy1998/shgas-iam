@@ -6,6 +6,7 @@
   "exports": {
     ".": "./src/index.ts",
     "./schema": "./src/schema/public.ts",
+    "./migrate": "./src/migrate.ts",
     "./schema/role-assignments": "./src/schema/role-assignments.ts",
     "./relations": "./src/relations/index.ts",
     "./client-snapshot": "./src/client-snapshot.ts",

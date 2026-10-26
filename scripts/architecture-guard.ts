@@ -472,7 +472,7 @@ function collectRoleResolutionOwnerViolations(sources: readonly IndexedSourceFil
               file: source.file,
               line: lineOf(source.sourceFile, declaration),
               message:
-                "Only Role Assignment Resolver implementation and the Admin Role Management repository " +
+                "Only Role Assignment Resolver, Admin Role Management and formal initialization source owners " +
                 `may ${dependencyOperation(declaration)} dedicated Role Assignment schema entry ` +
                 `"${moduleSpecifier}".`,
             },
@@ -899,9 +899,9 @@ function isCompositionOwner(file: string) {
 
 function isRoleAssignmentSchemaOwner(file: string) {
   return (
-    file === "packages/assignment-resolution/src/role-assignment/internal/resolver.ts" ||
-    file === "apps/admin-api/src/services/role/role.repository.ts"
-  );
+file === "packages/assignment-resolution/src/role-assignment/internal/resolver.ts" ||
+    file === "apps/admin-api/src/services/role/role.repository.ts" ||
+    file === "apps/worker/src/commands/initialization/initialization-source.ts"  );
 }
 
 function isRoleAssignmentResolverValueOwner(file: string) {

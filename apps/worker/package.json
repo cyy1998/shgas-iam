@@ -15,6 +15,12 @@
   },
   "scripts": {
     "dev": "bun --hot src/index.ts",
+    "database:migrate": "bun run src/commands/initialization/database-migrate.ts",
+    "initialize:source": "bun run src/commands/initialization/initialize.ts source",
+    "initialize:access": "bun run src/commands/initialization/initialize.ts access",
+    "organization-search:backfill": "bun run src/commands/organization-search/organization-search-backfill.ts",
+    "organization-search:repair": "bun run src/commands/organization-search/organization-search-repair.ts",
+    "organization-search:verify": "bun run src/commands/organization-search/organization-search-verify.ts",
     "serve": "bun run src/index.ts",
     "lint": "biome check --formatter-enabled=false . && stylelint \"**/*.less\" --allow-empty-input",
     "lint:fix": "biome check --formatter-enabled=false --write . && stylelint \"**/*.less\" --allow-empty-input",
