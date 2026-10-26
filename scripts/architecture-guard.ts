@@ -19,28 +19,17 @@ type IndexedSourceFile = Readonly<{
 
 type StaticDependencyDeclaration = ts.ImportDeclaration | ts.ExportDeclaration;
 
-type StaticModulePattern = Readonly<
-  | { kind: "exact"; module: string }
-  | { kind: "package"; module: string }
-  | { kind: "prefix"; module: string }
-  | { kind: "suffix"; module: string }
-  | { kind: "prefix-suffix"; prefix: string; suffix: string }
->;
-
-type StaticSourcePattern =
-  | string
-  | Readonly<{
-      prefix: string;
-      suffix: string;
-    }>;
+type StaticModulePattern = Readonly<{
+  kind: "exact" | "package" | "prefix";
+  module: string;
+}>;
 
 type StaticModuleOwnershipRule = Readonly<{
   ruleId: "client-subject-projection-owner" | "session-runtime-owner" | "worker-ownership";
-  sourceScopes: readonly StaticSourcePattern[];
+  sourceScopes: readonly string[];
   targets: readonly StaticModulePattern[];
   allowedTargets?: readonly StaticModulePattern[];
-  allowedSources: readonly StaticSourcePattern[];
-  dependencyKind: "all" | "value";
+  allowedSources?: readonly string[];
   message: (moduleSpecifier: string, declaration: StaticDependencyDeclaration) => string;
 }>;
 
@@ -145,8 +134,6 @@ const staticModuleOwnershipRules: readonly StaticModuleOwnershipRule[] = [
       { kind: "package", module: "hono" },
       { kind: "package", module: "@iam/db" },
     ],
-    allowedSources: [],
-    dependencyKind: "all",
     message: (moduleSpecifier) =>
       `OIDC must not import another protocol, app or HTTP owner "${moduleSpecifier}"; inject its external capabilities.`,
   },
@@ -160,8 +147,6 @@ const staticModuleOwnershipRules: readonly StaticModuleOwnershipRule[] = [
       { kind: "prefix", module: "packages/oidc/src" },
       { kind: "prefix", module: "apps" },
     ],
-    allowedSources: [],
-    dependencyKind: "all",
     message: (moduleSpecifier) =>
       `Session Kernel must not import runtime or protocol owner "${moduleSpecifier}"; inject its external capabilities.`,
   },
@@ -169,8 +154,6 @@ const staticModuleOwnershipRules: readonly StaticModuleOwnershipRule[] = [
     ruleId: "client-subject-projection-owner",
     sourceScopes: ["packages/client-subject-projection/src"],
     targets: [...clientSubjectProjectionExternalOwnerTargets, { kind: "prefix", module: "packages/custom-sso/src" }],
-    allowedSources: [],
-    dependencyKind: "all",
     message: (moduleSpecifier) =>
       `Client Subject Projection implementation must not import runtime or protocol module "${moduleSpecifier}"; ` +
       "depend on its injected facts and safety ports.",
@@ -180,8 +163,6 @@ const staticModuleOwnershipRules: readonly StaticModuleOwnershipRule[] = [
     sourceScopes: ["packages/custom-sso/src/wire.ts"],
     targets: [...clientSubjectProjectionExternalOwnerTargets, { kind: "prefix", module: "packages/custom-sso/src" }],
     allowedTargets: [{ kind: "exact", module: "packages/custom-sso/src/wire" }],
-    allowedSources: [],
-    dependencyKind: "all",
     message: (moduleSpecifier) =>
       `Custom SSO wire adapter must not import facts persistence, configuration, runtime, ` +
       `or transport module "${moduleSpecifier}"; ` +
@@ -192,23 +173,19 @@ const staticModuleOwnershipRules: readonly StaticModuleOwnershipRule[] = [
     sourceScopes: ["packages/custom-sso/src/wire.ts"],
     targets: [{ kind: "prefix", module: "packages/client-subject-projection/src" }],
     allowedTargets: [{ kind: "exact", module: "packages/client-subject-projection/src" }],
-    allowedSources: [],
-    dependencyKind: "all",
     message: (moduleSpecifier) =>
       `Custom SSO wire adapter must not import non-root Projection module "${moduleSpecifier}"; ` +
       "depend only on the root public Client Subject Projection interface.",
   },
   {
     ruleId: "session-runtime-owner",
-    sourceScopes: ["apps/api/src/routes/sso", "apps/api/src/use-cases/sso", "apps/api/src/composition"],
+    sourceScopes: ["apps/api/src/routes/sso", "apps/api/src/use-cases/sso"],
     targets: [
       { kind: "prefix", module: "@iam/session-kernel" },
       { kind: "prefix", module: "packages/custom-sso/src/internal" },
       { kind: "exact", module: "apps/api/src/lib/infra/redis" },
       { kind: "prefix", module: "apps/api/src/lib/integrations" },
     ],
-    allowedSources: ["apps/api/src/composition"],
-    dependencyKind: "all",
     message: (moduleSpecifier) =>
       `Custom SSO routes and use cases must not import session runtime module "${moduleSpecifier}"; ` +
       "depend on their injected application interface.",
@@ -221,29 +198,18 @@ const staticModuleOwnershipRules: readonly StaticModuleOwnershipRule[] = [
       { kind: "package", module: "@iam/db" },
       { kind: "package", module: "hono" },
     ],
-    allowedTargets: [],
     allowedSources: ["packages/custom-sso/src/wire.ts"],
-    dependencyKind: "all",
     message: (moduleSpecifier) =>
       `Custom SSO application must not import app provider or HTTP module "${moduleSpecifier}"; ` +
       "declare its outbound capability locally and inject it from composition.",
   },
   {
     ruleId: "session-runtime-owner",
-    sourceScopes: [
-      "apps/admin-api/src/services/user",
-      "apps/admin-api/src/services/client",
-      "apps/admin-api/src/services/session-revocation",
-      "apps/admin-api/src/composition",
-    ],
+    sourceScopes: ["apps/admin-api/src/services/user", "apps/admin-api/src/services/client"],
     targets: [
       { kind: "prefix", module: "@iam/session-kernel" },
-      { kind: "suffix", module: "custom-sso-session-kernel.adapter" },
-      { kind: "suffix", module: "oidc-session-kernel.adapter" },
       { kind: "exact", module: "apps/admin-api/src/lib/infra/redis" },
     ],
-    allowedSources: ["apps/admin-api/src/services/session-revocation", "apps/admin-api/src/composition"],
-    dependencyKind: "all",
     message: (moduleSpecifier) =>
       `Admin user and client services must not import session runtime module "${moduleSpecifier}"; ` +
       "depend on the consumer-owned Session Revocation port.",
@@ -252,8 +218,6 @@ const staticModuleOwnershipRules: readonly StaticModuleOwnershipRule[] = [
     ruleId: "worker-ownership",
     sourceScopes: ["apps/worker/src"],
     targets: [{ kind: "prefix", module: "apps/api/src" }],
-    allowedSources: [],
-    dependencyKind: "all",
     message: (moduleSpecifier, declaration) =>
       `Worker production sources must not ${dependencyOperation(declaration)} ` +
       `API-private module "${moduleSpecifier}"; depend on a public workspace package.`,
@@ -491,12 +455,11 @@ function collectDependencyDirectionViolations(sources: readonly IndexedSourceFil
 function collectStaticModuleOwnershipViolations(sources: readonly IndexedSourceFile[]): ArchitectureViolation[] {
   return sources.flatMap((source) =>
     staticModuleOwnershipRules
-      .filter((rule) => rule.sourceScopes.some((scope) => matchesStaticSourcePattern(source.file, scope)))
-      .filter((rule) => !rule.allowedSources.some((owner) => matchesStaticSourcePattern(source.file, owner)))
+      .filter((rule) => rule.sourceScopes.some((scope) => isPathAtOrBelow(source.file, scope)))
+      .filter((rule) => !rule.allowedSources?.some((owner) => isPathAtOrBelow(source.file, owner)))
       .flatMap((rule) =>
         [...source.imports, ...source.reExports].flatMap((declaration): ArchitectureViolation[] => {
           if (!declaration.moduleSpecifier || !ts.isStringLiteral(declaration.moduleSpecifier)) return [];
-          if (rule.dependencyKind === "value" && !hasValueDependency(declaration)) return [];
           const moduleSpecifier = declaration.moduleSpecifier.text;
           const normalizedTargets = normalizeStaticModuleEdges(source.file, moduleSpecifier);
           if (
@@ -966,24 +929,11 @@ function resolveCanonicalStaticSourceModule(modulePath: string) {
 }
 
 function matchesStaticModulePattern(modulePath: string, pattern: StaticModulePattern) {
-  if (pattern.kind === "exact") return modulePath === pattern.module;
-  if (pattern.kind === "package") return isPackageRootOrSubpath(modulePath, pattern.module);
-  if (pattern.kind === "prefix") return isPathAtOrBelow(modulePath, pattern.module);
-  if (pattern.kind === "suffix") return modulePath === pattern.module || modulePath.endsWith(`/${pattern.module}`);
-  return isPathAtOrBelow(modulePath, pattern.prefix) && modulePath.endsWith(pattern.suffix);
-}
-
-function matchesStaticSourcePattern(sourceFile: string, pattern: StaticSourcePattern) {
-  if (typeof pattern === "string") return isPathAtOrBelow(sourceFile, pattern);
-  return isPathAtOrBelow(sourceFile, pattern.prefix) && sourceFile.endsWith(pattern.suffix);
+  return pattern.kind === "exact" ? modulePath === pattern.module : isPathAtOrBelow(modulePath, pattern.module);
 }
 
 function isPathAtOrBelow(path: string, prefix: string) {
   return path === prefix || path.startsWith(`${prefix}/`);
-}
-
-function isPackageRootOrSubpath(modulePath: string, packageRoot: string) {
-  return modulePath === packageRoot || modulePath.startsWith(`${packageRoot}/`);
 }
 
 function referencedTypeName(type: ts.TypeNode, sourceFile: ts.SourceFile) {

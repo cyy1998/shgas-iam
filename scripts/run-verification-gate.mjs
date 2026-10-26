@@ -2,11 +2,12 @@
 import process from "node:process";
 import { runPnpmCommand } from "./run-pnpm-command.mjs";
 
-const gate = process.argv[2];
+const args = process.argv.slice(2);
+const [gate] = args;
 const commands =
   gate === "ci" ? ["verify", "test:integration"] : gate === "release" ? ["verify:ci", "test:e2e"] : undefined;
-if (!commands) {
-  console.error(`Unknown verification gate: ${gate ?? "<missing>"}`);
+if (args.length !== 1 || !commands) {
+  console.error("Usage: pnpm verify:ci | pnpm verify:release");
   process.exit(1);
 }
 

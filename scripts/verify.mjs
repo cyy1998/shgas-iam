@@ -11,11 +11,11 @@ if (args.length > 1 || (args.length === 1 && args[0] !== "--static")) {
 const stages = [
   {
     name: "static",
-    commands: [["format:check"], ["lint"], ["check:docs"], ["check:env-names"], ["check:architecture"]],
+    commands: ["format:check", "lint", "check:docs", "check:env-names", "check:architecture"],
   },
-  { name: "typecheck", commands: [["typecheck"]] },
-  { name: "test:unit", commands: [["test:unit"]] },
-  { name: "build", commands: [["build"]] },
+  { name: "typecheck", commands: ["typecheck"] },
+  { name: "test:unit", commands: ["test:unit"] },
+  { name: "build", commands: ["build"] },
 ];
 
 const pnpmCli = process.env.npm_execpath;
@@ -27,10 +27,10 @@ if (!pnpmCli) {
 const selectedStages = args[0] === "--static" ? stages.slice(0, 1) : stages;
 for (const stage of selectedStages) {
   console.log(`\n[verify] ${stage.name}`);
-  for (const args of stage.commands) {
-    const result = runPnpmCommand(pnpmCli, args);
+  for (const command of stage.commands) {
+    const result = runPnpmCommand(pnpmCli, [command]);
     if (result.error) {
-      console.error(`[verify] failed to launch pnpm ${args.join(" ")}: ${result.error.message}`);
+      console.error(`[verify] failed to launch pnpm ${command}: ${result.error.message}`);
       process.exit(1);
     }
     if (result.status !== 0) process.exit(result.status ?? 1);

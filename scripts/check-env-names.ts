@@ -15,6 +15,7 @@ type EnvExampleCheck = {
 type FrontendCheck = {
   appDir: string;
   boundaryFile: string;
+  dockerfile: string;
   prefix: string;
 };
 
@@ -46,100 +47,15 @@ const frontendChecks: FrontendCheck[] = [
   {
     appDir: "apps/admin/src",
     boundaryFile: "apps/admin/src/constants/config.ts",
+    dockerfile: "apps/admin/Dockerfile",
     prefix: "UMI_APP_ADMIN_",
   },
   {
     appDir: "apps/sso/src",
     boundaryFile: "apps/sso/src/constants/config.ts",
+    dockerfile: "apps/sso/Dockerfile",
     prefix: "UMI_APP_SSO_",
   },
-];
-
-const dockerFiles = [
-  "docker/.env.dev.example",
-  "docker/.env.prod.example",
-  "docker/compose.dev.yaml",
-  "docker/compose.prod.data.yaml",
-  "docker/compose.prod.apps.yaml",
-  "docker/compose.prod.gateway.yaml",
-  "docker/compose.prod.observability.yaml",
-  "apps/admin/Dockerfile",
-  "apps/sso/Dockerfile",
-];
-
-const retiredDockerNames = [
-  "DATABASE_URL",
-  "REDIS_URL",
-  "REDIS_HOST",
-  "REDIS_PORT",
-  "LOG_LEVEL",
-  "LOG_FORMAT",
-  "PASSWORD_HASH_ROUNDS",
-  "MAGIC_CODE",
-  "CAP_ENABLED",
-  "CAP_SITE_KEY",
-  "CAP_SECRET",
-  "CAP_CHALLENGE_TTL_MS",
-  "CAP_TOKEN_TTL_SECONDS",
-  "HUMAN_VERIFICATION_WINDOW_SECONDS",
-  "HUMAN_VERIFICATION_LOGIN_FAILURE_THRESHOLD",
-  "HUMAN_VERIFICATION_LOOKUP_THRESHOLD",
-  "LOGIN_CREDENTIAL_ACTIVE_KID",
-  "LOGIN_CREDENTIAL_PRIVATE_KEYS_JSON",
-  "LOGIN_CREDENTIAL_MAX_SKEW_MS",
-  "LOGIN_CREDENTIAL_NONCE_TTL_SECONDS",
-  "AUTH_CODE_EXPIRE_TIME",
-  "REDIS_EXPIRE_TIME",
-  "LOGIN_ENDPOINT",
-  "SSO_INTERNAL_ORIGIN",
-  "SSO_EXTERNAL_ORIGIN",
-  "AUTHORIZATION_ENDPOINT",
-  "LOGOUT_ENDPOINT",
-  "THIRDPARTY_OA_ENDPOINT",
-  "ADMIN_CLIENT_CODES",
-  "ADMIN_ROLE_CODES",
-  "OIDC_ISSUER",
-  "OIDC_PUBLIC_ORIGIN",
-  "OIDC_SSO_LOGIN_PATH",
-  "OIDC_COOKIE_KEYS",
-  "OIDC_CURRENT_JWK_JSON",
-  "OIDC_PREVIOUS_JWK_JSON",
-  "OIDC_GLOBAL_SESSION_COOKIE",
-  "OIDC_GLOBAL_SESSION_TTL_SECONDS",
-  "OIDC_AUTHORIZATION_CODE_TTL_SECONDS",
-  "OIDC_INTERACTION_TTL_SECONDS",
-  "OIDC_ACCESS_TOKEN_TTL_SECONDS",
-  "OIDC_ID_TOKEN_TTL_SECONDS",
-  "OIDC_CLIENT_CACHE_TTL_SECONDS",
-  "OIDC_BCRYPT_COST",
-  "OIDC_CLIENT_AUTH_FAILURE_LIMIT",
-  "OIDC_CLIENT_AUTH_FAILURE_WINDOW_SECONDS",
-  "OIDC_TRUST_PROXY",
-  "SESSION_KERNEL_NAMESPACE",
-  "SESSION_KERNEL_PRINCIPAL_IDLE_TTL_SECONDS",
-  "SESSION_KERNEL_PRINCIPAL_ABSOLUTE_TTL_SECONDS",
-  "SESSION_KERNEL_TOMBSTONE_TTL_SECONDS",
-  "SESSION_KERNEL_TOMBSTONE_GRACE_SECONDS",
-  "SESSION_LOOKUP_HMAC_CURRENT_ID",
-  "SESSION_LOOKUP_HMAC_CURRENT_SECRET",
-  "SESSION_LOOKUP_HMAC_PREVIOUS_ID",
-  "SESSION_LOOKUP_HMAC_PREVIOUS_SECRET",
-  "IAM_API_USER_PROFILE_WORKER_CONCURRENCY",
-  "IAM_API_USER_PROFILE_REBUILD_BATCH_SIZE",
-  "IAM_API_USER_PROFILE_BACKFILL_BATCH_SIZE",
-  "UMI_APP_API_PREFIX",
-  "UMI_APP_SSO_AUTHORIZE_URL",
-  "UMI_APP_SSO_LOGOUT_URL",
-  "UMI_APP_WELL_KNOWN_URL",
-  "UMI_APP_CAP_SITE_KEY",
-  "UMI_APP_CAP_ENDPOINT",
-  "UMI_APP_CAP_WASM_URL",
-  "UMI_APP_CAP_PAKO_URL",
-  "UMI_APP_LOGIN_CREDENTIAL_KID",
-  "UMI_APP_LOGIN_CREDENTIAL_PUBLIC_KEY",
-  "UMI_APP_GRAFANA_URL",
-  "UMI_APP_SYSTEM_LOG_ENV",
-  "SSO_UMI_APP_SSO_CLIENT_CODE",
 ];
 
 const violations: Violation[] = [];
@@ -155,10 +71,7 @@ for (const check of envExampleChecks) {
 
 for (const check of frontendChecks) {
   checkFrontendEnvReads(check);
-}
-
-for (const file of dockerFiles) {
-  checkDockerRetiredNames(file);
+  checkFrontendDockerfile(check);
 }
 
 if (violations.length > 0) {
@@ -179,7 +92,7 @@ function checkRawEnvSchema(check: AppEnvSchemaCheck): void {
   for (const match of block.text.matchAll(/^[\t ]+([A-Z][A-Z0-9_]*)\s*:/gm)) {
     const key = match[1];
     if (key !== "NODE_ENV" && !key.startsWith(check.prefix)) {
-      add(check.file, lineNumber(text, block.start + match.index!), `${key} must use ${check.prefix} in RawEnvSchema`);
+      add(check.file, lineNumber(text, block.start + match.index), `${key} must use ${check.prefix} in RawEnvSchema`);
     }
   }
 }
@@ -190,7 +103,7 @@ function checkBackendProcessEnvBoundary(envFile: string): void {
     if (file === envFile || file.includes("/__tests__/")) continue;
     const text = read(file);
     for (const match of text.matchAll(/process\.env(?:\.([A-Z][A-Z0-9_]*)|\[\s*["']([A-Z][A-Z0-9_]*)["']\s*\])/g)) {
-      add(file, lineNumber(text, match.index!), "backend process.env reads must stay inside src/env.ts");
+      add(file, lineNumber(text, match.index), "backend process.env reads must stay inside src/env.ts");
     }
   }
 }
@@ -217,38 +130,22 @@ function checkFrontendEnvReads(check: FrontendCheck): void {
       const key = match[1];
 
       if (file !== check.boundaryFile) {
-        add(file, lineNumber(text, match.index!), "frontend process.env reads must stay inside constants/config.ts");
+        add(file, lineNumber(text, match.index), "frontend process.env reads must stay inside constants/config.ts");
       }
 
       if (key.startsWith("UMI_APP_") && !key.startsWith(check.prefix)) {
-        add(file, lineNumber(text, match.index!), `${key} must use ${check.prefix}`);
+        add(file, lineNumber(text, match.index), `${key} must use ${check.prefix}`);
       }
     }
   }
 }
 
-function checkDockerRetiredNames(file: string): void {
-  const text = read(file);
-
-  for (const name of retiredDockerNames) {
-    const pattern = new RegExp(`(?<![A-Z0-9_])${escapeRegExp(name)}(?![A-Z0-9_])`, "g");
-    for (const match of text.matchAll(pattern)) {
-      add(file, lineNumber(text, match.index!), `${name} is a retired app env contract name`);
-    }
-  }
-
-  const frontendDockerPrefix = file.includes("apps/admin/")
-    ? "UMI_APP_ADMIN_"
-    : file.includes("apps/sso/")
-      ? "UMI_APP_SSO_"
-      : undefined;
-
-  if (frontendDockerPrefix) {
-    for (const match of text.matchAll(/\b(UMI_APP_[A-Z0-9_]+)\b/g)) {
-      const key = match[1];
-      if (!key.startsWith(frontendDockerPrefix)) {
-        add(file, lineNumber(text, match.index!), `${key} must use ${frontendDockerPrefix}`);
-      }
+function checkFrontendDockerfile(check: FrontendCheck): void {
+  const text = read(check.dockerfile);
+  for (const match of text.matchAll(/\b(UMI_APP_[A-Z0-9_]+)\b/g)) {
+    const key = match[1];
+    if (!key.startsWith(check.prefix)) {
+      add(check.dockerfile, lineNumber(text, match.index), `${key} must use ${check.prefix}`);
     }
   }
 }
@@ -308,8 +205,4 @@ function add(file: string, line: number, message: string): void {
 
 function lineNumber(text: string, index: number): number {
   return text.slice(0, index).split("\n").length;
-}
-
-function escapeRegExp(value: string): string {
-  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }

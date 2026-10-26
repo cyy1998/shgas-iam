@@ -6,7 +6,7 @@ import { join } from "node:path";
 import { runPnpmCommand } from "../../run-pnpm-command.mjs";
 
 const repoRoot = join(import.meta.dirname, "../../..");
-const pnpmRecorderScript = join(repoRoot, "scripts/__tests__/fixtures/pnpm-recorder.mjs");
+const pnpmRecorderScript = join(import.meta.dirname, "fixtures/pnpm-recorder.mjs");
 const turboBin = join(repoRoot, "node_modules/turbo/bin/turbo");
 const verifyScript = join(repoRoot, "scripts/verify.mjs");
 const verificationGateScript = join(repoRoot, "scripts/run-verification-gate.mjs");
@@ -324,7 +324,23 @@ describe("test orchestration", () => {
     });
     expect(result.commands).toEqual(["format:check", "lint"]);
     expect(result.exitCode).toBe(1);
+    expect(result.signal).toBeNull();
   });
+
+  test.each([[], ["unknown"], ["--ci"], ["ci", "extra"], ["release", "extra"]].map((args) => ({ args })))(
+    "rejects invalid gate arguments before launching owner commands: %j",
+    ({ args }) => {
+      const result = runWithPnpmRecorder({
+        args,
+        commandLogEnvName: "IAM_VERIFICATION_GATE_COMMAND_LOG",
+        orchestrationScript: verificationGateScript,
+        temporaryDirectoryPrefix: "iam-verification-gate-args-",
+      });
+      expect(result.commands).toEqual([]);
+      expect(result.exitCode).toBe(1);
+      expect(result.output).toContain("Usage:");
+    },
+  );
 
   test("runs the provider-neutral CI gate in owner-command order", () => {
     const rootPackage = readJson(join(repoRoot, "package.json"));

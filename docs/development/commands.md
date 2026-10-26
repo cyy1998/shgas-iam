@@ -223,7 +223,7 @@ Profile 重建及 Subject Access 恢复见[Profile 维护手册](../releases/dat
   `pnpm --filter @iam/e2e-system runtime:cleanup -- --descriptor <run-descriptor.json>` 或
   `pnpm --filter @iam/e2e-system runtime:cleanup -- --project <exact-project>`
 - 后端 Architecture Guard（唯一静态架构入口）：`pnpm check:architecture`
-- 文档索引与 freshness guard：`pnpm check:docs`
+- 文档索引与本地链接检查：`pnpm check:docs`
 - Env naming guard：`pnpm check:env-names`
 - 组织搜索首建：`pnpm --filter @iam/worker organization-search:backfill`。命令使用 `IAM_WORKER_DATABASE_URL` 与
   Worker Redis 配置，只创建组织队列及数据库资源，退出时关闭；按批保存全部组织（含删除组织）的源变化记录并唤醒普通

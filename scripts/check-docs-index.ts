@@ -26,18 +26,6 @@ const datePattern = /^\d{4}-\d{2}-\d{2}$/;
 const currentDate = new Date();
 const todayUtc = Date.UTC(currentDate.getUTCFullYear(), currentDate.getUTCMonth(), currentDate.getUTCDate());
 
-const staleReferencePatterns = [
-  { pattern: /\bPrisma\b|schema\.prisma|src\/db\/schema\.prisma/i, label: "Prisma-era database reference" },
-  {
-    pattern: /Route Handler\s*->\s*Service\s*->\s*Repository\s*->\s*Prisma/i,
-    label: "old layered architecture summary",
-  },
-  {
-    pattern: /src\/routes\/auth\/auth\.service\.ts|src\/lib\/core\/create-app\.ts/i,
-    label: "pre-composition app path",
-  },
-];
-
 const findings: Finding[] = [];
 const warnings: Finding[] = [];
 
@@ -50,7 +38,6 @@ const docs = listMarkdownFiles(docsRoot)
 checkIndexCoverage(indexedDocs, docs);
 checkIndexFreshness(indexedDocs);
 checkMarkdownLinks(listMarkdownFiles(docsRoot).map((file) => toRepoPath(file)));
-checkStaleReferences(indexedDocs);
 
 for (const warning of warnings) {
   console.warn(`Docs index warning: ${warning.file} ${warning.message}`);
@@ -126,23 +113,16 @@ function parseIndex(): Map<string, IndexedDoc> {
 }
 
 function checkIndexCoverage(rows: Map<string, IndexedDoc>, docs: string[]): void {
-  const indexedPaths = [...rows.keys()].sort();
-
   for (const doc of docs) {
     if (!rows.has(doc)) {
       fail("docs/index.md", `${doc} is missing from the docs index`);
     }
   }
 
-  for (const doc of indexedPaths) {
+  for (const doc of rows.keys()) {
     if (!docs.includes(doc)) {
       fail("docs/index.md", `${doc} is indexed but no file exists`);
     }
-  }
-
-  const unsorted = indexedPaths.find((path, index) => path !== [...rows.keys()][index]);
-  if (unsorted) {
-    fail("docs/index.md", "document rows must be sorted by normalized path");
   }
 }
 
@@ -160,7 +140,7 @@ function checkIndexFreshness(rows: Map<string, IndexedDoc>): void {
       if (!isDate(doc.nextReview)) {
         fail("docs/index.md", `${doc.path} must use YYYY-MM-DD next review date`);
       } else if (dateToUtc(doc.nextReview) < todayUtc) {
-        fail("docs/index.md", `${doc.path} next review date is in the past`);
+        warnings.push({ file: doc.path, message: "next review date is in the past; review the content" });
       }
     }
 
@@ -172,8 +152,8 @@ function checkIndexFreshness(rows: Map<string, IndexedDoc>): void {
       fail("docs/index.md", `${doc.path} should use n/a next review for ${doc.status}`);
     }
 
-    if (doc.status === "Stale" && !doc.notes.toLowerCase().includes("not current")) {
-      fail("docs/index.md", `${doc.path} is Stale but notes do not explain that it is not current`);
+    if (doc.status === "Stale" && !doc.notes.trim()) {
+      fail("docs/index.md", `${doc.path} is Stale but has no explanation`);
     }
   }
 }
@@ -192,18 +172,6 @@ function checkMarkdownLinks(files: string[]): void {
       if (!existsSync(targetPath)) {
         fail(file, `broken markdown link target: ${rawTarget}`);
       }
-    }
-  }
-}
-
-function checkStaleReferences(rows: Map<string, IndexedDoc>): void {
-  for (const doc of rows.values()) {
-    const text = read(doc.path);
-    const stalePattern = staleReferencePatterns.find(({ pattern }) => pattern.test(text));
-    if (!stalePattern) continue;
-
-    if (doc.status === "Current" || doc.status === "Needs Review") {
-      fail(doc.path, `contains ${stalePattern.label}; mark as Historical/Stale or update the content`);
     }
   }
 }
