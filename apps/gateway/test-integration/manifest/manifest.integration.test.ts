@@ -1,7 +1,7 @@
 import { describe, expect, it } from "bun:test";
-import { loadManifest, sourcePluginConfig, sourceRoute, sourceUpstream } from "../../src/__tests__/test-helpers";
+import { sourcePluginConfig, sourceRoute, sourceUpstream } from "../../src/__tests__/test-helpers";
 import { validateManifest } from "../../src/validators";
-import { createManifestFile, registerManifestFixtureCleanup } from "./fixture";
+import { createManifestFile, loadManifest, registerManifestFixtureCleanup } from "./fixture";
 
 registerManifestFixtureCleanup();
 

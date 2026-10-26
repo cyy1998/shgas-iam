@@ -1,9 +1,10 @@
 import { expect, test } from "bun:test";
-import { readFile } from "node:fs/promises";
 import { ClientStatus } from "@iam/contracts";
+import { stringify } from "yaml";
 import { createGatewayApp } from "../http/app";
 import { createGatewayLifecycle } from "../http/lifecycle";
 import { createGatewayService } from "../services/gateway/gateway.service";
+import { createManifestSource, createManifestVariables } from "./manifest-fixture";
 
 const yaml =
   "service: {}\nupstreams:\n  - key: api\n    nodes: { 'api:30000': 1 }\nroutes:\n  - key: api\n    uri: /api/*\n    upstream: api\n";
@@ -395,7 +396,7 @@ test("validation codes cannot be influenced by caller values or disclose dynamic
   expect(body.data.issues.some((issue: { code: string }) => issue.code === "SSL_MATERIAL_REQUIRED")).toBe(false);
 });
 
-test("IAM, Tender and GDS representative manifests remain valid through HTTP", async () => {
+test("caller-supplied YAML validates across application scopes without deployment files", async () => {
   const app = createGatewayApp({
     service: createGatewayService({
       credentials: {
@@ -405,29 +406,10 @@ test("IAM, Tender and GDS representative manifests remain valid through HTTP", a
       },
     }),
   });
-  for (const stage of ["dev", "prod"])
-    for (const client of ["iam", "tender", "gds"]) {
-      const source = await readFile(
-        new URL(`../../../../docker/apisix/manifests/${stage}/${client}.yaml`, import.meta.url),
-        "utf8",
-      );
-      const variables = Object.fromEntries(
-        [...source.matchAll(/\$\{([A-Z0-9_]+)\}/g)].map((match) => {
-          const name = match[1]!;
-          return [
-            name,
-            name.includes("CIDR")
-              ? "10.0.0.0/24"
-              : name.endsWith("PORT")
-                ? "30000"
-                : name.endsWith("URL")
-                  ? "http://api:30000/auth"
-                  : name.includes("COLLECTOR")
-                    ? "collector:4318"
-                    : "api.internal",
-          ];
-        }),
-      );
+  for (const stage of ["test", "preview"])
+    for (const client of ["iam", "catalog", "files"]) {
+      const source = stringify(createManifestSource());
+      const variables = createManifestVariables();
       const response = await app.request("/validate", {
         method: "POST",
         headers: { "content-type": "application/json", apikey: "key" },
@@ -439,5 +421,30 @@ test("IAM, Tender and GDS representative manifests remain valid through HTTP", a
         status: 200,
         valid: true,
       });
+      expect(body.data.resources).toEqual({
+        services: 1,
+        upstreams: 2,
+        routes: 5,
+        plugin_configs: 2,
+        plugin_metadata: 1,
+        consumers: 0,
+        ssls: 0,
+      });
     }
+
+  const invalid = createManifestSource();
+  invalid.upstreams = [];
+  const response = await app.request("/validate", {
+    method: "POST",
+    headers: { "content-type": "application/json", apikey: "key" },
+    body: JSON.stringify({ scope: "test:catalog", yaml: stringify(invalid), variables: createManifestVariables() }),
+  });
+  const body = await response.json();
+  expect(response.status).toBe(400);
+  expect(body.data.valid).toBe(false);
+  expect(body.data.issues).toContainEqual({
+    code: "REFERENCE_NOT_FOUND",
+    path: "routes[0]",
+    message: "Resource references a missing target",
+  });
 });

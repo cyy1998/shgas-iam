@@ -31,7 +31,8 @@ Unit 支持 package-local 执行，E2E 单旅程入口保留用于调试；具�
 ### Turbo task graph 与缓存
 
 测试通过 `transit` 传播依赖源码变化，不用 `^test` 执行依赖包的测试。Unit 仅在输入、环境、fixture、时间和随机性可重现时缓存；
-Integration 与 E2E 禁用缓存。仓库配置、runner 和资源工具的变化须进入相关输入，Gateway 读取的 APISIX manifests 也在其中。
+Integration 与 E2E 禁用缓存。仓库配置、runner 和资源工具的变化须进入相关输入。
+Gateway Unit 使用包内合成 manifest 样例，由默认 workspace inputs 跟踪，不读取调用方部署配置。
 
 Strict env 仅透传 owner 所需的内部地址、run ID、记录、筛选及工具路径；进程归属 marker 只透传、不计入 hash。
 Root typecheck 包含工具测试和相关源码。任务定义见[turbo.json](../../turbo.json)。

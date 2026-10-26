@@ -1,25 +1,3 @@
-import { readFile } from "node:fs/promises";
-import path from "node:path";
-import { fileURLToPath } from "node:url";
-import { parse } from "yaml";
-import { renderEnvValue } from "../env";
-import { materializeManifest, parseManifestScope } from "../manifest";
-import type { EnvMap } from "../types";
-
-export const repositoryRoot = fileURLToPath(new URL("../../../../", import.meta.url));
-export function relativePath(file: string) {
-  return path.relative(repositoryRoot, file);
-}
-export async function loadManifest(scope: string, file?: string, options: { renderEnv?: boolean; env?: EnvMap } = {}) {
-  const parsed = parseManifestScope(scope);
-  const manifest = file ?? path.join(repositoryRoot, "docker", "apisix", "manifests", parsed.env, `${parsed.app}.yaml`);
-  const source = parse(await readFile(manifest, "utf8"));
-  return {
-    ...materializeManifest(options.renderEnv ? renderEnvValue(source, options.env ?? {}, manifest) : source, scope),
-    manifest,
-  };
-}
-
 import { createEmptyResourceMap } from "../resources";
 import type { LoadedManifest, ManifestObject, ResourceKind } from "../types";
 

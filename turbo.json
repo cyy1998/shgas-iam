@@ -17,10 +17,6 @@
     "test:unit": {
       "dependsOn": ["transit"]
     },
-    "@iam/gateway-apisix#test:unit": {
-      "dependsOn": ["transit"],
-      "inputs": ["$TURBO_DEFAULT$", "$TURBO_ROOT$/docker/apisix/**"]
-    },
     "//#test:unit:root": {},
     "//#typecheck:root": {
       "inputs": [
