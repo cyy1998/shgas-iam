@@ -2,7 +2,7 @@
 #   docker build -f apps/api/Dockerfile -t iam-api .
 
 # ── Stage 1: pnpm base ───────────────────────────────────────────────────────
-FROM docker.xuanyuan.run/node:24.18.0-alpine AS base
+FROM docker.io/library/node:24.18.0-alpine AS base
 ENV PNPM_HOME="/pnpm"
 ENV PATH="$PNPM_HOME:$PATH"
 ARG HTTP_PROXY
@@ -82,7 +82,7 @@ RUN --mount=type=cache,id=iam-pnpm-v12,target=/pnpm/store \
     pnpm --config.inject-workspace-packages=true --filter @iam/api deploy --prod /deploy/api
 
 # ── Stage 4: Production runtime (Bun) ────────────────────────────────────────
-FROM docker.xuanyuan.run/oven/bun:1.4.2-alpine AS runtime
+FROM docker.io/oven/bun:1.4.2-alpine AS runtime
 ENV NODE_ENV=production
 WORKDIR /app
 COPY --from=builder /deploy/api ./
