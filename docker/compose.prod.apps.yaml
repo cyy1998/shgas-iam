@@ -258,6 +258,7 @@ services:
     build:
       context: ..
       dockerfile: apps/gateway/Dockerfile
+      args: *build-proxy-args
     restart: unless-stopped
     # Covers the maximum permitted Gateway shutdown deadline (300 seconds).
     stop_grace_period: 310s
